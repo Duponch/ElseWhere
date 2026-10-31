@@ -25,9 +25,16 @@ export function validPartyHistoricalTransport292(raw:unknown,version:unknown):bo
   if('partyMemories292'in v){if(!humanLanes.has(kind)||!data(v,'recreation')||!validPartyMemoryField292(v,version,Math.floor(Number.MAX_SAFE_INTEGER/10),Math.floor(Number.MAX_SAFE_INTEGER/10),true))return false;}
   if(kind==='task'&&!validPartyTask292(v,version,Math.floor(Number.MAX_SAFE_INTEGER/10),Number.MAX_SAFE_INTEGER,Number.MAX_SAFE_INTEGER))return false;
   if('partyStartedAtCore'in v&&kind!=='task')return false;
-  const list=(value:unknown,lane:string):boolean=>{if(!Array.isArray(value))return plain(value)&&!!data(value,'upserted')&&visit(value,lane);if(active.has(value)||value.length>1_000_000)return false;active.add(value);for(let i=0;i<value.length;i++){const d=Object.getOwnPropertyDescriptor(value,String(i));if(!d||!d.enumerable||!Object.hasOwn(d,'value')||!visit(d.value,lane))return false;}active.delete(value);return true;};
+  const list=(value:unknown,lane:string):boolean=>{
+   // VisitorGroup.members are persistent IDs, not custody Pawn records.
+   const visitorIds=lane==='visitor-member-id';
+   if(!Array.isArray(value))return !visitorIds&&plain(value)&&!!data(value,'upserted')&&visit(value,lane);
+   if(active.has(value)||value.length>1_000_000)return false;active.add(value);
+   for(let i=0;i<value.length;i++){const d=Object.getOwnPropertyDescriptor(value,String(i));if(!d||!d.enumerable||!Object.hasOwn(d,'value'))return false;if(visitorIds?--budget<0||!integer(d.value,1):!visit(d.value,lane))return false;}
+   active.delete(value);return true;
+  };
   if('upserted'in v){const d=data(v,'upserted');if(!d||!list(d.value,kind))return false;}
-  for(const lane of lanes){const d=Object.getOwnPropertyDescriptor(v,lane);if(!d){if(lane in v)return false;continue;}if(!d.enumerable||!Object.hasOwn(d,'value'))return false;if(d.value===undefined||d.value===null||typeof d.value!=='object')continue;if(!(lists.has(lane)?list(d.value,lane):visit(d.value,lane)))return false;}
+  for(const lane of lanes){const d=Object.getOwnPropertyDescriptor(v,lane);if(!d){if(lane in v)return false;continue;}if(!d.enumerable||!Object.hasOwn(d,'value'))return false;if(d.value===undefined||d.value===null||typeof d.value!=='object')continue;const child=kind==='visitors'&&lane==='groups'?'visitor-group':kind==='visitor-group'&&lane==='members'?'visitor-member-id':lane;if(!(lists.has(lane)?list(d.value,child):visit(d.value,child)))return false;}
   active.delete(v);return true;
  };
  try{return visit(raw,'world');}catch{return false;}

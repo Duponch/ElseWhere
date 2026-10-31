@@ -56,9 +56,9 @@ export function validForestryHistoricalTransport291(raw:unknown,version:unknown)
  if(!integer(version,1,298))return false;
  let budget=2_000_000;const active=new Set<object>();
  const list=(value:unknown,key:string):boolean=>{
-  if(!Array.isArray(value))return plain(value)&&!!data(value,'upserted')&&visit(value,key);
+  if(!Array.isArray(value))return key!=='visitor-member-id'&&plain(value)&&!!data(value,'upserted')&&visit(value,key);
   if(active.has(value)||value.length>1_000_000)return false;active.add(value);
-  for(let i=0;i<value.length;i++){const d=Object.getOwnPropertyDescriptor(value,String(i));if(!d||!own(d,'value')||!visit(d.value,key)){active.delete(value);return false;}}
+  for(let i=0;i<value.length;i++){const d=Object.getOwnPropertyDescriptor(value,String(i));if(!d||!own(d,'value')||(key==='visitor-member-id'?!d.enumerable||--budget<0||!integer(d.value,1):!visit(d.value,key))){active.delete(value);return false;}}
   active.delete(value);return true;
  };
  const visit=(value:unknown,kind:string):boolean=>{
@@ -73,7 +73,8 @@ export function validForestryHistoricalTransport291(raw:unknown,version:unknown)
    const d=Object.getOwnPropertyDescriptor(value,key);if(!d){if(key in value)return false;continue;}
    if(!d.enumerable||!own(d,'value'))return false;
    if(d.value===undefined||d.value===null||typeof d.value!=='object')continue;
-   if(!(array?list(d.value,key):visit(d.value,key))){active.delete(value);return false;}
+   const child=kind==='visitors'&&key==='groups'?'visitor-group':kind==='visitor-group'&&key==='members'?'visitor-member-id':key;
+   if(!(array?list(d.value,child):visit(d.value,child))){active.delete(value);return false;}
   }
   active.delete(value);return true;
  };

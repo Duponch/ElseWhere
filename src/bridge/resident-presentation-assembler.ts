@@ -297,7 +297,11 @@ export class ResidentPresentationAssembler {
   if(!validWallDoorHistoricalTransport296(packet,packet.world.schemaVersion))return fail('Invalid or future resident wall-door successor data');
   if(!validToxicFalloutTransport294(packet,packet.world.schemaVersion))return fail('Invalid or future resident ToxicFallout condition or corpse rot credit');
   if(!validMiscIncidents(packet.world.miscIncidents,packet.world.schemaVersion,packet.world))return fail('Invalid resident Misc incident calendar');
-  if(!validPeaceTalksHistorical293(packet,packet.world.schemaVersion)||!validPartyHistoricalTransport292(packet,packet.world.schemaVersion)||!validForestryHistoricalTransport291(packet,packet.world.schemaVersion)||!this.firefoamTransport(packet,packet.world.schemaVersion)||!validBillPauseHistoricalTransport289(packet,packet.world.schemaVersion))return fail('Invalid or future resident bill reserve pause');
+  if(!validPeaceTalksHistorical293(packet,packet.world.schemaVersion))return fail('Invalid or future resident PeaceTalks transport');
+  if(!validPartyHistoricalTransport292(packet,packet.world.schemaVersion))return fail('Invalid or future resident Party transport');
+  if(!validForestryHistoricalTransport291(packet,packet.world.schemaVersion))return fail('Invalid or future resident Forestry transport');
+  if(!this.firefoamTransport(packet,packet.world.schemaVersion))return fail('Invalid or future resident firefoam transport');
+  if(!validBillPauseHistoricalTransport289(packet,packet.world.schemaVersion))return fail('Invalid or future resident bill reserve pause');
   if(checkpoint&&['tiles','resources','piles','structures','baseRevision'].some(key=>own(packet,key)))return fail('Ambiguous resident checkpoint');
   const previous=this.current;
   if(!checkpoint&&(!previous||packet.epoch!==this.epoch||packet.baseRevision!==this.revision||packet.revision!==packet.baseRevision+1
