@@ -4,10 +4,13 @@ export const MAIN_FRAME_ADMISSION_CAPACITY=256;
 export const MAIN_FRAME_PHASE_ADMISSION_LIMIT297=8;
 export const MAIN_FRAME_HEAVY_ADMISSION_LIMIT297=2;
 export const MAIN_FRAME_SECOND_HEAVY_BEFORE_MS297=2;
+export const MAIN_FRAME_STARVATION_WATCHDOG_MS325=100;
 export interface MainFrameAdmissionHost {
  now():number;
  post(task:()=>void):void;
  report(error:unknown):void;
+ /** Optional wall-time scheduling; callback is never invoked synchronously. */
+ watchdog?(task:()=>void,delayMs:number):()=>void;
  close():void;
 }
 export interface MainFrameAdmissionInfo {readonly arrivalAt?:number;readonly epoch?:number;readonly tick?:number}
@@ -17,16 +20,18 @@ function createHost():MainFrameAdmissionHost {
  channel.port1.onmessage=()=>{const task=pending;pending=undefined;if(!closed)task?.();};
  return {now:()=>performance.now(),post(task){if(closed)return;if(pending)throw Error('Admission task already posted');pending=task;channel.port2.postMessage(0);},
   report(error){if(typeof globalThis.reportError==='function')globalThis.reportError(error);else queueMicrotask(()=>{throw error;});},
+  watchdog(task,delayMs){const timer=setTimeout(task,delayMs);return()=>clearTimeout(timer);},
   close(){closed=true;pending=undefined;channel.port1.close();channel.port2.close();}};
 }
 export class MainFrameAdmissionFIFO {
  readonly #host:MainFrameAdmissionHost;
  readonly #entries:Entry[]=[];
  #closed=false;#running=false;#posted=false;#current:Entry|undefined;
+ #frameStarved=false;#watchdogToken:object|undefined;#cancelWatchdog:(()=>void)|undefined;
  #received=0;#dispatched=0;#maxDepth=0;#overflow=0;
  #dispatchCount=0;#dispatchMaxMs=0;#adoptCount=0;#adoptMaxMs=0;#adoptTotalMs=0;
  #latestEpoch:number|undefined;#latestTick:number|undefined;#appliedEpoch:number|undefined;#appliedTick:number|undefined;#maxTickLag=0;
- constructor(private readonly canFrame:()=>boolean,private readonly onOverflow:()=>void,host?:MainFrameAdmissionHost){this.#host=host??createHost();}
+ constructor(private readonly canFrame:()=>boolean,private readonly onOverflow:()=>void,host?:MainFrameAdmissionHost,private readonly onFrameStarved:()=>void=()=>{}){this.#host=host??createHost();}
  enqueue(run:()=>void,info:MainFrameAdmissionInfo={}):boolean {
   if(this.#closed)return false;
   const entry:Entry={run,arrivalAt:info.arrivalAt??this.#host.now(),epoch:info.epoch,tick:info.tick,phaseTicket297:isNativeCorePhaseAdmissionTicket297(info,run)?info:undefined,fullTicket297:isNativeCoreFullAdmissionTicket297(info,run)?info:undefined};this.#received++;
@@ -37,6 +42,11 @@ export class MainFrameAdmissionFIFO {
   this.#entries.push(entry);this.#maxDepth=Math.max(this.#maxDepth,this.#entries.length);this.notifyAvailability();return true;
  }
  drainFrame():void {
+  if(this.#closed||this.#running)return;
+  this.#clearWatchdog();this.#frameStarved=false;
+  this.#drainFrameBudget();
+ }
+ #drainFrameBudget():void {
   if(this.#closed||this.#running)return;
   if(!this.canFrame()){this.notifyAvailability();return;}
   const started=this.#host.now();let phases=0,ordinary=0,heavy=0,modernFull=false;
@@ -57,9 +67,28 @@ export class MainFrameAdmissionFIFO {
   }
   this.notifyAvailability();
  }
+ #clearWatchdog():void {
+  const cancel=this.#cancelWatchdog;this.#cancelWatchdog=undefined;this.#watchdogToken=undefined;cancel?.();
+ }
+ #armWatchdog():void {
+  if(this.#watchdogToken||this.#running||!this.#host.watchdog)return;
+  const token={};this.#watchdogToken=token;
+  this.#cancelWatchdog=this.#host.watchdog(()=>{
+   if(this.#closed||this.#watchdogToken!==token)return;
+   this.#watchdogToken=undefined;this.#cancelWatchdog=undefined;
+   if(!this.#entries.length)return;
+   if(this.canFrame()&&!this.#frameStarved){this.#frameStarved=true;this.onFrameStarved();}
+   this.notifyAvailability();
+  },MAIN_FRAME_STARVATION_WATCHDOG_MS325);
+ }
  notifyAvailability():void {
-  if(this.#closed||this.#posted||!this.#entries.length||this.canFrame())return;
-  this.#posted=true;this.#host.post(()=>{this.#posted=false;if(this.#closed)return;if(this.canFrame())return;
+  if(this.#closed||!this.#entries.length){this.#clearWatchdog();return;}
+  const canFrame=this.canFrame();
+  if(canFrame&&!this.#frameStarved){this.#armWatchdog();return;}
+  this.#clearWatchdog();
+  if(this.#posted)return;
+  this.#posted=true;this.#host.post(()=>{this.#posted=false;if(this.#closed)return;
+   if(this.canFrame()){if(this.#frameStarved)this.#drainFrameBudget();else this.notifyAvailability();return;}
    const entry=this.#entries.shift();if(entry)this.#run(entry);this.notifyAvailability();});
  }
  #run(entry:Entry):void {
@@ -80,5 +109,5 @@ export class MainFrameAdmissionFIFO {
   tickLag:this.#latestEpoch===this.#appliedEpoch&&this.#latestTick!==undefined&&this.#appliedTick!==undefined?this.#latestTick-this.#appliedTick:null,maxTickLag:this.#maxTickLag});}
  resetDiagnostics():void {this.#received=this.#dispatched=this.#overflow=this.#dispatchCount=this.#adoptCount=0;this.#dispatchMaxMs=this.#adoptMaxMs=this.#adoptTotalMs=0;this.#maxDepth=this.#entries.length;
   this.#maxTickLag=this.#latestEpoch===this.#appliedEpoch&&this.#latestTick!==undefined&&this.#appliedTick!==undefined?Math.max(0,this.#latestTick-this.#appliedTick):0;}
- close():void {if(this.#closed)return;this.#closed=true;this.#entries.length=0;this.#host.close();}
+ close():void {if(this.#closed)return;this.#closed=true;this.#clearWatchdog();this.#frameStarved=false;this.#entries.length=0;this.#host.close();}
 }

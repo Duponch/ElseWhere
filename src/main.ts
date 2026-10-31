@@ -325,7 +325,7 @@ const client = (() => {
   class MainSimulationClient extends SimulationClient {
     protected override createDecoder():SnapshotReader {
       queues.get(this)?.close();lanes.get(this)?.close();const lane=createNativeCloneResidentLane();lanes.set(this,lane);
-      queues.set(this,new MainFrameAdmissionFIFO(()=>mainAdmissionCanFrame(),()=>this.stop('La file de présentation est saturée. Le résultat des opérations reste inconnu ; rechargez une colonie validée.')));
+      queues.set(this,new MainFrameAdmissionFIFO(()=>mainAdmissionCanFrame(),()=>this.stop('La file de présentation est saturée. Le résultat des opérations reste inconnu ; rechargez une colonie validée.'),undefined,()=>renderer?.suspendUntilNextFrame()));
       return lane.reader;
     }
     protected override createWorker():Worker {const lane=lanes.get(this);if(!lane)throw Error('Missing native clone lane');return lane.createWorker();}
@@ -607,8 +607,8 @@ class MainPresentationChanges extends PresentationChanges {
 class MainColonyRenderer extends ColonyRenderer {
   protected override cameraOnlyInput():boolean{return nativeUi?.hasOpenGamePage(true)??false;}
   protected override createSelectionRectanglePort(){return nativeUi?(bounds:{left:number;top:number;width:number;height:number}|null)=>nativeUi!.setSelectionRectangle(bounds):undefined;}
-  get admissionFrameReady():boolean {return !this.disposed&&!this.preparing&&!this.fatalError;}
-  protected override frame(now:number):void {this.beginPresentationFrame297();drainMainAdmissionsBeforeFrame();const frameNow=Math.max(now,this.hostPort.now());let ready=false;try{super.frame(frameNow);ready=this.admissionFrameReady;}finally{try{if(renderer===this)nativeUi?.gameCountdownFrame298(now,ready);}finally{notifyMainAdmissionAvailability();}}}
+  get admissionFrameReady():boolean {return !this.disposed&&!this.preparing&&!this.fatalError&&!this.presentationStopped;}
+  protected override frame(now:number):void {this.resumeAfterFrameStarvation();this.beginPresentationFrame297();drainMainAdmissionsBeforeFrame();const frameNow=Math.max(now,this.hostPort.now());let ready=false;try{super.frame(frameNow);ready=this.admissionFrameReady;}finally{try{if(renderer===this)nativeUi?.gameCountdownFrame298(now,ready);}finally{notifyMainAdmissionAvailability();}}}
   protected override createApplicationContext():SceneApplicationContext{return new SceneApplicationContext();}
   protected override createEnvironmentLighting():EnvironmentLighting {const context=this.applicationContext!;return new EnvironmentLighting(new EnvironmentLightField(context.topology,world=>context.read(world)?.lighting));}
   protected override createIntentReader(){return createClosedMainMapIntentReader();}
@@ -1153,7 +1153,9 @@ function refreshNativeUi():void {
 const initialRuntimeOptions=(async()=>{await attempt(()=>threatPausePreference.initialize());await attempt(()=>settlementPreference.initialize());})();
 async function pauseForMenu(): Promise<void> {
   renderer?.cancelDesignation(); orderMenu.close();
+  if(simulationStopped){menuResumeSpeed=0;return;}
   await menuTransition;
+  if(simulationStopped){menuResumeSpeed=0;return;}
   if (campaignState() && menuResumeSpeed === undefined) {
     const speed = currentSpeed,resumeRevision=deferredResumeGuard.capture();
     await client.setSpeed(0); menuResumeSpeed = deferredResumeGuard.allows(resumeRevision)?speed:0;
@@ -2440,7 +2442,7 @@ client.onFault = () => {
   session.markSimulationStopped(); simulationStopped = true; currentSpeed = 0; menuResumeSpeed = undefined;
   frontMenu.setHasGame(false);
   audio.reset();
-  if (snapshot) renderer?.setWorld(snapshot, false, 0, latestMotion, true,latestCoreFullInput297);
+  renderer?.stopPresentation();
   updateIncident(); syncStorageButtons();
 };
 function receiveMainSnapshot(world: World, cost: number, speed: number, replaced: boolean, motion?: PawnTrack[], coreInput297?:object): void {

@@ -215,7 +215,7 @@ export class SceneRenderCore {
     const previous=this.pendingCore297.at(-1);if(previous&&input.core<previous.core||input.core<this.appliedCore297)throw Error('Actor phase would rewind presentation');
     this.latestCoreInput297=nativeInput;
     this.projectiles.adoptPhase297(input);
-    if(this.hostPort.hidden())return;
+    if(this.presentationSuspendedUntilFrame325||this.hostPort.hidden())return;
     this.timeline.adopt(input.core/10,input.speed,input.tracks,this.hostPort.now(),false,!!this.applicationContext,true);this.hasTracks=true;
     this.pendingCore297.push(input);if(this.pendingCore297.length>64)throw Error('Actor phase presentation history overflow');
     if(input.speed===0)this.presentCorePhases297();
@@ -419,6 +419,8 @@ export class SceneRenderCore {
   protected snapshotDuration = 120;
   protected disposed = false;
   protected preparing = false;
+  protected presentationStopped = false;
+  private presentationSuspendedUntilFrame325 = false;
   protected pointerDown: { x: number; y: number; button: number; pointerId: number } | null = null;
 
   constructor(renderer: THREE.WebGPURenderer, groundGrassEnabled: boolean, protected readonly rendererLifetime: RendererLifetime, protected readonly hostPort:SceneRenderHostPort) {
@@ -546,12 +548,31 @@ export class SceneRenderCore {
     },this.surfaceTint,this.environmentLighting.configureGrounded,this.animationDetail);
   }
 
+  /** Admissions continue under their original guards while RAF is absent. */
+  suspendUntilNextFrame(): void {
+    if(this.disposed||this.fatalError||this.presentationStopped)return;
+    this.presentationSuspendedUntilFrame325=true;
+  }
+
+  /** Only an actual MAIN frame resumes poses from the latest confirmed input. */
+  resumeAfterFrameStarvation(): void {
+    if(!this.presentationSuspendedUntilFrame325)return;
+    this.presentationSuspendedUntilFrame325=false;
+    this.visibilityChanged();
+  }
+
+  /** Freeze the last prepared scene after a source fault. No World or Native owner is re-admitted. */
+  stopPresentation(): void {
+    this.presentationStopped = true; this.lastFrame = 0; this.keys.clear();
+  }
+
   setWorld(world: World, resetPresentation = false, speed = 1, tracks?: PawnTrack[], immutableSnapshot = false, coreInput297?:object, deferCalmFull297 = false): void {
     if(this.disposed || this.fatalError)return;
     try {
     const coreInput=readNativeCorePhaseInput297(coreInput297);
     if(coreInput297&&(!coreInput||coreInput.kind!=='full'||coreInput.world!==world))throw Error('Invalid Native Full phase owner');
     if(isCorePhysicalSchema297(Number(world.schemaVersion))&&!coreInput)throw Error('Current297 renderer requires its Native Full owner');
+    if(this.presentationStopped){if(!resetPresentation)return;this.presentationStopped=false;}
     if(coreInput)this.coreFullInputs297.set(world,coreInput);
     const at=coreInput?coreInput.core/10:world.tick;
     const previous=this.received?.world;
@@ -573,7 +594,7 @@ export class SceneRenderCore {
     this.immutableSnapshot=immutableSnapshot;
     if(immutableSnapshot)this.immutableWorlds.add(world);else this.immutableWorlds.delete(world);
     if(coreInput)this.projectiles.adoptPhase297(coreInput,reset);else this.projectiles.adopt(world,reset);
-    if(this.hostPort.hidden())return;
+    if(this.presentationSuspendedUntilFrame325||this.hostPort.hidden())return;
     if(tracks){this.timeline.adopt(at,speed,tracks,this.hostPort.now(),reset||!this.hasTracks,!!this.applicationContext&&immutableSnapshot,!!coreInput);this.hasTracks=true;}
     if(speed===0){
       // This World has already been received/admitted. Pause presents this
@@ -1491,6 +1512,7 @@ export class SceneRenderCore {
   }
 
   visibilityChanged():void {
+    if(this.presentationStopped)return;
     this.frames.reset();this.lastFrame=0;this.animationDetail.reset();
     if(!this.hostPort.hidden()&&this.received){const r=this.received,latest=this.latestCoreInput297;this.setWorld(r.world,true,r.speed,r.tracks,r.immutableSnapshot,r.coreInput297);if(latest){const phase=readNativeCorePhaseInput297(latest),full=this.coreFullInputs297.get(r.world);
       // A newer Full supersedes an older phase even in the same Native epoch.
@@ -1501,6 +1523,7 @@ export class SceneRenderCore {
 
   protected frame(now: number): void {
     if (this.disposed || this.fatalError || this.preparing) return;
+    if(this.presentationStopped){this.renderer.info.reset();this.renderScene();return;}
     if(this.hasTracks){this.timeline.advance(now);const due=this.presentation.take(this.timeline.tick,this.received?.coreInput297?undefined:now,this.presentationFrame297);if(due)this.applyWorld(due);this.presentCorePhases297();}
     this.presentConfirmedIntents();
     const dtTweener297=this.lastFrame?Math.max(0,(now-this.lastFrame)/1000):0;
