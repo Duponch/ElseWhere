@@ -1,3 +1,5 @@
+import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {effectiveCore297} from './core-phase-297.ts';
 import {medicalCivilCore271} from './suspended-human-clock-271.ts';
 import {advanceAnimalAgeConditionInterval256,tickAnimalConditionTends256} from './animal-age-condition-runtime-256.ts';
 import {destroyAnimalConditionPart256} from './animal-condition-missing-part-256.ts';
@@ -46,7 +48,7 @@ function frontier(a:ActualAnimalMind256,record:AnimalAgeMedical256,draw:MedicalR
    if(committed)throw Error('Animal clinical mental outcome already committed');committed=true;
    if(record.death){delete a.confusion;return;}
    if(startedAt!==undefined&&episode){
-    const ok=local?tryStartAnimalConfusionLocal256(local,a,startedAt):caravan&&tryStartAnimalConfusionCaravan256(a);
+    const ok=local?tryStartAnimalConfusionLocal256(local,a,isCorePhysicalSchema297(Number(local.schemaVersion))?effectiveCore297(local):startedAt):caravan&&tryStartAnimalConfusionCaravan256(a);
     if(!ok)throw Error('Prepared actual animal mental admission changed before commit');a.confusion=episode;
    }else if(episode)a.confusion=episode;
    else if(recovered){delete a.confusion;if(local)interruptAnimalConditionJob256(a,local.tick,true);}
