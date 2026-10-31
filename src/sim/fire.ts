@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {effectiveCore297} from './core-phase-297.ts';
 import {landedStartingPods256,damageStartingPod256} from './starting-pod-damage-256.ts';
 import {terrainExtinguishesFire256} from './natural-terrain-runtime-256.ts';
 import {destroyBridge} from './bridge.ts';
@@ -109,7 +110,7 @@ function applyDamage(w:World,target:FireTarget,amount:number,core:number,instiga
   if(target.kind==='resource')damageResource(w,target.value,amount);
   else if(target.kind==='pile')damagePile(w,target.value,amount);
   else {
-    const s=target.value,state=ensureFireState(w);damageStructure(w,s,fireRound(amount*Math.max(.05,structureFlammability(s)),()=>fireRandom(state)),'fire',w.rng,{core,rawAmount:amount,...instigatorKey?{instigatorKey}:{}});
+    const s=target.value,state=ensureFireState(w);damageStructure(w,s,fireRound(amount*Math.max(.05,structureFlammability(s)),()=>fireRandom(state)),'fire',w.rng,{core:isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveCore297(w):core,rawAmount:amount,...instigatorKey?{instigatorKey}:{}});
     if(s.kind==='battery'&&w.structures.includes(s)&&!state.batteryWicks.some(w=>w.structureId===s.id)&&fireRandom(state)<.05&&!!s.battery&&batteryWattDays(s.battery)>500)state.batteryWicks.push({structureId:s.id,endCore:core+70+Math.floor(fireRandom(state)*80)});
   }
   const destroyed=target.kind==='resource'?!w.resources.includes(target.value):target.kind==='pile'?!w.piles.includes(target.value):!w.structures.includes(target.value)&&!w.packed.some(p=>p.building===target.value);

@@ -74,7 +74,7 @@ export function advanceDuckFlyers256(w:World,services?:DuckFlyerServices256):voi
  for(const f of s.flyers){const now=w.tick*10;if(f.atCore===now)continue;if(f.atCore!==now-10)throw Error('Duck flyer clock discontinuity');
   for(let core=f.atCore+1;core<=now;core++){
    const left=f.remainingCore-1;
-   if(f.kind==='arrival'&&left<=15&&!f.roofHit){if(isRoofed(w,f.cell.z*w.width+f.cell.x)){if(!services)throw Error('Duck arrival requires atomic HitRoof service');if(!services.hitRoof(w,f.cell,core)){f.remainingCore=Math.max(0,f.remainingCore-(now-f.atCore));f.atCore=now;break;}s=w.wildlife!;}f.roofHit=true;}
+   if(f.kind==='arrival'&&left<=15&&!f.roofHit){if(isRoofed(w,f.cell.z*w.width+f.cell.x)){if(!services)throw Error('Duck arrival requires atomic HitRoof service');if(!services.hitRoof(w,f.cell,isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveCore297(w):core)){f.remainingCore=Math.max(0,f.remainingCore-(now-f.atCore));f.atCore=now;break;}s=w.wildlife!;}f.roofHit=true;}
    f.remainingCore=Math.max(0,left);f.atCore=core;
    if(left<=0){const release=f.kind==='arrival'?planReleaseArrival(w,f):undefined,retire=f.kind==='leaving'?planHeldDuckContentsRetirement256(w,f.animal.id):undefined,exits=s.exitedAnimals??0;if(f.kind==='arrival'&&!release||f.kind==='leaving'&&(!retire||!Number.isSafeInteger(exits+1))){f.atCore=now;break;}if(retire&&!retire.commit()){f.atCore=now;break;}s.flyers=s.flyers!.filter(holder=>holder!==f);if(!s.flyers.length)delete s.flyers;if(release)release();else{s.exitedAnimals=exits+1;w.events.push({tick:w.tick,type:'need',message:`Canard ${f.animal.id} a quitté la carte en vol.`});if(w.events.length>80)w.events.splice(0,w.events.length-80);}finished.add(f.id);break;}
   }
