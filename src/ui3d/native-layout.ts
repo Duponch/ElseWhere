@@ -23,6 +23,8 @@ export interface NativePageBox {
   inspectorParts?:NativeInspectorParts;
   /** Explicit useful globe area for the World browser only. */
   visualRect?:NativeRect;
+  /** Fixed portrait in the pregame dossier; absent for existing layouts. */
+  portraitRect?:NativeRect;
   /** Fixed column headings for the two long animal catalogues only. */
   tableHeader?:NativeRect;
   matrixColumnWeights?:readonly number[];
@@ -510,8 +512,125 @@ function worldPage(page:NativePage,viewport:{width:number;height:number},measure
   return{x:12,y:viewport.height-bottom-height,width,height,header,footer,body,contentHeight,rows,layout:'world',regions,actions,visualRect};
 }
 
+/** Pregame choices and their dossier share one opt-in regional layout.
+ * No screen IDs, commands, generation state or simulation owners are inferred. */
+function setupPage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure):NativePageBox {
+  const pad=NATIVE_UI.padding,gap=10,header=page.subtitle?76:48;
+  const width=Math.min(Math.max(220,Math.min(requestedWidth(page,1160),viewport.width-32)),Math.max(1,viewport.width-24));
+  const innerWidth=Math.max(1,width-pad*2-12),maximumHeight=Math.max(1,Math.min(page.height??760,viewport.height-24));
+  const actionFlow=flowNativeControls(page.actions??[],{x:pad,y:0,width:innerWidth,height:0},measure);
+  const footer=page.actions?.length?actionFlow.height+pad*2:pad;
+  const has=(key:NativeRegion)=>page.rows.some(row=>(row.region??'details')===key);
+  const catalogue=has('catalogue'),details=has('details')||!!page.portrait,summary=!page.visual&&has('graph');
+  const wide=width>=(page.visual?900:760),rail=Math.min(page.setupCatalogueWidth??240,innerWidth*.44);
+  const navigationRows:NativeRowBox[]=[];let navigationNeed=0;
+  for(const row of page.rows.filter(row=>row.region==='navigation')){
+    const box=rowBox(row,pad,navigationNeed,innerWidth,measure,false);navigationRows.push(box);navigationNeed+=box.height+3;
+  }
+  if(navigationNeed)navigationNeed-=3;
+  const navigationHeight=Math.min(navigationNeed,Math.max(0,maximumHeight-header-footer-60));
+  const bodyTop=header+navigationHeight+(navigationHeight?gap:0),maximumBody=Math.max(0,maximumHeight-footer-bodyTop);
+
+  function geometry(space:number,needs:Partial<Record<NativeRegion,number>>={}){
+    const regions:Partial<Record<NativeRegion,NativeRegionBox>>={};
+    if(navigationNeed)regions.navigation={x:pad,y:header,width:innerWidth,height:navigationHeight,contentHeight:navigationNeed};
+    let area:NativeRect={x:pad,y:bodyTop,width:innerWidth,height:space},visualRect:NativeRect|undefined;
+    if(page.visual){
+      if(wide){const ratio=Number.isFinite(page.columnRatio)?Math.max(.35,Math.min(.7,page.columnRatio!)):.54,globeWidth=Math.max(1,innerWidth*ratio);visualRect={...area,width:globeWidth};area={x:pad+globeWidth+gap,y:bodyTop,width:Math.max(1,innerWidth-globeWidth-gap),height:space};}
+      else{const visualHeight=Math.min(220,Math.max(0,(space-gap)*.38));visualRect={...area,height:visualHeight};area={x:pad,y:bodyTop+visualHeight+(visualHeight?gap:0),width:innerWidth,height:Math.max(0,space-visualHeight-(visualHeight?gap:0))};}
+      regions.graph={...visualRect,contentHeight:0};
+    }
+    const hasDossier=details||summary;
+    if(catalogue&&hasDossier){
+      if(wide&&!page.visual){regions.catalogue={...area,width:rail,contentHeight:0};area={...area,x:area.x+rail+gap,width:Math.max(1,area.width-rail-gap)};}
+      else{
+        const catalogueNeed=needs.catalogue??180,dossierNeed=(needs.details??180)+(summary?127:0);
+        const available=Math.max(0,area.height-gap),share=catalogueNeed/Math.max(1,catalogueNeed+dossierNeed);
+        const catalogueHeight=Math.min(available*.56,Math.max(Math.min(76,available*.3),available*share));
+        regions.catalogue={...area,height:catalogueHeight,contentHeight:0};area={...area,y:area.y+catalogueHeight+gap,height:Math.max(0,available-catalogueHeight)};
+      }
+    }else if(catalogue){regions.catalogue={...area,contentHeight:0};}
+    if(summary){
+      const summaryHeight=Math.min(127,Math.max(0,(area.height-gap)*.42));
+      regions.graph={x:area.x,y:area.y+area.height-summaryHeight,width:area.width,height:summaryHeight,contentHeight:0};
+      area={...area,height:Math.max(0,area.height-summaryHeight-(summaryHeight?gap:0))};
+    }
+    let portraitRect:NativeRect|undefined;
+    if(details){
+      if(page.portrait){const portraitHeight=Math.min(128,Math.max(0,area.height)),portraitWidth=portraitHeight*92/128;portraitRect={x:area.x+area.width-portraitWidth-12,y:area.y,width:portraitWidth,height:portraitHeight};}
+      regions.details={...area,contentHeight:0};
+    }
+    return{regions,visualRect,portraitRect};
+  }
+
+  function buildRows(regions:Partial<Record<NativeRegion,NativeRegionBox>>,portraitRect?:NativeRect){
+    const rows:NativeRowBox[]=navigationRows.map(box=>({...box,row:{...box.row,region:'navigation'}}));
+    for(const key of ['catalogue','details','graph'] as const){
+      const region=regions[key];if(!region||key==='graph'&&page.visual)continue;
+      const source=page.rows.filter(row=>(row.region??'details')===key);
+      const setupColumns=key==='details'&&source.some(row=>row.setupColumn!==undefined);
+      const presentLanes=setupColumns?Math.max(...source.map(row=>(row.setupColumn??0)+1)):1;
+      const count=setupColumns?Math.min(presentLanes,region.width>=760?3:region.width>=520?2:1):1;
+      if(key==='graph'&&!page.visual){
+        const count=region.width>=640?4:region.width>=360?2:1,cellWidth=Math.max(1,(region.width-12-gap*(count-1))/count);let top=0;
+        for(let index=0;index<source.length;){
+          const sourceRow=source[index]!;
+          if(!sourceRow.dense||sourceRow.emphasis==='heading'){
+            const box=rowBox({...sourceRow,region:key},region.x,region.y-header+top,Math.max(1,region.width-12),measure,false);rows.push(box);top+=box.height+2;index++;continue;
+          }
+          let rowHeight=0;
+          for(let column=0;column<count&&index<source.length;column++){
+            const entry=source[index]!;if(!entry.dense||entry.emphasis==='heading')break;
+            const box=rowBox({...entry,region:key},region.x+column*(cellWidth+gap),region.y-header+top,cellWidth,measure,false);rows.push(box);rowHeight=Math.max(rowHeight,box.height);index++;
+          }
+          top+=rowHeight+2;
+        }
+        region.contentHeight=top;continue;
+      }
+      let top=0,inColumns=false,portraitPlaced=false;const lanes=Array.from({length:count},()=>0);
+      for(const sourceRow of source){
+        const row={...sourceRow,region:key},explicit=setupColumns?row.setupColumn:undefined,useColumn=explicit!==undefined;
+        const column=setupColumns&&count===2&&explicit===2?0:Math.min(count-1,explicit??0);
+        if(useColumn&&!inColumns){
+          inColumns=true;lanes.fill(top);
+          if(key==='details'&&portraitRect&&!portraitPlaced){lanes[count-1]=Math.max(top,portraitRect.height+8);portraitPlaced=true;}
+        }else if(!useColumn&&inColumns){inColumns=false;top=Math.max(...lanes);}
+        const rowTop=useColumn?lanes[column]!:top;
+        const portraitInset=key==='details'&&portraitRect&&!useColumn&&rowTop<portraitRect.height?portraitRect.width+12:0;
+        const columnWidth=useColumn?(region.width-12-gap*(count-1))/count:Math.max(1,region.width-12-portraitInset);
+        const x=region.x+(useColumn?column*(columnWidth+gap):0);
+        const box=rowBox(row,x,region.y-header+rowTop,columnWidth,measure,false);
+        if(key==='catalogue'&&row.compact&&row.controlStyle==='button'&&row.controls?.length===1&&!row.label&&!row.value&&!row.input){
+          const control=box.controls[0];if(control){control.x=region.x;control.width=Math.max(1,region.width-12);control.y=region.y-header+rowTop+3;control.height=NATIVE_UI.button;box.height=NATIVE_UI.button+6;}
+        }
+        // A single-line dense fact keeps the14px font; only unused padding shrinks.
+        if(row.dense&&!row.input&&!row.meter&&!row.controls?.length&&!row.detail&&box.labelLines.length===1&&box.valueLines.length<=1)box.height=24;
+        rows.push(box);const next=rowTop+box.height+(row.dense?1:3);
+        if(useColumn)lanes[column]=next;else top=next;
+      }
+      region.contentHeight=Math.max(top,...lanes,key==='details'?(portraitRect?.height??0):0);
+    }
+    return rows;
+  }
+  const initial=geometry(maximumBody);buildRows(initial.regions,initial.portraitRect);
+  const needs=Object.fromEntries(Object.entries(initial.regions).map(([key,region])=>[key,region!.contentHeight])) as Partial<Record<NativeRegion,number>>;
+  const dossierNeed=(needs.details??0)+(summary?127+gap:0);
+  const catalogueNeed=needs.catalogue??0;
+  let usefulBody=wide&&!page.visual?Math.max(catalogueNeed,dossierNeed):catalogueNeed+dossierNeed+(catalogue&&details?gap:0);
+  if(page.visual)usefulBody=wide?Math.max(320,usefulBody):220+gap+usefulBody;
+  const height=Math.min(maximumHeight,bodyTop+Math.max(28,usefulBody)+footer),space=Math.max(0,height-footer-bodyTop);
+  const final=geometry(space,needs),rows=buildRows(final.regions,final.portraitRect);
+  const primary=final.regions.catalogue??final.regions.details??final.regions.graph??{x:pad,y:bodyTop,width:innerWidth,height:space,contentHeight:0};
+  const actions=actionFlow.controls.map(control=>({...control,y:height-header-footer+pad+control.y}));
+  // Keep declaration/keyboard order. When one line fits, anchor the final action
+  // to the opposite edge without changing its callback or inventing Enter behavior.
+  if(actions.length>=2&&actions.every(action=>action.y===actions[0]!.y))actions[actions.length-1]!.x=pad+innerWidth-actions[actions.length-1]!.width;
+  return{x:page.setupAnchor==='right'?Math.max(12,viewport.width-width-24):(viewport.width-width)/2,y:(viewport.height-height)/2,width,height,header,footer,body:{x:primary.x,y:primary.y,width:primary.width,height:primary.height},contentHeight:primary.contentHeight,rows,layout:'setup',regions:final.regions,actions,visualRect:final.visualRect,portraitRect:final.portraitRect};
+}
+
 export function layoutNativePage(page:NativePage,viewport:{width:number;height:number},front:boolean,measure:TextMeasure):NativePageBox {
   const layout=page.layout??(front?'front':page.id.startsWith('inspect-')?'inspector':['work','schedule','animals','wildlife','assign','history'].includes(page.id)?'table':'dialog');
+  if(layout==='setup')return setupPage(page,viewport,measure);
   if(layout==='storage')return storagePage(page,viewport,measure);
   if(layout==='world')return worldPage(page,viewport,measure);
   if(layout==='table'&&page.tableProfile==='colonists'&&['work','schedule','assign'].includes(page.id)&&page.rows.some(row=>row.columns))return colonistTablePage(page,viewport,measure);

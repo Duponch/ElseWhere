@@ -894,7 +894,7 @@ export class NativeStage {
     }
   }
   private measure=(text:string,size:number,bold=false):number=>{this.measureContext.font=this.font(size,bold);return this.measureContext.measureText(text).width;};
-  private primaryRegion():NativeRegion|undefined{return this.pageBox?.layout==='storage'||this.pageBox?.layout==='architect'||this.pageBox?.layout==='world'||this.pageBox?.layout==='table'&&this.pageBox.regions.catalogue?'catalogue':this.pageBox?.layout==='research'?'details':undefined;}
+  private primaryRegion():NativeRegion|undefined{if(this.pageBox?.layout==='setup')return this.pageBox.regions.catalogue?'catalogue':this.pageBox.regions.details?'details':this.pageBox.regions.graph?'graph':'navigation';return this.pageBox?.layout==='storage'||this.pageBox?.layout==='architect'||this.pageBox?.layout==='world'||this.pageBox?.layout==='table'&&this.pageBox.regions.catalogue?'catalogue':this.pageBox?.layout==='research'?'details':undefined;}
   private horizontalOffset(region?:NativeRegion):number{return region==='graph'?this.graphX:region==='catalogue'&&(this.pageBox?.layout==='palette'||this.pageBox?.layout==='table')?this.paletteX:0;}
   private setHorizontalOffset(region:NativeRegion|undefined,value:number):void{const rect=region?this.pageBox?.regions[region]:undefined,next=THREE.MathUtils.clamp(value,0,Math.max(0,(rect?.contentWidth??rect?.width??0)-(rect?.width??0)));if(region==='graph')this.graphX=next;else if(region==='catalogue'&&(this.pageBox?.layout==='palette'||this.pageBox?.layout==='table'))this.paletteX=next;}
   private regionOffset(region?:NativeRegion):number{return !region||region===this.primaryRegion()||this.pageBox?.layout==='table'&&region==='navigation'?this.scroll:region==='catalogue'?this.scroll:this.regionOffsets[region];}
@@ -983,7 +983,7 @@ export class NativeStage {
     return [{...ink,controls:controls?.map(control=>this.controlInk(control)),columns:columns?.map(({hint:_columnHint,...column})=>column)},!!this.rowHint(row)];
   }
   private pageInkSignature(page:NativePage|null):string{
-    return page?JSON.stringify([page.id,page.contentKey,page.title,page.subtitle,page.width,page.height,page.layout,page.tableProfile,page.palette,page.research,page.columnRatio,page.portrait?.url,page.visual?.selected,page.visual?.markers,page.rows.map(row=>this.rowInk(row)),page.actions?.map(control=>this.controlInk(control)),page.closable,this.textFontRevision,this.textEntityRevision,this.frontVisible,this.width,this.height,this.displayScale,this.bottomDockHeight,this.scroll,this.regionOffsets,this.graphX,this.paletteX]):'';
+    return page?JSON.stringify([page.id,page.contentKey,page.title,page.subtitle,page.width,page.height,page.layout,page.tableProfile,page.setupCatalogueWidth,page.setupAnchor,page.palette,page.research,page.columnRatio,page.portrait?.url,page.visual?.selected,page.visual?.markers,page.rows.map(row=>this.rowInk(row)),page.actions?.map(control=>this.controlInk(control)),page.closable,this.textFontRevision,this.textEntityRevision,this.frontVisible,this.width,this.height,this.displayScale,this.bottomDockHeight,this.scroll,this.regionOffsets,this.graphX,this.paletteX]):'';
   }
   private rebuildPage(force=false):void{
     const page=this.page;
@@ -1023,9 +1023,9 @@ export class NativeStage {
       drawFn:(ctx,wp,hp,rng)=>{
         ctx.save();ctx.scale(wp/box.width,hp/sheet.height);ctx.textAlign='left';ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font(17,true);
         const title=box.inspectorParts?page.rows.find(row=>row.id==='pawn-tabs')?.controls?.find(control=>control.active)?.label??page.title:page.title;
-        ctx.fillText(title,margin,27,box.width-margin*2-(page.portrait&&!box.inspectorParts?74:28));
+        ctx.fillText(title,margin,27,box.width-margin*2-(page.portrait&&!box.inspectorParts&&!box.portraitRect?74:28));
         drawMarkerLine(ctx,margin,35,Math.min(box.width-48,margin+this.measure(title,17,true)+22),35,'#b58b4a',1.3,rng);
-        if(page.subtitle&&!box.inspectorParts){ctx.font=this.font(13);ctx.fillStyle='#66583f';wrapNativeText(page.subtitle,box.width-margin*2-(page.portrait?62:0),this.measure,13).slice(0,2).forEach((line,index)=>ctx.fillText(line,margin,55+index*17));}
+        if(page.subtitle&&!box.inspectorParts){ctx.font=this.font(13);ctx.fillStyle='#66583f';wrapNativeText(page.subtitle,box.width-margin*2-(page.portrait&&!box.portraitRect?62:0),this.measure,13).slice(0,2).forEach((line,index)=>ctx.fillText(line,margin,55+index*17));}
         for(const r of visible){if(r.row.graphNode)continue;const top=box.header+r.top-this.rowOffset(r.row),nameBand=this.rowNameViewport(r.row);
           if(nameBand){ctx.save();ctx.beginPath();ctx.rect(nameBand.x,nameBand.y,nameBand.width,nameBand.height);ctx.clip();this.drawMatrixName(ctx,r,top);ctx.restore();}
           const region=this.rowViewport(r.row);ctx.save();ctx.beginPath();ctx.rect(region.x,region.y,region.width,region.height);ctx.clip();ctx.translate(-this.horizontalOffset(r.row.region),0);this.drawPageRow(ctx,r,top,rng,box);ctx.restore();}
@@ -1097,7 +1097,7 @@ export class NativeStage {
       }
       const source=page.portrait.url;let image=this.portraitImages.get(source);
       if(!image){image=new Image();this.portraitImages.set(source,image);image.onload=()=>{if(!this.closed&&this.page?.portrait?.url===source){this.rebuildPage(true);this.invalidate();}};image.src=source;}
-      if(image.complete&&image.naturalWidth){const portrait=image;this.pagePiece('page:portrait',{w:summary ? .74 : .43,h:summary ? .82 : .47,depth:.018,bgColor:PALETTE.kraftBase,seed:2081,drawFn:(ctx,wp,hp)=>ctx.drawImage(portrait,0,0,wp,hp)},source,summary?(summary.x+47-box.width/2)*k:w/2-.7,summary?(box.height/2-summary.y-summary.height/2)*k:h/2-.32,.07);}
+      if(image.complete&&image.naturalWidth){const portrait=image,rect=box.portraitRect;const piece=this.pagePiece('page:portrait',{w:rect?rect.width*k:summary ? .74 : .43,h:rect?rect.height*k:summary ? .82 : .47,depth:.018,bgColor:PALETTE.kraftBase,seed:2081,drawFn:(ctx,wp,hp)=>ctx.drawImage(portrait,0,0,wp,hp)},source,rect?(rect.x+rect.width/2-box.width/2)*k:summary?(summary.x+47-box.width/2)*k:w/2-.7,rect?(box.height/2-rect.y+this.regionOffset('details')-rect.height/2)*k:summary?(box.height/2-summary.y-summary.height/2)*k:h/2-.32,.07);if(rect)this.regionGroup('details').add(piece);}
       if(this.portraitImages.size>24)for(const [url,old]of this.portraitImages){if(url===source)continue;old.onload=null;old.onerror=null;this.portraitImages.delete(url);if(this.portraitImages.size<=16)break;}
     }
     this.retirePagePieces();this.focusIndex=focusedId===undefined?-1:this.pageControls.filter(hit=>!hit.control?.disabled).findIndex(hit=>(hit.control?.id??String(hit.piece.userData.nativeId))===focusedId);

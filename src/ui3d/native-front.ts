@@ -8,6 +8,8 @@ import { defaultWorldGenerationSettings, validWorldGenerationSettings, isIntrins
 import { GEOGRAPHIC_CREATION_SIZES_262, GEOGRAPHIC_CREATION_SEASONS_262, type GeographicCreationOptions262 } from '../sim/geographic-creation-options-262';
 import { canPlaceWorldSettlement } from '../sim/world-settlement-placement';
 import { describeWorldSite } from '../sim/world-site-geography';
+import {BIOME_LABELS,HILLINESS_LABELS} from '../sim/site';
+import {STONE_LABELS} from '../sim/geology';
 import { createStartingCandidateRoster, previewStartingCandidate, previewStartingParty, rerollStartingCandidateForRoster, validStartingCandidateName, startingPartyMissingWork, type StartingCandidateDescriptor } from '../sim/starting-candidates';
 import { startingOriginalRequestFromRoster256 } from '../sim/starting-original-request-256';
 import { BACKGROUND_SKILL_IDS, BACKGROUND_WORK_LABELS, CHILDHOODS, ADULTHOODS, backgroundSkillRefusal, backgroundWorkRefusal } from '../sim/colonist-backgrounds';
@@ -33,6 +35,7 @@ import { humanLimbVisualMask } from '../render/human-anatomy-presentation';
 import { portraitDataUrl, portraitExpressionOf } from '../ui/pawn-portrait';
 import { nativeClinicalConditionRows } from './native-special-inspection';
 import { NATIVE_UI_SCALE_LIMITS } from './native-preferences';
+import {presentNativeFront} from './native-front-presentation';
 
 type Page = 'home' | 'scenario' | 'story' | 'world' | 'site' | 'pawns' | 'load' | 'tests' | 'options';
 const names: Record<string, string> = {
@@ -59,12 +62,16 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   let showCandidateClothes = true;
   let selectedTile: number | null = null, eligible: number[] = [], siteOffset = 0;
   let tests: TestColony[] | undefined;
+  const testCatalogue={search:'',selected:undefined as string|undefined};
+  const optionSections=[{id:'game',label:'Jeu'},{id:'interface',label:'Interface'},{id:'graphics',label:'Graphismes'},{id:'lighting',label:'Éclairage'},{id:'audio',label:'Audio'}] as const;
+  let optionSection:typeof optionSections[number]['id']='game';
+  let loadSearch='',selectedLoadKey:string|undefined;
   let confirmation: { message: string; accept: () => void | Promise<unknown> } | undefined;
 
   function paint(): void {
     if (!open||externalPage) return;
     if (confirmation) {
-      show({ id: 'front-confirm', title: 'Confirmer le départ', modal: true, rows: [{ id: 'confirmation', label: confirmation.message }], actions: [
+      show({ id: 'front-confirm', title: 'Confirmer le départ', modal: true, layout:'setup',width:620,height:280,rows: [{ id: 'confirmation', region:'details',label: confirmation.message }], actions: [
         control('confirm-cancel', 'Annuler', () => { confirmation = undefined; }),
         control('confirm-accept', 'Confirmer', () => { const accept = confirmation!.accept; confirmation = undefined; return accept(); }),
       ], onClose: () => { confirmation = undefined; paint(); } });
@@ -73,9 +80,9 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     const result = renderPage();
     if (error) result.rows.unshift({ id: 'front-error', label: error });
     if (status) result.rows.unshift({ id: 'front-status', label: status });
-    result.id = `front-${page}`; result.modal = true; result.width ??= page==='home'?4.9:8.8;
+    result.id = `front-${page}`; result.modal = true;
     result.onClose = () => { if (!busy && !pending) back(); };
-    show(result);
+    show(presentNativeFront(result,page,{button:control,field:input,tests:testCatalogue}));
   }
   function navigate(next: Page): void { externalPage=false;page = next; open = true; error = ''; status = ''; confirmation = undefined; paint(); }
   function fail(cause: unknown): void { error = errorMessage(cause); paint(); }
@@ -210,136 +217,202 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       { id: 'test-sound', label: 'Essayer le son', controls: [control('test-sound', 'Essayer', async () => { if (await run(options.onTestSound, 'Chargement du son d’essai…')) status = 'Son d’essai lancé.'; })] },
       toggle('music', 'Musique', options.getMusicEnabled(), value => preference(options.onMusicEnabledChange(value))),
       range('music-volume', 'Volume de la musique', Math.round(options.getMusicVolume() * 100), 0, 100, 1, value => preference(options.onMusicVolumeChange(value / 100)), false, ' %'));
-    const split=Math.ceil(rows.length/2);rows.forEach((row,index)=>{row.column=index<split?0:1;});
-    return { id: '', title: 'Options', rows, width:1120,height:760,columnRatio:.5,layout:'front',actions: navigation() };
+    const sectionOf=(id:string):typeof optionSections[number]['id']=>{
+      if(['autosave','threat','settlements'].includes(id))return 'game';
+      if(['ui-scale','auto-hide-bottom','auto-hide-notifications','designation','item-label','font'].includes(id))return 'interface';
+      if(id.startsWith('light-'))return 'lighting';
+      if(['sound','sound-volume','test-sound','music','music-volume'].includes(id))return 'audio';
+      return 'graphics';
+    };
+    const category=optionSections.find(section=>section.id===optionSection)!;
+    const catalogue:NativeRow[]=optionSections.map(section=>({id:`option-section-${section.id}`,label:'',region:'catalogue',controls:[control(`option-section-${section.id}`,section.label,()=>{optionSection=section.id;},false,optionSection===section.id)]}));
+    const details:NativeRow[]=[{id:'option-section-title',label:category.label,emphasis:'heading',region:'details'},
+      ...rows.filter(row=>sectionOf(row.id)===optionSection).map(row=>({...row,region:'details' as const,column:undefined}))];
+    return { id:'',title:'Options',rows:[...catalogue,...details],width:900,height:760,layout:'setup',setupCatalogueWidth:180,contentKey:`options-${optionSection}`,actions:navigation() };
   }
 
+  const nativeSiteView={scope:'',tab:'facts' as 'facts'|'places'|'factions'};
+  const nativeSiteRiverNames={'huge-river':'Fleuve','large-river':'Grande rivière',river:'Rivière',creek:'Ruisseau'} as const;
+  const nativeSiteRoadNames={'dirt-path':'Sentier','dirt-road':'Route en terre','stone-road':'Route pavée','ancient-asphalt-road':'Ancienne route asphaltée','ancient-asphalt-highway':'Ancienne autoroute'} as const;
+  const nativeSiteBiome=(biome:ReturnType<typeof describeWorldSite>['biome'])=>biome==='ocean'?'Océan':biome==='lake'?'Lac':BIOME_LABELS[biome];
+
   function renderWorld(): NativePage {
-    const update = (action: () => void) => { invalidateDraft(); action(); };
-    const rows: NativeRow[] = [input('world-seed', 'Graine', parameters.seed, value => update(() => { parameters.seed = value; })),
-      { id: 'random-seed', label: 'Graine aléatoire', controls: [control('random-seed', 'Aléatoire', () => update(() => { parameters.seed = randomSiteSeed(); }))] },
-      choice('coverage', 'Couverture de la planète', parameters.settings.coverage, [.3, .5, 1] as const, value => update(() => { parameters.settings.coverage = value; }), value => `${value * 100} %`)];
-    if (parameters.settings.coverage === 1) rows.push({ id: 'coverage-warning', label: 'Une planète complète demande davantage de temps de préparation et de mémoire.' });
-    for (const [key, label] of [['rainfall', 'Précipitations'], ['temperature', 'Température'], ['population', 'Population']] as const) rows.push(range(`world-${key}`, label, parameters.settings[key], 0, 6, 1, value => update(() => { parameters.settings[key] = value as typeof parameters.settings[typeof key]; })));
-    rows.push(choice('map-size', 'Taille de la carte', parameters.size, GEOGRAPHIC_CREATION_SIZES_262, value => update(() => { parameters.size = value; }), value => `${value} × ${value}`),
-      choice('season', 'Saison de départ', parameters.season, GEOGRAPHIC_CREATION_SEASONS_262, value => update(() => { parameters.season = value; }), value => CREATION_SEASON_LABELS_262[value]));
-    if (parameters.size > 280) rows.push({ id: 'size-warning', label: 'Les grandes cartes augmentent le coût de simulation et peuvent modifier les déplacements.' });
-    if (parameters.season === 'winter') rows.push({ id: 'winter-warning', label: 'Commencer en hiver peut rendre la survie plus difficile.' });
-    rows.push({ id: 'world-explanation', label: 'La population règle les implantations du monde ; elle ne change pas votre équipe. Auto choisit la première période chaude du lieu ou son été.' });
-    parameters.settings.factions.forEach((def, index) => {
-      if (isIntrinsicWorldFaction(def)) return;
-      rows.push({ id: `faction-${index}`, label: names[def] ?? def, controls: [control(`remove-faction-${index}`, 'Retirer', () => update(() => { parameters.settings.factions.splice(index, 1); }))] });
+    const update=(action:()=>void)=>{invalidateDraft();action();};
+    const catalogue=(row:NativeRow):NativeRow=>({...row,region:'catalogue',presentation:'plain',dense:true,compact:true});
+    const details=(row:NativeRow):NativeRow=>({...row,region:'details',presentation:'plain',dense:true,compact:true});
+    const rows:NativeRow[]=[{id:'world-help',region:'navigation',presentation:'plain',compact:true,label:'Préparer la planète',value:'Paramètres à gauche · factions à droite',hint:'Les choix sont appliqués au prochain monde généré. Changer un paramètre invalide le brouillon actuel, comme auparavant.'},
+      catalogue(input('world-seed','Graine',parameters.seed,value=>update(()=>{parameters.seed=value;}))),
+      catalogue({id:'random-seed',label:'Graine aléatoire',controls:[control('random-seed','Aléatoire',()=>update(()=>{parameters.seed=randomSiteSeed();}))]}),
+      catalogue(choice('coverage','Couverture de la planète',parameters.settings.coverage,[.3,.5,1] as const,value=>update(()=>{parameters.settings.coverage=value;}),value=>`${value*100} %`))];
+    if(parameters.settings.coverage===1)rows.push(catalogue({id:'coverage-warning',label:'Une planète complète demande davantage de temps de préparation et de mémoire.'}));
+    for(const[key,label]of[['rainfall','Précipitations'],['temperature','Température'],['population','Population']]as const)rows.push(catalogue(range(`world-${key}`,label,parameters.settings[key],0,6,1,value=>update(()=>{parameters.settings[key]=value as typeof parameters.settings[typeof key];}))));
+    rows.push(catalogue(choice('map-size','Taille de la carte',parameters.size,GEOGRAPHIC_CREATION_SIZES_262,value=>update(()=>{parameters.size=value;}),value=>`${value} × ${value}`)),
+      catalogue(choice('season','Saison de départ',parameters.season,GEOGRAPHIC_CREATION_SEASONS_262,value=>update(()=>{parameters.season=value;}),value=>CREATION_SEASON_LABELS_262[value])));
+    if(parameters.size>280)rows.push(catalogue({id:'size-warning',label:'Les grandes cartes augmentent le coût de simulation et peuvent modifier les déplacements.'}));
+    if(parameters.season==='winter')rows.push(catalogue({id:'winter-warning',label:'Commencer en hiver peut rendre la survie plus difficile.'}));
+    rows.push(catalogue({id:'world-explanation',label:'La population règle les implantations du monde ; elle ne change pas votre équipe. Auto choisit la première période chaude du lieu ou son été.'}));
+    rows.push(details({id:'world-factions-heading',label:'Factions installées',emphasis:'heading'}));
+    parameters.settings.factions.forEach((def,index)=>{
+      if(isIntrinsicWorldFaction(def))return;
+      rows.push(details({id:`faction-${index}`,label:names[def]??def,controls:[control(`remove-faction-${index}`,'Retirer',()=>update(()=>{parameters.settings.factions.splice(index,1);}))]}));
     });
-    const humans = parameters.settings.factions.filter(def => !isIntrinsicWorldFaction(def) && def !== 'Mechanoid' && def !== 'Insect').length;
-    rows.push({ id: 'human-faction-count', label: `${humans} / 12 factions humaines`, detail: humans ? undefined : 'Vous avez retiré toutes les factions humaines.' });
-    for (const def of CONFIGURABLE_WORLD_FACTIONS.filter(def => !isIntrinsicWorldFaction(def))) {
-      const hidden = def === 'Mechanoid' || def === 'Insect';
-      rows.push({ id: `add-faction-${def}`, label: names[def] ?? def, controls: [control(`add-faction-${def}`, 'Ajouter', () => update(() => { parameters.settings.factions.push(def as ConfigurableWorldFaction); }), hidden ? parameters.settings.factions.includes(def) : humans >= 12)] });
-    }
-    rows.push({ id: 'reset-factions', label: 'Factions', controls: [control('reset-factions', 'Réinitialiser', () => update(() => { parameters.settings.factions = defaultWorldGenerationSettings().factions; }))] });
-    const actions = navigation(control('generate-world', 'Générer', generateWorld, !flow || !options.getWorldCreationPlayer));
-    actions.push(control('reset-world', 'Réinitialiser tout', () => update(() => { parameters = { seed: randomSiteSeed(), settings: defaultWorldGenerationSettings(), size: 250, season: 'auto' }; })));
-    if (busy && !pending) actions.push(control('cancel-generation', 'Annuler la génération', () => { invalidateDraft(); busy = false; status = ''; paint(); }, false, false, true));
-    return { id: '', title: 'Créer le monde', rows, actions };
+    const humans=parameters.settings.factions.filter(def=>!isIntrinsicWorldFaction(def)&&def!=='Mechanoid'&&def!=='Insect').length;
+    rows.push(details({id:'human-faction-count',label:`${humans} / 12 factions humaines`,detail:humans?undefined:'Vous avez retiré toutes les factions humaines.'}));
+    const addControls=CONFIGURABLE_WORLD_FACTIONS.filter(def=>!isIntrinsicWorldFaction(def)).map(def=>{
+      const hidden=def==='Mechanoid'||def==='Insect';
+      return control(`add-faction-${def}`,names[def]??def,()=>{
+        // Keep the same live maximum/uniqueness constraints as the displayed
+        // availability, even if a control was retained across a repaint.
+        const currentHumans=parameters.settings.factions.filter(value=>!isIntrinsicWorldFaction(value)&&value!=='Mechanoid'&&value!=='Insect').length;
+        if(hidden?parameters.settings.factions.includes(def):currentHumans>=12)return;
+        update(()=>{parameters.settings.factions.push(def as ConfigurableWorldFaction);});
+      },hidden?parameters.settings.factions.includes(def):humans>=12);
+    });
+    rows.push(details({id:'world-add-factions',label:'Ajouter une faction',controls:addControls}),details({id:'reset-factions',label:'Factions',controls:[control('reset-factions','Réinitialiser',()=>update(()=>{parameters.settings.factions=defaultWorldGenerationSettings().factions;}))]}));
+    const primary=busy&&!pending?control('cancel-generation','Annuler la génération',()=>{invalidateDraft();busy=false;status='';paint();},false,false,true):control('generate-world','Générer',generateWorld,!flow||!options.getWorldCreationPlayer);
+    return{id:'',title:'Créer le monde',layout:'setup',setupCatalogueWidth:400,rows,actions:[...navigation(),control('reset-world','Réinitialiser tout',()=>update(()=>{parameters={seed:randomSiteSeed(),settings:defaultWorldGenerationSettings(),size:250,season:'auto'};})),primary]};
   }
 
   function renderSite(): NativePage {
-    const preview = flow?.preview;
-    if (!preview) return { id: '', title: 'Lieu de départ', rows: [{ id: 'missing-preview', label: 'Le monde préparé n’est plus disponible.' }], actions: [control('regenerate', 'Revenir aux paramètres', () => navigate('world'))] };
-    const surface = preview.geography.surface;
-    const choose = (id: number) => {
-      if (!open || page !== 'site' || busy || pending || flow?.preview !== preview) throw Error('Le choix du lieu n’est plus disponible dans cette préparation.');
-      if (!Number.isSafeInteger(id) || !eligible.includes(id)) throw Error('Ce lieu de départ est indisponible.');
-      selectedTile = id;
+    const preview=flow?.preview;
+    if(!preview)return{id:'',title:'Lieu de départ',rows:[{id:'missing-preview',label:'Le monde préparé n’est plus disponible.'}],actions:[control('regenerate','Revenir aux paramètres',()=>navigate('world'))]};
+    const surface=preview.geography.surface,scope=`${generation}:${preview.generation}:${preview.key}`;
+    if(nativeSiteView.scope!==scope){nativeSiteView.scope=scope;nativeSiteView.tab='facts';}
+    const choose=(id:number)=>{
+      if(!open||page!=='site'||busy||pending||flow?.preview!==preview)throw Error('Le choix du lieu n’est plus disponible dans cette préparation.');
+      if(!Number.isSafeInteger(id)||!eligible.includes(id))throw Error('Ce lieu de départ est indisponible.');
+      selectedTile=id;nativeSiteView.tab='facts';
     };
-    const rows: NativeRow[] = [input('tile-input', 'Numéro de case', selectedTile === null ? '' : String(selectedTile), value => choose(Number(value)), 'number'),
-      { id: 'site-list-summary', label: `${eligible.length} lieux disponibles`, detail: 'La sélection ne génère pas de carte locale. Confirmer valide ce lieu avant le choix des personnages.' }];
-    if (selectedTile !== null) {
-      const site = describeWorldSite(surface, preview.geography.roads, selectedTile), calendar = worldCreationCalendarFacts262(surface.tiles[selectedTile]!, parameters.season);
-      for (const [label, value] of [
-        ['Case', String(site.tileId)], ['Biome', site.biome], ['Coordonnées', `${site.latitude.toFixed(2)}° / ${site.longitude.toFixed(2)}°`], ['Relief', site.hilliness],
-        ['Altitude', `${Math.round(site.elevation)} m`], ['Température moyenne', `${site.meanTemperature.toFixed(1)} °C`], ['Précipitations', `${Math.round(site.rainfall)} mm/an`],
-        ['Roches naturelles', site.hasBedrock ? site.naturalRocks.join(', ') : 'Aucune roche de sous-sol'], ['Côte océanique', site.coastAngle === null ? 'Non' : 'Oui'],
-        ['Cours d’eau', site.rivers.map(r => r.river).join(', ') || 'Aucun'], ['Routes', site.roads.map(r => r.road).join(', ') || 'Aucune'], ['Voisins', surface.tiles[selectedTile]!.neighbours.join(', ')],
-        ['Taille de la carte', `${parameters.size} × ${parameters.size}`], ['Saison choisie', calendar.choice], ['Date de départ', calendar.date], ['Cycle saisonnier', calendar.seasonalRange],
-      ]) rows.push({ id: `site-fact-${rows.length}`, label: label!, value: value! });
+    const changeView=(tab:typeof nativeSiteView.tab)=>{if(open&&page==='site'&&!busy&&!pending&&flow?.preview===preview)nativeSiteView.tab=tab;};
+    const random=control('tile-random','Lieu aléatoire',()=>{
+      const limit=Math.floor(0x100000000/eligible.length)*eligible.length;let draw:number;
+      do{draw=crypto.getRandomValues(new Uint32Array(1))[0]!;}while(draw>=limit);
+      choose(eligible[draw%eligible.length]!);siteOffset=Math.floor(eligible.indexOf(selectedTile!)/16)*16;
+    },!eligible.length);
+    const rows:NativeRow[]=[{id:'site-views',region:'navigation',label:'',controlStyle:'tab',compact:true,controls:[
+      control('site-view-facts','Lieu choisi',()=>changeView('facts'),false,nativeSiteView.tab==='facts'),
+      control('site-view-places','Lieux disponibles',()=>changeView('places'),false,nativeSiteView.tab==='places'),
+      control('site-view-factions','Factions',()=>changeView('factions'),false,nativeSiteView.tab==='factions'),
+    ]},{...input('tile-input','Numéro de case',selectedTile===null?'':String(selectedTile),value=>choose(Number(value)),'number'),region:'navigation',compact:true},
+      {id:'site-selection-tools',region:'navigation',presentation:'plain',compact:true,label:`${eligible.length} lieux disponibles`,controls:[random],hint:'La sélection ne génère pas de carte locale. Confirmer valide ce lieu avant le choix des personnages.'}];
+    const detail=(row:NativeRow):NativeRow=>({...row,region:'details',presentation:'plain',dense:true,compact:true});
+    if(nativeSiteView.tab==='facts'){
+      if(selectedTile===null)rows.push(detail({id:'site-list-summary',label:'Choisissez un lieu sur le globe ou dans la liste.',hint:'Le numéro de case et le bouton Lieu aléatoire restent disponibles au-dessus.'}));
+      else{
+        const site=describeWorldSite(surface,preview.geography.roads,selectedTile),calendar=worldCreationCalendarFacts262(surface.tiles[selectedTile]!,parameters.season);
+        const facts=[['Case',String(site.tileId)],['Biome',nativeSiteBiome(site.biome)],['Coordonnées',`${site.latitude.toFixed(2)}° / ${site.longitude.toFixed(2)}°`],['Relief',HILLINESS_LABELS[site.hilliness]],
+          ['Altitude',`${Math.round(site.elevation)} m`],['Température moyenne',`${site.meanTemperature.toFixed(1)} °C`],['Précipitations',`${Math.round(site.rainfall)} mm/an`],
+          ['Roches naturelles',site.hasBedrock?site.naturalRocks.map(stone=>STONE_LABELS[stone]).join(', '):'Aucune roche de sous-sol'],['Côte océanique',site.coastAngle===null?'Non':'Oui'],
+          ['Cours d’eau',site.rivers.map(river=>nativeSiteRiverNames[river.river]).join(', ')||'Aucun'],['Routes',site.roads.map(road=>nativeSiteRoadNames[road.road]).join(', ')||'Aucune'],['Voisins',surface.tiles[selectedTile]!.neighbours.join(', ')],
+          ['Taille de la carte',`${parameters.size} × ${parameters.size}`],['Saison choisie',calendar.choice],['Date de départ',calendar.date],['Cycle saisonnier',calendar.seasonalRange]];
+        facts.forEach(([label,value],index)=>rows.push(detail({id:`site-fact-${index+2}`,label:label!,value:value!})));
+      }
+    }else if(nativeSiteView.tab==='places'){
+      rows.push(detail({id:'site-list-summary',label:`${eligible.length} lieux disponibles`,hint:'Choisir une ligne ouvre les informations du lieu sans créer de carte.'}));
+      for(const id of eligible.slice(siteOffset,siteOffset+16)){
+        const tile=surface.tiles[id]!;
+        rows.push(detail({id:`tile-${id}`,label:`Case ${id} · ${nativeSiteBiome(tile.biome)}`,value:`${tile.meanTemperature.toFixed(1)} °C · ${Math.round(tile.rainfall)} mm/an · ${HILLINESS_LABELS[tile.hilliness]}`,controls:[control(`choose-tile-${id}`,'Choisir',()=>choose(id),false,selectedTile===id)]}));
+      }
+      rows.push(detail({id:'tile-pagination',label:`${siteOffset+(eligible.length?1:0)}–${Math.min(siteOffset+16,eligible.length)} / ${eligible.length}`,controls:[
+        control('tiles-previous','Précédents',()=>{siteOffset=Math.max(0,siteOffset-16);},siteOffset===0),
+        control('tiles-next','Suivants',()=>{siteOffset+=16;},siteOffset+16>=eligible.length),
+      ]}));
+    }else{
+      for(const faction of preview.factions.filter(faction=>!faction.hidden)){
+        const count=preview.settlements.filter(settlement=>settlement.factionId===faction.id).length;
+        rows.push(detail({id:`world-faction-${faction.id}`,label:faction.name,value:`${count} implantation${count===1?'':'s'}`}));
+      }
     }
-    for (const id of eligible.slice(siteOffset, siteOffset + 16)) {
-      const tile = surface.tiles[id]!;
-      rows.push({ id: `tile-${id}`, label: `Case ${id} · ${tile.biome}`, value: `${tile.meanTemperature.toFixed(1)} °C · ${Math.round(tile.rainfall)} mm/an · ${tile.hilliness}`, controls: [control(`choose-tile-${id}`, 'Choisir', () => choose(id), false, selectedTile === id)] });
-    }
-    rows.push({ id: 'tile-pagination', label: `${siteOffset + (eligible.length ? 1 : 0)}–${Math.min(siteOffset + 16, eligible.length)} / ${eligible.length}`, controls: [
-      control('tiles-previous', 'Précédents', () => { siteOffset = Math.max(0, siteOffset - 16); }, siteOffset === 0),
-      control('tiles-next', 'Suivants', () => { siteOffset += 16; }, siteOffset + 16 >= eligible.length),
-      control('tile-random', 'Lieu aléatoire', () => {
-        const limit = Math.floor(0x100000000 / eligible.length) * eligible.length; let draw: number;
-        do { draw = crypto.getRandomValues(new Uint32Array(1))[0]!; } while (draw >= limit);
-        choose(eligible[draw % eligible.length]!); siteOffset = Math.floor(eligible.indexOf(selectedTile!) / 16) * 16;
-      }, !eligible.length),
-    ] });
-    for (const faction of preview.factions.filter(faction => !faction.hidden)) rows.push({ id: `world-faction-${faction.id}`, label: faction.name, value: `${preview.settlements.filter(s => s.factionId === faction.id).length} implantations` });
-    return { id: '', title: 'Choisir le lieu de départ', rows,
-      visual: { kind: 'planet', surface, roads: preview.geography.roads, selected: selectedTile,
-        markers: preview.settlements.map(settlement => ({ tile: settlement.tile, label: settlement.name, color: 0x8d7e9c })),
-        onSelect: id => {
-          error = '';
-          try { choose(id); siteOffset = Math.floor(eligible.indexOf(id) / 16) * 16; }
-          catch (cause) { error = errorMessage(cause); }
-          paint();
-        },
-      }, actions: navigation(control('confirm-site', 'Suivant', () => {
-      if (selectedTile === null) return;
-      const calendar = worldCreationCalendarFacts262(surface.tiles[selectedTile]!, parameters.season);
-      confirmation = { message: `Confirmer la case ${selectedTile} · ${parameters.size} × ${parameters.size} · ${calendar.choice} · ${calendar.date} ?`, accept: confirmSite };
-    }, selectedTile === null)) };
+    return{id:'',title:'Choisir le lieu de départ',layout:'setup',columnRatio:.58,contentKey:`${scope}:${nativeSiteView.tab}:${selectedTile??'none'}`,rows,
+      visual:{kind:'planet',surface,roads:preview.geography.roads,selected:selectedTile,markers:preview.settlements.map(settlement=>({tile:settlement.tile,label:settlement.name,color:0x8d7e9c})),onSelect:id=>{
+        error='';try{choose(id);siteOffset=Math.floor(eligible.indexOf(id)/16)*16;}catch(cause){error=errorMessage(cause);}paint();
+      }},actions:navigation(control('confirm-site','Suivant',()=>{
+        if(selectedTile===null)return;
+        const calendar=worldCreationCalendarFacts262(surface.tiles[selectedTile]!,parameters.season);
+        confirmation={message:`Confirmer la case ${selectedTile} · ${parameters.size} × ${parameters.size} · ${calendar.choice} · ${calendar.date} ?`,accept:confirmSite};
+      },selectedTile===null))};
   }
 
   function renderPawns(): NativePage {
-    const rows: NativeRow[] = [{ id: 'party-help', label: 'Trois personnes choisies parmi huit candidats. Les trois premiers partent ; les flèches réordonnent la liste.' }];
-    let portrait:NativePage['portrait'];
-    for (const [index, descriptor] of roster.entries()) {
-      const pawn = previewStartingCandidate(teamSeed, descriptor);
-      const move = (target: number) => { const next = [...roster]; next.splice(target, 0, next.splice(index, 1)[0]!); roster = next; };
-      rows.push({ id: `candidate-${descriptor.serial}`, label: `${index + 1}. ${pawn.name}`, value: index < 3 ? 'Au départ' : 'Réserve', controls: [
-        control(`inspect-${descriptor.serial}`, 'Profil', () => { inspected = descriptor.serial; }, false, inspected === descriptor.serial),
-        control(`up-${descriptor.serial}`, '↑', () => move(index - 1), index === 0), control(`down-${descriptor.serial}`, '↓', () => move(index + 1), index === roster.length - 1),
-        control(`reroll-${descriptor.serial}`, 'Renouveler', () => { roster = rerollStartingCandidateForRoster(teamSeed, roster, descriptor.serial); }),
-      ] });
+    const draftGeneration=generation,draftSeed=teamSeed,party=previewStartingParty(teamSeed,roster.slice(0,3));
+    const selectedProfiles=new Map(party.pawns.map(pawn=>[pawn.id,pawn] as const));
+    const profiles=roster.map(descriptor=>selectedProfiles.get(descriptor.serial)??previewStartingCandidate(teamSeed,descriptor));
+    const current=()=>open&&page==='pawns'&&generation===draftGeneration&&teamSeed===draftSeed;
+    const live=(serial:number,version:number)=>current()?roster.find(candidate=>candidate.serial===serial&&candidate.generation===version):undefined;
+    const reorder=(serial:number,target:number)=>{
+      if(!current()||!Number.isSafeInteger(target)||target<0||target>=roster.length)return;
+      const from=roster.findIndex(candidate=>candidate.serial===serial);if(from<0||from===target)return;
+      const next=[...roster];next.splice(target,0,next.splice(from,1)[0]!);roster=next;
+    };
+    const rows: NativeRow[]=[{id:'party-help',region:'navigation',presentation:'plain',compact:true,label:'Choisir trois personnes',value:'Les trois premiers partent.',hint:'Sélectionnez un candidat dans la liste puis choisissez sa place dans le dossier. Monter et descendre conservent les huit profils et leur ordre relatif.'}];
+    for(const [index,descriptor] of roster.entries()){
+      if(index===0||index===3)rows.push({id:index===0?'party-selected-heading':'party-reserve-heading',region:'catalogue',presentation:'plain',compact:true,emphasis:'heading',label:index===0?'Au départ':'Laissés sur place'});
+      const pawn=profiles[index]!,story=pawn.background?(pawn.background.adulthood?ADULTHOODS[pawn.background.adulthood].label:CHILDHOODS[pawn.background.childhood].label):'Passé non renseigné';
+      rows.push({id:`candidate-${descriptor.serial}`,region:'catalogue',label:'',compact:true,controlStyle:'button',controls:[{
+        ...control(`inspect-${descriptor.serial}`,pawn.name,()=>{if(live(descriptor.serial,descriptor.generation))inspected=descriptor.serial;},false,inspected===descriptor.serial),
+        hint:[pawn.name,index<3?'Au départ':'Laissé sur place',story,pawn.age?`${biologicalYears(pawn.age)} ans biologiques · ${chronologicalYears(pawn.age)} ans chronologiques`:'Âge non renseigné'].join('\n'),
+      }]});
     }
-    const descriptor = roster.find(d => d.serial === inspected) ?? roster[0];
-    if (descriptor) {
-      const pawn = previewStartingCandidate(teamSeed, descriptor), party = previewStartingParty(teamSeed, roster.slice(0, 3));
+    let portrait:NativePage['portrait'];
+    const descriptor=roster.find(candidate=>candidate.serial===inspected)??roster[0];
+    if(descriptor){
+      const position=roster.findIndex(candidate=>candidate.serial===descriptor.serial),pawn=profiles[position]!,selected=position<3;
+      const details=(row:NativeRow,setupColumn:0|1|2=0):NativeRow=>({...row,region:'details',setupColumn,dense:true,compact:true});
+      const heading=(id:string,label:string,setupColumn:0|1|2=0):NativeRow=>details({id,label,emphasis:'heading',presentation:'plain'},setupColumn);
       const look=apparelAppearance([]);
-      // The actual starting scenario equips a cloth shirt at materialization;
-      // this visual choice never creates a pile or alters a candidate owner.
+      // This remains a view of the cloth shirt actually supplied at departure.
+      // Hiding it neither creates a pile nor changes a candidate's equipment.
       if(showCandidateClothes){look.shirt=true;look.silhouette=1;look.color=APPAREL['cloth-shirt'].color;look.signature='cloth-shirt';}
       portrait={url:portraitDataUrl(appearanceOf(pawn,teamSeed),look,undefined,portraitExpressionOf(pawn),humanLimbVisualMask(pawn)),label:`Portrait de ${pawn.name}`};
-      rows.push({id:'candidate-clothing',label:'Tenue dans le portrait',controls:[control('candidate-clothing',showCandidateClothes?'Masquer les vêtements':'Montrer les vêtements',()=>{showCandidateClothes=!showCandidateClothes;},false,showCandidateClothes)]});
-      rows.push(input('candidate-name', 'Nom', pawn.name, value => { const name = value.trim(); if (!validStartingCandidateName(name)) throw Error('Le nom doit contenir 1 à 80 caractères, sans caractères de contrôle.'); roster = roster.map(d => d.serial === descriptor.serial ? { ...d, nameOverride: name } : d); }, 'text', 80),
-        { id: 'candidate-age', label: 'Âge biologique / chronologique', value: pawn.age ? `${biologicalYears(pawn.age)} / ${chronologicalYears(pawn.age)} ans` : 'Non renseigné' },
-        { id: 'candidate-traits', label: 'Traits', value: (pawn.traits ?? []).map(id => TRAITS[id].label).join(' · ') || 'Aucun' });
-      for(const id of pawn.traits??[])rows.push({id:`candidate-trait-${id}`,label:TRAITS[id].label,detail:TRAITS[id].description});
-      if (pawn.background) {
-        rows.push({ id: 'childhood', label: 'Enfance', value: CHILDHOODS[pawn.background.childhood].label, detail: CHILDHOODS[pawn.background.childhood].description });
-        if (pawn.background.adulthood) rows.push({ id: 'adulthood', label: 'Adulte', value: ADULTHOODS[pawn.background.adulthood].label, detail: ADULTHOODS[pawn.background.adulthood].description });
-      }
-      for (const skill of BACKGROUND_SKILL_IDS) {
-        const record = pawn.skills[skill]??{level:0,xp:0,dailyXp:0,passion:0 as const}, refusal = backgroundSkillRefusal(pawn, skill);
-        rows.push({ id: `skill-${skill}`, label: names[skill]!, value: `${refusal?'Indisponible · Niveau enregistré ':''}${record.level} / 20 · ${record.passion===2?'Forte passion':record.passion===1?'Passion':'Sans passion'}`, detail: `${refusal?`${refusal} · `:''}${(record.xp/XP_SCALE).toFixed(1)} / ${xpRequired(record.level)/XP_SCALE} XP · Apprentissage ${Math.round(learningFactor(record,pawn)*100)} %` });
+      const identity=input('candidate-name','Nom',pawn.name,value=>{
+        if(!live(descriptor.serial,descriptor.generation))return false;
+        const name=value.trim();if(!validStartingCandidateName(name))throw Error('Le nom doit contenir 1 à 80 caractères, sans caractères de contrôle.');
+        roster=roster.map(candidate=>candidate.serial===descriptor.serial?{...candidate,nameOverride:name}:candidate);
+      },'text',80);
+      identity.controls=[{...control(`reroll-${descriptor.serial}`,'↻',()=>{if(live(descriptor.serial,descriptor.generation))roster=rerollStartingCandidateForRoster(teamSeed,roster,descriptor.serial);}),hint:'Renouveler ce candidat : les sept autres profils et leur ordre sont conservés.'}];
+      rows.push({...identity,region:'details',dense:true,compact:true},{id:'candidate-age',region:'details',dense:true,compact:true,label:'Âge bio. / chrono.',value:pawn.age?`${biologicalYears(pawn.age)} / ${chronologicalYears(pawn.age)} ans`:'Non renseigné'});
+      rows.push(details({id:'candidate-actions',label:'',controls:[
+        {...control(`promote-${descriptor.serial}`,selected?'Laisser sur place':'Choisir pour le départ',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)<3?3:2);}),hint:selected?'Place ce profil après les trois personnes choisies ; le candidat suivant rejoint le départ.':'Place ce profil en troisième position ; la dernière personne choisie passe dans les réserves.'},
+        {...control(`up-${descriptor.serial}`,'↑',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)-1);},position===0),hint:'Monter ce candidat d’une place.'},
+        {...control(`down-${descriptor.serial}`,'↓',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)+1);},position===roster.length-1),hint:'Descendre ce candidat d’une place.'},
+      ]}));
+      rows.push(details({id:'candidate-clothing',label:'Tenue du portrait',controls:[control('candidate-clothing',showCandidateClothes?'Masquer les vêtements':'Montrer les vêtements',()=>{if(current())showCandidateClothes=!showCandidateClothes;},false,showCandidateClothes)]}));
+      rows.push(heading('candidate-story-heading','Histoire'));
+      if(pawn.background){
+        const childhood=CHILDHOODS[pawn.background.childhood];rows.push(details({id:'childhood',label:'Enfance',value:childhood.label,hint:childhood.description}));
+        if(pawn.background.adulthood){const adulthood=ADULTHOODS[pawn.background.adulthood];rows.push(details({id:'adulthood',label:'Adulte',value:adulthood.label,hint:adulthood.description}));}
+      }else rows.push(details({id:'candidate-story-none',label:'Passé non renseigné'}));
+      rows.push(heading('candidate-traits','Traits'));
+      for(const id of pawn.traits??[])rows.push(details({id:`candidate-trait-${id}`,label:TRAITS[id].label,hint:TRAITS[id].description}));
+      if(!pawn.traits?.length)rows.push(details({id:'candidate-traits-none',label:'Aucun trait'}));
+      rows.push(heading('candidate-work-heading','Incapable de'));
+      let refused=0;
+      for(const work of Object.keys(BACKGROUND_WORK_LABELS) as WorkType[]){const refusal=backgroundWorkRefusal(pawn,work);if(refusal){refused++;rows.push(details({id:`refused-${work}`,label:BACKGROUND_WORK_LABELS[work],hint:refusal}));}}
+      if(!refused)rows.push(details({id:'candidate-work-none',label:'Aucune incapacité enregistrée'}));
+      rows.push(heading('candidate-skills-heading','Compétences',1));
+      for(const skill of BACKGROUND_SKILL_IDS){
+        const record=pawn.skills[skill]??{level:0,xp:0,dailyXp:0,passion:0 as const},refusal=backgroundSkillRefusal(pawn,skill),passion=record.passion===2?'Forte passion':record.passion===1?'Passion':'Sans passion';
+        rows.push(details({id:`skill-${skill}`,label:names[skill]!,value:refusal?'Incapable':`${record.level} / 20`,meter:{value:refusal?0:record.level,max:20,passion:record.passion,label:refusal?'Incapable':`${record.level} / 20`},hint:[names[skill],refusal?`${refusal} · Niveau enregistré ${record.level} / 20`:undefined,passion,`${(record.xp/XP_SCALE).toFixed(1)} / ${xpRequired(record.level)/XP_SCALE} XP`,`Apprentissage ${Math.round(learningFactor(record,pawn)*100)} %`].filter(Boolean).join('\n')},1));
       }
       const health=pawn.health;
       const conditions:NativeRow[]=[...(health?.injuries??[]).map(injury=>({id:`candidate-injury-${injury.id}`,label:BODY_PARTS[injury.part].label,value:`${injury.scar?.pain!==undefined?'Cicatrice':INJURY_RULES[injury.kind].label} · −${(injury.severity/HP_UNIT).toFixed(1)} PV`})),
         ...(health?.missing??[]).map(part=>({id:`candidate-missing-${part.part}`,label:BODY_PARTS[part.part].label,value:'Partie perdue'})),
-        ...(health?.ageAilments??[]).map(ailment=>({id:`candidate-age-condition-${ailment}`,label:ailment==='bad-back'?'Lumbago':'Frêle',detail:ailment==='bad-back'?'Mouvement −30 points · Manipulation −10 points':'Mouvement et manipulation −30 points'})),
+        ...(health?.ageAilments??[]).map(ailment=>({id:`candidate-age-condition-${ailment}`,label:ailment==='bad-back'?'Lumbago':'Frêle',hint:ailment==='bad-back'?'Mouvement −30 points · Manipulation −10 points':'Mouvement et manipulation −30 points'})),
         ...nativeClinicalConditionRows(health)];
-      rows.push({id:'candidate-health-heading',label:'Santé du candidat',value:conditions.length?'Affections réellement présentes':'Aucun problème de santé enregistré'},...conditions);
-      for (const work of Object.keys(BACKGROUND_WORK_LABELS) as WorkType[]) { const refusal = backgroundWorkRefusal(pawn, work); if (refusal) rows.push({ id: `refused-${work}`, label: `Incapable : ${BACKGROUND_WORK_LABELS[work]}`, detail: refusal }); }
-      const index = captureRelationshipIndex(party.relationships);
-      for (const other of party.pawns) { if (other.id === pawn.id) continue; const kinds = relationshipKinds(index, pawn.id, other.id); if (kinds.length) rows.push({ id: `relationship-${other.id}`, label: other.name, value: kinds.map(kind=>({parent:'Parent',child:'Enfant',sibling:'Fratrie',lover:'Partenaire',spouse:'Conjoint','ex-lover':'Ancien partenaire','ex-spouse':'Ancien conjoint'})[kind]).join(', ') }); }
-      for (const skill of BACKGROUND_SKILL_IDS) rows.push({ id: `team-${skill}`, label: `Équipe · ${names[skill]}`, value: party.pawns.map(person => `${person.name} ${backgroundSkillRefusal(person, skill) ? '—' : person.skills[skill]?.level ?? 0}`).join(' · ') });
+      rows.push(heading('candidate-health-heading','Santé',2),...conditions.map(row=>details(row,2)));
+      if(!conditions.length)rows.push(details({id:'candidate-health-none',label:'Aucun problème de santé enregistré'},2));
+      rows.push(heading('candidate-relations-heading','Relations',2));
+      const relationships=captureRelationshipIndex(party.relationships);let related=0;
+      for(const other of party.pawns){if(other.id===pawn.id)continue;const kinds=relationshipKinds(relationships,pawn.id,other.id);if(kinds.length){related++;rows.push(details({id:`relationship-${other.id}`,label:other.name,value:kinds.map(kind=>({parent:'Parent',child:'Enfant',sibling:'Fratrie',lover:'Partenaire',spouse:'Conjoint','ex-lover':'Ancien partenaire','ex-spouse':'Ancien conjoint'})[kind]).join(', ')},2));}}
+      if(!related)rows.push(details({id:'candidate-relations-none',label:'Aucun lien connu dans l’équipe choisie'},2));
+      BACKGROUND_SKILL_IDS.forEach(skill=>{
+        const usable=party.pawns.filter(person=>!backgroundSkillRefusal(person,skill));
+        const best=usable.reduce<typeof usable[number]|undefined>((previous,person)=>{const record=person.skills[skill],before=previous?.skills[skill];return!previous||(record?.level??0)>(before?.level??0)||(record?.level??0)===(before?.level??0)&&(record?.passion??0)>(before?.passion??0)?person:previous;},undefined);
+        rows.push({id:`team-${skill}`,region:'graph',presentation:'plain',dense:true,compact:true,label:names[skill]!,labelWidth:100,value:best?`${best.skills[skill]?.level??0} / 20`:'—',meter:{value:best?.skills[skill]?.level??0,max:20,passion:best?.skills[skill]?.passion??0,label:best?`${best.skills[skill]?.level??0} / 20`:'Incapable'},hint:[`Compétence utilisable de l’équipe · ${names[skill]}`,best?`Meilleur niveau : ${best.name}`:'Aucune personne choisie ne peut pratiquer cette compétence.',...party.pawns.map(person=>`${person.name} : ${backgroundSkillRefusal(person,skill)?'Incapable':`${person.skills[skill]?.level??0} / 20 · ${person.skills[skill]?.passion===2?'Forte passion':person.skills[skill]?.passion===1?'Passion':'Sans passion'}`}`)].join('\n')});
+      });
     }
-    if (busy && pending) rows.push({ id: 'cancel-local', label: 'Préparation de la colonie', controls: [control('cancel-local', 'Annuler la préparation', () => { flow?.cancel(); status = 'Annulation demandée…'; }, false, false, true)] });
-    return { id: '', title: 'Préparer les personnages', rows, portrait, actions: navigation(control('start-colony', 'Démarrer', askStart, !flow?.ticket)) };
+    if(busy&&pending)rows.push({id:'cancel-local',region:'navigation',label:'Préparation de la colonie',controls:[control('cancel-local','Annuler la préparation',()=>{flow?.cancel();status='Annulation demandée…';},false,false,true)]});
+    return{id:'',title:'Préparer les personnages',layout:'setup',contentKey:`${draftGeneration}:${draftSeed}:${descriptor?.serial??''}`,setupCatalogueWidth:240,width:1260,height:764,rows,portrait,actions:navigation(control('start-colony','Démarrer',askStart,!flow?.ticket))};
   }
 
   function importFile(): void {
@@ -363,6 +436,40 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     const loaded = await run(async () => { tests = await options.getTestColonies(); }, 'Chargement du catalogue de test…');
     if (loaded) paint();
   }
+  function renderLoad():NativePage {
+    let saves:ReturnType<FrontMenuOptions['getSaves']>=[];try{saves=options.getSaves();}catch(cause){error=errorMessage(cause);}
+    const kinds={manual:'Sauvegarde manuelle',recovery:'Colonie précédente',named:'Sauvegarde nommée',auto:'Copie automatique'} as const;
+    const entries=saves.map(save=>{
+      const caption=[save.kind?kinds[save.kind]:'Colonie enregistrée',save.savedAt===undefined?'':new Date(save.savedAt).toLocaleString('fr-FR')].filter(Boolean).join(' · ');
+      // Keep the former load control and its fresh repository lookup intact.
+      const load=control(`load-save-${save.key}`,save.label,()=>run(async()=>{const current=options.getSaves().find(entry=>entry.key===save.key);if(!current||current.disabled)throw Error('Cette sauvegarde n’est plus disponible. Actualisez la liste avant de la charger.');await options.onLoad(current.key);},'Vérification et chargement de la sauvegarde…'),save.disabled);
+      return{save,caption,load};
+    });
+    const fold=(value:string)=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr');
+    const query=fold(loadSearch.trim()),visible=entries.filter(({save,caption})=>!query||fold([save.label,caption,save.detail].join(' ')).includes(query));
+    const selected=entries.find(({save})=>save.key===selectedLoadKey);
+    const search={...input('load-search','Rechercher une colonie',loadSearch,value=>{loadSearch=value;selectedLoadKey=undefined;},'text',160),region:'navigation' as const};
+    const rows:NativeRow[]=[search,{id:'load-count',label:`${visible.length} / ${saves.length} copies`,region:'navigation',dense:true},
+      ...visible.map(({save,caption}):NativeRow=>({id:`save-${save.key}`,label:'',region:'catalogue',controls:[{
+        ...control(`select-save-${save.key}`,save.label,()=>{selectedLoadKey=save.key;},false,selectedLoadKey===save.key),hint:[save.label,caption,save.detail].join('\n'),
+      }]}))];
+    if(!visible.length)rows.push({id:'no-save',label:saves.length?'Aucune copie ne correspond à la recherche.':'Aucune colonie enregistrée',region:'catalogue'});
+    if(selected){
+      rows.push({id:'selected-save-name',label:selected.save.label,emphasis:'heading',region:'details'},
+        {id:'selected-save-kind',label:'Type de copie',value:selected.save.kind?kinds[selected.save.kind]:'Colonie enregistrée',region:'details'},
+        {id:'selected-save-time',label:'Enregistrée',value:selected.save.savedAt===undefined?'Date non enregistrée':new Date(selected.save.savedAt).toLocaleString('fr-FR'),region:'details'},
+        {id:'selected-save-detail',label:'Détails',detail:selected.save.detail,region:'details'},
+        {id:'selected-save-availability',label:selected.save.disabled?'Chargement indisponible':'Copie sélectionnée',detail:'La sélection ne charge pas la colonie. Le bouton Charger vérifie de nouveau sa disponibilité.',region:'details'});
+    }else rows.push({id:'load-selection-help',label:'Choisissez une copie',detail:'Sélectionnez une sauvegarde pour lire ses informations, puis utilisez Charger.',region:'details'});
+    const load=selected?control('load-selected','Charger',()=>{
+      if(selectedLoadKey!==selected.save.key)throw Error('Le choix de sauvegarde a changé. Sélectionnez de nouveau une copie.');
+      return selected.load.onActivate();
+    },!!selected.load.disabled):control('load-selected','Charger',()=>{},true);
+    return{id:'',title:'Charger une partie',subtitle:'Sélectionner une copie affiche ses informations ; Charger ouvre la colonie en pause.',rows,width:900,height:760,layout:'setup',setupCatalogueWidth:300,contentKey:`load-${loadSearch}`,
+      actions:[...navigation(),control('test-colonies','Colonies de test',loadTestCatalogue),control('import','Importer un fichier',importFile),
+        ...(hasGame&&options.onExport?[control('export','Exporter la partie actuelle',()=>run(options.onExport!,'Préparation du fichier de la partie actuelle…'))]:[]),load]};
+  }
+
   function renderPage(): NativePage {
     if (page === 'options') return renderOptions();
     if (page === 'world') return renderWorld();
@@ -401,18 +508,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       rows.push({ id: 'test-preservation', label: 'La sauvegarde manuelle reste intacte. La colonie ouverte est conservée dans « Colonie précédente ». Sauvegardez votre progression avant de multiplier les essais.' });
       return { id: '', title: 'Colonies de test', rows, actions: navigation() };
     }
-    let saves: ReturnType<FrontMenuOptions['getSaves']> = []; try { saves = options.getSaves(); } catch (cause) { error = errorMessage(cause); }
-    const kinds={manual:'Sauvegarde manuelle',recovery:'Colonie précédente',named:'Sauvegarde nommée',auto:'Copie automatique'} as const;
-    return { id: '', title: 'Charger une partie', subtitle: 'Cliquer sur une copie ouvre cette colonie en pause.', rows: saves.length ? saves.map((save):NativeRow => {
-      const caption=[save.kind?kinds[save.kind]:'Colonie enregistrée',save.savedAt===undefined?'':new Date(save.savedAt).toLocaleString('fr-FR')].filter(Boolean).join(' · ');
-      return {id:`save-${save.key}`,label:'',controlStyle:'card',controls:[{
-        ...control(`load-save-${save.key}`,save.label,()=>run(async()=>{const current=options.getSaves().find(entry=>entry.key===save.key);if(!current||current.disabled)throw Error('Cette sauvegarde n’est plus disponible. Actualisez la liste avant de la charger.');await options.onLoad(current.key);},'Vérification et chargement de la sauvegarde…'),save.disabled),
-        presentation:'card',icon:'load',color:'#f3ead6',caption,description:save.detail,hint:[save.label,caption,save.detail].join('\n'),
-      }]};
-    }) : [{ id: 'no-save', label: 'Aucune colonie enregistrée' }], actions: [...navigation(),
-      control('test-colonies', 'Colonies de test', loadTestCatalogue), control('import', 'Importer un fichier', importFile),
-      ...(hasGame && options.onExport ? [control('export', 'Exporter la partie actuelle', () => run(options.onExport!, 'Préparation du fichier de la partie actuelle…'))] : []),
-    ] };
+    return renderLoad();
   }
 
   function showCreation(): void {

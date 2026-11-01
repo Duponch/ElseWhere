@@ -46,6 +46,8 @@ export interface NativeRow {
   hint?:string;
   emphasis?:'heading'|'muted'|'normal';
   column?:0|1;
+  /** Pregame dossier lane only; existing column semantics stay unchanged. */
+  setupColumn?:0|1|2;
   labelWidth?:number;
   dense?:boolean;
   region?:'navigation'|'catalogue'|'details'|'graph';
@@ -81,9 +83,13 @@ export interface NativePage {
   width?:number;
   height?:number;
   columnRatio?:number;
-  layout?:'inspector'|'table'|'tools'|'dialog'|'front'|'architect'|'palette'|'research'|'storage'|'world';
+  layout?:'inspector'|'table'|'tools'|'dialog'|'front'|'architect'|'palette'|'research'|'storage'|'world'|'setup';
   /** Opt-in fixed roster toolbar/headings; presentation only, never persisted. */
   tableProfile?:'colonists'|'factions';
+  /** Pregame choice rail, CSS pixels; no persisted or mechanical state. */
+  setupCatalogueWidth?:number;
+  /** Pregame paper anchor only; no screen-ID classification. */
+  setupAnchor?:'center'|'right';
   palette?:'orders'|'zones';
   research?:{width:number;height:number;selected:string;links:readonly {from:string;to:string;path:readonly {x:number;y:number}[]}[]};
   visual?:{

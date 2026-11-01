@@ -1,6 +1,7 @@
 import type {NativeUiState,NativeUiActions,NativePage,NativeRow,NativeControl} from './native-contract';
 import type {World,Pawn,Command,MaterialPile} from '../sim/types';
 import {TICKS_PER_DAY} from '../sim/types';
+import {BIOME_LABELS,HILLINESS_LABELS} from '../sim/site';
 import type {CampaignGroupSummary,WorldGroupRecord} from '../sim/world-map-state';
 import type {GroupPanelSnapshot,GroupPanelFacts,GroupDraft} from '../ui/group-panel';
 import type {GroupFormationPreview,GroupMassView} from '../sim/group-panel-state';
@@ -63,7 +64,7 @@ function numberRow(id:string,label:string,value:number,commit:(value:number)=>vo
 function quantities(values:ReadonlyMap<number,number>):CommercialBuyLine[]{return [...values].filter(([,n])=>n!==0).map(([pileId,quantity])=>{if(!Number.isSafeInteger(quantity)||quantity<0)throw Error('Quantité entière positive ou nulle requise.');return {pileId,quantity};}).sort((a,b)=>a.pileId-b.pileId);}
 function toggle(set:Set<number>,id:number):void {set.has(id)?set.delete(id):set.add(id);}
 function actorNeeds(pawn:Pawn):string{return `Faim ${Math.round(pawn.hunger)} % · repos ${Math.round(pawn.rest)} % · ${pawn.state}${pawn.prisoner?' · Prisonnier':''}`;}
-function tileLabel(id:number):string {const planet=source().planet,tile=planet&&planetTile(planet,id);return tile?`Case ${id} · ${tile.biome} · ${tile.hilliness}`:`Case ${id}`;}
+function tileLabel(id:number):string {const planet=source().planet,tile=planet&&planetTile(planet,id);return tile?`Case ${id} · ${tile.biome==='ocean'?'Océan':tile.biome==='lake'?'Lac':BIOME_LABELS[tile.biome]} · ${HILLINESS_LABELS[tile.hilliness]}`:`Case ${id}`;}
 function changeTab(next:typeof tab):void {tab=next;rootPage();}
 export function setNativeWorldTab(next:'maps'|'groups'|'individual'|'factions'):void {tab=next;}
 async function send(command:Command):Promise<unknown>{
@@ -369,7 +370,7 @@ export function focusNativePaidAiSite298(siteId:number):void {
 }
 function mapRows():NativeRow[]{
  const input=source(),registry=readMapRegistryState(input),rows:NativeRow[]=[];
- if(registry){rows.push(r('world-map-count','Cartes',`${registry.settlements} colonie(s) · plafond ${registry.maxSettlements}`,`${registry.maps.length} cartes conservées. Afficher une carte ne déplace personne.`));for(const map of registry.maps)rows.push(r(`map-${map.id}`,map.name,`${map.people} personnes · ${map.kind}`,map.campPressure?`Prochain raid du camp dans ${days(map.campPressure.raidAtCore-input.tick*10)} · ${map.campPressure.raidsSent} raids déjà envoyés${map.campPressure.alert?' · alerte active':''}`:undefined,[
+ if(registry){rows.push(r('world-map-count','Cartes',`${registry.settlements} colonie(s) · plafond ${registry.maxSettlements}`,`${registry.maps.length} cartes conservées. Afficher une carte ne déplace personne.`));for(const map of registry.maps)rows.push(r(`map-${map.id}`,map.name,`${map.people} personne${map.people===1?'':'s'} · ${mapDisplayName({id:map.id,kind:map.kind,tile:null})}`,map.campPressure?`Prochain raid du camp dans ${days(map.campPressure.raidAtCore-input.tick*10)} · ${map.campPressure.raidsSent} raids déjà envoyés${map.campPressure.alert?' · alerte active':''}`:undefined,[
   b(`map-${map.id}-view`,map.active?'Carte active':'Afficher',()=>send({type:'map-view',mapId:map.id}),{active:map.active,disabled:!map.view.ok,hint:map.view.reason}),
   b(`map-${map.id}-prepare`,'Préparer une caravane',async()=>{if(!map.active)await send({type:'map-view',mapId:map.id});await send({type:'group-select',groupId:null});openFormation();},{disabled:!map.view.ok,hint:map.view.reason}),
   b(`map-${map.id}-settle`,'S’installer',()=>{const warning=map.settleWarning263?.();confirm(`settle-${map.id}`,'S’installer sur cette carte ?',[r('settle-map',map.name,warning)],async()=>{const current=readMapRegistryState(source())?.maps.find(m=>m.id===map.id);if(!current?.settle.ok||current.settleWarning263?.()!==warning)throw Error('La situation de l’installation a changé.');await send({type:'map-settle',mapId:map.id});});},{disabled:!map.settle.ok,hint:map.settle.reason}),
