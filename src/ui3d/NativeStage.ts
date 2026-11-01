@@ -13,7 +13,7 @@ import {NativeHitPose} from './NativeHitPose';
 import {NativeHoverPreview} from './native-hover-preview';
 import {setNativeCursor} from '../ui/native-cardboard-cursors';
 import {SHIP_FRAME_MAXIMUM_DELTA_298} from '../bridge/ship-countdown-wire-298';
-import {NATIVE_UI,NATIVE_RIGHT_DOCK_WIDTH,layoutNativePage,nativeVisualWidth,nativeMatrixColumns,nativeMatrixHeadingLines,wrapNativeText,nativeCardInk,type NativePageBox,type NativeRowBox,type NativeRect,type NativeRegion,type NativeRegionBox} from './native-layout';
+import {NATIVE_UI,NATIVE_RIGHT_DOCK_WIDTH,layoutNativePage,nativeVisualWidth,nativeMatrixColumns,nativeMatrixHeadingLines,nativeTableRowScroll,wrapNativeText,nativeCardInk,type NativePageBox,type NativeRowBox,type NativeRect,type NativeRegion,type NativeRegionBox} from './native-layout';
 
 const HUD_DISTANCE=7.5;
 const PANEL_IDS=['architect','work','schedule','assign','animals','wildlife','research','quests','world','history','factions','menu'] as const;
@@ -53,6 +53,7 @@ export class NativeStage {
   private readonly management:CardboardPiece[]=[];
   private readonly pageGroup=new THREE.Group();
   private readonly pageContent=new THREE.ClippingGroup();
+  private readonly tableHeaderContent=new THREE.ClippingGroup();
   private readonly pageFooter=new THREE.ClippingGroup();
   private readonly regionGroups={navigation:new THREE.ClippingGroup(),details:new THREE.ClippingGroup(),graph:new THREE.ClippingGroup()};
   private readonly regionOffsets={navigation:0,details:0,graph:0};
@@ -184,7 +185,7 @@ export class NativeStage {
     this.hudRoot.position.set(0,0,-HUD_DISTANCE);this.camera.add(this.hudRoot);this.scene.add(this.camera);
     Object.values(this.anchors).forEach(group=>this.hudRoot.add(group));
     this.selectionBox.add(this.selectionFill,this.selectionOutline);this.selectionBox.visible=false;this.selectionBox.position.z=.5;this.hudRoot.add(this.selectionBox);
-    this.hudRoot.add(this.pageGroup);this.pageGroup.add(this.pageContent,...Object.values(this.regionGroups),this.pageFooter);
+    this.hudRoot.add(this.pageGroup);this.pageGroup.add(this.pageContent,...Object.values(this.regionGroups),this.pageFooter,this.tableHeaderContent);
     this.anchors.bottomLeft.add(this.toolsDock);this.toolsDock.visible=false;
     for(const [index,kind]of (['orders','zones'] as const).entries()){
       const control:NativeControl={id:'map-dock:'+kind,label:kind==='orders'?'Ordres':'Zones',hint:kind==='orders'?'Ordres sur la carte':'Zones sur la carte',onActivate:()=>this.options.onTools?.(kind)};
@@ -234,7 +235,7 @@ export class NativeStage {
       readout:this.worldReadout?{visible:this.worldReadout.visible,paper:this.worldReadout.userData.paper,width:this.worldReadout.userData.w*100,height:this.worldReadout.userData.h*100,lines:this.worldReadoutLines,scroll:this.worldReadoutScroll,maxScroll:this.worldReadoutMaxScroll}:null,
       tooltip:this.hintPiece?{width:this.hintPiece.userData.w*100,height:this.hintPiece.userData.h*100}:null,
       regions:this.pageBox?.regions,inspectorParts:this.pageBox?.inspectorParts,graph:this.page?.research?{x:this.graphX,y:this.regionOffsets.graph,width:this.page.research.width,height:this.page.research.height,bounds:this.pageBox?.regions.graph}:null,
-      paletteOffset:this.paletteX,rows:this.pageBox?.rows.map(row=>({id:row.row.id,column:row.row.column,region:row.row.region,meter:!!row.row.meter,x:row.x-this.horizontalOffset(row.row.region),top:row.top-this.regionOffset(row.row.region),width:row.width,height:row.height,visible:this.rowVisible(row)}))??[],
+      paletteOffset:this.paletteX,rows:this.pageBox?.rows.map(row=>({id:row.row.id,column:row.row.column,region:row.row.region,meter:!!row.row.meter,x:row.x-this.horizontalOffset(row.row.region),top:row.top-this.rowOffset(row.row),width:row.width,height:row.height,visible:this.rowVisible(row)}))??[],
       management:this.management.map((piece,index)=>{
         const center=piece.getWorldPosition(new THREE.Vector3()).project(this.camera);
         return {id:PANEL_IDS[index],x:(center.x+1)*this.width/2*this.displayScale,y:(1-center.y)*this.height/2*this.displayScale,
@@ -876,7 +877,13 @@ export class NativeStage {
     if(this.pageBox?.layout==='table'&&this.pageBox.regions.catalogue&&!region)return this.regionGroups.details;
     return !region||region===this.primaryRegion()||region==='catalogue'?this.pageContent:this.regionGroups[region];
   }
-  private rowViewport(row:NativeRow):NativeRect{return (row.region&&this.pageBox?.regions[row.region])??this.pageBox!.body;}
+  private rowOffset(row:NativeRow):number{return nativeTableRowScroll(this.pageBox!,row,this.regionOffset(row.region));}
+  private rowViewport(row:NativeRow):NativeRect{return this.pageBox?.tableHeader&&row.columns?this.pageBox.tableHeader:(row.region&&this.pageBox?.regions[row.region])??this.pageBox!.body;}
+  private rowNameViewport(row:NativeRow):NativeRect|undefined {
+    const box=this.pageBox;if(box?.layout!=='table'||row.region!=='catalogue')return;
+    const name=box.regions.navigation;if(!name)return;
+    return box.tableHeader&&row.columns?{...name,y:box.tableHeader.y,height:box.tableHeader.height}:name;
+  }
   private focusNextControl(direction:1|-1):void{
     const page=this.page,box=this.pageBox;if(!page||!box)return;
     const logical:Array<{id:string;disabled?:boolean}>=[];
@@ -888,7 +895,7 @@ export class NativeStage {
     const next=logical[index<0?(direction===1?0:logical.length-1):(index+direction+logical.length)%logical.length]!;
     const row=box.rows.find(row=>row.row.id===next.id||row.controls.some(control=>control.control.id===next.id));
     if(row){
-      const control=row.controls.find(control=>control.control.id===next.id),rect=this.rowViewport(row.row),top=box.header+(control?.y??row.top),height=control?.height??row.height,offset=this.regionOffset(row.row.region);
+      const control=row.controls.find(control=>control.control.id===next.id),rect=this.rowViewport(row.row),top=box.header+(control?.y??row.top),height=control?.height??row.height,offset=this.rowOffset(row.row);
       if(top-offset<rect.y)this.setRegionOffset(row.row.region,top-rect.y-4);else if(top+height-offset>rect.y+rect.height)this.setRegionOffset(row.row.region,top+height-rect.y-rect.height+4);
       if(row.row.region==='graph'||box.layout==='palette'||box.layout==='table'&&row.row.region==='catalogue'){const left=control?.x??row.x,width=control?.width??row.width,offsetX=this.horizontalOffset(row.row.region);if(left-offsetX<rect.x)this.setHorizontalOffset(row.row.region,left-rect.x-4);else if(left+width-offsetX>rect.x+rect.width)this.setHorizontalOffset(row.row.region,left+width-rect.x-rect.width+4);}
       this.rebuildPage(true);
@@ -897,11 +904,12 @@ export class NativeStage {
     if(this.focusIndex>=0)this.hover(list[this.focusIndex]!.piece);
   }
   private rowVisible(row:NativeRowBox):boolean{
-    const box=this.pageBox!,region=this.rowViewport(row.row),top=box.header+row.top-this.regionOffset(row.row.region),left=row.x-this.horizontalOffset(row.row.region);
+    const box=this.pageBox!,region=this.rowViewport(row.row),top=box.header+row.top-this.rowOffset(row.row),left=row.x-this.horizontalOffset(row.row.region);
     return top+row.height>region.y&&top<region.y+region.height&&left+row.width>region.x&&left<region.x+region.width;
   }
   private regionAt(x:number,y:number):NativeRegion|undefined{
     const box=this.pageBox;if(!box)return;x/=this.displayScale;y/=this.displayScale;
+    const heading=box.tableHeader;if(heading&&x>=box.x+heading.x&&x<=box.x+heading.x+heading.width&&y>=box.y+heading.y&&y<=box.y+heading.y+heading.height)return 'catalogue';
     for(const [key,rect]of Object.entries(box.regions))if(x>=box.x+rect.x&&x<=box.x+rect.x+rect.width&&y>=box.y+rect.y&&y<=box.y+rect.y+rect.height)return key as NativeRegion;
     return;
   }
@@ -988,7 +996,7 @@ export class NativeStage {
         ctx.fillText(title,margin,27,box.width-margin*2-(page.portrait&&!box.inspectorParts?74:28));
         drawMarkerLine(ctx,margin,35,Math.min(box.width-48,margin+this.measure(title,17,true)+22),35,'#b58b4a',1.3,rng);
         if(page.subtitle&&!box.inspectorParts){ctx.font=this.font(13);ctx.fillStyle='#66583f';wrapNativeText(page.subtitle,box.width-margin*2-(page.portrait?62:0),this.measure,13).slice(0,2).forEach((line,index)=>ctx.fillText(line,margin,55+index*17));}
-        for(const r of visible){if(r.row.graphNode)continue;const top=box.header+r.top-this.regionOffset(r.row.region),nameBand=box.layout==='table'&&r.row.region==='catalogue'?box.regions.navigation:undefined;
+        for(const r of visible){if(r.row.graphNode)continue;const top=box.header+r.top-this.rowOffset(r.row),nameBand=this.rowNameViewport(r.row);
           if(nameBand){ctx.save();ctx.beginPath();ctx.rect(nameBand.x,nameBand.y,nameBand.width,nameBand.height);ctx.clip();this.drawMatrixName(ctx,r,top);ctx.restore();}
           const region=this.rowViewport(r.row);ctx.save();ctx.beginPath();ctx.rect(region.x,region.y,region.width,region.height);ctx.clip();ctx.translate(-this.horizontalOffset(r.row.region),0);this.drawPageRow(ctx,r,top,rng,box);ctx.restore();}
         this.drawResearchLinks(ctx,box,rng);
@@ -1003,9 +1011,11 @@ export class NativeStage {
     const clip=(group:THREE.ClippingGroup,rect:NativeRect)=>{const tl=local(rect.x,rect.y),br=local(rect.x+rect.width,rect.y+rect.height);group.clippingPlanes=[new THREE.Plane(new THREE.Vector3(1,0,0),-tl.x),new THREE.Plane(new THREE.Vector3(-1,0,0),br.x),new THREE.Plane(new THREE.Vector3(0,-1,0),tl.y),new THREE.Plane(new THREE.Vector3(0,1,0),-br.y)];};
     this.pageFooter.visible=box.layout==='storage';
     if(this.pageFooter.visible)clip(this.pageFooter,{x:0,y:box.height-box.footer,width:box.width,height:box.footer});
+    this.tableHeaderContent.visible=!!box.tableHeader;
+    if(box.tableHeader)clip(this.tableHeaderContent,box.tableHeader);
     clip(this.pageContent,box.layout==='table'?box.regions.catalogue??box.body:box.body);for(const [key,group]of Object.entries(this.regionGroups))clip(group,box.regions[key as NativeRegion]??box.body);
     for(const r of visible){
-      const row=r.row,offset=this.regionOffset(row.region),group=this.regionGroup(row.region),top=box.header+r.top-offset,cy=top+r.height/2;
+      const row=r.row,offset=this.rowOffset(row),group=box.tableHeader&&row.columns?this.tableHeaderContent:this.regionGroup(row.region),top=box.header+r.top-offset,cy=top+r.height/2;
       const hint=this.rowHint(row);
       if(hint&&!row.graphNode){
         const nameBand=box.layout==='table'&&row.region==='catalogue'?box.regions.navigation:undefined,width=nameBand?.width??r.width,left=nameBand?.x??r.x-this.horizontalOffset(row.region);
@@ -1013,7 +1023,7 @@ export class NativeStage {
         piece.userData.tooltip=hint;piece.userData.nativeStatic=true;(nameBand?this.regionGroups.navigation:group).add(piece);
       }
       if(row.columns){
-        const columns=nativeMatrixColumns(row,r.x,r.width,row.columns.length,r.matrixTail);
+        const columns=nativeMatrixColumns(row,r.x,r.width,row.columns.length,r.matrixTail,box.matrixColumnWeights);
         row.columns.forEach((column,index)=>{const cell=columns[index]!,hintPiece=this.pagePiece('column:'+row.id+':'+index,{w:cell.width*k,h:r.height*k,paper:false,hitOnly:true,interactive:true,drawFn:()=>{}},column.hint??column.label,(cell.x-this.horizontalOffset(row.region)+cell.width/2-box.width/2)*k,(box.height/2-cy)*k,.04);hintPiece.userData.nativeStatic=true;hintPiece.userData.tooltip=column.hint??column.label;group.add(hintPiece);});
       }
       const controls=row.controls??[];
@@ -1083,7 +1093,7 @@ export class NativeStage {
     }
     if(row.columns){
       if(!(box.layout==='table'&&box.regions.navigation&&row.region==='catalogue'))this.drawMatrixName(ctx,r,top);
-      const tail=r.matrixTail?192:0,columns=nativeMatrixColumns(row,r.x,r.width,row.columns.length,r.matrixTail);
+      const tail=r.matrixTail?192:0,columns=nativeMatrixColumns(row,r.x,r.width,row.columns.length,r.matrixTail,box.matrixColumnWeights);
       row.columns.forEach((column,index)=>{const cell=columns[index]!,lines=nativeMatrixHeadingLines(column.label,cell.width-5,this.measure).slice(0,2);ctx.textAlign='center';ctx.font=this.font(12,true);lines.forEach((line,lineIndex)=>ctx.fillText(line,cell.x+cell.width/2,top+28+(lineIndex-(lines.length-1)/2)*15,cell.width-4));});
       if(row.value)this.semanticText(ctx,row.value,r.x+r.width-tail+6,top+28,tail-10,12);return;
     }

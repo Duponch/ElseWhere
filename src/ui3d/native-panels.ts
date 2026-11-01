@@ -194,37 +194,105 @@ function quotaEditor(species:AutoSlaughterSpecies):void {
   row('quota-pregnant','Inclure les femelles gestantes',draft.allowPregnant?'Oui':'Non',undefined,[button('quota-pregnant-toggle',draft.allowPregnant?'Oui':'Non',()=>{draft={...draft,allowPregnant:!draft.allowPregnant};open(make());},{active:draft.allowPregnant})]),
  ],[button('quota-apply','Appliquer',async()=>{await send({type:'auto-slaughter-policy',config:{...draft}});back();})]);open(make());
 }
+type AnimalTableKind='animals'|'wildlife';
+type TableAnimal=NonNullable<World['wildlife']>['animals'][number];
+type AnimalTableView={search:string;filter:string;sort:string;descending:boolean};
+const animalTableViews:Record<AnimalTableKind,AnimalTableView>={animals:{search:'',filter:'all',sort:'name',descending:false},wildlife:{search:'',filter:'all',sort:'name',descending:false}};
+let animalTableIdentity='';
+const animalSearchText=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr');
+const animalCareTableLabels:Record<MedicalCare,string>={none:'Aucun soin',dry:'Sans médicament',herbal:'Plantes ou moins',industrial:'Indust. ou moins',best:'Meilleurs'};
+const animalTableAgeFormat=new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2});
+const animalTableCollator=new Intl.Collator('fr',{numeric:true,sensitivity:'base'});
+function animalTableKey(state:NativeUiState):string {
+ const world=state.world;return world?`${state.epoch??''}:${registeredMapId(world)??''}:${world.seed}:${world.width}:${world.height}`:'none';
+}
+function animalTableView(kind:AnimalTableKind):AnimalTableView {
+ const key=animalTableKey(latest!);
+ if(key!==animalTableIdentity){for(const view of Object.values(animalTableViews))Object.assign(view,{search:'',filter:'all',sort:'name',descending:false});animalTableIdentity=key;}
+ return animalTableViews[kind];
+}
+/** Every retained callback re-reads the real scope before exposing or ordering an actor. */
+function animalTableGuard<T extends unknown[]>(action:(...args:T)=>void|Promise<unknown>):(...args:T)=>void|Promise<unknown> {
+ const key=animalTableKey(latest!);
+ return (...args)=>{const current=host?.readState?.()??latest;if(!current||animalTableKey(current)!==key||current.busy)return;latest=current;return action(...args);};
+}
+function tableAnimal(kind:AnimalTableKind,id:number):TableAnimal {
+ const world=currentWorld(),animal=currentAnimal(id);
+ if(kind==='animals'?(!animal.domestic||animal.state==='dead'):(!!animal.domestic||!knownPosition256(world,animal)))throw Error('Cet animal n’est plus disponible dans cette liste.');
+ return animal;
+}
+function animalTableButton(id:string,label:string,activate:()=>void|Promise<unknown>,extra:Partial<NativeControl>={}):NativeControl {
+ return button(id,label,extra.disabled?()=>{}:animalTableGuard(activate),extra);
+}
+function animalFact(id:string,label:string,hint=label):NativeControl{return button(id,label,()=>{},{disabled:true,hint});}
+function animalTableToolbar(kind:AnimalTableKind,world:World,total:number,shown:number):NativeRow[] {
+ const view=animalTableView(kind),refresh=()=>back();
+ const filters=kind==='animals'?[['all','Tous'],['female','Femelles'],['male','Mâles'],['young','Jeunes'],['slaughter','Abattage demandé'],['haul','Transport demandé'],['ready','Produit prêt']]:[['all','Tous'],['female','Femelles'],['male','Mâles'],['hunt','Chasse désignée'],['tame','Apprivoisement demandé']];
+ const sorts=[['name','Nom'],['species','Espèce'],['age','Âge'],['sex','Sexe'],['activity','Activité'],...(kind==='animals'?[['area','Zone / enclos'],['product','Produit']]:[['position','Position']])];
+ const select=(suffix:string,label:string,value:string,choices:string[][],write:(value:string)=>void):NativeControl=>animalTableButton(`${kind}-${suffix}`,`${label} : ${choices.find(([key])=>key===value)?.[1]??value}`,()=>{}, {select:{value,options:choices.map(([value,label])=>({value:value!,label:label!})),onChange:animalTableGuard((value:string)=>{if(!choices.some(([key])=>key===value))return;write(value);refresh();})}});
+ return [
+  {id:`${kind}-search`,label:'Rechercher',region:'navigation',compact:true,presentation:'plain',input:{value:view.search,placeholder:'Nom, espèce ou activité…',maxLength:160,onCommit:animalTableGuard((value:string)=>{view.search=value;refresh();})}},
+  {id:`${kind}-filters`,label:'',region:'navigation',compact:true,presentation:'plain',controls:[select('filter','Filtrer',view.filter,filters,value=>{view.filter=value;}),select('sort','Trier',view.sort,sorts,value=>{view.sort=value;}),animalTableButton(`${kind}-direction`,view.descending?'Décroissant':'Croissant',()=>{view.descending=!view.descending;refresh();},{hint:'Inverser le tri de la liste'})]},
+ ];
+}
+function filteredTableAnimals(kind:AnimalTableKind,world:World,animals:TableAnimal[],targets?:ReturnType<typeof autoSlaughterTargets>):TableAnimal[] {
+ const view=animalTableView(kind),needle=animalSearchText(view.search.trim());
+ const activities=new Map<TableAnimal,string>();
+ const activity=(animal:TableAnimal)=>{let value=activities.get(animal);if(value===undefined){value=animalActivity(world,animal,kind==='animals'?targets:undefined);activities.set(animal,value);}return value;};
+ const name=(animal:TableAnimal)=>actualAnimalName256(animal)??`${animalSpecies(animal.species).label} ${animal.id}`;
+ const filtered=animals.filter(animal=>{
+  const filter=view.filter,match=filter==='all'||filter==='female'&&animal.sex==='female'||filter==='male'&&animal.sex==='male'||filter==='young'&&animalLifeStage(animal)!=='adult'||filter==='slaughter'&&!!animal.domestic?.slaughter||filter==='haul'&&readAnimalTraining282(animal,'haul').wanted||filter==='ready'&&!!productKind(animal)&&productFullness(animal)>=1||filter==='hunt'&&!!world.hunting?.targets.includes(animal.id)||filter==='tame'&&!!animal.taming?.designated;
+  return match&&(!needle||animalSearchText([name(animal),animalSpecies(animal.species).label,animal.sex==='female'?'Femelle':'Mâle',activity(animal),kind==='animals'?animalAreaLabel(world,animal):'',animal.id].join(' ')).includes(needle));
+ });
+ const textKeys=new Map<TableAnimal,string>();
+ const text=(animal:TableAnimal)=>{let value=textKeys.get(animal);if(value===undefined){value=view.sort==='species'?animalSpecies(animal.species).label:view.sort==='sex'?animal.sex:view.sort==='activity'?activity(animal):view.sort==='area'?animalAreaLabel(world,animal):name(animal);textKeys.set(animal,value);}return value;};
+ return filtered.sort((a,b)=>{const compared=view.sort==='age'?a.ageTicks-b.ageTicks:view.sort==='product'?productFullness(a)-productFullness(b):view.sort==='position'?a.z-b.z||a.x-b.x:animalTableCollator.compare(text(a),text(b));return (view.descending?-compared:compared)||a.id-b.id;});
+}
+function animalQuotaOverview():void {
+ const world=currentWorld(),rows:NativeRow[]=[{id:'quotas-headings',label:'Espèce',value:'Total',compact:true,columns:['Adultes ♂','Adultes ♀','Jeunes ♂','Jeunes ♀','Gestantes','Limite','Modifier'].map(label=>({label}))}];
+ for(const species of AUTO_SLAUGHTER_SPECIES){const counts=autoSlaughterCounts(world,species),config=world.autoSlaughter?.find(row=>row.species===species)??defaultAutoSlaughterConfig(species);
+  rows.push({id:`quota-${species}`,label:animalSpecies(species).label,value:String(counts.total),compact:true,presentation:'plain',controls:[...[[counts.males,'males'],[counts.females,'females'],[counts.malesYoung,'males-young'],[counts.femalesYoung,'females-young'],[counts.pregnant,'pregnant'],[config.maxTotal<0?'∞':config.maxTotal,'limit']].map(([value,suffix])=>animalFact(`quota-${species}-${suffix}`,String(value))),animalTableButton(`quota-${species}-edit`,'Quotas',()=>quotaEditor(species))]});
+ }
+ const page=detailPage('animals-quotas','Abattage automatique',rows);page.layout='table';page.width=1140;open(page);
+}
 function animalsPanel(world:World):NativePage {
- const animals=world.wildlife?.animals.filter(a=>!!a.domestic&&a.state!=='dead')??[],targets=autoSlaughterTargets(world);
- const rows:NativeRow[]=[{id:'animals-headings',label:'Animal',value:'Âge · activité',compact:true,columns:['Repérer','Dossier','Abattage','Transport','Zone'].map(label=>({label}))},...animals.map((animal):NativeRow=>{
-  const product=productKind(animal),refusal=slaughterRefusal(world,animal),training=readAnimalTraining282(animal,'haul');
-  const controls=[button(`animal-${animal.id}-locate`,'Repérer',()=>host?.selectPawn(animal.id)),button(`animal-${animal.id}-details`,'Dossier',()=>animalDetails(animal.id)),button(`animal-${animal.id}-slaughter`,animal.domestic!.slaughter?'Abattage demandé':'Abattre',()=>send({type:'slaughter',animalId:animal.id,enabled:!currentAnimal(animal.id).domestic?.slaughter}),{active:!!animal.domestic!.slaughter,disabled:!!refusal&&!animal.domestic!.slaughter,hint:refusal})];
-  if(world.schemaVersion>=282)controls.push(button(`animal-${animal.id}-haul`,training.wanted?'Transport demandé':'Entraîner',()=>send({type:'animal-training',animalId:animal.id,skill:'haul',wanted:!readAnimalTraining282(currentAnimal(animal.id),'haul').wanted}),{active:training.wanted,disabled:!!trainingRefusal282(world,animal,'haul'),hint:trainingRefusal282(world,animal,'haul')??`${training.steps}/${training.maxSteps}`}));
-  if(world.schemaVersion>=287&&supportsAnimalAreas287(animal.species))controls.push(button(`animal-${animal.id}-area`,'Zone',()=>animalArea(animal.id)));
-  const identity=actualAnimalName256(animal)??`${animalSpecies(animal.species).label} ${animal.id}`;
-  const age=`${animal.sex==='female'?'♀':'♂'} · ${(animal.ageTicks/(TICKS_PER_DAY*60)).toLocaleString('fr-FR',{maximumFractionDigits:2})} an · ${stageLabels[animalLifeStage(animal)]}`;
-  const facts=[animalActivity(world,animal,targets),animalAreaLabel(world,animal),MEDICAL_CARE[animal.domestic!.care],product?`${product==='milk'?'Lait':'Laine'} ${Math.round(100*productFullness(animal))} %`:'',animal.pregnancy?`Gestation ${Math.round(100*animal.pregnancy.progress/gestationTicks(animal.species))} %`:''].filter(Boolean).join(' · ');
-  const ordered=['locate','details','slaughter','haul','area'].map(action=>controls.find(control=>control.id===`animal-${animal.id}-${action}`)??button(`animal-${animal.id}-${action}-unavailable`,'—',()=>{},{disabled:true,hint:'Indisponible dans cette partie ou pour cette espèce.'}));
-  return {...row(`animal-${animal.id}`,identity,`${age} · ${animalActivity(world,animal,targets)}`,undefined,ordered.map(control=>({...control,hint:[control.hint,identity,age,facts].filter(Boolean).join('\n')}))),compact:true,presentation:'record',hint:[identity,age,facts].join('\n')};
- })];
- if(!animals.length)rows.push(row('animals-empty','Aucun animal domestique.'));
- if(world.schemaVersion>=228){rows.push({id:'animals-quotas-heading',label:'Abattage automatique',emphasis:'heading',presentation:'plain'});for(const species of AUTO_SLAUGHTER_SPECIES){const c=autoSlaughterCounts(world,species),config=world.autoSlaughter?.find(c=>c.species===species)??defaultAutoSlaughterConfig(species);rows.push({...row(`quota-${species}`,animalSpecies(species).label,`${c.total} animaux · limite ${config.maxTotal<0?'∞':config.maxTotal}`,`Adultes ${c.males} ♂ / ${c.females} ♀ · jeunes ${c.malesYoung} ♂ / ${c.femalesYoung} ♀ · gestantes ${c.pregnant}`,[button(`quota-${species}-edit`,'Quotas',()=>quotaEditor(species))]),presentation:'record'});}}
- return {id:'animals',title:'Animaux',layout:'table',rows,width:11.4,onClose:()=>void host?.panel(null)};
+ const all=world.wildlife?.animals.filter(animal=>!!animal.domestic&&animal.state!=='dead')??[],targets=autoSlaughterTargets(world),animals=filteredTableAnimals('animals',world,all,targets);
+ const rows:NativeRow[]=[...animalTableToolbar('animals',world,all.length,animals.length),{id:'animals-headings',label:'Animal',value:'Activité · gestation',region:'catalogue',compact:true,columns:['Sexe','Âge','Maturité','Soins','Zone / enclos','Produit','Transport','Abattre','Repérer','Dossier'].map(label=>({label}))}];
+ for(const animal of animals){
+  const id=animal.id,identity=actualAnimalName256(animal)??`${animalSpecies(animal.species).label} ${id}`,product=productKind(animal),training=readAnimalTraining282(animal,'haul'),refusal=slaughterRefusal(world,animal),trainingRefusal=trainingRefusal282(world,animal,'haul');
+  const areaValue=animalAreaLabel(world,animal),area=areaValue==='Aucun enclos attribué'?'Sans enclos':areaValue,productLabel=product?`${product==='milk'?'Lait':'Laine'} ${Math.round(100*Math.max(0,Math.min(1,productFullness(animal))))} %`:'—';
+  const areaControl=world.schemaVersion>=287&&supportsAnimalAreas287(animal.species)?animalTableButton(`animal-${id}-area`,area,()=>{tableAnimal('animals',id);animalArea(id);},{hint:`Zone autorisée de ${identity} · ${areaValue}`}):animalFact(`animal-${id}-area`,area,areaValue);
+  const transport=world.schemaVersion>=282?animalTableButton(`animal-${id}-haul`,`${training.steps}/${training.maxSteps}${training.wanted?' Oui':''}`,()=>{const current=tableAnimal('animals',id);return send({type:'animal-training',animalId:id,skill:'haul',wanted:!readAnimalTraining282(current,'haul').wanted});},{active:training.wanted,disabled:!!trainingRefusal,hint:trainingRefusal??`Entraîner ${identity} au transport · ${training.steps}/${training.maxSteps}`}):animalFact(`animal-${id}-haul-unavailable`,'—');
+  const careControl=animalTableButton(`animal-${id}-care`,animalCareTableLabels[animal.domestic!.care],()=>{}, {hint:`Soins de ${identity} · ${MEDICAL_CARE[animal.domestic!.care]}`,select:{value:animal.domestic!.care,options:(Object.keys(MEDICAL_CARE) as MedicalCare[]).map(care=>({value:care,label:MEDICAL_CARE[care]})),onChange:animalTableGuard((value:string)=>{
+   const care=(Object.keys(MEDICAL_CARE) as MedicalCare[]).find(care=>care===value);if(!care)return;
+   tableAnimal('animals',id);return send({type:'animal-care-policy',animalId:id,care});
+  })}});
+  const controls=[animalFact(`animal-${id}-sex`,animal.sex==='female'?'F':'M',animal.sex==='female'?'Femelle':'Mâle'),animalFact(`animal-${id}-age`,`${animalTableAgeFormat.format(animal.ageTicks/(TICKS_PER_DAY*60))} an`),animalFact(`animal-${id}-stage`,stageLabels[animalLifeStage(animal)]),careControl,areaControl,animalFact(`animal-${id}-product`,productLabel),transport,
+   animalTableButton(`animal-${id}-slaughter`,animal.domestic!.slaughter?'Annuler l’abattage':'Désigner pour abattage',()=>{const current=tableAnimal('animals',id);return send({type:'slaughter',animalId:id,enabled:!current.domestic!.slaughter});},{glyph:animal.domestic!.slaughter?'allow':'forbid',active:!!animal.domestic!.slaughter,disabled:!!refusal&&!animal.domestic!.slaughter,hint:refusal??`Abattage manuel de ${identity}`}),
+   animalTableButton(`animal-${id}-locate`,'Repérer',()=>{tableAnimal('animals',id);host?.selectPawn(id);}),animalTableButton(`animal-${id}-details`,'Dossier',()=>{tableAnimal('animals',id);animalDetails(id);})];
+  const activity=[animalActivity(world,animal,targets),animal.pregnancy?`Gestation ${Math.round(100*animal.pregnancy.progress/gestationTicks(animal.species))} %`:''].filter(Boolean).join(' · ');
+  rows.push({id:`animal-${id}`,label:identity,value:activity,region:'catalogue',compact:true,presentation:'plain',controls});
+ }
+ if(!animals.length)rows.push({id:'animals-empty',label:all.length?'Aucun animal ne correspond à la recherche et au filtre.':'Aucun animal domestique.',region:'catalogue',presentation:'plain'});
+ return {id:'animals',title:`Animaux · ${animals.length} / ${all.length}`,layout:'table',contentKey:JSON.stringify([animalTableKey(latest!),animalTableView('animals')]),rows,width:1640,actions:world.schemaVersion>=228?[animalTableButton('animals-quotas-open','Abattage automatique',animalQuotaOverview)]:undefined,onClose:()=>void host?.panel(null)};
 }
 function wildlifePanel(state:NativeUiState,world:World):NativePage {
- const animals=world.wildlife?.animals.filter(a=>!a.domestic&&knownPosition256(world,a))??[];
- const rows:NativeRow[]=[];
- if(!world.wildlife)rows.push(row('wildlife-enable','Partie historique',undefined,'Introduire la faune adopte le circuit existant.',[button('enable-wildlife','Introduire la faune',()=>send({type:'enable-wildlife'}))]));
- for(const animal of animals){const hunted=world.hunting?.targets.includes(animal.id)??false;const drafted=state.selectedPawnIds.length>0&&state.selectedPawnIds.every(id=>world.pawns.some(p=>p.id===id&&isColonist(p)&&!p.prisoner&&p.draft&&p.state!=='dead'&&p.state!=='downed'));
-  const controls=[button(`wildlife-${animal.id}-focus`,'Repérer',()=>host?.selectPawn(animal.id)),button(`wildlife-${animal.id}-hunt`,hunted?'Chasse désignée':'Chasser',()=>send({type:'hunt',animalId:animal.id,enabled:!currentWorld().hunting?.targets.includes(animal.id)}),{active:hunted,disabled:animal.state==='dead'})];
-  if(canTameSpecies(animal.species))controls.push(button(`wildlife-${animal.id}-tame`,animal.taming?.designated?'Apprivoisement demandé':'Apprivoiser',()=>send({type:'tame',animalId:animal.id,enabled:!currentAnimal(animal.id).taming?.designated}),{active:!!animal.taming?.designated,disabled:animal.state==='dead'}));
-  controls.push(button(`wildlife-${animal.id}-shoot`,'Tirer',()=>send({type:'shoot',pawnIds:[...(latest?.selectedPawnIds??[])],targetId:animal.id}),{disabled:!drafted||animal.state==='dead'}),button(`wildlife-${animal.id}-melee`,'Mêlée',()=>send({type:'melee',pawnIds:[...(latest?.selectedPawnIds??[])],targetId:animal.id}),{disabled:!drafted||animal.state==='dead'}));
-  rows.push({...row(`wildlife-${animal.id}`,actualAnimalName256(animal)??`${animalSpecies(animal.species).label} ${animal.id}`,`${animal.sex==='female'?'Femelle':'Mâle'} · ${animal.x}, ${animal.z}`,animalActivity(world,animal),controls),presentation:'record'});
+ const all=world.wildlife?.animals.filter(animal=>!animal.domestic&&knownPosition256(world,animal))??[],animals=filteredTableAnimals('wildlife',world,all);
+ const rows:NativeRow[]=[...animalTableToolbar('wildlife',world,all.length,animals.length)];
+ if(!world.wildlife)rows.push({...row('wildlife-enable','Partie historique',undefined,'Introduire la faune adopte le circuit existant.',[animalTableButton('enable-wildlife','Introduire la faune',()=>send({type:'enable-wildlife'}))]),region:'navigation',presentation:'plain'});
+ rows.push({id:'wildlife-headings',label:'Animal',value:'Activité',region:'catalogue',compact:true,columns:['Sexe','Position','Chasse','Apprivoiser','Repérer','Tirer','Mêlée'].map(label=>({label}))});
+ for(const animal of animals){
+  const id=animal.id,hunted=world.hunting?.targets.includes(id)??false,drafted=state.selectedPawnIds.length>0&&state.selectedPawnIds.every(id=>world.pawns.some(pawn=>pawn.id===id&&isColonist(pawn)&&!pawn.prisoner&&pawn.draft&&pawn.state!=='dead'&&pawn.state!=='downed'));
+  const combat=(type:'shoot'|'melee')=>{const current=host?.readState?.()??latest!,fresh=current.world!;tableAnimal('wildlife',id);if(!current.selectedPawnIds.length||!current.selectedPawnIds.every(id=>fresh.pawns.some(pawn=>pawn.id===id&&isColonist(pawn)&&!pawn.prisoner&&pawn.draft&&pawn.state!=='dead'&&pawn.state!=='downed')))return;return send({type,pawnIds:[...current.selectedPawnIds],targetId:id});};
+  const controls=[animalFact(`wildlife-${id}-sex`,animal.sex==='female'?'Femelle':'Mâle'),animalFact(`wildlife-${id}-position`,`${animal.x}, ${animal.z}`),
+   animalTableButton(`wildlife-${id}-hunt`,hunted?'Annuler la chasse':'Désigner pour chasse',()=>{tableAnimal('wildlife',id);return send({type:'hunt',animalId:id,enabled:!currentWorld().hunting?.targets.includes(id)});},{glyph:hunted?'allow':'forbid',active:hunted,disabled:animal.state==='dead'}),
+   canTameSpecies(animal.species)?animalTableButton(`wildlife-${id}-tame`,animal.taming?.designated?'Annuler l’apprivoisement':'Demander l’apprivoisement',()=>{const current=tableAnimal('wildlife',id);return send({type:'tame',animalId:id,enabled:!current.taming?.designated});},{glyph:animal.taming?.designated?'allow':'forbid',active:!!animal.taming?.designated,disabled:animal.state==='dead'}):animalFact(`wildlife-${id}-tame-unavailable`,'—'),
+   animalTableButton(`wildlife-${id}-focus`,'Repérer',()=>{tableAnimal('wildlife',id);host?.selectPawn(id);}),animalTableButton(`wildlife-${id}-shoot`,'Tirer',()=>combat('shoot'),{disabled:!drafted||animal.state==='dead'}),animalTableButton(`wildlife-${id}-melee`,'Mêlée',()=>combat('melee'),{disabled:!drafted||animal.state==='dead'})];
+  rows.push({id:`wildlife-${id}`,label:actualAnimalName256(animal)??`${animalSpecies(animal.species).label} ${id}`,value:animalActivity(world,animal),region:'catalogue',compact:true,presentation:'plain',controls});
  }
- if(world.wildlife&&!animals.length)rows.push(row('wildlife-empty','Aucun animal sauvage connu.'));
- return {id:'wildlife',title:'Faune',subtitle:'Les ordres de combat utilisent les colons mobilisés sélectionnés.',rows,width:7.8,onClose:()=>void host?.panel(null)};
+ if(world.wildlife&&!animals.length)rows.push({id:'wildlife-empty',label:all.length?'Aucun animal ne correspond à la recherche et au filtre.':'Aucun animal sauvage connu.',region:'catalogue',presentation:'plain'});
+ return {id:'wildlife',title:`Faune · ${animals.length} / ${all.length}`,subtitle:'Les ordres de combat utilisent les colons mobilisés sélectionnés.',layout:'table',contentKey:JSON.stringify([animalTableKey(latest!),animalTableView('wildlife')]),rows,width:1280,onClose:()=>void host?.panel(null)};
 }
-
 function historyPanel(state:NativeUiState):NativePage {
  const source=state.world??state.campaign,rows:NativeRow[]=[];
  if(state.world){const economy=state.world.economy;if(economy){const wealth=economy.wealth,expect=expectationForWealth(wealth.knownTotal);rows.push(row('economy-total','Patrimoine évalué',`${money(wealth.knownTotal)}${wealth.complete?'':' au minimum'}`,`Relevé jour ${1+Math.floor(economy.sampledAt/TICKS_PER_DAY)} · attentes ${expect.label} (${signed(expect.moodOffset)} humeur)`),row('economy-parts','Composition',undefined,`Objets ${money(wealth.items)} · bâtiments ${money(wealth.structures)} · sols ${money(wealth.floors)}`),row('economy-coverage','Couverture',wealth.complete?'Complète':'Valeurs manquantes',`${wealth.unpricedPawnIds.length} personnes ; ${(wealth.unpricedPileIds?.length??0)+(wealth.unpricedPackedIds?.length??0)+(wealth.unpricedStructureIds?.length??0)} autres biens non évalués.`));}else rows.push(row('economy-adopt','Patrimoine',undefined,'La partie conserve ses règles historiques. Adopter le suivi part des biens présents.',[button('economy-enable','Activer le suivi économique',()=>send({type:'adopt-economy'}))]));}

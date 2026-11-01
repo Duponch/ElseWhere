@@ -21,14 +21,21 @@ export interface NativePageBox {
   contentHeight:number;rows:NativeRowBox[];layout:NonNullable<NativePage['layout']>;
   regions:Partial<Record<NativeRegion,NativeRegionBox>>;actions:NativeControlBox[];
   inspectorParts?:NativeInspectorParts;
+  /** Fixed column headings for the two long animal catalogues only. */
+  tableHeader?:NativeRect;
+  matrixColumnWeights?:readonly number[];
 }
 export type TextMeasure=(text:string,size:number,bold?:boolean)=>number;
+/** The renderer uses the same vertical rule for ink, hints and controls. */
+export function nativeTableRowScroll(box:Pick<NativePageBox,'tableHeader'>,row:NativeRow,offset:number):number{return box.tableHeader&&row.columns?0:offset;}
 /** Shared geometry for matrix controls, painted headings and their hint planes.
  * The name and activity lanes have the same width in every row. */
-export function nativeMatrixColumns(row:Pick<NativeRow,'value'>,x:number,width:number,count:number,tail=!!row.value):NativeRect[]{
+export function nativeMatrixColumns(row:Pick<NativeRow,'value'>,x:number,width:number,count:number,tail=!!row.value,weights?:readonly number[]):NativeRect[]{
   if(count<=0)return [];
   const left=x+104,available=Math.max(1,width-104-(tail?192:0)),gap=6,cell=Math.max(1,(available-gap*(count-1))/count);
-  return Array.from({length:count},(_,index)=>({x:left+index*(cell+gap),y:0,width:cell,height:0}));
+  if(weights?.length!==count||weights.some(value=>!Number.isFinite(value)||value<=0))return Array.from({length:count},(_,index)=>({x:left+index*(cell+gap),y:0,width:cell,height:0}));
+  const unit=Math.max(1,(available-gap*(count-1))/weights.reduce((sum,value)=>sum+value,0));let offset=0;
+  return weights.map(value=>{const width=unit*value,box={x:left+offset,y:0,width,height:0};offset+=width+gap;return box;});
 }
 /** Long single-word headings wrap instead of squeezing their glyphs. The full
  * original column label is still the tooltip and the model's authority. */
@@ -124,7 +131,7 @@ export function flowNativeControls(controls:readonly NativeControl[],rect:Native
   }
   return {controls:boxes,height:y-rect.y+lineHeight};
 }
-function rowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasure,table:boolean,tileColumnLimit?:number,matrixTail=!!row.value):NativeRowBox {
+function rowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasure,table:boolean,tileColumnLimit?:number,matrixTail=!!row.value,matrixWeights?:readonly number[]):NativeRowBox {
   if(row.tree)return storageTreeRowBox(row,x,top,width,measure);
   const matrix=!!row.compact&&!!row.controls?.length&&table;
   const isTabs=row.controlStyle==='tab'||row.id==='pawn-tabs'||row.id==='health-tabs';
@@ -143,7 +150,7 @@ function rowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasu
   if(row.columns)height=48;
   else if(matrix){
     height=row.controls!.some(control=>control.caption)?48:42;controlHeight=height-6;controlTop=3;
-    controls=nativeMatrixColumns(row,x,width,controlColumns,matrixTail).map((column,index)=>({control:row.controls![index]!,style:row.controls![index]!.presentation??'button',x:column.x,y:top+3,width:column.width,height:controlHeight}));
+    controls=nativeMatrixColumns(row,x,width,controlColumns,matrixTail,matrixWeights).map((column,index)=>({control:row.controls![index]!,style:row.controls![index]!.presentation??'button',x:column.x,y:top+3,width:column.width,height:controlHeight}));
   }else if(row.meter)height=row.meter.secondary?34:row.dense?25:28;
   else if(row.input){
     height=Math.max(36,labelLines.length*NATIVE_UI.line+8);controlHeight=26;controlTop=4;
@@ -356,9 +363,49 @@ function inspectorPage(page:NativePage,viewport:{width:number;height:number},mea
   actions.forEach(control=>control.y+=stripY-header);
   return {x:12,y:viewport.height-bottom-height,width,height,header,footer,body:{x:bodyX,y:header,width:contentWidth,height:bodyHeight},contentHeight,rows:[tabsBox,...rows],layout:'inspector',regions:{navigation:{...tabs,contentHeight:tabs.height}},actions,inspectorParts:{sheet,tabs,summary,actions:actionRect}};
 }
+/** Animal catalogues pin their measured toolbar and headings above the list.
+ * Other table layouts keep their existing geometry and scroll owners. */
+function animalTablePage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure):NativePageBox {
+  const pad=NATIVE_UI.padding,gap=4,header=page.subtitle?76:48,bottom=NATIVE_UI.bottom+10;
+  const width=Math.min(Math.max(220,Math.min(requestedWidth(page,page.id==='animals'?1640:1280),viewport.width-32)),Math.max(1,viewport.width-24));
+  const contentWidth=Math.max(1,width-pad*2-12),nameWidth=Math.min(104,Math.max(1,contentWidth-1));
+  const columns=Math.max(0,...page.rows.map(row=>row.columns?.length??0));
+  const matrixRow=(row:NativeRow)=>!!row.columns||!!row.compact&&row.controls?.length===columns;
+  const tail=page.rows.some(row=>matrixRow(row)&&!!row.value);
+  const weights=page.id==='animals'?[.55,.7,.7,1.6,1.55,1,.9,.55,.7,.7]:[.7,.9,.8,1.1,.9,.75,.75];
+  const intrinsicWidth=Math.max(contentWidth,page.id==='animals'?1140:1000,104+(tail?192:0)+columns*42+Math.max(0,columns-1)*6);
+  const actionFlow=flowNativeControls(page.actions??[],{x:pad,y:0,width:width-pad*2,height:0},measure);
+  const horizontalReserve=intrinsicWidth>contentWidth?12:0;
+  const footer=(page.actions?.length?actionFlow.height+pad*2:pad)+horizontalReserve;
+  const height=Math.min(page.height??900,Math.max(1,viewport.height-bottom-12));
+  const rows:NativeRowBox[]=[];let toolbarHeight=0;
+  for(const row of page.rows.filter(row=>row.region==='navigation')){
+    const box=rowBox({...row,region:'details'},pad,toolbarHeight,contentWidth,measure,false);rows.push(box);toolbarHeight+=box.height+gap;
+  }
+  const headingY=header+toolbarHeight;let headingHeight=0;
+  for(const row of page.rows.filter(row=>!!row.columns)){
+    const box=rowBox({...row,region:'catalogue'},pad,toolbarHeight+headingHeight,intrinsicWidth,measure,true,undefined,tail,weights);rows.push(box);headingHeight+=box.height;
+  }
+  const bodyY=headingY+headingHeight+gap,bodyHeight=Math.max(0,height-footer-bodyY);
+  let contentHeight=0;
+  for(const row of page.rows.filter(row=>row.region!=='navigation'&&!row.columns)){
+    const matrix=matrixRow(row),x=pad+(matrix?0:nameWidth),rowWidth=matrix?intrinsicWidth:Math.max(1,contentWidth-nameWidth);
+    const box=rowBox({...row,region:'catalogue'},x,bodyY-header+contentHeight,rowWidth,measure,true,undefined,matrix?tail:undefined,matrix?weights:undefined);
+    if(matrix){box.height=34;box.controlTop=3;box.controlHeight=28;for(const control of box.controls)control.height=28;}
+    rows.push(box);contentHeight+=box.height+gap;
+  }
+  const body={x:pad,y:bodyY,width:contentWidth,height:bodyHeight};
+  return {x:12,y:viewport.height-bottom-height,width,height,header,footer,body,contentHeight,rows,layout:'table',
+    matrixColumnWeights:weights,tableHeader:{x:pad+nameWidth,y:headingY,width:contentWidth-nameWidth,height:headingHeight},
+    regions:{details:{x:pad,y:header,width:contentWidth,height:toolbarHeight,contentHeight:toolbarHeight},
+      navigation:{...body,width:nameWidth,contentHeight},
+      catalogue:{...body,x:pad+nameWidth,width:contentWidth-nameWidth,contentWidth:intrinsicWidth-nameWidth,contentHeight}},
+    actions:actionFlow.controls.map(control=>({...control,y:height-header-footer+horizontalReserve+pad+control.y}))};
+}
 export function layoutNativePage(page:NativePage,viewport:{width:number;height:number},front:boolean,measure:TextMeasure):NativePageBox {
   const layout=page.layout??(front?'front':page.id.startsWith('inspect-')?'inspector':['work','schedule','animals','wildlife','assign','history'].includes(page.id)?'table':'dialog');
   if(layout==='storage')return storagePage(page,viewport,measure);
+  if(layout==='table'&&(page.id==='animals'||page.id==='wildlife')&&page.rows.some(row=>row.columns))return animalTablePage(page,viewport,measure);
   if(layout==='architect'||layout==='research')return structuredPage(page,viewport,measure,layout);
   if(layout==='inspector'&&page.portrait&&page.rows.some(row=>row.id==='pawn-tabs'))return inspectorPage(page,viewport,measure);
   if(layout==='palette'){
