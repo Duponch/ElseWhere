@@ -5,21 +5,23 @@ import { stoneColor } from './stone-palette';
 import { harvestable } from '../sim/plants';
 import { workProgress } from '../sim/work-progress';
 import * as THREE from 'three/webgpu';
-import { Fn, If, attribute, positionLocal, renderGroup, sin, uniform, vec3 } from 'three/tsl';
+import { Fn, If, attribute, positionLocal, renderGroup, sin, uniform, uv, vec3 } from 'three/tsl';
 import type { AnimationDetail, AnimationSampleHandle } from './AnimationDetail';
 import { NaturalAnimationCache } from './natural-animation-cache';
 import { TICKS_PER_SECOND, type World } from '../sim/types';
 import { WORLD_SCALE } from '../world/scale';
 import { clearGroup } from './primitives';
 import type { Placement } from './primitives';
-import { mergedInstances,noise,type ResourceRange,type ResourceRangeData } from './StaticGeometry';
+import { mergedInstances,noise,resourceBrushData,type ResourceBrushData,type ResourceRange,type ResourceRangeData } from './StaticGeometry';
 import type { NaturalPresentationChange } from './NaturalResourcePresentation';
 import type {NaturalAppearanceReader} from './natural-appearance-pass';
 import {readSceneResourceFrame,type SceneResourceFrame} from './scene-resource-index';
 import {ResourceTargetTint} from './resource-target-tint';
 import {ResourceRangeBounds} from './resource-range-bounds';
-import {currentGraphicsStyle} from './graphics-style';
-import {appendOrigamiFlora,createOrigamiFloraParts,origamiFloraGeometries,ORIGAMI_FLORA_KEYS,ORIGAMI_FLORA_CANOPY_KEYS} from './origami/flora';
+import {applyOrigamiSurface,currentGraphicsStyle,type GraphicsStyleContext} from './graphics-style';
+import {createOrigamiBrushGeometry} from './origami/brush-geometry';
+import {ReferenceFloraLibrary} from './origami/resource-flora';
+import {GENERIC_REFERENCE_PROFILE} from './origami/reference-profiles';
 
 const resourceIdentity=(world:World,resource:World['resources'][number]):string=>{
   const support=hydroponicFloraHeight(world,resource);
@@ -27,8 +29,20 @@ const resourceIdentity=(world:World,resource:World['resources'][number]):string=
 };
 const rangeResourceId=(id:number):number=>id<0?Math.floor(-id/2):id;
 const CHOP_RECOIL_SECONDS = .55;
-type TreePart = { mesh:THREE.Mesh; range:ResourceRange; positions:Float32Array; normals:Float32Array; upload:{start:number;count:number} };
+type ResourceObject=THREE.Mesh|THREE.LineSegments;
+type TreePart = { mesh:ResourceObject; range:ResourceRange; positions:Float32Array; normals:Float32Array; expansions?:Float32Array; brush?:ResourceBrushData;upload:{start:number;count:number} };
 type TreeHit = { at:number; x:number; z:number; axisX:number; axisZ:number; angle:number; sample?:AnimationSampleHandle; pendingPose?:boolean };
+
+/** Creases of the existing fallback primitives, with their original placements
+ * and visibility/growth identities. Exact source recipes supply separate lines. */
+export function resourceFallbackLineParts(parts:readonly {geometry:THREE.BufferGeometry;items:Placement[]}[]):{geometry:THREE.BufferGeometry;items:Placement[]}[] {
+  return parts.filter(part=>part.items.length>0).map(part=>{
+    const geometry=new THREE.EdgesGeometry(part.geometry,22),count=geometry.getAttribute('position').count;
+    const normals=new Float32Array(count*3);for(let i=1;i<normals.length;i+=3)normals[i]=1;
+    geometry.setAttribute('normal',new THREE.BufferAttribute(normals,3));geometry.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(count*2),2));
+    return {geometry,items:part.items};
+  });
+}
 
 /** A short strike and damped return about the tree's base, in confirmed scene time. */
 export function chopRecoilAngle(age:number):number {
@@ -57,7 +71,7 @@ function retainResources(group: THREE.Group, alive: Set<number>): void {
 
 /** Reapply a resource's visible size from the immutable merged positions.
  * This avoids cumulative float drift and keeps index-mask ranges stable. */
-function resizeResources(world:World,group:THREE.Group,resources:Map<number,World['resources'][number]>,originalSizes:Map<number,number>,currentSizes:Map<number,number>,nextSizes:Map<number,number>,bounds:WeakMap<THREE.BufferGeometry,ResourceRangeBounds>):void {
+function resizeResources(world:World,group:THREE.Group,resources:Map<number,World['resources'][number]>,originalSizes:Map<number,number>,currentSizes:Map<number,number>,nextSizes:Map<number,number>,bounds:WeakMap<THREE.BufferGeometry,ResourceRangeBounds>,graphics?:GraphicsStyleContext):void {
   const changed=new Set<number>();
   for(const [id,size] of nextSizes)if(currentSizes.get(id)!==size&&originalSizes.has(id))changed.add(id);
   if(!changed.size)return;
@@ -65,25 +79,36 @@ function resizeResources(world:World,group:THREE.Group,resources:Map<number,Worl
     const mesh=object as THREE.Mesh,data=mesh.userData.resourceRanges as ResourceRangeData|undefined;
     if(!data)continue;
     const position=mesh.geometry.getAttribute('position') as THREE.BufferAttribute;let touched=false;
+    const brush=resourceBrushData(mesh.geometry);
     const retained=bounds.get(mesh.geometry);let bounded=!!retained;
     for(let rangeIndex=0;rangeIndex<data.ranges.length;rangeIndex++) {
       const range=data.ranges[rangeIndex]!;
       const id=rangeResourceId(range.id);if(!changed.has(id))continue;
       const resource=resources.get(id),initial=originalSizes.get(id),target=nextSizes.get(id);if(!resource||initial===undefined||target===undefined)continue;
       const ratio=target/initial,support=hydroponicFloraHeight(world,resource);
+      const expansion=mesh.geometry.getAttribute('origamiWearExpand') as THREE.BufferAttribute|undefined;
       for(let vertex=range.vertexStart;vertex<range.vertexStart+range.vertexCount;vertex++){
         const offset=vertex*3;
         position.array[offset]=resource.x+(data.originalPositions[offset]!-resource.x)*ratio;
         position.array[offset+1]=support?support+(data.originalPositions[offset+1]!-support)*ratio:data.originalPositions[offset+1]!*ratio;
         position.array[offset+2]=resource.z+(data.originalPositions[offset+2]!-resource.z)*ratio;
+        if(expansion&&data.originalWearExpandDirections){expansion.array[offset]=data.originalWearExpandDirections[offset]!*ratio;expansion.array[offset+1]=data.originalWearExpandDirections[offset+1]!*ratio;expansion.array[offset+2]=data.originalWearExpandDirections[offset+2]!*ratio;}
+        if(brush&&data.originalBrush){
+          const original=data.originalBrush;
+          brush.base[offset]=resource.x+(original.base[offset]!-resource.x)*ratio;brush.base[offset+1]=support?support+(original.base[offset+1]!-support)*ratio:original.base[offset+1]!*ratio;brush.base[offset+2]=resource.z+(original.base[offset+2]!-resource.z)*ratio;
+          for(const key of ['width','rough'] as const)for(let component=0;component<3;component++)brush[key][offset+component]=original[key][offset+component]!*ratio;
+        }
       }
+      if(brush)graphics?.refreshBrushGeometry(mesh.geometry,range.vertexStart,range.vertexCount);
       if(retained&&!retained.update(rangeIndex,position.array))bounded=false;
       position.addUpdateRange(range.vertexStart*3,range.vertexCount*3);
+      if(expansion)expansion.addUpdateRange(range.vertexStart*3,range.vertexCount*3);
       touched=true;
     }
     if(touched){
       position.needsUpdate=true;
-      const padding=data.ranges.some(range=>resources.get(rangeResourceId(range.id))?.kind==='tree')?4:0;
+      const expansion=mesh.geometry.getAttribute('origamiWearExpand');if(expansion)expansion.needsUpdate=true;
+      const padding=(data.ranges.some(range=>resources.get(rangeResourceId(range.id))?.kind==='tree')?4:0)+((mesh.userData.referenceCompanion==='wear'||Boolean(brush))?0.5:0);
       if(bounded){
         mesh.geometry.boundingSphere??=new THREE.Sphere();
         retained!.writeSphere(mesh.geometry.boundingSphere,padding);
@@ -91,6 +116,7 @@ function resizeResources(world:World,group:THREE.Group,resources:Map<number,Worl
         bounds.delete(mesh.geometry);mesh.geometry.computeBoundingSphere();
         if(padding&&mesh.geometry.boundingSphere)mesh.geometry.boundingSphere.radius+=padding;
       }
+      if(brush&&mesh.geometry.boundingSphere)mesh.geometry.userData.referenceBrushConservativeSphere=mesh.geometry.boundingSphere.clone();
     }
   }
   for(const id of changed)currentSizes.set(id,nextSizes.get(id)!);
@@ -103,7 +129,16 @@ function visibleResourceKeys(world:World,r:World['resources'][number],appearance
 
 export class ResourceLayer {
   private readonly graphicsStyle=currentGraphicsStyle();
-  compiledMaterials435():readonly THREE.NodeMaterial[]{return[this.staticMaterial,this.texturedMaterial,this.windPlain,this.windTextured];}
+  private readonly referenceFlora=this.graphicsStyle?.origami?new ReferenceFloraLibrary():undefined;
+  private readonly origamiPlain:THREE.NodeMaterial|undefined;
+  private readonly origamiTextured:THREE.NodeMaterial|undefined;
+  private readonly linePlain:THREE.NodeMaterial|undefined;
+  private readonly lineWind:THREE.NodeMaterial|undefined;
+  private readonly wearPlain:THREE.NodeMaterial|undefined;
+  private readonly wearWind:THREE.NodeMaterial|undefined;
+  private get bodyPlain():THREE.NodeMaterial{return this.origamiPlain??this.staticMaterial;}
+  private get bodyTextured():THREE.NodeMaterial{return this.origamiTextured??this.texturedMaterial;}
+  compiledMaterials435():readonly THREE.NodeMaterial[]{return[this.bodyPlain,this.bodyTextured,this.windPlain,this.windTextured];}
   compiledAttributeChanged435:((attribute:THREE.BufferAttribute,start:number,count:number)=>void)|undefined;
   private readonly targetTint=new ResourceTargetTint((attribute,start,count)=>this.compiledAttributeChanged435?.(attribute,start,count));
   private readonly rangeBounds=new WeakMap<THREE.BufferGeometry,ResourceRangeBounds>();
@@ -127,23 +162,38 @@ export class ResourceLayer {
     for(const plant of this.growing.values())if(harvestable(world,plant)){this.update(world,false);break;}
   }
   constructor(readonly group: THREE.Group, private readonly staticMaterial: THREE.NodeMaterial, private readonly texturedMaterial: THREE.NodeMaterial=staticMaterial,private readonly detail?:AnimationDetail) {
-    const windPosition=Fn(()=>{
+    if(this.graphicsStyle?.origami){
+      this.origamiPlain=staticMaterial.clone();this.origamiTextured=texturedMaterial.clone();
+      Reflect.set(this.origamiPlain,'vertexColors',false);Reflect.set(this.origamiTextured,'vertexColors',false);
+      this.origamiPlain.colorNode=attribute('color','vec3');
+      applyOrigamiSurface(this.origamiTextured,attribute('color','vec3'),uv(),this.graphicsStyle,attribute('origamiPaint','vec4').w,true);
+      // Exact profiles already contain their authored base color. Only live
+      // blight/selection changes modulate that result, using the source baseline.
+      const paint=attribute('origamiPaint','vec4'),ratio=attribute('color','vec3').div(paint.xyz.max(vec3(.00001)));
+      const painted=this.origamiTextured.colorNode as THREE.Node<'vec3'>;
+      // The shared paint sample must be evaluated outside profile branches.
+      // A ConditionalNode around the complete graph can leave the cached Fn
+      // result uninitialised when its first generated branch is not taken.
+      this.origamiTextured.colorNode=painted.mul(paint.w.greaterThan(0).select(ratio,vec3(1)));
+      this.origamiPlain.userData.rendererOwned=this.origamiTextured.userData.rendererOwned=true;
+    }
+    const makeWindPosition=(base:THREE.Node<'vec3'>)=>Fn(()=>{
       const root=attribute('windRoot','vec3');
       const deform=(tick:THREE.Node<'float'>)=>{
-      const height=positionLocal.y.div(4).clamp(0,1);
+      const height=base.y.div(4).clamp(0,1);
       const wave=sin(tick.mul(2*Math.PI/48).add(root.x.mul(.47)).add(root.y.mul(.31)));
       const bend=height.mul(height).mul(root.z).mul(this.windStrength).mul(wave.mul(.43).add(.63));
       const leaves=root.z.greaterThan(.8).select(1,0);
-      const flutter=sin(tick.mul(2*Math.PI/15).add(positionLocal.x.mul(1.3)).add(positionLocal.z.mul(1.7)))
+      const flutter=sin(tick.mul(2*Math.PI/15).add(base.x.mul(1.3)).add(base.z.mul(1.7)))
         .mul(leaves).mul(height).mul(this.windStrength).mul(.11);
-      return positionLocal.add(vec3(
+      return base.add(vec3(
         this.windDirection.x.mul(bend).sub(this.windDirection.y.mul(flutter)),
         0,
         this.windDirection.y.mul(bend).add(this.windDirection.x.mul(flutter)),
       ));
       };
       if(!detail)return deform(this.windTick);
-      const level=detail.level(vec3(root.x,0,root.y)).toVar(),position=positionLocal.toVar();
+      const level=detail.level(vec3(root.x,0,root.y)).toVar(),position=base.toVar();
       If(level.equal(0),()=>{position.assign(deform(this.windTick));})
         .ElseIf(level.equal(1),()=>{
           // Spatial sine/cosine bases are built with the resident geometry.
@@ -151,17 +201,28 @@ export class ResourceLayer {
           const basis=attribute('windBasis','vec4'),wind=this.middleWind.wind;
           const wave=this.middleWind.phaseA.x.mul(basis.y).add(this.middleWind.phaseA.y.mul(basis.x));
           const flutterWave=this.middleWind.phaseB.x.mul(basis.w).add(this.middleWind.phaseB.y.mul(basis.z));
-          const height=positionLocal.y.div(4).clamp(0,1);
+          const height=base.y.div(4).clamp(0,1);
           const bend=height.mul(height).mul(root.z).mul(wind.z).mul(wave.mul(.43).add(.63));
           const flutter=flutterWave.mul(root.z.greaterThan(.8).select(1,0)).mul(height).mul(wind.z).mul(.11);
-          position.assign(positionLocal.add(vec3(wind.x.mul(bend).sub(wind.y.mul(flutter)),0,wind.y.mul(bend).add(wind.x.mul(flutter)))));
+          position.assign(base.add(vec3(wind.x.mul(bend).sub(wind.y.mul(flutter)),0,wind.y.mul(bend).add(wind.x.mul(flutter)))));
         });
       return position;
     })();
-    this.windPlain=staticMaterial.clone();
-    this.windTextured=texturedMaterial.clone();
+    const windPosition=makeWindPosition(positionLocal);
+    this.windPlain=this.bodyPlain.clone();
+    this.windTextured=this.bodyTextured.clone();
     this.windPlain.positionNode=this.windTextured.positionNode=windPosition;
     this.windPlain.userData.rendererOwned=this.windTextured.userData.rendererOwned=true;
+    if(this.graphicsStyle?.origami){
+      const wearPosition=positionLocal.add(attribute('origamiWearExpand','vec3').mul(this.graphicsStyle.contourSpan));
+      this.linePlain=this.graphicsStyle.createBrushMaterial(positionLocal,uv());
+      this.lineWind=this.graphicsStyle.createBrushMaterial(windPosition,uv());
+      this.wearPlain=this.graphicsStyle.createWearMaterial(wearPosition,uv());
+      this.wearWind=this.graphicsStyle.createWearMaterial(makeWindPosition(wearPosition),uv());
+      for(const material of [this.linePlain,this.lineWind,this.wearPlain,this.wearWind]){
+        material.userData.rendererOwned=true;material.userData.referenceOriginalMask=material.maskNode;
+      }
+    }
   }
   /** One uniform update for the whole forest; no vertex buffer is rewritten. */
   setWind(strength:number,directionX:number,directionZ:number):void {
@@ -177,12 +238,19 @@ export class ResourceLayer {
   setTexturesEnabled(enabled:boolean):void {
     if(this.texturesEnabled===enabled)return;
     this.texturesEnabled=enabled;
-    this.group.traverse(object=>{if(object instanceof THREE.Mesh)object.material=object.geometry.hasAttribute('windRoot')
-      ?enabled?this.windTextured:this.windPlain:enabled?this.texturedMaterial:this.staticMaterial;});
+    this.group.traverse(object=>{
+      if(object.userData.referenceCompanion){object.userData.origamiTexturesEnabled=enabled;this.graphicsStyle?.refreshEdgeObject(object);}
+      else if(object instanceof THREE.Mesh)object.material=object.geometry.hasAttribute('windRoot')
+        ?enabled?this.windTextured:this.windPlain:enabled?this.bodyTextured:this.bodyPlain;
+    });
   }
   setFoliageVisible(visible: boolean): void {
     this.foliageVisible = visible;
-    this.group.traverse(object => { if (object.name === 'tree-canopy') object.visible = visible; });
+    this.group.traverse(object => { if (object.name === 'tree-canopy') {
+      object.userData.origamiOwnerVisible=visible;
+      if(object.userData.referenceCompanion)this.graphicsStyle?.refreshEdgeObject(object);
+      else object.visible=visible;
+    } });
   }
   /** Caller supplies already eligible target IDs, not a rectangle-position mask.
    * Only their existing spatial chunks/ranges are visited on selection changes. */
@@ -195,7 +263,7 @@ export class ResourceLayer {
   }
   clearTargetPreview():void {this.targetTint.restore();this.targetPreviewIds.clear();}
   clear(): void { this.middleWind.reset();this.clearTargetPreview();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear(); this.treeCells.clear();this.treeCellsPending=undefined; }
-  dispose():void {this.clear();this.windPlain.dispose();this.windTextured.dispose();}
+  dispose():void {this.clear();this.windPlain.dispose();this.windTextured.dispose();this.origamiPlain?.dispose();this.origamiTextured?.dispose();this.linePlain?.dispose();this.lineWind?.dispose();this.wearPlain?.dispose();this.wearWind?.dispose();this.referenceFlora?.dispose();}
 
   /** Only a confirmed increase in a reserved chopping job can produce a hit.
    * The contact phase is the forward reach of the existing 11 rad/s arm pose. */
@@ -262,10 +330,12 @@ export class ResourceLayer {
   private poseTree(id:number,hit:TreeHit,angle:number):void {
     const parts=this.treeParts.get(id);if(!parts)return;
     const sine=Math.sin(angle),cosine=Math.cos(angle),complement=1-cosine;
-    for(const {mesh,range,positions,normals,upload} of parts){
+    for(const {mesh,range,positions,normals,expansions,brush,upload} of parts){
       const position=mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
       const normal=mesh.geometry.getAttribute('normal') as THREE.BufferAttribute;
       const out=position.array as Float32Array,outNormal=normal.array as Float32Array;
+      const expand=mesh.geometry.getAttribute('origamiWearExpand') as THREE.BufferAttribute|undefined;
+      const currentBrush=resourceBrushData(mesh.geometry);
       for(let vertex=range.vertexStart;vertex<range.vertexStart+range.vertexCount;vertex++){
         const i=vertex*3;
         const x=positions[i]!-hit.x,y=positions[i+1]!,z=positions[i+2]!-hit.z;
@@ -277,7 +347,19 @@ export class ResourceLayer {
         outNormal[i]=nx*cosine-hit.axisZ*ny*sine+hit.axisX*normalDot*complement;
         outNormal[i+1]=ny*cosine+(hit.axisZ*nx-hit.axisX*nz)*sine;
         outNormal[i+2]=nz*cosine+hit.axisX*ny*sine+hit.axisZ*normalDot*complement;
+        if(expand&&expansions){
+          const ex=expansions[i]!,ey=expansions[i+1]!,ez=expansions[i+2]!,dot=hit.axisX*ex+hit.axisZ*ez;
+          expand.array[i]=ex*cosine-hit.axisZ*ey*sine+hit.axisX*dot*complement;
+          expand.array[i+1]=ey*cosine+(hit.axisZ*ex-hit.axisX*ez)*sine;
+          expand.array[i+2]=ez*cosine+hit.axisX*ey*sine+hit.axisZ*dot*complement;
+        }
+        if(currentBrush&&brush){
+          for(const key of ['base','width','rough'] as const){const translated=key==='base',bx=brush[key][i]!-(translated?hit.x:0),by=brush[key][i+1]!,bz=brush[key][i+2]!-(translated?hit.z:0),dot=hit.axisX*bx+hit.axisZ*bz;
+            currentBrush[key][i]=(translated?hit.x:0)+bx*cosine-hit.axisZ*by*sine+hit.axisX*dot*complement;currentBrush[key][i+1]=by*cosine+(hit.axisZ*bx-hit.axisX*bz)*sine;currentBrush[key][i+2]=(translated?hit.z:0)+bz*cosine+hit.axisX*by*sine+hit.axisZ*dot*complement;
+          }
+        }
       }
+      if(currentBrush)this.graphicsStyle?.refreshBrushGeometry(mesh.geometry,range.vertexStart,range.vertexCount);
       // Reuse the range descriptor: WebGPU uploads only this tree's vertices,
       // instead of the whole 64-cell chunk on every animated frame.
       upload.start=range.vertexStart*3;upload.count=range.vertexCount*3;
@@ -285,18 +367,24 @@ export class ResourceLayer {
       // its latest pending range, rather than accumulating one per RAF.
       if(!position.updateRanges.includes(upload))position.updateRanges.push(upload);
       if(!normal.updateRanges.includes(upload))normal.updateRanges.push(upload);
+      if(expand&&!expand.updateRanges.includes(upload))expand.updateRanges.push(upload);
       position.needsUpdate=true;normal.needsUpdate=true;
+      if(expand)expand.needsUpdate=true;
       this.compiledAttributeChanged435?.(position,upload.start,upload.count);this.compiledAttributeChanged435?.(normal,upload.start,upload.count);
+      if(expand)this.compiledAttributeChanged435?.(expand,upload.start,upload.count);
     }
     hit.angle=angle;
   }
 
   private refreshTreeBases(ids:readonly number[]):void {
-    const copies=new Map<THREE.Mesh,Float32Array>();
+    const copies=new Map<ResourceObject,Float32Array>(),expansions=new Map<ResourceObject,Float32Array>(),brushes=new Map<ResourceObject,ResourceBrushData>();
     for(const id of ids)for(const part of this.treeParts.get(id)??[]){
       let positions=copies.get(part.mesh);
       if(!positions){positions=new Float32Array((part.mesh.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array);copies.set(part.mesh,positions);}
       part.positions=positions;
+      const expand=part.mesh.geometry.getAttribute('origamiWearExpand');
+      if(expand){let copy=expansions.get(part.mesh);if(!copy){copy=new Float32Array(expand.array as Float32Array);expansions.set(part.mesh,copy);}part.expansions=copy;}
+      const brush=resourceBrushData(part.mesh.geometry);if(brush){let copy=brushes.get(part.mesh);if(!copy){copy={base:brush.base.slice(),width:brush.width.slice(),rough:brush.rough.slice()};brushes.set(part.mesh,copy);}part.brush=copy;}
     }
   }
   update(world: World, newMap: boolean, changes?: ReadonlyMap<number,NaturalPresentationChange>,frame?:SceneResourceFrame,appearance?:NaturalAppearanceReader): void {
@@ -309,6 +397,18 @@ export class ResourceLayer {
     const texturedOutput=this.texturedMaterial.outputNode;
     if(this.windPlain.outputNode!==plainOutput)this.windPlain.outputNode=plainOutput;
     if(this.windTextured.outputNode!==texturedOutput)this.windTextured.outputNode=texturedOutput;
+    for(const material of [this.origamiPlain,this.origamiTextured,this.linePlain,this.lineWind,this.wearPlain,this.wearWind])if(material){
+      const source=material===this.origamiPlain?this.staticMaterial:this.texturedMaterial;
+      material.outputNode=source.outputNode;
+      material.maskShadowNode=source.maskShadowNode;
+      const original=material.userData.referenceOriginalMask as THREE.Node<'bool'>|undefined;
+      if(material.userData.referenceMaskSource!==source.maskNode){
+        material.maskNode=source.maskNode?(original?new THREE.OperatorNode('&&',source.maskNode,original):source.maskNode):original??null;
+        material.userData.referenceMaskSource=source.maskNode;material.needsUpdate=true;
+      }
+    }
+    this.windPlain.maskNode=this.bodyPlain.maskNode;this.windTextured.maskNode=this.bodyTextured.maskNode;
+    this.windPlain.maskShadowNode=this.bodyPlain.maskShadowNode;this.windTextured.maskShadowNode=this.bodyTextured.maskShadowNode;
     if (newMap) { this.middleWind.reset();this.clearTargetPreview();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear(); }
     const indexed=readSceneResourceFrame(frame,world);
     if(indexed)this.treeCellsPending=world;
@@ -381,7 +481,7 @@ export class ResourceLayer {
       if (previous && chunk.every(r => previous.identities.get(r.id) === resourceIdentity(world,r))) {
         const treeSizeChanged=previous.treeIds.some(id=>previous.currentSizes.get(id)!==sizes.get(id));
         if(treeSizeChanged)this.clearChopRecoil();
-        resizeResources(world,previous.group,new Map(chunk.map(resource=>[resource.id,resource])),previous.originalSizes,previous.currentSizes,sizes,this.rangeBounds);
+        resizeResources(world,previous.group,new Map(chunk.map(resource=>[resource.id,resource])),previous.originalSizes,previous.currentSizes,sizes,this.rangeBounds,this.graphicsStyle);
         if(treeSizeChanged)this.refreshTreeBases(previous.treeIds);
         // Growth changes vertex positions, not the selected original ranges.
         // Keep their index version stable until actual membership changes;
@@ -398,13 +498,13 @@ export class ResourceLayer {
       const trunks: Placement[] = [], crowns: Placement[] = [], upperCrowns: Placement[] = [];
       const rocks: Placement[] = [], bushes: Placement[] = [], berries: Placement[] = [];
       const cones:Placement[]=[],blades:Placement[]=[],cacti:Placement[]=[];
-      const origamiParts=this.graphicsStyle?.origami?createOrigamiFloraParts():undefined;
+      const origamiParts=this.referenceFlora?.createBatch();
       for (const resource of chunk) {
         const { x, z } = resource;
         const parts = [trunks, crowns, upperCrowns, rocks, bushes, berries];
         const lengths = parts.map(items => items.length);
         const n = noise(x, z, 77), turn = n * Math.PI * 2;
-        if(origamiParts&&appendOrigamiFlora(origamiParts,world,resource,turn,size(resource)))continue;
+        if(origamiParts?.append(world,resource,turn,size(resource)))continue;
         if(resource.species||isMedicinalPlant(resource)){appendFlora({trunks,crowns,cones,blades,cacti,bushes,fruit:berries},world,resource,turn,size(resource));continue;}
         if (resource.kind === 'tree') {
           const height = WORLD_SCALE.treeMinHeight + n * (WORLD_SCALE.treeMaxHeight - WORLD_SCALE.treeMinHeight);
@@ -428,48 +528,74 @@ export class ResourceLayer {
       }
       for (const trunk of trunks) trunk.color ??= 0x70573e;
       for (const berry of berries) berry.color = 0xb96f63;
-      const origamiKeys=origamiParts?ORIGAMI_FLORA_KEYS.filter(key=>origamiParts[key].length>0):[];
-      const origamiGeometry=origamiKeys.length?origamiFloraGeometries(origamiKeys):undefined;
-      const origamiBodies=origamiKeys.filter(key=>!ORIGAMI_FLORA_CANOPY_KEYS.has(key)).map(key=>({geometry:origamiGeometry![key]!,items:origamiParts![key]}));
-      const origamiCanopies=origamiKeys.filter(key=>ORIGAMI_FLORA_CANOPY_KEYS.has(key)).map(key=>({geometry:origamiGeometry![key]!,items:origamiParts![key]}));
-      mergedInstances(group, [
+      if(this.graphicsStyle?.origami)for(const items of [trunks,crowns,upperCrowns,rocks,bushes,berries,cones,blades,cacti])for(const item of items)item.profile??=GENERIC_REFERENCE_PROFILE;
+      const origamiBodies=origamiParts?.parts(false)??[],origamiCanopies=origamiParts?.parts(true)??[];
+      const fallbackBodies=[
         { geometry: new THREE.CylinderGeometry(0.1, 0.16, 1, 5), items: trunks },
         { geometry: new THREE.DodecahedronGeometry(1, 0), items: rocks },
         { geometry: new THREE.BoxGeometry(1,1,1), items: blades },
         { geometry: new THREE.CylinderGeometry(.5,.5,1,5), items: cacti },
         { geometry: new THREE.IcosahedronGeometry(1, 0), items: bushes },
         { geometry: new THREE.IcosahedronGeometry(0.055, 0), items: berries },
-        ...origamiBodies,
-      ], this.texturesEnabled?this.texturedMaterial:this.staticMaterial,true,true,this.graphicsStyle?.origami===true);
-      const canopy = mergedInstances(group, [{ geometry: world.site?new THREE.IcosahedronGeometry(1,0):new THREE.ConeGeometry(1, 1, 6), items: [...crowns, ...upperCrowns] },{geometry:new THREE.ConeGeometry(1,1,6),items:cones},...origamiCanopies], this.texturesEnabled?this.texturedMaterial:this.staticMaterial,true,true,this.graphicsStyle?.origami===true);
+      ];
+      const fallbackCanopies=[{geometry:world.site?new THREE.IcosahedronGeometry(1,0):new THREE.ConeGeometry(1,1,6),items:[...crowns,...upperCrowns]},{geometry:new THREE.ConeGeometry(1,1,6),items:cones}];
+      const makeBrushParts=(parts:readonly {geometry:THREE.BufferGeometry;items:Placement[]}[])=>parts.filter(part=>part.items.length>0).map(part=>({geometry:createOrigamiBrushGeometry(part.geometry),items:part.items}));
+      const bodyBrushParts=this.graphicsStyle?.origami?makeBrushParts([...fallbackBodies,...origamiBodies]):[],canopyBrushParts=this.graphicsStyle?.origami?makeBrushParts([...fallbackCanopies,...origamiCanopies]):[];
+      mergedInstances(group,[...fallbackBodies,...origamiBodies],this.texturesEnabled?this.bodyTextured:this.bodyPlain,true,true,this.graphicsStyle?.origami===true);
+      const canopy=mergedInstances(group,[...fallbackCanopies,...origamiCanopies],this.texturesEnabled?this.bodyTextured:this.bodyPlain,true,true,this.graphicsStyle?.origami===true);
       if (canopy) { canopy.name = 'tree-canopy'; canopy.visible = this.foliageVisible; }
+      if(origamiParts)for(const isCanopy of [false,true]){
+        const lineBody=mergedInstances(group,isCanopy?canopyBrushParts:bodyBrushParts,this.linePlain!,false,true,true);
+        if(lineBody){
+          const lines=lineBody;
+          lines.matrixAutoUpdate=false;lines.userData.referenceCompanion='lines';
+          if(isCanopy){lines.name='tree-canopy';lines.visible=this.foliageVisible;}
+          lines.userData.origamiOwnerVisible=!isCanopy||this.foliageVisible;lines.userData.origamiTexturesEnabled=this.texturesEnabled;
+          const releaseBrush=this.graphicsStyle!.prepareBrushGeometry(lines.geometry),releaseEdge=this.graphicsStyle!.trackEdgeObject(lines,'line');
+          lines.userData.origamiEdgeCleanup=()=>{releaseEdge();releaseBrush();};
+          lines.geometry.computeBoundingSphere();lines.geometry.boundingSphere!.radius+=.5;lines.geometry.userData.referenceBrushConservativeSphere=lines.geometry.boundingSphere!.clone();
+        }
+        const wear=mergedInstances(group,origamiParts.parts(isCanopy,'wear'),this.wearPlain!,false,true,true);
+        if(wear){
+          wear.userData.referenceCompanion='wear';wear.receiveShadow=true;
+          // The shader expands the stored base by at most 0.115 source units;
+          // reserve a conservative margin even for non-tree shrubs.
+          if(wear.geometry.boundingSphere)wear.geometry.boundingSphere.radius+=.5;
+          if(isCanopy){wear.name='tree-canopy';wear.visible=this.foliageVisible;}
+          wear.userData.origamiOwnerVisible=!isCanopy||this.foliageVisible;wear.userData.origamiTexturesEnabled=this.texturesEnabled;
+          wear.userData.origamiEdgeCleanup=this.graphicsStyle!.trackEdgeObject(wear,'wear');
+        }
+      }
       retainResources(group,visibleKeys);
       const trees=new Map(chunk.filter(r=>r.kind==='tree').map(r=>[r.id,r] as const));
       const treeIds=[...trees.keys()],treeSet=new Set(treeIds);
       for(const object of group.children){
-        const mesh=object as THREE.Mesh,source=mesh.userData.resourceRanges as ResourceRangeData|undefined;
+        const mesh=object as ResourceObject,source=mesh.userData.resourceRanges as ResourceRangeData|undefined;
         if(!source)continue;
         const [chunkX,chunkZ]=key.split(':').map(Number);
         const east=chunkX!*WORLD_SCALE.resourceChunkSize+WORLD_SCALE.resourceChunkSize*.5>=world.width*.5,south=chunkZ!*WORLD_SCALE.resourceChunkSize+WORLD_SCALE.resourceChunkSize*.5>=world.height*.5;
         const quadrant=south?(east?3:2):(east?1:0);
-        setStaticSceneSource435(mesh,`resource:${key}:${mesh===canopy?'canopy':'body'}`,quadrant);
+        if(mesh instanceof THREE.Mesh&&!mesh.userData.referenceCompanion)setStaticSceneSource435(mesh,`resource:${key}:${mesh===canopy?'canopy':'body'}`,quadrant);
         const retained=ResourceRangeBounds.capture((mesh.geometry.getAttribute('position') as THREE.BufferAttribute).array,source.ranges);
         if(retained)this.rangeBounds.set(mesh.geometry,retained);
         const ranges=source.ranges.filter(range=>treeSet.has(rangeResourceId(range.id)));
         if(!ranges.length)continue;
         const normals=new Float32Array((mesh.geometry.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array);
+        const expand=mesh.geometry.getAttribute('origamiWearExpand');
+        const expansions=expand?new Float32Array(expand.array as Float32Array):undefined;
         for(const range of ranges){
           const id=rangeResourceId(range.id),parts=this.treeParts.get(id)??[];
-          parts.push({mesh,range,positions:source.originalPositions,normals,upload:{start:range.vertexStart*3,count:range.vertexCount*3}});this.treeParts.set(id,parts);
+          parts.push({mesh,range,positions:source.originalPositions,normals,expansions,brush:source.originalBrush,upload:{start:range.vertexStart*3,count:range.vertexCount*3}});this.treeParts.set(id,parts);
         }
         if(!ranges.some(range=>trees.has(rangeResourceId(range.id))))continue;
         // Tilted crowns remain inside the conservative camera/shadow bounds.
         if(mesh.geometry.boundingSphere)mesh.geometry.boundingSphere.radius+=4;
+        if(resourceBrushData(mesh.geometry)&&mesh.geometry.boundingSphere)mesh.geometry.userData.referenceBrushConservativeSphere=mesh.geometry.boundingSphere.clone();
         const windRoot=new Float32Array((mesh.geometry.getAttribute('position') as THREE.BufferAttribute).count*3);
         for(const range of ranges){
           const resource=trees.get(rangeResourceId(range.id));
           if(!resource)continue;
-          const weight=resource.species==='saguaro'?.14:mesh===canopy?1:.62;
+          const weight=resource.species==='saguaro'?.14:mesh.name==='tree-canopy'?1:.62;
           for(let vertex=range.vertexStart;vertex<range.vertexStart+range.vertexCount;vertex++){
             const offset=vertex*3;windRoot[offset]=resource.x;windRoot[offset+1]=resource.z;windRoot[offset+2]=weight;
           }
@@ -483,7 +609,7 @@ export class ResourceLayer {
         }
         mesh.geometry.setAttribute('windRoot',new THREE.BufferAttribute(windRoot,3));
         mesh.geometry.setAttribute('windBasis',new THREE.BufferAttribute(windBasis,4));
-        mesh.material=this.texturesEnabled?this.windTextured:this.windPlain;
+        mesh.material=mesh.userData.referenceCompanion==='lines'?this.lineWind!:mesh.userData.referenceCompanion==='wear'?this.wearWind!:this.texturesEnabled?this.windTextured:this.windPlain;
       }
       for(const id of treeIds){const hit=this.treeHits.get(id);if(hit)hit.angle=NaN;}
       this.chunks.set(key,{signature,group,identities:new Map(chunk.map(r=>[r.id,resourceIdentity(world,r)])),originalSizes:new Map(sizes),currentSizes:new Map(sizes),visibleKeys,treeIds});

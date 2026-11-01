@@ -1,7 +1,7 @@
 import{createSurfaceMaterial}from'./SurfaceMaterials';
 import * as THREE from 'three/webgpu';
 import type {ItemShape} from './item-geometry';
-export type Placement = { x: number; y: number; z: number; sx?: number; sy?: number; sz?: number; ry?: number; color?: number; key?: number; targetId?: number; pigment?: 'stone'; shape?: 'rounded-rock'|'sandbag'|ItemShape };
+export type Placement = { x: number; y: number; z: number; sx?: number; sy?: number; sz?: number; ry?: number; color?: number; key?: number; targetId?: number; pigment?: 'stone'; shape?: 'rounded-rock'|'sandbag'|ItemShape; profile?: number; referenceColor?: number; rawGeometry?: boolean };
 /** Presentation ownership only; key remains the existing pigment/shape seed. */
 export function tagPlacementTargets(parts: Placement[], start: number, targetId: number): void {
   for (let i = start; i < parts.length; i++) parts[i]!.targetId = targetId;
@@ -38,7 +38,8 @@ export function clearGroup(group: THREE.Group): void {
   const geometries = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();
   group.traverse((object) => {
-    if (!(object instanceof THREE.Mesh)) return;
+    const release=object.userData.origamiEdgeCleanup as (()=>void)|undefined;if(release){release();delete object.userData.origamiEdgeCleanup;}
+    if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.LineSegments)) return;
     geometries.add(object.geometry);
     for (const mat of Array.isArray(object.material) ? object.material : [object.material]) materials.add(mat);
     if (object instanceof THREE.InstancedMesh) object.dispose();

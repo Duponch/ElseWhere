@@ -10,6 +10,7 @@ import type { NaturalPresentationChange } from './NaturalResourcePresentation';
 import { ResourceTargetTint } from './resource-target-tint';
 import { currentGraphicsStyle } from './graphics-style';
 import { createOrigamiGroundTuftGeometry } from './origami/flora';
+import {createInstancedOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 
 const BASE_STEMS = [
   { x: 0, z: 0, height: 1, leanX: .04, leanZ: -.025 },
@@ -75,6 +76,7 @@ export class PlantClusterLayer {
   private readonly graphicsStyle = currentGraphicsStyle();
   private readonly geometry = this.graphicsStyle?.origami ? createOrigamiGroundTuftGeometry() : createPlantClusterGeometry();
   private mesh: THREE.InstancedMesh;
+  private contour?:OrigamiContourBinding;
   private readonly slots = new Map<number, { index: number; signature: string }>();
   private readonly free: number[] = [];
   private readonly transform = new THREE.Object3D();
@@ -128,9 +130,10 @@ export class PlantClusterLayer {
     this.mesh = this.createMesh(128);
     this.group.name = 'plant-cluster-layer';
     this.group.add(this.mesh);
+    if(this.graphicsStyle?.origami){this.contour=createInstancedOrigamiContour(this.mesh,this.graphicsStyle,windPosition);this.group.add(this.contour.line);}
   }
   private texturesEnabled=true;
-  setTexturesEnabled(enabled:boolean):void {this.texturesEnabled=enabled;this.mesh.material=enabled?this.windTextured:this.windPlain;}
+  setTexturesEnabled(enabled:boolean):void {this.texturesEnabled=enabled;this.mesh.material=enabled?this.windTextured:this.windPlain;this.contour?.sync();}
   setTargetPreview(ids:ReadonlySet<number>):void {
     if(ids.size===this.targetPreviewIds.size&&[...ids].every(id=>this.targetPreviewIds.has(id)))return;
     this.targetTint.restore();this.targetPreviewIds=new Set(ids);this.tintTargets();
@@ -187,12 +190,14 @@ export class PlantClusterLayer {
     previous.dispose();
     this.mesh = next;
     this.group.add(next);
+    this.contour?.sync(next);
   }
 
   prepareForCompile(): () => void {
     const count = this.mesh.count;
     this.mesh.count = Math.max(1, count);
-    return () => { this.mesh.count = count; };
+    this.contour?.sync();
+    return () => { this.mesh.count = count;this.contour?.sync(); };
   }
 
   update(world: World, reset: boolean, changes?: ReadonlyMap<number, NaturalPresentationChange>): void {
@@ -285,6 +290,7 @@ export class PlantClusterLayer {
       this.mesh.instanceColor!.needsUpdate = true;
     }
     this.tintTargets();
+    this.contour?.sync();
   }
 
   private includeTransformBounds(): void {
@@ -295,6 +301,7 @@ export class PlantClusterLayer {
   instanceCount(): number { return this.mesh.count; }
 
   dispose(): void {
+    this.contour?.dispose();this.contour=undefined;
     this.clearTargetPreview();
     this.mesh.dispose();
     this.geometry.dispose();

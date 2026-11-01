@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import {solidExplorationMaterial256} from './ExplorationMask256';
 import type {OwnedOpaqueProducer435} from './OwnedOpaqueRevisionRegistry435';
 import {indexTimberGeometry} from './index-timber-geometry';
-import { attribute,materialColor,texture,varying,vec4,vertexColor } from 'three/tsl';
+import { attribute,materialColor,texture,uv,varying,vec4,vertexColor } from 'three/tsl';
 import {OverviewBatch,configureOverviewMaterial} from './OverviewBatch';
 import type { World } from '../sim/types';
 import { WORLD_SCALE } from '../world/scale';
@@ -12,6 +12,8 @@ import { timberPatternUv } from './timber-pattern-uv';
 import { woodFiberDetail } from './stylized-surfaces';
 import type { Placement } from './primitives';
 import { InstanceTargetTint } from './instance-target-tint';
+import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
+import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 
 type Point = readonly [number, number, number];
 
@@ -208,6 +210,8 @@ export function timberCladdingParts(world:World,cutaway:boolean,subjects:readonl
  * changing cutaway; the layer performs no work during rendered frames. */
 export class TimberCladdingLayer {
   readonly group=new THREE.Group();
+  private readonly style=currentGraphicsStyle();
+  private readonly contours=new Map<OverviewBatch,OrigamiContourBinding>();
   readonly wallGeometry=createTimberGeometry(false);
   readonly eaveGeometry=createTimberGeometry(true);
   readonly grain=grainTexture();
@@ -245,6 +249,7 @@ export class TimberCladdingLayer {
     const tint=vec4(attribute('overviewColor','vec3'),1);
     this.material.colorNode=tint.mul(vec4(texture(this.grain,timberPatternUv()).rgb,1).mul(vertexColor()));
     this.plainMaterial.colorNode=tint.mul(materialColor.mul(vertexColor()));
+    applyOrigamiSurface(this.material,tint.rgb.mul(materialColor.rgb).mul(vertexColor().rgb),uv(),this.style);
     this.material.map=null;
     for(const mat of [this.material,this.plainMaterial]){configure?.(mat);mat.userData.rendererOwned=true;}
     const origin=this.createChunk('0:0',256);
@@ -253,7 +258,7 @@ export class TimberCladdingLayer {
   setTexturesEnabled(enabled:boolean):void {
     if(this.texturesEnabled===enabled)return;
     this.texturesEnabled=enabled;
-    for(const chunk of this.chunks.values())for(const batch of [chunk.wall,chunk.eave]){batch.mesh.material=enabled?this.material:this.plainMaterial;this.ownedProducer435?.dirty(batch.mesh);}
+    for(const chunk of this.chunks.values())for(const batch of [chunk.wall,chunk.eave]){batch.mesh.material=enabled?this.material:this.plainMaterial;this.contours.get(batch.mesh)?.sync();this.ownedProducer435?.dirty(batch.mesh);}
   }
   private makeMesh(shape:THREE.BufferGeometry,name:string,capacity:number):OverviewBatch {
     const mesh=new OverviewBatch(shape,this.texturesEnabled?this.material:this.plainMaterial,capacity);
@@ -268,7 +273,10 @@ export class TimberCladdingLayer {
       wall:{mesh:wall,capacity,tint:new InstanceTargetTint(()=>this.ownedProducer435?.dirty(wall))},
       eave:{mesh:eave,capacity,tint:new InstanceTargetTint(()=>this.ownedProducer435?.dirty(eave))},
     };
-    for(const mesh of [chunk.wall.mesh,chunk.eave.mesh]){mesh.userData.timberChunk=key;this.group.add(mesh);}
+    for(const mesh of [chunk.wall.mesh,chunk.eave.mesh]){
+      mesh.userData.timberChunk=key;this.group.add(mesh);
+      if(this.style?.origami){const contour=createOrigamiContour(mesh,this.style);this.contours.set(mesh,contour);this.group.add(contour.line);}
+    }
     this.chunks.set(key,chunk);return chunk;
   }
   private grow(batch:{mesh:OverviewBatch;capacity:number},count:number,shape:THREE.BufferGeometry):void {
@@ -317,6 +325,7 @@ export class TimberCladdingLayer {
       const mesh=batch.mesh;
       if(!spatial.has(key)){mesh.activeCount=0;batch.tint.setInstances(mesh.colorBuffer,[]);}
       mesh.instanceMatrix.needsUpdate=true;mesh.colorBuffer.needsUpdate=true;mesh.computeBoundingSphere();
+      this.contours.get(mesh)?.sync();
       this.ownedProducer435?.dirty(mesh);
     }
   }
@@ -324,10 +333,11 @@ export class TimberCladdingLayer {
   prepareForCompile():()=>void {
     const empty=[...this.chunks.values()].flatMap(chunk=>[chunk.wall.mesh,chunk.eave.mesh]).filter(mesh=>mesh.activeCount===0);
     const saved=empty.map(mesh=>({mesh,buffer:mesh.instanceMatrix,version:mesh.instanceMatrix.version}));
-    for(const mesh of empty){mesh.activeCount=1;this.ownedProducer435?.dirty(mesh);}
-    return ()=>{for(const {mesh,buffer,version} of saved)if(mesh.instanceMatrix===buffer&&buffer.version===version){mesh.activeCount=0;this.ownedProducer435?.dirty(mesh);}};
+    for(const mesh of empty){mesh.activeCount=1;this.contours.get(mesh)?.sync();this.ownedProducer435?.dirty(mesh);}
+    return ()=>{for(const {mesh,buffer,version} of saved)if(mesh.instanceMatrix===buffer&&buffer.version===version){mesh.activeCount=0;this.contours.get(mesh)?.sync();this.ownedProducer435?.dirty(mesh);}};
   }
   dispose():void {
+    for(const contour of this.contours.values())contour.dispose();this.contours.clear();
     for(const chunk of this.chunks.values())for(const batch of [chunk.wall,chunk.eave]){
       batch.tint.dispose();this.ownedProducer435?.forget(batch.mesh);this.group.remove(batch.mesh);batch.mesh.dispose();
     }

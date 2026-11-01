@@ -1,4 +1,6 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
+import {stubReferenceBakeToSink} from './fixtures/reference-paint-bake-stub';
+vi.mock('../src/render/origami/reference-paint-library',async importOriginal=>({...await importOriginal<typeof import('../src/render/origami/reference-paint-library')>(),bakeReferencePaintLayersToSink:stubReferenceBakeToSink}));
 import * as THREE from 'three/webgpu';
 import { PLANT_SPECIES } from '../src/sim/biome-flora';
 import { footprintCells } from '../src/sim/definitions';
@@ -125,7 +127,7 @@ test('requested-key geometry builds allocate only used assets without unbound ac
   finally { Object.values(assets).forEach(g => g?.dispose()); }
 });
 
-test('resource integration retains two compiled source meshes, masks, wind data and stable growth geometry', () => {
+test('resource integration retains two opaque sources and four batched reference companions, masks, wind and growth', () => {
   const w = world(), r = plant('oak'); w.resources = [r];
   const context = new GraphicsStyleContext({ ...DEFAULT_GRAPHICS_STYLE_PREFERENCES, style: 'origami' });
   const material = new THREE.MeshStandardNodeMaterial({ vertexColors: true }); material.userData.rendererOwned = true;
@@ -135,9 +137,12 @@ test('resource integration retains two compiled source meshes, masks, wind data 
   try {
     // Update occurs after leaving construction scope: the layer must retain it.
     layer.update(w, true, undefined, undefined, appearance);
-    const meshes = (group.children[0] as THREE.Group).children as THREE.Mesh[];
-    expect(meshes).toHaveLength(2);
-    const canopy = meshes.find(mesh => mesh.name === 'tree-canopy')!;
+    const meshes = (group.children[0] as THREE.Group).children as (THREE.Mesh|THREE.LineSegments)[];
+    const surfaces=meshes.filter(mesh=>!mesh.userData.referenceCompanion);
+    expect(surfaces).toHaveLength(2);expect(meshes).toHaveLength(6);
+    expect(meshes.filter(mesh=>mesh instanceof THREE.LineSegments)).toHaveLength(2);
+    expect(meshes.filter(mesh=>mesh.userData.referenceCompanion==='wear')).toHaveLength(2);
+    const canopy = surfaces.find(mesh => mesh.name === 'tree-canopy')!;
     expect(canopy.geometry.drawRange.count).toBeGreaterThan(0);
     for (const mesh of meshes) {
       expect(mesh.geometry.hasAttribute('windRoot')).toBe(true);
@@ -145,8 +150,11 @@ test('resource integration retains two compiled source meshes, masks, wind data 
       expect(mesh.userData.resourceRanges).toBeDefined();
       // Original prism-face boundaries must survive chunk merging: cropping
       // them into a texture atlas interior would erase the kraft edge treatment.
-      const faceUvs = Array.from(mesh.geometry.getAttribute('uv').array);
-      expect(faceUvs).toContain(0); expect(faceUvs).toContain(1);
+      if(!mesh.userData.referenceCompanion){
+        const faceUvs = Array.from(mesh.geometry.getAttribute('uv').array);
+        expect(faceUvs).toContain(0); expect(faceUvs).toContain(1);
+      }
+      expect(mesh.geometry.getAttribute('origamiPaint').count).toBe(mesh.geometry.getAttribute('position').count);
     }
     const geometry = canopy.geometry, oldPositions = Array.from(geometry.getAttribute('position').array);
     r.growth = .5; layer.update(w, false, undefined, undefined, appearance);
@@ -154,8 +162,9 @@ test('resource integration retains two compiled source meshes, masks, wind data 
     expect(Array.from(geometry.getAttribute('position').array)).not.toEqual(oldPositions);
     leafless = true; layer.update(w, false, undefined, undefined, appearance);
     expect(canopy.geometry.drawRange.count).toBe(0);
-    expect(meshes.find(mesh => mesh !== canopy)!.geometry.drawRange.count).toBeGreaterThan(0);
-    layer.setFoliageVisible(false); expect(canopy.visible).toBe(false);
+    expect(surfaces.find(mesh => mesh !== canopy)!.geometry.drawRange.count).toBeGreaterThan(0);
+    for(const mesh of meshes.filter(mesh=>mesh.name==='tree-canopy'))expect(mesh.geometry.drawRange.count).toBe(0);
+    layer.setFoliageVisible(false);for(const mesh of meshes.filter(mesh=>mesh.name==='tree-canopy'))expect(mesh.visible).toBe(false);
   } finally { layer.dispose(); material.dispose(); context.dispose(); }
 });
 

@@ -431,7 +431,7 @@ export class SceneRenderCore {
   protected readonly terrainPaintMaterial = opaqueGroundExplorationMaterial256(createSurfaceMaterial('diffuse',0xffffff,{vertexColors:false,map:this.terrainPaintTexture}));
   protected readonly staticPaint=createStylizedSurfaceTexture('vegetation');
   protected readonly texturedStaticMaterial=(()=>{
-    const mat=createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true,map:this.graphicsStyle.origami?null:this.staticPaint});
+    const mat=this.graphicsStyle.origami?createSurfaceMaterial('physical',0xffffff,{vertexColors:false,roughness:.88,metalness:.02}):createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true,map:this.staticPaint});
     applyOrigamiSurface(mat,attribute('color','vec3'),undefined,this.graphicsStyle);return mat;
   })();
   protected readonly waterMaterial = material(0xffffff, { vertexColors: true, roughness: 0.45, metalness: 0.08 });
@@ -832,6 +832,7 @@ export class SceneRenderCore {
     this.wildlife.update(world,this.hasTracks?this.timeline:undefined,resetPoses,this.pawns);
     this.animalCargo.update(world,this.hasTracks?this.timeline:undefined,resetPoses);
     this.mechanoids.update(world,this.hasTracks?this.timeline:undefined,resetPoses,this.pawns);
+    this.graphicsStyle.flushPaint();
     this.ropes.adopt(world,resetPoses);
     this.landscape.refresh(this.backend==='WebGPU'&&this.overview.group.visible);
     if(this.selectedObject?.kind!=='growing'||zoneChanged)this.updateSelectedObject();

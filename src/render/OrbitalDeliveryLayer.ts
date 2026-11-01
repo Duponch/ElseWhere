@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { Fn,attribute,float,mat4,normalLocal,positionLocal,smoothstep,texture,transformNormal,uniform,vec3,vec4,instanceIndex,uint } from 'three/tsl';
+import { Fn,attribute,float,mat4,normalLocal,positionLocal,smoothstep,texture,transformNormal,uniform,uv,vec3,vec4,instanceIndex,uint } from 'three/tsl';
 import { ORBITAL_DELIVERY_LIMIT } from '../sim/orbital-state';
 import type { World } from '../sim/types';
 import { BoxMesh } from './BoxMesh';
@@ -8,6 +8,8 @@ import { createStylizedSurfaceTexture } from './stylized-surfaces';
 import { instancedBoxPatternUv } from './texture-variation';
 import type { AnimationDetail } from './AnimationDetail';
 import { RetainedAnimation } from './RetainedAnimation';
+import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
+import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 
 export const ORBITAL_CAPSULE_PARTS=6;
 export const ORBITAL_CAPSULE_HEIGHT=24;
@@ -25,6 +27,7 @@ const PARTS=[
 export class OrbitalDeliveryLayer {
   readonly group=new THREE.Group();
   readonly mesh:BoxMesh;
+  private readonly contour?:OrigamiContourBinding;
   readonly tick=uniform(0);
   private readonly base=new THREE.BoxGeometry(1,1,1);
   private readonly paint=createStylizedSurfaceTexture();
@@ -57,8 +60,16 @@ export class OrbitalDeliveryLayer {
     this.mesh.geometry.setAttribute('orbitalTimes',timingBuffer);
     this.mesh.geometry.setAttribute('orbitalLid',new THREE.InstancedBufferAttribute(new Float32Array(ORBITAL_DELIVERY_LIMIT*ORBITAL_CAPSULE_PARTS),1));
     this.mesh.activeCount=0;this.group.add(this.mesh);
+    const context=currentGraphicsStyle();
+    applyOrigamiSurface(this.painted,attribute('boxColor','vec3'),uv(),context);
+    if(context?.origami){this.contour=createOrigamiContour(this.mesh,context);this.group.add(this.contour.line);}
   }
+  /** Renderer-only preview callers must synchronize after writing instance streams. */
+  syncContours():void {this.contour?.sync();}
   adopt(world:World):void {
+    try{this.adoptBody(world);}finally{this.syncContours();}
+  }
+  private adoptBody(world:World):void {
     const deliveries=world.orbital?.pending??[];
     const key=deliveries.map(d=>`${d.id}:${d.cell.x}:${d.cell.z}:${d.createdAt}:${d.landAt}:${d.openAt}`).join('|');
     if(key===this.key)return;
@@ -89,19 +100,20 @@ export class OrbitalDeliveryLayer {
     });
   }
   setTexturesEnabled(enabled:boolean):void {
-    if(enabled===this.texturesEnabled)return;this.texturesEnabled=enabled;this.mesh.material=enabled?this.painted:this.plain;
+    if(enabled===this.texturesEnabled)return;this.texturesEnabled=enabled;this.mesh.material=enabled?this.painted:this.plain;this.syncContours();
   }
   prepareForCompile():()=>void {
     const mesh=this.mesh,visible=mesh.visible,culled=mesh.frustumCulled,count=mesh.activeCount,revision=this.revision;
     const buffer=mesh.instanceMatrix,first=count===0?buffer.array.slice(0,16):undefined;
     if(first){buffer.array.fill(0,0,16);buffer.array[0]=buffer.array[5]=buffer.array[10]=buffer.array[15]=1;buffer.needsUpdate=true;mesh.activeCount=1;}
-    const version=buffer.version;mesh.visible=true;mesh.frustumCulled=false;
+    const version=buffer.version;mesh.visible=true;mesh.frustumCulled=false;this.syncContours();
     return()=>{
       mesh.frustumCulled=culled;
       if(mesh.instanceMatrix!==buffer||buffer.version!==version)return;
       if(first){buffer.array.set(first,0);buffer.needsUpdate=true;}
       if(this.revision===revision){mesh.activeCount=count;mesh.visible=visible;}
+      this.syncContours();
     };
   }
-  dispose():void {this.animation.dispose();this.mesh.removeFromParent();this.mesh.dispose();this.base.dispose();this.plain.dispose();this.painted.dispose();this.paint.dispose();this.group.clear();}
+  dispose():void {this.contour?.dispose();this.animation.dispose();this.mesh.removeFromParent();this.mesh.dispose();this.base.dispose();this.plain.dispose();this.painted.dispose();this.paint.dispose();this.group.clear();}
 }

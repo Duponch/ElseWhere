@@ -364,6 +364,12 @@
 .front-texture-setting input { flex: none; margin: 0; }
 .front-texture-setting > span { min-width: 0; }
 .front-volume-setting input[type=range] { width: min(180px, 42%); accent-color: #567353; }
+.front-origami-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.front-origami-settings[hidden] { display: none; }
+.front-origami-settings .front-volume-setting { display: grid; min-height: 0; gap: 8px; margin: 0; }
+.front-origami-settings .front-volume-setting > span { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.front-origami-settings output { flex: none; white-space: nowrap; }
+.front-origami-settings .front-volume-setting input[type=range] { width: 100%; min-width: 0; }
 .front-menu .front-test-save { background: #fff9ec; border-color: var(--line); border-radius: 10px; }
 .front-menu .front-test-detail .front-test-metadata { color: var(--ink); font-weight: 700; }
 .front-menu .front-test-detail .front-test-focus, .front-menu .front-test-preservation { color: var(--muted-ink); border-color: var(--line); }

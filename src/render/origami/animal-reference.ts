@@ -1,21 +1,27 @@
 import * as THREE from 'three/webgpu';
+import {registerReferencePaintProfile} from './reference-profiles';
 
 /** Geometry recipes transcribed from the user supplied gouache/cardboard HTML
  * (atelier...(6).html, eight animal builders). The transient groups are consumed
- * only at batch compilation. Reference edge lines/material draw calls and its
- * clocks/scene/UI are deliberately not retained. */
+ * only at batch compilation. Reference edge geometry is flattened into its
+ * companion batches; clocks/scene/UI are not retained. The names added to source
+ * primitives carry game anatomy only; they do not change the source artwork. */
 export type OrigamiAnimalReference='fox'|'camel'|'hare'|'dog'|'buffalo'|'gazelle'|'deer'|'elephant';
 export interface ReferencePigment {baseColor:string;secondaryColor?:string;accentColor?:string;strokeStyle?:string;strokeCount?:number;gradientTip?:{color:string};flankStripe?:{bellyColor:string;stripeColor:string}}
 interface LegDimensions {upperW?:number;upperD?:number;upperH?:number;sockW?:number;sockH?:number;hoofH?:number}
 const pigmentMaterials=new Map<string,THREE.MeshBasicMaterial>();
-function registerGouacheMat(config:ReferencePigment):THREE.MeshBasicMaterial {
- const key=JSON.stringify(config),cached=pigmentMaterials.get(key);if(cached)return cached;
- const material=new THREE.MeshBasicMaterial({color:config.baseColor});material.userData.pigment=config;pigmentMaterials.set(key,material);return material;
+function registerGouacheMat(key:string,config:ReferencePigment):THREE.MeshBasicMaterial {
+ const cached=pigmentMaterials.get(key);if(cached)return cached;
+ const material=new THREE.MeshBasicMaterial({color:config.baseColor});
+ material.userData.referencePaintKey=key;material.userData.referencePaintConfig=config;
+ material.userData.referencePaintIndex=registerReferencePaintProfile(key,config);
+ pigmentMaterials.set(key,material);return material;
 }
 function createCardboardPart(geometry:THREE.BufferGeometry,material:THREE.MeshBasicMaterial,options:{pos?:number[];rot?:number[];scale?:number[];castShadow?:boolean;receiveShadow?:boolean;edgeAngle?:number}={}):THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial> {
  const g=geometry.index?geometry.toNonIndexed():geometry.clone();g.computeVertexNormals();
  const mesh=new THREE.Mesh(g,material),p=options.pos??[0,0,0],r=options.rot??[0,0,0],s=options.scale??[1,1,1];
- mesh.position.set(p[0],p[1],p[2]);mesh.rotation.set(r[0],r[1],r[2]);mesh.scale.set(s[0],s[1],s[2]);return mesh;
+ mesh.position.set(p[0],p[1],p[2]);mesh.rotation.set(r[0],r[1],r[2]);mesh.scale.set(s[0],s[1],s[2]);
+ mesh.userData.referenceEdgeAngle=options.edgeAngle??22;return mesh;
 }
 // Creates a tapered horizontal box (along X axis)
 function createTaperedBoxGeometry(lengthX:number, heightY:number, depthZ:number, frontScaleY = 0.5, frontScaleZ = 0.5, frontDropY = 0) {
@@ -82,21 +88,21 @@ function createCardboardCutoutPlate(points2D:readonly number[][], thickness = 0.
 }
 
 // Shared Materials (Eyes, hooves, pink inner ears)
-const matCharcoalGouache = registerGouacheMat({
+const matCharcoalGouache = registerGouacheMat('matCharcoalGouache',{
   baseColor: '#1a1917',
   secondaryColor: '#2c2926',
   strokeStyle: 'coarse',
   strokeCount: 180
 });
 
-const matCreamWhiteGouache = registerGouacheMat({
+const matCreamWhiteGouache = registerGouacheMat('matCreamWhiteGouache',{
   baseColor: '#e8e3d8',
   secondaryColor: '#d5cebf',
   strokeStyle: 'directional',
   strokeCount: 240
 });
 
-const matPinkEarGouache = registerGouacheMat({
+const matPinkEarGouache = registerGouacheMat('matPinkEarGouache',{
   baseColor: '#d99b8e',
   secondaryColor: '#c48375',
   strokeStyle: 'directional',
@@ -160,7 +166,7 @@ function createArticulatedLeg(upperMat:THREE.MeshBasicMaterial, sockMat:THREE.Me
 function buildFox() {
   const group = new THREE.Group();
 
-  const matFoxBody = registerGouacheMat({
+  const matFoxBody = registerGouacheMat('matFoxBody',{
     baseColor: '#b35b28',
     secondaryColor: '#9a491c',
     accentColor: '#cc6f35',
@@ -168,7 +174,7 @@ function buildFox() {
     strokeCount: 420
   });
 
-  const matFoxSnout = registerGouacheMat({
+  const matFoxSnout = registerGouacheMat('matFoxSnout',{
     baseColor: '#b35b28',
     secondaryColor: '#9a491c',
     strokeStyle: 'directional',
@@ -299,7 +305,7 @@ function buildFox() {
 function buildCamel() {
   const group = new THREE.Group();
 
-  const matCamelTan = registerGouacheMat({
+  const matCamelTan = registerGouacheMat('matCamelTan',{
     baseColor: '#8d7960',
     secondaryColor: '#78654e',
     accentColor: '#a38d72',
@@ -307,7 +313,7 @@ function buildCamel() {
     strokeCount: 380
   });
 
-  const matCamelMuzzle = registerGouacheMat({
+  const matCamelMuzzle = registerGouacheMat('matCamelMuzzle',{
     baseColor: '#8a7d7b',
     secondaryColor: '#736765',
     strokeStyle: 'directional',
@@ -404,7 +410,7 @@ function buildCamel() {
 function buildHare() {
   const group = new THREE.Group();
 
-  const matHareSand = registerGouacheMat({
+  const matHareSand = registerGouacheMat('matHareSand',{
     baseColor: '#b5a789',
     secondaryColor: '#9e9073',
     accentColor: '#cabd9f',
@@ -498,7 +504,7 @@ function buildHare() {
 function buildDog() {
   const group = new THREE.Group();
 
-  const matDogOchre = registerGouacheMat({
+  const matDogOchre = registerGouacheMat('matDogOchre',{
     baseColor: '#c98844',
     secondaryColor: '#b07130',
     accentColor: '#debfd0',
@@ -506,14 +512,14 @@ function buildDog() {
     strokeCount: 380
   });
 
-  const matDogSaddle = registerGouacheMat({
+  const matDogSaddle = registerGouacheMat('matDogSaddle',{
     baseColor: '#3b2d23',
     secondaryColor: '#291f18',
     strokeStyle: 'wavy',
     strokeCount: 300
   });
 
-  const matDogCollar = registerGouacheMat({
+  const matDogCollar = registerGouacheMat('matDogCollar',{
     baseColor: '#b8332a',
     secondaryColor: '#8f221b',
     strokeStyle: 'directional',
@@ -623,7 +629,7 @@ function buildDog() {
 function buildBuffalo() {
   const group = new THREE.Group();
 
-  const matBuffaloDark = registerGouacheMat({
+  const matBuffaloDark = registerGouacheMat('matBuffaloDark',{
     baseColor: '#362d28',
     secondaryColor: '#261f1b',
     accentColor: '#4d4039',
@@ -631,7 +637,7 @@ function buildBuffalo() {
     strokeCount: 440
   });
 
-  const matBuffaloHorn = registerGouacheMat({
+  const matBuffaloHorn = registerGouacheMat('matBuffaloHorn',{
     baseColor: '#756d61',
     secondaryColor: '#575046',
     strokeStyle: 'directional',
@@ -743,7 +749,7 @@ function buildBuffalo() {
 function buildGazelle() {
   const group = new THREE.Group();
 
-  const matGazelleFlank = registerGouacheMat({
+  const matGazelleFlank = registerGouacheMat('matGazelleFlank',{
     baseColor: '#c98e4b',
     secondaryColor: '#b57b3a',
     strokeStyle: 'directional',
@@ -754,7 +760,7 @@ function buildGazelle() {
     }
   });
 
-  const matGazelleTan = registerGouacheMat({
+  const matGazelleTan = registerGouacheMat('matGazelleTan',{
     baseColor: '#c98e4b',
     secondaryColor: '#b57b3a',
     strokeStyle: 'directional',
@@ -872,7 +878,7 @@ function buildGazelle() {
 function buildDeer() {
   const group = new THREE.Group();
 
-  const matDeerAuburn = registerGouacheMat({
+  const matDeerAuburn = registerGouacheMat('matDeerAuburn',{
     baseColor: '#8c4927',
     secondaryColor: '#73381b',
     accentColor: '#a85c34',
@@ -880,14 +886,14 @@ function buildDeer() {
     strokeCount: 400
   });
 
-  const matDeerMane = registerGouacheMat({
+  const matDeerMane = registerGouacheMat('matDeerMane',{
     baseColor: '#592e18',
     secondaryColor: '#42200f',
     strokeStyle: 'coarse',
     strokeCount: 300
   });
 
-  const matAntlerCream = registerGouacheMat({
+  const matAntlerCream = registerGouacheMat('matAntlerCream',{
     baseColor: '#ded5c1',
     secondaryColor: '#c4b89f',
     strokeStyle: 'directional',
@@ -1014,7 +1020,7 @@ function buildDeer() {
 function buildElephant() {
   const group = new THREE.Group();
 
-  const matElephantSlate = registerGouacheMat({
+  const matElephantSlate = registerGouacheMat('matElephantSlate',{
     baseColor: '#6f7378',
     secondaryColor: '#5c6066',
     accentColor: '#868b91',

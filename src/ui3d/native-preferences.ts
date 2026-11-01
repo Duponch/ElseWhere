@@ -21,25 +21,46 @@ export type GraphicsStyle='default'|'origami';
 export interface GraphicsStylePreferences {
  style:GraphicsStyle;
  impasto:number;
+ blackEdges:number;
+ edgeWidth:number;
+ strokeImperfection:number;
  edges:number;
  wear:number;
  contourImperfection:number;
 }
 /** Browser display preference, deliberately separate from World and save data. */
 export const GRAPHICS_STYLE_PREFERENCE_KEY='elsewhere.graphics-style.v1';
-export const DEFAULT_GRAPHICS_STYLE_PREFERENCES:Readonly<GraphicsStylePreferences>=Object.freeze({style:'default',impasto:1,edges:.65,wear:.75,contourImperfection:.60});
+export const DEFAULT_GRAPHICS_STYLE_PREFERENCES:Readonly<GraphicsStylePreferences>=Object.freeze({style:'default',impasto:1,blackEdges:.45475625,edgeWidth:1,strokeImperfection:.45,edges:.65,wear:.75,contourImperfection:.60});
 export const ORIGAMI_STYLE_CONTROLS=[
- {key:'impasto',label:'Relief empâtement gouache',min:0,max:2.2,step:.01},
- {key:'edges',label:'Arêtes et pliures carton kraft',min:0,max:1,step:.01},
- {key:'wear',label:'Usure et écaillage des arêtes',min:0,max:1,step:.01},
- {key:'contourImperfection',label:'Imperfection du remplissage des contours',min:0,max:1,step:.01},
+ {key:'impasto',label:'Relief empâtement gouache',min:0,max:2.2,step:.01,unit:'%'},
+ {key:'blackEdges',label:'Contours noirs',min:0,max:1,step:.01,unit:'%'},
+ {key:'edges',label:'Contours carton d’origine',min:0,max:1,step:.01,unit:'%'},
+ {key:'edgeWidth',label:'Épaisseur des contours',min:.5,max:5,step:.1,unit:'×'},
+ {key:'strokeImperfection',label:'Irrégularité du trait',min:0,max:1,step:.01,unit:'%'},
+ {key:'wear',label:'Usure et écaillage des arêtes',min:0,max:1,step:.01,unit:'%'},
+ {key:'contourImperfection',label:'Imperfection du remplissage des contours',min:0,max:1,step:.01,unit:'%'},
 ] as const;
+export type OrigamiStyleControl=typeof ORIGAMI_STYLE_CONTROLS[number];
+export function origamiStyleDisplayScale(control:Pick<OrigamiStyleControl,'unit'>):number{return control.unit==='%'?100:1;}
+/** All display surfaces use the same units; stored values remain renderer units. */
+export function formatOrigamiStyleValue(control:Pick<OrigamiStyleControl,'unit'>,value:number):string {
+ return `${control.unit==='%'?Math.round(value*100):Math.round(value*10)/10} ${control.unit}`;
+}
 export function normalizeGraphicsStylePreferences(value:unknown):GraphicsStylePreferences {
  const data=value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
  const result:GraphicsStylePreferences={...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:data.style==='origami'?'origami':'default'};
  for(const {key,min,max} of ORIGAMI_STYLE_CONTROLS){
   const number=data[key];
   result[key]=typeof number==='number'&&Number.isFinite(number)?Math.max(min,Math.min(max,number)):DEFAULT_GRAPHICS_STYLE_PREFERENCES[key];
+ }
+ if(!Object.hasOwn(data,'blackEdges')){
+  // Old v1 preferences linked their visible contour intensity to three paper
+  // controls. Preserve that intensity once; the newly stored field then stays
+  // independent from subsequent paper/wear/fill edits. Keep the authoritative
+  // default decimal rather than its equivalent floating-point multiplication.
+  const defaults=DEFAULT_GRAPHICS_STYLE_PREFERENCES;
+  result.blackEdges=result.edges===defaults.edges&&result.wear===defaults.wear&&result.contourImperfection===defaults.contourImperfection?defaults.blackEdges:
+   result.edges*(1-Math.min(1,result.wear*(.2+result.contourImperfection*1.15))*.45);
  }
  return result;
 }

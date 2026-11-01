@@ -12,10 +12,12 @@ import {createSurfaceMaterial} from './SurfaceMaterials';
 import {treeCargoKind} from './tree-presentation';
 import {WildlifeBodyScale} from './wildlife-frame-state';
 import type {WildlifeLayer} from './WildlifeLayer';
+import {currentGraphicsStyle} from './graphics-style';
+import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 
 type CargoMesh=THREE.InstancedMesh<THREE.BufferGeometry,THREE.MeshLambertNodeMaterial>;
 type Member={animal:WildAnimal;scale:number;back:Back;shown?:boolean;last?:readonly [number,number,number,number,boolean]};
-type Batch={mesh:CargoMesh;capacity:number;members:Member[];width:number;depth:number};
+type Batch={mesh:CargoMesh;contour?:OrigamiContourBinding;capacity:number;members:Member[];width:number;depth:number};
 type Back={y:number;z:number;width:number;depth:number;bodyCenter:number;restFloor:number};
 const backs=new Map<string,Back>();
 
@@ -58,6 +60,7 @@ function carriedGeometry(item:ItemId,quantity:number,tree?:MaterialPile['innerRe
 export class AnimalCargoLayer282 {
  readonly group=new THREE.Group();
  readonly stats={activeCargo:0,activeBatches:0,geometryBuilds:0,matrixUploads:0};
+ private readonly graphicsStyle=currentGraphicsStyle();
  private readonly material=createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true});
  private readonly batches=new Map<string,Batch>();
  private readonly bodyScale=new WildlifeBodyScale();
@@ -77,9 +80,10 @@ export class AnimalCargoLayer282 {
   const mesh=new THREE.InstancedMesh(geometry,this.material,capacity);
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;mesh.castShadow=mesh.receiveShadow=true;
   this.group.add(mesh);const b=geometry.boundingBox;
-  return {mesh,capacity,members:[],width:b?Math.max(.001,b.max.x-b.min.x):1,depth:b?Math.max(.001,b.max.z-b.min.z):1};
+  const contour=this.graphicsStyle?.origami?createOrigamiContour(mesh,this.graphicsStyle):undefined;if(contour){contour.line.frustumCulled=false;mesh.add(contour.line);}
+  return {mesh,contour,capacity,members:[],width:b?Math.max(.001,b.max.x-b.min.x):1,depth:b?Math.max(.001,b.max.z-b.min.z):1};
  }
- private disposeBatch(batch:Batch):void {batch.mesh.removeFromParent();batch.mesh.dispose();batch.mesh.geometry.dispose();}
+ private disposeBatch(batch:Batch):void {batch.contour?.dispose();batch.mesh.removeFromParent();batch.mesh.dispose();batch.mesh.geometry.dispose();}
  update(world:World,_timeline?:MotionTimeline,reset=false):void {
   if(reset){for(const batch of this.batches.values())this.disposeBatch(batch);this.batches.clear();this.active=[];}
   for(const batch of this.active){batch.members=[];batch.mesh.count=0;batch.mesh.visible=false;}
@@ -104,11 +108,12 @@ export class AnimalCargoLayer282 {
    if(batch.members.length>batch.capacity){
     const previous=batch.mesh,geometry=previous.geometry.clone(),members=batch.members,capacity=2**Math.ceil(Math.log2(members.length));
     this.disposeBatch(batch);const grown=this.makeBatch(geometry,capacity);grown.mesh.name=previous.name;
-    batch.mesh=grown.mesh;batch.capacity=capacity;batch.members=members;
+    batch.mesh=grown.mesh;batch.contour=grown.contour;batch.capacity=capacity;batch.members=members;
    }
    batch.mesh.count=batch.members.length;
    const owner=batch.mesh.geometry.getAttribute('aTo') as THREE.InstancedBufferAttribute;
    batch.members.forEach(({animal},i)=>owner.setXYZW(i,animal.x,0,animal.z,0));owner.needsUpdate=true;
+   batch.contour?.sync(batch.mesh);
   }
   // Quantity/tree variants stay resident across ordinary handoffs. Inactive
   // variants alone are evicted, bounding a long campaign's retained geometry.
@@ -130,13 +135,13 @@ export class AnimalCargoLayer282 {
     batch.mesh.setMatrixAt(i,this.object.matrix);member.shown=true;member.last=[px,py,pz,pose.yaw,resting];dirty=true;this.stats.matrixUploads++;
    });
    if(dirty){batch.mesh.instanceMatrix.needsUpdate=true;changed=true;}
-   if(!batch.mesh.visible){batch.mesh.visible=true;changed=true;}
+   if(!batch.mesh.visible){batch.mesh.visible=true;batch.contour?.sync(batch.mesh);changed=true;}
   }
   return changed;
  }
  prepareForCompile():()=>void {
   const mesh=this.warmup.mesh;mesh.count=1;mesh.visible=true;
-  return ()=>{mesh.count=0;mesh.visible=false;};
+  this.warmup.contour?.sync(mesh);return ()=>{mesh.count=0;mesh.visible=false;this.warmup.contour?.sync(mesh);};
  }
  dispose():void {for(const batch of this.batches.values())this.disposeBatch(batch);this.batches.clear();this.active=[];this.disposeBatch(this.warmup);this.material.dispose();}
 }

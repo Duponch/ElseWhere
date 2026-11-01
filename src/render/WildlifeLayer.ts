@@ -10,10 +10,12 @@ import {ActorAnimationCache,sampleActorRoot} from './ActorAnimationCache';
 import {PawnTweener297} from './PawnTweener297';
 import {sampleAnimalRig} from './actor-animation-sampling';
 import * as THREE from 'three/webgpu';
-import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
+import {currentGraphicsStyle,applyOrigamiSurface,type GraphicsStyleContext} from './graphics-style';
 import {origamiAnimalGeometry} from './origami/animal-geometry';
+import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {createRigBrushGeometry} from './origami/rig-brush';
 import { coreTimeSeconds,localTimeSeconds } from '../bridge/clock-rate';
-import { Fn,If,attribute,cos,sin,float,instanceIndex,normalLocal,positionLocal,vec3,uniform,renderGroup,mix } from 'three/tsl';
+import { Fn,If,attribute,cos,sin,float,instanceIndex,normalLocal,positionLocal,uv,vec3,uniform,renderGroup,mix } from 'three/tsl';
 import { hareGeometry } from './hare-geometry';
 import { animalParts } from './animal-shape';
 import { material } from './primitives';
@@ -50,6 +52,11 @@ class SpeciesRig {
   readonly slaughter:THREE.Mesh;
   readonly plainMaterial:THREE.MeshStandardNodeMaterial;
   readonly texturedMaterial:THREE.MeshStandardNodeMaterial;
+  readonly origamiLines?:THREE.Mesh;
+  readonly origamiWear?:THREE.Mesh;
+  private origamiGraphics?:GraphicsStyleContext;
+  private readonly origamiCleanup:(()=>void)[]=[];
+  private readonly fallbackContour?:OrigamiContourBinding;
   readonly animationCache:ActorAnimationCache;
   private readonly sampledBones:readonly number[];
   private readonly carrierSlots=new Map<number,number>();
@@ -99,7 +106,14 @@ class SpeciesRig {
     this.restingHeight=bounds.max.x+restFloor;
     this.restingRadius=Math.max(Math.abs(bodyCenter-bounds.min.y),Math.abs(bodyCenter-bounds.max.y),Math.abs(bounds.min.z),Math.abs(bounds.max.z))+.1;
     const mat=material(0xffffff);configure?.(actorExplorationMaterial256(mat));
-    mat.colorNode=bodyBloodPigment(attribute('color','vec3'),attribute('animalPart','vec4').z,species==='hare'||species==='snow-hare'?2:1,attribute('animalPart','vec4').w.lessThan(0).select(float(1),float(0)),attribute('aBiology','vec3').y);
+    const origami=!!geometry.userData.origamiReference;
+    // The packed paint word replaces the original RGB input in this pipeline;
+    // the CPU color alias must never consume a second vertex attribute slot.
+    const paint=origami?attribute('animalPaint','vec4'):undefined;
+    const baseColor=paint?paint.rgb:attribute('color','vec3');
+    const withBlood=(base:THREE.Node<'vec3'>)=>bodyBloodPigment(base,attribute('animalPart','vec4').z,species==='hare'||species==='snow-hare'?2:1,attribute('animalPart','vec4').w.lessThan(0).select(float(1),float(0)),attribute('aBiology','vec3').y);
+    mat.vertexColors=false;mat.colorNode=withBlood(baseColor);
+    if(origami){mat.roughness=.88;mat.metalness=.02;}
     mat.positionNode=Fn(()=>{
       const cached=this.animationCache.cached().toVar();
       const pose=pawnPresentationPose(this,instanceIndex,cached),state=attribute('aAnimal','vec4'),part=attribute('animalPart','vec4'),biology=attribute('aBiology','vec3'),bone=part.x,pivot=attribute('bindPivot','vec3');
@@ -180,16 +194,63 @@ class SpeciesRig {
     })();
     const textured=material(0xffffff);configure?.(actorExplorationMaterial256(textured));
     textured.positionNode=mat.positionNode;
-    textured.colorNode=mat.colorNode.mul(animalCoatShade(surfaceTexture));
-    if(geometry.userData.origamiReference)applyOrigamiSurface(textured,mat.colorNode,undefined,graphics);
+    if(!origami)textured.colorNode=mat.colorNode.mul(animalCoatShade(surfaceTexture));
+    if(origami){
+      textured.vertexColors=false;
+      applyOrigamiSurface(textured,baseColor,attribute('animalPaintUv','vec2'),graphics,paint!.w);
+      // Source paint already contains the authored palette. Only actual blood
+      // modifies it; multiplying it by its base RGB would darken it twice.
+      textured.colorNode=withBlood(textured.colorNode! as THREE.Node<'vec3'>);
+    }
     this.plainMaterial=mat;this.texturedMaterial=textured;
     this.mesh=new THREE.Mesh(geometry,textured);this.mesh.name=`Wild ${this.species} — GPU rig`;this.mesh.frustumCulled=false;this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.flames=attachedFireMesh(this.mesh.geometry,this,.6,this.animationDetail);
+    if(origami&&graphics?.origami){
+      this.origamiGraphics=graphics;
+      const lineGeometry=createRigBrushGeometry(geometry),wearGeometry=geometry.userData.origamiWear as THREE.InstancedBufferGeometry;
+      const lineMaterial=graphics.createBrushMaterial(mat.positionNode,uv()),wearMaterial=graphics.createWearMaterial(mat.positionNode,attribute('animalPaintUv','vec2'));
+      // Both companions use the exact owner/exploration masks of the body,
+      // including shadow visibility; no independent gameplay state is read.
+      for(const companion of [lineMaterial,wearMaterial]){
+        actorExplorationMaterial256(companion);companion.maskNode=mat.maskNode;companion.maskShadowNode=mat.maskShadowNode;
+      }
+      this.origamiLines=new THREE.Mesh(lineGeometry,lineMaterial);this.origamiLines.name=`Wild ${this.species} — face-painted gouache ribbons`;this.origamiLines.frustumCulled=false;
+      this.origamiWear=new THREE.Mesh(wearGeometry,wearMaterial);this.origamiWear.name=`Wild ${this.species} — reference physical wear`;this.origamiWear.frustumCulled=false;this.origamiWear.castShadow=false;this.origamiWear.receiveShadow=true;
+      this.origamiWear.userData.origamiTexturesEnabled=true;
+      this.origamiCleanup.push(graphics.prepareBrushGeometry(lineGeometry),graphics.trackWearGeometry(wearGeometry),graphics.trackEdgeObject(this.origamiLines,'line'),graphics.trackEdgeObject(this.origamiWear,'wear'));
+      this.mesh.add(this.origamiLines,this.origamiWear);
+    }else if(graphics?.origami){
+      this.fallbackContour=createOrigamiContour(this.mesh,graphics,mat.positionNode);
+      this.mesh.add(this.fallbackContour.line);
+    }
     this.selection=pawnSelectionMesh(this.mesh.geometry as THREE.InstancedBufferGeometry,this);this.selection.visible=false;
     (this.selection.geometry as THREE.InstancedBufferGeometry).instanceCount=0;
     this.slaughter=animalSlaughterMarker(this.mesh.geometry as THREE.InstancedBufferGeometry,this,style,geometry.boundingBox!.max.y);
     this.mesh.visible=false;this.flames.visible=false;
   }
-  setTexturesEnabled(enabled:boolean):void {this.mesh.material=enabled?this.texturedMaterial:this.plainMaterial;setFireTexturesEnabled(this.flames,enabled);}
+  setTexturesEnabled(enabled:boolean):void {
+    this.mesh.material=enabled?this.texturedMaterial:this.plainMaterial;setFireTexturesEnabled(this.flames,enabled);
+    this.fallbackContour?.sync();
+    if(this.origamiWear){this.origamiWear.userData.origamiTexturesEnabled=enabled;this.origamiWear.visible=enabled&&this.origamiGraphics!.edgeVisuals.showWear;}
+  }
+  /** Static reference streams survive capacity growth; only the common actor
+   * buffers are relinked to the newly grown resident allocation. */
+  private syncOrigamiInstances():void {
+    this.fallbackContour?.sync();
+    for(const companion of [this.origamiLines,this.origamiWear])if(companion){
+      for(const [name,attr] of Object.entries(this.mesh.geometry.attributes)){
+        if(attr instanceof THREE.InstancedBufferAttribute||attr instanceof THREE.InterleavedBufferAttribute&&attr.data instanceof THREE.InstancedInterleavedBuffer)companion.geometry.setAttribute(name,attr);
+      }
+    }
+  }
+  private setOrigamiCount(count:number):void {
+    if(this.origamiLines)(this.origamiLines.geometry as THREE.InstancedBufferGeometry).instanceCount=count;
+    if(this.origamiWear)(this.origamiWear.geometry as THREE.InstancedBufferGeometry).instanceCount=count;
+  }
+  disposeOrigamiCompanions():void {
+    this.fallbackContour?.dispose();
+    for(const cleanup of this.origamiCleanup)cleanup();this.origamiCleanup.length=0;
+    for(const companion of [this.origamiLines,this.origamiWear])if(companion){companion.geometry.dispose();(companion.material as THREE.Material).dispose();companion.removeFromParent();}
+  }
   setSelected(ids:ReadonlySet<number>):void {
     this.selected=ids;const geometry=this.selection.geometry as THREE.InstancedBufferGeometry,flags=geometry.getAttribute('aSelected') as THREE.InstancedBufferAttribute;
     geometry.instanceCount=this.animals.length;
@@ -215,13 +276,15 @@ class SpeciesRig {
     const marker=this.slaughter.geometry as THREE.InstancedBufferGeometry;
     const n=g.instanceCount,f=fire.instanceCount,s=marker.instanceCount,visible=this.slaughter.visible,bodyVisible=this.mesh.visible,fireVisible=this.flames.visible,revision=this.revision;
     g.instanceCount=Math.max(1,n);fire.instanceCount=Math.max(1,f);
+    this.setOrigamiCount(g.instanceCount);
     marker.instanceCount=Math.max(1,s);this.slaughter.visible=true;this.mesh.visible=true;this.flames.visible=true;
-    return ()=>{if(this.revision!==revision)return;g.instanceCount=n;fire.instanceCount=f;marker.instanceCount=s;this.slaughter.visible=visible;this.mesh.visible=bodyVisible;this.flames.visible=fireVisible;};
+    return ()=>{if(this.revision!==revision)return;g.instanceCount=n;this.setOrigamiCount(n);fire.instanceCount=f;marker.instanceCount=s;this.slaughter.visible=visible;this.mesh.visible=bodyVisible;this.flames.visible=fireVisible;};
   }
   deactivate():void {
     this.revision++;this.source=undefined;this.animals=[];this.hasFireActors=false;this.playback435.clear();
     this.keys.clear();this.headings.clear();this.gait.clear();this.carrierSlots.clear();this.actorSlots.clear();this.animationCache.reset();this.resetSpring297();
     for(const mesh of [this.mesh,this.flames,this.selection,this.slaughter]){(mesh.geometry as THREE.InstancedBufferGeometry).instanceCount=0;mesh.visible=false;}
+    this.setOrigamiCount(0);
     const fire=this.mesh.geometry.getAttribute('aFire') as THREE.InstancedBufferAttribute;
     if(fire.getX(0)!==0){fire.setX(0,0);fire.needsUpdate=true;}
   }
@@ -271,7 +334,7 @@ class SpeciesRig {
     if(changed||reset)this.revision++;
     if(reset){this.headings.clear();this.keys.clear();this.gait.clear();this.resetSpring297();}
     if(changed){this.source=world;this.keys.clear();this.animals=group;this.phaseIndices297.clear();for(let i=0;i<group.length;i++)this.phaseIndices297.set(group[i]!.id,i);this.surfaces=surfaces;this.mesh.visible=group.length>0;
-      if(this.animals.length>this.mesh.geometry.getAttribute('aFrom').count)growPawnBuffers([this.mesh,this.flames,this.selection,this.slaughter],this.animals.length);
+      if(this.animals.length>this.mesh.geometry.getAttribute('aFrom').count){growPawnBuffers([this.mesh,this.flames,this.selection,this.slaughter],this.animals.length);this.syncOrigamiInstances();}
       this.setSelected(this.selected);
       const markers=this.slaughter.geometry as THREE.InstancedBufferGeometry,flags=markers.getAttribute('aSlaughter') as THREE.InstancedBufferAttribute;
       let any=false,dirty=false;
@@ -295,7 +358,7 @@ class SpeciesRig {
     (this.flames.geometry as THREE.InstancedBufferGeometry).instanceCount=fireCount;
     this.hasFireActors=fireCount>0;this.flames.visible=this.hasFireActors;
     }
-    const animals=this.animals;g.instanceCount=animals.length;let dirty=false,springDirty=false;
+    const animals=this.animals;g.instanceCount=animals.length;this.setOrigamiCount(animals.length);let dirty=false,springDirty=false;
     const spring=isCorePhysicalSchema297(Number(world.schemaVersion));if(spring)this.ensureSpring297(animals.length);
     this.playback435.prepare(world,animals,reset);const playback=this.playback435.beginFrame(timeline);if(this.playback435.retrying)this.keys.clear();
     if(changed||reset){this.carrierSlots.clear();if(reset)this.animationCache.reset();}
@@ -483,6 +546,7 @@ export class WildlifeLayer {
   dispose():void{
     for(const r of this.rigs){
       r.clearPlayback435();r.animationCache.dispose();
+      r.disposeOrigamiCompanions();
       for(const m of [r.mesh,r.flames,r.selection,r.slaughter])m.geometry.dispose();
       r.plainMaterial.dispose();r.texturedMaterial.dispose();
       (r.flames.material as THREE.Material).dispose();

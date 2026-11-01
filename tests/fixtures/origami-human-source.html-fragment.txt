@@ -1,0 +1,292 @@
+    function buildRimWorldColonist(preset) {
+      const group = new THREE.Group();
+
+      const matSkin = registerGouacheMat({
+        baseColor: preset.skinColor || '#e0b18d',
+        secondaryColor: '#c99773',
+        strokeStyle: 'directional',
+        strokeCount: 220
+      });
+
+      const matShirt = registerGouacheMat({
+        baseColor: preset.shirtColor || '#3b6e8c',
+        secondaryColor: preset.shirtSecondary || '#2c556e',
+        strokeStyle: 'wavy',
+        strokeCount: 320
+      });
+
+      const matOuterwear = registerGouacheMat({
+        baseColor: preset.coatColor || '#70482c',
+        secondaryColor: preset.coatSecondary || '#57361f',
+        strokeStyle: 'coarse',
+        strokeCount: 360
+      });
+
+      const matPants = registerGouacheMat({
+        baseColor: preset.pantsColor || '#3c424a',
+        secondaryColor: '#2b3036',
+        strokeStyle: 'directional',
+        strokeCount: 260
+      });
+
+      const matHair = registerGouacheMat({
+        baseColor: preset.hairColor || '#4a3222',
+        secondaryColor: '#332115',
+        strokeStyle: 'wavy',
+        strokeCount: 240
+      });
+
+      const matHat = registerGouacheMat({
+        baseColor: preset.hatColor || '#8c5832',
+        secondaryColor: '#6e4323',
+        strokeStyle: 'directional',
+        strokeCount: 260
+      });
+
+      const matWeaponWood = registerGouacheMat({
+        baseColor: '#7d4e2d',
+        secondaryColor: '#5c371e',
+        strokeStyle: 'directional',
+        strokeCount: 180
+      });
+
+      const matSteelGouache = registerGouacheMat({
+        baseColor: '#6c767d',
+        secondaryColor: '#4c5459',
+        accentColor: '#909ca3',
+        strokeStyle: 'directional',
+        strokeCount: 220
+      });
+
+      const hipY = 0.56;
+
+      const torsoGeo = createVerticalPrismGeometry(0.46, 0.30, 0.52, 0.34, 0.64, 0, 0);
+      const torso = createCardboardPart(torsoGeo, matShirt, {
+        pos: [0, hipY + 0.32, 0]
+      });
+      group.add(torso);
+
+      if (preset.role === 'sheriff') {
+        const coatLeft = createCardboardPart(
+          createVerticalPrismGeometry(0.14, 0.34, 0.18, 0.40, 0.72, 0, 0),
+          matOuterwear,
+          { pos: [-0.19, hipY + 0.28, 0] }
+        );
+        const coatRight = createCardboardPart(
+          createVerticalPrismGeometry(0.14, 0.34, 0.18, 0.40, 0.72, 0, 0),
+          matOuterwear,
+          { pos: [0.19, hipY + 0.28, 0] }
+        );
+        const coatBack = createCardboardPart(
+          createVerticalPrismGeometry(0.48, 0.10, 0.56, 0.14, 0.72, 0, 0),
+          matOuterwear,
+          { pos: [0, hipY + 0.28, -0.14] }
+        );
+        const bandanaMat = registerGouacheMat({
+          baseColor: '#b83228',
+          secondaryColor: '#8f2219',
+          strokeStyle: 'directional',
+          strokeCount: 140
+        });
+        const bandana = createCardboardPart(
+          createVerticalPrismGeometry(0.34, 0.32, 0.16, 0.20, 0.14, 0, 0.04),
+          bandanaMat,
+          { pos: [0, hipY + 0.62, 0.04] }
+        );
+        group.add(coatLeft, coatRight, coatBack, bandana);
+      } else if (preset.role === 'guard') {
+        const flakVest = createCardboardPart(
+          createVerticalPrismGeometry(0.52, 0.38, 0.50, 0.36, 0.48, 0, 0),
+          matOuterwear,
+          { pos: [0, hipY + 0.36, 0] }
+        );
+        [-1, 1].forEach((side) => {
+          const pad = createCardboardPart(new THREE.BoxGeometry(0.20, 0.14, 0.32), matOuterwear, {
+            pos: [side * 0.28, hipY + 0.56, 0],
+            rot: [0, 0, -side * 0.2]
+          });
+          group.add(pad);
+        });
+        group.add(flakVest);
+      } else if (preset.role === 'miner') {
+        const pack = createCardboardPart(new THREE.BoxGeometry(0.38, 0.44, 0.22), matOuterwear, {
+          pos: [0, hipY + 0.34, -0.24]
+        });
+        const bedroll = createCardboardPart(new THREE.BoxGeometry(0.42, 0.14, 0.14), matHat, {
+          pos: [0, hipY + 0.60, -0.24]
+        });
+        group.add(pack, bedroll);
+      } else if (preset.role === 'medic') {
+        const coatHem = createCardboardPart(
+          createVerticalPrismGeometry(0.50, 0.34, 0.56, 0.38, 0.28, 0, 0),
+          matShirt,
+          { pos: [0, hipY + 0.06, 0] }
+        );
+        const crossMat = registerGouacheMat({
+          baseColor: '#c93429',
+          secondaryColor: '#9e231b',
+          strokeStyle: 'directional',
+          strokeCount: 120
+        });
+        const badgeH = createCardboardPart(new THREE.BoxGeometry(0.14, 0.05, 0.03), crossMat, {
+          pos: [-0.11, hipY + 0.46, 0.16]
+        });
+        const badgeV = createCardboardPart(new THREE.BoxGeometry(0.05, 0.14, 0.03), crossMat, {
+          pos: [-0.11, hipY + 0.46, 0.16]
+        });
+        group.add(coatHem, badgeH, badgeV);
+      }
+
+      const headGroup = new THREE.Group();
+      headGroup.position.set(0, hipY + 0.66, 0);
+      group.add(headGroup);
+
+      const headBox = createCardboardPart(
+        createVerticalPrismGeometry(0.36, 0.36, 0.33, 0.33, 0.38, 0, 0),
+        matSkin,
+        { pos: [0, 0.20, 0] }
+      );
+      headGroup.add(headBox);
+
+      const nose = createCardboardPart(new THREE.BoxGeometry(0.06, 0.08, 0.06), matSkin, {
+        pos: [0, 0.19, 0.19]
+      });
+      headGroup.add(nose);
+
+      [-1, 1].forEach((side) => {
+        const eye = createCardboardPart(new THREE.BoxGeometry(0.05, 0.05, 0.03), matCharcoalGouache, {
+          pos: [side * 0.09, 0.22, 0.18]
+        });
+        const ear = createCardboardPart(new THREE.BoxGeometry(0.05, 0.10, 0.07), matSkin, {
+          pos: [side * 0.19, 0.20, 0]
+        });
+        headGroup.add(eye, ear);
+      });
+
+      if (preset.role === 'sheriff') {
+        const brim = createCardboardPart(new THREE.BoxGeometry(0.66, 0.05, 0.62), matHat, {
+          pos: [0, 0.39, 0],
+          rot: [-0.04, 0, 0]
+        });
+        const crown = createCardboardPart(
+          createVerticalPrismGeometry(0.32, 0.34, 0.38, 0.40, 0.22, 0, -0.02),
+          matHat,
+          { pos: [0, 0.51, 0] }
+        );
+        headGroup.add(brim, crown);
+      } else if (preset.role === 'miner') {
+        const beard = createCardboardPart(
+          createVerticalPrismGeometry(0.36, 0.24, 0.26, 0.16, 0.18, 0, 0.03),
+          matHair,
+          { pos: [0, 0.08, 0.11] }
+        );
+        const dome = createCardboardPart(
+          createVerticalPrismGeometry(0.32, 0.34, 0.42, 0.44, 0.18, 0, 0),
+          matHat,
+          { pos: [0, 0.44, 0] }
+        );
+        const lamp = createCardboardPart(new THREE.BoxGeometry(0.10, 0.09, 0.08), matCreamWhiteGouache, {
+          pos: [0, 0.46, 0.22]
+        });
+        headGroup.add(beard, dome, lamp);
+      } else if (preset.role === 'medic') {
+        const hairTop = createCardboardPart(new THREE.BoxGeometry(0.40, 0.14, 0.40), matHair, {
+          pos: [0, 0.38, -0.02]
+        });
+        const hairBun = createCardboardPart(new THREE.BoxGeometry(0.20, 0.20, 0.18), matHair, {
+          pos: [0, 0.36, -0.26]
+        });
+        const glassesBridge = createCardboardPart(new THREE.BoxGeometry(0.28, 0.03, 0.03), matCharcoalGouache, {
+          pos: [0, 0.23, 0.20]
+        });
+        headGroup.add(hairTop, hairBun, glassesBridge);
+      } else if (preset.role === 'guard') {
+        const helmet = createCardboardPart(
+          createVerticalPrismGeometry(0.36, 0.38, 0.44, 0.44, 0.24, 0, -0.02),
+          matHat,
+          { pos: [0, 0.42, -0.01] }
+        );
+        const visor = createCardboardPart(new THREE.BoxGeometry(0.38, 0.08, 0.06), matCharcoalGouache, {
+          pos: [0, 0.28, 0.20]
+        });
+        headGroup.add(helmet, visor);
+      }
+
+      const leftArmPivot = new THREE.Group();
+      leftArmPivot.position.set(-0.32, hipY + 0.56, 0);
+      const rightArmPivot = new THREE.Group();
+      rightArmPivot.position.set(0.32, hipY + 0.56, 0);
+      group.add(leftArmPivot, rightArmPivot);
+
+      [leftArmPivot, rightArmPivot].forEach((pivot, idx) => {
+        const sleeveMat = preset.role === 'sheriff' ? matOuterwear : matShirt;
+        const upperArm = createCardboardPart(
+          createVerticalPrismGeometry(0.15, 0.15, 0.13, 0.13, 0.28, 0, 0),
+          sleeveMat,
+          { pos: [0, -0.12, 0] }
+        );
+        const hand = createCardboardPart(new THREE.BoxGeometry(0.12, 0.12, 0.12), matSkin, {
+          pos: [0, -0.30, 0]
+        });
+        pivot.add(upperArm, hand);
+
+        if (idx === 1) {
+          if (preset.role === 'sheriff' || preset.role === 'guard') {
+            pivot.rotation.x = -0.65;
+            const stock = createCardboardPart(
+              new THREE.BoxGeometry(0.08, 0.14, 0.56),
+              preset.role === 'guard' ? matCharcoalGouache : matWeaponWood,
+              { pos: [0, -0.30, 0.18] }
+            );
+            const barrel = createCardboardPart(new THREE.BoxGeometry(0.05, 0.06, 0.46), matSteelGouache, {
+              pos: [0, -0.26, 0.52]
+            });
+            pivot.add(stock, barrel);
+          } else if (preset.role === 'miner') {
+            pivot.rotation.x = -0.5;
+            const handle = createCardboardPart(new THREE.BoxGeometry(0.06, 0.06, 0.62), matWeaponWood, {
+              pos: [0, -0.30, 0.18]
+            });
+            const pickHead = createCardboardPart(
+              createTaperedBoxGeometry(0.44, 0.08, 0.08, 0.35, 0.5, 0),
+              matSteelGouache,
+              { pos: [0, -0.30, 0.46], rot: [0, 0, Math.PI * 0.5] }
+            );
+            pivot.add(handle, pickHead);
+          } else if (preset.role === 'medic') {
+            const medBox = createCardboardPart(new THREE.BoxGeometry(0.12, 0.24, 0.30), matCreamWhiteGouache, {
+              pos: [0.06, -0.38, 0.04]
+            });
+            pivot.add(medBox);
+          }
+        }
+      });
+
+      const legs = [];
+      [-1, 1].forEach((side) => {
+        const legPivot = new THREE.Group();
+        legPivot.position.set(side * 0.13, hipY, 0);
+
+        const trouser = createCardboardPart(
+          createVerticalPrismGeometry(0.20, 0.22, 0.17, 0.19, 0.42, 0, 0),
+          matPants,
+          { pos: [0, -0.21, 0] }
+        );
+        const boot = createCardboardPart(new THREE.BoxGeometry(0.18, 0.15, 0.25), matCharcoalGouache, {
+          pos: [0, -0.48, 0.03]
+        });
+        legPivot.add(trouser, boot);
+        group.add(legPivot);
+        legs.push(legPivot);
+      });
+
+      group.userData = {
+        headGroup,
+        leftArmPivot,
+        rightArmPivot,
+        legs,
+        primaryMaterial: preset.role === 'sheriff' || preset.role === 'guard' ? matOuterwear : matShirt
+      };
+      return group;
+    }
+

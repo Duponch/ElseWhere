@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { Fn, attribute, cos, float, mat4, normalLocal, positionLocal, sin, smoothstep, texture, transformNormal, uniform, vec3, vec4, instanceIndex } from 'three/tsl';
+import { Fn, attribute, cos, float, mat4, normalLocal, positionLocal, sin, smoothstep, texture, transformNormal, uniform, uv, vec3, vec4, instanceIndex } from 'three/tsl';
 import type { World } from '../sim/types';
 import { BoxMesh } from './BoxMesh';
 import { material } from './primitives';
@@ -7,6 +7,8 @@ import { createStylizedSurfaceTexture } from './stylized-surfaces';
 import { instancedBoxPatternUv } from './texture-variation';
 import type { AnimationDetail } from './AnimationDetail';
 import { RetainedAnimation } from './RetainedAnimation';
+import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
+import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 
 export const POD_RESCUE_PARTS = 6;
 export const POD_RESCUE_FALL_HEIGHT = 24;
@@ -25,6 +27,7 @@ const PARTS = [
 export class PodRescueLayer {
   readonly group = new THREE.Group();
   readonly mesh: BoxMesh;
+  private readonly contour?:OrigamiContourBinding;
   readonly tick = uniform(0);
   /** Actual opening tick and confirmation flag, never the scheduled deadline. */
   readonly opening = uniform(new THREE.Vector2());
@@ -85,9 +88,18 @@ export class PodRescueLayer {
     });
     this.mesh.instanceMatrix.needsUpdate=this.mesh.colorBuffer.needsUpdate=sides.needsUpdate=true;
     this.mesh.activeCount=0;this.group.add(this.mesh);
+    const context=currentGraphicsStyle();
+    applyOrigamiSurface(this.painted,attribute('boxColor','vec3'),uv(),context);
+    if(context?.origami){this.contour=createOrigamiContour(this.mesh,context);this.group.add(this.contour.line);}
   }
 
+  /** Renderer-only preview callers must synchronize after writing instance streams. */
+  syncContours():void {this.contour?.sync();}
+
   adopt(world:World):void {
+    try{this.adoptBody(world);}finally{this.syncContours();}
+  }
+  private adoptBody(world:World):void {
     const pending=world.podRescues?.pending;
     if(!pending){
       if(this.pendingId!==undefined){
@@ -118,6 +130,9 @@ export class PodRescueLayer {
   }
 
   present(tick:number):void {
+    try{this.presentBody(tick);}finally{this.syncContours();}
+  }
+  private presentBody(tick:number):void {
     this.tick.value=tick;if(!this.mesh.activeCount)return;
     // Retirement follows the confirmed clock, including when the pose is held.
     if(this.fadeUntil!==undefined&&tick>=this.fadeUntil){this.mesh.activeCount=0;this.fadeUntil=undefined;this.revision++;return;}
@@ -133,7 +148,7 @@ export class PodRescueLayer {
   setTexturesEnabled(enabled:boolean):void {
     if(enabled===this.texturesEnabled)return;
     this.texturesEnabled=enabled;
-    this.mesh.material=enabled?this.painted:this.plain;
+    this.mesh.material=enabled?this.painted:this.plain;this.syncContours();
   }
 
   prepareForCompile():()=>void {
@@ -142,7 +157,7 @@ export class PodRescueLayer {
     const first=count===0?buffer.array.slice(0,16):undefined;
     if(first){buffer.array.fill(0,0,16);buffer.array[15]=1;buffer.needsUpdate=true;mesh.activeCount=1;}
     const version=buffer.version;
-    mesh.visible=true;mesh.frustumCulled=false;
+    mesh.visible=true;mesh.frustumCulled=false;this.syncContours();
     return()=>{
       mesh.frustumCulled=culled;
       if(mesh.instanceMatrix!==buffer||buffer.version!==version)return;
@@ -150,10 +165,12 @@ export class PodRescueLayer {
       // its latest visibility/count must still win over the preparation state.
       if(first){buffer.array.set(first,0);buffer.needsUpdate=true;}
       if(this.revision===revision){mesh.activeCount=count;mesh.visible=visible;}
+      this.syncContours();
     };
   }
 
   dispose():void {
+    this.contour?.dispose();
     this.animation.dispose();
     this.mesh.removeFromParent();this.mesh.dispose();this.base.dispose();
     this.plain.dispose();this.painted.dispose();this.paint.dispose();this.group.clear();

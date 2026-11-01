@@ -60,7 +60,7 @@ function setup(){
   const world=animalCombatCamp(),pawn=world.pawns[0]!;
   const edge={from:{x:10,z:10},to:{x:14,z:10},start:100,end:104};
   world.tick=101;Object.assign(pawn,{x:14,z:10,state:'moving',motion:edge,path:[]});
-  const exact=JSON.stringify(world),detail=new AnimationDetail(),configured:Surface[]=[];
+  const exact=JSON.stringify(world),detail=new AnimationDetail(),configured:THREE.NodeMaterial[]=[];
   const layer=new PawnLayer(material=>{configured.push(material);material.userData.nativePipelineProbe=true;},detail);
   const timeline=new MotionTimeline();timeline.tracks.set(pawn.id,[edge]);
   layer.update(world,1,true);layer.setSelected(new Set([pawn.id]));

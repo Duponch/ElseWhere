@@ -1,12 +1,14 @@
 import {CORE_STARTING_ARRIVAL_PROFILE_256} from '../sim/starting-pod-state-256';
 import * as THREE from 'three/webgpu';
-import { Fn,attribute,cos,float,mat4,normalLocal,positionLocal,sin,smoothstep,texture,transformNormal,uniform,vec3,vec4 } from 'three/tsl';
+import { Fn,attribute,cos,float,mat4,normalLocal,positionLocal,sin,smoothstep,texture,transformNormal,uniform,uv,vec3,vec4 } from 'three/tsl';
 import type { Cell,World } from '../sim/types';
 import { BoxMesh } from './BoxMesh';
 import { material } from './primitives';
 import { createStylizedSurfaceTexture } from './stylized-surfaces';
 import { instancedBoxPatternUv } from './texture-variation';
 import type { AnimationDetail } from './AnimationDetail';
+import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
+import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 
 export const STARTING_ARRIVAL_CAPSULES=3;
 export const STARTING_ARRIVAL_PARTS=8;
@@ -31,6 +33,7 @@ type Phase='none'|'incoming'|'landed'|'opening'|'retired';
 export class StartingArrivalLayer {
   readonly group=new THREE.Group();
   readonly mesh:BoxMesh;
+  private readonly contour?:OrigamiContourBinding;
   readonly tick=uniform(0);
   readonly opening=uniform(new THREE.Vector2());
   private readonly times=uniform(new THREE.Vector2(0,15));
@@ -92,13 +95,22 @@ export class StartingArrivalLayer {
     });
     this.mesh.instanceMatrix.needsUpdate=this.mesh.colorBuffer.needsUpdate=sides.needsUpdate=true;
     this.mesh.activeCount=0;this.group.add(this.mesh);
+    const context=currentGraphicsStyle();
+    applyOrigamiSurface(this.painted,attribute('boxColor','vec3'),uv(),context);
+    if(context?.origami){this.contour=createOrigamiContour(this.mesh,context);this.group.add(this.contour.line);}
   }
+
+  /** Renderer-only preview callers must synchronize after writing instance streams. */
+  syncContours():void {this.contour?.sync();}
 
   get presentation():Readonly<{phase:Phase;capsules:number;visible:boolean}> {
     return {phase:this.phase,capsules:this.mesh.activeCount/STARTING_ARRIVAL_PARTS,visible:this.mesh.visible};
   }
 
   adopt(world:World,reset=false):boolean {
+    try{return this.adoptBody(world,reset);}finally{this.syncContours();}
+  }
+  private adoptBody(world:World,reset=false):boolean {
     const arrival=world.startingArrival;this.confirmedTick=world.tick;
     if(reset){this.key='';this.cellsKey='';this.coreCells.clear();this.coreOpenings.clear();}
     const core=arrival?.profile===CORE_STARTING_ARRIVAL_PROFILE_256?arrival:undefined;this.coreArrival.value=core?1:0;
@@ -158,6 +170,9 @@ export class StartingArrivalLayer {
   }
 
   present(tick:number,confirmedTick=this.confirmedTick):boolean {
+    try{return this.presentBody(tick,confirmedTick);}finally{this.syncContours();}
+  }
+  private presentBody(tick:number,confirmedTick:number):boolean {
     if(!this.mesh.activeCount)return false;
     // Scene supplies the latest received confirmed frontier. Its bounded shared
     // timeline may be fractionally ahead of the last applied scene snapshot.
@@ -169,19 +184,20 @@ export class StartingArrivalLayer {
     return false;
   }
 
-  setTexturesEnabled(enabled:boolean):void {if(enabled!==this.texturesEnabled){this.texturesEnabled=enabled;this.mesh.material=enabled?this.painted:this.plain;}}
+  setTexturesEnabled(enabled:boolean):void {if(enabled!==this.texturesEnabled){this.texturesEnabled=enabled;this.mesh.material=enabled?this.painted:this.plain;this.syncContours();}}
 
   prepareForCompile():()=>void {
     const mesh=this.mesh,visible=mesh.visible,culled=mesh.frustumCulled,count=mesh.activeCount,revision=this.revision;
     const buffer=mesh.instanceMatrix,first=count===0?buffer.array.slice(0,16):undefined;
     if(first){buffer.array.fill(0,0,16);buffer.array[15]=1;buffer.needsUpdate=true;mesh.activeCount=1;}
-    const version=buffer.version;mesh.visible=true;mesh.frustumCulled=false;
+    const version=buffer.version;mesh.visible=true;mesh.frustumCulled=false;this.syncContours();
     return()=>{
       mesh.frustumCulled=culled;if(mesh.instanceMatrix!==buffer||buffer.version!==version)return;
       if(first){buffer.array.set(first,0);buffer.needsUpdate=true;}
       if(this.revision===revision){mesh.activeCount=count;mesh.visible=visible;}
+      this.syncContours();
     };
   }
 
-  dispose():void {this.mesh.removeFromParent();this.mesh.dispose();this.base.dispose();this.plain.dispose();this.painted.dispose();this.paint.dispose();this.coreCells.clear();this.coreOpenings.clear();this.group.clear();}
+  dispose():void {this.contour?.dispose();this.mesh.removeFromParent();this.mesh.dispose();this.base.dispose();this.plain.dispose();this.painted.dispose();this.paint.dispose();this.coreCells.clear();this.coreOpenings.clear();this.group.clear();}
 }

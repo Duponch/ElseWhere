@@ -34,7 +34,7 @@ import { apparelAppearance } from '../render/character-apparel';
 import { humanLimbVisualMask } from '../render/human-anatomy-presentation';
 import { portraitDataUrl, portraitExpressionOf } from '../ui/pawn-portrait';
 import { nativeClinicalConditionRows } from './native-special-inspection';
-import { NATIVE_UI_SCALE_LIMITS,normalizeGraphicsStylePreferences,ORIGAMI_STYLE_CONTROLS,type GraphicsStylePreferences } from './native-preferences';
+import { NATIVE_UI_SCALE_LIMITS,normalizeGraphicsStylePreferences,ORIGAMI_STYLE_CONTROLS,origamiStyleDisplayScale,formatOrigamiStyleValue,type GraphicsStylePreferences } from './native-preferences';
 import {presentNativeFront} from './native-front-presentation';
 
 type Page = 'home' | 'scenario' | 'story' | 'world' | 'site' | 'pawns' | 'load' | 'tests' | 'options';
@@ -185,7 +185,10 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
         return run(()=>preference(options.onGraphicsStylePreferencesChange!(normalizeGraphicsStylePreferences({...current,...patch}))),'Application du style graphique…');
       };
       rows.push(choice('graphics-style','Style graphique',settings.style,['default','origami'] as const,style=>apply({style}),style=>style==='origami'?'Origami':'Par défaut'));
-      if(settings.style==='origami')for(const {key,label,min,max,step} of ORIGAMI_STYLE_CONTROLS)rows.push(range(`origami-${key}`,label,Math.round(settings[key]*100),min*100,max*100,step*100,value=>apply({[key]:value/100},true),false,' %'));
+      if(settings.style==='origami')for(const control of ORIGAMI_STYLE_CONTROLS){
+        const {key,label,min,max,step,unit}=control,scale=origamiStyleDisplayScale(control),value=unit==='%'?Math.round(settings[key]*scale):settings[key];
+        rows.push({...range(`origami-${key}`,label,value,min*scale,max*scale,step*scale,next=>apply({[key]:next/scale},true),false,` ${unit}`),value:formatOrigamiStyleValue(control,settings[key]),compact:true,dense:true});
+      }
     }
     if(options.onMeasureGraphicsStyle)rows.push(
       {id:'graphics-measure-help',label:'Le changement de style prépare les ressources avant la mesure. La scène sera affichée pendant une seconde de préparation, puis cinq secondes de mesure.'},

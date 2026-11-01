@@ -10,11 +10,14 @@ export {bodyBloodRegion,bodyBloodWord} from './body-blood-word-297';
 /** Bind coordinates are explicitly carried into the fragment stage. Drawing
  * paint inside the existing material keeps marks attached through every rig
  * pose and requires neither a texture sample nor another draw. */
-export function bodyBloodPigment(base:Node<'vec3'>,region:Node<'float'>,scale=1,eligible?:Node<'float'>,packedWord:Node<'float'>=attribute('aBodyBlood','float')) {
+export function bodyBloodPigment(base:Node<'vec3'>,region:Node<'float'>,scale=1,eligible?:Node<'float'>,packedWord:Node<'float'>=attribute('aBodyBlood','float'),bind?:Node<'vec4'>) {
   return Fn(()=>{
     const pigment=base.toVar(),word=packedWord;
     If(word.greaterThan(0),()=>{
-      const local=varying(attribute('position','vec3')).mul(scale),r=varying(region);
+      // Complex painted actors reuse one named bind/region stream. Creating
+      // anonymous varyings inside nested shader functions can reserve the same
+      // data repeatedly. Existing callers retain their original construction.
+      const local=(bind?bind.xyz:varying(attribute('position','vec3'))).mul(scale),r=bind?bind.w:varying(region);
       const strength=word.div(float(4).pow(r)).floor().mod(4).div(3);
       const broad=sin(local.y.mul(7).add(local.z.mul(5)).add(r.mul(2.3)))
         .mul(sin(local.z.mul(6).sub(local.x.mul(8)).add(r))).mul(.5).add(.5);

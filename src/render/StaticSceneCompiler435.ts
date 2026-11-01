@@ -6,6 +6,10 @@ import {markResidentAttributeRange} from './resident-attribute-range';
 
 type SourceTag={key:string;quadrant:0|1|2|3;partitions:2|4};
 const sourceTags=new WeakMap<THREE.Mesh,SourceTag>();
+const hiddenSourceLayers=new WeakMap<THREE.Object3D,number>();
+/** Producer companions retain the intended layer selection while the compiler
+ * temporarily suppresses only their original opaque surface draw. */
+export function staticSceneSourceLayers435(source:THREE.Object3D):number{return source.layers.mask===0?(hiddenSourceLayers.get(source)??0):source.layers.mask;}
 /** Called by the resource producer when constructing its body/canopy mesh.
  * A stable chunk/role key survives geometry replacement; no geometry hash or
  * mutable position/bounds determines slot identity or the spatial page. */
@@ -59,7 +63,7 @@ export class StaticSceneCompiler435 {
   const signature=[this.id(geometry),this.id(index),...attributes.map(a=>this.id(a)),position.count].join(':');
   return{source,root,material,key,sourceKey:tag?`owned:${tag.key}`:`object:${this.id(source)}`,signature,names,attributes,index,start,count,layers,quadrant:tag?.quadrant,partitions:tag?.partitions};
  }
- private restoreSources():void{for(const[source,layers]of this.hidden)if(source.layers.mask===0)source.layers.mask=layers;this.hidden.clear();}
+ private restoreSources():void{for(const[source,layers]of this.hidden){if(source.layers.mask===0)source.layers.mask=layers;hiddenSourceLayers.delete(source);}this.hidden.clear();}
  private release(page:Page):void{page.mesh.removeFromParent();page.arena.dispose();}
  private container(root:THREE.Object3D):THREE.Group{
   let group=this.containers.get(root);if(!group){group=new THREE.Group();group.name='compiled-static-world435';group.matrixAutoUpdate=false;this.scene.add(group);this.containers.set(root,group);}return group;
@@ -180,11 +184,11 @@ export class StaticSceneCompiler435 {
    for(const item of selected){active.add(item.key);const old=this.pages.get(item.key);if(old)this.update(old,item.choices);else this.pages.set(item.key,this.create(item.key,item.choices,item.quadrant));}
    for(const[key,page]of this.pages)if(!active.has(key)){this.release(page);this.pages.delete(key);}
    this.links.clear();for(const page of this.pages.values())for(const block of page.blocks.values())for(let a=0;a<block.attributes.length;a++){const attribute=block.attributes[a]!,links=this.links.get(attribute)??[];links.push({page,block,attribute:a});this.links.set(attribute,links);}
-   this.blockedRoots.clear();for(const page of this.pages.values())for(const choice of page.choices){this.hidden.set(choice.source,choice.layers);choice.source.layers.mask=0;}
+   this.blockedRoots.clear();for(const page of this.pages.values())for(const choice of page.choices){this.hidden.set(choice.source,choice.layers);hiddenSourceLayers.set(choice.source,choice.layers);choice.source.layers.mask=0;}
    this.stats.sourceObjects=this.hidden.size;this.stats.unmergedNativeObjects=this.stats.eligibleObjects-this.hidden.size;this.stats.pageObjects=this.pages.size;this.stats.sourceActiveTriangles=[...this.pages.values()].reduce((n,p)=>n+p.choices.reduce((m,c)=>m+c.count/3,0),0);this.stats.compiledActiveTriangles=[...this.pages.values()].reduce((n,p)=>n+p.indices/3,0);this.syncVisibility();
   }catch(error){this.clear();this.stats.fallbacks++;throw error;}
  }
- syncVisibility():void{for(const[root,group]of this.containers){const valid=identityChain(root);if(!valid&&!this.blockedRoots.has(root)){this.blockedRoots.add(root);for(const page of this.pages.values())if(page.root===root)for(const{source}of page.choices){const layers=this.hidden.get(source);if(layers!==undefined&&source.layers.mask===0)source.layers.mask=layers;}this.stats.fallbacks++;}group.visible=valid&&!this.blockedRoots.has(root)&&visibleChain(root);}}
+ syncVisibility():void{for(const[root,group]of this.containers){const valid=identityChain(root);if(!valid&&!this.blockedRoots.has(root)){this.blockedRoots.add(root);for(const page of this.pages.values())if(page.root===root)for(const{source}of page.choices){const layers=this.hidden.get(source);if(layers!==undefined&&source.layers.mask===0)source.layers.mask=layers;hiddenSourceLayers.delete(source);}this.stats.fallbacks++;}group.visible=valid&&!this.blockedRoots.has(root)&&visibleChain(root);}}
  meshes():readonly THREE.Mesh[]{return[...this.pages.values()].map(p=>p.mesh);}
  snapshot(){return{...this.stats,offeredToNativeOnly:true,cameras:[...this.offered].map(([camera,data])=>({uuid:camera.uuid,type:camera.type,...data})),pages:[...this.pages.values()].map(p=>({mesh:p.mesh.uuid,material:(p.mesh.material as THREE.Material).uuid,root:p.root.name||p.root.type,quadrant:p.quadrant,sources:p.choices.length,vertices:[...p.blocks.values()].reduce((n,b)=>n+b.vertexCount,0),indexCount:p.indices,vertexCapacity:p.arena.vertexCapacity,indexCapacity:p.arena.indexCapacity,bufferBytes:Object.values(p.arena.geometry.attributes).reduce((n,a)=>n+a.array.byteLength,0)+p.arena.geometry.index!.array.byteLength,uniqueAttributeBlocks:p.blocks.size,sourceAttributeVertices:p.choices.reduce((n,c)=>n+c.attributes[0]!.count,0),arena:{...p.arena.stats},blocks:[...p.blocks.values()].map(b=>({key:b.key,offset:b.allocation.offset,capacity:b.allocation.capacity,vertices:b.vertexCount,runs:b.sourceRuns.length})),bounds:p.arena.geometry.boundingSphere?{center:p.arena.geometry.boundingSphere.center.toArray(),radius:p.arena.geometry.boundingSphere.radius}:null}))};}
  clear():void{this.restoreSources();for(const page of this.pages.values())this.release(page);this.pages.clear();this.links.clear();this.blockedRoots.clear();for(const group of this.containers.values())group.removeFromParent();this.containers.clear();this.offered.clear();this.stats.eligibleObjects=this.stats.candidateFamilies=this.stats.unmergedNativeObjects=this.stats.sourceObjects=this.stats.pageObjects=this.stats.sourceActiveTriangles=this.stats.compiledActiveTriangles=0;}

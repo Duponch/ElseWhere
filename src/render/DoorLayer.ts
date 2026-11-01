@@ -10,6 +10,8 @@ import { penBoundaryAxes } from './pen-parts';
 import { InstanceTargetTint } from './instance-target-tint';
 import type { AnimationDetail } from './AnimationDetail';
 import { RetainedAnimation } from './RetainedAnimation';
+import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
+import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 
 const EMPTY_AXES:ReadonlyMap<number,0|1>=new Map();
 const AUTODOOR_TINT=new THREE.Color(0xa6b7b4);
@@ -26,6 +28,7 @@ export class DoorLayer {
   private readonly paint=createStylizedSurfaceTexture();
   private texturesEnabled=true;
   readonly mesh:BoxMesh;
+  private readonly contour?:OrigamiContourBinding;
   private key='';
   private history=new Map<number,{current:DoorState;previous:DoorState}>();
   private readonly targetTint=new InstanceTargetTint();
@@ -47,18 +50,23 @@ export class DoorLayer {
     })();
     // Two carried leaves still use one draw. A narrow shaded centre joint on
     // each leaf suggests four wooden panels without extra geometry or uploads.
-    this.material.colorNode=attribute('boxColor','vec3').mul(select(positionLocal.x.abs().lessThan(.022),.77,1));
+    const baseColor=attribute('boxColor','vec3').mul(select(positionLocal.x.abs().lessThan(.022),.77,1));
+    this.material.colorNode=baseColor;
     this.textured.positionNode=this.material.positionNode;
     this.textured.colorNode=this.material.colorNode.mul(texture(this.paint,uv()).rgb);
     this.material.userData.rendererOwned=true;
     this.textured.userData.rendererOwned=true;
     this.mesh=new BoxMesh(this.base,this.textured,256);this.allocateAttributes(256);
     this.mesh.name='door-leaves';this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.group.add(this.mesh);
+    const context=currentGraphicsStyle();
+    applyOrigamiSurface(this.textured,baseColor,uv(),context);
+    if(context?.origami){this.contour=createOrigamiContour(this.mesh,context);this.group.add(this.contour.line);}
   }
   setTexturesEnabled(enabled:boolean):void {
     if(this.texturesEnabled===enabled)return;
     this.texturesEnabled=enabled;
     this.mesh.material=enabled?this.textured:this.material;
+    this.contour?.sync();
   }
   private allocateAttributes(capacity:number):void {
     for(const [name,size] of [['doorCurrent',4],['doorPrevious',4],['doorShift',3]] as const)this.mesh.geometry.setAttribute(name,new THREE.InstancedBufferAttribute(new Float32Array(capacity*size),size).setUsage(THREE.StaticDrawUsage));
@@ -96,6 +104,7 @@ export class DoorLayer {
     this.mesh.computeBoundingSphere();this.mesh.boundingSphere.radius+=.5;
     this.targetTint.setInstances(this.mesh.colorBuffer,targetIds);
     this.animation.reconcile(doors.map(s=>({id:s.id,x:s.x,y:1,z:s.z})));
+    this.contour?.sync();
   }
   // V299_NATIVE_DOOR_END
 
@@ -133,6 +142,7 @@ export class DoorLayer {
     this.mesh.computeBoundingSphere();this.mesh.boundingSphere.radius+=.5;
     this.targetTint.setInstances(this.mesh.colorBuffer,targetIds);
     this.animation.reconcile(doors.map(s=>({id:s.id,x:s.x,y:1,z:s.z})));
+    this.contour?.sync();
   }
   present(tick:number):void {
     this.tick.value=tick;
@@ -145,8 +155,8 @@ export class DoorLayer {
   }
   prepareForCompile():()=>void {
     if(this.mesh.activeCount)return ()=>{};
-    const version=this.mesh.instanceMatrix.version;this.mesh.activeCount=1;
-    return ()=>{if(this.mesh.instanceMatrix.version===version)this.mesh.activeCount=0;};
+    const version=this.mesh.instanceMatrix.version;this.mesh.activeCount=1;this.contour?.sync();
+    return ()=>{if(this.mesh.instanceMatrix.version===version)this.mesh.activeCount=0;this.contour?.sync();};
   }
-  dispose():void {this.animation.dispose();this.targetTint.dispose();this.mesh.dispose();this.base.dispose();this.material.dispose();this.textured.dispose();this.paint.dispose();}
+  dispose():void {this.contour?.dispose();this.animation.dispose();this.targetTint.dispose();this.mesh.dispose();this.base.dispose();this.material.dispose();this.textured.dispose();this.paint.dispose();}
 }

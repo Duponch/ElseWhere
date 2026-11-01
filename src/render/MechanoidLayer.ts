@@ -25,6 +25,8 @@ import { material } from './primitives';
 import { scytherGeometry } from './scyther-geometry';
 import { rangedMechGeometry } from './ranged-mech-geometry';
 import { headingAt,turnToward,TURN_TICKS,type TurnHeading } from './turn-presentation';
+import {currentGraphicsStyle,type GraphicsStyleContext} from './graphics-style';
+import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 
 type VisualMech=Mechanoid&{pile?:MaterialPile;carrierId?:number};
 const GAIT_RATE=2*Math.PI/1.12;
@@ -39,6 +41,7 @@ class MechanicalRaceBatch {
   private readonly animationRoot={x:0,y:0,z:0,yaw:0};
   private readonly linkedRoot={x:0,y:0,z:0,yaw:0};
   private body?:THREE.Mesh;private selection?:THREE.Mesh;
+  private contour?:OrigamiContourBinding;
   private selected:ReadonlySet<number>=new Set();private source?:World;
   private records:VisualMech[]=[];private readonly keys=new Map<number,string>();
   private readonly phaseIndices297=new Map<number,number>();
@@ -46,7 +49,7 @@ class MechanicalRaceBatch {
   playbackMetrics435(){return this.playback435.snapshot();}
   private readonly headings=new Map<number,TurnHeading>();private readonly gait=new GaitPhaseTracker();
   private surfaces:ReadonlyMap<number,number>=new Map();private pileSurface:ReadonlyMap<number,PileSurface>=new Map();
-  constructor(private readonly kind:MechanoidKind,readonly group:THREE.Group,private readonly animationDetail:AnimationDetail,private readonly configure?:(material:THREE.MeshStandardNodeMaterial)=>void){this.animationCache=new ActorAnimationCache(animationDetail);}
+  constructor(private readonly kind:MechanoidKind,readonly group:THREE.Group,private readonly animationDetail:AnimationDetail,private readonly configure?:(material:THREE.MeshStandardNodeMaterial)=>void,private readonly style?:GraphicsStyleContext){this.animationCache=new ActorAnimationCache(animationDetail);}
 
   private allocate():void {
     if(this.body)return;
@@ -106,6 +109,7 @@ class MechanicalRaceBatch {
     body.userData.mechKind=this.kind;
     const selection=pawnSelectionMesh(geometry,this);selection.name='Selected mechanical owners — shared trajectories';selection.visible=false;
     this.body=body;this.selection=selection;this.group.add(body,selection);
+    if(this.style?.origami){this.contour=createOrigamiContour(body,this.style);this.group.add(this.contour.line);}
   }
 
   setSelected(ids:ReadonlySet<number>):void {
@@ -185,6 +189,7 @@ class MechanicalRaceBatch {
     if(dirty)(from as THREE.InterleavedBufferAttribute).data.needsUpdate=true;
     if(changed||reset||dirty)this.records.forEach((actor,i)=>this.animationCache.reconcile(i,actor.id,[rig.getW(i),mask.getX(i),mask.getY(i),carrierState.getX(i),this.carrierSlots.get(i),actor.carrierId,actor.pile?.owner.type].join(':')));
     if(playback)this.playback435.commit();
+    this.contour?.sync();
   }
   /** Gesture-only proxy reads the same instance edges as the rig. */
   forEachPose(visit:(id:number,x:number,y:number,z:number,height:number,radius:number,dead:boolean)=>void):void {
@@ -205,15 +210,16 @@ class MechanicalRaceBatch {
       this.animationCache.setRoot(i,root,time,travelTime,travelTime,this.blend.value);sampleMechRig(this.animationCache,i,g,root,travelTime);this.animationCache.publish(i);
     }this.animationCache.flush();
   }
-  prepare():()=>void {if(!this.body)return()=>{};const g=this.body.geometry as THREE.InstancedBufferGeometry,count=g.instanceCount;g.instanceCount=Math.max(1,count);return()=>{g.instanceCount=count;};}
+  prepare():()=>void {if(!this.body)return()=>{};const g=this.body.geometry as THREE.InstancedBufferGeometry,count=g.instanceCount;g.instanceCount=Math.max(1,count);this.contour?.sync();return()=>{g.instanceCount=count;this.contour?.sync();};}
   reset():void {this.dispose();this.animationCache.reset();this.source=undefined;this.records=[];this.keys.clear();this.headings.clear();this.gait.clear();this.carrierSlots.clear();}
-  dispose():void {this.playback435.clear();this.animationCache.dispose();if(this.body){this.group.remove(this.body);this.body.geometry.dispose();(this.body.material as THREE.Material).dispose();}if(this.selection){this.group.remove(this.selection);this.selection.geometry.dispose();(this.selection.material as THREE.Material).dispose();}this.body=undefined;this.selection=undefined;}
+  dispose():void {this.contour?.dispose();this.contour=undefined;this.playback435.clear();this.animationCache.dispose();if(this.body){this.group.remove(this.body);this.body.geometry.dispose();(this.body.material as THREE.Material).dispose();}if(this.selection){this.group.remove(this.selection);this.selection.geometry.dispose();(this.selection.material as THREE.Material).dispose();}this.body=undefined;this.selection=undefined;}
 }
 
 /** At most three conditional race batches, each one body and one selection
  * mesh. Empty/historical scenes allocate none of the new races. */
 export class MechanoidLayer {
   readonly group=new THREE.Group();
+  private readonly style=currentGraphicsStyle();
   private readonly batches=new Map<MechanoidKind,MechanicalRaceBatch>();
   private selected:ReadonlySet<number>=new Set();
   private source?:World;private pileSource?:readonly MaterialPile[];private corpsePiles:MaterialPile[]=[];
@@ -229,7 +235,7 @@ export class MechanoidLayer {
       for(const pile of this.corpsePiles)add({id:pile.id,mechKind:pile.mechCorpse!.mechKind,state:'dead',health:pile.mechCorpse!.health,
         x:pile.owner.type==='ground'?pile.owner.x:0,z:pile.owner.type==='ground'?pile.owner.z:0,heading:pile.mechCorpse!.heading??0,path:[],moveCooldown:0,planCooldown:0,
         pile,carrierId:pile.owner.type==='pawn'?pile.owner.pawnId:pawns?.animalCorpseTransferCarrier(pile.id)});
-      for(const kind of this.records.keys())if(!this.batches.has(kind))this.batches.set(kind,new MechanicalRaceBatch(kind,this.group,this.animationDetail,this.configure));
+      for(const kind of this.records.keys())if(!this.batches.has(kind))this.batches.set(kind,new MechanicalRaceBatch(kind,this.group,this.animationDetail,this.configure,this.style));
     }
     for(const [kind,batch] of this.batches){batch.update(world,timeline,this.records.get(kind)??[],reset,pawns,actorScene);batch.setSelected(this.selected);}
   }

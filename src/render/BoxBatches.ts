@@ -16,6 +16,7 @@ import {ZONE_FILL_OPACITY} from './zone-surface-presentation';
 import {ITEM_SHAPES,type ItemShape} from './item-geometry';
 import {ItemMeshAtlas} from './item-mesh-atlas';
 import {createSandbagGeometry} from './sandbag-parts';
+import {createOrigamiContour,ItemContourAtlas,type OrigamiContourBinding} from './origami/contours';
 
 const object = new THREE.Object3D(), color = new THREE.Color();
 type Style = 'solid' | 'overlay' | 'wire' | 'storage' | 'storage-home' | 'border';
@@ -25,15 +26,18 @@ type Style = 'solid' | 'overlay' | 'wire' | 'storage' | 'storage-home' | 'border
  * Capacity grows geometrically only when content exceeds its high-water mark.
  */
 export class BoxBatches {
+  private readonly graphicsStyle=currentGraphicsStyle();
+  private readonly contours=new Map<BoxMesh,OrigamiContourBinding>();
+  private itemContourAtlas?:ItemContourAtlas;
   private readonly geometry = new THREE.BoxGeometry(1, 1, 1);
   private readonly roundedRockGeometry = createChunkGeometry();
   private readonly smallRockGeometry = createChunkGeometry(true);
   private readonly sandbagGeometry = createSandbagGeometry();
   private readonly surfaceTexture = createStylizedSurfaceTexture();
   private readonly rockTexture = createChunkSurfacePaint();
-  private readonly texturedSolid = createSurfaceMaterial('diffuse',0xffffff);
+  private readonly texturedSolid = currentGraphicsStyle()?.origami?createSurfaceMaterial('physical',0xffffff):createSurfaceMaterial('diffuse',0xffffff);
   private readonly plainRock = createSurfaceMaterial('diffuse',0xffffff);
-  private readonly texturedRock = createSurfaceMaterial('diffuse',0xffffff);
+  private readonly texturedRock = currentGraphicsStyle()?.origami?createSurfaceMaterial('physical',0xffffff):createSurfaceMaterial('diffuse',0xffffff);
   private readonly materials: Record<Style, THREE.NodeMaterial> = {
     solid: createSurfaceMaterial('diffuse',0xffffff),
     // An unlit surface stays legible at midday; grass shares the same tint.
@@ -46,7 +50,7 @@ export class BoxBatches {
   private readonly batches = new Map<string, BoxMesh>();
   private readonly itemAtlas=new ItemMeshAtlas();
   private readonly plainItem=createSurfaceMaterial('diffuse',0xffffff);
-  private readonly texturedItem=createSurfaceMaterial('diffuse',0xffffff);
+  private readonly texturedItem=this.graphicsStyle?.origami?createSurfaceMaterial('physical',0xffffff):createSurfaceMaterial('diffuse',0xffffff);
   private readonly itemBatchKeys=new Set<string>();
   private readonly targetBatches = new Map<BoxMesh, { ids: (number | undefined)[]; tint: InstanceTargetTint }>();
   private readonly targetGroups = new Map<THREE.Group, ReadonlySet<number>>();
@@ -64,6 +68,7 @@ export class BoxBatches {
     configure?.(this.plainItem);configure?.(this.texturedItem);
     this.plainItem.userData.rendererOwned=this.texturedItem.userData.rendererOwned=true;
     this.itemAtlas.configure(this.plainItem);this.itemAtlas.configure(this.texturedItem,this.surfaceTexture);
+    applyOrigamiSurface(this.texturedItem,attribute('boxColor','vec3'),this.itemAtlas.paintUvNode(),this.graphicsStyle);
     this.geometry.userData.rendererOwned = true;
     this.roundedRockGeometry.userData.rendererOwned = true;
     this.smallRockGeometry.userData.rendererOwned = true;
@@ -94,6 +99,7 @@ export class BoxBatches {
       else if (mesh.material === this.texturedRock || mesh.material === this.plainRock) mesh.material = enabled ? this.texturedRock : this.plainRock;
       else if(mesh.material===this.texturedItem||mesh.material===this.plainItem)mesh.material=enabled?this.texturedItem:this.plainItem;
       if(mesh.material!==previous)mesh.commitOwnedOpaque435();
+      this.contours.get(mesh)?.sync();
     }
   }
 
@@ -144,6 +150,7 @@ export class BoxBatches {
         warm.castShadow = shadows; warm.receiveShadow = true; warm.activeCount = 0;
         this.ownedProducer435?.register(warm,[this.plainRock,this.texturedRock],[this.rockTexture]);
         group.add(warm); this.batches.set(warm.name, warm);
+        this.syncContour(warm,geometry,false);
       }
       this.roundedRockWarm = true;
     }
@@ -189,6 +196,7 @@ export class BoxBatches {
     mesh.computeBoundingSphere();
     if(targets)targets.tint.setInstances(mesh.colorBuffer,targets.ids);
     mesh.commitOwnedOpaque435();
+    this.contours.get(mesh)?.sync();
     return true;
   }
 
@@ -239,6 +247,20 @@ export class BoxBatches {
     targets.tint.setInstances(mesh.colorBuffer,ids);
     const selected=this.targetGroups.get(group);if(selected)targets.tint.setTargets(selected);
     mesh.commitOwnedOpaque435();
+    if(style==='solid')this.syncContour(mesh,geometry,atlas);
+  }
+
+  private syncContour(mesh:BoxMesh,geometry:THREE.BufferGeometry,atlas:boolean):void {
+    const context=this.graphicsStyle;if(!context?.origami)return;
+    let binding=this.contours.get(mesh);
+    if(!binding){
+      if(atlas){
+        const source=this.itemContourAtlas??=new ItemContourAtlas();
+        binding=createOrigamiContour(mesh,context,source.positionNode(),geometry===this.itemAtlas.smallGeometry?source.smallGeometry:source.geometry,source.paintUvNode());
+      }else binding=createOrigamiContour(mesh,context,(mesh.material as THREE.NodeMaterial).positionNode,geometry);
+      mesh.add(binding.line);this.contours.set(mesh,binding);
+    }
+    binding.sync(mesh);
   }
 
   private allocateRockContour(mesh: BoxMesh): void {
@@ -246,6 +268,7 @@ export class BoxBatches {
   }
 
   clear(): void {
+    for(const binding of this.contours.values())binding.dispose();this.contours.clear();
     for (const state of this.targetBatches.values()) state.tint.dispose();
     this.targetBatches.clear();this.targetGroups.clear();
     for (const mesh of this.batches.values()) { mesh.removeFromParent(); mesh.dispose(); }
@@ -278,6 +301,7 @@ export class BoxBatches {
   dispose(): void {
     this.clear(); this.geometry.dispose(); this.roundedRockGeometry.dispose();this.smallRockGeometry.dispose();this.sandbagGeometry.dispose();
     this.itemAtlas.dispose();this.plainItem.dispose();this.texturedItem.dispose();
+    this.itemContourAtlas?.dispose();this.itemContourAtlas=undefined;
     for (const mat of Object.values(this.materials)) mat.dispose();
     this.texturedSolid.dispose(); this.plainRock.dispose(); this.texturedRock.dispose(); this.surfaceTexture.dispose();this.rockTexture.dispose();
   }

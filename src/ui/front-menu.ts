@@ -25,7 +25,7 @@ import './front-menu.css';
 import { renderPerformanceLayout, bindRenderPerformanceControls } from './render-performance-controls';
 import { DEFAULT_SHADOW_SETTINGS, type ShadowSettings } from '../render/shadow-settings';
 import { DEFAULT_ANIMATION_SETTINGS, type AnimationSettings } from '../render/animation-settings';
-import {normalizeGraphicsStylePreferences,ORIGAMI_STYLE_CONTROLS,type GraphicsStylePreferences} from '../ui3d/native-preferences';
+import {normalizeGraphicsStylePreferences,ORIGAMI_STYLE_CONTROLS,origamiStyleDisplayScale,formatOrigamiStyleValue,type OrigamiStyleControl,type GraphicsStylePreferences} from '../ui3d/native-preferences';
 
 export interface FrontMenuDraft {
   seed: number;
@@ -368,20 +368,21 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
       for(const [value,label] of [['default','Par défaut'],['origami','Origami']] as const){const entry=element('option','',label);entry.value=value;style.append(entry);}
       styleText.append(element('strong','','Style graphique'),element('span','','Choix visuel conservé dans ce navigateur, indépendant des colonies.'));
       styleSetting.append(style,styleText);card.append(styleSetting);
-      const controls=element('div','front-origami-settings');card.append(controls);
-      const sliders:{key:typeof ORIGAMI_STYLE_CONTROLS[number]['key'];slider:HTMLInputElement;output:HTMLOutputElement}[]=[];
-      const refresh=()=>{const settings=current();style.value=settings.style;controls.hidden=settings.style!=='origami';for(const {key,slider,output} of sliders){slider.value=String(Math.round(settings[key]*100));output.textContent=`${Math.round(settings[key]*100)} %`;}};
+      const controls=element('div','front-origami-settings');controls.setAttribute('role','group');controls.setAttribute('aria-label','Réglages Origami');card.append(controls);
+      const sliders:{control:OrigamiStyleControl;slider:HTMLInputElement;output:HTMLOutputElement}[]=[];
+      const refresh=()=>{const settings=current();style.value=settings.style;controls.hidden=settings.style!=='origami';for(const {control,slider,output} of sliders){slider.value=String(settings[control.key]*origamiStyleDisplayScale(control));output.textContent=formatOrigamiStyleValue(control,settings[control.key]);}};
       const apply=(patch:Partial<GraphicsStylePreferences>,origamiOnly=false)=>{
         if(root.hidden||page!=='options'||busy||operationPending||!card.isConnected)return;
         const settings=current();if(origamiOnly&&settings.style!=='origami')return;
         void run(async()=>{if(!await options.onGraphicsStylePreferencesChange!(normalizeGraphicsStylePreferences({...settings,...patch})))showError('Le choix s’applique maintenant, mais ce navigateur ne peut pas le conserver pour la prochaine visite.');},'Application du style graphique…').finally(refresh);
       };
       style.addEventListener('change',()=>{if(style.value==='default'||style.value==='origami')apply({style:style.value});else refresh();});
-      for(const {key,label,min,max,step} of ORIGAMI_STYLE_CONTROLS){
+      for(const control of ORIGAMI_STYLE_CONTROLS){
+        const {key,label,min,max,step}=control,scale=origamiStyleDisplayScale(control);
         const setting=element('label','front-relief front-texture-setting front-volume-setting'),text=element('span'),slider=element('input'),output=element('output');
-        slider.id=`front-origami-${key}`;slider.type='range';slider.min=String(min*100);slider.max=String(max*100);slider.step=String(step*100);slider.setAttribute('aria-label',label);output.setAttribute('for',slider.id);
-        text.append(element('strong','',label),output);setting.append(text,slider);controls.append(setting);sliders.push({key,slider,output});
-        slider.addEventListener('input',()=>{const value=Number(slider.value);if(Number.isFinite(value))apply({[key]:value/100},true);else refresh();});
+        slider.id=`front-origami-${key}`;slider.type='range';slider.min=String(min*scale);slider.max=String(max*scale);slider.step=String(step*scale);slider.setAttribute('aria-label',label);output.setAttribute('for',slider.id);
+        text.append(element('strong','',label),output);setting.append(text,slider);controls.append(setting);sliders.push({control,slider,output});
+        slider.addEventListener('input',()=>{const value=Number(slider.value);if(Number.isFinite(value))apply({[key]:value/scale},true);else refresh();});
       }
       refresh();
     }

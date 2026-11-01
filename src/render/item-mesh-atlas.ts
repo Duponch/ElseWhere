@@ -15,6 +15,8 @@ export class ItemMeshAtlas {
   readonly smallVertexLimit=96;
   private readonly slots=new Map<ItemShape|undefined,number>();
   private readonly buffer;
+  private readonly positionUv:THREE.Node<'vec4'>;
+  private readonly normalUv:THREE.Node<'vec4'>;
 
   constructor(){
     const sources=this.shapes.map(shape=>shape?createItemGeometry(shape):new THREE.BoxGeometry(1,1,1));
@@ -38,6 +40,8 @@ export class ItemMeshAtlas {
     // WebGL's storage fallback otherwise ignores element indices. Its PBO
     // path preserves this same immutable lookup through an RGBA float texture.
     this.buffer=storage(this.data,'vec4',this.data.count).toReadOnly().setPBO(true);
+    const address=uint(attribute('itemShape','float')).mul(this.verticesPerSlot).add(vertexIndex).mul(2).toVar();
+    this.positionUv=this.buffer.element(address).toVar();this.normalUv=this.buffer.element(address.add(1)).toVar();
     // Attributes establish the existing shader layout; authored data is fetched
     // from the atlas in the vertex stage. There is no per-frame buffer write.
     this.geometry=new THREE.BufferGeometry();
@@ -56,9 +60,12 @@ export class ItemMeshAtlas {
   slot(shape:ItemShape|undefined):number {return this.slots.get(shape)??0;}
   isSmall(shape:ItemShape|undefined):boolean {return this.vertexCounts[this.slot(shape)]!<=this.smallVertexLimit;}
 
+  /** The true source UV occupies the spare W component of the existing two
+   * atlas reads. Reuse those same nodes in the position and paint graphs. */
+  paintUvNode():THREE.Node<'vec2'> {return varying(vec2(this.positionUv.w,this.normalUv.w),'v_itemPaintUv');}
+
   configure(material:THREE.NodeMaterial,surface?:THREE.Texture):void {
-    const address=uint(attribute('itemShape','float')).mul(this.verticesPerSlot).add(vertexIndex).mul(2);
-    const positionUv=this.buffer.element(address),normalUv=this.buffer.element(address.add(1));
+    const positionUv=this.positionUv,normalUv=this.normalUv;
     material.positionNode=Fn(()=>{
       const transform=mat4(attribute('boxMatrix0','vec4'),attribute('boxMatrix1','vec4'),attribute('boxMatrix2','vec4'),attribute('boxMatrix3','vec4')).toVar();
       normalLocal.assign(transformNormal(normalUv.xyz,transform));

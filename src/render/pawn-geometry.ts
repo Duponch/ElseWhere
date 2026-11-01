@@ -7,6 +7,7 @@ import {ITEM_VISUAL_IDS,itemCargoKind,itemGeometry,centreItemParts} from './item
 import {placementGeometry} from './item-portrait';
 import { RESIDENT_WEAPON_VISUALS269 } from './weapon-shape';
 import {currentGraphicsStyle} from './graphics-style';
+import {origamiHumanGeometry} from './origami/human-geometry';
 
 // Disjoint from weapon tags; -4 is the bolt-action rifle, not the parka hood.
 export const PARKA_HOOD_DYE = -6;
@@ -33,6 +34,7 @@ export const WORK_SICKLE_DYE = -32;
  */
 export function pawnGeometry(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false): THREE.InstancedBufferGeometry {
   const origami=currentGraphicsStyle()?.origami===true;
+  if(origami)return origamiHumanGeometry(includeSmithing,includeMace,includeLongsword,includeSpear);
   const positions: number[] = [], normals: number[] = [], colors: number[] = [];
   const bones: number[] = [], pivots: number[] = [], dyes: number[] = [];
   const paperUV:number[]=[];

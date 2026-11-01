@@ -1,5 +1,5 @@
 import {afterEach,expect,test,vi} from 'vitest';
-import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,GRAPHICS_STYLE_PREFERENCE_KEY,normalizeGraphicsStylePreferences,parseGraphicsStylePreferences,type GraphicsStylePreferences} from '../src/ui3d/native-preferences';
+import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,GRAPHICS_STYLE_PREFERENCE_KEY,ORIGAMI_STYLE_CONTROLS,normalizeGraphicsStylePreferences,parseGraphicsStylePreferences,formatOrigamiStyleValue,origamiStyleDisplayScale,type GraphicsStylePreferences} from '../src/ui3d/native-preferences';
 import {createNativeFrontMenu} from '../src/ui3d/native-front';
 import type {FrontMenuOptions} from '../src/ui/front-menu';
 import type {NativeControl,NativePage} from '../src/ui3d/native-contract';
@@ -15,9 +15,53 @@ test('graphics preferences default safely for absent, corrupt and invalid enum s
 test('graphics settings clamp finite controls independently and round trip without changing their source',()=>{
   const input={style:'origami',impasto:99,edges:-1,wear:.123,contourImperfection:NaN},before={...input};
   const result=normalizeGraphicsStylePreferences(input);
-  expect(result).toEqual({style:'origami',impasto:2.2,edges:0,wear:.123,contourImperfection:.6});
+  expect(result).toEqual({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'origami',impasto:2.2,blackEdges:0,edges:0,wear:.123,contourImperfection:.6});
   expect(input).toEqual(before);expect(parseGraphicsStylePreferences(JSON.stringify(result))).toEqual(result);
   expect(normalizeGraphicsStylePreferences({...result,impasto:-Infinity,edges:Infinity,wear:NaN})).toEqual({...result,impasto:1,edges:.65,wear:.75});
+});
+
+test('legacy v1 preferences preserve their actual contour intensity once and then keep the black control independent',()=>{
+  const legacy={style:'origami',impasto:1.3,edges:.8,wear:.25,contourImperfection:.4},raw=JSON.stringify(legacy),migrated=parseGraphicsStylePreferences(raw);
+  expect(migrated.blackEdges).toBeCloseTo(legacy.edges*(1-Math.min(1,legacy.wear*(.2+legacy.contourImperfection*1.15))*.45),14);
+  expect(migrated).toMatchObject(legacy);expect(JSON.stringify(legacy)).toBe(raw);
+  const restored=parseGraphicsStylePreferences(JSON.stringify(migrated));
+  expect(normalizeGraphicsStylePreferences({...restored,edges:0,wear:1,contourImperfection:1}).blackEdges).toBe(migrated.blackEdges);
+  expect(parseGraphicsStylePreferences(JSON.stringify({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,blackEdges:undefined})).blackEdges).toBe(.45475625);
+});
+
+test('black contour settings have their own finite bounds and do not overwrite the original paper controls',()=>{
+  const base={...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'origami' as const,edges:.2,wear:.3,contourImperfection:.4};
+  for(const [value,expected]of [[-2,0],[3,1],[.237,.237],[NaN,.45475625],[Infinity,.45475625],['.4',.45475625],[null,.45475625]] as const){
+    const actual=normalizeGraphicsStylePreferences({...base,blackEdges:value});expect(actual.blackEdges).toBe(expected);expect(actual).toMatchObject({edges:.2,wear:.3,contourImperfection:.4});
+  }
+  expect(ORIGAMI_STYLE_CONTROLS.map(({key,label})=>[key,label])).toEqual([
+    ['impasto','Relief empâtement gouache'],['blackEdges','Contours noirs'],['edges','Contours carton d’origine'],['edgeWidth','Épaisseur des contours'],['strokeImperfection','Irrégularité du trait'],['wear','Usure et écaillage des arêtes'],['contourImperfection','Imperfection du remplissage des contours'],
+  ]);
+});
+
+test('contour width migrates v1 to a physical multiplier of one with finite independent bounds',()=>{
+ const legacy={style:'origami',impasto:1.4,blackEdges:.33,edges:.8,wear:.2,contourImperfection:.4};
+ expect(parseGraphicsStylePreferences(JSON.stringify(legacy))).toEqual({...legacy,edgeWidth:1,strokeImperfection:.45});
+ for(const [value,expected]of [[-2,.5],[.5,.5],[2.4,2.4],[99,5],[NaN,1],[Infinity,1],['2',1],[null,1]] as const){
+  expect(normalizeGraphicsStylePreferences({...legacy,edgeWidth:value})).toEqual({...legacy,edgeWidth:expected,strokeImperfection:.45});
+ }
+ const control=ORIGAMI_STYLE_CONTROLS.find(control=>control.key==='edgeWidth')!;
+ expect(control).toMatchObject({label:'Épaisseur des contours',min:.5,max:5,step:.1,unit:'×'});
+ expect(origamiStyleDisplayScale(control)).toBe(1);expect(formatOrigamiStyleValue(control,.5)).toBe('0.5 ×');expect(formatOrigamiStyleValue(control,2.4)).toBe('2.4 ×');
+ const intensity=ORIGAMI_STYLE_CONTROLS.find(control=>control.key==='blackEdges')!;
+ expect(origamiStyleDisplayScale(intensity)).toBe(100);expect(formatOrigamiStyleValue(intensity,.37)).toBe('37 %');
+});
+
+test('stroke imperfection migrates v1 independently and explicit zero preserves a regular stroke',()=>{
+ const legacy={...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'origami' as const,edgeWidth:2.4,blackEdges:.37,edges:.2,wear:.3,contourImperfection:.8};
+ const {strokeImperfection:_,...oldV1}=legacy;
+ expect(parseGraphicsStylePreferences(JSON.stringify(oldV1))).toEqual({...oldV1,strokeImperfection:.45});
+ for(const [value,expected]of [[0,0],[-1,0],[3,1],[.237,.237],[NaN,.45],[Infinity,.45],['.2',.45],[null,.45]] as const){
+  expect(normalizeGraphicsStylePreferences({...oldV1,strokeImperfection:value})).toEqual({...oldV1,strokeImperfection:expected});
+ }
+ const control=ORIGAMI_STYLE_CONTROLS.find(control=>control.key==='strokeImperfection')!;
+ expect(control).toMatchObject({label:'Irrégularité du trait',min:0,max:1,step:.01,unit:'%'});
+ expect(origamiStyleDisplayScale(control)).toBe(100);expect(formatOrigamiStyleValue(control,.45)).toBe('45 %');
 });
 
 function fixture(persist=true){
@@ -47,7 +91,9 @@ test('Graphismes offers default and Origami without changing any preference thro
   await f.control('graphics-style').select!.onChange('origami');
   expect(f.change).toHaveBeenCalledExactlyOnceWith({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'origami'});
   expect(f.page.rows.filter(row=>row.id.startsWith('origami-')).map(row=>[row.id,row.value])).toEqual([
-    ['origami-impasto','100 %'],['origami-edges','65 %'],['origami-wear','75 %'],['origami-contourImperfection','60 %']]);
+    ['origami-impasto','100 %'],['origami-blackEdges','45 %'],['origami-edges','65 %'],['origami-edgeWidth','1 ×'],['origami-strokeImperfection','45 %'],['origami-wear','75 %'],['origami-contourImperfection','60 %']]);
+  expect(f.page.rows.filter(row=>row.id.startsWith('origami-')).every(row=>row.compact&&row.dense&&row.region==='details')).toBe(true);
+  expect(f.page.rows.find(row=>row.id==='origami-edges')!.label).toBe('Contours carton d’origine');
 });
 
 test('Origami ranges apply exact bounded settings through the backend and switching retains slider values',async()=>{
@@ -59,15 +105,51 @@ test('Origami ranges apply exact bounded settings through the backend and switch
   await input('origami-contourImperfection').onCommit('27');expect(f.settings.contourImperfection).toBe(.27);
   const before=f.change.mock.calls.length;expect(await input('origami-impasto').onCommit('Infinity')).toBe(false);expect(f.change).toHaveBeenCalledTimes(before);
   await f.control('graphics-style').select!.onChange('default');expect(f.page.rows.some(row=>row.id.startsWith('origami-'))).toBe(false);
-  await f.control('graphics-style').select!.onChange('origami');expect(f.settings).toEqual({style:'origami',impasto:2.2,edges:0,wear:.32,contourImperfection:.27});
+  await f.control('graphics-style').select!.onChange('origami');expect(f.settings).toEqual({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'origami',impasto:2.2,edges:0,wear:.32,contourImperfection:.27});
+});
+
+test('native black contours remain independent and retain their value across styles',async()=>{
+  const f=fixture();await f.click('option-section-graphics');await f.control('graphics-style').select!.onChange('origami');
+  const input=(id:string)=>f.page.rows.find(row=>row.id===id)!.input!;
+  expect(f.page.rows.find(row=>row.id==='origami-blackEdges')!.label).toBe('Contours noirs');
+  await input('origami-blackEdges').onCommit('37');expect(f.settings.blackEdges).toBe(.37);
+  const other={edges:f.settings.edges,wear:f.settings.wear,contourImperfection:f.settings.contourImperfection};
+  expect(other).toEqual({edges:.65,wear:.75,contourImperfection:.6});
+  await input('origami-edges').onCommit('0');await input('origami-wear').onCommit('0');await input('origami-contourImperfection').onCommit('100');
+  expect(f.settings.blackEdges).toBe(.37);
+  await f.control('graphics-style').select!.onChange('default');await f.control('graphics-style').select!.onChange('origami');
+  expect(f.settings.blackEdges).toBe(.37);expect(input('origami-blackEdges').value).toBe('37');
+});
+
+test('native contour width commits physical multiplier units with a tenth step and preserves the other controls',async()=>{
+ const f=fixture();await f.click('option-section-graphics');await f.control('graphics-style').select!.onChange('origami');
+ const input=()=>f.page.rows.find(row=>row.id==='origami-edgeWidth')!.input!;
+ const before={...f.settings};expect(input().value).toBe('1');
+ await input().onCommit('2.4');expect(f.settings.edgeWidth).toBeCloseTo(2.4,12);expect(f.page.rows.find(row=>row.id==='origami-edgeWidth')!.value).toBe('2.4 ×');
+ const {edgeWidth:_,...oldControls}=f.settings,{edgeWidth:__,...previousControls}=before;expect(oldControls).toEqual(previousControls);
+ await input().onCommit('0');expect(f.settings.edgeWidth).toBe(.5);expect(f.page.rows.find(row=>row.id==='origami-edgeWidth')!.value).toBe('0.5 ×');
+ await f.click('origami-edgeWidth-more');expect(f.settings.edgeWidth).toBeCloseTo(.6,12);
+ await input().onCommit('99');expect(f.settings.edgeWidth).toBe(5);
+ await f.control('graphics-style').select!.onChange('default');await f.control('graphics-style').select!.onChange('origami');expect(input().value).toBe('5');
+});
+
+test('native irregularity uses percent units independently of width and restores exact zero through the backend',async()=>{
+ const f=fixture();await f.click('option-section-graphics');await f.control('graphics-style').select!.onChange('origami');
+ const input=()=>f.page.rows.find(row=>row.id==='origami-strokeImperfection')!.input!;
+ const before={...f.settings};expect(input().value).toBe('45');
+ expect(f.page.rows.find(row=>row.id==='origami-strokeImperfection')!.label).toBe('Irrégularité du trait');
+ await input().onCommit('27');expect(f.settings.strokeImperfection).toBe(.27);
+ const {strokeImperfection:_,...other}=f.settings,{strokeImperfection:__,...previous}=before;expect(other).toEqual(previous);
+ await input().onCommit('0');expect(f.settings.strokeImperfection).toBe(0);expect(f.page.rows.find(row=>row.id==='origami-strokeImperfection')!.value).toBe('0 %');
+ await f.control('graphics-style').select!.onChange('default');await f.control('graphics-style').select!.onChange('origami');expect(input().value).toBe('0');
 });
 
 test('retained Origami controls refuse old renders, inactive style, other pages and busy operations',async()=>{
   const f=fixture();await f.click('option-section-graphics');await f.control('graphics-style').select!.onChange('origami');
-  const old=f.page.rows.find(row=>row.id==='origami-wear')!.input!;
+  const old=f.page.rows.find(row=>row.id==='origami-blackEdges')!.input!;
   await f.click('origami-edges-less');const before=f.change.mock.calls.length;
   expect(await old.onCommit('12')).toBe(false);expect(f.change).toHaveBeenCalledTimes(before);
-  const fresh=f.page.rows.find(row=>row.id==='origami-wear')!.input!;
+  const fresh=f.page.rows.find(row=>row.id==='origami-blackEdges')!.input!;
   f.menu.setBusy(true);expect(await fresh.onCommit('13')).toBe(false);f.menu.setBusy(false);
   await f.control('graphics-style').select!.onChange('default');expect(await fresh.onCommit('14')).toBe(false);
   const style=f.control('graphics-style');await f.click('front-back');await style.select!.onChange('origami');expect(f.change).toHaveBeenCalledTimes(before+1);

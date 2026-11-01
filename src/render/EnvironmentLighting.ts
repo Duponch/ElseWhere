@@ -54,6 +54,9 @@ export class EnvironmentLighting {
   readonly configure = (material: NodeMaterial): void => {
     this.exploration.configure(material);
     if (this.configured.has(material)) return;
+    // Crease lines have an explicit ink/kraft pigment. Surface normals and
+    // room-light fill belong to the faces, not this unlit line overlay.
+    if(material.userData.origamiUnlitContour){this.configured.add(material);return;}
     if (material.outputNode) throw new Error('Environment lighting requires an unclaimed material output.');
     material.outputNode = material.userData.explorationOpaqueRock?this.rockShade:material.userData.explorationOpaqueGround?this.groundShade:this.shade; this.configured.add(material);
   };

@@ -15,6 +15,13 @@ export interface ResourceRangeData {
   ranges:ResourceRange[];
   original:Uint16Array|Uint32Array;
   originalPositions:Float32Array;
+  originalWearExpandDirections?:Float32Array;
+  originalBrush?:ResourceBrushData;
+}
+export interface ResourceBrushData {base:Float32Array;width:Float32Array;rough:Float32Array}
+export function resourceBrushData(geometry:THREE.BufferGeometry):ResourceBrushData|undefined {
+  const base=geometry.userData.referenceBrushBasePositions as Float32Array|undefined,width=geometry.userData.referenceBrushWidthOffsets as Float32Array|undefined,rough=geometry.userData.referenceBrushRoughOffsets as Float32Array|undefined;
+  return base&&width&&rough?{base,width,rough}:undefined;
 }
 
 export function noise(x: number, z: number, salt = 0): number {
@@ -33,11 +40,16 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
   if (!vertexCount) { for (const part of parts) part.geometry.dispose(); if (!mat.userData.rendererOwned) mat.dispose(); return; }
   const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Float32Array(vertexCount * 3);
   const uvs = includeUv ? new Float32Array(vertexCount * 2) : undefined;
+  const hasProfiles=parts.some(part=>part.items.some(item=>item.profile!==undefined)||part.geometry.hasAttribute('origamiPaint'));
+  const paint=hasProfiles?new Float32Array(vertexCount*4):undefined;
+  const wearExpand=parts.some(part=>part.geometry.hasAttribute('origamiWearExpand'))?new Float32Array(vertexCount*3):undefined;
+  const brush=parts.some(part=>resourceBrushData(part.geometry))?{base:new Float32Array(vertexCount*3),width:new Float32Array(vertexCount*3),rough:new Float32Array(vertexCount*3)}:undefined;
   const indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
   let vertex = 0, index = 0;
   const ranges:ResourceRange[] = [];
   for (const { geometry, items } of parts) {
-    const pos = geometry.getAttribute('position'), normal = geometry.getAttribute('normal'), uv=geometry.getAttribute('uv');
+    const pos = geometry.getAttribute('position'), normal = geometry.getAttribute('normal'), uv=geometry.getAttribute('uv'),sourcePaint=geometry.getAttribute('origamiPaint'),sourceExpand=geometry.getAttribute('origamiWearExpand');
+    const sourceBrush=resourceBrushData(geometry);
     for (const item of items) {
       const firstIndex = index,firstVertex=vertex;
       // These vertices are baked only when a spatial chunk changes. Encode a
@@ -48,6 +60,7 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
       const sx = item.sx ?? 1, sy = item.sy ?? 1, sz = item.sz ?? 1;
       const cosine = Math.cos(item.ry ?? 0), sine = Math.sin(item.ry ?? 0);
       scratchColor.setHex(item.color ?? 0xffffff);
+      const referenceColor=paint?new THREE.Color(item.referenceColor??item.color??0xffffff):undefined;
       const stonePigment=item.pigment==='stone';
       let facetX=NaN,facetZ=NaN,facetTint:readonly [number,number,number]=STONE_FACET_TINTS[0];
       for (let i = 0; i < pos.count; i++) {
@@ -60,6 +73,13 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
         normals[offset] = (nx * cosine + nz * sine) / length;
         normals[offset + 1] = ny / length;
         normals[offset + 2] = (nz * cosine - nx * sine) / length;
+        if(paint){const at=(vertex+i)*4;paint[at]=referenceColor!.r;paint[at+1]=referenceColor!.g;paint[at+2]=referenceColor!.b;paint[at+3]=item.profile??sourcePaint?.getW(i)??0;}
+        if(wearExpand&&sourceExpand){const ex=sourceExpand.getX(i)*sx,ey=sourceExpand.getY(i)*sy,ez=sourceExpand.getZ(i)*sz;wearExpand[offset]=ex*cosine+ez*sine;wearExpand[offset+1]=ey;wearExpand[offset+2]=ez*cosine-ex*sine;}
+        if(brush){
+          const at=i*3,bx=(sourceBrush?.base[at]??pos.getX(i))*sx,by=(sourceBrush?.base[at+1]??pos.getY(i))*sy,bz=(sourceBrush?.base[at+2]??pos.getZ(i))*sz;
+          brush.base[offset]=item.x+bx*cosine+bz*sine;brush.base[offset+1]=item.y+by;brush.base[offset+2]=item.z+bz*cosine-bx*sine;
+          for(const key of ['width','rough'] as const){const values=sourceBrush?.[key],vx=(values?.[at]??0)*sx,vy=(values?.[at+1]??0)*sy,vz=(values?.[at+2]??0)*sz;brush[key][offset]=vx*cosine+vz*sine;brush[key][offset+1]=vy;brush[key][offset+2]=vz*cosine-vx*sine;}
+        }
         if(stonePigment) {
           // Dodecahedron normals are constant over each broad facet. Hashing
           // their quantized direction makes all vertices of a face share one
@@ -73,8 +93,8 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
         if(uvs){
           const uvOffset=(vertex+i)*2;
           const [spanU,spanV]=physicalPatternSpan(sx,sy,sz,normal.getX(i),normal.getY(i));
-          uvs[uvOffset]=faceUv?(uv?.getX(i)??0):((uv?.getX(i)??0)-.5)*spanU+PATTERN_SPAN*.5+phaseU;
-          uvs[uvOffset+1]=faceUv?(uv?.getY(i)??0):((uv?.getY(i)??0)-.5)*spanV+PATTERN_SPAN*.5+phaseV;
+          uvs[uvOffset]=faceUv||item.rawGeometry?(uv?.getX(i)??0):((uv?.getX(i)??0)-.5)*spanU+PATTERN_SPAN*.5+phaseU;
+          uvs[uvOffset+1]=faceUv||item.rawGeometry?(uv?.getY(i)??0):((uv?.getY(i)??0)-.5)*spanV+PATTERN_SPAN*.5+phaseV;
         }
       }
       for (let i = 0; i < (geometry.index?.count ?? pos.count); i++) indices[index++] = vertex + (geometry.index?.getX(i) ?? i);
@@ -88,12 +108,15 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   if(uvs)geometry.setAttribute('uv',new THREE.BufferAttribute(uvs,2));
+  if(paint)geometry.setAttribute('origamiPaint',new THREE.BufferAttribute(paint,4));
+  if(wearExpand)geometry.setAttribute('origamiWearExpand',new THREE.BufferAttribute(wearExpand,3));
+  if(brush){geometry.userData.origamiBrushPrebuilt=true;geometry.userData.referenceBrushBasePositions=brush.base;geometry.userData.referenceBrushWidthOffsets=brush.width;geometry.userData.referenceBrushRoughOffsets=brush.rough;}
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   geometry.computeBoundingSphere();
   const mesh = new THREE.Mesh(geometry, mat);
   mesh.castShadow = shadows; mesh.receiveShadow = true;
   mesh.matrixAutoUpdate = false;
-  if (ranges.length) mesh.userData.resourceRanges = {ranges,original:indices.slice(),originalPositions:positions.slice()} satisfies ResourceRangeData;
+  if (ranges.length) mesh.userData.resourceRanges = {ranges,original:indices.slice(),originalPositions:positions.slice(),...(wearExpand?{originalWearExpandDirections:wearExpand.slice()}:{}),...(brush?{originalBrush:{base:brush.base.slice(),width:brush.width.slice(),rough:brush.rough.slice()}}:{})} satisfies ResourceRangeData;
   group.add(mesh);
   return mesh;
 }

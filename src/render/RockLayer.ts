@@ -9,6 +9,8 @@ import { opaqueRockExplorationMaterial256 } from './ExplorationMask256';
 import { foggedCell256 } from '../sim/exploration-state-256';
 import { createStylizedSurfaceTexture } from './stylized-surfaces';
 import { positionLocal, texture, varying, vec2 } from 'three/tsl';
+import {currentGraphicsStyle} from './graphics-style';
+import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 
 /** One resident surface shared by close/distant views, including the map slab.
  * Cell slots survive excavation/restoration. Only affected vertices are uploaded;
@@ -16,9 +18,11 @@ import { positionLocal, texture, varying, vec2 } from 'three/tsl';
  * Keep default StaticDrawUsage: r186 otherwise uploads unchanged attributes on
  * every frame. Mining marks exact ranges and increments needsUpdate explicitly. */
 export class RockLayer {
+  private readonly graphicsStyle=currentGraphicsStyle();
+  private readonly contours=new Map<THREE.Mesh,OrigamiContourBinding>();
   readonly group=new THREE.Group();
   readonly mesh:THREE.Mesh;
-  readonly stats={updatedCells:0,indexCount:0,bufferBytes:0};
+  readonly stats={updatedCells:0,indexCount:0,bufferBytes:0,contourBufferBytes:0};
   private slots=new Map<number,{slot:number;indices:number[]}>();
   private rockMask=new Uint8Array(0);
   private tiles:World['tiles']|undefined;
@@ -57,9 +61,18 @@ export class RockLayer {
     const chosen=enabled?this.texturedMaterial:this.plainMaterial;
     this.mesh.material=chosen;
     this.local.traverse(object=>{if(object instanceof THREE.Mesh)object.material=chosen;});
+    for(const binding of this.contours.values())binding.sync();
   }
-  setDistant(distant:boolean):void {this.distant=distant;this.mesh.visible=distant;this.mesh.castShadow=false;this.local.visible=!distant;}
-  private clearLocal():void {for(const mesh of this.local.children)(mesh as THREE.Mesh).geometry.dispose();this.local.clear();this.chunks.clear();}
+  setDistant(distant:boolean):void {
+    const changed=this.distant!==distant;this.distant=distant;this.mesh.visible=distant;this.mesh.castShadow=false;this.local.visible=!distant;
+    if(this.graphicsStyle?.origami){if(distant&&(changed||!this.contours.has(this.mesh)))this.syncContour(this.mesh);else if(!distant&&changed)for(const object of this.local.children)if(object instanceof THREE.Mesh)this.syncContour(object);}
+  }
+  private syncContour(mesh:THREE.Mesh):void {
+    const context=this.graphicsStyle;if(!context?.origami)return;let binding=this.contours.get(mesh);
+    if(!binding){binding=createOrigamiContour(mesh,context,(mesh.material as THREE.NodeMaterial).positionNode);mesh.add(binding.line);this.contours.set(mesh,binding);}binding.sync();
+    this.stats.contourBufferBytes=[...this.contours.values()].reduce((sum,item)=>sum+Object.values(item.line.geometry.attributes).reduce((total,a)=>total+a.array.byteLength,0),0);
+  }
+  private clearLocal():void {for(const object of this.local.children)if(object instanceof THREE.Mesh){this.contours.get(object)?.dispose();this.contours.delete(object);object.geometry.dispose();}this.local.clear();this.chunks.clear();}
   private viewGeometry(indices:Uint32Array,box:THREE.Box3):THREE.BufferGeometry {
     const geometry=new THREE.BufferGeometry();
     for(const name of ['position','normal','color'])geometry.setAttribute(name,this.mesh.geometry.getAttribute(name));
@@ -72,6 +85,7 @@ export class RockLayer {
       this.clearLocal();
       const slab=this.viewGeometry((this.mesh.geometry.index!.array as Uint32Array).slice(0,36),new THREE.Box3(new THREE.Vector3(-.6,-1,-.6),new THREE.Vector3(this.width-.4,0,this.height-.4)));
       const mesh=new THREE.Mesh(slab,this.mesh.material);mesh.receiveShadow=true;mesh.matrixAutoUpdate=false;this.local.add(mesh);
+      if(!this.distant)this.syncContour(mesh);
     }
     for(const i of dirty) {
       const cx=Math.floor(i%this.width/size),cz=Math.floor(Math.floor(i/this.width)/size),key=`${cx}:${cz}`;keys.add(key);
@@ -89,6 +103,7 @@ export class RockLayer {
       const indices=c.mesh.geometry.index!;let count=0;
       for(const cell of c.cells){const faces=this.slots.get(cell)!.indices;(indices.array as Uint32Array).set(faces,count);count+=faces.length;}
       c.mesh.geometry.setDrawRange(0,count);indices.clearUpdateRanges();indices.addUpdateRange(0,count);indices.needsUpdate=true;
+      if(!this.distant)this.syncContour(c.mesh);
     }
     this.stats.bufferBytes = Object.values(this.mesh.geometry.attributes).reduce((sum,a)=>sum+a.array.byteLength,0) + this.mesh.geometry.index!.array.byteLength + this.local.children.reduce((sum,m)=>sum+(m as THREE.Mesh).geometry.index!.array.byteLength,0);
     this.setDistant(this.distant);
@@ -150,8 +165,9 @@ export class RockLayer {
       for(const attribute of [position,normal,color])attribute.needsUpdate=true;
       this.stats.updatedCells=dirty.size;this.stats.indexCount=offset;
       this.updateLocal(dirty,reallocated);
+      if(this.distant)this.syncContour(this.mesh);
     }
     this.tiles=world.tiles;
   }
-  dispose():void {this.clearLocal();this.mesh.geometry.dispose();this.plainMaterial.dispose();this.texturedMaterial.dispose();this.stonePaint.dispose();}
+  dispose():void {this.clearLocal();for(const binding of this.contours.values())binding.dispose();this.contours.clear();this.mesh.geometry.dispose();this.plainMaterial.dispose();this.texturedMaterial.dispose();this.stonePaint.dispose();}
 }

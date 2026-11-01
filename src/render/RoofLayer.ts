@@ -1,4 +1,7 @@
 import * as THREE from 'three/webgpu';
+import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
+import {attribute,vec2,uv} from 'three/tsl';
+import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 import {roofCoverage,roofKindAt} from '../sim/roof-rules';
 import { isRoomDoor } from '../sim/door-rules';
 import type { World } from '../sim/types';
@@ -129,6 +132,7 @@ export class RoofLayer {
   readonly textured = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, roughness: .94, metalness: 0, flatShading: true, vertexColors: true, map: this.paint });
   readonly plain = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, roughness: .94, metalness: 0, flatShading: true, vertexColors: true });
   readonly mesh: THREE.Mesh;
+  private readonly contour?:OrigamiContourBinding;
   private surfaceKey = '';
   private areaKey = '';
   private texturesEnabled = true;
@@ -138,12 +142,23 @@ export class RoofLayer {
     this.mesh.name = 'continuous-roof-coverage';
     this.mesh.castShadow = this.mesh.receiveShadow = true;
     this.mesh.visible = false; this.surface.add(this.mesh);
+    const context=currentGraphicsStyle();
+    if(context?.origami){
+      // The canonical slab's X/Z UV is degenerate on its vertical skirts.
+      // Use the existing source position/normal for those faces only; no
+      // canonical geometry or default roof coordinates are rewritten.
+      const point=attribute('position','vec3'),normal=attribute('normal','vec3').abs();
+      const paintUv=normal.y.greaterThan(.5).select(uv(),normal.x.greaterThan(.5).select(vec2(point.z,point.y).div(8),vec2(point.x,point.y).div(8)));
+      applyOrigamiSurface(this.textured,attribute('color','vec3'),paintUv,context);
+    }
+    if(context?.origami){this.contour=createOrigamiContour(this.mesh,context);this.surface.add(this.contour.line);}
     this.surface.visible = this.areas.visible = false;
   }
   setTexturesEnabled(enabled: boolean): void {
     if (this.texturesEnabled === enabled) return;
     this.texturesEnabled = enabled;
     this.mesh.material = enabled ? this.textured : this.plain;
+    this.contour?.sync();
   }
   update(world: World, batches: BoxBatches, cutaway = false, reset = false): void {
     this.updatePhysical(world,cutaway,reset);
@@ -160,6 +175,7 @@ export class RoofLayer {
       const old = this.mesh.geometry;
       this.mesh.geometry = roofSlabGeometry(cells, top,cell=>roofKindAt(world,cell.z*world.width+cell.x));
       old.dispose(); this.mesh.visible = cells.length > 0;
+      this.contour?.rebuild();this.contour?.sync();
     }
   }
   updateAreas(world:GroundOverlaySurface,build:readonly number[],remove:readonly number[],batches:BoxBatches,reset=false,known?:(cell:number)=>boolean):boolean {
@@ -190,15 +206,18 @@ export class RoofLayer {
       this.mesh.visible = true;
     }
     this.surface.visible = this.areas.visible = true;
+    if(warm)this.contour?.rebuild();this.contour?.sync();
     return () => {
       if (warm) {
         if(this.mesh.geometry===warm){warm.dispose();this.mesh.geometry=original;this.mesh.visible=false;}
         else original.dispose(); // A newer world replaced and disposed warm.
       }
       this.surface.visible = surface; this.areas.visible = areas;
+      if(warm)this.contour?.rebuild();this.contour?.sync();
     };
   }
   dispose(): void {
+    this.contour?.dispose();
     this.surface.remove(this.mesh); this.mesh.geometry.dispose();
     this.textured.dispose(); this.plain.dispose(); this.paint.dispose();
   }

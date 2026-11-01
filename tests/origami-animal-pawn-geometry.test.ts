@@ -5,6 +5,7 @@ import {animalVisualParts256} from '../src/render/animal-visual-parts-v256';
 import {corpseVisualPartBit} from '../src/render/corpse-presentation';
 import {GraphicsStyleContext,withGraphicsStyle} from '../src/render/graphics-style';
 import {pawnGeometry,WORK_AXE_DYE,WORK_PICKAXE_DYE,WORK_SICKLE_DYE} from '../src/render/pawn-geometry';
+import {ORIGAMI_HUMAN_BIND} from '../src/render/origami/human-geometry';
 
 function origamiPawn():THREE.InstancedBufferGeometry {
   const context=new GraphicsStyleContext();context.preferences.style='origami';
@@ -12,7 +13,7 @@ function origamiPawn():THREE.InstancedBufferGeometry {
 }
 
 describe('Origami animals retain the resident simulation-facing rig',()=>{
-  it('compiles all reference mappings into bounded batches and finite face-local UVs',()=>{
+  it('compiles all reference mappings into bounded batches and finite original object UVs',()=>{
     expect(ORIGAMI_ANIMAL_SPECIES).toEqual(expect.arrayContaining(['red-fox','dromedary','hare','snow-hare','gazelle','deer','muffalo','elephant','labrador-retriever','husky','yorkshire-terrier']));
     expect(origamiAnimalGeometry(16,'not-a-species')).toBeUndefined();
     for(const species of ORIGAMI_ANIMAL_SPECIES){
@@ -24,8 +25,6 @@ describe('Origami animals retain the resident simulation-facing rig',()=>{
       for(let i=0;i<position.count;i++){
         expect(Number.isFinite(position.getX(i)+position.getY(i)+position.getZ(i))).toBe(true);
         expect(Number.isFinite(uv.getX(i)+uv.getY(i))).toBe(true);
-        expect(uv.getX(i)).toBeGreaterThanOrEqual(-.00001);expect(uv.getX(i)).toBeLessThanOrEqual(1.00001);
-        expect(uv.getY(i)).toBeGreaterThanOrEqual(-.00001);expect(uv.getY(i)).toBeLessThanOrEqual(1.00001);
         bones.add(part.getX(i));
       }
       expect([...bones].sort()).toEqual([0,1,2,3]);
@@ -34,10 +33,10 @@ describe('Origami animals retain the resident simulation-facing rig',()=>{
     }
   });
 
-  it('keeps native anatomical bits, live/dead eyes and distinct dog phenotypes',()=>{
+  it('keeps native anatomical bits and live/dead eyes with the exact shared source dog',()=>{
     const dogs=['labrador-retriever','husky','yorkshire-terrier'].map(species=>origamiAnimalGeometry(1,species)!);
-    const signatures=dogs.map(g=>{g.computeBoundingBox();return [g.getAttribute('position').count,g.boundingBox!.max.x,g.boundingBox!.max.y,g.boundingBox!.max.z,g.getAttribute('color').getX(0)].join(',');});
-    expect(new Set(signatures).size).toBe(3);
+    for(const g of dogs){const scale=g.userData.origamiReferenceScale;expect(scale).toBeGreaterThan(0);expect(g.userData.origamiReference).toBe('dog');}
+    expect(new Set(dogs.map(g=>g.getAttribute('position').count)).size).toBe(1);
     for(const species of ['elephant','labrador-retriever','husky','yorkshire-terrier']){
       const g=origamiAnimalGeometry(1,species)!,parts=animalVisualParts256(species)!,part=g.getAttribute('animalPart');
       const allowed=new Set(parts.map((_,index)=>2**index));let live=0,dead=0;
@@ -46,7 +45,9 @@ describe('Origami animals retain the resident simulation-facing rig',()=>{
     }
     dogs.forEach(g=>g.dispose());
     const hare=origamiAnimalGeometry(1,'hare')!,bits=new Set(Array.from({length:hare.getAttribute('animalPart').count},(_,i)=>hare.getAttribute('animalPart').getY(i)));
-    for(const side of ['left','right'] as const){expect(bits.has(corpseVisualPartBit(`${side}-front-paw`,'hare'))).toBe(true);expect(bits.has(corpseVisualPartBit(`${side}-rear-paw`,'hare'))).toBe(true);}
+    // Source front shin/paw is one primitive: keep that source topology,
+    // with the existing leg owner. The distinct rear paw primitive remains.
+    for(const side of ['left','right'] as const){expect(bits.has(corpseVisualPartBit(`${side}-front-leg`,'hare'))).toBe(true);expect(bits.has(corpseVisualPartBit(`${side}-rear-paw`,'hare'))).toBe(true);}
     hare.dispose();
     // Elephant has no native clinical Tail record. The farthest rearward
     // reference tail fold must inherit the actual torso's absence owner.
@@ -64,21 +65,21 @@ describe('Origami pawn geometry preserves appearance and tool attachment',()=>{
     plain.dispose();explicit.dispose();context.dispose();
   });
 
-  it('retains each original dye/bone/pivot identity and packs paper UV in the same buffer',()=>{
+  it('retains resident identity tags with the authored source pivots and packed paint profile',()=>{
     const plain=pawnGeometry(true,true,true,true),folded=origamiPawn();
-    const identities=(g:THREE.BufferGeometry)=>{const dye=g.getAttribute('dye'),bone=g.getAttribute('boneId'),pivot=g.getAttribute('bindPivot');return new Set(Array.from({length:dye.count},(_,i)=>[dye.getX(i),bone.getX(i),pivot.getX(i),pivot.getY(i),pivot.getZ(i)].join(',')));};
-    const old=identities(plain),next=identities(folded);for(const identity of old)expect(next.has(identity)).toBe(true);
+    const tags=(g:THREE.BufferGeometry)=>{const dye=g.getAttribute('dye');return new Set(Array.from({length:dye.count},(_,i)=>dye.getX(i)));};
+    const old=tags(plain),next=tags(folded);for(const tag of old)expect(next.has(tag)).toBe(true);
     const vertices=folded.getAttribute('position') as THREE.InterleavedBufferAttribute,uv=folded.getAttribute('origamiPaintUv') as THREE.InterleavedBufferAttribute;
     expect(uv.data).toBe(vertices.data);expect(uv.count).toBe(vertices.count);expect(vertices.count).toBeLessThan(14000);
     expect(folded.getAttribute('uv')).toBe(uv);
     const traits=folded.getAttribute('pawnRigTraits') as THREE.InterleavedBufferAttribute;
-    expect(traits.data).toBe(vertices.data);expect(traits.itemSize).toBe(2);
+    expect(traits.data).toBe(vertices.data);expect(traits.itemSize).toBe(3);
     const dye=folded.getAttribute('dye'),bone=folded.getAttribute('boneId'),pivot=folded.getAttribute('bindPivot');
     for(let i=0;i<vertices.count;i++){expect(traits.getX(i)).toBe(bone.getX(i));expect(traits.getY(i)).toBe(dye.getX(i));}
     for(const tag of [WORK_AXE_DYE,WORK_PICKAXE_DYE,WORK_SICKLE_DYE]){
-      let count=0;for(let i=0;i<dye.count;i++)if(dye.getX(i)===tag){count++;expect(bone.getX(i)).toBe(3);expect(pivot.getX(i)).toBeCloseTo(.23);expect(pivot.getY(i)).toBeCloseTo(1.01);}
+      let count=0;for(let i=0;i<dye.count;i++)if(dye.getX(i)===tag){count++;expect(bone.getX(i)).toBe(3);expect(pivot.getX(i)).toBeCloseTo(ORIGAMI_HUMAN_BIND.shoulderX);expect(pivot.getY(i)).toBeCloseTo(ORIGAMI_HUMAN_BIND.shoulderY);}
       expect(count).toBeGreaterThan(0);
     }
-    plain.dispose();folded.dispose();
+    plain.dispose();folded.userData.origamiLines.dispose();folded.userData.origamiWear.dispose();folded.dispose();
   });
 });

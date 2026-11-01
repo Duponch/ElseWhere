@@ -4,14 +4,15 @@ import { BODY_PROPORTIONS } from './pawn-appearance-shape';
 import {LONGSWORD_DYE270} from './longsword-parts270';
 import {SPEAR_DYE272} from './spear-parts272';
 import {MACE_DYE269} from './mace-parts269';
+import {ORIGAMI_HUMAN_BIND,HUMAN_REFERENCE_SCALE} from './origami/human-geometry';
 
 /** Original CPU aliases remain inspectable; the Origami shader spends one
  * vertex location on both traits, keeping real UVs within the device limit. */
 export function pawnBoneNode(origami=false):Node<'float'> {
-  return origami?attribute('pawnRigTraits','vec2').x:attribute('boneId','float');
+  return origami?attribute('pawnRigTraits','vec3').x:attribute('boneId','float');
 }
 export function pawnDyeNode(origami=false):Node<'float'> {
-  return origami?attribute('pawnRigTraits','vec2').y:attribute('dye','float');
+  return origami?attribute('pawnRigTraits','vec3').y:attribute('dye','float');
 }
 
 /** Applied equally to vertices and rigid-bone pivots, before pose animation. */
@@ -21,10 +22,13 @@ export function pawnMorph(point:Node<'vec3'>,origami=false) {
   const bodyType=shape.x.mod(10);
   const factor=(column:number)=>BODY_PROPORTIONS.reduce<Node<'float'>>((v,row,i)=>bodyType.equal(i).select(float(row[column]!),v),float(1));
   const shoulder=factor(0),waist=factor(1),hip=factor(2),depth=factor(3);
-  const torso=mix(waist,shoulder,point.y.sub(.76).div(.20).clamp(0,1));
+  const torso=mix(waist,shoulder,point.y.sub(origami ? .76*HUMAN_REFERENCE_SCALE : .76).div(origami ? .44*HUMAN_REFERENCE_SCALE : .20).clamp(0,1));
   const legs=bone.greaterThanEqual(4),arms=bone.greaterThanEqual(2).and(bone.lessThanEqual(3));
   const head=bone.equal(1),narrow=shape.y.mod(6).greaterThanEqual(3),jaw=shape.y.mod(3);
-  const lower=point.y.lessThan(1.18);
+  // Preserve the original jaw region's fractional head height. This stays
+  // below the source eyes (bottom 1.415), keeping each 3D eye block rigid.
+  const sourceJawCut=1.23+(1.18-1.04)/.30*.38;
+  const lower=point.y.lessThan(origami?sourceJawCut*HUMAN_REFERENCE_SCALE:1.18);
   const headWidth=narrow.select(float(.87),float(1)).mul(shape.y.greaterThanEqual(6).select(float(.97),float(1)))
     .mul(lower.select(jaw.equal(1).select(float(.84),jaw.equal(2).select(float(1.12),float(1))),float(1)));
   const body=vec3(point.x.mul(legs.select(hip,arms.select(shoulder,torso))),point.y,point.z.mul(depth));
@@ -36,7 +40,7 @@ export function pawnMorph(point:Node<'vec3'>,origami=false) {
   // -30/-31/-32 are the resident axe/pickaxe/sickle tags from pawn-geometry.
   // Keep each tool's dimensions rigid; only its grip follows the shaped hand.
   const workTool=dye.equal(-30).or(dye.equal(-31)).or(dye.equal(-32));
-  return workTool.select(vec3(point.x.add(shoulder.sub(1).mul(.23)),point.y,point.z.add(depth.sub(1).mul(.05))),equipped);
+  return workTool.select(vec3(point.x.add(shoulder.sub(1).mul(ORIGAMI_HUMAN_BIND.shoulderX)),point.y,point.z.add(depth.sub(1).mul(.05*HUMAN_REFERENCE_SCALE))),equipped);
 }
 
 export function hiddenAppearancePart(origami=false) {
