@@ -402,9 +402,41 @@ function animalTablePage(page:NativePage,viewport:{width:number;height:number},m
       catalogue:{...body,x:pad+nameWidth,width:contentWidth-nameWidth,contentWidth:intrinsicWidth-nameWidth,contentHeight}},
     actions:actionFlow.controls.map(control=>({...control,y:height-header-footer+horizontalReserve+pad+control.y}))};
 }
+/** The opt-in profile pins the roster toolbar and headings; other tables keep
+ * their own layout. Equal work cells retain skill captions at a readable size. */
+function colonistTablePage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure):NativePageBox {
+ const pad=NATIVE_UI.padding,gap=4,header=page.subtitle?76:48,bottom=NATIVE_UI.bottom+10;
+ const width=Math.min(Math.max(220,Math.min(requestedWidth(page,1480),viewport.width-32)),Math.max(1,viewport.width-24));
+ const contentWidth=Math.max(1,width-pad*2-12),nameWidth=Math.min(104,Math.max(1,contentWidth-1));
+ const columns=Math.max(0,...page.rows.map(row=>row.columns?.length??0));
+ const matrixRow=(row:NativeRow)=>!!row.columns||!!row.compact&&row.controls?.length===columns;
+ const tail=page.rows.some(row=>matrixRow(row)&&!!row.value);
+ const weights=page.id==='schedule'?[...Array.from({length:24},()=>1),2.25,2.25]:page.id==='assign'?[1.6,.9,1.4,1.6,.7,.9,1.5,1.3].slice(0,columns):undefined;
+ const minimum=page.id==='schedule'?1136:page.id==='work'?1180:1176;
+ const intrinsicWidth=Math.max(contentWidth,minimum);
+ const actionFlow=flowNativeControls(page.actions??[],{x:pad,y:0,width:width-pad*2,height:0},measure),horizontalReserve=intrinsicWidth>contentWidth?12:0;
+ const footer=(page.actions?.length?actionFlow.height+pad*2:pad)+horizontalReserve,height=Math.min(page.height??900,Math.max(1,viewport.height-bottom-12));
+ const rows:NativeRowBox[]=[];let toolbarHeight=0;
+ for(const row of page.rows.filter(row=>row.region==='navigation')){const box=rowBox({...row,region:'details'},pad,toolbarHeight,contentWidth,measure,false);rows.push(box);toolbarHeight+=box.height+gap;}
+ const headingY=header+toolbarHeight;let headingHeight=0;
+ for(const row of page.rows.filter(row=>!!row.columns)){const box=rowBox({...row,region:'catalogue'},pad,toolbarHeight+headingHeight,intrinsicWidth,measure,true,undefined,tail,weights);rows.push(box);headingHeight+=box.height;}
+ const bodyY=headingY+headingHeight+gap,bodyHeight=Math.max(0,height-footer-bodyY);let contentHeight=0;
+ for(const row of page.rows.filter(row=>row.region!=='navigation'&&!row.columns)){
+  const matrix=matrixRow(row),x=pad+(matrix?0:nameWidth),rowWidth=matrix?intrinsicWidth:Math.max(1,contentWidth-nameWidth);
+  const box=rowBox({...row,region:'catalogue'},x,bodyY-header+contentHeight,rowWidth,measure,true,undefined,matrix?tail:undefined,matrix?weights:undefined);
+  if(matrix){box.height=page.id==='work'?44:34;box.controlTop=3;box.controlHeight=box.height-6;for(const control of box.controls)control.height=box.controlHeight;}
+  rows.push(box);contentHeight+=box.height+gap;
+ }
+ const body={x:pad,y:bodyY,width:contentWidth,height:bodyHeight};
+ return {x:12,y:viewport.height-bottom-height,width,height,header,footer,body,contentHeight,rows,layout:'table',matrixColumnWeights:weights,
+  tableHeader:{x:pad+nameWidth,y:headingY,width:contentWidth-nameWidth,height:headingHeight},
+  regions:{details:{x:pad,y:header,width:contentWidth,height:toolbarHeight,contentHeight:toolbarHeight},navigation:{...body,width:nameWidth,contentHeight},catalogue:{...body,x:pad+nameWidth,width:contentWidth-nameWidth,contentWidth:intrinsicWidth-nameWidth,contentHeight}},
+  actions:actionFlow.controls.map(control=>({...control,y:height-header-footer+horizontalReserve+pad+control.y}))};
+}
 export function layoutNativePage(page:NativePage,viewport:{width:number;height:number},front:boolean,measure:TextMeasure):NativePageBox {
   const layout=page.layout??(front?'front':page.id.startsWith('inspect-')?'inspector':['work','schedule','animals','wildlife','assign','history'].includes(page.id)?'table':'dialog');
   if(layout==='storage')return storagePage(page,viewport,measure);
+  if(layout==='table'&&page.tableProfile==='colonists'&&['work','schedule','assign'].includes(page.id)&&page.rows.some(row=>row.columns))return colonistTablePage(page,viewport,measure);
   if(layout==='table'&&(page.id==='animals'||page.id==='wildlife')&&page.rows.some(row=>row.columns))return animalTablePage(page,viewport,measure);
   if(layout==='architect'||layout==='research')return structuredPage(page,viewport,measure,layout);
   if(layout==='inspector'&&page.portrait&&page.rows.some(row=>row.id==='pawn-tabs'))return inspectorPage(page,viewport,measure);

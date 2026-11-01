@@ -31,7 +31,8 @@ describe('native work and schedule retain their direct confirmed interactions', 
   it('shows the eighteen named columns and changes every priority through the local 0–4 selector', async () => {
     const f = fixture(), pawn = f.world.pawns[0]!, beforeOthers = f.world.pawns.slice(1).map(pawn => ({ ...pawn.priorities }));
     expect(f.page.layout).toBe('table');
-    expect(f.page.rows[0]!.columns?.map(column => column.label)).toEqual(workColumns.map(column => column.label));
+    expect(f.page.rows[0]!.columns?.map(column => column.hint)).toEqual(workColumns.map(column => column.label));
+    expect(f.page.rows[0]!.columns?.every(column => column.label.length > 0 && column.label.length <= 7)).toBe(true);
     const worker = f.page.rows.find(row => row.id === `worker-${pawn.id}`)!;
     expect(worker.controls).toHaveLength(18); expect(worker.value).toBe(`Activité confirmée ${pawn.id}`);
     const select = f.control(`work-${pawn.id}-build`);

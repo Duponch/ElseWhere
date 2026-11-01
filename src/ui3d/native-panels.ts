@@ -146,31 +146,70 @@ function workSkill(pawn:Pawn,work:WorkType):{caption?:string;hint?:string} {
  const stats=work==='mine'?`vitesse ${Math.round(miningWorkSpeed(pawn)*100)} % avant lumière · rendement minéral ${Math.round(miningYield(pawn)*100)} % ; moyenne pondérée par les dégâts des coups sur le gisement`:work==='grow'||work==='gather'?`vitesse ${Math.round(plantWorkSpeed(pawn)*100)} % avant lumière · semis, récolte et abattage`:work==='cook'?`cuisson ${Math.round(cookingSpeed(pawn)*100)} % · rendement de boucherie ${Math.round(butcheryEfficiency(pawn)*100)} % avant poste`:work==='art'?'qualité des sculptures, sans effet direct sur la vitesse':work==='handle'?'Apprivoisement et entretien des lièvres · niveau Animaux 8 requis':work==='warden'?'nourrit les prisonniers et mène les conversations selon le mode choisi':work==='build'?`vitesse ${Math.round(constructionSpeed(pawn)*100)} % · apprentissage ${Math.round(learningFactor(skill,pawn)*100)} %`:`apprentissage ${Math.round(learningFactor(skill,pawn)*100)} %`;
  return {caption:`${skill.level}${' ♨'.repeat(skill.passion)}`,hint:`${label} ${skill.level}/20 · ${passionLabels[skill.passion]} · ${stats}`};
 }
+type ColonistTableKind='work'|'schedule'|'assign';
+const colonistTableSearches:Record<ColonistTableKind,string>={work:'',schedule:'',assign:''};
+let colonistTableIdentity='';
+const colonistSearchText=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr');
+function colonistTableKey(state:NativeUiState):string {
+ const world=state.world;return world?`${state.epoch??''}:${registeredMapId(world)??''}:${world.seed}:${world.width}:${world.height}`:'none';
+}
+function colonistTableSearch(kind:ColonistTableKind):string {
+ const key=colonistTableKey(latest!);if(key!==colonistTableIdentity){for(const id of ['work','schedule','assign'] as const)colonistTableSearches[id]='';scheduleClipboard=undefined;colonistTableIdentity=key;}
+ return colonistTableSearches[kind];
+}
+/** Local view callbacks never reuse the owner or scope captured by an older map. */
+function colonistTableGuard<T extends unknown[]>(action:(...args:T)=>void|Promise<unknown>):(...args:T)=>void|Promise<unknown> {
+ const key=colonistTableKey(latest!);
+ return (...args)=>{const current=host?.readState?.()??latest;if(!current||colonistTableKey(current)!==key)throw Error('Ce tableau appartient à une autre carte.');if(current.busy)throw Error('Attendez la fin de l’opération courante.');latest=current;return action(...args);};
+}
+function colonistTableControl(id:string,label:string,onActivate:NativeControl['onActivate'],extra:Partial<NativeControl>={}):NativeControl {
+ const control=button(id,label,onActivate,extra);
+ return {...control,onActivate:colonistTableGuard(control.onActivate),
+  ...(control.select?{select:{...control.select,onChange:colonistTableGuard(control.select.onChange)}}:{}),
+  ...(control.paint?{paint:{...control.paint,onPaint:colonistTableGuard(control.paint.onPaint)}}:{})};
+}
+function colonistTableRows(kind:ColonistTableKind,world:World):{all:Pawn[];shown:Pawn[];search:string} {
+ const search=colonistTableSearch(kind),needle=colonistSearchText(search.trim());
+ const all=world.pawns.filter(p=>isColonist(p)&&(kind==='schedule'||!p.prisoner));
+ return {all,search,shown:needle?all.filter(p=>colonistSearchText(`${p.name} ${p.id}`).includes(needle)):all};
+}
+function colonistTableToolbar(kind:ColonistTableKind,search:string,shown:number,total:number):NativeRow {
+ return {id:`${kind}-search`,label:`Rechercher · ${shown}/${total}`,region:'navigation',hint:'Recherche locale par nom ou identifiant. Aucune affectation n’est modifiée.',input:{value:search,placeholder:'Nom ou identifiant…',maxLength:80,onCommit:colonistTableGuard((value:string)=>{colonistTableSearches[kind]=value;back();})}};
+}
+function colonistTablePawn(id:number,kind:ColonistTableKind):Pawn {
+ const pawn=currentPawn(id);if(!isColonist(pawn)||(kind!=='schedule'&&pawn.prisoner))throw Error('Cette personne n’est plus dans ce tableau.');return pawn;
+}
+const compactWorkLabels:Record<WorkType,string>={firefight:'Feu',patient:'Pat.',doctor:'Méd.',bedrest:'Repos',basic:'Man.',warden:'Geôle',handle:'Dress.',cook:'Cuisine',hunt:'Chasse',build:'Const.',grow:'Cult.',mine:'Mine',gather:'Forêt',art:'Art',craft:'Artis.',haul:'Trans.',clean:'Net.',research:'Rech.'};
 function workPanel(world:World):NativePage {
- const pawns=world.pawns.filter(p=>isColonist(p)&&!p.prisoner);
- return {id:'work',title:'Travail',layout:'table',subtitle:'Priorités manuelles : 1 haute · 4 basse · 0 désactivée. Le transport livre aussi les chantiers.',width:14.8,rows:[
-  {id:'work-headings',label:'Colon',value:'Activité',compact:true,columns:workColumns.map(c=>({label:c.label,hint:c.label}))},
+ const {all,shown:pawns,search}=colonistTableRows('work',world);
+ return {id:'work',title:'Travail',layout:'table',tableProfile:'colonists',contentKey:`work:${colonistTableKey(latest!)}:${search}`,subtitle:'Priorités manuelles : 1 haute · 4 basse · 0 désactivée. Le transport livre aussi les chantiers.',width:1480,rows:[
+  {id:'work-headings',label:'Colon',value:'Activité',compact:true,columns:workColumns.map(c=>({label:compactWorkLabels[c.id],hint:c.label}))},
+  colonistTableToolbar('work',search,pawns.length,all.length),
   ...pawns.map(pawn=>({...row(`worker-${pawn.id}`,pawn.name,host?.pawnActivity?.(pawn.id)??queryPawnStatus(world,pawn).reason,pawn.traits?.map(id=>TRAITS[id].label).join(' · ')??'Aucun trait attribué',workColumns.map(({id,label})=>{
    const refusal=backgroundWorkRefusal(pawn,id),value=pawn.priorities[id],skill=workSkill(pawn,id);
-   return button(`work-${pawn.id}-${id}`,String(value),()=>{},{caption:skill.caption,hint:[`Priorité ${label} · ${pawn.name}`,refusal?`${refusal} Priorité enregistrée : ${value}. Un ordre direct ne permet pas de contourner cette incapacité.`:undefined,skill.hint].filter(Boolean).join('\n'),disabled:!!refusal||pawn.state==='dead',active:value===1,select:{value:String(value),options:[0,1,2,3,4].map(priority=>({value:String(priority),label:String(priority),hint:priority===0?'Désactivé':`Priorité ${priority}${priority===1?' · haute':priority===4?' · basse':''}`})),onChange:value=>{const priority=Number(value);if(!Number.isInteger(priority)||priority<0||priority>4)throw Error('Priorité entière de 0 à 4 requise.');return send({type:'priority',pawnId:pawn.id,work:id,value:priority});}}});
+   return colonistTableControl(`work-${pawn.id}-${id}`,String(value),()=>{},{caption:skill.caption,hint:[`Priorité ${label} · ${pawn.name}`,refusal?`${refusal} Priorité enregistrée : ${value}. Un ordre direct ne permet pas de contourner cette incapacité.`:undefined,skill.hint].filter(Boolean).join('\n'),disabled:!!refusal||pawn.state==='dead',active:value===1,select:{value:String(value),options:[0,1,2,3,4].map(priority=>({value:String(priority),label:String(priority),hint:priority===0?'Désactivé':`Priorité ${priority}${priority===1?' · haute':priority===4?' · basse':''}`})),onChange:value=>{const priority=Number(value);if(!Number.isInteger(priority)||priority<0||priority>4)throw Error('Priorité entière de 0 à 4 requise.');const current=colonistTablePawn(pawn.id,'work');return send({type:'priority',pawnId:current.id,work:id,value:priority});}}});
   })),compact:true})),
  ],onClose:()=>void host?.panel(null)};
 }
 const assignmentColors:Record<ScheduleAssignment,string>={anything:'#e9d2a9',work:'#dfb7a4',sleep:'#c2d5e0',recreation:'#c9dfc1'};
 function schedulePanel(world:World):NativePage {
- const hour=hourOfDay(calendarTick(world));
- const rows:NativeRow[]=[{...row('schedule-brush','Activité à peindre',undefined,'Choisir une activité puis cliquer ou glisser sur les heures. Temps libre : le colon gère ses besoins et son travail. Dormir exige un couchage accessible ; travailler permet toujours de manger.',(Object.keys(assignmentLabels) as ScheduleAssignment[]).map(id=>button(`brush-${id}`,assignmentLabels[id],()=>{scheduleBrush=id;redraw();},{color:assignmentColors[id],active:scheduleBrush===id}))),compact:true},
-  {id:'schedule-headings',label:'Colon',compact:true,columns:[...Array.from({length:24},(_,h)=>({label:String(h),hint:`${h} h – ${h+1} h${h===hour?' · heure actuelle':''}`})),{label:'Copier'},{label:'Coller'}]},
+ const hour=hourOfDay(calendarTick(world)),{all,shown:pawns,search}=colonistTableRows('schedule',world);
+ const rows:NativeRow[]=[{id:'schedule-headings',label:'Colon',compact:true,columns:[...Array.from({length:24},(_,h)=>({label:String(h),hint:`${h} h – ${h+1} h${h===hour?' · heure actuelle':''}`})),{label:'Copier'},{label:'Coller'}]},
+  colonistTableToolbar('schedule',search,pawns.length,all.length),
+  {id:'schedule-brush',label:'',region:'navigation',controlStyle:'button',hint:'Choisir une activité puis cliquer ou glisser sur les heures. La plage indique une priorité, pas un ordre instantané.',controls:(Object.keys(assignmentLabels) as ScheduleAssignment[]).map(id=>colonistTableControl(`brush-${id}`,assignmentLabels[id],()=>{scheduleBrush=id;redraw();},{color:assignmentColors[id],active:scheduleBrush===id}))},
  ];
- for(const pawn of world.pawns.filter(isColonist)){
+ for(const pawn of pawns){
   rows.push({...row(`schedule-${pawn.id}`,pawn.name,undefined,undefined,[...Array.from({length:24},(_,h)=>{
    const assignment=pawn.schedule[h]??'anything';
-   return button(`hour-${pawn.id}-${h}`,assignmentSymbols[assignment],()=>send({type:'schedule-paint',pawnId:pawn.id,hours:[h],assignment:scheduleBrush}),{hint:`${pawn.name} · ${h} h – ${h+1} h : ${assignmentLabels[assignment]}`,color:assignmentColors[assignment],active:h===hour,disabled:pawn.state==='dead',paint:{group:`schedule-${pawn.id}`,index:h,onPaint:indices=>{const hours=[...new Set(indices)].filter(value=>Number.isInteger(value)&&value>=0&&value<24);if(hours.length)return send({type:'schedule-paint',pawnId:pawn.id,hours,assignment:scheduleBrush});}}});
-  }),button(`copy-${pawn.id}`,'Copier',()=>{scheduleClipboard=[...currentPawn(pawn.id).schedule];redraw();},{hint:`Copier les 24 heures de ${pawn.name}`}),button(`paste-${pawn.id}`,'Coller',()=>send({type:'schedule-replace',pawnId:pawn.id,assignments:[...scheduleClipboard!]}),{disabled:!scheduleClipboard||pawn.state==='dead',hint:`Coller les 24 heures chez ${pawn.name}`})]),compact:true});
+   return colonistTableControl(`hour-${pawn.id}-${h}`,assignmentSymbols[assignment],()=>{const current=colonistTablePawn(pawn.id,'schedule');return send({type:'schedule-paint',pawnId:current.id,hours:[h],assignment:scheduleBrush});},{hint:`${pawn.name} · ${h} h – ${h+1} h : ${assignmentLabels[assignment]}`,color:assignmentColors[assignment],active:h===hour,disabled:pawn.state==='dead',paint:{group:`schedule-${pawn.id}`,index:h,onPaint:indices=>{const hours=[...new Set(indices)].filter(value=>Number.isInteger(value)&&value>=0&&value<24);if(hours.length){const current=colonistTablePawn(pawn.id,'schedule');return send({type:'schedule-paint',pawnId:current.id,hours,assignment:scheduleBrush});}}}});
+  }),colonistTableControl(`copy-${pawn.id}`,'Copier',()=>{scheduleClipboard=[...colonistTablePawn(pawn.id,'schedule').schedule];redraw();},{hint:`Copier les 24 heures de ${pawn.name}`}),colonistTableControl(`paste-${pawn.id}`,'Coller',()=>{const current=colonistTablePawn(pawn.id,'schedule');if(!scheduleClipboard)return;return send({type:'schedule-replace',pawnId:current.id,assignments:[...scheduleClipboard]});},{disabled:!scheduleClipboard||pawn.state==='dead',hint:`Coller les 24 heures chez ${pawn.name}`})]),compact:true});
  }
- rows.push({...row('schedule-profile',world.restRules==='legacy'?'Sauvegarde historique : ancienne vitesse de fatigue conservée. Les horaires sont modifiables.':'Profil adulte : repos nocturne de 22 h à 6 h par défaut. Le sommeil peut continuer en plage libre jusqu’à récupération complète.'),compact:true});
- rows.push({...row('schedule-help','La plage indique une priorité, pas un ordre instantané.',undefined,'Tab parcourt les cases, Entrée ou Espace peint ; Échap annule le tracé. Loisir favorise les activités accessibles sous 95 % de satisfaction ; temps libre sous 35 %. Répéter la même famille crée de la lassitude.'),compact:true});
- return {id:'schedule',title:'Planning',layout:'table',rows,width:14.8,onClose:()=>void host?.panel(null)};
+ const help=()=>open(detailPage('schedule-help','Planning · repères',[
+  row('schedule-instructions','Peindre les horaires',undefined,'Choisir une activité puis cliquer ou glisser sur les heures. Tab parcourt les cases, Entrée ou Espace peint ; Échap annule le tracé.'),
+  row('schedule-priorities','Les plages sont des priorités',undefined,'Temps libre : le colon gère ses besoins et son travail. Dormir exige un couchage accessible ; travailler permet toujours de manger. Loisir favorise les activités accessibles sous 95 % de satisfaction ; temps libre sous 35 %. Répéter la même famille crée de la lassitude.'),
+  row('schedule-profile',world.restRules==='legacy'?'Sauvegarde historique : ancienne vitesse de fatigue conservée. Les horaires sont modifiables.':'Profil adulte : repos nocturne de 22 h à 6 h par défaut. Le sommeil peut continuer en plage libre jusqu’à récupération complète.'),
+ ]));
+ return {id:'schedule',title:'Planning',layout:'table',tableProfile:'colonists',contentKey:`schedule:${colonistTableKey(latest!)}:${search}`,rows,width:1480,actions:[colonistTableControl('schedule-help-open','Aide du planning',help)],onClose:()=>void host?.panel(null)};
 }
 function animalArea(id:number):void {
  const world=currentWorld(),animal=currentAnimal(id),current=currentAnimalAreaChoice287(world,animal);
@@ -483,29 +522,39 @@ function paintAreaCoordinates(areaId:number,onBack:()=>void=()=>areaEditor()):vo
  };open(make());
 }
 function assignPanel(world:World):NativePage {
- const rows:NativeRow[]=[{id:'assign-headings',label:'Colon',value:'Activité',compact:true,columns:['Régime','Hostilité','Zone','Tenue','Auto','Port forcé','Drogues',...(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))?['Lecture']:[]].map(label=>({label}))}];
- for(const pawn of world.pawns.filter(p=>isColonist(p)&&!p.prisoner)){
+ const {all,shown:pawns,search}=colonistTableRows('assign',world),reading=Number(world.schemaVersion)===295||Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion));
+ const rows:NativeRow[]=[{id:'assign-headings',label:'Colon',value:'Activité',compact:true,columns:['Régime','Hostilité','Zone','Tenue','Auto','Port forcé','Drogues',...(reading?['Lecture']:[])].map(label=>({label}))},colonistTableToolbar('assign',search,pawns.length,all.length)];
+ for(const pawn of pawns){
   const food=world.foodPolicies.find(p=>p.id===pawn.foodPolicyId),apparel=world.apparelPolicies?.find(p=>p.id===pawn.apparelPolicyId),drug=effectiveDrugPolicies265(world).find(p=>p.id===pawn.drugPolicyId)??effectiveDrugPolicies265(world)[0]!;
-   const controls=[button(`assign-food-${pawn.id}`,'Régime',()=>choose(`food-choice-${pawn.id}`,`${pawn.name} · alimentation`,currentWorld().foodPolicies.map(policy=>({id:`food-${policy.id}`,label:policy.name,active:currentPawn(pawn.id).foodPolicyId===policy.id,choose:()=>send({type:'food-policy-assign',pawnId:pawn.id,policyId:policy.id})})))),button(`assign-response-${pawn.id}`,'Hostilité',()=>choose(`response-${pawn.id}`,`${pawn.name} · réaction hostile`,(['flee','ignore','attack'] as const).map(response=>({id:response,label:{flee:'Fuir',ignore:'Ignorer',attack:'Attaquer'}[response],active:(currentPawn(pawn.id).hostilityResponse??'flee')===response,choose:()=>send({type:'hostility-response',pawnId:pawn.id,response})})))),button(`assign-area-${pawn.id}`,'Zone',()=>choose(`area-choice-${pawn.id}`,`${pawn.name} · zone autorisée`,[{id:0,label:'Sans restriction'},...(currentWorld().allowedAreas??[])].map(area=>({id:`area-${area.id}`,label:area.label,active:(currentPawn(pawn.id).allowedAreaId??0)===area.id,choose:()=>send({type:'assign-allowed-area',pawnId:pawn.id,areaId:area.id||null})}))))];
-  if(world.schemaVersion>=90&&apparel){controls.push(button(`assign-apparel-${pawn.id}`,'Tenue',()=>choose(`apparel-choice-${pawn.id}`,`${pawn.name} · tenue`,(currentWorld().apparelPolicies??[]).map(policy=>({id:`apparel-${policy.id}`,label:policy.label,active:currentPawn(pawn.id).apparelPolicyId===policy.id,choose:()=>send({type:'apparel-policy-assign',pawnId:pawn.id,policyId:policy.id,automatic:!!currentPawn(pawn.id).apparelAutomation})})))),button(`assign-auto-${pawn.id}`,pawn.apparelAutomation?'Auto actif':'Auto inactif',()=>{const p=currentPawn(pawn.id);return send({type:'apparel-policy-assign',pawnId:p.id,policyId:p.apparelPolicyId??apparel.id,automatic:!p.apparelAutomation});},{active:!!pawn.apparelAutomation}),button(`assign-forced-${pawn.id}`,'Libérer le port forcé',()=>send({type:'apparel-clear-forced',pawnId:pawn.id})));}
-  if(world.schemaVersion>=265)controls.push(button(`assign-drug-${pawn.id}`,'Drogues',()=>choose(`drug-choice-${pawn.id}`,`${pawn.name} · drogues`,effectiveDrugPolicies265(currentWorld()).map(policy=>({id:`drug-${policy.id}`,label:policy.name,active:currentPawn(pawn.id).drugPolicyId===policy.id,choose:()=>send({type:'drug-policy-assign',pawnId:pawn.id,policyId:policy.id})})))));
-  if((Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion)))))controls.push(button(`assign-reading-${pawn.id}`,'Lecture',()=>choose(`reading-choice-${pawn.id}`,`${pawn.name} · lecture`,READING_POLICIES_295.map(policy=>({id:String(policy.id),label:policy.label,active:effectiveReadingPolicy295(currentPawn(pawn.id))===policy.id,choose:()=>send({type:'reading-policy-295',pawnId:pawn.id,policyId:policy.id})})))));
-  const area=pawn.allowedAreaId?world.allowedAreas?.find(a=>a.id===pawn.allowedAreaId)?.label??'Zone inconnue':'Sans restriction';
-  const response={flee:'Fuir',ignore:'Ignorer',attack:'Attaquer'}[pawn.hostilityResponse??'flee'];
-  const values:Record<string,string>={food:food?.name??'Régime inconnu',response,area,apparel:apparel?.label??'Tenue indisponible',auto:pawn.apparelAutomation?'Auto actif':'Auto inactif',forced:'Libérer',drug:drug?.name??'Politique indisponible',reading:READING_POLICIES_295.find(p=>p.id===effectiveReadingPolicy295(pawn))!.label};
-  const hint=[pawn.name,`Régime : ${values.food}`,`Hostilité : ${response}`,`Zone : ${area}`,`Tenue : ${values.apparel}`,values.auto,world.schemaVersion>=265?`Drogues : ${drug.name}`:'',queryPawnStatus(world,pawn).reason].filter(Boolean).join('\n');
-  const ordered=['food','response','area','apparel','auto','forced','drug',...(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))?['reading']:[]].map(action=>{
-   const original=controls.find(control=>control.id===`assign-${action}-${pawn.id}`);
-   if(!original)return button(`assign-${action}-${pawn.id}-unavailable`,'—',()=>{},{disabled:true,hint:'Indisponible dans cette partie.'});
-   return {...original,label:values[action]!,hint:[original.label,original.hint,hint].filter(Boolean).join('\n'),disabled:original.disabled||pawn.state==='dead'||!!pawn.health?.death||!!pawn.visitor};
-  });
-  rows.push({...row(`assign-${pawn.id}`,pawn.name,queryPawnStatus(world,pawn).reason,undefined,ordered),compact:true,hint});
+  const area=pawn.allowedAreaId?world.allowedAreas?.find(a=>a.id===pawn.allowedAreaId)?.label??'Zone inconnue':'Sans restriction',response={flee:'Fuir',ignore:'Ignorer',attack:'Attaquer'}[pawn.hostilityResponse??'flee'];
+  const values:Record<string,string>={food:food?.name??'Régime inconnu',response,area,apparel:apparel?.label??'Tenue indisponible',auto:pawn.apparelAutomation?'Actif':'Inactif',forced:'Libérer',drug:drug?.name??'Politique indisponible',reading:READING_POLICIES_295.find(p=>p.id===effectiveReadingPolicy295(pawn))!.label};
+  const dead=pawn.state==='dead'||!!pawn.health?.death||!!pawn.visitor;
+  const owner=()=>colonistTablePawn(pawn.id,'assign');
+  const controls:NativeControl[]=[
+   colonistTableControl(`assign-food-${pawn.id}`,values.food!,()=>{},{disabled:dead,hint:`${pawn.name} · Régime : ${values.food}`,select:{value:String(pawn.foodPolicyId),options:world.foodPolicies.map(policy=>({value:String(policy.id),label:policy.name})),onChange:value=>{const id=Number(value),policy=currentWorld().foodPolicies.find(p=>p.id===id);if(!policy)return;return send({type:'food-policy-assign',pawnId:owner().id,policyId:policy.id});}}}),
+   colonistTableControl(`assign-response-${pawn.id}`,response,()=>{},{disabled:dead,hint:`${pawn.name} · réaction hostile`,select:{value:pawn.hostilityResponse??'flee',options:([{value:'flee',label:'Fuir'},{value:'ignore',label:'Ignorer'},{value:'attack',label:'Attaquer'}]),onChange:value=>{if(value!=='flee'&&value!=='ignore'&&value!=='attack')return;return send({type:'hostility-response',pawnId:owner().id,response:value});}}}),
+   colonistTableControl(`assign-area-${pawn.id}`,area,()=>{},{disabled:dead,hint:`${pawn.name} · zone autorisée : ${area}`,select:{value:String(pawn.allowedAreaId??0),options:[{value:'0',label:'Sans restriction'},...(world.allowedAreas??[]).map(a=>({value:String(a.id),label:a.label}))],onChange:value=>{const areaId=Number(value);if(!Number.isSafeInteger(areaId)||areaId!==0&&!currentWorld().allowedAreas?.some(a=>a.id===areaId))return;return send({type:'assign-allowed-area',pawnId:owner().id,areaId:areaId||null});}}}),
+  ];
+  if(world.schemaVersion>=90&&apparel){controls.push(
+   colonistTableControl(`assign-apparel-${pawn.id}`,values.apparel!,()=>{},{disabled:dead,hint:`${pawn.name} · Tenue : ${values.apparel}`,select:{value:String(pawn.apparelPolicyId),options:(world.apparelPolicies??[]).map(policy=>({value:String(policy.id),label:policy.label})),onChange:value=>{const policy=(currentWorld().apparelPolicies??[]).find(p=>p.id===Number(value));if(!policy)return;const p=owner();return send({type:'apparel-policy-assign',pawnId:p.id,policyId:policy.id,automatic:!!p.apparelAutomation});}}}),
+   colonistTableControl(`assign-auto-${pawn.id}`,values.auto!,()=>{const p=owner();return send({type:'apparel-policy-assign',pawnId:p.id,policyId:p.apparelPolicyId??apparel.id,automatic:!p.apparelAutomation});},{disabled:dead,active:!!pawn.apparelAutomation,hint:`${pawn.name} · automatisation de la tenue : ${pawn.apparelAutomation?'active':'inactive'}`}),
+   colonistTableControl(`assign-forced-${pawn.id}`,'Libérer',()=>send({type:'apparel-clear-forced',pawnId:owner().id}),{disabled:dead,hint:`${pawn.name} · libérer le port forcé`}),
+  );}else controls.push(...['apparel','auto','forced'].map(action=>button(`assign-${action}-${pawn.id}-unavailable`,'—',()=>{},{disabled:true,hint:'Indisponible dans cette partie.'})));
+  if(world.schemaVersion>=265)controls.push(colonistTableControl(`assign-drug-${pawn.id}`,values.drug!,()=>{},{disabled:dead,hint:`${pawn.name} · Drogues : ${values.drug}`,select:{value:String(drug.id),options:effectiveDrugPolicies265(world).map(policy=>({value:String(policy.id),label:policy.name})),onChange:value=>{const policy=effectiveDrugPolicies265(currentWorld()).find(p=>p.id===Number(value));if(!policy)return;return send({type:'drug-policy-assign',pawnId:owner().id,policyId:policy.id});}}}));else controls.push(button(`assign-drug-${pawn.id}-unavailable`,'—',()=>{},{disabled:true,hint:'Indisponible dans cette partie.'}));
+  if(reading)controls.push(colonistTableControl(`assign-reading-${pawn.id}`,values.reading!,()=>{},{disabled:dead,hint:`${pawn.name} · Lecture : ${values.reading}`,select:{value:String(effectiveReadingPolicy295(pawn)),options:READING_POLICIES_295.map(policy=>({value:String(policy.id),label:policy.label})),onChange:value=>{const policy=READING_POLICIES_295.find(p=>String(p.id)===value);if(!policy)return;return send({type:'reading-policy-295',pawnId:owner().id,policyId:policy.id});}}}));
+  rows.push({...row(`assign-${pawn.id}`,pawn.name,queryPawnStatus(world,pawn).reason,undefined,controls),compact:true,hint:[pawn.name,`Régime : ${values.food}`,`Hostilité : ${response}`,`Zone : ${area}`,`Tenue : ${values.apparel}`,`Auto : ${values.auto}`,`Drogues : ${values.drug}`].join('\n')});
  }
- rows.push(row('manage-food','Régimes alimentaires',undefined,undefined,[button('food-new','Nouveau régime',()=>inputPage('new-food','Nouveau régime','Nouveau régime',name=>send({type:'food-policy-create',name}))),...world.foodPolicies.map(policy=>button(`food-edit-${policy.id}`,policy.name,()=>foodEditor(policy.id)))]));
- if(world.apparelPolicies)rows.push(row('manage-apparel','Politiques de tenue',undefined,'Filtre des vêtements et matières, qualité, PV, copie et renommage.',world.apparelPolicies.map(policy=>button(`apparel-edit-${policy.id}`,policy.label,()=>apparelEditor(policy.id)))));
- if(world.schemaVersion>=265)rows.push(row('manage-drugs','Politiques de drogues',undefined,undefined,[button('drug-new','Nouvelle politique',()=>inputPage('new-drug','Nouvelle politique','Nouvelle politique',name=>send({type:'drug-policy-create',name}))),...effectiveDrugPolicies265(world).map(policy=>button(`drug-edit-${policy.id}`,policy.name,()=>drugEditor(policy.id)))]));
- rows.push(row('manage-areas','Zones autorisées',`${world.allowedAreas?.length??0} zones`,undefined,[button('areas-manage','Gérer les zones',areaEditor)]));
- return {id:'assign',title:'Assignations',layout:'table',rows,width:11.4,onClose:()=>void host?.panel(null)};
+ const actions:NativeControl[]=[colonistTableControl('assign-manage-food','Régimes',()=>open(detailPage('assign-food-policies','Régimes alimentaires',[
+  row('manage-food','Régimes alimentaires',undefined,undefined,[colonistTableControl('food-new','Nouveau régime',()=>inputPage('new-food','Nouveau régime','Nouveau régime',colonistTableGuard((name:string)=>send({type:'food-policy-create',name})))),...currentWorld().foodPolicies.map(policy=>colonistTableControl(`food-edit-${policy.id}`,policy.name,()=>foodEditor(policy.id)))]),
+ ])))];
+ if(world.apparelPolicies)actions.push(colonistTableControl('assign-manage-apparel','Tenues',()=>open(detailPage('assign-apparel-policies','Politiques de tenue',[
+  row('manage-apparel','Politiques de tenue',undefined,'Filtre des vêtements et matières, qualité, PV, copie et renommage.',(currentWorld().apparelPolicies??[]).map(policy=>colonistTableControl(`apparel-edit-${policy.id}`,policy.label,()=>apparelEditor(policy.id)))),
+ ]))));
+ if(world.schemaVersion>=265)actions.push(colonistTableControl('assign-manage-drugs','Drogues',()=>open(detailPage('assign-drug-policies','Politiques de drogues',[
+  row('manage-drugs','Politiques de drogues',undefined,undefined,[colonistTableControl('drug-new','Nouvelle politique',()=>inputPage('new-drug','Nouvelle politique','Nouvelle politique',colonistTableGuard((name:string)=>send({type:'drug-policy-create',name})))),...effectiveDrugPolicies265(currentWorld()).map(policy=>colonistTableControl(`drug-edit-${policy.id}`,policy.name,()=>drugEditor(policy.id)))]),
+ ]))));
+ actions.push(colonistTableControl('areas-manage','Zones',()=>areaEditor()));
+ return {id:'assign',title:'Assignations',layout:'table',tableProfile:'colonists',contentKey:`assign:${colonistTableKey(latest!)}:${search}`,rows,actions,width:1480,onClose:()=>void host?.panel(null)};
 }
 
 function questsPanel(state:NativeUiState):NativePage {

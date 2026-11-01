@@ -82,6 +82,8 @@ export interface NativePage {
   height?:number;
   columnRatio?:number;
   layout?:'inspector'|'table'|'tools'|'dialog'|'front'|'architect'|'palette'|'research'|'storage';
+  /** Opt-in fixed roster toolbar/headings; presentation only, never persisted. */
+  tableProfile?:'colonists';
   palette?:'orders'|'zones';
   research?:{width:number;height:number;selected:string;links:readonly {from:string;to:string;path:readonly {x:number;y:number}[]}[]};
   visual?:{
