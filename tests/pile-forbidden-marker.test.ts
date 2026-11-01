@@ -24,10 +24,10 @@ function marks(bundle:PileBundle){
  expect(parts).toEqual(plain);
  return {plain,parts,icons:forbiddenPileIconInstances([bundle])};
 }
-function iconAbove(bundle:PileBundle){
+function attachedIcon(bundle:PileBundle){
  const {plain,icons}=marks(bundle);expect(icons).toHaveLength(1);const icon=icons[0]!;
- const top=plain.length?Math.max(...plain.map(p=>p.y+(p.sy??1)/2)):1.4;
- expect(icon.y).toBeGreaterThan(top);expect(icon.icon).toBe(83);
+ const support=bundle.surface?.y??0;
+ expect(icon.y).toBeGreaterThan(support);expect(icon.y-support).toBeLessThan(.6);expect(icon.icon).toBe(83);
  expect([icon.cellX,icon.cellZ]).toEqual([bundle.x,bundle.z]);
  return icon;
 }
@@ -39,7 +39,7 @@ test('same-cell allowed and forbidden material families stay separate and use th
  const piles=sources.flatMap(p=>{const denied=structuredClone(p);denied.id=p.id+1;setMaterialForbidden256(denied,true);expect(materialAllowedForPlayer256(p)).toBe(true);expect(materialAllowedForPlayer256(denied)).toBe(false);return [p,denied];});
  const w=world(piles);stamped(w);const owner=new ScenePilePresentation();read(owner,w);const bundles=all(owner);expect(bundles).toHaveLength(8);
  for(const source of sources){const pair=bundles.filter(b=>b.item===source.item);expect(pair).toHaveLength(2);expect(pair.map(b=>b.quantity)).toEqual([source.quantity,source.quantity]);expect(pair.map(b=>b.forbidden===true)).toEqual([false,true]);
-  expect(marks(pair[0]!).icons).toHaveLength(0);iconAbove(pair[1]!);
+  expect(marks(pair[0]!).icons).toHaveLength(0);attachedIcon(pair[1]!);
  }
  expect(forbiddenPileIconInstances(bundles)).toHaveLength(4);
 });
@@ -48,7 +48,7 @@ test('permission-only resident edits rebuild the chunk and remove the pictogram 
  const source=wood(1),w=world([source]),journal=stamped(w),owner=new ScenePilePresentation();const a=read(owner,w),ac=a.changedChunks[0]!;
  const firstParts=owner.placements(a,ac),firstSignature=ac.signature;expect(forbiddenPileIconInstances(ac.bundles)).toEqual([]);expect(owner.acknowledge(a)).toBe(true);
  const denied=structuredClone(source);setMaterialForbidden256(denied,true);const w2={...w,piles:[denied]};journal.append(w,w2,1,2,[],[]);
- const b=read(owner,w2);expect(b.changedChunks).toHaveLength(1);const bc=b.changedChunks[0]!;expect(bc.signature).not.toBe(firstSignature);expect(bc.bundles[0]!.forbidden).toBe(true);iconAbove(bc.bundles[0]!);expect(owner.placements(b,bc)).toEqual(firstParts);owner.acknowledge(b);
+ const b=read(owner,w2);expect(b.changedChunks).toHaveLength(1);const bc=b.changedChunks[0]!;expect(bc.signature).not.toBe(firstSignature);expect(bc.bundles[0]!.forbidden).toBe(true);attachedIcon(bc.bundles[0]!);expect(owner.placements(b,bc)).toEqual(firstParts);owner.acknowledge(b);
  const allowed=structuredClone(denied);setMaterialForbidden256(allowed,false);const w3={...w2,piles:[allowed]};journal.append(w2,w3,1,3,[],[]);
  const c=read(owner,w3);expect(c.changedChunks).toHaveLength(1);const cc=c.changedChunks[0]!;expect(cc.signature).toBe(firstSignature);expect(cc.bundles[0]!.forbidden).toBeUndefined();expect(owner.placements(c,cc)).toEqual(firstParts);expect(forbiddenPileIconInstances(cc.bundles)).toEqual([]);
  expect([allowed.id,allowed.quantity,allowed.owner,w3.tick]).toEqual([source.id,source.quantity,source.owner,w.tick]);
@@ -61,7 +61,7 @@ test('shelf identity levels keep their own pictogram anchors and retain the item
  expect(bundles.map(b=>b.surface?.level).sort()).toEqual([0,1,2]);
  const icons=forbiddenPileIconInstances(bundles);expect(icons).toHaveLength(3);expect(new Set(icons.map(i=>i.y)).size).toBe(3);
  for(const b of bundles){const s=b.surface!;expect(s.shelfId).toBe(shelf.id);expect(s.scaleHeight).toBe(true);expect(s.scale).toBeLessThan(1);
-  const local=pileParts([{...b,surface:undefined}]),supported=pileParts([b]);expect(supported).toHaveLength(local.length);const icon=iconAbove(b);
+  const local=pileParts([{...b,surface:undefined}]),supported=pileParts([b]);expect(supported).toHaveLength(local.length);const icon=attachedIcon(b);
   expect(icon.x).toBeCloseTo(b.x+s.x,12);expect(icon.z).toBeCloseTo(b.z+s.z,12);
   for(let i=0;i<local.length;i++){const a=local[i]!,t=supported[i]!;expect(t.x).toBeCloseTo(b.x+(a.x-b.x)*s.scale+s.x,12);expect(t.z).toBeCloseTo(b.z+(a.z-b.z)*s.scale+s.z,12);expect(t.y).toBeCloseTo(a.y*s.scale+s.y,12);
    expect(t.sx).toBeCloseTo((a.sx??1)*s.scale,12);expect(t.sy).toBeCloseTo((a.sy??1)*s.scale,12);expect(t.sz).toBeCloseTo((a.sz??1)*s.scale,12);
@@ -78,7 +78,7 @@ test('only actual ground ownership is marked; supplies and carried/inventory/equ
  const g=bundles.find(b=>b.item==='granite-chunk')!,j=bundles.find(b=>b.supplied)!;expect(g.forbidden).toBe(true);expect(j.forbidden).toBeUndefined();expect(marks(j).icons).toHaveLength(0);
  const {plain,icons}=marks(g);expect(icons).toHaveLength(1);expect(plain.every(p=>p.targetId===4*w.width+4)).toBe(true);
  expect(forbiddenPileIconInstances(bundles)).toHaveLength(3);
- for(const body of [human,mech]){const projected=bundles.find(b=>b.pileId===body.id)!;expect(projected.markerOnly).toBe(true);expect(projected.forbidden).toBe(true);expect(marks(projected).parts).toEqual([]);expect(iconAbove(projected).y).toBeGreaterThan(1.4);}
+ for(const body of [human,mech]){const projected=bundles.find(b=>b.pileId===body.id)!;expect(projected.markerOnly).toBe(true);expect(projected.forbidden).toBe(true);expect(marks(projected).parts).toEqual([]);expect(attachedIcon(projected).y).toBeLessThan(.6);}
  // Dedicated body rigs own these corpses. Allow removes only their marker
  // bundles; no duplicate body geometry is created by this projection.
  setMaterialForbidden256(human,false);setMaterialForbidden256(mech,false);read(owner,w);const allowedBodies=all(owner);expect(allowedBodies.filter(b=>b.markerOnly)).toEqual([]);expect(forbiddenPileIconInstances(allowedBodies)).toHaveLength(1);
@@ -87,7 +87,7 @@ test('only actual ground ownership is marked; supplies and carried/inventory/equ
 test('unstamped mutable Worlds cannot use resident caches and direct mutable pictogram reads the current flag on every call',()=>{
  const w=world([wood(1)]),owner=new ScenePilePresentation();expect(owner.prepareSupports(w)).toBeUndefined();expect(owner.read(w,new Map())).toBeUndefined();
  const bundle:PileBundle={x:4,z:4,kind:'wood',item:'wood',quantity:10,supplied:false},before=pileParts([bundle]);expect(marks(bundle).icons).toEqual([]);
- bundle.forbidden=true;expect(pileParts([bundle])).toEqual(before);iconAbove(bundle);
+ bundle.forbidden=true;expect(pileParts([bundle])).toEqual(before);attachedIcon(bundle);
  delete bundle.forbidden;expect(pileParts([bundle])).toEqual(before);expect(marks(bundle).icons).toEqual([]);expect(Object.isFrozen(bundle)).toBe(false);expect(Object.isFrozen(w.piles[0]!)).toBe(false);
  // SceneRenderCore's complete mutable aggregation/signature branch is reviewed
  // separately. This CPU contract does not execute or certify that GPU caller.
@@ -97,7 +97,7 @@ test('same raw permission alias cannot hide a change, freeze its source or poiso
  const raw:MaterialPile={id:1,kind:'weapon',item:'revolver',quantity:1,weapon:{quality:'normal',hitPoints:100},owner:{type:'ground',x:4,z:4}},w=world([raw]);stamped(w);const owner=new ScenePilePresentation(),a=read(owner,w),ac=a.changedChunks[0]!,oldBundle=ac.bundles[0]!;
  const original=owner.placements(a,ac);expect(oldBundle.forbidden).toBeUndefined();expect(forbiddenPileIconInstances(ac.bundles)).toEqual([]);expect(Object.isFrozen(raw)).toBe(false);expect(Object.isFrozen(raw.weapon!)).toBe(false);expect(Object.isFrozen(w.piles)).toBe(false);owner.acknowledge(a);
  raw.weapon!.forbidden=true;const b=read(owner,w),bc=b.changedChunks[0]!;expect(b.changedChunks).toHaveLength(1);expect(bc.bundles[0]!.forbidden).toBe(true);expect(oldBundle.forbidden).toBeUndefined();expect(forbiddenPileIconInstances([oldBundle])).toEqual([]);expect(()=>{bc.bundles[0]!.forbidden=undefined;}).toThrow(TypeError);
- const expected=owner.placements(b,bc),publicCopy=owner.placements(b,bc);publicCopy.at(-1)!.x=9999;expect(owner.placements(b,bc)).toEqual(expected);expect(expected).toEqual(original);iconAbove(bc.bundles[0]!);
+ const expected=owner.placements(b,bc),publicCopy=owner.placements(b,bc);publicCopy.at(-1)!.x=9999;expect(owner.placements(b,bc)).toEqual(expected);expect(expected).toEqual(original);attachedIcon(bc.bundles[0]!);
  const expectedIcons=forbiddenPileIconInstances(bc.bundles),publicIcons=forbiddenPileIconInstances(bc.bundles);publicIcons[0]!.x=9999;expect(forbiddenPileIconInstances(bc.bundles)).toEqual(expectedIcons);
  const inspection=owner.inspect();inspection[0]!.bundles[0]!.forbidden=undefined;expect(owner.placements(b,bc)).toEqual(expected);expect(forbiddenPileIconInstances(bc.bundles)).toEqual(expectedIcons);
  owner.acknowledge(b);expect(()=>owner.placements(b,bc)).toThrow('Stale or foreign');delete raw.weapon!.forbidden;

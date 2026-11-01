@@ -40,11 +40,11 @@ export const isIconDesignationKind = (kind: unknown): kind is DesignationIconKin
 /** Four resident vector slots; historical v304 assets are neither edited nor copied. */
 export const TREE_DESIGNATION_ATLAS_URL='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="384" height="96" viewBox="0 0 256 64">'+
-  ['extract-tree','replant-tree','smooth-floor','forbid'].map((kind,index)=>pictogramSvg(kind).replace('<svg ',`<svg x="${index*64}" y="0" `).replace('width="96" height="96"','width="64" height="64"')).join('')+'</svg>');
+  ['extract-tree','replant-tree','smooth-floor','forbid'].map((kind,index)=>(kind==='forbid'?pictogramSvg('cancel').replaceAll('#ff6b5e','#c85a42').replaceAll('#262238','#261e18'):pictogramSvg(kind)).replace('<svg ',`<svg x="${index*64}" y="0" `).replace('width="96" height="96"','width="64" height="64"')).join('')+'</svg>');
 
 function treeFallbackAtlas():THREE.DataTexture {
   const width=64,height=16,data=new Uint8Array(width*height*4);
-  const pixel=(slot:number,x:number,y:number)=>{if(x<1||x>14||y<1||y>14)return;const at=(y*width+slot*16+x)*4;data[at]=data[at+3]=255;data[at+1]=slot===3?107:255;data[at+2]=slot===3?94:255;};
+  const pixel=(slot:number,x:number,y:number)=>{if(x<1||x>14||y<1||y>14)return;const at=(y*width+slot*16+x)*4;data[at]=slot===3?200:255;data[at+3]=255;data[at+1]=slot===3?90:255;data[at+2]=slot===3?66:255;};
   // Upright shovel and rooted sprout remain distinct even if SVG decoding fails.
   for(let y=3;y<=10;y++)for(let x=7;x<=8;x++)pixel(0,x,y);
   for(let y=2;y<=4;y++)for(let x=5;x<=10;x++)if(y===2||y===4||x===5||x===10)pixel(0,x,y);
@@ -52,7 +52,8 @@ function treeFallbackAtlas():THREE.DataTexture {
   for(let y=4;y<=12;y++)pixel(1,8,y);
   for(let i=0;i<4;i++){pixel(1,8-i,7-i);pixel(1,8+i,6-i);pixel(1,5+i,12);}
   for(let x=3;x<=12;x++)pixel(2,x,12);for(let i=0;i<6;i++){pixel(2,5+i,9-i);pixel(2,6+i,9-i);}
-  for(let y=2;y<=14;y++)for(let x=2;x<=14;x++){const r=Math.hypot(x-8,y-8);if(r>=5&&r<=6.3||Math.abs(x-y)<=.7&&x>=4&&x<=12)pixel(3,x,y);}
+  // Same terracotta cross if SVG decoding fails; never a white traffic-sign disc.
+  for(let y=3;y<=13;y++)for(let x=3;x<=13;x++)if(Math.abs(x-y)<=1||Math.abs(x+y-16)<=1)pixel(3,x,y);
   const map=new THREE.DataTexture(data,width,height,THREE.RGBAFormat,THREE.UnsignedByteType);
   map.minFilter=map.magFilter=THREE.LinearFilter;map.generateMipmaps=false;map.needsUpdate=true;return map;
 }
@@ -64,7 +65,7 @@ export interface ForbiddenPileIconInstance extends DesignationIconInstance { cel
 export function forbiddenPileIconInstances(bundles:readonly PileBundle[]):ForbiddenPileIconInstance[] {
   const icons:ForbiddenPileIconInstance[]=[];
   for(const b of bundles)if(b.forbidden&&!b.supplied){
-    const surface=b.surface,height=(b.markerOnly||b.kind==='corpse')?1.48:1.08;
+    const surface=b.surface,height=(b.markerOnly||b.kind==='corpse')?.42:.22;
     icons.push({x:b.x+(surface?.x??0),y:(surface?.y??0)+height*(surface?.scaleHeight?surface.scale:1),z:b.z+(surface?.z??0),icon:83,cellX:b.x,cellZ:b.z});
   }
   return icons;
@@ -252,7 +253,8 @@ export class DesignationIconLayer {
     // camera branch can reuse the ortho prewarm variant after a mode switch.
     material.scaleNode = vec2(this.screenScale)
       .mul(this.perspectiveScale.greaterThan(.5).select(depth, 1))
-      .mul(inRange.select(1, 0));
+      .mul(inRange.select(1, 0))
+      .mul(attribute('designationIcon','float').equal(83).select(.6,1));
     const atlasUv = vec2(uv().x.add(attribute('designationIcon', 'float')).div(4), uv().y.div(5).add(.8));
     const icon = attribute('designationIcon', 'float');
     const architectUv = (offset: number) => {
