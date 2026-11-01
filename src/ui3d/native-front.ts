@@ -34,7 +34,7 @@ import { apparelAppearance } from '../render/character-apparel';
 import { humanLimbVisualMask } from '../render/human-anatomy-presentation';
 import { portraitDataUrl, portraitExpressionOf } from '../ui/pawn-portrait';
 import { nativeClinicalConditionRows } from './native-special-inspection';
-import { NATIVE_UI_SCALE_LIMITS } from './native-preferences';
+import { NATIVE_UI_SCALE_LIMITS,normalizeGraphicsStylePreferences,ORIGAMI_STYLE_CONTROLS,type GraphicsStylePreferences } from './native-preferences';
 import {presentNativeFront} from './native-front-presentation';
 
 type Page = 'home' | 'scenario' | 'story' | 'world' | 'site' | 'pawns' | 'load' | 'tests' | 'options';
@@ -65,6 +65,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   const testCatalogue={search:'',selected:undefined as string|undefined};
   const optionSections=[{id:'game',label:'Jeu'},{id:'interface',label:'Interface'},{id:'graphics',label:'Graphismes'},{id:'lighting',label:'Éclairage'},{id:'audio',label:'Audio'}] as const;
   let optionSection:typeof optionSections[number]['id']='game';
+  let graphicsPreferenceGeneration=0;
   let loadSearch='',selectedLoadKey:string|undefined;
   let confirmation: { message: string; accept: () => void | Promise<unknown> } | undefined;
 
@@ -173,6 +174,29 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
 
   function renderOptions(): NativePage {
     const rows: NativeRow[] = [];
+    const renderGeneration=++graphicsPreferenceGeneration;
+    if(options.getGraphicsStylePreferences&&options.onGraphicsStylePreferencesChange){
+      const settings=normalizeGraphicsStylePreferences(options.getGraphicsStylePreferences()),mine=renderGeneration;
+      const apply=(patch:Partial<GraphicsStylePreferences>,origamiOnly=false)=>{
+        if(!open||externalPage||page!=='options'||optionSection!=='graphics'||mine!==graphicsPreferenceGeneration||busy||pending)return false;
+        const current=normalizeGraphicsStylePreferences(options.getGraphicsStylePreferences!());
+        if(origamiOnly&&current.style!=='origami')return false;
+        graphicsPreferenceGeneration++;
+        return run(()=>preference(options.onGraphicsStylePreferencesChange!(normalizeGraphicsStylePreferences({...current,...patch}))),'Application du style graphique…');
+      };
+      rows.push(choice('graphics-style','Style graphique',settings.style,['default','origami'] as const,style=>apply({style}),style=>style==='origami'?'Origami':'Par défaut'));
+      if(settings.style==='origami')for(const {key,label,min,max,step} of ORIGAMI_STYLE_CONTROLS)rows.push(range(`origami-${key}`,label,Math.round(settings[key]*100),min*100,max*100,step*100,value=>apply({[key]:value/100},true),false,' %'));
+    }
+    if(options.onMeasureGraphicsStyle)rows.push(
+      {id:'graphics-measure-help',label:'Le changement de style prépare les ressources avant la mesure. La scène sera affichée pendant une seconde de préparation, puis cinq secondes de mesure.'},
+      {id:'graphics-measurement',label:options.getGraphicsStyleMeasurement?.()||'Mettez la colonie en pause pour mesurer les intervalles, les soumissions CPU, les appels et les triangles. GPU non mesuré.'},
+      {id:'graphics-measure',label:'Comparer les styles',controls:[control('graphics-measure','Mesurer ce style (5 s)',async()=>{
+        if(!open||externalPage||page!=='options'||optionSection!=='graphics'||renderGeneration!==graphicsPreferenceGeneration||!options.canMeasureGraphicsStyle?.())return;
+        await run(options.onMeasureGraphicsStyle!,'Mesure du style graphique…');
+        // The callback hides Options to sample the real scene. Reopen only after
+        // the shared pending guard has cleared, preserving its result/error.
+        if(!open){externalPage=false;page='options';open=true;paint();}
+      },!options.canMeasureGraphicsStyle?.())]});
     if(options.getUiScale&&options.onUiScaleChange)rows.push(range('ui-scale','Échelle de l’interface',Math.round(options.getUiScale()*100),NATIVE_UI_SCALE_LIMITS.min*100,NATIVE_UI_SCALE_LIMITS.max*100,NATIVE_UI_SCALE_LIMITS.step*100,value=>preference(options.onUiScaleChange!(value/100)),false,' %'));
     if(options.getUiAutoHide&&options.onUiAutoHideChange){
       const settings=options.getUiAutoHide();

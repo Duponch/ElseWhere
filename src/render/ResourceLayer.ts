@@ -18,6 +18,8 @@ import type {NaturalAppearanceReader} from './natural-appearance-pass';
 import {readSceneResourceFrame,type SceneResourceFrame} from './scene-resource-index';
 import {ResourceTargetTint} from './resource-target-tint';
 import {ResourceRangeBounds} from './resource-range-bounds';
+import {currentGraphicsStyle} from './graphics-style';
+import {appendOrigamiFlora,createOrigamiFloraParts,origamiFloraGeometries,ORIGAMI_FLORA_KEYS,ORIGAMI_FLORA_CANOPY_KEYS} from './origami/flora';
 
 const resourceIdentity=(world:World,resource:World['resources'][number]):string=>{
   const support=hydroponicFloraHeight(world,resource);
@@ -100,6 +102,7 @@ function visibleResourceKeys(world:World,r:World['resources'][number],appearance
 }
 
 export class ResourceLayer {
+  private readonly graphicsStyle=currentGraphicsStyle();
   compiledMaterials435():readonly THREE.NodeMaterial[]{return[this.staticMaterial,this.texturedMaterial,this.windPlain,this.windTextured];}
   compiledAttributeChanged435:((attribute:THREE.BufferAttribute,start:number,count:number)=>void)|undefined;
   private readonly targetTint=new ResourceTargetTint((attribute,start,count)=>this.compiledAttributeChanged435?.(attribute,start,count));
@@ -395,11 +398,13 @@ export class ResourceLayer {
       const trunks: Placement[] = [], crowns: Placement[] = [], upperCrowns: Placement[] = [];
       const rocks: Placement[] = [], bushes: Placement[] = [], berries: Placement[] = [];
       const cones:Placement[]=[],blades:Placement[]=[],cacti:Placement[]=[];
+      const origamiParts=this.graphicsStyle?.origami?createOrigamiFloraParts():undefined;
       for (const resource of chunk) {
         const { x, z } = resource;
         const parts = [trunks, crowns, upperCrowns, rocks, bushes, berries];
         const lengths = parts.map(items => items.length);
         const n = noise(x, z, 77), turn = n * Math.PI * 2;
+        if(origamiParts&&appendOrigamiFlora(origamiParts,world,resource,turn,size(resource)))continue;
         if(resource.species||isMedicinalPlant(resource)){appendFlora({trunks,crowns,cones,blades,cacti,bushes,fruit:berries},world,resource,turn,size(resource));continue;}
         if (resource.kind === 'tree') {
           const height = WORLD_SCALE.treeMinHeight + n * (WORLD_SCALE.treeMaxHeight - WORLD_SCALE.treeMinHeight);
@@ -423,6 +428,10 @@ export class ResourceLayer {
       }
       for (const trunk of trunks) trunk.color ??= 0x70573e;
       for (const berry of berries) berry.color = 0xb96f63;
+      const origamiKeys=origamiParts?ORIGAMI_FLORA_KEYS.filter(key=>origamiParts[key].length>0):[];
+      const origamiGeometry=origamiKeys.length?origamiFloraGeometries(origamiKeys):undefined;
+      const origamiBodies=origamiKeys.filter(key=>!ORIGAMI_FLORA_CANOPY_KEYS.has(key)).map(key=>({geometry:origamiGeometry![key]!,items:origamiParts![key]}));
+      const origamiCanopies=origamiKeys.filter(key=>ORIGAMI_FLORA_CANOPY_KEYS.has(key)).map(key=>({geometry:origamiGeometry![key]!,items:origamiParts![key]}));
       mergedInstances(group, [
         { geometry: new THREE.CylinderGeometry(0.1, 0.16, 1, 5), items: trunks },
         { geometry: new THREE.DodecahedronGeometry(1, 0), items: rocks },
@@ -430,8 +439,9 @@ export class ResourceLayer {
         { geometry: new THREE.CylinderGeometry(.5,.5,1,5), items: cacti },
         { geometry: new THREE.IcosahedronGeometry(1, 0), items: bushes },
         { geometry: new THREE.IcosahedronGeometry(0.055, 0), items: berries },
-      ], this.texturesEnabled?this.texturedMaterial:this.staticMaterial,true,true);
-      const canopy = mergedInstances(group, [{ geometry: world.site?new THREE.IcosahedronGeometry(1,0):new THREE.ConeGeometry(1, 1, 6), items: [...crowns, ...upperCrowns] },{geometry:new THREE.ConeGeometry(1,1,6),items:cones}], this.texturesEnabled?this.texturedMaterial:this.staticMaterial,true,true);
+        ...origamiBodies,
+      ], this.texturesEnabled?this.texturedMaterial:this.staticMaterial,true,true,this.graphicsStyle?.origami===true);
+      const canopy = mergedInstances(group, [{ geometry: world.site?new THREE.IcosahedronGeometry(1,0):new THREE.ConeGeometry(1, 1, 6), items: [...crowns, ...upperCrowns] },{geometry:new THREE.ConeGeometry(1,1,6),items:cones},...origamiCanopies], this.texturesEnabled?this.texturedMaterial:this.staticMaterial,true,true,this.graphicsStyle?.origami===true);
       if (canopy) { canopy.name = 'tree-canopy'; canopy.visible = this.foliageVisible; }
       retainResources(group,visibleKeys);
       const trees=new Map(chunk.filter(r=>r.kind==='tree').map(r=>[r.id,r] as const));

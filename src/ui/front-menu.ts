@@ -25,6 +25,7 @@ import './front-menu.css';
 import { renderPerformanceLayout, bindRenderPerformanceControls } from './render-performance-controls';
 import { DEFAULT_SHADOW_SETTINGS, type ShadowSettings } from '../render/shadow-settings';
 import { DEFAULT_ANIMATION_SETTINGS, type AnimationSettings } from '../render/animation-settings';
+import {normalizeGraphicsStylePreferences,ORIGAMI_STYLE_CONTROLS,type GraphicsStylePreferences} from '../ui3d/native-preferences';
 
 export interface FrontMenuDraft {
   seed: number;
@@ -44,6 +45,11 @@ export interface FrontMenuSave {
 }
 
 export interface FrontMenuOptions {
+  getGraphicsStylePreferences?:()=>GraphicsStylePreferences;
+  onGraphicsStylePreferencesChange?:(value:GraphicsStylePreferences)=>boolean|Promise<boolean>;
+  getGraphicsStyleMeasurement?:()=>string;
+  onMeasureGraphicsStyle?:()=>Promise<void>;
+  canMeasureGraphicsStyle?:()=>boolean;
   getUiAutoHide?:()=>{bottom:boolean;notifications:boolean};
   onUiAutoHideChange?:(value:{bottom:boolean;notifications:boolean})=>boolean;
   getUiScale?:()=>number;
@@ -355,6 +361,43 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
       text.append(title,description,status);setting.append(select,text);card.append(setting);
     }
     card.append(element('h2', '', 'Affichage'));
+    if(options.getGraphicsStylePreferences&&options.onGraphicsStylePreferencesChange){
+      const current=()=>normalizeGraphicsStylePreferences(options.getGraphicsStylePreferences!());
+      const styleSetting=element('label','front-relief front-texture-setting'),style=element('select'),styleText=element('span');
+      style.id='front-graphics-style';style.setAttribute('aria-label','Style graphique');
+      for(const [value,label] of [['default','Par défaut'],['origami','Origami']] as const){const entry=element('option','',label);entry.value=value;style.append(entry);}
+      styleText.append(element('strong','','Style graphique'),element('span','','Choix visuel conservé dans ce navigateur, indépendant des colonies.'));
+      styleSetting.append(style,styleText);card.append(styleSetting);
+      const controls=element('div','front-origami-settings');card.append(controls);
+      const sliders:{key:typeof ORIGAMI_STYLE_CONTROLS[number]['key'];slider:HTMLInputElement;output:HTMLOutputElement}[]=[];
+      const refresh=()=>{const settings=current();style.value=settings.style;controls.hidden=settings.style!=='origami';for(const {key,slider,output} of sliders){slider.value=String(Math.round(settings[key]*100));output.textContent=`${Math.round(settings[key]*100)} %`;}};
+      const apply=(patch:Partial<GraphicsStylePreferences>,origamiOnly=false)=>{
+        if(root.hidden||page!=='options'||busy||operationPending||!card.isConnected)return;
+        const settings=current();if(origamiOnly&&settings.style!=='origami')return;
+        void run(async()=>{if(!await options.onGraphicsStylePreferencesChange!(normalizeGraphicsStylePreferences({...settings,...patch})))showError('Le choix s’applique maintenant, mais ce navigateur ne peut pas le conserver pour la prochaine visite.');},'Application du style graphique…').finally(refresh);
+      };
+      style.addEventListener('change',()=>{if(style.value==='default'||style.value==='origami')apply({style:style.value});else refresh();});
+      for(const {key,label,min,max,step} of ORIGAMI_STYLE_CONTROLS){
+        const setting=element('label','front-relief front-texture-setting front-volume-setting'),text=element('span'),slider=element('input'),output=element('output');
+        slider.id=`front-origami-${key}`;slider.type='range';slider.min=String(min*100);slider.max=String(max*100);slider.step=String(step*100);slider.setAttribute('aria-label',label);output.setAttribute('for',slider.id);
+        text.append(element('strong','',label),output);setting.append(text,slider);controls.append(setting);sliders.push({key,slider,output});
+        slider.addEventListener('input',()=>{const value=Number(slider.value);if(Number.isFinite(value))apply({[key]:value/100},true);else refresh();});
+      }
+      refresh();
+    }
+    if(options.onMeasureGraphicsStyle){
+      const information=element('p','front-small',options.getGraphicsStyleMeasurement?.()||'Mettez la colonie en pause pour mesurer les intervalles, les soumissions CPU, les appels et les triangles. GPU non mesuré.');
+      information.id='front-graphics-measurement';information.style.whiteSpace='pre-line';
+      const measure=action('Mesurer ce style (5 s)',()=>{
+        if(root.hidden||page!=='options'||busy||operationPending||!card.isConnected||!options.canMeasureGraphicsStyle?.())return;
+        void run(options.onMeasureGraphicsStyle!,'Mesure du style graphique…').finally(()=>{
+          if(root.hidden){const failure=error.hidden?'':error.textContent;navigate('options');if(failure)showError(failure);}
+          else if(card.isConnected){information.textContent=options.getGraphicsStyleMeasurement?.()||'Mettez la colonie en pause pour mesurer les intervalles, les soumissions CPU, les appels et les triangles. GPU non mesuré.';measure.disabled=!options.canMeasureGraphicsStyle?.();}
+        });
+      });
+      measure.id='front-graphics-measure';measure.disabled=!options.canMeasureGraphicsStyle?.();
+      card.append(element('p','front-small','Le changement de style prépare les ressources avant la mesure. La scène sera affichée pendant une seconde de préparation, puis cinq secondes de mesure.'),information,measure);
+    }
     const setting = element('label', 'front-relief front-texture-setting');
     const checkbox = element('input');
     checkbox.type = 'checkbox';
@@ -905,5 +948,5 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
     root.addEventListener(type, event => event.stopPropagation());
   }
 
-  return { showHome, setHasGame, showCreation, showLoad, hide, isOpen: () => !root.hidden, setBusy, showError };
+  return { showHome, setHasGame, showCreation, showOptions:()=>navigate('options'), showLoad, hide, isOpen: () => !root.hidden, setBusy, showError };
 }

@@ -6,6 +6,10 @@ import {ownActorPlaybackWorld435,isActorPlaybackWorld435} from './ActorPlayback4
 import {StaticSceneCompiler435} from './StaticSceneCompiler435';
 import type {SceneApplicationContext} from './SceneApplicationContext';
 import{createSurfaceMaterial}from'./SurfaceMaterials';
+import {GraphicsStyleContext,currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
+import type {GraphicsStylePreferences} from '../ui3d/native-preferences';
+import {createGraphicsStyleComparison,type GraphicsStyleComparisonContext,type GraphicsStyleComparisonResult,type GraphicsComparisonMetadata} from './graphics-style-comparison';
+import {attribute} from 'three/tsl';
 import {knownPosition256} from '../ui/exploration-readers-256';
 import {knownCell256,UNDISCOVERED_CELL_LABEL_256} from '../sim/exploration-visibility-256';
 import {roofCoverage} from '../sim/roof-rules';
@@ -146,6 +150,9 @@ function isNaturalSceneWorld(value:World|{changed:boolean}):value is World {
 }
 
 export class SceneRenderCore {
+  private rendererDisposal:Promise<void>|undefined;
+  private graphicsMeasurement:{collector:ReturnType<typeof createGraphicsStyleComparison>;context:()=>GraphicsStyleComparisonContext;isCurrent:()=>boolean;resolve:(result:GraphicsStyleComparisonResult)=>void;timer?:ReturnType<typeof setTimeout>}|undefined;
+  async disposeAsync():Promise<void>{this.dispose();await this.rendererDisposal;}
   protected diorama: DioramaLayer | null = null;
   protected dioramaEnabled = true;
   protected room: RoomLayer | null = null;
@@ -164,7 +171,64 @@ export class SceneRenderCore {
   private shadowCameraLayers = -1;
   private shadowCameraCoordinates = -1;
   private shadowCameraReversedDepth = false;
+  readonly graphicsStyle=currentGraphicsStyle()??new GraphicsStyleContext();
   readonly stats = { fps: 0, frameMs: 0, frameP95: 0, drawCalls: 0, triangles: 0 };
+  setGraphicsStyleParameters(settings:GraphicsStylePreferences):void {
+    if(settings.style!==this.graphicsStyle.preferences.style)throw new Error('Le changement de style exige une nouvelle préparation de l’affichage.');
+    this.graphicsStyle.update(settings);this.invalidatePausedShadow();
+  }
+  captureGraphicsView(){return{mode:this.rig.mode,position:this.camera.position.toArray(),target:this.controls.target.toArray(),zoom:this.camera.zoom};}
+  captureGraphicsInteraction(){return{tool:this.tool,floor:this.selectedFloor,material:this.constructionMaterial,rotation:this.placementRotation,zone:this.zoneTarget,allowedArea:this.allowedAreaTarget,tree:this.treePlacementId,furniture:this.furniturePlacement,roofAreas:this.roofAreasVisible};}
+  restoreGraphicsInteraction(state:ReturnType<SceneRenderCore['captureGraphicsInteraction']>):void{
+    this.setFloorSelection(state.floor);this.setConstructionMaterial(state.material);this.setPlacementRotation(state.rotation);this.setTool(state.tool);this.setZoneTarget(state.zone);this.setAllowedAreaTarget(state.allowedArea);this.setTreePlacement(state.tree);this.setFurniturePlacement(state.furniture);this.setRoofAreasVisible(state.roofAreas);
+  }
+  restoreGraphicsView(view:ReturnType<SceneRenderCore['captureGraphicsView']>):void{
+    this.rig.setMode(view.mode);this.controls.target.fromArray(view.target);this.camera.position.fromArray(view.position);this.camera.zoom=view.zoom;this.camera.updateProjectionMatrix();this.controls.update();this.invalidatePausedShadow();
+  }
+  /** Manual fixed window over actual scene submissions. CPU renderScene time
+   * and submission intervals remain distinct; no GPU time is inferred. */
+  async measureGraphicsStyle(sceneFingerprint:string,settings:Record<string,GraphicsComparisonMetadata>,isCurrent:()=>boolean):Promise<GraphicsStyleComparisonResult>{
+    if(this.graphicsMeasurement)throw Error('Une mesure graphique est déjà en cours.');
+    if(this.disposed||this.fatalError||this.preparing||this.presentationStopped||!this.world||this.received?.speed!==0)throw Error('Mettez une colonie affichée en pause avant de mesurer.');
+    const context=():GraphicsStyleComparisonContext=>({preferences:{...this.graphicsStyle.preferences},sceneFingerprint,
+      camera:{...this.captureGraphicsView(),up:this.camera.up.toArray(),quaternion:this.camera.quaternion.toArray(),projection:Array.from(this.camera.projectionMatrix.toArray()),near:this.camera.near,far:this.camera.far,layers:this.camera.layers.mask,coordinateSystem:this.camera.coordinateSystem,reversedDepth:this.camera.reversedDepth,span:this.rig.span},
+      viewport:{width:this.viewportWidth,height:this.viewportHeight,pixelRatio:this.renderer.getPixelRatio()},backend:this.backend,
+      settings:{requested:settings,renderer:{textures:this.texturesEnabled,grassVisible:this.grassVisible,groundGrass:!!this.grass,room:this.roomEnabled,diorama:this.dioramaEnabled,lighting:{...this.lightingSettings},shadows:{...this.shadowSettings},animations:{...this.animationDetail.settings},requestedPixelRatio:this.hostPort.pixelRatio(),requestedViewport:{...this.hostPort.viewport()},backend:this.hostPort.backend()}}});
+    const started=this.hostPort.now(),collector=createGraphicsStyleComparison(context(),started);
+    return new Promise(resolve=>{
+      const active={collector,context,isCurrent,resolve,timer:undefined as ReturnType<typeof setTimeout>|undefined};
+      this.graphicsMeasurement=active;
+      if(!this.graphicsMeasurementIsCurrent()){this.cancelGraphicsMeasurement('context-changed');return;}
+      if(this.hostPort.hidden()){this.cancelGraphicsMeasurement('hidden');return;}
+      // A fixed deadline also resolves when hidden/suspended RAF produces no
+      // further frames. The main visibility owner can cancel immediately.
+      active.timer=setTimeout(()=>{
+        if(this.graphicsMeasurement!==active)return;
+        if(!this.graphicsMeasurementIsCurrent()){this.cancelGraphicsMeasurement('context-changed');return;}
+        try{this.completeGraphicsMeasurement(collector.finish(this.hostPort.now(),context(),!this.hostPort.hidden()));}
+        catch{this.cancelGraphicsMeasurement('invalid-context');}
+      },Math.max(0,Math.ceil(collector.deadlineMs-this.hostPort.now())));
+    });
+  }
+  cancelGraphicsMeasurement(reason='cancelled'):void{
+    const active=this.graphicsMeasurement;if(active)this.completeGraphicsMeasurement(active.collector.cancel(reason,this.hostPort.now()));
+  }
+  private graphicsMeasurementIsCurrent():boolean{
+    const active=this.graphicsMeasurement;if(!active||this.disposed||this.fatalError||this.preparing||this.presentationStopped||this.received?.speed!==0)return false;
+    try{return active.isCurrent();}catch{return false;}
+  }
+  private completeGraphicsMeasurement(result:GraphicsStyleComparisonResult):void{
+    const active=this.graphicsMeasurement;if(!active)return;
+    this.graphicsMeasurement=undefined;if(active.timer!==undefined)clearTimeout(active.timer);active.resolve(result);
+  }
+  private recordGraphicsMeasurement(cpuSubmitMs:number,submittedAtMs:number):void{
+    const active=this.graphicsMeasurement;if(!active)return;
+    if(!this.graphicsMeasurementIsCurrent()){this.cancelGraphicsMeasurement('context-changed');return;}
+    try{
+      const result=active.collector.sample({nowMs:submittedAtMs,context:active.context(),visible:!this.hostPort.hidden(),drawCalls:this.renderer.info.render.drawCalls,triangles:this.renderer.info.render.triangles,cpuSubmitMs});
+      if(result)this.completeGraphicsMeasurement(result);
+    }catch{this.cancelGraphicsMeasurement('invalid-context');}
+  }
   protected readonly frames = new FrameMetrics();
   protected viewportWidth=1;
   protected viewportHeight=1;
@@ -366,7 +430,10 @@ export class SceneRenderCore {
   protected terrainPaintResident=false;
   protected readonly terrainPaintMaterial = opaqueGroundExplorationMaterial256(createSurfaceMaterial('diffuse',0xffffff,{vertexColors:false,map:this.terrainPaintTexture}));
   protected readonly staticPaint=createStylizedSurfaceTexture('vegetation');
-  protected readonly texturedStaticMaterial=createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true,map:this.staticPaint});
+  protected readonly texturedStaticMaterial=(()=>{
+    const mat=createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true,map:this.graphicsStyle.origami?null:this.staticPaint});
+    applyOrigamiSurface(mat,attribute('color','vec3'),undefined,this.graphicsStyle);return mat;
+  })();
   protected readonly waterMaterial = material(0xffffff, { vertexColors: true, roughness: 0.45, metalness: 0.08 });
   protected readonly paintedWater=new PaintedWater(this.terrainPaintTexture,this.environmentLighting.configure,this.animationDetail);
   protected readonly clouds=new WeatherCloudLayer(this.animationDetail,this.decorOcclusion);
@@ -521,6 +588,7 @@ export class SceneRenderCore {
   reportFailure(message: string): void {
     if (this.disposed || this.fatalError) return;
     this.fatalError = message;
+    this.cancelGraphicsMeasurement('renderer-failed');
     this.renderer.setAnimationLoop(null);
     this.keys.clear();
     if (this.hostPort.selectionReady() && this.rig && this.hover) this.cancelDesignation();
@@ -564,6 +632,7 @@ export class SceneRenderCore {
 
   /** Freeze the last prepared scene after a source fault. No World or Native owner is re-admitted. */
   stopPresentation(): void {
+    this.cancelGraphicsMeasurement('presentation-stopped');
     this.presentationStopped = true; this.lastFrame = 0; this.keys.clear();
   }
 
@@ -1516,6 +1585,7 @@ export class SceneRenderCore {
   }
 
   visibilityChanged():void {
+    if(this.hostPort.hidden())this.cancelGraphicsMeasurement('hidden');
     if(this.presentationStopped)return;
     this.frames.reset();this.lastFrame=0;this.animationDetail.reset();
     if(!this.hostPort.hidden()&&this.received){const r=this.received,latest=this.latestCoreInput297;this.setWorld(r.world,true,r.speed,r.tracks,r.immutableSnapshot,r.coreInput297);if(latest){const phase=readNativeCorePhaseInput297(latest),full=this.coreFullInputs297.get(r.world);
@@ -1643,7 +1713,12 @@ export class SceneRenderCore {
     this.ownedOpaqueRevisions435?.preflight(this.camera,shadow);
     this.renderer.info.reset();
     this.hostPort.drawLabels(this.world, this.camera, cellPixels, this.viewportWidth, this.viewportHeight,this.environmentLighting.exploration.field.revision);
-    this.renderScene();
+    if(this.graphicsMeasurement){
+      const started=this.hostPort.now();
+      try{this.renderScene();}catch(cause){this.cancelGraphicsMeasurement('render-failed');throw cause;}
+      const submitted=this.hostPort.now();
+      this.recordGraphicsMeasurement(submitted-started,submitted);
+    }else this.renderScene();
     if(refreshShadow){
       const completed=!shadow.needsUpdate;this.shadowRefresh.capture(now,completed);
       if(cacheEligible)this.pausedShadow.capture(completed,this.camera,shadowLight,skyTick,this.pawns.blend.value,distant,this.viewportWidth,this.viewportHeight);
@@ -1875,6 +1950,7 @@ export class SceneRenderCore {
   }
   dispose(): void {
     if (this.disposed) return;
+    this.cancelGraphicsMeasurement('renderer-disposed');
     this.releaseCalmFullFrame297();this.presentation.clear();this.pendingCore297.length=0;this.latestCoreInput297=undefined;
     this.confirmedIntentReader?.clear();this.confirmedIntents=this.presentedIntentFields=undefined;
     this.confirmedJobMarkers.clear();this.confirmedJobsSource=undefined;
@@ -1934,9 +2010,10 @@ export class SceneRenderCore {
     this.objectSelection?.geometry.dispose();(this.objectSelection?.material as THREE.Material | undefined)?.dispose();
     this.daylight?.dispose();
     this.environmentLighting.dispose();
+    this.graphicsStyle.dispose();
     this.renderer.onDeviceLost = () => {};
     this.renderer.onError = () => {};
-    if (!this.rendererLifetime.closed) { this.rendererLifetime.closed = true; void this.renderer.dispose(); }
+    if (!this.rendererLifetime.closed) { this.rendererLifetime.closed = true; this.rendererDisposal=Promise.resolve(this.renderer.dispose()); }
     this.hostPort.removeSurface();
   }
 }

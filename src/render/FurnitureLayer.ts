@@ -49,6 +49,8 @@ import {spikeTrapParts} from './spike-trap-parts';
 import { penParts } from './pen-parts';
 import { WORLD_SCALE } from '../world/scale';
 import type { Placement } from './primitives';
+import { currentGraphicsStyle } from './graphics-style';
+import { replaceOrigamiFurnitureParts } from './origami/props';
 
 /** Procedural furniture batches rebuilt only when structure content changes. */
 export function buildFurniture(world: World, group: THREE.Group, cutaway: boolean, batches: BoxBatches, contextWorld:World=world): void {
@@ -116,12 +118,13 @@ type FurnitureState={group:THREE.Group;batches:FurnitureBatches;cutaway:boolean;
   colorManagementEnabled:boolean;workingColorSpace:string;
   stamp:object;items:Placement[];spans:Map<number,FurnitureSpan>;sunLamps:SunLampCapture[]};
 
-/** Native-only sink captures the canonically authored array after the real set
- * succeeds. It changes no producer expression, read order or GPU operation. */
-function buildFurnitureOwned(world:World,group:THREE.Group,cutaway:boolean,batches:FurnitureBatches):Placement[]|undefined {
+/** Capture the authored array after the real set succeeds. Default keeps the
+ * original producer order; optional Origami replaces only covered subjects. */
+function buildFurnitureOwned(world:World,group:THREE.Group,cutaway:boolean,batches:FurnitureBatches,origami=false):Placement[]|undefined {
   let owned:Placement[]|undefined;
   const sink:Pick<BoxBatches,'set'>={
     set(...args:Parameters<BoxBatches['set']>):void {
+      if(origami&&args[1]==='furniture')args[2]=replaceOrigamiFurnitureParts(world,args[2]);
       batches.set(...args);
       if(args[0]===group&&args[1]==='furniture')owned=args[2];
     },
@@ -134,12 +137,16 @@ function buildFurnitureOwned(world:World,group:THREE.Group,cutaway:boolean,batch
 
 /** Renderer-owned list and spans, never a retained World or source structure. */
 export class FurniturePresentation {
+  private readonly graphicsStyle=currentGraphicsStyle();
   private state:FurnitureState|undefined;
 
   clear():void {this.state=undefined;}
 
   update(world:World,group:THREE.Group,cutaway:boolean,batches:FurnitureBatches,
     flowerChanges?:readonly number[],readonlyNative=false):void {
+    // The optional recipe changes part order/count. Keep its full resident
+    // rebuild until a separate span contract qualifies incremental flowers.
+    if(this.graphicsStyle?.origami){this.clear();buildFurnitureOwned(world,group,cutaway,batches,true);return;}
     if(!readonlyNative){this.clear();buildFurniture(world,group,cutaway,batches as BoxBatches);return;}
     const state=this.state;
     // Keep only a local predecessor until every read/patch/capture succeeds.

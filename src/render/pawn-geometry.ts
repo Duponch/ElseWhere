@@ -6,6 +6,7 @@ import { APPAREL } from '../sim/apparel-rules';
 import {ITEM_VISUAL_IDS,itemCargoKind,itemGeometry,centreItemParts} from './item-presentation';
 import {placementGeometry} from './item-portrait';
 import { RESIDENT_WEAPON_VISUALS269 } from './weapon-shape';
+import {currentGraphicsStyle} from './graphics-style';
 
 // Disjoint from weapon tags; -4 is the bolt-action rifle, not the parka hood.
 export const PARKA_HOOD_DYE = -6;
@@ -20,6 +21,10 @@ export const SIMPLE_HELMET_DYE = -12;
 export const PAWN_EYE_OPEN = 60;
 export const PAWN_EYE_CLOSED = 61;
 export const PAWN_EYE_CROSS = 62;
+/** Presentation-only resident work props; never equipment or inventory. */
+export const WORK_AXE_DYE = -30;
+export const WORK_PICKAXE_DYE = -31;
+export const WORK_SICKLE_DYE = -32;
 
 /** Eight rigid bones, authored entirely in code. Each vertex has one bone influence.
  * The bind position/pivot and animation state are evaluated in the vertex shader.
@@ -27,8 +32,10 @@ export const PAWN_EYE_CROSS = 62;
  * This deliberately small prototype rig is not yet the future glTF atlas importer.
  */
 export function pawnGeometry(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false): THREE.InstancedBufferGeometry {
+  const origami=currentGraphicsStyle()?.origami===true;
   const positions: number[] = [], normals: number[] = [], colors: number[] = [];
   const bones: number[] = [], pivots: number[] = [], dyes: number[] = [];
+  const paperUV:number[]=[];
   const indices:number[]=[];
   // Small accessories retain their hard-edged shapes. The anatomical body is
   // authored as continuous exterior shells below, rather than overlapping
@@ -46,7 +53,7 @@ export function pawnGeometry(includeSmithing=false,includeMace=false,includeLong
       box.computeVertexNormals();
     }
     if (roll) box.rotateZ(roll);
-    const pos = box.getAttribute('position'), normal = box.getAttribute('normal');
+    const pos = box.getAttribute('position'), normal = box.getAttribute('normal'),uv=box.getAttribute('uv');
     const col = new THREE.Color(color);
     const base=bones.length;
     for (let i = 0; i < pos.count; i++) {
@@ -54,12 +61,37 @@ export function pawnGeometry(includeSmithing=false,includeMace=false,includeLong
       normals.push(normal.getX(i), normal.getY(i), normal.getZ(i));
       colors.push(col.r, col.g, col.b);
       bones.push(bone); pivots.push(...pivot); dyes.push(dye);
+      if(origami)paperUV.push(uv.getX(i),uv.getY(i));
       indices.push(base+i);
     }
     box.dispose();
   };
   type Ring = { y:number; x:number; z:number; halfX:number; halfZ:number; corner:number };
   const addShell = (rings:readonly Ring[],bone:number,pivot:readonly [number,number,number],color:number,dye=0) => {
+    if(origami){
+      // Keep the authored silhouettes and medical/appearance identities, but
+      // fold each envelope into four paper faces with sharp shared creases.
+      // Vertices are duplicated per actual face for stable face-local paint.
+      const tint=new THREE.Color(color),bottom=rings[0],top=rings[rings.length-1];
+      const point=(r:Ring,side:number):number[]=>[r.x+([ -1,1,1,-1 ][side])*r.halfX,r.y,r.z+([ -1,-1,1,1 ][side])*r.halfZ];
+      const emit=(points:readonly number[][],uvs:readonly number[][]):void=>{
+        const a=new THREE.Vector3().fromArray(points[0]),b=new THREE.Vector3().fromArray(points[1]),c=new THREE.Vector3().fromArray(points[2]);
+        const normal=b.sub(a).cross(c.sub(a)).normalize(),base=bones.length;
+        for(let i=0;i<points.length;i++){
+          positions.push(...points[i]);normals.push(normal.x,normal.y,normal.z);colors.push(tint.r,tint.g,tint.b);bones.push(bone);pivots.push(...pivot);dyes.push(dye);paperUV.push(...uvs[i]);
+        }
+        indices.push(base,base+1,base+2,base,base+2,base+3);
+      };
+      for(let band=0;band<rings.length-1;band++)for(let side=0;side<4;side++){
+        const lower=rings[band],upper=rings[band+1],next=(side+1)%4;
+        // A new paint sheet for each planar prism face, rather than seams at
+        // arbitrary UV grid lines through the body or the exposed face.
+        emit([point(lower,side),point(upper,side),point(upper,next),point(lower,next)],[[0,0],[0,1],[1,1],[1,0]]);
+      }
+      emit([point(bottom,0),point(bottom,1),point(bottom,2),point(bottom,3)],[[0,0],[1,0],[1,1],[0,1]]);
+      emit([point(top,3),point(top,2),point(top,1),point(top,0)],[[0,0],[1,0],[1,1],[0,1]]);
+      return;
+    }
     const tint=new THREE.Color(color),sides=8;
     const contour=(ring:Ring,i:number):readonly [number,number,number] => {
       const {x,z,halfX:a,halfZ:b,corner:c,y}=ring;
@@ -203,25 +235,57 @@ export function pawnGeometry(includeSmithing=false,includeMace=false,includeLong
   for(const variant of RESIDENT_WEAPON_VISUALS269)if((variant.item!=='mace-family'||includeMace)&&(variant.item!=='longsword-family'||includeLongsword)&&(variant.item!=='spear-family'||includeSpear))for(const part of variant.parts)addPart(
     [part.size[2],part.size[0],part.size[1]].map(n=>n/PAWN_MODEL_SCALE),
     [.205+part.center[2]/PAWN_MODEL_SCALE,.68+(variant.item==='bolt-action-rifle'||variant.item==='emp-launcher'||variant.item==='mace-family'||variant.item==='longsword-family'||variant.item==='spear-family'?1:-1)*part.center[0]/PAWN_MODEL_SCALE,part.center[1]/PAWN_MODEL_SCALE],0,[0,.61,0],part.color,variant.dye);
+  if(origami){
+    const hand=[.23,.62,.05],pivot=[.23,1.01,0],wood=0x8c623e,steel=0x85969a;
+    const tool=(size:number[],at:number[],dye:number,color=steel,roll=0,taper?:readonly [number,number,number,number])=>addPart(size,[hand[0]+at[0],hand[1]+at[1],hand[2]+at[2]],3,pivot,color,dye,roll,taper);
+    // These three rigid props share the actual right-arm bone and its bind
+    // pivot. Confirmed job presentation alone chooses which one is visible.
+    tool([.038,.61,.040],[0,.12,0],WORK_AXE_DYE,wood);
+    tool([.22,.17,.045],[.09,.365,0],WORK_AXE_DYE,steel,0,[1.15,.78,1,1]);
+    tool([.075,.10,.06],[-.045,.36,0],WORK_AXE_DYE,0x667478);
+    tool([.038,.61,.040],[0,.12,0],WORK_PICKAXE_DYE,wood);
+    tool([.25,.055,.055],[-.07,.365,0],WORK_PICKAXE_DYE,steel,-.12,[.9,1,.8,1]);
+    tool([.22,.046,.046],[.155,.345,0],WORK_PICKAXE_DYE,steel,-.26,[.48,1,.55,1]);
+    tool([.042,.38,.044],[0,.055,0],WORK_SICKLE_DYE,wood);
+    // A short angular crescent made of connected paper-steel facets.
+    tool([.16,.045,.032],[.055,.24,0],WORK_SICKLE_DYE,steel,.20);
+    tool([.12,.04,.030],[.175,.285,0],WORK_SICKLE_DYE,steel,.55);
+    tool([.09,.035,.028],[.235,.355,0],WORK_SICKLE_DYE,steel,1.03);
+    tool([.07,.028,.024],[.235,.42,0],WORK_SICKLE_DYE,steel,1.75,[.35,1,.5,1]);
+  }
   const geometry = new THREE.InstancedBufferGeometry();
   // WebGPU guarantees only eight vertex-buffer slots. Keeping authored attributes
   // interleaved leaves room for the seven independent per-instance attributes.
-  const vertexData = new Float32Array(bones.length * 14);
+  const stride=origami?16:14;
+  const vertexData = new Float32Array(bones.length * stride);
   for (let i = 0; i < bones.length; i++) {
-    vertexData.set(positions.slice(i * 3, i * 3 + 3), i * 14);
-    vertexData.set(normals.slice(i * 3, i * 3 + 3), i * 14 + 3);
-    vertexData.set(colors.slice(i * 3, i * 3 + 3), i * 14 + 6);
-    vertexData[i * 14 + 9] = bones[i];
-    vertexData.set(pivots.slice(i * 3, i * 3 + 3), i * 14 + 10);
-    vertexData[i * 14 + 13] = dyes[i];
+    vertexData.set(positions.slice(i * 3, i * 3 + 3), i * stride);
+    vertexData.set(normals.slice(i * 3, i * 3 + 3), i * stride + 3);
+    vertexData.set(colors.slice(i * 3, i * 3 + 3), i * stride + 6);
+    vertexData[i * stride + 9] = bones[i];
+    if(origami){
+      vertexData[i*stride+10]=dyes[i];
+      vertexData.set(pivots.slice(i*3,i*3+3),i*stride+11);
+      vertexData[i*stride+14]=paperUV[i*2];vertexData[i*stride+15]=paperUV[i*2+1];
+    }else{
+      vertexData.set(pivots.slice(i * 3, i * 3 + 3), i * stride + 10);
+      vertexData[i * stride + 13] = dyes[i];
+    }
   }
-  const vertices = new THREE.InterleavedBuffer(vertexData, 14);
+  const vertices = new THREE.InterleavedBuffer(vertexData, stride);
   geometry.setAttribute('position', new THREE.InterleavedBufferAttribute(vertices, 3, 0));
   geometry.setAttribute('normal', new THREE.InterleavedBufferAttribute(vertices, 3, 3));
   geometry.setAttribute('color', new THREE.InterleavedBufferAttribute(vertices, 3, 6));
   geometry.setAttribute('boneId', new THREE.InterleavedBufferAttribute(vertices, 1, 9));
-  geometry.setAttribute('bindPivot', new THREE.InterleavedBufferAttribute(vertices, 3, 10));
-  geometry.setAttribute('dye', new THREE.InterleavedBufferAttribute(vertices, 1, 13));
+  geometry.setAttribute('bindPivot', new THREE.InterleavedBufferAttribute(vertices, 3, origami?11:10));
+  geometry.setAttribute('dye', new THREE.InterleavedBufferAttribute(vertices, 1, origami?10:13));
+  if(origami){
+    // One shader input replaces separate bone/dye locations, leaving room
+    // for actual face UVs within WebGPU's sixteen-attribute minimum.
+    geometry.setAttribute('pawnRigTraits',new THREE.InterleavedBufferAttribute(vertices,2,9));
+    const uv=new THREE.InterleavedBufferAttribute(vertices,2,14);
+    geometry.setAttribute('origamiPaintUv',uv);geometry.setAttribute('uv',uv);geometry.userData.origami=true;
+  }
   geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indices),1));
   geometry.instanceCount = 0;
   return geometry;

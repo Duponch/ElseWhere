@@ -8,6 +8,8 @@ import { floraColor, floraSize, isClusterPlantSpecies } from './flora-presentati
 import { noise } from './StaticGeometry';
 import type { NaturalPresentationChange } from './NaturalResourcePresentation';
 import { ResourceTargetTint } from './resource-target-tint';
+import { currentGraphicsStyle } from './graphics-style';
+import { createOrigamiGroundTuftGeometry } from './origami/flora';
 
 const BASE_STEMS = [
   { x: 0, z: 0, height: 1, leanX: .04, leanZ: -.025 },
@@ -70,7 +72,8 @@ export function plantClusterPresentation(world: World, resource: Resource, size 
  * Slots survive ordinary snapshots; only changed collections/growth stages upload. */
 export class PlantClusterLayer {
   readonly group = new THREE.Group();
-  private readonly geometry = createPlantClusterGeometry();
+  private readonly graphicsStyle = currentGraphicsStyle();
+  private readonly geometry = this.graphicsStyle?.origami ? createOrigamiGroundTuftGeometry() : createPlantClusterGeometry();
   private mesh: THREE.InstancedMesh;
   private readonly slots = new Map<number, { index: number; signature: string }>();
   private readonly free: number[] = [];

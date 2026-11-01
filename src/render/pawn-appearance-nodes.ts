@@ -5,9 +5,18 @@ import {LONGSWORD_DYE270} from './longsword-parts270';
 import {SPEAR_DYE272} from './spear-parts272';
 import {MACE_DYE269} from './mace-parts269';
 
+/** Original CPU aliases remain inspectable; the Origami shader spends one
+ * vertex location on both traits, keeping real UVs within the device limit. */
+export function pawnBoneNode(origami=false):Node<'float'> {
+  return origami?attribute('pawnRigTraits','vec2').x:attribute('boneId','float');
+}
+export function pawnDyeNode(origami=false):Node<'float'> {
+  return origami?attribute('pawnRigTraits','vec2').y:attribute('dye','float');
+}
+
 /** Applied equally to vertices and rigid-bone pivots, before pose animation. */
-export function pawnMorph(point:Node<'vec3'>) {
-  const bone=attribute('boneId','float'),dye=attribute('dye','float'),shape=attribute('aShape','vec4');
+export function pawnMorph(point:Node<'vec3'>,origami=false) {
+  const bone=pawnBoneNode(origami),dye=pawnDyeNode(origami),shape=attribute('aShape','vec4');
   // Tens encode corpse presentation stage in the existing appearance slot.
   const bodyType=shape.x.mod(10);
   const factor=(column:number)=>BODY_PROPORTIONS.reduce<Node<'float'>>((v,row,i)=>bodyType.equal(i).select(float(row[column]!),v),float(1));
@@ -22,11 +31,16 @@ export function pawnMorph(point:Node<'vec3'>) {
   const shaped=head.select(vec3(point.x.mul(headWidth),point.y,point.z),body);
   // Weapons preserve their dimensions, with only their holster shifted outwards.
   const weapon=dye.equal(-1).or(dye.equal(-4)).or(dye.equal(-5)).or(dye.equal(MACE_DYE269)).or(dye.equal(LONGSWORD_DYE270)).or(dye.equal(SPEAR_DYE272));
-  return weapon.select(vec3(point.x.add(shoulder.sub(1).mul(.205)),point.y,point.z),shaped);
+  const equipped=weapon.select(vec3(point.x.add(shoulder.sub(1).mul(.205)),point.y,point.z),shaped);
+  if(!origami)return equipped;
+  // -30/-31/-32 are the resident axe/pickaxe/sickle tags from pawn-geometry.
+  // Keep each tool's dimensions rigid; only its grip follows the shaped hand.
+  const workTool=dye.equal(-30).or(dye.equal(-31)).or(dye.equal(-32));
+  return workTool.select(vec3(point.x.add(shoulder.sub(1).mul(.23)),point.y,point.z.add(depth.sub(1).mul(.05))),equipped);
 }
 
-export function hiddenAppearancePart() {
-  const dye=attribute('dye','float'),shape=attribute('aShape','vec4');
+export function hiddenAppearancePart(origami=false) {
+  const dye=pawnDyeNode(origami),shape=attribute('aShape','vec4');
   const hair=dye.greaterThanEqual(100).and(dye.lessThan(200));
   const beard=dye.greaterThanEqual(200);
   const mask=hair.select(shape.z,shape.w),index=hair.select(dye.sub(100),dye.sub(200));

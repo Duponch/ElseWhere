@@ -1,4 +1,6 @@
 import * as THREE from 'three/webgpu';
+import {GraphicsStyleContext,withGraphicsStyle} from './graphics-style';
+import type {GraphicsStylePreferences} from '../ui3d/native-preferences';
 import {actualCameraView301} from './actual-camera-view-301.ts';
 import type {ActualView301} from '../sim/actual-view-301.ts';
 import {SceneRenderCore} from './SceneRenderCore';
@@ -53,13 +55,14 @@ export class ColonyRenderer extends SceneRenderCore {
     if(this.cameraOnlyPointer!==event.pointerId)return false;
     this.cameraOnlyPointer=undefined;this.pointerDown=null;return true;
   }
-  static async create(host: HTMLElement, onPick: (x: number, z: number) => void, groundGrassEnabled = true): Promise<ColonyRenderer> {
+  static async create(host: HTMLElement, onPick: (x: number, z: number) => void, groundGrassEnabled = true,graphics?:GraphicsStylePreferences): Promise<ColonyRenderer> {
+    const graphicsContext=new GraphicsStyleContext(graphics);
     const renderer = new ReentrantRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     const lifetime: RendererLifetime = { closed: false };
     let view: ColonyRenderer | undefined;
     try {
       await renderer.init();
-      view = new this(host, onPick, renderer, groundGrassEnabled, lifetime);
+      view = withGraphicsStyle(graphicsContext,()=>new this(host, onPick, renderer, groundGrassEnabled, lifetime));
       if (view.fatalError) throw new Error(view.fatalError);
       const ready = view;
       renderer.setAnimationLoop((time) => {
@@ -69,6 +72,7 @@ export class ColonyRenderer extends SceneRenderCore {
     } catch (error) {
       try { if (view) view.dispose(); else if (!lifetime.closed) { renderer.setAnimationLoop(null); lifetime.closed = true; await renderer.dispose(); renderer.domElement.remove(); } }
       catch { /* Preserve the initialization failure even if teardown fails. */ }
+      if(!view)graphicsContext.dispose();
       throw error;
     }
   }

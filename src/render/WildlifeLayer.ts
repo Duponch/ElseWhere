@@ -10,6 +10,8 @@ import {ActorAnimationCache,sampleActorRoot} from './ActorAnimationCache';
 import {PawnTweener297} from './PawnTweener297';
 import {sampleAnimalRig} from './actor-animation-sampling';
 import * as THREE from 'three/webgpu';
+import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
+import {origamiAnimalGeometry} from './origami/animal-geometry';
 import { coreTimeSeconds,localTimeSeconds } from '../bridge/clock-rate';
 import { Fn,If,attribute,cos,sin,float,instanceIndex,normalLocal,positionLocal,vec3,uniform,renderGroup,mix } from 'three/tsl';
 import { hareGeometry } from './hare-geometry';
@@ -84,15 +86,16 @@ class SpeciesRig {
   constructor(readonly travelTime:WildlifeLayer['travelTime'],readonly species:string,surfaceTexture:THREE.Texture,style:AnimalSlaughterMarkerStyle,private readonly animationDetail:AnimationDetail,configure?:(m:THREE.MeshStandardNodeMaterial)=>void) {
     this.animationCache=new ActorAnimationCache(animationDetail);
     this.gaitRate=animalGaitRadiansPerUnit(species);
-    const geometry=hareGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species);
+    const graphics=currentGraphicsStyle();
+    const geometry=(graphics?.origami?origamiAnimalGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species):undefined)??hareGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species);
     geometry.userData.animationCache=this.animationCache;
     const part=geometry.getAttribute('animalPart');this.sampledBones=[...new Set(Array.from({length:part.count},(_,i)=>part.getX(i)))].sort((a,b)=>a-b);
-    bakeAnimalCoatCoordinates(geometry,species);
+    if(!geometry.hasAttribute('animalPaintUv'))bakeAnimalCoatCoordinates(geometry,species);
     geometry.computeBoundingBox();
     const bounds=geometry.boundingBox!;
     // A live sleeper or downed animal rolls onto its side around the trunk.
     // The full bind-space width sets its floor and height; no axis is crushed.
-    const restFloor=.025-bounds.min.x,bodyCenter=animalParts(species)[0]!.center[1];
+    const restFloor=.025-bounds.min.x,bodyCenter=geometry.userData.origamiBodyCenter??animalParts(species)[0]!.center[1];
     this.restingHeight=bounds.max.x+restFloor;
     this.restingRadius=Math.max(Math.abs(bodyCenter-bounds.min.y),Math.abs(bodyCenter-bounds.max.y),Math.abs(bounds.min.z),Math.abs(bounds.max.z))+.1;
     const mat=material(0xffffff);configure?.(actorExplorationMaterial256(mat));
@@ -178,6 +181,7 @@ class SpeciesRig {
     const textured=material(0xffffff);configure?.(actorExplorationMaterial256(textured));
     textured.positionNode=mat.positionNode;
     textured.colorNode=mat.colorNode.mul(animalCoatShade(surfaceTexture));
+    if(geometry.userData.origamiReference)applyOrigamiSurface(textured,mat.colorNode,undefined,graphics);
     this.plainMaterial=mat;this.texturedMaterial=textured;
     this.mesh=new THREE.Mesh(geometry,textured);this.mesh.name=`Wild ${this.species} — GPU rig`;this.mesh.frustumCulled=false;this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.flames=attachedFireMesh(this.mesh.geometry,this,.6,this.animationDetail);
     this.selection=pawnSelectionMesh(this.mesh.geometry as THREE.InstancedBufferGeometry,this);this.selection.visible=false;

@@ -20,6 +20,8 @@ import {buildNativeInspector,setNativeInspectorTab} from './ui3d/native-inspecto
 import {NativeHudCards} from './ui3d/native-hud';
 import type {NativeHudViewAction} from './ui3d/native-hud';
 import {NATIVE_DOCK_PREFERENCE_KEY,parseNativeDockPreferences,NATIVE_UI_SCALE_PREFERENCE_KEY,parseNativeUiScale,normalizeNativeUiScale,type NativeDockPreferences} from './ui3d/native-preferences';
+import {GRAPHICS_STYLE_PREFERENCE_KEY,parseGraphicsStylePreferences,normalizeGraphicsStylePreferences,type GraphicsStylePreferences} from './ui3d/native-preferences';
+import type {GraphicsStyleComparisonResult} from './render/graphics-style-comparison';
 import {installNativeCardboardCursors} from './ui/native-cardboard-cursors';
 import type {NativeUiState,NativeUiActions,NativePage} from './ui3d/native-contract';
 import {createNativeShipTerminal298,readAdoptedShipCredits298} from './ui3d/native-ship-terminal-298';
@@ -639,6 +641,10 @@ let decorOcclusionPreference = DEFAULT_DECOR_OCCLUSION_ENABLED;
 let lightingSettings = { ...DEFAULT_LIGHTING_SETTINGS };
 let shadowSettings = { ...DEFAULT_SHADOW_SETTINGS };
 let animationSettings = { ...DEFAULT_ANIMATION_SETTINGS };
+let graphicsStylePreferences=parseGraphicsStylePreferences(null);
+let graphicsStyleChanging=false;
+const graphicsMeasurements=new Map<string,GraphicsStyleComparisonResult>();
+const graphicsSceneIds=new WeakMap<object,number>();let nextGraphicsSceneId=0;
 let uiFont = readUiFont();
 applyUiFont(uiFont);
 let soundEnabled = true;
@@ -660,6 +666,7 @@ try {
   lightingSettings = parseLightingSettings(localStorage.getItem(LIGHTING_PREFERENCE_KEY));
   shadowSettings = parseShadowSettings(localStorage.getItem(SHADOW_PREFERENCE_KEY));
   animationSettings = parseAnimationSettings(localStorage.getItem(ANIMATION_PREFERENCE_KEY));
+  graphicsStylePreferences=parseGraphicsStylePreferences(localStorage.getItem(GRAPHICS_STYLE_PREFERENCE_KEY));
   soundEnabled = localStorage.getItem(SOUND_ENABLED_PREFERENCE_KEY) !== 'false';
   const storedVolume = Number(localStorage.getItem(SOUND_VOLUME_PREFERENCE_KEY));
   if (localStorage.getItem(SOUND_VOLUME_PREFERENCE_KEY) !== null && Number.isFinite(storedVolume)) soundVolume = Math.max(0, Math.min(1, storedVolume));
@@ -841,6 +848,52 @@ function setAnimationSettings(settings: AnimationSettings): boolean {
   animationSettings=parseAnimationSettings(settings);renderer?.setAnimationSettings(animationSettings);refreshPerformanceControls();
   try { localStorage.setItem(ANIMATION_PREFERENCE_KEY,JSON.stringify(animationSettings));return true; } catch { return false; }
 }
+async function setGraphicsStylePreferences(settings:GraphicsStylePreferences):Promise<boolean>{
+ if(graphicsStyleChanging||graphicsRecovering||replacingWorld||presentationPreparation)throw new Error('La préparation de l’affichage est déjà en cours.');
+ const next=normalizeGraphicsStylePreferences(settings),previous=graphicsStylePreferences;
+ if(next.style===previous.style){renderer?.setGraphicsStyleParameters(next);graphicsStylePreferences=next;}
+ else if(!renderer){graphicsStylePreferences=next;}
+ else{
+  const view=renderer.captureGraphicsView(),interaction=renderer.captureGraphicsInteraction(),epoch=campaignPresentationEpoch;
+  const restore=(active:ColonyRenderer)=>{active.restoreGraphicsView(view);active.restoreGraphicsInteraction(interaction);active.setSelectedPawns(selection.ids);active.setSelectedObjects(selectedObjects);};
+  graphicsStyleChanging=true;graphicsRecovering=true;syncStorageButtons();
+  // Only one complete renderer/device is resident. Never reload or replace the
+  // simulation, its Worker, tickets, owners or saves for a visual preference.
+  const old=renderer;
+  try{
+   renderer=undefined;await old.disposeAsync();graphicsStylePreferences=next;
+   await prepareWorld();
+   if(epoch===campaignPresentationEpoch&&renderer)restore(renderer);
+  }catch(error){
+   graphicsStylePreferences=previous;
+   if(renderer){const failed=renderer;renderer=undefined;await failed.disposeAsync();}
+   try{await prepareWorld();if(epoch===campaignPresentationEpoch&&renderer)restore(renderer);}catch{/* Existing display recovery keeps the simulation and saves intact. */}
+   throw error;
+  }finally{graphicsStyleChanging=false;graphicsRecovering=false;syncStorageButtons();updateIncident();}
+ }
+ try{localStorage.setItem(GRAPHICS_STYLE_PREFERENCE_KEY,JSON.stringify(graphicsStylePreferences));return true;}catch{return false;}
+}
+function graphicsMeasurementText():string{
+ const rows=[...graphicsMeasurements.values()].map(result=>{
+  const style=result.context.preferences.style==='origami'?'Origami':'Par défaut';
+  if(result.status!=='complete')return `${style} : mesure interrompue (${result.reason??result.status}).`;
+  return `${style} : intervalle médian ${result.frameIntervalsMs?.median.toFixed(2)} ms, p95 ${result.frameIntervalsMs?.p95.toFixed(2)} ms ; soumission CPU ${result.cpuSubmitMs?.mean.toFixed(2)} ms ; ${Math.round(result.drawCalls?.mean??0)} appels, ${Math.round(result.triangles?.mean??0)} triangles. GPU non mesuré.`;
+ });
+ const values=[...graphicsMeasurements.values()].filter(value=>value.status==='complete');
+ if(values.length===2){const key=(v:GraphicsStyleComparisonResult)=>JSON.stringify({...v.context,preferences:undefined});rows.push(key(values[0]!)===key(values[1]!)?'Même scène, caméra et paramètres : mesures comparables dans cette session.':'Scène, caméra ou paramètres différents : refaire les deux mesures pour comparer.');}
+ return rows.join('\n')||'Mettez la colonie en pause. La mesure masque les Options et conserve votre caméra. Les résultats restent consultables ici pour les deux styles.';
+}
+async function measureGraphicsStyle():Promise<void>{
+ const active=renderer,world=snapshot,epoch=campaignPresentationEpoch;
+ if(!active||!world||currentSpeed!==0||graphicsStyleChanging||graphicsRecovering||replacingWorld||presentationPreparation)throw new Error('Mettez une colonie affichée en pause avant de mesurer.');
+ let id=graphicsSceneIds.get(world);if(id===undefined){id=++nextGraphicsSceneId;graphicsSceneIds.set(world,id);}
+ const panel=currentPanel,tool=currentTool,selectionKey=[...selection.ids].join(','),objectKey=JSON.stringify(selectedObjects);
+ setPanel(null,true);frontMenu.hide();
+ try{
+  const result=await active.measureGraphicsStyle(`${epoch}:${id}:${world.seed}:${world.tick}`,{scope:'paused-colony',ui:'game-hud'},()=>renderer===active&&snapshot===world&&currentSpeed===0&&campaignPresentationEpoch===epoch&&!frontMenu.isOpen()&&currentPanel===null&&currentTool===tool&&[...selection.ids].join(',')===selectionKey&&JSON.stringify(selectedObjects)===objectKey&&!graphicsStyleChanging&&!graphicsRecovering&&!replacingWorld);
+  graphicsMeasurements.set(result.context.preferences.style,result);
+ }finally{if(epoch===campaignPresentationEpoch&&currentPanel===null)setPanel(panel,true);}
+}
 const refreshPerformanceControls=bindRenderPerformanceControls(document.querySelector('#menu-panel')!,'game-',{
   getShadows:()=>shadowSettings,setShadows:setShadowSettings,
   getAnimations:()=>animationSettings,setAnimations:setAnimationSettings,
@@ -988,6 +1041,8 @@ const frontOptions:FrontMenuOptions = {
   onExport:exportCurrentColony,
   getShadowSettings:()=>({...shadowSettings}),onShadowSettingsChange:setShadowSettings,
   getAnimationSettings:()=>({...animationSettings}),onAnimationSettingsChange:setAnimationSettings,
+  getGraphicsStylePreferences:()=>({...graphicsStylePreferences}),onGraphicsStylePreferencesChange:setGraphicsStylePreferences,
+  getGraphicsStyleMeasurement:graphicsMeasurementText,onMeasureGraphicsStyle:measureGraphicsStyle,canMeasureGraphicsStyle:()=>!!renderer&&!!snapshot&&currentSpeed===0&&!graphicsRecovering&&!graphicsStyleChanging&&!presentationPreparation,
   getSaves: () => session.saves(),
   getTexturesEnabled: () => texturesEnabled,
   getUiFont:()=>uiFont,
@@ -2376,7 +2431,7 @@ audioGestureRoot.addEventListener('click', event => {
   const panelButton = button.matches('[data-panel], [data-guide-panel], [data-close-panel], .front-back, .front-next');
   audio.playInterface(panelButton ? 'ui.panel' : 'ui.click');
 }, { capture: true });
-document.addEventListener('visibilitychange', () => { music.setHidden(document.hidden); audio.setHidden(document.hidden); });
+document.addEventListener('visibilitychange', () => { music.setHidden(document.hidden); audio.setHidden(document.hidden);if(document.hidden)renderer?.cancelGraphicsMeasurement('hidden'); });
 function setViewControlLabel(id:string,label:string):void {
   const button=el<HTMLButtonElement>(id);
   button.querySelector<HTMLElement>('.view-control-label')!.textContent=label;
@@ -2608,7 +2663,7 @@ async function prepareWorldView(): Promise<void> {
   await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
   if(!hasAuthority()){if(campaignOnly)renderCampaignOnly();return;}
   if (!renderer) {
-    const created=await MainColonyRenderer.create(el('viewport'), pickCell, groundGrassEnabled);
+    const created=await MainColonyRenderer.create(el('viewport'), pickCell, groundGrassEnabled,graphicsStylePreferences);
     if(!hasAuthority()){created.dispose();if(campaignOnly)renderCampaignOnly();return;}
     renderer=created;
     renderer.setDioramaEnabled(dioramaEnabled);

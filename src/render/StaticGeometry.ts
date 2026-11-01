@@ -27,7 +27,7 @@ export function noise(x: number, z: number, salt = 0): number {
  * per-cell silhouettes and colors stay intact; only submissions are combined.
  * Dynamic pawns and cargo remain GPU-instanced and are never baked here.
  */
-export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.BufferGeometry; items: Placement[] }[], mat: THREE.Material, shadows = true, includeUv = false): THREE.Mesh | undefined {
+export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.BufferGeometry; items: Placement[] }[], mat: THREE.Material, shadows = true, includeUv = false,faceUv=false): THREE.Mesh | undefined {
   const vertexCount = parts.reduce((sum, part) => sum + part.geometry.getAttribute('position').count * part.items.length, 0);
   const indexCount = parts.reduce((sum, part) => sum + (part.geometry.index?.count ?? part.geometry.getAttribute('position').count) * part.items.length, 0);
   if (!vertexCount) { for (const part of parts) part.geometry.dispose(); if (!mat.userData.rendererOwned) mat.dispose(); return; }
@@ -73,8 +73,8 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
         if(uvs){
           const uvOffset=(vertex+i)*2;
           const [spanU,spanV]=physicalPatternSpan(sx,sy,sz,normal.getX(i),normal.getY(i));
-          uvs[uvOffset]=((uv?.getX(i)??0)-.5)*spanU+PATTERN_SPAN*.5+phaseU;
-          uvs[uvOffset+1]=((uv?.getY(i)??0)-.5)*spanV+PATTERN_SPAN*.5+phaseV;
+          uvs[uvOffset]=faceUv?(uv?.getX(i)??0):((uv?.getX(i)??0)-.5)*spanU+PATTERN_SPAN*.5+phaseU;
+          uvs[uvOffset+1]=faceUv?(uv?.getY(i)??0):((uv?.getY(i)??0)-.5)*spanV+PATTERN_SPAN*.5+phaseV;
         }
       }
       for (let i = 0; i < (geometry.index?.count ?? pos.count); i++) indices[index++] = vertex + (geometry.index?.getX(i) ?? i);

@@ -5,6 +5,7 @@ import { WildlifeLayer } from '../src/render/WildlifeLayer';
 import { PAWN_SURFACE } from '../src/render/actor-surface';
 import { createStylizedSurfaceTexture } from '../src/render/stylized-surfaces';
 import { createWorld } from '../src/sim/index';
+import {ANIMAL_SPECIES_IDS} from '../src/sim/animal-species';
 
 function hasPigmentSample(material: THREE.MeshStandardNodeMaterial): boolean {
   let found = false;
@@ -34,8 +35,8 @@ test('actor texture switch preserves resident rigs and leaves plain color shader
     expect(human.material).toBe(humanPlain);
 
     const animals = wildlife.mesh.children.filter(mesh => mesh.name.startsWith('Wild ')) as THREE.Mesh[];
-    expect(animals).toHaveLength(7); // V190 adds the resident red-fox rig.
-    expect(animals.map(mesh=>mesh.name)).toEqual(['hare','snow-hare','deer','muffalo','gazelle','dromedary','red-fox'].map(species=>`Wild ${species} — GPU rig`));
+    expect(animals).toHaveLength(ANIMAL_SPECIES_IDS.length);
+    expect(animals.map(mesh=>mesh.name)).toEqual(ANIMAL_SPECIES_IDS.map(species=>`Wild ${species} — GPU rig`));
     const animalGeometry = animals.map(mesh => mesh.geometry);
     const animalTextured = animals.map(mesh => mesh.material as THREE.MeshStandardNodeMaterial);
     expect(animalTextured.every(hasPigmentSample)).toBe(true);

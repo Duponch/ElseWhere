@@ -23,7 +23,7 @@ import { humanCorpseAge } from '../sim/human-corpses';
 import { HUMAN_LIMB_VISUALS,humanLimbVisualMask,packHumanShape } from './human-anatomy-presentation';
 import { anestheticStage } from '../sim/anesthetic';
 import { appearanceShape,pawnBaseColor } from './pawn-appearance-shape';
-import { pawnMorph,hiddenAppearancePart } from './pawn-appearance-nodes';
+import { pawnMorph,hiddenAppearancePart,pawnBoneNode,pawnDyeNode } from './pawn-appearance-nodes';
 import { BIOME_CARGO } from './biome-cargo';
 import {itemCargoKind} from './item-presentation';
 import { firePosition } from '../sim/fire-rules';
@@ -54,8 +54,10 @@ import { constructionWorkTarget } from '../sim/construction-rules';
 import { pawnSelectionMesh } from './PawnSelectionLayer';
 import type { MotionTimeline } from './MotionTimeline';
 import * as THREE from 'three/webgpu';
+import {currentGraphicsStyle,withGraphicsStyle,applyOrigamiSurface} from './graphics-style';
 import { Fn, If, attribute, cos, float, instanceIndex, mix, positionLocal, sin, uniform, renderGroup, vec2,vec3,vec4, varying } from 'three/tsl';
-import { TICKS_PER_SECOND,type MaterialPile,type Pawn,type World } from '../sim/types';
+import { TICKS_PER_SECOND,type MaterialPile,type Pawn,type World,type Job } from '../sim/types';
+import {origamiWorkTool} from './origami/work-tools';
 import { adjacentTable } from '../sim/dining';
 import { CARRY_CAPACITY, footprintCells } from '../sim/definitions';
 import { PAWN_MODEL_SCALE, WORLD_SCALE } from '../world/scale';
@@ -147,6 +149,9 @@ export function retainedHumanCorpseOffsets(world:World):ReadonlyMap<number,{x:nu
 }
 
 export class PawnLayer {
+  private readonly graphics=currentGraphicsStyle();
+  private workToolJobs=new Map<number,Job>();
+  private activity(pawn:Pawn,equipment:number):number{return (this.graphics?.origami?origamiWorkTool(pawn,this.workToolJobs.get(pawn.jobId??-1)):0)||presentationActivity(pawn,equipment);}
   private selected:ReadonlySet<number>=new Set();
   private pawnIds:number[]=[];
   private selectionMesh:THREE.Mesh|null=null;
@@ -308,7 +313,7 @@ export class PawnLayer {
     if(this.smithingGeometry===smithing&&this.maceGeometry===mace&&this.longswordGeometry===longsword&&this.spearGeometry===spear)return;
     this.smithingGeometry=smithing;this.maceGeometry=mace;this.longswordGeometry=longsword;this.spearGeometry=spear;
     if(!this.pawnMesh)return;
-    const previous=this.pawnMesh.geometry as THREE.InstancedBufferGeometry,next=pawnGeometry(smithing,mace,longsword,spear);
+    const previous=this.pawnMesh.geometry as THREE.InstancedBufferGeometry,next=this.graphics?withGraphicsStyle(this.graphics,()=>pawnGeometry(smithing,mace,longsword,spear)):pawnGeometry(smithing,mace,longsword,spear);
     for(const [name,attribute]of Object.entries(previous.attributes))if(attribute instanceof THREE.InstancedBufferAttribute
       ||attribute instanceof THREE.InterleavedBufferAttribute&&attribute.data instanceof THREE.InstancedInterleavedBuffer)next.setAttribute(name,attribute);
     next.userData={...previous.userData};next.instanceCount=previous.instanceCount;
@@ -316,7 +321,8 @@ export class PawnLayer {
   }
   private createPawnMesh(count: number): void {
     clearGroup(this.group);
-    const geometry = pawnGeometry(this.smithingGeometry,this.maceGeometry,this.longswordGeometry,this.spearGeometry);
+    const makeGeometry=()=>pawnGeometry(this.smithingGeometry,this.maceGeometry,this.longswordGeometry,this.spearGeometry);
+    const geometry = this.graphics?withGraphicsStyle(this.graphics,makeGeometry):makeGeometry();
     geometry.userData.animationCache=this.animationCache;
     const travel = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4);
     for(let i=0;i<count;i++)travel.setW(i,1);
@@ -338,8 +344,8 @@ export class PawnLayer {
     // animationCache, so the native body has no retained flag/root read at all.
     const originalClock = { travelTime: this.travelTime, blend: this.blend };
     const makeOriginalPosition = () => Fn(() => {
-      const bone = attribute('boneId', 'float');
-      const pivot = pawnMorph(attribute('bindPivot', 'vec3'));
+      const bone = pawnBoneNode(this.graphics?.origami);
+      const pivot = pawnMorph(attribute('bindPivot', 'vec3'),this.graphics?.origami);
       const motion = attribute('aMotion', 'vec4');
       const pose = pawnPresentationPose(originalClock);
       // This branch is the complete original rig. Intermediate and distant
@@ -465,7 +471,7 @@ export class PawnLayer {
           .mul(bone.lessThan(5.5).select(float(.045),float(.025)));
         angle.assign(mix(angle,lowLeg,crouch));
       });
-      const local = pawnMorph(positionLocal).sub(pivot);
+      const local = pawnMorph(positionLocal,this.graphics?.origami).sub(pivot);
       const c = cos(angle), s = sin(angle);
       const animated = vec3(local.x, local.y.mul(c).sub(local.z.mul(s)), local.y.mul(s).add(local.z.mul(c))).add(pivot).toVar();
       If(busy.and(bone.lessThan(3.5)),()=>{
@@ -506,7 +512,7 @@ export class PawnLayer {
       // but long enough to survive that presentation boundary.
       const recoil=motion.z.equal(15).select(float(1).sub(this.travelTime.sub(motion.w).div(.30)).clamp(0,1),float(0));
       for(const weapon of RESIDENT_WEAPON_VISUALS269) {
-        const isWeapon=attribute('dye','float').equal(weapon.dye);
+        const isWeapon=pawnDyeNode(this.graphics?.origami).equal(weapon.dye);
         const along=positionLocal.y.sub(.68),across=positionLocal.x.sub(.205),depth=positionLocal.z;
         if(weapon.item==='bolt-action-rifle'||weapon.item==='emp-launcher') {
           // High diagonal sling at rest: the long gun remains legible above
@@ -542,28 +548,29 @@ export class PawnLayer {
         const x=animated.x.toVar(),y=animated.y.toVar(),z=animated.z.toVar();
         animated.assign(vec3(float(.65).sub(y),z.add(.19+.95/PAWN_MODEL_SCALE),x.add(.3)));
       });
-      If(attribute('dye','float').equal(-3).and(attribute('aEquipment','vec4').y.notEqual(2).and(attribute('aEquipment','vec4').y.notEqual(3))),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.graphics?.origami).equal(-3).and(attribute('aEquipment','vec4').y.notEqual(2).and(attribute('aEquipment','vec4').y.notEqual(3))),()=>{animated.assign(vec3(0));});
       // Vest is bit0. Mutually exclusive headgear occupies even codes:
       // flak2, recon4, cloth tuque6, wool tuque8, simple10. No new buffer.
       const wornFlags=attribute('aEquipment','vec4').z.floor(),helmet=wornFlags.greaterThan(1.5),recon=wornFlags.greaterThan(3.5).and(wornFlags.lessThan(5.5)),tuque=wornFlags.greaterThan(5.5).and(wornFlags.lessThan(9.5));
-      If(attribute('dye','float').equal(-2).and(wornFlags.mod(2).lessThan(.5)),()=>{animated.assign(vec3(0));});
-      If(attribute('dye','float').equal(FLAK_HELMET_DYE).and(helmet.not().or(wornFlags.greaterThan(3.5))),()=>{animated.assign(vec3(0));});
-      If(attribute('dye','float').equal(PLATE_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(6)),()=>{animated.assign(vec3(0));});
-      If(attribute('dye','float').equal(SIMPLE_HELMET_DYE).and(wornFlags.lessThan(9.5).or(wornFlags.greaterThan(11.5))),()=>{animated.assign(vec3(0));});
-      If(attribute('dye','float').equal(RECON_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(5)),()=>{animated.assign(vec3(0));});
-      If(attribute('dye','float').equal(RECON_HELMET_DYE).and(recon.not()),()=>{animated.assign(vec3(0));});
-      If(attribute('dye','float').equal(TUQUE_DYE).and(tuque.not()),()=>{animated.assign(vec3(0));});
-      If(attribute('dye','float').equal(PARKA_HOOD_DYE).and(attribute('aEquipment','vec4').y.notEqual(4).or(helmet)),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.graphics?.origami).equal(-2).and(wornFlags.mod(2).lessThan(.5)),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.graphics?.origami).equal(FLAK_HELMET_DYE).and(helmet.not().or(wornFlags.greaterThan(3.5))),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.graphics?.origami).equal(PLATE_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(6)),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.graphics?.origami).equal(SIMPLE_HELMET_DYE).and(wornFlags.lessThan(9.5).or(wornFlags.greaterThan(11.5))),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.graphics?.origami).equal(RECON_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(5)),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.graphics?.origami).equal(RECON_HELMET_DYE).and(recon.not()),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.graphics?.origami).equal(TUQUE_DYE).and(tuque.not()),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.graphics?.origami).equal(PARKA_HOOD_DYE).and(attribute('aEquipment','vec4').y.notEqual(4).or(helmet)),()=>{animated.assign(vec3(0));});
       // One face variant is visible at a time. The pause-controlled scene
       // clock also freezes blinks and sleep poses when the game is paused.
-      const dye=attribute('dye','float'),asleep=motion.z.equal(POSE_SLEEP),dead=motion.z.equal(POSE_DEAD);
+      const dye=pawnDyeNode(this.graphics?.origami),asleep=motion.z.equal(POSE_SLEEP),dead=motion.z.equal(POSE_DEAD);
       // The presentation clock wraps at 2π during tracked play, so the
       // frequency is integral and cannot jump at that wrap boundary.
       const blink=decorativeSin(time.add(motion.w.mul(1.97))).greaterThan(.994);
       const face=dead.select(float(PAWN_EYE_CROSS),asleep.or(blink).select(float(PAWN_EYE_CLOSED),float(PAWN_EYE_OPEN)));
       If(dye.greaterThanEqual(PAWN_EYE_OPEN).and(dye.lessThanEqual(PAWN_EYE_CROSS)).and(dye.notEqual(face)),()=>{ animated.assign(vec3(0)); });
       If(recon.and(dye.greaterThanEqual(PAWN_EYE_OPEN)).and(dye.lessThanEqual(PAWN_EYE_CROSS)),()=>{ animated.assign(vec3(0)); });
-      If(hiddenAppearancePart(),()=>{ animated.assign(vec3(0)); });
+      If(hiddenAppearancePart(this.graphics?.origami),()=>{ animated.assign(vec3(0)); });
+      if(this.graphics?.origami){const tool=dye.lessThanEqual(-30).and(dye.greaterThanEqual(-32));If(tool.and(dye.notEqual(attribute('aMotion','vec4').y).or(attribute('aCargo','vec4').x.abs().greaterThan(.5))),()=>{animated.assign(vec3(0));});}
       // Four anatomical bits share aShape.x. Degenerate each absent limb at
       // the common body origin after pose/portage transforms; colour and shadow
       // passes use this same node, without another mesh or actor attribute.
@@ -586,7 +593,7 @@ export class PawnLayer {
     })();
     const originalPosition = makeOriginalPosition();
     mat.positionNode=Fn(()=>{const result=vec3(0).toVar();If(this.animationCache.cached(),()=>{result.assign(this.cachedPawnPosition());}).Else(()=>{result.assign(originalPosition);});return result;})();
-    const baseColor = Fn(()=>{const fragmentBone=pawnFragmentTraits.x,fragmentDye=pawnFragmentTraits.y;const tint=mix(attribute('color','vec3'),attribute('aTint','vec3'),fragmentDye.equal(1).select(float(1),float(0))).toVar();
+    const baseColor = Fn(()=>{const traits=this.graphics?.origami?varying(attribute('pawnRigTraits','vec2'),'v_pawnOrigamiTraits'):pawnFragmentTraits;const fragmentBone=traits.x,fragmentDye=traits.y;const tint=mix(attribute('color','vec3'),attribute('aTint','vec3'),fragmentDye.equal(1).select(float(1),float(0))).toVar();
       If(fragmentDye.equal(SPEAR_DYE272),()=>{
         const material=attribute('aEquipment','vec4').x.fract().mul(8).round();
         for(const [index,item]of SPEAR_ITEMS_272.entries()){const c=new THREE.Color(spearColor272(item));If(material.equal(index+1),()=>{tint.mulAssign(vec3(c.r,c.g,c.b));});}
@@ -639,6 +646,7 @@ export class PawnLayer {
     this.configure?.(actorExplorationMaterial256(textured));
     textured.positionNode = mat.positionNode;
     textured.colorNode = baseColor.mul(pawnSurfaceShade(this.surfaceTexture));
+    applyOrigamiSurface(textured,baseColor,undefined,this.graphics);
     const nativePlain = material(0xffffff), nativeTextured = material(0xffffff);
     this.configure?.(actorExplorationMaterial256(nativePlain));
     this.configure?.(actorExplorationMaterial256(nativeTextured));
@@ -648,6 +656,7 @@ export class PawnLayer {
     nativeTextured.positionNode = nativePlain.positionNode;
     nativePlain.colorNode = baseColor;
     nativeTextured.colorNode = textured.colorNode;
+    nativeTextured.normalNode=textured.normalNode;
     // All variants survive map changes; geometry, appearance and shading stay
     // shared. Explicit disposal below owns these materials, not clearGroup.
     mat.userData.rendererOwned = textured.userData.rendererOwned = true;
@@ -763,9 +772,9 @@ export class PawnLayer {
    * static morphology and visibility still use the live encoded streams. */
   private cachedPawnPosition():THREE.Node<'vec3'> {
     return Fn(()=>{
-      const bone=attribute('boneId','float'),dye=attribute('dye','float'),motion=vec4(0,this.animationCache.cell(4).z,this.animationCache.cell(4).y,0);
+      const bone=pawnBoneNode(this.graphics?.origami),dye=pawnDyeNode(this.graphics?.origami),motion=vec4(0,this.animationCache.cell(4).z,this.animationCache.cell(4).y,0);
       const pose=pawnPresentationPose({travelTime:this.travelTime,blend:this.blend});
-      const pivot=pawnMorph(attribute('bindPivot','vec3')),local=pawnMorph(positionLocal).sub(pivot);
+      const pivot=pawnMorph(attribute('bindPivot','vec3'),this.graphics?.origami),local=pawnMorph(positionLocal,this.graphics?.origami).sub(pivot);
       const data=this.animationCache.cellAt(float(8).add(bone));
       const animated=vec3(local.x,local.y.mul(data.x).sub(local.z.mul(data.y)),local.y.mul(data.y).add(local.z.mul(data.x))).add(pivot).toVar();
       animated.y.addAssign(data.z);animated.z.addAssign(data.w);
@@ -805,7 +814,8 @@ export class PawnLayer {
       const face=motion.z.equal(POSE_DEAD).select(float(PAWN_EYE_CROSS),motion.z.equal(POSE_SLEEP).or(this.animationCache.cell(3).y.greaterThan(.5)).select(float(PAWN_EYE_CLOSED),float(PAWN_EYE_OPEN)));
       If(dye.greaterThanEqual(PAWN_EYE_OPEN).and(dye.lessThanEqual(PAWN_EYE_CROSS)).and(dye.notEqual(face)),()=>{animated.assign(vec3(0));});
       If(recon.and(dye.greaterThanEqual(PAWN_EYE_OPEN)).and(dye.lessThanEqual(PAWN_EYE_CROSS)),()=>{animated.assign(vec3(0));});
-      If(hiddenAppearancePart(),()=>{animated.assign(vec3(0));});
+      If(hiddenAppearancePart(this.graphics?.origami),()=>{animated.assign(vec3(0));});
+      if(this.graphics?.origami){const tool=dye.lessThanEqual(-30).and(dye.greaterThanEqual(-32));If(tool.and(dye.notEqual(attribute('aMotion','vec4').y).or(attribute('aCargo','vec4').x.abs().greaterThan(.5))),()=>{animated.assign(vec3(0));});}
       const mask=attribute('aShape','vec4').x.div(100).floor();
       for(const limb of HUMAN_LIMB_VISUALS){const member=limb.bones.reduce((matches,id)=>matches.or(bone.equal(id)),bone.equal(-1));If(member.and(mask.div(limb.bit).floor().mod(2).greaterThan(.5)),()=>{animated.assign(vec3(0));});}
       If(helmet.and(dye.greaterThanEqual(100)).and(dye.lessThan(200)),()=>{animated.assign(vec3(0));});
@@ -913,6 +923,7 @@ export class PawnLayer {
   }
 
   update(world: World, oldBlend: number, newMap: boolean): void {
+    if(this.graphics?.origami)this.workToolJobs=new Map(world.jobs.map(job=>[job.id,job]));
     if(newMap){this.animationCache.reset();this.partialAnimationCache.reset();}
     this.travelKeys.clear();this.travelSurfaces=furnitureSurfaces(world);
     if(newMap){this.headings.clear();this.approachTransitions.clear();this.departureOffsets.clear();this.workOffsets.clear();this.crouchTransitions.clear();this.shownPoses.clear();this.gait.clear();this.handoffs.clear();}
@@ -965,7 +976,7 @@ export class PawnLayer {
     const equipment=geometry.getAttribute('aEquipment') as THREE.InterleavedBufferAttribute;
     const carried = new Map<number, World['piles'][number]>();
     for (const pile of world.piles) if (pile.owner.type === 'pawn') carried.set(pile.owner.pawnId, pile);
-    let jobsById:Map<number,World['jobs'][number]>|undefined;
+    let jobsById:Map<number,World['jobs'][number]>|undefined=this.graphics?.origami?this.workToolJobs:undefined;
     const present = new Set<number>();
     world.pawns.forEach((pawn, index) => {
       present.add(pawn.id);
@@ -1042,7 +1053,7 @@ export class PawnLayer {
       this.workPoses.set(pawn.id,workPose);
       const smallMelee=!!pawn.melee?.strike&&(world.wildlife?.animals.some(animal=>animal.id===pawn.melee!.strike!.targetId&&animal.species==='hare')??false);
       const equipmentCode=weaponVisual(gears.get(pawn.id)?.item)?.equipment??0;
-      motion.setXYZW(index, pawn.state === 'moving'&&!pawn.stun&&!pasteCollect ? 1 : 0,presentationActivity(pawn,equipmentCode),animationPose(pawn,workPose,smallMelee,seated,!!coupleBed),pawn.melee?.strike ? coreTimeSeconds(pawn.melee.strike.atCore,Math.floor(world.tick/1024)*1024) : pawn.shooting?.stance?.phase==='cooldown'?coreTimeSeconds(pawn.shooting.stance.startedAtCore,Math.floor(world.tick/1024)*1024):pawn.id * 1.7);
+      motion.setXYZW(index, pawn.state === 'moving'&&!pawn.stun&&!pasteCollect ? 1 : 0,this.activity(pawn,equipmentCode),animationPose(pawn,workPose,smallMelee,seated,!!coupleBed),pawn.melee?.strike ? coreTimeSeconds(pawn.melee.strike.atCore,Math.floor(world.tick/1024)*1024) : pawn.shooting?.stance?.phase==='cooldown'?coreTimeSeconds(pawn.shooting.stance.startedAtCore,Math.floor(world.tick/1024)*1024):pawn.id * 1.7);
       const identity=appearanceOf(pawn,world.seed),variant=appearanceShape(identity);
       blood.setX(index,bodyBloodWord(pawn.health));
       scratchColor.setHex(identity.skinColor);skin.setXYZ(index,scratchColor.r,scratchColor.g,scratchColor.b);
@@ -1216,7 +1227,7 @@ export class PawnLayer {
           fromX:visual.from.x,fromZ:visual.from.z,toX:visual.to.x,toZ:visual.to.z,
         },timeline.tick,HUMAN_GAIT_RADIANS_PER_UNIT));
         else this.gait.halt(pawn.id,timeline.tick,HUMAN_GAIT_RADIANS_PER_UNIT);
-        motion.setY(i,0);
+        motion.setY(i,this.graphics?.origami?origamiWorkTool(pawn,this.workToolJobs.get(pawn.jobId??-1)):0);
         motion.setZ(i,shownPose);
       } else {
         this.gait.halt(pawn.id,timeline.tick,HUMAN_GAIT_RADIANS_PER_UNIT);
@@ -1255,7 +1266,7 @@ export class PawnLayer {
         times.setXYZW(i,shifting?approachStart:0,shifting?approachStart+APPROACH_TICKS/TICKS_PER_SECOND:0,localTimeSeconds(heading.startTick,origin),2);
         // Unexpected target changes still get a short, visibly stepping
         // adjustment. Normal task arrivals already reach contact on the edge.
-        motion.setX(i,motionX(shifting,this.crouchTransitions.get(pawn.id),origin));motion.setY(i,presentationActivity(pawn,equipment.getX(i)));
+        motion.setX(i,motionX(shifting,this.crouchTransitions.get(pawn.id),origin));motion.setY(i,this.activity(pawn,equipment.getX(i)));
         motion.setZ(i,shownPose);
       }
       if(!stepping){

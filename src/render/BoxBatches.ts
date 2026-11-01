@@ -1,8 +1,9 @@
 import{createSurfaceMaterial}from'./SurfaceMaterials';
+import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
 import {solidExplorationMaterial256} from './ExplorationMask256';
 import type {OwnedOpaqueProducer435} from './OwnedOpaqueRevisionRegistry435';
 import * as THREE from 'three/webgpu';
-import { attribute, texture } from 'three/tsl';
+import { attribute, texture, uv } from 'three/tsl';
 import { material } from './primitives';
 import type { Placement } from './primitives';
 import { BoxMesh, configureBoxMaterial } from './BoxMesh';
@@ -70,12 +71,15 @@ export class BoxBatches {
     for (const mat of Object.values(this.materials)) { mat.userData.rendererOwned = true; configureBoxMaterial(mat); }
     this.texturedSolid.userData.rendererOwned = true;
     configureBoxMaterial(this.texturedSolid);
+    const graphics=currentGraphicsStyle();
     this.texturedSolid.colorNode = attribute('boxColor', 'vec3').mul(texture(this.surfaceTexture, instancedBoxPatternUv()).rgb);
+    applyOrigamiSurface(this.texturedSolid,attribute('boxColor','vec3'),uv(),graphics);
     for (const mat of [this.plainRock, this.texturedRock]) {
       mat.userData.rendererOwned = true;
       configureChunkMaterial(mat);
     }
     this.texturedRock.colorNode = attribute('boxColor', 'vec3').mul(texture(this.rockTexture, chunkPaintUv()).rgb);
+    applyOrigamiSurface(this.texturedRock,attribute('boxColor','vec3'),uv(),graphics);
   }
 
   /** Select a resident pipeline. The plain one has no texture node or map, so
