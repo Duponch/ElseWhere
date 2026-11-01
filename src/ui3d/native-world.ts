@@ -433,4 +433,75 @@ export function buildNativeWorld(next:NativeUiState,callbacks:NativeUiActions):N
  }
  return {id:'world',title:'Monde',subtitle:'Les mêmes personnes et biens conservent leurs propriétaires pendant chaque voyage.',rows,width:1120,height:740,visual,onClose:()=>void callbacks.panel(null)};
 }
-export function buildNativeFactions(next:NativeUiState,callbacks:NativeUiActions):NativePage {update(next,callbacks);return page('factions','Factions',next.world||next.campaign?factionRows():[r('factions-no-game','Aucune partie active.')],[],()=>void callbacks.panel(null));}
+type NativeFactionRegistry=NonNullable<CampaignUIState['worldFactions']>;
+type NativeFaction=NativeFactionRegistry['factions'][number];
+type NativeFactionSort='name'|'relation'|'settlements';
+const factionBrowser={identity:'',search:'',sort:'name' as NativeFactionSort};
+const factionTypeLabel=(def:NativeFaction['def']):string=>({PlayerColony:'Colonie',PlayerTribe:'Tribu du joueur',OutlanderCivil:'Union civile',OutlanderRough:'Union hostile',TribeCivil:'Tribu paisible',TribeRough:'Tribu hostile',TribeSavage:'Tribu farouche',Pirate:'Pirates',Mechanoid:'Mécanoïdes',Insect:'Insectes',Ancients:'Anciens',AncientsHostile:'Anciens hostiles'} as const)[def];
+const factionSearchText=(text:string)=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr');
+function factionBrowserIdentity(next:NativeUiState):string {
+ const input=next.world??next.campaign;if(!input)return 'none';const campaign=campaignUIFacts(input);
+ return ['factions',next.epoch,campaign?.campaignSeed??('seed'in input?input.seed:input.campaignSeed),campaign?.activeMapId??('seed'in input?input.seed:'none')].join(':');
+}
+/** These controls navigate borrowed current registry facts, never cached owners. */
+function factionBrowserGuard<T extends unknown[]>(next:NativeUiState,callbacks:NativeUiActions,run:(fresh:NativeUiState,...args:T)=>void|Promise<unknown>):(...args:T)=>void|Promise<unknown> {
+ const identity=factionBrowserIdentity(next);
+ return (...args)=>{const fresh=callbacks.readState?.()??state;if(!fresh||fresh.busy||factionBrowserIdentity(fresh)!==identity)return;update(fresh,callbacks);return run(fresh,...args);};
+}
+function factionRelationFact(registry:NativeFactionRegistry,faction:NativeFaction):{label:string;goodwill:number|undefined} {
+ if(faction.id===registry.playerFactionId)return{label:'Votre faction',goodwill:undefined};
+ const relation=registry.relations.find(value=>value.aId===Math.min(faction.id,registry.playerFactionId)&&value.bId===Math.max(faction.id,registry.playerFactionId));
+ return relation?{label:({hostile:'Hostile',neutral:'Neutre',ally:'Alliée'} as const)[relation.kind]+' · '+(relation.goodwill>0?'+':'')+relation.goodwill,goodwill:relation.goodwill}:{label:'Relation inconnue',goodwill:undefined};
+}
+function factionDossier(next:NativeUiState,callbacks:NativeUiActions,id:number):void {
+ const registry=(next.world??next.campaign)?.worldFactions,faction=registry?.factions.find(value=>value.id===id&&!value.hidden);if(!registry||!faction)return;
+ const relation=factionRelationFact(registry,faction),leader=registry.leaders.find(value=>value.factionId===id),settlements=registry.settlements.filter(value=>value.factionId===id);
+ const back=factionBrowserGuard(next,callbacks,fresh=>show(buildNativeFactions(fresh,callbacks)));
+ const rows:NativeRow[]=[
+  {...r('faction-detail-type','Type',factionTypeLabel(faction.def),faction.def),presentation:'plain',compact:true},
+  {...r('faction-detail-relation','Relations',relation.label),presentation:'plain',compact:true},
+  {...r('faction-detail-leader','Dirigeant',leader?.pawn.name??'Non enregistré'),presentation:'plain',compact:true},
+  {...r('faction-detail-status','État',faction.lifecycle259?.defeated?'Vaincue':faction.lifecycle259?.temporary?'Temporaire':faction.lifecycle259?'Persistante':'Non enregistré'),presentation:'plain',compact:true},
+  {id:'faction-detail-settlements',label:'Établissements · '+settlements.length,emphasis:'heading',presentation:'plain',compact:true},
+ ];
+ for(const settlement of settlements){
+  const access=worldSettlementAccess256(registry,settlement.id),target={id:settlement.id,factionId:settlement.factionId,tile:settlement.tile};
+  rows.push({...r('faction-settlement-'+target.id,settlement.name,tileLabel(target.tile),access.ok?(access.canTrade?'Commerce admissible à destination.':'Commerce indisponible à destination.'):access.reason,[b('faction-settlement-'+target.id+'-view','Inspecter la case',factionBrowserGuard(next,callbacks,fresh=>{
+   const current=(fresh.world??fresh.campaign)?.worldFactions,owner=current?.factions.find(value=>value.id===id&&!value.hidden),actual=current?.settlements.find(value=>value.id===target.id);
+   if(!owner||!actual||actual.factionId!==target.factionId||actual.tile!==target.tile)return;
+   selectedTile=actual.tile;changeTab('maps');
+  }))]),presentation:'plain',compact:true});
+ }
+ if(!settlements.length)rows.push({id:'faction-detail-no-settlements',label:'Aucun établissement enregistré.',presentation:'plain',compact:true});
+ show({id:'faction-detail-'+id,title:faction.name,layout:'dialog',modal:true,width:820,rows,actions:[b('faction-detail-back','Retour aux factions',back)],onClose:back});
+}
+export function buildNativeFactions(next:NativeUiState,callbacks:NativeUiActions):NativePage {
+ update(next,callbacks);const identity=factionBrowserIdentity(next);if(factionBrowser.identity!==identity){factionBrowser.identity=identity;factionBrowser.search='';factionBrowser.sort='name';}
+ const input=next.world??next.campaign,registry=input?.worldFactions;
+ const close=factionBrowserGuard(next,callbacks,()=>callbacks.panel(null));
+ if(!input)return{id:'factions',title:'Factions',rows:[r('factions-no-game','Aucune partie active.')],onClose:close};
+ if(!registry)return{id:'factions',title:'Factions',rows:[r('factions-empty','Cette partie ne possède pas de registre de factions.')],onClose:close};
+ const refresh=factionBrowserGuard(next,callbacks,fresh=>show(buildNativeFactions(fresh,callbacks)));
+ const all=registry.factions.filter(faction=>!faction.hidden).map(faction=>{
+  const relation=factionRelationFact(registry,faction),leader=registry.leaders.find(value=>value.factionId===faction.id)?.pawn.name,settlements=registry.settlements.filter(value=>value.factionId===faction.id);
+  return{faction,relation,leader,settlements};
+ });
+ const needle=factionSearchText(factionBrowser.search.trim()),visible=all.filter(value=>!needle||factionSearchText([value.faction.name,value.faction.def,factionTypeLabel(value.faction.def),value.relation.label,value.leader??'',...value.settlements.map(settlement=>settlement.name)].join(' ')).includes(needle));
+ visible.sort((a,b)=>{
+  const compare=factionBrowser.sort==='settlements'?b.settlements.length-a.settlements.length:factionBrowser.sort==='relation'?(b.relation.goodwill??-Infinity)-(a.relation.goodwill??-Infinity):0;
+  return (Number.isNaN(compare)?0:compare)||a.faction.name.localeCompare(b.faction.name,'fr',{numeric:true})||a.faction.id-b.faction.id;
+ });
+ const rows:NativeRow[]=[
+  {id:'factions-search',label:'Rechercher',region:'navigation',presentation:'plain',compact:true,input:{value:factionBrowser.search,placeholder:'Faction, dirigeant ou établissement…',maxLength:160,onCommit:factionBrowserGuard(next,callbacks,(_fresh,value:string)=>{factionBrowser.search=value;refresh();})}},
+  {id:'factions-sort',label:'Trier',region:'navigation',presentation:'plain',compact:true,controls:([['name','Nom'],['relation','Relations'],['settlements','Établissements']] as const).map(([sort,label])=>b('factions-sort-'+sort,label,factionBrowserGuard(next,callbacks,()=>{factionBrowser.sort=sort;refresh();}),{active:factionBrowser.sort===sort}))},
+  {id:'factions-count',label:'Factions',value:visible.length+' / '+all.length,region:'navigation',presentation:'plain',compact:true},
+  {id:'factions-heading',label:'Faction',columns:[{label:'Type'},{label:'Relations'},{label:'Dirigeant'},{label:'Établissements'},{label:'État'},{label:'Dossier'}],compact:true},
+ ];
+ for(const value of visible){
+  const faction=value.faction,open=factionBrowserGuard(next,callbacks,fresh=>factionDossier(fresh,callbacks,faction.id));
+  const facts=[factionTypeLabel(faction.def),value.relation.label,value.leader??'Non enregistré',String(value.settlements.length),faction.lifecycle259?.defeated?'Vaincue':faction.lifecycle259?.temporary?'Temporaire':faction.lifecycle259?'Persistante':'Non enregistré','Ouvrir'];
+  rows.push({id:'faction-'+faction.id,label:faction.name,compact:true,controls:facts.map((label,index)=>b('faction-'+faction.id+'-field-'+index,label,open,{hint:index===0?faction.def:'Ouvrir le dossier de '+faction.name}))});
+ }
+ if(!visible.length)rows.push({id:'factions-search-empty',label:'Aucune faction ne correspond à la recherche.',presentation:'plain',compact:true});
+ return{id:'factions',title:'Factions',contentKey:JSON.stringify([identity,factionBrowser.search,factionBrowser.sort]),layout:'table',tableProfile:'factions',width:1280,rows,actions:[b('factions-back','Retour',close)],onClose:close};
+}

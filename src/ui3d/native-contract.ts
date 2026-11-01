@@ -83,7 +83,7 @@ export interface NativePage {
   columnRatio?:number;
   layout?:'inspector'|'table'|'tools'|'dialog'|'front'|'architect'|'palette'|'research'|'storage';
   /** Opt-in fixed roster toolbar/headings; presentation only, never persisted. */
-  tableProfile?:'colonists';
+  tableProfile?:'colonists'|'factions';
   palette?:'orders'|'zones';
   research?:{width:number;height:number;selected:string;links:readonly {from:string;to:string;path:readonly {x:number;y:number}[]}[]};
   visual?:{
@@ -140,6 +140,10 @@ export interface NativeUiActions {
   cancelCampEntry?:(id:number,groupId:number)=>Promise<unknown>;
   readState?:()=>NativeUiState;
   closePage?:()=>void;
+  /** Existing Main flows; presentation entry points only. */
+  openSaveManager?:()=>void|Promise<unknown>;
+  openOptions?:()=>void|Promise<unknown>;
+  openHelp?:()=>void|Promise<unknown>;
   openVisitorTrade?:()=>void;
   openOrbitalTrade?:(consoleId?:number)=>void;
   openFactionComms298?:(consoleId?:number)=>void;

@@ -221,11 +221,10 @@ function storageFixedRowBox(row:NativeRow,x:number,top:number,width:number,measu
 function storagePage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure):NativePageBox {
   const pad=NATIVE_UI.padding,gap=6,header=page.subtitle?76:48,bottom=NATIVE_UI.bottom+10;
   const width=Math.min(Math.max(220,Math.min(requestedWidth(page,480),viewport.width-32)),Math.max(1,viewport.width-24));
-  const height=Math.min(page.height??760,760,Math.max(1,viewport.height-bottom-12));
+  const maximumHeight=Math.min(page.height??760,760,Math.max(1,viewport.height-bottom-12));
   const contentWidth=Math.max(1,width-pad*2-12),rows:NativeRowBox[]=[];
   const actionFlow=flowNativeControls(page.actions??[],{x:pad,y:0,width:Math.max(1,width-pad*2),height:0},measure);
   const footerPad=14,footer=page.actions?.length?actionFlow.height+footerPad*2:footerPad;
-  const footerTop=Math.max(header,height-footer),contentBottom=Math.max(header,footerTop-gap);
   const fixed:Partial<Record<'details'|'navigation',{boxes:NativeRowBox[];height:number}>>={};
   for(const key of ['details','navigation'] as const){
     const fixedRows=page.rows.filter(row=>(row.region??'details')===key),boxes:NativeRowBox[]=[];
@@ -242,9 +241,15 @@ function storagePage(page:NativePage,viewport:{width:number;height:number},measu
     const contentHeight=Math.max(top,left,right)-(boxes.length?gap:0);
     fixed[key]={boxes,height:contentHeight};
   }
+  // Measure each tree row once, before deciding the paper height. Search may
+  // leave no rows; it must not reserve an empty viewport-sized catalogue.
+  const treeBoxes:NativeRowBox[]=[];let treeTop=0;
+  for(const row of page.rows.filter(row=>row.region==='catalogue')){const box=rowBox(row,pad,treeTop,contentWidth,measure,false);treeBoxes.push(box);treeTop+=box.height;}
   const details=fixed.details!,navigation=fixed.navigation!;
   const sectionGaps=(details.boxes.length?gap:0)+(navigation.boxes.length?gap:0);
-  const detailsBudget=Math.max(0,contentBottom-header-navigation.height-sectionGaps-72);
+  const height=Math.min(maximumHeight,header+footer+gap+details.height+navigation.height+sectionGaps+Math.max(1,treeTop));
+  const footerTop=Math.max(header,height-footer),contentBottom=Math.max(header,footerTop-gap);
+  const detailsBudget=Math.max(0,contentBottom-header-navigation.height-sectionGaps-Math.min(72,treeTop));
   const detailsHeight=Math.min(details.height,detailsBudget);
   const regions:Partial<Record<NativeRegion,NativeRegionBox>>={};let nextTop=header;
   for(const key of ['details','navigation'] as const){
@@ -254,12 +259,9 @@ function storagePage(page:NativePage,viewport:{width:number;height:number},measu
     nextTop+=visibleHeight+(section.boxes.length?gap:0);
   }
   const catalogueHeight=Math.max(0,contentBottom-nextTop);
-  regions.catalogue={x:pad,y:nextTop,width:contentWidth+12,height:catalogueHeight,contentHeight:0};
-  let treeTop=0;
-  for(const row of page.rows.filter(row=>row.region==='catalogue')){
-    const box=rowBox(row,pad,nextTop-header+treeTop,contentWidth,measure,false);rows.push(box);treeTop+=box.height;
-  }
-  regions.catalogue.contentHeight=treeTop;
+  regions.catalogue={x:pad,y:nextTop,width:contentWidth+12,height:catalogueHeight,contentHeight:treeTop};
+  const treeDelta=nextTop-header;
+  for(const box of treeBoxes){box.top+=treeDelta;box.controls=box.controls.map(control=>({...control,y:control.y+treeDelta}));rows.push(box);}
   const actions=actionFlow.controls.map(control=>({...control,y:footerTop-header+footerPad+control.y}));
   return {x:12,y:viewport.height-bottom-height,width,height,header,footer,body:{...regions.catalogue},contentHeight:treeTop,rows,layout:'storage',regions,actions};
 }
@@ -281,10 +283,10 @@ function regionRows(page:NativePage,regions:Partial<Record<NativeRegion,NativeRe
 }
 function structuredPage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure,layout:'architect'|'research'):NativePageBox {
   const pad=NATIVE_UI.padding,gap=14,requested=requestedWidth(page,layout==='architect'?1180:1190),width=Math.min(Math.max(280,Math.min(layout==='architect'?Math.min(requested,1180):requested,viewport.width-32)),Math.max(1,viewport.width-24));
-  const header=48,bottom=NATIVE_UI.bottom+12;
-  const availableHeight=Math.max(1,viewport.height-bottom-12);
-  const height=Math.min(availableHeight,layout==='architect'?476:Math.max(180,Math.min(page.height??780,780,viewport.height-214)));
-  const body:NativeRect={x:pad,y:header,width:width-pad*2,height:height-header-pad};
+  const header=48,bottom=NATIVE_UI.bottom+12,availableHeight=Math.max(1,viewport.height-bottom-12);
+  const maximumHeight=Math.min(availableHeight,page.height??(layout==='architect'?900:780));
+  let height=maximumHeight;
+  const body:NativeRect={x:pad,y:header,width:width-pad*2,height:Math.max(0,height-header-pad)};
   const regions:Partial<Record<NativeRegion,NativeRegionBox>>={};
   if(layout==='architect'){
     const navWidth=Math.min(width>=620?212:104,Math.max(96,width*.36));
@@ -305,12 +307,41 @@ function structuredPage(page:NativePage,viewport:{width:number;height:number},me
     const graphX=pad+sidebar+12,graphWidth=Math.max(60,width-pad-graphX);
     regions.details={x:pad,y:header,width:sidebar,height:body.height,contentHeight:0};
     regions.navigation={x:graphX,y:header,width:graphWidth,height:NATIVE_UI.tab,contentHeight:0};
-    regions.graph={x:graphX,y:header+NATIVE_UI.tab+6,width:graphWidth,height:Math.max(1,body.height-NATIVE_UI.tab-6),contentHeight:page.research?.height??815,contentWidth:page.research?.width??850};
+    regions.graph={x:graphX,y:header+NATIVE_UI.tab+6,width:graphWidth,height:Math.max(1,body.height-NATIVE_UI.tab-6),contentHeight:0,contentWidth:page.research?.width??850};
   }
-  const tileColumnLimit=layout==='architect'?10:4;
-  // The cardboard and its regions depend only on the viewport, never on the
-  // selected category or construction. Their complete contents scroll inside.
-  const rows=regionRows(page,regions,header,measure,tileColumnLimit);
+  const tileColumnLimit=layout==='architect'?10:4,rows=regionRows(page,regions,header,measure,tileColumnLimit);
+  const oldTops:Partial<Record<NativeRegion,number>>={},needed:Partial<Record<NativeRegion,number>>={};
+  for(const[key,region]of Object.entries(regions)){oldTops[key as NativeRegion]=region!.y;needed[key as NativeRegion]=0;}
+  for(const row of rows){const key=row.row.region??'details',region=regions[key]!;needed[key]=Math.max(needed[key]??0,header+row.top+row.height-region.y);}
+  // Retain the actual graph and all its routes; declared canvas padding alone
+  // must not inflate a sparse graph or add empty vertical scrolling.
+  let graphNeed=needed.graph??0;
+  for(const link of page.research?.links??[])for(const point of link.path)graphNeed=Math.max(graphNeed,point.y);
+  if(graphNeed>0)graphNeed+=12;
+  const navNeed=needed.navigation??0,catalogueNeed=needed.catalogue??0,detailNeed=needed.details??0;
+  const stacked=layout==='architect'&&width<850;
+  const requiredBody=layout==='architect'?(stacked?Math.max(navNeed,Math.max(1,catalogueNeed)+Math.max(1,detailNeed)+(catalogueNeed&&detailNeed?10:0)):Math.max(navNeed,catalogueNeed,detailNeed)):
+    Math.max(detailNeed,navNeed+graphNeed+(navNeed&&graphNeed?6:0));
+  height=Math.min(maximumHeight,header+pad+Math.max(32,requiredBody));body.height=Math.max(0,height-header-pad);
+  if(layout==='architect'){
+    regions.navigation!.height=body.height;
+    if(stacked){
+      const splitGap=catalogueNeed>0&&detailNeed>0?10:0;
+      const fullStack=Math.max(1,catalogueNeed)+Math.max(1,detailNeed)+splitGap;
+      const detailsHeight=fullStack<=body.height?Math.max(1,detailNeed):Math.min(Math.max(1,detailNeed),Math.max(1,body.height-splitGap-Math.min(Math.max(1,catalogueNeed),Math.max(1,body.height*.6))));
+      const catalogueHeight=Math.max(1,body.height-detailsHeight-splitGap);
+      regions.catalogue!.height=catalogueHeight;regions.details!.y=header+catalogueHeight+splitGap;regions.details!.height=Math.max(1,body.height-catalogueHeight-splitGap);
+    }else{regions.catalogue!.height=body.height;regions.details!.height=body.height;}
+  }else{
+    const graphGap=navNeed>0&&graphNeed>0?6:0;
+    const navigationMinimum=Math.min(Math.max(1,navNeed),NATIVE_UI.tab,Math.max(1,body.height-graphGap-1));
+    const navigationBudget=graphNeed>0?Math.max(navigationMinimum,body.height-graphGap-Math.min(graphNeed,Math.max(24,body.height*.5))):Math.max(1,body.height-1);
+    const navigationHeight=Math.min(Math.max(1,navNeed),navigationBudget);
+    regions.details!.height=body.height;regions.navigation!.height=navigationHeight;
+    regions.graph!.y=header+navigationHeight+graphGap;regions.graph!.height=Math.max(1,body.height-navigationHeight-graphGap);regions.graph!.contentHeight=graphNeed;
+  }
+  // Only origins move. No row is remeasured, scaled, dropped or reassigned.
+  for(const row of rows){const key=row.row.region??'details',delta=regions[key]!.y-oldTops[key]!;if(delta){row.top+=delta;for(const control of row.controls)control.y+=delta;}}
   const primary=regions[layout==='architect'?'catalogue':'details']!;
   return {x:12,y:viewport.height-bottom-height,width,height,header,footer:pad,body:{x:primary.x,y:primary.y,width:primary.width,height:primary.height},contentHeight:primary.contentHeight,rows,layout,regions,actions:[]};
 }
@@ -377,7 +408,7 @@ function animalTablePage(page:NativePage,viewport:{width:number;height:number},m
   const actionFlow=flowNativeControls(page.actions??[],{x:pad,y:0,width:width-pad*2,height:0},measure);
   const horizontalReserve=intrinsicWidth>contentWidth?12:0;
   const footer=(page.actions?.length?actionFlow.height+pad*2:pad)+horizontalReserve;
-  const height=Math.min(page.height??900,Math.max(1,viewport.height-bottom-12));
+  const maxHeight=Math.min(page.height??900,Math.max(1,viewport.height-bottom-12));
   const rows:NativeRowBox[]=[];let toolbarHeight=0;
   for(const row of page.rows.filter(row=>row.region==='navigation')){
     const box=rowBox({...row,region:'details'},pad,toolbarHeight,contentWidth,measure,false);rows.push(box);toolbarHeight+=box.height+gap;
@@ -386,7 +417,7 @@ function animalTablePage(page:NativePage,viewport:{width:number;height:number},m
   for(const row of page.rows.filter(row=>!!row.columns)){
     const box=rowBox({...row,region:'catalogue'},pad,toolbarHeight+headingHeight,intrinsicWidth,measure,true,undefined,tail,weights);rows.push(box);headingHeight+=box.height;
   }
-  const bodyY=headingY+headingHeight+gap,bodyHeight=Math.max(0,height-footer-bodyY);
+  const bodyY=headingY+headingHeight+gap;
   let contentHeight=0;
   for(const row of page.rows.filter(row=>row.region!=='navigation'&&!row.columns)){
     const matrix=matrixRow(row),x=pad+(matrix?0:nameWidth),rowWidth=matrix?intrinsicWidth:Math.max(1,contentWidth-nameWidth);
@@ -394,6 +425,7 @@ function animalTablePage(page:NativePage,viewport:{width:number;height:number},m
     if(matrix){box.height=34;box.controlTop=3;box.controlHeight=28;for(const control of box.controls)control.height=28;}
     rows.push(box);contentHeight+=box.height+gap;
   }
+  const height=Math.min(maxHeight,bodyY+Math.max(28,contentHeight)+footer),bodyHeight=Math.max(0,height-footer-bodyY);
   const body={x:pad,y:bodyY,width:contentWidth,height:bodyHeight};
   return {x:12,y:viewport.height-bottom-height,width,height,header,footer,body,contentHeight,rows,layout:'table',
     matrixColumnWeights:weights,tableHeader:{x:pad+nameWidth,y:headingY,width:contentWidth-nameWidth,height:headingHeight},
@@ -411,23 +443,24 @@ function colonistTablePage(page:NativePage,viewport:{width:number;height:number}
  const columns=Math.max(0,...page.rows.map(row=>row.columns?.length??0));
  const matrixRow=(row:NativeRow)=>!!row.columns||!!row.compact&&row.controls?.length===columns;
  const tail=page.rows.some(row=>matrixRow(row)&&!!row.value);
- const weights=page.id==='schedule'?[...Array.from({length:24},()=>1),2.25,2.25]:page.id==='assign'?[1.6,.9,1.4,1.6,.7,.9,1.5,1.3].slice(0,columns):undefined;
+ const weights=page.id==='schedule'?[...Array.from({length:24},()=>1),2.25,2.25]:page.id==='assign'?[1.6,.9,1.4,1.6,.7,.9,1.5,1.3].slice(0,columns):page.tableProfile==='factions'?[1.2,1.25,1.7,.8,.9,.7]:undefined;
  const minimum=page.id==='schedule'?1136:page.id==='work'?1180:1176;
  const intrinsicWidth=Math.max(contentWidth,minimum);
  const actionFlow=flowNativeControls(page.actions??[],{x:pad,y:0,width:width-pad*2,height:0},measure),horizontalReserve=intrinsicWidth>contentWidth?12:0;
- const footer=(page.actions?.length?actionFlow.height+pad*2:pad)+horizontalReserve,height=Math.min(page.height??900,Math.max(1,viewport.height-bottom-12));
+ const footer=(page.actions?.length?actionFlow.height+pad*2:pad)+horizontalReserve,maxHeight=Math.min(page.height??900,Math.max(1,viewport.height-bottom-12));
  const rows:NativeRowBox[]=[];let toolbarHeight=0;
  for(const row of page.rows.filter(row=>row.region==='navigation')){const box=rowBox({...row,region:'details'},pad,toolbarHeight,contentWidth,measure,false);rows.push(box);toolbarHeight+=box.height+gap;}
  const headingY=header+toolbarHeight;let headingHeight=0;
  for(const row of page.rows.filter(row=>!!row.columns)){const box=rowBox({...row,region:'catalogue'},pad,toolbarHeight+headingHeight,intrinsicWidth,measure,true,undefined,tail,weights);rows.push(box);headingHeight+=box.height;}
- const bodyY=headingY+headingHeight+gap,bodyHeight=Math.max(0,height-footer-bodyY);let contentHeight=0;
+ const bodyY=headingY+headingHeight+gap;let contentHeight=0;
  for(const row of page.rows.filter(row=>row.region!=='navigation'&&!row.columns)){
   const matrix=matrixRow(row),x=pad+(matrix?0:nameWidth),rowWidth=matrix?intrinsicWidth:Math.max(1,contentWidth-nameWidth);
   const box=rowBox({...row,region:'catalogue'},x,bodyY-header+contentHeight,rowWidth,measure,true,undefined,matrix?tail:undefined,matrix?weights:undefined);
-  if(matrix){box.height=page.id==='work'?44:34;box.controlTop=3;box.controlHeight=box.height-6;for(const control of box.controls)control.height=box.controlHeight;}
+  if(matrix){box.height=page.tableProfile==='factions'?Math.max(44,Math.min(64,box.labelLines.length*NATIVE_UI.line+8)):page.id==='work'?44:34;box.controlTop=3;box.controlHeight=box.height-6;for(const control of box.controls)control.height=box.controlHeight;}
   rows.push(box);contentHeight+=box.height+gap;
  }
- const body={x:pad,y:bodyY,width:contentWidth,height:bodyHeight};
+ const height=Math.min(maxHeight,bodyY+Math.max(28,contentHeight)+footer),bodyHeight=Math.max(0,height-footer-bodyY);
+  const body={x:pad,y:bodyY,width:contentWidth,height:bodyHeight};
  return {x:12,y:viewport.height-bottom-height,width,height,header,footer,body,contentHeight,rows,layout:'table',matrixColumnWeights:weights,
   tableHeader:{x:pad+nameWidth,y:headingY,width:contentWidth-nameWidth,height:headingHeight},
   regions:{details:{x:pad,y:header,width:contentWidth,height:toolbarHeight,contentHeight:toolbarHeight},navigation:{...body,width:nameWidth,contentHeight},catalogue:{...body,x:pad+nameWidth,width:contentWidth-nameWidth,contentWidth:intrinsicWidth-nameWidth,contentHeight}},
@@ -437,6 +470,7 @@ export function layoutNativePage(page:NativePage,viewport:{width:number;height:n
   const layout=page.layout??(front?'front':page.id.startsWith('inspect-')?'inspector':['work','schedule','animals','wildlife','assign','history'].includes(page.id)?'table':'dialog');
   if(layout==='storage')return storagePage(page,viewport,measure);
   if(layout==='table'&&page.tableProfile==='colonists'&&['work','schedule','assign'].includes(page.id)&&page.rows.some(row=>row.columns))return colonistTablePage(page,viewport,measure);
+  if(layout==='table'&&page.tableProfile==='factions'&&page.id==='factions'&&page.rows.some(row=>row.columns))return colonistTablePage(page,viewport,measure);
   if(layout==='table'&&(page.id==='animals'||page.id==='wildlife')&&page.rows.some(row=>row.columns))return animalTablePage(page,viewport,measure);
   if(layout==='architect'||layout==='research')return structuredPage(page,viewport,measure,layout);
   if(layout==='inspector'&&page.portrait&&page.rows.some(row=>row.id==='pawn-tabs'))return inspectorPage(page,viewport,measure);
@@ -456,7 +490,7 @@ export function layoutNativePage(page:NativePage,viewport:{width:number;height:n
     return {x,y:viewport.height-NATIVE_UI.bottom-12-height-(page.palette==='orders'?54:0),width,height,header:0,footer:0,body,contentHeight:height,rows,layout,regions:{catalogue:{...body,contentHeight:height,contentWidth}},actions:[]};
   }
   let requested=requestedWidth(page,layout==='inspector'?680:layout==='tools'?350:760);
-  if(page.id==='menu')requested=368;if(page.id==='history')requested=720;if(page.id==='animals')requested=900;
+  if(page.id==='menu')requested=450;if(page.id==='history')requested=720;if(page.id==='animals')requested=900;
   const width=Math.min(Math.max(220,Math.min(requested,viewport.width-32)),Math.max(1,viewport.width-24)),pad=NATIVE_UI.padding;
   const visual=nativeVisualWidth(page,width),contentWidth=width-pad*2-(visual?visual+10:0)-12,bodyX=pad+visual+(visual?10:0);
   const matrixColumns=layout==='table'?Math.max(0,...page.rows.map(row=>row.columns?.length??0)):0;
@@ -483,7 +517,7 @@ export function layoutNativePage(page:NativePage,viewport:{width:number;height:n
   }
   const contentHeight=Math.max(top,left,right);
   const maxHeight=Math.min(availableHeight,Math.max(header+footer+32,150,Math.min(page.height??(front?760:layout==='inspector'?600:layout==='tools'?560:720),viewport.height-bottom-(front?20:110))));
-  const height=page.id==='world'?maxHeight:Math.min(maxHeight,Math.max(header+footer+40,header+contentHeight+footer+8,page.visual?440:0));
+  const height=page.id==='world'&&page.visual?maxHeight:Math.min(maxHeight,Math.max(header+footer+40,header+contentHeight+footer+8,page.visual?440:0));
   const actions=scrollActions?[]:actionFlow.controls.map(control=>({...control,y:height-header-footer+horizontalReserve+pad+control.y}));
   const x=front?(viewport.width-width)/2:12,y=front?(viewport.height-height)/2:viewport.height-bottom-height;
   const body={x:bodyX,y:header,width:contentWidth,height:height-header-footer};

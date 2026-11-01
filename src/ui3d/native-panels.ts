@@ -627,21 +627,59 @@ function questsPanel(state:NativeUiState):NativePage {
  ],onClose:()=>void host?.panel(null)};
 }
 
+const menuView={identity:'',legacy:false,copies:false};
 function menuPanel(state:NativeUiState,actions:NativeUiActions):NativePage {
- const world=state.world,legacy:NativeRow[]=[];
+ const identity=narrativeIdentity(state);if(menuView.identity!==identity){menuView.identity=identity;menuView.legacy=false;menuView.copies=false;}
+ const world=state.world,legacy:NativeRow[]=[],rows:NativeRow[]=[];
+ const compact=(id:string,label:string,controls?:NativeControl[],detail?:string):NativeRow=>({...row(id,label,undefined,detail,controls),presentation:'plain',compact:true});
+ const menuAction=(id:string,label:string,run:(fresh:NativeUiState)=>void|Promise<unknown>,disabled=false):NativeControl=>narrativeButton(id,label,run,{disabled});
  if(world){
-  if(!world.climate)legacy.push(row('legacy-climate','Saisons et météo',undefined,'Activation prospective à l’heure actuelle ; aucune croissance passée ajoutée.',[button('legacy-climate-adopt','Activer les saisons',()=>send({type:'climate-adopt'}),{disabled:state.busy})]));
-  if(!world.raids)legacy.push(row('legacy-raids','Raids du camp',undefined,'Calendrier historique : première attaque dans 3,5 à 4 jours, puis 6 à 8 jours après chaque issue.',[button('legacy-raids-adopt','Activer les raids',()=>send({type:'enable-raids'}),{disabled:state.busy})]));
-  if(!world.raids?.mechanoid||world.schemaVersion>=197&&!world.raids.mechanoid.ranged)legacy.push(row('legacy-mech-raids','Raids mécaniques futurs',undefined,'Concurrence prospective aux occasions Cassandra à partir du jour 45. Aucun raid créé maintenant.',[button('legacy-mech-adopt','Admettre les raids mécaniques futurs',()=>send({type:'enable-mech-raids'}),{disabled:state.busy||world.schemaVersion<194||world.raids?.profile!=='cassandra-raids-v1'})]));
-  if(!world.gameProfile&&!world.heatwaves)legacy.push(row('legacy-heatwaves','Canicules du camp',undefined,'Calendrier historique : première canicule dans 6 à 7 jours, sans exposition passée.',[button('legacy-heatwaves-adopt','Activer les canicules',()=>send({type:'enable-heatwaves'}),{disabled:state.busy})]));
+  if(!world.climate)legacy.push(compact('legacy-climate','Saisons et météo',[menuAction('legacy-climate-adopt','Activer les saisons',fresh=>{if(fresh.world&&!fresh.world.climate)return send({type:'climate-adopt'});},state.busy)],'Activation prospective à l’heure actuelle ; aucune croissance passée ajoutée.'));
+  if(!world.raids)legacy.push(compact('legacy-raids','Raids du camp',[menuAction('legacy-raids-adopt','Activer les raids',fresh=>{if(fresh.world&&!fresh.world.raids)return send({type:'enable-raids'});},state.busy)],'Calendrier historique : première attaque dans 3,5 à 4 jours, puis 6 à 8 jours après chaque issue.'));
+  if(!world.raids?.mechanoid||world.schemaVersion>=197&&!world.raids.mechanoid.ranged)legacy.push(compact('legacy-mech-raids','Raids mécaniques futurs',[menuAction('legacy-mech-adopt','Admettre les raids mécaniques futurs',fresh=>{const value=fresh.world;if(value&&value.schemaVersion>=194&&value.raids?.profile==='cassandra-raids-v1'&&(!value.raids.mechanoid||value.schemaVersion>=197&&!value.raids.mechanoid.ranged))return send({type:'enable-mech-raids'});},state.busy||world.schemaVersion<194||world.raids?.profile!=='cassandra-raids-v1')],'Concurrence prospective aux occasions Cassandra à partir du jour 45. Aucun raid créé maintenant.'));
+  if(!world.gameProfile&&!world.heatwaves)legacy.push(compact('legacy-heatwaves','Canicules du camp',[menuAction('legacy-heatwaves-adopt','Activer les canicules',fresh=>{if(fresh.world&&!fresh.world.gameProfile&&!fresh.world.heatwaves)return send({type:'enable-heatwaves'});},state.busy)],'Calendrier historique : première canicule dans 6 à 7 jours, sans exposition passée.'));
  }
- return {id:'menu',title:'Menu',rows:[
-  row('menu-game','Partie',undefined,state.fault,[button('menu-resume','Reprendre',()=>actions.panel(null),{disabled:!!state.fault}),button('menu-save','Sauvegarder',actions.save,{disabled:state.busy||!state.hasGame||!!state.fault}),button('menu-load','Charger',()=>actions.front('load'),{disabled:state.busy}),button('menu-export','Exporter',actions.exportSave,{disabled:state.busy||!state.hasGame||!!state.fault})]),
-  row('menu-new','Autres actions',undefined,undefined,[button('menu-create','Nouvelle colonie',()=>actions.front('create'),{disabled:state.busy}),button('menu-home','Accueil',()=>actions.front('home'),{disabled:state.busy})]),
-  ...state.saves.map(save=>row(`menu-save-${save.key}`,save.label,save.kind,save.detail)),
-  ...legacy,
- ],onClose:()=>void actions.panel(null)};
+ rows.push(compact('menu-game','Partie',[
+  menuAction('menu-save','Sauvegarder',fresh=>{if(fresh.hasGame&&!fresh.fault)return host?.save();},state.busy||!state.hasGame||!!state.fault),
+  menuAction('menu-load','Charger',()=>host?.front('load'),state.busy),
+  menuAction('menu-export','Exporter',fresh=>{if(fresh.hasGame&&!fresh.fault)return host?.exportSave();},state.busy||!state.hasGame||!!state.fault),
+ ],state.fault));
+ const saved=state.saves,named=saved.filter(save=>save.kind==='named').length,automatic=saved.filter(save=>save.kind==='auto').length;
+ rows.push(compact('menu-saves','Sauvegardes',[
+  ...(actions.openSaveManager?[menuAction('native-manage-saves','Gérer les sauvegardes',()=>host?.openSaveManager?.(),state.busy)]:[]),
+  menuAction('menu-copies-toggle',menuView.copies?'Masquer les copies':'Copies disponibles ('+saved.length+')',()=>{menuView.copies=!menuView.copies;back();},state.busy),
+ ],String(named)+' nommée'+(named===1?'':'s')+' · '+automatic+' automatique'+(automatic===1?'':'s')+' · '+saved.length+' copies au total.'));
+ if(menuView.copies){
+  if(!saved.length)rows.push(compact('menu-copies-empty','Aucune copie disponible.'));
+  for(const save of saved)rows.push({...row('menu-save-'+save.key,save.label,({manual:'Manuelle',recovery:'Colonie précédente',named:'Nommée',auto:'Automatique'} as const)[save.kind],save.detail),presentation:'plain',compact:true});
+ }
+ const preferences:NativeControl[]=[
+  ...(actions.openOptions?[menuAction('native-options','Options',()=>host?.openOptions?.(),state.busy)]:[]),
+  ...(actions.openHelp?[menuAction('native-help','Aide',()=>host?.openHelp?.(),state.busy)]:[]),
+ ];
+ if(preferences.length)rows.push(compact('native-menu-details','Préférences et carnet',preferences));
+ const exchanges:NativeControl[]=[
+  ...(actions.openVisitorTrade?[menuAction('native-visitor-trade','Visiteurs et commerce',()=>host?.openVisitorTrade?.(),state.busy)]:[]),
+  ...(actions.openOrbitalTrade?[menuAction('native-orbital-trade','Commerce orbital',()=>host?.openOrbitalTrade?.(),state.busy)]:[]),
+  ...(world&&world.schemaVersion>=298&&isCorePhysicalSchema297(world.schemaVersion)&&actions.openFactionComms298?[menuAction('native-faction-comms298','Communications de faction',()=>host?.openFactionComms298?.(),state.busy)]:[]),
+ ];
+ if(exchanges.length)rows.push(compact('native-menu-trade','Échanges',exchanges));
+ rows.push(compact('menu-new','Autres actions',[
+  menuAction('menu-create','Nouvelle colonie',()=>host?.front('create'),state.busy),
+  menuAction('menu-home','Accueil',()=>host?.front('home'),state.busy),
+ ]));
+ if(legacy.length){
+  rows.push(compact('menu-legacy','Anciennes parties',[
+   {...menuAction('menu-legacy-toggle',menuView.legacy?'Masquer les réglages historiques':'Réglages historiques ('+legacy.length+')',()=>{menuView.legacy=!menuView.legacy;back();},state.busy),glyph:menuView.legacy?'collapse':'expand'},
+  ],'Activations prospectives des anciens formats ; aucune activation au simple dépliage.'));
+  if(menuView.legacy)rows.push(...legacy);
+ }
+ const close=narrativeGuard(()=>host?.panel(null));
+ return {id:'menu',title:'Menu',contentKey:identity,layout:'dialog',width:450,rows,actions:[
+  menuAction('menu-resume','Reprendre',fresh=>{if(!fresh.fault)return host?.panel(null);},state.busy||!!state.fault),
+ ],onClose:close};
 }
+
 
 /** Refresh confirmed readers while an owned native editor keeps its draft. */
 export function syncNativePanelState(state:NativeUiState,actions:NativeUiActions):void {

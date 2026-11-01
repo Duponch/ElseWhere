@@ -1105,6 +1105,7 @@ function nativeActions():NativeUiActions {
     material:material=>{if(isShipComputerSensorsKind298(currentTool))return;nativeConstructionMaterial=material;renderer?.setConstructionMaterial(material);refreshNativeUi();},
     creationStorage:settings=>{nativeCreationStorage=structuredClone(settings);refreshNativeUi();},
     front:openFront,save,exportSave:exportCurrentColony,
+    openSaveManager:openNativeSaveManager,openOptions:openNativeOptions,openHelp,
     showPage:page=>{nativeCustomPage=page;nativeUi?.showPage(page);},refresh:()=>renderState(),clearSelection,
     readState:readNativeState,closePage:()=>{nativeToolPalette=undefined;nativeCustomPage=undefined;renderState();},
     pawnActivity:id=>{const pawn=snapshot?.pawns.find(p=>p.id===id);return pawn&&snapshot?actionLabel(pawn,carriedPatientsOf(snapshot)):'';},
@@ -1147,15 +1148,6 @@ function refreshNativeUi():void {
   }else if(nativeEncounterKey){nativeEncounterKey=undefined;nativeCustomPage=undefined;}
   if(nativeCustomPage){nativeUi.showPage(nativeCustomPage);return;}
   const page=currentPanel?buildNativePanel(state,actions):nativeHudHiddenInspectorKey!==undefined&&nativeHudHiddenInspectorKey===nativePawnInspectorKey()?null:buildNativeInspector(state,actions);
-  if(page?.id==='menu')page.rows.push({id:'native-menu-details',label:'Sauvegardes, options et carnet',controls:[
-    {id:'native-manage-saves',label:'Gérer les sauvegardes',onActivate:openNativeSaveManager},
-    {id:'native-options',label:'Options',onActivate:openNativeOptions},{id:'native-help',label:'Aide',onActivate:openHelp},
-  ]});
-  if(page?.id==='menu')page.rows.push({id:'native-menu-trade',label:'Échanges',controls:[
-    {id:'native-visitor-trade',label:'Visiteurs et commerce',onActivate:()=>nativeLocalTrade?.openVisitors()},
-    {id:'native-orbital-trade',label:'Commerce orbital',onActivate:()=>nativeLocalTrade?.openOrbital()},
-    ...(isSchema298OrLater(Number(state.world?.schemaVersion))?[{id:'native-faction-comms298',label:'Communications de faction',onActivate:()=>{void attempt(async()=>nativeFactionComms298?.open());}}]:[]),
-  ]});
   if(page&&!page.onClose)page.onClose=()=>setPanel(null);
   nativeUi.showPage(page);
 }

@@ -7,14 +7,14 @@ const measure=(s:string,size:number)=>Array.from(s).length*size*.54;
 function fixture(){let page:NativePage;page=createNativeStorageEditor({id:'creation-storage',title:'Réglages du stockage',initial:{priority:2,filters:{wood:true,food:true}},show:next=>{page=next;},onApply:()=>{},onBack:()=>{}});return{get page(){return page;}};}
 function layout(page:NativePage,width=1280,height=720){return layoutNativePage(page,{width,height},false,measure);}
 
-test('expanding the catalogue never moves the fixed settings, search or footer and keeps compact independent targets',async()=>{
+test('expanding the catalogue grows the paper only as needed while settings, search and footer remain separately accessible',async()=>{
   const f=fixture(),before=layout(f.page);
   for(let i=0;i<100;i++){
     const closed=f.page.rows.find(row=>row.tree?.branch&&!row.tree.expanded&&!row.controls?.[0]?.disabled);
     if(!closed)break;await closed.controls![0]!.onActivate();
   }
-  const after=layout(f.page);expect(after.width).toBe(480);expect(after.height).toBe(before.height);expect(after.y).toBe(before.y);
-  expect(after.regions.details).toEqual(before.regions.details);expect(after.regions.navigation).toEqual(before.regions.navigation);expect(after.actions.map(x=>[x.x,x.y,x.width,x.height])).toEqual(before.actions.map(x=>[x.x,x.y,x.width,x.height]));
+  const after=layout(f.page);expect(after.width).toBe(480);expect(after.height).toBeGreaterThanOrEqual(before.height);expect(after.y+after.height).toBe(before.y+before.height);
+  expect(after.regions.details).toEqual(before.regions.details);expect(after.regions.navigation).toEqual(before.regions.navigation);expect(after.actions.map(x=>[x.x,after.y+after.header+x.y,x.width,x.height])).toEqual(before.actions.map(x=>[x.x,before.y+before.header+x.y,x.width,x.height]));
   expect(after.contentHeight).toBeGreaterThan(after.body.height);expect(after.rows.filter(r=>r.row.tree).length).toBeGreaterThan(40);
   const checks=after.rows.filter(r=>r.row.tree);
   for(const row of checks){
