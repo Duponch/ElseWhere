@@ -12,6 +12,7 @@ import { noise } from './StaticGeometry';
 import { perspectiveDetailRange, screenSpriteScale } from './map-overlay-detail';
 import { WORLD_SCALE } from '../world/scale';
 import {UI_ATLAS_URL,pictogramSvg} from '../ui/pictograms';
+import type {PileBundle} from './pile-parts';
 
 export const DESIGNATION_MIN_CELL_PIXELS = 32;
 export const DESIGNATION_ICON_PIXELS = 30;
@@ -36,14 +37,14 @@ function iconIndex(kind: MarkerKind): number {
 export const isIconDesignationKind = (kind: unknown): kind is DesignationIconKind =>
   typeof kind === 'string' && (DESIGNATION_ICON_KINDS as readonly string[]).includes(kind);
 
-/** Three resident vector slots; historical v304 assets are neither edited nor copied. */
+/** Four resident vector slots; historical v304 assets are neither edited nor copied. */
 export const TREE_DESIGNATION_ATLAS_URL='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="288" height="96" viewBox="0 0 192 64">'+
-  ['extract-tree','replant-tree','smooth-floor'].map((kind,index)=>pictogramSvg(kind).replace('<svg ',`<svg x="${index*64}" y="0" `).replace('width="96" height="96"','width="64" height="64"')).join('')+'</svg>');
+  '<svg xmlns="http://www.w3.org/2000/svg" width="384" height="96" viewBox="0 0 256 64">'+
+  ['extract-tree','replant-tree','smooth-floor','forbid'].map((kind,index)=>pictogramSvg(kind).replace('<svg ',`<svg x="${index*64}" y="0" `).replace('width="96" height="96"','width="64" height="64"')).join('')+'</svg>');
 
 function treeFallbackAtlas():THREE.DataTexture {
-  const width=48,height=16,data=new Uint8Array(width*height*4);
-  const pixel=(slot:number,x:number,y:number)=>{if(x<1||x>14||y<1||y>14)return;const at=(y*width+slot*16+x)*4;data[at]=data[at+1]=data[at+2]=data[at+3]=255;};
+  const width=64,height=16,data=new Uint8Array(width*height*4);
+  const pixel=(slot:number,x:number,y:number)=>{if(x<1||x>14||y<1||y>14)return;const at=(y*width+slot*16+x)*4;data[at]=data[at+3]=255;data[at+1]=slot===3?107:255;data[at+2]=slot===3?94:255;};
   // Upright shovel and rooted sprout remain distinct even if SVG decoding fails.
   for(let y=3;y<=10;y++)for(let x=7;x<=8;x++)pixel(0,x,y);
   for(let y=2;y<=4;y++)for(let x=5;x<=10;x++)if(y===2||y===4||x===5||x===10)pixel(0,x,y);
@@ -51,11 +52,23 @@ function treeFallbackAtlas():THREE.DataTexture {
   for(let y=4;y<=12;y++)pixel(1,8,y);
   for(let i=0;i<4;i++){pixel(1,8-i,7-i);pixel(1,8+i,6-i);pixel(1,5+i,12);}
   for(let x=3;x<=12;x++)pixel(2,x,12);for(let i=0;i<6;i++){pixel(2,5+i,9-i);pixel(2,6+i,9-i);}
+  for(let y=2;y<=14;y++)for(let x=2;x<=14;x++){const r=Math.hypot(x-8,y-8);if(r>=5&&r<=6.3||Math.abs(x-y)<=.7&&x>=4&&x<=12)pixel(3,x,y);}
   const map=new THREE.DataTexture(data,width,height,THREE.RGBAFormat,THREE.UnsignedByteType);
   map.minFilter=map.magFilter=THREE.LinearFilter;map.generateMipmaps=false;map.needsUpdate=true;return map;
 }
 
 export interface DesignationIconInstance { x: number; y: number; z: number; icon: number }
+export interface ForbiddenPileIconInstance extends DesignationIconInstance { cellX:number; cellZ:number }
+/** Reuse the renderer's already grouped, supported pile projection. No World
+ * traversal, item model, target or simulation permission is created here. */
+export function forbiddenPileIconInstances(bundles:readonly PileBundle[]):ForbiddenPileIconInstance[] {
+  const icons:ForbiddenPileIconInstance[]=[];
+  for(const b of bundles)if(b.forbidden&&!b.supplied){
+    const surface=b.surface,height=(b.markerOnly||b.kind==='corpse')?1.48:1.08;
+    icons.push({x:b.x+(surface?.x??0),y:(surface?.y??0)+height*(surface?.scaleHeight?surface.scale:1),z:b.z+(surface?.z??0),icon:83,cellX:b.x,cellZ:b.z});
+  }
+  return icons;
+}
 function instancesForTargets(world: World, targets: readonly MarkerTarget[]): DesignationIconInstance[] {
   const visibleTargets=targets.filter(job=>job.kind==='mine'||knownPosition256(world,job));
   const trees=visibleTargets.some(j=>j.kind==='chop'||j.kind==='extract-tree')?new Map(world.resources.filter(r=>r.kind==='tree').map(r=>[r.z*world.width+r.x,r])):undefined;
@@ -212,6 +225,9 @@ export class DesignationIconLayer {
   private minCellPixels = DESIGNATION_MIN_CELL_PIXELS;
   private committed: DesignationIconInstance[] = [];
   private preview: DesignationIconInstance[] = [];
+  private readonly pileChunks=new Map<string,readonly ForbiddenPileIconInstance[]>();
+  private pileIcons:readonly ForbiddenPileIconInstance[]=[];
+  private visiblePileIcons:readonly DesignationIconInstance[]=[];
   private instanceCount = 0;
   private revision = 0;
   private intentions:ConfirmedIntentFields|undefined;
@@ -243,7 +259,7 @@ export class DesignationIconLayer {
       const cell = icon.sub(offset);
       return vec2(uv().x.add(cell.mod(6)).div(6), uv().y.add(cell.div(6).floor().negate().add(4)).div(5));
     };
-    const treeUv=vec2(uv().x.add(icon.sub(80)).div(3),uv().y);
+    const treeUv=vec2(uv().x.add(icon.sub(80)).div(4),uv().y);
     material.colorNode = icon.greaterThanEqual(80).select(this.treeNode.sample(treeUv),icon.lessThan(20).select(this.atlasNode.sample(atlasUv),
       icon.lessThan(50).select(this.architectNodes[0].sample(architectUv(20)), this.architectNodes[1].sample(architectUv(50)))));
     this.mesh = new THREE.Mesh(geometry, material);
@@ -273,11 +289,22 @@ export class DesignationIconLayer {
     this.publish();
   }
 
+  /** Called from pile adoption, including same-tick edits and cargo handoffs.
+   * Only changed chunks rebuild anchors. Camera/RAF never reads World piles. */
+  updatePileIcons(world:World,changes:readonly {key:string;bundles:readonly PileBundle[]}[],active:ReadonlySet<string>,reset=false):void {
+    let dirty=reset;
+    if(reset)this.pileChunks.clear();
+    for(const key of this.pileChunks.keys())if(!active.has(key)){this.pileChunks.delete(key);dirty=true;}
+    for(const change of changes){this.pileChunks.set(change.key,forbiddenPileIconInstances(change.bundles));dirty=true;}
+    if(dirty)this.pileIcons=[...this.pileChunks.values()].flat();
+    this.visiblePileIcons=this.pileIcons.filter(icon=>knownPosition256(world,{x:icon.cellX,z:icon.cellZ}));
+    this.publish();
+  }
+
   updatePreview(world: World, action: AreaAction, cells: readonly number[]): void {
     const targets = committedTargets(world,this.intentions);
-    const instances = instancesForTargets(world, [...targets, ...previewTargets(world, action, cells, targets)]);
-    this.committed = instances.slice(0, targets.length);
-    this.preview = instances.slice(targets.length);
+    this.committed = instancesForTargets(world,targets);
+    this.preview = instancesForTargets(world,previewTargets(world,action,cells,targets));
     this.publish();
   }
 
@@ -295,7 +322,7 @@ export class DesignationIconLayer {
 
   private publish(): void {
     this.revision++;
-    const instances = this.preview.length ? [...this.committed, ...this.preview] : this.committed;
+    const instances = this.visiblePileIcons.length||this.preview.length ? [...this.committed,...this.visiblePileIcons,...this.preview] : this.committed;
     this.instanceCount = instances.length;
     this.mesh.geometry.instanceCount = this.instanceCount;
     if (this.instanceCount === 0) this.mesh.visible = false;
@@ -346,7 +373,7 @@ export class DesignationIconLayer {
 
   dispose(): void {
     this.disposed = true;
-    this.committed = []; this.preview = [];
+    this.committed = []; this.preview = [];this.pileChunks.clear();this.pileIcons=[];this.visiblePileIcons=[];
     this.mesh.geometry.dispose();
     this.mesh.material.dispose();
     this.fallback.dispose();this.treeFallback.dispose();

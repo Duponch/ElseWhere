@@ -1465,6 +1465,7 @@ export class SceneRenderCore {
     const hidden=this.pawns.hiddenPileQuantities();
     const prepared=this.immutableWorlds.has(world)?this.applicationContext?.piles.read(world,hidden,newMap):undefined;
     if(prepared){
+      this.designations.updatePileIcons(world,prepared.changedChunks,prepared.activeKeys,newMap);
       for(const [key,chunk]of this.pileChunks)if(!prepared.activeKeys.has(key)&&chunk.signature!==''){this.boxes.set(chunk.group,`pile:${key}`,[]);chunk.signature='';}
       for(const change of prepared.changedChunks){const {key,signature}=change,previous=this.pileChunks.get(key);if(previous?.signature===signature)continue;
         const group=previous?.group??new THREE.Group();if(!previous)this.pileGroup.add(group);group.name=`Material piles ${key}`;
@@ -1498,6 +1499,7 @@ export class SceneRenderCore {
       const chunk = chunks.get(key);
       if (chunk) chunk.push(bundle); else chunks.set(key, [bundle]);
     }
+    this.designations.updatePileIcons(world,[...chunks].map(([key,bundles])=>({key,bundles})),new Set(chunks.keys()),true);
     for (const [key, chunk] of this.pileChunks) if (!chunks.has(key)&&chunk.signature!=='') {
       this.boxes.set(chunk.group, `pile:${key}`, []); chunk.signature = '';
     }

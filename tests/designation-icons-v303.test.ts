@@ -112,19 +112,36 @@ test('new removal sprites retain the historical JobLayer classification and use 
   expect(['mine', 'chop', 'harvest', 'cut'].every(isIconDesignationKind)).toBe(true);
 });
 
-test('preview clear restores ground designations and camera presentation never reads source collections', () => {
+test('preview clear keeps forbidden overlays and camera changes never read source collections or upload buffers', () => {
   const world = fixture(); world.piles = [chunk(world, 2, 2, true)];
   const icons = new DesignationIconLayer(() => undefined);
+  const bundle={x:4,z:4,kind:'wood' as const,item:'wood' as const,quantity:10,supplied:false,forbidden:true as const};
+  icons.updatePileIcons(world,[{key:'piles',bundles:[bundle]}],new Set(['piles']));
   icons.updatePreview(world, 'haul-chunks', [2 * world.width + 3]);
-  expect(icons.mesh.geometry.instanceCount).toBe(2);
-  icons.clearPreview(); expect(icons.mesh.geometry.instanceCount).toBe(1);
-  const position = icons.mesh.geometry.getAttribute('designationPosition') as THREE.InstancedBufferAttribute, version = position.version;
-  for (const key of ['jobs', 'piles', 'resources', 'roofing']) Object.defineProperty(world, key, { get: () => { throw new Error(`frame read ${key}`); } });
+  expect(icons.mesh.geometry.instanceCount).toBe(3);
+  icons.clearPreview(); expect(icons.mesh.geometry.instanceCount).toBe(2);
+  const geometry=icons.mesh.geometry,position=geometry.getAttribute('designationPosition') as THREE.InstancedBufferAttribute,version=position.version;
+  icons.updatePileIcons(world,[],new Set(['piles']));expect(position.version).toBe(version);
+  expect(icons.mesh.material).toBeInstanceOf(THREE.SpriteNodeMaterial);expect(icons.mesh.material.depthTest).toBe(false);
+  const quad=geometry.getAttribute('position');expect(quad.count).toBe(4);for(let i=0;i<quad.count;i++)expect(quad.getZ(i)).toBe(0);
+  for (const key of ['jobs', 'piles', 'resources', 'roofing','structures']) Object.defineProperty(world, key, { get: () => { throw new Error('frame read '+key); } });
   icons.setMinCellPixels(0);
-  const camera = new THREE.PerspectiveCamera();
-  for (let frame = 0; frame < 10; frame++) icons.present(camera, 1440, .01);
-  expect(icons.mesh.visible).toBe(true); expect(position.version).toBe(version);
+  for(const camera of [new THREE.PerspectiveCamera(),new THREE.OrthographicCamera()])for(let frame=0;frame<10;frame++)icons.present(camera,1440,.01);
+  expect(icons.mesh.visible).toBe(true);expect(geometry.getAttribute('designationPosition')).toBe(position);expect(position.version).toBe(version);
   icons.dispose();
+});
+
+test('hidden forbidden objects stay hidden and clearing a visible preview never retains a filtered target',()=>{
+  const world=fixture();world.site={revision:3} as World['site'];world.exploration={revision:1};
+  world.tiles[2*world.width+2]!.fogged=true;world.jobs=[job(world,'chop',2,2)];
+  const before=JSON.stringify(world),icons=new DesignationIconLayer(()=>undefined);
+  const base={kind:'wood' as const,item:'wood' as const,quantity:10,supplied:false,forbidden:true as const};
+  icons.updatePileIcons(world,[{key:'piles',bundles:[{...base,x:2,z:2},{...base,x:4,z:4}]}],new Set(['piles']));
+  icons.updatePreview(world,'haul-chunks',[3*world.width+3]);expect(icons.mesh.geometry.instanceCount).toBe(2);
+  icons.clearPreview();expect(icons.mesh.geometry.instanceCount).toBe(1);
+  expect(icons.mesh.geometry.getAttribute('designationPosition').getX(0)).toBe(4);
+  icons.updatePileIcons(world,[],new Set());expect(icons.mesh.geometry.instanceCount).toBe(0);
+  expect(JSON.stringify(world)).toBe(before);icons.dispose();
 });
 
 test('the three historical vector atlases plus tree slots load once and release late loads', () => {
