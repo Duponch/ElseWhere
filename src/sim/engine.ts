@@ -74,6 +74,7 @@ import {isCaveHiveKind256} from './cave-hive-state-256.ts';
 import {advanceActualHiveComponents256} from './cave-hive-tick-256.ts';
 import {captureAnimalCombatThreats256} from './cave-hive-lord-256.ts';
 import {applyMaterialPermission256} from './material-permission-256.ts';
+import {applyAreaMaterialPermission256} from './area-material-permission-256';
 import {isShipChunk256} from './ship-chunk-256.ts';
 import {advanceCaravanIncidents261,pendingCaravan261} from './caravan-incidents-261.ts';
 import {advanceActualWorldPawns256} from './world-pawn-campaign-256.ts';
@@ -436,6 +437,7 @@ function applyAnimalHomeArea287(world:World,command:AreaCommand,selected:readonl
   return {ok:true,affected:selected.length};
 }
 function applyArea(world: World, command: AreaCommand, drops:DropPlan): CommandResult {
+  if(command.action==='allow'||command.action==='forbid')return applyAreaMaterialPermission256(world,command);
   const selection = queryArea(world, command);
   if (!selection.ok) return selection;
   if (!selection.cells.length) return refusal('missing-target', 'Aucune case compatible dans ce rectangle.');
@@ -700,6 +702,7 @@ function applyLocalCommand(world: World, command: LocalCommand): CommandResult {
   if(isSchema287OrLater(Number(world.schemaVersion))&&(command?.type==='allowed-area-create'||command?.type==='allowed-area-settings'||command?.type==='allowed-area-paint'||command?.type==='allowed-area-delete'||command?.type==='assign-allowed-area'))return applyAnimalAwareAreaCommand287(world,command);
   if(command&&typeof command==='object'&&hiddenExplorationCommandTarget256(world,command))return refusal('missing-target','Cette cible n’est pas connue sur la carte actuelle.');
   if(command.type==='material-forbid')return applyMaterialPermission256(world,command);
+  if(command.type==='area'&&(command.action==='allow'||command.action==='forbid'))return applyAreaMaterialPermission256(world,command);
   if(command.type==='egg-forbid')return applyEggPermission256(world,command);
   if(command.type==='map-view'||command.type==='map-settle'||command.type==='map-abandon'||command.type==='group-select'||command.type==='group-enter')return refusal('invalid-command','Une commande de campagne valide est requise.');
   // Filter editing changes campaign metadata only. Ordinary due checks own

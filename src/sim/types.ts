@@ -338,7 +338,7 @@ export interface World {
   logisticsCursor: number;
 }
 export type DesignateCommand = { type: 'designate'; kind: JobKind; targetId?:number; orientation?: Orientation; material?:import('./construction-materials.ts').ConstructionMaterial; floor?:import('./flooring.ts').FloorKind } & Cell;
-export type AreaAction = 'smooth-floor' | 'build-bridge' | 'remove-bridge' | 'snow-clear' | 'remove-snow-clear' | 'lay-floor' | 'remove-floor' | 'home' | 'remove-home' | 'build-roof' | 'remove-roof' | 'ignore-roof' | 'mine' | 'haul-chunks' | 'deconstruct' | 'chop' | 'harvest' | 'cut' | 'cancel' | 'stockpile' | 'remove-stockpile' | 'growing' | 'remove-growing';
+export type AreaAction = 'allow' | 'forbid' | 'smooth-floor' | 'build-bridge' | 'remove-bridge' | 'snow-clear' | 'remove-snow-clear' | 'lay-floor' | 'remove-floor' | 'home' | 'remove-home' | 'build-roof' | 'remove-roof' | 'ignore-roof' | 'mine' | 'haul-chunks' | 'deconstruct' | 'chop' | 'harvest' | 'cut' | 'cancel' | 'stockpile' | 'remove-stockpile' | 'growing' | 'remove-growing';
 export interface StorageSettings extends StorageConditions { items?:Partial<Record<ItemId,boolean>>; filters?: StorageFilters; priority?: number; capacity?: number }
 export interface AreaCommand extends StorageSettings { type: 'area'; action: AreaAction; from: Cell; to: Cell; targetZoneId?:number; floor?: import('./flooring.ts').FloorKind }
 export interface BuildLineCommand { type: 'build-line'; kind: import('./construction-line.ts').LineBuildKind; from: Cell; to: Cell; material?: import('./construction-materials.ts').ConstructionMaterial }

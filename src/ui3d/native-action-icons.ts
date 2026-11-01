@@ -1,4 +1,4 @@
-import {drawHandBlob,drawHandPaintedIcon,drawHandRect,drawMarkerLine,seededRandom} from './prototype-art';
+import {PALETTE,drawHandBlob,drawHandPaintedIcon,drawHandRect,drawMarkerLine,seededRandom} from './prototype-art';
 
 type OriginalIcon='architecte'|'travail'|'planning'|'assignations'|'animaux'|'faune'|'recherches'|'quetes'|'monde'|'historique'|'factions'|'menu'|'ordres'|'zones';
 export type NativeActionIconKind=OriginalIcon|'wall'|'floor'|'floor-remove'|'bridge'|'bridge-remove'|'chair'|'bed'|'medical-bed'|'animal-bed'|'table'|'shelf'|'door'|'fence'|'flag'|'grave'|'thermometer'|'flame'|'lamp'|'horseshoe'|'chess'|'television'|'workbench'|'anvil'|'sword'|'gun'|'shield'|'shirt'|'power'|'wire'|'battery'|'solar'|'wind'|'rocket'|'reactor'|'casket'|'computer'|'sensors'|'mine'|'haul'|'axe'|'harvest'|'scissors'|'uninstall'|'deconstruct'|'cancel'|'growing'|'growing-remove'|'stockpile'|'stockpile-remove'|'roof'|'roof-remove'|'roof-ignore'|'home'|'home-remove'|'snow'|'snow-remove'|'pot'|'food'|'barrel'|'drop'|'drill'|'radar'|'chip'|'cross'|'limb'|'paint'|'foam'|'play'|'pause'|'save'|'load'|'export'|'copy'|'paste'|'back'|'rotate-left'|'rotate-right'|'information'|'plus'|'minus'|'check'|'fallback';
@@ -8,6 +8,7 @@ export type NativeActionIconKind=OriginalIcon|'wall'|'floor'|'floor-remove'|'bri
 const families:Readonly<Record<string,NativeActionIconKind>>={
   architecte:'architecte',architect:'architecte',travail:'travail',work:'travail',planning:'planning',schedule:'planning',assignations:'assignations',assign:'assignations',animaux:'animaux',animals:'animaux',faune:'faune',wildlife:'faune',recherches:'recherches',research:'recherches',quetes:'quetes',quests:'quetes',monde:'monde',world:'monde',historique:'historique',history:'historique',factions:'factions',menu:'menu',ordres:'ordres',orders:'ordres',zones:'zones',
   structure:'wall',floors:'floor',furniture:'chair',temperature:'thermometer',recreation:'horseshoe',production:'workbench',power:'power',ship:'rocket',
+  allow:'check',forbid:'cancel',
   select:'information',mine:'mine','haul-chunks':'haul',haul:'haul',chop:'axe',harvest:'harvest',cut:'scissors',uninstall:'uninstall',deconstruct:'deconstruct',cancel:'cancel',
   wall:'wall',door:'door',autodoor:'door','mini-turret':'gun',sandbags:'wall',fence:'fence','fence-gate':'fence','pen-marker':'flag','spike-trap':'sword','firefoam-popper':'foam',
   'build-bridge':'bridge','remove-bridge':'bridge-remove','smooth-floor':'floor','remove-floor':'floor-remove','wood-planks':'floor',
@@ -50,7 +51,8 @@ export function nativeActionIconKind(id:string):NativeActionIconKind {
  * No canvas, image, geometry, material, animation or GPU work is allocated here. */
 export function drawNativeActionIcon(ctx:CanvasRenderingContext2D,id:string,cx:number,cy:number,r:number,ink='#261e18',accent='#f4ecda'):void {
   if(!Number.isFinite(cx+cy+r)||r<=0)return;
-  const kind=nativeActionIconKind(id);
+  const kind=nativeActionIconKind(id),semantic=semanticId(id);
+  if(semantic==='forbid')ink=PALETTE.terracotta;else if(semantic==='allow')ink=PALETTE.pineDark;
   if(originals.has(kind)){drawHandPaintedIcon(ctx,kind,cx,cy,r,ink,accent);return;}
   let seed=97;for(const char of kind)seed=(Math.imul(seed,31)+char.charCodeAt(0))>>>0;
   const rng=seededRandom(seed),lw=Math.max(1.3,r*.13);

@@ -5,7 +5,7 @@ export const ZONE_SELECTION_COLOR=0xfff5d6;
 export const ZONE_SELECTION_WIDTH=.07;
 export const ZONE_TOOLS=new Set<string>(['snow-clear','remove-snow-clear','stockpile','remove-stockpile','growing','remove-growing','home','remove-home','build-roof','remove-roof','ignore-roof']);
 export function areaPreviewColor(action:AreaAction,eligible:number,skipped:number):number {
-  if(!ZONE_TOOLS.has(action))return 0x8bcef0;
+  if(!ZONE_TOOLS.has(action)&&action!=='allow'&&action!=='forbid')return 0x8bcef0;
   return eligible===0?0xe46f58:skipped>0?0xe4bb68:0x9dd9ca;
 }
 

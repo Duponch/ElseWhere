@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import {PrototypeCardboardArt,MANAGEMENT_BUTTONS,PALETTE,drawHandBlob,drawHandRect,drawMarkerLine,type CardboardPiece,type CardboardDraw,type CardboardPieceOptions} from './prototype-art';
 import {drawNativeActionIcon} from './native-action-icons';
 import {applyNativeHudButtonPose} from './native-hud-art';
+import {applyNativeMapToolHover} from './native-map-tool-hover';
 import {createNativeTextLexicon,tokenizeNativeText,NATIVE_TEXT_STYLES,type NativeTextLexicon,type NativeTextEntity,type NativeTextSpan} from './native-rich-text';
 import type {NativeControl,NativeControlStyle,NativePage,NativeRow,NativeShipCurtainPhase298} from './native-contract';
 import {NativeGlobe} from './NativeGlobe';
@@ -81,6 +82,9 @@ export class NativeStage {
   private page:NativePage|null=null;
   private pageBackdrop:CardboardPiece|undefined;
   private hovered:CardboardPiece|null=null;
+  private mapToolLabel:CardboardPiece|undefined;
+  private mapToolLabelOwner:CardboardPiece|undefined;
+  private mapToolLabelTitle='';
   private readonly hoverPreview=new NativeHoverPreview(message=>this.options.onError(message));
   private down:{piece:CardboardPiece;controlId?:string;outsidePage?:string;pageId?:string;layout?:NativePageBox;pose:NativeHitPose;pointerId:number;x:number;y:number}|null=null;
   private hoverPose:{piece:CardboardPiece;pose:NativeHitPose;pageId?:string}|undefined;
@@ -190,7 +194,7 @@ export class NativeStage {
     for(const [index,kind]of (['orders','zones'] as const).entries()){
       const control:NativeControl={id:'map-dock:'+kind,label:kind==='orders'?'Ordres':'Zones',hint:kind==='orders'?'Ordres sur la carte':'Zones sur la carte',onActivate:()=>this.options.onTools?.(kind)};
       const piece=this.art.createPiece({w:1.08,h:.46,depth:.046,bevel:.038,uvPadding:1,textureWidth:216,textureHeight:92,seed:381+index*5,bgColor:PALETTE.sageMountain,interactive:true,tooltip:control.hint,drawFn:(ctx,w,h,rng)=>{ctx.save();ctx.scale(w/108,h/46);drawHandBlob(ctx,23,23,17,PALETTE.creamPaper,PALETTE.inkDark,1.5,rng);drawNativeActionIcon(ctx,kind,23,23,11);drawHandRect(ctx,44,11,58,25,PALETTE.creamPaper,PALETTE.inkDark,1,rng);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';ctx.font=this.font(13,true);ctx.fillText(control.label,73,28,54);ctx.restore();}});
-      piece.userData.nativeId=control.id;piece.setBaseTransform(.54,index===0?1.63:1.09,.08);this.toolsDock.add(piece);this.register(piece,control);
+      piece.userData.nativeId=control.id;piece.userData.nativeMapToolPose=true;piece.setBaseTransform(.54,index===0?1.63:1.09,.08);this.toolsDock.add(piece);this.register(piece,control);
     }
     // The reference's three lights, with the world key expressed in HUD-camera
     // space. They light actual cream edges and matte painted mesh fronts.
@@ -230,7 +234,7 @@ export class NativeStage {
   }
   diagnostics(){
     this.scene.updateMatrixWorld(true);
-    return {...this.stats,displayScale:this.displayScale,logicalViewport:{width:this.width,height:this.height},bottomDockHeight:this.bottomDockHeight,cache:this.overlayCache.stats,standby:this.standby.stats,activeAnimations:this.moving.size,uiObjects:this.art.interactiveMeshes.length,
+    return {...this.stats,mapToolHover:this.mapToolLabelOwner?{id:this.mapToolLabelOwner.userData.nativeId,title:this.mapToolLabelTitle,labelVisible:!!this.mapToolLabel?.visible,value:this.mapToolLabelOwner.userData.hoverVal,scale:this.mapToolLabelOwner.scale.x}:null,displayScale:this.displayScale,logicalViewport:{width:this.width,height:this.height},bottomDockHeight:this.bottomDockHeight,cache:this.overlayCache.stats,standby:this.standby.stats,activeAnimations:this.moving.size,uiObjects:this.art.interactiveMeshes.length,
       mode:'native-meshes',page:this.page?.id??null,scroll:this.scroll,maxScroll:this.maxScroll,pageBounds:this.pageBox?{x:this.pageBox.x,y:this.pageBox.y,width:this.pageBox.width,height:this.pageBox.height}:null,dropdown:this.dropdown?{owner:this.dropdown.controlId,...this.dropdown.box}:null,bottomDock:{autoHide:this.autoHideBottom,open:this.bottomOpen,offset:this.bottomOffset,page:this.managementPage,pages:this.managementPages},front:this.frontVisible,globe:this.globeDiagnostics(),
       readout:this.worldReadout?{visible:this.worldReadout.visible,paper:this.worldReadout.userData.paper,width:this.worldReadout.userData.w*100,height:this.worldReadout.userData.h*100,lines:this.worldReadoutLines,scroll:this.worldReadoutScroll,maxScroll:this.worldReadoutMaxScroll}:null,
       tooltip:this.hintPiece?{width:this.hintPiece.userData.w*100,height:this.hintPiece.userData.h*100}:null,
@@ -576,6 +580,7 @@ export class NativeStage {
     }
   }
   private setPose(piece:CardboardPiece,hover:number):void{
+    if(piece.userData.nativeMapToolPose){if(applyNativeMapToolHover(piece,hover))this.sceneRevision++;if(this.mapToolLabelOwner===piece)this.updateMapToolLabel();return;}
     if(piece.userData.nativeToolbarPose){if(applyNativeHudButtonPose(piece))this.sceneRevision++;return;}
     const ud=piece.userData,toolbar=String(ud.nativeId??'').startsWith('tab:'),activeLift=ud.active?(toolbar?.065:.02):0,hoverLift=hover*(toolbar?.085:.025),pressPush=ud.pressVal*(toolbar?.05:Math.min(.02,ud.depth*.5));
     const x=ud.basePos.x,y=ud.basePos.y+(ud.active&&toolbar?.045:0)+hover*(toolbar?.03:.005),z=ud.basePos.z+activeLift+hoverLift-pressPush;
@@ -590,6 +595,7 @@ export class NativeStage {
     return hit;
   }
   private unregister(piece:CardboardPiece):void{
+    if(this.mapToolLabelOwner===piece)this.clearMapToolLabel();
     if(this.hintOwner===piece)this.clearHint();
     if(this.hovered===piece)this.hover(null);this.moving.delete(piece);
     for(const mesh of piece.userData.interactiveMeshes??[])this.hits.delete(mesh);
@@ -637,6 +643,30 @@ export class NativeStage {
   private updatePointerCursor(hit?:Hit):void{
     setNativeCursor(document.documentElement,this.pendingActions?'wait':this.regionDrag||this.scrollbarDrag||this.globeDrag?'grabbing':hit?.control?.disabled||hit?.piece.userData.nativeDisabled?'forbidden':hit?.input?'text':hit?.piece.userData.nativeScroll||hit?.piece.userData.nativeReadoutScroll?'grab':hit&&!hit.piece.userData.nativeStatic?'link':this.frontVisible||this.page?.modal?'pointer':undefined);
   }
+  private clearMapToolLabel():void {
+    if(this.mapToolLabel){this.mapToolLabel.removeFromParent();this.art.disposePiece(this.mapToolLabel);this.sceneRevision++;}
+    this.mapToolLabel=undefined;this.mapToolLabelOwner=undefined;this.mapToolLabelTitle='';
+  }
+  private showMapToolLabel(owner:CardboardPiece):void {
+    const title=String(owner.userData.nativeMapToolTitle??'');if(!title)return;
+    if(this.mapToolLabelOwner===owner&&this.mapToolLabelTitle===title)return;
+    this.clearMapToolLabel();const width=Math.min(220,Math.max(54,this.measure(title,13,true)+20)),height=26;
+    const label=this.art.createPiece({w:width*.01,h:height*.01,depth:.018,bevel:.012,uvPadding:1,textureWidth:Math.ceil(width*2),textureHeight:52,bgColor:PALETTE.creamPaper,seed:this.seed('map-tool-label:'+title),interactive:false,
+      drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.font=this.font(13,true);ctx.textAlign='center';ctx.fillStyle=PALETTE.inkDark;ctx.fillText(title,width/2,18,width-12);ctx.restore();}});
+    label.userData.nativeId='map-tool-hover-title';label.userData.nativeStatic=true;label.visible=false;
+    (String(owner.userData.nativeId).startsWith('map-dock:')?this.toolsDock:this.pageGroup).add(label);
+    this.mapToolLabel=label;this.mapToolLabelOwner=owner;this.mapToolLabelTitle=title;this.sceneRevision++;this.updateMapToolLabel();
+  }
+  private updateMapToolLabel():void {
+    const label=this.mapToolLabel,owner=this.mapToolLabelOwner;if(!label||!owner)return;
+    const u=owner.userData,h=Math.max(0,Math.min(1,u.hoverVal));
+    if(!owner.parent||!u.nativeMapToolPose||h===0&&u.hoverTarget===0){this.clearMapToolLabel();return;}
+    const half=this.mapToolLabel!.userData.w*.5,limit=(this.pageBox?.width??this.width)*.005;
+    const x=Math.max(-limit+half,Math.min(limit-half,u.basePos.x)),y=u.basePos.y-u.h*.5*(1+h*.45)-.18,z=owner.position.z+.08,visible=h>.01;
+    if(label.position.x===x&&label.position.y===y&&label.position.z===z&&label.scale.x===h&&label.visible===visible)return;
+    label.setBaseTransform(x,y,z);label.scale.setScalar(h);label.visible=visible;this.sceneRevision++;
+  }
+
   private hover(piece:CardboardPiece|null):void{
     if(piece?.userData.nativeStatic||piece?.userData.nativeDisabled)piece=null;
     if(piece===this.hovered)return;
@@ -646,10 +676,10 @@ export class NativeStage {
     this.hovered=piece;this.hoverPose=undefined;
     if(piece){
       const id=String(piece.userData.nativeId??'');
-      if(id.startsWith('tab:')||id.startsWith('hud:speed:')||id.startsWith('hud:view:')||id.startsWith('map-dock:')){
+      if(piece.userData.nativeMapToolPose||id.startsWith('tab:')||id.startsWith('hud:speed:')||id.startsWith('hud:view:')||id.startsWith('map-dock:')){
         this.scene.updateMatrixWorld(true);this.hoverPose={piece,pose:new NativeHitPose(piece.userData.interactiveMeshes??[]),pageId:this.page?.id};
       }
-      piece.userData.hoverTarget=1;this.moving.add(piece);
+      piece.userData.hoverTarget=1;this.moving.add(piece);if(piece.userData.nativeMapToolPose)this.showMapToolLabel(piece);
     }this.invalidate();
   }
   private pointerMove(event:PointerEvent):void{
@@ -1189,6 +1219,7 @@ export class NativeStage {
     const piece=this.pagePiece(control.id,{w,h,depth:.046,bevel:.038,uvPadding:1,textureWidth:Math.max(32,Math.ceil(cssW*2)),textureHeight:Math.max(32,Math.ceil(cssH*2)),bgColor:control.glyph?PALETTE.creamPaper:control.disabled?PALETTE.kraftLight:control.active?PALETTE.ochre:control.color??PALETTE.sageMountain,seed:this.seed(control.id),interactive:true,drawFn:draw},
       JSON.stringify([control.label,control.caption,control.description,control.icon,control.glyph,control.color,style,node,inset?.icon,!!inset?.disabled,!!control.active,!!control.disabled,!!control.select,this.textFontRevision]),x,y,z,control);
     piece.userData.nativeStyle=style;piece.userData.active=!!control.active;
+    piece.userData.nativeMapToolPose=this.page?.layout==='palette'&&style==='icon';piece.userData.nativeMapToolTitle=control.label;
     piece.userData.nativeToolbarPose=style==='tile'||style==='navigation'||style==='tab';this.setPose(piece,piece.userData.hoverVal);
     this.pageGroup.add(piece);return piece;
   }
@@ -1360,7 +1391,7 @@ export class NativeStage {
     return task;
   }
   dispose():void{
-    if(this.closed)return;this.hover(null);this.closed=true;this.resetShipCurtain298(false);this.countdownFrameAt298=undefined;this.countdownFrameDriver298=undefined;this.countdownFrameEligible298=false;this.countdownFeedEligible298=false;this.fontRequest++;this.clearHint();clearTimeout(this.noticeTimer);this.finishEdit(false,false);cancelAnimationFrame(this.frameId);
+    if(this.closed)return;this.hover(null);this.clearMapToolLabel();this.closed=true;this.resetShipCurtain298(false);this.countdownFrameAt298=undefined;this.countdownFrameDriver298=undefined;this.countdownFrameEligible298=false;this.countdownFeedEligible298=false;this.fontRequest++;this.clearHint();clearTimeout(this.noticeTimer);this.finishEdit(false,false);cancelAnimationFrame(this.frameId);
     setNativeCursor(document.documentElement,undefined);
     for(const dispose of this.disposers)dispose();this.disposers.length=0;this.overlayCache.dispose();for(const image of this.portraitImages.values()){image.onload=null;image.onerror=null;}this.portraitImages.clear();this.globe?.dispose();this.selectionFill.geometry.dispose();this.selectionFill.material.dispose();this.selectionOutline.geometry.dispose();this.selectionOutline.material.dispose();this.shipCurtainMesh298.geometry.dispose();this.shipCurtainMaterial298.dispose();this.shipCurtainScene298.clear();this.art.dispose();this.ownRenderer.domElement.remove();void this.ownRenderer.dispose();this.hits.clear();this.moving.clear();this.retainedPagePieces.clear();
   }

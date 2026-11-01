@@ -26,6 +26,7 @@ const BUILD_RESEARCH:Readonly<Partial<Record<Tool,ResearchProject>>>=Object.free
 /** Existing command/material compatibility boundaries. These describe the
  * format, never the colony's stock, selected material, workers or terrain. */
 const MIN_SCHEMA:Readonly<Partial<Record<Tool,number>>>=Object.freeze({
+  allow:256,forbid:256,
   'ship-computer':298,'ship-sensors':298,
   'ship-cryptosleep-casket':277,'ship-beam':276,'ship-engine':276,
   'ship-reactor':275,'cryptosleep-casket':271,'fueled-smithy':267,'electric-smithy':267,brewery:265,'fermenting-barrel':265,'geothermal-generator':264,bedroll:256,'torch-lamp':249,'build-bridge':247,'remove-bridge':247,vent:244,'sleeping-spot':232,shelf:229,'small-shelf':229,'spike-trap':226,

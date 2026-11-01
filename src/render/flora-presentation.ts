@@ -68,6 +68,10 @@ export function appendFlora(parts:FloraParts,world:World,r:Resource,turn:number,
   } else if(r.species==='agave') {
     const h=.4;
     for(let i=0;i<6;i++) {const angle=turn+i*Math.PI/3;add(parts.blades,{dx:Math.sin(angle)*.13,dz:Math.cos(angle)*.13,y:h*.5,sx:.15,sy:h,sz:.65,ry:angle});}
+  } else if(r.species==='brambles'||r.species==='chokevine'||r.species==='astragalus'||r.species==='dandelion'||r.species==='low-shrub') {
+    // Real ground-cover Resources retain their colour, footprint and identity.
+    // Their low crown differs from selectable Bush without another draw batch.
+    add(parts.bushes,{y:.12,sx:.43,sy:.12,sz:.41,ry:turn});
   } else {
     const moss=r.species==='moss';
     add(parts.bushes,{y:moss?.04:.3,sx:.43,sy:moss?.055:.37,sz:.41,ry:turn});

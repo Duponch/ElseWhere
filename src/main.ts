@@ -1454,6 +1454,7 @@ function pickCell(x: number, z: number) {
     const tool = currentTool;
     if((tool==='allowed-expand'||tool==='allowed-shrink')&&allowedAreaEditId!==undefined){paintAllowedArea(allowedAreaEditId,tool==='allowed-expand',{x,z},{x,z});return;}
     void attempt(() => {
+      if(tool==='allow'||tool==='forbid')return client.command({type:'area',action:tool,from:{x,z},to:{x,z}});
       if(isBuildableFloor(tool))return client.command({type:'area',action:'lay-floor',floor:tool,from:{x,z},to:{x,z}});
       if(tool==='build-bridge'||tool==='remove-bridge')return client.command({type:'area',action:tool,from:{x,z},to:{x,z}});
       if(tool==='smooth-floor')return client.command({type:'area',action:'smooth-floor',from:{x,z},to:{x,z}});
@@ -1483,14 +1484,14 @@ function designateArea(action: AreaAction, from: Cell, to: Cell) {
   if (!snapshot || replacingWorld || frontMenu.isOpen()) return;
   void attempt(async () => {
     let response:string|undefined;
-    try {response = await client.command({ type: 'area', action, from, to, ...(action==='lay-floor'&&isBuildableFloor(currentTool)?{floor:currentTool}:{}), ...(action === 'stockpile' ? readStorageSettings('stockpile') : {}),...(zoneEditTarget===undefined?{}:{targetZoneId:zoneEditTarget}) });}
+    try {response = await client.command(action==='allow'||action==='forbid'?{type:'area',action,from,to}:{ type: 'area', action, from, to, ...(action==='lay-floor'&&isBuildableFloor(currentTool)?{floor:currentTool}:{}), ...(action === 'stockpile' ? readStorageSettings('stockpile') : {}),...(zoneEditTarget===undefined?{}:{targetZoneId:zoneEditTarget}) });}
     catch(error) {
       if(error instanceof Error && error.message==='Aucune case compatible dans ce rectangle.')return;
       throw error;
     }
     const result = JSON.parse(response!) as { affected: number; skipped: number };
     if(result.affected===0)return;
-    const label = action==='snow-clear'||action==='remove-snow-clear'?'case(s) de déneigement modifiée(s)':action==='build-bridge'||action==='remove-bridge'?'ordre(s) de pont créé(s)':action==='smooth-floor'?'ordre(s) de lissage créé(s)':action==='lay-floor'||action==='remove-floor'?'ordre(s) de sol créé(s)':action==='home'||action==='remove-home'?'case(s) de foyer modifiée(s)':isRoofArea(action) ? 'case(s) de zone de toiture modifiée(s)' : action === 'growing' ? 'case(s) de culture créée(s)' : action === 'remove-growing' ? 'case(s) de culture retirée(s)' : action === 'cancel' ? 'ordre(s) annulé(s)' : action === 'remove-stockpile' ? 'case(s) de réserve retirée(s)' : action === 'stockpile' ? 'case(s) de réserve créée(s)' : 'ordre(s) de collecte créé(s)';
+    const label = action==='allow'?'objet(s) autorisé(s)':action==='forbid'?'objet(s) interdit(s)':action==='snow-clear'||action==='remove-snow-clear'?'case(s) de déneigement modifiée(s)':action==='build-bridge'||action==='remove-bridge'?'ordre(s) de pont créé(s)':action==='smooth-floor'?'ordre(s) de lissage créé(s)':action==='lay-floor'||action==='remove-floor'?'ordre(s) de sol créé(s)':action==='home'||action==='remove-home'?'case(s) de foyer modifiée(s)':isRoofArea(action) ? 'case(s) de zone de toiture modifiée(s)' : action === 'growing' ? 'case(s) de culture créée(s)' : action === 'remove-growing' ? 'case(s) de culture retirée(s)' : action === 'cancel' ? 'ordre(s) annulé(s)' : action === 'remove-stockpile' ? 'case(s) de réserve retirée(s)' : action === 'stockpile' ? 'case(s) de réserve créée(s)' : 'ordre(s) de collecte créé(s)';
     notify(`${result.affected} ${label}${result.skipped ? ` · ${result.skipped} case(s) ignorée(s)` : ''}.`);
   });
 }

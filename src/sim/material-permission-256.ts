@@ -23,14 +23,19 @@ export function validMaterialPermission256(pile:unknown,version:number):boolean 
  return true;
 }
 export type MaterialPermissionCommand256={type:'material-forbid';pileId:number;forbidden:boolean};
+/** Shared live owner/forced guard for single-item and rectangle transactions. */
+export function materialPermissionRefusal256(world:World,pile:MaterialPile,forbidden:boolean):string|undefined {
+ const o=pile.owner,owned=o.type==='ground'||(o.type==='pawn'||o.type==='inventory'||o.type==='apparel'||o.type==='equipment')&&world.pawns.some(p=>p.id===o.pawnId&&isColonist(p));
+ if(!owned)return 'Bien hors de portée de la colonie.';
+ if(forbidden&&pile.apparel?.forced)return 'Retirer la protection du vêtement porté avant de l’interdire.';
+ return undefined;
+}
 /** A player's actual ground/carried Thing. Birth holders cannot be unlocked
  * through an invented ground location or a projection of their contents. */
 export function applyMaterialPermission256(world:World,command:MaterialPermissionCommand256):{ok:true}|{ok:false;reason:string} {
  if(!command||typeof command!=='object'||Reflect.ownKeys(command).length!==3||Reflect.ownKeys(command).some(k=>typeof k!=='string'||!['type','pileId','forbidden'].includes(k)||!Object.hasOwn(Object.getOwnPropertyDescriptor(command,k)!,'value')||!Object.getOwnPropertyDescriptor(command,k)!.enumerable))return {ok:false,reason:'Réglage de bien invalide.'};
  if(command.type!=='material-forbid'||!isSchema256Or257(world.schemaVersion)||!Number.isSafeInteger(command.pileId)||typeof command.forbidden!=='boolean')return {ok:false,reason:'Réglage de bien invalide.'};
  const pile=world.piles.find(p=>p.id===command.pileId);if(!pile)return {ok:false,reason:'Bien indisponible.'};
- const o=pile.owner,owned=o.type==='ground'||(o.type==='pawn'||o.type==='inventory'||o.type==='apparel'||o.type==='equipment')&&world.pawns.some(p=>p.id===o.pawnId&&isColonist(p));
- if(!owned)return {ok:false,reason:'Bien hors de portée de la colonie.'};
- if(command.forbidden&&pile.apparel?.forced)return {ok:false,reason:'Retirer la protection du vêtement porté avant de l’interdire.'};
+ const reason=materialPermissionRefusal256(world,pile,command.forbidden);if(reason)return {ok:false,reason};
  setMaterialForbidden256(pile,command.forbidden);return {ok:true};
 }

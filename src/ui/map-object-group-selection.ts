@@ -5,6 +5,7 @@ import { footprintCells, STRUCTURE_DEFINITIONS } from '../sim/definitions';
 import type { Cell, Job, MaterialPile, Resource, World } from '../sim/types';
 import { mapObjectCells, mapResourceSelectable, sameMapObject, type MapObjectSelection } from './map-object-selection';
 import { selectedMapJob296, selectableMapJobs296 } from './wall-door-selection-296';
+import {resourceNeverMultiSelect4871} from './map-plant-multiselect-facts';
 
 /** Installed Core 1.6 Selector.MaxNumSelected, not a world-distance radius. */
 export const MAX_MAP_OBJECT_SELECTION = 200;
@@ -52,15 +53,34 @@ function targetIdentity(world:GeyserWorld256,target:MapObjectSelection):Identity
   }
 }
 
+/** The first eligible Thing under the mouse, independent of the previous
+ * ordinary-click cycling slot. Actor priority remains in ColonyRenderer.
+ * Singleselect/selectable flags and the physical candidate order are unchanged.
+ */
+export function mapObjectGroupTarget(world:GeyserWorld256,underMouse:readonly MapObjectSelection[]):MapObjectSelection|undefined {
+  return underMouse.find(target=>{
+    if(target.kind==='resource'){
+      const resource=world.resources.find(value=>value.id===target.id);
+      if(!resource||resourceNeverMultiSelect4871(resource))return false;
+    }
+    return !!targetIdentity(world,target)&&mapObjectCells(world,target).length>0;
+  });
+}
+
 /**
  * Same physical ThingDef/faction on the current screen, up to Core's 200 cap.
  * The renderer supplies its camera/viewport test; there is no circular radius.
  * Installed and ground-minified furniture share their inner definition. Stuff,
  * quality, damage, rotation and stack size do not discriminate the group.
- * Trees, natural rocks, walls and map orders are deliberate user-requested
- * extensions of Core's neverMultiSelect exclusions.
+ * Confirmed concrete plant definitions keep Core's neverMultiSelect flags.
+ * Unresolved historical non-tree plants and non-plant extensions remain
+ * explicit local behavior, not a new claim of exhaustive Core equivalence.
  */
 export function matchingMapObjects(world:GeyserWorld256,target:MapObjectSelection,visibleCell:(cell:Cell)=>boolean):MapObjectSelection[] {
+  if(target.kind==='resource'){
+    const resource=world.resources.find(value=>value.id===target.id);
+    if(!resource||resourceNeverMultiSelect4871(resource))return [];
+  }
   if(!mapObjectCells(world,target).length)return [];
   const identity=targetIdentity(world,target);if(!identity)return [];
   const candidates:Candidate[]=[];
@@ -79,7 +99,7 @@ export function matchingMapObjects(world:GeyserWorld256,target:MapObjectSelectio
       for(const object of world.piles)if(object.owner.type==='ground')add({kind:'pile',id:object.id},pileIdentity(object),[cellOf(object.owner)]);
       break;
     case 'resource':
-      for(const object of world.resources)if(mapResourceSelectable(object))add({kind:'resource',id:object.id},resourceIdentity(object),[cellOf(object)]);
+      for(const object of world.resources)if(mapResourceSelectable(object)&&!resourceNeverMultiSelect4871(object))add({kind:'resource',id:object.id},resourceIdentity(object),[cellOf(object)]);
       break;
     case 'rock':
       for(let id=0;id<world.tiles.length;id++) {

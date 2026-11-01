@@ -11,7 +11,7 @@ import {isAreaAction} from '../sim/designation';
 import {isLineBuildKind} from '../sim/construction-line';
 import {STRUCTURE_DEFINITIONS} from '../sim/definitions';
 import {mapObjectsAt,sameMapObject} from '../ui/map-object-selection';
-import {matchingMapObjects} from '../ui/map-object-group-selection';
+import {matchingMapObjects,mapObjectGroupTarget} from '../ui/map-object-group-selection';
 import {cameraClipNear} from './camera-clip';
 import {installMapWheelZoom} from '../ui/map-wheel';
 import {DeferredMapHover} from './deferred-map-hover';
@@ -99,7 +99,7 @@ export class ColonyRenderer extends SceneRenderCore {
         // The two ordinary clicks may have cycled the inspector. Resolve the
         // physical hit again; the final cycling slot is not the double-click target.
         if(hitActors(this.screenPawns(),event.clientX,event.clientY).length)return false;
-        const target=mapObjectsAt(world,cell)[0];if(!target)return false;
+        const target=mapObjectGroupTarget(world,mapObjectsAt(world,cell));if(!target)return false;
         this.camera.updateMatrixWorld();const point=new THREE.Vector3();
         const objects=matchingMapObjects(world,target,c=>{
           point.set(c.x,.1,c.z).project(this.camera);

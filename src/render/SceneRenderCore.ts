@@ -1750,7 +1750,7 @@ export class SceneRenderCore {
       bounds={minX:Math.min(drag.from.x,cell.x),maxX:Math.max(drag.from.x,cell.x),minZ:Math.min(drag.from.z,cell.z),maxZ:Math.max(drag.from.z,cell.z)};
       cells=[];for(let z=bounds.minZ;z<=bounds.maxZ;z++)for(let x=bounds.minX;x<=bounds.maxX;x++)cells.push(z*world.width+x);skipped=0;
     }else if ('action' in drag) {
-      this.areaIndex ??= buildAreaIndex(world);
+      if(drag.action!=='allow'&&drag.action!=='forbid')this.areaIndex ??= buildAreaIndex(world);
       const result = queryArea(world, { type: 'area', action: drag.action, from: drag.from, to: cell, ...this.zoneTargetCommand(drag.action), ...(drag.action==='lay-floor'?{floor:this.selectedFloor}:{}) }, this.areaIndex);
       if (!result.ok) {this.hover.visible=false;this.areaPreview.hide();this.constructionPreview.hide();this.surfaceTint.clearPreview();this.designations.clearPreview();this.clearOrderTargets();this.onAreaPreview(null);return;}
       ({ bounds, cells, skipped } = result);
@@ -1842,8 +1842,8 @@ export class SceneRenderCore {
     }
     if (isAreaAction(this.tool) && this.tool!=='lay-floor' && this.tool!=='build-roof' && this.tool!=='build-bridge' && this.tool!=='remove-bridge') {
       let color=0x8bcef0;
-      if(ZONE_TOOLS.has(this.tool)){
-        this.areaIndex??=buildAreaIndex(this.world);
+      if(ZONE_TOOLS.has(this.tool)||this.tool==='allow'||this.tool==='forbid'){
+        if(this.tool!=='allow'&&this.tool!=='forbid')this.areaIndex??=buildAreaIndex(this.world);
         const result=queryArea(this.world,{type:'area',action:this.tool,from:cell,to:cell,...this.zoneTargetCommand(this.tool)},this.areaIndex);
         color=areaPreviewColor(this.tool,result.ok?result.cells.length:0,result.ok?result.skipped:1);
       }

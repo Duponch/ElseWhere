@@ -16,7 +16,7 @@ import { siteHudLayout } from './site-hud';
 
 const mapSizeLabels: Record<number, string> = { 32: 'terrain d’essai', 64: 'compacte', 128: 'compacte', 200: 'petite', 250: 'moyenne' };
 
-export type Tool = 'snow-clear' | 'remove-snow-clear' | BuildableFloorKind | 'home' | 'remove-home' | 'ignore-roof' | 'haul-chunks' | 'select' | 'allowed-expand' | 'allowed-shrink' | Exclude<JobKind, 'sow'|'repair'|'fix-breakdown'|'flick'|'lay-floor'> | 'cancel' | 'stockpile' | 'remove-stockpile' | 'growing' | 'remove-growing';
+export type Tool = 'allow' | 'forbid' | 'snow-clear' | 'remove-snow-clear' | BuildableFloorKind | 'home' | 'remove-home' | 'ignore-roof' | 'haul-chunks' | 'select' | 'allowed-expand' | 'allowed-shrink' | Exclude<JobKind, 'sow'|'repair'|'fix-breakdown'|'flick'|'lay-floor'> | 'cancel' | 'stockpile' | 'remove-stockpile' | 'growing' | 'remove-growing';
 export type Panel = 'quests' | 'world' | 'animals' | 'wildlife' | 'research' | 'architect' | 'work' | 'schedule' | 'assign' | 'history' | 'menu' | null;
 export type ArchitectCategory = 'orders' | 'zones' | 'structure' | 'floors' | 'furniture' | 'temperature' | 'recreation' | 'production' | 'power' | 'ship';
 /** Visible Core work order (naturalPriority), omitting Smithing and Tailoring
@@ -48,6 +48,8 @@ export const toolDefinitions: { id: Tool; title: string; hint: string; key: stri
   {id:'remove-floor',title:'Retirer le sol',hint:'Travail de Construction · récupère environ la moitié du matériau · conserve le terrain naturel',key:'',category:'floors'},
   {id:'grave',title:'Tombe',hint:'1 × 2 · creusée sans matériau · un corps · Q / E pour tourner',key:'',category:'furniture'},
   { id: 'select', title: 'Inspecter', hint: 'Choisir un colon, un objet ou une zone ; survoler le terrain pour le lire', key: 'Échap', category: 'orders' },
+  {id:'allow',title:'Autoriser',hint:'Cliquer ou tracer un rectangle pour autoriser les objets au sol connus. Les plantes et bâtiments ne sont pas concernés.',key:'',category:'orders'},
+  {id:'forbid',title:'Interdire',hint:'Cliquer ou tracer un rectangle pour interdire les objets au sol connus. Les plantes et bâtiments ne sont pas concernés.',key:'',category:'orders'},
   { id:'mine',title:'Miner',hint:'Désigner les massifs à creuser. Les fragments restent au sol après extraction.',key:'M',category:'orders' },
   { id:'haul-chunks',title:'Transporter',hint:'Désigner les fragments à ranger dans une réserve qui les accepte. Les autres objets sont transportés automatiquement selon les réglages de stockage et de travail.',key:'',category:'orders' },
   { id: 'chop', title: 'Abattre', hint: 'Cliquer ou tracer un rectangle sur les arbres à couper. Échap annule le tracé.', key: 'C', category: 'orders' },

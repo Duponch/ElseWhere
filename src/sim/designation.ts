@@ -1,4 +1,5 @@
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
+import {queryAreaMaterialPermission256} from './area-material-permission-256';
 import {naturalTerrainWalkable256} from './natural-terrain-movement-256.ts';
 import {foggedCell256} from './exploration-state-256.ts';
 import {canDesignateBridge} from './bridge.ts';
@@ -20,7 +21,7 @@ import { soilFertility } from './soil.ts';
 import { SCHEMA_VERSION,type AreaAction,type AreaCommand,type Cell,type CommandResult,type StorageSettings,type World } from './types.ts';
 
 const TREE = 1, BERRIES = 2, FIXED = 4, JOB = 8, STORAGE = 16, BLOCKED = 32, RIPE = 64, GROWING = 128, ZONE_BLOCKED = 256, GROW_BLOCKED = 512, DECONSTRUCTIBLE = 1024, ROCK = 2048, CHUNK = 4096, HAUL = 8192, PLANT_JOB = 16384;
-export const isAreaAction = (value: unknown): value is AreaAction => ['smooth-floor','build-bridge','remove-bridge','snow-clear','remove-snow-clear','lay-floor','remove-floor','home','remove-home','build-roof', 'remove-roof', 'ignore-roof', 'mine', 'haul-chunks', 'deconstruct', 'chop', 'harvest', 'cut', 'cancel', 'stockpile', 'remove-stockpile', 'growing', 'remove-growing'].includes(value as string);
+export const isAreaAction = (value: unknown): value is AreaAction => ['allow','forbid','smooth-floor','build-bridge','remove-bridge','snow-clear','remove-snow-clear','lay-floor','remove-floor','home','remove-home','build-roof', 'remove-roof', 'ignore-roof', 'mine', 'haul-chunks', 'deconstruct', 'chop', 'harvest', 'cut', 'cancel', 'stockpile', 'remove-stockpile', 'growing', 'remove-growing'].includes(value as string);
 export interface AreaBounds { minX: number; maxX: number; minZ: number; maxZ: number }
 export interface AreaIndex { flags: Uint16Array }
 export type AreaQuery = { ok: false; reason: string; code: CommandResult['code'] }
@@ -73,6 +74,7 @@ export function buildAreaIndex(world: World): AreaIndex {
  */
 export function queryArea(world: World, command: AreaCommand, index?: AreaIndex): AreaQuery {
   if (!command || !isAreaAction(command.action)) return { ok: false, code: 'invalid-command', reason: 'Outil de rectangle inconnu.' };
+  if(command.action==='allow'||command.action==='forbid')return queryAreaMaterialPermission256(world,command);
   if((command.action==='snow-clear'||command.action==='remove-snow-clear')&&!world.snow)return {ok:false,code:'invalid-command',reason:'Cette partie historique ne simule pas de neige au sol.'};
   if(command.targetZoneId===undefined&&command.from&&command.to&&(command.action==='stockpile'||command.action==='growing')){
     const within=(x:number,z:number)=>x>=Math.min(command.from.x,command.to.x)&&x<=Math.max(command.from.x,command.to.x)&&z>=Math.min(command.from.z,command.to.z)&&z<=Math.max(command.from.z,command.to.z);

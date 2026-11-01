@@ -55,7 +55,7 @@ test('raw items and food variants stay distinct; contents owned outside the grou
   expect(matchingMapObjects(world,{kind:'pile',id:7},onScreen)).toEqual([{kind:'pile',id:7}]);
 });
 
-test('all requested plants are eligible but species and historical unknown definitions remain distinct',()=>{
+test('concrete plants and historical TreeBase policy respect neverMultiSelect without invented species',()=>{
   const world=emptyWorld();
   world.resources=[
     {id:1,kind:'tree',species:'oak',x:1,z:1,amount:20,growth:.5},
@@ -65,8 +65,9 @@ test('all requested plants are eligible but species and historical unknown defin
     {id:5,kind:'rice',x:5,z:5,amount:20,growth:.2},
     {id:6,kind:'rice',x:6,z:6,amount:20,growth:.9},
   ];
-  expect(matchingMapObjects(world,{kind:'resource',id:1},onScreen)).toEqual([{kind:'resource',id:1},{kind:'resource',id:2}]);
-  expect(matchingMapObjects(world,{kind:'resource',id:5},onScreen)).toEqual([{kind:'resource',id:5},{kind:'resource',id:6}]);
+  expect(matchingMapObjects(world,{kind:'resource',id:1},onScreen)).toEqual([]);
+  expect(matchingMapObjects(world,{kind:'resource',id:5},onScreen)).toEqual([]);
+  expect(matchingMapObjects(world,{kind:'resource',id:4},onScreen)).toEqual([]);
 });
 
 test('mineable ore definitions override surrounding geology while bare stones and loose resources stay distinct',()=>{
@@ -104,7 +105,7 @@ test('construction blueprints, frames, installations and floor definitions form 
 
 test('screen visibility rather than distance bounds selection, with clicked target retained at the 200 cap',()=>{
   const world=emptyWorld();
-  world.resources=Array.from({length:220},(_,i)=>({id:1000+i,kind:'tree' as const,species:'oak' as const,x:i%16,z:Math.floor(i/16),amount:20}));
+  world.resources=Array.from({length:220},(_,i)=>({id:1000+i,kind:'berries' as const,species:'berry-bush' as const,x:i%16,z:Math.floor(i/16),amount:10}));
   const all=matchingMapObjects(world,{kind:'resource',id:1219},onScreen);
   expect(all).toHaveLength(MAX_MAP_OBJECT_SELECTION);
   expect(all[0]).toEqual({kind:'resource',id:1219});
