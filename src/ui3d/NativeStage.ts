@@ -894,7 +894,7 @@ export class NativeStage {
     }
   }
   private measure=(text:string,size:number,bold=false):number=>{this.measureContext.font=this.font(size,bold);return this.measureContext.measureText(text).width;};
-  private primaryRegion():NativeRegion|undefined{return this.pageBox?.layout==='storage'||this.pageBox?.layout==='architect'||this.pageBox?.layout==='table'&&this.pageBox.regions.catalogue?'catalogue':this.pageBox?.layout==='research'?'details':undefined;}
+  private primaryRegion():NativeRegion|undefined{return this.pageBox?.layout==='storage'||this.pageBox?.layout==='architect'||this.pageBox?.layout==='world'||this.pageBox?.layout==='table'&&this.pageBox.regions.catalogue?'catalogue':this.pageBox?.layout==='research'?'details':undefined;}
   private horizontalOffset(region?:NativeRegion):number{return region==='graph'?this.graphX:region==='catalogue'&&(this.pageBox?.layout==='palette'||this.pageBox?.layout==='table')?this.paletteX:0;}
   private setHorizontalOffset(region:NativeRegion|undefined,value:number):void{const rect=region?this.pageBox?.regions[region]:undefined,next=THREE.MathUtils.clamp(value,0,Math.max(0,(rect?.contentWidth??rect?.width??0)-(rect?.width??0)));if(region==='graph')this.graphX=next;else if(region==='catalogue'&&(this.pageBox?.layout==='palette'||this.pageBox?.layout==='table'))this.paletteX=next;}
   private regionOffset(region?:NativeRegion):number{return !region||region===this.primaryRegion()||this.pageBox?.layout==='table'&&region==='navigation'?this.scroll:region==='catalogue'?this.scroll:this.regionOffsets[region];}
@@ -1081,8 +1081,9 @@ export class NativeStage {
     if(page.visual){
       this.globe??=new NativeGlobe(tile=>{try{this.options.onActivate?.('world:select-tile');this.page?.visual?.onSelect(tile);}catch(error){this.options.onError(String(error));}});
       this.pageGroup.add(this.globe);this.globe.visible=true;const visualWidth=nativeVisualWidth(page,box.width);
-      this.globe.position.set((-box.width/2+12+visualWidth/2)*k,(box.height/2-box.header-box.body.height/2)*k,.35);
-      this.globe.scale.setScalar(Math.min(visualWidth*.44,box.body.height*.43)*k);
+      const globeRect=box.visualRect??{x:12,y:box.header,width:visualWidth,height:box.body.height};
+      this.globe.position.set((-box.width/2+globeRect.x+globeRect.width/2)*k,(box.height/2-globeRect.y-globeRect.height/2)*k,.35);
+      this.globe.scale.setScalar(Math.min(globeRect.width*.44,globeRect.height*.43)*k);
       this.globe.setSurface(page.visual.surface,page.visual.roads);this.globe.setSelected(page.visual.selected);this.globe.setMarkers((page.visual.markers??[]).map(marker=>({...marker,label:marker.label??('Case '+marker.tile)})));this.sceneRevision++;
     }
     if(page.portrait){

@@ -81,7 +81,7 @@ export interface NativePage {
   width?:number;
   height?:number;
   columnRatio?:number;
-  layout?:'inspector'|'table'|'tools'|'dialog'|'front'|'architect'|'palette'|'research'|'storage';
+  layout?:'inspector'|'table'|'tools'|'dialog'|'front'|'architect'|'palette'|'research'|'storage'|'world';
   /** Opt-in fixed roster toolbar/headings; presentation only, never persisted. */
   tableProfile?:'colonists'|'factions';
   palette?:'orders'|'zones';

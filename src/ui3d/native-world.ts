@@ -9,7 +9,7 @@ import type {CommercialBuyLine} from '../sim/commercial-state';
 import {ITEM_DEFINITIONS} from '../sim/items';
 import {QUALITY_LABELS} from '../sim/equipment-rules';
 import {isColonist} from '../sim/affiliation';
-import {campaignUIFacts,mapDisplayName,groupDisplayLabel,readMapRegistryState,type CampaignUIState} from '../ui/map-registry-adapter';
+import {campaignUIFacts,mapDisplayName,groupDisplayLabel,readMapRegistryState,readJumpToEntries,type CampaignUIState} from '../ui/map-registry-adapter';
 import {groupWorld,groupEntryActions} from '../sim/world-map-authority';
 import {groupMemberChoices,groupSourceChoices,previewGroupFormation,groupRoutePreview,groupPermission,groupTradeQuote} from '../sim/group-authority';
 import {actualCampReform260,reformMemberReason260,reformSourceChoices260,previewGroupReform260} from '../sim/group-reform-260';
@@ -45,6 +45,7 @@ let state:NativeWorldState|undefined,actions:NativeWorldActions|undefined;
 let tab:'maps'|'groups'|'individual'|'factions'='maps';
 let selectedTile:number|undefined;
 let scope='',campaignIdentity='',scopeRevision=0,lastTick=-1,pending=false;
+let worldJumpIdentity='',worldJumpKey='';
 const kg=(grams:number)=>`${(grams/1000).toLocaleString('fr-FR',{maximumFractionDigits:3})} kg`;
 const days=(core:number)=>`${Math.max(0,core/(TICKS_PER_DAY*10)).toLocaleString('fr-FR',{maximumFractionDigits:2})} j`;
 const b=(id:string,label:string,onActivate:NativeControl['onActivate'],extra:Partial<NativeControl>={}):NativeControl=>({id,label,onActivate,...extra});
@@ -399,6 +400,7 @@ function factionRows():NativeRow[]{
 function update(next:NativeUiState,callbacks:NativeUiActions):void {
  state=next;actions=callbacks;const input=next.world??next.campaign,key=input?String(campaignUIFacts(input)?.campaignSeed??('seed'in input?input.seed:input.campaignSeed)):'none';
  if(campaignIdentity!==key||input&&input.tick<lastTick){campaignIdentity=key;scope=`${key}:${++scopeRevision}`;formation=undefined;selectedTile=undefined;}lastTick=input?.tick??-1;
+ const jumpIdentity=[next.epoch,scope].join(':');if(worldJumpIdentity!==jumpIdentity){worldJumpIdentity=jumpIdentity;worldJumpKey='';}
 }
 export function syncNativeWorldState(next:NativeUiState,callbacks:NativeUiActions):void {update(next,callbacks);}
 /** Main has already checked the authoritative settlement-arrival notice.
@@ -416,9 +418,48 @@ export function nativeWorldChooseTile(tile:number):void {const planet=source().p
 export function buildNativeWorld(next:NativeUiState,callbacks:NativeUiActions):NativePage {
  update(next,callbacks);if(!next.world&&!next.campaign)return {id:'world',title:'Monde',rows:[r('world-no-game','Aucune partie active.')],onClose:()=>void callbacks.panel(null)};
  const controls:NativeControl[]=(['maps','groups','individual','factions'] as const).map(id=>b(`world-tab-${id}`,{maps:'Cartes et globe',groups:'Caravanes',individual:'Voyages individuels',factions:'Factions'}[id],()=>changeTab(id),{active:tab===id}));
- const rows:NativeRow[]=[r('world-tabs','Monde',undefined,undefined,controls)];
+ const rows:NativeRow[]=[{...r('world-tabs','',undefined,undefined,controls),region:'navigation',controlStyle:'tab'}];
+ const jumpEntries=readJumpToEntries(source()).filter(entry=>entry.kind==='map'||entry.kind==='group');
+ if(jumpEntries.length){
+  const keyOf=(entry:{kind:string;id:number})=>entry.kind+':'+entry.id;
+  const allowed=(entry:{kind:string;id:number},input:CampaignUIState)=>entry.kind==='map'?!!readMapRegistryState(input)?.maps.find(map=>map.id===entry.id)?.view.ok:entry.kind==='group'&&!!campaignUIFacts(input)?.groups.some(group=>group.id===entry.id);
+  if(!jumpEntries.some(entry=>keyOf(entry)===worldJumpKey))worldJumpKey=keyOf(jumpEntries.find(entry=>entry.active)??jumpEntries[0]!);
+  // Display facts are read once per page. Activation still rereads live permission.
+  const shownMapAccess=new Map((readMapRegistryState(source())?.maps??[]).map(map=>[map.id,map.view.ok] as const));
+  const shownGroupIds=new Set((campaignUIFacts(source())?.groups??[]).map(group=>group.id));
+  const shownAllowed=(entry:{kind:string;id:number})=>entry.kind==='map'?shownMapAccess.get(entry.id)===true:entry.kind==='group'&&shownGroupIds.has(entry.id);
+  const chosenKey=worldJumpKey,selected=jumpEntries.find(entry=>keyOf(entry)===chosenKey)!,identity=worldJumpIdentity;
+  const live=():NativeUiState|undefined=>{
+   const fresh=callbacks.readState?.()??state;if(!fresh||fresh.busy||fresh.fault||pending)return;
+   update(fresh,callbacks);return worldJumpIdentity===identity?fresh:undefined;
+  };
+  const chooser=b('world-jump-choice',selected.label,()=>{},{disabled:next.busy||!!next.fault,select:{value:chosenKey,options:jumpEntries.map(entry=>({value:keyOf(entry),label:entry.label,disabled:!shownAllowed(entry)})),onChange:value=>{
+   const fresh=live(),input=fresh?.world??fresh?.campaign;if(!input)return;
+   const target=readJumpToEntries(input).find(entry=>(entry.kind==='map'||entry.kind==='group')&&keyOf(entry)===value);if(!target||!allowed(target,input))return;
+   worldJumpKey=value;rootPage();
+  }}});
+  const go=b('world-jump-go','Aller',async()=>{
+   const fresh=live(),input=fresh?.world??fresh?.campaign;if(!input||worldJumpKey!==chosenKey)return;
+   const target=readJumpToEntries(input).find(entry=>(entry.kind==='map'||entry.kind==='group')&&keyOf(entry)===chosenKey);if(!target||!allowed(target,input))return;
+   if(target.kind==='map'){
+    await send({type:'map-view',mapId:target.id});
+    const current=live(),actual=current?.world??current?.campaign;
+    if(actual&&worldJumpKey===chosenKey&&campaignUIFacts(actual)?.activeMapId===target.id)await callbacks.panel(null);
+    return;
+   }
+   if(target.kind!=='group')return;
+   await send({type:'group-select',groupId:target.id});
+   const current=live(),actual=current?.world??current?.campaign;if(!actual||worldJumpKey!==chosenKey)return;
+   const row=campaignUIFacts(actual)?.groups.find(group=>group.id===target.id),owned=row&&groupWorld(actual,target.id);
+   if(!row||!owned?.group||owned.group.id!==target.id)return;
+   tab='groups';groupDetail(target.id);
+  },{disabled:next.busy||!!next.fault||!shownAllowed(selected)});
+  rows.push({id:'world-quickjump',label:'Aller à',region:'navigation',presentation:'plain',compact:true,controls:[chooser,go]});
+ }
  const preparation=state?.campProgress;if(preparation)rows.push(r('camp-preparation','Préparation de la carte locale',preparation.progress.phase,undefined,[b('camp-preparation-cancel','Annuler la préparation',()=>{if(!actions?.cancelCampEntry)throw Error('L’annulation de cette préparation est indisponible.');return actions.cancelCampEntry(preparation.id,preparation.groupId);},{disabled:!actions?.cancelCampEntry})]));
- rows.push(...(tab==='maps'?mapRows():tab==='groups'?groupRows():tab==='individual'?individualRows():factionRows()));
+ const section=tab==='maps'?mapRows():tab==='groups'?groupRows():tab==='individual'?individualRows():factionRows();
+ const inspection=(row:NativeRow)=>row.id==='world-tile'||row.id==='world-selected-tile';
+ rows.push(...section.filter(inspection),...section.filter(row=>!inspection(row)));
  const input=source(),planet=input.planet,geography=tab==='maps'&&planet?.revision===3?planetGeography256(planet):undefined;
  let visual:NativePage['visual'];
  if(geography&&planet){
@@ -431,7 +472,7 @@ export function buildNativeWorld(next:NativeUiState,callbacks:NativeUiActions):N
   ];
   visual={kind:'planet',surface:geography.surface,roads:geography.roads,selected:selectedTile??planet.homeTile,markers,onSelect:nativeWorldChooseTile};
  }
- return {id:'world',title:'Monde',subtitle:'Les mêmes personnes et biens conservent leurs propriétaires pendant chaque voyage.',rows,width:1120,height:740,visual,onClose:()=>void callbacks.panel(null)};
+ return {id:'world',title:'Monde',subtitle:'Les mêmes personnes et biens conservent leurs propriétaires pendant chaque voyage.',layout:'world',contentKey:JSON.stringify([scope,tab,selectedTile??planet?.homeTile??null]),rows,width:1120,height:740,visual,onClose:()=>void callbacks.panel(null)};
 }
 type NativeFactionRegistry=NonNullable<CampaignUIState['worldFactions']>;
 type NativeFaction=NativeFactionRegistry['factions'][number];

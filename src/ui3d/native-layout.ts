@@ -21,6 +21,8 @@ export interface NativePageBox {
   contentHeight:number;rows:NativeRowBox[];layout:NonNullable<NativePage['layout']>;
   regions:Partial<Record<NativeRegion,NativeRegionBox>>;actions:NativeControlBox[];
   inspectorParts?:NativeInspectorParts;
+  /** Explicit useful globe area for the World browser only. */
+  visualRect?:NativeRect;
   /** Fixed column headings for the two long animal catalogues only. */
   tableHeader?:NativeRect;
   matrixColumnWeights?:readonly number[];
@@ -466,9 +468,52 @@ function colonistTablePage(page:NativePage,viewport:{width:number;height:number}
   regions:{details:{x:pad,y:header,width:contentWidth,height:toolbarHeight,contentHeight:toolbarHeight},navigation:{...body,width:nameWidth,contentHeight},catalogue:{...body,x:pad+nameWidth,width:contentWidth-nameWidth,contentWidth:intrinsicWidth-nameWidth,contentHeight}},
   actions:actionFlow.controls.map(control=>({...control,y:height-header-footer+horizontalReserve+pad+control.y}))};
 }
+/** World navigation is independent from the long catalogue and the globe. */
+function worldPage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure):NativePageBox {
+  const pad=NATIVE_UI.padding,gap=10,header=page.subtitle?76:48,bottom=NATIVE_UI.bottom+10;
+  const width=Math.min(Math.max(220,Math.min(requestedWidth(page,1120),viewport.width-32)),Math.max(1,viewport.width-24));
+  const innerWidth=Math.max(1,width-pad*2-12),wide=width>=850,visualWidth=page.visual&&wide?nativeVisualWidth(page,width):0;
+  const maximumHeight=Math.min(page.height??740,Math.max(1,viewport.height-bottom-12));
+  const rows:NativeRowBox[]=[];let navigationHeight=0,contentHeight=0;
+  for(const row of page.rows.filter(row=>row.region==='navigation')){
+    const box=rowBox(row,pad,navigationHeight,innerWidth,measure,false);rows.push(box);navigationHeight+=box.height+3;
+  }
+  if(navigationHeight)navigationHeight-=3;
+  const contentX=pad+(visualWidth?visualWidth+gap:0),contentWidth=Math.max(1,innerWidth-(visualWidth?visualWidth+gap:0));
+  const contentRows:NativeRowBox[]=[];
+  for(const row of page.rows.filter(row=>row.region!=='navigation')){
+    const box=rowBox({...row,region:'catalogue'},contentX,contentHeight,Math.max(1,contentWidth-12),measure,false);contentRows.push(box);contentHeight+=box.height+3;
+  }
+  if(contentHeight)contentHeight-=3;
+  const actionFlow=flowNativeControls(page.actions??[],{x:pad,y:0,width:innerWidth,height:0},measure);
+  const footer=page.actions?.length?actionFlow.height+pad*2:pad;
+  const navigationContentHeight=navigationHeight;
+  navigationHeight=Math.min(navigationHeight,Math.max(0,maximumHeight-header-footer-40-(navigationHeight?gap:0)));
+  const contentTop=header+navigationHeight+(navigationHeight?gap:0);
+  const usefulHeight=page.visual?(wide?Math.max(320,contentHeight):180+gap+Math.max(28,contentHeight)):Math.max(28,contentHeight);
+  const height=Math.min(maximumHeight,contentTop+usefulHeight+footer),space=Math.max(0,height-footer-contentTop);
+  let bodyY=contentTop,bodyHeight=space,visualRect:NativeRect|undefined;
+  if(page.visual){
+    if(wide)visualRect={x:pad,y:contentTop,width:visualWidth,height:space};
+    else{
+      const splitGap=space>12?gap:0,globeHeight=Math.min(180,Math.max(0,(space-splitGap)*.42));
+      visualRect={x:pad,y:contentTop,width:innerWidth,height:globeHeight};bodyY+=globeHeight+splitGap;bodyHeight=Math.max(0,space-globeHeight-splitGap);
+    }
+  }
+  const body={x:contentX,y:bodyY,width:contentWidth,height:bodyHeight};
+  for(const box of contentRows){const delta=bodyY-header;box.top+=delta;for(const control of box.controls)control.y+=delta;rows.push(box);}
+  const regions:Partial<Record<NativeRegion,NativeRegionBox>>={
+    navigation:{x:pad,y:header,width:innerWidth,height:navigationHeight,contentHeight:navigationContentHeight},
+    catalogue:{...body,contentHeight},
+  };
+  const actions=actionFlow.controls.map(control=>({...control,y:height-header-footer+pad+control.y}));
+  return{x:12,y:viewport.height-bottom-height,width,height,header,footer,body,contentHeight,rows,layout:'world',regions,actions,visualRect};
+}
+
 export function layoutNativePage(page:NativePage,viewport:{width:number;height:number},front:boolean,measure:TextMeasure):NativePageBox {
   const layout=page.layout??(front?'front':page.id.startsWith('inspect-')?'inspector':['work','schedule','animals','wildlife','assign','history'].includes(page.id)?'table':'dialog');
   if(layout==='storage')return storagePage(page,viewport,measure);
+  if(layout==='world')return worldPage(page,viewport,measure);
   if(layout==='table'&&page.tableProfile==='colonists'&&['work','schedule','assign'].includes(page.id)&&page.rows.some(row=>row.columns))return colonistTablePage(page,viewport,measure);
   if(layout==='table'&&page.tableProfile==='factions'&&page.id==='factions'&&page.rows.some(row=>row.columns))return colonistTablePage(page,viewport,measure);
   if(layout==='table'&&(page.id==='animals'||page.id==='wildlife')&&page.rows.some(row=>row.columns))return animalTablePage(page,viewport,measure);
