@@ -1,5 +1,7 @@
 # Elsewhere sur Cloudflare Pages
 
+**1 novembre2026 — publication300 :9602d52c, Production/main.** Code4ea60d95, [repli d’inactivité et continuation alimentaire](idle-job-fallback300.md) qualifiés ;19contrats/types/Pages et interface ciblée,20HTTPS exacts. La revue des fondations et les performances restent ouvertes. [Adresse stable](https://elsewhere-cq7.pages.dev/). Les publications ci-dessous sont historiques.
+
 **Publication courante V480–V482, schéma295 : `b969b256`.** Produit `61d63e51`,
 UI carton native, retombées toxiques, lecture physique et correctif anti-incendie.
 [Provenance et vérifications](publication-v482.md) : copie propre5043fichiers,
