@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import type {Structure} from './types.ts';
 import type {CampaignState,WorldGroupRecord} from './world-map-state.ts';
 
@@ -29,4 +30,4 @@ export interface EscapedShips298 {
 export type EscapeCampaign298=CampaignState&{escapedShips298?:EscapedShips298};
 export type ShipEscapeCommand298={type:'ship-launch-298';computerId:number}|{type:'ship-credits-continue-298';departureId:number};
 export type ShipEscapeResult298={ok:true;resumeNormal?:true}|{ok:false;reason:string};
-export const shipEscapeSchema298=(version:unknown):version is 298=>version===SHIP_ESCAPE_SCHEMA_298;
+export const shipEscapeSchema298=(version:unknown):version is 298|299=>isSchema298OrLater(version);

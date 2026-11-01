@@ -40,7 +40,7 @@ export class GroupCaravanPhysical256 {
   const carried=recalculateGroupCarried256(g,moving),beds=recalculateGroupBeds256(g,moving,carried);this.services.set(g.id,{carried,beds});
   for(const [id,bed] of beds){const p=g.members.find(p=>p.id===id)!;this.comfortMarks.used(p,bed,coreTick,deltaCore);}
   for(const p of groupMixedNeedOrder256(g)){if(p.state==='dead'||p.health?.death)continue;if('species'in p){if(p.ageTicks===0)continue;if(!moving||carried.has(p.id))c.restMarks.mark(p,coreTick,.8);satisfyCaravanAnimalFood256(w,g,p,{...groupAnimalEnvironment256(w,g,coreTick),random:c.random});continue;}const bed=beds.get(p.id);if(!moving||carried.has(p.id)||bed)c.restMarks.mark(p,coreTick,bed?.restEffectiveness??.8);
-   ingestGroupFood256(w,g,p,c);advanceGroupAlcohol265(g,{tick:w.tick,schemaVersion:w.schemaVersion,drugPolicies:w.drugPolicies,resting:!moving,core256:{tick:coreTick,delta:deltaCore},onlyPerson256:p,random:c.random,notice:c.notice});advanceGroupJoy(g,{tick:w.tick,stationary:!moving,core256:{tick:coreTick,delta:deltaCore},onlyPerson256:p,random:c.random});}
+   ingestGroupFood256(w,g,p,Number(w.schemaVersion)===299?{...c,coreAt299:coreTick}:c);advanceGroupAlcohol265(g,{tick:w.tick,schemaVersion:w.schemaVersion,drugPolicies:w.drugPolicies,resting:!moving,core256:{tick:coreTick,delta:deltaCore},onlyPerson256:p,random:c.random,notice:c.notice});advanceGroupJoy(g,{tick:w.tick,stationary:!moving,core256:{tick:coreTick,delta:deltaCore},onlyPerson256:p,random:c.random});}
   advanceGroupCare(g,{tick:w.tick,core256:{tick:coreTick,delta:deltaCore},random:c.random});
  }
 }

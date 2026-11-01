@@ -13,7 +13,7 @@ const domains=['piles','pawns','structures','jobs','packed','worldMaps','seconda
  * inventory custody and the35 newly traded receipt identities, before any
  * historical map migrates or a sparse public predecessor can be replaced. */
 export function validApparelTradeHistoricalTransport279(value:unknown,version:number):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>298)return false;if(isSchema279OrLater(version))return true;
+ if(!Number.isSafeInteger(version)||version<1||version>299)return false;if(isSchema279OrLater(version))return true;
  let budget=2_000_000;const active=new Set<object>();
  const walk=(v:unknown,inTrade=false):boolean=>{
   if(--budget<0)return false;if(v===null||typeof v!=='object')return true;
@@ -44,7 +44,7 @@ export function validApparelTradeHistoricalTransport279(value:unknown,version:nu
  * archived garments at their actual departure owner, without a synthetic map. */
 export function validApparelTradeWorld279(w:World):boolean {
  try{
-  if(!Number.isSafeInteger(w.schemaVersion)||Number(w.schemaVersion)<1||Number(w.schemaVersion)>298)return false;
+  if(!Number.isSafeInteger(w.schemaVersion)||Number(w.schemaVersion)<1||Number(w.schemaVersion)>299)return false;
   if(!isSchema279OrLater(w.schemaVersion))return true;
   for(const pile of w.piles)if(pile.owner.type==='inventory'&&isOrdinaryApparel279(pile.item)){
    if(pile.kind!=='apparel'||!validApparelShape(pile as unknown as Record<string,unknown>,w.schemaVersion))return false;

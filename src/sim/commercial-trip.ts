@@ -1,3 +1,4 @@
+import {offMapIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
 import {medicalElapsedTicks271} from './suspended-human-clock-271.ts';
 import {rememberMapAreaDeparture,prepareSameMapAreaReturn,commitMapAreaEntry} from './pawn-map-areas.ts';
 import {registeredCampaign} from './world-map-context.ts';
@@ -101,7 +102,8 @@ function consumeRation(w:World,s:CommercialOffMap):void {
   const p=s.pawn;if(p.hunger>30||!foodAllowed(w,p,'survival-meal'))return;
   const pile=s.items.find(i=>i.id===s.foodPileId&&i.item==='survival-meal'&&i.owner.type==='inventory'&&i.owner.pawnId===p.id);
   if(!pile||pile.quantity<1)return;
-  p.hunger=Math.min(100,p.hunger+ITEM_DEFINITIONS['survival-meal'].nutrition);pile.quantity--;s.consumed++;
+  const ingestedAt299=offMapIngestionCore299(w,p);
+  p.hunger=Math.min(100,p.hunger+ITEM_DEFINITIONS['survival-meal'].nutrition);pile.quantity--;s.consumed++;commitHumanIngestion299(p,ingestedAt299);
   if(!pile.quantity)s.items.splice(s.items.indexOf(pile),1);
   logCommercial(w,`${p.name} mange une ration de survie pendant l’expédition commerciale.`);
 }

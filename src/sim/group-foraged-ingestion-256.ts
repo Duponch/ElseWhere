@@ -1,3 +1,4 @@
+import {groupIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
 import {recordCaravanAnimalConsumption256} from './group-animal-food-256.ts';
 import type {Pawn,World,MaterialPile} from './types.ts';
 import {TICKS_PER_DAY} from './types.ts';
@@ -25,7 +26,7 @@ function eligible(g:GroupFoodOwner256,w:World,p:Pawn):MaterialPile|undefined {
 }
 /** One original person in Mono needs order. A received fruit is not recorded
  * as gathered; legacy reorganization gets consumption counters only. */
-export function ingestGroupFood256(w:World,g:GroupFoodOwner256,p:Pawn,c:{random():number;notice(pawn:Pawn,message:string):void}):ConsumedGroupMass {
+export function ingestGroupFood256(w:World,g:GroupFoodOwner256,p:Pawn,c:{coreAt299?:number;random():number;notice(pawn:Pawn,message:string):void}):ConsumedGroupMass {
  const none:ConsumedGroupMass={massRemovedGrams:0,removed:[]};
  if(w.schemaVersion<256||w.group!==g||g.lastPersonalTick!==w.tick||!g.members.includes(p)||g.travel?.revision!==1&&g.reorganization?.revision!==1)throw Error('Invalid prospective food owner');
  if(p.state==='dead'||p.health?.death||adultHungerFactor(p.hunger)>=1)return none;
@@ -36,10 +37,11 @@ export function ingestGroupFood256(w:World,g:GroupFoodOwner256,p:Pawn,c:{random(
  const fruit=GROUP_FORAGED_ITEMS_256.includes(pile.item as GroupForagedItem256),counter=fruit?fruitCounters(g)!.consumed:undefined;
  let prior:number;if(ordinary)prior=0;else if(fruit)prior=counter![pile.item as GroupForagedItem256];else if(pile.item==='pemmican')prior=g.provisions?.pemmicanConsumedUnits??g.reorganization?.pemmicanSinceOpening?.consumed??NaN;else prior=g.ledger.foodConsumed;
  if(!Number.isSafeInteger(prior)||!Number.isSafeInteger(prior+quantity))throw Error('Prospective food counter overflow');
+ const ingestedAt299=groupIngestionCore299(g,p,w.schemaVersion,w.tick,c.coreAt299);
  if(ordinary)recordCaravanAnimalConsumption256(g,pile.item,quantity);
  const cause=ingestionFoodPoison(pile,true,w.gameProfile?.difficulty==='adventure-story'?.75:1,c.random);
  if(pile.quantity===quantity)g.items.splice(g.items.indexOf(pile),1);else pile.quantity-=quantity;
- p.hunger=Math.min(100,p.hunger+ITEM_DEFINITIONS[pile.item].nutrition*quantity);rememberIngestionAt(p,w.tick,{raw:rawFoodThought(pile.item),food:pile.item});
+ p.hunger=Math.min(100,p.hunger+ITEM_DEFINITIONS[pile.item].nutrition*quantity);commitHumanIngestion299(p,ingestedAt299);rememberIngestionAt(p,w.tick,{raw:rawFoodThought(pile.item),food:pile.item});
  if(ordinary){}else if(fruit)counter![pile.item as GroupForagedItem256]=prior+quantity;else if(pile.item==='pemmican'){if(g.provisions)g.provisions.pemmicanConsumedUnits=prior+quantity;else g.reorganization!.pemmicanSinceOpening!.consumed=prior+quantity;}else g.ledger.foodConsumed=prior+quantity;
  if(cause){p.health??=createMedicalRecord(w.tick);p.health.foodPoisoning=exposeFoodPoisoningAtRecord(p.health,cause,pile.item,w.tick);const status=medicalStatus(p.health);if(status!=='mobile')p.state=status;c.notice(p,`${p.name} souffre d’une intoxication alimentaire.`);}
  if(!eligible(g,w,p))c.notice(p,'La caravane ne possède plus de nourriture admissible pour ce membre.');

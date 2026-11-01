@@ -1,3 +1,4 @@
+import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {claimLocalActorBed256,forgetLocalActorBed256,forgetLocalBedOwners256,localBedClaimAvailable256,type ActualActorBeds256,captureActorBeds256} from './actor-bed-local-256.ts';
 import { canStandAt } from './furniture-travel.ts';
@@ -72,7 +73,7 @@ export function processAnimalRest(w:World,a:WildAnimal,ctx:AnimalRestContext):bo
     if(!a.path.length){clearRest(w,a);return false;}
     ctx.move();return true;
   }
-  const replaceAreaReturn=[287,288,289,290,291,292,293,294,295,296,297,298].includes(Number(w.schemaVersion))&&ctx.medicalRest&&!!a.animalAreaReturn287;
+  const replaceAreaReturn=isSchema287OrLater(Number(w.schemaVersion))&&ctx.medicalRest&&!!a.animalAreaReturn287;
   const replaceThermal=(Number(w.schemaVersion)===288||(Number(w.schemaVersion)===289||(Number(w.schemaVersion)===290||(Number(w.schemaVersion)===291||(Number(w.schemaVersion)===292||(Number(w.schemaVersion)===293||(Number(w.schemaVersion)===294||(Number(w.schemaVersion)===295||(Number(w.schemaVersion)===296||isCorePhysicalSchema297(Number(w.schemaVersion)))))))))))&&ctx.medicalRest&&!!a.animalThermalRefuge288;
   if(!wanted||a.meal||a.path.length&&!replaceAreaReturn&&!replaceThermal||a.nextDecision>w.tick&&!replaceThermal)return false;
   const rank=(s:Structure)=>s.medical?0:a.domestic?.bedId===s.id?1:2;

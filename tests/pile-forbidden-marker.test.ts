@@ -1,0 +1,95 @@
+import {expect,test} from 'vitest';
+import {ScenePilePresentation,type ScenePileChunks} from '../src/render/ScenePilePresentation';
+import {pileParts,type PileBundle} from '../src/render/pile-parts';
+import {materialAllowedForPlayer256,setMaterialForbidden256} from '../src/sim/material-permission-256';
+import {newApparelState} from '../src/sim/apparel-rules';
+import {createMechaMedicalRecord} from '../src/sim/mechanoid-health';
+import {SnapshotChangeJournal} from '../src/bridge/snapshots';
+import type {MaterialPile,World,Structure,Job} from '../src/sim/types';
+
+// Isolated presentation contracts. Narrow presentation-component input and test-only journal
+// witness, following pile-parts-cache-v475. No World constructor, simulated
+// progression, human save, full validity claim or GPU object is used here.
+function world(piles:MaterialPile[],structures:Structure[]=[],jobs:Job[]=[]):World {
+ return {seed:912,width:16,height:16,tick:0,schemaVersion:298,piles,structures,jobs} as unknown as World;
+}
+function wood(id:number,x=4,z=4):MaterialPile{return {id,kind:'wood',item:'wood',quantity:10,owner:{type:'ground',x,z}};}
+function stamped(w:World){const journal=new SnapshotChangeJournal();journal.reset(w,1,1);return journal;}
+function read(owner:ScenePilePresentation,w:World):ScenePileChunks {owner.prepareSupports(w);const frame=owner.read(w,new Map());if(!frame)throw Error('Expected journal-backed projection');return frame;}
+function all(owner:ScenePilePresentation){return owner.inspect().flatMap(c=>c.bundles);}
+function markers(bundle:PileBundle){const plain=pileParts([{...bundle,forbidden:undefined}]),marked=pileParts([bundle]);expect(marked.slice(0,plain.length)).toEqual(plain);return {plain,marked,extra:marked.slice(plain.length)};}
+function crossedAbove(bundle:PileBundle){const {plain,extra}=markers(bundle);expect(extra).toHaveLength(2);
+ const top=Math.max(...plain.map(p=>p.y+(p.sy??1)/2));
+ for(const part of extra){expect(part.y).toBeGreaterThan(top);expect(part.shape).toBeUndefined();expect(part.targetId).toBeUndefined();
+  const color=part.color!;expect((color>>16)&255).toBeGreaterThan(((color>>8)&255)*1.5);expect((color>>16)&255).toBeGreaterThan((color&255)*1.5);
+  expect(part.sx!).toBeGreaterThan(part.sz!*3);expect(part.sy!).toBeLessThan(part.sx!);
+ }
+ expect(Math.abs(extra[0]!.ry!-extra[1]!.ry!)).toBeCloseTo(Math.PI/2,12);return extra;
+}
+
+test('same-cell allowed and forbidden material families stay separate and use the actual unified permission rule',()=>{
+ const sources:MaterialPile[]=[wood(1,4),{id:3,kind:'weapon',item:'bolt-action-rifle',quantity:1,owner:{type:'ground',x:5,z:4},weapon:{quality:'normal',hitPoints:100}},
+  {id:5,kind:'apparel',item:'cloth-shirt',quantity:1,owner:{type:'ground',x:6,z:4},apparel:newApparelState('cloth-shirt')},
+  {id:7,kind:'food',item:'turkey-egg-unfertilized',quantity:1,owner:{type:'ground',x:7,z:4}}];
+ const piles=sources.flatMap(p=>{const denied=structuredClone(p);denied.id=p.id+1;setMaterialForbidden256(denied,true);expect(materialAllowedForPlayer256(p)).toBe(true);expect(materialAllowedForPlayer256(denied)).toBe(false);return [p,denied];});
+ const w=world(piles);stamped(w);const owner=new ScenePilePresentation();read(owner,w);const bundles=all(owner);expect(bundles).toHaveLength(8);
+ for(const source of sources){const pair=bundles.filter(b=>b.item===source.item);expect(pair).toHaveLength(2);expect(pair.map(b=>b.quantity)).toEqual([source.quantity,source.quantity]);expect(pair.map(b=>b.forbidden===true)).toEqual([false,true]);
+  expect(markers(pair[0]!).extra).toHaveLength(0);crossedAbove(pair[1]!);
+ }
+});
+
+test('permission-only resident edits rebuild the chunk and remove the marker without a quantity, location, identity or tick change',()=>{
+ const source=wood(1),w=world([source]),journal=stamped(w),owner=new ScenePilePresentation();const a=read(owner,w),ac=a.changedChunks[0]!;
+ const firstParts=owner.placements(a,ac),firstSignature=ac.signature;expect(owner.acknowledge(a)).toBe(true);
+ const denied=structuredClone(source);setMaterialForbidden256(denied,true);const w2={...w,piles:[denied]};journal.append(w,w2,1,2,[],[]);
+ const b=read(owner,w2);expect(b.changedChunks).toHaveLength(1);const bc=b.changedChunks[0]!;expect(bc.signature).not.toBe(firstSignature);expect(bc.bundles[0]!.forbidden).toBe(true);crossedAbove(bc.bundles[0]!);expect(owner.placements(b,bc)).toHaveLength(firstParts.length+2);owner.acknowledge(b);
+ const allowed=structuredClone(denied);setMaterialForbidden256(allowed,false);const w3={...w2,piles:[allowed]};journal.append(w2,w3,1,3,[],[]);
+ const c=read(owner,w3);expect(c.changedChunks).toHaveLength(1);const cc=c.changedChunks[0]!;expect(cc.signature).toBe(firstSignature);expect(cc.bundles[0]!.forbidden).toBeUndefined();expect(owner.placements(c,cc)).toEqual(firstParts);
+ expect([allowed.id,allowed.quantity,allowed.owner,w3.tick]).toEqual([source.id,source.quantity,source.owner,w.tick]);
+});
+
+test('shelf identity levels transform each marker together with its own item height and scale',()=>{
+ const piles=[wood(1),wood(2),wood(3)];for(const p of piles)setMaterialForbidden256(p,true);
+ const shelf:Structure={id:100,kind:'small-shelf',x:4,z:4,orientation:1,footprint:'standard',material:'wood',quality:'normal'};
+ const w=world(piles,[shelf]);stamped(w);const owner=new ScenePilePresentation();read(owner,w);const bundles=all(owner);expect(bundles).toHaveLength(3);
+ expect(bundles.map(b=>b.surface?.level).sort()).toEqual([0,1,2]);
+ for(const b of bundles){const s=b.surface!;expect(s.shelfId).toBe(shelf.id);expect(s.scaleHeight).toBe(true);expect(s.scale).toBeLessThan(1);
+  const local=pileParts([{...b,surface:undefined}]),supported=pileParts([b]);expect(supported).toHaveLength(local.length);crossedAbove(b);
+  for(let i=0;i<local.length;i++){const a=local[i]!,t=supported[i]!;expect(t.x).toBeCloseTo(b.x+(a.x-b.x)*s.scale+s.x,12);expect(t.z).toBeCloseTo(b.z+(a.z-b.z)*s.scale+s.z,12);expect(t.y).toBeCloseTo(a.y*s.scale+s.y,12);
+   expect(t.sx).toBeCloseTo((a.sx??1)*s.scale,12);expect(t.sy).toBeCloseTo((a.sy??1)*s.scale,12);expect(t.sz).toBeCloseTo((a.sz??1)*s.scale,12);
+  }
+ }
+});
+
+test('only actual ground ownership is marked; supplies and carried/inventory/equipment owners do not borrow the ground cross',()=>{
+ const ground:MaterialPile={id:1,kind:'chunk',item:'granite-chunk',quantity:1,forbidden:true,owner:{type:'ground',x:4,z:4}},job:Job={id:200,kind:'wall',x:6,z:4,orientation:0,footprint:'standard',material:'wood',construction:'frame',status:'pending',reservedBy:null,progress:0,escrow:{wood:0,food:0}};
+ const supplied={...wood(2),forbidden:true as const,owner:{type:'job' as const,jobId:job.id}},carried={...wood(3),forbidden:true as const,owner:{type:'pawn' as const,pawnId:7}},inventory={...wood(4),forbidden:true as const,owner:{type:'inventory' as const,pawnId:7}},equipped:MaterialPile={id:5,kind:'weapon',item:'revolver',quantity:1,weapon:{quality:'normal',hitPoints:100,forbidden:true},owner:{type:'equipment',pawnId:7}};
+ const human:MaterialPile={id:10,kind:'corpse',item:'human-corpse',quantity:1,forbidden:true,owner:{type:'ground',x:8,z:4},humanCorpse:{pawnId:101}};
+ const mech:MaterialPile={id:11,kind:'mech-corpse',item:'scyther-corpse',quantity:1,forbidden:true,owner:{type:'ground',x:9,z:4},mechCorpse:{mechKind:'scyther',health:createMechaMedicalRecord(0)}};
+ const w=world([ground,supplied,carried,inventory,equipped,human,mech],[],[job]);stamped(w);const owner=new ScenePilePresentation();read(owner,w);const bundles=all(owner);expect(bundles).toHaveLength(4);
+ const g=bundles.find(b=>b.item==='granite-chunk')!,j=bundles.find(b=>b.supplied)!;expect(g.forbidden).toBe(true);expect(j.forbidden).toBeUndefined();expect(markers(j).extra).toHaveLength(0);
+ const {plain,extra}=markers(g);expect(extra).toHaveLength(2);expect(plain.every(p=>p.targetId===4*w.width+4)).toBe(true);expect(extra.every(p=>p.targetId===undefined)).toBe(true);
+ for(const body of [human,mech]){const projected=bundles.find(b=>b.pileId===body.id)!;expect(projected.markerOnly).toBe(true);expect(projected.forbidden).toBe(true);expect(markers(projected).plain).toEqual([]);const parts=crossedAbove(projected);expect(parts).toHaveLength(2);expect(parts.every(p=>p.y>1.4)).toBe(true);}
+ // Dedicated body rigs already own these corpses. Allow removes only their
+ // marker bundles; no duplicate body geometry is created by this projection.
+ setMaterialForbidden256(human,false);setMaterialForbidden256(mech,false);read(owner,w);expect(all(owner).filter(b=>b.markerOnly)).toEqual([]);
+});
+
+test('unstamped mutable Worlds cannot use resident caches and direct mutable bundle geometry reads the current flag on every call',()=>{
+ const w=world([wood(1)]),owner=new ScenePilePresentation();expect(owner.prepareSupports(w)).toBeUndefined();expect(owner.read(w,new Map())).toBeUndefined();
+ const bundle:PileBundle={x:4,z:4,kind:'wood',item:'wood',quantity:10,supplied:false},before=pileParts([bundle]);
+ bundle.forbidden=true;const denied=pileParts([bundle]);expect(denied.slice(0,before.length)).toEqual(before);crossedAbove(bundle);
+ delete bundle.forbidden;expect(pileParts([bundle])).toEqual(before);expect(Object.isFrozen(bundle)).toBe(false);expect(Object.isFrozen(w.piles[0]!)).toBe(false);
+ // SceneRenderCore's complete mutable aggregation/signature branch is reviewed
+ // separately. This CPU contract does not execute or certify that GPU caller.
+});
+
+test('same raw permission alias cannot hide a change, freeze its source or poison a published/cached placement receipt',()=>{
+ const raw:MaterialPile={id:1,kind:'weapon',item:'revolver',quantity:1,weapon:{quality:'normal',hitPoints:100},owner:{type:'ground',x:4,z:4}},w=world([raw]);stamped(w);const owner=new ScenePilePresentation(),a=read(owner,w),ac=a.changedChunks[0]!,oldBundle=ac.bundles[0]!;
+ const original=owner.placements(a,ac);expect(oldBundle.forbidden).toBeUndefined();expect(Object.isFrozen(raw)).toBe(false);expect(Object.isFrozen(raw.weapon!)).toBe(false);expect(Object.isFrozen(w.piles)).toBe(false);owner.acknowledge(a);
+ raw.weapon!.forbidden=true;const b=read(owner,w),bc=b.changedChunks[0]!;expect(b.changedChunks).toHaveLength(1);expect(bc.bundles[0]!.forbidden).toBe(true);expect(oldBundle.forbidden).toBeUndefined();expect(()=>{bc.bundles[0]!.forbidden=undefined;}).toThrow(TypeError);
+ const expected=owner.placements(b,bc),publicCopy=owner.placements(b,bc);publicCopy.at(-1)!.x=9999;expect(owner.placements(b,bc)).toEqual(expected);expect(expected).toHaveLength(original.length+2);
+ const inspection=owner.inspect();inspection[0]!.bundles[0]!.forbidden=undefined;expect(owner.placements(b,bc)).toEqual(expected);
+ owner.acknowledge(b);expect(()=>owner.placements(b,bc)).toThrow('Stale or foreign');delete raw.weapon!.forbidden;
+ const c=read(owner,w),cc=c.changedChunks[0]!;expect(c.changedChunks).toHaveLength(1);expect(owner.placements(c,cc)).toEqual(original);expect(raw.weapon!.forbidden).toBeUndefined();
+});

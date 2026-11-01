@@ -38,7 +38,7 @@ export function validateShipReactorThreats275(w:World,version:number=w.schemaVer
 /** Delta-only continuity after full next-world validation. A map replacement
  * is a checkpoint and has no predecessor here; cold RAW cannot prove history. */
 export function validShipReactorThreatContinuation275(previous:Pick<World,'schemaVersion'|'tick'|'shipReactorThreats275'>,next:Pick<World,'schemaVersion'|'tick'|'shipReactorThreats275'>):boolean {
- if(!int(previous.schemaVersion,1,298)||!int(next.schemaVersion,1,298)||!int(previous.tick)||!int(next.tick,previous.tick))return false;
+ if(!int(previous.schemaVersion,1,299)||!int(next.schemaVersion,1,299)||!int(previous.tick)||!int(next.tick,previous.tick))return false;
  const a=previous.shipReactorThreats275,b=next.shipReactorThreats275;
  if(!a)return !b||b.adoptedAtCore>=previous.tick*10;
  if(!b||a.revision!==b.revision||a.mapId!==b.mapId||a.tile!==b.tile||a.generationAtCore!==b.generationAtCore||a.adoptedAtCore!==b.adoptedAtCore||a.seed!==b.seed

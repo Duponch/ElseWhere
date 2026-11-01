@@ -9,7 +9,7 @@ import type {World} from './types.ts';
  * A reservation is a reference to the one existing exemplar, not another item. */
 export function validReadingWorld295(world:World):boolean {
  try{
-  const version=Number(world.schemaVersion);if(!Number.isSafeInteger(version)||version<1||version>298)return false;
+  const version=Number(world.schemaVersion);if(!Number.isSafeInteger(version)||version<1||version>299)return false;
   const piles=new Map<number,World['piles'][number]>();
   for(const pile of world.piles){
    if(!validNovelPile295(pile,version))return false;

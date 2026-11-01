@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isColonist} from './affiliation.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {planetGeography256} from './planet-geography-256.ts';
@@ -35,7 +36,7 @@ function eligibleHomes(root:CampaignState):ActualHome298[]{
  * create geography, choose a payer, alter a natural calendar, or own any Thing.
  * The caller supplies its private draft RNG; refusal commits no draw to Root. */
 export function preparePaidAiSiteTile298(root:CampaignState,paidCore:number,draw:()=>number):PaidAiSiteTile298{
- if(Number(root.schemaVersion)!==298||root.planet?.revision!==3||!root.worldFactions||!root.worldSites263||effectiveCore297(root)!==paidCore)return no('Actual298 paid Site geography and physical frontier required');
+ if(!isSchema298OrLater(Number(root.schemaVersion))||root.planet?.revision!==3||!root.worldFactions||!root.worldSites263||effectiveCore297(root)!==paidCore)return no('Actual298 paid Site geography and physical frontier required');
  const planet=root.planet,maps=root.worldMaps,factions=root.worldFactions,sites=root.worldSites263,homes=eligibleHomes(root);
  if(!homes.length)return no('No actual loaded player home has a free colonist');
  const roll=draw();if(!Number.isFinite(roll)||roll<0||roll>=1)return no('Invalid private Site origin draw');
@@ -86,7 +87,7 @@ export function preparePaidAiSiteTile298(root:CampaignState,paidCore:number,draw
  if(tile===undefined)return no('No actual unoccupied settlement-valid Site tile was found');
  const chosenTile=tile;
  const current=()=>{try{
-  if(Number(root.schemaVersion)!==298||effectiveCore297(root)!==paidCore||root.planet!==planet||root.worldMaps!==maps||root.worldFactions!==factions||root.worldSites263!==sites||planetGeography256(planet)!==owner)return false;
+  if(!isSchema298OrLater(Number(root.schemaVersion))||effectiveCore297(root)!==paidCore||root.planet!==planet||root.worldMaps!==maps||root.worldFactions!==factions||root.worldSites263!==sites||planetGeography256(planet)!==owner)return false;
   const live=eligibleHomes(root);
   return live.length===homes.length&&live.every((row,i)=>{const prior=homes[i]!;return row.mapId===prior.mapId&&row.tile===prior.tile&&row.body===prior.body&&row.pawns===prior.pawns;});
  }catch{return false;}};

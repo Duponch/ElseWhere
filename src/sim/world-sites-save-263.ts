@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {validAiCoreInformationReceipt298} from './faction-comms-save-298.ts';
 import {validationCore297} from './core-phase-297.ts';
@@ -36,7 +37,7 @@ export function validateWorldSites263(value:unknown,root:WorldSitesValidationCon
  if(!isSchema263OrLater(Number(root.schemaVersion)))return Object.hasOwn(root,'worldSites263')||value!==undefined?['Future263 world Sites in an older campaign.']:[];
  if(value===undefined)return Object.hasOwn(root,'worldSites263')?['Undefined263 Site authority.']:[];
  if(!plainWorldPawnData256(value)||!record(value)||!keys(value,['revision','nextId','entries'],['quest'])||value.revision!==1||!int(value.nextId,1)||!Array.isArray(value.entries)||value.entries.length>4096||Object.hasOwn(value,'quest')&&!calendar(value.quest,root.tick*10,root.nextId,root.schemaVersion))return ['Invalid263 world Site authority.'];
- const sites=value as unknown as WorldSitesState263,ids=new Set<number>(),activeTiles=new Set<number>(),peaceTags=new Set<string>(),peaceActiveFactions=new Set<number>(),core=Number(root.schemaVersion)===298?validationCore297(298,root.tick,coreNow298):root.tick*10,factions=root.worldFactions;
+ const sites=value as unknown as WorldSitesState263,ids=new Set<number>(),activeTiles=new Set<number>(),peaceTags=new Set<string>(),peaceActiveFactions=new Set<number>(),core=isSchema298OrLater(Number(root.schemaVersion))?validationCore297(298,root.tick,coreNow298):root.tick*10,factions=root.worldFactions;
  if(!Number.isSafeInteger(core))return ['Current298 Site authority requires its actual physical frontier.'];
  if(!factions||!root.planet)return ['Site authority requires the actual faction and planet registries.'];
  for(const raw of sites.entries){

@@ -1,6 +1,7 @@
 import {readSnapshotChanges,readSnapshotStructureChanges} from '../bridge/snapshot-changes';
 import {WORLD_SCALE} from '../world/scale';
 import {corpseStage} from '../sim/corpses';
+import {materialAllowedForPlayer256} from '../sim/material-permission-256';
 import {corpseVisualMask} from './corpse-presentation';
 import type {World,Structure,MaterialPile,Job} from '../sim/types';
 import {pileParts,type PileBundle} from './pile-parts';
@@ -22,7 +23,7 @@ export interface ScenePileChunks {readonly activeKeys:ReadonlySet<string>;readon
 /** The exact old chunk signature, including its historical string collisions.
  * This is called only for affected chunks on the closed immutable path. */
 function signature(bundles:readonly PileBundle[]):string {
- return bundles.map(bundle=>`${bundle.x}:${bundle.z}:${bundle.item}:${bundle.quantity}:${bundle.supplied}:${bundle.pileId??''}:${bundle.corpseStage??''}:${bundle.facing??0}:${bundle.innerResource?`${bundle.innerResource.species??'legacy'}:${bundle.innerResource.growth??1}:${bundle.innerResource.blight??false}`:''}:${bundle.corpse?corpseVisualMask(bundle.corpse):0}:${bundle.surface?Object.values(bundle.surface).join(','):'ground'}`).join('|');
+ return bundles.map(bundle=>`${bundle.x}:${bundle.z}:${bundle.item}:${bundle.quantity}:${bundle.supplied}:${bundle.pileId??''}:${bundle.corpseStage??''}:${bundle.facing??0}:${bundle.innerResource?`${bundle.innerResource.species??'legacy'}:${bundle.innerResource.growth??1}:${bundle.innerResource.blight??false}`:''}:${bundle.corpse?corpseVisualMask(bundle.corpse):0}:${bundle.surface?Object.values(bundle.surface).join(','):'ground'}${bundle.forbidden?':forbidden':''}${bundle.markerOnly?':marker-only':''}`).join('|');
 }
 
 /** Clone BEFORE freezing: seeds may contain nested references to the admitted
@@ -98,17 +99,18 @@ export class ScenePilePresentation {
  readSupports=(world:World):PileSurfaceReadPair|undefined=>this.supports.get(world);
 
  private input(world:World,pile:MaterialPile,hidden:ReadonlyMap<number,number>,jobs:ReadonlyMap<number,Job>,supports:SupportState,old:PileRecord|undefined):Input|undefined {
-  if(pile.humanCorpse||pile.mechCorpse||pile.owner.type==='grave'||pile.owner.type!=='ground'&&pile.owner.type!=='job')return;
+  const forbidden=pile.owner.type==='ground'&&!materialAllowedForPlayer256(pile),markerOnly=!!(pile.humanCorpse||pile.mechCorpse);
+  if(markerOnly&&!forbidden||pile.owner.type==='grave'||pile.owner.type!=='ground'&&pile.owner.type!=='job')return;
   const masked=hidden.get(pile.id)??0,quantity=pile.quantity-masked;if(quantity<=0)return;
   const job=pile.owner.type==='job'?jobs.get(pile.owner.jobId):undefined;if(pile.owner.type==='job'&&!job)return;
-  const position=pile.owner.type==='ground'?pile.owner:job!,identity=job?undefined:supports.identities.get(pile.id),surface=job?undefined:identity??supports.cells.get(position.z*world.width+position.x),stage=pile.kind==='corpse'?corpseStage(pile,world.tick):undefined;
+  const position=pile.owner.type==='ground'?pile.owner:job!,identity=job?undefined:supports.identities.get(pile.id),surface=job?undefined:identity??supports.cells.get(position.z*world.width+position.x),stage=!markerOnly&&pile.kind==='corpse'?corpseStage(pile,world.tick):undefined;
   const before=old?.input;
-  if(old?.pile===pile&&before&&Object.is(before.hidden,masked)&&before.surface===surface&&before.corpseStage===stage&&before.jobX===job?.x&&before.jobZ===job?.z)return before;
-  const key=`${position.x}:${position.z}:${pile.item}:${job?'job':'ground'}${pile.corpse||pile.innerResource||identity?`:${pile.id}`:''}`;
-  const seed:PileBundle={x:position.x,z:position.z,kind:pile.kind,item:pile.item,quantity,supplied:!!job,
-   ...(identity||pile.innerResource?{pileId:pile.id}:{}),...(pile.innerResource?{innerResource:pile.innerResource}:{}),
+  if(old?.pile===pile&&before&&!!before.seed.forbidden===forbidden&&!!before.seed.markerOnly===markerOnly&&Object.is(before.hidden,masked)&&before.surface===surface&&before.corpseStage===stage&&before.jobX===job?.x&&before.jobZ===job?.z)return before;
+  const key=`${position.x}:${position.z}:${pile.item}:${job?'job':'ground'}${pile.corpse||pile.innerResource||identity||markerOnly?`:${pile.id}`:''}${forbidden?':forbidden':''}`;
+  const seed:PileBundle={x:position.x,z:position.z,kind:pile.kind,item:pile.item,quantity,supplied:!!job,...(forbidden?{forbidden:true as const}:{}),...(markerOnly?{markerOnly:true as const}:{}),
+   ...(identity||pile.innerResource||markerOnly?{pileId:pile.id}:{}),...(pile.innerResource?{innerResource:pile.innerResource}:{}),
    ...(pile.kind==='chunk'&&pile.owner.type==='ground'?{targetId:position.z*world.width+position.x}:{}),surface,
-   ...(pile.kind==='corpse'?{corpseStage:stage!,facing:pile.corpse?.facing??0,corpse:pile.corpse}:{})};
+   ...(!markerOnly&&pile.kind==='corpse'?{corpseStage:stage!,facing:pile.corpse?.facing??0,corpse:pile.corpse}:{})};
   return {key,chunk:chunkKey(position.x,position.z),quantity,hidden:masked,job,jobX:job?.x,jobZ:job?.z,surface,corpseStage:stage,seed};
  }
 

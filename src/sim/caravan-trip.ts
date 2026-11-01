@@ -1,3 +1,4 @@
+import {offMapIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
 import {medicalElapsedTicks271} from './suspended-human-clock-271.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {rememberLocalActorBedDeparture256,prepareLocalActorBedReturn256} from './actor-bed-local-256.ts';
@@ -156,8 +157,9 @@ function consumeTrailFood(w:World,s:Extract<ScoutState,{phase:'travelling'|'awai
   if(p.hunger>30||!foodAllowed(w,p,'survival-meal'))return;
   const pile=s.items.find(i=>i.id===s.foodPileId&&i.item==='survival-meal'&&i.owner.type==='inventory'&&i.owner.pawnId===p.id);
   if(!pile||pile.quantity<1)return;
+  const ingestedAt299=offMapIngestionCore299(w,p);
   p.hunger=Math.min(100,p.hunger+ITEM_DEFINITIONS['survival-meal'].nutrition);
-  pile.quantity--;s.consumed++;
+  pile.quantity--;s.consumed++;commitHumanIngestion299(p,ingestedAt299);
   if(pile.quantity===0)s.items.splice(s.items.indexOf(pile),1);
   log(w,`${p.name} mange un repas de survie pendant la reconnaissance.`);
 }

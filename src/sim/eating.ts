@@ -1,5 +1,5 @@
+import {localIngestionCore299,commitHumanIngestion299,selfFoodPermission299} from './human-ingestion-clock299.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
-import {eggAllowedForPlayer256} from './animal-egg-permission-v256.ts';
 import {beerPile265,completeAlcoholInventory265,takeOwnedBeer265,ingestBeer265} from './alcohol-ingestion-265.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
 import { copyPileCondition } from './pile-condition.ts';
@@ -27,6 +27,7 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
   // eating keeps its historical release, location choice and resolution.
   const release=()=>{if(task.forced)interruptDraftWork(world,pawn);else context.release();};
   const alcohol=isSchema265OrLater(world.schemaVersion)&&task.alcoholReason!==undefined;
+  const ignoreFoodForbidden299=Number(world.schemaVersion)===299&&task.foodBinge299===true;
   if(alcohol){
     const body=pawnBody(pawn);
     // Recheck after every health transition, before pickup, inventory transfer
@@ -48,7 +49,7 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
     task.carryPileId=meal.id;task.phase='collect';pawn.path=[];pawn.state='moving';return;
   }
   const pile = world.piles.find(item => item.id === (task.phase === 'pickup' ? task.sourcePileId : task.carryPileId));
-  if (!pile || !(alcohol?beerPile265(pile):pile.kind==='food')||task.alcoholReason!=='binge'&&!eggAllowedForPlayer256(pile)) { release(); return; }
+  if (!pile || !(alcohol?beerPile265(pile):pile.kind==='food')||task.alcoholReason!=='binge'&&!selfFoodPermission299(pile,ignoreFoodForbidden299)) { release(); return; }
   if(alcohol&&(task.paste||task.phase==='collect'||(task.alcoholReason==='inventory'?(task.phase!=='pickup'||task.quantity<1||task.quantity>3):task.quantity!==1))){release();return;}
   if (task.phase === 'pickup') {
     if(alcohol&&pile.owner.type==='inventory'){if(!takeOwnedBeer265(world,pawn,pile,task))release();return;}
@@ -104,8 +105,10 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
   pawn.state = 'eating';
   advanceWork(task,physicalEatingFactor(pawn));
   if (task.progress >= INGEST_TICKS) {
+    const ingestedAt299=localIngestionCore299(world,pawn);
     world.piles.splice(world.piles.indexOf(pile), 1);
     pawn.hunger = Math.min(100, pawn.hunger + nutritionOf(pile));
+    commitHumanIngestion299(pawn,ingestedAt299);
     if(alcohol){
       pawn.need=null;pawn.state='idle';pawn.planCooldown=0;pawn.needCooldown=0;if(task.forced)pawn.orders.active=null;
       ingestBeer265(world,pawn);context.event(`${pawn.name} a bu une bière.`);return;

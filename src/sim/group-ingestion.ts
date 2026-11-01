@@ -1,3 +1,4 @@
+import {groupIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
 import {mixedGroupProvisions,groupPemmicanCounter,setGroupPemmicanCounter} from './group-provisions.ts';
 import {foodScore} from './food-selection.ts';
 import {ticksUntilRot} from './food-preservation.ts';
@@ -16,7 +17,7 @@ type ActiveGroup=Extract<GroupState,{members:unknown}>;
 export interface GroupIngestionContext {
   /** One actual owner only, for the prospective per-Pawn Core needs order. */
   onlyPerson256?:Pawn;
-  tick:number;schemaVersion:number;foodPolicies:readonly FoodPolicy[];foodPoisonFactor:number;
+  tick:number;schemaVersion:number;coreAt299?:number;foodPolicies:readonly FoodPolicy[];foodPoisonFactor:number;
   random():number;notice(person:Pawn,message:string):void;
 }
 /** Historical groups retain ration-only ingestion. Prospective formations
@@ -38,9 +39,11 @@ export function advanceGroupIngestion(group:ActiveGroup,c:GroupIngestionContext)
     if(owner.type!=='inventory'||index<0||mass===undefined||!Number.isSafeInteger(pile.quantity)||pile.quantity<1)throw Error('Invalid group food ownership');
     const quantity=mealQuantity(person,pile,pile.quantity),pemmican=mixed&&pile.item==='pemmican',consumed=(pemmican?groupPemmicanCounter(group,'consumed'):group.ledger.foodConsumed)+quantity;
     if((!mixed&&quantity!==1)||!Number.isSafeInteger(quantity)||quantity<1||quantity>pile.quantity||!Number.isSafeInteger(consumed)||consumed<0)throw Error('Invalid food consumption counter');
+    const ingestedAt299=groupIngestionCore299(group,person,c.schemaVersion,c.tick,c.coreAt299);
     const cause=c.schemaVersion>=89?ingestionFoodPoison(pile,true,c.foodPoisonFactor,c.random):undefined;
     if(pile.quantity===quantity)group.items.splice(index,1);else pile.quantity-=quantity;
     person.hunger=Math.min(100,person.hunger+ITEM_DEFINITIONS[pile.item].nutrition*quantity);
+    commitHumanIngestion299(person,ingestedAt299);
     // No dining-room observation or missing-table thought without that job.
     rememberIngestionAt(person,c.tick,{raw:false,food:pile.item});
     if(pemmican)setGroupPemmicanCounter(group,'consumed',consumed);else group.ledger.foodConsumed=consumed;

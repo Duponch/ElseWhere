@@ -1,5 +1,10 @@
 # Elsewhere
 
+**1 novembre 2026 — schéma 299.** [Besoins alimentaires et frénésie](docs/development/food-binge-cadence299.md) corrigés, [objets interdits marqués dans le décor](docs/development/forbidden-pile-markers.md). La priorité humaine reste la vraie partie325 et les défauts rencontrés ; six ensembles, victoire et contenu en pause. Les dettes de cadence et l’errance civile ordinaire manquante restent ouvertes ; aucune identité exhaustive ni performance globale certifiée.
+
+## Historique conservé du lot298
+
+
 **31 octobre 2026 — chaîne de victoire intégrée, schéma 298.** Console et information payée, cache réelle de cœur d’IA, ordinateur/capteurs recherchés et construits, lancement, départ vivant et crédits sont raccordés. [Comportement, références, contrôles et limites](docs/development/ship-victory298.md). Les six ensembles reprennent en autonomie ; aucun n’est déclaré terminé. Le défaut résiduel de fluidité et la dette de débit×6 restent ouverts, leurs expérimentations sont suspendues selon la demande humaine.
 
 La dernière production Cloudflare attestée est **495c93d0/source58fc7307, schéma297**, vérifiée le31octobre. Le nouveau lot298 n’est pas réputé publié par son intégration ou son commit. Les sauvegardes publiques et campagnes personnelles restent préservées.

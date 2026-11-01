@@ -13,7 +13,7 @@ import type {World} from './types.ts';
 const own=(v:object,k:PropertyKey)=>Object.hasOwn(v,k);
 const plain=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype;
 const field=(v:object,k:string)=>{const d=Object.getOwnPropertyDescriptor(v,k);return d?.enumerable&&own(d,'value')?d:undefined;};
-const versionAllowed=(v:unknown):v is number=>firefoamInteger290(v,1,298);
+const versionAllowed=(v:unknown):v is number=>firefoamInteger290(v,1,299);
 type Kind='world'|'record'|'thing'|'building'|'retainedBuilding'|'job'|'actor'|'localActor'|'health'|'feet'|'trace'|'carried'|'research'|'filth';
 type Branch=readonly [string,Kind,boolean?];
 interface IdentitySinkInternal290 {add(value:number):unknown;has(value:number):boolean}

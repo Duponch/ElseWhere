@@ -1,3 +1,4 @@
+import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {animalComfyRange256,isAnimalSpecies256} from './animal-core-v256.ts';
 import {actualNativeSevenFacts256} from './actual-animal-profile-256.ts';
@@ -38,7 +39,7 @@ export interface AnimalThermalOpportunity466 {temperature:number;mapHeld:boolean
  * Fixed-point severity kernels are the existing local adaptation. Frostbite,
  * air burns and insect cold slowdown remain distinct unrepresented effects. */
 export function applyAnimalThermal466(w:Pick<World,'tick'|'schemaVersion'>,a:WildAnimal,record:MedicalRecord|undefined,input:AnimalThermalOpportunity466):MedicalRecord|undefined {
- if(![287,288,289,290,291,292,293,294,295,296,297,298].includes(Number(w.schemaVersion))||record?.death||a.state==='dead')return record;
+ if(!isSchema287OrLater(Number(w.schemaVersion))||record?.death||a.state==='dead')return record;
  const range=animalThermalProfile466(a);if(!range)return record;
  if(!Number.isFinite(input.temperature)||typeof input.mapHeld!=='boolean')throw Error('Invalid actual local animal thermal opportunity');
  const cold=record?.hypothermia??0,heat=record?.heatstroke??0;

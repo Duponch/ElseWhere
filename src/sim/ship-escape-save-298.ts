@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {plainWorldPawnData256} from './world-pawn-save-256.ts';
 import {validGroupMapContext} from './world-map-context-save.ts';
 import {indexShipParts276,connectedShipParts276} from './ship-part-reader-276.ts';
@@ -24,9 +25,9 @@ const nextDeparture=(state:EscapedShips298)=>state.receipts.length+1;
  * paused phase1..9. Only an actual completed departure has this saved owner. */
 export function validEscapedShipsEnvelope298(root:object,version:number,tick:number,nextThingId:number,physicalCore298?:number):boolean {
  try{
-  if(!int(version,1,298))return false;
+  if(!int(version,1,299))return false;
   const field=data(root,'escapedShips298');if(!field)return !('escapedShips298'in root);
-  if(version!==298||!atCore(tick,physicalCore298,Number.MAX_SAFE_INTEGER)||!int(nextThingId,1)||!exact(field.value,['revision','nextId','departures','receipts','credits']))return false;
+  if(!isSchema298OrLater(version)||!atCore(tick,physicalCore298,Number.MAX_SAFE_INTEGER)||!int(nextThingId,1)||!exact(field.value,['revision','nextId','departures','receipts','credits']))return false;
   const s=field.value;if(s.revision!==1||!int(s.nextId,2,SHIP_ESCAPE_HISTORY_LIMIT_298+1)||!dense(s.receipts,SHIP_ESCAPE_HISTORY_LIMIT_298)||!dense(s.departures,SHIP_ESCAPE_HISTORY_LIMIT_298))return false;
   for(let i=0;i<s.receipts.length;i++){
    const r=s.receipts[i];if(!plain(r)||!exact(r,['id','mapId','computerId','at','atCore298','outcome'])||r.id!==i+1||!int(r.mapId)||!int(r.computerId,1,nextThingId-1)||!atCore(r.at,r.atCore298,physicalCore298)||r.outcome!=='departed'||i>0&&Number((s.receipts[i-1] as Record<string,unknown>).atCore298)>r.atCore298)return false;
@@ -130,7 +131,7 @@ export function* escapedShipThingIds298(root:EscapeCampaign298):Generator<number
 const lanes=new Set(['world','dynamic','campaign','worldMaps','sites','map','worldGroups','groups','state','worldPawns','owners','actor','pawns','structures','jobs','packed','building','shipCryptosleep277','occupant','heldShipCaskets277','secondarySite','group','worldSites263','tradeRequests284','entries']);
 /** Historical branches cannot gain the future owner/summary/commands. */
 export function validShipEscapeHistorical298(value:unknown,version:number):boolean {
- if(!int(version,1,298))return false;if(version===298)return true;let budget=2000000;const active=new Set<object>();
+ if(!int(version,1,299))return false;if(isSchema298OrLater(version))return true;let budget=2000000;const active=new Set<object>();
  const walk=(v:unknown):boolean=>{if(--budget<0)return false;if(v===null||typeof v!=='object')return true;if(active.has(v)||!Array.isArray(v)&&!plain(v))return false;active.add(v);for(const k of Reflect.ownKeys(v)){if(typeof k!=='string'||k==='escapedShips298'||k==='escapedShipsSummary298')return false;const d=Object.getOwnPropertyDescriptor(v,k);if(!d||!Object.hasOwn(d,'value'))return false;if(k==='type'&&(d.value==='ship-launch-298'||d.value==='ship-credits-continue-298'))return false;if((Array.isArray(v)||lanes.has(k))&&!walk(d.value))return false;}active.delete(v);return true;};
  try{return walk(value);}catch{return false;}
 }

@@ -343,11 +343,13 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   }
 
   function importFile(): void {
-    // Browser-owned file chooser only: never inserted, styled, measured or used
-    // to draw/position a control, and created only at this explicit gesture.
-    const picker = document.createElement('input'); picker.type = 'file'; picker.accept = '.json,application/json';
-    picker.addEventListener('change', () => { const file = picker.files?.[0]; if (file) void run(() => options.onImport(file), 'Vérification du fichier et préparation de la colonie…'); picker.remove(); }, { once: true });
-    picker.addEventListener('cancel', () => picker.remove(), { once: true }); picker.click();
+    // Browser-owned picker only: hidden, never measured or used for native UI
+    // layout. DOM ownership keeps it alive until selection or cancellation.
+    const picker = document.createElement('input'); picker.type = 'file'; picker.accept = '.json,application/json'; picker.hidden = true;
+    const cleanup = () => { picker.removeEventListener('change', selected); picker.removeEventListener('cancel', cleanup); picker.remove(); };
+    const selected = () => { try { const file = picker.files?.[0]; if (file) void run(() => options.onImport(file), 'Vérification du fichier et préparation de la colonie…'); } finally { cleanup(); } };
+    picker.addEventListener('change', selected, { once: true }); picker.addEventListener('cancel', cleanup, { once: true });
+    try { document.body.append(picker); picker.click(); } catch (cause) { cleanup(); throw cause; }
   }
   function downloadTest(save: TestColony): void {
     // Browser download service, as in the original catalogue. This unattached

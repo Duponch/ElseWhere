@@ -1,3 +1,4 @@
+import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import type {CoreActorScene297} from '../bridge/core-phase-projection-297';
 import {ActorPlayback435} from './ActorPlayback435';
 import {arrivalRotationYaw256} from '../sim/arrival-rotation-256';
@@ -291,7 +292,7 @@ class SpeciesRig {
     this.hasFireActors=fireCount>0;this.flames.visible=this.hasFireActors;
     }
     const animals=this.animals;g.instanceCount=animals.length;let dirty=false,springDirty=false;
-    const spring=Number(world.schemaVersion)===297||Number(world.schemaVersion)===298;if(spring)this.ensureSpring297(animals.length);
+    const spring=isCorePhysicalSchema297(Number(world.schemaVersion));if(spring)this.ensureSpring297(animals.length);
     this.playback435.prepare(world,animals,reset);const playback=this.playback435.beginFrame(timeline);if(this.playback435.retrying)this.keys.clear();
     if(changed||reset){this.carrierSlots.clear();if(reset)this.animationCache.reset();}
     animals.forEach((a,i)=>{

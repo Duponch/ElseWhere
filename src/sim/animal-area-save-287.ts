@@ -22,7 +22,7 @@ export function validAnimalAreaChoice287(value:unknown,nextId=Number.MAX_SAFE_IN
 /** Only the two prospective fields. A corpse/detached holder never owns Goto. */
 export function validAnimalAreaField287(value:unknown,version:number,nextId:number,local=false):boolean {
  try{
-  if(!plain(value)||!int(version,1,298)||!int(nextId,1))return false;
+  if(!plain(value)||!int(version,1,299)||!int(nextId,1))return false;
   for(const key of ['animalMapAreas287','animalAreaReturn287'])if(!absent(value,key)&&(!data(value,key)||!isSchema287OrLater(version)))return false;
   const field=data(value,'animalMapAreas287');if(field){const v=field.value;if(!plain(v)||!exact(v,['revision','assignments'])||v.revision!==1||!Array.isArray(v.assignments)||Object.getPrototypeOf(v.assignments)!==Array.prototype||v.assignments.length>nextId||Reflect.ownKeys(v.assignments).length!==v.assignments.length+1)return false;const maps=new Set<number>();for(let i=0;i<v.assignments.length;i++){const d=data(v.assignments,String(i)),r=d?.value;if(!plain(r)||!exact(r,['mapId','choice'])||!int(r.mapId)||maps.has(r.mapId)||!validAnimalAreaChoice287(r.choice,nextId))return false;maps.add(r.mapId);}}
   const back=data(value,'animalAreaReturn287');if(back){const v=back.value;if(!local||!field||!plain(v)||!exact(v,['mapId','target'])||!int(v.mapId)||!plain(v.target)||!exact(v.target,['x','z'])||!int(v.target.x)||!int(v.target.z))return false;}
@@ -35,7 +35,7 @@ export function validAnimalAreaBindings287(value:AnimalAreaHolder287,refs:Animal
 const lanes=new Set(['world','dynamic','campaign','wildlife','animals','animal','piles','corpse','worldMaps','sites','map','worldGroups','groups','state','animalOwners','members','animalLosses','items','worldPawns','owners','actor','structures','packed','building','shipCryptosleep277','occupant','cryptosleep','casket','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277','startingArrival','pods','pending261','abandonedContents','abandonedPawns','humans','posts','stock','leaders','worldFactions','scout','commercialTrip','groupLosses','secondarySite','group','tradeRequests284','entries','options','legacyTravellers','losses']);
 /** Historical sparse/dynamic fences visit known custody lanes, never grids. */
 export function validAnimalAreaHistoricalTransport287(value:unknown,version:number):boolean {
- if(!int(version,1,298))return false;if(isSchema287OrLater(version))return true;const active=new Set<object>();let budget=2_000_000;
+ if(!int(version,1,299))return false;if(isSchema287OrLater(version))return true;const active=new Set<object>();let budget=2_000_000;
  const walk=(v:unknown):boolean=>{if(--budget<0)return false;if(v===null||typeof v!=='object')return true;if(active.has(v)||!Array.isArray(v)&&!plain(v)||'animalMapAreas287'in v||'animalAreaReturn287'in v)return false;active.add(v);for(const k of Reflect.ownKeys(v)){if(typeof k!=='string')return false;const d=Object.getOwnPropertyDescriptor(v,k);if(!d||!Object.hasOwn(d,'value'))return false;if((Array.isArray(v)||lanes.has(k))&&!walk(d.value))return false;}active.delete(v);return true;};
  try{return walk(value);}catch{return false;}
 }

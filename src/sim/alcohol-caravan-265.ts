@@ -1,3 +1,4 @@
+import {groupIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
 import {medicalCivilTick271} from './suspended-human-clock-271.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import {drugPolicyFor265,type DrugPolicy265} from './alcohol-policy-265.ts';
@@ -41,9 +42,10 @@ export function advanceGroupAlcohol265(group:Group,c:GroupAlcoholContext265):Con
   const originalCarrier=pile.owner.pawnId;
   if(!Number.isSafeInteger(pile.quantity)||p.health&&medicalCivilTick271(p.health)!==c.tick)throw Error('Caravan beer is not at its actual clinical frontier');
   const previous=group.reorganization.inventoryEffects?.beer??0;if(!Number.isSafeInteger(previous-1))throw Error('Alcohol consumption effects exhausted');
+  const ingestedAt299=groupIngestionCore299(group,p,c.schemaVersion,c.tick,core.tick);
   const bodySize=alcoholBodySize265(p);recordCaravanAnimalConsumption256(group,'beer',1);
   if(pile.quantity===1)group.items.splice(group.items.indexOf(pile),1);else pile.quantity--;
-  p.health??=createMedicalRecord(c.tick);ingestAlcoholDose265(p.health,bodySize,c.tick,c.random);p.hunger=Math.min(100,p.hunger+8);gainRecreation(p.recreation,'chemical',17);
+  p.health??=createMedicalRecord(c.tick);ingestAlcoholDose265(p.health,bodySize,c.tick,c.random);p.hunger=Math.min(100,p.hunger+8);gainRecreation(p.recreation,'chemical',17);commitHumanIngestion299(p,ingestedAt299);
   const status=medicalStatus(p.health);if(status!=='mobile')p.state=status;
   removed.push({pawnId:originalCarrier,grams:300});c.notice(p,`${p.name} a bu une bière des provisions de la caravane.`);
  }

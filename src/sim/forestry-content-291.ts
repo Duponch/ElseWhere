@@ -10,7 +10,7 @@ export type ForestrySpecies291=typeof FORESTRY_SPECIES_291[number];
 export type GrowingPlant291=CropKind|ForestrySpecies291;
 export const TREE_SOWING_COST_291=1_000_000_000;
 export const isForestrySpecies291=(value:unknown):value is ForestrySpecies291=>typeof value==='string'&&(FORESTRY_SPECIES_291 as readonly string[]).includes(value);
-export const isGrowingPlantInVersion291=(value:unknown,version:number):value is GrowingPlant291=>Number.isSafeInteger(version)&&version<=298&&(isCropKindInVersion(value,version)||(version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version)))))))&&isForestrySpecies291(value));
+export const isGrowingPlantInVersion291=(value:unknown,version:number):value is GrowingPlant291=>Number.isSafeInteger(version)&&version<=299&&(isCropKindInVersion(value,version)||(version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version)))))))&&isForestrySpecies291(value));
 export const treeSowingUnlocked291=(world:Pick<World,'schemaVersion'|'research'>):boolean=>(Number(world.schemaVersion)===291||(Number(world.schemaVersion)===292||(Number(world.schemaVersion)===293||(Number(world.schemaVersion)===294||(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))))))&&world.research?.treeSowing291?.completedAt!==undefined;
 /** Potential indigenous flora, never the set of trees physically on the map. */
 export function forestNativeSpecies291(world:Pick<World,'schemaVersion'|'site'>):readonly ForestrySpecies291[]{

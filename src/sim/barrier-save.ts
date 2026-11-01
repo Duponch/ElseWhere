@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
 import {validNaturalHiveLoss256} from './cave-hive-loss-256.ts';
 import {isFutureEcologyItem256} from './cave-products-256.ts';
@@ -21,7 +22,7 @@ export function validateBarriers(world:World,version:number):string[] {
     const neutral=natural||version>=193&&object(ledger)&&(object(ledger.items)&&Object.keys(ledger.items).length>0||object(ledger.resources)&&Object.keys(ledger.resources).length>0);
     if(version<67||!object(ledger)||Object.keys(ledger).some(k=>!['count','lost',...(version>=256?['natural']:[]),...(version>=192?['fuelTicksLost','fuelTicksBurned','batteryEnergyLost']:[]),...(version>=193?['items','resources','woodPotentialLost']:[])].includes(k))
       ||!integer(ledger.count,neutral?0:1)||!object(ledger.lost)||(!Object.keys(ledger.lost).length&&!neutral)
-      ||Object.entries(ledger.lost).some(([k,v])=>!(version===298&&k==='ai-core'||version>=123&&k==='gold'||isSchema275OrLater(version)&&k==='plasteel'||version>=256&&(k==='jade'||k==='uranium')||k!=='jade'&&CONSTRUCTION_MATERIALS.includes(k as never)||version>=256&&isBedrollTextile256(k)||version>=75&&k==='component'||version>=193&&k==='advanced-component'||version>=211&&k==='silver'||version>=265&&(k==='wort'||k==='beer'))||!integer(v,1))
+      ||Object.entries(ledger.lost).some(([k,v])=>!(isSchema298OrLater(version)&&k==='ai-core'||version>=123&&k==='gold'||isSchema275OrLater(version)&&k==='plasteel'||version>=256&&(k==='jade'||k==='uranium')||k!=='jade'&&CONSTRUCTION_MATERIALS.includes(k as never)||version>=256&&isBedrollTextile256(k)||version>=75&&k==='component'||version>=193&&k==='advanced-component'||version>=211&&k==='silver'||version>=265&&(k==='wort'||k==='beer'))||!integer(v,1))
       ||['fuelTicksLost','fuelTicksBurned'].some(k=>ledger[k]!==undefined&&!integer(ledger[k],1))
       ||ledger.batteryEnergyLost!==undefined&&(typeof ledger.batteryEnergyLost!=='number'||!Number.isFinite(ledger.batteryEnergyLost)||ledger.batteryEnergyLost<=0||!Number.isSafeInteger(ledger.batteryEnergyLost*2))
       ||ledger.items!==undefined&&(!object(ledger.items)||!Object.keys(ledger.items).length||Object.entries(ledger.items).some(([k,v])=>!Object.hasOwn(ITEM_DEFINITIONS,k)||version<256&&(isFutureEcologyItem256(k)||k==='slag-steel-chunk')||version<235&&k==='minified-tree'||version<227&&['hay','kibble'].includes(k)||version<206&&k==='neutroamine'||version<194&&k==='scyther-corpse'||version<197&&V219_ITEM_IDS.some(item=>item===k)||!integer(v,1)))

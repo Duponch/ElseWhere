@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import type {GroupMemberProjectionContext} from './group-reorganization-state.ts';
 import {calendarTick} from './calendar.ts';
 import {CAMPAIGN_FIELDS} from './secondary-site-state.ts';
@@ -27,7 +28,7 @@ export const boundWorldGroup=(w:World):WorldGroupRecord|undefined=>groupBindings
 /** Read-only mutation authority, with an EXPECTED runtime owner. Validation
  * and group projections are not the canonical mutating map context. */
 export function isActualMapMutationContext298(expectedOwner:CampaignState,world:World):boolean {
- if(Number(world.schemaVersion)!==298||registeredCampaign(world)!==expectedOwner||groupBindings.has(world))return false;
+ if(!isSchema298OrLater(Number(world.schemaVersion))||registeredCampaign(world)!==expectedOwner||groupBindings.has(world))return false;
  const maps=expectedOwner.worldMaps,id=registeredMapId(world);
  if(world===expectedOwner){
   if(!Array.isArray(world.tiles))return false;

@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isColonist} from './affiliation.ts';
 import {pawnBody} from './health-rules.ts';
 import {electricityDisabledAtCore} from './cassandra-world.ts';
@@ -18,7 +19,7 @@ export interface ActualConsoleHome298 {root:CampaignState;mapId:number;body:Worl
 /** Actual owner only. No map, registry or projection is fabricated by this reader. */
 export function actualConsoleHome298(w:World):ActualConsoleHome298|undefined {
  const root=registeredCampaign(w),mapId=registeredMapId(w);
- if(Number(w.schemaVersion)!==298||Number(root.schemaVersion)!==298||mapId===undefined)return;
+ if(!isSchema298OrLater(Number(w.schemaVersion))||!isSchema298OrLater(Number(root.schemaVersion))||mapId===undefined)return;
  const maps=root.worldMaps;
  if(!maps){
   if(root!==w||mapId!==0||!Array.isArray(w.tiles)||!Array.isArray(w.pawns)||!Array.isArray(w.piles))return;

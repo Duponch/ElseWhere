@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {footprintCells} from './definitions.ts';
 import {captureActualLocalDistricts256} from './actual-local-districts-256.ts';
@@ -49,7 +50,7 @@ function draftOriginalTargetGoods263(siteId:number,nextId:number,points:number,t
 export function draftItemStashGoods263(siteId:number,nextId:number,points:number,tick:number,rng:number,version:number=263){return draftOriginalTargetGoods263(siteId,nextId,points,tick,rng,undefined,version);}
 /** Fixed paid-information original. No reward lottery and no off-map duplicate. */
 export function draftAiCoreSiteGoods298(siteId:number,nextId:number,rng:number,version:number):{items:MaterialPile[];nextId:number;rng:number;targetValue:number}|null {
- if(version!==298||![siteId,nextId].every(n=>Number.isSafeInteger(n)&&n>0)||!Number.isSafeInteger(nextId+1)||!Number.isInteger(rng)||rng<=0||rng>0xffffffff)return null;
+ if(!isSchema298OrLater(version)||![siteId,nextId].every(n=>Number.isSafeInteger(n)&&n>0)||!Number.isSafeInteger(nextId+1)||!Number.isInteger(rng)||rng<=0||rng>0xffffffff)return null;
  const def=ITEM_DEFINITIONS['ai-core'];if(!def||def.kind!=='ai-core'||def.stackLimit!==1)return null;
  return {items:[{id:nextId,kind:'ai-core',item:'ai-core',quantity:1,owner:{type:'world-site263',siteId}}],nextId:nextId+1,rng,targetValue:4000};
 }

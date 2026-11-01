@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {registeredCampaign,registeredMap,registeredMapId,hasLoadedRoot} from './world-map-context.ts';
 import {isColonist} from './affiliation.ts';
 import {effectiveCore297} from './core-phase-297.ts';
@@ -39,7 +40,7 @@ export function captureKnownWorldThreat298(payer:World):KnownWorldThreatCapture2
  const fail=(reason:string):Extract<KnownWorldThreatCapture298,{ok:false}>=>({ok:false,reason});
  const root=registeredCampaign(payer),maps=root.worldMaps,sites=maps?.sites,rootMapId=maps?.rootMapId,groups=root.worldGroups,rows=groups?.groups;
  const core=effectiveCore297(payer),tick=root.tick,payerMapId=registeredMapId(payer);
- if(Number(root.schemaVersion)!==298||payerMapId===undefined||!payer.economy)return fail('Le modèle économique réel du payeur est indisponible.');
+ if(!isSchema298OrLater(Number(root.schemaVersion))||payerMapId===undefined||!payer.economy)return fail('Le modèle économique réel du payeur est indisponible.');
  const adaptation=payer.economy.adaptationDays,sources:unknown[]=[],guards:(()=>boolean)[]=[];
  const captures:{world:World;kind:string;mapId:number}[]=[];
  if(maps){
@@ -123,5 +124,5 @@ export function captureKnownWorldThreat298(payer:World):KnownWorldThreatCapture2
  if(!Number.isFinite(knownWealth)||knownWealth<0)return fail('La somme de richesse World est invalide.');
  const sourceSeal=seal(sources),input:WeightedWorldThreatInput298={knownWealth,colonistContribution,animalHealthPower:0,elapsedDays:tick/6000,adaptationDays:adaptation,seedBucket:Math.floor(tick/250)};
  const diagnostics:KnownWorldThreatDiagnostics298={model:'known-world-partial298',unpricedHumanIds:[...unpricedHumans],unpricedAnimalIds:[...unpricedAnimals],unpricedHistoricalPawnIds:[...unpricedHistoricalPawns],unpricedPileIds:[...unpricedPiles],unpricedPackedIds:[...unpricedPacked],unpricedStructureIds:[...unpricedStructures],unknownReleaseAnimalIds:[...unknownRelease],homeSamples,adaptation:{mapId:payerMapId,days:adaptation,scope:'existing-local-model-not-global-history'}};
- return {ok:true,input,diagnostics,current:()=>Number(root.schemaVersion)===298&&registeredCampaign(payer)===root&&registeredMapId(payer)===payerMapId&&root.tick===tick&&effectiveCore297(payer)===core&&payer.economy?.adaptationDays===adaptation&&guards.every(g=>g())&&sourceSeal()};
+ return {ok:true,input,diagnostics,current:()=>isSchema298OrLater(Number(root.schemaVersion))&&registeredCampaign(payer)===root&&registeredMapId(payer)===payerMapId&&root.tick===tick&&effectiveCore297(payer)===core&&payer.economy?.adaptationDays===adaptation&&guards.every(g=>g())&&sourceSeal()};
 }

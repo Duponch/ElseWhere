@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297 as frontierCore297} from './core-phase-297.ts';
 import {validAiCoreInformationReceipt298} from './faction-comms-save-298.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
@@ -18,7 +19,7 @@ export interface SiteHolderTransfer263 {current():boolean;commit():void}
  * re-created reward, remote collection or second ownership interval. */
 export function prepareItemStashTransfer263(root:CampaignState,source:ItemStash263,map:World,mapId:number,storage:AncientRect256):SiteHolderTransfer263|null {
  const paid=Object.getOwnPropertyDescriptor(source,'aiCoreInformation298')?.value as import('./faction-comms-state-298.ts').AiCoreInformationReceipt298|undefined;
- const paidCurrent=Number(root.schemaVersion)===298&&!!paid,atCore=paidCurrent?frontierCore297(root):root.tick*10;
+ const paidCurrent=isSchema298OrLater(Number(root.schemaVersion))&&!!paid,atCore=paidCurrent?frontierCore297(root):root.tick*10;
  if('aiCoreInformation298'in source&&(!paidCurrent||!validAiCoreInformationReceipt298(source,Number(root.schemaVersion),root.nextId,root.tick,atCore)))return null;
  // This preflight only strengthens the paid298 transfer. Historical holders
  // retain their literal path; the complete generation/RAW namespace stays required.
@@ -29,7 +30,7 @@ export function prepareItemStashTransfer263(root:CampaignState,source:ItemStash2
  const capturedNextId=root.nextId;
  // Local PILE collision check, not a replacement for campaign identity admission.
  // Re-read IDs at commit: a stable array/object reference does not seal its ID.
- const paidOriginalCurrent=()=>!paidCurrent||Number(root.schemaVersion)===298&&Number(map.schemaVersion)===298&&root.nextId===capturedNextId
+ const paidOriginalCurrent=()=>!paidCurrent||isSchema298OrLater(Number(root.schemaVersion))&&isSchema298OrLater(Number(map.schemaVersion))&&root.nextId===capturedNextId
   &&plainWorldPawnData256(source)&&plainWorldPawnData256(piles)&&originals.length===1&&items.length===1&&items[0]===originals[0]
   &&validAiCorePile298(originals[0],298)&&originals[0]!.id===paid!.coreId&&originals[0]!.id<capturedNextId
   &&originals[0]!.owner.type==='world-site263'&&originals[0]!.owner.siteId===source.id&&Reflect.ownKeys(originals[0]!.owner).length===2

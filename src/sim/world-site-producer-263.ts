@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297 as frontierCore297} from './core-phase-297.ts';
 import {preparePaidAiSiteTile298} from './paid-ai-site-tile-298.ts';
 import type {AiCoreSiteRequest298,AiCoreInformationReceipt298} from './faction-comms-state-298.ts';
@@ -65,7 +66,7 @@ function validAiInformationIntent298(value:unknown,root:CampaignState):value is 
  const plain=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype;
  const own=(v:object,k:string)=>{const d=Object.getOwnPropertyDescriptor(v,k);return d?.enumerable&&Object.hasOwn(d,'value')?d.value as unknown:undefined;};
  const int=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
- if(Number(root.schemaVersion)!==298||!plain(value)||Reflect.ownKeys(value).length!==7||own(value,'kind')!=='ai-core-information'||!int(own(value,'homeMapId'))||own(value,'atCore')!==frontierCore297(root)||!int(own(value,'pawnId'),1,root.nextId-1)||!int(own(value,'factionId'),1)||!int(own(value,'consoleId'),1,root.nextId-1))return false;
+ if(!isSchema298OrLater(Number(root.schemaVersion))||!plain(value)||Reflect.ownKeys(value).length!==7||own(value,'kind')!=='ai-core-information'||!int(own(value,'homeMapId'))||own(value,'atCore')!==frontierCore297(root)||!int(own(value,'pawnId'),1,root.nextId-1)||!int(own(value,'factionId'),1)||!int(own(value,'consoleId'),1,root.nextId-1))return false;
  const rows=own(value,'silver');if(!Array.isArray(rows)||Object.getPrototypeOf(rows)!==Array.prototype||rows.length<1||rows.length>1500||Reflect.ownKeys(rows).length!==rows.length+1)return false;
  let sum=0;const ids=new Set<number>();for(let i=0;i<rows.length;i++){const row=own(rows,String(i));if(!plain(row)||Reflect.ownKeys(row).length!==2)return false;const id=own(row,'pileId'),quantity=own(row,'quantity');if(!int(id,1,root.nextId-1)||!int(quantity,1,1500)||ids.has(id))return false;ids.add(id);sum+=quantity;}return sum===1500;
 }

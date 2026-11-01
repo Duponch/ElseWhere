@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {planetGeography256} from './planet-geography-256.ts';
 import {worldBiomeCanSettle} from './world-biome-properties.ts';
@@ -82,7 +83,7 @@ export function queueWorldTargetEntry263(root:CampaignState,record:WorldGroupRec
  * No clock, physiology, material owner, RNG or allocator is advanced here. */
 export function queueWorldTargetEntryAtTile298(root:CampaignState,record:WorldGroupRecord,target:WorldEntryTarget263):boolean {
  const g=record.state;
- if(Number(root.schemaVersion)!==298||target.kind!=='visit-site'||!root.planet||!root.worldGroups?.groups.includes(record)||record.localMapId!==null||!record.encounters261||record.pending261||record.pendingEntry263||!('members'in g)||g.lastPersonalTick!==root.tick||!worldTargetAccess263(root,target,g.tile).ok)return false;
+ if(!isSchema298OrLater(Number(root.schemaVersion))||target.kind!=='visit-site'||!root.planet||!root.worldGroups?.groups.includes(record)||record.localMapId!==null||!record.encounters261||record.pending261||record.pendingEntry263||!('members'in g)||g.lastPersonalTick!==root.tick||!worldTargetAccess263(root,target,g.tile).ok)return false;
  const state=Object.getOwnPropertyDescriptor(record,'state'),pendingField=Object.getOwnPropertyDescriptor(record,'pendingEntry263'),arrival=Object.getOwnPropertyDescriptor(record,'arrival261');
  if(!state||!Object.hasOwn(state,'value')||state.value!==g||!state.writable||(pendingField?!Object.hasOwn(pendingField,'value')||!pendingField.writable:!Object.isExtensible(record)||'pendingEntry263'in record)||(arrival?!Object.hasOwn(arrival,'value')||!arrival.configurable:'arrival261'in record))return false;
  const phase=g.tile===root.planet.homeTile?'awaiting-entry' as const:'at-site' as const;

@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
 import {createShipCountdownSession298,type ShipCountdownSession298} from './ship-countdown-session-298.ts';
 import {prepareShipLaunch298,prepareShipDeparture298} from '../sim/ship-escape-runtime-298.ts';
 import {captureShipRootDestruction298,releaseShipRootDestruction298,type ShipRootDestructionProof298} from '../sim/ship-root-destruction-proof-298.ts';
@@ -21,7 +22,7 @@ interface Mandate298 {capture:ShipEscapeLaunchCapture298;proof:ShipRootDestructi
 const idle298=Object.freeze({kind:'idle'} as const),waiting298=Object.freeze({kind:'waiting'} as const);
 const stale298=Object.freeze({kind:'refused',reason:'Le propriétaire ou la génération du countdown est périmé.'} as const);
 const reason298=(error:unknown)=>error instanceof Error?error.message.slice(0,512):'La transaction terminale interne a échoué.';
-const actualOwner298=(owner:EscapeCampaign298)=>!!owner&&typeof owner==='object'&&Number(owner.schemaVersion)===298&&registeredCampaign(owner)===owner;
+const actualOwner298=(owner:EscapeCampaign298)=>!!owner&&typeof owner==='object'&&isSchema298OrLater(Number(owner.schemaVersion))&&registeredCampaign(owner)===owner;
 
 /** INTERNAL runtime composition only. No wire input or public launch grant.
  * The caller owns delta eligibility/browser policy and invokes bind only at a

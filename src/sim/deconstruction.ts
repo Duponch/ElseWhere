@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isShipComputerSensorsKind298} from './ship-computer-sensors-content-298.ts';
 import {notifyShipRootDestruction298} from './ship-root-destruction-proof-298.ts';
 import {isSchema276OrLater} from './schema-compatibility-257.ts';
@@ -33,7 +34,7 @@ import { retireWallDoorWork296 } from './wall-door-runtime-296.ts';
 export function finishDeconstruction(world: World, pawn: Pawn, job: Job): boolean {
   const structure = deconstructionTarget(world, job);
   if (!structure || !deconstructionAvailable(world, job, pawn.id)) return false;
-  const shipPart=isShipComputerSensorsKind298(structure.kind)||isShipPartKind276(structure.kind);if(shipPart&&!(isShipComputerSensorsKind298(structure.kind)?Number(world.schemaVersion)===298:isShipAddedKind276(structure.kind)?isSchema276OrLater(world.schemaVersion):isSchema275OrLater(world.schemaVersion)))return false;
+  const shipPart=isShipComputerSensorsKind298(structure.kind)||isShipPartKind276(structure.kind);if(shipPart&&!(isShipComputerSensorsKind298(structure.kind)?isSchema298OrLater(Number(world.schemaVersion)):isShipAddedKind276(structure.kind)?isSchema276OrLater(world.schemaVersion):isSchema275OrLater(world.schemaVersion)))return false;
   if(isPlayerCasket271(structure)){const plan=planCryptosleepRemoval271(world,structure,'deconstruct');return plan.ok&&plan.commit();}
   if(isShipCasket277(structure)){const plan=planShipCasketRemoval277(world,structure,'deconstruct');return plan.ok&&plan.commit();}
   if(isAncientCasket256(structure)){const plan=planEmptyAncientCasketRemoval256(world,structure,'deconstruct');return plan.ok&&plan.commit();}

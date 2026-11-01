@@ -43,7 +43,7 @@ const minimumSchema:Partial<Record<ResearchProject,number>>={
   hydroponics:203,'gun-turrets':193,'tube-television':190,'packaged-survival-meals':188,
   'hospital-bed':187,autodoors:143,
 };
-const admitted=(world:World,project:ResearchProject)=>Number.isSafeInteger(world.schemaVersion)&&Number(world.schemaVersion)<=298&&(project==='tree-sowing'?[291,292,293,294,295,296,297,298].includes(world.schemaVersion):project==='firefoam'?[290,291,292,293,294,295,296,297,298].includes(world.schemaVersion):project==='ship-cryptosleep'?isSchema277OrLater(world.schemaVersion):project==='ship-engine'?isSchema276OrLater(world.schemaVersion):world.schemaVersion>=(minimumSchema[project]??0));
+const admitted=(world:World,project:ResearchProject)=>Number.isSafeInteger(world.schemaVersion)&&Number(world.schemaVersion)<=299&&(project==='tree-sowing'?[291,292,293,294,295,296,297,298,299].includes(world.schemaVersion):project==='firefoam'?[290,291,292,293,294,295,296,297,298,299].includes(world.schemaVersion):project==='ship-cryptosleep'?isSchema277OrLater(world.schemaVersion):project==='ship-engine'?isSchema276OrLater(world.schemaVersion):world.schemaVersion>=(minimumSchema[project]??0));
 
 const sorted=(ids:number[])=>ids.sort((a,b)=>a-b);
 const local=(pawn:Pawn)=>isColonist(pawn)&&!pawn.prisoner&&!pawn.visitor&&!pawn.raid&&!pawn.podRescue&&pawn.state!=='dead'&&!pawn.health?.death;

@@ -1,3 +1,4 @@
+import {validHumanIngestionPawn299} from './human-ingestion-save-299.ts';
 import {validFactionCommsPawnFields298} from './faction-comms-save-298.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297,effectiveLocal297,validationCore297} from './core-phase-297.ts';
@@ -92,6 +93,7 @@ export function validateRetainedShipCasketPawnShape277(item:Record<string,unknow
 function pawnRecordShape(item:Record<string,unknown>,world:PawnRecordContext,version:number,validationTick:number,detached:boolean,awayAreaIds?:ReadonlySet<number>,heldPlayer271?:{casketId:number;heldAt:number;retained?:true},heldShip277?:{casketId:number;heldAt:number;retained?:true},coreNow297?:number):string[] {
   const physicalCoreNow297=validationCore297(version,validationTick,coreNow297),physicalLocalNow297=isCorePhysicalSchema297(version)?physicalCoreNow297/10:validationTick;
   if(isCorePhysicalSchema297(version)&&!Number.isSafeInteger(physicalCoreNow297))return ['Invalid actual physical Pawn frontier.'];
+  if(!validHumanIngestionPawn299(item,version,physicalCoreNow297))return ['Invalid actual human ingestion clock or provider provenance.'];
   const input=world as unknown as Record<string,unknown>;
   const legacyV2=version===2, size=world.width*world.height, errors:string[]=[];
   if(!validFactionCommsPawnFields298(item,version,validationTick,world.width,world.height,coreNow297)||(detached||heldPlayer271||heldShip277)&&'factionComms298'in item)errors.push('Invalid faction communication for its actual Pawn owner.');

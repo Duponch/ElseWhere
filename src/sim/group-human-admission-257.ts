@@ -1,3 +1,4 @@
+import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {preparePartyRelease292} from './party-release-292.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {validStagger} from './stagger.ts';
@@ -167,7 +168,7 @@ export function validGroupAdmission257(value:unknown,version:number):value is Gr
  * Only the save reader may retain its already-owned formation until the next
  * ordinary reconciliation. New commands and runtime admission keep every refusal. */
 function savedStaggerInCurrentFineWindow297(w:World,p:Pawn,version:number):boolean {
- if(version!==297&&version!==298||Number(w.schemaVersion)!==version)return false;
+ if(!isCorePhysicalSchema297(version)||Number(w.schemaVersion)!==version)return false;
  const stagger=p.stagger;if(!record(stagger)||!fields(stagger,['sinceCore','untilCore']))return false;
  let core:number;try{core=effectiveCore297(w);}catch{return false;}
  const macro=w.tick*10;

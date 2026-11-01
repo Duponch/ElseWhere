@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import type {World} from './types.ts';
 import {isShipCasket277} from './ship-casket-state-277.ts';
 import {SHIP_ESCAPE_HISTORY_LIMIT_298,type EscapeCampaign298,type ShipEscapeReceipt298} from './ship-escape-state-298.ts';
@@ -24,7 +25,7 @@ export function escapedShipProjection298(root:EscapeCampaign298):ShipEscapeProje
  const field=Object.getOwnPropertyDescriptor(root,'escapedShips298');
  if(!field){if('escapedShips298'in root)throw Error('Inherited escaped-ship authority');return {};}
  const version:unknown=root.schemaVersion;
- if(version!==298||!field.enumerable||!Object.hasOwn(field,'value')||!field.value)throw Error('Invalid escaped-ship projection source');
+ if(!isSchema298OrLater(version)||!field.enumerable||!Object.hasOwn(field,'value')||!field.value)throw Error('Invalid escaped-ship projection source');
  const s=field.value as NonNullable<EscapeCampaign298['escapedShips298']>,r=s.receipts.at(-1);
  if(!r)throw Error('Saved escaped-ship owner has no actual departure receipt');
  const receipt={id:r.id,mapId:r.mapId,computerId:r.computerId,at:r.at,atCore298:r.atCore298,outcome:r.outcome};
@@ -63,7 +64,7 @@ export function validEscapedShipsProjection298(value:unknown,version:unknown,tic
   if(!value||typeof value!=='object'||Array.isArray(value)||'escapedShips298'in value)return false;
   const field=data(value,'escapedShipsSummary298');
   if(!field)return !('escapedShipsSummary298'in value);
-  if(version!==298||!atCore(tick,physicalCore298,Number.MAX_SAFE_INTEGER)||!int(nextId,1)||!exact(field.value,['revision','receipt','credits']))return false;
+  if(!isSchema298OrLater(version)||!atCore(tick,physicalCore298,Number.MAX_SAFE_INTEGER)||!int(nextId,1)||!exact(field.value,['revision','receipt','credits']))return false;
   const s=field.value;if(s.revision!==1)return false;
   const r=s.receipt,c=s.credits;
   if(!record(r)||!exact(r,['id','mapId','computerId','at','atCore298','outcome'])||!departure(r.id)||!int(r.mapId)||!computer(r.computerId,nextId)||!atCore(r.at,r.atCore298,physicalCore298)||r.outcome!=='departed')return false;

@@ -59,7 +59,7 @@ export const architectCategoryAvailable=(world:World,category:ArchitectCategory)
 /** Catalogue visibility only. Placement still has its own shared simulation
  * validation; an occupied cell or an empty stock never removes an icon. */
 export function architectToolAvailable(world:World,tool:Tool):boolean {
-  if(tool==='firefoam-popper'&&![290,291,292,293,294,295,296,297,298].includes(world.schemaVersion))return false;
+  if(tool==='firefoam-popper'&&![290,291,292,293,294,295,296,297,298,299].includes(world.schemaVersion))return false;
   if(tool==='smooth-floor'&&!isSchema281OrLater(world.schemaVersion))return false;
   if(tool==='ship-cryptosleep-casket'&&!isSchema277OrLater(world.schemaVersion))return false;
   if(isShipAddedKind276(tool)&&!isSchema276OrLater(world.schemaVersion))return false;

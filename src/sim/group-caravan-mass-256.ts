@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
 import {AI_CORE_CONTENT_298} from './ai-core-content-298.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -21,7 +22,7 @@ export type GroupWithTravelPacked256=AwayGroup&{packed?:PackedFurniture[]};
 /** This new contract alone admits real gathered fruits. It does not broaden
  * mass/possession admission of a historical group or an individual trip. */
 export function groupCaravanUnitMass256(item:MaterialPile['item'],freight:boolean,version:number=256):number|undefined {
- if(item==='ai-core')return version===298?AI_CORE_CONTENT_298.massGrams:undefined;
+ if(item==='ai-core')return isSchema298OrLater(version)?AI_CORE_CONTENT_298.massGrams:undefined;
  if(item==='novel')return (version===295||(version===296||isCorePhysicalSchema297(version)))?500:undefined;
  if(isProstheticItem273(item))return isSchema273OrLater(version)?commercialItemMassGrams(item,version):undefined;
  if(isSmithingApparel267(item))return version>=267?commercialItemMassGrams(item,version):undefined;

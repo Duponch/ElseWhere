@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
 import type {NativeControl,NativePage,NativeRow,NativeUiActions} from './native-contract';
 import type {World} from '../sim/types';
 import {intellectualSkill,needsHighTechBench,needsResearchAnalyzer,researchPrerequisite,researchUnlocked,RESEARCH_SCALE,type ResearchProject} from '../sim/research';
@@ -34,7 +35,7 @@ const nativeGraphLinks=researchGraphLinks.map(link=>link.from==='machining'&&lin
 const catalogues=new Map<number,{projects:readonly ProjectNode[];links:typeof researchGraphLinks;height:number}>();
 function catalogue(schema:number){
   let result=catalogues.get(schema);
-  if(!result){const projects=researchProjects.filter(project=>minimumSchema[project.id]===298?schema===298:schema>=(minimumSchema[project.id]??0)),ids=new Set(projects.map(project=>project.id));result={projects,links:nativeGraphLinks.filter(link=>ids.has(link.from)&&ids.has(link.to)),height:Math.ceil(Math.max(740,...projects.map(project=>researchNodePosition(project).y+RESEARCH_NODE_HEIGHT+22)))};catalogues.set(schema,result);}
+  if(!result){const projects=researchProjects.filter(project=>minimumSchema[project.id]===298?isSchema298OrLater(schema):schema>=(minimumSchema[project.id]??0)),ids=new Set(projects.map(project=>project.id));result={projects,links:nativeGraphLinks.filter(link=>ids.has(link.from)&&ids.has(link.to)),height:Math.ceil(Math.max(740,...projects.map(project=>researchNodePosition(project).y+RESEARCH_NODE_HEIGHT+22)))};catalogues.set(schema,result);}
   return result;
 }
 let selectedProject:ResearchProject|undefined;

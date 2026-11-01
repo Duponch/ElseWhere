@@ -1,3 +1,4 @@
+import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {recordShipCasketFilthMovement277} from './filth.ts';
 import {createAnimalThermalPass466,createAnimalAirReader466} from './animal-thermal-air-v466.ts';
@@ -250,7 +251,7 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
     const wantFood=a.confusion?.05:species.predator?.3:.45,urgent=species.predator?.12:.18,hungry=species.predator?.24:.36;
     a.food=Math.max(0,a.food-animalFoodPerDay(a)/6000*malnutritionModifiers(a.health?.malnutrition).hungerFactor*(a.food<nutrition*urgent?.25:a.food<nutrition*hungry?.5:1));
     a.rest=Math.max(0,Math.min(1,a.rest+(a.state==='sleeping'?.0003809524*.8:-.00015833333*(a.rest<.01?.6:a.rest<.14?.3:a.rest<.28?.7:1))));
-    if([287,288,289,290,291,292,293,294,295,296,297,298].includes(Number(world.schemaVersion))&&a.animalAreaReturn287)reconcileAnimalAreaTasks287(world,a,readArea(a));
+    if(isSchema287OrLater(Number(world.schemaVersion))&&a.animalAreaReturn287)reconcileAnimalAreaTasks287(world,a,readArea(a));
     // Transport owns position only: life, health, bleeding and needs still advance.
     if(world.schemaVersion>=221&&animalCarrier(world,a.id))continue;
     hauling.recover(a);
@@ -321,7 +322,7 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
     if(held&&!(a.state==='eating'&&a.meal)){cancelAnimalExit(world,a);continue;}
     if(a.eggLay&&processAnimalEggLay256(world,a,()=>moveAnimal(world,a,getNav(a).step,body.capacities.moving,getNav(a).geometry)))continue;
     const returnToArea=()=>{const policy=readArea(a);if(!policy&&!a.animalAreaReturn287)return false;return processAnimalAreaReturn287(world,a,{policy,nav:getNav(a),takeSearch:takeHaulSearch,...medicalRest?{fallbackRoute:(goals:Cell[])=>getNav(a).failedRouteTo(a,goals)}:{},move:()=>{moveAnimal(world,a,getNav(a).step,body.capacities.moving,getNav(a).geometry);}});};
-    if([287,288,289,290,291,292,293,294,295,296,297,298].includes(Number(world.schemaVersion))&&!medicalRest&&returnToArea())continue;
+    if(isSchema287OrLater(Number(world.schemaVersion))&&!medicalRest&&returnToArea())continue;
     const rest=()=>{
       if(world.schemaVersion<221||!a.domestic||a.confusion&&a.rest>=.15&&a.state!=='sleeping')return false;
       const pen=grazingPen(world,a),inside=(c:Cell)=>!pen||pen.has(c.z*world.width+c.x);
@@ -331,7 +332,7 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
         move:()=>{moveAnimal(world,a,getNav(a).step,body.capacities.moving,getNav(a).geometry);}});
     };
     if(medicalRest&&rest())continue;
-    if([287,288,289,290,291,292,293,294,295,296,297,298].includes(Number(world.schemaVersion))&&medicalRest&&returnToArea())continue;
+    if(isSchema287OrLater(Number(world.schemaVersion))&&medicalRest&&returnToArea())continue;
     if((Number(world.schemaVersion)===288||(Number(world.schemaVersion)===289||(Number(world.schemaVersion)===290||(Number(world.schemaVersion)===291||(Number(world.schemaVersion)===292||(Number(world.schemaVersion)===293||(Number(world.schemaVersion)===294||(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion)))))))))))&&(a.animalThermalRefuge288||Math.max(a.health?.heatstroke??0,a.health?.hypothermia??0)>=HEAT_SERIOUS)&&processAnimalThermalRefuge288(world,a,{nav:getNav(a),air:animalAir,policy:readArea(a),takeSearch:takeHaulSearch,
       interruptHaul:()=>{interruptAnimalHaul282(world,a);hauling.invalidate();},startJob:()=>notifyDuckFlightJob256(world,a,'other',()=>wildlifeRandom(s)),
       move:()=>{moveAnimal(world,a,getNav(a).step,body.capacities.moving,getNav(a).geometry);}}))continue;

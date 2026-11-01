@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {roofCollapseProjection256} from './roof-collapse-projection-256.ts';
 import {retireShipWorkDraft298} from './ship-work-retirement-draft-298.ts';
@@ -31,7 +32,7 @@ const encoded298=(v:unknown)=>JSON.stringify(v);
 export function prepareShipPhysicalRemoval298(expectedOwner:CampaignState,world:World,parts:readonly Structure[],physicalCore298:number):ShipPhysicalRemoval298 {
  const fail=(reason:string):ShipPhysicalRemoval298=>({ok:false,reason});
  try{
-  if(Number(expectedOwner.schemaVersion)!==298||Number(world.schemaVersion)!==298||registeredCampaign(expectedOwner)!==expectedOwner
+  if(!isSchema298OrLater(Number(expectedOwner.schemaVersion))||!isSchema298OrLater(Number(world.schemaVersion))||registeredCampaign(expectedOwner)!==expectedOwner
    ||!isActualMapMutationContext298(expectedOwner,world)||!Number.isSafeInteger(physicalCore298)||physicalCore298<0||effectiveCore297(expectedOwner)!==physicalCore298||effectiveCore297(world)!==physicalCore298)
    return fail('Le propriétaire ou la frontière physique réelle du retrait est invalide.');
   const registry=expectedOwner.worldMaps,mapId=registeredMapId(world),record=registry?.sites.find(r=>r.id===mapId),planet=expectedOwner.planet;
@@ -74,7 +75,7 @@ export function prepareShipPhysicalRemoval298(expectedOwner:CampaignState,world:
   // No registeredMap/flush/cache refresh in either guard. Replacing the active
   // cached context, source body, descriptor or exact fine frontier refuses.
   const baseCurrent=()=>{
-   try{return Number(expectedOwner.schemaVersion)===298&&Number(world.schemaVersion)===298&&registeredCampaign(expectedOwner)===expectedOwner&&registeredCampaign(world)===expectedOwner
+   try{return isSchema298OrLater(Number(expectedOwner.schemaVersion))&&isSchema298OrLater(Number(world.schemaVersion))&&registeredCampaign(expectedOwner)===expectedOwner&&registeredCampaign(world)===expectedOwner
     &&isActualMapMutationContext298(expectedOwner,world)&&registeredMapId(world)===mapId&&effectiveCore297(expectedOwner)===physicalCore298&&effectiveCore297(world)===physicalCore298
     &&expectedOwner.worldMaps===registry&&(registry?!!record&&registry.sites.includes(record)&&record.id===mapId&&(mapId===registry.rootMapId&&hasLoadedRoot(expectedOwner)?expectedOwner:record.map)===body:expectedOwner.planet===planet&&world===expectedOwner)
     &&expectedOwner.rng===rng&&expectedOwner.nextId===nextId&&world.seed===seed&&world.width===width&&world.height===height&&world.tiles===sourceTiles&&world.structures===sourceStructures

@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {AI_CORE_CONTENT_298} from './ai-core-content-298.ts';
 import {NOVEL_MAX_HIT_POINTS_295} from './book-state-295.ts';
@@ -70,7 +71,7 @@ export const structureLeavesResources=(s:Pick<Structure,'kind'>)=>isAncientMonum
 export const resourceMaxHp=(r:Pick<Resource,'kind'|'species'>)=>floraDefinition(r)?.hitPoints??(r.kind==='healroot'?60:r.kind==='tree'?200:r.kind==='berries'?120:r.kind==='corn'?150:r.kind==='rock'?0:85);
 export const resourceFlammability=(r:Pick<Resource,'kind'|'species'>)=>floraDefinition(r)?.flammability??(r.kind==='rock'?0:r.kind==='tree'?.8:r.kind==='haygrass'?1.3:1);
 export function pileMaxHp(p:Pick<MaterialPile,'kind'|'item'>,version=p.item==='ai-core'?298:p.item==='novel'?295:isProstheticItem273(p.item)?273:isSmithingApparel267(p.item)?267:193):number {
-  if(p.item==='ai-core')return version===298&&p.kind==='ai-core'?AI_CORE_CONTENT_298.maxHitPoints:0;
+  if(p.item==='ai-core')return isSchema298OrLater(version)&&p.kind==='ai-core'?AI_CORE_CONTENT_298.maxHitPoints:0;
   if(p.item==='novel')return (version===295||(version===296||isCorePhysicalSchema297(version)))&&p.kind==='book'?NOVEL_MAX_HIT_POINTS_295:0;
   if(isProstheticItem273(p.item))return isSchema273OrLater(version)&&p.kind==='prosthesis'?50:0;
   if(isSmithingApparel267(p.item))return version>=267&&p.kind==='apparel'?APPAREL[p.item].hitPoints:0;

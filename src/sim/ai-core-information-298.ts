@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {registeredCampaign,registeredMapId} from './world-map-context.ts';
 import {orbitalCoverage} from './orbital-rules.ts';
 import {reservedSource} from './materials.ts';
@@ -23,7 +24,7 @@ function ownSeal(value:unknown,active=new Set<object>()):()=>boolean {
 /** UI consent is stable contact identity, not an affordability or owner grant. */
 function basic(w:World,pawnId:number,factionId:number,consoleId:number):{pawn:Pawn;mapId:number;quote:string}|{reason:string} {
  const p=w.pawns.find(p=>p.id===pawnId),task=p&&factionCommsTask298(p);
- if(Number(w.schemaVersion)!==298||!p||!task||task.factionId!==factionId||task.consoleId!==consoleId||!settledConsoleContact298(w,p,task))return {reason:'Le négociateur doit être réellement prêt à cette console.'};
+ if(!isSchema298OrLater(Number(w.schemaVersion))||!p||!task||task.factionId!==factionId||task.consoleId!==consoleId||!settledConsoleContact298(w,p,task))return {reason:'Le négociateur doit être réellement prêt à cette console.'};
  const social=backgroundSkillRefusal(p,'social');if(social)return {reason:social};
  return {pawn:p,mapId:task.mapId,quote:JSON.stringify(['ai-core-info298',w.seed,task.mapId,pawnId,factionId,consoleId,task.startedAtCore,1500])};
 }

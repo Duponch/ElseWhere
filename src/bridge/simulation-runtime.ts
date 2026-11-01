@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {createShipCountdownRuntime298} from './ship-countdown-runtime-298.ts';
 import type {ShipRuntimeRequest298,ShipRuntimeResponse298,ShipOwnerReplyMetadata298} from './ship-countdown-wire-298.ts';
@@ -100,7 +101,7 @@ function shipCreditsHeld298():boolean {
   const held=shipCreditsHold298;return !!held&&held.root===world&&world?.escapedShips298?.credits===held.departureId;
 }
 function syncShipCreditsHold298(now:number):void {
-  const root=world,id=root?.schemaVersion===298?root.escapedShips298?.credits:undefined;
+  const root=world,id=isSchema298OrLater(root?.schemaVersion)?root.escapedShips298?.credits:undefined;
   shipCreditsHold298=root&&typeof id==='number'?{root,departureId:id}:undefined;
   if(shipCreditsHold298){speed=0;resetSimulationClock(now);}
 }

@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isActualMapMutationContext298,registeredCampaign,registeredMapId} from './world-map-context.ts';
 import type {CampaignState} from './world-map-state.ts';
 import type {Structure,World} from './types.ts';
@@ -22,7 +23,7 @@ export function releaseShipRootDestruction298(proof:unknown):void {
 }
 /** Caller has already accepted a normal ship-computer launch on its real owner. */
 export function captureShipRootDestruction298(world:World,original:Structure,expectedOwner:CampaignState):ShipRootDestructionProof298 {
- if(Number(world.schemaVersion)!==298||original.kind!=='ship-computer'||!isActualMapMutationContext298(expectedOwner,world)||!world.structures.includes(original))throw Error('Capture requires the original installed computer and its actual local owner.');
+ if(!isSchema298OrLater(Number(world.schemaVersion))||original.kind!=='ship-computer'||!isActualMapMutationContext298(expectedOwner,world)||!world.structures.includes(original))throw Error('Capture requires the original installed computer and its actual local owner.');
  const mapId=registeredMapId(world);if(mapId===undefined)throw Error('The launch root has no actual map.');
  const old=currentByOwner.get(expectedOwner);if(old)releaseShipRootDestruction298(old.proof);
  const previous=watched.get(original);if(previous)releaseShipRootDestruction298(previous.proof);

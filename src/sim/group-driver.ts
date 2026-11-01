@@ -1,3 +1,4 @@
+import {effectiveCore297} from './core-phase-297.ts';
 import {advanceGroupAlcohol265} from './alcohol-caravan-265.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {preparePlayerRetreatDeparture261} from './caravan-player-retreat-261.ts';
@@ -284,7 +285,7 @@ export function advanceGroup(w:World):void {
  let travel=travelAtFrontier.travel;
  const stationary=travelAtFrontier.stationary;
  const random=()=>healthRandom(w),notice=(_person:Pawn,message:string)=>groupLog(w,message);
-  const ingestion=g.reorganization?g.members.reduce((all,p)=>{const one=ingestGroupFood256(w,g as AwayGroup,p,{random,notice});all.massRemovedGrams+=one.massRemovedGrams;all.removed.push(...one.removed);return all;},{massRemovedGrams:0,removed:[] as {pawnId:number;grams:number}[]}):advanceGroupIngestion(g,{tick:w.tick,schemaVersion:w.schemaVersion,foodPolicies:w.foodPolicies,foodPoisonFactor:w.gameProfile?.difficulty==='adventure-story'?.75:1,random,notice});
+  const ingestion=g.reorganization?g.members.reduce((all,p)=>{const one=ingestGroupFood256(w,g as AwayGroup,p,{random,notice,...(Number(w.schemaVersion)===299?{coreAt299:effectiveCore297(w)}:{})});all.massRemovedGrams+=one.massRemovedGrams;all.removed.push(...one.removed);return all;},{massRemovedGrams:0,removed:[] as {pawnId:number;grams:number}[]}):advanceGroupIngestion(g,{tick:w.tick,schemaVersion:w.schemaVersion,...(Number(w.schemaVersion)===299?{coreAt299:effectiveCore297(w)}:{}),foodPolicies:w.foodPolicies,foodPoisonFactor:w.gameProfile?.difficulty==='adventure-story'?.75:1,random,notice});
   const alcohol=advanceGroupAlcohol265(g,{tick:w.tick,schemaVersion:w.schemaVersion,drugPolicies:w.drugPolicies,resting:stationary,random,notice});
   const care=advanceGroupCare(g,{tick:w.tick,random});
   const mass=applyConsumedGroupMass(travel.mass,[ingestion,alcohol,care]);

@@ -1,4 +1,4 @@
-import {eggAllowedForPlayer256} from './animal-egg-permission-v256.ts';
+import {foodBingeDue299,selfFoodPermission299} from './human-ingestion-clock299.ts';
 import { isBedKind } from './bed-kinds.ts';
 import { bedAssignmentReason,bedSlotCell,bedSlotClaimed,pawnBedSlot } from './bed-slots.ts';
 import { colonyExpectation } from './colony-economy.ts';
@@ -39,6 +39,35 @@ export interface NeedContext {
   event(message: string): void;
 }
 
+/** Same physical selection for both providers. Pending navigation/release is
+ * not evidence that ordinary food is unavailable, so it cannot fall through. */
+function tryFoodNeed(world:World,pawn:Pawn,context:NeedContext,foodBinge299=false):'admitted'|'unavailable'|'pending' {
+ const allowed=selfAllowedFood(world,pawn);
+ const topology=pawn.prisoner||world.structures.some(s=>s.prisoner)?capturePrisonTopology(world):undefined;
+ const sources=world.piles.filter(pile=>pile.kind==='food'&&selfFoodPermission299(pile,foodBinge299)&&allowed.includes(pile.item as FoodItemId)&&selfFoodAccessible(world,pawn,pile,topology,foodBinge299)&&pile.quantity>reservedSource(world,pile.id,pawn.id));
+ const held=world.piles.find(pile=>pile.owner.type==='pawn'&&pile.owner.pawnId===pawn.id&&pile.kind==='food'&&selfFoodPermission299(pile,foodBinge299)&&allowed.includes(pile.item as FoodItemId));
+ const pasteAvailable=world.structures.some(s=>s.kind==='nutrient-paste-dispenser'&&planPasteRequest(world,pawn,s,pawn,topology));
+ if(!sources.length&&!held&&!pasteAvailable)return 'unavailable';
+ const reach=context.search(foodSourceSearchGoals(world,pawn,sources,topology,foodBinge299));
+ if(!reach)return 'pending';
+ const best=selectFoodSource(world,pawn,sources,reach,pawn,topology,foodBinge299);
+ if(!held&&!best)return 'unavailable';
+ const useHeld=!!held&&(!best||world.foodRules==='legacy'||pileFoodScore(world,held,0)>=best.score);
+ if(!useHeld&&best?.kind==='paste'){
+  if(!context.release())return 'pending';
+  if(!pasteRequestValid(world,pawn,best.request))return 'unavailable';
+  pawn.need={kind:'eat',phase:'pickup',sourcePileId:null,carryPileId:null,quantity:1,progress:0,dining:null,paste:best.request,...(foodBinge299?{foodBinge299:true as const}:{})};
+  pawn.path=best.path;pawn.state='moving';pawn.planCooldown=0;
+ }else{
+  const selected=useHeld?held!:sources.find(pile=>best?.kind==='pile'&&pile.id===best.id)!;
+  const quantity=mealQuantity(pawn,selected,selected.quantity-reservedSource(world,selected.id,pawn.id));
+  if(!context.release())return 'pending';
+  pawn.need={kind:'eat',phase:'pickup',sourcePileId:selected.id,carryPileId:null,quantity,progress:0,dining:null,...(foodBinge299?{foodBinge299:true as const}:{})};
+  pawn.path=useHeld?[]:best!.path;pawn.state='moving';pawn.planCooldown=0;
+ }
+ return 'admitted';
+}
+
 /** Needs never grant nutrition for a reservation or rest for a nearby bed.
  * All phases use the same movement/search budget and material owners as work.
  */
@@ -68,40 +97,15 @@ export function processNeeds(world: World, pawn: Pawn, context: NeedContext): bo
     return false;
   }
 
-  // Sleep only ends for hunger if a physically reachable portion can be reserved.
-  const wantsFood = pawn.mental?.crisis?.kind==='food-binge'||pawn.hunger <= (pawn.mental?.crisis?5:pawn.need?.kind === 'sleep' ? 12.5 : 30);
-  let reach: Reachability | null | undefined;
-  if (pawn.need?.kind !== 'eat' && wantsFood && canPlan && (world.restRules === 'adult' || pawn.rest > (pawn.need?.kind === 'sleep' ? 5 : 0))) {
-    // Its old haul will be released atomically if this replacement is selected.
-    const allowed = selfAllowedFood(world, pawn);
-    const topology=pawn.prisoner||world.structures.some(s=>s.prisoner)?capturePrisonTopology(world):undefined;
-    const sources = world.piles.filter(pile => pile.kind === 'food' && eggAllowedForPlayer256(pile)&&allowed.includes(pile.item as FoodItemId) && selfFoodAccessible(world,pawn,pile,topology) && pile.quantity > reservedSource(world, pile.id, pawn.id));
-    // A hungry hauler already holding food may reserve a meal quantity for ingestion.
-    const held = world.piles.find(pile => pile.owner.type === 'pawn' && pile.owner.pawnId === pawn.id && pile.kind === 'food' && eggAllowedForPlayer256(pile)&&allowed.includes(pile.item as FoodItemId));
-    const pasteAvailable=world.structures.some(s=>s.kind==='nutrient-paste-dispenser'&&planPasteRequest(world,pawn,s,pawn,topology));
-    if (sources.length || held || pasteAvailable) {
-      reach = context.search(foodSourceSearchGoals(world, pawn, sources,topology));
-      if (!reach) return true; // Budget exhaustion must not be mistaken for inaccessibility.
-      const best = selectFoodSource(world, pawn, sources, reach,pawn,topology);
-      if (held || best) {
-        const useHeld = !!held && (!best || world.foodRules === 'legacy' || pileFoodScore(world, held, 0) >= best.score);
-        if(!useHeld&&best?.kind==='paste'){
-          if(!context.release())return true;
-          if(pasteRequestValid(world,pawn,best.request)){
-            pawn.need={kind:'eat',phase:'pickup',sourcePileId:null,carryPileId:null,quantity:1,progress:0,dining:null,paste:best.request};
-            pawn.path=best.path;pawn.state='moving';pawn.planCooldown=0;
-          }
-        }else{
-          const selected = useHeld ? held! : sources.find(pile => best?.kind==='pile'&&pile.id===best.id)!;
-          const quantity = mealQuantity(pawn, selected, selected.quantity - reservedSource(world, selected.id, pawn.id));
-          if (!context.release()) return true; // Deposits cargo at the actor, preserving its identity.
-          pawn.need = { kind: 'eat', phase: 'pickup', sourcePileId: selected.id, carryPileId: null, quantity, progress: 0, dining: null };
-          pawn.path = useHeld ? [] : best!.path;
-          pawn.state = 'moving'; pawn.planCooldown = 0;
-        }
-      }
-    }
-    pawn.needCooldown = NEED_INTERVAL;
+  // Core's ordinary provider precedes compulsive eating. A resolved false
+  // source permits fallback; an exhausted search budget is still pending.
+  const binge299=Number(world.schemaVersion)===299&&pawn.mental?.crisis?.kind==='food-binge';
+  const ordinaryFood=binge299?pawn.hunger<30:pawn.mental?.crisis?.kind==='food-binge'||pawn.hunger<=(pawn.mental?.crisis?5:pawn.need?.kind==='sleep'?12.5:30);
+  if(pawn.need?.kind!=='eat'&&(binge299||ordinaryFood)&&canPlan&&(world.restRules==='adult'||pawn.rest>(pawn.need?.kind==='sleep'?5:0))){
+   let attempted=false,result:'admitted'|'unavailable'|'pending'='unavailable';
+   if(ordinaryFood){attempted=true;result=tryFoodNeed(world,pawn,context);if(result==='pending')return true;}
+   if(binge299&&result==='unavailable'&&foodBingeDue299(world,pawn)){attempted=true;result=tryFoodNeed(world,pawn,context,true);if(result==='pending')return true;}
+   if(attempted)pawn.needCooldown=NEED_INTERVAL;
   }
 
   if (pawn.need?.kind === 'eat') { processEating(world, pawn, context); return true; }
@@ -114,7 +118,9 @@ export function processNeeds(world: World, pawn: Pawn, context: NeedContext): bo
     // Fuel carried for a cooking bill is part of food preparation. Cancelling it
     // here lets the planner select it again forever ahead of harvesting.
     const cookingFuel = pawn.haul?.destination.type === 'fuel' && pawn.haul.destination.forCooking;
-    if ((job && job.kind !== 'harvest') || pawn.haul && !cookingFuel) if (!context.release()) return true;
+    // In299, an unavailable food provider falls through to ordinary work.
+    // Historical worlds retain their critical-hunger interruption rule.
+    if (Number(world.schemaVersion)!==299 && ((job && job.kind !== 'harvest') || pawn.haul && !cookingFuel)) if (!context.release()) return true;
     // Cooking may still provide food for others even under a restrictive diet.
     // Its processor can wait for a navigation budget while keeping its product;
     // do not overwrite the active task's state during that wait.

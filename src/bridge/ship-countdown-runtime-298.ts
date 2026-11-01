@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
 import {createShipCountdownCoordinator298} from './ship-countdown-coordinator-298.ts';
 import {continueShipCredits298} from '../sim/ship-escape-runtime-298.ts';
 import type {EscapeCampaign298} from '../sim/ship-escape-state-298.ts';
@@ -38,7 +39,7 @@ function frameDeltas(input:unknown):number[]|undefined {
 export function createShipCountdownRuntime298(){
  let owner:CampaignState|undefined,coordinator:Coordinator298|undefined,ownerEpoch=0,lastSequence=0;
  const nextEpoch=()=>{if(!Number.isSafeInteger(ownerEpoch+1))throw Error('L’époque terminale est épuisée.');return ownerEpoch+1;};
- const bound=(current:CampaignState|undefined,epoch:number)=>!!current&&current===owner&&epoch===ownerEpoch&&current.schemaVersion===298&&!!coordinator;
+ const bound=(current:CampaignState|undefined,epoch:number)=>!!current&&current===owner&&epoch===ownerEpoch&&isSchema298OrLater(current.schemaVersion)&&!!coordinator;
  const state=(outcome:ShipCountdownState298['outcome'],message?:string):ShipCountdownState298=>({type:'ship-countdown-state-298',ownerEpoch,generation:coordinator?.generation??0,active:coordinator?.active===true,outcome,...message?{reason:message}:{}});
  const refusal=(request:ShipFrameRequest298,message:string):ShipFrameAck298=>{
   let epoch=ownerEpoch,generation=0,sequence=0;
@@ -50,7 +51,7 @@ export function createShipCountdownRuntime298(){
    * but never touches the old mandate. Commit is called at world assignment. */
   prepareAcceptedOwner(next:CampaignState){
    const epoch=nextEpoch(),previousOwner=owner,previousEpoch=ownerEpoch;
-   const prepared=next.schemaVersion===298?createShipCountdownCoordinator298(next as EscapeCampaign298):undefined;
+   const prepared=isSchema298OrLater(next.schemaVersion)?createShipCountdownCoordinator298(next as EscapeCampaign298):undefined;
    let committed=false;
    return {commit():void {
     if(committed||owner!==previousOwner||ownerEpoch!==previousEpoch)throw Error('Le remplacement terminal préparé est périmé.');
@@ -58,7 +59,7 @@ export function createShipCountdownRuntime298(){
    }};
   },
   replyMetadata(current:CampaignState|undefined):ShipOwnerReplyMetadata298 {
-   return current===owner&&current?.schemaVersion===298?{shipOwnerEpoch298:ownerEpoch}:{};
+   return current===owner&&isSchema298OrLater(current?.schemaVersion)?{shipOwnerEpoch298:ownerEpoch}:{};
   },
   launch(current:CampaignState|undefined,world:World,input:Extract<ShipControlRequest298,{type:'ship-launch-298'}>){
    if(!exact(input,['type','id','ownerEpoch','computerId'])||input.type!=='ship-launch-298'||!positive(input.id)||!positive(input.ownerEpoch)||!positive(input.computerId)||!bound(current,input.ownerEpoch))return {ok:false as const,reason:'Le propriétaire ou le geste de lancement est périmé.'};

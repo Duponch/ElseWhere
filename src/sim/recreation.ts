@@ -69,7 +69,7 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
     }
     return true;
   }
-  if (world.tick<500 || pawn.hunting || pawn.research || pawn.need || pawn.jobId!==null || pawn.haul || pawn.cooking || pawn.burial || pawn.cleaning || pawn.needCooldown>0 || pawn.hunger<=20
+  if (world.tick<500 || pawn.hunting || pawn.research || pawn.need || pawn.jobId!==null || pawn.haul || pawn.cooking || pawn.burial || pawn.cleaning || pawn.needCooldown>0 || (Number(world.schemaVersion)!==299 && pawn.hunger<=20)
     || assignment==='work' || assignment==='sleep'&&!afterWork || joy.level >= (assignment==='anything'?35:95) || urgentMedicalTask(pawn) || urgentDoctorCall(world,pawn)) return false;
   const choices: {activity: RecreationActivity; weight: number}[] = [];
   let pins:ReturnType<typeof availablePins>|undefined,chessTables:ReturnType<typeof availableChessTables>|undefined;

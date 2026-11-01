@@ -30,6 +30,7 @@ import type { BuildableFloorKind } from '../sim/flooring';
 import type { ConstructionMaterial } from '../sim/construction-materials';
 import { WindLayer } from './WindLayer';
 import { pileParts,type PileBundle } from './pile-parts';
+import {materialAllowedForPlayer256} from '../sim/material-permission-256';
 import { corpseStage } from '../sim/corpses';
 import { corpseVisualMask } from './corpse-presentation';
 import { WildlifeLayer } from './WildlifeLayer';
@@ -1475,7 +1476,8 @@ export class SceneRenderCore {
     const jobById = new Map(world.jobs.map(job => [job.id, job]));
     const cells = new Map<string, PileBundle>();
     for (const pile of world.piles) {
-      if(pile.humanCorpse||pile.mechCorpse||pile.owner.type==='grave')continue;
+      const forbidden=pile.owner.type==='ground'&&!materialAllowedForPlayer256(pile),markerOnly=!!(pile.humanCorpse||pile.mechCorpse);
+      if(markerOnly&&!forbidden||pile.owner.type==='grave')continue;
       if (pile.owner.type !== 'ground'&&pile.owner.type!=='job') continue;
       const quantity=pile.quantity-(hidden.get(pile.id)??0);
       if(quantity<=0)continue;
@@ -1483,12 +1485,12 @@ export class SceneRenderCore {
       if (pile.owner.type === 'job' && !job) continue;
       const position = pile.owner.type === 'ground' ? pile.owner : job!;
       const identitySurface=job?undefined:identitySurfaces.get(pile.id);
-      const key = `${position.x}:${position.z}:${pile.item}:${job ? 'job' : 'ground'}${pile.corpse||pile.innerResource||identitySurface?`:${pile.id}`:''}`;
+      const key = `${position.x}:${position.z}:${pile.item}:${job ? 'job' : 'ground'}${pile.corpse||pile.innerResource||identitySurface||markerOnly?`:${pile.id}`:''}${forbidden?':forbidden':''}`;
       const bundle = cells.get(key);
       if (bundle) bundle.quantity += quantity;
-      else cells.set(key, { x: position.x, z: position.z, kind: pile.kind, item: pile.item, quantity, supplied: !!job,...(identitySurface||pile.innerResource?{pileId:pile.id}:{}),...(pile.innerResource?{innerResource:pile.innerResource}:{}),
+      else cells.set(key, { x: position.x, z: position.z, kind: pile.kind, item: pile.item, quantity, supplied: !!job,...(forbidden?{forbidden:true as const}:{}),...(markerOnly?{markerOnly:true as const}:{}),...(identitySurface||pile.innerResource||markerOnly?{pileId:pile.id}:{}),...(pile.innerResource?{innerResource:pile.innerResource}:{}),
         ...(pile.kind==='chunk'&&pile.owner.type==='ground'?{targetId:position.z*world.width+position.x}:{}),
-        surface:job?undefined:identitySurface??surfaces.get(position.z*world.width+position.x),...(pile.kind==='corpse'?{corpseStage:corpseStage(pile,world.tick),facing:pile.corpse?.facing??0,corpse:pile.corpse}:{}) });
+        surface:job?undefined:identitySurface??surfaces.get(position.z*world.width+position.x),...(!markerOnly&&pile.kind==='corpse'?{corpseStage:corpseStage(pile,world.tick),facing:pile.corpse?.facing??0,corpse:pile.corpse}:{}) });
     }
     const chunks = new Map<string, PileBundle[]>();
     for (const bundle of cells.values()) {
@@ -1500,7 +1502,7 @@ export class SceneRenderCore {
       this.boxes.set(chunk.group, `pile:${key}`, []); chunk.signature = '';
     }
     for (const [key, bundles] of chunks) {
-      const signature = bundles.map(bundle => `${bundle.x}:${bundle.z}:${bundle.item}:${bundle.quantity}:${bundle.supplied}:${bundle.pileId??''}:${bundle.corpseStage??''}:${bundle.facing??0}:${bundle.innerResource?`${bundle.innerResource.species??'legacy'}:${bundle.innerResource.growth??1}:${bundle.innerResource.blight??false}`:''}:${bundle.corpse?corpseVisualMask(bundle.corpse):0}:${bundle.surface?Object.values(bundle.surface).join(','):'ground'}`).join('|');
+      const signature = bundles.map(bundle => `${bundle.x}:${bundle.z}:${bundle.item}:${bundle.quantity}:${bundle.supplied}:${bundle.pileId??''}:${bundle.corpseStage??''}:${bundle.facing??0}:${bundle.innerResource?`${bundle.innerResource.species??'legacy'}:${bundle.innerResource.growth??1}:${bundle.innerResource.blight??false}`:''}:${bundle.corpse?corpseVisualMask(bundle.corpse):0}:${bundle.surface?Object.values(bundle.surface).join(','):'ground'}${bundle.forbidden?':forbidden':''}${bundle.markerOnly?':marker-only':''}`).join('|');
       const previous = this.pileChunks.get(key);
       if (previous?.signature === signature) continue;
       const group = previous?.group ?? new THREE.Group();

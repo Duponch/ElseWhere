@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {paidConsoleCell298} from './console-service-298.ts';
 import {reconcileFactionComms298} from './faction-comms-298.ts';
@@ -16,7 +17,7 @@ const safe=(v:number)=>Number.isSafeInteger(v)&&v>=0;
 /** One owner per actual local World. No Native authority, timer, route or
  * macro-work producer. Registered after load and actual command/macro changes. */
 export function createConsoleContactCore298(world:World){
- if(Number(world.schemaVersion)!==298)throw Error('Console Core owner requires prospective298');
+ if(!isSchema298OrLater(Number(world.schemaVersion)))throw Error('Console Core owner requires prospective298');
  const active=new Map<number,ActiveConsoleContact298>();
  let lastCore=effectiveCore297(world),nextDue=Infinity,syncSerial=0,syncing=false;
  const live=(core:number)=>{if(!safe(core)||effectiveCore297(world)!==core)throw Error('Console contact needs its actual committed Core');};

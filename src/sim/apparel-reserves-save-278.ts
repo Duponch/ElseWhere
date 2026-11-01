@@ -9,7 +9,7 @@ const plain=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!
 /** Only the new optional bill field is checked here. Existing bill records
  * keep their ordinary domain validators; no world/grid or owner is fabricated. */
 export function validApparelReservesBuilding278(value:unknown,version:number):boolean {
- if(!plain(value)||!Number.isSafeInteger(version)||version<1||version>298)return false;
+ if(!plain(value)||!Number.isSafeInteger(version)||version<1||version>299)return false;
  const bills=Object.getOwnPropertyDescriptor(value,'bills');
  if(!bills)return !('bills'in value);
  if(!Object.hasOwn(bills,'value'))return false;
@@ -29,7 +29,7 @@ export function validApparelReservesBuilding278(value:unknown,version:number):bo
  * adoption. Current bill shapes use validBillSettings; absence stays historical.
  * This does not walk terrain, resources or the planetary payload. */
 export function validApparelReservesHistoricalTransport278(value:unknown,version:number):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>298)return false;
+ if(!Number.isSafeInteger(version)||version<1||version>299)return false;
  if(isSchema278OrLater(version))return true;
  let budget=2_000_000;const active=new Set<object>();
  const walk=(v:unknown):boolean=>{

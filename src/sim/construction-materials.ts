@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {FIREFOAM_CONTENT_290} from './firefoam-content-290.ts';
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
@@ -149,7 +150,7 @@ for(const kind of Object.keys(JOB_DURATION) as JobKind[]) {
   }
 }
 export function validConstructionMaterial(kind:unknown,material:unknown,version:number=SCHEMA_VERSION):boolean {
-  if(isShipComputerSensorsKind298(kind))return version===298&&material==='steel';
+  if(isShipComputerSensorsKind298(kind))return isSchema298OrLater(version)&&material==='steel';
   if(kind==='firefoam-popper')return (version===290||(version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))))))&&material==='steel';
   if(isShipCasketKind277(kind))return isSchema277OrLater(version)&&material==='steel';
   if(isShipAddedKind276(kind))return isSchema276OrLater(version)&&material==='steel';

@@ -13,7 +13,7 @@ export function validCoveredInFirefoamState290(value:unknown):value is CoveredIn
 /** Descriptor-first medical header. Absence never acquires an effect. */
 export function validCoveredInFirefoamField290(record:unknown,version:number):boolean {
  try{
-  if(!plain(record)||!Number.isSafeInteger(version)||version<1||version>298)return false;
+  if(!plain(record)||!Number.isSafeInteger(version)||version<1||version>299)return false;
   const d=Object.getOwnPropertyDescriptor(record,'coveredInFirefoam290');
   if(!d)return !('coveredInFirefoam290'in record);
   return (version===290||(version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))))))&&d.enumerable===true&&Object.hasOwn(d,'value')&&validCoveredInFirefoamState290(d.value);

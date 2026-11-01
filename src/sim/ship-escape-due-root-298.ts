@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {registeredCampaign,registeredMap,registeredMapId,hasLoadedRoot,isActualMapMutationContext298} from './world-map-context.ts';
 import {wasShipRootDestroyed298,type ShipRootDestructionProof298} from './ship-root-destruction-proof-298.ts';
@@ -15,13 +16,13 @@ export function prepareShipEscapeDueRoot298(owner:EscapeCampaign298,capture:Ship
  try{
   const original=capture.originalRoot,mapId=capture.mapId,computerId=capture.computerId;
   const startedAt=capture.startedAt,startedAtCore=capture.startedAtCore298,originKind=capture.originKind298,originTile=capture.originTile298;
-  if(Number(owner.schemaVersion)!==298||registeredCampaign(owner)!==owner||capture.owner!==owner||proof.original!==original||original.kind!=='ship-computer'||original.id!==computerId
+  if(!isSchema298OrLater(Number(owner.schemaVersion))||registeredCampaign(owner)!==owner||capture.owner!==owner||proof.original!==original||original.kind!=='ship-computer'||original.id!==computerId
    ||!Number.isSafeInteger(mapId)||mapId<0||!Number.isSafeInteger(computerId)||computerId<1||!Number.isSafeInteger(physicalCore298)||physicalCore298<0
    ||!Number.isSafeInteger(startedAt)||startedAt<0||!Number.isSafeInteger(startedAtCore)||startedAtCore<0||Math.floor(startedAtCore/10)!==startedAt
    ||physicalCore298<startedAtCore||owner.tick<startedAt||originKind!=='registered-map'&&originKind!=='monomap'
    ||originTile!==null&&(!Number.isSafeInteger(originTile)||originTile<0)||effectiveCore297(owner)!==physicalCore298)return fail298('La racine ou la frontière physique ne correspond pas à la capture interne.');
   const frontierCurrent=()=>{
-   try{return Number(owner.schemaVersion)===298&&registeredCampaign(owner)===owner&&capture.owner===owner&&capture.originalRoot===original&&proof.original===original
+   try{return isSchema298OrLater(Number(owner.schemaVersion))&&registeredCampaign(owner)===owner&&capture.owner===owner&&capture.originalRoot===original&&proof.original===original
     &&capture.mapId===mapId&&capture.computerId===computerId&&original.id===computerId&&original.kind==='ship-computer'&&capture.startedAt===startedAt&&capture.startedAtCore298===startedAtCore
     &&capture.originKind298===originKind&&capture.originTile298===originTile&&effectiveCore297(owner)===physicalCore298;}catch{return false;}
   };

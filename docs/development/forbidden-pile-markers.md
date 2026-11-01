@@ -1,0 +1,20 @@
+# Objets interdits au sol et libellé d’inactivité
+
+**Lot qualifié, schéma 299.** L’état de publication est consigné dans le checkpoint de livraison. Le marqueur modifie trois sources de rendu, avec17spans inversibles : `pile-parts.ts`, `ScenePilePresentation.ts` et `SceneRenderCore.ts`. Les permissions, commandes, propriétaires et règles de simulation restent inchangés.
+
+Un X rouge est ajouté aux objets interdits au sol, indépendamment de leur sélection : matériaux, repas, fragments, armes, vêtements, œufs et autres piles transportables. La décision vient exclusivement de `materialAllowedForPlayer256`, qui réunit les représentations de permission existantes. Les corps animaux, humains et mécaniques sont également couverts ; les deux derniers ne produisent qu’un marqueur dans cette chaîne, sans doubler leur rig. Les objets portés, inventaires, réserves de chantier et tombes n’obtiennent pas de marqueur au sol. Les meubles emballés `World.packed` n’ont aucune permission correspondante : aucune n’est inventée. L’interdiction de passage des portes est une autre règle, hors de ce lot.
+
+Les piles d’un même objet sont regroupées séparément selon leur permission. Le flag entre aussi dans la réutilisation des entrées et la signature des chunks : autoriser ou interdire une pile invalide son affichage même si son identifiant, sa quantité, sa position et le tick restent constants. Les supports, décalages et niveaux d’étagère restent appliqués au marqueur. Les parties de l’objet conservent leurs cibles ; le X n’en ajoute aucune. Profondeur et brouillard restent ceux des batches existants.
+
+Le coût ajouté est de **deux instances cubiques par groupe interdit rendu**, dans les batches déjà présents ; une catégorie auparavant vide peut devenir active. Aucun scan de World par RAF, asset, texture ou matériau nouveau n’est ajouté. Cela ne constitue pas une preuve de coût nul ni de FPS. Le X reste en espace monde : distance, parois et terrain peuvent normalement réduire sa visibilité. La lecture des grands corps, des angles et des zooms reste à vérifier visuellement.
+
+Les six contrats dédiés ont d’abord échoué sur le témoin en23,90s, puis passé surV2 en15,95s. Ils couvrent permissions, regroupement, invalidation, supports, propriétaires et conservation des caches/sources. L’intégration privée a ensuite acquis **7PASS en32,77s : ces mêmes six contrats et un contrat de portabilité du schéma**, sans additionner ces résultats comme13cas distincts. Le fallback complet `SceneRenderCore` est relu statiquement ; il n’est pas exécuté par ces contrats CPU. Le complément ci-dessous décrit les contrôles finaux et la vérification visuelle réellement acquise.
+
+Le libellé associé `idle` devient **« Inoccupé »** dans ce lot. Ce choix suit la clé française primaire `ActivityIconIdle` de Core1.6.4871rev590 ; il décrit l’absence d’activité, sans affirmer qu’un travail est accessible. La primaire distingue aussi les tâches de repli : `GotoWander` (« erre. »), `Wait_Wander` (« attend sans rien faire. »), puis les offres de loisir/errance du sous-arbre Idle. La lecture locale constate qu’un fournisseur d’errance civile ordinaire manque encore à Elsewhere. **Cette dette est distincte et n’est pas corrigée ici** : changer le texte ou rendre les interdits visibles n’ajoute aucune promenade, tâche ou matière disponible.
+
+Preuves privées : gelV2 `ca4edaa97b494612e0637c2de5d8c51a38d65a74e7c09d86d0756fb307b9ae5e`, reçus CPU/intégration de Root, notes `core-idle-primary.md` et `local-idle-readonly.md`. Aucun résultat global de fluidité ni parité exhaustive avec RimWorld n’est affirmé.
+
+
+## Complément de qualification finale
+
+Types complets155,626s et PagesCODE7,888s acquis sur la composition142sources. Vérification visuelle dans la même325 en pause : croix visibles sur les objets interdits ; l’autorisation UI de l’argent62991×500 supprime sa croix, conserve les autres et passe réellement par le Worker. Sauvegarde manuelle299 et export entier478a64e5 : mêmes Core217100/RNG158380497/id65645, Whole exacte hors numéro et permission connue. Pas de mesureFPSglobale depuis le compteur ponctuel.

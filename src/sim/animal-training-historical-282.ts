@@ -6,7 +6,7 @@ const domains=['world','dynamic','campaign','wildlife','pawns','structures','pac
  * Human haul is old content. Terrain, resources and planetary geography are
  * never visited. The current version has no recursive adoption overhead. */
 export function validAnimalTrainingHistoricalTransport282(value:unknown,version:number):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>298)return false;
+ if(!Number.isSafeInteger(version)||version<1||version>299)return false;
  if(isSchema282OrLater(version))return true;
  let budget=2_000_000;const active=new Set<object>();
  const walk=(v:unknown,animal=false,animalOwners=false):boolean=>{

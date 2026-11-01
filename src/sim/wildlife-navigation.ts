@@ -1,3 +1,4 @@
+import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveLocal297} from './core-phase-297.ts';
 import {animalMoveCostCore297} from './animal-move-cost-297.ts';
@@ -63,7 +64,7 @@ export function createAnimalNavigationReader(world:World,getGeometry?:()=>Struct
  * must use the default navigation after the handler opens each passage. */
 export function animalNavigation(world:World,allowClosedGate=false,fencePassable=false,actor?:WildAnimal,capturedFlight=false,providedGeometry?:StructureNavigationGeometry,readArea:(a:WildAnimal)=>AnimalAreaPolicy287|undefined=a=>captureAnimalAreaPolicy287(world,a),physicalNow?:()=>number) {
   let failedRoute:{actor:Cell;x:number;z:number;tick:number;field:DistanceField}|undefined;
-  const area=(start:Cell)=>{if(![287,288,289,290,291,292,293,294,295,296,297,298].includes(Number(world.schemaVersion)))return;const original=world.wildlife?.animals.find(a=>a===start);return original?readArea(original):undefined;};
+  const area=(start:Cell)=>{if(!isSchema287OrLater(Number(world.schemaVersion)))return;const original=world.wildlife?.animals.find(a=>a===start);return original?readArea(original):undefined;};
   const duck=world.schemaVersion>=256&&actor?.species==='duck'?actor:undefined,override=duck&&duckTerrainOverride256(world,duck),flying=!!duck&&(capturedFlight||duckFlying256(duck.flight));
   const terrainFree=(terrain:unknown)=>naturalTerrainWalkable256(terrain)||flying&&terrain==='water-deep';
   const geometry=providedGeometry??captureStructureNavigation(world);
@@ -159,12 +160,12 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
       // reuse its settled field without launching another search.
       const target=rankedFood(world,cells,search,rank);
       if(target){const path=routeToCell(world,target,search.finish(new Set([target.z*width+target.x])));return path?{kind:'food',path}:undefined;}
-      if(!exitFallback){if([287,288,289,290,291,292,293,294,295,296,297,298].includes(Number(world.schemaVersion)))failedRoute={actor:a,x:a.x,z:a.z,tick:world.tick,field:search.finish()};return;}
+      if(!exitFallback){if(isSchema287OrLater(Number(world.schemaVersion)))failedRoute={actor:a,x:a.x,z:a.z,tick:world.tick,field:search.finish()};return;}
     }
     const reach=search.finish(indices.size?indices:new Set(exits.map(c=>c.z*world.width+c.x)));
     const target=cells.filter(c=>hasReachableCell(reach,c.z*world.width+c.x)).sort((a,b)=>reach.costs[a.z*world.width+a.x]!-reach.costs[b.z*world.width+b.x]!)[0];
     if(target){const path=routeToCell(world,target,reach);return path?{kind:'food',path}:undefined;}
-    if(!exitFallback&&[287,288,289,290,291,292,293,294,295,296,297,298].includes(Number(world.schemaVersion)))failedRoute={actor:a,x:a.x,z:a.z,tick:world.tick,field:reach};
+    if(!exitFallback&&isSchema287OrLater(Number(world.schemaVersion)))failedRoute={actor:a,x:a.x,z:a.z,tick:world.tick,field:reach};
     // An unsuccessful food flood exhausted its frontier. Its complete field
     // already contains reachable edge cells: do not launch a second flood.
     const exit=exits.filter(c=>hasReachableCell(reach,c.z*world.width+c.x)).sort((a,b)=>reach.costs[a.z*world.width+a.x]!-reach.costs[b.z*world.width+b.x]!)[0];

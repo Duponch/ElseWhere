@@ -1,3 +1,4 @@
+import {selfFoodPermission299} from './human-ingestion-clock299.ts';
 import {eggAllowedForPlayer256} from './animal-egg-permission-v256.ts';
 import { capturePrisonTopology,prisonRoom,prisonerAllowedCell } from './prison-space.ts';
 import type { RoomTopology } from './room-topology.ts';
@@ -20,8 +21,8 @@ export function prisonFoodChecker(world:World):(pile:MaterialPile)=>boolean {
     return marked&&!!prisonRoom(world,pile.owner,topology??=capturePrisonTopology(world));
   };
 }
-export function selfFoodAccessible(world:World,pawn:Pawn,pile:MaterialPile,topology?:RoomTopology):boolean {
-  if(pile.owner.type!=='ground'||!eggAllowedForPlayer256(pile))return false;
+export function selfFoodAccessible(world:World,pawn:Pawn,pile:MaterialPile,topology?:RoomTopology,ignoreForbidden=false):boolean {
+  if(pile.owner.type!=='ground'||!selfFoodPermission299(pile,ignoreForbidden))return false;
   if(!allowedAreaAllows(world,pawn,pile.owner))return false;
   return pawn.prisoner?prisonerAllowedCell(world,pawn,pile.owner,topology):!prisonFood(world,pile,topology);
 }

@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {registeredCampaign,withWorldGroup} from './world-map-context.ts';
 import {peaceTalksArrivalReason293,preparePeaceTalksResolution293} from './peace-talks-runtime-293.ts';
@@ -35,7 +36,7 @@ export function applyCaravanArrivalCommand261(root:CampaignState,c:CaravanArriva
  // StartPath at the real destination invokes VisitSite immediately in Core1.6.
  // This request creates no map and plays no tick; the existing cooperative
  // generator still owns every physical adoption, allocation and placement.
- if(Number(root.schemaVersion)===298&&a?.kind==='visit-site'&&g.tile===c.destination){
+ if(isSchema298OrLater(Number(root.schemaVersion))&&a?.kind==='visit-site'&&g.tile===c.destination){
   if(!captureGroupMass(g.members,g.items,freightGroup(g),root.schemaVersion,g.packed,g.animalOwners?.members))return fail('La masse actuelle est invalide.');
   return queueWorldTargetEntryAtTile298(root,r,a)?{ok:true}:fail('La vraie entrée immédiate du Site ne peut pas être engagée.');
  }

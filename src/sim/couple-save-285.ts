@@ -24,7 +24,7 @@ function field(raw:object,key:string):unknown {
  if(!d)return key in raw?invalid:undefined;
  return d.enumerable===true&&Object.hasOwn(d,'value')&&d.value!==undefined?d.value:invalid;
 }
-const dates=(version:number,tick:number,civilTick:number)=>int(version,2,298)&&int(tick)&&int(civilTick,tick,Math.floor(Number.MAX_SAFE_INTEGER/10));
+const dates=(version:number,tick:number,civilTick:number)=>int(version,2,299)&&int(tick)&&int(civilTick,tick,Math.floor(Number.MAX_SAFE_INTEGER/10));
 
 export function validCoupleClock285(value:unknown,civilTick:number):value is CoupleClock285 {
  return int(civilTick,0,Math.floor(Number.MAX_SAFE_INTEGER/10))&&exact(value,['revision','rng'],['lastAttemptAtCore','nextAllowedAtCore'])

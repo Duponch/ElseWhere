@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
 import type {NativePage,NativeRow,NativeUiState,NativeShipCurtainPhase298} from './native-contract';
 import type {World} from '../sim/types';
 import type {EscapedShipsSummary298} from '../sim/ship-escape-projection-298';
@@ -39,11 +40,11 @@ const line=(id:string,label:string,value?:string):NativeRow=>({id,label,value});
  * CampaignSummary is consulted ONLY when there is no current World. */
 export function readAdoptedShipCredits298(world:NativeUiState['world'],campaign:NativeUiState['campaign'],hasGame:boolean):PublicCredits298|undefined {
   const source:{schemaVersion:number;escapedShipsSummary298?:EscapedShipsSummary298}|undefined=world!==undefined?world:campaign;
-  return hasGame&&Number(source?.schemaVersion)===298?source?.escapedShipsSummary298?.credits??undefined:undefined;
+  return hasGame&&isSchema298OrLater(Number(source?.schemaVersion))?source?.escapedShipsSummary298?.credits??undefined:undefined;
 }
 const adoptedCredits298=(state:NativeUiState)=>readAdoptedShipCredits298(state.world,state.campaign,state.hasGame);
 function scope298(state:NativeUiState,computerId:number):LaunchScope298|undefined {
-  const world=state.world;if(!world||Number(world.schemaVersion)!==298)return;
+  const world=state.world;if(!world||!isSchema298OrLater(Number(world.schemaVersion)))return;
   return {epoch:state.epoch,mapId:registeredMapId(world),seed:world.seed,width:world.width,height:world.height,computerId};
 }
 function currentComputer298(state:NativeUiState,scope:LaunchScope298):World['structures'][number]|undefined {

@@ -4,7 +4,7 @@ const HISTORICAL_TOKENS297=[...TOKENS297,'phaseCore297','corePathBudget297','hel
 /** Metadata shape only, no authority/owner/carry permission is granted here. */
 export function validCapturedCoreMove297(value:unknown,version:number,allowHuman=true):boolean {
  if(!value||typeof value!=='object'||Array.isArray(value))return false;
- if(!Number.isSafeInteger(version)||version<1||version>298)return false;
+ if(!Number.isSafeInteger(version)||version<1||version>299)return false;
  const core='coreMove297' in value,walk='coreMoveWalk297' in value;
  if(!core&&!walk)return true;
  if(!isCorePhysicalSchema297(version)||!allowHuman||!core)return false;
@@ -16,7 +16,7 @@ export function validCapturedCoreMove297(value:unknown,version:number,allowHuman
  * No walker cost on the current297 hot path; no gameplay result is memoized. */
 export function validCoreMoveHistoricalTransport297(raw:unknown,version:number):boolean {
  try {
-  if(!Number.isSafeInteger(version)||version<1||version>298)return false;
+  if(!Number.isSafeInteger(version)||version<1||version>299)return false;
   if(isCorePhysicalSchema297(version))return true;
   const lanes=["world","summary","dynamic","campaign","worldMaps","worldGroups","worldPawns","worldFactions","campaignMap","secondarySite","map","maps","sites","entries","groups","group","state","groupLosses","pending261","battlefield261","retained","people","pawns","resources","wildlife","animals","piles","items","packed","building","structures","jobs","deconstruction","wallDoor296","plan","body","cryptosleep","shipCryptosleep277","occupant","human","pawn","animal","actor","contents","lost","abandoned","abandonedContents","abandonedPawns","humans","pods","animalLosses","losses","members","owners","heldCaskets259","heldPlayerCaskets271","heldShipCaskets277","casket","upserted","orbital","ships","deliveries","cargo","pending","departures","commercialTrip","civilianPost","visitors","raids","trade","prisonDepartures","arrivals","startingArrival","podRescues","scout","quests","worldSites263","tradeRequests284","requests","rewards","options","stockpiles","filters","shelf","settings","policy","privatePolicy","linkedStorage286","policies","recreation","task","bills","ledger","destroyed","stock","motion","segments","tracks","mechanoids"];
   const laneSet=new Set(lanes),order=new Map(lanes.map((key,index)=>[key,index])),active=new Set<object>();let budget=2_000_000;

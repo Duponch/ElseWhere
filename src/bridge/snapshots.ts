@@ -1,3 +1,5 @@
+import {validHumanIngestionOwners299} from '../sim/human-ingestion-save-299.ts';
+import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
 import {validVictoryContentHistorical298,validShipComputerSensorsBuilding298} from '../sim/victory-content-save-298.ts';
 import {escapedShipProjection298,validEscapedShipsProjection298,validEscapedShipsProjectionScope298,type NativeUIWorld298} from '../sim/ship-escape-projection-298.ts';
 import {validShipEscapeHistorical298} from '../sim/ship-escape-save-298.ts';
@@ -1159,7 +1161,7 @@ export class SnapshotDecoder {
     if(packet.epoch<this.epoch||packet.epoch===this.epoch&&packet.revision<=this.revision)return {status:'stale'};
     if(!validPhaseCore297(packet.summary,packet.summary.schemaVersion)||!validCorePathBudget297(packet.summary,packet.summary.schemaVersion,packet.summary.tick,isCorePhysicalSchema297(Number(packet.summary.schemaVersion))?Number(Object.getOwnPropertyDescriptor(packet.summary,'phaseCore297')?.value):0,false))return refuse();
     if(!validVictoryContentHistorical298(packet.summary,packet.summary.schemaVersion))return refuse();
-    if(!validShipEscapeHistorical298(packet.summary,packet.summary.schemaVersion)||!validEscapedShipsProjection298(packet.summary,packet.summary.schemaVersion,packet.summary.tick,packet.summary.nextId,Number(packet.summary.schemaVersion)===298&&'escapedShipsSummary298' in packet.summary?effectiveCore297(packet.summary):undefined))return refuse();
+    if(!validShipEscapeHistorical298(packet.summary,packet.summary.schemaVersion)||!validEscapedShipsProjection298(packet.summary,packet.summary.schemaVersion,packet.summary.tick,packet.summary.nextId,isSchema298OrLater(Number(packet.summary.schemaVersion))&&'escapedShipsSummary298' in packet.summary?effectiveCore297(packet.summary):undefined))return refuse();
     if(!validWallDoorHistoricalTransport296(packet.summary,packet.summary.schemaVersion))return refuse();
     if(!validNovelHistoricalTransport295(packet.summary,packet.summary.schemaVersion))return refuse();
     if(!validToxicFalloutTransport294(packet.summary,packet.summary.schemaVersion)||!validPeaceTalksHistorical293(packet.summary,packet.summary.schemaVersion)||!validPartyHistoricalTransport292(packet.summary,packet.summary.schemaVersion)||!validForestryHistoricalTransport291(packet.summary,packet.summary.schemaVersion)||!validFirefoamHistoricalTransport290(packet.summary,packet.summary.schemaVersion)||!validBillPauseHistoricalTransport289(packet.summary,packet.summary.schemaVersion)||!validAnimalThermalRefugeHistoricalTransport288(packet.summary,packet.summary.schemaVersion)||!validAnimalAreaHistoricalTransport287(packet.summary,packet.summary.schemaVersion)||!validLinkedStorageHistorical286(packet.summary,packet.summary.schemaVersion)||!validCoupleHistoricalTransport285(packet.summary,packet.summary.schemaVersion)||!validTradeRequestHistorical284(packet.summary,packet.summary.schemaVersion)||!validApparelProvenanceHistoricalTransport284(packet.summary,packet.summary.schemaVersion))return refuse();
@@ -1199,7 +1201,7 @@ export class SnapshotDecoder {
     if(!validNovelHistoricalTransport295(packet,packet.world.schemaVersion))return resync('Invalid or future Novel/reading data.');
     if(!validToxicFalloutTransport294(packet,packet.world.schemaVersion))return resync('Invalid or future ToxicFallout condition or corpse rot credit.');
     if(!validPeaceTalksHistorical293(packet,packet.world.schemaVersion)||!validPartyHistoricalTransport292(packet,packet.world.schemaVersion)||!validForestryHistoricalTransport291(packet,packet.world.schemaVersion)||!validFirefoamHistoricalTransport290(packet,packet.world.schemaVersion)||!validBillPauseHistoricalTransport289(packet,packet.world.schemaVersion)||!validAnimalThermalRefugeHistoricalTransport288(packet,packet.world.schemaVersion)||!validAnimalAreaHistoricalTransport287(packet,packet.world.schemaVersion)||!validLinkedStorageHistorical286(packet,packet.world.schemaVersion)||!validCoupleHistoricalTransport285(packet,packet.world.schemaVersion)||!validTradeRequestHistorical284(packet,packet.world.schemaVersion)||!validApparelProvenanceHistoricalTransport284(packet,packet.world.schemaVersion)||!validBillWorkerHistoricalTransport283(packet,packet.world.schemaVersion))return resync('Future couple or bill worker settings.');
-    if(!validShipEscapeHistorical298(packet,packet.world.schemaVersion)||!validEscapedShipsProjection298(packet.world,packet.world.schemaVersion,packet.world.tick,packet.world.nextId,Number(packet.world.schemaVersion)===298&&'escapedShipsSummary298' in packet.world?effectiveCore297(packet.world):undefined))return resync('Invalid escaped-ship read projection.');
+    if(!validShipEscapeHistorical298(packet,packet.world.schemaVersion)||!validEscapedShipsProjection298(packet.world,packet.world.schemaVersion,packet.world.tick,packet.world.nextId,isSchema298OrLater(Number(packet.world.schemaVersion))&&'escapedShipsSummary298' in packet.world?effectiveCore297(packet.world):undefined))return resync('Invalid escaped-ship read projection.');
     if(!validShipCasketHistoricalTransport277(packet,packet.world.schemaVersion))return resync('Future spatial casket content.');
     if(!validShipPartHistoricalTransport276(packet,packet.world.schemaVersion))return resync('Pièce de vaisseau ou recherche moteur future dans ce snapshot.');
     if(!validShipReactorHistoricalTransport275(packet,packet.world.schemaVersion))return resync('Réacteur stellaire futur dans ce snapshot.');
@@ -1773,6 +1775,7 @@ export class SnapshotDecoder {
     // Only the fixed MAIN context reuses this default capture within this call.
     // Public decoding and each foreign context retain their complete capture.
     const readHumanOwners=()=>validation.humanOwners?.read(next)??captureHumanOwners(next);
+    if(!validHumanIngestionOwners299(next,next.schemaVersion,readHumanOwners))return resync('Horloge ou provenance alimentaire humaine invalide.');
     if(!validFactionCommsTransportForSnapshot298(next,next.schemaVersion,readHumanOwners))return resync('Communication de faction ou contact invalide.');
     if(Object.hasOwn(next,'group')||Object.hasOwn(next,'groupLosses')){
       try {const people=readHumanOwners().people;
@@ -1797,7 +1800,7 @@ export class SnapshotDecoder {
     if(!validReadingWorld295(next))return resync('Invalid Novel ownership, reading phase or reservation.');
     if(!validPeaceTalksBindings293(next)||!validPartyWorld292(next)||!validForestryPolicies291(next))return resync('Invalid or locked forest growing policy.');
     if(!validFirefoamWorld290(next)||!validBillPauseWorld289(next)||!validAnimalThermalRefugeWorld288(next)||!validAnimalAreaWorld287(next)||!validLinkedStorageProjection286(next)||!validBillWorkerWorld283(next,readHumanOwners))return resync('Opérateur de facture ou réglages incohérents.');
-    if(!validEscapedShipsProjection298(next,next.schemaVersion,next.tick,next.nextId,Number(next.schemaVersion)===298&&'escapedShipsSummary298' in next?effectiveCore297(next):undefined)||!validEscapedShipsProjectionScope298(next))return resync('Escaped-ship credits do not match known away people.');
+    if(!validEscapedShipsProjection298(next,next.schemaVersion,next.tick,next.nextId,isSchema298OrLater(Number(next.schemaVersion))&&'escapedShipsSummary298' in next?effectiveCore297(next):undefined)||!validEscapedShipsProjectionScope298(next))return resync('Escaped-ship credits do not match known away people.');
     if(acceptExtra&&!acceptExtra(next))return resync('Métadonnées supplémentaires incompatibles avec la carte confirmée.');
     freezeAdmittedNativeWorldPawnOrder256(next);
     if(!riverWater.inherited&&next.riverWater)freezeAdmittedRiverWater256(next.riverWater);

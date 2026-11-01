@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {isNovelBook295} from './book-state-295.ts';
@@ -74,7 +75,7 @@ export function materialIdentityCount(world:World,quantity:number,owner:Material
 }
 export function materialCanFit(world: World, kind: MaterialKind, quantity: number, owner: MaterialOwner, item: ItemId = legacyItem(kind),subject?:MaterialPile): boolean {
   if(kind==='ai-core'||item==='ai-core'){
-    if(world.schemaVersion!==298||kind!=='ai-core'||item!=='ai-core'||quantity!==1||subject&&(subject.kind!==kind||subject.item!==item||subject.quantity!==1)||owner.type==='equipment'||owner.type==='apparel'||owner.type==='grave')return false;
+    if(!isSchema298OrLater(world.schemaVersion)||kind!=='ai-core'||item!=='ai-core'||quantity!==1||subject&&(subject.kind!==kind||subject.item!==item||subject.quantity!==1)||owner.type==='equipment'||owner.type==='apparel'||owner.type==='grave')return false;
   }
   if(kind==='book'||item==='novel'){
     if(world.schemaVersion<295||kind!=='book'||item!=='novel'||quantity!==1||!subject||subject.item!==item||subject.kind!==kind||subject.quantity!==1||!isNovelBook295(subject.book)||owner.type==='job'||owner.type==='equipment'||owner.type==='apparel'||owner.type==='grave')return false;
@@ -90,7 +91,7 @@ export function materialCanFit(world: World, kind: MaterialKind, quantity: numbe
 }
 
 export function addMaterial(world: World, kind: MaterialKind, quantity: number, owner: MaterialOwner, item: ItemId = legacyItem(kind),condition:Pick<MaterialPile,'egg'|'eggForbidden'>={}): void {
-  if((kind==='ai-core'||item==='ai-core')&&(world.schemaVersion!==298||kind!=='ai-core'||item!=='ai-core'))throw Error('AI cores require their current singleton content domain.');
+  if((kind==='ai-core'||item==='ai-core')&&(!isSchema298OrLater(world.schemaVersion)||kind!=='ai-core'||item!=='ai-core'))throw Error('AI cores require their current singleton content domain.');
   if(kind==='book'||item==='novel')throw new Error('A Novel requires an original generated book.');
   if(world.schemaVersion<256&&(isFutureEcologyItem256(item)||item==='slag-steel-chunk'))throw Error('Future animal item.');
   if(kind==='plant')throw new Error('A minified tree requires an original Resource.');

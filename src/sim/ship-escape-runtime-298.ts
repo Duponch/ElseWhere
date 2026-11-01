@@ -1,3 +1,4 @@
+import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {registeredCampaign,registeredMapId,boundWorldGroup} from './world-map-context.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {indexShipParts276,connectedShipParts276,readShipAssembly276} from './ship-part-reader-276.ts';
@@ -29,7 +30,7 @@ function launchOrigin(w:World,root:EscapeCampaign298,mapId:number){
 }
 function inspectLaunch(w:World,computerId:number){
  const root=registeredCampaign(w) as EscapeCampaign298,mapId=registeredMapId(w),state=root.escapedShips298;
- if(Number(root.schemaVersion)!==298||mapId===undefined)return fail('Le départ exige le domaine physique 298 actuel.');
+ if(!isSchema298OrLater(Number(root.schemaVersion))||mapId===undefined)return fail('Le départ exige le domaine physique 298 actuel.');
  const origin=launchOrigin(w,root,mapId);if(!origin.ok)return origin;
  const core=effectiveCore297(root);
  if(!validEscapedShipsEnvelope298(root,298,root.tick,root.nextId,core))return fail('Le registre des départs est invalide.');
@@ -72,7 +73,7 @@ function prepareFinalDeparture(root:EscapeCampaign298,p:ShipEscapeLaunchCapture2
  const siteRecord=registry?.sites.find(m=>m.id===p.mapId),retiredRecord=registry?.retired.find(m=>m.id===p.mapId),meta=siteRecord??retiredRecord;
  if(p.originKind298==='registered-map'?!meta||meta.tile!==p.originTile298:p.mapId!==0||p.originTile298===null||p.originTile298!==homeTile)throw Error('Final escape origin provenance differs from its accepted original');
  const originCurrent=()=>root.worldMaps===registry&&root.planet===planet&&(p.originKind298==='registered-map'?!!meta&&(siteRecord?registry?.sites.includes(siteRecord):retiredRecord?registry?.retired.includes(retiredRecord):false)&&meta.id===p.mapId&&meta.tile===p.originTile298:planet?.homeTile===homeTile);
- const baseCurrent=()=>preparedLaunches.has(p)&&Number(root.schemaVersion)===298&&root.tick===tick&&effectiveCore297(root)===core&&root.rng===rng&&root.nextId===nextId&&originCurrent()&&stateCurrent(root,state)&&descriptorCurrent()&&priorCurrent()&&source.current()&&ownWritable(root,'escapedShips298');
+ const baseCurrent=()=>preparedLaunches.has(p)&&isSchema298OrLater(Number(root.schemaVersion))&&root.tick===tick&&effectiveCore297(root)===core&&root.rng===rng&&root.nextId===nextId&&originCurrent()&&stateCurrent(root,state)&&descriptorCurrent()&&priorCurrent()&&source.current()&&ownWritable(root,'escapedShips298');
  let used=false;
  const common={id,mapId:p.mapId,computerId:p.computerId,departedAt:tick,departedAtCore298:core,originKind298:p.originKind298,originTile298:p.originTile298};
  if(source.kind==='known-destroyed'){
@@ -122,7 +123,7 @@ export function prepareShipLaunch298(w:World,computerId:number):{ok:false;reason
   const tick=root.tick,rng=root.rng,nextId=root.nextId,stamp=stateStamp(prior);
   const structures=w.structures,all=[...structures],seal=sealRemovalOriginal259({parts:r.parts},[],[]);
   const capture:ShipEscapeLaunchCapture298=Object.freeze({owner:root,world:w,originalRoot:r.originalRoot,mapId:r.mapId,computerId,startedAt:tick,startedAtCore298:core,originKind298:origin.originKind298,originTile298:origin.originTile298});
-  const current=()=>Number(root.schemaVersion)===298&&root.tick===tick&&effectiveCore297(root)===core&&root.rng===rng&&root.nextId===nextId&&origin.current()&&stateCurrent(root,prior)&&stamp()&&w.structures===structures&&structures.length===all.length&&structures.every((s,i)=>s===all[i])&&seal(0)&&ownWritable(root,'escapedShips298');
+  const current=()=>isSchema298OrLater(Number(root.schemaVersion))&&root.tick===tick&&effectiveCore297(root)===core&&root.rng===rng&&root.nextId===nextId&&origin.current()&&stateCurrent(root,prior)&&stamp()&&w.structures===structures&&structures.length===all.length&&structures.every((s,i)=>s===all[i])&&seal(0)&&ownWritable(root,'escapedShips298');
   if(!current())return fail('Le départ initial a changé avant sa préparation.');
   preparedLaunches.add(capture);return {ok:true,capture,current};
  }catch(error){return fail(error instanceof Error?error.message:'Le départ initial n’a pas pu être préparé.');}
@@ -136,7 +137,7 @@ export function prepareShipDeparture298(input:EscapeCampaign298,capture:ShipEsca
  const root=registeredCampaign(input) as EscapeCampaign298;
  if(!preparedLaunches.has(capture)||capture.owner!==root||capture.originalRoot.id!==capture.computerId||String(capture.originalRoot.kind)!=='ship-computer')throw Error('Unknown or replaced private launch capture');
  const core=effectiveCore297(root),state=root.escapedShips298;
- if(Number(root.schemaVersion)!==298||!validEscapedShipsEnvelope298(root,298,root.tick,root.nextId,core))throw Error('Invalid final escape archive owner');
+ if(!isSchema298OrLater(Number(root.schemaVersion))||!validEscapedShipsEnvelope298(root,298,root.tick,root.nextId,core))throw Error('Invalid final escape archive owner');
  if(core<capture.startedAtCore298||root.tick<capture.startedAt)throw Error('Final escape physical frontier precedes its captured launch');
  if(state?.credits!==null&&state?.credits!==undefined)throw Error('Final escape credits recipient is no longer available');
  if((state?.receipts.length??0)>=SHIP_ESCAPE_HISTORY_LIMIT_298)throw Error('Final escape archive capacity changed');
