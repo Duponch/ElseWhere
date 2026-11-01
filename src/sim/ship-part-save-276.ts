@@ -12,7 +12,7 @@ type ShapeHeader276=Pick<World,'width'|'height'|'nextId'>&Partial<Pick<World,'wo
 /** Descriptor-first sparse fence. A hull part has no running component and
  * cannot be carried as minified furniture. Ordinary shapes keep their guards. */
 export function validShipHullField276(v:unknown,version:number,owner:'installed'|'job'|'packed'='installed'):boolean {
- if(!integer(version,1,299)||!plain(v))return false;
+ if(!integer(version,1,300)||!plain(v))return false;
  const kind=data(v,'kind');if(!kind)return !('kind'in v);
  if(!isShipAddedKind276(kind.value))return true;
  if(!isSchema276OrLater(version)||owner==='packed')return false;
@@ -48,7 +48,7 @@ const filterFields276=new Set(['allowed','allowedItems','inputs']);
  * Traversal is sparse: never the terrain, resources or planetary payload.
  * This is a historical fence, not a replacement for complete276 validation. */
 export function validShipPartHistoricalTransport276(value:unknown,version:number):boolean {
- if(!integer(version,1,299))return false;if(isSchema276OrLater(version))return true;
+ if(!integer(version,1,300))return false;if(isSchema276OrLater(version))return true;
  let left=2_000_000;const active=new Set<object>();
  const walk=(v:unknown):boolean=>{
   if(--left<0)return false;if(v===null||typeof v!=='object')return true;

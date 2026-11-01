@@ -1,6 +1,6 @@
 import type { ItemId } from './items.ts';
 import type { StorageConditions } from './storage-condition.ts';
-export const SCHEMA_VERSION = 299 as const;
+export const SCHEMA_VERSION = 300 as const;
 export const TICKS_PER_SECOND = 6;
 export const TICKS_PER_DAY = 6000;
 
@@ -196,6 +196,8 @@ export interface Pawn extends Cell { /** Shared fixed catalogue: 1 novels allowe
   needCooldown: number;
   /** Last actual committed ingestion at this original human owner Core; absence is unknown. */
   lastIngestAtCore299?:number;
+  /** Actual local civil wait/move only; absence preserves historical state. */
+  idleWander300?:import('./idle-wander-300.ts').IdleWander300;
   state: PawnState;
   priorities: Record<WorkType, number>;
   /** Serialized route and cadence make save/resume exactly reproducible. */

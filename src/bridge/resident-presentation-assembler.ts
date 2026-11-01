@@ -1,4 +1,5 @@
 import {validHumanIngestionProjection299} from '../sim/human-ingestion-save-299.ts';
+import {validIdleWanderProjection300} from '../sim/idle-wander-save-300.ts';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {validPhaseCore297} from '../sim/core-phase-297';
 import {validCorePathBudget297} from '../sim/core-path-budget-297';
@@ -272,7 +273,7 @@ export class ResidentPresentationAssembler {
   if(!validPhaseCore297(raw,Number(raw.schemaVersion))||!validCorePathBudget297(raw,Number(raw.schemaVersion),Number(raw.tick),isCorePhysicalSchema297(raw.schemaVersion)?Number(raw.phaseCore297):0,false))return fail('Physical mapless clock or unexpected local path budget');
   const geographic=this.geography.prepare(raw,packet.geography,own(packet,'geography'),packet.epoch!==this.epoch);if(!geographic.ok)return fail();
   const summary={...geographic.state},view=groupWorld(summary,null),calendar=summary.planet?.revision===3?summary.calendarOrigin:undefined;
-  if(!view||!validHumanIngestionProjection299(view,view.schemaVersion)||!validPeaceTalksBindings293(summary)||!validFirefoamWorld290(summary)||!validBillPauseWorld289(summary)||!validAnimalThermalRefugeWorld288(summary)||!validAnimalAreaWorld287(summary)||!validResidentTradeRequests284(view,summary)||!validLinkedStorageProjection286(summary)||!validBillWorkerWorld283(view)||!validCoupleProjection285(view)||!this.chronology(view,packet.epoch,calendar)||acceptExtra&&!acceptExtra(view)||!this.geography.canCommit(geographic))return fail();
+  if(!view||!validHumanIngestionProjection299(view,view.schemaVersion)||!validIdleWanderProjection300(view,view.schemaVersion)||!validPeaceTalksBindings293(summary)||!validFirefoamWorld290(summary)||!validBillPauseWorld289(summary)||!validAnimalThermalRefugeWorld288(summary)||!validAnimalAreaWorld287(summary)||!validResidentTradeRequests284(view,summary)||!validLinkedStorageProjection286(summary)||!validBillWorkerWorld283(view)||!validCoupleProjection285(view)||!this.chronology(view,packet.epoch,calendar)||acceptExtra&&!acceptExtra(view)||!this.geography.canCommit(geographic))return fail();
   // Freezing is a representation adapter for exact native slots/free lists,
   // never inferred from final membership. Only the candidate is written.
   freezeAdmittedNativeWorldPawnOrder256(summary);view.worldPawns=summary.worldPawns;
@@ -355,6 +356,7 @@ export class ResidentPresentationAssembler {
   if(!validReadingWorld295(next))return fail('Invalid resident Novel ownership, reading phase or reservation');
   if(!validWallDoorWorld296(next)||!validWallDoorResidentNamespace296(next))return fail('Invalid resident wall-door target, work owner or successor identity');
   if(!validHumanIngestionProjection299(next,next.schemaVersion))return fail('Invalid actual human ingestion clock or provider provenance');
+  if(!validIdleWanderProjection300(next,next.schemaVersion))return fail('Invalid actual local civil wander task');
   const calendar=next.planet?.revision===3&&next.campaignMap?.revision===2?next.campaignMap.calendarOrigin:undefined;
   if(!this.chronology(next,packet.epoch,calendar)||acceptExtra&&!acceptExtra(next)||!this.geography.canCommit(geographic))return fail('Rejected resident transaction');
   freezeAdmittedNativeWorldPawnOrder256(next);if(!river.inherited&&next.riverWater)freezeAdmittedRiverWater256(next.riverWater);

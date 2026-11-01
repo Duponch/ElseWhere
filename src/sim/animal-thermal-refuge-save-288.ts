@@ -19,7 +19,7 @@ const absent=(v:object,k:string)=>!Object.hasOwn(v,k)&&!(k in v);
 /** Only a spawned local original can own this prospective job. No getter is evaluated. */
 export function validAnimalThermalRefugeField288(value:unknown,version:number,tick:number,width:number,height:number,local=false):boolean {
  try{
-  if(!plain(value)||!int(version,1,299))return false;
+  if(!plain(value)||!int(version,1,300))return false;
   if(absent(value,FIELD))return true;
   const d=data(value,FIELD);if(!isSchema288OrLater(version)||!local||!d||!int(tick,0,Math.floor(Number.MAX_SAFE_INTEGER/10))||!int(width,1)||!int(height,1))return false;
   const t=d.value;if(!plain(t)||!exact(t,['mapId','target','phase','startedAtCore'])||!int(t.mapId)||!int(t.startedAtCore,0,tick*10)||t.startedAtCore%10!==0||t.phase!=='travel'&&t.phase!=='wait')return false;
@@ -30,7 +30,7 @@ export function validAnimalThermalRefugeField288(value:unknown,version:number,ti
 const lanes=new Set(['world','dynamic','campaign','wildlife','animals','animal','piles','corpse','worldMaps','sites','map','worldGroups','groups','state','animalOwners','members','animalLosses','items','worldPawns','owners','actor','structures','packed','building','shipCryptosleep277','occupant','cryptosleep','casket','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277','startingArrival','pods','pending261','abandonedContents','abandonedPawns','humans','posts','stock','leaders','worldFactions','scout','commercialTrip','groupLosses','secondarySite','group','tradeRequests284','entries','options','legacyTravellers','losses','flyers']);
 /** Historical sparse/dynamic packets visit real custody lanes, never terrain grids. */
 export function validAnimalThermalRefugeHistoricalTransport288(value:unknown,version:number):boolean {
- if(!int(version,1,299))return false;if(isSchema288OrLater(version))return true;
+ if(!int(version,1,300))return false;if(isSchema288OrLater(version))return true;
  const active=new Set<object>();let budget=2_000_000;
  const walk=(v:unknown):boolean=>{
   if(--budget<0)return false;if(v===null||typeof v!=='object')return true;

@@ -1,3 +1,5 @@
+import {isSchema299OrLater} from './schema-compatibility-257.ts';
+import {effectiveCore297} from './core-phase-297.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import { allowedAreaRecreationAllowed } from './allowed-area-services.ts';
 import {readingAllowed295,readingAutoNeeds295} from './reading-state-295.ts';
@@ -27,7 +29,7 @@ const labels: Record<RecreationActivity,string> = {horseshoes: 'jouer aux fers Ã
 const urgentDoctorCall=(world:World,pawn:Pawn):boolean=>urgentWorkEnabled(pawn,'doctor')&&world.pawns.some(p=>p!==pawn&&allowedAreaAllows(world,pawn,p)&&lyingPatient(p)&&urgentTreatment(p));
 /** Search shares the existing bounded navigation budget. No gain in transit,
  * no worker/cargo preemption just because the timetable recommends recreation. */
-export function processRecreation(world: World, pawn: Pawn, context: NeedContext, afterWork = false): boolean {
+export function processRecreation(world: World, pawn: Pawn, context: NeedContext, afterWork = false, provider:'ordinary'|'idle300'='ordinary'): boolean {
   // Party has its own physical presence watermark and outcome; personal joy
   // saturation and the ordinary 400-tick limit must never finish it.
   if(pawn.recreation.task?.activity==='party')return false;
@@ -69,8 +71,11 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
     }
     return true;
   }
-  if (world.tick<500 || pawn.hunting || pawn.research || pawn.need || pawn.jobId!==null || pawn.haul || pawn.cooking || pawn.burial || pawn.cleaning || pawn.needCooldown>0 || (Number(world.schemaVersion)!==299 && pawn.hunger<=20)
-    || assignment==='work' || assignment==='sleep'&&!afterWork || joy.level >= (assignment==='anything'?35:95) || urgentMedicalTask(pawn) || urgentDoctorCall(world,pawn)) return false;
+  // The idle supplier has its own admission conditions; no fake timetable or World.
+  const idle300=Number(world.schemaVersion)===300&&provider==='idle300';
+  if(idle300&&(effectiveCore297(world)<60000||assignment==='work'))return false;
+  if (world.tick<500 || pawn.hunting || pawn.research || pawn.need || pawn.jobId!==null || pawn.haul || pawn.cooking || pawn.burial || pawn.cleaning || pawn.needCooldown>0 || (!isSchema299OrLater(Number(world.schemaVersion)) && pawn.hunger<=20)
+    || !idle300&&(assignment==='work'||assignment==='sleep'&&!afterWork) || joy.level >= (idle300?99:assignment==='anything'?35:95) || urgentMedicalTask(pawn) || urgentDoctorCall(world,pawn)) return false;
   const choices: {activity: RecreationActivity; weight: number}[] = [];
   let pins:ReturnType<typeof availablePins>|undefined,chessTables:ReturnType<typeof availableChessTables>|undefined;
   const televisions=world.schemaVersion>=190&&isColonist(pawn)&&!pawn.prisoner&&!pawn.visitor&&pawnBody(pawn).capacities.sight>0?availableTelevisions(world,pawn.id):[];

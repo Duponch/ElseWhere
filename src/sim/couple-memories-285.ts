@@ -85,7 +85,7 @@ export function coupleOpinionOffset285(holder:Readonly<CoupleMemoryHolder285>,ot
 }
 
 const plain=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype;
-const versionAllowed=(version:number)=>int(version,2,299);
+const versionAllowed=(version:number)=>int(version,2,300);
 
 /** Shape only: the enclosing actual-owner guard checks self/nextId/namespace.
  * Presence starts ONLY285. No future version is inferred from a lower bound. */

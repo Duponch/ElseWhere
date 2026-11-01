@@ -13,7 +13,7 @@ const branches=['world','tiles','jobs','worldMaps','sites','map','secondarySite'
 /** Inspect only real terrain/job owner lanes. Labels and ordinary strings are
  * never new content; tile tuples have their existing positional contract. */
 export function validSmoothFloorsHistoricalTransport281(value:unknown,version:number):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>299)return false;
+ if(!Number.isSafeInteger(version)||version<1||version>300)return false;
  if(isSchema281OrLater(version))return true;
  const active=new Set<object>();
  const walk=(v:unknown,tiles=false):boolean=>{
@@ -83,7 +83,7 @@ export function validateSmoothFloors281(w:World,version:number):string[] {
  * sparse successor. New load epochs intentionally pass no predecessor. */
 export function validSmoothFloorWorld281(w:World,previous?:World):boolean {
  try{
-  if(!Number.isSafeInteger(w.schemaVersion)||Number(w.schemaVersion)<1||Number(w.schemaVersion)>299)return false;
+  if(!Number.isSafeInteger(w.schemaVersion)||Number(w.schemaVersion)<1||Number(w.schemaVersion)>300)return false;
   if(validateSmoothFloors281(w,w.schemaVersion).length)return false;
   let jobs:Map<number,World['jobs'][number]>|undefined,claimedJobs:Set<number>|undefined;
   for(const before of previous?.jobs??[])if(before.kind==='smooth-floor'){

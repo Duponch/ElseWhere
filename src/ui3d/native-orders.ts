@@ -112,7 +112,7 @@ export async function nativeOrderPage(
   if (!Number.isInteger(at.x) || !Number.isInteger(at.z) || at.x < 0 || at.z < 0 || at.x >= world.width || at.z >= world.height) { message('Ordres', 'Cette case est hors de la carte.'); return; }
   const selected = world.pawns.filter(pawn => selection.has(pawn.id) && isColonist(pawn) && !pawn.prisoner);
   const tactical = selected.some(pawn => pawn.draft);
-  const service = world.structures.some(structure => (isAncientCasket256(structure) || structure.kind === 'cryptosleep-casket' || structure.kind === 'ship-cryptosleep-casket' || [290, 291, 292, 293,294,295,296,297,298,299].includes(world.schemaVersion) && structure.kind === 'firefoam-popper') && footprintContains(structure, at) && (targetId === undefined || targetId === structure.id))
+  const service = world.structures.some(structure => (isAncientCasket256(structure) || structure.kind === 'cryptosleep-casket' || structure.kind === 'ship-cryptosleep-casket' || [290, 291, 292, 293,294,295,296,297,298,299,300].includes(world.schemaVersion) && structure.kind === 'firefoam-popper') && footprintContains(structure, at) && (targetId === undefined || targetId === structure.id))
     || contextConsumesFood(world, selection, at, targetId)
     || targetId === undefined && world.structures.some(structure => structure.kind === 'mini-turret' && structure.x === at.x && structure.z === at.z);
 
@@ -171,7 +171,7 @@ export async function nativeOrderPage(
     const live = read(); if (!live) return;
     const rows: NativeRow[] = [];
     let firefoamCount = 0;
-    if ([290, 291, 292, 293,294,295,296,297,298,299].includes(live.schemaVersion)) {
+    if ([290, 291, 292, 293,294,295,296,297,298,299,300].includes(live.schemaVersion)) {
       for (const structure of live.structures.filter(structure => structure.kind === 'firefoam-popper' && footprintContains(structure, at)).sort((a, b) => a.id - b.id)) {
         firefoamCount++;
         const reason = queue ? 'Déclenchement direct ; relâchez Maj.' : queryFirefoamUseReason290(live, pawn.id, structure.id);

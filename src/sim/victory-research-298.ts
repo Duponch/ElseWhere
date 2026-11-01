@@ -23,7 +23,7 @@ const projects=Object.freeze(['long-range-mineral-scanner','ship-computer','ship
  * prospective records/project selections; it never initializes progress. */
 export function validVictoryResearchDomain298(state:unknown,version:number,atLocal:number):boolean {
  try{
-  if(!int(version,1,299)||!int(atLocal,0,Number.MAX_SAFE_INTEGER))return false;
+  if(!int(version,1,300)||!int(atLocal,0,Number.MAX_SAFE_INTEGER))return false;
   if(state===undefined)return true;if(!plain(state))return false;
   const project=data(state,'project');if(!project&&'project'in state)return false;
   const selected=project?.value;

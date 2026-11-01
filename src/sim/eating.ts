@@ -1,3 +1,4 @@
+import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {localIngestionCore299,commitHumanIngestion299,selfFoodPermission299} from './human-ingestion-clock299.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import {beerPile265,completeAlcoholInventory265,takeOwnedBeer265,ingestBeer265} from './alcohol-ingestion-265.ts';
@@ -27,7 +28,7 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
   // eating keeps its historical release, location choice and resolution.
   const release=()=>{if(task.forced)interruptDraftWork(world,pawn);else context.release();};
   const alcohol=isSchema265OrLater(world.schemaVersion)&&task.alcoholReason!==undefined;
-  const ignoreFoodForbidden299=Number(world.schemaVersion)===299&&task.foodBinge299===true;
+  const ignoreFoodForbidden299=isSchema299OrLater(Number(world.schemaVersion))&&task.foodBinge299===true;
   if(alcohol){
     const body=pawnBody(pawn);
     // Recheck after every health transition, before pickup, inventory transfer

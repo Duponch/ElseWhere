@@ -1,6 +1,6 @@
 # Ce qui est jouable et ce qui manque
 
-**1 novembre 2026 — schéma 299.** [Besoins alimentaires et frénésie](../development/food-binge-cadence299.md) corrigés, [objets interdits marqués dans le décor](../development/forbidden-pile-markers.md). La priorité humaine reste la vraie partie325 et les défauts rencontrés ; six ensembles, victoire et contenu en pause. Les dettes de cadence et l’errance civile ordinaire manquante restent ouvertes ; aucune identité exhaustive ni performance globale certifiée.
+**1 novembre 2026 — schéma 300.** [Repli d’inactivité et continuation alimentaire](../development/idle-job-fallback300.md) : dix-neuf contrats, typage, compilation et observation ciblée dans l’interface. La revue des fondations reste prioritaire ; partie325, six ensembles et contenu en pause. Décision des tâches et construction restent ouvertes. Les performances suivront cette étape ; aucune identité exhaustive ni fluidité globale certifiée.
 
 ## Historique conservé du lot298
 

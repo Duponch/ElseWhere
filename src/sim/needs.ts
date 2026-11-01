@@ -1,3 +1,4 @@
+import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {foodBingeDue299,selfFoodPermission299} from './human-ingestion-clock299.ts';
 import { isBedKind } from './bed-kinds.ts';
 import { bedAssignmentReason,bedSlotCell,bedSlotClaimed,pawnBedSlot } from './bed-slots.ts';
@@ -71,7 +72,23 @@ function tryFoodNeed(world:World,pawn:Pawn,context:NeedContext,foodBinge299=fals
 /** Needs never grant nutrition for a reservation or rest for a nearby bed.
  * All phases use the same movement/search budget and material owners as work.
  */
-export function processNeeds(world: World, pawn: Pawn, context: NeedContext): boolean {
+export type NeedDecision300='handled'|'unavailable'|'pending-current';
+/** Only tasks already owned before the food offer can resume. This does not
+ * select work or confer a reservation on a candidate job. */
+function ownsCurrentCivilWork300(world:World,pawn:Pawn):boolean {
+ return pawn.jobId!==null&&world.jobs.some(job=>job.id===pawn.jobId&&job.reservedBy===pawn.id)
+  ||!!(pawn.haul||pawn.cooking||pawn.animalRescue||pawn.animalHandling||pawn.animalFeed||pawn.animalCare||pawn.hunting||pawn.burial||pawn.cleaning||pawn.brewing||pawn.deepWork||pawn.research||pawn.ward||pawn.feed||pawn.surgery||pawn.tend||pawn.rescue||pawn.firefighting);
+}
+/** The civil Engine alone consumes the richer decision. Historical/clinical
+ * callers keep the boolean wrapper and its original pending ownership. */
+export function processNeedsDecision300(world:World,pawn:Pawn,context:NeedContext):NeedDecision300 {
+ const result=processNeedsResult300(world,pawn,context,true);
+ return result===true?'handled':result===false?'unavailable':result;
+}
+export function processNeeds(world:World,pawn:Pawn,context:NeedContext):boolean {
+ return processNeedsResult300(world,pawn,context,false)!==false;
+}
+function processNeedsResult300(world:World,pawn:Pawn,context:NeedContext,allowPendingCurrent300:boolean):boolean|'pending-current' {
   const canPlan = pawn.needCooldown === 0;
   if (pawn.bedId !== null && !world.structures.some(bed => bed.id === pawn.bedId && isBedKind(bed.kind))&&!world.packed?.some(pack=>pack.building.id===pawn.bedId&&isBedKind(pack.building.kind))) pawn.bedId = null;
   if(pawn.bedId===null)delete pawn.bedSlot;
@@ -99,12 +116,12 @@ export function processNeeds(world: World, pawn: Pawn, context: NeedContext): bo
 
   // Core's ordinary provider precedes compulsive eating. A resolved false
   // source permits fallback; an exhausted search budget is still pending.
-  const binge299=Number(world.schemaVersion)===299&&pawn.mental?.crisis?.kind==='food-binge';
+  const binge299=isSchema299OrLater(Number(world.schemaVersion))&&pawn.mental?.crisis?.kind==='food-binge';
   const ordinaryFood=binge299?pawn.hunger<30:pawn.mental?.crisis?.kind==='food-binge'||pawn.hunger<=(pawn.mental?.crisis?5:pawn.need?.kind==='sleep'?12.5:30);
   if(pawn.need?.kind!=='eat'&&(binge299||ordinaryFood)&&canPlan&&(world.restRules==='adult'||pawn.rest>(pawn.need?.kind==='sleep'?5:0))){
    let attempted=false,result:'admitted'|'unavailable'|'pending'='unavailable';
-   if(ordinaryFood){attempted=true;result=tryFoodNeed(world,pawn,context);if(result==='pending')return true;}
-   if(binge299&&result==='unavailable'&&foodBingeDue299(world,pawn)){attempted=true;result=tryFoodNeed(world,pawn,context,true);if(result==='pending')return true;}
+   if(ordinaryFood){attempted=true;result=tryFoodNeed(world,pawn,context);if(result==='pending')return allowPendingCurrent300&&Number(world.schemaVersion)===300&&ownsCurrentCivilWork300(world,pawn)?'pending-current':true;}
+   if(binge299&&result==='unavailable'&&foodBingeDue299(world,pawn)){attempted=true;result=tryFoodNeed(world,pawn,context,true);if(result==='pending')return allowPendingCurrent300&&Number(world.schemaVersion)===300&&ownsCurrentCivilWork300(world,pawn)?'pending-current':true;}
    if(attempted)pawn.needCooldown=NEED_INTERVAL;
   }
 
@@ -120,7 +137,7 @@ export function processNeeds(world: World, pawn: Pawn, context: NeedContext): bo
     const cookingFuel = pawn.haul?.destination.type === 'fuel' && pawn.haul.destination.forCooking;
     // In299, an unavailable food provider falls through to ordinary work.
     // Historical worlds retain their critical-hunger interruption rule.
-    if (Number(world.schemaVersion)!==299 && ((job && job.kind !== 'harvest') || pawn.haul && !cookingFuel)) if (!context.release()) return true;
+    if (!isSchema299OrLater(Number(world.schemaVersion)) && ((job && job.kind !== 'harvest') || pawn.haul && !cookingFuel)) if (!context.release()) return true;
     // Cooking may still provide food for others even under a restrictive diet.
     // Its processor can wait for a navigation budget while keeping its product;
     // do not overwrite the active task's state during that wait.

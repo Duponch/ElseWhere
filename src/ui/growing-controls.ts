@@ -32,7 +32,7 @@ export function growingControls(zone: GrowingZone, send: (command: Command) => v
   const updateHelp=()=>{help.textContent=growingCultureHelp(plant.value as GrowingPlant291,world);};
   updateHelp();plant.addEventListener('change',updateHelp);
   panel.append(help);
-  if(zone.basinId===undefined&&world&&[291,292,293,294,295,296,297,298,299].includes(world.schemaVersion)){
+  if(zone.basinId===undefined&&world&&[291,292,293,294,295,296,297,298,299,300].includes(world.schemaVersion)){
     const forest=document.createElement('p');forest.className='muted';
     const native=forestNativeSpecies291(world);
     forest.textContent=!native.length?'Aucune essence à semer parmi les arbres livrés de ce biome.':treeSowingUnlocked291(world)?'Essences indigènes disponibles. Le choix de la zone ne remplace ni la compétence du cultivateur ni son trajet.':'Pour semer les arbres indigènes, recherchez Semis d’arbres (1 000 points). Culture 6 sera requise pour commencer le travail.';

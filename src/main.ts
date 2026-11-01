@@ -1,3 +1,4 @@
+import {idleWanderTask300} from './sim/idle-wander-300.ts';
 import {isSchema298OrLater} from './sim/schema-compatibility-257.ts';
 import {isShipComputerSensorsKind298} from './sim/ship-computer-sensors-content-298';
 import {isCorePhysicalSchema297} from './sim/physical-schema-297.ts';
@@ -1743,6 +1744,7 @@ function actionLabel(pawn: Pawn, carriedPatients: ReadonlySet<number>) {
   if(pawn.need?.kind==='eat'&&pawn.need.alcoholReason)return pawn.need.alcoholReason==='inventory'?'Prend des bières pour son inventaire':pawn.need.phase==='ingest'?'Boit une bière':'Rejoint une bière';
   if(pawn.brewing)return pawn.path.length||pawn.moveCooldown>0?'Rejoint le fût de fermentation':'Extrait la bière du fût';
   if (pawn.need) return queryPawnStatus(snapshot!,pawn,confirmedFoodReadability()).reason;
+  if(Number(snapshot?.schemaVersion)===300&&idleWanderTask300(pawn))return queryPawnStatus(snapshot!,pawn,confirmedFoodReadability()).reason;
   if(pawn.recreation.task)return queryPawnStatus(snapshot!,pawn,confirmedFoodReadability()).reason;
   const comms298=(pawn as import('./sim/faction-comms-state-298').FactionCommsPawn298).factionComms298;if(comms298)return comms298.phase==='ready'?'Communication de faction · au contact de la console':'Communication de faction · rejoint la console';
   if(pawn.orbitalTrade)return pawn.orbitalTrade.phase==='ready'?'Commerce orbital · au contact de la console':'Commerce orbital · rejoint la console';

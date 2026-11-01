@@ -5,7 +5,7 @@ import {isPerishable,rotAge,ROT_DAYS} from './food-preservation.ts';
 import {TICKS_PER_DAY} from './types.ts';
 /** Stable own physical suspension receipt; never the advancing row or root clock. */
 export function worldPawnGoodsCore297(row:WorldPawnOwner256,version:number):number {
- const held=row.heldAtCore259;if(!Number.isSafeInteger(version)||version<1||version>299||!Number.isSafeInteger(held)||held!<0||held!%10)return NaN;
+ const held=row.heldAtCore259;if(!Number.isSafeInteger(version)||version<1||version>300||!Number.isSafeInteger(held)||held!<0||held!%10)return NaN;
  if(!('heldGoodsCore297'in row))return held!;
  const d=Object.getOwnPropertyDescriptor(row,'heldGoodsCore297');return isCorePhysicalSchema297(version)&&!!d&&d.enumerable===true&&Object.hasOwn(d,'value')&&typeof d.value==='number'&&Number.isSafeInteger(d.value)&&d.value>=held!&&d.value<=held!+9?d.value:NaN;
 }

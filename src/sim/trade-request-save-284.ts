@@ -107,7 +107,7 @@ function entry(value:unknown,root:TradeRequestsValidationContext284,nextRequestI
  * only live held Things, once, after the whole candidate passes. */
 export function validateTradeRequests284(value:unknown,root:TradeRequestsValidationContext284,ids:NumericMembershipSink):string[] {
  try{
-  if(!int(root.schemaVersion,1,299))return ['Unknown trade request schema.'];
+  if(!int(root.schemaVersion,1,300))return ['Unknown trade request schema.'];
   const field=Object.getOwnPropertyDescriptor(root,'tradeRequests284');
   if(field&&(!field.enumerable||!own(field,'value')))return ['Invalid trade request authority descriptor.'];
   if(field&&field.value!==value||!field&&'tradeRequests284'in root)return ['Trade request authority differs from its actual field.'];
@@ -125,7 +125,7 @@ export function validateTradeRequests284(value:unknown,root:TradeRequestsValidat
 /** Cold historical transport fence only. Current284 admission uses the closed
  * request graph above, never a generic campaign walk on each publication. */
 export function validTradeRequestHistorical284(value:unknown,version:number):boolean {
- if(!int(version,1,299))return false;if(isSchema284OrLater(version))return true;
+ if(!int(version,1,300))return false;if(isSchema284OrLater(version))return true;
  let budget=2_000_000;const active=new WeakSet<object>(),done=new WeakSet<object>();
  const walk=(v:unknown):boolean=>{
   if(--budget<0)return false;if(v===null||typeof v!=='object')return typeof v!=='function'&&typeof v!=='symbol';

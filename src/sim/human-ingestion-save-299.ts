@@ -1,3 +1,4 @@
+import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297,heldCore297} from './core-phase-297.ts';
 import {worldPawnPhysicalCore297} from './world-pawn-physical-clock-297.ts';
 import type {HumanOwnershipCapture,HumanOwnerSlot} from './human-owners.ts';
@@ -7,14 +8,14 @@ const integer=(v:unknown,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='n
 /** New fields are never read through accessors or inferred from historical absence. */
 export function validHumanIngestionPawn299(value:unknown,version:number,ownerCore?:number):boolean {
  try{
-  if(!record(value)||!Number.isSafeInteger(version)||version<1||version>299)return false;
+  if(!record(value)||!Number.isSafeInteger(version)||version<1||version>300)return false;
   if('lastIngestAtCore299'in value){const d=Object.getOwnPropertyDescriptor(value,'lastIngestAtCore299');
-   if(version!==299||!d?.enumerable||!Object.hasOwn(d,'value')||!integer(ownerCore)||!integer(d.value,ownerCore))return false;
+   if(!isSchema299OrLater(version)||!d?.enumerable||!Object.hasOwn(d,'value')||!integer(ownerCore)||!integer(d.value,ownerCore))return false;
   }
   const need=Object.getOwnPropertyDescriptor(value,'need');
   if(need&&!Object.hasOwn(need,'value'))return false;
   if(need&&record(need.value)&&'foodBinge299'in need.value){const task=need.value,d=Object.getOwnPropertyDescriptor(task,'foodBinge299'),kind=Object.getOwnPropertyDescriptor(task,'kind');
-   if(version!==299||!d?.enumerable||!Object.hasOwn(d,'value')||d.value!==true||!kind?.enumerable||!Object.hasOwn(kind,'value')||kind.value!=='eat'||'forced'in task||'alcoholReason'in task)return false;
+   if(!isSchema299OrLater(version)||!d?.enumerable||!Object.hasOwn(d,'value')||d.value!==true||!kind?.enumerable||!Object.hasOwn(kind,'value')||kind.value!=='eat'||'forced'in task||'alcoholReason'in task)return false;
   }
   return true;
  }catch{return false;}

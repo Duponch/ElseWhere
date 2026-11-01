@@ -19,7 +19,7 @@ export function firefoamControls290(world:World,structure:Structure,send:(comman
  const status=document.createElement('p');status.dataset.firefoamStatus=String(structure.id);status.setAttribute('role','status');section.append(label,state,help,cost,status);
  let current=structure,currentWorld=world,available=false,pending=false,sent:boolean|undefined,feedback='';
  function paint(){
-  available=[290,291,292,293,294,295,296,297,298,299].includes(currentWorld.schemaVersion)&&current.kind==='firefoam-popper'&&!!current.firefoam290&&currentWorld.structures.includes(current);
+  available=[290,291,292,293,294,295,296,297,298,299,300].includes(currentWorld.schemaVersion)&&current.kind==='firefoam-popper'&&!!current.firefoam290&&currentWorld.structures.includes(current);
   const optionAllowed=firefoamResearchUnlocked290(currentWorld)&&current.factionId===undefined;
   section.hidden=!available;input.checked=sent??current.firefoam290?.autoRebuild??false;input.disabled=!available||!optionAllowed||pending||sent!==undefined;
   const wick=current.firefoam290?.wick;
@@ -34,7 +34,7 @@ export function firefoamControls290(world:World,structure:Structure,send:(comman
  };
  const controller={refresh(nextWorld:World,next?:Structure){
   currentWorld=nextWorld;if(next?.id===structure.id)current=next;
-  if(!next||![290,291,292,293,294,295,296,297,298,299].includes(nextWorld.schemaVersion)){sent=undefined;pending=false;section.hidden=true;return;}
+  if(!next||![290,291,292,293,294,295,296,297,298,299,300].includes(nextWorld.schemaVersion)){sent=undefined;pending=false;section.hidden=true;return;}
   if(sent!==undefined&&next.firefoam290?.autoRebuild===sent){sent=undefined;feedback='Reconstruction confirmée.';}paint();
  }};controllers.set(section,controller);paint();return section;
 }
@@ -45,7 +45,7 @@ export function updateFirefoamControls290(parent:ParentNode,world:World,structur
 /** Uses the same pure authority as the SIM command. The action is direct,
  * unqueued and acquires neither contact time nor wick on the UI side. */
 export function appendFirefoamOptions290(parent:HTMLElement,world:World,pawnId:number,cell:Cell,queue:boolean,actions:{close():void;send(command:TriggerCommand):Promise<unknown>;report(message:string,error?:boolean):void}):number {
- if(![290,291,292,293,294,295,296,297,298,299].includes(world.schemaVersion))return 0;
+ if(![290,291,292,293,294,295,296,297,298,299,300].includes(world.schemaVersion))return 0;
  const structures=world.structures.filter(s=>s.kind==='firefoam-popper'&&footprintContains(s,cell)).sort((a,b)=>a.id-b.id);
  for(const structure of structures){
   const reason=queue?'Déclenchement direct ; relâchez Maj.':queryFirefoamUseReason290(world,pawnId,structure.id);

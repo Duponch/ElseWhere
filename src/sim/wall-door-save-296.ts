@@ -35,7 +35,7 @@ const data=(v:object,k:PropertyKey):PropertyDescriptor|undefined=>{const d=Objec
 const integer=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
 const record=(v:unknown):v is Record<string,unknown>=>plain(v)&&Reflect.ownKeys(v).every(k=>typeof k==='string'&&!!data(v,k));
 const keys=(v:unknown,required:readonly string[],optional:readonly string[]=[]):v is Record<string,unknown>=>record(v)&&required.every(k=>!!data(v,k))&&Reflect.ownKeys(v).every(k=>typeof k==='string'&&(required.includes(k)||optional.includes(k)));
-const supported=(v:unknown):v is number=>integer(v,1,299);
+const supported=(v:unknown):v is number=>integer(v,1,300);
 
 /** Shape only. Neither a descriptor nor its containing Job can invoke a getter. */
 export function validWallDoorJob296(value:unknown,version:number):boolean {

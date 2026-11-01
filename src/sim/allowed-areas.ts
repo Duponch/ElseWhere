@@ -1,3 +1,4 @@
+import {interruptIdleForArea300} from './idle-wander-300.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {planCurrentMapArea,rememberCurrentMapArea,forgetMapArea} from './pawn-map-areas.ts';
 import { captureHumanOwners } from './human-owners.ts';
@@ -49,7 +50,7 @@ export function applyAllowedAreaCommand(world:World,input:unknown,hooks:AllowedA
     if(plan===false)return refusal('Pas de place pour conserver le chargement interrompu.','occupied');
     if(world.schemaVersion>=256)rememberCurrentMapArea(world,pawn,command.areaId);
     if(command.areaId===null)delete pawn.allowedAreaId;else pawn.allowedAreaId=command.areaId;
-    clearReturn(pawn);hooks.reconcile?.(world,affected,plan);return {ok:true,affected:1};
+    clearReturn(pawn);interruptIdleForArea300(world,pawn);hooks.reconcile?.(world,affected,plan);return {ok:true,affected:1};
   }
   if(!int(c.areaId))return refusal('Identité de zone invalide.');
   const area=areas.find(a=>a.id===c.areaId);if(!area)return refusal('Zone autorisée introuvable.','missing-target');

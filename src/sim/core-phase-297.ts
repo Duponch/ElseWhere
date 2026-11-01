@@ -5,7 +5,7 @@ const integer=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof 
 /** LIVE validated state only; forwards real campaign fields, grants no owner. */
 export function effectiveCore297(w:PhaseWorld297):number {
  const version=Number(w.schemaVersion),tick=w.tick;
- if(!integer(tick)||!integer(version,1,299))throw Error('Invalid live physical clock');
+ if(!integer(tick)||!integer(version,1,300))throw Error('Invalid live physical clock');
  const core=tick*10;if(!integer(core))throw Error('Physical clock exhausted');
  if(!isCorePhysicalSchema297(version))return core; // Do not read a future field on historical Worlds.
  const phase=w.phaseCore297;if(!integer(phase,0,9)||!integer(core+phase))throw Error('Invalid committed physical phase');return core+phase;
@@ -14,12 +14,12 @@ export const effectiveLocal297=(w:PhaseWorld297):number=>effectiveCore297(w)/10;
 /** Shape callers with a civil timestamp need an EXPLICIT physical owner proof.
  * Missing proof is rejected in297; it is not borrowed from an unrelated root. */
 export function validationCore297(version:number,civilTick:number,coreNow297?:number):number {
- if(!integer(version,1,299))return NaN;
+ if(!integer(version,1,300))return NaN;
  if(!isCorePhysicalSchema297(version))return civilTick*10;
  return integer(civilTick)&&integer(coreNow297)&&Math.floor(coreNow297/10)===civilTick?coreNow297:NaN;
 }
 export function validPhaseCore297(raw:unknown,version:number,localBody=false):boolean {
- if(!raw||typeof raw!=='object'||Array.isArray(raw)||!integer(version,1,299))return false;
+ if(!raw||typeof raw!=='object'||Array.isArray(raw)||!integer(version,1,300))return false;
  const present='phaseCore297'in raw;
  if(!isCorePhysicalSchema297(version)||localBody)return !present;
  const p=Object.getOwnPropertyDescriptor(raw,'phaseCore297'),t=Object.getOwnPropertyDescriptor(raw,'tick');
@@ -37,7 +37,7 @@ export function suspensionDeltas297(heldAt:number,targetCivil:number,physical?:S
 }
 /** Optional prospective holder field. Absence is the historical phase0 capture. */
 export function heldCore297(holder:unknown,version:number,heldAt:number):number {
- if(!integer(version,1,299)||!holder||typeof holder!=='object'||Array.isArray(holder)||!integer(heldAt)||!integer(heldAt*10))return NaN;
+ if(!integer(version,1,300)||!holder||typeof holder!=='object'||Array.isArray(holder)||!integer(heldAt)||!integer(heldAt*10))return NaN;
  const present='heldAtCore297'in holder;if(!present)return heldAt*10;
  const d=Object.getOwnPropertyDescriptor(holder,'heldAtCore297');return isCorePhysicalSchema297(version)&&!!d&&d.enumerable===true&&Object.hasOwn(d,'value')&&integer(d.value)&&Math.floor(d.value/10)===heldAt?d.value:NaN;
 }

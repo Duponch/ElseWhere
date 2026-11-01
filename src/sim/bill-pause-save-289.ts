@@ -4,7 +4,7 @@ import type {World} from './types.ts';
 
 const own=(v:object,k:PropertyKey)=>Object.hasOwn(v,k);
 const plain=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype;
-const versionAllowed=(v:number)=>Number.isSafeInteger(v)&&v>=1&&v<=299;
+const versionAllowed=(v:number)=>Number.isSafeInteger(v)&&v>=1&&v<=300;
 const field=(v:object,k:string)=>{const d=Object.getOwnPropertyDescriptor(v,k);return d?.enumerable&&own(d,'value')?d:undefined;};
 
 /** Scalar only. A retained/minified original owns the same saved memory.

@@ -1,4 +1,5 @@
 import {validHumanIngestionOwners299} from '../sim/human-ingestion-save-299.ts';
+import {validIdleWanderOwners300} from '../sim/idle-wander-save-300.ts';
 import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
 import {validVictoryContentHistorical298,validShipComputerSensorsBuilding298} from '../sim/victory-content-save-298.ts';
 import {escapedShipProjection298,validEscapedShipsProjection298,validEscapedShipsProjectionScope298,type NativeUIWorld298} from '../sim/ship-escape-projection-298.ts';
@@ -1776,6 +1777,7 @@ export class SnapshotDecoder {
     // Public decoding and each foreign context retain their complete capture.
     const readHumanOwners=()=>validation.humanOwners?.read(next)??captureHumanOwners(next);
     if(!validHumanIngestionOwners299(next,next.schemaVersion,readHumanOwners))return resync('Horloge ou provenance alimentaire humaine invalide.');
+    if(!validIdleWanderOwners300(next,next.schemaVersion,readHumanOwners))return resync('Tâche locale d’errance civile invalide.');
     if(!validFactionCommsTransportForSnapshot298(next,next.schemaVersion,readHumanOwners))return resync('Communication de faction ou contact invalide.');
     if(Object.hasOwn(next,'group')||Object.hasOwn(next,'groupLosses')){
       try {const people=readHumanOwners().people;

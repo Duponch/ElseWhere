@@ -1,3 +1,4 @@
+import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {barrelFreeCapacity265,barrelExtractionProposal265,fermentationHaulCandidates265} from './fermentation-runtime-265.ts';
 import {isBurialContainer256} from './ancient-monument-runtime-256.ts';
@@ -186,7 +187,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
   // Logistics with a higher priority still uses the ordinary complete planner.
   const ready = world.jobs.filter(job => (job.kind!=='mine'||!explorationEnabled256(world)||world.tiles[cellIndex(world,job.x,job.z)]?.terrain==='rock')&&(job.kind!=='smooth-floor'||!smoothFloorReason281(world,job,job.id,budget.structureGeometry?.()))&&allows(ancientRepairTarget256(world,job))&&(!job.tree||!treeJobReason(world,job,pawn))&&!isConstruction(job) && job.reservedBy === null && !clearingCells.has(cellIndex(world,job.x,job.z)) && workPriority(pawn,workType(job)) > 0
     &&(job.kind!=='fix-breakdown'||fixBreakdownWanted(world,job)&&deliveredMaterial(world,job,'component')===1)
-    && sowingJobAllowed(world,pawn,job) && (job.kind!=='sow'||!packedAt(world,job)) && job.escrow.wood >= JOB_WOOD_COST[job.kind] && (Number(world.schemaVersion)===299 || pawn.hunger > 20 || job.kind === 'harvest') && (job.kind!=='deconstruct'||deconstructionAvailable(world,job,pawn.id)) && (!job.furniture||furnitureReady(world,job,pawn)&&allows(furnitureWorkTarget(world,job))))
+    && sowingJobAllowed(world,pawn,job) && (job.kind!=='sow'||!packedAt(world,job)) && job.escrow.wood >= JOB_WOOD_COST[job.kind] && (isSchema299OrLater(Number(world.schemaVersion)) || pawn.hunger > 20 || job.kind === 'harvest') && (job.kind!=='deconstruct'||deconstructionAvailable(world,job,pawn.id)) && (!job.furniture||furnitureReady(world,job,pawn)&&allows(furnitureWorkTarget(world,job))))
     .map(job => ({ job, target: treeWorkTarget(world,job)??ancientRepairTarget256(world,job), id: job.id, priority: workPriority(pawn,workType(job)), rank: job.kind==='fix-breakdown'?-3:job.kind==='flick'?-2.5:job.kind==='uninstall' ? -2 : job.kind==='deconstruct' ? job.wallDoor296?.plan?2:3 : workType(job) === 'gather' ? 0 : 1, distance: Math.abs(job.x-pawn.x)+Math.abs(job.z-pawn.z) }))
     .sort(compareCandidate);
   let reachable: Reachability | null = null;
@@ -280,7 +281,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     if(job.kind==='mine'&&explorationEnabled256(world)&&world.tiles[cellIndex(world,job.x,job.z)]?.terrain!=='rock')continue;
     if(job.kind==='smooth-floor'&&smoothFloorReason281(world,job,job.id,budget.structureGeometry?.()))continue;
     const work = workType(job);
-    if (job.reservedBy !== null || clearingCells.has(cellIndex(world,job.x,job.z)) || workPriority(pawn,work) === 0 || (delivered.get(`${job.id}:wood`) ?? 0) < JOB_WOOD_COST[job.kind] || (Number(world.schemaVersion)!==299 && pawn.hunger <= 20 && job.kind !== 'harvest')) continue;
+    if (job.reservedBy !== null || clearingCells.has(cellIndex(world,job.x,job.z)) || workPriority(pawn,work) === 0 || (delivered.get(`${job.id}:wood`) ?? 0) < JOB_WOOD_COST[job.kind] || (!isSchema299OrLater(Number(world.schemaVersion)) && pawn.hunger <= 20 && job.kind !== 'harvest')) continue;
     if(job.kind==='fix-breakdown'&&(!fixBreakdownWanted(world,job)||(delivered.get(`${job.id}:component`)??0)!==1))continue;
     if(job.kind==='sow'&&packedAt(world,job))continue;
     if(job.furniture&&(!furnitureReady(world,job,pawn)||!allows(furnitureWorkTarget(world,job))))continue;
@@ -306,7 +307,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     const proposal=planCooking(world,pawn,reachable,budget);
     if(proposal&&(!best||proposal.priority<best.priority||proposal.priority===best.priority&&best.rank>=-1))best={cooking:proposal,priority:proposal.priority,rank:-1,distance:Math.abs(pawn.x-proposal.station.x)+Math.abs(pawn.z-proposal.station.z),id:proposal.station.id,target:proposal.target};
   }
-  if (Number.isFinite(constructionHaulPriority(pawn)) && (Number(world.schemaVersion)===299 || pawn.hunger > 20) && (!best || best.priority >= constructionHaulPriority(pawn))) {
+  if (Number.isFinite(constructionHaulPriority(pawn)) && (isSchema299OrLater(Number(world.schemaVersion)) || pawn.hunger > 20) && (!best || best.priority >= constructionHaulPriority(pawn))) {
     const zonesByCell = new Map(storage.map(zone => [cellIndex(world, zone.x, zone.z), zone]));
     const hoppersByCell=new Map(world.structures.filter(s=>s.kind==='hopper').map(s=>[cellIndex(world,s.x,s.z),s]));
     const isPrisonFood=prisonFoodChecker(world);

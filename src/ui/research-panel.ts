@@ -41,8 +41,8 @@ function paintSelected(root:HTMLElement,world:World,send:(command:Command)=>void
 
 export function updateResearchPanel(root: HTMLElement, world: World, send: (command: Command) => void, actions:ResearchPanelActions={}): void {
   const stations=captureResearchStationIssues(world);
-  if(root.dataset.selectedResearch==='tree-sowing'&&![291,292,293,294,295,296,297,298,299].includes(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
-  if(root.dataset.selectedResearch==='firefoam'&&![290,291,292,293,294,295,296,297,298,299].includes(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
+  if(root.dataset.selectedResearch==='tree-sowing'&&![291,292,293,294,295,296,297,298,299,300].includes(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
+  if(root.dataset.selectedResearch==='firefoam'&&![290,291,292,293,294,295,296,297,298,299,300].includes(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
   if(!projectById.has(root.dataset.selectedResearch as ResearchProject))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
   const readiness=readResearchReadiness(world,root.dataset.selectedResearch as ResearchProject,stations);
   root.classList.add('research-reference');
@@ -81,8 +81,8 @@ export function updateResearchPanel(root: HTMLElement, world: World, send: (comm
     root.replaceChildren(layout);
   }
   for(const project of researchProjects){
-    if(project.id==='tree-sowing'){const node=root.querySelector<HTMLElement>('[data-research-node="tree-sowing"]')!;node.hidden=![291,292,293,294,295,296,297,298,299].includes(world.schemaVersion);if(node.hidden)continue;}
-    if(project.id==='firefoam'){const node=root.querySelector<HTMLElement>('[data-research-node="firefoam"]')!;node.hidden=![290,291,292,293,294,295,296,297,298,299].includes(world.schemaVersion);if(node.hidden)continue;}
+    if(project.id==='tree-sowing'){const node=root.querySelector<HTMLElement>('[data-research-node="tree-sowing"]')!;node.hidden=![291,292,293,294,295,296,297,298,299,300].includes(world.schemaVersion);if(node.hidden)continue;}
+    if(project.id==='firefoam'){const node=root.querySelector<HTMLElement>('[data-research-node="firefoam"]')!;node.hidden=![290,291,292,293,294,295,296,297,298,299,300].includes(world.schemaVersion);if(node.hidden)continue;}
     const done=researchUnlocked(world,project.id),active=world.research?.project===project.id,progress=project.progress(world),points=(progress?.points??0)/RESEARCH_SCALE,missing=researchPrerequisite(world,project.id);
     root.querySelector<HTMLProgressElement>(`[data-${project.prefix}-progress]`)!.value=points;
     const initial=done&&progress?.completedAt===0&&(world.scenario?.id==='survivors'||world.scenario?.id==='crashlanded');

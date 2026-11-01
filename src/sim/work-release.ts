@@ -1,3 +1,4 @@
+import {releaseIdleWander300} from './idle-wander-300.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import type {FactionCommsPawn298} from './faction-comms-state-298.ts';
 import {preparePartyRelease292} from './party-release-292.ts';
@@ -225,6 +226,7 @@ export function releaseAssignments(world:World,pawn:Pawn,despawning=false,ownerL
  * this half only after checking that it has no cross-actor notifier. */
 export function clearReleasedPawnAssignments259(pawn:Pawn):void {
   if(pawn.coupleTask285)throw Error('Entered couple stage requires its actual pair release before own-record cleanup');
+  releaseIdleWander300(pawn,false);
   delete (pawn as FactionCommsPawn298).factionComms298;
   delete pawn.brewing;delete pawn.orbitalTrade;delete pawn.deepWork;delete pawn.animalHandling;delete pawn.animalCare;delete pawn.animalFeed;delete pawn.burial;delete pawn.cleaning;delete pawn.trade;delete pawn.firefighting;delete pawn.ward;delete pawn.heatRefuge;delete pawn.research;delete pawn.tend;delete pawn.feed;delete pawn.medicalSleep;delete pawn.equipmentTask;
   delete pawn.shipCasketTask277;delete pawn.cryptosleepTask;delete pawn.rescue;delete pawn.animalRescue;delete pawn.surgery;delete pawn.hunting;delete pawn.openCasket;delete pawn.firefoamTask290;
