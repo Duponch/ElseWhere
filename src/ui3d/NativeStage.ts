@@ -10,6 +10,7 @@ import {NativeDamageTracker} from './NativeDamageTracker';
 import {NativeRendererStandby} from './NativeRendererStandby';
 import {normalizeNativeUiScale} from './native-preferences';
 import {NativeHitPose} from './NativeHitPose';
+import {NativeHoverPreview} from './native-hover-preview';
 import {setNativeCursor} from '../ui/native-cardboard-cursors';
 import {SHIP_FRAME_MAXIMUM_DELTA_298} from '../bridge/ship-countdown-wire-298';
 import {NATIVE_UI,NATIVE_RIGHT_DOCK_WIDTH,layoutNativePage,nativeVisualWidth,nativeMatrixColumns,nativeMatrixHeadingLines,wrapNativeText,nativeCardInk,type NativePageBox,type NativeRowBox,type NativeRect,type NativeRegion,type NativeRegionBox} from './native-layout';
@@ -52,6 +53,7 @@ export class NativeStage {
   private readonly management:CardboardPiece[]=[];
   private readonly pageGroup=new THREE.Group();
   private readonly pageContent=new THREE.ClippingGroup();
+  private readonly pageFooter=new THREE.ClippingGroup();
   private readonly regionGroups={navigation:new THREE.ClippingGroup(),details:new THREE.ClippingGroup(),graph:new THREE.ClippingGroup()};
   private readonly regionOffsets={navigation:0,details:0,graph:0};
   private graphX=0;
@@ -78,6 +80,7 @@ export class NativeStage {
   private page:NativePage|null=null;
   private pageBackdrop:CardboardPiece|undefined;
   private hovered:CardboardPiece|null=null;
+  private readonly hoverPreview=new NativeHoverPreview(message=>this.options.onError(message));
   private down:{piece:CardboardPiece;controlId?:string;outsidePage?:string;pageId?:string;layout?:NativePageBox;pose:NativeHitPose;pointerId:number;x:number;y:number}|null=null;
   private hoverPose:{piece:CardboardPiece;pose:NativeHitPose;pageId?:string}|undefined;
   private dismissedPointer:number|undefined;
@@ -181,7 +184,7 @@ export class NativeStage {
     this.hudRoot.position.set(0,0,-HUD_DISTANCE);this.camera.add(this.hudRoot);this.scene.add(this.camera);
     Object.values(this.anchors).forEach(group=>this.hudRoot.add(group));
     this.selectionBox.add(this.selectionFill,this.selectionOutline);this.selectionBox.visible=false;this.selectionBox.position.z=.5;this.hudRoot.add(this.selectionBox);
-    this.hudRoot.add(this.pageGroup);this.pageGroup.add(this.pageContent,...Object.values(this.regionGroups));
+    this.hudRoot.add(this.pageGroup);this.pageGroup.add(this.pageContent,...Object.values(this.regionGroups),this.pageFooter);
     this.anchors.bottomLeft.add(this.toolsDock);this.toolsDock.visible=false;
     for(const [index,kind]of (['orders','zones'] as const).entries()){
       const control:NativeControl={id:'map-dock:'+kind,label:kind==='orders'?'Ordres':'Zones',hint:kind==='orders'?'Ordres sur la carte':'Zones sur la carte',onActivate:()=>this.options.onTools?.(kind)};
@@ -307,8 +310,9 @@ export class NativeStage {
       if(this.shipCurtainPhase298==='clear'&&this.shipCurtainPageHandoff298){this.shipCurtainPageHandoff298=false;this.shipCurtainPage298=page?.id;}
       else this.resetShipCurtain298();
     }
+    const contentChanged=page?.contentKey!==this.page?.contentKey;
     const same=page?.id===this.page?.id,ownerChanged=page?.visual?.surface!==this.page?.visual?.surface||page?.visual?.roads!==this.page?.visual?.roads;
-    this.page=page;if(!same){this.cancelPress();this.scroll=0;this.regionOffsets.navigation=this.regionOffsets.details=this.regionOffsets.graph=this.graphX=this.paletteX=0;this.closeDropdown();}
+    this.page=page;if(!same){this.cancelPress();this.hover(null);this.scroll=0;this.regionOffsets.navigation=this.regionOffsets.details=this.regionOffsets.graph=this.graphX=this.paletteX=0;this.closeDropdown();}else if(contentChanged){this.cancelPress();this.scroll=0;}
     this.toolsDock.children.forEach((object,index)=>{const piece=object as CardboardPiece,active=page?.palette===(index===0?'orders':'zones');if(piece.userData.active!==active)piece.setActive(active,active?PALETTE.ochre:PALETTE.sageMountain);});
     this.rebuildPage(ownerChanged);this.layoutToolsDock();this.refreshWorldReadout();this.updateWorldReadoutVisibility();this.invalidate();
   }
@@ -586,7 +590,7 @@ export class NativeStage {
   }
   private unregister(piece:CardboardPiece):void{
     if(this.hintOwner===piece)this.clearHint();
-    this.moving.delete(piece);if(this.hovered===piece)this.hovered=null;
+    if(this.hovered===piece)this.hover(null);this.moving.delete(piece);
     for(const mesh of piece.userData.interactiveMeshes??[])this.hits.delete(mesh);
     this.art.disposePiece(piece);
   }
@@ -635,6 +639,8 @@ export class NativeStage {
   private hover(piece:CardboardPiece|null):void{
     if(piece?.userData.nativeStatic||piece?.userData.nativeDisabled)piece=null;
     if(piece===this.hovered)return;
+    const mesh=piece?.userData.interactiveMeshes?.[0];
+    this.hoverPreview.set(mesh?this.hits.get(mesh)?.control?.onHover:undefined);
     if(this.hovered){this.hovered.userData.hoverTarget=0;this.moving.add(this.hovered);}
     this.hovered=piece;this.hoverPose=undefined;
     if(piece){
@@ -808,6 +814,10 @@ export class NativeStage {
     const count=Math.floor((state.box.height-10)/25);if(state.index<state.offset)state.offset=state.index;else if(state.index>=state.offset+count)state.offset=state.index-count+1;this.rebuildDropdown();
   }
   private keyDown(event:KeyboardEvent):void{
+    if(this.page?.layout==='storage'&&(event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='f'){
+      const search=this.pageControls.find(hit=>hit.input&&String(hit.piece.userData.nativeId).endsWith('-search'));
+      if(search){this.swallow(event);this.closeDropdown();this.activate(search);return;}
+    }
     if(this.editor&&event.target===this.editor)return;
     if(this.dropdown){if(event.key==='Escape'||event.key==='Tab'){this.swallow(event);this.closeDropdown();return;}if(['ArrowDown','ArrowUp','Home','End','Enter',' '].includes(event.key)){this.swallow(event);this.dropdownKey(event.key);return;}}
     if(event.key==='Escape'){
@@ -842,18 +852,18 @@ export class NativeStage {
       if(this.pageBox?.layout==='palette')this.setHorizontalOffset(region,this.horizontalOffset(region)+(Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY)*unit);
       else if((region==='graph'||this.pageBox?.layout==='table'&&(region==='catalogue'||region==='navigation'))&&(event.shiftKey||Math.abs(event.deltaX)>Math.abs(event.deltaY))){const target=region==='navigation'?'catalogue':region;this.setHorizontalOffset(target,this.horizontalOffset(target)+(event.shiftKey?event.deltaY:event.deltaX)*unit);}
       else this.setRegionOffset(region,this.regionOffset(region)+event.deltaY*unit);
-      this.rebuildPage(true);this.invalidate();return;
+      this.hover(null);this.rebuildPage(true);this.invalidate();return;
     }
     const hit=this.hit(event.clientX,event.clientY);
     if(hit||this.frontVisible||this.page?.modal){
       this.swallow(event);if(hit&&!this.pagePieces.includes(hit.piece))return;if(this.maxScroll<=0)return;
       const delta=event.deltaMode===1?event.deltaY*16:event.deltaMode===2?event.deltaY*this.height:event.deltaY;
       const next=THREE.MathUtils.clamp(this.scroll+delta,0,this.maxScroll);
-      if(next!==this.scroll){this.scroll=next;this.rebuildPage(true);this.invalidate();}
+      if(next!==this.scroll){this.scroll=next;this.hover(null);this.rebuildPage(true);this.invalidate();}
     }
   }
   private measure=(text:string,size:number,bold=false):number=>{this.measureContext.font=this.font(size,bold);return this.measureContext.measureText(text).width;};
-  private primaryRegion():NativeRegion|undefined{return this.pageBox?.layout==='architect'||this.pageBox?.layout==='table'&&this.pageBox.regions.catalogue?'catalogue':this.pageBox?.layout==='research'?'details':undefined;}
+  private primaryRegion():NativeRegion|undefined{return this.pageBox?.layout==='storage'||this.pageBox?.layout==='architect'||this.pageBox?.layout==='table'&&this.pageBox.regions.catalogue?'catalogue':this.pageBox?.layout==='research'?'details':undefined;}
   private horizontalOffset(region?:NativeRegion):number{return region==='graph'?this.graphX:region==='catalogue'&&(this.pageBox?.layout==='palette'||this.pageBox?.layout==='table')?this.paletteX:0;}
   private setHorizontalOffset(region:NativeRegion|undefined,value:number):void{const rect=region?this.pageBox?.regions[region]:undefined,next=THREE.MathUtils.clamp(value,0,Math.max(0,(rect?.contentWidth??rect?.width??0)-(rect?.width??0)));if(region==='graph')this.graphX=next;else if(region==='catalogue'&&(this.pageBox?.layout==='palette'||this.pageBox?.layout==='table'))this.paletteX=next;}
   private regionOffset(region?:NativeRegion):number{return !region||region===this.primaryRegion()||this.pageBox?.layout==='table'&&region==='navigation'?this.scroll:region==='catalogue'?this.scroll:this.regionOffsets[region];}
@@ -935,7 +945,7 @@ export class NativeStage {
     return [{...ink,controls:controls?.map(control=>this.controlInk(control)),columns:columns?.map(({hint:_columnHint,...column})=>column)},!!this.rowHint(row)];
   }
   private pageInkSignature(page:NativePage|null):string{
-    return page?JSON.stringify([page.id,page.title,page.subtitle,page.width,page.height,page.layout,page.palette,page.research,page.columnRatio,page.portrait?.url,page.visual?.selected,page.visual?.markers,page.rows.map(row=>this.rowInk(row)),page.actions?.map(control=>this.controlInk(control)),page.closable,this.textFontRevision,this.textEntityRevision,this.frontVisible,this.width,this.height,this.displayScale,this.bottomDockHeight,this.scroll,this.regionOffsets,this.graphX,this.paletteX]):'';
+    return page?JSON.stringify([page.id,page.contentKey,page.title,page.subtitle,page.width,page.height,page.layout,page.palette,page.research,page.columnRatio,page.portrait?.url,page.visual?.selected,page.visual?.markers,page.rows.map(row=>this.rowInk(row)),page.actions?.map(control=>this.controlInk(control)),page.closable,this.textFontRevision,this.textEntityRevision,this.frontVisible,this.width,this.height,this.displayScale,this.bottomDockHeight,this.scroll,this.regionOffsets,this.graphX,this.paletteX]):'';
   }
   private rebuildPage(force=false):void{
     const page=this.page;
@@ -991,6 +1001,8 @@ export class NativeStage {
     this.pageGroup.updateMatrixWorld(true);
     const local=(x:number,y:number)=>new THREE.Vector3((x-box.width/2)*k,(box.height/2-y)*k,0).applyMatrix4(this.pageGroup.matrixWorld);
     const clip=(group:THREE.ClippingGroup,rect:NativeRect)=>{const tl=local(rect.x,rect.y),br=local(rect.x+rect.width,rect.y+rect.height);group.clippingPlanes=[new THREE.Plane(new THREE.Vector3(1,0,0),-tl.x),new THREE.Plane(new THREE.Vector3(-1,0,0),br.x),new THREE.Plane(new THREE.Vector3(0,-1,0),tl.y),new THREE.Plane(new THREE.Vector3(0,1,0),-br.y)];};
+    this.pageFooter.visible=box.layout==='storage';
+    if(this.pageFooter.visible)clip(this.pageFooter,{x:0,y:box.height-box.footer,width:box.width,height:box.footer});
     clip(this.pageContent,box.layout==='table'?box.regions.catalogue??box.body:box.body);for(const [key,group]of Object.entries(this.regionGroups))clip(group,box.regions[key as NativeRegion]??box.body);
     for(const r of visible){
       const row=r.row,offset=this.regionOffset(row.region),group=this.regionGroup(row.region),top=box.header+r.top-offset,cy=top+r.height/2;
@@ -1025,7 +1037,7 @@ export class NativeStage {
       }
     }
     this.drawScrollbars(box);
-    for(const action of box.actions)this.control(action.control,(action.x+action.width/2-box.width/2)*k,(box.height/2-box.header-action.y-action.height/2)*k,action.width*k,action.height*k,.09,action.style);
+    for(const action of box.actions){const piece=this.control(action.control,(action.x+action.width/2-box.width/2)*k,(box.height/2-box.header-action.y-action.height/2)*k,action.width*k,action.height*k,.09,action.style);if(box.layout==='storage')this.pageFooter.add(piece);}
     if(page.visual){
       this.globe??=new NativeGlobe(tile=>{try{this.options.onActivate?.('world:select-tile');this.page?.visual?.onSelect(tile);}catch(error){this.options.onError(String(error));}});
       this.pageGroup.add(this.globe);this.globe.visible=true;const visualWidth=nativeVisualWidth(page,box.width);
@@ -1058,6 +1070,12 @@ export class NativeStage {
   }
   private drawPageRow(ctx:CanvasRenderingContext2D,r:NativeRowBox,top:number,rng:()=>number,box:NativePageBox):void{
     const row=r.row,ink=PALETTE.inkDark,body=NATIVE_UI.body,line=NATIVE_UI.line;ctx.fillStyle=ink;ctx.textAlign='left';
+    if(row.tree){
+      const left=r.x+Math.max(0,row.tree.depth)*17+28;
+      ctx.fillStyle=row.controls?.every(control=>control.disabled)?'#7a705f':ink;
+      this.semanticText(ctx,r.labelLines[0]??row.label,left,top+18,r.labelWidth,14,row.tree.depth===0);
+      return;
+    }
     const record=row.presentation==='record'||!!row.controls?.length&&!!row.label&&!row.meter&&!row.columns&&!r.matrix;
     if(record||row.presentation==='summary'){
       const summary=row.presentation==='summary';drawHandRect(ctx,r.x-4,top+2,r.width+6,r.height-7,summary?'rgba(217,153,62,.12)':'rgba(255,251,235,.38)','rgba(122,95,58,.28)',.75,rng);
@@ -1107,7 +1125,23 @@ export class NativeStage {
       ctx.save();ctx.scale(wp/cssW,hp/cssH);ctx.fillStyle=control.disabled?'#8b7b60':PALETTE.inkDark;ctx.textAlign='center';
       const ink=control.disabled?'#776c55':PALETTE.inkDark;
       const icon=(cx:number,cy:number,r:number)=>drawNativeActionIcon(ctx,control.icon??(control.label==='▶'?'play':control.id),cx,cy,r,ink,PALETTE.creamPaper);
-      if(style==='tile'||style==='navigation'){
+      if(control.glyph){
+        const cx=cssW/2,cy=cssH/2;
+        if(control.glyph==='expand'||control.glyph==='collapse'){
+          ctx.fillStyle=ink;ctx.beginPath();
+          if(control.glyph==='collapse'){ctx.moveTo(cx-5,cy-3);ctx.lineTo(cx+5,cy-3);ctx.lineTo(cx,cy+4);}
+          else{ctx.moveTo(cx-3,cy-5);ctx.lineTo(cx+4,cy);ctx.lineTo(cx-3,cy+5);}
+          ctx.closePath();ctx.fill();
+        }else{
+          drawHandRect(ctx,cx-8,cy-8,16,16,PALETTE.creamPaper,ink,1,rng);
+          ctx.strokeStyle=control.disabled?ink:control.glyph==='allow'?PALETTE.pineDark:control.glyph==='forbid'?PALETTE.terracotta:PALETTE.ochre;
+          ctx.lineWidth=2.4;ctx.lineCap='round';ctx.beginPath();
+          if(control.glyph==='allow'){ctx.moveTo(cx-5,cy);ctx.lineTo(cx-1,cy+4);ctx.lineTo(cx+6,cy-5);}
+          else if(control.glyph==='forbid'){ctx.moveTo(cx-4,cy-4);ctx.lineTo(cx+4,cy+4);ctx.moveTo(cx+4,cy-4);ctx.lineTo(cx-4,cy+4);}
+          else{ctx.moveTo(cx-5,cy);ctx.lineTo(cx+5,cy);}
+          ctx.stroke();
+        }
+      }else if(style==='tile'||style==='navigation'){
         const radius=Math.min(23,cssW*.24,cssH*.24),cy=cssH*.34;drawHandBlob(ctx,cssW/2,cy,radius+5,PALETTE.creamPaper,ink,1.8,rng);icon(cssW/2,cy,radius*.77);
         const lines=wrapNativeText(control.label,cssW-13,this.measure,13).slice(0,2),bandHeight=lines.length>1?31:24,bandY=cssH-bandHeight-4;
         ctx.save();ctx.translate(cssW/2,bandY+bandHeight/2);ctx.rotate(this.seed(control.id)%2?.024:-.024);drawHandRect(ctx,-cssW*.46,-bandHeight/2,cssW*.92,bandHeight,PALETTE.creamPaper,ink,1.1,rng);ctx.font=this.font(13,true);lines.forEach((line,index)=>ctx.fillText(line,0,4+(index-(lines.length-1)/2)*14,cssW-13));ctx.restore();
@@ -1139,11 +1173,11 @@ export class NativeStage {
         if(control.caption){ctx.font=this.font(workCell?12:11,workCell);ctx.fillStyle=workCell?'#392b20':'#5b5b42';ctx.fillText(control.caption,cssW/2,cssH-5,cssW-6);}
       }
       if(control.select){const cy=workCell?10:cssH/2;ctx.fillStyle=PALETTE.inkDark;ctx.beginPath();ctx.moveTo(cssW-12,cy-2);ctx.lineTo(cssW-5,cy-2);ctx.lineTo(cssW-8.5,cy+3);ctx.closePath();ctx.fill();}
-      if(control.active)drawMarkerLine(ctx,5,cssH-3,cssW-5,cssH-3,PALETTE.inkDark,1,rng);
+      if(control.active&&!control.glyph)drawMarkerLine(ctx,5,cssH-3,cssW-5,cssH-3,PALETTE.inkDark,1,rng);
       ctx.restore();
     };
-    const piece=this.pagePiece(control.id,{w,h,depth:.046,bevel:.038,uvPadding:1,textureWidth:Math.max(32,Math.ceil(cssW*2)),textureHeight:Math.max(32,Math.ceil(cssH*2)),bgColor:control.disabled?PALETTE.kraftLight:control.active?PALETTE.ochre:control.color??PALETTE.sageMountain,seed:this.seed(control.id),interactive:true,drawFn:draw},
-      JSON.stringify([control.label,control.caption,control.description,control.icon,style,node,inset?.icon,!!inset?.disabled,!!control.active,!!control.disabled,!!control.select,this.textFontRevision]),x,y,z,control);
+    const piece=this.pagePiece(control.id,{w,h,depth:.046,bevel:.038,uvPadding:1,textureWidth:Math.max(32,Math.ceil(cssW*2)),textureHeight:Math.max(32,Math.ceil(cssH*2)),bgColor:control.glyph?PALETTE.creamPaper:control.disabled?PALETTE.kraftLight:control.active?PALETTE.ochre:control.color??PALETTE.sageMountain,seed:this.seed(control.id),interactive:true,drawFn:draw},
+      JSON.stringify([control.label,control.caption,control.description,control.icon,control.glyph,control.color,style,node,inset?.icon,!!inset?.disabled,!!control.active,!!control.disabled,!!control.select,this.textFontRevision]),x,y,z,control);
     piece.userData.nativeStyle=style;piece.userData.active=!!control.active;
     piece.userData.nativeToolbarPose=style==='tile'||style==='navigation'||style==='tab';this.setPose(piece,piece.userData.hoverVal);
     this.pageGroup.add(piece);return piece;
@@ -1204,6 +1238,7 @@ export class NativeStage {
     }
     const {piece,hit}=record;
     hit.control=control;hit.input=input;
+    if(created&&interaction?.hovered)this.hoverPreview.set(control?.onHover);
     const hint=control?.hint??control?.label??'';
     if(this.hintOwner===piece&&piece.userData.tooltip!==hint)this.clearHint();
     piece.userData.tooltip=hint;piece.userData.nativeDisabled=!!control?.disabled;
@@ -1315,7 +1350,7 @@ export class NativeStage {
     return task;
   }
   dispose():void{
-    if(this.closed)return;this.closed=true;this.resetShipCurtain298(false);this.countdownFrameAt298=undefined;this.countdownFrameDriver298=undefined;this.countdownFrameEligible298=false;this.countdownFeedEligible298=false;this.fontRequest++;this.clearHint();clearTimeout(this.noticeTimer);this.finishEdit(false,false);cancelAnimationFrame(this.frameId);
+    if(this.closed)return;this.hover(null);this.closed=true;this.resetShipCurtain298(false);this.countdownFrameAt298=undefined;this.countdownFrameDriver298=undefined;this.countdownFrameEligible298=false;this.countdownFeedEligible298=false;this.fontRequest++;this.clearHint();clearTimeout(this.noticeTimer);this.finishEdit(false,false);cancelAnimationFrame(this.frameId);
     setNativeCursor(document.documentElement,undefined);
     for(const dispose of this.disposers)dispose();this.disposers.length=0;this.overlayCache.dispose();for(const image of this.portraitImages.values()){image.onload=null;image.onerror=null;}this.portraitImages.clear();this.globe?.dispose();this.selectionFill.geometry.dispose();this.selectionFill.material.dispose();this.selectionOutline.geometry.dispose();this.selectionOutline.material.dispose();this.shipCurtainMesh298.geometry.dispose();this.shipCurtainMaterial298.dispose();this.shipCurtainScene298.clear();this.art.dispose();this.ownRenderer.domElement.remove();void this.ownRenderer.dispose();this.hits.clear();this.moving.clear();this.retainedPagePieces.clear();
   }

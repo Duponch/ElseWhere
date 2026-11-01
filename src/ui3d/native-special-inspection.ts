@@ -292,9 +292,28 @@ export function nativeSpecialRows(state: NativeUiState, nativeActions: NativeUiA
   const pile = selected?.kind === 'pile' ? world.piles.find(pile => pile.id === selected.id) : undefined;
   const body = pawn?.state === 'dead' ? pawn : pile?.humanCorpse ? world.pawns.find(pawn => pawn.id === pile.humanCorpse!.pawnId) : undefined;
   if (body) rows.push({ id: 'special-burial', label: `Dépouille de ${body.name}`, controls: [button('special-burial', 'Inhumer…', () => burialPage(scope, body.id))] });
-  if (selected?.kind === 'growing') {
-    const zone = world.growingZones.find(zone => zone.id === selected.id);
-    if (zone) rows.push({ id: 'special-crop-species', label: zone.basinId === undefined ? 'Culture de la zone' : 'Culture hydroponique', value: growingPlantLabel291(zone.plant), detail: growingCultureHelp(zone.plant, world), controls: growingCultureChoices(zone, world).map(plant => button(`crop-${plant}`, growingPlantLabel291(plant), async () => { const current = assertScope(scope).growingZones.find(zone => zone.id === selected.id); if (!current) throw Error('La zone a disparu.'); await send({ type: 'growing-policy', zoneId: current.id, plant, allowSow: current.allowSow, allowCut: current.allowCut }); }, false, zone.plant === plant)) });
+  const growing = selected?.kind === 'growing' ? world.growingZones.find(zone => zone.id === selected.id)
+    : structure?.kind === 'hydroponics-basin' && knownBuilding256(world,structure) && targetBuildingPlayerUse263(world,structure) ? world.growingZones.find(zone => zone.basinId === structure.id) : undefined;
+  if (growing) {
+    const zone = growing, choices = growingCultureChoices(zone, world);
+    const choosePlant = (plant:typeof zone.plant) => button(`crop-${plant}`, growingPlantLabel291(plant), async () => {
+      const current = assertScope(scope).growingZones.find(current => current.id === zone.id);
+      if (!current) throw Error('La zone a disparu.');
+      await send({ type: 'growing-policy', zoneId: current.id, plant, allowSow: current.allowSow, allowCut: current.allowCut });
+    }, false, zone.plant === plant, growingCultureHelp(plant, world));
+    const choice = button('special-crop-select', growingPlantLabel291(zone.plant), () => {}, false, false, growingCultureHelp(zone.plant, world));
+    choice.select = { value: zone.plant, options: choices.map(plant => ({value:plant,label:growingPlantLabel291(plant),hint:growingCultureHelp(plant,world)})), onChange:async value => {
+      const plant = choices.find(plant => plant === value); if (plant) await choosePlant(plant).onActivate();
+    } };
+    rows.push({ id:'special-crop-species',label:zone.basinId===undefined?'Culture':'Culture hydroponique',value:growingPlantLabel291(zone.plant),compact:true,presentation:'plain',hint:growingCultureHelp(zone.plant,world),controls:[choice] });
+    if (selected?.kind !== 'growing') {
+      rows.push(row('special-crop-size','Surface de culture',`${zone.cells.length} cases`));
+      for (const [field,label] of [['allowSow','Autoriser les semis'],['allowCut','Couper les plantes indésirables']] as const) rows.push(toggle(`special-crop-${field}`,label,zone[field],async enabled=>{
+        const current=assertScope(scope).growingZones.find(current=>current.id===zone.id);if(!current)throw Error('La zone a disparu.');
+        await send({type:'growing-policy',zoneId:current.id,allowSow:field==='allowSow'?enabled:current.allowSow,allowCut:field==='allowCut'?enabled:current.allowCut});
+      }));
+    }
+    if (zone.basinId !== undefined) rows.push(row('special-crop-basin-care','Bac hydroponique','Fertilité 280 % · 70 W en continu','Sans alimentation : nouveaux semis suspendus et plantes qui dépérissent. Prévoir une lumière horticole sous toit et une température adaptée. Retirer le bac détruit ses plantes.'));
   }
   if (!structure || !knownBuilding256(world, structure)) return rows;
   if (isShipPartKind298(structure.kind) && world.schemaVersion >= 276) rows.push({ id: 'special-ship-assembly', label: 'Assemblage du vaisseau', controls: [button('special-ship-assembly', 'Inspecter les pièces reliées', () => shipAssemblyPage(scope, structure.id))] });

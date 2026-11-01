@@ -1112,6 +1112,11 @@ function nativeActions():NativeUiActions {
     launchShip298:id=>nativeShipTerminal298?.openLaunch(id),
     resizeZone:(kind,id,shrink)=>{nativeCustomPage=undefined;editZone(kind,id,shrink);},
     paintAllowedArea:(id,enabled)=>{if(!snapshot?.allowedAreas?.some(area=>area.id===id))return;nativeCustomPage=undefined;setPanel(null);applyTool(enabled?'allowed-expand':'allowed-shrink');allowedAreaEditId=id;renderer?.setAllowedAreaTarget(id);},
+    previewAllowedArea:id=>{
+      if(id!==undefined&&!snapshot?.allowedAreas?.some(area=>area.id===id))return;
+      const target=id===undefined?allowedAreaEditId:id;
+      renderer?.setAllowedAreaTarget(target!==undefined&&snapshot?.allowedAreas?.some(area=>area.id===target)?target:undefined);
+    },
     selectObject:object=>selectObjects([object]),
     readBillWorkers:(structureId,billId)=>client.billWorkerOptions(structureId,billId),
     cancelCampEntry:(id,groupId)=>client.cancelCampEntry256(id,groupId),

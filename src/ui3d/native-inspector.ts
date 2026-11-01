@@ -13,7 +13,8 @@ import { constructionRecipe } from '../sim/construction-materials';
 import { mapCellDetails } from '../ui/map-cell-details';
 import { buildingLabels } from '../ui/building-labels';
 import { plantInspection } from '../ui/plant-inspection';
-import { STORAGE_FILTER_TREE, storageTreeSelection, storageTreePermissions, storageNodeLeaves, type StorageFilterNode } from '../ui/storage-filter-tree';
+import { STORAGE_FILTER_TREE, storageTreeSelection, storageTreePermissions, storageNodeLeaves, STORAGE_LEAVES } from '../ui/storage-filter-tree';
+import {nativeStorageTreeRows} from './native-storage-editor';
 import { shelfControlOptions } from '../ui/shelf-inspection';
 import { ITEM_DEFINITIONS } from '../sim/items';
 import { STRUCTURE_DEFINITIONS } from '../sim/definitions';
@@ -49,7 +50,7 @@ import { MALNUTRITION_UNIT } from '../sim/malnutrition';
 import { HEAT_UNIT, comfortableTemperature, apparelInsulation } from '../sim/heat-rules';
 import { INFECTION_UNIT } from '../sim/infection-rules';
 import { wornApparel, apparelLabel, apparelDefinition, armorPiece } from '../sim/apparel-rules';
-import { WEAPON_QUALITIES, equippedWeapon, weaponLabel } from '../sim/equipment-rules';
+import { QUALITY_LABELS, WEAPON_QUALITIES, equippedWeapon, weaponLabel, type WeaponQuality } from '../sim/equipment-rules';
 import { minifiable } from '../sim/furniture-rules';
 import { targetBuildingPlayerUse263 } from '../sim/world-target-building-263';
 import { healthCapacityTooltip, healthPartTooltip, healthSurgeryView } from '../ui/health-inspection';
@@ -128,6 +129,7 @@ let selectionKey = '', subpage: { kind: 'bills' | 'storage' | 'item' | 'anatomy'
 const billDrafts = new Map<string, BillSettings>();
 const billWorkers = new Map<string, BillWorkerOptions283>();
 let storageClipboard: StorageSettings | undefined;
+let storageNavigation: {target:string;search:string;expanded:Set<string>} | undefined;
 const lightCache = new LightEnvironmentCache();
 
 function row(id: string, label: string, value?: string, hint?: string): NativeRow { return { id, label, value, hint }; }
@@ -432,37 +434,86 @@ function billPage(world: World, structure: Structure): NativePage {
 function storagePage(world: World, structureId?: number, stockpileId?: number): NativePage | null {
   const structure = world.structures.find(s => s.id === structureId), stockpile = world.stockpiles.find(s => s.id === stockpileId), current = structure?.shelf?.settings ?? stockpile;
   if (!current) return null;
+  const target = structureId === undefined ? `stockpile:${stockpileId}` : `shelf:${structureId}`;
+  if (storageNavigation?.target !== target) storageNavigation = { target, search: '', expanded: new Set<string>() };
+  const navigation = storageNavigation;
   const selected = storageTreeSelection(current.filters, current.items);
-  const update = (settings: StorageSettings) => send(structureId !== undefined ? { type: 'shelf-policy', structureId, settings } : { type: 'stockpile-policy', stockpileId: stockpileId!, settings });
+  const admittedSelection=selectionKey;
+  const update = (settings: StorageSettings) => { currentPolicy(); return send(structureId !== undefined ? { type: 'shelf-policy', structureId, settings } : { type: 'stockpile-policy', stockpileId: stockpileId!, settings }); };
   const currentPolicy = () => {
-    const fresh = latest.world, shelf = fresh?.structures.find(structure => structure.id === structureId), policy = shelf?.shelf?.settings ?? fresh?.stockpiles.find(stockpile => stockpile.id === stockpileId);
+    const state=owner.readState?.()??latest;
+    if(nativeInspectorSelectionKey(state)!==admittedSelection)throw Error('La sélection a changé. Ouvrez à nouveau les réglages de cette réserve.');
+    const fresh = state.world, shelf = fresh?.structures.find(structure => structure.id === structureId), policy = shelf?.shelf?.settings ?? fresh?.stockpiles.find(stockpile => stockpile.id === stockpileId);
     if (!fresh || !policy || shelf && !targetBuildingPlayerUse263(fresh, shelf)) throw Error('Ce stockage n’est plus disponible pour la colonie.');
     return policy;
   };
   const capacity = structure?.shelf
     ? row('storage-capacity', 'Capacité par case', `${groundMaxStacks(world, structure)} piles`, 'Chaque pile respecte la limite propre à son objet.')
-    : { ...numberRow('storage-capacity', 'Plafond d’une pile au sol', current.capacity, 1, ITEM_DEFINITIONS.silver.stackLimit, capacity => update({ capacity })), detail: 'La limite propre à chaque objet reste applicable si elle est inférieure à ce plafond.' };
-  const rows: NativeRow[] = [numberRow('storage-priority', 'Priorité du stockage', current.priority, 1, world.schemaVersion >= 219 ? 5 : 4, priority => update({ priority })), capacity,
+    : { ...numberRow('storage-capacity', 'Pile max.', current.capacity, 1, ITEM_DEFINITIONS.silver.stackLimit, capacity => update({ capacity })), detail: 'La limite propre à chaque objet reste applicable si elle est inférieure à ce plafond.' };
+  const rows: NativeRow[] = [choices('storage-priority','Priorité',current.priority,world.schemaVersion>=219?[1,2,3,4,5]:[1,2,3,4],priority=>update({priority}),value=>['','Basse','Normale','Préférée','Importante','Critique'][value]??String(value)), capacity,
     booleanRow('fresh', 'Accepter les produits frais', current.allowFresh !== false, allowFresh => update({ allowFresh })), booleanRow('rotten', 'Accepter les produits pourris', current.allowRotten !== false, allowRotten => update({ allowRotten }))];
-  rows.push({ id: 'storage-copy-settings', label: 'Copier les réglages confirmés', detail: 'Filtres, priorité, qualité, état et fraîcheur. Les capacités physiques de chaque stockage sont conservées.', controls: [
-    control('storage-copy', 'Copier les réglages', () => { const policy = currentPolicy(); storageClipboard = structuredClone({ filters: policy.filters, items: policy.items, priority: policy.priority, quality: policy.quality, hitPoints: policy.hitPoints, allowFresh: policy.allowFresh, allowRotten: policy.allowRotten }); feedback = 'Réglages copiés.'; }),
-    control('storage-paste', 'Coller les réglages', () => { currentPolicy(); if (!storageClipboard) throw Error('Copiez d’abord les réglages d’un stockage.'); return update(structuredClone(storageClipboard)); }, !storageClipboard),
+  rows.push({ id: 'storage-copy-settings', label: 'Réglages', detail: 'Filtres, priorité, qualité, état et fraîcheur. Les capacités physiques de chaque stockage sont conservées.', controls: [
+    control('storage-copy', 'Copier', () => { const policy = currentPolicy(); storageClipboard = structuredClone({ filters: policy.filters, items: policy.items, priority: policy.priority, quality: policy.quality, hitPoints: policy.hitPoints, allowFresh: policy.allowFresh, allowRotten: policy.allowRotten }); feedback = 'Réglages copiés.'; }),
+    control('storage-paste', 'Coller', () => { currentPolicy(); if (!storageClipboard) throw Error('Copiez d’abord les réglages d’un stockage.'); return update(structuredClone(storageClipboard)); }, !storageClipboard),
   ] });
   const quality = current.quality ?? { min: WEAPON_QUALITIES[0], max: WEAPON_QUALITIES.at(-1)! }, hp = current.hitPoints ?? { min: 0, max: 100 };
-  rows.push(choices('storage-quality-min', 'Qualité minimum', quality.min, WEAPON_QUALITIES.filter(value => WEAPON_QUALITIES.indexOf(value) <= WEAPON_QUALITIES.indexOf(quality.max)), min => update({ quality: { ...quality, min } })), choices('storage-quality-max', 'Qualité maximum', quality.max, WEAPON_QUALITIES.filter(value => WEAPON_QUALITIES.indexOf(value) >= WEAPON_QUALITIES.indexOf(quality.min)), max => update({ quality: { ...quality, max } })), numberRow('storage-hp-min', 'État minimum (%)', hp.min, 0, hp.max, min => update({ hitPoints: { ...hp, min } })), numberRow('storage-hp-max', 'État maximum (%)', hp.max, hp.min, 100, max => update({ hitPoints: { ...hp, max } })));
-  const nodeRows = (node: StorageFilterNode, path: string) => {
-    const leaves = storageNodeLeaves(node), allowed = structureId === undefined ? leaves : leaves.filter(item => shelfControlOptions.fixedAllows!(item));
-    const selectedCount = allowed.filter(item => selected.has(item)).length, state = selectedCount === 0 ? 'none' : selectedCount === allowed.length ? 'all' : 'mixed';
-    rows.push({ id: `storage-node-${node.id}`, label: `${path}${node.label}`, value: state === 'all' ? 'Autorisé' : state === 'none' ? 'Interdit' : 'Partiel', detail: allowed.length < leaves.length ? 'Les exclusions physiques de l’étagère restent applicables.' : undefined, controls: [control(`storage-node-${node.id}`, state === 'all' ? 'Interdire' : 'Autoriser', () => {
-      const next = new Set(selected); for (const leaf of allowed) { if (state === 'all') next.delete(leaf); else next.add(leaf); }
-      return update(storageTreePermissions(next));
-    }, !allowed.length, state === 'all')] });
-    for (const child of node.children ?? []) nodeRows(child, `${path}› `);
+  rows.push(choices('storage-quality-min', 'Qualité minimum', quality.min, WEAPON_QUALITIES.filter(value => WEAPON_QUALITIES.indexOf(value) <= WEAPON_QUALITIES.indexOf(quality.max)), min => {
+    const fresh = currentPolicy().quality ?? { min: WEAPON_QUALITIES[0]!, max: WEAPON_QUALITIES.at(-1)! };
+    if (WEAPON_QUALITIES.indexOf(min) > WEAPON_QUALITIES.indexOf(fresh.max)) throw Error('Le minimum dépasse le maximum.');
+    return update({ quality: { ...fresh, min } });
+  }), choices('storage-quality-max', 'Qualité maximum', quality.max, WEAPON_QUALITIES.filter(value => WEAPON_QUALITIES.indexOf(value) >= WEAPON_QUALITIES.indexOf(quality.min)), max => {
+    const fresh = currentPolicy().quality ?? { min: WEAPON_QUALITIES[0]!, max: WEAPON_QUALITIES.at(-1)! };
+    if (WEAPON_QUALITIES.indexOf(max) < WEAPON_QUALITIES.indexOf(fresh.min)) throw Error('Le minimum dépasse le maximum.');
+    return update({ quality: { ...fresh, max } });
+  }), numberRow('storage-hp-min', 'PV minimum (%)', hp.min, 0, hp.max, min => {
+    const fresh = currentPolicy().hitPoints ?? { min: 0, max: 100 };
+    if (min > fresh.max) throw Error('Le minimum dépasse le maximum.');
+    return update({ hitPoints: { ...fresh, min } });
+  }), numberRow('storage-hp-max', 'PV maximum (%)', hp.max, hp.min, 100, max => {
+    const fresh = currentPolicy().hitPoints ?? { min: 0, max: 100 };
+    if (max < fresh.min) throw Error('Le minimum dépasse le maximum.');
+    return update({ hitPoints: { ...fresh, max } });
+  }));
+  const freshRow=rows.find(entry=>entry.id==='fresh'),rottenRow=rows.find(entry=>entry.id==='rotten');
+  if(freshRow&&rottenRow){
+    const fresh=freshRow.controls![0]!,rotten=rottenRow.controls![0]!;
+    rows.splice(rows.indexOf(freshRow),2,{id:'storage-freshness',label:'Conservation',controls:[{...fresh,label:'Frais',hint:'Autoriser ou interdire les produits frais'},{...rotten,label:'Pourris',hint:'Autoriser ou interdire les produits pourris'}]});
+  }
+  const minimum=rows.find(entry=>entry.id==='storage-quality-min'),maximum=rows.find(entry=>entry.id==='storage-quality-max');
+  if(minimum&&maximum){
+    const bounds=[minimum.controls![0]!,maximum.controls![0]!].map((action,index)=>({...action,label:QUALITY_LABELS[(index===0?quality.min:quality.max)!],caption:index===0?'Minimum':'Maximum',select:action.select?{...action.select,options:action.select.options.map(option=>({...option,label:QUALITY_LABELS[option.value as WeaponQuality]}))}:undefined}));
+    rows.splice(rows.indexOf(minimum),2,{id:'storage-quality',label:'Qualité',controls:bounds});
+  }
+  const hpMinimum=rows.find(entry=>entry.id==='storage-hp-min'),hpMaximum=rows.find(entry=>entry.id==='storage-hp-max');
+  if(hpMinimum){hpMinimum.column=0;hpMinimum.label='PV min %';hpMinimum.labelWidth=78;}
+  if(hpMaximum){hpMaximum.column=1;hpMaximum.label='PV max %';hpMaximum.labelWidth=78;}
+  for (const entry of rows) { entry.region = 'details'; entry.compact = true; entry.presentation = 'plain'; }
+  const fixedAllows = structureId === undefined ? undefined : shelfControlOptions.fixedAllows;
+  const setAll = (allow:boolean) => {
+    const policy = currentPolicy(), next = storageTreeSelection(policy.filters, policy.items);
+    for (const node of STORAGE_FILTER_TREE) for (const leaf of storageNodeLeaves(node)) if (!fixedAllows || fixedAllows(leaf)) { if (allow) next.add(leaf); else next.delete(leaf); }
+    return update(storageTreePermissions(next));
   };
-  for (const node of STORAGE_FILTER_TREE) nodeRows(node, '');
-  return { id: `inspect-storage-${structureId ?? stockpileId}`, title: structure ? `${buildingLabels[structure.kind]} · Stockage` : 'Zone de stockage', rows, actions: [control('storage-back', 'Retour', () => { subpage = undefined; })], layout: 'inspector' };
+  rows.push({ id: 'storage-search', label: 'Rechercher', region: 'navigation', compact: true, presentation: 'plain', input: {
+    value: navigation.search, placeholder: 'Objet ou catégorie…', maxLength: 160,
+    onCommit: async value => { await control('storage-search-commit', 'Rechercher un objet', () => { navigation.search = value; }).onActivate(); },
+  } }, { id: 'storage-all', label: `${selected.size} / ${STORAGE_LEAVES.length}`, hint:'Nombre d’objets autorisés dans le filtre', region: 'navigation', compact: true, presentation: 'plain', controls: [
+    control('storage-clear', 'Tout effacer', () => setAll(false)), control('storage-allow', 'Tout autoriser', () => setAll(true)),
+  ] });
+  const treeRows = nativeStorageTreeRows({ id: 'storage', selected, expanded: navigation.expanded, search: navigation.search, disabled: latest.busy, fixedAllows,
+    onExpand: id => { if (navigation.expanded.has(id)) navigation.expanded.delete(id); else navigation.expanded.add(id); },
+    onToggle: (_node, _state, allowed) => {
+      const policy = currentPolicy(), next = storageTreeSelection(policy.filters, policy.items);
+      const all = allowed.every(leaf => next.has(leaf));
+      for (const leaf of allowed) { if (all) next.delete(leaf); else next.add(leaf); }
+      return update(storageTreePermissions(next));
+    },
+  });
+  // Reuse the inspector's existing fresh-state/map/busy guards and repaint path.
+  for (const entry of treeRows) entry.controls = entry.controls?.map(action => ({...control(action.id, action.label, action.onActivate, action.disabled, action.active, action.hint),glyph:action.glyph}));
+  rows.push(...treeRows);
+  return { id: `inspect-storage-${structureId ?? stockpileId}`, title: structure ? `${buildingLabels[structure.kind]} · Stockage` : 'Zone de stockage', contentKey:navigation.search, rows, actions: [control('storage-back', 'Retour', () => { subpage = undefined; })], layout: 'storage', width: 480, height: 760 };
 }
-
 function objectLabel(world: World, selected: MapObjectSelection): string {
   if(selected.kind==='job'){const job=selectedMapJob296(world,selected.id);if(job&&job.kind in buildingLabels)return `Plan · ${buildingLabels[job.kind as Structure['kind']]}`;}
   if (selected.kind === 'structure' || selected.kind === 'packed') { const structure = world.structures.find(s => s.id === selected.id) ?? world.packed.find(p => p.building.id === selected.id)?.building; return structure ? buildingLabels[structure.kind] : 'Bâtiment absent'; }
@@ -571,7 +622,7 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
     actions.push(control('delete-stockpile', 'Supprimer la zone', () => send({ type: 'delete-zone', kind: 'stockpile', zoneId: currentZoneId() })));
   }
   else if (selected.kind === 'growing') {
-    const zone = world.growingZones.find(zone => zone.id === selected.id); if (zone) rows.push(row('growing-plant', 'Plante cultivée', zone.plant), booleanRow('allow-sow', 'Autoriser les semis', zone.allowSow, allowSow => send({ type: 'growing-policy', zoneId: zone.id, allowSow, allowCut: zone.allowCut })), booleanRow('allow-cut', 'Autoriser la coupe', zone.allowCut, allowCut => send({ type: 'growing-policy', zoneId: zone.id, allowSow: zone.allowSow, allowCut })));
+    const zone = world.growingZones.find(zone => zone.id === selected.id); if (zone) rows.push(row('growing-size', 'Surface de culture', `${zone.cells.length} cases`), booleanRow('allow-sow', 'Autoriser les semis', zone.allowSow, allowSow => send({ type: 'growing-policy', zoneId: zone.id, allowSow, allowCut: zone.allowCut })), booleanRow('allow-cut', 'Couper les plantes indésirables', zone.allowCut, allowCut => send({ type: 'growing-policy', zoneId: zone.id, allowSow: zone.allowSow, allowCut })));
     if (owner.resizeZone) actions.push(control('growing-expand', 'Agrandir la zone', () => owner.resizeZone!('growing', selected.id, false)), control('growing-shrink', 'Réduire la zone', () => owner.resizeZone!('growing', selected.id, true)));
     actions.push(command('delete-growing', 'Supprimer la zone', { type: 'delete-zone', kind: 'growing', zoneId: selected.id }));
   } else if (selected.kind === 'packed') { const packed = world.packed.find(p => p.building.id === selected.id); if (packed) { const building = packed.building, max = structureMaxHp(building); rows.push(row('packed-label', 'Meuble emballé', buildingLabels[building.kind]), meterRow('packed-health', 'Points de vie conservés', max - (building.damage ?? 0), max, undefined, `${max - (building.damage ?? 0)} / ${max}`), row('packed-material', 'Matériau', building.material ?? 'Matériau de construction enregistré'), row('packed-quality', 'Qualité', building.quality ?? 'Sans qualité')); if (owner.placeFurniture) actions.push(control('install-packed', 'Installer', () => owner.placeFurniture!(selected.id))); } }
@@ -637,11 +688,16 @@ function mechPage(world: World, actorId: number): NativePage | null {
 
 /** All projections use the accepted World passed by Main. Data and commands
  * never come from DOM layout, hidden legacy controls or simulated clicks. */
+function nativeInspectorSelectionKey(state:NativeUiState):string {
+  const world=state.world,selected=world?(state.selectedObjects??[]).filter(object=>mapObjectExists(world,object)):[];
+  return `${state.epoch??''}:${world?registeredMapId(world)??'':''}|${state.selectedPawnIds.join(',')}|${state.selectedAnimalId??''}|${state.selectedMechanoidId??''}|${selected.map(object=>`${object.kind}:${object.id}`).join(',')}|${state.selectedCell?.x},${state.selectedCell?.z}`;
+}
+
 export function buildNativeInspector(state: NativeUiState, actions: NativeUiActions): NativePage | null {
   latest = state; owner = actions; const world = state.world; if (!world) return null;
   const selected = (state.selectedObjects ?? []).filter(object => mapObjectExists(world, object));
-  const key = `${state.epoch ?? ''}:${registeredMapId(world) ?? ''}|${state.selectedPawnIds.join(',')}|${state.selectedAnimalId ?? ''}|${state.selectedMechanoidId ?? ''}|${selected.map(object => `${object.kind}:${object.id}`).join(',')}|${state.selectedCell?.x},${state.selectedCell?.z}`;
-  if (key !== selectionKey) { subpage = undefined; billDrafts.clear(); billWorkers.clear(); feedback = ''; selectionKey = key; }
+  const key = nativeInspectorSelectionKey(state);
+  if (key !== selectionKey) { subpage = undefined; billDrafts.clear(); billWorkers.clear(); storageNavigation = undefined; feedback = ''; selectionKey = key; }
   let page: NativePage | null = null;
   if (subpage?.kind === 'item') { page = itemPage(world, subpage.itemId!); if (!page) subpage = undefined; }
   else if (subpage?.kind === 'anatomy') { const pawn = world.pawns.find(pawn => pawn.id === subpage?.pawnId); if (pawn) page = anatomyPage(world, pawn); else subpage = undefined; }
@@ -659,11 +715,11 @@ export function buildNativeInspector(state: NativeUiState, actions: NativeUiActi
     if (details) page = { id: 'inspect-cell', title: details.heading, subtitle: `${state.selectedCell.x}, ${state.selectedCell.z}`, rows: [...details.rows.map((detail, index) => row(`cell-fact-${index}`, detail.label, detail.value)), ...details.things.map((thing, index) => row(`cell-thing-${index}`, thing)), ...objects.map(object => ({ id: `cell-object-${object.kind}-${object.id}`, label: objectLabel(world, object), controls: owner.selectObject ? [control(`inspect-${object.kind}-${object.id}`, 'Inspecter', () => owner.selectObject!(object))] : undefined }))], layout: 'inspector' };
   }
   if (!page) return null;
-  page.layout = 'inspector';
+  if (page.layout !== 'storage') page.layout = 'inspector';
   page.width ??= page.id.startsWith('inspect-bills-') || page.id.startsWith('inspect-storage-') ? 630 : 500; page.height ??= 430;
   if (!subpage && selected.length <= 1 && (!state.selectedPawnIds.length || activeTab === 'health' || activeTab === 'needs')) page.rows.push(...nativeSpecialRows(state, actions).map(entry => page!.columnRatio === undefined ? entry : activeTab==='health'?{...entry,label:entry.id==='special-environment'?'':entry.label,compact:true,column:1 as const}:{...entry,column:0 as const}));
   for (const entry of page.rows) { if (entry.detail) { entry.hint = [entry.hint, entry.detail].filter(Boolean).join(' · '); delete entry.detail; } if (entry.hint) for (const action of entry.controls ?? []) action.hint = [action.hint, entry.hint].filter(Boolean).join(' · '); }
-  if (feedback) page.rows.unshift(row('inspector-feedback', feedback));
+  if (feedback) page.rows.unshift({...row('inspector-feedback', feedback), ...(page.layout === 'storage' ? {region:'details' as const, compact:true, presentation:'plain' as const} : {})});
   if (owner.clearSelection) {
     // Inspection repaint uses the host's custom page slot. Release that slot
     // as well as selection, without changing unrelated host close callbacks.

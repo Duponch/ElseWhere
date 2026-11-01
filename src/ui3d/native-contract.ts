@@ -20,6 +20,8 @@ export interface NativeControl {
   id:string;
   label:string;
   icon?:string;
+  /** Compact ink glyph; label remains the full accessible action name. */
+  glyph?:'expand'|'collapse'|'allow'|'forbid'|'mixed';
   color?:string;
   disabled?:boolean;
   active?:boolean;
@@ -31,6 +33,8 @@ export interface NativeControl {
   select?:{value:string;options:readonly {value:string;label:string;hint?:string;disabled?:boolean}[];onChange:(value:string)=>void|Promise<unknown>};
   paint?:{group:string;index:number;onPaint:(indices:readonly number[])=>void|Promise<unknown>};
   onActivate:()=>void|Promise<unknown>;
+  /** View-only pointer/focus preview, released by the native hover owner. */
+  onHover?:(hovered:boolean)=>void;
 }
 export type NativeControlStyle='button'|'tab'|'tile'|'icon'|'navigation'|'research'|'card';
 export interface NativeRow {
@@ -52,6 +56,7 @@ export interface NativeRow {
   controls?:NativeControl[];
   /** Equal-width cells are used by work and schedule matrices. */
   compact?:boolean;
+  tree?:{depth:number;state:'all'|'none'|'mixed';branch:boolean;expanded:boolean};
   input?:{
     value:string;placeholder?:string;maxLength?:number;kind?:'text'|'number';
     onCommit:(value:string)=>void|boolean|Promise<unknown>;
@@ -61,6 +66,8 @@ export interface NativePage {
   textEntities?:readonly NativeTextEntity[];
   id:string;
   title:string;
+  /** Changes only when a search scope changes; expansion preserves its position. */
+  contentKey?:string;
   subtitle?:string;
   color?:string;
   rows:NativeRow[];
@@ -74,7 +81,7 @@ export interface NativePage {
   width?:number;
   height?:number;
   columnRatio?:number;
-  layout?:'inspector'|'table'|'tools'|'dialog'|'front'|'architect'|'palette'|'research';
+  layout?:'inspector'|'table'|'tools'|'dialog'|'front'|'architect'|'palette'|'research'|'storage';
   palette?:'orders'|'zones';
   research?:{width:number;height:number;selected:string;links:readonly {from:string;to:string;path:readonly {x:number;y:number}[]}[]};
   visual?:{
@@ -138,5 +145,7 @@ export interface NativeUiActions {
   launchShip298?:(computerId:number)=>void;
   resizeZone?:(kind:'stockpile'|'growing',id:number,shrink:boolean)=>void;
   paintAllowedArea?:(id:number,enabled:boolean)=>void;
+  /** View only; undefined restores the active allowed-area paint target. */
+  previewAllowedArea?:(id:number|undefined)=>void;
   pawnActivity?:(pawnId:number)=>string;
 }

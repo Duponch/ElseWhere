@@ -7,10 +7,15 @@ import { newApparelCountFilter278 } from '../src/sim/apparel-count-278';
 import { STORAGE_FILTER_TREE, storageNodeLeaves, storageTreeSelection } from '../src/ui/storage-filter-tree';
 import { shelfControlOptions } from '../src/ui/shelf-inspection';
 import type { Structure } from '../src/sim/types';
-import type { NativePage, NativeUiActions, NativeUiState } from '../src/ui3d/native-contract';
+import type { NativeControl, NativePage, NativeUiActions, NativeUiState } from '../src/ui3d/native-contract';
 import { buildNativeInspector } from '../src/ui3d/native-inspector';
 
 let epoch = 47600;
+function storageControl(page: NativePage, id: string): NativeControl {
+  const result = page.rows.flatMap(row => row.controls ?? []).find(control => control.id === id);
+  expect(result, `Missing storage control ${id}`).toBeDefined();
+  return result!;
+}
 async function fixture(kind: 'stockpile' | 'shelf' | 'tailor' = 'stockpile') {
   const world = createWorld(476, 16, 16);
   const stockpile = { id: world.nextId++, x: 7, z: 8, priority: 3, capacity: 75, filters: { wood: true, food: true } };
@@ -42,15 +47,21 @@ async function fixture(kind: 'stockpile' | 'shelf' | 'tailor' = 'stockpile') {
 describe('native storage controls match confirmed storage rules', () => {
   it('allows the highest priority and refuses priorities outside the real range', async () => {
     const f = await fixture();
-    expect(await f.page.rows.find(row => row.id === 'storage-priority')!.input!.onCommit('0')).toBe(false);
-    await f.page.rows.find(row => row.id === 'storage-priority')!.input!.onCommit('6');
+    const priority = () => storageControl(f.page, 'storage-priority').select!;
+    expect(priority().options.map(option => option.value)).toEqual(['1', '2', '3', '4', '5']);
+    expect(f.page.rows.find(row => row.id === 'storage-priority')!.input).toBeUndefined();
+    await priority().onChange('0');
+    await priority().onChange('6');
     expect(f.actions.command).not.toHaveBeenCalled();
-    await f.page.rows.find(row => row.id === 'storage-priority')!.input!.onCommit('5');
+    await priority().onChange('5');
     expect(f.stockpile.priority).toBe(5);
-    expect(f.page.rows.find(row => row.id === 'storage-priority')!.controls!.find(control => control.id.endsWith('-more'))!.disabled).toBe(true);
-    await f.page.rows.find(row => row.id === 'storage-priority')!.input!.onCommit('1');
+    expect(priority().value).toBe('5');
+    expect(priority().options.some(option => Number(option.value) > 5)).toBe(false);
+    await priority().onChange('1');
     expect(f.stockpile.priority).toBe(1);
-    expect(f.page.rows.find(row => row.id === 'storage-priority')!.controls!.find(control => control.id.endsWith('-less'))!.disabled).toBe(true);
+    expect(priority().value).toBe('1');
+    expect(priority().options.some(option => Number(option.value) < 1)).toBe(false);
+    expect(f.actions.command).toHaveBeenCalledTimes(2);
   });
 
   it('accepts the ground quota boundary and refuses a quota exceeding the item provider', async () => {
@@ -68,7 +79,7 @@ describe('native storage controls match confirmed storage rules', () => {
     expect(capacity.value).toBe(`${groundMaxStacks(f.world, f.shelf)} piles`);
     expect(capacity.input).toBeUndefined();
     expect(capacity.controls).toBeUndefined();
-    await f.page.rows.find(row => row.id === 'storage-priority')!.input!.onCommit('5');
+    await storageControl(f.page, 'storage-priority').select!.onChange('5');
     expect(f.shelf.shelf!.settings.priority).toBe(5);
     expect(f.actions.command).toHaveBeenCalledExactlyOnceWith({ type: 'shelf-policy', structureId: f.shelf.id, settings: { priority: 5 } });
   });
@@ -80,14 +91,25 @@ describe('native storage controls match confirmed storage rules', () => {
     const excludedBefore = leaves.filter(item => !shelfControlOptions.fixedAllows!(item)).map(item => [item, selected().has(item)] as const);
     expect(allowed.length).toBeGreaterThan(0);
     expect(allowed.length).toBeLessThan(leaves.length);
+    expect(f.page.rows.some(row => row.id === 'storage-node-muffalo-corpse')).toBe(false);
+    await storageControl(f.page, 'storage-node-corpses-expand').onActivate();
+    await storageControl(f.page, 'storage-node-animal-corpses-expand').onActivate();
     // A small body from a normally large species remains a real permitted choice.
-    expect(f.page.rows.find(row => row.id === 'storage-node-muffalo-corpse')!.controls![0]!.disabled).toBe(false);
-    await f.page.rows.find(row => row.id === 'storage-node-corpses')!.controls![0]!.onActivate();
+    expect(storageControl(f.page, 'storage-node-muffalo-corpse-permission').disabled).toBe(false);
+    expect(storageControl(f.page, 'storage-node-human-corpses-permission').disabled).toBe(true);
+    expect(storageControl(f.page, 'storage-node-mech-corpses-permission').disabled).toBe(true);
+    // Search can expose a physically excluded leaf without enabling it.
+    await f.page.rows.find(row => row.id === 'storage-search')!.input!.onCommit('scyther');
+    expect(storageControl(f.page, 'storage-node-scyther-corpse-permission').disabled).toBe(true);
+    await storageControl(f.page, 'storage-node-scyther-corpse-permission').onActivate();
+    expect(f.actions.command).not.toHaveBeenCalled();
+    await f.page.rows.find(row => row.id === 'storage-search')!.input!.onCommit('');
+    await storageControl(f.page, 'storage-node-corpses-permission').onActivate();
     expect(allowed.every(item => selected().has(item))).toBe(true);
-    expect(f.page.rows.find(row => row.id === 'storage-node-corpses')!.value).toBe('Autorisé');
-    await f.page.rows.find(row => row.id === 'storage-node-corpses')!.controls![0]!.onActivate();
+    expect(f.page.rows.find(row => row.id === 'storage-node-corpses')!.tree!.state).toBe('all');
+    await storageControl(f.page, 'storage-node-corpses-permission').onActivate();
     expect(allowed.every(item => !selected().has(item))).toBe(true);
-    expect(f.page.rows.find(row => row.id === 'storage-node-corpses')!.value).toBe('Interdit');
+    expect(f.page.rows.find(row => row.id === 'storage-node-corpses')!.tree!.state).toBe('none');
     expect(excludedBefore.map(([item]) => [item, selected().has(item)])).toEqual(excludedBefore);
     expect(f.actions.command).toHaveBeenCalledTimes(2);
   });
@@ -109,20 +131,25 @@ describe('native storage controls match confirmed storage rules', () => {
   it('returns a rejected commit to the native editor when the command refuses a valid value', async () => {
     const f = await fixture();
     vi.mocked(f.actions.command).mockResolvedValueOnce({ ok: false, reason: 'Stockage indisponible.' });
-    expect(await f.page.rows.find(row => row.id === 'storage-priority')!.input!.onCommit('4')).toBe(false);
+    await storageControl(f.page, 'storage-priority').select!.onChange('4');
     expect(f.stockpile.priority).toBe(3);
+    expect(storageControl(f.page, 'storage-priority').select!.value).toBe('3');
     expect(f.page.rows[0]!.label).toBe('Stockage indisponible.');
+    vi.mocked(f.actions.command).mockResolvedValueOnce({ ok: false, reason: 'Stockage indisponible.' });
+    expect(await f.page.rows.find(row => row.id === 'storage-capacity')!.input!.onCommit('100')).toBe(false);
+    expect(f.stockpile.capacity).toBe(75);
+    expect(f.actions.command).toHaveBeenCalledTimes(2);
   });
 
   it('applies localized quality choices directly to the same storage and rejects values absent from its options', async () => {
-    const f = await fixture(), minimum = f.page.rows.find(row => row.id === 'storage-quality-min')!.controls![0]!.select!;
+    const f = await fixture(), minimum = storageControl(f.page, 'storage-quality-min').select!;
     expect(minimum.options.some(option => option.value === 'good' && !!option.label)).toBe(true);
     await minimum.onChange('not-a-quality');
     expect(f.actions.command).not.toHaveBeenCalled();
     await minimum.onChange('good');
     expect(f.world.stockpiles[0]!.quality).toEqual({ min: 'good', max: 'legendary' });
     expect(f.actions.command).toHaveBeenCalledExactlyOnceWith({ type: 'stockpile-policy', stockpileId: f.stockpile.id, settings: { quality: { min: 'good', max: 'legendary' } } });
-    const maximum = f.page.rows.find(row => row.id === 'storage-quality-max')!.controls![0]!.select!;
+    const maximum = storageControl(f.page, 'storage-quality-max').select!;
     expect(maximum.options.some(option => option.value === 'normal')).toBe(false);
     await maximum.onChange('normal');
     expect(f.actions.command).toHaveBeenCalledTimes(1);
@@ -133,13 +160,13 @@ describe('native storage controls match confirmed storage rules', () => {
   });
 
   it('retains the captured map guard and the current busy guard for localized select changes', async () => {
-    const f = await fixture(), minimum = f.page.rows.find(row => row.id === 'storage-quality-min')!.controls![0]!.select!;
+    const f = await fixture(), minimum = storageControl(f.page, 'storage-quality-min').select!;
     f.state.busy = true; await minimum.onChange('good');
     expect(f.actions.command).not.toHaveBeenCalled();
     f.state.busy = false; f.state.epoch!++; await minimum.onChange('good');
     expect(f.actions.command).not.toHaveBeenCalled();
     expect(f.world.stockpiles[0]!.quality).toBeUndefined();
-    expect(f.page.rows.some(row => row.id === 'storage-quality-min')).toBe(false);
+    expect(f.page.rows.some(row => row.controls?.some(control => control.id === 'storage-quality-min'))).toBe(false);
     expect(f.page.rows.some(row => row.id === 'object-id')).toBe(true);
   });
 

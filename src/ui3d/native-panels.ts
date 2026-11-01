@@ -48,8 +48,8 @@ import {tradeRequestContent284} from '../sim/trade-request-content-284';
 import {worldSettlementAccess256} from '../sim/world-faction-access';
 import {peaceTalksFacts293} from '../ui/peace-talks-293';
 import {constructionMaterials} from '../sim/construction-materials';
-import {STORAGE_FILTER_TREE,STORAGE_LEAVES,storageTreeSelection,storageTreePermissions,storageSearchNodes,storageNodeState,setStorageNode,type StorageFilterNode} from '../ui/storage-filter-tree';
-import type {StorageControlSettings} from '../ui/storage-item-controls';
+import {createNativeStorageEditor} from './native-storage-editor';
+import {registeredMapId} from '../sim/world-map-context';
 
 /** Native drafts only. Confirmed World objects are borrowed and never edited. */
 let latest:NativeUiState|undefined;
@@ -93,36 +93,15 @@ function inputPage(id:string,title:string,value:string,onCommit:(value:string)=>
 
 function creationStorageEditor(onBack:()=>void=back):void {
  if(!latest||!host)return;
- const initial=latest.creationStorage,selected=storageTreeSelection(initial.filters,initial.items),expanded=new Set<string>();
- let priority=initial.priority,allowFresh=initial.allowFresh!==false,allowRotten=initial.allowRotten!==false,search='';
- let minQuality=initial.quality?.min??'awful',maxQuality=initial.quality?.max??'legendary',qualityEnabled=!!initial.quality;
- let minHp=initial.hitPoints?.min??0,maxHp=initial.hitPoints?.max??100,hpEnabled=!!initial.hitPoints;
- const quality=(bound:'min'|'max'):void=>choose(`storage-quality-${bound}`,'Qualité',(WEAPON_QUALITIES as readonly WeaponQuality[]).map(value=>({id:value,label:QUALITY_LABELS[value],active:value===(bound==='min'?minQuality:maxQuality),choose:()=>{if(bound==='min')minQuality=value;else maxQuality=value;}})),()=>open(make()));
- const make=():NativePage=>{
-  const visible=search.trim()?storageSearchNodes(search):undefined,rows:NativeRow[]=[
-   row('creation-storage-priority','Priorité',undefined,undefined,([[1,'Basse'],[2,'Normale'],[3,'Préférée'],[4,'Importante'],[5,'Critique']] as const).map(([value,label])=>button(`creation-storage-priority-${value}`,label,()=>{priority=value;open(make());},{active:priority===value}))),
-   row('creation-storage-all','Objets acceptés',`${selected.size} / ${STORAGE_LEAVES.length}`,undefined,[button('creation-storage-clear','Tout effacer',()=>{selected.clear();open(make());}),button('creation-storage-allow','Tout autoriser',()=>{for(const item of STORAGE_LEAVES)selected.add(item);open(make());})]),
-   {id:'creation-storage-search',label:'Rechercher un objet',input:{value:search,placeholder:'Nom d’objet ou de catégorie',onCommit:value=>{search=value;open(make());}}},
-   row('creation-storage-fresh','État de conservation',undefined,undefined,[button('creation-storage-fresh-toggle',allowFresh?'Frais autorisés':'Frais interdits',()=>{allowFresh=!allowFresh;open(make());},{active:allowFresh}),button('creation-storage-rotten-toggle',allowRotten?'Pourris autorisés':'Pourris interdits',()=>{allowRotten=!allowRotten;open(make());},{active:allowRotten})]),
-   row('creation-storage-quality','Filtre de qualité',qualityEnabled?`${QUALITY_LABELS[minQuality]} → ${QUALITY_LABELS[maxQuality]}`:'Toutes qualités',undefined,[button('creation-storage-quality-toggle',qualityEnabled?'Désactiver le filtre':'Activer le filtre',()=>{qualityEnabled=!qualityEnabled;open(make());},{active:qualityEnabled}),...qualityEnabled?[button('creation-storage-quality-min','Minimum',()=>quality('min')),button('creation-storage-quality-max','Maximum',()=>quality('max'))]:[]]),
-   row('creation-storage-hp','Filtre de points de vie',hpEnabled?`${minHp}–${maxHp} %`:'Tous états',undefined,[button('creation-storage-hp-toggle',hpEnabled?'Désactiver le filtre':'Activer le filtre',()=>{hpEnabled=!hpEnabled;open(make());},{active:hpEnabled})]),
-  ];
-  if(hpEnabled)rows.push({id:'creation-storage-hp-min',label:'PV minimum (%)',input:{value:String(minHp),kind:'number',onCommit:value=>{const n=Number(value);if(!Number.isInteger(n)||n<0||n>100)throw Error('Pourcentage entier de 0 à 100 requis.');minHp=n;}}},{id:'creation-storage-hp-max',label:'PV maximum (%)',input:{value:String(maxHp),kind:'number',onCommit:value=>{const n=Number(value);if(!Number.isInteger(n)||n<0||n>100)throw Error('Pourcentage entier de 0 à 100 requis.');maxHp=n;}}});
-  const visit=(node:StorageFilterNode,depth:number):void=>{if(visible&&!visible.has(node.id))return;const status=storageNodeState(node,selected),children=!!node.children?.length;rows.push(row(`creation-storage-node-${node.id}`,`${'· '.repeat(depth)}${node.label}`,status==='all'?'Tout autorisé':status==='none'?'Interdit':'Partiellement autorisé',undefined,[button(`creation-storage-node-${node.id}-toggle`,status==='all'?'Interdire':'Autoriser',()=>{setStorageNode(node,selected,status!=='all');open(make());},{active:status==='all'}),...children?[button(`creation-storage-node-${node.id}-expand`,expanded.has(node.id)?'Replier':'Détails',()=>{expanded.has(node.id)?expanded.delete(node.id):expanded.add(node.id);open(make());})]:[]]));if(children&&(visible||expanded.has(node.id)))for(const child of node.children!)visit(child,depth+1);};
-  for(const node of STORAGE_FILTER_TREE)visit(node,0);
-  return detailPage('creation-storage','Réglages de la nouvelle réserve',rows,[button('creation-storage-apply','Appliquer aux prochaines zones',()=>{
-   if(qualityEnabled&&WEAPON_QUALITIES.indexOf(minQuality)>WEAPON_QUALITIES.indexOf(maxQuality)||hpEnabled&&minHp>maxHp)throw Error('Le minimum dépasse le maximum.');
-   const settings:StorageControlSettings={...storageTreePermissions(selected),priority,allowFresh,allowRotten,...qualityEnabled?{quality:{min:minQuality,max:maxQuality}}:{},...hpEnabled?{hitPoints:{min:minHp,max:maxHp}}:{}};
-   host!.creationStorage(settings);onBack();
-  })],onBack);
- };open(make());
+ open(createNativeStorageEditor({id:'creation-storage',title:'Réglages de la nouvelle réserve',initial:latest.creationStorage,
+  show:open,onApply:settings=>host!.creationStorage(settings),onBack,applyLabel:'Appliquer aux prochaines zones'}));
 }
-
 /** Map designations keep their own owner, separate from construction categories. */
 export function buildNativeToolPalette(state:NativeUiState,actions:NativeUiActions,kind:'orders'|'zones'):NativePage {
  syncNativePanelState(state,actions);
  const tools=toolDefinitions.filter(tool=>tool.category===kind&&tool.id!=='select'&&!!state.world&&architectToolAvailable(state.world,tool.id));
  const controls=tools.map(tool=>nativeToolControl(tool,state,actions));
+ if(kind==='zones')controls.push(button('zones-areas-open','Zones autorisées',()=>areaEditor(()=>{if(latest&&host)open(buildNativeToolPalette(latest,host,'zones'));}),{icon:'zones',hint:'Gérer les dix zones autorisées · noms, couleurs, agrandissement et réduction.'}));
  if(kind==='zones')controls.push(button('architect-storage-settings-open','Réglages du stockage',()=>creationStorageEditor(()=>{if(latest&&host)open(buildNativeToolPalette(latest,host,'zones'));}),{icon:'settings',hint:'Réglages de la nouvelle réserve\nObjets acceptés, priorité, conservation, qualité et points de vie. Les réglages sont appliqués aux prochaines réserves tracées.'}));
  return {id:`map-tools-${kind}`,title:kind==='orders'?'Ordres':'Zones',layout:'palette',palette:kind,width:600,
   rows:[{id:`${kind}-tools`,label:'',region:'catalogue',controlStyle:'icon',controls}],onClose:()=>{actions.closePage?.();void actions.panel(null);}};
@@ -293,26 +272,74 @@ function apparelEditor(id:number):void {
  ],[button('apparel-apply','Appliquer',async()=>{if(WEAPON_QUALITIES.indexOf(minQuality)>WEAPON_QUALITIES.indexOf(maxQuality)||minHitPointsPercent>maxHitPointsPercent)throw Error('Le minimum dépasse le maximum.');await send({type:'apparel-policy-update',policyId:id,allowedItems:[...items],allowedMaterials:[...materials],minQuality,maxQuality,minHitPointsPercent,maxHitPointsPercent});back();}),button('apparel-copy','Copier les filtres confirmés',()=>inputPage(`apparel-copy-${id}`,'Copier la tenue',`${policy.label} copie`,label=>send({type:'apparel-policy-copy',policyId:id,label}))),button('apparel-rename','Renommer',()=>inputPage(`apparel-rename-${id}`,'Renommer la tenue',policy.label,label=>send({type:'apparel-policy-rename',policyId:id,label})))]);
  open(make());
 }
-function areaEditor():void {
- const world=currentWorld();
- open(detailPage('allowed-areas','Zones autorisées',[
+function areaEditor(onBack:()=>void=back):void {
+ const world=currentWorld(),returnToList=()=>areaEditor(onBack);
+ const epoch=latest?.epoch,mapId=registeredMapId(world),seed=world.seed,width=world.width,height=world.height;
+ const preview=(areaId:number|undefined):void=>{
+  if(areaId===undefined){host?.previewAllowedArea?.(undefined);return;}
+  const current=host?.readState?.()??latest,fresh=current?.world;
+  if(!fresh||current?.epoch!==epoch||registeredMapId(fresh)!==mapId||fresh.seed!==seed||fresh.width!==width||fresh.height!==height)return;
+  host?.previewAllowedArea?.(areaId!==undefined&&fresh.allowedAreas?.some(area=>area.id===areaId)?areaId:undefined);
+ };
+ const clearPreview=()=>preview(undefined),leaveList=()=>{clearPreview();onBack();};
+ clearPreview();
+ const page=detailPage('allowed-areas','Zones autorisées',[
   row('areas-help','Règles',`${world.allowedAreas?.length??0} / 10`,'Une zone vide équivaut à Sans restriction. Les trajets peuvent traverser le reste de la carte.'),
   ...(world.allowedAreas??[]).map(area=>row(`area-${area.id}`,area.label,`${area.cells.length} cases · #${area.color.toString(16).padStart(6,'0')}`,undefined,[
-   button(`area-${area.id}-rename`,'Renommer',()=>inputPage(`area-rename-${area.id}`,'Nom de zone',area.label,label=>send({type:'allowed-area-settings',areaId:area.id,label}),undefined,64)),
-   button(`area-${area.id}-color`,'Couleur',()=>{let draft=area.color.toString(16).padStart(6,'0');open(detailPage('area-color','Couleur de zone',[{id:'area-color-input',label:'Couleur hexadécimale',input:{value:draft,maxLength:7,onCommit:value=>{draft=value.replace(/^#/,'');}}}],[button('area-color-apply','Appliquer',async()=>{if(!/^[0-9a-fA-F]{6}$/.test(draft))throw Error('Six chiffres hexadécimaux requis.');await send({type:'allowed-area-settings',areaId:area.id,color:parseInt(draft,16)});areaEditor();})]));}),
+   button(`area-${area.id}-rename`,'Renommer',()=>renameAllowedArea(area.id,returnToList)),
+   button(`area-${area.id}-color`,'Couleur',()=>colorAllowedArea(area.id,returnToList),{color:`#${area.color.toString(16).padStart(6,'0')}`,hint:`Couleur de ${area.label}`} ),
    ...(host?.paintAllowedArea?[button(`area-${area.id}-expand`,'Agrandir',()=>host?.paintAllowedArea?.(area.id,true)),button(`area-${area.id}-shrink`,'Réduire',()=>host?.paintAllowedArea?.(area.id,false))]:[]),
-   button(`area-${area.id}-paint`,'Rectangle par coordonnées',()=>paintAreaCoordinates(area.id)),
-   button(`area-${area.id}-delete`,'Supprimer',()=>confirm(`area-delete-${area.id}`,'Supprimer cette zone ?',area.label,()=>send({type:'allowed-area-delete',areaId:area.id}))),
+   button(`area-${area.id}-paint`,'Coordonnées',()=>paintAreaCoordinates(area.id,returnToList)),
+   button(`area-${area.id}-delete`,'Supprimer',()=>open(detailPage(`area-delete-${area.id}`,'Supprimer cette zone ?',[row('area-delete-name',area.label)],
+    [button(`area-delete-${area.id}-confirm`,'Confirmer',async()=>{await send({type:'allowed-area-delete',areaId:area.id});returnToList();})],returnToList))),
   ])),
- ],[button('area-new','Nouvelle zone',async()=>{await send({type:'allowed-area-create'});areaEditor();},{disabled:(world.allowedAreas?.length??0)>=10})]));
+ ],[button('area-new','Nouvelle zone',async()=>{await send({type:'allowed-area-create'});returnToList();},{disabled:(world.allowedAreas?.length??0)>=10})],leaveList);
+ // The actions of a zone share one preview; a dialog releases it first.
+ for(const area of world.allowedAreas??[]){
+  const entry=page.rows.find(row=>row.id===`area-${area.id}`);if(!entry)continue;
+  const onHover=(hovered:boolean)=>preview(hovered?area.id:undefined);
+  entry.controls=entry.controls?.map(action=>{
+   const activate=action.onActivate;
+   return {...action,onHover,onActivate:()=>{clearPreview();return activate();}};
+  });
+ }
+ page.layout='table';page.width=1280;
+ for(const entry of page.rows){entry.compact=true;entry.presentation='plain';}
+ page.rows.splice(1,0,{id:'areas-headings',label:'Zone',value:'Cases · couleur',compact:true,presentation:'plain',columns:['Renommer','Couleur',...(host?.paintAllowedArea?['Agrandir','Réduire']:[]),'Coordonnées','Supprimer'].map(label=>({label}))});
+ open(page);
 }
-/** Coordinate entry is native and sends the same bounded rectangle command. */
-function paintAreaCoordinates(areaId:number):void {
+function renameAllowedArea(areaId:number,onBack:()=>void):void {
+ const area=currentWorld().allowedAreas?.find(area=>area.id===areaId);if(!area)return;
+ let draft=area.label;
+ const page=detailPage(`area-rename-${areaId}`,'Nom de zone',[
+  {id:`area-rename-${areaId}-input`,label:'Nom',compact:true,presentation:'plain',input:{value:draft,maxLength:64,onCommit:value=>{draft=value;}}},
+ ],[button(`area-rename-${areaId}-apply`,'Appliquer',async()=>{await send({type:'allowed-area-settings',areaId,label:draft});onBack();})],onBack);
+ page.width=480;open(page);
+}
+/** Named painted swatches complement, rather than remove, the precise color. */
+function colorAllowedArea(areaId:number,onBack:()=>void):void {
+ const area=currentWorld().allowedAreas?.find(area=>area.id===areaId);if(!area)return;
+ let draft=area.color.toString(16).padStart(6,'0');
+ const palette=[['Sauge','8ca77b'],['Bleu','8eb0bd'],['Terre cuite','ca927b'],['Ocre','d5b36c'],['Lavande','b4a0bf'],['Rose','d2a5ab'],['Menthe','8db9aa'],['Sable','c9ba98']] as const;
+ const make=():NativePage=>{
+  const page=detailPage(`area-color-${areaId}`,'Couleur de zone',[
+   {id:'area-color-palette',label:'Couleurs',compact:true,presentation:'plain',controls:palette.map(([label,hex])=>button(`area-color-${hex}`,label,()=>{draft=hex;open(make());},{color:`#${hex}`,caption:draft.toLowerCase()===hex?'Choisie':undefined,hint:`${label} · #${hex}`}))},
+   {id:'area-color-input',label:'Code précis',compact:true,presentation:'plain',input:{value:draft,placeholder:'#RRGGBB',maxLength:7,onCommit:value=>{draft=value.replace(/^#/,'');open(make());}}},
+   {id:'area-color-preview',label:'Aperçu',compact:true,presentation:'plain',controls:[button('area-color-current','Couleur choisie',()=>{},{color:/^[0-9a-fA-F]{6}$/.test(draft)?`#${draft}`:undefined,hint:`#${draft}`})]},
+  ],[button('area-color-apply','Appliquer',async()=>{if(!/^[0-9a-fA-F]{6}$/.test(draft))throw Error('Six chiffres hexadécimaux requis.');await send({type:'allowed-area-settings',areaId,color:parseInt(draft,16)});onBack();})],onBack);
+  page.width=600;return page;
+ };open(make());
+}
+/** Coordinate entry keeps the same bounded rectangle command. */
+function paintAreaCoordinates(areaId:number,onBack:()=>void=()=>areaEditor()):void {
  const world=currentWorld();let fromX=latest?.selectedCell?.x??0,fromZ=latest?.selectedCell?.z??0,toX=fromX,toZ=fromZ,enabled=true;
- const make=():NativePage=>detailPage(`area-paint-${areaId}`,'Modifier la zone',[
-  row('paint-mode','Opération',enabled?'Agrandir':'Réduire',undefined,[button('paint-toggle',enabled?'Ajouter les cases':'Retirer les cases',()=>{enabled=!enabled;open(make());})]),
-  ...([['from-x','Début X',()=>fromX,(n:number)=>{fromX=n;},world.width],['from-z','Début Z',()=>fromZ,(n:number)=>{fromZ=n;},world.height],['to-x','Fin X',()=>toX,(n:number)=>{toX=n;},world.width],['to-z','Fin Z',()=>toZ,(n:number)=>{toZ=n;},world.height]] as const).map(([id,label,read,write,limit]):NativeRow=>({id,label,input:{value:String(read()),kind:'number',onCommit:value=>{const n=Number(value);if(!Number.isSafeInteger(n)||n<0||n>=limit)throw Error(`Coordonnée de 0 à ${limit-1} requise.`);write(n);}}})),
- ],[button('paint-apply','Appliquer le rectangle',async()=>{await send({type:'allowed-area-paint',areaId,enabled,from:{x:fromX,z:fromZ},to:{x:toX,z:toZ}});areaEditor();})]);open(make());
+ const make=():NativePage=>{
+  const page=detailPage(`area-paint-${areaId}`,'Modifier la zone',[
+   {...row('paint-mode','Opération',enabled?'Agrandir':'Réduire',undefined,[button('paint-toggle',enabled?'Ajouter les cases':'Retirer les cases',()=>{enabled=!enabled;open(make());})]),compact:true,presentation:'plain'},
+   ...([['from-x','Début X',()=>fromX,(n:number)=>{fromX=n;},world.width],['from-z','Début Z',()=>fromZ,(n:number)=>{fromZ=n;},world.height],['to-x','Fin X',()=>toX,(n:number)=>{toX=n;},world.width],['to-z','Fin Z',()=>toZ,(n:number)=>{toZ=n;},world.height]] as const).map(([id,label,read,write,limit],index):NativeRow=>({id,label,column:index%2===0?0:1,compact:true,presentation:'plain',input:{value:String(read()),kind:'number',onCommit:value=>{const n=Number(value);if(!Number.isSafeInteger(n)||n<0||n>=limit)throw Error(`Coordonnée de 0 à ${limit-1} requise.`);write(n);}}})),
+  ],[button('paint-apply','Appliquer le rectangle',async()=>{await send({type:'allowed-area-paint',areaId,enabled,from:{x:fromX,z:fromZ},to:{x:toX,z:toZ}});onBack();})],onBack);
+  page.width=600;return page;
+ };open(make());
 }
 function assignPanel(world:World):NativePage {
  const rows:NativeRow[]=[{id:'assign-headings',label:'Colon',value:'Activité',compact:true,columns:['Régime','Hostilité','Zone','Tenue','Auto','Port forcé','Drogues',...(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))?['Lecture']:[]].map(label=>({label}))}];

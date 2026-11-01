@@ -125,6 +125,7 @@ export function flowNativeControls(controls:readonly NativeControl[],rect:Native
   return {controls:boxes,height:y-rect.y+lineHeight};
 }
 function rowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasure,table:boolean,tileColumnLimit?:number,matrixTail=!!row.value):NativeRowBox {
+  if(row.tree)return storageTreeRowBox(row,x,top,width,measure);
   const matrix=!!row.compact&&!!row.controls?.length&&table;
   const isTabs=row.controlStyle==='tab'||row.id==='pawn-tabs'||row.id==='health-tabs';
   const rowControls=row.controls??[],onlyButtons=!row.label&&!row.value&&!row.detail||isTabs;
@@ -170,6 +171,91 @@ function rowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasu
   return {row,x,top,width,height,labelWidth,controlTop,controlHeight,controlColumns,detailLines,labelLines,valueLines,matrix,controls,textWidth,inlineActions,matrixTail};
 }
 const requestedWidth=(page:NativePage,fallback:number)=>page.width?(page.width>20?page.width:page.width*100):fallback;
+/** Storage rows keep disclosure and permission as independent hit targets. */
+function storageTreeRowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasure):NativeRowBox {
+  const indent=Math.max(0,row.tree!.depth)*17,controlSize=24,controlTop=1.5;
+  const labelLeft=indent+controlSize+4,permissionLeft=Math.max(0,width-controlSize);
+  const labelWidth=Math.max(0,permissionLeft-labelLeft-6),controls:NativeControlBox[]=[];
+  const rowControls=row.controls??[],permission=rowControls[rowControls.length-1];
+  if(row.tree!.branch&&(row.controls?.length??0)>1){
+    const control=row.controls![0]!;
+    controls.push({control,style:control.presentation??'button',x:x+indent,y:top+controlTop,width:controlSize,height:controlSize});
+  }
+  if(permission)controls.push({control:permission,style:permission.presentation??'button',x:x+permissionLeft,y:top+controlTop,width:controlSize,height:controlSize});
+  return {row,x,top,width,height:27,labelWidth,controlTop,controlHeight:controlSize,controlColumns:controls.length,detailLines:[],
+    textWidth:labelWidth,inlineActions:true,labelLines:[storageSingleLine(row.label,labelWidth,measure)],valueLines:[],matrix:false,controls};
+}
+/** Only the visible ink is shortened; the row retains the complete tooltip text. */
+function storageSingleLine(text:string,width:number,measure:TextMeasure):string {
+  if(width<=0)return '';
+  const line=text.replace(/\s+/g,' ').trim();if(measure(line,NATIVE_UI.body)<=width)return line;
+  const chars=Array.from(line);while(chars.length&&measure(chars.join('')+'…',NATIVE_UI.body)>width)chars.pop();
+  return chars.length?chars.join('').trimEnd()+'…':measure('…',NATIVE_UI.body)<=width?'…':'';
+}
+/** Compact settings and toolbar rows are exclusive to the storage page. */
+function storageFixedRowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasure):NativeRowBox {
+  if(row.input){
+    const wanted=row.label?(row.labelWidth??(width<260?80:130)):0,right=row.controls?.length?row.controls.length*28+6:0;
+    const labelWidth=Math.min(wanted,Math.max(0,width-right-78));
+    const box=rowBox({...row,labelWidth},x,top,width,measure,false);
+    box.height=32;box.labelLines=row.label?[storageSingleLine(row.label,box.labelWidth-5,measure)]:[];
+    return box;
+  }
+  if(row.controls?.length){
+    const labelWidth=row.label?100:0,gap=6,left=x+(row.label?labelWidth+8:0);
+    const columns=row.controls.length,cell=Math.max(1,(width-(left-x)-gap*(columns-1))/columns);
+    const controls:NativeControlBox[]=row.controls.map((control,index)=>({control,style:control.presentation??'button',x:left+index*(cell+gap),y:top,width:cell,height:32}));
+    return {row,x,top,width,height:32,labelWidth,controlTop:0,controlHeight:32,controlColumns:columns,detailLines:[],textWidth:labelWidth,
+      inlineActions:true,labelLines:row.label?[storageSingleLine(row.label,labelWidth-5,measure)]:[],valueLines:[],matrix:false,controls};
+  }
+  return rowBox(row,x,top,width,measure,false);
+}
+/** Search and footer stay fixed. Only a short viewport makes settings scroll. */
+function storagePage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure):NativePageBox {
+  const pad=NATIVE_UI.padding,gap=6,header=page.subtitle?76:48,bottom=NATIVE_UI.bottom+10;
+  const width=Math.min(Math.max(220,Math.min(requestedWidth(page,480),viewport.width-32)),Math.max(1,viewport.width-24));
+  const height=Math.min(page.height??760,760,Math.max(1,viewport.height-bottom-12));
+  const contentWidth=Math.max(1,width-pad*2-12),rows:NativeRowBox[]=[];
+  const actionFlow=flowNativeControls(page.actions??[],{x:pad,y:0,width:Math.max(1,width-pad*2),height:0},measure);
+  const footerPad=14,footer=page.actions?.length?actionFlow.height+footerPad*2:footerPad;
+  const footerTop=Math.max(header,height-footer),contentBottom=Math.max(header,footerTop-gap);
+  const fixed:Partial<Record<'details'|'navigation',{boxes:NativeRowBox[];height:number}>>={};
+  for(const key of ['details','navigation'] as const){
+    const fixedRows=page.rows.filter(row=>(row.region??'details')===key),boxes:NativeRowBox[]=[];
+    let top=0,left=0,right=0,columns=false;
+    for(const row of fixedRows){
+      const inColumns=key==='details'&&row.column!==undefined&&contentWidth>=426;
+      if(inColumns&&!columns){columns=true;left=right=top;}
+      else if(!inColumns&&columns){columns=false;top=Math.max(left,right);}
+      const columnWidth=columns?(contentWidth-gap)/2:contentWidth;
+      const x=pad+(columns&&row.column===1?columnWidth+gap:0),rowTop=columns?(row.column===1?right:left):top;
+      const box=storageFixedRowBox({...row,region:key},x,rowTop,columnWidth,measure);boxes.push(box);
+      if(columns){if(row.column===1)right+=box.height+gap;else left+=box.height+gap;}else top+=box.height+gap;
+    }
+    const contentHeight=Math.max(top,left,right)-(boxes.length?gap:0);
+    fixed[key]={boxes,height:contentHeight};
+  }
+  const details=fixed.details!,navigation=fixed.navigation!;
+  const sectionGaps=(details.boxes.length?gap:0)+(navigation.boxes.length?gap:0);
+  const detailsBudget=Math.max(0,contentBottom-header-navigation.height-sectionGaps-72);
+  const detailsHeight=Math.min(details.height,detailsBudget);
+  const regions:Partial<Record<NativeRegion,NativeRegionBox>>={};let nextTop=header;
+  for(const key of ['details','navigation'] as const){
+    const section=fixed[key]!,visibleHeight=key==='details'?detailsHeight:section.height;
+    regions[key]={x:pad,y:nextTop,width:contentWidth+12,height:visibleHeight,contentHeight:section.height};
+    for(const box of section.boxes){const delta=nextTop-header;box.top+=delta;box.controls=box.controls.map(control=>({...control,y:control.y+delta}));rows.push(box);}
+    nextTop+=visibleHeight+(section.boxes.length?gap:0);
+  }
+  const catalogueHeight=Math.max(0,contentBottom-nextTop);
+  regions.catalogue={x:pad,y:nextTop,width:contentWidth+12,height:catalogueHeight,contentHeight:0};
+  let treeTop=0;
+  for(const row of page.rows.filter(row=>row.region==='catalogue')){
+    const box=rowBox(row,pad,nextTop-header+treeTop,contentWidth,measure,false);rows.push(box);treeTop+=box.height;
+  }
+  regions.catalogue.contentHeight=treeTop;
+  const actions=actionFlow.controls.map(control=>({...control,y:footerTop-header+footerPad+control.y}));
+  return {x:12,y:viewport.height-bottom-height,width,height,header,footer,body:{...regions.catalogue},contentHeight:treeTop,rows,layout:'storage',regions,actions};
+}
 function regionRows(page:NativePage,regions:Partial<Record<NativeRegion,NativeRegionBox>>,header:number,measure:TextMeasure,tileColumnLimit?:number):NativeRowBox[]{
   const rows:NativeRowBox[]=[],tops:Partial<Record<NativeRegion,number>>={};
   for(const row of page.rows){
@@ -272,6 +358,7 @@ function inspectorPage(page:NativePage,viewport:{width:number;height:number},mea
 }
 export function layoutNativePage(page:NativePage,viewport:{width:number;height:number},front:boolean,measure:TextMeasure):NativePageBox {
   const layout=page.layout??(front?'front':page.id.startsWith('inspect-')?'inspector':['work','schedule','animals','wildlife','assign','history'].includes(page.id)?'table':'dialog');
+  if(layout==='storage')return storagePage(page,viewport,measure);
   if(layout==='architect'||layout==='research')return structuredPage(page,viewport,measure,layout);
   if(layout==='inspector'&&page.portrait&&page.rows.some(row=>row.id==='pawn-tabs'))return inspectorPage(page,viewport,measure);
   if(layout==='palette'){
