@@ -31,9 +31,9 @@ export interface ConstructionObstruction { plant?:Resource; pile?:MaterialPile; 
  * and discard this index before any transfer, cutting or construction occurs.
  * Small plants are not blockers; their Frame/final destruction is committed
  * separately after the physical placement and custody preflight succeeds. */
-export function constructionObstructions(world:World):ReadonlyMap<number,ConstructionObstruction> {
+export function constructionObstructions(world:World,candidates:readonly Job[]=world.jobs):ReadonlyMap<number,ConstructionObstruction> {
   const sites=new Map<number,number[]>(),result=new Map<number,ConstructionObstruction>(),clearItems=new Set<number>(),shelves=new Set<number>();
-  for(const job of world.jobs)if(isConstruction(job)) {
+  for(const job of candidates)if(isConstruction(job)) {
     result.set(job.id,{});if(clearsGroundItems(world,job.furniture?.kind??job.kind))clearItems.add(job.id);
     if(isShelfKind(job.furniture?.kind??job.kind))shelves.add(job.id);
     for(const c of footprintCells(job)) {

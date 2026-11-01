@@ -1,3 +1,4 @@
+import {woodWallTouch301} from './wall-frame-kind-301.ts';
 import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {barrelFreeCapacity265,barrelExtractionProposal265,fermentationHaulCandidates265} from './fermentation-runtime-265.ts';
@@ -134,7 +135,7 @@ function compareCandidate(a: Candidate, b: Candidate): number { return a.priorit
 export function canReach(world: World, target: Cell & { kind?: JobKind|import('./types.ts').StructureKind }, reachable: Reachability, allowTarget: boolean,geometry?:StructureNavigationGeometry): boolean {
   const cells = target.kind ? footprintCells(target as Job) : [target];
   if ((allowTarget||target.kind==='smooth-floor') && canStopAt(world,target,reachable) && hasReachableCell(reachable,cellIndex(world, target.x, target.z))) return true;
-  for (const cell of cells) for (const next of workNeighbours(cell,target.kind)) {
+  for (const cell of cells) for (const next of workNeighbours(cell,target.kind,woodWallTouch301(world,target))) {
     if (canStopAt(world,next,reachable) && !cells.some(own => sameCell(own, next)) && (target.kind!=='smooth-floor'||canTouchSmoothFloor281(world,next,target,geometry)) && hasReachableCell(reachable,cellIndex(world, next.x, next.z))) return true;
   }
   return false;

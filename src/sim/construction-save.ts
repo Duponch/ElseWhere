@@ -1,3 +1,4 @@
+import {validFrameWorkJob301} from './finish-frame-save-301.ts';
 import {validShipComputerSensorsField298} from './victory-content-save-298.ts';
 import {validFrameDamage256} from './roof-frame-256.ts';
 import { isRoofJob } from './roof-rules.ts';
@@ -13,6 +14,7 @@ export function initializeConstruction(world:World):void {
 export function validateConstruction(world:World,version:number):string[] {
   const errors:string[]=[];
   for(const job of world.jobs) {
+    if(!validFrameWorkJob301(job,version))errors.push('Invalid or future actual FinishFrame301 work.');
     if(!validShipComputerSensorsField298(job,version,'job'))errors.push('Invalid or future computer/sensors construction field.');
     if(!validFrameDamage256(job,version))errors.push('Invalid or future Frame damage.');
     if(version<16){if(job.construction!==undefined||job.clearance!==undefined)errors.push('Legacy save contains construction phases.');continue;}

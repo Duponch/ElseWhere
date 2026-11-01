@@ -1,3 +1,5 @@
+import {actualViewKey301} from './actual-view-wire-301.ts';
+import {isActualView301,type ActualView301} from '../sim/actual-view-301.ts';
 import {validGeographicCreationSize262,validGeographicCreationSeason262} from '../sim/geographic-creation-options-262';
 import {worldGenerationKey,validWorldGenerationSettings} from '../sim/world-generation-settings';
 import {WORLD_FACTION_DEFINITIONS_256,isWorldFactionDef256} from '../sim/world-faction-catalog';
@@ -65,6 +67,17 @@ export class SimulationClient {
   private worldDraft?:{preview:WorldCreationPreview256;geography:DraftGeographyPreview256;ticket?:WorldCreationTicket256;starting?:boolean};
   private snapshots: SnapshotReader;
   private adopted?: { epoch: number; revision: number };
+  private actualViewSent301?:{worker:Worker;key:string;at:number};
+  /** Same live client/Worker and adopted epoch; no request id, Promise or ACK.
+   * Called by frames, but only changed quantized descriptions reach the Worker. */
+  setActualView301(view:ActualView301|null,now=performance.now()):void {
+    if(this.stopped||this.fault||!this.adopted||!Number.isFinite(now)||view!==null&&!isActualView301(view))return;
+    const epoch=this.adopted.epoch,key=actualViewKey301(epoch,view),old=this.actualViewSent301;
+    if(old?.worker===this.worker&&(old.key===key||view!==null&&now-old.at<100))return;
+    const source=this.worker;
+    try{source.postMessage({type:'actual-view-301',epoch,view} satisfies Request);this.actualViewSent301={worker:source,key,at:now};}
+    catch(error){this.onError(error instanceof Error?error.message:String(error));}
+  }
   private stopped = false;
   private fault?: SimulationFault;
   private resyncing = false;

@@ -1,3 +1,4 @@
+import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -37,8 +38,9 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
     if(urgentDoctorCall(world,pawn)){interruptWork(world,pawn,true);return false;}
     return processReading295(world,pawn,context);
   }
-  const joy=pawn.recreation, assignment=assignmentAt(world,pawn);
+  const joy=pawn.recreation;
   if (joy.task) {
+    const assignment=assignmentAt(world,pawn);
     if (assignment==='work' || urgentMedicalTask(pawn) || urgentDoctorCall(world,pawn)
       || joy.task.activity==='visit-sick'&&world.pawns.some(p=>p.id===joy.task!.patientId&&urgentTreatment(p))
       || joy.task.activity==='chess'&&pawnBody(pawn).capacities.manipulation<=0
@@ -71,11 +73,22 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
     }
     return true;
   }
+  return offerRecreation300(world,pawn,context,afterWork,provider)!=='unavailable';
+}
+
+export type RecreationProvider300='ordinary'|'idle300';
+export type RecreationOffer300='admitted'|'unavailable'|'pending';
+/** Admission only: do not process an existing recreation/reading task. Search,
+ * ordering, RNG, cooldown writes and real reading admission remain shared with
+ * the macro wrapper; no elapsed, joy or XP is granted by this offer. */
+export function offerRecreation300(world:World,pawn:Pawn,context:NeedContext,afterWork=false,provider:RecreationProvider300='ordinary'):RecreationOffer300 {
+  if(pawn.recreation.task)return 'unavailable';
+  const joy=pawn.recreation,assignment=assignmentAt(world,pawn);
   // The idle supplier has its own admission conditions; no fake timetable or World.
-  const idle300=Number(world.schemaVersion)===300&&provider==='idle300';
-  if(idle300&&(effectiveCore297(world)<60000||assignment==='work'))return false;
+  const idle300=isSchema300OrLater(Number(world.schemaVersion))&&provider==='idle300';
+  if(idle300&&(effectiveCore297(world)<60000||assignment==='work'))return 'unavailable';
   if (world.tick<500 || pawn.hunting || pawn.research || pawn.need || pawn.jobId!==null || pawn.haul || pawn.cooking || pawn.burial || pawn.cleaning || pawn.needCooldown>0 || (!isSchema299OrLater(Number(world.schemaVersion)) && pawn.hunger<=20)
-    || !idle300&&(assignment==='work'||assignment==='sleep'&&!afterWork) || joy.level >= (idle300?99:assignment==='anything'?35:95) || urgentMedicalTask(pawn) || urgentDoctorCall(world,pawn)) return false;
+    || !idle300&&(assignment==='work'||assignment==='sleep'&&!afterWork) || joy.level >= (idle300?99:assignment==='anything'?35:95) || urgentMedicalTask(pawn) || urgentDoctorCall(world,pawn)) return 'unavailable';
   const choices: {activity: RecreationActivity; weight: number}[] = [];
   let pins:ReturnType<typeof availablePins>|undefined,chessTables:ReturnType<typeof availableChessTables>|undefined;
   const televisions=world.schemaVersion>=190&&isColonist(pawn)&&!pawn.prisoner&&!pawn.visitor&&pawnBody(pawn).capacities.sight>0?availableTelevisions(world,pawn.id):[];
@@ -92,7 +105,7 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
   }
   if((Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))&&readingAllowed295(pawn)&&readingAutoNeeds295(pawn)&&!joy.bored.reading&&world.piles.some(p=>p.kind==='book'&&readingSourceAllowed295(world,pawn,p)))
     choices.push({activity:'read',weight:3*Math.max(.001,(1-(joy.tolerance.reading??0)/100)**5)});
-  if(!choices.length){pawn.needCooldown=20;return false;}
+  if(!choices.length){pawn.needCooldown=20;return 'unavailable';}
   const reserved=reservedServiceCells(world,pawn.id);
   let space:RecreationSpace|undefined;
   const readSpace=()=>space??=recreationSpace(world,undefined,choices.some(c=>c.activity==='visit-sick'),context.recreationTopology);
@@ -101,7 +114,7 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
     for(;index<choices.length-1;index++){draw-=choices[index]!.weight;if(draw<0)break;}
     const {activity}=choices.splice(index,1)[0]!;
     if(activity==='read'){
-      const selected=selectAutomaticReading295(world,pawn,context);if(selected!=='unavailable')return selected;continue;
+      const selected=selectAutomaticReading295(world,pawn,context);if(selected!=='unavailable')return selected?(joy.task?'admitted':'pending'):'unavailable';continue;
     }
     const candidates: RecreationTask[]=[];
     if(activity==='horseshoes') {
@@ -158,7 +171,7 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
     }):[];
     const goals=facing.length?facing:valid;
     const reach=context.search(new Set(goals.map(c=>cellIndex(world,c.target.x,c.target.z))));
-    if(!reach)return true;
+    if(!reach)return 'pending';
     const reachable=valid.flatMap(task=>{const path=routeToCell(world,task.target,reach);return path?[{task,path}]:[];});
     if(!reachable.length)continue;
     let preferred=(activity==='social-relax'||activity==='visit-sick')&&reachable.some(r=>r.task.seatId!==undefined)?reachable.filter(r=>r.task.seatId!==undefined):reachable;
@@ -167,7 +180,7 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
       if(facingReachable.length)preferred=facingReachable;
     }
     const selected=preferred[Math.floor(recreationRandom(world)*preferred.length)]!;
-    joy.task=selected.task;pawn.path=selected.path;pawn.state='moving';pawn.planCooldown=0;return true;
+    joy.task=selected.task;pawn.path=selected.path;pawn.state='moving';pawn.planCooldown=0;return 'admitted';
   }
-  pawn.needCooldown=20;return false;
+  pawn.needCooldown=20;return 'unavailable';
 }

@@ -1,3 +1,5 @@
+import {isActualViewRequest301} from './actual-view-wire-301.ts';
+import {setActualView301} from '../sim/actual-view-301.ts';
 import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {createShipCountdownRuntime298} from './ship-countdown-runtime-298.ts';
@@ -64,6 +66,7 @@ import { AudioCueRecorder } from './audio-cues';
  * complete. Request ordering, clocks, ACK and SAVE never select that boundary. */
 export function startSimulationWorker(scope:DedicatedWorkerGlobalScope,send:(message:(Response&ShipOwnerReplyMetadata298)|ShipRuntimeResponse298)=>void,snapshots:SnapshotEncoder<true>=new SnapshotEncoder({structureDelta:true,minimumStructures:1000}),publishLocal?:(world:World,publication:SnapshotMessage<true>,originalPacket:SnapshotMessage<true>)=>void,createMotionRecorder:()=>MotionRecorder=()=>new MotionRecorder(),publishPhaseLocal?:(world:World,phase:CorePhaseEnvelope297)=>void):void {
 let world: CampaignState | undefined;
+let actualViewEpoch301=0;
 const shipCountdown298=createShipCountdownRuntime298();
 let caravans:GroupCampaignRuntime256|undefined;
 /** Build on the validated replacement BEFORE changing the active owner. The
@@ -142,9 +145,11 @@ const audioCues=new AudioCueRecorder();
 const publishCapturedTick = (checkpoint = false) => {
   let published: { epoch: number; revision: number } | undefined;
   if (world) {
-    const visible=visibleWorld();if(!visible){const header=snapshots.campaignHeader(checkpoint);send({type:'campaign-only',...header,stepMs,speed,...(()=>{const transport=snapshots.encodeCampaignSummary(campaignOnlySummary(world),checkpoint);return {summary:transport.state,...transport.geography?{geography:transport.geography}:{}};})(),urgentThreats:urgentThreats.snapshot()});audioCues.reset();lastPublishedTick=world.tick;for(const notice of takeCaravanTradeArrivals261(world))send({type:'caravan-trade-arrival',...notice,checkpoint:header});return header;}
+    const visible=visibleWorld();if(!visible){const header=snapshots.campaignHeader(checkpoint);actualViewEpoch301=header.epoch;setActualView301(world,null);send({type:'campaign-only',...header,stepMs,speed,...(()=>{const transport=snapshots.encodeCampaignSummary(campaignOnlySummary(world),checkpoint);return {summary:transport.state,...transport.geography?{geography:transport.geography}:{}};})(),urgentThreats:urgentThreats.snapshot()});audioCues.reset();lastPublishedTick=world.tick;for(const notice of takeCaravanTradeArrivals261(world))send({type:'caravan-trade-arrival',...notice,checkpoint:header});return header;}
     const audioPublication297=audioCues.preparePublication297(),cues=audioPublication297.cues;
     const packet = snapshots.encode(visible, stepMs, speed, checkpoint);
+    if(actualViewEpoch301!==packet.epoch)setActualView301(world,null);
+    actualViewEpoch301=packet.epoch;
     const recordedMotion=motion.snapshot();
     const physicalFull297=isCorePhysicalSchema297(Number(visible.schemaVersion))?phasePublisher297.prepareFull(visible,packet.epoch,packet.revision,recordedMotion,coreMapId297(physicalVisibleWorld297()!),'frontier'):undefined;
     const publication={...packet,urgentThreats:urgentThreats.snapshot(),motion:recordedMotion,...physicalFull297?{corePhase297:physicalFull297.metadata}:{},...cues.length?{audioCues:cues}:{}};
@@ -374,6 +379,15 @@ async function handleWorldDraft256(request:DraftRequest256):Promise<void> {
 }
 
 scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298>) => {
+  // Read the discriminant as own data before any ordinary request handling.
+  if(!request||typeof request!=='object')return;
+  const type301=Object.getOwnPropertyDescriptor(request,'type');
+  if(!type301||!Object.hasOwn(type301,'value'))return;
+  // Small own-data control message, outside command/clock/publication/ACK paths.
+  if(request.type==='actual-view-301'){
+    if(isActualViewRequest301(request)&&world&&request.epoch===actualViewEpoch301)setActualView301(world,request.view);
+    return;
+  }
   // This active-only channel has no Request id, pending Promise, SIM clock or
   // periodic publication. Cancellation must survive cooperative preparations.
   if(request.type==='ship-cancel-298'){

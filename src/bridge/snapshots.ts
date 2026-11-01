@@ -1,3 +1,4 @@
+import {validFrameOwners301} from '../sim/finish-frame-save-301.ts';
 import {validHumanIngestionOwners299} from '../sim/human-ingestion-save-299.ts';
 import {validIdleWanderOwners300} from '../sim/idle-wander-save-300.ts';
 import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
@@ -1778,6 +1779,7 @@ export class SnapshotDecoder {
     const readHumanOwners=()=>validation.humanOwners?.read(next)??captureHumanOwners(next);
     if(!validHumanIngestionOwners299(next,next.schemaVersion,readHumanOwners))return resync('Horloge ou provenance alimentaire humaine invalide.');
     if(!validIdleWanderOwners300(next,next.schemaVersion,readHumanOwners))return resync('Tâche locale d’errance civile invalide.');
+    if(!validFrameOwners301(next,next.schemaVersion,readHumanOwners))return resync('Propriété ou travail FinishFrame301 invalide.');
     if(!validFactionCommsTransportForSnapshot298(next,next.schemaVersion,readHumanOwners))return resync('Communication de faction ou contact invalide.');
     if(Object.hasOwn(next,'group')||Object.hasOwn(next,'groupLosses')){
       try {const people=readHumanOwners().people;

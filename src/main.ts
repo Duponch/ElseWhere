@@ -1,3 +1,4 @@
+import {isSchema300OrLater} from './sim/schema-compatibility-257.ts';
 import {idleWanderTask300} from './sim/idle-wander-300.ts';
 import {isSchema298OrLater} from './sim/schema-compatibility-257.ts';
 import {isShipComputerSensorsKind298} from './sim/ship-computer-sensors-content-298';
@@ -355,7 +356,7 @@ const client = (() => {
   const native = new MainSimulationClient();
   drainMainAdmissionsBeforeFrame=()=>queues.get(native)?.drainFrame();
   notifyMainAdmissionAvailability=()=>queues.get(native)?.notifyAvailability();
-  document.addEventListener('visibilitychange',()=>queues.get(native)?.notifyAvailability());
+  document.addEventListener('visibilitychange',()=>{queues.get(native)?.notifyAvailability();if(document.hidden)native.setActualView301(null);});
   let onError: SimulationClient['onError'] = () => {};
   let onFault: SimulationClient['onFault'] = () => {};
   let onRequestStatus: SimulationClient['onRequestStatus'] = () => {};
@@ -377,6 +378,7 @@ const client = (() => {
     confirmWorldDraftSite256:(...args:Parameters<SimulationClient['confirmWorldDraftSite256']>)=>native.confirmWorldDraftSite256(...args),
     startWorldDraft256:(...args:Parameters<SimulationClient['startWorldDraft256']>)=>native.startWorldDraft256(...args),
     hasConfirmedWorldDraft256:(...args:Parameters<SimulationClient['hasConfirmedWorldDraft256']>)=>native.hasConfirmedWorldDraft256(...args),
+    setActualView301:(...args:Parameters<SimulationClient['setActualView301']>)=>native.setActualView301(...args),
     init: (...args: Parameters<SimulationClient['init']>) => native.init(...args),
     command: async (command:Parameters<SimulationClient['command']>[0]) => {
       const learning=firstGesturesLearning,token=learning?.prepare(command,snapshot);
@@ -610,7 +612,7 @@ class MainColonyRenderer extends ColonyRenderer {
   protected override cameraOnlyInput():boolean{return nativeUi?.hasOpenGamePage(true)??false;}
   protected override createSelectionRectanglePort(){return nativeUi?(bounds:{left:number;top:number;width:number;height:number}|null)=>nativeUi!.setSelectionRectangle(bounds):undefined;}
   get admissionFrameReady():boolean {return !this.disposed&&!this.preparing&&!this.fatalError&&!this.presentationStopped;}
-  protected override frame(now:number):void {this.resumeAfterFrameStarvation();this.beginPresentationFrame297();drainMainAdmissionsBeforeFrame();const frameNow=Math.max(now,this.hostPort.now());let ready=false;try{super.frame(frameNow);ready=this.admissionFrameReady;}finally{try{if(renderer===this)nativeUi?.gameCountdownFrame298(now,ready);}finally{notifyMainAdmissionAvailability();}}}
+  protected override frame(now:number):void {this.resumeAfterFrameStarvation();this.beginPresentationFrame297();drainMainAdmissionsBeforeFrame();const frameNow=Math.max(now,this.hostPort.now());let ready=false;try{super.frame(frameNow);ready=this.admissionFrameReady;}finally{try{if(renderer===this){nativeUi?.gameCountdownFrame298(now,ready);client.setActualView301(ready&&mainAdmissionCanFrame()?this.readActualView301(frameNow):null,frameNow);}}finally{notifyMainAdmissionAvailability();}}}
   protected override createApplicationContext():SceneApplicationContext{return new SceneApplicationContext();}
   protected override createEnvironmentLighting():EnvironmentLighting {const context=this.applicationContext!;return new EnvironmentLighting(new EnvironmentLightField(context.topology,world=>context.read(world)?.lighting));}
   protected override createIntentReader(){return createClosedMainMapIntentReader();}
@@ -1744,7 +1746,7 @@ function actionLabel(pawn: Pawn, carriedPatients: ReadonlySet<number>) {
   if(pawn.need?.kind==='eat'&&pawn.need.alcoholReason)return pawn.need.alcoholReason==='inventory'?'Prend des bières pour son inventaire':pawn.need.phase==='ingest'?'Boit une bière':'Rejoint une bière';
   if(pawn.brewing)return pawn.path.length||pawn.moveCooldown>0?'Rejoint le fût de fermentation':'Extrait la bière du fût';
   if (pawn.need) return queryPawnStatus(snapshot!,pawn,confirmedFoodReadability()).reason;
-  if(Number(snapshot?.schemaVersion)===300&&idleWanderTask300(pawn))return queryPawnStatus(snapshot!,pawn,confirmedFoodReadability()).reason;
+  if(isSchema300OrLater(Number(snapshot?.schemaVersion))&&idleWanderTask300(pawn))return queryPawnStatus(snapshot!,pawn,confirmedFoodReadability()).reason;
   if(pawn.recreation.task)return queryPawnStatus(snapshot!,pawn,confirmedFoodReadability()).reason;
   const comms298=(pawn as import('./sim/faction-comms-state-298').FactionCommsPawn298).factionComms298;if(comms298)return comms298.phase==='ready'?'Communication de faction · au contact de la console':'Communication de faction · rejoint la console';
   if(pawn.orbitalTrade)return pawn.orbitalTrade.phase==='ready'?'Commerce orbital · au contact de la console':'Commerce orbital · rejoint la console';

@@ -1,6 +1,6 @@
 import type { ItemId } from './items.ts';
 import type { StorageConditions } from './storage-condition.ts';
-export const SCHEMA_VERSION = 300 as const;
+export const SCHEMA_VERSION = 301 as const;
 export const TICKS_PER_SECOND = 6;
 export const TICKS_PER_DAY = 6000;
 
@@ -54,6 +54,8 @@ export type NeedTask =
   | { kind: 'eat'; foodBinge299?:true; alcoholReason?:'joy'|'scheduled'|'addiction'|'ordered'|'binge'|'inventory'; forced?:true; phase: 'pickup' | 'collect' | 'choose-spot' | 'travel' | 'ingest'; sourcePileId: number | null; paste?:import('./nutrient-paste.ts').PasteRequest; carryPileId: number | null; quantity: number; progress: number; workRemainder?:number; dining: DiningPlace | null }
   | { kind: 'sleep'; roomRest?:import('./room-experience.ts').RoomRest; medical?:'patient'|'bedrest'; phase: 'travel' | 'sleep'; bedId: number | null; target: Cell };
 export interface Job extends Cell { wallDoor296?:import('./wall-door-state-296.ts').WallDoorState296; frameDamage?:number;
+  /** Real wood Wall Frame work only; absent history is captured at contact, never load. */
+  frameWork301?:import('./finish-frame-save-301.ts').FrameWork301;
   tree?:import('./tree-transfer-state.ts').TreeTask; plantTarget?:{resourceId:number};
   fixBreakdown?:import('./breakdowns.ts').BreakdownTarget;
   floor?:import('./flooring.ts').FloorKind;
@@ -196,6 +198,12 @@ export interface Pawn extends Cell { /** Shared fixed catalogue: 1 novels allowe
   needCooldown: number;
   /** Last actual committed ingestion at this original human owner Core; absence is unknown. */
   lastIngestAtCore299?:number;
+  /** Persisted Thing interval accumulator; absence remains unknown until a real Core step. */
+  jobTickDelta301?:number;
+  /** Actual local wood Wall toil; never retained across owner suspension/release. */
+  frameToil301?:import('./finish-frame-save-301.ts').FrameToil301;
+  /** Real Wait_MaintainPosture expiry, examined at the next eligible interval. */
+  postureUntilCore301?:number;
   /** Actual local civil wait/move only; absence preserves historical state. */
   idleWander300?:import('./idle-wander-300.ts').IdleWander300;
   state: PawnState;

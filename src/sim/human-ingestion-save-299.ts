@@ -8,7 +8,7 @@ const integer=(v:unknown,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='n
 /** New fields are never read through accessors or inferred from historical absence. */
 export function validHumanIngestionPawn299(value:unknown,version:number,ownerCore?:number):boolean {
  try{
-  if(!record(value)||!Number.isSafeInteger(version)||version<1||version>300)return false;
+  if(!record(value)||!Number.isSafeInteger(version)||version<1||version>301)return false;
   if('lastIngestAtCore299'in value){const d=Object.getOwnPropertyDescriptor(value,'lastIngestAtCore299');
    if(!isSchema299OrLater(version)||!d?.enumerable||!Object.hasOwn(d,'value')||!integer(ownerCore)||!integer(d.value,ownerCore))return false;
   }

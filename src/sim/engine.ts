@@ -1,3 +1,6 @@
+import {createWoodWallCore301} from './wood-wall-core-301.ts';
+import {rateForPawn301} from './actual-view-301.ts';
+import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {idleWanderTask300,offerIdleWander300,processIdleWander300,createIdleWanderCore300} from './idle-wander-300.ts';
 import {isSchema287OrLater,isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isShipComputerSensorsKind298} from './ship-computer-sensors-content-298.ts';
@@ -1167,7 +1170,7 @@ export function stepWorld(world:CampaignState,ticks=1,diagnostics?:import('./wor
     if(ticks)for(const map of registeredMaps(root)){adoptTempMapIncidents261(map);flushRegisteredMap(map);}
     adoptWorldIncidents(campaignClockContext(root));
     for(let i=0;i<ticks;i++){
-      const firefoamWorldOwners290=[290,291,292,293,294,295,296,297,298,299,300].includes(Number(root.schemaVersion))?captureFirefoamWorldPawnIds290(root):undefined;
+      const firefoamWorldOwners290=[290,291,292,293,294,295,296,297,298,299,300,301].includes(Number(root.schemaVersion))?captureFirefoamWorldPawnIds290(root):undefined;
       root.tick++;
       if(isCorePhysicalSchema297(Number(root.schemaVersion))){root.phaseCore297=0;beginCoreMacro297(root);syncWorldPawnsPhysicalCore297(root);advanceActualWorldPawns256(root,firefoamWorldOwners290);}
       for(const map of registeredMaps(root)){stepLocalWorld(map,1,diagnostics,false);flushRegisteredMap(map);}
@@ -1208,7 +1211,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
   adoptRainElectrical(world);
   let thermal=reconcileTemperature(world);reconcilePlantLighting(world,()=>readPlantLight(world));updateFoodTemperatures(world,thermal);updatePlantTemperatures(world,thermal);
   for (let step = 0; step < ticks; step++) {
-    const firefoamLocalMechs290=[290,291,292,293,294,295,296,297,298,299,300].includes(Number(world.schemaVersion))?new Set((world.mechanoids??[]).filter(m=>m.state!=='dead'&&m.health?.coveredInFirefoam290).map(m=>m.id)):undefined;
+    const firefoamLocalMechs290=[290,291,292,293,294,295,296,297,298,299,300,301].includes(Number(world.schemaVersion))?new Set((world.mechanoids??[]).filter(m=>m.state!=='dead'&&m.health?.coveredInFirefoam290).map(m=>m.id)):undefined;
     flushColonyLosses(world);
     if(advanceClock){world.tick++;if(isCorePhysicalSchema297(Number(world.schemaVersion))){world.phaseCore297=0;beginCoreMacro297(campaignAuthority(world));syncWorldPawnsPhysicalCore297(campaignAuthority(world));}}advanceActualHiveComponents256(world);advanceAnimalAges256(world);finishSnowSteps(world);
     let light:LightEnvironment|undefined,lightKey:string|undefined;
@@ -1340,7 +1343,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(pawn.need?.kind==='eat' && pawn.need.dining && !validDiningPlace(world,pawn.need.dining)) {pawn.need.phase='choose-spot';pawn.need.dining=null;pawn.need.progress=0;delete pawn.need.workRemainder;pawn.path=[];pawn.state='moving';}
       if(factionCommsTask298(pawn))reconcileFactionComms298(world,pawn);if(pawn.orbitalTrade)reconcileOrbitalTrade(world,pawn);if(pawn.deepWork)reconcileDeepWork(world,pawn);
       reconcileAllowedAreaPawn(world,pawn);
-      if (pawn.moveCooldown > 0) { if(pawn.draft)pawn.draft.lastActiveTick=world.tick; pawn.state = groupOnMapMember(world,pawn.id) || scoutOnMapId(world)===pawn.id || commercialOnMapId(world)===pawn.id || pawn.brewing || factionCommsTask298(pawn) || pawn.orbitalTrade || pawn.deepWork || pawn.animalHandling || pawn.animalCare || pawn.animalFeed || pawn.animalRescue || pawn.burial || pawn.shipCasketTask277 || pawn.cryptosleepTask || pawn.openCasket || pawn.firefoamTask290 || pawn.cleaning || pawn.visitor || pawn.podRescue || pawn.trade || pawn.burning || pawn.firefighting || pawn.hunting || pawn.mental?.crisis || pawn.raid || pawn.tactics || pawn.melee || pawn.flee || pawn.draft || pawn.bombRefuge || pawn.heatRefuge || pawn.research || pawn.allowedAreaReturn || pawn.jobId !== null || pawn.equipmentTask || pawn.ward || pawn.feed || pawn.tend || pawn.surgery || pawn.rescue || pawn.haul || pawn.need || pawn.cooking || pawn.recreation.task || Number(world.schemaVersion)===300&&idleWanderTask300(pawn)?.kind==='move' ? 'moving' : 'idle'; continue; }
+      if (pawn.moveCooldown > 0) { if(pawn.draft)pawn.draft.lastActiveTick=world.tick; pawn.state = groupOnMapMember(world,pawn.id) || scoutOnMapId(world)===pawn.id || commercialOnMapId(world)===pawn.id || pawn.brewing || factionCommsTask298(pawn) || pawn.orbitalTrade || pawn.deepWork || pawn.animalHandling || pawn.animalCare || pawn.animalFeed || pawn.animalRescue || pawn.burial || pawn.shipCasketTask277 || pawn.cryptosleepTask || pawn.openCasket || pawn.firefoamTask290 || pawn.cleaning || pawn.visitor || pawn.podRescue || pawn.trade || pawn.burning || pawn.firefighting || pawn.hunting || pawn.mental?.crisis || pawn.raid || pawn.tactics || pawn.melee || pawn.flee || pawn.draft || pawn.bombRefuge || pawn.heatRefuge || pawn.research || pawn.allowedAreaReturn || pawn.jobId !== null || pawn.equipmentTask || pawn.ward || pawn.feed || pawn.tend || pawn.surgery || pawn.rescue || pawn.haul || pawn.need || pawn.cooking || pawn.recreation.task || isSchema300OrLater(Number(world.schemaVersion))&&idleWanderTask300(pawn)?.kind==='move' ? 'moving' : 'idle'; continue; }
       const needsContext = {
         recreationTopology:()=>getLight().topology,
         searchAllowed:(policy:import('./allowed-area-state.ts').AllowedAreaPolicy)=>searchAllowed(world,pawn,getBlocked(),occupied,budget,policy),
@@ -1420,6 +1423,17 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(pawn.openCasket&&processAncientCasketOpening256(world,pawn,needsContext))continue;
       if(pawn.orders.active==='bury'&&pawn.burial){processBurial(world,pawn,needsContext);continue;}
       if(pawn.cleaning?.forced&&processCleaning(world,pawn,needsContext))continue;
+      // An admitted FinishFrame owns its whole finite visit. Its paid work,
+      // expiry and Ready run in the real Core owner, not again in this macro.
+      const frameOwner301=Number(world.schemaVersion)===301?coreState297(world).frame:undefined;
+      if(frameOwner301?.owns(pawn)){
+        if(!pawn.frameToil301&&pawn.postureUntilCore301===undefined){
+          const frame=frameOwner301.currentFrame(pawn);
+          if(frame&&!frameOwner301.admitAtContact(pawn))
+            moveToward(world,pawn,constructionWorkTarget(world,frame),false,getBlocked,budget,false,getLight);
+        }
+        continue;
+      }
       if (advanceOrders(world,pawn,getBlocked,budget)) continue;
       if (!pawn.animalHandling&&!pawn.animalCare&&!pawn.animalFeed&&!pawn.animalRescue&&!pawn.ward&&!pawn.feed&&!pawn.tend&&!pawn.surgery&&!pawn.rescue&&advancePriorityWork(world,pawn,getBlocked,budget)) continue;
       if(processIdleWander300(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked}))continue;
@@ -1439,7 +1453,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(!pawn.surgery&&pawn.planCooldown===0&&recoverDroppedWeapon(world,pawn,()=>searchCandidates(world,pawn,getBlocked(),occupied,budget)))continue;
       if(!pawn.surgery&&pawn.planCooldown===0&&considerApparelPolicy(world,pawn,()=>searchCandidates(world,pawn,getBlocked(),occupied,budget)))continue;
       if(processReturnToAllowedArea(world,pawn,needsContext))continue;
-      if (pawn.jobId === null && pawn.haul === null && !pawn.rescue && !pawn.animalHandling && !pawn.animalCare && !pawn.animalFeed && !pawn.animalRescue && !pawn.ward&&!pawn.feed&&!pawn.tend&&!pawn.surgery && !pawn.cooking && !pawn.hunting && !pawn.orbitalTrade && !pawn.deepWork && !pawn.brewing && !pawn.research && !pawn.burial && !pawn.cleaning && pawn.planCooldown === 0) {planWork(world, pawn, getBlocked, occupied, budget);idlePlanningResolved300=Number(world.schemaVersion)===300&&budget.remaining>0&&budget.pairs>0&&pawn.planCooldown>0;}
+      if (pawn.jobId === null && pawn.haul === null && !pawn.rescue && !pawn.animalHandling && !pawn.animalCare && !pawn.animalFeed && !pawn.animalRescue && !pawn.ward&&!pawn.feed&&!pawn.tend&&!pawn.surgery && !pawn.cooking && !pawn.hunting && !pawn.orbitalTrade && !pawn.deepWork && !pawn.brewing && !pawn.research && !pawn.burial && !pawn.cleaning && pawn.planCooldown === 0) {planWork(world, pawn, getBlocked, occupied, budget);idlePlanningResolved300=isSchema300OrLater(Number(world.schemaVersion))&&budget.remaining>0&&budget.pairs>0&&pawn.planCooldown>0;}
       }
       if(pawn.firefighting&&processFirefighting(world,pawn,needsContext))continue;
       if(pawn.animalRescue){processAnimalRescue(world,pawn,needsContext);continue;}
@@ -1468,8 +1482,15 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       const job = world.jobs.find(candidate => candidate.id === pawn.jobId); if (!job) {
         if(pendingCurrent300)continue;
         if(processReturnToAllowedArea(world,pawn,needsContext))continue;
-        if(processRecreation(world,pawn,needsContext,true,Number(world.schemaVersion)===300?'idle300':'ordinary'))continue;
+        if(processRecreation(world,pawn,needsContext,true,isSchema300OrLater(Number(world.schemaVersion))?'idle300':'ordinary'))continue;
         if(idlePlanningResolved300&&budget.remaining>0&&budget.pairs>0)offerIdleWander300(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked});
+        continue;
+      }
+      // A job admitted by Main in THIS macro has not passed the earlier
+      // owned-job branch. Admit its toil without paying old macro work once.
+      if(Number(world.schemaVersion)===301&&coreState297(world).frame!.owns(pawn)){
+        const frame=coreState297(world).frame!;
+        if(!frame.admitAtContact(pawn))moveToward(world,pawn,constructionWorkTarget(world,job),false,getBlocked,budget,false,getLight);
         continue;
       }
       if(job.tree){const beforeResources=world.resources,beforePiles=world.piles,beforeJobs=world.jobs;processTreeWork(world,pawn,job,(target,touch)=>moveToward(world,pawn,target,false,getBlocked,budget,false,getLight),getLight().speedAt(pawn));if(world.resources!==beforeResources||world.piles!==beforePiles||world.jobs!==beforeJobs){blocked=undefined;roofs=undefined;invalidateEnvironment();}continue;}
@@ -1611,8 +1632,20 @@ import { advanceStartingArrival } from './starting-arrival.ts';
 import { medicallyStopped,physicalWorkFactor } from './health-rules.ts';
 
 
+function woodWallOwner301(world:World):ReturnType<typeof createWoodWallCore301> {
+ let light:LightEnvironment|undefined;
+ const owner=createWoodWallCore301(world,{
+  rate:p=>rateForPawn301(world,p),
+  light:p=>(light??=readPlantLight(world)).speedAt(p),
+  complete:(p,j)=>{completeJob(world,p,j);return !world.jobs.includes(j);},
+  release:p=>releaseWork(world,p),
+  event:message=>event(world,'job',message),
+ });
+ return {...owner,invalidate(){light=undefined;owner.invalidate();}};
+}
 interface CoreMap297 {
  movement:ReturnType<typeof createCoreMovement297>;
+ frame?:ReturnType<typeof createWoodWallCore301>;
  idle?:ReturnType<typeof createIdleWanderCore300>;
  physics:ReturnType<typeof createCorePhysics297>;
  contacts?:ReturnType<typeof createConsoleContactCore298>;
@@ -1630,29 +1663,32 @@ function beginCoreMacro297(root:World):void {
 }
 
 function coreState297(world:World):CoreMap297 {
- let state=coreMaps297.get(world);if(!state){state={movement:createCoreMovement297(world),physics:createCorePhysics297(world),...(Number(world.schemaVersion)===300?{idle:createIdleWanderCore300(world)}:{}),...(isSchema298OrLater(Number(world.schemaVersion))?{contacts:createConsoleContactCore298(world)}:{})};coreMaps297.set(world,state);}return state;
+ let state=coreMaps297.get(world);if(!state){state={movement:createCoreMovement297(world),physics:createCorePhysics297(world),...(Number(world.schemaVersion)===301?{frame:woodWallOwner301(world)}:{}),...(isSchema300OrLater(Number(world.schemaVersion))?{idle:createIdleWanderCore300(world)}:{}),...(isSchema298OrLater(Number(world.schemaVersion))?{contacts:createConsoleContactCore298(world)}:{})};coreMaps297.set(world,state);}return state;
 }
 function invalidateCoreCampaign297(root:World,reason:'macro'|'command'|'movement'|'impact'):void {
- for(const map of actualCoreMaps297(root)){invalidateHumanMoveSpeed297(map);const state=coreMaps297.get(map);if(state){state.physics.invalidate(reason);state.movement.invalidate();state.idle?.invalidate();if(reason==='macro'||reason==='impact')state.contacts?.invalidateActive(effectiveCore297(map),reason);}}
+ for(const map of actualCoreMaps297(root)){invalidateHumanMoveSpeed297(map);const state=coreMaps297.get(map);if(state){state.physics.invalidate(reason);state.movement.invalidate();state.idle?.invalidate();state.frame?.invalidate();if(reason==='macro'||reason==='impact')state.contacts?.invalidateActive(effectiveCore297(map),reason);}}
 }
 function advanceCoreMap297(world:World,boundary=false):CoreStepResult297 {
  const state=coreState297(world);
- if(boundary){invalidateHumanMoveSpeed297(world);state.physics.invalidate('macro');state.idle?.invalidate();}
+ if(boundary){invalidateHumanMoveSpeed297(world);state.physics.invalidate('macro');state.idle?.invalidate();state.frame?.invalidate();}
  const moved=state.movement.advance();if(moved.changedCells||moved.topologyChanged)state.physics.invalidate('movement');
  const result=state.physics.advance(effectiveCore297(world));
+ if(result.requiresFull||moved.topologyChanged)state.frame?.invalidate();
+ const frameStep301=state.frame?.advance(result.core);
+ if(frameStep301?.requiresFull){state.physics.invalidate('impact');state.movement.invalidate();state.frame?.invalidate();}
  const expired=expirePhysicalActorTimers297(world);
  const idleStep300=state.idle?.advance(effectiveCore297(world));
  const contacts=state.contacts,core=result.core;
- if(result.observerEffects297.threatsChanged)contacts?.invalidateActive(core,'impact');
- const physicalActorChanges298=[...moved.actorsChanged,...result.actorsChanged,...expired,...(idleStep300?.actorsChanged??[])];
+ if(result.observerEffects297.threatsChanged||frameStep301?.requiresFull)contacts?.invalidateActive(core,'impact');
+ const physicalActorChanges298=[...moved.actorsChanged,...result.actorsChanged,...expired,...(idleStep300?.actorsChanged??[]),...(frameStep301?.actorsChanged??[])];
  contacts?.notifyActorsChanged(core,physicalActorChanges298);
  const contactStep=contacts?.advance(core);
  // Reindex only the actually changed owner on a causal roster mismatch.
  if(contactStep?.rosterSyncIds.length)for(const id of contactStep.rosterSyncIds){const slot=world.pawns.findIndex(p=>p.id===id);if(slot>=0)contacts!.observeCommandPawn(world.pawns[slot]!,slot,core);}
  const reactorStep=advanceShipReactorsCore297(world);
  if(reactorStep?.completed)event(world,'command',reactorStep.completed===1?'Un réacteur stellaire a terminé son démarrage.':`${reactorStep.completed} réacteurs stellaires ont terminé leur démarrage.`);
- if(result.requiresFull){state.movement.invalidate();invalidateHumanMoveSpeed297(world);}
- state.result={...result,observerEffects297:{threatsChanged:result.observerEffects297.threatsChanged||moved.topologyChanged,audioChanged:result.observerEffects297.audioChanged||moved.topologyChanged},requiresFull:result.requiresFull||moved.requiresFull||!!reactorStep?.completed||!!contactStep?.requiresFull||!!idleStep300?.requiresFull,actorsChanged:[...new Set(contactStep?.actorsChanged.length?[...physicalActorChanges298,...contactStep.actorsChanged]:physicalActorChanges298)]};return state.result;
+ if(result.requiresFull||frameStep301?.requiresFull){state.movement.invalidate();invalidateHumanMoveSpeed297(world);}
+ state.result={...result,observerEffects297:{threatsChanged:result.observerEffects297.threatsChanged||moved.topologyChanged||!!frameStep301?.requiresFull,audioChanged:result.observerEffects297.audioChanged||moved.topologyChanged||!!frameStep301?.requiresFull},requiresFull:result.requiresFull||moved.requiresFull||!!frameStep301?.requiresFull||!!reactorStep?.completed||!!contactStep?.requiresFull||!!idleStep300?.requiresFull,actorsChanged:[...new Set(contactStep?.actorsChanged.length?[...physicalActorChanges298,...contactStep.actorsChanged]:physicalActorChanges298)]};return state.result;
 }
 /** requiresFull preserves the existing conservative boundary signal. Only the
  * fixed bridge may use the separate actual hard receipt to coalesce calm macros. */

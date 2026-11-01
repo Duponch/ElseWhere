@@ -1,3 +1,4 @@
+import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {idleWanderTask300} from './idle-wander-300.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {humanMoveSpeedFactor297} from './human-move-speed-297.ts';
@@ -36,7 +37,7 @@ export function startTravel(world:World,pawn:Pawn,next:Cell,getLight?:LightReade
   const terrainDelay=furnitureDelay(world,pawn,next,undefined,geometry);
   let speedFactor=isCorePhysicalSchema297(Number(world.schemaVersion))?humanMoveSpeedFactor297(world,pawn,getLight):(getLight?.()??new LightEnvironmentCache().read(world)).speedAt(pawn)*pawnBody(pawn).capacities.moving*apparelMoveFactor(world,pawn)*weatherMoveFactor(world,pawn);
   if(world.schemaVersion>=86&&!isCorePhysicalSchema297(Number(world.schemaVersion))){if(pawn.prisoner)speedFactor*=.35;if(pawn.rescue?.phase==='carry'||cryptosleepCarrying271(pawn)||shipCasketCarrying277(pawn)||groupHumanCarrying257(world,pawn.id)||kidnapCarrying261(pawn))speedFactor*=.6;}
-  const coreMove297=isCorePhysicalSchema297(Number(world.schemaVersion)),walk297=((pawn.mental?.crisis?.kind==='sad-wander'||pawn.mental?.crisis?.kind==='food-binge')&&!pawn.need)||(Number(world.schemaVersion)===300&&idleWanderTask300(pawn)?.kind==='move');
+  const coreMove297=isCorePhysicalSchema297(Number(world.schemaVersion)),walk297=((pawn.mental?.crisis?.kind==='sad-wander'||pawn.mental?.crisis?.kind==='food-binge')&&!pawn.need)||(isSchema300OrLater(Number(world.schemaVersion))&&idleWanderTask300(pawn)?.kind==='move');
   if(!coreMove297&&walk297)speedFactor=Math.min(speedFactor/2,TRAVEL_TICKS/5);
   const duration = coreMove297?coreMoveDuration297(pawn,next,speedFactor,terrainDelay,walk297):TRAVEL_TICKS * edgeLength(pawn,next)/speedFactor+terrainDelay;
   const motion:TravelSegment={from:{x:pawn.x,z:pawn.z},to:{x:next.x,z:next.z},start,end:start+duration,...terrainDelay?{terrainDelay}:{},...speedFactor!==1?{speedFactor}:{}};

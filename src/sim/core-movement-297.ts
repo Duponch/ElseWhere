@@ -1,3 +1,4 @@
+import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {idleWanderTask300,idleMotionAllowed300,idleOtherActivity300,releaseIdleWander300} from './idle-wander-300.ts';
 import {createAnimalCoreMovement297} from './animal-core-movement-297.ts';
 import {captureCorePassengers297} from './core-passengers-297.ts';
@@ -48,7 +49,7 @@ export function createCoreMovement297(world:World){
       finishSnowStep(world,pawn);const snowChanged=index>=0&&world.tiles[index]?.snowDepth!==depth;
       requiresFull=recordFilthMovement297(world,pawn)||snowChanged||requiresFull;
     }
-    if(Number(world.schemaVersion)===300&&idleWanderTask300(pawn)?.kind==='move'&&!idleMotionAllowed300(world,pawn)){releaseIdleWander300(pawn,!idleOtherActivity300(pawn));if(!changed.includes(pawn.id))changed.push(pawn.id);requiresFull=true;}
+    if(isSchema300OrLater(Number(world.schemaVersion))&&idleWanderTask300(pawn)?.kind==='move'&&!idleMotionAllowed300(world,pawn)){releaseIdleWander300(pawn,!idleOtherActivity300(pawn));if(!changed.includes(pawn.id))changed.push(pawn.id);requiresFull=true;}
     if(pawn.moveCooldown>0)continue;
     // Clinical/task invalidation stays authoritative. A stale path is never
     // extended after an impact, command, retirement or ownership transfer.

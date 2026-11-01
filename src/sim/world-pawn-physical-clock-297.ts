@@ -4,7 +4,7 @@ import type {CampaignState} from './world-map-state.ts';
 import type {WorldPawnsState256,WorldPawnOwner256} from './world-pawn-state-256.ts';
 const integer=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
 function ownedPhysical(value:object,version:number,civilCore:number):number {
- if(!integer(version,1,300)||!integer(civilCore)||civilCore%10)return NaN;
+ if(!integer(version,1,301)||!integer(civilCore)||civilCore%10)return NaN;
  if(!('physicalClockCore297'in value))return civilCore;
  const d=Object.getOwnPropertyDescriptor(value,'physicalClockCore297');
  return isCorePhysicalSchema297(version)&&!!d&&d.enumerable===true&&Object.hasOwn(d,'value')&&integer(d.value,civilCore,civilCore+9)?d.value:NaN;

@@ -24,7 +24,7 @@ export function shipReactorEndCore275(startCore:number):number|undefined {
 }
 
 export function validShipReactorState275(v:unknown,core:number,version:number=275):v is ShipReactorState275 {
- if(!integer(version,1,300)||!integer(core)||!plain(v)||Reflect.ownKeys(v).length!==3||!['state','startCore','endCore'].every(k=>data(v,k)))return false;
+ if(!integer(version,1,301)||!integer(core)||!plain(v)||Reflect.ownKeys(v).length!==3||!['state','startCore','endCore'].every(k=>data(v,k)))return false;
  return integer(v.startCore,0,core)&&(isCorePhysicalSchema297(version)||v.startCore%10===0)&&integer(v.endCore,SHIP_REACTOR_STARTUP_CORE_275)
   &&v.endCore===shipReactorEndCore275(v.startCore)
   &&(v.state==='starting'?core<=v.endCore:v.state==='running'&&core>v.endCore);
@@ -33,7 +33,7 @@ export function validShipReactorState275(v:unknown,core:number,version:number=27
 /** Descriptor-first prospective field fence. Jobs may name the future built
  * kind but never own a running component; minified reactors do not exist. */
 export function validShipReactorField275(v:unknown,version:number,core:number,owner:'installed'|'job'|'packed'='installed'):boolean {
- if(!integer(version,1,300)||!integer(core)||!plain(v))return false;
+ if(!integer(version,1,301)||!integer(core)||!plain(v))return false;
  const kind=data(v,'kind');if(!kind)return owner==='job'&&!('kind'in v)&&!('shipReactor275'in v);
  const has='shipReactor275'in v;
  if(kind.value!=='ship-reactor')return !has;

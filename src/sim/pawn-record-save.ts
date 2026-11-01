@@ -1,3 +1,4 @@
+import {validFramePawn301} from './finish-frame-save-301.ts';
 import {validHumanIngestionPawn299} from './human-ingestion-save-299.ts';
 import {validIdleWanderPawn300} from './idle-wander-save-300.ts';
 import {validFactionCommsPawnFields298} from './faction-comms-save-298.ts';
@@ -94,6 +95,7 @@ export function validateRetainedShipCasketPawnShape277(item:Record<string,unknow
 function pawnRecordShape(item:Record<string,unknown>,world:PawnRecordContext,version:number,validationTick:number,detached:boolean,awayAreaIds?:ReadonlySet<number>,heldPlayer271?:{casketId:number;heldAt:number;retained?:true},heldShip277?:{casketId:number;heldAt:number;retained?:true},coreNow297?:number):string[] {
   const physicalCoreNow297=validationCore297(version,validationTick,coreNow297),physicalLocalNow297=isCorePhysicalSchema297(version)?physicalCoreNow297/10:validationTick;
   if(isCorePhysicalSchema297(version)&&!Number.isSafeInteger(physicalCoreNow297))return ['Invalid actual physical Pawn frontier.'];
+  if(!validFramePawn301(item,version,!detached&&!heldPlayer271&&!heldShip277,physicalCoreNow297))return ['Invalid actual FinishFrame301 Pawn fields.'];
   if(!validHumanIngestionPawn299(item,version,physicalCoreNow297))return ['Invalid actual human ingestion clock or provider provenance.'];
   if(!validIdleWanderPawn300(item,version,!detached&&!heldPlayer271&&!heldShip277?{core:physicalCoreNow297,width:world.width,height:world.height}:undefined))return ['Invalid actual local civil wander task.'];
   const input=world as unknown as Record<string,unknown>;

@@ -1,3 +1,4 @@
+import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {idleWanderTask300} from './idle-wander-300.ts';
 import { clearingDuration } from './gathering.ts';
 import { clearanceOutputPending,workOutputPending } from './construction-plants.ts';
@@ -160,7 +161,7 @@ export function queryPawnStatus(world: World, pawn: Pawn, foodReadability?:FoodR
   if (pawn.haul) return { code: pawn.haul.phase, reason: pawn.haul.destination.type === 'aside' ? `Libère ${pawn.haul.destination.constructionId===undefined?'les cultures':'le chantier'} : ${pawn.haul.quantity} unités à déplacer.` : pawn.haul.phase === 'pickup' ? `Va prélever ${pawn.haul.quantity} unités réservées.` : `Porte ${pawn.haul.quantity} unités vers ${pawn.haul.destination.type === 'job' ? 'un chantier' : 'le stockage'}.` };
   if (pawn.jobId !== null) return { code: 'working', reason: pawn.state === 'moving' ? 'Se rend à son travail.' : 'Travaille sur sa cible.' };
   if (pawn.state === 'sleeping') return { code: 'sleeping', reason: 'Se repose.' };
-  const idle300=Number(world.schemaVersion)===300?idleWanderTask300(pawn):undefined;
+  const idle300=isSchema300OrLater(Number(world.schemaVersion))?idleWanderTask300(pawn):undefined;
   if(idle300)return {code:idle300.kind==='wait'?'idle-wander-wait':'idle-wander-move',reason:idle300.kind==='wait'?'Attend sans rien faire.':'Erre.'};
   if (pawn.state === 'hungry') {
     const food=(foodReadability??captureFoodReadability(world)).byPawn.get(pawn.id);

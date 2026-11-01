@@ -7,7 +7,7 @@ const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&
 /** Fence original RAW and sparse/public domains before migration/adoption.
  * It never reads terrain, resource arrays or the planetary payload. */
 export function validShipCasketHistoricalTransport277(value:unknown,version:number):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>300)return false;if(isSchema277OrLater(version))return true;
+ if(!Number.isSafeInteger(version)||version<1||version>301)return false;if(isSchema277OrLater(version))return true;
  let budget=2000000;const active=new Set<object>();
  const walk=(v:unknown):boolean=>{
   if(--budget<0)return false;if(v===null||typeof v!=='object')return true;

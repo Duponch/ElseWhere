@@ -100,7 +100,7 @@ export function orderReadiness(world: World, pawn: Pawn, job: Job, accepted=fals
   if (job.kind === 'sow' && (groundPile(world,job)||packedAt(world,job))) return 'Le sol doit être dégagé ; choisissez Dégager avant de semer.';
 }
 function goals(world: World, job: Job) {
-  const plant=clearingPlant(world,job),cells=plant?[plant]:footprintCells(furnitureWorkTarget(world,job) as Job), result=interactionGoals(world,cells,job.kind);
+  const plant=clearingPlant(world,job),cells=plant?[plant]:footprintCells(furnitureWorkTarget(world,job) as Job), result=interactionGoals(world,cells,job.kind,undefined,job);
   if(job.kind!=='smooth-floor')for(const cell of cells)result.delete(cellIndex(world,cell.x,cell.z));
   return result;
 }

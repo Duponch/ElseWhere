@@ -1,3 +1,4 @@
+import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {medicalCivilTick271} from './suspended-human-clock-271.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
@@ -21,7 +22,7 @@ export interface HumanConditionWander256 {revision:1;nextMoveOrderIsWait:boolean
  * primary TryStartMentalState and StopAll do not reset Pawn_MindState. */
 export function constructHumanConditionMind256(p:Pawn,version:number):void {
  if(!isSchema256Or257(version)||p.mental?.wander)throw Error('Clinical mind must be constructed once with the actual new human');
- mentalState(p).wander={revision:1,nextMoveOrderIsWait:Number(version)===300};
+ mentalState(p).wander={revision:1,nextMoveOrderIsWait:isSchema300OrLater(Number(version))};
 }
 export function hasHumanConditionMind256(p:Pawn):boolean {return p.mental?.wander?.revision===1;}
 export function validHumanClinicalConditionOwner256(p:Pawn,version:number,clock:number,spatial=false):boolean {

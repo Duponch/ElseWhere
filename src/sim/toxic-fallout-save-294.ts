@@ -12,7 +12,7 @@ const int=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v===
  * can stand in for this witness after a transfer or after the fallout ends. */
 export function validToxicFalloutRotCredit294(rot:unknown,version:number,corpse:boolean):boolean {
  try{
-  if(!int(version,1,300))return false;
+  if(!int(version,1,301))return false;
   if(!rot||typeof rot!=='object'||!('fallout294'in rot))return true;
   const d=data(rot,'fallout294');
   return (version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))&&corpse&&!!d&&int(d.value,300)&&d.value%300===0;
@@ -30,7 +30,7 @@ export interface ToxicFalloutRotFacts294 {
  * calendar, a random draw, an environmental cursor or a past exposure. */
 export function validToxicFalloutCalendar294(value:unknown,version:number,w:Pick<World,'tick'|'width'|'height'>,calendar:Pick<CassandraMiscCalendar,'adoptedAt'|'opportunities'>):boolean {
  try{
-  if(!int(version,1,300))return false;
+  if(!int(version,1,301))return false;
   if(value===undefined)return true;
   if((version!==294&&(version!==295&&(version!==296&&!isCorePhysicalSchema297(version))))||!keys(value,['adoptedAt','count'],['lastStart','active'])||!int(w.tick)||!int(w.tick*10)||!int(w.width,1)||!int(w.height,1)||!int(w.width*w.height,1)
    ||!int(calendar.adoptedAt,0,w.tick)||!int(calendar.opportunities)||!int(value.adoptedAt,calendar.adoptedAt,w.tick)||!int(value.count,0,calendar.opportunities))return false;
@@ -53,7 +53,7 @@ export function validToxicFalloutCalendar294(value:unknown,version:number,w:Pick
  * Descriptor checks precede value reads, including on historical packets. */
 export function validToxicFalloutHistoricalTransport294(raw:unknown,version:unknown,facts?:ToxicFalloutRotFacts294):boolean {
  try{
-  if(!int(version,1,300))return false;
+  if(!int(version,1,301))return false;
   const active=new Set<object>();let budget=2000000;
   const lanes=['world','summary','dynamic','campaign','worldMaps','worldGroups','worldPawns','campaignMap','secondarySite','map','maps','sites','entries','groups','group','state','groupLosses','pending261','battlefield261','retained','people','pawns','wildlife','animals','piles','items','packed','building','structures','body','cryptosleep','shipCryptosleep277','occupant','human','pawn','animal','actor','contents','lost','abandoned','abandonedContents','abandonedPawns','humans','pods','animalLosses','losses','members','owners','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277','casket','upserted'] as const;
   const visit=(v:unknown,lane:string,context:Record<string,unknown>,corpseRot=false,holder?:Record<string,unknown>,actor?:Record<string,unknown>):boolean=>{

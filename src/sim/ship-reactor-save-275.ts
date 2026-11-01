@@ -29,7 +29,7 @@ export function validShipReactorBuilding275(v:unknown,version:number,w:Header275
  * ship parts cannot travel inside any packed owner. The276 checks reuse this
  * owner walk, rather than adding another structures/possessions traversal. */
 export function validShipReactorWorld275(w:World,version:number=w.schemaVersion):boolean {
- const core=isCorePhysicalSchema297(Number(version))?effectiveCore297(w):w.tick*10;if(!int(w.tick,0,Math.floor(Number.MAX_SAFE_INTEGER/10))||!int(version,1,300))return false;
+ const core=isCorePhysicalSchema297(Number(version))?effectiveCore297(w):w.tick*10;if(!int(w.tick,0,Math.floor(Number.MAX_SAFE_INTEGER/10))||!int(version,1,301))return false;
  for(const s of w.structures)if(!validShipReactorBuilding275(s,version,w,core)||!validShipHullBuilding276(s,version,w))return false;
  for(const j of w.jobs){
   if(!validShipReactorField275(j,version,core,'job')||!validShipHullField276(j,version,'job'))return false;
@@ -51,7 +51,7 @@ export function validShipReactorWorld275(w:World,version:number=w.schemaVersion)
  * no predecessor. Coalesced packets can legitimately skip the entire warmup. */
 export function validShipReactorContinuation275(previous:Pick<World,'schemaVersion'|'tick'|'structures'>&Partial<Pick<World,'phaseCore297'>>,next:Pick<World,'schemaVersion'|'tick'|'structures'>&Partial<Pick<World,'phaseCore297'>>):boolean {
  if(!int(previous.tick,0,Math.floor(Number.MAX_SAFE_INTEGER/10))||!int(next.tick,previous.tick,Math.floor(Number.MAX_SAFE_INTEGER/10))
-  ||!int(previous.schemaVersion,1,300)||!int(next.schemaVersion,1,300))return false;
+  ||!int(previous.schemaVersion,1,301)||!int(next.schemaVersion,1,301))return false;
  const before=isCorePhysicalSchema297(Number(previous.schemaVersion))?effectiveCore297(previous):previous.tick*10,after=isCorePhysicalSchema297(Number(next.schemaVersion))?effectiveCore297(next):next.tick*10;let old:Map<number,ShipReactor275>|undefined;
  for(const s of previous.structures)if(isShipReactor275(s))(old??=new Map()).set(s.id,s);
  for(const s of next.structures){
@@ -75,7 +75,7 @@ const futureStrings=(a:unknown[]):boolean=>Reflect.ownKeys(a).some(k=>{const d=O
 /** Sparse historical fence, before migration or checkpoint/delta admission.
  * It never walks terrain, geography or resource arrays. */
 export function validShipReactorHistoricalTransport275(value:unknown,version:number):boolean {
- if(!int(version,1,300))return false;if(isSchema275OrLater(version))return true;
+ if(!int(version,1,301))return false;if(isSchema275OrLater(version))return true;
  let budget=2000000;const active=new Set<object>();
  const historical=(v:unknown,domain?:string):boolean=>{
   if(--budget<0)return false;if(!v||typeof v!=='object')return true;

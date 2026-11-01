@@ -1,4 +1,6 @@
 import * as THREE from 'three/webgpu';
+import {actualCameraView301} from './actual-camera-view-301.ts';
+import type {ActualView301} from '../sim/actual-view-301.ts';
 import {SceneRenderCore} from './SceneRenderCore';
 import {createDomPort} from './DomScenePort';
 import type {RendererLifetime} from './scene-render-ports';
@@ -15,6 +17,19 @@ import {installMapWheelZoom} from '../ui/map-wheel';
 import {DeferredMapHover} from './deferred-map-hover';
 import type {AreaAction,Cell} from '../sim/types';
 export class ColonyRenderer extends SceneRenderCore {
+  private actualViewSample301?:{mapKey:string;at:number;view:ActualView301|null};
+  /** Sample the real camera after controls updated, at most ten times/second
+   * per map; incoming immutable World publications do not invalidate this bound. */
+  readActualView301(now:number):ActualView301|null {
+    const world=this.world;
+    if(!world||!Number.isFinite(now)||this.disposed||this.preparing||this.presentationStopped||this.fatalError){this.actualViewSample301=undefined;return null;}
+    const mapId=world.campaignMap?.revision===2?world.campaignMap.activeMapId:0,mapKey=[mapId,world.width,world.height].join(':');
+    const old=this.actualViewSample301;if(old?.mapKey===mapKey&&now-old.at<100)return old.view;
+    const rect=this.renderer.domElement.getBoundingClientRect();
+    if(rect.width<=0||rect.height<=0){this.actualViewSample301={mapKey,at:now,view:null};return null;}
+    const view=actualCameraView301(this.camera,mapId,world.width,world.height,this.rig.span);
+    this.actualViewSample301={mapKey,at:now,view};return view;
+  }
   protected createSelectionRectanglePort():((bounds:{left:number;top:number;width:number;height:number}|null)=>void)|undefined{return undefined;}
   private readonly selectionInput:PawnSelectionInput;
   private readonly deferredHover=new DeferredMapHover();

@@ -1,3 +1,4 @@
+import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297,effectiveLocal297} from './core-phase-297.ts';
 import {isColonist} from './affiliation.ts';
 import {allowedAreaOtherActivity,allowedAreaAllows,captureAllowedArea} from './allowed-area-state.ts';
@@ -41,7 +42,7 @@ export function idleOtherActivity300(p:Pawn):boolean {
 export function idleMotionAllowed300(w:World,p:Pawn):boolean {
  // Stun suspends the pather; it does not revoke the GotoWander owner.
  // The existing Core movement pass still refuses to advance a stunned pawn.
- return Number(w.schemaVersion)===300&&idleWanderTask300(p)?.kind==='move'&&!idleOtherActivity300(p)&&p.state!=='dead'&&p.state!=='downed'&&!p.health?.death&&!p.collapsePending;
+ return isSchema300OrLater(Number(w.schemaVersion))&&idleWanderTask300(p)?.kind==='move'&&!idleOtherActivity300(p)&&p.state!=='dead'&&p.state!=='downed'&&!p.health?.death&&!p.collapsePending;
 }
 export function releaseIdleWander300(p:Pawn,clearRoute=true):void {
  const owner=p as IdlePawn300;if(!owner.idleWander300)return;delete owner.idleWander300;
@@ -50,12 +51,12 @@ export function releaseIdleWander300(p:Pawn,clearRoute=true):void {
 /** New nonempty effective assignment only; painting has no new speculative
  * interrupt contract here. StopDead uses the existing real pather stop. */
 export function interruptIdleForArea300(w:World,p:Pawn):void {
- if(Number(w.schemaVersion)!==300)return;const task=idleWanderTask300(p);if(!task)return;
+ if(!isSchema300OrLater(Number(w.schemaVersion)))return;const task=idleWanderTask300(p);if(!task)return;
  const policy=captureAllowedArea(w,p),at=task.kind==='wait'?task.at:task.target;
  if(policy&&!policy.has(at.z*w.width+at.x)){stopCapturedTravel297(w,p);releaseIdleWander300(p);}
 }
 function mayOffer(w:World,p:Pawn):boolean {
- return Number(w.schemaVersion)===300&&w.pawns.includes(p)&&!idleWanderTask300(p)&&isColonist(p)&&!idleOtherActivity300(p)&&!isStunned(p,effectiveCore297(w))
+ return isSchema300OrLater(Number(w.schemaVersion))&&w.pawns.includes(p)&&!idleWanderTask300(p)&&isColonist(p)&&!idleOtherActivity300(p)&&!isStunned(p,effectiveCore297(w))
   &&p.state!=='dead'&&p.state!=='downed'&&!p.health?.death&&!p.collapsePending&&p.moveCooldown===0&&(p.motion?.end??0)<=effectiveLocal297(w)
   &&p.mental?.wander?.revision===1&&pawnBody(p).canBeAwake&&pawnBody(p).capacities.moving>0
   &&!w.piles.some(q=>q.owner.type==='pawn'&&q.owner.pawnId===p.id)&&!w.packed.some(q=>q.owner.type==='pawn'&&q.owner.pawnId===p.id);
@@ -122,7 +123,7 @@ export function offerIdleWander300(w:World,p:Pawn,context:IdleWanderContext300):
 /** Active optional job owns the turn. MainWork is not re-run every20 local
  * ticks or every constant-tree30Core window. Real commands clear it on commit. */
 export function processIdleWander300(w:World,p:Pawn,context:IdleWanderContext300):boolean {
- const task=Number(w.schemaVersion)===300?idleWanderTask300(p):undefined;if(!task)return false;
+ const task=isSchema300OrLater(Number(w.schemaVersion))?idleWanderTask300(p):undefined;if(!task)return false;
  if(idleOtherActivity300(p)||p.state==='dead'||p.state==='downed'||p.health?.death||p.collapsePending){releaseIdleWander300(p,!idleOtherActivity300(p));return false;}
  if(task.kind==='wait'){p.state='idle';return true;}
  if(isStunned(p,effectiveCore297(w)))return true;
@@ -138,7 +139,7 @@ export function processIdleWander300(w:World,p:Pawn,context:IdleWanderContext300
 export function createIdleWanderCore300(w:World){
  let dirty=true,owners:Pawn[]=[];
  return {invalidate(){dirty=true;},advance(core:number):{actorsChanged:number[];requiresFull:boolean}{
-  if(Number(w.schemaVersion)!==300)return {actorsChanged:[],requiresFull:false};
+  if(!isSchema300OrLater(Number(w.schemaVersion)))return {actorsChanged:[],requiresFull:false};
   if(core!==effectiveCore297(w))throw Error('Idle300 requires its actual committed Core');
   if(dirty){owners=w.pawns.filter(p=>idleWanderTask300(p));dirty=false;}
   const changed:number[]=[];

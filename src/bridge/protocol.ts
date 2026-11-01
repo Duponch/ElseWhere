@@ -13,6 +13,7 @@ export interface WorldDraftPreviewMessage256 {
  settlements:readonly import('../ui/world-creation-contract').WorldCreationSettlement256[];
 }
 export type Request =
+  | import('./actual-view-wire-301.ts').ActualViewRequest301
   | ShipRuntimeRequest298
   | {id:number;type:'world-draft-generate';generation:number;request:import('../ui/world-creation-contract').WorldCreationRequest256}
   | {id:number;type:'world-draft-cancel';generation:number;operationId?:number}

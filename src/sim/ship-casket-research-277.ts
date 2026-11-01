@@ -26,7 +26,7 @@ const data=(v:object,key:string)=>{const d=Object.getOwnPropertyDescriptor(v,key
  * False/undefined markers and selection are rejected before277 and after283. */
 export function validShipCasketResearchDomain277(state:unknown,version:number,atLocal:number):boolean {
  try{
-  if(!int(version,1,300)||!int(atLocal,0,Number.MAX_SAFE_INTEGER))return false;
+  if(!int(version,1,301)||!int(atLocal,0,Number.MAX_SAFE_INTEGER))return false;
   if(state===undefined)return true;if(!plain(state))return false;
   const selected=data(state,'project')?.value,hasRecord='shipCryptosleep'in state;
   if(!hasRecord&&selected!=='ship-cryptosleep')return true;

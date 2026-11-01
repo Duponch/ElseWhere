@@ -12,7 +12,7 @@ import type {NeedContext} from '../src/sim/needs.ts';
 
 // Configured component inputs, not fabricated valid campaign saves. Persistence
 // and full schema299 ownership are qualified separately by the schema contracts.
-function setup(){const w=medicalCamp();w.schemaVersion=299;w.phaseCore297=0;const p=w.pawns[0]!;p.hunger=100;p.rest=100;delete p.health;
+function setup(){const w=medicalCamp();(w as unknown as {schemaVersion:number}).schemaVersion=299;w.phaseCore297=0;const p=w.pawns[0]!;p.hunger=100;p.rest=100;delete p.health;
  p.mental={below:[0,0,0],cooldown:0,catharsis:[],crisis:{kind:'food-binge',age:0,target:null,waitUntil:w.tick}};
  return {w,p};}
 function context(){const calls={released:0,moved:0,searched:0,events:[] as string[]};const c:NeedContext={search:()=>{calls.searched++;return null;},move:()=>{calls.moved++;},release:()=>{calls.released++;return true;},event:m=>calls.events.push(m)};return {c,calls};}

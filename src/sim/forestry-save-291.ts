@@ -53,7 +53,7 @@ const lanes:readonly [string,boolean?][]=[
  ['humans',true],['members',true],['people',true],['animals',true],['pawns',true],['human'],['pawn'],['animal'],['actor'],['scout'],['commercialTrip'],
 ];
 export function validForestryHistoricalTransport291(raw:unknown,version:unknown):boolean {
- if(!integer(version,1,300))return false;
+ if(!integer(version,1,301))return false;
  let budget=2_000_000;const active=new Set<object>();
  const list=(value:unknown,key:string):boolean=>{
   if(!Array.isArray(value))return key!=='visitor-member-id'&&plain(value)&&!!data(value,'upserted')&&visit(value,key);

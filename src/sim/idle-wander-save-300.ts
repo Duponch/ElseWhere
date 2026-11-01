@@ -1,3 +1,4 @@
+import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import type {HumanOwnershipCapture} from './human-owners.ts';
 import type {World} from './types.ts';
@@ -25,9 +26,9 @@ const competing=['priorityWork','draft','interruptedCargo','rescue','animalHandl
  * minted. Old absence is neutral and the clinical wander bit is never changed. */
 export function validIdleWanderPawn300(value:unknown,version:number,owner?:IdleWanderOwner300):boolean {
  try{
-  if(!object(value)||!integer(version,1,300))return false;
+  if(!object(value)||!integer(version,1,301))return false;
   if(!('idleWander300'in value))return true;
-  if(version!==300||!owner||!integer(owner.core)||!integer(owner.width,1)||!integer(owner.height,1))return false;
+  if(!isSchema300OrLater(version)||!owner||!integer(owner.core)||!integer(owner.width,1)||!integer(owner.height,1))return false;
   const task=data(value,'idleWander300');if(!object(task))return false;
   const cell=(v:unknown):v is Record<string,unknown>=>object(v)&&keys(v,['x','z'])&&integer(data(v,'x'),0,owner.width-1)&&integer(data(v,'z'),0,owner.height-1);
   const same=(a:Record<string,unknown>,b:Record<string,unknown>)=>data(a,'x')===data(b,'x')&&data(a,'z')===data(b,'z');
@@ -72,7 +73,7 @@ export function validIdleWanderPawn300(value:unknown,version:number,owner?:IdleW
 /** Reuse the caller's existing owner capture. No second census is created. */
 export function validIdleWanderOwners300(w:World,version:number,readOwners:()=>HumanOwnershipCapture):boolean {
  try{
-  const local=Number(version)===300?{core:effectiveCore297(w),width:w.width,height:w.height}:undefined;
+  const local=isSchema300OrLater(Number(version))?{core:effectiveCore297(w),width:w.width,height:w.height}:undefined;
   for(const slot of readOwners().pawnOwners)if(slot.pawn&&!validIdleWanderPawn300(slot.pawn,version,slot.kind==='map'?local:undefined))return false;
   // These are other owners, never the selected map's local actors.
   for(const row of (w.campaignMap?.revision===2?w.campaignMap.groups:[]))if('members'in row.state)for(const p of row.state.members)if(!validIdleWanderPawn300(p,version))return false;
@@ -88,7 +89,7 @@ export function validIdleWanderOwners300(w:World,version:number,readOwners:()=>H
  * retain their ordinary/clinical bit, never a live map wander task. */
 export function validIdleWanderProjection300(w:World,version:number):boolean {
  try{
-  const local=Number(version)===300?{core:effectiveCore297(w),width:w.width,height:w.height}:undefined;
+  const local=isSchema300OrLater(Number(version))?{core:effectiveCore297(w),width:w.width,height:w.height}:undefined;
   const away=(p:unknown)=>validIdleWanderPawn300(p,version);
   const building=(s:Pick<World['structures'][number],'cryptosleep'|'shipCryptosleep277'|'casket'>):boolean=>{
    if(s.cryptosleep?.human&&!away(s.cryptosleep.human))return false;

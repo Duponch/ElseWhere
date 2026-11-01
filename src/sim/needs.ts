@@ -1,3 +1,4 @@
+import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {foodBingeDue299,selfFoodPermission299} from './human-ingestion-clock299.ts';
 import { isBedKind } from './bed-kinds.ts';
@@ -16,7 +17,7 @@ import { processEating } from './eating.ts';
 import { pileFoodScore, foodSourceSearchGoals, selectFoodSource } from './food-selection.ts';
 import { planPasteRequest,pasteRequestValid } from './nutrient-paste.ts';
 import { updateWellbeing,type FurnitureSight } from './wellbeing.ts';
-import { processSleeping } from './sleeping.ts';
+import { processSleeping,offerSleeping300 } from './sleeping.ts';
 import { updateRecreation } from './recreation-rules.ts';
 import { updateRest } from './rest.ts';
 import { type FoodItemId } from './food-policy.ts';
@@ -88,42 +89,66 @@ export function processNeedsDecision300(world:World,pawn:Pawn,context:NeedContex
 export function processNeeds(world:World,pawn:Pawn,context:NeedContext):boolean {
  return processNeedsResult300(world,pawn,context,false)!==false;
 }
-function processNeedsResult300(world:World,pawn:Pawn,context:NeedContext,allowPendingCurrent300:boolean):boolean|'pending-current' {
-  const canPlan = pawn.needCooldown === 0;
+export type NeedOffer300='admitted'|'unavailable'|'pending';
+export type NeedPreparation300='open'|'interrupted-sleep'|'interrupted-idle'|'direct-order'|'urgent-sleep'|'urgent-work';
+/** Real preconditions, separate from admission/continuation. This may retire a
+ * missing bed, perform the existing exhaustion collapse or retry cargo; it
+ * never grants rest/nutrition or advances an Eating/Sleeping processor. */
+export function prepareNeeds300(world:World,pawn:Pawn,context:NeedContext):NeedPreparation300 {
   if (pawn.bedId !== null && !world.structures.some(bed => bed.id === pawn.bedId && isBedKind(bed.kind))&&!world.packed?.some(pack=>pack.building.id===pawn.bedId&&isBedKind(pack.building.kind))) pawn.bedId = null;
   if(pawn.bedId===null)delete pawn.bedSlot;
-
   collapseFromExhaustion(world,pawn,context);
-
-  if(pawn.interruptedCargo) {
-    retryInterruptedCargo(world,pawn);
-    if(pawn.interruptedCargo) {
-      if(pawn.need?.kind==='sleep')processSleeping(world,pawn,context,canPlan);
-      else pawn.state='idle';
-      return true;
-    }
-  }
-
-  // A direct player job postpones ordinary needs and schedules; depletion and
-  // emergency collapse still run. Queuing behind a need does not interrupt it.
-  if(pawn.orders.active!==null)return false;
-  // Urgent medical work precedes ordinary hunger/schedule choices. Fatigue
-  // collapse above still interrupts; the patient's physical bed keeps running.
-  if(world.schemaVersion>=50&&urgentMedicalTask(pawn)){
-    if(pawn.need?.kind==='sleep')return processSleeping(world,pawn,context,canPlan);
-    return false;
-  }
-
+  if(pawn.interruptedCargo){retryInterruptedCargo(world,pawn);if(pawn.interruptedCargo){if(pawn.need?.kind==='sleep')return 'interrupted-sleep';pawn.state='idle';return 'interrupted-idle';}}
+  if(pawn.orders.active!==null)return 'direct-order';
+  if(world.schemaVersion>=50&&urgentMedicalTask(pawn))return pawn.need?.kind==='sleep'?'urgent-sleep':'urgent-work';
+  return 'open';
+}
+/** Read-only gates for an offer called outside the macro wrapper. Its owner
+ * must run the real preparation at the intended point; no collapse/cargo
+ * operation is repeated merely to ask whether a provider has an offer. */
+function needsOfferAllowed300(world:World,pawn:Pawn):boolean {
+ return !pawn.interruptedCargo&&pawn.orders.active===null&&!(world.schemaVersion>=50&&urgentMedicalTask(pawn))
+  &&!((world.restRules==='legacy'?pawn.rest===0:pawn.collapsePending)&&pawn.need?.kind!=='sleep');
+}
+function offerFoodNeedResult300(world:World,pawn:Pawn,context:NeedContext,canPlan:boolean):NeedOffer300 {
   // Core's ordinary provider precedes compulsive eating. A resolved false
   // source permits fallback; an exhausted search budget is still pending.
   const binge299=isSchema299OrLater(Number(world.schemaVersion))&&pawn.mental?.crisis?.kind==='food-binge';
   const ordinaryFood=binge299?pawn.hunger<30:pawn.mental?.crisis?.kind==='food-binge'||pawn.hunger<=(pawn.mental?.crisis?5:pawn.need?.kind==='sleep'?12.5:30);
   if(pawn.need?.kind!=='eat'&&(binge299||ordinaryFood)&&canPlan&&(world.restRules==='adult'||pawn.rest>(pawn.need?.kind==='sleep'?5:0))){
    let attempted=false,result:'admitted'|'unavailable'|'pending'='unavailable';
-   if(ordinaryFood){attempted=true;result=tryFoodNeed(world,pawn,context);if(result==='pending')return allowPendingCurrent300&&Number(world.schemaVersion)===300&&ownsCurrentCivilWork300(world,pawn)?'pending-current':true;}
-   if(binge299&&result==='unavailable'&&foodBingeDue299(world,pawn)){attempted=true;result=tryFoodNeed(world,pawn,context,true);if(result==='pending')return allowPendingCurrent300&&Number(world.schemaVersion)===300&&ownsCurrentCivilWork300(world,pawn)?'pending-current':true;}
+   if(ordinaryFood){attempted=true;result=tryFoodNeed(world,pawn,context);if(result==='pending')return 'pending';}
+   if(binge299&&result==='unavailable'&&foodBingeDue299(world,pawn)){attempted=true;result=tryFoodNeed(world,pawn,context,true);if(result==='pending')return 'pending';}
    if(attempted)pawn.needCooldown=NEED_INTERVAL;
+   return result;
   }
+
+  return 'unavailable';
+}
+/** New food admission only. No Eating/Sleeping continuation or gain. */
+export function offerFoodNeed300(world:World,pawn:Pawn,context:NeedContext,canPlan=pawn.needCooldown===0):NeedOffer300 {
+ return needsOfferAllowed300(world,pawn)?offerFoodNeedResult300(world,pawn,context,canPlan):'unavailable';
+}
+/** Composite food→rest admission only; callers keep any already active need
+ * with its existing processor. canPlan can be captured BEFORE preparation,
+ * preserving the macro's historical eligibility snapshot. */
+export function offerNeeds300(world:World,pawn:Pawn,context:NeedContext,canPlan=pawn.needCooldown===0):NeedOffer300 {
+ if(!needsOfferAllowed300(world,pawn))return 'unavailable';
+ const food=offerFoodNeedResult300(world,pawn,context,canPlan);if(food!=='unavailable')return food;
+ if(pawn.need?.kind==='eat')return 'unavailable';
+ return (pawn.need?.kind==='sleep'||pawn.mental?.crisis?.kind!=='food-binge')?offerSleeping300(world,pawn,context,canPlan):'unavailable';
+}
+
+function processNeedsResult300(world:World,pawn:Pawn,context:NeedContext,allowPendingCurrent300:boolean):boolean|'pending-current' {
+  // Capture before collapse/release, exactly as the original macro did.
+  const canPlan = pawn.needCooldown === 0,preparation=prepareNeeds300(world,pawn,context);
+  if(preparation==='interrupted-sleep'){processSleeping(world,pawn,context,canPlan);return true;}
+  if(preparation==='interrupted-idle')return true;
+  if(preparation==='direct-order'||preparation==='urgent-work')return false;
+  if(preparation==='urgent-sleep')return processSleeping(world,pawn,context,canPlan);
+
+  const foodOffer=offerFoodNeedResult300(world,pawn,context,canPlan);
+  if(foodOffer==='pending')return allowPendingCurrent300&&isSchema300OrLater(Number(world.schemaVersion))&&ownsCurrentCivilWork300(world,pawn)?'pending-current':true;
 
   if (pawn.need?.kind === 'eat') { processEating(world, pawn, context); return true; }
 

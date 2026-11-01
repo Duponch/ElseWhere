@@ -10,7 +10,7 @@ export const hasCoupleFields285=(p:object):boolean=>'coupleClock285'in p||'coupl
 /** Cold fence before historical migration/transport. Current285 uses actual
  * owner guards below, never a generic object walk on every publication. */
 export function validCoupleHistoricalTransport285(value:unknown,version:number):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>300)return false;
+ if(!Number.isSafeInteger(version)||version<1||version>301)return false;
  if(version===285||version===286||version===287||version===288||(version===289||(version===290||(version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))))))))return true;
  const domains=['pawns','structures','packed','worldMaps','secondarySite','campaignMap','worldGroups','worldPawns','worldFactions','group','groups','groupLosses','animalLosses','commercialTrip','visitors','raids','prisonDepartures','startingArrival','podRescues','scout','quests'];
  let budget=2_000_000;const active=new WeakSet<object>(),done=new WeakSet<object>();

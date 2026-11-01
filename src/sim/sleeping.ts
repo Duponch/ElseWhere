@@ -22,10 +22,12 @@ import type { Cell, Pawn, World } from './types.ts';
 const same = (a: Cell, b: Cell): boolean => a.x === b.x && a.z === b.z;
 const NEED_INTERVAL = 20;
 
-/** Ownership, accessibility and rest gain all depend on the actual sleeping cell. */
-export function processSleeping(world: World, pawn: Pawn, context: NeedContext, canPlan: boolean): boolean {
-  if(!allowedAreaServicesAllowed(world,pawn)){context.release();return false;}
-  if(pawn.need?.kind==='sleep'&&pawn.need.medical)return processPatientRest(world,pawn,context);
+export type SleepingOfferDecision300='admitted'|'unavailable'|'pending';
+// Ephemeral historical exits; never persisted and never a grant of rest.
+type SleepingOfferResult300=SleepingOfferDecision300|'admitted-medical'|'unavailable-handled'|'unavailable-unhandled';
+
+/** New proposal only: no existing sleep progress, no rest grant. */
+function offerSleepingAfterServices300(world:World,pawn:Pawn,context:NeedContext,canPlan:boolean):SleepingOfferResult300 {
   let reach: Reachability | null;
   if (!pawn.need && wantsSleep(world, pawn) && canPlan && (world.restRules === 'legacy' || (pawn.jobId === null && !pawn.haul && !pawn.cooking&&!pawn.ward&&!pawn.feed&&!pawn.tend&&!pawn.rescue))) {
     const bedOwners=world.schemaVersion>=256?captureActorBeds256(world):undefined;
@@ -47,11 +49,11 @@ export function processSleeping(world: World, pawn: Pawn, context: NeedContext, 
     const ownedTarget=doublePlaces.find(place=>place.rank===0)?.target??ownedBed;
     const medical=patientWork(pawn,world.schemaVersion);
     reach = context.search( !medical&&ownedTarget ? new Set([ownedTarget.z * world.width + ownedTarget.x]) : undefined);
-    if (!reach) return true;
+    if (!reach) return 'pending';
     // A wounded sleeper may use a medical bed. Do not fall back to the floor
     // merely because the sleep provider runs before the ordinary work planner.
     const patient=medical?patientProposal(world,pawn,reach):undefined;
-    if(patient){if(!context.release())return true;startPatientRest(world,pawn,patient);return processPatientRest(world,pawn,context);}
+    if(patient){if(!context.release())return 'pending';startPatientRest(world,pawn,patient);return 'admitted-medical';}
     const owners = new Map(world.pawns.filter(other => other.bedId !== null).map(other => [other.bedId, other.id]));
     const reserved = new Set(world.pawns.filter(other => other.id !== pawn.id && other.need?.kind === 'sleep').map(other => other.need?.kind === 'sleep' ? other.need.bedId : null));
     let best: { id: number; slot?:BedSlot; path: Cell[]; target: Cell; rank: number; cost:number } | undefined;
@@ -68,7 +70,7 @@ export function processSleeping(world: World, pawn: Pawn, context: NeedContext, 
       const rank = pawn.bedId === bed.id?0:2;
       if(path){const cost=routeCost(world,path,reach);if(!best||rank<best.rank||rank===best.rank&&(cost<best.cost||cost===best.cost&&bed.id<best.id))best={id:bed.id,path,target:{x:bed.x,z:bed.z},rank,cost};}
     }
-    if (!context.release()) return true;
+    if (!context.release()) return 'pending';
     if (best) {
       claimLocalActorBed256(world,pawn,world.structures.find(b=>b.id===best!.id)!,best.slot);
       pawn.need = { kind: 'sleep', phase: 'travel', bedId: best.id, target: best.target };
@@ -80,14 +82,28 @@ export function processSleeping(world: World, pawn: Pawn, context: NeedContext, 
         const candidates = [ { x: pawn.x, z: pawn.z - 1 }, { x: pawn.x + 1, z: pawn.z }, { x: pawn.x, z: pawn.z + 1 }, { x: pawn.x - 1, z: pawn.z } ];
         const groundTopology=pawn.prisoner?capturePrisonTopology(world):undefined;
         const free = candidates.find(cell => allows(cell)&&prisonerAllowedCell(world,pawn,cell,groundTopology) && !bedCells.has(cell.z * world.width + cell.x) && canStandAt(world,cell) && !world.pawns.some(other => same(other, cell)) && routeToCell(world, cell, reach!) !== null);
-        if (!free) { pawn.needCooldown = NEED_INTERVAL; return allows(pawn); }
+        if (!free) { pawn.needCooldown = NEED_INTERVAL; return allows(pawn)?'unavailable-handled':'unavailable-unhandled'; }
         target = free; path = routeToCell(world, target, reach)!;
       }
       pawn.need = { kind: 'sleep', phase: path.length ? 'travel' : 'sleep', bedId: null, target };
       pawn.path = path; pawn.planCooldown = 0; pawn.state = path.length ? 'moving' : 'sleeping';
       context.event(`${pawn.name} dort au sol : aucun lit disponible et accessible.`);
     }
+    return 'admitted';
   }
+  return 'unavailable';
+}
+
+/** Existing tasks are unavailable to the NEW-task API without cancellation.
+ * Same new-admission predicates/claims; no continuation or rest gain. */
+export function offerSleeping300(world:World,pawn:Pawn,context:NeedContext,canPlan:boolean):SleepingOfferDecision300 {
+  if(pawn.need)return 'unavailable';
+  if(!allowedAreaServicesAllowed(world,pawn)){context.release();return 'unavailable';}
+  const result=offerSleepingAfterServices300(world,pawn,context,canPlan);
+  return result==='admitted-medical'?'admitted':result==='unavailable-handled'||result==='unavailable-unhandled'?'unavailable':result;
+}
+
+function continueSleepingAfterServices300(world:World,pawn:Pawn,context:NeedContext):boolean {
   if (pawn.need?.kind === 'sleep') {
     const task = pawn.need;
     if (scheduleWakes(world, pawn) || (world.restRules === 'adult' && task.phase === 'travel' && pawn.hunger <= 0)) {
@@ -111,4 +127,23 @@ export function processSleeping(world: World, pawn: Pawn, context: NeedContext, 
     return true;
   }
   return false;
+}
+
+/** Existing task only. Collapse physiology remains in Needs before admission. */
+export function continueSleeping300(world:World,pawn:Pawn,context:NeedContext):boolean {
+  if(!allowedAreaServicesAllowed(world,pawn)){context.release();return false;}
+  if(pawn.need?.kind==='sleep'&&pawn.need.medical)return processPatientRest(world,pawn,context);
+  return continueSleepingAfterServices300(world,pawn,context);
+}
+
+/** Original macro order: includes immediate medical/ordinary progress after
+ * admission and the no-floor handled return without an admitted task. */
+export function processSleeping(world:World,pawn:Pawn,context:NeedContext,canPlan:boolean):boolean {
+  if(!allowedAreaServicesAllowed(world,pawn)){context.release();return false;}
+  if(pawn.need?.kind==='sleep'&&pawn.need.medical)return processPatientRest(world,pawn,context);
+  const result=offerSleepingAfterServices300(world,pawn,context,canPlan);
+  if(result==='pending'||result==='unavailable-handled')return true;
+  if(result==='unavailable-unhandled')return false;
+  if(result==='admitted-medical')return processPatientRest(world,pawn,context);
+  return continueSleepingAfterServices300(world,pawn,context);
 }

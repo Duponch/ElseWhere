@@ -28,7 +28,7 @@ export function partyMoodThoughts292(h:Readonly<PartyMemoryHolder292>,tick:numbe
 }
 export function validPartyMemoryField292(owner:unknown,version:number,tick:number,civilTick=tick,shapeOnly=false):boolean {
  try{
-  if(!partyPlain292(owner)||!integer(version,1,300)||!integer(tick)||!integer(civilTick,tick))return false;
+  if(!partyPlain292(owner)||!integer(version,1,301)||!integer(tick)||!integer(civilTick,tick))return false;
   const d=Object.getOwnPropertyDescriptor(owner,'partyMemories292');if(!d)return !('partyMemories292'in owner);
   if((version!==292&&(version!==293&&(version!==294&&(version!==295&&(version!==296&&!isCorePhysicalSchema297(version))))))||!d.enumerable||!Object.hasOwn(d,'value')||!partyDense292(d.value)||d.value.length<1||d.value.length>10)return false;
   for(const m of d.value){if(!partyKeys292(m,['at','power'],['suspendedTicks'])||!integer(m.at,0,Math.min(civilTick,Number.MAX_SAFE_INTEGER-PARTY_MEMORY_DURATION_292))||typeof m.power!=='number'||!Number.isFinite(m.power)||m.power<=.0625||m.power>1||!validSuspendedMemory271(m,version,tick,m.at)||!shapeOnly&&memoryExpiry271(m,m.at+PARTY_MEMORY_DURATION_292)<Math.max(tick,m.at))return false;}

@@ -1,6 +1,6 @@
 # Plan de développement
 
-**1 novembre 2026 — schéma 300.** [Repli d’inactivité et continuation alimentaire](development/idle-job-fallback300.md) : dix-neuf contrats, typage, compilation et observation ciblée dans l’interface. La revue des fondations reste prioritaire ; partie325, six ensembles et contenu en pause. Décision des tâches et construction restent ouvertes. Les performances suivront cette étape ; aucune identité exhaustive ni fluidité globale certifiée.
+**1 novembre 2026 — schéma 301.** [Travail de construction ciblé sur le mur en bois](development/construction-finish301.md) : cadence du constructeur, cumul du chantier, échecs et transitions de fin raccordés et qualifiés, avec sauvegarde/recharge identiques dans un essai séparé. Le lot civil300 reste acquis. La revue des fondations reste ouverte ; partie325, six ensembles et contenu demeurent en pause. Main au macro, autres constructions et cas de contact encore partiels ; aucune parité exhaustive ni fluidité globale certifiée.
 
 ## Historique conservé du lot298
 
