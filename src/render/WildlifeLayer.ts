@@ -97,7 +97,7 @@ class SpeciesRig {
     this.animationCache=new ActorAnimationCache(animationDetail);
     this.gaitRate=animalGaitRadiansPerUnit(species);
     const graphics=currentGraphicsStyle();
-    const geometry=(graphics?.origami?origamiAnimalPresentationGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species):undefined)??hareGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species);
+    const geometry=(graphics?.origami?origamiAnimalPresentationGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species,graphics.wearEnabled):undefined)??hareGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species);
     if(graphics?.origami&&geometry.userData.origamiReference)indexExactStaticVertices(geometry);
     geometry.userData.animationCache=this.animationCache;
     const part=geometry.getAttribute('animalPart');this.sampledBones=[...new Set(Array.from({length:part.count},(_,i)=>part.getX(i)))].sort((a,b)=>a-b);
@@ -210,18 +210,20 @@ class SpeciesRig {
     this.mesh=new THREE.Mesh(geometry,textured);this.mesh.name=`Wild ${this.species} — GPU rig`;this.mesh.frustumCulled=false;this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.flames=attachedFireMesh(this.mesh.geometry,this,.6,this.animationDetail);
     if(origami&&graphics?.origami){
       this.origamiGraphics=graphics;
-      const lineGeometry=createRigBrushGeometry(geometry),wearGeometry=geometry.userData.origamiWear as THREE.InstancedBufferGeometry;
-      const lineMaterial=graphics.createBrushMaterial(mat.positionNode,uv()),wearMaterial=graphics.createWearMaterial(mat.positionNode,attribute('animalPaintUv','vec2'));
+      const lineGeometry=createRigBrushGeometry(geometry),wearGeometry=graphics.wearEnabled?geometry.userData.origamiWear as THREE.InstancedBufferGeometry|undefined:undefined;
+      const lineMaterial=graphics.createBrushMaterial(mat.positionNode,uv()),wearMaterial=wearGeometry?graphics.createWearMaterial(mat.positionNode,attribute('animalPaintUv','vec2')):undefined;
       // Both companions use the exact owner/exploration masks of the body,
       // including shadow visibility; no independent gameplay state is read.
-      for(const companion of [lineMaterial,wearMaterial]){
+      for(const companion of [lineMaterial,...(wearMaterial?[wearMaterial]:[])]){
         actorExplorationMaterial256(companion);companion.maskNode=mat.maskNode;companion.maskShadowNode=mat.maskShadowNode;
       }
       this.origamiLines=new THREE.Mesh(lineGeometry,lineMaterial);this.origamiLines.name=`Wild ${this.species} — face-painted gouache ribbons`;this.origamiLines.frustumCulled=false;
-      this.origamiWear=new THREE.Mesh(wearGeometry,wearMaterial);this.origamiWear.name=`Wild ${this.species} — reference physical wear`;this.origamiWear.frustumCulled=false;this.origamiWear.castShadow=false;this.origamiWear.receiveShadow=true;
-      this.origamiWear.userData.origamiTexturesEnabled=true;
-      this.origamiCleanup.push(graphics.prepareBrushGeometry(lineGeometry),graphics.trackWearGeometry(wearGeometry),graphics.trackEdgeObject(this.origamiLines,'line'),graphics.trackEdgeObject(this.origamiWear,'wear'));
-      this.mesh.add(this.origamiLines,this.origamiWear);
+      this.origamiCleanup.push(graphics.prepareBrushGeometry(lineGeometry),graphics.trackEdgeObject(this.origamiLines,'line'));this.mesh.add(this.origamiLines);
+      if(wearGeometry&&wearMaterial){
+        this.origamiWear=new THREE.Mesh(wearGeometry,wearMaterial);this.origamiWear.name=`Wild ${this.species} — reference physical wear`;this.origamiWear.frustumCulled=false;this.origamiWear.castShadow=false;this.origamiWear.receiveShadow=true;
+        this.origamiWear.userData.origamiTexturesEnabled=true;
+        this.origamiCleanup.push(graphics.trackWearGeometry(wearGeometry),graphics.trackEdgeObject(this.origamiWear,'wear'));this.mesh.add(this.origamiWear);
+      }
     }else if(graphics?.origami){
       this.fallbackContour=createOrigamiContour(this.mesh,graphics,mat.positionNode);
       this.mesh.add(this.fallbackContour.line);

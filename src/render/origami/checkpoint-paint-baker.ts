@@ -1,15 +1,15 @@
-import {GouacheCardboardPainter,createSeparatedReferencePaint,replayReferenceCoverage} from './reference-painter';
+import {GouacheCardboardPainter,createSeparatedReferencePaint,replayReferenceCoverage,type ReferencePaintRasterOptions} from './reference-painter';
 import type {ReferenceFacePaintPixels,ReferencePaintDescriptor,ReferencePaintLayerReceipt} from './reference-paint-library';
 
 export interface CheckpointFacePaintPixels extends ReferenceFacePaintPixels {coverageSeed:number}
-export type CheckpointPaintSink=(index:number,color:Uint8Array,bump:Uint8Array,face:CheckpointFacePaintPixels)=>void;
+export type CheckpointPaintSink=(index:number,color:Uint8Array,bump:Uint8Array|undefined,face:CheckpointFacePaintPixels)=>void;
 /** Full authored raster plus a read-only checkpoint at the pigment/coverage boundary. */
-export function bakeCheckpointPaintToSink(descriptors:readonly ReferencePaintDescriptor[],fill:number,onLayer:CheckpointPaintSink):{layers:ReferencePaintLayerReceipt[]}{
+export function bakeCheckpointPaintToSink(descriptors:readonly ReferencePaintDescriptor[],fill:number,onLayer:CheckpointPaintSink,options:ReferencePaintRasterOptions={}):{layers:ReferencePaintLayerReceipt[]}{
  const painter=new GouacheCardboardPainter();painter.fillImperfectionAmount=fill;
  const layers:ReferencePaintLayerReceipt[]=[];
  for(let index=0;index<descriptors.length;index++){
   const descriptor=descriptors[index]!;painter.seed=descriptor.seed;
-  const separated=createSeparatedReferencePaint(painter,descriptor.config),material=separated.material;
+  const separated=createSeparatedReferencePaint(painter,descriptor.config,options),material=separated.material;
   try{
    onLayer(index,separated.pigmentColorRgba,separated.pigmentBumpRgba,separated);
    layers.push({key:descriptor.key,seed:descriptor.seed,seedAfter:separated.seedAfter});

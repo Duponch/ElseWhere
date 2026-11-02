@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {packReferencePaintPixels} from '../src/render/origami/reference-paint-library';
-import {BASE_REFERENCE_PAINT_DESCRIPTORS,humanVariantDescriptor,humanVariantProfile,referenceProfileCount} from '../src/render/origami/reference-profiles';
+import {BASE_REFERENCE_PAINT_DESCRIPTORS,PROTECTED_REFERENCE_PAINT_DESCRIPTORS,humanVariantDescriptor,humanVariantProfile,referenceProfileCount} from '../src/render/origami/reference-profiles';
 import {REFERENCE_FINAL_PAINT_SEED,REFERENCE_HUMAN_DESCRIPTORS,REFERENCE_PAINT_DESCRIPTORS} from '../src/render/origami/reference-paint-seeds';
 
 describe('lossless reference paint texture packing',()=>{
@@ -47,7 +47,9 @@ describe('lossless reference paint texture packing',()=>{
 
 describe('source paint registrations and local human templates',()=>{
   it('fixes the immutable 43-profile baseline before any appearance variants',()=>{
-    expect(BASE_REFERENCE_PAINT_DESCRIPTORS).toHaveLength(43);
+    expect(PROTECTED_REFERENCE_PAINT_DESCRIPTORS).toHaveLength(43);
+    expect(BASE_REFERENCE_PAINT_DESCRIPTORS.slice(0,43)).toEqual(PROTECTED_REFERENCE_PAINT_DESCRIPTORS);
+    expect(BASE_REFERENCE_PAINT_DESCRIPTORS).toHaveLength(88);
     expect(BASE_REFERENCE_PAINT_DESCRIPTORS[0].key).toBe('generic-gouache');
     expect(Object.isFrozen(BASE_REFERENCE_PAINT_DESCRIPTORS)).toBe(true);
     expect(BASE_REFERENCE_PAINT_DESCRIPTORS.every(descriptor=>Object.isFrozen(descriptor)&&Object.isFrozen(descriptor.config))).toBe(true);
@@ -75,6 +77,6 @@ describe('source paint registrations and local human templates',()=>{
     expect(descriptor.seed).toBe(source.seed);expect(descriptor.refreshSeed).toBe(source.refreshSeed);expect(descriptor.sourceIndex).toBe(source.sourceIndex);
     const id=humanVariantProfile(0,0x123456),count=referenceProfileCount();
     expect(humanVariantProfile(0,0x123456)).toBe(id);expect(referenceProfileCount()).toBe(count);
-    expect(BASE_REFERENCE_PAINT_DESCRIPTORS).toHaveLength(43);
+    expect(BASE_REFERENCE_PAINT_DESCRIPTORS).toHaveLength(88);
   });
 });

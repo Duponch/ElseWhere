@@ -112,7 +112,11 @@ test('physical controls do not repaint; first fill refresh is full and subsequen
 test('physical wear expands on preference edits, edge visibility follows the reference, and disposal releases ownership',()=>{
  const context=new GraphicsStyleContext({...defaults,style:'origami',edges:.65}),geometry=new THREE.BufferGeometry(),object=new THREE.Object3D();geometry.setAttribute('position',new THREE.Float32BufferAttribute([1,2,3],3));geometry.userData.referenceWearBasePositions=new Float32Array([1,2,3]);geometry.userData.referenceWearExpandDirections=new Float32Array([2,0,0]);
  const untrack=context.trackWearGeometry(geometry),untrackObject=context.trackEdgeObject(object,'wear');
- try{expect(geometry.getAttribute('position').getX(0)).toBeCloseTo(1+2*.6675,6);expect(object.visible).toBe(true);context.update({...context.preferences,edges:0});expect(object.visible).toBe(false);context.update({...context.preferences,wear:0});expect(geometry.getAttribute('position').getX(0)).toBe(1);untrack();untrackObject();expect(Reflect.get(context,'wearGeometries').size).toBe(0);}finally{geometry.dispose();context.dispose();}
+ try{expect(geometry.getAttribute('position').getX(0)).toBeCloseTo(1+2*.6675,6);expect(object.visible).toBe(true);context.update({...context.preferences,edges:0,wear:.25});expect(object.visible).toBe(false);expect(geometry.getAttribute('position').getX(0)).toBeCloseTo(1+2*.25*(.2+.60*1.15),6);
+  // Zero now omits the mesh altogether, rather than updating a dormant skirt.
+  // Its structural boundary must be handled by the renderer replacement path.
+  const before=Array.from(geometry.getAttribute('position').array);expect(()=>context.update({...context.preferences,wear:0})).toThrow('nouvelle préparation');expect(Array.from(geometry.getAttribute('position').array)).toEqual(before);
+  untrack();untrackObject();expect(Reflect.get(context,'wearGeometries').size).toBe(0);}finally{geometry.dispose();context.dispose();}
 });
 test('the legacy canonical line adapter keeps black ink and kraft independent without repainting',()=>{
  const context=folded(),lighting=new EnvironmentLighting(),line=new THREE.LineSegments(new THREE.BufferGeometry(),context.createLineMaterial(null));

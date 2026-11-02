@@ -7,7 +7,10 @@ describe('paper and face-coverage recipes share across real palette variants',()
  it('keeps all dynamic human RGB palettes within the same bounded source template pool',()=>{
   const initial=new Set(BASE_REFERENCE_PAINT_DESCRIPTORS.map(referenceCoverageKey)),dynamic=new Set(initial);
   for(let color=0;color<512;color++)for(let category=0;category<9;category++)dynamic.add(referenceCoverageKey(humanVariantDescriptor(category,(color*123457)&0xffffff)));
-  expect(dynamic).toEqual(initial);expect(initial.size).toBeGreaterThan(0);expect(initial.size).toBeLessThanOrEqual(43);expect(dynamic.size).toBeLessThanOrEqual(256);
+  // The completed bestiary added45 namespaced profiles to the protected43.
+  // One RGB-only pair shares a coverage template; human colors add none.
+  expect(BASE_REFERENCE_PAINT_DESCRIPTORS).toHaveLength(88);expect(initial.size).toBe(87);
+  expect(dynamic).toEqual(initial);expect(dynamic.size).toBeLessThanOrEqual(256);
  });
  it('ignores only RGB values, rather than optional color branches or source RNG boundaries',()=>{
   const descriptor:ReferencePaintDescriptor={key:'authored',seed:5320559487764549,sourceIndex:12,config:{baseColor:'#aa7733',secondaryColor:'#886622',accentColor:'#eeeeee',strokeCount:240,strokeStyle:'wavy',gradientTip:{color:'#dddddd'},flankStripe:{bellyColor:'#ffffff',stripeColor:'#000000'}}};

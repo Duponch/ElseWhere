@@ -20,7 +20,7 @@ import {buildNativeInspector,setNativeInspectorTab} from './ui3d/native-inspecto
 import {NativeHudCards} from './ui3d/native-hud';
 import type {NativeHudViewAction} from './ui3d/native-hud';
 import {NATIVE_DOCK_PREFERENCE_KEY,parseNativeDockPreferences,NATIVE_UI_SCALE_PREFERENCE_KEY,parseNativeUiScale,normalizeNativeUiScale,type NativeDockPreferences} from './ui3d/native-preferences';
-import {GRAPHICS_STYLE_PREFERENCE_KEY,parseGraphicsStylePreferences,normalizeGraphicsStylePreferences,type GraphicsStylePreferences} from './ui3d/native-preferences';
+import {GRAPHICS_STYLE_PREFERENCE_KEY,parseGraphicsStylePreferences,normalizeGraphicsStylePreferences,requiresGraphicsStyleRebuild,type GraphicsStylePreferences} from './ui3d/native-preferences';
 import type {GraphicsStyleComparisonResult} from './render/graphics-style-comparison';
 import {installNativeCardboardCursors} from './ui/native-cardboard-cursors';
 import type {NativeUiState,NativeUiActions,NativePage} from './ui3d/native-contract';
@@ -851,7 +851,7 @@ function setAnimationSettings(settings: AnimationSettings): boolean {
 async function setGraphicsStylePreferences(settings:GraphicsStylePreferences):Promise<boolean>{
  if(graphicsStyleChanging||graphicsRecovering||replacingWorld||presentationPreparation)throw new Error('La préparation de l’affichage est déjà en cours.');
  const next=normalizeGraphicsStylePreferences(settings),previous=graphicsStylePreferences;
- if(next.style===previous.style){renderer?.setGraphicsStyleParameters(next);graphicsStylePreferences=next;}
+ if(!requiresGraphicsStyleRebuild(previous,next)){renderer?.setGraphicsStyleParameters(next);graphicsStylePreferences=next;}
  else if(!renderer){graphicsStylePreferences=next;}
  else{
   const view=renderer.captureGraphicsView(),interaction=renderer.captureGraphicsInteraction(),epoch=campaignPresentationEpoch;

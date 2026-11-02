@@ -20,13 +20,14 @@ function groupSalt(key:string):number{let word=2166136261;for(let i=0;i<key.leng
 /** A renderer owns one compiled source vocabulary. Every chunk consumes clones
  * into its existing body/canopy submissions, never scene objects per plant. */
 export class ReferenceFloraLibrary {
+  constructor(private readonly includeWear=true){}
   private readonly recipes=new Map<OrigamiFloraReference,Recipe>();
   recipe(name:OrigamiFloraReference):Recipe {
     let recipe=this.recipes.get(name);if(recipe)return recipe;
     const source=compileOrigamiFloraReference(name);
     const parts:DecoratedPart[]=source.map(part=>{
       const lines=new THREE.EdgesGeometry(part.sourceGeometry,part.edgeAngle);
-      const wear=createPhysicalEdgeWearGeometry(part.sourceGeometry,lines,0);
+      const wear=this.includeWear?createPhysicalEdgeWearGeometry(part.sourceGeometry,lines,0):null;
       lines.applyMatrix4(part.partMatrix);
       const normals=new Float32Array(lines.getAttribute('position').count*3);
       for(let i=1;i<normals.length;i+=3)normals[i]=1;

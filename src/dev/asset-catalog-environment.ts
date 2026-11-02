@@ -153,20 +153,23 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
     // unbound to any simulation species. The recipe compiles the same seven
     // source parts and their physical face-coplanar wear, without a Resource.
     const unbound=section('plants-unbound','Végétation — référence non encore liée','Modèle source disponible, sans espèce correspondante dans le catalogue du jeu.');
-    const referenceLibrary=new ReferenceFloraLibrary(),acacia=referenceLibrary.recipe('acacia'),acaciaGroup=new THREE.Group(),referenceCleanup:(()=>void)[]=[];
+    const referenceLibrary=new ReferenceFloraLibrary(context.wearEnabled),acacia=referenceLibrary.recipe('acacia'),acaciaGroup=new THREE.Group(),referenceCleanup:(()=>void)[]=[];
     const referenceMaterial=context.origami?createSurfaceMaterial('physical',0xffffff,{vertexColors:false,roughness:.88,metalness:.02}):createSurfaceMaterial('diffuse',0xffffff,{vertexColors:false});
     referenceMaterial.userData.rendererOwned=true;referenceMaterial.colorNode=attribute('color','vec3');
     applyOrigamiSurface(referenceMaterial,attribute('color','vec3'),uv(),context,attribute('origamiPaint','vec4').w,true);
     const referenceBody=mergedInstances(acaciaGroup,acacia.parts.map((part,index)=>({geometry:part.geometry.clone(),items:[{x:0,y:0,z:0,key:index,color:part.baseColor,referenceColor:part.baseColor,profile:part.profileId,rawGeometry:true}]})),referenceMaterial,true,true,true)!;
     referenceBody.geometry.computeBoundingBox();
     if(context.origami){
-      const lineMaterial=context.createBrushMaterial(null,uv()),wearMaterial=context.createWearMaterial(positionLocal.add(attribute('origamiWearExpand','vec3').mul(context.contourSpan)),uv());
-      lineMaterial.userData.rendererOwned=wearMaterial.userData.rendererOwned=true;
+      const lineMaterial=context.createBrushMaterial(null,uv());
+      lineMaterial.userData.rendererOwned=true;
       const lines=mergedInstances(acaciaGroup,acacia.parts.map(part=>({geometry:createOrigamiBrushGeometry(part.geometry),items:[{x:0,y:0,z:0}]})),lineMaterial,false,true,true)!;
       referenceCleanup.push(context.prepareBrushGeometry(lines.geometry));
-      const wear=mergedInstances(acaciaGroup,acacia.parts.filter(part=>part.wear).map(part=>({geometry:part.wear!.clone(),items:[{x:0,y:0,z:0}]})),wearMaterial,false,true,true);
-      referenceCleanup.push(context.trackEdgeObject(lines,'line'));if(wear)referenceCleanup.push(context.trackEdgeObject(wear,'wear'));
-      dispose.push(()=>lineMaterial.dispose(),()=>wearMaterial.dispose());
+      referenceCleanup.push(context.trackEdgeObject(lines,'line'));dispose.push(()=>lineMaterial.dispose());
+      if(context.wearEnabled){
+        const wearMaterial=context.createWearMaterial(positionLocal.add(attribute('origamiWearExpand','vec3').mul(context.contourSpan)),uv());wearMaterial.userData.rendererOwned=true;
+        const wear=mergedInstances(acaciaGroup,acacia.parts.filter(part=>part.wear).map(part=>({geometry:part.wear!.clone(),items:[{x:0,y:0,z:0}]})),wearMaterial,false,true,true);
+        if(wear)referenceCleanup.push(context.trackEdgeObject(wear,'wear'));dispose.push(()=>wearMaterial.dispose());
+      }
     }
     const referenceBounds=new ShelfLayout(28).add(acaciaGroup,referenceBody.geometry.boundingBox!);unbound.group.add(acaciaGroup);
     unbound.items.push(item('reference:acacia','Acacia — référence non encore liée','reference',referenceBounds,context.origami?'Sept pièces originales ; profils et coordonnées de peinture conservés.':'Aperçu du modèle source disponible ; aucune espèce ajoutée au jeu.'));

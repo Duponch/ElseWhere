@@ -9,7 +9,7 @@ import {bodyBloodRegion} from '../body-blood-word-297';
 import {buildOrigamiAnimalReference,type OrigamiAnimalReference} from './animal-reference';
 import {buildOrigamiAnimalPresentation} from './animal-presentation';
 import {createReferenceEdgeGeometry} from './reference-edges';
-import {BESTIARY_ANIMAL_SPECIES,bestiaryAnimalGeometry,bestiaryAnimalBodyCenter,bestiaryAnimalReferenceInfo,type OrigamiAnimalReferenceInfo} from './bestiary-registry';
+import {BESTIARY_ANIMAL_SPECIES,bestiaryAnimalGeometry,bestiaryAnimalBodyCenter,bestiaryAnimalReferenceInfo,bestiaryAnimalCachedWearBytes,type OrigamiAnimalReferenceInfo} from './bestiary-registry';
 
 /** Existing clinical and gameplay identities select exact reference artwork.
  * All three real dog breeds use the source shepherd; muffalo uses the source
@@ -27,35 +27,39 @@ export function origamiAnimalReferenceInfo(species:string):OrigamiAnimalReferenc
 
 type RefMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
 interface CompiledStream {vertices:Float32Array;paintUV:Float32Array}
-interface CompiledAnimal extends CompiledStream {bodyCenter:number;reference:OrigamiAnimalReference;parts:number;referenceScale:number;referenceFloor:number;lines:CompiledStream;wear:CompiledStream;wearBase:Float32Array;wearDirections:Float32Array}
+interface CompiledAnimal extends CompiledStream {bodyCenter:number;reference:OrigamiAnimalReference;parts:number;referenceScale:number;referenceFloor:number;lines:CompiledStream;wear?:CompiledStream;wearBase?:Float32Array;wearDirections?:Float32Array}
 const compiledAnimals=new Map<string,CompiledAnimal>();
 const ORIGIN=new THREE.Vector3();
 
 /** The resident species rig is unchanged: one draw for the body, the same
  * packed anatomical masks and existing owner/cargo/interpolation attributes.
- * Transient reference meshes are flattened once, never retained per animal. */
-export function origamiAnimalGeometry(capacity:number,species:string):THREE.InstancedBufferGeometry|undefined {
-  return createAnimalGeometry(capacity,species,false);
+ * Transient reference meshes are flattened once, never retained per animal.
+ * includeWear defaults true for canonical callers; false omits physical wear
+ * generation and storage. Each recipe retains only its latest requested wear
+ * mode; already-adopted rigs own their existing companion arrays independently. */
+export function origamiAnimalGeometry(capacity:number,species:string,includeWear=true):THREE.InstancedBufferGeometry|undefined {
+  return createAnimalGeometry(capacity,species,false,includeWear);
 }
-/** Product-only user corrections, separate from the canonical geometry API. */
-export function origamiAnimalPresentationGeometry(capacity:number,species:string):THREE.InstancedBufferGeometry|undefined {
-  return createAnimalGeometry(capacity,species,true);
+/** Product-only user corrections, separate from the canonical geometry API.
+ * includeWear defaults true; product callers pass the context's wearEnabled. */
+export function origamiAnimalPresentationGeometry(capacity:number,species:string,includeWear=true):THREE.InstancedBufferGeometry|undefined {
+  return createAnimalGeometry(capacity,species,true,includeWear);
 }
-function createAnimalGeometry(capacity:number,species:string,presentation:boolean):THREE.InstancedBufferGeometry|undefined {
-  if(!ORIGAMI_ANIMAL_REFERENCES[species])return bestiaryAnimalGeometry(capacity,species,presentation);
-  const compiled=compileAnimal(species,presentation);if(!compiled)return;
+function createAnimalGeometry(capacity:number,species:string,presentation:boolean,includeWear:boolean):THREE.InstancedBufferGeometry|undefined {
+  if(!ORIGAMI_ANIMAL_REFERENCES[species])return bestiaryAnimalGeometry(capacity,species,presentation,includeWear);
+  const compiled=compileAnimal(species,presentation,includeWear);if(!compiled)return;
   const g=streamGeometry(compiled);
   const instances=new THREE.InstancedInterleavedBuffer(new Float32Array(capacity*33),33).setUsage(THREE.StaticDrawUsage);
   for(const [name,size,offset] of [['aFrom',4,0],['aTo',4,4],['aTravel',4,8],['aAnimal',4,12],['aScale',1,16],['aBodyBlood',1,17],['aAbsent',1,18],['aCarrier',4,19],['aCorpseHandoff',2,23],['aCorpseFrom',4,25],['aCorpseTo',4,29]] as const)g.setAttribute(name,new THREE.InterleavedBufferAttribute(instances,size,offset));
   g.setAttribute('aBiology',new THREE.InterleavedBufferAttribute(instances,3,16));
-  const lines=streamGeometry(compiled.lines),wear=streamGeometry(compiled.wear,true);
+  const lines=streamGeometry(compiled.lines),wear=compiled.wear?streamGeometry(compiled.wear,true):undefined;
   for(const companion of [lines,wear]){
+    if(!companion)continue;
     for(const [name,attribute] of Object.entries(g.attributes))if(attribute instanceof THREE.InterleavedBufferAttribute&&attribute.data===instances)companion.setAttribute(name,attribute);
     companion.instanceCount=0;
   }
-  wear.userData.referenceWearBasePositions=compiled.wearBase;
-  wear.userData.referenceWearExpandDirections=compiled.wearDirections;
-  g.userData.origamiLines=lines;g.userData.origamiWear=wear;
+  if(wear){wear.userData.referenceWearBasePositions=compiled.wearBase;wear.userData.referenceWearExpandDirections=compiled.wearDirections;g.userData.origamiWear=wear;}
+  g.userData.origamiLines=lines;
   g.userData.origamiReference=compiled.reference;g.userData.origamiParts=compiled.parts;g.userData.origamiBodyCenter=compiled.bodyCenter;
   g.userData.origamiReferenceScale=compiled.referenceScale;g.userData.origamiReferenceFloor=compiled.referenceFloor;
   g.userData.origamiPresentationCorrections=presentation;
@@ -74,7 +78,16 @@ function streamGeometry(stream:CompiledStream,mutable=false):THREE.InstancedBuff
   return g;
 }
 
-export function origamiAnimalBodyCenter(species:string):number|undefined {return ORIGAMI_ANIMAL_REFERENCES[species]?compileAnimal(species)?.bodyCenter:bestiaryAnimalBodyCenter(species);}
+export function origamiAnimalBodyCenter(species:string):number|undefined {return ORIGAMI_ANIMAL_REFERENCES[species]?(compiledAnimals.get(`${species}:canonical`)??compileAnimal(species,false,false))?.bodyCenter:bestiaryAnimalBodyCenter(species);}
+
+/** Read-only qualification of dedicated cached wear storage, not total app RAM
+ * or a driver allocation. Runtime owners may still hold an earlier live rig. */
+export function origamiAnimalCachedWearBytes(species:string,presentation=true):number {
+ if(!ORIGAMI_ANIMAL_REFERENCES[species])return bestiaryAnimalCachedWearBytes(species,presentation);
+ const entry=compiledAnimals.get(`${species}:${presentation?'presentation':'canonical'}`),buffers=new Set<ArrayBufferLike>();
+ if(entry?.wear)for(const array of [entry.wear.vertices,entry.wear.paintUV,entry.wearBase,entry.wearDirections])if(array)buffers.add(array.buffer);
+ return [...buffers].reduce((sum,buffer)=>sum+buffer.byteLength,0);
+}
 
 function belongsTo(object:THREE.Object3D,ancestor:THREE.Object3D|undefined):boolean {
   if(!ancestor)return false;
@@ -125,9 +138,18 @@ function referenceOwner(mesh:RefMesh,root:THREE.Group,world:THREE.Vector3,leg:TH
   return belongsTo(mesh,root.userData.headGroup)?'head':'torso';
 }
 
-function compileAnimal(species:string,presentation=false):CompiledAnimal|undefined {
+function compileAnimal(species:string,presentation=false,includeWear=true):CompiledAnimal|undefined {
   const reference=ORIGAMI_ANIMAL_REFERENCES[species];if(!reference)return;
-  const cacheKey=`${species}:${presentation?'presentation':'canonical'}`,cached=compiledAnimals.get(cacheKey);if(cached)return cached;
+  const cacheKey=`${species}:${presentation?'presentation':'canonical'}`,other=compiledAnimals.get(cacheKey);
+  if(other&&(!includeWear||other.wear)){
+    if(!includeWear&&other.wear){
+      // Drop cache ownership only. Old runtime wear owns its copied positions
+      // and borrowed base/UV arrays; never dispose or mutate those live aliases.
+      const {wear:_wear,wearBase:_base,wearDirections:_directions,...bodyOnly}=other;
+      compiledAnimals.set(cacheKey,bodyOnly);return bodyOnly;
+    }
+    return other;
+  }
   const root=presentation?buildOrigamiAnimalPresentation(reference):buildOrigamiAnimalReference(reference);
   root.updateMatrixWorld(true);
   const original=animalParts(species),trunk=original[0],referenceLength={fox:1.32,camel:1.42,hare:.68,dog:1.26,buffalo:1.735,gazelle:1.06,deer:1.32,elephant:1.78}[reference];
@@ -162,15 +184,15 @@ function compileAnimal(species:string,presentation=false):CompiledAnimal|undefin
     const medical=nativeOwner(species,owner),bit=corpseVisualPartBit(medical,species),region=bodyBloodRegion(medical,true),isEye=owner.endsWith('-eye');
     const color=mesh.material.color,profile=mesh.material.userData.referencePaintIndex as number;
     count++;
-    for(let i=0;i<p.count;i++){
+    if(!other)for(let i=0;i<p.count;i++){
       point.fromBufferAttribute(p,i).applyMatrix4(mesh.matrixWorld);convert(point);
       normal.fromBufferAttribute(n,i).applyNormalMatrix(matrix);normal.set(-normal.z,normal.y,normal.x);
       data.push(point.x,point.y,point.z,normal.x,normal.y,normal.z,color.r,color.g,color.b,profile,bone,bit,region,isEye?0:-1,pivot.x,pivot.y,pivot.z);
       paintUV.push(uv.getX(i),uv.getY(i));
     }
-    const edges=createReferenceEdgeGeometry(mesh.geometry,mesh.userData.referenceEdgeAngle as number);
+    const edges=createReferenceEdgeGeometry(mesh.geometry,mesh.userData.referenceEdgeAngle as number,includeWear);
     const lp=edges.lines.getAttribute('position');
-    for(let i=0;i<lp.count;i++){
+    if(!other)for(let i=0;i<lp.count;i++){
       point.fromBufferAttribute(lp,i).applyMatrix4(mesh.matrixWorld);convert(point);
       lineData.push(point.x,point.y,point.z,0,1,0,color.r,color.g,color.b,profile,bone,bit,region,isEye?0:-1,pivot.x,pivot.y,pivot.z);lineUV.push(0,0);
     }
@@ -189,7 +211,7 @@ function compileAnimal(species:string,presentation=false):CompiledAnimal|undefin
     edges.surface.dispose();edges.lines.dispose();edges.wear?.dispose();
     // Death uses crossed eyes under the same anatomy bit and shader eyeMark
     // state as the existing renderer; the live pupil is not left on corpses.
-    if(isEye){
+    if(isEye&&!other){
       for(const roll of [-Math.PI/4,Math.PI/4]){
         const cross=new THREE.BoxGeometry(.025,.067,.010).toNonIndexed();
         cross.rotateZ(roll);cross.applyMatrix4(mesh.matrixWorld);
@@ -207,7 +229,9 @@ function compileAnimal(species:string,presentation=false):CompiledAnimal|undefin
   });
   const bodyCenter=({fox:.68,camel:1.24,hare:.42,dog:.74,buffalo:1.04,gazelle:.94,deer:1.08,elephant:1.28}[reference]-floor)*scale;
   root.traverse(object=>{if(object instanceof THREE.Mesh){const mesh=object as RefMesh;mesh.geometry.dispose();}});
-  const compiled={vertices:new Float32Array(data),paintUV:new Float32Array(paintUV),bodyCenter,reference,parts:count,referenceScale:scale,referenceFloor:floor,
-    lines:{vertices:new Float32Array(lineData),paintUV:new Float32Array(lineUV)},wear:{vertices:new Float32Array(wearData),paintUV:new Float32Array(wearUV)},wearBase:new Float32Array(wearBase),wearDirections:new Float32Array(wearDirections)};
+  // A later zero→positive pipeline rebuild compiles its new wear, but retains
+  // only one immutable body/line allocation for this exact presentation recipe.
+  const compiled={vertices:other?.vertices??new Float32Array(data),paintUV:other?.paintUV??new Float32Array(paintUV),bodyCenter,reference,parts:count,referenceScale:scale,referenceFloor:floor,
+    lines:other?.lines??{vertices:new Float32Array(lineData),paintUV:new Float32Array(lineUV)},...(includeWear?{wear:{vertices:new Float32Array(wearData),paintUV:new Float32Array(wearUV)},wearBase:new Float32Array(wearBase),wearDirections:new Float32Array(wearDirections)}:{})};
   compiledAnimals.set(cacheKey,compiled);return compiled;
 }

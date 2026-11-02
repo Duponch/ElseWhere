@@ -17,7 +17,12 @@ describe('literal Atelier gouache and physical edge reference',()=>{
       "        referencePaintCapture.get(this)?.('pigment', paintCanvas, paintBumpCanvas); // Read-only separation hook.",
       "          referencePaintCapture.get(this)?.('coverage', maskCanvas); // Read-only separation hook.",
     ]){expect(source.split(hook)).toHaveLength(2);source=source.replace(`${hook}\n`,'');}
-    source=source.slice(source.indexOf('export class GouacheCardboardPainter {'))
+    // Coverage replay was appended after the literal class in the mask-only
+    // optimization. Keep that separately tested adapter outside this original
+    // class oracle; the expected supplied-source hash remains unchanged.
+    const replayMarker='/** PRIVATE literal coverage block, extracted without changing its draw/RNG statements. */';
+    expect(source.split(replayMarker)).toHaveLength(2);
+    source=source.slice(source.indexOf('export class GouacheCardboardPainter {'),source.indexOf(replayMarker))
       .replace('export class GouacheCardboardPainter {','class GouacheCardboardPainter {')
       .replace('      seed: number;\n','').replace('      edgeWearAmount: number;\n','').replace('      fillImperfectionAmount: number;\n','')
       .replace('randRange(min: number, max: number)','randRange(min, max)')

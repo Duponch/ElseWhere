@@ -7,7 +7,7 @@ import {StaticSceneCompiler435} from './StaticSceneCompiler435';
 import type {SceneApplicationContext} from './SceneApplicationContext';
 import{createSurfaceMaterial}from'./SurfaceMaterials';
 import {GraphicsStyleContext,currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
-import type {GraphicsStylePreferences} from '../ui3d/native-preferences';
+import {requiresGraphicsStyleRebuild,type GraphicsStylePreferences} from '../ui3d/native-preferences';
 import {createGraphicsStyleComparison,type GraphicsStyleComparisonContext,type GraphicsStyleComparisonResult,type GraphicsComparisonMetadata} from './graphics-style-comparison';
 import {attribute} from 'three/tsl';
 import {knownPosition256} from '../ui/exploration-readers-256';
@@ -174,7 +174,7 @@ export class SceneRenderCore {
   readonly graphicsStyle=currentGraphicsStyle()??new GraphicsStyleContext();
   readonly stats = { fps: 0, frameMs: 0, frameP95: 0, drawCalls: 0, triangles: 0 };
   setGraphicsStyleParameters(settings:GraphicsStylePreferences):void {
-    if(settings.style!==this.graphicsStyle.preferences.style)throw new Error('Le changement de style exige une nouvelle préparation de l’affichage.');
+    if(requiresGraphicsStyleRebuild(this.graphicsStyle.preferences,settings))throw new Error('Le changement de style ou des effets désactivés exige une nouvelle préparation de l’affichage.');
     this.graphicsStyle.update(settings);this.invalidatePausedShadow();
   }
   captureGraphicsView(){return{mode:this.rig.mode,position:this.camera.position.toArray(),target:this.controls.target.toArray(),zoom:this.camera.zoom};}

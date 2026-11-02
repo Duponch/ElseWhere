@@ -105,11 +105,16 @@ export function describeBestiaryAnimal(species:string,root:BestiaryGroup):Bestia
 
 export type ProfileForBestiaryMaterial=(material:BestiaryMaterial)=>number;
 export interface CompiledBestiaryGeometry {readonly body:THREE.InstancedBufferGeometry;readonly brush:THREE.InstancedBufferGeometry;readonly wear:THREE.InstancedBufferGeometry;readonly receipt:{readonly species:string;readonly referenceLength:number;readonly scale:number;readonly sourceLimbCount:number;readonly nativeLimbCount:number;readonly parts:readonly {nativePart:BodyPartId;bone:number;pivot:Triple;maskBit:number;eyeMark:number}[]}}
+export type CompiledBestiaryBody=Omit<CompiledBestiaryGeometry,'brush'|'wear'>&{readonly wear?:THREE.InstancedBufferGeometry};
 
 /** Compiles one static source into the existing17-float actor format. Instance
  * attributes are intentionally not fabricated here: the future SpeciesRig
  * owner will attach its original33-float stream to all three geometries. */
-export function compileBestiaryAnimalBody(species:string,root:BestiaryGroup,profileFor:ProfileForBestiaryMaterial):Omit<CompiledBestiaryGeometry,'brush'> {
+export function compileBestiaryAnimalBody(species:string,root:BestiaryGroup,profileFor:ProfileForBestiaryMaterial):Omit<CompiledBestiaryGeometry,'brush'>;
+export function compileBestiaryAnimalBody(species:string,root:BestiaryGroup,profileFor:ProfileForBestiaryMaterial,includeWear:true):Omit<CompiledBestiaryGeometry,'brush'>;
+export function compileBestiaryAnimalBody(species:string,root:BestiaryGroup,profileFor:ProfileForBestiaryMaterial,includeWear:boolean,sharedBody?:THREE.InstancedBufferGeometry):CompiledBestiaryBody;
+/** includeWear defaults true; product wear0 never constructs edge/wear sources. */
+export function compileBestiaryAnimalBody(species:string,root:BestiaryGroup,profileFor:ProfileForBestiaryMaterial,includeWear=true,sharedBody?:THREE.InstancedBufferGeometry):CompiledBestiaryBody {
  const plan=describeBestiaryAnimal(species,root),bodyValues:number[]=[],bodyUv:number[]=[],wearValues:number[]=[],wearUv:number[]=[],wearBase:number[]=[],wearDirections:number[]=[],cargoTorso:number[]=[];
  function append(geometry:THREE.BufferGeometry,part:NativeSourcePart,profile:number,values:number[],uvs:number[],matrix:THREE.Matrix4,mark=part.eyeMark):void {
   const p=geometry.getAttribute('position'),n=geometry.getAttribute('normal'),uv=geometry.getAttribute('uv'),index=geometry.getIndex(),count=index?.count??p.count;
@@ -127,18 +132,20 @@ export function compileBestiaryAnimalBody(species:string,root:BestiaryGroup,prof
  }
  for(const part of plan.parts){
   const mesh=part.mesh,profile=profileFor(mesh.material);if(!Number.isSafeInteger(profile)||profile<0)throw Error('Invalid admitted paint profile');
-  append(mesh.geometry,part,profile,bodyValues,bodyUv,mesh.matrixWorld);
-  const edges=createReferenceEdgeGeometry(mesh.geometry,mesh.userData.referenceEdgeAngle??22);
-  if(edges.wear){
+  if(!sharedBody)append(mesh.geometry,part,profile,bodyValues,bodyUv,mesh.matrixWorld);
+  if(includeWear){
+   const edges=createReferenceEdgeGeometry(mesh.geometry,mesh.userData.referenceEdgeAngle??22);
+   if(edges.wear){
    const geometry=edges.wear,base=geometry.userData.basePosArray as Float32Array,directions=geometry.userData.expandDirArray as Float32Array;
    // Source wear positions are at their unexpanded bases. The context later
    // applies its exact wear amount from these transformed CPU vectors.
    geometry.setAttribute('position',new THREE.BufferAttribute(base,3));append(geometry,part,profile,wearValues,wearUv,mesh.matrixWorld);
    const linear=new THREE.Matrix3().setFromMatrix4(mesh.matrixWorld),point=new THREE.Vector3(),direction=new THREE.Vector3();
    for(let i=0;i<base.length;i+=3){point.fromArray(base,i).applyMatrix4(mesh.matrixWorld);convertBestiaryPoint(point,plan);direction.fromArray(directions,i).applyMatrix3(linear);direction.set(-direction.z*plan.scale,direction.y*plan.scale,direction.x*plan.scale);wearBase.push(...point.toArray());wearDirections.push(...direction.toArray());}
+   }
+   edges.surface.dispose();edges.lines.dispose();edges.wear?.dispose();
   }
-  edges.surface.dispose();edges.lines.dispose();edges.wear?.dispose();
-  if(part.eyeMark===0){
+  if(part.eyeMark===0&&!sharedBody){
    mesh.geometry.computeBoundingBox();const size=mesh.geometry.boundingBox!.getSize(new THREE.Vector3());
    for(const roll of [-Math.PI/4,Math.PI/4]){
     const indexed=new THREE.BoxGeometry(Math.min(size.x,size.y)*.31,Math.max(size.x,size.y)*1.17,Math.max(.004,size.z*.35)),cross=indexed.toNonIndexed();indexed.dispose();
@@ -151,16 +158,16 @@ export function compileBestiaryAnimalBody(species:string,root:BestiaryGroup,prof
   for(const [name,size,offset]of [['position',3,0],['normal',3,3],['color',3,6],['animalPaint',4,6],['boneId',1,10],['corpsePartMask',1,11],['bloodRegion',1,12],['eyeMark',1,13],['animalPart',4,10],['bindPivot',3,14]] as const)geometry.setAttribute(name,new THREE.InterleavedBufferAttribute(buffer,size,offset));
   geometry.setAttribute('uv',uv);geometry.setAttribute('animalPaintUv',uv);geometry.instanceCount=0;return geometry;
  }
- const body=stream(bodyValues,bodyUv),wear=stream(wearValues,wearUv);
- wear.userData.referenceWearBasePositions=new Float32Array(wearBase);wear.userData.referenceWearExpandDirections=new Float32Array(wearDirections);
- body.userData.origamiWear=wear;body.userData.origamiReference=`best46:${species}`;body.userData.origamiBodyCenter=plan.bodyCenter;
+ const body=sharedBody??stream(bodyValues,bodyUv),wear=includeWear?stream(wearValues,wearUv):undefined;
+ if(wear){wear.userData.referenceWearBasePositions=new Float32Array(wearBase);wear.userData.referenceWearExpandDirections=new Float32Array(wearDirections);if(!sharedBody)body.userData.origamiWear=wear;}
+ body.userData.origamiReference=`best46:${species}`;body.userData.origamiBodyCenter=plan.bodyCenter;
  body.userData.origamiReferenceScale=plan.scale;body.userData.origamiReferenceFloor=plan.floor;body.userData.origamiReferenceLength=plan.referenceLength;
  // Source conversion and clipping happen once per immutable compiled template,
  // never during adoption/present(). Registry keeps canonical/presentation apart.
- body.computeBoundingBox();const torsoBounds=new THREE.Box3(),corner=new THREE.Vector3();
+ if(!sharedBody){body.computeBoundingBox();const torsoBounds=new THREE.Box3(),corner=new THREE.Vector3();
  for(const x of [plan.torsoBounds.min.x,plan.torsoBounds.max.x])for(const y of [plan.torsoBounds.min.y,plan.torsoBounds.max.y])for(const z of [plan.torsoBounds.min.z,plan.torsoBounds.max.z])torsoBounds.expandByPoint(convertBestiaryPoint(corner.set(x,y,z),plan));
  const torsoTriangles=new Float32Array(cargoTorso),cargoBack=deriveAnimalCargoBack({torsoTriangles,torsoBounds,bodyBounds:body.boundingBox!,bodyCenter:plan.bodyCenter});
- if(cargoBack){body.userData.origamiCargoBack=cargoBackMetadata(cargoBack);body.userData.origamiCargoTorso=torsoTriangles;}
+ if(cargoBack){body.userData.origamiCargoBack=cargoBackMetadata(cargoBack);body.userData.origamiCargoTorso=torsoTriangles;}}
  return{body,wear,receipt:{species,referenceLength:plan.referenceLength,scale:plan.scale,sourceLimbCount:plan.sourceLimbCount,nativeLimbCount:plan.nativeLimbCount,
   parts:plan.parts.map(part=>({nativePart:part.nativePart,bone:part.bone,pivot:part.pivot.toArray(),maskBit:part.maskBit,eyeMark:part.eyeMark}))}};
 }

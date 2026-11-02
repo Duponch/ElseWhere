@@ -1,7 +1,7 @@
 /** Exact shared paint residency and coverage-only repaint; full authored raster retained. */
 import * as THREE from 'three/webgpu';
 import {uniform,texture,uv,vec2,vec3,vec4,float,Fn,If,varying,mix,smoothstep,workingToColorSpace,colorSpaceToWorking} from 'three/tsl';
-import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,normalizeGraphicsStylePreferences,type GraphicsStylePreferences} from '../ui3d/native-preferences';
+import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,normalizeGraphicsStylePreferences,graphicsStylePipelineKey,type GraphicsStylePreferences,type GraphicsStylePipelineKey} from '../ui3d/native-preferences';
 import {packReferencePaintPixels,type ReferenceEdgePixels,type ReferencePaintDescriptor} from './origami/reference-paint-library';
 import {referenceEdgeVisuals,type ReferenceEdgeVisuals} from './origami/reference-edges';
 import {BASE_REFERENCE_PAINT_DESCRIPTORS,PROTECTED_REFERENCE_PAINT_DESCRIPTORS,humanBaseProfileIds,humanVariantDescriptor,GENERIC_REFERENCE_PROFILE} from './origami/reference-profiles';
@@ -37,6 +37,8 @@ export interface GraphicsStyleContextOptions {staticDescriptors?:readonly Virtua
  * UVs, seeds and mips while sharing one material across a batch. */
 export class GraphicsStyleContext {
  preferences:GraphicsStylePreferences;
+ readonly pipelineKey:GraphicsStylePipelineKey;
+ readonly reliefEnabled:boolean;
  readonly impasto=uniform(1);readonly edges=uniform(.65);readonly wear=uniform(.75);readonly contour=uniform(.60);
  readonly contourSpan=uniform(.6675);readonly lineOpacity=uniform(.45475625);readonly wearOpacity=uniform(.560625);
  /** Both edge looks share one geometry and draw. Black takes precedence at
@@ -53,7 +55,7 @@ export class GraphicsStyleContext {
  private readonly activeBankCount=uniform(0);private readonly genericFaceLayer=uniform(0);
  private lastPaintVersion=-1;private admissionDepth=0;private repaintRequested=false;
  private protectedDemandDeclared=false;
- private edgeMaps?:{color:THREE.DataTexture;alpha:THREE.DataTexture;bump:THREE.DataTexture};
+ private edgeMaps?:{color?:THREE.DataTexture;alpha:THREE.DataTexture;bump?:THREE.DataTexture};
  private bakedRefreshed=false;private coverageCheckpoints=new Map<number,CoverageCheckpoint>();
  private lastReplayMode:'none'|'full'|'mask'='none';
  private bakedFill=-1;private fillTimer?:ReturnType<typeof setTimeout>;
@@ -66,7 +68,8 @@ export class GraphicsStyleContext {
  private rowsData?:Float32Array;private rowsTexture?:THREE.DataTexture;
  constructor(settings:GraphicsStylePreferences={...DEFAULT_GRAPHICS_STYLE_PREFERENCES},options:GraphicsStyleContextOptions={}) {
   this.paintPool=new VirtualPaintPool(PROTECTED_REFERENCE_PAINT_DESCRIPTORS);for(const descriptor of BASE_REFERENCE_PAINT_DESCRIPTORS.slice(PROTECTED_REFERENCE_PAINT_DESCRIPTORS.length))this.paintPool.register(descriptor);for(const descriptor of options.staticDescriptors??[])this.paintPool.register(descriptor);this.paintPool.sealStaticCatalog();
-  this.preferences=normalizeGraphicsStylePreferences(settings);this.update(settings);
+  this.preferences=normalizeGraphicsStylePreferences(settings);this.pipelineKey=graphicsStylePipelineKey(this.preferences);
+  this.reliefEnabled=this.origami&&this.preferences.impasto>0;this.update(settings);
  }
  private ensureRows():THREE.DataTexture{if(!this.rowsTexture){this.rowsData=new Float32Array(12*4096);this.rowsData.set(this.paintPool.humanRowsData());this.rowsTexture=new THREE.DataTexture(this.rowsData,12,4096,THREE.RedFormat,THREE.FloatType);this.rowsTexture.minFilter=this.rowsTexture.magFilter=THREE.NearestFilter;this.rowsTexture.needsUpdate=true;}return this.rowsTexture;}
  /** Binding objects only. No Canvas, raster, source painter or bulk palette. */
@@ -112,8 +115,11 @@ export class GraphicsStyleContext {
   this.lastPaintVersion=this.paintPool.version;
  }
  get origami():boolean{return this.preferences.style==='origami';}
+ get wearEnabled():boolean{return this.origami&&this.preferences.wear>0;}
  update(settings:GraphicsStylePreferences):void {
-  this.preferences=normalizeGraphicsStylePreferences(settings);this.impasto.value=this.preferences.impasto;this.edges.value=this.preferences.edges;this.wear.value=this.preferences.wear;this.contour.value=this.preferences.contourImperfection;
+  const next=normalizeGraphicsStylePreferences(settings);
+  if(graphicsStylePipelineKey(next)!==this.pipelineKey)throw Error('La modification des effets désactivés exige une nouvelle préparation de l’affichage.');
+  this.preferences=next;this.impasto.value=this.preferences.impasto;this.edges.value=this.preferences.edges;this.wear.value=this.preferences.wear;this.contour.value=this.preferences.contourImperfection;
   // Prepare all game pigments before play; an arriving species never starts a Canvas bake.
   if(this.origami&&!this.protectedDemandDeclared){this.paintPool.requireProfiles('protected-core43',Array.from({length:PROTECTED_REFERENCE_PAINT_DESCRIPTORS.length},(_,id)=>id));this.protectedDemandDeclared=true;}
   if(this.origami)this.requirePaint('all-game-best35',GAME_USED_BESTIARY_VIRTUAL_IDS);
@@ -127,7 +133,7 @@ export class GraphicsStyleContext {
   this.lineOpacity.value=alpha;this.lineColor.value.set(0xd7b384).multiplyScalar(1-ink);
   this.brushColor.value.set(0xd7b384).lerp(new THREE.Color(0x241c18),ink);
   for(const entry of this.brushGeometries.values())if(entry.width!==this.preferences.edgeWidth||entry.roughness!==this.preferences.strokeImperfection){this.refreshBrushGeometry(entry.geometry);entry.width=this.preferences.edgeWidth;entry.roughness=this.preferences.strokeImperfection;}
-  for(const geometry of this.wearGeometries)this.expandWear(geometry);for(const [object,kind]of this.edgeObjects)this.refreshEdgeObject(object,kind);
+  if(this.wearEnabled)for(const geometry of this.wearGeometries)this.expandWear(geometry);for(const [object,kind]of this.edgeObjects)this.refreshEdgeObject(object,kind);
   if(this.bakedFill>=0&&this.bakedFill!==this.preferences.contourImperfection){if(this.fillTimer)clearTimeout(this.fillTimer);this.fillTimer=setTimeout(()=>{this.fillTimer=undefined;this.repaintRequested=true;this.flushPaint();},60);}
  }
  private expandWear(geometry:THREE.BufferGeometry):void {
@@ -135,7 +141,7 @@ export class GraphicsStyleContext {
   const position=geometry.getAttribute('position');for(let i=0;i<position.count;i++)position.setXYZ(i,base[i*3]!+expand[i*3]!*this.contourSpan.value,base[i*3+1]!+expand[i*3+1]!*this.contourSpan.value,base[i*3+2]!+expand[i*3+2]!*this.contourSpan.value);
   position.needsUpdate=true;geometry.computeBoundingBox();geometry.computeBoundingSphere();
  }
- trackWearGeometry(geometry:THREE.BufferGeometry):()=>void{this.wearGeometries.add(geometry);this.expandWear(geometry);return()=>this.untrackWearGeometry(geometry);}
+ trackWearGeometry(geometry:THREE.BufferGeometry):()=>void{if(!this.wearEnabled)throw Error('Disabled Origami wear must not allocate or register geometry');this.wearGeometries.add(geometry);this.expandWear(geometry);return()=>this.untrackWearGeometry(geometry);}
  untrackWearGeometry(geometry:THREE.BufferGeometry):void{this.wearGeometries.delete(geometry);}
  prepareBrushGeometry(geometry:THREE.BufferGeometry):()=>void {
   const previous=this.brushOwners.get(geometry);if(previous)return previous;
@@ -202,7 +208,7 @@ export class GraphicsStyleContext {
     if(face)for(let y=0;y<512;y++)for(let x=0;x<512;x++)coveragePixels![entry.faceLayer*512*512+(511-y)*512+x]=face.coverageRgba[(y*512+x)*4+3]!;
     capturedFaces.add(entry.faceLayer);
    }
-  });
+  },{includeHeight:this.reliefEnabled});
   // No live texture or lookup is changed before all Canvas/copy work succeeds.
   // Publication is synchronous between owner render calls, not a GPU fence.
   this.paintPool.commit(plan);
@@ -218,11 +224,17 @@ export class GraphicsStyleContext {
  private ensureEdgeMaps():void{
   if(!this.origami)throw Error('Default materials must not request Origami edge maps.');
   if(this.edgeMaps)return;
-  const {edge}=bakeResidentPaintToSink([],{includeEdge:true,edgeSeed:1337,fillImperfection:this.preferences.contourImperfection},()=>{});
+  const {edge}=bakeResidentPaintToSink([],{includeEdge:true,includeHeight:this.reliefEnabled,edgeChannels:{color:this.wearEnabled,height:this.wearEnabled&&this.reliefEnabled},edgeSeed:1337,fillImperfection:this.preferences.contourImperfection},()=>{});
   if(!edge)throw Error('Edge painter did not return source maps');this.setEdgeMaps(edge);
  }
 
- private setEdgeMaps(edge:ReferenceEdgePixels):void{this.edgeMaps={color:edgeTexture(edge.colorRgba,true),alpha:edgeTexture(edge.alphaRgba),bump:edgeTexture(edge.bumpRgba)};}
+ private setEdgeMaps(edge:ReferenceEdgePixels):void{
+  if(this.wearEnabled&&!edge.colorRgba)throw Error('Enabled Origami wear requires its source color pixels');
+  if(this.wearEnabled&&this.reliefEnabled&&!edge.bumpRgba)throw Error('Enabled Origami relief requires its source edge height pixels');
+  this.edgeMaps={alpha:edgeTexture(edge.alphaRgba)};
+  if(this.wearEnabled)this.edgeMaps.color=edgeTexture(edge.colorRgba!,true);
+  if(this.wearEnabled&&this.reliefEnabled)this.edgeMaps.bump=edgeTexture(edge.bumpRgba!);
+ }
  get paint():THREE.DataArrayTexture{this.flushPaint();this.ensurePaintBindings();return this.colorArray!;}
  /** Read-only diagnostics use original Canvas2D row order. */
  paintLayerData(profileId:number):Uint8Array{this.paintPool.assertResident([profileId]);const local=this.paintPool.resolve(profileId)![0],bank=this.banks[Math.floor(local/LAYERS_PER_BANK)]!,layer=local%LAYERS_PER_BANK,data=bank.image.data as Uint8Array;return flipRows(data.subarray(layer*PIXELS_PER_LAYER,(layer+1)*PIXELS_PER_LAYER),512,512);}
@@ -234,14 +246,14 @@ export class GraphicsStyleContext {
  resolvedPaintIdsNode(profile:THREE.Node<'float'>):THREE.Node<'vec2'>{this.flushPaint();this.ensurePaintBindings();return texture(this.faceProfilesTexture!,vec2(profile.mod(256).add(.5).div(256),profile.div(256).floor().add(.5).div(256))).level(float(0)).context({forceUVContext:false}).rg;}
  faceProfileNode(profile:THREE.Node<'float'>):THREE.Node<'float'>{return this.resolvedPaintIdsNode(profile).y;}
  genericPaintIdsNode(fillCoverage=true):THREE.Node<'vec2'>{this.requirePaint('generic-surfaces',[GENERIC_REFERENCE_PROFILE]);return vec2(GENERIC_REFERENCE_PROFILE,fillCoverage?this.genericFaceLayer:float(0));}
- facePaintNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>):THREE.Node<'vec4'>{
+ facePaintNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight=true):THREE.Node<'vec4'>{
   const pigment=this.paintNode(pigmentUv,profile).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=texture(this.coverageArray!,faceUv).depth(faceProfile).r;
   // Source Canvas composition uses encoded sRGB. The opaque repeating
   // pigment never contains a paper frame; only this raw face mask exposes it.
   // ColorSpaceNode is a raw node class in r186: wrap it before swizzling.
   const paperEncoded=vec4(workingToColorSpace(vec4(paper.rgb,1),THREE.SRGBColorSpace) as unknown as THREE.Node<'vec4'>).rgb,pigmentEncoded=vec4(workingToColorSpace(vec4(pigment.rgb,1),THREE.SRGBColorSpace) as unknown as THREE.Node<'vec4'>).rgb;
   const color=vec4(colorSpaceToWorking(vec4(mix(paperEncoded,pigmentEncoded,coverage),1),THREE.SRGBColorSpace) as unknown as THREE.Node<'vec4'>).rgb;
-  return vec4(color,mix(paper.a,pigment.a,coverage));
+  return vec4(color,includeHeight?mix(paper.a,pigment.a,coverage):float(0));
  }
  faceHeightNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>):THREE.Node<'float'>{return mix(texture(this.paperArray!,faceUv).depth(faceProfile).a,this.paintNode(pigmentUv,profile).a,texture(this.coverageArray!,faceUv).depth(faceProfile).r);}
  /** Canonical reference adapter only. Product contours are painted triangles. */
@@ -257,12 +269,16 @@ export class GraphicsStyleContext {
   return material;
  }
  createWearMaterial(positionNode:THREE.Node|null,coordinates:THREE.Node<'vec2'>=uv()):THREE.MeshStandardNodeMaterial {
+  if(!this.wearEnabled)throw Error('Disabled Origami wear must not allocate a material');
   this.ensureEdgeMaps();const edge=this.edgeMaps!,material=new THREE.MeshStandardNodeMaterial({roughness:.94,metalness:0,flatShading:true,transparent:true,alphaTest:.06,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
   const metric=physicalPaintMetric(coordinates).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal();
   const paintUv=applyPhysicalPaintMetric(coordinates,metric,density).mul(vec2(1,4)).toVar();
-  const dx=applyPhysicalPaintMetric(coordinates.dFdx(),metric,density).mul(vec2(1,4)),dy=applyPhysicalPaintMetric(coordinates.dFdy(),metric,density).mul(vec2(1,4));
-  const height=texture(edge.bump,paintUv).r;
-  material.positionNode=positionNode;material.colorNode=texture(edge.color,paintUv).rgb;material.opacityNode=texture(edge.alpha,coordinates).g.mul(this.wearOpacity);material.normalNode=referencePaintBumpNormal(height,texture(edge.bump,paintUv.add(dx)).r,texture(edge.bump,paintUv.add(dy)).r,float(.045));return material;
+  material.positionNode=positionNode;material.colorNode=texture(edge.color!,paintUv).rgb;material.opacityNode=texture(edge.alpha,coordinates).g.mul(this.wearOpacity);
+  if(this.reliefEnabled){
+   const dx=applyPhysicalPaintMetric(coordinates.dFdx(),metric,density).mul(vec2(1,4)),dy=applyPhysicalPaintMetric(coordinates.dFdy(),metric,density).mul(vec2(1,4)),height=texture(edge.bump!,paintUv).r;
+   material.normalNode=referencePaintBumpNormal(height,texture(edge.bump!,paintUv.add(dx)).r,texture(edge.bump!,paintUv.add(dy)).r,this.impasto.mul(.045));
+  }else{material.normalNode=null;material.normalMap=null;material.bumpMap=null;}
+  return material;
  }
  registerHumanAppearance(appearance:HumanPaintAppearance):number {
   const colors=[appearance.skin,appearance.shirt,appearance.outerwear??appearance.shirt,appearance.pants??0x3c424a,appearance.hair,appearance.hat??appearance.shirt],extra=[appearance.vest??0x626c60,appearance.reconArmor??0x647d86,appearance.plate??0x7c8186],key=[...colors,...extra].join(':');const old=this.appearanceRows.get(key);if(old!==undefined){if(this.origami)this.paintPool.requireHumanRow(`human-row:${old}`,old);return old;}
@@ -284,22 +300,29 @@ export class GraphicsStyleContext {
  }
  debugPaintStorage(){if(!this.colorArray)throw Error('Paint is not prepared');return{banks:this.banks.map(texture=>({texture,data:texture.image.data as Uint8Array})),paper:{texture:this.paperArray!,data:this.paperArray!.image.data as Uint8Array},coverage:{texture:this.coverageArray!,data:this.coverageArray!.image.data as Uint8Array},lookup:{texture:this.faceProfilesTexture!,data:this.faceProfilesTexture!.image.data as Float32Array},rows:this.rowsData};}
  paintReplayState(){return{mode:this.lastReplayMode,refreshed:this.bakedRefreshed,checkpointCount:this.coverageCheckpoints.size,bakedFill:this.bakedFill};}
- dispose():void{this.coverageCheckpoints.clear();if(this.fillTimer)clearTimeout(this.fillTimer);for(const release of [...this.brushOwners.values()])release();this.brushGeometries.clear();for(const bank of this.banks)bank.dispose();this.banks.length=0;for(const map of Object.values(this.edgeMaps??{}))map.dispose();this.paperArray?.dispose();this.coverageArray?.dispose();this.faceProfilesTexture?.dispose();this.rowsTexture?.dispose();this.paintPool.dispose();this.appearanceRows.clear();this.wearGeometries.clear();this.edgeObjects.clear();this.colorArray=undefined;this.edgeMaps=undefined;this.rowsTexture=undefined;this.rowsData=undefined;this.paperArray=undefined;this.coverageArray=undefined;this.faceProfilesTexture=undefined;}
+ dispose():void{this.coverageCheckpoints.clear();if(this.fillTimer)clearTimeout(this.fillTimer);for(const release of [...this.brushOwners.values()])release();this.brushGeometries.clear();for(const bank of this.banks)bank.dispose();this.banks.length=0;for(const map of Object.values(this.edgeMaps??{}))map?.dispose();this.paperArray?.dispose();this.coverageArray?.dispose();this.faceProfilesTexture?.dispose();this.rowsTexture?.dispose();this.paintPool.dispose();this.appearanceRows.clear();this.wearGeometries.clear();this.edgeObjects.clear();this.colorArray=undefined;this.edgeMaps=undefined;this.rowsTexture=undefined;this.rowsData=undefined;this.paperArray=undefined;this.coverageArray=undefined;this.faceProfilesTexture=undefined;}
 }
 
 /** Only textured pipelines call this. Exact profiles contain authored color;
  * vertexColors must be false, avoiding the old dark-green multiplication. */
 export function applyOrigamiSurface(material:THREE.NodeMaterial,base:THREE.Node<'vec3'>,coordinates:THREE.Node<'vec2'>=uv(),context=currentGraphicsStyle(),profile?:THREE.Node<'float'>,includeGeneric=false,fillCoverage=true):void {
  if(!context?.origami)return;material.vertexColors=false;
- // All banks and all three bump probes share the same interpolated UV stream.
+ // All banks and enabled bump probes share the same interpolated UV stream.
  // Implicit attribute transports would be recreated by isolated normal builds.
  const rawUv=varying(coordinates,'v_origamiPaintUv'),ids=profile?varying(context.resolvedPaintIdsNode(profile),'v_origamiPaintProfile').setInterpolation('flat'):context.genericPaintIdsNode(fillCoverage),id=ids.x,faceId=ids.y;
  const metric=physicalPaintMetric(rawUv).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal();
- const paintUv=applyPhysicalPaintMetric(rawUv,metric,density).toVar(),sample=(fillCoverage?context.facePaintNode(paintUv,rawUv,id,faceId):context.paintNode(paintUv,id)).toVar();
- const dx=applyPhysicalPaintMetric(rawUv.dFdx(),metric,density),dy=applyPhysicalPaintMetric(rawUv.dFdy(),metric,density);
+ const paintUv=applyPhysicalPaintMetric(rawUv,metric,density).toVar(),sample=(fillCoverage?context.facePaintNode(paintUv,rawUv,id,faceId,context.reliefEnabled):context.paintNode(paintUv,id)).toVar();
  // Actor profiles are all authored (>0). Keeping their unreachable generic
  // branch would compile the entire old appearance graph and its varyings.
- const hx=fillCoverage?context.faceHeightNode(paintUv.add(dx),rawUv.add(rawUv.dFdx()),id,faceId):context.paintNode(paintUv.add(dx),id).a,hy=fillCoverage?context.faceHeightNode(paintUv.add(dy),rawUv.add(rawUv.dFdy()),id,faceId):context.paintNode(paintUv.add(dy),id).a;
- material.colorNode=profile&&!includeGeneric?sample.rgb:sample.rgb.mul(id.equal(GENERIC_REFERENCE_PROFILE).select(base,vec3(1)));material.normalNode=referencePaintBumpNormal(sample.a,hx,hy,context.impasto.mul(.035));
+ material.colorNode=profile&&!includeGeneric?sample.rgb:sample.rgb.mul(id.equal(GENERIC_REFERENCE_PROFILE).select(base,vec3(1)));
+ if(context.reliefEnabled){
+  const dx=applyPhysicalPaintMetric(rawUv.dFdx(),metric,density),dy=applyPhysicalPaintMetric(rawUv.dFdy(),metric,density);
+  const hx=fillCoverage?context.faceHeightNode(paintUv.add(dx),rawUv.add(rawUv.dFdx()),id,faceId):context.paintNode(paintUv.add(dx),id).a,hy=fillCoverage?context.faceHeightNode(paintUv.add(dy),rawUv.add(rawUv.dFdy()),id,faceId):context.paintNode(paintUv.add(dy),id).a;
+  material.normalNode=referencePaintBumpNormal(sample.a,hx,hy,context.impasto.mul(.035));
+ }else{
+  // This branch is chosen while constructing the material, never per pixel.
+  // Null also excludes any inherited stock normal/bump-map fallback.
+  material.normalNode=null;Reflect.set(material,'normalMap',null);Reflect.set(material,'bumpMap',null);
+ }
  if(material instanceof THREE.MeshStandardNodeMaterial){material.roughness=.88;material.metalness=.02;}
 }

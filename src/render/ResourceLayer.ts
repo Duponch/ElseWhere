@@ -129,7 +129,7 @@ function visibleResourceKeys(world:World,r:World['resources'][number],appearance
 
 export class ResourceLayer {
   private readonly graphicsStyle=currentGraphicsStyle();
-  private readonly referenceFlora=this.graphicsStyle?.origami?new ReferenceFloraLibrary():undefined;
+  private readonly referenceFlora=this.graphicsStyle?.origami?new ReferenceFloraLibrary(this.graphicsStyle.wearEnabled):undefined;
   private readonly origamiPlain:THREE.NodeMaterial|undefined;
   private readonly origamiTextured:THREE.NodeMaterial|undefined;
   private readonly linePlain:THREE.NodeMaterial|undefined;
@@ -214,12 +214,15 @@ export class ResourceLayer {
     this.windPlain.positionNode=this.windTextured.positionNode=windPosition;
     this.windPlain.userData.rendererOwned=this.windTextured.userData.rendererOwned=true;
     if(this.graphicsStyle?.origami){
-      const wearPosition=positionLocal.add(attribute('origamiWearExpand','vec3').mul(this.graphicsStyle.contourSpan));
       this.linePlain=this.graphicsStyle.createBrushMaterial(positionLocal,uv());
       this.lineWind=this.graphicsStyle.createBrushMaterial(windPosition,uv());
-      this.wearPlain=this.graphicsStyle.createWearMaterial(wearPosition,uv());
-      this.wearWind=this.graphicsStyle.createWearMaterial(makeWindPosition(wearPosition),uv());
+      if(this.graphicsStyle.wearEnabled){
+        const wearPosition=positionLocal.add(attribute('origamiWearExpand','vec3').mul(this.graphicsStyle.contourSpan));
+        this.wearPlain=this.graphicsStyle.createWearMaterial(wearPosition,uv());
+        this.wearWind=this.graphicsStyle.createWearMaterial(makeWindPosition(wearPosition),uv());
+      }
       for(const material of [this.linePlain,this.lineWind,this.wearPlain,this.wearWind]){
+        if(!material)continue;
         material.userData.rendererOwned=true;material.userData.referenceOriginalMask=material.maskNode;
       }
     }
@@ -555,7 +558,7 @@ export class ResourceLayer {
           lines.userData.origamiEdgeCleanup=()=>{releaseEdge();releaseBrush();};
           lines.geometry.computeBoundingSphere();lines.geometry.boundingSphere!.radius+=.5;lines.geometry.userData.referenceBrushConservativeSphere=lines.geometry.boundingSphere!.clone();
         }
-        const wear=mergedInstances(group,origamiParts.parts(isCanopy,'wear'),this.wearPlain!,false,true,true);
+        const wear=this.wearPlain?mergedInstances(group,origamiParts.parts(isCanopy,'wear'),this.wearPlain,false,true,true):null;
         if(wear){
           wear.userData.referenceCompanion='wear';wear.receiveShadow=true;
           // The shader expands the stored base by at most 0.115 source units;

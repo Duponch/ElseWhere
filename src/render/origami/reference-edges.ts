@@ -160,12 +160,14 @@ export interface ReferenceEdgeGeometry {
   wear: THREE.BufferGeometry | null;
 }
 
-/** The original createCardboardPart preparation, with no scene objects. */
-export function createReferenceEdgeGeometry(geometry: THREE.BufferGeometry, edgeAngle = 22): ReferenceEdgeGeometry {
+/** The original createCardboardPart preparation, with no scene objects.
+ * includeWear defaults true for canonical callers. Product wear0 skips the
+ * physical wear generator entirely, rather than allocating hidden triangles. */
+export function createReferenceEdgeGeometry(geometry: THREE.BufferGeometry, edgeAngle = 22, includeWear = true): ReferenceEdgeGeometry {
   const surface = geometry.index ? geometry.toNonIndexed() : geometry.clone();
   surface.computeVertexNormals();
   const lines = new THREE.EdgesGeometry(surface, edgeAngle);
-  return {surface, lines, wear: createPhysicalEdgeWearGeometry(surface, lines)};
+  return {surface, lines, wear: includeWear ? createPhysicalEdgeWearGeometry(surface, lines) : null};
 }
 
 export interface ReferenceEdgeVisuals {

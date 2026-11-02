@@ -342,7 +342,7 @@ export class PawnLayer {
     if(!this.graphics?.origami||!this.pawnMesh)return;
     this.clearOrigamiPartUnions();
     if(!this.indexedOrigamiBodies.has(body)){indexExactStaticVertices(body);this.indexedOrigamiBodies.add(body);}
-    const lines=createRigBrushGeometry(body),wear=body.userData.origamiWear as THREE.InstancedBufferGeometry;
+    const lines=createRigBrushGeometry(body),wear=body.userData.origamiWear as THREE.InstancedBufferGeometry|undefined;
     this.releaseOrigamiBrush?.();this.releaseOrigamiBrush=this.graphics.prepareBrushGeometry(lines);
     const position=(this.pawnMesh.material as THREE.MeshStandardNodeMaterial).positionNode;
     if(this.origamiLineMesh){this.retiredPawnGeometries.push(this.origamiLineMesh.geometry);this.origamiLineMesh.geometry=lines;}
@@ -352,16 +352,22 @@ export class PawnLayer {
       this.origamiLineMesh.name='Colonists — face-painted gouache ribbon batch';this.origamiLineMesh.frustumCulled=false;this.group.add(this.origamiLineMesh);
       this.releaseOrigamiEdges.push(this.graphics.trackEdgeObject(this.origamiLineMesh,'line'));
     }
-    this.releaseOrigamiWear?.();
-    if(this.origamiWearMesh){this.retiredPawnGeometries.push(this.origamiWearMesh.geometry);this.origamiWearMesh.geometry=wear;}
-    else{
-      this.origamiWearMesh=new THREE.Mesh(wear,this.graphics.createWearMaterial(position!,attribute('origamiPaintUv','vec2')));
-      this.configure?.(actorExplorationMaterial256(this.origamiWearMesh.material));
-      this.origamiWearMesh.name='Colonists — source physical edge wear batch';this.origamiWearMesh.frustumCulled=false;this.origamiWearMesh.castShadow=false;this.origamiWearMesh.receiveShadow=true;this.group.add(this.origamiWearMesh);
-      this.releaseOrigamiEdges.push(this.graphics.trackEdgeObject(this.origamiWearMesh,'wear'));
+    this.releaseOrigamiWear?.();this.releaseOrigamiWear=undefined;
+    if(wear&&this.graphics.wearEnabled){
+      if(this.origamiWearMesh){this.retiredPawnGeometries.push(this.origamiWearMesh.geometry);this.origamiWearMesh.geometry=wear;}
+      else{
+        this.origamiWearMesh=new THREE.Mesh(wear,this.graphics.createWearMaterial(position!,attribute('origamiPaintUv','vec2')));
+        this.configure?.(actorExplorationMaterial256(this.origamiWearMesh.material));
+        this.origamiWearMesh.name='Colonists — source physical edge wear batch';this.origamiWearMesh.frustumCulled=false;this.origamiWearMesh.castShadow=false;this.origamiWearMesh.receiveShadow=true;this.group.add(this.origamiWearMesh);
+        this.releaseOrigamiEdges.push(this.graphics.trackEdgeObject(this.origamiWearMesh,'wear'));
+      }
+      this.releaseOrigamiWear=this.graphics.trackWearGeometry(wear);
+      this.origamiWearMesh.userData.origamiTexturesEnabled=this.texturesEnabled;this.graphics.refreshEdgeObject(this.origamiWearMesh,'wear');
+    }else if(this.origamiWearMesh){
+      this.graphics.untrackEdgeObject(this.origamiWearMesh);this.retiredPawnGeometries.push(this.origamiWearMesh.geometry);
+      this.origamiWearMesh.material.dispose();this.origamiWearMesh.removeFromParent();this.origamiWearMesh=null;
     }
-    this.releaseOrigamiWear=this.graphics.trackWearGeometry(wear);
-    this.origamiWearMesh.userData.origamiTexturesEnabled=this.texturesEnabled;this.graphics.refreshEdgeObject(this.origamiWearMesh,'wear');this.installOrigamiPartUnions(body);this.syncOrigamiInstances(body);
+    this.installOrigamiPartUnions(body);this.syncOrigamiInstances(body);
   }
   private clearOrigamiCompanions():void {
     this.clearOrigamiPartUnions();

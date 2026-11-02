@@ -33,8 +33,8 @@ export const WORK_SICKLE_DYE = -32;
  * This deliberately small prototype rig is not yet the future glTF atlas importer.
  */
 export function pawnGeometry(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false): THREE.InstancedBufferGeometry {
-  const origami=currentGraphicsStyle()?.origami===true;
-  if(origami)return origamiHumanGeometry(includeSmithing,includeMace,includeLongsword,includeSpear);
+  const graphics=currentGraphicsStyle(),origami=graphics?.origami===true;
+  if(origami)return origamiHumanGeometry(includeSmithing,includeMace,includeLongsword,includeSpear,graphics.wearEnabled);
   const positions: number[] = [], normals: number[] = [], colors: number[] = [];
   const bones: number[] = [], pivots: number[] = [], dyes: number[] = [];
   const paperUV:number[]=[];

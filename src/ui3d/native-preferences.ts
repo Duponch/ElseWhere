@@ -72,3 +72,14 @@ export function normalizeGraphicsStylePreferences(value:unknown):GraphicsStylePr
 export function parseGraphicsStylePreferences(raw:string|null):GraphicsStylePreferences {
  try{return normalizeGraphicsStylePreferences(raw===null?undefined:JSON.parse(raw));}catch{return normalizeGraphicsStylePreferences(undefined);}
 }
+
+export type GraphicsStylePipelineKey='default'|`origami:${'relief'|'flat'}:${'wear'|'no-wear'}`;
+/** Zero disables a compiled effect. Positive intensity changes keep the same
+ * resident graph; Default never rebuilds for inactive Origami preferences. */
+export function graphicsStylePipelineKey(value:unknown):GraphicsStylePipelineKey {
+ const settings=normalizeGraphicsStylePreferences(value);
+ return settings.style==='default'?'default':`origami:${settings.impasto===0?'flat':'relief'}:${settings.wear===0?'no-wear':'wear'}`;
+}
+export function requiresGraphicsStyleRebuild(previous:unknown,next:unknown):boolean {
+ return graphicsStylePipelineKey(previous)!==graphicsStylePipelineKey(next);
+}

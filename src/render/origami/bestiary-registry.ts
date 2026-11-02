@@ -3,7 +3,7 @@ import {bestiaryPaintProfile} from './reference-profiles';
 import {createBestiaryReference} from './bestiary-reference.literal';
 import {createBestiaryPresentation} from './bestiary-presentation';
 import {createBestiaryAdaptations,BESTIARY_ADAPTATION_MANIFEST,type BestiaryAdaptationId} from './bestiary-adaptations';
-import {BESTIARY_NEW_SPECIES,compileBestiaryAnimalBody,type CompiledBestiaryGeometry} from './bestiary-geometry';
+import {BESTIARY_NEW_SPECIES,compileBestiaryAnimalBody,type CompiledBestiaryBody} from './bestiary-geometry';
 import type {BestiaryFactory,BestiaryGroup,RegisterMaterial} from './bestiary-types';
 import type {CompiledAnimalCargoBack} from './animal-cargo-back';
 
@@ -38,16 +38,37 @@ export function buildBestiaryAnimal(species:string,presentation=true):BestiaryGr
  return reference?(presentation?sources.presentation:sources.canonical).build(reference):sources.adapted.build(species);
 }
 
-type CompiledBody=Omit<CompiledBestiaryGeometry,'brush'>;
+type CompiledBody=CompiledBestiaryBody;
 const compiled=new Map<string,CompiledBody>();
-function cached(species:string,presentation:boolean):CompiledBody|undefined {
- const key=`${species}:${presentation?'presentation':'canonical'}`,found=compiled.get(key);if(found)return found;
+/** A metadata view only: all immutable body/index attributes keep their source
+ * identities. Remove a template-only backlink without touching any older body
+ * view or runtime companion that may still belong to a live renderer. */
+function detachedBodyView(source:THREE.InstancedBufferGeometry):THREE.InstancedBufferGeometry {
+ const body=new THREE.InstancedBufferGeometry();
+ for(const [name,attribute]of Object.entries(source.attributes))body.setAttribute(name,attribute);
+ if(source.index)body.setIndex(source.index);
+ body.setDrawRange(source.drawRange.start,source.drawRange.count);for(const group of source.groups)body.addGroup(group.start,group.count,group.materialIndex);
+ body.boundingBox=source.boundingBox?.clone()??null;body.boundingSphere=source.boundingSphere?.clone()??null;
+ body.instanceCount=source.instanceCount;body.userData={...source.userData};delete body.userData.origamiWear;
+ return body;
+}
+function cached(species:string,presentation:boolean,includeWear=true):CompiledBody|undefined {
+ const key=`${species}:${presentation?'presentation':'canonical'}`,other=compiled.get(key);
+ if(other&&(!includeWear||other.wear)){
+  if(!includeWear&&other.wear){const bodyOnly={body:other.body,receipt:other.receipt};compiled.set(key,bodyOnly);return bodyOnly;}
+  return other;
+ }
  const root=buildBestiaryAnimal(species,presentation);if(!root)return;
  try{
+  // The compiler writes metadata even when it borrows body arrays. Give it an
+  // independent view so a concurrent old runtime/template remains untouched.
   const result=compileBestiaryAnimalBody(species,root,material=>{
    const profile:unknown=material.userData.referencePaintIndex;if(typeof profile!=='number')throw Error('Unregistered bestiary paint profile');return profile;
-  });
-  compiled.set(key,result);return result;
+  },includeWear,other?detachedBodyView(other.body):undefined);
+  // New positive compilations attach their source wear in userData. A cache
+  // body must never keep that hidden ownership after switching the recipe off.
+  const next=Object.hasOwn(result.body.userData,'origamiWear')?{...result,body:detachedBodyView(result.body)}:result;
+  compiled.set(key,next);return next;
  }finally{root.traverse(object=>{if(object instanceof THREE.Mesh)object.geometry.dispose();});}
 }
 /** New attribute views share immutable compiled CPU arrays. Mutable wear gets
@@ -63,17 +84,32 @@ function instantiate(source:THREE.InstancedBufferGeometry,mutable=false):THREE.I
  }
  geometry.userData={...source.userData};geometry.instanceCount=0;return geometry;
 }
-export function bestiaryAnimalGeometry(capacity:number,species:string,presentation=true):THREE.InstancedBufferGeometry|undefined {
- const template=cached(species,presentation);if(!template)return;
- const geometry=instantiate(template.body),wear=instantiate(template.wear,true),instances=new THREE.InstancedInterleavedBuffer(new Float32Array(capacity*33),33).setUsage(THREE.StaticDrawUsage);
+/** includeWear defaults true; zero has no compiled or instantiated wear data. */
+export function bestiaryAnimalGeometry(capacity:number,species:string,presentation=true,includeWear=true):THREE.InstancedBufferGeometry|undefined {
+ const template=cached(species,presentation,includeWear);if(!template)return;
+ const geometry=instantiate(template.body),wear=template.wear?instantiate(template.wear,true):undefined,instances=new THREE.InstancedInterleavedBuffer(new Float32Array(capacity*33),33).setUsage(THREE.StaticDrawUsage);
+ // A zero template may borrow a positive body whose canonical userData points
+ // at its wear. Never copy that borrowed companion into the zero runtime view.
+ if(!wear)delete geometry.userData.origamiWear;
  for(const [name,size,offset]of [['aFrom',4,0],['aTo',4,4],['aTravel',4,8],['aAnimal',4,12],['aScale',1,16],['aBodyBlood',1,17],['aAbsent',1,18],['aCarrier',4,19],['aCorpseHandoff',2,23],['aCorpseFrom',4,25],['aCorpseTo',4,29],['aBiology',3,16]] as const){
-  const attribute=new THREE.InterleavedBufferAttribute(instances,size,offset);geometry.setAttribute(name,attribute);wear.setAttribute(name,attribute);
+  const attribute=new THREE.InterleavedBufferAttribute(instances,size,offset);geometry.setAttribute(name,attribute);wear?.setAttribute(name,attribute);
  }
- geometry.userData.origamiWear=wear;geometry.userData.origamiReferenceInfo=information.get(species);return geometry;
+ if(wear)geometry.userData.origamiWear=wear;geometry.userData.origamiReferenceInfo=information.get(species);return geometry;
 }
-export function bestiaryAnimalBodyCenter(species:string):number|undefined{return cached(species,true)?.body.userData.origamiBodyCenter;}
+function metadataTemplate(species:string):CompiledBody|undefined{return compiled.get(`${species}:presentation`)??cached(species,true,false);}
+/** Nominal dedicated cache buffers only; live runtimes retain their own aliases
+ * until their ordinary disposal. This read never creates a source template. */
+export function bestiaryAnimalCachedWearBytes(species:string,presentation=true):number {
+ const entry=compiled.get(`${species}:${presentation?'presentation':'canonical'}`),buffers=new Set<ArrayBufferLike>();
+ for(const geometry of [entry?.wear,entry?.body.userData.origamiWear as THREE.InstancedBufferGeometry|undefined])if(geometry){
+  for(const attribute of Object.values(geometry.attributes))buffers.add((attribute instanceof THREE.InterleavedBufferAttribute?attribute.data.array:attribute.array).buffer);
+  for(const key of ['referenceWearBasePositions','referenceWearExpandDirections']){const array=geometry.userData[key] as Float32Array|undefined;if(array)buffers.add(array.buffer);}
+ }
+ return [...buffers].reduce((sum,buffer)=>sum+buffer.byteLength,0);
+}
+export function bestiaryAnimalBodyCenter(species:string):number|undefined{return metadataTemplate(species)?.body.userData.origamiBodyCenter;}
 /** Borrow the eight immutable numbers from the presentation template. This
  * follows its existing lazy compile cache; it never instantiates actor buffers. */
-export function bestiaryAnimalCargoBack(species:string):CompiledAnimalCargoBack|undefined{return cached(species,true)?.body.userData.origamiCargoBack;}
+export function bestiaryAnimalCargoBack(species:string):CompiledAnimalCargoBack|undefined{return metadataTemplate(species)?.body.userData.origamiCargoBack;}
 /** Shared read-only source corners for first adoption of each cargo variant. */
-export function bestiaryAnimalCargoTorso(species:string):Float32Array|undefined{return cached(species,true)?.body.userData.origamiCargoTorso;}
+export function bestiaryAnimalCargoTorso(species:string):Float32Array|undefined{return metadataTemplate(species)?.body.userData.origamiCargoTorso;}

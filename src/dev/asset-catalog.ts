@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {ReentrantRenderer} from '../render/ReentrantRenderer';
 import {GraphicsStyleContext,withGraphicsStyle} from '../render/graphics-style';
-import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,ORIGAMI_STYLE_CONTROLS,formatOrigamiStyleValue,type GraphicsStyle,type GraphicsStylePreferences} from '../ui3d/native-preferences';
+import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,ORIGAMI_STYLE_CONTROLS,formatOrigamiStyleValue,requiresGraphicsStyleRebuild,type GraphicsStyle,type GraphicsStylePreferences} from '../ui3d/native-preferences';
 import {createActorCatalog} from './asset-catalog-actors';
 import {createEnvironmentAssetCatalog} from './asset-catalog-environment';
 import {createTransportAssetCatalog} from './asset-catalog-transports';
@@ -24,7 +24,17 @@ for(const control of ORIGAMI_STYLE_CONTROLS){
   const label=document.createElement('label'),text=document.createElement('span');text.textContent=control.label;
   const input=document.createElement('input');input.type='range';input.id=`catalog-${control.key}`;input.min=String(control.min);input.max=String(control.max);input.step=String(control.step);input.value=String(previewPreferences[control.key]);input.setAttribute('aria-label',control.label);
   const output=document.createElement('output');output.setAttribute('for',input.id);const show=()=>{output.value=formatOrigamiStyleValue(control,Number(input.value));};show();
-  input.oninput=()=>{previewPreferences[control.key]=Number(input.value);show();if(context)context.update({...previewPreferences,style:context.preferences.style});requestRender();if(paintRefreshTimer)clearTimeout(paintRefreshTimer);paintRefreshTimer=setTimeout(()=>{paintRefreshTimer=undefined;requestRender();},80);};
+  input.oninput=()=>{
+    if(busy||closed)return;
+    previewPreferences[control.key]=Number(input.value);show();
+    if(paintRefreshTimer){clearTimeout(paintRefreshTimer);paintRefreshTimer=undefined;}
+    if(context){
+      const next={...previewPreferences,style:context.preferences.style};
+      if(requiresGraphicsStyleRebuild(context.preferences,next)){void build(next.style,true);return;}
+      context.update(next);
+    }
+    requestRender();paintRefreshTimer=setTimeout(()=>{paintRefreshTimer=undefined;requestRender();},80);
+  };
   label.append(text,input,output);paintSettings.append(label);paintInputs.push(input);
 }
 $('catalog-nav').before(paintSettings);
@@ -124,14 +134,24 @@ function requestRender():void{if(frame!==undefined||closed)return;frame=requestA
 controls.addEventListener('change',requestRender);
 function resize():void{const width=Math.max(1,stage.clientWidth),height=Math.max(1,stage.clientHeight);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();requestRender();}
 const resizeObserver=new ResizeObserver(resize);
-async function build(style:GraphicsStyle):Promise<void>{
+async function build(style:GraphicsStyle,preserveView=false):Promise<void>{
   if(busy||closed)return;busy=true;lock(true);loading.hidden=false;diagnostics.ready=false;document.body.dataset.ready='preparing';
+  const view=preserveView?{position:camera.position.clone(),quaternion:camera.quaternion.clone(),target:controls.target.clone(),zoom:camera.zoom,minDistance:controls.minDistance,maxDistance:controls.maxDistance,selectedId:selected?.item.id}:undefined;
   try{
     disposeCatalog();context=new GraphicsStyleContext({...previewPreferences,style});diagnostics.style=style;
     progress('Humains, animaux et variantes disponibles…');await nextFrame();collections.push(withGraphicsStyle(context,()=>createActorCatalog(context!)));
     progress('Végétation, mobilier, fragments et objets…');await nextFrame();collections.push(withGraphicsStyle(context,()=>createEnvironmentAssetCatalog(context!)));
     collections.push(withGraphicsStyle(context,()=>createTransportAssetCatalog()));
-    sections=collections.flatMap(collection=>collection.sections);layout();focus(wholeBounds);progress('Préparation des matériaux de cette vue…');await nextFrame();context.flushPaint();await renderer.compileAsync(scene,camera);
+    sections=collections.flatMap(collection=>collection.sections);layout();
+    if(view){
+      const entry=entries.find(entry=>entry.item.id===view.selectedId);if(entry)selectEntry(entry);
+      // Consume any old orbit damping before restoring the exact view. The
+      // rebuilt entries have fresh owners; selection is restored by real ID.
+      const damping=controls.enableDamping;controls.enableDamping=false;controls.update();
+      controls.target.copy(view.target);camera.position.copy(view.position);camera.quaternion.copy(view.quaternion);camera.zoom=view.zoom;
+      controls.minDistance=view.minDistance;controls.maxDistance=view.maxDistance;camera.updateProjectionMatrix();controls.update();controls.enableDamping=damping;
+    }else focus(wholeBounds);
+    progress('Préparation des matériaux de cette vue…');await nextFrame();context.flushPaint();await renderer.compileAsync(scene,camera);
     renderer.render(scene,camera);labels();diagnostics.ready=failures.length===0;document.body.dataset.ready=diagnostics.ready?'ready':'error';$('catalog-message').textContent=`${entries.length} assets agencés par type · ${style==='origami'?'Origami et recettes existantes signalées':'Style par défaut'}\nRechercher un nom ou choisir un groupe pour s’en approcher.`;
     loading.hidden=true;
   }catch(cause){fail(cause);loading.hidden=true;}finally{busy=false;lock(false);requestRender();}
