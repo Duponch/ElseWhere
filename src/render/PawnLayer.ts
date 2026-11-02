@@ -60,6 +60,7 @@ import {createRigBrushGeometry} from './origami/rig-brush';
 import { Fn, If, attribute, cos, float, instanceIndex, mix, positionLocal, sin, uniform, renderGroup, uv,vec2,vec3,vec4, varying } from 'three/tsl';
 import { TICKS_PER_SECOND,type MaterialPile,type Pawn,type World,type Job } from '../sim/types';
 import {origamiWorkTool} from './origami/work-tools';
+import {encodeOrigamiEquipment,origamiWeaponVisualSignal,origamiEquipmentPositionNode,ORIGAMI_EQUIPMENT_HAND,ORIGAMI_EQUIPMENT_BELT,ORIGAMI_EQUIPMENT_SLING} from './origami/equipment-pose';
 import {ORIGAMI_HUMAN_BIND,ORIGAMI_DUSTER_DYE,ORIGAMI_PARKA_DYE,ORIGAMI_RECON_ARMOR_DYE,humanReferencePaintProfiles} from './origami/human-geometry';
 import {APPAREL} from '../sim/apparel-rules';
 import { adjacentTable } from '../sim/dining';
@@ -162,6 +163,13 @@ export class PawnLayer {
     return {hip:bind.hipY,foot:bind.footY,kneeSpan:bind.hipY-bind.kneeY,seatedHip:bind.hipY-.005,crouchHip:bind.hipY-.12*legScale,crouchZ:.075*legScale,kneelHip:bind.hipY-.13*legScale,lieCenter:bind.hipY+.04*legScale,gunY:bind.shoulderY+.01,gunZ:.45+armDelta,pistolY:bind.shoulderY-.02,pistolZ:.44+armDelta,weaponXScale:bind.shoulderX/.23};
   })();
   private workToolJobs=new Map<number,Job>();
+  private equippedVisualItems=new Map<number,string>();
+  private refreshOrigamiEquipmentSignal(pawn:Pawn,index:number):void {
+    if(!this.graphics?.origami||!this.pawnMesh)return;
+    const equipment=this.pawnMesh.geometry.getAttribute('aEquipment') as THREE.InterleavedBufferAttribute,signal=origamiWeaponVisualSignal(pawn,this.equippedVisualItems.get(pawn.id));
+    const encoded=encodeOrigamiEquipment(equipment.getX(index),signal.ready,signal.strike);
+    if(equipment.getX(index)!==encoded){equipment.setX(index,encoded);equipment.data.needsUpdate=true;}
+  }
   private activity(pawn:Pawn,equipment:number):number{return (this.graphics?.origami?origamiWorkTool(pawn,this.workToolJobs.get(pawn.jobId??-1)):0)||presentationActivity(pawn,equipment);}
   private selected:ReadonlySet<number>=new Set();
   private pawnIds:number[]=[];
@@ -415,9 +423,10 @@ export class PawnLayer {
     // One factory for both graphs. The original clock deliberately has no
     // animationCache, so the native body has no retained flag/root read at all.
     const originalClock = { travelTime: this.travelTime, blend: this.blend };
-    const makeOriginalPosition = () => Fn(() => {
-      const bone = pawnBoneNode(this.graphics?.origami);
-      const pivot = pawnMorph(attribute('bindPivot', 'vec3'),this.graphics?.origami);
+    const makeOriginalPosition = (probe?:{bone:0|3;point:THREE.Node<'vec3'>}):THREE.Node<'vec3'> => Fn(() => {
+      const bone = probe?float(probe.bone):pawnBoneNode(this.graphics?.origami),probeTraits=probe?{bone,dye:float(2)}:undefined;
+      const bindPivot=probe?probe.bone===3?vec3(ORIGAMI_HUMAN_BIND.shoulderX,ORIGAMI_HUMAN_BIND.shoulderY,0):vec3(0,ORIGAMI_HUMAN_BIND.hipY,0):attribute('bindPivot','vec3');
+      const pivot = pawnMorph(bindPivot,this.graphics?.origami,probeTraits);
       const motion = attribute('aMotion', 'vec4');
       const pose = pawnPresentationPose(originalClock);
       // This branch is the complete original rig. Intermediate and distant
@@ -543,7 +552,7 @@ export class PawnLayer {
           .mul(bone.lessThan(5.5).select(float(.045),float(.025)));
         angle.assign(mix(angle,lowLeg,crouch));
       });
-      const local = pawnMorph(positionLocal,this.graphics?.origami).sub(pivot);
+      const local = pawnMorph(probe?.point??positionLocal,this.graphics?.origami,probeTraits).sub(pivot);
       const c = cos(angle), s = sin(angle);
       const animated = vec3(local.x, local.y.mul(c).sub(local.z.mul(s)), local.y.mul(s).add(local.z.mul(c))).add(pivot).toVar();
       If(busy.and(bone.lessThan(3.5)),()=>{
@@ -579,11 +588,24 @@ export class PawnLayer {
         const y=animated.y.sub(this.humanBind.kneelHip).toVar(),z=animated.z.toVar();
         animated.y.assign(y.mul(.82).sub(z.mul(.57)).add(this.humanBind.kneelHip));animated.z.assign(y.mul(.57).add(z.mul(.82)));
       });
+      // The equipped object asks this exact rig for its grip anchor. No
+      // duplicate arm animation, alternate anatomy or world trajectory exists.
+      if(probe)return animated;
       // The first confirmed cooldown image can arrive one local tick after
       // the shot (0.134 s in the native pilot). Keep the cosmetic kick short
       // but long enough to survive that presentation boundary.
       const recoil=motion.z.equal(15).select(float(1).sub(this.travelTime.sub(motion.w).div(.30)).clamp(0,1),float(0));
-      for(const weapon of RESIDENT_WEAPON_VISUALS269) {
+      if(this.graphics?.origami){
+        const dye=pawnDyeNode(true),equipmentVertex=RESIDENT_WEAPON_VISUALS269.reduce((matches,weapon)=>matches.or(dye.equal(weapon.dye)),dye.equal(-999));
+        If(equipmentVertex,()=>{
+          const hand=makeOriginalPosition({bone:3,point:vec3(...ORIGAMI_EQUIPMENT_HAND)}).toVar();
+          const sling=dye.equal(-4).or(dye.equal(-9)).or(dye.equal(SPEAR_DYE272));
+          const stowed=makeOriginalPosition({bone:0,point:sling.select(vec3(...ORIGAMI_EQUIPMENT_SLING),vec3(...ORIGAMI_EQUIPMENT_BELT))}).toVar();
+          const reach=sin(this.travelTime.sub(motion.w).mul(4).clamp(0,1).mul(Math.PI));
+          for(const weapon of RESIDENT_WEAPON_VISUALS269)If(dye.equal(weapon.dye),()=>{animated.assign(origamiEquipmentPositionNode(weapon.item,positionLocal,hand,stowed,motion.z,motion.y,reach,recoil));});
+        });
+        for(const weapon of RESIDENT_WEAPON_VISUALS269)If(dye.equal(weapon.dye).and(attribute('aEquipment','vec4').x.floor().notEqual(weapon.equipment)),()=>{animated.assign(vec3(0));});
+      }else for(const weapon of RESIDENT_WEAPON_VISUALS269) {
         const isWeapon=pawnDyeNode(this.graphics?.origami).equal(weapon.dye);
         const along=positionLocal.y.sub(.68),across=positionLocal.x.sub(.205),depth=positionLocal.z;
         if(weapon.item==='bolt-action-rifle'||weapon.item==='emp-launcher') {
@@ -891,11 +913,12 @@ export class PawnLayer {
 
   /** Cached rig coefficients replace every animated trig/clock expression;
    * static morphology and visibility still use the live encoded streams. */
-  private cachedPawnPosition():THREE.Node<'vec3'> {
+  private cachedPawnPosition(probe?:{bone:0|3;point:THREE.Node<'vec3'>}):THREE.Node<'vec3'> {
     return Fn(()=>{
-      const bone=pawnBoneNode(this.graphics?.origami),dye=pawnDyeNode(this.graphics?.origami),motion=vec4(0,this.animationCache.cell(4).z,this.animationCache.cell(4).y,0);
+      const bone=probe?float(probe.bone):pawnBoneNode(this.graphics?.origami),dye=pawnDyeNode(this.graphics?.origami),motion=vec4(0,this.animationCache.cell(4).z,this.animationCache.cell(4).y,0),probeTraits=probe?{bone,dye:float(2)}:undefined;
       const pose=pawnPresentationPose({travelTime:this.travelTime,blend:this.blend});
-      const pivot=pawnMorph(attribute('bindPivot','vec3'),this.graphics?.origami),local=pawnMorph(positionLocal,this.graphics?.origami).sub(pivot);
+      const bindPivot=probe?probe.bone===3?vec3(ORIGAMI_HUMAN_BIND.shoulderX,ORIGAMI_HUMAN_BIND.shoulderY,0):vec3(0,ORIGAMI_HUMAN_BIND.hipY,0):attribute('bindPivot','vec3');
+      const pivot=pawnMorph(bindPivot,this.graphics?.origami,probeTraits),local=pawnMorph(probe?.point??positionLocal,this.graphics?.origami,probeTraits).sub(pivot);
       const data=this.animationCache.cellAt(float(8).add(bone));
       const animated=vec3(local.x,local.y.mul(data.x).sub(local.z.mul(data.y)),local.y.mul(data.y).add(local.z.mul(data.x))).add(pivot).toVar();
       animated.y.addAssign(data.z);animated.z.addAssign(data.w);
@@ -907,8 +930,17 @@ export class PawnLayer {
       const post=this.animationCache.cellAt(float(16).add(bone));animated.y.addAssign(post.x);animated.z.addAssign(post.y);
       If(motion.z.greaterThan(2.5).and(motion.z.lessThan(3.5)),()=>{If(bone.greaterThan(5.5),()=>{animated.y.addAssign(this.humanBind.kneeSpan);animated.z.addAssign(this.humanBind.kneeSpan);});animated.y.addAssign(WORLD_SCALE.stoolHeight/PAWN_MODEL_SCALE-this.humanBind.seatedHip);});
       If(motion.z.equal(10).and(bone.lessThan(3.5)),()=>{const y=animated.y.sub(this.humanBind.kneelHip).toVar(),z=animated.z.toVar();animated.y.assign(y.mul(.82).sub(z.mul(.57)).add(this.humanBind.kneelHip));animated.z.assign(y.mul(.57).add(z.mul(.82)));});
+      if(probe)return animated;
       const shooting=motion.z.equal(7).or(motion.z.equal(15)),recoil=this.animationCache.cell(3).z;
-      for(const weapon of RESIDENT_WEAPON_VISUALS269){const isWeapon=dye.equal(weapon.dye),along=positionLocal.y.sub(.68),across=positionLocal.x.sub(.205),depth=positionLocal.z;
+      if(this.graphics?.origami){
+        const equipmentVertex=RESIDENT_WEAPON_VISUALS269.reduce((matches,weapon)=>matches.or(dye.equal(weapon.dye)),dye.equal(-999));
+        If(equipmentVertex,()=>{
+          const hand=this.cachedPawnPosition({bone:3,point:vec3(...ORIGAMI_EQUIPMENT_HAND)}).toVar(),sling=dye.equal(-4).or(dye.equal(-9)).or(dye.equal(SPEAR_DYE272));
+          const stowed=this.cachedPawnPosition({bone:0,point:sling.select(vec3(...ORIGAMI_EQUIPMENT_SLING),vec3(...ORIGAMI_EQUIPMENT_BELT))}).toVar();
+          for(const weapon of RESIDENT_WEAPON_VISUALS269)If(dye.equal(weapon.dye),()=>{animated.assign(origamiEquipmentPositionNode(weapon.item,positionLocal,hand,stowed,motion.z,motion.y,this.animationCache.cell(3).w,recoil));});
+        });
+        for(const weapon of RESIDENT_WEAPON_VISUALS269)If(dye.equal(weapon.dye).and(attribute('aEquipment','vec4').x.floor().notEqual(weapon.equipment)),()=>{animated.assign(vec3(0));});
+      }else for(const weapon of RESIDENT_WEAPON_VISUALS269){const isWeapon=dye.equal(weapon.dye),along=positionLocal.y.sub(.68),across=positionLocal.x.sub(.205),depth=positionLocal.z;
         if(weapon.item==='bolt-action-rifle'||weapon.item==='emp-launcher'){
           If(isWeapon,()=>{animated.assign(vec3(along.mul(.30).add(across).add(.13),along.mul(.78).add(depth.mul(.12)).add(.84),depth.mul(.8).add(.25)));});
           If(shooting.and(isWeapon),()=>{animated.assign(vec3(across.add(.10*this.humanBind.weaponXScale),depth.add(this.humanBind.gunY).add(recoil.mul(.035)),along.add(this.humanBind.gunZ).sub(recoil.mul(.12))));});
@@ -1061,6 +1093,7 @@ export class PawnLayer {
     const retainedOffsets=retainedHumanCorpseOffsets(world);
     const apparel=apparelProjection(world);
     const gears=equipmentProjection(world);
+    if(this.graphics?.origami)this.equippedVisualItems=new Map([...gears].map(([id,piece])=>[id,piece.item]));
     let smithing=this.smithingGeometry,mace=this.maceGeometry,longsword=this.longswordGeometry,spear=this.spearGeometry;
     if(!smithing)for(const pieces of apparel.values())if(pieces.some(p=>isSmithingApparel267(p.item))){smithing=true;break;}
     if(!mace)for(const piece of gears.values())if(isMaceItem269(piece.item)){mace=true;break;}
@@ -1194,6 +1227,7 @@ export class PawnLayer {
         shape.setW(index,variant[3]+row*32);
       }
       equipment.setXYZW(index,equipmentCode,look.silhouette,(look.vest?1:0)+(look.simpleHelmet?10:look.reconHelmet?4:look.helmet?2:look.tuque===2?8:look.tuque===1?6:0)+(look.vestTintCode??0)/65536,look.pants+(look.simpleHelmet?look.simpleHelmetMaterial/16:look.plasteelHelmet?.5:0));
+      this.refreshOrigamiEquipmentSignal(pawn,index);
       const load = carried.get(pawn.id);
       const packed=world.packed?.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id);
       const handoff=this.handoffs.active.get(pawn.id);
@@ -1242,6 +1276,7 @@ export class PawnLayer {
     const changed=[...dirty];
     this.playback435.adoptPhase297(world,humans,changed);
     for(const i of changed){const pawn=humans[i]!,target=this.targetPoses.get(pawn.id);if(!target)throw Error('Missing resident pawn pose');
+      this.refreshOrigamiEquipmentSignal(pawn,i);
       // Full owns interaction anchors; a dirty phase only moves their cell basis.
       const anchor=3*i;target.x=pawn.x+this.targetOffsets297[anchor]!;target.z=pawn.z+this.targetOffsets297[anchor+2]!;
       target.y=(this.travelSurfaces.get(pawn.z*world.width+pawn.x)??0)+this.targetOffsets297[anchor+1]!;
@@ -1309,6 +1344,7 @@ export class PawnLayer {
       const prepared=playback?this.playback435.select(i,timeline,timeline.tick,origin):undefined;
       if(spring&&!this.springValid297[i])this.captureSpring297(i,from,to,times,motion);
       if(playback&&!prepared){if(spring)dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;return;}
+      if(this.graphics?.origami)this.refreshOrigamiEquipmentSignal(pawn,i);
       const segment=pawn.body?.pileId!==undefined||pawn.body?.lostAt!==undefined?undefined:(playback?prepared!.edge:timeline.segment(pawn.id));
       const active=!!segment && timeline.tick<segment.end;
       const pasteCollect=pasteCollectionSource(pawn);

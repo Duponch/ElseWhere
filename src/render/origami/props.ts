@@ -57,13 +57,13 @@ export function origamiFurnitureParts(world: World): Placement[] {
       // Three saved item supports stay exactly at the shared storage heights.
       for (const y of SHELF_LEVELS) {
         add(0, y - .035, 0, width, .07, .84, body);
-        add(0, y - .012, .43, width, .045, .025, trim);
+        for(const dz of [-.43,.43])add(0, y - .012, dz, width, .045, .025, trim);
       }
       for (const dx of [-width / 2 + .045, width / 2 - .045]) {
         add(dx, .74, 0, .07, 1.48, .84, body);
-        add(dx, .74, .43, .085, 1.48, .025, trim);
+        for(const dz of [-.43,.43])add(dx, .74, dz, .085, 1.48, .025, trim);
       }
-      add(0, .74, -.405, width, 1.48, .035, trim);
+      // Storage is accessible from either long side; no rear closing board.
     } else if (s.kind === 'table' || s.kind === 'stool' || s.kind === 'table-square' || s.kind === 'table-long') {
       const stool = s.kind === 'stool';
       const width = stool ? WORLD_SCALE.stoolWidth : s.kind === 'table-square' ? 1.70 : s.kind === 'table-long' ? 1.92 : WORLD_SCALE.tableWidth;

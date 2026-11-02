@@ -140,7 +140,7 @@ test('resource integration retains two opaque sources and four batched reference
     const meshes = (group.children[0] as THREE.Group).children as (THREE.Mesh|THREE.LineSegments)[];
     const surfaces=meshes.filter(mesh=>!mesh.userData.referenceCompanion);
     expect(surfaces).toHaveLength(2);expect(meshes).toHaveLength(6);
-    expect(meshes.filter(mesh=>mesh instanceof THREE.LineSegments)).toHaveLength(2);
+    expect(meshes.filter(mesh=>mesh instanceof THREE.Mesh&&(mesh.material as THREE.NodeMaterial).userData.origamiBrush)).toHaveLength(2);
     expect(meshes.filter(mesh=>mesh.userData.referenceCompanion==='wear')).toHaveLength(2);
     const canopy = surfaces.find(mesh => mesh.name === 'tree-canopy')!;
     expect(canopy.geometry.drawRange.count).toBeGreaterThan(0);
@@ -168,12 +168,13 @@ test('resource integration retains two opaque sources and four batched reference
   } finally { layer.dispose(); material.dispose(); context.dispose(); }
 });
 
-test('physical grass captures its renderer style and preserves the existing single resident draw', () => {
+test('physical grass retains one resident surface with a matching Origami brush companion', () => {
   const context = new GraphicsStyleContext({ ...DEFAULT_GRAPHICS_STYLE_PREFERENCES, style: 'origami' });
   const material = new THREE.MeshStandardNodeMaterial({ vertexColors: true });
   const folded = withGraphicsStyle(context, () => new PlantClusterLayer(material)), ordinary = new PlantClusterLayer(material);
   try {
-    expect(folded.group.children).toHaveLength(1); expect(ordinary.group.children).toHaveLength(1);
+    expect(folded.group.children).toHaveLength(2); expect(ordinary.group.children).toHaveLength(1);
+    expect((folded.group.children[1] as THREE.Mesh).geometry.userData.origamiBrushPrebuilt).toBe(true);
     const foldedGeometry = (folded.group.children[0] as THREE.Mesh).geometry;
     const ordinaryGeometry = (ordinary.group.children[0] as THREE.Mesh).geometry;
     foldedGeometry.computeBoundingBox(); ordinaryGeometry.computeBoundingBox();

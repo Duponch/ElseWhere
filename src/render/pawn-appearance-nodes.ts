@@ -16,8 +16,8 @@ export function pawnDyeNode(origami=false):Node<'float'> {
 }
 
 /** Applied equally to vertices and rigid-bone pivots, before pose animation. */
-export function pawnMorph(point:Node<'vec3'>,origami=false) {
-  const bone=pawnBoneNode(origami),dye=pawnDyeNode(origami),shape=attribute('aShape','vec4');
+export function pawnMorph(point:Node<'vec3'>,origami=false,traits?:{bone:Node<'float'>;dye:Node<'float'>}) {
+  const bone=traits?.bone??pawnBoneNode(origami),dye=traits?.dye??pawnDyeNode(origami),shape=attribute('aShape','vec4');
   // Tens encode corpse presentation stage in the existing appearance slot.
   const bodyType=shape.x.mod(10);
   const factor=(column:number)=>BODY_PROPORTIONS.reduce<Node<'float'>>((v,row,i)=>bodyType.equal(i).select(float(row[column]!),v),float(1));

@@ -11,7 +11,7 @@ import {PawnTweener297} from './PawnTweener297';
 import {sampleAnimalRig} from './actor-animation-sampling';
 import * as THREE from 'three/webgpu';
 import {currentGraphicsStyle,applyOrigamiSurface,type GraphicsStyleContext} from './graphics-style';
-import {origamiAnimalGeometry} from './origami/animal-geometry';
+import {origamiAnimalPresentationGeometry} from './origami/animal-geometry';
 import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 import {createRigBrushGeometry} from './origami/rig-brush';
 import { coreTimeSeconds,localTimeSeconds } from '../bridge/clock-rate';
@@ -94,7 +94,7 @@ class SpeciesRig {
     this.animationCache=new ActorAnimationCache(animationDetail);
     this.gaitRate=animalGaitRadiansPerUnit(species);
     const graphics=currentGraphicsStyle();
-    const geometry=(graphics?.origami?origamiAnimalGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species):undefined)??hareGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species);
+    const geometry=(graphics?.origami?origamiAnimalPresentationGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species):undefined)??hareGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species);
     geometry.userData.animationCache=this.animationCache;
     const part=geometry.getAttribute('animalPart');this.sampledBones=[...new Set(Array.from({length:part.count},(_,i)=>part.getX(i)))].sort((a,b)=>a-b);
     if(!geometry.hasAttribute('animalPaintUv'))bakeAnimalCoatCoordinates(geometry,species);

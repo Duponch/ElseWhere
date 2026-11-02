@@ -19,6 +19,7 @@ import {animalParts} from '../render/animal-shape';
 import {POSE_DEAD} from '../bridge/actor-phase-dependencies-297';
 import {scytherGeometry} from '../render/scyther-geometry';
 import {createOrigamiContour,type OrigamiContourBinding} from '../render/origami/contours';
+import {encodeOrigamiEquipment} from '../render/origami/equipment-pose';
 import {rangedMechGeometry} from '../render/ranged-mech-geometry';
 import {material} from '../render/primitives';
 import {mechanoidDefinition,type MechanoidKind} from '../sim/mechanoid-definition';
@@ -30,7 +31,7 @@ type RaceRig={species:typeof ANIMAL_SPECIES_IDS[number];mesh:THREE.Mesh<THREE.In
 interface HumanPreview {
   id:string;label:string;note?:string;body:number;head:number;hairMask:number;beardMask:number;
   tint:number;skin:number;hair:number;silhouette:number;flags:number;pants:number;weapon:number;activity:number;pose:number;stage:number;
-  palette?:number;hat?:number;
+  palette?:number;hat?:number;phase?:number;
 }
 const PALETTES=[{skin:0xe0b18d,hair:0x4a3222,tint:0x3b6e8c},{skin:0xffefd5,hair:0x333333,tint:0x809864},{skin:0x825b30,hair:0xc19255,tint:0xc57c65}] as const;
 const PANTS=[0x3c424a,0xd8c8a2,0xad8a61,0xa88b63,0x839ac5,0xc3a375,0xb3c0ba,0xb26422,0x707070] as const;
@@ -70,7 +71,7 @@ function clothingPreview(id:ApparelItem,index:number):HumanPreview {
   else if(id.endsWith('-simple-helmet')){result.flags=10;const materialIndex=SIMPLE_HELMET_ITEMS267.indexOf(id as typeof SIMPLE_HELMET_ITEMS267[number]);result.pants+=(materialIndex+1)/16;result.hat=SIMPLE_HELMET_COLORS267[materialIndex]??definition.color;}
   result.note='Vêtement existant, avec sa forme et sa couleur actuelles.';return result;
 }
-function humanPreviews():HumanPreview[] {
+function humanPreviews(origami=false):HumanPreview[] {
   const rows:HumanPreview[]=[];
   BODY_TYPES.forEach((body,index)=>rows.push({...baseHuman(`body:${body.id}`,`Corps · ${BODY_NAMES[body.id]}`,index),body:index}));
   HEAD_TYPES.forEach((head,index)=>rows.push({...baseHuman(`head:${head.id}`,`Tête ${head.sex==='female'?'féminine':'masculine'} · ${head.width==='narrow'?'étroite':'moyenne'} · mâchoire ${{normal:'normale',pointy:'pointue',wide:'large'}[head.jaw]}`,index),body:head.sex==='female'?1:0,head:index}));
@@ -80,6 +81,10 @@ function humanPreviews():HumanPreview[] {
   BEARD_PARTS.forEach((_,index)=>rows.push({...baseHuman(`beard-part:${index}`,`Pièce de barbe · ${index+1}`),hairMask:0,beardMask:2**index,note:'Élément de barbe isolé pour en vérifier la forme.'}));
   (Object.keys(APPAREL) as ApparelItem[]).forEach((id,index)=>rows.push(clothingPreview(id,index)));
   for(const [index,id]of [...WEAPON_VISUALS.map(visual=>visual.item),...MACE_ITEMS_269,...LONGSWORD_ITEMS_270,...SPEAR_ITEMS_272].entries())rows.push({...baseHuman(`weapon:${id}`,`Arme · ${WEAPON_LABELS[id]}`,index),weapon:weaponVisual(id)!.equipment,note:'Version et matière existantes de cette arme, montrée sur un colon.'});
+  if(origami){
+    for(const id of [...WEAPON_VISUALS.map(visual=>visual.item),MACE_ITEMS_269[0]!,LONGSWORD_ITEMS_270[0]!,SPEAR_ITEMS_272[0]!])rows.push({...baseHuman(`weapon-ready:${id}`,`Arme tenue · ${WEAPON_LABELS[id]}`),weapon:encodeOrigamiEquipment(weaponVisual(id)!.equipment,true),pose:['revolver','bolt-action-rifle','emp-launcher'].includes(id)?7:0,note:'Arme existante tenue à sa poignée ; pose fixe de présentation.'});
+    for(const [id,activity]of [[MACE_ITEMS_269[0]!,6],[LONGSWORD_ITEMS_270[0]!,10],[SPEAR_ITEMS_272[0]!,13]] as const)rows.push({...baseHuman(`weapon-strike:${id}`,`Geste d’arme · ${WEAPON_LABELS[id]}`),weapon:encodeOrigamiEquipment(weaponVisual(id)!.equipment,true,true),pose:8,activity,phase:-.125,note:'Geste fixe de présentation : la poignée suit la main, sans ordre de combat créé.'});
+  }
   for(const [index,name]of ['Hache','Pioche','Faucille'].entries())rows.push({...baseHuman(`work-tool:${index}`,`Outil visuel · ${name}`),activity:[-30,-31,-32][index]!,note:'Outil de travail du style Origami, présenté au repos.'});
   return rows;
 }
@@ -103,7 +108,7 @@ function pawnSection(context:GraphicsStyleContext,id:string,label:string,rows:Hu
   rows.forEach((row,index)=>{
     const x=index%columns*4.2,z=Math.floor(index/columns)*4.8;
     write(geometry,'aFrom',index,[x,0,z,.12*Math.PI]);write(geometry,'aTo',index,[x,0,z,.12*Math.PI]);write(geometry,'aTravel',index,[0,0,0,0]);
-    write(geometry,'aMotion',index,[0,row.activity,row.pose,0]);write(geometry,'aCargo',index,[0,0,0,0]);
+    write(geometry,'aMotion',index,[0,row.activity,row.pose,row.phase??0]);write(geometry,'aCargo',index,[0,0,0,0]);
     const tint=new THREE.Color(row.tint),skin=new THREE.Color(row.skin),hair=new THREE.Color(row.hair);
     write(geometry,'aTint',index,tint.toArray());write(geometry,'aSkin',index,skin.toArray());write(geometry,'aHairBlood',index,[hair.r,hair.g,hair.b,0]);
     write(geometry,'aShape',index,[row.body+row.stage*10,row.head,row.hairMask,row.beardMask+(row.palette??0)*32]);
@@ -163,7 +168,7 @@ function mechanicalSection(context:GraphicsStyleContext):{section:CatalogSection
 }
 
 export function createActorCatalog(context:GraphicsStyleContext):CatalogCollection {
-  const allRows=humanPreviews(),rows=context.origami?allRows:allRows.filter(row=>!row.id.startsWith('work-tool:')),corpseRows=[0,1,2].map(stage=>({...baseHuman(`human-corpse:${stage}`,['Humain · mort','Humain · putréfié','Humain · desséché'][stage]!),pose:POSE_DEAD,stage}));
+  const allRows=humanPreviews(context.origami),rows=context.origami?allRows:allRows.filter(row=>!row.id.startsWith('work-tool:')),corpseRows=[0,1,2].map(stage=>({...baseHuman(`human-corpse:${stage}`,['Humain · mort','Humain · putréfié','Humain · desséché'][stage]!),pose:POSE_DEAD,stage}));
   for(const row of [...rows,...corpseRows])palette(context,row);
   const humans=pawnSection(context,'humans','Humains — générateur et équipements existants',rows),corpses=pawnSection(context,'human-corpses','Restes humains — états existants',corpseRows),animals=animalSection(context,false),animalCorpses=animalSection(context,true),machines=mechanicalSection(context);
   if(!context.origami)humans.section.missing=allRows.filter(row=>row.id.startsWith('work-tool:')).map(row=>({id:row.id,label:row.label,reason:'Accessoire proposé dans le style Origami ; choisissez ce style pour le voir.'}));

@@ -30,7 +30,8 @@ export interface GraphicsStylePreferences {
 }
 /** Browser display preference, deliberately separate from World and save data. */
 export const GRAPHICS_STYLE_PREFERENCE_KEY='elsewhere.graphics-style.v1';
-export const DEFAULT_GRAPHICS_STYLE_PREFERENCES:Readonly<GraphicsStylePreferences>=Object.freeze({style:'default',impasto:1,blackEdges:.45475625,edgeWidth:1,strokeImperfection:.45,edges:.65,wear:.75,contourImperfection:.60});
+export const DEFAULT_GRAPHICS_STYLE_PREFERENCES:Readonly<GraphicsStylePreferences>=Object.freeze({style:'default',impasto:1,blackEdges:.79,edgeWidth:1.7,strokeImperfection:.15,edges:0,wear:.75,contourImperfection:.60});
+const LEGACY_PAPER_DEFAULTS=Object.freeze({edges:.65,wear:.75,contourImperfection:.60,blackEdges:.45475625});
 export const ORIGAMI_STYLE_CONTROLS=[
  {key:'impasto',label:'Relief empâtement gouache',min:0,max:2.2,step:.01,unit:'%'},
  {key:'blackEdges',label:'Contours noirs',min:0,max:1,step:.01,unit:'%'},
@@ -53,14 +54,18 @@ export function normalizeGraphicsStylePreferences(value:unknown):GraphicsStylePr
   const number=data[key];
   result[key]=typeof number==='number'&&Number.isFinite(number)?Math.max(min,Math.min(max,number)):DEFAULT_GRAPHICS_STYLE_PREFERENCES[key];
  }
- if(!Object.hasOwn(data,'blackEdges')){
+ const legacyPaperKeys=['edges','wear','contourImperfection'] as const;
+ const hasLegacyPaper=legacyPaperKeys.some(key=>typeof data[key]==='number'&&Number.isFinite(data[key]));
+ if(!Object.hasOwn(data,'blackEdges')&&!Object.hasOwn(data,'edgeWidth')&&!Object.hasOwn(data,'strokeImperfection')&&hasLegacyPaper){
   // Old v1 preferences linked their visible contour intensity to three paper
   // controls. Preserve that intensity once; the newly stored field then stays
-  // independent from subsequent paper/wear/fill edits. Keep the authoritative
-  // default decimal rather than its equivalent floating-point multiplication.
-  const defaults=DEFAULT_GRAPHICS_STYLE_PREFERENCES;
-  result.blackEdges=result.edges===defaults.edges&&result.wear===defaults.wear&&result.contourImperfection===defaults.contourImperfection?defaults.blackEdges:
-   result.edges*(1-Math.min(1,result.wear*(.2+result.contourImperfection*1.15))*.45);
+  // independent from subsequent paper/wear/fill edits. New or modern partial
+  // records use today's defaults. Genuine pre-black v1 records retain the old
+  // paper defaults in this derivation, even when a field was absent/invalid.
+  const old=(key:typeof legacyPaperKeys[number]):number=>typeof data[key]==='number'&&Number.isFinite(data[key])?Math.max(0,Math.min(1,data[key] as number)):LEGACY_PAPER_DEFAULTS[key];
+  const edges=old('edges'),wear=old('wear'),fill=old('contourImperfection');
+  result.blackEdges=edges===LEGACY_PAPER_DEFAULTS.edges&&wear===LEGACY_PAPER_DEFAULTS.wear&&fill===LEGACY_PAPER_DEFAULTS.contourImperfection?LEGACY_PAPER_DEFAULTS.blackEdges:
+   edges*(1-Math.min(1,wear*(.2+fill*1.15))*.45);
  }
  return result;
 }

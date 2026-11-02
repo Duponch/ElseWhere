@@ -7,6 +7,7 @@ import type {BodyPartId} from '../../sim/body-definition';
 import {corpseVisualPartBit} from '../corpse-presentation';
 import {bodyBloodRegion} from '../body-blood-word-297';
 import {buildOrigamiAnimalReference,type OrigamiAnimalReference} from './animal-reference';
+import {buildOrigamiAnimalPresentation} from './animal-presentation';
 import {createReferenceEdgeGeometry} from './reference-edges';
 
 /** Existing clinical and gameplay identities select exact reference artwork.
@@ -29,7 +30,14 @@ const ORIGIN=new THREE.Vector3();
  * packed anatomical masks and existing owner/cargo/interpolation attributes.
  * Transient reference meshes are flattened once, never retained per animal. */
 export function origamiAnimalGeometry(capacity:number,species:string):THREE.InstancedBufferGeometry|undefined {
-  const compiled=compileAnimal(species);if(!compiled)return;
+  return createAnimalGeometry(capacity,species,false);
+}
+/** Product-only user corrections, separate from the canonical geometry API. */
+export function origamiAnimalPresentationGeometry(capacity:number,species:string):THREE.InstancedBufferGeometry|undefined {
+  return createAnimalGeometry(capacity,species,true);
+}
+function createAnimalGeometry(capacity:number,species:string,presentation:boolean):THREE.InstancedBufferGeometry|undefined {
+  const compiled=compileAnimal(species,presentation);if(!compiled)return;
   const g=streamGeometry(compiled);
   const instances=new THREE.InstancedInterleavedBuffer(new Float32Array(capacity*33),33).setUsage(THREE.StaticDrawUsage);
   for(const [name,size,offset] of [['aFrom',4,0],['aTo',4,4],['aTravel',4,8],['aAnimal',4,12],['aScale',1,16],['aBodyBlood',1,17],['aAbsent',1,18],['aCarrier',4,19],['aCorpseHandoff',2,23],['aCorpseFrom',4,25],['aCorpseTo',4,29]] as const)g.setAttribute(name,new THREE.InterleavedBufferAttribute(instances,size,offset));
@@ -44,6 +52,7 @@ export function origamiAnimalGeometry(capacity:number,species:string):THREE.Inst
   g.userData.origamiLines=lines;g.userData.origamiWear=wear;
   g.userData.origamiReference=compiled.reference;g.userData.origamiParts=compiled.parts;g.userData.origamiBodyCenter=compiled.bodyCenter;
   g.userData.origamiReferenceScale=compiled.referenceScale;g.userData.origamiReferenceFloor=compiled.referenceFloor;
+  g.userData.origamiPresentationCorrections=presentation;
   g.instanceCount=0;return g;
 }
 
@@ -110,10 +119,10 @@ function referenceOwner(mesh:RefMesh,root:THREE.Group,world:THREE.Vector3,leg:TH
   return belongsTo(mesh,root.userData.headGroup)?'head':'torso';
 }
 
-function compileAnimal(species:string):CompiledAnimal|undefined {
+function compileAnimal(species:string,presentation=false):CompiledAnimal|undefined {
   const reference=ORIGAMI_ANIMAL_REFERENCES[species];if(!reference)return;
-  const cached=compiledAnimals.get(species);if(cached)return cached;
-  const root=buildOrigamiAnimalReference(reference);
+  const cacheKey=`${species}:${presentation?'presentation':'canonical'}`,cached=compiledAnimals.get(cacheKey);if(cached)return cached;
+  const root=presentation?buildOrigamiAnimalPresentation(reference):buildOrigamiAnimalReference(reference);
   root.updateMatrixWorld(true);
   const original=animalParts(species),trunk=original[0],referenceLength={fox:1.32,camel:1.42,hare:.68,dog:1.26,buffalo:1.735,gazelle:1.06,deer:1.32,elephant:1.78}[reference];
   // Scale from the existing adult trunk length, independently of age/health;
@@ -194,5 +203,5 @@ function compileAnimal(species:string):CompiledAnimal|undefined {
   root.traverse(object=>{if(object instanceof THREE.Mesh){const mesh=object as RefMesh;mesh.geometry.dispose();}});
   const compiled={vertices:new Float32Array(data),paintUV:new Float32Array(paintUV),bodyCenter,reference,parts:count,referenceScale:scale,referenceFloor:floor,
     lines:{vertices:new Float32Array(lineData),paintUV:new Float32Array(lineUV)},wear:{vertices:new Float32Array(wearData),paintUV:new Float32Array(wearUV)},wearBase:new Float32Array(wearBase),wearDirections:new Float32Array(wearDirections)};
-  compiledAnimals.set(species,compiled);return compiled;
+  compiledAnimals.set(cacheKey,compiled);return compiled;
 }
