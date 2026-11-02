@@ -14,6 +14,8 @@ import {currentGraphicsStyle,applyOrigamiSurface,type GraphicsStyleContext} from
 import {origamiAnimalPresentationGeometry} from './origami/animal-geometry';
 import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 import {createRigBrushGeometry} from './origami/rig-brush';
+import {ActorPartUnionIndex,readAnimalPartUnion} from './origami/actor-part-union';
+import {indexExactStaticVertices} from './origami/static-index';
 import { coreTimeSeconds,localTimeSeconds } from '../bridge/clock-rate';
 import { Fn,If,attribute,cos,sin,float,instanceIndex,normalLocal,positionLocal,uv,vec3,uniform,renderGroup,mix } from 'three/tsl';
 import { hareGeometry } from './hare-geometry';
@@ -56,6 +58,7 @@ class SpeciesRig {
   readonly origamiWear?:THREE.Mesh;
   private origamiGraphics?:GraphicsStyleContext;
   private readonly origamiCleanup:(()=>void)[]=[];
+  private readonly origamiPartUnions:ActorPartUnionIndex[]=[];
   private readonly fallbackContour?:OrigamiContourBinding;
   readonly animationCache:ActorAnimationCache;
   private readonly sampledBones:readonly number[];
@@ -95,6 +98,7 @@ class SpeciesRig {
     this.gaitRate=animalGaitRadiansPerUnit(species);
     const graphics=currentGraphicsStyle();
     const geometry=(graphics?.origami?origamiAnimalPresentationGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species):undefined)??hareGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species);
+    if(graphics?.origami&&geometry.userData.origamiReference)indexExactStaticVertices(geometry);
     geometry.userData.animationCache=this.animationCache;
     const part=geometry.getAttribute('animalPart');this.sampledBones=[...new Set(Array.from({length:part.count},(_,i)=>part.getX(i)))].sort((a,b)=>a-b);
     if(!geometry.hasAttribute('animalPaintUv'))bakeAnimalCoatCoordinates(geometry,species);
@@ -225,7 +229,7 @@ class SpeciesRig {
     this.selection=pawnSelectionMesh(this.mesh.geometry as THREE.InstancedBufferGeometry,this);this.selection.visible=false;
     (this.selection.geometry as THREE.InstancedBufferGeometry).instanceCount=0;
     this.slaughter=animalSlaughterMarker(this.mesh.geometry as THREE.InstancedBufferGeometry,this,style,geometry.boundingBox!.max.y);
-    this.mesh.visible=false;this.flames.visible=false;
+    this.mesh.visible=false;this.flames.visible=false;this.installOrigamiPartUnions();
   }
   setTexturesEnabled(enabled:boolean):void {
     this.mesh.material=enabled?this.texturedMaterial:this.plainMaterial;setFireTexturesEnabled(this.flames,enabled);
@@ -235,18 +239,30 @@ class SpeciesRig {
   /** Static reference streams survive capacity growth; only the common actor
    * buffers are relinked to the newly grown resident allocation. */
   private syncOrigamiInstances():void {
+    this.mesh.geometry.userData.animationCache=this.animationCache;
     this.fallbackContour?.sync();
     for(const companion of [this.origamiLines,this.origamiWear])if(companion){
+      companion.geometry.userData.animationCache=this.animationCache;
       for(const [name,attr] of Object.entries(this.mesh.geometry.attributes)){
         if(attr instanceof THREE.InstancedBufferAttribute||attr instanceof THREE.InterleavedBufferAttribute&&attr.data instanceof THREE.InstancedInterleavedBuffer)companion.geometry.setAttribute(name,attr);
       }
     }
+    this.refreshOrigamiPartUnion();
+  }
+  private clearOrigamiPartUnions():void {for(const union of this.origamiPartUnions)union.dispose();this.origamiPartUnions.length=0;}
+  private installOrigamiPartUnions():void {
+    this.clearOrigamiPartUnions();if(!this.origamiGraphics?.origami)return;
+    for(const geometry of [this.mesh.geometry,this.origamiLines?.geometry,this.origamiWear?.geometry])if(geometry)this.origamiPartUnions.push(new ActorPartUnionIndex(geometry as THREE.InstancedBufferGeometry,'animal'));
+  }
+  private refreshOrigamiPartUnion():void {
+    if(!this.origamiPartUnions.length)return;const body=this.mesh.geometry as THREE.InstancedBufferGeometry,state=readAnimalPartUnion(body,body.instanceCount);for(const union of this.origamiPartUnions)union.reconcile(state);
   }
   private setOrigamiCount(count:number):void {
     if(this.origamiLines)(this.origamiLines.geometry as THREE.InstancedBufferGeometry).instanceCount=count;
     if(this.origamiWear)(this.origamiWear.geometry as THREE.InstancedBufferGeometry).instanceCount=count;
   }
   disposeOrigamiCompanions():void {
+    this.clearOrigamiPartUnions();
     this.fallbackContour?.dispose();
     for(const cleanup of this.origamiCleanup)cleanup();this.origamiCleanup.length=0;
     for(const companion of [this.origamiLines,this.origamiWear])if(companion){companion.geometry.dispose();(companion.material as THREE.Material).dispose();companion.removeFromParent();}
@@ -275,16 +291,18 @@ class SpeciesRig {
     const g=this.mesh.geometry as THREE.InstancedBufferGeometry,fire=this.flames.geometry as THREE.InstancedBufferGeometry;
     const marker=this.slaughter.geometry as THREE.InstancedBufferGeometry;
     const n=g.instanceCount,f=fire.instanceCount,s=marker.instanceCount,visible=this.slaughter.visible,bodyVisible=this.mesh.visible,fireVisible=this.flames.visible,revision=this.revision;
+    const restoreUnions=this.origamiPartUnions.map(union=>union.prepareForCompile());
     g.instanceCount=Math.max(1,n);fire.instanceCount=Math.max(1,f);
     this.setOrigamiCount(g.instanceCount);
     marker.instanceCount=Math.max(1,s);this.slaughter.visible=true;this.mesh.visible=true;this.flames.visible=true;
-    return ()=>{if(this.revision!==revision)return;g.instanceCount=n;this.setOrigamiCount(n);fire.instanceCount=f;marker.instanceCount=s;this.slaughter.visible=visible;this.mesh.visible=bodyVisible;this.flames.visible=fireVisible;};
+    return ()=>{for(const restore of restoreUnions)restore();if(this.revision!==revision)return;g.instanceCount=n;this.setOrigamiCount(n);fire.instanceCount=f;marker.instanceCount=s;this.slaughter.visible=visible;this.mesh.visible=bodyVisible;this.flames.visible=fireVisible;};
   }
   deactivate():void {
     this.revision++;this.source=undefined;this.animals=[];this.hasFireActors=false;this.playback435.clear();
     this.keys.clear();this.headings.clear();this.gait.clear();this.carrierSlots.clear();this.actorSlots.clear();this.animationCache.reset();this.resetSpring297();
     for(const mesh of [this.mesh,this.flames,this.selection,this.slaughter]){(mesh.geometry as THREE.InstancedBufferGeometry).instanceCount=0;mesh.visible=false;}
     this.setOrigamiCount(0);
+    this.refreshOrigamiPartUnion();
     const fire=this.mesh.geometry.getAttribute('aFire') as THREE.InstancedBufferAttribute;
     if(fire.getX(0)!==0){fire.setX(0,0);fire.needsUpdate=true;}
   }
@@ -334,7 +352,7 @@ class SpeciesRig {
     if(changed||reset)this.revision++;
     if(reset){this.headings.clear();this.keys.clear();this.gait.clear();this.resetSpring297();}
     if(changed){this.source=world;this.keys.clear();this.animals=group;this.phaseIndices297.clear();for(let i=0;i<group.length;i++)this.phaseIndices297.set(group[i]!.id,i);this.surfaces=surfaces;this.mesh.visible=group.length>0;
-      if(this.animals.length>this.mesh.geometry.getAttribute('aFrom').count){growPawnBuffers([this.mesh,this.flames,this.selection,this.slaughter],this.animals.length);this.syncOrigamiInstances();}
+      if(this.animals.length>this.mesh.geometry.getAttribute('aFrom').count){this.clearOrigamiPartUnions();growPawnBuffers([this.mesh,this.flames,this.selection,this.slaughter],this.animals.length);this.installOrigamiPartUnions();this.syncOrigamiInstances();}
       this.setSelected(this.selected);
       const markers=this.slaughter.geometry as THREE.InstancedBufferGeometry,flags=markers.getAttribute('aSlaughter') as THREE.InstancedBufferAttribute;
       let any=false,dirty=false;
@@ -463,7 +481,7 @@ class SpeciesRig {
     });
     if(dirty)for(const a of [from,to,times,state,scale,g.getAttribute('aBodyBlood'),g.getAttribute('aAbsent'),g.getAttribute('aCarrier'),g.getAttribute('aCorpseHandoff'),g.getAttribute('aCorpseFrom'),g.getAttribute('aCorpseTo')])a.needsUpdate=true;
     else if(springDirty)for(const a of [from,to,times,state])a.needsUpdate=true;
-    if(changed||reset||dirty){this.actorSlots.clear();let minScale=1;animals.forEach((a,i)=>{this.actorSlots.set(a.id,i);minScale=Math.min(minScale,scale.getX(i));const carrier=g.getAttribute('aCarrier');this.animationCache.reconcile(i,a.id,[state.getZ(i),scale.getX(i),g.getAttribute('aAbsent').getX(i),carrier.getX(i),carrier.getY(i),this.carrierSlots.get(i),a.carrierId,a.corpsePile?.owner.type].join(':'));});this.animationCache.setMinimumScale(minScale);}
+    if(changed||reset||dirty){this.actorSlots.clear();let minScale=1;animals.forEach((a,i)=>{this.actorSlots.set(a.id,i);minScale=Math.min(minScale,scale.getX(i));const carrier=g.getAttribute('aCarrier');this.animationCache.reconcile(i,a.id,[state.getZ(i),scale.getX(i),g.getAttribute('aAbsent').getX(i),carrier.getX(i),carrier.getY(i),this.carrierSlots.get(i),a.carrierId,a.corpsePile?.owner.type].join(':'));});this.animationCache.setMinimumScale(minScale);this.refreshOrigamiPartUnion();}
     if(playback)this.playback435.commit();
   }
   cpuPoseForId(id:number){

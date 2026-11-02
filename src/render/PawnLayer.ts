@@ -57,6 +57,8 @@ import * as THREE from 'three/webgpu';
 import {currentGraphicsStyle,withGraphicsStyle,applyOrigamiSurface} from './graphics-style';
 import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 import {createRigBrushGeometry} from './origami/rig-brush';
+import {ActorPartUnionIndex,HumanPartUnionReader} from './origami/actor-part-union';
+import {indexExactStaticVertices} from './origami/static-index';
 import { Fn, If, attribute, cos, float, instanceIndex, mix, positionLocal, sin, uniform, renderGroup, uv,vec2,vec3,vec4, varying } from 'three/tsl';
 import { TICKS_PER_SECOND,type MaterialPile,type Pawn,type World,type Job } from '../sim/types';
 import {origamiWorkTool} from './origami/work-tools';
@@ -199,6 +201,9 @@ export class PawnLayer {
   private releaseOrigamiWear:(()=>void)|undefined;
   private releaseOrigamiBrush:(()=>void)|undefined;
   private releaseOrigamiEdges:(()=>void)[]=[];
+  private readonly origamiPartUnions:ActorPartUnionIndex[]=[];
+  private origamiPartUnionReader?:HumanPartUnionReader;
+  private readonly indexedOrigamiBodies=new WeakSet<THREE.BufferGeometry>();
   private smithingGeometry=false;
   private maceGeometry=false;
   private longswordGeometry=false;
@@ -316,13 +321,27 @@ export class PawnLayer {
    * Rebind after capacity growth; their own static source vertices stay owned. */
   private syncOrigamiInstances(body=this.pawnMesh?.geometry as THREE.InstancedBufferGeometry|undefined):void {
     if(!body)return;
+    body.userData.animationCache=this.animationCache;
     for(const mesh of [this.origamiLineMesh,this.origamiWearMesh])if(mesh){
       for(const [name,attribute]of Object.entries(body.attributes))if(attribute instanceof THREE.InstancedBufferAttribute||attribute instanceof THREE.InterleavedBufferAttribute&&attribute.data instanceof THREE.InstancedInterleavedBuffer)mesh.geometry.setAttribute(name,attribute);
       mesh.geometry.instanceCount=body.instanceCount;mesh.geometry.userData.animationCache=this.animationCache;
     }
+    this.refreshOrigamiPartUnion(body);
+  }
+  private clearOrigamiPartUnions():void {for(const union of this.origamiPartUnions)union.dispose();this.origamiPartUnions.length=0;}
+  private installOrigamiPartUnions(body=this.pawnMesh?.geometry as THREE.InstancedBufferGeometry|undefined):void {
+    this.clearOrigamiPartUnions();if(!this.graphics?.origami||!body)return;
+    this.origamiPartUnionReader??=new HumanPartUnionReader();
+    for(const geometry of [body,this.origamiLineMesh?.geometry,this.origamiWearMesh?.geometry])if(geometry)this.origamiPartUnions.push(new ActorPartUnionIndex(geometry,'human'));
+  }
+  private refreshOrigamiPartUnion(body=this.pawnMesh?.geometry as THREE.InstancedBufferGeometry|undefined):void {
+    if(!body||!this.origamiPartUnionReader||!this.origamiPartUnions.length)return;
+    const state=this.origamiPartUnionReader.read(body,body.instanceCount);for(const union of this.origamiPartUnions)union.reconcile(state);
   }
   private adoptOrigamiCompanions(body:THREE.InstancedBufferGeometry):void {
     if(!this.graphics?.origami||!this.pawnMesh)return;
+    this.clearOrigamiPartUnions();
+    if(!this.indexedOrigamiBodies.has(body)){indexExactStaticVertices(body);this.indexedOrigamiBodies.add(body);}
     const lines=createRigBrushGeometry(body),wear=body.userData.origamiWear as THREE.InstancedBufferGeometry;
     this.releaseOrigamiBrush?.();this.releaseOrigamiBrush=this.graphics.prepareBrushGeometry(lines);
     const position=(this.pawnMesh.material as THREE.MeshStandardNodeMaterial).positionNode;
@@ -342,9 +361,10 @@ export class PawnLayer {
       this.releaseOrigamiEdges.push(this.graphics.trackEdgeObject(this.origamiWearMesh,'wear'));
     }
     this.releaseOrigamiWear=this.graphics.trackWearGeometry(wear);
-    this.origamiWearMesh.userData.origamiTexturesEnabled=this.texturesEnabled;this.graphics.refreshEdgeObject(this.origamiWearMesh,'wear');this.syncOrigamiInstances(body);
+    this.origamiWearMesh.userData.origamiTexturesEnabled=this.texturesEnabled;this.graphics.refreshEdgeObject(this.origamiWearMesh,'wear');this.installOrigamiPartUnions(body);this.syncOrigamiInstances(body);
   }
   private clearOrigamiCompanions():void {
+    this.clearOrigamiPartUnions();
     this.releaseOrigamiBrush?.();this.releaseOrigamiBrush=undefined;
     this.releaseOrigamiWear?.();this.releaseOrigamiWear=undefined;
     for(const release of this.releaseOrigamiEdges)release();this.releaseOrigamiEdges=[];
@@ -361,6 +381,7 @@ export class PawnLayer {
     const geometry = mesh.geometry as THREE.InstancedBufferGeometry;
     const savedMaterial = mesh.material, savedVisible = mesh.visible, savedCount = geometry.instanceCount;
     const companions=[this.origamiLineMesh,this.origamiWearMesh].filter((item):item is NonNullable<typeof item>=>item!==null).map(companion=>({companion,visible:companion.visible,count:companion.geometry.instanceCount}));
+    const restoreUnions=this.origamiPartUnions.map(union=>union.prepareForCompile());
     try {
       mesh.visible = true;
       geometry.instanceCount = Math.max(1, savedCount);
@@ -379,6 +400,7 @@ export class PawnLayer {
       geometry.instanceCount = savedCount;
       this.selectOrigamiPosition((savedMaterial as THREE.MeshStandardNodeMaterial).positionNode);
       for(const {companion,visible,count}of companions){companion.visible=visible;companion.geometry.instanceCount=count;}
+      for(const restore of restoreUnions)restore();
     }
   }
   private readonly travelKeys = new Map<number,string>();
@@ -1074,6 +1096,7 @@ export class PawnLayer {
       cargo.needsUpdate=true;
       this.syncMainCargoKinds();
       this.syncPartialCargo();
+      this.refreshOrigamiPartUnion();
     }
     return refresh;
   }
@@ -1101,7 +1124,7 @@ export class PawnLayer {
     if(!spear)for(const piece of gears.values())if(isSpearItem272(piece.item)){spear=true;break;}
     this.extendResidentGeometry(smithing,mace,longsword,spear);
     if (!this.pawnMesh) this.createPawnMesh(Math.max(1,world.pawns.length));
-    else if(this.pawnMesh.geometry.getAttribute('aFrom').count<world.pawns.length){growPawnBuffers([this.pawnMesh,this.cargoMesh!,this.selectionMesh!,this.fireMesh!,this.partialCargoMesh!],world.pawns.length);this.syncOrigamiInstances();}
+    else if(this.pawnMesh.geometry.getAttribute('aFrom').count<world.pawns.length){this.clearOrigamiPartUnions();growPawnBuffers([this.pawnMesh,this.cargoMesh!,this.selectionMesh!,this.fireMesh!,this.partialCargoMesh!],world.pawns.length);this.installOrigamiPartUnions();this.syncOrigamiInstances();}
     const geometry = this.pawnMesh!.geometry as THREE.InstancedBufferGeometry;
     if(this.targetOffsets297.length<world.pawns.length*3)this.targetOffsets297=new Float64Array(world.pawns.length*3);
     const flames=geometry.getAttribute('aFire') as THREE.InstancedBufferAttribute;
@@ -1339,7 +1362,7 @@ export class PawnLayer {
     this.travelTime.value=localTimeSeconds(timeline.tick,origin);
     const playback=this.playback435.beginFrame(timeline);if(this.playback435.retrying)this.travelKeys.clear();
     const spring=isCorePhysicalSchema297(Number(world.schemaVersion));if(spring)this.ensureSpring297(humans.length);
-    let dirty=false;
+    let dirty=false,partUnionDirty=false;
     humans.forEach((pawn,i)=>{
       const prepared=playback?this.playback435.select(i,timeline,timeline.tick,origin):undefined;
       if(spring&&!this.springValid297[i])this.captureSpring297(i,from,to,times,motion);
@@ -1357,6 +1380,7 @@ export class PawnLayer {
       const key=`${origin}:${segment?.start}:${segment?.end}:${segment?.edgeStart}:${segment?.fromFraction}:${segment?.toFraction}:${active}:${!!segment&&timeline.tick>=segment.start}:${pawn.state}:${shownPose}:${pawn.path[0]?.x}:${pawn.path[0]?.z}:${pasteCollect?.dispenserId}`;
       if(this.travelKeys.get(pawn.id)===key){if(spring)dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;return;}
       this.travelKeys.set(pawn.id,key);dirty=true;
+      const priorActivity=motion.getY(i);
       const visual=this.visuals.get(pawn.id)!;
       if(onEdge&&segment) {
         const yaw=Math.atan2(segment.to.x-segment.from.x,segment.to.z-segment.from.z);
@@ -1442,6 +1466,7 @@ export class PawnLayer {
         else motion.setW(i,pawn.id*1.7);
       }
       from.setXYZW(i,visual.from.x,visual.from.y,visual.from.z,visual.from.w);to.setXYZW(i,visual.to.x,visual.to.y,visual.to.z,visual.to.w);
+      if(motion.getY(i)!==priorActivity)partUnionDirty=true;
       if(spring){this.captureSpring297(i,from,to,times,motion);dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;}
     });
     let crouchFinished=false;
@@ -1461,7 +1486,7 @@ export class PawnLayer {
       for(const [carrier,patient] of this.rescuePairs){
         from.setXYZW(patient,from.getX(carrier),from.getY(carrier),from.getZ(carrier),from.getW(carrier));
         to.setXYZW(patient,to.getX(carrier),to.getY(carrier),to.getZ(carrier),to.getW(carrier));
-        times.setXYZW(patient,times.getX(carrier),times.getY(carrier),times.getZ(carrier),times.getW(carrier));motion.setXYZ(patient,0,0,6);
+        times.setXYZW(patient,times.getX(carrier),times.getY(carrier),times.getZ(carrier),times.getW(carrier));if(motion.getY(patient)!==0)partUnionDirty=true;motion.setXYZ(patient,0,0,6);
         this.crouchTransitions.delete(humans[patient]!.id);this.shownPoses.set(humans[patient]!.id,6);
         const source=this.visuals.get(humans[carrier]!.id)!,target=this.visuals.get(humans[patient]!.id)!;
         target.from.copy(source.from);target.to.copy(source.to);
@@ -1469,6 +1494,7 @@ export class PawnLayer {
       }
       for(const attribute of [from,to,times,motion])attribute.needsUpdate=true;
     }else if(crouchFinished)motion.needsUpdate=true;
+    if(partUnionDirty)this.refreshOrigamiPartUnion(geometry as THREE.InstancedBufferGeometry);
     if(playback)this.playback435.commit();
   }
 
