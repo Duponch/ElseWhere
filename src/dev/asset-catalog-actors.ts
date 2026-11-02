@@ -14,7 +14,7 @@ import {LONGSWORD_ITEMS_270} from '../sim/longsword-content-270';
 import {SPEAR_ITEMS_272} from '../sim/spear-content-272';
 import {WEAPON_LABELS} from '../sim/equipment-rules';
 import {ANIMAL_SPECIES_IDS,ANIMAL_SPECIES} from '../sim/animal-species';
-import {ORIGAMI_ANIMAL_REFERENCES} from '../render/origami/animal-geometry';
+import {origamiAnimalReferenceInfo} from '../render/origami/animal-geometry';
 import {animalParts} from '../render/animal-shape';
 import {POSE_DEAD} from '../bridge/actor-phase-dependencies-297';
 import {scytherGeometry} from '../render/scyther-geometry';
@@ -140,12 +140,15 @@ function animalSection(context:GraphicsStyleContext,dead:boolean):{section:Catal
     write(g,'aFrom',0,[x,lift,z,0]);write(g,'aTo',0,[x,lift,z,0]);write(g,'aTravel',0,[0,0,0,0]);write(g,'aAnimal',0,[0,0,dead?2:0,0]);write(g,'aBiology',0,[1,0,0]);
     write(g,'aCarrier',0,[0,0,0,0]);write(g,'aCorpseHandoff',0,[0,0]);write(g,'aCorpseFrom',0,[0,0,0,0]);write(g,'aCorpseTo',0,[0,0,0,0]);
     invoke(rig,'syncOrigamiInstances');invoke(rig,'setOrigamiCount',1);
-    const reference=ORIGAMI_ANIMAL_REFERENCES[rig.species],status:CatalogStatus=context.origami&&reference?'reference':'default';
-    const note=context.origami&&reference?`Dessin peint fourni : ${REFERENCE_NAMES[reference]}. L’espèce garde son nom du catalogue.`:context.origami?'Modèle actuel conservé ; dessin Origami de cette espèce non encore disponible.':'Modèle du style par défaut.';
+    const reference=origamiAnimalReferenceInfo(rig.species),status:CatalogStatus=context.origami&&reference?reference.status:'default';
+    const note=!context.origami?'Modèle du style par défaut.':!reference?'Modèle actuel conservé ; dessin Origami de cette espèce non encore disponible.':reference.kind==='existing-reference'
+      ?`Dessin peint fourni : ${REFERENCE_NAMES[reference.referenceId as keyof typeof REFERENCE_NAMES]}. Modèle et corrections précédents conservés.`
+      :reference.kind==='explicit-adaptation'?`Adaptation Origami du modèle ${reference.parent} de la nouvelle scène. Cette espèce n’y a pas de recette dédiée. Peinture, proportions et détails adaptés.`
+      :'Modèle de la nouvelle scène de référence. Peinture et contours harmonisés ; yeux, attaches et détails corrigés.';
     items.push(item(`${dead?'corpse':'animal'}:${rig.species}`,`${dead?'Reste · ':''}${ANIMAL_SPECIES[rig.species].label}`,status,bounds.translate(new THREE.Vector3(x,0,z)),note));
   }
   layer.mesh.name=dead?'Restes animaux':'Faune — 53 espèces existantes';
-  return {section:{id:dead?'animal-corpses':'animals',label:layer.mesh.name,group:layer.mesh,items,note:'53 espèces adultes. Huit dessins fournis couvrent onze identités ; les autres modèles actuels sont conservés.'},dispose:()=>layer.dispose()};
+  return {section:{id:dead?'animal-corpses':'animals',label:layer.mesh.name,group:layer.mesh,items,note:context.origami?'53 espèces adultes : onze identités Origami conservées, 35 nouveaux modèles de référence et sept adaptations explicites.':'53 espèces adultes avec les modèles du style par défaut.'},dispose:()=>layer.dispose()};
 }
 
 /** The three source mechanical recipes are deliberately retained in both

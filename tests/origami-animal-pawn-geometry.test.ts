@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import * as THREE from 'three/webgpu';
-import {origamiAnimalGeometry,ORIGAMI_ANIMAL_SPECIES} from '../src/render/origami/animal-geometry';
+import {origamiAnimalGeometry,ORIGAMI_ANIMAL_SPECIES,ORIGAMI_ANIMAL_REFERENCES} from '../src/render/origami/animal-geometry';
 import {animalVisualParts256} from '../src/render/animal-visual-parts-v256';
 import {corpseVisualPartBit} from '../src/render/corpse-presentation';
 import {GraphicsStyleContext,withGraphicsStyle} from '../src/render/graphics-style';
@@ -16,7 +16,9 @@ describe('Origami animals retain the resident simulation-facing rig',()=>{
   it('compiles all reference mappings into bounded batches and finite original object UVs',()=>{
     expect(ORIGAMI_ANIMAL_SPECIES).toEqual(expect.arrayContaining(['red-fox','dromedary','hare','snow-hare','gazelle','deer','muffalo','elephant','labrador-retriever','husky','yorkshire-terrier']));
     expect(origamiAnimalGeometry(16,'not-a-species')).toBeUndefined();
-    for(const species of ORIGAMI_ANIMAL_SPECIES){
+    // This acquired contract describes the original quadruped eleven. The
+    // separate bestiary contract covers native zero/two/six-limb bodies.
+    for(const species of Object.keys(ORIGAMI_ANIMAL_REFERENCES)){
       const g=origamiAnimalGeometry(16,species)!,position=g.getAttribute('position'),part=g.getAttribute('animalPart'),uv=g.getAttribute('animalPaintUv');
       expect(g.index).toBeNull();expect(position.count%3).toBe(0);expect(position.count).toBeLessThan(12000);
       expect(uv.count).toBe(position.count);expect(g.getAttribute('bindPivot').count).toBe(position.count);

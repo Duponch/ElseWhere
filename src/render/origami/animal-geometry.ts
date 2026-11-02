@@ -9,6 +9,7 @@ import {bodyBloodRegion} from '../body-blood-word-297';
 import {buildOrigamiAnimalReference,type OrigamiAnimalReference} from './animal-reference';
 import {buildOrigamiAnimalPresentation} from './animal-presentation';
 import {createReferenceEdgeGeometry} from './reference-edges';
+import {BESTIARY_ANIMAL_SPECIES,bestiaryAnimalGeometry,bestiaryAnimalBodyCenter,bestiaryAnimalReferenceInfo,type OrigamiAnimalReferenceInfo} from './bestiary-registry';
 
 /** Existing clinical and gameplay identities select exact reference artwork.
  * All three real dog breeds use the source shepherd; muffalo uses the source
@@ -18,7 +19,11 @@ export const ORIGAMI_ANIMAL_REFERENCES:Readonly<Record<string,OrigamiAnimalRefer
   'labrador-retriever':'dog',husky:'dog','yorkshire-terrier':'dog',
   muffalo:'buffalo',gazelle:'gazelle',deer:'deer',elephant:'elephant',
 });
-export const ORIGAMI_ANIMAL_SPECIES=Object.freeze(Object.keys(ORIGAMI_ANIMAL_REFERENCES));
+export const ORIGAMI_ANIMAL_SPECIES=Object.freeze([...Object.keys(ORIGAMI_ANIMAL_REFERENCES),...BESTIARY_ANIMAL_SPECIES]);
+export function origamiAnimalReferenceInfo(species:string):OrigamiAnimalReferenceInfo|undefined {
+ const reference=ORIGAMI_ANIMAL_REFERENCES[species];
+ return reference?{kind:'existing-reference',status:'reference',referenceId:reference,sourceKey:`original:${reference}`,changes:[]}:bestiaryAnimalReferenceInfo(species);
+}
 
 type RefMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
 interface CompiledStream {vertices:Float32Array;paintUV:Float32Array}
@@ -37,6 +42,7 @@ export function origamiAnimalPresentationGeometry(capacity:number,species:string
   return createAnimalGeometry(capacity,species,true);
 }
 function createAnimalGeometry(capacity:number,species:string,presentation:boolean):THREE.InstancedBufferGeometry|undefined {
+  if(!ORIGAMI_ANIMAL_REFERENCES[species])return bestiaryAnimalGeometry(capacity,species,presentation);
   const compiled=compileAnimal(species,presentation);if(!compiled)return;
   const g=streamGeometry(compiled);
   const instances=new THREE.InstancedInterleavedBuffer(new Float32Array(capacity*33),33).setUsage(THREE.StaticDrawUsage);
@@ -68,7 +74,7 @@ function streamGeometry(stream:CompiledStream,mutable=false):THREE.InstancedBuff
   return g;
 }
 
-export function origamiAnimalBodyCenter(species:string):number|undefined {return compileAnimal(species)?.bodyCenter;}
+export function origamiAnimalBodyCenter(species:string):number|undefined {return ORIGAMI_ANIMAL_REFERENCES[species]?compileAnimal(species)?.bodyCenter:bestiaryAnimalBodyCenter(species);}
 
 function belongsTo(object:THREE.Object3D,ancestor:THREE.Object3D|undefined):boolean {
   if(!ancestor)return false;

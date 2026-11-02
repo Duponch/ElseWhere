@@ -3,18 +3,19 @@ import type {ReferencePaintConfig} from './reference-painter';
 import type {ReferencePaintDescriptor} from './reference-paint-library';
 import {REFERENCE_PAINT_DESCRIPTORS,REFERENCE_HUMAN_DESCRIPTORS} from './reference-paint-seeds';
 import {HUMAN_REFERENCE_PIGMENTS,HUMAN_PAINT_PROFILES} from './human-reference';
+import {BESTIARY_PAINT_DESCRIPTORS} from './bestiary-paint-descriptors';
 
 /** Zero is reserved for existing assets without a supplied reference model.
  * Canonical assets always use their actual authored colored profile. */
 export const GENERIC_REFERENCE_PROFILE=0;
 const profiles:ReferencePaintDescriptor[]=[{key:'generic-gouache',config:{baseColor:'#ffffff',secondaryColor:'#ded8cc',strokeStyle:'directional',strokeCount:300},seed:1337}];
 const indices=new Map<string,number>([['generic-gouache',0]]);
-const canonical=new Map(REFERENCE_PAINT_DESCRIPTORS.map(p=>[p.key,p]));
+const canonical=new Map([...REFERENCE_PAINT_DESCRIPTORS,...BESTIARY_PAINT_DESCRIPTORS].map(p=>[p.key,p]));
 const humanKeys=['matSkin','matShirt','matOuterwear','matPants','matHair','matHat','matCharcoalGouache','matWeaponWood','matSteelGouache'];
 const humanSource:readonly ReferencePaintDescriptor[]=humanKeys.map((key,index)=>REFERENCE_HUMAN_DESCRIPTORS.find(p=>p.key===key)??canonical.get(key)??{key,config:HUMAN_REFERENCE_PIGMENTS[index],seed:1337});
 
 function fromTemplate(key:string,config:ReferencePaintConfig,source?:ReferencePaintDescriptor):ReferencePaintDescriptor {
- return {key,config:{...config},seed:source?.seed??1337,
+ return {...source,key,config:{...config},seed:source?.seed??1337,
   ...(source?.sourceIndex!==undefined?{sourceIndex:source.sourceIndex}:{}),
   ...(source?.refreshSeed!==undefined?{refreshSeed:source.refreshSeed}:{}),
  };
@@ -33,16 +34,30 @@ export function referencePaintProfiles():readonly ReferencePaintDescriptor[]{ret
 export function referenceProfileCount():number{return profiles.length;}
 export function humanBaseProfileIds():readonly number[]{return Object.entries(HUMAN_PAINT_PROFILES).map(([name,index])=>registerReferencePaintProfile(`human:${name}:${HUMAN_REFERENCE_PIGMENTS[index].baseColor}`,HUMAN_REFERENCE_PIGMENTS[index]));}
 
-// Fix the baseline pool before dependent modules can register any variants.
-// The descriptor/ID order is generic0, 33 canonical registrations, 9 human
-// templates. Later appearances append metadata without mutating this snapshot.
+// Keep the protected43 identities before declaring the separate bestiary.
+// This snapshot is metadata only and preserves the old IDs/configs/seeds.
 humanBaseProfileIds();
-export const BASE_REFERENCE_PAINT_DESCRIPTORS:readonly ReferencePaintDescriptor[]=Object.freeze(profiles.map(descriptor=>Object.freeze({
+function snapshotProfiles():readonly ReferencePaintDescriptor[]{return Object.freeze(profiles.map(descriptor=>Object.freeze({
  ...descriptor,config:Object.freeze({...descriptor.config,
   ...(descriptor.config.gradientTip?{gradientTip:Object.freeze({...descriptor.config.gradientTip})}:{}),
   ...(descriptor.config.flankStripe?{flankStripe:Object.freeze({...descriptor.config.flankStripe})}:{}),
  }),
-})));
+})));}
+export const PROTECTED_REFERENCE_PAINT_DESCRIPTORS=snapshotProfiles();
+
+// All45 source paints have distinct RNG/configuration provenance, including
+// the19 names shared with the older atelier. Namespace them rather than
+// recoloring/reseeding any existing identity. Human variants append later.
+const bestiaryIndices=new Map<string,number>();
+for(const descriptor of BESTIARY_PAINT_DESCRIPTORS){const id=registerReferencePaintProfile(descriptor.key,descriptor.config);bestiaryIndices.set(descriptor.key,id);bestiaryIndices.set(descriptor.sourceKey,id);}
+export function bestiaryPaintProfile(sourceKey:string):number{
+ const id=bestiaryIndices.get(sourceKey);if(id===undefined)throw new Error(`Unknown bestiary paint profile: ${sourceKey}`);
+ return id;
+}
+/** Context snapshot includes static bestiary metadata before dynamic human
+ * rows. The existing eager context is unchanged until its separate admission
+ * port is qualified; merely registering metadata never creates pixels. */
+export const BASE_REFERENCE_PAINT_DESCRIPTORS=snapshotProfiles();
 
 /** Keep the same authored brush recipe and shade ratios for genuine resident
  * appearance colors. The reference palette itself passes through unchanged. */
