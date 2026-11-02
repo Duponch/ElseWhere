@@ -1682,6 +1682,7 @@ export class SceneRenderCore {
       snowRate:weatherSnowRate(this.world),camera:this.camera,target:this.controls.target,
       strength:visualWindStrength,directionX:visualWind.x,directionZ:visualWind.z,daylight:this.daylight.sample.daylight});
     const cellPixels=this.rig.pixelsPerCell(this.viewportHeight);
+    if(this.graphicsStyle.reliefLod?.update(this.rig.mode,cellPixels*this.renderer.getPixelRatio()))this.invalidatePausedShadow();
     this.actionFeedback.setBarsDetailVisible(cellPixels>=18);
     this.actionVfx.setDetailVisible(true);
     this.brawlCloud.setDetailVisible(true);

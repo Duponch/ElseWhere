@@ -13,6 +13,7 @@ import {bakeResidentPaintToSink} from './origami/reference-resident-paint-librar
 import {GAME_USED_BESTIARY_VIRTUAL_IDS} from './origami/game-paint-residency';
 import {referenceCoverageKey} from './origami/reference-coverage';
 import {bakeCheckpointPaintToSink,replayCheckpointMaskR8} from './origami/checkpoint-paint-baker';
+import {createGlobalReliefLod,installGlobalReliefLod,type GlobalReliefLod} from './origami/relief-lod';
 
 interface CoverageCheckpoint {readonly coverageSeed:number;readonly kraft:boolean;readonly signature:string}
 
@@ -39,6 +40,7 @@ export class GraphicsStyleContext {
  preferences:GraphicsStylePreferences;
  readonly pipelineKey:GraphicsStylePipelineKey;
  readonly reliefEnabled:boolean;
+ readonly reliefLod:GlobalReliefLod|undefined;
  readonly impasto=uniform(1);readonly edges=uniform(.65);readonly wear=uniform(.75);readonly contour=uniform(.60);
  readonly contourSpan=uniform(.6675);readonly lineOpacity=uniform(.45475625);readonly wearOpacity=uniform(.560625);
  /** Both edge looks share one geometry and draw. Black takes precedence at
@@ -69,7 +71,8 @@ export class GraphicsStyleContext {
  constructor(settings:GraphicsStylePreferences={...DEFAULT_GRAPHICS_STYLE_PREFERENCES},options:GraphicsStyleContextOptions={}) {
   this.paintPool=new VirtualPaintPool(PROTECTED_REFERENCE_PAINT_DESCRIPTORS);for(const descriptor of BASE_REFERENCE_PAINT_DESCRIPTORS.slice(PROTECTED_REFERENCE_PAINT_DESCRIPTORS.length))this.paintPool.register(descriptor);for(const descriptor of options.staticDescriptors??[])this.paintPool.register(descriptor);this.paintPool.sealStaticCatalog();
   this.preferences=normalizeGraphicsStylePreferences(settings);this.pipelineKey=graphicsStylePipelineKey(this.preferences);
-  this.reliefEnabled=this.origami&&this.preferences.impasto>0;this.update(settings);
+  this.reliefEnabled=this.origami&&this.preferences.impasto>0;
+  this.reliefLod=createGlobalReliefLod(this.reliefEnabled);this.update(settings);
  }
  private ensureRows():THREE.DataTexture{if(!this.rowsTexture){this.rowsData=new Float32Array(12*4096);this.rowsData.set(this.paintPool.humanRowsData());this.rowsTexture=new THREE.DataTexture(this.rowsData,12,4096,THREE.RedFormat,THREE.FloatType);this.rowsTexture.minFilter=this.rowsTexture.magFilter=THREE.NearestFilter;this.rowsTexture.needsUpdate=true;}return this.rowsTexture;}
  /** Binding objects only. No Canvas, raster, source painter or bulk palette. */
@@ -277,6 +280,7 @@ export class GraphicsStyleContext {
   if(this.reliefEnabled){
    const dx=applyPhysicalPaintMetric(coordinates.dFdx(),metric,density).mul(vec2(1,4)),dy=applyPhysicalPaintMetric(coordinates.dFdy(),metric,density).mul(vec2(1,4)),height=texture(edge.bump!,paintUv).r;
    material.normalNode=referencePaintBumpNormal(height,texture(edge.bump!,paintUv.add(dx)).r,texture(edge.bump!,paintUv.add(dy)).r,this.impasto.mul(.045));
+   installGlobalReliefLod(material,this.reliefLod);
   }else{material.normalNode=null;material.normalMap=null;material.bumpMap=null;}
   return material;
  }
@@ -319,6 +323,7 @@ export function applyOrigamiSurface(material:THREE.NodeMaterial,base:THREE.Node<
   const dx=applyPhysicalPaintMetric(rawUv.dFdx(),metric,density),dy=applyPhysicalPaintMetric(rawUv.dFdy(),metric,density);
   const hx=fillCoverage?context.faceHeightNode(paintUv.add(dx),rawUv.add(rawUv.dFdx()),id,faceId):context.paintNode(paintUv.add(dx),id).a,hy=fillCoverage?context.faceHeightNode(paintUv.add(dy),rawUv.add(rawUv.dFdy()),id,faceId):context.paintNode(paintUv.add(dy),id).a;
   material.normalNode=referencePaintBumpNormal(sample.a,hx,hy,context.impasto.mul(.035));
+  installGlobalReliefLod(material,context.reliefLod);
  }else{
   // This branch is chosen while constructing the material, never per pixel.
   // Null also excludes any inherited stock normal/bump-map fallback.
