@@ -1,7 +1,9 @@
 import {expect,test,vi} from 'vitest';
 import * as THREE from 'three/webgpu';
-import {stubReferenceBakeToSink} from './fixtures/reference-paint-bake-stub';
+import {stubReferenceBakeToSink,stubResidentPaintToSink,stubCheckpointPaintToSink,stubReplayCheckpointMaskR8} from './fixtures/reference-paint-bake-stub';
 vi.mock('../src/render/origami/reference-paint-library',async importOriginal=>({...await importOriginal<typeof import('../src/render/origami/reference-paint-library')>(),bakeReferencePaintLayersToSink:stubReferenceBakeToSink}));
+vi.mock('../src/render/origami/reference-resident-paint-library',async importOriginal=>({...await importOriginal<typeof import('../src/render/origami/reference-resident-paint-library')>(),bakeResidentPaintToSink:stubResidentPaintToSink}));
+vi.mock('../src/render/origami/checkpoint-paint-baker',async importOriginal=>({...await importOriginal<typeof import('../src/render/origami/checkpoint-paint-baker')>(),bakeCheckpointPaintToSink:stubCheckpointPaintToSink,replayCheckpointMaskR8:stubReplayCheckpointMaskR8}));
 import {resourceFallbackLineParts} from '../src/render/ResourceLayer';
 import {mergedInstances} from '../src/render/StaticGeometry';
 import type {Placement} from '../src/render/primitives';

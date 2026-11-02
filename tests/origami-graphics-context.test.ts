@@ -2,12 +2,14 @@ import {expect,test,vi,afterEach} from 'vitest';
 import * as THREE from 'three/webgpu';
 import {attribute,vec2,vec3,float} from 'three/tsl';
 import {applyPaintMetric,paintMetricFromDerivatives,type PaintVector2,type PaintVector3} from '../src/render/origami/paint-metric';
-import {stubReferenceBakeToSink} from './fixtures/reference-paint-bake-stub';
+import {stubReferenceBakeToSink,stubResidentPaintToSink,stubCheckpointPaintToSink,stubReplayCheckpointMaskR8} from './fixtures/reference-paint-bake-stub';
 vi.mock('../src/render/origami/reference-paint-library',async importOriginal=>({...await importOriginal<typeof import('../src/render/origami/reference-paint-library')>(),bakeReferencePaintLayersToSink:vi.fn((...args:Parameters<typeof stubReferenceBakeToSink>)=>stubReferenceBakeToSink(...args))}));
-import {bakeReferencePaintLayersToSink as bakeReferencePaintLayers} from '../src/render/origami/reference-paint-library';
+vi.mock('../src/render/origami/reference-resident-paint-library',async importOriginal=>({...await importOriginal<typeof import('../src/render/origami/reference-resident-paint-library')>(),bakeResidentPaintToSink:stubResidentPaintToSink}));
+vi.mock('../src/render/origami/checkpoint-paint-baker',async importOriginal=>({...await importOriginal<typeof import('../src/render/origami/checkpoint-paint-baker')>(),bakeCheckpointPaintToSink:vi.fn((...args:Parameters<typeof stubCheckpointPaintToSink>)=>stubCheckpointPaintToSink(...args)),replayCheckpointMaskR8:vi.fn(stubReplayCheckpointMaskR8)}));
+import {bakeCheckpointPaintToSink as bakeReferencePaintLayers,replayCheckpointMaskR8} from '../src/render/origami/checkpoint-paint-baker';
 import {applyOrigamiSurface,currentGraphicsStyle,GraphicsStyleContext,withGraphicsStyle} from '../src/render/graphics-style';
 import {DEFAULT_GRAPHICS_STYLE_PREFERENCES as defaults} from '../src/ui3d/native-preferences';
-import {BASE_REFERENCE_PAINT_DESCRIPTORS} from '../src/render/origami/reference-profiles';
+import {GAME_REQUIRED_VIRTUAL_IDS78} from '../src/render/origami/game-paint-residency';
 import {EnvironmentLighting} from '../src/render/EnvironmentLighting';
 const folded=()=>new GraphicsStyleContext({...defaults,style:'origami'});
 
@@ -51,9 +53,9 @@ test('Default does no Origami raster, palette texture or node replacement',()=>{
  const context=new GraphicsStyleContext(),material=new THREE.MeshLambertNodeMaterial(),color=vec3(.4,.5,.6);material.colorNode=color;
  try{applyOrigamiSurface(material,vec3(1),undefined,context);context.flushPaint();expect(material.colorNode).toBe(color);expect(bakeReferencePaintLayers).not.toHaveBeenCalled();expect(Reflect.get(context,'colorArray')).toBeUndefined();expect(Reflect.get(context,'rowsTexture')).toBeUndefined();}finally{material.dispose();context.dispose();}
 });
-test('reference profiles retain independent full resolution SRGB RGB and linear height alpha layers',()=>{
+test('the78 gamewide profiles retain full resolution SRGB RGB, linear height alpha and77 shared face templates',()=>{
  const context=folded(),material=new THREE.MeshStandardNodeMaterial({vertexColors:true});
- try{applyOrigamiSurface(material,attribute('color','vec3'),undefined,context,float(1));const paint=context.paint;expect(paint.isDataArrayTexture).toBe(true);expect(paint.image).toMatchObject({width:512,height:512,depth:BASE_REFERENCE_PAINT_DESCRIPTORS.length});expect(paint.colorSpace).toBe(THREE.SRGBColorSpace);expect(paint.format).toBe(THREE.RGBAFormat);expect(paint.flipY).toBe(false);expect(material.vertexColors).toBe(false);expect(material.roughness).toBe(.88);expect(material.metalness).toBe(.02);expect(material.normalNode).not.toBeNull();expect(bakeReferencePaintLayers).toHaveBeenCalledTimes(1);}finally{material.dispose();context.dispose();}
+ try{applyOrigamiSurface(material,attribute('color','vec3'),undefined,context,float(1));const paint=context.paint;expect(paint.isDataArrayTexture).toBe(true);expect(paint.image).toMatchObject({width:512,height:512,depth:GAME_REQUIRED_VIRTUAL_IDS78.length});expect((Reflect.get(context,'paperArray') as THREE.DataArrayTexture).image.depth).toBe(77);expect((Reflect.get(context,'coverageArray') as THREE.DataArrayTexture).image.depth).toBe(77);expect(paint.colorSpace).toBe(THREE.SRGBColorSpace);expect(paint.format).toBe(THREE.RGBAFormat);expect(paint.flipY).toBe(false);expect(material.vertexColors).toBe(false);expect(material.roughness).toBe(.88);expect(material.metalness).toBe(.02);expect(material.normalNode).not.toBeNull();expect(bakeReferencePaintLayers).toHaveBeenCalledTimes(1);}finally{material.dispose();context.dispose();}
 });
 
 test('real color and height graphs sample metric pigment separately from raw face kraft and coverage',()=>{
@@ -99,9 +101,13 @@ test('square rectangle shear and rotated triangle witnesses cannot place a cover
   // produced by the stubbed source painter or the GPU compositor.
  }}finally{context.dispose();}
 });
-test('impasto and physical edge controls change existing state without repainting; fill repaints once after debounce',()=>{
+test('physical controls do not repaint; first fill refresh is full and subsequent fill changes onlyM after debounce',()=>{
  vi.useFakeTimers();const context=folded(),material=new THREE.MeshStandardNodeMaterial();
- try{applyOrigamiSurface(material,vec3(1),undefined,context);const paint=context.paint,color=material.colorNode,version=paint.version;context.update({...context.preferences,impasto:1.7,edges:.24,wear:.18});expect(context.impasto.value).toBe(1.7);expect(context.paint.version).toBe(version);expect(bakeReferencePaintLayers).toHaveBeenCalledTimes(1);context.update({...context.preferences,contourImperfection:.81});context.update({...context.preferences,contourImperfection:.83});expect(bakeReferencePaintLayers).toHaveBeenCalledTimes(1);vi.advanceTimersByTime(60);expect(bakeReferencePaintLayers).toHaveBeenCalledTimes(2);expect(context.paint).toBe(paint);expect(material.colorNode).toBe(color);expect(paint.version).toBeGreaterThan(version);}finally{material.dispose();context.dispose();}
+ try{applyOrigamiSurface(material,vec3(1),undefined,context);const paint=context.paint,color=material.colorNode,version=paint.version;context.update({...context.preferences,impasto:1.7,edges:.24,wear:.18});expect(context.impasto.value).toBe(1.7);expect(context.paint.version).toBe(version);expect(bakeReferencePaintLayers).toHaveBeenCalledTimes(1);context.update({...context.preferences,contourImperfection:.81});context.update({...context.preferences,contourImperfection:.83});expect(bakeReferencePaintLayers).toHaveBeenCalledTimes(1);vi.advanceTimersByTime(60);expect(bakeReferencePaintLayers).toHaveBeenCalledTimes(2);expect(context.paint).toBe(paint);expect(material.colorNode).toBe(color);expect(paint.version).toBeGreaterThan(version);
+  const refreshedVersion=paint.version,coverage=Reflect.get(context,'coverageArray') as THREE.DataArrayTexture,coverageVersion=coverage.version,maskBytes=coverage.image.data;
+  context.update({...context.preferences,contourImperfection:.61});vi.advanceTimersByTime(60);
+  expect(bakeReferencePaintLayers).toHaveBeenCalledTimes(2);expect(replayCheckpointMaskR8).toHaveBeenCalledTimes(77);expect(context.paint===paint).toBe(true);expect(paint.version).toBe(refreshedVersion);expect((Reflect.get(context,'coverageArray') as THREE.DataArrayTexture)===coverage).toBe(true);expect(coverage.image.data===maskBytes).toBe(true);expect(coverage.version).toBe(coverageVersion+1);
+ }finally{material.dispose();context.dispose();}
 });
 test('physical wear expands on preference edits, edge visibility follows the reference, and disposal releases ownership',()=>{
  const context=new GraphicsStyleContext({...defaults,style:'origami',edges:.65}),geometry=new THREE.BufferGeometry(),object=new THREE.Object3D();geometry.setAttribute('position',new THREE.Float32BufferAttribute([1,2,3],3));geometry.userData.referenceWearBasePositions=new Float32Array([1,2,3]);geometry.userData.referenceWearExpandDirections=new Float32Array([2,0,0]);
@@ -148,7 +154,7 @@ test('a palette above 256 source layers uses bounded banks and a fresh renderer 
   expect(banks.filter(bank=>bank.image.width===512).length).toBe(2);
   expect(banks.every(bank=>bank.image.depth<=256)).toBe(true);
   expect(banks[0]!.image.depth+banks[1]!.image.depth).toBeGreaterThan(256);
-  fresh.flushPaint();expect(fresh.paint.image.depth).toBe(BASE_REFERENCE_PAINT_DESCRIPTORS.length);
+  fresh.flushPaint();expect(fresh.paint.image.depth).toBe(GAME_REQUIRED_VIRTUAL_IDS78.length);
   expect((Reflect.get(fresh,'banks') as THREE.DataArrayTexture[]).filter(bank=>bank.image.width===512)).toHaveLength(1);
  }finally{crowded.dispose();fresh.dispose();}
 });

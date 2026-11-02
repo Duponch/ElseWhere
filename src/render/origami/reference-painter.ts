@@ -38,6 +38,8 @@ export interface ReferenceSeparatedPaintPixels {
    * coverage scalar: Canvas stores the white mask unpremultiplied. */
   coverageRgba:Uint8Array;
   seed:number;seedAfter:number;
+  /** PRIVATE read-only checkpoint, never a derived/skipped seed. */
+  coverageSeed:number;
 }
 type PaintCaptureStage='paper'|'pigment'|'coverage';
 type PaintCapture=(stage:PaintCaptureStage,color:HTMLCanvasElement,bump?:HTMLCanvasElement)=>void;
@@ -60,10 +62,11 @@ function capturedRgba(canvas:HTMLCanvasElement):Uint8Array {
  */
 export function createSeparatedReferencePaint(painter:GouacheCardboardPainter,config:ReferencePaintConfig):ReferenceSeparatedPaintPixels {
   const seed=painter.seed,previous=referencePaintCapture.get(painter);
+  let coverageSeed=Number.NaN;
   let paperColorRgba:Uint8Array|undefined,paperBumpRgba:Uint8Array|undefined,pigmentColorRgba:Uint8Array|undefined,pigmentBumpRgba:Uint8Array|undefined,coverageRgba:Uint8Array|undefined;
   referencePaintCapture.set(painter,(stage,color,bump)=>{
     if(stage==='paper'){paperColorRgba=capturedRgba(color);paperBumpRgba=capturedRgba(bump!);}
-    else if(stage==='pigment'){pigmentColorRgba=capturedRgba(color);pigmentBumpRgba=capturedRgba(bump!);}
+    else if(stage==='pigment'){coverageSeed=painter.seed;pigmentColorRgba=capturedRgba(color);pigmentBumpRgba=capturedRgba(bump!);}
     else coverageRgba=capturedRgba(color);
   });
   let material:THREE.MeshStandardMaterial;
@@ -73,7 +76,7 @@ export function createSeparatedReferencePaint(painter:GouacheCardboardPainter,co
   // The literal source omits its mask entirely when fill is disabled.
   coverageRgba??=new Uint8Array(512*512*4).fill(255);
   return {width:512,height:512,material,paperColorRgba,paperBumpRgba,pigmentColorRgba,pigmentBumpRgba,coverageRgba,
-    canonicalColorRgba:capturedRgba(material.userData.colorCanvas as HTMLCanvasElement),canonicalBumpRgba:capturedRgba(material.userData.bumpCanvas as HTMLCanvasElement),seed,seedAfter:painter.seed};
+    canonicalColorRgba:capturedRgba(material.userData.colorCanvas as HTMLCanvasElement),canonicalBumpRgba:capturedRgba(material.userData.bumpCanvas as HTMLCanvasElement),seed,seedAfter:painter.seed,coverageSeed};
 }
 
 export class GouacheCardboardPainter {
@@ -551,3 +554,71 @@ export class GouacheCardboardPainter {
       }
     }
 
+
+/** PRIVATE literal coverage block, extracted without changing its draw/RNG statements. */
+function replayCoverageBlock(this:GouacheCardboardPainter,kraftEdgeWear:boolean):Uint8Array {
+ const size=512;let coverageRgba:Uint8Array|undefined;
+        const imp = kraftEdgeWear ? this.fillImperfectionAmount : 0;
+        if (imp > 0.01) {
+          const maskCanvas = document.createElement('canvas');
+          maskCanvas.width = size;
+          maskCanvas.height = size;
+          const mCtx = maskCanvas.getContext('2d')!;
+
+          const maxMargin = Math.round(imp * 44);
+          const innerPad = Math.max(2, Math.round(maxMargin * 0.32));
+
+          // Interior of the surface is covered by paint
+          mCtx.fillStyle = '#ffffff';
+          mCtx.fillRect(maxMargin, maxMargin, size - maxMargin * 2, size - maxMargin * 2);
+
+          // Along the contour zone, the paint coverage is formed only by gouache strokes
+          // that stopped short of the edge (leaving unpainted cardboard gaps at the border)
+          const borderStrokeCount = Math.round(180 + (1 - imp) * 140);
+          for (let i = 0; i < borderStrokeCount; i++) {
+            const side = i % 4;
+            const reach = innerPad + Math.pow(this.random(), 0.75) * (maxMargin - innerPad + 10);
+            const sLen = this.randRange(36, 88);
+            const sWid = this.randRange(12, 28);
+            let bx = 0;
+            let by = 0;
+            let ang = 0;
+
+            if (side === 0) {
+              bx = this.randRange(innerPad, size - innerPad);
+              by = reach + sWid * 0.4;
+              ang = this.randRange(-0.22, 0.22);
+            } else if (side === 1) {
+              bx = this.randRange(innerPad, size - innerPad);
+              by = size - reach - sWid * 0.4;
+              ang = this.randRange(-0.22, 0.22);
+            } else if (side === 2) {
+              bx = reach + sWid * 0.4;
+              by = this.randRange(innerPad, size - innerPad);
+              ang = Math.PI * 0.5 + this.randRange(-0.22, 0.22);
+            } else {
+              bx = size - reach - sWid * 0.4;
+              by = this.randRange(innerPad, size - innerPad);
+              ang = Math.PI * 0.5 + this.randRange(-0.22, 0.22);
+            }
+
+            mCtx.save();
+            mCtx.translate(bx, by);
+            mCtx.rotate(ang);
+            mCtx.fillStyle = '#ffffff';
+            mCtx.beginPath();
+            mCtx.roundRect(-sLen * 0.5, -sWid * 0.5, sLen, sWid, sWid * 0.45);
+            mCtx.fill();
+            mCtx.restore();
+          }
+
+          coverageRgba=capturedRgba(maskCanvas);
+        }
+
+ return coverageRgba??new Uint8Array(512*512*4).fill(255);
+}
+export function replayReferenceCoverage(coverageSeed:number,fill:number,kraftEdgeWear=true):{coverageRgba:Uint8Array;seedAfter:number}{
+ if(!Number.isSafeInteger(coverageSeed)||!Number.isFinite(fill)||fill<0||fill>1)throw Error('Exact checkpoint and normalized fill required');
+ const painter=new GouacheCardboardPainter();painter.seed=coverageSeed;painter.fillImperfectionAmount=fill;
+ const coverageRgba=replayCoverageBlock.call(painter,kraftEdgeWear);return{coverageRgba,seedAfter:painter.seed};
+}

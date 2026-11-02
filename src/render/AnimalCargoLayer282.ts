@@ -14,12 +14,18 @@ import {WildlifeBodyScale} from './wildlife-frame-state';
 import type {WildlifeLayer} from './WildlifeLayer';
 import {currentGraphicsStyle} from './graphics-style';
 import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {bestiaryAnimalCargoBack,bestiaryAnimalCargoTorso} from './origami/bestiary-registry';
+import {compiledCargoBackPoint,fitAnimalCargoBack,type CompiledAnimalCargoBack} from './origami/animal-cargo-back';
 
 type CargoMesh=THREE.InstancedMesh<THREE.BufferGeometry,THREE.MeshLambertNodeMaterial>;
-type Member={animal:WildAnimal;scale:number;back:Back;shown?:boolean;last?:readonly [number,number,number,number,boolean]};
-type Batch={mesh:CargoMesh;contour?:OrigamiContourBinding;capacity:number;members:Member[];width:number;depth:number};
+type Member={animal:WildAnimal;scale:number;back:Back|CompiledAnimalCargoBack;shown?:boolean;last?:readonly [number,number,number,number,boolean]};
+type Batch={mesh:CargoMesh;contour?:OrigamiContourBinding;capacity:number;members:Member[];width:number;depth:number;backs:Map<string,CompiledAnimalCargoBack>};
 type Back={y:number;z:number;width:number;depth:number;bodyCenter:number;restFloor:number};
+/** Read-only presentation projection. Tests/previews can supply the actual
+ * inventory/actor records without inventing an Engine or a complete World. */
+export type AnimalCargoSnapshot282=Pick<World,'schemaVersion'|'wildlife'|'piles'>;
 const backs=new Map<string,Back>();
+function isCompiledBack(back:Back|CompiledAnimalCargoBack):back is CompiledAnimalCargoBack{return Array.isArray(back);}
 
 function backFor(species:string):Back {
  let back=backs.get(species);if(back)return back;
@@ -59,7 +65,7 @@ function carriedGeometry(item:ItemId,quantity:number,tree?:MaterialPile['innerRe
  * with no independent clock, shader, quantity label or simulation mutation. */
 export class AnimalCargoLayer282 {
  readonly group=new THREE.Group();
- readonly stats={activeCargo:0,activeBatches:0,geometryBuilds:0,matrixUploads:0};
+ readonly stats={activeCargo:0,activeBatches:0,geometryBuilds:0,matrixUploads:0,attachmentBuilds:0};
  private readonly graphicsStyle=currentGraphicsStyle();
  private readonly material=createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true});
  private readonly batches=new Map<string,Batch>();
@@ -81,10 +87,16 @@ export class AnimalCargoLayer282 {
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;mesh.castShadow=mesh.receiveShadow=true;
   this.group.add(mesh);const b=geometry.boundingBox;
   const contour=this.graphicsStyle?.origami?createOrigamiContour(mesh,this.graphicsStyle):undefined;if(contour){contour.line.frustumCulled=false;mesh.add(contour.line);}
-  return {mesh,contour,capacity,members:[],width:b?Math.max(.001,b.max.x-b.min.x):1,depth:b?Math.max(.001,b.max.z-b.min.z):1};
+  return {mesh,contour,capacity,members:[],width:b?Math.max(.001,b.max.x-b.min.x):1,depth:b?Math.max(.001,b.max.z-b.min.z):1,backs:new Map()};
+ }
+ private referenceBack(batch:Batch,species:string):CompiledAnimalCargoBack|undefined {
+  const cached=batch.backs.get(species);if(cached)return cached;
+  const base=bestiaryAnimalCargoBack(species),torso=bestiaryAnimalCargoTorso(species);if(!base||!torso)return;
+  const fitted=fitAnimalCargoBack(base,torso,batch.width,batch.depth);if(!fitted)return;
+  batch.backs.set(species,fitted);this.stats.attachmentBuilds++;return fitted;
  }
  private disposeBatch(batch:Batch):void {batch.contour?.dispose();batch.mesh.removeFromParent();batch.mesh.dispose();batch.mesh.geometry.dispose();}
- update(world:World,_timeline?:MotionTimeline,reset=false):void {
+ update(world:AnimalCargoSnapshot282,_timeline?:MotionTimeline,reset=false):void {
   if(reset){for(const batch of this.batches.values())this.disposeBatch(batch);this.batches.clear();this.active=[];}
   for(const batch of this.active){batch.members=[];batch.mesh.count=0;batch.mesh.visible=false;}
   this.active=[];this.stats.activeCargo=0;
@@ -100,7 +112,8 @@ export class AnimalCargoLayer282 {
     if(!batch){const geometry=carriedGeometry(pile.item,pile.quantity,pile.innerResource);if(!geometry.getAttribute('position').count){geometry.dispose();continue;}
      batch=this.makeBatch(geometry,1);batch.mesh.name=`Animal cargo282 — ${pile.item}`;this.batches.set(key,batch);this.stats.geometryBuilds++;}
     if(!batch.members.length)this.active.push(batch);
-    const back=backFor(animal.species),scale=this.bodyScale.read(animal)*Math.min(1,back.width/batch.width,back.depth/batch.depth);
+    const back=this.graphicsStyle?.origami?this.referenceBack(batch,animal.species)??backFor(animal.species):backFor(animal.species),width=isCompiledBack(back)?back[3]:back.width,depth=isCompiledBack(back)?back[4]:back.depth;
+    const scale=this.bodyScale.read(animal)*Math.min(1,width/batch.width,depth/batch.depth);
     batch.members.push({animal,scale,back});this.stats.activeCargo++;
    }
   }
@@ -120,7 +133,7 @@ export class AnimalCargoLayer282 {
   for(const [key,batch] of this.batches){if(this.batches.size<=64)break;if(!batch.members.length){this.disposeBatch(batch);this.batches.delete(key);}}
   this.stats.activeBatches=this.active.length;
  }
- present(wildlife:WildlifeLayer):boolean {
+ present(wildlife:Pick<WildlifeLayer,'cpuPoseForId'>):boolean {
   let changed=false;
   for(const batch of this.active){
    let dirty=false;
@@ -128,8 +141,14 @@ export class AnimalCargoLayer282 {
     const {animal,scale,back}=member,pose=wildlife.cpuPoseForId(animal.id),last=member.last;
     if(!pose){if(member.shown!==false){this.object.scale.setScalar(0);this.object.updateMatrix();batch.mesh.setMatrixAt(i,this.object.matrix);member.shown=false;dirty=true;}return;}
     const resting=animal.state==='downed'||animal.state==='sleeping',growth=this.bodyScale.read(animal);
-    const c=Math.cos(pose.yaw),s=Math.sin(pose.yaw),x=resting?(back.bodyCenter-back.y-.025)*growth:0,z=back.z*growth;
-    const px=pose.x+x*c+z*s,py=pose.y+(resting?back.restFloor:back.y+.025)*growth,pz=pose.z+z*c-x*s;
+    let px:number,py:number,pz:number;
+    if(isCompiledBack(back)){
+     compiledCargoBackPoint(back,pose,growth,resting,this.object.position);px=this.object.position.x;py=this.object.position.y;pz=this.object.position.z;
+    }else{
+     // Keep Default and the protected eleven-reference attachment arithmetic.
+     const c=Math.cos(pose.yaw),s=Math.sin(pose.yaw),x=resting?(back.bodyCenter-back.y-.025)*growth:0,z=back.z*growth;
+     px=pose.x+x*c+z*s;py=pose.y+(resting?back.restFloor:back.y+.025)*growth;pz=pose.z+z*c-x*s;
+    }
     if(member.shown&&last&&last[0]===px&&last[1]===py&&last[2]===pz&&last[3]===pose.yaw&&last[4]===resting)return;
     this.object.position.set(px,py,pz);this.object.rotation.set(0,pose.yaw,resting?Math.PI/2:0);this.object.scale.setScalar(scale);this.object.updateMatrix();
     batch.mesh.setMatrixAt(i,this.object.matrix);member.shown=true;member.last=[px,py,pz,pose.yaw,resting];dirty=true;this.stats.matrixUploads++;

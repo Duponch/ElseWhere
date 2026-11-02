@@ -1,12 +1,20 @@
+/** Exact shared paint residency and coverage-only repaint; full authored raster retained. */
 import * as THREE from 'three/webgpu';
 import {uniform,texture,uv,vec2,vec3,vec4,float,Fn,If,varying,mix,smoothstep,workingToColorSpace,colorSpaceToWorking} from 'three/tsl';
 import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,normalizeGraphicsStylePreferences,type GraphicsStylePreferences} from '../ui3d/native-preferences';
-import {bakeReferencePaintLayersToSink,packReferencePaintPixels,type ReferenceEdgePixels,type ReferencePaintDescriptor} from './origami/reference-paint-library';
+import {packReferencePaintPixels,type ReferenceEdgePixels,type ReferencePaintDescriptor} from './origami/reference-paint-library';
 import {referenceEdgeVisuals,type ReferenceEdgeVisuals} from './origami/reference-edges';
-import {BASE_REFERENCE_PAINT_DESCRIPTORS,humanBaseProfileIds,humanVariantDescriptor,GENERIC_REFERENCE_PROFILE} from './origami/reference-profiles';
+import {BASE_REFERENCE_PAINT_DESCRIPTORS,PROTECTED_REFERENCE_PAINT_DESCRIPTORS,humanBaseProfileIds,humanVariantDescriptor,GENERIC_REFERENCE_PROFILE} from './origami/reference-profiles';
 import {physicalPaintMetric,applyPhysicalPaintMetric,referencePaintBumpNormal} from './origami/paint-metric';
 import {updateOrigamiBrushGeometry} from './origami/brush-geometry';
+import {VirtualPaintPool,type VirtualPaintDescriptor} from './origami/virtual-paint-pool';
+import {bakeResidentPaintToSink} from './origami/reference-resident-paint-library';
+
+import {GAME_USED_BESTIARY_VIRTUAL_IDS} from './origami/game-paint-residency';
 import {referenceCoverageKey} from './origami/reference-coverage';
+import {bakeCheckpointPaintToSink,replayCheckpointMaskR8} from './origami/checkpoint-paint-baker';
+
+interface CoverageCheckpoint {readonly coverageSeed:number;readonly kraft:boolean;readonly signature:string}
 
 /** Synchronous construction scope; each renderer owns its textures/settings. */
 let constructing:GraphicsStyleContext|undefined;
@@ -23,6 +31,7 @@ function edgeTexture(data:Uint8Array,color=false):THREE.DataTexture {
  map.magFilter=THREE.LinearFilter;map.minFilter=THREE.LinearMipmapLinearFilter;map.generateMipmaps=true;map.needsUpdate=true;return map;
 }
 export interface HumanPaintAppearance {skin:number;hair:number;shirt:number;outerwear?:number;pants?:number;hat?:number;vest?:number;reconArmor?:number;plate?:number}
+export interface GraphicsStyleContextOptions {staticDescriptors?:readonly VirtualPaintDescriptor[]}
 
 /** Independent source 512² color/height layers preserve the authored brushwork,
  * UVs, seeds and mips while sharing one material across a batch. */
@@ -39,25 +48,75 @@ export class GraphicsStyleContext {
  edgeVisuals:ReferenceEdgeVisuals=referenceEdgeVisuals();
  private colorArray?:THREE.DataArrayTexture;private readonly banks:THREE.DataArrayTexture[]=[];
  private paperArray?:THREE.DataArrayTexture;private coverageArray?:THREE.DataArrayTexture;
- private faceProfilesTexture?:THREE.DataTexture;private faceProfileData?:Float32Array;
- private readonly coverageKeys=new Map<string,number>();
- private readonly descriptors:ReferencePaintDescriptor[]=[...BASE_REFERENCE_PAINT_DESCRIPTORS];
- private readonly localIds=new Map(BASE_REFERENCE_PAINT_DESCRIPTORS.map((_,i)=>[i,i]));
- private readonly localKeys=new Map(BASE_REFERENCE_PAINT_DESCRIPTORS.map((d,i)=>[d.key,i]));
- private readonly activeBankCount=uniform(1);private refreshed=false;private bakedRefreshed=false;
+ private faceProfilesTexture?:THREE.DataTexture;
+ private readonly paintPool:VirtualPaintPool;
+ private readonly activeBankCount=uniform(0);private readonly genericFaceLayer=uniform(0);
+ private lastPaintVersion=-1;private admissionDepth=0;private repaintRequested=false;
+ private protectedDemandDeclared=false;
  private edgeMaps?:{color:THREE.DataTexture;alpha:THREE.DataTexture;bump:THREE.DataTexture};
- private bakedCount=0;private bakedFill=-1;private fillTimer?:ReturnType<typeof setTimeout>;
+ private bakedRefreshed=false;private coverageCheckpoints=new Map<number,CoverageCheckpoint>();
+ private lastReplayMode:'none'|'full'|'mask'='none';
+ private bakedFill=-1;private fillTimer?:ReturnType<typeof setTimeout>;
  private readonly wearGeometries=new Set<THREE.BufferGeometry>();
  private readonly brushGeometries=new Map<object,{geometry:THREE.BufferGeometry;owners:Set<THREE.BufferGeometry>;width:number;roughness:number}>();
  private readonly brushOwners=new Map<THREE.BufferGeometry,()=>void>();
  private readonly edgeObjects=new Map<THREE.Object3D,'line'|'wear'>();
+ private readonly geometryPaintIds=new WeakMap<THREE.BufferGeometry,{attribute:THREE.BufferAttribute|THREE.InterleavedBufferAttribute;version:number;ids:readonly number[]}>();
  private readonly humanIds=humanBaseProfileIds();private readonly appearanceRows=new Map<string,number>();
  private rowsData?:Float32Array;private rowsTexture?:THREE.DataTexture;
- constructor(settings:GraphicsStylePreferences={...DEFAULT_GRAPHICS_STYLE_PREFERENCES}) {this.preferences=normalizeGraphicsStylePreferences(settings);this.update(settings);}
- private ensureRows():THREE.DataTexture{if(!this.rowsTexture){this.rowsData=new Float32Array(12*4096);this.rowsTexture=new THREE.DataTexture(this.rowsData,12,4096,THREE.RedFormat,THREE.FloatType);this.rowsTexture.minFilter=this.rowsTexture.magFilter=THREE.NearestFilter;this.rowsTexture.needsUpdate=true;}return this.rowsTexture;}
+ constructor(settings:GraphicsStylePreferences={...DEFAULT_GRAPHICS_STYLE_PREFERENCES},options:GraphicsStyleContextOptions={}) {
+  this.paintPool=new VirtualPaintPool(PROTECTED_REFERENCE_PAINT_DESCRIPTORS);for(const descriptor of BASE_REFERENCE_PAINT_DESCRIPTORS.slice(PROTECTED_REFERENCE_PAINT_DESCRIPTORS.length))this.paintPool.register(descriptor);for(const descriptor of options.staticDescriptors??[])this.paintPool.register(descriptor);this.paintPool.sealStaticCatalog();
+  this.preferences=normalizeGraphicsStylePreferences(settings);this.update(settings);
+ }
+ private ensureRows():THREE.DataTexture{if(!this.rowsTexture){this.rowsData=new Float32Array(12*4096);this.rowsData.set(this.paintPool.humanRowsData());this.rowsTexture=new THREE.DataTexture(this.rowsData,12,4096,THREE.RedFormat,THREE.FloatType);this.rowsTexture.minFilter=this.rowsTexture.magFilter=THREE.NearestFilter;this.rowsTexture.needsUpdate=true;}return this.rowsTexture;}
+ /** Binding objects only. No Canvas, raster, source painter or bulk palette. */
+ private ensurePaintBindings():void{
+  if(!this.origami)throw Error('Default materials must not request Origami texture bindings.');
+  if(this.admissionDepth)throw Error('Material construction during paint discovery; discover first, then flush, then construct.');
+  if(this.colorArray)return;
+  for(let bank=0;bank<MAX_BANKS;bank++)this.banks.push(arrayTexture(new Uint8Array(4),1,1));this.colorArray=this.banks[0];
+  this.paperArray=arrayTexture(new Uint8Array(4),1,1);this.paperArray.wrapS=this.paperArray.wrapT=THREE.ClampToEdgeWrapping;
+  this.coverageArray=new THREE.DataArrayTexture(new Uint8Array([255]),1,1,1);this.coverageArray.format=THREE.RedFormat;this.coverageArray.wrapS=this.coverageArray.wrapT=THREE.ClampToEdgeWrapping;this.coverageArray.magFilter=THREE.LinearFilter;this.coverageArray.minFilter=THREE.LinearMipmapLinearFilter;this.coverageArray.generateMipmaps=true;this.coverageArray.needsUpdate=true;
+  this.faceProfilesTexture=new THREE.DataTexture(this.paintPool.ensureMetadataData(),256,256,THREE.RGFormat,THREE.FloatType);this.faceProfilesTexture.colorSpace=THREE.NoColorSpace;this.faceProfilesTexture.minFilter=this.faceProfilesTexture.magFilter=THREE.NearestFilter;this.faceProfilesTexture.generateMipmaps=false;this.faceProfilesTexture.needsUpdate=true;
+ }
+ profileId(key:string):number{return this.paintPool.id(key);}
+ requirePaint(owner:string,virtualIds:readonly number[]):void{if(this.origami)this.paintPool.requireProfiles(owner,virtualIds);}
+ requireHumanPaintRow(owner:string,row:number):void{if(this.origami)this.paintPool.requireHumanRow(owner,row);}
+ releasePaint(owner:string):void{this.paintPool.release(owner);}
+ declareSpeciesPaint(species:string,virtualIds:readonly number[]):void{this.paintPool.declareSpecies(species,virtualIds);}
+ requireSpeciesPaint(owner:string,actualSpecies:readonly string[]):void{if(this.origami)this.paintPool.requireSpecies(owner,actualSpecies);}
+ /** Called for ACTIVE rigs in WildlifeLayer.update, never from prepare().
+  * animalPaint is RGB+virtual profile, hence component.w (not component.x). */
+ requireAnimalPaintGeometry(owner:string,geometry:THREE.BufferGeometry):void{
+  if(!this.origami)return;const attribute=geometry.getAttribute('animalPaint');if(!attribute)return;
+  const version=attribute instanceof THREE.InterleavedBufferAttribute?attribute.data.version:attribute.version;let cached=this.geometryPaintIds.get(geometry);
+  if(!cached||cached.attribute!==attribute||cached.version!==version){const used=new Set<number>();for(let vertex=0;vertex<attribute.count;vertex++){const id=attribute.getComponent(vertex,3);if(!Number.isSafeInteger(id)||id<0)throw Error('Invalid virtual animal paint ID');used.add(id);}cached={attribute,version,ids:[...used].sort((a,b)=>a-b)};this.geometryPaintIds.set(geometry,cached);}
+  this.paintPool.requireProfiles(owner,cached.ids);
+ }
+ paintResidency(){return this.paintPool.stats();}
+ /** Discovery must NOT construct materials or compile. Flush once, then build
+  * the shaders/rigs, then publish the cohort. Owner schedules this before draw. */
+ preparePaintBatch<T,R>(discover:()=>T,construct:(discovery:T)=>R):R{
+  if(this.admissionDepth)throw Error('Nested paint admission batch');this.admissionDepth++;
+  let discovery:T;try{discovery=discover();}finally{this.admissionDepth--;}
+  this.flushPaint();const result=construct(discovery!);this.assertPaintReadyForDraw();return result;
+ }
+ /** Explicit gallery/qualification scope, NEVER the normal wildlife prepare. */
+ prepareAllStaticPaintForCatalog(owner='explicit-catalog-all'):()=>void{
+  this.requirePaint(owner,Array.from({length:this.paintPool.stats().staticVirtualCount},(_,id)=>id));this.flushPaint();return()=>this.releasePaint(owner);
+ }
+ assertPaintReadyForDraw():void{
+  if(!this.origami||this.lastPaintVersion===this.paintPool.version)return;
+  if(this.paintPool.plan().entries.length)throw Error('Unprepared paint demand; admit the cohort before publishing it.');
+  // Owner/row bookkeeping may change without introducing a new resident ID.
+  this.lastPaintVersion=this.paintPool.version;
+ }
  get origami():boolean{return this.preferences.style==='origami';}
  update(settings:GraphicsStylePreferences):void {
   this.preferences=normalizeGraphicsStylePreferences(settings);this.impasto.value=this.preferences.impasto;this.edges.value=this.preferences.edges;this.wear.value=this.preferences.wear;this.contour.value=this.preferences.contourImperfection;
+  // Prepare all game pigments before play; an arriving species never starts a Canvas bake.
+  if(this.origami&&!this.protectedDemandDeclared){this.paintPool.requireProfiles('protected-core43',Array.from({length:PROTECTED_REFERENCE_PAINT_DESCRIPTORS.length},(_,id)=>id));this.protectedDemandDeclared=true;}
+  if(this.origami)this.requirePaint('all-game-best35',GAME_USED_BESTIARY_VIRTUAL_IDS);
   this.edgeVisuals=referenceEdgeVisuals(this.preferences.edges,this.preferences.wear,this.preferences.contourImperfection);
   this.contourSpan.value=this.edgeVisuals.contourSpan;this.wearOpacity.value=this.edgeVisuals.wearOpacity;
   this.blackEdges.value=this.preferences.blackEdges;
@@ -69,7 +128,7 @@ export class GraphicsStyleContext {
   this.brushColor.value.set(0xd7b384).lerp(new THREE.Color(0x241c18),ink);
   for(const entry of this.brushGeometries.values())if(entry.width!==this.preferences.edgeWidth||entry.roughness!==this.preferences.strokeImperfection){this.refreshBrushGeometry(entry.geometry);entry.width=this.preferences.edgeWidth;entry.roughness=this.preferences.strokeImperfection;}
   for(const geometry of this.wearGeometries)this.expandWear(geometry);for(const [object,kind]of this.edgeObjects)this.refreshEdgeObject(object,kind);
-  if(this.colorArray&&this.bakedFill!==this.preferences.contourImperfection){if(this.fillTimer)clearTimeout(this.fillTimer);this.fillTimer=setTimeout(()=>{this.fillTimer=undefined;this.refreshed=true;this.flushPaint();},60);}
+  if(this.bakedFill>=0&&this.bakedFill!==this.preferences.contourImperfection){if(this.fillTimer)clearTimeout(this.fillTimer);this.fillTimer=setTimeout(()=>{this.fillTimer=undefined;this.repaintRequested=true;this.flushPaint();},60);}
  }
  private expandWear(geometry:THREE.BufferGeometry):void {
   const base=geometry.userData.referenceWearBasePositions as Float32Array|undefined,expand=geometry.userData.referenceWearExpandDirections as Float32Array|undefined;if(!base||!expand)return;
@@ -90,65 +149,91 @@ export class GraphicsStyleContext {
  trackEdgeObject(object:THREE.Object3D,kind:'line'|'wear'):()=>void{this.edgeObjects.set(object,kind);this.refreshEdgeObject(object,kind);return()=>this.untrackEdgeObject(object);}
  untrackEdgeObject(object:THREE.Object3D):void{this.edgeObjects.delete(object);}
  refreshEdgeObject(object:THREE.Object3D,kind=this.edgeObjects.get(object)):void{if(kind)object.visible=object.userData.origamiOwnerVisible!==false&&(kind==='line'?this.lineOpacity.value>0:this.edgeVisuals.showWear&&object.userData.origamiTexturesEnabled!==false);}
- /** Snapshot preparation only. RGB is source sRGB; alpha is its lossless linear
-  * grayscale height. Banks retain independent 512² layers, including mipmaps.
-  * Only palettes used by this renderer are resident, never past colonies. */
+ /** Flush pending palette work before returning material texture bindings. */
  flushPaint():void {
-  if(!this.origami)return;const descriptors=this.descriptors,fill=this.fillTimer?this.bakedFill:this.preferences.contourImperfection;
-  if(this.bakedCount===0&&fill!==.60)this.refreshed=true;
-  if(this.bakedCount===descriptors.length&&this.bakedFill===fill&&this.bakedRefreshed===this.refreshed)return;
-  if(descriptors.length>LAYERS_PER_BANK*MAX_BANKS)throw new Error('Origami : la scène dépasse 2048 pigments distincts.');
-  const sameFill=this.bakedFill===fill&&this.bakedRefreshed===this.refreshed&&this.colorArray,start=sameFill?this.bakedCount:0;
-  const requests=descriptors.slice(start).map(d=>this.refreshed?{...d,seed:d.refreshSeed??d.seed}:d);
-  // Appearance colors reuse the source recipe's paper and fill template.
-  // No mask/substrate is duplicated for each new colonist pigment palette.
-  if(!this.faceProfileData){this.faceProfileData=new Float32Array(LAYERS_PER_BANK*MAX_BANKS);this.faceProfilesTexture=new THREE.DataTexture(this.faceProfileData,this.faceProfileData.length,1,THREE.RedFormat,THREE.FloatType);this.faceProfilesTexture.minFilter=this.faceProfilesTexture.magFilter=THREE.NearestFilter;}
-  for(let i=0;i<descriptors.length;i++){const key=referenceCoverageKey(descriptors[i]!);let layer=this.coverageKeys.get(key);if(layer===undefined){layer=this.coverageKeys.size;if(layer>=256)throw new Error('Origami : plus de256 gabarits de remplissage distincts.');this.coverageKeys.set(key,layer);}this.faceProfileData[i]=layer;}
-  const faceDepth=this.coverageKeys.size,oldFaceDepth=this.paperArray?.image.depth??0,faceDirty=!sameFill||faceDepth!==oldFaceDepth;
-  const paperPixels=faceDirty?new Uint8Array(faceDepth*PIXELS_PER_LAYER):undefined,coveragePixels=faceDirty?new Uint8Array(faceDepth*512*512).fill(255):undefined;
-  if(sameFill&&faceDirty&&this.paperArray&&this.coverageArray){paperPixels!.set(this.paperArray.image.data as Uint8Array);coveragePixels!.set(this.coverageArray.image.data as Uint8Array);}
-  const capturedFaces=new Set<number>();
-  const blank=new Uint8Array(4);
-  const uploads:{bank:number;first:number;count:number;depth:number;data:Uint8Array;old:THREE.DataArrayTexture|undefined}[]=[];
-  for(let bank=0;bank<MAX_BANKS;bank++){
-   const first=bank*LAYERS_PER_BANK,count=Math.max(0,Math.min(LAYERS_PER_BANK,descriptors.length-first)),depth=Math.max(1,count),old=this.banks[bank];
-   if(old&&(count===0||(sameFill&&first+count<=start)))continue;
-   const data=count?new Uint8Array(depth*PIXELS_PER_LAYER):blank;
-   if(sameFill&&old&&count)data.set((old.image.data as Uint8Array).subarray(0,Math.min(data.length,(old.image.data as Uint8Array).length)));
-   uploads.push({bank,first,count,depth,data,old});
+  if(!this.origami)return;if(this.admissionDepth)throw Error('Raster requested during paint discovery; discover all IDs before preparing.');
+  const fill=this.fillTimer?this.bakedFill:this.preferences.contourImperfection;
+  const repaint=this.repaintRequested||(this.bakedFill<0&&fill!==.60)||(this.bakedFill>=0&&this.bakedFill!==fill);
+  if(this.lastPaintVersion===this.paintPool.version&&!repaint)return;
+  const plan=this.paintPool.plan(repaint);
+  if(!plan.entries.length){this.lastPaintVersion=this.paintPool.version;return;}
+  this.ensurePaintBindings();
+  const oldFaceDepth=this.paperArray!.image.width===512?this.paperArray!.image.depth:0;
+  const maskOnly=repaint&&this.bakedRefreshed&&plan.refreshed&&oldFaceDepth===plan.faceDepth&&plan.entries.every(entry=>{
+   const checkpoint=this.coverageCheckpoints.get(entry.faceLayer);return !entry.newlyResident&&checkpoint!==undefined&&Number.isSafeInteger(checkpoint.coverageSeed)&&checkpoint.signature===referenceCoverageKey(entry.descriptor);
+  });
+  if(maskOnly){
+   const coveragePixels=new Uint8Array(plan.faceDepth*512*512),done=new Set<number>();
+   for(const entry of plan.entries){if(done.has(entry.faceLayer))continue;const checkpoint=this.coverageCheckpoints.get(entry.faceLayer)!;
+    coveragePixels.set(replayCheckpointMaskR8(checkpoint.coverageSeed,fill,checkpoint.kraft),entry.faceLayer*512*512);done.add(entry.faceLayer);
+   }
+   // Every mask and the final capacity check succeed before any live byte,
+   // pool or fill changes. Existing Texture/Source/buffer identity is retained.
+   const destination:unknown=this.coverageArray!.image.data;
+   if(!(destination instanceof Uint8Array)||destination.length!==coveragePixels.length||this.coverageArray!.image.width!==512||this.coverageArray!.image.height!==512)throw Error('Prepared mask destination capacity changed');
+   this.paintPool.commit(plan);destination.set(coveragePixels);this.coverageArray!.needsUpdate=true;
+   this.bakedFill=fill;this.bakedRefreshed=plan.refreshed;this.repaintRequested=false;this.lastPaintVersion=this.paintPool.version;this.lastReplayMode='mask';return;
   }
-  const scratch=new Uint8Array(PIXELS_PER_LAYER);
-  const baked=bakeReferencePaintLayersToSink(requests,{fillImperfection:fill,separateFill:true},(index,color,bump,face)=>{
-   const local=start+index,bank=Math.floor(local/LAYERS_PER_BANK),upload=uploads.find(item=>item.bank===bank)!;
-   packReferencePaintPixels(color,bump,512,512,1,scratch);upload.data.set(scratch,(local-upload.first)*PIXELS_PER_LAYER);
-   const faceLayer=this.faceProfileData![local]!;
-   if(faceDirty&&!capturedFaces.has(faceLayer)&&(!sameFill||faceLayer>=oldFaceDepth)){
-    packReferencePaintPixels(face?.paperColorRgba??color,face?.paperBumpRgba??bump,512,512,1,scratch);paperPixels!.set(scratch,faceLayer*PIXELS_PER_LAYER);
-    if(face)for(let y=0;y<512;y++)for(let x=0;x<512;x++)coveragePixels![faceLayer*512*512+(511-y)*512+x]=face.coverageRgba[(y*512+x)*4+3]!;
-    capturedFaces.add(faceLayer);
+  const faceDirty=repaint||plan.faceDepth!==oldFaceDepth;
+  const nextCheckpoints=new Map<number,CoverageCheckpoint>(repaint?undefined:this.coverageCheckpoints);
+  const paperPixels=faceDirty?new Uint8Array(plan.faceDepth*PIXELS_PER_LAYER):undefined,coveragePixels=faceDirty?new Uint8Array(plan.faceDepth*512*512).fill(255):undefined;
+  if(faceDirty&&!repaint&&oldFaceDepth){paperPixels!.set(this.paperArray!.image.data as Uint8Array);coveragePixels!.set(this.coverageArray!.image.data as Uint8Array);}
+  const touched=new Set(plan.entries.map(entry=>Math.floor(entry.pigmentLayer/LAYERS_PER_BANK)));
+  const uploads=new Map<number,{data:Uint8Array;size:1|512;depth:number}>();
+  for(let bank=0;bank<MAX_BANKS;bank++){
+   const shape=plan.bankShapes[bank]!,old=this.banks[bank]!;
+   if(!touched.has(bank)&&old.image.width===shape.size&&old.image.depth===shape.depth)continue;
+   const data=new Uint8Array(shape.size*shape.size*shape.depth*4);
+   if(!repaint&&old.image.width===shape.size)data.set(old.image.data as Uint8Array);
+   uploads.set(bank,{...shape,data});
+  }
+  const capturedFaces=new Set<number>(),scratch=new Uint8Array(PIXELS_PER_LAYER);
+  bakeCheckpointPaintToSink(plan.entries.map(entry=>entry.descriptor),fill,(index,color,bump,face)=>{
+   const entry=plan.entries[index]!,bank=Math.floor(entry.pigmentLayer/LAYERS_PER_BANK),upload=uploads.get(bank);
+   if(!upload)throw Error('Paint admission destination missing');
+   packReferencePaintPixels(color,bump,512,512,1,scratch);upload.data.set(scratch,(entry.pigmentLayer%LAYERS_PER_BANK)*PIXELS_PER_LAYER);
+   const signature=referenceCoverageKey(entry.descriptor),existing=nextCheckpoints.get(entry.faceLayer);
+   if(Number.isSafeInteger(face.coverageSeed)){
+    if(existing&&(existing.coverageSeed!==face.coverageSeed||existing.signature!==signature))throw Error('Shared face checkpoint disagrees across RGB variants');
+    nextCheckpoints.set(entry.faceLayer,{coverageSeed:face.coverageSeed,kraft:entry.descriptor.config.kraftEdgeWear??true,signature});
+   }
+   if(faceDirty&&!capturedFaces.has(entry.faceLayer)&&(repaint||entry.faceLayer>=oldFaceDepth)){
+    packReferencePaintPixels(face?.paperColorRgba??color,face?.paperBumpRgba??bump,512,512,1,scratch);paperPixels!.set(scratch,entry.faceLayer*PIXELS_PER_LAYER);
+    if(face)for(let y=0;y<512;y++)for(let x=0;x<512;x++)coveragePixels![entry.faceLayer*512*512+(511-y)*512+x]=face.coverageRgba[(y*512+x)*4+3]!;
+    capturedFaces.add(entry.faceLayer);
    }
   });
-  for(const {bank,count,depth,data,old}of uploads){if(old){old.dispose();old.image={data,width:512,height:512,depth};old.needsUpdate=true;}else this.banks[bank]=arrayTexture(data,depth,count?512:1);}
-  this.colorArray=this.banks[0];this.activeBankCount.value=Math.ceil(descriptors.length/LAYERS_PER_BANK);
+  // No live texture or lookup is changed before all Canvas/copy work succeeds.
+  // Publication is synchronous between owner render calls, not a GPU fence.
+  this.paintPool.commit(plan);
+  for(const [bank,{data,size,depth}]of uploads){const map=this.banks[bank]!;map.dispose();map.image={data,width:size,height:size,depth};map.needsUpdate=true;}
   if(faceDirty){
-   if(this.paperArray){this.paperArray.dispose();this.paperArray.image={data:paperPixels!,width:512,height:512,depth:faceDepth};this.paperArray.needsUpdate=true;}else this.paperArray=arrayTexture(paperPixels!,faceDepth);
-   this.paperArray.wrapS=this.paperArray.wrapT=THREE.ClampToEdgeWrapping;
-   if(this.coverageArray){this.coverageArray.dispose();this.coverageArray.image={data:coveragePixels!,width:512,height:512,depth:faceDepth};}
-   else{this.coverageArray=new THREE.DataArrayTexture(coveragePixels!,512,512,faceDepth);this.coverageArray.format=THREE.RedFormat;this.coverageArray.wrapS=this.coverageArray.wrapT=THREE.ClampToEdgeWrapping;this.coverageArray.magFilter=THREE.LinearFilter;this.coverageArray.minFilter=THREE.LinearMipmapLinearFilter;this.coverageArray.generateMipmaps=true;}
-   this.coverageArray.needsUpdate=true;
+   this.paperArray!.dispose();this.paperArray!.image={data:paperPixels!,width:512,height:512,depth:plan.faceDepth};this.paperArray!.needsUpdate=true;
+   this.coverageArray!.dispose();this.coverageArray!.image={data:coveragePixels!,width:512,height:512,depth:plan.faceDepth};this.coverageArray!.needsUpdate=true;
   }
-  this.faceProfilesTexture!.needsUpdate=true;
-  if(!this.edgeMaps)this.setEdgeMaps(baked.edge);this.bakedCount=descriptors.length;this.bakedFill=fill;this.bakedRefreshed=this.refreshed;
+  this.faceProfilesTexture!.needsUpdate=true;this.genericFaceLayer.value=this.paintPool.resolve(0)?.[1]??0;
+  this.activeBankCount.value=Math.max(...plan.bankShapes.map((shape,index)=>shape.size===512?index+1:0));
+  this.coverageCheckpoints=nextCheckpoints;this.bakedRefreshed=plan.refreshed;this.lastReplayMode='full';this.bakedFill=fill;this.repaintRequested=false;this.lastPaintVersion=this.paintPool.version;
  }
+ private ensureEdgeMaps():void{
+  if(!this.origami)throw Error('Default materials must not request Origami edge maps.');
+  if(this.edgeMaps)return;
+  const {edge}=bakeResidentPaintToSink([],{includeEdge:true,edgeSeed:1337,fillImperfection:this.preferences.contourImperfection},()=>{});
+  if(!edge)throw Error('Edge painter did not return source maps');this.setEdgeMaps(edge);
+ }
+
  private setEdgeMaps(edge:ReferenceEdgePixels):void{this.edgeMaps={color:edgeTexture(edge.colorRgba,true),alpha:edgeTexture(edge.alphaRgba),bump:edgeTexture(edge.bumpRgba)};}
- get paint():THREE.DataArrayTexture{this.flushPaint();return this.colorArray!;}
+ get paint():THREE.DataArrayTexture{this.flushPaint();this.ensurePaintBindings();return this.colorArray!;}
  /** Read-only diagnostics use original Canvas2D row order. */
- paintLayerData(profileId:number):Uint8Array{this.flushPaint();const local=this.localIds.get(profileId)??profileId,bank=this.banks[Math.floor(local/LAYERS_PER_BANK)]!,layer=local%LAYERS_PER_BANK,data=bank.image.data as Uint8Array;return flipRows(data.subarray(layer*PIXELS_PER_LAYER,(layer+1)*PIXELS_PER_LAYER),512,512);}
+ paintLayerData(profileId:number):Uint8Array{this.paintPool.assertResident([profileId]);const local=this.paintPool.resolve(profileId)![0],bank=this.banks[Math.floor(local/LAYERS_PER_BANK)]!,layer=local%LAYERS_PER_BANK,data=bank.image.data as Uint8Array;return flipRows(data.subarray(layer*PIXELS_PER_LAYER,(layer+1)*PIXELS_PER_LAYER),512,512);}
  paintNode(coordinates:THREE.Node<'vec2'>,profile:THREE.Node<'float'>):THREE.Node<'vec4'>{
-  this.flushPaint();const banks=this.banks,active=this.activeBankCount;
+  this.flushPaint();
+  this.ensurePaintBindings();const banks=this.banks,active=this.activeBankCount;
   return Fn(()=>{const result=vec4(0).toVar();If(active.equal(1),()=>{result.assign(texture(banks[0]!,coordinates).depth(profile));}).Else(()=>{for(let bank=0;bank<MAX_BANKS;bank++)If(active.greaterThan(bank).and(profile.greaterThanEqual(bank*LAYERS_PER_BANK)).and(profile.lessThan((bank+1)*LAYERS_PER_BANK)),()=>{result.assign(texture(banks[bank]!,coordinates).depth(profile.mod(LAYERS_PER_BANK)));});});return result;})();
  }
- faceProfileNode(profile:THREE.Node<'float'>):THREE.Node<'float'>{this.flushPaint();return texture(this.faceProfilesTexture!,vec2(profile.add(.5).div(LAYERS_PER_BANK*MAX_BANKS),.5)).level(float(0)).context({forceUVContext:false}).r;}
+ resolvedPaintIdsNode(profile:THREE.Node<'float'>):THREE.Node<'vec2'>{this.flushPaint();this.ensurePaintBindings();return texture(this.faceProfilesTexture!,vec2(profile.mod(256).add(.5).div(256),profile.div(256).floor().add(.5).div(256))).level(float(0)).context({forceUVContext:false}).rg;}
+ faceProfileNode(profile:THREE.Node<'float'>):THREE.Node<'float'>{return this.resolvedPaintIdsNode(profile).y;}
+ genericPaintIdsNode(fillCoverage=true):THREE.Node<'vec2'>{this.requirePaint('generic-surfaces',[GENERIC_REFERENCE_PROFILE]);return vec2(GENERIC_REFERENCE_PROFILE,fillCoverage?this.genericFaceLayer:float(0));}
  facePaintNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>):THREE.Node<'vec4'>{
   const pigment=this.paintNode(pigmentUv,profile).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=texture(this.coverageArray!,faceUv).depth(faceProfile).r;
   // Source Canvas composition uses encoded sRGB. The opaque repeating
@@ -165,13 +250,14 @@ export class GraphicsStyleContext {
   const material=new THREE.MeshStandardNodeMaterial({transparent:true,depthWrite:false,depthTest:true,alphaTest:.012,flatShading:true,roughness:.94,metalness:0,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3});
   material.name='Origami — painted gouache brush strokes';material.userData.origamiContour=true;material.userData.origamiBrush=true;material.positionNode=positionNode;
   applyOrigamiSurface(material,this.brushColor.rgb,coordinates,this,undefined,false,false);
+  this.ensureEdgeMaps();
   const edge=this.edgeMaps!,raw=varying(coordinates,'v_origamiBrushUv');
   const dry=texture(edge.alpha,raw).g,soft=smoothstep(0,.035,raw.y).mul(float(1).sub(smoothstep(.90,1,raw.y)));
   material.opacityNode=this.lineOpacity.mul(soft).mul(mix(float(1),dry.mul(.65).add(.35),this.strokeImperfection));
   return material;
  }
  createWearMaterial(positionNode:THREE.Node|null,coordinates:THREE.Node<'vec2'>=uv()):THREE.MeshStandardNodeMaterial {
-  this.flushPaint();const edge=this.edgeMaps!,material=new THREE.MeshStandardNodeMaterial({roughness:.94,metalness:0,flatShading:true,transparent:true,alphaTest:.06,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+  this.ensureEdgeMaps();const edge=this.edgeMaps!,material=new THREE.MeshStandardNodeMaterial({roughness:.94,metalness:0,flatShading:true,transparent:true,alphaTest:.06,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
   const metric=physicalPaintMetric(coordinates).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal();
   const paintUv=applyPhysicalPaintMetric(coordinates,metric,density).mul(vec2(1,4)).toVar();
   const dx=applyPhysicalPaintMetric(coordinates.dFdx(),metric,density).mul(vec2(1,4)),dy=applyPhysicalPaintMetric(coordinates.dFdy(),metric,density).mul(vec2(1,4));
@@ -179,10 +265,10 @@ export class GraphicsStyleContext {
   material.positionNode=positionNode;material.colorNode=texture(edge.color,paintUv).rgb;material.opacityNode=texture(edge.alpha,coordinates).g.mul(this.wearOpacity);material.normalNode=referencePaintBumpNormal(height,texture(edge.bump,paintUv.add(dx)).r,texture(edge.bump,paintUv.add(dy)).r,float(.045));return material;
  }
  registerHumanAppearance(appearance:HumanPaintAppearance):number {
-  const colors=[appearance.skin,appearance.shirt,appearance.outerwear??appearance.shirt,appearance.pants??0x3c424a,appearance.hair,appearance.hat??appearance.shirt],extra=[appearance.vest??0x626c60,appearance.reconArmor??0x647d86,appearance.plate??0x7c8186],key=[...colors,...extra].join(':');const old=this.appearanceRows.get(key);if(old!==undefined)return old;
-  const row=this.appearanceRows.size;if(row>=4096)throw new Error('Origami: trop de palettes humaines simultanées');
-  const local=(descriptor:ReferencePaintDescriptor):number=>{let id=this.localKeys.get(descriptor.key);if(id===undefined){id=this.descriptors.length;this.descriptors.push(descriptor);this.localKeys.set(descriptor.key,id);}return id;};
-  this.ensureRows();const ids=colors.map((color,category)=>local(humanVariantDescriptor(category,color)));ids.push(...this.humanIds.slice(6),...extra.map(color=>local(humanVariantDescriptor(2,color))));this.rowsData!.set(ids,row*12);this.rowsTexture!.needsUpdate=true;this.appearanceRows.set(key,row);return row;
+  const colors=[appearance.skin,appearance.shirt,appearance.outerwear??appearance.shirt,appearance.pants??0x3c424a,appearance.hair,appearance.hat??appearance.shirt],extra=[appearance.vest??0x626c60,appearance.reconArmor??0x647d86,appearance.plate??0x7c8186],key=[...colors,...extra].join(':');const old=this.appearanceRows.get(key);if(old!==undefined){if(this.origami)this.paintPool.requireHumanRow(`human-row:${old}`,old);return old;}
+  const local=(descriptor:ReferencePaintDescriptor):number=>this.paintPool.registerHumanProfile(descriptor);
+  const ids=colors.map((color,category)=>local(humanVariantDescriptor(category,color)));ids.push(...this.humanIds.slice(6),...extra.map(color=>local(humanVariantDescriptor(2,color))));
+  const row=this.paintPool.registerHumanRow(ids);if(this.rowsData){this.rowsData.set(ids,row*12);this.rowsTexture!.needsUpdate=true;}this.appearanceRows.set(key,row);if(this.origami)this.paintPool.requireHumanRow(`human-row:${row}`,row);return row;
  }
  humanProfileNode(baseProfile:THREE.Node<'float'>,row:THREE.Node<'float'>,dye?:THREE.Node<'float'>):THREE.Node<'float'> {
   let category:THREE.Node<'float'>=float(8);for(let i=7;i>=0;i--)category=baseProfile.equal(this.humanIds[i]!).select(float(i),category);
@@ -191,7 +277,14 @@ export class GraphicsStyleContext {
   // replaced by the three paint-UV probes used by the normal/bump sub-build.
   return texture(this.ensureRows(),vec2(category.add(.5).div(12),row.add(.5).div(4096))).level(float(0)).context({forceUVContext:false}).r;
  }
- dispose():void{if(this.fillTimer)clearTimeout(this.fillTimer);for(const release of [...this.brushOwners.values()])release();this.brushGeometries.clear();for(const bank of this.banks)bank.dispose();this.banks.length=0;for(const map of Object.values(this.edgeMaps??{}))map.dispose();this.paperArray?.dispose();this.coverageArray?.dispose();this.faceProfilesTexture?.dispose();this.coverageKeys.clear();this.rowsTexture?.dispose();this.wearGeometries.clear();this.edgeObjects.clear();this.colorArray=undefined;this.edgeMaps=undefined;this.rowsTexture=undefined;this.rowsData=undefined;this.paperArray=undefined;this.coverageArray=undefined;this.faceProfilesTexture=undefined;this.faceProfileData=undefined;}
+ /** diagnostic borrowed upload-order bytes; diagnostics never cause a bake. */
+ debugPaintProfile(virtualId:number){this.paintPool.assertResident([virtualId]);const [physicalLayer,faceLayer]=this.paintPool.resolve(virtualId)!;
+  const pigment=this.banks[Math.floor(physicalLayer/256)]!.image.data as Uint8Array,paper=this.paperArray!.image.data as Uint8Array,coverage=this.coverageArray!.image.data as Uint8Array;
+  return{physicalLayer,faceLayer,pigment:pigment.subarray((physicalLayer%256)*PIXELS_PER_LAYER,(physicalLayer%256+1)*PIXELS_PER_LAYER),paper:paper.subarray(faceLayer*PIXELS_PER_LAYER,(faceLayer+1)*PIXELS_PER_LAYER),coverage:coverage.subarray(faceLayer*512*512,(faceLayer+1)*512*512),orientation:'upload-bottom-up' as const};
+ }
+ debugPaintStorage(){if(!this.colorArray)throw Error('Paint is not prepared');return{banks:this.banks.map(texture=>({texture,data:texture.image.data as Uint8Array})),paper:{texture:this.paperArray!,data:this.paperArray!.image.data as Uint8Array},coverage:{texture:this.coverageArray!,data:this.coverageArray!.image.data as Uint8Array},lookup:{texture:this.faceProfilesTexture!,data:this.faceProfilesTexture!.image.data as Float32Array},rows:this.rowsData};}
+ paintReplayState(){return{mode:this.lastReplayMode,refreshed:this.bakedRefreshed,checkpointCount:this.coverageCheckpoints.size,bakedFill:this.bakedFill};}
+ dispose():void{this.coverageCheckpoints.clear();if(this.fillTimer)clearTimeout(this.fillTimer);for(const release of [...this.brushOwners.values()])release();this.brushGeometries.clear();for(const bank of this.banks)bank.dispose();this.banks.length=0;for(const map of Object.values(this.edgeMaps??{}))map.dispose();this.paperArray?.dispose();this.coverageArray?.dispose();this.faceProfilesTexture?.dispose();this.rowsTexture?.dispose();this.paintPool.dispose();this.appearanceRows.clear();this.wearGeometries.clear();this.edgeObjects.clear();this.colorArray=undefined;this.edgeMaps=undefined;this.rowsTexture=undefined;this.rowsData=undefined;this.paperArray=undefined;this.coverageArray=undefined;this.faceProfilesTexture=undefined;}
 }
 
 /** Only textured pipelines call this. Exact profiles contain authored color;
@@ -200,7 +293,7 @@ export function applyOrigamiSurface(material:THREE.NodeMaterial,base:THREE.Node<
  if(!context?.origami)return;material.vertexColors=false;
  // All banks and all three bump probes share the same interpolated UV stream.
  // Implicit attribute transports would be recreated by isolated normal builds.
- const rawUv=varying(coordinates,'v_origamiPaintUv'),ids=profile?varying(vec2(profile,fillCoverage?context.faceProfileNode(profile):float(0)),'v_origamiPaintProfile').setInterpolation('flat'):vec2(GENERIC_REFERENCE_PROFILE),id=ids.x,faceId=ids.y;
+ const rawUv=varying(coordinates,'v_origamiPaintUv'),ids=profile?varying(context.resolvedPaintIdsNode(profile),'v_origamiPaintProfile').setInterpolation('flat'):context.genericPaintIdsNode(fillCoverage),id=ids.x,faceId=ids.y;
  const metric=physicalPaintMetric(rawUv).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal();
  const paintUv=applyPhysicalPaintMetric(rawUv,metric,density).toVar(),sample=(fillCoverage?context.facePaintNode(paintUv,rawUv,id,faceId):context.paintNode(paintUv,id)).toVar();
  const dx=applyPhysicalPaintMetric(rawUv.dFdx(),metric,density),dy=applyPhysicalPaintMetric(rawUv.dFdy(),metric,density);

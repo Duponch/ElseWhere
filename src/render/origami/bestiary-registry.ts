@@ -5,6 +5,7 @@ import {createBestiaryPresentation} from './bestiary-presentation';
 import {createBestiaryAdaptations,BESTIARY_ADAPTATION_MANIFEST,type BestiaryAdaptationId} from './bestiary-adaptations';
 import {BESTIARY_NEW_SPECIES,compileBestiaryAnimalBody,type CompiledBestiaryGeometry} from './bestiary-geometry';
 import type {BestiaryFactory,BestiaryGroup,RegisterMaterial} from './bestiary-types';
+import type {CompiledAnimalCargoBack} from './animal-cargo-back';
 
 export interface OrigamiAnimalReferenceInfo {
  readonly kind:'existing-reference'|'new-reference'|'explicit-adaptation';
@@ -71,3 +72,8 @@ export function bestiaryAnimalGeometry(capacity:number,species:string,presentati
  geometry.userData.origamiWear=wear;geometry.userData.origamiReferenceInfo=information.get(species);return geometry;
 }
 export function bestiaryAnimalBodyCenter(species:string):number|undefined{return cached(species,true)?.body.userData.origamiBodyCenter;}
+/** Borrow the eight immutable numbers from the presentation template. This
+ * follows its existing lazy compile cache; it never instantiates actor buffers. */
+export function bestiaryAnimalCargoBack(species:string):CompiledAnimalCargoBack|undefined{return cached(species,true)?.body.userData.origamiCargoBack;}
+/** Shared read-only source corners for first adoption of each cargo variant. */
+export function bestiaryAnimalCargoTorso(species:string):Float32Array|undefined{return cached(species,true)?.body.userData.origamiCargoTorso;}

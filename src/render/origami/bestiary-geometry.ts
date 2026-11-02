@@ -10,6 +10,7 @@ import {corpseVisualPartBit} from '../corpse-presentation';
 import {bodyBloodRegion} from '../body-blood-word-297';
 import {createReferenceEdgeGeometry} from './reference-edges';
 import {createRigBrushGeometry} from './rig-brush';
+import {deriveAnimalCargoBack,cargoBackMetadata} from './animal-cargo-back';
 import type {BestiaryGroup,BestiaryMesh,BestiaryMaterial,Triple} from './bestiary-types';
 
 export const BESTIARY_NEW_SPECIES:Readonly<Record<string,string>>=Object.freeze({
@@ -109,12 +110,16 @@ export interface CompiledBestiaryGeometry {readonly body:THREE.InstancedBufferGe
  * attributes are intentionally not fabricated here: the future SpeciesRig
  * owner will attach its original33-float stream to all three geometries. */
 export function compileBestiaryAnimalBody(species:string,root:BestiaryGroup,profileFor:ProfileForBestiaryMaterial):Omit<CompiledBestiaryGeometry,'brush'> {
- const plan=describeBestiaryAnimal(species,root),bodyValues:number[]=[],bodyUv:number[]=[],wearValues:number[]=[],wearUv:number[]=[],wearBase:number[]=[],wearDirections:number[]=[];
+ const plan=describeBestiaryAnimal(species,root),bodyValues:number[]=[],bodyUv:number[]=[],wearValues:number[]=[],wearUv:number[]=[],wearBase:number[]=[],wearDirections:number[]=[],cargoTorso:number[]=[];
  function append(geometry:THREE.BufferGeometry,part:NativeSourcePart,profile:number,values:number[],uvs:number[],matrix:THREE.Matrix4,mark=part.eyeMark):void {
   const p=geometry.getAttribute('position'),n=geometry.getAttribute('normal'),uv=geometry.getAttribute('uv'),index=geometry.getIndex(),count=index?.count??p.count;
   const normalMatrix=new THREE.Matrix3().getNormalMatrix(matrix),point=new THREE.Vector3(),normal=new THREE.Vector3(),color=part.mesh.material.color;
+  const collectCargo=values===bodyValues&&mark===part.eyeMark&&part.bone===0&&part.sourceLimbOrdinal===null&&['torso','shell','pronotum','hump'].includes(part.visualRole);
   for(let at=0;at<count;at++){
    const vertex=index?index.getX(at):at;point.fromBufferAttribute(p,vertex).applyMatrix4(matrix);convertBestiaryPoint(point,plan);
+   // Collect only original rigid torso corners during this existing pass.
+   // Head, limbs, tail, death-eye marks and expanded wear cannot support cargo.
+   if(collectCargo)cargoTorso.push(Math.fround(point.x),Math.fround(point.y),Math.fround(point.z));
    normal.fromBufferAttribute(n,vertex).applyNormalMatrix(normalMatrix);normal.set(-normal.z,normal.y,normal.x);
    values.push(point.x,point.y,point.z,normal.x,normal.y,normal.z,color.r,color.g,color.b,profile,part.bone,part.maskBit,part.bloodRegion,mark,part.pivot.x,part.pivot.y,part.pivot.z);
    uvs.push(uv?.getX(vertex)??0,uv?.getY(vertex)??0);
@@ -150,6 +155,12 @@ export function compileBestiaryAnimalBody(species:string,root:BestiaryGroup,prof
  wear.userData.referenceWearBasePositions=new Float32Array(wearBase);wear.userData.referenceWearExpandDirections=new Float32Array(wearDirections);
  body.userData.origamiWear=wear;body.userData.origamiReference=`best46:${species}`;body.userData.origamiBodyCenter=plan.bodyCenter;
  body.userData.origamiReferenceScale=plan.scale;body.userData.origamiReferenceFloor=plan.floor;body.userData.origamiReferenceLength=plan.referenceLength;
+ // Source conversion and clipping happen once per immutable compiled template,
+ // never during adoption/present(). Registry keeps canonical/presentation apart.
+ body.computeBoundingBox();const torsoBounds=new THREE.Box3(),corner=new THREE.Vector3();
+ for(const x of [plan.torsoBounds.min.x,plan.torsoBounds.max.x])for(const y of [plan.torsoBounds.min.y,plan.torsoBounds.max.y])for(const z of [plan.torsoBounds.min.z,plan.torsoBounds.max.z])torsoBounds.expandByPoint(convertBestiaryPoint(corner.set(x,y,z),plan));
+ const torsoTriangles=new Float32Array(cargoTorso),cargoBack=deriveAnimalCargoBack({torsoTriangles,torsoBounds,bodyBounds:body.boundingBox!,bodyCenter:plan.bodyCenter});
+ if(cargoBack){body.userData.origamiCargoBack=cargoBackMetadata(cargoBack);body.userData.origamiCargoTorso=torsoTriangles;}
  return{body,wear,receipt:{species,referenceLength:plan.referenceLength,scale:plan.scale,sourceLimbCount:plan.sourceLimbCount,nativeLimbCount:plan.nativeLimbCount,
   parts:plan.parts.map(part=>({nativePart:part.nativePart,bone:part.bone,pivot:part.pivot.toArray(),maskBit:part.maskBit,eyeMark:part.eyeMark}))}};
 }
