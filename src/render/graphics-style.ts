@@ -249,13 +249,30 @@ export class GraphicsStyleContext {
  resolvedPaintIdsNode(profile:THREE.Node<'float'>):THREE.Node<'vec2'>{this.flushPaint();this.ensurePaintBindings();return texture(this.faceProfilesTexture!,vec2(profile.mod(256).add(.5).div(256),profile.div(256).floor().add(.5).div(256))).level(float(0)).context({forceUVContext:false}).rg;}
  faceProfileNode(profile:THREE.Node<'float'>):THREE.Node<'float'>{return this.resolvedPaintIdsNode(profile).y;}
  genericPaintIdsNode(fillCoverage=true):THREE.Node<'vec2'>{this.requirePaint('generic-surfaces',[GENERIC_REFERENCE_PROFILE]);return vec2(GENERIC_REFERENCE_PROFILE,fillCoverage?this.genericFaceLayer:float(0));}
- facePaintNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight=true):THREE.Node<'vec4'>{
+ facePaintNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight=true,opaqueColorEndpoints=false):THREE.Node<'vec4'>{
+  if(opaqueColorEndpoints&&!this.reliefEnabled)return this.facePaintOpaqueEndpoints(pigmentUv,faceUv,profile,faceProfile,includeHeight);
   const pigment=this.paintNode(pigmentUv,profile).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=texture(this.coverageArray!,faceUv).depth(faceProfile).r;
   // Source Canvas composition uses encoded sRGB. The opaque repeating
   // pigment never contains a paper frame; only this raw face mask exposes it.
   // ColorSpaceNode is a raw node class in r186: wrap it before swizzling.
   const paperEncoded=vec4(workingToColorSpace(vec4(paper.rgb,1),THREE.SRGBColorSpace) as unknown as THREE.Node<'vec4'>).rgb,pigmentEncoded=vec4(workingToColorSpace(vec4(pigment.rgb,1),THREE.SRGBColorSpace) as unknown as THREE.Node<'vec4'>).rgb;
   const color=vec4(colorSpaceToWorking(vec4(mix(paperEncoded,pigmentEncoded,coverage),1),THREE.SRGBColorSpace) as unknown as THREE.Node<'vec4'>).rgb;
+  return vec4(color,includeHeight?mix(paper.a,pigment.a,coverage):float(0));
+ }
+ private facePaintOpaqueEndpoints(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight:boolean):THREE.Node<'vec4'>{
+  const pigment=this.paintNode(pigmentUv,profile).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=texture(this.coverageArray!,faceUv).depth(faceProfile).r.toVar();
+  const color=Fn(()=>{
+   // Preserve implicit derivatives: every texture read precedes the varying
+   // coverage condition. Only redundant endpoint color conversions are skipped.
+   const sampledPigment=pigment.toVar('origamiEndpointPigment'),sampledPaper=paper.toVar('origamiEndpointPaper'),sampledCoverage=coverage.toVar('origamiEndpointCoverage'),result=vec3(0).toVar('origamiEndpointColor');
+   If(sampledCoverage.equal(1),()=>{result.assign(sampledPigment.rgb);})
+   .ElseIf(sampledCoverage.equal(0),()=>{result.assign(sampledPaper.rgb);})
+   .Else(()=>{
+    const paperEncoded=vec4(workingToColorSpace(vec4(sampledPaper.rgb,1),THREE.SRGBColorSpace) as unknown as THREE.Node<'vec4'>).rgb,pigmentEncoded=vec4(workingToColorSpace(vec4(sampledPigment.rgb,1),THREE.SRGBColorSpace) as unknown as THREE.Node<'vec4'>).rgb;
+    result.assign(vec4(colorSpaceToWorking(vec4(mix(paperEncoded,pigmentEncoded,sampledCoverage),1),THREE.SRGBColorSpace) as unknown as THREE.Node<'vec4'>).rgb);
+   });
+   return result;
+  })();
   return vec4(color,includeHeight?mix(paper.a,pigment.a,coverage):float(0));
  }
  faceHeightNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>):THREE.Node<'float'>{return mix(texture(this.paperArray!,faceUv).depth(faceProfile).a,this.paintNode(pigmentUv,profile).a,texture(this.coverageArray!,faceUv).depth(faceProfile).r);}
@@ -309,13 +326,15 @@ export class GraphicsStyleContext {
 
 /** Only textured pipelines call this. Exact profiles contain authored color;
  * vertexColors must be false, avoiding the old dark-green multiplication. */
-export function applyOrigamiSurface(material:THREE.NodeMaterial,base:THREE.Node<'vec3'>,coordinates:THREE.Node<'vec2'>=uv(),context=currentGraphicsStyle(),profile?:THREE.Node<'float'>,includeGeneric=false,fillCoverage=true):void {
+/** Select during material construction; no per-frame or distance decision. */
+export interface OrigamiSurfaceOptions {opaqueColorEndpoints?:boolean}
+export function applyOrigamiSurface(material:THREE.NodeMaterial,base:THREE.Node<'vec3'>,coordinates:THREE.Node<'vec2'>=uv(),context=currentGraphicsStyle(),profile?:THREE.Node<'float'>,includeGeneric=false,fillCoverage=true,options?:OrigamiSurfaceOptions):void {
  if(!context?.origami)return;material.vertexColors=false;
  // All banks and enabled bump probes share the same interpolated UV stream.
  // Implicit attribute transports would be recreated by isolated normal builds.
  const rawUv=varying(coordinates,'v_origamiPaintUv'),ids=profile?varying(context.resolvedPaintIdsNode(profile),'v_origamiPaintProfile').setInterpolation('flat'):context.genericPaintIdsNode(fillCoverage),id=ids.x,faceId=ids.y;
  const metric=physicalPaintMetric(rawUv).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal();
- const paintUv=applyPhysicalPaintMetric(rawUv,metric,density).toVar(),sample=(fillCoverage?context.facePaintNode(paintUv,rawUv,id,faceId,context.reliefEnabled):context.paintNode(paintUv,id)).toVar();
+ const paintUv=applyPhysicalPaintMetric(rawUv,metric,density).toVar(),sample=(fillCoverage?context.facePaintNode(paintUv,rawUv,id,faceId,context.reliefEnabled,options?.opaqueColorEndpoints===true):context.paintNode(paintUv,id)).toVar();
  // Actor profiles are all authored (>0). Keeping their unreachable generic
  // branch would compile the entire old appearance graph and its varyings.
  material.colorNode=profile&&!includeGeneric?sample.rgb:sample.rgb.mul(id.equal(GENERIC_REFERENCE_PROFILE).select(base,vec3(1)));

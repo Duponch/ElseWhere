@@ -166,7 +166,9 @@ export class ResourceLayer {
       this.origamiPlain=staticMaterial.clone();this.origamiTextured=texturedMaterial.clone();
       Reflect.set(this.origamiPlain,'vertexColors',false);Reflect.set(this.origamiTextured,'vertexColors',false);
       this.origamiPlain.colorNode=attribute('color','vec3');
-      applyOrigamiSurface(this.origamiTextured,attribute('color','vec3'),uv(),this.graphicsStyle,attribute('origamiPaint','vec4').w,true);
+      // The endpoint shortcut benefits the large painted flora faces. Actors
+      // keep the original compositor; this is a construction-time choice only.
+      applyOrigamiSurface(this.origamiTextured,attribute('color','vec3'),uv(),this.graphicsStyle,attribute('origamiPaint','vec4').w,true,true,{opaqueColorEndpoints:true});
       // Exact profiles already contain their authored base color. Only live
       // blight/selection changes modulate that result, using the source baseline.
       const paint=attribute('origamiPaint','vec4'),ratio=attribute('color','vec3').div(paint.xyz.max(vec3(.00001)));
