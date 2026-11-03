@@ -59,6 +59,16 @@ export interface WildlifeBakedPreparationResult {
   retained:string[];
   fallback:{species:string;reason:string}[];
 }
+export type AnimalGraphicsComparisonState=readonly[species:string,geometry:string,material:string,flags:number];
+/** Measurement identity only. Layouts/byte counts remain in bakedStatus, outside
+ * the per-submission comparator. UUIDs distinguish an equally shaped new owner. */
+export function animalGraphicsComparisonState(species:string,mesh:Pick<THREE.Mesh,'geometry'|'material'>,active:boolean,textures:boolean,blood:boolean,sourceMaterial:THREE.Material,ribbonsVisible:boolean,binding?:Pick<PreparedAnimalAtlas,'geometry'|'material'>):AnimalGraphicsComparisonState {
+  const material=Array.isArray(mesh.material)?mesh.material.map(value=>value.uuid).join(','):mesh.material.uuid;
+  const flags=(active?1:0)|(textures?2:0)|(binding?4:0)|(blood?8:0)
+    |(binding&&mesh.geometry===binding.geometry?16:0)|(binding&&mesh.material===binding.material?32:0)
+    |(mesh.material===sourceMaterial?64:0)|(ribbonsVisible?128:0)|(binding?.material.userData.origamiBakedBloodFree===true?256:0);
+  return[species,mesh.geometry.uuid,material,flags];
+}
 const instancedAnimalAttribute=(a:THREE.BufferAttribute|THREE.InterleavedBufferAttribute):boolean=>a instanceof THREE.InstancedBufferAttribute||a instanceof THREE.InterleavedBufferAttribute&&a.data instanceof THREE.InstancedInterleavedBuffer;
 /** Copy owner aliases only; rings, sprites, source static vertices and their
  * canonical triangle family remain owned by their original geometry. */
@@ -282,6 +292,10 @@ class SpeciesRig {
   bakedStatus(){
     const binding=this.bakedBinding;if(!binding)return undefined;
     return{species:this.species,cpuBytes:binding.resource.cpuBytes,gpuBytes:binding.resource.gpuBytes,atlas:binding.resource.atlasLayout,triangles:binding.sourceVertex.length/3,texturesEnabled:this.texturesEnabled,bloodBlocked:this.bloodBlocked,atlasMaterialBloodFree:binding.material.userData.origamiBakedBloodFree===true,bodyUsesBakedGeometry:this.mesh.geometry===binding.geometry,bodyUsesBakedMaterial:this.mesh.material===binding.material,bodyUsesSourceMaterial:this.mesh.material===this.texturedMaterial,sourceRibbonsVisible:this.origamiLines?.visible??false};
+  }
+  graphicsComparisonState(active:boolean):AnimalGraphicsComparisonState|undefined {
+    if(!active&&!this.bakedBinding)return undefined;
+    return animalGraphicsComparisonState(this.species,this.mesh,active,this.texturesEnabled,this.bloodBlocked,this.texturedMaterial,this.origamiLines?.visible??false,this.bakedBinding);
   }
   releaseBaked():void {this.bakedBinding?.dispose();}
   async prepareBaked(options:WildlifeBakedPreparation,isCurrent:()=>boolean):Promise<'prepared'|'retained'> {
@@ -642,6 +656,13 @@ export class WildlifeLayer {
   bakedStatus(){
     const published=this.rigs.flatMap(rig=>{const status=rig.bakedStatus();return status?[status]:[];});
     return{eligible:this.bakedEligible,activeSpecies:this.activeRigs.map(rig=>rig.species),bloodBlockedSpecies:this.activeRigs.filter(rig=>rig.atlasBlockedByBlood).map(rig=>rig.species),published,pending:this.hasPendingBakedSpecies,preparing:!!this.bakedPreparation,generation:this.bakedGeneration,cpuBytes:published.reduce((n,s)=>n+s.cpuBytes,0),gpuBytes:published.reduce((n,s)=>n+s.gpuBytes,0),fallback:this.bakedFallback.map(row=>({...row}))};
+  }
+  /** Compact exact render identity; no atlas plans/cache totals or diagnostic
+   * prose are built for a measurement frame. At most the53 resident rigs. */
+  graphicsComparisonMetadata(){
+    const active=new Set(this.activeRigs),rigs:AnimalGraphicsComparisonState[]=[];
+    for(const rig of this.rigs){const state=rig.graphicsComparisonState(active.has(rig));if(state)rigs.push(state);}
+    return{generation:this.bakedGeneration,eligible:this.bakedEligible,pending:this.hasPendingBakedSpecies,preparing:!!this.bakedPreparation,closed:this.bakedClosed,rigs};
   }
   /** Restore the true source before changing its paint/line settings. Pending
    * preparation sees the new generation and can no longer publish. */

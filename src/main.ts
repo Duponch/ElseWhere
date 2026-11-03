@@ -21,7 +21,7 @@ import {NativeHudCards} from './ui3d/native-hud';
 import type {NativeHudViewAction} from './ui3d/native-hud';
 import {NATIVE_DOCK_PREFERENCE_KEY,parseNativeDockPreferences,NATIVE_UI_SCALE_PREFERENCE_KEY,parseNativeUiScale,normalizeNativeUiScale,type NativeDockPreferences} from './ui3d/native-preferences';
 import {GRAPHICS_STYLE_PREFERENCE_KEY,parseGraphicsStylePreferences,normalizeGraphicsStylePreferences,requiresGraphicsStyleRebuild,type GraphicsStylePreferences} from './ui3d/native-preferences';
-import type {GraphicsStyleComparisonResult} from './render/graphics-style-comparison';
+import {graphicsStyleComparisonsShareScene,type GraphicsStyleComparisonResult} from './render/graphics-style-comparison';
 import {installNativeCardboardCursors} from './ui/native-cardboard-cursors';
 import type {NativeUiState,NativeUiActions,NativePage} from './ui3d/native-contract';
 import {createNativeShipTerminal298,readAdoptedShipCredits298} from './ui3d/native-ship-terminal-298';
@@ -880,7 +880,7 @@ function graphicsMeasurementText():string{
   return `${style} : intervalle médian ${result.frameIntervalsMs?.median.toFixed(2)} ms, p95 ${result.frameIntervalsMs?.p95.toFixed(2)} ms ; soumission CPU ${result.cpuSubmitMs?.mean.toFixed(2)} ms ; ${Math.round(result.drawCalls?.mean??0)} appels, ${Math.round(result.triangles?.mean??0)} triangles. GPU non mesuré.`;
  });
  const values=[...graphicsMeasurements.values()].filter(value=>value.status==='complete');
- if(values.length===2){const key=(v:GraphicsStyleComparisonResult)=>JSON.stringify({...v.context,preferences:undefined});rows.push(key(values[0]!)===key(values[1]!)?'Même scène, caméra et paramètres : mesures comparables dans cette session.':'Scène, caméra ou paramètres différents : refaire les deux mesures pour comparer.');}
+  if(values.length===2)rows.push(graphicsStyleComparisonsShareScene(values[0]!.context,values[1]!.context)?'Même scène, caméra et paramètres : mesures comparables dans cette session.':'Scène, caméra ou paramètres différents : refaire les deux mesures pour comparer.');
  return rows.join('\n')||'Mettez la colonie en pause. La mesure masque les Options et conserve votre caméra. Les résultats restent consultables ici pour les deux styles.';
 }
 async function measureGraphicsStyle():Promise<void>{
@@ -890,7 +890,7 @@ async function measureGraphicsStyle():Promise<void>{
  const panel=currentPanel,tool=currentTool,selectionKey=[...selection.ids].join(','),objectKey=JSON.stringify(selectedObjects);
  setPanel(null,true);frontMenu.hide();
  try{
-  const result=await active.measureGraphicsStyle(`${epoch}:${id}:${world.seed}:${world.tick}`,{scope:'paused-colony',ui:'game-hud'},()=>renderer===active&&snapshot===world&&currentSpeed===0&&campaignPresentationEpoch===epoch&&!frontMenu.isOpen()&&currentPanel===null&&currentTool===tool&&[...selection.ids].join(',')===selectionKey&&JSON.stringify(selectedObjects)===objectKey&&!graphicsStyleChanging&&!graphicsRecovering&&!replacingWorld);
+   const result=await active.measureGraphicsStyle(`${epoch}:${id}:${world.seed}:${world.tick}`,{scope:'paused-colony',ui:'game-hud',tool,selectionKey,objectKey},()=>renderer===active&&snapshot===world&&currentSpeed===0&&campaignPresentationEpoch===epoch&&!frontMenu.isOpen()&&currentPanel===null&&currentTool===tool&&[...selection.ids].join(',')===selectionKey&&JSON.stringify(selectedObjects)===objectKey&&!graphicsStyleChanging&&!graphicsRecovering&&!replacingWorld);
   graphicsMeasurements.set(result.context.preferences.style,result);
  }finally{if(epoch===campaignPresentationEpoch&&currentPanel===null)setPanel(panel,true);}
 }

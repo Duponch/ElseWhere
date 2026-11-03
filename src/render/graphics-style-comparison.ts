@@ -62,6 +62,21 @@ function contextKey(context:GraphicsStyleComparisonContext):string {
  if(canonical(context.preferences)!==canonical(normalizeGraphicsStylePreferences(context.preferences)))throw Error('Comparison preferences are invalid.');
  const key=canonical(context);if(key.length>16384)throw Error('Comparison context is too large.');return key;
 }
+/** Pair reporting only: different styles intentionally have different render
+ * preferences/bindings. World, camera, viewport and ALL common settings stay
+ * exact. The collector still validates the complete context on every sample. */
+export function graphicsStyleComparisonsShareScene(left:GraphicsStyleComparisonContext,right:GraphicsStyleComparisonContext):boolean {
+ try{
+  const a=contextKey(left),b=contextKey(right);
+  if(left.preferences.style===right.preferences.style)return a===b;
+  const shared=(context:GraphicsStyleComparisonContext)=>{
+   const {preferences:_preferences,settings,...scene}=context;
+   const {origamiBaked:_renderState,...commonSettings}=settings;
+   return canonical({...scene,settings:commonSettings});
+  };
+  return shared(left)===shared(right);
+ }catch{return false;}
+}
 function distribution(values:number[]):GraphicsStyleComparisonDistribution|undefined {
  if(!values.length)return undefined;
  values.sort((a,b)=>a-b);const count=values.length,middle=Math.floor(count/2);

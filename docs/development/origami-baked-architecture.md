@@ -77,6 +77,33 @@ d'application : le module chargé ne prouve pas son activation. Le contrat435
 distinct est acquis ; aucun Whole du Main, essai de FPS ou contrôle d'ombres
 exhaustif n'est déduit de V30.
 
+Le banc **V32** reprend cette même initialisation publique et ajoute exactement
+trois raccords de Main : `SceneApplicationContext`, le champ lumineux partagé
+avec sa topologie et sa vue préparée, et la préparation des structures. Les
+trois déclarations sont comparées à `src/main.ts` et épinglées ; la factory
+héritée conserve son vrai `new this`. **435 est désormais effectivement actif
+dans ce sous-ensemble** : deux pages, quatre blocs et 2884 triangles compilés,
+égaux aux triangles source. La page portant les matériaux des arbres comporte
+deux producteurs, deux blocs et 4680 indices, soit 1560 triangles ; il ne s'agit
+donc pas seulement d'une page de terrain.
+
+Les 26 chênes/peupliers générés restent prêts sur deux pages partagées de 42,5 Mio,
+sans repli, et le renard conserve sa vraie publication opaque. Le contexte et
+l'éclairage appartiennent au World courant ; topologie et préparation des
+structures sont partagées. Largeur 1,7→2→1,7 et textures OFF/ON sont observés,
+avec le même header schéma301/Core0/tick0/RNG61103/nextId381, sans simulation
+avancée. Le retour conserve **99 pixels différents sur 851200**, MAE 0,000569 et
+maximum 11, sans variation d'alpha ; aucune identité pixel ni cause n'est déduite.
+La fermeture publique attend le renderer, fermé sans erreur. Le [rapport V32](../../tmp/origami-baked-architecture-20261102/core-tree-main-context-runtime/native-v32-core-summary.json)
+porte le SHA256 `7d55a69853947911f68bf33e6867e5bbb2f2cd9d783b34cf51d5b3b64314f998`,
+sous le pin `7548d819ef37bec24c0cde855822ba3bf72aad9a6356bd119f158d80c33debad`.
+Ses cinq reçus décrivent un seul cycle de vie, sans nouveau chronométrage ni
+preuve de performances. Room et les réglages d'ombres produits sont conservés,
+mais la carte n'a aucun émetteur local lu ; les lampes et pièces non vides ne
+sont donc pas qualifiées. Les lecteurs d'intentions, la file d'admission, l'UI,
+les ordres et la boucle Main ne sont pas repris : **V32 n'est pas Whole Main**.
+L'observation historique V30 sans435 reste distincte et inchangée.
+
 L'atelier `assets.html` possède maintenant un raccord source au même
 `TreeBakeOwner` : préparation exclusive, publication avant recalcul des bornes,
 statuts et étiquettes, retrait avant modification de peinture et fermeture après
@@ -107,9 +134,9 @@ standard acquise à09:18 ; les sources suivies bridge/simulation sont inchangée
 Le [rapport d'identité](../../tmp/origami-baked-architecture-20261102/final-worker-identity.json)
 porte le SHA256 `8ad7b9a002541f375d3a94c4e3b9da3bf685a6b4fc961186e39fad38c2cbde7a`.
 Cette comparaison ne remplace ni les anciens contrôles de simulation ni un
-Whole du Main. Le commit local peut suivre cet enregistrement, puis le travail
-de performances continue ; aucun hash de commit ni livraison distante n'est
-présumé. Les animaux conservent
+Whole du Main. Le lot est enregistré par le commit local
+`baadb63a4c1571120264c84923f84138d6a9160c` ; le travail de performances continue,
+sans push ni livraison distante. Les animaux conservent
 les limites de qualité détaillées plus bas ; les humains gardent leur rendu
 actuel, sans optimisation opaque installée.
 
@@ -175,6 +202,15 @@ refus d'une préparation devenue obsolète. La fixture de deux apparences demand
 45 cellules de texture utiles ; aucun pixel n'est encore alloué par ce helper.
 Il ne certifie pas la morphologie, les taches de sang ou le rendu humain final.
 
+Le banc GPU privé ultérieur **V33** a affiché la source et le candidat humain
+aux vues joueur, proche et latérale. Le gros plan conserve des bras trop flous :
+**NO GO de qualité**, aucun raccord humain au produit ni chronométrage acquis.
+Le retour Source conserve exactement son PNG initial. La libération a été
+demandée par l'UI et l'onglet21 a été fermé, sans erreur enregistrée ; ce n'est
+pas un nouveau reçu d'état interne du renderer après fermeture. Le [rapport V33](../../tmp/origami-baked-architecture-20261102/human-gpu-cell-runtime-current/native-v33-quality-summary.json)
+porte le SHA256 `9bda515376a270b40788e6095f2d74aa9a788c99758764f3984f7501a4a51f8d`.
+Ce rejet reste privé et distinct des preuves de contexte435 et de métrologie.
+
 Deux pistes supplémentaires restent privées. La première emploie la place libre
 de l'atlas du cerf pour augmenter la définition de ses deux bois complets, sans
 agrandir la texture ; ses trois contrats et sa compilation passent. Quatre vues
@@ -194,6 +230,7 @@ Cette admission géométrique ne constitue pas une validation visuelle.
 
 | Essai borné | Résultat | Limite |
 | --- | --- | --- |
+| V32, vrai Core et trois raccords de contexte Main | 26 arbres prêts sans repli ;435 actif,2 pages/4 blocs/2884 triangles dont une page d'arbres de1560 triangles ; fermeture sans erreur | Cycle de vie en pause seulement, retour99 pixels différents conservé ; aucun nouveau chronométrage, pièce avec lampe ou Whole Main |
 | V29, vrai ResourceLayer/TreeBakeOwner :400peupliers Legacy / gouache opaque Lambert / Legacy | GPU0,628053 /0,595285 /0,606208ms ; CPU0,366055 /0,359333 /0,377064ms ;400prêts,0repli | Coût local proche, dérives et quantification conservées ; ombres OFF, sans435/Core/campagne, aucune causalité ou parité globale |
 | 400 peupliers source identiques, ancien Origami / texture opaque / ancien Origami | GPU moyen 0,8793 / 0,4751 / 0,8957 ms, environ −46,5 % | Au repos, ombres désactivées, aucune diversité procédurale |
 | 400 peupliers, Par défaut / texture opaque / Par défaut | GPU moyen 0,3222 / 0,4915 / 0,3277 ms | Candidat encore **+51,3 %** contre les témoins Par défaut ; formes natives différentes |
@@ -223,6 +260,61 @@ Changement des paramètres, retour, textures OFF/ON et fermeture passent sans
 erreur. Le zoom ne change pas la génération du cache. Cela qualifie ce cycle
 de vie, pas la qualité des animaux en gros plan, leur transport clinique ou
 une comparaison de coûts.
+
+## Robustesse du comparateur — deux contrats ciblés acquis
+
+Le comparateur du jeu recevait tout le diagnostic des textures précuites :
+plans d'atlas, octets et états détaillés des espèces, caches et arbres. Ce
+diagnostic peut dépasser ses gardes inchangées de1024valeurs et16384caractères.
+Un contrôle CPU borné par la vraie API publique, avec caméra et paramètres
+minimaux, a reproduit le refus dès41espèces :838valeurs mais16622caractères.
+45espèces donnent914valeurs/18134caractères et53espèces1066/21158. Le contexte
+réel du Core ajoute d'autres paramètres et peut donc atteindre la limite plus tôt.
+Le [reçu de dimensionnement](../../tmp/origami-baked-architecture-20261102/comparison-metadata-size-audit.json)
+porte le SHA256 `7af8a11ef34066cabb76cebb8d1ff05b994038490102433542a369701500df59`.
+Il duplique uniquement la forme de métadonnées d'une publication V32 pour
+dimensionner le message ; il ne prétend pas avoir admis53atlas réels. Aucun
+modèle, Canvas, World ou GPU n'a été construit pour ce contrôle.
+
+Le correctif source remplace ce diagnostic dans la mesure seulement par des
+ports compacts : espèce, UUID de géométrie et matériau, état actif, textures,
+sang, branche source/précuite et rubans. Les arbres donnent leurs générations,
+matériaux et une révision mise à jour par les vrais changements de chunks ou
+d'aperçu de sélection. La lecture ne refait aucun recensement des chunks, aucun
+plan d'atlas ou total mémoire ; les diagnostics Native détaillés restent inchangés.
+L'identité complète de chaque essai reste contrôlée à chaque échantillon.
+
+Pour confronter deux styles, seul le résumé de présentation intrinsèque au style
+et ses préférences graphiques sont exclus du message de comparabilité. World,
+caméra, viewport, backend, paramètres de rendu communs, outil et sélections
+restent exacts. Deux essais du même style conservent l'identité stricte complète.
+Les limites de taille et les refus d'un contexte invalide ne sont pas assouplis.
+
+Les deux nouveaux [contrats ciblés](../../tests/graphics-style-comparison-metadata.test.ts)
+passent en33,772s (`origami-comparison-compact-metadata-2026-11-03T18-07-51.371Z-15024`).
+Ils utilisent le Core public, les vrais ports et le collecteur, avec53petits
+propriétaires de métadonnées : taille, changements d'état/UUID, aperçu et retrait,
+paramètres communs et gardes. Les modèles des53espèces, leurs atlas et un renderer
+ne sont pas construits. Ce PASS exclut les pixels, les performances et une
+admission Native de53espèces. Le commit du correctif reste à effectuer ; aucun
+hash d'enregistrement ni livraison distante n'est présumé.
+Le premier typage complet a échoué en72,167s sur les seules intersections
+`never` des trois prototypes de la fixture
+(`origami-comparison-metadata-product-types-2026-11-03T18-09-33.898Z-16788`).
+Les assertions de type ont été déplacées après `Object.assign`, sans changement
+du comportement ou des oracles ; la source précédente est archivée exactement.
+Les deux PASS restent acquis sans répétition après ces seules annotations.
+Le typage complet final passe en69,281s
+(`origami-comparison-metadata-product-types-final-2026-11-03T18-13-33.666Z-12360`)
+et le build Pages standard CODE en4,338s
+(`origami-comparison-metadata-pages-2026-11-03T18-21-22.953Z-17688`).
+La sortie C privée garde `publicDir=false`, sans copie des médias publics.
+Ses deux Workers sont strictement identiques en octets aux fichiers standards
+de17:07, SHA256 `043ebe6a63b3b9ee2f62ea6b99ced62f51a2421b335dd4e4dbd63206c915393b`
+et `d46556530d6c6f66a674f0638b4bc872c159bd3c76edbc72aab3c2fba727090e`.
+Les sources bridge/simulation suivies sont inchangées. Le [reçu d'identité](../../tmp/origami-baked-architecture-20261102/comparison-worker-identity-20261103.json)
+porte le SHA256 `a7ca8a373a8a5eb97c293aee632911b2c1d8dec221ad4e00ddea5f7acad4a758`.
+Aucun gain CPU n'est chiffré et le Native humain V33 ne qualifie pas ce correctif.
 
 ## Dernières corrections de préparation
 
@@ -261,8 +353,9 @@ opérations, sans remplacer une observation graphique.
   grains des contours ; une texture finale simplement étirée n'est pas admise.
   Il n'est pas promu. Le choix humain de formes Legacy est désormais raccordé
   aux sources pour les13essences ; V29 qualifie le coût du composant peuplier,
-  V30 le cycle Core en pause et V31 les13admissions/quatre gros plans. La qualité
-  des autres gros plans, les ombres et le chemin Main avec435 actif restent ouverts.
+  V30 le cycle Core en pause et V31 les13admissions/quatre gros plans. V32 observe
+  le vrai contexte et435 actif sur cette carte32², sans reprendre tout Main.
+  La qualité des autres gros plans, les ombres exhaustives et Whole Main restent ouverts.
 - Le coût d'éclairage : une factorisation algébrique privée est préparée pour
   des faces rigides sous Directional+Hemi. Le jeu emploie aussi des PointLight
   et des déformations. Le premier contrôle CPU annoncé à trois heures contient
@@ -284,7 +377,8 @@ opérations, sans remplacer une observation graphique.
   chênes/peupliers et le renard en pause. Le correctif de quarantaine après
   publication est qualifié par les deux contrats ciblés ; typage complet, Pages
   standard et identité des deux Workers finaux sont acquis.
-  Aucun Whole du Main avec435 actif ni parité de campagne n'est acquis.
+  V32 ajoute l'activation effective435 et du champ lumineux partagé dans son
+  sous-ensemble de contexte. Aucun Whole du Main ni parité de campagne n'est acquis.
 
 La garde Native utilise désormais **4,5Gio libres sur C**, sur demande humaine,
 avec les réserves mémoire4+1Gio et2Gio par volume conservées. Une garde fraîche

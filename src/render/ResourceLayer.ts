@@ -174,6 +174,8 @@ export class ResourceLayer {
   private readonly preparedTreeCanopies=new WeakSet<THREE.Mesh>();
   private treeRecipeEpoch=0;
   private treeDemandEpoch=0;
+  /** Updated only by actual chunk/preview writers; never by RAF or a read. */
+  private graphicsComparisonRevision=0;
   private treeSpecies:readonly TreeSpecies[]=Object.freeze([]);
   private treeSpeciesKey='[]';
   private cachedTreeUpdate:{world:World;appearance:NaturalAppearanceReader|undefined}|undefined;
@@ -256,6 +258,13 @@ export class ResourceLayer {
   }
   treeBakeDemand():{key:string;species:readonly TreeSpecies[];isCurrent():boolean}{const epoch=this.treeDemandEpoch;return{key:this.treeSpeciesKey,species:this.treeSpecies,isCurrent:()=>!this.disposed&&this.treeDemandEpoch===epoch};}
   bakedTreeStatus(){const pending=this.treeSpecies.filter(species=>!this.treeCatalog?.readReady(species));let trees=0,ready=0;for(const chunk of this.chunks.values()){trees+=chunk.treeCount;ready+=chunk.preparedTreeCount;}const fallback=trees-ready;return{revision:this.treeCatalog?.revision??null,species:this.treeSpecies,pending,ready,fallback,total:trees,texturePages:this.treeCatalog?.pageCount??0,fallbackReason:!fallback?null:!this.graphicsStyle?.origami?'default-style':this.graphicsStyle.reliefEnabled?'positive-relief':this.graphicsStyle.wearEnabled?'positive-wear':!this.treeCatalog?'atlas-not-prepared':pending.length?'species-not-prepared':'unsupported-species-or-blight-or-placement-mismatch',scope:'Prepared Legacy tree geometry/Lambert; fallback retains qualified original Origami producers; other flora unchanged'};}
+  /** Measurement identity uses existing epochs and material owners, never a
+   * second chunk census. Full Native diagnostics remain in bakedTreeStatus. */
+  graphicsComparisonMetadata(){
+    this.treeCatalog?.assertCurrent();
+    const family=this.treeFamily;
+    return{revision:this.graphicsComparisonRevision,recipeEpoch:this.treeRecipeEpoch,demandEpoch:this.treeDemandEpoch,speciesKey:this.treeSpeciesKey,catalogRevision:this.treeCatalog?.revision??null,textures:this.texturesEnabled,foliage:this.foliageVisible,materials:family?[family.normal.uuid,family.preview.uuid,family.plain.uuid]:[]};
+  }
   private makeTreeFamily(catalog:TreeAssetCatalog,configure:(material:THREE.NodeMaterial)=>void):TreeMaterialFamily{
     const normal=new THREE.MeshLambertNodeMaterial({flatShading:true}),preview=new THREE.MeshLambertNodeMaterial({flatShading:true}),plain=new THREE.MeshLambertNodeMaterial({flatShading:true,vertexColors:true}),materials=[normal,preview,plain];let closed=false;
     try{const paint=treeArrayColorNode(catalog.texture),ratio=varying(attribute('color','vec3').div(attribute('origamiPaint','vec4').xyz.max(vec3(.00001))),'v_preparedTreePreviewRatio');normal.colorNode=paint;preview.colorNode=paint.mul(ratio);
@@ -315,12 +324,13 @@ export class ResourceLayer {
    * Only their existing spatial chunks/ranges are visited on selection changes. */
   setTargetPreview(ids:ReadonlySet<number>):void {
     if(ids.size===this.targetPreviewIds.size&&[...ids].every(id=>this.targetPreviewIds.has(id)))return;
+    this.graphicsComparisonRevision++;
     const keys=new Set<string>();for(const id of [...this.targetPreviewIds,...ids]){const key=this.resourceChunks.get(id);if(key)keys.add(key);}
     this.targetTint.restore();this.targetPreviewIds=new Set(ids);
     let materialChanged=false;for(const key of keys){const chunk=this.chunks.get(key);if(chunk){this.targetTint.apply(chunk.group,this.targetPreviewIds);if(this.refreshTreeMaterials(chunk.group))materialChanged=true;}}
     if(materialChanged)this.compiledMaterialsChanged435?.();
   }
-  clearTargetPreview():void {this.targetTint.restore();this.targetPreviewIds.clear();if(!this.treeFamily)return;let changed=false;for(const chunk of this.chunks.values())if(this.refreshTreeMaterials(chunk.group))changed=true;if(changed)this.compiledMaterialsChanged435?.();}
+  clearTargetPreview():void {if(this.targetPreviewIds.size)this.graphicsComparisonRevision++;this.targetTint.restore();this.targetPreviewIds.clear();if(!this.treeFamily)return;let changed=false;for(const chunk of this.chunks.values())if(this.refreshTreeMaterials(chunk.group))changed=true;if(changed)this.compiledMaterialsChanged435?.();}
   clear(): void { this.middleWind.reset();this.clearTargetPreview();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear(); this.treeCells.clear();this.treeCellsPending=undefined;this.cachedTreeUpdate=undefined;this.treeDemandEpoch++;this.refreshTreeCensus(); }
   dispose():void {if(this.disposed)return;this.disposed=true;const resources:{dispose():void}[]=[this.windPlain,this.windTextured,...[this.origamiPlain,this.origamiTextured,this.linePlain,this.lineWind,this.wearPlain,this.wearWind,this.referenceFlora].filter((r):r is NonNullable<typeof r>=>r!==undefined),...this.treeFamilies];const errors:unknown[]=[];try{this.clear();}catch(error){errors.push(error);}try{disposeTreeResources(resources,'Resource material cleanup failed');}catch(error){errors.push(error);}this.treeCatalog=undefined;this.treeFamily=undefined;if(errors.length)throw new AggregateError(errors,'Resource layer cleanup failed');}
 
@@ -529,6 +539,7 @@ export class ResourceLayer {
       if(key)this.resourceChunks.set(id,key);else this.resourceChunks.delete(id);
     }
     for (const [key, previous] of this.chunks) if ((!partial||affected.has(key))&&!chunks.has(key) && previous.signature !== '') {
+      this.graphicsComparisonRevision++;
       retainResources(previous.group, new Set()); previous.visibleKeys.clear(); previous.signature = '';
       for(const id of previous.treeIds){this.treeParts.delete(id);this.treeHits.delete(id);}
       previous.treeIds=[];
@@ -540,6 +551,7 @@ export class ResourceLayer {
       const signature=chunk.map(resource=>{if(resource.kind==='tree'){treeCount++;if(species&&isTreeSpecies(resource.species))species.add(resource.species);if(previous?.preparedTreeIds.has(resource.id))preparedTreeCount++;}return`${resource.id}:${identity(resource)}:${size(resource)}:${resource.kind==='berries'&&ripe(resource)?1:0}:${leafless(resource)}`;}).join('|');
       const treeRecipeChanged=!!previous&&previous.treeRecipeEpoch!==this.treeRecipeEpoch&&(previous.treeCount>0||treeCount>0);
       if (previous?.signature === signature&&!treeRecipeChanged) continue;
+      this.graphicsComparisonRevision++;
       const sizes=new Map(chunk.map(resource=>[resource.id,size(resource)]));
       const visibleKeys=new Set(chunk.flatMap(r=>visibleResourceKeys(world,r,appearance)));
       if (previous&&!treeRecipeChanged&&chunk.every(r => previous.identities.get(r.id) === identity(r))) {
