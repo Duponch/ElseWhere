@@ -11,6 +11,8 @@ import {ORE_DEFINITIONS} from '../sim/ore';
 import type {Resource,Structure,StructureKind,Tile} from '../sim/types';
 import {buildingLabels} from '../ui/building-labels';
 import {ResourceLayer} from '../render/ResourceLayer';
+import {TreeBakeOwner,type OwnedTreeCatalog} from '../render/origami/TreeBakeOwner';
+import {AtlasBuildQuarantineError} from '../render/origami/baked/atlas-cache';
 import {PlantClusterLayer} from '../render/PlantClusterLayer';
 import {CropLayer} from '../render/CropLayer';
 import {BoxBatches} from '../render/BoxBatches';
@@ -127,6 +129,39 @@ function instanceBounds(mesh:THREE.InstancedMesh,slot:number):THREE.Box3 {
   mesh.geometry.computeBoundingBox();const transform=new THREE.Matrix4();mesh.getMatrixAt(slot,transform);return mesh.geometry.boundingBox!.clone().applyMatrix4(transform);
 }
 
+/** The same game tree owner, attached to an existing gallery ResourceLayer.
+ * Caller must hold the renderer and detach Source before terminal disposal. */
+export function createCatalogTreePreparation(context:GraphicsStyleContext,resources:ResourceLayer,refreshInventory:()=>void){
+    let disposed=false,preparingTrees=false,treeGeneration=0,treeOwner:TreeBakeOwner|undefined,treeFallback:string|undefined;const quarantinedTrees=new Set<OwnedTreeCatalog>();
+    return {
+      treeStatus:()=>({layer:resources.bakedTreeStatus(),cache:treeOwner?.snapshot()??null,reason:treeFallback??null,scope:'Same TreeBakeOwner/ResourceLayer as the game; isolated presentation records and actual stock gallery lights, no Core/World or simulation.'}),
+      invalidatePreparedTrees(){if(disposed)return;if(preparingTrees)throw Error('Catalog trees are still preparing');treeGeneration++;if(treeOwner){const transaction=resources.setTreeAssetCatalog(undefined);transaction.commit();treeOwner.invalidate();}treeFallback=undefined;refreshInventory();},
+      async prepareTrees(renderer:THREE.WebGPURenderer,camera:THREE.Camera,lightingScene:THREE.Scene,assertPreparationCurrent:()=>void){
+        if(disposed||preparingTrees)throw Error('Catalog tree preparation is unavailable');
+        if(!context.origami||context.reliefEnabled||context.wearEnabled){treeFallback='positive-effects-or-default-style';return;}
+        if(Reflect.get(renderer.backend,'isWebGPUBackend')!==true){treeFallback='webgpu-required';return;}
+        const demand=resources.treeBakeDemand();if(!demand.species.length)return;
+        const MiB=1024*1024,owner=treeOwner??=new TreeBakeOwner({cpuBytes:128*MiB,gpuBytes:512*MiB});if(!owner.needsPreparation(demand))return;
+        const paint=context.prepareAtlasPaint();preparingTrees=true;const generation=treeGeneration;let published=false,candidate:OwnedTreeCatalog|undefined,staging:ReturnType<ResourceLayer['prepareTreeAssetCatalog']>|undefined;
+        const assertCurrent=()=>{assertPreparationCurrent();paint.assertCurrent();if(disposed||generation!==treeGeneration||!demand.isCurrent())throw Error('Catalog tree preparation superseded');};
+        try{
+          assertCurrent();candidate=await owner.prepare(renderer,context,demand,paint,assertCurrent);assertCurrent();if(!candidate)return;
+          // The atelier has actual stock scene lights and no room/exploration
+          // output hook. Fresh Lambert materials deliberately retain that graph.
+          staging=resources.prepareTreeAssetCatalog(candidate,()=>{});const warmup=new THREE.Group();warmup.add(...staging.warmup);
+          await renderer.compileAsync(warmup,camera,lightingScene);assertCurrent();
+          const transaction=staging.publish();published=true;
+          try{transaction.commit();const retired=owner.adopt(candidate);candidate=undefined;retired?.dispose();}
+          catch(error){throw new AggregateError([error],'Catalog tree publication transfer failed');}
+          treeFallback=undefined;refreshInventory();
+        }catch(error){if(error instanceof AggregateError||error instanceof AtlasBuildQuarantineError){if(candidate){quarantinedTrees.add(candidate);candidate=undefined;}throw error;}assertCurrent();owner.refuse(demand,error);treeFallback=error instanceof Error?error.message:String(error);refreshInventory();}
+        finally{preparingTrees=false;const errors:unknown[]=[];try{staging?.dispose();}catch(error){errors.push(error);}if(candidate&&published)quarantinedTrees.add(candidate);else try{candidate?.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Catalog tree staged cleanup failed');}
+      },
+      get preparing(){return preparingTrees;},
+      dispose(){if(disposed)return;if(preparingTrees)throw Error('Wait for catalog tree preparation before disposal');disposed=true;treeGeneration++;const errors:unknown[]=[];for(const owner of [...quarantinedTrees,...(treeOwner?[treeOwner]:[])])try{owner.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Catalog tree owner cleanup failed');},
+    };
+}
+
 export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):CatalogCollection {
   return withGraphicsStyle(context,()=>{
     const sections:CatalogSection[]=[],dispose:(()=>void)[]=[],boundsReader=new PlacementBounds();
@@ -141,12 +176,16 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
     const plants:Resource[]=PLANT_SPECIES.map((species,index)=>({id:1000+index,kind:FLORA_DEFINITIONS[species].kind,species,x:4+(index%8)*7,z:4+Math.floor(index/8)*7,amount:1,growth:1}));
     const wildRecord=presentationRecord(64,40,plants),resourceGroup=new THREE.Group(),resources=new ResourceLayer(resourceGroup,plain,painted),clusters=new PlantClusterLayer(plain,painted);wild.group.add(resourceGroup,clusters.group);
     previewCall(resources,resources.update,wildRecord,true,undefined,undefined,{read:()=>({size:1,ripe:true,leafless:false}),harvestable:(r:Resource)=>previewCall(undefined,harvestable,wildRecord,r)});previewCall(clusters,clusters.update,wildRecord,true);
-    const byId=resourceBounds(wild.group),clusterSlots=Reflect.get(clusters,'slots') as Map<number,{index:number}>,clusterMesh=Reflect.get(clusters,'mesh') as THREE.InstancedMesh;
+    const clusterSlots=Reflect.get(clusters,'slots') as Map<number,{index:number}>,clusterMesh=Reflect.get(clusters,'mesh') as THREE.InstancedMesh;
+    const refreshWildInventory=()=>{
+    const byId=resourceBounds(wild.group),readyIds=new Set<number>();resourceGroup.traverse(object=>{if(!(object instanceof THREE.Mesh)||!object.geometry.hasAttribute('bakedUv'))return;const ranges=object.userData.resourceRanges as ResourceRangeData|undefined;for(const range of ranges?.ranges??[])readyIds.add(range.id<0?Math.floor(-range.id/2):range.id);});
+    wild.items.length=0;wild.missing!.length=0;
     for(const plant of plants){const slot=clusterSlots.get(plant.id);if(slot)byId.set(plant.id,instanceBounds(clusterMesh,slot.index));const bounds=byId.get(plant.id);
       if(!bounds||bounds.isEmpty()){wild.missing!.push({id:plant.species!,label:FLORA_DEFINITIONS[plant.species!].label,reason:'Aucun modèle affichable produit pour cette espèce.'});continue;}
-      const status:CatalogStatus=!context.origami?'default':SOURCE_PLANTS.has(plant.species!)?'reference':plant.species==='grass'||plant.species==='tall-grass'?'origami':'default';
-      wild.items.push(item(`plant:${plant.species}`,FLORA_DEFINITIONS[plant.species!].label,status,bounds,status==='default'&&context.origami?'Modèle habituel ; pas de remplacement Origami.':undefined));
+      const ready=readyIds.has(plant.id),status:CatalogStatus=!context.origami?'default':ready?'origami':SOURCE_PLANTS.has(plant.species!)?'reference':plant.species==='grass'||plant.species==='tall-grass'?'origami':'default';
+      wild.items.push(item(`plant:${plant.species}`,FLORA_DEFINITIONS[plant.species!].label,status,bounds,ready?'Forme habituelle de l’arbre, gouache et contours précalculés partagés ; éclairage Lambert du jeu.':status==='default'&&context.origami?'Modèle habituel ; pas de remplacement Origami.':undefined));
     }
+    };refreshWildInventory();
     sections.push(wild);dispose.push(()=>resources.dispose(),()=>clusters.dispose());
 
     // A source asset already authored in the reference module, deliberately
@@ -288,7 +327,7 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
     boxes.set(geyserGroup,'catalog:natural-geyser',geyserParts);const geyserPlaced=new ShelfLayout(28).add(geyserGroup,geyserBounds);naturalProps.group.add(geyserGroup);
     naturalProps.items.push(item('natural:geyser','Geyser naturel','default',geyserPlaced));sections.push(naturalProps);
     boundsReader.dispose();
-    let disposed=false;
-    return {sections,dispose(){if(disposed)return;disposed=true;for(let i=dispose.length-1;i>=0;i--)dispose[i]!();for(const entry of sections)entry.group.clear();}};
+    let disposed=false;const treePreparation=createCatalogTreePreparation(context,resources,refreshWildInventory);
+    return {sections,prepareTrees:treePreparation.prepareTrees,invalidatePreparedTrees:treePreparation.invalidatePreparedTrees,treeStatus:treePreparation.treeStatus,dispose(){if(disposed)return;if(treePreparation.preparing)throw Error('Wait for catalog tree preparation before disposal');disposed=true;const errors:unknown[]=[];for(let i=dispose.length-1;i>=0;i--)try{dispose[i]!();}catch(error){errors.push(error);}for(const entry of sections)entry.group.clear();if(!errors.length)try{treePreparation.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Catalog environment cleanup failed; tree owner retained on Source cleanup failure');}};
   });
 }

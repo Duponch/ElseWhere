@@ -56,6 +56,7 @@ export class GraphicsStyleContext {
  private readonly paintPool:VirtualPaintPool;
  private readonly activeBankCount=uniform(0);private readonly genericFaceLayer=uniform(0);
  private lastPaintVersion=-1;private admissionDepth=0;private repaintRequested=false;
+ private atlasPaintEpoch=0;
  private protectedDemandDeclared=false;
  private edgeMaps?:{color?:THREE.DataTexture;alpha:THREE.DataTexture;bump?:THREE.DataTexture};
  private bakedRefreshed=false;private coverageCheckpoints=new Map<number,CoverageCheckpoint>();
@@ -181,7 +182,7 @@ export class GraphicsStyleContext {
    const destination:unknown=this.coverageArray!.image.data;
    if(!(destination instanceof Uint8Array)||destination.length!==coveragePixels.length||this.coverageArray!.image.width!==512||this.coverageArray!.image.height!==512)throw Error('Prepared mask destination capacity changed');
    this.paintPool.commit(plan);destination.set(coveragePixels);this.coverageArray!.needsUpdate=true;
-   this.bakedFill=fill;this.bakedRefreshed=plan.refreshed;this.repaintRequested=false;this.lastPaintVersion=this.paintPool.version;this.lastReplayMode='mask';return;
+   this.bakedFill=fill;this.bakedRefreshed=plan.refreshed;this.repaintRequested=false;this.lastPaintVersion=this.paintPool.version;this.lastReplayMode='mask';this.atlasPaintEpoch++;return;
   }
   const faceDirty=repaint||plan.faceDepth!==oldFaceDepth;
   const nextCheckpoints=new Map<number,CoverageCheckpoint>(repaint?undefined:this.coverageCheckpoints);
@@ -222,7 +223,7 @@ export class GraphicsStyleContext {
   }
   this.faceProfilesTexture!.needsUpdate=true;this.genericFaceLayer.value=this.paintPool.resolve(0)?.[1]??0;
   this.activeBankCount.value=Math.max(...plan.bankShapes.map((shape,index)=>shape.size===512?index+1:0));
-  this.coverageCheckpoints=nextCheckpoints;this.bakedRefreshed=plan.refreshed;this.lastReplayMode='full';this.bakedFill=fill;this.repaintRequested=false;this.lastPaintVersion=this.paintPool.version;
+  this.coverageCheckpoints=nextCheckpoints;this.bakedRefreshed=plan.refreshed;this.lastReplayMode='full';this.bakedFill=fill;this.repaintRequested=false;this.lastPaintVersion=this.paintPool.version;this.atlasPaintEpoch++;
  }
  private ensureEdgeMaps():void{
   if(!this.origami)throw Error('Default materials must not request Origami edge maps.');
@@ -314,11 +315,26 @@ export class GraphicsStyleContext {
   // replaced by the three paint-UV probes used by the normal/bump sub-build.
   return texture(this.ensureRows(),vec2(category.add(.5).div(12),row.add(.5).div(4096))).level(float(0)).context({forceUVContext:false}).r;
  }
- /** diagnostic borrowed upload-order bytes; diagnostics never cause a bake. */
- debugPaintProfile(virtualId:number){this.paintPool.assertResident([virtualId]);const [physicalLayer,faceLayer]=this.paintPool.resolve(virtualId)!;
+ /** Borrowed upload-order pixels; valid only while the captured paint epoch
+  * remains current. Reading never creates a paint or uploads a GPU bank. */
+ private readPaintProfile(virtualId:number){this.paintPool.assertResident([virtualId]);const [physicalLayer,faceLayer]=this.paintPool.resolve(virtualId)!;
   const pigment=this.banks[Math.floor(physicalLayer/256)]!.image.data as Uint8Array,paper=this.paperArray!.image.data as Uint8Array,coverage=this.coverageArray!.image.data as Uint8Array;
   return{physicalLayer,faceLayer,pigment:pigment.subarray((physicalLayer%256)*PIXELS_PER_LAYER,(physicalLayer%256+1)*PIXELS_PER_LAYER),paper:paper.subarray(faceLayer*PIXELS_PER_LAYER,(faceLayer+1)*PIXELS_PER_LAYER),coverage:coverage.subarray(faceLayer*512*512,(faceLayer+1)*512*512),orientation:'upload-bottom-up' as const};
  }
+ /** Called only under the renderer's exclusive preparation gate. Finish the
+  * requested fill before lending pixels across asynchronous GPU preparation. */
+ prepareAtlasPaint(){
+  if(!this.origami||this.reliefEnabled||this.wearEnabled)throw Error('Opaque atlas requires Origami with relief and wear disabled');
+  if(this.fillTimer){clearTimeout(this.fillTimer);this.fillTimer=undefined;this.repaintRequested=true;}
+  this.flushPaint();this.ensureEdgeMaps();
+  const epoch=this.atlasPaintEpoch,settings=JSON.stringify(this.preferences),alpha=this.edgeMaps!.alpha,data=alpha.image.data;
+  if(!(data instanceof Uint8Array))throw Error('Prepared brush alpha pixels missing');
+  const isCurrent=():boolean=>this.atlasPaintEpoch===epoch&&JSON.stringify(this.preferences)===settings&&this.edgeMaps?.alpha===alpha&&!this.fillTimer&&!this.repaintRequested;
+  const assertCurrent=()=>{if(!isCurrent())throw Error('Prepared atlas paint changed before publication');};
+  return{fingerprint:`paint-v1:${epoch}:${settings}`,isCurrent,assertCurrent,paint:{readProfile:(id:number)=>{assertCurrent();return this.readPaintProfile(id);},edgeAlpha:{data,width:alpha.image.width,height:alpha.image.height},brushColorLinear:[this.brushColor.value.r,this.brushColor.value.g,this.brushColor.value.b] as const,lineOpacity:this.lineOpacity.value,strokeImperfection:this.strokeImperfection.value}};
+ }
+ /** Diagnostic borrowed bytes; diagnostics never cause a bake. */
+ debugPaintProfile(virtualId:number){return this.readPaintProfile(virtualId);}
  debugPaintStorage(){if(!this.colorArray)throw Error('Paint is not prepared');return{banks:this.banks.map(texture=>({texture,data:texture.image.data as Uint8Array})),paper:{texture:this.paperArray!,data:this.paperArray!.image.data as Uint8Array},coverage:{texture:this.coverageArray!,data:this.coverageArray!.image.data as Uint8Array},lookup:{texture:this.faceProfilesTexture!,data:this.faceProfilesTexture!.image.data as Float32Array},rows:this.rowsData};}
  paintReplayState(){return{mode:this.lastReplayMode,refreshed:this.bakedRefreshed,checkpointCount:this.coverageCheckpoints.size,bakedFill:this.bakedFill};}
  dispose():void{this.coverageCheckpoints.clear();if(this.fillTimer)clearTimeout(this.fillTimer);for(const release of [...this.brushOwners.values()])release();this.brushGeometries.clear();for(const bank of this.banks)bank.dispose();this.banks.length=0;for(const map of Object.values(this.edgeMaps??{}))map?.dispose();this.paperArray?.dispose();this.coverageArray?.dispose();this.faceProfilesTexture?.dispose();this.rowsTexture?.dispose();this.paintPool.dispose();this.appearanceRows.clear();this.wearGeometries.clear();this.edgeObjects.clear();this.colorArray=undefined;this.edgeMaps=undefined;this.rowsTexture=undefined;this.rowsData=undefined;this.paperArray=undefined;this.coverageArray=undefined;this.faceProfilesTexture=undefined;}

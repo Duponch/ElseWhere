@@ -16,6 +16,7 @@ import {createOrigamiContour,type OrigamiContourBinding} from './origami/contour
 import {createRigBrushGeometry} from './origami/rig-brush';
 import {ActorPartUnionIndex,readAnimalPartUnion} from './origami/actor-part-union';
 import {indexExactStaticVertices} from './origami/static-index';
+import {prepareAnimalAtlasBinding,type BakedAnimalLibrary,type AnimalBakeRequest,type PreparedAnimalAtlas} from './origami/baked/animal-baked';
 import { coreTimeSeconds,localTimeSeconds } from '../bridge/clock-rate';
 import { Fn,If,attribute,cos,sin,float,instanceIndex,normalLocal,positionLocal,uv,vec3,uniform,renderGroup,mix } from 'three/tsl';
 import { hareGeometry } from './hare-geometry';
@@ -45,6 +46,27 @@ import {WildlifeBodyScale,WildlifeFrameState} from './wildlife-frame-state';
 import { pileSurfaces,pileIdentitySurfaces,type PileSurface } from './pile-surfaces';
 import { PAWN_MODEL_SCALE,WORLD_SCALE } from '../world/scale';
 
+export interface WildlifeBakedPreparation {
+  library:BakedAnimalLibrary;
+  request:(species:string)=>AnimalBakeRequest;
+  /** The caller owns exclusive renderer preparation across every await. */
+  isCurrent:()=>boolean;
+  adoptConfiguredClone:(source:THREE.MeshStandardNodeMaterial,next:THREE.MeshStandardNodeMaterial)=>boolean;
+  warmup:(binding:PreparedAnimalAtlas,species:string)=>Promise<void>;
+}
+export interface WildlifeBakedPreparationResult {
+  prepared:string[];
+  retained:string[];
+  fallback:{species:string;reason:string}[];
+}
+const instancedAnimalAttribute=(a:THREE.BufferAttribute|THREE.InterleavedBufferAttribute):boolean=>a instanceof THREE.InstancedBufferAttribute||a instanceof THREE.InterleavedBufferAttribute&&a.data instanceof THREE.InstancedInterleavedBuffer;
+/** Copy owner aliases only; rings, sprites, source static vertices and their
+ * canonical triangle family remain owned by their original geometry. */
+function linkAnimalOwners(target:THREE.InstancedBufferGeometry,source:THREE.InstancedBufferGeometry):void {
+  for(const[name,a]of Object.entries(source.attributes))if(instancedAnimalAttribute(a))target.setAttribute(name,a);
+  target.instanceCount=source.instanceCount;target.userData.animationCache=source.userData.animationCache;
+}
+
 /** Resident capacity and node graph. CPU supplies edges/phases at snapshots
  * and segment boundaries; continuous translation and the rig run on the GPU. */
 class SpeciesRig {
@@ -57,6 +79,12 @@ class SpeciesRig {
   readonly origamiLines?:THREE.Mesh;
   readonly origamiWear?:THREE.Mesh;
   private origamiGraphics?:GraphicsStyleContext;
+  private texturesEnabled=true;
+  private readonly bakedEligible:boolean;
+  private bloodBlocked=false;
+  private bakedBinding?:PreparedAnimalAtlas;
+  private bakedSource?:THREE.InstancedBufferGeometry;
+  private readonly withBlood:(base:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
   private readonly origamiCleanup:(()=>void)[]=[];
   private readonly origamiPartUnions:ActorPartUnionIndex[]=[];
   private readonly fallbackContour?:OrigamiContourBinding;
@@ -97,6 +125,7 @@ class SpeciesRig {
     this.animationCache=new ActorAnimationCache(animationDetail);
     this.gaitRate=animalGaitRadiansPerUnit(species);
     const graphics=currentGraphicsStyle();
+    this.bakedEligible=!!graphics?.origami&&!graphics.reliefEnabled&&!graphics.wearEnabled;
     const geometry=(graphics?.origami?origamiAnimalPresentationGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species,graphics.wearEnabled):undefined)??hareGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species);
     if(graphics?.origami&&geometry.userData.origamiReference)indexExactStaticVertices(geometry);
     geometry.userData.animationCache=this.animationCache;
@@ -116,6 +145,7 @@ class SpeciesRig {
     const paint=origami?attribute('animalPaint','vec4'):undefined;
     const baseColor=paint?paint.rgb:attribute('color','vec3');
     const withBlood=(base:THREE.Node<'vec3'>)=>bodyBloodPigment(base,attribute('animalPart','vec4').z,species==='hare'||species==='snow-hare'?2:1,attribute('animalPart','vec4').w.lessThan(0).select(float(1),float(0)),attribute('aBiology','vec3').y);
+    this.withBlood=withBlood;
     mat.vertexColors=false;mat.colorNode=withBlood(baseColor);
     if(origami){mat.roughness=.88;mat.metalness=.02;}
     mat.positionNode=Fn(()=>{
@@ -233,10 +263,65 @@ class SpeciesRig {
     this.slaughter=animalSlaughterMarker(this.mesh.geometry as THREE.InstancedBufferGeometry,this,style,geometry.boundingBox!.max.y);
     this.mesh.visible=false;this.flames.visible=false;this.installOrigamiPartUnions();
   }
+  /** The fused atlas cannot recolor the body beneath its already painted ink.
+   * Keep its geometry/lease, but use the original body and ribbons while any
+   * resident's published blood word is nonzero. */
+  private selectSurface():void {
+    const atlasEnabled=this.texturesEnabled&&!this.bloodBlocked;
+    this.mesh.material=this.texturesEnabled?(atlasEnabled&&this.bakedBinding?this.bakedBinding.material:this.texturedMaterial):this.plainMaterial;
+    this.bakedBinding?.setAtlasEnabled(atlasEnabled);
+  }
+  get atlasBlockedByBlood():boolean{return this.bloodBlocked;}
+  get hasRetainedBakedSurface():boolean{return !!this.bakedBinding;}
+  get needsBakedPreparation():boolean{return this.bakedEligible&&this.animals.length>0&&this.texturesEnabled&&!this.bloodBlocked&&!this.bakedBinding;}
   setTexturesEnabled(enabled:boolean):void {
-    this.mesh.material=enabled?this.texturedMaterial:this.plainMaterial;setFireTexturesEnabled(this.flames,enabled);
+    this.texturesEnabled=enabled;this.selectSurface();setFireTexturesEnabled(this.flames,enabled);
     this.fallbackContour?.sync();
     if(this.origamiWear){this.origamiWear.userData.origamiTexturesEnabled=enabled;this.origamiWear.visible=enabled&&this.origamiGraphics!.edgeVisuals.showWear;}
+  }
+  bakedStatus(){
+    const binding=this.bakedBinding;if(!binding)return undefined;
+    return{species:this.species,cpuBytes:binding.resource.cpuBytes,gpuBytes:binding.resource.gpuBytes,atlas:binding.resource.atlasLayout,triangles:binding.sourceVertex.length/3,texturesEnabled:this.texturesEnabled,bloodBlocked:this.bloodBlocked,atlasMaterialBloodFree:binding.material.userData.origamiBakedBloodFree===true,bodyUsesBakedGeometry:this.mesh.geometry===binding.geometry,bodyUsesBakedMaterial:this.mesh.material===binding.material,bodyUsesSourceMaterial:this.mesh.material===this.texturedMaterial,sourceRibbonsVisible:this.origamiLines?.visible??false};
+  }
+  releaseBaked():void {this.bakedBinding?.dispose();}
+  async prepareBaked(options:WildlifeBakedPreparation,isCurrent:()=>boolean):Promise<'prepared'|'retained'> {
+    if(this.bloodBlocked)throw Error('Animal baked preparation deferred while resident body blood requires the source ink composition');
+    if(this.bakedBinding)return'retained';
+    const graphics=this.origamiGraphics,source=this.mesh.geometry as THREE.InstancedBufferGeometry;
+    if(!graphics?.origami||graphics.reliefEnabled||graphics.wearEnabled||!source.userData.origamiReference||!this.origamiLines)throw Error('Animal baked rendering requires the actual Origami relief0/wear0 source');
+    if(!this.texturesEnabled)throw Error('Animal baked preparation deferred while textures are disabled');
+    const lease=await options.library.acquire(this.species,options.request(this.species));
+    const current=()=>isCurrent()&&this.texturesEnabled&&!this.bloodBlocked&&this.mesh.geometry===source&&!this.bakedBinding;
+    if(!current()){lease.release();throw Error('Animal baked preparation superseded before binding');}
+    const binding=prepareAnimalAtlasBinding(lease,source,this.texturedMaterial,this.withBlood,{
+      // The existing published-word guard owns this capability: current()
+      // rechecks it across warmup, and selectSurface restores source on blood.
+      bloodFree:true,isCurrent:current,adoptConfiguredClone:options.adoptConfiguredClone,
+      warmup:next=>options.warmup(next,this.species),ribbons:this.origamiLines,
+      refreshRibbons:()=>graphics.refreshEdgeObject(this.origamiLines!),
+      publish:next=>{
+        if(!current())throw Error('Animal baked publication superseded');
+        const detach=()=>{
+          if(this.bakedBinding!==next)return;
+          const original=this.bakedSource!;
+          this.clearOrigamiPartUnions();linkAnimalOwners(original,this.mesh.geometry as THREE.InstancedBufferGeometry);
+          this.mesh.geometry=original;this.mesh.material=this.texturesEnabled?this.texturedMaterial:this.plainMaterial;
+          this.installOrigamiPartUnions();this.syncOrigamiInstances();
+          this.bakedBinding=undefined;this.bakedSource=undefined;
+        };
+        this.clearOrigamiPartUnions();this.bakedSource=source;this.bakedBinding=next;
+        try{
+          // Auxiliary meshes retain their own rings/sprites and owner aliases.
+          // The initial aliases are identical; real capacity growth below
+          // replaces/relinks all existing consumers together.
+          this.mesh.geometry=next.geometry;this.selectSurface();
+          next.syncInstances(source);this.installOrigamiPartUnions();this.syncOrigamiInstances();
+          return{detach,isAttached:()=>this.bakedBinding===next};
+        }catch(error){try{detach();}catch(cleanup){throw new AggregateError([error,cleanup],'Animal baked publication could not restore its source');}throw error;}
+      },
+    });
+    try{binding.setAtlasEnabled(this.texturesEnabled&&!this.bloodBlocked);await binding.commit();return'prepared';}
+    catch(error){try{binding.dispose();}catch(cleanup){throw new AggregateError([error,cleanup],'Animal baked binding cleanup failed');}throw error;}
   }
   /** Static reference streams survive capacity growth; only the common actor
    * buffers are relinked to the newly grown resident allocation. */
@@ -300,6 +385,8 @@ class SpeciesRig {
     return ()=>{for(const restore of restoreUnions)restore();if(this.revision!==revision)return;g.instanceCount=n;this.setOrigamiCount(n);fire.instanceCount=f;marker.instanceCount=s;this.slaughter.visible=visible;this.mesh.visible=bodyVisible;this.flames.visible=fireVisible;};
   }
   deactivate():void {
+    this.releaseBaked();
+    this.bloodBlocked=false;
     this.revision++;this.source=undefined;this.animals=[];this.hasFireActors=false;this.playback435.clear();
     this.keys.clear();this.headings.clear();this.gait.clear();this.carrierSlots.clear();this.actorSlots.clear();this.animationCache.reset();this.resetSpring297();
     for(const mesh of [this.mesh,this.flames,this.selection,this.slaughter]){(mesh.geometry as THREE.InstancedBufferGeometry).instanceCount=0;mesh.visible=false;}
@@ -349,12 +436,12 @@ class SpeciesRig {
   updateClock(tick:number,pawns?:PawnLayer):void {
     this.time.value=pawns?.time.value??localTimeSeconds(tick)%(2*Math.PI);this.blend.value=pawns?.blend.value??1;
   }
-  update(world:World,group:VisualAnimal[],burning:ReadonlyMap<number,number>,timeline:MotionTimeline|undefined,surfaces:ReadonlyMap<number,number>,pileSurface:ReadonlyMap<number,PileSurface>,reset=false,pawns?:PawnLayer,quotaTargets:ReadonlySet<number>=new Set(),pileIdentities?:ReadonlyMap<number,PileSurface>,actorScene?:CoreActorScene297,dt297=0,speed297=0):void {
+  update(world:World,group:VisualAnimal[],burning:ReadonlyMap<number,number>,timeline:MotionTimeline|undefined,surfaces:ReadonlyMap<number,number>,pileSurface:ReadonlyMap<number,PileSurface>,reset=false,pawns?:PawnLayer,quotaTargets:ReadonlySet<number>=new Set(),pileIdentities?:ReadonlyMap<number,PileSurface>,actorScene?:CoreActorScene297,dt297=0,speed297=0):boolean {
     const changed=this.source!==world;
     if(changed||reset)this.revision++;
     if(reset){this.headings.clear();this.keys.clear();this.gait.clear();this.resetSpring297();}
     if(changed){this.source=world;this.keys.clear();this.animals=group;this.phaseIndices297.clear();for(let i=0;i<group.length;i++)this.phaseIndices297.set(group[i]!.id,i);this.surfaces=surfaces;this.mesh.visible=group.length>0;
-      if(this.animals.length>this.mesh.geometry.getAttribute('aFrom').count){this.clearOrigamiPartUnions();growPawnBuffers([this.mesh,this.flames,this.selection,this.slaughter],this.animals.length);this.installOrigamiPartUnions();this.syncOrigamiInstances();}
+      if(this.animals.length>this.mesh.geometry.getAttribute('aFrom').count){this.clearOrigamiPartUnions();growPawnBuffers([this.mesh,this.flames,this.selection,this.slaughter],this.animals.length);this.bakedBinding?.adoptGrownGeometry(this.mesh.geometry as THREE.InstancedBufferGeometry);this.installOrigamiPartUnions();this.syncOrigamiInstances();}
       this.setSelected(this.selected);
       const markers=this.slaughter.geometry as THREE.InstancedBufferGeometry,flags=markers.getAttribute('aSlaughter') as THREE.InstancedBufferAttribute;
       let any=false,dirty=false;
@@ -483,8 +570,22 @@ class SpeciesRig {
     });
     if(dirty)for(const a of [from,to,times,state,scale,g.getAttribute('aBodyBlood'),g.getAttribute('aAbsent'),g.getAttribute('aCarrier'),g.getAttribute('aCorpseHandoff'),g.getAttribute('aCorpseFrom'),g.getAttribute('aCorpseTo')])a.needsUpdate=true;
     else if(springDirty)for(const a of [from,to,times,state])a.needsUpdate=true;
-    if(changed||reset||dirty){this.actorSlots.clear();let minScale=1;animals.forEach((a,i)=>{this.actorSlots.set(a.id,i);minScale=Math.min(minScale,scale.getX(i));const carrier=g.getAttribute('aCarrier');this.animationCache.reconcile(i,a.id,[state.getZ(i),scale.getX(i),g.getAttribute('aAbsent').getX(i),carrier.getX(i),carrier.getY(i),this.carrierSlots.get(i),a.carrierId,a.corpsePile?.owner.type].join(':'));});this.animationCache.setMinimumScale(minScale);this.refreshOrigamiPartUnion();}
+    let bloodChanged=false;
+    if(changed||reset||dirty){
+      this.actorSlots.clear();let minScale=1,hasBlood=false;
+      const blood=this.bakedEligible?g.getAttribute('aBodyBlood'):undefined;
+      animals.forEach((a,i)=>{
+        this.actorSlots.set(a.id,i);minScale=Math.min(minScale,scale.getX(i));const carrier=g.getAttribute('aCarrier');
+        this.animationCache.reconcile(i,a.id,[state.getZ(i),scale.getX(i),g.getAttribute('aAbsent').getX(i),carrier.getX(i),carrier.getY(i),this.carrierSlots.get(i),a.carrierId,a.corpsePile?.owner.type].join(':'));
+        // Reuse this existing resident pass, and only read the actual stream
+        // after the live/carried/corpse writers above have published it.
+        if(blood&&!hasBlood)hasBlood=blood.getX(i)!==0;
+      });
+      this.animationCache.setMinimumScale(minScale);this.refreshOrigamiPartUnion();
+      if(this.bakedEligible&&this.bloodBlocked!==hasBlood){this.bloodBlocked=hasBlood;bloodChanged=true;this.selectSurface();}
+    }
     if(playback)this.playback435.commit();
+    return bloodChanged;
   }
   cpuPoseForId(id:number){
     const slot=this.actorSlots.get(id);if(slot===undefined)return;
@@ -520,17 +621,68 @@ export class WildlifeLayer {
   private readonly markerStyle:AnimalSlaughterMarkerStyle;
   private rigs:SpeciesRig[];private source?:World;private surfaces:ReadonlyMap<number,number>=new Map();private pileSurface:ReadonlyMap<number,PileSurface>=new Map();private pileIdentities:ReadonlyMap<number,PileSurface>=new Map();private quotaTargets:ReadonlySet<number>=new Set();
   private activeRigs:SpeciesRig[]=[];
+  private readonly bakedEligible:boolean;
+  private bakedGeneration=0;
+  private bakedPending=false;
+  private bakedClosed=false;
+  private bakedPreparation?:Promise<WildlifeBakedPreparationResult>;
+  private bakedFallback:WildlifeBakedPreparationResult['fallback']=[];
   private groups=new Map<string,VisualAnimal[]>();
   private burning:ReadonlyMap<number,number>=new Map();
   private selected:ReadonlySet<number>=new Set();
   constructor(configure?:(m:THREE.MeshStandardNodeMaterial)=>void,loadTexture?:SceneTextureLoader,animationDetail=new AnimationDetail()){
+    const graphics=currentGraphicsStyle();this.bakedEligible=!!graphics?.origami&&!graphics.reliefEnabled&&!graphics.wearEnabled;
     this.markerStyle=new AnimalSlaughterMarkerStyle(loadTexture);
     this.rigs=ANIMAL_SPECIES_IDS.map(species=>new SpeciesRig(this.travelTime,species,this.surfaceTextures[animalCoat(species)],this.markerStyle,animationDetail,configure));
     for(const rig of this.rigs){this.mesh.add(rig.mesh,rig.selection,rig.slaughter);this.flames.add(rig.flames);}
   }
+  /** No species scan on frame calls. Refusals are retried only after explicit
+   * invalidation or a changed active species cohort, never every paused frame. */
+  get hasPendingBakedSpecies():boolean{return this.bakedPending&&!this.bakedClosed;}
+  bakedStatus(){
+    const published=this.rigs.flatMap(rig=>{const status=rig.bakedStatus();return status?[status]:[];});
+    return{eligible:this.bakedEligible,activeSpecies:this.activeRigs.map(rig=>rig.species),bloodBlockedSpecies:this.activeRigs.filter(rig=>rig.atlasBlockedByBlood).map(rig=>rig.species),published,pending:this.hasPendingBakedSpecies,preparing:!!this.bakedPreparation,generation:this.bakedGeneration,cpuBytes:published.reduce((n,s)=>n+s.cpuBytes,0),gpuBytes:published.reduce((n,s)=>n+s.gpuBytes,0),fallback:this.bakedFallback.map(row=>({...row}))};
+  }
+  /** Restore the true source before changing its paint/line settings. Pending
+   * preparation sees the new generation and can no longer publish. */
+  invalidateBakedSpecies():void {
+    this.bakedGeneration++;this.bakedFallback=[];
+    this.bakedPending=this.bakedEligible&&this.activeRigs.length>0&&!this.bakedClosed;
+    for(const rig of this.rigs)rig.releaseBaked();
+  }
+  async settleBakedSpecies():Promise<void>{await this.bakedPreparation;}
+  /** Called only by the scene's exclusive preparation owner, not update/RAF. */
+  prepareBakedSpecies(options:WildlifeBakedPreparation):Promise<WildlifeBakedPreparationResult>{
+    if(this.bakedClosed)return Promise.reject(Error('Wildlife baked preparation owner is disposed'));
+    if(this.bakedPreparation)return Promise.reject(Error('Wildlife baked preparation already active'));
+    const generation=this.bakedGeneration,cohort=[...this.activeRigs];
+    const current=()=>!this.bakedClosed&&generation===this.bakedGeneration&&options.isCurrent();
+    const job:Promise<WildlifeBakedPreparationResult>=Promise.resolve().then(async()=>{
+      const result:WildlifeBakedPreparationResult={prepared:[],retained:[],fallback:[]};
+      for(const rig of cohort){
+        if(!current())break;
+        try{
+          if(!this.bakedEligible)throw Error('Animal baked rendering requires Origami relief0/wear0');
+          const outcome=await rig.prepareBaked(options,current);result[outcome].push(rig.species);
+        }catch(error){
+          // A failed rollback cannot be presented as a safe source fallback.
+          if(error instanceof AggregateError)throw error;
+          const reason=error instanceof Error?error.message:String(error);result.fallback.push({species:rig.species,reason});
+          if(!/budget|capacity|superseded|disposed|deferred|requires|exceeds|refused/i.test(reason))console.warn('Animal baked preparation kept its source',rig.species,error);
+        }
+      }
+      if(current()){this.bakedFallback=result.fallback;this.bakedPending=false;}
+      return result;
+    }).finally(()=>{if(this.bakedPreparation===job)this.bakedPreparation=undefined;});
+    this.bakedPreparation=job;return job;
+  }
   setDesignationMinCellPixels(value:number):void {this.markerStyle.setMinCellPixels(value);}
   presentDesignations(camera:THREE.OrthographicCamera|THREE.PerspectiveCamera,height:number,cellPixels:number):void {this.markerStyle.present(camera,height,cellPixels);}
-  setTexturesEnabled(enabled:boolean):void {if(this.texturesEnabled===enabled)return;this.texturesEnabled=enabled;for(const rig of this.rigs)rig.setTexturesEnabled(enabled);}
+  setTexturesEnabled(enabled:boolean):void {
+    if(this.texturesEnabled===enabled)return;this.texturesEnabled=enabled;let needsPreparation=false;
+    for(const rig of this.rigs){rig.setTexturesEnabled(enabled);if(this.bakedEligible)needsPreparation||=rig.needsBakedPreparation;}
+    if(this.bakedEligible){if(this.bakedPreparation)this.bakedGeneration++;this.bakedPending=needsPreparation&&!this.bakedClosed;}
+  }
   setSelected(ids:ReadonlySet<number>):void {this.selected=ids;for(const rig of this.activeRigs)rig.setSelected(ids);}
   forEachPose(visit:(id:number,species:string,x:number,y:number,z:number,height:number,radius:number)=>void):void {for(const rig of this.activeRigs)rig.forEachPose(visit);}
   cpuPoseForId(id:number){for(const rig of this.activeRigs){const pose=rig.cpuPoseForId(id);if(pose)return pose;}}
@@ -540,6 +692,9 @@ export class WildlifeLayer {
       this.source=world;this.groups=wildlifePresentationGroups(world,pawns?pileId=>pawns.animalCorpseTransferCarrier(pileId):undefined);
       // Retain canonical species order for pointer iteration and submission.
       const active=this.rigs.filter(rig=>this.groups.has(rig.species));
+      if(active.length!==this.activeRigs.length||active.some((rig,i)=>rig!==this.activeRigs[i])){
+        this.bakedGeneration++;this.bakedFallback=[];this.bakedPending=this.bakedEligible&&active.length>0&&!this.bakedClosed;
+      }
       for(const rig of active)rig.setSelected(this.selected);
       const present=new Set(active);for(const rig of this.activeRigs)if(!present.has(rig))rig.deactivate();
       this.activeRigs=active;
@@ -551,7 +706,18 @@ export class WildlifeLayer {
     // These scalar writes preserve each resident graph's independent clocks,
     // including during compile preparation; only active rigs prepare actors.
     for(const rig of this.rigs)rig.updateClock(tick,pawns);
-    for(const rig of this.activeRigs)rig.update(world,this.groups.get(rig.species)!,this.burning,timeline,this.surfaces,this.pileSurface,reset,pawns,this.quotaTargets,this.pileIdentities,actorScene,dt297,speed297);
+    let bloodChanged=false,invalidatePreparation=false,needsPreparation=false;
+    for(const rig of this.activeRigs){
+      const changed=rig.update(world,this.groups.get(rig.species)!,this.burning,timeline,this.surfaces,this.pileSurface,reset,pawns,this.quotaTargets,this.pileIdentities,actorScene,dt297,speed297);
+      if(this.bakedEligible){bloodChanged||=changed;invalidatePreparation||=changed&&!rig.hasRetainedBakedSurface;needsPreparation||=rig.needsBakedPreparation;}
+    }
+    if(bloodChanged&&invalidatePreparation){
+      // A retained binding switches materials without cancelling another
+      // species' warmup. Only a newly blocked/clean unbound rig invalidates
+      // the pending cohort, preventing stale publication or lost admission.
+      if(this.bakedPreparation)this.bakedGeneration++;
+      this.bakedFallback=[];this.bakedPending=needsPreparation&&!this.bakedClosed;
+    }
   }
   adoptPhase297(world:World,indices:readonly number[],actorScene?:CoreActorScene297,changedActorIds?:ReadonlySet<number>):void {
     const population=actorScene?.animals??world.wildlife?.animals??[],dirty=new Set(indices);
@@ -564,6 +730,7 @@ export class WildlifeLayer {
   presentAnimations(pawns?:PawnLayer):void {for(const rig of this.activeRigs)rig.presentAnimations(pawns);}
   prepare():()=>void{const restores=this.rigs.map(r=>r.prepare());return()=>{for(const restore of restores)restore();};}
   dispose():void{
+    this.bakedClosed=true;this.invalidateBakedSpecies();
     for(const r of this.rigs){
       r.clearPlayback435();r.animationCache.dispose();
       r.disposeOrigamiCompanions();

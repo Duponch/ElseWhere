@@ -38,6 +38,10 @@ import {materialAllowedForPlayer256} from '../sim/material-permission-256';
 import { corpseStage } from '../sim/corpses';
 import { corpseVisualMask } from './corpse-presentation';
 import { WildlifeLayer } from './WildlifeLayer';
+import {BakedAnimalLibrary,type AnimalBakeRequest} from './origami/baked/animal-baked';
+import {prepareGpuAtlas} from './origami/baked/gpu-atlas-preparation';
+import {AtlasBuildQuarantineError} from './origami/baked/atlas-cache';
+import {TreeBakeOwner,type OwnedTreeCatalog} from './origami/TreeBakeOwner';
 import { AnimalCargoLayer282 } from './AnimalCargoLayer282';
 import { MechanoidLayer } from './MechanoidLayer';
 import { RopeLayer } from './RopeLayer';
@@ -151,8 +155,24 @@ function isNaturalSceneWorld(value:World|{changed:boolean}):value is World {
 
 export class SceneRenderCore {
   private rendererDisposal:Promise<void>|undefined;
+  private bakedAnimalLibrary?:BakedAnimalLibrary;
+  private bakedTreeOwner?:TreeBakeOwner;
+  /** A failed publication/retirement may still have Source or435 users. These
+   * textures stay owned until both producers detach; never allocated normally. */
+  private quarantinedTreeCatalogs?:Set<OwnedTreeCatalog>;
+  private bakedAnimalPreparation?:Promise<void>;
+  private bakedAnimalEpoch=0;
+  private bakedAnimalTimer?:ReturnType<typeof setTimeout>;
+  private closingPresentation=false;
+  private disposeAfterPreparation?:Promise<void>;
   private graphicsMeasurement:{collector:ReturnType<typeof createGraphicsStyleComparison>;context:()=>GraphicsStyleComparisonContext;isCurrent:()=>boolean;resolve:(result:GraphicsStyleComparisonResult)=>void;timer?:ReturnType<typeof setTimeout>}|undefined;
-  async disposeAsync():Promise<void>{this.dispose();await this.rendererDisposal;}
+  async disposeAsync():Promise<void>{
+    const errors:unknown[]=[];
+    try{this.dispose();}catch(error){errors.push(error);}
+    try{await this.disposeAfterPreparation;}catch(error){errors.push(error);}
+    try{await this.rendererDisposal;}catch(error){errors.push(error);}
+    if(errors.length===1)throw errors[0];if(errors.length)throw new AggregateError(errors,'Scene disposal failed');
+  }
   protected diorama: DioramaLayer | null = null;
   protected dioramaEnabled = true;
   protected room: RoomLayer | null = null;
@@ -175,7 +195,112 @@ export class SceneRenderCore {
   readonly stats = { fps: 0, frameMs: 0, frameP95: 0, drawCalls: 0, triangles: 0 };
   setGraphicsStyleParameters(settings:GraphicsStylePreferences):void {
     if(requiresGraphicsStyleRebuild(this.graphicsStyle.preferences,settings))throw new Error('Le changement de style ou des effets désactivés exige une nouvelle préparation de l’affichage.');
+    this.bakedAnimalEpoch++;this.wildlife.invalidateBakedSpecies();
+    this.invalidateBakedTrees();
     this.graphicsStyle.update(settings);this.invalidatePausedShadow();
+    this.queuePausedBakedAnimals();
+  }
+  bakedGraphicsStatus(){return{animals:this.wildlife.bakedStatus(),cache:this.bakedAnimalLibrary?.snapshot()??null,
+    trees:this.resources.bakedTreeStatus(),treeCache:this.bakedTreeOwner?.snapshot()??null};}
+  private get canBakeAnimals():boolean{return this.backend==='WebGPU'&&this.graphicsStyle.origami&&!this.graphicsStyle.reliefEnabled&&!this.graphicsStyle.wearEnabled&&this.texturesEnabled;}
+  private get hasPendingBakedResources():boolean {
+    if(this.wildlife.hasPendingBakedSpecies)return true;
+    const demand=this.resources.treeBakeDemand();
+    return this.bakedTreeOwner?this.bakedTreeOwner.needsPreparation(demand):demand.species.length>0;
+  }
+  private invalidateBakedTrees():void {
+    if(!this.bakedTreeOwner)return;
+    const transaction=this.resources.setTreeAssetCatalog(undefined);
+    this.ownedOpaqueRevisions435?.invalidateResources();this.reconcileStaticCompiler435();
+    transaction.commit();this.bakedTreeOwner.invalidate();
+  }
+  private async prepareBakedTreeResources(source:ReturnType<GraphicsStyleContext['prepareAtlasPaint']>,assertCurrent:()=>void):Promise<void>{
+    const demand=this.resources.treeBakeDemand();if(!demand.species.length)return;
+    const MiB=1024*1024,owner=this.bakedTreeOwner??=new TreeBakeOwner({cpuBytes:128*MiB,gpuBytes:512*MiB});
+    if(!owner.needsPreparation(demand))return;
+    let candidate:Awaited<ReturnType<TreeBakeOwner['prepare']>>;
+    let staging:ReturnType<ResourceLayer['prepareTreeAssetCatalog']>|undefined;
+    try{
+      candidate=await owner.prepare(this.renderer,this.graphicsStyle,demand,source,assertCurrent);
+      if(!candidate)return;
+      assertCurrent();
+      staging=this.resources.prepareTreeAssetCatalog(candidate,this.environmentLighting.configure);
+      const preview=new THREE.Group();preview.add(...staging.warmup);
+      await this.renderer.compileAsync(preview,this.rig.orthographic,this.scene);assertCurrent();
+      await this.renderer.compileAsync(preview,this.rig.perspective,this.scene);assertCurrent();
+      if(!demand.isCurrent())throw Error('Tree cohort changed before publication');
+      // No await after publication: settings, Source chunks and compiled pages
+      // change as one synchronous transaction before normal rendering resumes.
+      const transaction=staging.publish();
+      try{
+        this.ownedOpaqueRevisions435?.invalidateResources();this.reconcileStaticCompiler435();
+      }catch(error){
+        try{transaction.rollback();this.reconcileStaticCompiler435();transaction.commit();}
+        catch(rollback){throw new AggregateError([error,rollback],'Tree publication rollback failed');}
+        throw error;
+      }
+      try{transaction.commit();const retired=owner.adopt(candidate);candidate=undefined;retired?.dispose();}
+      catch(error){throw new AggregateError([error],'Tree publication ownership transfer failed');}
+      this.invalidatePausedShadow();
+    }catch(error){
+      if(error instanceof AggregateError||error instanceof AtlasBuildQuarantineError){
+        if(candidate){(this.quarantinedTreeCatalogs??=new Set()).add(candidate);candidate=undefined;}
+        throw error;
+      }
+      assertCurrent();if(!demand.isCurrent())throw error;
+      owner.refuse(demand,error);console.warn('Tree atlas retained the original renderer',error);
+    }finally{
+      const errors:unknown[]=[];
+      try{staging?.dispose();}catch(error){errors.push(error);}
+      try{candidate?.dispose();}catch(error){errors.push(error);}
+      if(errors.length)throw new AggregateError(errors,'Tree staged resource cleanup failed');
+    }
+  }
+  /** The renderer is exclusively held across every GPU await. Existing actors
+   * remain on their source materials until the complete texture is published. */
+  private async prepareBakedWildlifeResources(pausedOnly=false):Promise<void>{
+    if(!this.canBakeAnimals||!this.hasPendingBakedResources||this.closingPresentation)return;
+    if(!this.preparing||this.bakedAnimalPreparation)throw Error('Animal atlas preparation requires an exclusive renderer');
+    const epoch=this.bakedAnimalEpoch,source=this.graphicsStyle.prepareAtlasPaint(),MiB=1024*1024;
+    const library=this.bakedAnimalLibrary??=new BakedAnimalLibrary({cpuBytes:128*MiB,gpuBytes:512*MiB});
+    const ownsPreparation=()=>!this.disposed&&!this.closingPresentation&&this.preparing&&this.canBakeAnimals&&epoch===this.bakedAnimalEpoch&&(!pausedOnly||this.received?.speed===0);
+    const isCurrent=()=>ownsPreparation()&&source.isCurrent();
+    const assertCurrent=()=>{if(!ownsPreparation())throw Error('Animal atlas preparation superseded');source.assertCurrent();};
+    const request=():AnimalBakeRequest=>({recipeFingerprint:'complete-origami-animals-v1',paletteFingerprint:'authored-reference-palette-v1',paintFingerprint:source.fingerprint,
+      impasto:0,wear:0,edgeWidth:this.graphicsStyle.preferences.edgeWidth,strokeImperfection:this.graphicsStyle.preferences.strokeImperfection,
+      chartOptions:{texelsPerUnit:256,paddingTexels:8,mipLevels:4,maxAtlasSize:2048,maxAtlasPixels:2048*2048,maxOutputBytes:32*MiB,maxTriangles:20000},
+      paint:source.paint,maxInkTriangles:100000,reservation:{cpuBytes:64*MiB,gpuBytes:256*MiB},deferGpuReservation:true,assertPreparationCurrent:assertCurrent,compilerFingerprint:'gpu-compact-opaque-v7',
+      compiler:input=>prepareGpuAtlas(this.renderer,input.charts,input.ink,input.profile,input.paint,{levels:4,maxCpuBytes:32*MiB,maxGpuBytes:256*MiB,maxTextureSize:4096},()=>{assertCurrent();input.assertCurrent();},plan=>input.reservePreparation({cpuBytes:plan.cpuBytes,gpuBytes:plan.peakGpuBytes}))});
+    const job=(async()=>{
+      await this.prepareBakedTreeResources(source,assertCurrent);
+      assertCurrent();
+      await this.wildlife.prepareBakedSpecies({library,request,isCurrent,adoptConfiguredClone:(from,to)=>this.environmentLighting.adoptConfiguredClone(from,to),warmup:async binding=>{
+        assertCurrent();const preview=new THREE.Mesh(binding.geometry,binding.material);preview.frustumCulled=false;preview.castShadow=true;preview.receiveShadow=true;
+        await this.renderer.compileAsync(preview,this.camera,this.scene);assertCurrent();
+      }});
+      assertCurrent();library.evictUnused();
+    })();
+    this.bakedAnimalPreparation=job;
+    try{await job;}finally{if(this.bakedAnimalPreparation===job)this.bakedAnimalPreparation=undefined;}
+  }
+  /** New species are usable immediately on the original prepared material.
+   * Cook their shared atlas only during an actual pause, never in update/RAF. */
+  private queuePausedBakedAnimals():void{
+    if(this.bakedAnimalTimer)clearTimeout(this.bakedAnimalTimer);
+    this.bakedAnimalTimer=undefined;
+    if(this.disposed||this.closingPresentation||this.fatalError||this.preparing||this.received?.speed!==0||!this.canBakeAnimals||!this.hasPendingBakedResources)return;
+    this.bakedAnimalTimer=setTimeout(()=>{
+      this.bakedAnimalTimer=undefined;
+      if(this.disposed||this.closingPresentation||this.fatalError||this.preparing||this.received?.speed!==0)return;
+      this.preparing=true;
+      void this.prepareBakedWildlifeResources(true).catch(error=>{
+        if(this.closingPresentation)return;
+        if(error instanceof AggregateError||error instanceof AtlasBuildQuarantineError)this.reportFailure('Préparation des textures interrompue : '+error.message);
+        else console.warn('Opaque atlas preparation retained the original renderer',error);
+      }).finally(()=>{
+        this.preparing=false;this.lastFrame=0;this.invalidatePausedShadow();this.queuePausedBakedAnimals();
+      });
+    },100);
   }
   captureGraphicsView(){return{mode:this.rig.mode,position:this.camera.position.toArray(),target:this.controls.target.toArray(),zoom:this.camera.zoom};}
   captureGraphicsInteraction(){return{tool:this.tool,floor:this.selectedFloor,material:this.constructionMaterial,rotation:this.placementRotation,zone:this.zoneTarget,allowedArea:this.allowedAreaTarget,tree:this.treePlacementId,furniture:this.furniturePlacement,roofAreas:this.roofAreasVisible};}
@@ -193,7 +318,7 @@ export class SceneRenderCore {
     const context=():GraphicsStyleComparisonContext=>({preferences:{...this.graphicsStyle.preferences},sceneFingerprint,
       camera:{...this.captureGraphicsView(),up:this.camera.up.toArray(),quaternion:this.camera.quaternion.toArray(),projection:Array.from(this.camera.projectionMatrix.toArray()),near:this.camera.near,far:this.camera.far,layers:this.camera.layers.mask,coordinateSystem:this.camera.coordinateSystem,reversedDepth:this.camera.reversedDepth,span:this.rig.span},
       viewport:{width:this.viewportWidth,height:this.viewportHeight,pixelRatio:this.renderer.getPixelRatio()},backend:this.backend,
-      settings:{requested:settings,renderer:{textures:this.texturesEnabled,grassVisible:this.grassVisible,groundGrass:!!this.grass,room:this.roomEnabled,diorama:this.dioramaEnabled,lighting:{...this.lightingSettings},shadows:{...this.shadowSettings},animations:{...this.animationDetail.settings},requestedPixelRatio:this.hostPort.pixelRatio(),requestedViewport:{...this.hostPort.viewport()},backend:this.hostPort.backend()}}});
+      settings:{requested:settings,origamiBaked:this.bakedGraphicsStatus(),renderer:{textures:this.texturesEnabled,grassVisible:this.grassVisible,groundGrass:!!this.grass,room:this.roomEnabled,diorama:this.dioramaEnabled,lighting:{...this.lightingSettings},shadows:{...this.shadowSettings},animations:{...this.animationDetail.settings},requestedPixelRatio:this.hostPort.pixelRatio(),requestedViewport:{...this.hostPort.viewport()},backend:this.hostPort.backend()}}});
     const started=this.hostPort.now(),collector=createGraphicsStyleComparison(context(),started);
     return new Promise(resolve=>{
       const active={collector,context,isCurrent,resolve,timer:undefined as ReturnType<typeof setTimeout>|undefined};
@@ -507,6 +632,7 @@ export class SceneRenderCore {
     // output transform while preserving room -> bundles -> objects draw order.
     this.scene.onBeforeRender = (_renderer, scene, camera) => this.composeRoomBeforeRender(scene, camera);
     this.resources.compiledAttributeChanged435=(attribute,start,count)=>this.staticSceneCompiler435?.patchAttribute(attribute,start,count);
+    this.resources.compiledMaterialsChanged435=()=>{this.ownedOpaqueRevisions435?.invalidateResources();this.reconcileStaticCompiler435();};
     this.environmentLighting.configure(this.staticMaterial);
     this.environmentLighting.configure(this.terrainPlainMaterial);
     this.environmentLighting.configure(this.terrainPaintMaterial);
@@ -712,7 +838,7 @@ export class SceneRenderCore {
     const newMap = !previousWorld||previousWorld.seed!==world.seed||previousWorld.width!==world.width||previousWorld.height!==world.height||previousWorld.scenario?.id!==world.scenario?.id||previousWorld.scenario?.revision!==world.scenario?.revision||
       previousWorld.site?.hilliness!==world.site?.hilliness||previousWorld.site?.revision!==world.site?.revision||previousWorld.site?.biome!==world.site?.biome;
     const changedTiles=terrainTileChanges(previousWorld,world,!!previousWorld&&this.immutableWorlds.has(previousWorld)&&this.immutableWorlds.has(world));
-    if(newMap)this.mechanoids.reset();
+    if(newMap){this.mechanoids.reset();if(this.bakedAnimalPreparation)this.bakedAnimalEpoch++;}
     const terrainChanges=terrainSurfaceChanges(previousWorld,world,changedTiles);
     // External setWorld callers may mutate tile collections in place. Only
     // decoder snapshots promise identity-stable unchanged tiles.
@@ -830,6 +956,7 @@ export class SceneRenderCore {
     this.resources.adoptChopWork(previousWorld??undefined,world,resetPoses,resourceFrame);
     this.actionFeedback.update(world,this.selectedPawns,this.pawns.feedbackSource!,!!this.confirmedIntents);
     this.wildlife.update(world,this.hasTracks?this.timeline:undefined,resetPoses,this.pawns);
+    this.queuePausedBakedAnimals();
     this.animalCargo.update(world,this.hasTracks?this.timeline:undefined,resetPoses);
     this.mechanoids.update(world,this.hasTracks?this.timeline:undefined,resetPoses,this.pawns);
     this.graphicsStyle.flushPaint();
@@ -947,6 +1074,8 @@ export class SceneRenderCore {
     this.overview.setTexturesEnabled(enabled);
     this.pawns.setTexturesEnabled(enabled);
     this.wildlife.setTexturesEnabled(enabled);
+    if(enabled&&!this.wildlife.bakedStatus().published.length)this.wildlife.invalidateBakedSpecies();
+    this.queuePausedBakedAnimals();
     this.fires.setTexturesEnabled(enabled);
     this.clouds.setTexturesEnabled(enabled);
     this.grass?.setTexturesEnabled(enabled);
@@ -1145,6 +1274,7 @@ export class SceneRenderCore {
 
   protected async preparePresentationResources(): Promise<void> {
     this.preparing = true;this.ownedOpaqueRevisions435?.setEnabled(false);this.ownedOpaqueRevisions435?.invalidateResources();
+    await this.prepareBakedWildlifeResources();
     const restoreDiorama = this.dioramaEnabled || this.roomEnabled ? await this.diorama?.prepare() : undefined;
     this.invalidatePausedShadow();
     const culling = new Map<THREE.Object3D, boolean>();
@@ -1239,6 +1369,7 @@ export class SceneRenderCore {
       this.updateHover();
       this.frames.reset(); this.lastFrame = 0;
       this.ownedOpaqueRevisions435?.invalidateResources();this.ownedOpaqueRevisions435?.setEnabled(!!this.world&&this.immutableWorlds.has(this.world));
+      this.queuePausedBakedAnimals();
     }
   }
 
@@ -1952,6 +2083,15 @@ export class SceneRenderCore {
   }
   dispose(): void {
     if (this.disposed) return;
+    if(this.bakedAnimalTimer){clearTimeout(this.bakedAnimalTimer);this.bakedAnimalTimer=undefined;}
+    if(this.bakedAnimalPreparation){
+      if(!this.disposeAfterPreparation){
+        this.closingPresentation=true;this.bakedAnimalEpoch++;this.renderer.setAnimationLoop(null);
+        this.disposeAfterPreparation=this.bakedAnimalPreparation.catch(()=>{}).then(()=>{this.dispose();});
+      }
+      return;
+    }
+    this.closingPresentation=true;
     this.cancelGraphicsMeasurement('renderer-disposed');
     this.releaseCalmFullFrame297();this.presentation.clear();this.pendingCore297.length=0;this.latestCoreInput297=undefined;
     this.confirmedIntentReader?.clear();this.confirmedIntents=this.presentedIntentFields=undefined;
@@ -1991,12 +2131,16 @@ export class SceneRenderCore {
     if(this.grass){this.grass.mesh.removeFromParent();this.grass.dispose();this.grass=null;}
     this.surfaceTint.dispose();
     this.resources.dispose();
+    const treeCleanupErrors:unknown[]=[];
+    for(const owner of [...(this.bakedTreeOwner?[this.bakedTreeOwner]:[]),...(this.quarantinedTreeCatalogs??[])])try{owner.dispose();}catch(error){treeCleanupErrors.push(error);}
+    if(!treeCleanupErrors.length){this.bakedTreeOwner=undefined;this.quarantinedTreeCatalogs=undefined;}
     this.preparedNaturalPresentation.clear();
     this.sceneResources.clear();
     this.structurePreparation?.clear();this.preparedStructures=undefined;
     this.furniturePresentation.clear();this.structureSignature.clear();this.storageSignature.clear();this.homeSignature.clear();
     this.pawns.dispose();
     this.doors.dispose();this.projectiles.dispose();this.fires.dispose();this.wind.dispose();this.animalCargo.dispose();this.wildlife.dispose();this.mechanoids.dispose();this.ropes.dispose();this.designations.dispose();
+    this.bakedAnimalLibrary?.dispose();this.bakedAnimalLibrary=undefined;
 
     for (const group of [this.terrainGroup, this.resourceGroup, this.structureGroup, this.jobGroup, this.storageGroup, this.pileGroup]) clearGroup(group);
     this.pileChunks.clear();this.applicationContext?.clear();
@@ -2017,5 +2161,6 @@ export class SceneRenderCore {
     this.renderer.onError = () => {};
     if (!this.rendererLifetime.closed) { this.rendererLifetime.closed = true; this.rendererDisposal=Promise.resolve(this.renderer.dispose()); }
     this.hostPort.removeSurface();
+    if(treeCleanupErrors.length)throw new AggregateError(treeCleanupErrors,'Detached tree owner cleanup failed');
   }
 }

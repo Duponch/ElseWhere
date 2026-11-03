@@ -13,6 +13,26 @@ import {GAME_REQUIRED_VIRTUAL_IDS78} from '../src/render/origami/game-paint-resi
 import {EnvironmentLighting} from '../src/render/EnvironmentLighting';
 const folded=()=>new GraphicsStyleContext({...defaults,style:'origami'});
 
+test('opaque atlas lending finishes the requested fill and rejects stale settings, pixels and disposal',()=>{
+ vi.useFakeTimers();
+ const context=new GraphicsStyleContext({...defaults,style:'origami',impasto:0,wear:0});
+ try{
+  context.requirePaint('atlas-test',[0,30]);
+  const first=context.prepareAtlasPaint(),pixels=first.paint.readProfile(30);
+  expect(pixels.orientation).toBe('upload-bottom-up');expect(pixels.coverage).toHaveLength(512*512);
+  expect(()=>first.assertCurrent()).not.toThrow();
+  context.update({...context.preferences,blackEdges:.31});
+  expect(()=>first.assertCurrent()).toThrow(/changed/);
+  const second=context.prepareAtlasPaint();expect(second.fingerprint).not.toBe(first.fingerprint);
+  context.update({...context.preferences,contourImperfection:.23});
+  expect(()=>second.paint.readProfile(30)).toThrow(/changed/);
+  const third=context.prepareAtlasPaint();expect(context.paintReplayState().bakedFill).toBe(.23);
+  const epoch=third.fingerprint;vi.runAllTimers();
+  expect(()=>third.assertCurrent()).not.toThrow();expect(context.prepareAtlasPaint().fingerprint).toBe(epoch);
+  context.dispose();expect(()=>third.assertCurrent()).toThrow(/changed/);
+ }finally{context.dispose();vi.useRealTimers();}
+});
+
 interface GraphBuilder {context:object}
 interface GraphNode {
  getChildren?:()=>Iterable<GraphNode>;getOutputNode?:(builder:GraphBuilder)=>GraphNode;

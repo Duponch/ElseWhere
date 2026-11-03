@@ -60,6 +60,17 @@ export class EnvironmentLighting {
     if (material.outputNode) throw new Error('Environment lighting requires an unclaimed material output.');
     material.outputNode = material.userData.explorationOpaqueRock?this.rockShade:material.userData.explorationOpaqueGround?this.groundShade:this.shade; this.configured.add(material);
   };
+  /** A baked pigment clone keeps the exact existing pose, lighting and
+   * exploration graphs. Register that ownership without wrapping them again. */
+  readonly adoptConfiguredClone = (source:NodeMaterial,next:NodeMaterial):boolean => {
+    if(source===next||!this.configured.has(source))return false;
+    for(const key of ['positionNode','normalNode','maskNode','maskShadowNode','outputNode','opacityNode'] as const)if(source[key]!==next[key])return false;
+    for(const key of ['roughnessNode','metalnessNode','lightsNode'])if(Reflect.get(source,key)!==Reflect.get(next,key))return false;
+    for(const key of ['origamiUnlitContour','explorationActor','explorationIntent','explorationOpaqueRock','explorationOpaqueGround','explorationSolid'])if(source.userData[key]!==next.userData[key])return false;
+    for(const key of ['side','transparent','depthTest','depthWrite','alphaTest','flatShading'])if(Reflect.get(source,key)!==Reflect.get(next,key))return false;
+    if(!this.exploration.adoptConfiguredClone(source,next))return false;
+    this.configured.add(next);return true;
+  };
   /** Decorative blades borrow the horizontal surface's local-light response.
    * Their authored root precedes sway; geometric blade faces must not attenuate
    * the lamp fill or shift the source/roof sample into a neighbouring cell. */

@@ -40,6 +40,9 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
   if (!vertexCount) { for (const part of parts) part.geometry.dispose(); if (!mat.userData.rendererOwned) mat.dispose(); return; }
   const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Float32Array(vertexCount * 3);
   const uvs = includeUv ? new Float32Array(vertexCount * 2) : undefined;
+  const hasBakedUv=parts.some(part=>part.items.length>0&&part.geometry.hasAttribute('bakedUv'));
+  if(hasBakedUv)for(const part of parts)if(part.items.length){const baked=part.geometry.getAttribute('bakedUv');if(!(baked instanceof THREE.BufferAttribute)||baked instanceof THREE.InstancedBufferAttribute||!(baked.array instanceof Float32Array)||baked.itemSize!==3||baked.count!==part.geometry.getAttribute('position').count)throw new Error('Prepared tree batches require ordinary bakedUv3 on every nonempty part');}
+  const bakedUvs=hasBakedUv?new Float32Array(vertexCount*3):undefined;
   const hasProfiles=parts.some(part=>part.items.some(item=>item.profile!==undefined)||part.geometry.hasAttribute('origamiPaint'));
   const paint=hasProfiles?new Float32Array(vertexCount*4):undefined;
   const wearExpand=parts.some(part=>part.geometry.hasAttribute('origamiWearExpand'))?new Float32Array(vertexCount*3):undefined;
@@ -48,7 +51,7 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
   let vertex = 0, index = 0;
   const ranges:ResourceRange[] = [];
   for (const { geometry, items } of parts) {
-    const pos = geometry.getAttribute('position'), normal = geometry.getAttribute('normal'), uv=geometry.getAttribute('uv'),sourcePaint=geometry.getAttribute('origamiPaint'),sourceExpand=geometry.getAttribute('origamiWearExpand');
+    const pos = geometry.getAttribute('position'), normal = geometry.getAttribute('normal'), uv=geometry.getAttribute('uv'),sourcePaint=geometry.getAttribute('origamiPaint'),sourceExpand=geometry.getAttribute('origamiWearExpand'),sourceBakedUv=geometry.getAttribute('bakedUv');
     const sourceBrush=resourceBrushData(geometry);
     for (const item of items) {
       const firstIndex = index,firstVertex=vertex;
@@ -73,6 +76,7 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
         normals[offset] = (nx * cosine + nz * sine) / length;
         normals[offset + 1] = ny / length;
         normals[offset + 2] = (nz * cosine - nx * sine) / length;
+        if(bakedUvs){bakedUvs[offset]=sourceBakedUv.getX(i);bakedUvs[offset+1]=sourceBakedUv.getY(i);bakedUvs[offset+2]=sourceBakedUv.getZ(i);}
         if(paint){const at=(vertex+i)*4;paint[at]=referenceColor!.r;paint[at+1]=referenceColor!.g;paint[at+2]=referenceColor!.b;paint[at+3]=item.profile??sourcePaint?.getW(i)??0;}
         if(wearExpand&&sourceExpand){const ex=sourceExpand.getX(i)*sx,ey=sourceExpand.getY(i)*sy,ez=sourceExpand.getZ(i)*sz;wearExpand[offset]=ex*cosine+ez*sine;wearExpand[offset+1]=ey;wearExpand[offset+2]=ez*cosine-ex*sine;}
         if(brush){
@@ -108,6 +112,7 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   if(uvs)geometry.setAttribute('uv',new THREE.BufferAttribute(uvs,2));
+  if(bakedUvs)geometry.setAttribute('bakedUv',new THREE.BufferAttribute(bakedUvs,3));
   if(paint)geometry.setAttribute('origamiPaint',new THREE.BufferAttribute(paint,4));
   if(wearExpand)geometry.setAttribute('origamiWearExpand',new THREE.BufferAttribute(wearExpand,3));
   if(brush){geometry.userData.origamiBrushPrebuilt=true;geometry.userData.referenceBrushBasePositions=brush.base;geometry.userData.referenceBrushWidthOffsets=brush.width;geometry.userData.referenceBrushRoughOffsets=brush.rough;}

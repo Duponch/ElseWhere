@@ -55,6 +55,15 @@ export class ExplorationMask256 {
   material.maskShadowNode=shadow?new THREE.OperatorNode('&&',convert(shadow,'bool'),visible):visible;
   this.configured.add(material);material.needsUpdate=true;
  };
+ /** Adopt an already composed clone without composing visibility a second
+  * time. Colour may change; pose, masks and exploration ownership may not. */
+ readonly adoptConfiguredClone=(source:THREE.NodeMaterial,next:THREE.NodeMaterial):boolean=>{
+  if(source===next||!this.configured.has(source))return false;
+  for(const key of ['positionNode','normalNode','maskNode','maskShadowNode','outputNode','opacityNode'] as const)if(source[key]!==next[key])return false;
+  for(const key of ['explorationActor','explorationIntent','explorationOpaqueRock','explorationOpaqueGround','explorationSolid'])if(source.userData[key]!==next.userData[key])return false;
+  const owner=solidOwners.get(source),other=solidOwners.get(next);if(other!==undefined&&other!==owner)return false;
+  if(owner)solidOwners.set(next,owner);this.configured.add(next);return true;
+ };
  /** Rare adoption/settings/preparation traversal covers unlit VFX and sprites.
   * Standard-material variants register at creation via EnvironmentLighting. */
  bind(root:THREE.Object3D):void {root.traverse(object=>{if(object instanceof THREE.Mesh)for(const m of Array.isArray(object.material)?object.material:[object.material])if(m instanceof THREE.NodeMaterial){if(object.geometry.getAttribute('aTo'))actorExplorationMaterial256(m);this.configure(m);}});}

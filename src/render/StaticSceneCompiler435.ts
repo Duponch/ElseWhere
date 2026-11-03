@@ -58,6 +58,9 @@ export class StaticSceneCompiler435 {
   if(!(index.array instanceof Uint16Array)&&!(index.array instanceof Uint32Array))return this.reject('unsupported-index');
   const start=geometry.drawRange.start,count=Math.min(geometry.drawRange.count,index.count-start);
   if(!Number.isInteger(start)||start<0||!Number.isInteger(count)||count<0||start%3||count%3)return this.reject('invalid-triangle-range');
+  // Empty retained producers must not consume a spatial family/page budget.
+  // They remain resident and can be admitted again when their index restores.
+  if(count===0)return null;
   const tag=sourceTags.get(source),layout=names.map((name,i)=>`${name}:${attributes[i]!.itemSize}`).join(','),layers=source.layers.mask;
   const key=[this.id(root),material.uuid,source.castShadow,source.receiveShadow,source.renderOrder,source.frustumCulled,layers,layout].join('|');
   const signature=[this.id(geometry),this.id(index),...attributes.map(a=>this.id(a)),position.count].join(':');

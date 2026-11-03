@@ -31,6 +31,7 @@ for(const control of ORIGAMI_STYLE_CONTROLS){
     if(context){
       const next={...previewPreferences,style:context.preferences.style};
       if(requiresGraphicsStyleRebuild(context.preferences,next)){void build(next.style,true);return;}
+      if(context.origami&&!context.reliefEnabled&&!context.wearEnabled){paintRefreshTimer=setTimeout(()=>{paintRefreshTimer=undefined;void refreshPaint(next);},80);return;}
       context.update(next);
     }
     requestRender();paintRefreshTimer=setTimeout(()=>{paintRefreshTimer=undefined;requestRender();},80);
@@ -56,34 +57,38 @@ type Entry={item:CatalogItem;section:CatalogSection;label:HTMLDivElement;searchT
 let collections:CatalogCollection[]=[],sections:CatalogSection[]=[],entries:Entry[]=[],context:GraphicsStyleContext|undefined,selected:Entry|undefined;
 let wholeBounds=new THREE.Box3(new THREE.Vector3(-10,0,-10),new THREE.Vector3(10,2,10));
 let sectionLabels:{section:CatalogSection;element:HTMLDivElement;anchor:THREE.Vector3}[]=[];
-let frame:number|undefined,busy=false,closed=false;
+let frame:number|undefined,busy=false,closed=false,resizePending=false,catalogCleanupFailed=false,jobEpoch=0,activeJob:Promise<void>|undefined,initialization:Promise<void>|undefined;
+const preparationFrames=new Map<number,()=>void>(),quarantinedCollections:CatalogCollection[]=[];
 const failures:string[]=[];
-const diagnostics:{ready:boolean;style:string;assets:number;sections:{id:string;label:string;count:number;missing:unknown[]}[];errors:string[];scope:string;backend?:unknown}={ready:false,style:'origami',assets:0,sections:[],errors:failures,scope:'Models, objects and content recipes; animated transient VFX, selection/designation overlays and generated landscapes are excluded. No simulation or campaign.'};
+const diagnostics:{ready:boolean;style:string;assets:number;sections:{id:string;label:string;count:number;missing:unknown[]}[];errors:string[];scope:string;backend?:unknown;trees?:unknown[]}={ready:false,style:'origami',assets:0,sections:[],errors:failures,scope:'Models, objects and content recipes; animated transient VFX, selection/designation overlays and generated landscapes are excluded. No simulation or campaign.'};
 function fail(cause:unknown):void{const message=cause instanceof Error?cause.stack??cause.message:String(cause);failures.push(message);errorView.hidden=false;errorView.textContent=failures.join('\n\n');$('catalog-message').textContent='Le catalogue a rencontré une erreur ; le détail est conservé ci-dessus.';diagnostics.ready=false;document.body.dataset.ready='error';}
 renderer.onError=fail;renderer.onDeviceLost=info=>fail(info.message);
 window.addEventListener('error',event=>fail(event.error??event.message));window.addEventListener('unhandledrejection',event=>fail(event.reason));
 const normalize=(text:string)=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-const nextFrame=()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
-function lock(value:boolean):void{styleControl.disabled=value;$<HTMLButtonElement>('catalog-all').disabled=value;$<HTMLButtonElement>('catalog-above').disabled=value;search.disabled=value;for(const input of paintInputs)input.disabled=value||styleControl.value!=='origami';}
+const nextFrame=()=>new Promise<void>(resolve=>{const frame=requestAnimationFrame(()=>{preparationFrames.delete(frame);resolve();});preparationFrames.set(frame,resolve);});
+function lock(value:boolean):void{styleControl.disabled=value;$<HTMLButtonElement>('catalog-all').disabled=value;$<HTMLButtonElement>('catalog-above').disabled=value;search.disabled=value;labelsControl.disabled=floorControl.disabled=value;for(const input of paintInputs)input.disabled=value||styleControl.value!=='origami';}
 function progress(message:string):void{$('catalog-loading-text').textContent=message;$('catalog-message').textContent=message;}
 function disposeCatalog():void{
-  for(const collection of collections)collection.dispose();collections=[];sections=[];entries=[];sectionLabels=[];selected=undefined;catalogRoot.clear();overlay.replaceChildren();$('catalog-detail').replaceChildren();context?.dispose();context=undefined;
+  if(catalogCleanupFailed)throw Error('Catalog cleanup is quarantined; paint context remains owned');
+  const errors:unknown[]=[];for(const collection of collections)try{collection.dispose();}catch(error){errors.push(error);quarantinedCollections.push(collection);}collections=[];sections=[];entries=[];sectionLabels=[];selected=undefined;catalogRoot.clear();overlay.replaceChildren();$('catalog-detail').replaceChildren();if(!errors.length){try{context?.dispose();}catch(error){errors.push(error);}if(!errors.length)context=undefined;}if(errors.length){catalogCleanupFailed=true;throw new AggregateError(errors,'Catalog cleanup failed; unresolved owners retained');}
 }
 function worldBox(entry:Entry):THREE.Box3{return entry.item.bounds.clone().applyMatrix4(entry.section.group.matrixWorld);}
 function sectionBox(section:CatalogSection):THREE.Box3{const box=new THREE.Box3();for(const item of section.items)box.union(item.bounds);if(box.isEmpty())box.set(new THREE.Vector3(-6,0,0),new THREE.Vector3(6,1,4));return box.applyMatrix4(section.group.matrixWorld);}
-function focus(box:THREE.Box3,above=false):void{
+function focus(box:THREE.Box3,above=false,internal=false):void{
+  if(closed||busy&&!internal)return;
   const center=box.getCenter(new THREE.Vector3()),sphere=box.getBoundingSphere(new THREE.Sphere()),radius=Math.max(.65,sphere.radius);
   const fitAspect=Math.min(1,camera.aspect),distance=radius/Math.sin(THREE.MathUtils.degToRad(camera.fov*.5))*1.12/fitAspect;
   const direction=above?new THREE.Vector3(.001,1,.001).normalize():new THREE.Vector3(.34,.83,1).normalize();
   controls.target.copy(center);camera.position.copy(center).addScaledVector(direction,distance);controls.minDistance=Math.max(.3,Math.min(radius*.2,1));controls.update();requestRender();
 }
-function selectEntry(entry:Entry):void{
+function selectEntry(entry:Entry,internal=false):void{
+  if(closed||busy&&!internal)return;
   selected=entry;const detail=$('catalog-detail');detail.replaceChildren();const heading=document.createElement('h2');heading.textContent=entry.item.label;detail.append(heading);
   const tag=document.createElement('span');tag.className=`catalog-tag ${entry.item.status}`;tag.textContent=statusNames[entry.item.status];detail.append(tag);
   const identifier=document.createElement('p'),code=document.createElement('code');code.textContent=entry.item.id;identifier.append(code);detail.append(identifier);
   const note=document.createElement('p');note.textContent=entry.item.note??entry.section.note??'Recette de présentation actuellement disponible dans le catalogue.';detail.append(note);
   const button=document.createElement('button');button.textContent='Rejoindre ce modèle';button.onclick=()=>focus(worldBox(entry));detail.append(button);
-  focus(worldBox(entry));renderInventory();
+  focus(worldBox(entry),false,internal);renderInventory();
 }
 function renderInventory():void{
   const query=normalize(search.value.trim()),inventory=$('catalog-inventory'),fragment=document.createDocumentFragment();let matches=0;
@@ -130,35 +135,65 @@ function labels():void{
     const visible=labelsControl.checked&&projected.z>=0&&projected.z<=1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1&&!titles.some(other=>Math.abs(other.x-x)<(other.width+titleWidth)/2+8&&Math.abs(other.y-y)<30);
     heading.element.style.display=visible?'block':'none';if(visible){heading.element.style.left=`${x}px`;heading.element.style.top=`${y}px`;titles.push({x,y,width:titleWidth});}}
 }
-function requestRender():void{if(frame!==undefined||closed)return;frame=requestAnimationFrame(()=>{frame=undefined;if(closed)return;try{const moved=controls.update();renderer.render(scene,camera);labels();if(moved)requestRender();}catch(cause){fail(cause);}});}
+function requestRender():void{if(frame!==undefined||closed||busy)return;frame=requestAnimationFrame(()=>{frame=undefined;if(closed||busy)return;try{const moved=controls.update();renderer.render(scene,camera);labels();if(moved)requestRender();}catch(cause){fail(cause);}});}
 controls.addEventListener('change',requestRender);
-function resize():void{const width=Math.max(1,stage.clientWidth),height=Math.max(1,stage.clientHeight);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();requestRender();}
+function resize():void{if(closed)return;if(busy){resizePending=true;return;}resizePending=false;const width=Math.max(1,stage.clientWidth),height=Math.max(1,stage.clientHeight);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();requestRender();}
 const resizeObserver=new ResizeObserver(resize);
-async function build(style:GraphicsStyle,preserveView=false):Promise<void>{
-  if(busy||closed)return;busy=true;lock(true);loading.hidden=false;diagnostics.ready=false;document.body.dataset.ready='preparing';
-  const view=preserveView?{position:camera.position.clone(),quaternion:camera.quaternion.clone(),target:controls.target.clone(),zoom:camera.zoom,minDistance:controls.minDistance,maxDistance:controls.maxDistance,selectedId:selected?.item.id}:undefined;
-  try{
-    disposeCatalog();context=new GraphicsStyleContext({...previewPreferences,style});diagnostics.style=style;
-    progress('Humains, animaux et variantes disponibles…');await nextFrame();collections.push(withGraphicsStyle(context,()=>createActorCatalog(context!)));
-    progress('Végétation, mobilier, fragments et objets…');await nextFrame();collections.push(withGraphicsStyle(context,()=>createEnvironmentAssetCatalog(context!)));
-    collections.push(withGraphicsStyle(context,()=>createTransportAssetCatalog()));
+function rememberView(){return{position:camera.position.clone(),quaternion:camera.quaternion.clone(),target:controls.target.clone(),zoom:camera.zoom,minDistance:controls.minDistance,maxDistance:controls.maxDistance,selectedId:selected?.item.id};}
+function arrange(view:ReturnType<typeof rememberView>|undefined):void{
     sections=collections.flatMap(collection=>collection.sections);layout();
     if(view){
-      const entry=entries.find(entry=>entry.item.id===view.selectedId);if(entry)selectEntry(entry);
+      const entry=entries.find(entry=>entry.item.id===view.selectedId);if(entry)selectEntry(entry,true);
       // Consume any old orbit damping before restoring the exact view. The
       // rebuilt entries have fresh owners; selection is restored by real ID.
       const damping=controls.enableDamping;controls.enableDamping=false;controls.update();
       controls.target.copy(view.target);camera.position.copy(view.position);camera.quaternion.copy(view.quaternion);camera.zoom=view.zoom;
       controls.minDistance=view.minDistance;controls.maxDistance=view.maxDistance;camera.updateProjectionMatrix();controls.update();controls.enableDamping=damping;
-    }else focus(wholeBounds);
-    progress('Préparation des matériaux de cette vue…');await nextFrame();context.flushPaint();await renderer.compileAsync(scene,camera);
-    renderer.render(scene,camera);labels();diagnostics.ready=failures.length===0;document.body.dataset.ready=diagnostics.ready?'ready':'error';$('catalog-message').textContent=`${entries.length} assets agencés par type · ${style==='origami'?'Origami et recettes existantes signalées':'Style par défaut'}\nRechercher un nom ou choisir un groupe pour s’en approcher.`;
-    loading.hidden=true;
-  }catch(cause){fail(cause);loading.hidden=true;}finally{busy=false;lock(false);requestRender();}
+    }else focus(wholeBounds,false,true);
+    diagnostics.trees=collections.flatMap(collection=>collection.treeStatus?[collection.treeStatus()]:[]);
+}
+function exclusiveCatalogJob(work:(assertCurrent:()=>void)=>Promise<void>):Promise<void>{
+  if(closed)return Promise.resolve();if(catalogCleanupFailed){fail(Error('Une préparation précédente conserve des ressources non libérées ; rechargez l’atelier.'));return Promise.resolve();}if(busy)return activeJob??Promise.resolve();
+  busy=true;const epoch=++jobEpoch;lock(true);controls.enabled=false;loading.hidden=false;diagnostics.ready=false;document.body.dataset.ready='preparing';if(frame!==undefined){cancelAnimationFrame(frame);frame=undefined;}
+  const assertCurrent=()=>{if(closed||jobEpoch!==epoch)throw Error('Catalog preparation superseded');};
+  const task=Promise.resolve().then(()=>{assertCurrent();return work(assertCurrent);}).catch(cause=>{if(!closed)fail(cause);}).finally(()=>{activeJob=undefined;busy=false;if(!closed){controls.enabled=true;loading.hidden=true;lock(false);if(resizePending)resize();else requestRender();}});activeJob=task;return task;
+}
+async function prepareTrees(graphics:GraphicsStyleContext,assertJobCurrent:()=>void):Promise<void>{
+  const assertCurrent=()=>{assertJobCurrent();if(context!==graphics)throw Error('Catalog paint context changed');};
+  assertCurrent();graphics.flushPaint();
+  for(const collection of collections){await collection.prepareTrees?.(renderer,camera,scene,assertCurrent);assertCurrent();}
+}
+async function finishView(assertCurrent:()=>void):Promise<void>{
+  progress('Préparation des matériaux de cette vue…');await nextFrame();assertCurrent();context!.flushPaint();await renderer.compileAsync(scene,camera);assertCurrent();
+  renderer.render(scene,camera);labels();diagnostics.ready=failures.length===0;document.body.dataset.ready=diagnostics.ready?'ready':'error';$('catalog-message').textContent=`${entries.length} assets agencés par type · ${context!.origami?'Origami et recettes existantes signalées':'Style par défaut'}\nRechercher un nom ou choisir un groupe pour s’en approcher.`;
+}
+function build(style:GraphicsStyle,preserveView=false):Promise<void>{
+  const view=preserveView?rememberView():undefined;
+  return exclusiveCatalogJob(async assertCurrent=>{
+    if(paintRefreshTimer){clearTimeout(paintRefreshTimer);paintRefreshTimer=undefined;}
+    disposeCatalog();const graphics=context=new GraphicsStyleContext({...previewPreferences,style});diagnostics.style=style;
+    progress('Humains, animaux et variantes disponibles…');await nextFrame();assertCurrent();collections.push(withGraphicsStyle(graphics,()=>createActorCatalog(graphics)));
+    progress('Végétation, mobilier, fragments et objets…');await nextFrame();assertCurrent();collections.push(withGraphicsStyle(graphics,()=>createEnvironmentAssetCatalog(graphics)));
+    collections.push(withGraphicsStyle(graphics,()=>createTransportAssetCatalog()));
+    progress('Préparation des arbres partagés…');await prepareTrees(graphics,assertCurrent);assertCurrent();arrange(view);await finishView(assertCurrent);
+  });
+}
+function refreshPaint(next:GraphicsStylePreferences):Promise<void>{
+  const graphics=context,view=rememberView();if(!graphics)return Promise.resolve();
+  return exclusiveCatalogJob(async assertCurrent=>{
+    for(const collection of collections)collection.invalidatePreparedTrees?.();
+    graphics.update(next);progress('Actualisation des peintures et contours des arbres…');await nextFrame();assertCurrent();
+    await prepareTrees(graphics,assertCurrent);assertCurrent();arrange(view);await finishView(assertCurrent);
+  });
 }
 styleControl.onchange=()=>void build(styleControl.value as GraphicsStyle);$('catalog-all').onclick=()=>{selected=undefined;focus(wholeBounds);renderInventory();};$('catalog-above').onclick=()=>focus(selected?worldBox(selected):wholeBounds,true);
 search.addEventListener('input',renderInventory);search.addEventListener('keydown',event=>{if(event.key==='Escape'){search.value='';renderInventory();}});labelsControl.onchange=requestRender;floorControl.onchange=()=>{floor.visible=floorControl.checked;if(grid)grid.visible=floorControl.checked;requestRender();};
-Object.assign(window,{assetCatalog:{diagnostics,overview:()=>focus(wholeBounds),focus:(id:string)=>{const entry=entries.find(entry=>entry.item.id===id);if(entry)selectEntry(entry);return !!entry;},setStyle:(style:GraphicsStyle)=>{styleControl.value=style;return build(style);},inventory:()=>sections.map(section=>({id:section.id,label:section.label,items:section.items.map(({id,label,status,note})=>({id,label,status,note})),missing:section.missing??[]}))}});
+Object.assign(window,{assetCatalog:{diagnostics,overview:()=>focus(wholeBounds),focus:(id:string)=>{if(busy||closed)return false;const entry=entries.find(entry=>entry.item.id===id);if(entry)selectEntry(entry);return !!entry;},setStyle:(style:GraphicsStyle)=>{if(busy||closed)return activeJob??Promise.resolve();styleControl.value=style;return build(style);},inventory:()=>sections.map(section=>({id:section.id,label:section.label,items:section.items.map(({id,label,status,note})=>({id,label,status,note})),missing:section.missing??[]}))}});
 async function init(){await renderer.init();if(closed)return;stage.prepend(renderer.domElement);const backend=renderer.backend as unknown as {isWebGPUBackend?:boolean;device?:{limits?:{maxVertexAttributes?:number}}};diagnostics.backend={webgpu:backend.isWebGPUBackend===true,name:renderer.backend.constructor.name,maxVertexAttributes:backend.device?.limits?.maxVertexAttributes};resizeObserver.observe(stage);resize();const requested=new URLSearchParams(location.search).get('style');styleControl.value=requested==='default'?'default':'origami';await build(styleControl.value as GraphicsStyle);}
-window.addEventListener('pagehide',()=>{closed=true;if(paintRefreshTimer)clearTimeout(paintRefreshTimer);if(frame!==undefined)cancelAnimationFrame(frame);resizeObserver.disconnect();controls.dispose();disposeCatalog();floor.geometry.dispose();(floor.material as THREE.Material).dispose();if(grid){grid.geometry.dispose();for(const material of Array.isArray(grid.material)?grid.material:[grid.material])material.dispose();}void renderer.dispose();});
-void init().catch(fail);
+window.addEventListener('pagehide',()=>{
+  if(closed)return;closed=true;jobEpoch++;if(paintRefreshTimer)clearTimeout(paintRefreshTimer);if(frame!==undefined)cancelAnimationFrame(frame);for(const [frame,resolve]of preparationFrames){cancelAnimationFrame(frame);resolve();}preparationFrames.clear();resizeObserver.disconnect();controls.enabled=false;
+  // An in-flight compile/bake still owns the renderer and its borrowed paint.
+  // Cancellation is checked at each await; destruction starts after settlement.
+  void Promise.allSettled([activeJob,initialization]).then(async()=>{const errors:unknown[]=[];for(const dispose of [()=>controls.dispose(),disposeCatalog,()=>floor.geometry.dispose(),()=>{(floor.material as THREE.Material).dispose();},()=>{if(grid){grid.geometry.dispose();for(const material of Array.isArray(grid.material)?grid.material:[grid.material])material.dispose();}}])try{dispose();}catch(error){errors.push(error);}try{await renderer.dispose();}catch(error){errors.push(error);}if(errors.length)fail(new AggregateError(errors,'Catalog page cleanup failed'));});
+});
+initialization=init().catch(cause=>{if(!closed)fail(cause);});
