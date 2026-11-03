@@ -5,6 +5,75 @@ L'objectif reste le coût du mode Par défaut avec la même impression visuelle.
 La parité n'est pas acquise. La simulation, le schéma301 et la vraie325 sont
 inchangés ; aucun push ou déploiement n'est demandé.
 
+## Mesure composite du produit, 3 novembre au soir
+
+Les lots arbres/animaux et comparateur sont committés localement en
+`baadb63a` puis `d78eaef5`. La mesure V36 du rendu intégré confirme que la
+parité reste ouverte, malgré le coût proche du Legacy obtenu sur les peupliers.
+
+Une seule carte128 réellement générée par le Worker, en pause, contient
+473arbres, 13animaux et trois colons. Les trois passages conservent le même
+World/Full, la caméra, l'herbe, Room, le diorama, les textures, la lumière1/1/1
+et les ombres60Hz/2048. Le calendrier réel est06h, civil1500 ; ce n'est pas un
+essai à toutes les heures. Le vrai contexte Main et435 sont actifs, mais
+l'interface, les intentions et la boucle propre à Main ne sont pas reproduites.
+
+| Passage | CPU de soumission | GPU de la frame Core | Appels de dessin | Triangles soumis |
+| --- | ---: | ---: | ---: | ---: |
+| Legacy initial | 0,7618ms | 0,6991ms | 21 | 206930 |
+| Origami intégré | 1,4010ms | 1,2998ms | 46 | 1177740 |
+| Legacy retour | 0,8444ms | 0,7045ms | 21 | 206930 |
+
+Origami est à **+85,21%GPU et +74,45%CPU** par rapport aux moyennes Legacy.
+La dérive des témoins est de+0,78%GPU et+10,84%CPU ; elle est conservée dans
+le résultat. CPU et GPU sont des mesures distinctes : collecteur produit1+5s,
+puis douze callbacks Core complets par passage avec timestamps GPU frais.
+L'ordonnancement sérialisé de ces douze lectures n'est pas une cadence de FPS.
+Les ombres en pause peuvent réutiliser normalement leur cache après chauffe.
+
+Les473arbres sont réellement prêts sans repli, ainsi que les gazelles et
+renards générés. Les colons utilisent toujours leur rendu produit Source,
+sans prototype humain D512. Les paramètres des paires interstyles sont
+acceptés par le vrai comparateur ; les UUID des renderers Legacy reconstruits
+restent différents. Les retours PNG sont exacts dans cet essai. Les trois
+renderers puis le client sont libérés sans erreur, avec un seul reçu World.
+Le [rapport V36](../../tmp/origami-baked-architecture-20261102/core-composite-runtime-current/native-v36-performance-summary.json)
+porte le SHA256`735ff702551e26158411c2fcbee0c6a043133d4aa55cbef2baa55670ba20f0af`.
+
+Le compilateur435 admet maintenant une deuxième famille de ressources en
+quatre quadrants si le budget de huit pages le permet. La restriction des
+terrains en deux moitiés reste inchangée. Le nouveau contrat vérifie les
+sommets et UV exacts, les bornes, les références stables et la libération.
+Typage complet et Pages passent ; les deux Workers restent octet-identiques.
+
+V37 observe une seule nouvelle vue Origami sur la même carte, sans rejouer
+les trois passages V36 : huit pages, seize sources, **42 appels au lieu de46**
+et toujours1177740triangles. Les PNG avant/après sont strictement identiques.
+Une collecte unique donne1,27249msGPU et1,37367msCPU de soumission, douze
+timestamps frais et1200framesCPU. La comparaison temporelle avec V36 est
+historique, pas un contre-essai causal ; aucun gain général n'en est déduit.
+Le renderer et le client sont fermés sans erreur.
+
+Le recensement en lecture seule s'exécute une fois après préparation, hors
+chronomètre. Il distingue les vraies références des producteurs, les plages
+d'indices actives et les instances ; les sources435 masquées ne doublent pas
+les pages compilées. Sur1203029triangles potentiellement visibles, quatre
+groupes de contours représentent954904triangles, soit79,37% : touffes584304,
+ressources177840, objets165240 et roches27520. Avec les contours humains,
+la proportion atteint80,09%. Ces potentiels ne sont pas une attribution des
+temps GPU ou des passes effectives : frustum, masques shader, Room et caches
+d'ombres restent des domaines distincts. Les3478touffes demandent chacune
+24triangles de corps et168triangles de contours ; elles deviennent la
+prochaine cible de préparation opaque, avec qualité et coût à établir.
+Le [rapport V37](../../tmp/origami-baked-architecture-20261102/core-composite-census-runtime-current/native-v37-census-summary.json)
+porte le SHA256`f0de39fa3de909ef4b550aaf9853778996c590d4bba503e8b9999477f09af62a`.
+
+Les prototypes humains V34/V35 restent privés : sur45propriétaires et deux
+apparences, V35 réduit le GPU de45,19% contre l'Origami Source et33,63% contre
+Legacy, mais augmente la soumission CPU de3,87% et12,10% respectivement.
+La peinture est encore adoucie au gros plan. Ces chiffres ne qualifient donc
+ni une intégration humaine, ni la scène composite, ni les FPS d'une campagne.
+
 Le 3 novembre, l'utilisateur a choisi de conserver les **formes Legacy des
 arbres avec une apparence Origami**. Cette nouvelle direction concerne les arbres,
 pas les animaux ni les humains. Le raccord maintenant intégré aux sources reprend aussi le vrai

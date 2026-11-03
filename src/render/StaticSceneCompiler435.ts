@@ -164,18 +164,19 @@ export class StaticSceneCompiler435 {
   page.arena.ensureIndices(total);const index=page.arena.geometry.index!,out=index.array as Uint32Array;let at=0;for(const choice of choices){const indices=next.get(choice.sourceKey)!.indices;out.set(indices,at);at+=indices.length;}
   page.indices=at;page.arena.geometry.setDrawRange(0,at);page.mesh.geometry=page.arena.geometry;page.mesh.visible=at>0;if(at)this.mark(index,0,at);this.stats.indexPatches++;this.stats.copiedBytes+=at*4;
  }
- /** Spatial buckets come from producer chunk keys. Split at most one resource
-  * family into four quadrants and one terrain family into two fixed halves,
-  * within the eight-page budget shared with rock/other material families. */
+ /** Spatial buckets come from producer chunk keys. Resource families may use
+  * their four quadrants while pages remain; at most one terrain family uses
+  * two fixed halves. All families share the same eight-page ceiling. */
  private selected(grouped:Map<string,Choice[]>):{key:string;choices:Choice[];quadrant:number|undefined}[]{
-  const families=[...grouped].filter(([,choices])=>choices.length>1).sort((a,b)=>b[1].length-a[1].length);let remaining=this.maxPages;const split=new Set<2|4>();
+  const families=[...grouped].filter(([,choices])=>choices.length>1).sort((a,b)=>b[1].length-a[1].length);let remaining=this.maxPages,terrainSplit=false;
   const selected:{key:string;choices:Choice[];quadrant:number|undefined}[]=[];
   for(const[key,choices]of families){if(!remaining)break;const partitions=choices[0]!.partitions;if(partitions&&choices.every(c=>c.quadrant!==undefined&&c.partitions===partitions)){
     const buckets=new Map<number,Choice[]>();for(const choice of choices){const q=choice.quadrant!,rows=buckets.get(q)??[];rows.push(choice);buckets.set(q,rows);}
     // Never collapse an oversized spatial family back into a full-map page.
-    // Excess/secondary multi-bucket families remain their original native draws.
-    if(buckets.size>remaining||(buckets.size>1&&split.has(partitions)))continue;
-    for(const[q,rows]of[...buckets].sort((a,b)=>a[0]-b[0]))selected.push({key:`${key}|quadrant:${q}`,choices:rows,quadrant:q});remaining-=buckets.size;if(buckets.size>1)split.add(partitions);continue;
+    // Excess families retain native draws; a second resource family may use
+    // genuinely free pages without removing the separate terrain restriction.
+    if(buckets.size>remaining||(partitions===2&&buckets.size>1&&terrainSplit))continue;
+    for(const[q,rows]of[...buckets].sort((a,b)=>a[0]-b[0]))selected.push({key:`${key}|quadrant:${q}`,choices:rows,quadrant:q});remaining-=buckets.size;if(partitions===2&&buckets.size>1)terrainSplit=true;continue;
    }selected.push({key,choices,quadrant:undefined});remaining--;
   }return selected;
  }
