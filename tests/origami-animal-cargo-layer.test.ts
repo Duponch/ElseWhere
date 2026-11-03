@@ -24,14 +24,14 @@ function mesh(layer:AnimalCargoLayer282){const body=layer.group.children.find((o
 function matrixClose(actual:THREE.Matrix4,expected:THREE.Matrix4){for(let i=0;i<16;i++)expect(Math.abs(actual.elements[i]!-expected.elements[i]!),`matrix component${i}`).toBeLessThan(2e-6);}
 
 describe('real animal cargo batch attachment, typed record projection without simulation',()=>{
- it('matches bind roll/growth/yaw and item footprint for the two new carriers while Default and protected carriers keep historical matrices',()=>{
+ it('matches common-model bind roll/growth/yaw and item footprint in both styles while protected carriers keep historical matrices',()=>{
   const point=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3(),actual=new THREE.Matrix4(),expected=new THREE.Matrix4(),bodyScale=new WildlifeBodyScale();
   for(const style of ['default','origami'] as const)for(const species of ['cougar','megasloth','labrador-retriever','elephant'] as const){
    const context=new GraphicsStyleContext({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style}),layer=withGraphicsStyle(context,()=>new AnimalCargoLayer282()),animal=actor(species);
    try{
     for(const growth of [1,.57])for(const resting of [false,true]){
      animal.state=resting?'sleeping':'idle';animal.growthTracker={revision:1,value:Math.fround(growth),nextCheckCore:growth===1?null:240};const records=snapshot(animal),before=JSON.stringify(records);layer.update(records);layer.present({cpuPoseForId:()=>pose});const body=mesh(layer);body.getMatrixAt(0,actual);
-     const base=style==='origami'?bestiaryAnimalCargoBack(species):undefined,torso=base?bestiaryAnimalCargoTorso(species):undefined,size=bodyScale.read(animal),bounds=body.geometry.boundingBox!,batchWidth=Math.max(.001,bounds.max.x-bounds.min.x),batchDepth=Math.max(.001,bounds.max.z-bounds.min.z),back=base&&torso?fitAnimalCargoBack(base,torso,batchWidth,batchDepth):undefined;
+     const base=bestiaryAnimalCargoBack(species),torso=base?bestiaryAnimalCargoTorso(species):undefined,size=bodyScale.read(animal),bounds=body.geometry.boundingBox!,batchWidth=Math.max(.001,bounds.max.x-bounds.min.x),batchDepth=Math.max(.001,bounds.max.z-bounds.min.z),back=base&&torso?fitAnimalCargoBack(base,torso,batchWidth,batchDepth):undefined;
      let x=0,y:number,z:number,width:number,depth:number;
      if(back){
       // Independent affine matrix: start at the real compiled back, roll it

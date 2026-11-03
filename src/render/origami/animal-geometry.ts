@@ -45,6 +45,12 @@ export function origamiAnimalGeometry(capacity:number,species:string,includeWear
 export function origamiAnimalPresentationGeometry(capacity:number,species:string,includeWear=true):THREE.InstancedBufferGeometry|undefined {
   return createAnimalGeometry(capacity,species,true,includeWear);
 }
+/** Shared product model in both graphics styles. The style selects surface
+ * paint/companions only; anatomical owners and authored corrections stay equal.
+ * Default omits physical wear unless its caller explicitly requests it. */
+export function commonAnimalPresentationGeometry(capacity:number,species:string,includeWear=false):THREE.InstancedBufferGeometry|undefined {
+  return origamiAnimalPresentationGeometry(capacity,species,includeWear);
+}
 function createAnimalGeometry(capacity:number,species:string,presentation:boolean,includeWear:boolean):THREE.InstancedBufferGeometry|undefined {
   if(!ORIGAMI_ANIMAL_REFERENCES[species])return bestiaryAnimalGeometry(capacity,species,presentation,includeWear);
   const compiled=compileAnimal(species,presentation,includeWear);if(!compiled)return;

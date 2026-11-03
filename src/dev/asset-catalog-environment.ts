@@ -38,7 +38,6 @@ import {createSandbagGeometry} from '../render/sandbag-parts';
 import {createSurfaceMaterial} from '../render/SurfaceMaterials';
 import {createStylizedSurfaceTexture} from '../render/stylized-surfaces';
 import {applyOrigamiSurface,withGraphicsStyle,type GraphicsStyleContext} from '../render/graphics-style';
-import {ORIGAMI_FURNITURE_KINDS} from '../render/origami/props';
 import {createOrigamiContour} from '../render/origami/contours';
 import {ReferenceFloraLibrary} from '../render/origami/resource-flora';
 import {createOrigamiBrushGeometry} from '../render/origami/brush-geometry';
@@ -69,7 +68,7 @@ function previewCall<T>(owner:object|undefined,producer:(...args:never[])=>T,rec
   return Reflect.apply(producer,owner,[record,...args]);
 }
 
-const SOURCE_PLANTS=new Set<string>(['oak','poplar','pine','saguaro','bush','berry-bush']);
+const SOURCE_PLANTS=new Set<string>(['bush','berry-bush']);
 const ITEM_KIND_LABELS:Readonly<Record<string,string>>={
   'ai-core':'Cœurs d’IA',book:'Livres',prosthesis:'Prothèses',wort:'Moût',beer:'Bière',jade:'Jade',plant:'Végétaux transportables',
   chemfuel:'Biocarburant',neutroamine:'Neutroamine',silver:'Argent',wood:'Bois',food:'Nourriture',chunk:'Fragments rocheux',steel:'Acier',gold:'Or',uranium:'Uranium',plasteel:'Plastacier',
@@ -182,8 +181,8 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
     wild.items.length=0;wild.missing!.length=0;
     for(const plant of plants){const slot=clusterSlots.get(plant.id);if(slot)byId.set(plant.id,instanceBounds(clusterMesh,slot.index));const bounds=byId.get(plant.id);
       if(!bounds||bounds.isEmpty()){wild.missing!.push({id:plant.species!,label:FLORA_DEFINITIONS[plant.species!].label,reason:'Aucun modèle affichable produit pour cette espèce.'});continue;}
-      const ready=readyIds.has(plant.id),status:CatalogStatus=!context.origami?'default':ready?'origami':SOURCE_PLANTS.has(plant.species!)?'reference':plant.species==='grass'||plant.species==='tall-grass'?'origami':'default';
-      wild.items.push(item(`plant:${plant.species}`,FLORA_DEFINITIONS[plant.species!].label,status,bounds,ready?'Forme habituelle de l’arbre, gouache et contours précalculés partagés ; éclairage Lambert du jeu.':status==='default'&&context.origami?'Modèle habituel ; pas de remplacement Origami.':undefined));
+      const ready=readyIds.has(plant.id),tree=plant.kind==='tree',status:CatalogStatus=!context.origami?'default':ready||tree?'origami':SOURCE_PLANTS.has(plant.species!)?'reference':plant.species==='grass'||plant.species==='tall-grass'?'origami':'default';
+      wild.items.push(item(`plant:${plant.species}`,FLORA_DEFINITIONS[plant.species!].label,status,bounds,tree&&context.origami?'Forme habituelle de l’arbre, peinte à la gouache ; contours et usure selon les options Origami.':status==='default'&&context.origami?'Modèle habituel ; pas de remplacement Origami.':undefined));
     }
     };refreshWildInventory();
     sections.push(wild);dispose.push(()=>resources.dispose(),()=>clusters.dispose());
@@ -264,8 +263,8 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
       if(bounds.isEmpty()){buildings.missing!.push({id:`building:${kind}`,label,reason:'Les constructeurs graphiques n’ont produit aucun assemblage visible.'});continue;}
       const placed=buildingLayout.add(group,bounds);buildings.group.add(group);
       const stuff=material?` · ${ITEM_DEFINITIONS[material as ItemId]?.label??material}`:'';
-      const status:CatalogStatus=context.origami&&ORIGAMI_FURNITURE_KINDS.has(kind)?'origami':'default';
-      buildings.items.push(item(`building:${kind}`,label+stuff,status,placed,status==='default'&&context.origami?'Modèle habituel ; pas de remplacement Origami.':undefined));
+      const status:CatalogStatus=context.origami?'origami':'default';
+      buildings.items.push(item(`building:${kind}`,label+stuff,status,placed,'Forme habituelle commune aux deux styles ; peinture à la gouache et contours selon les options Origami.'));
     }
     sections.push(buildings);
 

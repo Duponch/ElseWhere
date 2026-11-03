@@ -11,7 +11,7 @@ import { createAnimalMedicalRecord256 } from '../src/sim/animal-clinical-age-v25
 import { ANIMAL_SPECIES_IDS,type AnimalSpeciesId } from '../src/sim/animal-species';
 import { WildlifeLayer } from '../src/render/WildlifeLayer';
 import { PawnLayer } from '../src/render/PawnLayer';
-import { hareGeometry } from '../src/render/hare-geometry';
+import { commonAnimalPresentationGeometry } from '../src/render/origami/animal-geometry';
 import { corpseVisualMask,corpseVisualPartBit } from '../src/render/corpse-presentation';
 import { pileParts } from '../src/render/pile-parts';
 import { cargoGeometry } from '../src/render/pawn-geometry';
@@ -36,7 +36,7 @@ test('all species keep the full shared faceted body, coat palette and resident c
     const mesh=rig(layer,species),geometry=mesh.geometry as THREE.InstancedBufferGeometry;
     expect(geometry.instanceCount).toBe(1);expect(geometry.getAttribute('aAnimal').getZ(0)).toBe(2);
     expect(geometry.getAttribute('aScale').getX(0)).toBe(1);
-    const bind=hareGeometry(1,species),position=geometry.getAttribute('position'),color=geometry.getAttribute('color'),normal=geometry.getAttribute('normal'),eye=geometry.getAttribute('eyeMark');
+    const bind=commonAnimalPresentationGeometry(1,species,false);if(!bind)throw Error('Missing shared species model '+species);const position=geometry.getAttribute('position'),color=geometry.getAttribute('color'),normal=geometry.getAttribute('normal'),eye=geometry.getAttribute('eyeMark');
     expect(Array.from(position.array)).toEqual(Array.from(bind.getAttribute('position').array));
     expect(Array.from(color.array)).toEqual(Array.from(bind.getAttribute('color').array));
     let open=0,cross=0;for(let vertex=0;vertex<eye.count;vertex++){
@@ -58,7 +58,12 @@ test('consumption updates the same rig mask at the same tick; corpses never dupl
   const history=structuredClone(changed.piles[0]!.corpse!.health);layer.update(changed,undefined);
   expect(mesh.geometry).toBe(geometry);expect(geometry.getAttribute('aAbsent')).toBe(mask);
   expect(mask.getX(0)).toBe(corpseVisualMask(changed.piles[0]!.corpse!));expect(changed.piles[0]!.corpse!.health).toEqual(history);
-  const bits=geometry.getAttribute('corpsePartMask');expect(Array.from({length:bits.count},(_,i)=>bits.getX(i))).toContain(corpseVisualPartBit('left-front-paw'));
+  const bits=geometry.getAttribute('corpsePartMask'),owners=new Set(Array.from({length:bits.count},(_,i)=>bits.getX(i)));
+  // The common source asset authors its front shin/paw as one primitive owned
+  // by the leg. Clinical child consumption is still retained in the exact mask;
+  // it cannot manufacture a separate paw mesh or remove the intact parent leg.
+  const paw=corpseVisualPartBit('left-front-paw'),leg=corpseVisualPartBit('left-front-leg');
+  expect(owners.has(leg)).toBe(true);expect(owners.has(paw)).toBe(false);expect(mask.getX(0)&paw).toBe(paw);expect(mask.getX(0)&leg).toBe(0);expect(owners.has(corpseVisualPartBit('head'))).toBe(true);
   expect(pileParts([{x:8,z:9,kind:'corpse',item:'hare-corpse',quantity:1,supplied:false,corpse:body}])).toEqual([]);
   const cargo=cargoGeometry(),kinds=cargo.getAttribute('cargoKind');expect(Array.from({length:kinds.count},(_,i)=>kinds.getX(i))).not.toContain(27);cargo.dispose();layer.dispose();
 });

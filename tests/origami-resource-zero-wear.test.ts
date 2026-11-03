@@ -23,7 +23,7 @@ test('all source flora omit wear at construction without changing their painted 
   for(let i=0;i<a.parts.length;i++){
    expect(b.parts[i]!.wear,name).toBeNull();
    expect(snapshot(b.parts[i]!.geometry),name).toEqual(snapshot(a.parts[i]!.geometry));
-   expect(snapshot(b.parts[i]!.lines),name).toEqual(snapshot(a.parts[i]!.lines));
+   expect(snapshot(b.parts[i]!.lines!),name).toEqual(snapshot(a.parts[i]!.lines!));
    expect(b.parts[i]!.partMatrix.toArray(),name).toEqual(a.parts[i]!.partMatrix.toArray());
    expect(b.parts[i]!.profileId,name).toBe(a.parts[i]!.profileId);
   }

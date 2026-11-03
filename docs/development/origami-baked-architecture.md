@@ -5,6 +5,12 @@ L'objectif reste le coût du mode Par défaut avec la même impression visuelle.
 La parité n'est pas acquise. La simulation, le schéma301 et la vraie325 sont
 inchangés ; aucun push ou déploiement n'est demandé.
 
+La nouvelle consigne du3novembre au soir impose des [modèles communs aux deux
+habillages](shared-model-graphics-styles.md). Ce lot est qualifié en composants ;
+V38 mesure encore+84,31%GPU pour Origami sur une même carte128 en pause.
+Les contours restent activés selon la dernière consigne humaine. Continuer
+leur refonte, sans attribuer au changement du modèle Legacy un gain Origami.
+
 ## Mesure composite du produit, 3 novembre au soir
 
 Les lots arbres/animaux et comparateur sont committés localement en

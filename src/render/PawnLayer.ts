@@ -77,7 +77,7 @@ import type { AnimalCorpseCarrier } from './animal-corpse-carrier';
 // Two affine traits share one fragment location. Keep all decisions (skin,
 // equipment, corpse ribs and blood) in the fragment shader; vertex poses use
 // the original attributes and receive no additional buffer or approximation.
-export const pawnFragmentTraits=varying(vec2(attribute('boneId','float'),attribute('dye','float')),'v_pawnFragmentTraits');
+export const pawnFragmentTraits=varying(attribute('pawnRigTraits','vec3').xy,'v_pawnFragmentTraits');
 
 type VisualPawn = { from: THREE.Vector4; to: THREE.Vector4 };
 type ApproachTransition = { fromX:number; fromZ:number; toX:number; toZ:number; start:number; baseX:number; baseZ:number };
@@ -159,20 +159,22 @@ export function retainedHumanCorpseOffsets(world:World):ReadonlyMap<number,{x:nu
 
 export class PawnLayer {
   private readonly graphics=currentGraphicsStyle();
+  /** Shared anatomy/rig; the graphics context selects surface treatment only. */
+  private readonly referenceRig=true;
   private readonly humanBind=(()=>{
-    if(!this.graphics?.origami)return {hip:.61,foot:.11,kneeSpan:.21,seatedHip:.605,crouchHip:.49,crouchZ:.075,kneelHip:.48,lieCenter:.65,gunY:1.02,gunZ:.45,pistolY:.99,pistolZ:.44,weaponXScale:1};
+    if(!this.referenceRig)return {hip:.61,foot:.11,kneeSpan:.21,seatedHip:.605,crouchHip:.49,crouchZ:.075,kneelHip:.48,lieCenter:.65,gunY:1.02,gunZ:.45,pistolY:.99,pistolZ:.44,weaponXScale:1};
     const bind=ORIGAMI_HUMAN_BIND,legScale=(bind.hipY-bind.footY)/(.61-.11),armDelta=(bind.shoulderY-bind.handY)-(1.01-.62);
     return {hip:bind.hipY,foot:bind.footY,kneeSpan:bind.hipY-bind.kneeY,seatedHip:bind.hipY-.005,crouchHip:bind.hipY-.12*legScale,crouchZ:.075*legScale,kneelHip:bind.hipY-.13*legScale,lieCenter:bind.hipY+.04*legScale,gunY:bind.shoulderY+.01,gunZ:.45+armDelta,pistolY:bind.shoulderY-.02,pistolZ:.44+armDelta,weaponXScale:bind.shoulderX/.23};
   })();
   private workToolJobs=new Map<number,Job>();
   private equippedVisualItems=new Map<number,string>();
   private refreshOrigamiEquipmentSignal(pawn:Pawn,index:number):void {
-    if(!this.graphics?.origami||!this.pawnMesh)return;
+    if(!this.referenceRig||!this.pawnMesh)return;
     const equipment=this.pawnMesh.geometry.getAttribute('aEquipment') as THREE.InterleavedBufferAttribute,signal=origamiWeaponVisualSignal(pawn,this.equippedVisualItems.get(pawn.id));
     const encoded=encodeOrigamiEquipment(equipment.getX(index),signal.ready,signal.strike);
     if(equipment.getX(index)!==encoded){equipment.setX(index,encoded);equipment.data.needsUpdate=true;}
   }
-  private activity(pawn:Pawn,equipment:number):number{return (this.graphics?.origami?origamiWorkTool(pawn,this.workToolJobs.get(pawn.jobId??-1)):0)||presentationActivity(pawn,equipment);}
+  private activity(pawn:Pawn,equipment:number):number{return (this.referenceRig?origamiWorkTool(pawn,this.workToolJobs.get(pawn.jobId??-1)):0)||presentationActivity(pawn,equipment);}
   private selected:ReadonlySet<number>=new Set();
   private pawnIds:number[]=[];
   private selectionMesh:THREE.Mesh|null=null;
@@ -330,7 +332,7 @@ export class PawnLayer {
   }
   private clearOrigamiPartUnions():void {for(const union of this.origamiPartUnions)union.dispose();this.origamiPartUnions.length=0;}
   private installOrigamiPartUnions(body=this.pawnMesh?.geometry as THREE.InstancedBufferGeometry|undefined):void {
-    this.clearOrigamiPartUnions();if(!this.graphics?.origami||!body)return;
+    this.clearOrigamiPartUnions();if(!body)return;
     this.origamiPartUnionReader??=new HumanPartUnionReader();
     for(const geometry of [body,this.origamiLineMesh?.geometry,this.origamiWearMesh?.geometry])if(geometry)this.origamiPartUnions.push(new ActorPartUnionIndex(geometry,'human'));
   }
@@ -339,9 +341,10 @@ export class PawnLayer {
     const state=this.origamiPartUnionReader.read(body,body.instanceCount);for(const union of this.origamiPartUnions)union.reconcile(state);
   }
   private adoptOrigamiCompanions(body:THREE.InstancedBufferGeometry):void {
-    if(!this.graphics?.origami||!this.pawnMesh)return;
+    if(!this.pawnMesh)return;
     this.clearOrigamiPartUnions();
     if(!this.indexedOrigamiBodies.has(body)){indexExactStaticVertices(body);this.indexedOrigamiBodies.add(body);}
+    if(!this.graphics?.origami){this.installOrigamiPartUnions(body);this.syncOrigamiInstances(body);return;}
     const lines=createRigBrushGeometry(body),wear=body.userData.origamiWear as THREE.InstancedBufferGeometry|undefined;
     this.releaseOrigamiBrush?.();this.releaseOrigamiBrush=this.graphics.prepareBrushGeometry(lines);
     const position=(this.pawnMesh.material as THREE.MeshStandardNodeMaterial).positionNode;
@@ -421,7 +424,7 @@ export class PawnLayer {
     const previous=this.pawnMesh.geometry as THREE.InstancedBufferGeometry,next=this.graphics?withGraphicsStyle(this.graphics,()=>pawnGeometry(smithing,mace,longsword,spear)):pawnGeometry(smithing,mace,longsword,spear);
     for(const [name,attribute]of Object.entries(previous.attributes))if(attribute instanceof THREE.InstancedBufferAttribute
       ||attribute instanceof THREE.InterleavedBufferAttribute&&attribute.data instanceof THREE.InstancedInterleavedBuffer)next.setAttribute(name,attribute);
-    next.userData=this.graphics?.origami?{...previous.userData,...next.userData}:{...previous.userData};next.instanceCount=previous.instanceCount;
+    next.userData={...previous.userData,...next.userData};next.instanceCount=previous.instanceCount;
     this.pawnMesh.geometry=next;this.retiredPawnGeometries.push(previous);
     this.adoptOrigamiCompanions(next);
   }
@@ -452,9 +455,9 @@ export class PawnLayer {
     // animationCache, so the native body has no retained flag/root read at all.
     const originalClock = { travelTime: this.travelTime, blend: this.blend };
     const makeOriginalPosition = (probe?:{bone:0|3;point:THREE.Node<'vec3'>}):THREE.Node<'vec3'> => Fn(() => {
-      const bone = probe?float(probe.bone):pawnBoneNode(this.graphics?.origami),probeTraits=probe?{bone,dye:float(2)}:undefined;
+      const bone = probe?float(probe.bone):pawnBoneNode(this.referenceRig),probeTraits=probe?{bone,dye:float(2)}:undefined;
       const bindPivot=probe?probe.bone===3?vec3(ORIGAMI_HUMAN_BIND.shoulderX,ORIGAMI_HUMAN_BIND.shoulderY,0):vec3(0,ORIGAMI_HUMAN_BIND.hipY,0):attribute('bindPivot','vec3');
-      const pivot = pawnMorph(bindPivot,this.graphics?.origami,probeTraits);
+      const pivot = pawnMorph(bindPivot,this.referenceRig,probeTraits);
       const motion = attribute('aMotion', 'vec4');
       const pose = pawnPresentationPose(originalClock);
       // This branch is the complete original rig. Intermediate and distant
@@ -580,7 +583,7 @@ export class PawnLayer {
           .mul(bone.lessThan(5.5).select(float(.045),float(.025)));
         angle.assign(mix(angle,lowLeg,crouch));
       });
-      const local = pawnMorph(probe?.point??positionLocal,this.graphics?.origami,probeTraits).sub(pivot);
+      const local = pawnMorph(probe?.point??positionLocal,this.referenceRig,probeTraits).sub(pivot);
       const c = cos(angle), s = sin(angle);
       const animated = vec3(local.x, local.y.mul(c).sub(local.z.mul(s)), local.y.mul(s).add(local.z.mul(c))).add(pivot).toVar();
       If(busy.and(bone.lessThan(3.5)),()=>{
@@ -623,7 +626,7 @@ export class PawnLayer {
       // the shot (0.134 s in the native pilot). Keep the cosmetic kick short
       // but long enough to survive that presentation boundary.
       const recoil=motion.z.equal(15).select(float(1).sub(this.travelTime.sub(motion.w).div(.30)).clamp(0,1),float(0));
-      if(this.graphics?.origami){
+      if(this.referenceRig){
         const dye=pawnDyeNode(true),equipmentVertex=RESIDENT_WEAPON_VISUALS269.reduce((matches,weapon)=>matches.or(dye.equal(weapon.dye)),dye.equal(-999));
         If(equipmentVertex,()=>{
           const hand=makeOriginalPosition({bone:3,point:vec3(...ORIGAMI_EQUIPMENT_HAND)}).toVar();
@@ -634,7 +637,7 @@ export class PawnLayer {
         });
         for(const weapon of RESIDENT_WEAPON_VISUALS269)If(dye.equal(weapon.dye).and(attribute('aEquipment','vec4').x.floor().notEqual(weapon.equipment)),()=>{animated.assign(vec3(0));});
       }else for(const weapon of RESIDENT_WEAPON_VISUALS269) {
-        const isWeapon=pawnDyeNode(this.graphics?.origami).equal(weapon.dye);
+        const isWeapon=pawnDyeNode(this.referenceRig).equal(weapon.dye);
         const along=positionLocal.y.sub(.68),across=positionLocal.x.sub(.205),depth=positionLocal.z;
         if(weapon.item==='bolt-action-rifle'||weapon.item==='emp-launcher') {
           // High diagonal sling at rest: the long gun remains legible above
@@ -670,30 +673,30 @@ export class PawnLayer {
         const x=animated.x.toVar(),y=animated.y.toVar(),z=animated.z.toVar();
         animated.assign(vec3(float(this.humanBind.lieCenter).sub(y),z.add(.19+.95/PAWN_MODEL_SCALE),x.add(.3)));
       });
-      If(pawnDyeNode(this.graphics?.origami).equal(-3).and(this.graphics?.origami?attribute('aEquipment','vec4').y.notEqual(2):attribute('aEquipment','vec4').y.notEqual(2).and(attribute('aEquipment','vec4').y.notEqual(3))),()=>{animated.assign(vec3(0));});
-      if(this.graphics?.origami){If(pawnDyeNode(true).equal(ORIGAMI_DUSTER_DYE).and(attribute('aEquipment','vec4').y.notEqual(3)).or(pawnDyeNode(true).equal(ORIGAMI_PARKA_DYE).and(attribute('aEquipment','vec4').y.notEqual(4))),()=>{animated.assign(vec3(0));});}
+      If(pawnDyeNode(this.referenceRig).equal(-3).and(this.referenceRig?attribute('aEquipment','vec4').y.notEqual(2):attribute('aEquipment','vec4').y.notEqual(2).and(attribute('aEquipment','vec4').y.notEqual(3))),()=>{animated.assign(vec3(0));});
+      if(this.referenceRig){If(pawnDyeNode(true).equal(ORIGAMI_DUSTER_DYE).and(attribute('aEquipment','vec4').y.notEqual(3)).or(pawnDyeNode(true).equal(ORIGAMI_PARKA_DYE).and(attribute('aEquipment','vec4').y.notEqual(4))),()=>{animated.assign(vec3(0));});}
       // Vest is bit0. Mutually exclusive headgear occupies even codes:
       // flak2, recon4, cloth tuque6, wool tuque8, simple10. No new buffer.
       const wornFlags=attribute('aEquipment','vec4').z.floor(),helmet=wornFlags.greaterThan(1.5),recon=wornFlags.greaterThan(3.5).and(wornFlags.lessThan(5.5)),tuque=wornFlags.greaterThan(5.5).and(wornFlags.lessThan(9.5));
-      If(pawnDyeNode(this.graphics?.origami).equal(-2).and(wornFlags.mod(2).lessThan(.5)),()=>{animated.assign(vec3(0));});
-      If(pawnDyeNode(this.graphics?.origami).equal(FLAK_HELMET_DYE).and(helmet.not().or(wornFlags.greaterThan(3.5))),()=>{animated.assign(vec3(0));});
-      If(pawnDyeNode(this.graphics?.origami).equal(PLATE_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(6)),()=>{animated.assign(vec3(0));});
-      If(pawnDyeNode(this.graphics?.origami).equal(SIMPLE_HELMET_DYE).and(wornFlags.lessThan(9.5).or(wornFlags.greaterThan(11.5))),()=>{animated.assign(vec3(0));});
-      If(pawnDyeNode(this.graphics?.origami).equal(this.graphics?.origami?ORIGAMI_RECON_ARMOR_DYE:RECON_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(5)),()=>{animated.assign(vec3(0));});
-      If(pawnDyeNode(this.graphics?.origami).equal(RECON_HELMET_DYE).and(recon.not()),()=>{animated.assign(vec3(0));});
-      If(pawnDyeNode(this.graphics?.origami).equal(TUQUE_DYE).and(tuque.not()),()=>{animated.assign(vec3(0));});
-      If(pawnDyeNode(this.graphics?.origami).equal(PARKA_HOOD_DYE).and(attribute('aEquipment','vec4').y.notEqual(4).or(helmet)),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.referenceRig).equal(-2).and(wornFlags.mod(2).lessThan(.5)),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.referenceRig).equal(FLAK_HELMET_DYE).and(helmet.not().or(wornFlags.greaterThan(3.5))),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.referenceRig).equal(PLATE_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(6)),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.referenceRig).equal(SIMPLE_HELMET_DYE).and(wornFlags.lessThan(9.5).or(wornFlags.greaterThan(11.5))),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.referenceRig).equal(this.referenceRig?ORIGAMI_RECON_ARMOR_DYE:RECON_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(5)),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.referenceRig).equal(RECON_HELMET_DYE).and(recon.not()),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.referenceRig).equal(TUQUE_DYE).and(tuque.not()),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.referenceRig).equal(PARKA_HOOD_DYE).and(attribute('aEquipment','vec4').y.notEqual(4).or(helmet)),()=>{animated.assign(vec3(0));});
       // One face variant is visible at a time. The pause-controlled scene
       // clock also freezes blinks and sleep poses when the game is paused.
-      const dye=pawnDyeNode(this.graphics?.origami),asleep=motion.z.equal(POSE_SLEEP),dead=motion.z.equal(POSE_DEAD);
+      const dye=pawnDyeNode(this.referenceRig),asleep=motion.z.equal(POSE_SLEEP),dead=motion.z.equal(POSE_DEAD);
       // The presentation clock wraps at 2π during tracked play, so the
       // frequency is integral and cannot jump at that wrap boundary.
       const blink=decorativeSin(time.add(motion.w.mul(1.97))).greaterThan(.994);
       const face=dead.select(float(PAWN_EYE_CROSS),asleep.or(blink).select(float(PAWN_EYE_CLOSED),float(PAWN_EYE_OPEN)));
       If(dye.greaterThanEqual(PAWN_EYE_OPEN).and(dye.lessThanEqual(PAWN_EYE_CROSS)).and(dye.notEqual(face)),()=>{ animated.assign(vec3(0)); });
       If(recon.and(dye.greaterThanEqual(PAWN_EYE_OPEN)).and(dye.lessThanEqual(PAWN_EYE_CROSS)),()=>{ animated.assign(vec3(0)); });
-      If(hiddenAppearancePart(this.graphics?.origami),()=>{ animated.assign(vec3(0)); });
-      if(this.graphics?.origami){const tool=dye.lessThanEqual(-30).and(dye.greaterThanEqual(-32));If(tool.and(dye.notEqual(attribute('aMotion','vec4').y).or(attribute('aCargo','vec4').x.abs().greaterThan(.5))),()=>{animated.assign(vec3(0));});}
+      If(hiddenAppearancePart(this.referenceRig),()=>{ animated.assign(vec3(0)); });
+      if(this.referenceRig){const tool=dye.lessThanEqual(-30).and(dye.greaterThanEqual(-32));If(tool.and(dye.notEqual(attribute('aMotion','vec4').y).or(attribute('aCargo','vec4').x.abs().greaterThan(.5))),()=>{animated.assign(vec3(0));});}
       // Four anatomical bits share aShape.x. Degenerate each absent limb at
       // the common body origin after pose/portage transforms; colour and shadow
       // passes use this same node, without another mesh or actor attribute.
@@ -729,7 +732,7 @@ export class PawnLayer {
       return vec4(raw,resolved);
     })():undefined;
     const origamiTraits=origamiVertexTraits?varying(origamiVertexTraits,'v_pawnOrigamiTraits').setInterpolation('flat'):undefined;
-    const origamiBloodBind=this.graphics?.origami?(()=>{
+    const origamiBloodBind=this.referenceRig?(()=>{
       const bone=attribute('pawnRigTraits','vec3').x,region=bone.greaterThanEqual(6).select(bone.sub(2),bone);
       // Both pigment graphs share one bind-space transport. Creating it here
       // keeps repeated Fn builds and normal-map contexts from allocating new
@@ -753,7 +756,7 @@ export class PawnLayer {
       If(fragmentDye.equal(PLATE_ARMOR_DYE),()=>{tint.assign(attribute('aTint','vec3'));});
       for(const [index,hex] of SIMPLE_HELMET_COLORS267.entries()){const color=new THREE.Color(hex);If(fragmentDye.equal(SIMPLE_HELMET_DYE).and(attribute('aEquipment','vec4').w.fract().mul(16).round().equal(index+1)),()=>{tint.assign(vec3(color.r,color.g,color.b));});}
       If(fragmentDye.equal(-3).or(fragmentDye.equal(PARKA_HOOD_DYE)),()=>{ tint.assign(attribute('aTint','vec3')); });
-      if(this.graphics?.origami)If(fragmentDye.equal(ORIGAMI_DUSTER_DYE).or(fragmentDye.equal(ORIGAMI_PARKA_DYE)),()=>{tint.assign(attribute('aTint','vec3'));});
+      if(this.referenceRig)If(fragmentDye.equal(ORIGAMI_DUSTER_DYE).or(fragmentDye.equal(ORIGAMI_PARKA_DYE)),()=>{tint.assign(attribute('aTint','vec3'));});
       If(attribute('aEquipment','vec4').y.equal(2).and(fragmentBone.greaterThanEqual(2)).and(fragmentBone.lessThanEqual(3)),()=>{ tint.assign(attribute('aSkin','vec3')); });
       If(fragmentDye.equal(2),()=>{ tint.assign(attribute('aSkin','vec3')); });
       If(fragmentDye.greaterThanEqual(100),()=>{ tint.assign(attribute('aHairBlood','vec4').xyz); });
@@ -785,7 +788,7 @@ export class PawnLayer {
       const dye=fragmentDye,bone=fragmentBone;
       const region=bone.greaterThanEqual(6).select(bone.sub(2),bone);
       const clothPart=dye.equal(-3).or(dye.equal(-2)).or(dye.greaterThanEqual(0).and(dye.lessThan(3)));
-      const bloodSurface=this.graphics?.origami?clothPart.or(dye.equal(ORIGAMI_DUSTER_DYE)).or(dye.equal(ORIGAMI_PARKA_DYE)):clothPart;
+      const bloodSurface=this.referenceRig?clothPart.or(dye.equal(ORIGAMI_DUSTER_DYE)).or(dye.equal(ORIGAMI_PARKA_DYE)):clothPart;
       return bodyBloodPigment(tint,region,1,bloodSurface.select(float(1),float(0)),attribute('aHairBlood','vec4').w,origamiBloodBind);})();
     mat.colorNode = baseColor;
     const textured = material(0xffffff);
@@ -943,10 +946,10 @@ export class PawnLayer {
    * static morphology and visibility still use the live encoded streams. */
   private cachedPawnPosition(probe?:{bone:0|3;point:THREE.Node<'vec3'>}):THREE.Node<'vec3'> {
     return Fn(()=>{
-      const bone=probe?float(probe.bone):pawnBoneNode(this.graphics?.origami),dye=pawnDyeNode(this.graphics?.origami),motion=vec4(0,this.animationCache.cell(4).z,this.animationCache.cell(4).y,0),probeTraits=probe?{bone,dye:float(2)}:undefined;
+      const bone=probe?float(probe.bone):pawnBoneNode(this.referenceRig),dye=pawnDyeNode(this.referenceRig),motion=vec4(0,this.animationCache.cell(4).z,this.animationCache.cell(4).y,0),probeTraits=probe?{bone,dye:float(2)}:undefined;
       const pose=pawnPresentationPose({travelTime:this.travelTime,blend:this.blend});
       const bindPivot=probe?probe.bone===3?vec3(ORIGAMI_HUMAN_BIND.shoulderX,ORIGAMI_HUMAN_BIND.shoulderY,0):vec3(0,ORIGAMI_HUMAN_BIND.hipY,0):attribute('bindPivot','vec3');
-      const pivot=pawnMorph(bindPivot,this.graphics?.origami,probeTraits),local=pawnMorph(probe?.point??positionLocal,this.graphics?.origami,probeTraits).sub(pivot);
+      const pivot=pawnMorph(bindPivot,this.referenceRig,probeTraits),local=pawnMorph(probe?.point??positionLocal,this.referenceRig,probeTraits).sub(pivot);
       const data=this.animationCache.cellAt(float(8).add(bone));
       const animated=vec3(local.x,local.y.mul(data.x).sub(local.z.mul(data.y)),local.y.mul(data.y).add(local.z.mul(data.x))).add(pivot).toVar();
       animated.y.addAssign(data.z);animated.z.addAssign(data.w);
@@ -960,7 +963,7 @@ export class PawnLayer {
       If(motion.z.equal(10).and(bone.lessThan(3.5)),()=>{const y=animated.y.sub(this.humanBind.kneelHip).toVar(),z=animated.z.toVar();animated.y.assign(y.mul(.82).sub(z.mul(.57)).add(this.humanBind.kneelHip));animated.z.assign(y.mul(.57).add(z.mul(.82)));});
       if(probe)return animated;
       const shooting=motion.z.equal(7).or(motion.z.equal(15)),recoil=this.animationCache.cell(3).z;
-      if(this.graphics?.origami){
+      if(this.referenceRig){
         const equipmentVertex=RESIDENT_WEAPON_VISUALS269.reduce((matches,weapon)=>matches.or(dye.equal(weapon.dye)),dye.equal(-999));
         If(equipmentVertex,()=>{
           const hand=this.cachedPawnPosition({bone:3,point:vec3(...ORIGAMI_EQUIPMENT_HAND)}).toVar(),sling=dye.equal(-4).or(dye.equal(-9)).or(dye.equal(SPEAR_DYE272));
@@ -983,21 +986,21 @@ export class PawnLayer {
       If(motion.z.equal(POSE_DEAD),()=>{animated.z.assign(animated.z.mul(.78));});
       If(motion.z.equal(6),()=>{const x=animated.x.toVar(),y=animated.y.toVar(),z=animated.z.toVar();animated.assign(vec3(float(this.humanBind.lieCenter).sub(y),z.add(.19+.95/PAWN_MODEL_SCALE),x.add(.3)));});
       const equipment=attribute('aEquipment','vec4'),worn=equipment.z.floor(),helmet=worn.greaterThan(1.5),recon=worn.greaterThan(3.5).and(worn.lessThan(5.5)),tuque=worn.greaterThan(5.5).and(worn.lessThan(9.5));
-      If(dye.equal(-3).and(this.graphics?.origami?equipment.y.notEqual(2):equipment.y.notEqual(2).and(equipment.y.notEqual(3))),()=>{animated.assign(vec3(0));});
-      if(this.graphics?.origami){If(dye.equal(ORIGAMI_DUSTER_DYE).and(equipment.y.notEqual(3)).or(dye.equal(ORIGAMI_PARKA_DYE).and(equipment.y.notEqual(4))),()=>{animated.assign(vec3(0));});}
+      If(dye.equal(-3).and(this.referenceRig?equipment.y.notEqual(2):equipment.y.notEqual(2).and(equipment.y.notEqual(3))),()=>{animated.assign(vec3(0));});
+      if(this.referenceRig){If(dye.equal(ORIGAMI_DUSTER_DYE).and(equipment.y.notEqual(3)).or(dye.equal(ORIGAMI_PARKA_DYE).and(equipment.y.notEqual(4))),()=>{animated.assign(vec3(0));});}
       If(dye.equal(-2).and(worn.mod(2).lessThan(.5)),()=>{animated.assign(vec3(0));});
       If(dye.equal(FLAK_HELMET_DYE).and(helmet.not().or(worn.greaterThan(3.5))),()=>{animated.assign(vec3(0));});
       If(dye.equal(PLATE_ARMOR_DYE).and(equipment.y.notEqual(6)),()=>{animated.assign(vec3(0));});
       If(dye.equal(SIMPLE_HELMET_DYE).and(worn.lessThan(9.5).or(worn.greaterThan(11.5))),()=>{animated.assign(vec3(0));});
-      If(dye.equal(this.graphics?.origami?ORIGAMI_RECON_ARMOR_DYE:RECON_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(5)),()=>{animated.assign(vec3(0));});
+      If(dye.equal(this.referenceRig?ORIGAMI_RECON_ARMOR_DYE:RECON_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(5)),()=>{animated.assign(vec3(0));});
       If(dye.equal(RECON_HELMET_DYE).and(recon.not()),()=>{animated.assign(vec3(0));});
       If(dye.equal(TUQUE_DYE).and(tuque.not()),()=>{animated.assign(vec3(0));});
       If(dye.equal(PARKA_HOOD_DYE).and(equipment.y.notEqual(4).or(helmet)),()=>{animated.assign(vec3(0));});
       const face=motion.z.equal(POSE_DEAD).select(float(PAWN_EYE_CROSS),motion.z.equal(POSE_SLEEP).or(this.animationCache.cell(3).y.greaterThan(.5)).select(float(PAWN_EYE_CLOSED),float(PAWN_EYE_OPEN)));
       If(dye.greaterThanEqual(PAWN_EYE_OPEN).and(dye.lessThanEqual(PAWN_EYE_CROSS)).and(dye.notEqual(face)),()=>{animated.assign(vec3(0));});
       If(recon.and(dye.greaterThanEqual(PAWN_EYE_OPEN)).and(dye.lessThanEqual(PAWN_EYE_CROSS)),()=>{animated.assign(vec3(0));});
-      If(hiddenAppearancePart(this.graphics?.origami),()=>{animated.assign(vec3(0));});
-      if(this.graphics?.origami){const tool=dye.lessThanEqual(-30).and(dye.greaterThanEqual(-32));If(tool.and(dye.notEqual(attribute('aMotion','vec4').y).or(attribute('aCargo','vec4').x.abs().greaterThan(.5))),()=>{animated.assign(vec3(0));});}
+      If(hiddenAppearancePart(this.referenceRig),()=>{animated.assign(vec3(0));});
+      if(this.referenceRig){const tool=dye.lessThanEqual(-30).and(dye.greaterThanEqual(-32));If(tool.and(dye.notEqual(attribute('aMotion','vec4').y).or(attribute('aCargo','vec4').x.abs().greaterThan(.5))),()=>{animated.assign(vec3(0));});}
       const mask=attribute('aShape','vec4').x.div(100).floor();
       for(const limb of HUMAN_LIMB_VISUALS){const member=limb.bones.reduce((matches,id)=>matches.or(bone.equal(id)),bone.equal(-1));If(member.and(mask.div(limb.bit).floor().mod(2).greaterThan(.5)),()=>{animated.assign(vec3(0));});}
       If(helmet.and(dye.greaterThanEqual(100)).and(dye.lessThan(200)),()=>{animated.assign(vec3(0));});
@@ -1108,7 +1111,7 @@ export class PawnLayer {
   }
 
   update(world: World, oldBlend: number, newMap: boolean): void {
-    if(this.graphics?.origami)this.workToolJobs=new Map(world.jobs.map(job=>[job.id,job]));
+    if(this.referenceRig)this.workToolJobs=new Map(world.jobs.map(job=>[job.id,job]));
     if(newMap){this.animationCache.reset();this.partialAnimationCache.reset();}
     this.travelKeys.clear();this.travelSurfaces=furnitureSurfaces(world);
     if(newMap){this.headings.clear();this.approachTransitions.clear();this.departureOffsets.clear();this.workOffsets.clear();this.crouchTransitions.clear();this.shownPoses.clear();this.gait.clear();this.handoffs.clear();}
@@ -1122,7 +1125,7 @@ export class PawnLayer {
     const retainedOffsets=retainedHumanCorpseOffsets(world);
     const apparel=apparelProjection(world);
     const gears=equipmentProjection(world);
-    if(this.graphics?.origami)this.equippedVisualItems=new Map([...gears].map(([id,piece])=>[id,piece.item]));
+    if(this.referenceRig)this.equippedVisualItems=new Map([...gears].map(([id,piece])=>[id,piece.item]));
     let smithing=this.smithingGeometry,mace=this.maceGeometry,longsword=this.longswordGeometry,spear=this.spearGeometry;
     if(!smithing)for(const pieces of apparel.values())if(pieces.some(p=>isSmithingApparel267(p.item))){smithing=true;break;}
     if(!mace)for(const piece of gears.values())if(isMaceItem269(piece.item)){mace=true;break;}
@@ -1162,7 +1165,7 @@ export class PawnLayer {
     const equipment=geometry.getAttribute('aEquipment') as THREE.InterleavedBufferAttribute;
     const carried = new Map<number, World['piles'][number]>();
     for (const pile of world.piles) if (pile.owner.type === 'pawn') carried.set(pile.owner.pawnId, pile);
-    let jobsById:Map<number,World['jobs'][number]>|undefined=this.graphics?.origami?this.workToolJobs:undefined;
+    let jobsById:Map<number,World['jobs'][number]>|undefined=this.referenceRig?this.workToolJobs:undefined;
     const present = new Set<number>();
     world.pawns.forEach((pawn, index) => {
       present.add(pawn.id);
@@ -1373,7 +1376,7 @@ export class PawnLayer {
       const prepared=playback?this.playback435.select(i,timeline,timeline.tick,origin):undefined;
       if(spring&&!this.springValid297[i])this.captureSpring297(i,from,to,times,motion);
       if(playback&&!prepared){if(spring)dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;return;}
-      if(this.graphics?.origami)this.refreshOrigamiEquipmentSignal(pawn,i);
+      if(this.referenceRig)this.refreshOrigamiEquipmentSignal(pawn,i);
       const segment=pawn.body?.pileId!==undefined||pawn.body?.lostAt!==undefined?undefined:(playback?prepared!.edge:timeline.segment(pawn.id));
       const active=!!segment && timeline.tick<segment.end;
       const pasteCollect=pasteCollectionSource(pawn);
@@ -1424,7 +1427,7 @@ export class PawnLayer {
           fromX:visual.from.x,fromZ:visual.from.z,toX:visual.to.x,toZ:visual.to.z,
         },timeline.tick,HUMAN_GAIT_RADIANS_PER_UNIT));
         else this.gait.halt(pawn.id,timeline.tick,HUMAN_GAIT_RADIANS_PER_UNIT);
-        motion.setY(i,this.graphics?.origami?origamiWorkTool(pawn,this.workToolJobs.get(pawn.jobId??-1)):0);
+        motion.setY(i,this.referenceRig?origamiWorkTool(pawn,this.workToolJobs.get(pawn.jobId??-1)):0);
         motion.setZ(i,shownPose);
       } else {
         this.gait.halt(pawn.id,timeline.tick,HUMAN_GAIT_RADIANS_PER_UNIT);
@@ -1533,7 +1536,7 @@ export class PawnLayer {
     const time=owner===undefined?this.time.value:this.animationCache.cpuClock(owner,'time')??this.time.value;
     const travelTime=owner===undefined?this.travelTime.value:this.animationCache.cpuClock(owner,'travelTime')??this.travelTime.value;
     this.animationCache.setRoot(slot,root,time,travelTime,this.cargoTime.value,this.blend.value);samplePawnRig(this.animationCache,slot,g,root,time,travelTime);
-    if(this.graphics?.origami&&pose===3)this.animationCache.set(slot,4,this.animationCache.get(slot,4,0)+(.605-this.humanBind.seatedHip)*PAWN_MODEL_SCALE,pose,motion.getY(slot));
+    if(this.referenceRig&&pose===3)this.animationCache.set(slot,4,this.animationCache.get(slot,4,0)+(.605-this.humanBind.seatedHip)*PAWN_MODEL_SCALE,pose,motion.getY(slot));
     this.animationCache.publish(slot);
   }
 

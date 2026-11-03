@@ -112,7 +112,7 @@ export class AnimalCargoLayer282 {
     if(!batch){const geometry=carriedGeometry(pile.item,pile.quantity,pile.innerResource);if(!geometry.getAttribute('position').count){geometry.dispose();continue;}
      batch=this.makeBatch(geometry,1);batch.mesh.name=`Animal cargo282 — ${pile.item}`;this.batches.set(key,batch);this.stats.geometryBuilds++;}
     if(!batch.members.length)this.active.push(batch);
-    const back=this.graphicsStyle?.origami?this.referenceBack(batch,animal.species)??backFor(animal.species):backFor(animal.species),width=isCompiledBack(back)?back[3]:back.width,depth=isCompiledBack(back)?back[4]:back.depth;
+    const back=this.referenceBack(batch,animal.species)??backFor(animal.species),width=isCompiledBack(back)?back[3]:back.width,depth=isCompiledBack(back)?back[4]:back.depth;
     const scale=this.bodyScale.read(animal)*Math.min(1,width/batch.width,depth/batch.depth);
     batch.members.push({animal,scale,back});this.stats.activeCargo++;
    }

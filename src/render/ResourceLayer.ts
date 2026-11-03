@@ -20,6 +20,7 @@ import {ResourceTargetTint} from './resource-target-tint';
 import {ResourceRangeBounds} from './resource-range-bounds';
 import {applyOrigamiSurface,currentGraphicsStyle,type GraphicsStyleContext} from './graphics-style';
 import {createOrigamiBrushGeometry} from './origami/brush-geometry';
+import {createPhysicalEdgeWearGeometry} from './origami/reference-edges';
 import {ReferenceFloraLibrary} from './origami/resource-flora';
 import {GENERIC_REFERENCE_PROFILE} from './origami/reference-profiles';
 import {isTreeSpecies} from './origami/baked/trees/recipe';
@@ -137,7 +138,7 @@ function visibleResourceKeys(world:World,r:World['resources'][number],appearance
 export class ResourceLayer {
   private readonly graphicsStyle=currentGraphicsStyle();
   private readonly treeBakeSupported=this.graphicsStyle?.origami===true&&!this.graphicsStyle.reliefEnabled&&!this.graphicsStyle.wearEnabled;
-  private readonly referenceFlora=this.graphicsStyle?.origami?new ReferenceFloraLibrary(this.graphicsStyle.wearEnabled):undefined;
+  private readonly referenceFlora=new ReferenceFloraLibrary(this.graphicsStyle?.wearEnabled===true,this.graphicsStyle?.origami===true);
   private readonly origamiPlain:THREE.NodeMaterial|undefined;
   private readonly origamiTextured:THREE.NodeMaterial|undefined;
   private readonly linePlain:THREE.NodeMaterial|undefined;
@@ -257,7 +258,7 @@ export class ResourceLayer {
     const next=[...species].sort(),key=JSON.stringify(next);if(key!==this.treeSpeciesKey){this.treeSpecies=Object.freeze(next);this.treeSpeciesKey=key;this.treeDemandEpoch++;}
   }
   treeBakeDemand():{key:string;species:readonly TreeSpecies[];isCurrent():boolean}{const epoch=this.treeDemandEpoch;return{key:this.treeSpeciesKey,species:this.treeSpecies,isCurrent:()=>!this.disposed&&this.treeDemandEpoch===epoch};}
-  bakedTreeStatus(){const pending=this.treeSpecies.filter(species=>!this.treeCatalog?.readReady(species));let trees=0,ready=0;for(const chunk of this.chunks.values()){trees+=chunk.treeCount;ready+=chunk.preparedTreeCount;}const fallback=trees-ready;return{revision:this.treeCatalog?.revision??null,species:this.treeSpecies,pending,ready,fallback,total:trees,texturePages:this.treeCatalog?.pageCount??0,fallbackReason:!fallback?null:!this.graphicsStyle?.origami?'default-style':this.graphicsStyle.reliefEnabled?'positive-relief':this.graphicsStyle.wearEnabled?'positive-wear':!this.treeCatalog?'atlas-not-prepared':pending.length?'species-not-prepared':'unsupported-species-or-blight-or-placement-mismatch',scope:'Prepared Legacy tree geometry/Lambert; fallback retains qualified original Origami producers; other flora unchanged'};}
+  bakedTreeStatus(){const pending=this.treeSpecies.filter(species=>!this.treeCatalog?.readReady(species));let trees=0,ready=0;for(const chunk of this.chunks.values()){trees+=chunk.treeCount;ready+=chunk.preparedTreeCount;}const fallback=trees-ready;return{revision:this.treeCatalog?.revision??null,species:this.treeSpecies,pending,ready,fallback,total:trees,texturePages:this.treeCatalog?.pageCount??0,geometryVariant:this.cachedTreeUpdate?.world.site?'legacy-broadleaf':'legacy-conical',fallbackReason:!fallback?null:!this.graphicsStyle?.origami?'default-style':this.graphicsStyle.reliefEnabled?'positive-relief':this.graphicsStyle.wearEnabled?'positive-wear':!this.treeCatalog?'atlas-not-prepared':pending.length?'species-not-prepared':'unsupported-species-or-blight-or-geometry-variant-or-placement-mismatch',scope:'Legacy tree geometry in both styles; prepared Lambert or Source gouache/contours according to admission and options; other flora unchanged'};}
   /** Measurement identity uses existing epochs and material owners, never a
    * second chunk census. Full Native diagnostics remain in bakedTreeStatus. */
   graphicsComparisonMetadata(){
@@ -583,7 +584,11 @@ export class ResourceLayer {
         const parts = [trunks, crowns, upperCrowns, rocks, bushes, berries];
         const lengths = parts.map(items => items.length);
         const n = noise(x, z, 77), turn = n * Math.PI * 2;
-        const prepared=resource.kind==='tree'?this.treeCatalog?.readReady(resource.species)?.place(resource,turn,size(resource)):undefined;
+        const ready=resource.kind==='tree'?this.treeCatalog?.readReady(resource.species):undefined;
+        // Historical worlds without a site use conical broadleaf crowns.
+        // The baked crown recipe is icosahedral, so retain the exact Source
+        // primitive instead. Cone/cactus recipes still match those worlds.
+        const prepared=ready&&(world.site||!ready.parts.some(part=>part.primitiveKind==='crown'))?ready.place(resource,turn,size(resource)):undefined;
         if(prepared?.length){
           for(const {template,item}of prepared){
             const baked=template.geometry.getAttribute('bakedUv');if(!(baked instanceof THREE.BufferAttribute)||baked instanceof THREE.InstancedBufferAttribute||!(baked.array instanceof Float32Array)||baked.itemSize!==3||baked.count!==template.geometry.getAttribute('position').count)throw new Error('Ready tree template requires ordinary bakedUv3');
@@ -595,7 +600,10 @@ export class ResourceLayer {
           }
           preparedTreeIds.add(resource.id);continue;
         }
-        if(origamiParts?.append(world,resource,turn,size(resource)))continue;
+        // Tree shape is independent of atlas admission/effects. Their original
+        // Legacy placements below still receive the current Origami paint and
+        // physical contours when an opaque atlas is unavailable or ineligible.
+        if(resource.kind!=='tree'&&origamiParts?.append(world,resource,turn,size(resource)))continue;
         if(resource.species||isMedicinalPlant(resource)){appendFlora({trunks,crowns,cones,blades,cacti,bushes,fruit:berries},world,resource,turn,size(resource));continue;}
         if (resource.kind === 'tree') {
           const height = WORLD_SCALE.treeMinHeight + n * (WORLD_SCALE.treeMaxHeight - WORLD_SCALE.treeMinHeight);
@@ -630,6 +638,19 @@ export class ResourceLayer {
         { geometry: new THREE.IcosahedronGeometry(0.055, 0), items: berries },
       ];
       const fallbackCanopies=[{geometry:world.site?new THREE.IcosahedronGeometry(1,0):new THREE.ConeGeometry(1,1,6),items:[...crowns,...upperCrowns]},{geometry:new THREE.ConeGeometry(1,1,6),items:cones}];
+      // Wear follows those same Legacy primitives. Only actual tree ranges
+      // participate; zero wear never creates edges, geometry or a key census.
+      const treeWearKeys=this.wearPlain?new Set(chunk.filter(r=>r.kind==='tree').flatMap(r=>[r.id,-r.id*2])):undefined;
+      const makeTreeWearParts=(parts:readonly {geometry:THREE.BufferGeometry;items:Placement[]}[])=>treeWearKeys?parts.flatMap(part=>{
+        const items=part.items.filter(item=>typeof item.key==='number'&&treeWearKeys.has(item.key));if(!items.length)return[];
+        const source=part.geometry.index?part.geometry.toNonIndexed():part.geometry.clone();let edges:THREE.EdgesGeometry|undefined,geometry:THREE.BufferGeometry|null=null;
+        try{edges=new THREE.EdgesGeometry(source);geometry=createPhysicalEdgeWearGeometry(source,edges,0);}finally{edges?.dispose();source.dispose();}
+        if(!geometry)throw new Error('Legacy tree wear unexpectedly has no physical edges');
+        treeClones.add(geometry);const ownedWear=geometry;geometry.addEventListener('dispose',()=>treeClones.delete(ownedWear));
+        geometry.setAttribute('origamiWearExpand',new THREE.BufferAttribute(geometry.userData.expandDirArray as Float32Array,3));
+        return[{geometry,items}];
+      }):[];
+      const treeBodyWear=makeTreeWearParts(fallbackBodies),treeCanopyWear=makeTreeWearParts(fallbackCanopies);
       const makeBrushParts=(parts:readonly {geometry:THREE.BufferGeometry;items:Placement[]}[])=>parts.filter(part=>part.items.length>0).map(part=>({geometry:createOrigamiBrushGeometry(part.geometry),items:part.items}));
       const bodyBrushParts=this.graphicsStyle?.origami?makeBrushParts([...fallbackBodies,...origamiBodies]):[],canopyBrushParts=this.graphicsStyle?.origami?makeBrushParts([...fallbackCanopies,...origamiCanopies]):[];
       mergedInstances(group,[...fallbackBodies,...origamiBodies],this.texturesEnabled?this.bodyTextured:this.bodyPlain,true,true,this.graphicsStyle?.origami===true);
@@ -643,7 +664,7 @@ export class ResourceLayer {
           if(isCanopy){this.preparedTreeCanopies.add(mesh);mesh.name='tree-canopy';mesh.visible=this.foliageVisible;}
         }
       }
-      if(origamiParts)for(const isCanopy of [false,true]){
+      if(this.graphicsStyle?.origami&&origamiParts)for(const isCanopy of [false,true]){
         const lineBody=mergedInstances(group,isCanopy?canopyBrushParts:bodyBrushParts,this.linePlain!,false,true,true);
         if(lineBody){
           const lines=lineBody;
@@ -654,7 +675,7 @@ export class ResourceLayer {
           lines.userData.origamiEdgeCleanup=()=>{releaseEdge();releaseBrush();};
           lines.geometry.computeBoundingSphere();lines.geometry.boundingSphere!.radius+=.5;lines.geometry.userData.referenceBrushConservativeSphere=lines.geometry.boundingSphere!.clone();
         }
-        const wear=this.wearPlain?mergedInstances(group,origamiParts.parts(isCanopy,'wear'),this.wearPlain,false,true,true):null;
+        const wear=this.wearPlain?mergedInstances(group,[...(isCanopy?treeCanopyWear:treeBodyWear),...origamiParts.parts(isCanopy,'wear')],this.wearPlain,false,true,true):null;
         if(wear){
           wear.userData.referenceCompanion='wear';wear.receiveShadow=true;
           // The shader expands the stored base by at most 0.115 source units;

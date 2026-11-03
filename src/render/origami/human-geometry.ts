@@ -133,7 +133,8 @@ export function origamiHumanParts(includeSmithing=false,includeMace=false,includ
 /** includeWear defaults true for independent canonical/component callers.
  * This factory retains no module-level geometry cache: every returned body,
  * line and optional wear companion belongs to its adopting renderer. */
-export function origamiHumanGeometry(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false,includeWear=true):THREE.InstancedBufferGeometry {
+export function origamiHumanGeometry(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false,includeWear=true,includeContours=true):THREE.InstancedBufferGeometry {
+  if(includeWear&&!includeContours)throw Error('Physical human wear requires its contour preparation');
   const registered=humanReferencePaintProfiles(),profileIds=Object.keys(P).map(name=>registered[name as keyof typeof P]);
   const data:number[]=[],lineData:number[]=[],wearData:number[]=[],wearBase:number[]=[],wearExpand:number[]=[],ranges:{id:string;start:number;count:number;bone:number;dye:number;profile:number}[]=[],lineRanges:{id:string;start:number;count:number}[]=[],wearRanges:{id:string;start:number;count:number}[]=[];
   const parts=origamiHumanParts(includeSmithing,includeMace,includeLongsword,includeSpear),scale=HUMAN_REFERENCE_SCALE;
@@ -151,6 +152,12 @@ export function origamiHumanGeometry(includeSmithing=false,includeMace=false,inc
     }
   };
   for(const part of parts){
+    if(!includeContours){
+      const start=data.length/17;
+      append(data,part.geometry,part);
+      ranges.push({id:part.id,start,count:part.geometry.getAttribute('position').count,bone:part.bone,dye:part.dye,profile:part.profile});
+      part.geometry.dispose();continue;
+    }
     const geometry=part.geometry,start=data.length/17,reference=createReferenceEdgeGeometry(geometry,22,includeWear);
     if(part.id.includes('-trouser-')){
       // There is no authored seam around the source's single trouser prism.
@@ -179,7 +186,8 @@ export function origamiHumanGeometry(includeSmithing=false,includeMace=false,inc
     if(indexed)geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(Array.from({length:packed.length/17},(_,i)=>i)),1));
     geometry.instanceCount=0;geometry.userData.origami=true;geometry.userData.origamiHumanReference=true;return geometry;
   };
-  const geometry=compiled(data,true),lines=compiled(lineData,false);
+  const geometry=compiled(data,true);
   if(includeWear){const wear=compiled(wearData,false);wear.userData.referenceWearBasePositions=new Float32Array(wearBase);wear.userData.referenceWearExpandDirections=new Float32Array(wearExpand);geometry.userData.origamiWear=wear;geometry.userData.origamiHumanWearParts=Object.freeze(wearRanges.map(range=>Object.freeze(range)));}
-  geometry.userData.origamiLines=lines;geometry.userData.origamiReferenceScale=scale;geometry.userData.origamiHumanParts=Object.freeze(ranges.map(range=>Object.freeze(range)));geometry.userData.origamiHumanLineParts=Object.freeze(lineRanges.map(range=>Object.freeze(range)));return geometry;
+  if(includeContours){geometry.userData.origamiLines=compiled(lineData,false);geometry.userData.origamiHumanLineParts=Object.freeze(lineRanges.map(range=>Object.freeze(range)));}
+  geometry.userData.origamiReferenceScale=scale;geometry.userData.origamiHumanParts=Object.freeze(ranges.map(range=>Object.freeze(range)));return geometry;
 }

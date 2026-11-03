@@ -21,12 +21,15 @@ test('actor texture switch preserves resident rigs and leaves plain color shader
     const human = pawns.group.children[0] as THREE.Mesh;
     const humanGeometry = human.geometry, humanPlain = human.material as THREE.MeshStandardNodeMaterial;
     expect(hasPigmentSample(humanPlain)).toBe(false);
-    expect(humanGeometry.hasAttribute('uv')).toBe(false);
+    // Shared models retain real Source UVs even when their selected material
+    // has no pigment sampling. Geometry presence no longer identifies style.
+    const humanUv=humanGeometry.getAttribute('uv');expect(humanUv.itemSize).toBe(2);
     pawns.setTexturesEnabled(true);
     const humanTextured = human.material as THREE.MeshStandardNodeMaterial;
     expect(humanTextured).not.toBe(humanPlain);
     expect(hasPigmentSample(humanTextured)).toBe(true);
     expect(human.geometry).toBe(humanGeometry);
+    expect(human.geometry.getAttribute('uv')).toBe(humanUv);
     const poses = humanGeometry.getAttribute('aFrom');
     world.pawns.reverse(); pawns.update(world, 1, false);
     expect(human.material).toBe(humanTextured);
@@ -40,11 +43,12 @@ test('actor texture switch preserves resident rigs and leaves plain color shader
     const animalGeometry = animals.map(mesh => mesh.geometry);
     const animalTextured = animals.map(mesh => mesh.material as THREE.MeshStandardNodeMaterial);
     expect(animalTextured.every(hasPigmentSample)).toBe(true);
-    expect(animalGeometry.every(geometry => !geometry.hasAttribute('uv'))).toBe(true);
+    const animalUv=animalGeometry.map(geometry=>geometry.getAttribute('uv'));
+    expect(animalUv.every(uv=>uv.itemSize===2)).toBe(true);
     wildlife.setTexturesEnabled(false);
     const animalPlain = animals.map(mesh => mesh.material as THREE.MeshStandardNodeMaterial);
     expect(animalPlain.every(material => !hasPigmentSample(material))).toBe(true);
-    animals.forEach((mesh, index) => expect(mesh.geometry).toBe(animalGeometry[index]));
+    animals.forEach((mesh, index) => {expect(mesh.geometry).toBe(animalGeometry[index]);expect(mesh.geometry.getAttribute('uv')).toBe(animalUv[index]);});
     wildlife.setTexturesEnabled(true);
     animals.forEach((mesh, index) => expect(mesh.material).toBe(animalTextured[index]));
     wildlife.setTexturesEnabled(false);

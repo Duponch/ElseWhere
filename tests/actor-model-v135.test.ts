@@ -4,27 +4,32 @@ import { animalParts } from '../src/render/animal-shape';
 import { graveParts } from '../src/render/grave-parts';
 import { createWorld } from '../src/sim/index';
 import { initialGrave } from '../src/sim/burial';
+import {HUMAN_REFERENCE_SCALE} from '../src/render/origami/human-geometry';
 
-test('the shared human rig overlaps shoulders and hips while the holstered revolver points down',()=>{
+test('the shared human rig joins the authored torso and trousers, overlaps shoulders and retains the revolver bind direction',()=>{
   const geometry=pawnGeometry(),point=geometry.getAttribute('position'),bone=geometry.getAttribute('boneId'),dye=geometry.getAttribute('dye');
-  const bounds=(accept:(i:number)=>boolean)=>{
+  expect(geometry.userData.origamiHumanReference).toBe(true);
+  const parts=geometry.userData.origamiHumanParts as readonly {id:string;start:number;count:number}[],index=geometry.index;
+  const vertices=(ids:readonly string[])=>ids.flatMap(id=>{const part=parts.find(part=>part.id===id);expect(part,'Source part '+id).toBeDefined();if(!part)throw Error('Missing actual Source part '+id);return Array.from({length:part.count},(_,i)=>index?.getX(part.start+i)??part.start+i);});
+  const bounds=(ids:readonly string[])=>{
     const result={minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity};
-    for(let i=0;i<point.count;i++)if(accept(i)){
+    for(const i of vertices(ids)){
       result.minX=Math.min(result.minX,point.getX(i));result.maxX=Math.max(result.maxX,point.getX(i));
       result.minY=Math.min(result.minY,point.getY(i));result.maxY=Math.max(result.maxY,point.getY(i));
     }
     return result;
   };
-  const trunk=bounds(i=>bone.getX(i)===0&&dye.getX(i)===1);
-  const legs=bounds(i=>bone.getX(i)===4||bone.getX(i)===5);
-  const arms=bounds(i=>bone.getX(i)===3);
-  expect(trunk.minY).toBeLessThan(legs.maxY-.08);
+  const trunk=bounds(['reference-torso']);
+  const legs=bounds(['reference-left-trouser-upper','reference-right-trouser-upper']);
+  const arms=bounds(['reference-right-upper-arm']);
+  expect(trunk.minY).toBeCloseTo(.56*HUMAN_REFERENCE_SCALE,6);
+  expect(trunk.minY).toBeCloseTo(legs.maxY,6);
   expect(trunk.maxY).toBeGreaterThan(arms.minY+.08);
   expect(trunk.maxX).toBeGreaterThan(arms.minX);
   const gunCenters:number[]=[];
-  for(let i=0;i<point.count;i++)if(dye.getX(i)===-1&&i%36===0){
-    let sum=0;for(let j=0;j<36;j++)sum+=point.getY(i+j);
-    gunCenters.push(sum/36);
+  for(const id of ['weapon-revolver-0','weapon-revolver-1','weapon-revolver-2']){
+    const corners=vertices([id]);expect(corners.every(i=>bone.getX(i)===0&&dye.getX(i)===-1)).toBe(true);
+    gunCenters.push(corners.reduce((sum,i)=>sum+point.getY(i),0)/corners.length);
   }
   expect(gunCenters).toHaveLength(3);
   expect(gunCenters[0]).toBeLessThan(gunCenters[2]!); // barrel below grip

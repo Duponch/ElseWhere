@@ -4,7 +4,7 @@ import {pawnFragmentTraits} from '../src/render/PawnLayer';
 
 // This graph/source contract guards the new transport only. Actual complete
 // WGSL locations and raster equality belong to ROOT's native diagnostics.
-test('V350 bone and dye share one named vec2 transport with both original inputs',()=>{
+test('V350 bone and dye share one named vec2 transport from the common packed rig traits',()=>{
   expect(pawnFragmentTraits.isVaryingNode).toBe(true);
   expect(pawnFragmentTraits.name).toBe('v_pawnFragmentTraits');
   const attributes=new Set<string>();
@@ -12,7 +12,7 @@ test('V350 bone and dye share one named vec2 transport with both original inputs
     const candidate=node as typeof node&{isAttributeNode?:boolean;_attributeName?:string};
     if(candidate._attributeName)attributes.add(candidate._attributeName);
   });
-  expect([...attributes].sort()).toEqual(['boneId','dye']);
+  expect([...attributes].sort()).toEqual(['pawnRigTraits']);
 });
 
 test('V350 shared traits preserve each scalar under perspective-correct interpolation',()=>{
@@ -33,14 +33,14 @@ test('V350 only fragment trait transport changes; pose attributes and nonlinear 
   const start=source.indexOf('    const baseColor = Fn('),end=source.indexOf('    mat.colorNode = baseColor;',start);
   expect(start).toBeGreaterThan(0);expect(end).toBeGreaterThan(start);
   const fragment=source.slice(start,end);
-  expect(fragment).toContain('fragmentBone=pawnFragmentTraits.x,fragmentDye=pawnFragmentTraits.y');
+  expect(fragment).toContain('const traits=origamiTraits??pawnFragmentTraits;const fragmentBone=traits.x,fragmentDye=traits.y');
   expect(fragment).not.toMatch(/attribute\('(boneId|dye)'/);
   expect(fragment).toContain('const ribs=sin(positionLocal.y.mul(43)).greaterThan(.25)');
   expect(fragment).toContain('bodyBloodPigment(');
   const before=source.slice(source.indexOf('const makeOriginalPosition'),start),cached=source.slice(source.indexOf('private cachedPawnPosition'));
-  expect(before).toContain("attribute('boneId', 'float')");
-  expect(before).toContain("attribute('dye','float')");
-  expect(cached).toContain("attribute('boneId','float')");
-  expect(cached).toContain("attribute('dye','float')");
+  expect(before).toContain('pawnBoneNode(this.referenceRig)');
+  expect(before).toContain('pawnDyeNode(this.referenceRig)');
+  expect(cached).toContain('pawnBoneNode(this.referenceRig)');
+  expect(cached).toContain('pawnDyeNode(this.referenceRig)');
   expect(source).toContain('baseColor.mul(pawnSurfaceShade(this.surfaceTexture))');
 });

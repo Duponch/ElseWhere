@@ -6,7 +6,7 @@ import {compileOrigamiFloraReference,disposeOrigamiFloraReferenceParts,type Orig
 import {createPhysicalEdgeWearGeometry} from './reference-edges';
 
 type BatchInput={geometry:THREE.BufferGeometry;items:Placement[]};
-type DecoratedPart=OrigamiFloraReferencePart&{lines:THREE.BufferGeometry;wear:THREE.BufferGeometry|null};
+type DecoratedPart=OrigamiFloraReferencePart&{lines:THREE.BufferGeometry|null;wear:THREE.BufferGeometry|null};
 type CanopyGroup={key:string;center:THREE.Vector3;width:number;depth:number};
 type Recipe={parts:DecoratedPart[];height:number;canopies:Map<DecoratedPart,CanopyGroup>};
 const references:Readonly<Record<string,OrigamiFloraReference>>={poplar:'poplar',oak:'oak',pine:'pine',saguaro:'cactus',bush:'bush','berry-bush':'bush'};
@@ -20,12 +20,15 @@ function groupSalt(key:string):number{let word=2166136261;for(let i=0;i<key.leng
 /** A renderer owns one compiled source vocabulary. Every chunk consumes clones
  * into its existing body/canopy submissions, never scene objects per plant. */
 export class ReferenceFloraLibrary {
-  constructor(private readonly includeWear=true){}
+  constructor(private readonly includeWear=true,private readonly includeContours=true){}
   private readonly recipes=new Map<OrigamiFloraReference,Recipe>();
   recipe(name:OrigamiFloraReference):Recipe {
     let recipe=this.recipes.get(name);if(recipe)return recipe;
     const source=compileOrigamiFloraReference(name);
     const parts:DecoratedPart[]=source.map(part=>{
+      // Shared Default silhouettes borrow only the authored body vocabulary.
+      // Neither edge extraction nor wear is prepared for that appearance.
+      if(!this.includeContours)return {...part,lines:null,wear:null};
       const lines=new THREE.EdgesGeometry(part.sourceGeometry,part.edgeAngle);
       const wear=this.includeWear?createPhysicalEdgeWearGeometry(part.sourceGeometry,lines,0):null;
       lines.applyMatrix4(part.partMatrix);
@@ -67,7 +70,7 @@ export class ReferenceFloraLibrary {
   dispose():void {
     for(const {parts}of this.recipes.values()){
       disposeOrigamiFloraReferenceParts(parts);
-      for(const part of parts){part.lines.dispose();part.wear?.dispose();}
+      for(const part of parts){part.lines?.dispose();part.wear?.dispose();}
     }
     this.recipes.clear();
   }

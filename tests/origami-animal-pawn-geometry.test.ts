@@ -63,7 +63,7 @@ describe('Origami pawn geometry preserves appearance and tool attachment',()=>{
   it('leaves default geometry byte-exact across an explicit default context',()=>{
     const plain=pawnGeometry(true,true,true,true),context=new GraphicsStyleContext(),explicit=withGraphicsStyle(context,()=>pawnGeometry(true,true,true,true));
     for(const name of Object.keys(plain.attributes))expect(Array.from(explicit.getAttribute(name).array)).toEqual(Array.from(plain.getAttribute(name).array));
-    expect(Array.from(explicit.index!.array)).toEqual(Array.from(plain.index!.array));expect(plain.hasAttribute('origamiPaintUv')).toBe(false);
+    expect(Array.from(explicit.index!.array)).toEqual(Array.from(plain.index!.array));expect(plain.hasAttribute('origamiPaintUv')).toBe(true);expect(explicit.getAttribute('origamiPaintUv').count).toBe(explicit.getAttribute('position').count);
     plain.dispose();explicit.dispose();context.dispose();
   });
 

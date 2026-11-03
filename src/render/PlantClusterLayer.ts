@@ -74,7 +74,7 @@ export function plantClusterPresentation(world: World, resource: Resource, size 
 export class PlantClusterLayer {
   readonly group = new THREE.Group();
   private readonly graphicsStyle = currentGraphicsStyle();
-  private readonly geometry = this.graphicsStyle?.origami ? createOrigamiGroundTuftGeometry() : createPlantClusterGeometry();
+  private readonly geometry = createOrigamiGroundTuftGeometry();
   private mesh: THREE.InstancedMesh;
   private contour?:OrigamiContourBinding;
   private readonly slots = new Map<number, { index: number; signature: string }>();

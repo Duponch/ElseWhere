@@ -181,7 +181,8 @@ test('physical grass retains one resident surface with a matching Origami brush 
     const ordinaryGeometry = (ordinary.group.children[0] as THREE.Mesh).geometry;
     foldedGeometry.computeBoundingBox(); ordinaryGeometry.computeBoundingBox();
     expect(foldedGeometry.boundingBox!.max.y).toBeCloseTo(1, 7);
-    expect(foldedGeometry.getAttribute('position').count).not.toBe(ordinaryGeometry.getAttribute('position').count);
+    // Both appearances now share the authored silhouette; only Origami adds ink.
+    expect(Array.from(foldedGeometry.getAttribute('position').array)).toEqual(Array.from(ordinaryGeometry.getAttribute('position').array));
   } finally { folded.dispose(); ordinary.dispose(); material.dispose(); context.dispose(); }
 });
 

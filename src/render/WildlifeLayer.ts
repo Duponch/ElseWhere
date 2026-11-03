@@ -11,7 +11,8 @@ import {PawnTweener297} from './PawnTweener297';
 import {sampleAnimalRig} from './actor-animation-sampling';
 import * as THREE from 'three/webgpu';
 import {currentGraphicsStyle,applyOrigamiSurface,type GraphicsStyleContext} from './graphics-style';
-import {origamiAnimalPresentationGeometry} from './origami/animal-geometry';
+import {commonAnimalPresentationGeometry} from './origami/animal-geometry';
+import {prepareAnimalGraphicsStyle} from './animal-graphics-style';
 import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
 import {createRigBrushGeometry} from './origami/rig-brush';
 import {ActorPartUnionIndex,readAnimalPartUnion} from './origami/actor-part-union';
@@ -30,7 +31,7 @@ import type { MotionTimeline } from './MotionTimeline';
 import { furnitureSurfaces } from './furniture-motion';
 import { travelHeight } from './furniture-motion';
 import { pawnSelectionMesh } from './PawnSelectionLayer';
-import { animalCoat,animalCoatShade,bakeAnimalCoatCoordinates,createAnimalCoatTexture } from './animal-surface-paint';
+import { animalCoat,animalCoatShade,createAnimalCoatTexture } from './animal-surface-paint';
 import { ANIMAL_SPECIES_IDS } from '../sim/animal-species';
 import { GaitPhaseTracker,animalGaitRadiansPerUnit } from './gait-presentation';
 import { bodyBloodPigment,bodyBloodWord } from './body-blood';
@@ -136,11 +137,11 @@ class SpeciesRig {
     this.gaitRate=animalGaitRadiansPerUnit(species);
     const graphics=currentGraphicsStyle();
     this.bakedEligible=!!graphics?.origami&&!graphics.reliefEnabled&&!graphics.wearEnabled;
-    const geometry=(graphics?.origami?origamiAnimalPresentationGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species,graphics.wearEnabled):undefined)??hareGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species);
-    if(graphics?.origami&&geometry.userData.origamiReference)indexExactStaticVertices(geometry);
+    const geometry=commonAnimalPresentationGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species,graphics?.origami===true&&graphics.wearEnabled)??hareGeometry(isAnimalSpecies256(species)?16:MAX_WILDLIFE,species);
+    const {referenceModel,gouache:origami}=prepareAnimalGraphicsStyle(geometry,species,graphics);
+    if(referenceModel)indexExactStaticVertices(geometry);
     geometry.userData.animationCache=this.animationCache;
     const part=geometry.getAttribute('animalPart');this.sampledBones=[...new Set(Array.from({length:part.count},(_,i)=>part.getX(i)))].sort((a,b)=>a-b);
-    if(!geometry.hasAttribute('animalPaintUv'))bakeAnimalCoatCoordinates(geometry,species);
     geometry.computeBoundingBox();
     const bounds=geometry.boundingBox!;
     // A live sleeper or downed animal rolls onto its side around the trunk.
@@ -149,7 +150,6 @@ class SpeciesRig {
     this.restingHeight=bounds.max.x+restFloor;
     this.restingRadius=Math.max(Math.abs(bodyCenter-bounds.min.y),Math.abs(bodyCenter-bounds.max.y),Math.abs(bounds.min.z),Math.abs(bounds.max.z))+.1;
     const mat=material(0xffffff);configure?.(actorExplorationMaterial256(mat));
-    const origami=!!geometry.userData.origamiReference;
     // The packed paint word replaces the original RGB input in this pipeline;
     // the CPU color alias must never consume a second vertex attribute slot.
     const paint=origami?attribute('animalPaint','vec4'):undefined;
@@ -352,7 +352,7 @@ class SpeciesRig {
   }
   private clearOrigamiPartUnions():void {for(const union of this.origamiPartUnions)union.dispose();this.origamiPartUnions.length=0;}
   private installOrigamiPartUnions():void {
-    this.clearOrigamiPartUnions();if(!this.origamiGraphics?.origami)return;
+    this.clearOrigamiPartUnions();if(!this.mesh.geometry.userData.origamiReference)return;
     for(const geometry of [this.mesh.geometry,this.origamiLines?.geometry,this.origamiWear?.geometry])if(geometry)this.origamiPartUnions.push(new ActorPartUnionIndex(geometry as THREE.InstancedBufferGeometry,'animal'));
   }
   private refreshOrigamiPartUnion():void {

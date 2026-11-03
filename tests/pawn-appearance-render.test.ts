@@ -9,6 +9,7 @@ import {appearanceShape} from '../src/render/pawn-appearance-shape';
 import {HAIR_PARTS,BEARD_PARTS,HAIR_MASKS} from '../src/render/pawn-appearance-shape';
 import {portraitDataUrl,portraitExpressionOf,portraitCacheSize} from '../src/ui/pawn-portrait';
 import {apparelAppearance} from '../src/render/character-apparel';
+import {HUMAN_REFERENCE_SCALE} from '../src/render/origami/human-geometry';
 
 test('resident appearance survives actor growth, reordering and restored legacy identity without mutating gameplay',()=>{
   const world=createWorld(42,32,32),layer=new PawnLayer();
@@ -77,6 +78,7 @@ test('hairlines and beard cheeks wrap the actual head without coplanar front fac
 
 test('one resident head contains open, shut and crossed eye geometry without a new vertex stream',()=>{
   const geometry=pawnGeometry(),dye=geometry.getAttribute('dye'),position=geometry.getAttribute('position');
+  expect(geometry.userData.origamiHumanReference).toBe(true);
   const counts=new Map<number,number>(),front=new Map<number,number>();
   for(let i=0;i<dye.count;i++){
     const tag=dye.getX(i);
@@ -87,7 +89,11 @@ test('one resident head contains open, shut and crossed eye geometry without a n
   expect(counts.get(PAWN_EYE_OPEN)).toBe(72);
   expect(counts.get(PAWN_EYE_CLOSED)).toBe(72);
   expect(counts.get(PAWN_EYE_CROSS)).toBe(144);
-  for(const tag of [PAWN_EYE_OPEN,PAWN_EYE_CLOSED,PAWN_EYE_CROSS])expect(front.get(tag)).toBeGreaterThan(.15);
+  // Actual reference eye boxes: unchanged triangle counts, authored depth
+  // converted once by the common model scale (including the crossed offset).
+  expect(front.get(PAWN_EYE_OPEN)).toBeCloseTo((.18+.03/2)*HUMAN_REFERENCE_SCALE,6);
+  expect(front.get(PAWN_EYE_CLOSED)).toBeCloseTo((.181+.03/2)*HUMAN_REFERENCE_SCALE,6);
+  expect(front.get(PAWN_EYE_CROSS)).toBeCloseTo((.183+.03/2)*HUMAN_REFERENCE_SCALE,6);
   expect(geometry.getAttribute('dye')).toBeInstanceOf(THREE.InterleavedBufferAttribute);
   geometry.dispose();
 });
