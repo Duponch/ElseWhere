@@ -6,6 +6,7 @@ import {attachLegacyMaskAttributes,legacyCoverageNode,compileLegacyFaceMasks,leg
  * Native orientation, half-float rounding, edge padding and timing UNQUALIFIED.
  */
 import * as THREE from 'three/webgpu';
+import {TreeAtlasAdmissionRefusal} from './admission';
 import {Fn,If,Discard,attribute,varying,texture,textureLoad,vec2,vec3,vec4,ivec2,float,int,mix,smoothstep} from 'three/tsl';
 import type {BakedChartSet} from '../charts';
 import type {BakedInk,AtlasPaintSource,PaintProfilePixels} from '../baker';
@@ -27,7 +28,7 @@ export interface PackedCompactGpuPalette {ids:readonly number[];size:number;pigm
 /** Copies ONLY the admitted profiles. P is byte-exact RGBA; KM is exact paper
  * RGB with exact linear coverage in A. SRGB sampling never transforms alpha. */
 export function packCompactGpuPalette(ids:readonly number[],readProfile:AtlasPaintSource['readProfile'],maxCpuBytes:number):PackedCompactGpuPalette{
- const source=borrowedProfiles(ids,readProfile);integer(maxCpuBytes,1,'compact CPU cap');if(source.cpuBytes>maxCpuBytes)throw Error('GPU atlas: compact CPU budget refused BEFORE pixel allocation');
+ const source=borrowedProfiles(ids,readProfile);integer(maxCpuBytes,1,'compact CPU cap');if(source.cpuBytes>maxCpuBytes)throw new TreeAtlasAdmissionRefusal('GPU atlas: compact CPU budget refused BEFORE pixel allocation');
  const layerBytes=source.size*source.size*4,pigment=new Uint8Array(source.cpuBytes/2),paperCoverage=new Uint8Array(source.cpuBytes/2);
  source.ids.forEach((id,layer)=>{const p=source.profiles.get(id)!;pigment.set(p.pigment,layer*layerBytes);for(let pixel=0;pixel<p.coverage.length;pixel++){const at=layer*layerBytes+pixel*4;paperCoverage[at]=p.paper[pixel*4]!;paperCoverage[at+1]=p.paper[pixel*4+1]!;paperCoverage[at+2]=p.paper[pixel*4+2]!;paperCoverage[at+3]=p.coverage[pixel]!;}});
  return{ids:source.ids,size:source.size,pigment,paperCoverage,cpuBytes:source.cpuBytes,gpuBytes:source.gpuBytes};
@@ -55,7 +56,7 @@ export function planTreeGpuAtlas(charts:BakedChartSet,ink:BakedInk,profile:Atlas
  // Linear16F working2x(32N), two target-size16F ping-pong(16N), final
  // SRGB8 finite chain, and one SRGB8 mip scratch <=N. No hidden MSAA buffer.
  const peakGpuBytes=pixels*49+retainedGpuBytes+geometryBytes+compact.gpuBytes+alphaGpuBytes,cpuBytes=geometryBytes*4+levels*64+compact.cpuBytes+charts.charts.length*3*1024;
- if(!Number.isSafeInteger(peakGpuBytes)||cpuBytes>limits.maxCpuBytes||peakGpuBytes>limits.maxGpuBytes)throw Error('GPU atlas: peak budget refused BEFORE geometry/render targets');
+ if(!Number.isSafeInteger(peakGpuBytes)||cpuBytes>limits.maxCpuBytes||peakGpuBytes>limits.maxGpuBytes)throw new TreeAtlasAdmissionRefusal('GPU atlas: peak budget refused BEFORE geometry/render targets');
  return Object.freeze({width,height,levels,workingScale:2,dilationPasses:2*quantum,cpuBytes,peakGpuBytes,retainedGpuBytes,geometryBytes,compactProfileIds:Object.freeze(compact.ids),paletteSize:compact.size,compactCpuBytes:compact.cpuBytes,compactGpuBytes:compact.gpuBytes,alphaGpuBytes});
 }
 function geometry(position:number[],uv:number[],extra:Record<string,{data:number[];size:number}>={}):THREE.BufferGeometry{

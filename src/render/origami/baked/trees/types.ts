@@ -33,6 +33,8 @@ export interface ReadyTreeRecipe {
 }
 /** Core owns texture/leases/generation. Reading never prepares or allocates. */
 export interface TreeAssetCatalog {
+ /** Captured by the actual owner before async preparation; style is excluded. */
+ readonly paintKey?:string;
  readonly revision:number;readonly texture:THREE.Texture;readonly pageCount:number;
  readonly modelKeys:readonly string[];readonly slots:readonly TextureSurfaceSlot[];
  assertCurrent():void;

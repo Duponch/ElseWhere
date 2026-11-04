@@ -25,10 +25,13 @@ import {GENERIC_REFERENCE_PROFILE} from './origami/reference-profiles';
 import {isTreeSpecies} from './origami/baked/trees/recipe';
 import type {TreeAssetCatalog,TreeSpecies} from './origami/baked/trees/types';
 import {TreeModels,treeModelVariant,type TreeModel} from './models/TreeModels';
+import {FixedTreeCohorts,type FixedTreeCohortPlan} from './models/FixedTreeCohort';
+import type {TreeBakeDemand} from './origami/TreeBakeOwner';
+import {FixedTreeTextureSurface,fixedTreePaintKey} from './surfaces/FixedTreeTextureSurface';
 import {copyPastelTextureToArray,createTextureSurface,validateTextureSurfaceAssets,TEXTURE_SURFACE_SLOT_COUNT,type TextureSurfaceAssets} from './surfaces/TextureSurface';
 import {createStylizedSurfaceTexture} from './stylized-surfaces';
 import {createResourceSurfaceModels} from './models/ResourceSurfaceModels';
-import {applySharedPaintSurface,sharedPaintColorNode,type SharedPaintSurfaceOptions} from './surfaces/SharedPaintSurface';
+import {applySharedPaintSurface,type SharedPaintSurfaceOptions} from './surfaces/SharedPaintSurface';
 import {naturalStroke} from './surfaces/NaturalSurfaceModels';
 import {LEGACY_TREE_PAINT_TABLE} from './origami/baked/trees/palette';
 
@@ -144,6 +147,7 @@ export class ResourceLayer {
   private readonly graphicsStyle=currentGraphicsStyle();
   private get treeTextureCompatible():boolean{return !this.graphicsStyle?.reliefEnabled&&!this.graphicsStyle?.wearEnabled;}
   private readonly treeModels=new TreeModels();
+  private readonly treeCohorts=new FixedTreeCohorts(this.treeModels);
   private readonly referenceFlora=new ReferenceFloraLibrary(false,false);
   private readonly surfaceModels=createResourceSurfaceModels(this.treeModels,this.referenceFlora);
   private readonly bodyTextured:THREE.NodeMaterial;
@@ -155,7 +159,7 @@ export class ResourceLayer {
   private makeWindPosition!:(base:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
   private wearFlora:ReferenceFloraLibrary|undefined;
   private wearTemplates:Map<THREE.BufferGeometry,THREE.BufferGeometry>|undefined;
-  compiledMaterials435():readonly THREE.NodeMaterial[]{return[this.bodyPlain,this.bodyTextured,this.windPlain];}
+  compiledMaterials435():readonly THREE.NodeMaterial[]{return[...new Set([this.bodyPlain,this.bodyTextured,this.windPlain,this.treeSurface.material])];}
   compiledAttributeChanged435:((attribute:THREE.BufferAttribute,start:number,count:number)=>void)|undefined;
   compiledMaterialsChanged435:(()=>void)|undefined;
   private readonly targetTint=new ResourceTargetTint((attribute,start,count)=>this.compiledAttributeChanged435?.(attribute,start,count));
@@ -178,6 +182,11 @@ export class ResourceLayer {
   private readonly growing = new Map<number,World['resources'][number]>();
   private treeCatalog:TreeAssetCatalog|undefined;
   private readonly treeSurface:ReturnType<typeof createTextureSurface>;
+  private readonly fixedTreeSurface:FixedTreeTextureSurface|undefined;
+  private treeDirectFallback:{key:string;paintKey:string;reason:string}|undefined;
+  private fixedTreeAtlasAvailable=true;
+  private pendingFixedCohort:{plan:FixedTreeCohortPlan;applied:boolean}|undefined;
+  private applyingFixedWorld:FixedTreeCohortPlan|undefined;
   private readonly pastelTreeAssets:TextureSurfaceAssets;
   private readonly fallbackPastel:THREE.DataTexture|undefined;
   private readonly sharedTreeMeshes=new WeakSet<THREE.Mesh>();
@@ -242,22 +251,17 @@ export class ResourceLayer {
     // Old isolated callers obtain the same tiny Source map, never a flat tint.
     const pastelArray=copyPastelTextureToArray(pastel);
     this.pastelTreeAssets={texture:pastelArray,uvAddress:'raw',slots:Object.freeze(Array.from({length:TEXTURE_SURFACE_SLOT_COUNT},()=>Object.freeze({layer:0,paletteBaked:false})))};
-    try{this.treeSurface=createTextureSurface(this.pastelTreeAssets,{positionNode:windPosition,chartUv:vec3(surface.zw,slot),castShadowPositionNode:texturedMaterial.castShadowPositionNode,receivedShadowPositionNode:texturedMaterial.receivedShadowPositionNode,configure:treeSource?.configure});}catch(error){pastelArray.dispose();throw error;}
-    this.bodyTextured=this.windTextured=this.treeSurface.material;
-    this.windPlain=this.treeSurface.plainMaterial;
-    // Named trees have fixed authored proportions and may use their prepared
-    // one-read image. Anonymous, continuously varied trees use the exact face
-    // paint instead; they are never distorted to a canonical raster aspect.
-    const fast=this.treeSurface.material.colorNode as THREE.Node<'vec3'>;
-    applySharedPaintSurface(this.bodyTextured,options);
-    const refresh=()=>{
-      const direct=sharedPaintColorNode(options),context=this.graphicsStyle;
-      this.treeSurface.material.colorNode=context&&this.treeTextureCompatible?Fn(()=>{const result=vec3(0).toVar();If(context.surfaceEncoding.greaterThan(0).and(this.treeBankReady.greaterThan(0)).and(slot.lessThan(31)),()=>{result.assign(fast);}).Else(()=>{result.assign(direct);});return result;})():direct;
-      this.treeSurface.material.needsUpdate=true;
-      this.refreshOptionalWear();
-    };
+    const surfaceOptions={positionNode:windPosition,chartUv:vec3(surface.zw,slot),castShadowPositionNode:texturedMaterial.castShadowPositionNode,receivedShadowPositionNode:texturedMaterial.receivedShadowPositionNode,configure:treeSource?.configure};
+    try{this.fixedTreeSurface=this.graphicsStyle?new FixedTreeTextureSurface(this.graphicsStyle,this.pastelTreeAssets,surfaceOptions):undefined;this.treeSurface=this.fixedTreeSurface?.surface??createTextureSurface(this.pastelTreeAssets,surfaceOptions);}catch(error){pastelArray.dispose();throw error;}
+    // Fixed named trees keep the final one-fetch graph from their first Pastel
+    // draw. Continuous/generic resources own a separate complete Source graph.
+    const direct=new THREE.MeshLambertNodeMaterial({flatShading:true,vertexColors:false});direct.userData.rendererOwned=true;direct.positionNode=windPosition;direct.castShadowPositionNode=texturedMaterial.castShadowPositionNode;direct.receivedShadowPositionNode=texturedMaterial.receivedShadowPositionNode;treeSource?.configure(direct);
+    this.bodyTextured=this.windTextured=direct;this.windPlain=this.treeSurface.plainMaterial;
+    applySharedPaintSurface(direct,options);
+    const refresh=()=>{this.refreshOptionalWear();this.refreshFixedTreeMaterials();};
     refresh();this.releaseSurfaceRefresh=this.graphicsStyle?.trackSharedSurfaceRefresh(refresh)??(()=>{});
   }
+
   /** Optional wear owns only its companion geometry. Body models and material
    * identities survive every feature boundary, including strict zero. */
   private refreshOptionalWear():void{
@@ -331,13 +335,34 @@ export class ResourceLayer {
     return{revision:this.treeCatalog?.revision??null,species:this.treeSpecies,pending:pending.map(model=>model.species??'anonymous'),ready,fallback,total:trees,texturePages:this.treeCatalog?.pageCount??0,geometryVariant:this.cachedTreeUpdate?.world.site?'legacy-broadleaf':'legacy-conical',fallbackReason:!fallback?null:!this.treeTextureCompatible?'optional-effects-use-source-face-paint':anonymous===fallback?'continuous-proportions-use-source-face-paint':'source-face-paint-until-bank-ready',scope:'Common models and Lambert surfaces; direct opaque face paint preserves continuously varied proportions and is the complete Gouache fallback.'};
   }
   /** Existing epochs and owners only: no frame census or geometry hashing. */
-  graphicsComparisonMetadata(){this.treeCatalog?.assertCurrent();return{revision:this.graphicsComparisonRevision,recipeEpoch:this.treeRecipeEpoch,demandEpoch:this.treeDemandEpoch,speciesKey:this.treeSpeciesKey,catalogRevision:this.treeCatalog?.revision??null,textures:this.texturesEnabled,foliage:this.foliageVisible,materials:[this.treeSurface.material.uuid,this.treeSurface.plainMaterial.uuid]};}
-  private treeMaterial():THREE.NodeMaterial{return this.texturesEnabled?this.treeSurface.material:this.treeSurface.plainMaterial;}
+  graphicsComparisonMetadata(){this.treeCatalog?.assertCurrent();return{revision:this.graphicsComparisonRevision,recipeEpoch:this.treeRecipeEpoch,demandEpoch:this.treeDemandEpoch,speciesKey:this.treeSpeciesKey,catalogRevision:this.treeCatalog?.revision??null,textures:this.texturesEnabled,foliage:this.foliageVisible,materials:[this.treeSurface.material.uuid,this.treeSurface.plainMaterial.uuid,this.bodyTextured.uuid]};}
+  private treeMaterial():THREE.NodeMaterial{return!this.texturesEnabled?this.treeSurface.plainMaterial:!this.fixedTreeAtlasAvailable||!this.treeTextureCompatible||this.treeDirectFallback?this.bodyTextured:this.treeSurface.material;}
+  setFixedTreeAtlasAvailable(available:boolean):void{if(this.fixedTreeAtlasAvailable===available)return;this.fixedTreeAtlasAvailable=available;this.refreshFixedTreeMaterials();}
+  private refreshFixedTreeMaterials():void{let changed=false;const material=this.treeMaterial();for(const chunk of this.chunks.values())for(const object of chunk.group.children)if(object instanceof THREE.Mesh&&this.sharedTreeMeshes.has(object)&&object.material!==material){object.material=material;changed=true;}if(changed)this.compiledMaterialsChanged435?.();}
+  inspectFixedTreeCohort(world:World,reset=false,immutableSnapshot=false):FixedTreeCohortPlan{return this.treeCohorts.inspect(world,{reset,immutableSnapshot});}
+  confirmProjectedWorld(plan:FixedTreeCohortPlan):void{if(this.pendingFixedCohort?.plan!==plan||this.treeBakeDemand().key!==plan.key)throw Error('Applied tree models differ from admitted cohort');this.pendingFixedCohort.applied=true;}
+  beginFixedWorldApplication(world:World,plan:FixedTreeCohortPlan|undefined,reset:boolean,immutableSnapshot:boolean):void{if(this.applyingFixedWorld)throw Error('Tree World application already active');const next=this.pendingFixedCohort?.plan??(plan?.isCurrent()?plan:this.treeCohorts.inspect(world,{reset,immutableSnapshot}));if(next.world!==world)throw Error('Tree admission belongs to a different World');this.applyingFixedWorld=next;}
+  abortFixedWorldApplication():void{this.applyingFixedWorld=undefined;}
+  completeFixedWorld(world:World,plan:FixedTreeCohortPlan|undefined,immutableSnapshot:boolean):void{try{if(this.pendingFixedCohort){this.confirmProjectedWorld(this.pendingFixedCohort.plan);return;}if(!this.treeCohorts.isCommittedWorld(world)){const next=this.applyingFixedWorld?.world===world?this.applyingFixedWorld:plan?.isCurrent()?plan:this.treeCohorts.inspect(world,{immutableSnapshot});if(next.key!==this.treeBakeDemand().key)throw Error('Presented World tree cohort differs from its actual models');this.treeCohorts.commit(next);}this.synchronizeFixedTreeCohort();}finally{this.applyingFixedWorld=undefined;}}
+  fixedTreeNeedsAdmission(plan:FixedTreeCohortPlan):boolean{if(!this.fixedTreeAtlasAvailable||!this.graphicsStyle?.origami||!this.treeTextureCompatible||!this.texturesEnabled||!plan.models.length)return false;const paintKey=fixedTreePaintKey(this.graphicsStyle);if(this.treeDirectFallback?.key===plan.key&&this.treeDirectFallback.paintKey===paintKey)return false;return!this.treeCatalog||this.treeCatalog.paintKey!==paintKey||plan.models.some(model=>!this.treeCatalog!.modelKeys.includes(model.key));}
+  assertFixedTreeDrawReady():void{if(!this.fixedTreeAtlasAvailable||!this.graphicsStyle?.origami||!this.treeTextureCompatible||!this.texturesEnabled||this.treeDirectFallback)return;const demand=this.treeBakeDemand();if(this.fixedTreeSurface?.status().cohort!==demand.key)throw Error('Actual named tree cohort has not been admitted');this.fixedTreeSurface.assertDrawable();}
+  /** Direct is a separate complete Source representation, selected only for
+   * positive effects or an explicit pre-GPU admission refusal. No owner retires. */
+  setTreeDirectFallback(reason:string,demand:TreeBakeDemand=this.treeBakeDemand()):TreeAssetPublication{
+    if(!this.graphicsStyle||!this.fixedTreeSurface)throw Error('Shared tree context required');
+    const previous=this.treeDirectFallback,oldCatalog=this.treeCatalog,oldReady=this.treeBankReady.value,metadata=this.fixedTreeSurface.prepare(undefined,{key:'[]',species:[],models:[],isCurrent:()=>demand.isCurrent()},()=>{}),prospective='world'in demand?demand as FixedTreeCohortPlan:undefined;let settled=false;
+    const publication:TreeAssetPublication={commit:()=>{if(settled)return;if(prospective&&!this.pendingFixedCohort?.applied)throw Error('Prospective direct tree World must be applied before commit');metadata.commit();if(prospective)this.treeCohorts.commit(prospective);this.pendingFixedCohort=undefined;metadata.dispose();settled=true;},rollback:()=>{if(settled)return;metadata.rollback();this.pendingFixedCohort=undefined;this.treeCatalog=oldCatalog;this.treeBankReady.value=oldReady;this.treeDirectFallback=previous;settled=true;try{this.refreshFixedTreeMaterials();}finally{metadata.dispose();}}};
+    try{metadata.publish();this.treeCatalog=undefined;this.treeBankReady.value=0;this.treeDirectFallback={key:demand.key,paintKey:fixedTreePaintKey(this.graphicsStyle),reason};if(prospective)this.pendingFixedCohort={plan:prospective,applied:false};this.refreshFixedTreeMaterials();return publication;}
+    catch(error){try{publication.rollback();}catch(cleanup){throw new AggregateError([error,cleanup],'Direct tree publication rollback failed');}throw error;}
+  }
+
   /** Warm the existing graph, then atomically exchange texture data only.
    * No model/template, material family, chunk or435 page is rebuilt here. */
-  prepareTreeAssetCatalog(catalog:TreeAssetCatalog|undefined,_configureFresh?:(material:THREE.NodeMaterial)=>void):PreparedTreeCatalogStage{
-    if(this.disposed)throw Error('Resource layer disposed');const demand=this.treeBakeDemand(),startEpoch=this.treeRecipeEpoch;
+  prepareTreeAssetCatalog(catalog:TreeAssetCatalog|undefined,_configureFresh?:(material:THREE.NodeMaterial)=>void,prospectiveDemand?:TreeBakeDemand):PreparedTreeCatalogStage{
+    if(this.disposed)throw Error('Resource layer disposed');const demand=prospectiveDemand??this.treeBakeDemand(),startEpoch=this.treeRecipeEpoch;
     if(catalog){catalog.assertCurrent();if(!this.treeTextureCompatible||!Number.isSafeInteger(catalog.revision)||catalog.revision<0||!catalog.modelKeys.length||catalog.pageCount!==Math.max(2,catalog.modelKeys.length)||Number((catalog.texture.image as {depth?:number}).depth)!==catalog.pageCount||new Set(catalog.modelKeys).size!==catalog.modelKeys.length||demand.models.some(model=>{const layer=catalog.modelKeys.indexOf(model.key),row=catalog.slots[model.surfaceSlot];return layer<0||!row?.paletteBaked||row.layer!==layer;}))throw Error('Complete compatible tree texture bank required');}
+    if(!this.fixedTreeSurface||!this.graphicsStyle)throw Error('Shared tree texture context required');
+    if(catalog&&!catalog.paintKey)throw Error('Prepared tree bank requires its captured paint key');
     const assets:TextureSurfaceAssets=catalog?{texture:catalog.texture,uvAddress:'chart',slots:catalog.slots,assertCurrent:()=>catalog.assertCurrent()}:this.pastelTreeAssets;
     // Validate off the live binding. A borrowed bank is never retired by this
     // layer; the external owner transfers its lifetime after publication.
@@ -350,14 +375,17 @@ export class ResourceLayer {
         for(const material of [this.treeSurface.material,this.treeSurface.plainMaterial]){const view=new THREE.Mesh(geometry,material);view.frustumCulled=false;view.castShadow=view.receiveShadow=true;warmup.push(view);}
       }
     }
-    let closed=false,published=false;
+    let metadata:ReturnType<FixedTreeTextureSurface['prepare']>;try{metadata=this.fixedTreeSurface.prepare(catalog?{catalog,paintKey:catalog.paintKey!}:undefined,demand,()=>{});}catch(error){geometry?.dispose();throw error;}
+    let closed=false,published=false,settled=false;let publication:TreeAssetPublication|undefined;
     return{warmup:Object.freeze(warmup),publish:()=>{
       if(closed||published||this.disposed||startEpoch!==this.treeRecipeEpoch||!demand.isCurrent())throw Error('Tree texture staging superseded');catalog?.assertCurrent();
-      const old=this.treeCatalog,oldAssets=this.treeSurface.assets,oldReady=this.treeBankReady.value;this.treeSurface.setAssets(assets);this.treeCatalog=catalog;this.treeBankReady.value=catalog?1:0;const publicationEpoch=++this.treeRecipeEpoch;published=true;let done=false,rolledBack=false;
-      return{rollback:()=>{if(done||rolledBack)return;if(this.treeCatalog!==catalog||this.treeRecipeEpoch!==publicationEpoch)throw Error('A newer tree texture publication owns this layer');this.treeSurface.setAssets(oldAssets);this.treeCatalog=old;this.treeBankReady.value=oldReady;this.treeRecipeEpoch++;rolledBack=true;},commit:()=>{done=true;}};
-    },dispose:()=>{if(closed)return;closed=true;geometry?.dispose();}};
+      const old=this.treeCatalog,oldReady=this.treeBankReady.value,oldFallback=this.treeDirectFallback;metadata.publish();this.treeCatalog=catalog;this.treeBankReady.value=catalog?1:0;this.treeDirectFallback=undefined;const publicationEpoch=++this.treeRecipeEpoch;published=true;
+      const prospective='world'in demand?demand as FixedTreeCohortPlan:undefined;if(prospective)this.pendingFixedCohort={plan:prospective,applied:false};
+      publication={rollback:()=>{if(settled)return;if(this.treeCatalog!==catalog||this.treeRecipeEpoch!==publicationEpoch)throw Error('Newer tree publication owns the layer');metadata.rollback();this.treeCatalog=old;this.treeBankReady.value=oldReady;this.treeDirectFallback=oldFallback;this.pendingFixedCohort=undefined;this.treeRecipeEpoch++;settled=true;try{this.refreshFixedTreeMaterials();}finally{metadata.dispose();}},commit:()=>{if(settled)return;if(prospective&&!this.pendingFixedCohort?.applied)throw Error('Prospective tree World must be applied before commit');metadata.commit();if(prospective)this.treeCohorts.commit(prospective);this.pendingFixedCohort=undefined;metadata.dispose();settled=true;}};try{this.refreshFixedTreeMaterials();}catch(error){try{publication.rollback();}catch(cleanup){throw new AggregateError([error,cleanup],'Tree metadata publication rollback failed');}throw error;}return publication;
+    },dispose:()=>{if(closed)return;closed=true;const errors:unknown[]=[];try{if(published&&!settled)publication!.rollback();else if(!published)metadata.dispose();}catch(error){errors.push(error);}try{geometry?.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Tree publication staging cleanup failed');}};
   }
-  setTreeAssetCatalog(catalog:TreeAssetCatalog|undefined,configureFresh?:(material:THREE.NodeMaterial)=>void):TreeAssetPublication{const stage=this.prepareTreeAssetCatalog(catalog,configureFresh);try{return stage.publish();}finally{stage.dispose();}}
+  setTreeAssetCatalog(catalog:TreeAssetCatalog|undefined,configureFresh?:(material:THREE.NodeMaterial)=>void):TreeAssetPublication{const stage=this.prepareTreeAssetCatalog(catalog,configureFresh);let publication:TreeAssetPublication;try{publication=stage.publish();}catch(error){stage.dispose();throw error;}return{commit:()=>{try{publication.commit();}finally{stage.dispose();}},rollback:()=>{try{publication.rollback();}finally{stage.dispose();}}};}
+
   /** One uniform update for the whole forest; no vertex buffer is rewritten. */
   setWind(strength:number,directionX:number,directionZ:number):void {
     this.windStrength.value=Number.isFinite(strength)?Math.max(0,Math.min(2,strength)):0;
@@ -397,7 +425,7 @@ export class ResourceLayer {
   }
   clearTargetPreview():void {if(this.targetPreviewIds.size)this.graphicsComparisonRevision++;this.targetTint.restore();this.targetPreviewIds.clear();}
   clear(): void { this.middleWind.reset();this.clearTargetPreview();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear(); this.treeCells.clear();this.treeCellsPending=undefined;this.cachedTreeUpdate=undefined;this.treeDemandEpoch++;this.refreshTreeCensus(); }
-  dispose():void {if(this.disposed)return;this.disposed=true;this.releaseSurfaceRefresh();const resources:{dispose():void}[]=[...[this.wearPlain,this.wearWind,this.referenceFlora,this.wearFlora,this.fallbackPastel,...(this.wearTemplates?.values()??[])].filter((r):r is NonNullable<typeof r>=>r!==undefined),this.treeSurface,this.pastelTreeAssets.texture,this.surfaceModels,this.treeModels];const errors:unknown[]=[];try{this.clear();}catch(error){errors.push(error);}try{disposeTreeResources(resources,'Resource material cleanup failed');}catch(error){errors.push(error);}this.treeCatalog=undefined;if(errors.length)throw new AggregateError(errors,'Resource layer cleanup failed');}
+  dispose():void {if(this.disposed)return;this.disposed=true;this.releaseSurfaceRefresh();const resources:{dispose():void}[]=[...[this.wearPlain,this.wearWind,this.referenceFlora,this.wearFlora,this.fallbackPastel,...(this.wearTemplates?.values()??[])].filter((r):r is NonNullable<typeof r>=>r!==undefined),...(this.fixedTreeSurface?[this.fixedTreeSurface]:[this.treeSurface]),this.bodyTextured,this.pastelTreeAssets.texture,this.surfaceModels,this.treeCohorts,this.treeModels];const errors:unknown[]=[];try{this.clear();}catch(error){errors.push(error);}try{disposeTreeResources(resources,'Resource material cleanup failed');}catch(error){errors.push(error);}this.treeCatalog=undefined;if(errors.length)throw new AggregateError(errors,'Resource layer cleanup failed');}
 
   /** Only a confirmed increase in a reserved chopping job can produce a hit.
    * The contact phase is the forward reach of the existing 11 rad/s arm pose. */
@@ -522,6 +550,21 @@ export class ResourceLayer {
     }
   }
   update(world: World, newMap: boolean, changes?: ReadonlyMap<number,NaturalPresentationChange>,frame?:SceneResourceFrame,appearance?:NaturalAppearanceReader): void {
+    const pending=this.pendingFixedCohort,projection=pending?.plan??this.applyingFixedWorld??this.treeCohorts.inspect(world,{reset:newMap,immutableSnapshot:!!frame});
+    this.updateWorldChunks(world,newMap,changes,frame,appearance);
+    if(pending||this.applyingFixedWorld)return;
+    this.treeCohorts.commit(projection);
+    this.synchronizeFixedTreeCohort();
+  }
+  private synchronizeFixedTreeCohort():void{
+    const demand=this.treeBakeDemand(),paintKey=this.graphicsStyle?fixedTreePaintKey(this.graphicsStyle):undefined;
+    if(this.treeDirectFallback&&(this.treeDirectFallback.key!==demand.key||this.treeDirectFallback.paintKey!==paintKey))this.treeDirectFallback=undefined;
+    if(this.fixedTreeSurface&&this.graphicsStyle&&!this.treeDirectFallback&&this.treeTextureCompatible&&(!this.graphicsStyle.origami||this.treeCatalog?.paintKey===paintKey&&demand.models.every(model=>this.treeCatalog!.modelKeys.includes(model.key)))&&this.fixedTreeSurface.status().cohort!==demand.key){
+      const bank=this.treeCatalog?.paintKey===paintKey?this.treeCatalog:undefined,stage=this.fixedTreeSurface.prepare(bank?{catalog:bank,paintKey:bank.paintKey!}:undefined,demand,()=>{});try{stage.publish();stage.commit();}finally{stage.dispose();}
+    }
+    this.refreshFixedTreeMaterials();
+  }
+  private updateWorldChunks(world: World, newMap: boolean, changes?: ReadonlyMap<number,NaturalPresentationChange>,frame?:SceneResourceFrame,appearance?:NaturalAppearanceReader): void {
     if(this.disposed)throw new Error('Resource layer disposed');this.cachedTreeUpdate={world,appearance};this.treeCatalog?.assertCurrent();
     const size=(r:World['resources'][number])=>appearance?.read(r).size??floraSize(world,r);
     const ripe=(r:World['resources'][number])=>appearance?appearance.harvestable(r):harvestable(world,r);

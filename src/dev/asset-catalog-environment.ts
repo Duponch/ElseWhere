@@ -13,6 +13,8 @@ import {buildingLabels} from '../ui/building-labels';
 import {ResourceLayer} from '../render/ResourceLayer';
 import {TreeBakeOwner,type OwnedTreeCatalog} from '../render/origami/TreeBakeOwner';
 import {AtlasBuildQuarantineError} from '../render/origami/baked/atlas-cache';
+import {TreeAtlasAdmissionRefusal} from '../render/origami/baked/trees/admission';
+import {fixedTreePaintKey} from '../render/surfaces/FixedTreeTextureSurface';
 import {PlantClusterLayer} from '../render/PlantClusterLayer';
 import type {PreparedPlantAtlasStage} from '../render/origami/baked/plants/PlantAtlasSurface';
 import {CropLayer} from '../render/CropLayer';
@@ -132,28 +134,54 @@ function instanceBounds(mesh:THREE.InstancedMesh,slot:number):THREE.Box3 {
  * Caller must hold the renderer and detach Source before terminal disposal. */
 export function createCatalogTreePreparation(context:GraphicsStyleContext,resources:ResourceLayer,refreshInventory:()=>void){
     let disposed=false,preparingTrees=false,treeGeneration=0,treeOwner:TreeBakeOwner|undefined,treeFallback:string|undefined;const quarantinedTrees=new Set<OwnedTreeCatalog>();
+    const useDirect=(reason:string)=>{const publication=resources.setTreeDirectFallback(reason);try{publication.commit();}catch(error){try{publication.rollback();}catch(cleanup){throw new AggregateError([error,cleanup],'Catalog direct tree publication rollback failed');}throw error;}treeFallback=reason;resources.assertFixedTreeDrawReady();refreshInventory();};
     return {
       treeStatus:()=>({layer:resources.bakedTreeStatus(),cache:treeOwner?.snapshot()??null,reason:treeFallback??null,scope:'Same TreeBakeOwner/ResourceLayer as the game; isolated presentation records and actual stock gallery lights, no Core/World or simulation.'}),
-      invalidatePreparedTrees(){if(disposed)return;if(preparingTrees)throw Error('Catalog trees are still preparing');treeGeneration++;if(treeOwner){const transaction=resources.setTreeAssetCatalog(undefined);transaction.commit();treeOwner.invalidate();}treeFallback=undefined;refreshInventory();},
+      // A texture-style selection never retires the borrowed Gouache bank.
+      // A real paint-key change is prepared while the old owner remains live.
+      invalidatePreparedTrees(){if(disposed)return;if(preparingTrees)throw Error('Catalog trees are still preparing');},
+      assertFixedTreeDrawReady(){resources.assertFixedTreeDrawReady();},
       async prepareTrees(renderer:THREE.WebGPURenderer,camera:THREE.Camera,lightingScene:THREE.Scene,assertPreparationCurrent:()=>void){
         if(disposed||preparingTrees)throw Error('Catalog tree preparation is unavailable');
-        if(!context.origami||context.reliefEnabled||context.wearEnabled){treeFallback='positive-effects-or-default-style';return;}
-        if(Reflect.get(renderer.backend,'isWebGPUBackend')!==true){treeFallback='webgpu-required';return;}
-        const demand=resources.treeBakeDemand();if(!demand.models.length)return;
-        const MiB=1024*1024,owner=treeOwner??=new TreeBakeOwner({cpuBytes:128*MiB,gpuBytes:512*MiB});if(!owner.needsPreparation(demand))return;
+        assertPreparationCurrent();
+        if(!context.origami){treeFallback=undefined;resources.assertFixedTreeDrawReady();refreshInventory();return;}
+        if(context.reliefEnabled||context.wearEnabled){useDirect('optional-effects-use-source-face-paint');return;}
+        if(Reflect.get(renderer.backend,'isWebGPUBackend')!==true){useDirect('webgpu-required');return;}
+        const demand=resources.treeBakeDemand();if(!demand.models.length){resources.assertFixedTreeDrawReady();return;}
+        const paintKey=fixedTreePaintKey(context),MiB=1024*1024,owner=treeOwner??=new TreeBakeOwner({cpuBytes:128*MiB,gpuBytes:512*MiB});
+        if(!owner.needsPreparation(demand,paintKey)){
+          const active=owner.activeCatalog;
+          if(active?.paintKey===paintKey&&demand.models.every(model=>active.modelKeys.includes(model.key))){const publication=resources.setTreeAssetCatalog(active);publication.commit();treeFallback=undefined;}
+          resources.assertFixedTreeDrawReady();refreshInventory();return;
+        }
         const paint=context.prepareAtlasPaint();preparingTrees=true;const generation=treeGeneration;let published=false,candidate:OwnedTreeCatalog|undefined,staging:ReturnType<ResourceLayer['prepareTreeAssetCatalog']>|undefined;
-        const assertCurrent=()=>{assertPreparationCurrent();paint.assertCurrent();if(disposed||generation!==treeGeneration||!demand.isCurrent())throw Error('Catalog tree preparation superseded');};
+        const assertCurrent=()=>{assertPreparationCurrent();paint.assertCurrent();if(disposed||generation!==treeGeneration||!demand.isCurrent()||fixedTreePaintKey(context)!==paintKey)throw Error('Catalog tree preparation superseded');};
         try{
-          assertCurrent();candidate=await owner.prepare(renderer,context,demand,paint,assertCurrent);assertCurrent();if(!candidate)return;
+          assertCurrent();candidate=await owner.prepare(renderer,context,demand,paint,assertCurrent);assertCurrent();if(!candidate){resources.assertFixedTreeDrawReady();return;}
           // The same persistent Lambert graph uses the actual gallery lights.
           staging=resources.prepareTreeAssetCatalog(candidate,()=>{});const warmup=new THREE.Group();warmup.add(...staging.warmup);
           await renderer.compileAsync(warmup,camera,lightingScene);assertCurrent();
-          const transaction=staging.publish();published=true;
-          try{transaction.commit();const retired=owner.adopt(candidate);retired?.dispose();candidate=undefined;}
-          catch(error){throw new AggregateError([error],'Catalog tree publication transfer failed');}
+          const transaction=staging.publish();
+          try{transaction.commit();published=true;}
+          catch(error){try{transaction.rollback();}catch(rollbackError){throw new AggregateError([error,rollbackError],'Catalog tree publication rollback failed');}throw error;}
+          // The previous owner remains active until publication has committed.
+          // A failed transfer must retain the now-bound candidate separately;
+          // rolling back a committed binding is no longer a valid operation.
+          const transferring=candidate;let retired:OwnedTreeCatalog|undefined;
+          try{retired=owner.adopt(transferring);candidate=undefined;}
+          catch(error){quarantinedTrees.add(transferring);candidate=undefined;throw new AggregateError([error],'Catalog committed tree owner transfer failed');}
+          if(retired)try{retired.dispose();}catch(error){quarantinedTrees.add(retired);throw new AggregateError([error],'Catalog retired tree cleanup failed');}
+          resources.assertFixedTreeDrawReady();
           treeFallback=undefined;refreshInventory();
-        }catch(error){if(error instanceof AggregateError||error instanceof AtlasBuildQuarantineError){if(candidate){quarantinedTrees.add(candidate);candidate=undefined;}throw error;}assertCurrent();owner.refuse(demand,error);treeFallback=error instanceof Error?error.message:String(error);refreshInventory();}
-        finally{preparingTrees=false;const errors:unknown[]=[];try{staging?.dispose();}catch(error){errors.push(error);}if(candidate&&published)quarantinedTrees.add(candidate);else try{candidate?.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Catalog tree staged cleanup failed');}
+        }catch(error){
+          if(error instanceof AggregateError||error instanceof AtlasBuildQuarantineError){if(candidate){quarantinedTrees.add(candidate);candidate=undefined;}throw error;}
+          // Shader, device, stale-generation and programming errors are fatal.
+          // Only the planner's typed pre-allocation admission refusal may use
+          // the complete Source direct surface instead of the fixed bank.
+          if(!(error instanceof TreeAtlasAdmissionRefusal))throw error;
+          assertCurrent();owner.refuse(demand,error,paintKey);useDirect(error.message);
+        }
+        finally{preparingTrees=false;const errors:unknown[]=[];try{staging?.dispose();}catch(error){errors.push(error);}if(candidate){if(published||errors.length)quarantinedTrees.add(candidate);else try{candidate.dispose();}catch(error){quarantinedTrees.add(candidate);errors.push(error);}candidate=undefined;}if(errors.length)throw new AggregateError(errors,'Catalog tree staged cleanup failed');}
       },
       get preparing(){return preparingTrees;},
       dispose(){if(disposed)return;if(preparingTrees)throw Error('Wait for catalog tree preparation before disposal');disposed=true;treeGeneration++;const errors:unknown[]=[];for(const owner of [...quarantinedTrees,...(treeOwner?[treeOwner]:[])])try{owner.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Catalog tree owner cleanup failed');},
@@ -347,6 +375,6 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
       try{stage=await clusters.prepareAtlasResources(renderer,context.prepareAtlasPaint(),assertCurrent);assertCurrent();if(!stage)return;await renderer.compileAsync(clusters.group,camera,lightingScene);assertCurrent();const prepared=stage;stage=undefined;delivered=true;let closed=false;return{commit:()=>prepared.commit(),rollback:()=>prepared.rollback(),dispose:()=>{if(closed)return;closed=true;try{prepared.dispose();}finally{preparingPlants=false;}}};}
       catch(error){stage?.rollback();throw error;}finally{if(!delivered){try{stage?.dispose();}finally{preparingPlants=false;}}}
     };
-    return {sections,stagePlants,prepareTrees:treePreparation.prepareTrees,invalidatePreparedTrees:treePreparation.invalidatePreparedTrees,treeStatus:treePreparation.treeStatus,dispose(){if(disposed)return;if(treePreparation.preparing||preparingPlants)throw Error('Wait for catalog surface preparation before disposal');disposed=true;const errors:unknown[]=[];for(let i=dispose.length-1;i>=0;i--)try{dispose[i]!();}catch(error){errors.push(error);}for(const entry of sections)entry.group.clear();if(!errors.length)try{treePreparation.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Catalog environment cleanup failed; tree owner retained on Source cleanup failure');}};
+    return {sections,stagePlants,prepareTrees:treePreparation.prepareTrees,invalidatePreparedTrees:treePreparation.invalidatePreparedTrees,assertFixedTreeDrawReady:treePreparation.assertFixedTreeDrawReady,treeStatus:treePreparation.treeStatus,dispose(){if(disposed)return;if(treePreparation.preparing||preparingPlants)throw Error('Wait for catalog surface preparation before disposal');disposed=true;const errors:unknown[]=[];for(let i=dispose.length-1;i>=0;i--)try{dispose[i]!();}catch(error){errors.push(error);}for(const entry of sections)entry.group.clear();if(!errors.length)try{treePreparation.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Catalog environment cleanup failed; tree owner retained on Source cleanup failure');}};
   });
 }

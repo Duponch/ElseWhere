@@ -132,7 +132,7 @@ function labels():void{
     const visible=labelsControl.checked&&projected.z>=0&&projected.z<=1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1&&!titles.some(other=>Math.abs(other.x-x)<(other.width+titleWidth)/2+8&&Math.abs(other.y-y)<30);
     heading.element.style.display=visible?'block':'none';if(visible){heading.element.style.left=`${x}px`;heading.element.style.top=`${y}px`;titles.push({x,y,width:titleWidth});}}
 }
-function requestRender():void{if(frame!==undefined||closed||busy)return;frame=requestAnimationFrame(()=>{frame=undefined;if(closed||busy)return;try{const moved=controls.update();renderer.render(scene,camera);labels();if(moved)requestRender();}catch(cause){fail(cause);}});}
+function requestRender():void{if(frame!==undefined||closed||busy)return;frame=requestAnimationFrame(()=>{frame=undefined;if(closed||busy)return;try{const moved=controls.update();for(const collection of collections)collection.assertFixedTreeDrawReady?.();renderer.render(scene,camera);labels();if(moved)requestRender();}catch(cause){fail(cause);}});}
 controls.addEventListener('change',requestRender);
 function resize():void{if(closed)return;if(busy){resizePending=true;return;}resizePending=false;const width=Math.max(1,stage.clientWidth),height=Math.max(1,stage.clientHeight);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();requestRender();}
 const resizeObserver=new ResizeObserver(resize);
@@ -154,7 +154,7 @@ async function prepareTrees(graphics:GraphicsStyleContext,assertJobCurrent:()=>v
 }
 async function finishView(assertCurrent:()=>void,prepared=false):Promise<void>{
   if(!prepared){progress('Préparation des matériaux de cette vue…');await nextFrame();assertCurrent();for(const texture of context!.prepareSharedSurfaceAssets())renderer.initTexture(texture);await renderer.compileAsync(scene,camera);assertCurrent();}
-  renderer.render(scene,camera);labels();diagnostics.ready=failures.length===0;document.body.dataset.ready=diagnostics.ready?'ready':'error';$('catalog-message').textContent=`${entries.length} assets agencés par type · texture ${context!.origami?'Gouache':'Pastel'}\nRechercher un nom ou choisir un groupe pour s’en approcher.`;
+  for(const collection of collections)collection.assertFixedTreeDrawReady?.();renderer.render(scene,camera);labels();diagnostics.ready=failures.length===0;document.body.dataset.ready=diagnostics.ready?'ready':'error';$('catalog-message').textContent=`${entries.length} assets agencés par type · texture ${context!.origami?'Gouache':'Pastel'}\nRechercher un nom ou choisir un groupe pour s’en approcher.`;
 }
 function build(style:GraphicsStyle):Promise<void>{
   return exclusiveCatalogJob(async assertCurrent=>{

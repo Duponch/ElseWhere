@@ -130,6 +130,44 @@ adaptée à leurs proportions. Une banque absente, incomplète ou refusée laiss
 la vraie surface Gouache directe ; aucun arbre Gouache ne redevient Pastel pour
 attendre son image. Les effets positifs utilisent également la surface commune.
 
+Le lot V55 donne aux arbres fixes un matériau final séparé, sans branche de
+peinture directe dans son programme. Ce même matériau existe dès le premier
+dessin Pastel. Un coordinateur conserve le dernier World et son éventuel reset
+pendant l'admission d'une nouvelle cohorte ; il prépare ses images avant de
+publier ces modèles. Les changements de texture conservent la banque prête.
+Les erreurs GPU restent des erreurs et les propriétaires en échec de rollback
+restent en quarantaine. Les producteurs et la galerie suivent cette discipline.
+La projection de cohorte peut encore parcourir les ressources à l'adoption d'un
+World sans journal compatible ; aucun recensement n'est ajouté au rendu stable.
+
+V55 observe 473 arbres prêts, deux espèces, zéro repli, sur la même carte et le
+même Core. Les 29 contrats intégrés passent par reprises ciblées ; les cinq
+contrats de composants, trois contrats de sampler générique, types complets,
+Pages et quatre comparaisons de Workers passent aussi. Le seul échec de fixture
+attendait deux matériaux lorsque les textures sont coupées : les deux familles
+partagent alors correctement le même matériau uni.
+
+La séparation représente huit pages435 et 25 appels, contre quatre pages et
+21 appels précédemment ; les 214196 triangles restent identiques. Sur trois
+bras de 128 échantillons GPU, V55 donne 0,894976/1,125376/0,895488 ms : Gouache
+reste à +25,71 %, dérive Pastel +0,057 %. Tous les pics sont conservés.
+CPU : 1,216505/1,178351/1,209000 ms, soit -2,84 % local, avec des cadences
+différentes entre le premier bras et les suivants. La fermeture du renderer et
+du client est attestée. Ce résultat ne prouve aucun gain de FPS ou de campagne.
+
+Le DPR V55 vaut 1,2 : ses images 1344×912 contiennent 44 % de pixels de plus
+que V54 à DPR1. Les temps absolus des deux versions ne sont donc pas comparés
+pour attribuer un gain à ce lot. Les formes et l'aspect restent cohérents sur
+les gros plans examinés ; aucune identité pixel historique n'est revendiquée.
+La paire Source/B-I de V55 conserve, elle, toutes les identités et le même DPR.
+La parité de performances avec Pastel demeure ouverte.
+
+Les surfaces implicitement génériques utilisent désormais seulement la banque
+de pigment0, dont le slot0 est réservé au profil générique. Les profils explicites
+conservent leur domaine complet de huit banques. Cela retire des bindings et
+des branches inutiles sans changer les pixels Source512, leur composition ou
+leur stockage ; aucun gain individuel n'est attribué à cette spécialisation.
+
 Le Pastel garde sa carte neutre Source64, ses pixels, filtres et espace couleur.
 Il n'est pas converti en gros atlas2048. Les ressources transportent UV de face,
 UV de trait/cache et identités exactes dans huit buffers au maximum, vent inclus.

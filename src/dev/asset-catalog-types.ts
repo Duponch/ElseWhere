@@ -28,8 +28,10 @@ export interface CatalogCollection {
   prepareTrees?(renderer:THREE.WebGPURenderer,camera:THREE.Camera,lightingScene:THREE.Scene,assertCurrent:()=>void):Promise<void>;
   /** Data publication is settled by the exclusive gallery transaction. */
   stagePlants?(renderer:THREE.WebGPURenderer,camera:THREE.Camera,lightingScene:THREE.Scene,assertCurrent:()=>void):Promise<PreparedPlantAtlasStage|undefined>;
-  /** Detach rendered users before changing paint or retiring its owner. */
+  /** Compatibility hook; style changes preserve prepared texture ownership. */
   invalidatePreparedTrees?():void;
+  /** Readiness assertion only; no census, admission, compile or allocation. */
+  assertFixedTreeDrawReady?():void;
   treeStatus?():unknown;
   dispose():void;
 }

@@ -1,6 +1,7 @@
 /** Exclusive fixed2048/mip4 GPU-page assembly. No raster, readback, format
  * conversion, downscale, global renderer override or per-frame operation. */
 import * as THREE from 'three/webgpu';
+import {TreeAtlasAdmissionRefusal} from './admission';
 export interface TreePageDemand {key:string;width:2048;height:2048;levels:4;preparationPeakGpuBytes:number;preparationCpuBytes:number}
 export interface TreeArrayLimits {maxPages:number;maxArrayLayers:number;maxTextureSize:number;maxPeakGpuBytes:number;maxCpuBytes:number;existingLiveGpuBytes:number;existingLiveCpuBytes:number;sharedCpuBytes:number;/** Defaults to1: preserve a single original2D page. Larger minima allocate real array layers, duplicating page0 into any extra layers. */minArrayLayers?:number}
 export interface TreeArrayPlan {key:string;kind:'2d'|'array';entries:readonly{key:string;layer:number}[];schedule:readonly number[];/** Actual allocation depth, including duplicates. */depth:number;layerCopies:readonly{sourcePage:number;layer:number}[];width:2048;height:2048;levels:4;retainedGpuBytes:number;sourcePageGpuBytes:number;peakGpuBytes:number;preparationCpuBytes:number;existingLiveGpuBytes:number;copyCommands:number}
@@ -11,13 +12,13 @@ export const PAGE_GPU_BYTES=2048*2048*4*(1+1/4+1/16+1/64);
 export function planTreeArrayPages(demands:readonly TreePageDemand[],paintAndLayoutFingerprint:string,limits:TreeArrayLimits):TreeArrayPlan|undefined{
  for(const[key,n]of Object.entries(limits))if(!(key==='minArrayLayers'&&n===undefined)&&!integer(n))throw Error('Explicit finite tree array limits/live bytes required');
  const minimum=limits.minArrayLayers??1;if(!integer(minimum)||minimum<1)throw Error('Positive integer minimum tree array depth required');
- if(!demands.length)return undefined;const depth=Math.max(minimum,demands.length);if(!paintAndLayoutFingerprint||demands.length>limits.maxPages||depth>limits.maxArrayLayers||limits.maxTextureSize<2048)throw Error('Tree array page/capability admission refused BEFORE allocation');
+ if(!demands.length)return undefined;const depth=Math.max(minimum,demands.length);if(!paintAndLayoutFingerprint||demands.length>limits.maxPages||depth>limits.maxArrayLayers||limits.maxTextureSize<2048)throw new TreeAtlasAdmissionRefusal('Tree array page/capability admission refused BEFORE allocation');
  const seen=new Set<string>();for(const d of demands){if(!d.key||seen.has(d.key)||d.width!==2048||d.height!==2048||d.levels!==4||!integer(d.preparationPeakGpuBytes)||d.preparationPeakGpuBytes<PAGE_GPU_BYTES||!integer(d.preparationCpuBytes))throw Error('Exact unique2048/mip4 prepared pages required');seen.add(d.key);}
  const schedule=demands.map((_,i)=>i).sort((a,b)=>demands[b]!.preparationPeakGpuBytes-demands[a]!.preparationPeakGpuBytes||a-b),retainedGpuBytes=PAGE_GPU_BYTES*depth,kind=depth===1?'2d':'array';
  // Largest bake BEFORE array allocation. Once its final21.25MiB remains, allocate
  // the destination, copy/release it, then bake/copy one further page at a time.
  const peakGpuBytes=limits.existingLiveGpuBytes+(kind==='2d'?demands[0]!.preparationPeakGpuBytes:Math.max(demands[schedule[0]!]!.preparationPeakGpuBytes,retainedGpuBytes+PAGE_GPU_BYTES,...schedule.slice(1).map(i=>retainedGpuBytes+demands[i]!.preparationPeakGpuBytes))),preparationCpuBytes=limits.existingLiveCpuBytes+limits.sharedCpuBytes+Math.max(...demands.map(d=>d.preparationCpuBytes))+depth*4*64;
- if(!Number.isSafeInteger(peakGpuBytes)||peakGpuBytes>limits.maxPeakGpuBytes||preparationCpuBytes>limits.maxCpuBytes)throw Error('Tree array old-live/new/preparation peak refused BEFORE allocation');
+ if(!Number.isSafeInteger(peakGpuBytes)||peakGpuBytes>limits.maxPeakGpuBytes||preparationCpuBytes>limits.maxCpuBytes)throw new TreeAtlasAdmissionRefusal('Tree array old-live/new/preparation peak refused BEFORE allocation');
  const layerCopies=Array.from({length:depth},(_,layer)=>Object.freeze({sourcePage:layer<demands.length?layer:0,layer}));
  return Object.freeze({key:JSON.stringify({version:'tree-array-2048-rgba8srgb-m4-v1',paintAndLayoutFingerprint,pages:demands.map(d=>d.key),...(depth>demands.length?{depth}:{})}),kind,entries:Object.freeze(demands.map((d,layer)=>Object.freeze({key:d.key,layer}))),schedule:Object.freeze(schedule),depth,layerCopies:Object.freeze(layerCopies),width:2048,height:2048,levels:4,retainedGpuBytes,sourcePageGpuBytes:PAGE_GPU_BYTES,peakGpuBytes,preparationCpuBytes,existingLiveGpuBytes:limits.existingLiveGpuBytes,copyCommands:kind==='2d'?0:depth*4});
 }

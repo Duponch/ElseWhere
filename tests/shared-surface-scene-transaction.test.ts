@@ -6,6 +6,9 @@ import * as THREE from 'three/webgpu';
 import {SceneRenderCore} from '../src/render/SceneRenderCore';
 import {MotionTimeline} from '../src/render/MotionTimeline';
 import {PresentationQueue} from '../src/render/PresentationQueue';
+import {fixedTreePaintKey} from '../src/render/surfaces/FixedTreeTextureSurface';
+import type {GraphicsStyleContext} from '../src/render/graphics-style';
+import {TreeAtlasAdmissionRefusal} from '../src/render/origami/baked/trees/admission';
 import {TreeBakeOwner,type OwnedTreeCatalog} from '../src/render/origami/TreeBakeOwner';
 import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,type GraphicsStylePreferences} from '../src/ui3d/native-preferences';
 import type {World} from '../src/sim/types';
@@ -24,7 +27,7 @@ function fixture(){
   graphicsMeasurement:undefined,cancelGraphicsMeasurement:vi.fn(),invalidatePausedShadow:vi.fn(),updateSelectedObject:vi.fn(),updateHover:vi.fn(),keys:new Set(),onFatalError:vi.fn(),
   hostPort:{now:()=>1000,hidden:()=>false,selectionReady:()=>false},received,world:received.world,timeline,hasTracks:false,immutableWorlds:new WeakSet(),coreFullInputs297:new WeakMap(),pendingCore297:[],appliedCore297:-Infinity,presentation:new PresentationQueue(),releaseCalmFullFrame297:vi.fn(),
   confirmedIntentReader:{admit,clear:vi.fn()},confirmedJobMarkers:{clear:vi.fn()},projectiles:{adopt:vi.fn(),adoptPhase297:vi.fn()},applyWorldWithinSurfaceReads:applied,
-  resources:{treeBakeDemand:()=>({models:[],species:[],key:'empty',isCurrent:()=>true})},plants:{group:new THREE.Group(),hasPendingAtlasResources:()=>false,prepareAtlasResources:()=>undefined},environmentLighting:{configure:vi.fn(),dispose:vi.fn()},rig:{orthographic:new THREE.OrthographicCamera(),perspective:new THREE.PerspectiveCamera(),dispose:vi.fn()},scene:new THREE.Scene(),
+  resources:{beginFixedWorldApplication:vi.fn(),abortFixedWorldApplication:vi.fn(),completeFixedWorld:vi.fn(),assertFixedTreeDrawReady:vi.fn(),treeBakeDemand:()=>({models:[],species:[],key:'empty',isCurrent:()=>true})},plants:{group:new THREE.Group(),hasPendingAtlasResources:()=>false,prepareAtlasResources:()=>undefined},environmentLighting:{configure:vi.fn(),dispose:vi.fn()},rig:{orthographic:new THREE.OrthographicCamera(),perspective:new THREE.PerspectiveCamera(),dispose:vi.fn()},scene:new THREE.Scene(),
   preparePresentationResources:vi.fn(async()=>{events.push('compile');expect(field(core,'preparing')).toBe(true);await gate.promise;})});
  return{core,events,gate,rendererDone,texture,graphics,renderer,timeline,adopt,applied,admit,received,compile:field<ReturnType<typeof vi.fn>>(core,'preparePresentationResources')};
 }
@@ -73,9 +76,9 @@ test('real disposeAsync waits for an active texture transaction before detaching
 });
 
 function treePorts(f:ReturnType<typeof fixture>,retirementFails=false){
- const oldDisposed=vi.fn(()=>{if(retirementFails)throw Error('TEST old texture retirement failed');}),newDisposed=vi.fn(),old={revision:1,modelKeys:['actual-model-label'],demandKey:'one-model',assertCurrent:()=>{},dispose:oldDisposed} as unknown as OwnedTreeCatalog,candidate={revision:2,modelKeys:['actual-model-label'],demandKey:'one-model',assertCurrent:()=>{},dispose:newDisposed} as unknown as OwnedTreeCatalog,owner=new TreeBakeOwner({cpuBytes:128*1024*1024,gpuBytes:512*1024*1024});owner.adopt(old);
- let active:OwnedTreeCatalog|undefined=old;const demand={models:[{key:'actual-model-label'}],species:['poplar'],key:'one-model',isCurrent:()=>true},publication=(value:OwnedTreeCatalog|undefined)=>{const previous=active;active=value;let committed=false;return{commit:()=>{committed=true;},rollback:()=>{if(!committed)active=previous;}};},stageDisposed=vi.fn(),resources={treeBakeDemand:()=>demand,prepareTreeAssetCatalog:vi.fn((value:OwnedTreeCatalog)=>({warmup:[],publish:()=>publication(value),dispose:stageDisposed})),setTreeAssetCatalog:vi.fn((value:OwnedTreeCatalog|undefined)=>publication(value))};
- Object.assign(f.core,{backend:'WebGPU',bakedTreeOwner:owner,resources});const prepare=vi.spyOn(owner,'prepare').mockImplementation(async(_renderer,_graphics,_demand,_paint,assert,force)=>{expect(force).toBe(true);assert();return candidate;});return{old,candidate,owner,oldDisposed,newDisposed,stageDisposed,resources,prepare,active:()=>active};
+ const oldDisposed=vi.fn(()=>{if(retirementFails)throw Error('TEST old texture retirement failed');}),newDisposed=vi.fn(),old={paintKey:fixedTreePaintKey(f.graphics as unknown as GraphicsStyleContext),revision:1,modelKeys:['actual-model-label'],demandKey:'one-model',assertCurrent:()=>{},dispose:oldDisposed} as unknown as OwnedTreeCatalog,candidate={paintKey:fixedTreePaintKey(f.graphics as unknown as GraphicsStyleContext),revision:2,modelKeys:['actual-model-label'],demandKey:'one-model',assertCurrent:()=>{},dispose:newDisposed} as unknown as OwnedTreeCatalog,owner=new TreeBakeOwner({cpuBytes:128*1024*1024,gpuBytes:512*1024*1024});owner.adopt(old);
+ let active:OwnedTreeCatalog|undefined=old;const demand={models:[{key:'actual-model-label'}],species:['poplar'],key:'one-model',isCurrent:()=>true},publication=(value:OwnedTreeCatalog|undefined)=>{const previous=active;active=value;let committed=false;return{commit:()=>{committed=true;},rollback:()=>{if(!committed)active=previous;}};},stageDisposed=vi.fn(),resources={beginFixedWorldApplication:vi.fn(),abortFixedWorldApplication:vi.fn(),completeFixedWorld:vi.fn(),assertFixedTreeDrawReady:vi.fn(),treeBakeDemand:()=>demand,prepareTreeAssetCatalog:vi.fn((value:OwnedTreeCatalog)=>({warmup:[],publish:()=>publication(value),dispose:stageDisposed})),setTreeAssetCatalog:vi.fn((value:OwnedTreeCatalog|undefined)=>publication(value)),setTreeDirectFallback:vi.fn((_reason:string)=>publication(undefined))};
+ Object.assign(f.core,{backend:'WebGPU',bakedTreeOwner:owner,resources});const prepare=vi.spyOn(owner,'prepare').mockImplementation(async(_renderer,_graphics,_demand,_paint,assert,force)=>{expect(force).toBe(true);assert();Object.assign(candidate,{paintKey:fixedTreePaintKey(f.graphics as unknown as GraphicsStyleContext)});return candidate;});return{old,candidate,owner,oldDisposed,newDisposed,stageDisposed,resources,prepare,active:()=>active};
 }
 test('tree image staging retains the old owner across both projection compiles and rolls back before freeing an uncommitted candidate',async()=>{
  const f=fixture(),tree=treePorts(f);f.compile.mockImplementationOnce(async()=>{expect(tree.active()).toBe(tree.candidate);expect(tree.oldDisposed).not.toHaveBeenCalled();await f.gate.promise;throw Error('TEST scene compile failed');}).mockResolvedValueOnce(undefined);const job=begin(f,{style:'origami',edgeWidth:2}),handled=job.catch(error=>error);
@@ -84,7 +87,7 @@ test('tree image staging retains the old owner across both projection compiles a
 
 test('a retirement failure after committed tree ownership is quarantined and cannot masquerade as a successful rollback',async()=>{
  const f=fixture(),tree=treePorts(f,true);f.compile.mockResolvedValue(undefined);const error=await begin(f,{style:'origami',edgeWidth:2}).catch(error=>error);
- try{expect(error).toBeInstanceOf(AggregateError);expect(field<string>(f.core,'fatalError')).toContain('retour aux textures');expect(tree.active()).toBe(tree.candidate);expect(tree.oldDisposed).toHaveBeenCalledOnce();expect(tree.newDisposed).not.toHaveBeenCalled();expect(field<Set<OwnedTreeCatalog>>(f.core,'quarantinedTreeCatalogs').has(tree.candidate)).toBe(true);expect(f.renderer.setAnimationLoop).toHaveBeenCalledWith(null);}finally{tree.owner.dispose();f.texture.dispose();}
+ try{expect(error).toBeInstanceOf(AggregateError);expect(field<string>(f.core,'fatalError')).toContain('retour aux textures');expect(tree.active()).toBe(tree.candidate);expect(tree.oldDisposed).toHaveBeenCalledOnce();expect(tree.newDisposed).not.toHaveBeenCalled();expect(field<Set<OwnedTreeCatalog>>(f.core,'quarantinedTreeCatalogs').has(tree.old)).toBe(true);expect(f.renderer.setAnimationLoop).toHaveBeenCalledWith(null);}finally{tree.owner.dispose();f.texture.dispose();}
 });
 
 test.each([false,true])('an empty tree cohort invalidates the previous paint generation only after successful compilation (rollback=%s)',async fail=>{
@@ -93,7 +96,7 @@ test.each([false,true])('an empty tree cohort invalidates the previous paint gen
  const job=begin(f,{style:'origami',edgeWidth:2}),handled=job.catch(error=>error);
  try{
   await vi.waitFor(()=>expect(f.compile).toHaveBeenCalledOnce(),{interval:1,timeout:1000});
-  expect(tree.prepare).not.toHaveBeenCalled();expect(tree.resources.setTreeAssetCatalog).toHaveBeenCalledExactlyOnceWith(undefined);expect(tree.oldDisposed).not.toHaveBeenCalled();
+  expect(tree.prepare).not.toHaveBeenCalled();expect(tree.resources.setTreeDirectFallback).toHaveBeenCalledExactlyOnceWith('paint-generation-direct-fallback');expect(tree.oldDisposed).not.toHaveBeenCalled();
   f.gate.resolve();const result=await handled;
   if(fail){expect(result).toBeInstanceOf(Error);expect(tree.active()).toBe(tree.old);expect(tree.oldDisposed).not.toHaveBeenCalled();expect(tree.owner.snapshot().models).toBe(1);}
   else{expect(result).toBeUndefined();expect(tree.active()).toBeUndefined();expect(tree.oldDisposed).toHaveBeenCalledOnce();expect(tree.owner.snapshot().models).toBe(0);}
@@ -105,17 +108,17 @@ test('style-only Pastel/Gouache/Pastel/Gouache retains the same prepared owner/i
  const f=fixture(),tree=treePorts(f),scene=field<THREE.Scene>(f.core,'scene'),geometry=new THREE.BoxGeometry(),material=new THREE.MeshLambertNodeMaterial(),mesh=new THREE.Mesh(geometry,material);scene.add(mesh);f.compile.mockResolvedValue(undefined);
  try{
   for(const style of ['origami','default','origami'] as const){await begin(f,{style});expect(tree.active()).toBe(tree.old);expect(tree.owner.snapshot().models).toBe(1);expect(tree.oldDisposed).not.toHaveBeenCalled();expect(f.graphics.preferences.style).toBe(style);expect(scene.children).toEqual([mesh]);expect(mesh.geometry).toBe(geometry);expect(mesh.material).toBe(material);expect(field(f.core,'renderer')).toBe(f.renderer);}
-  expect(tree.prepare).not.toHaveBeenCalled();expect(tree.resources.prepareTreeAssetCatalog).not.toHaveBeenCalled();expect(tree.resources.setTreeAssetCatalog).not.toHaveBeenCalled();expect(f.compile.mock.calls.map(args=>args[0])).toEqual([true,true,true]);expect(f.renderer.dispose).not.toHaveBeenCalled();
+  expect(tree.prepare).not.toHaveBeenCalled();expect(tree.resources.prepareTreeAssetCatalog).toHaveBeenCalledTimes(2);expect(tree.resources.setTreeAssetCatalog).not.toHaveBeenCalled();expect(f.compile.mock.calls.map(args=>args[0])).toEqual([true,true,true]);expect(f.renderer.dispose).not.toHaveBeenCalled();
  }finally{tree.owner.dispose();geometry.dispose();material.dispose();f.texture.dispose();}
 });
 
 test('each of the seven real paint changes invalidates old images, using the direct surface when a new atlas is refused or optional effects require their full graph',async()=>{
  vi.spyOn(console,'warn').mockImplementation(()=>{});
  for(const[key,value]of [['impasto',.2],['wear',.2],['edges',.35],['blackEdges',.4],['edgeWidth',2.3],['strokeImperfection',.3],['contourImperfection',.2]] as const){
-  const f=fixture(),tree=treePorts(f);tree.prepare.mockRejectedValue(Error('TEST bounded atlas reservation refused'));f.compile.mockResolvedValue(undefined);
+  const f=fixture(),tree=treePorts(f);tree.prepare.mockRejectedValue(new TreeAtlasAdmissionRefusal('TEST bounded atlas reservation refused'));f.compile.mockResolvedValue(undefined);
   try{
-   await begin(f,{style:'origami',[key]:value});expect(f.graphics.preferences[key],key).toBe(value);expect(tree.active(),key).toBeUndefined();expect(tree.oldDisposed,key).toHaveBeenCalledOnce();expect(tree.resources.setTreeAssetCatalog,key).toHaveBeenCalledExactlyOnceWith(undefined);expect(tree.owner.snapshot().models,key).toBe(0);expect(field(f.core,'fatalError'),key).toBeUndefined();expect(f.renderer.dispose,key).not.toHaveBeenCalled();
-   const featureBoundary=key==='impasto'||key==='wear';expect(f.compile).toHaveBeenCalledExactlyOnceWith(!featureBoundary);if(featureBoundary)expect(tree.prepare,key).not.toHaveBeenCalled();else{expect(tree.prepare,key).toHaveBeenCalledOnce();expect(tree.prepare.mock.calls[0]![5],key).toBe(true);}
+   await begin(f,{style:'origami',[key]:value});expect(f.graphics.preferences[key],key).toBe(value);expect(tree.active(),key).toBeUndefined();const featureBoundary=key==='impasto'||key==='wear';if(featureBoundary)expect(tree.oldDisposed,key).toHaveBeenCalledOnce();else expect(tree.oldDisposed,key).not.toHaveBeenCalled();expect(tree.resources.setTreeDirectFallback,key).toHaveBeenCalledOnce();expect(tree.owner.snapshot().models,key).toBe(featureBoundary?0:1);expect(field(f.core,'fatalError'),key).toBeUndefined();expect(f.renderer.dispose,key).not.toHaveBeenCalled();
+   expect(f.compile).toHaveBeenCalledExactlyOnceWith(!featureBoundary,false);if(featureBoundary)expect(tree.prepare,key).not.toHaveBeenCalled();else{expect(tree.prepare,key).toHaveBeenCalledOnce();expect(tree.prepare.mock.calls[0]![5],key).toBe(true);}
   }finally{tree.owner.dispose();f.texture.dispose();}
  }
 });
@@ -127,4 +130,11 @@ test('the real data-only preparation uploads and compiles both cameras without r
   const source:unknown=Reflect.get(SceneRenderCore.prototype,'preparePresentationResources');if(typeof source!=='function')throw Error('Real preparation method absent');await Reflect.apply(source,f.core,[true]);
   expect(f.renderer.compileAsync.mock.calls).toEqual([[scene,rig.orthographic],[scene,rig.perspective]]);expect(f.graphics.prepareSharedSurfaceAssets).toHaveBeenCalledOnce();expect(f.renderer.initTexture).toHaveBeenCalledExactlyOnceWith(f.texture);expect(render).not.toHaveBeenCalled();expect(field(f.core,'preparing')).toBe(true);expect(field(f.core,'holdSurfaceWorld')).toBe(true);
  }finally{f.texture.dispose();}
+});
+
+
+test('failed CPU rollback quarantines the still-published candidate instead of retiring a possibly bound image',async()=>{
+ const f=fixture(),tree=treePorts(f),failure=new Error('TEST publication rollback failed');tree.resources.prepareTreeAssetCatalog.mockImplementation(()=>({warmup:[],publish:()=>({commit:()=>{},rollback:()=>{throw failure;}}),dispose:tree.stageDisposed}));f.compile.mockRejectedValue(Error('TEST program failed'));
+ try{const error=await begin(f,{style:'origami',edgeWidth:2}).catch(error=>error);expect(error).toBeInstanceOf(AggregateError);expect(tree.newDisposed).not.toHaveBeenCalled();expect(tree.oldDisposed).not.toHaveBeenCalled();expect(field<Set<OwnedTreeCatalog>>(f.core,'quarantinedTreeCatalogs').has(tree.candidate)).toBe(true);expect(field<string>(f.core,'fatalError')).toBeDefined();expect(f.renderer.setAnimationLoop).toHaveBeenCalledWith(null);}
+ finally{tree.owner.dispose();tree.candidate.dispose();f.texture.dispose();}
 });

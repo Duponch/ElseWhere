@@ -1,3 +1,4 @@
+export {TreeAtlasAdmissionRefusal} from './admission';
 export {TREE_SPECIES,isTreeSpecies,compileLegacyTreeRecipe,createReadyTreeRecipe} from './recipe';
 export {createLegacyTreePaintResolver,LEGACY_TREE_PAINT_TABLE,LEGACY_REFERENCE_PAINT_IDS} from './palette';
 export {planTreeRecipeAtlas} from './preparation';

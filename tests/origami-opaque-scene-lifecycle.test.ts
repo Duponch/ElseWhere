@@ -17,6 +17,7 @@ vi.mock('../src/render/origami/reference-paint-library',async original=>({...awa
 vi.mock('../src/render/origami/reference-resident-paint-library',async original=>({...await original<typeof import('../src/render/origami/reference-resident-paint-library')>(),bakeResidentPaintToSink:stubResidentPaintToSink}));
 vi.mock('../src/render/origami/checkpoint-paint-baker',async original=>({...await original<typeof import('../src/render/origami/checkpoint-paint-baker')>(),bakeCheckpointPaintToSink:stubCheckpointPaintToSink,replayCheckpointMaskR8:stubReplayCheckpointMaskR8}));
 import {TreeBakeOwner,type OwnedTreeCatalog} from '../src/render/origami/TreeBakeOwner';
+import {fixedTreePaintKey} from '../src/render/surfaces/FixedTreeTextureSurface';
 import {DEFAULT_GRAPHICS_STYLE_PREFERENCES} from '../src/ui3d/native-preferences';
 
 afterEach(()=>{vi.restoreAllMocks();});
@@ -48,7 +49,7 @@ test('a published texture-only tree catalog survives old-texture retirement fail
   const events:string[]=[],makeCatalog=(models:readonly TreeModel[],revision:number)=>{
     const target=new RenderTarget(2048,2048,{depth:2,depthBuffer:false,colorSpace:SRGBColorSpace,generateMipmaps:false,minFilter:LinearMipmapLinearFilter,magFilter:LinearFilter}),slots=Array.from({length:64},()=>({layer:0,paletteBaked:false}));for(let i=0;i<models.length;i++)slots[models[i]!.surfaceSlot]={layer:i,paletteBaked:true};let retired=false,calls=0;target.texture.flipY=false;target.texture.mipmaps=Array.from({length:4},(_,l)=>({data:new Uint8Array(0),width:2048/2**l,height:2048/2**l}));
     const assertCurrent=()=>{if(retired)throw Error('TEST tree catalog retired');};
-    const catalog:OwnedTreeCatalog={revision,texture:target.texture,pageCount:2,modelKeys:models.map(model=>model.key),slots,demandKey:resources.treeBakeDemand().key,cpuBytes:16384,gpuBytes:2*2048**2*4*1.328125,peakGpuBytes:3*2048**2*4*1.328125,assertCurrent,dispose(){if(retired)return;calls++;
+    const catalog:OwnedTreeCatalog={paintKey:fixedTreePaintKey(graphics),revision,texture:target.texture,pageCount:2,modelKeys:models.map(model=>model.key),slots,demandKey:resources.treeBakeDemand().key,cpuBytes:16384,gpuBytes:2*2048**2*4*1.328125,peakGpuBytes:3*2048**2*4*1.328125,assertCurrent,dispose(){if(retired)return;calls++;
       // Independent lifetime oracle: a published, undisposed producer can
       // still read this texture. Retiring it at Core's catch/finally is wrong.
       expect(Reflect.get(resources,'disposed')||Reflect.get(resources,'treeCatalog')!==catalog).toBe(true);
@@ -67,10 +68,10 @@ test('a published texture-only tree catalog survives old-texture retirement fail
   const paintDispose=vi.spyOn(graphics,'dispose');candidate.target.addEventListener('dispose',()=>{throw Error('TEST retired candidate target cleanup failed');});
   vi.spyOn(owner,'prepare').mockResolvedValue(candidate.catalog);
   try{
-    const paintLease=graphics.prepareAtlasPaint();await expect(call<Promise<void>>(f.core,'prepareBakedTreeResources',paintLease,()=>{})).rejects.toThrow('Tree publication ownership transfer failed');
+    const paintLease=graphics.prepareAtlasPaint();await expect(call<Promise<void>>(f.core,'prepareBakedTreeResources',paintLease,()=>{})).rejects.toThrow('Old named tree bank retirement quarantined');
     expect(events).toContain('old-texture-failure');expect(resources.bakedTreeStatus()).toMatchObject({revision:2,ready:2,fallback:0});expect(()=>candidate.catalog.assertCurrent()).not.toThrow();expect(candidate.calls()).toBe(0);expect(old.calls()).toBe(1);expect(owner.snapshot()).toMatchObject({models:2,ready:2});expect(renderer.compileAsync).toHaveBeenCalledTimes(2);
     expect(resources.compiledMaterials435()).toEqual(materials);for(const before of drawState){expect(before.mesh.geometry).toBe(before.geometry);expect(before.mesh.material).toBe(before.material);expect(before.mesh.geometry.index).toBe(before.index);Object.values(before.mesh.geometry.attributes).forEach((a,i)=>expect(a.array).toBe(before.attributes[i]));}expect(field<{invalidateResources:()=>void}>(f.core,'ownedOpaqueRevisions435').invalidateResources).not.toHaveBeenCalled();
-    expect(field<Set<OwnedTreeCatalog>>(f.core,'quarantinedTreeCatalogs').has(candidate.catalog)).toBe(true);
+    expect(field<Set<OwnedTreeCatalog>>(f.core,'quarantinedTreeCatalogs').has(old.catalog)).toBe(true);
     Reflect.set(f.core,'preparing',false);let settled=false,closeError:unknown;const closing=call<Promise<void>>(f.core,'disposeAsync').then(()=>{settled=true;},error=>{settled=true;closeError=error;});
     expect(candidate.calls()).toBe(1);expect(old.calls()).toBe(1);const detached=events.indexOf('source-detached');expect(events.indexOf('compiler-detached')).toBeLessThan(detached);expect(events.indexOf('release:1')).toBeLessThan(detached);expect(detached).toBeLessThan(events.indexOf('release:2'));expect(settled).toBe(false);
     // A target's real dispose listener failed after Source detached. The

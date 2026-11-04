@@ -21,16 +21,16 @@ export async function changeCatalogSurface(context:GraphicsStyleContext,next:Gra
  const prepare=async(preferences:GraphicsStylePreferences)=>{
   const plants:PreparedPlantAtlasStage[]=[];let committed=false;
   try{port.assertCurrent();
-  // Detach an old generation before changing its borrowed paint. Rendering is
-  // held; an atlas refusal retains the same complete opaque direct surface.
-  for(const collection of collections)collection.invalidatePreparedTrees?.();
+  // Preserve the previous Gouache bank across Pastel/Gouache selections. The
+  // preparation owner compares the paint key and retains its old lease until
+  // a real replacement has compiled and been published. Rendering is held.
   context.update(preferences);
   for(const texture of context.prepareSharedSurfaceAssets())port.renderer.initTexture(texture);
   for(const collection of collections){await collection.prepareTrees?.(port.renderer,port.camera,port.scene,()=>port.assertCurrent());port.assertCurrent();}
   for(const collection of collections){const stage=await collection.stagePlants?.(port.renderer,port.camera,port.scene,()=>port.assertCurrent());if(stage)plants.push(stage);port.assertCurrent();}
   // A preparation may have admitted additional metadata/pigment layers.
   for(const texture of context.prepareSharedSurfaceAssets())port.renderer.initTexture(texture);
-  await port.renderer.compileAsync(port.scene,port.camera);port.assertCurrent();for(const stage of plants)stage.commit();committed=true;
+  await port.renderer.compileAsync(port.scene,port.camera);port.assertCurrent();for(const collection of collections)collection.assertFixedTreeDrawReady?.();for(const stage of plants)stage.commit();committed=true;
   }finally{const errors:unknown[]=[];for(const stage of plants.reverse()){if(!committed)try{stage.rollback();}catch(error){errors.push(error);}try{stage.dispose();}catch(error){errors.push(error);}}if(errors.length)throw new AggregateError(errors,'Catalog plant stage cleanup failed');}
  };
  try{await prepare(next);}
