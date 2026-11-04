@@ -11,23 +11,26 @@ import {GraphicsStyleContext,withGraphicsStyle} from '../src/render/graphics-sty
 import {DEFAULT_GRAPHICS_STYLE_PREFERENCES} from '../src/ui3d/native-preferences';
 import {ResourceLayer} from '../src/render/ResourceLayer';
 import {EnvironmentLighting} from '../src/render/EnvironmentLighting';
-import {TREE_SPECIES,compileLegacyTreeRecipe,createReadyTreeRecipe} from '../src/render/origami/baked/trees/recipe';
-import type {TreeAssetCatalog,ReadyTreeRecipe,TreeSpecies} from '../src/render/origami/baked/trees/types';
+import {TREE_SPECIES} from '../src/render/origami/baked/trees/recipe';
+import type {TreeAssetCatalog} from '../src/render/origami/baked/trees/types';
+import type {TextureSurfaceSlot} from '../src/render/surfaces/TextureSurface';
+import {createStylizedSurfaceTexture} from '../src/render/stylized-surfaces';
 import type {ResourceRangeData} from '../src/render/StaticGeometry';
 import type {Resource} from '../src/sim/types';
 import type {NaturalPresentationChange} from '../src/render/NaturalResourcePresentation';
 import {writeTestFileSync} from './test-output';
 
 const settings={impasto:0,wear:0,edges:0,blackEdges:.79,edgeWidth:1.7,strokeImperfection:.15,contourImperfection:.6};
-function fixture(site:boolean){return{width:32,height:32,tick:0,seed:123,...(site?{site:{biome:'temperate-forest'}}:{}),resources:TREE_SPECIES.map((species,i):Resource=>({id:1000+i,kind:'tree',species,x:3+i,z:8,amount:1,growth:.7})),structures:[],pawns:[],jobs:[]};}
+function fixture(site:boolean){const resources:Resource[]=TREE_SPECIES.map((species,i)=>({id:1000+i,kind:'tree',species,x:3+i,z:8,amount:1,growth:.7}));resources[0]!.blight={since:0,severity:.5,lastHarmTick:0,nextCheck:200,rng:1};resources.push({id:1100,kind:'tree',x:21,z:11,amount:1,growth:.41});return{width:32,height:32,tick:0,seed:123,...(site?{site:{biome:'temperate-forest'}}:{}),resources,structures:[],pawns:[],jobs:[]};}
 type Input=ReturnType<typeof fixture>;
 function make(style:'default'|'origami'){
- const context=new GraphicsStyleContext({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style,...settings}),group=new THREE.Group(),environment=new EnvironmentLighting(),plain=new THREE.MeshLambertNodeMaterial({vertexColors:true}),paint=new THREE.MeshStandardNodeMaterial({vertexColors:true});
- plain.userData.rendererOwned=paint.userData.rendererOwned=true;environment.configure(plain);environment.configure(paint);const layer=withGraphicsStyle(context,()=>new ResourceLayer(group,plain,paint));
- return{group,layer,environment,dispose(){layer.dispose();plain.dispose();paint.dispose();environment.dispose();context.dispose();}};
+ const context=new GraphicsStyleContext({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style,...settings}),group=new THREE.Group(),environment=new EnvironmentLighting(),plain=new THREE.MeshLambertNodeMaterial({vertexColors:true}),paint=new THREE.MeshLambertNodeMaterial({vertexColors:true}),pastel=createStylizedSurfaceTexture('vegetation');
+ plain.userData.rendererOwned=paint.userData.rendererOwned=true;environment.configure(plain);environment.configure(paint);const layer=withGraphicsStyle(context,()=>new ResourceLayer(group,plain,paint,undefined,{pastelTexture:pastel,configure:environment.configure}));
+ return{group,layer,environment,dispose(){layer.dispose();plain.dispose();paint.dispose();pastel.dispose();environment.dispose();context.dispose();}};
 }
 function update(layer:ResourceLayer,input:Input,newMap:boolean,leaves:ReadonlySet<number>,changes?:ReadonlyMap<number,NaturalPresentationChange>){const before=JSON.stringify(input);Reflect.apply(layer.update,layer,[input,newMap,changes,undefined,{read:(r:Resource)=>({size:r.growth??1,ripe:true,leafless:leaves.has(r.id)}),harvestable:()=>false}]);expect(JSON.stringify(input)).toBe(before);}
-const fields=['position','normal','windRoot','windBasis'] as const;
+const fields=['position','normal','windRoot','windBasis','uv','surfaceUv'] as const;
+const cornerStride=3+3+3+4+2+4;
 type Domain={id:number;canopy:boolean;visible:boolean;active:number[][];resident:number[][];rangeCounts:number[]};
 /** Compare logical triangle corners, not backing indices: atlas seams legitimately
  * duplicate source vertices. Active streams read the ACTUAL compacted index and
@@ -58,17 +61,17 @@ function difference(expected:Domain[],actual:Domain[]){
   for(const field of ['active','resident'] as const){if(a[field].length!==b[field].length){issues.push(`${field} triangles ${a.id}: ${a[field].length}/${b[field].length}`);continue;}let error=0;for(let t=0;t<a[field].length;t++)for(let c=0;c<a[field][t]!.length;c++)error=Math.max(error,Math.abs(a[field][t]![c]!-b[field][t]![c]!));if(error>2e-6)issues.push(`${field} position/normal/wind ${a.id}: max ${error}`);}
  }return issues;
 }
-function compact(rows:Domain[]){return rows.map(r=>({id:r.id,canopy:r.canopy,visible:r.visible,rangeCounts:r.rangeCounts,activeTriangles:r.active.length,residentTriangles:r.resident.length,activeSha:createHash('sha256').update(JSON.stringify(r.active)).digest('hex'),residentSha:createHash('sha256').update(JSON.stringify(r.resident)).digest('hex'),positionBounds:r.resident.length?Array.from({length:3},(_,axis)=>({min:Math.min(...r.resident.flatMap(t=>[t[axis]!,t[13+axis]!,t[26+axis]!])),max:Math.max(...r.resident.flatMap(t=>[t[axis]!,t[13+axis]!,t[26+axis]!]))})):null}));}
+function compact(rows:Domain[]){return rows.map(r=>({id:r.id,canopy:r.canopy,visible:r.visible,rangeCounts:r.rangeCounts,activeTriangles:r.active.length,residentTriangles:r.resident.length,activeSha:createHash('sha256').update(JSON.stringify(r.active)).digest('hex'),residentSha:createHash('sha256').update(JSON.stringify(r.resident)).digest('hex'),positionBounds:r.resident.length?Array.from({length:3},(_,axis)=>({min:Math.min(...r.resident.flatMap(t=>[t[axis]!,t[cornerStride+axis]!,t[cornerStride*2+axis]!])),max:Math.max(...r.resident.flatMap(t=>[t[axis]!,t[cornerStride+axis]!,t[cornerStride*2+axis]!]))})):null}));}
 
-test('actual tree Layer keeps Legacy body/canopy active domains for all13 species with and without site through full/partial growth and leaf masking',()=>{
- const recipes=TREE_SPECIES.map(species=>compileLegacyTreeRecipe(species,{paintGeneration:'TEST-layer13-metadata-only',settings,pageSize:2048,maxCpuBytes:8*1024*1024})),ready=new Map<TreeSpecies,ReadyTreeRecipe>(),texture=new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1),reports:unknown[]=[],failures:string[]=[];
- try{
-  for(const recipe of recipes)ready.set(recipe.species,createReadyTreeRecipe(recipe,0,1));
-  const catalog:TreeAssetCatalog={revision:1,texture,pageCount:1,readReady:s=>ready.get(s as TreeSpecies),assertCurrent(){for(const r of ready.values())r.assertCurrent();}};
+test('actual shared tree Layer keeps all13 species, anonymous and blighted active domains/UVs in both variants across texture-only publication, growth and leaf masking',()=>{
+ const reports:unknown[]=[],failures:string[]=[];
   for(const site of [true,false]){
    const input=fixture(site),legacy=make('default'),fallback=make('origami'),baked=make('origami'),leaves=new Set<number>();
+   let texture:THREE.DataArrayTexture|undefined;
    try{
-    for(const row of [legacy,fallback,baked])update(row.layer,input,true,leaves);baked.layer.setTreeAssetCatalog(catalog,baked.environment.configure).commit();
+    for(const row of [legacy,fallback,baked])update(row.layer,input,true,leaves);const demand=baked.layer.treeBakeDemand();expect(demand.models).toHaveLength(13);expect(demand.models.every(m=>m.variant===(site?'broadleaf':'conical'))).toBe(true);expect(demand.models.some(m=>m.species===undefined)).toBe(false);
+    texture=new THREE.DataArrayTexture(new Uint8Array(2*2*4*13),2,2,13);texture.minFilter=THREE.LinearMipmapLinearFilter;texture.magFilter=THREE.LinearFilter;texture.colorSpace=THREE.SRGBColorSpace;texture.generateMipmaps=true;const slots:TextureSurfaceSlot[]=Array.from({length:64},()=>({layer:0,paletteBaked:false}));demand.models.forEach((m,i)=>{slots[m.surfaceSlot]={layer:i,paletteBaked:true};});const catalog:TreeAssetCatalog={revision:1,texture,pageCount:13,modelKeys:demand.models.map(m=>m.key),slots,assertCurrent(){for(const m of demand.models)m.assertCurrent();}};
+    const before=capture(baked.group),geometries=baked.group.children.filter((m):m is THREE.Mesh=>m instanceof THREE.Mesh).map(m=>m.geometry),materials=baked.layer.compiledMaterials435();baked.layer.setTreeAssetCatalog(catalog,baked.environment.configure).commit();expect(capture(baked.group)).toEqual(before);expect(baked.group.children.filter((m):m is THREE.Mesh=>m instanceof THREE.Mesh).map(m=>m.geometry)).toEqual(geometries);expect(baked.layer.compiledMaterials435()).toEqual(materials);expect(baked.layer.bakedTreeStatus()).toMatchObject({ready:13,fallback:1});
     const check=(phase:string)=>{const source=capture(legacy.group),raw=capture(fallback.group),atlas=capture(baked.group),fallbackIssues=difference(source,raw),atlasIssues=difference(source,atlas);reports.push({site,phase,status:baked.layer.bakedTreeStatus(),source:compact(source),fallback:compact(raw),ready:compact(atlas),fallbackIssues,atlasIssues});failures.push(...fallbackIssues.map(s=>`${site}/${phase}/fallback: ${s}`),...atlasIssues.map(s=>`${site}/${phase}/ready: ${s}`));};
     check('initial-full');
     input.resources[0]!.growth=.43;input.resources[4]!.growth=.57;const changes=new Map<number,NaturalPresentationChange>([0,4].map(i=>[input.resources[i]!.id,{resource:input.resources[i]!,size:input.resources[i]!.growth!}]));
@@ -77,9 +80,8 @@ test('actual tree Layer keeps Legacy body/canopy active domains for all13 specie
     for(const row of [legacy,fallback,baked])row.layer.setFoliageVisible(false);check('foliage-hidden');for(const row of [legacy,fallback,baked])row.layer.setFoliageVisible(true);
     leaves.clear();for(const row of [legacy,fallback,baked])update(row.layer,input,false,leaves);check('full-update-restored');
     for(const row of [legacy,fallback,baked])update(row.layer,input,true,leaves);check('new-map-rebuild');
-   }finally{baked.dispose();fallback.dispose();legacy.dispose();}
+   }finally{baked.dispose();fallback.dispose();legacy.dispose();texture?.dispose();}
   }
-  writeTestFileSync('artifacts/tree-layer13-legacy-domain.json',JSON.stringify({scope:'Integrated actual ResourceLayer. Synthetic paint only; no GPU/raster/World or visual claim. Atlas seam vertex duplication allowed; real owner, triangle, fields and visibility compared.',fields,reports,failures},null,2));
+  writeTestFileSync('artifacts/tree-layer13-legacy-domain.json',JSON.stringify({scope:'Integrated actual ResourceLayer/common models. Tiny texture arrays and synthetic paint only; no GPU/raster/World or visual claim. Actual owners, indexed triangles, UV/model-slot fields and visibility compared before/after texture data publication.',fields,reports,failures},null,2));
   expect(failures).toEqual([]);
- }finally{for(const r of ready.values())r.dispose();for(const r of recipes)r.dispose();texture.dispose();}
 },60000);

@@ -113,12 +113,12 @@ export class ReferenceFloraBatch {
     }
     return true;
   }
-  parts(canopy:boolean,kind:'surface'|'lines'|'wear'='surface'):BatchInput[] {
+  parts(canopy:boolean,kind:'surface'|'lines'|'wear'='surface',geometryMapper?:(source:THREE.BufferGeometry)=>THREE.BufferGeometry):BatchInput[] {
     const result:BatchInput[]=[];
     for(const [part,items]of this.placements){
       if(part.canopy!==canopy)continue;
       const geometry=kind==='surface'?part.geometry:kind==='lines'?part.lines:part.wear;
-      if(geometry)result.push({geometry:geometry.clone(),items});
+      if(geometry)result.push({geometry:(geometryMapper?geometryMapper(geometry):geometry).clone(),items});
     }
     return result;
   }

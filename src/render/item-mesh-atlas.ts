@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import {Fn,attribute,float,mat4,normalLocal,storage,texture,transformNormal,uint,varying,vec2,vertexIndex} from 'three/tsl';
+import {Fn,attribute,float,mat4,normalLocal,storage,texture,transformNormal,uint,varying,vec2,vec4,vertexIndex} from 'three/tsl';
 import {createItemGeometry,ITEM_SHAPES,type ItemShape} from './item-geometry';
 import {PATTERN_SPAN} from './texture-variation';
 
@@ -17,31 +17,36 @@ export class ItemMeshAtlas {
   private readonly buffer;
   private readonly positionUv:THREE.Node<'vec4'>;
   private readonly normalUv:THREE.Node<'vec4'>;
+  private readonly stroke:THREE.Node<'vec4'>;
 
-  constructor(){
-    const sources=this.shapes.map(shape=>shape?createItemGeometry(shape):new THREE.BoxGeometry(1,1,1));
+  constructor(borrowedModels?:readonly THREE.BufferGeometry[]){
+    if(borrowedModels&&borrowedModels.length!==this.shapes.length)throw Error('Complete shared item model vocabulary required');
+    const sources=borrowedModels??this.shapes.map(shape=>shape?createItemGeometry(shape):new THREE.BoxGeometry(1,1,1));
     this.vertexCounts=Object.freeze(sources.map(source=>source.index?.count??source.getAttribute('position').count));
     this.verticesPerSlot=Math.max(...this.vertexCounts);
-    const values=new Float32Array(this.shapes.length*this.verticesPerSlot*8);
+    const stride=borrowedModels?12:8,values=new Float32Array(this.shapes.length*this.verticesPerSlot*stride);
     let radius=0;
     sources.forEach((source,slot)=>{
       this.slots.set(this.shapes[slot],slot);
       const position=source.getAttribute('position'),normal=source.getAttribute('normal'),uv=source.getAttribute('uv'),index=source.index;
       for(let i=0;i<this.verticesPerSlot;i++){
-        const offset=(slot*this.verticesPerSlot+i)*8;
+        const offset=(slot*this.verticesPerSlot+i)*stride;
         if(i>=this.vertexCounts[slot]!){values[offset+5]=1;continue;}
         const vertex=index?index.getX(i):i,x=position.getX(vertex),y=position.getY(vertex),z=position.getZ(vertex);
+        const face=source.getAttribute('surfaceStrokeFace'),strokeUv=source.getAttribute('surfaceStrokeUv');
         values.set([x,y,z,uv.getX(vertex),normal.getX(vertex),normal.getY(vertex),normal.getZ(vertex),uv.getY(vertex)],offset);
+        if(borrowedModels)values.set([face?.getX(vertex)??0,strokeUv?.getX(vertex)??uv.getX(vertex),strokeUv?.getY(vertex)??uv.getY(vertex),0],offset+8);
         radius=Math.max(radius,Math.hypot(x,y,z));
       }
-      source.dispose();
+      if(!borrowedModels)source.dispose();
     });
     this.data=new THREE.StorageBufferAttribute(values,4);
     // WebGL's storage fallback otherwise ignores element indices. Its PBO
     // path preserves this same immutable lookup through an RGBA float texture.
     this.buffer=storage(this.data,'vec4',this.data.count).toReadOnly().setPBO(true);
-    const address=uint(attribute('itemShape','float')).mul(this.verticesPerSlot).add(vertexIndex).mul(2).toVar();
+    const address=uint(attribute('itemShape','float')).mul(this.verticesPerSlot).add(vertexIndex).mul(stride/4).toVar();
     this.positionUv=this.buffer.element(address).toVar();this.normalUv=this.buffer.element(address.add(1)).toVar();
+    this.stroke=borrowedModels?this.buffer.element(address.add(2)).toVar():vec4(0);
     // Attributes establish the existing shader layout; authored data is fetched
     // from the atlas in the vertex stage. There is no per-frame buffer write.
     this.geometry=new THREE.BufferGeometry();
@@ -63,6 +68,8 @@ export class ItemMeshAtlas {
   /** The true source UV occupies the spare W component of the existing two
    * atlas reads. Reuse those same nodes in the position and paint graphs. */
   paintUvNode():THREE.Node<'vec2'> {return varying(vec2(this.positionUv.w,this.normalUv.w),'v_itemPaintUv');}
+  strokeFaceNode():THREE.Node<'float'>{return this.stroke.x;}
+  strokeUvNode():THREE.Node<'vec2'>{return this.stroke.yz;}
 
   configure(material:THREE.NodeMaterial,surface?:THREE.Texture):void {
     const positionUv=this.positionUv,normalUv=this.normalUv;

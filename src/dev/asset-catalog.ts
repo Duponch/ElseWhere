@@ -2,23 +2,24 @@ import * as THREE from 'three/webgpu';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {ReentrantRenderer} from '../render/ReentrantRenderer';
 import {GraphicsStyleContext,withGraphicsStyle} from '../render/graphics-style';
-import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,ORIGAMI_STYLE_CONTROLS,formatOrigamiStyleValue,requiresGraphicsStyleRebuild,type GraphicsStyle,type GraphicsStylePreferences} from '../ui3d/native-preferences';
+import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,ORIGAMI_STYLE_CONTROLS,formatOrigamiStyleValue,type GraphicsStyle,type GraphicsStylePreferences} from '../ui3d/native-preferences';
 import {createActorCatalog} from './asset-catalog-actors';
 import {createEnvironmentAssetCatalog} from './asset-catalog-environment';
 import {createTransportAssetCatalog} from './asset-catalog-transports';
 import type {CatalogCollection,CatalogItem,CatalogSection,CatalogStatus} from './asset-catalog-types';
+import {changeCatalogSurface} from './asset-catalog-surface';
 import './asset-catalog.css';
 
 /** Independent development entry point. No Main bootstrap, simulation,
  * campaign, persistence, clock advancement or Worker is constructed here. */
 const host=document.getElementById('asset-catalog');if(!host)throw new Error('Asset catalog root missing');
-host.innerHTML=`<main class="catalog-app"><header class="catalog-header"><div class="catalog-heading"><h1>Atelier des assets</h1><p>Scène de développement · aucun monde chargé</p></div><div class="catalog-toolbar"><label>Style <select id="catalog-style"><option value="origami">Origami</option><option value="default">Par défaut</option></select></label><button id="catalog-all" class="primary">Tout voir</button><button id="catalog-above">Vue du dessus</button><label><input id="catalog-labels" type="checkbox" checked>Noms au zoom</label><label><input id="catalog-floor" type="checkbox" checked>Repères</label></div></header><div class="catalog-body"><aside class="catalog-sidebar"><div class="catalog-search"><input id="catalog-search" type="search" placeholder="Rechercher et rejoindre…" aria-label="Rechercher un asset"><div id="catalog-count" class="catalog-count">Préparation du catalogue…</div><div class="catalog-legend"><span class="catalog-tag reference">Référence</span><span class="catalog-tag origami">Origami</span><span class="catalog-tag default">Recette existante</span></div></div><nav id="catalog-nav" class="catalog-nav" aria-label="Types d’assets"></nav><div id="catalog-inventory" class="catalog-inventory"></div><div id="catalog-detail" class="catalog-detail"></div></aside><section id="catalog-stage" class="catalog-stage" aria-label="Catalogue des modèles 3D"><div id="catalog-overlay" class="catalog-labels" aria-hidden="true"></div><div class="catalog-status"><span id="catalog-message" class="message">Chargement…</span><span class="instructions">Glisser : tourner · molette : zoomer<br>Clic droit / deux doigts : déplacer</span></div><div id="catalog-loading" class="catalog-loading"><div><strong>Préparation de l’atelier</strong><span id="catalog-loading-text">Ouverture des recettes graphiques…</span></div></div><pre id="catalog-error" class="catalog-error" hidden></pre></section></div></main>`;
+host.innerHTML=`<main class="catalog-app"><header class="catalog-header"><div class="catalog-heading"><h1>Atelier des assets</h1><p>Scène de développement · aucun monde chargé</p></div><div class="catalog-toolbar"><label>Texture <select id="catalog-style"><option value="origami">Gouache</option><option value="default">Pastel</option></select></label><button id="catalog-all" class="primary">Tout voir</button><button id="catalog-above">Vue du dessus</button><label><input id="catalog-labels" type="checkbox" checked>Noms au zoom</label><label><input id="catalog-floor" type="checkbox" checked>Repères</label></div></header><div class="catalog-body"><aside class="catalog-sidebar"><div class="catalog-search"><input id="catalog-search" type="search" placeholder="Rechercher et rejoindre…" aria-label="Rechercher un asset"><div id="catalog-count" class="catalog-count">Préparation du catalogue…</div><div class="catalog-legend"><span class="catalog-tag reference">Référence</span><span class="catalog-tag origami">Modèle commun</span><span class="catalog-tag default">Recette existante</span></div></div><nav id="catalog-nav" class="catalog-nav" aria-label="Types d’assets"></nav><div id="catalog-inventory" class="catalog-inventory"></div><div id="catalog-detail" class="catalog-detail"></div></aside><section id="catalog-stage" class="catalog-stage" aria-label="Catalogue des modèles 3D"><div id="catalog-overlay" class="catalog-labels" aria-hidden="true"></div><div class="catalog-status"><span id="catalog-message" class="message">Chargement…</span><span class="instructions">Glisser : tourner · molette : zoomer<br>Clic droit / deux doigts : déplacer</span></div><div id="catalog-loading" class="catalog-loading"><div><strong>Préparation de l’atelier</strong><span id="catalog-loading-text">Ouverture des recettes graphiques…</span></div></div><pre id="catalog-error" class="catalog-error" hidden></pre></section></div></main>`;
 const $=<T extends HTMLElement>(id:string)=>document.getElementById(id) as T;
 const stage=$<HTMLElement>('catalog-stage'),overlay=$('catalog-overlay'),loading=$('catalog-loading'),errorView=$('catalog-error');
 const styleControl=$<HTMLSelectElement>('catalog-style'),search=$<HTMLInputElement>('catalog-search'),labelsControl=$<HTMLInputElement>('catalog-labels'),floorControl=$<HTMLInputElement>('catalog-floor');
 const previewPreferences:GraphicsStylePreferences={...DEFAULT_GRAPHICS_STYLE_PREFERENCES};
 const paintSettings=document.createElement('details');paintSettings.className='catalog-paint-settings';
-const paintSummary=document.createElement('summary');paintSummary.textContent='Réglages Origami';paintSettings.append(paintSummary);
+const paintSummary=document.createElement('summary');paintSummary.textContent='Réglages Gouache';paintSettings.append(paintSummary);
 const paintInputs:HTMLInputElement[]=[];let paintRefreshTimer:ReturnType<typeof setTimeout>|undefined;
 for(const control of ORIGAMI_STYLE_CONTROLS){
   const label=document.createElement('label'),text=document.createElement('span');text.textContent=control.label;
@@ -28,19 +29,13 @@ for(const control of ORIGAMI_STYLE_CONTROLS){
     if(busy||closed)return;
     previewPreferences[control.key]=Number(input.value);show();
     if(paintRefreshTimer){clearTimeout(paintRefreshTimer);paintRefreshTimer=undefined;}
-    if(context){
-      const next={...previewPreferences,style:context.preferences.style};
-      if(requiresGraphicsStyleRebuild(context.preferences,next)){void build(next.style,true);return;}
-      if(context.origami&&!context.reliefEnabled&&!context.wearEnabled){paintRefreshTimer=setTimeout(()=>{paintRefreshTimer=undefined;void refreshPaint(next);},80);return;}
-      context.update(next);
-    }
-    requestRender();paintRefreshTimer=setTimeout(()=>{paintRefreshTimer=undefined;requestRender();},80);
+    if(context){const next={...previewPreferences,style:context.preferences.style};paintRefreshTimer=setTimeout(()=>{paintRefreshTimer=undefined;void refreshPaint(next);},80);}
   };
   label.append(text,input,output);paintSettings.append(label);paintInputs.push(input);
 }
 $('catalog-nav').before(paintSettings);
 const scopeNote=document.createElement('p');scopeNote.className='catalog-subtle';scopeNote.textContent='Modèles et objets disponibles ; effets animés transitoires exclus.';$('catalog-count').parentElement!.append(scopeNote);
-const statusNames:Record<CatalogStatus,string>={reference:'Référence',origami:'Origami',default:'Recette existante'};
+const statusNames:Record<CatalogStatus,string>={reference:'Référence',origami:'Modèle commun',default:'Recette existante'};
 const renderer=new ReentrantRenderer({antialias:true,powerPreference:'high-performance'});
 renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
@@ -81,14 +76,16 @@ function focus(box:THREE.Box3,above=false,internal=false):void{
   const direction=above?new THREE.Vector3(.001,1,.001).normalize():new THREE.Vector3(.34,.83,1).normalize();
   controls.target.copy(center);camera.position.copy(center).addScaledVector(direction,distance);controls.minDistance=Math.max(.3,Math.min(radius*.2,1));controls.update();requestRender();
 }
-function selectEntry(entry:Entry,internal=false):void{
-  if(closed||busy&&!internal)return;
-  selected=entry;const detail=$('catalog-detail');detail.replaceChildren();const heading=document.createElement('h2');heading.textContent=entry.item.label;detail.append(heading);
+function showEntryDetails(entry:Entry):void{
+  const detail=$('catalog-detail');detail.replaceChildren();const heading=document.createElement('h2');heading.textContent=entry.item.label;detail.append(heading);
   const tag=document.createElement('span');tag.className=`catalog-tag ${entry.item.status}`;tag.textContent=statusNames[entry.item.status];detail.append(tag);
   const identifier=document.createElement('p'),code=document.createElement('code');code.textContent=entry.item.id;identifier.append(code);detail.append(identifier);
   const note=document.createElement('p');note.textContent=entry.item.note??entry.section.note??'Recette de présentation actuellement disponible dans le catalogue.';detail.append(note);
   const button=document.createElement('button');button.textContent='Rejoindre ce modèle';button.onclick=()=>focus(worldBox(entry));detail.append(button);
-  focus(worldBox(entry),false,internal);renderInventory();
+}
+function selectEntry(entry:Entry,internal=false):void{
+  if(closed||busy&&!internal)return;
+  selected=entry;showEntryDetails(entry);focus(worldBox(entry),false,internal);renderInventory();
 }
 function renderInventory():void{
   const query=normalize(search.value.trim()),inventory=$('catalog-inventory'),fragment=document.createDocumentFragment();let matches=0;
@@ -139,17 +136,8 @@ function requestRender():void{if(frame!==undefined||closed||busy)return;frame=re
 controls.addEventListener('change',requestRender);
 function resize():void{if(closed)return;if(busy){resizePending=true;return;}resizePending=false;const width=Math.max(1,stage.clientWidth),height=Math.max(1,stage.clientHeight);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();requestRender();}
 const resizeObserver=new ResizeObserver(resize);
-function rememberView(){return{position:camera.position.clone(),quaternion:camera.quaternion.clone(),target:controls.target.clone(),zoom:camera.zoom,minDistance:controls.minDistance,maxDistance:controls.maxDistance,selectedId:selected?.item.id};}
-function arrange(view:ReturnType<typeof rememberView>|undefined):void{
-    sections=collections.flatMap(collection=>collection.sections);layout();
-    if(view){
-      const entry=entries.find(entry=>entry.item.id===view.selectedId);if(entry)selectEntry(entry,true);
-      // Consume any old orbit damping before restoring the exact view. The
-      // rebuilt entries have fresh owners; selection is restored by real ID.
-      const damping=controls.enableDamping;controls.enableDamping=false;controls.update();
-      controls.target.copy(view.target);camera.position.copy(view.position);camera.quaternion.copy(view.quaternion);camera.zoom=view.zoom;
-      controls.minDistance=view.minDistance;controls.maxDistance=view.maxDistance;camera.updateProjectionMatrix();controls.update();controls.enableDamping=damping;
-    }else focus(wholeBounds,false,true);
+function arrange():void{
+    sections=collections.flatMap(collection=>collection.sections);layout();focus(wholeBounds,false,true);
     diagnostics.trees=collections.flatMap(collection=>collection.treeStatus?[collection.treeStatus()]:[]);
 }
 function exclusiveCatalogJob(work:(assertCurrent:()=>void)=>Promise<void>):Promise<void>{
@@ -163,32 +151,39 @@ async function prepareTrees(graphics:GraphicsStyleContext,assertJobCurrent:()=>v
   assertCurrent();graphics.flushPaint();
   for(const collection of collections){await collection.prepareTrees?.(renderer,camera,scene,assertCurrent);assertCurrent();}
 }
-async function finishView(assertCurrent:()=>void):Promise<void>{
-  progress('Préparation des matériaux de cette vue…');await nextFrame();assertCurrent();context!.flushPaint();await renderer.compileAsync(scene,camera);assertCurrent();
-  renderer.render(scene,camera);labels();diagnostics.ready=failures.length===0;document.body.dataset.ready=diagnostics.ready?'ready':'error';$('catalog-message').textContent=`${entries.length} assets agencés par type · ${context!.origami?'Origami et recettes existantes signalées':'Style par défaut'}\nRechercher un nom ou choisir un groupe pour s’en approcher.`;
+async function finishView(assertCurrent:()=>void,prepared=false):Promise<void>{
+  if(!prepared){progress('Préparation des matériaux de cette vue…');await nextFrame();assertCurrent();for(const texture of context!.prepareSharedSurfaceAssets())renderer.initTexture(texture);await renderer.compileAsync(scene,camera);assertCurrent();}
+  renderer.render(scene,camera);labels();diagnostics.ready=failures.length===0;document.body.dataset.ready=diagnostics.ready?'ready':'error';$('catalog-message').textContent=`${entries.length} assets agencés par type · texture ${context!.origami?'Gouache':'Pastel'}\nRechercher un nom ou choisir un groupe pour s’en approcher.`;
 }
-function build(style:GraphicsStyle,preserveView=false):Promise<void>{
-  const view=preserveView?rememberView():undefined;
+function build(style:GraphicsStyle):Promise<void>{
   return exclusiveCatalogJob(async assertCurrent=>{
     if(paintRefreshTimer){clearTimeout(paintRefreshTimer);paintRefreshTimer=undefined;}
     disposeCatalog();const graphics=context=new GraphicsStyleContext({...previewPreferences,style});diagnostics.style=style;
     progress('Humains, animaux et variantes disponibles…');await nextFrame();assertCurrent();collections.push(withGraphicsStyle(graphics,()=>createActorCatalog(graphics)));
     progress('Végétation, mobilier, fragments et objets…');await nextFrame();assertCurrent();collections.push(withGraphicsStyle(graphics,()=>createEnvironmentAssetCatalog(graphics)));
     collections.push(withGraphicsStyle(graphics,()=>createTransportAssetCatalog()));
-    progress('Préparation des arbres partagés…');await prepareTrees(graphics,assertCurrent);assertCurrent();arrange(view);await finishView(assertCurrent);
+    progress('Préparation des arbres partagés…');await prepareTrees(graphics,assertCurrent);assertCurrent();arrange();await finishView(assertCurrent);
   });
 }
 function refreshPaint(next:GraphicsStylePreferences):Promise<void>{
-  const graphics=context,view=rememberView();if(!graphics)return Promise.resolve();
+  if(paintRefreshTimer){clearTimeout(paintRefreshTimer);paintRefreshTimer=undefined;}
+  const graphics=context;if(!graphics)return Promise.resolve();
   return exclusiveCatalogJob(async assertCurrent=>{
-    for(const collection of collections)collection.invalidatePreparedTrees?.();
-    graphics.update(next);progress('Actualisation des peintures et contours des arbres…');await nextFrame();assertCurrent();
-    await prepareTrees(graphics,assertCurrent);assertCurrent();arrange(view);await finishView(assertCurrent);
+    progress('Actualisation des textures et des contours…');await nextFrame();assertCurrent();
+    try{await changeCatalogSurface(graphics,next,collections,{renderer,scene,camera,assertCurrent});}
+    finally{
+      Object.assign(previewPreferences,graphics.preferences);styleControl.value=graphics.preferences.style;
+      for(const[i,input]of paintInputs.entries()){const control=ORIGAMI_STYLE_CONTROLS[i]!;input.value=String(graphics.preferences[control.key]);(input.nextElementSibling as HTMLOutputElement).value=formatOrigamiStyleValue(control,graphics.preferences[control.key]);}
+    }
+    diagnostics.style=graphics.preferences.style;diagnostics.trees=collections.flatMap(collection=>collection.treeStatus?[collection.treeStatus()]:[]);
+    const currentItems=new Map(sections.flatMap(section=>section.items.map(item=>[item.id,item] as const)));
+    for(const entry of entries)entry.item=currentItems.get(entry.item.id)??entry.item;
+    if(selected)showEntryDetails(selected);renderInventory();await finishView(assertCurrent,true);
   });
 }
-styleControl.onchange=()=>void build(styleControl.value as GraphicsStyle);$('catalog-all').onclick=()=>{selected=undefined;focus(wholeBounds);renderInventory();};$('catalog-above').onclick=()=>focus(selected?worldBox(selected):wholeBounds,true);
+styleControl.onchange=()=>void refreshPaint({...previewPreferences,style:styleControl.value as GraphicsStyle});$('catalog-all').onclick=()=>{selected=undefined;focus(wholeBounds);renderInventory();};$('catalog-above').onclick=()=>focus(selected?worldBox(selected):wholeBounds,true);
 search.addEventListener('input',renderInventory);search.addEventListener('keydown',event=>{if(event.key==='Escape'){search.value='';renderInventory();}});labelsControl.onchange=requestRender;floorControl.onchange=()=>{floor.visible=floorControl.checked;if(grid)grid.visible=floorControl.checked;requestRender();};
-Object.assign(window,{assetCatalog:{diagnostics,overview:()=>focus(wholeBounds),focus:(id:string)=>{if(busy||closed)return false;const entry=entries.find(entry=>entry.item.id===id);if(entry)selectEntry(entry);return !!entry;},setStyle:(style:GraphicsStyle)=>{if(busy||closed)return activeJob??Promise.resolve();styleControl.value=style;return build(style);},inventory:()=>sections.map(section=>({id:section.id,label:section.label,items:section.items.map(({id,label,status,note})=>({id,label,status,note})),missing:section.missing??[]}))}});
+Object.assign(window,{assetCatalog:{diagnostics,overview:()=>focus(wholeBounds),focus:(id:string)=>{if(busy||closed)return false;const entry=entries.find(entry=>entry.item.id===id);if(entry)selectEntry(entry);return !!entry;},setStyle:(style:GraphicsStyle)=>{if(busy||closed)return activeJob??Promise.resolve();styleControl.value=style;return refreshPaint({...previewPreferences,style});},inventory:()=>sections.map(section=>({id:section.id,label:section.label,items:section.items.map(({id,label,status,note})=>({id,label,status,note})),missing:section.missing??[]}))}});
 async function init(){await renderer.init();if(closed)return;stage.prepend(renderer.domElement);const backend=renderer.backend as unknown as {isWebGPUBackend?:boolean;device?:{limits?:{maxVertexAttributes?:number}}};diagnostics.backend={webgpu:backend.isWebGPUBackend===true,name:renderer.backend.constructor.name,maxVertexAttributes:backend.device?.limits?.maxVertexAttributes};resizeObserver.observe(stage);resize();const requested=new URLSearchParams(location.search).get('style');styleControl.value=requested==='default'?'default':'origami';await build(styleControl.value as GraphicsStyle);}
 window.addEventListener('pagehide',()=>{
   if(closed)return;closed=true;jobEpoch++;if(paintRefreshTimer)clearTimeout(paintRefreshTimer);if(frame!==undefined)cancelAnimationFrame(frame);for(const [frame,resolve]of preparationFrames){cancelAnimationFrame(frame);resolve();}preparationFrames.clear();resizeObserver.disconnect();controls.enabled=false;

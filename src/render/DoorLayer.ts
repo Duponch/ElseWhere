@@ -10,8 +10,10 @@ import { penBoundaryAxes } from './pen-parts';
 import { InstanceTargetTint } from './instance-target-tint';
 import type { AnimationDetail } from './AnimationDetail';
 import { RetainedAnimation } from './RetainedAnimation';
-import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
-import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {currentGraphicsStyle} from './graphics-style';
+import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
+import {naturalStroke} from './surfaces/NaturalSurfaceModels';
+import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
 
 const EMPTY_AXES:ReadonlyMap<number,0|1>=new Map();
 const AUTODOOR_TINT=new THREE.Color(0xa6b7b4);
@@ -22,13 +24,13 @@ const AUTODOOR_TINT=new THREE.Color(0xa6b7b4);
 export class DoorLayer {
   readonly group=new THREE.Group();
   readonly tick=uniform(0);
-  private readonly base=new THREE.BoxGeometry(1,1,1);
+  private readonly surfaceModel=new OwnedStrokeModel(new THREE.BoxGeometry(1,1,1));
+  private readonly base=this.surfaceModel.geometry;
   private readonly material=material(0xffffff);
   private readonly textured=material(0xffffff);
   private readonly paint=createStylizedSurfaceTexture();
   private texturesEnabled=true;
   readonly mesh:BoxMesh;
-  private readonly contour?:OrigamiContourBinding;
   private key='';
   private history=new Map<number,{current:DoorState;previous:DoorState}>();
   private readonly targetTint=new InstanceTargetTint();
@@ -59,14 +61,14 @@ export class DoorLayer {
     this.mesh=new BoxMesh(this.base,this.textured,256);this.allocateAttributes(256);
     this.mesh.name='door-leaves';this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.group.add(this.mesh);
     const context=currentGraphicsStyle();
-    applyOrigamiSurface(this.textured,baseColor,uv(),context);
-    if(context?.origami){this.contour=createOrigamiContour(this.mesh,context);this.group.add(this.contour.line);}
+    this.textured.roughness=.88;this.textured.metalness=.02;
+    applySharedPaintSurface(this.textured,{context,base:baseColor,pastel:this.textured.colorNode as THREE.Node<'vec3'>,faceUv:uv(),stroke:naturalStroke(context,this.surfaceModel.stroke)});
   }
   setTexturesEnabled(enabled:boolean):void {
     if(this.texturesEnabled===enabled)return;
     this.texturesEnabled=enabled;
     this.mesh.material=enabled?this.textured:this.material;
-    this.contour?.sync();
+
   }
   private allocateAttributes(capacity:number):void {
     for(const [name,size] of [['doorCurrent',4],['doorPrevious',4],['doorShift',3]] as const)this.mesh.geometry.setAttribute(name,new THREE.InstancedBufferAttribute(new Float32Array(capacity*size),size).setUsage(THREE.StaticDrawUsage));
@@ -104,7 +106,7 @@ export class DoorLayer {
     this.mesh.computeBoundingSphere();this.mesh.boundingSphere.radius+=.5;
     this.targetTint.setInstances(this.mesh.colorBuffer,targetIds);
     this.animation.reconcile(doors.map(s=>({id:s.id,x:s.x,y:1,z:s.z})));
-    this.contour?.sync();
+
   }
   // V299_NATIVE_DOOR_END
 
@@ -142,7 +144,7 @@ export class DoorLayer {
     this.mesh.computeBoundingSphere();this.mesh.boundingSphere.radius+=.5;
     this.targetTint.setInstances(this.mesh.colorBuffer,targetIds);
     this.animation.reconcile(doors.map(s=>({id:s.id,x:s.x,y:1,z:s.z})));
-    this.contour?.sync();
+
   }
   present(tick:number):void {
     this.tick.value=tick;
@@ -155,8 +157,8 @@ export class DoorLayer {
   }
   prepareForCompile():()=>void {
     if(this.mesh.activeCount)return ()=>{};
-    const version=this.mesh.instanceMatrix.version;this.mesh.activeCount=1;this.contour?.sync();
-    return ()=>{if(this.mesh.instanceMatrix.version===version)this.mesh.activeCount=0;this.contour?.sync();};
+    const version=this.mesh.instanceMatrix.version;this.mesh.activeCount=1;
+    return ()=>{if(this.mesh.instanceMatrix.version===version)this.mesh.activeCount=0;};
   }
-  dispose():void {this.contour?.dispose();this.animation.dispose();this.targetTint.dispose();this.mesh.dispose();this.base.dispose();this.material.dispose();this.textured.dispose();this.paint.dispose();}
+  dispose():void {this.animation.dispose();this.targetTint.dispose();this.mesh.dispose();this.surfaceModel.dispose();this.material.dispose();this.textured.dispose();this.paint.dispose();}
 }

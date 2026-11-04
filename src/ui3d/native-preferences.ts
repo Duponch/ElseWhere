@@ -73,12 +73,12 @@ export function parseGraphicsStylePreferences(raw:string|null):GraphicsStylePref
  try{return normalizeGraphicsStylePreferences(raw===null?undefined:JSON.parse(raw));}catch{return normalizeGraphicsStylePreferences(undefined);}
 }
 
-export type GraphicsStylePipelineKey='default'|`origami:${'relief'|'flat'}:${'wear'|'no-wear'}`;
-/** Zero disables a compiled effect. Positive intensity changes keep the same
- * resident graph; Default never rebuilds for inactive Origami preferences. */
+export type GraphicsStylePipelineKey=`surface:${'relief'|'flat'}:${'wear'|'no-wear'}`;
+/** Material features alone determine shader structure. Choosing another set
+ * of texture images never selects a renderer or a different model pipeline. */
 export function graphicsStylePipelineKey(value:unknown):GraphicsStylePipelineKey {
  const settings=normalizeGraphicsStylePreferences(value);
- return settings.style==='default'?'default':`origami:${settings.impasto===0?'flat':'relief'}:${settings.wear===0?'no-wear':'wear'}`;
+ return `surface:${settings.impasto===0?'flat':'relief'}:${settings.wear===0?'no-wear':'wear'}`;
 }
 export function requiresGraphicsStyleRebuild(previous:unknown,next:unknown):boolean {
  return graphicsStylePipelineKey(previous)!==graphicsStylePipelineKey(next);

@@ -7,8 +7,10 @@ import { createStylizedSurfaceTexture } from './stylized-surfaces';
 import { instancedBoxPatternUv } from './texture-variation';
 import type { AnimationDetail } from './AnimationDetail';
 import { RetainedAnimation } from './RetainedAnimation';
-import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
-import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {currentGraphicsStyle} from './graphics-style';
+import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
+import {naturalStroke} from './surfaces/NaturalSurfaceModels';
+import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
 
 export const POD_RESCUE_PARTS = 6;
 export const POD_RESCUE_FALL_HEIGHT = 24;
@@ -27,14 +29,14 @@ const PARTS = [
 export class PodRescueLayer {
   readonly group = new THREE.Group();
   readonly mesh: BoxMesh;
-  private readonly contour?:OrigamiContourBinding;
   readonly tick = uniform(0);
   /** Actual opening tick and confirmation flag, never the scheduled deadline. */
   readonly opening = uniform(new THREE.Vector2());
   private readonly center = uniform(new THREE.Vector3());
   private readonly times = uniform(new THREE.Vector3());
   private readonly yaw = uniform(0);
-  private readonly base = new THREE.BoxGeometry(1,1,1);
+  private readonly surfaceModel=new OwnedStrokeModel(new THREE.BoxGeometry(1,1,1));
+  private readonly base=this.surfaceModel.geometry;
   private readonly paint = createStylizedSurfaceTexture();
   private readonly plain = material(0xffffff,{transparent:true,depthWrite:false,forceSinglePass:true});
   private readonly painted = material(0xffffff,{transparent:true,depthWrite:false,forceSinglePass:true});
@@ -89,12 +91,12 @@ export class PodRescueLayer {
     this.mesh.instanceMatrix.needsUpdate=this.mesh.colorBuffer.needsUpdate=sides.needsUpdate=true;
     this.mesh.activeCount=0;this.group.add(this.mesh);
     const context=currentGraphicsStyle();
-    applyOrigamiSurface(this.painted,attribute('boxColor','vec3'),uv(),context);
-    if(context?.origami){this.contour=createOrigamiContour(this.mesh,context);this.group.add(this.contour.line);}
+    this.painted.roughness=.88;this.painted.metalness=.02;
+    applySharedPaintSurface(this.painted,{context,base:attribute('boxColor','vec3'),pastel:this.painted.colorNode as THREE.Node<'vec3'>,faceUv:uv(),stroke:naturalStroke(context,this.surfaceModel.stroke)});
   }
 
   /** Renderer-only preview callers must synchronize after writing instance streams. */
-  syncContours():void {this.contour?.sync();}
+  syncContours():void {}
 
   adopt(world:World):void {
     try{this.adoptBody(world);}finally{this.syncContours();}
@@ -170,9 +172,9 @@ export class PodRescueLayer {
   }
 
   dispose():void {
-    this.contour?.dispose();
+
     this.animation.dispose();
-    this.mesh.removeFromParent();this.mesh.dispose();this.base.dispose();
+    this.mesh.removeFromParent();this.mesh.dispose();this.surfaceModel.dispose();
     this.plain.dispose();this.painted.dispose();this.paint.dispose();this.group.clear();
   }
 }

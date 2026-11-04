@@ -184,7 +184,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
         graphicsPreferenceGeneration++;
         return run(()=>preference(options.onGraphicsStylePreferencesChange!(normalizeGraphicsStylePreferences({...current,...patch}))),'Application du style graphique…');
       };
-      rows.push(choice('graphics-style','Style graphique',settings.style,['default','origami'] as const,style=>apply({style}),style=>style==='origami'?'Origami':'Par défaut'));
+      rows.push(choice('graphics-style','Texture des modèles',settings.style,['default','origami'] as const,style=>apply({style}),style=>style==='origami'?'Gouache':'Pastel'));
       if(settings.style==='origami')for(const control of ORIGAMI_STYLE_CONTROLS){
         const {key,label,min,max,step,unit}=control,scale=origamiStyleDisplayScale(control),value=unit==='%'?Math.round(settings[key]*scale):settings[key];
         rows.push({...range(`origami-${key}`,label,value,min*scale,max*scale,step*scale,next=>apply({[key]:next/scale},true),false,` ${unit}`),value:formatOrigamiStyleValue(control,settings[key]),compact:true,dense:true});

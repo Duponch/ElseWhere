@@ -57,16 +57,16 @@ test('empty crop painted bands share resident transforms and restore the public 
   }finally{layer.dispose();material.dispose();context.dispose();}
 });
 
-test('animal cargo compile preparation restores hidden owner and matching painted-band counts',()=>{
+test('animal cargo compile preparation restores its single opaque owner and common stroke addresses',()=>{
   const context=new GraphicsStyleContext({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'origami',edges:0,blackEdges:1}),layer=withGraphicsStyle(context,()=>new AnimalCargoLayer282());
   try{
     const body=layer.group.children.find((object):object is THREE.InstancedMesh=>object instanceof THREE.InstancedMesh&&!isPaintedContour(object))!;
-    const line=body.children.find(isPaintedContour)!;
-    expect(line).toBeInstanceOf(THREE.InstancedMesh);expect(line).not.toBeInstanceOf(THREE.LineSegments);
-    expect(line.geometry.userData.origamiBrushPrebuilt).toBe(true);
-    expect((line.material as THREE.MeshStandardNodeMaterial).positionNode).toBe((body.material as THREE.NodeMaterial).positionNode);
-    expect(line).toBeDefined();expect(body.visible).toBe(false);expect(body.count).toBe(0);expect(Reflect.get(line,'instanceMatrix')).toBe(body.instanceMatrix);
-    const restore=layer.prepareForCompile();expect(body.visible).toBe(true);expect(body.count).toBe(1);expect(Reflect.get(line,'count')).toBe(1);
-    restore();expect(body.visible).toBe(false);expect(body.count).toBe(0);expect(Reflect.get(line,'count')).toBe(0);
+    const geometry=body.geometry,material=body.material,node=(body.material as THREE.NodeMaterial).colorNode;
+    expect(body.children.filter(isPaintedContour)).toEqual([]);expect(geometry.hasAttribute('surfaceStrokeUv')).toBe(true);expect(geometry.hasAttribute('surfaceStrokeFace')).toBe(true);
+    expect(node).toBeDefined();expect(body.visible).toBe(false);expect(body.count).toBe(0);
+    const restore=layer.prepareForCompile();expect(body.visible).toBe(true);expect(body.count).toBe(1);
+    restore();expect(body.visible).toBe(false);expect(body.count).toBe(0);
+    context.update({...context.preferences,style:'default'});context.update({...context.preferences,style:'origami'});
+    expect(body.geometry).toBe(geometry);expect(body.material).toBe(material);expect((body.material as THREE.NodeMaterial).colorNode).toBe(node);expect(body.children.filter(isPaintedContour)).toEqual([]);
   }finally{layer.dispose();context.dispose();}
 });

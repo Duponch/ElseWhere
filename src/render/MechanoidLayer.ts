@@ -26,7 +26,8 @@ import { scytherGeometry } from './scyther-geometry';
 import { rangedMechGeometry } from './ranged-mech-geometry';
 import { headingAt,turnToward,TURN_TICKS,type TurnHeading } from './turn-presentation';
 import {currentGraphicsStyle,type GraphicsStyleContext} from './graphics-style';
-import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
+import {naturalStroke,SURFACE_STROKE_UV} from './surfaces/NaturalSurfaceModels';
 
 type VisualMech=Mechanoid&{pile?:MaterialPile;carrierId?:number};
 const GAIT_RATE=2*Math.PI/1.12;
@@ -41,7 +42,7 @@ class MechanicalRaceBatch {
   private readonly animationRoot={x:0,y:0,z:0,yaw:0};
   private readonly linkedRoot={x:0,y:0,z:0,yaw:0};
   private body?:THREE.Mesh;private selection?:THREE.Mesh;
-  private contour?:OrigamiContourBinding;
+  private surfaceModel?:OwnedStrokeModel;
   private selected:ReadonlySet<number>=new Set();private source?:World;
   private records:VisualMech[]=[];private readonly keys=new Map<number,string>();
   private readonly phaseIndices297=new Map<number,number>();
@@ -53,7 +54,9 @@ class MechanicalRaceBatch {
 
   private allocate():void {
     if(this.body)return;
-    const index=(id:string)=>mechanoidPartIndex(this.kind,id),geometry=this.kind==='scyther'?scytherGeometry(8,index):rangedMechGeometry(this.kind,8,index);
+    const index=(id:string)=>mechanoidPartIndex(this.kind,id),source=this.kind==='scyther'?scytherGeometry(8,index):rangedMechGeometry(this.kind,8,index),instances=Object.entries(source.attributes).filter(([,a])=>a instanceof THREE.InstancedBufferAttribute||a instanceof THREE.InterleavedBufferAttribute&&a.data instanceof THREE.InstancedInterleavedBuffer);
+    this.surfaceModel=new OwnedStrokeModel(source,64*1024*1024,true);
+    const geometry=new THREE.InstancedBufferGeometry();for(const[name,a]of Object.entries(this.surfaceModel.geometry.attributes))geometry.setAttribute(name,a);for(const[name,a]of instances)geometry.setAttribute(name,a);geometry.setIndex(this.surfaceModel.geometry.index!.clone());geometry.boundingBox=this.surfaceModel.geometry.boundingBox!.clone();geometry.boundingSphere=this.surfaceModel.geometry.boundingSphere!.clone();geometry.instanceCount=0;
     geometry.userData.animationCache=this.animationCache;
     const mat=material(0xffffff,{metalness:.24,roughness:.74});this.configure?.(actorExplorationMaterial256(mat));
     mat.colorNode=attribute('color','vec3');
@@ -109,7 +112,7 @@ class MechanicalRaceBatch {
     body.userData.mechKind=this.kind;
     const selection=pawnSelectionMesh(geometry,this);selection.name='Selected mechanical owners — shared trajectories';selection.visible=false;
     this.body=body;this.selection=selection;this.group.add(body,selection);
-    if(this.style?.origami){this.contour=createOrigamiContour(body,this.style);this.group.add(this.contour.line);}
+    const surfaceAddress=attribute(SURFACE_STROKE_UV,'vec3');mat.colorNode=naturalStroke(this.style,this.surfaceModel.stroke,surfaceAddress.z,surfaceAddress.xy)(mat.colorNode as THREE.Node<'vec3'>);
   }
 
   setSelected(ids:ReadonlySet<number>):void {
@@ -189,7 +192,7 @@ class MechanicalRaceBatch {
     if(dirty)(from as THREE.InterleavedBufferAttribute).data.needsUpdate=true;
     if(changed||reset||dirty)this.records.forEach((actor,i)=>this.animationCache.reconcile(i,actor.id,[rig.getW(i),mask.getX(i),mask.getY(i),carrierState.getX(i),this.carrierSlots.get(i),actor.carrierId,actor.pile?.owner.type].join(':')));
     if(playback)this.playback435.commit();
-    this.contour?.sync();
+
   }
   /** Gesture-only proxy reads the same instance edges as the rig. */
   forEachPose(visit:(id:number,x:number,y:number,z:number,height:number,radius:number,dead:boolean)=>void):void {
@@ -210,9 +213,9 @@ class MechanicalRaceBatch {
       this.animationCache.setRoot(i,root,time,travelTime,travelTime,this.blend.value);sampleMechRig(this.animationCache,i,g,root,travelTime);this.animationCache.publish(i);
     }this.animationCache.flush();
   }
-  prepare():()=>void {if(!this.body)return()=>{};const g=this.body.geometry as THREE.InstancedBufferGeometry,count=g.instanceCount;g.instanceCount=Math.max(1,count);this.contour?.sync();return()=>{g.instanceCount=count;this.contour?.sync();};}
+  prepare():()=>void {if(!this.body)return()=>{};const g=this.body.geometry as THREE.InstancedBufferGeometry,count=g.instanceCount;g.instanceCount=Math.max(1,count);return()=>{g.instanceCount=count;};}
   reset():void {this.dispose();this.animationCache.reset();this.source=undefined;this.records=[];this.keys.clear();this.headings.clear();this.gait.clear();this.carrierSlots.clear();}
-  dispose():void {this.contour?.dispose();this.contour=undefined;this.playback435.clear();this.animationCache.dispose();if(this.body){this.group.remove(this.body);this.body.geometry.dispose();(this.body.material as THREE.Material).dispose();}if(this.selection){this.group.remove(this.selection);this.selection.geometry.dispose();(this.selection.material as THREE.Material).dispose();}this.body=undefined;this.selection=undefined;}
+  dispose():void {this.surfaceModel?.dispose();this.surfaceModel=undefined;this.playback435.clear();this.animationCache.dispose();if(this.body){this.group.remove(this.body);this.body.geometry.dispose();(this.body.material as THREE.Material).dispose();}if(this.selection){this.group.remove(this.selection);this.selection.geometry.dispose();(this.selection.material as THREE.Material).dispose();}this.body=undefined;this.selection=undefined;}
 }
 
 /** At most three conditional race batches, each one body and one selection

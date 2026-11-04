@@ -8,8 +8,10 @@ import { createStylizedSurfaceTexture } from './stylized-surfaces';
 import { instancedBoxPatternUv } from './texture-variation';
 import type { AnimationDetail } from './AnimationDetail';
 import { RetainedAnimation } from './RetainedAnimation';
-import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
-import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {currentGraphicsStyle} from './graphics-style';
+import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
+import {naturalStroke} from './surfaces/NaturalSurfaceModels';
+import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
 
 export const ORBITAL_CAPSULE_PARTS=6;
 export const ORBITAL_CAPSULE_HEIGHT=24;
@@ -27,9 +29,9 @@ const PARTS=[
 export class OrbitalDeliveryLayer {
   readonly group=new THREE.Group();
   readonly mesh:BoxMesh;
-  private readonly contour?:OrigamiContourBinding;
   readonly tick=uniform(0);
-  private readonly base=new THREE.BoxGeometry(1,1,1);
+  private readonly surfaceModel=new OwnedStrokeModel(new THREE.BoxGeometry(1,1,1));
+  private readonly base=this.surfaceModel.geometry;
   private readonly paint=createStylizedSurfaceTexture();
   private readonly plain=material(0xffffff);
   private readonly painted=material(0xffffff);
@@ -61,11 +63,11 @@ export class OrbitalDeliveryLayer {
     this.mesh.geometry.setAttribute('orbitalLid',new THREE.InstancedBufferAttribute(new Float32Array(ORBITAL_DELIVERY_LIMIT*ORBITAL_CAPSULE_PARTS),1));
     this.mesh.activeCount=0;this.group.add(this.mesh);
     const context=currentGraphicsStyle();
-    applyOrigamiSurface(this.painted,attribute('boxColor','vec3'),uv(),context);
-    if(context?.origami){this.contour=createOrigamiContour(this.mesh,context);this.group.add(this.contour.line);}
+    this.painted.roughness=.88;this.painted.metalness=.02;
+    applySharedPaintSurface(this.painted,{context,base:attribute('boxColor','vec3'),pastel:this.painted.colorNode as THREE.Node<'vec3'>,faceUv:uv(),stroke:naturalStroke(context,this.surfaceModel.stroke)});
   }
   /** Renderer-only preview callers must synchronize after writing instance streams. */
-  syncContours():void {this.contour?.sync();}
+  syncContours():void {}
   adopt(world:World):void {
     try{this.adoptBody(world);}finally{this.syncContours();}
   }
@@ -115,5 +117,5 @@ export class OrbitalDeliveryLayer {
       this.syncContours();
     };
   }
-  dispose():void {this.contour?.dispose();this.animation.dispose();this.mesh.removeFromParent();this.mesh.dispose();this.base.dispose();this.plain.dispose();this.painted.dispose();this.paint.dispose();this.group.clear();}
+  dispose():void {this.animation.dispose();this.mesh.removeFromParent();this.mesh.dispose();this.surfaceModel.dispose();this.plain.dispose();this.painted.dispose();this.paint.dispose();this.group.clear();}
 }

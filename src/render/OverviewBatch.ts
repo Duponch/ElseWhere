@@ -37,10 +37,11 @@ export class OverviewBatch extends THREE.Mesh<THREE.InstancedBufferGeometry> {
     if(!Number.isSafeInteger(capacity)||capacity<1)throw new RangeError('Invalid overview capacity.');
     if(!base.boundingSphere)base.computeBoundingSphere();
     const geometry=new THREE.InstancedBufferGeometry();
+    const staticCloneData={};
     for(const [name,value] of Object.entries(base.attributes)) {
       if(name==='overviewColor'||(matrixAttributes as readonly string[]).includes(name))continue;
       // Each batch owns these buffers, including vertex colors and the index.
-      geometry.setAttribute(name,value.clone());
+      geometry.setAttribute(name,value instanceof THREE.InterleavedBufferAttribute?value.clone(staticCloneData):value.clone());
     }
     if(base.index)geometry.setIndex(base.index.clone());
     for(const group of base.groups)geometry.addGroup(group.start,group.count,group.materialIndex);

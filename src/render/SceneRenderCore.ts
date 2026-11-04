@@ -6,10 +6,9 @@ import {ownActorPlaybackWorld435,isActorPlaybackWorld435} from './ActorPlayback4
 import {StaticSceneCompiler435} from './StaticSceneCompiler435';
 import type {SceneApplicationContext} from './SceneApplicationContext';
 import{createSurfaceMaterial}from'./SurfaceMaterials';
-import {GraphicsStyleContext,currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
-import {requiresGraphicsStyleRebuild,type GraphicsStylePreferences} from '../ui3d/native-preferences';
+import {GraphicsStyleContext,currentGraphicsStyle} from './graphics-style';
+import {normalizeGraphicsStylePreferences,graphicsStylePipelineKey,type GraphicsStylePreferences} from '../ui3d/native-preferences';
 import {createGraphicsStyleComparison,type GraphicsStyleComparisonContext,type GraphicsStyleComparisonResult,type GraphicsComparisonMetadata} from './graphics-style-comparison';
-import {attribute} from 'three/tsl';
 import {knownPosition256} from '../ui/exploration-readers-256';
 import {knownCell256,UNDISCOVERED_CELL_LABEL_256} from '../sim/exploration-visibility-256';
 import {roofCoverage} from '../sim/roof-rules';
@@ -38,8 +37,6 @@ import {materialAllowedForPlayer256} from '../sim/material-permission-256';
 import { corpseStage } from '../sim/corpses';
 import { corpseVisualMask } from './corpse-presentation';
 import { WildlifeLayer } from './WildlifeLayer';
-import {BakedAnimalLibrary,type AnimalBakeRequest} from './origami/baked/animal-baked';
-import {prepareGpuAtlas} from './origami/baked/gpu-atlas-preparation';
 import {AtlasBuildQuarantineError} from './origami/baked/atlas-cache';
 import {TreeBakeOwner,type OwnedTreeCatalog} from './origami/TreeBakeOwner';
 import { AnimalCargoLayer282 } from './AnimalCargoLayer282';
@@ -141,6 +138,7 @@ import { parseAnimationSettings, type AnimationSettings } from './animation-sett
 import { DEFAULT_SHADOW_SETTINGS, parseShadowSettings, type ShadowSettings } from './shadow-settings';
 import { ShadowRefreshScheduler } from './ShadowRefreshScheduler';
 type VisualChunk = { signature: string; group: THREE.Group };
+interface PreparedCoreTreeTextures {commit():void;rollback():void;dispose():void}
 
 export interface AudioFrameView {
   tick: number;
@@ -155,14 +153,15 @@ function isNaturalSceneWorld(value:World|{changed:boolean}):value is World {
 
 export class SceneRenderCore {
   private rendererDisposal:Promise<void>|undefined;
-  private bakedAnimalLibrary?:BakedAnimalLibrary;
   private bakedTreeOwner?:TreeBakeOwner;
   /** A failed publication/retirement may still have Source or435 users. These
    * textures stay owned until both producers detach; never allocated normally. */
   private quarantinedTreeCatalogs?:Set<OwnedTreeCatalog>;
-  private bakedAnimalPreparation?:Promise<void>;
-  private bakedAnimalEpoch=0;
-  private bakedAnimalTimer?:ReturnType<typeof setTimeout>;
+  private sharedSurfacePreparation?:Promise<void>;
+  private sharedSurfaceEpoch=0;
+  private treeTextureTimer?:ReturnType<typeof setTimeout>;
+  private holdSurfaceWorld=false;
+  private pendingSurfaceWorld?:{world:World;reset:boolean};
   private closingPresentation=false;
   private disposeAfterPreparation?:Promise<void>;
   private graphicsMeasurement:{collector:ReturnType<typeof createGraphicsStyleComparison>;context:()=>GraphicsStyleComparisonContext;isCurrent:()=>boolean;resolve:(result:GraphicsStyleComparisonResult)=>void;timer?:ReturnType<typeof setTimeout>}|undefined;
@@ -193,35 +192,70 @@ export class SceneRenderCore {
   private shadowCameraReversedDepth = false;
   readonly graphicsStyle=currentGraphicsStyle()??new GraphicsStyleContext();
   readonly stats = { fps: 0, frameMs: 0, frameP95: 0, drawCalls: 0, triangles: 0 };
-  setGraphicsStyleParameters(settings:GraphicsStylePreferences):void {
-    if(requiresGraphicsStyleRebuild(this.graphicsStyle.preferences,settings))throw new Error('Le changement de style ou des effets désactivés exige une nouvelle préparation de l’affichage.');
-    this.bakedAnimalEpoch++;this.wildlife.invalidateBakedSpecies();
-    this.invalidateBakedTrees();
-    this.graphicsStyle.update(settings);this.invalidatePausedShadow();
-    this.queuePausedBakedAnimals();
+  async setGraphicsStyleParameters(settings:GraphicsStylePreferences):Promise<void> {
+    if(this.disposed||this.closingPresentation||this.fatalError)throw Error('Cet affichage est fermé ou indisponible.');
+    if(this.sharedSurfacePreparation||this.preparing)throw Error('La préparation des textures est déjà en cours.');
+    const next=normalizeGraphicsStylePreferences(settings),previous={...this.graphicsStyle.preferences},epoch=++this.sharedSurfaceEpoch;
+    const treePaintChanged=(['impasto','wear','edges','blackEdges','edgeWidth','strokeImperfection','contourImperfection'] as const).some(key=>next[key]!==previous[key]);
+    const compileOnly=graphicsStylePipelineKey(next)===graphicsStylePipelineKey(previous);
+    if(this.treeTextureTimer){clearTimeout(this.treeTextureTimer);this.treeTextureTimer=undefined;}
+    this.cancelGraphicsMeasurement('texture-change');this.holdSurfaceWorld=true;this.preparing=true;
+    const assertCurrent=()=>{if(this.disposed||this.closingPresentation||epoch!==this.sharedSurfaceEpoch)throw Error('La préparation des textures a été interrompue.');};
+    const job=(async()=>{
+      let trees:PreparedCoreTreeTextures|undefined;
+      try{
+        this.graphicsStyle.update(next);this.uploadSharedSurfaceAssets();assertCurrent();
+        if(this.canBakeTrees)trees=await this.stageBakedTreeResources(this.graphicsStyle.prepareAtlasPaint(),assertCurrent,treePaintChanged);
+        // An actual paint change ends the old generation even for an empty
+        // cohort. Encoding alone preserves it, including while on Pastel.
+        if(!trees&&treePaintChanged&&this.bakedTreeOwner){const owner=this.bakedTreeOwner,publication=this.resources.setTreeAssetCatalog(undefined);let settled=false;trees={commit:()=>{settled=true;publication.commit();owner.invalidate();},rollback:()=>{if(settled)throw Error('Committed tree images cannot be rolled back');publication.rollback();},dispose:()=>{}};}
+        // Encoding alone keeps the prepared Gouache bank resident: the shared
+        // surface's Pastel branch does not sample it. No bake on a return to
+        // Gouache unless an actual paint value or model cohort changed.
+        assertCurrent();await this.preparePresentationResources(compileOnly);assertCurrent();trees?.commit();
+      }catch(error){
+        // Keep the old images alive until every candidate program is ready.
+        // A failed candidate cannot retire a texture still bound by Source435.
+        if(this.closingPresentation||this.disposed)throw error;
+        try{trees?.rollback();this.graphicsStyle.update(previous);this.uploadSharedSurfaceAssets();await this.preparePresentationResources(compileOnly);assertCurrent();}
+        catch(rollbackError){const failure=new AggregateError([error,rollbackError],'Le retour aux textures précédentes a échoué.');this.reportFailure(failure.message);throw failure;}
+        throw error;
+      }finally{
+        try{trees?.dispose();}catch(error){if(!this.closingPresentation)this.reportFailure('Libération des textures interrompue : '+(error instanceof Error?error.message:String(error)));throw error;}finally{this.finishSurfacePreparation();}
+      }
+    })();
+    this.sharedSurfacePreparation=job;
+    try{await job;}finally{if(this.sharedSurfacePreparation===job)this.sharedSurfacePreparation=undefined;this.queuePausedTreeTextures();}
   }
-  bakedGraphicsStatus(){return{animals:this.wildlife.bakedStatus(),cache:this.bakedAnimalLibrary?.snapshot()??null,
+  private uploadSharedSurfaceAssets():void{for(const texture of this.graphicsStyle.prepareSharedSurfaceAssets())this.renderer.initTexture(texture);}
+  /** Only the newest fully admitted World is held. Native admissions and the
+   * motion timeline continue; no simulation, input owner or camera is replaced. */
+  private finishSurfacePreparation():void{
+    this.holdSurfaceWorld=false;this.preparing=false;this.lastFrame=0;this.invalidatePausedShadow();
+    const pending=this.pendingSurfaceWorld;this.pendingSurfaceWorld=undefined;
+    if(this.disposed||this.closingPresentation||this.fatalError||this.hostPort.hidden()||this.presentationSuspendedUntilFrame325)return;
+    if(pending)try{this.presentation.clear();this.applyWorld(pending.world,pending.reset);this.presentCorePhases297();this.uploadSharedSurfaceAssets();}catch(error){this.reportFailure('Adoption après préparation des textures interrompue : '+(error instanceof Error?error.message:String(error)));throw error;}
+    this.updateSelectedObject();this.updateHover();
+  }
+  bakedGraphicsStatus(){return{animals:this.wildlife.bakedStatus(),cache:null,
     trees:this.resources.bakedTreeStatus(),treeCache:this.bakedTreeOwner?.snapshot()??null};}
-  private get canBakeAnimals():boolean{return this.backend==='WebGPU'&&this.graphicsStyle.origami&&!this.graphicsStyle.reliefEnabled&&!this.graphicsStyle.wearEnabled&&this.texturesEnabled;}
+  private get canBakeTrees():boolean{return this.backend==='WebGPU'&&this.graphicsStyle.origami&&!this.graphicsStyle.reliefEnabled&&!this.graphicsStyle.wearEnabled&&this.texturesEnabled;}
   private get hasPendingBakedResources():boolean {
-    if(this.wildlife.hasPendingBakedSpecies)return true;
     const demand=this.resources.treeBakeDemand();
-    return this.bakedTreeOwner?this.bakedTreeOwner.needsPreparation(demand):demand.species.length>0;
-  }
-  private invalidateBakedTrees():void {
-    if(!this.bakedTreeOwner)return;
-    const transaction=this.resources.setTreeAssetCatalog(undefined);
-    this.ownedOpaqueRevisions435?.invalidateResources();this.reconcileStaticCompiler435();
-    transaction.commit();this.bakedTreeOwner.invalidate();
+    return this.bakedTreeOwner?this.bakedTreeOwner.needsPreparation(demand):demand.models.length>0;
   }
   private async prepareBakedTreeResources(source:ReturnType<GraphicsStyleContext['prepareAtlasPaint']>,assertCurrent:()=>void):Promise<void>{
-    const demand=this.resources.treeBakeDemand();if(!demand.species.length)return;
+    const prepared=await this.stageBakedTreeResources(source,assertCurrent);
+    try{prepared?.commit();}finally{prepared?.dispose();}
+  }
+  private async stageBakedTreeResources(source:ReturnType<GraphicsStyleContext['prepareAtlasPaint']>,assertCurrent:()=>void,force=false):Promise<PreparedCoreTreeTextures|undefined>{
+    const demand=this.resources.treeBakeDemand();if(!demand.models.length)return;
     const MiB=1024*1024,owner=this.bakedTreeOwner??=new TreeBakeOwner({cpuBytes:128*MiB,gpuBytes:512*MiB});
-    if(!owner.needsPreparation(demand))return;
+    if(!force&&!owner.needsPreparation(demand))return;
     let candidate:Awaited<ReturnType<TreeBakeOwner['prepare']>>;
     let staging:ReturnType<ResourceLayer['prepareTreeAssetCatalog']>|undefined;
     try{
-      candidate=await owner.prepare(this.renderer,this.graphicsStyle,demand,source,assertCurrent);
+      candidate=await owner.prepare(this.renderer,this.graphicsStyle,demand,source,assertCurrent,force);
       if(!candidate)return;
       assertCurrent();
       staging=this.resources.prepareTreeAssetCatalog(candidate,this.environmentLighting.configure);
@@ -229,26 +263,29 @@ export class SceneRenderCore {
       await this.renderer.compileAsync(preview,this.rig.orthographic,this.scene);assertCurrent();
       await this.renderer.compileAsync(preview,this.rig.perspective,this.scene);assertCurrent();
       if(!demand.isCurrent())throw Error('Tree cohort changed before publication');
-      // No await after publication: settings, Source chunks and compiled pages
-      // change as one synchronous transaction before normal rendering resumes.
-      const transaction=staging.publish();
-      try{
-        this.ownedOpaqueRevisions435?.invalidateResources();this.reconcileStaticCompiler435();
-      }catch(error){
-        try{transaction.rollback();this.reconcileStaticCompiler435();transaction.commit();}
-        catch(rollback){throw new AggregateError([error,rollback],'Tree publication rollback failed');}
-        throw error;
-      }
-      try{transaction.commit();const retired=owner.adopt(candidate);candidate=undefined;retired?.dispose();}
-      catch(error){throw new AggregateError([error],'Tree publication ownership transfer failed');}
-      this.invalidatePausedShadow();
+      // No await after publication. Only the shared texture binding changes;
+      // model buffers, materials, wind and compiled435 pages stay resident.
+      const transaction=staging.publish(),published=candidate,stage=staging;candidate=undefined;staging=undefined;let settled=false,rolledBack=false,closed=false;
+      return{commit:()=>{
+        if(settled||rolledBack)return;
+        try{settled=true;transaction.commit();const retired=owner.adopt(published);retired?.dispose();this.invalidatePausedShadow();}
+        catch(error){(this.quarantinedTreeCatalogs??=new Set()).add(published);throw new AggregateError([error],'Tree publication ownership transfer failed');}
+      },rollback:()=>{if(settled)throw Error('Committed tree images cannot be rolled back');if(rolledBack)return;transaction.rollback();rolledBack=true;},dispose:()=>{
+        if(closed)return;closed=true;const errors:unknown[]=[];try{stage.dispose();}catch(error){errors.push(error);}
+        if(!settled){if(!rolledBack){(this.quarantinedTreeCatalogs??=new Set()).add(published);errors.push(Error('Published tree candidate must be committed or rolled back before retirement'));}else try{published.dispose();}catch(error){(this.quarantinedTreeCatalogs??=new Set()).add(published);errors.push(error);}}
+        if(errors.length)throw new AggregateError(errors,'Tree staged publication cleanup failed');
+      }};
     }catch(error){
       if(error instanceof AggregateError||error instanceof AtlasBuildQuarantineError){
         if(candidate){(this.quarantinedTreeCatalogs??=new Set()).add(candidate);candidate=undefined;}
         throw error;
       }
       assertCurrent();if(!demand.isCurrent())throw error;
-      owner.refuse(demand,error);console.warn('Tree atlas retained the original renderer',error);
+      owner.refuse(demand,error);console.warn('Tree atlas retained the shared direct-painted surface',error);
+      // A different paint generation must never keep the previous cached
+      // image. The exact opaque direct surface remains available if a bounded
+      // old+new atlas reservation is refused, and rollback keeps the old bank.
+      if(force){const publication=this.resources.setTreeAssetCatalog(undefined);let settled=false;return{commit:()=>{settled=true;publication.commit();owner.invalidate();},rollback:()=>{if(settled)throw Error('Committed tree images cannot be rolled back');publication.rollback();},dispose:()=>{}};}
     }finally{
       const errors:unknown[]=[];
       try{staging?.dispose();}catch(error){errors.push(error);}
@@ -258,48 +295,32 @@ export class SceneRenderCore {
   }
   /** The renderer is exclusively held across every GPU await. Existing actors
    * remain on their source materials until the complete texture is published. */
-  private async prepareBakedWildlifeResources(pausedOnly=false):Promise<void>{
-    if(!this.canBakeAnimals||!this.hasPendingBakedResources||this.closingPresentation)return;
-    if(!this.preparing||this.bakedAnimalPreparation)throw Error('Animal atlas preparation requires an exclusive renderer');
-    const epoch=this.bakedAnimalEpoch,source=this.graphicsStyle.prepareAtlasPaint(),MiB=1024*1024;
-    const library=this.bakedAnimalLibrary??=new BakedAnimalLibrary({cpuBytes:128*MiB,gpuBytes:512*MiB});
-    const ownsPreparation=()=>!this.disposed&&!this.closingPresentation&&this.preparing&&this.canBakeAnimals&&epoch===this.bakedAnimalEpoch&&(!pausedOnly||this.received?.speed===0);
-    const isCurrent=()=>ownsPreparation()&&source.isCurrent();
-    const assertCurrent=()=>{if(!ownsPreparation())throw Error('Animal atlas preparation superseded');source.assertCurrent();};
-    const request=():AnimalBakeRequest=>({recipeFingerprint:'complete-origami-animals-v1',paletteFingerprint:'authored-reference-palette-v1',paintFingerprint:source.fingerprint,
-      impasto:0,wear:0,edgeWidth:this.graphicsStyle.preferences.edgeWidth,strokeImperfection:this.graphicsStyle.preferences.strokeImperfection,
-      chartOptions:{texelsPerUnit:256,paddingTexels:8,mipLevels:4,maxAtlasSize:2048,maxAtlasPixels:2048*2048,maxOutputBytes:32*MiB,maxTriangles:20000},
-      paint:source.paint,maxInkTriangles:100000,reservation:{cpuBytes:64*MiB,gpuBytes:256*MiB},deferGpuReservation:true,assertPreparationCurrent:assertCurrent,compilerFingerprint:'gpu-compact-opaque-v7',
-      compiler:input=>prepareGpuAtlas(this.renderer,input.charts,input.ink,input.profile,input.paint,{levels:4,maxCpuBytes:32*MiB,maxGpuBytes:256*MiB,maxTextureSize:4096},()=>{assertCurrent();input.assertCurrent();},plan=>input.reservePreparation({cpuBytes:plan.cpuBytes,gpuBytes:plan.peakGpuBytes}))});
-    const job=(async()=>{
-      await this.prepareBakedTreeResources(source,assertCurrent);
-      assertCurrent();
-      await this.wildlife.prepareBakedSpecies({library,request,isCurrent,adoptConfiguredClone:(from,to)=>this.environmentLighting.adoptConfiguredClone(from,to),warmup:async binding=>{
-        assertCurrent();const preview=new THREE.Mesh(binding.geometry,binding.material);preview.frustumCulled=false;preview.castShadow=true;preview.receiveShadow=true;
-        await this.renderer.compileAsync(preview,this.camera,this.scene);assertCurrent();
-      }});
-      assertCurrent();library.evictUnused();
-    })();
-    this.bakedAnimalPreparation=job;
-    try{await job;}finally{if(this.bakedAnimalPreparation===job)this.bakedAnimalPreparation=undefined;}
+  private async prepareSharedTreeTextures(pausedOnly=false):Promise<void>{
+    if(!this.canBakeTrees||!this.hasPendingBakedResources||this.closingPresentation)return;
+    if(!this.preparing)throw Error('Tree texture preparation requires an exclusive renderer');
+    const epoch=this.sharedSurfaceEpoch,source=this.graphicsStyle.prepareAtlasPaint();
+    const assertCurrent=()=>{if(this.disposed||this.closingPresentation||!this.preparing||!this.canBakeTrees||epoch!==this.sharedSurfaceEpoch||pausedOnly&&this.received?.speed!==0)throw Error('Tree texture preparation superseded');source.assertCurrent();};
+    await this.prepareBakedTreeResources(source,assertCurrent);
   }
-  /** New species are usable immediately on the original prepared material.
-   * Cook their shared atlas only during an actual pause, never in update/RAF. */
-  private queuePausedBakedAnimals():void{
-    if(this.bakedAnimalTimer)clearTimeout(this.bakedAnimalTimer);
-    this.bakedAnimalTimer=undefined;
-    if(this.disposed||this.closingPresentation||this.fatalError||this.preparing||this.received?.speed!==0||!this.canBakeAnimals||!this.hasPendingBakedResources)return;
-    this.bakedAnimalTimer=setTimeout(()=>{
-      this.bakedAnimalTimer=undefined;
+  /** Optional image caching only; every arriving model already has its shared
+   * opaque paint surface. No animal atlas queue or renderer replacement exists. */
+  private queuePausedTreeTextures():void{
+    if(this.treeTextureTimer)clearTimeout(this.treeTextureTimer);
+    this.treeTextureTimer=undefined;
+    if(this.disposed||this.closingPresentation||this.fatalError||this.preparing||this.sharedSurfacePreparation||this.received?.speed!==0||!this.canBakeTrees||!this.hasPendingBakedResources)return;
+    this.treeTextureTimer=setTimeout(()=>{
+      this.treeTextureTimer=undefined;
       if(this.disposed||this.closingPresentation||this.fatalError||this.preparing||this.received?.speed!==0)return;
-      this.preparing=true;
-      void this.prepareBakedWildlifeResources(true).catch(error=>{
+      this.preparing=true;this.holdSurfaceWorld=true;
+      const job=this.prepareSharedTreeTextures(true);this.sharedSurfacePreparation=job;
+      void job.catch(error=>{
         if(this.closingPresentation)return;
         if(error instanceof AggregateError||error instanceof AtlasBuildQuarantineError)this.reportFailure('Préparation des textures interrompue : '+error.message);
-        else console.warn('Opaque atlas preparation retained the original renderer',error);
+        else console.warn('Tree texture preparation retained the shared surface',error);
       }).finally(()=>{
-        this.preparing=false;this.lastFrame=0;this.invalidatePausedShadow();this.queuePausedBakedAnimals();
-      });
+        if(this.sharedSurfacePreparation===job)this.sharedSurfacePreparation=undefined;
+        this.finishSurfacePreparation();this.queuePausedTreeTextures();
+      }).catch(error=>{if(!this.closingPresentation&&!this.fatalError)this.reportFailure('Reprise des textures interrompue : '+(error instanceof Error?error.message:String(error)));});
     },100);
   }
   captureGraphicsView(){return{mode:this.rig.mode,position:this.camera.position.toArray(),target:this.controls.target.toArray(),zoom:this.camera.zoom};}
@@ -411,6 +432,7 @@ export class SceneRenderCore {
     if(input.speed===0)this.presentCorePhases297();
   }
   private presentCorePhases297():void {
+    if(this.holdSurfaceWorld)return;
     const anchor=this.appliedCoreAnchor297;if(!anchor)return;
     const received=this.received&&this.coreFullInputs297.get(this.received.world),applicable:CorePhaseTypedProjection297[]=[],retained:CorePhaseTypedProjection297[]=[];
     for(const input of this.pendingCore297){
@@ -555,10 +577,7 @@ export class SceneRenderCore {
   protected terrainPaintResident=false;
   protected readonly terrainPaintMaterial = opaqueGroundExplorationMaterial256(createSurfaceMaterial('diffuse',0xffffff,{vertexColors:false,map:this.terrainPaintTexture}));
   protected readonly staticPaint=createStylizedSurfaceTexture('vegetation');
-  protected readonly texturedStaticMaterial=(()=>{
-    const mat=this.graphicsStyle.origami?createSurfaceMaterial('physical',0xffffff,{vertexColors:false,roughness:.88,metalness:.02}):createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true,map:this.staticPaint});
-    applyOrigamiSurface(mat,attribute('color','vec3'),undefined,this.graphicsStyle);return mat;
-  })();
+  protected readonly texturedStaticMaterial=createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true,map:this.staticPaint});
   protected readonly waterMaterial = material(0xffffff, { vertexColors: true, roughness: 0.45, metalness: 0.08 });
   protected readonly paintedWater=new PaintedWater(this.terrainPaintTexture,this.environmentLighting.configure,this.animationDetail);
   protected readonly clouds=new WeatherCloudLayer(this.animationDetail,this.decorOcclusion);
@@ -567,15 +586,15 @@ export class SceneRenderCore {
   protected readonly geysers=new GeyserLayer256(this.boxes);
   protected readonly snowSurface=new SnowSurfaceLayer(this.environmentLighting.configure);
   protected readonly recreationHints = new RecreationHints(this.boxes);
-  protected readonly resources = new ResourceLayer(this.resourceGroup, this.staticMaterial,this.texturedStaticMaterial,this.animationDetail);
+  protected readonly resources = new ResourceLayer(this.resourceGroup, this.staticMaterial,this.texturedStaticMaterial,this.animationDetail,{pastelTexture:this.staticPaint,configure:this.environmentLighting.configure});
   protected readonly naturalPresentation = new NaturalResourcePresentation();
   protected readonly preparedNaturalPresentation = new PreparedNaturalPresentation();
   protected readonly sceneResources = new SceneResourceIndex();
-  protected readonly crops = new CropLayer(this.staticMaterial,this.texturedStaticMaterial);
+  protected readonly crops = new CropLayer(this.staticMaterial,this.texturedStaticMaterial,this.staticPaint);
   protected readonly growing = new GrowingZoneLayer(this.boxes);
   protected readonly allowedAreaLayer=new AllowedAreaLayer(this.boxes);
   protected readonly rocks = new RockLayer(this.environmentLighting.configure);
-  protected readonly plants = new PlantClusterLayer(this.staticMaterial,this.texturedStaticMaterial,this.animationDetail);
+  protected readonly plants = new PlantClusterLayer(this.staticMaterial,this.texturedStaticMaterial,this.animationDetail,this.staticPaint);
   protected readonly designations:DesignationIconLayer;
   protected readonly daylight: DayNightLayer;
   protected readonly pausedShadow = new PausedShadowCache();
@@ -787,11 +806,21 @@ export class SceneRenderCore {
       if(intents!==this.confirmedIntents||reset){this.confirmedIntents=intents;this.confirmedIntentsDirty=true;}
     }
     this.received={world,speed,tracks,immutableSnapshot,coreInput297};
+    if(this.holdSurfaceWorld){
+      this.pendingSurfaceWorld={world,reset:reset||(this.pendingSurfaceWorld?.reset??false)};
+      // A newly admitted authentic Full contains the complete actor frontier
+      // for its anchor. Older-anchor phases cannot be presented after it.
+      if(coreInput){const retained=this.pendingCore297.filter(input=>input.anchor===coreInput.anchor);this.pendingCore297.splice(0,this.pendingCore297.length,...retained);}
+    }
     this.immutableSnapshot=immutableSnapshot;
     if(immutableSnapshot)this.immutableWorlds.add(world);else this.immutableWorlds.delete(world);
     if(coreInput)this.projectiles.adoptPhase297(coreInput,reset);else this.projectiles.adopt(world,reset);
     if(this.presentationSuspendedUntilFrame325||this.hostPort.hidden())return;
     if(tracks){this.timeline.adopt(at,speed,tracks,this.hostPort.now(),reset||!this.hasTracks,!!this.applicationContext&&immutableSnapshot,!!coreInput);this.hasTracks=true;}
+    if(this.holdSurfaceWorld){
+      if(speed===0&&!tracks&&this.hasTracks)this.timeline.adopt(at,0,[],this.hostPort.now(),reset,!!this.applicationContext&&immutableSnapshot,!!coreInput);
+      this.presentation.clear();this.applyWorld(world,reset);return;
+    }
     if(speed===0){
       // This World has already been received/admitted. Pause presents this
       // confirmed state now, bypassing only the scene's old playout/5Hz queue.
@@ -816,6 +845,7 @@ export class SceneRenderCore {
   }
 
   protected applyWorld(world: World, resetPresentation = false): void {
+    if(this.holdSurfaceWorld){this.pendingSurfaceWorld={world,reset:resetPresentation||(this.pendingSurfaceWorld?.reset??false)};return;}
     const phase=this.coreFullInputs297.get(world);this.appliedCoreAnchor297=phase?.anchor;this.appliedCore297=phase?.core??-Infinity;this.actorScene297=phase?.actorScene;
     const calm=this.calmFullFrame297;if(calm&&phase?.anchor.epoch===calm.anchor.epoch&&phase.anchor.mapId===calm.anchor.mapId&&phase.anchor.revision>=calm.anchor.revision)this.calmFullFrame297=undefined;
     this.ownedOpaqueRevisions435?.setEnabled(!!this.applicationContext&&this.immutableWorlds.has(world));this.ownedOpaqueRevisions435?.invalidateResources();
@@ -838,7 +868,7 @@ export class SceneRenderCore {
     const newMap = !previousWorld||previousWorld.seed!==world.seed||previousWorld.width!==world.width||previousWorld.height!==world.height||previousWorld.scenario?.id!==world.scenario?.id||previousWorld.scenario?.revision!==world.scenario?.revision||
       previousWorld.site?.hilliness!==world.site?.hilliness||previousWorld.site?.revision!==world.site?.revision||previousWorld.site?.biome!==world.site?.biome;
     const changedTiles=terrainTileChanges(previousWorld,world,!!previousWorld&&this.immutableWorlds.has(previousWorld)&&this.immutableWorlds.has(world));
-    if(newMap){this.mechanoids.reset();if(this.bakedAnimalPreparation)this.bakedAnimalEpoch++;}
+    if(newMap)this.mechanoids.reset();
     const terrainChanges=terrainSurfaceChanges(previousWorld,world,changedTiles);
     // External setWorld callers may mutate tile collections in place. Only
     // decoder snapshots promise identity-stable unchanged tiles.
@@ -956,7 +986,7 @@ export class SceneRenderCore {
     this.resources.adoptChopWork(previousWorld??undefined,world,resetPoses,resourceFrame);
     this.actionFeedback.update(world,this.selectedPawns,this.pawns.feedbackSource!,!!this.confirmedIntents);
     this.wildlife.update(world,this.hasTracks?this.timeline:undefined,resetPoses,this.pawns);
-    this.queuePausedBakedAnimals();
+    this.queuePausedTreeTextures();
     this.animalCargo.update(world,this.hasTracks?this.timeline:undefined,resetPoses);
     this.mechanoids.update(world,this.hasTracks?this.timeline:undefined,resetPoses,this.pawns);
     this.graphicsStyle.flushPaint();
@@ -1074,8 +1104,7 @@ export class SceneRenderCore {
     this.overview.setTexturesEnabled(enabled);
     this.pawns.setTexturesEnabled(enabled);
     this.wildlife.setTexturesEnabled(enabled);
-    if(enabled&&!this.wildlife.bakedStatus().published.length)this.wildlife.invalidateBakedSpecies();
-    this.queuePausedBakedAnimals();
+    this.queuePausedTreeTextures();
     this.fires.setTexturesEnabled(enabled);
     this.clouds.setTexturesEnabled(enabled);
     this.grass?.setTexturesEnabled(enabled);
@@ -1264,17 +1293,30 @@ export class SceneRenderCore {
    * Do not defer the first overview pipeline to the player's first wheel zoom. */
   async preparePresentation(): Promise<void> {
     if (this.fatalError) throw new Error(this.fatalError);
-    try { await this.preparePresentationResources(); }
+    if(this.sharedSurfacePreparation||this.preparing)throw Error('La préparation de l’affichage est déjà en cours.');
+    const job=this.preparePresentationResources();this.sharedSurfacePreparation=job;
+    try { await job; }
     catch (error) {
       // Restoration inside the preparation completes before teardown.
       try { this.dispose(); } catch { /* Preserve the original preparation error. */ }
       throw error;
-    }
+    }finally{if(this.sharedSurfacePreparation===job)this.sharedSurfacePreparation=undefined;this.queuePausedTreeTextures();}
   }
 
-  protected async preparePresentationResources(): Promise<void> {
+  protected async preparePresentationResources(compileOnly=false): Promise<void> {
+    if(compileOnly){
+      // Data changes keep the existing model/material programs and all LOD/
+      // shadow variants. Unlike render-based warmups, compileAsync never
+      // submits Room/shadow frames or invokes producers' geometry helpers.
+      this.uploadSharedSurfaceAssets();
+      await this.renderer.compileAsync(this.scene,this.rig.orthographic);
+      await this.renderer.compileAsync(this.scene,this.rig.perspective);
+      if(this.fatalError)throw Error(this.fatalError);
+      return;
+    }
     this.preparing = true;this.ownedOpaqueRevisions435?.setEnabled(false);this.ownedOpaqueRevisions435?.invalidateResources();
-    await this.prepareBakedWildlifeResources();
+    this.uploadSharedSurfaceAssets();
+    if(!this.holdSurfaceWorld)await this.prepareSharedTreeTextures();
     const restoreDiorama = this.dioramaEnabled || this.roomEnabled ? await this.diorama?.prepare() : undefined;
     this.invalidatePausedShadow();
     const culling = new Map<THREE.Object3D, boolean>();
@@ -1360,7 +1402,7 @@ export class SceneRenderCore {
       restoreStartingArrival();
       restoreDiorama?.();
       this.overview.group.visible = distant; this.terrainGroup.visible = this.resourceGroup.visible = this.plants.group.visible = !distant;
-      this.rocks.setDistant(distant); this.landscape.refresh(this.backend==='WebGPU'&&distant); this.preparing = false;
+      this.rocks.setDistant(distant); this.landscape.refresh(this.backend==='WebGPU'&&distant); this.preparing = this.holdSurfaceWorld;
       this.staticSceneCompiler435?.syncVisibility();
       this.storageGroup.visible=this.growing.group.visible=this.allowedAreaLayer.group.visible=this.zonesVisible;
       this.roofs.areas.visible=this.zonesVisible&&this.roofAreasVisible;
@@ -1369,7 +1411,7 @@ export class SceneRenderCore {
       this.updateHover();
       this.frames.reset(); this.lastFrame = 0;
       this.ownedOpaqueRevisions435?.invalidateResources();this.ownedOpaqueRevisions435?.setEnabled(!!this.world&&this.immutableWorlds.has(this.world));
-      this.queuePausedBakedAnimals();
+      this.queuePausedTreeTextures();
     }
   }
 
@@ -2083,11 +2125,12 @@ export class SceneRenderCore {
   }
   dispose(): void {
     if (this.disposed) return;
-    if(this.bakedAnimalTimer){clearTimeout(this.bakedAnimalTimer);this.bakedAnimalTimer=undefined;}
-    if(this.bakedAnimalPreparation){
+    if(this.treeTextureTimer){clearTimeout(this.treeTextureTimer);this.treeTextureTimer=undefined;}
+    if(this.sharedSurfacePreparation){
       if(!this.disposeAfterPreparation){
-        this.closingPresentation=true;this.bakedAnimalEpoch++;this.renderer.setAnimationLoop(null);
-        this.disposeAfterPreparation=this.bakedAnimalPreparation.catch(()=>{}).then(()=>{this.dispose();});
+        this.closingPresentation=true;this.sharedSurfaceEpoch++;this.renderer.setAnimationLoop(null);
+        const preparation=this.sharedSurfacePreparation;
+        this.disposeAfterPreparation=preparation.catch(()=>{}).then(()=>{if(this.sharedSurfacePreparation===preparation)this.sharedSurfacePreparation=undefined;this.dispose();});
       }
       return;
     }
@@ -2140,7 +2183,6 @@ export class SceneRenderCore {
     this.furniturePresentation.clear();this.structureSignature.clear();this.storageSignature.clear();this.homeSignature.clear();
     this.pawns.dispose();
     this.doors.dispose();this.projectiles.dispose();this.fires.dispose();this.wind.dispose();this.animalCargo.dispose();this.wildlife.dispose();this.mechanoids.dispose();this.ropes.dispose();this.designations.dispose();
-    this.bakedAnimalLibrary?.dispose();this.bakedAnimalLibrary=undefined;
 
     for (const group of [this.terrainGroup, this.resourceGroup, this.structureGroup, this.jobGroup, this.storageGroup, this.pileGroup]) clearGroup(group);
     this.pileChunks.clear();this.applicationContext?.clear();

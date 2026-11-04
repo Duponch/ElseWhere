@@ -18,7 +18,8 @@ import {origamiAnimalReferenceInfo} from '../render/origami/animal-geometry';
 import {animalParts} from '../render/animal-shape';
 import {POSE_DEAD} from '../bridge/actor-phase-dependencies-297';
 import {scytherGeometry} from '../render/scyther-geometry';
-import {createOrigamiContour,type OrigamiContourBinding} from '../render/origami/contours';
+import {OwnedStrokeModel} from '../render/surfaces/OwnedStrokeModel';
+import {naturalStroke} from '../render/surfaces/NaturalSurfaceModels';
 import {encodeOrigamiEquipment} from '../render/origami/equipment-pose';
 import {rangedMechGeometry} from '../render/ranged-mech-geometry';
 import {material} from '../render/primitives';
@@ -49,7 +50,7 @@ function invoke(target:object,name:string,...args:unknown[]):unknown {
   const method=Reflect.get(target,name);if(typeof method!=='function')throw Error(`Actor catalog: renderer preview seam ${name} changed`);return Reflect.apply(method,target,args);
 }
 function detail():AnimationDetail {const result=new AnimationDetail();result.setSettings({enabled:false,nearPixels:24,farPixels:8,middleHz:12});return result;}
-function humanStatus(context:GraphicsStyleContext):CatalogStatus{return context.origami?'origami':'default';}
+function humanStatus():CatalogStatus{return 'reference';}
 function item(id:string,label:string,status:CatalogStatus,bounds:THREE.Box3,note?:string):CatalogItem {
   const center=bounds.getCenter(new THREE.Vector3());center.y=bounds.max.y+.22;return {id,label,status,note,position:center,bounds};
 }
@@ -71,7 +72,7 @@ function clothingPreview(id:ApparelItem,index:number):HumanPreview {
   else if(id.endsWith('-simple-helmet')){result.flags=10;const materialIndex=SIMPLE_HELMET_ITEMS267.indexOf(id as typeof SIMPLE_HELMET_ITEMS267[number]);result.pants+=(materialIndex+1)/16;result.hat=SIMPLE_HELMET_COLORS267[materialIndex]??definition.color;}
   result.note='Vêtement existant, avec sa forme et sa couleur actuelles.';return result;
 }
-function humanPreviews(origami=false):HumanPreview[] {
+function humanPreviews():HumanPreview[] {
   const rows:HumanPreview[]=[];
   BODY_TYPES.forEach((body,index)=>rows.push({...baseHuman(`body:${body.id}`,`Corps · ${BODY_NAMES[body.id]}`,index),body:index}));
   HEAD_TYPES.forEach((head,index)=>rows.push({...baseHuman(`head:${head.id}`,`Tête ${head.sex==='female'?'féminine':'masculine'} · ${head.width==='narrow'?'étroite':'moyenne'} · mâchoire ${{normal:'normale',pointy:'pointue',wide:'large'}[head.jaw]}`,index),body:head.sex==='female'?1:0,head:index}));
@@ -81,15 +82,15 @@ function humanPreviews(origami=false):HumanPreview[] {
   BEARD_PARTS.forEach((_,index)=>rows.push({...baseHuman(`beard-part:${index}`,`Pièce de barbe · ${index+1}`),hairMask:0,beardMask:2**index,note:'Élément de barbe isolé pour en vérifier la forme.'}));
   (Object.keys(APPAREL) as ApparelItem[]).forEach((id,index)=>rows.push(clothingPreview(id,index)));
   for(const [index,id]of [...WEAPON_VISUALS.map(visual=>visual.item),...MACE_ITEMS_269,...LONGSWORD_ITEMS_270,...SPEAR_ITEMS_272].entries())rows.push({...baseHuman(`weapon:${id}`,`Arme · ${WEAPON_LABELS[id]}`,index),weapon:weaponVisual(id)!.equipment,note:'Version et matière existantes de cette arme, montrée sur un colon.'});
-  if(origami){
+  {
     for(const id of [...WEAPON_VISUALS.map(visual=>visual.item),MACE_ITEMS_269[0]!,LONGSWORD_ITEMS_270[0]!,SPEAR_ITEMS_272[0]!])rows.push({...baseHuman(`weapon-ready:${id}`,`Arme tenue · ${WEAPON_LABELS[id]}`),weapon:encodeOrigamiEquipment(weaponVisual(id)!.equipment,true),pose:['revolver','bolt-action-rifle','emp-launcher'].includes(id)?7:0,note:'Arme existante tenue à sa poignée ; pose fixe de présentation.'});
     for(const [id,activity]of [[MACE_ITEMS_269[0]!,6],[LONGSWORD_ITEMS_270[0]!,10],[SPEAR_ITEMS_272[0]!,13]] as const)rows.push({...baseHuman(`weapon-strike:${id}`,`Geste d’arme · ${WEAPON_LABELS[id]}`),weapon:encodeOrigamiEquipment(weaponVisual(id)!.equipment,true,true),pose:8,activity,phase:-.125,note:'Geste fixe de présentation : la poignée suit la main, sans ordre de combat créé.'});
   }
-  for(const [index,name]of ['Hache','Pioche','Faucille'].entries())rows.push({...baseHuman(`work-tool:${index}`,`Outil visuel · ${name}`),activity:[-30,-31,-32][index]!,note:'Outil de travail du style Origami, présenté au repos.'});
+  for(const [index,name]of ['Hache','Pioche','Faucille'].entries())rows.push({...baseHuman(`work-tool:${index}`,`Outil visuel · ${name}`),activity:[-30,-31,-32][index]!,note:'Outil de travail du modèle humain commun, présenté au repos.'});
   return rows;
 }
 function palette(context:GraphicsStyleContext,row:HumanPreview):void {
-  row.palette=context.origami?context.registerHumanAppearance({skin:row.skin,hair:row.hair,shirt:row.tint,outerwear:row.tint,pants:PANTS[Math.floor(row.pants)]??PANTS[0],hat:row.hat??APPAREL['flak-helmet'].color,vest:APPAREL['flak-vest'].color,reconArmor:APPAREL['recon-armor'].color,plate:row.tint}):0;
+  row.palette=context.registerHumanAppearance({skin:row.skin,hair:row.hair,shirt:row.tint,outerwear:row.tint,pants:PANTS[Math.floor(row.pants)]??PANTS[0],hat:row.hat??APPAREL['flak-helmet'].color,vest:APPAREL['flak-vest'].color,reconArmor:APPAREL['recon-armor'].color,plate:row.tint});
 }
 
 /** Documented development-only bridge to the existing resident render kernel.
@@ -101,7 +102,7 @@ function pawnSection(context:GraphicsStyleContext,id:string,label:string,rows:Hu
   for(const name of ['smithingGeometry','maceGeometry','longswordGeometry','spearGeometry'])Reflect.set(layer,name,true);
   invoke(layer,'createPawnMesh',rows.length);Reflect.set(layer,'nativeBody',true);invoke(layer,'selectBodyMaterial');
   const body=Reflect.get(layer,'pawnMesh') as THREE.Mesh<THREE.InstancedBufferGeometry>,geometry=body.geometry;
-  const companions=[Reflect.get(layer,'origamiLineMesh'),Reflect.get(layer,'origamiWearMesh')];
+  const companions=[Reflect.get(layer,'wearEffect')];
   for(const child of layer.group.children)if(child!==body&&!companions.includes(child))child.visible=false;
   geometry.instanceCount=rows.length;layer.animationCache.ensureCapacity(rows.length);layer.time.value=layer.travelTime.value=0;
   const items:CatalogItem[]=[],columns=9;
@@ -114,10 +115,9 @@ function pawnSection(context:GraphicsStyleContext,id:string,label:string,rows:Hu
     write(geometry,'aShape',index,[row.body+row.stage*10,row.head,row.hairMask,row.beardMask+(row.palette??0)*32]);
     write(geometry,'aEquipment',index,[row.weapon,row.silhouette,row.flags,row.pants]);
     const bounds=new THREE.Box3(new THREE.Vector3(x-1.6,-.05,z-1.8),new THREE.Vector3(x+1.6,2.9,z+1.8));
-    const note=!context.origami&&row.id==='apparel:recon-armor'?'Aperçu du modèle actuel : anomalie connue de la tenue recon en style par défaut.':row.note;
-    items.push(item(row.id,row.label,humanStatus(context),bounds,[note,'Aperçu statique du générateur courant ; cadrage large pour voir aussi les accessoires.'].filter(Boolean).join(' ')));
+    items.push(item(row.id,row.label,humanStatus(),bounds,[row.note,'Modèle partagé par les textures Pastel et Gouache ; cadrage large pour voir aussi les accessoires.'].filter(Boolean).join(' ')));
   });
-  invoke(layer,'syncOrigamiInstances',geometry);layer.group.name=label;
+  invoke(layer,'syncBodyInstances',geometry);layer.group.name=label;
   return {section:{id,label,group:layer.group,items,note:'Variantes actuelles du générateur ; les combinaisons de corps, coiffures et tenues ne sont pas toutes déroulées.'},dispose:()=>layer.dispose()};
 }
 
@@ -140,15 +140,15 @@ function animalSection(context:GraphicsStyleContext,dead:boolean):{section:Catal
     write(g,'aFrom',0,[x,lift,z,0]);write(g,'aTo',0,[x,lift,z,0]);write(g,'aTravel',0,[0,0,0,0]);write(g,'aAnimal',0,[0,0,dead?2:0,0]);write(g,'aBiology',0,[1,0,0]);
     write(g,'aCarrier',0,[0,0,0,0]);write(g,'aCorpseHandoff',0,[0,0]);write(g,'aCorpseFrom',0,[0,0,0,0]);write(g,'aCorpseTo',0,[0,0,0,0]);
     invoke(rig,'syncOrigamiInstances');invoke(rig,'setOrigamiCount',1);
-    const reference=origamiAnimalReferenceInfo(rig.species),status:CatalogStatus=context.origami&&reference?reference.status:'default';
-    const note=!context.origami?'Modèle du style par défaut.':!reference?'Modèle actuel conservé ; dessin Origami de cette espèce non encore disponible.':reference.kind==='existing-reference'
+    const reference=origamiAnimalReferenceInfo(rig.species),status:CatalogStatus=reference?.status??'default';
+    const note=!reference?'Modèle commun conservé.':reference.kind==='existing-reference'
       ?`Dessin peint fourni : ${REFERENCE_NAMES[reference.referenceId as keyof typeof REFERENCE_NAMES]}. Modèle et corrections précédents conservés.`
       :reference.kind==='explicit-adaptation'?`Adaptation Origami du modèle ${reference.parent} de la nouvelle scène. Cette espèce n’y a pas de recette dédiée. Peinture, proportions et détails adaptés.`
       :'Modèle de la nouvelle scène de référence. Peinture et contours harmonisés ; yeux, attaches et détails corrigés.';
     items.push(item(`${dead?'corpse':'animal'}:${rig.species}`,`${dead?'Reste · ':''}${ANIMAL_SPECIES[rig.species].label}`,status,bounds.translate(new THREE.Vector3(x,0,z)),note));
   }
   layer.mesh.name=dead?'Restes animaux':'Faune — 53 espèces existantes';
-  return {section:{id:dead?'animal-corpses':'animals',label:layer.mesh.name,group:layer.mesh,items,note:context.origami?'53 espèces adultes : onze identités Origami conservées, 35 nouveaux modèles de référence et sept adaptations explicites.':'53 espèces adultes avec les modèles du style par défaut.'},dispose:()=>layer.dispose()};
+  return {section:{id:dead?'animal-corpses':'animals',label:layer.mesh.name,group:layer.mesh,items,note:'53 espèces adultes communes aux textures Pastel et Gouache : onze identités précédentes conservées, 35 nouveaux modèles de référence et sept adaptations explicites.'},dispose:()=>layer.dispose()};
 }
 
 /** The three source mechanical recipes are deliberately retained in both
@@ -156,24 +156,22 @@ function animalSection(context:GraphicsStyleContext,dead:boolean):{section:Catal
  * equations; no unexported race class or fake World is needed. */
 function mechanicalSection(context:GraphicsStyleContext):{section:CatalogSection;dispose():void} {
   const group=new THREE.Group(),items:CatalogItem[]=[],kinds:MechanoidKind[]=['scyther','lancer','pikeman'];group.name='Machines — recettes existantes';
-  const contours:OrigamiContourBinding[]=[],bodies:THREE.Mesh[]=[];
+  const models:OwnedStrokeModel[]=[],bodies:THREE.Mesh[]=[];
   for(const [index,kind]of kinds.entries())for(const dead of [false,true]){
     const geometry=kind==='scyther'?scytherGeometry(1,part=>mechanoidPartIndex(kind,part)):rangedMechGeometry(kind,1,part=>mechanoidPartIndex(kind,part));
     const position=geometry.getAttribute('position'),normal=geometry.getAttribute('normal');
     if(dead)for(let i=0;i<position.count;i++){const x=position.getX(i),y=position.getY(i),nx=normal.getX(i),ny=normal.getY(i);position.setXYZ(i,1.12-y,x+.70,position.getZ(i));normal.setXYZ(i,-ny,nx,normal.getZ(i));}
-    geometry.instanceCount=1;geometry.computeBoundingBox();const mat=material(0xffffff,{metalness:.24,roughness:.74});mat.colorNode=attribute('color','vec3');
-    const mesh=new THREE.Mesh(geometry,mat);mesh.position.set(index*4.5,0,dead?5:0);mesh.name=`${dead?'Carcasse':'Machine'} · ${kind}`;group.add(mesh);
+    const model=new OwnedStrokeModel(geometry);models.push(model);const mat=material(0xffffff,{metalness:.24,roughness:.74});mat.colorNode=naturalStroke(context,model.stroke)(attribute('color','vec3'));
+    const mesh=new THREE.Mesh(model.geometry,mat);mesh.position.set(index*4.5,0,dead?5:0);mesh.name=`${dead?'Carcasse':'Machine'} · ${kind}`;group.add(mesh);
     bodies.push(mesh);
-    if(context.origami){mesh.updateMatrix();const contour=createOrigamiContour(mesh,context);contours.push(contour);group.add(contour.line);}
-    const bounds=geometry.boundingBox!.clone().translate(mesh.position);items.push(item(`machine:${kind}:${dead?'corpse':'live'}`,`${dead?'Carcasse · ':''}${mechanoidDefinition(kind).label}`,'default',bounds,'Modèle mécanique actuel, debout ou couché. Pas de version Origami distincte.'));
+    const bounds=model.geometry.boundingBox!.clone().translate(mesh.position);items.push(item(`machine:${kind}:${dead?'corpse':'live'}`,`${dead?'Carcasse · ':''}${mechanoidDefinition(kind).label}`,'default',bounds,'Modèle mécanique commun aux textures Pastel et Gouache, debout ou couché.'));
   }
-  return {section:{id:'machines',label:group.name,group,items},dispose(){for(const contour of contours)contour.dispose();for(const mesh of bodies){mesh.geometry.dispose();(mesh.material as THREE.Material).dispose();}group.clear();}};
+  return {section:{id:'machines',label:group.name,group,items},dispose(){for(const mesh of bodies)(mesh.material as THREE.Material).dispose();for(const model of models)model.dispose();group.clear();}};
 }
 
 export function createActorCatalog(context:GraphicsStyleContext):CatalogCollection {
-  const allRows=humanPreviews(context.origami),rows=context.origami?allRows:allRows.filter(row=>!row.id.startsWith('work-tool:')),corpseRows=[0,1,2].map(stage=>({...baseHuman(`human-corpse:${stage}`,['Humain · mort','Humain · putréfié','Humain · desséché'][stage]!),pose:POSE_DEAD,stage}));
+  const rows=humanPreviews(),corpseRows=[0,1,2].map(stage=>({...baseHuman(`human-corpse:${stage}`,['Humain · mort','Humain · putréfié','Humain · desséché'][stage]!),pose:POSE_DEAD,stage}));
   for(const row of [...rows,...corpseRows])palette(context,row);
   const humans=pawnSection(context,'humans','Humains — générateur et équipements existants',rows),corpses=pawnSection(context,'human-corpses','Restes humains — états existants',corpseRows),animals=animalSection(context,false),animalCorpses=animalSection(context,true),machines=mechanicalSection(context);
-  if(!context.origami)humans.section.missing=allRows.filter(row=>row.id.startsWith('work-tool:')).map(row=>({id:row.id,label:row.label,reason:'Accessoire proposé dans le style Origami ; choisissez ce style pour le voir.'}));
   let disposed=false;return {sections:[humans.section,animals.section,corpses.section,animalCorpses.section,machines.section],dispose(){if(disposed)return;disposed=true;humans.dispose();corpses.dispose();animals.dispose();animalCorpses.dispose();machines.dispose();}};
 }

@@ -32,7 +32,7 @@ import { apparelProjection,apparelAppearance,SIMPLE_HELMET_COLORS267 } from './c
 import { coreTimeSeconds,localTimeSeconds } from '../bridge/clock-rate';
 import { growPawnBuffers } from './pawn-buffers';
 import { isColonist } from '../sim/affiliation';
-import { pawnGeometry,cargoGeometry,selectCargoGeometryKinds,prepareCargoGeometryForCompile,PARKA_HOOD_DYE,FLAK_HELMET_DYE,PLATE_ARMOR_DYE,SIMPLE_HELMET_DYE,TUQUE_DYE,RECON_HELMET_DYE,RECON_ARMOR_DYE,PAWN_EYE_OPEN,PAWN_EYE_CLOSED,PAWN_EYE_CROSS } from './pawn-geometry';
+import { selectCargoGeometryKinds,prepareCargoGeometryForCompile,PARKA_HOOD_DYE,FLAK_HELMET_DYE,PLATE_ARMOR_DYE,SIMPLE_HELMET_DYE,TUQUE_DYE,RECON_HELMET_DYE,RECON_ARMOR_DYE,PAWN_EYE_OPEN,PAWN_EYE_CLOSED,PAWN_EYE_CROSS } from './pawn-geometry';
 import { equipmentProjection } from './character-equipment';
 import { RESIDENT_WEAPON_VISUALS269,weaponVisual } from './weapon-shape';
 import {LONGSWORD_DYE270,LONGSWORD_EQUIPMENT270,longswordStrikeActivity270} from './longsword-parts270';
@@ -54,12 +54,14 @@ import { constructionWorkTarget } from '../sim/construction-rules';
 import { pawnSelectionMesh } from './PawnSelectionLayer';
 import type { MotionTimeline } from './MotionTimeline';
 import * as THREE from 'three/webgpu';
-import {currentGraphicsStyle,withGraphicsStyle,applyOrigamiSurface} from './graphics-style';
-import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
-import {createRigBrushGeometry} from './origami/rig-brush';
+import {currentGraphicsStyle} from './graphics-style';
 import {ActorPartUnionIndex,HumanPartUnionReader} from './origami/actor-part-union';
-import {indexExactStaticVertices} from './origami/static-index';
-import { Fn, If, attribute, cos, float, instanceIndex, mix, positionLocal, sin, uniform, renderGroup, uv,vec2,vec3,vec4, varying } from 'three/tsl';
+import {HumanModels,createHumanWearGeometry,type HumanModel} from './models/HumanModels';
+import {HumanCargoModel} from './models/HumanCargoModel';
+import {naturalStroke} from './surfaces/NaturalSurfaceModels';
+import {createFaceStrokeNode,attachFaceStrokeGpuRetirement,type FaceStrokeData} from './surfaces/FaceStrokeTable';
+import {applySharedPaintSurface,type SharedPaintSurfaceOptions} from './surfaces/SharedPaintSurface';
+import { Fn, If, attribute, cos, float, instanceIndex, mix, positionLocal, sin, uniform, renderGroup, storage,uv,vec2,vec3,vec4, varying } from 'three/tsl';
 import { TICKS_PER_SECOND,type MaterialPile,type Pawn,type World,type Job } from '../sim/types';
 import {origamiWorkTool} from './origami/work-tools';
 import {encodeOrigamiEquipment,origamiWeaponVisualSignal,origamiEquipmentPositionNode,ORIGAMI_EQUIPMENT_HAND,ORIGAMI_EQUIPMENT_BELT,ORIGAMI_EQUIPMENT_SLING} from './origami/equipment-pose';
@@ -77,7 +79,7 @@ import type { AnimalCorpseCarrier } from './animal-corpse-carrier';
 // Two affine traits share one fragment location. Keep all decisions (skin,
 // equipment, corpse ribs and blood) in the fragment shader; vertex poses use
 // the original attributes and receive no additional buffer or approximation.
-export const pawnFragmentTraits=varying(attribute('pawnRigTraits','vec3').xy,'v_pawnFragmentTraits');
+export const pawnFragmentTraits=varying(attribute('pawnRigTraits','vec4').xy,'v_pawnFragmentTraits');
 
 type VisualPawn = { from: THREE.Vector4; to: THREE.Vector4 };
 type ApproachTransition = { fromX:number; fromZ:number; toX:number; toZ:number; start:number; baseX:number; baseZ:number };
@@ -198,14 +200,16 @@ export class PawnLayer {
   private readonly linkedRoot={x:0,y:0,z:0,yaw:0};
   readonly visuals = new Map<number, VisualPawn>();
   private pawnMesh: THREE.Mesh | null = null;
-  private origamiLineMesh:THREE.Mesh<THREE.InstancedBufferGeometry,THREE.NodeMaterial>|null=null;
-  private origamiWearMesh:THREE.Mesh<THREE.InstancedBufferGeometry,THREE.NodeMaterial>|null=null;
-  private releaseOrigamiWear:(()=>void)|undefined;
-  private releaseOrigamiBrush:(()=>void)|undefined;
-  private releaseOrigamiEdges:(()=>void)[]=[];
-  private readonly origamiPartUnions:ActorPartUnionIndex[]=[];
-  private origamiPartUnionReader?:HumanPartUnionReader;
-  private readonly indexedOrigamiBodies=new WeakSet<THREE.BufferGeometry>();
+  private readonly bodyPartUnions:ActorPartUnionIndex[]=[];
+  private bodyPartUnionReader?:HumanPartUnionReader;
+  private readonly humanModels=new HumanModels();
+  private readonly cargoModel=new HumanCargoModel();
+  private humanModel?:HumanModel;
+  private humanStroke?:FaceStrokeData;
+  private wearEffect?:THREE.Mesh<THREE.InstancedBufferGeometry,THREE.MeshStandardNodeMaterial>;
+  private wearModelKey?:string;
+  private releaseWearEffect?:()=>void;
+  private releaseFeatureRefresh?:()=>void;
   private smithingGeometry=false;
   private maceGeometry=false;
   private longswordGeometry=false;
@@ -221,8 +225,6 @@ export class PawnLayer {
   get feedbackSource():THREE.InstancedBufferGeometry|undefined {return this.pawnMesh?.geometry as THREE.InstancedBufferGeometry|undefined;}
   private cargoMesh: THREE.Mesh | null = null;
   private partialCargoMesh: THREE.Mesh | null = null;
-  private cargoContour:OrigamiContourBinding|undefined;
-  private partialCargoContour:OrigamiContourBinding|undefined;
   private fireMesh: THREE.Mesh | null = null;
   private readonly targetPoses = new Map<number,THREE.Vector4>();
   private targetOffsets297 = new Float64Array(0);
@@ -254,7 +256,7 @@ export class PawnLayer {
   private travelSurfaces:ReadonlyMap<number,number>=new Map();
   private groupHumanCarrierIds=new Set<number>();
   private rescuePairs:readonly (readonly [number,number])[]=[];
-  constructor(private readonly configure?: (material: THREE.NodeMaterial) => void,private readonly animationDetail=new AnimationDetail()) {this.animationCache=new ActorAnimationCache(animationDetail);this.partialAnimationCache=new ActorAnimationCache(animationDetail);}
+  constructor(private readonly configure?: (material: THREE.NodeMaterial) => void,private readonly animationDetail=new AnimationDetail()) {this.animationCache=new ActorAnimationCache(animationDetail);this.partialAnimationCache=new ActorAnimationCache(animationDetail);this.releaseFeatureRefresh=this.graphics?.trackSharedSurfaceRefresh(()=>this.refreshWearEffect());}
   cpuPoseForId(id:number){const slot=this.pawnIndices.get(id),g=this.pawnMesh?.geometry;return slot===undefined||!g?undefined:this.animationCache.presentedRoot(slot,g.getAttribute('aFrom'),g.getAttribute('aTo'),g.getAttribute('aTravel'),this.travelTime.value,this.blend.value);}
   presentedPose(id:number){return this.cpuPoseForId(id);}
   /** Warm the resident fire graph before the first burning actor appears. */
@@ -275,12 +277,10 @@ export class PawnLayer {
         const geometry=mesh.geometry as THREE.InstancedBufferGeometry,visible=mesh.visible;
         const restoreGeometry=prepareCargoGeometryForCompile(geometry);
         mesh.visible=true;
-        const contour=mesh===this.cargoMesh?this.cargoContour:this.partialCargoContour;contour?.sync(mesh);
         restorers.push(()=>{
           const sameGeometry=mesh.geometry===geometry;
           restoreGeometry(sameGeometry);
           if(mesh.visible===true)mesh.visible=visible;
-          contour?.sync(mesh);
         });
       }
       return restore;
@@ -313,72 +313,39 @@ export class PawnLayer {
       ? (this.texturesEnabled ? this.nativeTexturedMaterial : this.nativePlainMaterial)
       : (this.texturesEnabled ? this.texturedMaterial : this.plainMaterial);
     if (selected && this.pawnMesh.material !== selected) this.pawnMesh.material = selected;
-    if(selected)this.selectOrigamiPosition(selected.positionNode);
-    if(this.origamiWearMesh){this.origamiWearMesh.userData.origamiTexturesEnabled=this.texturesEnabled;this.graphics?.refreshEdgeObject(this.origamiWearMesh,'wear');}
+    if(selected&&this.wearEffect){if(this.wearEffect.material.positionNode!==selected.positionNode){this.wearEffect.material.positionNode=selected.positionNode;this.wearEffect.material.needsUpdate=true;}this.wearEffect.userData.origamiTexturesEnabled=this.texturesEnabled;this.graphics?.refreshEdgeObject(this.wearEffect,'wear');}
   }
-  private selectOrigamiPosition(position:THREE.Node|null):void {
-    for(const companion of [this.origamiLineMesh,this.origamiWearMesh])if(companion&&companion.material.positionNode!==position){companion.material.positionNode=position;companion.material.needsUpdate=true;}
+  private clearBodyPartUnions():void{for(const union of this.bodyPartUnions)union.dispose();this.bodyPartUnions.length=0;}
+  private installBodyPartUnions(body=this.pawnMesh?.geometry as THREE.InstancedBufferGeometry|undefined):void{this.clearBodyPartUnions();if(!body)return;this.bodyPartUnionReader??=new HumanPartUnionReader();for(const geometry of [body,this.wearEffect?.geometry])if(geometry)this.bodyPartUnions.push(new ActorPartUnionIndex(geometry,'human'));}
+  private refreshBodyPartUnion(body=this.pawnMesh?.geometry as THREE.InstancedBufferGeometry|undefined):void{if(!body||!this.bodyPartUnionReader)return;const state=this.bodyPartUnionReader.read(body,body.instanceCount);for(const union of this.bodyPartUnions)union.reconcile(state);}
+  private syncBodyInstances(body=this.pawnMesh?.geometry as THREE.InstancedBufferGeometry|undefined):void{if(!body)return;body.userData.animationCache=this.animationCache;if(this.wearEffect){for(const[name,a]of Object.entries(body.attributes))if(a instanceof THREE.InstancedBufferAttribute||a instanceof THREE.InterleavedBufferAttribute&&a.data instanceof THREE.InstancedInterleavedBuffer)this.wearEffect.geometry.setAttribute(name,a);this.wearEffect.geometry.instanceCount=body.instanceCount;this.wearEffect.geometry.userData.animationCache=this.animationCache;}this.refreshBodyPartUnion(body);}
+  private adoptBodyGeometry(body:THREE.InstancedBufferGeometry):void{this.refreshWearEffect();this.installBodyPartUnions(body);this.syncBodyInstances(body);}
+  private retireWearEffect():void{
+    const effect=this.wearEffect,release=this.releaseWearEffect;this.wearEffect=undefined;this.releaseWearEffect=undefined;this.wearModelKey=undefined;if(!effect)return;
+    this.clearBodyPartUnions();const errors:unknown[]=[];for(const close of [()=>release?.(),()=>effect.removeFromParent(),()=>effect.geometry.dispose(),()=>effect.material.dispose()])try{close();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Human physical-wear retirement failed');
   }
-  /** The line/wear batches read precisely the body's resident instance streams.
-   * Rebind after capacity growth; their own static source vertices stay owned. */
-  private syncOrigamiInstances(body=this.pawnMesh?.geometry as THREE.InstancedBufferGeometry|undefined):void {
-    if(!body)return;
-    body.userData.animationCache=this.animationCache;
-    for(const mesh of [this.origamiLineMesh,this.origamiWearMesh])if(mesh){
-      for(const [name,attribute]of Object.entries(body.attributes))if(attribute instanceof THREE.InstancedBufferAttribute||attribute instanceof THREE.InterleavedBufferAttribute&&attribute.data instanceof THREE.InstancedInterleavedBuffer)mesh.geometry.setAttribute(name,attribute);
-      mesh.geometry.instanceCount=body.instanceCount;mesh.geometry.userData.animationCache=this.animationCache;
-    }
-    this.refreshOrigamiPartUnion(body);
+  /** A true optional effect, independent of Pastel/Gouache. Texture encoding
+   * only gates its visibility. Zero owns no wear geometry, material or cache. */
+  private refreshWearEffect():void{
+    const context=this.graphics,body=this.pawnMesh;if(!context||!body)return;
+    if(!context.wearEnabled){const had=!!this.wearEffect;this.retireWearEffect();if(had){this.installBodyPartUnions();this.syncBodyInstances();}return;}
+    if(this.wearEffect&&this.wearModelKey!==this.humanModel?.key)this.retireWearEffect();
+    const source=body.material as THREE.MeshStandardNodeMaterial;
+    if(this.wearEffect){const material=this.wearEffect.material,fresh=context.createWearMaterial(source.positionNode,attribute('origamiPaintUv','vec2'));try{material.colorNode=fresh.colorNode;material.opacityNode=fresh.opacityNode;material.normalNode=fresh.normalNode;material.positionNode=fresh.positionNode;}finally{fresh.dispose();}material.needsUpdate=true;context.refreshEdgeObject(this.wearEffect,'wear');return;}
+    let geometry:THREE.InstancedBufferGeometry|undefined,material:THREE.MeshStandardNodeMaterial|undefined,effect:THREE.Mesh<THREE.InstancedBufferGeometry,THREE.MeshStandardNodeMaterial>|undefined,releaseGeometry:(()=>void)|undefined,releaseObject:(()=>void)|undefined,attached=false;
+    try{
+      geometry=createHumanWearGeometry({smithing:this.smithingGeometry,mace:this.maceGeometry,longsword:this.longswordGeometry,spear:this.spearGeometry});material=context.createWearMaterial(source.positionNode,attribute('origamiPaintUv','vec2'));this.configure?.(actorExplorationMaterial256(material));material.maskNode=source.maskNode;material.maskShadowNode=source.maskShadowNode;
+      effect=new THREE.Mesh(geometry,material);effect.name='Colonists — optional physical paint wear';effect.frustumCulled=false;effect.castShadow=false;effect.receiveShadow=true;effect.userData.origamiTexturesEnabled=this.texturesEnabled;
+      releaseGeometry=context.trackWearGeometry(geometry);releaseObject=context.trackEdgeObject(effect,'wear');const freeGeometry=releaseGeometry,freeObject=releaseObject;this.releaseWearEffect=()=>{try{freeObject();}finally{freeGeometry();}};this.wearEffect=effect;this.wearModelKey=this.humanModel?.key;this.group.add(effect);this.installBodyPartUnions();this.syncBodyInstances();attached=true;
+    }finally{if(!attached){releaseObject?.();releaseGeometry?.();effect?.removeFromParent();geometry?.dispose();material?.dispose();this.wearEffect=undefined;this.releaseWearEffect=undefined;this.wearModelKey=undefined;}}
   }
-  private clearOrigamiPartUnions():void {for(const union of this.origamiPartUnions)union.dispose();this.origamiPartUnions.length=0;}
-  private installOrigamiPartUnions(body=this.pawnMesh?.geometry as THREE.InstancedBufferGeometry|undefined):void {
-    this.clearOrigamiPartUnions();if(!body)return;
-    this.origamiPartUnionReader??=new HumanPartUnionReader();
-    for(const geometry of [body,this.origamiLineMesh?.geometry,this.origamiWearMesh?.geometry])if(geometry)this.origamiPartUnions.push(new ActorPartUnionIndex(geometry,'human'));
-  }
-  private refreshOrigamiPartUnion(body=this.pawnMesh?.geometry as THREE.InstancedBufferGeometry|undefined):void {
-    if(!body||!this.origamiPartUnionReader||!this.origamiPartUnions.length)return;
-    const state=this.origamiPartUnionReader.read(body,body.instanceCount);for(const union of this.origamiPartUnions)union.reconcile(state);
-  }
-  private adoptOrigamiCompanions(body:THREE.InstancedBufferGeometry):void {
-    if(!this.pawnMesh)return;
-    this.clearOrigamiPartUnions();
-    if(!this.indexedOrigamiBodies.has(body)){indexExactStaticVertices(body);this.indexedOrigamiBodies.add(body);}
-    if(!this.graphics?.origami){this.installOrigamiPartUnions(body);this.syncOrigamiInstances(body);return;}
-    const lines=createRigBrushGeometry(body),wear=body.userData.origamiWear as THREE.InstancedBufferGeometry|undefined;
-    this.releaseOrigamiBrush?.();this.releaseOrigamiBrush=this.graphics.prepareBrushGeometry(lines);
-    const position=(this.pawnMesh.material as THREE.MeshStandardNodeMaterial).positionNode;
-    if(this.origamiLineMesh){this.retiredPawnGeometries.push(this.origamiLineMesh.geometry);this.origamiLineMesh.geometry=lines;}
-    else{
-      this.origamiLineMesh=new THREE.Mesh(lines,this.graphics.createBrushMaterial(position!,uv()));
-      this.configure?.(actorExplorationMaterial256(this.origamiLineMesh.material));
-      this.origamiLineMesh.name='Colonists — face-painted gouache ribbon batch';this.origamiLineMesh.frustumCulled=false;this.group.add(this.origamiLineMesh);
-      this.releaseOrigamiEdges.push(this.graphics.trackEdgeObject(this.origamiLineMesh,'line'));
-    }
-    this.releaseOrigamiWear?.();this.releaseOrigamiWear=undefined;
-    if(wear&&this.graphics.wearEnabled){
-      if(this.origamiWearMesh){this.retiredPawnGeometries.push(this.origamiWearMesh.geometry);this.origamiWearMesh.geometry=wear;}
-      else{
-        this.origamiWearMesh=new THREE.Mesh(wear,this.graphics.createWearMaterial(position!,attribute('origamiPaintUv','vec2')));
-        this.configure?.(actorExplorationMaterial256(this.origamiWearMesh.material));
-        this.origamiWearMesh.name='Colonists — source physical edge wear batch';this.origamiWearMesh.frustumCulled=false;this.origamiWearMesh.castShadow=false;this.origamiWearMesh.receiveShadow=true;this.group.add(this.origamiWearMesh);
-        this.releaseOrigamiEdges.push(this.graphics.trackEdgeObject(this.origamiWearMesh,'wear'));
-      }
-      this.releaseOrigamiWear=this.graphics.trackWearGeometry(wear);
-      this.origamiWearMesh.userData.origamiTexturesEnabled=this.texturesEnabled;this.graphics.refreshEdgeObject(this.origamiWearMesh,'wear');
-    }else if(this.origamiWearMesh){
-      this.graphics.untrackEdgeObject(this.origamiWearMesh);this.retiredPawnGeometries.push(this.origamiWearMesh.geometry);
-      this.origamiWearMesh.material.dispose();this.origamiWearMesh.removeFromParent();this.origamiWearMesh=null;
-    }
-    this.installOrigamiPartUnions(body);this.syncOrigamiInstances(body);
-  }
-  private clearOrigamiCompanions():void {
-    this.clearOrigamiPartUnions();
-    this.releaseOrigamiBrush?.();this.releaseOrigamiBrush=undefined;
-    this.releaseOrigamiWear?.();this.releaseOrigamiWear=undefined;
-    for(const release of this.releaseOrigamiEdges)release();this.releaseOrigamiEdges=[];
-    for(const companion of [this.origamiLineMesh,this.origamiWearMesh])if(companion){this.group.remove(companion);companion.geometry.dispose();companion.material.dispose();}
-    this.origamiLineMesh=null;this.origamiWearMesh=null;
+  /** Fixed scalar storage is model-owned data. New equipment can change its
+   * contents at adoption, without changing any material or storage binding. */
+  private createHumanGeometry():THREE.InstancedBufferGeometry{
+    const model=this.humanModels.get({smithing:this.smithingGeometry,mace:this.maceGeometry,longsword:this.longswordGeometry,spear:this.spearGeometry});
+    if(!this.humanStroke){const values=new Float32Array(131072*4),buffer=new THREE.StorageBufferAttribute(values,4),node=storage(buffer,'vec4',values.length/4).toReadOnly(),owner=this;let closed=false;this.humanStroke={get faceCount(){return owner.humanModel?.strokes.faceCount??0;},get edgeCount(){return owner.humanModel?.strokes.edgeCount??0;},get maxEdgesPerFace(){return owner.humanModel?.strokes.maxEdgesPerFace??0;},values,buffer,node,cpuBytes:values.byteLength,assertCurrent(){if(closed)throw Error('Human stroke binding retired');},dispose(){if(closed)return;closed=true;node.dispose();}};}
+    if(model!==this.humanModel){if(model.strokes.values.length>this.humanStroke.values.length)throw Error('Human stroke binding capacity refused');this.humanStroke.values.set(model.strokes.values);this.humanStroke.buffer.addUpdateRange(0,model.strokes.values.length);this.humanStroke.buffer.needsUpdate=true;this.humanModel=model;}
+    return model.createGeometry();
   }
   /** Call only while the owner suspends frames and prepares scene visibility.
    * compileAsync skips shadows; prepareShadow must request a real shadow pass.
@@ -389,26 +356,25 @@ export class PawnLayer {
     if (!mesh) return;
     const geometry = mesh.geometry as THREE.InstancedBufferGeometry;
     const savedMaterial = mesh.material, savedVisible = mesh.visible, savedCount = geometry.instanceCount;
-    const companions=[this.origamiLineMesh,this.origamiWearMesh].filter((item):item is NonNullable<typeof item>=>item!==null).map(companion=>({companion,visible:companion.visible,count:companion.geometry.instanceCount}));
-    const restoreUnions=this.origamiPartUnions.map(union=>union.prepareForCompile());
+    const effect=this.wearEffect,savedWear=effect?{visible:effect.visible,count:effect.geometry.instanceCount}:undefined;
+    const restoreUnions=this.bodyPartUnions.map(union=>union.prepareForCompile());
     try {
       mesh.visible = true;
       geometry.instanceCount = Math.max(1, savedCount);
-      for(const {companion,count}of companions){companion.visible=true;companion.geometry.instanceCount=Math.max(1,count);}
+      if(effect){effect.visible=true;effect.geometry.instanceCount=Math.max(1,effect.geometry.instanceCount);}
       for (const variant of [this.plainMaterial, this.texturedMaterial,
         this.nativePlainMaterial, this.nativeTexturedMaterial]) {
         if (!variant) continue;
         mesh.material = variant;
-        this.selectOrigamiPosition(variant.positionNode);
-        for (const camera of cameras){await renderer.compileAsync(mesh, camera, scene);for(const {companion}of companions)await renderer.compileAsync(companion,camera,scene);}
+        if(effect){effect.material.positionNode=variant.positionNode;effect.material.needsUpdate=true;}
+        for(const camera of cameras){await renderer.compileAsync(mesh,camera,scene);if(effect)await renderer.compileAsync(effect,camera,scene);}
         await prepareShadow();
       }
     } finally {
       mesh.material = savedMaterial;
       mesh.visible = savedVisible;
       geometry.instanceCount = savedCount;
-      this.selectOrigamiPosition((savedMaterial as THREE.MeshStandardNodeMaterial).positionNode);
-      for(const {companion,visible,count}of companions){companion.visible=visible;companion.geometry.instanceCount=count;}
+      if(effect&&savedWear){effect.material.positionNode=(savedMaterial as THREE.MeshStandardNodeMaterial).positionNode;effect.material.needsUpdate=true;effect.visible=savedWear.visible;effect.geometry.instanceCount=savedWear.count;}
       for(const restore of restoreUnions)restore();
     }
   }
@@ -421,19 +387,18 @@ export class PawnLayer {
     if(this.smithingGeometry===smithing&&this.maceGeometry===mace&&this.longswordGeometry===longsword&&this.spearGeometry===spear)return;
     this.smithingGeometry=smithing;this.maceGeometry=mace;this.longswordGeometry=longsword;this.spearGeometry=spear;
     if(!this.pawnMesh)return;
-    const previous=this.pawnMesh.geometry as THREE.InstancedBufferGeometry,next=this.graphics?withGraphicsStyle(this.graphics,()=>pawnGeometry(smithing,mace,longsword,spear)):pawnGeometry(smithing,mace,longsword,spear);
+    const previous=this.pawnMesh.geometry as THREE.InstancedBufferGeometry,next=this.createHumanGeometry();
     for(const [name,attribute]of Object.entries(previous.attributes))if(attribute instanceof THREE.InstancedBufferAttribute
       ||attribute instanceof THREE.InterleavedBufferAttribute&&attribute.data instanceof THREE.InstancedInterleavedBuffer)next.setAttribute(name,attribute);
     next.userData={...previous.userData,...next.userData};next.instanceCount=previous.instanceCount;
     this.pawnMesh.geometry=next;this.retiredPawnGeometries.push(previous);
-    this.adoptOrigamiCompanions(next);
+    this.adoptBodyGeometry(next);
   }
   private createPawnMesh(count: number): void {
-    this.cargoContour?.dispose();this.cargoContour=undefined;this.partialCargoContour?.dispose();this.partialCargoContour=undefined;
-    this.clearOrigamiCompanions();
+    this.retireWearEffect();
+    this.clearBodyPartUnions();
     clearGroup(this.group);
-    const makeGeometry=()=>pawnGeometry(this.smithingGeometry,this.maceGeometry,this.longswordGeometry,this.spearGeometry);
-    const geometry = this.graphics?withGraphicsStyle(this.graphics,makeGeometry):makeGeometry();
+    const geometry=this.createHumanGeometry();
     geometry.userData.animationCache=this.animationCache;
     const travel = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4);
     for(let i=0;i<count;i++)travel.setW(i,1);
@@ -719,21 +684,21 @@ export class PawnLayer {
     })();
     const originalPosition = makeOriginalPosition();
     mat.positionNode=Fn(()=>{const result=vec3(0).toVar();If(this.animationCache.cached(),()=>{result.assign(this.cachedPawnPosition());}).Else(()=>{result.assign(originalPosition);});return result;})();
-    const origamiProfiles=this.graphics?.origami?humanReferencePaintProfiles():undefined;
+    const origamiProfiles=humanReferencePaintProfiles();
     // Resolve the metadata lookup once in the vertex stage. Passing its one
     // constant-per-part ID with the existing traits keeps bumpMap's three
     // isolated UV contexts from re-expanding instance attributes as varyings.
-    const origamiVertexTraits=this.graphics?.origami?Fn(()=>{
-      const raw=attribute('pawnRigTraits','vec3'),outfit=attribute('aEquipment','vec4').y,selected=raw.z.toVar();
+    const origamiVertexTraits=this.graphics?Fn(()=>{
+      const raw=attribute('pawnRigTraits','vec4'),outfit=attribute('aEquipment','vec4').y,selected=raw.z.toVar();
       const sleeve=raw.x.greaterThanEqual(2).and(raw.x.lessThanEqual(3)).and(raw.y.equal(1));
       If(sleeve.and(outfit.equal(2)),()=>{selected.assign(origamiProfiles!.skin);});
       If(sleeve.and(outfit.equal(3).or(outfit.equal(4))),()=>{selected.assign(origamiProfiles!.outerwear);});
-      const resolved=this.graphics!.humanProfileNode(selected,attribute('aShape','vec4').w.div(32).floor(),raw.y);
-      return vec4(raw,resolved);
+      const resolved=float(0).toVar();If(this.graphics!.surfaceEncoding.greaterThan(0),()=>{resolved.assign(this.graphics!.humanProfileNode(selected,attribute('aShape','vec4').w.div(32).floor(),raw.y));});
+      return vec4(raw.xyz,resolved);
     })():undefined;
     const origamiTraits=origamiVertexTraits?varying(origamiVertexTraits,'v_pawnOrigamiTraits').setInterpolation('flat'):undefined;
     const origamiBloodBind=this.referenceRig?(()=>{
-      const bone=attribute('pawnRigTraits','vec3').x,region=bone.greaterThanEqual(6).select(bone.sub(2),bone);
+      const bone=attribute('pawnRigTraits','vec4').x,region=bone.greaterThanEqual(6).select(bone.sub(2),bone);
       // Both pigment graphs share one bind-space transport. Creating it here
       // keeps repeated Fn builds and normal-map contexts from allocating new
       // anonymous position/region varyings; its interpolation is unchanged.
@@ -795,12 +760,12 @@ export class PawnLayer {
     this.configure?.(actorExplorationMaterial256(textured));
     textured.positionNode = mat.positionNode;
     textured.colorNode = baseColor.mul(pawnSurfaceShade(this.surfaceTexture));
-    if(this.graphics?.origami&&origamiTraits){
+    let bodySurfaceOptions:SharedPaintSurfaceOptions|undefined;
+    if(this.graphics&&origamiTraits){
       const profiles=origamiProfiles!,bone=origamiTraits.x,dye=origamiTraits.y;
-      applyOrigamiSurface(textured,baseColor,undefined,this.graphics,origamiTraits.w);
+
       const region=bone.greaterThanEqual(6).select(bone.sub(2),bone),cloth=dye.equal(-3).or(dye.equal(-2)).or(dye.equal(ORIGAMI_DUSTER_DYE)).or(dye.equal(ORIGAMI_PARKA_DYE)).or(dye.greaterThanEqual(0).and(dye.lessThan(3)));
-      const sourcePaint=textured.colorNode as THREE.Node<'vec3'>;
-      textured.colorNode=Fn(()=>{
+      const transformPaint=(sourcePaint:THREE.Node<'vec3'>)=>Fn(()=>{
         const pigment=sourcePaint.toVar(),stage=attribute('aShape','vec4').x.div(10).floor().mod(10),red=new THREE.Color(0x965f58),boneColor=new THREE.Color(0xc9bd9b),dark=new THREE.Color(0x554e43),steel=new THREE.Color(0x6c767d);
         const weapon=RESIDENT_WEAPON_VISUALS269.reduce((selected,variant)=>selected.or(dye.equal(variant.dye)),dye.equal(-999));
         // Equipment is an adaptation absent from this reference anatomy. Keep
@@ -817,7 +782,9 @@ export class PawnLayer {
         });
         return bodyBloodPigment(pigment,region,1,cloth.select(float(1),float(0)),attribute('aHairBlood','vec4').w,origamiBloodBind);
       })();
-    }else applyOrigamiSurface(textured,baseColor,undefined,this.graphics);
+      const context=this.graphics,faceUv=varying(attribute('origamiPaintUv','vec2'),'v_pawnSurfaceUv'),stroke=(body:THREE.Node<'vec3'>)=>createFaceStrokeNode(body,{table:this.humanStroke!,faceId:attribute('pawnRigTraits','vec4').w,faceUv,enabled:context.surfaceEncoding.mul(context.lineOpacity),width:context.edgeWidth,irregularity:context.strokeImperfection,opacity:context.lineOpacity,brushColor:context.brushColor.rgb,samplePigment:(u,x,y)=>context.sampleStrokePigment(u,x,y),sampleDry:(u,x,y)=>context.sampleStrokeDry(u,x,y)});
+      bodySurfaceOptions={context,base:baseColor,pastel:baseColor.mul(pawnSurfaceShade(this.surfaceTexture)),faceUv,profile:origamiTraits.w,includeGeneric:false,gouacheTransform:transformPaint,stroke};applySharedPaintSurface(textured,bodySurfaceOptions);
+    }
     const nativePlain = material(0xffffff), nativeTextured = material(0xffffff);
     this.configure?.(actorExplorationMaterial256(nativePlain));
     this.configure?.(actorExplorationMaterial256(nativeTextured));
@@ -828,6 +795,8 @@ export class PawnLayer {
     nativePlain.colorNode = baseColor;
     nativeTextured.colorNode = textured.colorNode;
     nativeTextured.normalNode=textured.normalNode;
+    if(bodySurfaceOptions)applySharedPaintSurface(nativeTextured,bodySurfaceOptions);
+    for(const bodyMaterial of [mat,textured,nativePlain,nativeTextured]){bodyMaterial.roughness=.88;bodyMaterial.metalness=.02;}
     // All variants survive map changes; geometry, appearance and shading stay
     // shared. Explicit disposal below owns these materials, not clearGroup.
     mat.userData.rendererOwned = textured.userData.rendererOwned = true;
@@ -858,14 +827,15 @@ export class PawnLayer {
     };
     this.pawnMesh = mesh;
     this.group.add(mesh);
-    this.adoptOrigamiCompanions(geometry);
-    const cargo = cargoGeometry();
+    this.adoptBodyGeometry(geometry);
+    const cargo = this.cargoModel.createGeometry();
     for (const name of ['aFrom', 'aTo', 'aCargo', 'aMotion', 'aTravel']) cargo.setAttribute(name, geometry.getAttribute(name));
     cargo.setAttribute('aHandoffFrom',new THREE.InstancedBufferAttribute(new Float32Array(count*4),4).setUsage(THREE.StaticDrawUsage));
     cargo.setAttribute('aHandoffTo',new THREE.InstancedBufferAttribute(new Float32Array(count*4),4).setUsage(THREE.StaticDrawUsage));
     const cargoMat = material(0xffffff);
     this.configure?.(actorExplorationMaterial256(cargoMat));
-    cargoMat.colorNode = attribute('color', 'vec3');
+    cargoMat.roughness=.88;cargoMat.metalness=.02;
+    cargoMat.colorNode = naturalStroke(this.graphics,this.graphics?this.cargoModel.strokes:undefined)(attribute('color', 'vec3'));
     cargoMat.positionNode = Fn(() => {
       const cached=this.animationCache.cached().toVar(),pose=pawnPresentationPose(this,instanceIndex,cached);
       const load = attribute('aCargo', 'vec4');
@@ -913,15 +883,15 @@ export class PawnLayer {
     this.cargoMesh.castShadow = true;
     this.cargoMesh.receiveShadow = true;
     this.group.add(this.cargoMesh);
-    if(this.graphics?.origami){this.cargoContour=createOrigamiContour(this.cargoMesh,this.graphics,cargoMat.positionNode);this.cargoContour.line.frustumCulled=false;this.cargoMesh.add(this.cargoContour.line);}
     this.fireMesh=attachedFireMesh(geometry,this,1,this.animationDetail);setFireTexturesEnabled(this.fireMesh,this.texturesEnabled);this.group.add(this.fireMesh);
     this.selectionMesh=pawnSelectionMesh(geometry,this);this.group.add(this.selectionMesh);
-    const partial=cargoGeometry();
+    const partial=this.cargoModel.createGeometry();
     partial.setAttribute('aTransferFrom',new THREE.InstancedBufferAttribute(new Float32Array(count*4),4).setUsage(THREE.StaticDrawUsage));
     partial.setAttribute('aTransferTo',new THREE.InstancedBufferAttribute(new Float32Array(count*4),4).setUsage(THREE.StaticDrawUsage));
     partial.setAttribute('aTransferCargo',new THREE.InstancedBufferAttribute(new Float32Array(count*4),4).setUsage(THREE.StaticDrawUsage));
     const partialMat=material(0xffffff);this.configure?.(actorExplorationMaterial256(partialMat));
-    partialMat.colorNode=attribute('color','vec3');
+    partialMat.roughness=.88;partialMat.metalness=.02;
+    partialMat.colorNode=naturalStroke(this.graphics,this.graphics?this.cargoModel.strokes:undefined)(attribute('color','vec3'));
     partialMat.positionNode=Fn(()=>{
       const from=attribute('aTransferFrom','vec4'),to=attribute('aTransferTo','vec4'),load=attribute('aTransferCargo','vec4');
       const bit=attribute('corpsePartMask','float');
@@ -939,7 +909,6 @@ export class PawnLayer {
     this.partialCargoMesh.name='Partial material releases — resident transfer batch';
     this.partialCargoMesh.frustumCulled=false;this.partialCargoMesh.castShadow=true;this.partialCargoMesh.receiveShadow=true;
     this.group.add(this.partialCargoMesh);
-    if(this.graphics?.origami){this.partialCargoContour=createOrigamiContour(this.partialCargoMesh,this.graphics,partialMat.positionNode);this.partialCargoContour.line.frustumCulled=false;this.partialCargoMesh.add(this.partialCargoContour.line);}
   }
 
   /** Cached rig coefficients replace every animated trig/clock expression;
@@ -1032,7 +1001,6 @@ export class PawnLayer {
     geometry.instanceCount=index;
     selectCargoGeometryKinds(geometry,kinds);
     if(index){from.needsUpdate=true;to.needsUpdate=true;cargo.needsUpdate=true;}
-    this.partialCargoContour?.sync(this.partialCargoMesh);
   }
 
   private syncMainCargoKinds():void {
@@ -1040,7 +1008,6 @@ export class PawnLayer {
     const geometry=this.cargoMesh.geometry as THREE.InstancedBufferGeometry,cargo=this.pawnMesh.geometry.getAttribute('aCargo');
     const kinds=new Set<number>();for(let i=0;i<geometry.instanceCount;i++)kinds.add(cargo.getX(i));
     selectCargoGeometryKinds(geometry,kinds);
-    this.cargoContour?.sync(this.cargoMesh);
   }
 
   /** Read the already presented pose once at an ownership change. The release
@@ -1105,7 +1072,7 @@ export class PawnLayer {
       cargo.needsUpdate=true;
       this.syncMainCargoKinds();
       this.syncPartialCargo();
-      this.refreshOrigamiPartUnion();
+      this.refreshBodyPartUnion();
     }
     return refresh;
   }
@@ -1133,7 +1100,7 @@ export class PawnLayer {
     if(!spear)for(const piece of gears.values())if(isSpearItem272(piece.item)){spear=true;break;}
     this.extendResidentGeometry(smithing,mace,longsword,spear);
     if (!this.pawnMesh) this.createPawnMesh(Math.max(1,world.pawns.length));
-    else if(this.pawnMesh.geometry.getAttribute('aFrom').count<world.pawns.length){this.clearOrigamiPartUnions();growPawnBuffers([this.pawnMesh,this.cargoMesh!,this.selectionMesh!,this.fireMesh!,this.partialCargoMesh!],world.pawns.length);this.installOrigamiPartUnions();this.syncOrigamiInstances();}
+    else if(this.pawnMesh.geometry.getAttribute('aFrom').count<world.pawns.length){this.clearBodyPartUnions();growPawnBuffers([this.pawnMesh,this.cargoMesh!,this.selectionMesh!,this.fireMesh!,this.partialCargoMesh!],world.pawns.length,(geometry,mesh)=>{if(mesh===this.pawnMesh||mesh===this.cargoMesh||mesh===this.partialCargoMesh)this.retiredPawnGeometries.push(geometry);else geometry.dispose();});this.installBodyPartUnions();this.syncBodyInstances();}
     const geometry = this.pawnMesh!.geometry as THREE.InstancedBufferGeometry;
     if(this.targetOffsets297.length<world.pawns.length*3)this.targetOffsets297=new Float64Array(world.pawns.length*3);
     const flames=geometry.getAttribute('aFire') as THREE.InstancedBufferAttribute;
@@ -1252,7 +1219,7 @@ export class PawnLayer {
       scratchColor.setHex(look.color??(isColonist(pawn)?pawnBaseColor(pawn.id):pawn.visitor&&!world.visitors?.groups.find(g=>g.id===pawn.visitor!.group)?.hostile?0x77958f:0xb74736));
       if(pawn.state==='dead')scratchColor.setHex(0x73756c);
       tint.setXYZ(index, scratchColor.r, scratchColor.g, scratchColor.b);
-      if(this.graphics?.origami){
+      if(this.graphics){
         const hat=look.simpleHelmet?(SIMPLE_HELMET_COLORS267[look.simpleHelmetMaterial-1]??0x8c5832):look.reconHelmet?APPAREL['recon-helmet'].color:look.helmet?(look.plasteelHelmet?0xa0b2b5:APPAREL['flak-helmet'].color):look.tuque===2?0xb3c0ba:look.tuque===1?APPAREL['cloth-tuque'].color:0x8c5832;
         const vestCode=(look.vestTintCode??0)-1,vest=vestCode<0?APPAREL['flak-vest'].color:scratchVestColor.setRGB(Math.floor(vestCode/1024)/31,Math.floor(vestCode/32)%32/31,vestCode%32/31).getHex();
         const row=this.graphics.registerHumanAppearance({skin:identity.skinColor,hair:identity.hairColor,shirt:scratchColor.getHex(),outerwear:scratchColor.getHex(),pants:ORIGAMI_PANTS_COLORS[look.pants]??ORIGAMI_PANTS_COLORS[0],hat,vest,reconArmor:APPAREL['recon-armor'].color,plate:scratchColor.getHex()});
@@ -1288,7 +1255,7 @@ export class PawnLayer {
       this.animationCache.reconcile(i,p.id,[posture,shape.getX(i),shape.getY(i),shape.getZ(i),shape.getW(i),equipment.getX(i),equipment.getY(i),equipment.getZ(i),equipment.getW(i),owner?.type,owner?.type==='pawn'?owner.pawnId:undefined,patientOwners.get(i),...melee].join(':'));});
     for (const attr of [fromAttribute, toAttribute, motion, tint, cargo,handoffFrom,handoffTo]) attr.needsUpdate = true;
     geometry.instanceCount = world.pawns.length;
-    this.syncOrigamiInstances(geometry);
+    this.syncBodyInstances(geometry);
     (this.cargoMesh!.geometry as THREE.InstancedBufferGeometry).instanceCount = world.pawns.length;
     this.syncMainCargoKinds();
     this.syncPartialCargo();
@@ -1503,7 +1470,7 @@ export class PawnLayer {
       }
       for(const attribute of [from,to,times,motion])attribute.needsUpdate=true;
     }else if(crouchFinished)motion.needsUpdate=true;
-    if(partUnionDirty)this.refreshOrigamiPartUnion(geometry as THREE.InstancedBufferGeometry);
+    if(partUnionDirty)this.refreshBodyPartUnion(geometry as THREE.InstancedBufferGeometry);
     if(playback)this.playback435.commit();
   }
 
@@ -1542,8 +1509,13 @@ export class PawnLayer {
 
   dispose(): void {
     this.playback435.clear();
-    this.cargoContour?.dispose();this.cargoContour=undefined;this.partialCargoContour?.dispose();this.partialCargoContour=undefined;
-    this.clearOrigamiCompanions();
+    this.releaseFeatureRefresh?.();this.releaseFeatureRefresh=undefined;this.retireWearEffect();
+    this.clearBodyPartUnions();
+    // All borrowers stop together. Real initialized candidates retain their
+    // r186 geometry-dispose listener until this point, even after growth.
+    const terminalGeometries=[...this.retiredPawnGeometries,...[this.pawnMesh,this.cargoMesh,this.partialCargoMesh].filter((mesh):mesh is THREE.Mesh=>!!mesh).map(mesh=>mesh.geometry)];
+    if(this.humanStroke)attachFaceStrokeGpuRetirement(this.humanStroke,terminalGeometries);
+    this.cargoModel.attachGpuRetirement(terminalGeometries);
     clearGroup(this.group);
     for(const retired of this.retiredPawnGeometries)retired.dispose();this.retiredPawnGeometries.length=0;this.smithingGeometry=false;this.maceGeometry=false;this.longswordGeometry=false;this.spearGeometry=false;
     this.plainMaterial?.dispose();
@@ -1552,7 +1524,7 @@ export class PawnLayer {
     this.nativeTexturedMaterial?.dispose();
     this.nativePlainMaterial = this.nativeTexturedMaterial = null;
     this.nativeBody = false;
-    this.surfaceTexture.dispose();
+    this.surfaceTexture.dispose();this.humanStroke?.dispose();this.humanStroke=undefined;this.humanModels.dispose();this.cargoModel.dispose();
     this.animationCache.dispose();this.partialAnimationCache.dispose();
     this.pawnMesh = this.cargoMesh = this.partialCargoMesh = this.fireMesh = this.selectionMesh = null;
   }

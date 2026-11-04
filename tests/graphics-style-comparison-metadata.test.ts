@@ -27,11 +27,11 @@ function catalogFixture(){
   });
   const wildlife=Object.assign(Object.create(WildlifeLayer.prototype),{rigs:rows,activeRigs:[...rows],bakedEligible:true,bakedGeneration:7,bakedPending:false,bakedClosed:false}) as WildlifeLayer;
   const fullWildlife=vi.spyOn(wildlife,'bakedStatus').mockImplementation(()=>{throw Error('Detailed Native status must not be built for a measurement frame');});
-  const catalog={revision:3,assertCurrent:vi.fn()},family={normal:material(),preview:material(),plain:material()};
+  const catalog={revision:3,assertCurrent:vi.fn()},treeSurface={material:material(),plainMaterial:material()};
   const resourceGeometry=geometry();resourceGeometry.setAttribute('color',new BufferAttribute(new Float32Array([1,1,1,1,1,1,1,1,1]),3));
-  const resourceMesh=new Mesh(resourceGeometry,family.normal),resourceGroup=new Group();resourceGroup.add(resourceMesh);resourceMesh.userData.resourceRanges={ranges:[{id:1001,start:0,count:3,vertexStart:0,vertexCount:3}]};
+  const resourceMesh=new Mesh(resourceGeometry,treeSurface.material),resourceGroup=new Group();resourceGroup.add(resourceMesh);resourceMesh.userData.resourceRanges={ranges:[{id:1001,start:0,count:3,vertexStart:0,vertexCount:3}]};
   const chunks=new Map([['0:0',{group:resourceGroup}]]),census=vi.spyOn(chunks,'values');
-  const resources=Object.assign(Object.create(ResourceLayer.prototype),{treeRecipeEpoch:4,treeDemandEpoch:2,graphicsComparisonRevision:8,treeSpeciesKey:'["oak","poplar"]',treeCatalog:catalog,treeFamily:family,texturesEnabled:true,foliageVisible:true,chunks,targetPreviewIds:new Set<number>(),targetTint:new ResourceTargetTint(),resourceChunks:new Map([[1001,'0:0']]),preparedTreeMeshes:new WeakSet([resourceMesh])}) as ResourceLayer;
+  const resources=Object.assign(Object.create(ResourceLayer.prototype),{treeRecipeEpoch:4,treeDemandEpoch:2,graphicsComparisonRevision:8,treeSpeciesKey:'["oak","poplar"]',treeCatalog:catalog,treeSurface,texturesEnabled:true,foliageVisible:true,chunks,targetPreviewIds:new Set<number>(),targetTint:new ResourceTargetTint(),resourceChunks:new Map([[1001,'0:0']]),sharedTreeMeshes:new WeakSet([resourceMesh])}) as ResourceLayer;
   const fullTrees=vi.spyOn(resources,'bakedTreeStatus').mockImplementation(()=>{throw Error('Detailed tree census must remain outside the comparator');});
   const camera=new OrthographicCamera(-16,16,16,-16,.1,1000);camera.position.set(20,25,20);
   const core=Object.assign(Object.create(SceneRenderCore.prototype),{
@@ -45,7 +45,7 @@ function catalogFixture(){
     lightingSettings:{sun:1,moon:1,ambient:1},shadowSettings:{frequency:60,resolution:2048},animationDetail:{settings:{enabled:true,nearPixels:24,farPixels:8,middleHz:12}},
     hostPort:{now:()=>now,hidden:()=>false,pixelRatio:()=>1,viewport:()=>({width:1280,height:900}),backend:()=> 'WebGPU'},
   }) as SceneRenderCore;
-  return{core,wildlife,resources,catalog,family,rows,source,material,geometry,fullWildlife,fullTrees,census,
+  return{core,wildlife,resources,catalog,treeSurface,rows,source,material,geometry,fullWildlife,fullTrees,census,
     async measure(mutate:()=>void=()=>{}){now=0;const result=core.measureGraphicsStyle('same-confirmed-scene',{scope:'paused-colony',ui:'game-hud',tool:'select',selectionKey:'1,2',objectKey:'[]'},()=>true);void result.catch(()=>{});mutate();now=6000;await vi.advanceTimersByTimeAsync(6000);return result;},
     dispose(){for(const g of geometries)g.dispose();for(const m of materials)m.dispose();},
   };
@@ -78,7 +78,7 @@ test('the public Core measurement admits53 compact owners and cancels exact rend
     const preview=await f.measure(()=>{f.resources.setTargetPreview(new Set([1001]));});expect(preview).toMatchObject({status:'cancelled',reason:'context-changed'});
     const previewRevision=f.resources.graphicsComparisonMetadata().revision;f.resources.setTargetPreview(new Set([1001]));expect(f.resources.graphicsComparisonMetadata().revision).toBe(previewRevision); // same preview is not a writer
     expect(f.census).not.toHaveBeenCalled();
-    const cleared=await f.measure(()=>{f.resources.clearTargetPreview();});expect(cleared).toMatchObject({status:'cancelled',reason:'context-changed'});expect(f.census).toHaveBeenCalledTimes(1); // only the existing clear-preview writer visits chunks
+    const cleared=await f.measure(()=>{f.resources.clearTargetPreview();});expect(cleared).toMatchObject({status:'cancelled',reason:'context-changed'});expect(f.census).not.toHaveBeenCalled(); // persistent shared materials need no chunk census on clear
     const clearedRevision=f.resources.graphicsComparisonMetadata().revision;f.resources.clearTargetPreview();expect(f.resources.graphicsComparisonMetadata().revision).toBe(clearedRevision);
     expect(f.fullWildlife).not.toHaveBeenCalled();expect(f.fullTrees).not.toHaveBeenCalled();expect(f.catalog.assertCurrent).toHaveBeenCalled();
   }finally{f.core.cancelGraphicsMeasurement('test-cleanup');f.dispose();}

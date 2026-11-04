@@ -3,7 +3,6 @@ import * as THREE from 'three/webgpu';
 import { PAWN_MODEL_SCALE } from '../world/scale';
 import {ITEM_VISUAL_IDS,itemCargoKind,itemGeometry,centreItemParts} from './item-presentation';
 import {placementGeometry} from './item-portrait';
-import {currentGraphicsStyle} from './graphics-style';
 import {origamiHumanGeometry} from './origami/human-geometry';
 
 // Disjoint from weapon tags; -4 is the bolt-action rifle, not the parka hood.
@@ -30,10 +29,8 @@ export const WORK_SICKLE_DYE = -32;
  * This deliberately small prototype rig is not yet the future glTF atlas importer.
  */
 export function pawnGeometry(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false): THREE.InstancedBufferGeometry {
-  const graphics=currentGraphicsStyle(),painted=graphics?.origami===true;
-  // Anatomy is shared by both graphic styles. Only Origami owns its optional
-  // surface companions; Legacy keeps the same body with the pastel material.
-  return origamiHumanGeometry(includeSmithing,includeMace,includeLongsword,includeSpear,painted&&graphics.wearEnabled,painted);
+  // Bind anatomy has no texture-style context or companion render owner.
+  return origamiHumanGeometry(includeSmithing,includeMace,includeLongsword,includeSpear,false,false);
 }
 
 /** Cargo is a second instanced batch sharing the pawn pose attributes. Its
@@ -43,15 +40,15 @@ export function pawnGeometry(includeSmithing=false,includeMace=false,includeLong
 export function cargoGeometry(): THREE.InstancedBufferGeometry {
   const data: number[] = [];
   const ranges:CargoGeometryRange[]=[],byKind:Record<number,CargoGeometryRange>={};
-  const begin=(kind:number)=>({kind,start:data.length/11,count:0,materialIndex:0});
-  const finish=(range:CargoGeometryRange)=>{range.count=data.length/11-range.start;Object.freeze(range);ranges.push(range);byKind[range.kind]=range;};
+  const begin=(kind:number)=>({kind,start:data.length/13,count:0,materialIndex:0});
+  const finish=(range:CargoGeometryRange)=>{range.count=data.length/13-range.start;Object.freeze(range);ranges.push(range);byKind[range.kind]=range;};
   const part = (size: number[], center: number[], kind: number, color: number,corpsePartMask=0) => {
     const box = new THREE.BoxGeometry(size[0], size[1], size[2]).toNonIndexed();
-    const positions = box.getAttribute('position'), normals = box.getAttribute('normal');
+    const positions = box.getAttribute('position'), normals = box.getAttribute('normal'),uv=box.getAttribute('uv');
     const tint = new THREE.Color(color);
     for (let i = 0; i < positions.count; i++) data.push(
       positions.getX(i) + center[0], positions.getY(i) + center[1], positions.getZ(i) + center[2],
-      normals.getX(i), normals.getY(i), normals.getZ(i), tint.r, tint.g, tint.b, kind,corpsePartMask,
+      normals.getX(i), normals.getY(i), normals.getZ(i), tint.r, tint.g, tint.b, kind,corpsePartMask,uv.getX(i),uv.getY(i),
     );
     box.dispose();
   };
@@ -68,24 +65,25 @@ export function cargoGeometry(): THREE.InstancedBufferGeometry {
     const kind=model.kind;
     const range=begin(kind);
     for(const p of centreItemParts(itemGeometry(item,undefined,undefined,traits),true)){
-      const source=placementGeometry(p),positions=source.getAttribute('position'),normals=source.getAttribute('normal'),index=source.getIndex(),tint=new THREE.Color(p.color??0xb8ac96);
+      const source=placementGeometry(p),positions=source.getAttribute('position'),normals=source.getAttribute('normal'),uv=source.getAttribute('uv'),index=source.getIndex(),tint=new THREE.Color(p.color??0xb8ac96);
       rotation.setFromAxisAngle(new THREE.Vector3(0,1,0),p.ry??0);
       transform.compose(new THREE.Vector3(p.x,p.y,p.z),rotation,new THREE.Vector3(p.sx??1,p.sy??1,p.sz??1));normalMatrix.getNormalMatrix(transform);
       for(let i=0;i<(index?.count??positions.count);i++){
         const vertex=index?index.getX(i):i;
         point.fromBufferAttribute(positions,vertex).applyMatrix4(transform);normal.fromBufferAttribute(normals,vertex).applyMatrix3(normalMatrix).normalize();
-        data.push(point.x,point.y,point.z,normal.x,normal.y,normal.z,tint.r,tint.g,tint.b,kind,0);
+        data.push(point.x,point.y,point.z,normal.x,normal.y,normal.z,tint.r,tint.g,tint.b,kind,0,uv?.getX(vertex)??0,uv?.getY(vertex)??0);
       }
     }
     finish(range);
   }
-  const vertices = new THREE.InterleavedBuffer(new Float32Array(data), 11);
+  const vertices = new THREE.InterleavedBuffer(new Float32Array(data), 13);
   const geometry = new THREE.InstancedBufferGeometry();
   geometry.setAttribute('position', new THREE.InterleavedBufferAttribute(vertices, 3, 0));
   geometry.setAttribute('normal', new THREE.InterleavedBufferAttribute(vertices, 3, 3));
   geometry.setAttribute('color', new THREE.InterleavedBufferAttribute(vertices, 3, 6));
   geometry.setAttribute('cargoKind', new THREE.InterleavedBufferAttribute(vertices, 1, 9));
   geometry.setAttribute('corpsePartMask', new THREE.InterleavedBufferAttribute(vertices, 1, 10));
+  geometry.setAttribute('uv',new THREE.InterleavedBufferAttribute(vertices,2,11));
   geometry.userData.cargoRanges=Object.freeze(ranges);
   geometry.userData.cargoRangesByKind=Object.freeze(byKind);
   geometry.instanceCount = 0;

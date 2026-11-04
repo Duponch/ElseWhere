@@ -1,5 +1,9 @@
 # Origami : préparation des couleurs et contours dans une texture
 
+**Priorité du 4 novembre : [un rendu commun, avec textures Pastel/Gouache](shared-texture-rendering.md).**
+Les paragraphes suivants décrivent les lots précédemment qualifiés et leurs
+limites. Ils ne signifient pas que la nouvelle architecture commune est livrée.
+
 État du 3 novembre 2026 : **lot opaque qualifié en composants ; suite des performances ouverte**.
 L'objectif reste le coût du mode Par défaut avec la même impression visuelle.
 La parité n'est pas acquise. La simulation, le schéma301 et la vraie325 sont

@@ -27,9 +27,8 @@ import {floorPartsForKind} from '../render/HygieneLayer';
 import {bridgePartsForCell} from '../render/bridge-parts';
 import {TERRAIN_COLORS,buildTerrain} from '../render/TerrainLayer';
 import {RockLayer} from '../render/RockLayer';
-import {ROCK_VERTICES,writeRockCell} from '../render/RockSurface';
+import {ROCK_INDICES} from '../render/RockSurface';
 import {geyserParts256} from '../render/GeyserLayer256';
-import {writeRockPigment} from '../render/rock-pigment';
 import {ITEM_VISUAL_IDS} from '../render/item-presentation';
 import {pileParts} from '../render/pile-parts';
 import {createItemGeometry,ITEM_SHAPES,type ItemShape} from '../render/item-geometry';
@@ -37,10 +36,11 @@ import {createChunkGeometry,isSmallChunk} from '../render/chunk-shape';
 import {createSandbagGeometry} from '../render/sandbag-parts';
 import {createSurfaceMaterial} from '../render/SurfaceMaterials';
 import {createStylizedSurfaceTexture} from '../render/stylized-surfaces';
-import {applyOrigamiSurface,withGraphicsStyle,type GraphicsStyleContext} from '../render/graphics-style';
-import {createOrigamiContour} from '../render/origami/contours';
+import {withGraphicsStyle,type GraphicsStyleContext} from '../render/graphics-style';
 import {ReferenceFloraLibrary} from '../render/origami/resource-flora';
-import {createOrigamiBrushGeometry} from '../render/origami/brush-geometry';
+import {compileNaturalSurfaceModels,naturalStroke} from '../render/surfaces/NaturalSurfaceModels';
+import {applySharedPaintSurface} from '../render/surfaces/SharedPaintSurface';
+import {attachFaceStrokeGpuRetirement} from '../render/surfaces/FaceStrokeTable';
 import type {Placement} from '../render/primitives';
 import {mergedInstances,type ResourceRangeData} from '../render/StaticGeometry';
 import type {CatalogCollection,CatalogItem,CatalogSection,CatalogStatus} from './asset-catalog-types';
@@ -68,7 +68,6 @@ function previewCall<T>(owner:object|undefined,producer:(...args:never[])=>T,rec
   return Reflect.apply(producer,owner,[record,...args]);
 }
 
-const SOURCE_PLANTS=new Set<string>(['bush','berry-bush']);
 const ITEM_KIND_LABELS:Readonly<Record<string,string>>={
   'ai-core':'Cœurs d’IA',book:'Livres',prosthesis:'Prothèses',wort:'Moût',beer:'Bière',jade:'Jade',plant:'Végétaux transportables',
   chemfuel:'Biocarburant',neutroamine:'Neutroamine',silver:'Argent',wood:'Bois',food:'Nourriture',chunk:'Fragments rocheux',steel:'Acier',gold:'Or',uranium:'Uranium',plasteel:'Plastacier',
@@ -139,18 +138,17 @@ export function createCatalogTreePreparation(context:GraphicsStyleContext,resour
         if(disposed||preparingTrees)throw Error('Catalog tree preparation is unavailable');
         if(!context.origami||context.reliefEnabled||context.wearEnabled){treeFallback='positive-effects-or-default-style';return;}
         if(Reflect.get(renderer.backend,'isWebGPUBackend')!==true){treeFallback='webgpu-required';return;}
-        const demand=resources.treeBakeDemand();if(!demand.species.length)return;
+        const demand=resources.treeBakeDemand();if(!demand.models.length)return;
         const MiB=1024*1024,owner=treeOwner??=new TreeBakeOwner({cpuBytes:128*MiB,gpuBytes:512*MiB});if(!owner.needsPreparation(demand))return;
         const paint=context.prepareAtlasPaint();preparingTrees=true;const generation=treeGeneration;let published=false,candidate:OwnedTreeCatalog|undefined,staging:ReturnType<ResourceLayer['prepareTreeAssetCatalog']>|undefined;
         const assertCurrent=()=>{assertPreparationCurrent();paint.assertCurrent();if(disposed||generation!==treeGeneration||!demand.isCurrent())throw Error('Catalog tree preparation superseded');};
         try{
           assertCurrent();candidate=await owner.prepare(renderer,context,demand,paint,assertCurrent);assertCurrent();if(!candidate)return;
-          // The atelier has actual stock scene lights and no room/exploration
-          // output hook. Fresh Lambert materials deliberately retain that graph.
+          // The same persistent Lambert graph uses the actual gallery lights.
           staging=resources.prepareTreeAssetCatalog(candidate,()=>{});const warmup=new THREE.Group();warmup.add(...staging.warmup);
           await renderer.compileAsync(warmup,camera,lightingScene);assertCurrent();
           const transaction=staging.publish();published=true;
-          try{transaction.commit();const retired=owner.adopt(candidate);candidate=undefined;retired?.dispose();}
+          try{transaction.commit();const retired=owner.adopt(candidate);retired?.dispose();candidate=undefined;}
           catch(error){throw new AggregateError([error],'Catalog tree publication transfer failed');}
           treeFallback=undefined;refreshInventory();
         }catch(error){if(error instanceof AggregateError||error instanceof AtlasBuildQuarantineError){if(candidate){quarantinedTrees.add(candidate);candidate=undefined;}throw error;}assertCurrent();owner.refuse(demand,error);treeFallback=error instanceof Error?error.message:String(error);refreshInventory();}
@@ -161,28 +159,52 @@ export function createCatalogTreePreparation(context:GraphicsStyleContext,resour
     };
 }
 
+/** The unbound reference still uses its real seven source parts. Its model,
+ * face addresses and Lambert body survive every texture change. Only the
+ * optional physical wear owns a separate, strictly-positive effect resource. */
+export function createCatalogReferenceAcacia(context:GraphicsStyleContext){
+ const library=new ReferenceFloraLibrary(false,false),recipe=library.recipe('acacia'),models=compileNaturalSurfaceModels(recipe.parts.map(part=>part.geometry)),group=new THREE.Group(),material=createSurfaceMaterial('diffuse',0xffffff,{vertexColors:false});
+ material.userData.rendererOwned=true;
+ const paintOwner=`catalog-reference-acacia:${group.uuid}`;context.requirePaint(paintOwner,recipe.parts.map(part=>part.profileId));
+ const body=mergedInstances(group,recipe.parts.map((part,index)=>({geometry:models.geometries[index]!.clone(),items:[{x:0,y:0,z:0,key:index,color:part.baseColor,referenceColor:part.baseColor,profile:part.profileId,rawGeometry:true}]})),material,true,true,true)!;
+ const paint=attribute('origamiPaint','vec4'),profile=paint.w.mod(128),surface=attribute('surfaceUv','vec4');
+ applySharedPaintSurface(material,{context,base:attribute('color','vec3'),pastel:attribute('color','vec3'),faceUv:surface.xy,profile,includeGeneric:true,stroke:naturalStroke(context,models.stroke,paint.w.div(128).floor(),surface.zw)});
+ body.name='Reference acacia — shared opaque surface';body.geometry.computeBoundingBox();
+ let wear:THREE.Mesh|undefined,wearMaterial:THREE.MeshStandardNodeMaterial|undefined,wearLibrary:ReferenceFloraLibrary|undefined,releaseWear:(()=>void)|undefined,closed=false;
+ const clearWear=()=>{releaseWear?.();releaseWear=undefined;wear?.removeFromParent();wear?.geometry.dispose();wear=undefined;wearMaterial?.dispose();wearMaterial=undefined;wearLibrary?.dispose();wearLibrary=undefined;};
+ const refreshWear=()=>{
+  clearWear();if(!context.wearEnabled)return;
+  wearLibrary=new ReferenceFloraLibrary(true,true);const parts=wearLibrary.recipe('acacia').parts;
+  wearMaterial=context.createWearMaterial(positionLocal.add(attribute('origamiWearExpand','vec3').mul(context.contourSpan)),uv());wearMaterial.userData.rendererOwned=true;
+  wear=mergedInstances(group,parts.filter(part=>part.wear).map(part=>({geometry:part.wear!.clone(),items:[{x:0,y:0,z:0}]})),wearMaterial,false,true,true);
+  if(wear){wear.name='Reference acacia — optional physical wear';releaseWear=context.trackEdgeObject(wear,'wear');}
+ };
+ refreshWear();const releaseRefresh=context.trackSharedSurfaceRefresh(refreshWear);
+ return{group,body,bounds:body.geometry.boundingBox!.clone(),dispose(){if(closed)return;closed=true;releaseRefresh();clearWear();attachFaceStrokeGpuRetirement(models.stroke,[body.geometry]);body.removeFromParent();body.geometry.dispose();material.dispose();models.dispose();library.dispose();context.releasePaint(paintOwner);}};
+}
+
 export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):CatalogCollection {
   return withGraphicsStyle(context,()=>{
     const sections:CatalogSection[]=[],dispose:(()=>void)[]=[],boundsReader=new PlacementBounds();
     const paint=createStylizedSurfaceTexture('vegetation');
     const plain=createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true});
-    const painted=context.origami?createSurfaceMaterial('physical',0xffffff,{vertexColors:false,roughness:.88,metalness:.02}):createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true,map:paint});
-    plain.userData.rendererOwned=painted.userData.rendererOwned=true;applyOrigamiSurface(painted,attribute('color','vec3'),undefined,context);
+    const painted=createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true,map:paint});
+    plain.userData.rendererOwned=painted.userData.rendererOwned=true;
     const boxes=new BoxBatches();dispose.push(()=>boxes.dispose(),()=>plain.dispose(),()=>painted.dispose(),()=>paint.dispose());
 
     // All wild species, including the two actual resident grass batches.
-    const wild=section('plants-wild','Végétation sauvage','Toutes les espèces du catalogue, à maturité. Les modèles habituels restent indiqués lorsqu’ils ne sont pas remplacés en Origami.');
+    const wild=section('plants-wild','Végétation sauvage','Toutes les espèces du catalogue, à maturité. Les deux textures partagent les mêmes modèles.');
     const plants:Resource[]=PLANT_SPECIES.map((species,index)=>({id:1000+index,kind:FLORA_DEFINITIONS[species].kind,species,x:4+(index%8)*7,z:4+Math.floor(index/8)*7,amount:1,growth:1}));
-    const wildRecord=presentationRecord(64,40,plants),resourceGroup=new THREE.Group(),resources=new ResourceLayer(resourceGroup,plain,painted),clusters=new PlantClusterLayer(plain,painted);wild.group.add(resourceGroup,clusters.group);
+    const wildRecord=presentationRecord(64,40,plants),resourceGroup=new THREE.Group(),resources=new ResourceLayer(resourceGroup,plain,painted,undefined,{pastelTexture:paint,configure:()=>{}}),clusters=new PlantClusterLayer(plain,painted,undefined,paint);wild.group.add(resourceGroup,clusters.group);
     previewCall(resources,resources.update,wildRecord,true,undefined,undefined,{read:()=>({size:1,ripe:true,leafless:false}),harvestable:(r:Resource)=>previewCall(undefined,harvestable,wildRecord,r)});previewCall(clusters,clusters.update,wildRecord,true);
     const clusterSlots=Reflect.get(clusters,'slots') as Map<number,{index:number}>,clusterMesh=Reflect.get(clusters,'mesh') as THREE.InstancedMesh;
     const refreshWildInventory=()=>{
-    const byId=resourceBounds(wild.group),readyIds=new Set<number>();resourceGroup.traverse(object=>{if(!(object instanceof THREE.Mesh)||!object.geometry.hasAttribute('bakedUv'))return;const ranges=object.userData.resourceRanges as ResourceRangeData|undefined;for(const range of ranges?.ranges??[])readyIds.add(range.id<0?Math.floor(-range.id/2):range.id);});
+    const byId=resourceBounds(wild.group);
     wild.items.length=0;wild.missing!.length=0;
     for(const plant of plants){const slot=clusterSlots.get(plant.id);if(slot)byId.set(plant.id,instanceBounds(clusterMesh,slot.index));const bounds=byId.get(plant.id);
       if(!bounds||bounds.isEmpty()){wild.missing!.push({id:plant.species!,label:FLORA_DEFINITIONS[plant.species!].label,reason:'Aucun modèle affichable produit pour cette espèce.'});continue;}
-      const ready=readyIds.has(plant.id),tree=plant.kind==='tree',status:CatalogStatus=!context.origami?'default':ready||tree?'origami':SOURCE_PLANTS.has(plant.species!)?'reference':plant.species==='grass'||plant.species==='tall-grass'?'origami':'default';
-      wild.items.push(item(`plant:${plant.species}`,FLORA_DEFINITIONS[plant.species!].label,status,bounds,tree&&context.origami?'Forme habituelle de l’arbre, peinte à la gouache ; contours et usure selon les options Origami.':status==='default'&&context.origami?'Modèle habituel ; pas de remplacement Origami.':undefined));
+      const status:CatalogStatus=context.origami?'origami':'default';
+      wild.items.push(item(`plant:${plant.species}`,FLORA_DEFINITIONS[plant.species!].label,status,bounds,'Modèle commun ; texture et contours selon les options.'));
     }
     };refreshWildInventory();
     sections.push(wild);dispose.push(()=>resources.dispose(),()=>clusters.dispose());
@@ -191,37 +213,19 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
     // unbound to any simulation species. The recipe compiles the same seven
     // source parts and their physical face-coplanar wear, without a Resource.
     const unbound=section('plants-unbound','Végétation — référence non encore liée','Modèle source disponible, sans espèce correspondante dans le catalogue du jeu.');
-    const referenceLibrary=new ReferenceFloraLibrary(context.wearEnabled),acacia=referenceLibrary.recipe('acacia'),acaciaGroup=new THREE.Group(),referenceCleanup:(()=>void)[]=[];
-    const referenceMaterial=context.origami?createSurfaceMaterial('physical',0xffffff,{vertexColors:false,roughness:.88,metalness:.02}):createSurfaceMaterial('diffuse',0xffffff,{vertexColors:false});
-    referenceMaterial.userData.rendererOwned=true;referenceMaterial.colorNode=attribute('color','vec3');
-    applyOrigamiSurface(referenceMaterial,attribute('color','vec3'),uv(),context,attribute('origamiPaint','vec4').w,true);
-    const referenceBody=mergedInstances(acaciaGroup,acacia.parts.map((part,index)=>({geometry:part.geometry.clone(),items:[{x:0,y:0,z:0,key:index,color:part.baseColor,referenceColor:part.baseColor,profile:part.profileId,rawGeometry:true}]})),referenceMaterial,true,true,true)!;
-    referenceBody.geometry.computeBoundingBox();
-    if(context.origami){
-      const lineMaterial=context.createBrushMaterial(null,uv());
-      lineMaterial.userData.rendererOwned=true;
-      const lines=mergedInstances(acaciaGroup,acacia.parts.map(part=>({geometry:createOrigamiBrushGeometry(part.geometry),items:[{x:0,y:0,z:0}]})),lineMaterial,false,true,true)!;
-      referenceCleanup.push(context.prepareBrushGeometry(lines.geometry));
-      referenceCleanup.push(context.trackEdgeObject(lines,'line'));dispose.push(()=>lineMaterial.dispose());
-      if(context.wearEnabled){
-        const wearMaterial=context.createWearMaterial(positionLocal.add(attribute('origamiWearExpand','vec3').mul(context.contourSpan)),uv());wearMaterial.userData.rendererOwned=true;
-        const wear=mergedInstances(acaciaGroup,acacia.parts.filter(part=>part.wear).map(part=>({geometry:part.wear!.clone(),items:[{x:0,y:0,z:0}]})),wearMaterial,false,true,true);
-        if(wear)referenceCleanup.push(context.trackEdgeObject(wear,'wear'));dispose.push(()=>wearMaterial.dispose());
-      }
-    }
-    const referenceBounds=new ShelfLayout(28).add(acaciaGroup,referenceBody.geometry.boundingBox!);unbound.group.add(acaciaGroup);
-    unbound.items.push(item('reference:acacia','Acacia — référence non encore liée','reference',referenceBounds,context.origami?'Sept pièces originales ; profils et coordonnées de peinture conservés.':'Aperçu du modèle source disponible ; aucune espèce ajoutée au jeu.'));
-    sections.push(unbound);dispose.push(()=>{for(const release of referenceCleanup)release();acaciaGroup.traverse(object=>{if(object instanceof THREE.Mesh||object instanceof THREE.LineSegments)object.geometry.dispose();});referenceMaterial.dispose();referenceLibrary.dispose();});
+    const acacia=createCatalogReferenceAcacia(context),referenceBounds=new ShelfLayout(28).add(acacia.group,acacia.bounds);unbound.group.add(acacia.group);
+    unbound.items.push(item('reference:acacia','Acacia — référence non encore liée','reference',referenceBounds,'Sept pièces originales et surfaces communes ; aucune espèce ajoutée au jeu.'));
+    sections.push(unbound);dispose.push(()=>acacia.dispose());
 
     // Six resident crops plus the existing medicinal-plant resource recipe.
     const crops=section('plants-crops','Cultures','Les sept cultures existantes, sans semis ni progression du temps.');
     const cropKinds=['rice','potato','corn','cotton','haygrass','hops','healroot'] as const;
     const cropRecords:Resource[]=cropKinds.map((kind,index)=>({id:2000+index,kind,x:2+index*3,z:2,amount:1,growth:1}));
-    const cropRecord=presentationRecord(24,6,cropRecords),cropLayer=new CropLayer(plain,painted),medicinalGroup=new THREE.Group(),medicinal=new ResourceLayer(medicinalGroup,plain,painted);crops.group.add(medicinalGroup,cropLayer.group);
+    const cropRecord=presentationRecord(24,6,cropRecords),cropLayer=new CropLayer(plain,painted,paint),medicinalGroup=new THREE.Group(),medicinal=new ResourceLayer(medicinalGroup,plain,painted,undefined,{pastelTexture:paint,configure:()=>{}});crops.group.add(medicinalGroup,cropLayer.group);
     previewCall(cropLayer,cropLayer.update,cropRecord,true);previewCall(medicinal,medicinal.update,cropRecord,true,undefined,undefined,{read:()=>({size:1,ripe:true,leafless:false}),harvestable:(r:Resource)=>previewCall(undefined,harvestable,cropRecord,r)});
     const cropBounds=resourceBounds(crops.group),cropBatches=Reflect.get(cropLayer,'batches') as {kind:string;mesh:THREE.InstancedMesh;slots:Map<number,number>}[];
     for(const resource of cropRecords){const batch=cropBatches.find(candidate=>candidate.kind===resource.kind),slot=batch?.slots.get(resource.id);if(batch&&slot!==undefined)cropBounds.set(resource.id,instanceBounds(batch.mesh,slot));
-      const bounds=cropBounds.get(resource.id);if(bounds&&!bounds.isEmpty())crops.items.push(item(`crop:${resource.kind}`,PLANT_DEFINITIONS[resource.kind as keyof typeof PLANT_DEFINITIONS].label,'default',bounds,context.origami?'Géométrie de culture habituelle ; pas de modèle Origami distinct.':undefined));
+      const bounds=cropBounds.get(resource.id);if(bounds&&!bounds.isEmpty())crops.items.push(item(`crop:${resource.kind}`,PLANT_DEFINITIONS[resource.kind as keyof typeof PLANT_DEFINITIONS].label,context.origami?'origami':'default',bounds,'Modèle de culture commun aux deux textures.'));
       else crops.missing!.push({id:resource.kind,label:resource.kind,reason:'Aucune géométrie de culture produite.'});
     }
     sections.push(crops);dispose.push(()=>cropLayer.dispose(),()=>medicinal.dispose());
@@ -264,7 +268,7 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
       const placed=buildingLayout.add(group,bounds);buildings.group.add(group);
       const stuff=material?` · ${ITEM_DEFINITIONS[material as ItemId]?.label??material}`:'';
       const status:CatalogStatus=context.origami?'origami':'default';
-      buildings.items.push(item(`building:${kind}`,label+stuff,status,placed,'Forme habituelle commune aux deux styles ; peinture à la gouache et contours selon les options Origami.'));
+      buildings.items.push(item(`building:${kind}`,label+stuff,status,placed,'Forme habituelle commune aux deux textures ; peinture et contours selon les options.'));
     }
     sections.push(buildings);
 
@@ -280,7 +284,7 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
         if(bounds.isEmpty()){entry.missing!.push({id:`item:${id}`,label:definition.label,reason:'Aucun modèle d’objet produit.'});continue;}
         const anchor=new THREE.Group(),placed=layout.add(anchor,bounds),offset=anchor.position;
         placements.push(...parts.map(p=>({...p,x:p.x+offset.x,y:p.y+offset.y,z:p.z+offset.z})));
-        entry.items.push(item(`item:${id}`,definition.label,'default',placed,context.origami?'Forme d’objet habituelle ; pas de modèle Origami distinct.':undefined));
+        entry.items.push(item(`item:${id}`,definition.label,context.origami?'origami':'default',placed,'Forme d’objet commune aux deux textures.'));
       }
       if(placements.length)boxes.set(entry.group,`pile:catalog:${kind}`,placements);sections.push(entry);
     }
@@ -310,16 +314,25 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
 
     // The exact RockLayer cell/pigment writers, without its map-sized basal slab.
     const rocks=section('rocks-minerals','Roches et minerais','Cinq roches naturelles et sept minerais, exposés séparément.');
-    const rockLayout=new ShelfLayout(28,1.6),rockMaterials=new RockLayer();dispose.push(()=>rockMaterials.dispose());
+    const rockLayout=new ShelfLayout(28,1.6),rockLayer=new RockLayer();
     const rockCases=[...STONE_KINDS.map(stone=>({id:stone,label:STONE_LABELS[stone],tile:{terrain:'rock',stone} as Tile})),...Object.entries(ORE_DEFINITIONS).map(([ore,definition])=>({id:ore,label:definition.label,tile:{terrain:'rock',ore} as Tile}))];
-    for(const sample of rockCases){
-      const record=presentationRecord(3,3);record.tiles[4]=sample.tile;
-      const position=new Float32Array(ROCK_VERTICES*3),color=new Float32Array(ROCK_VERTICES*3),normal=new Float32Array(ROCK_VERTICES*3),indices=previewCall(undefined,writeRockCell,record,1,1,position,0);previewCall(undefined,writeRockPigment,record,1,1,color,0);for(let i=1;i<normal.length;i+=3)normal[i]=1;
-      const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(position,3));geometry.setAttribute('normal',new THREE.BufferAttribute(normal,3));geometry.setAttribute('color',new THREE.BufferAttribute(color,3));geometry.setIndex(indices);geometry.computeBoundingBox();geometry.computeBoundingSphere();
-      const group=new THREE.Group(),mesh=new THREE.Mesh(geometry,rockMaterials.mesh.material);mesh.castShadow=mesh.receiveShadow=true;group.add(mesh);
-      if(context.origami){const contour=createOrigamiContour(mesh,context);mesh.add(contour.line);dispose.push(()=>contour.dispose());}
-      const placed=rockLayout.add(group,geometry.boundingBox!);rocks.group.add(group);rocks.items.push(item(`rock:${sample.id}`,sample.label,'default',placed));dispose.push(()=>geometry.dispose());
+    // One real sparse RockLayer supplies the model, material and stroke bank.
+    // Views omit its basal slab without substituting a material that expects
+    // different vertex fields. The partial record remains a preview adapter.
+    const rockRecord=presentationRecord(3,rockCases.length*3);
+    rockCases.forEach((sample,index)=>{rockRecord.tiles[(index*3+1)*3+1]=sample.tile;});
+    previewCall(rockLayer,rockLayer.update,rockRecord,true);
+    const source=rockLayer.mesh.geometry,sourceIndex=source.index!,point=new THREE.Vector3(),rockViews:THREE.BufferGeometry[]=[];
+    if(rockLayer.stats.indexCount!==36+rockCases.length*ROCK_INDICES)throw Error('Isolated catalog rock slots differ from actual writer output');
+    for(const [index,sample]of rockCases.entries()){
+      const geometry=new THREE.BufferGeometry();for(const[name,a]of Object.entries(source.attributes))geometry.setAttribute(name,a);
+      const indices=Uint32Array.from({length:ROCK_INDICES},(_,i)=>sourceIndex.getX(36+index*ROCK_INDICES+i));geometry.setIndex(new THREE.BufferAttribute(indices,1));
+      const bounds=new THREE.Box3(),positions=geometry.getAttribute('position');for(const vertex of indices)bounds.expandByPoint(point.fromBufferAttribute(positions,vertex));geometry.boundingBox=bounds;geometry.boundingSphere=bounds.getBoundingSphere(new THREE.Sphere());
+      rockViews.push(geometry);const group=new THREE.Group(),mesh=new THREE.Mesh(geometry,rockLayer.mesh.material);mesh.name='Catalog rock — shared sparse source';mesh.castShadow=mesh.receiveShadow=true;group.add(mesh);
+      const placed=rockLayout.add(group,bounds);rocks.group.add(group);rocks.items.push(item('rock:'+sample.id,sample.label,'default',placed));
     }
+    dispose.push(()=>{rockLayer.attachSurfaceGpuRetirement(rockViews);for(const geometry of rockViews)geometry.dispose();rockLayer.dispose();});
+
     sections.push(rocks);
     const naturalProps=section('natural-objects','Objets naturels','Modèles naturels fixes ; les effets passagers sont exclus.');
     const geyserParts=geyserParts256([{id:5000,x:0,z:0}]),geyserGroup=new THREE.Group(),geyserBounds=boundsReader.parts(geyserParts);

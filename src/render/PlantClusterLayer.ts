@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { Fn, If, attribute, positionLocal, sin, uniform, vec3 } from 'three/tsl';
+import { Fn, If, attribute, instanceColor, positionLocal, sin, texture, uniform, uv, vec3 } from 'three/tsl';
 import type { AnimationDetail } from './AnimationDetail';
 import { NaturalAnimationCache } from './natural-animation-cache';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -10,7 +10,9 @@ import type { NaturalPresentationChange } from './NaturalResourcePresentation';
 import { ResourceTargetTint } from './resource-target-tint';
 import { currentGraphicsStyle } from './graphics-style';
 import { createOrigamiGroundTuftGeometry } from './origami/flora';
-import {createInstancedOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
+import {compileNaturalSurfaceModels,interleaveNaturalSurfaceFields,naturalStroke,type NaturalSurfaceModels} from './surfaces/NaturalSurfaceModels';
+import {createStylizedSurfaceTexture} from './stylized-surfaces';
 
 const BASE_STEMS = [
   { x: 0, z: 0, height: 1, leanX: .04, leanZ: -.025 },
@@ -74,9 +76,10 @@ export function plantClusterPresentation(world: World, resource: Resource, size 
 export class PlantClusterLayer {
   readonly group = new THREE.Group();
   private readonly graphicsStyle = currentGraphicsStyle();
-  private readonly geometry = createOrigamiGroundTuftGeometry();
+  private readonly geometry:THREE.BufferGeometry;
+  private readonly surfaceModels:NaturalSurfaceModels|undefined;
+  private readonly ownedPastel:THREE.DataTexture|undefined;
   private mesh: THREE.InstancedMesh;
-  private contour?:OrigamiContourBinding;
   private readonly slots = new Map<number, { index: number; signature: string }>();
   private readonly free: number[] = [];
   private readonly transform = new THREE.Object3D();
@@ -98,7 +101,9 @@ export class PlantClusterLayer {
   private readonly targetTint=new ResourceTargetTint();
   private targetPreviewIds=new Set<number>();
 
-  constructor(private readonly plainMaterial:THREE.NodeMaterial,private readonly texturedMaterial:THREE.NodeMaterial=plainMaterial,private readonly detail?:AnimationDetail) {
+  constructor(private readonly plainMaterial:THREE.NodeMaterial,private readonly texturedMaterial:THREE.NodeMaterial=plainMaterial,private readonly detail?:AnimationDetail,pastelSource?:THREE.Texture) {
+    const source=createOrigamiGroundTuftGeometry();
+    if(this.graphicsStyle){try{this.surfaceModels=compileNaturalSurfaceModels([source]);this.geometry=this.surfaceModels.geometries[0]!;interleaveNaturalSurfaceFields(this.geometry);}finally{source.dispose();}}else this.geometry=source;
     const windPosition=Fn(()=>{
       const deform=(tick:THREE.Node<'float'>)=>{
       const yaw=attribute('windYaw','float'),c=yaw.cos(),s=yaw.sin();
@@ -125,15 +130,21 @@ export class PlantClusterLayer {
       return position;
     })();
     this.windPlain=plainMaterial.clone();
-    this.windTextured=texturedMaterial.clone();
+    this.windTextured=this.graphicsStyle?new THREE.MeshLambertNodeMaterial({flatShading:true}):texturedMaterial.clone();
     this.windPlain.positionNode=this.windTextured.positionNode=windPosition;
+    if(this.graphicsStyle){
+      const borrowed=pastelSource??Reflect.get(texturedMaterial,'map') as THREE.Texture|undefined,pastel=borrowed??(this.ownedPastel=createStylizedSurfaceTexture('vegetation')),stroke=naturalStroke(this.graphicsStyle,this.surfaceModels!.stroke);
+      // Every live natural tint is strictly positive (bounded plant palette,
+      // blight and target mix). Undo Three's implicit instance tint only after
+      // composing the independently colored brush; inactive slots are clamped.
+      applySharedPaintSurface(this.windTextured,{context:this.graphicsStyle,base:attribute('color','vec3'),pastel:attribute('color','vec3').mul(texture(pastel,uv()).rgb),gouacheTransform:body=>body.mul(instanceColor),stroke:body=>stroke(body).div(instanceColor.max(vec3(.000001)))});
+    }
     this.mesh = this.createMesh(128);
     this.group.name = 'plant-cluster-layer';
     this.group.add(this.mesh);
-    if(this.graphicsStyle?.origami){this.contour=createInstancedOrigamiContour(this.mesh,this.graphicsStyle,windPosition);this.group.add(this.contour.line);}
   }
   private texturesEnabled=true;
-  setTexturesEnabled(enabled:boolean):void {this.texturesEnabled=enabled;this.mesh.material=enabled?this.windTextured:this.windPlain;this.contour?.sync();}
+  setTexturesEnabled(enabled:boolean):void {this.texturesEnabled=enabled;this.mesh.material=enabled?this.windTextured:this.windPlain;}
   setTargetPreview(ids:ReadonlySet<number>):void {
     if(ids.size===this.targetPreviewIds.size&&[...ids].every(id=>this.targetPreviewIds.has(id)))return;
     this.targetTint.restore();this.targetPreviewIds=new Set(ids);this.tintTargets();
@@ -190,21 +201,17 @@ export class PlantClusterLayer {
     previous.dispose();
     this.mesh = next;
     this.group.add(next);
-    this.contour?.sync(next);
   }
 
   prepareForCompile(): () => void {
+    this.syncSurfaceLighting();
     const count = this.mesh.count;
     this.mesh.count = Math.max(1, count);
-    this.contour?.sync();
-    return () => { this.mesh.count = count;this.contour?.sync(); };
+    return () => { this.mesh.count = count; };
   }
 
   update(world: World, reset: boolean, changes?: ReadonlyMap<number, NaturalPresentationChange>): void {
-    const plainOutput=this.plainMaterial.outputNode;
-    const texturedOutput=this.texturedMaterial.outputNode;
-    if(this.windPlain.outputNode!==plainOutput)this.windPlain.outputNode=plainOutput;
-    if(this.windTextured.outputNode!==texturedOutput)this.windTextured.outputNode=texturedOutput;
+    this.syncSurfaceLighting();
     if (reset) {
       this.middleWind.reset();
       this.clearTargetPreview();
@@ -290,7 +297,6 @@ export class PlantClusterLayer {
       this.mesh.instanceColor!.needsUpdate = true;
     }
     this.tintTargets();
-    this.contour?.sync();
   }
 
   private includeTransformBounds(): void {
@@ -298,13 +304,18 @@ export class PlantClusterLayer {
     this.bounds.union(this.transformedBounds);
   }
 
+  private syncSurfaceLighting():void {
+    for(const [source,target]of [[this.plainMaterial,this.windPlain],[this.texturedMaterial,this.windTextured]] as const){
+      target.outputNode=source.outputNode;target.maskNode=source.maskNode;target.maskShadowNode=source.maskShadowNode;
+    }
+  }
+
   instanceCount(): number { return this.mesh.count; }
 
   dispose(): void {
-    this.contour?.dispose();this.contour=undefined;
     this.clearTargetPreview();
     this.mesh.dispose();
-    this.geometry.dispose();
+    if(this.surfaceModels)this.surfaceModels.dispose();else this.geometry.dispose();this.ownedPastel?.dispose();
     this.windPlain.dispose();this.windTextured.dispose();
   }
 }

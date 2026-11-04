@@ -20,7 +20,7 @@ import {buildNativeInspector,setNativeInspectorTab} from './ui3d/native-inspecto
 import {NativeHudCards} from './ui3d/native-hud';
 import type {NativeHudViewAction} from './ui3d/native-hud';
 import {NATIVE_DOCK_PREFERENCE_KEY,parseNativeDockPreferences,NATIVE_UI_SCALE_PREFERENCE_KEY,parseNativeUiScale,normalizeNativeUiScale,type NativeDockPreferences} from './ui3d/native-preferences';
-import {GRAPHICS_STYLE_PREFERENCE_KEY,parseGraphicsStylePreferences,normalizeGraphicsStylePreferences,requiresGraphicsStyleRebuild,type GraphicsStylePreferences} from './ui3d/native-preferences';
+import {GRAPHICS_STYLE_PREFERENCE_KEY,parseGraphicsStylePreferences,normalizeGraphicsStylePreferences,type GraphicsStylePreferences} from './ui3d/native-preferences';
 import {graphicsStyleComparisonsShareScene,type GraphicsStyleComparisonResult} from './render/graphics-style-comparison';
 import {installNativeCardboardCursors} from './ui/native-cardboard-cursors';
 import type {NativeUiState,NativeUiActions,NativePage} from './ui3d/native-contract';
@@ -850,32 +850,15 @@ function setAnimationSettings(settings: AnimationSettings): boolean {
 }
 async function setGraphicsStylePreferences(settings:GraphicsStylePreferences):Promise<boolean>{
  if(graphicsStyleChanging||graphicsRecovering||replacingWorld||presentationPreparation)throw new Error('La préparation de l’affichage est déjà en cours.');
- const next=normalizeGraphicsStylePreferences(settings),previous=graphicsStylePreferences;
- if(!requiresGraphicsStyleRebuild(previous,next)){renderer?.setGraphicsStyleParameters(next);graphicsStylePreferences=next;}
- else if(!renderer){graphicsStylePreferences=next;}
- else{
-  const view=renderer.captureGraphicsView(),interaction=renderer.captureGraphicsInteraction(),epoch=campaignPresentationEpoch;
-  const restore=(active:ColonyRenderer)=>{active.restoreGraphicsView(view);active.restoreGraphicsInteraction(interaction);active.setSelectedPawns(selection.ids);active.setSelectedObjects(selectedObjects);};
-  graphicsStyleChanging=true;graphicsRecovering=true;syncStorageButtons();
-  // Only one complete renderer/device is resident. Never reload or replace the
-  // simulation, its Worker, tickets, owners or saves for a visual preference.
-  const old=renderer;
-  try{
-   renderer=undefined;await old.disposeAsync();graphicsStylePreferences=next;
-   await prepareWorld();
-   if(epoch===campaignPresentationEpoch&&renderer)restore(renderer);
-  }catch(error){
-   graphicsStylePreferences=previous;
-   if(renderer){const failed=renderer;renderer=undefined;await failed.disposeAsync();}
-   try{await prepareWorld();if(epoch===campaignPresentationEpoch&&renderer)restore(renderer);}catch{/* Existing display recovery keeps the simulation and saves intact. */}
-   throw error;
-  }finally{graphicsStyleChanging=false;graphicsRecovering=false;syncStorageButtons();updateIncident();}
- }
+ const next=normalizeGraphicsStylePreferences(settings),active=renderer;
+ graphicsStyleChanging=true;syncStorageButtons();
+ try{if(active)await active.setGraphicsStyleParameters(next);graphicsStylePreferences=next;}
+ finally{graphicsStyleChanging=false;syncStorageButtons();updateIncident();}
  try{localStorage.setItem(GRAPHICS_STYLE_PREFERENCE_KEY,JSON.stringify(graphicsStylePreferences));return true;}catch{return false;}
 }
 function graphicsMeasurementText():string{
  const rows=[...graphicsMeasurements.values()].map(result=>{
-  const style=result.context.preferences.style==='origami'?'Origami':'Par défaut';
+  const style=result.context.preferences.style==='origami'?'Gouache':'Pastel';
   if(result.status!=='complete')return `${style} : mesure interrompue (${result.reason??result.status}).`;
   return `${style} : intervalle médian ${result.frameIntervalsMs?.median.toFixed(2)} ms, p95 ${result.frameIntervalsMs?.p95.toFixed(2)} ms ; soumission CPU ${result.cpuSubmitMs?.mean.toFixed(2)} ms ; ${Math.round(result.drawCalls?.mean??0)} appels, ${Math.round(result.triangles?.mean??0)} triangles. GPU non mesuré.`;
  });

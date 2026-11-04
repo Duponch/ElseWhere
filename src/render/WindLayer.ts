@@ -9,7 +9,8 @@ import { ResourceTargetTint } from './resource-target-tint';
 import type { AnimationDetail } from './AnimationDetail';
 import { RetainedAnimation } from './RetainedAnimation';
 import {currentGraphicsStyle} from './graphics-style';
-import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
+import {naturalStroke} from './surfaces/NaturalSurfaceModels';
 
 interface Spin {tick:number;phase:number;speed:number}
 /** Three retained blades per turbine. Only changes of power/placement upload
@@ -18,8 +19,8 @@ export class WindLayer {
   readonly group=new THREE.Group();
   readonly tick=uniform(0);
   readonly mesh:BoxMesh;
-  private readonly contour?:OrigamiContourBinding;
-  private readonly base=new THREE.BoxGeometry(1,1,1);
+  private readonly surfaceModel=new OwnedStrokeModel(new THREE.BoxGeometry(1,1,1));
+  private readonly base=this.surfaceModel.geometry;
   private readonly material=material(0xffffff);
   private key:string|null=null;
   private readonly history=new Map<number,{current:Spin;previous:Spin}>();
@@ -48,7 +49,7 @@ export class WindLayer {
     this.mesh=new BoxMesh(this.base,this.material,256);this.allocateAttributes(256);
     this.mesh.name='wind-turbine-blades';this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.group.add(this.mesh);
     const context=currentGraphicsStyle();
-    if(context?.origami){this.contour=createOrigamiContour(this.mesh,context);this.group.add(this.contour.line);}
+    this.material.colorNode=naturalStroke(context,this.surfaceModel.stroke)(attribute('boxColor','vec3'));
   }
   private allocateAttributes(capacity:number):void {
     for(const name of ['windCurrent','windPrevious','windShape'])this.mesh.geometry.setAttribute(name,new THREE.InstancedBufferAttribute(new Float32Array(capacity*4),4).setUsage(THREE.StaticDrawUsage));
@@ -99,7 +100,7 @@ export class WindLayer {
     this.animation.reconcile(turbines.flatMap(s=>{
       const hub=windBladeHub(s);return [0,1,2].map(blade=>({id:s.id*3+blade,x:hub.x,y:hub.y,z:hub.z}));
     }));
-    this.contour?.sync();
+
   }
   present(tick:number):void {
     this.tick.value=tick;if(!this.mesh.activeCount)return;
@@ -112,8 +113,8 @@ export class WindLayer {
   }
   prepareForCompile():()=>void {
     if(this.mesh.activeCount)return ()=>{};
-    const version=this.mesh.instanceMatrix.version;this.mesh.activeCount=1;this.contour?.sync();
-    return ()=>{if(this.mesh.instanceMatrix.version===version)this.mesh.activeCount=0;this.contour?.sync();};
+    const version=this.mesh.instanceMatrix.version;this.mesh.activeCount=1;
+    return ()=>{if(this.mesh.instanceMatrix.version===version)this.mesh.activeCount=0;};
   }
-  dispose():void {this.contour?.dispose();this.animation.dispose();this.clearTargetPreview();this.mesh.dispose();this.base.dispose();this.material.dispose();}
+  dispose():void {this.animation.dispose();this.clearTargetPreview();this.mesh.dispose();this.surfaceModel.dispose();this.material.dispose();}
 }

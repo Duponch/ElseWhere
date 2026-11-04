@@ -13,13 +13,16 @@ import {treeCargoKind} from './tree-presentation';
 import {WildlifeBodyScale} from './wildlife-frame-state';
 import type {WildlifeLayer} from './WildlifeLayer';
 import {currentGraphicsStyle} from './graphics-style';
-import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {attribute} from 'three/tsl';
+import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
+import {MutableFaceStrokeBank,type FaceStrokeBankRegion} from './surfaces/MutableFaceStrokeBank';
+import {naturalStroke,SURFACE_STROKE_FACE} from './surfaces/NaturalSurfaceModels';
 import {bestiaryAnimalCargoBack,bestiaryAnimalCargoTorso} from './origami/bestiary-registry';
 import {compiledCargoBackPoint,fitAnimalCargoBack,type CompiledAnimalCargoBack} from './origami/animal-cargo-back';
 
 type CargoMesh=THREE.InstancedMesh<THREE.BufferGeometry,THREE.MeshLambertNodeMaterial>;
 type Member={animal:WildAnimal;scale:number;back:Back|CompiledAnimalCargoBack;shown?:boolean;last?:readonly [number,number,number,number,boolean]};
-type Batch={mesh:CargoMesh;contour?:OrigamiContourBinding;capacity:number;members:Member[];width:number;depth:number;backs:Map<string,CompiledAnimalCargoBack>};
+type Batch={mesh:CargoMesh;model:OwnedStrokeModel;region:FaceStrokeBankRegion;capacity:number;members:Member[];width:number;depth:number;backs:Map<string,CompiledAnimalCargoBack>};
 type Back={y:number;z:number;width:number;depth:number;bodyCenter:number;restFloor:number};
 /** Read-only presentation projection. Tests/previews can supply the actual
  * inventory/actor records without inventing an Engine or a complete World. */
@@ -68,6 +71,7 @@ export class AnimalCargoLayer282 {
  readonly stats={activeCargo:0,activeBatches:0,geometryBuilds:0,matrixUploads:0,attachmentBuilds:0};
  private readonly graphicsStyle=currentGraphicsStyle();
  private readonly material=createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true});
+ private readonly strokeBank=new MutableFaceStrokeBank();
  private readonly batches=new Map<string,Batch>();
  private readonly bodyScale=new WildlifeBodyScale();
  private readonly object=new THREE.Object3D();
@@ -76,18 +80,20 @@ export class AnimalCargoLayer282 {
  constructor(configure?:(m:THREE.NodeMaterial)=>void){
   this.group.name='Animal cargo282 — real local inventory';
   configure?.(actorExplorationMaterial256(this.material));
+  this.material.vertexColors=false;this.material.colorNode=naturalStroke(this.graphicsStyle,this.strokeBank)(attribute('color','vec3'));
   // Zero-size instance compiles the same attribute/material pipeline under the
   // loading overlay even when no animal has acquired a carried item yet.
   this.warmup=this.makeBatch(carriedGeometry('wood',1),1);this.warmup.mesh.name='Animal cargo282 — pipeline preparation';
   this.object.scale.setScalar(0);this.object.updateMatrix();this.warmup.mesh.setMatrixAt(0,this.object.matrix);
  }
- private makeBatch(geometry:THREE.BufferGeometry,capacity:number):Batch {
-  geometry.setAttribute('aTo',new THREE.InstancedBufferAttribute(new Float32Array(capacity*4),4).setUsage(THREE.DynamicDrawUsage));
-  const mesh=new THREE.InstancedMesh(geometry,this.material,capacity);
-  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;mesh.castShadow=mesh.receiveShadow=true;
-  this.group.add(mesh);const b=geometry.boundingBox;
-  const contour=this.graphicsStyle?.origami?createOrigamiContour(mesh,this.graphicsStyle):undefined;if(contour){contour.line.frustumCulled=false;mesh.add(contour.line);}
-  return {mesh,contour,capacity,members:[],width:b?Math.max(.001,b.max.x-b.min.x):1,depth:b?Math.max(.001,b.max.z-b.min.z):1,backs:new Map()};
+ private makeBatch(source:THREE.BufferGeometry,capacity:number):Batch {
+  const model=new OwnedStrokeModel(source);let region:FaceStrokeBankRegion|undefined,geometry:THREE.BufferGeometry|undefined,mesh:CargoMesh|undefined;
+  try{region=this.strokeBank.publish(model.stroke);geometry=model.geometry.clone();const faces=geometry.getAttribute(SURFACE_STROKE_FACE);
+   for(let vertex=0;vertex<faces.count;vertex++)faces.setX(vertex,faces.getX(vertex)+region.faceOffset);
+   geometry.setAttribute('aTo',new THREE.InstancedBufferAttribute(new Float32Array(capacity*4),4).setUsage(THREE.DynamicDrawUsage));
+   mesh=new THREE.InstancedMesh(geometry,this.material,capacity);mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;mesh.castShadow=mesh.receiveShadow=true;
+   this.group.add(mesh);const b=geometry.boundingBox;return {mesh,model,region,capacity,members:[],width:b?Math.max(.001,b.max.x-b.min.x):1,depth:b?Math.max(.001,b.max.z-b.min.z):1,backs:new Map()};
+  }catch(error){mesh?.removeFromParent();mesh?.dispose();geometry?.dispose();region?.release();model.dispose();throw error;}
  }
  private referenceBack(batch:Batch,species:string):CompiledAnimalCargoBack|undefined {
   const cached=batch.backs.get(species);if(cached)return cached;
@@ -95,7 +101,7 @@ export class AnimalCargoLayer282 {
   const fitted=fitAnimalCargoBack(base,torso,batch.width,batch.depth);if(!fitted)return;
   batch.backs.set(species,fitted);this.stats.attachmentBuilds++;return fitted;
  }
- private disposeBatch(batch:Batch):void {batch.contour?.dispose();batch.mesh.removeFromParent();batch.mesh.dispose();batch.mesh.geometry.dispose();}
+ private disposeBatch(batch:Batch):void {batch.region.release();batch.mesh.removeFromParent();batch.mesh.dispose();batch.mesh.geometry.dispose();batch.model.dispose();}
  update(world:AnimalCargoSnapshot282,_timeline?:MotionTimeline,reset=false):void {
   if(reset){for(const batch of this.batches.values())this.disposeBatch(batch);this.batches.clear();this.active=[];}
   for(const batch of this.active){batch.members=[];batch.mesh.count=0;batch.mesh.visible=false;}
@@ -119,14 +125,14 @@ export class AnimalCargoLayer282 {
   }
   for(const batch of this.active){
    if(batch.members.length>batch.capacity){
-    const previous=batch.mesh,geometry=previous.geometry.clone(),members=batch.members,capacity=2**Math.ceil(Math.log2(members.length));
-    this.disposeBatch(batch);const grown=this.makeBatch(geometry,capacity);grown.mesh.name=previous.name;
-    batch.mesh=grown.mesh;batch.contour=grown.contour;batch.capacity=capacity;batch.members=members;
+    const previous=batch.mesh,geometry=previous.geometry.clone(),capacity=2**Math.ceil(Math.log2(batch.members.length));
+    geometry.setAttribute('aTo',new THREE.InstancedBufferAttribute(new Float32Array(capacity*4),4).setUsage(THREE.DynamicDrawUsage));
+    const mesh=new THREE.InstancedMesh(geometry,this.material,capacity);mesh.name=previous.name;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;mesh.castShadow=mesh.receiveShadow=true;
+    this.group.add(mesh);previous.removeFromParent();previous.dispose();previous.geometry.dispose();batch.mesh=mesh;batch.capacity=capacity;
    }
    batch.mesh.count=batch.members.length;
    const owner=batch.mesh.geometry.getAttribute('aTo') as THREE.InstancedBufferAttribute;
    batch.members.forEach(({animal},i)=>owner.setXYZW(i,animal.x,0,animal.z,0));owner.needsUpdate=true;
-   batch.contour?.sync(batch.mesh);
   }
   // Quantity/tree variants stay resident across ordinary handoffs. Inactive
   // variants alone are evicted, bounding a long campaign's retained geometry.
@@ -154,13 +160,13 @@ export class AnimalCargoLayer282 {
     batch.mesh.setMatrixAt(i,this.object.matrix);member.shown=true;member.last=[px,py,pz,pose.yaw,resting];dirty=true;this.stats.matrixUploads++;
    });
    if(dirty){batch.mesh.instanceMatrix.needsUpdate=true;changed=true;}
-   if(!batch.mesh.visible){batch.mesh.visible=true;batch.contour?.sync(batch.mesh);changed=true;}
+   if(!batch.mesh.visible){batch.mesh.visible=true;changed=true;}
   }
   return changed;
  }
  prepareForCompile():()=>void {
   const mesh=this.warmup.mesh;mesh.count=1;mesh.visible=true;
-  this.warmup.contour?.sync(mesh);return ()=>{mesh.count=0;mesh.visible=false;this.warmup.contour?.sync(mesh);};
+  return ()=>{mesh.count=0;mesh.visible=false;};
  }
- dispose():void {for(const batch of this.batches.values())this.disposeBatch(batch);this.batches.clear();this.active=[];this.disposeBatch(this.warmup);this.material.dispose();}
+ dispose():void {for(const batch of this.batches.values())this.disposeBatch(batch);this.batches.clear();this.active=[];this.disposeBatch(this.warmup);this.material.dispose();this.strokeBank.dispose();}
 }

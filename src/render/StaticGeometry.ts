@@ -34,17 +34,34 @@ export function noise(x: number, z: number, salt = 0): number {
  * per-cell silhouettes and colors stay intact; only submissions are combined.
  * Dynamic pawns and cargo remain GPU-instanced and are never baked here.
  */
-export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.BufferGeometry; items: Placement[] }[], mat: THREE.Material, shadows = true, includeUv = false,faceUv=false): THREE.Mesh | undefined {
+export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.BufferGeometry; items: Placement[] }[], mat: THREE.Material, shadows = true, includeUv = false,faceUv=false,packedSurface=false): THREE.Mesh | undefined {
   const vertexCount = parts.reduce((sum, part) => sum + part.geometry.getAttribute('position').count * part.items.length, 0);
   const indexCount = parts.reduce((sum, part) => sum + (part.geometry.index?.count ?? part.geometry.getAttribute('position').count) * part.items.length, 0);
   if (!vertexCount) { for (const part of parts) part.geometry.dispose(); if (!mat.userData.rendererOwned) mat.dispose(); return; }
-  const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Float32Array(vertexCount * 3);
-  const uvs = includeUv ? new Float32Array(vertexCount * 2) : undefined;
   const hasBakedUv=parts.some(part=>part.items.length>0&&part.geometry.hasAttribute('bakedUv'));
   if(hasBakedUv)for(const part of parts)if(part.items.length){const baked=part.geometry.getAttribute('bakedUv');if(!(baked instanceof THREE.BufferAttribute)||baked instanceof THREE.InstancedBufferAttribute||!(baked.array instanceof Float32Array)||baked.itemSize!==3||baked.count!==part.geometry.getAttribute('position').count)throw new Error('Prepared tree batches require ordinary bakedUv3 on every nonempty part');}
-  const bakedUvs=hasBakedUv?new Float32Array(vertexCount*3):undefined;
-  const hasProfiles=parts.some(part=>part.items.some(item=>item.profile!==undefined)||part.geometry.hasAttribute('origamiPaint'));
+  const hasSurface=packedSurface||parts.some(part=>part.geometry.hasAttribute('surfaceStrokeFace'));
+  // One ordinary vec4 keeps wind-enabled resources within WebGPU's eight
+  // vertex-buffer limit. The profile word is an exact integer in Float32:
+  // profile +128*(treeSlot +32*faceId), with slot31 meaning no tree cache.
+  // Admission precedes the large output allocations and never quantizes IDs.
+  if(hasSurface)for(const {geometry,items}of parts)if(items.length){
+    const position=geometry.getAttribute('position'),raw=geometry.getAttribute('surfaceFaceUv')??geometry.getAttribute('uv'),strokeUv=geometry.getAttribute('surfaceStrokeUv')??geometry.getAttribute('uv'),strokeFace=geometry.getAttribute('surfaceStrokeFace'),sourcePaint=geometry.getAttribute('origamiPaint'),baked=geometry.getAttribute('bakedUv');
+    for(const [name,a,size]of [['raw',raw,2],['stroke UV',strokeUv,2],['stroke face',strokeFace,1]] as const)if(!(a instanceof THREE.BufferAttribute)||a instanceof THREE.InstancedBufferAttribute||a.itemSize!==size||a.count!==position.count)throw Error(`Complete ordinary shared natural ${name} fields required before merge`);
+    for(const item of items)if(item.profile!==undefined&&(!Number.isSafeInteger(item.profile)||item.profile<0||item.profile>=128))throw Error('Shared natural profile outside exact packed domain');
+    const needsSourceProfile=items.some(item=>item.profile===undefined);
+    for(let i=0;i<position.count;i++){
+      const face=strokeFace!.getX(i),slot=packedSurface?(baked?.getZ(i)??31):0;
+      if(!Number.isSafeInteger(face)||face<0||face>=4096||!Number.isSafeInteger(slot)||slot<0||(slot>27&&slot!==31))throw Error('Shared natural face/tree slot outside exact packed domain');
+      const profile=needsSourceProfile?(sourcePaint?.getW(i)??0):0,word=profile+128*(packedSurface?slot+32*face:face);if(!Number.isSafeInteger(profile)||profile<0||profile>=128||word>=16777216)throw Error('Shared natural profile outside exact packed domain');
+    }
+  }
+  const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Float32Array(vertexCount * 3);
+  const uvs = includeUv ? new Float32Array(vertexCount * 2) : undefined;
+  const bakedUvs=hasBakedUv&&!packedSurface?new Float32Array(vertexCount*3):undefined;
+  const hasProfiles=hasSurface||parts.some(part=>part.items.some(item=>item.profile!==undefined)||part.geometry.hasAttribute('origamiPaint'));
   const paint=hasProfiles?new Float32Array(vertexCount*4):undefined;
+  const surfaceUvs=hasSurface?new Float32Array(vertexCount*4):undefined;
   const wearExpand=parts.some(part=>part.geometry.hasAttribute('origamiWearExpand'))?new Float32Array(vertexCount*3):undefined;
   const brush=parts.some(part=>resourceBrushData(part.geometry))?{base:new Float32Array(vertexCount*3),width:new Float32Array(vertexCount*3),rough:new Float32Array(vertexCount*3)}:undefined;
   const indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
@@ -53,6 +70,8 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
   for (const { geometry, items } of parts) {
     const pos = geometry.getAttribute('position'), normal = geometry.getAttribute('normal'), uv=geometry.getAttribute('uv'),sourcePaint=geometry.getAttribute('origamiPaint'),sourceExpand=geometry.getAttribute('origamiWearExpand'),sourceBakedUv=geometry.getAttribute('bakedUv');
     const sourceBrush=resourceBrushData(geometry);
+    const rawFace=geometry.getAttribute('surfaceFaceUv')??uv,strokeUv=geometry.getAttribute('surfaceStrokeUv')??uv,strokeFace=geometry.getAttribute('surfaceStrokeFace');
+    if(hasSurface&&items.length&&(!rawFace||!strokeUv||!strokeFace))throw Error('Complete shared natural surface fields required before merge');
     for (const item of items) {
       const firstIndex = index,firstVertex=vertex;
       // These vertices are baked only when a spatial chunk changes. Encode a
@@ -77,7 +96,8 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
         normals[offset + 1] = ny / length;
         normals[offset + 2] = (nz * cosine - nx * sine) / length;
         if(bakedUvs){bakedUvs[offset]=sourceBakedUv.getX(i);bakedUvs[offset+1]=sourceBakedUv.getY(i);bakedUvs[offset+2]=sourceBakedUv.getZ(i);}
-        if(paint){const at=(vertex+i)*4;paint[at]=referenceColor!.r;paint[at+1]=referenceColor!.g;paint[at+2]=referenceColor!.b;paint[at+3]=item.profile??sourcePaint?.getW(i)??0;}
+        if(surfaceUvs){const at=(vertex+i)*4;surfaceUvs[at]=rawFace!.getX(i);surfaceUvs[at+1]=rawFace!.getY(i);surfaceUvs[at+2]=packedSurface&&sourceBakedUv?sourceBakedUv.getX(i):strokeUv!.getX(i);surfaceUvs[at+3]=packedSurface&&sourceBakedUv?sourceBakedUv.getY(i):strokeUv!.getY(i);}
+        if(paint){const at=(vertex+i)*4;paint[at]=referenceColor!.r;paint[at+1]=referenceColor!.g;paint[at+2]=referenceColor!.b;const profile=item.profile??sourcePaint?.getW(i)??0;paint[at+3]=profile+(surfaceUvs?128*(packedSurface?(sourceBakedUv?.getZ(i)??31)+32*strokeFace!.getX(i):strokeFace!.getX(i)):0);}
         if(wearExpand&&sourceExpand){const ex=sourceExpand.getX(i)*sx,ey=sourceExpand.getY(i)*sy,ez=sourceExpand.getZ(i)*sz;wearExpand[offset]=ex*cosine+ez*sine;wearExpand[offset+1]=ey;wearExpand[offset+2]=ez*cosine-ex*sine;}
         if(brush){
           const at=i*3,bx=(sourceBrush?.base[at]??pos.getX(i))*sx,by=(sourceBrush?.base[at+1]??pos.getY(i))*sy,bz=(sourceBrush?.base[at+2]??pos.getZ(i))*sz;
@@ -113,6 +133,7 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   if(uvs)geometry.setAttribute('uv',new THREE.BufferAttribute(uvs,2));
   if(bakedUvs)geometry.setAttribute('bakedUv',new THREE.BufferAttribute(bakedUvs,3));
+  if(surfaceUvs)geometry.setAttribute('surfaceUv',new THREE.BufferAttribute(surfaceUvs,4));
   if(paint)geometry.setAttribute('origamiPaint',new THREE.BufferAttribute(paint,4));
   if(wearExpand)geometry.setAttribute('origamiWearExpand',new THREE.BufferAttribute(wearExpand,3));
   if(brush){geometry.userData.origamiBrushPrebuilt=true;geometry.userData.referenceBrushBasePositions=brush.base;geometry.userData.referenceBrushWidthOffsets=brush.width;geometry.userData.referenceBrushRoughOffsets=brush.rough;}

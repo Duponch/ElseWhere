@@ -13,7 +13,10 @@ import {PreparedCropPresentation,type PreparedCropChange} from './prepared-crop-
 import {CropResidentBounds} from './crop-resident-bounds';
 import type {SceneResourceFrame} from './scene-resource-index';
 import {currentGraphicsStyle,type GraphicsStyleContext} from './graphics-style';
-import {createInstancedOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {attribute,instanceColor,texture,uv,vec3} from 'three/tsl';
+import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
+import {compileNaturalSurfaceModels,naturalStroke,type NaturalSurfaceModels} from './surfaces/NaturalSurfaceModels';
+import {createStylizedSurfaceTexture} from './stylized-surfaces';
 
 /** Dedicated resident instancing: sowing never rebuilds forest/rock geometry. */
 export function cropGeometry(kind:ResidentCropKind):THREE.BufferGeometry {
@@ -64,8 +67,8 @@ type CropCapture={x:number;z:number;growth:number;leafless:boolean;blighted:bool
 
 class CropBatch {
   private mesh: THREE.InstancedMesh;
-  private readonly contour:OrigamiContourBinding|undefined;
   private readonly geometry: THREE.BufferGeometry;
+  private readonly ownsGeometry:boolean;
   private readonly slots = new Map<number, number>();
   private readonly free: number[] = [];
   private used = 0;
@@ -82,18 +85,18 @@ class CropBatch {
   private readonly insertionOrder=new Map<number,number>();
   private nextInsertion=0;
   private readonly residentBounds:CropResidentBounds;
-  constructor(private readonly group:THREE.Group,readonly kind:ResidentCropKind,private material: THREE.Material,graphicsStyle:GraphicsStyleContext|undefined) {
+  constructor(private readonly group:THREE.Group,readonly kind:ResidentCropKind,private material: THREE.Material,graphicsStyle:GraphicsStyleContext|undefined,sharedGeometry?:THREE.BufferGeometry) {
     if(kind==='cotton')this.ripe.setHex(0xf0ead7);
     if(kind==='potato')this.ripe.setHex(0x83964a);
     if(kind==='hops'){this.green.setHex(0x72966a);this.ripe.setHex(0xaabd78);}
     if(kind==='haygrass'){this.green.setHex(0x80934e);this.ripe.setHex(0xc6b56b);}
-    this.geometry = cropGeometry(kind);
+    this.geometry=sharedGeometry??cropGeometry(kind);this.ownsGeometry=!sharedGeometry;
     this.residentBounds=new CropResidentBounds(this.geometry);
     this.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.geometry.getAttribute('position').count * 3).fill(1), 3));
     this.mesh = this.createMesh(128); this.group.add(this.mesh);
-    if(graphicsStyle?.origami){this.contour=createInstancedOrigamiContour(this.mesh,graphicsStyle);this.group.add(this.contour.line);}
+    void graphicsStyle;
   }
-  setMaterial(material:THREE.Material):void {this.material=material;this.mesh.material=material;this.contour?.sync(this.mesh);}
+  setMaterial(material:THREE.Material):void {this.material=material;this.mesh.material=material;}
   setTargetPreview(ids:ReadonlySet<number>):void {
     if(ids.size===this.targetPreviewIds.size&&[...ids].every(id=>this.targetPreviewIds.has(id)))return;
     this.targetTint.restore();this.targetPreviewIds=new Set(ids);this.tintTargets();
@@ -116,8 +119,8 @@ class CropBatch {
     return mesh;
   }
   prepareForCompile(): () => void {
-    const mesh=this.mesh,count=mesh.count,version=this.version;mesh.count=Math.max(1,count);this.contour?.sync(mesh);
-    return () => { if(this.mesh===mesh&&this.version===version){mesh.count=count;this.contour?.sync(mesh);} };
+    const mesh=this.mesh,count=mesh.count,version=this.version;mesh.count=Math.max(1,count);
+    return () => { if(this.mesh===mesh&&this.version===version)mesh.count=count; };
   }
   update(world: World, reset: boolean, crops: readonly Resource[],hydroponicCells:ReadonlyMap<number,number>,readGrowth?:(crop:Resource)=>number): void {
     this.preparedTracking=false;
@@ -159,7 +162,6 @@ class CropBatch {
       this.mesh.instanceMatrix.needsUpdate = true; this.mesh.instanceColor!.needsUpdate = true;
     }
     this.mesh.computeBoundingSphere();
-    this.contour?.sync(this.mesh);
     this.tintTargets();
   }
   /** Exact prepared values only. No resource partition, alive Set, growth or
@@ -211,7 +213,7 @@ class CropBatch {
     if(last){const value=this.captures.get(last.id);if(!value)throw Error('Lost crop tail capture');this.transform.position.set(last.x,.025+(value.supported?HYDROPONIC_SUPPORT_HEIGHT:0),last.z);this.transform.rotation.y=(last.id%7)*.9;}
     if(lastMatrix>=firstMatrix)markResidentAttributeRange(this.mesh.instanceMatrix,firstMatrix*16,(lastMatrix-firstMatrix+1)*16);
     if(lastColor>=firstColor)markResidentAttributeRange(this.mesh.instanceColor!,firstColor*3,(lastColor-firstColor+1)*3);
-    if(boundsChanged||resized)this.residentBounds.writeSphere(this.mesh.boundingSphere??=new THREE.Sphere());this.contour?.sync(this.mesh);this.tintTargets();
+    if(boundsChanged||resized)this.residentBounds.writeSphere(this.mesh.boundingSphere??=new THREE.Sphere());this.tintTargets();
   }
   private updateResident(world:World,reset:boolean,crops:readonly Resource[],hydroponicCells:ReadonlyMap<number,number>,readGrowth:(crop:Resource)=>number):void {
     if(reset)this.clearTargetPreview();else this.targetTint.restore();
@@ -262,10 +264,9 @@ class CropBatch {
     if(lastMatrix>=firstMatrix)markResidentAttributeRange(this.mesh.instanceMatrix,firstMatrix*16,(lastMatrix-firstMatrix+1)*16);
     if(lastColor>=firstColor)markResidentAttributeRange(this.mesh.instanceColor!,firstColor*3,(lastColor-firstColor+1)*3);
     if(lastMatrix>=firstMatrix||countChanged||resized||reset)this.mesh.computeBoundingSphere();
-    this.contour?.sync(this.mesh);
     this.tintTargets();
   }
-  dispose(): void { this.contour?.dispose();this.clearTargetPreview();this.residentBounds.clear();this.liveSlots.clear();this.insertionOrder.clear();this.captures.clear();this.mesh.dispose(); this.geometry.dispose(); }
+  dispose(): void {this.clearTargetPreview();this.residentBounds.clear();this.liveSlots.clear();this.insertionOrder.clear();this.captures.clear();this.mesh.dispose();if(this.ownsGeometry)this.geometry.dispose();}
 }
 
 /** Historical shapes and the small hops batch are prewarmed even empty.
@@ -276,19 +277,34 @@ export class CropLayer {
   private readonly batches:CropBatch[];
   private haygrassBatch:CropBatch|undefined;
   private texturesEnabled=true;
+  private readonly surfaceModels:NaturalSurfaceModels|undefined;
+  private readonly sharedTextured:THREE.NodeMaterial|undefined;
+  private readonly ownedPastel:THREE.DataTexture|undefined;
   private readonly partition=new CropPresentationPartition();
   private readonly prepared=new PreparedCropPresentation();
-  constructor(private readonly plainMaterial:THREE.Material,private readonly texturedMaterial:THREE.Material=plainMaterial){this.batches=RESIDENT_CROP_KINDS.filter(kind=>kind!=='haygrass').map(kind=>new CropBatch(this.group,kind,texturedMaterial,this.graphicsStyle));}
-  setTexturesEnabled(enabled:boolean):void {this.texturesEnabled=enabled;for(const batch of this.batches)batch.setMaterial(enabled?this.texturedMaterial:this.plainMaterial);}
+  constructor(private readonly plainMaterial:THREE.Material,private readonly texturedMaterial:THREE.Material=plainMaterial,pastelSource?:THREE.Texture){
+    if(this.graphicsStyle&&texturedMaterial instanceof THREE.NodeMaterial){
+      const originals=RESIDENT_CROP_KINDS.map(kind=>cropGeometry(kind));
+      try{this.surfaceModels=compileNaturalSurfaceModels(originals);}finally{for(const geometry of originals)geometry.dispose();}
+      this.sharedTextured=new THREE.MeshLambertNodeMaterial({flatShading:true});this.sharedTextured.userData.rendererOwned=true;
+      const borrowed=pastelSource??Reflect.get(texturedMaterial,'map') as THREE.Texture|undefined,pastel=borrowed??(this.ownedPastel=createStylizedSurfaceTexture('vegetation')),stroke=naturalStroke(this.graphicsStyle,this.surfaceModels.stroke);
+      applySharedPaintSurface(this.sharedTextured,{context:this.graphicsStyle,base:attribute('color','vec3'),pastel:attribute('color','vec3').mul(texture(pastel,uv()).rgb),gouacheTransform:body=>body.mul(instanceColor),stroke:body=>stroke(body).div(instanceColor.max(vec3(.000001)))});
+    }
+    this.batches=RESIDENT_CROP_KINDS.filter(kind=>kind!=='haygrass').map(kind=>this.createBatch(kind));
+  }
+  private createBatch(kind:ResidentCropKind):CropBatch{return new CropBatch(this.group,kind,this.texturesEnabled?(this.sharedTextured??this.texturedMaterial):this.plainMaterial,this.graphicsStyle,this.surfaceModels?.geometries[RESIDENT_CROP_KINDS.indexOf(kind)]);}
+  private syncSurfaceLighting():void{if(!this.sharedTextured||!(this.texturedMaterial instanceof THREE.NodeMaterial))return;this.sharedTextured.outputNode=this.texturedMaterial.outputNode;this.sharedTextured.maskNode=this.texturedMaterial.maskNode;this.sharedTextured.maskShadowNode=this.texturedMaterial.maskShadowNode;}
+  setTexturesEnabled(enabled:boolean):void {this.texturesEnabled=enabled;for(const batch of this.batches)batch.setMaterial(enabled?(this.sharedTextured??this.texturedMaterial):this.plainMaterial);}
   setTargetPreview(ids:ReadonlySet<number>):void {for(const batch of this.batches)batch.setTargetPreview(ids);}
   clearTargetPreview():void {for(const batch of this.batches)batch.clearTargetPreview();}
-  prepareForCompile():()=>void {const restore=this.batches.map(b=>b.prepareForCompile());return()=>restore.forEach(f=>f());}
+  prepareForCompile():()=>void {this.syncSurfaceLighting();const restore=this.batches.map(b=>b.prepareForCompile());return()=>restore.forEach(f=>f());}
   hasPreparedFrameChange(world:World):boolean {return this.prepared.hasFrameChange(world);}
   update(world:World,reset:boolean,immutableSnapshot=false,index?:SceneResourceFrame):void {
+    this.syncSurfaceLighting();
     const prepared=immutableSnapshot?this.prepared.readScene(world,reset,index):undefined;
     if(prepared){
       if(!prepared.changed)return;let created:CropBatch|undefined;
-      if(!this.haygrassBatch&&this.prepared.count('haygrass')){created=this.haygrassBatch=new CropBatch(this.group,'haygrass',this.texturesEnabled?this.texturedMaterial:this.plainMaterial,this.graphicsStyle);this.batches.push(created);}
+      if(!this.haygrassBatch&&this.prepared.count('haygrass')){created=this.haygrassBatch=this.createBatch('haygrass');this.batches.push(created);}
       for(const batch of this.batches)batch.updatePrepared(world,reset||batch===created,this.prepared.changes,this.prepared.count(batch.kind),this.prepared.last(batch.kind));return;
     }
     this.prepared.clear();
@@ -298,10 +314,10 @@ export class CropLayer {
     const readGrowth=immutableSnapshot?createPlantGrowthReader(world):undefined;
     let created:CropBatch|undefined;
     if(!this.haygrassBatch&&crops.haygrass.length){
-      created=this.haygrassBatch=new CropBatch(this.group,'haygrass',this.texturesEnabled?this.texturedMaterial:this.plainMaterial,this.graphicsStyle);
+      created=this.haygrassBatch=this.createBatch('haygrass');
       this.batches.push(created);
     }
     for(const batch of this.batches)batch.update(world,reset||batch===created,crops[batch.kind],hydroponicCells,readGrowth);
   }
-  dispose():void {this.prepared.clear();for(const batch of this.batches)batch.dispose();}
+  dispose():void {this.prepared.clear();for(const batch of this.batches)batch.dispose();this.sharedTextured?.dispose();this.surfaceModels?.dispose();this.ownedPastel?.dispose();}
 }

@@ -1,5 +1,5 @@
 import{createSurfaceMaterial}from'./SurfaceMaterials';
-import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
+import {currentGraphicsStyle} from './graphics-style';
 import {solidExplorationMaterial256} from './ExplorationMask256';
 import type {OwnedOpaqueProducer435} from './OwnedOpaqueRevisionRegistry435';
 import * as THREE from 'three/webgpu';
@@ -16,7 +16,9 @@ import {ZONE_FILL_OPACITY} from './zone-surface-presentation';
 import {ITEM_SHAPES,type ItemShape} from './item-geometry';
 import {ItemMeshAtlas} from './item-mesh-atlas';
 import {createSandbagGeometry} from './sandbag-parts';
-import {createOrigamiContour,ItemContourAtlas,type OrigamiContourBinding} from './origami/contours';
+import {createItemGeometry} from './item-geometry';
+import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
+import {compileNaturalSurfaceModels,naturalStroke,type NaturalSurfaceModels} from './surfaces/NaturalSurfaceModels';
 
 const object = new THREE.Object3D(), color = new THREE.Color();
 type Style = 'solid' | 'overlay' | 'wire' | 'storage' | 'storage-home' | 'border';
@@ -27,17 +29,16 @@ type Style = 'solid' | 'overlay' | 'wire' | 'storage' | 'storage-home' | 'border
  */
 export class BoxBatches {
   private readonly graphicsStyle=currentGraphicsStyle();
-  private readonly contours=new Map<BoxMesh,OrigamiContourBinding>();
-  private itemContourAtlas?:ItemContourAtlas;
-  private readonly geometry = new THREE.BoxGeometry(1, 1, 1);
-  private readonly roundedRockGeometry = createChunkGeometry();
-  private readonly smallRockGeometry = createChunkGeometry(true);
-  private readonly sandbagGeometry = createSandbagGeometry();
+  private readonly geometry:THREE.BufferGeometry;
+  private readonly roundedRockGeometry:THREE.BufferGeometry;
+  private readonly smallRockGeometry:THREE.BufferGeometry;
+  private readonly sandbagGeometry:THREE.BufferGeometry;
+  private readonly surfaceModels:NaturalSurfaceModels|undefined;
   private readonly surfaceTexture = createStylizedSurfaceTexture();
   private readonly rockTexture = createChunkSurfacePaint();
-  private readonly texturedSolid = currentGraphicsStyle()?.origami?createSurfaceMaterial('physical',0xffffff):createSurfaceMaterial('diffuse',0xffffff);
+  private readonly texturedSolid = createSurfaceMaterial('diffuse',0xffffff);
   private readonly plainRock = createSurfaceMaterial('diffuse',0xffffff);
-  private readonly texturedRock = currentGraphicsStyle()?.origami?createSurfaceMaterial('physical',0xffffff):createSurfaceMaterial('diffuse',0xffffff);
+  private readonly texturedRock = createSurfaceMaterial('diffuse',0xffffff);
   private readonly materials: Record<Style, THREE.NodeMaterial> = {
     solid: createSurfaceMaterial('diffuse',0xffffff),
     // An unlit surface stays legible at midday; grass shares the same tint.
@@ -48,9 +49,9 @@ export class BoxBatches {
     wire: new THREE.MeshBasicNodeMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.65, depthWrite: false }),
   };
   private readonly batches = new Map<string, BoxMesh>();
-  private readonly itemAtlas=new ItemMeshAtlas();
+  private readonly itemAtlas:ItemMeshAtlas;
   private readonly plainItem=createSurfaceMaterial('diffuse',0xffffff);
-  private readonly texturedItem=this.graphicsStyle?.origami?createSurfaceMaterial('physical',0xffffff):createSurfaceMaterial('diffuse',0xffffff);
+  private readonly texturedItem=createSurfaceMaterial('diffuse',0xffffff);
   private readonly itemBatchKeys=new Set<string>();
   private readonly targetBatches = new Map<BoxMesh, { ids: (number | undefined)[]; tint: InstanceTargetTint }>();
   private readonly targetGroups = new Map<THREE.Group, ReadonlySet<number>>();
@@ -60,6 +61,16 @@ export class BoxBatches {
   private roundedRockWarm = false;
 
   constructor(configure?: (material: THREE.NodeMaterial) => void,private readonly ownedProducer435?:OwnedOpaqueProducer435) {
+    if(this.graphicsStyle){
+      const originals=[new THREE.BoxGeometry(1,1,1),createChunkGeometry(),createChunkGeometry(true),createSandbagGeometry(),new THREE.BoxGeometry(1,1,1),...ITEM_SHAPES.map(shape=>createItemGeometry(shape))];
+      try{this.surfaceModels=compileNaturalSurfaceModels(originals);}finally{for(const geometry of originals)geometry.dispose();}
+      this.geometry=this.surfaceModels.geometries[0]!;this.roundedRockGeometry=this.surfaceModels.geometries[1]!;this.smallRockGeometry=this.surfaceModels.geometries[2]!;this.sandbagGeometry=this.surfaceModels.geometries[3]!;
+      this.itemAtlas=new ItemMeshAtlas(this.surfaceModels.geometries.slice(4));
+    }else{
+      // Non-game UI callers have no texture-style context at all. Preserve
+      // their original tiny models without preparing an unused stroke table.
+      this.geometry=new THREE.BoxGeometry(1,1,1);this.roundedRockGeometry=createChunkGeometry();this.smallRockGeometry=createChunkGeometry(true);this.sandbagGeometry=createSandbagGeometry();this.itemAtlas=new ItemMeshAtlas();
+    }
     solidExplorationMaterial256(this.materials.solid);solidExplorationMaterial256(this.texturedSolid);
     configure?.(this.materials.solid);
     configure?.(this.texturedSolid);
@@ -68,7 +79,7 @@ export class BoxBatches {
     configure?.(this.plainItem);configure?.(this.texturedItem);
     this.plainItem.userData.rendererOwned=this.texturedItem.userData.rendererOwned=true;
     this.itemAtlas.configure(this.plainItem);this.itemAtlas.configure(this.texturedItem,this.surfaceTexture);
-    applyOrigamiSurface(this.texturedItem,attribute('boxColor','vec3'),this.itemAtlas.paintUvNode(),this.graphicsStyle);
+    applySharedPaintSurface(this.texturedItem,{context:this.graphicsStyle,base:attribute('boxColor','vec3'),pastel:this.texturedItem.colorNode as THREE.Node<'vec3'>,faceUv:this.itemAtlas.paintUvNode(),stroke:naturalStroke(this.graphicsStyle,this.surfaceModels?.stroke,this.itemAtlas.strokeFaceNode(),this.itemAtlas.strokeUvNode())});
     this.geometry.userData.rendererOwned = true;
     this.roundedRockGeometry.userData.rendererOwned = true;
     this.smallRockGeometry.userData.rendererOwned = true;
@@ -76,15 +87,15 @@ export class BoxBatches {
     for (const mat of Object.values(this.materials)) { mat.userData.rendererOwned = true; configureBoxMaterial(mat); }
     this.texturedSolid.userData.rendererOwned = true;
     configureBoxMaterial(this.texturedSolid);
-    const graphics=currentGraphicsStyle();
+    const graphics=this.graphicsStyle;
     this.texturedSolid.colorNode = attribute('boxColor', 'vec3').mul(texture(this.surfaceTexture, instancedBoxPatternUv()).rgb);
-    applyOrigamiSurface(this.texturedSolid,attribute('boxColor','vec3'),uv(),graphics);
+    applySharedPaintSurface(this.texturedSolid,{context:graphics,base:attribute('boxColor','vec3'),pastel:this.texturedSolid.colorNode as THREE.Node<'vec3'>,stroke:naturalStroke(graphics,this.surfaceModels?.stroke)});
     for (const mat of [this.plainRock, this.texturedRock]) {
       mat.userData.rendererOwned = true;
       configureChunkMaterial(mat);
     }
     this.texturedRock.colorNode = attribute('boxColor', 'vec3').mul(texture(this.rockTexture, chunkPaintUv()).rgb);
-    applyOrigamiSurface(this.texturedRock,attribute('boxColor','vec3'),uv(),graphics);
+    applySharedPaintSurface(this.texturedRock,{context:graphics,base:attribute('boxColor','vec3'),pastel:this.texturedRock.colorNode as THREE.Node<'vec3'>,stroke:naturalStroke(graphics,this.surfaceModels?.stroke)});
   }
 
   /** Select a resident pipeline. The plain one has no texture node or map, so
@@ -99,7 +110,6 @@ export class BoxBatches {
       else if (mesh.material === this.texturedRock || mesh.material === this.plainRock) mesh.material = enabled ? this.texturedRock : this.plainRock;
       else if(mesh.material===this.texturedItem||mesh.material===this.plainItem)mesh.material=enabled?this.texturedItem:this.plainItem;
       if(mesh.material!==previous)mesh.commitOwnedOpaque435();
-      this.contours.get(mesh)?.sync();
     }
   }
 
@@ -148,9 +158,8 @@ export class BoxBatches {
         this.allocateRockContour(warm);
         warm.name = `pile-${suffix}-warm`;
         warm.castShadow = shadows; warm.receiveShadow = true; warm.activeCount = 0;
-        this.ownedProducer435?.register(warm,[this.plainRock,this.texturedRock],[this.rockTexture]);
+        this.ownedProducer435?.register(warm,[this.plainRock,this.texturedRock],[this.rockTexture,...(this.surfaceModels?[this.surfaceModels.stroke.buffer]:[])]);
         group.add(warm); this.batches.set(warm.name, warm);
-        this.syncContour(warm,geometry,false);
       }
       this.roundedRockWarm = true;
     }
@@ -196,7 +205,6 @@ export class BoxBatches {
     mesh.computeBoundingSphere();
     if(targets)targets.tint.setInstances(mesh.colorBuffer,targets.ids);
     mesh.commitOwnedOpaque435();
-    this.contours.get(mesh)?.sync();
     return true;
   }
 
@@ -216,7 +224,7 @@ export class BoxBatches {
       mesh.castShadow = style === 'solid' && shadows; mesh.receiveShadow = true;
       if(style==='solid')this.ownedProducer435?.register(mesh,
         atlas?[this.plainItem,this.texturedItem]:rock?[this.plainRock,this.texturedRock]:[this.materials.solid,this.texturedSolid],
-        atlas?[this.itemAtlas.data,this.surfaceTexture]:rock?[this.rockTexture]:[this.surfaceTexture]);
+        atlas?[this.itemAtlas.data,this.surfaceTexture,...(this.surfaceModels?[this.surfaceModels.stroke.buffer]:[])]:rock?[this.rockTexture,...(this.surfaceModels?[this.surfaceModels.stroke.buffer]:[])]:[this.surfaceTexture,...(this.surfaceModels?[this.surfaceModels.stroke.buffer]:[])]);
       group.add(mesh); this.batches.set(key, mesh);
     } else if (items.length > mesh.instanceMatrix.count||atlas!==!!mesh.itemShapeBuffer) {
       // Release the old per-instance buffers before replacing their capacity.
@@ -247,20 +255,6 @@ export class BoxBatches {
     targets.tint.setInstances(mesh.colorBuffer,ids);
     const selected=this.targetGroups.get(group);if(selected)targets.tint.setTargets(selected);
     mesh.commitOwnedOpaque435();
-    if(style==='solid')this.syncContour(mesh,geometry,atlas);
-  }
-
-  private syncContour(mesh:BoxMesh,geometry:THREE.BufferGeometry,atlas:boolean):void {
-    const context=this.graphicsStyle;if(!context?.origami)return;
-    let binding=this.contours.get(mesh);
-    if(!binding){
-      if(atlas){
-        const source=this.itemContourAtlas??=new ItemContourAtlas();
-        binding=createOrigamiContour(mesh,context,source.positionNode(),geometry===this.itemAtlas.smallGeometry?source.smallGeometry:source.geometry,source.paintUvNode());
-      }else binding=createOrigamiContour(mesh,context,(mesh.material as THREE.NodeMaterial).positionNode,geometry);
-      mesh.add(binding.line);this.contours.set(mesh,binding);
-    }
-    binding.sync(mesh);
   }
 
   private allocateRockContour(mesh: BoxMesh): void {
@@ -268,7 +262,6 @@ export class BoxBatches {
   }
 
   clear(): void {
-    for(const binding of this.contours.values())binding.dispose();this.contours.clear();
     for (const state of this.targetBatches.values()) state.tint.dispose();
     this.targetBatches.clear();this.targetGroups.clear();
     for (const mesh of this.batches.values()) { mesh.removeFromParent(); mesh.dispose(); }
@@ -299,9 +292,8 @@ export class BoxBatches {
   }
 
   dispose(): void {
-    this.clear(); this.geometry.dispose(); this.roundedRockGeometry.dispose();this.smallRockGeometry.dispose();this.sandbagGeometry.dispose();
+    this.clear();if(this.surfaceModels)this.surfaceModels.dispose();else{this.geometry.dispose();this.roundedRockGeometry.dispose();this.smallRockGeometry.dispose();this.sandbagGeometry.dispose();}
     this.itemAtlas.dispose();this.plainItem.dispose();this.texturedItem.dispose();
-    this.itemContourAtlas?.dispose();this.itemContourAtlas=undefined;
     for (const mat of Object.values(this.materials)) mat.dispose();
     this.texturedSolid.dispose(); this.plainRock.dispose(); this.texturedRock.dispose(); this.surfaceTexture.dispose();this.rockTexture.dispose();
   }

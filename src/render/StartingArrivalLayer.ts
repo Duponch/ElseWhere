@@ -7,8 +7,10 @@ import { material } from './primitives';
 import { createStylizedSurfaceTexture } from './stylized-surfaces';
 import { instancedBoxPatternUv } from './texture-variation';
 import type { AnimationDetail } from './AnimationDetail';
-import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
-import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {currentGraphicsStyle} from './graphics-style';
+import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
+import {naturalStroke} from './surfaces/NaturalSurfaceModels';
+import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
 
 export const STARTING_ARRIVAL_CAPSULES=3;
 export const STARTING_ARRIVAL_PARTS=8;
@@ -33,7 +35,6 @@ type Phase='none'|'incoming'|'landed'|'opening'|'retired';
 export class StartingArrivalLayer {
   readonly group=new THREE.Group();
   readonly mesh:BoxMesh;
-  private readonly contour?:OrigamiContourBinding;
   readonly tick=uniform(0);
   readonly opening=uniform(new THREE.Vector2());
   private readonly times=uniform(new THREE.Vector2(0,15));
@@ -41,7 +42,8 @@ export class StartingArrivalLayer {
   private readonly coreArrival=uniform(0);
   private readonly coreCells=new Set<string>();
   private readonly coreOpenings=new Map<string,{cell:Cell;openedAt:number}>();
-  private readonly base=new THREE.BoxGeometry(1,1,1);
+  private readonly surfaceModel=new OwnedStrokeModel(new THREE.BoxGeometry(1,1,1));
+  private readonly base=this.surfaceModel.geometry;
   private readonly paint=createStylizedSurfaceTexture();
   private readonly plain=material(0xffffff,{transparent:true,depthWrite:false,forceSinglePass:true});
   private readonly painted=material(0xffffff,{transparent:true,depthWrite:false,forceSinglePass:true});
@@ -96,12 +98,12 @@ export class StartingArrivalLayer {
     this.mesh.instanceMatrix.needsUpdate=this.mesh.colorBuffer.needsUpdate=sides.needsUpdate=true;
     this.mesh.activeCount=0;this.group.add(this.mesh);
     const context=currentGraphicsStyle();
-    applyOrigamiSurface(this.painted,attribute('boxColor','vec3'),uv(),context);
-    if(context?.origami){this.contour=createOrigamiContour(this.mesh,context);this.group.add(this.contour.line);}
+    this.painted.roughness=.88;this.painted.metalness=.02;
+    applySharedPaintSurface(this.painted,{context,base:attribute('boxColor','vec3'),pastel:this.painted.colorNode as THREE.Node<'vec3'>,faceUv:uv(),stroke:naturalStroke(context,this.surfaceModel.stroke)});
   }
 
   /** Renderer-only preview callers must synchronize after writing instance streams. */
-  syncContours():void {this.contour?.sync();}
+  syncContours():void {}
 
   get presentation():Readonly<{phase:Phase;capsules:number;visible:boolean}> {
     return {phase:this.phase,capsules:this.mesh.activeCount/STARTING_ARRIVAL_PARTS,visible:this.mesh.visible};
@@ -199,5 +201,5 @@ export class StartingArrivalLayer {
     };
   }
 
-  dispose():void {this.contour?.dispose();this.mesh.removeFromParent();this.mesh.dispose();this.base.dispose();this.plain.dispose();this.painted.dispose();this.paint.dispose();this.coreCells.clear();this.coreOpenings.clear();this.group.clear();}
+  dispose():void {this.mesh.removeFromParent();this.mesh.dispose();this.surfaceModel.dispose();this.plain.dispose();this.painted.dispose();this.paint.dispose();this.coreCells.clear();this.coreOpenings.clear();this.group.clear();}
 }

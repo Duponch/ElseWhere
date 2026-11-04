@@ -3,7 +3,7 @@ import * as THREE from 'three/webgpu';
 /** Grow the three resident meshes together. Keep materials/node graphs so both
  * colour and shadow pipelines survive population changes. Each geometry owns
  * its static vertices; trajectory attributes remain shared by all consumers. */
-export function growPawnBuffers(meshes:readonly THREE.Mesh[],required:number):void {
+export function growPawnBuffers(meshes:readonly THREE.Mesh[],required:number,retireGeometry?:(geometry:THREE.BufferGeometry,mesh:THREE.Mesh)=>void):void {
   const capacity=2**Math.ceil(Math.log2(Math.max(1,required)));
   const shared=new Map<string,THREE.InstancedBufferAttribute>();
   const interleaved=new Map<THREE.InterleavedBuffer,THREE.InstancedInterleavedBuffer>();
@@ -32,5 +32,5 @@ export function growPawnBuffers(meshes:readonly THREE.Mesh[],required:number):vo
   });
   // No render can interleave this synchronous replacement. Dispose only after
   // every clone is ready: shared old attributes are no longer used anywhere.
-  meshes.forEach((mesh,i)=>{mesh.geometry.dispose();mesh.geometry=replacements[i]!;});
+  meshes.forEach((mesh,i)=>{const previous=mesh.geometry;mesh.geometry=replacements[i]!;if(retireGeometry)retireGeometry(previous,mesh);else previous.dispose();});
 }

@@ -9,10 +9,10 @@ import {ORIGAMI_HUMAN_BIND,HUMAN_REFERENCE_SCALE} from './origami/human-geometry
 /** Original CPU aliases remain inspectable; the Origami shader spends one
  * vertex location on both traits, keeping real UVs within the device limit. */
 export function pawnBoneNode(origami=false):Node<'float'> {
-  return origami?attribute('pawnRigTraits','vec3').x:attribute('boneId','float');
+  return origami?attribute('pawnRigTraits','vec4').x:attribute('boneId','float');
 }
 export function pawnDyeNode(origami=false):Node<'float'> {
-  return origami?attribute('pawnRigTraits','vec3').y:attribute('dye','float');
+  return origami?attribute('pawnRigTraits','vec4').y:attribute('dye','float');
 }
 
 /** Applied equally to vertices and rigid-bone pivots, before pose animation. */

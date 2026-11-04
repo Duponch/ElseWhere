@@ -1,7 +1,10 @@
 import * as THREE from 'three/webgpu';
-import {currentGraphicsStyle,applyOrigamiSurface} from './graphics-style';
-import {attribute,vec2,uv} from 'three/tsl';
-import {createOrigamiContour,type OrigamiContourBinding} from './origami/contours';
+import {currentGraphicsStyle} from './graphics-style';
+import {attribute,vec2,uv,texture} from 'three/tsl';
+import {compileFaceStrokeTable} from './surfaces/FaceStrokeTable';
+import {MutableFaceStrokeBank,type FaceStrokeBankRegion} from './surfaces/MutableFaceStrokeBank';
+import {naturalStroke,SURFACE_STROKE_UV} from './surfaces/NaturalSurfaceModels';
+import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
 import {roofCoverage,roofKindAt} from '../sim/roof-rules';
 import { isRoomDoor } from '../sim/door-rules';
 import type { World } from '../sim/types';
@@ -132,7 +135,8 @@ export class RoofLayer {
   readonly textured = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, roughness: .94, metalness: 0, flatShading: true, vertexColors: true, map: this.paint });
   readonly plain = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, roughness: .94, metalness: 0, flatShading: true, vertexColors: true });
   readonly mesh: THREE.Mesh;
-  private readonly contour?:OrigamiContourBinding;
+  private readonly strokeBank=new MutableFaceStrokeBank();
+  private surfaceRegion?:FaceStrokeBankRegion;
   private surfaceKey = '';
   private areaKey = '';
   private texturesEnabled = true;
@@ -142,23 +146,19 @@ export class RoofLayer {
     this.mesh.name = 'continuous-roof-coverage';
     this.mesh.castShadow = this.mesh.receiveShadow = true;
     this.mesh.visible = false; this.surface.add(this.mesh);
+    this.mesh.geometry.setAttribute(SURFACE_STROKE_UV,new THREE.Float32BufferAttribute([],3));
     const context=currentGraphicsStyle();
-    if(context?.origami){
-      // The canonical slab's X/Z UV is degenerate on its vertical skirts.
-      // Use the existing source position/normal for those faces only; no
-      // canonical geometry or default roof coordinates are rewritten.
-      const point=attribute('position','vec3'),normal=attribute('normal','vec3').abs();
-      const paintUv=normal.y.greaterThan(.5).select(uv(),normal.x.greaterThan(.5).select(vec2(point.z,point.y).div(8),vec2(point.x,point.y).div(8)));
-      applyOrigamiSurface(this.textured,attribute('color','vec3'),paintUv,context);
-    }
-    if(context?.origami){this.contour=createOrigamiContour(this.mesh,context);this.surface.add(this.contour.line);}
+    // Exact old roof UVs remain the Pastel source. The original Gouache
+    // side-face projection supplies its own regular authored coordinates.
+    const point=attribute('position','vec3'),normal=attribute('normal','vec3').abs(),paintUv=normal.y.greaterThan(.5).select(uv(),normal.x.greaterThan(.5).select(vec2(point.z,point.y).div(8),vec2(point.x,point.y).div(8))),address=attribute(SURFACE_STROKE_UV,'vec3'),base=attribute('color','vec3');
+    this.textured.roughness=.88;this.textured.metalness=.02;
+    applySharedPaintSurface(this.textured,{context,base,pastel:base.mul(texture(this.paint,uv()).rgb),faceUv:paintUv,stroke:naturalStroke(context,this.strokeBank,address.z,address.xy)});
     this.surface.visible = this.areas.visible = false;
   }
   setTexturesEnabled(enabled: boolean): void {
     if (this.texturesEnabled === enabled) return;
     this.texturesEnabled = enabled;
     this.mesh.material = enabled ? this.textured : this.plain;
-    this.contour?.sync();
   }
   update(world: World, batches: BoxBatches, cutaway = false, reset = false): void {
     this.updatePhysical(world,cutaway,reset);
@@ -169,13 +169,12 @@ export class RoofLayer {
     const key=prepared&&prepared.world===world?`${world.width}|${cutaway}|${prepared.tail}`:
       `${world.width}|${cutaway}|${roofCoverage(world).join(',')}|${state?.natural?.thin.join(',')}|${state?.natural?.thick.join(',')}|${world.structures.filter(s=>s.kind==='wall'||isRoomDoor(s.kind)).map(s=>`${s.kind}:${s.x}:${s.z}`).join(',')}`;
     if (reset || this.surfaceKey !== key) {
-      this.surfaceKey = key;
       const cells = prepared&&prepared.world===world?prepared.cells:roofSurfaceCells(world);
       const top = (cutaway ? WORLD_SCALE.wallCutawayHeight : WORLD_SCALE.wallHeight) + .08;
-      const old = this.mesh.geometry;
-      this.mesh.geometry = roofSlabGeometry(cells, top,cell=>roofKindAt(world,cell.z*world.width+cell.x));
-      old.dispose(); this.mesh.visible = cells.length > 0;
-      this.contour?.rebuild();this.contour?.sync();
+      const old = this.mesh.geometry,region=this.surfaceRegion,next=this.prepareSurfaceGeometry(roofSlabGeometry(cells, top,cell=>roofKindAt(world,cell.z*world.width+cell.x)));
+      // Publish the identity only after bounded geometry/table admission has
+      // succeeded. A refused allocation must leave the previous roof retryable.
+      this.mesh.geometry=next.geometry;this.surfaceRegion=next.region;this.surfaceKey=key;region?.release();old.dispose();this.mesh.visible=cells.length>0;
     }
   }
   updateAreas(world:GroundOverlaySurface,build:readonly number[],remove:readonly number[],batches:BoxBatches,reset=false,known?:(cell:number)=>boolean):boolean {
@@ -198,27 +197,33 @@ export class RoofLayer {
   prepare(): () => void {
     const surface = this.surface.visible, areas = this.areas.visible;
     const empty = this.mesh.geometry.getAttribute('position').count === 0;
-    const original = this.mesh.geometry;
+    const original = this.mesh.geometry,originalRegion=this.surfaceRegion;
     let warm:THREE.BufferGeometry|undefined;
     if (empty) {
-      warm=roofSlabGeometry([{ x: 0, z: 0 }], WORLD_SCALE.wallHeight + .08);
-      this.mesh.geometry = warm;
+      const next=this.prepareSurfaceGeometry(roofSlabGeometry([{ x: 0, z: 0 }], WORLD_SCALE.wallHeight + .08));warm=next.geometry;
+      this.mesh.geometry = warm;this.surfaceRegion=next.region;
       this.mesh.visible = true;
     }
     this.surface.visible = this.areas.visible = true;
-    if(warm)this.contour?.rebuild();this.contour?.sync();
     return () => {
       if (warm) {
-        if(this.mesh.geometry===warm){warm.dispose();this.mesh.geometry=original;this.mesh.visible=false;}
+        if(this.mesh.geometry===warm){this.surfaceRegion?.release();warm.dispose();this.mesh.geometry=original;this.surfaceRegion=originalRegion;this.mesh.visible=false;}
         else original.dispose(); // A newer world replaced and disposed warm.
       }
       this.surface.visible = surface; this.areas.visible = areas;
-      if(warm)this.contour?.rebuild();this.contour?.sync();
     };
   }
   dispose(): void {
-    this.contour?.dispose();
+    this.surfaceRegion?.release();this.surfaceRegion=undefined;
     this.surface.remove(this.mesh); this.mesh.geometry.dispose();
-    this.textured.dispose(); this.plain.dispose(); this.paint.dispose();
+    this.textured.dispose(); this.plain.dispose(); this.paint.dispose();this.strokeBank.dispose();
+  }
+
+  private prepareSurfaceGeometry(geometry:THREE.BufferGeometry):{geometry:THREE.BufferGeometry;region?:FaceStrokeBankRegion}{
+    const p=geometry.getAttribute('position'),n=geometry.getAttribute('normal'),author=geometry.getAttribute('uv'),raw=new Float32Array(p.count*2);
+    for(let v=0;v<p.count;v++){if(Math.abs(n.getY(v))>.5)raw.set([author.getX(v),author.getY(v)],v*2);else if(Math.abs(n.getX(v))>.5)raw.set([p.getZ(v)/8,p.getY(v)/8],v*2);else raw.set([p.getX(v)/8,p.getY(v)/8],v*2);}
+    if(!p.count){geometry.setAttribute(SURFACE_STROKE_UV,new THREE.Float32BufferAttribute([],3));return{geometry};}
+    geometry.setAttribute(SURFACE_STROKE_UV,new THREE.BufferAttribute(raw,2));let table:ReturnType<typeof compileFaceStrokeTable>|undefined,region:FaceStrokeBankRegion|undefined;
+    try{table=compileFaceStrokeTable(geometry,{uvAttribute:SURFACE_STROKE_UV,maxTriangles:2000000,maxCpuBytes:256*1024*1024,mergeCoplanar:false,maxEdgesPerFace:3});region=this.strokeBank.publish(table);const address=new Float32Array(p.count*3);for(let v=0;v<p.count;v++)address.set([raw[v*2]!,raw[v*2+1]!,table.faceIds[v]!+region.faceOffset],v*3);geometry.setAttribute(SURFACE_STROKE_UV,new THREE.BufferAttribute(address,3));return{geometry,region};}catch(error){region?.release();geometry.dispose();throw error;}finally{table?.dispose();}
   }
 }

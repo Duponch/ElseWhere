@@ -36,9 +36,11 @@ export class BoxMesh extends THREE.Mesh<THREE.InstancedBufferGeometry> {
     const geometry = new THREE.InstancedBufferGeometry();
     // Tiny authored box data is owned by each geometry. Disposing a grown batch
     // must never release another live batch's attributes or index.
-    geometry.setAttribute('position', base.getAttribute('position').clone());
-    geometry.setAttribute('normal', base.getAttribute('normal').clone());
-    geometry.setAttribute('uv', base.getAttribute('uv').clone());
+    const staticCloneData={};
+    for(const[name,attribute]of Object.entries(base.attributes)){
+      if(attribute instanceof THREE.InstancedBufferAttribute||attribute instanceof THREE.InterleavedBufferAttribute&&attribute.data instanceof THREE.InstancedInterleavedBuffer)continue;
+      geometry.setAttribute(name,attribute instanceof THREE.InterleavedBufferAttribute?attribute.clone(staticCloneData):attribute.clone());
+    }
     if (base.index) geometry.setIndex(base.index.clone());
     geometry.setDrawRange(base.drawRange.start,base.drawRange.count);
     this.instanceMatrix = new THREE.InstancedInterleavedBuffer(new Float32Array(capacity * 16), 16).setUsage(THREE.StaticDrawUsage);
