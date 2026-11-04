@@ -6,7 +6,7 @@ import {Fn,If,int,storage,uniform,vec4} from 'three/tsl';
 import {MAX_EXTENDED_MAP_SIZE} from '../../sim/map-config';
 import {createOrigamiBrushGeometry} from '../origami/brush-geometry';
 import {RockSurfaceModel,ROCK_SURFACE_UV,ROCK_SURFACE_FACES,ROCK_SLAB_FACES,ROCK_SLAB_INDICES} from '../models/RockSurfaceModel';
-import {FACE_STROKE_EDGE_ROWS,FACE_STROKE_EDGE_FLOATS,writeFaceStrokeEdgeRecord,type FaceStrokeData} from './FaceStrokeTable';
+import {FACE_STROKE_EDGE_ROWS,FACE_STROKE_EDGE_FLOATS,classifyFaceStrokeGate,writeFaceStrokeEdgeRecord,type FaceStrokeData} from './FaceStrokeTable';
 
 const PAGES=8,FIRST_PAGE_ROWS=65536,MAX_PAGE_ROWS=8388608,FACE_ROWS=4,EDGE_CAPACITY=4,EDGE_BLOCK_ROWS=EDGE_CAPACITY*FACE_STROKE_EDGE_ROWS;
 interface Page {attribute:THREE.StorageBufferAttribute;allocated:boolean;rows:number}
@@ -83,8 +83,10 @@ export class RockStrokeTable implements FaceStrokeData {
   for(const[face,records]of touched)if(!records.length){const previous=this.blocks.get(face);if(previous){this.edges-=previous.count;this.free.push(previous.row);this.blocks.delete(face);}}
   for(const[face,records]of touched){
    const count=records.length/FACE_STROKE_EDGE_FLOATS;let block=this.blocks.get(face);if(count&&!block){block={row:this.free.pop()??this.reserveRows(EDGE_BLOCK_ROWS),count:0};this.blocks.set(face,block);}if(block){this.edges+=count-block.count;block.count=count;if(Math.fround(block.row)!==block.row)throw Error('Rock edge address lost exact Float32 representation');this.write(block.row,records);}
-   let inset=0,rectangular=true;for(let edge=0;edge<count;edge++){const at=edge*FACE_STROKE_EDGE_FLOATS,a=records.subarray(at,at+2),b=records.subarray(at+24,at+26),axis=Math.abs(a[0]!-b[0]!)<1e-5&&(Math.abs(a[0]!)<1e-5||Math.abs(a[0]!-1)<1e-5)||Math.abs(a[1]!-b[1]!)<1e-5&&(Math.abs(a[1]!)<1e-5||Math.abs(a[1]!-1)<1e-5);rectangular&&=axis;for(let v=0;v<6;v++){const p=at+v*6;inset=Math.max(inset,5*(Math.abs(records[p+2]!)+Math.abs(records[p+4]!)),5*(Math.abs(records[p+3]!)+Math.abs(records[p+5]!)));}}
-   this.write(face*2,new Float32Array([block?.row??0,count,0,0,1,1,inset+2e-5,rectangular?1:0]));
+   const gate=classifyFaceStrokeGate(records,[0,0,1,1]);let inset=0;for(let edge=0;edge<count;edge++)for(let v=0;v<6;v++){const p=edge*FACE_STROKE_EDGE_FLOATS+v*6;inset=Math.max(inset,5*(Math.abs(records[p+2]!)+Math.abs(records[p+4]!)),5*(Math.abs(records[p+3]!)+Math.abs(records[p+5]!)));}
+   // Keep the original maximum5x-width/rough1 bound. Its existing epsilon is
+   // enlarged, never consumed, by any measured Source base-line deviation.
+   this.write(face*2,new Float32Array([block?.row??0,count,0,0,1,1,inset+gate.deviation+2e-5,gate.kind]));
   }
   for(const page of this.dirty)this.pages[page]!.attribute.needsUpdate=true;this.dirty.clear();this.stats.patches+=patches.length;
  }

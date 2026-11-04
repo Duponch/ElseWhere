@@ -16,6 +16,7 @@ import type {ResourceRangeData} from '../src/render/StaticGeometry';
 import type {Resource} from '../src/sim/types';
 import type {TreeModel} from '../src/render/models/TreeModels';
 import type {TextureSurfaceSlot} from '../src/render/surfaces/TextureSurface';
+import {StaticSceneCompiler435} from '../src/render/StaticSceneCompiler435';
 import {writeTestFileSync} from './test-output';
 
 const settings={impasto:0,wear:0,edges:0,blackEdges:.79,edgeWidth:1.7,strokeImperfection:.15,contourImperfection:.6};
@@ -91,6 +92,42 @@ test('real mixed resource bodies, tree surfaces and staging views compile cold w
   input.width=128;input.height=128;input.resources[2]!.x=80;input.resources[2]!.z=80;input.resources.push({id:1004,kind:'tree',x:11,z:8,amount:1,growth:1});update(f.layer,input,true);stage=f.layer.prepareTreeAssetCatalog(undefined);scene.add(...stage.warmup);scene.updateMatrixWorld(true);const facts:unknown[]=[];
   const unique=new Map<THREE.Material,THREE.Mesh>();for(const mesh of [...bodies(f.group),...stage.warmup])unique.set(mesh.material as THREE.Material,mesh);
   for(const [material,mesh]of unique){const b=new Builder(mesh,renderer);b.scene=scene;b.camera=camera;b.material=material;b.lightsNode=new THREE.LightsNode().setLights([sun,hemisphere]);b.build();const attrs=b.getAttributesArray().flatMap(a=>{const attribute=a.node?.attribute??mesh.geometry.getAttribute(a.name);return attribute?[{name:a.name,attribute}]:[];}),buffers=new Set(attrs.map(({attribute:a})=>a instanceof THREE.InterleavedBufferAttribute?a.data:a)),bindings=b.getBindings().flatMap(group=>group.bindings).filter(binding=>binding.isSampledTexture);expect(attrs.length).toBeLessThanOrEqual(16);expect(buffers.size,attrs.map(a=>a.name).join(',')).toBeLessThanOrEqual(8);expect(b.varyings.filter(v=>v.needsInterpolation).length).toBeLessThanOrEqual(16);for(const bit of [1,2])expect(bindings.filter(binding=>(binding.visibility&bit)!==0).length).toBeLessThanOrEqual(16);expect((material as THREE.NodeMaterial).normalNode).toBeNull();expect(material.transparent).toBe(false);expect(b.fragmentShader).not.toContain('origamiGlobalRelief');facts.push({material:material.type,attributes:attrs.map(a=>[a.name,a.attribute.itemSize]),buffers:buffers.size,varyings:b.varyings.filter(v=>v.needsInterpolation).map(v=>v.name)});writeTestFileSync(`artifacts/shared-resource-${facts.length}-fragment.wgsl`,b.fragmentShader);}
-  expect(unique.size).toBeGreaterThanOrEqual(4);expect(init).not.toHaveBeenCalled();writeTestFileSync('artifacts/shared-resource-program-facts.json',JSON.stringify({scope:'Actual ResourceLayer and staging, source paint sink, cold WGSL only; no device, image or performance claim',facts},null,2)+'\n');
+  expect(unique.size).toBe(2);expect(init).not.toHaveBeenCalled();writeTestFileSync('artifacts/shared-resource-program-facts.json',JSON.stringify({scope:'Actual ResourceLayer and staging, source paint sink, cold WGSL only; no device, image or performance claim',facts},null,2)+'\n');
  }finally{stage?.dispose();f.dispose();init.mockRestore();}
+},60_000);
+
+
+/** The tiny bank is a binding/publication fixture, never a visual paint oracle. */
+test('one opaque resource material and eight-buffer layout merge named cached trees and slot31 direct surfaces before the first draw',()=>{
+ const f=make('default'),input=record(),scene=new THREE.Scene(),compiler=new StaticSceneCompiler435(scene),banks:ReturnType<typeof catalog>[]=[],stages:PreparedTreeCatalogStage[]=[];
+ input.resources.push({id:1004,kind:'tree',x:11,z:8,amount:1,growth:1});
+ let materialDisposals=0;
+ try{
+  update(f.layer,input,true);scene.add(f.group);scene.updateMatrixWorld(true);
+  const meshes=bodies(f.group),material=meshes[0]!.material as THREE.NodeMaterial;
+  expect(meshes.length).toBeGreaterThanOrEqual(4);expect(new Set(meshes.map(m=>m.material)).size).toBe(1);
+  const attributes=['color','normal','origamiPaint','position','surfaceUv','uv','windBasis','windRoot'];
+  let cached=0,direct=0;
+  for(const mesh of meshes){
+   expect(Object.keys(mesh.geometry.attributes).sort()).toEqual(attributes);expect(mesh.material).toBe(material);
+   const paint=mesh.geometry.getAttribute('origamiPaint'),root=mesh.geometry.getAttribute('windRoot');
+   for(let i=0;i<paint.count;i++){const slot=Math.floor(paint.getW(i)/128)%32;if(slot===31)direct++;else cached++;}
+   const ranges=mesh.userData.resourceRanges as ResourceRangeData;
+   for(const r of ranges.ranges)if(r.id===1003)for(let i=r.vertexStart;i<r.vertexStart+r.vertexCount;i++)expect([root.getX(i),root.getY(i),root.getZ(i)]).toEqual([0,0,0]);
+  }
+  expect(cached).toBeGreaterThan(0);expect(direct).toBeGreaterThan(0);
+  const triangles=meshes.reduce((sum,m)=>sum+Math.min(m.geometry.drawRange.count,m.geometry.index!.count)/3,0);
+  const originals=meshes.map(mesh=>({mesh,geometry:mesh.geometry,material:mesh.material,index:mesh.geometry.index,fields:Object.fromEntries(Object.entries(mesh.geometry.attributes).map(([k,a])=>[k,{attribute:a,array:a.array,bytes:new Uint8Array(a.array.buffer,a.array.byteOffset,a.array.byteLength).slice()}]))}));
+  compiler.reconcile([f.group],f.layer.compiledMaterials435());const pages=[...compiler.meshes()],facts=compiler.snapshot();
+  expect(facts).toMatchObject({candidateFamilies:1,pageObjects:1,sourceObjects:meshes.length,unmergedNativeObjects:0,sourceActiveTriangles:triangles,compiledActiveTriangles:triangles,fallbacks:0});
+  expect(facts.pages[0]!.blocks).toHaveLength(meshes.length);expect(facts.pages[0]!.sources).toBe(meshes.length);
+  const bank=catalog(f.layer.treeBakeDemand().models,31);banks.push(bank);const stage=f.layer.prepareTreeAssetCatalog(bank.bank);stages.push(stage);stage.warmup.forEach(mesh=>(mesh.material as THREE.Material).addEventListener('dispose',()=>materialDisposals++));
+  const published=stage.publish();published.commit();stage.dispose();
+  for(const style of ['origami','default','origami','default'] as const){
+   f.context.update({...f.context.preferences,style});compiler.syncVisibility();expect(compiler.meshes()).toEqual(pages);expect(compiler.stats.reconciles).toBe(1);
+   for(const row of originals){expect(row.mesh.material).toBe(row.material);expect(row.mesh.geometry).toBe(row.geometry);expect(row.geometry.index).toBe(row.index);for(const[k,a]of Object.entries(row.fields)){const actual=row.geometry.getAttribute(k);expect(actual).toBe(a.attribute);expect(actual.array).toBe(a.array);expect(new Uint8Array(actual.array.buffer,actual.array.byteOffset,actual.array.byteLength)).toEqual(a.bytes);}}
+  }
+  compiler.clear();f.layer.setTexturesEnabled(false);expect(new Set(meshes.map(m=>m.material)).size).toBe(1);f.layer.setTexturesEnabled(true);expect(meshes.every(m=>m.material===material)).toBe(true);expect(materialDisposals).toBe(0);
+ }finally{compiler.dispose();for(const stage of stages)stage.dispose();f.dispose();for(const bank of banks)bank.dispose();}
+ expect(materialDisposals).toBe(2);
 },60_000);

@@ -25,6 +25,21 @@ Les refus V43, les mesures V44 à faible cadence et tous leurs reçus restent
 conservés séparément. **La parité avec l'ancien Pastel n'est pas atteinte.**
 Il ne s'agit ni de FPS globaux, ni d'une campagne active ou de Whole Main.
 
+Le lot suivant V47 réunit les matériaux et layouts de ressources : quatre pages,
+21 appels, 214196 triangles dans les deux textures, sans changer les règles435.
+Un filtre conservateur évite aussi des recherches de traits dans des intérieurs
+prouvés vides. Les sept contrats distincts passent ; types56,074s/Pages5,509s,
+Workers identiques et fermeture Native complète sont acquis. Le PNG du gros plan
+colon/rochers est identique à V45 sur ses 851200 pixels. Cela reste un seul cadrage.
+
+V47 L/C/L : GPU0,791893/1,010347/0,791893ms ; CPU0,880144/0,939785/0,929426ms
+sur836/837/836 échantillons. Gouache reste à +27,59%GPU/+3,87%CPU face au Pastel
+courant ; dérives0%GPU/+5,60%CPU conservées. La comparaison externe avec l'ancien
+Pastel mesuré une heure auparavant est descriptive, pas une attribution causale.
+Le regroupement et le filtre constituent un lot combiné : aucun gain individuel
+n'est attribué à l'un des deux. Une borne dépendant des réglages réels et des
+groupes de paramètres versionnés restent des candidats privés non qualifiés.
+
 ## Un seul propriétaire des modèles et du rendu
 
 Humains, 53 animaux, plantes, herbes et buissons gardent les modèles Origami

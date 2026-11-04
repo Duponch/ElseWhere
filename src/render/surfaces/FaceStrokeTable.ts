@@ -9,8 +9,45 @@ type Attribute=THREE.BufferAttribute|THREE.InterleavedBufferAttribute;
 const instanced=(a:Attribute)=>a instanceof THREE.InstancedBufferAttribute||a instanceof THREE.InterleavedBufferAttribute&&a.data instanceof THREE.InstancedInterleavedBuffer;
 const TAG='uvStrokeSourceFace',HEADER_ROWS=2,EDGE_ROWS=9,EDGE_FLOATS=36;
 /** ABI for bounded mutable producers (mined rocks). Headers contain
- * [edgeStartRow,edgeCount,minU,minV,maxU,maxV,maxInset,rectangular]. */
+ * [edgeStartRow,edgeCount,minU,minV,maxU,maxV,maxInset,boundaryGate].
+ * Gate0 bypasses;1 axes only;2 adds the rising diagonal;3 the falling
+ * diagonal;4 both. These are rejection bounds, never drawn geometry. */
 export const FACE_STROKE_HEADER_ROWS=HEADER_ROWS,FACE_STROKE_EDGE_ROWS=EDGE_ROWS,FACE_STROKE_EDGE_FLOATS=EDGE_FLOATS;
+export type FaceStrokeGateKind=0|1|2|3|4;
+export type FaceStrokeBounds=readonly[minU:number,minV:number,maxU:number,maxV:number];
+const GATE_BASE_TOLERANCE=1e-5;
+
+/** Classify only the six ACTUAL Source base points of every strip. Any
+ * unsupported edge disables the gate for the complete face. The measured
+ * deviation is added to its existing maximum-width/roughness inset, so
+ * classification tolerance can never shrink the admitted painted region. */
+export function classifyFaceStrokeGate(records:Float32Array,bounds:FaceStrokeBounds):{kind:FaceStrokeGateKind;deviation:number}{
+ const[loU,loV,hiU,hiV]=bounds,du=hiU-loU,dv=hiV-loV,scale=du+dv;
+ if(records.length%EDGE_FLOATS||!bounds.every(Number.isFinite)||du<=0||dv<=0||records.some(value=>!Number.isFinite(value)))return{kind:0,deviation:0};
+ let main=false,anti=false,deviation=0;
+ for(let edge=0;edge<records.length;edge+=EDGE_FLOATS){
+  const errors=[0,0,0,0,0,0];
+  for(let vertex=0;vertex<6;vertex++){
+   const at=edge+vertex*6,u=records[at]!,v=records[at+1]!,distances=[Math.abs(u-loU),Math.abs(v-loV),Math.abs(u-hiU),Math.abs(v-hiV),Math.abs((u-loU)*dv-(v-loV)*du)/scale,Math.abs((u-loU)*dv+(v-loV)*du-du*dv)/scale];
+   for(let line=0;line<errors.length;line++)errors[line]=Math.max(errors[line]!,distances[line]!);
+  }
+  const closest=Math.min(...errors),line=errors.indexOf(closest);
+  if(closest>GATE_BASE_TOLERANCE)return{kind:0,deviation:0};
+  deviation=Math.max(deviation,closest);if(line===4)main=true;else if(line===5)anti=true;
+ }
+ return{kind:main?anti?4:2:anti?3:1,deviation};
+}
+
+/** CPU counterpart of the shader's conservative broad phase. Negative
+ * infinity means UNKNOWN/bypass, not an empty face. */
+export function faceStrokeGateDistance(point:readonly[number,number],bounds:FaceStrokeBounds,kind:FaceStrokeGateKind):number{
+ if(kind===0)return-Infinity;
+ const[u,v]=point,[loU,loV,hiU,hiV]=bounds,du=hiU-loU,dv=hiV-loV,scale=du+dv;
+ let distance=Math.min(u-loU,v-loV,hiU-u,hiV-v);
+ if(kind===2||kind===4)distance=Math.min(distance,Math.abs((u-loU)*dv-(v-loV)*du)/scale);
+ if(kind===3||kind===4)distance=Math.min(distance,Math.abs((u-loU)*dv+(v-loV)*du-du*dv)/scale);
+ return distance;
+}
 
 /** Encode one actual Source strip into a caller-owned sparse table. The
  * producer owns its global triangle seed and real-neighbor eligibility; this
@@ -169,7 +206,14 @@ export function queryFaceStrokeCoverage(options:FaceStrokeNodeOptions):THREE.Nod
   // This caller-supplied switch is uniform (texture encoding × line opacity).
   // Pastel/zero ink execute no derivatives, SSBO reads or texture operations.
   If(options.enabled.greaterThan(0).and(options.opacity.greaterThan(0)),()=>{
-   const dx=uv.dFdx().toVar(),dy=uv.dFdy().toVar(),px=(options.surfacePosition??positionView).dFdx().toVar(),py=(options.surfacePosition??positionView).dFdy().toVar(),first=int(face).mul(HEADER_ROWS),header=read(first),info=read(first.add(1)),distance=uv.x.sub(header.z).min(uv.y.sub(header.w)).min(info.x.sub(uv.x)).min(info.y.sub(uv.y));
+   const dx=uv.dFdx().toVar(),dy=uv.dFdy().toVar(),px=(options.surfacePosition??positionView).dFdx().toVar(),py=(options.surfacePosition??positionView).dFdy().toVar(),first=int(face).mul(HEADER_ROWS),header=read(first),info=read(first.add(1)),distance=float(0).toVar(),span=info.xy.sub(header.zw),relative=uv.sub(header.zw),scale=span.x.add(span.y).max(1e-20);
+   // Explicitly dominate both conditional updates and the final gate read.
+   distance.assign(uv.x.sub(header.z).min(uv.y.sub(header.w)).min(info.x.sub(uv.x)).min(info.y.sub(uv.y)));
+   // Diagonals are admitted only when present in the real Source records.
+   // Their L-infinity distance uses the same per-coordinate inset bound.
+   // No new storage read, strip query, texture sample or pixel color is added.
+   If(info.w.equal(2).or(info.w.equal(4)),()=>{distance.assign(distance.min(relative.x.mul(span.y).sub(relative.y.mul(span.x)).abs().div(scale)));});
+   If(info.w.equal(3).or(info.w.equal(4)),()=>{distance.assign(distance.min(relative.x.mul(span.y).add(relative.y.mul(span.x)).sub(span.x.mul(span.y)).abs().div(scale)));});
    If(header.y.greaterThan(0).and(info.w.lessThan(.5).or(distance.lessThanEqual(info.z))),()=>{
    Loop({start:int(0),end:int(header.y),type:'int',condition:'<'},({i})=>{
     const points:THREE.Node<'vec2'>[]=[],edge=int(header.x).add(i.mul(EDGE_ROWS));

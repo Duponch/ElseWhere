@@ -155,7 +155,7 @@ export class ResourceLayer {
   private makeWindPosition!:(base:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
   private wearFlora:ReferenceFloraLibrary|undefined;
   private wearTemplates:Map<THREE.BufferGeometry,THREE.BufferGeometry>|undefined;
-  compiledMaterials435():readonly THREE.NodeMaterial[]{return[this.bodyPlain,this.bodyTextured,this.windPlain,this.windTextured,this.treeSurface.material,this.treeSurface.plainMaterial];}
+  compiledMaterials435():readonly THREE.NodeMaterial[]{return[this.bodyPlain,this.bodyTextured,this.windPlain];}
   compiledAttributeChanged435:((attribute:THREE.BufferAttribute,start:number,count:number)=>void)|undefined;
   compiledMaterialsChanged435:(()=>void)|undefined;
   private readonly targetTint=new ResourceTargetTint((attribute,start,count)=>this.compiledAttributeChanged435?.(attribute,start,count));
@@ -201,8 +201,8 @@ export class ResourceLayer {
     const options:SharedPaintSurfaceOptions={context:this.graphicsStyle,base:attribute('color','vec3'),pastel:attribute('color','vec3').mul(texture(pastel,uv()).rgb),faceUv:surface.xy,profile,includeGeneric:true,
       gouacheTransform:body=>body.mul(profile.greaterThan(0).select(attribute('color','vec3').div(paint.xyz.max(vec3(.00001))),vec3(1))),
       stroke:naturalStroke(this.graphicsStyle,this.surfaceModels.stroke,face,slot.lessThan(31).select(surface.xy,surface.zw))};
-    this.bodyTextured=texturedMaterial.clone();this.bodyTextured.userData.rendererOwned=true;
-    applySharedPaintSurface(this.bodyTextured,options);
+    // One resident textured Lambert owns generic, continuous and named tree
+    // surfaces. Texture addressing is per-face data, never a material family.
     const makeWindPosition=(base:THREE.Node<'vec3'>)=>Fn(()=>{
       const root=attribute('windRoot','vec3');
       const deform=(tick:THREE.Node<'float'>)=>{
@@ -236,24 +236,23 @@ export class ResourceLayer {
     })();
     this.makeWindPosition=makeWindPosition;
     const windPosition=makeWindPosition(positionLocal);
-    this.windPlain=this.bodyPlain.clone();
-    this.windTextured=this.bodyTextured.clone();
-    this.windPlain.positionNode=this.windTextured.positionNode=windPosition;
-    this.windPlain.userData.rendererOwned=this.windTextured.userData.rendererOwned=true;
+    // Generic resources carry zero-weight wind records so their ordinary
+    // attribute layout can share the exact tree material and435 pages.
     // Texture ownership is separate from the model library and from materials.
     // Old isolated callers obtain the same tiny Source map, never a flat tint.
     const pastelArray=copyPastelTextureToArray(pastel);
     this.pastelTreeAssets={texture:pastelArray,uvAddress:'raw',slots:Object.freeze(Array.from({length:TEXTURE_SURFACE_SLOT_COUNT},()=>Object.freeze({layer:0,paletteBaked:false})))};
-    try{this.treeSurface=createTextureSurface(this.pastelTreeAssets,{positionNode:windPosition,chartUv:vec3(surface.zw,slot),castShadowPositionNode:this.windTextured.castShadowPositionNode,receivedShadowPositionNode:this.windTextured.receivedShadowPositionNode,configure:treeSource?.configure});}catch(error){pastelArray.dispose();throw error;}
+    try{this.treeSurface=createTextureSurface(this.pastelTreeAssets,{positionNode:windPosition,chartUv:vec3(surface.zw,slot),castShadowPositionNode:texturedMaterial.castShadowPositionNode,receivedShadowPositionNode:texturedMaterial.receivedShadowPositionNode,configure:treeSource?.configure});}catch(error){pastelArray.dispose();throw error;}
+    this.bodyTextured=this.windTextured=this.treeSurface.material;
+    this.windPlain=this.treeSurface.plainMaterial;
     // Named trees have fixed authored proportions and may use their prepared
     // one-read image. Anonymous, continuously varied trees use the exact face
     // paint instead; they are never distorted to a canonical raster aspect.
     const fast=this.treeSurface.material.colorNode as THREE.Node<'vec3'>;
-    applySharedPaintSurface(this.windTextured,options);
-    applySharedPaintSurface(this.treeSurface.material,options);
+    applySharedPaintSurface(this.bodyTextured,options);
     const refresh=()=>{
       const direct=sharedPaintColorNode(options),context=this.graphicsStyle;
-      this.treeSurface.material.colorNode=context&&this.treeTextureCompatible?Fn(()=>{const result=vec3(0).toVar();If(context.surfaceEncoding.greaterThan(0).and(this.treeBankReady.greaterThan(0)),()=>{result.assign(fast);}).Else(()=>{result.assign(direct);});return result;})():direct;
+      this.treeSurface.material.colorNode=context&&this.treeTextureCompatible?Fn(()=>{const result=vec3(0).toVar();If(context.surfaceEncoding.greaterThan(0).and(this.treeBankReady.greaterThan(0)).and(slot.lessThan(31)),()=>{result.assign(fast);}).Else(()=>{result.assign(direct);});return result;})():direct;
       this.treeSurface.material.needsUpdate=true;
       this.refreshOptionalWear();
     };
@@ -398,7 +397,7 @@ export class ResourceLayer {
   }
   clearTargetPreview():void {if(this.targetPreviewIds.size)this.graphicsComparisonRevision++;this.targetTint.restore();this.targetPreviewIds.clear();}
   clear(): void { this.middleWind.reset();this.clearTargetPreview();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear(); this.treeCells.clear();this.treeCellsPending=undefined;this.cachedTreeUpdate=undefined;this.treeDemandEpoch++;this.refreshTreeCensus(); }
-  dispose():void {if(this.disposed)return;this.disposed=true;this.releaseSurfaceRefresh();const resources:{dispose():void}[]=[this.windPlain,this.windTextured,...[this.bodyTextured,this.wearPlain,this.wearWind,this.referenceFlora,this.wearFlora,this.fallbackPastel,...(this.wearTemplates?.values()??[])].filter((r):r is NonNullable<typeof r>=>r!==undefined),this.treeSurface,this.pastelTreeAssets.texture,this.surfaceModels,this.treeModels];const errors:unknown[]=[];try{this.clear();}catch(error){errors.push(error);}try{disposeTreeResources(resources,'Resource material cleanup failed');}catch(error){errors.push(error);}this.treeCatalog=undefined;if(errors.length)throw new AggregateError(errors,'Resource layer cleanup failed');}
+  dispose():void {if(this.disposed)return;this.disposed=true;this.releaseSurfaceRefresh();const resources:{dispose():void}[]=[...[this.wearPlain,this.wearWind,this.referenceFlora,this.wearFlora,this.fallbackPastel,...(this.wearTemplates?.values()??[])].filter((r):r is NonNullable<typeof r>=>r!==undefined),this.treeSurface,this.pastelTreeAssets.texture,this.surfaceModels,this.treeModels];const errors:unknown[]=[];try{this.clear();}catch(error){errors.push(error);}try{disposeTreeResources(resources,'Resource material cleanup failed');}catch(error){errors.push(error);}this.treeCatalog=undefined;if(errors.length)throw new AggregateError(errors,'Resource layer cleanup failed');}
 
   /** Only a confirmed increase in a reserved chopping job can produce a hit.
    * The contact phase is the forward reach of the existing 11 rad/s arm pose. */
@@ -712,7 +711,10 @@ export class ResourceLayer {
         const retained=ResourceRangeBounds.capture((mesh.geometry.getAttribute('position') as THREE.BufferAttribute).array,source.ranges);
         if(retained)this.rangeBounds.set(mesh.geometry,retained);
         const ranges=source.ranges.filter(range=>treeSet.has(rangeResourceId(range.id)));
-        if(!ranges.length)continue;
+        // Optional wear retains its original static/wind ownership. Ordinary
+        // opaque resources always get the common eight-buffer wind layout.
+        if(!ranges.length&&mesh.userData.referenceCompanion)continue;
+        if(ranges.length){
         const normals=new Float32Array((mesh.geometry.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array);
         const expand=mesh.geometry.getAttribute('origamiWearExpand');
         const expansions=expand?new Float32Array(expand.array as Float32Array):undefined;
@@ -720,10 +722,10 @@ export class ResourceLayer {
           const id=rangeResourceId(range.id),parts=this.treeParts.get(id)??[];
           parts.push({mesh,range,positions:source.originalPositions,normals,expansions,brush:source.originalBrush,upload:{start:range.vertexStart*3,count:range.vertexCount*3}});this.treeParts.set(id,parts);
         }
-        if(!ranges.some(range=>trees.has(rangeResourceId(range.id))))continue;
         // Tilted crowns remain inside the conservative camera/shadow bounds.
         if(mesh.geometry.boundingSphere)mesh.geometry.boundingSphere.radius+=4;
         if(resourceBrushData(mesh.geometry)&&mesh.geometry.boundingSphere)mesh.geometry.userData.referenceBrushConservativeSphere=mesh.geometry.boundingSphere.clone();
+        }
         const windRoot=new Float32Array((mesh.geometry.getAttribute('position') as THREE.BufferAttribute).count*3);
         for(const range of ranges){
           const resource=trees.get(rangeResourceId(range.id));
@@ -734,7 +736,9 @@ export class ResourceLayer {
           }
         }
         const windBasis=new Float32Array(windRoot.length/3*4),position=mesh.geometry.getAttribute('position');
-        for(let vertex=0;vertex<position.count;vertex++){
+        // Weight0 makes every deformation term exactly zero. No trigonometry
+        // or fake owner coordinates are needed for non-tree resource vertices.
+        if(ranges.length)for(let vertex=0;vertex<position.count;vertex++){
           const rootPhase=windRoot[vertex*3]!*.47+windRoot[vertex*3+1]!*.31;
           const flutterPhase=position.getX(vertex)*1.3+position.getZ(vertex)*1.7;
           windBasis[vertex*4]=Math.sin(rootPhase);windBasis[vertex*4+1]=Math.cos(rootPhase);
