@@ -207,7 +207,7 @@ export class ResourceLayer {
     const originalMap=(Reflect.get(texturedMaterial,'map') as THREE.DataTexture|undefined)??treeSource?.pastelTexture;
     this.fallbackPastel=originalMap?undefined:createStylizedSurfaceTexture('vegetation');
     const pastel=originalMap??this.fallbackPastel!,paint=attribute('origamiPaint','vec4'),profile=paint.w.mod(128),surface=attribute('surfaceUv','vec4'),slot=paint.w.div(128).floor().mod(32),face=paint.w.div(4096).floor();
-    const options:SharedPaintSurfaceOptions={context:this.graphicsStyle,base:attribute('color','vec3'),pastel:attribute('color','vec3').mul(texture(pastel,uv()).rgb),faceUv:surface.xy,profile,includeGeneric:true,
+    const options:SharedPaintSurfaceOptions={context:this.graphicsStyle,base:attribute('color','vec3'),pastel:attribute('color','vec3').mul(texture(pastel,uv()).rgb),faceUv:surface.xy,profile,includeGeneric:true,pigmentDomain:'game-static78',
       gouacheTransform:body=>body.mul(profile.greaterThan(0).select(attribute('color','vec3').div(paint.xyz.max(vec3(.00001))),vec3(1))),
       stroke:naturalStroke(this.graphicsStyle,this.surfaceModels.stroke,face,slot.lessThan(31).select(surface.xy,surface.zw))};
     // One resident textured Lambert owns generic, continuous and named tree

@@ -14,6 +14,7 @@ import {currentGraphicsStyle} from './graphics-style';
 import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
 import {naturalStroke} from './surfaces/NaturalSurfaceModels';
 import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
+import {assertUnitBoxPaintGeometry,rigidBoxPaintInputs} from './surfaces/RigidBoxPaintUv';
 
 const EMPTY_AXES:ReadonlyMap<number,0|1>=new Map();
 const AUTODOOR_TINT=new THREE.Color(0xa6b7b4);
@@ -62,7 +63,8 @@ export class DoorLayer {
     this.mesh.name='door-leaves';this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.group.add(this.mesh);
     const context=currentGraphicsStyle();
     this.textured.roughness=.88;this.textured.metalness=.02;
-    applySharedPaintSurface(this.textured,{context,base:baseColor,pastel:this.textured.colorNode as THREE.Node<'vec3'>,faceUv:uv(),stroke:naturalStroke(context,this.surfaceModel.stroke)});
+    assertUnitBoxPaintGeometry(this.base);const rigidPaint=context?rigidBoxPaintInputs(context,'rigidDoor'):undefined;
+    applySharedPaintSurface(this.textured,{context,base:baseColor,pastel:this.textured.colorNode as THREE.Node<'vec3'>,faceUv:rigidPaint?.faceUv??uv(),get pigmentUv(){return context&&!context.reliefEnabled&&!context.wearEnabled?rigidPaint?.pigmentUv:undefined;},stroke:naturalStroke(context,this.surfaceModel.stroke,undefined,undefined,true)});
   }
   setTexturesEnabled(enabled:boolean):void {
     if(this.texturesEnabled===enabled)return;

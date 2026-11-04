@@ -163,7 +163,7 @@ La paire Source/B-I de V55 conserve, elle, toutes les identités et le même DPR
 La parité de performances avec Pastel demeure ouverte.
 
 Les surfaces implicitement génériques utilisent désormais seulement la banque
-de pigment0, dont le slot0 est réservé au profil générique. Les profils explicites
+de pigment0, dont le slot0 est réservé au profil générique. Les profils explicites dynamiques
 conservent leur domaine complet de huit banques. Cela retire des bindings et
 des branches inutiles sans changer les pixels Source512, leur composition ou
 leur stockage ; aucun gain individuel n'est attribué à cette spécialisation.
@@ -177,6 +177,57 @@ Les rochers continus gardent leurs triangles, pigment, socle et mises à jour
 locales d'excavation. Les coutures de face et tables de traits sont indépendantes
 du style. Les pages de stockage retiennent une capacité maximale réutilisable
 entre tailles de cartes ; elles ne sont pas recréées à chaque aller-retour.
+
+## Lot groupé V56
+
+Le lot suivant réunit rochers, humains, animaux, objets et mobilier. Les
+rochers utilisent un stockage propriétaire unique lorsque leur borne tient
+sous128Mio, sinon les huit pages Source ; les écritures, adresses et opérations
+de minage restent communes. V56 confirme un buffer réel de8Mio aux douze
+frontières :265172 lignes utilisées,524288 de capacité. Les allocations
+retirées sont comptées dans les14680336 octets CPU déclarés ; aucune
+libération GPU anticipée n'est déduite du seul propriétaire CPU.
+
+Les78 peintures statiques du jeu peuvent maintenant lier uniquement la banque0.
+Le plan d'admission vérifie ce domaine avant toute allocation ou publication ;
+les palettes humaines dynamiques conservent leurs huit banques. Pigment512,
+papier/masque et composition Source sont conservés. Les boîtes rigides et portes
+admettent une métrique de peinture vertex exacte ; les formes qui n'en ont pas
+la preuve gardent le calcul de surface existant.
+
+Les headers de traits passent au vertex, avec des valeurs constantes par face.
+Les humains transportent un seulvec4 : les vraies bornesUV0/.5/1, dont les
+demi-faces des pantalons, sont encodées en entier exact puis reconstruites par
+opérations binaires. Aucun buffer, propriétaire, modèle, UV ou pixel nouveau
+n'est requis. Les27 contrats distincts passent par reprises ciblées : ils
+couvrent notamment53 modèles, les78 profils après300 couleurs humaines, et
+11328 faces sur16 variantes humaines, dont256 demi-faces, avec leurs huit mots
+Float32 reproduits bit pour bit. Le froid avec le vrai champ lumineux conserve
+16varyings pour les humains Native/LOD et13 pour les animaux ; les limites
+huit buffers et16 attributs/samplers restent contrôlées.
+
+Un premier froid humain sans ce champ ne couvrait pas le produit complet :
+le contrôle renforcé a refusé17varyings avant Native. Cet échec est conservé.
+Le principe des headers vertex avait déjà été essayé dans V49 sans gain
+convaincant ; ce lot le réutilise avec un autre stockage et plusieurs familles,
+sans réinstaller l'ancien filtre dynamique ou la déduplication des neuf lignes.
+Les types finaux, Pages et les quatre comparaisons de Workers passent. Sur le
+même Core/World128, V56 mesure Pastel/Gouache/Pastel : GPU
+0,899072/1,110016/0,942592ms, soit+20,54% pour Gouache face à la moyenne des
+témoins ; dérive Pastel+4,84%, pic Gouache2,031616ms inclus. CPU :
+1,078500/1,393411/1,153917ms, soit+24,83%, dérive+6,99%. Les384échantillons
+GPU,1152UID et trois passes par callback sont conservés, à25appels et214196
+triangles dans chaque bras. Renderer et client sont fermés sans erreur.
+Ces données ne démontrent aucune parité, amélioration historique causale,
+attribution individuelle de sous-lot, campagne active ou gain de FPS globaux.
+
+Au même World, caméra, paramètres et DPR1,2, les PNG colon, arbre et vue joueur
+Gouache sont byte-exacts avec V55, ainsi que le retour Pastel avec son témoin
+initial. L'animal observé est partiellement masqué par un tronc ; le mobilier
+cubique est absent de cette carte. La galerie distincte a montré714assets et
+une table longue peinte, mais aucune paire Source/optimisé de mobilier dans
+ce Core n'est inventée. Les surfaces directes et palettes dynamiques ne sont
+pas toutes devenues une unique texture finale ; l'optimisation continue.
 
 ## Qualification et limites
 

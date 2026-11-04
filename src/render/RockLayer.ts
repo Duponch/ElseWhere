@@ -3,7 +3,7 @@ import type { World } from '../sim/types';
 import { ROCK_INDICES, ROCK_VERTICES } from './RockSurface';
 import {RockSurfaceModel,ROCK_SURFACE_UV,ROCK_SURFACE_VERTICES} from './models/RockSurfaceModel';
 import {RockStrokeTable,type RockStrokePatch} from './surfaces/RockStrokeTable';
-import {createFaceStrokeNode} from './surfaces/FaceStrokeTable';
+import {faceStrokeVertexHeaders,createFaceStrokeNode} from './surfaces/FaceStrokeTable';
 import { WORLD_SCALE } from '../world/scale';
 import { STONE_KINDS } from '../sim/geology';
 import { material } from './primitives';
@@ -21,6 +21,7 @@ import {currentGraphicsStyle} from './graphics-style';
 export class RockLayer {
   private readonly graphicsStyle=currentGraphicsStyle();
   private readonly stroke=new RockStrokeTable();
+  private boundStrokeMode='';
   private model:RockSurfaceModel|undefined;
   private previousModel:RockSurfaceModel|undefined;
   private pendingSlab=false;
@@ -50,24 +51,30 @@ export class RockLayer {
     // The varying moves coordinate arithmetic out of the fragment stage.
     // A full repeat spans roughly 38 world cells. Top faces use x/z directly;
     // height gently offsets side faces without introducing a visible cell grid.
+    this.bindSurface();
+    configure?.(this.plainMaterial);configure?.(this.texturedMaterial);
+    this.mesh=new THREE.Mesh(new THREE.BufferGeometry(),this.texturedMaterial);
+    this.mesh.name='Continuous rock surface';this.mesh.castShadow=true;this.mesh.receiveShadow=true;
+    this.mesh.matrixAutoUpdate=false;
+    this.group.add(this.mesh,this.local);this.setDistant(false);
+  }
+  private bindSurface():void {
     const paintedUv=varying(positionLocal.xz.mul(.026).add(positionLocal.y.mul(vec2(.009,.007))));
     // Source rocks use this same stone pigment in both texture styles. Only
     // their ink changes: a face-fill painting here would replace the original
     // broad stone map with a new kraft frame on every small cliff facet.
     // Include vertex pigment before the ink, so it cannot tint the ink twice.
     const context=this.graphicsStyle,base=attribute('color','vec3'),surface=attribute(ROCK_SURFACE_UV,'vec3');
-    const ink=(body:THREE.Node<'vec3'>)=>context?createFaceStrokeNode(body,{table:this.stroke,faceId:surface.z,faceUv:surface.xy,enabled:context.surfaceEncoding,opacity:context.lineOpacity,width:context.edgeWidth,irregularity:context.strokeImperfection,brushColor:context.brushColor.rgb,samplePigment:(p,dx,dy)=>context.sampleStrokePigment(p,dx,dy),sampleDry:(p,dx,dy)=>context.sampleStrokeDry(p,dx,dy),readRow:this.stroke.readRow}):body;
+    const headers=context?faceStrokeVertexHeaders({table:this.stroke,faceId:surface.z,enabled:context.surfaceEncoding,opacity:context.lineOpacity,readRow:this.stroke.readRow},'v_rockStrokeHeader'):undefined;
+    const ink=(body:THREE.Node<'vec3'>)=>context?createFaceStrokeNode(body,{table:this.stroke,faceId:surface.z,headers,faceUv:surface.xy,enabled:context.surfaceEncoding,opacity:context.lineOpacity,width:context.edgeWidth,irregularity:context.strokeImperfection,brushColor:context.brushColor.rgb,samplePigment:(p,dx,dy)=>context.sampleStrokePigment(p,dx,dy),sampleDry:(p,dx,dy)=>context.sampleStrokeDry(p,dx,dy),readRow:this.stroke.readRow}):body;
     this.texturedMaterial.vertexColors=this.plainMaterial.vertexColors=false;
     this.texturedMaterial.colorNode=ink(base.mul(texture(this.stonePaint,paintedUv).rgb));
     // Source contours also remain visible when surface textures are disabled.
     // Neither rock body ever had an optional relief or physical-wear graph;
     // all ink settings are shared uniforms and need no feature refresh owner.
     this.plainMaterial.colorNode=ink(base);
-    configure?.(this.plainMaterial);configure?.(this.texturedMaterial);
-    this.mesh=new THREE.Mesh(new THREE.BufferGeometry(),this.texturedMaterial);
-    this.mesh.name='Continuous rock surface';this.mesh.castShadow=true;this.mesh.receiveShadow=true;
-    this.mesh.matrixAutoUpdate=false;
-    this.group.add(this.mesh,this.local);this.setDistant(false);
+    this.boundStrokeMode=this.stroke.representationKey;
+    this.plainMaterial.needsUpdate=true;this.texturedMaterial.needsUpdate=true;
   }
   setTexturesEnabled(enabled:boolean):void {
     if(this.texturesEnabled===enabled)return;
@@ -168,6 +175,9 @@ export class RockLayer {
       this.updateLocal(dirty,reallocated);
       this.previousModel?.dispose();this.previousModel=undefined;
     }
+    // Representation changes only at actual World reset/admission. New Fn
+    // nodes are mandatory so TSL cannot reuse an old single/paged graph.
+    if(this.boundStrokeMode!==this.stroke.representationKey)this.bindSurface();
     this.tiles=world.tiles;
   }
   sharedSurfaceStatus(){return{pipeline:'shared-paint',sourceRibbons:false,modelVertices:this.mesh.geometry.getAttribute('position')?.count??0,stroke:this.stroke.snapshot()};}

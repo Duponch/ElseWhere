@@ -15,6 +15,9 @@ export interface SharedPaintSurfaceOptions {
  readonly pastel:THREE.Node<'vec3'>;
  readonly faceUv?:THREE.Node<'vec2'>;
  readonly profile?:THREE.Node<'float'>;
+ /** The fixed game palette is admitted into bank0 before any dynamic human
+  * pigments. Caller must use only those proven static virtual profiles. */
+ readonly pigmentDomain?:'game-static78';
  readonly includeGeneric?:boolean;
  /** An exact caller-supplied vertex mapping may replace the rendered-triangle
   * metric. Non-affine wind/morphs keep the actual fragment metric by default. */
@@ -29,11 +32,11 @@ function paintInputs(options:SharedPaintSurfaceOptions){
   ?varying(Fn(()=>{const value=vec2(0).toVar();If(context.surfaceEncoding.greaterThan(0),()=>{value.assign(resolved);});return value;})()).setInterpolation('flat')
   :context.genericPaintIdsNode(true);
  const metric=physicalPaintMetric(raw).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal(),pigment=options.pigmentUv??applyPhysicalPaintMetric(raw,metric,density);
- return{raw,ids,metric,density,pigment,genericOnly:options.profile===undefined};
+ return{raw,ids,metric,density,pigment,genericOnly:options.profile===undefined,gameStaticBank0:options.pigmentDomain==='game-static78'};
 }
 
 function surfaceColor(options:SharedPaintSurfaceOptions,inputs:ReturnType<typeof paintInputs>):THREE.Node<'vec3'>{
- const context=options.context!,sample=context.facePaintNode(inputs.pigment,inputs.raw,inputs.ids.x,inputs.ids.y,context.reliefEnabled,true,inputs.genericOnly).toVar();
+ const context=options.context!,sample=context.facePaintNode(inputs.pigment,inputs.raw,inputs.ids.x,inputs.ids.y,context.reliefEnabled,true,inputs.genericOnly,inputs.gameStaticBank0).toVar();
  let body:THREE.Node<'vec3'>=options.profile&&options.includeGeneric===false?sample.rgb:sample.rgb.mul(inputs.ids.x.equal(GENERIC_REFERENCE_PROFILE).select(options.base,vec3(1)));
  if(options.gouacheTransform)body=options.gouacheTransform(body);
  return options.stroke?options.stroke(body):body;
@@ -60,8 +63,8 @@ function configureSharedPaintSurface(material:THREE.NodeMaterial,options:SharedP
   // inputs, but not a lazily initialized fragment variable owned by the other
   // graph's branch. Each positive-relief probe shares this local metric.
   const metric=physicalPaintMetric(inputs.raw).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal(),pigment=options.pigmentUv??applyPhysicalPaintMetric(inputs.raw,metric,density);
-  const sample=context.facePaintNode(pigment,inputs.raw,inputs.ids.x,inputs.ids.y,true,true,inputs.genericOnly),dx=applyPhysicalPaintMetric(inputs.raw.dFdx(),metric,density),dy=applyPhysicalPaintMetric(inputs.raw.dFdy(),metric,density),
-   hx=context.faceHeightNode(pigment.add(dx),inputs.raw.add(inputs.raw.dFdx()),inputs.ids.x,inputs.ids.y,inputs.genericOnly),hy=context.faceHeightNode(pigment.add(dy),inputs.raw.add(inputs.raw.dFdy()),inputs.ids.x,inputs.ids.y,inputs.genericOnly);
+  const sample=context.facePaintNode(pigment,inputs.raw,inputs.ids.x,inputs.ids.y,true,true,inputs.genericOnly,inputs.gameStaticBank0),dx=applyPhysicalPaintMetric(inputs.raw.dFdx(),metric,density),dy=applyPhysicalPaintMetric(inputs.raw.dFdy(),metric,density),
+   hx=context.faceHeightNode(pigment.add(dx),inputs.raw.add(inputs.raw.dFdx()),inputs.ids.x,inputs.ids.y,inputs.genericOnly,inputs.gameStaticBank0),hy=context.faceHeightNode(pigment.add(dy),inputs.raw.add(inputs.raw.dFdy()),inputs.ids.x,inputs.ids.y,inputs.genericOnly,inputs.gameStaticBank0);
   const bumped=referencePaintBumpNormal(sample.a,hx,hy,context.impasto.mul(.035));
   material.normalNode=Fn(()=>{const result=vec3(normalView).toVar();If(context.surfaceEncoding.greaterThan(float(0)),()=>{result.assign(bumped);});return result;})();
   installGlobalReliefLod(material,context.reliefLod!);

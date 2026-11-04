@@ -13,7 +13,7 @@ import * as THREE from 'three/webgpu';
 import {currentGraphicsStyle,withGraphicsStyle,GraphicsStyleContext} from './graphics-style';
 import {AnimalModels,ANIMAL_SURFACE_PROFILE_STRIDE,type AnimalModel} from './models/AnimalModels';
 import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
-import {attachFaceStrokeGpuRetirement,createFaceStrokeNode} from './surfaces/FaceStrokeTable';
+import {faceStrokeVertexHeaders,attachFaceStrokeGpuRetirement,createFaceStrokeNode} from './surfaces/FaceStrokeTable';
 import {commonAnimalPresentationGeometry} from './origami/animal-geometry';
 import {ActorPartUnionIndex,readAnimalPartUnion} from './origami/actor-part-union';
 import { coreTimeSeconds,localTimeSeconds } from '../bridge/clock-rate';
@@ -213,9 +213,9 @@ class SpeciesRig {
     const textured=material(0xffffff);configure?.(actorExplorationMaterial256(textured));
     textured.positionNode=mat.positionNode;
     textured.roughness=.88;textured.metalness=.02;
-    const surfaceUv=attribute('animalSurfaceUv','vec4'),word=paint.w,profile=word.mod(ANIMAL_SURFACE_PROFILE_STRIDE),faceId=word.div(ANIMAL_SURFACE_PROFILE_STRIDE).floor();
-    applySharedPaintSurface(textured,{context:graphics,base:baseColor,pastel:withBlood(baseColor).mul(texture(surfaceTexture,surfaceUv.zw).r.mul(.8).add(.28)),faceUv:surfaceUv.xy,profile,includeGeneric:true,gouacheTransform:withBlood,
-      stroke:body=>createFaceStrokeNode(body,{table:model.strokes,faceId,faceUv:surfaceUv.xy,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),width:graphics.edgeWidth,irregularity:graphics.strokeImperfection,opacity:graphics.lineOpacity,brushColor:graphics.brushColor.rgb,samplePigment:(coordinates,dx,dy)=>graphics.sampleStrokePigment(coordinates,dx,dy),sampleDry:(coordinates,dx,dy)=>graphics.sampleStrokeDry(coordinates,dx,dy)})});
+    const surfaceUv=attribute('animalSurfaceUv','vec4'),word=paint.w,profile=word.mod(ANIMAL_SURFACE_PROFILE_STRIDE),faceId=word.div(ANIMAL_SURFACE_PROFILE_STRIDE).floor(),headers=faceStrokeVertexHeaders({table:model.strokes,faceId,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity},'v_animalStrokeHeader');
+    applySharedPaintSurface(textured,{context:graphics,base:baseColor,pastel:withBlood(baseColor).mul(texture(surfaceTexture,surfaceUv.zw).r.mul(.8).add(.28)),faceUv:surfaceUv.xy,profile,pigmentDomain:'game-static78',includeGeneric:true,gouacheTransform:withBlood,
+      stroke:body=>createFaceStrokeNode(body,{table:model.strokes,faceId,headers,faceUv:surfaceUv.xy,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),width:graphics.edgeWidth,irregularity:graphics.strokeImperfection,opacity:graphics.lineOpacity,brushColor:graphics.brushColor.rgb,samplePigment:(coordinates,dx,dy)=>graphics.sampleStrokePigment(coordinates,dx,dy),sampleDry:(coordinates,dx,dy)=>graphics.sampleStrokeDry(coordinates,dx,dy)})});
     this.plainMaterial=mat;this.texturedMaterial=textured;
     this.mesh=new THREE.Mesh(geometry,textured);this.mesh.name=`Wild ${this.species} — GPU rig`;this.mesh.frustumCulled=false;this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.flames=attachedFireMesh(this.mesh.geometry,this,.6,this.animationDetail);
     this.selection=pawnSelectionMesh(this.mesh.geometry as THREE.InstancedBufferGeometry,this);this.selection.visible=false;

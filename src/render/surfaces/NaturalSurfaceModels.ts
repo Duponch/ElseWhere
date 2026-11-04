@@ -4,7 +4,7 @@
 import * as THREE from 'three/webgpu';
 import {attribute} from 'three/tsl';
 import type {GraphicsStyleContext} from '../graphics-style';
-import {compileFaceStrokeTable,combineFaceStrokeTables,createFaceStrokeNode,type FaceStrokeTable,type FaceStrokeData} from './FaceStrokeTable';
+import {compileFaceStrokeTable,combineFaceStrokeTables,faceStrokeVertexHeaders,createFaceStrokeNode,type FaceStrokeTable,type FaceStrokeData} from './FaceStrokeTable';
 
 export const SURFACE_STROKE_UV='surfaceStrokeUv',SURFACE_STROKE_FACE='surfaceStrokeFace';
 const instanced=(a:THREE.BufferAttribute|THREE.InterleavedBufferAttribute)=>a instanceof THREE.InstancedBufferAttribute||a instanceof THREE.InterleavedBufferAttribute&&a.data instanceof THREE.InstancedInterleavedBuffer;
@@ -67,7 +67,8 @@ export function compileNaturalSurfaceModels(sources:readonly THREE.BufferGeometr
 }
 
 /** Original brush pigments/dryness with no companion surface draw. */
-export function naturalStroke(context:GraphicsStyleContext|undefined,table:FaceStrokeData|undefined,faceId:THREE.Node<'float'>=attribute(SURFACE_STROKE_FACE,'float'),coordinates:THREE.Node<'vec2'>=attribute(SURFACE_STROKE_UV,'vec2')):(body:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>{
+export function naturalStroke(context:GraphicsStyleContext|undefined,table:FaceStrokeData|undefined,faceId:THREE.Node<'float'>=attribute(SURFACE_STROKE_FACE,'float'),coordinates:THREE.Node<'vec2'>=attribute(SURFACE_STROKE_UV,'vec2'),vertexHeaders=false):(body:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>{
  if(!context||!table)return body=>body;
- return body=>createFaceStrokeNode(body,{table,faceId,faceUv:coordinates,enabled:context.surfaceEncoding,width:context.edgeWidth,irregularity:context.strokeImperfection,opacity:context.lineOpacity,brushColor:context.brushColor as unknown as THREE.Node<'vec3'>,samplePigment:(p,dx,dy)=>context.sampleStrokePigment(p,dx,dy),sampleDry:(p,dx,dy)=>context.sampleStrokeDry(p,dx,dy)});
+ const headers=vertexHeaders?faceStrokeVertexHeaders({table,faceId,enabled:context.surfaceEncoding,opacity:context.lineOpacity},'v_naturalStrokeHeader'):undefined;
+ return body=>createFaceStrokeNode(body,{table,faceId,headers,faceUv:coordinates,enabled:context.surfaceEncoding,width:context.edgeWidth,irregularity:context.strokeImperfection,opacity:context.lineOpacity,brushColor:context.brushColor as unknown as THREE.Node<'vec3'>,samplePigment:(p,dx,dy)=>context.sampleStrokePigment(p,dx,dy),sampleDry:(p,dx,dy)=>context.sampleStrokeDry(p,dx,dy)});
 }

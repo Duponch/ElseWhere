@@ -2,7 +2,7 @@
  * never a texture-style identity. Coplanar UV-continuous triangles share one
  * face and keep indexed corners; no blanket triangle expansion at draw time. */
 import * as THREE from 'three/webgpu';
-import {Fn,If,Loop,float,int,mix,positionView,varying,vec2,vec3,vec4,storage} from 'three/tsl';
+import {Fn,If,Loop,float,int,uint,mix,positionView,varying,vec2,vec3,vec4,storage} from 'three/tsl';
 import {createOrigamiBrushGeometry} from '../origami/brush-geometry';
 
 type Attribute=THREE.BufferAttribute|THREE.InterleavedBufferAttribute;
@@ -192,10 +192,54 @@ export interface FaceStrokeNodeOptions {
  /** Optional bounded storage pagination. The logical ROW addresses, Source
   * records and all shader arithmetic are unchanged; no per-frame CPU lookup. */
  readonly readRow?:(row:THREE.Node<'int'>)=>THREE.Node<'vec4'>;
+ /** Actual per-face headers may be loaded at the vertex stage.
+  * Flat interpolation retains their exact Float32 values; dynamic paged
+  * producers leave this absent and keep their current fragment ABI. */
+ readonly headers?:readonly[THREE.Node<'vec4'>,THREE.Node<'vec4'>];
  readonly enabled:THREE.Node<'float'>;readonly width:THREE.Node<'float'>;readonly irregularity:THREE.Node<'float'>;readonly opacity:THREE.Node<'float'>;readonly brushColor:THREE.Node<'vec3'>;
  readonly samplePigment:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>THREE.Node<'vec3'>;
  readonly sampleDry:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>THREE.Node<'float'>;
  readonly surfacePosition?:THREE.Node<'vec3'>;
+}
+/** The caller must prove its actual faceId is constant on each triangle and
+ * headers are constant over that triangle for one submitted draw. Actor
+ * models are immutable; a paged dynamic owner may upload before submission.
+ * No attribute, model, pose, table row or ownership changes.
+ * Uniform OFF paths read no storage; only header work changes shader stage. */
+export function faceStrokeVertexHeaders(options:Pick<FaceStrokeNodeOptions,'table'|'faceId'|'enabled'|'opacity'|'readRow'>,label:string):readonly[THREE.Node<'vec4'>,THREE.Node<'vec4'>]{
+ options.table.assertCurrent();
+ if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(label))throw Error('Stable vertex-header varying label required');
+ const read=options.readRow??((row:THREE.Node<'int'>)=>options.table.node.element(row));
+ const load=(offset:number)=>varying(Fn(()=>{const result=vec4(0).toVar();If(options.enabled.greaterThan(0).and(options.opacity.greaterThan(0)),()=>{result.assign(read(int(options.faceId).mul(HEADER_ROWS).add(offset)));});return result;})(),label+offset).setInterpolation('flat','first');
+ return[load(0),load(1)];
+}
+/** The authored human halves use V0/.5/1, including their real half-face
+ * bounds. Pack four ternary bounds and the gate into an exact integer, never
+ * quantize arbitrary UVs or assume that every face is the whole unit square. */
+export function assertHalfUvFaceStrokeHeaders(table:FaceStrokeData):{faces:number;halfFaces:number;maxCode:number}{
+ table.assertCurrent();const a=table.values;let halfFaces=0,maxCode=0;
+ for(let face=0;face<table.faceCount;face++){const at=face*8,values=[a[at+2]!,a[at+3]!,a[at+4]!,a[at+5]!],gate=a[at+7]!;
+  if(values.some(v=>Object.is(v,-0)||v!==0&&v!==.5&&v!==1)||!Number.isInteger(gate)||gate<0||gate>4||!Number.isSafeInteger(a[at])||!Number.isSafeInteger(a[at+1])||!Number.isFinite(a[at+6]))throw Error('Actual human face header exceeds exact half-UV packing domain');
+  if(values.some(v=>v===.5))halfFaces++;const code=gate+8*(values[0]!*2+values[1]!*8+values[2]!*32+values[3]!*128);if(!Number.isSafeInteger(code)||code<0||code>=2048)throw Error('Human face header code exceeds exact integer packing');maxCode=Math.max(maxCode,code);
+ }return{faces:table.faceCount,halfFaces,maxCode};
+}
+/** Pure counterpart for representation contracts over the ACTUAL CPU table.
+ * The constructor guard above proves the complete table before shader use. */
+export function packHalfUvFaceStrokeHeader(values:ArrayLike<number>,at:number):Float32Array{
+ return new Float32Array([values[at]!,values[at+1]!,values[at+6]!,values[at+7]!+8*(values[at+2]!*2+values[at+3]!*8+values[at+4]!*32+values[at+5]!*128)]);
+}
+export function unpackHalfUvFaceStrokeHeader(packed:ArrayLike<number>):Float32Array{
+ const word=packed[3]!>>>0,code=word>>>3,digit=(shift:number)=>(code>>>shift&3)*.5;
+ return new Float32Array([packed[0]!,packed[1]!,digit(0),digit(2),digit(4),digit(6),packed[2]!,word&7]);
+}
+/** ONE flat vec4 for the proven authored human domain. No model, attribute,
+ * palette, table or UV changes. Integer arithmetic is exact in Float32; zero
+ * encoding/opacity executes no vertex storage read. Other producers retain
+ * their unrestricted two-header helper. */
+export function faceStrokeHalfUvVertexHeaders(options:Pick<FaceStrokeNodeOptions,'table'|'faceId'|'enabled'|'opacity'>,label:string):readonly[THREE.Node<'vec4'>,THREE.Node<'vec4'>]{
+ assertHalfUvFaceStrokeHeaders(options.table);if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(label))throw Error('Stable packed-header varying label required');
+ const packed=varying(Fn(()=>{const result=vec4(0).toVar();If(options.enabled.greaterThan(0).and(options.opacity.greaterThan(0)),()=>{const first=int(options.faceId).mul(HEADER_ROWS),a=options.table.node.element(first),b=options.table.node.element(first.add(1)),code=a.z.mul(2).add(a.w.mul(8)).add(b.x.mul(32)).add(b.y.mul(128)).mul(8).add(b.w);result.assign(vec4(a.xy,b.z,code));});return result;})(),label).setInterpolation('flat','first'),word=packed.w.toUint(),bounds=word.shiftRight(uint(3)),digit=(shift:number)=>bounds.shiftRight(uint(shift)).bitAnd(uint(3)).toFloat().mul(.5);
+ return[vec4(packed.xy,digit(0),digit(2)),vec4(digit(4),digit(6),packed.z,word.bitAnd(uint(7)).toFloat())];
 }
 /** Premultiplied ink RGB + alpha. Derivatives execute before varying branches;
  * only thin painted regions fetch generic pigment and the dry-brush map. */
@@ -206,7 +250,7 @@ export function queryFaceStrokeCoverage(options:FaceStrokeNodeOptions):THREE.Nod
   // This caller-supplied switch is uniform (texture encoding × line opacity).
   // Pastel/zero ink execute no derivatives, SSBO reads or texture operations.
   If(options.enabled.greaterThan(0).and(options.opacity.greaterThan(0)),()=>{
-   const dx=uv.dFdx().toVar(),dy=uv.dFdy().toVar(),px=(options.surfacePosition??positionView).dFdx().toVar(),py=(options.surfacePosition??positionView).dFdy().toVar(),first=int(face).mul(HEADER_ROWS),header=read(first),info=read(first.add(1)),distance=float(0).toVar(),span=info.xy.sub(header.zw),relative=uv.sub(header.zw),scale=span.x.add(span.y).max(1e-20);
+   const dx=uv.dFdx().toVar(),dy=uv.dFdy().toVar(),px=(options.surfacePosition??positionView).dFdx().toVar(),py=(options.surfacePosition??positionView).dFdy().toVar(),first=int(face).mul(HEADER_ROWS),header=options.headers?.[0]??read(first),info=options.headers?.[1]??read(first.add(1)),distance=float(0).toVar(),span=info.xy.sub(header.zw),relative=uv.sub(header.zw),scale=span.x.add(span.y).max(1e-20);
    // Explicitly dominate both conditional updates and the final gate read.
    distance.assign(uv.x.sub(header.z).min(uv.y.sub(header.w)).min(info.x.sub(uv.x)).min(info.y.sub(uv.y)));
    // Diagonals are admitted only when present in the real Source records.

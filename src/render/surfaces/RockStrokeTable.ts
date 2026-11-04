@@ -1,6 +1,7 @@
-/** Sparse mutable cliff strokes, using the exact Source stock producer. One
- * small initial page and at most seven bounded pages serve the same material;
- * neither texture changes nor ordinary frames prepare or repack this data. */
+/** Sparse mutable cliff strokes, using the exact Source stock producer.
+ * A proven map bound of at most128MiB uses one contiguous runtime storage;
+ * larger maps retain eight pages. Real writes grow capacity geometrically.
+ * Texture styles and ordinary frames never prepare/repack these records. */
 import * as THREE from 'three/webgpu';
 import {Fn,If,int,storage,uniform,vec4} from 'three/tsl';
 import {MAX_EXTENDED_MAP_SIZE} from '../../sim/map-config';
@@ -17,20 +18,26 @@ const power2=(value:number)=>2**Math.ceil(Math.log2(Math.max(1,value)));
 export class RockStrokeTable implements FaceStrokeData {
  private pages:Page[]=Array.from({length:PAGES},()=>({attribute:new THREE.StorageBufferAttribute(new Float32Array(4),4),allocated:false,rows:1}));
  private readonly nodes=this.pages.map(page=>storage(page.attribute,'vec4',0).toReadOnly());
+ private single=new THREE.StorageBufferAttribute(new Float32Array(4),4);
+ private readonly singleNode=storage(this.single,'vec4',0).toReadOnly();
+ private storageMode:'single'|'paged'='single';private storageModeChanges=0;private singleDirty=false;
+ /** Storage backend identity, unrelated to texture style. Layer refreshes its
+  * two color Fn graphs only when this key actually changes at World reset. */
+ get representationKey():string{return this.storageMode;}
  private readonly starts=Array.from({length:PAGES},()=>uniform(0));private readonly ends=Array.from({length:PAGES},()=>uniform(0));
  private readonly retired:THREE.StorageBufferAttribute[]=[];
  private readonly faceIds=new Map<number,readonly number[]>();private readonly reservedFaces=new Set<number>();private readonly blocks=new Map<number,{row:number;count:number}>();private readonly free:number[]=[];
  private slabFaces:readonly number[]=[];private cursor=0;private facesSpan=0;private edges=0;private closed=false;private width=0;private height=0;private readonly dirty=new Set<number>();
  readonly stats={preparedCells:0,preparedSlabs:0,patches:0,pageAllocations:0,changedRows:0};
- readonly node=this.nodes[0]!;
- get buffer():THREE.StorageBufferAttribute{return this.pages[0]!.attribute;}
+ get node():THREE.StorageBufferNode<'vec4'>{return this.storageMode==='single'?this.singleNode:this.nodes[0]!;}
+ get buffer():THREE.StorageBufferAttribute{return this.storageMode==='single'?this.single:this.pages[0]!.attribute;}
  get faceCount():number{return this.facesSpan;}
  get edgeCount():number{return this.edges;}
  readonly maxEdgesPerFace=EDGE_CAPACITY;
- get cpuBytes():number{return[...this.pages.map(page=>page.attribute),...this.retired].reduce((n,a)=>n+a.array.byteLength,0);}
+ get cpuBytes():number{return[this.single,...this.pages.map(page=>page.attribute),...this.retired].reduce((n,a)=>n+a.array.byteLength,0);}
  /** Inspection only: material/frames never assemble a contiguous copy. */
- get values():Float32Array{this.assertCurrent();const result=new Float32Array(this.cursor*4);for(let page=0;page<PAGES;page++){const first=this.starts[page]!.value,last=Math.min(this.cursor,this.ends[page]!.value),data=this.pages[page]!;if(data.allocated&&last>first)result.set(data.attribute.array.subarray(0,(last-first)*4),first*4);}return result;}
- readonly readRow=(row:THREE.Node<'int'>):THREE.Node<'vec4'>=>Fn(()=>{const result=vec4(0).toVar(),select=If(row.lessThan(int(this.ends[0]!)),()=>{result.assign(this.nodes[0]!.element(row));});for(let page=1;page<PAGES;page++)select.ElseIf(row.lessThan(int(this.ends[page]!)),()=>{result.assign(this.nodes[page]!.element(row.sub(int(this.starts[page]!))));});return result;})();
+ get values():Float32Array{this.assertCurrent();const result=new Float32Array(this.cursor*4);if(this.storageMode==='single'){result.set(this.single.array.subarray(0,Math.min(result.length,this.single.array.length)));return result;}for(let page=0;page<PAGES;page++){const first=this.starts[page]!.value,last=Math.min(this.cursor,this.ends[page]!.value),data=this.pages[page]!;if(data.allocated&&last>first)result.set(data.attribute.array.subarray(0,(last-first)*4),first*4);}return result;}
+ readonly readRow=(row:THREE.Node<'int'>):THREE.Node<'vec4'>=>this.storageMode==='single'?this.singleNode.element(row):Fn(()=>{const result=vec4(0).toVar(),select=If(row.lessThan(int(this.ends[0]!)),()=>{result.assign(this.nodes[0]!.element(row));});for(let page=1;page<PAGES;page++)select.ElseIf(row.lessThan(int(this.ends[page]!)),()=>{result.assign(this.nodes[page]!.element(row.sub(int(this.starts[page]!))));});return result;})();
  assertCurrent():void{if(this.closed)throw Error('Rock stroke owner retired');}
  reset(width:number,height:number):void{
   this.assertCurrent();if(!Number.isSafeInteger(width)||width<1||width>MAX_EXTENDED_MAP_SIZE||!Number.isSafeInteger(height)||height<1||height>MAX_EXTENDED_MAP_SIZE)throw Error('Actual supported map bounds required');
@@ -40,6 +47,10 @@ export class RockStrokeTable implements FaceStrokeData {
   // The larger325 coefficient leaves explicit headroom without truncation.
   const upperRows=325*width*height+216*(width+height)+1024,laterRows=Math.max(FIRST_PAGE_ROWS,power2(Math.ceil((upperRows-FIRST_PAGE_ROWS)/(PAGES-1))));
   if(laterRows>MAX_PAGE_ROWS)throw Error('Supported map exceeded its derived rock storage page bound');
+  const nextMode=upperRows<=MAX_PAGE_ROWS?'single':'paged';if(nextMode!==this.storageMode)this.storageModeChanges++;this.storageMode=nextMode;
+  // Capacity follows REAL writes, never map maximum. Clearing a current
+  // high-water buffer is a reset operation, never ordinary frame/style work.
+  if(this.storageMode==='single'){this.single.array.fill(0);this.single.clearUpdateRanges();this.single.addUpdateRange(0,this.single.array.length);this.singleDirty=true;}
   this.width=width;this.height=height;let offset=0;
   for(let page=0;page<PAGES;page++){
    const required=page===0?FIRST_PAGE_ROWS:laterRows,old=this.pages[page]!,rows=Math.max(required,old.rows);this.starts[page]!.value=offset;this.ends[page]!.value=offset+rows;offset+=rows;
@@ -47,18 +58,31 @@ export class RockStrokeTable implements FaceStrokeData {
    // Reusing larger pages prevents32→64→32 or repeated save loads from
    // retaining another complete allocation at every world reset. Growth is
    // geometric and bounded; small worlds never allocate the maximum page.
-   if(old.rows>=required){if(old.allocated){old.attribute.array.fill(0);old.attribute.clearUpdateRanges();old.attribute.addUpdateRange(0,old.attribute.array.length);this.dirty.add(page);}continue;}
+   if(old.rows>=required){if(this.storageMode==='paged'&&old.allocated){old.attribute.array.fill(0);old.attribute.clearUpdateRanges();old.attribute.addUpdateRange(0,old.attribute.array.length);this.dirty.add(page);}continue;}
    this.retired.push(old.attribute);const attribute=new THREE.StorageBufferAttribute(new Float32Array(4),4);this.pages[page]={attribute,allocated:false,rows};this.nodes[page]!.value=attribute;
   }
   this.faceIds.clear();this.reservedFaces.clear();this.blocks.clear();this.free.length=0;this.cursor=0;this.facesSpan=0;this.edges=0;this.slabFaces=this.reserveFaces(ROCK_SLAB_FACES);
  }
- private reserveRows(rows:number):number{const first=Math.ceil(this.cursor/4)*4,end=first+rows;if(!Number.isSafeInteger(end)||end>this.ends[PAGES-1]!.value||end>=2**26)throw Error('Rock sparse storage exceeded its actual map admission bound');this.cursor=end;return first;}
+ private reserveRows(rows:number):number{const first=Math.ceil(this.cursor/4)*4,end=first+rows;if(!Number.isSafeInteger(end)||end>this.ends[PAGES-1]!.value||end>=2**26||this.storageMode==='single'&&end>MAX_PAGE_ROWS)throw Error('Rock sparse storage exceeded its actual map admission bound');this.cursor=end;return first;}
  private reserveFaces(count:number):readonly number[]{const first=this.reserveRows(count*FACE_ROWS),ids=Array.from({length:count},(_,i)=>(first+i*FACE_ROWS)/2);for(const id of ids){if(Math.fround(id)!==id)throw Error('Rock face address lost exact Float32 representation');this.reservedFaces.add(id);}this.facesSpan=Math.max(this.facesSpan,ids.at(-1)!+1);return Object.freeze(ids);}
  bindModel(model:RockSurfaceModel):void{this.assertCurrent();if(model.width!==this.width||model.height!==this.height)throw Error('Actual rock model/map bounds disagree');model.setSlabPaintFaces(this.slabFaces);for(const[slot,ids]of this.faceIds)if(slot<model.capacity)model.setPaintFaces(slot,ids);}
  bindCell(model:RockSurfaceModel,slot:number):void{this.assertCurrent();let ids=this.faceIds.get(slot);if(!ids){ids=this.reserveFaces(ROCK_SURFACE_FACES);this.faceIds.set(slot,ids);}model.setPaintFaces(slot,ids);}
  private pageAt(row:number):number{for(let page=0;page<PAGES;page++)if(row>=this.starts[page]!.value&&row<this.ends[page]!.value)return page;throw Error('Rock scalar row outside its admitted pages');}
  private data(page:number):Float32Array{const entry=this.pages[page]!;if(!entry.allocated){this.retired.push(entry.attribute);entry.attribute=new THREE.StorageBufferAttribute(new Float32Array(entry.rows*4),4);entry.allocated=true;this.nodes[page]!.value=entry.attribute;this.stats.pageAllocations++;}return entry.attribute.array as Float32Array;}
+ private ensureSingle(rows:number):void{
+  if(!Number.isSafeInteger(rows)||rows<0||rows>MAX_PAGE_ROWS)throw Error('Actual contiguous rock write exceeded128MiB admission');
+  const old=this.single;if(rows<=old.count)return;
+  const capacity=Math.max(FIRST_PAGE_ROWS,power2(rows)),next=new THREE.StorageBufferAttribute(new Float32Array(capacity*4),4);
+  (next.array as Float32Array).set(old.array as Float32Array);this.retired.push(old);this.single=next;this.singleNode.value=next;next.addUpdateRange(0,next.array.length);this.singleDirty=true;this.stats.pageAllocations++;
+ }
+ private writeSingle(firstRow:number,values:Float32Array):void{
+  if(!Number.isSafeInteger(firstRow)||firstRow<0||values.length%4)throw Error('Actual aligned Source row write required');
+  this.ensureSingle(firstRow+values.length/4);const data=this.single.array as Float32Array,offset=firstRow*4;let changed=false;
+  for(let i=0;i<values.length;i++)if(!Object.is(data[offset+i],values[i])){changed=true;break;}
+  if(changed){data.set(values,offset);this.single.addUpdateRange(offset,values.length);this.singleDirty=true;this.stats.changedRows+=values.length/4;}
+ }
  private write(firstRow:number,values:Float32Array):void{
+  if(this.storageMode==='single'){this.writeSingle(firstRow,values);return;}
   let source=0,row=firstRow;while(source<values.length){const page=this.pageAt(row),first=row-this.starts[page]!.value,data=this.data(page),length=Math.min(values.length-source,data.length-first*4);let changed=false;for(let i=0;i<length;i++)if(!Object.is(data[first*4+i],values[source+i])){changed=true;break;}if(changed){data.set(values.subarray(source,source+length),first*4);const attribute=this.pages[page]!.attribute;attribute.addUpdateRange(first*4,length);this.dirty.add(page);this.stats.changedRows+=length/4;}source+=length;row+=length/4;}
  }
  prepareSlab(model:RockSurfaceModel):RockStrokePatch{model.stock.clearGroups();model.stock.addGroup(0,ROCK_SLAB_INDICES,0);this.stats.preparedSlabs++;return this.collect(model,this.slabFaces,local=>local);}
@@ -88,11 +112,12 @@ export class RockStrokeTable implements FaceStrokeData {
    // enlarged, never consumed, by any measured Source base-line deviation.
    this.write(face*2,new Float32Array([block?.row??0,count,0,0,1,1,inset+gate.deviation+2e-5,gate.kind]));
   }
+  if(this.storageMode==='single'&&this.singleDirty){this.single.needsUpdate=true;this.singleDirty=false;}
   for(const page of this.dirty)this.pages[page]!.attribute.needsUpdate=true;this.dirty.clear();this.stats.patches+=patches.length;
  }
- snapshot(){return{faceSpan:this.facesSpan,actualFaces:this.reservedFaces.size,edges:this.edges,rows:this.cursor,pages:this.pages.filter(page=>page.allocated).map(page=>page.attribute.array.byteLength),cpuBytes:this.cpuBytes,retiredBuffers:this.retired.length};}
+ snapshot(){return{faceSpan:this.facesSpan,actualFaces:this.reservedFaces.size,edges:this.edges,rows:this.cursor,pages:this.storageMode==='single'?[this.single.array.byteLength]:this.pages.filter(page=>page.allocated).map(page=>page.attribute.array.byteLength),cpuBytes:this.cpuBytes,retiredBuffers:this.retired.length,representation:this.storageMode,storageModeChanges:this.storageModeChanges,singleRows:this.single.count,inactiveResidentBytes:this.storageMode==='single'?this.pages.reduce((sum,page)=>sum+page.attribute.array.byteLength,0):this.single.array.byteLength,scope:'One actual owner, no mirror. CPU includes current/inactive/retired storage until terminal ownership.'};}
  /** Terminal ownership only, with real rendered geometry candidates supplied
   * by the producer AND its435 owner before either disposes those geometries. */
- attachGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{this.assertCurrent();const candidates=[...new Set(geometries)];for(const attribute of new Set([...this.pages.map(page=>page.attribute),...this.retired]))for(const geometry of candidates)geometry.setAttribute(`uvRockStrokeGpuRetirement${attribute.id}`,attribute);}
- dispose():void{if(this.closed)return;this.closed=true;for(const node of this.nodes)node.dispose();this.faceIds.clear();this.reservedFaces.clear();this.blocks.clear();this.free.length=0;this.retired.length=0;}
+ attachGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{this.assertCurrent();const candidates=[...new Set(geometries)];for(const attribute of new Set([this.single,...this.pages.map(page=>page.attribute),...this.retired]))for(const geometry of candidates)geometry.setAttribute(`uvRockStrokeGpuRetirement${attribute.id}`,attribute);}
+ dispose():void{if(this.closed)return;this.closed=true;this.singleNode.dispose();for(const node of this.nodes)node.dispose();this.faceIds.clear();this.reservedFaces.clear();this.blocks.clear();this.free.length=0;this.retired.length=0;}
 }

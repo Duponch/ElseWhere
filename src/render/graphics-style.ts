@@ -9,10 +9,10 @@ import {referenceEdgeVisuals,type ReferenceEdgeVisuals} from './origami/referenc
 import {BASE_REFERENCE_PAINT_DESCRIPTORS,PROTECTED_REFERENCE_PAINT_DESCRIPTORS,humanBaseProfileIds,humanVariantDescriptor,GENERIC_REFERENCE_PROFILE} from './origami/reference-profiles';
 import {physicalPaintMetric,applyPhysicalPaintMetric,referencePaintBumpNormal} from './origami/paint-metric';
 import {updateOrigamiBrushGeometry} from './origami/brush-geometry';
-import {VirtualPaintPool,type VirtualPaintDescriptor} from './origami/virtual-paint-pool';
+import {VirtualPaintPool,type VirtualPaintDescriptor,type PaintAdmissionPlan} from './origami/virtual-paint-pool';
 import {bakeResidentPaintToSink} from './origami/reference-resident-paint-library';
 
-import {GAME_USED_BESTIARY_VIRTUAL_IDS} from './origami/game-paint-residency';
+import {GAME_USED_BESTIARY_VIRTUAL_IDS,GAME_REQUIRED_VIRTUAL_IDS78} from './origami/game-paint-residency';
 import {referenceCoverageKey} from './origami/reference-coverage';
 import {bakeCheckpointPaintToSink,replayCheckpointMaskR8} from './origami/checkpoint-paint-baker';
 import {createGlobalReliefLod,installGlobalReliefLod,type GlobalReliefLod} from './origami/relief-lod';
@@ -64,6 +64,14 @@ export class GraphicsStyleContext {
  private lastPaintVersion=-1;private admissionDepth=0;private repaintRequested=false;
  private atlasPaintEpoch=0;
  private protectedDemandDeclared=false;
+ /** All game-static pigments are requested before the first Gouache flush,
+  * ahead of dynamic human profiles. Physical assignments never move. A
+  * specialized producer may therefore bind bank0 without eight alternatives;
+  * prove this at publication, never by rescanning during ordinary rendering. */
+ private assertGameStaticPigmentBank(plan:PaintAdmissionPlan):void{
+  const incoming=new Map(plan.entries.map(entry=>[entry.virtualId,entry.pigmentLayer]));
+  for(const id of GAME_REQUIRED_VIRTUAL_IDS78){const layer=incoming.get(id)??this.paintPool.resolve(id)?.[0];if(layer===undefined||layer<0||layer>=LAYERS_PER_BANK)throw Error('Game-static pigment escaped its admitted bank0 domain');}
+ }
  private edgeMaps?:{color?:THREE.DataTexture;alpha:THREE.DataTexture;bump?:THREE.DataTexture};
  private edgePixelsPrepared=false;
  private readonly sharedSurfaceRefreshers=new Set<()=>void>();
@@ -187,6 +195,7 @@ export class GraphicsStyleContext {
   const repaint=this.repaintRequested||(this.bakedFill<0&&fill!==.60)||(this.bakedFill>=0&&this.bakedFill!==fill);
   if(this.lastPaintVersion===this.paintPool.version&&!repaint)return;
   const plan=this.paintPool.plan(repaint);
+  this.assertGameStaticPigmentBank(plan);
   if(!plan.entries.length){this.lastPaintVersion=this.paintPool.version;return;}
   this.ensurePaintBindings();
   const oldFaceDepth=this.paperArray!.image.width===512?this.paperArray!.image.depth:0;
@@ -309,13 +318,13 @@ export class GraphicsStyleContext {
   * this capability. VirtualPaintPool reserves physical0 for that identity even
   * when generic0 is admitted after more than256 unrelated resident pigments.
   * Explicit-profile producers retain the complete eight-bank graph. */
- private surfacePigmentNode(coordinates:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,genericOnly:boolean):THREE.Node<'vec4'>{
-  if(!genericOnly)return this.paintNode(coordinates,profile);
-  this.flushPaint();this.ensurePaintBindings();return texture(this.banks[0]!,coordinates).depth(float(0));
+ private surfacePigmentNode(coordinates:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,genericOnly:boolean,gameStaticBank0=false):THREE.Node<'vec4'>{
+  if(!genericOnly&&!gameStaticBank0)return this.paintNode(coordinates,profile);
+  this.flushPaint();this.ensurePaintBindings();return texture(this.banks[0]!,coordinates).depth(genericOnly?float(0):profile);
  }
- facePaintNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight=true,opaqueColorEndpoints=false,genericOnly=false):THREE.Node<'vec4'>{
-  if(opaqueColorEndpoints&&!this.reliefEnabled)return this.facePaintOpaqueEndpoints(pigmentUv,faceUv,profile,faceProfile,includeHeight,genericOnly);
-  const pigment=this.surfacePigmentNode(pigmentUv,profile,genericOnly).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=paper.a;
+ facePaintNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight=true,opaqueColorEndpoints=false,genericOnly=false,gameStaticBank0=false):THREE.Node<'vec4'>{
+  if(opaqueColorEndpoints&&!this.reliefEnabled)return this.facePaintOpaqueEndpoints(pigmentUv,faceUv,profile,faceProfile,includeHeight,genericOnly,gameStaticBank0);
+  const pigment=this.surfacePigmentNode(pigmentUv,profile,genericOnly,gameStaticBank0).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=paper.a;
   // Source Canvas composition uses encoded sRGB. The opaque repeating
   // pigment never contains a paper frame; only this raw face mask exposes it.
   // ColorSpaceNode is a raw node class in r186: wrap it before swizzling.
@@ -323,8 +332,8 @@ export class GraphicsStyleContext {
   const color=vec4(colorSpaceToWorking(vec4(mix(paperEncoded,pigmentEncoded,coverage),1),THREE.SRGBColorSpace) as unknown as THREE.Node<'vec4'>).rgb;
   return vec4(color,includeHeight&&this.reliefEnabled?mix(texture(this.ensurePaperHeightBinding(),faceUv).depth(faceProfile).r,pigment.a,coverage):float(0));
  }
- private facePaintOpaqueEndpoints(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight:boolean,genericOnly:boolean):THREE.Node<'vec4'>{
-  const pigment=this.surfacePigmentNode(pigmentUv,profile,genericOnly).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=paper.a.toVar();
+ private facePaintOpaqueEndpoints(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight:boolean,genericOnly:boolean,gameStaticBank0:boolean):THREE.Node<'vec4'>{
+  const pigment=this.surfacePigmentNode(pigmentUv,profile,genericOnly,gameStaticBank0).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=paper.a.toVar();
   const color=Fn(()=>{
    // Preserve implicit derivatives: every texture read precedes the varying
    // coverage condition. Only redundant endpoint color conversions are skipped.
@@ -339,7 +348,7 @@ export class GraphicsStyleContext {
   })();
   return vec4(color,includeHeight&&this.reliefEnabled?mix(texture(this.ensurePaperHeightBinding(),faceUv).depth(faceProfile).r,pigment.a,coverage):float(0));
  }
- faceHeightNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,genericOnly=false):THREE.Node<'float'>{if(!this.reliefEnabled)return float(0);return mix(texture(this.ensurePaperHeightBinding(),faceUv).depth(faceProfile).r,this.surfacePigmentNode(pigmentUv,profile,genericOnly).a,texture(this.paperArray!,faceUv).depth(faceProfile).a);}
+ faceHeightNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,genericOnly=false,gameStaticBank0=false):THREE.Node<'float'>{if(!this.reliefEnabled)return float(0);return mix(texture(this.ensurePaperHeightBinding(),faceUv).depth(faceProfile).r,this.surfacePigmentNode(pigmentUv,profile,genericOnly,gameStaticBank0).a,texture(this.paperArray!,faceUv).depth(faceProfile).a);}
  /** Canonical reference adapter only. Product contours are painted triangles. */
  createLineMaterial(positionNode:THREE.Node|null):THREE.LineBasicNodeMaterial {const material=new THREE.LineBasicNodeMaterial({transparent:true});material.userData.origamiContour=true;material.userData.origamiUnlitContour=true;material.colorNode=this.lineColor;material.positionNode=positionNode;material.opacityNode=this.lineOpacity;return material;}
  createBrushMaterial(positionNode:THREE.Node|null,coordinates:THREE.Node<'vec2'>=uv()):THREE.MeshStandardNodeMaterial {

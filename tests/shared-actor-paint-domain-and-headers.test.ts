@@ -1,0 +1,57 @@
+/** Actual pool/models/actor programs. Tiny synthetic bank bytes exercise IDs
+ * and cold WGSL only: no device, painter pixel, Native or performance claim. */
+import{expect,test,vi}from'vitest';
+import*as THREE from'three/webgpu';
+import{EnvironmentLighting}from'../src/render/EnvironmentLighting';
+import{GraphicsStyleContext,withGraphicsStyle}from'../src/render/graphics-style';
+import{DEFAULT_GRAPHICS_STYLE_PREFERENCES}from'../src/ui3d/native-preferences';
+import type{VirtualPaintPool}from'../src/render/origami/virtual-paint-pool';
+import{createGamewideVirtualPool78,GAME_REQUIRED_VIRTUAL_IDS78}from'../src/render/origami/game-paint-residency';
+import{humanVariantDescriptor}from'../src/render/origami/reference-profiles';
+import{AnimalModels,ANIMAL_SURFACE_PROFILE_STRIDE}from'../src/render/models/AnimalModels';
+import{HumanModels}from'../src/render/models/HumanModels';
+import{ANIMAL_SPECIES_IDS}from'../src/sim/animal-species';
+import{PawnLayer}from'../src/render/PawnLayer';
+import{WildlifeLayer}from'../src/render/WildlifeLayer';
+import{animalCombatCamp}from'./scenarios/animal-combat';
+import{unboundWgslTextureResources}from'./wgsl-resource-bindings';
+import{paintBankReads}from'./wgsl-paint-bank-dominance';
+import{writeTestFileSync}from'./test-output';
+
+function assertFaceIds(g:THREE.BufferGeometry,face:(v:number)=>number,count:number){const index=g.index,total=index?.count??g.getAttribute('position').count;for(let corner=0;corner<total;corner+=3){const ids=[0,1,2].map(i=>face(index?.getX(corner+i)??corner+i));if(!Number.isSafeInteger(ids[0])||ids[0]!<0||ids[0]!>=count||ids[1]!==ids[0]||ids[2]!==ids[0])throw Error('Actual triangle crossed immutable face headers');}}
+
+test('all53 animal profiles belong to protected78 in physical bank0 even after300 real dynamic human profiles, and actual actor triangles own constant headers',()=>{
+ const pool=createGamewideVirtualPool78(),animals=new AnimalModels(),humans=new HumanModels(),allowed=new Set(GAME_REQUIRED_VIRTUAL_IDS78);
+ try{const first=pool.plan();pool.commit(first);const before=GAME_REQUIRED_VIRTUAL_IDS78.map(id=>({id,resolved:pool.resolve(id)}));expect(before).toHaveLength(78);expect(before.every(x=>x.resolved&&x.resolved[0]<256)).toBe(true);
+  const dynamic=Array.from({length:300},(_,i)=>pool.registerHumanProfile(humanVariantDescriptor(0,0x100000+i)));pool.requireProfiles('TEST-300human-colors',dynamic);const later=pool.plan();expect(later.entries).toHaveLength(300);expect(later.entries.at(-1)!.pigmentLayer).toBeGreaterThan(255);pool.commit(later);expect(GAME_REQUIRED_VIRTUAL_IDS78.map(id=>({id,resolved:pool.resolve(id)}))).toEqual(before);
+  let vertices=0;for(const species of ANIMAL_SPECIES_IDS){const model=animals.get(species),geometry=model.geometry,paint=geometry.getAttribute('animalPaint');for(let v=0;v<paint.count;v++)if(!allowed.has(paint.getW(v)%ANIMAL_SURFACE_PROFILE_STRIDE))throw Error('Unproved static animal palette '+species);assertFaceIds(geometry,v=>Math.floor(paint.getW(v)/ANIMAL_SURFACE_PROFILE_STRIDE),model.strokes.faceCount);vertices+=paint.count;}
+  const model=humans.get({smithing:true,mace:true,longsword:true,spear:true}),g=model.createGeometry();try{const traits=g.getAttribute('pawnRigTraits');assertFaceIds(g,v=>traits.getW(v),model.strokes.faceCount);}finally{g.dispose();}
+  expect(vertices).toBeGreaterThan(0);expect(pool.stats().residentCount).toBe(378);const replay=pool.plan(true);expect(replay.entries).toHaveLength(378);expect(replay.entries.filter(x=>allowed.has(x.virtualId)).map(x=>[x.virtualId,x.pigmentLayer,x.faceLayer])).toEqual(before.map(x=>[x.id,x.resolved![0],x.resolved![1]]));
+ }finally{pool.dispose();animals.dispose();humans.dispose();}
+},60000);
+
+
+test('actual Context refuses a broken static-bank admission before any pixel/binding allocation or pool commit',()=>{
+ const context=new GraphicsStyleContext({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'default',impasto:0,wear:0}),pool=Reflect.get(context,'paintPool')as VirtualPaintPool;
+ try{const dynamic=Array.from({length:300},(_,i)=>pool.registerHumanProfile(humanVariantDescriptor(0,0x200000+i)));pool.requireProfiles('TEST-invalid-preexisting-human-first',dynamic);pool.commit(pool.plan());const resident=pool.stats().residentCount,metadata=pool.metadataData()!.slice();expect(Reflect.get(context,'colorArray')).toBeUndefined();context.update({...context.preferences,style:'origami'});expect(()=>context.flushPaint()).toThrow('Game-static pigment escaped its admitted bank0 domain');expect(Reflect.get(context,'colorArray')).toBeUndefined();expect(pool.stats().residentCount).toBe(resident);expect(pool.metadataData()).toEqual(metadata);}
+ finally{context.dispose();}
+});
+
+interface Binding{readonly name:string;readonly visibility:number;readonly isSampledTexture?:boolean;readonly isStorageBuffer?:boolean;readonly texture?:THREE.Texture}
+interface BuilderPort{scene:THREE.Scene;camera:THREE.Camera;material:THREE.Material;lightsNode:THREE.LightsNode;build():void;vertexShader:string;fragmentShader:string;varyings:{name:string;needsInterpolation:boolean}[];getAttributesArray():{name:string;node?:{attribute?:THREE.BufferAttribute|THREE.InterleavedBufferAttribute}}[];getBindings():{bindings:Binding[]}[]}
+const Builder=THREE.WGSLNodeBuilder as unknown as new(o:THREE.Object3D,r:THREE.WebGPURenderer)=>BuilderPort;
+
+for(const impasto of[0,.2])test('actual human native/LOD and animal headers compile cold with exact static-only bank0, dynamic human banks and device budgets (relief='+impasto+')',()=>{
+ const context=new GraphicsStyleContext({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'default',impasto,wear:0}),renderer=new THREE.WebGPURenderer({canvas:{width:960,height:600,style:{}}as HTMLCanvasElement}),init=vi.spyOn(renderer,'init').mockImplementation(()=>{throw Error('No device in cold actor contract');});renderer.hasFeature=()=>false;renderer.outputColorSpace=THREE.LinearSRGBColorSpace;Reflect.set(renderer.backend,'device',{features:new Set<string>(),limits:{maxUniformBufferBindingSize:65536}});Reflect.set(renderer.backend,'renderer',renderer);
+ const lighting=new EnvironmentLighting(),pawns=withGraphicsStyle(context,()=>new PawnLayer(lighting.configure)),wildlife=withGraphicsStyle(context,()=>new WildlifeLayer(lighting.configure,()=>undefined)),world=animalCombatCamp(),scene=new THREE.Scene(),camera=new THREE.OrthographicCamera(-3,3,2,-2,.1,100),sun=new THREE.DirectionalLight(),sky=new THREE.HemisphereLight();scene.add(pawns.group,wildlife.mesh,sun,sky);camera.position.set(3,4,6);camera.lookAt(0,1,0);camera.updateMatrixWorld();
+ try{pawns.update(world,0,true);wildlife.update(world,undefined,true);const human=Reflect.get(pawns,'pawnMesh')as THREE.Mesh<THREE.BufferGeometry>,native=Reflect.get(pawns,'nativePawnMesh')as THREE.Mesh<THREE.BufferGeometry>|undefined;
+  const animalMeshes:THREE.Mesh[]=[];wildlife.mesh.traverse(o=>{if(o instanceof THREE.Mesh&&o.geometry.hasAttribute('animalPaint')&&o.name.startsWith('Wild ')&&(o.name.includes('red-fox')||o.name.includes('gazelle')))animalMeshes.push(o);});expect(animalMeshes).toHaveLength(2);const tests=[{label:'human-lod',mesh:human,material:Reflect.get(pawns,'texturedMaterial')as THREE.NodeMaterial},{label:'human-native',mesh:native??human,material:Reflect.get(pawns,'nativeTexturedMaterial')as THREE.NodeMaterial},...animalMeshes.map(mesh=>({label:mesh.name.includes('red-fox')?'animal-fox':'animal-gazelle',mesh,material:mesh.material as THREE.NodeMaterial}))];
+  // No Canvas is used: two tiny TEST physical banks exercise the real dynamic
+  // shader graph. Protected78 retain physical0..77; human rows target bank1.
+  void context.paint;const storage=context.debugPaintStorage(),rank=new Map(GAME_REQUIRED_VIRTUAL_IDS78.map((id,i)=>[id,i]));for(const[index,bank]of storage.banks.slice(0,2).entries())bank.texture.image={width:1,height:1,depth:256,data:new Uint8Array(256*4).fill(80+index*80)};for(let id=0;id<storage.lookup.data.length/2;id++){storage.lookup.data[id*2]=rank.get(id)??(256+id%256);storage.lookup.data[id*2+1]=0;}Reflect.set(Reflect.get(context,'activeBankCount'),'value',2);
+  const facts:unknown[]=[];for(const row of tests){const mesh=new THREE.Mesh(row.mesh.geometry,row.material);scene.add(mesh);scene.updateMatrixWorld(true);const b=new Builder(mesh,renderer);b.scene=scene;b.camera=camera;b.material=row.material;b.lightsNode=new THREE.LightsNode().setLights([sun,sky]);b.build();mesh.removeFromParent();const bindings=b.getBindings().flatMap(g=>g.bindings),sampled=bindings.filter(x=>x.isSampledTexture&&(x.visibility&2)!==0),pigment=sampled.filter(x=>storage.banks.some(bank=>bank.texture===x.texture)),animal=row.label.startsWith('animal'),prefix=animal?'v_animalStrokeHeader':'v_pawnStrokeHeader',attrs=b.getAttributesArray().flatMap(a=>{const attribute=a.node?.attribute??mesh.geometry.getAttribute(a.name);return attribute?[attribute]:[];}),buffers=new Set(attrs.map(a=>a instanceof THREE.InterleavedBufferAttribute?a.data:a));
+   expect(pigment).toHaveLength(animal?1:8);if(animal)expect(pigment[0]!.texture).toBe(storage.banks[0]!.texture);expect(sampled.some(x=>x.texture===storage.paper.texture)).toBe(true);if(animal){expect(b.vertexShader).toContain(prefix+'0');expect(b.vertexShader).toContain(prefix+'1');expect(b.fragmentShader).toContain(prefix+'0');expect(b.fragmentShader).toContain(prefix+'1');}else{expect(b.vertexShader).toContain(prefix+'Packed');expect(b.fragmentShader).toContain(prefix+'Packed');expect(b.vertexShader).not.toContain(prefix+'0');expect(b.vertexShader).not.toContain(prefix+'1');}expect(b.fragmentShader).not.toContain('v_surfaceStrokeFace');expect(bindings.some(x=>x.isStorageBuffer&&(x.visibility&1)!==0)).toBe(true);
+   expect(attrs.length).toBeLessThanOrEqual(16);expect(buffers.size).toBeLessThanOrEqual(8);expect(b.varyings.filter(v=>v.needsInterpolation).length).toBeLessThanOrEqual(16);expect(sampled.length).toBeLessThanOrEqual(16);for(const bit of[1,2])expect(bindings.filter(x=>x.isStorageBuffer&&(x.visibility&bit)!==0).length).toBeLessThanOrEqual(8);expect(b.getBindings().length).toBeLessThanOrEqual(4);expect((b.fragmentShader.match(/\bvar\s+\w+\s*:\s*sampler\s*;/g)??[]).length).toBeLessThanOrEqual(16);expect(unboundWgslTextureResources(b.vertexShader)).toEqual([]);expect(unboundWgslTextureResources(b.fragmentShader)).toEqual([]);const reads=paintBankReads(b.fragmentShader,new Set(pigment.map(x=>x.name)));expect(reads.filter(r=>r.missing.length)).toEqual([]);expect(row.material.normalNode===null).toBe(impasto===0);const label='actor-domain-header-'+impasto+'-'+row.label;writeTestFileSync('artifacts/'+label+'-vertex.wgsl',b.vertexShader);writeTestFileSync('artifacts/'+label+'-fragment.wgsl',b.fragmentShader);facts.push({label,buffers:buffers.size,attributes:attrs.length,varyings:b.varyings.filter(v=>v.needsInterpolation).length,pigment:pigment.map(x=>({name:x.name,texture:x.texture!.uuid})),readCount:reads.length});}
+  writeTestFileSync('artifacts/actor-domain-header-'+impasto+'-facts.json',JSON.stringify({scope:'Cold real actor graph only, synthetic bank data, no Native quality/performance claim',facts},null,2)+'\n');expect(init).not.toHaveBeenCalled();
+ }finally{pawns.dispose();wildlife.dispose();lighting.dispose();context.dispose();init.mockRestore();}
+},60000);

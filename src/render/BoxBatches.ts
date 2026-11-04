@@ -19,6 +19,7 @@ import {createSandbagGeometry} from './sandbag-parts';
 import {createItemGeometry} from './item-geometry';
 import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
 import {compileNaturalSurfaceModels,naturalStroke,type NaturalSurfaceModels} from './surfaces/NaturalSurfaceModels';
+import {assertUnitBoxPaintGeometry,rigidBoxPaintInputs} from './surfaces/RigidBoxPaintUv';
 
 const object = new THREE.Object3D(), color = new THREE.Color();
 type Style = 'solid' | 'overlay' | 'wire' | 'storage' | 'storage-home' | 'border';
@@ -37,6 +38,8 @@ export class BoxBatches {
   private readonly surfaceTexture = createStylizedSurfaceTexture();
   private readonly rockTexture = createChunkSurfacePaint();
   private readonly texturedSolid = createSurfaceMaterial('diffuse',0xffffff);
+  private readonly texturedNonBox = createSurfaceMaterial('diffuse',0xffffff);
+  private readonly rigidBoxes=new WeakSet<BoxMesh>();
   private readonly plainRock = createSurfaceMaterial('diffuse',0xffffff);
   private readonly texturedRock = createSurfaceMaterial('diffuse',0xffffff);
   private readonly materials: Record<Style, THREE.NodeMaterial> = {
@@ -71,31 +74,36 @@ export class BoxBatches {
       // their original tiny models without preparing an unused stroke table.
       this.geometry=new THREE.BoxGeometry(1,1,1);this.roundedRockGeometry=createChunkGeometry();this.smallRockGeometry=createChunkGeometry(true);this.sandbagGeometry=createSandbagGeometry();this.itemAtlas=new ItemMeshAtlas();
     }
-    solidExplorationMaterial256(this.materials.solid);solidExplorationMaterial256(this.texturedSolid);
+    solidExplorationMaterial256(this.materials.solid);solidExplorationMaterial256(this.texturedSolid);solidExplorationMaterial256(this.texturedNonBox);
     configure?.(this.materials.solid);
     configure?.(this.texturedSolid);
+    configure?.(this.texturedNonBox);
     configure?.(this.plainRock);
     configure?.(this.texturedRock);
     configure?.(this.plainItem);configure?.(this.texturedItem);
     this.plainItem.userData.rendererOwned=this.texturedItem.userData.rendererOwned=true;
     this.itemAtlas.configure(this.plainItem);this.itemAtlas.configure(this.texturedItem,this.surfaceTexture);
-    applySharedPaintSurface(this.texturedItem,{context:this.graphicsStyle,base:attribute('boxColor','vec3'),pastel:this.texturedItem.colorNode as THREE.Node<'vec3'>,faceUv:this.itemAtlas.paintUvNode(),stroke:naturalStroke(this.graphicsStyle,this.surfaceModels?.stroke,this.itemAtlas.strokeFaceNode(),this.itemAtlas.strokeUvNode())});
+    applySharedPaintSurface(this.texturedItem,{context:this.graphicsStyle,base:attribute('boxColor','vec3'),pastel:this.texturedItem.colorNode as THREE.Node<'vec3'>,faceUv:this.itemAtlas.paintUvNode(),stroke:naturalStroke(this.graphicsStyle,this.surfaceModels?.stroke,this.itemAtlas.strokeFaceNode(),this.itemAtlas.strokeUvNode(),true)});
     this.geometry.userData.rendererOwned = true;
     this.roundedRockGeometry.userData.rendererOwned = true;
     this.smallRockGeometry.userData.rendererOwned = true;
     this.sandbagGeometry.userData.rendererOwned = true;
     for (const mat of Object.values(this.materials)) { mat.userData.rendererOwned = true; configureBoxMaterial(mat); }
-    this.texturedSolid.userData.rendererOwned = true;
+    this.texturedSolid.userData.rendererOwned = this.texturedNonBox.userData.rendererOwned = true;
     configureBoxMaterial(this.texturedSolid);
+    configureBoxMaterial(this.texturedNonBox);
     const graphics=this.graphicsStyle;
     this.texturedSolid.colorNode = attribute('boxColor', 'vec3').mul(texture(this.surfaceTexture, instancedBoxPatternUv()).rgb);
-    applySharedPaintSurface(this.texturedSolid,{context:graphics,base:attribute('boxColor','vec3'),pastel:this.texturedSolid.colorNode as THREE.Node<'vec3'>,stroke:naturalStroke(graphics,this.surfaceModels?.stroke)});
+    this.texturedNonBox.colorNode=this.texturedSolid.colorNode;
+    assertUnitBoxPaintGeometry(this.geometry);const rigidPaint=graphics?rigidBoxPaintInputs(graphics,'rigidBox'):undefined;
+    applySharedPaintSurface(this.texturedSolid,{context:graphics,base:attribute('boxColor','vec3'),pastel:this.texturedSolid.colorNode as THREE.Node<'vec3'>,faceUv:rigidPaint?.faceUv,get pigmentUv(){return graphics&&!graphics.reliefEnabled&&!graphics.wearEnabled?rigidPaint?.pigmentUv:undefined;},stroke:naturalStroke(graphics,this.surfaceModels?.stroke,undefined,undefined,true)});
+    applySharedPaintSurface(this.texturedNonBox,{context:graphics,base:attribute('boxColor','vec3'),pastel:this.texturedNonBox.colorNode as THREE.Node<'vec3'>,stroke:naturalStroke(graphics,this.surfaceModels?.stroke,undefined,undefined,true)});
     for (const mat of [this.plainRock, this.texturedRock]) {
       mat.userData.rendererOwned = true;
       configureChunkMaterial(mat);
     }
     this.texturedRock.colorNode = attribute('boxColor', 'vec3').mul(texture(this.rockTexture, chunkPaintUv()).rgb);
-    applySharedPaintSurface(this.texturedRock,{context:graphics,base:attribute('boxColor','vec3'),pastel:this.texturedRock.colorNode as THREE.Node<'vec3'>,stroke:naturalStroke(graphics,this.surfaceModels?.stroke)});
+    applySharedPaintSurface(this.texturedRock,{context:graphics,base:attribute('boxColor','vec3'),pastel:this.texturedRock.colorNode as THREE.Node<'vec3'>,stroke:naturalStroke(graphics,this.surfaceModels?.stroke,undefined,undefined,true)});
   }
 
   /** Select a resident pipeline. The plain one has no texture node or map, so
@@ -103,10 +111,9 @@ export class BoxBatches {
   setTexturesEnabled(enabled: boolean): void {
     if (enabled === this.texturesEnabled) return;
     this.texturesEnabled = enabled;
-    const chosen = enabled ? this.texturedSolid : this.materials.solid;
     for (const mesh of this.batches.values()) {
       const previous=mesh.material;
-      if (mesh.material === this.texturedSolid || mesh.material === this.materials.solid) mesh.material = chosen;
+      if (mesh.material === this.texturedSolid || mesh.material===this.texturedNonBox || mesh.material === this.materials.solid) mesh.material = enabled?(this.rigidBoxes.has(mesh)?this.texturedSolid:this.texturedNonBox):this.materials.solid;
       else if (mesh.material === this.texturedRock || mesh.material === this.plainRock) mesh.material = enabled ? this.texturedRock : this.plainRock;
       else if(mesh.material===this.texturedItem||mesh.material===this.plainItem)mesh.material=enabled?this.texturedItem:this.plainItem;
       if(mesh.material!==previous)mesh.commitOwnedOpaque435();
@@ -216,14 +223,14 @@ export class BoxBatches {
     const atlas=geometry===this.itemAtlas.geometry||geometry===this.itemAtlas.smallGeometry;
     const chosen = style==='solid'&&atlas?(this.texturesEnabled?this.texturedItem:this.plainItem):style === 'solid' && rock
       ? (this.texturesEnabled ? this.texturedRock : this.plainRock)
-      : style === 'solid' && this.texturesEnabled ? this.texturedSolid : this.materials[style];
+      : style === 'solid' && this.texturesEnabled ? (geometry===this.geometry?this.texturedSolid:this.texturedNonBox) : this.materials[style];
     if (!mesh) {
       mesh = new BoxMesh(geometry, chosen, Math.max(256, 2 ** Math.ceil(Math.log2(items.length || 1))),style==='solid'?this.ownedProducer435:undefined);
       if(rock)this.allocateRockContour(mesh);
       mesh.name = key;
       mesh.castShadow = style === 'solid' && shadows; mesh.receiveShadow = true;
       if(style==='solid')this.ownedProducer435?.register(mesh,
-        atlas?[this.plainItem,this.texturedItem]:rock?[this.plainRock,this.texturedRock]:[this.materials.solid,this.texturedSolid],
+        atlas?[this.plainItem,this.texturedItem]:rock?[this.plainRock,this.texturedRock]:[this.materials.solid,geometry===this.geometry?this.texturedSolid:this.texturedNonBox],
         atlas?[this.itemAtlas.data,this.surfaceTexture,...(this.surfaceModels?[this.surfaceModels.stroke.buffer]:[])]:rock?[this.rockTexture,...(this.surfaceModels?[this.surfaceModels.stroke.buffer]:[])]:[this.surfaceTexture,...(this.surfaceModels?[this.surfaceModels.stroke.buffer]:[])]);
       group.add(mesh); this.batches.set(key, mesh);
     } else if (items.length > mesh.instanceMatrix.count||atlas!==!!mesh.itemShapeBuffer) {
@@ -232,6 +239,7 @@ export class BoxBatches {
       mesh.allocate(geometry, capacity);
       if(rock)this.allocateRockContour(mesh);
     }
+    if(geometry===this.geometry)this.rigidBoxes.add(mesh);else this.rigidBoxes.delete(mesh);
     if (mesh.material !== chosen) mesh.material = chosen;
     mesh.activeCount = items.length;
     const ids:(number|undefined)[]=[];
@@ -295,6 +303,6 @@ export class BoxBatches {
     this.clear();if(this.surfaceModels)this.surfaceModels.dispose();else{this.geometry.dispose();this.roundedRockGeometry.dispose();this.smallRockGeometry.dispose();this.sandbagGeometry.dispose();}
     this.itemAtlas.dispose();this.plainItem.dispose();this.texturedItem.dispose();
     for (const mat of Object.values(this.materials)) mat.dispose();
-    this.texturedSolid.dispose(); this.plainRock.dispose(); this.texturedRock.dispose(); this.surfaceTexture.dispose();this.rockTexture.dispose();
+    this.texturedSolid.dispose();this.texturedNonBox.dispose(); this.plainRock.dispose(); this.texturedRock.dispose(); this.surfaceTexture.dispose();this.rockTexture.dispose();
   }
 }

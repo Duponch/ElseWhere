@@ -59,7 +59,7 @@ import {ActorPartUnionIndex,HumanPartUnionReader} from './origami/actor-part-uni
 import {HumanModels,createHumanWearGeometry,type HumanModel} from './models/HumanModels';
 import {HumanCargoModel} from './models/HumanCargoModel';
 import {naturalStroke} from './surfaces/NaturalSurfaceModels';
-import {createFaceStrokeNode,attachFaceStrokeGpuRetirement,type FaceStrokeData} from './surfaces/FaceStrokeTable';
+import {faceStrokeHalfUvVertexHeaders,createFaceStrokeNode,attachFaceStrokeGpuRetirement,type FaceStrokeData} from './surfaces/FaceStrokeTable';
 import {applySharedPaintSurface,type SharedPaintSurfaceOptions} from './surfaces/SharedPaintSurface';
 import { Fn, If, attribute, cos, float, instanceIndex, mix, positionLocal, sin, uniform, renderGroup, storage,uv,vec2,vec3,vec4, varying } from 'three/tsl';
 import { TICKS_PER_SECOND,type MaterialPile,type Pawn,type World,type Job } from '../sim/types';
@@ -782,7 +782,7 @@ export class PawnLayer {
         });
         return bodyBloodPigment(pigment,region,1,cloth.select(float(1),float(0)),attribute('aHairBlood','vec4').w,origamiBloodBind);
       })();
-      const context=this.graphics,faceUv=varying(attribute('origamiPaintUv','vec2'),'v_pawnSurfaceUv'),stroke=(body:THREE.Node<'vec3'>)=>createFaceStrokeNode(body,{table:this.humanStroke!,faceId:attribute('pawnRigTraits','vec4').w,faceUv,enabled:context.surfaceEncoding.mul(context.lineOpacity),width:context.edgeWidth,irregularity:context.strokeImperfection,opacity:context.lineOpacity,brushColor:context.brushColor.rgb,samplePigment:(u,x,y)=>context.sampleStrokePigment(u,x,y),sampleDry:(u,x,y)=>context.sampleStrokeDry(u,x,y)});
+      const context=this.graphics,faceUv=varying(attribute('origamiPaintUv','vec2'),'v_pawnSurfaceUv'),faceId=attribute('pawnRigTraits','vec4').w,headers=faceStrokeHalfUvVertexHeaders({table:this.humanStroke!,faceId,enabled:context.surfaceEncoding.mul(context.lineOpacity),opacity:context.lineOpacity},'v_pawnStrokeHeaderPacked'),stroke=(body:THREE.Node<'vec3'>)=>createFaceStrokeNode(body,{table:this.humanStroke!,faceId,headers,faceUv,enabled:context.surfaceEncoding.mul(context.lineOpacity),width:context.edgeWidth,irregularity:context.strokeImperfection,opacity:context.lineOpacity,brushColor:context.brushColor.rgb,samplePigment:(u,x,y)=>context.sampleStrokePigment(u,x,y),sampleDry:(u,x,y)=>context.sampleStrokeDry(u,x,y)});
       bodySurfaceOptions={context,base:baseColor,pastel:baseColor.mul(pawnSurfaceShade(this.surfaceTexture)),faceUv,profile:origamiTraits.w,includeGeneric:false,gouacheTransform:transformPaint,stroke};applySharedPaintSurface(textured,bodySurfaceOptions);
     }
     const nativePlain = material(0xffffff), nativeTextured = material(0xffffff);
