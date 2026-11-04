@@ -150,6 +150,7 @@ async function prepareTrees(graphics:GraphicsStyleContext,assertJobCurrent:()=>v
   const assertCurrent=()=>{assertJobCurrent();if(context!==graphics)throw Error('Catalog paint context changed');};
   assertCurrent();graphics.flushPaint();
   for(const collection of collections){await collection.prepareTrees?.(renderer,camera,scene,assertCurrent);assertCurrent();}
+  const stages=[];let committed=false;try{for(const collection of collections){const stage=await collection.stagePlants?.(renderer,camera,scene,assertCurrent);if(stage)stages.push(stage);assertCurrent();}for(const stage of stages)stage.commit();committed=true;}finally{const errors:unknown[]=[];for(const stage of stages.reverse()){if(!committed)try{stage.rollback();}catch(error){errors.push(error);}try{stage.dispose();}catch(error){errors.push(error);}}if(errors.length)throw new AggregateError(errors,'Catalog initial plant stage cleanup failed');}
 }
 async function finishView(assertCurrent:()=>void,prepared=false):Promise<void>{
   if(!prepared){progress('Préparation des matériaux de cette vue…');await nextFrame();assertCurrent();for(const texture of context!.prepareSharedSurfaceAssets())renderer.initTexture(texture);await renderer.compileAsync(scene,camera);assertCurrent();}

@@ -4,6 +4,7 @@ import type * as THREE from 'three/webgpu';
 import type {GraphicsStyleContext} from '../render/graphics-style';
 import type {GraphicsStylePreferences} from '../ui3d/native-preferences';
 import type {CatalogCollection} from './asset-catalog-types';
+import type {PreparedPlantAtlasStage} from '../render/origami/baked/plants/PlantAtlasSurface';
 
 export interface CatalogSurfacePort {
  readonly renderer:THREE.WebGPURenderer;
@@ -18,16 +19,19 @@ export interface CatalogSurfacePort {
 export async function changeCatalogSurface(context:GraphicsStyleContext,next:GraphicsStylePreferences,collections:readonly CatalogCollection[],port:CatalogSurfacePort):Promise<void>{
  const previous={...context.preferences};
  const prepare=async(preferences:GraphicsStylePreferences)=>{
-  port.assertCurrent();
+  const plants:PreparedPlantAtlasStage[]=[];let committed=false;
+  try{port.assertCurrent();
   // Detach an old generation before changing its borrowed paint. Rendering is
   // held; an atlas refusal retains the same complete opaque direct surface.
   for(const collection of collections)collection.invalidatePreparedTrees?.();
   context.update(preferences);
   for(const texture of context.prepareSharedSurfaceAssets())port.renderer.initTexture(texture);
   for(const collection of collections){await collection.prepareTrees?.(port.renderer,port.camera,port.scene,()=>port.assertCurrent());port.assertCurrent();}
+  for(const collection of collections){const stage=await collection.stagePlants?.(port.renderer,port.camera,port.scene,()=>port.assertCurrent());if(stage)plants.push(stage);port.assertCurrent();}
   // A preparation may have admitted additional metadata/pigment layers.
   for(const texture of context.prepareSharedSurfaceAssets())port.renderer.initTexture(texture);
-  await port.renderer.compileAsync(port.scene,port.camera);port.assertCurrent();
+  await port.renderer.compileAsync(port.scene,port.camera);port.assertCurrent();for(const stage of plants)stage.commit();committed=true;
+  }finally{const errors:unknown[]=[];for(const stage of plants.reverse()){if(!committed)try{stage.rollback();}catch(error){errors.push(error);}try{stage.dispose();}catch(error){errors.push(error);}}if(errors.length)throw new AggregateError(errors,'Catalog plant stage cleanup failed');}
  };
  try{await prepare(next);}
  catch(error){

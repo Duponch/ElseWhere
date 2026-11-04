@@ -1,4 +1,5 @@
 import type * as THREE from 'three/webgpu';
+import type {PreparedPlantAtlasStage} from '../render/origami/baked/plants/PlantAtlasSurface';
 
 /** Development presentation inventory only. These entries are neither game
  * entities nor a World: they carry labels, preview bounds and render ownership. */
@@ -25,6 +26,8 @@ export interface CatalogCollection {
   /** The entry point holds exclusive renderer ownership across every await.
    * Called only after all appearance profiles have been registered/flushed. */
   prepareTrees?(renderer:THREE.WebGPURenderer,camera:THREE.Camera,lightingScene:THREE.Scene,assertCurrent:()=>void):Promise<void>;
+  /** Data publication is settled by the exclusive gallery transaction. */
+  stagePlants?(renderer:THREE.WebGPURenderer,camera:THREE.Camera,lightingScene:THREE.Scene,assertCurrent:()=>void):Promise<PreparedPlantAtlasStage|undefined>;
   /** Detach rendered users before changing paint or retiring its owner. */
   invalidatePreparedTrees?():void;
   treeStatus?():unknown;

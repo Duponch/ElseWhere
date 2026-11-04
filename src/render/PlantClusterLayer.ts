@@ -8,7 +8,9 @@ import { floraColor, floraSize, isClusterPlantSpecies } from './flora-presentati
 import { noise } from './StaticGeometry';
 import type { NaturalPresentationChange } from './NaturalResourcePresentation';
 import { ResourceTargetTint } from './resource-target-tint';
-import { currentGraphicsStyle } from './graphics-style';
+import { currentGraphicsStyle,type GraphicsStyleContext } from './graphics-style';
+import {PlantAtlasSurface} from './origami/baked/plants/PlantAtlasSurface';
+import {PlantAtlasAdmissionRefusal} from './origami/baked/plants/PlantAtlasPlan';
 import { createOrigamiGroundTuftGeometry } from './origami/flora';
 import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
 import {compileNaturalSurfaceModels,interleaveNaturalSurfaceFields,naturalStroke,type NaturalSurfaceModels} from './surfaces/NaturalSurfaceModels';
@@ -80,7 +82,7 @@ export class PlantClusterLayer {
   private readonly surfaceModels:NaturalSurfaceModels|undefined;
   private readonly ownedPastel:THREE.DataTexture|undefined;
   private mesh: THREE.InstancedMesh;
-  private readonly slots = new Map<number, { index: number; signature: string }>();
+  private readonly slots = new Map<number, { index: number; signature: string; atlasShape?:string }>();
   private readonly free: number[] = [];
   private readonly transform = new THREE.Object3D();
   private readonly color = new THREE.Color();
@@ -92,6 +94,8 @@ export class PlantClusterLayer {
   private readonly windTextured:THREE.NodeMaterial;
   private windYaw!:THREE.InstancedBufferAttribute;
   private windBasis!:THREE.InstancedBufferAttribute;
+  private plantAtlasBins!:THREE.InstancedBufferAttribute;
+  private readonly plantAtlas:PlantAtlasSurface|undefined;
   // A growing envelope is conservative after removals and moves. Updating it
   // for a changed tuft costs O(1), unlike InstancedMesh.computeBoundingSphere()
   // which scans every resident slot, including the thousands left unchanged.
@@ -138,13 +142,21 @@ export class PlantClusterLayer {
       // blight and target mix). Undo Three's implicit instance tint only after
       // composing the independently colored brush; inactive slots are clamped.
       applySharedPaintSurface(this.windTextured,{context:this.graphicsStyle,base:attribute('color','vec3'),pastel:attribute('color','vec3').mul(texture(pastel,uv()).rgb),gouacheTransform:body=>body.mul(instanceColor),stroke:body=>stroke(body).div(instanceColor.max(vec3(.000001)))});
+      try{if(!(pastel instanceof THREE.DataTexture))throw new PlantAtlasAdmissionRefusal('Exact Source64 pastel texture required');this.plantAtlas=new PlantAtlasSurface(this.graphicsStyle,this.geometry,this.surfaceModels!.stroke,this.windTextured,pastel,()=>{if(this.mesh)this.selectMaterial();});}
+      catch(error){if(!(error instanceof PlantAtlasAdmissionRefusal))throw error;console.warn('Plant atlas model refused; retaining exact direct Source',error);}
     }
     this.mesh = this.createMesh(128);
     this.group.name = 'plant-cluster-layer';
     this.group.add(this.mesh);
   }
   private texturesEnabled=true;
-  setTexturesEnabled(enabled:boolean):void {this.texturesEnabled=enabled;this.mesh.material=enabled?this.windTextured:this.windPlain;}
+  private selectedTexturedMaterial():THREE.NodeMaterial{return this.plantAtlas?.selectedMaterial()??this.windTextured;}
+  private selectMaterial():void{this.mesh.material=this.texturesEnabled?this.selectedTexturedMaterial():this.windPlain;}
+  setTexturesEnabled(enabled:boolean):void {this.texturesEnabled=enabled;this.selectMaterial();}
+  hasPendingAtlasResources():boolean{return this.slots.size>0&&(this.plantAtlas?.needsPreparation()??false);}
+  prepareAtlasResources(renderer:THREE.WebGPURenderer,source:ReturnType<GraphicsStyleContext['prepareAtlasPaint']>,assertExclusive:()=>void){if(this.slots.size===0)return;return this.plantAtlas?.stage(renderer,source,assertExclusive);}
+  atlasStatus(){return this.plantAtlas?.stats()??{pipeline:'direct-source',ready:false,refused:true};}
+  graphicsComparisonMetadata(){return{active:this.slots.size,model:this.geometry.uuid,material:Array.isArray(this.mesh.material)?this.mesh.material.map(m=>m.uuid):this.mesh.material.uuid,textured:this.texturesEnabled,binsVersion:this.plantAtlasBins.version,atlas:this.plantAtlas?.comparisonMetadata()??null};}
   setTargetPreview(ids:ReadonlySet<number>):void {
     if(ids.size===this.targetPreviewIds.size&&[...ids].every(id=>this.targetPreviewIds.has(id)))return;
     this.targetTint.restore();this.targetPreviewIds=new Set(ids);this.tintTargets();
@@ -173,7 +185,8 @@ export class PlantClusterLayer {
     this.windBasis=new THREE.InstancedBufferAttribute(new Float32Array(capacity*4),4).setUsage(THREE.StaticDrawUsage);
     this.geometry.setAttribute('windYaw',this.windYaw);
     this.geometry.setAttribute('windBasis',this.windBasis);
-    const mesh = new THREE.InstancedMesh(this.geometry, this.texturesEnabled?this.windTextured:this.windPlain, capacity);
+    this.plantAtlasBins=new THREE.InstancedBufferAttribute(new Uint32Array(capacity*2),2).setUsage(THREE.StaticDrawUsage);this.geometry.setAttribute('plantAtlasBins',this.plantAtlasBins);
+    const mesh = new THREE.InstancedMesh(this.geometry, this.texturesEnabled?this.selectedTexturedMaterial():this.windPlain, capacity);
     mesh.name = 'upright-plant-clusters';
     mesh.instanceMatrix = new THREE.StorageInstancedBufferAttribute(capacity, 16);
     mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
@@ -189,12 +202,12 @@ export class PlantClusterLayer {
     if (required <= this.mesh.instanceMatrix.count) return;
     const previous = this.mesh;
     const previousYaw=this.windYaw;
-    const previousBasis=this.windBasis;
+    const previousBasis=this.windBasis,previousBins=this.plantAtlasBins;
     const next = this.createMesh(2 ** Math.ceil(Math.log2(required)));
     next.instanceMatrix.array.set(previous.instanceMatrix.array);
     next.instanceColor!.array.set(previous.instanceColor!.array);
     this.windYaw.array.set(previousYaw.array);
-    this.windBasis.array.set(previousBasis.array);
+    this.windBasis.array.set(previousBasis.array);this.plantAtlasBins.array.set(previousBins.array);
     next.count = previous.count;
     next.boundingSphere = previous.boundingSphere?.clone() ?? null;
     this.group.remove(previous);
@@ -229,6 +242,7 @@ export class PlantClusterLayer {
     this.targetTint.restore();
     let firstMatrix = Infinity, lastMatrix = -1;
     let firstColor = Infinity, lastColor = -1;
+    let firstBins=Infinity,lastBins=-1;
     const removed = alive
       ? [...this.slots].filter(([id])=>!alive.has(id))
       : [...changes!].filter(([id,{resource}])=>this.slots.has(id)&&(!resource||!isClusterPlantSpecies(resource.species)))
@@ -267,6 +281,7 @@ export class PlantClusterLayer {
       this.mesh.setMatrixAt(slot.index, this.transform.matrix);
       this.windYaw.setX(slot.index,presentation.rotation);
       this.windBasis.setXYZW(slot.index,Math.cos(presentation.rotation),Math.sin(presentation.rotation),Math.sin(presentation.rotation*3.1),Math.cos(presentation.rotation*3.1));
+      if(this.plantAtlas){const shapeKey=`${plant.id}:${plant.species}:${plant.x}:${plant.z}`;if(slot.atlasShape!==shapeKey){const bins=this.plantAtlas.bins([presentation.scaleX,presentation.scaleY,presentation.scaleZ]);if(this.plantAtlasBins.getX(slot.index)!==bins[0]||this.plantAtlasBins.getY(slot.index)!==bins[1]){this.plantAtlasBins.setXY(slot.index,bins[0],bins[1]);firstBins=Math.min(firstBins,slot.index);lastBins=Math.max(lastBins,slot.index);}slot.atlasShape=shapeKey;}}
       this.includeTransformBounds();
       this.mesh.setColorAt(slot.index, this.color.setHex(presentation.color));
       firstMatrix = Math.min(firstMatrix, slot.index);
@@ -296,6 +311,7 @@ export class PlantClusterLayer {
       this.mesh.instanceColor!.addUpdateRange(firstColor * 3, (lastColor - firstColor + 1) * 3);
       this.mesh.instanceColor!.needsUpdate = true;
     }
+    if(lastBins>=0){this.plantAtlasBins.clearUpdateRanges();this.plantAtlasBins.addUpdateRange(firstBins*2,(lastBins-firstBins+1)*2);this.plantAtlasBins.needsUpdate=true;}
     this.tintTargets();
   }
 
@@ -308,13 +324,14 @@ export class PlantClusterLayer {
     for(const [source,target]of [[this.plainMaterial,this.windPlain],[this.texturedMaterial,this.windTextured]] as const){
       target.outputNode=source.outputNode;target.maskNode=source.maskNode;target.maskShadowNode=source.maskShadowNode;
     }
+    this.plantAtlas?.syncLighting();
   }
 
   instanceCount(): number { return this.mesh.count; }
 
   dispose(): void {
     this.clearTargetPreview();
-    this.mesh.dispose();
+    this.mesh.dispose();this.plantAtlas?.dispose();
     if(this.surfaceModels)this.surfaceModels.dispose();else this.geometry.dispose();this.ownedPastel?.dispose();
     this.windPlain.dispose();this.windTextured.dispose();
   }

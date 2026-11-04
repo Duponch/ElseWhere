@@ -14,6 +14,7 @@ import {ResourceLayer} from '../render/ResourceLayer';
 import {TreeBakeOwner,type OwnedTreeCatalog} from '../render/origami/TreeBakeOwner';
 import {AtlasBuildQuarantineError} from '../render/origami/baked/atlas-cache';
 import {PlantClusterLayer} from '../render/PlantClusterLayer';
+import type {PreparedPlantAtlasStage} from '../render/origami/baked/plants/PlantAtlasSurface';
 import {CropLayer} from '../render/CropLayer';
 import {BoxBatches} from '../render/BoxBatches';
 import {FurniturePresentation} from '../render/FurnitureLayer';
@@ -339,7 +340,13 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
     boxes.set(geyserGroup,'catalog:natural-geyser',geyserParts);const geyserPlaced=new ShelfLayout(28).add(geyserGroup,geyserBounds);naturalProps.group.add(geyserGroup);
     naturalProps.items.push(item('natural:geyser','Geyser naturel','default',geyserPlaced));sections.push(naturalProps);
     boundsReader.dispose();
-    let disposed=false;const treePreparation=createCatalogTreePreparation(context,resources,refreshWildInventory);
-    return {sections,prepareTrees:treePreparation.prepareTrees,invalidatePreparedTrees:treePreparation.invalidatePreparedTrees,treeStatus:treePreparation.treeStatus,dispose(){if(disposed)return;if(treePreparation.preparing)throw Error('Wait for catalog tree preparation before disposal');disposed=true;const errors:unknown[]=[];for(let i=dispose.length-1;i>=0;i--)try{dispose[i]!();}catch(error){errors.push(error);}for(const entry of sections)entry.group.clear();if(!errors.length)try{treePreparation.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Catalog environment cleanup failed; tree owner retained on Source cleanup failure');}};
+    let disposed=false,preparingPlants=false;const treePreparation=createCatalogTreePreparation(context,resources,refreshWildInventory);
+    const stagePlants=async(renderer:THREE.WebGPURenderer,camera:THREE.Camera,lightingScene:THREE.Scene,assertCurrent:()=>void):Promise<PreparedPlantAtlasStage|undefined>=>{
+      if(disposed||preparingPlants)throw Error('Catalog plants preparation unavailable');if(Reflect.get(renderer.backend,'isWebGPUBackend')!==true||!context.origami||context.reliefEnabled||context.wearEnabled||!clusters.hasPendingAtlasResources())return;
+      preparingPlants=true;let stage:PreparedPlantAtlasStage|undefined,delivered=false;
+      try{stage=await clusters.prepareAtlasResources(renderer,context.prepareAtlasPaint(),assertCurrent);assertCurrent();if(!stage)return;await renderer.compileAsync(clusters.group,camera,lightingScene);assertCurrent();const prepared=stage;stage=undefined;delivered=true;let closed=false;return{commit:()=>prepared.commit(),rollback:()=>prepared.rollback(),dispose:()=>{if(closed)return;closed=true;try{prepared.dispose();}finally{preparingPlants=false;}}};}
+      catch(error){stage?.rollback();throw error;}finally{if(!delivered){try{stage?.dispose();}finally{preparingPlants=false;}}}
+    };
+    return {sections,stagePlants,prepareTrees:treePreparation.prepareTrees,invalidatePreparedTrees:treePreparation.invalidatePreparedTrees,treeStatus:treePreparation.treeStatus,dispose(){if(disposed)return;if(treePreparation.preparing||preparingPlants)throw Error('Wait for catalog surface preparation before disposal');disposed=true;const errors:unknown[]=[];for(let i=dispose.length-1;i>=0;i--)try{dispose[i]!();}catch(error){errors.push(error);}for(const entry of sections)entry.group.clear();if(!errors.length)try{treePreparation.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Catalog environment cleanup failed; tree owner retained on Source cleanup failure');}};
   });
 }

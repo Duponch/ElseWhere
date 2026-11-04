@@ -139,6 +139,8 @@ import { DEFAULT_SHADOW_SETTINGS, parseShadowSettings, type ShadowSettings } fro
 import { ShadowRefreshScheduler } from './ShadowRefreshScheduler';
 type VisualChunk = { signature: string; group: THREE.Group };
 interface PreparedCoreTreeTextures {commit():void;rollback():void;dispose():void}
+/** Superseding/closing a held preparation is not a renderer failure. */
+class SharedSurfacePreparationCancelled extends Error {}
 
 export interface AudioFrameView {
   tick: number;
@@ -202,26 +204,26 @@ export class SceneRenderCore {
     this.cancelGraphicsMeasurement('texture-change');this.holdSurfaceWorld=true;this.preparing=true;
     const assertCurrent=()=>{if(this.disposed||this.closingPresentation||epoch!==this.sharedSurfaceEpoch)throw Error('La préparation des textures a été interrompue.');};
     const job=(async()=>{
-      let trees:PreparedCoreTreeTextures|undefined;
+      let trees:PreparedCoreTreeTextures|undefined,plants:PreparedCoreTreeTextures|undefined;
       try{
         this.graphicsStyle.update(next);this.uploadSharedSurfaceAssets();assertCurrent();
-        if(this.canBakeTrees)trees=await this.stageBakedTreeResources(this.graphicsStyle.prepareAtlasPaint(),assertCurrent,treePaintChanged);
+        if(this.canBakeTrees){const source=this.graphicsStyle.prepareAtlasPaint();trees=await this.stageBakedTreeResources(source,assertCurrent,treePaintChanged);plants=await this.plants.prepareAtlasResources(this.renderer,source,assertCurrent);}
         // An actual paint change ends the old generation even for an empty
         // cohort. Encoding alone preserves it, including while on Pastel.
         if(!trees&&treePaintChanged&&this.bakedTreeOwner){const owner=this.bakedTreeOwner,publication=this.resources.setTreeAssetCatalog(undefined);let settled=false;trees={commit:()=>{settled=true;publication.commit();owner.invalidate();},rollback:()=>{if(settled)throw Error('Committed tree images cannot be rolled back');publication.rollback();},dispose:()=>{}};}
         // Encoding alone keeps the prepared Gouache bank resident: the shared
         // surface's Pastel branch does not sample it. No bake on a return to
         // Gouache unless an actual paint value or model cohort changed.
-        assertCurrent();await this.preparePresentationResources(compileOnly);assertCurrent();trees?.commit();
+        assertCurrent();await this.preparePresentationResources(compileOnly);assertCurrent();trees?.commit();plants?.commit();
       }catch(error){
         // Keep the old images alive until every candidate program is ready.
         // A failed candidate cannot retire a texture still bound by Source435.
         if(this.closingPresentation||this.disposed)throw error;
-        try{trees?.rollback();this.graphicsStyle.update(previous);this.uploadSharedSurfaceAssets();await this.preparePresentationResources(compileOnly);assertCurrent();}
+        try{plants?.rollback();trees?.rollback();this.graphicsStyle.update(previous);this.uploadSharedSurfaceAssets();await this.preparePresentationResources(compileOnly);assertCurrent();}
         catch(rollbackError){const failure=new AggregateError([error,rollbackError],'Le retour aux textures précédentes a échoué.');this.reportFailure(failure.message);throw failure;}
         throw error;
       }finally{
-        try{trees?.dispose();}catch(error){if(!this.closingPresentation)this.reportFailure('Libération des textures interrompue : '+(error instanceof Error?error.message:String(error)));throw error;}finally{this.finishSurfacePreparation();}
+        try{try{plants?.dispose();}finally{trees?.dispose();}}catch(error){if(!this.closingPresentation)this.reportFailure('Libération des textures interrompue : '+(error instanceof Error?error.message:String(error)));throw error;}finally{this.finishSurfacePreparation();}
       }
     })();
     this.sharedSurfacePreparation=job;
@@ -237,12 +239,12 @@ export class SceneRenderCore {
     if(pending)try{this.presentation.clear();this.applyWorld(pending.world,pending.reset);this.presentCorePhases297();this.uploadSharedSurfaceAssets();}catch(error){this.reportFailure('Adoption après préparation des textures interrompue : '+(error instanceof Error?error.message:String(error)));throw error;}
     this.updateSelectedObject();this.updateHover();
   }
-  bakedGraphicsStatus(){return{animals:this.wildlife.bakedStatus(),cache:null,
+  bakedGraphicsStatus(){return{animals:this.wildlife.bakedStatus(),plants:this.plants.atlasStatus(),cache:null,
     trees:this.resources.bakedTreeStatus(),treeCache:this.bakedTreeOwner?.snapshot()??null};}
   private get canBakeTrees():boolean{return this.backend==='WebGPU'&&this.graphicsStyle.origami&&!this.graphicsStyle.reliefEnabled&&!this.graphicsStyle.wearEnabled&&this.texturesEnabled;}
   private get hasPendingBakedResources():boolean {
     const demand=this.resources.treeBakeDemand();
-    return this.bakedTreeOwner?this.bakedTreeOwner.needsPreparation(demand):demand.models.length>0;
+    return this.plants.hasPendingAtlasResources()||(this.bakedTreeOwner?this.bakedTreeOwner.needsPreparation(demand):demand.models.length>0);
   }
   private async prepareBakedTreeResources(source:ReturnType<GraphicsStyleContext['prepareAtlasPaint']>,assertCurrent:()=>void):Promise<void>{
     const prepared=await this.stageBakedTreeResources(source,assertCurrent);
@@ -299,8 +301,11 @@ export class SceneRenderCore {
     if(!this.canBakeTrees||!this.hasPendingBakedResources||this.closingPresentation)return;
     if(!this.preparing)throw Error('Tree texture preparation requires an exclusive renderer');
     const epoch=this.sharedSurfaceEpoch,source=this.graphicsStyle.prepareAtlasPaint();
-    const assertCurrent=()=>{if(this.disposed||this.closingPresentation||!this.preparing||!this.canBakeTrees||epoch!==this.sharedSurfaceEpoch||pausedOnly&&this.received?.speed!==0)throw Error('Tree texture preparation superseded');source.assertCurrent();};
+    const assertCurrent=()=>{if(this.disposed||this.closingPresentation||!this.preparing||!this.canBakeTrees||epoch!==this.sharedSurfaceEpoch||pausedOnly&&this.received?.speed!==0)throw new SharedSurfacePreparationCancelled('Tree texture preparation superseded');source.assertCurrent();};
     await this.prepareBakedTreeResources(source,assertCurrent);
+    const plants=await this.plants.prepareAtlasResources(this.renderer,source,assertCurrent);
+    try{if(plants){await this.renderer.compileAsync(this.plants.group,this.rig.orthographic,this.scene);assertCurrent();await this.renderer.compileAsync(this.plants.group,this.rig.perspective,this.scene);assertCurrent();plants.commit();}}
+    catch(error){plants?.rollback();throw error;}finally{plants?.dispose();}
   }
   /** Optional image caching only; every arriving model already has its shared
    * opaque paint surface. No animal atlas queue or renderer replacement exists. */
@@ -314,9 +319,10 @@ export class SceneRenderCore {
       this.preparing=true;this.holdSurfaceWorld=true;
       const job=this.prepareSharedTreeTextures(true);this.sharedSurfacePreparation=job;
       void job.catch(error=>{
-        if(this.closingPresentation)return;
-        if(error instanceof AggregateError||error instanceof AtlasBuildQuarantineError)this.reportFailure('Préparation des textures interrompue : '+error.message);
-        else console.warn('Tree texture preparation retained the shared surface',error);
+        if(this.closingPresentation||error instanceof SharedSurfacePreparationCancelled)return;
+        // Typed pre-GPU admission refusals are already handled by their owner.
+        // An unexpected renderer/WGSL/runtime error is terminal, never retried.
+        this.reportFailure('Préparation des textures interrompue : '+(error instanceof Error?error.message:String(error)));
       }).finally(()=>{
         if(this.sharedSurfacePreparation===job)this.sharedSurfacePreparation=undefined;
         this.finishSurfacePreparation();this.queuePausedTreeTextures();
@@ -339,7 +345,7 @@ export class SceneRenderCore {
     const context=():GraphicsStyleComparisonContext=>({preferences:{...this.graphicsStyle.preferences},sceneFingerprint,
       camera:{...this.captureGraphicsView(),up:this.camera.up.toArray(),quaternion:this.camera.quaternion.toArray(),projection:Array.from(this.camera.projectionMatrix.toArray()),near:this.camera.near,far:this.camera.far,layers:this.camera.layers.mask,coordinateSystem:this.camera.coordinateSystem,reversedDepth:this.camera.reversedDepth,span:this.rig.span},
       viewport:{width:this.viewportWidth,height:this.viewportHeight,pixelRatio:this.renderer.getPixelRatio()},backend:this.backend,
-      settings:{requested:settings,origamiBaked:{animals:this.wildlife.graphicsComparisonMetadata(),trees:this.resources.graphicsComparisonMetadata()},renderer:{textures:this.texturesEnabled,grassVisible:this.grassVisible,groundGrass:!!this.grass,room:this.roomEnabled,diorama:this.dioramaEnabled,lighting:{...this.lightingSettings},shadows:{...this.shadowSettings},animations:{...this.animationDetail.settings},requestedPixelRatio:this.hostPort.pixelRatio(),requestedViewport:{...this.hostPort.viewport()},backend:this.hostPort.backend()}}});
+      settings:{requested:settings,origamiBaked:{animals:this.wildlife.graphicsComparisonMetadata(),trees:this.resources.graphicsComparisonMetadata(),plants:this.plants.graphicsComparisonMetadata()},renderer:{textures:this.texturesEnabled,grassVisible:this.grassVisible,groundGrass:!!this.grass,room:this.roomEnabled,diorama:this.dioramaEnabled,lighting:{...this.lightingSettings},shadows:{...this.shadowSettings},animations:{...this.animationDetail.settings},requestedPixelRatio:this.hostPort.pixelRatio(),requestedViewport:{...this.hostPort.viewport()},backend:this.hostPort.backend()}}});
     const started=this.hostPort.now(),collector=createGraphicsStyleComparison(context(),started);
     return new Promise(resolve=>{
       const active={collector,context,isCurrent,resolve,timer:undefined as ReturnType<typeof setTimeout>|undefined};
@@ -986,10 +992,10 @@ export class SceneRenderCore {
     this.resources.adoptChopWork(previousWorld??undefined,world,resetPoses,resourceFrame);
     this.actionFeedback.update(world,this.selectedPawns,this.pawns.feedbackSource!,!!this.confirmedIntents);
     this.wildlife.update(world,this.hasTracks?this.timeline:undefined,resetPoses,this.pawns);
-    this.queuePausedTreeTextures();
     this.animalCargo.update(world,this.hasTracks?this.timeline:undefined,resetPoses);
     this.mechanoids.update(world,this.hasTracks?this.timeline:undefined,resetPoses,this.pawns);
     this.graphicsStyle.flushPaint();
+    this.queuePausedTreeTextures();
     this.ropes.adopt(world,resetPoses);
     this.landscape.refresh(this.backend==='WebGPU'&&this.overview.group.visible);
     if(this.selectedObject?.kind!=='growing'||zoneChanged)this.updateSelectedObject();

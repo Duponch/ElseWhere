@@ -1,0 +1,66 @@
+/** Source is an explicit representation fallback, never a hidden uniform
+ * branch in the admitted material. */
+import * as THREE from 'three/webgpu';
+import {Fn,If,attribute,buffer,instanceColor,int,mix,texture,uint,uniformGroup,varying,vec3} from 'three/tsl';
+import type {GraphicsStyleContext} from '../../../graphics-style';
+import type {FaceStrokeData} from '../../../surfaces/FaceStrokeTable';
+import {SURFACE_STROKE_FACE,SURFACE_STROKE_UV} from '../../../surfaces/NaturalSurfaceModels';
+import {copyPastelTextureToArray} from '../../../surfaces/TextureSurface';
+import {PlantAtlasAdmissionRefusal,planPlantAtlas,packPlantFaceBins,type PlantAtlasPlan} from './PlantAtlasPlan';
+import {preparePlantAtlasGpu,type PlantAtlasGpuResult} from './PlantAtlasGpu';
+export interface PreparedPlantAtlasStage {commit():void;rollback():void;dispose():void}
+type PaintLease=ReturnType<GraphicsStyleContext['prepareAtlasPaint']>;
+export class PlantAtlasSurface {
+ readonly plan:PlantAtlasPlan;readonly material:THREE.MeshLambertNodeMaterial;
+ private readonly assets=uniformGroup('plantAtlasAssets',0,null);
+ private readonly pastel:THREE.DataArrayTexture;
+ private readonly body:THREE.TextureNode;private readonly ink:THREE.TextureNode;
+ private current:{key:string;value:PlantAtlasGpuResult}|undefined;
+ private readonly owned=new Set<PlantAtlasGpuResult>();
+ private refused:string|undefined;private closed=false;private staging=false;private pendingStage=false;
+ private readonly releaseSettings:()=>void;
+ private fingerprint():string{const p=this.context.preferences;return JSON.stringify(['plant-BI16-source512-v1',this.context.genericPaintSemanticKey(),p.edges,p.blackEdges,p.edgeWidth,p.strokeImperfection,p.contourImperfection]);}
+ private eligible():boolean{return!this.context.reliefEnabled&&!this.context.wearEnabled;}
+ constructor(private readonly context:GraphicsStyleContext,geometry:THREE.BufferGeometry,private readonly stroke:FaceStrokeData,private readonly sourceMaterial:THREE.NodeMaterial,pastel:THREE.DataTexture,private readonly changed:()=>void){
+  this.plan=planPlantAtlas(geometry,{maxCpuBytes:32*1024*1024,maxPeakGpuBytes:416*1024*1024,existingLiveGpuBytes:43688});this.pastel=copyPastelTextureToArray(pastel);
+  const rows=buffer(this.plan.addressRows,'vec4',this.plan.addressRows.length/4).setGroup(this.assets),lookup=rows as typeof rows&{element(index:THREE.Node<'int'>):THREE.Node<'vec4'>},face=attribute(SURFACE_STROKE_FACE,'float').toInt(),packed=attribute('plantAtlasBins','uvec2'),word=face.lessThan(8).select(packed.x,packed.y),bin=word.shiftRight(face.mod(8).toUint().mul(uint(4))).bitAnd(uint(15)).toInt(),base=lookup.element(face),row=int(this.plan.faces.length).add(face.mul(16).add(bin).mul(2)),tile=lookup.element(row),layer=lookup.element(row.add(1)).x,raw=attribute(SURFACE_STROKE_UV,'vec2');
+  const coords=varying(mix(raw,tile.xy.add(raw.sub(base.xy).mul(base.zw).mul(tile.zw)),context.surfaceEncoding),'v_plantAtlasUv'),depth=varying(layer.mul(context.surfaceEncoding),'v_plantAtlasLayer').setInterpolation('flat','first');
+  const sampled=texture(this.pastel,coords);this.body=sampled.depth(depth);this.ink=sampled.depth(depth.add(1));
+  this.material=new THREE.MeshLambertNodeMaterial({flatShading:true,vertexColors:false});this.material.positionNode=sourceMaterial.positionNode;this.syncLighting();
+  this.material.colorNode=Fn(()=>{const result=this.body.rgb.toVar();If(context.surfaceEncoding.greaterThan(0),()=>{
+   // Three multiplies instanceColor after colorNode. Keep Source's exact
+   // independently tinted body and untinted ink, including target previews.
+   result.addAssign(this.ink.rgb.div(instanceColor.max(vec3(.000001))));
+  });return result;})();
+  this.releaseSettings=context.trackSharedPaintSettingsRefresh(()=>this.refresh());
+ }
+ syncLighting():void{
+  this.material.outputNode=this.sourceMaterial.outputNode;this.material.maskNode=this.sourceMaterial.maskNode;this.material.maskShadowNode=this.sourceMaterial.maskShadowNode;
+  this.material.castShadowPositionNode=this.sourceMaterial.castShadowPositionNode;this.material.receivedShadowPositionNode=this.sourceMaterial.receivedShadowPositionNode;
+ }
+ private admitted():boolean{return this.eligible()&&this.current?.key===this.fingerprint();}
+ selectedMaterial():THREE.NodeMaterial{return this.eligible()&&(!this.context.origami||this.admitted())?this.material:this.sourceMaterial;}
+ refresh():void{if(this.closed)return;const map=this.context.origami&&this.admitted()?this.current!.value.texture:this.pastel;this.body.value=map;this.ink.value=map;this.changed();}
+ bins(scale:readonly[number,number,number]):readonly[number,number]{return packPlantFaceBins(this.plan,scale);}
+ needsPreparation():boolean{return!this.closed&&this.context.origami&&this.eligible()&&this.current?.key!==this.fingerprint()&&this.refused!==this.fingerprint();}
+ private retire(value:PlantAtlasGpuResult):void{if(!this.owned.has(value))return;try{value.dispose();this.owned.delete(value);}catch(error){throw new AggregateError([error],'Plant atlas owner retirement quarantine');}}
+ /** Publish before scene compile; retire only on commit. Old and new remain
+  * owned throughout every await, rollback and renderer-drain boundary. */
+ async stage(renderer:THREE.WebGPURenderer,source:PaintLease,assertExclusive:()=>void):Promise<PreparedPlantAtlasStage|undefined>{
+  if(!this.needsPreparation())return;if(this.staging||this.pendingStage)throw Error('Plant atlas preparation already active');this.staging=true;
+  const key=this.fingerprint(),old=this.current,assert=()=>{assertExclusive();source.assertCurrent();if(this.closed||key!==this.fingerprint()||!this.context.origami||!this.eligible())throw Error('Plant atlas preparation superseded');};let candidate:PlantAtlasGpuResult|undefined;
+  try{
+   assert();const plan=planPlantAtlas(this.plan.geometry,{maxCpuBytes:32*1024*1024,maxPeakGpuBytes:416*1024*1024,existingLiveGpuBytes:43688+[...this.owned].reduce((n,owner)=>n+owner.gpuBytes,0)});
+   if(plan.addressRows.some((value,index)=>value!==this.plan.addressRows[index]))throw Error('Plant atlas layout changed after model construction');
+   candidate=await preparePlantAtlasGpu(renderer,plan,source,this.stroke,{edgeWidth:this.context.preferences.edgeWidth},assert);this.owned.add(candidate);assert();
+   const published=candidate;this.current={key,value:published};this.refresh();candidate=undefined;this.pendingStage=true;let settled=false,rolledBack=false,closed=false;
+   const rollback=()=>{if(settled)throw Error('Committed plant atlas cannot be rolled back');if(rolledBack)return;this.current=old;this.refresh();rolledBack=true;};
+   return{commit:()=>{if(settled||rolledBack)return;settled=true;this.pendingStage=false;this.refused=undefined;if(old)this.retire(old.value);},rollback,dispose:()=>{if(closed)return;closed=true;try{if(!settled){if(!rolledBack)rollback();this.retire(published);}}finally{this.pendingStage=false;}}};
+  }catch(error){if(error instanceof PlantAtlasAdmissionRefusal){assert();this.refused=key;this.refresh();console.warn('Plant atlas retained exact direct Source after pre-GPU admission refusal',error);return;}throw error;}
+  finally{this.staging=false;if(candidate){if(this.current?.value===candidate){this.current=old;this.refresh();}this.retire(candidate);}}
+ }
+ /** Fixed-size resource identities only, never atlas rows or a paint census. */
+ comparisonMetadata(){return{representation:this.selectedMaterial()===this.material?'atlas':'direct',ready:this.admitted(),pending:this.staging||this.pendingStage,preparedTexture:this.current?.value.texture.uuid??null,boundTexture:this.body.value.uuid,refused:!!this.refused};}
+ stats(){return{pipeline:this.selectedMaterial()===this.material?'two-read-BI-atlas':'direct-source',ready:this.admitted(),refused:!!this.refused,bins:16,pages:this.plan.pages,nominalRetainedGpuBytes:this.current?.value.gpuBytes??0,worstRestMetricError:this.plan.worstRestMetricError,windTextureAttachment:'bind-pose metric; Source vertex wind retained',quality:'Source512 with bounded approximate aspect bins'};}
+ dispose():void{if(this.closed)return;if(this.staging)throw Error('Wait for plant atlas preparation before disposal');this.closed=true;this.releaseSettings();const errors:unknown[]=[];for(const owner of [...this.owned])try{this.retire(owner);}catch(error){errors.push(error);}for(const owner of [this.material,this.pastel])try{owner.dispose();}catch(error){errors.push(error);}this.current=undefined;if(errors.length)throw new AggregateError(errors,'Plant atlas final ownership cleanup');}
+}

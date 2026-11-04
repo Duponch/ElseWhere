@@ -24,7 +24,7 @@ function fixture(){
   graphicsMeasurement:undefined,cancelGraphicsMeasurement:vi.fn(),invalidatePausedShadow:vi.fn(),updateSelectedObject:vi.fn(),updateHover:vi.fn(),keys:new Set(),onFatalError:vi.fn(),
   hostPort:{now:()=>1000,hidden:()=>false,selectionReady:()=>false},received,world:received.world,timeline,hasTracks:false,immutableWorlds:new WeakSet(),coreFullInputs297:new WeakMap(),pendingCore297:[],appliedCore297:-Infinity,presentation:new PresentationQueue(),releaseCalmFullFrame297:vi.fn(),
   confirmedIntentReader:{admit,clear:vi.fn()},confirmedJobMarkers:{clear:vi.fn()},projectiles:{adopt:vi.fn(),adoptPhase297:vi.fn()},applyWorldWithinSurfaceReads:applied,
-  resources:{treeBakeDemand:()=>({models:[],species:[],key:'empty',isCurrent:()=>true})},environmentLighting:{configure:vi.fn(),dispose:vi.fn()},rig:{orthographic:new THREE.OrthographicCamera(),perspective:new THREE.PerspectiveCamera(),dispose:vi.fn()},scene:new THREE.Scene(),
+  resources:{treeBakeDemand:()=>({models:[],species:[],key:'empty',isCurrent:()=>true})},plants:{group:new THREE.Group(),hasPendingAtlasResources:()=>false,prepareAtlasResources:()=>undefined},environmentLighting:{configure:vi.fn(),dispose:vi.fn()},rig:{orthographic:new THREE.OrthographicCamera(),perspective:new THREE.PerspectiveCamera(),dispose:vi.fn()},scene:new THREE.Scene(),
   preparePresentationResources:vi.fn(async()=>{events.push('compile');expect(field(core,'preparing')).toBe(true);await gate.promise;})});
  return{core,events,gate,rendererDone,texture,graphics,renderer,timeline,adopt,applied,admit,received,compile:field<ReturnType<typeof vi.fn>>(core,'preparePresentationResources')};
 }
@@ -79,7 +79,7 @@ function treePorts(f:ReturnType<typeof fixture>,retirementFails=false){
 }
 test('tree image staging retains the old owner across both projection compiles and rolls back before freeing an uncommitted candidate',async()=>{
  const f=fixture(),tree=treePorts(f);f.compile.mockImplementationOnce(async()=>{expect(tree.active()).toBe(tree.candidate);expect(tree.oldDisposed).not.toHaveBeenCalled();await f.gate.promise;throw Error('TEST scene compile failed');}).mockResolvedValueOnce(undefined);const job=begin(f,{style:'origami',edgeWidth:2}),handled=job.catch(error=>error);
- try{await Promise.resolve();await Promise.resolve();await Promise.resolve();expect(f.renderer.compileAsync).toHaveBeenCalledTimes(2);expect(tree.oldDisposed).not.toHaveBeenCalled();f.gate.resolve();const error=await handled;expect((error as Error).message).toBe('TEST scene compile failed');expect(tree.active()).toBe(tree.old);expect(tree.oldDisposed).not.toHaveBeenCalled();expect(tree.newDisposed).toHaveBeenCalledOnce();expect(tree.stageDisposed).toHaveBeenCalledOnce();expect(field(f.core,'fatalError')).toBeUndefined();}finally{f.gate.resolve();await handled;tree.owner.dispose();f.texture.dispose();}
+ try{await vi.waitFor(()=>expect(f.compile).toHaveBeenCalledOnce(),{interval:1,timeout:1000});expect(f.renderer.compileAsync).toHaveBeenCalledTimes(2);expect(tree.oldDisposed).not.toHaveBeenCalled();f.gate.resolve();const error=await handled;expect((error as Error).message).toBe('TEST scene compile failed');expect(tree.active()).toBe(tree.old);expect(tree.oldDisposed).not.toHaveBeenCalled();expect(tree.newDisposed).toHaveBeenCalledOnce();expect(tree.stageDisposed).toHaveBeenCalledOnce();expect(field(f.core,'fatalError')).toBeUndefined();}finally{f.gate.resolve();await handled;tree.owner.dispose();f.texture.dispose();}
 });
 
 test('a retirement failure after committed tree ownership is quarantined and cannot masquerade as a successful rollback',async()=>{
@@ -92,7 +92,7 @@ test.each([false,true])('an empty tree cohort invalidates the previous paint gen
  f.compile.mockImplementationOnce(async()=>{expect(tree.active()).toBeUndefined();expect(tree.oldDisposed).not.toHaveBeenCalled();await f.gate.promise;if(fail)throw Error('TEST empty cohort compile failed');}).mockResolvedValueOnce(undefined);
  const job=begin(f,{style:'origami',edgeWidth:2}),handled=job.catch(error=>error);
  try{
-  await Promise.resolve();
+  await vi.waitFor(()=>expect(f.compile).toHaveBeenCalledOnce(),{interval:1,timeout:1000});
   expect(tree.prepare).not.toHaveBeenCalled();expect(tree.resources.setTreeAssetCatalog).toHaveBeenCalledExactlyOnceWith(undefined);expect(tree.oldDisposed).not.toHaveBeenCalled();
   f.gate.resolve();const result=await handled;
   if(fail){expect(result).toBeInstanceOf(Error);expect(tree.active()).toBe(tree.old);expect(tree.oldDisposed).not.toHaveBeenCalled();expect(tree.owner.snapshot().models).toBe(1);}

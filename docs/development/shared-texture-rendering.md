@@ -82,6 +82,41 @@ cartes et caches dédiés sont retirés. Les effets absents d'un producteur Sour
 n'ont pas été inventés. Les anciennes préférences positives ne sont pas
 silencieusement converties en zéro.
 
+## Herbes
+
+Les touffes utilisent désormais une texture préparée en deux termes : la
+peinture atténuée par l'encre et l'encre séparée. Cela conserve la teinte propre
+à chaque plante sans teinter aussi le trait. Le matériau final ne contient plus
+le calcul de peinture ou la recherche de traits : une lecture en Pastel, deux
+en Gouache, sur une seule texture à couches et un seul sampler. Les formes,
+positions, croissance et mouvement au vent restent communs. Seize classes de
+proportions conservent les coups de pinceau, avec une erreur métrique maximale
+au repos de 1,903 %. Le placement de texture suit le modèle au repos sous le vent.
+
+La préparation possède un budget explicite de 416 Mio incluant les ressources
+temporaires et les anciennes et nouvelles textures. Le modèle actuel utilise
+42,5 Mio de texture conservée. Un refus de réservation ou des effets de relief
+ou d'usure positifs conserve le rendu Source complet. Les erreurs GPU restent
+des erreurs ; elles ne déclenchent pas une boucle de nouvelles tentatives.
+
+Native V54 a observé 3478 touffes sur la même carte et le même Core pendant
+Pastel/Gouache/Pastel, puis leur fermeture. La paire Source/Gouache préparée à
+distance de jeu conserve World, caméra, modèles, placements et matériaux
+attendus. Les images restent proches à l'œil ; elles ne sont pas identiques
+(9547 pixels différents sur 851200, MAE RGB 0,14258/255). Les horloges décoratives
+restent actives : ces différences ne sont pas toutes attribuées aux touffes.
+Le premier gros plan préparé ne possédait pas toutes les métadonnées du témoin ;
+il ne constitue donc pas une comparaison strictement identifiée.
+
+V54 GPU L/C/L : 0,731819/1,075883/0,770048 ms, pic Gouache 2,62144 ms inclus.
+L'écart moyen Gouache reste +43,27 %, avec une dérive Pastel de +5,22 % ;
+les médianes donnent +26,09 %. CPU : 0,898946/0,954089/0,913583 ms,
+soit +5,28 % avec une dérive de +1,63 %. Chaque bras GPU conserve ses douze
+échantillons, 21 appels et 214196 triangles. Aucun gain causal face à un ancien
+essai, aucune parité, campagne active ou mesure globale de FPS n'est acquis.
+Les prochains essais utiliseront un échantillon GPU plus long pour réduire
+l'influence d'un unique pic, sans retirer les observations adverses.
+
 ## Arbres, ressources et rochers
 
 `TreeModels` possède les treize essences Legacy et les deux vraies variantes de
