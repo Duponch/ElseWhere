@@ -3,6 +3,7 @@
 import * as THREE from 'three/webgpu';
 import {Fn,If,attribute,buffer,float,instanceColor,int,mix,texture,uint,uniform,uniformGroup,varying,vec3} from 'three/tsl';
 import type {GraphicsStyleContext} from '../../../graphics-style';
+import type {SurfaceBudgetInventory} from '../../../surfaces/SurfaceBudgetInventory';
 import type {FaceStrokeData} from '../../../surfaces/FaceStrokeTable';
 import {SURFACE_STROKE_FACE,SURFACE_STROKE_UV} from '../../../surfaces/NaturalSurfaceModels';
 import {copyPastelTextureToArray} from '../../../surfaces/TextureSurface';
@@ -20,7 +21,7 @@ export class PlantAtlasSurface {
  private readonly body:THREE.TextureNode;private readonly ink:THREE.TextureNode;
  private current:{key:string;value:PlantAtlasGpuResult}|undefined;
  private readonly owned=new Set<PlantAtlasGpuResult>();
- private refused:string|undefined;private closed=false;private staging=false;private pendingStage=false;
+ private budgetPreparing=false;private refused:string|undefined;private closed=false;private staging=false;private pendingStage=false;
  private readonly releaseSettings:()=>void;
  private fingerprint():string{const p=this.context.preferences;return JSON.stringify(['plant-BI16-source512-scalar-ink-v3',this.context.genericPaintSemanticKey(),p.edges,p.blackEdges,p.edgeWidth,p.strokeImperfection,p.contourImperfection]);}
  private eligible():boolean{return!this.context.reliefEnabled&&!this.context.wearEnabled;}
@@ -70,7 +71,7 @@ export class PlantAtlasSurface {
   try{
    assert();const plan=planPlantAtlas(this.plan.geometry,{maxCpuBytes:32*1024*1024,maxPeakGpuBytes:416*1024*1024,existingLiveGpuBytes:43688+[...this.owned].reduce((n,owner)=>n+owner.gpuBytes,0)});
    if(plan.addressRows.some((value,index)=>value!==this.plan.addressRows[index]))throw Error('Plant atlas layout changed after model construction');
-   candidate=await preparePlantAtlasGpu(renderer,plan,source,this.stroke,{edgeWidth:this.context.preferences.edgeWidth,scalarInkEnabled:this.eligible()&&this.context.preferences.edges===0},assert);this.owned.add(candidate);
+   candidate=await this.budgetedPreparation(()=>preparePlantAtlasGpu(renderer,plan,source,this.stroke,{edgeWidth:this.context.preferences.edgeWidth,scalarInkEnabled:this.eligible()&&this.context.preferences.edges===0},assert));this.owned.add(candidate);
    if(candidate.scalarInk){const scalar=validatePreparedScalarInk(candidate.scalarInk)!;if(!this.eligible()||this.context.preferences.edges!==0||![0,1,2].every(i=>Object.is(scalar.color[i],Math.fround(source.paint.brushColorLinear[i]!))))throw Error('Plant scalar ink must use the current supported paint lease');if(scalar.compact&&((candidate.texture.image as{depth?:number}).depth!==plan.pages||candidate.gpuBytes!==plan.pages*PLANT_PAGE_BYTES))throw Error('Actual compact Plant bank must retain exactly one physical layer per logical page');}
    assert();
    const published=candidate;this.current={key,value:published};this.refresh();candidate=undefined;this.pendingStage=true;let settled=false,rolledBack=false,closed=false;
@@ -80,6 +81,9 @@ export class PlantAtlasSurface {
   finally{this.staging=false;if(candidate){if(this.current?.value===candidate){this.current=old;this.refresh();}this.retire(candidate);}}
  }
  /** Fixed-size resource identities only, never atlas rows or a paint census. */
+ /** All still-owned banks, including staged old/new and retirement failures. */
+ surfaceBudget():SurfaceBudgetInventory{const textures=new Set<THREE.Texture>([this.pastel]);let cpuBytes=this.plan.addressRows.byteLength;for(const owner of this.owned){textures.add(owner.texture);cpuBytes+=owner.cpuBytes;}return{textures:[...textures],gpuBufferBytes:this.plan.addressRows.byteLength,cpuBytes,complete:!this.closed&&!this.budgetPreparing,scope:'All Plant owned/staged atlas textures and copied Pastel; addressRows nominal CPU/GPU bytes. Source geometry/canonical stroke and original Pastel are bridged separately; texture pixels measured once by caller. In-flight GPU is incomplete.'};}
+ private async budgetedPreparation(make:()=>Promise<PlantAtlasGpuResult>):Promise<PlantAtlasGpuResult>{this.budgetPreparing=true;try{return await make();}finally{this.budgetPreparing=false;}}
  comparisonMetadata(){return{representation:this.selectedMaterial()===this.material?'atlas':'direct',ready:this.admitted(),pending:this.staging||this.pendingStage,preparedTexture:this.current?.value.texture.uuid??null,boundTexture:this.body.value.uuid,refused:!!this.refused};}
  stats(){return{pipeline:this.selectedMaterial()===this.material?(this.scalarInkEnabled.value?'scalar-ink-BI-atlas':'occupancy-gated-BI-atlas'):'direct-source',ready:this.admitted(),refused:!!this.refused,bins:16,pages:this.plan.pages,scalarInkEnabled:this.scalarInkEnabled.value,scalarInkColor:this.scalarInkEnabled.value?this.current?.value.scalarInk?.color:null,nominalRetainedGpuBytes:this.current?.value.gpuBytes??0,worstRestMetricError:this.plan.worstRestMetricError,windTextureAttachment:'bind-pose metric; Source vertex wind retained',quality:'Source512 with bounded approximate aspect bins; scalar ink needs Native residual/quality admission'};}
  dispose():void{if(this.closed)return;if(this.staging)throw Error('Wait for plant atlas preparation before disposal');this.closed=true;this.releaseSettings();const errors:unknown[]=[];for(const owner of [...this.owned])try{this.retire(owner);}catch(error){errors.push(error);}for(const owner of [this.material,this.pastel])try{owner.dispose();}catch(error){errors.push(error);}this.current=undefined;if(errors.length)throw new AggregateError(errors,'Plant atlas final ownership cleanup');}

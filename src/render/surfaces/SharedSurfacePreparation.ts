@@ -25,6 +25,8 @@ export interface SharedSurfacePreparationStage {
 }
 export interface SharedSurfacePreparationOwner {
  readonly key:string;
+ /** Stage-only dependency order. Stable rendering never sorts owners. */
+ readonly preparationPriority?:number;
  needsPreparation(snapshot:SharedSurfacePreparationSnapshot):boolean;
  stage(snapshot:SharedSurfacePreparationSnapshot,assertCurrent:()=>void):SharedSurfacePreparationStage|Promise<SharedSurfacePreparationStage>;
 }
@@ -90,7 +92,7 @@ export class SharedSurfacePreparationRegistry {
  get dirty():boolean{return this.revision!==this.settledRevision;}
  invalidate():void{if(!this.closed)this.revision++;}
  register(owner:SharedSurfacePreparationOwner):()=>void{
-  if(this.closed||!owner.key||this.owners.has(owner.key))throw Error('Unique live shared surface owner required');
+  if(this.closed||!owner.key||this.owners.has(owner.key)||!Number.isSafeInteger(owner.preparationPriority??0))throw Error('Unique live shared surface owner and integral preparation priority required');
   this.owners.set(owner.key,owner);this.invalidate();let registered=true;
   return()=>{if(!registered)return;registered=false;if(this.owners.get(owner.key)===owner){this.owners.delete(owner.key);this.invalidate();}};
  }
@@ -106,7 +108,7 @@ export class SharedSurfacePreparationRegistry {
   const current=()=>{assertCurrent();if(this.closed||revision!==this.revision)throw Error('Shared surface demand changed during preparation');};
   const failures:unknown[]=[];
   try{
-   current();for(const owner of this.owners.values())if(owner.needsPreparation(snapshot)){const stage=await owner.stage(snapshot,current);this.stagedReferences.add(stage);stages.push({owner,stage});current();}
+   current();for(const owner of [...this.owners.values()].sort((a,b)=>(a.preparationPriority??0)-(b.preparationPriority??0)))if(owner.needsPreparation(snapshot)){const stage=await owner.stage(snapshot,current);this.stagedReferences.add(stage);stages.push({owner,stage});current();}
   }catch(error){failures.push(error);for(const{stage}of stages.toReversed())try{stage.dispose();this.stagedReferences.delete(stage);}catch(cleanup){failures.push(cleanup);}this.active=false;if(failures.length>1)throw new AggregateError(failures,'Shared surface staging cleanup failed');throw error;}
   let state:BatchState='staged',published=0,committed=0;
   const batch:SharedSurfacePreparationBatch={

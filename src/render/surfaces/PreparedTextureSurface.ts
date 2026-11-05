@@ -2,6 +2,7 @@
  * Source remains an explicit JS representation, never a hidden shader branch.
  * Construction happens before first Pastel; publication borrows textures only. */
 import * as THREE from 'three/webgpu';
+import type {SurfaceBudgetInventory} from './SurfaceBudgetInventory';
 import {Fn,If,float,mix,texture,uniform,varying,vec2,vec3} from 'three/tsl';
 import type {GraphicsStyleContext} from '../graphics-style';
 import type {PreparedSurfaceScalarInk} from '../origami/baked/surfaces/PreparedSurfaceTypes';
@@ -143,6 +144,8 @@ export class PreparedTextureSurface {
   this.material.vertexColors=representation==='pure'?false:source.vertexColors;if(changed)this.material.needsUpdate=true;this.representation=representation;
  }
  assertReady():void{if(this.closed||this.representation==='pure'&&this.options.context.origami&&(!this.current||this.options.context.reliefEnabled||this.options.context.wearEnabled))throw Error('Prepared final surface must publish or explicitly choose Source before draw');this.current?.assertCurrent();}
+ /** Read-only refs, including the Source Pastel and owned exact array copy. */
+ surfaceBudget():SurfaceBudgetInventory{return{textures:[this.pastel,this.options.pastelTexture,...(this.current?[this.current.texture]:[])],gpuBufferBytes:0,cpuBytes:0,complete:!this.closed,scope:'Texture refs only; pixels deduplicated/measured by caller. Atlas ownership remains with the family owner.'};}
  snapshot(){return{representation:this.representation,material:this.material.uuid,assets:this.current,boundTexture:this.body.value.uuid,journalRevision:this.journal.declaration.revision,scalarInkEnabled:this.scalarInkEnabled.value,scalarInkColor:this.scalarInkEnabled.value?this.current?.scalarInk?.color:undefined,closed:this.closed};}
  dispose():void{if(this.closed)return;const failures:unknown[]=[];for(const close of[this.unsubscribe,()=>this.journal.dispose(),()=>this.material.dispose(),()=>this.pastel.dispose()])try{close();}catch(error){failures.push(error);}if(failures.length)throw new AggregateError(failures,'Prepared final surface close quarantine');this.closed=true;this.current=undefined;}
 }

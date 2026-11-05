@@ -1,5 +1,41 @@
 # Rendu commun et textures Pastel/Gouache
 
+Lot V78 du 5 novembre : **Gouache proche de Pastel dans la scène mesurée**,
+résultat accepté par l'utilisateur pour commit et publication. Même World128,
+Main435, DPR1, contours actifs et relief/usure à zéro : GPU P/G/P
+0,720896 / 0,733184 / 0,720384 ms, soit **+1,740834 %** Gouache face à la moyenne
+Pastel de 0,720640 ms. Les trois médianes GPU sont 0,720896 ms. CPU soumission
+1,006532663 / 1,014309624 / 0,976083334 ms, soit environ +2,32 % ; médianes 1 ms.
+Les trois bras conservent 22 appels et 214196 triangles. Ces chiffres ne prouvent
+ni parité globale, ni FPS, WholeMain ou campagne ; aucune attribution par asset.
+
+Les panneaux rocheux admis utilisent désormais une texture finale, avec les
+mêmes modèles, UV Source et éclairage. Le remplissage et les traits sont préparés
+hors image. Les 23 couches de 1024 pixels, quatre mips et marges de 8 pixels
+retiennent une première banque de 128122880 octets, soit 122,1875 Mio nominaux.
+La banque de travail supplémentaire est différée jusqu'à une vraie modification,
+avec admission avant allocation et copies locales ; la banque publiée reste intacte.
+Au-delà de 24 pixels par case, le repli Source préserve la qualité proche : le
+passage observé à 89,62 puis 16,80 pixels revient à Prepared sur la même banque.
+
+La paire d'images Prepared initial → Source a un contexte accepté : 23,2056 %
+des pixels diffèrent, surtout d'un code RGB ; MAE RGB 0,603734, maximum 58, alpha
+exact. Ce n'est pas une identité visuelle exacte. Les 13 streams Source et leurs
+576633 mots restent bit-exacts lors de la bascule ; les quatre augmentations de
+versions dues aux uploads 435 sont prouvées et conservées. Le bouton de retour
+préparé explicite n'a pas fourni de témoin acquis. Le contrôle normal proximité /
+retour et les changements de textures sont conservés séparément. Les caméras
+demandées et les contextes contrôlés concordent ; l'identité complète P/P reste
+fausse sur quatre champs de caches plantes/arbres, sans normalisation.
+
+Validation acquise : 11 contrats produit et 2 contrats privés, types produit
+81,801 s et privés 35,069 s ; préparation Pages 69,946 s dont build 6,060 s,
+quatre Workers exacts. Les sources produit restent celles de V77. Reçu Native B
+final `actors-wide-20261105205535044-0e44387a`, fermé sans erreur ; rapport qualité
+`56fb1235…`, revue des quatre champs `6902a358…`, identités Workers `21f1665a…`.
+
+Les entrées suivantes retracent les lots précédents et leurs limites historiques.
+
 Lot groupé V70 du5novembre : **164,6875Mio de textures économisés, parité GPU
 toujours ouverte**. Les banques compatibles retiennent seulement le corps RGB
 et le coefficient d'encre dans son alpha ; leurs anciennes couches d'encre sont

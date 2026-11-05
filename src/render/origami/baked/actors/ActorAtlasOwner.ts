@@ -2,13 +2,14 @@
 import * as THREE from 'three/webgpu';
 import {attribute,uint} from 'three/tsl';
 import type {GraphicsStyleContext} from '../../../graphics-style';
+import type {SurfaceBudgetInventory} from '../../../surfaces/SurfaceBudgetInventory';
 import type {SharedSurfacePreparationOwner,SharedSurfacePreparationSnapshot,SharedSurfacePreparationStage} from '../../../surfaces/SharedSurfacePreparation';
 import type {SharedPaintSurfaceOptions} from '../../../surfaces/SharedPaintSurface';
 import type {FaceStrokeData} from '../../../surfaces/FaceStrokeTable';
 import {WORK_POSE} from '../../../work-presentation';
 import {ANIMAL_SURFACE_PROFILE_STRIDE} from '../../../models/AnimalModels';
 import {ActorAtlasAdmissionRefusal,type ActorAtlasLimits} from './ActorAtlasSchema';
-import {ActorTextureSurface,type ActorTextureAssets} from './ActorTextureSurface';
+import {ActorTextureSurface,compileActorAddressData,type ActorTextureAssets} from './ActorTextureSurface';
 import {captureActorModel,planActorCohorts,type ActorBakeSource} from './ActorAtlasModel';
 import {prepareActorAtlasGpu,type ActorAtlasGpuResult} from './ActorAtlasGpu';
 const MiB=1024*1024,SCREEN_MAX=128,SCREEN_RETURN=112;
@@ -27,7 +28,7 @@ export interface ActorAtlasOwnerOptions {
  readonly changed:()=>void;readonly configure?:(material:THREE.MeshStandardNodeMaterial)=>void;
  readonly maxCpuBytes?:number;readonly maxPeakGpuBytes?:number;readonly maxRetainedGpuBytes?:number;
 }
-type Asset={readonly key:string;readonly value:ActorAtlasGpuResult;readonly assets:ActorTextureAssets;readonly cpuBytes:number;readonly gpuBytes:number};
+type Asset={readonly key:string;readonly value:ActorAtlasGpuResult;readonly assets:ActorTextureAssets;readonly cpuBytes:number;readonly gpuBytes:number;readonly metadataReservations:Map<ActorTextureSurface,{readonly capacity:number;readonly data:Float32Array}>};
 type Density={mode:'orthographic'|'perspective';physicalCellPixels:number};
 type State={owners:Set<ActorAtlasOwner>;admitted:Set<ActorAtlasOwner>;tier:'source'|'screen';density?:Density;revision:number;held:Set<Asset>};
 const states=new WeakMap<GraphicsStyleContext,State>();
@@ -37,6 +38,8 @@ function densityTier(s:State,mode:'orthographic'|'perspective'|undefined,pixels:
 /** O(1) stable frame. Only a real tier transition dirties the existing registry;
  * no owner iteration, geometry inspection, allocation or GPU operation here. */
 export function updateActorAtlasDensity(context:GraphicsStyleContext,mode:'orthographic'|'perspective',physicalCellPixels:number):boolean{const s=states.get(context);if(!context.origami||!s?.admitted.size)return false;const next=densityTier(s,mode,physicalCellPixels);if(next===s.tier)return false;s.density={mode,physicalCellPixels};s.tier=next;s.revision++;context.surfacePreparation.invalidate();return true;}
+/** Pure inventory lookup; never creates a per-context state or admits an asset. */
+export function actorSurfaceBudget(context:GraphicsStyleContext):SurfaceBudgetInventory{const s=states.get(context),textures=new Set<THREE.Texture>();let gpuBufferBytes=0,cpuBytes=0,complete=true;for(const owner of s?.owners??[]){const item=owner.surfaceBudget();for(const t of item.textures)textures.add(t);gpuBufferBytes+=item.gpuBufferBytes;cpuBytes+=item.cpuBytes;complete&&=item.complete;}for(const asset of s?.held??[])textures.add(asset.value.texture);return{textures:[...textures],gpuBufferBytes,cpuBytes,complete,scope:'Renderer-local actor owner ledger, all currently held atlas refs including staged candidates; metadata potential GPU upper bounds, no Source frame census or driver memory.'};}
 /** Shared predicate for producer dirty writers. Pose class changes admission,
  * never the persistent paint key; animation phase/position do not trigger bake. */
 export function actorPoseIsRigid(kind:'human'|'animal',g:THREE.BufferGeometry,slot:number):boolean{
@@ -66,7 +69,7 @@ export class ActorAtlasOwner implements SharedSurfacePreparationOwner {
  private readonly owned=new Set<Asset>();
  private complete:{model:ActorBodyBakePort['model'];index:Uint16Array|Uint32Array}|undefined;
  private current:Asset|undefined;private dirty=true;private closed=false;private semantic='';private fallback:string|undefined;
- private cacheReady=false;
+ private cacheReady=false;private budgetPreparing=false;
  private publishedStyle:string|undefined;private publishedDensityRevision=-1;private publishedTier:'source'|'screen'='source';
  private actors=0;private cohorts=0;private staged=false;private qualityRequested:'source'|'prepared'|undefined;private qualityActive:'source'|'prepared'|undefined;
  constructor(readonly options:ActorAtlasOwnerOptions){this.key='actor-atlas:'+options.key;this.shared=state(options.context);try{const port=options.readPort();if(port)this.ensureSurfaces(port);this.unregister=options.context.surfacePreparation.register(this);this.shared.owners.add(this);}catch(error){const errors=[error];for(const surface of this.surfaces.values())try{surface.dispose();}catch(cleanup){errors.push(cleanup);}throw errors.length>1?new AggregateError(errors,'Actor surface constructor quarantine'):error;}}
@@ -97,8 +100,14 @@ export class ActorAtlasOwner implements SharedSurfacePreparationOwner {
     else{
      const held=[...this.shared.held].reduce((n,a)=>n+a.gpuBytes,0),metadata=[...this.shared.owners].reduce((sum,o)=>sum+[...o.surfaces.values()].reduce((sum,s)=>sum+s.snapshot().allocatedGpuUpperBoundBytes+s.snapshot().pastelGpuBytes,0),0),cpuHeld=[...this.shared.held].reduce((n,a)=>n+a.cpuBytes,0),maxPeak=this.options.maxPeakGpuBytes??1024*MiB,maxCpu=this.options.maxCpuBytes??256*MiB,maxRetained=this.options.maxRetainedGpuBytes??512*MiB;
      const limits:ActorAtlasLimits={maxFaces:Math.floor(128*MiB/32),maxPages:256,maxCpuBytes:maxCpu,maxRetainedGpuBytes:maxRetained-held,maxPeakGpuBytes:maxPeak,oldLiveGpuBytes:held,externalGpuBytes:metadata,oldLiveCpuBytes:cpuHeld,externalCpuBytes:metadata,compilerScratchGpuBytes:1,compilerScratchCpuBytes:1},plan=planActorCohorts(capture,{tier:'screen',maxCellPixels:SCREEN_MAX,oversampling:4,paintKey:semantic},limits);assertCurrent();paint.assertCurrent();
-     const value=await prepareActorAtlasGpu(renderer,plan,paint,{maxPeakGpuBytes:maxPeak,maxCpuBytes:maxCpu,oldLiveGpuBytes:held,otherLiveGpuBytes:metadata},()=>{assertCurrent();capture.assertCurrent();paint.assertCurrent();if(semantic!==parameters(context))throw Error('Actual actor paint settings changed');});
-     candidate={key:cacheKey,value,assets:{texture:value.texture,plan:plan.plan,cohorts:plan.addresses,assertCurrent:()=>value.assertCurrent()},cpuBytes:plan.plan.retainedCpuBytes+value.cpuBytes,gpuBytes:value.gpuBytes};this.owned.add(candidate);this.shared.held.add(candidate);next=candidate;admitted=true;
+     const value=await this.budgetedPreparation(()=>prepareActorAtlasGpu(renderer,plan,paint,{maxPeakGpuBytes:maxPeak,maxCpuBytes:maxCpu,oldLiveGpuBytes:held,otherLiveGpuBytes:metadata},()=>{assertCurrent();capture.assertCurrent();paint.assertCurrent();if(semantic!==parameters(context))throw Error('Actual actor paint settings changed');}));
+     const baseCpuBytes=plan.plan.retainedCpuBytes+value.cpuBytes;
+     candidate={key:cacheKey,value,assets:{texture:value.texture,plan:plan.plan,cohorts:plan.addresses,assertCurrent:()=>value.assertCurrent()},metadataReservations:new Map(),get cpuBytes():number{return baseCpuBytes+[...this.metadataReservations.values()].reduce((n,r)=>n+r.data.byteLength,0);},gpuBytes:value.gpuBytes};this.owned.add(candidate);this.shared.held.add(candidate);
+     // Compute the EXACT existing CPU address compiler's size while staging,
+     // before RockLAST observes this owner. No shader/geometry is compiled.
+     // Retain the real typed result so CPU ownership is not invented as freed.
+     try{for(const surface of this.surfaces.values()){const current=surface.snapshot(),metadata=compileActorAddressData(current.faceCount,candidate.assets,surface.options.maxAddressBytes);let capacity=current.capacityCpuBytes;while(capacity<metadata.data.byteLength)capacity*=2;if(capacity>(surface.options.maxAddressBytes??128*MiB))throw new ActorAtlasAdmissionRefusal('Prospective actor metadata HWM refused');candidate.metadataReservations.set(surface,{capacity,data:metadata.data});}}catch(error){throw new Error('Actor metadata staging reservation failed before publication',{cause:error});}
+     next=candidate;admitted=true;
     }
    }
   }catch(error){if(!(error instanceof ActorAtlasAdmissionRefusal)){const errors=[error];try{if(candidate)this.retire(candidate);}catch(cleanup){errors.push(cleanup);}finally{this.staged=false;}throw errors.length>1?new AggregateError(errors,'Actor atlas preparation quarantine'):error;}reason=error.message;admitted=false;next=old;}
@@ -106,6 +115,10 @@ export class ActorAtlasOwner implements SharedSurfacePreparationOwner {
   const rollback=()=>{if(settled)throw Error('Committed actor atlas stage cannot roll back');if(rolledBack)return;if(published){for(const row of previous){row.surface.setModelDomain(row.faceCount);row.surface.setAssets(row.assets);row.surface.selectRepresentation(row.representation);}for(const surface of this.surfaces.values())if(!previous.some(p=>p.surface===surface)){surface.setAssets(undefined);surface.selectRepresentation('source');}this.current=old;this.fallback=previousFallback;this.actors=previousActors;this.cohorts=previousCohorts;this.cacheReady=previousCacheReady;this.qualityActive=previousQuality;this.shared.density=previousDensity;this.shared.tier=previousTier;this.publishedStyle=previousStyle;this.publishedDensityRevision=previousDensityRevision;this.publishedTier=previousPublishedTier;if(wasAdmitted)this.shared.admitted.add(this);else this.shared.admitted.delete(this);this.options.changed();}rolledBack=true;};
   return{publish:()=>{if(disposed||published||rolledBack)throw Error('Actor atlas stage superseded');assertCurrent();if(semantic!==parameters(context))throw Error('Actor atlas settings changed before publication');this.shared.density=density;this.shared.tier=requestedTier;this.current=next;this.fallback=reason??(requestedTier==='source'?'Source-near-or-perspective':undefined);this.actors=actors;this.cohorts=cohorts;this.cacheReady=admitted;this.qualityActive=this.qualityRequested;this.publishedStyle=snapshot.preferences.style;this.publishedDensityRevision=this.shared.revision;this.publishedTier=requestedTier;if(eligibleForDensity)this.shared.admitted.add(this);else this.shared.admitted.delete(this);published=true;choose();},commit:()=>{if(settled)return;if(!published||rolledBack)throw Error('Only a published actor stage can commit');assertCurrent();settled=true;this.semantic=semantic;this.dirty=false;if(old&&old!==next)this.retire(old);},rollback,dispose:()=>{if(disposed)return;try{if(!settled&&!rolledBack)rollback();if(!settled&&candidate)this.retire(candidate);disposed=true;}finally{this.staged=false;}},stats:{kind:'actor-one-read',actors,cohorts,admitted,pages:next?.assets.plan.pages??0,reason}};
  }
+ /** Read-only stage-boundary inventory. Texture pixel bytes are measured by
+  * the caller after identity deduplication; buffer bytes are conservative. */
+ surfaceBudget():SurfaceBudgetInventory{const textures=new Set<THREE.Texture>();let gpuBufferBytes=0,cpuBytes=this.complete?.index.byteLength??0;for(const asset of this.owned){textures.add(asset.value.texture);cpuBytes+=asset.cpuBytes;for(const[surface,reservation]of asset.metadataReservations)if(reservation.capacity>surface.snapshot().capacityCpuBytes)gpuBufferBytes+=reservation.capacity;}for(const surface of this.surfaces.values()){const s=surface.snapshot();textures.add(surface.pastel);textures.add(surface.options.pastelTexture);if(surface.assets)textures.add(surface.assets.texture);gpuBufferBytes+=s.allocatedGpuUpperBoundBytes;cpuBytes+=s.allocatedGpuUpperBoundBytes;}return{textures:[...textures],gpuBufferBytes,cpuBytes,complete:!this.budgetPreparing&&!this.closed,scope:'All owned/staged actor atlases and original/copied Pastel refs; all allocated/retired metadata buffers, exact prospective publish HWM and retained stage-address CPU copies plus complete-index CPU copy. Texture pixels measured once by caller. In-flight GPU preparation is incomplete; not driver VRAM.'};}
+ private async budgetedPreparation(make:()=>Promise<ActorAtlasGpuResult>):Promise<ActorAtlasGpuResult>{this.budgetPreparing=true;try{return await make();}finally{this.budgetPreparing=false;}}
  status(){const pure=[...this.surfaces.values()].some(s=>s.snapshot().representation==='pure'),p=this.current?.assets.plan,ready=pure&&this.options.context.origami&&this.cacheReady;return{pipeline:'actor-one-read',actors:this.actors,cohorts:this.cohorts,ready,readyActors:ready?this.actors:0,cachedAdmission:this.cacheReady,eligibleForDensity:this.shared.admitted.has(this),representation:pure?'pure':'source',pages:p?.pages??0,pageSize:p?.size??0,retainedCpuBytes:this.current?.cpuBytes??0,retainedGpuBytes:this.current?.gpuBytes??0,sourcePaintAndCanonicalGpuNominal:this.current?.value.stats.borrowedSourceGpuBytes??0,metadataGpuUpperBytes:[...this.surfaces.values()].reduce((n,s)=>n+s.snapshot().allocatedGpuUpperBoundBytes,0),fallback:this.qualityActive==='source'?'diagnostic-Source':this.fallback??null,densityTier:this.publishedTier,desiredTier:this.shared.tier,maxCellPixels:SCREEN_MAX,qualityRoute:this.qualityActive??null,pending:this.staged,closed:this.closed};}
  attachGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{const all=[...geometries];for(const surface of this.surfaces.values())surface.attachGpuRetirement(all);}
  private retire(asset:Asset):void{if(!this.owned.has(asset))return;asset.value.dispose();this.owned.delete(asset);this.shared.held.delete(asset);}

@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { Fn, If, attribute, instanceColor, positionLocal, sin, texture, uniform, uv, vec3 } from 'three/tsl';
 import type { AnimationDetail } from './AnimationDetail';
+import type {SurfaceBudgetInventory} from './surfaces/SurfaceBudgetInventory';
 import { NaturalAnimationCache } from './natural-animation-cache';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Resource, World } from '../sim/types';
@@ -155,6 +156,8 @@ export class PlantClusterLayer {
   setTexturesEnabled(enabled:boolean):void {this.texturesEnabled=enabled;this.selectMaterial();}
   hasPendingAtlasResources():boolean{return this.slots.size>0&&(this.plantAtlas?.needsPreparation()??false);}
   prepareAtlasResources(renderer:THREE.WebGPURenderer,source:ReturnType<GraphicsStyleContext['prepareAtlasPaint']>,assertExclusive:()=>void){if(this.slots.size===0)return;return this.plantAtlas?.stage(renderer,source,assertExclusive);}
+  /** Read-only stage-boundary bridge, no plant admission or mesh traversal. */
+  surfaceBudget():SurfaceBudgetInventory{const value=this.plantAtlas?.surfaceBudget(),textures=new Set<THREE.Texture>(value?.textures??[]);if(this.ownedPastel)textures.add(this.ownedPastel);return{textures:[...textures],gpuBufferBytes:value?.gpuBufferBytes??0,cpuBytes:value?.cpuBytes??0,complete:value?.complete??true,scope:value?.scope??'No prepared Plant owner; any owned Source Pastel ref is supplied. Source model/canonical storage remains separately inventoried.'};}
   atlasStatus(){return this.plantAtlas?.stats()??{pipeline:'direct-source',ready:false,refused:true};}
   graphicsComparisonMetadata(){return{active:this.slots.size,model:this.geometry.uuid,material:Array.isArray(this.mesh.material)?this.mesh.material.map(m=>m.uuid):this.mesh.material.uuid,textured:this.texturesEnabled,binsVersion:this.plantAtlasBins.version,atlas:this.plantAtlas?.comparisonMetadata()??null};}
   setTargetPreview(ids:ReadonlySet<number>):void {

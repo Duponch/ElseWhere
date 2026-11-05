@@ -4,15 +4,22 @@ import { ROCK_INDICES, ROCK_VERTICES } from './RockSurface';
 import {RockSurfaceModel,ROCK_SURFACE_UV,ROCK_SURFACE_VERTICES} from './models/RockSurfaceModel';
 import {RockStrokeTable,type RockStrokePatch} from './surfaces/RockStrokeTable';
 import {faceStrokeVertexHeaders,createFaceStrokeNode} from './surfaces/FaceStrokeTable';
-import {createPreparedAffineStrokeNode,preparedAffineInteriorCircleVertex} from './surfaces/AffineStrokeKernel';
+import {preparedAffineInteriorCircleVertex} from './surfaces/AffineStrokeKernel';
+import {rockBodyColorNode,rockFinalAffineAlbedoNode,rockStonePaintUvNode} from './surfaces/RockFinalSource';
 import { WORLD_SCALE } from '../world/scale';
 import { STONE_KINDS } from '../sim/geology';
 import { material } from './primitives';
 import { opaqueRockExplorationMaterial256 } from './ExplorationMask256';
 import { foggedCell256 } from '../sim/exploration-state-256';
 import { createStylizedSurfaceTexture } from './stylized-surfaces';
-import {attribute,positionLocal,texture,varying,vec2} from 'three/tsl';
+import {attribute,positionLocal} from 'three/tsl';
 import {currentGraphicsStyle} from './graphics-style';
+import {RockFinalSurface} from './surfaces/RockFinalSurface';
+import {RockFinalOwner} from './surfaces/RockFinalOwner';
+import {createRockFinalRuntimeOptions,type RockFinalRuntimeConfiguration} from './surfaces/RockFinalRuntime';
+import {collectRockFinalInput} from './surfaces/RockFinalInput';
+import type {RockFinalPublication} from './surfaces/RockFinalRuntimeTypes';
+import type {SharedSurfacePreparationStage} from './surfaces/SharedSurfacePreparation';
 
 /** One resident surface shared by close/distant views, including the map slab.
  * Cell slots survive excavation/restoration. Only affected vertices are uploaded;
@@ -39,14 +46,18 @@ export class RockLayer {
   private width=0;
   private height=0;
   private readonly local=new THREE.Group();
-  private readonly chunks=new Map<string,{cells:Set<number>;mesh:THREE.Mesh;capacity:number}>();
+  private readonly chunks=new Map<string,{cells:Set<number>;mesh:THREE.Mesh;bodyMesh:THREE.Mesh;capacity:number}>();
+  private readonly finalSurface:RockFinalSurface;private finalOwner:RockFinalOwner|undefined;private finalWorldRevision=0;private finalPartitionRevision='';
+  private finalPublication:RockFinalPublication={route:'source',style:'default'};
+  private distantPrepared:THREE.Mesh|undefined;private distantBody:THREE.Mesh|undefined;private distantSlab:THREE.Mesh|undefined;
+  compiledMaterialsChanged435?:()=>void;
   private distant=false;
   private texturesEnabled=true;
   private readonly stonePaint=createStylizedSurfaceTexture('stone');
   // Clean dedicated materials: shared props already have exploration masks.
   private readonly plainMaterial=opaqueRockExplorationMaterial256(material(0xffffff,{vertexColors:true}));
   private readonly texturedMaterial=opaqueRockExplorationMaterial256(material(0xffffff,{vertexColors:true}));
-  compiledMaterials435():readonly THREE.NodeMaterial[]{return[this.plainMaterial,this.texturedMaterial];}
+  compiledMaterials435():readonly THREE.NodeMaterial[]{return[this.plainMaterial,this.texturedMaterial,this.finalSurface.preparedMaterial,this.finalSurface.bodyMaterial];}
   constructor(configure?: (material:THREE.MeshStandardNodeMaterial)=>void) {
     // Coordinates come from the existing world-space position attribute, so
     // even a vast continuous cliff adds no UV buffer, vertices or draw calls.
@@ -55,13 +66,50 @@ export class RockLayer {
     // height gently offsets side faces without introducing a visible cell grid.
     this.bindSurface();
     configure?.(this.plainMaterial);configure?.(this.texturedMaterial);
+    // Both final materials exist before the first Pastel draw. Their Standard
+    // properties, light/mask fields and shared Source attributes stay identical.
+    this.finalSurface=new RockFinalSurface(this.texturedMaterial,this.stonePaint,configure);
     this.mesh=new THREE.Mesh(new THREE.BufferGeometry(),this.texturedMaterial);
     this.mesh.name='Continuous rock surface';this.mesh.castShadow=true;this.mesh.receiveShadow=true;
     this.mesh.matrixAutoUpdate=false;
     this.group.add(this.mesh,this.local);this.setDistant(false);
   }
+  /** Install once during Core construction, before initial preparation. The
+   * ledger provider is explicit; missing bytes refuse allocation into Source. */
+  configureRockFinalRuntime(options:RockFinalRuntimeConfiguration):void {
+    if(this.finalOwner||this.closed||!this.graphicsStyle)throw Error('One live renderer-local Rock final configuration required');
+    const self=this;
+    this.finalOwner=new RockFinalOwner({...createRockFinalRuntimeOptions({...options,stonePaint:this.stonePaint,lookupStageUpperBytes:span=>this.finalSurface.lookupStageUpperBytes(span)}),host:{context:this.graphicsStyle,texturesEnabled:()=>this.texturesEnabled,collect:assertCurrent=>collectRockFinalInput({get geometry(){return self.mesh.geometry;},stroke:this.stroke,slots:this.slots,get width(){return self.width;},get height(){return self.height;},revision:()=>`${self.strokeWorldRevision}:${self.finalWorldRevision}:${self.stroke.stats.patches}`},assertCurrent),stage:binding=>this.stageRockFinalPublication(binding)}});
+  }
+  rockFinalStatus(){return this.finalOwner?.status()??{ready:false,representation:'source',refusal:'Runtime ledger/adapter not installed'};}
+  requestRockFinalQualityRoute(route:'source'|'prepared'|undefined):void{if(!this.finalOwner)throw Error('Rock final runtime not installed');this.finalOwner.requestQualityRoute(route);}
+  rockFinalNominalOwnership(){return{lookupCpuBytes:this.finalSurface.lookupCpuBytes,lookupGpuBytes:this.finalSurface.lookupGpuBytes,owner:this.finalOwner?.status()??null};}
+  rockFinalCanonicalTable(){return this.stroke;}
+  /** Canonical current/inactive/retired buffers are a conservative potentially
+   * uploaded bound. Affines are supplied separately by their actual manager. */
+  rockFinalSourceInventory(){const model=this.model,rawCpu=model?model.rawPosition.byteLength+model.rawColor.byteLength+(model.stock.index?.array.byteLength??0)+model.capacity*(6+14*4):0,stoneCpu=ArrayBuffer.isView(this.stonePaint.image.data)?this.stonePaint.image.data.byteLength:0;return{textures:[this.stonePaint],gpuBufferBytes:this.stroke.cpuBytes,cpuBytes:this.stroke.cpuBytes+rawCpu+stoneCpu,complete:!this.previousModel,scope:'Rock canonical current/inactive/retired storage, Source stone pixels and non-scene stock/raw model CPU; excludes separately inventoried prepared affines, atlas/lookup and deduplicated live Scene geometry'};}
+  rockFinalLookupStageUpperBytes(faceSpan:number){return this.finalSurface.lookupStageUpperBytes(faceSpan);}
+  rockFinalRequiresAsyncClose():boolean{const state=this.finalOwner?.status();return!!state&&!state.closed&&(state.gpuBytes>0||state.pending||state.quarantined>0);}
+  async closeRockFinalTextures():Promise<void>{await this.finalOwner?.close();}
+  private stageRockFinalPublication(binding:RockFinalPublication):SharedSurfacePreparationStage {
+    const surface=this.finalSurface.stage(binding),before=this.finalPublication,oldRevision=this.finalPartitionRevision,changes:{mesh:THREE.Mesh;material:THREE.Material|THREE.Material[];data?:Uint32Array;count:number}[]=[];
+    const partition=binding.input&&binding.input.revision()!==this.finalPartitionRevision;
+    const bodyFaces=new Set<number>();if(partition){const input=binding.input!,counts=new Map<number,number>();for(let i=0;i<input.arrays.faceId.length;i++){const panel=input.arrays.facePanel[i]!;counts.set(panel,(counts.get(panel)??0)+input.arrays.faceHeader[i*8+1]!);}for(let i=0;i<input.arrays.faceId.length;i++)if(counts.get(input.arrays.facePanel[i]!)===0)bodyFaces.add(input.arrays.faceId[i]!);}
+    const next: {mesh:THREE.Mesh;data:Uint32Array}[]=[];
+    for(const chunk of this.chunks.values()){
+      for(const mesh of[chunk.mesh,chunk.bodyMesh])changes.push({mesh,material:mesh.material,data:partition?(mesh.geometry.index!.array as Uint32Array).slice(0,mesh.geometry.drawRange.count):undefined,count:mesh.geometry.drawRange.count});
+      if(partition){const ink:number[]=[],body:number[]=[],raw=this.mesh.geometry.getAttribute(ROCK_SURFACE_UV);for(const cell of chunk.cells)for(let at=0,indices=this.slots.get(cell)!.indices;at<indices.length;at+=3)(bodyFaces.has(raw.getZ(indices[at]!))?body:ink).push(indices[at]!,indices[at+1]!,indices[at+2]!);next.push({mesh:chunk.mesh,data:Uint32Array.from(ink)},{mesh:chunk.bodyMesh,data:Uint32Array.from(body)});}
+    }
+    for(const mesh of[this.distantPrepared,this.distantBody])if(mesh)changes.push({mesh,material:mesh.material,data:partition?(mesh.geometry.index!.array as Uint32Array).slice(0,mesh.geometry.drawRange.count):undefined,count:mesh.geometry.drawRange.count});
+    if(partition&&this.distantPrepared&&this.distantBody){const ink:number[]=[],body:number[]=[],raw=this.mesh.geometry.getAttribute(ROCK_SURFACE_UV);for(const record of this.slots.values())for(let at=0;at<record.indices.length;at+=3)(bodyFaces.has(raw.getZ(record.indices[at]!))?body:ink).push(record.indices[at]!,record.indices[at+1]!,record.indices[at+2]!);next.push({mesh:this.distantPrepared,data:Uint32Array.from(ink)},{mesh:this.distantBody,data:Uint32Array.from(body)});}
+    let published=false,committed=false,disposed=false;
+    const write=(mesh:THREE.Mesh,data:Uint32Array)=>{const index=mesh.geometry.index!;if(data.length>index.count)throw Error('Rock partition exceeds actual retained chunk capacity');(index.array as Uint32Array).set(data);index.clearUpdateRanges();if(data.length)index.addUpdateRange(0,data.length);index.needsUpdate=true;mesh.geometry.setDrawRange(0,data.length);};
+    const materials=(value:RockFinalPublication)=>{const source=this.texturesEnabled?this.texturedMaterial:this.plainMaterial;for(const chunk of this.chunks.values()){chunk.mesh.material=value.route==='source'?source:this.finalSurface.preparedMaterial;chunk.bodyMesh.material=value.route==='source'?source:this.finalSurface.bodyMaterial;}for(const child of this.local.children)if(child instanceof THREE.Mesh&&!Array.from(this.chunks.values()).some(c=>c.mesh===child||c.bodyMesh===child))child.material=source;if(this.distantSlab)this.distantSlab.material=source;if(this.distantPrepared)this.distantPrepared.material=this.finalSurface.preparedMaterial;if(this.distantBody)this.distantBody.material=this.finalSurface.bodyMaterial;};
+    const rollback=()=>{if(committed)throw Error('Transferred Rock publication cannot roll back');if(!published)return;for(const row of changes){if(row.data)write(row.mesh,row.data);row.mesh.material=row.material;}surface.rollback();this.finalPublication=before;this.finalPartitionRevision=oldRevision;this.setDistant(this.distant);this.compiledMaterialsChanged435?.();published=false;};
+    return{publish:()=>{if(disposed||published)throw Error('Rock publication unavailable');published=true;surface.publish();for(const row of next)write(row.mesh,row.data);materials(binding);this.finalPublication=binding;if(binding.input)this.finalPartitionRevision=binding.input.revision();this.setDistant(this.distant);this.compiledMaterialsChanged435?.();},commit:()=>{if(!published)throw Error('Publish Rock routes before commit');surface.commit();committed=true;},rollback,dispose:()=>{if(disposed)return;if(!committed)rollback();surface.dispose();disposed=true;},stats:{partitionChanged:!!partition,commonAttributes:true,rawUvUnchanged:true,slabSource:true,distantPreparedViews:true}};
+  }
   private bindSurface():void {
-    const paintedUv=varying(positionLocal.xz.mul(.026).add(positionLocal.y.mul(vec2(.009,.007))));
+    const paintedUv=rockStonePaintUvNode(positionLocal);
     // Source rocks use this same stone pigment in both texture styles. Only
     // their ink changes: a face-fill painting here would replace the original
     // broad stone map with a new kraft frame on every small cliff facet.
@@ -71,9 +119,9 @@ export class RockLayer {
     const headers=context?faceStrokeVertexHeaders({table:headerTable,faceId:surface.z,enabled:context.surfaceEncoding,opacity:context.lineOpacity,readRow:read},'v_rockStrokeHeader'):undefined;
     const common=context?{faceId:surface.z,headers,faceUv:surface.xy,enabled:context.surfaceEncoding,opacity:context.lineOpacity,brushColor:context.brushColor.rgb,samplePigment:(p:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>context.sampleStrokePigment(p,dx,dy),sampleDry:(p:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>context.sampleStrokeDry(p,dx,dy)}:undefined;
     const interiorCircle=context&&prepared?preparedAffineInteriorCircleVertex({owner:prepared,faceId:surface.z,enabled:context.surfaceEncoding,opacity:context.lineOpacity}):undefined;
-    const ink=(body:THREE.Node<'vec3'>)=>!context?body:prepared?createPreparedAffineStrokeNode(body,{...common!,owner:prepared,interiorCircle}):createFaceStrokeNode(body,{...common!,table:this.stroke,width:context.edgeWidth,irregularity:context.strokeImperfection,readRow:this.stroke.readRow});
+    const ink=(body:THREE.Node<'vec3'>)=>!context?body:prepared?rockFinalAffineAlbedoNode(body,{...common!,owner:prepared,interiorCircle}):createFaceStrokeNode(body,{...common!,table:this.stroke,width:context.edgeWidth,irregularity:context.strokeImperfection,readRow:this.stroke.readRow});
     this.texturedMaterial.vertexColors=this.plainMaterial.vertexColors=false;
-    this.texturedMaterial.colorNode=ink(base.mul(texture(this.stonePaint,paintedUv).rgb));
+    this.texturedMaterial.colorNode=ink(rockBodyColorNode(base,this.stonePaint,paintedUv));
     // Source contours also remain visible when surface textures are disabled.
     // Neither rock body ever had an optional relief or physical-wear graph;
     // all ink settings are shared uniforms and need no feature refresh owner.
@@ -87,10 +135,13 @@ export class RockLayer {
     const chosen=enabled?this.texturedMaterial:this.plainMaterial;
     this.mesh.material=chosen;
     this.local.traverse(object=>{if(object instanceof THREE.Mesh)object.material=chosen;});
+    this.finalOwner?.texturesChanged();
   }
   setDistant(distant:boolean):void {
-    this.distant=distant;this.mesh.visible=distant;this.mesh.castShadow=false;this.local.visible=!distant;
+    this.distant=distant;const final=distant&&this.finalPublication.route!=='source'&&!!this.distantPrepared;this.mesh.visible=distant&&!final;this.mesh.castShadow=false;this.local.visible=!distant;for(const mesh of[this.distantPrepared,this.distantBody,this.distantSlab])if(mesh)mesh.visible=final;
   }
+  private clearDistantViews():void{for(const mesh of[this.distantPrepared,this.distantBody,this.distantSlab])if(mesh){mesh.removeFromParent();mesh.geometry.dispose();}this.distantPrepared=this.distantBody=this.distantSlab=undefined;}
+  private resetDistantViews():void{this.clearDistantViews();const box=this.mesh.geometry.boundingBox!.clone(),capacity=this.mesh.geometry.index!.count,create=(name:string,indices:Uint32Array,material:THREE.Material|THREE.Material[])=>{const mesh=new THREE.Mesh(this.viewGeometry(indices,box.clone()),material);mesh.name=name;mesh.matrixAutoUpdate=false;mesh.receiveShadow=true;mesh.castShadow=false;mesh.visible=false;this.group.add(mesh);return mesh;};this.distantPrepared=create('Distant rock final panels',new Uint32Array(capacity),this.finalSurface.preparedMaterial);this.distantBody=create('Distant rock zero-stroke panels',new Uint32Array(capacity),this.finalSurface.bodyMaterial);this.distantPrepared.geometry.setDrawRange(0,0);this.distantBody.geometry.setDrawRange(0,0);this.distantSlab=create('Distant rock Source slab',(this.mesh.geometry.index!.array as Uint32Array).slice(0,36),this.mesh.material);this.distantSlab.geometry.setDrawRange(0,36);}
   private clearLocal():void {for(const object of this.local.children)if(object instanceof THREE.Mesh)object.geometry.dispose();this.local.clear();this.chunks.clear();}
   private viewGeometry(indices:Uint32Array,box:THREE.Box3):THREE.BufferGeometry {
     const geometry=new THREE.BufferGeometry();
@@ -102,6 +153,7 @@ export class RockLayer {
     const size=WORLD_SCALE.chunkSize,keys=new Set<string>();
     if(reset) {
       this.clearLocal();
+      this.resetDistantViews();
       const slab=this.viewGeometry((this.mesh.geometry.index!.array as Uint32Array).slice(0,36),new THREE.Box3(new THREE.Vector3(-.6,-1,-.6),new THREE.Vector3(this.width-.4,0,this.height-.4)));
       const mesh=new THREE.Mesh(slab,this.mesh.material);mesh.receiveShadow=true;mesh.matrixAutoUpdate=false;this.local.add(mesh);
     }
@@ -111,16 +163,18 @@ export class RockLayer {
       if(!chunk) {
         const bounds=new THREE.Box3(new THREE.Vector3(cx*size-.8,-.01,cz*size-.8),new THREE.Vector3((cx+1)*size+.3,4,(cz+1)*size+.3));
         const mesh=new THREE.Mesh(this.viewGeometry(new Uint32Array(0),bounds),this.mesh.material);mesh.castShadow=true;mesh.receiveShadow=true;mesh.matrixAutoUpdate=false;
-        chunk={cells:new Set(),mesh,capacity:0};this.chunks.set(key,chunk);this.local.add(mesh);
+        const bodyMesh=new THREE.Mesh(this.viewGeometry(new Uint32Array(0),bounds.clone()),this.mesh.material);bodyMesh.castShadow=true;bodyMesh.receiveShadow=true;bodyMesh.matrixAutoUpdate=false;
+        chunk={cells:new Set(),mesh,bodyMesh,capacity:0};this.chunks.set(key,chunk);this.local.add(mesh,bodyMesh);
       }
       chunk.cells.add(i);
     }
     for(const key of keys) {
       const c=this.chunks.get(key)!;
-      if(c.cells.size>c.capacity) {c.capacity=2**Math.ceil(Math.log2(c.cells.size));c.mesh.geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(c.capacity*ROCK_INDICES),1));}
+      if(c.cells.size>c.capacity) {c.capacity=2**Math.ceil(Math.log2(c.cells.size));c.mesh.geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(c.capacity*ROCK_INDICES),1));c.bodyMesh.geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(c.capacity*ROCK_INDICES),1));}
       const indices=c.mesh.geometry.index!;let count=0;
       for(const cell of c.cells){const faces=this.slots.get(cell)!.indices;(indices.array as Uint32Array).set(faces,count);count+=faces.length;}
       c.mesh.geometry.setDrawRange(0,count);indices.clearUpdateRanges();indices.addUpdateRange(0,count);indices.needsUpdate=true;
+      c.bodyMesh.geometry.setDrawRange(0,0);c.mesh.material=this.mesh.material;c.bodyMesh.material=this.mesh.material;this.finalPartitionRevision='';
     }
     this.stats.bufferBytes = Object.values(this.mesh.geometry.attributes).reduce((sum,a)=>sum+a.array.byteLength,0) + this.mesh.geometry.index!.array.byteLength + this.local.children.reduce((sum,m)=>sum+(m as THREE.Mesh).geometry.index!.array.byteLength,0);
     this.setDistant(this.distant);
@@ -179,6 +233,7 @@ export class RockLayer {
       this.graphicsStyle?.preparedStrokes.refresh(this.stroke,reset?undefined:[...new Set(patches.flatMap(patch=>[...patch.faces]))]);
       this.stats.updatedCells=dirty.size;this.stats.indexCount=offset;
       this.updateLocal(dirty,reallocated);
+      this.finalWorldRevision++;this.finalOwner?.changed(dirty,patches.flatMap(p=>[...p.faces]),reset||reallocated);
       this.previousModel?.dispose();this.previousModel=undefined;
     }
     // Representation changes only at actual World reset/admission. New Fn
@@ -188,6 +243,6 @@ export class RockLayer {
   }
   sharedSurfaceStatus(){return{pipeline:'shared-paint',sourceRibbons:false,modelVertices:this.mesh.geometry.getAttribute('position')?.count??0,stroke:this.stroke.snapshot()};}
   /** The435 owner supplies its actual compiled geometries at terminal close. */
-  attachSurfaceGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{const actual=[...geometries];this.stroke.attachGpuRetirement(actual);this.graphicsStyle?.preparedStrokes.attachGpuRetirement(this.stroke,actual);}
-  dispose():void {if(this.closed)return;this.graphicsStyle?.preparedStrokes.release(this.stroke,[this.mesh.geometry,...this.local.children.filter((o):o is THREE.Mesh=>o instanceof THREE.Mesh).map(o=>o.geometry)]);this.closed=true;this.stroke.attachGpuRetirement([this.mesh.geometry,...this.local.children.filter((o):o is THREE.Mesh=>o instanceof THREE.Mesh).map(o=>o.geometry)]);this.clearLocal();if(this.model)this.model.dispose();else this.mesh.geometry.dispose();this.previousModel?.dispose();this.previousModel=undefined;this.plainMaterial.dispose();this.texturedMaterial.dispose();this.stonePaint.dispose();this.stroke.dispose();}
+  attachSurfaceGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{const actual=[...geometries];this.stroke.attachGpuRetirement(actual);this.graphicsStyle?.preparedStrokes.attachGpuRetirement(this.stroke,actual);this.finalSurface.attachGpuRetirement(actual);}
+  dispose():void {if(this.closed)return;if(this.rockFinalRequiresAsyncClose())throw Error('Await closeRockFinalTextures before Rock model/material and renderer disposal');this.finalOwner?.closeEmpty();const actual=[this.mesh.geometry,...this.local.children.filter((o):o is THREE.Mesh=>o instanceof THREE.Mesh).map(o=>o.geometry),...[this.distantPrepared,this.distantBody,this.distantSlab].flatMap(m=>m?[m.geometry]:[])];this.finalSurface.attachGpuRetirement(actual);this.graphicsStyle?.preparedStrokes.release(this.stroke,actual);this.closed=true;this.stroke.attachGpuRetirement(actual);this.clearLocal();this.clearDistantViews();if(this.model)this.model.dispose();else this.mesh.geometry.dispose();this.previousModel?.dispose();this.previousModel=undefined;this.finalSurface.dispose();this.plainMaterial.dispose();this.texturedMaterial.dispose();this.stonePaint.dispose();this.stroke.dispose();}
 }

@@ -144,7 +144,12 @@ import type {FixedTreeCohortPlan} from './models/FixedTreeCohort';
 import type {TreeBakeDemand} from './origami/TreeBakeOwner';
 import {fixedTreePaintKey} from './surfaces/FixedTreeTextureSurface';
 import type {SharedSurfacePreparationBatch,SharedSurfacePreparationSnapshot} from './surfaces/SharedSurfacePreparation';
-import {hasActorAtlasDensityGate,updateActorAtlasDensity} from './origami/baked/actors/ActorAtlasOwner';
+import {hasActorAtlasDensityGate,updateActorAtlasDensity,actorSurfaceBudget} from './origami/baked/actors/ActorAtlasOwner';
+import {rigidSurfaceBudget} from './origami/baked/surfaces/PreparedSurfaceOwner';
+import {measureSurfaceBudget,type SurfaceBudgetInventory} from './surfaces/SurfaceBudgetInventory';
+import type {RockFinalBudgetDeclarations} from './origami/baked/rocks/RockFinalTypes';
+import {rockFinalGpuQuarantineStatus} from './origami/baked/rocks/RockFinalGpu';
+import type {RockFinalInput} from './surfaces/RockFinalRuntimeTypes';
 import {TreeAtlasAdmissionRefusal} from './origami/baked/trees/admission';
 
 export interface AudioFrameView {
@@ -172,11 +177,13 @@ export class SceneRenderCore {
   private pendingSurfaceWorld?:{world:World;reset:boolean;alreadyApplied?:boolean};
   private closingPresentation=false;
   private disposeAfterPreparation?:Promise<void>;
+  private rockTextureClose?:Promise<void>;
+  private sharedSurfaceBudgetTextures:readonly THREE.Texture[]=[];
   private graphicsMeasurement:{collector:ReturnType<typeof createGraphicsStyleComparison>;context:()=>GraphicsStyleComparisonContext;isCurrent:()=>boolean;resolve:(result:GraphicsStyleComparisonResult)=>void;timer?:ReturnType<typeof setTimeout>}|undefined;
   async disposeAsync():Promise<void>{
     const errors:unknown[]=[];
     try{this.dispose();}catch(error){errors.push(error);}
-    try{await this.disposeAfterPreparation;}catch(error){errors.push(error);}
+    try{let closing:Promise<void>|undefined;do{closing=this.disposeAfterPreparation;await closing;}while(closing!==this.disposeAfterPreparation);}catch(error){errors.push(error);}
     try{await this.rendererDisposal;}catch(error){errors.push(error);}
     if(errors.length===1)throw errors[0];if(errors.length)throw new AggregateError(errors,'Scene disposal failed');
   }
@@ -259,7 +266,15 @@ export class SceneRenderCore {
     if(!this.world)return false;
     this.deferFixedTreeWorld(this.world,reset,true);return true;
   }
-  private uploadSharedSurfaceAssets():void{for(const texture of this.graphicsStyle.prepareSharedSurfaceAssets())this.renderer.initTexture(texture);}
+  private uploadSharedSurfaceAssets():void{const textures=this.graphicsStyle.prepareSharedSurfaceAssets();for(const texture of textures)this.renderer.initTexture(texture);this.sharedSurfaceBudgetTextures=textures;}
+  /** Operation-only nominal ledger; no Scene census occurs in stable frames. */
+  private rockFinalBudgetDeclarations(input:RockFinalInput,oldGpu:number,oldCpu:number):RockFinalBudgetDeclarations{
+    const canonical=this.rocks.rockFinalCanonicalTable(),all=this.graphicsStyle.preparedStrokes.surfaceBudget(),rest=this.graphicsStyle.preparedStrokes.surfaceBudget(canonical),owned=this.rocks.rockFinalSourceInventory(),affineGpu=all.gpuBufferBytes-rest.gpuBufferBytes-owned.gpuBufferBytes,affineCpu=all.cpuBytes-rest.cpuBytes-owned.gpuBufferBytes;
+    const source=measureSurfaceBudget(this.rocks.group,[{...owned,gpuBufferBytes:owned.gpuBufferBytes+Math.max(0,affineGpu),cpuBytes:owned.cpuBytes+Math.max(0,affineCpu),complete:owned.complete&&all.complete&&rest.complete&&affineGpu>=0&&affineCpu>=0}]);
+    const paint:SurfaceBudgetInventory={textures:this.sharedSurfaceBudgetTextures,gpuBufferBytes:0,cpuBytes:0,complete:true,scope:'Actual shared Source paint maps initialized before stageALL'},other=measureSurfaceBudget(this.scene,[rest,actorSurfaceBudget(this.graphicsStyle),rigidSurfaceBudget(this.graphicsStyle),this.plants.surfaceBudget(),paint,...(this.bakedTreeOwner?[this.bakedTreeOwner.surfaceBudget()]:[])],new Set([this.rocks.group]));
+    const lookup=this.rocks.rockFinalLookupStageUpperBytes(input.faceSpan),debt=rockFinalGpuQuarantineStatus(this.renderer);
+    return{sourceScope:source.scope+'; other: '+other.scope+'; quarantined scratch: '+debt.scope+(source.refusal?'; Source refusal: '+source.refusal:'')+(other.refusal?'; other refusal: '+other.refusal:''),sourceCpuBytes:source.cpuBytes===null?null:source.cpuBytes+debt.cpuBytes,sourceGpuBytes:source.gpuBytes,otherLiveGpuBytes:other.gpuBytes===null?null:other.gpuBytes+debt.gpuBytes,oldAtlasCpuBytes:oldCpu,oldAtlasGpuBytes:oldGpu,newLookupCpuBytes:lookup.newCpuBytes,newLookupGpuBytes:lookup.retainedGpuBytes,maxFamilyRetainedGpuBytes:512*1024*1024,maxGlobalPeakGpuBytes:1024*1024*1024,maxPreparationCpuBytes:256*1024*1024};
+  }
   /** Only the newest fully admitted World is held. Native admissions and the
    * motion timeline continue; no simulation, input owner or camera is replaced. */
   private deferFixedTreeWorld(world:World,reset:boolean,alreadyApplied=false):void{
@@ -732,6 +747,8 @@ export class SceneRenderCore {
     this.waterMaterial.userData.rendererOwned = true;
     this.backend = hostPort.backend();
     this.resources.setFixedTreeAtlasAvailable(this.backend==='WebGPU');
+    if(this.backend==='WebGPU')this.rocks.configureRockFinalRuntime({declarations:(input,oldGpu,oldCpu)=>this.rockFinalBudgetDeclarations(input,oldGpu,oldCpu),size:1024,density:48,maxCellPixels:24,returnCellPixels:20});
+    this.rocks.compiledMaterialsChanged435=()=>{this.ownedOpaqueRevisions435?.invalidateResources();this.reconcileStaticCompiler435();};
     const context = renderer.getContext() as GPUCanvasContext | WebGL2RenderingContext;
     if ('getConfiguration' in context) {
       const device = context.getConfiguration()?.device;
@@ -2206,6 +2223,9 @@ export class SceneRenderCore {
         this.disposeAfterPreparation=preparation.catch(()=>{}).then(()=>{if(this.sharedSurfacePreparation===preparation)this.sharedSurfacePreparation=undefined;this.dispose();});
       }
       return;
+    }
+    if(this.rocks.rockFinalRequiresAsyncClose()){
+      if(!this.rockTextureClose){this.closingPresentation=true;this.sharedSurfaceEpoch++;this.renderer.setAnimationLoop(null);const closing=this.rocks.closeRockFinalTextures().then(()=>{this.rockTextureClose=undefined;this.dispose();},error=>{this.rockTextureClose=undefined;throw error;});this.rockTextureClose=closing;this.disposeAfterPreparation=closing;void closing.catch(()=>{});}return;
     }
     this.closingPresentation=true;
     this.renderer.setAnimationLoop(null);

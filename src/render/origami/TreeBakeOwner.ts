@@ -1,4 +1,5 @@
 import type * as THREE from 'three/webgpu';
+import type {SurfaceBudgetInventory} from '../surfaces/SurfaceBudgetInventory';
 import type {GraphicsStyleContext} from '../graphics-style';
 import {TreeAtlasAdmissionRefusal} from './baked/trees/admission';
 import {fixedTreePaintKey} from '../surfaces/FixedTreeTextureSurface';
@@ -26,6 +27,8 @@ function cleanup(items:readonly Disposable[],message:string):void{const errors:u
  * model cache, ready geometry or per-frame scheduling belongs to this owner. */
 export class TreeBakeOwner {
  private active:OwnedTreeCatalog|undefined;private activeKeys=new Set<string>();
+ private readonly budgetOwned=new Set<OwnedTreeCatalog>();
+ surfaceBudget():SurfaceBudgetInventory{return{textures:[...this.budgetOwned].map(c=>c.texture),gpuBufferBytes:0,cpuBytes:[...this.budgetOwned].reduce((n,c)=>n+c.cpuBytes,0),complete:!this.closed,scope:'All owned active/staged/quarantined tree catalogs; textures deduplicated by caller, no renderer/driver target claim.'};}
  private settledDemand:string|undefined;private settledPaintKey:string|undefined;private generation=0;private catalogRevision=0;private closed=false;private refusal:string|undefined;
  constructor(private readonly limits:TreeBakeLimits){if(!Object.values(limits).every(n=>Number.isSafeInteger(n)&&n>0))throw Error('Explicit tree preparation budgets required');}
  get activeCatalog():OwnedTreeCatalog|undefined{return this.active;}
@@ -69,7 +72,7 @@ export class TreeBakeOwner {
   * only, never preparation models, a paint lease, graphics or demand object. */
  private createOwnedCatalog(ownedPages:NonNullable<Awaited<ReturnType<typeof buildTreeArrayPages>>>,demandKey:string,modelKeys:readonly string[],rows:readonly TextureSurfaceSlot[],generation:number,metadataBytes:number,paintKey:string):OwnedTreeCatalog{
   let retired=false;const assertCatalog=()=>{if(retired||this.closed||generation!==this.generation)throw Error('Tree texture catalog retired');};
-  return{paintKey,revision:++this.catalogRevision,texture:ownedPages.texture,pageCount:ownedPages.plan.depth,modelKeys,slots:rows,demandKey,cpuBytes:metadataBytes,gpuBytes:ownedPages.plan.retainedGpuBytes,peakGpuBytes:ownedPages.plan.peakGpuBytes,assertCurrent:assertCatalog,dispose(){if(retired)return;retired=true;ownedPages.dispose();}};
+  const owner=this,catalog:OwnedTreeCatalog={paintKey,revision:++this.catalogRevision,texture:ownedPages.texture,pageCount:ownedPages.plan.depth,modelKeys,slots:rows,demandKey,cpuBytes:metadataBytes,gpuBytes:ownedPages.plan.retainedGpuBytes,peakGpuBytes:ownedPages.plan.peakGpuBytes,assertCurrent:assertCatalog,dispose(){if(retired)return;retired=true;ownedPages.dispose();owner.budgetOwned.delete(catalog);}};owner.budgetOwned.add(catalog);return catalog;
  }
  /** Publish the texture binding first, then adopt synchronously. Geometry and
   * model references have no publication/retirement operation here. */

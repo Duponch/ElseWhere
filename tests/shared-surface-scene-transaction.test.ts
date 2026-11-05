@@ -62,7 +62,7 @@ test('rollback failure stops rendering and never applies held Worlds as if the c
 
 function teardownPorts(f:ReturnType<typeof fixture>){
  const names=['areaPreview','turretRange','recreationHints','orderRockPreview','constructionPreview','geysers','boxes','snowSurface','roofs','timber','hygiene','actionFeedback','actionVfx','brawlCloud','structureVfx','podRescue','orbitalDelivery','startingArrival','overview','deepResources','rocks','crops','plants','surfaceTint','resources','pawns','doors','projectiles','fires','wind','animalCargo','wildlife','mechanoids','ropes','designations','staticMaterial','terrainPlainMaterial','terrainPaintMaterial','terrainPaintTexture','terrainPaintStaging','texturedStaticMaterial','staticPaint','waterMaterial','paintedWater','clouds','precipitation'];
- for(const name of names)Reflect.set(f.core,name,{dispose:vi.fn()});
+ for(const name of names)Reflect.set(f.core,name,{dispose:vi.fn()});Reflect.set(Reflect.get(f.core,'rocks'),'rockFinalRequiresAsyncClose',()=>false);
  for(const name of ['terrainGroup','resourceGroup','structureGroup','jobGroup','storageGroup','pileGroup'])Reflect.set(f.core,name,new THREE.Group());
  for(const name of ['confirmedJobMarkers','preparedNaturalPresentation','sceneResources','structureSignature','storageSignature','homeSignature','pileChunks'])Reflect.set(f.core,name,new Map());
  Object.assign(f.core,{furniturePresentation:{clear:vi.fn()},resources:{dispose:vi.fn(),attachPreparedResourceGpuRetirement:vi.fn(),treeBakeDemand:()=>({models:[],species:[],key:'empty',isCurrent:()=>true})},hostPort:{now:()=>1000,hidden:()=>false,selectionReady:()=>false,disposeSelection:vi.fn(),disconnectResize:vi.fn(),removeInputListeners:vi.fn(),disposeLabels:vi.fn(),removeSurface:vi.fn()}});

@@ -4,6 +4,7 @@
 import type * as THREE from 'three/webgpu';
 import type {GraphicsStylePreferences} from '../../ui3d/native-preferences';
 import type {FaceStrokeData} from './FaceStrokeTable';
+import type {SurfaceBudgetInventory} from './SurfaceBudgetInventory';
 import {AffineAdmissionRefusal,AffineStrokeOwner,linearCanonicalStencil,normalizedStrokeSettings,type AffineStage,type StrokeSettings} from './AffineStrokeOwner';
 import type {SharedSurfacePreparationRegistry,SharedSurfacePreparationSnapshot,SharedSurfacePreparationStage} from './SharedSurfacePreparation';
 
@@ -107,6 +108,9 @@ export class PreparedFaceStrokes {
   entry.owner?.attachGpuRetirement(geometries);this.pendingRelease.add(entry);
   entry.owner?.dispose();this.pendingRelease.delete(entry);this.entries.delete(table);consumers.get(table)?.delete(this);this.serial++;this.registry.invalidate();
  }
+ /** Read-only nominal upper bound. Exclusion is by exact canonical identity
+  * and excludes its affine too, so Core can split Rock/other without aliases. */
+ surfaceBudget(exclude?:FaceStrokeData):SurfaceBudgetInventory{let gpuBufferBytes=0,cpuBytes=0,complete=!this.closed;for(const entry of new Set([...this.entries.values(),...this.pendingRelease])){if(entry.table===exclude)continue;const canonical=entry.table.cpuBytes,affine=entry.owner?.cpuBytes??0,stage=entry.owner?.snapshot().pendingStageCpuBytes??0;if(![canonical,affine,stage].every(n=>Number.isSafeInteger(n)&&n>=0)){complete=false;continue;}gpuBufferBytes+=canonical+affine;cpuBytes+=canonical+affine+stage;}return{textures:[],gpuBufferBytes,cpuBytes,complete,scope:'All entries and pendingRelease, canonical table CPU-byte upper as potential GPU plus current/retired affine arrays and pending CPU undo/stage; possible shared buffers conservatively counted, never falsely freed. Exact canonical identity may exclude Rock. Not actual uploaded bytes or driver VRAM.'};}
  snapshot(){return{entries:this.entries.size,prepared:[...this.entries.values()].filter(entry=>entry.mode==='prepared').length,source:[...this.entries.values()].filter(entry=>entry.mode==='source').map(entry=>entry.refused??'explicit canonical representation'),ownedBytes:this.ownedBytes(),pending:this.pending,staged:this.staged,limits:{...this.limits},owners:[...this.entries.values()].map(entry=>entry.owner?.snapshot()??{ready:false,explicitSource:true})};}
  dispose():void{
   if(this.closed)return;if(this.staged)throw Error('Settle shared preparation before closing affine owners');const errors:unknown[]=[];

@@ -3,6 +3,7 @@
 import * as THREE from 'three/webgpu';
 import {attribute} from 'three/tsl';
 import type {GraphicsStyleContext} from '../../../graphics-style';
+import type {SurfaceBudgetInventory} from '../../../surfaces/SurfaceBudgetInventory';
 import type {SharedSurfacePreparationOwner,SharedSurfacePreparationSnapshot,SharedSurfacePreparationStage} from '../../../surfaces/SharedSurfacePreparation';
 import {PreparedTextureSurface,type PreparedTextureSurfaceOptions} from '../../../surfaces/PreparedTextureSurface';
 import {PreparedSurfaceAdmissionRefusal,type PreparedSurfaceSource,type PreparedSurfaceVariant,type PreparedSurfaceGpuResult,type PreparedSurfacePlan,type PreparedSurfacePresentation} from './PreparedSurfaceTypes';
@@ -14,6 +15,8 @@ export const PREPARED_SURFACE_VARIANT='preparedSurfaceVariant';
 type Asset={readonly key:string;readonly sourceKey:string;readonly semantic:string;readonly variantIds:readonly number[];readonly plan:PreparedSurfacePlan;readonly gpu:PreparedSurfaceGpuResult};
 type Shared={readonly owned:Set<Asset>;readonly families:Set<PreparedSurfaceOwner>};const shared=new WeakMap<GraphicsStyleContext,Shared>();
 const familyState=(c:GraphicsStyleContext)=>{let s=shared.get(c);if(!s){s={owned:new Set(),families:new Set()};shared.set(c,s);}return s;};
+/** Read-only context query: no familyState() lazy creation or Source factory. */
+export function rigidSurfaceBudget(context:GraphicsStyleContext):SurfaceBudgetInventory{const s=shared.get(context),textures=new Set<THREE.Texture>();let gpuBufferBytes=0,cpuBytes=0,complete=true;for(const family of s?.families??[]){const value=family.surfaceBudget();for(const t of value.textures)textures.add(t);gpuBufferBytes+=value.gpuBufferBytes;cpuBytes+=value.cpuBytes;complete&&=value.complete;}for(const asset of s?.owned??[])textures.add(asset.gpu.texture);return{textures:[...textures],gpuBufferBytes,cpuBytes,complete,scope:'All shared rigid owners/candidates/retirement texture refs and metadata; context state is not created by inventory. No hidden Source geometry/paint allocation.'};}
 const paintKey=(c:GraphicsStyleContext)=>{const p=c.preferences;return JSON.stringify(['prepared-rigid-source-v1',c.genericPaintSemanticKey(),p.impasto,p.wear,p.edges,p.blackEdges,p.edgeWidth,p.strokeImperfection,p.contourImperfection,c.paintReplayState().refreshed]);};
 /** Validate only newly returned metadata, after owning the GPU result. A cached
  * bank always keeps its own basis and never reinterprets old alpha from prefs. */
@@ -69,7 +72,7 @@ export class PreparedSurfaceOwner implements SharedSurfacePreparationOwner {
  private readonly surfaces=new Map<THREE.NodeMaterial,PreparedTextureSurface>();private readonly variants=new Map<string,{id:number;value:PreparedSurfaceVariant}>();
  private readonly byId=new Map<number,PreparedSurfaceVariant>();private active:readonly number[]=[];private readonly owned=new Set<Asset>();private current:Asset|undefined;
  private readonly contributions=new Map<unknown,ReadonlySet<number>>();private readonly references=new Map<number,number>();
- private targetGpuBytes=0;private targetCpuBytes=0;
+ private targetGpuBytes=0;private targetCpuBytes=0;private budgetPreparing=false;
  private qualityRequested:'source'|'prepared'|undefined;private qualityPublished:'source'|'prepared'|undefined;
  private dirty=true;private closed=false;private pending=false;private publishedStyle:string|undefined;private semantic='';private publishedCacheIdentity='';private eligible=false;private desiredTier:'source'|'screen'='source';private publishedTier:'source'|'screen'='source';private fallback:string|undefined;
  constructor(readonly options:PreparedSurfaceOwnerOptions){this.addressBook=options.useAddressBook===false?undefined:new PreparedSurfaceAddressBook();this.key='prepared-surface:'+options.key;this.state=familyState(options.context);this.unregister=options.context.surfacePreparation.register(this);try{this.unregisterDensity=options.context.surfacePreparation.registerDensityConsumer({key:this.key,maxCellPixels:options.maxCellPixels??128,returnCellPixels:options.returnCellPixels??112,isEligible:()=>this.eligible&&options.context.origami,onCrossing:(_mode,_pixels,tier)=>{if(this.desiredTier===tier)return false;this.desiredTier=tier;this.invalidate();return true;}});}catch(error){this.unregister();throw error;}this.state.families.add(this);}
@@ -135,7 +138,7 @@ export class PreparedSurfaceOwner implements SharedSurfacePreparationOwner {
      }
      const paint=snapshot.paintSource;if(!paint)throw Error('One current Core paint lease required');
      const guard=()=>{current();source.assertCurrent();paint.assertCurrent();},prepareDefault=()=>prepareSurfaceGpu(snapshot.renderer,reservedPlan,paint,guard),
-      gpu=await(this.options.prepareGpu?this.options.prepareGpu(snapshot.renderer,reservedPlan,paint,guard,prepareDefault):prepareDefault());
+      gpu=await this.budgetedPreparation(()=>this.options.prepareGpu?this.options.prepareGpu(snapshot.renderer,reservedPlan,paint,guard,prepareDefault):prepareDefault());
      candidate={key:plan.key,sourceKey,semantic,variantIds:ids,plan,gpu};this.owned.add(candidate);this.state.owned.add(candidate);assertScalarInkResult(gpu,snapshot,plan);next=candidate;prepared=true;
     }
    }
@@ -191,6 +194,9 @@ export class PreparedSurfaceOwner implements SharedSurfacePreparationOwner {
   };
  }
 
+ /** Getter only: do not invoke options.source() or any writer/prepare path. */
+ surfaceBudget():SurfaceBudgetInventory{const textures=new Set<THREE.Texture>();let gpuBufferBytes=0,cpuBytes=0,complete=!this.closed&&!this.budgetPreparing;for(const asset of this.owned){textures.add(asset.gpu.texture);cpuBytes+=asset.gpu.cpuBytes+asset.plan.retainedCpuBytes;}for(const surface of this.surfaces.values()){const value=surface.surfaceBudget();for(const t of value.textures)textures.add(t);gpuBufferBytes+=value.gpuBufferBytes;cpuBytes+=value.cpuBytes;complete&&=value.complete;}if(this.addressBook){const value=this.addressBook.surfaceBudget();gpuBufferBytes+=value.gpuBufferBytes;cpuBytes+=value.cpuBytes;complete&&=value.complete;}return{textures:[...textures],gpuBufferBytes,cpuBytes,complete,scope:'All owned/staged rigid atlases, original/copied Pastel refs and lookup old/current/pending capacity. Source canonical tables are inventoried by PreparedFaceStrokes; Source geometry/shared paint by Core. Texture pixels measured once by caller.'};}
+ private async budgetedPreparation(make:()=>Promise<PreparedSurfaceGpuResult>):Promise<PreparedSurfaceGpuResult>{this.budgetPreparing=true;try{return await make();}finally{this.budgetPreparing=false;}}
  status(){const pure=[...this.surfaces.values()].every(surface=>surface.snapshot().representation==='pure'),cached=!!this.current&&this.current.semantic===paintKey(this.options.context)&&this.active.every(id=>this.current!.variantIds.includes(id)),ready=!this.pending&&this.options.context.origami&&!this.options.context.reliefEnabled&&!this.options.context.wearEnabled&&pure&&cached&&this.publishedTier==='screen';return{ready,readyVariants:ready?this.active.length:0,cachedAdmission:cached,pipeline:'prepared-rigid-family',scalarInkCached:!!this.current?.gpu.scalarInk,scalarInkCompact:this.current?.gpu.scalarInk?.compact===true,scalarInkColor:this.current?.gpu.scalarInk?.color??null,qualityRoute:this.qualityPublished??null,family:this.options.key,hasExternalDemand:!!this.options.hasExternalDemand?.(),hasActualDemand:this.active.length>0||!!this.options.hasExternalDemand?.(),activeVariants:this.active.length,cachedVariants:this.current?.variantIds.length??0,registeredVariants:this.variants.size,representation:[...this.surfaces.values()].some(s=>s.snapshot().representation==='source')?'source':'pure',tier:this.publishedTier,desiredTier:this.desiredTier,layers:(this.current?.gpu.texture.image as {depth?:number}|undefined)?.depth??0,pages:this.current?.gpu.pages.length??0,gpuBytes:[...this.owned].reduce((n,a)=>n+a.gpu.gpuBytes,0),cpuBytes:(this.addressBook?.cpuBytes??0)+this.targetCpuBytes+[...this.owned].reduce((n,a)=>n+a.gpu.cpuBytes+a.plan.retainedCpuBytes,0),lookupGpuUpperBytes:this.addressBook?.gpuUpperBytes??0,pastelCopiesGpuBytes:this.targetGpuBytes,fallback:this.fallback??null,pending:this.pending};}
  attachGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{this.addressBook?.attachGpuRetirement(geometries);}
  private retire(asset:Asset):void{if(!this.owned.has(asset))return;asset.gpu.dispose();this.owned.delete(asset);this.state.owned.delete(asset);}
