@@ -1,9 +1,11 @@
 # Rendu commun et textures Pastel/Gouache
 
+Publication du 5 novembre : commit produit `ca0c7571`, déploiement `c6240517` sur [l’adresse publique](https://elsewhere-cq7.pages.dev/) et [l’adresse figée](https://c6240517.elsewhere-cq7.pages.dev/). Le paquet propre contient575fichiers/156009172octets ;565fichiers publics et le catalogue des sauvegardes sont conservés, le manifeste de preuves privé est exclu. Les40réponses finales HTTPS ont le MIME, la taille et le SHA attendus ; quatre redirections308 index/galerie vers leurs adresses canoniques sont conservées. Ce contrôle de fichiers ne constitue pas une nouvelle campagne jouée. Reçu HTTP SHA`519f8b473c13ceffdf37742069799d7ba2263e5fcc62d0a2de06c24bc86497d5`. Aucun pushGit ni seconde publication pour cette note.
+
 Lot V78 du 5 novembre : **Gouache proche de Pastel dans la scène mesurée**,
 résultat accepté par l'utilisateur pour commit et publication. Même World128,
 Main435, DPR1, contours actifs et relief/usure à zéro : GPU P/G/P
-0,720896 / 0,733184 / 0,720384 ms, soit **+1,740834 %** Gouache face à la moyenne
+0,720896 / 0,733184 / 0,720384 ms, soit **+1,740675 %** Gouache face à la moyenne
 Pastel de 0,720640 ms. Les trois médianes GPU sont 0,720896 ms. CPU soumission
 1,006532663 / 1,014309624 / 0,976083334 ms, soit environ +2,32 % ; médianes 1 ms.
 Les trois bras conservent 22 appels et 214196 triangles. Ces chiffres ne prouvent
