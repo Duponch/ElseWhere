@@ -1,5 +1,58 @@
 # Rendu commun et textures Pastel/Gouache
 
+État du 5 novembre, lot groupé V67 : **qualité conservée, parité non atteinte**.
+Herbe, ressources et surfaces rigides partagent un masque d'encre conservateur
+dans l'alpha inutilisé de leur couleur préparée. Chaque mip est calculé depuis
+les RGB de l'encre déjà stockés, sans utiliser son alpha. Le programme peut
+omettre la seconde lecture quand son empreinte de filtrage ne contient aucune
+encre. Les couleurs, les modèles, les matériaux et les quatre mips sont conservés.
+La préparation réutilise ses cibles existantes ; aucun travail CPU par image ni
+nouvelle texture persistante n'est ajouté. Pastel et le repli complet restent
+inchangés. Les gradients des deux lectures Gouache sont identiques.
+
+Les23contrats distincts sont acquis par une reprise ciblée, les types produit
+finaux passent en54,000s, ceux du harnais en20,020s, Native en6,265s et Pages en
+4,068s. La sortie Pages conserve575artifacts ; ses fichiers publics ont été
+rétablis après une erreur de commande de nettoyage de sortie, sans recompiler
+ni modifier ses dix fichiers compilés. Les quatre Workers restent exacts.
+
+V67 utilise cette fois1120×760pixels physiques, DPR1 : les anciens chiffres à
+DPR1,2 sont des acquisitions différentes. Même WorkerWorld128/Main435 en pause,
+contours activés, relief/usure0 : GPU P/G/P0,738816/0,808960/0,759296ms, Gouache
++7,997 % face aux deux témoins, dérive Pastel+2,772 %. CPU de soumission
+0,867264/0,850778/0,754371ms, avec dérive Pastel−13,017 % : aucun gain CPU n'est
+revendiqué. Les384frames/1152UID, les pics et les21appels/214196triangles restent
+conservés ; propriétaires et préparation435 stables dans les six fenêtres.
+
+Le témoin V66 gelé, repris au même DPR1, donne GPU0,727040/0,818176/0,756736ms.
+La différence normalisée entre ces deux acquisitions est−2,073 %GPU et+1,587 %CPU,
+avec des médianes GPU identiques par texture. Cette comparaison chronologique ne
+prouve pas de gain causal. Aucune parité, campagne, WholeMain ou FPS global acquis.
+
+Quarante paires GPU, dix pages sur trois banques, conservent exactement chaque
+RGB et le masque attendu aux quatre mips :120lectures/80copies de contrôle,
+16Mio maximum de lecture et4Mio de masque, aucun buffer de contrôle conservé.
+Le témoin est désinscrit et tous les renderers/clients de contrôle sont libérés.
+Les quatre comparaisons visuelles au même DPR1 sont strictement identiques :
+Pastel, Gouache, cadrage intermédiaire et retour Gouache,0pixel RGBA différent.
+Les anciens PNG à DPR1,2 ne sont ni redimensionnés ni utilisés comme témoins égaux.
+
+La galerie standard conserve714assets,39groupes et2sansmodèle. Les passages
+Gouache1/.75,0/0,Pastel puis Gouache sont prêts ; la table longue a été observée
+avec les contours activés. Aucun message d'erreur,26avertissements Three conservés.
+L'onglet de contrôle est fermé ; la galerie n'expose pas de reçu public de libération.
+
+Le prochain lot reste privé : préparer une couleur finale pour une teinte commune,
+en conservant le B/I initial pour les couleurs variables. Sa sélection doit utiliser
+les données déjà transmises au GPU, sans nouvelle variante cartésienne, tampon de
+modèle ou décision CPU par image. Résolution, budgets et qualité restent à qualifier.
+
+Le manque d'espace a été résolu avec `uv cache prune`, hors ligne et sans forcer
+les verrous : l'outil a supprimé11,3Gio d'entrées inutilisées, sans suppression de
+conversation, base, projet ou sauvegarde. Le gain physique global observé sur C:
+est inférieur à l'estimation de l'outil ; C: affichait14,6Go libres à sa clôture.
+Les gardes disque et mémoire n'ont pas été abaissées.
+
 État du 5 novembre, lot UV/masques V66 : **images conservées, surcoût encore ouvert**.
 Les coordonnées et couches des ressources sont résolues lors de la publication,
 dans les huit buffers existants. Leur rendu final n'a plus de table de recherche

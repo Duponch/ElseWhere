@@ -2,7 +2,7 @@
  * Source remains an explicit JS representation, never a hidden shader branch.
  * Construction happens before first Pastel; publication borrows textures only. */
 import * as THREE from 'three/webgpu';
-import {Fn,If,mix,texture,varying,vec3} from 'three/tsl';
+import {Fn,If,mix,texture,varying,vec2,vec3} from 'three/tsl';
 import type {GraphicsStyleContext} from '../graphics-style';
 import {copyPastelTextureToArray} from './TextureSurface';
 import {createOwnedMaterialResources435,type OwnedMaterialResourceSnapshot435} from '../OwnedMaterialResources435';
@@ -56,15 +56,25 @@ export class PreparedTextureSurface {
    format=varying(address.format,'v_preparedSurfaceFormat').setInterpolation('flat','first'),
    tint=varying(options.tint,'v_preparedSurfaceTint'),inkTint=options.inkTint?varying(options.inkTint,'v_preparedSurfaceInkTint'):vec3(1);
   this.body=texture(this.pastel,coordinates).depth(bodyLayer);
-  // Explicit gradients dominate the varying format branch. RGBA paths do not
-  // read the ink layer; mixed-format draw quads never rely on implicit gradients.
+  // B/I body alpha stores conservative occupancy of STORED ink RGB, per mip.
+  // Its value is not opacity. Legacy Body.a=1 remains a safe always-read path.
   this.ink=texture(this.pastel,coordinates).depth(inkLayer);
   const sample=this.body as unknown as THREE.Node<'vec4'>;
   this.pureColor=Fn(()=>{
-   const sampled=sample.toVar(),result=vec3(0).toVar();
-   If(encoding.equal(0),()=>{result.assign(options.pastelFromSample(sampled));}).Else(()=>{
-    const dx=coordinates.dFdx().toVar(),dy=coordinates.dFdy().toVar();result.assign(sampled.rgb.mul(tint));
-    If(format.equal(1),()=>{result.addAssign(this.ink.grad(dx,dy).rgb.mul(inkTint));});
+   const result=vec3(0).toVar('preparedSurfaceColor');result.assign(vec3(0));
+   If(encoding.equal(0),()=>{
+    // Preserve the original Pastel sampler/algebra, with no Gouache gradients.
+    const sampled=sample.toVar();result.assign(options.pastelFromSample(sampled));
+   }).Else(()=>{
+    // Both samples need exactly the same filter footprint/LOD. Explicit
+    // assignments dominate the pixel-varying occupancy/format branch.
+    const dx=vec2(0).toVar('preparedSurfaceDx'),dy=vec2(0).toVar('preparedSurfaceDy');
+    dx.assign(coordinates.dFdx());dy.assign(coordinates.dFdy());
+    const sampled=this.body.grad(dx,dy).toVar('preparedGouacheBody');
+    result.assign(sampled.rgb.mul(tint));
+    If(format.equal(1).and(sampled.a.greaterThan(0)),()=>{
+     result.addAssign(this.ink.grad(dx,dy).rgb.mul(inkTint));
+    });
    });return result;
   })();
   this.journal=ownedJournal=createOwnedMaterialResources435(material,this.resources(this.pastel));

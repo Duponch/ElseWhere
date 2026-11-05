@@ -10,12 +10,13 @@ import{BoxBatches}from'../src/render/BoxBatches';
 import{PreparedSurfaceOwner}from'../src/render/origami/baked/surfaces/PreparedSurfaceOwner';
 import{planPreparedSurfaces}from'../src/render/origami/baked/surfaces/PreparedSurfacePlan';
 import{compilePreparedSurfaceAddresses}from'../src/render/origami/baked/surfaces/PreparedSurfaceAddressBook';
-import{createPreparedSurfacePage,preparedSurfaceTermNode,planPreparedSurfaceGpu}from'../src/render/origami/baked/surfaces/PreparedSurfaceGpu';
+import{createPreparedSurfacePage,preparedSurfaceTermNode,planPreparedSurfaceGpu,prepareSurfaceGpu}from'../src/render/origami/baked/surfaces/PreparedSurfaceGpu';
 import{canonicalPreparedSurfaceSource}from'../src/render/origami/baked/surfaces/PreparedSurfaceSource';
 import{PreparedSurfaceAdmissionRefusal,type PreparedSurfaceVariant}from'../src/render/origami/baked/surfaces/PreparedSurfaceTypes';
 import{EnvironmentLighting}from'../src/render/EnvironmentLighting';
 import{writeTestFileSync}from'./test-output';
 import{unboundWgslTextureResources}from'./wgsl-resource-bindings';
+import{registerInkOccupancyPreparationWitness,inkOccupancyPreparationWitness}from'../src/render/surfaces/InkOccupancyPacking';
 const MiB=1024*1024,limits={maxCpuBytes:256*MiB,maxRetainedGpuBytes:512*MiB,maxPeakGpuBytes:1024*MiB,oldLiveGpuBytes:0,otherLiveGpuBytes:0,oldLiveCpuBytes:0,maxPages:256,maxFaces:65536};
 function fixture(configure?:(m:THREE.NodeMaterial)=>void){const context=new GraphicsStyleContext({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'default',impasto:0,wear:0}),flush=vi.spyOn(context,'flushPaint').mockImplementation(()=>{}),group=new THREE.Group(),boxes=withGraphicsStyle(context,()=>new BoxBatches(configure));boxes.set(group,'furniture',[{x:0,y:.4,z:0,sx:1.7,sy:.11,sz:.63,color:0xb39154}]);boxes.set(group,'item',[{x:2,y:.4,z:0,sx:.3,sy:.6,sz:.2,shape:'item-shirt',color:0x7e9abc}]);const owner=Reflect.get(boxes,'preparedSurfaces')as PreparedSurfaceOwner,variants=[...(Reflect.get(owner,'byId')as Map<number,PreparedSurfaceVariant>).values()],source=owner.options.source();return{context,boxes,group,owner,variants,source,close(){boxes.dispose();context.dispose();flush.mockRestore();}};}
 
@@ -33,4 +34,32 @@ test('actual BI compiler uses current canonical Source while the final material 
  // Static schema refusal is a pure preflight, before target/device allocation.
  const raw=f.variants[0]!.model.geometry.getAttribute('position'),bad=new THREE.BufferAttribute(Uint16Array.from(raw.array as ArrayLike<number>),raw.itemSize,true);f.variants[0]!.model.geometry.setAttribute('TEST-normalized',bad);const newPlan=planPreparedSurfaces(f.source,f.variants,limits,{maxPhysicalCellPixels:64,oversampling:4,paintKey:'TEST-refusal'});expect(()=>planPreparedSurfaceGpu(newPlan)).toThrow(PreparedSurfaceAdmissionRefusal);f.variants[0]!.model.geometry.deleteAttribute('TEST-normalized');expect(init).not.toHaveBeenCalled();
  }finally{addressStage?.dispose();page?.body.dispose();page?.charts.dispose();texture?.dispose();mat?.dispose();f.close();lighting.dispose();init.mockRestore();}
+},60000);
+
+test('actual rigid preparation packs every stored BI mip after colour completion, reusing scratch and copying body only',async()=>{
+ // Actual canonical Box/Item, planner and compiler; ONLY GPU submission calls
+ // are mocked. This proves command/lifetime/budget ordering, never pixel bytes.
+ const f=fixture(),r=new THREE.WebGPURenderer({canvas:{width:128,height:128,style:{}}as HTMLCanvasElement}),initialized=vi.spyOn(r,'initialized','get').mockReturnValue(true),init=vi.spyOn(r,'init').mockImplementation(()=>{throw Error('No device in preparation-order contract');});
+ type Event={kind:'render';target:THREE.RenderTarget;name:string;viewport:THREE.Vector4}|{kind:'copy';from:THREE.Texture;to:THREE.Texture;layer:number|undefined;sourceLevel:number;level:number;width:number;height:number};
+ const events:Event[]=[],initializedTargets:THREE.RenderTarget[]=[],disposed=new Set<THREE.Texture>();let active:THREE.RenderTarget|null=null,result:Awaited<ReturnType<typeof prepareSurfaceGpu>>|undefined,unregisterWitness:(()=>void)|undefined;
+ const target=vi.spyOn(r,'setRenderTarget').mockImplementation(t=>{active=t;}),allocate=vi.spyOn(r,'initRenderTarget').mockImplementation(t=>{initializedTargets.push(t);t.addEventListener('dispose',()=>disposed.add(t.texture));}),render=vi.spyOn(r,'renderAsync').mockImplementation(async s=>{if(!active)throw Error('Missing real scratch target');const mesh=s.children[0]as THREE.Mesh;events.push({kind:'render',target:active,name:(mesh.material as THREE.Material).name,viewport:active.viewport.clone()});}),copy=vi.spyOn(r,'copyTextureToTexture').mockImplementation((from,to,region,at,sourceLevel=0,level=0)=>{if(!(region instanceof THREE.Box2))throw Error('Exact 2D mip copy required');events.push({kind:'copy',from,to,layer:at instanceof THREE.Vector3?at.z:undefined,sourceLevel,level,width:region.max.x-region.min.x,height:region.max.y-region.min.y});});
+ try{
+  f.context.update({...f.context.preferences,style:'origami'});
+  const plan=planPreparedSurfaces(f.source,f.variants,limits,{maxPhysicalCellPixels:64,oversampling:4,paintKey:'TEST-occupancy-order'}),before=planPreparedSurfaceGpu(plan),paint={assertCurrent:()=>{plan.assertCurrent();}}as unknown as Parameters<typeof prepareSurfaceGpu>[2];
+  result=await prepareSurfaceGpu(r,plan,paint,()=>{});
+  const packs=events.flatMap((event,index)=>event.kind==='render'&&event.name.startsWith('prepared-ink-occupancy-mip-')?[{event,index}]:[]),bi=plan.pages.filter(p=>p.format==='bi');expect(packs).toHaveLength(bi.length*4);expect(packs.length).toBeGreaterThan(0);
+  const first=packs[0]!.index,completed=new Set(events.slice(0,first).flatMap(e=>e.kind==='copy'&&e.to===result!.texture?[e.layer+':'+e.level]:[]));
+  for(const descriptor of plan.pages)for(const layer of descriptor.format==='bi'?[descriptor.bodyLayer,descriptor.inkLayer!]:[descriptor.bodyLayer])for(let level=0;level<4;level++)expect(completed.has(layer+':'+level)).toBe(true);
+  const oldScratch=new Set(events.slice(0,first).flatMap(e=>e.kind==='render'?[e.target]:[]));
+  for(const[{event,index},ordinal]of packs.map((entry,i)=>[entry,i]as const)){
+   const level=ordinal%4,descriptor=bi[Math.floor(ordinal/4)]!,n=plan.size/2**level,next=events[index+1];expect(oldScratch.has(event.target)).toBe(true);expect(event.target.texture).not.toBe(result.texture);expect(event.viewport.z).toBe(n);expect(event.viewport.w).toBe(n);expect(next?.kind).toBe('copy');
+   if(next?.kind==='copy'){expect(next.from).toBe(event.target.texture);expect(next.to).toBe(result.texture);expect(next.layer).toBe(descriptor.bodyLayer);expect(next.sourceLevel).toBe(0);expect(next.level).toBe(level);expect(next.width).toBe(n);expect(next.height).toBe(n);}
+  }
+  expect(events.slice(first).filter(e=>e.kind==='copy')).toHaveLength(packs.length);
+  const targetSet=new Set([...initializedTargets,...events.flatMap(e=>e.kind==='render'?[e.target]:[])]);expect(targetSet.size).toBe(8);expect(initializedTargets).toHaveLength(1);expect(initializedTargets[0]!.texture).toBe(result.texture);
+  expect(result.gpuBytes).toBe(plan.retainedGpuBytes);expect(result.stats.peakGpuBytes).toBe(before.peakGpuBytes);expect(result.stats.scratchGpuBytes).toBe(before.scratchGpuBytes);expect(result.stats.inkOccupancyPackingPasses).toBe(packs.length);expect(result.stats.inkOccupancyPackingCopies).toBe(packs.length);expect(result.stats.inkOccupancyExtraTargetBytes).toBe(0);expect(result.stats.readback).toBe(false);expect(init).not.toHaveBeenCalled();expect(active).toBe(null);
+  writeTestFileSync('artifacts/rigid-ink-occupancy-command-order.json',JSON.stringify({scope:'Actual models/plan/compiler; GPU submission mocked. No byte/Native/performance proof.',pages:plan.pages,layers:plan.layers,retainedGpuBytes:result.gpuBytes,scratchTargets:targetSet.size,packingPasses:packs.length,allOriginalMipCopiesBeforePacking:true,bodyOnlyCopies:true,stats:result.stats},null,2)+'\n');
+  const phases:string[]=[];unregisterWitness=registerInkOccupancyPreparationWitness(r,event=>{event.assertCurrent();expect(event.bank).not.toBe(result!.texture);expect(event.family).toBe('rigid');expect(event.scratch.texture).not.toBe(event.bank);phases.push(event.phase);if(event.phase==='packed')throw Error('TEST optional witness refused byte evidence');});
+  await expect(prepareSurfaceGpu(r,plan,paint,()=>{})).rejects.toThrow('TEST optional witness refused byte evidence');expect(phases).toEqual(['before','packed']);expect(disposed.has(initializedTargets.at(-1)!.texture)).toBe(true);expect(disposed.has(result.texture)).toBe(false);expect(()=>result!.assertCurrent()).not.toThrow();expect(active).toBe(null);unregisterWitness();unregisterWitness=undefined;expect(inkOccupancyPreparationWitness(r)).toBeUndefined();const retry=await prepareSurfaceGpu(r,plan,paint,()=>{});retry.dispose();
+ }finally{unregisterWitness?.();result?.dispose();copy.mockRestore();render.mockRestore();allocate.mockRestore();target.mockRestore();init.mockRestore();initialized.mockRestore();f.close();}
 },60000);

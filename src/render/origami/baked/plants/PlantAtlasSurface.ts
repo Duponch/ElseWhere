@@ -19,7 +19,7 @@ export class PlantAtlasSurface {
  private readonly owned=new Set<PlantAtlasGpuResult>();
  private refused:string|undefined;private closed=false;private staging=false;private pendingStage=false;
  private readonly releaseSettings:()=>void;
- private fingerprint():string{const p=this.context.preferences;return JSON.stringify(['plant-BI16-source512-v1',this.context.genericPaintSemanticKey(),p.edges,p.blackEdges,p.edgeWidth,p.strokeImperfection,p.contourImperfection]);}
+ private fingerprint():string{const p=this.context.preferences;return JSON.stringify(['plant-BI16-source512-rgb-occupancy-v2',this.context.genericPaintSemanticKey(),p.edges,p.blackEdges,p.edgeWidth,p.strokeImperfection,p.contourImperfection]);}
  private eligible():boolean{return!this.context.reliefEnabled&&!this.context.wearEnabled;}
  constructor(private readonly context:GraphicsStyleContext,geometry:THREE.BufferGeometry,private readonly stroke:FaceStrokeData,private readonly sourceMaterial:THREE.NodeMaterial,pastel:THREE.DataTexture,private readonly changed:()=>void){
   this.plan=planPlantAtlas(geometry,{maxCpuBytes:32*1024*1024,maxPeakGpuBytes:416*1024*1024,existingLiveGpuBytes:43688});this.pastel=copyPastelTextureToArray(pastel);
@@ -27,11 +27,17 @@ export class PlantAtlasSurface {
   const coords=varying(mix(raw,tile.xy.add(raw.sub(base.xy).mul(base.zw).mul(tile.zw)),context.surfaceEncoding),'v_plantAtlasUv'),depth=varying(layer.mul(context.surfaceEncoding),'v_plantAtlasLayer').setInterpolation('flat','first');
   const sampled=texture(this.pastel,coords);this.body=sampled.depth(depth);this.ink=sampled.depth(depth.add(1));
   this.material=new THREE.MeshLambertNodeMaterial({flatShading:true,vertexColors:false});this.material.positionNode=sourceMaterial.positionNode;this.syncLighting();
-  this.material.colorNode=Fn(()=>{const result=this.body.rgb.toVar();If(context.surfaceEncoding.greaterThan(0),()=>{
-   // Three multiplies instanceColor after colorNode. Keep Source's exact
-   // independently tinted body and untinted ink, including target previews.
-   result.addAssign(this.ink.rgb.div(instanceColor.max(vec3(.000001))));
-  });return result;})();
+  this.material.colorNode=Fn(()=>{const result=vec3(0).toVar();If(context.surfaceEncoding.greaterThan(0),()=>{
+   // Both filtered terms use IDENTICAL explicit gradients. Their nonnegative
+   // footprint makes zero occupancy a proof that the matching Ink RGB is zero.
+   const dx=coords.dFdx().toVar('plantAtlasDx'),dy=coords.dFdy().toVar('plantAtlasDy'),sampled=this.body.grad(dx,dy).toVar('plantAtlasBody');
+   result.assign(sampled.rgb);
+   If(sampled.a.greaterThan(0),()=>{
+    // Three multiplies instanceColor after colorNode. Keep Source's exact
+    // independently tinted body and untinted ink, including target previews.
+    result.addAssign(this.ink.grad(dx,dy).rgb.div(instanceColor.max(vec3(.000001))));
+   });
+  }).Else(()=>{result.assign(this.body.rgb);});return result;})();
   this.releaseSettings=context.trackSharedPaintSettingsRefresh(()=>this.refresh());
  }
  syncLighting():void{
@@ -61,6 +67,6 @@ export class PlantAtlasSurface {
  }
  /** Fixed-size resource identities only, never atlas rows or a paint census. */
  comparisonMetadata(){return{representation:this.selectedMaterial()===this.material?'atlas':'direct',ready:this.admitted(),pending:this.staging||this.pendingStage,preparedTexture:this.current?.value.texture.uuid??null,boundTexture:this.body.value.uuid,refused:!!this.refused};}
- stats(){return{pipeline:this.selectedMaterial()===this.material?'two-read-BI-atlas':'direct-source',ready:this.admitted(),refused:!!this.refused,bins:16,pages:this.plan.pages,nominalRetainedGpuBytes:this.current?.value.gpuBytes??0,worstRestMetricError:this.plan.worstRestMetricError,windTextureAttachment:'bind-pose metric; Source vertex wind retained',quality:'Source512 with bounded approximate aspect bins'};}
+ stats(){return{pipeline:this.selectedMaterial()===this.material?'occupancy-gated-BI-atlas':'direct-source',ready:this.admitted(),refused:!!this.refused,bins:16,pages:this.plan.pages,nominalRetainedGpuBytes:this.current?.value.gpuBytes??0,worstRestMetricError:this.plan.worstRestMetricError,windTextureAttachment:'bind-pose metric; Source vertex wind retained',quality:'Source512 with bounded approximate aspect bins'};}
  dispose():void{if(this.closed)return;if(this.staging)throw Error('Wait for plant atlas preparation before disposal');this.closed=true;this.releaseSettings();const errors:unknown[]=[];for(const owner of [...this.owned])try{this.retire(owner);}catch(error){errors.push(error);}for(const owner of [this.material,this.pastel])try{owner.dispose();}catch(error){errors.push(error);}this.current=undefined;if(errors.length)throw new AggregateError(errors,'Plant atlas final ownership cleanup');}
 }

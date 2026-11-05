@@ -14,6 +14,7 @@ import {createStylizedSurfaceTexture} from '../src/render/stylized-surfaces';
 import type {Resource} from '../src/sim/types';
 import {writeTestFileSync} from './test-output';
 import {unboundWgslTextureResources} from './wgsl-resource-bindings';
+import {inspectBiInkOccupancyProgram} from './bi-ink-occupancy-wgsl';
 
 interface Binding {
  name:string;visibility:number;isSampledTexture?:boolean;isStorageBuffer?:boolean;
@@ -62,7 +63,7 @@ test('resolved Resource final surface keeps direct resident UV and no address SS
  renderer.hasFeature=()=>false;renderer.outputColorSpace=THREE.LinearSRGBColorSpace;
  Reflect.set(renderer.backend,'device',{features:new Set<string>(),limits:{maxUniformBufferBindingSize:65536}});Reflect.set(renderer.backend,'renderer',renderer);
  scene.add(f.group,sun,sky);camera.position.set(15,12,16);camera.lookAt(9,1,8);camera.updateMatrixWorld(true);scene.updateMatrixWorld(true);
- const material=f.surface.material,positions=f.meshes.map(m=>m.geometry.getAttribute('position')),geometries=f.meshes.map(m=>m.geometry),
+ const material=f.surface.material,pureGraph=f.surface.material.colorNode,positions=f.meshes.map(m=>m.geometry.getAttribute('position')),geometries=f.meshes.map(m=>m.geometry),
   originals=f.meshes.map(m=>m.material),uvs=f.meshes.map(m=>m.geometry.getAttribute('uv')),nodes=[material.positionNode,material.maskNode,material.maskShadowNode,material.outputNode];
  let pass:'main'|'shadow'='main',style:'default'|'origami'='default',compiled=0,sourceRoute=false,relief=0;
  try{
@@ -81,11 +82,11 @@ test('resolved Resource final surface keeps direct resident UV and no address SS
     if(!sourceRoute){expect(storage).toEqual([]);expect(vsStorage).toEqual([]);expect(fsStorage).toEqual([]);}for(const bit of[1,2]){const visible=bindings.filter(b=>(b.visibility&bit)!==0);expect(visible.filter(b=>b.isStorageBuffer).length).toBeLessThanOrEqual(8);expect(visible.filter(b=>b.isSampledTexture).length).toBeLessThanOrEqual(16);expect(visible.filter(b=>b.isSampler&&!b.isSampledTexture).length).toBeLessThanOrEqual(16);}expect(builder.vertexShader).not.toContain('preparedSurfaceTerminal');expect(builder.vertexShader).not.toContain('FORBIDDEN');if(!sourceRoute){expect(builder.fragmentShader).not.toContain('origamiEndpointPigment');expect(builder.fragmentShader).not.toContain('v_surfaceStroke');}else if(pass==='main')expect(bindings.some(b=>b.isSampledTexture&&b.texture?.name==='Actual tree polygon fallback metadata')).toBe(true);
     expect(attributes.length).toBeLessThanOrEqual(16);expect(new Set(attributes.map(a=>a instanceof THREE.InterleavedBufferAttribute?a.data:a)).size).toBeLessThanOrEqual(8);expect(builder.varyings.filter(v=>v.needsInterpolation).length).toBeLessThanOrEqual(16);expect(builder.getBindings().length).toBeLessThanOrEqual(4);
     expect(unboundWgslTextureResources(builder.vertexShader)).toEqual([]);expect(unboundWgslTextureResources(builder.fragmentShader)).toEqual([]);
-    if(pass==='main'&&!sourceRoute){const bound=f.surface.snapshot().boundTexture;expect(bindings.filter(b=>b.isSampledTexture&&b.texture?.uuid===bound)).toHaveLength(1);expect(bindings.filter(b=>b.isSampler&&!b.isSampledTexture&&b.texture?.uuid===bound)).toHaveLength(1);}
+    if(pass==='main'&&!sourceRoute){const occupancy=inspectBiInkOccupancyProgram(builder.fragmentShader,{bodyVariable:'preparedGouacheBody',dxVariable:'preparedSurfaceDx',dyVariable:'preparedSurfaceDy',formatToken:'v_preparedSurfaceFormat',resultVariable:'preparedSurfaceColor'});writeTestFileSync('artifacts/'+label+'-occupancy-program.json',JSON.stringify(occupancy,null,2));expect(occupancy.errors).toEqual([]);const bound=f.surface.snapshot().boundTexture;expect(bindings.filter(b=>b.isSampledTexture&&b.texture?.uuid===bound)).toHaveLength(1);expect(bindings.filter(b=>b.isSampler&&!b.isSampledTexture&&b.texture?.uuid===bound)).toHaveLength(1);}
     compiled++;
    }finally{mesh.material=saved;}
   });
-  for(const nextStyle of ['default','origami']as const){style=nextStyle;f.context.update({...f.context.preferences,style});f.treeLayers.value=style==='origami'?2:0;f.groupUniform.needsUpdate=true;f.surface.setAssets(style==='origami'?{texture:f.atlas,assertCurrent(){}}:undefined);f.surface.selectRepresentation('pure');f.surface.assertReady();
+  for(const nextStyle of ['default','origami']as const){style=nextStyle;f.context.update({...f.context.preferences,style});f.treeLayers.value=style==='origami'?2:0;f.groupUniform.needsUpdate=true;f.surface.setAssets(style==='origami'?{texture:f.atlas,assertCurrent(){}}:undefined);f.surface.selectRepresentation('pure');f.surface.assertReady();expect(material.colorNode).toBe(pureGraph);
    for(const nextPass of ['main','shadow']as const){pass=nextPass;scene.overrideMaterial=pass==='shadow'?shadow:null;for(const mesh of f.meshes){mesh.material=material;renderer.renderObject(mesh,scene,camera,mesh.geometry,material,null,new THREE.LightsNode().setLights([sun,sky]));}}
   }
   sourceRoute=true;for(const nextRelief of[0,.2]){relief=nextRelief;f.context.update({...f.context.preferences,style:'origami',impasto:relief,wear:0});f.surface.selectRepresentation('source');expect(material.colorNode).toBe(f.source.colorNode);expect(material.normalNode).toBe(f.source.normalNode);for(const nextPass of['main','shadow']as const){pass=nextPass;scene.overrideMaterial=pass==='shadow'?shadow:null;for(const mesh of f.meshes){mesh.material=material;renderer.renderObject(mesh,scene,camera,mesh.geometry,material,null,new THREE.LightsNode().setLights([sun,sky]));}}}

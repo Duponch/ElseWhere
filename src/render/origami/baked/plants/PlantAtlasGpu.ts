@@ -5,6 +5,7 @@ import {Fn,If,attribute,varying,texture,textureLoad,vec2,vec3,vec4,ivec2,float,i
 import type {GraphicsStyleContext} from '../../../graphics-style';
 import {queryFaceStrokeCoverage,type FaceStrokeData} from '../../../surfaces/FaceStrokeTable';
 import {PLANT_PAGE_BYTES,PlantAtlasAdmissionRefusal,type PlantAtlasPlan} from './PlantAtlasPlan';
+import {inkOccupancyPackingNode,inkOccupancyPreparationWitness} from '../../../surfaces/InkOccupancyPacking';
 
 export interface PlantAtlasGpuResult {texture:THREE.Texture;gpuBytes:number;cpuBytes:number;stats:Readonly<Record<string,unknown>>;dispose():void}
 type Source=ReturnType<GraphicsStyleContext['prepareAtlasPaint']>;
@@ -51,6 +52,7 @@ export async function preparePlantAtlasGpu(renderer:THREE.WebGPURenderer,plan:Pl
  if(!renderer.initialized||!Reflect.get(renderer.backend,'isWebGPUBackend'))throw Error('Plant atlas needs the existing initialized WebGPU renderer');if(running.has(renderer))throw Error('Plant atlas renderer already leased');
  const check=()=>{assertExclusive();source.assertCurrent();stroke.assertCurrent();};check();
  const{pixels,edge,peak,cpuBytes}=planPlantGpuPreparation(plan,source,stroke,settings);
+ const witness=inkOccupancyPreparationWitness(renderer);
  const old={target:renderer.getRenderTarget(),face:renderer.getActiveCubeFace(),mip:renderer.getActiveMipmapLevel(),autoClear:renderer.autoClear,color:renderer.getClearColor(new THREE.Color()).clone(),alpha:renderer.getClearAlpha()},cleanup:(()=>void)[]=[],own=<T extends{dispose():void}>(v:T):T=>{cleanup.push(()=>v.dispose());return v;},camera=new THREE.OrthographicCamera(-1,1,1,-1,0,1);let output:THREE.RenderTarget|undefined,delivered:THREE.RenderTarget|undefined,failure:unknown;
  running.add(renderer);
  const render=async(s:THREE.Scene,t:THREE.RenderTarget)=>{check();renderer.setRenderTarget(t);await renderer.renderAsync(s,camera);check();};
@@ -75,8 +77,21 @@ export async function preparePlantAtlasGpu(renderer:THREE.WebGPURenderer,plan:Pl
     for(let level=1;level<levels;level++){const n=size/2**level;mip.viewport.set(0,0,n,n);const mat=own(material(sum4(page.texture,pixel(n,n).mul(2),level-1).mul(.25)));await render(scene(full,mat),mip);renderer.copyTextureToTexture(mip.texture,page.texture,new THREE.Box2(new THREE.Vector2(0,0),new THREE.Vector2(n,n)),new THREE.Vector2(0,0),0,level);check();}
     for(let level=0;level<levels;level++){const n=size/2**level;renderer.copyTextureToTexture(page.texture,output.texture,new THREE.Box2(new THREE.Vector2(0,0),new THREE.Vector2(n,n)),new THREE.Vector3(0,0,at*2+term),level,level);check();}
    }
+   // Body RGB and Ink RGB keep their independently resolved retained mips.
+   // Pack occupancy from ACTUAL stored Ink.rgb, never its quantized alpha.
+   // Reuse the existing RGBA8 targets: no extra atlas layer or scratch target.
+   for(let level=0;level<levels;level++){
+    const n=size/2**level,destination=level===0?page:mip;destination.viewport.set(0,0,n,n);
+    if(witness){check();await witness({phase:'before',family:'plant',page:at,bank:output.texture,bodyLayer:at*2,inkLayer:at*2+1,level,width:n,height:n,scratch:page,renderer,assertCurrent:check});check();}
+    const packing=own(material(inkOccupancyPackingNode(output.texture,float(at*2),float(at*2+1),level,[n,n],varying(attribute('bakeUv','vec2')))));
+    packing.name='Plant ink occupancy page'+at+' mip'+level;
+    await render(scene(full,packing),destination);
+    if(witness){check();await witness({phase:'packed',family:'plant',page:at,bank:output.texture,bodyLayer:at*2,inkLayer:at*2+1,level,width:n,height:n,scratch:destination,renderer,assertCurrent:check});check();}
+    renderer.copyTextureToTexture(destination.texture,output.texture,new THREE.Box2(new THREE.Vector2(0,0),new THREE.Vector2(n,n)),new THREE.Vector3(0,0,at*2),0,level);check();
+   }
+   page.viewport.set(0,0,size,size);
   }
-  check();const retained=output;let closed=false;delivered=retained;output=undefined;return{texture:retained.texture,gpuBytes:plan.retainedGpuBytes,cpuBytes:levels*plan.depth*64,stats:Object.freeze({scope:'Private GPU BI preparation; no Native quality or performance admission',pages:plan.pages,depth:plan.depth,levels,retainedGpuBytes:plan.retainedGpuBytes,peakGpuBytes:peak,preparationCpuBytes:cpuBytes,sourceProfile:0,sourcePixels:512,legacyCoverage:false,runtimeRibbons:false,kernel:'queryFaceStrokeCoverage actual Source',syntheticMetric:'[sqrt(ratio),0,1/sqrt(ratio)]',workingScale:2,mask:'two R8 targets, exact integer covered-subpixel counts0..4',readback:false,orientation:'row0/v0 via clipY; Native corner proof pending',halfFloatRounding:'Native delta pending'}),dispose(){if(closed)return;closed=true;retained.dispose();}};
+  check();const retained=output;let closed=false;delivered=retained;output=undefined;return{texture:retained.texture,gpuBytes:plan.retainedGpuBytes,cpuBytes:levels*plan.depth*64,stats:Object.freeze({scope:'Private GPU BI preparation; no Native quality or performance admission',pages:plan.pages,depth:plan.depth,levels,retainedGpuBytes:plan.retainedGpuBytes,peakGpuBytes:peak,preparationCpuBytes:cpuBytes,sourceProfile:0,sourcePixels:512,legacyCoverage:false,runtimeRibbons:false,inkOccupancy:'Body.a=1 iff stored Ink.rgb is nonzero at this retained mip',occupancyPackingPasses:plan.pages*levels,occupancyReusesScratch:true,kernel:'queryFaceStrokeCoverage actual Source',syntheticMetric:'[sqrt(ratio),0,1/sqrt(ratio)]',workingScale:2,mask:'two R8 targets, exact integer covered-subpixel counts0..4',readback:witness?'Optional preparation witness registered':false,orientation:'row0/v0 via clipY; Native corner proof pending',halfFloatRounding:'Native delta pending'}),dispose(){if(closed)return;closed=true;retained.dispose();}};
  }catch(error){failure=error;throw error;}finally{
   const failures:unknown[]=[];try{renderer.setRenderTarget(old.target,old.face,old.mip);renderer.autoClear=old.autoClear;renderer.setClearColor(old.color,old.alpha);}catch(error){failures.push(error);}for(const close of cleanup.reverse())try{close();}catch(error){failures.push(error);}if(output)try{output.dispose();}catch(error){failures.push(error);}running.delete(renderer);if(failures.length){if(delivered)try{delivered.dispose();}catch(error){failures.push(error);}throw new AggregateError(failure===undefined?failures:[failure,...failures],'Plant atlas preparation cleanup failed');}
  }
