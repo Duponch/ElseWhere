@@ -11,7 +11,7 @@ import type {PreparedTextureAddress} from './PreparedTextureSurface';
 /** Real final Resource inputs, shared by the product and cold main/shadow gate. */
 export function resourceResolvedTextureInputs(_context:GraphicsStyleContext,treeLayers:THREE.Node<'float'>){
  const paint=attribute('origamiPaint','vec4'),code=paint.w.div(128).floor().mod(32),profile=paint.w.mod(128),color=attribute('color','vec3'),generic=code.greaterThanEqual(treeLayers),layer=generic.select(treeLayers.add(code.sub(treeLayers).mul(2)),code);
- return{preResolvedUv:true as const,pastelUv:attribute('uv','vec2'),pastelFromSample:(sample:THREE.Node<'vec4'>)=>color.mul(sample.rgb),
+ return{preResolvedUv:true as const,scalarInkLayerBase:treeLayers,pastelUv:attribute('uv','vec2'),pastelFromSample:(sample:THREE.Node<'vec4'>)=>color.mul(sample.rgb),
   tint:generic.select(profile.greaterThan(0).select(color.div(paint.xyz.max(vec3(.00001))),color),color.div(paint.xyz.max(vec3(.00001)))),
   addressWithoutBook:():PreparedTextureAddress=>({uv:attribute('uv','vec2'),bodyLayer:layer,inkLayer:layer.add(1),format:generic.select(float(1),float(0))}),
  };

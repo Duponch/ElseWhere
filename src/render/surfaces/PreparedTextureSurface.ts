@@ -2,8 +2,9 @@
  * Source remains an explicit JS representation, never a hidden shader branch.
  * Construction happens before first Pastel; publication borrows textures only. */
 import * as THREE from 'three/webgpu';
-import {Fn,If,mix,texture,varying,vec2,vec3} from 'three/tsl';
+import {Fn,If,float,mix,texture,uniform,varying,vec2,vec3} from 'three/tsl';
 import type {GraphicsStyleContext} from '../graphics-style';
+import type {PreparedSurfaceScalarInk} from '../origami/baked/surfaces/PreparedSurfaceTypes';
 import {copyPastelTextureToArray} from './TextureSurface';
 import {createOwnedMaterialResources435,type OwnedMaterialResourceSnapshot435} from '../OwnedMaterialResources435';
 
@@ -28,10 +29,20 @@ export interface PreparedTextureSurfaceOptions {
   * coordinates. The owner restores/resolves it under the preparation hold.
   * No legacy coordinate branch, address book or extra attribute is retained. */
  readonly preResolvedUv?:boolean;
+ /** Existing physical prefix (e.g. copied tree layers). Logical B/I addresses
+  * remain stable; compact scalar banks remap only their body layer in the VS. */
+ readonly scalarInkLayerBase?:THREE.Node<'float'>;
  readonly resources?:Partial<OwnedMaterialResourceSnapshot435>;
  readonly configure?:(material:THREE.NodeMaterial)=>void;
 }
-export interface PreparedTextureAsset {readonly texture:THREE.Texture;assertCurrent():void}
+export interface PreparedTextureAsset {readonly texture:THREE.Texture;readonly scalarInk?:PreparedSurfaceScalarInk;assertCurrent():void}
+/** Check every actual coefficient colour before publication. K is captured
+ * from the real paint lease and rounded once to its native f32 uniform words. */
+export function validatePreparedScalarInk(value:PreparedSurfaceScalarInk|undefined):PreparedSurfaceScalarInk|undefined{
+ if(value===undefined)return undefined;
+ if(!value||!Array.isArray(value.color)||value.color.length!==3||![0,1,2].every(i=>{const n=value.color[i];return typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=1&&Object.is(Math.fround(n),n);})||value.compact!==undefined&&value.compact!==true)throw Error('Actual dense f32 scalar-ink colour/encoding required');
+ return value;
+}
 
 export class PreparedTextureSurface {
  readonly material:THREE.NodeMaterial;
@@ -39,6 +50,8 @@ export class PreparedTextureSurface {
  private readonly body:THREE.TextureNode;
  private readonly ink:THREE.TextureNode;
  private readonly pureColor:THREE.Node<'vec3'>;
+ private readonly scalarInkEnabled=uniform(0).setName('preparedScalarInkEnabled');
+ private readonly scalarInkColor=uniform(new THREE.Vector3(0,0,0)).setName('preparedScalarInkColor');
  private readonly journal:ReturnType<typeof createOwnedMaterialResources435>;
  private readonly unsubscribe:()=>void;
  private current:PreparedTextureAsset|undefined;
@@ -49,15 +62,21 @@ export class PreparedTextureSurface {
   try{
   this.pastel=ownedPastel=copyPastelTextureToArray(options.pastelTexture,options.pastelSize??64);
   const material=ownedMaterial=options.sourceMaterial.clone();this.material=material;material.userData={...options.sourceMaterial.userData,rendererOwned:true};
-  const address=options.address(),encoding=options.context.surfaceEncoding,
+  const address=options.address(),encoding=options.context.surfaceEncoding,physicalLayer=Fn(()=>{
+   const layer=float(0).toVar('preparedPhysicalBodyLayer');layer.assign(address.bodyLayer);
+   If(encoding.greaterThan(0).and(this.scalarInkEnabled.equal(2)).and(address.format.equal(1)),()=>{
+    const base=options.scalarInkLayerBase??float(0);layer.assign(base.add(layer.sub(base).mul(.5)));
+   });return layer;
+  })(),
    coordinates=varying(options.preResolvedUv?address.uv:mix(options.pastelUv,address.uv,encoding),'v_preparedSurfaceUv'),
-   bodyLayer=varying(address.bodyLayer.mul(encoding),'v_preparedSurfaceBodyLayer').setInterpolation('flat','first'),
+   bodyLayer=varying(physicalLayer.mul(encoding),'v_preparedSurfaceBodyLayer').setInterpolation('flat','first'),
    inkLayer=varying(address.inkLayer,'v_preparedSurfaceInkLayer').setInterpolation('flat','first'),
    format=varying(address.format,'v_preparedSurfaceFormat').setInterpolation('flat','first'),
    tint=varying(options.tint,'v_preparedSurfaceTint'),inkTint=options.inkTint?varying(options.inkTint,'v_preparedSurfaceInkTint'):vec3(1);
   this.body=texture(this.pastel,coordinates).depth(bodyLayer);
-  // B/I body alpha stores conservative occupancy of STORED ink RGB, per mip.
-  // Its value is not opacity. Legacy Body.a=1 remains a safe always-read path.
+  // The published bank explicitly declares whether alpha is a scalar ink
+  // coefficient or V67's conservative occupancy. It is never opacity, and a
+  // coefficient bank must not silently fall through to the occupancy path.
   this.ink=texture(this.pastel,coordinates).depth(inkLayer);
   const sample=this.body as unknown as THREE.Node<'vec4'>;
   this.pureColor=Fn(()=>{
@@ -72,7 +91,10 @@ export class PreparedTextureSurface {
     dx.assign(coordinates.dFdx());dy.assign(coordinates.dFdy());
     const sampled=this.body.grad(dx,dy).toVar('preparedGouacheBody');
     result.assign(sampled.rgb.mul(tint));
-    If(format.equal(1).and(sampled.a.greaterThan(0)),()=>{
+    If(format.equal(1).and(this.scalarInkEnabled.greaterThan(0)),()=>{
+     result.addAssign(this.scalarInkColor.mul(sampled.a).mul(inkTint));
+    });
+    If(format.equal(1).and(this.scalarInkEnabled.equal(0)).and(sampled.a.greaterThan(0)),()=>{
      result.addAssign(this.ink.grad(dx,dy).rgb.mul(inkTint));
     });
    });return result;
@@ -91,7 +113,7 @@ export class PreparedTextureSurface {
   catch(error){const failures=[error];try{ownedJournal?.dispose();}catch(cleanup){failures.push(cleanup);}for(const resource of[ownedMaterial,ownedPastel])if(resource)try{resource.dispose();}catch(cleanup){failures.push(cleanup);}throw failures.length===1?error:new AggregateError(failures,'Prepared final surface construction cleanup');}
  }
  private resources(map:THREE.Texture):OwnedMaterialResourceSnapshot435{
-  const extra=this.options.resources;return{textures:[map,...(extra?.textures??[])],arrayTextures:[map,...(extra?.arrayTextures??[])],sharedGroups:extra?.sharedGroups??[],storage:extra?.storage??[],objectUniforms:[this.options.context.surfaceEncoding,...(extra?.objectUniforms??[])]};
+  const extra=this.options.resources;return{textures:[map,...(extra?.textures??[])],arrayTextures:[map,...(extra?.arrayTextures??[])],sharedGroups:extra?.sharedGroups??[],storage:extra?.storage??[],objectUniforms:[this.options.context.surfaceEncoding,this.scalarInkEnabled,this.scalarInkColor,...(extra?.objectUniforms??[])]};
  }
  private refresh():void{
   if(this.closed)return;const map=this.options.context.origami&&this.current?this.current.texture:this.pastel;
@@ -102,6 +124,8 @@ export class PreparedTextureSurface {
  setAssets(assets:PreparedTextureAsset|undefined):void{
   if(this.closed)throw Error('Prepared final surface closed');assets?.assertCurrent();
   if(assets){const t=assets.texture,image=t.image as{width?:number;height?:number;depth?:number};if(!(t.isArrayTexture||t instanceof THREE.DataArrayTexture)||t.format!==THREE.RGBAFormat||t.type!==THREE.UnsignedByteType||t.colorSpace!==THREE.SRGBColorSpace||t.flipY||!Number.isSafeInteger(image?.depth)||Number(image?.depth)<1||t.magFilter!==THREE.LinearFilter||t.minFilter!==THREE.LinearMipmapLinearFilter)throw Error('Prepared final bank must be the filtered RGBA8 sRGB array');}
+  const scalar=validatePreparedScalarInk(assets?.scalarInk);
+  if(scalar)this.scalarInkColor.value.set(...scalar.color);else this.scalarInkColor.value.set(0,0,0);this.scalarInkEnabled.value=scalar?(scalar.compact?2:1):0;
   this.current=assets;this.refresh();
  }
  /** Hold/compile boundary only. The pure graph owns no Source paint kernel. */
@@ -119,6 +143,6 @@ export class PreparedTextureSurface {
   this.material.vertexColors=representation==='pure'?false:source.vertexColors;if(changed)this.material.needsUpdate=true;this.representation=representation;
  }
  assertReady():void{if(this.closed||this.representation==='pure'&&this.options.context.origami&&(!this.current||this.options.context.reliefEnabled||this.options.context.wearEnabled))throw Error('Prepared final surface must publish or explicitly choose Source before draw');this.current?.assertCurrent();}
- snapshot(){return{representation:this.representation,material:this.material.uuid,assets:this.current,boundTexture:this.body.value.uuid,journalRevision:this.journal.declaration.revision,closed:this.closed};}
+ snapshot(){return{representation:this.representation,material:this.material.uuid,assets:this.current,boundTexture:this.body.value.uuid,journalRevision:this.journal.declaration.revision,scalarInkEnabled:this.scalarInkEnabled.value,scalarInkColor:this.scalarInkEnabled.value?this.current?.scalarInk?.color:undefined,closed:this.closed};}
  dispose():void{if(this.closed)return;const failures:unknown[]=[];for(const close of[this.unsubscribe,()=>this.journal.dispose(),()=>this.material.dispose(),()=>this.pastel.dispose()])try{close();}catch(error){failures.push(error);}if(failures.length)throw new AggregateError(failures,'Prepared final surface close quarantine');this.closed=true;this.current=undefined;}
 }

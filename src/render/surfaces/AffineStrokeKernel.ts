@@ -4,9 +4,17 @@
 import type * as THREE from'three/webgpu';
 import{Fn,If,Loop,float,int,mix,positionView,varying,vec2,vec3,vec4}from'three/tsl';
 import type{FaceStrokeNodeOptions}from'./FaceStrokeTable';
-import type{AffineStrokeOwner}from'./AffineStrokeOwner';
-export interface AffineStrokeNodeOptions extends Omit<FaceStrokeNodeOptions,'table'|'readRow'|'width'|'irregularity'>{readonly owner:AffineStrokeOwner}
+import{AFFINE_CIRCLE_DISTANCE_GUARD,type AffineStrokeOwner}from'./AffineStrokeOwner';
+export interface AffineStrokeNodeOptions extends Omit<FaceStrokeNodeOptions,'table'|'readRow'|'width'|'irregularity'>{readonly owner:AffineStrokeOwner;readonly interiorCircle?:THREE.Node<'vec3'>}
 const HEADER_ROWS=2,EDGE_ROWS=9,stripTriangles=[[0,2,3],[0,3,1],[2,4,5],[2,5,3]]as const;
+/** One additional flat value, from the SAME prepared storage. The first edge's
+ * ninth row was unused; original headers, offsets and buffer size stay exact.
+ * Only the admitted unit-UV Rock producer requests this graph in BOTH styles. */
+export function preparedAffineInteriorCircleVertex(options:{readonly owner:AffineStrokeOwner;readonly faceId:THREE.Node<'float'>;readonly enabled:THREE.Node<'float'>;readonly opacity:THREE.Node<'float'>},label='v_rockStrokeInteriorCircle'):THREE.Node<'vec3'>{
+ if(!options.owner.source.interiorCircle)throw Error('An explicit unit-UV interior-circle producer is required');
+ if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(label))throw Error('Stable interior-circle varying label required');
+ return varying(Fn(()=>{const result=vec3(0).toVar();If(options.enabled.greaterThan(0).and(options.opacity.greaterThan(0)),()=>{const header=options.owner.readRow(int(options.faceId).mul(HEADER_ROWS));If(header.y.greaterThan(0),()=>{result.assign(options.owner.readRow(int(header.x).add(8)).xyz);});});return result;})(),label).setInterpolation('flat','first');
+}
 export function queryPreparedAffineCoverage(options:AffineStrokeNodeOptions):THREE.Node<'vec4'> {
  options.owner.assertReady();const face=varying(options.faceId,'v_surfaceStrokeFace').setInterpolation('flat','first'),uv=Reflect.get(options.faceUv,'isVaryingNode')===true?options.faceUv:varying(options.faceUv,'v_surfaceStrokeUv'),read=options.owner.readRow;
  return Fn(()=>{
@@ -14,7 +22,8 @@ export function queryPreparedAffineCoverage(options:AffineStrokeNodeOptions):THR
   // This caller-supplied switch is uniform (texture encoding × line opacity).
   // Pastel/zero ink execute no derivatives, SSBO reads or texture operations.
   If(options.enabled.greaterThan(0).and(options.opacity.greaterThan(0)),()=>{
-   const dx=uv.dFdx().toVar(),dy=uv.dFdy().toVar(),px=(options.surfacePosition??positionView).dFdx().toVar(),py=(options.surfacePosition??positionView).dFdy().toVar(),first=int(face).mul(HEADER_ROWS),header=options.headers?.[0]??read(first),info=options.headers?.[1]??read(first.add(1)),distance=float(0).toVar(),span=info.xy.sub(header.zw),relative=uv.sub(header.zw),scale=span.x.add(span.y).max(1e-20);
+   const dx=uv.dFdx().toVar(options.interiorCircle?'rockStrokeCircleDx':undefined),dy=uv.dFdy().toVar(options.interiorCircle?'rockStrokeCircleDy':undefined),px=(options.surfacePosition??positionView).dFdx().toVar(),py=(options.surfacePosition??positionView).dFdy().toVar(),first=int(face).mul(HEADER_ROWS),header=options.headers?.[0]??read(first),info=options.headers?.[1]??read(first.add(1));
+   const kernel=()=>{const distance=float(0).toVar(),span=info.xy.sub(header.zw),relative=uv.sub(header.zw),scale=span.x.add(span.y).max(1e-20);
    // Explicitly dominate both conditional updates and the final gate read.
    distance.assign(uv.x.sub(header.z).min(uv.y.sub(header.w)).min(info.x.sub(uv.x)).min(info.y.sub(uv.y)));
    // Diagonals are admitted only when present in the real Source records.
@@ -37,6 +46,15 @@ export function queryPreparedAffineCoverage(options:AffineStrokeNodeOptions):THR
     });
    });
    });
+   };
+   if(options.interiorCircle){
+    // All derivatives dominate this nonuniform rejection. The positive
+    // squared-distance guard dominates f32/FMA/flush error on the unit domain.
+    // Footprint shrink is conservative even where perspective is nonlinear:
+    // any nonnegative shrink is a subset of the certified point-sample disk.
+    const circle=options.interiorCircle,relative=uv.sub(circle.xy).toVar('rockStrokeCircleRelative'),footprint=dx.abs().add(dy.abs()),radius=circle.z.sub(footprint.x.add(footprint.y)).max(0).toVar('rockStrokeCircleRadius'),inside=uv.x.greaterThanEqual(0).and(uv.x.lessThanEqual(1)).and(uv.y.greaterThanEqual(0)).and(uv.y.lessThanEqual(1)).and(circle.z.greaterThan(0)).and(relative.dot(relative).add(AFFINE_CIRCLE_DISTANCE_GUARD).lessThan(radius.mul(radius)));
+    If(inside.not(),kernel);
+   }else kernel();
   });
   return result;
  })();

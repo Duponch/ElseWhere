@@ -4,7 +4,7 @@ import { ROCK_INDICES, ROCK_VERTICES } from './RockSurface';
 import {RockSurfaceModel,ROCK_SURFACE_UV,ROCK_SURFACE_VERTICES} from './models/RockSurfaceModel';
 import {RockStrokeTable,type RockStrokePatch} from './surfaces/RockStrokeTable';
 import {faceStrokeVertexHeaders,createFaceStrokeNode} from './surfaces/FaceStrokeTable';
-import {createPreparedAffineStrokeNode} from './surfaces/AffineStrokeKernel';
+import {createPreparedAffineStrokeNode,preparedAffineInteriorCircleVertex} from './surfaces/AffineStrokeKernel';
 import { WORLD_SCALE } from '../world/scale';
 import { STONE_KINDS } from '../sim/geology';
 import { material } from './primitives';
@@ -67,10 +67,11 @@ export class RockLayer {
     // broad stone map with a new kraft frame on every small cliff facet.
     // Include vertex pigment before the ink, so it cannot tint the ink twice.
     const context=this.graphicsStyle,base=attribute('color','vec3'),surface=attribute(ROCK_SURFACE_UV,'vec3');
-    const prepared=context?.preparedStrokes.acquire(this.stroke,{faceIds:()=>[...this.strokeFaces],revision:()=>`${this.strokeWorldRevision}:${this.stroke.stats.patches}`,isLinear:()=>this.stroke.representationKey==='single',onRepresentationChange:()=>this.bindSurface()}),headerTable=prepared?.headerTable()??this.stroke,read=prepared?.readRow??this.stroke.readRow;
+    const prepared=context?.preparedStrokes.acquire(this.stroke,{faceIds:()=>[...this.strokeFaces],revision:()=>`${this.strokeWorldRevision}:${this.stroke.stats.patches}`,isLinear:()=>this.stroke.representationKey==='single',interiorCircle:true,onRepresentationChange:()=>this.bindSurface()}),headerTable=prepared?.headerTable()??this.stroke,read=prepared?.readRow??this.stroke.readRow;
     const headers=context?faceStrokeVertexHeaders({table:headerTable,faceId:surface.z,enabled:context.surfaceEncoding,opacity:context.lineOpacity,readRow:read},'v_rockStrokeHeader'):undefined;
     const common=context?{faceId:surface.z,headers,faceUv:surface.xy,enabled:context.surfaceEncoding,opacity:context.lineOpacity,brushColor:context.brushColor.rgb,samplePigment:(p:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>context.sampleStrokePigment(p,dx,dy),sampleDry:(p:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>context.sampleStrokeDry(p,dx,dy)}:undefined;
-    const ink=(body:THREE.Node<'vec3'>)=>!context?body:prepared?createPreparedAffineStrokeNode(body,{...common!,owner:prepared}):createFaceStrokeNode(body,{...common!,table:this.stroke,width:context.edgeWidth,irregularity:context.strokeImperfection,readRow:this.stroke.readRow});
+    const interiorCircle=context&&prepared?preparedAffineInteriorCircleVertex({owner:prepared,faceId:surface.z,enabled:context.surfaceEncoding,opacity:context.lineOpacity}):undefined;
+    const ink=(body:THREE.Node<'vec3'>)=>!context?body:prepared?createPreparedAffineStrokeNode(body,{...common!,owner:prepared,interiorCircle}):createFaceStrokeNode(body,{...common!,table:this.stroke,width:context.edgeWidth,irregularity:context.strokeImperfection,readRow:this.stroke.readRow});
     this.texturedMaterial.vertexColors=this.plainMaterial.vertexColors=false;
     this.texturedMaterial.colorNode=ink(base.mul(texture(this.stonePaint,paintedUv).rgb));
     // Source contours also remain visible when surface textures are disabled.

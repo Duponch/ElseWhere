@@ -1,5 +1,70 @@
 # Rendu commun et textures Pastel/Gouache
 
+Lot groupé V70 du5novembre : **164,6875Mio de textures économisés, parité GPU
+toujours ouverte**. Les banques compatibles retiennent seulement le corps RGB
+et le coefficient d'encre dans son alpha ; leurs anciennes couches d'encre sont
+retirées après les copies et la fin des travaux GPU. Les plans UV logiques et
+leurs adresses restent identiques. La publication change atomiquement la texture,
+son format et sa couleur d'encre ; un refus de compactage garde la version entière.
+Les budgets comprennent l'ancienne banque, la nouvelle et toutes les cibles de
+préparation encore vivantes. Le plan d'admission reste volontairement conservateur.
+
+Sur le même World128/Main435/DPR1, les banques rigides et végétales passent de
+389939200 à217251840octets nominaux, soit172687360octets économisés. Ce total ne
+mesure ni toute la mémoire du pilote ni celle du jeu. Quarante copies compactées
+sur dix pages et quatre mips conservent exactement tous les octets RGBA ; le
+packing initial conserve le corps RGB et les résidus d'encre mesurés dans V69.
+Les rochers réutilisent aussi une ligne libre pour certifier les zones sans trait,
+avec un calcul conservateur et les en-têtes Source intacts ; aucun gain individuel
+de cette partie n'est attribué.
+
+GPU P/G/P0,719872/0,819712/0,740352ms : Gouache+12,272 %, dérive Pastel+2,845 %,
+pic Gouache2,555904ms inclus. Les médianes restent0,720896/0,786432/0,720896ms.
+CPU0,756699/0,737081/0,752096ms, dérive−0,608 %. Les384frames/1152UID,21appels
+et214196triangles restent conservés. Les six fenêtres sont stables ; les onze
+différences de capacité des légendes depuis la construction restent explicites.
+Ces acquisitions ne démontrent aucun gain GPU causal, parité, campagne ou FPS global.
+
+Les onze paires d'images passent leurs contrôles de contexte. V69→V70 conserve
+exactement Gouache et le gros plan végétal ; Pastel, le témoin Source végétal et
+les retours sont également exacts. Les écarts d'un code RGB de V69 face à V67
+restent inchangés. Les23contrats ciblés, types produit54,786s/privés18,972s,
+Native8,137s et Pages5,606s passent du premier coup. Les quatre Workers sont exacts.
+La galerie714assets/39groupes/2sansmodèle conserve les passages1/.75→0/0→Pastel→
+Gouache et la table longue observée, zéro erreur et26avertissements conservés.
+La compilation relative distincte sert seulement le montage privé sous un préfixe.
+Tous les renderers de mesure sont libérés ; la galerie n'a pas d'API publique de
+reçu de libération. Les onglets actifs de ces contrôles sont fermés.
+
+La suite étudie une texture finale pour les panneaux rocheux, avec les UV et
+modèles communs conservés, un budget explicite et un retour Source pour le socle,
+la proximité ou un refus. Aucun prototype de cette suite n'est intégré à ce lot.
+
+V69 du5novembre est **qualifié visuellement dans les vues contrôlées, mais
+non promu seul**. Le corps RGB conserve ses octets ; son alpha stocke un
+coefficient d'encre commun à toutes les teintes variables. La comparaison au
+même World128/Main435/DPR1 donne Pastel exact, Gouache681pixels/851200 et
+colon587pixels différents, au maximum un code RGB, alpha exact. Le gros plan
+de végétation diffère sur354pixels, au maximum un code ; son témoin Source
+est exact entre versions. Les retours Gouache et végétation sont strictement
+identiques, y compris leurs identités complètes.
+
+Le GPU P/G/P mesure0,729600/0,799232/0,756224ms, soit+7,581 %Gouache et
+dérive Pastel+3,649 %. Les médianes restent celles de V67. Le CPU a une dérive
+adverse de+11,433 % ; aucun gain causal ou parité n'est acquis. Les onze
+exceptions d'identité entre les premiers bras CPU concernent uniquement la
+capacité des légendes,16→64 après les gros plans ; elles restent dans le reçu.
+Les quarante paires de préparation et les quatre mips sont contrôlés. L'encre
+d'origine est encore retenue : aucune économie de mémoire GPU n'est annoncée.
+Les32contrats, types produit55,603s/privés19,498s, Native7,705s, Pages5,300s et
+quatre Workers exacts sont acquis. Tous les renderers et clients sont fermés.
+
+La suite V70 est un lot privé unique : retirer les couches d'encre devenues
+inutiles dans les banques compatibles, puis rejeter exactement l'intérieur
+des faces rocheuses où aucun trait ne peut être présent. Les modèles, contours
+activés, résolutions et replis restent conservés. Aucun gain de ce nouveau lot
+n'est encore acquis ; les sources V69 restent candidates non committées.
+
 Essai V68 du5novembre : **cache par teinte écarté du produit**. Les23fichiers
 candidats ont été archivés, puis les sources exactes du commit4f31e7ed rétablies.
 Le jeu conserve V67. Les32contrats, types finaux53,385s, types privés20,497s,

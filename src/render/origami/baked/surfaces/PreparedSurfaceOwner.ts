@@ -15,6 +15,25 @@ type Asset={readonly key:string;readonly sourceKey:string;readonly semantic:stri
 type Shared={readonly owned:Set<Asset>;readonly families:Set<PreparedSurfaceOwner>};const shared=new WeakMap<GraphicsStyleContext,Shared>();
 const familyState=(c:GraphicsStyleContext)=>{let s=shared.get(c);if(!s){s={owned:new Set(),families:new Set()};shared.set(c,s);}return s;};
 const paintKey=(c:GraphicsStyleContext)=>{const p=c.preferences;return JSON.stringify(['prepared-rigid-source-v1',c.genericPaintSemanticKey(),p.impasto,p.wear,p.edges,p.blackEdges,p.edgeWidth,p.strokeImperfection,p.contourImperfection,c.paintReplayState().refreshed]);};
+/** Validate only newly returned metadata, after owning the GPU result. A cached
+ * bank always keeps its own basis and never reinterprets old alpha from prefs. */
+function assertScalarInkResult(gpu:PreparedSurfaceGpuResult,snapshot:SharedSurfacePreparationSnapshot,plan:PreparedSurfacePlan):void{
+ const scalar=gpu.scalarInk;if(scalar?.compact!==true&&gpu.pages.some(p=>p.format==='scalar'))throw Error('Physical scalar pages require compact scalar metadata');if(!scalar)return;
+ const p=snapshot.preferences,source=snapshot.paintSource?.paint?.brushColorLinear,color=scalar.color;
+ if(p.style!=='origami'||p.impasto!==0||p.wear!==0||p.edges!==0||!source||source.length!==3||!color||color.length!==3)throw Error('Scalar ink needs its actual zero-effects/no-carton paint lease');
+ const k=[Math.fround(source[0]),Math.fround(source[1]),Math.fround(source[2])]as const;
+ if(![0,1,2].every(i=>Number.isFinite(source[i])&&source[i]!>=0&&source[i]!<=1&&Number.isFinite(color[i])&&Object.is(color[i],k[i])))throw Error('Scalar ink basis must match all three actual paint-lease f32 words');
+ const norm=Math.fround(Math.fround(Math.fround(k[0]*k[0])+Math.fround(k[1]*k[1]))+Math.fround(k[2]*k[2]));
+ if(!(norm>0))throw Error('Scalar ink requires a nonzero f32 paint basis');
+ if(scalar.compact!==undefined&&scalar.compact!==true)throw Error('Malformed compact scalar flag');
+ if(scalar.compact){
+  // Logical UV/address plans stay complete BI, including their conservative
+  // old/new admission. Only the actual selected result describes compaction.
+  // Resource pages omit its named-tree prefix; physical offsets retain it.
+  const pages=gpu.pages,n=plan.pages.length,depth=(gpu.texture.image as {depth?:number}).depth,base=pages[0]?.bodyLayer;
+  if(!n||pages.length!==n||!Number.isSafeInteger(base)||base!<0||!Number.isSafeInteger(depth)||depth!==base!+n||depth!>256||plan.pages.some((p,i)=>p.format!=='bi'||p.bodyLayer!==i*2||p.inkLayer!==i*2+1)||pages.some((p,i)=>p.format!=='scalar'||p.bodyLayer!==base!+i||p.inkLayer!==undefined))throw Error('Compact scalar requires dense physical pages and an unchanged canonical all-BI logical plan');
+ }
+}
 export interface PreparedSurfaceOwnerOptions {
  readonly key:string;readonly context:GraphicsStyleContext;readonly source:()=>PreparedSurfaceSource;
  readonly changed:()=>void;readonly maxCellPixels?:number;readonly returnCellPixels?:number;
@@ -117,7 +136,7 @@ export class PreparedSurfaceOwner implements SharedSurfacePreparationOwner {
      const paint=snapshot.paintSource;if(!paint)throw Error('One current Core paint lease required');
      const guard=()=>{current();source.assertCurrent();paint.assertCurrent();},prepareDefault=()=>prepareSurfaceGpu(snapshot.renderer,reservedPlan,paint,guard),
       gpu=await(this.options.prepareGpu?this.options.prepareGpu(snapshot.renderer,reservedPlan,paint,guard,prepareDefault):prepareDefault());
-     candidate={key:plan.key,sourceKey,semantic,variantIds:ids,plan,gpu};this.owned.add(candidate);this.state.owned.add(candidate);next=candidate;prepared=true;
+     candidate={key:plan.key,sourceKey,semantic,variantIds:ids,plan,gpu};this.owned.add(candidate);this.state.owned.add(candidate);assertScalarInkResult(gpu,snapshot,plan);next=candidate;prepared=true;
     }
    }
    // Every route stages presentation, including first Pastel and cached Gouache.
@@ -148,7 +167,7 @@ export class PreparedSurfaceOwner implements SharedSurfacePreparationOwner {
     published=true;lookup?.publish();presentation?.publish();this.current=next;this.qualityPublished=this.qualityRequested;this.fallback=this.qualityRequested==='source'?'diagnostic-Source':reason;this.eligible=eligible;this.publishedStyle=snapshot.preferences.style;this.publishedTier=this.desiredTier=tier;
     for(const surface of this.surfaces.values()){
      if(!gouache&&!positive){surface.setAssets(undefined);surface.selectRepresentation('pure');}
-     else if(prepared&&next&&tier==='screen'&&this.qualityRequested!=='source'){surface.setAssets({texture:next.gpu.texture,assertCurrent:()=>next!.gpu.assertCurrent()});surface.selectRepresentation('pure');surface.assertReady();}
+     else if(prepared&&next&&tier==='screen'&&this.qualityRequested!=='source'){surface.setAssets({texture:next.gpu.texture,scalarInk:next.gpu.scalarInk,assertCurrent:()=>next!.gpu.assertCurrent()});surface.selectRepresentation('pure');surface.assertReady();}
      else surface.selectRepresentation('source');
     }
     this.options.changed();
@@ -168,11 +187,11 @@ export class PreparedSurfaceOwner implements SharedSurfacePreparationOwner {
      if(!committed&&!rolledBack)restore();disposePresentation();lookup?.dispose();if(!committed)retireCandidate();disposed=true;
     }finally{this.pending=false;}
    },
-   stats:{family:this.options.key,variants:ids.length,prepared,reason,layers:next?.plan.layers??0},
+   stats:{family:this.options.key,variants:ids.length,prepared,reason,layers:(next?.gpu.texture.image as {depth?:number}|undefined)?.depth??0,logicalLayers:next?.plan.layers??0,scalarInkCached:!!next?.gpu.scalarInk,scalarInkCompact:next?.gpu.scalarInk?.compact===true,scalarInkColor:next?.gpu.scalarInk?.color??null},
   };
  }
 
- status(){const pure=[...this.surfaces.values()].every(surface=>surface.snapshot().representation==='pure'),cached=!!this.current&&this.current.semantic===paintKey(this.options.context)&&this.active.every(id=>this.current!.variantIds.includes(id)),ready=!this.pending&&this.options.context.origami&&!this.options.context.reliefEnabled&&!this.options.context.wearEnabled&&pure&&cached&&this.publishedTier==='screen';return{ready,readyVariants:ready?this.active.length:0,cachedAdmission:cached,pipeline:'prepared-rigid-family',qualityRoute:this.qualityPublished??null,family:this.options.key,hasExternalDemand:!!this.options.hasExternalDemand?.(),hasActualDemand:this.active.length>0||!!this.options.hasExternalDemand?.(),activeVariants:this.active.length,cachedVariants:this.current?.variantIds.length??0,registeredVariants:this.variants.size,representation:[...this.surfaces.values()].some(s=>s.snapshot().representation==='source')?'source':'pure',tier:this.publishedTier,desiredTier:this.desiredTier,layers:(this.current?.gpu.texture.image as {depth?:number}|undefined)?.depth??0,pages:this.current?.gpu.pages.length??0,gpuBytes:[...this.owned].reduce((n,a)=>n+a.gpu.gpuBytes,0),cpuBytes:(this.addressBook?.cpuBytes??0)+this.targetCpuBytes+[...this.owned].reduce((n,a)=>n+a.gpu.cpuBytes+a.plan.retainedCpuBytes,0),lookupGpuUpperBytes:this.addressBook?.gpuUpperBytes??0,pastelCopiesGpuBytes:this.targetGpuBytes,fallback:this.fallback??null,pending:this.pending};}
+ status(){const pure=[...this.surfaces.values()].every(surface=>surface.snapshot().representation==='pure'),cached=!!this.current&&this.current.semantic===paintKey(this.options.context)&&this.active.every(id=>this.current!.variantIds.includes(id)),ready=!this.pending&&this.options.context.origami&&!this.options.context.reliefEnabled&&!this.options.context.wearEnabled&&pure&&cached&&this.publishedTier==='screen';return{ready,readyVariants:ready?this.active.length:0,cachedAdmission:cached,pipeline:'prepared-rigid-family',scalarInkCached:!!this.current?.gpu.scalarInk,scalarInkCompact:this.current?.gpu.scalarInk?.compact===true,scalarInkColor:this.current?.gpu.scalarInk?.color??null,qualityRoute:this.qualityPublished??null,family:this.options.key,hasExternalDemand:!!this.options.hasExternalDemand?.(),hasActualDemand:this.active.length>0||!!this.options.hasExternalDemand?.(),activeVariants:this.active.length,cachedVariants:this.current?.variantIds.length??0,registeredVariants:this.variants.size,representation:[...this.surfaces.values()].some(s=>s.snapshot().representation==='source')?'source':'pure',tier:this.publishedTier,desiredTier:this.desiredTier,layers:(this.current?.gpu.texture.image as {depth?:number}|undefined)?.depth??0,pages:this.current?.gpu.pages.length??0,gpuBytes:[...this.owned].reduce((n,a)=>n+a.gpu.gpuBytes,0),cpuBytes:(this.addressBook?.cpuBytes??0)+this.targetCpuBytes+[...this.owned].reduce((n,a)=>n+a.gpu.cpuBytes+a.plan.retainedCpuBytes,0),lookupGpuUpperBytes:this.addressBook?.gpuUpperBytes??0,pastelCopiesGpuBytes:this.targetGpuBytes,fallback:this.fallback??null,pending:this.pending};}
  attachGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{this.addressBook?.attachGpuRetirement(geometries);}
  private retire(asset:Asset):void{if(!this.owned.has(asset))return;asset.gpu.dispose();this.owned.delete(asset);this.state.owned.delete(asset);}
  dispose():void{if(this.closed)return;if(this.pending)throw Error('Settle the canonical family before close');const errors:unknown[]=[];for(const stage of this.presentations)try{stage.dispose();this.presentations.delete(stage);}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Prepared presentation close quarantine');for(const asset of this.owned)try{this.retire(asset);}catch(error){errors.push(error);}for(const[original,surface]of this.surfaces)try{surface.dispose();this.surfaces.delete(original);}catch(error){errors.push(error);}try{this.addressBook?.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Prepared canonical family close quarantine');this.unregisterDensity();this.unregister();this.state.families.delete(this);this.closed=true;this.current=undefined;}

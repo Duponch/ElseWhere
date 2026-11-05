@@ -5,9 +5,10 @@ import {Fn,If,attribute,varying,texture,textureLoad,vec2,vec3,vec4,ivec2,float,i
 import type {GraphicsStyleContext} from '../../../graphics-style';
 import {queryFaceStrokeCoverage,type FaceStrokeData} from '../../../surfaces/FaceStrokeTable';
 import {PLANT_PAGE_BYTES,PlantAtlasAdmissionRefusal,type PlantAtlasPlan} from './PlantAtlasPlan';
-import {inkOccupancyPackingNode,inkOccupancyPreparationWitness} from '../../../surfaces/InkOccupancyPacking';
+import {inkOccupancyPackingNode,inkOccupancyPreparationWitness,preparedScalarInkBasis,scalarInkCompactionBudget,scalarInkCompactionDevice} from '../../../surfaces/InkOccupancyPacking';
+import type {PreparedSurfaceScalarInk} from '../surfaces/PreparedSurfaceTypes';
 
-export interface PlantAtlasGpuResult {texture:THREE.Texture;gpuBytes:number;cpuBytes:number;stats:Readonly<Record<string,unknown>>;dispose():void}
+export interface PlantAtlasGpuResult {texture:THREE.Texture;gpuBytes:number;cpuBytes:number;scalarInk?:PreparedSurfaceScalarInk;stats:Readonly<Record<string,unknown>>;dispose():void}
 type Source=ReturnType<GraphicsStyleContext['prepareAtlasPaint']>;
 const running=new WeakSet<THREE.WebGPURenderer>(),size=2048,levels=4,passes=16;
 const mipBytes=(w:number,h:number)=>{let bytes=0;for(;;){bytes+=w*h*4;if(w===1&&h===1)return bytes;w=Math.max(1,w>>1);h=Math.max(1,h>>1);}};
@@ -41,19 +42,19 @@ export function plantAtlasTerms(p:THREE.Texture,km:THREE.Texture,alpha:THREE.Tex
 }
 
 /** Pure byte admission over borrowed Source views; allocates no GPU object. */
-export function planPlantGpuPreparation(plan:PlantAtlasPlan,source:Source,stroke:FaceStrokeData,settings:{edgeWidth:number}){
- if(plan.size!==size||plan.levels!==levels||plan.depth!==plan.pages*2||plan.pages<1||plan.pages>2||!Number.isFinite(settings.edgeWidth)||settings.edgeWidth<.5||settings.edgeWidth>5)throw Error('Exact bounded plant atlas domain required');
+export function planPlantGpuPreparation(plan:PlantAtlasPlan,source:Source,stroke:FaceStrokeData,settings:{edgeWidth:number;scalarInkEnabled?:boolean}){
+ if(plan.size!==size||plan.levels!==levels||plan.depth!==plan.pages*2||plan.pages<1||plan.pages>2||!Number.isSafeInteger(plan.maxPeakGpuBytes)||plan.maxPeakGpuBytes<0||!Number.isFinite(settings.edgeWidth)||settings.edgeWidth<.5||settings.edgeWidth>5)throw Error('Exact bounded plant atlas domain required');
  source.assertCurrent();stroke.assertCurrent();const pixels=source.paint.readProfile(0),edge=source.paint.edgeAlpha;if(pixels.orientation!=='upload-bottom-up'||pixels.pigment.length!==512*512*4||pixels.paper.length!==512*512*4||pixels.coverage.length!==512*512||edge.data.length!==edge.width*edge.height*4)throw Error('Exact Source512 pigment/paper/coverage and full brush alpha required');
- const sourceGpuBytes=mipBytes(512,512)*2+mipBytes(edge.width,edge.height),geometryBytes=plan.tiles.reduce((n,t)=>n+plan.faces[t.face]!.triangles.length*3*7*4+6*9*4,0)+6*5*4,peak=plan.existingLiveGpuBytes+plan.retainedGpuBytes+PLANT_PAGE_BYTES+size*size*(32+16+1+2)+sourceGpuBytes+geometryBytes,cpuBytes=512*512*4+geometryBytes*4+levels*plan.depth*64;
- if(plan.retainedGpuBytes!==plan.depth*size*size*4*(1+1/4+1/16+1/64)||peak>plan.peakGpuBytes||cpuBytes>plan.maxCpuBytes)throw new PlantAtlasAdmissionRefusal('Plant atlas actual old-live/new/source/mask peak refused BEFORE allocation');
+ const sourceGpuBytes=mipBytes(512,512)*2+mipBytes(edge.width,edge.height),geometryBytes=plan.tiles.reduce((n,t)=>n+plan.faces[t.face]!.triangles.length*3*7*4+6*9*4,0)+6*5*4,peak=plan.existingLiveGpuBytes+plan.retainedGpuBytes+PLANT_PAGE_BYTES+size*size*(32+16+1+2)+sourceGpuBytes+geometryBytes,cpuBytes=512*512*4+geometryBytes*4+levels*plan.depth*64+(settings.scalarInkEnabled?32:0);
+ if(plan.retainedGpuBytes!==plan.depth*size*size*4*(1+1/4+1/16+1/64)||peak>plan.peakGpuBytes||peak>plan.maxPeakGpuBytes||cpuBytes>plan.maxCpuBytes)throw new PlantAtlasAdmissionRefusal('Plant atlas actual old-live/new/source/mask peak refused BEFORE allocation');
  return{pixels,edge,peak,cpuBytes,sourceGpuBytes,geometryBytes};
 }
-export async function preparePlantAtlasGpu(renderer:THREE.WebGPURenderer,plan:PlantAtlasPlan,source:Source,stroke:FaceStrokeData,settings:{edgeWidth:number},assertExclusive:()=>void):Promise<PlantAtlasGpuResult>{
+export async function preparePlantAtlasGpu(renderer:THREE.WebGPURenderer,plan:PlantAtlasPlan,source:Source,stroke:FaceStrokeData,settings:{edgeWidth:number;scalarInkEnabled?:boolean},assertExclusive:()=>void):Promise<PlantAtlasGpuResult>{
  if(!renderer.initialized||!Reflect.get(renderer.backend,'isWebGPUBackend'))throw Error('Plant atlas needs the existing initialized WebGPU renderer');if(running.has(renderer))throw Error('Plant atlas renderer already leased');
  const check=()=>{assertExclusive();source.assertCurrent();stroke.assertCurrent();};check();
  const{pixels,edge,peak,cpuBytes}=planPlantGpuPreparation(plan,source,stroke,settings);
- const witness=inkOccupancyPreparationWitness(renderer);
- const old={target:renderer.getRenderTarget(),face:renderer.getActiveCubeFace(),mip:renderer.getActiveMipmapLevel(),autoClear:renderer.autoClear,color:renderer.getClearColor(new THREE.Color()).clone(),alpha:renderer.getClearAlpha()},cleanup:(()=>void)[]=[],own=<T extends{dispose():void}>(v:T):T=>{cleanup.push(()=>v.dispose());return v;},camera=new THREE.OrthographicCamera(-1,1,1,-1,0,1);let output:THREE.RenderTarget|undefined,delivered:THREE.RenderTarget|undefined,failure:unknown;
+ const witness=inkOccupancyPreparationWitness(renderer),scalarInk=preparedScalarInkBasis(settings.scalarInkEnabled===true,source.paint.brushColorLinear);
+ const old={target:renderer.getRenderTarget(),face:renderer.getActiveCubeFace(),mip:renderer.getActiveMipmapLevel(),autoClear:renderer.autoClear,color:renderer.getClearColor(new THREE.Color()).clone(),alpha:renderer.getClearAlpha()},cleanup:(()=>void)[]=[],own=<T extends{dispose():void}>(v:T):T=>{cleanup.push(()=>v.dispose());return v;},camera=new THREE.OrthographicCamera(-1,1,1,-1,0,1);let output:THREE.RenderTarget|undefined,compactOutput:THREE.RenderTarget|undefined,delivered:THREE.RenderTarget|undefined,failure:unknown,compactionDevice:GPUDevice|undefined,compactionPending=false;
  running.add(renderer);
  const render=async(s:THREE.Scene,t:THREE.RenderTarget)=>{check();renderer.setRenderTarget(t);await renderer.renderAsync(s,camera);check();};
  try{
@@ -82,17 +83,30 @@ export async function preparePlantAtlasGpu(renderer:THREE.WebGPURenderer,plan:Pl
    // Reuse the existing RGBA8 targets: no extra atlas layer or scratch target.
    for(let level=0;level<levels;level++){
     const n=size/2**level,destination=level===0?page:mip;destination.viewport.set(0,0,n,n);
-    if(witness){check();await witness({phase:'before',family:'plant',page:at,bank:output.texture,bodyLayer:at*2,inkLayer:at*2+1,level,width:n,height:n,scratch:page,renderer,assertCurrent:check});check();}
-    const packing=own(material(inkOccupancyPackingNode(output.texture,float(at*2),float(at*2+1),level,[n,n],varying(attribute('bakeUv','vec2')))));
-    packing.name='Plant ink occupancy page'+at+' mip'+level;
+    if(witness){check();await witness({phase:'before',family:'plant',page:at,bank:output.texture,bodyLayer:at*2,inkLayer:at*2+1,level,width:n,height:n,scratch:page,scalarInkColor:scalarInk?.color,renderer,assertCurrent:check});check();}
+    const packing=own(material(inkOccupancyPackingNode(output.texture,float(at*2),float(at*2+1),level,[n,n],varying(attribute('bakeUv','vec2')),scalarInk?.color)));
+    packing.name=(scalarInk?'Plant scalar ink page':'Plant ink occupancy page')+at+' mip'+level;
     await render(scene(full,packing),destination);
-    if(witness){check();await witness({phase:'packed',family:'plant',page:at,bank:output.texture,bodyLayer:at*2,inkLayer:at*2+1,level,width:n,height:n,scratch:destination,renderer,assertCurrent:check});check();}
+    if(witness){check();await witness({phase:'packed',family:'plant',page:at,bank:output.texture,bodyLayer:at*2,inkLayer:at*2+1,level,width:n,height:n,scratch:destination,scalarInkColor:scalarInk?.color,renderer,assertCurrent:check});check();}
     renderer.copyTextureToTexture(destination.texture,output.texture,new THREE.Box2(new THREE.Vector2(0,0),new THREE.Vector2(n,n)),new THREE.Vector3(0,0,at*2),0,level);check();
    }
    page.viewport.set(0,0,size,size);
   }
-  check();const retained=output;let closed=false;delivered=retained;output=undefined;return{texture:retained.texture,gpuBytes:plan.retainedGpuBytes,cpuBytes:levels*plan.depth*64,stats:Object.freeze({scope:'Private GPU BI preparation; no Native quality or performance admission',pages:plan.pages,depth:plan.depth,levels,retainedGpuBytes:plan.retainedGpuBytes,peakGpuBytes:peak,preparationCpuBytes:cpuBytes,sourceProfile:0,sourcePixels:512,legacyCoverage:false,runtimeRibbons:false,inkOccupancy:'Body.a=1 iff stored Ink.rgb is nonzero at this retained mip',occupancyPackingPasses:plan.pages*levels,occupancyReusesScratch:true,kernel:'queryFaceStrokeCoverage actual Source',syntheticMetric:'[sqrt(ratio),0,1/sqrt(ratio)]',workingScale:2,mask:'two R8 targets, exact integer covered-subpixel counts0..4',readback:witness?'Optional preparation witness registered':false,orientation:'row0/v0 via clipY; Native corner proof pending',halfFloatRounding:'Native delta pending'}),dispose(){if(closed)return;closed=true;retained.dispose();}};
+  const compact=scalarInkCompactionBudget({scalarInk,allBiCanonical:true,fullLayers:plan.depth,fullGpuBytes:plan.retainedGpuBytes,fullPeakGpuBytes:peak,maxPeakGpuBytes:plan.maxPeakGpuBytes,maxRetainedGpuBytes:85*1024*1024,fullCpuBytes:cpuBytes,oldLiveCpuBytes:0,maxCpuBytes:plan.maxCpuBytes}),device=compact.eligible?scalarInkCompactionDevice(renderer):undefined;
+  let resultScalar=scalarInk,resultGpuBytes=plan.retainedGpuBytes,compactionCopies=0;let resultDepth:number=plan.depth;
+  if(compact.eligible&&device&&scalarInk){
+   compactionDevice=device;
+   check();await device.queue.onSubmittedWorkDone();check();compactOutput=target(size,size,'srgb',compact.layers);compactOutput.texture.isArrayTexture=true;finiteMips(compactOutput);renderer.initRenderTarget(compactOutput);
+   for(let at=0;at<plan.pages;at++)for(let level=0;level<levels;level++){const n=size/2**level;
+    compactionPending=true;renderer.copyTextureToTexture(output.texture,compactOutput.texture,new THREE.Box3(new THREE.Vector3(0,0,at*2),new THREE.Vector3(n,n,at*2+1)),new THREE.Vector3(0,0,at),level,level);check();compactionCopies++;
+    if(witness){await witness({phase:'compacted',family:'plant',page:at,bank:output.texture,bodyLayer:at*2,inkLayer:at*2+1,level,width:n,height:n,scratch:page,scalarInkColor:scalarInk.color,compactBank:compactOutput.texture,compactBodyLayer:at,renderer,assertCurrent:check});check();}
+   }
+   check();await device.queue.onSubmittedWorkDone();compactionPending=false;check();own(output);output=compactOutput;compactOutput=undefined;
+   resultDepth=compact.layers;resultGpuBytes=compact.gpuBytes;resultScalar=Object.freeze({color:scalarInk.color,compact:true});
+  }
+  const compacted=resultScalar?.compact===true;
+  check();const retained=output;let closed=false;delivered=retained;output=undefined;return{texture:retained.texture,scalarInk:resultScalar,gpuBytes:resultGpuBytes,cpuBytes:levels*resultDepth*64+(scalarInk?32:0),stats:Object.freeze({scope:'Private GPU BI preparation; no Native quality or performance admission',pages:plan.pages,depth:resultDepth,logicalDepth:plan.depth,levels,retainedGpuBytes:resultGpuBytes,peakGpuBytes:compacted?compact.peakGpuBytes:peak,fullPreparationPeakGpuBytes:peak,compactionPeakGpuBytes:compacted?compact.peakGpuBytes:null,preparationCpuBytes:cpuBytes,sourceProfile:0,sourcePixels:512,legacyCoverage:false,runtimeRibbons:false,inkOccupancy:scalarInk?'Body.a is LS ink coefficient, not occupancy':'Body.a=1 iff stored Ink.rgb is nonzero at this retained mip',occupancyPackingPasses:scalarInk?0:plan.pages*levels,scalarInkPackingPasses:scalarInk?plan.pages*levels:0,scalarInkColor:scalarInk?.color??null,scalarInkFormula:scalarInk?'clamp(dot(storedLinearI,K)/dot(K,K),0,1) stored as UNORM8 per actual retained mip':null,scalarInkCompacted:compacted,compactionCopies,compactionRefused:compacted?null:compact.reason??'configured-device-unavailable',originalInkLayersRetained:!compacted,occupancyReusesScratch:true,kernel:'queryFaceStrokeCoverage actual Source',syntheticMetric:'[sqrt(ratio),0,1/sqrt(ratio)]',workingScale:2,mask:'two R8 targets, exact integer covered-subpixel counts0..4',readback:witness?'Optional preparation witness registered':false,orientation:'row0/v0 via clipY; Native corner proof pending',halfFloatRounding:'Native delta pending'}),dispose(){if(closed)return;retained.dispose();closed=true;}};
  }catch(error){failure=error;throw error;}finally{
-  const failures:unknown[]=[];try{renderer.setRenderTarget(old.target,old.face,old.mip);renderer.autoClear=old.autoClear;renderer.setClearColor(old.color,old.alpha);}catch(error){failures.push(error);}for(const close of cleanup.reverse())try{close();}catch(error){failures.push(error);}if(output)try{output.dispose();}catch(error){failures.push(error);}running.delete(renderer);if(failures.length){if(delivered)try{delivered.dispose();}catch(error){failures.push(error);}throw new AggregateError(failure===undefined?failures:[failure,...failures],'Plant atlas preparation cleanup failed');}
+  const failures:unknown[]=[];if(compactionPending&&compactionDevice)try{await compactionDevice.queue.onSubmittedWorkDone();compactionPending=false;}catch(error){failures.push(error);}try{renderer.setRenderTarget(old.target,old.face,old.mip);renderer.autoClear=old.autoClear;renderer.setClearColor(old.color,old.alpha);}catch(error){failures.push(error);}for(const close of cleanup.reverse())try{close();}catch(error){failures.push(error);}if(output)try{output.dispose();}catch(error){failures.push(error);}if(compactOutput)try{compactOutput.dispose();}catch(error){failures.push(error);}running.delete(renderer);if(failures.length){if(delivered)try{delivered.dispose();}catch(error){failures.push(error);}throw new AggregateError(failure===undefined?failures:[failure,...failures],'Plant atlas preparation cleanup failed');}
  }
 }

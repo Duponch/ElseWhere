@@ -9,6 +9,9 @@ import{FACE_STROKE_EDGE_ROWS}from'./FaceStrokeTable';
 export interface StrokeSettings{readonly width:number;readonly irregularity:number}
 export interface CanonicalStencil{
  readonly canonical:FaceStrokeData;
+ /** Explicit unit-UV Rock domain only. The last row of its first edge block
+  * already exists and is unused by all four affine triangle queries. */
+ readonly interiorCircle?:true;
  /** A producer revision, not a frame/pose/paint epoch. Rock uses stats.patches
   * plus buffer.id; immutable models use a stable model key. */
  revision():string;
@@ -41,6 +44,45 @@ export function prepareAffineEdge(records:Float32Array,settings:StrokeSettings):
  }
  if(result.some(value=>!Number.isFinite(value)))throw new AffineAdmissionRefusal('Prepared Source inverse exceeds finite f32 domain');
  return result;
+}
+/** Conservative certificates against the ACTUAL prepared f32 predicates.
+ * This is not a raster/sample test of the strip. For each triangle, at least
+ * one of its three accepting half-planes must be false throughout the disk.
+ * The radius uses an L1 upper bound on the row's Euclidean slope, so no CPU
+ * sqrt/normalization or inverse-of-an-inverse is required.
+ *
+ * On q in [0,1]^2, each subtraction/product/sum (including contraction) has
+ * absolute error bounded by the sum of absolute intermediate magnitudes times
+ * 2^-18, plus normal-minimum terms for permitted subnormal flushing. This
+ * leaves at least32 single-precision ulps per elementary operation, and also
+ * dominates the double arithmetic and the final downward f32 radius store.
+ * Overflow/nonfinite certificates disable rejection rather than approximation.
+ * Runtime separately proves q in the unit domain and adds a 2^-14 positive
+ * guard to its squared-distance test. Thus a rounded-down distance cannot
+ * admit an exterior point. Derivative-footprint shrink only reduces the disk.
+ * These are analytic bounds; Native quality remains an independent gate. */
+export const AFFINE_CIRCLE_DISTANCE_GUARD=2**-14;
+const CIRCLE_ERROR=2**-18,MIN_NORMAL=2**-126;
+const CIRCLE_CENTRES=Object.freeze([[.5,.5],[1/3,1/3],[1/3,2/3],[2/3,1/3],[2/3,2/3]].map(p=>Object.freeze([f(p[0]!),f(p[1]!)]as const)));
+export function prepareAffineInteriorCircle(edges:readonly Float32Array[]):readonly[number,number,number,number]{
+ if(!edges.length||edges.some(edge=>edge.length!==EDGE_FLOATS||edge.some(v=>!Number.isFinite(v))))return[0,0,0,0];
+ if(!edges.some(edge=>[0,1,2,3].some(triangle=>edge[triangle*8+6]!>.5)))return[0,0,0,0];
+ let best:readonly[number,number,number,number]=[0,0,0,0];
+ for(const[cx,cy]of CIRCLE_CENTRES){
+  let radius=Math.min(cx,cy,1-cx,1-cy);
+  for(const edge of edges)for(let triangle=0;triangle<4;triangle++){
+   const at=triangle*8;if(edge[at+6]!<=.5)continue;
+   const ax=edge[at]!,ay=edge[at+1]!,ux=edge[at+2]!,uy=edge[at+3]!,vx=edge[at+4]!,vy=edge[at+5]!,px=cx-ax,py=cy-ay;
+   const u=px*ux+py*uy,v=px*vx+py*vy,mu=(1+Math.abs(ax))*Math.abs(ux)+(1+Math.abs(ay))*Math.abs(uy),mv=(1+Math.abs(ax))*Math.abs(vx)+(1+Math.abs(ay))*Math.abs(vy),eu=CIRCLE_ERROR*(mu+1)+MIN_NORMAL*(Math.abs(ux)+Math.abs(uy)+8),ev=CIRCLE_ERROR*(mv+1)+MIN_NORMAL*(Math.abs(vx)+Math.abs(vy)+8),es=eu+ev+CIRCLE_ERROR*(mu+mv+eu+ev+1);
+   if(!Number.isFinite(mu+mv)||mu+mv>2**120){radius=0;break;}
+   const lower=f(-1e-6),upper=f(1+1e-6),candidate=(violation:number,slope:number)=>violation>0?(slope>0?violation/slope:.5):0;
+   const certificate=Math.max(candidate(lower-u-eu,Math.abs(ux)+Math.abs(uy)),candidate(lower-v-ev,Math.abs(vx)+Math.abs(vy)),candidate(u+v-upper-es,Math.abs(ux+vx)+Math.abs(uy+vy)));
+   if(!Number.isFinite(certificate)){radius=0;break;}radius=Math.min(radius,certificate);
+  }
+  // Shrink by64 ulps before storing. Never round a proved radius outward.
+  const down=f(Math.max(0,radius)*(1-2**-18));if(down*down>AFFINE_CIRCLE_DISTANCE_GUARD&&down>best[2])best=[cx,cy,down,0];
+ }
+ return best;
 }
 interface Span{row:number;values:Float32Array;undo?:Float32Array}
 export class AffineStrokeOwner{
@@ -80,7 +122,9 @@ export class AffineStrokeOwner{
    const first=face*HEADER_ROWS,at=first*4;if(at+8>canonical.length)throw Error('Canonical header outside source rows');const header=canonical.slice(at,at+8),row=header[0]!,count=header[1]!;
    if(!Number.isSafeInteger(row)||row<0||!Number.isSafeInteger(count)||count<0||count>this.source.canonical.maxEdgesPerFace||row*4+count*EDGE_FLOATS>canonical.length||header.some(value=>!Number.isFinite(value)))throw Error('Canonical face has invalid Source header/edge span');
    spans.push({row:first,values:header});stageBytes+=header.byteLength;required=Math.max(required,first+2);
-   for(let edge=0;edge<count;edge++){const base=row+edge*FACE_STROKE_EDGE_ROWS,values=prepareAffineEdge(canonical.subarray(base*4,base*4+EDGE_FLOATS),normalized);spans.push({row:base,values});stageBytes+=values.byteLength;required=Math.max(required,base+FACE_STROKE_EDGE_ROWS);edges++;}
+   const preparedEdges:Float32Array[]=[];
+   for(let edge=0;edge<count;edge++){const base=row+edge*FACE_STROKE_EDGE_ROWS,values=prepareAffineEdge(canonical.subarray(base*4,base*4+EDGE_FLOATS),normalized);preparedEdges.push(values);spans.push({row:base,values});stageBytes+=values.byteLength;required=Math.max(required,base+FACE_STROKE_EDGE_ROWS);edges++;}
+   if(this.source.interiorCircle&&preparedEdges.length)preparedEdges[0]!.set(prepareAffineInteriorCircle(preparedEdges),32);
    if(stageBytes*2>this.limits.maxStageBytes)throw new AffineAdmissionRefusal('Affine staging/undo admission exceeds bounded CPU budget');
   }
   spans.sort((a,b)=>a.row-b.row);for(let i=1;i<spans.length;i++)if(spans[i]!.row<spans[i-1]!.row+spans[i-1]!.values.length/4)throw Error('Canonical faces aliased an owned header/edge span');
@@ -99,12 +143,12 @@ export class AffineStrokeOwner{
   },commit:()=>{this.assertCurrent();if(!published||disposed||committed||this.source.revision()!==revision)throw Error('Cannot commit stale/unpublished affine coefficients');committed=true;if(kind==='full')this.counters.fullPreparations++;else this.counters.dirtyPreparations++;this.counters.preparedFaces+=faces.length;this.counters.preparedEdges+=edges;this.counters.publishedRows+=stats.rows;},rollback,dispose:()=>{if(disposed)return;rollback();disposed=true;this.staging=undefined;}};
   this.staging=stage;return stage;
  }
- snapshot(){return{ready:this.ready,settingsKey:this.currentKey,preparedRevision:this.preparedRevision,cpuBytes:this.cpuBytes,canonicalBorrowedCpuBytes:this.source.canonical.cpuBytes,totalKnownCpuBytes:this.cpuBytes+this.source.canonical.cpuBytes,pendingStageCpuBytes:this.staging?.stats.cpuBytes??0,rows:this.attribute.count,retiredBuffers:this.retired.length,pending:!!this.staging,counters:{...this.counters},scope:'Prepared affine coefficients; canonical CPU remains separate/borrowed. Potential old canonical GPU allocation is producer-owned and not hidden here. No pixel/performance/driver-VRAM equivalence presumed.'};}
+ snapshot(){return{ready:this.ready,settingsKey:this.currentKey,preparedRevision:this.preparedRevision,cpuBytes:this.cpuBytes,canonicalBorrowedCpuBytes:this.source.canonical.cpuBytes,totalKnownCpuBytes:this.cpuBytes+this.source.canonical.cpuBytes,pendingStageCpuBytes:this.staging?.stats.cpuBytes??0,rows:this.attribute.count,retiredBuffers:this.retired.length,pending:!!this.staging,counters:{...this.counters},interiorCircle:this.source.interiorCircle?{storage:'Existing ninth row of first edge; original headers and addresses preserved',additionalRetainedCpuBytes:0,additionalGpuBytes:0,additionalStageBytes:0,additionalFlatVaryings:1}:null,scope:'Prepared affine coefficients; canonical CPU remains separate/borrowed. Potential old canonical GPU allocation is producer-owned and not hidden here. No pixel/performance/driver-VRAM equivalence presumed.'};}
  attachGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{this.assertCurrent();const actual=[...new Set(geometries)];for(const attribute of new Set([this.attribute,...this.retired]))for(const geometry of actual)geometry.setAttribute(`uvAffineStrokeGpuRetirement${attribute.id}`,attribute);}
  dispose():void{if(this.closed)return;const errors:unknown[]=[];try{this.staging?.dispose();}catch(error){errors.push(error);}try{this.node.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Affine owner terminal settlement failed');this.closed=true;this.retired.length=0;}
 }
 /** Fixed models: dense IDs supplied at admission. Rock: provide its actual
  * catalog/dirty IDs and a single-linear predicate; no private reflection seam. */
-export function linearCanonicalStencil(canonical:FaceStrokeData,options:{faceIds:()=>readonly number[];revision:()=>string;isLinear:()=>boolean}):CanonicalStencil{
- return{canonical,faceIds:options.faceIds,revision:options.revision,assertCurrent:()=>canonical.assertCurrent(),rows:()=>{canonical.assertCurrent();if(!options.isLinear())throw new AffineAdmissionRefusal('Private affine v1 supports contiguous canonical storage only; large paged representation remains Source');const rows=canonical.buffer.array;if(!(rows instanceof Float32Array)||canonical.buffer.itemSize!==4)throw Error('Actual linear canonical vec4 storage required');return rows;}};
+export function linearCanonicalStencil(canonical:FaceStrokeData,options:{faceIds:()=>readonly number[];revision:()=>string;isLinear:()=>boolean;interiorCircle?:true}):CanonicalStencil{
+ return{canonical,interiorCircle:options.interiorCircle,faceIds:options.faceIds,revision:options.revision,assertCurrent:()=>canonical.assertCurrent(),rows:()=>{canonical.assertCurrent();if(!options.isLinear())throw new AffineAdmissionRefusal('Private affine v1 supports contiguous canonical storage only; large paged representation remains Source');const rows=canonical.buffer.array;if(!(rows instanceof Float32Array)||canonical.buffer.itemSize!==4)throw Error('Actual linear canonical vec4 storage required');return rows;}};
 }

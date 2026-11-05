@@ -13,7 +13,7 @@ export interface PlantAtlasTile {face:number;bin:number;page:number;rect:PlantAt
 export interface PlantAtlasPlan {
  readonly size:2048;readonly levels:4;readonly bins:16;readonly pages:1|2;readonly depth:2|4;readonly geometry:THREE.BufferGeometry;
  readonly faces:readonly PlantAtlasFace[];readonly tiles:readonly PlantAtlasTile[];readonly key:string;
- readonly retainedGpuBytes:number;readonly peakGpuBytes:number;readonly maxCpuBytes:number;readonly addressRows:Float32Array;
+ readonly retainedGpuBytes:number;readonly peakGpuBytes:number;readonly maxPeakGpuBytes:number;readonly maxCpuBytes:number;readonly addressRows:Float32Array;
  readonly worstRestMetricError:number;readonly existingLiveGpuBytes:number;
 }
 const dot=(a:readonly number[],b:readonly number[])=>a.reduce((n,v,i)=>n+v*b[i]!,0),norm=(v:readonly number[])=>Math.hypot(...v),scaled=(v:readonly number[],s:readonly number[])=>v.map((x,i)=>x*s[i]!);
@@ -67,5 +67,5 @@ export function planPlantAtlas(geometry:THREE.BufferGeometry,limits:{maxCpuBytes
  if(retainedGpuBytes>85*1024*1024||peakGpuBytes>limits.maxPeakGpuBytes||addressRows.byteLength+total*16*128>limits.maxCpuBytes)throw new PlantAtlasAdmissionRefusal('Plant old-live/new/scratch budget refused BEFORE GPU allocation');
  for(const face of faces)addressRows.set([face.rawBounds[0],face.rawBounds[1],1/(face.rawBounds[2]-face.rawBounds[0]),1/(face.rawBounds[3]-face.rawBounds[1])],face.id*4);
  for(const tile of tiles){const row=faces.length+(tile.face*16+tile.bin)*2;addressRows.set([tile.content.x/size,tile.content.y/size,tile.content.width/size,tile.content.height/size],row*4);addressRows.set([tile.page*2,0,0,0],(row+1)*4);}
- return Object.freeze({size,levels:4,bins:16,pages,depth,geometry,faces:Object.freeze(faces),tiles:Object.freeze(tiles),key:JSON.stringify({version:'private-plant-BI-card16-v1',geometry:geometry.uuid,faces:faces.map(f=>[f.rawBounds,f.basisU,f.basisV,f.ratioMin,f.ratioMax]),tiles}),retainedGpuBytes,peakGpuBytes,maxCpuBytes:limits.maxCpuBytes,addressRows,worstRestMetricError,existingLiveGpuBytes:limits.existingLiveGpuBytes});
+ return Object.freeze({size,levels:4,bins:16,pages,depth,geometry,faces:Object.freeze(faces),tiles:Object.freeze(tiles),key:JSON.stringify({version:'private-plant-BI-card16-v1',geometry:geometry.uuid,faces:faces.map(f=>[f.rawBounds,f.basisU,f.basisV,f.ratioMin,f.ratioMax]),tiles}),retainedGpuBytes,peakGpuBytes,maxPeakGpuBytes:limits.maxPeakGpuBytes,maxCpuBytes:limits.maxCpuBytes,addressRows,worstRestMetricError,existingLiveGpuBytes:limits.existingLiveGpuBytes});
 }

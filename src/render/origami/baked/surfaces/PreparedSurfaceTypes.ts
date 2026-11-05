@@ -31,6 +31,12 @@ export interface PreparedSurfaceTile {
  readonly content:Readonly<{x:number;y:number;width:number;height:number}>;
 }
 export interface PreparedSurfacePage {readonly format:PreparedSurfaceFormat;readonly bodyLayer:number;readonly inkLayer?:number}
+/** The actual admitted bank stores a scalar Ink coefficient in Body.a. The
+ * basis is copied from its own paint lease; absent metadata means V67 BI. */
+export interface PreparedSurfaceScalarInk {readonly color:readonly[number,number,number];readonly compact?:true}
+/** Only the returned GPU bank uses physical pages. Canonical plans/addresses
+ * retain their original BI vocabulary independently of this storage encoding. */
+export interface PreparedSurfacePhysicalPage {readonly format:PreparedSurfaceFormat|'scalar';readonly bodyLayer:number;readonly inkLayer?:number}
 export interface PreparedSurfaceLimits {
  readonly maxCpuBytes:number;readonly maxRetainedGpuBytes:number;readonly maxPeakGpuBytes:number;
  readonly oldLiveGpuBytes:number;readonly otherLiveGpuBytes:number;readonly oldLiveCpuBytes:number;
@@ -45,7 +51,8 @@ export interface PreparedSurfacePlan {
  assertCurrent():void;
 }
 export interface PreparedSurfaceGpuResult {
- readonly texture:THREE.Texture;readonly pages:readonly PreparedSurfacePage[];
+ readonly texture:THREE.Texture;readonly pages:readonly PreparedSurfacePhysicalPage[];
+ readonly scalarInk?:PreparedSurfaceScalarInk;
  readonly gpuBytes:number;readonly cpuBytes:number;readonly stats:Readonly<Record<string,unknown>>;
  assertCurrent():void;dispose():void;
 }

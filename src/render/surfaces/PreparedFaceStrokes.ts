@@ -8,6 +8,8 @@ import {AffineAdmissionRefusal,AffineStrokeOwner,linearCanonicalStencil,normaliz
 import type {SharedSurfacePreparationRegistry,SharedSurfacePreparationSnapshot,SharedSurfacePreparationStage} from './SharedSurfacePreparation';
 
 export interface PreparedStrokeDescriptor {
+ /** Unit-UV Rock only; reuse affine edge padding and one flat varying. */
+ readonly interiorCircle?:true;
  readonly faceIds?:()=>readonly number[];
  readonly revision?:()=>string;
  readonly isLinear?:()=>boolean;
@@ -49,7 +51,7 @@ export class PreparedFaceStrokes {
   this.assertCurrent();const existing=this.entries.get(table);if(existing)return existing.mode==='prepared'?existing.owner:undefined;
   if(this.staged)throw Error('Do not admit a new stroke model into a staged surface batch');
   descriptor={...(table as PreparedStrokeCanonical).preparedStrokeDescriptor?.(),...descriptor};
-  table.assertCurrent();let entry:Entry;const revision=descriptor.revision??(()=>String(table.buffer.id)),source=linearCanonicalStencil(table,{faceIds:descriptor.faceIds??(()=>Array.from({length:table.faceCount},(_,face)=>face)),revision,isLinear:descriptor.isLinear??(()=>true)});
+  table.assertCurrent();let entry:Entry;const revision=descriptor.revision??(()=>String(table.buffer.id)),source=linearCanonicalStencil(table,{faceIds:descriptor.faceIds??(()=>Array.from({length:table.faceCount},(_,face)=>face)),revision,isLinear:descriptor.isLinear??(()=>true),interiorCircle:descriptor.interiorCircle});
   const headroom=this.limits.maxPreparedOwnedBytes-this.ownedBytes(),owner=headroom>=16?new AffineStrokeOwner(source,{maxBindingBytes:128*1024*1024,maxOwnedBytes:headroom,maxStageBytes:Math.min(32*1024*1024,this.limits.maxStageBytes)}):undefined;
   entry={table,descriptor,owner,mode:'prepared',full:false,dirty:new Set(),revision:0,stageBytes:0};
   let stage:AffineStage|undefined;
@@ -84,7 +86,7 @@ export class PreparedFaceStrokes {
     try{
      // This limit includes every other live/retired prepared allocation.
      const headroom=this.limits.maxPreparedOwnedBytes-this.ownedBytes()+(entry.owner?.cpuBytes??0);if(headroom<16)throw new AffineAdmissionRefusal('No prepared context reservation remains');
-     if(!entry.owner)entry.owner=new AffineStrokeOwner(linearCanonicalStencil(entry.table,{faceIds:entry.descriptor.faceIds??(()=>Array.from({length:entry.table.faceCount},(_,face)=>face)),revision:entry.descriptor.revision??(()=>String(entry.table.buffer.id)),isLinear:entry.descriptor.isLinear??(()=>true)}),{maxBindingBytes:128*1024*1024,maxOwnedBytes:headroom,maxStageBytes:Math.min(32*1024*1024,this.limits.maxStageBytes)});
+     if(!entry.owner)entry.owner=new AffineStrokeOwner(linearCanonicalStencil(entry.table,{faceIds:entry.descriptor.faceIds??(()=>Array.from({length:entry.table.faceCount},(_,face)=>face)),revision:entry.descriptor.revision??(()=>String(entry.table.buffer.id)),isLinear:entry.descriptor.isLinear??(()=>true),interiorCircle:entry.descriptor.interiorCircle}),{maxBindingBytes:128*1024*1024,maxOwnedBytes:headroom,maxStageBytes:Math.min(32*1024*1024,this.limits.maxStageBytes)});
      entry.owner.limits.maxOwnedBytes=headroom;
      row.stage=!settingsChanged&&!entry.full&&entry.mode==='prepared'?entry.owner.stageDirty([...entry.dirty]):entry.owner.stageAll(target);
      const reserved=row.stage.stats.kind==='full'?row.stage.stats.cpuBytes:entry.stageBytes;if(quota-entry.stageBytes+reserved>this.limits.maxStageBytes)throw new AffineAdmissionRefusal('Combined prepared stroke stage exceeds context budget');quota+=reserved-entry.stageBytes;
