@@ -152,7 +152,7 @@ export class RoofLayer {
     // side-face projection supplies its own regular authored coordinates.
     const point=attribute('position','vec3'),normal=attribute('normal','vec3').abs(),paintUv=normal.y.greaterThan(.5).select(uv(),normal.x.greaterThan(.5).select(vec2(point.z,point.y).div(8),vec2(point.x,point.y).div(8))),address=attribute(SURFACE_STROKE_UV,'vec3'),base=attribute('color','vec3');
     this.textured.roughness=.88;this.textured.metalness=.02;
-    applySharedPaintSurface(this.textured,{context,base,pastel:base.mul(texture(this.paint,uv()).rgb),faceUv:paintUv,stroke:naturalStroke(context,this.strokeBank,address.z,address.xy)});
+    const publishStroke=()=>applySharedPaintSurface(this.textured,{context,base,pastel:base.mul(texture(this.paint,uv()).rgb),faceUv:paintUv,stroke:naturalStroke(context,this.strokeBank,address.z,address.xy)});this.strokeBank.setPreparedRepresentationPublisher(()=>{publishStroke();this.textured.needsUpdate=true;});publishStroke();
     this.surface.visible = this.areas.visible = false;
   }
   setTexturesEnabled(enabled: boolean): void {

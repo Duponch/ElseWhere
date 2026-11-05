@@ -65,11 +65,15 @@ export class RoomBackdrop {
     const view = camera as PerspectiveCamera;
     this.optics.value.set(view.near, view.far, view.isPerspectiveCamera ? 1 : 0, focusDistance);
     this.blur.value.set(1 / this.size.x, 1 / this.size.y, span * .07, span * .38);
+    const refresh = !this.ready || this.version !== version || !this.lastView.equals(camera.matrixWorld)
+      || !this.lastProjection.equals(camera.projectionMatrix);
+    // A cached prepare-only call changes no renderer state. Keep optics/size
+    // updates above, then leave the foreground's active target untouched.
+    if (!refresh && !compose) return;
     const previousTarget = renderer.getRenderTarget(), previousAutoClear = renderer.autoClear;
     renderer.getClearColor(this.clear); const previousAlpha = renderer.getClearAlpha();
     try {
-      if (!this.ready || this.version !== version || !this.lastView.equals(camera.matrixWorld)
-        || !this.lastProjection.equals(camera.projectionMatrix)) {
+      if (refresh) {
         renderer.autoClear = true;
         renderer.setRenderTarget(this.target);
         renderer.render(scene, camera);

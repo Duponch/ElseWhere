@@ -1,5 +1,64 @@
 # Rendu commun et textures Pastel/Gouache
 
+État du 5 novembre 2026 : **macrolot acteurs/contours qualifié dans le vrai Core,
+parité encore ouverte**. Les mêmes modèles, matériaux, poses et règles de visibilité
+restent en place dans les deux textures. Les traits utilisent des coefficients
+préparés hors image ; les acteurs admissibles utilisent une texture de couleur
+préparée, avec les fabriques Source de peinture et de traits. Les états cliniques,
+formes non affines, effets positifs ou budgets non admis gardent leur représentation
+Source complète sur le même matériau. Aucun graphe Source coûteux n'est caché dans
+le fragment rapide. Le Pastel natif est conservé en64² pour les humains et256² pour
+les manteaux animaux, sans rééchantillonnage.
+
+V57 a admis les trois humains et treize animaux réels (douze gazelles et un renard),
+avec zéro préparation répétée pendant les fenêtres CPU. La préparation globale
+retient le dessin avant les premiers rendus et ombres ; tous les propriétaires
+stagent avant publication, compilation et transfert de durée de vie. Le registry
+sert aussi la galerie, sans créer de World de simulation. La densité physique
+est capturée avant l'admission ; une décision globale O(1) traite ensuite les vraies
+transitions de zoom. Le cache ne dépend pas du tick, d'un UUID de World ou de la pose.
+
+Même WorkerWorld128, Main435, caméra, DPR1.2000000476837158, contours activés et
+relief/usure0 : CPU P/G/P0.885287/0.890805/0.892882ms, soit Gouache+0.193% face à
+la moyenne Pastel ; GPU0.885760/0.996352/0.900608ms, soit+11.551%, dérive Pastel
++1.676%. Les384frames GPU et1152passes sont fraîches et leurs sommes exactes ;
+le pic adverse Gouache2.293760ms est conservé. Les25appels et214196triangles sont
+identiques dans tous les bras. Ces temps concernent la soumission CPU et le vrai
+GPU de ce sous-ensemble en pause, pas les FPS ou une campagne active/WholeMain.
+
+La référence356 a été mesurée de nouveau séparément, avec le même World/cadrage,
+128callbacks et trois passes : CPU0.717356ms, GPU0.832512ms. Le coût commun ajouté
+au Pastel courant reste donc visible, et Gouache reste environ19.68% plus coûteux
+côté GPU face à cette référence. C'est une comparaison chronologique indépendante,
+pas une attribution causale à une technique. **L'objectif de parité n'est pas acquis.**
+Deux familles Resource de quatre quadrants expliquent les quatre appels ajoutés ;
+leurs programmes doivent être réunis, leurs UUID seuls ne suffisent pas.
+
+La paire réelle Source/préparé au cadrage joueur change1758/1225728pixels ; retours
+Gouache et Pastel exacts. Root a observé les images côte à côte sans défaut grossier
+apparent. Les personnages sont petits dans ce cadrage : cela ne qualifie pas tous
+les détails proches, palettes, états cliniques ou angles. Les identités de modèles,
+matériaux et caméra sont vérifiées strictement avant les événements de diagnostic.
+Le renderer V57, son observateur et son client ont été libérés sans erreur.
+
+Les contrôles ciblés sont acquis par reprises bornées, avec les échecs initiaux
+conservés. Les types finaux et les builds passent ; quatre Workers des builds
+Native et Pages restent byte-exacts. Le premier démarrage Native de la galerie a
+refusé sa publication parce que la première compilation initialise légitimement
+la projection WebGPU. La correction initialise ce même champ public avant la
+capture de la garde stricte ; deux contrats couvrent cette conversion et refusent
+toujours un vrai changement de caméra après staging. Native V59 a ensuite observé
+714 assets, 39 groupes et deux définitions sans modèle au démarrage Gouache,
+puis relief/usure0 et Pastel/Gouache, sans erreur. La table longue a été observée
+avec peinture et contours ; son image et le reçu sont conservés. L'onglet a été
+fermé ; aucun reçu public de libération du renderer de galerie n'est revendiqué.
+Les neuf contrats galerie, les types finaux56.277s et Pages4.940s passent.
+Les programmes Native V59 sont byte-exacts à V57 : cette correction propre à la
+galerie ne justifie pas de rejouer le benchmark Core déjà acquis. Le total du lot
+est de69 cas distincts par reprises bornées. Les paragraphes suivants gardent les
+preuves et limites historiques des lots précédents.
+
+
 État du 4 novembre 2026 : **rendu commun fonctionnel, qualification finale ouverte**.
 La base des modèles est committée en `356a1d9a`. Le présent lot raccorde les surfaces,
 le jeu et la galerie. Les contrats ciblés, le typage complet et Pages passent.

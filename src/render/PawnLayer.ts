@@ -60,8 +60,10 @@ import {HumanModels,createHumanWearGeometry,type HumanModel} from './models/Huma
 import {HumanCargoModel} from './models/HumanCargoModel';
 import {naturalStroke} from './surfaces/NaturalSurfaceModels';
 import {faceStrokeHalfUvVertexHeaders,createFaceStrokeNode,attachFaceStrokeGpuRetirement,type FaceStrokeData} from './surfaces/FaceStrokeTable';
+import {createPreparedAffineStrokeNode} from './surfaces/AffineStrokeKernel';
+import {ActorAtlasOwner,actorPoseIsRigid} from './origami/baked/actors/ActorAtlasOwner';
 import {applySharedPaintSurface,type SharedPaintSurfaceOptions} from './surfaces/SharedPaintSurface';
-import { Fn, If, attribute, cos, float, instanceIndex, mix, positionLocal, sin, uniform, renderGroup, storage,uv,vec2,vec3,vec4, varying } from 'three/tsl';
+import { Fn, If, attribute, cos, float, instanceIndex, mix, positionLocal, sin, uniform, renderGroup,uv,vec2,vec3,vec4, varying } from 'three/tsl';
 import { TICKS_PER_SECOND,type MaterialPile,type Pawn,type World,type Job } from '../sim/types';
 import {origamiWorkTool} from './origami/work-tools';
 import {encodeOrigamiEquipment,origamiWeaponVisualSignal,origamiEquipmentPositionNode,ORIGAMI_EQUIPMENT_HAND,ORIGAMI_EQUIPMENT_BELT,ORIGAMI_EQUIPMENT_SLING} from './origami/equipment-pose';
@@ -72,7 +74,7 @@ import { CARRY_CAPACITY, footprintCells } from '../sim/definitions';
 import { PAWN_MODEL_SCALE, WORLD_SCALE } from '../world/scale';
 import { clearGroup, material } from './primitives';
 import { createStylizedSurfaceTexture } from './stylized-surfaces';
-import { pawnSurfaceShade } from './actor-surface';
+import { pawnSurfaceShade,pawnSurfaceUvNode,pawnSurfaceShadeFromSample } from './actor-surface';
 import { CargoHandoffs,type CargoAnchor } from './cargo-handoff';
 import { bodyBloodPigment,bodyBloodWord } from './body-blood';
 import type { AnimalCorpseCarrier } from './animal-corpse-carrier';
@@ -206,6 +208,20 @@ export class PawnLayer {
   private readonly cargoModel=new HumanCargoModel();
   private humanModel?:HumanModel;
   private humanStroke?:FaceStrokeData;
+  private bodyAtlas:ActorAtlasOwner|undefined;
+  private readonly bodyAtlasAppearance=new Map<number,string>();
+  private readonly bodyAtlasRigid=new Map<number,boolean>();
+  private bodyAtlasPublishedCount=0;private bodyAtlasModelKey='';
+  private observeBodyAtlasPose(id:number,slot:number,geometry:THREE.BufferGeometry):boolean{if(!this.bodyAtlas)return false;const rigid=actorPoseIsRigid('human',geometry,slot);if(this.bodyAtlasRigid.get(id)===rigid)return false;this.bodyAtlasRigid.set(id,rigid);return true;}
+  private bodyAtlasAppearanceChanged(id:number,slot:number,geometry:THREE.BufferGeometry):boolean{
+    if(!this.bodyAtlas)return false;const tint=geometry.getAttribute('aTint'),skin=geometry.getAttribute('aSkin'),hair=geometry.getAttribute('aHair'),shape=geometry.getAttribute('aShape'),equipment=geometry.getAttribute('aEquipment'),blood=geometry.getAttribute('aBodyBlood'),x=equipment.getX(slot),cleanEquipment=Math.floor(x)+Math.round((x-Math.floor(x))*8)/8;
+    const key=[tint.getX(slot),tint.getY(slot),tint.getZ(slot),skin.getX(slot),skin.getY(slot),skin.getZ(slot),hair.getX(slot),hair.getY(slot),hair.getZ(slot),shape.getX(slot),shape.getY(slot),shape.getZ(slot),shape.getW(slot),cleanEquipment,equipment.getY(slot),equipment.getZ(slot),equipment.getW(slot),blood.getX(slot)===0?0:1].join(':');
+    if(this.bodyAtlasAppearance.get(id)===key)return false;this.bodyAtlasAppearance.set(id,key);return true;
+  }
+  private readonly humanCanonicalTables=new Set<FaceStrokeData>();
+  private refreshHumanBodySurface:(()=>void)|undefined;
+  private humanBodyBakeOptions:((surfacePosition:THREE.Node<'vec3'>)=>SharedPaintSurfaceOptions&{surfacePosition:THREE.Node<'vec3'>})|undefined;
+  private humanPastelFromSample:((sample:THREE.Node<'vec4'>)=>THREE.Node<'vec3'>)|undefined;
   private wearEffect?:THREE.Mesh<THREE.InstancedBufferGeometry,THREE.MeshStandardNodeMaterial>;
   private wearModelKey?:string;
   private releaseWearEffect?:()=>void;
@@ -309,9 +325,10 @@ export class PawnLayer {
   }
   private selectBodyMaterial(): void {
     if (!this.pawnMesh) return;
-    const selected = this.nativeBody
+    const source = this.nativeBody
       ? (this.texturesEnabled ? this.nativeTexturedMaterial : this.nativePlainMaterial)
       : (this.texturesEnabled ? this.texturedMaterial : this.plainMaterial);
+    const selected=source&&this.texturesEnabled?(this.bodyAtlas?.selectedMaterial(source)??source):source;
     if (selected && this.pawnMesh.material !== selected) this.pawnMesh.material = selected;
     if(selected&&this.wearEffect){if(this.wearEffect.material.positionNode!==selected.positionNode){this.wearEffect.material.positionNode=selected.positionNode;this.wearEffect.material.needsUpdate=true;}this.wearEffect.userData.origamiTexturesEnabled=this.texturesEnabled;this.graphics?.refreshEdgeObject(this.wearEffect,'wear');}
   }
@@ -339,13 +356,20 @@ export class PawnLayer {
       releaseGeometry=context.trackWearGeometry(geometry);releaseObject=context.trackEdgeObject(effect,'wear');const freeGeometry=releaseGeometry,freeObject=releaseObject;this.releaseWearEffect=()=>{try{freeObject();}finally{freeGeometry();}};this.wearEffect=effect;this.wearModelKey=this.humanModel?.key;this.group.add(effect);this.installBodyPartUnions();this.syncBodyInstances();attached=true;
     }finally{if(!attached){releaseObject?.();releaseGeometry?.();effect?.removeFromParent();geometry?.dispose();material?.dispose();this.wearEffect=undefined;this.releaseWearEffect=undefined;this.wearModelKey=undefined;}}
   }
-  /** Fixed scalar storage is model-owned data. New equipment can change its
-   * contents at adoption, without changing any material or storage binding. */
+  /** Canonical model records are borrowed, with no second CPU/GPU mirror.
+   * The prepared owner has a stable runtime binding across equipment models. */
   private createHumanGeometry():THREE.InstancedBufferGeometry{
-    const model=this.humanModels.get({smithing:this.smithingGeometry,mace:this.maceGeometry,longsword:this.longswordGeometry,spear:this.spearGeometry});
-    if(!this.humanStroke){const values=new Float32Array(131072*4),buffer=new THREE.StorageBufferAttribute(values,4),node=storage(buffer,'vec4',values.length/4).toReadOnly(),owner=this;let closed=false;this.humanStroke={get faceCount(){return owner.humanModel?.strokes.faceCount??0;},get edgeCount(){return owner.humanModel?.strokes.edgeCount??0;},get maxEdgesPerFace(){return owner.humanModel?.strokes.maxEdgesPerFace??0;},values,buffer,node,cpuBytes:values.byteLength,assertCurrent(){if(closed)throw Error('Human stroke binding retired');},dispose(){if(closed)return;closed=true;node.dispose();}};}
-    if(model!==this.humanModel){if(model.strokes.values.length>this.humanStroke.values.length)throw Error('Human stroke binding capacity refused');this.humanStroke.values.set(model.strokes.values);this.humanStroke.buffer.addUpdateRange(0,model.strokes.values.length);this.humanStroke.buffer.needsUpdate=true;this.humanModel=model;}
+    const model=this.humanModels.get({smithing:this.smithingGeometry,mace:this.maceGeometry,longsword:this.longswordGeometry,spear:this.spearGeometry}),changed=model!==this.humanModel;this.humanModel=model;this.humanCanonicalTables.add(model.strokes);
+    if(!this.humanStroke){const owner=this;let closed=false;this.humanStroke={get faceCount(){return owner.humanModel!.strokes.faceCount;},get edgeCount(){return owner.humanModel!.strokes.edgeCount;},get maxEdgesPerFace(){return owner.humanModel!.strokes.maxEdgesPerFace;},get values(){return owner.humanModel!.strokes.values;},get buffer(){return owner.humanModel!.strokes.buffer;},get node(){return owner.humanModel!.strokes.node;},get cpuBytes(){return owner.humanModel!.strokes.cpuBytes;},assertCurrent(){if(closed)throw Error('Human canonical facade retired');owner.humanModel!.assertCurrent();},dispose(){closed=true;}};}
+    if(changed)this.graphics?.preparedStrokes.refresh(this.humanStroke);
     return model.createGeometry();
+  }
+  /** Source factories are borrowed by the offline baker, never by frame code.
+   * It captures genuine owner streams; a rejected whole actor stays Source. */
+  actorAtlasStatus(){return this.bodyAtlas?.status();}
+  bodySurfaceBakeSource(){
+    if(!this.humanModel||!this.pawnMesh||!this.texturedMaterial||!this.humanBodyBakeOptions||!this.humanPastelFromSample)return undefined;
+    const model=this.humanModel;return{model,createGeometry:()=>model.createGeometry(),geometry:this.pawnMesh.geometry as THREE.InstancedBufferGeometry,sourceMaterial:this.texturedMaterial,nativeMaterial:this.nativeTexturedMaterial,buildOptions:this.humanBodyBakeOptions,morphPosition:()=>pawnMorph(positionLocal,true).mul(PAWN_MODEL_SCALE),pastelTexture:this.surfaceTexture,pastelUv:pawnSurfaceUvNode(),pastelFromSample:this.humanPastelFromSample};
   }
   /** Call only while the owner suspends frames and prepares scene visibility.
    * compileAsync skips shadows; prepareShadow must request a real shadow pass.
@@ -363,7 +387,7 @@ export class PawnLayer {
       geometry.instanceCount = Math.max(1, savedCount);
       if(effect){effect.visible=true;effect.geometry.instanceCount=Math.max(1,effect.geometry.instanceCount);}
       for (const variant of [this.plainMaterial, this.texturedMaterial,
-        this.nativePlainMaterial, this.nativeTexturedMaterial]) {
+        this.nativePlainMaterial, this.nativeTexturedMaterial,...(this.bodyAtlas?.materials??[])]) {
         if (!variant) continue;
         mesh.material = variant;
         if(effect){effect.material.positionNode=variant.positionNode;effect.material.needsUpdate=true;}
@@ -782,8 +806,16 @@ export class PawnLayer {
         });
         return bodyBloodPigment(pigment,region,1,cloth.select(float(1),float(0)),attribute('aHairBlood','vec4').w,origamiBloodBind);
       })();
-      const context=this.graphics,faceUv=varying(attribute('origamiPaintUv','vec2'),'v_pawnSurfaceUv'),faceId=attribute('pawnRigTraits','vec4').w,headers=faceStrokeHalfUvVertexHeaders({table:this.humanStroke!,faceId,enabled:context.surfaceEncoding.mul(context.lineOpacity),opacity:context.lineOpacity},'v_pawnStrokeHeaderPacked'),stroke=(body:THREE.Node<'vec3'>)=>createFaceStrokeNode(body,{table:this.humanStroke!,faceId,headers,faceUv,enabled:context.surfaceEncoding.mul(context.lineOpacity),width:context.edgeWidth,irregularity:context.strokeImperfection,opacity:context.lineOpacity,brushColor:context.brushColor.rgb,samplePigment:(u,x,y)=>context.sampleStrokePigment(u,x,y),sampleDry:(u,x,y)=>context.sampleStrokeDry(u,x,y)});
-      bodySurfaceOptions={context,base:baseColor,pastel:baseColor.mul(pawnSurfaceShade(this.surfaceTexture)),faceUv,profile:origamiTraits.w,includeGeneric:false,gouacheTransform:transformPaint,stroke};applySharedPaintSurface(textured,bodySurfaceOptions);
+      const context=this.graphics,faceUv=varying(attribute('origamiPaintUv','vec2'),'v_pawnSurfaceUv'),faceId=attribute('pawnRigTraits','vec4').w,table=this.humanStroke!;
+      const buildStroke=(surfacePosition?:THREE.Node<'vec3'>,canonical=false)=>{
+        const prepared=canonical?undefined:context.preparedStrokes.acquire(table,{revision:()=>this.humanModel!.key,onRepresentationChange:()=>this.refreshHumanBodySurface?.()}),headerTable=prepared?.headerTable()??table,headers=faceStrokeHalfUvVertexHeaders({table:headerTable,faceId,enabled:context.surfaceEncoding.mul(context.lineOpacity),opacity:context.lineOpacity},'v_pawnStrokeHeaderPacked');
+        const common={faceId,headers,faceUv,surfacePosition,enabled:context.surfaceEncoding.mul(context.lineOpacity),opacity:context.lineOpacity,brushColor:context.brushColor.rgb,samplePigment:(u:THREE.Node<'vec2'>,x:THREE.Node<'vec2'>,y:THREE.Node<'vec2'>)=>context.sampleStrokePigment(u,x,y),sampleDry:(u:THREE.Node<'vec2'>,x:THREE.Node<'vec2'>,y:THREE.Node<'vec2'>)=>context.sampleStrokeDry(u,x,y)};
+        return prepared?(body:THREE.Node<'vec3'>)=>createPreparedAffineStrokeNode(body,{...common,owner:prepared}):(body:THREE.Node<'vec3'>)=>createFaceStrokeNode(body,{...common,table,width:context.edgeWidth,irregularity:context.strokeImperfection});
+      };
+      this.humanPastelFromSample=sample=>baseColor.mul(pawnSurfaceShadeFromSample(sample));
+      bodySurfaceOptions={context,base:baseColor,pastel:baseColor.mul(pawnSurfaceShade(this.surfaceTexture)),faceUv,profile:origamiTraits.w,includeGeneric:false,gouacheTransform:transformPaint,stroke:buildStroke()};applySharedPaintSurface(textured,bodySurfaceOptions);
+      this.humanBodyBakeOptions=surfacePosition=>({...bodySurfaceOptions!,surfacePosition,stroke:buildStroke(surfacePosition,true)});
+      this.refreshHumanBodySurface=()=>{bodySurfaceOptions={...bodySurfaceOptions!,stroke:buildStroke()};for(const material of[this.texturedMaterial,this.nativeTexturedMaterial])if(material){applySharedPaintSurface(material,bodySurfaceOptions);material.needsUpdate=true;}};
     }
     const nativePlain = material(0xffffff), nativeTextured = material(0xffffff);
     this.configure?.(actorExplorationMaterial256(nativePlain));
@@ -826,7 +858,8 @@ export class PawnLayer {
       shadowSources.set(override, {source, version: source.version});
     };
     this.pawnMesh = mesh;
-    this.group.add(mesh);
+    if(this.graphics&&!this.bodyAtlas)this.bodyAtlas=new ActorAtlasOwner({key:'human-full-body:'+this.group.uuid,kind:'human',context:this.graphics,readPort:()=>this.bodySurfaceBakeSource(),ownerCount:()=>this.pawnMesh?(this.pawnMesh.geometry as THREE.InstancedBufferGeometry).instanceCount:0,changed:()=>this.selectBodyMaterial(),configure:material=>{this.configure?.(actorExplorationMaterial256(material));}});
+    this.selectBodyMaterial();this.group.add(mesh);
     this.adoptBodyGeometry(geometry);
     const cargo = this.cargoModel.createGeometry();
     for (const name of ['aFrom', 'aTo', 'aCargo', 'aMotion', 'aTravel']) cargo.setAttribute(name, geometry.getAttribute(name));
@@ -1133,7 +1166,7 @@ export class PawnLayer {
     const carried = new Map<number, World['piles'][number]>();
     for (const pile of world.piles) if (pile.owner.type === 'pawn') carried.set(pile.owner.pawnId, pile);
     let jobsById:Map<number,World['jobs'][number]>|undefined=this.referenceRig?this.workToolJobs:undefined;
-    const present = new Set<number>();
+    const present = new Set<number>();let atlasChanged=this.bodyAtlasPublishedCount!==world.pawns.length||this.bodyAtlasModelKey!==this.humanModel?.key;
     world.pawns.forEach((pawn, index) => {
       present.add(pawn.id);
       const previous = newMap ? undefined : this.visuals.get(pawn.id);
@@ -1227,6 +1260,7 @@ export class PawnLayer {
       }
       equipment.setXYZW(index,equipmentCode,look.silhouette,(look.vest?1:0)+(look.simpleHelmet?10:look.reconHelmet?4:look.helmet?2:look.tuque===2?8:look.tuque===1?6:0)+(look.vestTintCode??0)/65536,look.pants+(look.simpleHelmet?look.simpleHelmetMaterial/16:look.plasteelHelmet?.5:0));
       this.refreshOrigamiEquipmentSignal(pawn,index);
+      atlasChanged=this.bodyAtlasAppearanceChanged(pawn.id,index,geometry)||atlasChanged;atlasChanged=this.observeBodyAtlasPose(pawn.id,index,geometry)||atlasChanged;
       const load = carried.get(pawn.id);
       const packed=world.packed?.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id);
       const handoff=this.handoffs.active.get(pawn.id);
@@ -1242,7 +1276,7 @@ export class PawnLayer {
         handoffFrom.setXYZW(index,0,0,0,0);handoffTo.setXYZW(index,0,0,0,0);
       }
     });
-    for (const id of this.visuals.keys()) if (!present.has(id)){this.visuals.delete(id);this.targetPoses.delete(id);this.headings.delete(id);this.workPoses.delete(id);this.workOffsets.delete(id);this.approachTransitions.delete(id);this.departureOffsets.delete(id);this.crouchTransitions.delete(id);this.shownPoses.delete(id);this.gait.delete(id);}
+    for (const id of this.visuals.keys()) if (!present.has(id)){this.bodyAtlasAppearance.delete(id);this.bodyAtlasRigid.delete(id);this.visuals.delete(id);this.targetPoses.delete(id);this.headings.delete(id);this.workPoses.delete(id);this.workOffsets.delete(id);this.approachTransitions.delete(id);this.departureOffsets.delete(id);this.crouchTransitions.delete(id);this.shownPoses.delete(id);this.gait.delete(id);}
     this.pawnIndices.clear();for(const [id,index] of indices)this.pawnIndices.set(id,index);
     const patientOwners=new Map(this.rescuePairs.map(([carrier,patient])=>[patient,carrier] as const));
     this.animationOwners.clear();for(const [patient,carrier] of patientOwners)this.animationOwners.set(patient,carrier);
@@ -1261,7 +1295,7 @@ export class PawnLayer {
     this.syncPartialCargo();
     (this.selectionMesh!.geometry as THREE.InstancedBufferGeometry).instanceCount=world.pawns.length;
     this.pawnIds=world.pawns.map(p=>p.id);this.setSelected(this.selected);
-    this.playback435.prepare(world,world.pawns,true);
+    this.playback435.prepare(world,world.pawns,true);this.bodyAtlasPublishedCount=world.pawns.length;this.bodyAtlasModelKey=this.humanModel?.key??'';if(atlasChanged)this.bodyAtlas?.invalidate();
   }
 
   /** No appearance, surface, ownership or job reconstruction on an actor-only
@@ -1338,8 +1372,9 @@ export class PawnLayer {
     this.travelTime.value=localTimeSeconds(timeline.tick,origin);
     const playback=this.playback435.beginFrame(timeline);if(this.playback435.retrying)this.travelKeys.clear();
     const spring=isCorePhysicalSchema297(Number(world.schemaVersion));if(spring)this.ensureSpring297(humans.length);
-    let dirty=false,partUnionDirty=false;
+    let dirty=false,partUnionDirty=false,atlasPoseChanged=false;
     humans.forEach((pawn,i)=>{
+      atlasPoseChanged=this.observeBodyAtlasPose(pawn.id,i,geometry)||atlasPoseChanged;
       const prepared=playback?this.playback435.select(i,timeline,timeline.tick,origin):undefined;
       if(spring&&!this.springValid297[i])this.captureSpring297(i,from,to,times,motion);
       if(playback&&!prepared){if(spring)dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;return;}
@@ -1442,6 +1477,7 @@ export class PawnLayer {
         else motion.setW(i,pawn.id*1.7);
       }
       from.setXYZW(i,visual.from.x,visual.from.y,visual.from.z,visual.from.w);to.setXYZW(i,visual.to.x,visual.to.y,visual.to.z,visual.to.w);
+      atlasPoseChanged=this.observeBodyAtlasPose(pawn.id,i,geometry)||atlasPoseChanged;
       if(motion.getY(i)!==priorActivity)partUnionDirty=true;
       if(spring){this.captureSpring297(i,from,to,times,motion);dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;}
     });
@@ -1470,7 +1506,7 @@ export class PawnLayer {
       }
       for(const attribute of [from,to,times,motion])attribute.needsUpdate=true;
     }else if(crouchFinished)motion.needsUpdate=true;
-    if(partUnionDirty)this.refreshBodyPartUnion(geometry as THREE.InstancedBufferGeometry);
+    if(partUnionDirty)this.refreshBodyPartUnion(geometry as THREE.InstancedBufferGeometry);if(atlasPoseChanged)this.bodyAtlas?.invalidate();
     if(playback)this.playback435.commit();
   }
 
@@ -1514,7 +1550,8 @@ export class PawnLayer {
     // All borrowers stop together. Real initialized candidates retain their
     // r186 geometry-dispose listener until this point, even after growth.
     const terminalGeometries=[...this.retiredPawnGeometries,...[this.pawnMesh,this.cargoMesh,this.partialCargoMesh].filter((mesh):mesh is THREE.Mesh=>!!mesh).map(mesh=>mesh.geometry)];
-    if(this.humanStroke)attachFaceStrokeGpuRetirement(this.humanStroke,terminalGeometries);
+    this.bodyAtlas?.attachGpuRetirement(terminalGeometries);this.bodyAtlas?.dispose();this.bodyAtlas=undefined;this.bodyAtlasAppearance.clear();this.bodyAtlasRigid.clear();this.bodyAtlasPublishedCount=0;this.bodyAtlasModelKey='';
+    if(this.humanStroke)this.graphics?.preparedStrokes.release(this.humanStroke,terminalGeometries);for(const table of this.humanCanonicalTables)attachFaceStrokeGpuRetirement(table,terminalGeometries);this.humanCanonicalTables.clear();this.refreshHumanBodySurface=undefined;this.humanBodyBakeOptions=undefined;this.humanPastelFromSample=undefined;
     this.cargoModel.attachGpuRetirement(terminalGeometries);
     clearGroup(this.group);
     for(const retired of this.retiredPawnGeometries)retired.dispose();this.retiredPawnGeometries.length=0;this.smithingGeometry=false;this.maceGeometry=false;this.longswordGeometry=false;this.spearGeometry=false;

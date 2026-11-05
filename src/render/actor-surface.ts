@@ -24,12 +24,18 @@ export function actorSurfaceShade(map: THREE.Texture) {
 
 /** Cover most of the visible torso with two broad irregular regions. The
  * grayscale wash scales all RGB channels equally, retaining identity hues. */
-export function pawnSurfaceShade(map: THREE.Texture) {
+export function pawnSurfaceUvNode() {
   const p = positionGeometry, settings = PAWN_SURFACE;
-  const coordinates = vec2(
+  return vec2(
     p.x.add(p.z.mul(settings.depthShift)).mul(settings.horizontalScale).add(.5),
     p.y.mul(settings.verticalScale).add(settings.verticalOffset),
   );
-  return texture(map, coordinates).r.sub(settings.grayPivot).mul(settings.grayGain)
+}
+export function pawnSurfaceShadeFromSample(sample:THREE.Node<'vec4'>) {
+  const settings=PAWN_SURFACE;
+  return sample.r.sub(settings.grayPivot).mul(settings.grayGain)
     .add(settings.grayBase).clamp(settings.minShade, settings.maxShade);
+}
+export function pawnSurfaceShade(map: THREE.Texture) {
+  return pawnSurfaceShadeFromSample(texture(map,pawnSurfaceUvNode()));
 }

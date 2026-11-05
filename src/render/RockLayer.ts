@@ -4,6 +4,7 @@ import { ROCK_INDICES, ROCK_VERTICES } from './RockSurface';
 import {RockSurfaceModel,ROCK_SURFACE_UV,ROCK_SURFACE_VERTICES} from './models/RockSurfaceModel';
 import {RockStrokeTable,type RockStrokePatch} from './surfaces/RockStrokeTable';
 import {faceStrokeVertexHeaders,createFaceStrokeNode} from './surfaces/FaceStrokeTable';
+import {createPreparedAffineStrokeNode} from './surfaces/AffineStrokeKernel';
 import { WORLD_SCALE } from '../world/scale';
 import { STONE_KINDS } from '../sim/geology';
 import { material } from './primitives';
@@ -21,6 +22,7 @@ import {currentGraphicsStyle} from './graphics-style';
 export class RockLayer {
   private readonly graphicsStyle=currentGraphicsStyle();
   private readonly stroke=new RockStrokeTable();
+  private readonly strokeFaces=new Set<number>();private strokeWorldRevision=0;
   private boundStrokeMode='';
   private model:RockSurfaceModel|undefined;
   private previousModel:RockSurfaceModel|undefined;
@@ -65,8 +67,10 @@ export class RockLayer {
     // broad stone map with a new kraft frame on every small cliff facet.
     // Include vertex pigment before the ink, so it cannot tint the ink twice.
     const context=this.graphicsStyle,base=attribute('color','vec3'),surface=attribute(ROCK_SURFACE_UV,'vec3');
-    const headers=context?faceStrokeVertexHeaders({table:this.stroke,faceId:surface.z,enabled:context.surfaceEncoding,opacity:context.lineOpacity,readRow:this.stroke.readRow},'v_rockStrokeHeader'):undefined;
-    const ink=(body:THREE.Node<'vec3'>)=>context?createFaceStrokeNode(body,{table:this.stroke,faceId:surface.z,headers,faceUv:surface.xy,enabled:context.surfaceEncoding,opacity:context.lineOpacity,width:context.edgeWidth,irregularity:context.strokeImperfection,brushColor:context.brushColor.rgb,samplePigment:(p,dx,dy)=>context.sampleStrokePigment(p,dx,dy),sampleDry:(p,dx,dy)=>context.sampleStrokeDry(p,dx,dy),readRow:this.stroke.readRow}):body;
+    const prepared=context?.preparedStrokes.acquire(this.stroke,{faceIds:()=>[...this.strokeFaces],revision:()=>`${this.strokeWorldRevision}:${this.stroke.stats.patches}`,isLinear:()=>this.stroke.representationKey==='single',onRepresentationChange:()=>this.bindSurface()}),headerTable=prepared?.headerTable()??this.stroke,read=prepared?.readRow??this.stroke.readRow;
+    const headers=context?faceStrokeVertexHeaders({table:headerTable,faceId:surface.z,enabled:context.surfaceEncoding,opacity:context.lineOpacity,readRow:read},'v_rockStrokeHeader'):undefined;
+    const common=context?{faceId:surface.z,headers,faceUv:surface.xy,enabled:context.surfaceEncoding,opacity:context.lineOpacity,brushColor:context.brushColor.rgb,samplePigment:(p:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>context.sampleStrokePigment(p,dx,dy),sampleDry:(p:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>context.sampleStrokeDry(p,dx,dy)}:undefined;
+    const ink=(body:THREE.Node<'vec3'>)=>!context?body:prepared?createPreparedAffineStrokeNode(body,{...common!,owner:prepared}):createFaceStrokeNode(body,{...common!,table:this.stroke,width:context.edgeWidth,irregularity:context.strokeImperfection,readRow:this.stroke.readRow});
     this.texturedMaterial.vertexColors=this.plainMaterial.vertexColors=false;
     this.texturedMaterial.colorNode=ink(base.mul(texture(this.stonePaint,paintedUv).rgb));
     // Source contours also remain visible when surface textures are disabled.
@@ -132,7 +136,7 @@ export class RockLayer {
     if(!reset&&this.tiles===world.tiles)return;
     reset ||= world.width!==this.width||world.height!==this.height||world.seed!==this.seed;
     const changed:number[]=[];
-    if(reset) {this.slots.clear();this.rockMask=new Uint8Array(world.tiles.length);this.width=world.width;this.height=world.height;this.seed=world.seed;}
+    if(reset) {this.strokeFaces.clear();this.strokeWorldRevision++;this.slots.clear();this.rockMask=new Uint8Array(world.tiles.length);this.width=world.width;this.height=world.height;this.seed=world.seed;}
     const inspect=reset?undefined:changedTiles;
     for(let n=0;n<(inspect?.length??world.tiles.length);n++) {
       const i=inspect?inspect[n]!:n;
@@ -170,18 +174,19 @@ export class RockLayer {
       const strokeDirty=new Set<number>();for(const i of geometric)for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){const x=i%world.width+dx,z=Math.floor(i/world.width)+dz;if(x>=0&&z>=0&&x<world.width&&z<world.height&&this.slots.has(z*world.width+x))strokeDirty.add(z*world.width+x);}
       const patches:RockStrokePatch[]=[];if(this.pendingSlab)patches.push(this.stroke.prepareSlab(model));
       for(const i of strokeDirty){const neighbours:{slot:number;count:number}[]=[];for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){const x=i%world.width+dx,z=Math.floor(i/world.width)+dz;if(x>=0&&z>=0&&x<world.width&&z<world.height){const record=this.slots.get(z*world.width+x);if(record)neighbours.push({slot:record.slot,count:record.indices.length});}}patches.push(this.stroke.prepareCell(model,this.slots.get(i)!.slot,neighbours));}
-      this.stroke.commit(patches);this.pendingSlab=false;
+      this.stroke.commit(patches);this.pendingSlab=false;for(const patch of patches)for(const face of patch.faces)this.strokeFaces.add(face);
+      this.graphicsStyle?.preparedStrokes.refresh(this.stroke,reset?undefined:[...new Set(patches.flatMap(patch=>[...patch.faces]))]);
       this.stats.updatedCells=dirty.size;this.stats.indexCount=offset;
       this.updateLocal(dirty,reallocated);
       this.previousModel?.dispose();this.previousModel=undefined;
     }
     // Representation changes only at actual World reset/admission. New Fn
     // nodes are mandatory so TSL cannot reuse an old single/paged graph.
-    if(this.boundStrokeMode!==this.stroke.representationKey)this.bindSurface();
+    if(!this.graphicsStyle&&this.boundStrokeMode!==this.stroke.representationKey)this.bindSurface();
     this.tiles=world.tiles;
   }
   sharedSurfaceStatus(){return{pipeline:'shared-paint',sourceRibbons:false,modelVertices:this.mesh.geometry.getAttribute('position')?.count??0,stroke:this.stroke.snapshot()};}
   /** The435 owner supplies its actual compiled geometries at terminal close. */
-  attachSurfaceGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{this.stroke.attachGpuRetirement(geometries);}
-  dispose():void {if(this.closed)return;this.closed=true;this.stroke.attachGpuRetirement([this.mesh.geometry,...this.local.children.filter((o):o is THREE.Mesh=>o instanceof THREE.Mesh).map(o=>o.geometry)]);this.clearLocal();if(this.model)this.model.dispose();else this.mesh.geometry.dispose();this.previousModel?.dispose();this.previousModel=undefined;this.plainMaterial.dispose();this.texturedMaterial.dispose();this.stonePaint.dispose();this.stroke.dispose();}
+  attachSurfaceGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{const actual=[...geometries];this.stroke.attachGpuRetirement(actual);this.graphicsStyle?.preparedStrokes.attachGpuRetirement(this.stroke,actual);}
+  dispose():void {if(this.closed)return;this.graphicsStyle?.preparedStrokes.release(this.stroke,[this.mesh.geometry,...this.local.children.filter((o):o is THREE.Mesh=>o instanceof THREE.Mesh).map(o=>o.geometry)]);this.closed=true;this.stroke.attachGpuRetirement([this.mesh.geometry,...this.local.children.filter((o):o is THREE.Mesh=>o instanceof THREE.Mesh).map(o=>o.geometry)]);this.clearLocal();if(this.model)this.model.dispose();else this.mesh.geometry.dispose();this.previousModel?.dispose();this.previousModel=undefined;this.plainMaterial.dispose();this.texturedMaterial.dispose();this.stonePaint.dispose();this.stroke.dispose();}
 }

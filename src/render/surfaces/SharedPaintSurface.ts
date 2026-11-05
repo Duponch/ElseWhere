@@ -22,6 +22,9 @@ export interface SharedPaintSurfaceOptions {
  /** An exact caller-supplied vertex mapping may replace the rendered-triangle
   * metric. Non-affine wind/morphs keep the actual fragment metric by default. */
  readonly pigmentUv?:THREE.Node<'vec2'>;
+ /** Preparation-only rasterizers retain the real post-morph 3D surface here
+  * while their clip positions address an atlas. Ordinary draws use view space. */
+ readonly surfacePosition?:THREE.Node<'vec3'>;
  /** Clinical recoloring belongs to the body, before the painted stroke. */
  readonly gouacheTransform?:(body:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
  readonly stroke?:(body:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
@@ -31,7 +34,7 @@ function paintInputs(options:SharedPaintSurfaceOptions){
  const context=options.context!,suppliedUv=options.faceUv??uv(),raw=Reflect.get(suppliedUv,'isVaryingNode')===true?suppliedUv:varying(suppliedUv),resolved=options.profile?context.resolvedPaintIdsNode(options.profile):undefined,ids=resolved
   ?varying(Fn(()=>{const value=vec2(0).toVar();If(context.surfaceEncoding.greaterThan(0),()=>{value.assign(resolved);});return value;})()).setInterpolation('flat')
   :context.genericPaintIdsNode(true);
- const metric=physicalPaintMetric(raw).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal(),pigment=options.pigmentUv??applyPhysicalPaintMetric(raw,metric,density);
+ const metric=physicalPaintMetric(raw,options.surfacePosition).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal(),pigment=options.pigmentUv??applyPhysicalPaintMetric(raw,metric,density);
  return{raw,ids,metric,density,pigment,genericOnly:options.profile===undefined,gameStaticBank0:options.pigmentDomain==='game-static78'};
 }
 
@@ -62,7 +65,7 @@ function configureSharedPaintSurface(material:THREE.NodeMaterial,options:SharedP
   // Color and normal are independently built/gated graphs. Share their vertex
   // inputs, but not a lazily initialized fragment variable owned by the other
   // graph's branch. Each positive-relief probe shares this local metric.
-  const metric=physicalPaintMetric(inputs.raw).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal(),pigment=options.pigmentUv??applyPhysicalPaintMetric(inputs.raw,metric,density);
+  const metric=physicalPaintMetric(inputs.raw,options.surfacePosition).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal(),pigment=options.pigmentUv??applyPhysicalPaintMetric(inputs.raw,metric,density);
   const sample=context.facePaintNode(pigment,inputs.raw,inputs.ids.x,inputs.ids.y,true,true,inputs.genericOnly,inputs.gameStaticBank0),dx=applyPhysicalPaintMetric(inputs.raw.dFdx(),metric,density),dy=applyPhysicalPaintMetric(inputs.raw.dFdy(),metric,density),
    hx=context.faceHeightNode(pigment.add(dx),inputs.raw.add(inputs.raw.dFdx()),inputs.ids.x,inputs.ids.y,inputs.genericOnly,inputs.gameStaticBank0),hy=context.faceHeightNode(pigment.add(dy),inputs.raw.add(inputs.raw.dFdy()),inputs.ids.x,inputs.ids.y,inputs.genericOnly,inputs.gameStaticBank0);
   const bumped=referencePaintBumpNormal(sample.a,hx,hy,context.impasto.mul(.035));

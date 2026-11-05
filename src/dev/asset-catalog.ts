@@ -7,7 +7,7 @@ import {createActorCatalog} from './asset-catalog-actors';
 import {createEnvironmentAssetCatalog} from './asset-catalog-environment';
 import {createTransportAssetCatalog} from './asset-catalog-transports';
 import type {CatalogCollection,CatalogItem,CatalogSection,CatalogStatus} from './asset-catalog-types';
-import {changeCatalogSurface} from './asset-catalog-surface';
+import {changeCatalogSurface,stageCatalogSharedSurfaces} from './asset-catalog-surface';
 import './asset-catalog.css';
 
 /** Independent development entry point. No Main bootstrap, simulation,
@@ -65,6 +65,8 @@ function lock(value:boolean):void{styleControl.disabled=value;$<HTMLButtonElemen
 function progress(message:string):void{$('catalog-loading-text').textContent=message;$('catalog-message').textContent=message;}
 function disposeCatalog():void{
   if(catalogCleanupFailed)throw Error('Catalog cleanup is quarantined; paint context remains owned');
+  // Settle borrowed publications before canonical tables/layers retire.
+  try{context?.surfacePreparation.dispose();}catch(error){catalogCleanupFailed=true;throw new AggregateError([error],'Catalog shared cleanup quarantined; canonical owners retained');}
   const errors:unknown[]=[];for(const collection of collections)try{collection.dispose();}catch(error){errors.push(error);quarantinedCollections.push(collection);}collections=[];sections=[];entries=[];sectionLabels=[];selected=undefined;catalogRoot.clear();overlay.replaceChildren();$('catalog-detail').replaceChildren();if(!errors.length){try{context?.dispose();}catch(error){errors.push(error);}if(!errors.length)context=undefined;}if(errors.length){catalogCleanupFailed=true;throw new AggregateError(errors,'Catalog cleanup failed; unresolved owners retained');}
 }
 function worldBox(entry:Entry):THREE.Box3{return entry.item.bounds.clone().applyMatrix4(entry.section.group.matrixWorld);}
@@ -132,7 +134,7 @@ function labels():void{
     const visible=labelsControl.checked&&projected.z>=0&&projected.z<=1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1&&!titles.some(other=>Math.abs(other.x-x)<(other.width+titleWidth)/2+8&&Math.abs(other.y-y)<30);
     heading.element.style.display=visible?'block':'none';if(visible){heading.element.style.left=`${x}px`;heading.element.style.top=`${y}px`;titles.push({x,y,width:titleWidth});}}
 }
-function requestRender():void{if(frame!==undefined||closed||busy)return;frame=requestAnimationFrame(()=>{frame=undefined;if(closed||busy)return;try{const moved=controls.update();for(const collection of collections)collection.assertFixedTreeDrawReady?.();renderer.render(scene,camera);labels();if(moved)requestRender();}catch(cause){fail(cause);}});}
+function requestRender():void{if(frame!==undefined||closed||busy)return;frame=requestAnimationFrame(()=>{frame=undefined;if(closed||busy)return;try{const moved=controls.update();context?.surfacePreparation.assertReadyForDraw();for(const collection of collections)collection.assertFixedTreeDrawReady?.();renderer.render(scene,camera);labels();if(moved)requestRender();}catch(cause){fail(cause);}});}
 controls.addEventListener('change',requestRender);
 function resize():void{if(closed)return;if(busy){resizePending=true;return;}resizePending=false;const width=Math.max(1,stage.clientWidth),height=Math.max(1,stage.clientHeight);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();requestRender();}
 const resizeObserver=new ResizeObserver(resize);
@@ -153,9 +155,11 @@ async function prepareTrees(graphics:GraphicsStyleContext,assertJobCurrent:()=>v
   const stages=[];let committed=false;try{for(const collection of collections){const stage=await collection.stagePlants?.(renderer,camera,scene,assertCurrent);if(stage)stages.push(stage);assertCurrent();}for(const stage of stages)stage.commit();committed=true;}finally{const errors:unknown[]=[];for(const stage of stages.reverse()){if(!committed)try{stage.rollback();}catch(error){errors.push(error);}try{stage.dispose();}catch(error){errors.push(error);}}if(errors.length)throw new AggregateError(errors,'Catalog initial plant stage cleanup failed');}
 }
 async function finishView(assertCurrent:()=>void,prepared=false):Promise<void>{
-  if(!prepared){progress('Préparation des matériaux de cette vue…');await nextFrame();assertCurrent();for(const texture of context!.prepareSharedSurfaceAssets())renderer.initTexture(texture);await renderer.compileAsync(scene,camera);assertCurrent();}
-  for(const collection of collections)collection.assertFixedTreeDrawReady?.();renderer.render(scene,camera);labels();diagnostics.ready=failures.length===0;document.body.dataset.ready=diagnostics.ready?'ready':'error';$('catalog-message').textContent=`${entries.length} assets agencés par type · texture ${context!.origami?'Gouache':'Pastel'}\nRechercher un nom ou choisir un groupe pour s’en approcher.`;
+  const graphics=context;if(!graphics)throw Error('Catalog context missing');
+  if(!prepared){progress('Préparation des matériaux de cette vue…');await nextFrame();assertCurrent();const shared=await stageCatalogSharedSurfaces(graphics,{renderer,scene,camera,epoch:jobEpoch,assertCurrent},'initial');try{shared?.publish();await renderer.compileAsync(scene,camera);assertCurrent();shared?.commit();}catch(error){try{shared?.rollback();}catch(cleanup){throw new AggregateError([error,cleanup],'Catalog initial shared rollback failed');}throw error;}finally{shared?.dispose();}}
+  graphics.surfacePreparation.assertReadyForDraw();for(const collection of collections)collection.assertFixedTreeDrawReady?.();renderer.render(scene,camera);labels();diagnostics.ready=failures.length===0;document.body.dataset.ready=diagnostics.ready?'ready':'error';$('catalog-message').textContent=`${entries.length} assets agencés par type · texture ${context!.origami?'Gouache':'Pastel'}\nRechercher un nom ou choisir un groupe pour s’en approcher.`;
 }
+
 function build(style:GraphicsStyle):Promise<void>{
   return exclusiveCatalogJob(async assertCurrent=>{
     if(paintRefreshTimer){clearTimeout(paintRefreshTimer);paintRefreshTimer=undefined;}
@@ -171,7 +175,7 @@ function refreshPaint(next:GraphicsStylePreferences):Promise<void>{
   const graphics=context;if(!graphics)return Promise.resolve();
   return exclusiveCatalogJob(async assertCurrent=>{
     progress('Actualisation des textures et des contours…');await nextFrame();assertCurrent();
-    try{await changeCatalogSurface(graphics,next,collections,{renderer,scene,camera,assertCurrent});}
+    try{await changeCatalogSurface(graphics,next,collections,{renderer,scene,camera,epoch:jobEpoch,assertCurrent});}
     finally{
       Object.assign(previewPreferences,graphics.preferences);styleControl.value=graphics.preferences.style;
       for(const[i,input]of paintInputs.entries()){const control=ORIGAMI_STYLE_CONTROLS[i]!;input.value=String(graphics.preferences[control.key]);(input.nextElementSibling as HTMLOutputElement).value=formatOrigamiStyleValue(control,graphics.preferences[control.key]);}

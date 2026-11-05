@@ -2,6 +2,8 @@
 import * as THREE from 'three/webgpu';
 import {uniform,texture,uv,vec2,vec3,vec4,ivec2,float,Fn,If,varying,mix,smoothstep,workingToColorSpace,colorSpaceToWorking} from 'three/tsl';
 import {metadataTexel} from './surfaces/MetadataTexel';
+import {SharedSurfacePreparationRegistry} from './surfaces/SharedSurfacePreparation';
+import {PreparedFaceStrokes} from './surfaces/PreparedFaceStrokes';
 import {REFERENCE_PAINTER_SOURCE_SHA256} from './origami/reference-painter';
 import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,normalizeGraphicsStylePreferences,graphicsStylePipelineKey,type GraphicsStylePreferences,type GraphicsStylePipelineKey} from '../ui3d/native-preferences';
 import {packReferencePaintPixels,type ReferenceEdgePixels,type ReferencePaintDescriptor} from './origami/reference-paint-library';
@@ -39,6 +41,8 @@ export interface GraphicsStyleContextOptions {staticDescriptors?:readonly Virtua
 /** Independent source 512² color/height layers preserve the authored brushwork,
  * UVs, seeds and mips while sharing one material across a batch. */
 export class GraphicsStyleContext {
+ readonly surfacePreparation=new SharedSurfacePreparationRegistry();
+ readonly preparedStrokes:PreparedFaceStrokes;
  preferences:GraphicsStylePreferences;
  pipelineKey:GraphicsStylePipelineKey;
  reliefEnabled:boolean;
@@ -89,6 +93,7 @@ export class GraphicsStyleContext {
  constructor(settings:GraphicsStylePreferences={...DEFAULT_GRAPHICS_STYLE_PREFERENCES},options:GraphicsStyleContextOptions={}) {
   this.paintPool=new VirtualPaintPool(PROTECTED_REFERENCE_PAINT_DESCRIPTORS);for(const descriptor of BASE_REFERENCE_PAINT_DESCRIPTORS.slice(PROTECTED_REFERENCE_PAINT_DESCRIPTORS.length))this.paintPool.register(descriptor);for(const descriptor of options.staticDescriptors??[])this.paintPool.register(descriptor);this.paintPool.sealStaticCatalog();
   this.preferences=normalizeGraphicsStylePreferences(settings);this.pipelineKey=graphicsStylePipelineKey(this.preferences);
+  this.preparedStrokes=new PreparedFaceStrokes(this.surfacePreparation,()=>this.preferences);
   this.reliefEnabled=this.preferences.impasto>0;
   this.reliefLod=createGlobalReliefLod(this.reliefEnabled);this.update(settings);
  }
@@ -139,6 +144,7 @@ export class GraphicsStyleContext {
  /** Feature changes rebuild nodes on the same material; image changes do not.
   * Callers release their registration when that material is disposed. */
  trackSharedSurfaceRefresh(refresh:()=>void):()=>void{this.sharedSurfaceRefreshers.add(refresh);return()=>{this.sharedSurfaceRefreshers.delete(refresh);};}
+ get preparedPaintRevision():number{return this.atlasPaintEpoch;}
  genericPaintSemanticKey():string{const source=PROTECTED_REFERENCE_PAINT_DESCRIPTORS[0]!,seed=this.bakedRefreshed?(source.refreshSeed??source.seed):source.seed;return JSON.stringify(['P0-separated512-v1',REFERENCE_PAINTER_SOURCE_SHA256,source.key,source.config,seed,this.preferences.contourImperfection]);}
  trackSharedPaintSettingsRefresh(refresh:()=>void):()=>void{this.sharedPaintSettingsRefreshers.add(refresh);return()=>{this.sharedPaintSettingsRefreshers.delete(refresh);};}
  update(settings:GraphicsStylePreferences):void {
@@ -167,7 +173,7 @@ export class GraphicsStyleContext {
   if(this.wearEnabled&&this.contourSpan.value!==previousContourSpan)for(const geometry of this.wearGeometries)this.expandWear(geometry);for(const [object,kind]of this.edgeObjects)this.refreshEdgeObject(object,kind);
   if(this.bakedFill>=0&&this.bakedFill!==this.preferences.contourImperfection){if(this.fillTimer)clearTimeout(this.fillTimer);this.fillTimer=setTimeout(()=>{this.fillTimer=undefined;this.repaintRequested=true;this.flushPaint();},60);}
   if(featuresChanged)for(const refresh of this.sharedSurfaceRefreshers)refresh();
-  if(previousPaintSettings!==JSON.stringify(this.preferences))for(const refresh of this.sharedPaintSettingsRefreshers)refresh();
+  if(previousPaintSettings!==JSON.stringify(this.preferences)){this.surfacePreparation.invalidate();for(const refresh of this.sharedPaintSettingsRefreshers)refresh();}
  }
  private expandWear(geometry:THREE.BufferGeometry):void {
   const base=geometry.userData.referenceWearBasePositions as Float32Array|undefined,expand=geometry.userData.referenceWearExpandDirections as Float32Array|undefined;if(!base||!expand)return;
@@ -216,7 +222,7 @@ export class GraphicsStyleContext {
    this.paintPool.commit(plan);destination.set(coveragePixels);this.coverageArray!.needsUpdate=true;
    for(let pixel=0;pixel<coveragePixels.length;pixel++)paperDestination[pixel*4+3]=coveragePixels[pixel]!;
    this.paperArray!.needsUpdate=true;
-   this.bakedFill=fill;this.bakedRefreshed=plan.refreshed;this.repaintRequested=false;this.lastPaintVersion=this.paintPool.version;this.lastReplayMode='mask';this.atlasPaintEpoch++;for(const refresh of this.sharedPaintSettingsRefreshers)refresh();return;
+   this.bakedFill=fill;this.bakedRefreshed=plan.refreshed;this.repaintRequested=false;this.lastPaintVersion=this.paintPool.version;this.lastReplayMode='mask';this.atlasPaintEpoch++;this.surfacePreparation.invalidate();for(const refresh of this.sharedPaintSettingsRefreshers)refresh();return;
   }
   const faceDirty=repaint||plan.faceDepth!==oldFaceDepth;
   const nextCheckpoints=new Map<number,CoverageCheckpoint>(repaint?undefined:this.coverageCheckpoints);
@@ -260,7 +266,7 @@ export class GraphicsStyleContext {
   }
   this.faceProfilesTexture!.needsUpdate=true;this.genericFaceLayer.value=this.paintPool.resolve(0)?.[1]??0;
   this.activeBankCount.value=Math.max(...plan.bankShapes.map((shape,index)=>shape.size===512?index+1:0));
-  this.coverageCheckpoints=nextCheckpoints;this.bakedRefreshed=plan.refreshed;this.lastReplayMode='full';this.bakedFill=fill;this.repaintRequested=false;this.lastPaintVersion=this.paintPool.version;this.atlasPaintEpoch++;for(const refresh of this.sharedPaintSettingsRefreshers)refresh();
+  this.coverageCheckpoints=nextCheckpoints;this.bakedRefreshed=plan.refreshed;this.lastReplayMode='full';this.bakedFill=fill;this.repaintRequested=false;this.lastPaintVersion=this.paintPool.version;this.atlasPaintEpoch++;this.surfacePreparation.invalidate();for(const refresh of this.sharedPaintSettingsRefreshers)refresh();
  }
  private ensurePaperHeightBinding():THREE.DataArrayTexture{
   if(!this.reliefEnabled)throw Error('Zero relief has no height texture binding');
@@ -421,7 +427,7 @@ export class GraphicsStyleContext {
  }
  debugPaintStorage(){if(!this.colorArray)throw Error('Paint is not prepared');return{banks:this.banks.map(texture=>({texture,data:texture.image.data as Uint8Array})),paper:{texture:this.paperArray!,data:this.paperArray!.image.data as Uint8Array},coverage:{texture:this.coverageArray!,data:this.coverageArray!.image.data as Uint8Array},lookup:{texture:this.faceProfilesTexture!,data:this.faceProfilesTexture!.image.data as Float32Array},rows:this.rowsData};}
  paintReplayState(){return{mode:this.lastReplayMode,refreshed:this.bakedRefreshed,checkpointCount:this.coverageCheckpoints.size,bakedFill:this.bakedFill};}
- dispose():void{this.sharedSurfaceRefreshers.clear();this.sharedPaintSettingsRefreshers.clear();this.paperHeightArray?.dispose();this.paperHeightArray=undefined;this.coverageCheckpoints.clear();if(this.fillTimer)clearTimeout(this.fillTimer);for(const release of [...this.brushOwners.values()])release();this.brushGeometries.clear();for(const bank of this.banks)bank.dispose();this.banks.length=0;for(const map of Object.values(this.edgeMaps??{}))map?.dispose();this.paperArray?.dispose();this.coverageArray?.dispose();this.faceProfilesTexture?.dispose();this.rowsTexture?.dispose();this.paintPool.dispose();this.appearanceRows.clear();this.wearGeometries.clear();this.edgeObjects.clear();this.colorArray=undefined;this.edgeMaps=undefined;this.rowsTexture=undefined;this.rowsData=undefined;this.paperArray=undefined;this.coverageArray=undefined;this.faceProfilesTexture=undefined;}
+ dispose():void{this.surfacePreparation.dispose();this.preparedStrokes.dispose();this.sharedSurfaceRefreshers.clear();this.sharedPaintSettingsRefreshers.clear();this.paperHeightArray?.dispose();this.paperHeightArray=undefined;this.coverageCheckpoints.clear();if(this.fillTimer)clearTimeout(this.fillTimer);for(const release of [...this.brushOwners.values()])release();this.brushGeometries.clear();for(const bank of this.banks)bank.dispose();this.banks.length=0;for(const map of Object.values(this.edgeMaps??{}))map?.dispose();this.paperArray?.dispose();this.coverageArray?.dispose();this.faceProfilesTexture?.dispose();this.rowsTexture?.dispose();this.paintPool.dispose();this.appearanceRows.clear();this.wearGeometries.clear();this.edgeObjects.clear();this.colorArray=undefined;this.edgeMaps=undefined;this.rowsTexture=undefined;this.rowsData=undefined;this.paperArray=undefined;this.coverageArray=undefined;this.faceProfilesTexture=undefined;}
 }
 
 /** Only textured pipelines call this. Exact profiles contain authored color;

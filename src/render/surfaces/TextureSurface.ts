@@ -77,12 +77,13 @@ export function createTextureSurface(initial:TextureSurfaceAssets,options:Textur
 }
 
 /** Exact data copy, not a raster/resample or colorspace conversion. Both layers
- * contain the original 64-square neutral pastel map. Source crops stay in UV.
- * CPU allocation=32768B; full GPU mip chain=43688B, excluding driver overhead.
+ * contain the original64-square neutral pastel map by default; animal coats
+ * explicitly keep their native256-square map. Source crops stay in UV.
+ * CPU/GPU nominal bytes are32768/43688 for64,524288/699048 for256.
  * The returned texture is owned by the caller, independently of the source. */
-export function copyPastelTextureToArray(source:THREE.DataTexture):THREE.DataArrayTexture {
+export function copyPastelTextureToArray(source:THREE.DataTexture,size:64|256=64):THREE.DataArrayTexture {
  const image=source.image;
- if(image.width!==64||image.height!==64||!(image.data instanceof Uint8Array)||image.data.length!==64*64*4||source.format!==THREE.RGBAFormat||source.type!==THREE.UnsignedByteType||source.colorSpace!==THREE.NoColorSpace||source.flipY||source.magFilter!==THREE.LinearFilter||source.minFilter!==THREE.LinearMipmapLinearFilter||!source.generateMipmaps||source.mipmaps.length)throw Error('Exact unflipped 64-square RGBA8 NoColorSpace pastel source required');
+ if((size!==64&&size!==256)||image.width!==size||image.height!==size||!(image.data instanceof Uint8Array)||image.data.length!==size*size*4||source.format!==THREE.RGBAFormat||source.type!==THREE.UnsignedByteType||source.colorSpace!==THREE.NoColorSpace||source.flipY||source.magFilter!==THREE.LinearFilter||source.minFilter!==THREE.LinearMipmapLinearFilter||!source.generateMipmaps||source.mipmaps.length)throw Error('Exact unflipped '+size+'-square RGBA8 NoColorSpace pastel source required');
  const data=new Uint8Array(image.data.length*2);data.set(image.data);data.set(image.data,image.data.length);
- const out=new THREE.DataArrayTexture(data,64,64,2);out.colorSpace=source.colorSpace;out.wrapS=source.wrapS;out.wrapT=source.wrapT;out.magFilter=source.magFilter;out.minFilter=source.minFilter;out.generateMipmaps=true;out.flipY=false;out.anisotropy=source.anisotropy;out.needsUpdate=true;return out;
+ const out=new THREE.DataArrayTexture(data,size,size,2);out.colorSpace=source.colorSpace;out.wrapS=source.wrapS;out.wrapT=source.wrapT;out.magFilter=source.magFilter;out.minFilter=source.minFilter;out.generateMipmaps=true;out.flipY=false;out.anisotropy=source.anisotropy;out.needsUpdate=true;return out;
 }

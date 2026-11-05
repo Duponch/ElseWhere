@@ -5,6 +5,8 @@ import * as THREE from 'three/webgpu';
 import {attribute} from 'three/tsl';
 import type {GraphicsStyleContext} from '../graphics-style';
 import {compileFaceStrokeTable,combineFaceStrokeTables,faceStrokeVertexHeaders,createFaceStrokeNode,type FaceStrokeTable,type FaceStrokeData} from './FaceStrokeTable';
+import {createPreparedAffineStrokeNode} from './AffineStrokeKernel';
+import {releasePreparedFaceStrokes} from './PreparedFaceStrokes';
 
 export const SURFACE_STROKE_UV='surfaceStrokeUv',SURFACE_STROKE_FACE='surfaceStrokeFace';
 const instanced=(a:THREE.BufferAttribute|THREE.InterleavedBufferAttribute)=>a instanceof THREE.InstancedBufferAttribute||a instanceof THREE.InterleavedBufferAttribute&&a.data instanceof THREE.InstancedInterleavedBuffer;
@@ -62,13 +64,16 @@ export function compileNaturalSurfaceModels(sources:readonly THREE.BufferGeometr
    for(const group of source.groups)g.addGroup(group.start,group.count,group.materialIndex);g.setDrawRange(source.drawRange.start,source.drawRange.count);g.userData={...source.userData};g.computeBoundingBox();g.computeBoundingSphere();
   }
   const owner=bank,cpuBytes=owner.table.cpuBytes+outputs.reduce((n,g)=>n+Object.values(g.attributes).reduce((s,a)=>s+a.array.byteLength,0)+(g.index?.array.byteLength??0),0);if(cpuBytes>maxCpuBytes)throw Error('Natural surface vocabulary retained budget exceeded');let closed=false;delivered=true;
-  return{geometries:Object.freeze(outputs),stroke:owner.table,cpuBytes,dispose(){if(closed)return;closed=true;const errors:unknown[]=[];for(const g of outputs)try{g.dispose();}catch(e){errors.push(e);}try{owner.dispose();}catch(e){errors.push(e);}if(errors.length)throw new AggregateError(errors,'Natural surface model cleanup failed');}};
+  return{geometries:Object.freeze(outputs),stroke:owner.table,cpuBytes,dispose(){if(closed)return;releasePreparedFaceStrokes(owner.table,outputs);closed=true;const errors:unknown[]=[];for(const g of outputs)try{g.dispose();}catch(e){errors.push(e);}try{owner.dispose();}catch(e){errors.push(e);}if(errors.length)throw new AggregateError(errors,'Natural surface model cleanup failed');}};
  }finally{for(const p of prepared)p.dispose();for(const t of tables)t.dispose();if(!delivered){for(const g of outputs)g.dispose();bank?.dispose();}}
 }
 
 /** Original brush pigments/dryness with no companion surface draw. */
 export function naturalStroke(context:GraphicsStyleContext|undefined,table:FaceStrokeData|undefined,faceId:THREE.Node<'float'>=attribute(SURFACE_STROKE_FACE,'float'),coordinates:THREE.Node<'vec2'>=attribute(SURFACE_STROKE_UV,'vec2'),vertexHeaders=false):(body:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>{
  if(!context||!table)return body=>body;
- const headers=vertexHeaders?faceStrokeVertexHeaders({table,faceId,enabled:context.surfaceEncoding,opacity:context.lineOpacity},'v_naturalStrokeHeader'):undefined;
- return body=>createFaceStrokeNode(body,{table,faceId,headers,faceUv:coordinates,enabled:context.surfaceEncoding,width:context.edgeWidth,irregularity:context.strokeImperfection,opacity:context.lineOpacity,brushColor:context.brushColor as unknown as THREE.Node<'vec3'>,samplePigment:(p,dx,dy)=>context.sampleStrokePigment(p,dx,dy),sampleDry:(p,dx,dy)=>context.sampleStrokeDry(p,dx,dy)});
+ const owner=context.preparedStrokes.acquire(table),headerTable=owner?.headerTable()??table,headers=vertexHeaders?faceStrokeVertexHeaders({table:headerTable,faceId,enabled:context.surfaceEncoding,opacity:context.lineOpacity},'v_naturalStrokeHeader'):undefined;
+ const common={faceId,headers,faceUv:coordinates,enabled:context.surfaceEncoding,opacity:context.lineOpacity,brushColor:context.brushColor.rgb,samplePigment:(p:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>context.sampleStrokePigment(p,dx,dy),sampleDry:(p:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>context.sampleStrokeDry(p,dx,dy)};
+ // A refused immutable admission retains a distinct Source graph. No style
+ // branch contains both kernels; P/G share whichever representation was admitted.
+ return owner?body=>createPreparedAffineStrokeNode(body,{...common,owner}):body=>createFaceStrokeNode(body,{...common,table,width:context.edgeWidth,irregularity:context.strokeImperfection});
 }

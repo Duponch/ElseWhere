@@ -80,7 +80,7 @@ export class AnimalCargoLayer282 {
  constructor(configure?:(m:THREE.NodeMaterial)=>void){
   this.group.name='Animal cargo282 — real local inventory';
   configure?.(actorExplorationMaterial256(this.material));
-  this.material.vertexColors=false;this.material.colorNode=naturalStroke(this.graphicsStyle,this.strokeBank)(attribute('color','vec3'));
+  this.material.vertexColors=false;const publishStroke=()=>{this.material.colorNode=naturalStroke(this.graphicsStyle,this.strokeBank)(attribute('color','vec3'));};this.strokeBank.setPreparedRepresentationPublisher(()=>{publishStroke();this.material.needsUpdate=true;});publishStroke();
   // Zero-size instance compiles the same attribute/material pipeline under the
   // loading overlay even when no animal has acquired a carried item yet.
   this.warmup=this.makeBatch(carriedGeometry('wood',1),1);this.warmup.mesh.name='Animal cargo282 — pipeline preparation';

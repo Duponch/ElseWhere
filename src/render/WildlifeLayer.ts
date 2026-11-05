@@ -12,7 +12,9 @@ import {sampleAnimalRig} from './actor-animation-sampling';
 import * as THREE from 'three/webgpu';
 import {currentGraphicsStyle,withGraphicsStyle,GraphicsStyleContext} from './graphics-style';
 import {AnimalModels,ANIMAL_SURFACE_PROFILE_STRIDE,type AnimalModel} from './models/AnimalModels';
-import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
+import {applySharedPaintSurface,type SharedPaintSurfaceOptions} from './surfaces/SharedPaintSurface';
+import {createPreparedAffineStrokeNode} from './surfaces/AffineStrokeKernel';
+import {ActorAtlasOwner,actorPoseIsRigid} from './origami/baked/actors/ActorAtlasOwner';
 import {faceStrokeVertexHeaders,attachFaceStrokeGpuRetirement,createFaceStrokeNode} from './surfaces/FaceStrokeTable';
 import {commonAnimalPresentationGeometry} from './origami/animal-geometry';
 import {ActorPartUnionIndex,readAnimalPartUnion} from './origami/actor-part-union';
@@ -67,6 +69,17 @@ class SpeciesRig {
   private origamiGraphics?:GraphicsStyleContext;
   private texturesEnabled=true;
   private readonly sharedModel:AnimalModel;
+  private bodyAtlas:ActorAtlasOwner|undefined;
+  private readonly atlasRows=new Map<number,number>();private atlasPublishedCount=0;
+  private selectSurfaceMaterial():void{if(this.mesh)this.mesh.material=this.texturesEnabled?(this.bodyAtlas?.selectedMaterial(this.texturedMaterial)??this.texturedMaterial):this.plainMaterial;}
+  actorAtlasStatus(){return this.bodyAtlas?.status();}
+  private observeAtlasRow(id:number,slot:number,geometry:THREE.BufferGeometry):boolean{
+    const biology=geometry.getAttribute('aBiology'),state=geometry.getAttribute('aAnimal'),growth=biology.getX(slot),key=(biology.getY(slot)===0?1:0)|(biology.getZ(slot)===0?2:0)|(state.getZ(slot)<.5?4:0)|(growth>0&&growth<=1?8:0)|(actorPoseIsRigid('animal',geometry,slot)?16:0);
+    if(this.atlasRows.get(id)===key)return false;this.atlasRows.set(id,key);return true;
+  }
+  private bodyBakeOptions:((surfacePosition:THREE.Node<'vec3'>)=>SharedPaintSurfaceOptions&{surfacePosition:THREE.Node<'vec3'>})|undefined;
+  private pastelFromSample:((sample:THREE.Node<'vec4'>)=>THREE.Node<'vec3'>)|undefined;
+  private pastelSourceTexture:THREE.DataTexture|undefined;
   /** A capacity replacement might never be drawn before closure. Retain the
    * old, potentially initialized body so final storage retirement can use its
    * real geometry listener; a never-rendered replacement cannot provide it. */
@@ -107,7 +120,7 @@ class SpeciesRig {
   private revision=0;
   private hasFireActors=false;
   private surfaces:ReadonlyMap<number,number>=new Map();
-  constructor(readonly travelTime:WildlifeLayer['travelTime'],readonly species:string,surfaceTexture:THREE.Texture,style:AnimalSlaughterMarkerStyle,private readonly animationDetail:AnimationDetail,configure:((m:THREE.MeshStandardNodeMaterial)=>void)|undefined,models:AnimalModels) {
+  constructor(readonly travelTime:WildlifeLayer['travelTime'],readonly species:string,surfaceTexture:THREE.DataTexture,style:AnimalSlaughterMarkerStyle,private readonly animationDetail:AnimationDetail,configure:((m:THREE.MeshStandardNodeMaterial)=>void)|undefined,models:AnimalModels) {
     this.animationCache=new ActorAnimationCache(animationDetail);
     this.gaitRate=animalGaitRadiansPerUnit(species);
     const graphics=currentGraphicsStyle();if(!graphics)throw Error('Animal surfaces require their actual scene texture context');this.origamiGraphics=graphics;
@@ -213,11 +226,16 @@ class SpeciesRig {
     const textured=material(0xffffff);configure?.(actorExplorationMaterial256(textured));
     textured.positionNode=mat.positionNode;
     textured.roughness=.88;textured.metalness=.02;
-    const surfaceUv=attribute('animalSurfaceUv','vec4'),word=paint.w,profile=word.mod(ANIMAL_SURFACE_PROFILE_STRIDE),faceId=word.div(ANIMAL_SURFACE_PROFILE_STRIDE).floor(),headers=faceStrokeVertexHeaders({table:model.strokes,faceId,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity},'v_animalStrokeHeader');
-    applySharedPaintSurface(textured,{context:graphics,base:baseColor,pastel:withBlood(baseColor).mul(texture(surfaceTexture,surfaceUv.zw).r.mul(.8).add(.28)),faceUv:surfaceUv.xy,profile,pigmentDomain:'game-static78',includeGeneric:true,gouacheTransform:withBlood,
-      stroke:body=>createFaceStrokeNode(body,{table:model.strokes,faceId,headers,faceUv:surfaceUv.xy,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),width:graphics.edgeWidth,irregularity:graphics.strokeImperfection,opacity:graphics.lineOpacity,brushColor:graphics.brushColor.rgb,samplePigment:(coordinates,dx,dy)=>graphics.sampleStrokePigment(coordinates,dx,dy),sampleDry:(coordinates,dx,dy)=>graphics.sampleStrokeDry(coordinates,dx,dy)})});
+    const surfaceUv=attribute('animalSurfaceUv','vec4'),word=paint.w,profile=word.mod(ANIMAL_SURFACE_PROFILE_STRIDE),faceId=word.div(ANIMAL_SURFACE_PROFILE_STRIDE).floor();
+    const buildStroke=(surfacePosition?:THREE.Node<'vec3'>,canonical=false)=>{
+      const prepared=canonical?undefined:graphics.preparedStrokes.acquire(model.strokes),table=prepared?.headerTable()??model.strokes,headers=faceStrokeVertexHeaders({table,faceId,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity},'v_animalStrokeHeader'),common={faceId,headers,faceUv:surfaceUv.xy,surfacePosition,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity,brushColor:graphics.brushColor.rgb,samplePigment:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>graphics.sampleStrokePigment(coordinates,dx,dy),sampleDry:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>graphics.sampleStrokeDry(coordinates,dx,dy)};
+      return prepared?(body:THREE.Node<'vec3'>)=>createPreparedAffineStrokeNode(body,{...common,owner:prepared}):(body:THREE.Node<'vec3'>)=>createFaceStrokeNode(body,{...common,table:model.strokes,width:graphics.edgeWidth,irregularity:graphics.strokeImperfection});
+    };
+    this.pastelSourceTexture=surfaceTexture;this.pastelFromSample=sample=>withBlood(baseColor).mul(sample.r.mul(.8).add(.28));
+    const bodyOptions:SharedPaintSurfaceOptions={context:graphics,base:baseColor,pastel:this.pastelFromSample(texture(surfaceTexture,surfaceUv.zw)),faceUv:surfaceUv.xy,profile,pigmentDomain:'game-static78',includeGeneric:true,gouacheTransform:withBlood,stroke:buildStroke()};applySharedPaintSurface(textured,bodyOptions);
+    this.bodyBakeOptions=surfacePosition=>({...bodyOptions,surfacePosition,stroke:buildStroke(surfacePosition,true)});
     this.plainMaterial=mat;this.texturedMaterial=textured;
-    this.mesh=new THREE.Mesh(geometry,textured);this.mesh.name=`Wild ${this.species} — GPU rig`;this.mesh.frustumCulled=false;this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.flames=attachedFireMesh(this.mesh.geometry,this,.6,this.animationDetail);
+    this.mesh=new THREE.Mesh(geometry,textured);this.bodyAtlas=new ActorAtlasOwner({key:'animal-full-body:'+this.species+':'+this.mesh.uuid,kind:'animal',context:graphics,readPort:()=>this.bodySurfaceBakeSource(),ownerCount:()=>(this.mesh.geometry as THREE.InstancedBufferGeometry).instanceCount,changed:()=>this.selectSurfaceMaterial(),configure:material=>{configure?.(actorExplorationMaterial256(material));}});this.selectSurfaceMaterial();this.mesh.name=`Wild ${this.species} — GPU rig`;this.mesh.frustumCulled=false;this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.flames=attachedFireMesh(this.mesh.geometry,this,.6,this.animationDetail);
     this.selection=pawnSelectionMesh(this.mesh.geometry as THREE.InstancedBufferGeometry,this);this.selection.visible=false;
     (this.selection.geometry as THREE.InstancedBufferGeometry).instanceCount=0;
     this.slaughter=animalSlaughterMarker(this.mesh.geometry as THREE.InstancedBufferGeometry,this,style,geometry.boundingBox!.max.y);
@@ -258,10 +276,11 @@ class SpeciesRig {
       for(const close of cleanup)try{close();}catch(e){errors.push(e);}if(errors.length)throw new AggregateError(errors,'Animal physical-wear preparation cleanup failed');
     }
   }
+  bodySurfaceBakeSource(){if(!this.bodyBakeOptions||!this.pastelFromSample||!this.pastelSourceTexture)return undefined;return{species:this.species,model:this.sharedModel,createGeometry:()=>this.sharedModel.instantiate(1),geometry:this.mesh.geometry as THREE.InstancedBufferGeometry,sourceMaterial:this.texturedMaterial,buildOptions:this.bodyBakeOptions,morphPosition:()=>positionLocal,pastelTexture:this.pastelSourceTexture,pastelUv:attribute('animalSurfaceUv','vec4').zw,pastelFromSample:this.pastelFromSample};}
   get usesSharedSurface():boolean{return !!this.sharedModel;}
   sharedSurfaceStatus(){const model=this.sharedModel;return model?{species:this.species,modelKey:model.key,triangles:model.triangleCount,faces:model.strokes.faceCount,strokeEdges:model.strokes.edgeCount,tableBytes:model.strokes.cpuBytes,geometry:this.mesh.geometry.uuid,material:this.texturedMaterial.uuid,pipeline:'shared-paint',sourceRibbons:false}:undefined;}
   setTexturesEnabled(enabled:boolean):void {
-    this.texturesEnabled=enabled;this.mesh.material=enabled?this.texturedMaterial:this.plainMaterial;setFireTexturesEnabled(this.flames,enabled);
+    this.texturesEnabled=enabled;this.selectSurfaceMaterial();setFireTexturesEnabled(this.flames,enabled);
     if(this.origamiWear){this.origamiWear.userData.origamiTexturesEnabled=enabled;this.origamiGraphics!.refreshEdgeObject(this.origamiWear,'wear');}
   }
   graphicsComparisonState(active:boolean):AnimalGraphicsComparisonState|undefined {
@@ -297,7 +316,8 @@ class SpeciesRig {
     if(this.origamiWear){this.origamiWear.geometry.dispose();(this.origamiWear.material as THREE.Material).dispose();this.origamiWear.removeFromParent();this.origamiWear=undefined;}
   }
   retireSurfaceGeometryStorage():void {
-    attachFaceStrokeGpuRetirement(this.sharedModel.strokes,[this.mesh.geometry,...this.retiredSurfaceGeometries]);
+    this.bodyAtlas?.attachGpuRetirement([this.mesh.geometry,...this.retiredSurfaceGeometries]);this.bodyAtlas?.dispose();this.bodyAtlas=undefined;this.atlasRows.clear();this.atlasPublishedCount=0;
+    this.origamiGraphics?.preparedStrokes.release(this.sharedModel.strokes,[this.mesh.geometry,...this.retiredSurfaceGeometries]);attachFaceStrokeGpuRetirement(this.sharedModel.strokes,[this.mesh.geometry,...this.retiredSurfaceGeometries]);this.bodyBakeOptions=undefined;this.pastelFromSample=undefined;this.pastelSourceTexture=undefined;
     for(const geometry of this.retiredSurfaceGeometries)geometry.dispose();
     this.retiredSurfaceGeometries.length=0;
   }
@@ -332,7 +352,7 @@ class SpeciesRig {
     return ()=>{for(const restore of restoreUnions)restore();if(this.revision!==revision)return;g.instanceCount=n;this.setOrigamiCount(n);fire.instanceCount=f;marker.instanceCount=s;this.slaughter.visible=visible;this.mesh.visible=bodyVisible;this.flames.visible=fireVisible;};
   }
   deactivate():void {
-    this.revision++;this.source=undefined;this.animals=[];this.hasFireActors=false;this.playback435.clear();
+    this.revision++;this.source=undefined;this.animals=[];this.hasFireActors=false;this.playback435.clear();if(this.atlasPublishedCount){this.atlasPublishedCount=0;this.atlasRows.clear();this.bodyAtlas?.invalidate();}
     this.keys.clear();this.headings.clear();this.gait.clear();this.carrierSlots.clear();this.actorSlots.clear();this.animationCache.reset();this.resetSpring297();
     for(const mesh of [this.mesh,this.flames,this.selection,this.slaughter]){(mesh.geometry as THREE.InstancedBufferGeometry).instanceCount=0;mesh.visible=false;}
     this.setOrigamiCount(0);
@@ -517,7 +537,10 @@ class SpeciesRig {
     else if(springDirty)for(const a of [from,to,times,state])a.needsUpdate=true;
     if(changed||reset||dirty){
       this.actorSlots.clear();let minScale=1;
-      animals.forEach((a,i)=>{this.actorSlots.set(a.id,i);minScale=Math.min(minScale,scale.getX(i));const carrier=g.getAttribute('aCarrier');this.animationCache.reconcile(i,a.id,[state.getZ(i),scale.getX(i),g.getAttribute('aAbsent').getX(i),carrier.getX(i),carrier.getY(i),this.carrierSlots.get(i),a.carrierId,a.corpsePile?.owner.type].join(':'));});
+      let atlasChanged=this.atlasPublishedCount!==animals.length;
+      animals.forEach((a,i)=>{this.actorSlots.set(a.id,i);minScale=Math.min(minScale,scale.getX(i));atlasChanged=this.observeAtlasRow(a.id,i,g)||atlasChanged;const carrier=g.getAttribute('aCarrier');this.animationCache.reconcile(i,a.id,[state.getZ(i),scale.getX(i),g.getAttribute('aAbsent').getX(i),carrier.getX(i),carrier.getY(i),this.carrierSlots.get(i),a.carrierId,a.corpsePile?.owner.type].join(':'));});
+      if(changed||reset){const present=new Set(animals.map(animal=>animal.id));for(const id of this.atlasRows.keys())if(!present.has(id))this.atlasRows.delete(id);}
+      this.atlasPublishedCount=animals.length;if(atlasChanged)this.bodyAtlas?.invalidate();
       this.animationCache.setMinimumScale(minScale);this.refreshOrigamiPartUnion();
     }
     if(playback)this.playback435.commit();
@@ -573,6 +596,8 @@ export class WildlifeLayer {
   }
   /** Read-only compatibility for historical evidence pages. This is an honest
    * diagnostic of the shared surface, never a species-atlas preparation API. */
+  actorAtlasStatus(){return this.activeRigs.map(rig=>({species:rig.species,status:rig.actorAtlasStatus()}));}
+  bodySurfaceBakeSources(){return this.activeRigs.map(rig=>rig.bodySurfaceBakeSource()).filter((source):source is NonNullable<typeof source>=>source!==undefined);}
   bakedStatus(){return{pipeline:'shared-paint',eligible:false,activeSpecies:this.activeRigs.map(rig=>rig.species),bloodBlockedSpecies:[],published:[],pending:false,preparing:false,generation:this.surfaceRevision,cpuBytes:0,gpuBytes:0,fallback:[]};}
   sharedSurfaceStatus(){return{pipeline:'shared-paint',models:this.models.snapshot(),species:this.rigs.flatMap(rig=>{const state=rig.sharedSurfaceStatus();return state?[state]:[];}),positiveEffectsTransitional:this.rigs.some(rig=>!rig.usesSharedSurface)};}
   graphicsComparisonMetadata(){const active=new Set(this.activeRigs),rigs:AnimalGraphicsComparisonState[]=[];for(const rig of this.rigs){const state=rig.graphicsComparisonState(active.has(rig));if(state)rigs.push(state);}return{generation:this.surfaceRevision,eligible:false,pending:false,preparing:false,closed:this.surfaceClosed,rigs};}

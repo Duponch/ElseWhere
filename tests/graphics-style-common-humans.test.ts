@@ -1,3 +1,4 @@
+import {settlePreparedStrokes} from './fixtures/settle-prepared-strokes';
 /** Actual shared human body/instance owners and cold Three shader generation.
  * Synthetic paint pixels support graph checks only; no GPU or quality claim. */
 import {expect,test,vi} from 'vitest';
@@ -29,7 +30,7 @@ test('Pastel and Gouache share human models, rig, materials and opaque trait tab
  try{
   for(const style of ['default','origami'] as const){
    const context=new GraphicsStyleContext({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style,impasto:0,wear:0}),exploration=new ExplorationMask256(),layer=withGraphicsStyle(context,()=>new PawnLayer(m=>exploration.configure(m)));
-   const entry={style,context,exploration,layer};entries.push(entry);layer.update(world,0,true);
+   const entry={style,context,exploration,layer};entries.push(entry);layer.update(world,0,true);settlePreparedStrokes(context);
   }
   const body=(layer:PawnLayer)=>Reflect.get(layer,'pawnMesh') as THREE.Mesh<THREE.InstancedBufferGeometry,THREE.MeshStandardNodeMaterial>;
   const a=body(entries[0]!.layer).geometry,b=body(entries[1]!.layer).geometry;
@@ -78,7 +79,7 @@ test('Pastel and Gouache share human models, rig, materials and opaque trait tab
 test('human physical wear is a source effect independent of style and is wholly retired at zero',()=>{
  const world=animalCombatCamp(),context=new GraphicsStyleContext({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'default',impasto:0,wear:0}),layer=withGraphicsStyle(context,()=>new PawnLayer());
  try{
-  layer.update(world,0,true);const mesh=Reflect.get(layer,'pawnMesh') as THREE.Mesh<THREE.InstancedBufferGeometry,THREE.MeshStandardNodeMaterial>,geometry=mesh.geometry,material=mesh.material,stroke=Reflect.get(layer,'humanStroke'),sourceIndex=geometry.index;
+  layer.update(world,0,true);settlePreparedStrokes(context);const mesh=Reflect.get(layer,'pawnMesh') as THREE.Mesh<THREE.InstancedBufferGeometry,THREE.MeshStandardNodeMaterial>,geometry=mesh.geometry,material=mesh.material,stroke=Reflect.get(layer,'humanStroke'),sourceIndex=geometry.index;
   expect(Reflect.get(layer,'wearEffect')).toBeUndefined();expect(Reflect.get(context,'wearGeometries').size).toBe(0);
   context.update({...context.preferences,wear:.75,edges:.65});
   const effect=Reflect.get(layer,'wearEffect') as THREE.Mesh<THREE.InstancedBufferGeometry,THREE.MeshStandardNodeMaterial>;
