@@ -18,7 +18,11 @@ import {ItemMeshAtlas} from './item-mesh-atlas';
 import {createSandbagGeometry} from './sandbag-parts';
 import {createItemGeometry} from './item-geometry';
 import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
-import {compileNaturalSurfaceModels,naturalStroke,type NaturalSurfaceModels} from './surfaces/NaturalSurfaceModels';
+import {compileNaturalSurfaceModels,naturalStroke,type NaturalSurfaceModels,SURFACE_STROKE_FACE,SURFACE_STROKE_UV} from './surfaces/NaturalSurfaceModels';
+import {PreparedSurfaceOwner,PREPARED_SURFACE_VARIANT} from './origami/baked/surfaces/PreparedSurfaceOwner';
+import {preparedNaturalModel,preparedDiagonalVariant} from './origami/baked/surfaces/PreparedSurfaceVariants';
+import {canonicalPreparedSurfaceSource} from './origami/baked/surfaces/PreparedSurfaceSource';
+import type {PreparedSurfaceModel} from './origami/baked/surfaces/PreparedSurfaceTypes';
 import {assertUnitBoxPaintGeometry,rigidBoxPaintInputs} from './surfaces/RigidBoxPaintUv';
 
 const object = new THREE.Object3D(), color = new THREE.Color();
@@ -40,6 +44,12 @@ export class BoxBatches {
   private readonly texturedSolid = createSurfaceMaterial('diffuse',0xffffff);
   private readonly texturedNonBox = createSurfaceMaterial('diffuse',0xffffff);
   private readonly rigidBoxes=new WeakSet<BoxMesh>();
+  private readonly preparedSurfaces:PreparedSurfaceOwner|undefined;
+  private readonly preparedSourceMaterials:THREE.NodeMaterial[]=[];
+  private readonly preparedModels=new Map<THREE.BufferGeometry,PreparedSurfaceModel>();
+  private readonly preparedBatchCounts=new Map<BoxMesh,Map<number,number>>();
+  preparedSurfaceStatus(){return this.preparedSurfaces?.status();}
+  requestPreparedSurfaceQualityRoute(route:'source'|'prepared'|undefined):void{this.preparedSurfaces?.requestQualityRoute(route);}
   private readonly plainRock = createSurfaceMaterial('diffuse',0xffffff);
   private readonly texturedRock = createSurfaceMaterial('diffuse',0xffffff);
   private readonly materials: Record<Style, THREE.NodeMaterial> = {
@@ -97,13 +107,24 @@ export class BoxBatches {
     this.texturedNonBox.colorNode=this.texturedSolid.colorNode;
     assertUnitBoxPaintGeometry(this.geometry);const rigidPaint=graphics?rigidBoxPaintInputs(graphics,'rigidBox'):undefined;
     applySharedPaintSurface(this.texturedSolid,{context:graphics,base:attribute('boxColor','vec3'),pastel:this.texturedSolid.colorNode as THREE.Node<'vec3'>,faceUv:rigidPaint?.faceUv,get pigmentUv(){return graphics&&!graphics.reliefEnabled&&!graphics.wearEnabled?rigidPaint?.pigmentUv:undefined;},stroke:naturalStroke(graphics,this.surfaceModels?.stroke,undefined,undefined,true)});
-    applySharedPaintSurface(this.texturedNonBox,{context:graphics,base:attribute('boxColor','vec3'),pastel:this.texturedNonBox.colorNode as THREE.Node<'vec3'>,stroke:naturalStroke(graphics,this.surfaceModels?.stroke,undefined,undefined,true)});
+    const nonBoxSourceOptions={context:graphics,base:attribute('boxColor','vec3'),pastel:this.texturedNonBox.colorNode as THREE.Node<'vec3'>,stroke:naturalStroke(graphics,this.surfaceModels?.stroke,undefined,undefined,true)};applySharedPaintSurface(this.texturedNonBox,nonBoxSourceOptions);
     for (const mat of [this.plainRock, this.texturedRock]) {
       mat.userData.rendererOwned = true;
       configureChunkMaterial(mat);
     }
     this.texturedRock.colorNode = attribute('boxColor', 'vec3').mul(texture(this.rockTexture, chunkPaintUv()).rgb);
     applySharedPaintSurface(this.texturedRock,{context:graphics,base:attribute('boxColor','vec3'),pastel:this.texturedRock.colorNode as THREE.Node<'vec3'>,stroke:naturalStroke(graphics,this.surfaceModels?.stroke,undefined,undefined,true)});
+    if(graphics&&this.surfaceModels){
+      const models=this.surfaceModels,source=canonicalPreparedSurfaceSource({key:'box-natural-vocabulary-v1',context:graphics,stroke:models.stroke,bodyOptions:()=>({...nonBoxSourceOptions,faceUv:uv()}),unitBodyProven:true,assertCurrent:()=>models.stroke.assertCurrent()});
+      this.preparedSurfaces=new PreparedSurfaceOwner({key:'box-natural:'+this.geometry.uuid,context:graphics,source:()=>source,maxCellPixels:64,returnCellPixels:56,changed:()=>{}});
+      models.geometries.forEach((geometry,i)=>this.preparedModels.set(geometry,preparedNaturalModel('box-natural-model:'+i,geometry,models.stroke)));
+      const install=(sourceMaterial:THREE.NodeMaterial,pastelUv:THREE.Node<'vec2'>,faceId:THREE.Node<'float'>,chartUv:THREE.Node<'vec2'>)=>{this.preparedSourceMaterials.push(sourceMaterial);return this.preparedSurfaces!.addTarget({sourceMaterial,pastelTexture:this.surfaceTexture,pastelUv,pastelFromSample:sample=>attribute('boxColor','vec3').mul(sample.rgb),tint:attribute('boxColor','vec3'),faceId,chartUv,configure});};
+      this.texturedSolid=install(this.texturedSolid,instancedBoxPatternUv(),attribute(SURFACE_STROKE_FACE,'float'),attribute(SURFACE_STROKE_UV,'vec2')) as typeof this.texturedSolid;
+      this.texturedNonBox=install(this.texturedNonBox,instancedBoxPatternUv(),attribute(SURFACE_STROKE_FACE,'float'),attribute(SURFACE_STROKE_UV,'vec2')) as typeof this.texturedNonBox;
+      this.texturedItem=install(this.texturedItem,this.itemAtlas.patternUvNode(),this.itemAtlas.strokeFaceNode(),this.itemAtlas.strokeUvNode()) as typeof this.texturedItem;
+      // Rounded fragments retain Source: their radial four-float deformation
+      // varies by seed and is not a shared affine metric domain.
+    }
   }
 
   /** Select a resident pipeline. The plain one has no texture node or map, so
@@ -206,12 +227,12 @@ export class BoxBatches {
       object.position.set(item.x,item.y,item.z);object.rotation.set(0,item.ry??0,0);
       object.scale.set(item.sx??1,item.sy??1,item.sz??1);object.updateMatrix();
       mesh.setMatrixAt(i,object.matrix);mesh.setColorAt(i,color.setHex(item.color??0xffffff));
-      if(targets)targets.ids[i]=item.targetId;
+      this.writePreparedVariant(mesh,i,item,this.geometry,false);if(targets)targets.ids[i]=item.targetId;
     }
     mesh.instanceMatrix.needsUpdate=true;mesh.colorBuffer.needsUpdate=true;
     mesh.computeBoundingSphere();
     if(targets)targets.tint.setInstances(mesh.colorBuffer,targets.ids);
-    mesh.commitOwnedOpaque435();
+    this.publishPreparedBatch(mesh);mesh.commitOwnedOpaque435();
     return true;
   }
 
@@ -242,6 +263,7 @@ export class BoxBatches {
     if(geometry===this.geometry)this.rigidBoxes.add(mesh);else this.rigidBoxes.delete(mesh);
     if (mesh.material !== chosen) mesh.material = chosen;
     mesh.activeCount = items.length;
+    if(style==='solid'&&!rock&&this.preparedSurfaces){const a=this.ensurePreparedVariant(mesh)!;a.array.fill(-1);this.preparedBatchCounts.set(mesh,new Map());}
     const ids:(number|undefined)[]=[];
     const patternIndices=atlas?new Map<number,number>():undefined;
     for (let i = 0; i < items.length; i++) {
@@ -249,7 +271,7 @@ export class BoxBatches {
       object.position.set(item.x, item.y, item.z); object.rotation.set(0, item.ry ?? 0, 0);
       object.scale.set(item.sx ?? 1, item.sy ?? 1, item.sz ?? 1); object.updateMatrix();
       mesh.setMatrixAt(i, object.matrix); mesh.setColorAt(i, color.setHex(item.color ?? 0xffffff));
-      ids.push(item.targetId);
+      if(style==='solid'&&!rock)this.writePreparedVariant(mesh,i,item,geometry,atlas);ids.push(item.targetId);
       if(atlas){const slot=this.itemAtlas.slot(item.shape as ItemShape|undefined),ordinal=patternIndices!.get(slot)??0;mesh.setItemShapeAt(i,slot,ordinal);patternIndices!.set(slot,ordinal+1);}
       if(rock)(mesh.geometry.getAttribute('chunkContour') as THREE.InstancedBufferAttribute).setXYZW(i,...chunkContour(item.key));
     }
@@ -262,8 +284,17 @@ export class BoxBatches {
     else targets.ids=ids;
     targets.tint.setInstances(mesh.colorBuffer,ids);
     const selected=this.targetGroups.get(group);if(selected)targets.tint.setTargets(selected);
-    mesh.commitOwnedOpaque435();
+    this.publishPreparedBatch(mesh);mesh.commitOwnedOpaque435();
   }
+
+  private ensurePreparedVariant(mesh:BoxMesh):THREE.InstancedBufferAttribute|undefined{
+    if(!this.preparedSurfaces)return;let a=mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT) as THREE.InstancedBufferAttribute|undefined;if(!a){a=new THREE.InstancedBufferAttribute(new Float32Array(mesh.instanceMatrix.count).fill(-1),1).setUsage(THREE.StaticDrawUsage);mesh.geometry.setAttribute(PREPARED_SURFACE_VARIANT,a);}return a;
+  }
+  private writePreparedVariant(mesh:BoxMesh,slot:number,item:Placement,geometry:THREE.BufferGeometry,atlas:boolean):void{
+    const owner=this.preparedSurfaces;if(!owner||geometry===this.roundedRockGeometry||geometry===this.smallRockGeometry)return;const a=this.ensurePreparedVariant(mesh)!,model=atlas?this.preparedModels.get(this.surfaceModels!.geometries[4+this.itemAtlas.slot(item.shape as ItemShape|undefined)]!):this.preparedModels.get(geometry);if(!model)throw Error('Actual shared prop model absent');
+    const id=owner.registerVariant(preparedDiagonalVariant(model,item.sx??1,item.sy??1,item.sz??1)),old=a.getX(slot),counts=this.preparedBatchCounts.get(mesh)??new Map<number,number>();if(old>=0){const n=(counts.get(old)??0)-1;if(n>0)counts.set(old,n);else counts.delete(old);}counts.set(id,(counts.get(id)??0)+1);this.preparedBatchCounts.set(mesh,counts);a.setX(slot,id);a.needsUpdate=true;
+  }
+  private publishPreparedBatch(mesh:BoxMesh):void{this.preparedSurfaces?.setContribution(mesh,this.preparedBatchCounts.get(mesh)?.keys()??[]);}
 
   private allocateRockContour(mesh: BoxMesh): void {
     mesh.geometry.setAttribute('chunkContour',new THREE.InstancedBufferAttribute(new Float32Array(mesh.instanceMatrix.count*4),4).setUsage(THREE.StaticDrawUsage));
@@ -272,7 +303,7 @@ export class BoxBatches {
   clear(): void {
     for (const state of this.targetBatches.values()) state.tint.dispose();
     this.targetBatches.clear();this.targetGroups.clear();
-    for (const mesh of this.batches.values()) { mesh.removeFromParent(); mesh.dispose(); }
+    for (const mesh of this.batches.values()) {this.preparedSurfaces?.setContribution(mesh,[]);mesh.removeFromParent();mesh.dispose();}this.preparedBatchCounts.clear();
     this.batches.clear();
     this.itemBatchKeys.clear();
     this.furnitureRevision=undefined;
@@ -300,9 +331,10 @@ export class BoxBatches {
   }
 
   dispose(): void {
+    this.preparedSurfaces?.attachGpuRetirement([...this.batches.values()].map(mesh=>mesh.geometry));this.preparedSurfaces?.dispose();
     this.clear();if(this.surfaceModels)this.surfaceModels.dispose();else{this.geometry.dispose();this.roundedRockGeometry.dispose();this.smallRockGeometry.dispose();this.sandbagGeometry.dispose();}
-    this.itemAtlas.dispose();this.plainItem.dispose();this.texturedItem.dispose();
+    this.itemAtlas.dispose();this.plainItem.dispose();if(!this.preparedSurfaces)this.texturedItem.dispose();
     for (const mat of Object.values(this.materials)) mat.dispose();
-    this.texturedSolid.dispose();this.texturedNonBox.dispose(); this.plainRock.dispose(); this.texturedRock.dispose(); this.surfaceTexture.dispose();this.rockTexture.dispose();
+    if(this.preparedSurfaces){for(const source of this.preparedSourceMaterials)source.dispose();}else{this.texturedSolid.dispose();this.texturedNonBox.dispose();} this.plainRock.dispose(); this.texturedRock.dispose(); this.surfaceTexture.dispose();this.rockTexture.dispose();
   }
 }

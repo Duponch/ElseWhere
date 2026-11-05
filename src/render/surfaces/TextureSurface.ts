@@ -2,6 +2,7 @@
  * are data; models, poses, lighting and material graphs never depend on a
  * texture-style label. Texture owners outlive every surface borrowing them. */
 import * as THREE from 'three/webgpu';
+import {createOwnedMaterialResources435} from '../OwnedMaterialResources435';
 import {attribute,buffer,int,mix,sharedUniformGroup,texture,uniform,uv,varying,vec3} from 'three/tsl';
 
 export const TEXTURE_SURFACE_SLOT_COUNT=64;
@@ -59,6 +60,7 @@ export function createTextureSurface(initial:TextureSurfaceAssets,options:Textur
  const tint=varying(color.div(mix(vec3(1),baseline.max(vec3(.00001)),row.y)),'v_textureSurfaceTint');
  const sampleNode=texture(initial.texture,xy).depth(int(layer));
  const material=new THREE.MeshLambertNodeMaterial({flatShading:true,vertexColors:false}),plainMaterial=new THREE.MeshLambertNodeMaterial({flatShading:true,vertexColors:false}),materials=[material,plainMaterial];
+ const resourceJournal=createOwnedMaterialResources435(material,{textures:[initial.texture],arrayTextures:[initial.texture],sharedGroups:[assetsGroup]}),plainJournal=createOwnedMaterialResources435(plainMaterial,{textures:[],arrayTextures:[],sharedGroups:[]});
  let current=snapshot(initial),closed=false;
  try {
   material.colorNode=sampleNode.rgb.mul(tint);plainMaterial.colorNode=color;
@@ -70,9 +72,9 @@ export function createTextureSurface(initial:TextureSurfaceAssets,options:Textur
    if(closed)throw Error('TextureSurface is disposed');validateTextureSurfaceAssets(stage);
    // No callbacks/awaits occur between these writes. Scene owners publish only
    // after upload/warmup, then release their previous texture lease separately.
-   const next=snapshot(stage);sampleNode.value=next.texture;address.value=next.uvAddress==='chart'?1:0;writeRows(next);assetsGroup.needsUpdate=true;current=next;
+   const next=snapshot(stage);sampleNode.value=next.texture;address.value=next.uvAddress==='chart'?1:0;writeRows(next);assetsGroup.needsUpdate=true;current=next;resourceJournal.publish({textures:[next.texture],arrayTextures:[next.texture],sharedGroups:[assetsGroup]});
   },
-  dispose():void {if(closed)return;closed=true;disposeMaterials(materials);},
+  dispose():void {if(closed)return;resourceJournal.dispose();plainJournal.dispose();disposeMaterials(materials);closed=true;},
  };
 }
 

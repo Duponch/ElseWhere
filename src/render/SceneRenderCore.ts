@@ -199,6 +199,7 @@ export class SceneRenderCore {
   private shadowCameraCoordinates = -1;
   private shadowCameraReversedDepth = false;
   readonly graphicsStyle=currentGraphicsStyle()??new GraphicsStyleContext();
+  private readonly releaseActorDensityConsumer=this.graphicsStyle.surfacePreparation.registerDensityConsumer({key:'qualified-actor-density-adapter',maxCellPixels:128,returnCellPixels:112,isEligible:()=>hasActorAtlasDensityGate(this.graphicsStyle),onCrossing:(mode,pixels)=>updateActorAtlasDensity(this.graphicsStyle,mode,pixels)});
   readonly stats = { fps: 0, frameMs: 0, frameP95: 0, drawCalls: 0, triangles: 0 };
   async setGraphicsStyleParameters(settings:GraphicsStylePreferences):Promise<void> {
     if(this.disposed||this.closingPresentation||this.fatalError)throw Error('Cet affichage est fermé ou indisponible.');
@@ -537,8 +538,9 @@ export class SceneRenderCore {
   readonly backend: string;
   protected readonly renderer: THREE.WebGPURenderer;
   protected readonly scene = new THREE.Scene();
-  protected readonly staticSceneCompiler435=this.applicationContext?new StaticSceneCompiler435(this.scene):undefined;
+  protected readonly staticSceneCompiler435=this.applicationContext?new StaticSceneCompiler435(this.scene,8,this.ownedOpaqueRevisions435?.producer('static-page')):undefined;
   staticSceneCompilerMetrics435(){return this.staticSceneCompiler435?.snapshot();}
+  ownedOpaqueRevisionMetrics435(){return this.ownedOpaqueRevisions435?.metrics();}
   private reconcileStaticCompiler435():void {
     const owner=this.staticSceneCompiler435;if(!owner)return;
     if(!this.world||!this.immutableWorlds.has(this.world)){owner.clear();return;}
@@ -1923,7 +1925,7 @@ export class SceneRenderCore {
     if(this.graphicsStyle.reliefLod?.update(this.rig.mode,cellPixels*this.renderer.getPixelRatio()))this.invalidatePausedShadow();
     // Operation snapshots seed the real camera density before initial atlas
     // admission. Only later admitted transitions use this O1 frame gate.
-    if(this.graphicsStyle.origami&&hasActorAtlasDensityGate(this.graphicsStyle)&&updateActorAtlasDensity(this.graphicsStyle,this.rig.mode,cellPixels*this.renderer.getPixelRatio()))this.invalidatePausedShadow();
+    if(this.canBakeTrees&&this.graphicsStyle.surfacePreparation.hasDensityConsumers&&this.graphicsStyle.surfacePreparation.observeDensity(this.rig.mode,cellPixels*this.renderer.getPixelRatio()))this.invalidatePausedShadow();
     this.actionFeedback.setBarsDetailVisible(cellPixels>=18);
     this.actionVfx.setDetailVisible(true);
     this.brawlCloud.setDetailVisible(true);
@@ -2229,6 +2231,7 @@ export class SceneRenderCore {
     this.hostPort.disconnectResize();
     this.rig?.dispose();
     this.hostPort.removeInputListeners();
+    this.resources.attachPreparedResourceGpuRetirement(this.staticSceneCompiler435?.meshes().map(mesh=>mesh.geometry)??[]);
     this.ownedOpaqueRevisions435?.dispose();this.staticSceneCompiler435?.dispose();
     this.geysers.dispose();this.boxes.dispose();this.snowSurface.dispose();
     this.roofs.dispose();
@@ -2273,7 +2276,7 @@ export class SceneRenderCore {
     this.objectSelection?.geometry.dispose();(this.objectSelection?.material as THREE.Material | undefined)?.dispose();
     this.daylight?.dispose();
     this.environmentLighting.dispose();
-    this.graphicsStyle.dispose();
+    this.releaseActorDensityConsumer?.();this.graphicsStyle.dispose();
     this.renderer.onDeviceLost = () => {};
     this.renderer.onError = () => {};
     if (!this.rendererLifetime.closed) { this.rendererLifetime.closed = true; this.rendererDisposal=Promise.resolve(this.renderer.dispose()); }

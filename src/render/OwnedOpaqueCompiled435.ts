@@ -7,6 +7,9 @@ export interface OwnedOpaqueCompiledDeclaration435 {
  readonly storage:ReadonlySet<BufferAttribute>;
  /** Exact producer-owned exploration.size/enabled nodes; no value heuristic. */
  readonly objectUniforms:ReadonlySet<Node>;
+ /** Exact Source-produced array textures and manually versioned shared groups. */
+ readonly arrayTextures?:ReadonlySet<Texture>;
+ readonly sharedGroups?:ReadonlySet<UniformGroupNode>;
  readonly renderer?:Renderer;
 }
 export interface OwnedOpaqueCompiledResult435 {readonly accepted:boolean;readonly reason:string;readonly objectUniforms?:number;readonly textures?:number;readonly storage?:number;readonly sharedGroups?:number}
@@ -31,8 +34,10 @@ export function compatibleOwnedOpaqueCompiled435(state:unknown,declaration:Owned
  const fail=(reason:string):OwnedOpaqueCompiledResult435=>({accepted:false,reason});
  if(!record(state)||!Array.isArray(state.bindings)||!Array.isArray(state.updateNodes)||!Array.isArray(state.updateBeforeNodes)||!Array.isArray(state.updateAfterNodes))return fail('compiled-state-missing');
  if(!declaration.materials.length||declaration.materials.some(material=>!(material instanceof NodeMaterial)||material.transparent||material.opacity!==1))return fail('material-not-opaque-owned');
+ const declaredGroup=(value:unknown):value is UniformGroupNode=>value instanceof UniformGroupNode&&declaration.sharedGroups?.has(value)===true&&Object.getPrototypeOf(value)===UniformGroupNode.prototype&&value.shared===true&&value.updateType===null&&value.update===UniformGroupNode.prototype.update&&noLifecycle(value);
+ const permittedShared=(value:unknown)=>shared(value)||declaredGroup(value);
  const covered=new Set<Node>(),textureNodes=new Set<TextureNode>(),declaredTexture=(value:unknown):value is Texture=>value instanceof Texture&&declaration.textures.has(value)
-  &&!['isVideoTexture','isStorageTexture','isCubeTexture','is3DTexture','isDataArrayTexture','isFramebufferTexture'].some(flag=>Reflect.get(value,flag)===true);
+  &&!['isVideoTexture','isStorageTexture','isCubeTexture','is3DTexture','isFramebufferTexture'].some(flag=>Reflect.get(value,flag)===true)&&(!(Reflect.get(value,'isDataArrayTexture')===true||Reflect.get(value,'isArrayTexture')===true)||declaration.arrayTextures?.has(value)===true);
  const textureNode=(node:unknown):node is TextureNode=>node instanceof TextureNode&&Object.getPrototypeOf(node)===TextureNode.prototype&&node.update===TextureNode.prototype.update&&node.updateReference===TextureNode.prototype.updateReference&&noLifecycle(node);
  // First identify every output written by a permitted native OBJECT writer.
  for(const raw of state.updateNodes){
@@ -51,11 +56,11 @@ export function compatibleOwnedOpaqueCompiled435(state:unknown,declaration:Owned
   }else if(raw instanceof TextureNode){
    if(!textureNode(raw))return fail('texture-writer-not-native');if(!declaredTexture(raw.value))return fail('resource-not-declared');textureNodes.add(raw);
   }else if(raw instanceof UniformGroupNode){
-   if(raw!==objectGroup&&!shared(raw)||raw.update!==UniformGroupNode.prototype.update||!noLifecycle(raw))return fail('uniform-group-not-native');
+   if(raw!==objectGroup&&!permittedShared(raw)||raw.update!==UniformGroupNode.prototype.update||!noLifecycle(raw))return fail('uniform-group-not-native');
   }else if(raw instanceof UniformNode){
    // SHARED deliberately retains all native shared-node updates. An OBJECT
    // callback would still write an object UBO which SHARED does not upload.
-   if(!noLifecycle(raw)||raw.updateType!=='none'&&(!shared(raw.groupNode)||raw.updateType==='object'))return fail('object-uniform-callback');
+   if(!noLifecycle(raw)||raw.updateType!=='none'&&(!permittedShared(raw.groupNode)||raw.updateType==='object'))return fail('object-uniform-callback');
   }else if(raw instanceof ReferenceNode){
    const output=Reflect.get(raw,'node'),source=Reflect.get(raw,'object'),property=Reflect.get(raw,'property');
    if(Object.getPrototypeOf(raw)!==ReferenceNode.prototype||raw.update!==ReferenceNode.prototype.update||raw.updateReference!==ReferenceNode.prototype.updateReference||!noLifecycle(raw)||!(source instanceof LightShadow)||typeof property!=='string'||!shadowProperties.has(property)||!(output instanceof UniformNode)||output.groupNode!==renderGroup)return fail('reference-not-shared-shadow');
@@ -83,8 +88,8 @@ export function compatibleOwnedOpaqueCompiled435(state:unknown,declaration:Owned
   for(const raw of group.bindings){
    if(!record(raw)||typeof raw.update!=='function')return fail('binding-invalid');
    if(raw.isNodeUniformsGroup===true){
-    if(!Array.isArray(raw.uniforms)||raw.groupNode!==objectGroup&&!shared(raw.groupNode))return fail('binding-uniform-group-invalid');
-    if(shared(raw.groupNode)){sharedGroups++;for(const value of raw.uniforms){const output=record(value)&&record(value.nodeUniform)?value.nodeUniform.node:undefined;if(!(output instanceof UniformNode)||output.groupNode!==raw.groupNode)return fail('shared-uniform-output');}continue;}
+    if(!Array.isArray(raw.uniforms)||raw.groupNode!==objectGroup&&!permittedShared(raw.groupNode))return fail('binding-uniform-group-invalid');
+    if(permittedShared(raw.groupNode)){sharedGroups++;for(const value of raw.uniforms){const output=record(value)&&record(value.nodeUniform)?value.nodeUniform.node:undefined;if(!(output instanceof UniformNode)||output.groupNode!==raw.groupNode)return fail('shared-uniform-output');}continue;}
     for(const value of raw.uniforms){const output=record(value)&&record(value.nodeUniform)?value.nodeUniform.node:undefined;objectUniforms++;
      if(!(output instanceof UniformNode)||output.groupNode!==objectGroup||!covered.has(output)&&(!declaration.objectUniforms.has(output)||output.updateType!=='none'||!noLifecycle(output)))return fail('object-uniform-not-declared');
     }

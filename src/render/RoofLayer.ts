@@ -140,6 +140,11 @@ export class RoofLayer {
   private surfaceKey = '';
   private areaKey = '';
   private texturesEnabled = true;
+  /** The continuous slab has world-absolute UVs and mutable unique faces.
+   * No canonical repeated chart domain is proven; retain exact Source rather
+   * than invent seams or allocate a per-cell atlas. This is an explicit route. */
+  preparedSurfaceStatus(){return{pipeline:'continuous-roof-Source',representation:'source',fallback:'continuous-world-roof-no-canonical-domain',atlasLayers:0,visible:this.mesh.visible};}
+  requestPreparedSurfaceQualityRoute(route:'source'|'prepared'|undefined):void {if(route==='prepared')throw Error('Continuous world roof has no admitted canonical prepared domain');}
   constructor(configure?: (material: THREE.MeshStandardNodeMaterial) => void,private readonly prepared?:(world:World)=>PreparedPhysicalRoofs|undefined) {
     for (const mat of [this.textured, this.plain]) { configure?.(mat); mat.userData.rendererOwned = true; }
     this.mesh = new THREE.Mesh(roofSlabGeometry([], WORLD_SCALE.wallHeight + .08), this.textured);

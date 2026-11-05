@@ -1,5 +1,47 @@
 # Rendu commun et textures Pastel/Gouache
 
+État du 5 novembre, lot rigides/ressources V65 : **rendu préparé réellement admis,
+parité encore ouverte**. Box/Item, Door, Crop et Timber partagent le propriétaire
+transactionnel de surfaces ; les ressources réunissent arbres et autres surfaces
+dans une seule banque et un même programme à huit buffers. Les mêmes géométries,
+matériaux, éclairage, poses et règles de visibilité sont conservés dès le premier
+Pastel. Le calcul du budget distingue les phases réelles de préparation, séparées
+par une attente effective des travaux GPU avant allocation de la banque finale.
+Les plafonds, la résolution et les quatre niveaux de mipmaps restent inchangés.
+
+V65 admet 348 variantes Resource sur six pages génériques et quatorze couches
+finales, ainsi que 32 variantes Box/Item sur trois pages. Door/Crop/Timber n'ont
+aucune demande dans cette carte : leurs contrats CPU ne constituent pas une
+qualification visuelle en colonie. Les 68 contrats distincts du lot, acquis par
+reprises bornées, et le typage produit final de 56,198 s passent. Les échecs
+initiaux et les replis Source V63 restent conservés séparément.
+
+Même WorkerWorld128, vrai contexte Main435, DPR1,2, contours activés,
+relief/usure0 : GPU P/G/P0,874496/0,986624/0,890880 ms, soit Gouache+11,775 %
+face aux deux témoins Pastel ; dérive Pastel+1,874 %. CPU soumission
+0,830911/0,805734/0,791820 ms, soit−0,694 %, avec dérive Pastel−4,705 %.
+Ces chiffres sont descriptifs ; ils ne prouvent ni parité avec l'ancien Legacy,
+ni gain CPU global, ni FPS de campagne. Les 384 échantillons GPU et leurs pics
+adverses sont conservés. Les appels et triangles sont identiques entre textures.
+Le renderer et son client ont été libérés publiquement sans erreur.
+
+Au cadrage joueur, V65 conserve l'apparence générale du témoin Gouache V57 :
+0,863 % de pixels différents et alpha identique. Aucun défaut géométrique grossier
+n'a été observé dans ce cadrage. Le repli Source présente déjà des triangles kraft
+absents du rendu préparé et ne constitue donc pas seul une référence de qualité.
+Les détails proches et toutes les familles inactives ne sont pas qualifiés par
+cette comparaison. Pages passe en 4,121 s ; ses quatre comparaisons de Workers,
+Native et standard chacun face à son témoin, restent exactes octet par octet.
+La galerie V65 affiche 714 assets, 39 groupes et deux définitions sans modèle.
+Relief/usure1/0,75 puis0/0 et Pastel/Gouache ont été observés, avec la table longue
+peinte et ses contours. L'onglet34 est fermé ; les avertissements de conversion
+non indexée et de dépréciation Three sont conservés, sans erreur observée.
+Aucun reçu public de libération du renderer de galerie n'est revendiqué.
+La prochaine optimisation groupée prépare les adresses des ressources dans leurs
+buffers existants afin de supprimer leurs recherches GPU, sans modifier la peinture.
+Elle corrige aussi l'ancien masque du repli complet des arbres, dont l'exposition
+plus fréquente rend les triangles kraft visibles à certains niveaux de zoom.
+
 État du 5 novembre 2026 : **macrolot acteurs/contours qualifié dans le vrai Core,
 parité encore ouverte**. Les mêmes modèles, matériaux, poses et règles de visibilité
 restent en place dans les deux textures. Les traits utilisent des coefficients

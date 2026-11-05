@@ -46,7 +46,10 @@ export class ItemMeshAtlas {
     this.buffer=storage(this.data,'vec4',this.data.count).toReadOnly().setPBO(true);
     const address=uint(attribute('itemShape','float')).mul(this.verticesPerSlot).add(vertexIndex).mul(stride/4).toVar();
     this.positionUv=this.buffer.element(address).toVar();this.normalUv=this.buffer.element(address.add(1)).toVar();
-    this.stroke=borrowedModels?this.buffer.element(address.add(2)).toVar():vec4(0);
+    // Face/UV metadata is a vertex lookup. A global VarNode here can emit
+    // a dead fragment load while a caller queries the prepared-address type.
+    // UVs remain smoothly interpolated; face headers read X flat at the vertex.
+    this.stroke=borrowedModels?varying(this.buffer.element(address.add(2)),'v_itemSourceStroke'):vec4(0);
     // Attributes establish the existing shader layout; authored data is fetched
     // from the atlas in the vertex stage. There is no per-frame buffer write.
     this.geometry=new THREE.BufferGeometry();
@@ -71,6 +74,15 @@ export class ItemMeshAtlas {
   strokeFaceNode():THREE.Node<'float'>{return this.stroke.x;}
   strokeUvNode():THREE.Node<'vec2'>{return this.stroke.yz;}
 
+  /** The original mapped Pastel UV, shared with the prepared representation. */
+  patternUvNode():THREE.Node<'vec2'>{
+    const positionUv=this.positionUv,normalUv=this.normalUv;
+      const seed=attribute('itemPatternIndex','float'),sx=attribute('boxMatrix0','vec4').xyz.length(),sy=attribute('boxMatrix1','vec4').xyz.length(),sz=attribute('boxMatrix2','vec4').xyz.length();
+      const facing=normalUv.xyz.abs(),u=sx.mul(facing.x.oneMinus()).add(sz.mul(facing.x)),v=sy.mul(facing.y.oneMinus()).add(sz.mul(facing.y)),longest=u.max(v).max(1e-6);
+      const span=vec2(u,v).div(longest).mul(PATTERN_SPAN),phase=vec2(seed.mul(.61803398875).fract(),seed.mul(.41421356237).fract()).mul(1-PATTERN_SPAN);
+      return varying(vec2(positionUv.w,normalUv.w).sub(.5).mul(span).add(float(PATTERN_SPAN*.5)).add(phase));
+  }
+
   configure(material:THREE.NodeMaterial,surface?:THREE.Texture):void {
     const positionUv=this.positionUv,normalUv=this.normalUv;
     material.positionNode=Fn(()=>{
@@ -80,11 +92,7 @@ export class ItemMeshAtlas {
     })();
     material.colorNode=attribute('boxColor','vec3');
     if(surface){
-      const seed=attribute('itemPatternIndex','float'),sx=attribute('boxMatrix0','vec4').xyz.length(),sy=attribute('boxMatrix1','vec4').xyz.length(),sz=attribute('boxMatrix2','vec4').xyz.length();
-      const facing=normalUv.xyz.abs(),u=sx.mul(facing.x.oneMinus()).add(sz.mul(facing.x)),v=sy.mul(facing.y.oneMinus()).add(sz.mul(facing.y)),longest=u.max(v).max(1e-6);
-      const span=vec2(u,v).div(longest).mul(PATTERN_SPAN),phase=vec2(seed.mul(.61803398875).fract(),seed.mul(.41421356237).fract()).mul(1-PATTERN_SPAN);
-      const mapped=varying(vec2(positionUv.w,normalUv.w).sub(.5).mul(span).add(float(PATTERN_SPAN*.5)).add(phase));
-      material.colorNode=attribute('boxColor','vec3').mul(texture(surface,mapped).rgb);
+      material.colorNode=attribute('boxColor','vec3').mul(texture(surface,this.patternUvNode()).rgb);
     }
   }
 

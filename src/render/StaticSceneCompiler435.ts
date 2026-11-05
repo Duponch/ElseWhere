@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import type {OwnedOpaqueProducer435} from './OwnedOpaqueRevisionRegistry435';
 import {createSourceOwnedRenderHook435} from './SourceOwnedRenderHooks435';
 import {StaticGeometryArena435,staticArenaBlockReserve435} from './StaticGeometryArena435';
 import type {StaticArenaAllocation435} from './StaticGeometryArena435';
@@ -39,7 +40,7 @@ export class StaticSceneCompiler435 {
  private readonly ids=new WeakMap<object,number>();private nextId=1;private disposed=false;
  readonly stats={reconciles:0,rebuilds:0,blockReplacements:0,blockRelocations:0,indexPatches:0,indexSourceRemaps:0,attributePatches:0,patchVertexVisits:0,sourceRangeCoalesces:0,copiedBytes:0,bulkSetCalls:0,bulkCopiedWords:0,copyRunVisits:0,runSearchSteps:0,referenceSorts:0,eligibleObjects:0,candidateFamilies:0,unmergedNativeObjects:0,sourceObjects:0,pageObjects:0,sourceActiveTriangles:0,compiledActiveTriangles:0,fallbacks:0,rejected:{}as Record<string,number>};
  private readonly offered=new Map<THREE.Camera,{entries:number;triangles:number}>();
- constructor(private readonly scene:THREE.Scene,private readonly maxPages=8){if(!Number.isInteger(maxPages)||maxPages<1||maxPages>8)throw new RangeError('Static compiler page budget must be1..8.');}
+ constructor(private readonly scene:THREE.Scene,private readonly maxPages=8,private readonly ownedProducer435?:OwnedOpaqueProducer435){if(!Number.isInteger(maxPages)||maxPages<1||maxPages>8)throw new RangeError('Static compiler page budget must be1..8.');}
  private id(value:object):number{let id=this.ids.get(value);if(id===undefined){id=this.nextId++;this.ids.set(value,id);}return id;}
  private reject(reason:string):null{this.stats.rejected[reason]=(this.stats.rejected[reason]??0)+1;return null;}
  private choice(source:THREE.Mesh,root:THREE.Object3D,knownMaterials:ReadonlySet<THREE.NodeMaterial>):Choice|null{
@@ -67,7 +68,7 @@ export class StaticSceneCompiler435 {
   return{source,root,material,key,sourceKey:tag?`owned:${tag.key}`:`object:${this.id(source)}`,signature,names,attributes,index,start,count,layers,quadrant:tag?.quadrant,partitions:tag?.partitions};
  }
  private restoreSources():void{for(const[source,layers]of this.hidden){if(source.layers.mask===0)source.layers.mask=layers;hiddenSourceLayers.delete(source);}this.hidden.clear();}
- private release(page:Page):void{page.mesh.removeFromParent();page.arena.dispose();}
+ private release(page:Page):void{this.ownedProducer435?.forget(page.mesh);page.mesh.removeFromParent();page.arena.dispose();}
  private container(root:THREE.Object3D):THREE.Group{
   let group=this.containers.get(root);if(!group){group=new THREE.Group();group.name='compiled-static-world435';group.matrixAutoUpdate=false;this.scene.add(group);this.containers.set(root,group);}return group;
  }
@@ -101,7 +102,7 @@ export class StaticSceneCompiler435 {
   const page:Page={key,root:first.root,mesh,arena,choices,blocks:new Map(),sources:new Map(),indices:0,indexOrder:'',quadrant};
   for(const[blockKey,rows]of grouped){const source=rows[0]!,mapping=planned.get(blockKey)!,block:Block={key:blockKey,attributes:source.attributes,names:source.names,...mapping,versions:source.attributes.map(a=>this.retainedVersion(a)),allocation:arena.allocate(mapping.vertexCount)};page.blocks.set(blockKey,block);for(let a=0;a<block.attributes.length;a++)this.copyVertices(page,block,a,0,block.vertexCount);}
   mesh.onBeforeRender=createSourceOwnedRenderHook435<THREE.Mesh,Parameters<THREE.Mesh['onBeforeRender']>,void>((_renderer,_scene,camera)=>{const previous=this.offered.get(camera)??{entries:0,triangles:0};previous.entries++;previous.triangles+=page.indices/3;this.offered.set(camera,previous);});
-  this.container(first.root).add(mesh);this.writeIndices(page,choices);this.bounds(page);this.stats.rebuilds++;return page;
+  this.container(first.root).add(mesh);this.writeIndices(page,choices);this.bounds(page);this.ownedProducer435?.register(mesh,[first.material],[],{beforeRender:mesh.onBeforeRender});this.stats.rebuilds++;return page;
  }
  private bounds(page:Page):void{const sphere=new THREE.Sphere();for(const c of page.choices)if(c.count)sphere.union(c.source.geometry.boundingSphere!);page.arena.geometry.boundingSphere=sphere;}
  private mark(attribute:THREE.BufferAttribute,start:number,end:number):void{const previous=attribute.updateRanges[0];if(previous){const priorEnd=previous.start+previous.count;previous.start=Math.min(previous.start,start);previous.count=Math.max(priorEnd,end)-previous.start;attribute.updateRanges.splice(1);}else attribute.addUpdateRange(start,end-start);attribute.needsUpdate=true;}
@@ -133,7 +134,7 @@ export class StaticSceneCompiler435 {
   }
   if(copied){this.mark(target,low,high);this.stats.copiedBytes+=copied;this.stats.attributePatches++;}
  }
- patchAttribute(attribute:THREE.BufferAttribute,start:number,count:number):void{for(const link of this.links.get(attribute)??[])this.copyRange(link.page,link.block,link.attribute,start,count);}
+ patchAttribute(attribute:THREE.BufferAttribute,start:number,count:number):void{const dirty=new Set<THREE.Mesh>();for(const link of this.links.get(attribute)??[]){this.copyRange(link.page,link.block,link.attribute,start,count);dirty.add(link.page.mesh);}for(const mesh of dirty)this.ownedProducer435?.dirty(mesh);}
  private completeVersions(page:Page,block:Block):void{
   for(let a=0;a<block.attributes.length;a++){const source=block.attributes[a]!;if(source.version===block.versions[a])continue;
    const version=this.retainedVersion(source);if(source.updateRanges.length)for(const range of source.updateRanges)this.copyRange(page,block,a,range.start,range.count);else this.copyVertices(page,block,a,0,block.vertexCount);block.versions[a]=version;}
@@ -147,7 +148,7 @@ export class StaticSceneCompiler435 {
    if(indicesChanged){const before=block.vertexCount;this.appendReferences(block,rows);if(block.vertexCount>before){const prior=block.allocation,next=page.arena.allocate(block.vertexCount,prior);block.allocation=next;const relocated=next!==prior;if(relocated)this.stats.blockRelocations++;for(let a=0;a<block.attributes.length;a++)this.copyVertices(page,block,a,relocated?0:before,block.vertexCount);}}
    this.completeVersions(page,block);
   }
-  this.writeIndices(page,choices);this.bounds(page);page.mesh.geometry=page.arena.geometry;
+  this.writeIndices(page,choices);this.bounds(page);page.mesh.geometry=page.arena.geometry;this.ownedProducer435?.dirty(page.mesh);
   if(oldGeometry!==page.arena.geometry)this.stats.rebuilds++;this.stats.copiedBytes+=page.arena.stats.growthCopiedBytes-growthBytes;
  }
  /** Recompute only changed source sequences; assemble active page indices with

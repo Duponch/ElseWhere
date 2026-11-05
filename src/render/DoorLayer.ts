@@ -14,6 +14,11 @@ import {currentGraphicsStyle} from './graphics-style';
 import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
 import {naturalStroke} from './surfaces/NaturalSurfaceModels';
 import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
+import {PreparedSurfaceOwner,PREPARED_SURFACE_VARIANT} from './origami/baked/surfaces/PreparedSurfaceOwner';
+import {preparedNaturalModel,preparedDiagonalVariant} from './origami/baked/surfaces/PreparedSurfaceVariants';
+import {canonicalPreparedSurfaceSource} from './origami/baked/surfaces/PreparedSurfaceSource';
+import {SURFACE_STROKE_FACE,SURFACE_STROKE_UV} from './surfaces/NaturalSurfaceModels';
+import type {PreparedSurfaceModel} from './origami/baked/surfaces/PreparedSurfaceTypes';
 import {assertUnitBoxPaintGeometry,rigidBoxPaintInputs} from './surfaces/RigidBoxPaintUv';
 
 const EMPTY_AXES:ReadonlyMap<number,0|1>=new Map();
@@ -35,6 +40,11 @@ export class DoorLayer {
   private key='';
   private history=new Map<number,{current:DoorState;previous:DoorState}>();
   private readonly targetTint=new InstanceTargetTint();
+  private readonly preparedSurfaces:PreparedSurfaceOwner|undefined;
+  private readonly preparedModel:PreparedSurfaceModel|undefined;
+  private readonly preparedSourceMaterial:THREE.MeshStandardNodeMaterial|undefined;
+  preparedSurfaceStatus(){return this.preparedSurfaces?.status();}
+  requestPreparedSurfaceQualityRoute(route:'source'|'prepared'|undefined):void{this.preparedSurfaces?.requestQualityRoute(route);}
   private readonly animation:RetainedAnimation;
   setTargetPreview(ids:ReadonlySet<number>):void {this.targetTint.setTargets(ids);}
   clearTargetPreview():void {this.targetTint.clear();}
@@ -64,7 +74,8 @@ export class DoorLayer {
     const context=currentGraphicsStyle();
     this.textured.roughness=.88;this.textured.metalness=.02;
     assertUnitBoxPaintGeometry(this.base);const rigidPaint=context?rigidBoxPaintInputs(context,'rigidDoor'):undefined;
-    applySharedPaintSurface(this.textured,{context,base:baseColor,pastel:this.textured.colorNode as THREE.Node<'vec3'>,faceUv:rigidPaint?.faceUv??uv(),get pigmentUv(){return context&&!context.reliefEnabled&&!context.wearEnabled?rigidPaint?.pigmentUv:undefined;},stroke:naturalStroke(context,this.surfaceModel.stroke,undefined,undefined,true)});
+    const sourceOptions={context,base:baseColor,pastel:this.textured.colorNode as THREE.Node<'vec3'>,faceUv:rigidPaint?.faceUv??uv(),get pigmentUv(){return context&&!context.reliefEnabled&&!context.wearEnabled?rigidPaint?.pigmentUv:undefined;},stroke:naturalStroke(context,this.surfaceModel.stroke,undefined,undefined,true)};applySharedPaintSurface(this.textured,sourceOptions);
+    if(context){this.preparedModel=preparedNaturalModel('door-unit-box-v1',this.base,this.surfaceModel.stroke);const source=canonicalPreparedSurfaceSource({key:'door-unit-box-v1',context,stroke:this.surfaceModel.stroke,bodyOptions:()=>sourceOptions,unitBodyProven:true,assertCurrent:()=>this.preparedModel!.assertCurrent()});this.preparedSurfaces=new PreparedSurfaceOwner({key:'door:'+this.group.uuid,context,source:()=>source,changed:()=>{}});this.preparedSourceMaterial=this.textured;this.textured=this.preparedSurfaces.addTarget({sourceMaterial:this.textured,pastelTexture:this.paint,pastelUv:uv(),pastelFromSample:sample=>baseColor.mul(sample.rgb),tint:baseColor,faceId:attribute(SURFACE_STROKE_FACE,'float'),chartUv:attribute(SURFACE_STROKE_UV,'vec2'),configure:m=>configure?.(m as THREE.MeshStandardNodeMaterial)}) as THREE.MeshStandardNodeMaterial;this.mesh.material=this.texturesEnabled?this.textured:this.material;}
   }
   setTexturesEnabled(enabled:boolean):void {
     if(this.texturesEnabled===enabled)return;
@@ -73,7 +84,7 @@ export class DoorLayer {
 
   }
   private allocateAttributes(capacity:number):void {
-    for(const [name,size] of [['doorCurrent',4],['doorPrevious',4],['doorShift',3]] as const)this.mesh.geometry.setAttribute(name,new THREE.InstancedBufferAttribute(new Float32Array(capacity*size),size).setUsage(THREE.StaticDrawUsage));
+    for(const [name,size] of [['doorCurrent',4],['doorPrevious',4],['doorShift',3],[PREPARED_SURFACE_VARIANT,1]] as const)this.mesh.geometry.setAttribute(name,new THREE.InstancedBufferAttribute(new Float32Array(capacity*size),size).setUsage(THREE.StaticDrawUsage));
   }
   // V299_NATIVE_DOOR_BEGIN
   // Central native admission owns these preparations; arguments do not grant it.
@@ -86,7 +97,7 @@ export class DoorLayer {
     if(count>this.mesh.instanceMatrix.count){const capacity=2**Math.ceil(Math.log2(count));this.mesh.allocate(this.base,capacity);this.allocateAttributes(capacity);}
     const current=this.mesh.geometry.getAttribute('doorCurrent'),previous=this.mesh.geometry.getAttribute('doorPrevious'),shift=this.mesh.geometry.getAttribute('doorShift');
     const object=new THREE.Object3D(),color=new THREE.Color();
-    let index=0;const targetIds:number[]=[];
+    let index=0;const targetIds:number[]=[],preparedIds=new Set<number>();
     for(const s of doors) {
       const d=s.door!,old=this.history.get(s.id),changed=!old||old.current.changedAt!==d.changedAt||old.current.from!==d.from||old.current.open!==d.open||doorMotionTicks({...s,door:old.current})!==doorMotionTicks(s);
       const pair=changed?{current:{...d},previous:old?.current??{...d}}:old!;this.history.set(s.id,pair);
@@ -98,11 +109,12 @@ export class DoorLayer {
         this.mesh.setMatrixAt(index,object.matrix);
         color.setHex(doorLeafColor(s.material));
         if(s.kind==='autodoor')color.lerp(AUTODOOR_TINT,.24);
-        this.mesh.setColorAt(index,color);targetIds.push(s.id);
+        this.mesh.setColorAt(index,color);targetIds.push(s.id);if(this.preparedSurfaces&&this.preparedModel){const id=this.preparedSurfaces.registerVariant(preparedDiagonalVariant(this.preparedModel,leaf.sx!,leaf.sy!,leaf.sz!));this.mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT).setX(index,id);preparedIds.add(id);}
         for(const [attribute,state] of [[current,pair.current],[previous,pair.previous]] as const)attribute.setXYZW(index,state.changedAt,state.from,(state.open?1:-1)/doorMotionTicks({...s,door:state}),0);
         shift.setXYZ(index,side*.45*cos,0,-side*.45*sin);index++;
       }
     }
+    this.preparedSurfaces?.setContribution(this.mesh,preparedIds);this.mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT).needsUpdate=true;
     this.mesh.activeCount=count;this.mesh.instanceMatrix.needsUpdate=this.mesh.colorBuffer.needsUpdate=true;
     for(const attribute of [current,previous,shift])attribute.needsUpdate=true;
     this.mesh.computeBoundingSphere();this.mesh.boundingSphere.radius+=.5;
@@ -124,7 +136,7 @@ export class DoorLayer {
     if(count>this.mesh.instanceMatrix.count){const capacity=2**Math.ceil(Math.log2(count));this.mesh.allocate(this.base,capacity);this.allocateAttributes(capacity);}
     const current=this.mesh.geometry.getAttribute('doorCurrent'),previous=this.mesh.geometry.getAttribute('doorPrevious'),shift=this.mesh.geometry.getAttribute('doorShift');
     const object=new THREE.Object3D(),color=new THREE.Color();
-    let index=0;const targetIds:number[]=[];
+    let index=0;const targetIds:number[]=[],preparedIds=new Set<number>();
     for(const s of doors) {
       const d=s.door!,old=this.history.get(s.id),changed=!old||old.current.changedAt!==d.changedAt||old.current.from!==d.from||old.current.open!==d.open||doorMotionTicks({...s,door:old.current})!==doorMotionTicks(s);
       const pair=changed?{current:{...d},previous:old?.current??{...d}}:old!;this.history.set(s.id,pair);
@@ -136,11 +148,12 @@ export class DoorLayer {
         this.mesh.setMatrixAt(index,object.matrix);
         color.setHex(doorLeafColor(s.material));
         if(s.kind==='autodoor')color.lerp(AUTODOOR_TINT,.24);
-        this.mesh.setColorAt(index,color);targetIds.push(s.id);
+        this.mesh.setColorAt(index,color);targetIds.push(s.id);if(this.preparedSurfaces&&this.preparedModel){const id=this.preparedSurfaces.registerVariant(preparedDiagonalVariant(this.preparedModel,leaf.sx!,leaf.sy!,leaf.sz!));this.mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT).setX(index,id);preparedIds.add(id);}
         for(const [attribute,state] of [[current,pair.current],[previous,pair.previous]] as const)attribute.setXYZW(index,state.changedAt,state.from,(state.open?1:-1)/doorMotionTicks({...s,door:state}),0);
         shift.setXYZ(index,side*.45*cos,0,-side*.45*sin);index++;
       }
     }
+    this.preparedSurfaces?.setContribution(this.mesh,preparedIds);this.mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT).needsUpdate=true;
     this.mesh.activeCount=count;this.mesh.instanceMatrix.needsUpdate=this.mesh.colorBuffer.needsUpdate=true;
     for(const attribute of [current,previous,shift])attribute.needsUpdate=true;
     this.mesh.computeBoundingSphere();this.mesh.boundingSphere.radius+=.5;
@@ -162,5 +175,5 @@ export class DoorLayer {
     const version=this.mesh.instanceMatrix.version;this.mesh.activeCount=1;
     return ()=>{if(this.mesh.instanceMatrix.version===version)this.mesh.activeCount=0;};
   }
-  dispose():void {this.animation.dispose();this.targetTint.dispose();this.mesh.dispose();this.surfaceModel.dispose();this.material.dispose();this.textured.dispose();this.paint.dispose();}
+  dispose():void {this.preparedSurfaces?.attachGpuRetirement([this.mesh.geometry]);this.preparedSurfaces?.dispose();this.animation.dispose();this.targetTint.dispose();this.mesh.dispose();this.surfaceModel.dispose();this.material.dispose();if(this.preparedSourceMaterial)this.preparedSourceMaterial.dispose();else this.textured.dispose();this.paint.dispose();}
 }

@@ -19,6 +19,7 @@ export interface ResourceRangeData {
   originalBrush?:ResourceBrushData;
 }
 export interface ResourceBrushData {base:Float32Array;width:Float32Array;rough:Float32Array}
+export interface ResourceSurfaceIdentityWriter {identity(geometry:THREE.BufferGeometry,item:Placement):number}
 export function resourceBrushData(geometry:THREE.BufferGeometry):ResourceBrushData|undefined {
   const base=geometry.userData.referenceBrushBasePositions as Float32Array|undefined,width=geometry.userData.referenceBrushWidthOffsets as Float32Array|undefined,rough=geometry.userData.referenceBrushRoughOffsets as Float32Array|undefined;
   return base&&width&&rough?{base,width,rough}:undefined;
@@ -34,7 +35,7 @@ export function noise(x: number, z: number, salt = 0): number {
  * per-cell silhouettes and colors stay intact; only submissions are combined.
  * Dynamic pawns and cargo remain GPU-instanced and are never baked here.
  */
-export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.BufferGeometry; items: Placement[] }[], mat: THREE.Material, shadows = true, includeUv = false,faceUv=false,packedSurface=false): THREE.Mesh | undefined {
+export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.BufferGeometry; items: Placement[] }[], mat: THREE.Material, shadows = true, includeUv = false,faceUv=false,packedSurface=false,prepared?:ResourceSurfaceIdentityWriter): THREE.Mesh | undefined {
   const vertexCount = parts.reduce((sum, part) => sum + part.geometry.getAttribute('position').count * part.items.length, 0);
   const indexCount = parts.reduce((sum, part) => sum + (part.geometry.index?.count ?? part.geometry.getAttribute('position').count) * part.items.length, 0);
   if (!vertexCount) { for (const part of parts) part.geometry.dispose(); if (!mat.userData.rendererOwned) mat.dispose(); return; }
@@ -62,6 +63,7 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
   const hasProfiles=hasSurface||parts.some(part=>part.items.some(item=>item.profile!==undefined)||part.geometry.hasAttribute('origamiPaint'));
   const paint=hasProfiles?new Float32Array(vertexCount*4):undefined;
   const surfaceUvs=hasSurface?new Float32Array(vertexCount*4):undefined;
+  const preparedIds=prepared?new Float32Array(vertexCount).fill(-1):undefined;
   const wearExpand=parts.some(part=>part.geometry.hasAttribute('origamiWearExpand'))?new Float32Array(vertexCount*3):undefined;
   const brush=parts.some(part=>resourceBrushData(part.geometry))?{base:new Float32Array(vertexCount*3),width:new Float32Array(vertexCount*3),rough:new Float32Array(vertexCount*3)}:undefined;
   const indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
@@ -73,6 +75,7 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
     const rawFace=geometry.getAttribute('surfaceFaceUv')??uv,strokeUv=geometry.getAttribute('surfaceStrokeUv')??uv,strokeFace=geometry.getAttribute('surfaceStrokeFace');
     if(hasSurface&&items.length&&(!rawFace||!strokeUv||!strokeFace))throw Error('Complete shared natural surface fields required before merge');
     for (const item of items) {
+      const preparedId=prepared?.identity(geometry,item)??-1;
       const firstIndex = index,firstVertex=vertex;
       // These vertices are baked only when a spatial chunk changes. Encode a
       // stable, resource-specific pigment crop in the existing UV stream.
@@ -86,6 +89,7 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
       const stonePigment=item.pigment==='stone';
       let facetX=NaN,facetZ=NaN,facetTint:readonly [number,number,number]=STONE_FACET_TINTS[0];
       for (let i = 0; i < pos.count; i++) {
+        if(preparedIds)preparedIds[vertex+i]=preparedId;
         const x = pos.getX(i) * sx, z = pos.getZ(i) * sz;
         const nx = normal.getX(i) / sx, ny = normal.getY(i) / sy, nz = normal.getZ(i) / sz;
         const length = Math.hypot(nx, ny, nz), offset = (vertex + i) * 3;
@@ -128,6 +132,7 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
     geometry.dispose();
   }
   const geometry = new THREE.BufferGeometry();
+  if(preparedIds)geometry.userData.preparedResourceVariantIds=preparedIds;
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));

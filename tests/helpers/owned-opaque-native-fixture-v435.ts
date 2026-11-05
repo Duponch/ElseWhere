@@ -1,4 +1,4 @@
-import {BoxGeometry,DataTexture,InspectorBase,MaterialReferenceNode,Matrix4,Mesh,MeshLambertNodeMaterial,ModelNode,Node,NodeMaterialObserver,Renderer,StorageBufferAttribute,StorageBufferNode,TextureNode,UniformNode,Vector2,WebGPUBackend,WGSLNodeBuilder}from'three/webgpu';
+import {BoxGeometry,DataTexture,InspectorBase,MaterialReferenceNode,Matrix4,Mesh,MeshLambertNodeMaterial,ModelNode,Node,NodeMaterialObserver,Renderer,StorageBufferAttribute,StorageBufferNode,Texture,TextureNode,UniformNode,Vector2,WebGPUBackend,WGSLNodeBuilder}from'three/webgpu';
 import {attribute,context,objectGroup,renderGroup}from'three/tsl';
 import type{OwnedOpaqueCompiledDeclaration435}from'../../src/render/OwnedOpaqueCompiled435';
 
@@ -45,7 +45,7 @@ export function nativeCompiledFixture435(options:{texture?:boolean;storage?:bool
  const projection=new UniformNode(new Matrix4()).setGroup(renderGroup);add(projection,'mat4','vertex','cameraProjectionMatrix');
  const map=new DataTexture(new Uint8Array([255,255,255,255]),1,1),texture=new TextureNode(map);if(options.texture){updates.push(texture);add(texture,'texture','fragment','ownedSurface');}
  const storageAttribute=new StorageBufferAttribute(new Float32Array([1,2,3,4]),4),storage=new StorageBufferNode(storageAttribute,'vec4',1).toReadOnly();if(options.storage)add(storage,'storageBuffer','vertex','itemAtlas');
- const textures=new Set(options.texture?[map]:[]),buffers=new Set(options.storage?[storageAttribute]:[]),objectUniforms=new Set<Node>([enabled,size]);
+ const textures=new Set<Texture>(options.texture?[map]:[]),buffers=new Set(options.storage?[storageAttribute]:[]),objectUniforms=new Set<Node>([enabled,size]);
  const declaration:OwnedOpaqueCompiledDeclaration435={materials:[material],textures,storage:buffers,objectUniforms,renderer};
  function state(){Reflect.set(builder,'bindGroups',null);const bindings=call('getBindings');if(!Array.isArray(bindings))throw Error('Native binding list missing');return{bindings,updateNodes:updates,updateBeforeNodes:before,updateAfterNodes:after};}
  function nativeObserver(){return new NodeMaterialObserver(builder);}

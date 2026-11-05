@@ -54,7 +54,7 @@ test('shared tree surface publishes and withdraws only texture data while real r
   const colors=[1001,1002].map(id=>stream(f.group,id,'color')),baseline=stream(f.group,1001,'origamiPaint');f.layer.setTargetPreview(new Set([1001]));expect(stream(f.group,1001,'color')).not.toEqual(colors[0]);expect(stream(f.group,1002,'color')).toEqual(colors[1]);expect(stream(f.group,1001,'origamiPaint')).toEqual(baseline);sameRefs(initial,false);expect(attributeChanges).toHaveBeenCalled();expect(materialChanges).not.toHaveBeenCalled();f.layer.clearTargetPreview();expect([1001,1002].map(id=>stream(f.group,id,'color'))).toEqual(colors);sameRefs(initial);
   f.layer.setTexturesEnabled(false);expect(meshes.every(m=>m.material===surfaceMats[1])).toBe(true);f.layer.setTexturesEnabled(true);sameRefs(initial);expect(f.configure).toHaveBeenCalledTimes(3);
   const beforeTextureOnlyAttributes=attributeChanges.mock.calls.length,second=catalog(demand.models,2,f.context);banks.push(second);const replacement=f.layer.prepareTreeAssetCatalog(second.bank);stages.push(replacement);expect(replacement.warmup.map(m=>m.material)).toEqual(surfaceMats);const swap=replacement.publish();sameRefs(initial);swap.rollback();swap.commit();replacement.dispose();sameRefs(initial);expect(f.layer.bakedTreeStatus().revision).toBe(1);expect(surfaceRetirements).toBe(0);
-  const removal=f.layer.setTreeDirectFallback('TEST explicit direct retirement');for(const row of initial){expect(row.mesh.geometry).toBe(row.geometry);expect(row.mesh.material).not.toBe(row.material);}expect(f.layer.bakedTreeStatus().ready).toBe(0);removal.rollback();removal.commit();sameRefs(initial);expect(f.layer.bakedTreeStatus().ready).toBe(2);
+  const removal=f.layer.setTreeDirectFallback('TEST explicit direct retirement');for(const row of initial){expect(row.mesh.geometry).toBe(row.geometry);expect(row.mesh.material).toBe(row.material);}expect(f.layer.bakedTreeStatus().ready).toBe(0);removal.rollback();removal.commit();sameRefs(initial);expect(f.layer.bakedTreeStatus().ready).toBe(2);
   const expired=catalog(demand.models,3,f.context);banks.push(expired);const pending=f.layer.prepareTreeAssetCatalog(expired.bank);stages.push(pending);expired.expire();expect(()=>pending.publish()).toThrow('epoch expired');pending.dispose();sameRefs(initial);expect(f.layer.bakedTreeStatus().revision).toBe(1);
   const badSlots=first.bank.slots.map(row=>({...row}));badSlots[model.surfaceSlot]={layer:1,paletteBaked:true};expect(()=>f.layer.prepareTreeAssetCatalog({...first.bank,slots:badSlots})).toThrow('Complete compatible tree texture bank');sameRefs(initial);
   // A staging copy owns only its geometry. Failed retirement must surface the
@@ -65,11 +65,11 @@ test('shared tree surface publishes and withdraws only texture data while real r
   const canopy=meshes.find(m=>m.name==='tree-canopy')!,index=canopy.geometry.index!,visible=canopy.geometry.drawRange.count;update(f.layer,input,false,new Set([1001]));expect(canopy.geometry.drawRange.count).toBe(visible/2);update(f.layer,input,false);expect(canopy.geometry.index).toBe(index);expect(canopy.geometry.drawRange.count).toBe(visible);sameRefs(initial,false);
   const phase=7*1.7-1.5*Math.PI;let tick=2;while(Math.floor((11*tick/6+phase)/(2*Math.PI))===Math.floor((11*(tick-1)/6+phase)/(2*Math.PI)))tick++;input.tick=tick-1;const next=structuredClone(input);next.tick=tick;next.jobs[0]!.progress=1;const at=(Math.floor((11*tick/6+phase)/(2*Math.PI))*2*Math.PI-phase)/11,beforeChop=stream(f.group,1001,'position'),other=stream(f.group,1002,'position');Reflect.apply(f.layer.adoptChopWork,f.layer,[input,next]);f.layer.presentChop(at+.09);expect(stream(f.group,1001,'position')).not.toEqual(beforeChop);expect(stream(f.group,1002,'position')).toEqual(other);f.layer.clearChopRecoil();expect(stream(f.group,1001,'position')).toEqual(beforeChop);
   const healthy=stream(f.group,1001,'color'),healthyBaseline=stream(f.group,1001,'origamiPaint'),position=stream(f.group,1001,'position');input.resources[0]!.blight={since:0,severity:.5,lastHarmTick:0,nextCheck:200,rng:1};update(f.layer,input,false);const sickPosition=stream(f.group,1001,'position');expect(sickPosition).toHaveLength(position.length);expect(Math.max(...sickPosition.map((v,i)=>Math.abs(v-position[i]!)))).toBeLessThan(2e-6);expect(stream(f.group,1001,'color')).not.toEqual(healthy);expect(stream(f.group,1001,'origamiPaint')).toEqual(healthyBaseline);expect(f.layer.treeBakeDemand().models[0]).toBe(model);expect(f.layer.bakedTreeStatus()).toMatchObject({ready:2,fallback:0});delete input.resources[0]!.blight;update(f.layer,input,false);expect(stream(f.group,1001,'color')).toEqual(healthy);expect(stream(f.group,1001,'origamiPaint')).toEqual(healthyBaseline);
-  expect(materialChanges).toHaveBeenCalledTimes(2);expect(surfaceRetirements).toBe(0);expect(borrowedTextureRetirements).toBe(0);f.layer.dispose();expect(surfaceRetirements).toBe(2);expect(borrowedTextureRetirements).toBe(0);
+  expect(materialChanges).not.toHaveBeenCalled();expect(surfaceRetirements).toBe(0);expect(borrowedTextureRetirements).toBe(0);f.layer.dispose();expect(surfaceRetirements).toBe(2);expect(borrowedTextureRetirements).toBe(0);
  }finally{for(const stage of stages)stage.dispose();f.dispose();source.dispose();for(const bank of banks)bank.dispose();}
 },45_000);
 
-test('actual resource models survive optional-feature boundaries while fixed and complete direct materials are selected explicitly',()=>{
+test('actual resource models survive optional-feature boundaries while fixed and complete direct graphs are selected explicitly',async()=>{
  const f=make('default'),input=record();
  try{
   update(f.layer,input,true);const before=bodies(f.group).map(mesh=>({mesh,geometry:mesh.geometry,material:mesh.material,index:mesh.geometry.index,position:mesh.geometry.getAttribute('position')}));
@@ -77,10 +77,11 @@ test('actual resource models survive optional-feature boundaries while fixed and
   f.context.update({...f.context.preferences,style:'origami'});f.context.prepareSharedSurfaceAssets();
   const unchanged=(material=true)=>{for(const row of before){expect(row.mesh.geometry).toBe(row.geometry);if(material)expect(row.mesh.material).toBe(row.material);expect(row.geometry.index).toBe(row.index);expect(row.geometry.getAttribute('position')).toBe(row.position);}};
   unchanged();expect(f.layer.bakedTreeStatus()).toMatchObject({ready:0,fallback:2});
-  f.context.update({...f.context.preferences,impasto:.2,wear:.4,edges:.65});unchanged(false);
+  const settle=async()=>{const registry=f.context.surfacePreparation,batch=await registry.stage({preferences:{...f.context.preferences},world:undefined,reset:false,reason:'settings',epoch:0,renderer:{}as THREE.WebGPURenderer,paintRevision:f.context.preparedPaintRevision},()=>{});try{batch.publish();batch.commit();}finally{batch.dispose();}};
+  f.context.update({...f.context.preferences,impasto:.2,wear:.4,edges:.65});await settle();unchanged(false);
   expect(bodies(f.group)).toEqual(before.map(row=>row.mesh));expect(f.group.children.flatMap(group=>group.children).some(mesh=>mesh.userData.referenceCompanion==='wear')).toBe(true);
   for(const row of before)if((row.mesh.material as THREE.NodeMaterial).colorNode!==null)expect((row.mesh.material as THREE.NodeMaterial).normalNode).not.toBeNull();
-  f.context.update({...f.context.preferences,impasto:0,wear:0});unchanged();expect(Reflect.get(f.layer,'wearFlora')).toBeUndefined();expect(Reflect.get(f.layer,'wearTemplates')).toBeUndefined();expect(f.group.children.flatMap(group=>group.children).some(mesh=>mesh.userData.referenceCompanion)).toBe(false);expect(f.context.reliefLod).toBeUndefined();
+  f.context.update({...f.context.preferences,impasto:0,wear:0});await settle();unchanged();expect(Reflect.get(f.layer,'wearFlora')).toBeUndefined();expect(Reflect.get(f.layer,'wearTemplates')).toBeUndefined();expect(f.group.children.flatMap(group=>group.children).some(mesh=>mesh.userData.referenceCompanion)).toBe(false);expect(f.context.reliefLod).toBeUndefined();
   f.context.update({...f.context.preferences,style:'default'});unchanged();
  }finally{f.dispose();}
 },45_000);
@@ -99,14 +100,14 @@ test('real mixed resource bodies, tree surfaces and staging views compile cold w
 
 
 /** The tiny bank is a binding/publication fixture, never a visual paint oracle. */
-test('fixed one-fetch and complete direct resource families retain the same packed models and435 pages across texture changes',()=>{
+test('the shared final resource family retains the same packed models and435 pages across texture changes',()=>{
  const f=make('default'),input=record(),scene=new THREE.Scene(),compiler=new StaticSceneCompiler435(scene),banks:ReturnType<typeof catalog>[]=[],stages:PreparedTreeCatalogStage[]=[];
  input.resources.push({id:1004,kind:'tree',x:11,z:8,amount:1,growth:1});
  let materialDisposals=0;
  try{
   update(f.layer,input,true);scene.add(f.group);scene.updateMatrixWorld(true);
   const meshes=bodies(f.group),material=meshes[0]!.material as THREE.NodeMaterial;
-  expect(meshes.length).toBeGreaterThanOrEqual(4);expect(new Set(meshes.map(m=>m.material)).size).toBe(2);
+  expect(meshes.length).toBeGreaterThanOrEqual(4);expect(new Set(meshes.map(m=>m.material)).size).toBe(1);
   const attributes=['color','normal','origamiPaint','position','surfaceUv','uv','windBasis','windRoot'];
   let cached=0,direct=0;
   for(const mesh of meshes){
@@ -120,7 +121,7 @@ test('fixed one-fetch and complete direct resource families retain the same pack
   const triangles=meshes.reduce((sum,m)=>sum+Math.min(m.geometry.drawRange.count,m.geometry.index!.count)/3,0);
   const originals=meshes.map(mesh=>({mesh,geometry:mesh.geometry,material:mesh.material,index:mesh.geometry.index,fields:Object.fromEntries(Object.entries(mesh.geometry.attributes).map(([k,a])=>[k,{attribute:a,array:a.array,bytes:new Uint8Array(a.array.buffer,a.array.byteOffset,a.array.byteLength).slice()}]))}));
   compiler.reconcile([f.group],f.layer.compiledMaterials435());const pages=[...compiler.meshes()],facts=compiler.snapshot();
-  expect(facts).toMatchObject({candidateFamilies:2,pageObjects:2,sourceObjects:meshes.length,unmergedNativeObjects:0,sourceActiveTriangles:triangles,compiledActiveTriangles:triangles,fallbacks:0});
+  expect(facts).toMatchObject({candidateFamilies:1,pageObjects:1,sourceObjects:meshes.length,unmergedNativeObjects:0,sourceActiveTriangles:triangles,compiledActiveTriangles:triangles,fallbacks:0});
   expect(facts.pages.flatMap(page=>page.blocks)).toHaveLength(meshes.length);expect(facts.pages.reduce((n,page)=>n+page.sources,0)).toBe(meshes.length);
   const bank=catalog(f.layer.treeBakeDemand().models,31,f.context);banks.push(bank);const stage=f.layer.prepareTreeAssetCatalog(bank.bank);stages.push(stage);stage.warmup.forEach(mesh=>(mesh.material as THREE.Material).addEventListener('dispose',()=>materialDisposals++));
   const published=stage.publish();published.commit();stage.dispose();

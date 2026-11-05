@@ -65,7 +65,7 @@ function teardownPorts(f:ReturnType<typeof fixture>){
  for(const name of names)Reflect.set(f.core,name,{dispose:vi.fn()});
  for(const name of ['terrainGroup','resourceGroup','structureGroup','jobGroup','storageGroup','pileGroup'])Reflect.set(f.core,name,new THREE.Group());
  for(const name of ['confirmedJobMarkers','preparedNaturalPresentation','sceneResources','structureSignature','storageSignature','homeSignature','pileChunks'])Reflect.set(f.core,name,new Map());
- Object.assign(f.core,{furniturePresentation:{clear:vi.fn()},resources:{dispose:vi.fn(),treeBakeDemand:()=>({models:[],species:[],key:'empty',isCurrent:()=>true})},hostPort:{now:()=>1000,hidden:()=>false,selectionReady:()=>false,disposeSelection:vi.fn(),disconnectResize:vi.fn(),removeInputListeners:vi.fn(),disposeLabels:vi.fn(),removeSurface:vi.fn()}});
+ Object.assign(f.core,{furniturePresentation:{clear:vi.fn()},resources:{dispose:vi.fn(),attachPreparedResourceGpuRetirement:vi.fn(),treeBakeDemand:()=>({models:[],species:[],key:'empty',isCurrent:()=>true})},hostPort:{now:()=>1000,hidden:()=>false,selectionReady:()=>false,disposeSelection:vi.fn(),disconnectResize:vi.fn(),removeInputListeners:vi.fn(),disposeLabels:vi.fn(),removeSurface:vi.fn()}});
 }
 test('real disposeAsync waits for an active texture transaction before detaching producers and then awaits the same renderer teardown',async()=>{
  const f=fixture(),job=begin(f),rejection=job.catch(error=>error);teardownPorts(f);let closed=false;const closing=call<Promise<void>>(f.core,'disposeAsync').then(()=>{closed=true;});

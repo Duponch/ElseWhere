@@ -1,7 +1,8 @@
 import {BufferAttribute,BufferGeometry,Camera,LightShadow,Mesh,Node,NodeMaterial,NodeMaterialObserver,Object3D,OrthographicCamera,PerspectiveCamera,RenderObjectRefreshType,REVISION,Scene,Texture,type NodeBuilder,type Renderer} from 'three/webgpu';
 import type {OwnedOpaqueProducer435} from './OwnedOpaqueRevisionRegistry435';
 import {compatibleOwnedOpaqueCompiled435} from './OwnedOpaqueCompiled435';
-import {createSourceOwnedRenderHook435} from './SourceOwnedRenderHooks435';
+import {createSourceOwnedRenderHook435,isSourceOwnedRenderHook435} from './SourceOwnedRenderHooks435';
+import {ownedMaterialResources435,type OwnedMaterialResources435} from './OwnedMaterialResources435';
 
 type Dictionary435=Record<string,unknown>;
 const record435=(value:unknown):value is Dictionary435=>typeof value==='object'&&value!==null;
@@ -11,7 +12,8 @@ const draw435=(value:unknown):value is Draw435=>record435(value)&&value.object i
 interface Material435 {native:NodeMaterial['setupObserver'];installed:NodeMaterial['setupObserver'];before:PropertyDescriptor|undefined}
 interface Entry435 {revision:number;resources:number;geometry:BufferGeometry|undefined;state:object|undefined;material:NodeMaterial|undefined;bindings:unknown;pending:Pending435|undefined}
 interface Pending435 {entry:Entry435;draw:Draw435;revision:number;resources:number;geometry:BufferGeometry;state:object;material:NodeMaterial;scene:Scene;camera:Camera}
-interface Mesh435 {family:'box'|'timber';revision:number;materials:Set<NodeMaterial>;after:Mesh['onAfterRender'];before:PropertyDescriptor|undefined;pending:Pending435[];valid:boolean}
+type Family435='box'|'timber'|'static-page';
+interface Mesh435 {family:Family435;allowedBefore:Mesh['onBeforeRender'];revision:number;materials:Set<NodeMaterial>;after:Mesh['onAfterRender'];before:PropertyDescriptor|undefined;pending:Pending435[];valid:boolean}
 interface Resource435 {value:Texture|BufferAttribute;version:number;source:unknown;sourceVersion:number;generation:unknown;listener:(()=>void)|undefined}
 type Compatibility435=ReturnType<typeof compatibleOwnedOpaqueCompiled435>;
 
@@ -28,10 +30,14 @@ export class OwnedOpaqueRevisions435 {
   private readonly textures=new Set<Texture>();
   private readonly storage=new Set<BufferAttribute>();
   private readonly objectUniforms=new Set<Node>();
+  private readonly fixedObjectUniforms=new Set<Node>();
   private readonly entries=new WeakMap<object,Entry435>();
   private readonly draws=new WeakMap<object,Draw435|false>();
   private readonly plans=new WeakMap<object,WeakMap<NodeMaterial,{epoch:number;result:Compatibility435}>>();
-  private readonly producers=new Map<'box'|'timber',OwnedOpaqueProducer435>();
+  private readonly producers=new Map<Family435,OwnedOpaqueProducer435>();
+  private readonly materialResources=new Map<NodeMaterial,{resources:OwnedMaterialResources435;release:()=>void}>();
+  private readonly arrayTextures=new Set<Texture>();
+  private readonly sharedGroups=new Set<import('three/webgpu').UniformGroupNode>();
   private renderer:Renderer|undefined;
   private scene:Scene|undefined;
   private camera:Camera|undefined;
@@ -50,15 +56,15 @@ export class OwnedOpaqueRevisions435 {
   private readonly counts={full:0,shared:0,native:0,retries:0,commits:0,registrations:0,forgotten:0,dirty:0,resourceInvalidations:0,resourceReads:0,compilations:0,acceptedPlans:0,rejectedPlans:0,preflights:0,identityReads:0};
   private readonly reasons:Record<string,number>={};
 
-  producer(family:'box'|'timber'):OwnedOpaqueProducer435 {
+  producer(family:Family435):OwnedOpaqueProducer435 {
     let producer=this.producers.get(family);if(producer)return producer;
-    producer={register:(mesh,materials,resources)=>this.register(mesh,materials,resources??[],family),dirty:mesh=>{const row=this.meshes.get(mesh);if(row){row.revision++;this.counts.dirty++;}},forget:mesh=>this.forget(mesh)};
+    producer={register:(mesh,materials,resources,options)=>this.register(mesh,materials,resources??[],family,options),dirty:mesh=>{const row=this.meshes.get(mesh);if(row){row.revision++;this.counts.dirty++;}},forget:mesh=>this.forget(mesh)};
     this.producers.set(family,producer);return producer;
   }
   attach(renderer:Renderer,scene:Scene,objectUniforms:readonly Node[],resources:readonly Texture[]):void {
     if(this.renderer&&this.renderer!==renderer)throw Error('Owned opaque renderer cannot be replaced');
     this.renderer=renderer;this.scene=scene;
-    for(const node of objectUniforms)this.objectUniforms.add(node);
+    for(const node of objectUniforms){this.fixedObjectUniforms.add(node);this.objectUniforms.add(node);}
     for(const resource of resources){this.fixedResources.add(resource);this.addResource(resource);}
     this.invalidateResources();
   }
@@ -74,6 +80,13 @@ export class OwnedOpaqueRevisions435 {
     if(value instanceof Texture)this.textures.add(value);else this.storage.add(value);
     this.resources.set(value,{value,version:-1,source:undefined,sourceVersion:-1,generation:undefined,listener});
     this.invalidateResources();
+  }
+  /** Only constructor/publication/disposal writers call this. Stable draws never discover resources. */
+  private synchronizeMaterialResources():void{
+    const retained=new Set<Texture|BufferAttribute>([...this.fixedResources,...this.shadowResources]);this.arrayTextures.clear();this.sharedGroups.clear();this.objectUniforms.clear();for(const node of this.fixedObjectUniforms)this.objectUniforms.add(node);
+    for(const {resources}of this.materialResources.values()){for(const node of resources.objectUniforms)this.objectUniforms.add(node);for(const value of resources.textures)retained.add(value);for(const value of resources.storage)retained.add(value);for(const value of resources.arrayTextures)this.arrayTextures.add(value);for(const group of resources.sharedGroups)this.sharedGroups.add(group);}
+    for(const[value,row]of this.resources)if(!retained.has(value)){if(row.listener&&value instanceof Texture)value.removeEventListener('dispose',row.listener);this.resources.delete(value);this.textures.delete(value as Texture);this.storage.delete(value as BufferAttribute);}
+    for(const value of retained)this.addResource(value);this.invalidateResources();
   }
   /** Once per world render, before any ShadowNode.updateBefore. Bounded to the
    * explicit family meshes and declared resources; never run per RenderObject.
@@ -112,23 +125,26 @@ export class OwnedOpaqueRevisions435 {
     const identity=(object:Object3D):boolean=>{const old=checked.get(object);if(old!==undefined)return old;this.counts.identityReads+=42;
       const p=object.position,q=object.quaternion,s=object.scale;
       const valid=p.x===0&&p.y===0&&p.z===0&&q.x===0&&q.y===0&&q.z===0&&q.w===1&&s.x===1&&s.y===1&&s.z===1&&identity435(object.matrix.elements)&&identity435(object.matrixWorld.elements)&&(!object.parent||identity(object.parent));checked.set(object,valid);return valid;};
-    for(const[mesh,row]of this.meshes){row.valid=identity(mesh)&&mesh.onAfterRender===row.after&&mesh.onBeforeRender===Object3D.prototype.onBeforeRender&&mesh.onBeforeShadow===Object3D.prototype.onBeforeShadow&&mesh.onAfterShadow===Object3D.prototype.onAfterShadow;}
+    for(const[mesh,row]of this.meshes){row.valid=identity(mesh)&&mesh.onAfterRender===row.after&&mesh.onBeforeRender===row.allowedBefore&&mesh.onBeforeShadow===Object3D.prototype.onBeforeShadow&&mesh.onAfterShadow===Object3D.prototype.onAfterShadow;}
     this.preflightReady=true;
   }
 
-  private register(mesh:Mesh,materials:readonly NodeMaterial[],resources:readonly(Texture|BufferAttribute)[],family:'box'|'timber'):void {
+  private register(mesh:Mesh,materials:readonly NodeMaterial[],resources:readonly(Texture|BufferAttribute)[],family:Family435,options?:{readonly beforeRender:Mesh['onBeforeRender']}):void {
     if(this.disposed||this.meshes.has(mesh))return;
     if(!materials.length||materials.some(material=>material.transparent||material.setupObserver!==NodeMaterial.prototype.setupObserver&&!this.materials.has(material)))return;
-    if(mesh.onBeforeRender!==Object3D.prototype.onBeforeRender||mesh.onAfterRender!==Object3D.prototype.onAfterRender||mesh.onBeforeShadow!==Object3D.prototype.onBeforeShadow||mesh.onAfterShadow!==Object3D.prototype.onAfterShadow)return;
+    const allowedBefore=family==='static-page'&&options?.beforeRender===mesh.onBeforeRender&&isSourceOwnedRenderHook435(options.beforeRender)?options.beforeRender:Object3D.prototype.onBeforeRender;
+    if(family==='static-page'&&materials.some(material=>!ownedMaterialResources435(material)))return;
+    if(mesh.onBeforeRender!==allowedBefore||mesh.onAfterRender!==Object3D.prototype.onAfterRender||mesh.onBeforeShadow!==Object3D.prototype.onBeforeShadow||mesh.onAfterShadow!==Object3D.prototype.onAfterShadow)return;
     for(const resource of resources){this.fixedResources.add(resource);this.addResource(resource);}
     for(const material of materials)this.install(material);
     const owner=this,original=mesh.onAfterRender,before=Object.getOwnPropertyDescriptor(mesh,'onAfterRender');
     const callback:Mesh['onAfterRender']=function(this:Mesh,renderer,scene,camera,geometry,material,group){original.call(this,renderer,scene,camera,geometry,material,group);owner.finish(this,scene,camera,material);};
     const after=createSourceOwnedRenderHook435(callback);
-    this.meshes.set(mesh,{family,revision:1,materials:new Set(materials),after,before,pending:[],valid:false});mesh.onAfterRender=after;this.counts.registrations++;
+    this.meshes.set(mesh,{family,allowedBefore,revision:1,materials:new Set(materials),after,before,pending:[],valid:false});mesh.onAfterRender=after;this.counts.registrations++;
   }
   private install(material:NodeMaterial):void {
     if(this.materials.has(material))return;
+    const resources=ownedMaterialResources435(material);if(resources){const release=resources.subscribe(()=>this.synchronizeMaterialResources());this.materialResources.set(material,{resources,release});this.synchronizeMaterialResources();}
     const owner=this,native=material.setupObserver,before=Object.getOwnPropertyDescriptor(material,'setupObserver');
     const installed:NodeMaterial['setupObserver']=function(this:NodeMaterial,builder:NodeBuilder){
       const observer=native.call(this,builder),refresh:unknown=Reflect.get(observer,'needsRefresh');
@@ -151,7 +167,7 @@ export class OwnedOpaqueRevisions435 {
     let plans=this.plans.get(ro._nodeBuilderState);if(!plans){plans=new WeakMap();this.plans.set(ro._nodeBuilderState,plans);}
     let plan=plans.get(ro.material);
     if(!plan||!plan.result.accepted&&plan.result.reason==='resource-not-declared'&&plan.epoch!==this.resourceEpoch){
-      const result=compatibleOwnedOpaqueCompiled435(ro._nodeBuilderState,{materials:[...row.materials],textures:this.textures,storage:this.storage,objectUniforms:this.objectUniforms,renderer:this.renderer});
+      const result=compatibleOwnedOpaqueCompiled435(ro._nodeBuilderState,{materials:[...row.materials],textures:this.textures,storage:this.storage,objectUniforms:this.objectUniforms,arrayTextures:this.arrayTextures,sharedGroups:this.sharedGroups,renderer:this.renderer});
       plan={epoch:this.resourceEpoch,result};plans.set(ro.material,plan);this.counts.compilations++;this.counts[result.accepted?'acceptedPlans':'rejectedPlans']++;
     }
     if(!plan.result.accepted)return this.fallback(value,frame,observer,native,'program:'+plan.result.reason);
@@ -180,7 +196,8 @@ export class OwnedOpaqueRevisions435 {
     for(const[material,row]of this.materials)if(material.setupObserver===row.installed){if(row.before)Object.defineProperty(material,'setupObserver',row.before);else Reflect.deleteProperty(material,'setupObserver');}
     for(const row of this.resources.values())if(row.listener&&row.value instanceof Texture)row.value.removeEventListener('dispose',row.listener);
     this.shadowTarget?.removeEventListener('dispose',this.shadowDisposed);this.shadowTarget=undefined;
-    this.materials.clear();this.resources.clear();this.fixedResources.clear();this.shadowResources.clear();this.textures.clear();this.storage.clear();this.objectUniforms.clear();this.producers.clear();
+    for(const row of this.materialResources.values())row.release();this.materialResources.clear();this.arrayTextures.clear();this.sharedGroups.clear();
+    this.materials.clear();this.resources.clear();this.fixedResources.clear();this.shadowResources.clear();this.textures.clear();this.storage.clear();this.objectUniforms.clear();this.fixedObjectUniforms.clear();this.producers.clear();
     this.renderer=undefined;this.scene=undefined;this.camera=undefined;this.shadow=undefined;this.shadowMap=undefined;this.backend=undefined;this.device=undefined;
   }
 }

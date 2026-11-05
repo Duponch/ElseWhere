@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import {solidExplorationMaterial256} from './ExplorationMask256';
 import type {OwnedOpaqueProducer435} from './OwnedOpaqueRevisionRegistry435';
 import {indexTimberGeometry} from './index-timber-geometry';
-import { attribute,materialColor,texture,uv,varying,vec4,vertexColor } from 'three/tsl';
+import { attribute,materialColor,texture,uv,varying,vec3,vec4,vertexColor } from 'three/tsl';
 import {OverviewBatch,configureOverviewMaterial} from './OverviewBatch';
 import type { World } from '../sim/types';
 import { WORLD_SCALE } from '../world/scale';
@@ -14,7 +14,11 @@ import type { Placement } from './primitives';
 import { InstanceTargetTint } from './instance-target-tint';
 import {currentGraphicsStyle} from './graphics-style';
 import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
-import {compileNaturalSurfaceModels,interleaveNaturalSurfaceFields,naturalStroke,type NaturalSurfaceModels} from './surfaces/NaturalSurfaceModels';
+import {compileNaturalSurfaceModels,interleaveNaturalSurfaceFields,naturalStroke,SURFACE_STROKE_FACE,SURFACE_STROKE_UV,type NaturalSurfaceModels} from './surfaces/NaturalSurfaceModels';
+import {PreparedSurfaceOwner,PREPARED_SURFACE_VARIANT} from './origami/baked/surfaces/PreparedSurfaceOwner';
+import {canonicalPreparedSurfaceSource} from './origami/baked/surfaces/PreparedSurfaceSource';
+import {preparedNaturalModel,preparedDiagonalVariant} from './origami/baked/surfaces/PreparedSurfaceVariants';
+import type {PreparedSurfaceModel} from './origami/baked/surfaces/PreparedSurfaceTypes';
 
 type Point = readonly [number, number, number];
 
@@ -226,6 +230,12 @@ export class TimberCladdingLayer {
     wall:{mesh:OverviewBatch;capacity:number;tint:InstanceTargetTint};
     eave:{mesh:OverviewBatch;capacity:number;tint:InstanceTargetTint};
   }>();
+  readonly preparedSurface:PreparedSurfaceOwner|undefined;
+  private readonly sourceMaterial:THREE.NodeMaterial|undefined;
+  private readonly preparedModels=new Map<THREE.BufferGeometry,PreparedSurfaceModel>();
+  private readonly preparedVariants=new Map<string,number>();
+  preparedSurfaceStatus(){return this.preparedSurface?.status();}
+  requestPreparedSurfaceQualityRoute(route:'source'|'prepared'|undefined):void{this.preparedSurface?.requestQualityRoute(route);}
   private key='';
   private texturesEnabled=true;
   private targetPreviewIds:ReadonlySet<number>=new Set();
@@ -253,9 +263,17 @@ export class TimberCladdingLayer {
     const tint=vec4(attribute('overviewColor','vec3'),1);
     this.material.colorNode=tint.mul(vec4(texture(this.grain,timberPatternUv()).rgb,1).mul(vertexColor()));
     this.plainMaterial.colorNode=tint.mul(materialColor.mul(vertexColor()));
-    applySharedPaintSurface(this.material,{context:this.style,base:tint.rgb.mul(materialColor.rgb).mul(vertexColor().rgb),pastel:this.material.colorNode.rgb,stroke:naturalStroke(this.style,this.surfaceModels?.stroke)});
+    const sourceOptions={context:this.style,base:tint.rgb.mul(materialColor.rgb).mul(vertexColor().rgb),pastel:this.material.colorNode.rgb,stroke:naturalStroke(this.style,this.surfaceModels?.stroke)};applySharedPaintSurface(this.material,sourceOptions);
     this.material.map=null;
     for(const mat of [this.material,this.plainMaterial]){configure?.(mat);mat.userData.rendererOwned=true;}
+    if(this.style&&this.surfaceModels){const models=this.surfaceModels,context=this.style,source=canonicalPreparedSurfaceSource({key:'timber-cladding-vocabulary-v1',context,stroke:models.stroke,bodyOptions:()=>sourceOptions,unitBodyProven:true,assertCurrent:()=>models.stroke.assertCurrent()});
+      this.preparedSurface=new PreparedSurfaceOwner({key:'timber-cladding:'+this.group.uuid,context,source:()=>source,changed:()=>{for(const chunk of this.chunks.values())for(const batch of[chunk.wall,chunk.eave])this.ownedProducer435?.dirty(batch.mesh);}});
+      this.preparedModels.set(this.wallGeometry,preparedNaturalModel('timber-wall-planks-v1',this.wallGeometry,models.stroke));this.preparedModels.set(this.eaveGeometry,preparedNaturalModel('timber-eave-planks-v1',this.eaveGeometry,models.stroke));
+      // Convert before type inspection; preserve the exact MaterialNode fallback
+      // when a real shadow override has no material.color property.
+      const preparedTint=tint.rgb.mul(vec3(materialColor)).mul(vertexColor().rgb);
+      this.sourceMaterial=this.material;this.material=this.preparedSurface.addTarget({sourceMaterial:this.material,pastelTexture:this.grain,pastelUv:timberPatternUv(),pastelFromSample:sample=>tint.mul(vec4(sample.rgb,1).mul(vertexColor())).rgb,tint:preparedTint,faceId:attribute(SURFACE_STROKE_FACE,'float'),chartUv:attribute(SURFACE_STROKE_UV,'vec2'),configure}) as THREE.MeshLambertNodeMaterial;
+    }
     const origin=this.createChunk('0:0',256);
     this.wallMesh=origin.wall.mesh;this.eaveMesh=origin.eave.mesh;
   }
@@ -267,6 +285,7 @@ export class TimberCladdingLayer {
   private makeMesh(shape:THREE.BufferGeometry,name:string,capacity:number):OverviewBatch {
     const mesh=new OverviewBatch(shape,this.texturesEnabled?this.material:this.plainMaterial,capacity);
     mesh.geometry.setAttribute('timberOrdinal',new THREE.InstancedBufferAttribute(new Float32Array(capacity),1).setUsage(THREE.StaticDrawUsage));
+    this.allocatePreparedVariant(mesh,capacity);
     mesh.name=name;mesh.activeCount=0;mesh.castShadow=true;mesh.receiveShadow=true;
     this.ownedProducer435?.register(mesh,[this.material,this.plainMaterial],[this.grain,...(this.surfaceModels?[this.surfaceModels.stroke.buffer]:[])]);
     return mesh;
@@ -289,8 +308,11 @@ export class TimberCladdingLayer {
     // no persistent CPU mirror or copy of obsolete buffer contents is needed.
     batch.mesh.allocate(shape,batch.capacity);
     batch.mesh.geometry.setAttribute('timberOrdinal',new THREE.InstancedBufferAttribute(new Float32Array(batch.capacity),1).setUsage(THREE.StaticDrawUsage));
+    this.allocatePreparedVariant(batch.mesh,batch.capacity);
     this.ownedProducer435?.dirty(batch.mesh);
   }
+  private allocatePreparedVariant(mesh:OverviewBatch,capacity:number):void {if(this.preparedSurface)mesh.geometry.setAttribute(PREPARED_SURFACE_VARIANT,new THREE.InstancedBufferAttribute(new Float32Array(capacity).fill(-1),1).setUsage(THREE.StaticDrawUsage));}
+  private preparedVariant(shape:THREE.BufferGeometry,p:TimberPlacement):number|undefined {if(!this.preparedSurface)return;const model=this.preparedModels.get(shape);if(!model)throw Error('Actual timber canonical model absent');const x=p.sx??1,y=p.sy??1,z=p.sz??1,key=JSON.stringify([model.key,x,y,z]);let id=this.preparedVariants.get(key);if(id===undefined){id=this.preparedSurface.registerVariant(preparedDiagonalVariant(model,x,y,z));this.preparedVariants.set(key,id);}return id;}
   update(world:World,cutaway:boolean,reset=false):void {
     const walls=world.structures.filter(s=>s.kind==='wall'&&s.material==='wood');
     const doors=walls.length?world.structures.filter(s=>isRoomDoor(s.kind)):[];
@@ -312,21 +334,21 @@ export class TimberCladdingLayer {
       const chunk=this.chunks.get(key)??this.createChunk(key);
       for(const [kind,placements,shape]of [['wall',parts.walls,this.wallGeometry],['eave',parts.eaves,this.eaveGeometry]]as const){
         const batch=chunk[kind],ordinals=entry[kind];this.grow(batch,ordinals.length,shape);
-        const mesh=batch.mesh,ordinalAttribute=mesh.geometry.getAttribute('timberOrdinal')as THREE.InstancedBufferAttribute,targetIds:(number|undefined)[]=[];
+        const mesh=batch.mesh,ordinalAttribute=mesh.geometry.getAttribute('timberOrdinal')as THREE.InstancedBufferAttribute,targetIds:(number|undefined)[]=[],preparedIds=new Set<number>();
         for(let slot=0;slot<ordinals.length;slot++){
           const ordinal=ordinals[slot]!,p=placements[ordinal]!;
           object.position.set(p.x,p.y,p.z);object.rotation.set(0,p.ry??0,0);
           object.scale.set(p.sx??1,p.sy??1,p.sz??1);object.updateMatrix();
           mesh.setMatrixAt(slot,object.matrix);mesh.setColorAt(slot,color.setRGB(p.tint,p.tint,p.tint));
-          ordinalAttribute.setX(slot,ordinal);targetIds.push(p.key);
+          ordinalAttribute.setX(slot,ordinal);targetIds.push(p.key);const variant=this.preparedVariant(shape,p);if(variant!==undefined){mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT).setX(slot,variant);preparedIds.add(variant);}
         }
-        mesh.activeCount=ordinals.length;ordinalAttribute.needsUpdate=true;
+        mesh.activeCount=ordinals.length;ordinalAttribute.needsUpdate=true;this.preparedSurface?.setContribution(mesh,preparedIds);if(this.preparedSurface)mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT).needsUpdate=true;
         batch.tint.setInstances(mesh.colorBuffer,targetIds);batch.tint.setTargets(this.targetPreviewIds);
       }
     }
     for(const [key,chunk]of this.chunks)for(const batch of [chunk.wall,chunk.eave]){
       const mesh=batch.mesh;
-      if(!spatial.has(key)){mesh.activeCount=0;batch.tint.setInstances(mesh.colorBuffer,[]);}
+      if(!spatial.has(key)){mesh.activeCount=0;batch.tint.setInstances(mesh.colorBuffer,[]);this.preparedSurface?.setContribution(mesh,[]);}
       mesh.instanceMatrix.needsUpdate=true;mesh.colorBuffer.needsUpdate=true;mesh.computeBoundingSphere();
       this.ownedProducer435?.dirty(mesh);
     }
@@ -339,10 +361,11 @@ export class TimberCladdingLayer {
     return ()=>{for(const {mesh,buffer,version} of saved)if(mesh.instanceMatrix===buffer&&buffer.version===version){mesh.activeCount=0;this.ownedProducer435?.dirty(mesh);}};
   }
   dispose():void {
+    this.preparedSurface?.attachGpuRetirement([...this.chunks.values()].flatMap(chunk=>[chunk.wall.mesh.geometry,chunk.eave.mesh.geometry]));this.preparedSurface?.dispose();
     for(const chunk of this.chunks.values())for(const batch of [chunk.wall,chunk.eave]){
       batch.tint.dispose();this.ownedProducer435?.forget(batch.mesh);this.group.remove(batch.mesh);batch.mesh.dispose();
     }
     this.chunks.clear();
-    if(this.surfaceModels)this.surfaceModels.dispose();else{this.wallGeometry.dispose();this.eaveGeometry.dispose();}this.material.dispose();this.plainMaterial.dispose();this.grain.dispose();
+    if(this.surfaceModels)this.surfaceModels.dispose();else{this.wallGeometry.dispose();this.eaveGeometry.dispose();}if(this.sourceMaterial)this.sourceMaterial.dispose();else this.material.dispose();this.plainMaterial.dispose();this.grain.dispose();
   }
 }

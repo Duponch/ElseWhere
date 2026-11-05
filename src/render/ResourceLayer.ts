@@ -34,6 +34,7 @@ import {createResourceSurfaceModels} from './models/ResourceSurfaceModels';
 import {applySharedPaintSurface,type SharedPaintSurfaceOptions} from './surfaces/SharedPaintSurface';
 import {naturalStroke} from './surfaces/NaturalSurfaceModels';
 import {LEGACY_TREE_PAINT_TABLE} from './origami/baked/trees/palette';
+import {ResourcePreparedAtlas} from './surfaces/ResourcePreparedAtlas';
 
 const resourceIdentity=(world:World,resource:World['resources'][number]):string=>{
   const support=hydroponicFloraHeight(world,resource);
@@ -151,6 +152,7 @@ export class ResourceLayer {
   private readonly referenceFlora=new ReferenceFloraLibrary(false,false);
   private readonly surfaceModels=createResourceSurfaceModels(this.treeModels,this.referenceFlora);
   private readonly bodyTextured:THREE.NodeMaterial;
+  private readonly preparedResources:ResourcePreparedAtlas|undefined;
   private get bodyPlain():THREE.NodeMaterial{return this.staticMaterial;}
   private wearPlain:THREE.NodeMaterial|undefined;
   private wearWind:THREE.NodeMaterial|undefined;
@@ -159,7 +161,7 @@ export class ResourceLayer {
   private makeWindPosition!:(base:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
   private wearFlora:ReferenceFloraLibrary|undefined;
   private wearTemplates:Map<THREE.BufferGeometry,THREE.BufferGeometry>|undefined;
-  compiledMaterials435():readonly THREE.NodeMaterial[]{return[...new Set([this.bodyPlain,this.bodyTextured,this.windPlain,this.treeSurface.material])];}
+  compiledMaterials435():readonly THREE.NodeMaterial[]{return[...new Set([this.bodyPlain,this.bodyTextured,this.windTextured,this.windPlain,this.treeSurface.material])];}
   compiledAttributeChanged435:((attribute:THREE.BufferAttribute,start:number,count:number)=>void)|undefined;
   compiledMaterialsChanged435:(()=>void)|undefined;
   private readonly targetTint=new ResourceTargetTint((attribute,start,count)=>this.compiledAttributeChanged435?.(attribute,start,count));
@@ -198,6 +200,7 @@ export class ResourceLayer {
   private treeSpecies:readonly TreeSpecies[]=Object.freeze([]);
   private treeSpeciesKey='[]';
   private demandedTreeModels:readonly TreeModel[]=Object.freeze([]);
+  private anonymousTreeCount=0;
   private cachedTreeUpdate:{world:World;appearance:NaturalAppearanceReader|undefined}|undefined;
   private disposed=false;
   updateGrowth(world: World): void {
@@ -256,8 +259,10 @@ export class ResourceLayer {
     // Fixed named trees keep the final one-fetch graph from their first Pastel
     // draw. Continuous/generic resources own a separate complete Source graph.
     const direct=new THREE.MeshLambertNodeMaterial({flatShading:true,vertexColors:false});direct.userData.rendererOwned=true;direct.positionNode=windPosition;direct.castShadowPositionNode=texturedMaterial.castShadowPositionNode;direct.receivedShadowPositionNode=texturedMaterial.receivedShadowPositionNode;treeSource?.configure(direct);
-    this.bodyTextured=this.windTextured=direct;this.windPlain=this.treeSurface.plainMaterial;
+    this.bodyTextured=direct;this.windPlain=this.treeSurface.plainMaterial;
     applySharedPaintSurface(direct,options);
+    this.preparedResources=this.graphicsStyle?new ResourcePreparedAtlas({key:group.uuid,context:this.graphicsStyle,sourceMaterial:direct,pastel,stroke:this.surfaceModels.stroke,bodyOptions:()=>options,catalog:()=>this.treeCatalog,hasNamedTrees:()=>this.demandedTreeModels.length>0,hasAnonymousTrees:()=>this.anonymousTreeCount>0,changed:()=>{}}):undefined;
+    this.windTextured=this.preparedResources?.material??direct;
     const refresh=()=>{this.refreshOptionalWear();this.refreshFixedTreeMaterials();};
     refresh();this.releaseSurfaceRefresh=this.graphicsStyle?.trackSharedSurfaceRefresh(refresh)??(()=>{});
   }
@@ -321,6 +326,7 @@ export class ResourceLayer {
     }
   }
   private refreshTreeCensus():void{
+    this.anonymousTreeCount=0;for(const chunk of this.chunks.values())this.anonymousTreeCount+=chunk.anonymousTreeCount;
     const models=new Map<string,TreeModel>();for(const chunk of this.chunks.values())for(const model of chunk.treeModels)models.set(model.key,model);
     const next=[...models.values()].sort((a,b)=>a.surfaceSlot-b.surfaceSlot),key=JSON.stringify(next.map(model=>model.key));
     if(key!==this.treeSpeciesKey){this.demandedTreeModels=Object.freeze(next);this.treeSpecies=Object.freeze([...new Set(next.flatMap(model=>model.species?[model.species]:[]))].sort());this.treeSpeciesKey=key;this.treeDemandEpoch++;}
@@ -335,8 +341,10 @@ export class ResourceLayer {
     return{revision:this.treeCatalog?.revision??null,species:this.treeSpecies,pending:pending.map(model=>model.species??'anonymous'),ready,fallback,total:trees,texturePages:this.treeCatalog?.pageCount??0,geometryVariant:this.cachedTreeUpdate?.world.site?'legacy-broadleaf':'legacy-conical',fallbackReason:!fallback?null:!this.treeTextureCompatible?'optional-effects-use-source-face-paint':anonymous===fallback?'continuous-proportions-use-source-face-paint':'source-face-paint-until-bank-ready',scope:'Common models and Lambert surfaces; direct opaque face paint preserves continuously varied proportions and is the complete Gouache fallback.'};
   }
   /** Existing epochs and owners only: no frame census or geometry hashing. */
-  graphicsComparisonMetadata(){this.treeCatalog?.assertCurrent();return{revision:this.graphicsComparisonRevision,recipeEpoch:this.treeRecipeEpoch,demandEpoch:this.treeDemandEpoch,speciesKey:this.treeSpeciesKey,catalogRevision:this.treeCatalog?.revision??null,textures:this.texturesEnabled,foliage:this.foliageVisible,materials:[this.treeSurface.material.uuid,this.treeSurface.plainMaterial.uuid,this.bodyTextured.uuid]};}
-  private treeMaterial():THREE.NodeMaterial{return!this.texturesEnabled?this.treeSurface.plainMaterial:!this.fixedTreeAtlasAvailable||!this.treeTextureCompatible||this.treeDirectFallback?this.bodyTextured:this.treeSurface.material;}
+  graphicsComparisonMetadata(){this.treeCatalog?.assertCurrent();return{revision:this.graphicsComparisonRevision,recipeEpoch:this.treeRecipeEpoch,demandEpoch:this.treeDemandEpoch,speciesKey:this.treeSpeciesKey,catalogRevision:this.treeCatalog?.revision??null,textures:this.texturesEnabled,foliage:this.foliageVisible,materials:[...new Set([this.treeSurface.material.uuid,this.treeSurface.plainMaterial.uuid,this.bodyTextured.uuid,this.windTextured.uuid])]};}
+  preparedResourceStatus(){return this.preparedResources?.status();}
+  attachPreparedResourceGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{const actual=new Set(geometries);this.group.traverse(object=>{if(object instanceof THREE.Mesh)actual.add(object.geometry);});this.preparedResources?.attachGpuRetirement(actual);}
+  private treeMaterial():THREE.NodeMaterial{return!this.texturesEnabled?this.treeSurface.plainMaterial:this.preparedResources?.material??(!this.fixedTreeAtlasAvailable||!this.treeTextureCompatible||this.treeDirectFallback?this.bodyTextured:this.treeSurface.material);}
   setFixedTreeAtlasAvailable(available:boolean):void{if(this.fixedTreeAtlasAvailable===available)return;this.fixedTreeAtlasAvailable=available;this.refreshFixedTreeMaterials();}
   private refreshFixedTreeMaterials():void{let changed=false;const material=this.treeMaterial();for(const chunk of this.chunks.values())for(const object of chunk.group.children)if(object instanceof THREE.Mesh&&this.sharedTreeMeshes.has(object)&&object.material!==material){object.material=material;changed=true;}if(changed)this.compiledMaterialsChanged435?.();}
   inspectFixedTreeCohort(world:World,reset=false,immutableSnapshot=false):FixedTreeCohortPlan{return this.treeCohorts.inspect(world,{reset,immutableSnapshot});}
@@ -424,8 +432,8 @@ export class ResourceLayer {
     for(const key of keys){const chunk=this.chunks.get(key);if(chunk)this.targetTint.apply(chunk.group,this.targetPreviewIds);}
   }
   clearTargetPreview():void {if(this.targetPreviewIds.size)this.graphicsComparisonRevision++;this.targetTint.restore();this.targetPreviewIds.clear();}
-  clear(): void { this.middleWind.reset();this.clearTargetPreview();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear(); this.treeCells.clear();this.treeCellsPending=undefined;this.cachedTreeUpdate=undefined;this.treeDemandEpoch++;this.refreshTreeCensus(); }
-  dispose():void {if(this.disposed)return;this.disposed=true;this.releaseSurfaceRefresh();const resources:{dispose():void}[]=[...[this.wearPlain,this.wearWind,this.referenceFlora,this.wearFlora,this.fallbackPastel,...(this.wearTemplates?.values()??[])].filter((r):r is NonNullable<typeof r>=>r!==undefined),...(this.fixedTreeSurface?[this.fixedTreeSurface]:[this.treeSurface]),this.bodyTextured,this.pastelTreeAssets.texture,this.surfaceModels,this.treeCohorts,this.treeModels];const errors:unknown[]=[];try{this.clear();}catch(error){errors.push(error);}try{disposeTreeResources(resources,'Resource material cleanup failed');}catch(error){errors.push(error);}this.treeCatalog=undefined;if(errors.length)throw new AggregateError(errors,'Resource layer cleanup failed');}
+  clear(): void { this.middleWind.reset();this.clearTargetPreview();this.preparedResources?.clear();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear(); this.treeCells.clear();this.treeCellsPending=undefined;this.cachedTreeUpdate=undefined;this.treeDemandEpoch++;this.refreshTreeCensus(); }
+  dispose():void {if(this.disposed)return;this.releaseSurfaceRefresh();this.attachPreparedResourceGpuRetirement([]);const resources:{dispose():void}[]=[...[this.wearPlain,this.wearWind,this.referenceFlora,this.wearFlora,this.fallbackPastel,...(this.wearTemplates?.values()??[])].filter((r):r is NonNullable<typeof r>=>r!==undefined),...(this.fixedTreeSurface?[this.fixedTreeSurface]:[this.treeSurface]),this.bodyTextured,this.pastelTreeAssets.texture,this.surfaceModels,this.treeCohorts,this.treeModels];const errors:unknown[]=[];try{this.preparedResources?.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Prepared resource owner close quarantined');try{this.clear();}catch(error){errors.push(error);}try{disposeTreeResources(resources,'Resource material cleanup failed');}catch(error){errors.push(error);}this.treeCatalog=undefined;if(errors.length)throw new AggregateError(errors,'Resource layer cleanup failed');this.disposed=true;}
 
   /** Only a confirmed increase in a reserved chopping job can produce a hit.
    * The contact phase is the forward reach of the existing 11 rad/s arm pose. */
@@ -589,7 +597,7 @@ export class ResourceLayer {
     this.windPlain.maskNode=this.bodyPlain.maskNode;this.windTextured.maskNode=this.bodyTextured.maskNode;
     this.windPlain.maskShadowNode=this.bodyPlain.maskShadowNode;this.windTextured.maskShadowNode=this.bodyTextured.maskShadowNode;
     for(const material of [this.treeSurface.material,this.treeSurface.plainMaterial]){material.outputNode=this.staticMaterial.outputNode;material.maskNode=this.staticMaterial.maskNode;material.maskShadowNode=this.staticMaterial.maskShadowNode;}
-    if (newMap) { this.middleWind.reset();this.clearTargetPreview();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear();this.treeDemandEpoch++; }
+    if (newMap) { this.middleWind.reset();this.clearTargetPreview();this.preparedResources?.clear();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear();this.treeDemandEpoch++; }
     const indexed=readSceneResourceFrame(frame,world);
     if(indexed)this.treeCellsPending=world;
     else{
@@ -649,6 +657,7 @@ export class ResourceLayer {
     }
     for (const [key, previous] of this.chunks) if ((!partial||affected.has(key))&&!chunks.has(key) && previous.signature !== '') {
       this.graphicsComparisonRevision++;
+      this.preparedResources?.forgetContribution(key);
       retainResources(previous.group, new Set()); previous.visibleKeys.clear(); previous.signature = '';
       for(const id of previous.treeIds){this.treeParts.delete(id);this.treeHits.delete(id);}
       previous.treeIds=[];
@@ -732,8 +741,10 @@ export class ResourceLayer {
         { geometry:this.surfaceModels.get('berry').clone(),items:berries },
       ];
       const fallbackCanopies=[{geometry:this.surfaceModels.get(world.site?'broadleaf':'conical').clone(),items:[...crowns,...upperCrowns]},{geometry:this.surfaceModels.get('conical').clone(),items:cones}];
-      mergedInstances(group,[...fallbackBodies,...origamiBodies,...continuousBodies.values()],this.texturesEnabled?this.bodyTextured:this.bodyPlain,true,true,false,true);
-      const canopy=mergedInstances(group,[...fallbackCanopies,...origamiCanopies,...continuousCanopies.values()],this.texturesEnabled?this.bodyTextured:this.bodyPlain,true,true,false,true);
+      const preparedIds=new Set<number>(),preparedIdentity=this.preparedResources?{identity:(geometry:THREE.BufferGeometry,item:Placement)=>{if(item.key!==undefined&&sharedTreeIds.has(rangeResourceId(item.key)))return-1;const size=item.key===undefined?1:sizes.get(rangeResourceId(item.key))??1,id=this.preparedResources!.capture(geometry,item,Math.max(1,1/Math.max(size,1e-9)));if(id>=0)preparedIds.add(id);return id;}}:undefined;
+      mergedInstances(group,[...fallbackBodies,...origamiBodies,...continuousBodies.values()],this.texturesEnabled?this.bodyTextured:this.bodyPlain,true,true,false,true,preparedIdentity);
+      const canopy=mergedInstances(group,[...fallbackCanopies,...origamiCanopies,...continuousCanopies.values()],this.texturesEnabled?this.bodyTextured:this.bodyPlain,true,true,false,true,preparedIdentity);
+      this.preparedResources?.setContribution(key,preparedIds);
       if(canopy){canopy.name='tree-canopy';canopy.visible=this.foliageVisible;}
       for(const [parts,isCanopy]of [[treeBodies,false],[treeCanopies,true]] as const){
         const mesh=mergedInstances(group,[...parts.values()],this.treeMaterial(),true,true,false,true);
@@ -787,6 +798,8 @@ export class ResourceLayer {
           windBasis[vertex*4]=Math.sin(rootPhase);windBasis[vertex*4+1]=Math.cos(rootPhase);
           windBasis[vertex*4+2]=Math.sin(flutterPhase);windBasis[vertex*4+3]=Math.cos(flutterPhase);
         }
+        const preparedIds=mesh.geometry.userData.preparedResourceVariantIds as Float32Array|undefined;
+        if(preparedIds)for(let vertex=0;vertex<position.count;vertex++)if(windRoot[vertex*3+2]===0&&preparedIds[vertex]!>=0)windBasis[vertex*4]=preparedIds[vertex]!;
         mesh.geometry.setAttribute('windRoot',new THREE.BufferAttribute(windRoot,3));
         mesh.geometry.setAttribute('windBasis',new THREE.BufferAttribute(windBasis,4));
         mesh.material=mesh.userData.referenceCompanion==='wear'?this.wearWind!:mesh instanceof THREE.Mesh&&this.sharedTreeMeshes.has(mesh)?this.treeMaterial():this.texturesEnabled?this.windTextured:this.windPlain;
