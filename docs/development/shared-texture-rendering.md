@@ -1,5 +1,36 @@
 # Rendu commun et textures Pastel/Gouache
 
+Essai V68 du5novembre : **cache par teinte écarté du produit**. Les23fichiers
+candidats ont été archivés, puis les sources exactes du commit4f31e7ed rétablies.
+Le jeu conserve V67. Les32contrats, types finaux53,385s, types privés20,497s,
+Native8,122s et Pages4,683s sont acquis pour l'essai, avec quatre Workers exacts.
+
+Même World128/Main435/DPR1/1120×760, contours activés et effets0 : GPU P/G/P
+0,723456/0,878592/0,769536ms, soit+17,695 %Gouache et dérive Pastel+6,369 %.
+CPU soumission0,767823/0,756766/0,759952ms, soit−0,932 % et dérive−1,025 %.
+Les384frames/1152UID, pics,21appels et214196triangles sont conservés. Les
+médianes GPU restent identiques à V67 ; les acquisitions sont chronologiques,
+sans attribution causale. Ce lot ne démontre aucun gain GPU convaincant.
+
+Le relevé réel hors mesure compte3478touffes,1316teintes distinctes et seulement
+12correspondances avec la teinte du cache :0,345 %des instances, sans équivalence
+avec une couverture de pixels. Ajouter une copie de21,25Mio à ce cas est inutile.
+Quarante paires B/I sont exactes ;20contrôles de couleur finale aux quatre mips
+restent dans un code sRGB, alpha exact. Les buffers de contrôle sont libérés.
+Les renderers/client et l'onglet sont fermés, sans erreur. La galerie V68 est
+volontairement non rejouée puisque le candidat est rejeté.
+
+Les images originales au même DPR gardent le retour Gouache et Pastel exacts.
+Gouache et le cadrage du colon diffèrent chacun sur14pixels/851200, au maximum
+un code RGB et aucun alpha. Rapport qualité88d61c49832b319ae4680158552db21f9b86719054e041604eead759f27e3952,
+rapport de coût compactd4442ab47c1fbf2576034f5a2f11a0f2deba1e088ef2dee6b2bfe71cea23a57b.
+Toutes les preuves, compilations et sources rejetées sont conservées en privé.
+
+L'étude suivante reste privée : garder le corps RGB et stocker un coefficient
+d'encre dans l'alpha. Cette forme prend en charge les teintes variables avec
+une seule lecture ; la variation chromatique réelle de l'encre impose une
+approximation dont l'erreur et la qualité doivent être qualifiées avant admission.
+
 État du 5 novembre, lot groupé V67 : **qualité conservée, parité non atteinte**.
 Herbe, ressources et surfaces rigides partagent un masque d'encre conservateur
 dans l'alpha inutilisé de leur couleur préparée. Chaque mip est calculé depuis
