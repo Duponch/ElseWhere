@@ -49,3 +49,12 @@ export interface PreparedSurfaceGpuResult {
  readonly gpuBytes:number;readonly cpuBytes:number;readonly stats:Readonly<Record<string,unknown>>;
  assertCurrent():void;dispose():void;
 }
+
+/** Actual selected presentation, independent of whether its texture is new or cached.
+ * Pastel and every Source route deliberately carry no prepared plan. */
+export interface PreparedSurfacePresentation {
+ readonly plan:PreparedSurfacePlan|undefined;
+ readonly variantIds:readonly number[];
+ readonly representation:'pure'|'source';
+ readonly gouache:boolean;
+}

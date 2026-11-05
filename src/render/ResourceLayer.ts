@@ -212,7 +212,8 @@ export class ResourceLayer {
     const pastel=originalMap??this.fallbackPastel!,paint=attribute('origamiPaint','vec4'),profile=paint.w.mod(128),surface=attribute('surfaceUv','vec4'),slot=paint.w.div(128).floor().mod(32),face=paint.w.div(4096).floor();
     const options:SharedPaintSurfaceOptions={context:this.graphicsStyle,base:attribute('color','vec3'),pastel:attribute('color','vec3').mul(texture(pastel,uv()).rgb),faceUv:surface.xy,profile,includeGeneric:true,pigmentDomain:'game-static78',
       gouacheTransform:body=>body.mul(profile.greaterThan(0).select(attribute('color','vec3').div(paint.xyz.max(vec3(.00001))),vec3(1))),
-      stroke:naturalStroke(this.graphicsStyle,this.surfaceModels.stroke,face,slot.lessThan(31).select(surface.xy,surface.zw))};
+      stroke:naturalStroke(this.graphicsStyle,this.surfaceModels.stroke,face,slot.lessThan(31).select(surface.xy,surface.zw)),
+      coverage:(raw,faceProfile,probe)=>this.surfaceModels.coverage(this.graphicsStyle!,raw,faceProfile,face,surface.zw,probe)};
     // One resident textured Lambert owns generic, continuous and named tree
     // surfaces. Texture addressing is per-face data, never a material family.
     const makeWindPosition=(base:THREE.Node<'vec3'>)=>Fn(()=>{
@@ -261,7 +262,7 @@ export class ResourceLayer {
     const direct=new THREE.MeshLambertNodeMaterial({flatShading:true,vertexColors:false});direct.userData.rendererOwned=true;direct.positionNode=windPosition;direct.castShadowPositionNode=texturedMaterial.castShadowPositionNode;direct.receivedShadowPositionNode=texturedMaterial.receivedShadowPositionNode;treeSource?.configure(direct);
     this.bodyTextured=direct;this.windPlain=this.treeSurface.plainMaterial;
     applySharedPaintSurface(direct,options);
-    this.preparedResources=this.graphicsStyle?new ResourcePreparedAtlas({key:group.uuid,context:this.graphicsStyle,sourceMaterial:direct,pastel,stroke:this.surfaceModels.stroke,bodyOptions:()=>options,catalog:()=>this.treeCatalog,hasNamedTrees:()=>this.demandedTreeModels.length>0,hasAnonymousTrees:()=>this.anonymousTreeCount>0,changed:()=>{}}):undefined;
+    this.preparedResources=this.graphicsStyle?new ResourcePreparedAtlas({key:group.uuid,context:this.graphicsStyle,sourceMaterial:direct,pastel,stroke:this.surfaceModels.stroke,bodyOptions:()=>options,catalog:()=>this.treeCatalog,hasNamedTrees:()=>this.demandedTreeModels.length>0,hasAnonymousTrees:()=>this.anonymousTreeCount>0,changed:()=>{},patchAttribute:(attribute,start,count)=>this.compiledAttributeChanged435?.(attribute,start,count),sourceCoverageCpuBytes:()=>this.surfaceModels.coverageCpuBytes,sourceCoverageGpuBytes:()=>this.surfaceModels.coverageGpuBytes,sourceCoverageTexture:()=>this.surfaceModels.legacyCoverage.texture}):undefined;
     this.windTextured=this.preparedResources?.material??direct;
     const refresh=()=>{this.refreshOptionalWear();this.refreshFixedTreeMaterials();};
     refresh();this.releaseSurfaceRefresh=this.graphicsStyle?.trackSharedSurfaceRefresh(refresh)??(()=>{});
@@ -686,7 +687,7 @@ export class ResourceLayer {
       }
       if(previous)for(const id of previous.treeIds)this.treeParts.delete(id);
       const group = previous?.group ?? new THREE.Group();
-      if (previous) {this.targetTint.restore(group);clearGroup(group);} else this.group.add(group);
+      if (previous) {this.preparedResources?.forgetContribution(key);this.targetTint.restore(group);clearGroup(group);} else this.group.add(group);
       group.name = `Resources ${key}`;
       const trunks: Placement[] = [], crowns: Placement[] = [], upperCrowns: Placement[] = [];
       const rocks: Placement[] = [], bushes: Placement[] = [], berries: Placement[] = [];
@@ -805,6 +806,9 @@ export class ResourceLayer {
         mesh.material=mesh.userData.referenceCompanion==='wear'?this.wearWind!:mesh instanceof THREE.Mesh&&this.sharedTreeMeshes.has(mesh)?this.treeMaterial():this.texturesEnabled?this.windTextured:this.windPlain;
       }
       for(const id of treeIds){const hit=this.treeHits.get(id);if(hit)hit.angle=NaN;}
+      // Every new actual resident geometry needs address publication, even
+      // when its canonical variant set reuses an existing admitted texture.
+      this.preparedResources?.setResidents(key,group.children.flatMap(object=>object instanceof THREE.Mesh&&!object.userData.referenceCompanion?[object.geometry]:[]));
       this.chunks.set(key,{signature,group,identities:new Map(chunk.map(r=>[r.id,identity(r)])),originalSizes:new Map(sizes),currentSizes:new Map(sizes),visibleKeys,treeIds,treeModels:[...models.values()],treeCount,anonymousTreeCount});
       if(this.targetPreviewIds.size&&chunk.some(r=>this.targetPreviewIds.has(r.id)))this.targetTint.apply(group,this.targetPreviewIds);
       }finally{disposeTreeResources([...treeClones],'Unconsumed prepared tree template cleanup failed');}

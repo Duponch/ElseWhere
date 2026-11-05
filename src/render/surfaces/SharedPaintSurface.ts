@@ -25,6 +25,9 @@ export interface SharedPaintSurfaceOptions {
  /** Preparation-only rasterizers retain the real post-morph 3D surface here
   * while their clip positions address an atlas. Ordinary draws use view space. */
  readonly surfacePosition?:THREE.Node<'vec3'>;
+ /** Optional exact coverage in the actual face domain. Pigment/paper RGB and
+  * their original UVs remain unchanged; bump probes query their shifted UV. */
+ readonly coverage?:(faceUv:THREE.Node<'vec2'>,faceProfile:THREE.Node<'float'>,probe?:'x'|'y')=>THREE.Node<'float'>;
  /** Clinical recoloring belongs to the body, before the painted stroke. */
  readonly gouacheTransform?:(body:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
  readonly stroke?:(body:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
@@ -39,7 +42,7 @@ function paintInputs(options:SharedPaintSurfaceOptions){
 }
 
 function surfaceColor(options:SharedPaintSurfaceOptions,inputs:ReturnType<typeof paintInputs>):THREE.Node<'vec3'>{
- const context=options.context!,sample=context.facePaintNode(inputs.pigment,inputs.raw,inputs.ids.x,inputs.ids.y,context.reliefEnabled,true,inputs.genericOnly,inputs.gameStaticBank0).toVar();
+ const context=options.context!,sample=context.facePaintNode(inputs.pigment,inputs.raw,inputs.ids.x,inputs.ids.y,context.reliefEnabled,true,inputs.genericOnly,inputs.gameStaticBank0,options.coverage?.(inputs.raw,inputs.ids.y)).toVar();
  let body:THREE.Node<'vec3'>=options.profile&&options.includeGeneric===false?sample.rgb:sample.rgb.mul(inputs.ids.x.equal(GENERIC_REFERENCE_PROFILE).select(options.base,vec3(1)));
  if(options.gouacheTransform)body=options.gouacheTransform(body);
  return options.stroke?options.stroke(body):body;
@@ -66,8 +69,8 @@ function configureSharedPaintSurface(material:THREE.NodeMaterial,options:SharedP
   // inputs, but not a lazily initialized fragment variable owned by the other
   // graph's branch. Each positive-relief probe shares this local metric.
   const metric=physicalPaintMetric(inputs.raw,options.surfacePosition).toVar(),density=metric.x.mul(metric.z).max(1e-20).sqrt().reciprocal(),pigment=options.pigmentUv??applyPhysicalPaintMetric(inputs.raw,metric,density);
-  const sample=context.facePaintNode(pigment,inputs.raw,inputs.ids.x,inputs.ids.y,true,true,inputs.genericOnly,inputs.gameStaticBank0),dx=applyPhysicalPaintMetric(inputs.raw.dFdx(),metric,density),dy=applyPhysicalPaintMetric(inputs.raw.dFdy(),metric,density),
-   hx=context.faceHeightNode(pigment.add(dx),inputs.raw.add(inputs.raw.dFdx()),inputs.ids.x,inputs.ids.y,inputs.genericOnly,inputs.gameStaticBank0),hy=context.faceHeightNode(pigment.add(dy),inputs.raw.add(inputs.raw.dFdy()),inputs.ids.x,inputs.ids.y,inputs.genericOnly,inputs.gameStaticBank0);
+  const sample=context.facePaintNode(pigment,inputs.raw,inputs.ids.x,inputs.ids.y,true,true,inputs.genericOnly,inputs.gameStaticBank0,options.coverage?.(inputs.raw,inputs.ids.y)),dx=applyPhysicalPaintMetric(inputs.raw.dFdx(),metric,density),dy=applyPhysicalPaintMetric(inputs.raw.dFdy(),metric,density),
+   hx=context.faceHeightNode(pigment.add(dx),inputs.raw.add(inputs.raw.dFdx()),inputs.ids.x,inputs.ids.y,inputs.genericOnly,inputs.gameStaticBank0,options.coverage?.(inputs.raw.add(inputs.raw.dFdx()),inputs.ids.y,'x')),hy=context.faceHeightNode(pigment.add(dy),inputs.raw.add(inputs.raw.dFdy()),inputs.ids.x,inputs.ids.y,inputs.genericOnly,inputs.gameStaticBank0,options.coverage?.(inputs.raw.add(inputs.raw.dFdy()),inputs.ids.y,'y'));
   const bumped=referencePaintBumpNormal(sample.a,hx,hy,context.impasto.mul(.035));
   material.normalNode=Fn(()=>{const result=vec3(normalView).toVar();If(context.surfaceEncoding.greaterThan(float(0)),()=>{result.assign(bumped);});return result;})();
   installGlobalReliefLod(material,context.reliefLod!);

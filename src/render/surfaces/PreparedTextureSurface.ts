@@ -24,6 +24,10 @@ export interface PreparedTextureSurfaceOptions {
  readonly tint:THREE.Node<'vec3'>;
  readonly inkTint?:THREE.Node<'vec3'>;
  readonly address:()=>PreparedTextureAddress;
+ /** The real resident uv already holds the currently published Pastel/atlas
+  * coordinates. The owner restores/resolves it under the preparation hold.
+  * No legacy coordinate branch, address book or extra attribute is retained. */
+ readonly preResolvedUv?:boolean;
  readonly resources?:Partial<OwnedMaterialResourceSnapshot435>;
  readonly configure?:(material:THREE.NodeMaterial)=>void;
 }
@@ -46,7 +50,7 @@ export class PreparedTextureSurface {
   this.pastel=ownedPastel=copyPastelTextureToArray(options.pastelTexture,options.pastelSize??64);
   const material=ownedMaterial=options.sourceMaterial.clone();this.material=material;material.userData={...options.sourceMaterial.userData,rendererOwned:true};
   const address=options.address(),encoding=options.context.surfaceEncoding,
-   coordinates=varying(mix(options.pastelUv,address.uv,encoding),'v_preparedSurfaceUv'),
+   coordinates=varying(options.preResolvedUv?address.uv:mix(options.pastelUv,address.uv,encoding),'v_preparedSurfaceUv'),
    bodyLayer=varying(address.bodyLayer.mul(encoding),'v_preparedSurfaceBodyLayer').setInterpolation('flat','first'),
    inkLayer=varying(address.inkLayer,'v_preparedSurfaceInkLayer').setInterpolation('flat','first'),
    format=varying(address.format,'v_preparedSurfaceFormat').setInterpolation('flat','first'),

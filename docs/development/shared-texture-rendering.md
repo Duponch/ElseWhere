@@ -1,5 +1,52 @@
 # Rendu commun et textures Pastel/Gouache
 
+État du 5 novembre, lot UV/masques V66 : **images conservées, surcoût encore ouvert**.
+Les coordonnées et couches des ressources sont résolues lors de la publication,
+dans les huit buffers existants. Leur rendu final n'a plus de table de recherche
+GPU. Les mêmes attributs sont transmis aux pages435 et restaurés avant Pastel,
+un gros plan ou le rendu complet. Un nouvel ensemble de maillages peut réutiliser
+sa texture tout en recevant ses propres coordonnées, sans refaire la peinture.
+Le premier Pastel n'alloue aucun miroir de coordonnées ; les 136512 sommets des
+seize géométries Resource retiennent ensuite1638144octets d'originaux CPU.
+Les six fenêtres de mesure gardent leurs propriétaires et états de préparation
+stables ; aucune préparation n'est ajoutée au rendu stable.
+
+Le masque du rendu complet des arbres utilise désormais leur vraie projection
+plane, déjà présente dans les coordonnées d'atlas. Les UV d'origine d'un tronc
+conique décrivent un rectangle et ne peuvent pas représenter son trapèze avec
+une seule transformation affine : le premier contrôle a correctement refusé ce
+calcul. Papier et pigment conservent leurs coordonnées ; le remplissage suit les
+vrais polygones, y compris pour les sondes de relief. Les treize espèces et leurs
+deux variantes passent le contrat géométrique indépendant. La texture de masque
+est déclarée et empruntée ; son lecteur particulier conserve le repli natif435.
+
+V66, même WorkerWorld128/Main435/caméra/DPR1,2, contours activés et effets0 :
+GPU P/G/P0,905728/0,963072/0,891904ms, soit+7,149 %Gouache et dérive Pastel−1,526 %.
+CPU soumission0,783000/0,799915/0,799750ms, soit+1,079 % et dérive+2,139 %.
+Les384frames/1152passes fraîches, leurs maxima et les21appels/214196triangles
+sont conservés. Les mêmes modèles et matériaux subsistent dans tous les bras.
+Ce sont les deux textures actuelles sur un Core en pause : aucune parité avec
+l'ancien Pastel, mesure de campagne, WholeMain ou FPS global n'est revendiquée.
+Le renderer, son instrumentation et son client sont libérés sans erreur.
+
+Les images V65→V66 Pastel et Gouache sont strictement identiques, ainsi que le
+retour Gouache après le gros plan. Le rendu complet corrigé reste différent du
+préparé au niveau pixel ; ses feuillages sont verts et le gros plan a été observé.
+Cela ne qualifie pas tous les angles, palettes ou familles absentes de la carte.
+Les43contrats distincts sont acquis par reprises bornées ; types produit54,567s,
+types du harnais19,942s, build Native6,362s et Pages4,319s passent. Quatre Workers
+restent exacts octet par octet. La galerie finale affiche714assets/39groupes/2sans
+modèle ; relief/usure1/0,75 puis0/0 et le retour Pastel/Gouache sont prêts. La table
+longue peinte et ses contours ont été observés. Les26avertissements Three sont
+conservés, sans erreur observée ; l'onglet36 est fermé. Aucun reçu public de
+libération du renderer de galerie n'est revendiqué.
+
+Le lot suivant reste privé : employer l'alpha inutilisé des textures B/I comme
+preuve de l'absence d'encre, pour éviter sa seconde lecture à l'intérieur des
+surfaces. Les gradients doivent être identiques pour les deux lectures et chaque
+mip doit conserver ses RGB. Une comparaison des octets durant la préparation et
+une qualification globale sont requises avant toute promotion.
+
 État du 5 novembre, lot rigides/ressources V65 : **rendu préparé réellement admis,
 parité encore ouverte**. Box/Item, Door, Crop et Timber partagent le propriétaire
 transactionnel de surfaces ; les ressources réunissent arbres et autres surfaces

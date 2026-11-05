@@ -328,9 +328,9 @@ export class GraphicsStyleContext {
   if(!genericOnly&&!gameStaticBank0)return this.paintNode(coordinates,profile);
   this.flushPaint();this.ensurePaintBindings();return texture(this.banks[0]!,coordinates).depth(genericOnly?float(0):profile);
  }
- facePaintNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight=true,opaqueColorEndpoints=false,genericOnly=false,gameStaticBank0=false):THREE.Node<'vec4'>{
-  if(opaqueColorEndpoints&&!this.reliefEnabled)return this.facePaintOpaqueEndpoints(pigmentUv,faceUv,profile,faceProfile,includeHeight,genericOnly,gameStaticBank0);
-  const pigment=this.surfacePigmentNode(pigmentUv,profile,genericOnly,gameStaticBank0).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=paper.a;
+ facePaintNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight=true,opaqueColorEndpoints=false,genericOnly=false,gameStaticBank0=false,coverageOverride?:THREE.Node<'float'>):THREE.Node<'vec4'>{
+  if(opaqueColorEndpoints&&!this.reliefEnabled)return this.facePaintOpaqueEndpoints(pigmentUv,faceUv,profile,faceProfile,includeHeight,genericOnly,gameStaticBank0,coverageOverride);
+  const pigment=this.surfacePigmentNode(pigmentUv,profile,genericOnly,gameStaticBank0).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=coverageOverride??paper.a;
   // Source Canvas composition uses encoded sRGB. The opaque repeating
   // pigment never contains a paper frame; only this raw face mask exposes it.
   // ColorSpaceNode is a raw node class in r186: wrap it before swizzling.
@@ -338,8 +338,8 @@ export class GraphicsStyleContext {
   const color=vec4(colorSpaceToWorking(vec4(mix(paperEncoded,pigmentEncoded,coverage),1),THREE.SRGBColorSpace) as unknown as THREE.Node<'vec4'>).rgb;
   return vec4(color,includeHeight&&this.reliefEnabled?mix(texture(this.ensurePaperHeightBinding(),faceUv).depth(faceProfile).r,pigment.a,coverage):float(0));
  }
- private facePaintOpaqueEndpoints(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight:boolean,genericOnly:boolean,gameStaticBank0:boolean):THREE.Node<'vec4'>{
-  const pigment=this.surfacePigmentNode(pigmentUv,profile,genericOnly,gameStaticBank0).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=paper.a.toVar();
+ private facePaintOpaqueEndpoints(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,includeHeight:boolean,genericOnly:boolean,gameStaticBank0:boolean,coverageOverride?:THREE.Node<'float'>):THREE.Node<'vec4'>{
+  const pigment=this.surfacePigmentNode(pigmentUv,profile,genericOnly,gameStaticBank0).toVar(),paper=texture(this.paperArray!,faceUv).depth(faceProfile).toVar(),coverage=(coverageOverride??paper.a).toVar();
   const color=Fn(()=>{
    // Preserve implicit derivatives: every texture read precedes the varying
    // coverage condition. Only redundant endpoint color conversions are skipped.
@@ -354,7 +354,9 @@ export class GraphicsStyleContext {
   })();
   return vec4(color,includeHeight&&this.reliefEnabled?mix(texture(this.ensurePaperHeightBinding(),faceUv).depth(faceProfile).r,pigment.a,coverage):float(0));
  }
- faceHeightNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,genericOnly=false,gameStaticBank0=false):THREE.Node<'float'>{if(!this.reliefEnabled)return float(0);return mix(texture(this.ensurePaperHeightBinding(),faceUv).depth(faceProfile).r,this.surfacePigmentNode(pigmentUv,profile,genericOnly,gameStaticBank0).a,texture(this.paperArray!,faceUv).depth(faceProfile).a);}
+ faceHeightNode(pigmentUv:THREE.Node<'vec2'>,faceUv:THREE.Node<'vec2'>,profile:THREE.Node<'float'>,faceProfile:THREE.Node<'float'>,genericOnly=false,gameStaticBank0=false,coverageOverride?:THREE.Node<'float'>):THREE.Node<'float'>{if(!this.reliefEnabled)return float(0);return mix(texture(this.ensurePaperHeightBinding(),faceUv).depth(faceProfile).r,this.surfacePigmentNode(pigmentUv,profile,genericOnly,gameStaticBank0).a,coverageOverride??texture(this.paperArray!,faceUv).depth(faceProfile).a);}
+ /** Exact original KM coverage sample, also used by true-polygon tree masks. */
+ faceCoverageNode(coordinates:THREE.Node<'vec2'>,faceProfile:THREE.Node<'float'>,levelZero=false):THREE.Node<'float'>{this.flushPaint();this.ensurePaintBindings();const sample=texture(this.paperArray!,coordinates).depth(faceProfile);return levelZero?sample.level(float(0)).a:sample.a;}
  /** Canonical reference adapter only. Product contours are painted triangles. */
  createLineMaterial(positionNode:THREE.Node|null):THREE.LineBasicNodeMaterial {const material=new THREE.LineBasicNodeMaterial({transparent:true});material.userData.origamiContour=true;material.userData.origamiUnlitContour=true;material.colorNode=this.lineColor;material.positionNode=positionNode;material.opacityNode=this.lineOpacity;return material;}
  createBrushMaterial(positionNode:THREE.Node|null,coordinates:THREE.Node<'vec2'>=uv()):THREE.MeshStandardNodeMaterial {
