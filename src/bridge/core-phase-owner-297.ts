@@ -8,6 +8,36 @@ import {effectiveCore297} from '../sim/core-phase-297';
 import {coreAnchor297,coreInteger297,coreOwnRecord297,copyCoreData297,readCorePhaseData297,validCoreTrace297} from './core-phase-data-297';
 import {CORE_HUMAN_OPTIONAL297,CORE_ANIMAL_OPTIONAL297,CORE_MECH_OPTIONAL297,type CoreActorMode297,type CoreActorScene297,type CoreActorSceneRecord297,type CorePhaseAnchor297,type CoreFullPhaseMetadata297,type CorePhaseTypedProjection297,type CoreActorProjection297,type CoreProjectileTrace297} from './core-phase-projection-297';
 
+/* Same contract as copyCoreData297 (pinned in core-phase-data-297.ts): the
+ * same budget, depth, cycle, finite-number, dense-array and plain-own-data
+ * rejections with the same messages, and an identical deeply frozen result
+ * (same keys and order; frozen properties are non-writable/non-configurable).
+ * It reads each property descriptor once and assigns before freezing instead
+ * of two descriptor reads plus defineProperty per key, which made the actor
+ * copy of every Full ~15% of the main thread on large colonies. */
+export function frozenDataCopy297<T>(value:T):T {
+ const active=new Set<object>();let left=1048576;
+ const copy=(v:unknown,depth:number):unknown=>{
+  if(--left<0||depth>24)throw Error('Core phase payload budget exceeded');
+  if(v===undefined||v===null||typeof v==='string'||typeof v==='boolean')return v;
+  if(typeof v==='number'){if(!Number.isFinite(v))throw Error('Nonfinite Core phase number');return v;}
+  if(typeof v!=='object'||active.has(v))throw Error('Cyclic or non-data Core phase value');active.add(v);
+  try{
+   if(Array.isArray(v)&&Object.getPrototypeOf(v)===Array.prototype&&Reflect.ownKeys(v).length===v.length+1){
+    const n=v.length,values:unknown[]=new Array(n);let dense=true;
+    for(let i=0;i<n;i++){const d=Object.getOwnPropertyDescriptor(v,String(i));if(!d?.enumerable||!Object.hasOwn(d,'value')){dense=false;break;}values[i]=d.value;}
+    if(dense){const out:unknown[]=new Array(n);for(let i=0;i<n;i++)out[i]=copy(values[i],depth+1);return Object.freeze(out);}
+   }
+   if(Array.isArray(v)||Object.getPrototypeOf(v)!==Object.prototype)throw Error('Core phase requires plain own data');
+   const keys=Reflect.ownKeys(v),values:unknown[]=new Array(keys.length);
+   for(let i=0;i<keys.length;i++){const k=keys[i]!;const d=typeof k==='string'?Object.getOwnPropertyDescriptor(v,k):undefined;if(!d||d.enumerable!==true||!Object.hasOwn(d,'value'))throw Error('Core phase requires plain own data');values[i]=d.value;}
+   const out:Record<string,unknown>={};
+   for(let i=0;i<keys.length;i++){const k=keys[i] as string,copied=copy(values[i],depth+1);if(k==='__proto__')Object.defineProperty(out,k,{value:copied,enumerable:true,writable:true,configurable:true});else out[k]=copied;}
+   return Object.freeze(out);
+  }finally{active.delete(v);}
+ };
+ return copy(value,0) as T;
+}
 type State={anchor:CorePhaseAnchor297;world:World;actorScene:CoreActorScene297;actorMode:CoreActorMode297;core:number;nextId:number;seq:number;tracks:PawnTrack[];trace:Map<number,CoreProjectileTrace297>};
 export interface PreparedCoreFull297 {readonly previous:object|undefined;readonly projection:CorePhaseTypedProjection297;readonly owner:object}
 export interface PreparedCorePhase297 {readonly previous:object;readonly projection:CorePhaseTypedProjection297;readonly owner:object}
@@ -31,10 +61,10 @@ export class CorePhaseFrameOwner297 {
   const anchor=coreAnchor297(world,epoch,revision,core,m.mapId),old=this.state,same=!reset&&old?.anchor.epoch===epoch&&old.anchor.mapId===m.mapId;
   if(same&&(core<old!.core||world.nextId<old!.nextId))throw Error('Full World predates its committed actor phase');
   if(!Array.isArray(motion))throw Error('Full Core anchor lost confirmed tracks');
-  const tracks=copyCoreData297(motion),trace=same?new Map(old!.trace):new Map<number,CoreProjectileTrace297>(),seen=new Set<number>();
+  const tracks=frozenDataCopy297(motion),trace=same?new Map(old!.trace):new Map<number,CoreProjectileTrace297>(),seen=new Set<number>();
   for(const value of m.projectilesRetained){if(!validCoreTrace297(value,anchor,core)||seen.has(value.id))throw Error('Invalid retained Core projectile');seen.add(value.id);trace.set(value.id,value);}
   for(const[id,value]of trace)if(value.endCore<core-640)trace.delete(id);
-  const actorMode:CoreActorMode297=frontier?'frontier':'same-civil',actorScene=this.scene(core,copyCoreData297(world.pawns),copyCoreData297(world.wildlife?.animals??[]),copyCoreData297(world.mechanoids??[]));
+  const actorMode:CoreActorMode297=frontier?'frontier':'same-civil',actorScene=this.scene(core,frozenDataCopy297(world.pawns),frozenDataCopy297(world.wildlife?.animals??[]),frozenDataCopy297(world.mechanoids??[]));
   const next:State={anchor,world,actorScene,actorMode,core,nextId:world.nextId,seq:0,tracks,trace};
   const projection:CorePhaseTypedProjection297=Object.freeze({kind:'full',audioCues:Object.freeze([]),anchor,phaseSeq:0,nextId:world.nextId,fromCore:core,core,speed,world,actorScene,actors:Object.freeze([]),tracks,projectiles:Object.freeze({upserted:Object.freeze([...trace.values()]),removed:Object.freeze([])})});
   const result=Object.freeze({previous:old,projection,owner:this.identity});this.prepared.set(result,next);return result;
