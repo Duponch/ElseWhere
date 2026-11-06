@@ -29,14 +29,14 @@ node scripts/perf-profile-summary.mjs tmp/perf/out.cpuprofile
 
 Rappel : la vitesse ×1 exige 6 ticks macro par seconde, la vitesse ×6 en exige 36.
 
-| Sauvegarde | Avant | Après | Vitesse max avant → après |
+| Sauvegarde | Avant | Après (6 novembre au matin) | Vitesse max avant → après |
 |---|---|---|---|
-| Les Forges (80 colons, 7 512 structures, 250×250) | 216 ms/tick (sous-pas Core : 6,1 ms) | **138 ms/tick (−36 %)** (sous-pas Core : 1,6 ms, −73 %) | ×0,77 → **×1,21** : le temps réel ×1 est désormais tenu |
-| Les Éclaircies (3 colons, 250×250) | 22,7 ms/tick | **16,3 ms/tick (−28 %)** | ×7,3 → **×10,2** |
+| Les Forges (80 colons, 7 512 structures, 250×250) | 216 ms/tick | **106 ms/tick (−51 %)** | ×0,77 → **×1,57** : le temps réel ×1 est tenu avec de la marge |
+| Les Éclaircies (3 colons, 250×250) | 22,7 ms/tick | **12,8 ms/tick (−44 %)** | ×7,3 → **×13** |
 
-Mesures faites machine au repos, Node 24, référence et branche lancées l’une après l’autre ; pour Les Éclaircies, moyenne de deux passes. Avec 80 colons, ×3 et ×6 restent hors de portée : il reste environ 117 ms par tick macro, à traiter avec la feuille de route ci-dessous.
+Les deux versions ont été mesurées sur une machine au repos, l’une après l’autre, sous Node 24. Avec 80 colons, ×3 et ×6 restent hors de portée : la feuille de route ci-dessous indique les prochains leviers.
 
-**Déterminisme.** L’état sérialisé complet est identique au bit près avant et après, sur les deux sauvegardes. Empreintes : `1bac02a8…9183` et `fb205a07…9d72` (Éclaircies), `5d2cc273…be53` et `47b7bb58…bf08` (Forges).
+**Déterminisme.** Après chaque optimisation, l’état sérialisé complet reste identique au bit près à celui du code d’origine, sur les deux sauvegardes. Empreintes : `1bac02a8…9183` pour Les Éclaircies après 300 ticks, `5d2cc273…be53` pour Les Forges après 40 ticks.
 
 **Tests.** Beaucoup de tests sont obsolètes. Seuls les tests récents (modifiés depuis le 20 octobre) qui touchent les modules modifiés ont été lancés, plus les simulations complètes sur vraies sauvegardes et les tests de rendu concernés : 76 fichiers.
 
@@ -58,11 +58,38 @@ Toutes les optimisations conservent exactement le résultat ; seule la façon de
 5. **Toits** (`roof-rules.ts`, `light-environment.ts`).
    - L’ensemble des cases couvertes est mis en cache ; il était recréé à chaque requête de vitesse d’un colon à l’intérieur.
    - Les trois `Array.includes` sont remplacés par une recherche binaire sur les tableaux triés.
-6. **Repousse des plantes sauvages** (`wild-plant-runtime-256.ts`). La capture spatiale de toute la carte n’est plus construite pour une case que `pick()` rejette de toute façon (plante déjà présente, roche, neige ≥ 0,2, densité nulle). Ces conditions sont testées exactement.
+6. **Repousse des plantes sauvages** (`wild-plant-runtime-256.ts`, `actual-plant-spatial-session-256.ts`).
+   - Pas de capture spatiale pour une case que `pick()` rejette de toute façon.
+   - La part de la capture qui dépend des ressources (≈ 28 000 plantes) est mise en cache par identité du tableau. La population est une surcouche copy-on-write.
+7. **Recherche par identifiant et par type** (`structureById`, `structuresOfKind`).
+   - 104 recherches linéaires `structures.find(s=>s.id===…)` ont été remplacées, dans 61 fichiers.
+   - Le guidage des animaux vers les enclos parcourait 7 512 structures, deux fois par animal et par décision.
+8. **Broutage** (`wildlife-food.ts`). Les plantes broutables sont calculées une fois par tick, au lieu d’une fois par animal affamé.
+9. **Éclairage et thermique** (`light-sources.ts`, `thermal-topology.ts`, `plant-lighting.ts`, `thermal-plants.ts`).
+   - Seules les structures qui émettent de la lumière sont parcourues.
+   - La topologie thermique est validée sans construire de chaîne de plusieurs dizaines de Ko.
+   - Après un remplacement des ressources, l’éclairage des plantes ne retraite que les plantes nouvelles.
+10. **Croissance** (`plants.ts`). Raccourci exact pour les plantes mûres (`growth` égal à 1), qui sont l’immense majorité des plantes sauvages.
+11. **Cultures** (`farming.ts`). Les emprises viennent de l’index partagé, et la validation d’une tâche se fait par requête ponctuelle.
+
+### Architecture
+
+- **Versions de schéma** (`schema-range.ts`). Les 30 prédicats `isSchemaNNNOrLater` et 16 listes `[290,…,301].includes` sont remplacés par une plage numérique `[N, SCHEMA_VERSION]`. Les types sont générés automatiquement, l’équivalence a été vérifiée pour toutes les valeurs, et un test fige le contrat. Une montée de version ne demande plus de modifier ces dizaines de prédicats.
+- **Guide d’architecture et de performance** : [architecture-guidelines.md](architecture-guidelines.md).
 
 ## 4. Rendu et thread principal
 
-Mesures sur Les Forges, dans Chromium sur un vrai GPU (WebGPU), en 1440×1000 à la vitesse ×1.
+**Client réel, Les Éclaircies**, mesuré dans Chromium sur un vrai GPU (WebGPU), en 1440×1000, avec un build de production ; même protocole pour les deux versions.
+
+| | ×1 : images/s · p95 · p99 | ×6 : images/s · p95 · p99 | Simulation à ×6 |
+|---|---|---|---|
+| Origine | 147 · 11,3 · 25,8 ms | 113 · 26,4 · 42,9 ms | 34 ticks/s (94 % de la cible) |
+| Branche | 160 · 5,7 · 15,9 ms | 118 · 20,7 · 42,2 ms | 38,6 ticks/s (×6 tenu) |
+
+**Saccades restantes à ×6.** Elles viennent de la reconstruction synchrone des chunks de la couche végétation (`ResourceLayer.updateWorldChunks`) : jusqu’à 290 ms d’un coup, quand beaucoup de plantes changent d’apparence en même temps. Les postes principaux sont la surcouche d’usure (`appendOptionalWear`, 43 %), la fusion des géométries (33 %) et le calcul des sphères englobantes (15 %). C’est la priorité n° 1 côté rendu (voir la feuille de route).
+
+Mesures de l’agent rendu sur Les Forges, faites avant ces corrections, à ×1 :
+
 
 - **En jeu**, le thread principal est saturé : environ 11,4 à 12 s de travail pour 10 s réelles. Intervalle entre images : moyenne 36,8 ms, médiane 8,4 ms, p95 154 à 179 ms.
 - **En pause**, la médiane tombe à 4,2 ms : la boucle de rendu elle-même est saine.
@@ -103,23 +130,32 @@ Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisi
 6. **Priorités par défaut.** Ici : 1 / 2 / 3. Dans RimWorld, les priorités manuelles sont désactivées par défaut et tout ce qui est autorisé vaut 3. Conséquence actuelle : un colon blessé ou malade continue de travailler au lieu de se reposer.
 7. **Pas de ×12 automatique** quand tous les colons dorment (`TickManager.NothingHappeningInGame`).
 8. **Cultures Core manquantes** : fraise, herbe à fumer, psychoïde, soie du diable.
-9. **Coût de déplacement non arrondi.** `TicksPerMove` utilise `RoundToInt` ; ici les diagonales sont 2,4 % plus lentes.
+9. **Coût de déplacement** (`human-move-core-297.ts`). Trois écarts avec `Pawn.TicksPerMove` et `CostToMoveIntoCell` :
+   - pas d’arrondi à l’entier, d’où des diagonales environ 2,4 % plus lentes ;
+   - l’allure « marche » double aussi le coût du terrain, alors que dans RimWorld elle ne s’applique qu’au pas de base ;
+   - le plafond de 450 est appliqué avant ce doublement.
 
-Ces correctifs n’ont **pas** été appliqués dans ce lot, pour deux raisons :
+Ces correctifs n’ont **pas** été appliqués dans ce lot :
 
-- les points 1 à 4 exigent une montée de schéma de sauvegarde, avec validateurs et migration ;
-- les points 5, 6 et 9 changent un comportement que des centaines de tests de régression épinglent au tick près.
-
-Chacun mérite un lot dédié avec mise à jour des tests.
+- **Points 1 à 4 et 8.** La validation des sauvegardes énumère, version par version, le contenu admis : types de souvenirs, cultures, champs… Tout ajout de contenu impose donc une montée de schéma ; la dernière a touché 129 fichiers. La refonte des prédicats de schéma de cette nuit réduit ce coût. L’étape suivante est de faire accepter par les validateurs le contenu connu des définitions courantes, au lieu de listes figées par version.
+- **Points 5, 6 et 9.** Ils changent un comportement que des centaines de tests épinglent au tick près.
+- **Point 5.** Il demande de réorganiser la planification en « WorkGivers » ordonnés comme dans RimWorld : type de travail, puis `priorityInType`, puis distance. Ce n’est pas un simple changement de constantes.
 
 ## 6. Feuille de route recommandée (par gain attendu)
 
-1. **Adoption des publications sur le thread principal**, soit ≈ 52 % de ce thread.
-   - Ne plus relancer les validateurs de sauvegarde sur des sous-ensembles inchangés : mémoriser le verdict par tableau, ou valider une seule fois dans le Worker.
-   - Copier les acteurs par partage structurel plutôt que par copie profonde.
-   - Côté Worker, envoyer colons et animaux en deltas indexés par identifiant (≈ 400 des 764 Ko).
-   - C’est le levier n° 1 contre les saccades.
-2. **Chargement.** Fusionner les validateurs historiques en une seule passe et les sauter pour une sauvegarde au schéma courant produite par le jeu. Potentiel : chargement en quelques secondes au lieu de 30 à 140 s.
-3. **Cadence RimWorld.** Passer en `TickRare` / `TickLong` les systèmes que RimWorld ne met pas à jour à chaque tick : éclairage et température des plantes, beauté, `reconcile*` coûteux. C’est à la fois plus fidèle et plus rapide.
-4. **Index persistants** pour les ressources, les objets au sol et les tâches, avec un journal de mutations unique. Remplacer progressivement les balayages O(n) restants : `navigationCosts`, `planWork`, faune.
-5. **×12 pendant le sommeil**, une fois le débit suffisant. Ce sera simple quand le type de vitesse publié (`0|1|3|6`) acceptera 12.
+1. **Rendu : étaler les reconstructions de chunks de végétation.** Traiter un nombre borné de chunks « sales » par image, en gardant l’ancienne géométrie visible entre-temps. C’est la source restante des saccades de 70 à 290 ms à ×6 sur une carte forestière.
+2. **Publication complète, côté Worker.** Une publication coûte des dizaines de ms et il y en a environ 5 par seconde à ×6. Pistes :
+   - envoyer colons et animaux en deltas indexés par identifiant (≈ 400 des 764 Ko sur Les Forges) ;
+   - comparer plus vite la saleté et les ressources ;
+   - faire passer les changements de pose dans les paquets de mouvement, ce qui touche des fichiers épinglés.
+3. **Copie profonde des acteurs côté thread principal** (`copyCoreData297`, environ 9 % sur Les Forges). La remplacer par un partage structurel ; c’est un fichier épinglé.
+4. **Chargement.** Fusionner les validateurs historiques en une seule passe et les sauter pour une sauvegarde au schéma courant produite par le jeu. Potentiel : quelques secondes au lieu de 30 à 140 s.
+5. **Simulation, 80 colons (106 ms par tick).** Postes restants :
+   - faune (11 %) ;
+   - planification du travail (18 %) : recherche de chemin vers la recherche, ménage, cuisine, chantiers ;
+   - recherche (5 %) ;
+   - besoins (3 %).
+   Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
+6. **Contenu sans montée de schéma** (voir § 5), puis les écarts RimWorld 1 à 4 et 8.
+7. **Planificateur en WorkGivers** façon RimWorld (écarts 5 et 6), avec mise à jour des tests.
+8. **×12 pendant le sommeil**, une fois le débit suffisant. Le jeu de vitesses publié (`0|1|3|6`) apparaît dans 17 fichiers, dont 2 épinglés.
