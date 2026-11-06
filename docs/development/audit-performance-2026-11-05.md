@@ -2,6 +2,25 @@
 
 Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les mesures, ce qui a été corrigé, et ce qu’il reste à faire, par ordre d’impact.
 
+## Synthèse (6 novembre, matin)
+
+| Mesure | Avant | Après |
+|---|---|---|
+| Simulation, Les Éclaircies (3 colons) | 22,7 ms/tick, ×7,3 max | **12,7 ms/tick, ×13 max** |
+| Simulation, Les Forges (80 colons) | 216 ms/tick, ×0,77 max | **103 ms/tick, ×1,6 max** |
+| Client réel, Les Éclaircies à ×6 | 34 ticks/s (×6 non tenu), image p95 26 ms | **38,6 ticks/s (×6 tenu)**, p95 21 ms |
+| Client réel, Les Forges à ×1 | p95 154 à 179 ms (mesure de l’agent rendu) | **p95 32 ms**, 92 im/s |
+| Worker de production, Les Forges à ×1 | 64 % du temps réel | **76 %** |
+
+- **Exactitude.** Après chaque optimisation, l’état complet sérialisé reste identique au bit près sur les deux sauvegardes de référence.
+- **Tests.** Chaque lot a été comparé test par test au commit d’origine : 0 régression.
+- **Bug corrigé.** Les colons étaient invisibles en vue perspective sous WebGPU.
+- **Architecture.**
+  - Index partagés de structures : par case, par ancre, par identifiant, par type, vues filtrées.
+  - Versions de schéma en plages numériques : une montée de version ne demande plus de modifier 30 prédicats.
+  - Guide d’architecture : [architecture-guidelines.md](architecture-guidelines.md).
+- **Disque.** 14 Go libérés dans `tmp/` (campagnes de mesure du 5 au 12 octobre). Les liens de documentation vers `tmp/` ne bloquent plus `check:docs`.
+
 ## 1. Diagnostic d’architecture
 
 Le projet compte environ 195 000 lignes de TypeScript : 1 544 fichiers dans `src/sim`, 379 dans `src/render` et 1 882 fichiers de tests. Plusieurs schémas structurels expliquent la dégradation progressive des performances.
@@ -130,12 +149,12 @@ Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisi
 6. **Priorités par défaut.** Ici : 1 / 2 / 3. Dans RimWorld, les priorités manuelles sont désactivées par défaut et tout ce qui est autorisé vaut 3. Conséquence actuelle : un colon blessé ou malade continue de travailler au lieu de se reposer.
 7. **Pas de ×12 automatique** quand tous les colons dorment (`TickManager.NothingHappeningInGame`).
 8. **Cultures Core manquantes** : fraise, herbe à fumer, psychoïde, soie du diable.
-9. **Coût de déplacement** (`human-move-core-297.ts`). `Pawn.TicksPerMove` arrondit le pas de base à l’entier (`RoundToInt`, puis bornes 1 à 450) ; ici il reste fractionnaire, d’où des diagonales environ 2,4 % plus lentes. En revanche, l’allure (marche ×2, minimum 50) appliquée après l’ajout du coût de terrain et du plafond de 450 est **fidèle** à `Pawn_PathFollower.CostToMoveIntoCell`. Ce point de l’audit initial était erroné.
+9. ~~**Coût de déplacement**~~ — *à vérifier, probablement fidèle.* L’audit initial annonçait un arrondi entier de `TicksPerMove`. Cet arrondi date d’avant RimWorld 1.5. Le code d’Elsewhere reproduit en float32 `CostToMoveIntoCell` et `CostToPayThisTick` de la version 1.6 (build 4871), paiement fractionnaire compris, aussi bien pour les humains que pour les animaux. L’allure appliquée après le coût de terrain et le plafond de 450 est elle aussi fidèle. Point non retenu.
 
 Ces correctifs n’ont **pas** été appliqués dans ce lot :
 
 - **Points 1 à 4 et 8.** La validation des sauvegardes énumère, version par version, le contenu admis : types de souvenirs, cultures, champs… Tout ajout de contenu impose donc une montée de schéma ; la dernière a touché 129 fichiers. La refonte des prédicats de schéma de cette nuit réduit ce coût. L’étape suivante est de faire accepter par les validateurs le contenu connu des définitions courantes, au lieu de listes figées par version.
-- **Points 5, 6 et 9.** Ils changent un comportement que des centaines de tests épinglent au tick près.
+- **Points 5 et 6.** Ils changent un comportement que des centaines de tests épinglent au tick près.
 - **Point 5.** Il demande de réorganiser la planification en « WorkGivers » ordonnés comme dans RimWorld : type de travail, puis `priorityInType`, puis distance. Ce n’est pas un simple changement de constantes.
 
 ## 6. Feuille de route recommandée (par gain attendu)
