@@ -63,13 +63,30 @@ export function createAnimalNavigationReader(world:World,getGeometry?:()=>Struct
 /** `allowClosedGate` is for planning a handler-led route only. Physical steps
  * must use the default navigation after the handler opens each passage. */
 const isAnimalSolidCandidate=(s:World['structures'][number]):boolean=>s.kind==='vent'||s.kind==='wall'||s.kind==='cooler'||s.kind==='fence'||s.kind==='table'||isPassageDoor(s.kind);
+/* Cells of the solid structure kinds for animals (vent, wall, cooler, fence
+ * unless passable or flying, legacy tables): kinds never change, so the set is
+ * fixed for a shared geometry. `mask` holds the in-map cells, `cells` every
+ * index exactly as the former per-reader Set received them. */
+interface AnimalStaticSolids {width:number;size:number;fence:boolean;legacy:boolean;mask:Uint8Array;cells:Int32Array}
+const animalSolidsByGeometry=new WeakMap<StructureNavigationGeometry,AnimalStaticSolids[]>();
+function animalStaticSolids(world:World,geometry:StructureNavigationGeometry,fence:boolean,legacy:boolean):AnimalStaticSolids {
+  const size=world.width*world.height;let list=animalSolidsByGeometry.get(geometry);if(!list){list=[];animalSolidsByGeometry.set(geometry,list);}
+  let entry=list.find(e=>e.width===world.width&&e.size===size&&e.fence===fence&&e.legacy===legacy);
+  if(!entry){const mask=new Uint8Array(size),cells:number[]=[];
+    for(const {structure:s,cells:at} of geometry.entries)if(s.kind==='vent'||s.kind==='wall'||s.kind==='cooler'||s.kind==='fence'&&fence||legacy&&s.kind==='table')for(const i of at){cells.push(i);if(i>=0&&i<size)mask[i]=1;}
+    entry={width:world.width,size,fence,legacy,mask,cells:Int32Array.from(cells)};list.push(entry);}
+  return entry;
+}
 export function animalNavigation(world:World,allowClosedGate=false,fencePassable=false,actor?:WildAnimal,capturedFlight=false,providedGeometry?:StructureNavigationGeometry,readArea:(a:WildAnimal)=>AnimalAreaPolicy287|undefined=a=>captureAnimalAreaPolicy287(world,a),physicalNow?:()=>number) {
   let failedRoute:{actor:Cell;x:number;z:number;tick:number;field:DistanceField}|undefined;
   const area=(start:Cell)=>{if(!isSchema287OrLater(Number(world.schemaVersion)))return;const original=world.wildlife?.animals.find(a=>a===start);return original?readArea(original):undefined;};
   const duck=world.schemaVersion>=256&&actor?.species==='duck'?actor:undefined,override=duck&&duckTerrainOverride256(world,duck),flying=!!duck&&(capturedFlight||duckFlying256(duck.flight));
   const terrainFree=(terrain:unknown)=>naturalTerrainWalkable256(terrain)||flying&&terrain==='water-deep';
   const geometry=providedGeometry??captureStructureNavigation(world);
-  const solids=new Set<number>(),corners=geometry.corners,width=world.width;
+  // Solid kinds come from a mask shared per (immutable) geometry; closed doors
+  // and transit jobs are live and stay in a per-reader set. Same union.
+  const solidKinds=animalStaticSolids(world,geometry,!fencePassable&&!flying,world.schemaVersion<22),solids=new Set<number>(),corners=geometry.corners,width=world.width;
+  const solidAt=(index:number):boolean=>solidKinds.mask[index]===1||solids.has(index);
   // Fine continuation reads step/haulStep only. Preserve immediate legacy
   // capture; the physical reader pays for standability only if free is used.
   let stand=physicalNow?undefined:captureStandability(world,geometry);
@@ -79,7 +96,6 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
   // the shared index of this world, iterate that cached subset (same order).
   const solidEntries=geometry===captureStructureNavigation(world)?filteredStructureEntries(world,'animal-navigation-solids',isAnimalSolidCandidate):geometry.entries;
   for(const {structure:s,cells} of solidEntries) {
-    if(s.kind==='vent'||s.kind==='wall'||s.kind==='cooler'||s.kind==='fence'&&!fencePassable&&!flying||world.schemaVersion<22&&s.kind==='table')for(const i of cells)solids.add(i);
     if(isPassageDoor(s.kind)){
       if(liveDoors){const index=s.z*width+s.x,row=liveDoors.get(index)??[];row.push(s);liveDoors.set(index,row);}
       else if(s.door?.forbidden||!allowClosedGate&&(!s.door?.open||doorOpenness(s,world.tick)<1-1e-9))solids.add(s.z*width+s.x);
@@ -92,8 +108,8 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
     return doors.some(s=>s.door?.forbidden||!allowClosedGate&&(!s.door?.open||doorOpenness(s,now)<1-1e-9));
   };
   const blockedAt=liveDoors
-    ?(index:number)=>solids.has(index)||!terrainFree(world.tiles[index]?.terrain)||liveDoorBlocked(index)
-    :(index:number)=>solids.has(index)||!terrainFree(world.tiles[index]?.terrain);
+    ?(index:number)=>solidAt(index)||!terrainFree(world.tiles[index]?.terrain)||liveDoorBlocked(index)
+    :(index:number)=>solidAt(index)||!terrainFree(world.tiles[index]?.terrain);
   const free=(c:Cell)=>inBounds(world,c.x,c.z)&&((stand??=captureStandability(world,geometry))(c)||flying&&world.tiles[c.z*width+c.x]?.terrain==='water-deep')&&!blockedAt(c.z*width+c.x);
   // Animal origins deliberately have no Pawn identity in canStep. The same
   // solid/door corner rule can use point queries without a map-sized mask.
@@ -109,10 +125,10 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
       // Non-flying terrainFree is exactly naturalTerrainWalkable256: reuse the shared mask.
       if(!flying){const mask=terrainBlockedMask(world.tiles);blocked.set(mask.length<=blocked.length?mask:mask.subarray(0,blocked.length));}
       else for(let i=0;i<world.tiles.length;i++){const t=world.tiles[i]!.terrain;if(!terrainFree(t))blocked[i]=1;}
-      for(const i of solids)blocked[i]=1;}
+      for(const i of solidKinds.cells)blocked[i]=1;for(const i of solids)blocked[i]=1;}
     // A physical reader retains geometry, never a frozen door phase. Route
     // queries refresh only the sparse door entries; point steps scan no map.
-    if(liveDoors)for(const index of liveDoors.keys())blocked[index]=Number(solids.has(index)||!terrainFree(world.tiles[index]?.terrain)||liveDoorBlocked(index));
+    if(liveDoors)for(const index of liveDoors.keys())blocked[index]=Number(solidAt(index)||!terrainFree(world.tiles[index]?.terrain)||liveDoorBlocked(index));
     return blocked;
   };
   // Haul uses OnCell, not Standability: a partial shelf or a chunk can be the

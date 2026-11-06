@@ -6,8 +6,8 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 
 | Mesure | Avant | Après |
 |---|---|---|
-| Simulation, Les Éclaircies (3 colons) | 22,7 ms/tick, ×7,3 max | **11,7 ms/tick, ×14 max** |
-| Simulation, Les Forges (80 colons) | 216 ms/tick, ×0,77 max | **85 ms/tick, ×1,96 max** |
+| Simulation, Les Éclaircies (3 colons) | 22,7 ms/tick, ×7,3 max | **11,5 ms/tick, ×14 max** |
+| Simulation, Les Forges (80 colons) | 216 ms/tick, ×0,77 max | **81,5 ms/tick, ×2,0 max** |
 | Simulation, Les Aulnes intégrées | 30,4 ms/tick | **15,6 ms/tick** |
 | Simulation, Les Aulnes sièges | 37,8 ms/tick | **21,6 ms/tick** |
 | Client réel, Les Éclaircies à ×6 | 34 ticks/s (×6 non tenu), 113 im/s, p95 26 ms | **35,8 à 38,6 ticks/s (×6 tenu), 147 im/s, p95 15 ms** |
@@ -52,8 +52,8 @@ Rappel : la vitesse ×1 exige 6 ticks macro par seconde, la vitesse ×6 en exige
 
 | Sauvegarde | Avant | Après (6 novembre au matin) | Vitesse max avant → après |
 |---|---|---|---|
-| Les Forges (80 colons, 7 512 structures, 250×250) | 216 ms/tick | **85 ms/tick (−61 %)** | ×0,77 → **×1,96** : le temps réel ×1 est tenu avec de la marge |
-| Les Éclaircies (3 colons, 250×250) | 22,7 ms/tick | **11,7 ms/tick (−48 %)** | ×7,3 → **×14** |
+| Les Forges (80 colons, 7 512 structures, 250×250) | 216 ms/tick | **81,5 ms/tick (−62 %)** | ×0,77 → **×2,0** : le temps réel ×1 est tenu avec de la marge |
+| Les Éclaircies (3 colons, 250×250) | 22,7 ms/tick | **11,5 ms/tick (−49 %)** | ×7,3 → **×14** |
 | Les Aulnes intégrées (v394) | 30,4 ms/tick | **15,6 ms/tick (−49 %)** | ×5,5 → **×10,7** |
 | Les Aulnes sièges (v224) | 37,8 ms/tick | **21,6 ms/tick (−43 %)** | ×4,4 → **×7,7** |
 
@@ -105,6 +105,9 @@ Toutes les optimisations conservent exactement le résultat ; seule la façon de
     Le mode `VERIFY_TERRAIN_CACHES=1` du banc recalcule et compare à chaque lecture. Il n’a trouvé aucun écrivain non marqué sur quatre sauvegardes.
 15. **Réseau électrique** (`power-topology.ts`). La clé texte de tous les transmetteurs n’est plus reconstruite à chaque lecture : le jeton d’appartenance et l’état des interrupteurs suffisent. La table des 7 512 structures par identifiant est partagée par jeton.
 16. **Cases debout** (`captureStandability`). Le masque des structures non franchissables est calculé une fois par géométrie partagée ; seuls les chantiers et les blocs restent lus à chaque appel.
+17. **Grille de blocage** (`blockedCells`, appelée par chaque déplacement et chaque planification). L’union du masque de terrain et des cases de structures pleines est calculée une fois par géométrie partagée. Chaque appel la copie, puis ajoute les portes interdites et les chantiers, qui sont des faits vivants.
+18. **Navigation animale.** Les cases de murs, clôtures, bouches et climatiseurs viennent d’un masque partagé par géométrie, au lieu d’un `Set` reconstruit à chaque tick et pour chaque variante de navigation.
+19. **Éclairage local** (`LocalLightCache`). La clé texte des 144 lampes des Forges était reconstruite à chaque lecture. Elle est remplacée par une comparaison champ par champ, d’égalité strictement identique.
 
 ### Architecture
 
@@ -215,7 +218,7 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
    Passer en `matrixAutoUpdate = false` les objets statiques, avec une mise à jour explicite quand ils bougent, est le levier le plus sûr.
 3. **Reconstruction d’un chunk de végétation** : encore 50 à 130 ms, mais rare, à l’apparition d’une plante dans le chunk. La découper en plusieurs images (corps, puis usure), ou calculer les tableaux dans un Worker.
 4. **Chargement.** Fusionner les validateurs historiques en une seule passe et les sauter pour une sauvegarde au schéma courant produite par le jeu. Potentiel : quelques secondes au lieu de 30 à 140 s.
-5. **Simulation, 80 colons (85 ms par tick).** Le profil est désormais plat : planification du travail ≈ 15 % (ménage, chantiers, cuisine), faune ≈ 10 %, déplacement ≈ 16 %, température de surface ≈ 6 %, recherche ≈ 4 %. Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
+5. **Simulation, 80 colons (81,5 ms par tick).** Le profil est désormais plat : planification du travail ≈ 15 % (ménage, chantiers, cuisine), faune ≈ 10 %, déplacement ≈ 16 %, température de surface ≈ 6 %, recherche ≈ 4 %. Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
 6. **Contenu sans montée de schéma** (voir § 5), puis les écarts RimWorld 1 à 4 et 8.
 7. **Planificateur en WorkGivers** façon RimWorld (écarts 5 et 6), avec mise à jour des tests.
 8. **×12 pendant le sommeil**, une fois le débit suffisant. Le jeu de vitesses publié (`0|1|3|6`) apparaît dans 17 fichiers, dont 2 épinglés.
