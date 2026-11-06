@@ -45,8 +45,20 @@ export function previewGroupAnimals256(w:World,ids:readonly number[],members:rea
  return {kind:'ready',animals,preparation:{revision:1,lines}};
 }
 export function groupAnimalCarrier256(w:World,id:number):Pawn|undefined {const held=groupAnimalPreparation(w,id);return held?.line.mode==='carry'&&held.line.gathered?w.pawns.find(p=>p.id===held.line.handlerId):undefined;}
+function followCarrier256(a:WildAnimal,p:Pawn):void {a.x=p.x;a.z=p.z;a.path=[];if(p.motion){a.motion={...p.motion,from:{...p.motion.from},to:{...p.motion.to},...p.motion.stagger?{stagger:p.motion.stagger.map(s=>({...s}))}:{},...p.motion.stuns?{stuns:p.motion.stuns.map(s=>({...s}))}:{}};delete a.motion.snowEntryPending;}else delete a.motion;}
 export function syncGroupCarriedAnimals256(w:World,p:Pawn):void {
- for(const a of w.wildlife?.animals??[])if(groupAnimalCarrier256(w,a.id)===p){a.x=p.x;a.z=p.z;a.path=[];if(p.motion){a.motion={...p.motion,from:{...p.motion.from},to:{...p.motion.to},...p.motion.stagger?{stagger:p.motion.stagger.map(s=>({...s}))}:{},...p.motion.stuns?{stuns:p.motion.stuns.map(s=>({...s}))}:{}};delete a.motion.snowEntryPending;}else delete a.motion;}
+ for(const a of w.wildlife?.animals??[])if(groupAnimalCarrier256(w,a.id)===p)followCarrier256(a,p);
+}
+/** Same effect and order as syncGroupCarriedAnimals256 for every pawn in turn.
+ * An animal's carrier depends only on group preparation lines and the pawn
+ * list, which these updates never change, so it is resolved once per animal
+ * instead of once per (pawn, animal) pair. */
+export function syncAllGroupCarriedAnimals256(w:World):void {
+ const animals=w.wildlife?.animals;if(!animals?.length)return;
+ let byCarrier:Map<Pawn,WildAnimal[]>|undefined;
+ for(const a of animals){const carrier=groupAnimalCarrier256(w,a.id);if(!carrier)continue;byCarrier??=new Map();const list=byCarrier.get(carrier);if(list)list.push(a);else byCarrier.set(carrier,[a]);}
+ if(!byCarrier)return;
+ for(const p of w.pawns){const list=byCarrier.get(p);if(list)for(const a of list)followCarrier256(a,p);}
 }
 /** Runs inside the existing human group intent, before meeting/loading/exit.
  * No waypoint or carrying link is acquired until both original edges finish. */

@@ -1,5 +1,5 @@
 import {shipCasketCarrierOf277,syncShipCasketPassenger277} from './ship-casket-carry-277.ts';
-import {groupAnimalClaimed256,groupAnimalCarrier256,syncGroupCarriedAnimals256} from './group-animal-formation-256.ts';
+import {groupAnimalClaimed256,groupAnimalCarrier256,syncGroupCarriedAnimals256,syncAllGroupCarriedAnimals256} from './group-animal-formation-256.ts';
 import type { Pawn,World } from './types.ts';
 
 export interface AnimalRescueTask {animalId:number;spotId:number;phase:'approach'|'carry';forced?:true}
@@ -18,7 +18,7 @@ export function animalSpotClaimed(w:World,id:number,exceptAnimal?:number,exceptP
     ||!!w.wildlife?.animals.some(a=>a.id!==exceptAnimal&&a.animalRest?.spotId===id);
 }
 export function syncCarriedAnimals(w:World,carrier?:Pawn):void {
-  if(w.schemaVersion>=256)for(const p of carrier?[carrier]:w.pawns)syncGroupCarriedAnimals256(w,p);
+  if(w.schemaVersion>=256){if(carrier)syncGroupCarriedAnimals256(w,carrier);else syncAllGroupCarriedAnimals256(w);}
   for(const p of carrier?[carrier]:w.pawns){
     syncShipCasketPassenger277(w,p);
     if(p.animalRescue?.phase!=='carry')continue;

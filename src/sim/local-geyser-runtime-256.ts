@@ -12,10 +12,19 @@ import {validLocalGeyserState256} from './local-geyser-save-256.ts';
 import {harvestedGeothermalGeyserIds264} from './geothermal-state-264.ts';
 import type {ThermalLayout} from './thermal-topology.ts';
 import type {GeyserWorld256,NaturalGeyser256} from './local-geyser-state-256.ts';
+import {structureMembershipToken} from './structure-navigation.ts';
 const f=Math.fround;
 /** Air can exist outdoors and on water. Full buildings/natural solids alone
  * have no Room; pathfinding/standability are deliberately not room predicates. */
+/* Full-fill cells depend only on structure kinds and footprints (immutable),
+ * so the set is cached per shared structure membership token. */
+const geyserFullCellsByToken256=new WeakMap<object,ReadonlySet<number>>();
 export function geyserFullCells256(world:GeyserWorld256):ReadonlySet<number> {
+ const token=structureMembershipToken(world);let cached=geyserFullCellsByToken256.get(token);
+ if(!cached){cached=computeGeyserFullCells256(world);geyserFullCellsByToken256.set(token,cached);}
+ return cached;
+}
+function computeGeyserFullCells256(world:GeyserWorld256):ReadonlySet<number> {
  const cells=new Set<number>();
  for(const s of world.structures){const facts=START_STRUCTURE_PHYSICS_256[s.kind];if(!facts)throw Error('Unknown actual geyser thermal building');if(facts.fullFill&&!facts.door)for(const c of footprintCells(s))cells.add(c.z*world.width+c.x);}
  return cells;
