@@ -42,7 +42,10 @@ export class WorkerNaturalAppearance {
   for(const id of physicalRemoved??[]){if(this.captures.has(id))removed.add(id);if(this.cropCaptures.has(id))cropRemoved.add(id);}
   const growth=createPlantGrowthReader(world),supports=readHydroponicCells(world);
   let current:Resource,value:number|undefined;
-  const readGrowth=():number=>value??(value=growth(current));
+  // readPlantGrowth returns exactly 1 whenever the stored growth is exactly 1
+  // (every branch then yields base or 1), so mature plants skip the reader.
+  const matureOrRead=(r:Resource):number=>(r.growth??1)===1?1:growth(r);
+  const readGrowth=():number=>value??(value=matureOrRead(current));
   for(let ordinal=0;ordinal<world.resources.length;ordinal++){
    const r=world.resources[ordinal]!,id=r.id;
    if(!Number.isSafeInteger(id)||id<=0||id>=world.nextId)throw Error('Invalid natural visual resource ID');
@@ -52,7 +55,7 @@ export class WorkerNaturalAppearance {
    if(before)before.seen=visit;if(cropBefore)cropBefore.seen=visit;
    if(isResidentCrop(r)){
     if(before)removed.add(id);
-    const number=growth(r),leafless=plantLeafless(world,r),blighted=!!r.blight,supported=supports.has(r.z*world.width+r.x);
+    const number=matureOrRead(r),leafless=plantLeafless(world,r),blighted=!!r.blight,supported=supports.has(r.z*world.width+r.x);
     if(!Number.isFinite(number)||number<0||number>1)throw Error('Invalid crop visual growth');
     if(cropBefore&&cropBefore.kind===r.kind&&cropBefore.x===r.x&&cropBefore.z===r.z&&Object.is(cropBefore.growth,number)
      &&cropBefore.leafless===leafless&&cropBefore.blighted===blighted&&cropBefore.supported===supported)continue;

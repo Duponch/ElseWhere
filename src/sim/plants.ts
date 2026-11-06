@@ -86,6 +86,9 @@ type GrowthPassInputs={
  * The pass only shares identical input calculations; arithmetic order stays
  * literal, including the inclusive light integral and strict harvest limit. */
 function readPlantGrowth(world:World,plant:Resource,inputs?:GrowthPassInputs):number {
+  // Exact shortcut: with a stored growth of exactly 1 every branch below
+  // returns either base (1) or 1, so skip the roof/substrate/light reads.
+  if ((plant.growth ?? 1) === 1) return 1;
   if (!isPlant(plant)) return 1;
   const base = plant.growth ?? 1;
   if(plant.blight)return base;
