@@ -12,7 +12,7 @@ import {finishSnowStep} from './snow-surface.ts';
 import {animalBodySize} from './animal-life.ts';
 import { mergeSlowIntervals,travelEnd } from './travel-timing.ts';
 import { weatherMoveFactor } from './weather-exposure.ts';
-import { routeToCell,hasReachableCell,inBounds } from './pathfinding.ts';
+import { routeToCell,hasReachableCell,inBounds,terrainBlockedMask } from './pathfinding.ts';
 import { jobBlocksTransit } from './construction-rules.ts';
 import { footprintCells } from './definitions.ts';
 import { captureStandability,navigationCosts,furnitureDelay } from './furniture-travel.ts';
@@ -101,7 +101,11 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
   };
   let blocked:Uint8Array|undefined;
   const routeGrid=()=>{
-    if(!blocked){blocked=new Uint8Array(width*world.height);for(let i=0;i<world.tiles.length;i++){const t=world.tiles[i]!.terrain;if(!terrainFree(t))blocked[i]=1;}for(const i of solids)blocked[i]=1;}
+    if(!blocked){blocked=new Uint8Array(width*world.height);
+      // Non-flying terrainFree is exactly naturalTerrainWalkable256: reuse the shared mask.
+      if(!flying){const mask=terrainBlockedMask(world.tiles);blocked.set(mask.length<=blocked.length?mask:mask.subarray(0,blocked.length));}
+      else for(let i=0;i<world.tiles.length;i++){const t=world.tiles[i]!.terrain;if(!terrainFree(t))blocked[i]=1;}
+      for(const i of solids)blocked[i]=1;}
     // A physical reader retains geometry, never a frozen door phase. Route
     // queries refresh only the sparse door entries; point steps scan no map.
     if(liveDoors)for(const index of liveDoors.keys())blocked[index]=Number(solids.has(index)||!terrainFree(world.tiles[index]?.terrain)||liveDoorBlocked(index));

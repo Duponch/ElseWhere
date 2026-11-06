@@ -12,6 +12,7 @@ import {surfaceTileHash} from './world-site-geography.ts';
 import {validatePlantMap256,type WildPlantMapInput256} from './wild-plant-generation-256.ts';
 import {createWildPlantSpawner256,PlantRegionCache256} from './wild-plant-spawner-256.ts';
 import {actualPlantRuntimeSessionFactory256} from './wild-plant-runtime-session-256.ts';
+import {resourceAt} from './farming.ts';
 const f=Math.fround;
 export interface WildFloraState256 {
  revision:2;cycleIndex:number;desired:number;desiredTmp:number;fertile:number;fertileTmp:number;hasCalculated:boolean;lastTick:number;
@@ -86,6 +87,15 @@ function context(world:World,worldSeed:number,tileHash:number){let c=contexts.ge
 const speciesDefs=new Map<string,string>(Object.entries(FACTS).map(([def,row])=>[row.species,def]));
 const crops:Readonly<Record<string,string>>={rice:'Plant_Rice',potato:'Plant_Potato',corn:'Plant_Corn',cotton:'Plant_Cotton',healroot:'Plant_Healroot',haygrass:'Plant_Haygrass'};
 export function runtimePlantDef256(resource:Resource):string|undefined {return resource.species===undefined?crops[resource.kind]:speciesDefs.get(resource.species);}
+/** Exact subset of the actual spawner's early rejection (see pick()). */
+function actualSpawnerRejects256(world:World,cell:number,density:number):boolean {
+ if(density<=0)return true;
+ const tile=world.tiles[cell];if(!tile)return false;
+ if(tile.terrain==='rock'||!!tile.collapsedRock)return true;
+ if(f(tile.snowDepth??0)>=f(.2))return true;
+ const resource=resourceAt(world,cell);
+ return resource!==undefined&&resource.x+resource.z*world.width===cell&&runtimePlantDef256(resource)!==undefined;
+}
 function captureBound(world:World,reader:WildPlantMapReader256,density:number) {
  const expected=authority(world),input=reader.capture(world);
  if(input.schemaVersion!==world.schemaVersion||input.width!==world.width||input.height!==world.height||input.worldSeed!==expected.worldSeed||input.tileHash!==expected.tileHash||input.rules!==expected.rules||input.densityFactor!==density)throw Error('Plant reader does not describe this actual map');
@@ -113,11 +123,17 @@ export function advanceWildFlora256(world:World,reader:WildPlantMapReader256):vo
    const cell=cache.order[next.cycleIndex]!,physical=reader.cell(world,cell);
    next.desiredTmp=f(next.desiredTmp+cellDesired(physical,density,rules,anyIgnores));if(physical.fertility>0)next.fertileTmp++;
    if(chance(cachedChance)&&plantRegrowthMtb256(physical.naturalRoof?130:rules.scalars.wildPlantRegrowDays,()=>random.value())&&(!physical.roofed||physical.naturalRoof)){
-    if(!spawner){const actualSession=actualPlantRuntimeSessionFactory256(reader);if(actualSession)spawner=actualSession(world,density,next.desired);else {const captured=captureBound(world,reader,density);spawner=createWildPlantSpawner256(captured.input,captured.order,cache.regions);}}
-    const def=spawner.pick(cell,random,next.desired,true);
+    // The actual spawner's pick() returns undefined, before reading any random
+    // value, when density<=0, a plant already stands on the cell, the cell is
+    // solid (rock/collapsed rock) or snow is >= 0.2. Those exact sufficient
+    // conditions are read directly here so the whole-map spatial capture is
+    // only built for a cell that can actually receive a plant.
+    let rejected=false;
+    if(!spawner){const actualSession=actualPlantRuntimeSessionFactory256(reader);if(actualSession){if(actualSpawnerRejects256(world,cell,density))rejected=true;else spawner=actualSession(world,density,next.desired);}else {const captured=captureBound(world,reader,density);spawner=createWildPlantSpawner256(captured.input,captured.order,cache.regions);}}
+    const def=rejected?undefined:spawner!.pick(cell,random,next.desired,true);
     if(def!==undefined){if(!Number.isSafeInteger(nextId+1))throw Error('No plant identity available');
      const plant=createWildPlantResource256(world,nextId++,cell%world.width,Math.floor(cell/world.width),FACTS[def].species,.15,true);
-     if(!plant)throw Error('Missing actual renewal resource definition');newPlants.push(plant);spawner.record({cell,defId:def,nonStump:true});
+     if(!plant)throw Error('Missing actual renewal resource definition');newPlants.push(plant);spawner!.record({cell,defId:def,nonStump:true});
     }
    }
    next.cycleIndex++;

@@ -1,5 +1,6 @@
 import {roomBarrierValue,roomBarrierCells} from './room-barriers.ts';
 import type { World } from './types.ts';
+import {structureMembershipToken} from './structure-navigation.ts';
 
 export interface RoomSpace {
   readonly kind: 'space';
@@ -41,6 +42,8 @@ export class RoomTopologyCache {
   private rocks = new Uint8Array(0);
   private barriers: number[] = [];
   private topology: RoomTopology | undefined;
+  private barrierToken: object | undefined;
+  private tileRefs: (World['tiles'][number] | undefined)[] = [];
 
   read(world: Pick<World, 'width' | 'height' | 'tiles' | 'structures'>): RoomTopology {
     const { width, height } = world, size = width * height;
@@ -54,18 +57,32 @@ export class RoomTopologyCache {
     // Detect in-place edits without rebuilding/writing the full combined mask
     // at each read. Barrier order is captured because later objects win.
     let inputChanged = resized, count = 0;
-    for (const building of world.structures) {
-      const value = roomBarrierValue(building.kind);
-      if (!value) continue;
-      for(const cell of roomBarrierCells(building)){
-        const code = (cell.z * width + cell.x) * 3 + value;
-        if (this.barriers[count] !== code) { this.barriers[count] = code; inputChanged = true; }
-        count++;
+    // Barrier codes depend only on structure kind/position/orientation, which
+    // are immutable; an unchanged shared membership token (same array, same
+    // members in the same order) therefore proves the codes are unchanged.
+    const token = world.width === width && Array.isArray(world.structures) ? structureMembershipToken(world as World) : undefined;
+    if (!token || token !== this.barrierToken || resized) {
+      for (const building of world.structures) {
+        const value = roomBarrierValue(building.kind);
+        if (!value) continue;
+        for(const cell of roomBarrierCells(building)){
+          const code = (cell.z * width + cell.x) * 3 + value;
+          if (this.barriers[count] !== code) { this.barriers[count] = code; inputChanged = true; }
+          count++;
+        }
       }
+      if (this.barriers.length !== count) { this.barriers.length = count; inputChanged = true; }
+      this.barrierToken = token;
     }
-    if (this.barriers.length !== count) { this.barriers.length = count; inputChanged = true; }
+    // Tile objects never change `terrain` in place (terrain edits replace the
+    // Tile), so only replaced tiles need their rock bit re-read.
+    if (this.tileRefs.length !== size) { this.tileRefs = new Array(size); }
+    const tiles = world.tiles, refs = this.tileRefs;
     for (let i = 0; i < size; i++) {
-      const value = world.tiles[i]!.terrain === 'rock' ? 1 : 0;
+      const tile = tiles[i]!;
+      if (refs[i] === tile) continue;
+      refs[i] = tile;
+      const value = tile.terrain === 'rock' ? 1 : 0;
       if (this.rocks[i] !== value) { this.rocks[i] = value; inputChanged = true; }
     }
     if (!inputChanged) return this.topology!;

@@ -3,6 +3,7 @@ import {effectiveLocal297} from './core-phase-297.ts';
 import {targetDoorCanOpen263} from './world-target-building-263.ts';
 import { hostileTo,isColonist } from './affiliation.ts';
 import { isRoomDoor,isPassageDoor } from './door-rules.ts';
+import { structureAnchors } from './structure-navigation.ts';
 import { prisonDoorPassable } from './prison-space.ts';
 import { prisonBreakActive } from './prison-break-state.ts';
 import type { Cell,Pawn,World } from './types.ts';
@@ -35,8 +36,14 @@ export function addActorObstacles(world:World,origin:Cell,grid:Uint8Array):void 
 export function actorStepAllowed(world:World,origin:Cell,next:Cell):boolean {
   const pawn=actor(world,origin);if(!pawn)return true;
   const occupied=hostileCells(world,pawn),dx=next.x-origin.x,dz=next.z-origin.z;
-  const free=(c:Cell)=>!occupied.has(c.z*world.width+c.x)&&(!opensDoors(pawn)?!world.structures.some(s=>(isMechanoidTarget(pawn)||targetDoorCanOpen263(world,pawn,s)!==true)&&isRoomDoor(s.kind)&&s.x===c.x&&s.z===c.z&&!(!isMechanoidTarget(pawn)&&pawn.prisoner?prisonDoorPassable(world,s):s.door?.open)):true);
-  if(!isMechanoidTarget(pawn))for(const s of world.structures)if((s.x===next.x&&s.z===next.z||dx&&dz&&(s.x===next.x&&s.z===origin.z||s.x===origin.x&&s.z===next.z))&&targetDoorCanOpen263(world,pawn,s)===false&&!s.door?.open)return false;
+  // Anchor-indexed lookups: same pure predicates over exactly the structures
+  // anchored on the probed cells, instead of scanning every structure per step.
+  const anchors=structureAnchors(world);
+  const free=(c:Cell)=>!occupied.has(c.z*world.width+c.x)&&(!opensDoors(pawn)?!anchors.anchoredAt(c.x,c.z).some(s=>(isMechanoidTarget(pawn)||targetDoorCanOpen263(world,pawn,s)!==true)&&isRoomDoor(s.kind)&&!(!isMechanoidTarget(pawn)&&pawn.prisoner?prisonDoorPassable(world,s):s.door?.open)):true);
+  if(!isMechanoidTarget(pawn)){
+    const closedTarget=(x:number,z:number)=>anchors.anchoredAt(x,z).some(s=>targetDoorCanOpen263(world,pawn,s)===false&&!s.door?.open);
+    if(closedTarget(next.x,next.z)||dx&&dz&&(closedTarget(next.x,origin.z)||closedTarget(origin.x,next.z)))return false;
+  }
   return free(next)&&(!dx||!dz||free({x:next.x,z:origin.z})&&free({x:origin.x,z:next.z}));
 }
 

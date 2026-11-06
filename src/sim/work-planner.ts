@@ -334,27 +334,39 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     // Planning does not mutate piles/reservations until a candidate is committed.
     // A destination/item capacity is therefore stable for this one invocation.
     const storageCapacities = new Map<string,number>();
+    // Every test below that can `continue` is a pure read of state that this
+    // loop never mutates, so they are evaluated cheapest-first and the
+    // pile-only facts are computed once per pile instead of once per pair.
+    // The visited pairs, their order, the winner, the cursor and the budget
+    // are exactly those of the original pair-by-pair evaluation.
+    interface PileFacts {ground:boolean;sourceAdmits:boolean;excess:number;currentPriority:number;available:number;outboundExcess:number}
+    const pileFacts:(PileFacts|undefined)[]=new Array(sources.length);
+    const factsFor=(pileIndex:number):PileFacts=>{
+      let facts=pileFacts[pileIndex];if(facts)return facts;
+      const pile=sources[pileIndex]!;
+      if(pile.owner.type!=='ground'){facts={ground:false,sourceAdmits:false,excess:0,currentPriority:0,available:0,outboundExcess:0};pileFacts[pileIndex]=facts;return facts;}
+      const sourceCell=cellIndex(world, pile.owner.x, pile.owner.z);
+      const sourceZone = zonesByCell.get(sourceCell);
+      const excess = sourceZone?.shelfId===undefined&&sourceZone ? Math.max(0, (ground.get(sourceCell) ?? 0) - sourceZone.capacity) : 0;
+      const sourceAdmits=!!sourceZone&&storageCellAccepts(world,sourceZone,pile);
+      const currentPriority = Math.max(sourceAdmits&&!excess?sourceZone!.priority:0,hoppersByCell.has(sourceCell)&&hopperAccepts(pile.item)?3:0);
+      facts={ground:true,sourceAdmits,excess,currentPriority,available:pile.quantity - (sourceReserved.get(pile.id) ?? 0),outboundExcess:Math.max(0, excess - (outbound.get(sourceCell) ?? 0))};
+      pileFacts[pileIndex]=facts;return facts;
+    };
     for (let offset = 0; offset < count; offset++) {
       const index = (start + offset) % total;
-      const pile = sources[Math.floor(index / destinations.length)]!;
+      const pileIndex = Math.floor(index / destinations.length);
+      const pile = sources[pileIndex]!;
       if (pile.owner.type !== 'ground') continue;
+      const facts = factsFor(pileIndex);
       const destination = destinations[index % destinations.length]!;
+      if (destination.priority <= facts.currentPriority) continue;
       if(destination.destination.type==='hopper'&&!hopperAccepts(pile.item))continue;
-      if(destination.destination.type==='stockpile') {
-        const zone=zonesByCell.get(cellIndex(world,destination.target.x,destination.target.z))!;
-        if(!storageCellAccepts(world,zone,pile))continue;
-      }
-      let capacity=destination.items?.get(pile.item)??destination[pile.kind]??0;
       // A trap leaves items in place. Its replacement still requires a real
       // pickup and delivery, including salvage lying on the blueprint cell.
       if (sameCell(pile.owner, destination.target) && !(world.schemaVersion>=226 && destination.destination.type==='job' && (destination.target as Job).kind==='spike-trap')) continue;
-      const sourceZone = zonesByCell.get(cellIndex(world, pile.owner.x, pile.owner.z));
-      const excess = sourceZone?.shelfId===undefined&&sourceZone ? Math.max(0, (ground.get(cellIndex(world, pile.owner.x, pile.owner.z)) ?? 0) - sourceZone.capacity) : 0;
-      const sourceAdmits=sourceZone&&storageCellAccepts(world,sourceZone,pile);
-      const currentPriority = Math.max(sourceAdmits&&!excess?sourceZone!.priority:0,hoppersByCell.has(cellIndex(world,pile.owner.x,pile.owner.z))&&hopperAccepts(pile.item)?3:0);
-      if (destination.priority <= currentPriority) continue;
-      let available = pile.quantity - (sourceReserved.get(pile.id) ?? 0);
-      if (sourceAdmits && excess > 0 && destination.destination.type === 'stockpile') available = Math.min(available, Math.max(0, excess - (outbound.get(cellIndex(world, pile.owner.x, pile.owner.z)) ?? 0)));
+      let available = facts.available;
+      if (facts.sourceAdmits && facts.excess > 0 && destination.destination.type === 'stockpile') available = Math.min(available, facts.outboundExcess);
       if (available <= 0) continue;
       // Ranking is independent of capacity/access. A candidate that cannot beat
       // the winner cannot affect this decision; retain pair order/cursor/budget.
@@ -362,6 +374,11 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
         distance:Math.abs(pawn.x-pile.owner.x)+Math.abs(pawn.z-pile.owner.z)+Math.abs(destination.target.x-pile.owner.x)+Math.abs(destination.target.z-pile.owner.z),id:pile.id,
         sourceId:pile.id,quantity:0,destination:destination.destination,target:pile.owner};
       if(best&&compareCandidate(candidate,best)>=0)continue;
+      if(destination.destination.type==='stockpile') {
+        const zone=zonesByCell.get(cellIndex(world,destination.target.x,destination.target.z))!;
+        if(!storageCellAccepts(world,zone,pile))continue;
+      }
+      let capacity=destination.items?.get(pile.item)??destination[pile.kind]??0;
       // Same-priority storage pairs cannot win; avoid their pure capacity scan.
       if(destination.destination.type==='stockpile') {
         const zone=zonesByCell.get(cellIndex(world,destination.target.x,destination.target.z))!;

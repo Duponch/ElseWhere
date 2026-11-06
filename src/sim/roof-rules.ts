@@ -18,7 +18,18 @@ export function roofCoverage(world:Pick<World,'roofing'>):readonly number[] {
  const sources=[r.constructed,r.natural.thin,r.natural.thick],at=[0,0,0],out:number[]=[];
  for(;;){let selected=-1,value=Infinity;for(let i=0;i<3;i++){const candidate=sources[i]![at[i]!]??Infinity;if(candidate<value){selected=i;value=candidate;}}if(selected<0)return out;out.push(value);at[selected]++;}
 }
-export const roofCells=(world:Pick<World,'roofing'>):ReadonlySet<number>=>new Set(roofCoverage(world));
+/* Roof cell arrays are never mutated in place once they belong to a World
+ * (every edit assigns a new sorted array), so the derived Set is cached by the
+ * identity and length of the three source arrays. Consumers only read it. */
+const roofSetCache=new WeakMap<object,{constructed:readonly number[];thin:readonly number[]|undefined;thick:readonly number[]|undefined;lengths:number;cells:ReadonlySet<number>}>();
+const EMPTY_ROOFS:ReadonlySet<number>=new Set<number>();
+export const roofCells=(world:Pick<World,'roofing'>):ReadonlySet<number>=>{
+ const r=world.roofing;if(!r)return EMPTY_ROOFS;
+ const thin=r.natural?.thin,thick=r.natural?.thick,lengths=r.constructed.length+(thin?.length??-1)*65536+(thick?.length??-1)*4294967296;
+ const cached=roofSetCache.get(r);
+ if(cached&&cached.constructed===r.constructed&&cached.thin===thin&&cached.thick===thick&&cached.lengths===lengths)return cached.cells;
+ const cells=new Set(roofCoverage(world));roofSetCache.set(r,{constructed:r.constructed,thin,thick,lengths,cells});return cells;
+};
 export const ROOF_WORK_TICKS = 4; // ceil(65 Core ticks / 1.7 / 10), neutral construction.
 export const isRoofJob = (j: Pick<Job|import('./types.ts').Structure, 'kind'>): boolean => j.kind === 'build-roof' || j.kind === 'remove-roof';
 export const isRoofArea = (action: string): action is 'build-roof'|'remove-roof'|'ignore-roof' => ['build-roof', 'remove-roof', 'ignore-roof'].includes(action);

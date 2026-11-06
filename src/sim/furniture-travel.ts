@@ -14,7 +14,7 @@ import { overlayNavigationCosts,type NavigationCostLookup } from './navigation-c
 import { FLOOR_DEFINITIONS } from './flooring.ts';
 import { spikeTrapKnowsOf,spikeTrapNavigationActor,SPIKE_TRAP_SEARCH_COST,SPIKE_TRAP_WALK_DELAY } from './spike-trap-state.ts';
 import type { Cell, StructureKind, World } from './types.ts';
-import type { StructureNavigationGeometry } from './structure-navigation.ts';
+import { captureStructureNavigation,type StructureNavigationGeometry } from './structure-navigation.ts';
 
 /** Core natural floors cost two Core ticks. Historical grass/soil stay neutral. */
 export function terrainTravelDelay(world:World,index:number):number {
@@ -108,6 +108,7 @@ export const FURNITURE_TRAVEL:Readonly<Record<StructureKind,Readonly<{delay:numb
 });
 export function canStandAt(world:World,cell:Cell,geometry?:StructureNavigationGeometry):boolean {
   const version=world.schemaVersion;
+  geometry??=captureStructureNavigation(world);
   if(!Number.isInteger(cell.x)||!Number.isInteger(cell.z)||cell.x<0||cell.z<0||cell.x>=world.width||cell.z>=world.height||['rock','water'].includes(world.tiles[cell.z*world.width+cell.x]!.terrain))return false;
   for(const s of geometry?.at(cell)??world.structures)if((geometry||footprintContains(s,cell))&&(version<22?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand))return false;
   if(version>=28&&world.piles.some(p=>p.kind==='chunk'&&p.owner.type==='ground'&&p.owner.x===cell.x&&p.owner.z===cell.z))return false;
@@ -117,6 +118,7 @@ export function canStandAt(world:World,cell:Cell,geometry?:StructureNavigationGe
  * world mutation; this is not a shared navigation or cross-actor cache. */
 export function captureStandability(world:World,geometry?:StructureNavigationGeometry):(cell:Cell)=>boolean {
   const version=world.schemaVersion;
+  geometry??=captureStructureNavigation(world);
   const denied=new Set<number>(),add=(s:Parameters<typeof footprintCells>[0])=>{for(const c of footprintCells(s))denied.add(c.z*world.width+c.x);};
   if(geometry){for(const {structure:s,cells} of geometry.entries)if(version<22?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand)for(const i of cells)denied.add(i);}
   else for(const s of world.structures)if(version<22?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand)add(s);
@@ -129,6 +131,9 @@ export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:Du
   const version=world.schemaVersion;
   if(version<22)return frameAt(world,to)?FRAME_TRAVEL_DELAY:0;
   let target:StructureKind|undefined,previousRepeats=false,trap=false;
+  // Shared footprint index: identical membership/order to the full scan
+  // (footprintContains ≡ footprintCells for every structure kind).
+  geometry??=captureStructureNavigation(world);
   if(geometry){
     for(const s of geometry.at(to)){
       if(s.kind!=='power-conduit')target=s.kind;
@@ -154,6 +159,7 @@ export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:Du
 /** Captured once per synchronous search. No shared mutation or cross-tick cache. */
 export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry):{costs:NavigationCostLookup|undefined;repeaters:ReadonlySet<number>;stops:ReadonlySet<number>;floors:NavigationCostLookup;coreMoveCosts297?:{cardinal:number;diagonal:number}} {
   const version=world.schemaVersion,width=world.width,snow=!!world.snow;
+  geometry??=captureStructureNavigation(world);
   const costs=new Map(frameCosts(world)),repeaters=new Set<number>(),stops=new Set<number>();
   const actor=version>=226?spikeTrapNavigationActor(world,origin):undefined,knows=!!actor&&spikeTrapKnowsOf(world,actor),traps=new Map<number,number>(),marshPerceptionCosts=new Map<number,number>();
   if(version>=22) {

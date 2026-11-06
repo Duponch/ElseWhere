@@ -18,10 +18,36 @@ export interface StructureNavigationGeometry {
 }
 const EMPTY_STRUCTURES:readonly Structure[]=Object.freeze([]);
 
-export function captureStructureNavigation(world:World):StructureNavigationGeometry {
-  const width=world.width,height=world.height,byCell=new Map<number,Structure[]>(),corners=new Set<number>(),roomDoors:Structure[]=[];
-  const entries:StructureNavigationFootprint[]=[];
-  for(const structure of world.structures){
+/** Structures whose ANCHOR (x,z) is a given cell, in source array order. */
+export interface StructureAnchorIndex {
+  anchoredAt(x:number,z:number):readonly Structure[];
+}
+interface SharedStructureIndex {
+  readonly count:number;
+  readonly first:Structure|undefined;
+  readonly last:Structure|undefined;
+  readonly width:number;
+  readonly height:number;
+  readonly geometry:StructureNavigationGeometry;
+  readonly anchors:StructureAnchorIndex;
+}
+/* Shared, cross-tick membership index keyed by the structures ARRAY itself.
+ *
+ * Validity contract (verified against every mutation site in src/sim):
+ *  - structure kind/x/z/orientation/footprint are never mutated in place;
+ *  - array elements are never replaced by index assignment;
+ *  - in-place membership changes only use push/splice (length and/or the
+ *    first/last element change), every other change replaces the array.
+ * Any push+splice sequence that keeps the length leaves a NEW object as the
+ * last element (or reorders it), so (identity,length,first,last) detects every
+ * membership/order change. Mutable facts (doors, traps, power…) are still read
+ * live from the original objects, exactly like the per-decision capture. */
+const sharedIndexes=new WeakMap<readonly Structure[],SharedStructureIndex>();
+
+function buildIndex(world:World):SharedStructureIndex {
+  const width=world.width,height=world.height,source=world.structures,byCell=new Map<number,Structure[]>(),corners=new Set<number>(),roomDoors:Structure[]=[];
+  const entries:StructureNavigationFootprint[]=[],anchors=new Map<number,Structure[]>();
+  for(const structure of source){
     const cells=footprintCells(structure).map(cell=>cell.z*width+cell.x);
     entries.push({structure,cells});
     // Preserve source order: physical travel selects the last non-conduit
@@ -29,18 +55,44 @@ export function captureStructureNavigation(world:World):StructureNavigationGeome
     for(const index of cells){const list=byCell.get(index);if(list)list.push(structure);else byCell.set(index,[structure]);}
     if(isPassageDoor(structure.kind))corners.add(structure.z*width+structure.x);
     if(isRoomDoor(structure.kind))roomDoors.push(structure);
+    if(Number.isInteger(structure.x)&&Number.isInteger(structure.z)){
+      const key=structure.z*width+structure.x,list=anchors.get(key);if(list)list.push(structure);else anchors.set(key,[structure]);
+    }
   }
-  return {entries,corners,roomDoors,at:cell=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<width&&cell.z<height
+  const geometry:StructureNavigationGeometry={entries,corners,roomDoors,at:cell=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<width&&cell.z<height
     ?byCell.get(cell.z*width+cell.x)??EMPTY_STRUCTURES:EMPTY_STRUCTURES};
+  const anchorIndex:StructureAnchorIndex={anchoredAt:(x,z)=>x>=0&&z>=0&&x<width&&z<height&&Number.isInteger(x)&&Number.isInteger(z)?anchors.get(z*width+x)??EMPTY_STRUCTURES:EMPTY_STRUCTURES};
+  return {count:source.length,first:source[0],last:source[source.length-1],width,height,geometry,anchors:anchorIndex};
+}
+function sharedIndex(world:World):SharedStructureIndex {
+  const source=world.structures;let index=sharedIndexes.get(source);
+  if(!index||index.count!==source.length||index.first!==source[0]||index.last!==source[source.length-1]||index.width!==world.width||index.height!==world.height){
+    index=buildIndex(world);sharedIndexes.set(source,index);
+  }
+  return index;
+}
+
+export function captureStructureNavigation(world:World):StructureNavigationGeometry {
+  return sharedIndex(world).geometry;
+}
+/** Identity token of the current shared index: unchanged token means the
+ * structures array has exactly the same members, order and (immutable)
+ * kind/position/orientation as when the token was last observed. */
+export function structureMembershipToken(world:World):object {
+  return sharedIndex(world);
+}
+/** O(1) anchor lookup with exactly the same membership/order as scanning
+ * world.structures for `s.x===x&&s.z===z`. */
+export function structureAnchors(world:World):StructureAnchorIndex {
+  return sharedIndex(world).anchors;
 }
 
 /** Engine-owned lifetime, reset at the existing structural commit boundaries.
  * Append/replacement checks are additional guards, not a general mutable-World
  * cache contract. No reader survives this decision phase or escapes to a save. */
 export function structureNavigationReader(world:World):{read:()=>StructureNavigationGeometry;invalidate:()=>void} {
-  let geometry:StructureNavigationGeometry|undefined,source:Structure[]|undefined,count=0;
   return {
-    read(){if(!geometry||source!==world.structures||count!==world.structures.length){source=world.structures;count=source.length;geometry=captureStructureNavigation(world);}return geometry;},
-    invalidate(){geometry=undefined;source=undefined;count=0;},
+    read:()=>captureStructureNavigation(world),
+    invalidate(){},
   };
 }

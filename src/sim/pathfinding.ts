@@ -12,7 +12,7 @@ import type { DistanceField, Reachability } from './navigation-types.ts';
 export type { DistanceField, Reachability } from './navigation-types.ts';
 import type { Cell, Job, World } from './types.ts';
 import { footprintCells } from './definitions.ts';
-import type { StructureNavigationGeometry } from './structure-navigation.ts';
+import { captureStructureNavigation,type StructureNavigationGeometry } from './structure-navigation.ts';
 
 export const cellIndex = (world: World, x: number, z: number): number => z * world.width + x;
 export const inBounds = (world: World, x: number, z: number): boolean =>
@@ -21,13 +21,25 @@ export const workNeighbours=(cell:Cell,kind?:string,diagonal=false):Cell[]=>[[0,
 export const adjacent = (a: Cell, b: Cell): boolean => Math.abs(a.x - b.x) + Math.abs(a.z - b.z) === 1;
 
 /** Only finished solids block V16 transit. Completion checks active actors/edges. */
+/* Terrain walkability per tiles array. Tile objects never change `terrain` in
+ * place (every terrain edit replaces the Tile object), so revalidating by
+ * object identity is exact and far cheaper than reclassifying every cell. */
+const terrainMasks=new WeakMap<readonly World['tiles'][number][],{refs:(World['tiles'][number]|undefined)[];mask:Uint8Array}>();
+export function terrainBlockedMask(tiles:readonly World['tiles'][number][]):Uint8Array {
+  const n=tiles.length;let cached=terrainMasks.get(tiles);
+  if(!cached||cached.refs.length!==n){cached={refs:new Array(n),mask:new Uint8Array(n)};terrainMasks.set(tiles,cached);
+    for(let i=0;i<n;i++){const tile=tiles[i]!;cached.refs[i]=tile;cached.mask[i]=naturalTerrainWalkable256(tile.terrain)?0:1;}
+    return cached.mask;}
+  const refs=cached.refs,mask=cached.mask;
+  for(let i=0;i<n;i++){const tile=tiles[i]!;if(refs[i]!==tile){refs[i]=tile;mask[i]=naturalTerrainWalkable256(tile.terrain)?0:1;}}
+  return mask;
+}
 export function blockedCells(world: World, physical=false,geometry?:StructureNavigationGeometry): Uint8Array {
   const version=world.schemaVersion;
   const blocked = new Uint8Array(world.width * world.height);
-  for (let i = 0; i < world.tiles.length; i++) {
-    const terrain = world.tiles[i]!.terrain;
-    if (!naturalTerrainWalkable256(terrain)) blocked[i] = 1;
-  }
+  const terrainMask=terrainBlockedMask(world.tiles);
+  blocked.set(terrainMask.length<=blocked.length?terrainMask:terrainMask.subarray(0,blocked.length));
+  geometry??=captureStructureNavigation(world);
   const add=(structure:World['structures'][number],cells?:readonly number[])=>{
     if (!physical&&isPassageDoor(structure.kind)&&structure.door?.forbidden)blocked[cellIndex(world,structure.x,structure.z)]=1;
     if ((structure.kind === 'wall'||structure.kind==='cooler'||structure.kind==='vent'||structure.kind==='electric-crematorium'||isShipPartKind276(structure.kind)||structure.kind==='geothermal-generator'||structure.kind==='nutrient-paste-dispenser') || version<22&&structure.kind === 'table'){

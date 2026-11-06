@@ -1,5 +1,6 @@
 import type { Cell, Structure, World } from './types.ts';
 import { isBlockMaterial } from './building-materials.ts';
+import { structureAnchors } from './structure-navigation.ts';
 
 /** Timed leaf segment, distinct from permission and logical opening. */
 export interface DoorState {
@@ -40,7 +41,9 @@ export function doorOpenness(s:Structure,tick:number):number {
   const d=s.door!;
   return Math.max(0,Math.min(1,d.from+(d.open?1:-1)*(tick-d.changedAt)/doorMotionTicks(s)));
 }
-export const doorAt=(world:World,c:Cell):Structure|undefined=>world.structures.find(s=>isPassageDoor(s.kind)&&s.x===c.x&&s.z===c.z);
+// Same first-in-array-order match as scanning world.structures, via the shared
+// anchor index (O(1) instead of O(structures) per pawn step).
+export const doorAt=(world:World,c:Cell):Structure|undefined=>{for(const s of structureAnchors(world).anchoredAt(c.x,c.z))if(isPassageDoor(s.kind))return s;return undefined;};
 export const doorWait=(s:Structure,tick:number):number=>s.door!.open?Math.max(0,(1-doorOpenness(s,tick))*doorMotionTicks(s)):doorOpenTicks(s);
 /** Doors retain a solid frame at diagonal side cells, including while open. */
 export const doorCorners=(world:World):ReadonlySet<number>=>new Set(world.structures.filter(s=>isPassageDoor(s.kind)).map(s=>s.z*world.width+s.x));

@@ -1,4 +1,4 @@
-import {roofCells} from './roof-rules.ts';
+import {roofCells,isRoofed} from './roof-rules.ts';
 import {caveLightSources256} from './cave-flora-256.ts';
 import {lightSources} from './light-sources.ts';
 import { annualNaturalLight } from './environment.ts';
@@ -37,8 +37,9 @@ export class LightEnvironmentCache {
   private readonly nonCaveLight=new LocalLightCache();
   speedAt(world:World,cell:Cell):number {
     if(Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height){
-      const sky=annualNaturalLight(world),index=cell.z*world.width+cell.x,roof=world.roofing;
-      if(Number.isFinite(sky)&&sky>=.3&&!roof?.constructed.includes(index)&&!roof?.natural?.thin.includes(index)&&!roof?.natural?.thick.includes(index))return 1;
+      const sky=annualNaturalLight(world),index=cell.z*world.width+cell.x;
+      // Roof arrays are kept sorted (see roof-rules containsRoofCell): binary search, not O(roofs).
+      if(Number.isFinite(sky)&&sky>=.3&&!isRoofed(world,index))return 1;
     }
     return this.read(world).speedAt(cell);
   }
