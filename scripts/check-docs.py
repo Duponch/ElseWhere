@@ -31,6 +31,7 @@ for name in current_pages:
     if documented != schema:
         errors.append(f'{name}: current schema header {documented!r}, expected {schema}')
 links = 0
+local_evidence = 0
 for name in files:
     source = root / name
     contents = source.read_text(encoding='utf-8')
@@ -40,6 +41,15 @@ for name in files:
             continue
         pathpart, _, anchor = target.partition('#')
         dest = source.parent / unquote(pathpart) if pathpart else source
+        # tmp/ is gitignored, machine-local evidence (runs, captures, profiles).
+        # It never exists in a fresh clone and is pruned to save disk space, so
+        # links into it are informative only and are not required to resolve.
+        try:
+            if dest.resolve().relative_to(root / 'tmp'):
+                local_evidence += 1
+                continue
+        except ValueError:
+            pass
         links += 1
         if not dest.exists():
             errors.append(f'{name}: missing {target}')
@@ -53,7 +63,7 @@ rows = re.findall(r'^\| (S\d{2}) \|.*$', matrix, flags=re.M)
 assert rows == [f'S{i:02}' for i in range(25)], rows
 families = re.findall(r'^\| (F\d) —', matrix, flags=re.M)
 assert families == [f'F{i}' for i in range(1,6)], families
-print(f'{len(files)} documents; {links} local links checked; 25 domain IDs and 5 validation families preserved.')
+print(f'{len(files)} documents; {links} local links checked ({local_evidence} links into machine-local tmp/ not required); 25 domain IDs and 5 validation families preserved.')
 for error in errors:
     print(error)
 if errors:
