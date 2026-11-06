@@ -2,6 +2,7 @@ import { footprintCells } from './definitions.ts';
 import { CONNECTION_RANGE } from './power-rules.ts';
 import { allowsWireConnection, isPowerConnector, transmitsPowerNow } from './power-grid.ts';
 import type { Cell, Structure, World } from './types.ts';
+import { filteredStructures,structureMembershipToken } from './structure-navigation.ts';
 
 interface PowerFootprint { readonly minX:number;readonly maxX:number;readonly minZ:number;readonly maxZ:number }
 
@@ -17,11 +18,25 @@ export interface PowerTopology {
 }
 /** Transmitting buildings form cardinal components over their actual footprint.
  * No DOM, navigation or room dependency; a wall does not interrupt a wire. */
+const isPowerSwitch=(s:Structure):boolean=>s.kind==='power-switch';
 export class PowerTopologyCache {
   private key='';
   private topology?:PowerTopology;
+  /* Exact fast path. The key lists id/kind/x/z/orientation/footprint of the
+   * transmitters; those fields are immutable and an unchanged membership token
+   * means the same structures in the same order. The only live input is each
+   * switch's switchOn, so the same token, size and switch states imply the
+   * same key, and therefore the same cached topology. */
+  private fast?:{token:object;width:number;height:number;switches:readonly Structure[];on:boolean[]};
   rebuilds=0;
   read(world:World):PowerTopology {
+    const token=structureMembershipToken(world),switches=filteredStructures(world,'power-switches',isPowerSwitch),fast=this.fast;
+    if(this.topology&&fast&&fast.token===token&&fast.width===world.width&&fast.height===world.height&&fast.switches===switches&&switches.every((s,i)=>(s.power?.switchOn!==false)===fast.on[i]))return this.topology;
+    const topology=this.readKeyed(world);
+    this.fast={token,width:world.width,height:world.height,switches,on:switches.map(s=>s.power?.switchOn!==false)};
+    return topology;
+  }
+  private readKeyed(world:World):PowerTopology {
     const transmitters=world.structures.filter(transmitsPowerNow);
     const key=`${world.width}:${world.height}|`+transmitters.map(s=>`${s.id}:${s.kind}:${s.x}:${s.z}:${s.orientation}:${s.footprint}`).join('|');
     if(this.topology&&key===this.key)return this.topology;
@@ -65,10 +80,16 @@ export function bestPowerParent(topology:PowerTopology,lamp:Cell,disallowedNets?
     }
   return best;
 }
+/* The id map and the connector list depend only on membership (ids and kinds
+ * are immutable), so they are shared per membership token; the same Map as
+ * `new Map(structures.map(s=>[s.id,s]))`, the same connectors in array order. */
+const idMaps=new WeakMap<object,ReadonlyMap<number,Structure>>();
+const isConnectorKind=(s:Structure):boolean=>isPowerConnector(s.kind);
 export function connectedPowerGroups(world:World,topology:PowerTopology):Structure[][] {
-  const byId=new Map(world.structures.map(s=>[s.id,s]));
+  const token=structureMembershipToken(world);let byId=idMaps.get(token);
+  if(!byId){byId=new Map(world.structures.map(s=>[s.id,s]));idMaps.set(token,byId);}
   const groups=new Map(topology.groups.map(ids=>[ids[0]!,ids.map(id=>byId.get(id)!)]));
-  for(const s of world.structures)if(isPowerConnector(s.kind)&&s.power?.parentId!=null) {
+  for(const s of filteredStructures(world,'power-connectors',isConnectorKind))if(s.power?.parentId!=null) {
     const net=topology.netOf.get(s.power.parentId);if(net!==undefined)groups.get(net)!.push(s);
   }
   return [...groups.values()];

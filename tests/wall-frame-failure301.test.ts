@@ -29,7 +29,8 @@ test('failure mutates the real owner, draws per stack before cell enumeration, a
  expect(p.jobId).toBe(job.id);expect('postureUntilCore301'in p).toBe(false);
 });
 test('five one-unit stacks recover five, keep partial placement, end unplaced holders and still rebuild without a retry owner',()=>{
- const {w,p,job}=fixture([1,1,1,1,1]);for(const t of w.tiles)t.terrain='rock';w.tiles[15*w.width+15]!.terrain='soil';
+ // Terrain edits replace the Tile objects (Tile contract), here the whole array.
+ const {w,p,job}=fixture([1,1,1,1,1]);w.tiles=w.tiles.map((t,i)=>({...t,terrain:i===15*w.width+15?'soil':'rock'}));
  const target:MaterialPile={id:w.nextId++,kind:'wood',item:'wood',quantity:74,owner:{type:'ground',x:15,z:15}};w.piles.push(target);
  const stream={rng:w.rng};for(let i=0;i<6;i++)healthRandom(stream);
  const result=failWoodWallFrame301(w,p,job);

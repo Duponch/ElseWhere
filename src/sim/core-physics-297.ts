@@ -19,6 +19,7 @@ import { advanceEmp } from './emp-effects.ts';
 import type { SpikeTrapWindow } from './spike-traps.ts';
 import {spikeTrapWindow297} from './spike-traps-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
+import {filteredStructures,structuresOfKind} from './structure-navigation.ts';
 
 
 export type CorePhysicsInvalidation297='macro'|'command'|'movement'|'impact';
@@ -32,6 +33,7 @@ export interface CoreStepResult297 {
 }
 /** Created at the last committed Core. Engine changes the real World phase and
  * advances movement BEFORE calling this synchronous physical owner. */
+const isWickCasket=(s:World['structures'][number]):boolean=>s.kind==='ancient-cryptosleep-casket'||s.kind==='cryptosleep-casket'||s.kind==='ship-cryptosleep-casket';
 export function createCorePhysics297(world:World) {
   if(!isCorePhysicalSchema297(Number(world.schemaVersion)))throw new RangeError('Core297 owner requires schema297');
   let lastCore=effectiveCore297(world),dirty=true;
@@ -40,8 +42,9 @@ export function createCorePhysics297(world:World) {
     const people=world.pawns.filter(p=>p.shooting||p.melee),targets=new Set(people.map(p=>p.melee?.order?.targetId));
     const animalTargets=new Set(world.wildlife?.animals.flatMap(a=>a.predation?[a.predation.targetId]:[])??[]);
     const shooters=[...people,...(world.mechanoids?.filter(m=>m.melee||m.ranged||m.stun||m.emp||m.stagger)??[]),...(world.wildlife?.animals.filter(a=>a.predation||a.manhunter||a.threat||a.strike||a.retaliation||a.stun||targets.has(a.id)||animalTargets.has(a.id))??[])];
-    const poppers=world.structures.filter(s=>s.kind==='firefoam-popper'&&s.firefoam290),turrets=world.structures.filter(s=>s.kind==='mini-turret'&&s.turret);
-    const caskets=world.structures.filter(s=>(s.kind==='ancient-cryptosleep-casket'||s.kind==='cryptosleep-casket'||s.kind==='ship-cryptosleep-casket')&&s.casketWick);
+    // Shared kind index (array order kept); the live fields are filtered here.
+    const poppers=structuresOfKind(world,'firefoam-popper').filter(s=>s.firefoam290),turrets=structuresOfKind(world,'mini-turret').filter(s=>s.turret);
+    const caskets=filteredStructures(world,'core-wick-caskets',isWickCasket).filter(s=>s.casketWick);
     return {turrets,owners:[...shooters.map(pawn=>({id:pawn.id,pawn})),...[...turrets,...caskets,...poppers].map(structure=>({id:structure.id,structure}))].sort((a,b)=>a.id-b.id)};
   };
   let captured:ReturnType<typeof captureOwners>|undefined;

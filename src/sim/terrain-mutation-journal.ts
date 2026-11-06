@@ -14,9 +14,24 @@ function advance(journal:Journal):boolean {
  if(journal.version===Number.MAX_SAFE_INTEGER){journal.poisoned=true;return false;}
  journal.version++;return true;
 }
+/** Physical write count of one actual Tile[], counted by every mark and bulk
+ * invalidation whether or not an encoder enrolled the array. Derived and never
+ * saved. Every in-place physical cell write must already mark the cell (see
+ * AGENTS.md), so the same Tile[] with the same count proves that no tile was
+ * replaced and no floor/bridge/snow/terrain field changed: simulation caches
+ * may skip a full tile scan on that proof. A replaced Tile[] starts at zero
+ * and fails the identity check. */
+const writeCounts=new WeakMap<readonly Tile[],number>();
+export function terrainWriteCount(tiles:readonly Tile[]):number {return writeCounts.get(tiles)??0;}
+const countWrite=(tiles:readonly Tile[])=>{writeCounts.set(tiles,(writeCounts.get(tiles)??0)+1);};
+/** Test/bench switch: caches relying on terrainWriteCount recompute and throw
+ * on any difference, which exposes a writer that forgot its mark. */
+export let verifyTerrainWriteCaches=false;
+export function setTerrainWriteCacheVerification(on:boolean):void {verifyTerrainWriteCaches=on;}
 /** Writers do nothing until a closed encoder owns a complete initial capture.
  * A mark is independent of tick and never consumes another reader's changes. */
 export function markTerrainCellChanged(tiles:readonly Tile[],index:number):void {
+ countWrite(tiles);
  const journal=journals.get(tiles);if(!journal||!advance(journal))return;
  if(tiles.length!==journal.length||!Number.isSafeInteger(index)||index<0||index>=journal.length){journal.fullVersion=journal.version;return;}
  journal.cells[journal.version%TERRAIN_JOURNAL_CAPACITY]=index;
@@ -24,6 +39,7 @@ export function markTerrainCellChanged(tiles:readonly Tile[],index:number):void 
 /** Bulk transactions cannot claim coverage of their internal speculative writes.
  * Call only at the actual commit; the next capture uses the complete codec. */
 export function invalidateTerrainJournal(tiles:readonly Tile[]):void {
+ countWrite(tiles);
  const journal=journals.get(tiles);if(journal&&advance(journal))journal.fullVersion=journal.version;
 }
 /** @internal Closed encoder boundary. Capture this BEFORE the full codec pass;

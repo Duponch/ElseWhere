@@ -132,9 +132,12 @@ test('a missing current tile still throws after a recent hit and the restored in
   expect(Object.is(query(plant),expected)).toBe(true);
 });
 
-test('a mature current plant still performs its original roof read before returning',()=>{
+// A mature plant is capped at 1 whatever its light: readPlantGrowth returns
+// before any roof read (exact shortcut), while a growing plant still reads.
+test('a mature current plant returns 1 without a roof read; a growing plant still reads roofs',()=>{
   const world=fixture(),plant=world.resources[0]!;plant.growth=1;delete plant.blight;delete plant.growthLight;
   const query=createPlantGrowthReader(world);
   Object.defineProperty(world,'roofing',{enumerable:true,configurable:true,get(){throw Error('actual roof read');}});
-  expect(()=>query(plant)).toThrow('actual roof read');expect(()=>plantGrowth(world,plant)).toThrow('actual roof read');
+  expect(query(plant)).toBe(1);expect(plantGrowth(world,plant)).toBe(1);
+  plant.growth=.5;expect(()=>query(plant)).toThrow('actual roof read');expect(()=>plantGrowth(world,plant)).toThrow('actual roof read');
 });

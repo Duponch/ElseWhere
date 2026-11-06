@@ -91,8 +91,10 @@ test('public topology recaptures source-order overlaps and same-tick vent edits 
   w.structures.push({id:w.nextId++,kind:'wall',x:2,z:4,orientation:0,footprint:'standard'});
   const blocked=cache.read(w);expect(blocked.rooms.map(r=>r.cells)).toEqual([air]);expect(blocked.indices[doorCell]).toBe(-1);
   w.structures.reverse();const reordered=cache.read(w);expect(reordered.rooms.map(r=>r.cells)).toEqual([air,[doorCell]]);expect(reordered.indices[doorCell]).toBe(1);
-  vent.orientation=0;const rotated=cache.read(w);expect(rotated).not.toBe(reordered);expect(rotated.vents).toEqual([]);
-  vent.orientation=1;w.tiles[72]!.terrain='rock';expect(cache.read(w).vents).toEqual([]);
-  w.tiles[72]!.terrain='grass';expect(cache.read(w).vents).toEqual([{id:vent.id,structureIndex:w.structures.indexOf(vent),sides:[-1,0]}]);
+  // Orientation and terrain are immutable in place (structure index and Tile
+  // contracts): an edit replaces the structures array or the Tile object.
+  w.structures=w.structures.map(s=>s===vent?{...vent,orientation:0 as const}:s);const rotated=cache.read(w);expect(rotated).not.toBe(reordered);expect(rotated.vents).toEqual([]);
+  w.structures=w.structures.map(s=>s.id===vent.id?vent:s);const grass=w.tiles[72]!;w.tiles[72]={...grass,terrain:'rock'};expect(cache.read(w).vents).toEqual([]);
+  w.tiles[72]=grass;expect(cache.read(w).vents).toEqual([{id:vent.id,structureIndex:w.structures.indexOf(vent),sides:[-1,0]}]);
   expect(first).toEqual(old);
 });

@@ -7,6 +7,9 @@ import { gunzipSync } from 'node:zlib';
 import { advanceWorldCore297 } from '../src/sim/engine.ts';
 import { deserializeWorld, serializeCampaign } from '../src/sim/serialization.ts';
 import { createHash } from 'node:crypto';
+import { setTerrainWriteCacheVerification } from '../src/sim/terrain-mutation-journal.ts';
+// VERIFY_TERRAIN_CACHES=1: caches keyed by the terrain write count recompute and throw on a difference.
+if (process.env.VERIFY_TERRAIN_CACHES) setTerrainWriteCacheVerification(true);
 
 const path = process.argv[2] ?? 'public/test-saves/v432/les-forges-crash-test.json';
 const macros = Number(process.argv[3] ?? 200);

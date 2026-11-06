@@ -92,7 +92,8 @@ test('engine-owned readers reset on append, replacement and explicit footprint c
   const w=scene(),reader=structureNavigationReader(w),first=reader.read();expect(reader.read()).toBe(first);
   const table=building(w,'table',6,6);const appended=reader.read();expect(appended).not.toBe(first);expect(canStandAt(w,{x:6,z:6},appended)).toBe(false);
   w.structures=[{...table,x:9}];const replaced=reader.read();expect(replaced).not.toBe(appended);expect(canStandAt(w,{x:6,z:6},replaced)).toBe(true);
-  w.structures[0]!.x=11;expect(canStandAt(w,{x:11,z:6})).toBe(false);expect(canStandAt(w,{x:9,z:6})).toBe(true);
+  // Position is immutable in place (shared index contract): a footprint edit replaces the array.
+  w.structures=[{...w.structures[0]!,x:11}];expect(canStandAt(w,{x:11,z:6})).toBe(false);expect(canStandAt(w,{x:9,z:6})).toBe(true);
   reader.invalidate();const moved=reader.read();expect(moved).not.toBe(replaced);expect(canStandAt(w,{x:11,z:6},moved)).toBe(false);expect(canStandAt(w,{x:9,z:6},moved)).toBe(true);
 });
 

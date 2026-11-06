@@ -15,6 +15,7 @@ import { FLOOR_DEFINITIONS } from './flooring.ts';
 import { spikeTrapKnowsOf,spikeTrapNavigationActor,SPIKE_TRAP_SEARCH_COST,SPIKE_TRAP_WALK_DELAY } from './spike-trap-state.ts';
 import type { Cell, StructureKind, World } from './types.ts';
 import { captureStructureNavigation,type StructureNavigationGeometry } from './structure-navigation.ts';
+import { terrainWriteCount,verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
 
 /** Core natural floors cost two Core ticks. Historical grass/soil stay neutral. */
 export function terrainTravelDelay(world:World,index:number):number {
@@ -116,16 +117,27 @@ export function canStandAt(world:World,cell:Cell,geometry?:StructureNavigationGe
 }
 /** For a batch of point queries in one read-only decision. Discard before any
  * world mutation; this is not a shared navigation or cross-actor cache. */
+/* Structure part of the standability mask, per (immutable) shared geometry and
+ * rule era: kinds never change, so it is fixed for a geometry. Indexed by the
+ * in-map cell, exactly the set the per-call capture used to rebuild. */
+const structureStandDenied=new WeakMap<StructureNavigationGeometry,{width:number;size:number;masks:(Uint8Array|undefined)[]}>();
+function structureDeniedMask(world:World,geometry:StructureNavigationGeometry,legacy:boolean):Uint8Array {
+  const size=world.width*world.height;let entry=structureStandDenied.get(geometry);
+  if(!entry||entry.width!==world.width||entry.size!==size){entry={width:world.width,size,masks:[]};structureStandDenied.set(geometry,entry);}
+  const slot=legacy?1:0;let mask=entry.masks[slot];
+  if(!mask){mask=new Uint8Array(size);for(const {structure:s,cells} of geometry.entries)if(legacy?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand)for(const i of cells)if(i>=0&&i<size)mask[i]=1;entry.masks[slot]=mask;}
+  return mask;
+}
 export function captureStandability(world:World,geometry?:StructureNavigationGeometry):(cell:Cell)=>boolean {
   const version=world.schemaVersion;
   geometry??=captureStructureNavigation(world);
   const denied=new Set<number>(),add=(s:Parameters<typeof footprintCells>[0])=>{for(const c of footprintCells(s))denied.add(c.z*world.width+c.x);};
-  if(geometry){for(const {structure:s,cells} of geometry.entries)if(version<22?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand)for(const i of cells)denied.add(i);}
-  else for(const s of world.structures)if(version<22?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand)add(s);
+  const structures=geometry?structureDeniedMask(world,geometry,version<22):undefined;
+  if(!geometry)for(const s of world.structures)if(version<22?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand)add(s);
   for(const j of world.jobs)if(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')add(j);
   if(version>=28)for(const p of world.piles)if(p.kind==='chunk'&&p.owner.type==='ground')denied.add(p.owner.z*world.width+p.owner.x);
   return cell=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height
-    &&!['rock','water'].includes(world.tiles[cell.z*world.width+cell.x]!.terrain)&&!denied.has(cell.z*world.width+cell.x);
+    &&!['rock','water'].includes(world.tiles[cell.z*world.width+cell.x]!.terrain)&&!structures?.[cell.z*world.width+cell.x]&&!denied.has(cell.z*world.width+cell.x);
 }
 export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry):number {
   const version=world.schemaVersion;
@@ -146,22 +158,79 @@ export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:Du
     if(footprintContains(s,from)&&FURNITURE_TRAVEL[s.kind].repeat)previousRepeats=true;
   }
   let objectDelay=target?FURNITURE_TRAVEL[target].delay:frameAt(world,to)?FRAME_TRAVEL_DELAY:0;
-  let repeats=target?FURNITURE_TRAVEL[target].repeat:false;
-  if(version>=28)for(const p of world.piles)if(p.kind==='chunk'&&p.owner.type==='ground') {
-    if(p.owner.x===to.x&&p.owner.z===to.z){objectDelay=Math.max(objectDelay,4.2);repeats=true;}
-    if(p.owner.x===from.x&&p.owner.z===from.z)previousRepeats=true;
+  let repeats=target?FURNITURE_TRAVEL[target].repeat:false,materialDelay=0;
+  // One pass over the piles, cell test first: only ground piles on `to` or
+  // `from` matter, for the chunk (repeat) rule and the material-floor rule.
+  for(const p of world.piles){
+    const owner=p.owner;if(owner.type!=='ground')continue;
+    const atTo=owner.x===to.x&&owner.z===to.z,atFrom=owner.x===from.x&&owner.z===from.z;
+    if(!atTo&&!atFrom)continue;
+    if(version>=28&&p.kind==='chunk'){if(atTo){objectDelay=Math.max(objectDelay,4.2);repeats=true;}if(atFrom)previousRepeats=true;}
+    if(atTo&&(version>=29&&p.kind==='steel'||version>=32&&p.kind==='blocks'||version>=41&&p.kind==='component'||version>=123&&(p.kind==='gold'||p.kind==='plasteel'||p.kind==='advanced-component')))materialDelay=1.4;
   }
-  const materialDelay=world.piles.some(p=>(version>=29&&p.kind==='steel'||version>=32&&p.kind==='blocks'||version>=41&&p.kind==='component'||version>=123&&(p.kind==='gold'||p.kind==='plasteel'||p.kind==='advanced-component'))&&p.owner.type==='ground'&&p.owner.x===to.x&&p.owner.z===to.z)?1.4:0;
   const actor=trap?spikeTrapNavigationActor(world,from):undefined,overrideCost=terrainOverride?.coreCost(world.tiles[to.z*world.width+to.x]!);
   return Math.max(repeats&&previousRepeats?0:objectDelay,materialDelay,(overrideCost===undefined?terrainTravelDelay(world,to.z*world.width+to.x):overrideCost/10),world.snow?snowTravelDelay(world.tiles[to.z*world.width+to.x]!.snowDepth??0):0)
     +(actor&&spikeTrapKnowsOf(world,actor)?SPIKE_TRAP_WALK_DELAY:0);
 }
-/** Captured once per synchronous search. No shared mutation or cross-tick cache. */
+interface TerrainCostLayer {terrain:Uint8Array|Uint16Array;maximum:number;marsh:ReadonlyMap<number,number>}
+/** Per-cell terrain search costs, a pure function of the tiles (terrain, floor,
+ * bridge, snow), the schema, site/snow flags and the drafted marsh perception.
+ * Without a terrain override the layer is reused while the same Tile[] keeps
+ * the same physical write count (every physical cell write marks its cell, see
+ * terrain-mutation-journal); flooring can mutate between actors within a tick
+ * and is still observed through that count. Consumers only read the layer. */
+const terrainLayers=new WeakMap<readonly World['tiles'][number][],{writes:number;version:number;site:boolean;snow:boolean;layers:(TerrainCostLayer|undefined)[]}>();
+function terrainCostLayer(world:World,version:number,drafted:boolean,snow:boolean,terrainOverride?:DuckTerrainOverride256):TerrainCostLayer {
+  const tiles=world.tiles,hasSite=!!world.site;
+  if(terrainOverride)return computeTerrainCostLayer(world,version,drafted,snow,hasSite,terrainOverride);
+  const writes=terrainWriteCount(tiles);let entry=terrainLayers.get(tiles);
+  if(!entry||entry.writes!==writes||entry.version!==version||entry.site!==hasSite||entry.snow!==snow){entry={writes,version,site:hasSite,snow,layers:[]};terrainLayers.set(tiles,entry);}
+  const slot=drafted?1:0,cached=entry.layers[slot];
+  if(cached){
+    if(verifyTerrainWriteCaches){const fresh=computeTerrainCostLayer(world,version,drafted,snow,hasSite);
+      if(fresh.maximum!==cached.maximum||fresh.terrain.length!==cached.terrain.length||fresh.terrain.some((v,i)=>v!==cached.terrain[i])||fresh.marsh.size!==cached.marsh.size||[...fresh.marsh].some(([k,v])=>cached.marsh.get(k)!==v))throw Error('Unmarked terrain write under an unchanged Tile[] count');}
+    return cached;
+  }
+  return entry.layers[slot]=computeTerrainCostLayer(world,version,drafted,snow,hasSite);
+}
+function computeTerrainCostLayer(world:World,version:number,drafted:boolean,snow:boolean,hasSite:boolean,terrainOverride?:DuckTerrainOverride256):TerrainCostLayer {
+  let terrain:Uint8Array|Uint16Array=new Uint8Array(world.tiles.length);let terrainMaximum=0;const marshPerceptionCosts=new Map<number,number>();
+  // Capture terrain on every decision: flooring can mutate between actors
+  // within a tick. Read floor definitions when a floor is present, like the
+  // scalar travel rule, without scanning the whole map through that helper.
+  const tiles=world.tiles;
+  const marshPerception=drafted?MARSH_PERCEIVED_CORE.drafted:MARSH_PERCEIVED_CORE.ordinary;
+  // Definition facts are frozen; retain only their conversions in this one
+  // capture. Every Tile and override is still read in the original order.
+  const naturalByKind=new Map<World['tiles'][number]['terrain'],{pathCost:number;perceivedCore:number;perceivedCost:number}|null>();
+  const readNatural=(kind:World['tiles'][number]['terrain'])=>{
+    const cached=naturalByKind.get(kind);if(cached!==undefined)return cached;
+    const definition=naturalTerrainCosts256(kind),perceivedCore=definition?(drafted?definition.perceivedDraftedCore:definition.perceivedCivilCore):0;
+    const captured=definition?{pathCost:Math.round(definition.pathCostCore/30*1000),perceivedCore,perceivedCost:Math.round(perceivedCore/30*1000)}:null;
+    naturalByKind.set(kind,captured);return captured;
+  };
+  for(let i=0;i<tiles.length;i++){
+    const tile=tiles[i]!,kind=tile.terrain;
+    let cost=tile.floor?Math.round(FLOOR_DEFINITIONS[tile.floor].pathCost/10/3*1000):kind==='rough-stone'||kind==='rich-soil'||kind==='gravel'||hasSite&&kind==='grass'||isCorePhysicalSchema297(Number(version))&&(kind==='grass'||kind==='soil')?67:0;
+    const natural=readNatural(kind);
+    if(natural&&!tile.bridge&&!tile.floor)cost=natural.pathCost;
+    else if(isWetTerrain(kind)&&!tile.bridge&&!tile.floor)cost=Math.round(MARSH_PATH_COST_CORE/30*1000);
+    const override=terrainOverride?.coreCost(tile);if(override!==undefined)cost=Math.round(override/30*1000);
+    if(snow)cost=Math.max(cost,snowSearchCost(tile.snowDepth??0));
+    const perceivedOverride=terrainOverride?.perceivedCore(tile),perception=perceivedOverride??(natural?natural.perceivedCore:isWetTerrain(kind)?marshPerception:0);
+    if(perception&&!tile.bridge&&!tile.floor)marshPerceptionCosts.set(i,perceivedOverride==null&&natural?natural.perceivedCost:Math.round(perception/30*1000));
+    if(cost>255&&terrain instanceof Uint8Array){const wide:Uint16Array=new Uint16Array(terrain.length);wide.set(terrain);terrain=wide;}
+    if(cost){terrain[i]=cost;if(cost>terrainMaximum)terrainMaximum=cost;}
+  }
+  return {terrain,maximum:terrainMaximum,marsh:marshPerceptionCosts};
+}
+/** Captured once per synchronous search. The terrain layer is shared only on an
+ * exact unchanged-tiles proof (terrainCostLayer); every other part is fresh. */
 export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry):{costs:NavigationCostLookup|undefined;repeaters:ReadonlySet<number>;stops:ReadonlySet<number>;floors:NavigationCostLookup;coreMoveCosts297?:{cardinal:number;diagonal:number}} {
   const version=world.schemaVersion,width=world.width,snow=!!world.snow;
   geometry??=captureStructureNavigation(world);
   const costs=new Map(frameCosts(world)),repeaters=new Set<number>(),stops=new Set<number>();
-  const actor=version>=226?spikeTrapNavigationActor(world,origin):undefined,knows=!!actor&&spikeTrapKnowsOf(world,actor),traps=new Map<number,number>(),marshPerceptionCosts=new Map<number,number>();
+  const actor=version>=226?spikeTrapNavigationActor(world,origin):undefined,knows=!!actor&&spikeTrapKnowsOf(world,actor),traps=new Map<number,number>();
   if(version>=22) {
     const add=(s:World['structures'][number],i:number)=>{
       const p=FURNITURE_TRAVEL[s.kind];
@@ -177,35 +246,12 @@ export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTe
   // A single captured byte per cell replaces two mostly dense Maps on a site.
   // Objects remain sparse; both lookups retain the same terrain floor.
   let terrain:Uint8Array|Uint16Array=new Uint8Array(world.tiles.length);let terrainMaximum=0;
+  let marshPerceptionCosts:ReadonlyMap<number,number>=new Map<number,number>();
   if(version>=28) {
     for(const p of world.piles)if(p.kind==='chunk'&&p.owner.type==='ground'){const i=p.owner.z*width+p.owner.x;costs.set(i,Math.max(costs.get(i)??0,1400));repeaters.add(i);stops.add(i);}
-    // Capture terrain on every decision: flooring can mutate between actors
-    // within a tick. Read floor definitions when a floor is present, like the
-    // scalar travel rule, without scanning the whole map through that helper.
-    const tiles=world.tiles,hasSite=!!world.site;
-    const drafted=!!actor&&'draft' in actor&&!!actor.draft,marshPerception=drafted?MARSH_PERCEIVED_CORE.drafted:MARSH_PERCEIVED_CORE.ordinary;
-    // Definition facts are frozen; retain only their conversions in this one
-    // capture. Every Tile and override is still read in the original order.
-    const naturalByKind=new Map<World['tiles'][number]['terrain'],{pathCost:number;perceivedCore:number;perceivedCost:number}|null>();
-    const readNatural=(kind:World['tiles'][number]['terrain'])=>{
-      const cached=naturalByKind.get(kind);if(cached!==undefined)return cached;
-      const definition=naturalTerrainCosts256(kind),perceivedCore=definition?(drafted?definition.perceivedDraftedCore:definition.perceivedCivilCore):0;
-      const captured=definition?{pathCost:Math.round(definition.pathCostCore/30*1000),perceivedCore,perceivedCost:Math.round(perceivedCore/30*1000)}:null;
-      naturalByKind.set(kind,captured);return captured;
-    };
-    for(let i=0;i<tiles.length;i++){
-      const tile=tiles[i]!,kind=tile.terrain;
-      let cost=tile.floor?Math.round(FLOOR_DEFINITIONS[tile.floor].pathCost/10/3*1000):kind==='rough-stone'||kind==='rich-soil'||kind==='gravel'||hasSite&&kind==='grass'||isCorePhysicalSchema297(Number(version))&&(kind==='grass'||kind==='soil')?67:0;
-      const natural=readNatural(kind);
-      if(natural&&!tile.bridge&&!tile.floor)cost=natural.pathCost;
-      else if(isWetTerrain(kind)&&!tile.bridge&&!tile.floor)cost=Math.round(MARSH_PATH_COST_CORE/30*1000);
-      const override=terrainOverride?.coreCost(tile);if(override!==undefined)cost=Math.round(override/30*1000);
-      if(snow)cost=Math.max(cost,snowSearchCost(tile.snowDepth??0));
-      const perceivedOverride=terrainOverride?.perceivedCore(tile),perception=perceivedOverride??(natural?natural.perceivedCore:isWetTerrain(kind)?marshPerception:0);
-      if(perception&&!tile.bridge&&!tile.floor)marshPerceptionCosts.set(i,perceivedOverride==null&&natural?natural.perceivedCost:Math.round(perception/30*1000));
-      if(cost>255&&terrain instanceof Uint8Array){const wide:Uint16Array=new Uint16Array(terrain.length);wide.set(terrain);terrain=wide;}
-      if(cost){terrain[i]=cost;if(cost>terrainMaximum)terrainMaximum=cost;}
-    }
+    const drafted=!!actor&&'draft' in actor&&!!actor.draft;
+    const layer=terrainCostLayer(world,version,drafted,snow,terrainOverride);
+    terrain=layer.terrain;terrainMaximum=layer.maximum;marshPerceptionCosts=layer.marsh;
   }
   if(version>=29)for(const p of world.piles)if((p.kind==='steel'||version>=32&&p.kind==='blocks'||version>=41&&p.kind==='component'||version>=123&&(p.kind==='gold'||p.kind==='plasteel'||p.kind==='advanced-component'))&&p.owner.type==='ground'){const i=p.owner.z*width+p.owner.x;floors.set(i,Math.max(floors.get(i)??0,467));costs.set(i,Math.max(costs.get(i)??0,467));}
   // Door wait is added after the terrain/object/material maximum, not compared

@@ -1,6 +1,7 @@
 import {roomBarrierValue,roomBarrierCells} from './room-barriers.ts';
 import type { World } from './types.ts';
 import {structureMembershipToken} from './structure-navigation.ts';
+import { terrainWriteCount, verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
 
 export interface RoomSpace {
   readonly kind: 'space';
@@ -44,6 +45,8 @@ export class RoomTopologyCache {
   private topology: RoomTopology | undefined;
   private barrierToken: object | undefined;
   private tileRefs: (World['tiles'][number] | undefined)[] = [];
+  private scannedTiles?: World['tiles'];
+  private scannedWrites = -1;
 
   read(world: Pick<World, 'width' | 'height' | 'tiles' | 'structures'>): RoomTopology {
     const { width, height } = world, size = width * height;
@@ -53,6 +56,7 @@ export class RoomTopologyCache {
       this.scratch = new Uint8Array(size);
       this.queue = new Int32Array(size);
       this.rocks = new Uint8Array(size);
+      this.scannedTiles = undefined;
     }
     // Detect in-place edits without rebuilding/writing the full combined mask
     // at each read. Barrier order is captured because later objects win.
@@ -76,14 +80,20 @@ export class RoomTopologyCache {
     }
     // Tile objects never change `terrain` in place (terrain edits replace the
     // Tile), so only replaced tiles need their rock bit re-read.
-    if (this.tileRefs.length !== size) { this.tileRefs = new Array(size); }
-    const tiles = world.tiles, refs = this.tileRefs;
-    for (let i = 0; i < size; i++) {
-      const tile = tiles[i]!;
-      if (refs[i] === tile) continue;
-      refs[i] = tile;
-      const value = tile.terrain === 'rock' ? 1 : 0;
-      if (this.rocks[i] !== value) { this.rocks[i] = value; inputChanged = true; }
+    if (this.tileRefs.length !== size) { this.tileRefs = new Array(size); this.scannedTiles = undefined; }
+    const tiles = world.tiles, refs = this.tileRefs, writes = terrainWriteCount(tiles);
+    // Same Tile[] and write count: no tile was replaced since the last scan.
+    const unchanged = tiles === this.scannedTiles && writes === this.scannedWrites && tiles.length === size;
+    if (!unchanged || verifyTerrainWriteCaches) {
+      for (let i = 0; i < size; i++) {
+        const tile = tiles[i]!;
+        if (refs[i] === tile) continue;
+        if (unchanged) throw Error('Unmarked terrain write under an unchanged Tile[] count');
+        refs[i] = tile;
+        const value = tile.terrain === 'rock' ? 1 : 0;
+        if (this.rocks[i] !== value) { this.rocks[i] = value; inputChanged = true; }
+      }
+      this.scannedTiles = tiles; this.scannedWrites = writes;
     }
     if (!inputChanged) return this.topology!;
     const mask = this.scratch;
