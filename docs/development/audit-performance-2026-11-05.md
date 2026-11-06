@@ -195,6 +195,12 @@ Les changements, sans effet sur la simulation (empreintes inchangées) :
 
 Les patchs s’accumulent côté affichage jusqu’à la publication complète suivante, qui les remplace. Hors du mode frontière, toutes les anciennes barrières sont conservées.
 
+**Vérification dans le client réel** (Les Forges, ×1, 30 s), en comparant chaque patch avec ce que calcule la publication complète suivante :
+
+- 142 colons patchés sont restés sur la même case, dans le même état et sur la même tâche. Leurs positions cibles, décalage de contact compris, et leurs poses de travail sont **identiques**. Seule l’orientation des colons en mouvement ou oisifs diffère : leur cap évolue entre les deux instants.
+- 22 portes patchées : état (`open`, `from`, `changedAt`) **identique** dans les 22 cas.
+- Aucun arrêt ni défaut graphique sur Les Éclaircies (×1, ×6) ni sur Les Forges (×1, ×6).
+
 Fichiers épinglés modifiés volontairement, avec mise à jour de leur empreinte :
 - `core-phase-data-297.ts` : le lecteur strict valide `poses297` et `doors297`, et accepte en mode frontière des allocations non expliquées par un projectile ;
 - `core-movement-297.ts` : sépare les changements différés et les portes.
