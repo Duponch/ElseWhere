@@ -63,6 +63,23 @@ function grazeablePlant(r:Resource,growth:number,world:World):boolean {
   if(world.snow&&r.kind!=='tree'&&(world.tiles[r.z*world.width+r.x]!.snowDepth??0)>.5)return false;
   return growth>=(r.species==='healroot-wild'||r.kind==='healroot'||r.kind==='haygrass'?.65:.1)&&plantNutrition(r,growth)>0;
 }
+/* Animal-independent grazing candidates of one local tick, in resource order.
+ * Every structural plant change replaces world.resources (identity check);
+ * the only in-place change during wildlife decisions is a partial graze,
+ * which each reader re-validates through growth/growthTick. */
+interface GrazingCandidate {readonly r:Resource;readonly growth:number;readonly sourceGrowth:number|undefined;readonly sourceTick:number|undefined;readonly tree:boolean}
+const grazingCaches=new WeakMap<World,{resources:readonly Resource[];tick:number;snow:unknown;candidates:GrazingCandidate[]}>();
+function grazingCandidates(world:World):readonly GrazingCandidate[] {
+  const cached=grazingCaches.get(world);
+  if(cached&&cached.resources===world.resources&&cached.tick===world.tick&&cached.snow===world.snow)return cached.candidates;
+  const candidates:GrazingCandidate[]=[];
+  for(const r of world.resources)if((r.kind!=='haygrass'||world.schemaVersion>=227)&&isPlant(r)&&!plantLeafless(world,r)){
+    const growth=plantGrowth(world,r);
+    if(grazeablePlant(r,growth,world))candidates.push({r,growth,sourceGrowth:r.growth,sourceTick:r.growthTick,tree:r.kind==='tree'});
+  }
+  grazingCaches.set(world,{resources:world.resources,tick:world.tick,snow:world.snow,candidates});
+  return candidates;
+}
 export function animalFoods(world:World,a:WildAnimal,readArea:(a:WildAnimal)=>AnimalAreaPolicy287|undefined=a=>captureAnimalAreaPolicy287(world,a)):AnimalFood[] {
   const result:AnimalFood[]=[];
   const capacity=animalNutritionMax(a);
@@ -73,9 +90,12 @@ export function animalFoods(world:World,a:WildAnimal,readArea:(a:WildAnimal)=>An
   for(const other of world.wildlife?.animals??[])if(other.id!==a.id&&other.meal?.kind==='plant')claimedPlants.add(other.meal.id);
   const reservedPlantCells=new Set<number>();
   for(const job of world.jobs)if(job.reservedBy!==null&&(job.kind==='harvest'||job.kind==='cut'||job.kind==='sow'))reservedPlantCells.add(job.z*world.width+job.x);
-  if(animalPlantDiet256(a)??!animalSpecies(a.species).predator)for(const r of world.resources)if((r.kind!=='haygrass'||world.schemaVersion>=227)&&inside(r)&&(!pen||pen.has(r.z*world.width+r.x))&&isPlant(r)&&(animalPlantDiet256(a,r.kind==='tree')??true)&&!plantLeafless(world,r)) {
-    const growth=plantGrowth(world,r);
-    if(grazeablePlant(r,growth,world)&&!claimedPlants.has(r.id)&&!reservedPlantCells.has(r.z*world.width+r.x))result.push({id:r.id,kind:'plant',x:r.x,z:r.z,quantity:1});
+  if(animalPlantDiet256(a)??!animalSpecies(a.species).predator)for(const entry of grazingCandidates(world)){
+    const r=entry.r;
+    // A partial graze earlier in this tick rewrites growth in place: re-read it.
+    let growth=entry.growth;
+    if(r.growth!==entry.sourceGrowth||r.growthTick!==entry.sourceTick){growth=plantGrowth(world,r);if(!grazeablePlant(r,growth,world))continue;}
+    if(inside(r)&&(!pen||pen.has(r.z*world.width+r.x))&&(animalPlantDiet256(a,entry.tree)??true)&&!claimedPlants.has(r.id)&&!reservedPlantCells.has(r.z*world.width+r.x))result.push({id:r.id,kind:'plant',x:r.x,z:r.z,quantity:1});
   }
   let reservations:ReadonlyMap<number,number>|undefined;
   for(const p of world.piles)if(animalPileFood(world,a,p)&&p.owner.type==='ground'&&inside(p.owner)&&(!pen||pen.has(p.owner.z*world.width+p.owner.x))) {
