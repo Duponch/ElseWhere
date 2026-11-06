@@ -36,6 +36,41 @@ export function noise(x: number, z: number, salt = 0): number {
  * per-cell silhouettes and colors stay intact; only submissions are combined.
  * Dynamic pawns and cargo remain GPU-instanced and are never baked here.
  */
+/** The exact getX..getW values of the first `size` components of every item of
+ * an attribute (denormalized like the accessors). A narrower attribute keeps a
+ * plain array so an out-of-range accessor read stays `undefined`, as before. */
+function components(attribute:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,size:1|2|3|4):ArrayLike<number>&{[index:number]:number}{
+  const count=attribute.count,out:Float64Array|number[]=attribute.itemSize>=size?new Float64Array(count*size):new Array<number>(count*size);
+  for(let i=0;i<count;i++){
+    const at=i*size;out[at]=attribute.getX(i);
+    if(size>1)out[at+1]=attribute.getY(i);
+    if(size>2)out[at+2]=attribute.getZ(i);
+    if(size>3)out[at+3]=attribute.getW(i);
+  }
+  return out;
+}
+/** Bit-identical to `BufferGeometry.computeBoundingSphere()` (three 0.186) for a
+ * plain, non-normalized xyz Float32 position array without morph targets: same
+ * Math.min/Math.max box, same (min+max)*0.5 center, same squared distances in
+ * the same order. Reads the typed array directly instead of building a Vector3
+ * per vertex twice. Returns undefined on NaN so the caller keeps three's report. */
+export function exactBoundingSphere(positions:Float32Array):THREE.Sphere|undefined {
+  let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
+  for(let i=0;i+2<positions.length;i+=3){
+    const x=positions[i]!,y=positions[i+1]!,z=positions[i+2]!;
+    minX=Math.min(minX,x);minY=Math.min(minY,y);minZ=Math.min(minZ,z);
+    maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);maxZ=Math.max(maxZ,z);
+  }
+  const empty=maxX<minX||maxY<minY||maxZ<minZ;
+  const cx=empty?0:(minX+maxX)*.5,cy=empty?0:(minY+maxY)*.5,cz=empty?0:(minZ+maxZ)*.5;
+  let maxRadiusSq=0;
+  for(let i=0;i+2<positions.length;i+=3){
+    const dx=cx-positions[i]!,dy=cy-positions[i+1]!,dz=cz-positions[i+2]!;
+    maxRadiusSq=Math.max(maxRadiusSq,dx*dx+dy*dy+dz*dz);
+  }
+  const radius=Math.sqrt(maxRadiusSq);
+  return Number.isNaN(radius)?undefined:new THREE.Sphere(new THREE.Vector3(cx,cy,cz),radius);
+}
 export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.BufferGeometry; items: Placement[] }[], mat: THREE.Material, shadows = true, includeUv = false,faceUv=false,packedSurface=false,prepared?:ResourceSurfaceIdentityWriter): THREE.Mesh | undefined {
   const vertexCount = parts.reduce((sum, part) => sum + part.geometry.getAttribute('position').count * part.items.length, 0);
   const indexCount = parts.reduce((sum, part) => sum + (part.geometry.index?.count ?? part.geometry.getAttribute('position').count) * part.items.length, 0);
@@ -75,6 +110,15 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
     const sourceBrush=resourceBrushData(geometry);
     const rawFace=geometry.getAttribute('surfaceFaceUv')??uv,strokeUv=geometry.getAttribute('surfaceStrokeUv')??uv,strokeFace=geometry.getAttribute('surfaceStrokeFace');
     if(hasSurface&&items.length&&(!rawFace||!strokeUv||!strokeFace))throw Error('Complete shared natural surface fields required before merge');
+    if(!items.length){geometry.dispose();continue;}
+    // The template is read once per part (exact getX..getW values) instead of
+    // through accessor calls for every item and vertex. Normal lengths depend
+    // only on the template and the item scale, so equal scales share them.
+    const count=pos.count,P=components(pos,3),N=components(normal,3),UV=uv?components(uv,2):undefined;
+    const BU=sourceBakedUv?components(sourceBakedUv,3):undefined,RF=surfaceUvs?components(rawFace!,2):undefined,SU=surfaceUvs?components(strokeUv!,2):undefined,SF=strokeFace?components(strokeFace,1):undefined;
+    const SPW=sourcePaint?components(sourcePaint,4):undefined,SE=sourceExpand?components(sourceExpand,3):undefined;
+    const sourceIndex=geometry.index?components(geometry.index,1):undefined,indexLength=sourceIndex?sourceIndex.length:count;
+    const lengthsByScale=new Map<string,Float64Array>();
     for (const item of items) {
       const preparedId=prepared?.identity(geometry,item)??-1;
       const firstIndex = index,firstVertex=vertex;
@@ -89,23 +133,25 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
       const referenceColor=paint?scratchReferenceColor.setHex(item.referenceColor??item.color??0xffffff):undefined;
       const stonePigment=item.pigment==='stone';
       let facetX=NaN,facetZ=NaN,facetTint:readonly [number,number,number]=STONE_FACET_TINTS[0];
-      for (let i = 0; i < pos.count; i++) {
+      const scaleKey=`${sx}|${sy}|${sz}`;let lengths=lengthsByScale.get(scaleKey);
+      if(!lengths){lengths=new Float64Array(count);for(let i=0;i<count;i++)lengths[i]=Math.hypot(N[i*3]!/sx,N[i*3+1]!/sy,N[i*3+2]!/sz);lengthsByScale.set(scaleKey,lengths);}
+      for (let i = 0; i < count; i++) {
         if(preparedIds)preparedIds[vertex+i]=preparedId;
-        const x = pos.getX(i) * sx, z = pos.getZ(i) * sz;
-        const nx = normal.getX(i) / sx, ny = normal.getY(i) / sy, nz = normal.getZ(i) / sz;
-        const length = Math.hypot(nx, ny, nz), offset = (vertex + i) * 3;
+        const i3=i*3,x = P[i3]! * sx, z = P[i3+2]! * sz;
+        const nx = N[i3]! / sx, ny = N[i3+1]! / sy, nz = N[i3+2]! / sz;
+        const length = lengths[i]!, offset = (vertex + i) * 3;
         positions[offset] = item.x + x * cosine + z * sine;
-        positions[offset + 1] = item.y + pos.getY(i) * sy;
+        positions[offset + 1] = item.y + P[i3+1]! * sy;
         positions[offset + 2] = item.z + z * cosine - x * sine;
         normals[offset] = (nx * cosine + nz * sine) / length;
         normals[offset + 1] = ny / length;
         normals[offset + 2] = (nz * cosine - nx * sine) / length;
-        if(bakedUvs){bakedUvs[offset]=sourceBakedUv.getX(i);bakedUvs[offset+1]=sourceBakedUv.getY(i);bakedUvs[offset+2]=sourceBakedUv.getZ(i);}
-        if(surfaceUvs){const at=(vertex+i)*4;surfaceUvs[at]=rawFace!.getX(i);surfaceUvs[at+1]=rawFace!.getY(i);surfaceUvs[at+2]=packedSurface&&sourceBakedUv?sourceBakedUv.getX(i):strokeUv!.getX(i);surfaceUvs[at+3]=packedSurface&&sourceBakedUv?sourceBakedUv.getY(i):strokeUv!.getY(i);}
-        if(paint){const at=(vertex+i)*4;paint[at]=referenceColor!.r;paint[at+1]=referenceColor!.g;paint[at+2]=referenceColor!.b;const profile=item.profile??sourcePaint?.getW(i)??0;paint[at+3]=profile+(surfaceUvs?128*(packedSurface?(sourceBakedUv?.getZ(i)??31)+32*strokeFace!.getX(i):strokeFace!.getX(i)):0);}
-        if(wearExpand&&sourceExpand){const ex=sourceExpand.getX(i)*sx,ey=sourceExpand.getY(i)*sy,ez=sourceExpand.getZ(i)*sz;wearExpand[offset]=ex*cosine+ez*sine;wearExpand[offset+1]=ey;wearExpand[offset+2]=ez*cosine-ex*sine;}
+        if(bakedUvs){bakedUvs[offset]=BU![i3]!;bakedUvs[offset+1]=BU![i3+1]!;bakedUvs[offset+2]=BU![i3+2]!;}
+        if(surfaceUvs){const at=(vertex+i)*4;surfaceUvs[at]=RF![i*2]!;surfaceUvs[at+1]=RF![i*2+1]!;surfaceUvs[at+2]=packedSurface&&BU?BU[i3]!:SU![i*2]!;surfaceUvs[at+3]=packedSurface&&BU?BU[i3+1]!:SU![i*2+1]!;}
+        if(paint){const at=(vertex+i)*4;paint[at]=referenceColor!.r;paint[at+1]=referenceColor!.g;paint[at+2]=referenceColor!.b;const profile=item.profile??SPW?.[i*4+3]??0;paint[at+3]=profile+(surfaceUvs?128*(packedSurface?(BU?.[i3+2]??31)+32*SF![i]!:SF![i]!):0);}
+        if(wearExpand&&SE){const ex=SE[i3]!*sx,ey=SE[i3+1]!*sy,ez=SE[i3+2]!*sz;wearExpand[offset]=ex*cosine+ez*sine;wearExpand[offset+1]=ey;wearExpand[offset+2]=ez*cosine-ex*sine;}
         if(brush){
-          const at=i*3,bx=(sourceBrush?.base[at]??pos.getX(i))*sx,by=(sourceBrush?.base[at+1]??pos.getY(i))*sy,bz=(sourceBrush?.base[at+2]??pos.getZ(i))*sz;
+          const at=i3,bx=(sourceBrush?.base[at]??P[i3]!)*sx,by=(sourceBrush?.base[at+1]??P[i3+1]!)*sy,bz=(sourceBrush?.base[at+2]??P[i3+2]!)*sz;
           brush.base[offset]=item.x+bx*cosine+bz*sine;brush.base[offset+1]=item.y+by;brush.base[offset+2]=item.z+bz*cosine-bx*sine;
           for(const key of ['width','rough'] as const){const values=sourceBrush?.[key],vx=(values?.[at]??0)*sx,vy=(values?.[at+1]??0)*sy,vz=(values?.[at+2]??0)*sz;brush[key][offset]=vx*cosine+vz*sine;brush[key][offset+1]=vy;brush[key][offset+2]=vz*cosine-vx*sine;}
         }
@@ -113,7 +159,7 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
           // Dodecahedron normals are constant over each broad facet. Hashing
           // their quantized direction makes all vertices of a face share one
           // tone, stable across chunk rebuilds and independent of game PRNG.
-          const nx=Math.round(normal.getX(i)*127),nz=Math.round(normal.getZ(i)*127);
+          const nx=Math.round(N[i3]!*127),nz=Math.round(N[i3+2]!*127);
           if(nx!==facetX||nz!==facetZ){facetTint=STONE_FACET_TINTS[Math.min(5,Math.floor(noise(nx,nz,pigmentKey+701)*6))]!;facetX=nx;facetZ=nz;}
           colors[offset]=scratchColor.r*facetTint[0];colors[offset+1]=scratchColor.g*facetTint[1];colors[offset+2]=scratchColor.b*facetTint[2];
         } else {
@@ -121,17 +167,17 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
         }
         if(uvs){
           const uvOffset=(vertex+i)*2;
-          if(faceUv||item.rawGeometry){uvs[uvOffset]=uv?.getX(i)??0;uvs[uvOffset+1]=uv?.getY(i)??0;}
+          if(faceUv||item.rawGeometry){uvs[uvOffset]=UV?.[i*2]??0;uvs[uvOffset+1]=UV?.[i*2+1]??0;}
           else{
-            const [spanU,spanV]=physicalPatternSpan(sx,sy,sz,normal.getX(i),normal.getY(i));
-            uvs[uvOffset]=((uv?.getX(i)??0)-.5)*spanU+PATTERN_SPAN*.5+phaseU;
-            uvs[uvOffset+1]=((uv?.getY(i)??0)-.5)*spanV+PATTERN_SPAN*.5+phaseV;
+            const [spanU,spanV]=physicalPatternSpan(sx,sy,sz,N[i3]!,N[i3+1]!);
+            uvs[uvOffset]=((UV?.[i*2]??0)-.5)*spanU+PATTERN_SPAN*.5+phaseU;
+            uvs[uvOffset+1]=((UV?.[i*2+1]??0)-.5)*spanV+PATTERN_SPAN*.5+phaseV;
           }
         }
       }
-      for (let i = 0; i < (geometry.index?.count ?? pos.count); i++) indices[index++] = vertex + (geometry.index?.getX(i) ?? i);
-      if (item.key !== undefined) ranges.push({id:item.key,start:firstIndex,count:index-firstIndex,vertexStart:firstVertex,vertexCount:pos.count});
-      vertex += pos.count;
+      for (let i = 0; i < indexLength; i++) indices[index++] = vertex + (sourceIndex ? sourceIndex[i]! : i);
+      if (item.key !== undefined) ranges.push({id:item.key,start:firstIndex,count:index-firstIndex,vertexStart:firstVertex,vertexCount:count});
+      vertex += count;
     }
     geometry.dispose();
   }
@@ -147,7 +193,8 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
   if(wearExpand)geometry.setAttribute('origamiWearExpand',new THREE.BufferAttribute(wearExpand,3));
   if(brush){geometry.userData.origamiBrushPrebuilt=true;geometry.userData.referenceBrushBasePositions=brush.base;geometry.userData.referenceBrushWidthOffsets=brush.width;geometry.userData.referenceBrushRoughOffsets=brush.rough;}
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-  geometry.computeBoundingSphere();
+  const sphere=exactBoundingSphere(positions);
+  if(sphere)geometry.boundingSphere=sphere;else geometry.computeBoundingSphere();
   const mesh = new THREE.Mesh(geometry, mat);
   mesh.castShadow = shadows; mesh.receiveShadow = true;
   mesh.matrixAutoUpdate = false;

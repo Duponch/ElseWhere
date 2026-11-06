@@ -72,6 +72,27 @@ export function chopRecoilAngle(age:number):number {
  * stay resident. Original ranges also permit checkpoint restoration of an ID.
  * Addition/movement of a resource rebuilds only that spatial chunk.
  */
+/** windBasis = (sin root, cos root, sin flutter, cos flutter) per vertex. The
+ * root phase is constant over a resource range, and most flutter phases repeat
+ * (vertices sharing a position), so the trigonometry is memoized: a repeated
+ * input reuses the earlier result. Math.sin/cos are pure, the flutter cache is
+ * keyed by the exact 64-bit pattern of the phase (-0 and NaN stay distinct) and
+ * every slot starts as the true mapping +0 -> (0, 1). Output is identical to
+ * evaluating every vertex. */
+const FLUTTER_SLOTS=8192,flutterBits=new Float64Array(1),flutterWords=new Uint32Array(flutterBits.buffer);
+const flutterLo=new Uint32Array(FLUTTER_SLOTS),flutterHi=new Uint32Array(FLUTTER_SLOTS),flutterSin=new Float64Array(FLUTTER_SLOTS),flutterCos=new Float64Array(FLUTTER_SLOTS).fill(1);
+function writeWindBasis(windBasis:Float32Array,windRoot:Float32Array,position:Pick<THREE.BufferAttribute,'count'|'getX'|'getZ'>):void{
+  const plain=position instanceof THREE.BufferAttribute&&!position.normalized?position:undefined,array=plain?.array,stride=plain?.itemSize??0;
+  let root=NaN,rootSin=NaN,rootCos=NaN;
+  for(let vertex=0;vertex<position.count;vertex++){
+    const rootPhase=windRoot[vertex*3]!*.47+windRoot[vertex*3+1]!*.31;
+    const flutterPhase=array?array[vertex*stride]!*1.3+array[vertex*stride+2]!*1.7:position.getX(vertex)*1.3+position.getZ(vertex)*1.7;
+    if(!Object.is(rootPhase,root)){root=rootPhase;rootSin=Math.sin(rootPhase);rootCos=Math.cos(rootPhase);}
+    flutterBits[0]=flutterPhase;const lo=flutterWords[0]!,hi=flutterWords[1]!,slot=Math.imul(lo^hi,0x9E3779B1)>>>19;
+    if(flutterLo[slot]!==lo||flutterHi[slot]!==hi){flutterLo[slot]=lo;flutterHi[slot]=hi;flutterSin[slot]=Math.sin(flutterPhase);flutterCos[slot]=Math.cos(flutterPhase);}
+    windBasis[vertex*4]=rootSin;windBasis[vertex*4+1]=rootCos;windBasis[vertex*4+2]=flutterSin[slot]!;windBasis[vertex*4+3]=flutterCos[slot]!;
+  }
+}
 function retainResources(group: THREE.Group, alive: Set<number>): void {
   for (const object of group.children) {
     const mesh = object as THREE.Mesh;
@@ -342,7 +363,7 @@ export class ResourceLayer {
         for(let vertex=range.vertexStart;vertex<range.vertexStart+range.vertexCount;vertex++){windRoot[vertex*3]=resource.x;windRoot[vertex*3+1]=resource.z;windRoot[vertex*3+2]=weight;}
         if(registerTrees){const parts=this.treeParts.get(id)??[];parts.push({mesh,range,positions,normals,expansions,upload:{start:range.vertexStart*3,count:range.vertexCount*3}});this.treeParts.set(id,parts);const hit=this.treeHits.get(id);if(hit)hit.angle=NaN;}
       }
-      for(let vertex=0;vertex<position.count;vertex++){const rootPhase=windRoot[vertex*3]!*.47+windRoot[vertex*3+1]!*.31,flutterPhase=position.getX(vertex)*1.3+position.getZ(vertex)*1.7;windBasis[vertex*4]=Math.sin(rootPhase);windBasis[vertex*4+1]=Math.cos(rootPhase);windBasis[vertex*4+2]=Math.sin(flutterPhase);windBasis[vertex*4+3]=Math.cos(flutterPhase);}
+      writeWindBasis(windBasis,windRoot,position);
       mesh.geometry.setAttribute('windRoot',new THREE.BufferAttribute(windRoot,3));mesh.geometry.setAttribute('windBasis',new THREE.BufferAttribute(windBasis,4));mesh.material=this.wearWind!;
       if(mesh.geometry.boundingSphere)mesh.geometry.boundingSphere.radius+=4.5;group.add(mesh);
     }
@@ -824,12 +845,7 @@ export class ResourceLayer {
         const windBasis=new Float32Array(windRoot.length/3*4),position=mesh.geometry.getAttribute('position');
         // Weight0 makes every deformation term exactly zero. No trigonometry
         // or fake owner coordinates are needed for non-tree resource vertices.
-        if(ranges.length)for(let vertex=0;vertex<position.count;vertex++){
-          const rootPhase=windRoot[vertex*3]!*.47+windRoot[vertex*3+1]!*.31;
-          const flutterPhase=position.getX(vertex)*1.3+position.getZ(vertex)*1.7;
-          windBasis[vertex*4]=Math.sin(rootPhase);windBasis[vertex*4+1]=Math.cos(rootPhase);
-          windBasis[vertex*4+2]=Math.sin(flutterPhase);windBasis[vertex*4+3]=Math.cos(flutterPhase);
-        }
+        if(ranges.length)writeWindBasis(windBasis,windRoot,position);
         const preparedIds=mesh.geometry.userData.preparedResourceVariantIds as Float32Array|undefined;
         if(preparedIds)for(let vertex=0;vertex<position.count;vertex++)if(windRoot[vertex*3+2]===0&&preparedIds[vertex]!>=0)windBasis[vertex*4]=preparedIds[vertex]!;
         mesh.geometry.setAttribute('windRoot',new THREE.BufferAttribute(windRoot,3));

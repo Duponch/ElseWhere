@@ -17,12 +17,16 @@ function geometryKey(geometry:THREE.BufferGeometry):string{
 }
 function sameGeometry(a:THREE.BufferGeometry,b:THREE.BufferGeometry):boolean{
  const names=Object.keys(a.attributes).sort(),other=Object.keys(b.attributes).sort();if(names.join('|')!==other.join('|'))return false;
- for(const name of names){const x=a.getAttribute(name),y=b.getAttribute(name);if(x.itemSize!==y.itemSize||x.count!==y.count||!(x.array instanceof Float32Array)||!(y.array instanceof Float32Array))return false;const X=words(x.array),Y=words(y.array);if(X.some((v,i)=>v!==Y[i]))return false;}
+ for(const name of names){const x=a.getAttribute(name),y=b.getAttribute(name);if(x.itemSize!==y.itemSize||x.count!==y.count||!(x.array instanceof Float32Array)||!(y.array instanceof Float32Array))return false;const X=words(x.array),Y=words(y.array);for(let i=0;i<X.length;i++)if(X[i]!==Y[i])return false;}
  if(!!a.index!==!!b.index||a.index?.count!==b.index?.count)return false;if(a.index&&b.index)for(let i=0;i<a.index.count;i++)if(a.index.getX(i)!==b.index.getX(i))return false;return true;
 }
 export class ResourcePreparedModels {
  private readonly canonical=new Map<string,{source:THREE.BufferGeometry;geometry:THREE.BufferGeometry;model:PreparedSurfaceModel}>();
  private readonly sourceKeys=new WeakMap<THREE.BufferGeometry,string>();
+ /** Like sourceKeys, a captured source is unchanged while it is captured again
+  * (one merge reads the same part template for every item). Its full collision
+  * comparison with a given canonical record therefore runs once, not per item. */
+ private readonly verified=new WeakMap<THREE.BufferGeometry,object>();
  private retained=0;private closed=false;
  constructor(private readonly register:(variant:PreparedSurfaceVariant)=>number){}
  capture(source:THREE.BufferGeometry,item:Placement,fullGrowthFactor=1):number{
@@ -34,7 +38,7 @@ export class ResourcePreparedModels {
   let sourceKey=this.sourceKeys.get(source);if(!sourceKey){sourceKey=geometryKey(source);this.sourceKeys.set(source,sourceKey);}
   const sourcePaint=source.getAttribute('origamiPaint'),profile=item.profile,reference=new THREE.Color(profile===0?0xffffff:item.referenceColor??item.color??0xffffff),referenceWords=words(new Float32Array([reference.r,reference.g,reference.b])),key=JSON.stringify(['resource-canonical-v1',sourceKey,profile??'source-profiles',[...referenceWords]]);
   let record=this.canonical.get(key);
-  if(record){if(!sameGeometry(record.source,source))throw Error('Resource canonical geometry hash collision');}
+  if(record){if(this.verified.get(source)!==record){if(!sameGeometry(record.source,source))throw Error('Resource canonical geometry hash collision');this.verified.set(source,record);}}
   else{
    const sourceCopy=source.clone(),geometry=source.clone(),surface=new Float32Array(position.count*4),paint=new Float32Array(position.count*4),chart=new Float32Array(position.count*2);
    for(let v=0;v<position.count;v++){const face=faces.getX(v),id=profile??sourcePaint?.getW(v)??0;if(!Number.isSafeInteger(face)||face<0||face>=4096||!Number.isSafeInteger(id)||id<0||id>=128)throw new PreparedSurfaceAdmissionRefusal('Resource packed face/profile not exact');surface.set([raw.getX(v),raw.getY(v),stroke.getX(v),stroke.getY(v)],v*4);paint.set([reference.r,reference.g,reference.b,id+128*(31+32*face)],v*4);chart.set([stroke.getX(v),stroke.getY(v)],v*2);}
