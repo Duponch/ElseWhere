@@ -5,12 +5,15 @@ import { isGrowingTerrain } from './soil.ts';
 import { RoomTopologyCache,type RoomTopology } from './room-topology.ts';
 import { isRoofed } from './roof-rules.ts';
 import type { Cell,World } from './types.ts';
+import { filteredStructures } from './structure-navigation.ts';
 
 const caches=new WeakMap<World,RoomTopologyCache>();
 const neighbors=(c:Cell):Cell[]=>[{x:c.x-1,z:c.z},{x:c.x+1,z:c.z},{x:c.x,z:c.z-1},{x:c.x,z:c.z+1}];
 export interface CleanlinessRoom {id:number;cells:ReadonlySet<number>;adjacent:ReadonlySet<number>;covered:number;cleanliness:number;doorway:boolean}
 /** One synchronous read. Rooms are computed only when requested; outdoors is
  * rejected before any flood or object aggregation. Never retain across mutation. */
+const CLEANLINESS_SOURCES=new Set<string>(['spike-trap','electric-crematorium','hydroponics-basin','fueled-smithy','electric-smithy','machining-table','butcher-table','stonecutter','art-bench']);
+const isCleanlinessSource=(s:World['structures'][number]):boolean=>CLEANLINESS_SOURCES.has(s.kind);
 export class CleanlinessCapture {
   readonly world:World;readonly topology:RoomTopology;
   private rooms=new Map<number,CleanlinessRoom>();
@@ -36,7 +39,8 @@ export class CleanlinessCapture {
     const contains=(i:number)=>cells.has(i)||adjacent.has(i)&&this.topology.at(i%w.width,Math.floor(i/w.width))?.kind==='doorway';
     for(const f of w.filth?.items??[])if(contains(f.z*w.width+f.x))total+=FILTH_DEFINITIONS[f.kind].cleanliness;
     for(const p of w.piles)if(p.item==='slag-steel-chunk'&&p.owner.type==='ground'&&contains(p.owner.z*w.width+p.owner.x))total-=2;
-    for(const s of w.structures){const value=s.kind==='spike-trap'?-5:s.kind==='electric-crematorium'?-20:s.kind==='hydroponics-basin'?-3:s.kind==='fueled-smithy'||s.kind==='electric-smithy'?-3:s.kind==='machining-table'?-2:s.kind==='butcher-table'?-15:s.kind==='stonecutter'||s.kind==='art-bench'?-5:0;if(value&&footprintCells(s).some(c=>contains(c.z*w.width+c.x)||s.kind==='electric-crematorium'&&neighbors(c).some(n=>cells.has(n.z*w.width+n.x))))total+=value;}
+    // Only these kinds contribute (value 0 otherwise); same source order.
+    for(const s of filteredStructures(w,'room-cleanliness-sources',isCleanlinessSource)){const value=s.kind==='spike-trap'?-5:s.kind==='electric-crematorium'?-20:s.kind==='hydroponics-basin'?-3:s.kind==='fueled-smithy'||s.kind==='electric-smithy'?-3:s.kind==='machining-table'?-2:s.kind==='butcher-table'?-15:s.kind==='stonecutter'||s.kind==='art-bench'?-5:0;if(value&&footprintCells(s).some(c=>contains(c.z*w.width+c.x)||s.kind==='electric-crematorium'&&neighbors(c).some(n=>cells.has(n.z*w.width+n.x))))total+=value;}
     const result={id,cells,adjacent,covered,cleanliness:total/cells.size,doorway};this.rooms.set(id,result);return result;
   }
 }

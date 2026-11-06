@@ -26,7 +26,7 @@ import {animalHaulDoorPassable282} from './animal-haul-door-282.ts';
 import {isSchema282OrLater} from './schema-compatibility-257.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 import { animalSpecies } from './animal-species.ts';
-import {captureStructureNavigation,type StructureNavigationGeometry} from './structure-navigation.ts';
+import {captureStructureNavigation,type StructureNavigationGeometry,filteredStructureEntries} from './structure-navigation.ts';
 import type { Cell,World } from './types.ts';
 import type {DistanceField} from './navigation-types.ts';
 /** Ranked food candidates resume a single frontier. Group once rather than
@@ -62,6 +62,7 @@ export function createAnimalNavigationReader(world:World,getGeometry?:()=>Struct
 /** Short-lived capture: no world mutation may interleave its searches/steps. */
 /** `allowClosedGate` is for planning a handler-led route only. Physical steps
  * must use the default navigation after the handler opens each passage. */
+const isAnimalSolidCandidate=(s:World['structures'][number]):boolean=>s.kind==='vent'||s.kind==='wall'||s.kind==='cooler'||s.kind==='fence'||s.kind==='table'||isPassageDoor(s.kind);
 export function animalNavigation(world:World,allowClosedGate=false,fencePassable=false,actor?:WildAnimal,capturedFlight=false,providedGeometry?:StructureNavigationGeometry,readArea:(a:WildAnimal)=>AnimalAreaPolicy287|undefined=a=>captureAnimalAreaPolicy287(world,a),physicalNow?:()=>number) {
   let failedRoute:{actor:Cell;x:number;z:number;tick:number;field:DistanceField}|undefined;
   const area=(start:Cell)=>{if(!isSchema287OrLater(Number(world.schemaVersion)))return;const original=world.wildlife?.animals.find(a=>a===start);return original?readArea(original):undefined;};
@@ -74,7 +75,10 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
   let stand=physicalNow?undefined:captureStandability(world,geometry);
   const liveDoors=physicalNow?new Map<number,World['structures']>():undefined;
   const add=(s:Parameters<typeof footprintCells>[0])=>{for(const c of footprintCells(s))solids.add(c.z*width+c.x);};
-  for(const {structure:s,cells} of geometry.entries) {
+  // Only solid kinds and passage doors contribute below; when the geometry is
+  // the shared index of this world, iterate that cached subset (same order).
+  const solidEntries=geometry===captureStructureNavigation(world)?filteredStructureEntries(world,'animal-navigation-solids',isAnimalSolidCandidate):geometry.entries;
+  for(const {structure:s,cells} of solidEntries) {
     if(s.kind==='vent'||s.kind==='wall'||s.kind==='cooler'||s.kind==='fence'&&!fencePassable&&!flying||world.schemaVersion<22&&s.kind==='table')for(const i of cells)solids.add(i);
     if(isPassageDoor(s.kind)){
       if(liveDoors){const index=s.z*width+s.x,row=liveDoors.get(index)??[];row.push(s);liveDoors.set(index,row);}

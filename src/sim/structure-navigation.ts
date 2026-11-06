@@ -32,6 +32,9 @@ interface SharedStructureIndex {
   readonly anchors:StructureAnchorIndex;
   /** Lazily built: structures per kind (source order). */
   byKind?:Map<Structure['kind'],Structure[]>;
+  /** Lazily built filtered views, keyed by caller-chosen names. */
+  filtered?:Map<string,readonly Structure[]>;
+  filteredEntries?:Map<string,readonly StructureNavigationFootprint[]>;
 }
 /* Shared, cross-tick membership index keyed by the structures ARRAY itself.
  *
@@ -100,6 +103,20 @@ export function structuresOfKind(world:World,kind:Structure['kind']):readonly St
   const index=sharedIndex(world);
   if(!index.byKind){const map=new Map<Structure['kind'],Structure[]>();for(const s of world.structures){const list=map.get(s.kind);if(list)list.push(s);else map.set(s.kind,[s]);}index.byKind=map;}
   return index.byKind.get(kind)??NO_STRUCTURES;
+}
+/** `world.structures.filter(keep)` in source order, cached per membership.
+ * `keep` must only read immutable structure facts (kind, position…) and must
+ * be the same predicate for a given `name`. */
+export function filteredStructures(world:World,name:string,keep:(s:Structure)=>boolean):readonly Structure[] {
+  const index=sharedIndex(world);const map=index.filtered??=new Map();
+  let list=map.get(name);if(!list){list=world.structures.filter(keep);map.set(name,list);}
+  return list;
+}
+/** Footprint entries (structure + cells) of `filteredStructures`, source order. */
+export function filteredStructureEntries(world:World,name:string,keep:(s:Structure)=>boolean):readonly StructureNavigationFootprint[] {
+  const index=sharedIndex(world);const map=index.filteredEntries??=new Map();
+  let list=map.get(name);if(!list){list=index.geometry.entries.filter(entry=>keep(entry.structure));map.set(name,list);}
+  return list;
 }
 /** O(1) anchor lookup with exactly the same membership/order as scanning
  * world.structures for `s.x===x&&s.z===z`. */
