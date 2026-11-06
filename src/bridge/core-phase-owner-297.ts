@@ -5,39 +5,10 @@ import type {Mechanoid} from '../sim/mechanoid-state';
 import type {PawnTrack} from './motion-tracks';
 import type {PresentationSegment} from '../sim/travel-timing';
 import {effectiveCore297} from '../sim/core-phase-297';
+import {frozenDataCopy297} from './core-frozen-copy-297';
 import {coreAnchor297,coreInteger297,coreOwnRecord297,copyCoreData297,readCorePhaseData297,validCoreTrace297} from './core-phase-data-297';
 import {CORE_HUMAN_OPTIONAL297,CORE_ANIMAL_OPTIONAL297,CORE_MECH_OPTIONAL297,type CoreActorMode297,type CoreActorScene297,type CoreActorSceneRecord297,type CorePhaseAnchor297,type CoreFullPhaseMetadata297,type CorePhaseTypedProjection297,type CoreActorProjection297,type CoreProjectileTrace297} from './core-phase-projection-297';
 
-/* Same contract as copyCoreData297 (pinned in core-phase-data-297.ts): the
- * same budget, depth, cycle, finite-number, dense-array and plain-own-data
- * rejections with the same messages, and an identical deeply frozen result
- * (same keys and order; frozen properties are non-writable/non-configurable).
- * It reads each property descriptor once and assigns before freezing instead
- * of two descriptor reads plus defineProperty per key, which made the actor
- * copy of every Full ~15% of the main thread on large colonies. */
-export function frozenDataCopy297<T>(value:T):T {
- const active=new Set<object>();let left=1048576;
- const copy=(v:unknown,depth:number):unknown=>{
-  if(--left<0||depth>24)throw Error('Core phase payload budget exceeded');
-  if(v===undefined||v===null||typeof v==='string'||typeof v==='boolean')return v;
-  if(typeof v==='number'){if(!Number.isFinite(v))throw Error('Nonfinite Core phase number');return v;}
-  if(typeof v!=='object'||active.has(v))throw Error('Cyclic or non-data Core phase value');active.add(v);
-  try{
-   if(Array.isArray(v)&&Object.getPrototypeOf(v)===Array.prototype&&Reflect.ownKeys(v).length===v.length+1){
-    const n=v.length,values:unknown[]=new Array(n);let dense=true;
-    for(let i=0;i<n;i++){const d=Object.getOwnPropertyDescriptor(v,String(i));if(!d?.enumerable||!Object.hasOwn(d,'value')){dense=false;break;}values[i]=d.value;}
-    if(dense){const out:unknown[]=new Array(n);for(let i=0;i<n;i++)out[i]=copy(values[i],depth+1);return Object.freeze(out);}
-   }
-   if(Array.isArray(v)||Object.getPrototypeOf(v)!==Object.prototype)throw Error('Core phase requires plain own data');
-   const keys=Reflect.ownKeys(v),values:unknown[]=new Array(keys.length);
-   for(let i=0;i<keys.length;i++){const k=keys[i]!;const d=typeof k==='string'?Object.getOwnPropertyDescriptor(v,k):undefined;if(!d||d.enumerable!==true||!Object.hasOwn(d,'value'))throw Error('Core phase requires plain own data');values[i]=d.value;}
-   const out:Record<string,unknown>={};
-   for(let i=0;i<keys.length;i++){const k=keys[i] as string,copied=copy(values[i],depth+1);if(k==='__proto__')Object.defineProperty(out,k,{value:copied,enumerable:true,writable:true,configurable:true});else out[k]=copied;}
-   return Object.freeze(out);
-  }finally{active.delete(v);}
- };
- return copy(value,0) as T;
-}
 type State={anchor:CorePhaseAnchor297;world:World;actorScene:CoreActorScene297;actorMode:CoreActorMode297;core:number;nextId:number;seq:number;tracks:PawnTrack[];trace:Map<number,CoreProjectileTrace297>};
 export interface PreparedCoreFull297 {readonly previous:object|undefined;readonly projection:CorePhaseTypedProjection297;readonly owner:object}
 export interface PreparedCorePhase297 {readonly previous:object;readonly projection:CorePhaseTypedProjection297;readonly owner:object}
@@ -120,3 +91,5 @@ export class CorePhaseFrameOwner297 {
   return this.scene(core,humans??base.humans,animals??base.animals,mechanical??base.mechanical);
  }
 }
+
+export {frozenDataCopy297} from './core-frozen-copy-297';

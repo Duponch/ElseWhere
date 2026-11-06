@@ -1,6 +1,5 @@
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import type {World,Pawn,Job,MaterialPile,Structure} from '../sim/types';
-import {copyCoreData297} from './core-phase-data-297';
 import {appearanceOf} from '../sim/pawn-appearance';
 import {appearanceShape} from '../render/pawn-appearance-shape';
 import {humanLimbVisualMask} from '../render/human-anatomy-presentation';
@@ -25,6 +24,7 @@ import {adjacentTable} from '../sim/dining';
 import {groupHumanCarryPairs257} from '../sim/group-human-admission-257';
 import {autoSlaughterTargets} from '../sim/auto-slaughter';
 import {isColonist} from '../sim/affiliation';
+import {frozenDataCopy297} from './core-frozen-copy-297';
 
 export const POSE_SLEEP=18,POSE_DEAD=19,POSE_FIGHT_READY=22,READING_ACTIVITY295=14;
 export function seatedOnFurniture(pawn:Pawn):boolean {
@@ -176,7 +176,7 @@ export function captureActorPhaseDependencies297(world:World):ActorPhaseDependen
  const mechanical=(world.mechanoids??[]).map(a=>[a.id,a.mechKind,mechanoidVisualMask(a)]);
  const mechanicalBodies=world.piles.filter(p=>p.mechCorpse&&(p.owner.type==='ground'||p.owner.type==='pawn')).map(p=>[p.id,owner(p.owner),p.mechCorpse!.mechKind,p.mechCorpse!.heading,mechanoidVisualMask(p.mechCorpse!)]);
  const departed=(world.raids?.departed??[]).map(a=>[a.pawnId,cell(a.cell)]);
- const data=copyCoreData297({map:[world.seed,world.width,world.height],human,animalGroups,animalCargo,mechanical,mechanicalBodies,departed,
+ const data=frozenDataCopy297({map:[world.seed,world.width,world.height],human,animalGroups,animalCargo,mechanical,mechanicalBodies,departed,
   humanCarry:groupHumanCarryPairs257(world).map(p=>[p.carrierId,p.patientId])});
  const result=Object.freeze({format:'actor-phase-dependencies-297-1' as const,data});ownedDependencies297.add(result);return result;
 }

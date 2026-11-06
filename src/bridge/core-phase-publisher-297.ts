@@ -7,8 +7,9 @@ import type {Mechanoid} from '../sim/mechanoid-state';
 import type {PresentationSegment} from '../sim/travel-timing';
 import type {PawnTrack} from './motion-tracks';
 import {effectiveCore297} from '../sim/core-phase-297';
-import {captureCoreActor297,copyCoreData297,coreAnchor297,coreMapId297,validCoreAudioCues297} from './core-phase-data-297';
+import {captureCoreActor297,coreAnchor297,coreMapId297,validCoreAudioCues297} from './core-phase-data-297';
 import type {CoreActorProjection297,CorePhaseAnchor297,CorePhaseEnvelope297,CoreFullPhaseMetadata297,CoreProjectileEvents297,CoreProjectileTrace297,CoreMotionPatch297} from './core-phase-projection-297';
+import {frozenDataCopy297} from './core-frozen-copy-297';
 
 type PriorTrack={sources:readonly PresentationSegment[];values:readonly PresentationSegment[]};
 const own=Object.hasOwn;
@@ -91,7 +92,7 @@ export class CorePhasePublisher297 {
   if(macro&&(!Number.isFinite(observedAt)||observedAt<0||this.quietObservedAt!==undefined&&observedAt<this.quietObservedAt))throw Error('Nonmonotone quiet observation time');
   if(!Number.isSafeInteger(value.core)||value.core<0||this.pendingCore!==undefined&&value.core<this.pendingCore)throw Error('Nonmonotone committed Core observation');
   for(const id of value.actorsChanged)this.dirtyActors.add(id);
-  for(const trace of value.projectileEvents.upserted){const owned=copyCoreData297(trace);this.retained.set(trace.id,owned);this.fxUpserted.set(trace.id,owned);}
+  for(const trace of value.projectileEvents.upserted){const owned=frozenDataCopy297(trace);this.retained.set(trace.id,owned);this.fxUpserted.set(trace.id,owned);}
   for(const id of value.projectileEvents.removed)this.fxRemoved.add(id);
   // Retention is history, not the World projectile collection lifetime.
   for(const[id,trace]of this.retained)if(trace.endCore<value.core-640)this.retained.delete(id);
@@ -107,7 +108,7 @@ export class CorePhasePublisher297 {
    if(prior){drop=current.length?prior.sources.indexOf(current[0]!):prior.sources.length;if(drop<0)drop=0;while(keep<current.length&&drop+keep<prior.sources.length&&current[keep]===prior.sources[drop+keep]){const piece=current[keep]!;if((own(piece,'stagger')||own(piece,'stuns'))&&!sameCoreValue297(prior.values[drop+keep],piece))break;keep++;}}
    // Recorder owns segment identities. All newly appended pieces are copied at
    // this synchronous publication boundary, including corrections/stationary STOP.
-   const appended=current.slice(keep).map(value=>copyCoreData297(value));
+   const appended=current.slice(keep).map(value=>frozenDataCopy297(value));
    const values=prior?prior.values.slice(drop,drop+keep).concat(appended):appended;
    if(!prior||drop||keep!==prior.sources.length||appended.length)patches.push(Object.freeze({id:track.id,drop,keep,append:Object.freeze(appended)}));
    next.set(track.id,{sources:current.slice(),values});
@@ -124,7 +125,7 @@ export class CorePhasePublisher297 {
   for(const id of this.dirtyActors){const slot=this.slots.get(id);if(!slot)throw Error('New actor requires a full membership anchor');const source=slot.kind==='human'?world.pawns[slot.index]:slot.kind==='animal'?world.wildlife?.animals[slot.index]:world.mechanoids?.[slot.index];if(!source||source.id!==id)throw Error('Changed actor escaped its full layout');
    rows.push(slot.kind==='human'?captureCoreActor297('human',slot.index,source as Pawn):slot.kind==='animal'?captureCoreActor297('animal',slot.index,source as WildAnimal):captureCoreActor297('mechanical',slot.index,source as Mechanoid));}
   rows.sort((a,b)=>a.id-b.id);
-  const motion=this.captureTracks(tracks),packet:CorePhaseEnvelope297=Object.freeze({type:before.actorMode297==='frontier'?'actor-frontier-297':'actor-phase-297',audioCues:copyCoreData297(audioCues),epoch:before.anchor.epoch,mapId:before.anchor.mapId,baseRevision:before.anchor.revision,phaseSeq:before.seq+1,nextId:world.nextId,fromCore:before.core,toCore:core,speed,actors:Object.freeze(rows),tracks:Object.freeze(motion.patches),projectiles:Object.freeze({upserted:Object.freeze([...this.fxUpserted.values()]),removed:Object.freeze([...this.fxRemoved])})});
+  const motion=this.captureTracks(tracks),packet:CorePhaseEnvelope297=Object.freeze({type:before.actorMode297==='frontier'?'actor-frontier-297':'actor-phase-297',audioCues:frozenDataCopy297(audioCues),epoch:before.anchor.epoch,mapId:before.anchor.mapId,baseRevision:before.anchor.revision,phaseSeq:before.seq+1,nextId:world.nextId,fromCore:before.core,toCore:core,speed,actors:Object.freeze(rows),tracks:Object.freeze(motion.patches),projectiles:Object.freeze({upserted:Object.freeze([...this.fxUpserted.values()]),removed:Object.freeze([...this.fxRemoved])})});
   return{packet,before,generation,next:{anchor:before.anchor,core,seq:packet.phaseSeq,nextId:world.nextId,tracks:motion.next,...before.actorMode297?{actorMode297:before.actorMode297,dependencies:before.dependencies,terrainCursor:before.terrainCursor}:{}}};
  }
  commitPhase(prepared:ReturnType<CorePhasePublisher297['preparePhase']>,sentAt:number):void {
@@ -139,14 +140,14 @@ export class CorePhasePublisher297 {
   // e.g. initial load or an immediate paused command publication.
   const retained=new Map(this.retained);
   for(const p of world.projectiles??[]){const f=p.flight,durationCore=Math.max(.001,Math.hypot(f.destination.x-f.origin.x,f.destination.z-f.origin.z)/f.speedPerCoreTick),total=Math.ceil(durationCore);
-   retained.set(p.id,copyCoreData297({id:p.id,emittedAtCore:p.emittedAtCore,endCore:p.arrival?p.advancedAtCore:p.emittedAtCore+total,durationCore,delayCore:total-durationCore,from:{x:f.origin.x,z:f.origin.z},to:{x:f.destination.x,z:f.destination.z},emp:p.weaponItem==='emp-launcher'}));}
+   retained.set(p.id,frozenDataCopy297({id:p.id,emittedAtCore:p.emittedAtCore,endCore:p.arrival?p.advancedAtCore:p.emittedAtCore+total,durationCore,delayCore:total-durationCore,from:{x:f.origin.x,z:f.origin.z},to:{x:f.destination.x,z:f.destination.z},emp:p.weaponItem==='emp-launcher'}));}
   for(const[id,t]of retained)if(t.endCore<core-640)retained.delete(id);
   const dependencies=actorMode297==='frontier'?captureActorPhaseDependencies297(world):undefined;
   // Runtime invokes this AFTER its actual snapshots.encode completed. The
   // closed codec alone enrolls tiles. A read-only peek can never repair them.
   const capturedTerrain=actorMode297==='frontier'?peekTerrainJournalCursor(world.tiles):undefined,terrainCursor=capturedTerrain&&Object.freeze(capturedTerrain);
-  const metadata:CoreFullPhaseMetadata297=copyCoreData297({mapId:anchor.mapId,core,projectilesRetained:[...retained.values()],...actorMode297?{actorMode297}:{}}),nextTracks=new Map<number,PriorTrack>();
-  for(const track of tracks)nextTracks.set(track.id,{sources:track.segments.slice(),values:track.segments.map(value=>copyCoreData297(value))});
+  const metadata:CoreFullPhaseMetadata297=frozenDataCopy297({mapId:anchor.mapId,core,projectilesRetained:[...retained.values()],...actorMode297?{actorMode297}:{}}),nextTracks=new Map<number,PriorTrack>();
+  for(const track of tracks)nextTracks.set(track.id,{sources:track.segments.slice(),values:track.segments.map(value=>frozenDataCopy297(value))});
   return{metadata,anchor,core,generation,tracks:nextTracks,retained,actorMode297,dependencies,terrainCursor};
  }
  commitFull(prepared:ReturnType<CorePhasePublisher297['prepareFull']>,sentAt:number):void {
