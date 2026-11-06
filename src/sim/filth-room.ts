@@ -4,7 +4,6 @@ import { FILTH_DEFINITIONS } from './filth-rules.ts';
 import { isGrowingTerrain } from './soil.ts';
 import { RoomTopologyCache,type RoomTopology } from './room-topology.ts';
 import { isRoofed,roofIdentity,sameRoofIdentity,type RoofIdentity } from './roof-rules.ts';
-import { terrainWriteCount,verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
 import type { Cell,World } from './types.ts';
 import { filteredStructures } from './structure-navigation.ts';
 
@@ -15,24 +14,21 @@ export interface CleanlinessRoom {id:number;cells:ReadonlySet<number>;adjacent:R
  * rejected before any flood or object aggregation. Never retain across mutation. */
 const CLEANLINESS_SOURCES=new Set<string>(['spike-trap','electric-crematorium','hydroponics-basin','fueled-smithy','electric-smithy','machining-table','butcher-table','stonecutter','art-bench']);
 const isCleanlinessSource=(s:World['structures'][number]):boolean=>CLEANLINESS_SOURCES.has(s.kind);
-/* Flood of one room: its cells (flood order is irrelevant to the sets), the
- * adjacent cells, the roofed count and the floor/soil partial sum in flood
- * order. It depends only on the immutable topology, the room, the tiles and
- * the roofs, so it is shared while the same Tile[] keeps its physical write
- * count (terrain-mutation-journal) and the roof arrays are unchanged. The
- * room total continues from that exact partial sum, in the original order. */
-interface RoomShape {tiles:World['tiles'];writes:number;roofs:RoofIdentity;width:number;start:number;cells:ReadonlySet<number>;adjacent:ReadonlySet<number>;covered:number;floorTotal:number}
+/* Flood of one room: its cells, the adjacent cells, the flood order and the
+ * roofed count. It depends only on the immutable topology (labels), the room,
+ * the starting cell and the roofs, so it is shared across captures while the
+ * roof arrays are unchanged. Tiles are NOT part of it: the floor/soil sum is
+ * re-read on every capture, in the same flood order, so the total is the very
+ * same sequence of additions as a fresh flood. */
+interface RoomShape {roofs:RoofIdentity;width:number;start:number;order:Int32Array;cells:ReadonlySet<number>;adjacent:ReadonlySet<number>;covered:number}
 const roomShapes=new WeakMap<RoomTopology,Map<number,RoomShape>>();
 function roomShape(w:World,topology:RoomTopology,id:number,index:number):RoomShape {
-  const writes=terrainWriteCount(w.tiles),roofs=roofIdentity(w);let shapes=roomShapes.get(topology);
+  const roofs=roofIdentity(w);let shapes=roomShapes.get(topology);
   const cached=shapes?.get(id);
-  // The flood starts at the requested cell; its partial sum is accumulated in
-  // flood order, so reuse also requires the same starting cell.
-  if(cached&&cached.tiles===w.tiles&&cached.writes===writes&&cached.width===w.width&&cached.start===index&&sameRoofIdentity(cached.roofs,roofs)&&!verifyTerrainWriteCaches)return cached;
-  const cells=new Set<number>([index]),adjacent=new Set<number>(),queue=[index];let total=0,covered=0;
+  if(cached&&cached.width===w.width&&cached.start===index&&sameRoofIdentity(cached.roofs,roofs))return cached;
+  const cells=new Set<number>([index]),adjacent=new Set<number>(),queue=[index];let covered=0;
   for(let head=0;head<queue.length;head++){
-    const i=queue[head]!,c={x:i%w.width,z:Math.floor(i/w.width)},tile=w.tiles[i]!;
-    total+=tile.floor?FLOOR_DEFINITIONS[tile.floor].cleanliness:isGrowingTerrain(tile.terrain)?-1:0;
+    const i=queue[head]!,c={x:i%w.width,z:Math.floor(i/w.width)};
     if(isRoofed(w,i))covered++;
     for(const next of neighbors(c)){
       const n=next.z*w.width+next.x,r=topology.at(next.x,next.z);if(!r)continue;
@@ -40,9 +36,7 @@ function roomShape(w:World,topology:RoomTopology,id:number,index:number):RoomSha
       else adjacent.add(n);
     }
   }
-  const shape:RoomShape={tiles:w.tiles,writes,roofs,width:w.width,start:index,cells,adjacent,covered,floorTotal:total};
-  if(cached&&verifyTerrainWriteCaches&&cached.tiles===w.tiles&&cached.writes===writes&&cached.width===w.width&&cached.start===index&&sameRoofIdentity(cached.roofs,roofs)
-    &&(cached.floorTotal!==total||cached.covered!==covered||cached.cells.size!==cells.size||cached.adjacent.size!==adjacent.size))throw Error('Unmarked terrain write under an unchanged Tile[] count');
+  const shape:RoomShape={roofs,width:w.width,start:index,order:Int32Array.from(queue),cells,adjacent,covered};
   if(!shapes){shapes=new Map();roomShapes.set(topology,shapes);}shapes.set(id,shape);return shape;
 }
 export class CleanlinessCapture {
@@ -54,7 +48,8 @@ export class CleanlinessCapture {
     // A doorway or exterior may have a Room, but no ProperRoom stat map.
     if(!space||space.kind!=='space'||space.touchesMapEdge)return null;
     const doorway=false,index=cell.z*w.width+cell.x,id=space.id,cached=this.rooms.get(id);if(cached)return cached;
-    const shape=roomShape(w,this.topology,id,index),{cells,adjacent,covered}=shape;let total=shape.floorTotal;
+    const shape=roomShape(w,this.topology,id,index),{cells,adjacent,covered}=shape;let total=0;
+    for(let k=0;k<shape.order.length;k++){const tile=w.tiles[shape.order[k]!]!;total+=tile.floor?FLOOR_DEFINITIONS[tile.floor].cleanliness:isGrowingTerrain(tile.terrain)?-1:0;}
     // Region lists include boundary objects, not every object across an open
     // adjacent room. The only nonzero adjacent surface in this slice is a door.
     const contains=(i:number)=>cells.has(i)||adjacent.has(i)&&this.topology.at(i%w.width,Math.floor(i/w.width))?.kind==='doorway';

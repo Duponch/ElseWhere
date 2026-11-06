@@ -100,6 +100,8 @@ Toutes les optimisations conservent exactement le résultat ; seule la façon de
     - la topologie des pièces (lumière, propreté, recherche) ne rebalaye plus les 62 500 tuiles à chaque lecture ;
     - la couche de coûts de terrain de `navigationCosts`, environ 6 ms par recherche sur Les Forges, est réutilisée tant que les tuiles ne changent pas.
 
+    La forme des pièces pour la propreté (cases, voisins, ordre d’inondation, cases couvertes) est elle aussi partagée entre lectures. Elle ne dépend que de la topologie et des toits ; la somme des sols est relue à chaque fois, dans le même ordre.
+
     Le mode `VERIFY_TERRAIN_CACHES=1` du banc recalcule et compare à chaque lecture. Il n’a trouvé aucun écrivain non marqué sur quatre sauvegardes.
 15. **Réseau électrique** (`power-topology.ts`). La clé texte de tous les transmetteurs n’est plus reconstruite à chaque lecture : le jeton d’appartenance et l’état des interrupteurs suffisent. La table des 7 512 structures par identifiant est partagée par jeton.
 16. **Cases debout** (`captureStandability`). Le masque des structures non franchissables est calculé une fois par géométrie partagée ; seuls les chantiers et les blocs restent lus à chaque appel.
