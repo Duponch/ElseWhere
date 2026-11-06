@@ -130,10 +130,7 @@ Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisi
 6. **Priorités par défaut.** Ici : 1 / 2 / 3. Dans RimWorld, les priorités manuelles sont désactivées par défaut et tout ce qui est autorisé vaut 3. Conséquence actuelle : un colon blessé ou malade continue de travailler au lieu de se reposer.
 7. **Pas de ×12 automatique** quand tous les colons dorment (`TickManager.NothingHappeningInGame`).
 8. **Cultures Core manquantes** : fraise, herbe à fumer, psychoïde, soie du diable.
-9. **Coût de déplacement** (`human-move-core-297.ts`). Trois écarts avec `Pawn.TicksPerMove` et `CostToMoveIntoCell` :
-   - pas d’arrondi à l’entier, d’où des diagonales environ 2,4 % plus lentes ;
-   - l’allure « marche » double aussi le coût du terrain, alors que dans RimWorld elle ne s’applique qu’au pas de base ;
-   - le plafond de 450 est appliqué avant ce doublement.
+9. **Coût de déplacement** (`human-move-core-297.ts`). `Pawn.TicksPerMove` arrondit le pas de base à l’entier (`RoundToInt`, puis bornes 1 à 450) ; ici il reste fractionnaire, d’où des diagonales environ 2,4 % plus lentes. En revanche, l’allure (marche ×2, minimum 50) appliquée après l’ajout du coût de terrain et du plafond de 450 est **fidèle** à `Pawn_PathFollower.CostToMoveIntoCell`. Ce point de l’audit initial était erroné.
 
 Ces correctifs n’ont **pas** été appliqués dans ce lot :
 
