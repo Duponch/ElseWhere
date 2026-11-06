@@ -24,7 +24,7 @@ await page.goto(origin + '/?e2e=1', { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => window.__perf?.ready);
 const t0 = Date.now();
 await page.evaluate(url => window.__perf.loadUrl(url), savePath);
-await page.waitForFunction(() => window.__perf?.view?.backend && window.__lisiere?.hasActiveMap && !window.__perf.blocked);
+await page.waitForFunction(() => window.__perf?.view?.backend && !!window.__perf.world && !window.__perf.blocked);
 const loadS = (Date.now() - t0) / 1000;
 await page.evaluate(() => window.__perf.speedTo(0));
 await page.mouse.move(720, 500);

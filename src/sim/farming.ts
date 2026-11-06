@@ -130,17 +130,16 @@ function placedAndPlannedCells(world:World,planned:readonly Job[],placed:(s:Worl
   return cells;
 }
 function context(world: World, queriedCells?:readonly number[]): Context {
-  const placed=world.structures.filter(s=>s.kind!=='power-conduit'),planned=world.jobs.filter(j => j.kind==='replant-tree'||j.kind==='install'||j.kind!=='power-conduit'&&j.kind in STRUCTURE_DEFINITIONS);
-  const objects=[...placed,...planned];
-  // Validation asks about at most five cells. Avoid expanding every building
-  // footprint for that point query; discovery still captures the full field.
+  const planned=world.jobs.filter(j => j.kind==='replant-tree'||j.kind==='install'||j.kind!=='power-conduit'&&j.kind in STRUCTURE_DEFINITIONS);
   // Placed footprints come from the shared structure index (same cells as
-  // footprintCells); only planned jobs are expanded here.
-  const fixed=queriedCells?new Set(queriedCells.filter(i=>objects.some(s=>footprintContains(s,{x:i%world.width,z:Math.floor(i/world.width)}))))
-    :placedAndPlannedCells(world,planned,s=>s.kind!=='power-conduit');
-  const other=world.growingZones.some(z=>z.basinId!==undefined)?[...placed.filter(s=>s.kind!=='hydroponics-basin'),...planned]:undefined;
-  const hydroBlocked=other&&(queriedCells?new Set(queriedCells.filter(i=>other.some(s=>footprintContains(s,{x:i%world.width,z:Math.floor(i/world.width)}))))
-    :placedAndPlannedCells(world,planned,s=>s.kind!=='power-conduit'&&s.kind!=='hydroponics-basin'));
+  // footprintCells/footprintContains); only planned jobs are scanned here.
+  // Validation asks about at most five cells: point queries, no expansion.
+  const geometry=captureStructureNavigation(world),cellOf=(i:number)=>({x:i%world.width,z:Math.floor(i/world.width)});
+  const occupiedAt=(i:number,placed:(s:World['structures'][number])=>boolean)=>{const c=cellOf(i);return geometry.at(c).some(placed)||planned.some(j=>footprintContains(j,c));};
+  const notConduit=(s:World['structures'][number])=>s.kind!=='power-conduit',notConduitOrBasin=(s:World['structures'][number])=>s.kind!=='power-conduit'&&s.kind!=='hydroponics-basin';
+  const fixed=queriedCells?new Set(queriedCells.filter(i=>occupiedAt(i,notConduit))):placedAndPlannedCells(world,planned,notConduit);
+  const hydroBlocked=world.growingZones.some(z=>z.basinId!==undefined)
+    ?(queriedCells?new Set(queriedCells.filter(i=>occupiedAt(i,notConduitOrBasin))):placedAndPlannedCells(world,planned,notConduitOrBasin)):undefined;
   let temperatures:TemperatureView|undefined,forestry:ReadonlySet<string>|undefined;
   return {
     resources: resourceCells(world),
