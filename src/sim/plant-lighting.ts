@@ -2,6 +2,7 @@ import { isPlant,plantGrowth } from './plants.ts';
 import { isRoofed,roofCoverage,roofIdentity,sameRoofIdentity,type RoofIdentity } from './roof-rules.ts';
 import type { LightEnvironment,LightReader } from './light-environment.ts';
 import type { Resource,World } from './types.ts';
+import { structuresOfKind } from './structure-navigation.ts';
 
 /** Settle the captured light/thermal interval before changing either regime.
  * Roof producers still call this before mutating physical coverage. */
@@ -49,7 +50,7 @@ export function reconcilePlantLighting(world:World,provided:LightEnvironment|Lig
       constructed:undefined,coverage:[],width:0,height:0};
     bindings.set(world,binding);
   }
-  const hasLamp=world.structures.some(s=>s.kind==='sun-lamp');
+  const hasLamp=(structuresOfKind(world,'sun-lamp').length>0);
   // Historical maps do not acquire new dark states or force a diffusion read.
   // With no sun lamp, all other glowers cap at .5 and cannot supply full light.
   if(world.schemaVersion<256&&!hasLamp&&!binding.hasCaptured)return;

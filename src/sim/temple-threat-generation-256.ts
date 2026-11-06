@@ -12,6 +12,7 @@ import {captureGeographicGenerationReachability256} from './geographic-generatio
 import {captureRandomClosewalk256,tryRandomClosewalkCellNear256} from './random-closewalk-256.ts';
 import {terrainIsWater256} from './natural-terrain-runtime-256.ts';
 import type {MechanoidKind} from './mechanoid-definition.ts';
+import { structuresOfKind } from './structure-navigation.ts';
 export interface TempleThreatOwners256 {lordIds:{nextId:number};working:HiveAdjacentRuntime256}
 const pool:readonly MechanoidKind[]=['scyther','lancer','pikeman'];
 /** CanResolve/Resolve each perform their own real rectangle selection. */
@@ -43,7 +44,7 @@ export function spawnFunctionalTempleThreat256(w:World,rect:AncientRect256,threa
  const made=spawnActualHive256(w,first,random,context,options);if(made.status!=='ready')throw Error('Temple Hive spawn refused: '+made.reason);
  for(let i=1;i<threat.count;i++){
   const capture=captureRandomClosewalk256(w),reach=captureGeographicGenerationReachability256(w),cell=tryRandomClosewalkCellNear256(capture,first,5,random,c=>!terrainIsWater256(w.tiles[c]!.terrain)&&reach.canReach(first,c,'closed-dry')&&reach.physical.standable(c));
-  if(cell===null||w.structures.filter(s=>s.kind==='insect-hive').length>=30||context.enemyReproductionRateFactor<=0)continue;
+  if(cell===null||[...structuresOfKind(w,'insect-hive')].length>=30||context.enemyReproductionRateFactor<=0)continue;
   const child=spawnActualHive256(w,cell,random,context,options);if(child.status!=='ready')throw Error('Temple child Hive spawn refused: '+child.reason);
  }
  owners.working.adjacentPermutation.splice(0,8,...context.adjacentPermutation);owners.working.adjacentUses=context.adjacentUses;

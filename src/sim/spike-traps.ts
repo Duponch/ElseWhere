@@ -12,6 +12,7 @@ import {captureSpikeTrapContacts,spikeTrapPhysicalCell,spikeTrapSpringChance,spi
 import {carrierOf} from './rescue-state.ts';
 import {animalCarrier} from './animal-rest-state.ts';
 import type {CommandResult,Structure,World} from './types.ts';
+import { structuresOfKind } from './structure-navigation.ts';
 
 const actors=(w:World):LivingTarget[]=>[...w.pawns,...w.wildlife?.animals??[],...w.mechanoids??[]];
 const present=(w:World,a:LivingTarget)=>a.state!=='dead'&&!a.health?.death&&('species'in a?!animalCarrier(w,a.id):'mechKind'in a||!carrierOf(w,a.id));
@@ -61,7 +62,7 @@ export interface SpikeTrapWindow {advance:(core:number)=>boolean;refresh:()=>voi
  * stagger cannot make an old queued arrival trigger before its new end. */
 export function spikeTrapWindow(w:World):SpikeTrapWindow|undefined {
  if(isCorePhysicalSchema297(Number(w.schemaVersion)))return spikeTrapWindow297(w);
- if(w.schemaVersion<226||!w.structures.some(s=>s.kind==='spike-trap'))return;
+ if(w.schemaVersion<226||!(structuresOfKind(w,'spike-trap').length>0))return;
  const start=Math.max(0,(w.tick-1)*10),end=w.tick*10;
  let current=start,queue=new Map<number,Set<LivingTargetKey>>(),traps=new Map<number,Structure>();
  const refresh=()=>{

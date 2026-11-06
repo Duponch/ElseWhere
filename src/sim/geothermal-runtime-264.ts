@@ -6,6 +6,7 @@ import {geyserFullCells256,geyserHasRoom256} from './local-geyser-runtime-256.ts
 import {validGeothermalState264,harvestedGeothermalGeyserIds264} from './geothermal-state-264.ts';
 import type {ThermalLayout} from './thermal-topology.ts';
 import type {Structure,World} from './types.ts';
+import { structuresOfKind } from './structure-navigation.ts';
 const f=Math.fround;
 
 /** The full 6x6 volume has 28 distinct surrounding air cells. */
@@ -21,7 +22,7 @@ export function geothermalAdjacentCells264(width:number,height:number,s:Pick<Str
 /** Root invokes this once after the true local thermal reconciliation. Every
  * admission precedes mutation; jumps never replay unknown historical heat. */
 export function advanceGeothermalGenerators264(world:World,layout:ThermalLayout):void {
- const sources=world.structures.filter(s=>s.kind==='geothermal-generator');if(!sources.length)return;
+ const sources=[...structuresOfKind(world,'geothermal-generator')];if(!sources.length)return;
  harvestedGeothermalGeyserIds264(world);
  for(const s of sources){const phase=s.geothermal!;if(!validGeothermalState264(phase,phase.atTick,world.nextId)||phase.atTick!==world.tick&&phase.atTick!==world.tick-1)throw Error('Geothermal phase requires one real local step, never catch-up');}
  if(layout.indices.length!==world.tiles.length||layout.rooms.length!==(world.thermal?.regions.length??0)||layout.rooms.some((r,i)=>r.cells.length!==world.thermal!.regions[i]!.cells.length))throw Error('Geothermal heat requires actual reconciled thermal regions');

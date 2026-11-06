@@ -54,6 +54,7 @@ import {finalizeInitialWorldRegistry} from './world-map-context.ts';
 import {adoptWind} from './wind.ts';
 import {ensureFireState} from './fire-rules.ts';
 import {validateWorld} from './serialization.ts';
+import { structuresOfKind } from './structure-navigation.ts';
 
 const BASE_STEPS=new Set(['ElevationFertility','MutatorPostElevationFertility','RocksFromGrid','Terrain','MutatorPostTerrain','Roads','MutatorCriticalStructures','MutatorNonCriticalStructures','ScatterShrines','ScatterRuinsSimple','FindPlayerStartSpot','ScenParts','Plants','SteamGeysers','RockChunks','CaveHives','Snow','Animals','Fog','MutatorFinal']);
 export const BASE_PLAYER_GENERATION_ORDER_256=Object.freeze(CORE_4871_GEN_STEP_DEFS.filter(row=>BASE_STEPS.has(row.defName)).sort((a,b)=>a.order-b.order||a.index-b.index));
@@ -125,7 +126,7 @@ export function* createGeographicNewGame256(input:GeographicNewGameInput256,bind
  const plants=populateGeographicInitialPlants256(w);let plant=plants.next();while(!plant.done){yield {phase:'Plants900',completed:12,total};plant=plants.next();}
  yield {phase:'SteamGeysers950',completed:13,total};
  const rules=localBiomeRules256(description.biome,256);if(!rules)throw Error('Actual biome definition absent');
- const caskets=w.structures.filter(s=>s.kind==='ancient-cryptosleep-casket').map(s=>{const cells=footprintCells(s),xs=cells.map(c=>c.x),zs=cells.map(c=>c.z);return {id:s.id,x:Math.min(...xs),z:Math.min(...zs),width:Math.max(...xs)-Math.min(...xs)+1,height:Math.max(...zs)-Math.min(...zs)+1};});
+ const caskets=[...structuresOfKind(w,'ancient-cryptosleep-casket')].map(s=>{const cells=footprintCells(s),xs=cells.map(c=>c.x),zs=cells.map(c=>c.z);return {id:s.id,x:Math.min(...xs),z:Math.min(...zs),width:Math.max(...xs)-Math.min(...xs)+1,height:Math.max(...zs)-Math.min(...zs)+1};});
  generateLocalGeysers256(w,{waterCovered:description.waterCovered,biomeFactor:rules.scalars.geyserCountFactor,mutatorFactors:[],layoutRects,usedRects,ancientCaskets:caskets,mapInitializing:true,planEdificeRemoval(cell){
   const rock=w.tiles[cell]?.mineable;if(rock)return planVanishMineable256(w,cell,rock.id,true);
   // Only the verified real generated750/road props may Vanish without product.

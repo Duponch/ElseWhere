@@ -1,7 +1,7 @@
 import {isShipPartKind276} from './ship-part-content-276.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {roofCells,roofIdentity,sameRoofIdentity,type RoofIdentity} from './roof-rules.ts';
-import {structureMembershipToken} from './structure-navigation.ts';
+import {structureMembershipToken,structuresOfKind} from './structure-navigation.ts';
 import {START_STRUCTURE_PHYSICS_256} from './player-start-physics-256.ts';
 import { isRoomDoor } from './door-rules.ts';
 import { ventFaces } from './vent.ts';
@@ -47,7 +47,7 @@ export class ThermalTopologyCache {
   }
   private readFull(world:World,geographic:boolean):ThermalLayout {
     const roofs=roofCells(world),doors:World['structures']=[],vents:{s:World['structures'][number];i:number}[]=[];
-    const hasVents=world.structures.some(s=>s.kind==='vent'),faceSolids=new Set<number>(),buildings=new Map<number,number>();
+    const hasVents=(structuresOfKind(world,'vent').length>0),faceSolids=new Set<number>(),buildings=new Map<number,number>();
     // Capture both room barriers and vent-face barriers in source order. The
     // final overlapping structure still wins for room topology, while every
     // blocking footprint contributes to the vent-face union. No input survives

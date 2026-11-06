@@ -10,6 +10,7 @@ import { isRoofed } from './roof-rules.ts';
 import { outdoorTemperature } from './temperature.ts';
 import { damageResource } from './thing-damage.ts';
 import type { LightEnvironment,LightReader } from './light-environment.ts';
+import { structuresOfKind } from './structure-navigation.ts';
 
 /** since starts observation. bornAt exists only when actual sowing is known. */
 export interface PlantLife {
@@ -68,7 +69,7 @@ export function advancePlantLife(world:World,layout:ThermalLayout,providedLight?
   const due=index.buckets[world.tick%PLANT_LIFE_INTERVAL]!;
   if(!due.length)return;
   const outside=outdoorTemperature(world),light=annualNaturalLight(world);
-  const needsArtificial=providedLight!==undefined&&(world.schemaVersion>=256||world.structures.some(s=>s.kind==='sun-lamp'));
+  const needsArtificial=providedLight!==undefined&&(world.schemaVersion>=256||(structuresOfKind(world,'sun-lamp').length>0));
   // Older direct callers retain their natural-light rules. Resolve an actual
   // environment lazily, only when a living plant reaches its individual check.
   let environment:LightEnvironment|undefined;

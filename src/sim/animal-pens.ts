@@ -4,7 +4,7 @@ import {isAnimalSpeciesInVersion} from './animal-species.ts';
 import type { AnimalSpeciesId } from './animal-species.ts';
 import { footprintCells } from './definitions.ts';
 import { isPassageDoor } from './door-rules.ts';
-import { filteredStructures,structureMembershipToken } from './structure-navigation.ts';
+import { filteredStructures,structureMembershipToken,structuresOfKind} from './structure-navigation.ts';
 import type { Cell, Structure, World } from './types.ts';
 
 export const PEN_ANIMALS:readonly AnimalSpeciesId[] = Object.freeze(['deer','gazelle','muffalo','dromedary',...PEN_ANIMALS_256]);
@@ -79,7 +79,7 @@ function build(world:World,oldSignature:string):PenCache {
   const component=new Int32Array(size);component.fill(-1);
   const byComponent:CachedRegion[]=[];
   const regions=new Map<number,PenRegion>(),access=new Map<number,readonly Cell[]>(),at=new Map<number,PenRegion>();
-  const markers=world.structures.filter(s=>s.kind==='pen-marker').sort((a,b)=>a.id-b.id);
+  const markers=[...structuresOfKind(world,'pen-marker')].sort((a,b)=>a.id-b.id);
   for(const marker of markers){
     const origin=marker.z*width+marker.x;
     if(blocked[origin])continue;

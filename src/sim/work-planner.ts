@@ -64,7 +64,7 @@ import { deliveredStock, groundQuantity, reservedDestination, reservedSource, re
 import {smoothFloorReason281,canTouchSmoothFloor281} from './smooth-floor-281.ts';
 import { cellIndex, workNeighbours, inBounds, canStopAt, hasReachableCell, reachableCells, routeToJob, routeToCell, interactionGoals } from './pathfinding.ts';
 import type { Reachability } from './pathfinding.ts';
-import { structureById,type StructureNavigationGeometry } from './structure-navigation.ts';
+import { structureById,type StructureNavigationGeometry,structuresOfKind} from './structure-navigation.ts';
 import type { Cell, HaulDestination, Job, JobKind, MaterialKind, MaterialPile, Pawn, World } from './types.ts';
 export const PLAN_INTERVAL=20;
 export interface SearchStats { searches:{pawnId:number;mode:'all'|'nearest'|'full';visited:number;unreachedGroups:number;connectivityVisited?:number}[] }
@@ -310,7 +310,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
   }
   if (Number.isFinite(constructionHaulPriority(pawn)) && (isSchema299OrLater(Number(world.schemaVersion)) || pawn.hunger > 20) && (!best || best.priority >= constructionHaulPriority(pawn))) {
     const zonesByCell = new Map(storage.map(zone => [cellIndex(world, zone.x, zone.z), zone]));
-    const hoppersByCell=new Map(world.structures.filter(s=>s.kind==='hopper').map(s=>[cellIndex(world,s.x,s.z),s]));
+    const hoppersByCell=new Map([...structuresOfKind(world,'hopper')].map(s=>[cellIndex(world,s.x,s.z),s]));
     const isPrisonFood=prisonFoodChecker(world);
     const sources = world.piles.filter(pile => automaticallyHaulable(pile) && !isPrisonFood(pile) && pile.owner.type === 'ground' && allows(pile.owner) && pile.quantity > (sourceReserved.get(pile.id) ?? 0));
     const destinations: { destination: HaulDestination; target: Cell & { kind?: JobKind|import('./types.ts').StructureKind }; priority: number; workPriority:number; wood: number; food: number; 'ai-core'?:number; book?:number; beer?:number; wort?:number; plant?:number; chemfuel?:number; silver?:number; 'mech-corpse'?:number; corpse?:number; unfinished?:number; textile?:number; chunk?:number; steel?:number; gold?:number; uranium?:number; plasteel?:number; component?:number; 'advanced-component'?:number; weapon?:number; apparel?:number; neutroamine?:number; medicine?:number; blocks?:number; jade?:number; prosthesis?:number; items?:ReadonlyMap<ItemId,number>; reachable?: boolean }[] = [];

@@ -6,6 +6,7 @@ import {animalCarrier} from './animal-rest-state.ts';
 import type {Structure,World} from './types.ts';
 import {trySpringSpikeTrap,type SpikeTrapWindow} from './spike-traps.ts';
 import {effectiveCore297} from './core-phase-297.ts';
+import { structuresOfKind } from './structure-navigation.ts';
 
 const actors=(w:World):LivingTarget[]=>[...w.pawns,...w.wildlife?.animals??[],...w.mechanoids??[]];
 const present=(w:World,a:LivingTarget)=>a.state!=='dead'&&!a.health?.death&&('species'in a?!animalCarrier(w,a.id):'mechKind'in a||!carrierOf(w,a.id));
@@ -15,7 +16,7 @@ const present=(w:World,a:LivingTarget)=>a.state!=='dead'&&!a.health?.death&&('sp
 export function spikeTrapWindow297(w:World,lastPlayedCore=effectiveCore297(w)-1):SpikeTrapWindow|undefined {
  if(!isCorePhysicalSchema297(Number(w.schemaVersion)))throw new RangeError('Core297 trap owner requires schema297');
  if(!Number.isSafeInteger(lastPlayedCore)||lastPlayedCore<0||lastPlayedCore>effectiveCore297(w))throw new RangeError('Invalid trap owner origin');
- if(!w.structures.some(s=>s.kind==='spike-trap'))return;
+ if(!(structuresOfKind(w,'spike-trap').length>0))return;
  const start=lastPlayedCore;
  let current=start,queue=new Map<number,Set<LivingTargetKey>>(),traps=new Map<number,Structure>();
  const refresh=()=>{

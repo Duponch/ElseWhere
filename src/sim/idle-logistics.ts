@@ -6,6 +6,7 @@ import { ITEM_DEFINITIONS, type ItemId } from './items.ts';
 import { storageAccepts } from './storage-filters.ts';
 import { storageConditionKey } from './storage-condition.ts';
 import type { World } from './types.ts';
+import { structuresOfKind } from './structure-navigation.ts';
 
 /** Linear conservative rejection before an expensive navigation flood.
  * False means no hauling can improve storage. True still requires all reservations/access checks. */
@@ -13,7 +14,7 @@ export function mayImproveStorage(world:World):boolean {
   const cells=storageCells(world),zones=new Map(cells.map(z=>[z.z*world.width+z.x,z]));
   const piles=world.piles.filter(p=>p.owner.type==='ground'),byCell=new Map<number,typeof piles>();
   for(const p of piles)if(p.owner.type==='ground'){const k=p.owner.z*world.width+p.owner.x,list=byCell.get(k);if(list)list.push(p);else byCell.set(k,[p]);}
-  const hoppers=new Map(world.structures.filter(s=>s.kind==='hopper').map(s=>[s.z*world.width+s.x,s]));
+  const hoppers=new Map([...structuresOfKind(world,'hopper')].map(s=>[s.z*world.width+s.x,s]));
   const wanted=[...hoppers.values()].filter(h=>hopperFillWanted(world,h.id));
   const best=new Map<ItemId,number>();
   // Keep the historical fast path when no range is active. Geometry/category
