@@ -203,7 +203,7 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 ## 6. Feuille de route recommandée (par gain attendu)
 
 1. **Publications complètes sur une grande colonie.** Sur Les Forges, une publication complète de ≈ 630 Ko part à chaque tick macro : 6,8 par seconde à ×1. Le thread principal y passe ≈ 30 % de son temps (adoption 18 %, application 12,6 %), dont 9,5 % pour la copie gelée des acteurs. Les essais de partage structurel et de validation plus rapide de cette copie ne gagnent rien : c’est le parcours qui coûte, pas l’allocation. Il faut donc publier moins. Pistes :
-   - porter dans le paquet de mouvement les dépendances de pose des acteurs changés (lit, cargaison, repas, pose de travail…), qui forcent aujourd’hui la publication complète ;
+   - porter dans le paquet de mouvement les dépendances de pose des acteurs changés, qui forcent aujourd’hui la publication complète. Mesure sur 30 ticks des Forges : 28 exigent une publication complète. Par tick, environ 2,8 colons changent de pose de contact (début ou fin d’un travail), 1,9 de pose d’animation et 0,4 de cargaison ; aucun autre champ ne bouge. Ces valeurs dépendent du contexte du monde (tâches, tas), absent des paquets de mouvement : il faut donc les transmettre déjà calculées, et que le rendu des colons les utilise ;
    - ou envoyer colons et animaux en deltas par champ : besoins et position changent à chaque tick, compétences, santé et équipement presque jamais.
 
    Les deux touchent des fichiers épinglés (`core-phase-data-297.ts`, `native-clone-resident.ts`).
