@@ -137,9 +137,16 @@ let fault: SimulationFault | undefined;
 const motion = createMotionRecorder();
 let presentationChanges=new PresentationChanges();
 let observedWorld:World|undefined;
+/* Within one committed Core observation nothing mutates the World between
+ * the several visibleWorld() reads (observers, Full encode, publication), so
+ * the campaign projection — rebuilt with whole-campaign people/bed captures —
+ * is computed once per scope and reused (same object, same content). */
+let presentationScope297=false,presentationMemo297:{owner:CampaignState;value:World}|undefined;
 function visibleWorld():World|undefined {
   if(world?.worldMaps&&!selectedRegisteredMap(world)){observedWorld=undefined;return;}
-  const current=campaignPresentation(world! as World);
+  let current:World;
+  if(presentationScope297&&presentationMemo297?.owner===world)current=presentationMemo297!.value;
+  else{current=campaignPresentation(world! as World);if(presentationScope297)presentationMemo297={owner:world!,value:current};}
   if(current!==observedWorld){motion.reset();phasePublisher297.reset();audioCues.reset();presentationChanges=new PresentationChanges();observedWorld=current;}
   return current;
 }
@@ -601,6 +608,8 @@ function runCoreTask297(now:number):void {
  const threatsChanged=result.localTickCompleted||result.maps.some(row=>row.observerEffects297.threatsChanged);
  const encounter=pendingCaravan261(world),entry=pendingWorldEntry263(world),threatPaused=threatsChanged&&urgentThreats.capture(world,threatPauseMode),paused=!!encounter||!!entry||threatPaused;
  if(threatPaused){speed=0;resetSimulationClock(now);}if(encounter)holdEncounterPause261(now);if(entry)holdWorldEntry263(now);
+ presentationScope297=true;presentationMemo297=undefined;
+ try{
  const visible=physicalVisibleWorld297();
  if(visible){
   const mapId=coreMapId297(visible),row=result.maps.find(item=>item.mapId===mapId);
@@ -634,6 +643,7 @@ function runCoreTask297(now:number):void {
   }
   publishDuePhysical297(paused,batch.remaining===0);
  }else if(result.localTickCompleted||paused)publishCapturedTick();
+ }finally{presentationScope297=false;presentationMemo297=undefined;}
  if(paused){if(encounter)startEncounter261();if(entry)startWorldEntry263();return;}
  if(batch.remaining===0){coreBatch297=undefined;if(wakeDue)regularTasks.request();}else regularTasks.request();
 }
