@@ -4,6 +4,7 @@ import {isAnimalSpeciesInVersion} from './animal-species.ts';
 import type { AnimalSpeciesId } from './animal-species.ts';
 import { footprintCells } from './definitions.ts';
 import { isPassageDoor } from './door-rules.ts';
+import { filteredStructures,structureMembershipToken } from './structure-navigation.ts';
 import type { Cell, Structure, World } from './types.ts';
 
 export const PEN_ANIMALS:readonly AnimalSpeciesId[] = Object.freeze(['deer','gazelle','muffalo','dromedary',...PEN_ANIMALS_256]);
@@ -20,6 +21,9 @@ interface CachedRegion { cells:Set<number>; access:Cell[]; closed:boolean }
 interface PenCache {
   scannedAt:number;
   signature:string;
+  /** Exact fast path: membership token and door hold states of the signature inputs. */
+  token?:object;
+  holds?:Uint8Array;
   regions:Map<number,PenRegion>;
   access:Map<number,readonly Cell[]>;
   at:Map<number,PenRegion>;
@@ -45,10 +49,22 @@ const passage=(s:Structure):boolean=>isPassageDoor(s.kind);
  * the previously flooded regions after one cheap structural signature. */
 export function invalidateAnimalPens(world:World):void { caches.delete(world); }
 
+const penSignatureInput=(s:Structure):boolean=>isShipPartKind276(s.kind)||s.kind==='geothermal-generator'||s.kind==='wall'||s.kind==='cooler'||s.kind==='vent'||s.kind==='fence'||passage(s)||s.kind==='pen-marker';
+const holdOpen=(s:Structure):number=>s.door?.holdOpen&&s.door.open?1:0;
+/* The signature reads only immutable facts (id, kind, position) of the
+ * structures selected by penSignatureInput (a kind-only predicate) plus each
+ * one's door hold state, so the selected list is cached per membership token
+ * and an unchanged token with unchanged hold states proves an equal signature. */
+function signatureInputs(world:World):readonly Structure[] {return filteredStructures(world,'animal-pen-signature',penSignatureInput);}
+function holdStates(inputs:readonly Structure[]):Uint8Array {const out=new Uint8Array(inputs.length);for(let i=0;i<inputs.length;i++)out[i]=holdOpen(inputs[i]!);return out;}
+function sameHoldStates(previous:Uint8Array|undefined,inputs:readonly Structure[]):boolean {
+  if(!previous||previous.length!==inputs.length)return false;
+  for(let i=0;i<inputs.length;i++)if(previous[i]!==holdOpen(inputs[i]!))return false;
+  return true;
+}
 function signature(world:World):string {
   const parts:string[]=[];
-  for(const s of world.structures)if(isShipPartKind276(s.kind)||s.kind==='geothermal-generator'||s.kind==='wall'||s.kind==='cooler'||s.kind==='vent'||s.kind==='fence'||passage(s)||s.kind==='pen-marker')
-    parts.push(`${s.id}:${s.kind}:${s.x}:${s.z}:${s.door?.holdOpen&&s.door.open?1:0}`);
+  for(const s of signatureInputs(world))parts.push(`${s.id}:${s.kind}:${s.x}:${s.z}:${holdOpen(s)}`);
   return parts.join('|');
 }
 
@@ -98,9 +114,11 @@ function build(world:World,oldSignature:string):PenCache {
 function capture(world:World):PenCache {
   const previous=caches.get(world);
   if(previous?.scannedAt===world.tick&&previous.count===world.structures.length)return previous;
+  const token=structureMembershipToken(world),inputs=signatureInputs(world);
+  if(previous&&previous.token===token&&sameHoldStates(previous.holds,inputs)){previous.scannedAt=world.tick;previous.count=world.structures.length;return previous;}
   const key=signature(world);
-  if(previous?.signature===key){previous.scannedAt=world.tick;previous.count=world.structures.length;return previous;}
-  const next=build(world,key);caches.set(world,next);return next;
+  if(previous?.signature===key){previous.scannedAt=world.tick;previous.count=world.structures.length;previous.token=token;previous.holds=holdStates(inputs);return previous;}
+  const next=build(world,key);next.token=token;next.holds=holdStates(inputs);caches.set(world,next);return next;
 }
 export const penRegion=(world:World,markerId:number):PenRegion|undefined=>capture(world).regions.get(markerId);
 export const animalPenAt=(world:World,x:number,z:number):PenRegion|undefined=>capture(world).at.get(z*world.width+x);
