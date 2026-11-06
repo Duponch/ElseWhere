@@ -143,7 +143,7 @@ Mesure du 6 novembre en fin de nuit, même protocole (fenêtres de 15 s) :
 
 Il reste une reconstruction de chunk de 50 à 130 ms, rare : elle n’a lieu qu’à l’apparition d’une plante dans le chunk, environ une fois toutes les 25 s à ×6 sur Les Éclaircies. Pour la faire disparaître, il faudrait découper la reconstruction d’un chunk sur plusieurs images, ou la confier à un Worker.
 
-**Les Forges (80 colons), client réel.** À ×1 : 98 images/s, p95 36 ms, 14 longues tâches en 15 s. Le thread principal est saturé (≈ 104 % d’occupation) :
+**Les Forges (80 colons), client réel.** À ×1 : 96 à 98 images/s, p95 36 ms, 14 longues tâches en 15 s. Le temps réel est tenu : 6,5 ticks/s pour 6 demandés. Le thread principal est saturé (≈ 104 % d’occupation) :
 
 | Poste | Part | Cause |
 |---|---|---|
@@ -210,6 +210,20 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
    - ou envoyer colons et animaux en deltas par champ : besoins et position changent à chaque tick, compétences, santé et équipement presque jamais.
 
    Les deux touchent des fichiers épinglés (`core-phase-data-297.ts`, `native-clone-resident.ts`).
+
+   **Le Worker paie aussi ce coût.** Profil du Worker de production sur Les Forges à ×3 :
+   - publication : 49 % ;
+   - simulation : 39,5 %.
+
+   Dans la publication :
+   - aspect naturel de 21 000 plantes : 12 % ;
+   - comparaison des ressources et des tas : 10 % ;
+   - encodeurs résidents : 12 % ;
+   - clonage du message : 7 % ;
+   - copie gelée des acteurs : 7,5 % ;
+   - dépendances de pose : 3,5 %.
+
+   Résultat : ×1 est tenu, à 89 % de la cible dans Node et à 6,5 ticks/s dans le navigateur, mais ×3 plafonne à environ 5 ticks/s, alors que la simulation seule en permettrait 12. Publier moins de fois en complet est donc le levier principal, à la fois pour le débit et pour la fluidité sur les grandes colonies.
 2. **Rendu three.js** : environ 36 à 48 % du thread principal en jeu, pour 148 maillages visibles et 72 appels de dessin. Postes :
    - uniformes par objet : 11 % ;
    - passe d’ombre : 6,5 % ;
