@@ -17,6 +17,7 @@ import type { TradeGood } from './trade-goods.ts';
 import type { TradeLine } from './trade-state.ts';
 import type { OrbitalShip } from './orbital-state.ts';
 import type { Cell,MaterialPile,Pawn,Structure,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export function orbitalConsoleSpot(s:Structure):Cell {return s.orientation===0?{x:s.x,z:s.z+2}:s.orientation===1?{x:s.x+2,z:s.z}:s.orientation===2?{x:s.x,z:s.z-2}:{x:s.x-2,z:s.z};}
 export function orbitalPoweredBeacon(w:World):boolean {return w.structures.some(s=>s.kind==='orbital-beacon'&&isPowerActive(s));}
@@ -44,7 +45,7 @@ export function orbitalTradeReason(w:World,p:Pawn,ship:OrbitalShip,console?:Stru
   const reason=negotiatorRefusal(p);if(reason)return reason;
   if(!w.pawns.includes(p)||p.state==='dead'||p.state==='downed'||p.state==='sleeping'||p.flee||carrierOf(w,p.id)||p.hunger<=24||p.rest<=15)return 'Négociateur indisponible.';
   if(!orbitalPoweredBeacon(w))return 'Une balise orbitale alimentée est nécessaire.';
-  console??=w.structures.find(s=>s.id===p.orbitalTrade?.consoleId);
+  console??=structureById(w,p.orbitalTrade?.consoleId);
   if(!console||console.kind!=='comms-console'||!w.structures.includes(console))return 'Console de communication introuvable.';
   const areaReason=allowedAreaReason(w,p,console);if(areaReason)return areaReason;
   if(!isPowerActive(console))return 'La console n’est pas alimentée.';
@@ -57,7 +58,7 @@ export function orbitalTradeReason(w:World,p:Pawn,ship:OrbitalShip,console?:Stru
 export function orbitalAtContact(w:World,p:Pawn,ship:OrbitalShip):boolean {
   const task=p.orbitalTrade;
   if(!task||task.shipId!==ship.id||task.phase!=='ready'||orbitalTradeReason(w,p,ship))return false;
-  const s=w.structures.find(s=>s.id===task.consoleId)!,spot=orbitalConsoleSpot(s);
+  const s=structureById(w,task.consoleId)!,spot=orbitalConsoleSpot(s);
   return task.spot.x===spot.x&&task.spot.z===spot.z&&p.x===spot.x&&p.z===spot.z&&!p.path.length&&p.moveCooldown===0&&(p.motion?.end??0)<=w.tick&&(p.stun?.untilCore??0)<=w.tick*10
     &&!orbitalOtherActivity(w,p);
 }

@@ -17,6 +17,7 @@ import { isSmeltingRecipe,smeltingIngredientAllowed,smeltingProduct,smeltingYiel
 import type { CookingBill } from './cooking-types.ts';
 import type { ProductionContext } from './production-output.ts';
 import type { Pawn,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 /** One indivisible input becomes one complete legal metal pile after preflight. */
 export function finishSmelting(world:World,pawn:Pawn,bill:CookingBill,context:ProductionContext):boolean {
@@ -24,7 +25,7 @@ export function finishSmelting(world:World,pawn:Pawn,bill:CookingBill,context:Pr
   if(world.schemaVersion<222||!task||task.recipe==='smelt-apparel'&&world.schemaVersion<267||task.recipe==='smelt-slag'&&!isSchema256Or257(world.schemaVersion)||!isSmeltingRecipe(task.recipe)||task.phase!=='work'||task.progress!==productionWorkTotal(task.recipe)
     ||!validSmeltingIngredients(task.ingredients,task.recipe)||task.ingredients[0]!.stage!=='placed'||(pawn.motion?.end??0)>world.tick||pawn.stun||pawn.draft
     ||pawn.state==='dead'||pawn.state==='downed'||pawnBody(pawn).capacities.manipulation<=0||backgroundWorkRefusal(pawn,'craft'))return false;
-  const station=world.structures.find(s=>s.id===task.stationId),ingredient=task.ingredients[0]!,weapon=world.piles.find(p=>p.id===ingredient.pileId);
+  const station=structureById(world,task.stationId),ingredient=task.ingredients[0]!,weapon=world.piles.find(p=>p.id===ingredient.pileId);
   if(!station||station.kind!=='electric-smelter'||!productionStationUsable(station)||!station.bills?.includes(bill)
     ||bill.id!==task.billId||bill.recipe!==task.recipe||!isSmeltingRecipe(bill.recipe)||bill.suspended||!(task.recipe==='smelt-slag'?['times','until','forever']:['times','forever']).includes(bill.mode)
     ||!Number.isSafeInteger(bill.target)||bill.target<0||bill.target>9999||bill.mode==='times'&&bill.target<=0

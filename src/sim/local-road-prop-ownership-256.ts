@@ -2,6 +2,7 @@ import {targetBuilding263,targetBuildingPlayerUse263,targetBuildingCanClaim263,t
 import {isAncientNeutralKind256} from './ancient-monument-runtime-256.ts';
 import {isLocalRoadProp256} from './local-road-props-256.ts';
 import type {CommandResult,Structure,World} from './types.ts';
+import { structureById } from './structure-navigation.ts';
 type FactionWorld=Pick<World,'schemaVersion'|'worldFactions'>&Partial<Pick<World,'pawns'|'structures'>>;
 export interface ClaimRoadPropCommand256 {type:'claim-road-prop';structureId:number}
 /** Registry authority, never a conventional faction number or an inferred alias. */
@@ -36,7 +37,7 @@ export function claimRoadProp256(w:World,value:unknown):CommandResult {
  if(Reflect.ownKeys(value).length!==2||!d.type||!('value'in d.type)||d.type.value!=='claim-road-prop'
    ||!d.structureId||!('value'in d.structureId)||!Number.isSafeInteger(d.structureId.value)||d.structureId.value<1)
   return {ok:false,code:'invalid-command',reason:'Commande de revendication invalide.'};
- const s=w.structures.find(s=>s.id===d.structureId.value);
+ const s=structureById(w,d.structureId.value);
  if(!s||!(targetBuilding263(w,s)||s.kind==='glow-pod'||isLocalRoadProp256(s.kind)||Object.hasOwn(s,'factionId')&&isAncientNeutralKind256(s.kind)))return {ok:false,code:'missing-target',reason:'Vestige routier absent de cette carte.'};
  if(!roadPropCanClaim256(w,s))return {ok:false,code:'invalid-command',reason:'Vestige non neutre ou faction du joueur non confirmée.'};
  s.factionId=roadPropPlayerFaction256(w)!;return {ok:true};

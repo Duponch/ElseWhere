@@ -5,6 +5,7 @@ import {isSchema277OrLater} from './schema-compatibility-257.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import type {BombInstigatorKey,TurretWick} from './mini-turret-state.ts';
 import type {Structure,World} from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export const ANCIENT_CASKET_FLAME_RADIUS_256=Math.fround(2.66);
 export interface AncientCasketWick256 extends TurretWick {}
@@ -35,7 +36,7 @@ export function ancientDamageInstigator256(w:World,k:BombInstigatorKey|undefined
  if(k===undefined)return {known:true,hasFaction:false};const id=Number(k.slice(k.indexOf(':')+1));
  if(k.startsWith('pawn:'))return {known:w.pawns.some(p=>p.id===id),hasFaction:w.pawns.some(p=>p.id===id)};
  if(k.startsWith('animal:')){const a=w.wildlife?.animals.find(a=>a.id===id);return {known:!!a,hasFaction:!!a?.domestic};}
- if(k.startsWith('structure:')){const s=w.structures.find(s=>s.id===id);return {known:!!s&&Object.hasOwn(s,'factionId'),hasFaction:!!s&&s.factionId!==null&&s.factionId!==undefined};}
+ if(k.startsWith('structure:')){const s=structureById(w,id);return {known:!!s&&Object.hasOwn(s,'factionId'),hasFaction:!!s&&s.factionId!==null&&s.factionId!==undefined};}
  // Mechanoid faction currently has no retained Faction owner in this model.
  return {known:false,hasFaction:false};
 }

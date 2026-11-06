@@ -8,6 +8,7 @@ import {isCookingOrder} from './order-types.ts';
 import {releaseAssignments} from './work-release.ts';
 import {smithingRecipeAvailable267,isSmithingRecipe267,smithingMaterialFromIngredients267,smithingWorkpiece267,type SmithingMaterial267,type SmithingRecipe267} from './smithing-content-267.ts';
 import type {Cell,CommandResult,MaterialPile,Pawn,World} from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface SmithingWork267 {
  recipe:SmithingRecipe267;material:SmithingMaterial267;authorId:number;progress:number;
@@ -18,7 +19,7 @@ export interface SmithingWork267 {
 export function beginSmithingWork267(w:World,p:Pawn):MaterialPile|null {
  const t=p.cooking;if(!t||!isSmithingRecipe267(t.recipe)||!smithingRecipeAvailable267(t.recipe,w.schemaVersion)||!allowedAreaWorkAllowed(w,p)||(p.motion?.end??0)>w.tick||p.moveCooldown>0||p.x!==t.spot.x||p.z!==t.spot.z)return null;
  const recipe=t.recipe,item=smithingWorkpiece267(recipe);
- const station=w.structures.find(s=>s.id===t.stationId);if(!station)return null;
+ const station=structureById(w,t.stationId);if(!station)return null;
  if(t.ingredients.length===1&&t.ingredients[0]!.item===item){
   const i=t.ingredients[0]!,existing=w.piles.find(q=>q.id===i.pileId),work=existing?.smithingWork;
   if(!existing||!materialAllowedForPlayer256(existing)||!work||existing.item!==item||work.recipe!==recipe||work.authorId!==p.id||i.stage!=='placed'||i.quantity!==1||existing.owner.type!=='ground'||existing.owner.x!==i.cell.x||existing.owner.z!==i.cell.z||!ingredientPlaceFree(w,i.cell,t.spot,recipe,station)||work.billId!==undefined&&work.billId!==t.billId)return null;

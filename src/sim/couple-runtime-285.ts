@@ -19,6 +19,7 @@ import {registeredCampaign} from './world-map-context.ts';
 import type {BodyAssessment} from './body-capacities.ts';
 import type {CoupleTask285} from './couple-state-285.ts';
 import type {Pawn,Structure,World} from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 const civilAdult=(p:Pawn)=>coupleAdult285(p)&&(p.faction??'colony')==='colony'&&!p.prisoner&&!p.visitor&&!p.raid&&!p.podRescue
  &&p.state!=='dead'&&!p.health?.death&&p.cryptosleepHeldAt271===undefined&&p.shipCryptosleepHeldAt277===undefined;
@@ -26,7 +27,7 @@ function lyingSleep(world:World,pawn:Pawn,bed?:Structure):Structure|undefined {
  const task=pawn.need;
  if(task?.kind!=='sleep'||task.phase!=='sleep'||task.bedId===null||pawn.moveCooldown!==0||(pawn.motion?.end??0)>world.tick
   ||!['sleeping','resting','downed'].includes(pawn.state))return;
- bed??=world.structures.find(b=>b.id===task.bedId);
+ bed??=structureById(world,task.bedId);
  if(!bed||bed.kind!=='double-bed'||task.bedId!==bed.id||bed.medical||bed.prisoner)return;
  const slot=pawnBedSlot(pawn,bed),cell=slot===undefined?undefined:bedSlotCell(bed,slot);
  return cell&&pawn.x===cell.x&&pawn.z===cell.z&&task.target.x===cell.x&&task.target.z===cell.z?bed:undefined;

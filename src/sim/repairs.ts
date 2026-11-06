@@ -7,11 +7,12 @@ import { releaseAssignments } from './work-release.ts';
 import { advanceWork,setWorkUnits,WORK_FRACTIONS } from './work-progress.ts';
 import type { BodyAssessment } from './body-capacities.ts';
 import type { Job,Pawn,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface RepairTarget { structureId:number; warmed?:true }
 export function inHome(world:World,index:number):boolean {const a=world.home??[];let lo=0,hi=a.length;while(lo<hi){const mid=(lo+hi)>>>1;if(a[mid]!<index)lo=mid+1;else hi=mid;}return a[lo]===index;}
 export function repairWanted(world:World,j:Job):boolean {
-  const s=world.structures.find(s=>s.id===j.repair?.structureId);
+  const s=structureById(world,j.repair?.structureId);
   return !!s&&roadPropCanRepair256(world,s)&&!s.breakdown&&(world.schemaVersion>=87?isRepairableStructure(s):isBarrier(s))&&!!s.damage&&inHome(world,s.z*world.width+s.x)&&!world.jobs.some(other=>other.deconstruction?.structureId===s.id);
 }
 /** Sparse automatic intentions reuse construction priorities, reservations and
@@ -31,7 +32,7 @@ export function reconcileRepairs(world:World):void {
 /** 80 Core work before the first HP, then 20, ConstructionSpeed x1.7.
  * Simulate ten Core substeps: at most one HP per Core tick, including extreme stats. */
 export function advanceRepair(world:World,pawn:Pawn,job:Job,light:number,body:BodyAssessment|undefined):boolean {
-  const s=world.structures.find(s=>s.id===job.repair?.structureId);if(!s?.damage||!roadPropCanRepair256(world,s))return true;
+  const s=structureById(world,job.repair?.structureId);if(!s?.damage||!roadPropCanRepair256(world,s))return true;
   pawn.path=[];pawn.state='working';
   for(let core=0;core<10;core++){
     advanceWork(job,1.7*light*constructionSpeed(pawn)*physicalWorkFactor(pawn,'build',body));

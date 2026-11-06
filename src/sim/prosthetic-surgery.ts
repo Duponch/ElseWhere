@@ -33,6 +33,7 @@ import type { SurgeryTask } from './surgery-state.ts';
 import type { Reachability } from './pathfinding.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell,Pawn,World,MaterialPile } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 const release=(w:World,d:Pawn):void=>{if(!releaseWork(w,d))interruptWork(w,d);};
 export function implantSurgeryReason(w:World,d:Pawn,p:Pawn|undefined,accepted=false):string|undefined {
@@ -95,7 +96,7 @@ export function processImplantSurgery(w:World,d:Pawn,context:NeedContext,doctorG
   if(!finishing)return;
   learnSkill(d.skills.medicine,surgeryBaseXp(task.workCore),d);
   if(isProstheticItem273(task.implant))consumeImplantIngredients(w,task);
-  const bed=w.structures.find(s=>s.id===task.bedId)!;
+  const bed=structureById(w,task.bedId)!;
   const capture=captureCleanliness(w),room=capture.room(bed);
   const chance=surgerySuccessChance({doctor:d,medicine:task.consumedMedicine,bedQuality:bed.quality,bedSurgeryFactor:bedSurgeryFactor(bed,w),recipeFactor:1,patientGlow:patientGlow(bed),roomCleanliness:room?.cleanliness??null,outdoors:surgeryOutdoors(w,bed,capture)});
   const outcome=resolveSurgeryOutcome(p.health!,task.part,chance,()=>healthRandom(w),{allowMissingPart:true});

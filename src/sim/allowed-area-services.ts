@@ -3,6 +3,7 @@ import { captureAllowedArea,allowedAreaAllows,type AllowedAreaPolicy } from './a
 import { bedSlotCell } from './bed-slots.ts';
 import type { Cell,Pawn,World } from './types.ts';
 import type { RecreationTask } from './recreation-rules.ts';
+import { structureById } from './structure-navigation.ts';
 
 /** Runtime admissions only. Transport keeps its existing physical guards. */
 export function allowedAreaRecreationAllowed(world:World,pawn:Pawn,task:RecreationTask,policy:AllowedAreaPolicy|undefined=captureAllowedArea(world,pawn)):boolean {
@@ -27,7 +28,7 @@ export function allowedAreaRecreationAllowed(world:World,pawn:Pawn,task:Recreati
   if(task.activity==='visit-sick'){
     const patient=world.pawns.find(p=>p.id===task.patientId);return !!patient&&allowedAreaAllows(world,pawn,patient,policy);
   }
-  const building=world.structures.find(s=>s.id===task.buildingId);return !!building&&allowedAreaAllows(world,pawn,building,policy);
+  const building=structureById(world,task.buildingId);return !!building&&allowedAreaAllows(world,pawn,building,policy);
 }
 
 /** An admitted contact may stand outside. Carried patients/inputs can cross
@@ -38,7 +39,7 @@ export function allowedAreaServicesAllowed(world:World,pawn:Pawn):boolean {
   const cell=(target:Cell|undefined)=>!!target&&allowedAreaAllows(world,pawn,target,policy);
   const patient=(id:number)=>cell(world.pawns.find(p=>p.id===id));
   const animal=(id:number)=>cell(world.wildlife?.animals.find(a=>a.id===id));
-  const building=(id:number)=>cell(world.structures.find(s=>s.id===id));
+  const building=(id:number)=>cell(structureById(world,id));
   const source=(id:number|null|undefined)=>{
     if(id===undefined||id===null||id===0)return true;
     const pile=world.piles.find(p=>p.id===id);return !!pile&&pile.owner.type==='ground'&&cell(pile.owner);
@@ -65,10 +66,10 @@ export function allowedAreaServicesAllowed(world:World,pawn:Pawn):boolean {
     if(surgery.ingredients?.some(i=>!cell(i.cell)||i.stage==='source'&&!source(i.pileId)))return false;
   }
   const cryptosleep=pawn.cryptosleepTask;
-  if(cryptosleep){const c=world.structures.find(s=>s.id===cryptosleep.casketId);if(!c||!isPlayerCasket271(c)||!cell(cryptosleepInteraction271(c))||cryptosleep.action==='carry'&&cryptosleep.phase==='approach'&&!patient(cryptosleep.patientId!))return false;}
+  if(cryptosleep){const c=structureById(world,cryptosleep.casketId);if(!c||!isPlayerCasket271(c)||!cell(cryptosleepInteraction271(c))||cryptosleep.action==='carry'&&cryptosleep.phase==='approach'&&!patient(cryptosleep.patientId!))return false;}
   const rescue=pawn.rescue;
   if(rescue&&!rescue.release){
-    const bed=world.structures.find(s=>s.id===rescue.bedId);
+    const bed=structureById(world,rescue.bedId);
     if(bed?.kind==='double-bed'?!cell(rescue.bedSlot===undefined?undefined:bedSlotCell(bed,rescue.bedSlot)):!building(rescue.bedId))return false;
     if(!rescue.arrest&&!rescue.capture&&rescue.phase==='approach'&&pawn.orders.active!=='rescue'&&!patient(rescue.patientId))return false;
   }

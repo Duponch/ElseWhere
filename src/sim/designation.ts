@@ -15,7 +15,7 @@ import { footprintCells } from './definitions.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
 import { inBounds } from './pathfinding.ts';
 import {canDesignateSmoothFloor281} from './smooth-floor-281.ts';
-import {captureStructureNavigation} from './structure-navigation.ts';
+import {captureStructureNavigation,structureById} from './structure-navigation.ts';
 import { canDesignateFloor,isBuildableFloor } from './flooring.ts';
 import { soilFertility } from './soil.ts';
 import { SCHEMA_VERSION,type AreaAction,type AreaCommand,type Cell,type CommandResult,type StorageSettings,type World } from './types.ts';
@@ -54,7 +54,7 @@ export function buildAreaIndex(world: World): AreaIndex {
   // resources still obstruct both zone types; legacy schemas keep their rules.
   for (const resource of world.resources) flags[index(resource)]! |= (world.schemaVersion<219?ZONE_BLOCKED:resource.kind==='rock'?ZONE_BLOCKED|GROW_BLOCKED:0) | FIXED | (choppable(world,resource)?TREE:0) | (isPlant(resource)||world.schemaVersion>=235&&resource.kind==='tree' ? BERRIES | (harvestable(world, resource) ? RIPE : 0) : 0);
   for (const structure of world.structures) for (const cell of footprintCells(structure)) flags[index(cell)]! |= DECONSTRUCTIBLE | FIXED | (occupancyOf(structure.kind)?.zones?0:ZONE_BLOCKED | GROW_BLOCKED);
-  for(const job of world.jobs)if(job.furniture){const source=world.structures.find(s=>s.id===job.furniture!.structureId);if(source)for(const c of footprintCells(source))flags[index(c)]!|=JOB;}
+  for(const job of world.jobs)if(job.furniture){const source=structureById(world,job.furniture!.structureId);if(source)for(const c of footprintCells(source))flags[index(c)]!|=JOB;}
   // Repair is automatic maintenance, not a cancellable designation. Its existing
   // barrier already supplies occupancy; it must not prevent deconstruction.
   for (const job of world.jobs.filter(j=>!isRoofJob(j)&&j.kind!=='repair'&&j.kind!=='fix-breakdown')) for (const cell of footprintCells(job)) flags[index(cell)]! |= JOB | (isPlantDesignationJob(job)?PLANT_JOB:0) | (job.kind==='deconstruct'||job.kind==='uninstall'||(world.schemaVersion>=219?occupancyOf(job.furniture?.kind??job.kind)?.zones!==false:occupancyOf(job.furniture?.kind??job.kind)?.zones)?0:ZONE_BLOCKED) | (occupancyOf(job.furniture?.kind??job.kind)?.zones===false?GROW_BLOCKED:0);

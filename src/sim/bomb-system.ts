@@ -22,6 +22,7 @@ import type { Structure,World } from './types.ts';
 import type { WorldProjectile } from './projectile-state.ts';
 import { projectileProfile } from './ranged-statistics.ts';
 import { applyEmpEffect } from './emp-effects.ts';
+import { structureById } from './structure-navigation.ts';
 
 /** Arrival owns the centre; the normal event queue advances this new wave on
  * the next Core substep. No thermal, flame or physical damage is emitted. */
@@ -106,7 +107,7 @@ export function advanceBombWave(w:World,wave:MiniTurretBombWave,core:number,read
       for(const t of snapshot){
         if(affected.has(t.key)||altitude(t.key)<full)continue;
         const id=idOf(t.key),target=t.key.startsWith('mech:')?w.mechanoids?.find(m=>m.id===id)
-          :t.key.startsWith('structure:')?w.structures.find(s=>s.id===id):undefined;
+          :t.key.startsWith('structure:')?structureById(w,id):undefined;
         if(target&&applyEmpEffect(w,target,amount,core)){affected.add(t.key);invalidate();}
       }
       wave.nextCell++;continue;
@@ -127,7 +128,7 @@ export function advanceBombWave(w:World,wave:MiniTurretBombWave,core:number,read
       else if(t.key.startsWith('mech:')){const m=w.mechanoids?.find(m=>m.id===id);if(m&&m.state!=='dead'){damageMechanoidWithBomb(w,m,core);attempted=true;}}
       else if(t.key.startsWith('structure:')||t.key.startsWith('packed:')){
         const packed=t.key.startsWith('packed:')?w.packed.find(p=>p.building.id===id&&p.owner.type==='ground'):undefined;
-        const s=packed?.building??(t.key.startsWith('structure:')?w.structures.find(s=>s.id===id):undefined);
+        const s=packed?.building??(t.key.startsWith('structure:')?structureById(w,id):undefined);
         if(s&&structureMaxHp(s)>0){if(!applyStructureExternalDamage(w,s,BOMB_AMOUNT,BOMB_AMOUNT*(packed?1:bombBuildingFactor(s)),'bomb',w.rng,core,wave.instigatorKey))throw new RangeError('Cannot commit Bomb structure impact');attempted=true;}
       }else if(t.key.startsWith('starting-pod:')){
         const p=landedStartingPods256(w).find(p=>p.id===id);if(p){if(!damageStartingPod256(w,p,BOMB_AMOUNT,core))throw new RangeError('Cannot commit Bomb active transporter impact');attempted=true;}

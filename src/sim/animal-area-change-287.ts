@@ -8,6 +8,7 @@ import {removalWritesMutable259,sealRemovalOriginal259,type MapRemovalWrite259} 
 import type {AnimalAreaChoice287} from './animal-area-state-287.ts';
 import type {WildAnimal} from './wildlife-state.ts';
 import type {Cell,World} from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface AnimalAreaChange287 {animal:WildAnimal;choice:AnimalAreaChoice287|null;cells?:readonly number[]}
 export type AnimalAreaChangePlan287={ok:false;reason:string}|{
@@ -32,7 +33,7 @@ function prepareWrites(w:World,changes:readonly AnimalAreaChange287[],prior:Read
    if(a.meal){const source=a.meal.kind==='plant'?w.resources.find(p=>p.id===a.meal!.id):w.piles.find(p=>p.id===a.meal!.id)?.owner;
     if(source&&'x'in source&&!inside(source)){delete draft.meal;interrupted=true;}
    }
-   if(a.animalRest){const spot=w.structures.find(s=>s.id===a.animalRest!.spotId);if(spot&&!inside(spot)){delete draft.animalRest;interrupted=true;if(draft.state==='sleeping')draft.state='idle';}}
+   if(a.animalRest){const spot=structureById(w,a.animalRest!.spotId);if(spot&&!inside(spot)){delete draft.animalRest;interrupted=true;if(draft.state==='sleeping')draft.state='idle';}}
    if(a.eggLay&&!inside(a.eggLay.target)){delete draft.eggLay;interrupted=true;}
    if(a.haul&&a.haul.phase!=='holding'){
     const task=a.haul,zone=(zones??=storageCells(w)).find(c=>c.id===task.destination.stockpileId),source=task.phase==='pickup'?w.piles.find(p=>p.id===task.sourcePileId):undefined;

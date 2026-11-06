@@ -291,7 +291,7 @@ import { deconstructionAt, deconstructionAvailable, designateDeconstruction } fr
 import { finishDeconstruction } from './deconstruction.ts';
 import { advancePriorityWork } from './priority-work.ts';
 import { leaveTransitCell } from './transit-exit.ts';
-import { captureStructureNavigation,structureNavigationReader } from './structure-navigation.ts';
+import { captureStructureNavigation,structureNavigationReader ,structureById} from './structure-navigation.ts';
 import { removeZonesForPlan } from './construction-zones.ts';
 import { occupancyOf, occupies } from './occupancy.ts';
 import { constructionHaulId, constructionSiteFree, constructionWorkTarget, isConstruction } from './construction-rules.ts';
@@ -793,7 +793,7 @@ function applyCommandInternal(world: World, command: Exclude<LocalCommand,import
   if(command.type==='heater-adjust')return adjustHeaterTarget(world,command.structureId,command.offset);
   if(command.type==='wind-auto-cut')return setWindAutoCut(world,command.structureId,command.enabled);
   if(command.type==='gather-spot'){
-    const spot=world.structures.find(structure=>structure.id===command.structureId);
+    const spot=structureById(world,command.structureId);
     if(!spot||!['campfire','table','table-square','table-long'].includes(spot.kind)||typeof command.enabled!=='boolean')
       return refusal('invalid-command','Point de rencontre invalide.');
     if(command.enabled)delete spot.gatherSpot;else spot.gatherSpot=false;
@@ -1124,7 +1124,7 @@ function completeJob(world: World, pawn: Pawn, job: Job): void {
   } else if (isRoofJob(job)) {
     finishRoofJob(world,job);
   } else if (job.kind === 'deconstruct') {
-    const target=world.structures.find(s=>s.id===job.deconstruction?.structureId);
+    const target=structureById(world,job.deconstruction?.structureId);
     if(!finishDeconstruction(world,pawn,job)){releaseWork(world,pawn);return;}
     invalidateAnimalPens(world);reconcileDomesticWork(world);
     if(target?.kind==='wall'||target?.kind==='column'||isRoomDoor(target?.kind))reconcileRoofSupport(world,false,target);

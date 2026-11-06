@@ -18,6 +18,7 @@ import { scheduleWakes, wantsSleep } from './schedule.ts';
 import { reservedServiceCells } from './service-reservations.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell, Pawn, World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 const same = (a: Cell, b: Cell): boolean => a.x === b.x && a.z === b.z;
 const NEED_INTERVAL = 20;
@@ -72,7 +73,7 @@ function offerSleepingAfterServices300(world:World,pawn:Pawn,context:NeedContext
     }
     if (!context.release()) return 'pending';
     if (best) {
-      claimLocalActorBed256(world,pawn,world.structures.find(b=>b.id===best!.id)!,best.slot);
+      claimLocalActorBed256(world,pawn,structureById(world,best!.id)!,best.slot);
       pawn.need = { kind: 'sleep', phase: 'travel', bedId: best.id, target: best.target };
       pawn.path = best.path; pawn.state = 'moving'; pawn.planCooldown = 0;
     } else {

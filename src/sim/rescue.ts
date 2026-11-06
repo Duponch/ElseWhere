@@ -23,6 +23,7 @@ import { processArrest,reconcileArrest } from './arrest.ts';
 import { planCommandDrops,releaseWork } from './work-release.ts';
 import type { NeedContext } from './needs.ts';
 import type { BedSlot,Cell,CommandResult,Pawn,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface RescueProposal {patientId:number;bedId:number;path:Cell[];bedSlot?:BedSlot}
 
@@ -82,7 +83,7 @@ export function rescueProposal(world:World,actor:Pawn,patient:Pawn,reach:Reachab
   for(const {bed,cell,slot} of beds)if(routeToCell(world,cell,reach))return {patientId:patient.id,bedId:bed.id,path,...(slot!==undefined?{bedSlot:slot}:{})};
 }
 export function startRescue(world:World,actor:Pawn,proposal:RescueProposal,forced=false,capture=false):void {
-  const bed=world.structures.find(b=>b.id===proposal.bedId)!,patient=world.pawns.find(p=>p.id===proposal.patientId)!;
+  const bed=structureById(world,proposal.bedId)!,patient=world.pawns.find(p=>p.id===proposal.patientId)!;
   if(bed.kind==='double-bed'&&(capture||proposal.bedSlot===undefined||!rescueBedAvailable(world,bed,patient,actor.id,false,proposal.bedSlot)))return;
   // The accepted rescue itself reserves a new visitor's destination. Do not
   // leave an ordinary bed owner behind if the order is cancelled before pickup.
@@ -115,7 +116,7 @@ export function reconcileRescues(world:World):void {
     if(!allowedAreaServicesAllowed(world,actor)){if(!releaseWork(world,actor))interruptWork(world,actor);continue;}
     if(actor.rescue.release){reconcileRelease(world,actor);continue;}
     if(actor.rescue.arrest){reconcileArrest(world,actor);continue;}
-    const task=actor.rescue,patient=world.pawns.find(p=>p.id===task.patientId),bed=world.structures.find(s=>s.id===task.bedId);
+    const task=actor.rescue,patient=world.pawns.find(p=>p.id===task.patientId),bed=structureById(world,task.bedId);
     if(!patient||!task.capture&&actor.orders.active!=='rescue'&&backgroundWorkRefusal(actor,patient.prisoner?'warden':'doctor')||(task.capture?!!captureReason(world,actor,patient,true):!wantsRescue(patient,actor.orders.active==='rescue')||!!visitorRescueRefusal(world,patient,actor.orders.active==='rescue'))||!bed
       ||bed.kind==='double-bed'&&(task.bedSlot===undefined||patient.bedId!==bed.id||patient.bedSlot!==task.bedSlot)
       ||!rescueBedAvailable(world,bed,patient,actor.id,!!task.capture,task.bedSlot)||medicalWorkRefusal(actor))releaseWork(world,actor);
@@ -126,7 +127,7 @@ export function processRescue(world:World,actor:Pawn,context:NeedContext):void {
   const task=actor.rescue;if(!task)return;
   if(task.release){processPrisonerRelease(world,actor,context);return;}
   if(task.arrest){processArrest(world,actor,context);return;}
-  const patient=world.pawns.find(p=>p.id===task.patientId),bed=world.structures.find(s=>s.id===task.bedId);
+  const patient=world.pawns.find(p=>p.id===task.patientId),bed=structureById(world,task.bedId);
   // Finish the previous physiological interval under its previous posture,
   // regardless of which actor was processed first in this tick.
   if(patient&&patient.health&&!patient.health.death&&patient.health.tick<world.tick)updatePawnHealth(world,patient);

@@ -22,6 +22,7 @@ import { carrierOf,rescueClaim,syncPatient } from './rescue-state.ts';
 import { planCommandDrops,releaseWork } from './work-release.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell,CommandResult,Pawn,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface ArrestProposal {patientId:number;bedId:number;path:Cell[]}
 const same=(a:Cell,b:Cell)=>a.x===b.x&&a.z===b.z;
@@ -80,7 +81,7 @@ export function applyArrest(world:World,command:{pawnId:number;patientId:number;
 
 export function reconcileArrest(world:World,actor:Pawn):boolean {
   const task=actor.rescue;if(!task?.arrest)return false;
-  const patient=world.pawns.find(p=>p.id===task.patientId),bed=world.structures.find(s=>s.id===task.bedId);
+  const patient=world.pawns.find(p=>p.id===task.patientId),bed=structureById(world,task.bedId);
   if(!task.capture&&!task.release&&actor.orders.active==='rescue'&&!arrestReason(world,actor,patient,true)
     &&patient&&bed&&allowedAreaAllows(world,actor,bed)&&rescueBedAvailable(world,bed,patient,actor.id,true))return true;
   releaseWork(world,actor);return false;
@@ -102,7 +103,7 @@ export function processArrest(world:World,actor:Pawn,context:NeedContext):void {
   const patient=world.pawns.find(p=>p.id===task.patientId);
   if(patient?.health&&!patient.health.death&&patient.health.tick<world.tick)updatePawnHealth(world,patient);
   if(!reconcileArrest(world,actor)||!patient)return;
-  const bed=world.structures.find(b=>b.id===task.bedId)!;
+  const bed=structureById(world,task.bedId)!;
   if(!settled(world,actor)){syncPatient(world,actor);return;}
   actor.state='moving';
   if(task.phase==='approach'){

@@ -54,6 +54,7 @@ import { freshRot, ticksUntilRot } from './food-preservation.ts';
 import { groundPile } from './ground-placement.ts';
 import { transferPile, reservedSource } from './materials.ts';
 import type { MaterialPile, Pawn, World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 const near=(a:{x:number;z:number},b:{x:number;z:number})=>Math.abs(a.x-b.x)+Math.abs(a.z-b.z)<=1;
 function take(world:World,pawn:Pawn,pile:MaterialPile,quantity:number):MaterialPile|null {
@@ -86,7 +87,7 @@ export function processCooking(world:World,pawn:Pawn,context:ProductionContext):
   if((smelting||cremation||burningApparel)&&((pawn.motion?.end??0)>world.tick||(cremation||burningApparel)&&pawn.moveCooldown>0))return;
   if((smelting||cremation||burningApparel)&&(pawn.stun||pawn.draft||pawn.state==='downed'||pawn.state==='dead'||pawnBody(pawn).capacities.manipulation<=0||(cremation||burningApparel)&&(medicalWorkRefusal(pawn)||(pawn.faction??'colony')!=='colony'||pawn.prisoner||pawn.visitor||pawn.raid||pawn.podRescue||pawn.burning||pawn.mental?.crisis||pawn.collapsePending||workPriority(pawn,'haul')===0))){context.release();return;}
   if(task.phase==='interrupted'){context.release();return;}
-  const station=world.structures.find(s=>s.id===task.stationId),bill=station?.bills?.find(b=>b.id===task.billId);
+  const station=structureById(world,task.stationId),bill=station?.bills?.find(b=>b.id===task.billId);
   if((smithing||brewing||pemmican||kibble||medicine||biofuel||smelting||cremation||burningApparel)&&(!station||!bill||bill.recipe!==task.recipe||!stationAccepts(station,task.recipe!))){context.release();return;}
   if(backgroundWorkRefusal(pawn,taskWork(task))||!station||!bill||bill.suspended||task.recipe==='cook-survival-meal'&&!stationAccepts(station,task.recipe)||!productionResearchUnlocked(world,taskRecipe(task))||task.phase!=='output'&&!productionWorkerQualified(pawn,taskRecipe(task))||workPriority(pawn,taskWork(task))===0&&pawn.orders.active!=='cook'||(task.phase!=='output'&&(!foodStationUsable(station)||!productionStationUsable(station)))) {context.release();return;}
   if(task.phase==='output'){if(!recipeHasProducts(taskRecipe(task))){context.release();return;}processProductionOutput(world,pawn,context,bill.destination);return;}

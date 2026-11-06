@@ -11,6 +11,7 @@ import type { SearchBudget } from './work-planner.ts';
 import type { Pawn,Structure,World } from './types.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 import type { Mechanoid } from './mechanoid-state.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface AggressiveCrisisAdmission { targetIds:number[];population:number }
 export const freePresentColonist=(w:World,p:Pawn):boolean=>w.pawns.includes(p)&&isColonist(p)&&!p.prisoner&&!p.visitor&&!p.podRescue&&!p.raid&&p.state!=='dead';
@@ -54,7 +55,7 @@ export function aggressiveCrisisAdmission(w:World,p:Pawn,kind:AggressiveCrisisKi
 
 const random=(rng:{value:number})=>{const state={rng:rng.value},roll=healthRandom(state);rng.value=state.rng;return roll;};
 export function chooseTantrumTarget(w:World,p:Pawn,ids:readonly number[],rng:{value:number}):number|undefined {
-  const weighted=ids.flatMap(id=>{const s=w.structures.find(s=>s.id===id);return s?[{id,weight:(1-Math.min(Math.sqrt(distanceSquared(p,s))/40,1))**2+.01}]:[];});
+  const weighted=ids.flatMap(id=>{const s=structureById(w,id);return s?[{id,weight:(1-Math.min(Math.sqrt(distanceSquared(p,s))/40,1))**2+.01}]:[];});
   if(!weighted.length)return;
   let roll=random(rng)*weighted.reduce((sum,t)=>sum+t.weight,0);
   return weighted.find(t=>(roll-=t.weight)<0)?.id??weighted.at(-1)!.id;

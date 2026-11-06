@@ -10,6 +10,7 @@ import {isCookingOrder} from './order-types.ts';
 import {ADVANCED_COMPONENT_REQUIREMENTS,isComponentRecipe,productionWorkTotal,type AdvancedComponentMaterial} from './production-recipes.ts';
 import {releaseAssignments} from './work-release.ts';
 import type {Cell,CommandResult,MaterialPile,Pawn,World} from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface OrdinaryComponentWork {
   recipe:'make-component';
@@ -78,7 +79,7 @@ function beginAdvancedComponentWork(world:World,pawn:Pawn):MaterialPile|null {
   if(!validAdvancedComponentIngredients('make-advanced-component',parts)||[...used].some(([id,part])=>world.piles.find(p=>p.id===id)!.quantity<part.quantity))return null;
   const remaining=world.piles.map(p=>used.has(p.id)?{...p,quantity:p.quantity-used.get(p.id)!.quantity}:p).filter(p=>p.quantity>0);
   if(remaining.length>=32768||!Number.isSafeInteger(world.nextId+1))return null;
-  const shadow={...world,piles:remaining},spot=task.spot,station=world.structures.find(s=>s.id===task.stationId);
+  const shadow={...world,piles:remaining},spot=task.spot,station=structureById(world,task.stationId);
   const cells:Cell[]=[{x:spot.x,z:spot.z+1},{x:spot.x+1,z:spot.z},{x:spot.x-1,z:spot.z},{x:spot.x,z:spot.z-1},...(station?footprintCells(station):[])];
   const cell=cells.find(c=>allowedAreaAllows(world,pawn,c)&&componentWorkpiecePlaceFree(shadow,c,spot,'make-advanced-component',station)&&groundCapacity(shadow,c,'unfinished-component',pawn.id)>=1);
   if(!cell)return null;

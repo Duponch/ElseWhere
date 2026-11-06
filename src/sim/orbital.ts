@@ -13,6 +13,7 @@ import { ORBITAL_ACTIVE_CHECKS,ORBITAL_CHECK,ORBITAL_CYCLE,ORBITAL_DELIVERY_LIMI
 import type { TradeLedger,TradeReceipt } from './trade-state.ts';
 import type { NeedContext } from './needs.ts';
 import type { CommandResult,Pawn,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 function emit(w:World,message:string):void {w.events.push({tick:w.tick,type:'command',message});if(w.events.length>80)w.events.splice(0,w.events.length-80);}
 export function adoptOrbital(w:World):void {
@@ -34,7 +35,7 @@ export function createOrbitalShip(w:World,kind:OrbitalKind):OrbitalShip|undefine
 function stop(w:World,p:Pawn):void {if(!releaseWork(w,p))interruptWork(w,p);delete p.orbitalTrade;p.path=[];p.planCooldown=0;if(!['dead','downed','sleeping'].includes(p.state))p.state=(p.motion?.end??0)>w.tick?'moving':'idle';}
 export function reconcileOrbitalTrade(w:World,p:Pawn):boolean {
   const task=p.orbitalTrade;if(!task)return false;
-  const ship=w.orbital?.ships.find(s=>s.id===task.shipId),console=w.structures.find(s=>s.id===task.consoleId),spot=console&&orbitalConsoleSpot(console);
+  const ship=w.orbital?.ships.find(s=>s.id===task.shipId),console=structureById(w,task.consoleId),spot=console&&orbitalConsoleSpot(console);
   if(!ship||!console||orbitalTradeReason(w,p,ship,console)||!spot||spot.x!==task.spot.x||spot.z!==task.spot.z||orbitalOtherActivity(w,p)){stop(w,p);return false;}
   return true;
 }
@@ -45,7 +46,7 @@ export function processOrbitalTrade(w:World,p:Pawn,ctx:NeedContext):boolean {
   task.phase='ready';p.path=[];p.state='idle';return true;
 }
 export function orderOrbitalTrade(w:World,pawnId:number,shipId:number,consoleId:number):CommandResult {
-  const fail=(reason:string):CommandResult=>({ok:false,code:'invalid-command',reason}),p=w.pawns.find(p=>p.id===pawnId),ship=w.orbital?.ships.find(s=>s.id===shipId),console=w.structures.find(s=>s.id===consoleId);
+  const fail=(reason:string):CommandResult=>({ok:false,code:'invalid-command',reason}),p=w.pawns.find(p=>p.id===pawnId),ship=w.orbital?.ships.find(s=>s.id===shipId),console=structureById(w,consoleId);
   if(!p||!ship||!console)return fail('Négociateur, vaisseau ou console introuvable.');
   const reason=orbitalTradeReason(w,p,ship,console);if(reason)return fail(reason);
   const spot=orbitalConsoleSpot(console),path=routeToCell(w,spot,reachableCells(w,p,blockedCells(w),new Set()));if(!path)return fail('Console inaccessible.');

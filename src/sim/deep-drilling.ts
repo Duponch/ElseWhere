@@ -12,6 +12,7 @@ import { releaseWork } from './work-release.ts';
 import { interruptWork } from './interrupted-cargo.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell,Pawn,Structure,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface DeepWorkProposal {task:DeepWorkTask;path:Cell[]}
 export function deepWorkWanted(world:World,pawn:Pawn):boolean {
@@ -28,7 +29,7 @@ export function startDeepWork(pawn:Pawn,proposal:DeepWorkProposal):void {
 function stop(world:World,pawn:Pawn):void {if(!releaseWork(world,pawn))interruptWork(world,pawn);}
 export function reconcileDeepWork(world:World,pawn:Pawn):boolean {
   const task=pawn.deepWork;if(!task)return false;
-  const s=world.structures.find(s=>s.id===task.structureId),spot=s&&deepWorkSpot(s);
+  const s=structureById(world,task.structureId),spot=s&&deepWorkSpot(s);
   if(!s||deepWorkReason(world,pawn,s,true)||task.kind!==(s.kind==='deep-drill'?'drill':'scan')||!spot||spot.x!==task.spot.x||spot.z!==task.spot.z){stop(world,pawn);return false;}
   return true;
 }
@@ -74,7 +75,7 @@ function scannerTick(world:World,pawn:Pawn,s:Structure,light:number,ctx:NeedCont
 }
 export function processDeepWork(world:World,pawn:Pawn,ctx:NeedContext,light:()=>number=()=>1):boolean {
   if(!reconcileDeepWork(world,pawn))return false;
-  const task=pawn.deepWork!,s=world.structures.find(s=>s.id===task.structureId)!;
+  const task=pawn.deepWork!,s=structureById(world,task.structureId)!;
   if(pawn.moveCooldown>0||(pawn.motion?.end??0)>world.tick||(pawn.stun?.untilCore??0)>world.tick*10)return true;
   if(pawn.x!==task.spot.x||pawn.z!==task.spot.z){ctx.move(task.spot,true);return true;}
   pawn.path=[];pawn.state='working';

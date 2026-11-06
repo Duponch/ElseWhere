@@ -34,6 +34,7 @@ import { footprintCells } from './definitions.ts';
 import { queryArea } from './designation.ts';
 import { stockpileZoneCells } from './stockpile-zones.ts';
 import { dropRetainingIdentity } from './ground-placement.ts';
+import { structureById } from './structure-navigation.ts';
 export type DropPlan=Map<number,Cell>;
 const same=(a:Cell,b:Cell)=>a.x===b.x&&a.z===b.z;
 
@@ -83,7 +84,7 @@ export function planCommandDrops(world:World,command:Command|import('./cave-glow
     const ids=new Set(command.type==='growing-policy'?[command.zoneId]:cells?.ok?world.growingZones.filter(z=>z.cells.some(c=>cells.cells.includes(c))).map(z=>z.id):[]);
     for(const pawn of world.pawns)if(pawn.haul?.destination.type==='aside'&&ids.has(pawn.haul.destination.growingZoneId??-1))pawns.add(pawn.id);
   } else if(command.type==='shelf-policy') {
-    for(const id of world.structures.find(s=>s.id===command.structureId)?.shelf?.cells??[])zones.add(id);
+    for(const id of structureById(world,command.structureId)?.shelf?.cells??[])zones.add(id);
   } else if(command.type==='stockpile-policy') {
     for(const zone of stockpileZoneCells(world,command.stockpileId))zones.add(zone.id);
   } else if(command.type==='stockpile') {
@@ -102,7 +103,7 @@ export function planCommandDrops(world:World,command:Command|import('./cave-glow
   } else if(command.type==='refuel-policy' && !command.enabled) {
     for(const pawn of world.pawns)if(pawn.haul?.destination.type==='fuel'&&!pawn.haul.destination.forced&&pawn.haul.destination.structureId===command.structureId)pawns.add(pawn.id);
   } else if(command.type==='assign-bed') {
-    const bed=world.structures.find(s=>s.id===command.bedId),owner=world.pawns.find(p=>p.id===command.pawnId);
+    const bed=structureById(world,command.bedId),owner=world.pawns.find(p=>p.id===command.pawnId);
     if(bed?.kind==='double-bed'){
       if((command.slot===0||command.slot===1)&&!(owner?.bedId===bed.id&&owner.bedSlot===command.slot)){
         const affected=new Set(world.pawns.filter(p=>p.bedId===bed.id&&p.bedSlot===command.slot||p.id===command.pawnId).map(p=>p.id));

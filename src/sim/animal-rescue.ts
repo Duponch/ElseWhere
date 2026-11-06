@@ -17,6 +17,7 @@ import { advanceAnimalHealth } from './wildlife-health.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell,CommandResult,Pawn,Structure,World } from './types.ts';
 import type { WildAnimal } from './wildlife-state.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface AnimalRescueProposal {task:AnimalRescueTask;path:Cell[];target:WildAnimal}
 export function animalRescueActorReady(w:World,p:Pawn):boolean {
@@ -70,7 +71,7 @@ export function animalRescueProposal(w:World,p:Pawn,reach:Reachability):AnimalRe
   for(const a of animals){const result=proposalFor(w,p,reach,a,false,targets);if(result)return result;}
 }
 export function startAnimalRescue(w:World,p:Pawn,proposal:AnimalRescueProposal):void {
-  const a=proposal.target,s=w.structures.find(s=>s.id===proposal.task.spotId)!;
+  const a=proposal.target,s=structureById(w,proposal.task.spotId)!;
   if(!s.medical)claimLocalActorBed256(w,a,s);
   p.animalRescue=proposal.task;p.path=proposal.path;p.state='moving';p.planCooldown=0;
 }
@@ -78,13 +79,13 @@ export function reconcileAnimalRescues(w:World,carrier?:Pawn):void {
   if(w.schemaVersion<221)return;
   for(const p of carrier?[carrier]:w.pawns){
     const t=p.animalRescue;if(!t)continue;
-    const a=w.wildlife?.animals.find(a=>a.id===t.animalId),s=w.structures.find(s=>s.id===t.spotId);
+    const a=w.wildlife?.animals.find(a=>a.id===t.animalId),s=structureById(w,t.spotId);
     if(!allowedAreaServicesAllowed(w,p)||reason(w,p,a,!!t.forced)||!s||!a||!animalSpotAvailable(w,s,a,p.id))releaseAnimalRescue(w,p);
   }
 }
 export function processAnimalRescue(w:World,p:Pawn,ctx:NeedContext):void {
   const t=p.animalRescue;if(!t)return;
-  const a=w.wildlife?.animals.find(a=>a.id===t.animalId),s=w.structures.find(s=>s.id===t.spotId);
+  const a=w.wildlife?.animals.find(a=>a.id===t.animalId),s=structureById(w,t.spotId);
   if(a&&!a.health?.death&&a.health&&a.health.tick<w.tick)advanceAnimalHealth(w,a);
   if(!allowedAreaServicesAllowed(w,p)||reason(w,p,a,!!t.forced)||!s||!a||!animalSpotAvailable(w,s,a,p.id)){releaseAnimalRescue(w,p);return;}
   if((p.motion?.end??0)>w.tick||p.moveCooldown>0)return;

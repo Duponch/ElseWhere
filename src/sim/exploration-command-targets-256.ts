@@ -6,6 +6,7 @@ import {footprintCells} from './definitions.ts';
 import {isColonist} from './affiliation.ts';
 import {firePosition} from './fire-rules.ts';
 import type {World,Cell} from './types.ts';
+import { structureById } from './structure-navigation.ts';
 const KEYS=['casketId','structureId','resourceId','pileId','itemId','animalId','bedId','markerId','fireId','patientId','targetId'] as const;
 /** Inventory/control/policy commands remain legal. Actual ground Things and
  * foreign spawned actors require a known occupied cell. Own colonist care
@@ -15,7 +16,7 @@ export function hiddenExplorationCommandTarget256(world:World,command:object):bo
  const known=(c:Cell)=>knownCell256(world,c.z*world.width+c.x);
  for(const key of KEYS){
   const field=Object.getOwnPropertyDescriptor(command,key);if(!field||!Object.hasOwn(field,'value')||!Number.isSafeInteger(field.value)||field.value<1)continue;
-  const id=field.value as number,s=world.structures.find(s=>s.id===id);
+  const id=field.value as number,s=structureById(world,id);
   if(s){if(!knownSpawnedThing256(world,footprintCells(s).map(c=>c.z*world.width+c.x)))return true;continue;}
   const r=world.resources.find(r=>r.id===id);if(r){if(!known(r))return true;continue;}
   const pile=world.piles.find(p=>p.id===id);if(pile){if(pile.owner.type==='ground'&&!known(pile.owner))return true;continue;}

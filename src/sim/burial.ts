@@ -15,6 +15,7 @@ import { planCommandDrops,releaseWork } from './work-release.ts';
 import { interruptWork } from './interrupted-cargo.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell,CommandResult,Pawn,Structure,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface GraveState {corpseId?:number;assignedPawnId?:number;colonists:boolean;strangers:boolean}
 export interface BurialTask {bodyPawnId:number;graveId:number;corpseId?:number;phase:'pickup'|'carry'|'bury';progress:number}
@@ -108,13 +109,13 @@ export function applyBurial(w:World,c:BurialCommand):CommandResult {
 export function releaseBurial(p:Pawn):void {delete p.burial;if(p.orders.active==='bury')p.orders.active=null;}
 export function reconcileBurials(w:World):void {
   for(const actor of w.pawns)if(actor.burial){
-    const t=actor.burial,body=w.pawns.find(p=>p.id===t.bodyPawnId),grave=w.structures.find(s=>s.id===t.graveId);
+    const t=actor.burial,body=w.pawns.find(p=>p.id===t.bodyPawnId),grave=structureById(w,t.graveId);
     if(!allowedAreaWorkAllowed(w,actor)||burialReason(w,actor,body,true)||!grave||!body||!graveAccepts(w,grave,body,actor.id))interruptWork(w,actor);
   }
 }
 export function processBurial(w:World,actor:Pawn,context:NeedContext):void {
   const t=actor.burial;if(!t)return;
-  const body=w.pawns.find(p=>p.id===t.bodyPawnId),grave=w.structures.find(s=>s.id===t.graveId);
+  const body=w.pawns.find(p=>p.id===t.bodyPawnId),grave=structureById(w,t.graveId);
   if(!allowedAreaWorkAllowed(w,actor)||!body||!grave||burialReason(w,actor,body,true)||!graveAccepts(w,grave,body,actor.id)){interruptWork(w,actor);return;}
   let pile=bodyPile(w,body);
   if(t.phase==='pickup'){

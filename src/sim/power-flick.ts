@@ -3,6 +3,7 @@ import {targetBuildingPlayerUse263} from './world-target-building-263.ts';
 import { reconcilePower } from './power.ts';
 import { isFlickable } from './power-rules.ts';
 import type { CommandResult,Job,Structure,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export const canFlickPower=(s:Structure):boolean=>isFlickable(s.kind)&&!!s.power;
 export const canFlickDevice=(s:Structure):boolean=>canFlickPower(s)||s.kind==='vent'&&!!s.vent;
@@ -11,7 +12,7 @@ export const actualPowerSwitch=(s:Structure):boolean=>s.power?.switchOn!==false;
 
 /** A command queues work. It never switches a circuit from a distance. */
 export function requestPowerFlick(world:World,structureId:number,on:boolean):CommandResult {
-  const s=world.structures.find(s=>s.id===structureId);
+  const s=structureById(world,structureId);
   if(!s||!targetBuildingPlayerUse263(world,s)||!canFlickDevice(s)||s.kind==='vent'&&world.schemaVersion<244||typeof on!=='boolean')return {ok:false,code:'invalid-command',reason:'Cet appareil ne possède pas d’interrupteur accessible.'};
   if(world.jobs.some(j=>(j.deconstruction?.structureId??j.furniture?.structureId)===s.id))return {ok:false,code:'occupied',reason:'Un retrait ou déplacement est déjà prévu.'};
   const old=world.jobs.find(j=>j.flick?.structureId===s.id);
@@ -33,14 +34,14 @@ function removeFlick(world:World,j:Job):void {
 }
 export function reconcilePowerFlicks(world:World):void {
   for(const j of world.jobs.filter(j=>j.flick)){
-    const s=world.structures.find(s=>s.id===j.flick!.structureId);
+    const s=structureById(world,j.flick!.structureId);
     if(!s||!targetBuildingPlayerUse263(world,s)||!canFlickDevice(s)||actualDeviceSwitch(s)===j.flick!.on||world.jobs.some(other=>(other.deconstruction?.structureId??other.furniture?.structureId)===s.id))removeFlick(world,j);
   }
 }
 /** Fifteen Core ticks at the target. Our ten-Core step commits on the second
  * local tick; no skill, XP, lamp bonus or construction multiplier applies. */
 export function advancePowerFlick(world:World,j:Job):boolean {
-  const s=world.structures.find(s=>s.id===j.flick?.structureId);
+  const s=structureById(world,j.flick?.structureId);
   if(!s||!targetBuildingPlayerUse263(world,s)||!canFlickDevice(s))return true;
   j.progress+=10;
   if(j.progress<15)return false;
@@ -56,7 +57,7 @@ export function validatePowerFlicks(world:World,version:number):string[] {
     const f=j.flick;
     if(j.kind!=='flick'){if(f!==undefined)errors.push('Unexpected switch job.');continue;}
     if(version<85||!f||typeof f!=='object'||Array.isArray(f)||Object.keys(f).some(k=>!['structureId','kind','on'].includes(k))||!Number.isSafeInteger(f.structureId)||typeof f.on!=='boolean'){errors.push('Invalid switch job.');continue;}
-    const s=world.structures.find(s=>s.id===f.structureId);
+    const s=structureById(world,f.structureId);
     if(!s||!targetBuildingPlayerUse263(world,s)||!canFlickDevice(s)||s.kind==='vent'&&version<244||s.kind==='electric-tailor-bench'&&version<181||actualDeviceSwitch(s)===f.on||seen.has(f.structureId)||s.kind!==f.kind||s.x!==j.x||s.z!==j.z||j.orientation!==s.orientation||j.footprint!=='standard'
       ||j.material!==undefined||j.construction||j.furniture||j.deconstruction||j.repair||j.clearance||j.growingZoneId!==undefined||j.workRemainder!==undefined||![0,10].includes(j.progress)||j.progress>0&&j.reservedBy===null||j.escrow.wood||j.escrow.food
       ||world.jobs.some(other=>(other.deconstruction?.structureId??other.furniture?.structureId)===f.structureId))errors.push('Switch job does not match its device.');

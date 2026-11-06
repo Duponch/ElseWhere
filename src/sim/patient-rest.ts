@@ -16,6 +16,7 @@ import { updatePawnHealth } from './health.ts';
 import { releaseWork } from './work-release.ts';
 import type { NeedContext } from './needs.ts';
 import type { BedSlot,Cell,Pawn,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface PatientRestProposal {work:'patient'|'bedrest';bedId:number;path:Cell[];bedSlot?:BedSlot}
 
@@ -51,7 +52,7 @@ export function patientProposal(world:World,pawn:Pawn,reach:Reachability):Patien
   for(const {bed,cell,slot} of beds){const path=routeToCell(world,cell,reach);if(path)return {work,bedId:bed.id,path,...(slot!==undefined?{bedSlot:slot}:{})};}
 }
 export function startPatientRest(world:World,pawn:Pawn,proposal:PatientRestProposal):void {
-  const bed=world.structures.find(b=>b.id===proposal.bedId)!;
+  const bed=structureById(world,proposal.bedId)!;
   if(bed.kind==='double-bed'&&(proposal.bedSlot===undefined||!!pawn.surgeryRequest||!rescueBedAvailable(world,bed,pawn,pawn.id,false,proposal.bedSlot)))return;
   const target=bed.kind==='double-bed'&&proposal.bedSlot!==undefined?bedSlotCell(bed,proposal.bedSlot):bed;
   if(!target)return;

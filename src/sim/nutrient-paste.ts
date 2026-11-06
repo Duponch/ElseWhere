@@ -16,6 +16,7 @@ import { reservedSource,refreshStock } from './materials.ts';
 import { freshRot } from './food-preservation.ts';
 import { interruptWork } from './interrupted-cargo.ts';
 import type { Cell,MaterialPile,Pawn,Structure,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface PasteRequest {
   dispenserId:number;
@@ -94,7 +95,7 @@ export function planPasteRequest(world:World,pawn:Pawn,dispenser:Structure,eater
  * hoppers, but cannot consume this actor's promised six units. */
 export function pasteRequestValid(world:World,pawn:Pawn,request:PasteRequest,eater:Pawn=pawn):boolean {
   if(request.producedAt!==undefined)return request.ingredients===undefined;
-  const s=world.structures.find(s=>s.id===request.dispenserId),inputs=request.ingredients;
+  const s=structureById(world,request.dispenserId),inputs=request.ingredients;
   if(!s||!inputs?.length||!pasteDispenserUsable(world,pawn,s,eater))return false;
   const spot=pasteSpot(s);if(spot.x!==request.spot.x||spot.z!==request.spot.z)return false;
   const sources=hopperFood(world,s),seen=new Set<number>();let total=0;

@@ -8,6 +8,7 @@ import {animalFeedingInProgress} from './animal-feeding.ts';
 import type {animalNavigation} from './wildlife-navigation.ts';
 import type {WildAnimal} from './wildlife-state.ts';
 import type {World} from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export function animalAreaProtected287(w:World,a:WildAnimal):boolean {
  return a.state==='dead'||a.state==='downed'||!!a.health?.death||!!animalCarrier(w,a.id)
@@ -39,7 +40,7 @@ export function reconcileAnimalAreaTasks287(w:World,a:WildAnimal,policy=captureA
  if(a.meal){const source=a.meal.kind==='plant'?w.resources.find(r=>r.id===a.meal!.id):w.piles.find(p=>p.id===a.meal!.id)?.owner;
   if(source&&'x'in source&&!inside(source)){delete a.meal;interrupted=true;}
  }
- if(a.animalRest){const bed=w.structures.find(s=>s.id===a.animalRest!.spotId);if(bed&&!inside(bed)){delete a.animalRest;if(a.state==='sleeping')a.state='idle';interrupted=true;}}
+ if(a.animalRest){const bed=structureById(w,a.animalRest!.spotId);if(bed&&!inside(bed)){delete a.animalRest;if(a.state==='sleeping')a.state='idle';interrupted=true;}}
  if(a.eggLay&&!inside(a.eggLay.target)){delete a.eggLay;interrupted=true;}
  if(a.animalAreaReturn287&&(!inside(a.animalAreaReturn287.target)||a.animalAreaReturn287.mapId!==registeredMapId(w)))releaseAnimalAreaReturn287(w,a);
  if(a.state==='sleeping'&&!a.sleepUntilCore&&!inside(a)){a.state='idle';interrupted=true;}

@@ -2,6 +2,7 @@ import {knownCell256} from './exploration-visibility-256.ts';
 import type { Cell,Pawn,Structure,World } from './types.ts';
 import { MENTAL_CRISIS_CATALOG,mentalCrisisLabel } from './mental-catalog.ts';
 import { animalSpecies } from './animal-species.ts';
+import { structureById } from './structure-navigation.ts';
 
 export { mentalCrisisLabel } from './mental-catalog.ts';
 export type MentalCrisisKind=keyof typeof MENTAL_CRISIS_CATALOG;
@@ -28,7 +29,7 @@ export function mentalCrisisView(world:World,pawn:Pawn,structureLabel?:(structur
   const kind=crisis.kind;
   let target:MentalTargetView|undefined;
   if(kind==='tantrum'&&crisis.targetId!==null){
-    const structure=world.structures.find(s=>s.id===crisis.targetId);
+    const structure=structureById(world,crisis.targetId);
     if(structure)target={type:'structure',id:structure.id,cell:{x:structure.x,z:structure.z},label:structureLabel?.(structure)??`Bâtiment ${structure.id}`};
   }else if((kind==='berserk'||kind==='murderous-rage')&&crisis.targetId!==null){
     const person=world.pawns.find(p=>p.id===crisis.targetId);

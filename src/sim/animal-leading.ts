@@ -16,6 +16,7 @@ import { animalNavigation, moveAnimal } from './wildlife-navigation.ts';
 import { animalBody } from './wildlife-health.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 import { animalServiceIds } from './animal-rest-state.ts';
+import { structureById,structuresOfKind } from './structure-navigation.ts';
 
 export type LeadingTask=AnimalHandlingTask & {kind:'lead';markerId:number};
 /** Core 1.6.4871 JobDriver_RopeToDestination constants. */
@@ -27,7 +28,7 @@ export const leadingClaimIds=(task:AnimalHandlingTask):readonly number[]=>task.k
 const key=(world:World,cell:Cell)=>cell.z*world.width+cell.x;
 export const livestock=(a:WildAnimal):boolean=>PEN_ANIMALS.includes(a.species);
 const usable=(world:World,a:WildAnimal,markerId:number)=>{
-  const marker=world.structures.find(s=>s.id===markerId&&s.kind==='pen-marker');
+  const found=structureById(world,markerId),marker=found?.kind==='pen-marker'?found:undefined;
   const region=penRegion(world,markerId);
   return marker?.pen?.accepted.includes(a.species)&&region?.closed&&region.accessible?region:undefined;
 };
@@ -40,14 +41,15 @@ const ropeable=(a:WildAnimal)=>!!a.domestic&&livestock(a)&&a.state!=='dead'&&a.s
   &&!a.burning&&!a.flee&&!a.threat&&!a.retaliation&&!a.strike;
 function destination(world:World,a:WildAnimal,pawn:Pawn):number|undefined {
   const assigned=a.domestic?.penMarkerId;
-  if(assigned&&world.structures.some(s=>s.id===assigned&&allowedAreaAllows(world,pawn,s))&&usable(world,a,assigned))return assigned;
-  return world.structures.filter(s=>s.kind==='pen-marker'&&allowedAreaAllows(world,pawn,s)&&usable(world,a,s.id))
+  const assignedStructure=assigned?structureById(world,assigned):undefined;
+  if(assigned&&assignedStructure&&allowedAreaAllows(world,pawn,assignedStructure)&&usable(world,a,assigned))return assigned;
+  return structuresOfKind(world,'pen-marker').filter(s=>allowedAreaAllows(world,pawn,s)&&usable(world,a,s.id))
     .sort((x,y)=>(x.x-a.x)**2+(x.z-a.z)**2-((y.x-a.x)**2+(y.z-a.z)**2)||x.id-y.id)[0]?.id;
 }
 export function leadingWanted(world:World,pawn:Pawn):boolean {
   if(!handler(pawn))return false;
   if(!world.wildlife?.animals.some(a=>a.domestic&&livestock(a)&&a.state!=='dead'&&a.state!=='downed'))return false;
-  if(!world.structures.some(s=>s.kind==='pen-marker'))return false;
+  if(!structuresOfKind(world,'pen-marker').length)return false;
   const claimed=claimedIds(world);
   return !!world.wildlife?.animals.some(a=>allowedAreaAllows(world,pawn,a)&&ropeable(a)&&!claimed.has(a.id)
     &&(()=>{const id=destination(world,a,pawn),r=id&&usable(world,a,id);return !!r&&!r.cells.has(key(world,a));})());
@@ -61,7 +63,7 @@ export function leadingProposal(world:World,pawn:Pawn,reach:Reachability):Leadin
     .sort((a,b)=>(a.x-pawn.x)**2+(a.z-pawn.z)**2-((b.x-pawn.x)**2+(b.z-pawn.z)**2)||a.id-b.id);
   for(const a of animals){
     const markerId=destination(world,a,pawn);if(!markerId)continue;
-    const marker=world.structures.find(s=>s.id===markerId);if(!marker||!allowedAreaAllows(world,pawn,marker))continue;
+    const marker=structureById(world,markerId);if(!marker||!allowedAreaAllows(world,pawn,marker))continue;
     const region=usable(world,a,markerId);if(!region||region.cells.has(key(world,a)))continue;
     const path=routeToJob(world,a,reach,false);if(!path)continue;
     const goals=penAccessCells(world,markerId).filter(c=>allowedAreaAllows(world,pawn,c));

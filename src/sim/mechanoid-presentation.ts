@@ -13,6 +13,7 @@ import type { Cell,World } from './types.ts';
 import { ANIMAL_SPECIES } from './animal-species.ts';
 import { pawnBodyLocation } from './human-corpses.ts';
 import { empMechanoidActive } from './emp-state.ts';
+import { structureById } from './structure-navigation.ts';
 
 /** The authored rig names its pieces independently of the medical namespace. */
 export function mechanoidPartIndex(kind:MechanoidKind,visualId:string):number {
@@ -31,7 +32,7 @@ export function mechanoidTargetView(world:World,id:number):MechanoidTargetView {
   const human=world.pawns.find(p=>p.id===id);if(human){const body=pawnBodyLocation(world,human);return {id,label:human.name,cell:body?{x:body.x,z:body.z}:null};}
   const animal=world.wildlife?.animals.find(a=>a.id===id);if(animal)return {id,label:ANIMAL_SPECIES[animal.species].label,cell:{x:animal.x,z:animal.z}};
   const mech=world.mechanoids?.find(m=>m.id===id);if(mech)return {id,label:`${mechanoidDefinition(mech.mechKind).label} ${id}`,cell:{x:mech.x,z:mech.z}};
-  const building=world.structures.find(s=>s.id===id);if(building)return {id,label:`Bâtiment ${id}`,cell:{x:building.x,z:building.z}};
+  const building=structureById(world,id);if(building)return {id,label:`Bâtiment ${id}`,cell:{x:building.x,z:building.z}};
   return {id,label:`Cible ${id} indisponible`,cell:null};
 }
 /** A typed ranged reference never resolves to an owner in a different namespace. */

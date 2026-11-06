@@ -13,6 +13,7 @@ import { workPriority } from './work-types.ts';
 import type { CookingBill } from './cooking-types.ts';
 import type { ProductionContext } from './production-output.ts';
 import type { Pawn,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 /** Destroy one original garment atomically. No output, identity allocation, XP or RNG. */
 export function finishBurnApparel(world:World,pawn:Pawn,bill:CookingBill,context:ProductionContext):boolean {
@@ -23,7 +24,7 @@ export function finishBurnApparel(world:World,pawn:Pawn,bill:CookingBill,context
     ||!world.pawns.includes(pawn)||!isColonist(pawn)||pawn.prisoner||pawn.visitor||pawn.raid||pawn.podRescue
     ||(pawn.motion?.end??0)>world.tick||pawn.moveCooldown>0||pawn.stun||pawn.draft||pawn.burning||pawn.mental?.crisis||pawn.collapsePending
     ||medicalWorkRefusal(pawn)||backgroundWorkRefusal(pawn,'haul')||workPriority(pawn,'haul')===0||!allowedAreaWorkAllowed(world,pawn))return false;
-  const station=world.structures.find(s=>s.id===task.stationId),ingredient=task.ingredients[0]!,garment=world.piles.find(p=>p.id===ingredient.pileId);
+  const station=structureById(world,task.stationId),ingredient=task.ingredients[0]!,garment=world.piles.find(p=>p.id===ingredient.pileId);
   if(!station||station.kind!=='electric-crematorium'&&station.kind!=='campfire'||!productionStationUsable(station)||!foodStationUsable(station)||!station.bills?.includes(bill)
     ||bill.id!==task.billId||!isBurnApparelRecipe(bill.recipe)||!validBillSettings(bill,bill.recipe,world.schemaVersion)||bill.suspended||!['times','forever'].includes(bill.mode)||bill.destination!=='drop'
     ||!Number.isSafeInteger(bill.target)||bill.target<0||bill.target>9999||bill.mode==='times'&&bill.target<=0

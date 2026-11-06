@@ -15,6 +15,7 @@ import { hasReachableCell,routeToCell } from './pathfinding.ts';
 import { searchCandidates,type NavigationGrid,type SearchBudget } from './work-planner.ts';
 import type { LightReader } from './light-environment.ts';
 import type { Pawn,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export const isAggressiveCrisis=(c:Pawn['mental']):boolean=>
   !!c?.crisis&&['tantrum','berserk','murderous-rage'].includes(c.crisis.kind);
@@ -68,7 +69,7 @@ export function processAggressiveCrisis(w:World,p:Pawn,getBlocked:NavigationGrid
   if(p.need?.kind==='sleep'){processNeeds(w,p,context);if(moodFrozen(p))finishMentalBreak(w,p);return;}
 
   if(c.kind==='tantrum'){
-    const target=c.targetId===null?undefined:w.structures.find(s=>s.id===c.targetId);
+    const target=c.targetId===null?undefined:structureById(w,c.targetId);
     if(c.targetId!==null&&!target||core>=c.nextTargetCore&&(c.targetId===null||c.attempted)){
       const ids=aggressiveCrisisCandidates(w,p,'tantrum',budget);if(ids===null)return;
       const choices=core-c.targetSinceCore>1250&&ids.some(id=>id!==c.targetId)?ids.filter(id=>id!==c.targetId):ids;

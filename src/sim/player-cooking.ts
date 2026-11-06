@@ -32,6 +32,7 @@ import { reservedServiceCells } from './service-reservations.ts';
 import { canReach, search, type NavigationGrid, type SearchBudget } from './work-planner.ts';
 import type { CookingOrder } from './order-types.ts';
 import type { Cell, HaulTask, Pawn, World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface CookingProposal { label:string;reason?:string;order?:CookingOrder|HaulTask;path?:Cell[] }
 export function planCookingOrder(world:World,pawn:Pawn,stationId:number,access?:import('./pathfinding.ts').Reachability,budget={pairs:32768},forced=true):CookingProposal {
@@ -155,13 +156,13 @@ export function startCookingOrder(pawn:Pawn,order:CookingOrder,path:Cell[]):void
 }
 /** Runtime queue admission is separate from its historical structural save guard. */
 export function queuedCookingAreaReason(world:World,pawn:Pawn,order:CookingOrder):string|undefined {
-  const c=order.cooking,station=world.structures.find(s=>s.id===c.stationId);
+  const c=order.cooking,station=structureById(world,c.stationId);
   let reason=station?allowedAreaReason(world,pawn,station):undefined;if(reason)return reason;
   for(const i of c.ingredients){reason=allowedAreaReason(world,pawn,i.cell);if(reason)return reason;
     const pile=world.piles.find(p=>p.id===i.pileId);if(i.stage!=='held'&&pile?.owner.type==='ground'){reason=allowedAreaReason(world,pawn,pile.owner);if(reason)return reason;}}
 }
 export function advanceCookingOrder(world:World,pawn:Pawn,order:CookingOrder,getBlocked:NavigationGrid,budget:SearchBudget):boolean {
-  const station=world.structures.find(s=>s.id===order.cooking.stationId);
+  const station=structureById(world,order.cooking.stationId);
   let reason=queuedCookingAreaReason(world,pawn,order)??(station?backgroundWorkRefusal(pawn,taskWork(order.cooking)):undefined)??queuedCookingReason(world,order),path:Cell[]|null=null;
   if(!reason) {
     const c=order.cooking,sources=c.ingredients.filter(i=>i.stage==='source').map(i=>world.piles.find(p=>p.id===i.pileId)!.owner as Cell);

@@ -8,6 +8,7 @@ import { animalCarrier,animalClaimed,animalSpotClaimed,releaseAnimalRescue } fro
 import type { Cell,Structure,World } from './types.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 import {captureAnimalAreaPolicy287,type AnimalAreaPolicy287} from './animal-area-policy-287.ts';
+import { structureById } from './structure-navigation.ts';
 
 const same=(a:Cell,b:Cell)=>a.x===b.x&&a.z===b.z;
 export function animalSpotAvailable(w:World,s:Structure,a:WildAnimal,exceptPawn?:number,bedOwners?:ActualActorBeds256):boolean {
@@ -41,7 +42,7 @@ export function reconcileAnimalRest(w:World):void {
   for(const a of w.wildlife?.animals??[]){
     if(a.domestic?.bedId!==undefined&&(a.state==='dead'||a.health?.death||!w.structures.some(s=>s.id===a.domestic!.bedId&&s.kind==='animal-sleeping-spot'&&!s.medical)))forgetLocalActorBed256(w,a);
     const t=a.animalRest;if(!t)continue;
-    const s=w.structures.find(s=>s.id===t.spotId);
+    const s=structureById(w,t.spotId);
     const policy=a.state!=='downed'&&!animalCarrier(w,a.id)&&!animalClaimed(w,a.id)?captureAnimalAreaPolicy287(w,a):undefined;
     if(s&&policy&&!policy.has(s.z*w.width+s.x)){clearRest(w,a);continue;}
     if(!s||!animalSpotAvailable(w,s,a)||animalCarrier(w,a.id)||a.burning||a.flee||a.threat||a.retaliation||a.strike||a.manhunter||slaughterIntent(w,a,w.schemaVersion,targets)
@@ -66,7 +67,7 @@ export function processAnimalRest(w:World,a:WildAnimal,ctx:AnimalRestContext):bo
     if(inside(a))return true;clearRest(w,a);return false;
   }
   if(t?.phase==='travel'){
-    const s=w.structures.find(s=>s.id===t.spotId);
+    const s=structureById(w,t.spotId);
     if(!s||!inside(s)||!animalSpotAvailable(w,s,a)||!ctx.free(s)){clearRest(w,a);return false;}
     if(same(s,a)){a.path=[];delete a.motion;a.state='sleeping';t.phase='sleep';return true;}
     if(a.path.length&&!ctx.step(a,a.path[0]!)){clearRest(w,a);return false;}

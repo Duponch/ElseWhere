@@ -7,6 +7,7 @@ import { footprintContains } from './definitions.ts';
 import { learnSkill } from './skills.ts';
 import type { BodyAssessment } from './body-capacities.ts';
 import type { Job,Pawn,Structure,StructureKind,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 /** Core 1.6.4871: CompBreakdownable, as present on shipped buildings. */
 const KINDS:ReadonlySet<StructureKind>=new Set(['electric-smithy','geothermal-generator','electric-crematorium','electric-smelter','biofuel-refinery','chemfuel-generator','nutrient-paste-dispenser','orbital-beacon','comms-console','ground-scanner','mini-turret','autodoor','wood-generator','wind-turbine','battery','solar-generator','electric-tailor-bench','machining-table','electric-stove','fabrication-bench','heater','cooler']);
@@ -36,7 +37,7 @@ export function newBreakdownCalendar(seed:number,tick:number):BreakdownCalendar 
 /** A deterministic diagnostic entry point. Natural failures use the separate
  * calendar below; neither path changes the established world.rng stream. */
 export function triggerBreakdown(world:World,structureId:number):boolean {
-  const s=world.structures.find(s=>s.id===structureId);
+  const s=structureById(world,structureId);
   if(!s||!breakdownEligible(s)||s.breakdown)return false;
   s.breakdown={brokenAt:world.tick};
   if(s.power)s.power.on=false;
@@ -61,7 +62,7 @@ export function advanceBreakdowns(world:World):void {
 }
 
 export function fixBreakdownWanted(world:World,job:Job):boolean {
-  const s=world.structures.find(s=>s.id===job.fixBreakdown?.structureId);
+  const s=structureById(world,job.fixBreakdown?.structureId);
   return !!s&&targetBuildingPlayerUse263(world,s)&&!!s.breakdown&&inHome(world,s.z*world.width+s.x)
     &&!world.fires?.items.some(f=>f.attachedAnimalId===undefined&&f.attachedPawnId===undefined&&footprintContains(s,f))
     &&!world.jobs.some(other=>other!==job&&(other.deconstruction?.structureId===s.id||other.furniture?.structureId===s.id));
@@ -104,7 +105,7 @@ export function fixBreakdownSuccessChance(pawn:Pawn,body?:BodyAssessment):number
 /** Fixed 1000-Core-tick interaction, then one physical component is spent on
  * either result. Failure leaves the building broken for the next delivery. */
 export function advanceBreakdownFix(world:World,pawn:Pawn,job:Job,body?:BodyAssessment):'success'|'failure'|null {
-  const s=world.structures.find(s=>s.id===job.fixBreakdown?.structureId);
+  const s=structureById(world,job.fixBreakdown?.structureId);
   if(!s?.breakdown||!targetBuildingPlayerUse263(world,s)||deliveredMaterial(world,job,'component')!==1)return null;
   pawn.path=[];pawn.state='working';job.progress++;
   if(job.progress<BREAKDOWN_FIX_TICKS)return null;

@@ -24,6 +24,7 @@ import type {ActualHive256,HiveLord256} from './cave-hive-state-256.ts';
 import {isColonist} from './affiliation.ts';
 import {registeredCampaign,registeredMapId} from './world-map-context.ts';
 import type {BombInstigatorKey} from './mini-turret-state.ts';
+import { structureById } from './structure-navigation.ts';
 export type HiveDutyJob256={kind:'maintain';hiveId:number;progressCore:number}|{kind:'attack';targetId:number;structure?:true};
 export function combatTargetKeyForHive256(w:World,id:number):BombInstigatorKey|undefined {
  if(w.pawns.some(p=>p.id===id))return `pawn:${id}`;
@@ -58,7 +59,7 @@ export function hiveInstigatorFaction256(w:World,key:BombInstigatorKey|undefined
  if(family==='pawn'){const p=w.pawns.find(p=>p.id===id);return p?{hasFaction:true,parentFaction:playerParent&&isColonist(p)}:none;}
  if(family==='mech')return {hasFaction:!!w.mechanoids?.some(m=>m.id===id),parentFaction:false};
  if(family==='animal'){const a=w.wildlife?.animals.find(a=>a.id===id),player=w.worldFactions?.playerFactionId;return a?{hasFaction:!!a.domestic||!!a.hive,parentFaction:playerParent&&(!!a.domestic||a.hive?.factionId===player)}:none;}
- const s=w.structures.find(s=>s.id===id);return s?{hasFaction:!Object.hasOwn(s,'factionId')||s.factionId!==null,parentFaction:playerParent&&(!Object.hasOwn(s,'factionId')||s.factionId===w.worldFactions?.playerFactionId)}:none;
+ const s=structureById(w,id);return s?{hasFaction:!Object.hasOwn(s,'factionId')||s.factionId!==null,parentFaction:playerParent&&(!Object.hasOwn(s,'factionId')||s.factionId===w.worldFactions?.playerFactionId)}:none;
 }
 function endLordJobs(w:World,id:number):void {
  for(const a of w.wildlife?.animals??[])if(a.hive?.lordId===id){delete a.hiveJob;delete a.meal;delete a.predation;delete a.exiting;if(a.wander)delete a.wander.job;a.path=[];if(!['dead','downed'].includes(a.state))a.state=(a.motion?.end??0)>w.tick?'moving':'idle';a.nextDecision=w.tick;}
@@ -113,7 +114,7 @@ export function processHivePriority256(w:World,a:WildAnimal,getNav:()=>ReturnTyp
  }
  if(a.hiveJob?.kind==='attack'){
   const order=a.hiveJob;
-  if(order.structure){const s=w.structures.find(s=>s.id===order.targetId);if(!s){releaseHiveMaintenance256(w,a);return false;}if(footprintCells(s).some(c=>meleeContact(w,a,c,physical))){a.path=[];a.state='idle';return true;}}
+  if(order.structure){const s=structureById(w,order.targetId);if(!s){releaseHiveMaintenance256(w,a);return false;}if(footprintCells(s).some(c=>meleeContact(w,a,c,physical))){a.path=[];a.state='idle';return true;}}
   if(a.path.length)moveAnimal(w,a,nav.step,animalBody(a).capacities.moving);return true;
  }
  return processHiveMaintenance256(w,a,{free:c=>nav.free(c),route:(actor,goals)=>nav.route(actor,goals),move:actor=>{moveAnimal(w,actor,nav.step,animalBody(actor).capacities.moving);},takeSearch:take},OBSERVED_HIVE_MAINTENANCE_KEY_256,actualCampRemovalAbsCore256(registeredCampaign(w),w));
@@ -135,7 +136,7 @@ export function processHiveWander256(w:World,a:WildAnimal,nav:ReturnType<typeof 
  * combat engine or manhunter alias. Called inside the ordinary Core substep. */
 export function advanceHiveStructureMelee256(w:World,a:WildAnimal,core:number,getPhysical:()=>Uint8Array):boolean {
  const job=a.hiveJob;if(!activeHiveInsect256(a)||job?.kind!=='attack'||!job.structure||a.burning||a.stun||a.strike||(a.motion?.end??0)>core/10)return false;
- const target=w.structures.find(s=>s.id===job.targetId);if(!target){delete a.hiveJob;return false;}
+ const target=structureById(w,job.targetId);if(!target){delete a.hiveJob;return false;}
  const physical=getPhysical();
  if(!footprintCells(target).some(c=>meleeContact(w,a,c,physical)))return false;
  const state={rng:w.rng},tool=chooseMeleeTool(animalMeleeTools(a),()=>healthRandom(state));if(!tool)return false;

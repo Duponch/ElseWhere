@@ -34,6 +34,7 @@ import { medicalWorkRefusal,pawnBody } from './health-rules.ts';
 import { tailoringTemperatureFactor } from './crafting-quality.ts';
 import type { WorkEnvironment } from './work-environment.ts';
 import type { Cell,CommandResult,Pawn,Structure,World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 export const RESEARCH_SCALE=1_000_000;export const SHIP_CRYPTOSLEEP_RESEARCH_COST277=SHIP_CASKET_RESEARCH_277.scaledCost;export const SHIP_ENGINE_RESEARCH_COST276=SHIP_ENGINE_RESEARCH_276.points*RESEARCH_SCALE;
 export const SHIP_BASICS_RESEARCH_COST275=SHIP_RESEARCH_POINTS_275.basics*RESEARCH_SCALE;
@@ -255,7 +256,7 @@ export function researchRate(pawn:Pawn,station:Structure,environment:WorkEnviron
 }
 export function processResearch(world:World,pawn:Pawn,move:(target:Cell,exact:boolean)=>unknown,rate:(s:Structure)=>number,event:(text:string)=>void):void {
   if(!allowedAreaServicesAllowed(world,pawn)){releaseAssignments(world,pawn);return;}
-  const task=pawn.research!,station=world.structures.find(s=>s.id===task.stationId);
+  const task=pawn.research!,station=structureById(world,task.stationId);
   if(medicalWorkRefusal(pawn)||!station||!researchWanted(world,pawn)||(needsResearchAnalyzer(world.research!.project!))&&task.facilityId===undefined||!researchStationUsable(world,station,world.research!.project!,task.facilityId)||deconstructionReserved(world,station.id,pawn.id)||!canStandAt(world,task.spot)){releaseAssignments(world,pawn);return;}
   if(pawn.x!==task.spot.x||pawn.z!==task.spot.z){move(task.spot,true);return;}
   pawn.path=[];pawn.state='working';

@@ -11,6 +11,7 @@ import type { CookingBill } from './cooking-types.ts';
 import type { ProductionContext } from './production-output.ts';
 import type { Cell,MaterialPile,Pawn,World } from './types.ts';
 import { animalSpecies } from './animal-species.ts';
+import { structureById } from './structure-navigation.ts';
 
 /** Products are decided together; the secondary output is placed in physical
  * reach, while the first output uses the existing single-cargo delivery task. */
@@ -18,7 +19,7 @@ export function finishButchery(world:World,pawn:Pawn,bill:CookingBill,context:Pr
   const task=pawn.cooking!,corpse=world.piles.find(p=>p.id===task.ingredients[0]?.pileId);
   if(!corpse||!corpseFresh(corpse,world.tick)||corpse.owner.type!=='ground')return false;
   const skill=completedCookingSkill(pawn,task.workTicks??0),worker={...pawn,skills:{...pawn.skills,cooking:skill}};
-  const station=world.structures.find(s=>s.id===task.stationId);if(!station)return false;
+  const station=structureById(world,task.stationId);if(!station)return false;
   const raw=corpseProducts(corpse);if(!raw)return false;
   const factor=butcheryEfficiency(worker)*butcherStationEfficiency(station),random={rng:world.rng};
   const meat=roundYield(raw.meat.quantity*factor,()=>healthRandom(random)),leather=roundYield(raw.leather.quantity*factor,()=>healthRandom(random));

@@ -11,6 +11,7 @@ import { neutralLossPlan } from './destruction-losses.ts';
 import { addFilth } from './filth.ts';
 import type { ThermalLayout } from './thermal-topology.ts';
 import { TICKS_PER_DAY,type Cell,type MaterialOwner,type MaterialPile,type Pawn,type World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 /** The person survives as a reference. Only the physical body can be lost. */
 export interface HumanBodyState {observedAt:number;pileId?:number;lostAt?:number;rot?:RotState;damage?:number}
@@ -32,7 +33,7 @@ export function pawnContentsLocation(w:World,p:Pawn):{cell:Cell;suspended:boolea
   if(p.body?.lostAt!==undefined)return null;
   const pile=p.body?.pileId===undefined?undefined:w.piles.find(i=>i.id===p.body!.pileId);
   if(pile?.owner.type==='grave'){
-    const graveId=pile.owner.graveId,grave=w.structures.find(s=>s.id===graveId);return grave?{cell:grave,suspended:true}:null;
+    const graveId=pile.owner.graveId,grave=structureById(w,graveId);return grave?{cell:grave,suspended:true}:null;
   }
   const cell=pawnBodyLocation(w,p);return cell?{cell,suspended:false}:null;
 }

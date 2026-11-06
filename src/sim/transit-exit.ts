@@ -10,6 +10,7 @@ import { releaseWork } from './work-release.ts';
 import { bedSlotCell,pawnBedSlot } from './bed-slots.ts';
 import type { World, Pawn, Cell } from './types.ts';
 import type { LightReader } from './light-environment.ts';
+import { structureById } from './structure-navigation.ts';
 
 const EXIT_DIRECTIONS=[[0,-1],[1,0],[0,1],[-1,0]] as const;
 
@@ -18,7 +19,7 @@ const EXIT_DIRECTIONS=[[0,-1],[1,0],[0,1],[-1,0]] as const;
 export function leaveTransitCell(world:World,pawn:Pawn,getBlocked:NavigationGrid,budget:SearchBudget,getLight?:LightReader):boolean {
   if(world.schemaVersion<22)return false;
   if(pawn.rescue){
-    const subject=pawn.rescue.phase==='carry'?world.structures.find(s=>s.id===pawn.rescue!.bedId):world.pawns.find(p=>p.id===pawn.rescue!.patientId);
+    const subject=pawn.rescue.phase==='carry'?structureById(world,pawn.rescue!.bedId):world.pawns.find(p=>p.id===pawn.rescue!.patientId);
     const target=subject&&'kind' in subject&&subject.kind==='double-bed'&&pawn.rescue.bedSlot!==undefined?bedSlotCell(subject,pawn.rescue.bedSlot):subject;
     if(target?.x===pawn.x&&target.z===pawn.z){delete pawn.transitExit;return false;}
   }

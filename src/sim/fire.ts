@@ -20,6 +20,7 @@ import type {BombInstigatorKey} from './mini-turret-state.ts';
 import { burnFloor } from './flooring.ts';
 import { addFilth } from './filth.ts';
 import {firefoamIgnitionFactor290} from './firefoam-actor-state-290.ts';
+import { structureById } from './structure-navigation.ts';
 export { fireDanger,fireNavigationPenalty,isBurning } from './fire-rules.ts';
 
 const NEAR:readonly (readonly [number,number])[]=[[0,-1],[1,0],[0,1],[-1,0],[1,-1],[1,1],[-1,1],[-1,-1]];
@@ -224,7 +225,7 @@ export function advanceFires(w:World,weather:{rainRate:number},initialLayout:The
     if(weather.rainRate>.01&&(!isRoofed(w,pos.z*w.width+pos.x)||w.structures.some(s=>(s.kind==='wall'||isRoomDoor(s.kind))&&same(s,pos)))){fireRandom(state);extinguishFire(w,f.id,10);}
   }
   for(const wick of [...state.batteryWicks])if(wick.endCore<=now){
-    state.batteryWicks=state.batteryWicks.filter(w=>w!==wick);const s=w.structures.find(s=>s.id===wick.structureId);if(!s?.battery)continue;
+    state.batteryWicks=state.batteryWicks.filter(w=>w!==wick);const s=structureById(w,wick.structureId);if(!s?.battery)continue;
     const cells=footprintCells(s),c=cells[Math.floor(fireRandom(state)*cells.length)]!,radius=(.5+fireRandom(state)*.5)*3;flameBurst(w,c,radius);
     if(w.structures.includes(s)){const lost=drainBatteryWattDays(s.battery,400)*120000;state.ledger.batteryEnergyLost+=lost;}
   }

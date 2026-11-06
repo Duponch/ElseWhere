@@ -2,6 +2,7 @@ import {isPlayerCasket271,cryptosleepInteraction271} from './cryptosleep-state-2
 import {isAncientCasket256,ancientCasketInteraction256} from './ancient-casket-state-256.ts';
 import { storageCellById } from './shelf-storage.ts';
 import type { Cell, Pawn, World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 export type { AllowedArea, AllowedAreaReturn } from './types.ts';
 
 export const ALLOWED_AREA_LIMIT=10;
@@ -53,14 +54,14 @@ export function allowedAreaWorkAllowed(world:World,pawn:Pawn):boolean {
   const policy=captureAllowedArea(world,pawn);if(!policy)return true;
   const allows=(cell:Cell|undefined|null)=>!cell||allowedAreaAllows(world,pawn,cell,policy);
   const ground=(id:number|null|undefined)=>{const pile=world.piles.find(p=>p.id===id);return pile?.owner.type!=='ground'||allows(pile.owner);};
-  if(pawn.cryptosleepTask){const c=world.structures.find(s=>s.id===pawn.cryptosleepTask!.casketId);if(!c||!isPlayerCasket271(c)||!allows(cryptosleepInteraction271(c)))return false;}
-  if(pawn.openCasket){const c=world.structures.find(s=>s.id===pawn.openCasket!.casketId);if(!c||!isAncientCasket256(c)||!allows(ancientCasketInteraction256(c)))return false;}
+  if(pawn.cryptosleepTask){const c=structureById(world,pawn.cryptosleepTask!.casketId);if(!c||!isPlayerCasket271(c)||!allows(cryptosleepInteraction271(c)))return false;}
+  if(pawn.openCasket){const c=structureById(world,pawn.openCasket!.casketId);if(!c||!isAncientCasket256(c)||!allows(ancientCasketInteraction256(c)))return false;}
   if(pawn.priorityWork&&!allows(pawn.priorityWork.cell))return false;
   if(pawn.jobId!==null){const job=world.jobs.find(j=>j.id===pawn.jobId);if(!allows(job))return false;
     if(job?.clearance&&!allows(world.resources.find(r=>r.id===job.clearance!.resourceId)))return false;
     if(job?.furniture){const pack=world.packed.find(p=>p.building.id===job.furniture!.structureId);if(pack?.owner.type==='ground'&&!allows(pack.owner))return false;}}
   if(pawn.haul){const h=pawn.haul,d=h.destination;
-    const target=d.type==='aside'?d:d.type==='job'?world.jobs.find(j=>j.id===d.jobId):d.type==='stockpile'?storageCellById(world,d.stockpileId):world.structures.find(s=>s.id===d.structureId);
+    const target=d.type==='aside'?d:d.type==='job'?world.jobs.find(j=>j.id===d.jobId):d.type==='stockpile'?storageCellById(world,d.stockpileId):structureById(world,d.structureId);
     if(!allows(target))return false;
     if(h.phase==='pickup'){
       if(h.whole){const pack=world.packed.find(p=>p.building.id===h.sourcePileId);if(pack?.owner.type==='ground'&&!allows(pack.owner))return false;}
@@ -68,17 +69,17 @@ export function allowedAreaWorkAllowed(world:World,pawn:Pawn):boolean {
     }
   }
   if(pawn.cooking){const c=pawn.cooking;
-    if(!allows(world.structures.find(s=>s.id===c.stationId)))return false;
+    if(!allows(structureById(world,c.stationId)))return false;
     if(c.phase!=='output')for(const i of c.ingredients)if(!allows(i.cell)||i.stage!=='held'&&!ground(i.pileId))return false;
     // Output can reselect an admissible depot. Its old destination is not an ingredient.
   }
   if(pawn.cleaning?.snowCell!==undefined&&!allows({x:pawn.cleaning.snowCell%world.width,z:Math.floor(pawn.cleaning.snowCell/world.width)}))return false;
   if(pawn.cleaning?.targets.some(id=>!allows(world.filth?.items.find(f=>f.id===id))))return false;
   if(pawn.firefighting){const f=world.fires?.items.find(f=>f.id===pawn.firefighting!.fireId);if(f){const cell=f.attachedPawnId!==undefined?world.pawns.find(p=>p.id===f.attachedPawnId):f.attachedAnimalId!==undefined?world.wildlife?.animals.find(a=>a.id===f.attachedAnimalId):f;if(!allows(cell))return false;}}
-  if(pawn.burial){const b=pawn.burial;if(!allows(world.structures.find(s=>s.id===b.graveId)))return false;
+  if(pawn.burial){const b=pawn.burial;if(!allows(structureById(world,b.graveId)))return false;
     if(b.phase==='pickup'){const body=world.pawns.find(p=>p.id===b.bodyPawnId);if(body?.body?.pileId!==undefined){if(!ground(body.body.pileId))return false;}else if(!allows(body))return false;}}
-  if(pawn.deepWork&&!allows(world.structures.find(s=>s.id===pawn.deepWork!.structureId)))return false;
-  if(pawn.orbitalTrade&&!allows(world.structures.find(s=>s.id===pawn.orbitalTrade!.consoleId)))return false;
+  if(pawn.deepWork&&!allows(structureById(world,pawn.deepWork!.structureId)))return false;
+  if(pawn.orbitalTrade&&!allows(structureById(world,pawn.orbitalTrade!.consoleId)))return false;
   if(pawn.trade&&!allows(world.pawns.find(p=>p.id===pawn.trade!.traderId)))return false;
   if(pawn.equipmentTask?.automatic&&!ground(pawn.equipmentTask.itemId))return false;
   return true;

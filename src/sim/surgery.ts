@@ -32,6 +32,7 @@ import type { Cell,CommandResult,Pawn,World } from './types.ts';
 import { implantSurgeryReason,implantSurgeryProposal,processImplantSurgery,planArtificialRestitution273,commitArtificialRestitution273,reportRestitutionBlocked273 } from './prosthetic-surgery.ts';
 import { validImplantTaskRelations } from './surgery-ingredients.ts';
 import {isFreeSurgeryDoctor280} from './prisoner-surgery-rules-280.ts';
+import { structureById } from './structure-navigation.ts';
 
 const release=(world:World,doctor:Pawn):void=>{if(!releaseWork(world,doctor))interruptWork(world,doctor);};
 /** Sparse pending requests cost no clinical/topology query on other pawns. */
@@ -126,7 +127,7 @@ export function processSurgery(world:World,doctor:Pawn,context:NeedContext,docto
   if(!finishing)return;
   // The actual work-time XP precedes the surgery statistic in Core.
   learnSkill(doctor.skills.medicine,surgeryBaseXp(task.workCore),doctor);
-  const bed=world.structures.find(s=>s.id===task.bedId)!;
+  const bed=structureById(world,task.bedId)!;
   const capture=captureCleanliness(world),room=capture.room(bed);
   const chance=surgerySuccessChance({doctor,medicine:task.consumedMedicine!,bedQuality:bed.quality,bedSurgeryFactor:bedSurgeryFactor(bed,world),patientGlow:patientGlow(bed),roomCleanliness:room?.cleanliness??null,outdoors:surgeryOutdoors(world,bed,capture)});
   const outcome=resolveSurgeryOutcome(patient.health!,task.part,chance,()=>healthRandom(world));

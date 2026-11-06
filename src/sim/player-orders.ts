@@ -288,7 +288,7 @@ export function reconcileOrders(world:World):void {
     jobs??=new Map(world.jobs.map(j=>[j.id,j]));
     orders.queue=orders.queue.filter(id=>{
       if(typeof id!=='number') {
-        const station=isCookingOrder(id)?world.structures.find(s=>s.id===id.cooking.stationId):undefined;
+        const station=isCookingOrder(id)?structureById(world,id.cooking.stationId):undefined;
         const work=isCookingOrder(id)?station?taskWork(id.cooking):undefined:haulingWork(id.destination);
         const reason=(work?backgroundWorkRefusal(pawn,work):undefined)??(isCookingOrder(id)?queuedCookingReason(world,id,pawn):queuedHaulReason(world,id,pawn));
         if(reason){world.events.push({tick:world.tick,type:'command',message:`${pawn.name} : livraison abandonnée. ${reason}`});if(world.events.length>80)world.events.shift();}
@@ -343,3 +343,4 @@ export function advanceOrders(world:World,pawn:Pawn,getBlocked:NavigationGrid,bu
   return false;
 }
 import { medicalWorkRefusal } from './health-rules.ts';
+import { structureById } from './structure-navigation.ts';

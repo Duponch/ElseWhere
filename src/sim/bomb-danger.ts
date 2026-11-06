@@ -15,6 +15,7 @@ import type { LightReader } from './light-environment.ts';
 import type { BombRefuge } from './mini-turret-state.ts';
 import type { Cell,Pawn,Structure,World } from './types.ts';
 import { miniTurretExplosive } from './bomb-eligibility.ts';
+import { structureById } from './structure-navigation.ts';
 
 const distance=(a:Cell,b:Cell)=>(a.x-b.x)**2+(a.z-b.z)**2;
 /** Capture once after combat, then borrow through the actor pass. */
@@ -33,7 +34,7 @@ export function validateBombRefuges(w:World,errors:string[]=[],ids?:NumericMembe
       ||w.pawns.some(a=>a.rescue?.phase==='carry'&&a.rescue.patientId===p.id)){errors.push('Invalid bomb refuge owner/shape.');continue;}
     const end=p.path.at(-1);
     if(end&&(end.x!==r.target.x||end.z!==r.target.z))errors.push('Bomb refuge route misses its target.');
-    const source=w.structures.find(s=>s.id===r.sourceId),wick=source?actualBombWick256(source):undefined;
+    const source=structureById(w,r.sourceId),wick=source?actualBombWick256(source):undefined;
     // A detonation may precede completion of this actor's captured edge. Such
     // historical refuge is removed at the next physical decision frontier.
     if(source&&(!['mini-turret','ancient-cryptosleep-casket'].includes(source.kind)||!wick)||wick&&(wick.endCore!==r.endCore||distance(source!,r.target)<=actualBombSourceRadius256(source!)**2))errors.push('Invalid bomb refuge source/target.');

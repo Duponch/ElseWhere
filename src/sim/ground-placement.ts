@@ -7,6 +7,7 @@ import { storageAccepts } from './storage-filters.ts';
 import { storageAt,storageCells,storageCellAccepts,shelfFixedAccepts,type StorageCell } from './shelf-storage.ts';
 import type { Cell, HaulTask, MaterialPile, StockpileCell, World } from './types.ts';
 import type { StagingGeometryReader } from './staging-validation.ts';
+import { structureById } from './structure-navigation.ts';
 
 /** Connected nearby cells, deterministic breadth first order. Never spill across a wall. */
 export function nearbyGround(world: World, origin: Cell, radius = 12): Cell[] {
@@ -40,7 +41,7 @@ export function createGroundCapacityReader(world:World):GroundCapacityReader {
   const add=(cell:Cell,r:PlacementReservation)=>{const key=cell.z*world.width+cell.x,list=reservations.get(key);if(list)list.push(r);else reservations.set(key,[r]);};
   for(const p of world.piles)if(p.owner.type==='ground'){const key=p.owner.z*world.width+p.owner.x,list=piles.get(key);if(list)list.push(p);else piles.set(key,[p]);}
   const haul=(task:HaulTask,pawnId:number,queued?:true)=>{
-    const d=task.destination,c=d.type==='stockpile'?storageById.get(d.stockpileId):d.type==='aside'?d:d.type==='hopper'?world.structures.find(s=>s.id===d.structureId):undefined;
+    const d=task.destination,c=d.type==='stockpile'?storageById.get(d.stockpileId):d.type==='aside'?d:d.type==='hopper'?structureById(world,d.structureId):undefined;
     if(c){const p=byId.get(task.phase==='pickup'?task.sourcePileId:task.carryPileId!);add(c,{pawnId,queued,item:p?.item,quantity:task.quantity,...task.whole?{exclusive:true as const}:{}});}
   };
   for(const p of world.pawns){

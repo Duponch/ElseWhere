@@ -14,6 +14,7 @@ import { advanceWork, resetWork, workProgress } from './work-progress.ts';
 import {planSelectedDrops,releaseWork,type DropPlan} from './work-release.ts';
 import {initialSpikeTrapState} from './spike-trap-state.ts';
 import {planConstructionPlantRetirement,commitConstructionPlantRetirement} from './plant-retirement.ts';
+import { structureById } from './structure-navigation.ts';
 
 /** A whole object needs a completely unreserved slot, never a compatible stack.
  * A full wood-slot capacity also excludes every typed inbound reservation. */
@@ -53,7 +54,7 @@ function commitFlowerWithdrawal(world:World,plan:FlowerWithdrawalPlan):void {
 }
 
 function detach(world:World,job:Job,owner:PackedFurniture['owner']):PackedFurniture {
-  const building=world.structures.find(s=>s.id===job.furniture!.structureId)!;
+  const building=structureById(world,job.furniture!.structureId)!;
   const bedOwnership=prepareBedOwnershipTransition256(world,building,'pack');
   world.structures=world.structures.filter(s=>s!==building);
   if(building.spikeTrap)building.spikeTrap.touching=[];
@@ -69,7 +70,7 @@ export function advanceFurniture(world:World,pawn:Pawn,job:Job,move:(target:Cell
   const target=furnitureWorkTarget(world,job),cells='kind' in target?footprintCells(target as Job):[target];
   if(!cells.some(c=>Math.abs(c.x-pawn.x)+Math.abs(c.z-pawn.z)===1)||cells.some(c=>c.x===pawn.x&&c.z===pawn.z)) {move(target);return false;}
   pawn.path=[];pawn.state='working';
-  const id=job.furniture!.structureId,source=world.structures.find(s=>s.id===id);
+  const id=job.furniture!.structureId,source=structureById(world,id);
   let pack=world.packed.find(p=>p.building.id===id);
   if(source) {
     const flower=source.kind==='flower-pot'?planFlowerWithdrawal(world,source):undefined;

@@ -30,6 +30,8 @@ interface SharedStructureIndex {
   readonly height:number;
   readonly geometry:StructureNavigationGeometry;
   readonly anchors:StructureAnchorIndex;
+  /** Lazily built: structures per kind (source order). */
+  byKind?:Map<Structure['kind'],Structure[]>;
 }
 /* Shared, cross-tick membership index keyed by the structures ARRAY itself.
  *
@@ -80,6 +82,24 @@ export function captureStructureNavigation(world:World):StructureNavigationGeome
  * kind/position/orientation as when the token was last observed. */
 export function structureMembershipToken(world:World):object {
   return sharedIndex(world);
+}
+/** Same result as `world.structures.find(s=>s.id===id)` (ids are immutable;
+ * the first structure wins if an invalid world repeats an id). */
+const idIndexes=new WeakMap<readonly Structure[],{count:number;first:Structure|undefined;last:Structure|undefined;map:Map<unknown,Structure>}>();
+export function structureById(world:{readonly structures:readonly Structure[]},id:unknown):Structure|undefined {
+  const source=world.structures;let index=idIndexes.get(source);
+  if(!index||index.count!==source.length||index.first!==source[0]||index.last!==source[source.length-1]){
+    const map=new Map<unknown,Structure>();for(const s of source)if(!map.has(s.id))map.set(s.id,s);
+    index={count:source.length,first:source[0],last:source[source.length-1],map};idIndexes.set(source,index);
+  }
+  return index.map.get(id);
+}
+const NO_STRUCTURES:readonly Structure[]=Object.freeze([]);
+/** Same members and order as `world.structures.filter(s=>s.kind===kind)`. */
+export function structuresOfKind(world:World,kind:Structure['kind']):readonly Structure[] {
+  const index=sharedIndex(world);
+  if(!index.byKind){const map=new Map<Structure['kind'],Structure[]>();for(const s of world.structures){const list=map.get(s.kind);if(list)list.push(s);else map.set(s.kind,[s]);}index.byKind=map;}
+  return index.byKind.get(kind)??NO_STRUCTURES;
 }
 /** O(1) anchor lookup with exactly the same membership/order as scanning
  * world.structures for `s.x===x&&s.z===z`. */

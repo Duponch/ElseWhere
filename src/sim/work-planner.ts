@@ -64,7 +64,7 @@ import { deliveredStock, groundQuantity, reservedDestination, reservedSource, re
 import {smoothFloorReason281,canTouchSmoothFloor281} from './smooth-floor-281.ts';
 import { cellIndex, workNeighbours, inBounds, canStopAt, hasReachableCell, reachableCells, routeToJob, routeToCell, interactionGoals } from './pathfinding.ts';
 import type { Reachability } from './pathfinding.ts';
-import type { StructureNavigationGeometry } from './structure-navigation.ts';
+import { structureById,type StructureNavigationGeometry } from './structure-navigation.ts';
 import type { Cell, HaulDestination, Job, JobKind, MaterialKind, MaterialPile, Pawn, World } from './types.ts';
 export const PLAN_INTERVAL=20;
 export interface SearchStats { searches:{pawnId:number;mode:'all'|'nearest'|'full';visited:number;unreachedGroups:number;connectivityVisited?:number}[] }
@@ -97,7 +97,7 @@ export function searchCandidates(world:World,pawn:Pawn,blocked:Uint8Array,occupi
 }
 export function destinationCell(world: World, destination: HaulDestination): (Cell & { kind?: JobKind|import('./types.ts').StructureKind }) | null {
   if (destination.type === 'aside') return destination;
-  if (destination.type === 'fuel'||destination.type==='turret'||destination.type==='hopper'||destination.type==='fermenting-barrel') return world.structures.find(s=>s.id===destination.structureId) ?? null;
+  if (destination.type === 'fuel'||destination.type==='turret'||destination.type==='hopper'||destination.type==='fermenting-barrel') return structureById(world,destination.structureId) ?? null;
   return destination.type === 'job' ? world.jobs.find(job => job.id === destination.jobId) ?? null : storageCellById(world,destination.stockpileId) ?? null;
 }
 export function destinationCapacity(world: World, destination: HaulDestination, kind: MaterialKind, exceptPawn?: number, subject: ItemId|MaterialPile = legacyItem(kind)): number {

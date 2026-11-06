@@ -5,6 +5,7 @@ import { haulingWork } from './work-types.ts';
 import type { OrderCommand } from './player-orders.ts';
 import type { QueuedOrder } from './order-types.ts';
 import { TICKS_PER_DAY, type Cell, type Pawn, type World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
 
 /** A cell and provider family, not a reservation or a radius of boosted jobs. */
 export interface PriorityWork { cell:Cell; work:'build'|'haul'|'cook'|'craft'|'art'; startedAt:number }
@@ -15,10 +16,10 @@ export function rememberPriorityWork(world:World,pawn:Pawn,command:OrderCommand,
   if(command.type==='order-job') {
     const job=world.jobs.find(j=>j.id===command.jobId);if(job&&isConstruction(job)){cell=job;work=job.installationWork??'build';}
   } else if(command.type==='order-cook') {
-    const station=world.structures.find(s=>s.id===command.structureId);cell=station;work=order&&isCookingOrder(order)?billWork({recipe:taskRecipe(order.cooking)}):order&&typeof order!=='number'&&!isCookingOrder(order)&&order.destination.type==='fuel'?haulingWork(order.destination) as PriorityWork['work']:station?stationWork(station):'cook';
+    const station=structureById(world,command.structureId);cell=station;work=order&&isCookingOrder(order)?billWork({recipe:taskRecipe(order.cooking)}):order&&typeof order!=='number'&&!isCookingOrder(order)&&order.destination.type==='fuel'?haulingWork(order.destination) as PriorityWork['work']:station?stationWork(station):'cook';
   } else if(command.type==='order-haul'&&order&&typeof order!=='number'&&!isCookingOrder(order)) {
     const d=order.destination;
-    if(d.type==='fuel'||d.type==='turret'){cell=world.structures.find(s=>s.id===d.structureId);work='haul';}
+    if(d.type==='fuel'||d.type==='turret'){cell=structureById(world,d.structureId);work='haul';}
     else if(d.type==='job'||d.type==='aside'&&d.constructionId!==undefined) {
       cell=world.jobs.find(j=>j.id===(d.type==='job'?d.jobId:d.constructionId));work=d.forConstruction?'build':'haul';
     }

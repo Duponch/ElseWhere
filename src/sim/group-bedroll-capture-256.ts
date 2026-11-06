@@ -4,6 +4,7 @@ import type {CaravanPhysicalPawn256} from './group-animal-state-256.ts';
 import type {Pawn,World} from './types.ts';
 import type {PackedFurniture} from './furniture-rules.ts';
 import {validBedrollBuilding256} from './bedroll-save-256.ts';
+import { structureById } from './structure-navigation.ts';
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype&&Reflect.ownKeys(v).every(k=>typeof k==='string'&&Object.hasOwn(Object.getOwnPropertyDescriptor(v,k)!,'value'));
 const integer=(v:unknown,min=0)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min;
 export const BEDROLL_MASS_GRAMS_256=2500;
@@ -39,5 +40,5 @@ export function detachGroupBedrollDeparture256(w:World,c:GroupBedrollDeparture25
 /** Pure local-entry namespace preflight. Inner pose remains literal; package
  * inventory ownership follows the same actual person through entry. */
 export function canReturnGroupBedrolls256(w:World,packs:readonly PackedFurniture[],members:readonly CaravanPhysicalPawn256[]):boolean {
- return w.schemaVersion>=256&&validCaravanBedrollPacks256(packs,members,w.nextId,w.schemaVersion,w.tick)&&packs.every(p=>!w.packed.some(q=>q.building.id===p.building.id)&&!w.structures.some(s=>s.id===p.building.id));
+ return w.schemaVersion>=256&&validCaravanBedrollPacks256(packs,members,w.nextId,w.schemaVersion,w.tick)&&packs.every(p=>!w.packed.some(q=>q.building.id===p.building.id)&&!(structureById(w,p.building.id)!==undefined));
 }

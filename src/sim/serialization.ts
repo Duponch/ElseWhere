@@ -832,9 +832,9 @@ function validateSchema(raw: unknown, version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 1
         if(version<217||!pile||hopperCapacity(world,haul.destination.structureId,pile.item,pawn.id)<haul.quantity)errors.push('Invalid hopper delivery reservation.');
       } else if (haul.destination.type === 'fuel') {
         const fuelTargetId=haul.destination.structureId;
-        if(haul.destination.forCrafting&&(!isSchema269OrLater(version)||world.structures.find(s=>s.id===fuelTargetId)?.kind!=='fueled-smithy'))errors.push('Crafting refuel targets a non-smithy or historical schema.');
-        if(haul.destination.forCooking&&!['campfire',...(version>=267?['fueled-smithy']:[]),...(version>=84?['fueled-stove']:[])].includes(world.structures.find(s=>s.id===fuelTargetId)?.kind??''))errors.push('Cooking refuel targets a non-cooking building.');
-        if(pile?.item!==fuelItem(world.structures.find(s=>s.id===fuelTargetId)?.kind)||fuelCapacity(world,haul.destination.structureId,pawn.id,haul.destination.forced)<haul.quantity)errors.push('Invalid fuel delivery reservation.');
+        if(haul.destination.forCrafting&&(!isSchema269OrLater(version)||structureById(world,fuelTargetId)?.kind!=='fueled-smithy'))errors.push('Crafting refuel targets a non-smithy or historical schema.');
+        if(haul.destination.forCooking&&!['campfire',...(version>=267?['fueled-smithy']:[]),...(version>=84?['fueled-stove']:[])].includes(structureById(world,fuelTargetId)?.kind??''))errors.push('Cooking refuel targets a non-cooking building.');
+        if(pile?.item!==fuelItem(structureById(world,fuelTargetId)?.kind)||fuelCapacity(world,haul.destination.structureId,pawn.id,haul.destination.forced)<haul.quantity)errors.push('Invalid fuel delivery reservation.');
       } else if (haul.destination.type === 'job') {
         const job = jobById.get(haul.destination.jobId);
         const capacity = job && pile ? version < 5
@@ -1845,3 +1845,4 @@ import { validSecondarySiteShape,secondaryMapForValidation } from './secondary-s
 import { isSecondaryContext } from './secondary-site-context.ts';
 import { validateMedicalRecord } from './injury-validation.ts';
 import { validatePawnHealth,validArtificialPartsWorldTransport } from './health-save.ts';
+import { structureById } from './structure-navigation.ts';
