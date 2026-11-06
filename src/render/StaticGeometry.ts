@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import type { Placement } from './primitives';
 import { PATTERN_SPAN,physicalPatternSpan } from './texture-variation';
 const scratchColor = new THREE.Color();
+const scratchReferenceColor = new THREE.Color();
 // Painted stone facets use the existing RGB vertex stream; the shared
 // resource material and its UV map remain unchanged. Values are linear-space
 // multipliers, with broad warm/cool pastel planes rather than tiny speckles.
@@ -85,7 +86,7 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
       const sx = item.sx ?? 1, sy = item.sy ?? 1, sz = item.sz ?? 1;
       const cosine = Math.cos(item.ry ?? 0), sine = Math.sin(item.ry ?? 0);
       scratchColor.setHex(item.color ?? 0xffffff);
-      const referenceColor=paint?new THREE.Color(item.referenceColor??item.color??0xffffff):undefined;
+      const referenceColor=paint?scratchReferenceColor.setHex(item.referenceColor??item.color??0xffffff):undefined;
       const stonePigment=item.pigment==='stone';
       let facetX=NaN,facetZ=NaN,facetTint:readonly [number,number,number]=STONE_FACET_TINTS[0];
       for (let i = 0; i < pos.count; i++) {
@@ -120,9 +121,12 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
         }
         if(uvs){
           const uvOffset=(vertex+i)*2;
-          const [spanU,spanV]=physicalPatternSpan(sx,sy,sz,normal.getX(i),normal.getY(i));
-          uvs[uvOffset]=faceUv||item.rawGeometry?(uv?.getX(i)??0):((uv?.getX(i)??0)-.5)*spanU+PATTERN_SPAN*.5+phaseU;
-          uvs[uvOffset+1]=faceUv||item.rawGeometry?(uv?.getY(i)??0):((uv?.getY(i)??0)-.5)*spanV+PATTERN_SPAN*.5+phaseV;
+          if(faceUv||item.rawGeometry){uvs[uvOffset]=uv?.getX(i)??0;uvs[uvOffset+1]=uv?.getY(i)??0;}
+          else{
+            const [spanU,spanV]=physicalPatternSpan(sx,sy,sz,normal.getX(i),normal.getY(i));
+            uvs[uvOffset]=((uv?.getX(i)??0)-.5)*spanU+PATTERN_SPAN*.5+phaseU;
+            uvs[uvOffset+1]=((uv?.getY(i)??0)-.5)*spanV+PATTERN_SPAN*.5+phaseV;
+          }
         }
       }
       for (let i = 0; i < (geometry.index?.count ?? pos.count); i++) indices[index++] = vertex + (geometry.index?.getX(i) ?? i);

@@ -88,7 +88,7 @@ function retainResources(group: THREE.Group, alive: Set<number>): void {
 
 /** Reapply a resource's visible size from the immutable merged positions.
  * This avoids cumulative float drift and keeps index-mask ranges stable. */
-function resizeResources(world:World,group:THREE.Group,resources:Map<number,World['resources'][number]>,originalSizes:Map<number,number>,currentSizes:Map<number,number>,nextSizes:Map<number,number>,bounds:WeakMap<THREE.BufferGeometry,ResourceRangeBounds>,graphics?:GraphicsStyleContext):void {
+function resizeResources(world:World,group:THREE.Group,resources:ReadonlyMap<number,World['resources'][number]>,originalSizes:Map<number,number>,currentSizes:Map<number,number>,nextSizes:Map<number,number>,bounds:WeakMap<THREE.BufferGeometry,ResourceRangeBounds>,graphics?:GraphicsStyleContext):void {
   const changed=new Set<number>();
   for(const [id,size] of nextSizes)if(currentSizes.get(id)!==size&&originalSizes.has(id))changed.add(id);
   if(!changed.size)return;
@@ -285,13 +285,16 @@ export class ResourceLayer {
       this.wearPlain=context.createWearMaterial(position,uv());this.wearWind=context.createWearMaterial(this.makeWindPosition(position),uv());
       this.wearPlain.userData.rendererOwned=this.wearWind.userData.rendererOwned=true;
       const world=this.cachedTreeUpdate?.world;
-      if(world)for(const chunk of this.chunks.values())this.appendOptionalWear(chunk.group,world,chunk.originalSizes,chunk.currentSizes,chunk.currentSizes);
+      if(world){let byId:Map<number,World['resources'][number]>|undefined;const resourcesById=()=>byId??=new Map(world.resources.map(r=>[r.id,r]));
+        for(const chunk of this.chunks.values())this.appendOptionalWear(chunk.group,world,chunk.originalSizes,chunk.currentSizes,chunk.currentSizes,true,resourcesById);}
     }
     this.refreshTreeCensus();this.compiledMaterialsChanged435?.();
   }
-  private appendOptionalWear(group:THREE.Group,world:World,initialSizes:Map<number,number>,_currentSizes:Map<number,number>,targetSizes:Map<number,number>,registerTrees=true):void{
+  /** `resourcesById` is the same complete id map for this World; callers that
+   * rebuild many chunks in one pass share it instead of re-indexing every chunk. */
+  private appendOptionalWear(group:THREE.Group,world:World,initialSizes:Map<number,number>,_currentSizes:Map<number,number>,targetSizes:Map<number,number>,registerTrees=true,resourcesById?:()=>ReadonlyMap<number,World['resources'][number]>):void{
     if(!this.wearPlain||!this.graphicsStyle)return;
-    const staging=new THREE.Group(),resources=new Map(world.resources.map(r=>[r.id,r]));
+    const staging=new THREE.Group(),resources=resourcesById?.()??new Map(world.resources.map(r=>[r.id,r]));
     const templates:{geometry:THREE.BufferGeometry;items:Placement[];canopy:boolean}[]=[],treeParts=new Map<THREE.BufferGeometry,{geometry:THREE.BufferGeometry;items:Placement[];canopy:boolean}>(),flora=this.wearFlora!.createBatch();
     // Discover optional wear only while enabled. At zero there is no wear
     // placement census, template cache, reference library or retained metadata.
@@ -579,6 +582,10 @@ export class ResourceLayer {
     const ripe=(r:World['resources'][number])=>appearance?appearance.harvestable(r):harvestable(world,r);
     const leafless=(r:World['resources'][number])=>appearance?.read(r).leafless??plantLeafless(world,r);
     const identity=(r:World['resources'][number])=>resourceIdentity(world,r)+(r.kind==='tree'?`:tree-shape:${treeModelVariant(world)}:blight:${r.blight?1:0}`:'');
+    // One complete id index per application, shared by every rebuilt chunk's
+    // optional wear (previously rebuilt from all World resources per chunk).
+    let resourceIndex:Map<number,World['resources'][number]>|undefined;
+    const resourcesById=()=>resourceIndex??=new Map(world.resources.map(r=>[r.id,r]));
     // ColonyRenderer configures the shared materials after constructing this
     // layer. Copy its lighting node before the first tree shader is compiled.
     const plainOutput=this.staticMaterial.outputNode;
@@ -752,7 +759,7 @@ export class ResourceLayer {
         if(!mesh)continue;this.sharedTreeMeshes.add(mesh);
         if(isCanopy){this.sharedTreeCanopies.add(mesh);mesh.name='tree-canopy';mesh.visible=this.foliageVisible;}
       }
-      this.appendOptionalWear(group,world,new Map(sizes),new Map(sizes),new Map(sizes),false);
+      this.appendOptionalWear(group,world,new Map(sizes),new Map(sizes),new Map(sizes),false,resourcesById);
       retainResources(group,visibleKeys);
       const trees=new Map(chunk.filter(r=>r.kind==='tree').map(r=>[r.id,r] as const));
       const treeIds=[...trees.keys()],treeSet=new Set(treeIds);

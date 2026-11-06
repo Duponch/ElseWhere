@@ -7,6 +7,7 @@ import {SceneRenderCore} from './SceneRenderCore';
 import {createDomPort} from './DomScenePort';
 import type {RendererLifetime} from './scene-render-ports';
 import {ReentrantRenderer} from './ReentrantRenderer';
+import {adapterRendererLimits} from './webgpu-device-limits';
 import {MapLabelsOverlay} from './MapLabelsOverlay';
 import {PawnSelectionInput,hitActors} from './PawnSelectionInput';
 import {isAreaAction} from '../sim/designation';
@@ -57,11 +58,23 @@ export class ColonyRenderer extends SceneRenderCore {
   }
   static async create(host: HTMLElement, onPick: (x: number, z: number) => void, groundGrassEnabled = true,graphics?:GraphicsStylePreferences): Promise<ColonyRenderer> {
     const graphicsContext=new GraphicsStyleContext(graphics);
-    const renderer = new ReentrantRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    const options = { antialias: true, alpha: false, powerPreference: 'high-performance' as const };
+    // Ask for the adapter's own inter-stage ceiling (default device: 16), so no
+    // actor material variant fails WebGPU pipeline validation at 17 inputs.
+    const requiredLimits = await adapterRendererLimits();
+    let renderer = new ReentrantRenderer(requiredLimits ? { ...options, requiredLimits } : options);
     const lifetime: RendererLifetime = { closed: false };
     let view: ColonyRenderer | undefined;
     try {
       await renderer.init();
+      // Three silently falls back to WebGL when a WebGPU device request fails.
+      // Never let the raised limit be the cause: retry with the default request.
+      if (requiredLimits && (renderer.backend as { isWebGPUBackend?: boolean } | undefined)?.isWebGPUBackend !== true) {
+        const refused = renderer;
+        renderer = new ReentrantRenderer(options);
+        try { await refused.dispose(); refused.domElement.remove(); } catch { /* The retained default renderer owns the result. */ }
+        await renderer.init();
+      }
       view = withGraphicsStyle(graphicsContext,()=>new this(host, onPick, renderer, groundGrassEnabled, lifetime));
       if (view.fatalError) throw new Error(view.fatalError);
       const ready = view;
