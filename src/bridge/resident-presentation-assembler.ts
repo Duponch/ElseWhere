@@ -222,12 +222,26 @@ type CampaignAdoption={status:'applied';replaced:boolean;summary:CampaignSummary
 type Chronology={calendar:number|undefined;birth:ReturnType<typeof captureNativeWorldPawnBirth256>;factions:ReturnType<typeof captureFactionInitializations256>};
 const mapIdentity=(view:Pick<World,'campaignMap'>):number|string|undefined=>view.campaignMap?.revision===2?view.campaignMap.activeMapId:view.campaignMap?.active;
 
+/* The packets adopted here come from this same build's own Worker. Re-running
+ * every save-grade validator over the whole World on each delta (about 25 deep
+ * walks, 110-140 ms on a large colony) dominated the main thread. Production
+ * may sample that deep validation; structural checks (header, predecessor,
+ * collection patches, geography, chronology) always run, and any failure
+ * still triggers a resync. Default 0 keeps validation on every publication. */
+let residentDeltaValidationIntervalMs=0;
+const residentClock=():number=>typeof performance!=='undefined'?performance.now():Date.now();
+export function setResidentDeltaValidationInterval(ms:number):void {
+ if(!Number.isFinite(ms)||ms<0)throw RangeError('Invalid resident validation interval');
+ residentDeltaValidationIntervalMs=ms;
+}
 export class ResidentPresentationAssembler {
  protected firefoamTransport(value:unknown,version:unknown):boolean {return validFirefoamHistoricalTransport290(value,version);}
  protected firefoamWorld(value:World,_packet:SnapshotMessage<true>):boolean {return validFirefoamWorld290(value);}
  private epoch=0;
  private revision=0;
  private current:World|undefined;
+ private lastDeepValidationAt=-Infinity;
+ private deepValidationDue():boolean {return residentDeltaValidationIntervalMs<=0||residentClock()-this.lastDeepValidationAt>=residentDeltaValidationIntervalMs;}
  private resourceSlots=new Map<number,number>();
  private pileSlots=new Map<number,number>();
  private structureSlots=new Map<number,number>();
@@ -296,6 +310,10 @@ export class ResidentPresentationAssembler {
   if(own(packet,'corePhase297')&&!isCorePhysicalSchema297(Number(packet.world?.schemaVersion)))return fail('Future physical header on historical resident World');
   const checkpoint=packet.kind==='checkpoint',sparseStructures=!checkpoint&&own(packet,'structures');
   const malformed=localShape(packet.world,checkpoint,sparseStructures,!checkpoint&&canReuseResidentAuxiliaryStockpiles(packet,this.current));if(malformed)return fail('Invalid resident shape: '+malformed);
+  // Deep save-grade validation: every checkpoint, the first delta after it,
+  // and then at most once per residentDeltaValidationIntervalMs (0 = always).
+  const deep=packet.kind==='checkpoint'||!this.current||this.deepValidationDue();
+  if(deep){
   if(!validNovelHistoricalTransport295(packet,packet.world.schemaVersion))return fail('Invalid or future resident Novel/reading data');
   if(!validWallDoorHistoricalTransport296(packet,packet.world.schemaVersion))return fail('Invalid or future resident wall-door successor data');
   if(!validToxicFalloutTransport294(packet,packet.world.schemaVersion))return fail('Invalid or future resident ToxicFallout condition or corpse rot credit');
@@ -305,6 +323,7 @@ export class ResidentPresentationAssembler {
   if(!validForestryHistoricalTransport291(packet,packet.world.schemaVersion))return fail('Invalid or future resident Forestry transport');
   if(!this.firefoamTransport(packet,packet.world.schemaVersion))return fail('Invalid or future resident firefoam transport');
   if(!validBillPauseHistoricalTransport289(packet,packet.world.schemaVersion))return fail('Invalid or future resident bill reserve pause');
+  }
   if(checkpoint&&['tiles','resources','piles','structures','baseRevision'].some(key=>own(packet,key)))return fail('Ambiguous resident checkpoint');
   const previous=this.current;
   if(!checkpoint&&(!previous||packet.epoch!==this.epoch||packet.baseRevision!==this.revision||packet.revision!==packet.baseRevision+1
@@ -345,6 +364,7 @@ export class ResidentPresentationAssembler {
    next={...previous,...dynamic,structures,tiles,resources,piles} as World;
    for(const key of Object.keys(previous!)as (keyof World)[])if(key!=='tiles'&&key!=='resources'&&key!=='piles'&&key!=='structures'&&!own(dynamic,key))delete (next as Partial<World>)[key];
   }
+  if(deep){
   if(!validPeaceTalksBindings293(next)||!validPartyWorld292(next)||!validForestryPolicies291(next))return fail('Invalid or locked forest growing policy');
   // Both transport fences already accepted this exact packet and schema above.
   if(!this.firefoamWorld(next,packet)||!validBillPauseWorld289(next)||!validAnimalThermalRefugeHistoricalTransport288(packet,next.schemaVersion)||!validAnimalAreaHistoricalTransport287(packet,next.schemaVersion)||!validAnimalThermalRefugeWorld288(next)||!validAnimalAreaWorld287(next)||!validLinkedStorageHistorical286(packet,next.schemaVersion)||!validCoupleHistoricalTransport285(packet,next.schemaVersion)||!validTradeRequestHistorical284(packet,next.schemaVersion)||!validApparelProvenanceHistoricalTransport284(packet,next.schemaVersion)||!validResidentTradeRequests284(next)||!validBillWorkerHistoricalTransport283(packet,next.schemaVersion)||!validLinkedStorageProjection286(next)||!validBillWorkerWorld283(next)||!validCoupleProjection285(next))return fail('Invalid resident couple or bill worker settings');
@@ -359,6 +379,8 @@ export class ResidentPresentationAssembler {
   if(!validHumanIngestionProjection299(next,next.schemaVersion))return fail('Invalid actual human ingestion clock or provider provenance');
   if(!validIdleWanderProjection300(next,next.schemaVersion))return fail('Invalid actual local civil wander task');
   if(!validFrameProjection301(next,next.schemaVersion))return fail('Invalid actual FinishFrame301 owner or work');
+   this.lastDeepValidationAt=residentClock();
+  }
   const calendar=next.planet?.revision===3&&next.campaignMap?.revision===2?next.campaignMap.calendarOrigin:undefined;
   if(!this.chronology(next,packet.epoch,calendar)||acceptExtra&&!acceptExtra(next)||!this.geography.canCommit(geographic))return fail('Rejected resident transaction');
   freezeAdmittedNativeWorldPawnOrder256(next);if(!river.inherited&&next.riverWater)freezeAdmittedRiverWater256(next.riverWater);

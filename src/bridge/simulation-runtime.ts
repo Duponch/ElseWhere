@@ -129,6 +129,9 @@ function resumeNeutralEncounter261(previous:object|undefined):void {
   neutralResume261=undefined;speed=shipCreditsHeld298()||urgentThreats.snapshot().urgentHeld?0:held.speed;resetSimulationClock(performance.now());
 }
 let lastPublishedTick=-1;
+/** Wall time of the last complete publication; see publishDuePhysical297. */
+let lastFullPublishedAt=-Infinity;
+const CALM_FULL_INTERVAL_MS=250;
 let stepMs = 0;
 let fault: SimulationFault | undefined;
 const motion = createMotionRecorder();
@@ -159,6 +162,7 @@ const publishCapturedTick = (checkpoint = false) => {
     if(physicalFull297)phasePublisher297.commitFull(physicalFull297,performance.now());
     audioCues.commitPublication297(audioPublication297);
     published = { epoch: packet.epoch, revision: packet.revision };
+    lastFullPublishedAt=performance.now();
   }
   lastPublishedTick=world?.tick??-1;
   if(world&&published)for(const notice of takeCaravanTradeArrivals261(world))send({type:'caravan-trade-arrival',...notice,checkpoint:published});
@@ -564,7 +568,14 @@ function publishDuePhysical297(force=false,batchTail=false):void {
   // Explicit frontier policy: calm Full coalesces to the TRUE logical tail
   // (or zero-credit wake). The same 20ms TOTAL budget still governs all sends.
   // A default/legacy anchor retains its old same-civil/20ms hold policy.
-  if(force||!quiet||batchTail||!phasePublisher297.frontierMode297&&phasePublisher297.quietBudgetExpired(now)){publishActualFull297();return;}
+  // A calm Full only refreshes slowly changing world state (jobs, items,
+  // plants, needs…); actors keep streaming through phase packets. In frontier
+  // mode, cap calm Fulls at one per CALM_FULL_INTERVAL_MS of wall time instead
+  // of one per batch tail (up to one per macro tick at speed 6), because each
+  // costs a full encode in this Worker and a full adoption on the main thread.
+  // Forced, hard (requiresFull), paused and non-frontier publications are unchanged.
+  const tail=batchTail&&(!phasePublisher297.frontierMode297||now-lastFullPublishedAt>=CALM_FULL_INTERVAL_MS);
+  if(force||!quiet||tail||!phasePublisher297.frontierMode297&&phasePublisher297.quietBudgetExpired(now)){publishActualFull297();return;}
   if(!phasePublisher297.frontierMode297)return;
  }
  if(!phasePublisher297.canPublishActors297)return;
@@ -599,7 +610,11 @@ function runCoreTask297(now:number):void {
   // including cross-map incidents. No Natural/geography encoder runs here.
   if(result.localTickCompleted||hard||paused){
    const current=visibleWorld();if(!current)throw Error('Selected publication owner disappeared during committed Core observation');
-   if(presentationChanges.capture(current))phasePublisher297.requestFull();
+   // In frontier mode a completed calm macro already schedules a calm Full
+   // (rate-limited in publishDuePhysical297) while actors keep streaming, so
+   // the whole-world presentation signature is neither needed nor computed.
+   const calmMacro=result.localTickCompleted&&!hard&&!paused&&phasePublisher297.frontierMode297;
+   if(!calmMacro&&presentationChanges.capture(current))phasePublisher297.requestFull();
   }
   // visibleWorld may revoke an old map's Recorder/Audio/Publisher ownership.
   // Capture this Core only after that synchronous owner check.
