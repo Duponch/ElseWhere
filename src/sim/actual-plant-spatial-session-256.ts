@@ -31,14 +31,48 @@ export function createActualPlantSpatialSession256(world:World,header:Header256)
  * guards still run once; the kernel receives the population built by that
  * same pass. No exposed existing array or previous session is reused. */
 export function createActualPlantSpatialSpawner256(world:World,header:Header256,order:readonly Def[]) {
- const population:PreparedPlantPopulation256={at:new Map(),globalSpecies:new Map(),totalPlants:0};
- const input=captureActualPlantSpatialSession256(world,header,population);
+ const base=resourceCapture256(world);
+ const population:PreparedPlantPopulation256={at:new OverlayPlantMap256(base.at),globalSpecies:new Map(base.species),totalPlants:base.total};
+ const input=captureActualPlantSpatialSession256(world,header,population,base);
  return createPreparedSpatialWildPlantSpawner256(input,order,population);
 }
-function captureActualPlantSpatialSession256(world:World,header:Header256,population?:PreparedPlantPopulation256):PlantSpatialSpawnerInput256 {
+/* Resource-derived part of the runtime capture, shared across ticks.
+ * world.resources is only ever replaced (never mutated in place) once a
+ * World runs, and a resource's kind/species/position are immutable, so the
+ * occupancy bits and plant rows it contributes are a pure function of the
+ * array identity. Everything else (structures, frames, piles, potted plants,
+ * geysers, tiles) is still read fresh by every capture. */
+interface ResourceCapture256 {readonly n:number;readonly owners:Uint8Array;readonly at:ReadonlyMap<number,ExistingGenerationPlant256>;readonly species:ReadonlyMap<string,number>;readonly total:number}
+const resourceCaptures256=new WeakMap<readonly World['resources'][number][],ResourceCapture256>();
+function resourceCapture256(world:World):ResourceCapture256 {
+ const n=world.width*world.height,cached=resourceCaptures256.get(world.resources);
+ if(cached&&cached.n===n)return cached;
+ const owners=new Uint8Array(n),at=new Map<number,ExistingGenerationPlant256>(),species=new Map<string,number>();let total=0;
+ for(const resource of world.resources){
+  const fill=resourceShotFill(resource),blocks=resource.kind!=='rock';
+  if(!Number.isFinite(fill)||fill<0||fill>1)throw Error('Missing physical plant fill definition');
+  if(!Number.isSafeInteger(resource.x)||!Number.isSafeInteger(resource.z)||resource.x<0||resource.z<0||resource.x>=world.width||resource.z>=world.height)throw Error('Physical plant owner outside its actual map');
+  const bits=(fill>.99?FULL:0)|(fill>=.01?COVER:0)|(blocks||fill>=.01?BLOCKS_PLANT:0),cell=resource.z*world.width+resource.x;
+  if(bits)owners[cell]=owners[cell]!|bits;
+  const defId=runtimePlantDef256(resource);
+  if(defId!==undefined){
+   if(at.has(cell))throw Error('Invalid existing initial plant');
+   at.set(cell,{cell,defId,nonStump:true});total++;species.set(defId,(species.get(defId)??0)+1);
+  }
+ }
+ const capture={n,owners,at,species,total};resourceCaptures256.set(world.resources,capture);return capture;
+}
+/** Copy-on-write population: plants recorded during one decision stay local. */
+class OverlayPlantMap256 extends Map<number,ExistingGenerationPlant256> {
+ private readonly base:ReadonlyMap<number,ExistingGenerationPlant256>;
+ constructor(base:ReadonlyMap<number,ExistingGenerationPlant256>){super();this.base=base;}
+ override get(key:number):ExistingGenerationPlant256|undefined{return super.has(key)?super.get(key):this.base.get(key);}
+ override has(key:number):boolean{return super.has(key)||this.base.has(key);}
+}
+function captureActualPlantSpatialSession256(world:World,header:Header256,population?:PreparedPlantPopulation256,base?:ResourceCapture256):PlantSpatialSpawnerInput256 {
  const n=world.width*world.height;
  if(world.schemaVersion<256||header.width!==world.width||header.height!==world.height||![world.width,world.height].every(v=>Number.isSafeInteger(v)&&v>=1&&v<=400)||world.tiles.length!==n)throw Error('Invalid actual spatial plant map');
- const owners=new Uint8Array(n),existing:ExistingGenerationPlant256[]=[],plantCells=population?.at??new Set<number>();
+ const owners=base&&base.n===n?base.owners.slice():new Uint8Array(n),existing:ExistingGenerationPlant256[]=[],plantCells=population?.at??new Set<number>();
  const index=(c:Cell)=>{if(!Number.isSafeInteger(c.x)||!Number.isSafeInteger(c.z)||c.x<0||c.z<0||c.x>=world.width||c.z>=world.height)throw Error('Physical plant owner outside its actual map');return c.z*world.width+c.x;};
  // Map's non-number keys never matched a valid numeric cell query. Preserve
  // that raw behavior instead of coercing a malformed geyser key to an index.
@@ -67,7 +101,9 @@ function captureActualPlantSpatialSession256(world:World,header:Header256,popula
   if(!constructionFrameWipesPlants(kind))throw Error('Missing actual Thing Frame metadata');
   for(const cell of footprintCells(job))filled(cell,FRAME_SHOT_FILL,true);
  }
- for(const resource of world.resources){
+ // With a shared resource capture its bits are already in owners and its
+ // plants in population (bitwise OR and keyed rows do not depend on order).
+ if(!(base&&base.n===n))for(const resource of world.resources){
   filled(resource,resourceShotFill(resource),resource.kind!=='rock');const defId=runtimePlantDef256(resource);
   if(defId!==undefined)plant({cell:resource.z*world.width+resource.x,defId,nonStump:true});
  }
