@@ -24,31 +24,56 @@ export const adjacent = (a: Cell, b: Cell): boolean => Math.abs(a.x - b.x) + Mat
 /* Terrain walkability per tiles array. Tile objects never change `terrain` in
  * place (every terrain edit replaces the Tile object), so revalidating by
  * object identity is exact and far cheaper than reclassifying every cell. */
-const terrainMasks=new WeakMap<readonly World['tiles'][number][],{refs:(World['tiles'][number]|undefined)[];mask:Uint8Array}>();
-export function terrainBlockedMask(tiles:readonly World['tiles'][number][]):Uint8Array {
+const terrainMasks=new WeakMap<readonly World['tiles'][number][],{refs:(World['tiles'][number]|undefined)[];mask:Uint8Array;revision:number}>();
+/** Walkability per cell, validated by Tile identity (terrain is never mutated
+ * in place). `revision` counts content changes of the returned mask. */
+function terrainBlockedEntry(tiles:readonly World['tiles'][number][]):{mask:Uint8Array;revision:number} {
   const n=tiles.length;let cached=terrainMasks.get(tiles);
-  if(!cached||cached.refs.length!==n){cached={refs:new Array(n),mask:new Uint8Array(n)};terrainMasks.set(tiles,cached);
+  if(!cached||cached.refs.length!==n){cached={refs:new Array(n),mask:new Uint8Array(n),revision:0};terrainMasks.set(tiles,cached);
     for(let i=0;i<n;i++){const tile=tiles[i]!;cached.refs[i]=tile;cached.mask[i]=naturalTerrainWalkable256(tile.terrain)?0:1;}
-    return cached.mask;}
+    return cached;}
   const refs=cached.refs,mask=cached.mask;
-  for(let i=0;i<n;i++){const tile=tiles[i]!;if(refs[i]!==tile){refs[i]=tile;mask[i]=naturalTerrainWalkable256(tile.terrain)?0:1;}}
-  return mask;
+  for(let i=0;i<n;i++){const tile=tiles[i]!;if(refs[i]!==tile){refs[i]=tile;const value=naturalTerrainWalkable256(tile.terrain)?0:1;if(mask[i]!==value){mask[i]=value;cached.revision++;}}}
+  return cached;
+}
+export function terrainBlockedMask(tiles:readonly World['tiles'][number][]):Uint8Array {return terrainBlockedEntry(tiles).mask;}
+const isSolidBlocker=(kind:World['structures'][number]['kind'],legacy:boolean):boolean=>kind==='wall'||kind==='cooler'||kind==='vent'||kind==='electric-crematorium'||isShipPartKind276(kind)||kind==='geothermal-generator'||kind==='nutrient-paste-dispenser'||legacy&&kind==='table';
+/* Per (immutable) shared geometry: the solid structure cells (kind only) and
+ * the passage doors, plus the union of the terrain mask and those cells for
+ * the terrain mask revision it was built from. All writes of blockedCells set
+ * 1, so the union is order independent; forbidden doors and transit jobs are
+ * live facts and are still added on every call. */
+interface StaticBlocking {width:number;size:number;legacy:boolean;solid:Int32Array;doors:readonly World['structures'][number][];base?:{mask:Uint8Array;revision:number;data:Uint8Array}}
+const staticBlocking=new WeakMap<StructureNavigationGeometry,StaticBlocking[]>();
+function staticBlockingFor(world:World,geometry:StructureNavigationGeometry,legacy:boolean):StaticBlocking {
+  const size=world.width*world.height;let list=staticBlocking.get(geometry);if(!list){list=[];staticBlocking.set(geometry,list);}
+  let entry=list.find(e=>e.width===world.width&&e.size===size&&e.legacy===legacy);
+  if(!entry){const solid:number[]=[],doors:World['structures'][number][]=[];
+    for(const {structure,cells} of geometry.entries){if(isPassageDoor(structure.kind))doors.push(structure);if(isSolidBlocker(structure.kind,legacy))for(const i of cells)solid.push(i);}
+    entry={width:world.width,size,legacy,solid:Int32Array.from(solid),doors};list.push(entry);}
+  return entry;
 }
 export function blockedCells(world: World, physical=false,geometry?:StructureNavigationGeometry): Uint8Array {
   const version=world.schemaVersion;
-  const blocked = new Uint8Array(world.width * world.height);
-  const terrainMask=terrainBlockedMask(world.tiles);
-  blocked.set(terrainMask.length<=blocked.length?terrainMask:terrainMask.subarray(0,blocked.length));
+  const terrain=terrainBlockedEntry(world.tiles),terrainMask=terrain.mask;
   geometry??=captureStructureNavigation(world);
-  const add=(structure:World['structures'][number],cells?:readonly number[])=>{
-    if (!physical&&isPassageDoor(structure.kind)&&structure.door?.forbidden)blocked[cellIndex(world,structure.x,structure.z)]=1;
-    if ((structure.kind === 'wall'||structure.kind==='cooler'||structure.kind==='vent'||structure.kind==='electric-crematorium'||isShipPartKind276(structure.kind)||structure.kind==='geothermal-generator'||structure.kind==='nutrient-paste-dispenser') || version<22&&structure.kind === 'table'){
-      if(cells){for(const i of cells)blocked[i]=1;}
-      else for (const cell of footprintCells(structure)) blocked[cellIndex(world, cell.x, cell.z)] = 1;
+  let blocked:Uint8Array;
+  if(geometry){
+    const fixed=staticBlockingFor(world,geometry,version<22);let base=fixed.base;
+    if(!base||base.mask!==terrainMask||base.revision!==terrain.revision){
+      const data=new Uint8Array(fixed.size);data.set(terrainMask.length<=data.length?terrainMask:terrainMask.subarray(0,data.length));
+      for(const i of fixed.solid)data[i]=1;base=fixed.base={mask:terrainMask,revision:terrain.revision,data};
     }
-  };
-  if(geometry){for(const {structure,cells} of geometry.entries)add(structure,cells);}
-  else for(const structure of world.structures)add(structure);
+    blocked=base.data.slice();
+    if(!physical)for(const structure of fixed.doors)if(structure.door?.forbidden)blocked[cellIndex(world,structure.x,structure.z)]=1;
+  }else{
+    blocked=new Uint8Array(world.width * world.height);
+    blocked.set(terrainMask.length<=blocked.length?terrainMask:terrainMask.subarray(0,blocked.length));
+    for(const structure of world.structures){
+      if (!physical&&isPassageDoor(structure.kind)&&structure.door?.forbidden)blocked[cellIndex(world,structure.x,structure.z)]=1;
+      if (isSolidBlocker(structure.kind,version<22))for (const cell of footprintCells(structure)) blocked[cellIndex(world, cell.x, cell.z)] = 1;
+    }
+  }
   for (const job of world.jobs) {
     if (jobBlocksTransit(world,job)) for (const cell of footprintCells(job)) blocked[cellIndex(world, cell.x, cell.z)] = 1;
   }

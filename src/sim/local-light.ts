@@ -37,18 +37,29 @@ function pop(heap:number[]):number {
  * channels separately before taking their maximum. */
 export class LocalLightCache {
   private topology?:RoomTopology;
-  private emitters='';
+  /* Emitter fields of the last build. Equivalent to the former text key
+   * `cell:radius:red[:green:blue][:overlit:r]` joined by commas: two keys are
+   * equal exactly when the mixed flag, the count and every listed field are
+   * equal, numbers comparing like their String() (0 and -0 equal, NaN equal
+   * to NaN). Compared field by field instead of building the string. */
+  private emitters?:{mixed:boolean;values:number[]};
   private light=new Float32Array(0);
   rebuilds=0;
 
+  private sameEmitters(sources:readonly LightSource[],mixed:boolean):boolean {
+    const e=this.emitters;if(!e||e.mixed!==mixed||e.values.length!==sources.length*7)return false;
+    const same=(a:number,b:number)=>a===b||a!==a&&b!==b,v=e.values;
+    for(let i=0;i<sources.length;i++){const s=sources[i]!,o=i*7;
+      if(!same(v[o]!,s.cell)||!same(v[o+1]!,s.radius)||!same(v[o+2]!,s.red))return false;
+      if(mixed&&(!same(v[o+3]!,s.green)||!same(v[o+4]!,s.blue)))return false;
+      const over=s.overlightRadius!==undefined;if((v[o+5]===1)!==over||over&&!same(v[o+6]!,s.overlightRadius!))return false;
+    }
+    return true;
+  }
   read(world:World,topology:RoomTopology,sources:readonly LightSource[]=lightSources(world)):Float32Array {
-    const mixed=sources.some(s=>s.green>s.red||s.blue>s.red);
-    const key=sources.map(s=>{
-      const channels=mixed?`${s.cell}:${s.radius}:${s.red}:${s.green}:${s.blue}`:`${s.cell}:${s.radius}:${s.red}`;
-      return s.overlightRadius===undefined?channels:`${channels}:overlit:${s.overlightRadius}`;
-    }).join(',');
-    if(this.topology===topology&&this.emitters===key)return this.light;
-    if(this.topology&&this.emitters===key&&sameLightObstacles(sources,this.topology,topology)) {
+    const mixed=sources.some(s=>s.green>s.red||s.blue>s.red),sameKey=this.sameEmitters(sources,mixed);
+    if(this.topology===topology&&sameKey)return this.light;
+    if(this.topology&&sameKey&&sameLightObstacles(sources,this.topology,topology)) {
       this.topology=topology;return this.light;
     }
     // Retain the original work area and heap ordering without a larger source.
@@ -98,7 +109,7 @@ export class LocalLightCache {
     // Core keeps ordinary accumulated RGB capped at .5. A qualifying source
     // marks full light in this same flood, independently of other sources.
     if(overlight)for(let i=0;i<overlight.length;i++)if(overlight[i])light[i]=1;
-    this.topology=topology;this.emitters=key;this.light=light;this.rebuilds++;
+    this.topology=topology;this.emitters={mixed,values:sources.flatMap(s=>[s.cell,s.radius,s.red,s.green,s.blue,s.overlightRadius===undefined?0:1,s.overlightRadius??0])};this.light=light;this.rebuilds++;
     return light;
   }
 }
