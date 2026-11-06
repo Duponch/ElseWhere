@@ -8,6 +8,7 @@ import { createPrisonerState } from '../src/sim/prisoner-state.ts';
 import { capturePrisonTopology,prisonBedValid,prisonDoorPassable,prisonerAllowedCell,prisonerEscapeRoute,prisonRoom } from '../src/sim/prison-space.ts';
 import { RoomTopologyCache } from '../src/sim/room-topology.ts';
 import type { Structure } from '../src/sim/types.ts';
+import { markTerrainCellChanged } from '../src/sim/terrain-mutation-journal';
 
 function prison(){
   const w=generateWorld(42,32,32);w.tiles=w.tiles.map(()=>({terrain:'grass'}));w.structures=[];w.jobs=[];w.resources=[];w.piles=[];w.packed=[];w.stockpiles=[];delete w.wildlife;
@@ -27,8 +28,10 @@ test('prison room is enclosed, has a marked bed and needs no roof; role and in-p
   Object.assign(bed,{x:13,z:13,orientation:1});expect(prisonBedValid(w,bed)).toBe(false);Object.assign(bed,{x:10,z:10,orientation:0});
   const i=w.structures.findIndex(s=>s.kind==='wall'&&s.x===8&&s.z===11),wall=w.structures.splice(i,1)[0]!;
   expect(prisonRoom(w,pawn)).toBeUndefined();expect(prisonBedValid(w,bed)).toBe(false);w.structures.push(wall);expect(prisonBedValid(w,bed)).toBe(true);
-  // Rock is a real barrier too; changing it in place must invalidate the room.
-  w.structures.splice(w.structures.indexOf(wall),1);w.tiles[11*w.width+8]={terrain:'rock'};expect(prisonBedValid(w,bed)).toBe(true);w.tiles[11*w.width+8]!.terrain='grass';expect(prisonBedValid(w,bed)).toBe(false);
+  // Rock is a real barrier too; a terrain edit (a replaced, marked Tile, as
+  // every physical writer does) must invalidate the room.
+  w.structures.splice(w.structures.indexOf(wall),1);w.tiles[11*w.width+8]={terrain:'rock'};markTerrainCellChanged(w.tiles,11*w.width+8);expect(prisonBedValid(w,bed)).toBe(true);
+  w.tiles[11*w.width+8]={terrain:'grass'};markTerrainCellChanged(w.tiles,11*w.width+8);expect(prisonBedValid(w,bed)).toBe(false);
 });
 
 test('escape requires an opening, preserves budget waits and uses a real weighted path through held or obstructed doors',()=>{
@@ -101,6 +104,6 @@ test('a synchronous prison query batch shares one capture, while later default q
     const wall=w.structures.find(s=>s.kind==='wall'&&s.x===8&&s.z===11)!;w.structures.splice(w.structures.indexOf(wall),1);
     expect(prisonRoom(w,pawn)).toBeUndefined();expect(read).toHaveBeenCalledTimes(2);expect(captured.at(pawn.x,pawn.z)).toBe(room);
     expect(prisonBedValid(w,bed)).toBe(false);expect(prisonerAllowedCell(w,pawn,{x:15,z:11})).toBe(true);
-    w.tiles[11*w.width+8]!.terrain='rock';expect(prisonBedValid(w,bed)).toBe(true);expect(prisonerAllowedCell(w,pawn,{x:15,z:11})).toBe(false);
+    w.tiles[11*w.width+8]={...w.tiles[11*w.width+8]!,terrain:'rock'};markTerrainCellChanged(w.tiles,11*w.width+8);expect(prisonBedValid(w,bed)).toBe(true);expect(prisonerAllowedCell(w,pawn,{x:15,z:11})).toBe(false);
   }finally{read.mockRestore();}
 });

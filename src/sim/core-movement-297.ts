@@ -34,8 +34,8 @@ export function createCoreMovement297(world:World){
   invalidate(){animals.invalidate();passengers=undefined;budget.structureGeometry=undefined;invalidatePhysicalDoors297(world);blocked=undefined;},
   beginMacro(next:SearchBudget){animals.beginMacro();passengers=undefined;owned=world.corePathBudget297={tick:world.tick,remaining:next.remaining,pairs:next.pairs};budget.stats=next.stats;budget.structureGeometry=next.structureGeometry;invalidatePhysicalDoors297(world);blocked=undefined;},
   budget(){return budget;},
-  advance():{actorsChanged:number[];changedCells:boolean;requiresFull:boolean;topologyChanged:boolean}{
-   const now=effectiveLocal297(world),core=effectiveCore297(world),changed:number[]=[];let changedCells=false,requiresFull=false;
+  advance():{actorsChanged:number[];changedCells:boolean;requiresFull:boolean;topologyChanged:boolean;deferredChange297:boolean;doorsMoved297:readonly number[]}{
+   const now=effectiveLocal297(world),core=effectiveCore297(world),changed:number[]=[];let changedCells=false,requiresFull=false,deferredChange297=false;
    const touchPassengers=(carrier:World['pawns'][number])=>{
     passengers??=captureCorePassengers297(world);
     for(const mirror of passengers.get(carrier.id)??[]){if(Object.hasOwn(mirror,'moveCooldown'))mirror.moveCooldown=carrier.moveCooldown;if(!changed.includes(mirror.id))changed.push(mirror.id);}
@@ -47,9 +47,12 @@ export function createCoreMovement297(world:World){
     if(before>0&&pawn.moveCooldown===0&&!carrierOf(world,pawn.id)){
       const m=pawn.motion,index=m?m.to.z*world.width+m.to.x:-1,depth=index<0?undefined:world.tiles[index]?.snowDepth;
       finishSnowStep(world,pawn);const snowChanged=index>=0&&world.tiles[index]?.snowDepth!==depth;
-      requiresFull=recordFilthMovement297(world,pawn)||snowChanged||requiresFull;
+      // Footprint filth and trodden snow are ground presentation, and a released
+      // idle wander changes no physical field: the next calm Full (or the macro
+      // dependency check) publishes them, not a hard Full.
+      deferredChange297=recordFilthMovement297(world,pawn)||snowChanged||deferredChange297;
     }
-    if(isSchema300OrLater(Number(world.schemaVersion))&&idleWanderTask300(pawn)?.kind==='move'&&!idleMotionAllowed300(world,pawn)){releaseIdleWander300(pawn,!idleOtherActivity300(pawn));if(!changed.includes(pawn.id))changed.push(pawn.id);requiresFull=true;}
+    if(isSchema300OrLater(Number(world.schemaVersion))&&idleWanderTask300(pawn)?.kind==='move'&&!idleMotionAllowed300(world,pawn)){releaseIdleWander300(pawn,!idleOtherActivity300(pawn));if(!changed.includes(pawn.id))changed.push(pawn.id);deferredChange297=true;}
     if(pawn.moveCooldown>0)continue;
     // Clinical/task invalidation stays authoritative. A stale path is never
     // extended after an impact, command, retirement or ownership transfer.
@@ -64,9 +67,13 @@ export function createCoreMovement297(world:World){
     if(m!==pawn.motion||x!==pawn.x||z!==pawn.z){if(!changed.includes(pawn.id))changed.push(pawn.id);touchPassengers(pawn);changedCells=true;}
    }
    const animal=animals.advance();for(const id of animal.actorsChanged)if(!changed.includes(id))changed.push(id);
-   changedCells||=animal.changedCells;requiresFull||=animal.requiresFull;
+   changedCells||=animal.changedCells;requiresFull||=animal.requiresFull;deferredChange297||=animal.deferredChange297;
    const doors=advancePhysicalDoors297(world);if(doors.topologyChanged)animals.invalidate();
-   return {actorsChanged:changed,changedCells,requiresFull:doors.changed||requiresFull,topologyChanged:doors.topologyChanged};
+   // Re-entering an open door or extending its close deadline changes nothing
+   // visible; doors that open or close are reported for a door patch; a door
+   // that reveals fog keeps the hard barrier.
+   if(doors.changed&&!doors.moved297.length&&!doors.exploration297)deferredChange297=true;
+   return {actorsChanged:changed,changedCells,requiresFull:doors.exploration297||requiresFull,topologyChanged:doors.topologyChanged,deferredChange297,doorsMoved297:doors.moved297.map(s=>s.id)};
   }
  };
 }

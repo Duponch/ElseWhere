@@ -1,5 +1,5 @@
 import type {AudioCue} from './audio-cues';
-import type {Pawn,Cell,World} from '../sim/types';
+import type {Pawn,Cell,World,Job} from '../sim/types';
 import type {PawnTrack} from './motion-tracks';
 import type {WildAnimal} from '../sim/wildlife-state';
 import type {Mechanoid} from '../sim/mechanoid-state';
@@ -57,6 +57,26 @@ export interface CoreProjectileEvents297 {
  readonly upserted:readonly CoreProjectileTrace297[];
  readonly removed:readonly number[];
 }
+/** Frontier pose patch of one human whose dependency row changed only in its
+ * work contact / animation pose (poseOnlyDependencyChanges297). It carries the
+ * complete current record, the job it references and the contact computed by
+ * the Worker on the live World (work pose, reach, and the facing toward the
+ * work target, or null when no work target sets it). Presentation only. */
+export interface CoreHumanPose297 {
+ readonly id:number;
+ readonly index:number;
+ readonly actor:Readonly<Pawn>;
+ readonly job:Readonly<Job>|null;
+ readonly workPose:number;
+ readonly reach:Readonly<{x:number;z:number}>;
+ readonly yaw:number|null;
+}
+/** Frontier door patch: the presentation state of a door that opened or closed
+ * since the anchored Full (the renderer animates open/from/changedAt). */
+export interface CoreDoorPatch297 {
+ readonly id:number;
+ readonly door:Readonly<NonNullable<World['structures'][number]['door']>>;
+}
 export interface CorePhaseEnvelopeFields297 {
  readonly audioCues:readonly AudioCue[];
  readonly epoch:number;
@@ -70,6 +90,10 @@ export interface CorePhaseEnvelopeFields297 {
  readonly actors:readonly CoreActorProjection297[];
  readonly tracks:readonly CoreMotionPatch297[];
  readonly projectiles:CoreProjectileEvents297;
+ /** Frontier only, present only when non-empty. */
+ readonly poses297?:readonly CoreHumanPose297[];
+ /** Frontier only, present only when non-empty. */
+ readonly doors297?:readonly CoreDoorPatch297[];
 }
 /** A real discriminated union preserves reply narrowing in SimulationClient. */
 export type CorePhaseEnvelope297=
@@ -109,6 +133,10 @@ export interface CorePhaseTypedProjection297 {
  readonly actors:readonly CoreActorProjection297[];
  readonly tracks:PawnTrack[];
  readonly projectiles:CoreProjectileEvents297;
+ /** Pose patches of this phase (already applied to actorScene.humans). */
+ readonly poses297?:readonly CoreHumanPose297[];
+ /** Door patches of this phase. */
+ readonly doors297?:readonly CoreDoorPatch297[];
 }
 /** Header transport only. Never stored in the saved World. */
 export interface CoreFullPhaseMetadata297 {

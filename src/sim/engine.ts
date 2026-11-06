@@ -1691,11 +1691,18 @@ function advanceCoreMap297(world:World,boundary=false):CoreStepResult297 {
  const reactorStep=advanceShipReactorsCore297(world);
  if(reactorStep?.completed)event(world,'command',reactorStep.completed===1?'Un réacteur stellaire a terminé son démarrage.':`${reactorStep.completed} réacteurs stellaires ont terminé leur démarrage.`);
  if(result.requiresFull||frameStep301?.requiresFull){state.movement.invalidate();invalidateHumanMoveSpeed297(world);}
- state.result={...result,observerEffects297:{threatsChanged:result.observerEffects297.threatsChanged||moved.topologyChanged||!!frameStep301?.requiresFull,audioChanged:result.observerEffects297.audioChanged||moved.topologyChanged||!!frameStep301?.requiresFull},requiresFull:result.requiresFull||moved.requiresFull||!!frameStep301?.requiresFull||!!reactorStep?.completed||!!contactStep?.requiresFull||!!idleStep300?.requiresFull,actorsChanged:[...new Set(contactStep?.actorsChanged.length?[...physicalActorChanges298,...contactStep.actorsChanged]:physicalActorChanges298)]};return state.result;
+ state.result={...result,observerEffects297:{threatsChanged:result.observerEffects297.threatsChanged||moved.topologyChanged||!!frameStep301?.requiresFull,audioChanged:result.observerEffects297.audioChanged||moved.topologyChanged||!!frameStep301?.requiresFull},requiresFull:result.requiresFull||moved.requiresFull||!!frameStep301?.requiresFull||!!reactorStep?.completed||!!contactStep?.requiresFull||!!idleStep300?.requiresFull,deferredChange297:moved.deferredChange297,doorsMoved297:moved.doorsMoved297,actorsChanged:[...new Set(contactStep?.actorsChanged.length?[...physicalActorChanges298,...contactStep.actorsChanged]:physicalActorChanges298)]};return state.result;
 }
 /** requiresFull preserves the existing conservative boundary signal. Only the
  * fixed bridge may use the separate actual hard receipt to coalesce calm macros. */
-export interface AdvancedCoreMap297 extends CoreStepResult297 {mapId:number;world:World;readonly requiresHardFull297:boolean}
+export interface AdvancedCoreMap297 extends CoreStepResult297 {mapId:number;world:World;readonly requiresHardFull297:boolean;
+ /** Changes a calm Full may publish (footprint filth, trodden snow, a released
+  * idle wander): published by the next calm Full or caught by the macro actor
+  * dependency check, rather than a hard Full. Never a simulation input. */
+ readonly deferredFull297:boolean;
+ /** Doors that opened or closed during this step (ids). A frontier anchor
+  * presents them with a door patch; any other anchor needs a hard Full. */
+ readonly doorsMoved297:readonly number[]}
 /** A single authoritative physical step. Phase0 is an atomic global/local macro
  * transaction. Results borrow maps only until the synchronous bridge copies them. */
 export function advanceWorldCore297(world:CampaignState,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):{core:number;localTickCompleted:boolean;maps:readonly AdvancedCoreMap297[]} {
@@ -1721,7 +1728,7 @@ export function advanceWorldCore297(world:CampaignState,diagnostics?:import('./w
    // Its first state is already at this frontier; it has played no earlier Core.
    result={core,actorsChanged:[],projectileEvents:{upserted:[],removed:[]},requiresFull:true,observerEffects297:{threatsChanged:true,audioChanged:true},strikeAudio297:[],shotAudio297:[]};
   }
-  results.push({...result,mapId:!root.worldMaps&&root.secondarySite&&map!==root?1:registeredMapId(map)??0,world:map,requiresFull:boundary||result.requiresFull,requiresHardFull297:ownersChanged||result.requiresFull});
+  results.push({...result,mapId:!root.worldMaps&&root.secondarySite&&map!==root?1:registeredMapId(map)??0,world:map,requiresFull:boundary||result.requiresFull||!!result.deferredChange297||!!result.doorsMoved297?.length,requiresHardFull297:ownersChanged||result.requiresFull,deferredFull297:!!result.deferredChange297,doorsMoved297:result.doorsMoved297??[]});
  }
  // Macro suffixes may create/retire owners or alter cover. Never retain their borrowed captures.
  if(boundary)invalidateCoreCampaign297(root,'macro');

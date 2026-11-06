@@ -1,6 +1,6 @@
 import type {AudioCue} from './audio-cues';
 import {peekTerrainJournalCursor,type TerrainJournalCursor} from '../sim/terrain-mutation-journal';
-import {captureActorPhaseDependencies297,equalActorPhaseDependencies297,type ActorPhaseDependencies297} from './actor-phase-dependencies-297';
+import {captureActorPhaseDependencies297,poseOnlyDependencyChanges297,humanWorkContact297,type ActorPhaseDependencies297} from './actor-phase-dependencies-297';
 import type {World,Pawn} from '../sim/types';
 import type {WildAnimal} from '../sim/wildlife-state';
 import type {Mechanoid} from '../sim/mechanoid-state';
@@ -8,7 +8,8 @@ import type {PresentationSegment} from '../sim/travel-timing';
 import type {PawnTrack} from './motion-tracks';
 import {effectiveCore297} from '../sim/core-phase-297';
 import {captureCoreActor297,coreAnchor297,coreMapId297,validCoreAudioCues297} from './core-phase-data-297';
-import type {CoreActorProjection297,CorePhaseAnchor297,CorePhaseEnvelope297,CoreFullPhaseMetadata297,CoreProjectileEvents297,CoreProjectileTrace297,CoreMotionPatch297} from './core-phase-projection-297';
+import type {CoreActorProjection297,CorePhaseAnchor297,CorePhaseEnvelope297,CoreFullPhaseMetadata297,CoreProjectileEvents297,CoreProjectileTrace297,CoreMotionPatch297,CoreHumanPose297,CoreDoorPatch297} from './core-phase-projection-297';
+import {structureById} from '../sim/structure-navigation';
 import {frozenDataCopy297} from './core-frozen-copy-297';
 
 type PriorTrack={sources:readonly PresentationSegment[];values:readonly PresentationSegment[]};
@@ -19,7 +20,10 @@ function sameCoreValue297(a:unknown,b:unknown):boolean {
  if(Array.isArray(b))return false;const x=Object.keys(a),y=Object.keys(b);return x.length===y.length&&x.every((k,i)=>k===y[i]&&sameCoreValue297((a as Record<string,unknown>)[k],(b as Record<string,unknown>)[k]));
 }
 interface SourceCommit {anchor:CorePhaseAnchor297;core:number;seq:number;nextId:number;tracks:Map<number,PriorTrack>;actorMode297?:'frontier';dependencies?:ActorPhaseDependencies297;terrainCursor?:TerrainJournalCursor}
-export interface CorePhaseStepObservation297 {readonly core:number;readonly actorsChanged:readonly number[];readonly projectileEvents:CoreProjectileEvents297;readonly requiresFull:boolean}
+export interface CorePhaseStepObservation297 {readonly core:number;readonly actorsChanged:readonly number[];readonly projectileEvents:CoreProjectileEvents297;readonly requiresFull:boolean;
+ /** World changed in a way a calm Full may publish (ground presentation,
+  * unexplained allocations): like a completed macro, never a hard barrier. */
+ readonly deferredFull297?:boolean}
 /** The caller owns the actual committed Engine World and Recorder. This class
  * never samples wall time to invent physical progress. Its wall budget limits
  * publication only, not simulation or command/fault barriers. */
@@ -37,7 +41,19 @@ export class CorePhasePublisher297 {
  private lastSentAt=-Infinity;
  private sourceGeneration=0;
  private readonly slots=new Map<number,{kind:CoreActorProjection297['kind'];index:number}>();
- reset():void{this.state=undefined;this.dirtyActors.clear();this.retained.clear();this.fxUpserted.clear();this.fxRemoved.clear();this.pendingCore=undefined;this.fullPending=false;this.quietFullPending=false;this.macroActorProofPending297=false;this.quietObservedAt=undefined;this.lastSentAt=-Infinity;this.sourceGeneration++;this.slots.clear();}
+ /** Frontier humans whose only dependency change since the committed baseline
+  * is their contact/animation pose, and the dependencies that include those
+  * changes. The next actor packet carries a pose patch for each of them and
+  * then adopts these dependencies as the new baseline; a Full clears both. */
+ private readonly poseDirty297=new Set<number>();
+ private pendingDependencies297:ActorPhaseDependencies297|undefined;
+ /** Frontier doors that opened or closed since the last publication. */
+ private readonly doorDirty297=new Set<number>();
+ /** Last physical row sent per actor since the anchoring Full. A macro marks
+  * every actor as a capture candidate; an actor whose captured fields equal
+  * the ones the renderer already holds is not sent again. */
+ private readonly sentRows297=new Map<number,CoreActorProjection297>();
+ reset():void{this.sentRows297.clear();this.doorDirty297.clear();this.poseDirty297.clear();this.pendingDependencies297=undefined;this.state=undefined;this.dirtyActors.clear();this.retained.clear();this.fxUpserted.clear();this.fxRemoved.clear();this.pendingCore=undefined;this.fullPending=false;this.quietFullPending=false;this.macroActorProofPending297=false;this.quietObservedAt=undefined;this.lastSentAt=-Infinity;this.sourceGeneration++;this.slots.clear();}
  get needsFull():boolean{return this.fullPending||this.quietFullPending||!this.state;}
  /** Quiet needs a new complete anchor at the logical tail. Only an explicitly
   * committed frontier anchor permits confirmed actors to cross a calm macro. */
@@ -70,7 +86,12 @@ export class CorePhasePublisher297 {
    if(actors.length!==layout.length||layout.some((id,index)=>actors[index]?.id!==id)){this.requestFull();return;}
   }
   const dependencies=captureActorPhaseDependencies297(world);
-  if(!equalActorPhaseDependencies297(before.dependencies,dependencies)){this.requestFull();return;}
+  // Compared with the latest baseline, including pose patches not yet sent.
+  // Only contact/animation pose changes of existing humans can travel as
+  // frontier pose patches; anything else still requires a genuine Full.
+  const changes=poseOnlyDependencyChanges297(this.pendingDependencies297??before.dependencies,dependencies);
+  if(!changes){this.requestFull();return;}
+  if(changes.length){for(const id of changes)this.poseDirty297.add(id);this.pendingDependencies297=dependencies;}
   for(const id of this.slots.keys())this.dirtyActors.add(id);
   this.macroActorProofPending297=false;this.sourceGeneration++;
  }
@@ -88,6 +109,12 @@ export class CorePhasePublisher297 {
   return born.length!==world.nextId-old.nextId||born.some((id,i)=>id!==old.nextId+i);
  }
  requestFull():void{this.fullPending=true;this.sourceGeneration++;}
+ /** A calm (coalesced) Full, as after a completed macro; frontier actors keep
+  * streaming until it is published. */
+ /** Frontier only: the next actor packet carries these doors' presentation
+  * state instead of a hard Full. */
+ markDoors297(ids:readonly number[]):void{if(!this.frontierMode297)throw Error('Door patches require a frontier anchor');for(const id of ids)this.doorDirty297.add(id);if(ids.length)this.sourceGeneration++;}
+ deferFull297(now:number):void{if(this.quietObservedAt===undefined)this.quietObservedAt=now;this.quietFullPending=true;this.sourceGeneration++;}
  observe(value:CorePhaseStepObservation297,macro:boolean,observedAt=performance.now()):void {
   if(macro&&(!Number.isFinite(observedAt)||observedAt<0||this.quietObservedAt!==undefined&&observedAt<this.quietObservedAt))throw Error('Nonmonotone quiet observation time');
   if(!Number.isSafeInteger(value.core)||value.core<0||this.pendingCore!==undefined&&value.core<this.pendingCore)throw Error('Nonmonotone committed Core observation');
@@ -96,8 +123,9 @@ export class CorePhasePublisher297 {
   for(const id of value.projectileEvents.removed)this.fxRemoved.add(id);
   // Retention is history, not the World projectile collection lifetime.
   for(const[id,trace]of this.retained)if(trace.endCore<value.core-640)this.retained.delete(id);
-  if(macro&&this.quietObservedAt===undefined)this.quietObservedAt=observedAt;
-  this.pendingCore=value.core;this.quietFullPending||=macro;this.fullPending||=value.requiresFull;
+  const quiet=macro||!!value.deferredFull297;
+  if(quiet&&this.quietObservedAt===undefined)this.quietObservedAt=observedAt;
+  this.pendingCore=value.core;this.quietFullPending||=quiet;this.fullPending||=value.requiresFull;
   if(macro&&this.frontierMode297)this.macroActorProofPending297=true;
   this.sourceGeneration++;
  }
@@ -123,14 +151,35 @@ export class CorePhasePublisher297 {
   const core=effectiveCore297(world);if(this.pendingCore!==core||coreMapId297(world)!==before.anchor.mapId||before.actorMode297!=='frontier'&&Math.floor(core/10)!==Math.floor(before.anchor.core/10))throw Error('Actor watermark escaped its actual World anchor');
   const rows:CoreActorProjection297[]=[];
   for(const id of this.dirtyActors){const slot=this.slots.get(id);if(!slot)throw Error('New actor requires a full membership anchor');const source=slot.kind==='human'?world.pawns[slot.index]:slot.kind==='animal'?world.wildlife?.animals[slot.index]:world.mechanoids?.[slot.index];if(!source||source.id!==id)throw Error('Changed actor escaped its full layout');
-   rows.push(slot.kind==='human'?captureCoreActor297('human',slot.index,source as Pawn):slot.kind==='animal'?captureCoreActor297('animal',slot.index,source as WildAnimal):captureCoreActor297('mechanical',slot.index,source as Mechanoid));}
+   const row=slot.kind==='human'?captureCoreActor297('human',slot.index,source as Pawn):slot.kind==='animal'?captureCoreActor297('animal',slot.index,source as WildAnimal):captureCoreActor297('mechanical',slot.index,source as Mechanoid);
+   const sent=this.sentRows297.get(id);if(sent&&sent.kind===row.kind&&sent.index===row.index&&sameCoreValue297(sent.fields,row.fields)&&!this.poseDirty297.has(id))continue;
+   rows.push(row);}
   rows.sort((a,b)=>a.id-b.id);
-  const motion=this.captureTracks(tracks),packet:CorePhaseEnvelope297=Object.freeze({type:before.actorMode297==='frontier'?'actor-frontier-297':'actor-phase-297',audioCues:frozenDataCopy297(audioCues),epoch:before.anchor.epoch,mapId:before.anchor.mapId,baseRevision:before.anchor.revision,phaseSeq:before.seq+1,nextId:world.nextId,fromCore:before.core,toCore:core,speed,actors:Object.freeze(rows),tracks:Object.freeze(motion.patches),projectiles:Object.freeze({upserted:Object.freeze([...this.fxUpserted.values()]),removed:Object.freeze([...this.fxRemoved])})});
-  return{packet,before,generation,next:{anchor:before.anchor,core,seq:packet.phaseSeq,nextId:world.nextId,tracks:motion.next,...before.actorMode297?{actorMode297:before.actorMode297,dependencies:before.dependencies,terrainCursor:before.terrainCursor}:{}}};
+  const poses=before.actorMode297==='frontier'&&this.poseDirty297.size?this.capturePoses297(world):[];
+  const doors:CoreDoorPatch297[]=[];
+  if(before.actorMode297==='frontier')for(const id of [...this.doorDirty297].sort((a,b)=>a-b)){const s=structureById(world,id);if(s?.door)doors.push(frozenDataCopy297({id,door:s.door}) as CoreDoorPatch297);}
+  const motion=this.captureTracks(tracks),packet:CorePhaseEnvelope297=Object.freeze({type:before.actorMode297==='frontier'?'actor-frontier-297':'actor-phase-297',audioCues:frozenDataCopy297(audioCues),epoch:before.anchor.epoch,mapId:before.anchor.mapId,baseRevision:before.anchor.revision,phaseSeq:before.seq+1,nextId:world.nextId,fromCore:before.core,toCore:core,speed,actors:Object.freeze(rows),tracks:Object.freeze(motion.patches),projectiles:Object.freeze({upserted:Object.freeze([...this.fxUpserted.values()]),removed:Object.freeze([...this.fxRemoved])}),...poses.length?{poses297:Object.freeze(poses)}:{},...doors.length?{doors297:Object.freeze(doors)}:{}});
+  return{packet,before,generation,next:{anchor:before.anchor,core,seq:packet.phaseSeq,nextId:world.nextId,tracks:motion.next,...before.actorMode297?{actorMode297:before.actorMode297,dependencies:this.pendingDependencies297??before.dependencies,terrainCursor:before.terrainCursor}:{}}};
  }
  commitPhase(prepared:ReturnType<CorePhasePublisher297['preparePhase']>,sentAt:number):void {
   if(prepared.before!==this.state||prepared.generation!==this.sourceGeneration||!Number.isFinite(sentAt))throw Error('Stale actor publication');
   this.state=prepared.next;this.lastSentAt=sentAt;this.dirtyActors.clear();this.fxUpserted.clear();this.fxRemoved.clear();this.pendingCore=undefined;
+  for(const row of prepared.packet.actors)this.sentRows297.set(row.id,row);
+  this.poseDirty297.clear();this.pendingDependencies297=undefined;this.doorDirty297.clear();
+ }
+ /** Complete current records of the pose-dirty humans with the contact the
+  * Full renderer would derive from the live World: work pose, reach, and the
+  * facing toward the work target (null when no target sets it). */
+ private capturePoses297(world:World):CoreHumanPose297[] {
+  const pawnsById=new Map(world.pawns.map(p=>[p.id,p] as const));let jobs:Map<number,World['jobs'][number]>|undefined;const poses:CoreHumanPose297[]=[];
+  for(const id of [...this.poseDirty297].sort((a,b)=>a-b)){
+   const slot=this.slots.get(id);if(!slot||slot.kind!=='human')throw Error('Pose patch escaped its full layout');
+   const pawn=world.pawns[slot.index];if(!pawn||pawn.id!==id)throw Error('Pose patch escaped its full layout');
+   const contact=humanWorkContact297(world,pawn,pawnsById,jobs,Number.NaN);jobs=contact.jobsById;
+   const job=pawn.jobId===null?undefined:(jobs??=new Map(world.jobs.map(j=>[j.id,j]))).get(pawn.jobId);
+   poses.push(frozenDataCopy297({id,index:slot.index,actor:pawn,job:job??null,workPose:contact.workPose,reach:{x:contact.reach.x,z:contact.reach.z},yaw:Number.isNaN(contact.yaw)?null:contact.yaw}) as CoreHumanPose297);
+  }
+  return poses;
  }
  /** Called immediately before real full encoding; no live alias survives yield.
   * Actual send must finish synchronously before commitFull. */
@@ -156,5 +205,6 @@ export class CorePhasePublisher297 {
   this.retained.clear();for(const[id,t]of prepared.retained)this.retained.set(id,t);
   this.slots.clear();for(const kind of ['human','animal','mechanical'] as const)prepared.anchor.layout[kind].forEach((id,index)=>this.slots.set(id,{kind,index}));
   this.dirtyActors.clear();this.fxUpserted.clear();this.fxRemoved.clear();this.pendingCore=undefined;this.fullPending=false;this.quietFullPending=false;this.macroActorProofPending297=false;this.quietObservedAt=undefined;this.sourceGeneration++;
+  this.poseDirty297.clear();this.pendingDependencies297=undefined;this.doorDirty297.clear();this.sentRows297.clear();
  }
 }

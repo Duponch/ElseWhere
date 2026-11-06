@@ -1,7 +1,7 @@
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {POSE_SLEEP,POSE_DEAD,POSE_FIGHT_READY,READING_ACTIVITY295,seatedOnFurniture,workActivity,animationPose,humanCorpseVisualStage,humanWorkContact297} from '../bridge/actor-phase-dependencies-297';
 export {humanCorpseVisualStage} from '../bridge/actor-phase-dependencies-297';
-import type {CoreActorScene297} from '../bridge/core-phase-projection-297';
+import type {CoreActorScene297,CoreHumanPose297} from '../bridge/core-phase-projection-297';
 import {PawnTweener297} from './PawnTweener297';
 import {ActorPlayback435} from './ActorPlayback435';
 import {isSmithingApparel267} from '../sim/smithing-apparel-267';
@@ -1110,7 +1110,10 @@ export class PawnLayer {
     return refresh;
   }
 
-  update(world: World, oldBlend: number, newMap: boolean): void {
+  /** `poses297` (frontier pose patch): for these humans the work pose, reach
+   * and facing toward the work target come from the Worker's live World, as a
+   * Full would compute them; everything else is derived exactly as in a Full. */
+  update(world: World, oldBlend: number, newMap: boolean, poses297?: ReadonlyMap<number,Pick<CoreHumanPose297,'workPose'|'reach'|'yaw'>>): void {
     if(this.referenceRig)this.workToolJobs=new Map(world.jobs.map(job=>[job.id,job]));
     if(newMap){this.animationCache.reset();this.partialAnimationCache.reset();}
     this.travelKeys.clear();this.travelSurfaces=furnitureSurfaces(world);
@@ -1216,9 +1219,10 @@ export class PawnLayer {
       // A task already owns the final travel edge before the worker changes to
       // `working`. Resolve that target early so the edge ends at its visual
       // contact pose instead of arriving at the cell centre and sliding later.
-      const contact297=humanWorkContact297(world,pawn,pawnsById,jobsById,yaw);
-      const {arriving,workPose,reach,humanOpponent,pasteCollect}=contact297;
-      jobsById=contact297.jobsById;yaw=contact297.yaw;
+      const contact297=humanWorkContact297(world,pawn,pawnsById,jobsById,yaw),patch297=poses297?.get(pawn.id);
+      const {arriving,humanOpponent,pasteCollect}=contact297;
+      const workPose=patch297?patch297.workPose:contact297.workPose,reach=patch297?{x:patch297.reach.x,z:patch297.reach.z}:contact297.reach;
+      jobsById=contact297.jobsById;yaw=patch297?patch297.yaw??yaw:contact297.yaw;
       this.workOffsets.set(pawn.id,reach);
       if(newMap)this.approachTransitions.set(pawn.id,{fromX:reach.x,fromZ:reach.z,toX:reach.x,toZ:reach.z,start:world.tick,baseX:pawn.x,baseZ:pawn.z});
       px+=reach.x;pz+=reach.z;

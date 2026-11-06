@@ -30,6 +30,10 @@ export interface CoreObserverEffects297 {threatsChanged:boolean;audioChanged:boo
 export interface CoreStepResult297 {
   core:number; actorsChanged:readonly number[]; projectileEvents:CoreProjectileEvents297; requiresFull:boolean;
   observerEffects297:CoreObserverEffects297;strikeAudio297:readonly CoreStrikeAudio297[];shotAudio297:readonly CoreShotAudio297[];
+  /** Set by the Engine map step: changes a calm Full may publish (see AdvancedCoreMap297). */
+  deferredChange297?:boolean;
+  /** Set by the Engine map step: doors that opened or closed (ids). */
+  doorsMoved297?:readonly number[];
 }
 /** Created at the last committed Core. Engine changes the real World phase and
  * advances movement BEFORE calling this synchronous physical owner. */

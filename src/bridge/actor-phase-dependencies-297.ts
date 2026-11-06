@@ -180,14 +180,42 @@ export function captureActorPhaseDependencies297(world:World):ActorPhaseDependen
   humanCarry:groupHumanCarryPairs257(world).map(p=>[p.carrierId,p.patientId])});
  const result=Object.freeze({format:'actor-phase-dependencies-297-1' as const,data});ownedDependencies297.add(result);return result;
 }
+const equalDependencyValue297=(x:unknown,y:unknown):boolean=>{
+ if(Object.is(x,y))return true;if(x===null||y===null||typeof x!=='object'||typeof y!=='object')return false;
+ if(Array.isArray(x))return Array.isArray(y)&&x.length===y.length&&x.every((v,i)=>equalDependencyValue297(v,y[i]));
+ if(Array.isArray(y))return false;const keys=Reflect.ownKeys(x),other=Reflect.ownKeys(y);if(keys.length!==other.length)return false;
+ return keys.every(k=>Object.hasOwn(y,k)&&equalDependencyValue297((x as Record<PropertyKey,unknown>)[k],(y as Record<PropertyKey,unknown>)[k]));
+};
 /** Exact type/presence/value comparison; unknown or copied wrappers refuse. */
 export function equalActorPhaseDependencies297(a:ActorPhaseDependencies297,b:ActorPhaseDependencies297):boolean {
  if(!a||!b||!ownedDependencies297.has(a)||!ownedDependencies297.has(b))return false;
- const equal=(x:unknown,y:unknown):boolean=>{
-  if(Object.is(x,y))return true;if(x===null||y===null||typeof x!=='object'||typeof y!=='object')return false;
-  if(Array.isArray(x))return Array.isArray(y)&&x.length===y.length&&x.every((v,i)=>equal(v,y[i]));
-  if(Array.isArray(y))return false;const keys=Reflect.ownKeys(x),other=Reflect.ownKeys(y);if(keys.length!==other.length)return false;
-  return keys.every(k=>Object.hasOwn(y,k)&&equal((x as Record<PropertyKey,unknown>)[k],(y as Record<PropertyKey,unknown>)[k]));
- };
- return equal(a.data,b.data);
+ return equalDependencyValue297(a.data,b.data);
+}
+/** Row slots of a human dependency row that a pose patch can carry: the work
+ * contact (work pose, contact pose, reach, yaw) and the animation pose. */
+const HUMAN_CONTACT_SLOT297=11,HUMAN_POSE_SLOT297=12;
+/** Humans whose dependency rows differ ONLY in their contact/animation pose,
+ * every other dependency (all other human slots, animals, cargo, mechanical
+ * bodies, departures, carry pairs, map) being exactly equal. Those changes are
+ * derived from the human's own record and its work target, so a frontier pose
+ * patch (complete record + Worker-computed contact) presents them without a
+ * complete World. `undefined` means some other dependency changed: the caller
+ * must keep requesting a genuine Full. An empty list means no change. */
+export function poseOnlyDependencyChanges297(a:ActorPhaseDependencies297,b:ActorPhaseDependencies297):number[]|undefined {
+ if(!a||!b||!ownedDependencies297.has(a)||!ownedDependencies297.has(b))return undefined;
+ const x=a.data as Record<string,unknown>,y=b.data as Record<string,unknown>;
+ const keys=Object.keys(x);if(keys.length!==Object.keys(y).length)return undefined;
+ for(const key of keys)if(key!=='human'&&(!Object.hasOwn(y,key)||!equalDependencyValue297(x[key],y[key])))return undefined;
+ const before=x.human,after=y.human;if(!Array.isArray(before)||!Array.isArray(after)||before.length!==after.length)return undefined;
+ const changed:number[]=[];
+ for(let i=0;i<before.length;i++){
+  const p=before[i] as unknown[],q=after[i] as unknown[];
+  if(p===q)continue;if(!Array.isArray(p)||!Array.isArray(q)||p.length!==q.length||!Object.is(p[0],q[0]))return undefined;
+  let pose=false;
+  for(let slot=0;slot<p.length;slot++)if(!equalDependencyValue297(p[slot],q[slot])){
+   if(slot!==HUMAN_CONTACT_SLOT297&&slot!==HUMAN_POSE_SLOT297)return undefined;pose=true;
+  }
+  if(pose)changed.push(p[0] as number);
+ }
+ return changed;
 }

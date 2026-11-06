@@ -2,7 +2,7 @@
 
 Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les mesures, ce qui a été corrigé, et ce qu’il reste à faire, par ordre d’impact.
 
-## Synthèse (6 novembre, fin de nuit)
+## Synthèse (6 novembre, matin)
 
 | Mesure | Avant | Après |
 |---|---|---|
@@ -10,9 +10,11 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Simulation, Les Forges (80 colons) | 216 ms/tick, ×0,77 max | **81,5 ms/tick, ×2,0 max** |
 | Simulation, Les Aulnes intégrées | 30,4 ms/tick | **15,6 ms/tick** |
 | Simulation, Les Aulnes sièges | 37,8 ms/tick | **21,6 ms/tick** |
-| Client réel, Les Éclaircies à ×6 | 34 ticks/s (×6 non tenu), 113 im/s, p95 26 ms | **35,8 à 38,6 ticks/s (×6 tenu), 147 im/s, p95 15 ms** |
+| Client réel, Les Éclaircies à ×6 | 34 ticks/s (×6 non tenu), 113 im/s, p95 26 ms | **38 ticks/s (×6 tenu), 150 im/s, p95 11 ms** |
 | Plus longue tâche, Les Éclaircies à ×6 | 290 ms | **136 ms**, et rare |
-| Client réel, Les Forges à ×1 | p95 154 à 179 ms (mesure de l’agent rendu) | **p95 32 à 36 ms**, 92 à 98 im/s |
+| Client réel, Les Forges à ×1 | p95 154 à 179 ms (mesure de l’agent rendu) | **p95 28 ms**, 107 im/s, temps réel tenu |
+| Client réel, Les Forges à ×6 | — | **9,5 ticks/s** (6,7 avant les publications allégées) |
+| Publications complètes, Les Forges à ×1 | 6,8 par seconde (≈ 630 Ko chacune) | **≈ 3 par seconde** |
 
 - **Exactitude.** Après chaque optimisation, l’état complet sérialisé reste identique au bit près sur les deux sauvegardes de référence.
 - **Tests.** Chaque lot a été comparé test par test au commit d’origine : 0 régression.
@@ -151,7 +153,7 @@ Il reste une reconstruction de chunk de 50 à 130 ms, rare : elle n’a lieu qu�
 | Adoption des publications | 18 % | Une publication **complète** de ≈ 630 Ko à chaque tick macro (6,8 par seconde). Copie gelée des acteurs : 9,5 % |
 | Application du monde | 12,6 % | Dont la reconstruction du mobilier (≈ 50 ms) quand le nombre de structures change |
 
-Le mode « frontière » (deltas d’acteurs) ne joue presque jamais sur une grande colonie. Chaque tick, au moins une des dépendances de pose capturées pour 80 colons et 241 animaux change : pose de travail, lit, repas, cargaison… La publication complète redevient alors obligatoire. C’est désormais la priorité côté client (voir la feuille de route).
+Le mode « frontière » (deltas d’acteurs) ne joue presque jamais sur une grande colonie. Chaque tick, au moins une des dépendances de pose capturées pour 80 colons et 241 animaux change : pose de travail, lit, repas, cargaison… La publication complète redevient alors obligatoire. C’est désormais la priorité côté client (voir la feuille de route). *Mesure faite avant les publications allégées décrites ci-dessous.*
 
 Mesures de l’agent rendu sur Les Forges, faites avant ces corrections, à ×1 :
 
@@ -173,6 +175,42 @@ Corrections appliquées :
 - **`StaticGeometry`** : moins d’allocations à la fusion des instances. Le résultat est identique au bit près.
 
 Non modifié volontairement : le rafraîchissement des ombres à chaque image et le ratio de pixels / MSAA (choix visuels), les validateurs côté thread principal et les fichiers épinglés. Ce sont les prochains gros gains ; voir la feuille de route.
+
+### Publications allégées sur les grandes colonies (6 novembre, matin)
+
+Sur Les Forges, le Worker publiait la partie complète (≈ 630 Ko) à presque chaque tick macro. Mesures de cause, sur 30 ticks : 28 publications provoquées par les poses, et à l’intérieur des ticks une vingtaine de publications « dures » dues aux traces de pas et aux portes. Chaque publication coûte une copie de tous les acteurs des deux côtés.
+
+Les changements, sans effet sur la simulation (empreintes inchangées) :
+
+1. **Patch de pose.** Quand, d’un tick à l’autre, seules la pose de contact et la pose d’animation de certains colons changent (`poseOnlyDependencyChanges297`), le paquet frontière porte `poses297`. Chaque patch contient l’enregistrement complet du colon, sa tâche, et la pose de contact calculée par le Worker sur le monde vivant : pose de travail, décalage, orientation vers la cible.
+   L’affichage relance alors sa mise à jour des colons, celle d’une publication complète, sur une vue « monde publié, colons à jour, tâches transmises ».
+2. **Patch de porte.** Une porte qui s’ouvre ou se ferme est transmise dans `doors297` (`open`, `from`, `changedAt`) au lieu d’imposer une publication complète.
+   - Repasser par une porte déjà ouverte ou prolonger son délai de fermeture ne change rien de visible : ce n’est plus signalé.
+   - Seule une porte qui dissipe réellement du brouillard reste une barrière dure.
+3. **Changements différés.** Ces changements sont publiés par la prochaine publication calme (au plus toutes les 250 ms), comme les autres changements lents du monde :
+   - traces de saleté et neige foulée ;
+   - abandon d’une promenade d’oisiveté ;
+   - identifiants alloués à autre chose qu’un projectile.
+4. **Acteurs inchangés non renvoyés.** À chaque tick, tous les acteurs étaient renvoyés ; seuls ceux dont les champs physiques ont changé le sont désormais.
+
+Les patchs s’accumulent côté affichage jusqu’à la publication complète suivante, qui les remplace. Hors du mode frontière, toutes les anciennes barrières sont conservées.
+
+Fichiers épinglés modifiés volontairement, avec mise à jour de leur empreinte :
+- `core-phase-data-297.ts` : le lecteur strict valide `poses297` et `doors297`, et accepte en mode frontière des allocations non expliquées par un projectile ;
+- `core-movement-297.ts` : sépare les changements différés et les portes.
+
+| Les Forges | Avant | Après |
+|---|---|---|
+| Worker seul, ×1 | 79 à 86 % du temps réel, 6,8 publications complètes/s | **98 %**, ≈ 3/s |
+| Worker seul, ×3 | ≈ 4,3 ticks/s | **≈ 7,5 ticks/s** |
+| Client réel, ×1 | 96 im/s, p95 36 ms | **107 im/s, p95 28 ms** |
+| Client réel, ×6 | 6,7 ticks/s, p95 33 ms | **9,5 ticks/s, p95 21 ms** |
+| Paquet de phase moyen | ≈ 120 Ko | ≈ 75 Ko |
+
+Côté thread principal, l’adoption des publications complètes est passée de 13,9 % à 7,8 % du temps. Le thread reste saturé à ×1 sur Les Forges :
+- le rendu prend environ 36 % ;
+- la désérialisation et la copie défensive des paquets de phase environ 7 %, dans un fichier épinglé ;
+- l’application du monde environ 12 %.
 
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
@@ -205,25 +243,14 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 
 ## 6. Feuille de route recommandée (par gain attendu)
 
-1. **Publications complètes sur une grande colonie.** Sur Les Forges, une publication complète de ≈ 630 Ko part à chaque tick macro : 6,8 par seconde à ×1. Le thread principal y passe ≈ 30 % de son temps (adoption 18 %, application 12,6 %), dont 9,5 % pour la copie gelée des acteurs. Les essais de partage structurel et de validation plus rapide de cette copie ne gagnent rien : c’est le parcours qui coûte, pas l’allocation. Il faut donc publier moins. Pistes :
-   - porter dans le paquet de mouvement les dépendances de pose des acteurs changés, qui forcent aujourd’hui la publication complète. Mesure sur 30 ticks des Forges : 28 exigent une publication complète. Par tick, environ 2,8 colons changent de pose de contact (début ou fin d’un travail), 1,9 de pose d’animation et 0,4 de cargaison ; aucun autre champ ne bouge. Ces valeurs dépendent du contexte du monde (tâches, tas), absent des paquets de mouvement : il faut donc les transmettre déjà calculées, et que le rendu des colons les utilise ;
-   - ou envoyer colons et animaux en deltas par champ : besoins et position changent à chaque tick, compétences, santé et équipement presque jamais.
+1. **Publications complètes restantes sur une grande colonie** (≈ 3 par seconde sur Les Forges, voir « Publications allégées »). Les causes restantes :
+   - changements de dépendances d’acteurs autres que la pose : cargaison, lit, repas, loisirs…, ≈ 2 par seconde ;
+   - publications calmes, au plus 4 par seconde.
 
-   Les deux touchent des fichiers épinglés (`core-phase-data-297.ts`, `native-clone-resident.ts`).
-
-   **Le Worker paie aussi ce coût.** Profil du Worker de production sur Les Forges à ×3 :
-   - publication : 49 % ;
-   - simulation : 39,5 %.
-
-   Dans la publication :
-   - aspect naturel de 21 000 plantes : 12 % ;
-   - comparaison des ressources et des tas : 10 % ;
-   - encodeurs résidents : 12 % ;
-   - clonage du message : 7 % ;
-   - copie gelée des acteurs : 7,5 % ;
-   - dépendances de pose : 3,5 %.
-
-   Résultat : ×1 est tenu, à 89 % de la cible dans Node et à 6,5 ticks/s dans le navigateur, mais ×3 plafonne à environ 5 ticks/s, alors que la simulation seule en permettrait 12. Publier moins de fois en complet est donc le levier principal, à la fois pour le débit et pour la fluidité sur les grandes colonies.
+   Prochaines étapes :
+   - étendre les patchs à la cargaison ;
+   - rendre la copie défensive des paquets de phase moins coûteuse (`native-message-capture.ts`, épinglé) ;
+   - adapter l’intervalle des publications calmes à leur coût réel.
 2. **Rendu three.js** : environ 36 à 48 % du thread principal en jeu, pour 148 maillages visibles et 72 appels de dessin. Postes :
    - uniformes par objet : 11 % ;
    - passe d’ombre : 6,5 % ;

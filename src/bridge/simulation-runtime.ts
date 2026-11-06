@@ -569,7 +569,10 @@ function publishDuePhysical297(force=false,batchTail=false):void {
  if(!world)return;const visible=physicalVisibleWorld297();if(!visible)return;
  if(!force&&!phasePublisher297.hasPending)return;
  const now=performance.now();if(!force&&!phasePublisher297.due(now))return;
- if(phasePublisher297.allocatorNeedsFull(visible)||phasePublisher297.terrainNeedsFull297(visible))phasePublisher297.requestFull();
+ if(phasePublisher297.terrainNeedsFull297(visible))phasePublisher297.requestFull();
+ // Unexplained (non-projectile) allocations: a frontier anchor publishes them
+ // with the next calm Full; a same-civil anchor keeps the hard barrier.
+ if(phasePublisher297.allocatorNeedsFull(visible)){if(phasePublisher297.frontierMode297)phasePublisher297.deferFull297(now);else phasePublisher297.requestFull();}
  if(force||phasePublisher297.needsFull){
   const quiet=phasePublisher297.canDeferFull;
   // Explicit frontier policy: calm Full coalesces to the TRUE logical tail
@@ -628,7 +631,10 @@ function runCoreTask297(now:number):void {
   // visibleWorld may revoke an old map's Recorder/Audio/Publisher ownership.
   // Capture this Core only after that synchronous owner check.
   motion.capture(visible);
-  phasePublisher297.observe({core:result.core,actorsChanged:row.actorsChanged,projectileEvents:row.projectileEvents,requiresFull:hard},result.localTickCompleted,performance.now());
+  phasePublisher297.observe({core:result.core,actorsChanged:row.actorsChanged,projectileEvents:row.projectileEvents,requiresFull:hard,deferredFull297:result.maps.some(item=>item.deferredFull297)},result.localTickCompleted,performance.now());
+  // Doors that opened or closed on the visible map: a frontier anchor ships
+  // their state in the next actor packet; any other anchor needs a Full.
+  if(row.doorsMoved297.length){if(phasePublisher297.frontierMode297)phasePublisher297.markDoors297(row.doorsMoved297);else phasePublisher297.requestFull();}
   if(result.localTickCompleted)phasePublisher297.observeMacroActors297(visible);
   // Preserve causal FX/strike/shot barriers. Audio-only work cues can use the
   // exact guarded actor envelope without forcing a complete World capture.

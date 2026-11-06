@@ -7,7 +7,7 @@ import type {PresentationSegment} from '../sim/travel-timing';
 import {effectiveCore297} from '../sim/core-phase-297';
 import {frozenDataCopy297} from './core-frozen-copy-297';
 import {coreAnchor297,coreInteger297,coreOwnRecord297,copyCoreData297,readCorePhaseData297,validCoreTrace297} from './core-phase-data-297';
-import {CORE_HUMAN_OPTIONAL297,CORE_ANIMAL_OPTIONAL297,CORE_MECH_OPTIONAL297,type CoreActorMode297,type CoreActorScene297,type CoreActorSceneRecord297,type CorePhaseAnchor297,type CoreFullPhaseMetadata297,type CorePhaseTypedProjection297,type CoreActorProjection297,type CoreProjectileTrace297} from './core-phase-projection-297';
+import {CORE_HUMAN_OPTIONAL297,CORE_ANIMAL_OPTIONAL297,CORE_MECH_OPTIONAL297,type CoreActorMode297,type CoreActorScene297,type CoreHumanPose297,type CoreActorSceneRecord297,type CorePhaseAnchor297,type CoreFullPhaseMetadata297,type CorePhaseTypedProjection297,type CoreActorProjection297,type CoreProjectileTrace297} from './core-phase-projection-297';
 
 type State={anchor:CorePhaseAnchor297;world:World;actorScene:CoreActorScene297;actorMode:CoreActorMode297;core:number;nextId:number;seq:number;tracks:PawnTrack[];trace:Map<number,CoreProjectileTrace297>};
 export interface PreparedCoreFull297 {readonly previous:object|undefined;readonly projection:CorePhaseTypedProjection297;readonly owner:object}
@@ -50,7 +50,7 @@ export class CorePhaseFrameOwner297 {
  prepare(raw:unknown):PreparedCorePhase297 {
   const before=this.state;if(!before)throw Error('Actor phase before Native full anchor');
   const input=readCorePhaseData297(raw,before.anchor,before.core,before.seq+1,before.nextId,new Set(before.trace.keys()),before.actorMode);
-  const actorScene=this.patchActors(before.actorScene,input.actors,input.toCore),trackMap=new Map(before.tracks.map(t=>[t.id,t]));
+  const actorScene=this.adoptPoses297(this.patchActors(before.actorScene,input.actors,input.toCore),input.poses297),trackMap=new Map(before.tracks.map(t=>[t.id,t]));
   for(const patch of input.tracks){if(!trackMap.has(patch.id)&&![...before.anchor.layout.human,...before.anchor.layout.animal,...before.anchor.layout.mechanical].includes(patch.id))throw Error('Unknown actor track outside the anchored layout');const previous=trackMap.get(patch.id)?.segments??[];
    if(patch.drop+patch.keep>previous.length||!trackMap.has(patch.id)&&(patch.drop!==0||patch.keep!==0))throw Error('Core motion predecessor mismatch');
    const segments=Object.freeze([...previous.slice(patch.drop,patch.drop+patch.keep),...patch.append]) as unknown as PresentationSegment[];
@@ -61,7 +61,7 @@ export class CorePhaseFrameOwner297 {
   // removed means physical SIM cleanup, never erasure of playable history.
   for(const[id,value]of trace)if(value.endCore<input.toCore-640)trace.delete(id);
   const next:State={anchor:before.anchor,world:before.world,actorScene,actorMode:before.actorMode,core:input.toCore,nextId:input.nextId,seq:input.phaseSeq,tracks,trace};
-  const projection:CorePhaseTypedProjection297=Object.freeze({kind:'phase',audioCues:input.audioCues,anchor:before.anchor,phaseSeq:input.phaseSeq,nextId:input.nextId,fromCore:input.fromCore,core:input.toCore,speed:input.speed,world:before.world,actorScene,actors:input.actors,tracks,projectiles:input.projectiles});
+  const projection:CorePhaseTypedProjection297=Object.freeze({kind:'phase',audioCues:input.audioCues,anchor:before.anchor,phaseSeq:input.phaseSeq,nextId:input.nextId,fromCore:input.fromCore,core:input.toCore,speed:input.speed,world:before.world,actorScene,actors:input.actors,tracks,projectiles:input.projectiles,...input.poses297?{poses297:input.poses297}:{},...input.doors297?{doors297:input.doors297}:{}});
   const result=Object.freeze({previous:before,projection,owner:this.identity});this.prepared.set(result,next);return result;
  }
  commit(prepared:PreparedCorePhase297):CorePhaseTypedProjection297 {
@@ -75,6 +75,15 @@ export class CorePhaseFrameOwner297 {
   animals.forEach((actor,index)=>put(actor.id,{kind:'animal',index,actor}));
   mechanical.forEach((actor,index)=>put(actor.id,{kind:'mechanical',index,actor}));
   return Object.freeze({core,humans:Object.freeze(humans),animals:Object.freeze(animals),mechanical:Object.freeze(mechanical),byId:Object.freeze(byId)});
+ }
+ /** A frontier pose patch replaces the human record by its complete current
+  * own-data record (validated and frozen by the strict reader); later physical
+  * phases overlay their fields on it as on any anchored record. */
+ private adoptPoses297(scene:CoreActorScene297,poses:readonly CoreHumanPose297[]|undefined):CoreActorScene297 {
+  if(!poses?.length)return scene;
+  const humans=scene.humans.slice();
+  for(const row of poses){const source=humans[row.index];if(!source||source.id!==row.id||row.actor.id!==row.id)throw Error('Pose patch escaped its anchored slot');humans[row.index]=row.actor;}
+  return this.scene(scene.core,humans,scene.animals,scene.mechanical);
  }
  private patchActors(base:CoreActorScene297,changes:readonly CoreActorProjection297[],core:number):CoreActorScene297 {
   if(changes.length===0)return Object.freeze({...base,core});

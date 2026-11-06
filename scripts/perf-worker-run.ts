@@ -42,6 +42,10 @@ if (process.env.FULL_REASONS) {
     if (measuring) { const frames = (new Error().stack ?? '').split(String.fromCharCode(10)).slice(2, 4).map(l => l.trim().replace(/\(.*\)/, '').replace(/^at /, '')).join(' <- '); fullReasons.set(frames, (fullReasons.get(frames) ?? 0) + 1); }
     return original.apply(this, args);
   };
+  for (const name of ['allocatorNeedsFull', 'terrainNeedsFull297', 'audioFitsPhase297']) {
+    const fn = proto[name];
+    proto[name] = function (...args: any[]) { const r = fn.apply(this, args); const hit = name === 'audioFitsPhase297' ? r === false : r === true; if (measuring && hit) fullReasons.set(`check:${name}`, (fullReasons.get(`check:${name}`) ?? 0) + 1); return r; };
+  }
   const obs = proto.observe;
   proto.observe = function (value: any, macro: boolean, ...rest: any[]) { if (measuring && value?.requiresFull) fullReasons.set('observe(requiresFull)', (fullReasons.get('observe(requiresFull)') ?? 0) + 1); return obs.call(this, value, macro, ...rest); };
 }

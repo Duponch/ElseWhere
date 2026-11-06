@@ -20,8 +20,11 @@ export type DoorCommand={type:'door-policy';structureId:number;setting:'holdOpen
 function openDoor(world:World,s:Structure):void {
   const now=isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick;
   const d=s.door!;
+  const opening=!d.open;
   if(!d.open){d.from=doorOpenness(s,now);d.changedAt=now;d.open=true;if(d.holdOpen)invalidateAnimalPens(world);}
-  if(isCorePhysicalSchema297(Number(world.schemaVersion))){const state=physicalDoorState297(world);state.open.add(s);state.changed=true;}
+  // `changed` also marks a re-entry into an already open door (simulation
+  // invalidation); only an actual opening changes what the door looks like.
+  if(isCorePhysicalSchema297(Number(world.schemaVersion))){const state=physicalDoorState297(world);state.open.add(s);state.changed=true;if(opening)state.moved297.add(s);}
   d.closeAt=now+(1-doorOpenness(s,now))*doorMotionTicks(s)+DOOR_CLOSE_DELAY;
 }
 /** Called before committing an edge. Waiting consumes no path or travel distance. */
@@ -110,16 +113,18 @@ export function applyDoorCommand(world:World,c:DoorCommand):CommandResult {
 }
 
 
-interface PhysicalDoors297 {open:Set<Structure>;changed:boolean}
+interface PhysicalDoors297 {open:Set<Structure>;changed:boolean;visibleChanged297:boolean;moved297:Set<Structure>}
 const physicalDoors297=new WeakMap<World,PhysicalDoors297>();
 function physicalDoorState297(w:World):PhysicalDoors297 {
- let state=physicalDoors297.get(w);if(!state){state={open:new Set(w.structures.filter(s=>isPassageDoor(s.kind)&&s.door?.open)),changed:false};physicalDoors297.set(w,state);}return state;
+ let state=physicalDoors297.get(w);if(!state){state={open:new Set(w.structures.filter(s=>isPassageDoor(s.kind)&&s.door?.open)),changed:false,visibleChanged297:false,moved297:new Set()};physicalDoors297.set(w,state);}return state;
 }
 export function invalidatePhysicalDoors297(w:World):void {physicalDoors297.delete(w);}
 /** Only open doors are inspected at physical cadence. Occupants/items are read
  * once, lazily, only when an actual close deadline becomes due. */
-export function advancePhysicalDoors297(w:World):{changed:boolean;topologyChanged:boolean} {
- const now=effectiveLocal297(w),state=physicalDoorState297(w);let changed=state.changed,topologyChanged=state.changed;state.changed=false;
+/** `moved297`: doors that actually opened or closed (presentation: their
+ * open/from/changedAt changed); `exploration297`: a door revealed fog. */
+export function advancePhysicalDoors297(w:World):{changed:boolean;topologyChanged:boolean;moved297:readonly Structure[];exploration297:boolean} {
+ const now=effectiveLocal297(w),state=physicalDoorState297(w);let changed=state.changed,topologyChanged=state.changed,exploration297=false;state.changed=false;
  let bodies:Set<number>|undefined,friendly:Set<number>|undefined,objects:Set<number>|undefined;
  const capture=()=>{if(bodies)return;bodies=new Set();friendly=new Set();objects=new Set();
   const add=(a:{x:number;z:number})=>bodies!.add(a.z*w.width+a.x);
@@ -131,14 +136,18 @@ export function advancePhysicalDoors297(w:World):{changed:boolean;topologyChange
  };
  for(const s of state.open){const d=s.door!,i=s.z*w.width+s.x;if(!d.open){state.open.delete(s);continue;}
   if(d.explorationApproacherId!==undefined&&doorOpenness(s,now)>=1-1e-9){
-   finishExplorationReveal256(w,consumeExplorationApproacher256(w,i,d,doorOpenness(s,now),id=>resolveActualExplorationApproacher256(w,id),()=>captureActualFogPhysical256(w)));changed=true;topologyChanged=true;
+   const reveal=consumeExplorationApproacher256(w,i,d,doorOpenness(s,now),id=>resolveActualExplorationApproacher256(w,id),()=>captureActualFogPhysical256(w));
+   finishExplorationReveal256(w,reveal);changed=true;topologyChanged=true;
+   // Presentation: only fog that actually lifted is a hard barrier.
+   if(reveal.changedCells.length||reveal.interiorCells.length)exploration297=true;
   }
   if(d.closeAt===null||d.closeAt>now)continue;
   capture();changed=true;
   if(bodies!.has(i)){if(!d.forbidden&&friendly!.has(i))d.lastTouch=now;d.closeAt=now+DOOR_CLOSE_DELAY;}
   if(d.holdOpen)d.closeAt=null;
   else if(bodies!.has(i)||objects!.has(i))d.closeAt=now+DOOR_CLOSE_DELAY;
-  else {d.from=doorOpenness(s,now);d.changedAt=now;d.open=false;d.closeAt=null;state.open.delete(s);topologyChanged=true;}
+  else {d.from=doorOpenness(s,now);d.changedAt=now;d.open=false;d.closeAt=null;state.open.delete(s);topologyChanged=true;state.moved297.add(s);}
  }
- return {changed,topologyChanged};
+ const moved297=[...state.moved297];state.moved297.clear();
+ return {changed,topologyChanged,moved297,exploration297};
 }

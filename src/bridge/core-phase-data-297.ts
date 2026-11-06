@@ -110,13 +110,36 @@ export function validCoreAudioCues297(cues:unknown,fromCore:number,toCore:number
  * authority are checked separately by the private lane owner. */
 export function readCorePhaseData297(raw:unknown,a:CorePhaseAnchor297,expectedCore:number,expectedSeq:number,minimumNextId=a.nextId,knownProjectiles:ReadonlySet<number>=new Set(),actorMode:CoreActorMode297='same-civil'):CorePhaseEnvelope297 {
  const v=(isCapturedCoreData297(raw)?raw:copyCoreData297(raw)) as unknown;
- if(!coreOwnRecord297(v)||!exact(v,['type','epoch','mapId','baseRevision','phaseSeq','nextId','fromCore','toCore','speed','actors','tracks','projectiles','audioCues'])||!(v.type==='actor-phase-297'||v.type==='actor-frontier-297'&&actorMode==='frontier')||v.epoch!==a.epoch||v.mapId!==a.mapId||v.baseRevision!==a.revision||v.phaseSeq!==expectedSeq||v.fromCore!==expectedCore||!coreInteger297(v.nextId,minimumNextId)||!coreInteger297(v.toCore,expectedCore)||v.type==='actor-phase-297'&&Math.floor(v.toCore/10)!==Math.floor(a.core/10)||(typeof v.speed!=='number'||![0,1,3,6].includes(v.speed)))throw Error('Invalid Core phase header/predecessor');
+ if(!coreOwnRecord297(v)||!exact(v,['type','epoch','mapId','baseRevision','phaseSeq','nextId','fromCore','toCore','speed','actors','tracks','projectiles','audioCues',...own(v,'poses297')?['poses297']:[],...own(v,'doors297')?['doors297']:[]])||!(v.type==='actor-phase-297'||v.type==='actor-frontier-297'&&actorMode==='frontier')||v.epoch!==a.epoch||v.mapId!==a.mapId||v.baseRevision!==a.revision||v.phaseSeq!==expectedSeq||v.fromCore!==expectedCore||!coreInteger297(v.nextId,minimumNextId)||!coreInteger297(v.toCore,expectedCore)||v.type==='actor-phase-297'&&Math.floor(v.toCore/10)!==Math.floor(a.core/10)||(typeof v.speed!=='number'||![0,1,3,6].includes(v.speed)))throw Error('Invalid Core phase header/predecessor');
  if(!validCoreAudioCues297(v.audioCues,Number(v.fromCore),Number(v.toCore)))throw Error('Invalid confirmed Core audio cues');
  if(!dense(v.actors)||v.actors.length>a.layout.human.length+a.layout.animal.length+a.layout.mechanical.length||!v.actors.every(row=>actor(row,a))||new Set(v.actors.map(row=>Number((row as unknown as Data).id))).size!==v.actors.length)throw Error('Invalid physical actor phase');
  if(!dense(v.tracks)||v.tracks.length>a.nextId||new Set(v.tracks.map(row=>coreOwnRecord297(row)?row.id:undefined)).size!==v.tracks.length)throw Error('Invalid Core motion patches');
  for(const p of v.tracks){if(!coreOwnRecord297(p)||!exact(p,['id','drop','keep','append'])||!coreInteger297(p.id,1,a.nextId-1)||!coreInteger297(p.drop)||!coreInteger297(p.keep)||!dense(p.append)||!p.append.every(s=>segment(s,a)&&(!coreOwnRecord297(s)||s.stop297!==true||Number(s.start)*10<=Number(v.toCore))))throw Error('Invalid Core motion patch');}
  const p=v.projectiles;if(!coreOwnRecord297(p)||!exact(p,['upserted','removed'])||!dense(p.upserted)||!dense(p.removed)||!p.upserted.every(t=>validCoreTrace297(t,{...a,nextId:Number(v.nextId)},Number(v.toCore)))||!p.removed.every(id=>coreInteger297(id,1,Number(v.nextId)-1)&&(knownProjectiles.has(id)||(p.upserted as CoreProjectileTrace297[]).some(t=>t.id===id)))||new Set(p.upserted.map(t=>(t as CoreProjectileTrace297).id)).size!==p.upserted.length||new Set(p.removed).size!==p.removed.length)throw Error('Invalid Core projectile events');
  const births=(p.upserted as CoreProjectileTrace297[]).filter(t=>t.id>=minimumNextId).map(t=>t.id).sort((x,y)=>x-y);
- if(births.length!==Number(v.nextId)-minimumNextId||births.some((id,i)=>id!==minimumNextId+i)||(p.upserted as CoreProjectileTrace297[]).some(t=>t.id<minimumNextId&&!knownProjectiles.has(t.id)))throw Error('Unknown or skipped Core allocator birth');
+ // A frontier World advances through calm Fulls: ids allocated to non-projectile
+ // things (ground traces, items, jobs) are published by the next calm Full.
+ // Same-civil phases keep the exact projectile-only allocator contract.
+ const allocatorExplained=v.type==='actor-frontier-297'||births.length===Number(v.nextId)-minimumNextId&&births.every((id,i)=>id===minimumNextId+i);
+ if(!allocatorExplained||(p.upserted as CoreProjectileTrace297[]).some(t=>t.id<minimumNextId&&!knownProjectiles.has(t.id)))throw Error('Unknown or skipped Core allocator birth');
+ if(own(v,'poses297')){const poses=v.poses297;if(v.type!=='actor-frontier-297'||!dense(poses)||poses.length===0||poses.length>a.layout.human.length||!poses.every(row=>humanPose(row,a))||new Set(poses.map(row=>(row as Data).id)).size!==poses.length)throw Error('Invalid Core pose patches');}
+ if(own(v,'doors297')){const doors=v.doors297;if(v.type!=='actor-frontier-297'||!dense(doors)||doors.length===0||doors.length>Number(v.nextId)||!doors.every(row=>doorPatch(row,Number(v.nextId)))||new Set(doors.map(row=>(row as Data).id)).size!==doors.length)throw Error('Invalid Core door patches');}
  return v as unknown as CorePhaseEnvelope297;
+}
+/** Frontier door patch: an id and the door's own-data state, of which the
+ * renderer animates open/from/changedAt (and an autodoor duration). */
+function doorPatch(row:unknown,nextId:number):boolean {
+ if(!coreOwnRecord297(row)||!exact(row,['id','door'])||!coreInteger297(row.id,1,nextId-1))return false;
+ const d=row.door;
+ return coreOwnRecord297(d)&&typeof d.open==='boolean'&&finite(d.from,0,1)&&finite(d.changedAt,0)&&(!own(d,'duration')||finite(d.duration,0));
+}
+/** Frontier pose patch: an anchored human slot, its complete own-data record,
+ * the referenced job (or null) and the Worker contact (pose, reach, facing). */
+function humanPose(row:unknown,a:CorePhaseAnchor297):boolean {
+ if(!coreOwnRecord297(row)||!exact(row,['id','index','actor','job','workPose','reach','yaw']))return false;
+ if(!coreInteger297(row.id,1,a.nextId-1)||!coreInteger297(row.index,0,a.layout.human.length-1)||a.layout.human[row.index]!==row.id)return false;
+ if(!coreOwnRecord297(row.actor)||row.actor.id!==row.id)return false;
+ if(row.job!==null&&!(coreOwnRecord297(row.job)&&coreInteger297(row.job.id,1)))return false;
+ const reach=row.reach;
+ return coreInteger297(row.workPose,0,1023)&&coreOwnRecord297(reach)&&exact(reach,['x','z'])&&finite(reach.x,-4,4)&&finite(reach.z,-4,4)&&(row.yaw===null||finite(row.yaw));
 }

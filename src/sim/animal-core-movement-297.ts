@@ -15,7 +15,7 @@ export function createAnimalCoreMovement297(world:World){
  let population:WildAnimal[]|undefined,active:WildAnimal[]|undefined;
  let guards:ReturnType<typeof captureAnimalPathGuards297>|undefined;
  let navigation:ReturnType<typeof createAnimalNavigationReader>|undefined;
- let lastArrivalCore=effectiveCore297(world),pendingFull=false,pendingCells=false;
+ let lastArrivalCore=effectiveCore297(world),pendingFull=false,pendingSurface=false,pendingCells=false;
  const pendingActors=new Set<number>();
  const rows=()=>{
   if(population!==world.wildlife?.animals){population=world.wildlife?.animals;active=undefined;guards=undefined;navigation=undefined;}
@@ -39,10 +39,12 @@ export function createAnimalCoreMovement297(world:World){
    if(!m||Math.ceil(m.end*10)!==core||a.state==='dead'||animalCarrier(world,a.id))continue;
    const index=m.to.z*world.width+m.to.x,depth=world.tiles[index]?.snowDepth;
    finishSnowStep(world,a,animalBodySize(a));
-   if(world.tiles[index]?.snowDepth!==depth)pendingFull=true;
+   // Snow and carried traces are ground presentation: published by the next
+   // calm Full, not a hard one (deferredChange297).
+   if(world.tiles[index]?.snowDepth!==depth)pendingSurface=true;
    // Preserve the old carried-traces operation, not ambient animal dirt. Its
    // private filth RNG is authoritative even when no visible deposit results.
-   if(a.filthFeet){recordShipCasketFilthMovement277(world,a);pendingFull=true;}
+   if(a.filthFeet){recordShipCasketFilthMovement277(world,a);pendingSurface=true;}
    pendingActors.add(a.id);pendingCells=true;
   }
   lastArrivalCore=core;
@@ -52,7 +54,7 @@ export function createAnimalCoreMovement297(world:World){
   /** Engine has committed this macro Core before biology can replace an old
    * edge. Complete only arrivals now; do not plan or start another edge here. */
   beginMacro(){arrivals();const core=effectiveCore297(world);for(const a of rows())expire(a,core);invalidate();},
-  advance():{actorsChanged:number[];changedCells:boolean;requiresFull:boolean}{
+  advance():{actorsChanged:number[];changedCells:boolean;requiresFull:boolean;deferredChange297:boolean}{
    arrivals();const now=effectiveLocal297(world),core=effectiveCore297(world);
    for(const a of rows()){
     expire(a,core);
@@ -68,8 +70,8 @@ export function createAnimalCoreMovement297(world:World){
     moveAnimal(world,a,haul?(from,to)=>nav.haulStep(a,to):nav.step,animalBody(a).capacities.moving,nav.geometry);
     if(a.motion!==motion||a.x!==x||a.z!==z||a.path.length!==pathLength){pendingActors.add(a.id);pendingCells=true;}
    }
-   const result={actorsChanged:[...pendingActors],changedCells:pendingCells,requiresFull:pendingFull};
-   pendingActors.clear();pendingCells=false;pendingFull=false;return result;
+   const result={actorsChanged:[...pendingActors],changedCells:pendingCells,requiresFull:pendingFull,deferredChange297:pendingSurface};
+   pendingActors.clear();pendingCells=false;pendingFull=false;pendingSurface=false;return result;
   },
  };
 }
