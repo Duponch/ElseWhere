@@ -1,4 +1,4 @@
-import {isSchema298OrLater} from './schema-compatibility-257.ts';
+import {isSchema298OrLater,isSchema290OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {VICTORY_RESEARCH_CONTENT_298,isVictoryResearchProject298,type VictoryResearchProject298} from './victory-research-content-298.ts';
 import {victoryResearchUnlocked298,victoryResearchPrerequisite298} from './victory-research-298.ts';
@@ -183,7 +183,7 @@ export function researchStationUsable(world:World,station:Structure,project:Rese
 export function selectResearch(world:World,project:unknown):CommandResult {
   if(isVictoryResearchProject298(project)&&!isSchema298OrLater(Number(world.schemaVersion)))return {ok:false,code:'invalid-command',reason:'Projet indisponible dans ce schéma.'};
   if(project==='tree-sowing'&&(Number(world.schemaVersion)!==291&&(Number(world.schemaVersion)!==292&&(Number(world.schemaVersion)!==293&&(Number(world.schemaVersion)!==294&&(Number(world.schemaVersion)!==295&&(Number(world.schemaVersion)!==296&&!isCorePhysicalSchema297(Number(world.schemaVersion)))))))))return {ok:false,code:'invalid-command',reason:'Projet indisponible dans ce schéma.'};
-  if(project==='firefoam'&&![290,291,292,293,294,295,296,297,298,299,300,301].includes(Number(world.schemaVersion)))return {ok:false,code:'invalid-command',reason:'Projet indisponible dans ce schéma.'};
+  if(project==='firefoam'&&!isSchema290OrLater(Number(world.schemaVersion)))return {ok:false,code:'invalid-command',reason:'Projet indisponible dans ce schéma.'};
   if(isShipCasketResearchProject277(project)&&!isSchema277OrLater(world.schemaVersion))return {ok:false,code:'invalid-command',reason:'Projet indisponible dans ce schéma.'};
   if(isShipEngineResearchProject276(project)&&!isSchema276OrLater(world.schemaVersion))return {ok:false,code:'invalid-command',reason:'Projet indisponible dans ce schéma.'};
   if(isShipResearchProject275(project)&&!isSchema275OrLater(world.schemaVersion))return {ok:false,code:'invalid-command',reason:'Projet indisponible dans ce schéma.'};

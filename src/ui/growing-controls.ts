@@ -2,6 +2,7 @@ import type { Command, GrowingZone,World } from '../sim/types';
 import { CROP_KINDS, type CropKind } from '../sim/crops';
 import {FLORA_DEFINITIONS} from '../sim/biome-flora';
 import {forestNativeSpecies291,forestSowingChoices291,growingPlantLabel291,isForestrySpecies291,treeSowingUnlocked291,type GrowingPlant291} from '../sim/forestry-content-291';
+import {isSchema291OrLater} from '../sim/schema-compatibility-257.ts';
 
 const CULTURE_HELP:Record<CropKind,string>={
   hops:'Culture 3 pour semer ; sol et hydroponie. Un plant mûr peut donner 8 houblons. Cinq jours de croissance pondérée et sensibilité à la fertilité de 70 % ; la lumière, le froid et la nuit modifient la durée réelle. Le houblon se conserve 30 jours à température ambiante. La recherche Brassage de bière débloque la brasserie et le tonneau, sans conditionner le semis du houblon.',
@@ -32,7 +33,7 @@ export function growingControls(zone: GrowingZone, send: (command: Command) => v
   const updateHelp=()=>{help.textContent=growingCultureHelp(plant.value as GrowingPlant291,world);};
   updateHelp();plant.addEventListener('change',updateHelp);
   panel.append(help);
-  if(zone.basinId===undefined&&world&&[291,292,293,294,295,296,297,298,299,300,301].includes(world.schemaVersion)){
+  if(zone.basinId===undefined&&world&&isSchema291OrLater(world.schemaVersion)){
     const forest=document.createElement('p');forest.className='muted';
     const native=forestNativeSpecies291(world);
     forest.textContent=!native.length?'Aucune essence à semer parmi les arbres livrés de ce biome.':treeSowingUnlocked291(world)?'Essences indigènes disponibles. Le choix de la zone ne remplace ni la compétence du cultivateur ni son trajet.':'Pour semer les arbres indigènes, recherchez Semis d’arbres (1 000 points). Culture 6 sera requise pour commencer le travail.';

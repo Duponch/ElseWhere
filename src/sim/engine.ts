@@ -1,6 +1,6 @@
 import {createWoodWallCore301} from './wood-wall-core-301.ts';
 import {rateForPawn301} from './actual-view-301.ts';
-import {isSchema300OrLater} from './schema-compatibility-257.ts';
+import {isSchema300OrLater,isSchema290OrLater} from './schema-compatibility-257.ts';
 import {idleWanderTask300,offerIdleWander300,processIdleWander300,createIdleWanderCore300} from './idle-wander-300.ts';
 import {isSchema287OrLater,isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isShipComputerSensorsKind298} from './ship-computer-sensors-content-298.ts';
@@ -1173,7 +1173,7 @@ export function stepWorld(world:CampaignState,ticks=1,diagnostics?:import('./wor
     if(ticks)for(const map of registeredMaps(root)){adoptTempMapIncidents261(map);flushRegisteredMap(map);}
     adoptWorldIncidents(campaignClockContext(root));
     for(let i=0;i<ticks;i++){
-      const firefoamWorldOwners290=[290,291,292,293,294,295,296,297,298,299,300,301].includes(Number(root.schemaVersion))?captureFirefoamWorldPawnIds290(root):undefined;
+      const firefoamWorldOwners290=isSchema290OrLater(Number(root.schemaVersion))?captureFirefoamWorldPawnIds290(root):undefined;
       root.tick++;
       if(isCorePhysicalSchema297(Number(root.schemaVersion))){root.phaseCore297=0;beginCoreMacro297(root);syncWorldPawnsPhysicalCore297(root);advanceActualWorldPawns256(root,firefoamWorldOwners290);}
       for(const map of registeredMaps(root)){stepLocalWorld(map,1,diagnostics,false);flushRegisteredMap(map);}
@@ -1214,7 +1214,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
   adoptRainElectrical(world);
   let thermal=reconcileTemperature(world);reconcilePlantLighting(world,()=>readPlantLight(world));updateFoodTemperatures(world,thermal);updatePlantTemperatures(world,thermal);
   for (let step = 0; step < ticks; step++) {
-    const firefoamLocalMechs290=[290,291,292,293,294,295,296,297,298,299,300,301].includes(Number(world.schemaVersion))?new Set((world.mechanoids??[]).filter(m=>m.state!=='dead'&&m.health?.coveredInFirefoam290).map(m=>m.id)):undefined;
+    const firefoamLocalMechs290=isSchema290OrLater(Number(world.schemaVersion))?new Set((world.mechanoids??[]).filter(m=>m.state!=='dead'&&m.health?.coveredInFirefoam290).map(m=>m.id)):undefined;
     flushColonyLosses(world);
     if(advanceClock){world.tick++;if(isCorePhysicalSchema297(Number(world.schemaVersion))){world.phaseCore297=0;beginCoreMacro297(campaignAuthority(world));syncWorldPawnsPhysicalCore297(campaignAuthority(world));}}advanceActualHiveComponents256(world);advanceAnimalAges256(world);finishSnowSteps(world);
     let light:LightEnvironment|undefined,lightKey:string|undefined;

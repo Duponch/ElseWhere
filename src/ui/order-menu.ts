@@ -20,6 +20,7 @@ import { draftablePawns } from './drafting-controls';
 import { FOOD_ITEMS } from '../sim/food-policy';
 import { groundPilesAt } from '../sim/ground-placement';
 import { setTooltip } from './tooltip';
+import {isSchema290OrLater} from '../sim/schema-compatibility-257.ts';
 
 export interface TacticalAttackOption {
   kind: 'shoot' | 'melee';
@@ -141,7 +142,7 @@ export class OrderMenu {
     // A turret service is a personal haul order, including while mobilized.
     // Ask the worker for its real eligibility instead of treating the building
     // as a ground movement or a living attack target.
-    if(world.structures.some(s=>(isAncientCasket256(s)||s.kind==='cryptosleep-casket'||s.kind==='ship-cryptosleep-casket'||[290,291,292,293,294,295,296,297,298,299,300,301].includes(world.schemaVersion)&&s.kind==='firefoam-popper')&&footprintContains(s,cell)&&(targetId===undefined||targetId===s.id))||contextConsumesFood(world,ids,cell,targetId)||targetId===undefined&&world.structures.some(s=>s.kind==='mini-turret'&&s.x===cell.x&&s.z===cell.z)){
+    if(world.structures.some(s=>(isAncientCasket256(s)||s.kind==='cryptosleep-casket'||s.kind==='ship-cryptosleep-casket'||isSchema290OrLater(world.schemaVersion)&&s.kind==='firefoam-popper')&&footprintContains(s,cell)&&(targetId===undefined||targetId===s.id))||contextConsumesFood(world,ids,cell,targetId)||targetId===undefined&&world.structures.some(s=>s.kind==='mini-turret'&&s.x===cell.x&&s.z===cell.z)){
       await this.open(world,ids,cell,x,y,queue);return;
     }
     this.close();
