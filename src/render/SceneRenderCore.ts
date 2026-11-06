@@ -556,6 +556,14 @@ export class SceneRenderCore {
   protected readonly staticSceneCompiler435=this.applicationContext?new StaticSceneCompiler435(this.scene,8,this.ownedOpaqueRevisions435?.producer('static-page')):undefined;
   staticSceneCompilerMetrics435(){return this.staticSceneCompiler435?.snapshot();}
   ownedOpaqueRevisionMetrics435(){return this.ownedOpaqueRevisions435?.metrics();}
+  /** Bounded vegetation chunk rebuilds while the application runs; paused
+   * views and non-application hosts (tests) keep complete synchronous updates. */
+  private chunkRebuildBudget():number{return this.applicationContext&&this.received?.speed!==0?6:Infinity;}
+  private flushDeferredResourceChunks():void{
+    if(!this.resources.hasDeferredChunks)return;
+    this.resources.setChunkRebuildBudget(this.chunkRebuildBudget());
+    if(this.resources.flushDeferredChunks()){this.invalidatePausedShadow(false);this.reconcileStaticCompiler435();}
+  }
   private reconcileStaticCompiler435():void {
     const owner=this.staticSceneCompiler435;if(!owner)return;
     if(!this.world||!this.immutableWorlds.has(this.world)){owner.clear();return;}
@@ -1689,6 +1697,7 @@ export class SceneRenderCore {
   }
 
   protected updateResources(world: World, newMap: boolean,frame?:SceneResourceFrame): void {
+    this.resources.setChunkRebuildBudget(this.chunkRebuildBudget());
     const immutable=this.immutableWorlds.has(world);
     if(immutable&&readPreparedNaturalFrame(world)){
       const prepared=this.preparedNaturalPresentation;
@@ -1857,6 +1866,7 @@ export class SceneRenderCore {
     if(this.presentationStopped){if(this.deferDirtySharedSurfaces())return;this.renderer.info.reset();this.renderScene();return;}
     if(this.hasTracks){this.timeline.advance(now);const due=this.presentation.take(this.timeline.tick,this.received?.coreInput297?undefined:now,this.presentationFrame297);if(due)this.applyWorld(due);this.presentCorePhases297();}
     if(this.preparing||this.holdSurfaceWorld||this.deferDirtySharedSurfaces())return;
+    this.flushDeferredResourceChunks();
     this.presentConfirmedIntents();
     const dtTweener297=this.lastFrame?Math.max(0,(now-this.lastFrame)/1000):0;
     const dt = Math.min(dtTweener297,.05);

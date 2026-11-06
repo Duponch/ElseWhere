@@ -197,6 +197,24 @@ export class ResourceLayer {
   private treeDemandEpoch=0;
   /** Updated only by actual chunk/preview writers; never by RAF or a read. */
   private graphicsComparisonRevision=0;
+  /* Bounded chunk rebuilds. A full chunk rebuild (merge + optional wear) costs
+   * tens of ms; rebuilding every affected chunk in one publication produced
+   * 70-290 ms frames on forest maps. With a finite budget, chunks beyond it
+   * keep their previous geometry and are rebuilt by later updates or by
+   * flushDeferredChunks() on following frames. Infinity keeps the original
+   * synchronous behavior (tests, paused views). */
+  private readonly deferredChunks=new Set<string>();
+  private chunkRebuildBudgetMs=Infinity;
+  setChunkRebuildBudget(ms:number):void{this.chunkRebuildBudgetMs=ms;}
+  get hasDeferredChunks():boolean{return this.deferredChunks.size>0;}
+  /** Rebuild deferred chunks within the current budget; true if geometry changed. */
+  flushDeferredChunks():boolean{
+    if(!this.deferredChunks.size)return false;
+    const cached=this.cachedTreeUpdate;if(!cached||this.disposed){this.deferredChunks.clear();return false;}
+    const before=this.graphicsComparisonRevision;
+    this.updateWorldChunks(cached.world,false,new Map(),undefined,cached.appearance);
+    return this.graphicsComparisonRevision!==before;
+  }
   private treeSpecies:readonly TreeSpecies[]=Object.freeze([]);
   private treeSpeciesKey='[]';
   private demandedTreeModels:readonly TreeModel[]=Object.freeze([]);
@@ -605,7 +623,7 @@ export class ResourceLayer {
     this.windPlain.maskNode=this.bodyPlain.maskNode;this.windTextured.maskNode=this.bodyTextured.maskNode;
     this.windPlain.maskShadowNode=this.bodyPlain.maskShadowNode;this.windTextured.maskShadowNode=this.bodyTextured.maskShadowNode;
     for(const material of [this.treeSurface.material,this.treeSurface.plainMaterial]){material.outputNode=this.staticMaterial.outputNode;material.maskNode=this.staticMaterial.maskNode;material.maskShadowNode=this.staticMaterial.maskShadowNode;}
-    if (newMap) { this.middleWind.reset();this.clearTargetPreview();this.preparedResources?.clear();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear();this.treeDemandEpoch++; }
+    if (newMap) { this.deferredChunks.clear();this.middleWind.reset();this.clearTargetPreview();this.preparedResources?.clear();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear();this.treeDemandEpoch++; }
     const indexed=readSceneResourceFrame(frame,world);
     if(indexed)this.treeCellsPending=world;
     else{
@@ -627,8 +645,10 @@ export class ResourceLayer {
         this.growing.delete(id);
         if(resource?.kind==='berries'&&!ripe(resource))this.growing.set(id,resource);
       }
+      for(const key of this.deferredChunks)affected.add(key);
       if(!affected.size)return;
     } else {
+      this.deferredChunks.clear();
       this.growing.clear();
       this.resourceChunks.clear();
     }
@@ -671,11 +691,12 @@ export class ResourceLayer {
       previous.treeIds=[];
       previous.treeModels=[];previous.treeCount=0;previous.anonymousTreeCount=0;
     }
+    const rebuildStarted=performance.now();let rebuilt=0;
     for (const [key, chunk] of chunks) {
       const previous = this.chunks.get(key);
       const models=new Map<string,TreeModel>();let treeCount=0,anonymousTreeCount=0;
       const signature=chunk.map(resource=>{if(resource.kind==='tree'){treeCount++;if(resource.species===undefined)anonymousTreeCount++;if(resource.species!==undefined){if(!isTreeSpecies(resource.species))throw Error('Unsupported actual tree model species');const model=this.treeModels.get(resource.species,treeModelVariant(world));models.set(model.key,model);}}return`${resource.id}:${identity(resource)}:${size(resource)}:${resource.kind==='berries'&&ripe(resource)?1:0}:${leafless(resource)}`;}).join('|');
-      if(previous?.signature===signature)continue;
+      if(previous?.signature===signature){this.deferredChunks.delete(key);continue;}
       this.graphicsComparisonRevision++;
       const sizes=new Map(chunk.map(resource=>[resource.id,size(resource)]));
       const visibleKeys=new Set(chunk.flatMap(r=>visibleResourceKeys(world,r,appearance)));
@@ -690,8 +711,11 @@ export class ResourceLayer {
         if(visibleKeys.size!==previous.visibleKeys.size||[...visibleKeys].some(id=>!previous.visibleKeys.has(id))){
           retainResources(previous.group,visibleKeys);previous.visibleKeys=visibleKeys;
         }
-        previous.signature=signature;previous.treeModels=[...models.values()];previous.treeCount=treeCount;previous.anonymousTreeCount=anonymousTreeCount;continue;
+        previous.signature=signature;previous.treeModels=[...models.values()];previous.treeCount=treeCount;previous.anonymousTreeCount=anonymousTreeCount;this.deferredChunks.delete(key);continue;
       }
+      // Full rebuild: at least one per call (progress), then only within budget.
+      if(partial&&rebuilt>0&&performance.now()-rebuildStarted>=this.chunkRebuildBudgetMs){this.deferredChunks.add(key);continue;}
+      rebuilt++;this.deferredChunks.delete(key);
       if(previous)for(const id of previous.treeIds)this.treeParts.delete(id);
       const group = previous?.group ?? new THREE.Group();
       if (previous) {this.preparedResources?.forgetContribution(key);this.targetTint.restore(group);clearGroup(group);} else this.group.add(group);
