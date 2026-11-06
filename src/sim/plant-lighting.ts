@@ -1,5 +1,5 @@
 import { isPlant,plantGrowth } from './plants.ts';
-import { isRoofed,roofCoverage } from './roof-rules.ts';
+import { isRoofed,roofCoverage,roofIdentity,sameRoofIdentity,type RoofIdentity } from './roof-rules.ts';
 import type { LightEnvironment,LightReader } from './light-environment.ts';
 import type { Resource,World } from './types.ts';
 
@@ -19,8 +19,20 @@ interface Binding {
   coverage:number[];
   width:number;
   height:number;
+  /** Identity of the three roof arrays the coverage was derived from. */
+  roofs?:RoofArrays;
+  /** Identity of the light regime (coverage, artificial field, size). */
+  regimeKey297?:object;
 }
+type RoofArrays=RoofIdentity;
 const bindings=new WeakMap<World,Binding>();
+// Equal roof array identities prove an equal coverage (see roofIdentity).
+const roofArrays=roofIdentity,sameRoofArrays=sameRoofIdentity;
+/* Light regime under which each plant object was last reconciled (schema>=256).
+ * A plant's regime depends only on its immutable cell, the roof coverage and
+ * the artificial field; when those are unchanged a plant object already
+ * reconciled (and whose growthLight was not altered since) needs no work. */
+const reconciled=new WeakMap<Resource,{key:object;mode:Resource['growthLight']}>();
 const sameCoverage=(previous:readonly number[],current:readonly number[]|undefined):boolean=>
   previous.length===(current?.length??0)&&previous.every((cell,i)=>cell===current![i]);
 
@@ -30,6 +42,7 @@ const sameCoverage=(previous:readonly number[],current:readonly number[]|undefin
  * Producers replace Resource[] when adding/removing/replacing plant objects. */
 export function reconcilePlantLighting(world:World,provided:LightEnvironment|LightReader):void {
   let binding=bindings.get(world);
+  const previous=binding;
   if(!binding||binding.source!==world.resources) {
     const plants=world.resources.filter(isPlant);
     binding={source:world.resources,plants,hasCaptured:plants.some(p=>p.growthLight!==undefined),artificial:undefined,
@@ -41,18 +54,25 @@ export function reconcilePlantLighting(world:World,provided:LightEnvironment|Lig
   // With no sun lamp, all other glowers cap at .5 and cannot supply full light.
   if(world.schemaVersion<256&&!hasLamp&&!binding.hasCaptured)return;
   const artificial=hasLamp?(typeof provided==='function'?provided():provided).artificial:undefined;
+  const roofs=roofArrays(world),sameDims=binding.width===world.width&&binding.height===world.height;
+  if(binding.artificial===artificial&&sameDims&&sameRoofArrays(binding.roofs,roofs))return;
   const constructed=roofCoverage(world);
-  if(binding.artificial===artificial
-    &&binding.width===world.width&&binding.height===world.height
-    &&sameCoverage(binding.coverage,constructed))return;
+  if(binding.artificial===artificial&&sameDims&&sameCoverage(binding.coverage,constructed)){binding.roofs=roofs;return;}
+  // Same regime inputs as the previous complete pass over another resources
+  // array: only plant objects not yet reconciled under them can change.
+  const regimeKey=previous&&previous!==binding&&world.schemaVersion>=256&&previous.artificial===artificial
+    &&previous.width===world.width&&previous.height===world.height&&sameCoverage(previous.coverage,constructed)?previous.regimeKey297:undefined;
+  const key=regimeKey??{};
   let hasCaptured=false;
   for(const plant of binding.plants) {
+    if(regimeKey){const seen=reconciled.get(plant);if(seen&&seen.key===regimeKey&&plant.growthLight===seen.mode){hasCaptured||=seen.mode!==undefined;continue;}}
     const cell=plant.z*world.width+plant.x;
     const mode=(artificial?.[cell]??0)>=1?'artificial-full':isRoofed(world,cell)?'dark':undefined;
     hasCaptured||=mode!==undefined;
+    if(world.schemaVersion>=256)reconciled.set(plant,{key,mode});
     if(plant.growthLight===mode)continue;
     checkpointPlantGrowth(world,plant);
     if(mode===undefined)delete plant.growthLight;else plant.growthLight=mode;
   }
-  Object.assign(binding,{artificial,hasCaptured,constructed,coverage:[...(constructed??[])],width:world.width,height:world.height});
+  Object.assign(binding,{artificial,hasCaptured,constructed,coverage:[...(constructed??[])],width:world.width,height:world.height,roofs,regimeKey297:key});
 }

@@ -23,6 +23,11 @@ export function roofCoverage(world:Pick<World,'roofing'>):readonly number[] {
  * identity and length of the three source arrays. Consumers only read it. */
 const roofSetCache=new WeakMap<object,{constructed:readonly number[];thin:readonly number[]|undefined;thick:readonly number[]|undefined;lengths:number;cells:ReadonlySet<number>}>();
 const EMPTY_ROOFS:ReadonlySet<number>=new Set<number>();
+/** Identity of the three roof arrays (and their lengths). Equal identities
+ * prove an equal coverage, because roof arrays are never mutated in place. */
+export type RoofIdentity=readonly [readonly number[]|undefined,readonly number[]|undefined,readonly number[]|undefined,number];
+export const roofIdentity=(world:Pick<World,'roofing'>):RoofIdentity=>{const r=world.roofing;return [r?.constructed,r?.natural?.thin,r?.natural?.thick,(r?.constructed.length??0)+(r?.natural?.thin.length??0)*65536+(r?.natural?.thick.length??0)*4294967296];};
+export const sameRoofIdentity=(a:RoofIdentity|undefined,b:RoofIdentity):boolean=>!!a&&a[0]===b[0]&&a[1]===b[1]&&a[2]===b[2]&&a[3]===b[3];
 export const roofCells=(world:Pick<World,'roofing'>):ReadonlySet<number>=>{
  const r=world.roofing;if(!r)return EMPTY_ROOFS;
  const thin=r.natural?.thin,thick=r.natural?.thick,lengths=r.constructed.length+(thin?.length??-1)*65536+(thick?.length??-1)*4294967296;

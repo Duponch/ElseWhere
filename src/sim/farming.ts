@@ -6,6 +6,7 @@ import { furnitureDuration,packedAt } from './furniture-rules.ts';
 import { constructionRecipe } from './construction-materials.ts';
 import { deconstructionDuration } from './deconstruction-rules.ts';
 import { footprintCells, footprintContains, JOB_DURATION, STRUCTURE_DEFINITIONS } from './definitions.ts';
+import { captureStructureNavigation } from './structure-navigation.ts';
 import {geyserBlocksPlantOrFloor256} from './local-geyser-state-256.ts';
 import { isCrop, isPlant, plantGrowth, PLANT_DEFINITIONS, sowingTemperatureAllowed } from './plants.ts';
 import { TemperatureView, outdoorTemperature,temperatureAt } from './temperature.ts';
@@ -33,7 +34,10 @@ export const resourceAt = (world: World, cell: number): Resource | undefined => 
 function resourceCells(world: World): Map<number, Resource> {
   let cached = resourcesCache.get(world);
   if (!cached || cached.source !== world.resources) {
-    cached = { source: world.resources, cells: new Map(world.resources.map(r => [index(world, r), r])) };
+    // Same last-wins cell map, without an intermediate [cell, resource] pair per plant.
+    const cells = new Map<number, Resource>();
+    for (const r of world.resources) cells.set(index(world, r), r);
+    cached = { source: world.resources, cells };
     resourcesCache.set(world, cached);
   }
   return cached.cells;
@@ -119,16 +123,24 @@ export function jobDuration(world: World, job: Job, capturedResource?:Resource|n
   return JOB_DURATION[job.kind];
 }
 interface Context { resources: Map<number, Resource>; fixed: Set<number>; hydroBlocked?:Set<number>; temperatures:TemperatureView;sows:Map<number,Job[]>;forestry:ReadonlySet<string> }
+function placedAndPlannedCells(world:World,planned:readonly Job[],placed:(s:World['structures'][number])=>boolean):Set<number> {
+  const cells=new Set<number>();
+  for(const {structure,cells:footprint} of captureStructureNavigation(world).entries)if(placed(structure))for(const i of footprint)cells.add(i);
+  for(const job of planned)for(const c of footprintCells(job))cells.add(index(world,c));
+  return cells;
+}
 function context(world: World, queriedCells?:readonly number[]): Context {
   const placed=world.structures.filter(s=>s.kind!=='power-conduit'),planned=world.jobs.filter(j => j.kind==='replant-tree'||j.kind==='install'||j.kind!=='power-conduit'&&j.kind in STRUCTURE_DEFINITIONS);
   const objects=[...placed,...planned];
   // Validation asks about at most five cells. Avoid expanding every building
   // footprint for that point query; discovery still captures the full field.
+  // Placed footprints come from the shared structure index (same cells as
+  // footprintCells); only planned jobs are expanded here.
   const fixed=queriedCells?new Set(queriedCells.filter(i=>objects.some(s=>footprintContains(s,{x:i%world.width,z:Math.floor(i/world.width)}))))
-    :new Set(objects.flatMap(s=>footprintCells(s).map(c=>index(world,c))));
+    :placedAndPlannedCells(world,planned,s=>s.kind!=='power-conduit');
   const other=world.growingZones.some(z=>z.basinId!==undefined)?[...placed.filter(s=>s.kind!=='hydroponics-basin'),...planned]:undefined;
   const hydroBlocked=other&&(queriedCells?new Set(queriedCells.filter(i=>other.some(s=>footprintContains(s,{x:i%world.width,z:Math.floor(i/world.width)}))))
-    :new Set(other.flatMap(s=>footprintCells(s).map(c=>index(world,c)))));
+    :placedAndPlannedCells(world,planned,s=>s.kind!=='power-conduit'&&s.kind!=='hydroponics-basin'));
   let temperatures:TemperatureView|undefined,forestry:ReadonlySet<string>|undefined;
   return {
     resources: resourceCells(world),

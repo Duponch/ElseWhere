@@ -2,6 +2,7 @@ import {caveLightSources256} from './cave-flora-256.ts';
 import { isPowerActive } from './power-rules.ts';
 import { SUN_LAMP_RADIUS,SUN_LAMP_OVERLIGHT_RADIUS,sunLampActive } from './sun-lamp.ts';
 import type { Structure, World } from './types.ts';
+import { structureMembershipToken } from './structure-navigation.ts';
 
 export interface LightSource {cell:number;radius:number;red:number;green:number;blue:number;overlightRadius?:number}
 
@@ -27,4 +28,15 @@ function structureLightSources(world:World,members:readonly Structure[]):LightSo
   });
 }
 export function lightSourcesFromMembers(world:World,members:readonly Structure[],caves:readonly LightSource[]):LightSource[] {return structureLightSources(world,members).concat([...caves]).sort((a,b)=>a.cell-b.cell);}
-export function lightSources(world:World,includeCavePlants=true):LightSource[] {return structureLightSources(world,world.structures).concat(includeCavePlants?[...caveLightSources256(world)]:[]).sort((a,b)=>a.cell-b.cell);}
+/* Light member structures in source order, cached by the shared structure
+ * membership token (kinds/positions are immutable). Activity (fuel, power,
+ * sun lamp state) is still evaluated live on every call. Non-member kinds
+ * contribute no source, so the result is identical to scanning every
+ * structure, including the stable order of equal cells after sorting. */
+const membersByToken=new WeakMap<object,readonly Structure[]>();
+function lightMembers(world:World):readonly Structure[] {
+  const token=structureMembershipToken(world);let members=membersByToken.get(token);
+  if(!members){members=world.structures.filter(s=>memberKinds.has(s.kind));membersByToken.set(token,members);}
+  return members;
+}
+export function lightSources(world:World,includeCavePlants=true):LightSource[] {return structureLightSources(world,lightMembers(world)).concat(includeCavePlants?[...caveLightSources256(world)]:[]).sort((a,b)=>a.cell-b.cell);}

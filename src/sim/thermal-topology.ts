@@ -1,6 +1,7 @@
 import {isShipPartKind276} from './ship-part-content-276.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
-import {roofCells} from './roof-rules.ts';
+import {roofCells,roofIdentity,sameRoofIdentity,type RoofIdentity} from './roof-rules.ts';
+import {structureMembershipToken} from './structure-navigation.ts';
 import {START_STRUCTURE_PHYSICS_256} from './player-start-physics-256.ts';
 import { isRoomDoor } from './door-rules.ts';
 import { ventFaces } from './vent.ts';
@@ -21,9 +22,31 @@ export class ThermalTopologyCache {
   private layout?:ThermalLayout;
   private key='';
   private checks=new Map<number,number>();
+  /* Exact fast path. The layout is a function of the structures (membership,
+   * order, kinds, positions, orientations: one shared membership token), the
+   * roof arrays (identity), the map size and the tiles actually read (terrain
+   * and collapsed rock never change in place: a terrain edit replaces the
+   * Tile). When all of those are identical the full validation below would
+   * rebuild the same key and find every check unchanged. */
+  private fast?:{token:object;roofs:RoofIdentity;width:number;height:number;geographic:boolean;cells:Int32Array;tiles:World['tiles'][number][]};
   read(world:World):ThermalLayout {
-    const roofs=roofCells(world),doors:World['structures']=[],vents:{s:World['structures'][number];i:number}[]=[];
     const geographic=isSchema256Or257(world.schemaVersion)&&world.site?.revision===3;
+    const token=structureMembershipToken(world),roofIds=roofIdentity(world),fast=this.fast;
+    if(this.layout&&fast&&fast.token===token&&fast.width===world.width&&fast.height===world.height&&fast.geographic===geographic&&sameRoofIdentity(fast.roofs,roofIds)){
+      let same=true;const tiles=world.tiles;
+      for(let k=0;k<fast.cells.length;k++)if(tiles[fast.cells[k]!]!==fast.tiles[k]){same=false;break;}
+      if(same)return this.layout;
+    }
+    const layout=this.readFull(world,geographic);
+    // Remember every tile the full read depended on: checked kinds and vent faces.
+    const cells=new Set<number>(this.checks.keys());
+    for(const s of world.structures)if(s.kind==='vent')for(const c of ventFaces(s))if(c.x>=0&&c.z>=0&&c.x<world.width&&c.z<world.height)cells.add(c.z*world.width+c.x);
+    const list=Int32Array.from(cells);
+    this.fast={token,roofs:roofIds,width:world.width,height:world.height,geographic,cells:list,tiles:Array.from(list,i=>world.tiles[i]!)};
+    return layout;
+  }
+  private readFull(world:World,geographic:boolean):ThermalLayout {
+    const roofs=roofCells(world),doors:World['structures']=[],vents:{s:World['structures'][number];i:number}[]=[];
     const hasVents=world.structures.some(s=>s.kind==='vent'),faceSolids=new Set<number>(),buildings=new Map<number,number>();
     // Capture both room barriers and vent-face barriers in source order. The
     // final overlapping structure still wins for room topology, while every
