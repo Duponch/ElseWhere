@@ -56,4 +56,11 @@ describe('native painted HUD symbols and poses · V480',()=>{
     data.hoverVal=data.pressVal=0;applyNativeHudButtonPose(piece);expect(piece.position.z).toBe(active.z);expect(piece.rotation.x).toBe(active.rx);
     data.nativeActivePose=0;data.active=false;applyNativeHudButtonPose(piece);expect(piece.position.z).toBe(resting.z);expect(piece.rotation.x).toBe(resting.rx);
   });
+  it('preserves the speed button disk while changing only the selected pictogram ink',()=>{
+    for(const speed of [0,1,3,6] as const){
+      const idle=ink(),active=ink();drawNativeSpeedIcon(idle.ctx,144,111,speed,false,seededRandom(480));drawNativeSpeedIcon(active.ctx,144,111,speed,true,seededRandom(480));
+      const disk=(commands:unknown[][])=>commands.slice(0,commands.findIndex(x=>x[0]==='stroke')+1);
+      expect(disk(active.commands)).toEqual(disk(idle.commands));
+    }
+  });
 });

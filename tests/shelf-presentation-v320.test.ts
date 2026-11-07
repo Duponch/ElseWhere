@@ -31,7 +31,7 @@ test.each([0,1,2,3] as const)('both shelf ghosts share finished resident geometr
     expect(finished).toHaveLength(8);expect(habitatParts(w)).toEqual(finished);
     expect([...ghost.boxes,...ghost.rotatedBoxes].map(pose)).toEqual(finished.map(pose));expect(w).toEqual(before);
     finished.slice(0,3).forEach((p,index)=>expect(p.y!+.035).toBeCloseTo(SHELF_LEVELS[index]!));
-    expect(ARCHITECT_ICON_MAPPING[kind]).toEqual(ARCHITECT_ICON_MAPPING.dresser);expect(ARCHITECT_ICON_URLS[kind]).toBe(`/assets/ui/elsewhere/v320/${kind}.svg`);
+    expect(ARCHITECT_ICON_MAPPING[kind]).toEqual(ARCHITECT_ICON_MAPPING.dresser);expect(ARCHITECT_ICON_URLS[kind]).toBe(`/assets/ui/elsewhere/pictograms-20261107/${kind}.svg`);
   }
 });
 

@@ -42,12 +42,12 @@ test('six sword pigments share one original family and old ordinary, armor and m
   const shapes=LONGSWORD_ITEMS_270.map(item=>{
    const model=itemGeometry(item,1);expect(model).toHaveLength(6);expect(ranges[itemCargoKind(item)]!.count).toBe(216);
    expect(weaponVisual(item)!.dye).toBe(LONGSWORD_DYE270);expect(weaponVisual(item)!.parts[0]!.color).toBe(longswordColor270(item));
-   expect(modelIconUrl(`item-${item}`)).toBe(itemPortraitDataUrl(item));return model.map(({color,...part})=>part);
+   expect(modelIconUrl(`item-${item}`)).toBe(`/assets/ui/elsewhere/pictograms-20261107/item-${item}.svg`);return model.map(({color,...part})=>part);
   });
   for(const shape of shapes)expect(shape).toEqual(shapes[0]);
   expect(new Set(LONGSWORD_ITEMS_270.map(item=>weaponVisual(item)!.parts[0]!.color)).size).toBe(6);
   expect(itemGeometry('unfinished-longsword')).toHaveLength(2);expect(ranges[itemCargoKind('unfinished-longsword')]!.count).toBe(72);
-  expect(modelIconUrl('item-unfinished-longsword')).toBe(itemPortraitDataUrl('unfinished-longsword'));expect(LONGSWORD_PARTS270).toHaveLength(6);
+  expect(modelIconUrl('item-unfinished-longsword')).toBe('/assets/ui/elsewhere/pictograms-20261107/item-unfinished-longsword.svg');expect(LONGSWORD_PARTS270).toHaveLength(6);
  }finally{for(const g of [plain,oldArmor,oldMace,sword,all,cargo])g.dispose();}
 });
 

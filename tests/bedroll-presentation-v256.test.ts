@@ -15,5 +15,5 @@ test('bedroll follows actual head/tail footprint in all four orientations with a
 test('minified bedroll uses the same real ID, material and supplied shelf transform without mutation',()=>{
  const bed={id:302,kind:'bedroll',orientation:3,footprint:'standard',x:11,z:13,material:'cloth',quality:'excellent',damage:7} as Structure,before=structuredClone(bed);
  const parts=packedBedrollParts(bed,2,4,1,.5);expect(parts).toHaveLength(4);expect(parts.every(p=>p.targetId===302&&p.y>1&&p.sz!<=.24)).toBe(true);expect(bed).toEqual(before);
- expect(modelIconUrl('bedroll')).toBe('/assets/ui/elsewhere/world-foundations/bedroll.svg');
+ expect(modelIconUrl('bedroll')).toBe('/assets/ui/elsewhere/pictograms-20261107/bedroll.svg');
 });

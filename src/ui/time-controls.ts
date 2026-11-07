@@ -1,19 +1,18 @@
 import './time-controls.css';
 
 export const TIME_CONTROL_ASSETS = Object.freeze({
-  0: '/assets/ui/elsewhere/v308/pause.png',
-  1: '/assets/ui/elsewhere/v308/play.png',
-  3: '/assets/ui/elsewhere/v308/speed-double.png',
-  6: '/assets/ui/elsewhere/v308/speed-triple.png',
+  0: '/assets/ui/elsewhere/pictograms-20261107/pause.svg',
+  1: '/assets/ui/elsewhere/pictograms-20261107/play.svg',
+  3: '/assets/ui/elsewhere/pictograms-20261107/speed-double.svg',
+  6: '/assets/ui/elsewhere/pictograms-20261107/speed-triple.svg',
 });
 
-/** Two pixels of padding around measured alpha bounds. SVG frames center
- * the generated PNGs without stretching, coloring or redrawing their shapes. */
+/** Equal transparent view boxes keep the new vector transport symbols aligned. */
 export const TIME_CONTROL_FRAMES = Object.freeze({
-  0: [35, 29, 58, 70],
-  1: [32, 26, 65, 76],
-  3: [24, 39, 81, 50],
-  6: [14, 43, 99, 43],
+  0: [0, 0, 64, 64],
+  1: [0, 0, 64, 64],
+  3: [0, 0, 64, 64],
+  6: [0, 0, 64, 64],
 } as const);
 
 function timeIcon(speed: keyof typeof TIME_CONTROL_ASSETS): SVGSVGElement {
@@ -22,7 +21,7 @@ function timeIcon(speed: keyof typeof TIME_CONTROL_ASSETS): SVGSVGElement {
   svg.setAttribute('viewBox', TIME_CONTROL_FRAMES[speed].join(' '));
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   const image = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-  image.setAttribute('href', TIME_CONTROL_ASSETS[speed]); image.setAttribute('width', '128'); image.setAttribute('height', '128');
+  image.setAttribute('href', TIME_CONTROL_ASSETS[speed]); image.setAttribute('width', '64'); image.setAttribute('height', '64');
   svg.append(image); return svg;
 }
 

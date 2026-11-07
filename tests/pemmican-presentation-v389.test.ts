@@ -21,7 +21,7 @@ test('V389 original pemmican pile reuses bounded resident shapes and a separate 
   expect(parts).not.toEqual(itemGeometry('survival-meal'));expect(parts).not.toEqual(itemGeometry('kibble'));
   expect(itemGeometry('pemmican',1).length).toBe(parts.length);expect(itemGeometry('pemmican',100000).length).toBe(parts.length);
   expect(ITEM_VISUAL_IDS).toContain('pemmican');expect(itemCargoKind('pemmican')).toBeGreaterThanOrEqual(200);
-  const url=modelIconUrl('item-pemmican');expect(url).toBe('/assets/ui/elsewhere/v389/item-pemmican.svg');
+  const url=modelIconUrl('item-pemmican');expect(url).toBe('/assets/ui/elsewhere/pictograms-20261107/item-pemmican.svg');
   const svg=readFileSync(new URL(`../public${url}`,import.meta.url),'utf8');expect(svg).toContain('<title>Pemmican</title>');expect(svg).toContain('<path');expect(svg).not.toMatch(/<image|(?:href|src)=/);
 });
 

@@ -68,7 +68,7 @@ test('both12-cell paid-frame markers and original menu images retain the fixed m
   const rect=shipPartRect276({...s,kind:s.kind}),model=SHIP_HULL_MODEL_BOUNDS_276[s.kind];
   expect(calls.get('job-plans')!.find(p=>p.targetId===s.id)).toMatchObject({x:rect.x+(rect.width-1)/2,z:rect.z+(rect.depth-1)/2,sx:model.width,sy:model.height,sz:model.depth});
   expect(placementMaterial(s.kind,'wood')).toBe('steel');expect(toolDefinitions.find(t=>t.id===s.kind)).toMatchObject({category:'ship'});
-  const icon=modelIconUrl(s.kind);expect(icon).toBe(ARCHITECT_ICON_URLS[s.kind]);expect(icon.startsWith('data:image/svg+xml,')).toBe(true);expect(decodeURIComponent(icon.slice(icon.indexOf(',')+1))).toContain('<svg');
+  const icon=modelIconUrl(s.kind);expect(icon).toBe(ARCHITECT_ICON_URLS[s.kind]);expect(icon).toBe(`/assets/ui/elsewhere/pictograms-20261107/${s.kind}.svg`);
  }
  expect(modelIconUrl('ship-beam')).not.toBe(modelIconUrl('ship-engine'));expect(modelIconUrl('ship-engine')).not.toBe(modelIconUrl('ship-reactor'));
  expect(ARCHITECT_ICON_MAPPING['ship-beam']).toEqual(ARCHITECT_ICON_MAPPING.wall);expect(ARCHITECT_ICON_MAPPING['ship-engine']).toEqual(ARCHITECT_ICON_MAPPING['solar-generator']);

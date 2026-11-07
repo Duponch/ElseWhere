@@ -21,6 +21,7 @@
 .front-menu :is(input,textarea){user-select:text;-webkit-user-select:text}
 .front-menu * { box-sizing: border-box; }
 .front-landscape, .front-shade { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: -2; }
+.front-landscape { object-fit: cover; }
 .front-shade { z-index: -1; background: linear-gradient(90deg, #0e211f6b, #0d1b1be8 78%), #10242142; }
 .front-top, .front-bottom { position: absolute; left: 42px; right: 42px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #d0dccbcc; }
 .front-top { top: 25px; font-size: 12px; }

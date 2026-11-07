@@ -24,7 +24,7 @@ test('original prosthetic shapes reuse ground/cargo/portrait geometry and leave 
   for(const item of [...PROSTHETIC_ITEMS_273,'unfinished-prosthetic'] as const){
    expect(itemGeometry(item)).toHaveLength(6);expect(itemGeometry(item)).toEqual(itemGeometry(item));
    const range=ranges[itemCargoKind(item)]!;expect(range.count).toBeGreaterThan(0);expect(range.count).toBeLessThanOrEqual(512);
-   const icon=itemPortraitDataUrl(item);expect(modelIconUrl(`item-${item}`)).toBe(icon);
+   const icon=itemPortraitDataUrl(item);expect(modelIconUrl(`item-${item}`)).toBe(`/assets/ui/elsewhere/pictograms-20261107/item-${item}.svg`);
    const svg=decodeURIComponent(icon.split(',')[1]!);expect(svg).toContain('<path');expect(svg).not.toMatch(/NaN|Infinity/);portraits.push(svg);
   }
   expect(new Set(portraits).size).toBe(3);

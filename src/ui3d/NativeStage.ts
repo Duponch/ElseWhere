@@ -9,6 +9,7 @@ import {NativeGlobe} from './NativeGlobe';
 import {NativeOverlayCache} from './NativeOverlayCache';
 import {NativeDamageTracker} from './NativeDamageTracker';
 import {NativeRendererStandby} from './NativeRendererStandby';
+import {NativeFrontBackdrop} from './NativeFrontBackdrop';
 import {normalizeNativeUiScale} from './native-preferences';
 import {NativeHitPose} from './NativeHitPose';
 import {NativeHoverPreview} from './native-hover-preview';
@@ -43,6 +44,7 @@ export class NativeStage {
   readonly art=new PrototypeCardboardArt();
   readonly scene=new THREE.Scene();
   readonly camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,.1,220);
+  private readonly frontBackdrop=new NativeFrontBackdrop(this.camera,()=>this.invalidate());
   readonly hudRoot=new THREE.Group();
   readonly anchors={topLeft:new THREE.Group(),topCenter:new THREE.Group(),topRight:new THREE.Group(),
     bottomLeft:new THREE.Group(),bottomCenter:new THREE.Group(),bottomRight:new THREE.Group(),drawerAnchor:new THREE.Group()};
@@ -235,7 +237,7 @@ export class NativeStage {
   diagnostics(){
     this.scene.updateMatrixWorld(true);
     return {...this.stats,mapToolHover:this.mapToolLabelOwner?{id:this.mapToolLabelOwner.userData.nativeId,title:this.mapToolLabelTitle,labelVisible:!!this.mapToolLabel?.visible,value:this.mapToolLabelOwner.userData.hoverVal,scale:this.mapToolLabelOwner.scale.x}:null,displayScale:this.displayScale,logicalViewport:{width:this.width,height:this.height},bottomDockHeight:this.bottomDockHeight,cache:this.overlayCache.stats,standby:this.standby.stats,activeAnimations:this.moving.size,uiObjects:this.art.interactiveMeshes.length,
-      mode:'native-meshes',page:this.page?.id??null,scroll:this.scroll,maxScroll:this.maxScroll,pageBounds:this.pageBox?{x:this.pageBox.x,y:this.pageBox.y,width:this.pageBox.width,height:this.pageBox.height}:null,dropdown:this.dropdown?{owner:this.dropdown.controlId,...this.dropdown.box}:null,bottomDock:{autoHide:this.autoHideBottom,open:this.bottomOpen,offset:this.bottomOffset,page:this.managementPage,pages:this.managementPages},front:this.frontVisible,globe:this.globeDiagnostics(),
+      mode:'native-meshes',page:this.page?.id??null,scroll:this.scroll,maxScroll:this.maxScroll,pageBounds:this.pageBox?{x:this.pageBox.x,y:this.pageBox.y,width:this.pageBox.width,height:this.pageBox.height}:null,dropdown:this.dropdown?{owner:this.dropdown.controlId,...this.dropdown.box}:null,bottomDock:{autoHide:this.autoHideBottom,open:this.bottomOpen,offset:this.bottomOffset,page:this.managementPage,pages:this.managementPages},front:this.frontVisible,frontBackdrop:this.frontBackdrop.diagnostics,globe:this.globeDiagnostics(),
       readout:this.worldReadout?{visible:this.worldReadout.visible,paper:this.worldReadout.userData.paper,width:this.worldReadout.userData.w*100,height:this.worldReadout.userData.h*100,lines:this.worldReadoutLines,scroll:this.worldReadoutScroll,maxScroll:this.worldReadoutMaxScroll}:null,
       tooltip:this.hintPiece?{width:this.hintPiece.userData.w*100,height:this.hintPiece.userData.h*100}:null,
       regions:this.pageBox?.regions,inspectorParts:this.pageBox?.inspectorParts,graph:this.page?.research?{x:this.graphX,y:this.regionOffsets.graph,width:this.page.research.width,height:this.page.research.height,bounds:this.pageBox?.regions.graph}:null,
@@ -273,7 +275,7 @@ export class NativeStage {
   }
   setFrontVisible(visible:boolean):void{
     if(this.frontVisible===visible)return;this.sceneRevision++;
-    this.frontVisible=visible;if(visible)this.resetShipCurtain298(false);this.updateOwnSurface();
+    this.frontVisible=visible;this.frontBackdrop.setVisible(visible);if(visible)this.resetShipCurtain298(false);this.updateOwnSurface();
     this.anchors.bottomCenter.visible=!visible;this.toolsDock.visible=this.worldVisible&&!visible;this.resize();this.rebuildPage(true);this.updateWorldReadoutVisibility();this.invalidate();
   }
   private updateOwnSurface():void{
@@ -404,6 +406,7 @@ export class NativeStage {
     this.sceneRevision++;
     this.width=innerWidth/this.displayScale;this.height=innerHeight/this.displayScale;
     this.camera.aspect=this.width/this.height;this.camera.updateProjectionMatrix();
+    this.frontBackdrop.resize(this.camera);
     const curtainHeight=2*Math.tan(THREE.MathUtils.degToRad(this.camera.fov)/2)*.2;
     this.shipCurtainMesh298.scale.set(curtainHeight*this.camera.aspect,curtainHeight,1);
     this.standby.resize(innerWidth,innerHeight,Math.min(devicePixelRatio||1,2));
@@ -1392,6 +1395,7 @@ export class NativeStage {
     return task;
   }
   dispose():void{
+    this.frontBackdrop.dispose();
     if(this.closed)return;this.hover(null);this.clearMapToolLabel();this.closed=true;this.resetShipCurtain298(false);this.countdownFrameAt298=undefined;this.countdownFrameDriver298=undefined;this.countdownFrameEligible298=false;this.countdownFeedEligible298=false;this.fontRequest++;this.clearHint();clearTimeout(this.noticeTimer);this.finishEdit(false,false);cancelAnimationFrame(this.frameId);
     setNativeCursor(document.documentElement,undefined);
     for(const dispose of this.disposers)dispose();this.disposers.length=0;this.overlayCache.dispose();for(const image of this.portraitImages.values()){image.onload=null;image.onerror=null;}this.portraitImages.clear();this.globe?.dispose();this.selectionFill.geometry.dispose();this.selectionFill.material.dispose();this.selectionOutline.geometry.dispose();this.selectionOutline.material.dispose();this.shipCurtainMesh298.geometry.dispose();this.shipCurtainMaterial298.dispose();this.shipCurtainScene298.clear();this.art.dispose();this.ownRenderer.domElement.remove();void this.ownRenderer.dispose();this.hits.clear();this.moving.clear();this.retainedPagePieces.clear();

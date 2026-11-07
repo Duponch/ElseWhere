@@ -39,7 +39,7 @@ test('ordinary furniture remains separate, batching retains actual IDs and Stuff
 });
 test('real names/icons and factual inspection expose support/minification without fabricated art or contents',()=>{
  for(const kind of ANCIENT_MONUMENT_KINDS_256){
-  expect(buildingLabels[kind]).toBeTruthy();expect(modelIconUrl(kind)).toBe(`/assets/ui/elsewhere/world-foundations/${kind}.svg`);
+  expect(buildingLabels[kind]).toBeTruthy();expect(modelIconUrl(kind)).toBe(`/assets/ui/elsewhere/pictograms-20261107/${kind}.svg`);
   expect(ancientMonumentDescription256(prop(kind))).not.toMatch(/auteur|récit|occupé|qualité/i);
  }
  expect(ancientMonumentDescription256(prop('column'))).toContain('Soutient le toit');

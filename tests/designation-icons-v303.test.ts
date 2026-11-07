@@ -149,7 +149,7 @@ test('the three historical vector atlases plus tree slots load once and release 
   const loader: SceneTextureLoader = (url, complete) => { pending.push({ url, complete }); };
   const icons = new DesignationIconLayer(loader);
   const mapGlyph=decodeURIComponent(TREE_DESIGNATION_ATLAS_URL).slice(decodeURIComponent(TREE_DESIGNATION_ATLAS_URL).lastIndexOf('<svg x="192"'));
-  expect(mapGlyph).toContain('data-pictogram="cancel"');expect(mapGlyph).toContain('#c85a42');expect(mapGlyph).toContain('#261e18');expect(mapGlyph).not.toContain('<circle');
+  expect(mapGlyph).toContain('data-pictogram="cancel"');expect(mapGlyph).toContain('#c85a42');expect(mapGlyph).toContain('data-art="adult-hand-20261107"');expect(mapGlyph).not.toContain('<circle');
   expect(pending.map(entry => entry.url)).toEqual(['/assets/ui/elsewhere/v304/ui.svg','/assets/ui/elsewhere/v304/architect-1.svg','/assets/ui/elsewhere/v304/architect-2.svg',TREE_DESIGNATION_ATLAS_URL]);
   const loaded = new THREE.Texture(), late = new THREE.Texture();
   const loadedDispose = vi.spyOn(loaded, 'dispose'), lateDispose = vi.spyOn(late, 'dispose');

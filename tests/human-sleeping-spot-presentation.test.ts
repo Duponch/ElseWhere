@@ -85,5 +85,5 @@ test('inspection removes exact floor owners immediately and groups mixed buildin
 test('Architecte offers an immediate human floor place with no material selector and its original model portrait',()=>{
   expect(toolDefinitions.find(tool=>tool.id==='sleeping-spot')).toMatchObject({title:'Couchage au sol',category:'furniture'});
   expect(placementMaterial('sleeping-spot','wood')).toBeUndefined();
-  expect(ARCHITECT_ICON_URLS['sleeping-spot']).toBe('/assets/ui/elsewhere/v336/sleeping-spot.svg');
+  expect(ARCHITECT_ICON_URLS['sleeping-spot']).toBe('/assets/ui/elsewhere/pictograms-20261107/sleeping-spot.svg');
 });

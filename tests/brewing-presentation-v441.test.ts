@@ -98,7 +98,7 @@ test('research, crops, fixed materials and unique storage leaves expose the whol
  world.research={points:0,project:null,brewing:{points:BREWING_RESEARCH_COST,completedAt:1}};
  for(const tool of ['brewery','fermenting-barrel'] as const){expect(architectToolAvailable(world,tool)).toBe(true);expect(placementMaterial(tool,'steel')).toBe('wood');expect(ARCHITECT_ICON_URLS[tool]).toBe(modelIconUrl(tool));}
  expect(growingCultureChoices({})).toContain('hops');expect(growingCultureChoices({basinId:100})).toContain('hops');expect(growingCultureHelp('hops')).toContain('Culture 3');
- for(const item of ['hops','wort','beer'] as const){expect(STORAGE_LEAVES.filter(id=>id===item)).toHaveLength(1);expect(itemGeometry(item,1).length).toBeGreaterThan(2);expect(modelIconUrl(`item-${item}`)).toContain('/v441/');}
+ for(const item of ['hops','wort','beer'] as const){expect(STORAGE_LEAVES.filter(id=>id===item)).toHaveLength(1);expect(itemGeometry(item,1).length).toBeGreaterThan(2);expect(modelIconUrl(`item-${item}`)).toContain('/pictograms-20261107/');}
  Object.assign(world,{schemaVersion:264});expect(architectToolAvailable(world,'brewery')).toBe(false);
 });
 

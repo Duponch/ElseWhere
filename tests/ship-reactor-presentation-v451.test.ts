@@ -81,7 +81,7 @@ test('the actual oriented42-cell plan marker, menu material, original icon and p
  const captures=new Map<string,Placement[]>();buildJobMarkers(w,new THREE.Group(),false,{set:(_g:THREE.Group,name:string,value:Placement[])=>captures.set(name,value)} as unknown as BoxBatches);
  expect(captures.get('job-orders')).toHaveLength(42);expect(captures.get('job-plans')).toEqual([expect.objectContaining({x:20,z:19.5,y:1.55,sx:5.86,sy:3.10,sz:6.86,ry:Math.PI/2})]);
  expect(placementMaterial('ship-reactor','wood')).toBe('steel');expect(toolDefinitions.find(t=>t.id==='ship-reactor')).toMatchObject({category:'ship',title:'Réacteur stellaire'});
- const icon=modelIconUrl('ship-reactor');expect(icon).toBe(ARCHITECT_ICON_URLS['ship-reactor']);expect(decodeURIComponent(icon.slice(icon.indexOf(',')+1))).toContain('<svg');expect(ARCHITECT_ICON_MAPPING['ship-reactor']).toEqual(ARCHITECT_ICON_MAPPING['geothermal-generator']);
+ const icon=modelIconUrl('ship-reactor');expect(icon).toBe(ARCHITECT_ICON_URLS['ship-reactor']);expect(icon).toBe('/assets/ui/elsewhere/pictograms-20261107/ship-reactor.svg');expect(ARCHITECT_ICON_MAPPING['ship-reactor']).toEqual(ARCHITECT_ICON_MAPPING['geothermal-generator']);
  expect(shipReactorInspectionText275(w,reactor)).toContain('veille');expect(shipReactorInspectionText275(w,reactor)).toContain('1 000 W');
  reactor.shipReactor275={state:'starting',startCore:w.tick*10,endCore:shipReactorEndCore275(w.tick*10)!};expect(shipReactorInspectionText275(w,reactor)).toContain('14,0 jours');
  reactor.shipReactor275.state='running';expect(shipReactorInspectionText275(w,reactor)).toContain('opérationnel');

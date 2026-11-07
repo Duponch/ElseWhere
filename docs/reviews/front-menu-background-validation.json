@@ -1,0 +1,89 @@
+{
+  "pictogramsCommit": "a17ff7ce",
+  "background": {
+    "path": "assets/ui/elsewhere/menu/background-20261107.webp",
+    "width": 1672,
+    "height": 941,
+    "bytes": 523234,
+    "sha256": "aee6277347cdfced5e9325d69ab26cc882f6c21cb9f30df35df25653ba25bb55",
+    "packagedBytesExact": true
+  },
+  "menuTests": {
+    "files": 5,
+    "total": 19,
+    "passed": 19,
+    "failed": 0
+  },
+  "typecheck": true,
+  "pagesBuild": true,
+  "pagesBuildSeconds": 9.53,
+  "packagedPictograms": {
+    "count": 565,
+    "bytesExact": true
+  },
+  "browser": {
+    "scope": "offline native menu component; UI service stubs; no World or simulation",
+    "viewports": [
+      {
+        "width": 1920,
+        "height": 1080,
+        "backend": "WebGL 2",
+        "frontBackdrop": {
+          "state": "ready",
+          "visible": true
+        },
+        "pageBounds": {
+          "x": 1416,
+          "y": 397,
+          "width": 480,
+          "height": 286
+        }
+      },
+      {
+        "width": 1280,
+        "height": 720,
+        "backend": "WebGL 2",
+        "frontBackdrop": {
+          "state": "ready",
+          "visible": true
+        },
+        "pageBounds": {
+          "x": 776,
+          "y": 217,
+          "width": 480,
+          "height": 286
+        }
+      },
+      {
+        "width": 2560,
+        "height": 1080,
+        "backend": "WebGL 2",
+        "frontBackdrop": {
+          "state": "ready",
+          "visible": true
+        },
+        "pageBounds": {
+          "x": 2056,
+          "y": 397,
+          "width": 480,
+          "height": 286
+        }
+      }
+    ],
+    "navigation": [
+      "home",
+      "options",
+      "home",
+      "load",
+      "home",
+      "scenario",
+      "home"
+    ],
+    "hiddenOnClose": true,
+    "restoredOnReopen": true,
+    "canvasRemovedOnDispose": true,
+    "requests": [],
+    "errors": [],
+    "stageErrors": []
+  }
+}

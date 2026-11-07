@@ -42,12 +42,12 @@ test('six material piles and cargo ranges reuse one original mace family while o
   const shapes=MACE_ITEMS_269.map(item=>{
    const model=itemGeometry(item,1);expect(model).toHaveLength(6);expect(ranges[itemCargoKind(item)]!.count).toBe(216);
    expect(weaponVisual(item)!.dye).toBe(MACE_DYE269);expect(weaponVisual(item)!.parts[0]!.color).toBe(maceColor269(item));
-   expect(modelIconUrl(`item-${item}`)).toBe(itemPortraitDataUrl(item));return model.map(({color,...part})=>part);
+   expect(modelIconUrl(`item-${item}`)).toBe(`/assets/ui/elsewhere/pictograms-20261107/item-${item}.svg`);return model.map(({color,...part})=>part);
   });
   for(const shape of shapes)expect(shape).toEqual(shapes[0]);
   expect(new Set(MACE_ITEMS_269.map(item=>weaponVisual(item)!.parts[0]!.color)).size).toBe(6);
   expect(itemGeometry('unfinished-mace')).toHaveLength(2);expect(ranges[itemCargoKind('unfinished-mace')]!.count).toBe(72);
-  expect(modelIconUrl('item-unfinished-mace')).toBe(itemPortraitDataUrl('unfinished-mace'));expect(MACE_PARTS269).toHaveLength(6);
+  expect(modelIconUrl('item-unfinished-mace')).toBe('/assets/ui/elsewhere/pictograms-20261107/item-unfinished-mace.svg');expect(MACE_PARTS269).toHaveLength(6);
  }finally{for(const g of [plain,oldArmor,mace,both,cargo])g.dispose();}
 });
 

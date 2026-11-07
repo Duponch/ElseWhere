@@ -22,6 +22,7 @@ import { BACKGROUND_WORK_LABELS } from '../sim/colonist-backgrounds';
 import type {StartingWorld} from '../sim/starting-world';
 import { testColonyUrl, type TestColony } from './test-colonies';
 import './front-menu.css';
+import {FRONT_MENU_BACKGROUND_URL} from './front-menu-background';
 import { renderPerformanceLayout, bindRenderPerformanceControls } from './render-performance-controls';
 import { DEFAULT_SHADOW_SETTINGS, type ShadowSettings } from '../render/shadow-settings';
 import { DEFAULT_ANIMATION_SETTINGS, type AnimationSettings } from '../render/animation-settings';
@@ -117,28 +118,7 @@ export interface FrontMenu {
 type Page = 'home' | 'scenario' | 'story' | 'world' | 'site' | 'pawns' | 'load' | 'tests' | 'options';
 type Control = HTMLButtonElement | HTMLInputElement | HTMLSelectElement;
 
-const scenery = `<svg class="front-landscape" viewBox="0 0 1440 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-  <defs>
-    <linearGradient id="front-sky" x2="0" y2="1"><stop stop-color="#0c2329"/><stop offset=".6" stop-color="#647c71"/><stop offset="1" stop-color="#b5a27b"/></linearGradient>
-    <linearGradient id="front-river" x2=".6" y2="1"><stop stop-color="#a7bcab"/><stop offset="1" stop-color="#364e48"/></linearGradient>
-  </defs>
-  <path fill="url(#front-sky)" d="M0 0h1440v1000H0z"/>
-  <circle cx="412" cy="244" r="79" fill="#d6c89b" opacity=".65"/>
-  <path fill="#819283" d="m0 510 174-118 101 36 207-179 105 140 120-65 182 214 182-110 269 135v437H0z"/>
-  <path fill="#bbc0a4" opacity=".48" d="m409 312 73-63 105 140-104-90-28 45z"/>
-  <path fill="#526e65" d="m0 541 126-44 144 108 189-119 180 85 180-149 239 194 178-107 204 76v415H0z"/>
-  <path fill="#34544d" d="m0 603 102-26 211 157 215-142 234 120 166-108 210 71 302-46v371H0z"/>
-  <path fill="url(#front-river)" d="m734 636-77 102 100 74-116 188h303L805 811l-92-89 39-86z"/>
-  <path fill="#193e36" d="m0 747 213-73 191 89 156-19 69 76-89 180H0zm1440-69-204 40-156 128-222 154h582z"/>
-  <g fill="#132e2a">
-    <path d="m-42 778 78-186 75 186H67v43h49L36 640l-77 181H5v47h-47l78-166 80 166H67v132H5V778z"/>
-    <path d="m89 856 71-164 71 164h-44v38h50l-77-151-80 151h52v106h55V856z"/>
-    <path d="m211 1000 108-257 104 257zM327 816h-19v184h19z"/>
-    <path d="m1169 940 79-207 86 207h-61v60h-45v-60zm121-139 83-219 92 219h-64v46h57l-85-183-81 183h56v153h53V801z"/>
-  </g>
-  <g fill="#d7b578" opacity=".85"><path d="m552 794 15-12 18 12v15h-33z"/><path d="m583 813 10-8 12 8v12h-22z"/></g>
-  <path fill="#3b332a" d="m547 795 20-18 23 18-6 3-17-13-14 13zm31 19 15-13 16 13-5 3-11-10-10 10z"/>
-</svg>`;
+const scenery = `<img class="front-landscape" src="${FRONT_MENU_BACKGROUND_URL}" alt="" aria-hidden="true" decoding="async" fetchpriority="high">`;
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);

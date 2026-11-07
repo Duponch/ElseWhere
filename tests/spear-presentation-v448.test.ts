@@ -34,10 +34,10 @@ test('six spear pigments reuse one authored pole on ground/cargo and preserve th
   const ranges=cargo.userData.cargoRangesByKind as Record<number,CargoGeometryRange>,shapes=[];
   for(const item of SPEAR_ITEMS_272){
    expect(weaponVisual(item)?.dye).toBe(SPEAR_DYE272);expect(weaponVisual(item)?.parts[0]?.color).toBe(spearColor272(item));expect(itemGeometry(item)).toHaveLength(7);expect(ranges[itemCargoKind(item)]?.count).toBe(252);
-   expect(modelIconUrl(`item-${item}`)).toBe(itemPortraitDataUrl(item));shapes.push(itemGeometry(item).map(({color,...part})=>part));
+   expect(modelIconUrl(`item-${item}`)).toBe(`/assets/ui/elsewhere/pictograms-20261107/item-${item}.svg`);shapes.push(itemGeometry(item).map(({color,...part})=>part));
   }
   for(const shape of shapes)expect(shape).toEqual(shapes[0]);expect(new Set(SPEAR_ITEMS_272.map(i=>weaponVisual(i)!.parts[0]!.color)).size).toBe(6);
-  expect(itemGeometry('unfinished-spear')).toHaveLength(2);expect(ranges[itemCargoKind('unfinished-spear')]?.count).toBe(72);expect(modelIconUrl('item-unfinished-spear')).toBe(itemPortraitDataUrl('unfinished-spear'));
+  expect(itemGeometry('unfinished-spear')).toHaveLength(2);expect(ranges[itemCargoKind('unfinished-spear')]?.count).toBe(72);expect(modelIconUrl('item-unfinished-spear')).toBe('/assets/ui/elsewhere/pictograms-20261107/item-unfinished-spear.svg');
  }finally{for(const geometry of [plain,old,spear,all,cargo])geometry.dispose();}
 });
 

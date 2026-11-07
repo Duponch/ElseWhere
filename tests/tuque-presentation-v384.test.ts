@@ -29,7 +29,7 @@ test('tuque cloth/wool share original resident head geometry, preserve bare face
 test('ground, carried and UI icons reuse authored cap geometry including its unfinished item',()=>{
   for(const item of ['cloth-tuque','muffalo-wool-tuque','unfinished-tuque'] as const){
     const parts=itemGeometry(item,1);expect(parts).toHaveLength(2);expect(parts.map(p=>p.shape)).toEqual(['item-helmet','item-disc']);
-    expect(itemPortraitSvg(item)).toContain('<path ');expect(modelIconUrl('item-'+item)).toBe(`/assets/ui/elsewhere/v384/item-${item}.svg`);
+    expect(itemPortraitSvg(item)).toContain('<path ');expect(modelIconUrl('item-'+item)).toBe(`/assets/ui/elsewhere/pictograms-20261107/item-${item}.svg`);
   }
-  expect(modelIconUrl('item-cloth-shirt')).toContain('/v304/');expect(new Set(Object.values(APPAREL_CARGO)).size).toBe(Object.keys(APPAREL_CARGO).length);
+  expect(modelIconUrl('item-cloth-shirt')).toContain('/pictograms-20261107/');expect(new Set(Object.values(APPAREL_CARGO)).size).toBe(Object.keys(APPAREL_CARGO).length);
 });

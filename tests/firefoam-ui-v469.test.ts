@@ -86,7 +86,7 @@ test('manual options are absent from older or future worlds and unrelated cells'
 test('original geometry and pictogram retain physical selection and no external asset',()=>{
  const f=fixture(),before=JSON.stringify(f.world),parts=firefoamParts290(f.world);expect(parts.length).toBeGreaterThan(12);expect(parts.every(p=>p.targetId===12&&p.key===12)).toBe(true);
  expect(parts.every(p=>Math.abs(p.x-9)+(p.sx??0)/2<=.36&&Math.abs(p.z-11)+(p.sz??0)/2<=.36)).toBe(true);expect(JSON.stringify(f.world)).toBe(before);
- expect(modelIconUrl('firefoam-popper')).toMatch(/^data:image\/svg\+xml,/);
+ expect(modelIconUrl('firefoam-popper')).toBe('/assets/ui/elsewhere/pictograms-20261107/firefoam-popper.svg');
 });
 
 test('research projection and construction visibility require the prospective completed research',()=>{

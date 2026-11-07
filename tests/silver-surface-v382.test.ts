@@ -43,7 +43,7 @@ test('silver occupies its existing rare mineral occasions with no simulation RNG
   expect(validOre({terrain:'rock',ore:'silver'},242)).toBe(false);expect(validOre({terrain:'rock',ore:'silver'},243)).toBe(true);
   expect(validOre({terrain:'grass',ore:'silver'},243)).toBe(false);
   expect(rockInspection({terrain:'rock',ore:'silver'})?.description).toContain('40 argent');
-  expect(modelIconUrl('mountain-silver')).toBe('/assets/ui/elsewhere/v382/mountain-silver.svg');
+  expect(modelIconUrl('mountain-silver')).toBe('/assets/ui/elsewhere/pictograms-20261107/mountain-silver.svg');
 });
 
 test('a prepared finite camp mines neutral40 silver, resumes damage exactly, then physically stores and spends its own product',()=>{

@@ -1,3 +1,4 @@
+import {drawPicto} from '../ui/picto-artwork';
 import * as THREE from 'three/webgpu';
 import type {WeatherKind} from '../sim/weather-definitions';
 import {PALETTE,drawHandBlob,drawHandRect,drawMarkerLine,seededRandom,type CardboardPiece} from './prototype-art';
@@ -41,37 +42,16 @@ export const nativeWeatherColor=(icon:NativeWeatherIcon):string=>icon==='sun'?PA
 function polygon(ctx:CanvasRenderingContext2D,points:readonly Point[],fill:string,stroke=PALETTE.inkDark,lineWidth=1.7):void {
   ctx.beginPath();points.forEach(([x,y],index)=>index===0?ctx.moveTo(x,y):ctx.lineTo(x,y));ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.strokeStyle=stroke;ctx.lineWidth=lineWidth;ctx.stroke();
 }
-export function drawNativeWeatherIcon(ctx:CanvasRenderingContext2D,icon:NativeWeatherIcon,width:number,height:number,rng=seededRandom(48009)):void {
-  ctx.save();ctx.scale(width/100,height/100);ctx.lineCap='round';ctx.lineJoin='round';
-  if(icon==='sun'){
-    drawHandBlob(ctx,50,50,25,'#edc45e',PALETTE.inkDark,2,rng);
-    for(let ray=0;ray<12;ray++){const angle=ray*Math.PI/6;drawMarkerLine(ctx,50+Math.cos(angle)*32,50+Math.sin(angle)*32,50+Math.cos(angle)*41,50+Math.sin(angle)*41,PALETTE.inkDark,1.8,rng);}
-  }else if(icon==='moon'){
-    drawMarkerLine(ctx,23,47,29,66,'#cfb979',1.6,rng);drawMarkerLine(ctx,31,28,41,23,'#cfb979',1.6,rng);
-  }else if(icon==='eclipse'){
-    drawHandBlob(ctx,50,50,35,'#e6c16d',PALETTE.inkDark,1.8,rng);drawHandBlob(ctx,54,48,28,'#374852',PALETTE.inkDark,1.4,rng);
-  }else{
-    polygon(ctx,cloud,'#e8e6d7');drawMarkerLine(ctx,18,52,84,52,'#98aeb2',2,rng);
-    if(icon==='rain'||icon==='rain-storm')for(const x of icon==='rain'?[20,47,74]:[18,77])polygon(ctx,drop(x,icon==='rain'&&x===47?73:70),'#5e849a');
-    if(icon==='snow')for(const[x,y]of [[23,79],[51,85],[78,76]]){drawMarkerLine(ctx,x-5,y,x+5,y,PALETTE.inkDark,1.6,rng);drawMarkerLine(ctx,x,y-5,x,y+5,PALETTE.inkDark,1.6,rng);}
-    if(icon==='dry-storm'||icon==='rain-storm')polygon(ctx,bolt,'#e7b956');
-    if(icon==='fog'){drawMarkerLine(ctx,13,76,75,75,'#6b8588',3,rng);drawMarkerLine(ctx,29,89,87,87,'#6b8588',3,rng);}
-  }
-  ctx.restore();
+export function drawNativeWeatherIcon(ctx:CanvasRenderingContext2D,icon:NativeWeatherIcon,width:number,height:number,_rng=seededRandom(48009)):void {
+  drawPicto(ctx,icon==='snow'?'weather-snow':icon,width/2,height/2,Math.min(width,height)*.42);
 }
 
 /** Numbers and transport glyphs are marker strokes, never font characters. */
 export function drawNativeSpeedIcon(ctx:CanvasRenderingContext2D,width:number,height:number,speed:0|1|3|6,active:boolean,rng=seededRandom(48031)):void {
   ctx.save();ctx.scale(width/48,height/37);ctx.lineCap='round';ctx.lineJoin='round';
-  const ink=PALETTE.inkDark,fill=active?'#fff8e7':ink;
+  const ink=PALETTE.inkDark;
   drawHandBlob(ctx,24,18.5,13.7,PALETTE.creamPaper,ink,1.1,rng);
-  if(speed===0){drawHandRect(ctx,17,10,4.8,17,ink,ink,1,rng);drawHandRect(ctx,26,10,4.8,17,ink,ink,1,rng);}
-  else if(speed===1)polygon(ctx,[[19,9],[33,18],[19,28],[18,21]],fill,ink,1.4);
-  else{
-    drawMarkerLine(ctx,12,15,19,23,ink,1.7,rng);drawMarkerLine(ctx,19,15,12,23,ink,1.7,rng);
-    const path:readonly Point[]=speed===3?[[24,10],[34,10],[35,14],[29,18],[34,20],[35,25],[31,28],[24,26]]:[[34,10],[28,11],[24,17],[24,24],[28,28],[34,26],[35,21],[32,18],[25,19]];
-    for(let index=1;index<path.length;index++)drawMarkerLine(ctx,path[index-1]![0],path[index-1]![1],path[index]![0],path[index]![1],ink,2.1,rng);
-  }
+  drawPicto(ctx,speed===0?'pause':speed===1?'play':speed===3?'speed-double':'speed-triple',24,18.5,11.5,active?'#305443':ink);
   ctx.restore();
 }
 

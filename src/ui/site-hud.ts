@@ -1,3 +1,4 @@
+import {pictoDataUrl} from './picto-artwork';
 import './site-hud.css';
 import { calendarTick } from '../sim/calendar';
 import { climateDate } from '../sim/site-climate';
@@ -78,14 +79,9 @@ export function siteHudLayout(): string {
   </div>`;
 }
 
-function seasonUrl(index: number): string {
-  const drawings = [
-    '<path d="M21 35v-12m0 5c-8 0-11-6-10-10 7-1 12 4 10 10Zm0-5c0-9 7-14 14-13 1 8-6 14-14 13Z" fill="#2fc98e"/><path d="M10 37h25" stroke="#d6f4e6"/>',
-    '<circle cx="24" cy="24" r="10" fill="#ffc23c"/><path d="M24 4v5m0 30v5M4 24h5m30 0h5M10 10l4 4m20 20 4 4M10 38l4-4m20-20 4-4" stroke="#ffc23c"/>',
-    '<path d="m24 5 5 10 9-3-3 11 8 5-13 5-6 11-3-12-14-6 10-5-3-12 9 5Z" fill="#ff9655"/><path d="m24 18-2 23m1-12-8-5m8 0 8-5" stroke="#7c4734"/>',
-    '<g stroke="#b0deff"><path d="M24 5v38M8 14l32 20M8 34l32-20M19 9l5 5 5-5M19 39l5-5 5 5M8 20l7-1-2-7M35 36l-2-7 7-1M8 28l7 1-2 7M35 12l-2 7 7 1"/></g>',
-  ];
-  return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><g stroke="#263449" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none">${drawings[index]}</g></svg>`)}")`;
+function seasonUrl(index:number):string {
+  const id=['season-spring','season-summer','season-autumn','season-winter'][index]!;
+  return `url("${pictoDataUrl(id)}")`;
 }
 
 /** Cache references once. Presentation changes are applied at minute/condition

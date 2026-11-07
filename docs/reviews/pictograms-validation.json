@@ -1,0 +1,56 @@
+{
+  "base": "666d598c",
+  "icons": 565,
+  "bytes": 740813,
+  "focusedTests": {
+    "files": 8,
+    "total": 44,
+    "passed": 44,
+    "failed": 0
+  },
+  "browser": {
+    "entries": 565,
+    "missing": [],
+    "empty": [],
+    "opaqueCorners": [],
+    "decodeErrors": [],
+    "errors": [],
+    "filters": true,
+    "smallSizes": [
+      24,
+      32
+    ],
+    "surfaces": [
+      "cream",
+      "kraft",
+      "dark"
+    ],
+    "viewports": [
+      1280,
+      390
+    ]
+  },
+  "compatibility": {
+    "reproducedBaselineFailures": 27,
+    "changedMessages": [],
+    "unexplained": [],
+    "files": [
+      "firefoam-ui-v469.test.ts",
+      "mace-presentation-v445.test.ts",
+      "pemmican-presentation-v389.test.ts",
+      "plasteel-knife-presentation-v444.test.ts",
+      "prosthetics-presentation-v449.test.ts",
+      "shelf-presentation-v320.test.ts",
+      "silver-surface-v382.test.ts",
+      "smooth-floor-ui-v458.test.ts",
+      "spear-presentation-v448.test.ts",
+      "sword-presentation-v446.test.ts",
+      "tree-designation-render-v349.test.ts",
+      "tuque-presentation-v384.test.ts"
+    ]
+  },
+  "selectionHarnessBaselineFailures": 15,
+  "typecheck": true,
+  "pagesBuild": true,
+  "packagedSvgBytesExact": true
+}

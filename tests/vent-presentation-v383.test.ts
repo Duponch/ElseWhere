@@ -11,6 +11,6 @@ test('real aperture changes original resident parts and confirmed signature at t
   const before=signature.read(w.structures,'',''),open=ventParts(w);vent.vent!.open=false;const closed=ventParts(w);
   expect(closed.length).toBe(open.length);expect(closed).not.toEqual(open);expect(signature.read(w.structures,'','')).not.toBe(before);
   expect(architectToolAvailable(w,'vent')).toBe(true);expect(placementMaterial('vent','wood')).toBe('steel');
-  expect(modelIconUrl('vent')).toBe('/assets/ui/elsewhere/v383/vent.svg');
+  expect(modelIconUrl('vent')).toBe('/assets/ui/elsewhere/pictograms-20261107/vent.svg');
   expect(ventParts(w,true).every(p=>p.y+(p.sy??1)/2<=.7200001)).toBe(true);
 });

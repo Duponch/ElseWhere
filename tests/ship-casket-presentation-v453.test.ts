@@ -38,7 +38,7 @@ test('occupancy alone changes the lid and both signature paths; unrelated holder
  casket.shipCryptosleep277.heldAt++;expect(raw.read(w.structures,'','')).toBe(closed);expect(confirmed.readConfirmed(w.structures,'','',[0])).toBe(closed);
 });
 test('spatial catalogue has its own original image, stable historical UV and passive power label',()=>{
- const {w,casket}=shipCasketServiceCamp277();expect(placementMaterial(casket.kind,'wood')).toBe('steel');expect(toolDefinitions.find(t=>t.id===casket.kind)).toMatchObject({category:'ship'});expect(modelIconUrl(casket.kind)).toMatch(/^data:image\/svg\+xml,/);expect(ARCHITECT_ICON_URLS[casket.kind]).toBe(modelIconUrl(casket.kind));expect(ARCHITECT_ICON_MAPPING[casket.kind]).toEqual(ARCHITECT_ICON_MAPPING.bed);
+ const {w,casket}=shipCasketServiceCamp277();expect(placementMaterial(casket.kind,'wood')).toBe('steel');expect(toolDefinitions.find(t=>t.id===casket.kind)).toMatchObject({category:'ship'});expect(modelIconUrl(casket.kind)).toBe('/assets/ui/elsewhere/pictograms-20261107/ship-cryptosleep-casket.svg');expect(ARCHITECT_ICON_URLS[casket.kind]).toBe(modelIconUrl(casket.kind));expect(ARCHITECT_ICON_MAPPING[casket.kind]).toEqual(ARCHITECT_ICON_MAPPING.bed);
  const text=powerInspection(w,casket);expect(text).toContain('Transmission électrique passive');expect(text).not.toContain('Non raccordée');expect(text).not.toContain('Demande 0 W');
 });
 

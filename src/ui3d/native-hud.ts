@@ -1,3 +1,4 @@
+import {drawPicto} from '../ui/picto-artwork';
 import * as THREE from 'three/webgpu';
 import type {MaterialPile, Pawn, World} from '../sim/types';
 import {TICKS_PER_DAY} from '../sim/types';
@@ -397,26 +398,9 @@ export class NativeHudCards {
     return {left:this.viewportWidth-324+this.rightDockOffset*100,top:30,right:this.viewportWidth,bottom:Math.max(100,this.viewportHeight-370)};
   }
 
-  private drawViewControl(action:NativeHudViewAction,ctx:CanvasRenderingContext2D,w:number,h:number,rng:()=>number):void {
-    ctx.save();ctx.scale(w/32,h/32);ctx.strokeStyle=PALETTE.inkDark;ctx.fillStyle=PALETTE.inkDark;ctx.lineWidth=1.6;ctx.lineCap='round';ctx.lineJoin='round';
-    if(action==='walls'){
-      drawHandRect(ctx,7,8,18,16,PALETTE.creamPaper,PALETTE.inkDark,1.3,rng);
-      for(const y of [13,19])drawMarkerLine(ctx,7,y,25,y,PALETTE.inkDark,1.2,rng);
-      for(const [x,y] of [[13,8],[19,13],[13,19]])drawMarkerLine(ctx,x,y,x,y+5,PALETTE.inkDark,1.2,rng);
-    }else if(action==='roofs'){
-      ctx.beginPath();ctx.moveTo(5,15);ctx.lineTo(16,6);ctx.lineTo(27,15);ctx.lineTo(23,15);ctx.lineTo(23,25);ctx.lineTo(9,25);ctx.lineTo(9,15);ctx.closePath();ctx.fillStyle=PALETTE.terracotta;ctx.fill();ctx.stroke();
-    }else if(action==='foliage'){
-      drawMarkerLine(ctx,16,18,16,27,PALETTE.inkDark,2,rng);drawHandBlob(ctx,16,14,9,PALETTE.sageMountain,PALETTE.inkDark,1.3,rng);
-    }else if(action==='zones'){
-      ctx.setLineDash([3,2]);ctx.strokeRect(6,6,20,20);ctx.setLineDash([]);ctx.fillStyle=PALETTE.sageMountain;ctx.globalAlpha=.7;ctx.fillRect(8,8,16,16);
-    }else if(action==='home'){
-      ctx.beginPath();ctx.moveTo(6,15);ctx.lineTo(16,6);ctx.lineTo(26,15);ctx.moveTo(10,13);ctx.lineTo(10,25);ctx.lineTo(22,25);ctx.lineTo(22,13);ctx.stroke();
-      ctx.strokeRect(14,19,4,6);
-    }else{
-      ctx.beginPath();ctx.moveTo(5,11);ctx.lineTo(18,11);ctx.lineTo(18,8);ctx.lineTo(25,8);ctx.lineTo(25,24);ctx.lineTo(5,24);ctx.closePath();ctx.stroke();
-      ctx.beginPath();ctx.arc(15,17,5,0,Math.PI*2);ctx.stroke();
-    }
-    ctx.restore();
+  private drawViewControl(action:NativeHudViewAction,ctx:CanvasRenderingContext2D,w:number,h:number,_rng:()=>number):void {
+    const icons:Record<NativeHudViewAction,string>={walls:'wall',roofs:'roof',foliage:'resource-tree',zones:'zones',home:'home',camera:'camera'};
+    drawPicto(ctx,icons[action],w/2,h/2,Math.min(w,h)*.39);
   }
 
   setVisible(visible: boolean): void {
@@ -615,7 +599,7 @@ export class NativeHudCards {
     }else{
       const image=res.item?this.resourceImages.get(res.item):undefined;
       if(image?.complete&&image.naturalWidth>0)ctx.drawImage(image,indent,2,24,24);
-      else {drawHandBlob(ctx,iconX,14,7,res.color,'#19242b',1.5,rng);}
+      else {drawPicto(ctx,res.item?'item-'+res.item:'stockpile',iconX,14,9);}
     }
     ctx.font=`${res.branch?'bold ':''}13px ${FONT}`;ctx.textAlign='left';ctx.fillStyle='#fff8e9';
     const textX=29+indent,valueWidth=res.value?Math.min(68,ctx.measureText(res.value).width+7):0,labelWidth=Math.max(35,screenWidth-textX-valueWidth-8);

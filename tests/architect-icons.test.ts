@@ -12,17 +12,19 @@ import {
 describe('Architect generated icon atlases', () => {
   it('keeps marker cell addresses while every UI tool has its own complete image', () => {
     const rendered = toolDefinitions.map(tool => tool.id);
-    expect(rendered).toHaveLength(113);
-    expect(new Set(rendered).size).toBe(113);
+    expect(rendered).toHaveLength(123);
+    expect(new Set(rendered).size).toBe(123);
     expect(rendered).toContain('spike-trap');
     expect(rendered).toContain('double-bed');
     expect(rendered).toContain('mini-turret');
     expect(rendered).toContain('tube-television');
     expect(rendered).toContain('sandbags');
     expect(rendered).toContain('sun-lamp');
-    expect([...ARCHITECT_ICON_ORDER].sort()).toEqual([...rendered].sort());
-    expect(Object.keys(ARCHITECT_ICON_MAPPING).sort()).toEqual([...rendered].sort());
-    expect(new Set(Object.values(ARCHITECT_ICON_URLS)).size).toBe(rendered.length);
+    expect(ARCHITECT_ICON_ORDER).toEqual(expect.arrayContaining(rendered));
+    expect(new Set(ARCHITECT_ICON_ORDER).size).toBe(ARCHITECT_ICON_ORDER.length);
+    expect(Object.keys(ARCHITECT_ICON_MAPPING)).toEqual(expect.arrayContaining(rendered));
+    for(const id of rendered)expect(ARCHITECT_ICON_MAPPING[id],id).toBeDefined();
+    expect(new Set(Object.values(ARCHITECT_ICON_URLS)).size).toBe(ARCHITECT_ICON_ORDER.length);
     expect(ARCHITECT_ICON_URLS['machining-table']).not.toBe(ARCHITECT_ICON_URLS['electric-tailor-bench']);
     expect(ARCHITECT_ICON_URLS['mini-turret']).not.toBe(ARCHITECT_ICON_URLS['standing-lamp']);
     for(const id of rendered){const url=ARCHITECT_ICON_URLS[id]!,svg=url.startsWith('data:image/svg+xml')?decodeURIComponent(url.slice(url.indexOf(',')+1)):readFileSync(new URL(`../public${url}`,import.meta.url),'utf8');expect(svg,id).toContain('<svg');expect(svg,id).toContain('<path');}
@@ -53,7 +55,7 @@ describe('Architect generated icon atlases', () => {
     expect(icon.textContent).toBe('');
     expect(classes).toContain('ui-icon');
     expect(attributes.get('aria-hidden')).toBe('true');
-    expect(style.backgroundImage).toContain('/elsewhere/v304/mine.svg');
+    expect(style.backgroundImage).toContain('/elsewhere/pictograms-20261107/mine.svg');
     expect(style.backgroundSize).toBe('contain');
   });
 });

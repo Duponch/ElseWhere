@@ -47,7 +47,7 @@ test('unfinished knife keeps a bare tang and blunt blank, while the existing fin
  expect(weaponVisual('plasteel-knife')).toEqual(original);
  for(const item of ['unfinished-knife','plasteel-knife'] as const){
   const svg=itemPortraitSvg(item);expect(svg).toContain('<path');expect(svg).not.toContain('NaN');
-  expect(modelIconUrl(`item-${item}`)).toBe(itemPortraitDataUrl(item));
+  expect(modelIconUrl(`item-${item}`)).toBe(`/assets/ui/elsewhere/pictograms-20261107/item-${item}.svg`);
  }
  expect(itemPortraitSvg('unfinished-knife')).not.toBe(itemPortraitSvg('plasteel-knife'));
 });

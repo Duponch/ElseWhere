@@ -43,13 +43,13 @@ test('weather illustration has no inset background plate and its thermometer exp
   expect(markup).toContain('class="site-thermometer"');
 });
 
-test('new generated time pictograms are delivery-sized PNGs with measured source-neutral framing', () => {
+test('time pictograms are transparent vectors with matching square view boxes', () => {
   for (const speed of [0, 1, 3, 6] as const) {
-    const bytes = readFileSync(new URL(`../public${TIME_CONTROL_ASSETS[speed]}`, import.meta.url));
-    expect(bytes.readUInt32BE(16)).toBe(128); expect(bytes.readUInt32BE(20)).toBe(128);
-    expect(bytes[25]).toBe(6); // PNG truecolor with alpha, not an opaque plate.
+    const svg = readFileSync(new URL(`../public${TIME_CONTROL_ASSETS[speed]}`, import.meta.url),'utf8');
+    expect(svg).toContain('viewBox="0 0 64 64"');expect(svg).toContain('data-art="adult-hand-20261107"');
+    expect(svg).not.toContain('<rect');expect(svg).toContain('<path');
     const [x, y, width, height] = TIME_CONTROL_FRAMES[speed];
     expect(x).toBeGreaterThanOrEqual(0); expect(y).toBeGreaterThanOrEqual(0);
-    expect(x + width).toBeLessThanOrEqual(128); expect(y + height).toBeLessThanOrEqual(128);
+    expect(x + width).toBeLessThanOrEqual(64); expect(y + height).toBeLessThanOrEqual(64);
   }
 });

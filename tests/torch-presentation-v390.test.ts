@@ -51,6 +51,6 @@ test('V390 architect admission and the original SVG stay separate from electrica
   expect(architectToolAvailable(old,'torch-lamp')).toBe(false);expect(architectToolAvailable(w,'torch-lamp')).toBe(true);
   expect(placementMaterial('torch-lamp','steel')).toBe('wood');expect(toolDefinitions.find(t=>t.id==='torch-lamp')).toMatchObject({category:'furniture',title:'Lampe-torche'});
   expect(ARCHITECT_ICON_MAPPING['torch-lamp']).toEqual(ARCHITECT_ICON_MAPPING['standing-lamp']);
-  const url=ARCHITECT_ICON_URLS['torch-lamp']!;expect(url).toBe('/assets/ui/elsewhere/v390/torch-lamp.svg');expect(url).not.toBe(ARCHITECT_ICON_URLS['standing-lamp']);
+  const url=ARCHITECT_ICON_URLS['torch-lamp']!;expect(url).toBe('/assets/ui/elsewhere/pictograms-20261107/torch-lamp.svg');expect(url).not.toBe(ARCHITECT_ICON_URLS['standing-lamp']);
   const svg=readFileSync(new URL(`../public${url}`,import.meta.url),'utf8');expect(svg).toContain('<title>Lampe-torche</title>');expect(svg).toContain('<path');expect(svg).not.toMatch(/<image|(?:href|src)=/);
 });
