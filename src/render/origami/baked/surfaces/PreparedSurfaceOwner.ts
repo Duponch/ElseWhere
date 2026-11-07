@@ -10,6 +10,7 @@ import {PreparedSurfaceAdmissionRefusal,type PreparedSurfaceSource,type Prepared
 import {PreparedSurfaceAddressBook,compilePreparedSurfaceAddresses} from './PreparedSurfaceAddressBook';
 import {planPreparedSurfaces} from './PreparedSurfacePlan';
 import {prepareSurfaceGpu} from './PreparedSurfaceGpu';
+import {SurfacePreparationSuperseded} from '../../../surfaces/SharedSurfacePreparation';
 const MiB=1024*1024;
 export const PREPARED_SURFACE_VARIANT='preparedSurfaceVariant';
 type Asset={readonly key:string;readonly sourceKey:string;readonly semantic:string;readonly variantIds:readonly number[];readonly plan:PreparedSurfacePlan;readonly gpu:PreparedSurfaceGpuResult};
@@ -102,7 +103,7 @@ export class PreparedSurfaceOwner implements SharedSurfacePreparationOwner {
   this.pending=true;
   let next=previous,candidate:Asset|undefined,lookup:ReturnType<PreparedSurfaceAddressBook['stage']>|undefined,presentation:SharedSurfacePreparationStage|undefined,
    reason:string|undefined,eligible=false,prepared=false,published=false,commitStarted=false,committed=false,rolledBack=false,disposed=false;
-  const current=()=>{assertCurrent();if(ids!==this.active||semantic!==paintKey(context)||identity!==(this.options.cacheIdentity?.()??''))throw Error('Actual canonical demand changed');};
+  const current=()=>{assertCurrent();if(ids!==this.active||semantic!==paintKey(context)||identity!==(this.options.cacheIdentity?.()??''))throw new SurfacePreparationSuperseded('Actual canonical demand changed');};
   const pure=()=>!positive&&(!gouache||!!(prepared&&next&&tier==='screen'&&this.qualityRequested!=='source'));
   const stagePresentation=async()=>{
    if(!this.options.stagePresentation)return;

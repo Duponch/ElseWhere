@@ -139,11 +139,14 @@ import { ShadowRefreshScheduler } from './ShadowRefreshScheduler';
 type VisualChunk = { signature: string; group: THREE.Group };
 interface PreparedCoreTreeTextures {commit():void;rollback():void;dispose():void;readonly representation?:'atlas'|'direct';covers?(demand:import('./origami/TreeBakeOwner').TreeBakeDemand):boolean;retarget?(demand:import('./models/FixedTreeCohort').FixedTreeCohortPlan):void}
 /** Superseding/closing a held preparation is not a renderer failure. */
-class SharedSurfacePreparationCancelled extends Error {}
+class SharedSurfacePreparationCancelled extends SurfacePreparationSuperseded {}
+/** Consecutive superseded attempts retried at once inside one world admission;
+ * beyond it the demand stays dirty and the next frame prepares again. */
+const SURFACE_SUPERSESSION_RETRIES=8;
 import type {FixedTreeCohortPlan} from './models/FixedTreeCohort';
 import type {TreeBakeDemand} from './origami/TreeBakeOwner';
 import {fixedTreePaintKey} from './surfaces/FixedTreeTextureSurface';
-import type {SharedSurfacePreparationBatch,SharedSurfacePreparationSnapshot} from './surfaces/SharedSurfacePreparation';
+import {SurfacePreparationSuperseded,type SharedSurfacePreparationBatch,type SharedSurfacePreparationSnapshot} from './surfaces/SharedSurfacePreparation';
 import {hasActorAtlasDensityGate,updateActorAtlasDensity,actorSurfaceBudget} from './origami/baked/actors/ActorAtlasOwner';
 import {rigidSurfaceBudget} from './origami/baked/surfaces/PreparedSurfaceOwner';
 import {measureSurfaceBudget,type SurfaceBudgetInventory} from './surfaces/SurfaceBudgetInventory';
@@ -276,8 +279,9 @@ export class SceneRenderCore {
     this.uploadSharedSurfaceAssets();
     const paintSource=this.canBakeTrees?this.graphicsStyle.prepareAtlasPaint():undefined;
     const snapshot=Object.freeze({...this.sharedSurfaceSnapshot(reason,reset),paintSource});
-    const camera=JSON.stringify(this.captureGraphicsView());
-    return registry.stage(snapshot,()=>{assertCurrent();paintSource?.assertCurrent();if(snapshot.density&&(snapshot.density.mode!==this.rig.mode||snapshot.density.physicalCellPixels!==this.rig.pixelsPerCell(this.viewportHeight)*this.renderer.getPixelRatio()))throw new SharedSurfacePreparationCancelled('Shared actor density changed before publication');if(snapshot.epoch!==this.sharedSurfaceEpoch||snapshot.world!==(this.world??undefined)||snapshot.paintRevision!==this.graphicsStyle.preparedPaintRevision||JSON.stringify(snapshot.preferences)!==JSON.stringify(this.graphicsStyle.preferences)||JSON.stringify(this.captureGraphicsView())!==camera)throw new SharedSurfacePreparationCancelled('Shared World/settings/camera/paint changed before publication');});
+    // Staged surfaces depend on the density (projection mode, physical pixels
+    // per cell), checked below; panning the camera does not obsolete them.
+    return registry.stage(snapshot,()=>{assertCurrent();paintSource?.assertCurrent();if(snapshot.density&&(snapshot.density.mode!==this.rig.mode||snapshot.density.physicalCellPixels!==this.rig.pixelsPerCell(this.viewportHeight)*this.renderer.getPixelRatio()))throw new SharedSurfacePreparationCancelled('Shared actor density changed before publication');if(snapshot.epoch!==this.sharedSurfaceEpoch||snapshot.world!==(this.world??undefined)||snapshot.paintRevision!==this.graphicsStyle.preparedPaintRevision||JSON.stringify(snapshot.preferences)!==JSON.stringify(this.graphicsStyle.preferences))throw new SharedSurfacePreparationCancelled('Shared World/settings/paint changed before publication');});
   }
   /** O(1) dirty latch, including registrations made by real LOD/adoption writers.
    * Start the hold in THIS callback, before any renderer or shadow submission. */
@@ -311,9 +315,9 @@ export class SceneRenderCore {
   private async finishSurfacePreparation():Promise<void>{
     try{
       if(this.disposed||this.closingPresentation||this.fatalError||this.hostPort.hidden()||this.presentationSuspendedUntilFrame325){this.pendingSurfaceWorld=undefined;return;}
-      let entry=this.takePendingSurfaceWorld();
+      let entry=this.takePendingSurfaceWorld(),superseded=0;
       while(entry){
-        let target=entry,reset=entry.reset,trees:PreparedCoreTreeTextures|undefined,batch:SharedSurfacePreparationBatch|undefined;
+        let target=entry,reset=entry.reset,trees:PreparedCoreTreeTextures|undefined,batch:SharedSurfacePreparationBatch|undefined,applied=!!entry.alreadyApplied;
         const assertCurrent=()=>{if(this.disposed||this.closingPresentation||this.fatalError)throw new SharedSurfacePreparationCancelled('World admission closed');};
         try{
           let plan=this.canBakeTrees?this.resources.inspectFixedTreeCohort(target.world,reset,this.immutableWorlds.has(target.world)):undefined;
@@ -323,7 +327,7 @@ export class SceneRenderCore {
           const latestBeforeApply=this.takePendingSurfaceWorld();
           if(latestBeforeApply){reset=reset||latestBeforeApply.reset;entry={...latestBeforeApply,reset};continue;}
           assertCurrent();this.presentation.clear();
-          if(!target.alreadyApplied)this.applyAdmittedWorld(target.world,reset,plan);
+          if(!target.alreadyApplied){this.applyAdmittedWorld(target.world,reset,plan);applied=true;}
           batch=await this.stageCoordinatedSurfaces('world',assertCurrent,reset);
           const latestBeforePublish=this.takePendingSurfaceWorld();
           if(latestBeforePublish){reset=reset||latestBeforePublish.reset;entry={...latestBeforePublish,reset};continue;}
@@ -333,7 +337,16 @@ export class SceneRenderCore {
           if(latestBeforeCommit){reset=reset||latestBeforeCommit.reset;entry={...latestBeforeCommit,reset};continue;}
           trees?.commit();batch?.commit();this.resources.assertFixedTreeDrawReady();
           entry=this.takePendingSurfaceWorld();
-        }catch(error){const failures:unknown[]=[error];try{batch?.rollback();}catch(cleanup){failures.push(cleanup);}try{trees?.rollback();}catch(cleanup){failures.push(cleanup);}throw failures.length>1?new AggregateError(failures,'Coordinated World surface rollback failed'):error;}
+        }catch(error){const failures:unknown[]=[error];try{batch?.rollback();}catch(cleanup){failures.push(cleanup);}try{trees?.rollback();}catch(cleanup){failures.push(cleanup);}
+          if(failures.length>1)throw new AggregateError(failures,'Coordinated World surface rollback failed');
+          if(!(error instanceof SurfacePreparationSuperseded)||this.disposed||this.closingPresentation||this.fatalError)throw error;
+          // Obsolete, not failed: prepare again from the current state. A newer
+          // held World supersedes this one; otherwise this World is kept.
+          const newer=this.takePendingSurfaceWorld();
+          entry=newer?{...newer,reset:reset||newer.reset}:{world:target.world,reset,alreadyApplied:applied};
+          if(++superseded>SURFACE_SUPERSESSION_RETRIES){this.pendingSurfaceWorld=entry;this.graphicsStyle.surfacePreparation?.invalidate();break;}
+          continue;
+        }
         finally{try{batch?.dispose();}finally{trees?.dispose();}}
       }
     }catch(error){if(!this.closingPresentation&&!this.fatalError)this.reportFailure('Préparation du dernier affichage interrompue : '+(error instanceof Error?error.message:String(error)));throw error;}finally{this.holdSurfaceWorld=false;this.preparing=false;this.lastFrame=0;this.invalidatePausedShadow();}

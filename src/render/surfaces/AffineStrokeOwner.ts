@@ -4,6 +4,7 @@
 import * as THREE from'three/webgpu';
 import{storage,uniform}from'three/tsl';
 import type{FaceStrokeData}from'./FaceStrokeTable';
+import {SurfacePreparationSuperseded} from './SharedSurfacePreparation';
 import{FACE_STROKE_EDGE_ROWS}from'./FaceStrokeTable';
 
 export interface StrokeSettings{readonly width:number;readonly irregularity:number}
@@ -128,7 +129,7 @@ export class AffineStrokeOwner{
    if(stageBytes*2>this.limits.maxStageBytes)throw new AffineAdmissionRefusal('Affine staging/undo admission exceeds bounded CPU budget');
   }
   spans.sort((a,b)=>a.row-b.row);for(let i=1;i<spans.length;i++)if(spans[i]!.row<spans[i-1]!.row+spans[i-1]!.values.length/4)throw Error('Canonical faces aliased an owned header/edge span');
-  this.source.assertCurrent();if(this.source.revision()!==revision)throw Error('Canonical stencil changed during affine preparation');
+  this.source.assertCurrent();if(this.source.revision()!==revision)throw new SurfacePreparationSuperseded('Canonical stencil changed during affine preparation');
   this.ensureRows(required); // HWM growth preserves old semantic content.
   for(const span of spans)span.undo=(this.attribute.array as Float32Array).slice(span.row*4,span.row*4+span.values.length);
   const before={width:this.width.value,irregularity:this.irregularity.value,key:this.currentKey,revision:this.preparedRevision,ready:this.ready};let published=false,committed=false,disposed=false;

@@ -3,6 +3,11 @@ import type {GraphicsStylePreferences} from '../../ui3d/native-preferences';
 import type {WebGPURenderer} from 'three/webgpu';
 import type {GraphicsStyleContext} from '../graphics-style';
 
+/** A preparation made obsolete by a newer demand, setting, paint or density.
+ * Its stages are rolled back; the owner prepares again from the current state.
+ * Never a renderer failure. */
+export class SurfacePreparationSuperseded extends Error {}
+
 export interface SharedSurfacePreparationSnapshot {
  readonly preferences:Readonly<GraphicsStylePreferences>;
  readonly world:World|undefined;
@@ -105,7 +110,7 @@ export class SharedSurfacePreparationRegistry {
  async stage(snapshot:SharedSurfacePreparationSnapshot,assertCurrent:()=>void):Promise<SharedSurfacePreparationBatch>{
   if(this.closed||this.active)throw Error('One exclusive shared surface preparation required');
   this.active=true;const revision=this.revision,stages:{owner:SharedSurfacePreparationOwner;stage:SharedSurfacePreparationStage}[]=[];
-  const current=()=>{assertCurrent();if(this.closed||revision!==this.revision)throw Error('Shared surface demand changed during preparation');};
+  const current=()=>{assertCurrent();if(this.closed)throw Error('Shared surface registry closed');if(revision!==this.revision)throw new SurfacePreparationSuperseded('Shared surface demand changed during preparation');};
   const failures:unknown[]=[];
   try{
    current();for(const owner of [...this.owners.values()].sort((a,b)=>(a.preparationPriority??0)-(b.preparationPriority??0)))if(owner.needsPreparation(snapshot)){const stage=await owner.stage(snapshot,current);this.stagedReferences.add(stage);stages.push({owner,stage});current();}

@@ -5,6 +5,7 @@ import type {GraphicsStyleContext} from '../graphics-style';
 import type {TreeBakeDemand} from '../origami/TreeBakeOwner';
 import type {TreeAssetCatalog} from '../origami/baked/trees/types';
 import {createTextureSurface,validateTextureSurfaceAssets,type TextureSurfaceAssets,type TextureSurfaceOptions} from './TextureSurface';
+import {SurfacePreparationSuperseded} from './SharedSurfacePreparation';
 
 type Cohort={readonly key:string;readonly models:readonly Readonly<{key:string;slot:number}>[]};
 type State={readonly cohort:Cohort;readonly catalog:TreeAssetCatalog|undefined;readonly paintKey:string|undefined};
@@ -20,7 +21,7 @@ export function fixedTreePaintKey(context:GraphicsStyleContext):string{
  const p=context.preferences;return JSON.stringify(['fixed-tree-source-bank-v1',p.impasto,p.wear,p.edges,p.blackEdges,p.edgeWidth,p.strokeImperfection,p.contourImperfection]);
 }
 function capture(demand:TreeBakeDemand):Cohort{
- if(!demand.isCurrent())throw Error('Tree cohort changed before texture admission');
+ if(!demand.isCurrent())throw new SurfacePreparationSuperseded('Tree cohort changed before texture admission');
  const models=demand.models.map(model=>{model.assertCurrent();if(model.species===undefined)throw Error('Continuous anonymous trees are not atlas-only assets');return Object.freeze({key:model.key,slot:model.surfaceSlot});});
  if(models.length>13||new Set(models.map(m=>m.key)).size!==models.length||new Set(models.map(m=>m.slot)).size!==models.length||models.some(m=>!Number.isSafeInteger(m.slot)||m.slot<0||m.slot>=64))throw Error('Unique bounded named tree models required');
  return Object.freeze({key:demand.key,models:Object.freeze(models)});
@@ -74,8 +75,8 @@ export class FixedTreeTextureSurface {
   const previous=this.active,previousAssets=this.surface.assets,startPublication=this.publication;this.openStage=true;let published=false,settled=false,rolledBack=false,disposed=false;
   const rollback=()=>{if(settled)throw Error('Committed tree texture publication cannot roll back');if(rolledBack)return;if(published){if(this.publication!==startPublication+1)throw Error('Newer tree publication owns the binding');this.active=previous;this.surface.setAssets(previousAssets);this.publication++;this.ready=false;this.synchronize();}rolledBack=true;};
   return{
-   publish:()=>{if(disposed||published||rolledBack||this.closed||startPublication!==this.publication)throw Error('Fixed tree stage superseded');assertExclusive();if(!demand.isCurrent()||catalog&&paintKey!==fixedTreePaintKey(this.context))throw Error('Fixed tree admission changed');catalog?.assertCurrent();this.active=next;this.publication++;published=true;try{this.synchronize();this.assertDrawable();}catch(error){try{rollback();}catch(cleanup){throw new AggregateError([error,cleanup],'Fixed tree CPU publication rollback failed');}throw error;}},
-   commit:()=>{if(settled)return;if(disposed||!published||rolledBack)throw Error('Only a published current fixed tree stage can commit');assertExclusive();if(!demand.isCurrent()||catalog&&paintKey!==fixedTreePaintKey(this.context))throw Error('Fixed tree admission changed before commit');catalog?.assertCurrent();settled=true;},
+   publish:()=>{if(disposed||published||rolledBack||this.closed||startPublication!==this.publication)throw Error('Fixed tree stage superseded');assertExclusive();if(!demand.isCurrent()||catalog&&paintKey!==fixedTreePaintKey(this.context))throw new SurfacePreparationSuperseded('Fixed tree admission changed');catalog?.assertCurrent();this.active=next;this.publication++;published=true;try{this.synchronize();this.assertDrawable();}catch(error){try{rollback();}catch(cleanup){throw new AggregateError([error,cleanup],'Fixed tree CPU publication rollback failed');}throw error;}},
+   commit:()=>{if(settled)return;if(disposed||!published||rolledBack)throw Error('Only a published current fixed tree stage can commit');assertExclusive();if(!demand.isCurrent()||catalog&&paintKey!==fixedTreePaintKey(this.context))throw new SurfacePreparationSuperseded('Fixed tree admission changed before commit');catalog?.assertCurrent();settled=true;},
    rollback,
    dispose:()=>{if(disposed)return;try{if(!settled)rollback();}finally{disposed=true;this.openStage=false;}},
   };

@@ -2,7 +2,7 @@
 import * as THREE from 'three/webgpu';
 import {uniform,texture,uv,vec2,vec3,vec4,ivec2,float,Fn,If,varying,mix,smoothstep,workingToColorSpace,colorSpaceToWorking} from 'three/tsl';
 import {metadataTexel} from './surfaces/MetadataTexel';
-import {SharedSurfacePreparationRegistry} from './surfaces/SharedSurfacePreparation';
+import {SharedSurfacePreparationRegistry,SurfacePreparationSuperseded} from './surfaces/SharedSurfacePreparation';
 import {PreparedFaceStrokes} from './surfaces/PreparedFaceStrokes';
 import {REFERENCE_PAINTER_SOURCE_SHA256} from './origami/reference-painter';
 import {DEFAULT_GRAPHICS_STYLE_PREFERENCES,normalizeGraphicsStylePreferences,graphicsStylePipelineKey,type GraphicsStylePreferences,type GraphicsStylePipelineKey} from '../ui3d/native-preferences';
@@ -410,7 +410,7 @@ export class GraphicsStyleContext {
   const epoch=this.atlasPaintEpoch,settings=JSON.stringify(this.preferences),alpha=this.edgeMaps!.alpha,data=alpha.image.data;
   if(!(data instanceof Uint8Array))throw Error('Prepared brush alpha pixels missing');
   const isCurrent=():boolean=>this.atlasPaintEpoch===epoch&&JSON.stringify(this.preferences)===settings&&this.edgeMaps?.alpha===alpha&&!this.fillTimer&&!this.repaintRequested;
-  const assertCurrent=()=>{if(!isCurrent())throw Error('Prepared atlas paint changed before publication');};
+  const assertCurrent=()=>{if(!isCurrent())throw new SurfacePreparationSuperseded('Prepared atlas paint changed before publication');};
   return{fingerprint:`paint-v1:${epoch}:${settings}`,isCurrent,assertCurrent,paint:{readProfile:(id:number)=>{assertCurrent();return this.readPaintProfile(id);},edgeAlpha:{data,width:alpha.image.width,height:alpha.image.height},brushColorLinear:[this.brushColor.value.r,this.brushColor.value.g,this.brushColor.value.b] as const,lineOpacity:this.lineOpacity.value,strokeImperfection:this.strokeImperfection.value}};
  }
  /** Diagnostic borrowed bytes; diagnostics never cause a bake. */

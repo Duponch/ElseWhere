@@ -4,6 +4,7 @@
 import * as THREE from 'three/webgpu';
 import {Fn,Loop,attribute,varying,texture,textureLoad,ivec2,vec3,vec4,float,int,max} from 'three/tsl';
 import type {BakedChartSet,BakedTriangle} from './charts';
+import {SurfacePreparationSuperseded} from '../../surfaces/SharedSurfacePreparation';
 
 export interface GpuFaceMeanLimits {
  maxCharts:number;maxCpuBytes:number;maxGpuBytes:number;maxTextureSize:number;
@@ -113,7 +114,7 @@ export async function prepareGpuFaceMeans(renderer:THREE.WebGPURenderer,charts:B
  if(!renderer.initialized||!('isWebGPUBackend' in backend)||backend.isWebGPUBackend!==true)throw Error('GPU face mean: initialized Native WebGPU renderer required');
  if(running.has(renderer))throw Error('GPU face mean: renderer preparation already active');assertExclusive();running.add(renderer);
  const old={target:renderer.getRenderTarget(),face:renderer.getActiveCubeFace(),mip:renderer.getActiveMipmapLevel(),autoClear:renderer.autoClear,color:renderer.getClearColor(new THREE.Color()).clone(),alpha:renderer.getClearAlpha()},version=atlas.version,image=atlas.image,mips=[...atlas.mipmaps],cleanup:(()=>void)[]=[],own=<T extends {dispose():void}>(value:T):T=>{cleanup.push(()=>value.dispose());return value;};let failure:unknown;
- const assertCurrent=()=>{assertExclusive();if(atlas.version!==version||atlas.image!==image||atlas.mipmaps.length!==mips.length||atlas.mipmaps.some((m,i)=>m!==mips[i]))throw Error('GPU face mean: borrowed atlas changed before publication');};
+ const assertCurrent=()=>{assertExclusive();if(atlas.version!==version||atlas.image!==image||atlas.mipmaps.length!==mips.length||atlas.mipmaps.some((m,i)=>m!==mips[i]))throw new SurfacePreparationSuperseded('GPU face mean: borrowed atlas changed before publication');};
  try{
   const at=performance.now(),packed=packGpuFaceMeanQuadrature(charts,plan),cpuQuadratureMs=performance.now()-at,g=own(rowGeometry(plan)),table=own(new THREE.DataTexture(packed.data,320,plan.chartCount,THREE.RGBAFormat,THREE.FloatType));table.colorSpace=THREE.NoColorSpace;table.flipY=false;table.minFilter=table.magFilter=THREE.NearestFilter;table.generateMipmaps=false;table.needsUpdate=true;
   const chart=varying(attribute('faceMeanChart','float'),'v_gpuFaceMeanChart').setInterpolation('flat');
