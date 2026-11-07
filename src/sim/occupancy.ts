@@ -116,6 +116,14 @@ export function groundOccupancyAllows(world:World,cell:Cell):boolean {
   if(world.schemaVersion<16)for(const j of world.jobs)if(j.kind==='wall'&&occupies(j,cell))return false;
   return true;
 }
+/** Same verdict as groundOccupancyAllows for an in-map integer cell, given
+ * the structures whose footprint contains that cell, in source order. */
+export function groundOccupancyAllowsAt(world:World,cell:Cell,occupants:readonly World['structures'][number][]):boolean {
+  if(!Number.isInteger(cell.x)||!Number.isInteger(cell.z)||cell.x<0||cell.z<0||cell.x>=world.width||cell.z>=world.height||['water','rock'].includes(world.tiles[cell.z*world.width+cell.x]!.terrain))return false;
+  for(const s of occupants)if(world.schemaVersion<21?s.kind==='wall':!OCCUPANCY[s.kind].items)return false;
+  if(world.schemaVersion<16)for(const j of world.jobs)if(j.kind==='wall'&&occupies(j,cell))return false;
+  return true;
+}
 export function storageOccupancyAllows(world:World,cell:Cell):boolean {
   for(const s of world.structures)if(occupies(s,cell)&&!OCCUPANCY[s.kind].store)return false;
   for(const j of world.jobs)if(occupies(j,cell)&&occupancyOf(j.furniture?.kind??j.kind)?.store===false)return false;

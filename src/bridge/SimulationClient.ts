@@ -11,7 +11,7 @@ import type {CampaignSummary,SettlementLimit} from '../sim/world-map-state';
 import {validSettlementLimit} from '../sim/world-map-options';
 import { UrgentThreatDelivery, validThreatPauseMode, type ThreatPauseMode, type ThreatPauseToken, type ThreatSpeedOptions, type UrgentThreatReceipt } from './urgent-threats';
 import type { Command, World } from '../sim/types';
-import { SimulationRequestError, type Request, type Response, type SimulationFault, type SimulationRequestStatus } from './protocol';
+import { SimulationRequestError, type OperationProgressStage, type Request, type Response, type SimulationFault, type SimulationRequestStatus } from './protocol';
 import { DEFAULT_MAP_SIZE } from '../sim/map-config';
 import { SnapshotDecoder } from './snapshots';
 import type { AudioCue } from './audio-cues';
@@ -40,9 +40,22 @@ interface PendingRequest {
   resolve: (value: string | undefined) => void;
   reject: (reason: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+  /** Arms a fresh 15 s watchdog; progress from the Worker re-arms it. */
+  watchdog?: () => ReturnType<typeof setTimeout>;
   reply?: Extract<Response, { type: 'reply' }>;
   replacementEpoch?: number;
   waiting?: boolean;
+}
+
+/** Reached step of a pending long request. Never an outcome. */
+export interface SimulationOperationProgress {
+  id:number;
+  type:Payload['type'];
+  /** planet/map: world-draft generation and colony map phases. */
+  stage:OperationProgressStage|'planet'|'map';
+  completed:number;
+  total:number;
+  phase?:string;
 }
 
 export class SimulationClient {
@@ -96,6 +109,7 @@ export class SimulationClient {
   onError: (message: string) => void = () => {};
   onFault: (fault: SimulationFault) => void = () => {};
   onRequestStatus: (status: SimulationRequestStatus) => void = () => {};
+  onOperationProgress: (progress: SimulationOperationProgress) => void = () => {};
 
   constructor() {
     this.snapshots = this.createDecoder();
@@ -146,7 +160,15 @@ export class SimulationClient {
       if(data.type==='world-draft-progress'){
         const pending=this.pending.get(data.id),d=pending?.draft,s=pending?.draftStart,p=data.progress;
         const receiver=d&&!d.aborted?d:s&&!s.cancelRequested?s:undefined;
-        if(receiver&&receiver.generation===data.generation&&this.draftGeneration===receiver.generation&&p&&typeof p.phase==='string'&&p.phase.length<=80&&Number.isSafeInteger(p.completed)&&Number.isSafeInteger(p.total)&&p.completed>=0&&p.total>=p.completed){try{receiver.onProgress({...p});}catch(error){this.onError(String(error));}}return;
+        if(receiver&&receiver.generation===data.generation&&this.draftGeneration===receiver.generation&&p&&typeof p.phase==='string'&&p.phase.length<=80&&Number.isSafeInteger(p.completed)&&Number.isSafeInteger(p.total)&&p.completed>=0&&p.total>=p.completed){
+          try{receiver.onProgress({...p});}catch(error){this.onError(String(error));}
+          this.operationProgressed(data.id,pending!,{stage:d?'planet':'map',completed:p.completed,total:p.total,phase:p.phase});
+        }return;
+      }
+      if(data.type==='operation-progress'){
+        const pending=this.pending.get(data.id);
+        if(pending&&['read','migrate','validate','restore','publish'].includes(data.stage)&&Number.isSafeInteger(data.completed)&&Number.isSafeInteger(data.total)&&data.completed>=0&&data.total>=data.completed)this.operationProgressed(data.id,pending,{stage:data.stage,completed:data.completed,total:data.total});
+        return;
       }
       if(data.type==='world-draft-preview'){
         const pending=this.pending.get(data.id),d=pending?.draft;if(!pending||!d||d.aborted)return;
@@ -229,6 +251,15 @@ export class SimulationClient {
     this.worker.onmessageerror = () => this.dispatchWorkerFailure(source,()=>{if(source===this.worker&&!this.stopped)this.stop('La communication avec la simulation est interrompue.');});
   }
 
+  /** A request that keeps reporting progress is not stalled: re-arm its
+   * watchdog and withdraw an earlier waiting notice. */
+  private operationProgressed(id:number,pending:PendingRequest,step:Omit<SimulationOperationProgress,'id'|'type'>):void {
+    if(this.pending.get(id)!==pending)return;
+    if(pending.watchdog){clearTimeout(pending.timer);pending.timer=pending.watchdog();}
+    if(pending.waiting){pending.waiting=false;this.onRequestStatus({id,type:pending.type,state:'progressing'});}
+    try{this.onOperationProgress({id,type:pending.type,...step});}catch(error){this.onError(String(error));}
+  }
+
   private finishReply(id: number, pending: PendingRequest) {
     const reply = pending.reply;
     if (!reply) return;
@@ -306,7 +337,7 @@ export class SimulationClient {
     const id = this.nextId++;
     if(draftStart)draftStart.operationId=id;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const watchdog = () => setTimeout(() => {
         const pending = this.pending.get(id);
         if (!pending) return;
         pending.waiting = true;
@@ -314,9 +345,10 @@ export class SimulationClient {
         this.onRequestStatus({ id, type: payload.type, state: 'waiting', message });
         this.onError(message);
       }, 15_000);
+      const timer = watchdog();
       // Reserve the existing pending/15s-warning slot BEFORE drainage. A second
       // replacement cannot pass the old guards while this request is waiting.
-      const pending:PendingRequest={ type: payload.type, resolve, reject, timer,...draft?{draft}:{},...draftStart?{draftStart}:{},...payload.type==='command'&&payload.command.type==='group-enter'&&['camp','settle'].includes(payload.command.mode)?{campGroupId:payload.command.groupId}:{} };
+      const pending:PendingRequest={ type: payload.type, resolve, reject, timer, watchdog,...draft?{draft}:{},...draftStart?{draftStart}:{},...payload.type==='command'&&payload.command.type==='group-enter'&&['camp','settle'].includes(payload.command.mode)?{campGroupId:payload.command.groupId}:{} };
       this.pending.set(id,pending);const source=this.worker;
       const post=()=>{
         if(this.pending.get(id)!==pending)return;

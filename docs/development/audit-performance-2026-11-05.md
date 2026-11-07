@@ -16,6 +16,8 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Client réel, Les Forges à ×6 | — | **9,5 ticks/s** (6,7 avant les publications allégées) |
 | Adoption d’une publication complète, Les Forges à ×1 (client réel) | 98 ms en moyenne, pics de 250 à 330 ms à chaque construction ou plante ajoutée | **≈ 65 ms**, pics des ressources ≤ 24 ms, mur ajouté ≈ 15 ms |
 | Publications complètes, Les Forges à ×1 (Worker seul) | 6,8 par seconde (≈ 630 Ko chacune) | **≈ 1,9 par seconde** (≈ 3 avant les patchs de cargaison) |
+| Chargement des Éclaircies (navigateur, profil neuf) | 119 s, panneau « Opération en attente » à 16 s | **75 s**, barre de progression, plus de panneau |
+| Nouvelle partie, de « Générer » au jeu affiché | 116 à 121 s | **72 s** |
 
 - **Exactitude.** Après chaque optimisation, l’état complet sérialisé reste identique au bit près sur les deux sauvegardes de référence.
 - **Tests.** Chaque lot a été comparé test par test au commit d’origine : 0 régression.
@@ -350,6 +352,51 @@ Le pire cas restant (~220 ms) est la toute première mise en place du mobilier a
 
 **Régression d’une nuit précédente corrigée côté test.** `tests/prison-break-combat-v269.test.ts` transformait une porte en mur en modifiant l’objet sur place. Cela viole le contrat de l’index partagé des structures : le type et la position d’une structure ne changent jamais sur place. Le test remplace maintenant le tableau, comme la simulation, et ses assertions sont inchangées. Il passe sur la branche et sur le code d’origine.
 
+### Lancement d’une partie (7 novembre, nuit)
+
+**Constat.** Au lancement d’une partie, le joueur attendait près de deux minutes. Le panneau « Opération en attente » apparaissait dès qu’une requête dépassait 15 s : chargement d’une ancienne sauvegarde ou création de colonie.
+
+**Mesures.** Build de production instrumenté, Chromium avec WebGPU, profil de navigateur neuf (sans cache de shaders), même machine.
+
+| Étape (chargement des Éclaircies, schéma 263) | Avant | Après |
+|---|---|---|
+| Worker : lecture, montée de 38 versions, vérification, première publication | 26 s | 24 s |
+| Création du rendu | 3 s | 4 s |
+| Première adoption du monde (`setWorld`) | 7 s | 6 s |
+| Peinture des arbres et des roches | 20 s | **7,5 s** |
+| Compilation des matériaux de la scène | 32,5 s | **11 s** |
+| Personnages, 1re variante, avec le premier passage d’ombres | 29 s | **14 s** |
+| Autres variantes des personnages, ombres finales | 9 s | 8 s |
+| **Total** | **119 s** | **75 s** |
+
+Nouvelle partie : 116 à 121 s avant, **72 s** après (planète 11 s, carte 10 s, affichage 51 s au lieu de 96 s).
+
+Un second lancement, avec le cache de shaders du navigateur déjà rempli, ne gagnait que 24 s avant ce lot : l’essentiel du coût est la construction des shaders en JavaScript (TSL vers WGSL), pas leur compilation par le pilote.
+
+**Cause principale.** Three.js r186 compile les objets un par un : il construit le shader d’un objet, puis attend que le GPU ait créé son pipeline avant de passer à l’objet suivant. Le processeur et le GPU ne travaillent donc jamais en même temps : environ 45 s d’attente pure sur Les Éclaircies.
+
+**Corrections.**
+1. **Compilation recouverte.** `ReentrantRenderer.compileAsync` laisse Three parcourir les mêmes objets, dans le même ordre, avec les mêmes programmes et pipelines. Il rassemble seulement les promesses de création de pipeline et les attend une seule fois, à la fin de l’appel. Les rendus ordinaires gardent la création synchrone.
+2. **Échauffement des ombres en parallèle.** Les passages d’ombres cachés, un par variante de corps des personnages, créaient leurs pipelines de façon synchrone, un par un dans le processus GPU. Ils les créent maintenant en asynchrone, en parallèle (`renderWarmingPipelines`). Un objet dont le pipeline n’est pas prêt n’est pas dessiné pendant ce passage invisible : c’est la vérification de Three lui-même. Le dernier passage d’ombres reste un rendu ordinaire et réenregistre les lots retenus du paysage (`landscape.needsUpdate`) avec des pipelines prêts.
+3. **Validation des sauvegardes indexée.** Les vérifications par case (chantier sur une structure, piles sur une étagère, occupation du sol) lisent un index des structures par case au lieu de parcourir toutes les structures. Les Forges en Node : 92 s → 68 s. Mêmes verdicts : une structure hors carte fait revenir aux parcours d’origine.
+
+**Exactitude.**
+- Les Forges et Les Éclaircies, chargées puis réécrites : **identiques à l’octet** au code d’origine, avec et sans suivi de progression.
+- Les Éclaircies chargées dans le navigateur : terrain, ombres, structures et personnages affichés, aucune erreur.
+
+**Barre de progression.**
+- **Worker.** Un message `operation-progress` signale chaque étape atteinte : lecture, montée de version (*i* / *N*), vérification, restauration, publication. La création de colonie garde ses étapes de génération de carte et ajoute vérification et publication. Ces messages ne répondent jamais à la requête et ne disent rien de son résultat.
+- **Client.** Chaque progrès réarme le délai de 15 s de la requête. Une requête déjà signalée en attente repasse « en cours ». Le panneau d’attente n’apparaît plus que si le Worker cesse de signaler son avancement pendant 15 s. Pendant un lancement, cet avertissement s’affiche dans la page de chargement, avec le bouton « Arrêter la simulation ».
+- **Affichage.** `SceneRenderCore.preparationProgress` signale peinture des surfaces, compilation (objets compilés / total), variantes des personnages et ombres. Le thread principal laisse passer une image avant chaque long travail synchrone, pour que l’écran se mette à jour.
+- **Page de chargement native** (`native-launch.ts`, modèle `launch-progress.ts`) : barre globale pondérée par les durées mesurées, sous-barre de l’étape en cours, étape et détail, liste des étapes cochées, temps écoulé. L’interface HTML historique affiche un panneau simple équivalent.
+- **Génération de la planète** (menu « Nouvelle partie ») : barre et libellés en français, au lieu des noms internes des phases.
+
+**Ce qui reste**, par gain attendu :
+- **Faune.** Chacune des 53 espèces a son propre shader (≈ 250 ms de construction) et sa variante d’ombre, compilés au chargement même pour les espèces absentes : 15 seulement sont présentes sur Les Éclaircies. Partager un même shader de squelette entre espèces (proportions en données plutôt qu’en code) supprimerait l’essentiel de ce coût. L’autre option, compiler les espèces absentes après l’affichage, réintroduit un risque de saccade à l’arrivée d’une nouvelle espèce.
+- **Variantes des personnages.** Six variantes de corps sont compilées, avec leurs ombres ; une ou deux seulement servent au réglage graphique courant.
+- **Anciennes sauvegardes.** La montée de version revalide la sauvegarde complète à chaque version : 24 s pour Les Éclaircies, 57 s pour Les Forges dans le navigateur. Fusionner ces validations demande l’accord du projet, qui exige de valider strictement chaque ancien schéma avant sa migration.
+- **Première adoption du monde** (6 s) et **création du rendu** (3 à 4 s).
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -394,7 +441,7 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 
    Passer en `matrixAutoUpdate = false` les objets statiques, avec une mise à jour explicite quand ils bougent, est le levier le plus sûr.
 3. **Reconstruction d’un chunk de végétation** : encore 50 à 130 ms, mais rare, à l’apparition d’une plante dans le chunk. La découper en plusieurs images (corps, puis usure), ou calculer les tableaux dans un Worker.
-4. **Chargement.** Fusionner les validateurs historiques en une seule passe et les sauter pour une sauvegarde au schéma courant produite par le jeu. Potentiel : quelques secondes au lieu de 30 à 140 s.
+4. **Chargement.** Fait en partie (voir « Lancement d’une partie ») : 119 s → 75 s pour Les Éclaircies, avec une barre de progression. Restent, par gain attendu : un shader de squelette partagé par les 53 espèces animales, la compilation des seules variantes de personnage utiles, puis, avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).
 5. **Simulation, 80 colons (81,5 ms par tick).** Le profil est désormais plat : planification du travail ≈ 15 % (ménage, chantiers, cuisine), faune ≈ 10 %, déplacement ≈ 16 %, température de surface ≈ 6 %, recherche ≈ 4 %. Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
 6. **Contenu sans montée de schéma** (voir § 5), puis les écarts RimWorld 1 à 4 et 8.
 7. **Planificateur en WorkGivers** façon RimWorld (écarts 5 et 6), avec mise à jour des tests.
@@ -404,6 +451,8 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 
 | Outil | Usage |
 |---|---|
+| `scripts/perf-load-profile.ts` | Chargement d’une sauvegarde par le vrai Worker, en Node : durée et étapes signalées, profil CPU optionnel |
+| `scripts/perf-newgame-profile.ts` | Nouvelle partie par le vrai Worker, en Node : génération de la planète, du site et de la colonie, étapes et profil |
 | `scripts/perf-save-bench.ts` | Débit de simulation et empreinte d’état ; `PROFILE=…` pour un profil CPU, `VERIFY_TERRAIN_CACHES=1` pour la vérification des caches de terrain |
 | `scripts/perf-worker-run.ts` | Worker de production à une vitesse donnée : ticks tenus, publications par seconde et tailles, `FULL_REASONS=1` pour les causes de publication complète |
 | `scripts/perf-client-profile.mjs` | Client réel (Chromium, WebGPU) : images/s, percentiles, longues tâches, profils en pause, ×1 et ×6 |

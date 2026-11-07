@@ -31,12 +31,17 @@ export type Request =
   | { id: number; type: 'resync' }
   | { id: number; type: 'load'; maxSettlements?:SettlementLimit; data: string; threatPauseMode?: ThreatPauseMode };
 
+/** Reached step of a long Worker operation (save loading, colony creation).
+ * Transport only: it never answers the request nor implies its outcome. */
+export type OperationProgressStage='read'|'migrate'|'validate'|'restore'|'publish';
+export interface OperationProgressMessage {type:'operation-progress';id:number;stage:OperationProgressStage;completed:number;total:number}
 export interface CaravanEncounterProgressMessage261 {type:'caravan-encounter-progress';groupId:number;phase:string;reason?:string}
 export interface CaravanTradeArrivalMessage261 {type:'caravan-trade-arrival';groupId:number;settlementId:number;factionId:number;postId:number;checkpoint:{epoch:number;revision:number}}
 export type Response = (
   | import('./core-phase-projection-297').CorePhaseEnvelope297
   | CaravanTradeArrivalMessage261
   | CaravanEncounterProgressMessage261
+  | OperationProgressMessage
   | WorldDraftPreviewMessage256
   | {type:'world-draft-progress';id:number;generation:number;progress:import('../ui/world-creation-contract').WorldCreationProgress256}
   | CampEntryProgressMessage256
@@ -57,7 +62,8 @@ export interface SimulationFault {
 export interface SimulationRequestStatus {
   id: number;
   type: Extract<Request,{id:number}>['type'];
-  state: 'waiting' | 'settled';
+  /** progressing: a waiting request reported progress again. */
+  state: 'waiting' | 'progressing' | 'settled';
   message?: string;
 }
 

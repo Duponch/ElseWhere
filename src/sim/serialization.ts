@@ -120,7 +120,7 @@ import {isConstructionLightPlant,constructionFinalWipesPlants} from './construct
 import {validateTreeTransport,registerTreeThingIds,validTreeJobShape,validPlantTargetShape} from './tree-transfer-save.ts';
 import {isPlantDesignationJob} from './tree-transfer.ts';
 import {validShelfTransport,validShelfGround,registerShelfThingIds} from './shelf-save.ts';
-import {groundMaxStacks,storageCellById,storageCellAccepts} from './shelf-storage.ts';
+import {groundMaxStacks,isShelfKind,storageCellById,storageCellAccepts} from './shelf-storage.ts';
 import { validatePlanet } from './planet-save.ts';
 import { validateGroupState } from './group-save.ts';
 import { registerGroupThingIds } from './group-namespace-save.ts';
@@ -271,7 +271,7 @@ import { validatePriorityWork } from './priority-work-state.ts';
 import { canStandAt } from './furniture-travel.ts';
 import { initializeFurnitureTravel } from './furniture-save.ts';
 import { initializeOccupancy } from './occupancy-save.ts';
-import { groundOccupancyAllows, occupancyOf } from './occupancy.ts';
+import { groundOccupancyAllows, groundOccupancyAllowsAt, occupancyOf } from './occupancy.ts';
 import { validSowingClearance } from './sowing-clearance.ts';
 import { initializeConstruction, validateConstruction } from './construction-save.ts';
 import { initializePlayerOrders, validatePlayerOrders, validSowingDestination } from './player-orders-save.ts';
@@ -428,7 +428,13 @@ function validateCampaignSchema(input:unknown,version:Parameters<typeof validate
     return errors;
   }catch{return ['Invalid second-site records or owner namespace.'];}
 }
+/** Loading-screen observation of deserializeCampaign: reports reached steps
+ * only. It never reads clocks or changes the save; observers cannot throw into it. */
+export interface CampaignLoadProgress {stage:'read'|'migrate'|'validate'|'restore';completed:number;total:number}
+let loadProgress:{observer:(step:CampaignLoadProgress)=>void;first:number;reported:number}|undefined;
+function reportLoadProgress(step:CampaignLoadProgress):void {try{loadProgress?.observer(step);}catch{/* Observation only. */}}
 function validateSchema(raw: unknown, version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 101 | 103 | 104 | 105 | 106 | 109 | 119 | 120 | 121 | 122 | 123 | 124 | 125 | 127 | 134 | 135 | 138 | 139 | 141 | 143 | 144 | 148 | 150 | 152 | 154 | 155 | 156 | 157 | 159 | 160 | 161 | 162 | 163 | 164 | 165 | 166 | 167 | 168 | 169 | 170 | 171 | 172 | 173 | 174 | 175 | 176 | 177 | 178 | 179 | 180 | 181 | 182 | 183 | 184 | 185 | 186 | 187 | 188 | 189 | 190 | 191 | 192 | 193 | 194 | 195 | 196 | 197 | 198 | 199 | 200 | 201 | 202 | 203 | 204 | 205 | 206 | 207 | 208 | 209 | 210 | 211 | 212 | 213 | 214 | 215 | 216 | 217 | 218 | 219 | 220 | 221 | 222 | 223 | 224 | 225 | 226 | 227 | 228 | 229 | 230 | 231 | 232 | 233 | 234 | 235 | 236 | 237 | 238 | 239 | 240 | 241 | 242 | 243 | 244 | 245 | 246 | 247 | 248 | 249 | 250 | 251 | 252 | 253 | 254 | 255 | 256 | 257 | 258 | 259 | 260 | 261|262|263|264|265|266|267|268|269|270|271|272|273|274|275|276|277|278|279|280|281|282|283|284|285|286|287|288|289|290|291|292|293|294|295|296|297|298|299|300|301, relationshipContext = true,registeredIds?:Set<number>,generatedContext?:{readonly calendarOrigin:number;readonly settlement?:true;readonly settlementDimensions?:Readonly<{width:number;height:number}>;readonly worldTarget263?:WorldTargetGenerated263},registeredNonStartingSettlement=false): string[] {
+  if(loadProgress&&version!==loadProgress.reported&&version<SCHEMA_VERSION){loadProgress.reported=version;reportLoadProgress({stage:'migrate',completed:Math.max(0,version-loadProgress.first),total:SCHEMA_VERSION-loadProgress.first});}
   const legacyV2 = version === 2;
   const errors: string[] = [];
   if (!record(raw)) return ['World must be an object.'];
@@ -726,10 +732,16 @@ function validateSchema(raw: unknown, version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 1
   const resourceCells = new Map(world.resources.map(item => [cellKey(item), item]));
   const structureCells = new Map<number, World['structures'][number]>(); const jobCells = new Map<number, World['jobs'][number]>();
   if (resourceCells.size !== world.resources.length || new Set(world.stockpiles.map(cellKey)).size !== world.stockpiles.length) errors.push('Duplicate cell occupancy.');
+  // Structures by in-map cell, in source order (footprintCells and
+  // footprintContains agree for every kind): the per-pile and per-job cell
+  // checks below read it instead of scanning every structure. Any structure
+  // cell outside the map keeps the original scans (invalid save anyway).
+  let structuresByCell:Map<number,World['structures'][number][]>|undefined,structureOutside=false;
   for (const [items, map] of [[world.structures, structureCells], [world.jobs, jobCells]] as const) {
     const occupants=new Map<number,typeof items[number][]>();
+    if(items===world.structures)structuresByCell=occupants as Map<number,World['structures'][number][]>;
     for (const item of items) if(!isRoofJob(item)&&!(version>=235&&isPlantDesignationJob(item))) for (const cell of footprintCells(item)) {
-      if (cell.x < 0 || cell.z < 0 || cell.x >= world.width || cell.z >= world.height) { errors.push('Footprint outside map.'); continue; }
+      if (cell.x < 0 || cell.z < 0 || cell.x >= world.width || cell.z >= world.height) { if(items===world.structures)structureOutside=true; errors.push('Footprint outside map.'); continue; }
       const key=cellKey(cell),others=occupants.get(key)??[];
       const kind=(s:typeof item)=>'deconstruction' in s&&s.deconstruction?s.deconstruction.kind:'furniture' in s&&s.furniture?s.furniture.kind:'flick' in s&&s.flick?s.flick.kind:s.kind;
       if(others.some(other=>sharesConstructionLayer(kind(other),kind(item))))errors.push('Overlapping footprints.');
@@ -739,6 +751,8 @@ function validateSchema(raw: unknown, version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 1
     }
   }
   const isImpassable = (cell: { x: number; z: number }): boolean => ['water', 'rock'].includes(world.tiles[cellKey(cell)]!.terrain);
+  const indexedCell=(cell:{x:number;z:number}):boolean=>!!structuresByCell&&!structureOutside&&Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height;
+  const structuresAt=(cell:{x:number;z:number}):readonly World['structures'][number][]=>structuresByCell!.get(cellKey(cell))??[];
   const spatialPawns=world.pawns.filter(pawn=>pawn.id!==offMapScout?.id&&!(version>=89&&pawn.state==='dead'&&(pawn.body?.pileId!==undefined||pawn.body?.lostAt!==undefined))),spatialPawnSet=new Set(spatialPawns);
   for (const item of [...world.resources, ...spatialPawns, ...world.stockpiles]) if (isImpassable(item)) errors.push('Entity placed on impassable terrain.');
   for (const [key,item] of [...structureCells, ...jobCells]) if (item.kind!=='mine'&&['water', 'rock'].includes(world.tiles[key]!.terrain)) errors.push('Footprint on impassable terrain.');
@@ -864,7 +878,7 @@ function validateSchema(raw: unknown, version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 1
     if (job.kind === 'chop' || job.kind === 'harvest' || job.kind === 'cut') { if (!(version>=90&&(job as typeof job&{flowerPotId?:number}).flowerPotId)&&(!resource || !(job.kind === 'chop' ? resource.kind === 'tree' : isPlant(resource)||version>=235&&job.kind==='cut'&&resource.kind==='tree'))) errors.push('Gather job has no matching resource.'); else if (version >= 7 && job.kind === 'harvest' && resource && !(version === 7 ? legacyPlantGrowth(world,resource) > .65 : harvestable(world,resource))) errors.push('Harvest job targets an immature plant.'); }
     else if(!(version>=90&&(job as typeof job&{flowerPotId?:number}).flowerPotId)&&!isRoofJob(job)&&job.kind!=='repair'&&job.kind!=='fix-breakdown'&&job.kind!=='flick'&&job.kind!=='mine'&&!(version>=235&&isPlantDesignationJob(job))&&job.kind!=='replant-tree'&&job.kind!=='deconstruct'&&job.kind!=='uninstall'&&job.kind!=='install')for (const cell of footprintCells(job)) {
       const obstacle=resourceCells.get(cellKey(cell));
-      if (obstacle&&!conduitKeepsPlant(job.kind,obstacle.kind)&&(version<16||!isConstruction(job)||obstacle.kind==='rock') || world.structures.some(s=>sharesConstructionLayer(job.kind,s.kind)&&footprintCells(s).some(c=>cellKey(c)===cellKey(cell))&&!(version>=203&&job.kind==='sow'&&s.kind==='hydroponics-basin'&&world.growingZones.some(z=>z.id===job.growingZoneId&&z.basinId===s.id&&z.cells.includes(cellKey(cell)))))) errors.push('Construction overlaps existing content.');
+      if (obstacle&&!conduitKeepsPlant(job.kind,obstacle.kind)&&(version<16||!isConstruction(job)||obstacle.kind==='rock') || (indexedCell(cell)?structuresAt(cell):world.structures).some(s=>sharesConstructionLayer(job.kind,s.kind)&&(indexedCell(cell)||footprintCells(s).some(c=>cellKey(c)===cellKey(cell)))&&!(version>=203&&job.kind==='sow'&&s.kind==='hydroponics-basin'&&world.growingZones.some(z=>z.id===job.growingZoneId&&z.basinId===s.id&&z.cells.includes(cellKey(cell)))))) errors.push('Construction overlaps existing content.');
     }
   }
   const available = { wood: 0, food: 0 };
@@ -873,8 +887,8 @@ function validateSchema(raw: unknown, version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 1
   for (const pile of world.piles) {
     const owner = pile.owner;
     if (owner.type === 'ground') {
-      if (version>=6 && ((groundCounts.set(cellKey(owner),(groundCounts.get(cellKey(owner))??0)+1)),groundCounts.get(cellKey(owner))!>(version>=229?groundMaxStacks(world,owner):1))) errors.push('Several item stacks occupy one floor cell.');
-      if (version>=21&&!groundOccupancyAllows(world,owner) || isImpassable(owner) || structureCells.get(cellKey(owner))?.kind === 'wall' || version<16&&jobCells.get(cellKey(owner))?.kind === 'wall') errors.push('Pile on impassable cell.');
+      if (version>=6 && ((groundCounts.set(cellKey(owner),(groundCounts.get(cellKey(owner))??0)+1)),groundCounts.get(cellKey(owner))!>(version>=229?(indexedCell(owner)?(structuresAt(owner).some(s=>isShelfKind(s.kind)&&!!s.shelf)?3:1):groundMaxStacks(world,owner)):1))) errors.push('Several item stacks occupy one floor cell.');
+      if (version>=21&&!(indexedCell(owner)?groundOccupancyAllowsAt(world,owner,structuresAt(owner)):groundOccupancyAllows(world,owner)) || isImpassable(owner) || structureCells.get(cellKey(owner))?.kind === 'wall' || version<16&&jobCells.get(cellKey(owner))?.kind === 'wall') errors.push('Pile on impassable cell.');
       if(pile.kind==='wood'||pile.kind==='food')available[pile.kind] += pile.quantity;
     } else if (owner.type === 'pawn') { if (!pawnById.has(owner.pawnId)) errors.push('Pile references missing carrier.'); if((pile.kind==='wood'||pile.kind==='food')&&(version<88||(pawnById.get(owner.pawnId)?.faction??'colony')==='colony'))available[pile.kind] += pile.quantity; }
     else if(owner.type==='equipment'||owner.type==='apparel'||owner.type==='inventory'){
@@ -936,9 +950,17 @@ export function serializeCampaign(world:CampaignState):string {
   const errors = validateWorld(world); if (errors.length) throw new Error(`Cannot save invalid world: ${errors.join(' ')}${errors.includes('Missing travel segment for movement delay.')?' Travel diagnostic: '+JSON.stringify((world as World).pawns.map(p=>({id:p.id,cooldown:p.moveCooldown,motion:p.motion}))):''}`);
   const serialized = JSON.stringify(world); if (!withinSaveTextLimit(serialized)) throw new Error('Save exceeds supported size.'); return serialized;
 }
-export function deserializeCampaign(serialized: string): CampaignState {
+export function deserializeCampaign(serialized: string,observer?:(step:CampaignLoadProgress)=>void): CampaignState {
+  if(!observer)return deserializeCampaignObserved(serialized);
+  const outer=loadProgress;
+  loadProgress={observer,first:SCHEMA_VERSION,reported:-1};
+  try{return deserializeCampaignObserved(serialized);}finally{loadProgress=outer;}
+}
+function deserializeCampaignObserved(serialized: string): CampaignState {
   if (typeof serialized !== 'string' || !withinSaveTextLimit(serialized)) throw new Error('Invalid or oversized save.');
+  reportLoadProgress({stage:'read',completed:0,total:1});
   let input: unknown = JSON.parse(serialized);
+  if(loadProgress&&record(input)&&Number.isInteger(input.schemaVersion)&&Number(input.schemaVersion)>=1&&Number(input.schemaVersion)<SCHEMA_VERSION){loadProgress.first=Number(input.schemaVersion);reportLoadProgress({stage:'migrate',completed:0,total:SCHEMA_VERSION-loadProgress.first});}
   if(record(input)&&Number.isInteger(input.schemaVersion)&&!validShipEscapeHistorical298(input,Number(input.schemaVersion)))throw new Error('Invalid historical save: Future escaped-ship data.');
   if(record(input)&&!validWallDoorHistoricalTransport296(input,input.schemaVersion))throw new Error('Invalid historical save: Future or invalid wall-door successor data.');
   if(record(input)&&!validNovelHistoricalTransport295(input,input.schemaVersion))throw new Error('Invalid historical save: Future or invalid Novel/reading data.');
@@ -1825,11 +1847,14 @@ export function deserializeCampaign(serialized: string): CampaignState {
   if(record(input)&&input.schemaVersion===298){const old=validateCampaignSchema(input,298);if(old.length)throw new Error('Invalid version298 save: '+old.join(' '));input.schemaVersion=299; /* Number only: preserve original data, physical phase, routes, owners, RNG and IDs. Missing ingestion/provider history stays absent, never inferred. */}
   if(record(input)&&input.schemaVersion===299){const old=validateCampaignSchema(input,299);if(old.length)throw new Error('Invalid version299 save: '+old.join(' '));input.schemaVersion=300; /* Number only: keep the existing ordinary/clinical wander bit, committed phase, paths, owners, RNG and IDs. Do not create an idle task or reset history. */}
   if(record(input)&&input.schemaVersion===300){const old=validateCampaignSchema(input,300);if(old.length)throw new Error('Invalid version300 save: '+old.join(' '));input.schemaVersion=301; /* Number only. Preserve every owner, task, work fraction, committed phase, RNG and identity. Missing Thing counter, Frame work/toil and posture history stay absent. */}
+  reportLoadProgress({stage:'validate',completed:0,total:2});
   const errors = validateWorld(input); if (errors.length) throw new Error(`Invalid save: ${errors.join(' ')}`);
   const world = input as World;
   if(hasLoadedRoot(world))consolidateLooseRocks(world);
+  reportLoadProgress({stage:'validate',completed:1,total:2});
   const normalizedErrors = validateWorld(world);
   if (normalizedErrors.length) throw new Error(`Invalid consolidated save: ${normalizedErrors.join(' ')}`);
+  reportLoadProgress({stage:'restore',completed:0,total:1});
   freezeAdmittedNativeWorldPawnOrder256(world);
   freezeAdmittedRiverWaterCampaign256(world);
   return world;

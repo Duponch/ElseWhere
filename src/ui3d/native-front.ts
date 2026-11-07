@@ -2,6 +2,7 @@ import type { FrontMenu, FrontMenuOptions } from '../ui/front-menu';
 import type { NativeControl, NativePage, NativeRow } from './native-contract';
 import { createWorldCreationFlow256 } from '../ui/world-creation-flow';
 import type { WorldCreationProgress256 } from '../ui/world-creation-contract';
+import { planetGenerationStep } from '../ui/launch-progress';
 import { worldCreationCalendarFacts262, CREATION_SEASON_LABELS_262 } from '../ui/world-creation-calendar-262';
 import { randomSiteSeed } from '../ui/front-site';
 import { defaultWorldGenerationSettings, validWorldGenerationSettings, isIntrinsicWorldFaction, CONFIGURABLE_WORLD_FACTIONS, type ConfigurableWorldFaction } from '../sim/world-generation-settings';
@@ -57,6 +58,8 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   let page: Page = 'home', open = false, hasGame = false, busy = false, pending = false;
   let externalPage=false;
   let error = '', status = '', generation = 0, difficultyChosen = false, reloadChosen = false;
+  /** Planet generation progress, 0..1, shown with the status. */
+  let statusMeter:number|undefined;
   let parameters = { seed: '', settings: defaultWorldGenerationSettings(), size: 250 as GeographicCreationOptions262['size'], season: 'auto' as GeographicCreationOptions262['season'] };
   let teamSeed = 0, roster: StartingCandidateDescriptor[] = [], inspected = 1;
   let showCandidateClothes = true;
@@ -80,12 +83,12 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     }
     const result = renderPage();
     if (error) result.rows.unshift({ id: 'front-error', label: error });
-    if (status) result.rows.unshift({ id: 'front-status', label: status });
+    if (status) result.rows.unshift({ id: 'front-status', label: status, ...statusMeter!==undefined?{meter:{value:statusMeter,max:1,label:`${Math.floor(statusMeter*100)} %`,color:'#63885d'}}:{} });
     result.id = `front-${page}`; result.modal = true;
     result.onClose = () => { if (!busy && !pending) back(); };
     show(presentNativeFront(result,page,{button:control,field:input,tests:testCatalogue}));
   }
-  function navigate(next: Page): void { externalPage=false;page = next; open = true; error = ''; status = ''; confirmation = undefined; paint(); }
+  function navigate(next: Page): void { externalPage=false;page = next; open = true; error = ''; status = '';statusMeter=undefined; confirmation = undefined; paint(); }
   function fail(cause: unknown): void { error = errorMessage(cause); paint(); }
   function control(id: string, label: string, action: () => unknown, disabled = false, active = false, allowBusy = false): NativeControl {
     return { id, label, disabled: disabled || (!allowBusy && (busy || pending)), active, onActivate: async () => {
@@ -124,7 +127,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   async function preference(result: boolean | void | Promise<boolean | void>): Promise<void> { if (await result === false) error = storageFailure; }
   async function run(action: () => Promise<unknown>, message: string): Promise<boolean> {
     if (busy || pending) return false;
-    busy = pending = true; status = message; error = ''; paint();
+    busy = pending = true; status = message;statusMeter=undefined; error = ''; paint();
     try { await action(); return true; } catch (cause) { error = errorMessage(cause); return false; }
     finally { busy = pending = false; status = ''; paint(); }
   }
@@ -135,21 +138,26 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   }
   const navigation = (next?: NativeControl): NativeControl[] => [control('front-back', 'Retour', back), ...(next ? [next] : [])];
   function invalidateDraft(): void { generation++; flow?.cancel(); selectedTile = null; eligible = []; }
-  function progress(p: WorldCreationProgress256): void { status = `${p.phase}${p.total ? ` · ${p.completed} / ${p.total}` : ''}…`; paint(); }
+  function progress(p: WorldCreationProgress256): void {
+    const planet=planetGenerationStep(p.phase,p.completed,p.total);
+    if(planet){status=`Génération du monde · ${planet.label}…`;statusMeter=Math.max(statusMeter??0,planet.fraction);}
+    else status = `${p.phase}${p.total ? ` · ${p.completed} / ${p.total}` : ''}…`;
+    paint();
+  }
 
   async function generateWorld(): Promise<void> {
     if (!flow || !options.getWorldCreationPlayer) throw Error('La préparation du monde n’est pas disponible.');
     if (!validWorldGenerationSettings(parameters.settings)) throw Error('Les paramètres du monde sont invalides. Vérifiez les factions.');
     const player = options.getWorldCreationPlayer();
     invalidateDraft(); const mine = generation;
-    busy = true; status = 'Préparation de la planète…'; paint();
+    busy = true; status = 'Préparation de la planète…';statusMeter=0; paint();
     try {
       const preview = await flow.generate({ seed: parameters.seed, settings: parameters.settings, player }, p => { if (mine === generation) progress(p); });
       if (mine !== generation || !open) return;
       const occupied = new Set(preview.settlements.map(settlement => settlement.tile));
       eligible = preview.geography.surface.tiles.filter(tile => canPlaceWorldSettlement(preview.geography.surface.tiles, tile.id, { settlementTiles: occupied })).map(tile => tile.id);
       siteOffset = 0; busy = false; navigate('site');
-    } catch (cause) { if (mine === generation && open) { busy = false; status = ''; fail(cause); } }
+    } catch (cause) { if (mine === generation && open) { busy = false; status = '';statusMeter=undefined; fail(cause); } }
   }
   async function confirmSite(): Promise<void> {
     if (!flow?.preview || selectedTile === null || !eligible.includes(selectedTile)) throw Error('Sélectionnez un lieu de départ disponible.');

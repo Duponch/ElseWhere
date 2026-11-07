@@ -375,7 +375,7 @@ export class PawnLayer {
    * compileAsync skips shadows; prepareShadow must request a real shadow pass.
    * This temporary warm override never changes the chosen runtime variant. */
   async prepareBodyPipelines(renderer: THREE.WebGPURenderer, scene: THREE.Scene,
-    cameras: readonly THREE.Camera[], prepareShadow: () => Promise<void>): Promise<void> {
+    cameras: readonly THREE.Camera[], prepareShadow: () => Promise<void>, progress?: (done:number,total:number)=>void): Promise<void> {
     const mesh = this.pawnMesh;
     if (!mesh) return;
     const geometry = mesh.geometry as THREE.InstancedBufferGeometry;
@@ -386,9 +386,10 @@ export class PawnLayer {
       mesh.visible = true;
       geometry.instanceCount = Math.max(1, savedCount);
       if(effect){effect.visible=true;effect.geometry.instanceCount=Math.max(1,effect.geometry.instanceCount);}
-      for (const variant of [this.plainMaterial, this.texturedMaterial,
-        this.nativePlainMaterial, this.nativeTexturedMaterial,...(this.bodyAtlas?.materials??[])]) {
-        if (!variant) continue;
+      const variants=[this.plainMaterial, this.texturedMaterial,
+        this.nativePlainMaterial, this.nativeTexturedMaterial,...(this.bodyAtlas?.materials??[])].filter(variant=>!!variant);
+      for (const [index,variant] of variants.entries()) {
+        progress?.(index,variants.length);
         mesh.material = variant;
         if(effect){effect.material.positionNode=variant.positionNode;effect.material.needsUpdate=true;}
         for(const camera of cameras){await renderer.compileAsync(mesh,camera,scene);if(effect)await renderer.compileAsync(effect,camera,scene);}

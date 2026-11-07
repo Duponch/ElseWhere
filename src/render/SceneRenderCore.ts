@@ -151,6 +151,7 @@ import type {RockFinalBudgetDeclarations} from './origami/baked/rocks/RockFinalT
 import {rockFinalGpuQuarantineStatus} from './origami/baked/rocks/RockFinalGpu';
 import type {RockFinalInput} from './surfaces/RockFinalRuntimeTypes';
 import {TreeAtlasAdmissionRefusal} from './origami/baked/trees/admission';
+import {PresentationPreparationReporter} from './presentation-preparation-progress';
 
 export interface AudioFrameView {
   tick: number;
@@ -191,6 +192,8 @@ export class SceneRenderCore {
   private treeTextureTimer?:ReturnType<typeof setTimeout>;
   private holdSurfaceWorld=false;
   private fixedTreeWorldPreparation:Promise<void>|undefined;
+  /** Loading-screen observation of preparePresentation; never awaited. */
+  readonly preparationProgress=new PresentationPreparationReporter();
   private pendingSurfaceWorld?:{world:World;reset:boolean;alreadyApplied?:boolean};
   private closingPresentation=false;
   private disposeAfterPreparation?:Promise<void>;
@@ -1455,7 +1458,7 @@ export class SceneRenderCore {
     if (this.fatalError) throw new Error(this.fatalError);
     if(this.sharedSurfacePreparation||this.preparing)throw Error('La préparation de l’affichage est déjà en cours.');
     this.holdSurfaceWorld=true;this.preparing=true;
-    const job=(async()=>{let shared:SharedSurfacePreparationBatch|undefined;const epoch=this.sharedSurfaceEpoch,assertCurrent=()=>{if(this.disposed||this.closingPresentation||this.fatalError||epoch!==this.sharedSurfaceEpoch)throw new SharedSurfacePreparationCancelled('Initial surface preparation closed');};try{this.uploadSharedSurfaceAssets();shared=await this.stageCoordinatedSurfaces('initial',assertCurrent);shared?.publish();await this.preparePresentationResources();assertCurrent();shared?.commit();}catch(error){try{shared?.rollback();}catch(cleanup){throw new AggregateError([error,cleanup],'Initial shared surface rollback failed');}throw error;}finally{try{shared?.dispose();}finally{await this.finishSurfacePreparation();}}})();this.sharedSurfacePreparation=job;
+    const job=(async()=>{let shared:SharedSurfacePreparationBatch|undefined;const epoch=this.sharedSurfaceEpoch,assertCurrent=()=>{if(this.disposed||this.closingPresentation||this.fatalError||epoch!==this.sharedSurfaceEpoch)throw new SharedSurfacePreparationCancelled('Initial surface preparation closed');};try{this.preparationProgress.report('surfaces',0,2);this.uploadSharedSurfaceAssets();shared=await this.stageCoordinatedSurfaces('initial',assertCurrent);this.preparationProgress.report('surfaces',1,2);shared?.publish();await this.preparePresentationResources();assertCurrent();shared?.commit();}catch(error){try{shared?.rollback();}catch(cleanup){throw new AggregateError([error,cleanup],'Initial shared surface rollback failed');}throw error;}finally{try{shared?.dispose();}finally{await this.finishSurfacePreparation();}}})();this.sharedSurfacePreparation=job;
     try { await job; }
     catch (error) {
       // Restoration inside the preparation completes before teardown.
@@ -1537,16 +1540,18 @@ export class SceneRenderCore {
       }
       this.environmentLighting.exploration.bind(this.scene);
       preparePawnCargo();
-      await this.renderer.compileAsync(this.scene, this.rig.orthographic);
+      this.preparationProgress.report('scene',0,1);
+      await this.renderer.compileAsync(this.scene, this.rig.orthographic,null,event=>{if(event.lengthComputable&&event.total>0)this.preparationProgress.report('scene',event.loaded,event.total);});
       preparePawnCargo();
       await this.renderer.compileAsync(this.scene, this.rig.perspective);
       await this.pawns.prepareBodyPipelines(this.renderer,this.scene,[this.rig.orthographic,this.rig.perspective],async()=>{
         const shadow=(this.room?.lighting.shadowLight??this.daylight.light).shadow,needsUpdate=shadow.needsUpdate;
-        try {shadow.needsUpdate=true;preparePawnCargo();await prepareShadowPipelines(this.renderer,this.scene,this.rig.orthographic,this.boxes);}
+        try {shadow.needsUpdate=true;preparePawnCargo();await prepareShadowPipelines(this.renderer,this.scene,this.rig.orthographic,this.boxes,true);}
         finally {shadow.needsUpdate=needsUpdate;}
-      });
+      },(done,total)=>this.preparationProgress.report('actors',done,total));
       this.landscape.needsUpdate=true;
       preparePawnCargo();
+      this.preparationProgress.report('shadows',0,1);
       await prepareShadowPipelines(this.renderer,this.scene,this.rig.orthographic,this.boxes);
       if (this.fatalError) throw new Error(this.fatalError);
     } finally {

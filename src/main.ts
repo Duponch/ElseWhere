@@ -280,6 +280,9 @@ import './ui/time-controls.css';
 import './ui/first-day-guide.css';
 import './ui/first-gestures-guide.css';
 import {setResidentDeltaValidationInterval} from './bridge/resident-presentation-assembler';
+import {LaunchProgress,type LaunchKind,type LaunchStage} from './ui/launch-progress';
+import {buildNativeLaunchPage} from './ui3d/native-launch';
+import {yieldToPaint} from './render/presentation-preparation-progress';
 // The Worker is this same build. Deep save-grade validation of every adopted
 // delta froze the main thread on large colonies; sample it every 30 s
 // (checkpoints and the first delta after them are always fully validated).
@@ -296,6 +299,10 @@ let nativeUi:NativeStage|undefined;
 let nativeShipTerminal298:ReturnType<typeof createNativeShipTerminal298>|undefined;
 let nativeHud:NativeHudCards|undefined;
 let nativeCustomPage:NativePage|undefined;
+/** Main-thread steps of the last launch with their time; diagnostics only. */
+const launchTimeline:{stage:string;at:number}[]=[];
+/** Loading screen of the colony being opened; observation only. */
+let launchProgress:LaunchProgress|undefined,launchTicker:ReturnType<typeof setInterval>|undefined,launchPaintQueued=false,legacyLaunchPanel:HTMLElement|undefined;
 let nativeHudHiddenInspectorKey:string|undefined;
 let nativeToolPalette:'orders'|'zones'|undefined;
 let nativeDockPreferences:NativeDockPreferences=(()=>{try{return parseNativeDockPreferences(localStorage.getItem(NATIVE_DOCK_PREFERENCE_KEY));}catch{return parseNativeDockPreferences(null);}})();
@@ -368,6 +375,7 @@ const client = (() => {
   let onError: SimulationClient['onError'] = () => {};
   let onFault: SimulationClient['onFault'] = () => {};
   let onRequestStatus: SimulationClient['onRequestStatus'] = () => {};
+  let onOperationProgress: SimulationClient['onOperationProgress'] = () => {};
   let onCampProgress:SimulationClient['onCampProgress']=()=>{};
   let onCaravanEncounterProgress:SimulationClient['onCaravanEncounterProgress']=()=>{};
   let onCaravanTradeArrival:SimulationClient['onCaravanTradeArrival']=()=>{};
@@ -377,6 +385,7 @@ const client = (() => {
   native.onError = message => onError(message);
   native.onFault = fault => onFault(fault);
   native.onRequestStatus = status => onRequestStatus(status);
+  native.onOperationProgress = progress => onOperationProgress(progress);
   native.onCampProgress=message=>onCampProgress(message);
   native.onCaravanEncounterProgress=message=>onCaravanEncounterProgress(message);
   native.onCaravanTradeArrival=message=>onCaravanTradeArrival(message);
@@ -421,6 +430,8 @@ const client = (() => {
     set onError(callback: SimulationClient['onError']) { onError = callback; },
     get onFault() { return onFault; },
     set onFault(callback: SimulationClient['onFault']) { onFault = callback; },
+    get onOperationProgress() { return onOperationProgress; },
+    set onOperationProgress(callback: SimulationClient['onOperationProgress']) { onOperationProgress = callback; },
     get onRequestStatus() { return onRequestStatus; },
     set onRequestStatus(callback: SimulationClient['onRequestStatus']) { onRequestStatus = callback; },
     get onCaravanTradeArrival(){return onCaravanTradeArrival;},
@@ -1079,6 +1090,8 @@ const frontOptions:FrontMenuOptions = {
   },
 };
 const frontMenu=nativeUi?createNativeFrontMenu(frontOptions,page=>{
+  // While a colony opens, its loading screen covers the menu pages.
+  if(launchProgress){paintLaunch();return;}
   nativeUi!.setFrontVisible(page!==null);nativeHud?.setVisible(page===null&&!!snapshot);nativeUi!.showPage(page);
 }):createFrontMenu(frontHost,frontOptions);
 const nativeSaveManager=nativeUi?createNativeSaveManager({
@@ -1177,6 +1190,7 @@ function refreshNativeUi():void {
   nativeUi.setWorldVisible(!!snapshot&&!!renderer);nativeHud?.setVisible(!!snapshot&&!frontMenu.isOpen());
   if(snapshot){nativeHud?.setSelection([...selection.ids]);nativeHud?.update(snapshot,currentSpeed,renderer?.stats.fps??0);}
   nativeHud?.setViewState({walls:wallCutaway?'coupés':'hauts',roofs:nativeRoofsVisible,foliage:foliageVisible,zones:nativeZonesVisible,camera:nativePerspective?'perspective':'iso'});
+  if(launchProgress){paintLaunch();return;}
   const state=readNativeState(),actions=nativeActions(),terminalPage=nativeShipTerminal298?.update(state);
   if(frontMenu.isOpen())return;
   if(state.fault||waitingRequests.size){updateIncident();return;}
@@ -1231,6 +1245,7 @@ async function replaceColony(action: () => Promise<void>,confirmedDraft?:WorldCr
   latestFoodReadability=undefined;
   lastCommercialArrivalKey=undefined;
   replacingWorld = true; syncStorageButtons();
+  beginLaunch(confirmedDraft?'create':'load');
   try {
     await action(); menuResumeSpeed = undefined;deferredResumeGuard.cancel();deferredResumeGuard.confirm(false);urgentThreatUI.reset(); updateIncident();
     if (simulationStopped) throw new Error('La simulation s’est arrêtée pendant la préparation de l’affichage. Chargez une colonie validée pour reprendre.');
@@ -1240,7 +1255,44 @@ async function replaceColony(action: () => Promise<void>,confirmedDraft?:WorldCr
     clearSelection(); setPanel(campaignOnly?'world':null); frontMenu.hide();
     if (snapshot?.pawns[0]) renderer?.focusPawn(snapshot.pawns[0].id);
     else if(snapshot?.startingArrival&&snapshot.startingArrival.phase!=='opened')renderer?.focusCell(snapshot.startingArrival.pods[0]!.cell);
-  } finally { replacingWorld = false; syncStorageButtons(); }
+  } finally { replacingWorld = false; endLaunch(); syncStorageButtons(); }
+}
+function beginLaunch(kind:LaunchKind):void {
+  endLaunch();launchTimeline.length=0;
+  launchProgress=new LaunchProgress(kind,performance.now(),session.hasWorld&&!simulationStopped);
+  launchTicker=setInterval(paintLaunch,500);paintLaunch();
+}
+function endLaunch():void {
+  if(!launchProgress)return;
+  launchProgress=undefined;clearInterval(launchTicker);launchTicker=undefined;
+  legacyLaunchPanel?.remove();legacyLaunchPanel=undefined;
+  if(nativeUi){nativeUi.setFrontVisible(frontMenu.isOpen());refreshNativeUi();}
+}
+function reportLaunch(stage:LaunchStage,completed=0,total=1,phase?:string):void {
+  if(!launchProgress)return;
+  launchProgress.report(stage,completed,total,phase);
+  if(launchPaintQueued)return;launchPaintQueued=true;
+  const paint=()=>{if(!launchPaintQueued)return;launchPaintQueued=false;paintLaunch();};
+  requestAnimationFrame(paint);setTimeout(paint,100);
+}
+function paintLaunch():void {
+  // A stopped simulation or a graphics fault keeps its own incident page.
+  if(!launchProgress||simulationStopped||graphicsFault)return;
+  const view=launchProgress.view(performance.now());
+  if(nativeUi){
+    const waiting=waitingRequests.size?{message:'La simulation ne signale plus d’avancement. Le résultat reste inconnu ; vous pouvez attendre ou arrêter la simulation.',onStop:()=>client.stop()}:undefined;
+    nativeUi.setFrontVisible(true);nativeHud?.setVisible(false);nativeUi.showPage(buildNativeLaunchPage(view,waiting));return;
+  }
+  if(!legacyLaunchPanel){
+    legacyLaunchPanel=document.createElement('section');legacyLaunchPanel.id='launch-progress';legacyLaunchPanel.setAttribute('role','status');
+    legacyLaunchPanel.style.cssText='position:fixed;z-index:10001;top:50%;left:50%;transform:translate(-50%,-50%);width:min(480px,90vw);padding:20px;background:#fff8ec;color:#292b31;border:2px solid #cda598;border-radius:12px;box-shadow:0 8px 28px #0005';
+    legacyLaunchPanel.innerHTML='<strong></strong><progress max="1" style="display:block;width:100%;margin:12px 0"></progress><p></p><small></small>';
+    document.body.append(legacyLaunchPanel);
+  }
+  legacyLaunchPanel.querySelector('strong')!.textContent=view.title;
+  legacyLaunchPanel.querySelector('progress')!.value=view.fraction;
+  legacyLaunchPanel.querySelector('p')!.textContent=view.detail?`${view.stage} · ${view.detail}`:view.stage;
+  legacyLaunchPanel.querySelector('small')!.textContent=`${Math.floor(view.fraction*100)} % · ${view.elapsedSeconds} s`;
 }
 
 
@@ -2477,6 +2529,10 @@ document.addEventListener('keydown', event => {
   else if (key === 's') { event.preventDefault(); setTool('stockpile'); }
 });
 client.onError = message => notify(message, true);
+client.onOperationProgress = progress => {
+  if(progress.type==='load'&&progress.stage!=='planet'&&progress.stage!=='map')reportLaunch(progress.stage,progress.completed,progress.total);
+  else if(progress.type==='world-draft-start')reportLaunch(progress.stage==='map'||progress.stage==='planet'?'map':progress.stage,progress.completed,progress.total,progress.phase);
+};
 client.onRequestStatus = status => {
   if (status.state === 'waiting') waitingRequests.set(status.id, status.message ?? 'La simulation tarde à répondre.');
   else waitingRequests.delete(status.id);
@@ -2557,6 +2613,7 @@ function receiveMainAudioCues(cues: readonly AudioCue[]): void {
   if (soundEnabled) audio.ingestCues(cues);
 }
 function updateIncident(): void {
+  if(launchProgress&&!simulationStopped&&!graphicsFault){if(incidentPanel)incidentPanel.hidden=true;paintLaunch();return;}
   if(nativeUi){
     if(!simulationStopped&&!graphicsFault&&!waitingRequests.size){
       if(nativeCustomPage?.id==='native-incident'){nativeCustomPage=nativeBeforeIncident;nativeBeforeIncident=undefined;refreshNativeUi();}
@@ -2652,6 +2709,8 @@ async function prepareWorldView(): Promise<void> {
   await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
   if(!hasAuthority()){if(campaignOnly)renderCampaignOnly();return;}
   if (!renderer) {
+    launchTimeline.push({stage:'renderer',at:performance.now()});
+    if(launchProgress){reportLaunch('renderer');await yieldToPaint();if(!hasAuthority()){if(campaignOnly)renderCampaignOnly();return;}}
     const created=await MainColonyRenderer.create(el('viewport'), pickCell, groundGrassEnabled,graphicsStylePreferences);
     if(!hasAuthority()){created.dispose();if(campaignOnly)renderCampaignOnly();return;}
     renderer=created;
@@ -2706,16 +2765,23 @@ async function prepareWorldView(): Promise<void> {
       el('area-feedback').hidden = true;
     };
   }
+  if(launchProgress){reportLaunch('world');await yieldToPaint();}
   const activeRenderer=renderer,activeWorld=snapshot;
   if(!activeRenderer||!activeWorld||!hasAuthority()){if(campaignOnly)renderCampaignOnly();return;}
+  launchTimeline.push({stage:'world',at:performance.now()});
   activeRenderer.setWorld(activeWorld, true, currentSpeed, latestMotion,true,latestCoreFullInput297);
+  launchTimeline.push({stage:'prepare',at:performance.now()});
+  if(launchProgress){reportLaunch('surfaces');activeRenderer.preparationProgress.observer=step=>{if(step.stage!=='first-frame'&&step.stage!=='renderer'&&step.stage!=='world')reportLaunch(step.stage,step.completed,step.total);};}
   if(latestCorePhaseInput297)activeRenderer.setCorePhase297(latestCorePhaseInput297);
   if (activeRenderer.compatibilityWarning) notify(activeRenderer.compatibilityWarning, true);
   syncAudioSources(activeWorld);
   try{await activeRenderer.preparePresentation();}
   catch(error){if(hasAuthority())throw error;}
   if(renderer!==activeRenderer||!hasAuthority()){activeRenderer.dispose();if(renderer===activeRenderer)renderer=undefined;if(campaignOnly)renderCampaignOnly();return;}
+  activeRenderer.preparationProgress.observer=undefined;
+  launchTimeline.push({stage:'prepared',at:performance.now()});
   el('loading')?.remove(); renderState();
+  launchTimeline.push({stage:'rendered-state',at:performance.now()});
 }
 async function start() {
   shell.hidden=true; frontMenu.showHome(false);

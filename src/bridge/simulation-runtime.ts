@@ -376,11 +376,13 @@ async function handleWorldDraft256(request:DraftRequest256):Promise<void> {
   if(heldWorldDraft!==d||!created)throw Error('La préparation est perdue. Générez le monde à nouveau.');
   const confirmedClock=configuredGeographicStartClock256(geographicSurfaceTileClimateDefinition256(owner.surface.tiles[request.ticket.tile]!),request.ticket.season);
   if(!isSchema256Or257(created.schemaVersion)||created.width!==request.ticket.size||created.height!==request.ticket.size||created.worldMaps?.mapSize.width!==request.ticket.size||created.worldMaps.mapSize.height!==request.ticket.size||created.worldMaps.calendarOrigin!==confirmedClock.calendarOrigin||created.climate?.revision!==4||created.climate.calendarOrigin!==confirmedClock.calendarOrigin||created.planet?.revision!==3||planetGeography256(created.planet)!==owner||created.site?.revision!==3||created.site.tileId!==request.ticket.tile||created.scenario?.id!==d.request.player.scenario||created.worldFactions!==draft.factions||created.nextId<nextThingId||created.worldFactions.playerFactionId!==playerFactionId||!created.worldFactions.factions.some(f=>f.id===playerFactionId&&f.def===d.request.player.playerDef&&f.name===d.request.player.playerName))throw Error('L’usine locale n’a pas conservé les propriétaires, dimensions ou calendrier du monde confirmé.');
+  send({type:'operation-progress',id:request.id,stage:'validate',completed:0,total:1});
   configureSettlementLimit(created,request.maxSettlements);const errors=validateWorld(created);if(errors.length)throw Error(`La colonie produite est invalide : ${errors[0]}`);
   // Sole authoritative replacement boundary. No old colony, clock or RNG was
   // touched before the complete local World and every owner passed validation.
   const createdCaravans=prepareCaravans(created),shipBinding298=shipCountdown298.prepareAcceptedOwner(created);
   snapshots.authorizeDraftPreview(owner,d.geographyId);world=created;caravans=createdCaravans;committed=true;shipBinding298.commit();neutralResume261=undefined;maxSettlements=request.maxSettlements;threatPauseMode=request.threatPauseMode;speed=0;urgentThreats.bootstrap(world);motion.reset();phasePublisher297.reset();audioCues.reset();fault=undefined;resetSimulationClock(performance.now());syncShipCreditsHold298(performance.now());
+  send({type:'operation-progress',id:request.id,stage:'publish',completed:0,total:1});
   const checkpoint=publish(true);if(!checkpoint)throw Error('Le checkpoint initial n’a pas été publié.');heldWorldDraft=undefined;
   send({type:'reply',id:request.id,ok:true,checkpoint,...shipCountdown298.replyMetadata(world)});
  }catch(error){
@@ -480,7 +482,7 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
       // publication, preserving an existing world and clock on refusal.
       if(request.maxSettlements!==undefined&&!validSettlementLimit(request.maxSettlements))throw Error('Plafond de colonies invalide.');
       let restored: CampaignState;
-      try { restored = deserializeCampaign(request.data); }
+      try { restored = deserializeCampaign(request.data,step=>send({type:'operation-progress',id:request.id,...step})); }
       catch { throw new Error('Cette sauvegarde est illisible ou incompatible avec cette version. La colonie actuelle et vos sauvegardes sont conservées.'); }
       const restoredCaravans=prepareCaravans(restored);maxSettlements=request.maxSettlements??maxSettlements;configureSettlementLimit(restored,maxSettlements);const shipBinding298=shipCountdown298.prepareAcceptedOwner(restored);world = restored;caravans=restoredCaravans; adoptedReplacement = true;shipBinding298.commit();neutralResume261=undefined; speed = 0; motion.reset();phasePublisher297.reset();
       threatPauseMode = request.threatPauseMode ?? threatPauseMode;
@@ -543,6 +545,7 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
       }
     }
     const checkpoint = request.type === 'init' || request.type === 'load' || request.type === 'resync';
+    if(request.type==='load')send({type:'operation-progress',id:request.id,stage:'publish',completed:0,total:1});
     // An observer/encoder/publication failure must stop further mutation too.
     let publication: { epoch: number; revision: number } | undefined;
     try { if(world&&pendingCaravan261(world))holdEncounterPause261(performance.now());if(world&&pendingWorldEntry263(world))holdWorldEntry263(performance.now());if(request.type!=='order-options')publication = publish(checkpoint); }
