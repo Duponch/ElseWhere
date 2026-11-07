@@ -78,6 +78,8 @@ import { pawnSurfaceShade,pawnSurfaceUvNode,pawnSurfaceShadeFromSample } from '.
 import { CargoHandoffs,type CargoAnchor } from './cargo-handoff';
 import { bodyBloodPigment,bodyBloodWord } from './body-blood';
 import type { AnimalCorpseCarrier } from './animal-corpse-carrier';
+/** Stable all-rigid real time before the colonists' body atlas is admitted again. */
+const BODY_ATLAS_READMIT_MS=6000;
 // Two affine traits share one fragment location. Keep all decisions (skin,
 // equipment, corpse ribs and blood) in the fragment shader; vertex poses use
 // the original attributes and receive no additional buffer or approximation.
@@ -212,7 +214,27 @@ export class PawnLayer {
   private readonly bodyAtlasAppearance=new Map<number,string>();
   private readonly bodyAtlasRigid=new Map<number,boolean>();
   private bodyAtlasPublishedCount=0;private bodyAtlasModelKey='';
-  private observeBodyAtlasPose(id:number,slot:number,geometry:THREE.BufferGeometry):boolean{if(!this.bodyAtlas)return false;const rigid=actorPoseIsRigid('human',geometry,slot);if(this.bodyAtlasRigid.get(id)===rigid)return false;this.bodyAtlasRigid.set(id,rigid);return true;}
+  private observeBodyAtlasPose(id:number,slot:number,geometry:THREE.BufferGeometry):boolean{if(!this.bodyAtlas)return false;const rigid=actorPoseIsRigid('human',geometry,slot);if(this.bodyAtlasRigid.get(id)===rigid)return rigid;this.bodyAtlasRigid.set(id,rigid);return rigid;}
+  /** Whether every colonist pose was rigid at the last observation. The atlas
+   * refuses the whole kind while one pose is not rigid (Source stays exact). */
+  private bodyAtlasAllRigid:boolean|undefined;
+  /** Real time at which a stable all-rigid state may admit the atlas again. */
+  private bodyAtlasReadmitAt:number|undefined;
+  /** A pose leaving the rigid class falls back to Source at once; the return
+   * to the atlas waits for BODY_ATLAS_READMIT_MS of stable rigid poses. Each
+   * flip re-prepares the shared surfaces, which holds frames: colonists
+   * kneeling then standing several times per second no longer do that. */
+  private observeBodyAtlasPoseAggregate(allRigid:boolean,now=performance.now()):boolean{
+    const atlas=this.bodyAtlas;if(!atlas)return false;
+    const previous=this.bodyAtlasAllRigid;this.bodyAtlasAllRigid=allRigid;
+    // Leaving the rigid class matters only while the atlas is actually drawn.
+    if(!allRigid){this.bodyAtlasReadmitAt=undefined;return previous!==false&&atlas.status().ready;}
+    if(previous!==true)this.bodyAtlasReadmitAt=now+BODY_ATLAS_READMIT_MS;
+    if(this.bodyAtlasReadmitAt===undefined||now<this.bodyAtlasReadmitAt)return false;
+    this.bodyAtlasReadmitAt=undefined;
+    // Only the Gouache style bakes this atlas; it may already be in service.
+    return !!this.graphics?.origami&&!atlas.status().ready;
+  }
   private bodyAtlasAppearanceChanged(id:number,slot:number,geometry:THREE.BufferGeometry):boolean{
     if(!this.bodyAtlas)return false;const tint=geometry.getAttribute('aTint'),skin=geometry.getAttribute('aSkin'),hair=geometry.getAttribute('aHair'),shape=geometry.getAttribute('aShape'),equipment=geometry.getAttribute('aEquipment'),blood=geometry.getAttribute('aBodyBlood'),x=equipment.getX(slot),cleanEquipment=Math.floor(x)+Math.round((x-Math.floor(x))*8)/8;
     const key=[tint.getX(slot),tint.getY(slot),tint.getZ(slot),skin.getX(slot),skin.getY(slot),skin.getZ(slot),hair.getX(slot),hair.getY(slot),hair.getZ(slot),shape.getX(slot),shape.getY(slot),shape.getZ(slot),shape.getW(slot),cleanEquipment,equipment.getY(slot),equipment.getZ(slot),equipment.getW(slot),blood.getX(slot)===0?0:1].join(':');
@@ -1170,7 +1192,7 @@ export class PawnLayer {
     const carried = new Map<number, World['piles'][number]>();
     for (const pile of world.piles) if (pile.owner.type === 'pawn') carried.set(pile.owner.pawnId, pile);
     let jobsById:Map<number,World['jobs'][number]>|undefined=this.referenceRig?this.workToolJobs:undefined;
-    const present = new Set<number>();let atlasChanged=this.bodyAtlasPublishedCount!==world.pawns.length||this.bodyAtlasModelKey!==this.humanModel?.key;
+    const present = new Set<number>();let atlasChanged=this.bodyAtlasPublishedCount!==world.pawns.length||this.bodyAtlasModelKey!==this.humanModel?.key,allRigid=true;
     world.pawns.forEach((pawn, index) => {
       present.add(pawn.id);
       const previous = newMap ? undefined : this.visuals.get(pawn.id);
@@ -1265,7 +1287,7 @@ export class PawnLayer {
       }
       equipment.setXYZW(index,equipmentCode,look.silhouette,(look.vest?1:0)+(look.simpleHelmet?10:look.reconHelmet?4:look.helmet?2:look.tuque===2?8:look.tuque===1?6:0)+(look.vestTintCode??0)/65536,look.pants+(look.simpleHelmet?look.simpleHelmetMaterial/16:look.plasteelHelmet?.5:0));
       this.refreshOrigamiEquipmentSignal(pawn,index);
-      atlasChanged=this.bodyAtlasAppearanceChanged(pawn.id,index,geometry)||atlasChanged;atlasChanged=this.observeBodyAtlasPose(pawn.id,index,geometry)||atlasChanged;
+      atlasChanged=this.bodyAtlasAppearanceChanged(pawn.id,index,geometry)||atlasChanged;allRigid=this.observeBodyAtlasPose(pawn.id,index,geometry)&&allRigid;
       const load = carried.get(pawn.id);
       const packed=world.packed?.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id);
       const handoff=this.handoffs.active.get(pawn.id);
@@ -1300,7 +1322,7 @@ export class PawnLayer {
     this.syncPartialCargo();
     (this.selectionMesh!.geometry as THREE.InstancedBufferGeometry).instanceCount=world.pawns.length;
     this.pawnIds=world.pawns.map(p=>p.id);this.setSelected(this.selected);
-    this.playback435.prepare(world,world.pawns,true);this.bodyAtlasPublishedCount=world.pawns.length;this.bodyAtlasModelKey=this.humanModel?.key??'';if(atlasChanged)this.bodyAtlas?.invalidate();
+    this.playback435.prepare(world,world.pawns,true);this.bodyAtlasPublishedCount=world.pawns.length;this.bodyAtlasModelKey=this.humanModel?.key??'';if(this.observeBodyAtlasPoseAggregate(allRigid)||atlasChanged)this.bodyAtlas?.invalidate();
   }
 
   /** No appearance, surface, ownership or job reconstruction on an actor-only
@@ -1377,9 +1399,9 @@ export class PawnLayer {
     this.travelTime.value=localTimeSeconds(timeline.tick,origin);
     const playback=this.playback435.beginFrame(timeline);if(this.playback435.retrying)this.travelKeys.clear();
     const spring=isCorePhysicalSchema297(Number(world.schemaVersion));if(spring)this.ensureSpring297(humans.length);
-    let dirty=false,partUnionDirty=false,atlasPoseChanged=false;
+    let dirty=false,partUnionDirty=false,allRigidBefore=true,allRigidAfter=true;
     humans.forEach((pawn,i)=>{
-      atlasPoseChanged=this.observeBodyAtlasPose(pawn.id,i,geometry)||atlasPoseChanged;
+      allRigidBefore=this.observeBodyAtlasPose(pawn.id,i,geometry)&&allRigidBefore;
       const prepared=playback?this.playback435.select(i,timeline,timeline.tick,origin):undefined;
       if(spring&&!this.springValid297[i])this.captureSpring297(i,from,to,times,motion);
       if(playback&&!prepared){if(spring)dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;return;}
@@ -1482,7 +1504,7 @@ export class PawnLayer {
         else motion.setW(i,pawn.id*1.7);
       }
       from.setXYZW(i,visual.from.x,visual.from.y,visual.from.z,visual.from.w);to.setXYZW(i,visual.to.x,visual.to.y,visual.to.z,visual.to.w);
-      atlasPoseChanged=this.observeBodyAtlasPose(pawn.id,i,geometry)||atlasPoseChanged;
+      allRigidAfter=this.observeBodyAtlasPose(pawn.id,i,geometry)&&allRigidAfter;
       if(motion.getY(i)!==priorActivity)partUnionDirty=true;
       if(spring){this.captureSpring297(i,from,to,times,motion);dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;}
     });
@@ -1511,7 +1533,7 @@ export class PawnLayer {
       }
       for(const attribute of [from,to,times,motion])attribute.needsUpdate=true;
     }else if(crouchFinished)motion.needsUpdate=true;
-    if(partUnionDirty)this.refreshBodyPartUnion(geometry as THREE.InstancedBufferGeometry);if(atlasPoseChanged)this.bodyAtlas?.invalidate();
+    if(partUnionDirty)this.refreshBodyPartUnion(geometry as THREE.InstancedBufferGeometry);if(this.observeBodyAtlasPoseAggregate(allRigidBefore&&allRigidAfter))this.bodyAtlas?.invalidate();
     if(playback)this.playback435.commit();
   }
 
@@ -1555,7 +1577,7 @@ export class PawnLayer {
     // All borrowers stop together. Real initialized candidates retain their
     // r186 geometry-dispose listener until this point, even after growth.
     const terminalGeometries=[...this.retiredPawnGeometries,...[this.pawnMesh,this.cargoMesh,this.partialCargoMesh].filter((mesh):mesh is THREE.Mesh=>!!mesh).map(mesh=>mesh.geometry)];
-    this.bodyAtlas?.attachGpuRetirement(terminalGeometries);this.bodyAtlas?.dispose();this.bodyAtlas=undefined;this.bodyAtlasAppearance.clear();this.bodyAtlasRigid.clear();this.bodyAtlasPublishedCount=0;this.bodyAtlasModelKey='';
+    this.bodyAtlas?.attachGpuRetirement(terminalGeometries);this.bodyAtlas?.dispose();this.bodyAtlas=undefined;this.bodyAtlasAppearance.clear();this.bodyAtlasRigid.clear();this.bodyAtlasAllRigid=this.bodyAtlasReadmitAt=undefined;this.bodyAtlasPublishedCount=0;this.bodyAtlasModelKey='';
     if(this.humanStroke)this.graphics?.preparedStrokes.release(this.humanStroke,terminalGeometries);for(const table of this.humanCanonicalTables)attachFaceStrokeGpuRetirement(table,terminalGeometries);this.humanCanonicalTables.clear();this.refreshHumanBodySurface=undefined;this.humanBodyBakeOptions=undefined;this.humanPastelFromSample=undefined;
     this.cargoModel.attachGpuRetirement(terminalGeometries);
     clearGroup(this.group);
