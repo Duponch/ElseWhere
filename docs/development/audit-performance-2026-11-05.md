@@ -270,6 +270,40 @@ Ces mesures confirment surtout le coût d’une publication complète pour le th
 
 Fichier épinglé modifié volontairement, avec mise à jour de son empreinte : `core-phase-data-297.ts`, dont le lecteur strict valide `piles297`.
 
+### Coût d’adoption d’une publication complète (7 novembre, après-midi)
+
+**Mesure.** Le temps de chaque étape d’`applyWorld` a été relevé dans le client réel, publication par publication (Les Forges, ×1, 30 s) : 36 adoptions, 98 ms en moyenne, médiane 65 ms, maximum 331 ms. La première source des pics était la reconstruction des structures : 9 adoptions sur 36, 101 ms en moyenne, jusqu’à 251 ms. Le mobilier de toute la carte forme un seul lot de 15 139 pièces ; il était entièrement recalculé dès qu’une structure changeait. Sur 40 s, les 9 reconstructions avaient toutes la même cause : un colon terminait un sac de sable.
+
+**1. Raccourci pour les types dessinés hors du mobilier.** Les sacs de sable sont dessinés par leur propre lot, et aucun des 40 producteurs du mobilier ne les lit.
+- La signature des structures enregistre maintenant les types des structures changées depuis la dernière reconstruction du mobilier.
+- Si ce sont uniquement des sacs de sable, seul leur lot est refait.
+- Tout autre changement garde la reconstruction complète : autre type, insertion au milieu du tableau, axes des portes, mobilier emballé, réinitialisation, vue coupée, lot non possédé, ou lampe solaire qui a changé d’état.
+
+Garde : `tests/furniture-independent-kinds.test.ts`. Plus de 300 sacs de sable collés à 45 types de structures (murs, portes, clôtures, enclos, conduits, ventilations, lits…) ne changent aucune pièce du mobilier, en vue normale comme en vue coupée, à l’ajout comme au retrait.
+
+**2. Jeton d’appartenance des structures.** La topologie des pièces et la liste des lampes demandaient un jeton qui construisait l’index partagé des structures. Côté thread principal, chaque publication complète apporte un nouveau tableau de structures : l’index (~8 ms sur Les Forges) était construit pour rien. C’est le cas de l’info-bulle de survol de la carte, qui calcule la lumière de la case survolée.
+
+Le jeton n’est maintenant utilisé que si l’index existe déjà ; sinon le balayage, moins coûteux, est fait directement. Empreintes des Éclaircies et des Forges inchangées ; temps par tick de la simulation inchangé à la précision de la mesure.
+
+**Vérification dans le client réel.** Après 40 s de jeu, dont 10 passages par le raccourci, les lots du mobilier (15 139 pièces) et des sacs de sable (65) sont identiques octet par octet (matrices et couleurs) à une reconstruction complète forcée. Aucune erreur.
+
+**Mesures**, Les Forges ×1, comparées au commit précédent dans les mêmes conditions, 2 passes de 40 s par build :
+
+| Par adoption complète | Avant | Après |
+|---|---|---|
+| Moyenne | 86,8 / 86,5 ms | **71,1 / 73,0 ms** |
+| Médiane | 61 / 58 ms | 61 / 59 ms |
+| Reconstruction des structures, cumul sur 40 s | 944 / 779 ms | **112 / 123 ms** |
+| Lumière de la case survolée, monde reçu (hors navigateur) | médiane 9,6 à 20 ms | **4,3 à 5,1 ms** |
+
+**Ce qui reste.** Le pic maximal reste vers 190 à 225 ms.
+- Il vient surtout des morceaux de ressources : un ajout de plante (semis, repousse) reconstruit tout le morceau de carte concerné, 50 à 118 ms, dont la fusion des géométries et l’usure des arêtes. Les retraits sont déjà traités sans reconstruction.
+- Une vraie construction (mur, meuble) reconstruit encore tout le mobilier, ~100 ms.
+
+Rendre ces deux reconstructions incrémentales demande de découper leurs lots par zone de la carte : c’est la prochaine étape, plus profonde.
+
+**Régression d’une nuit précédente corrigée côté test.** `tests/prison-break-combat-v269.test.ts` transformait une porte en mur en modifiant l’objet sur place. Cela viole le contrat de l’index partagé des structures : le type et la position d’une structure ne changent jamais sur place. Le test remplace maintenant le tableau, comme la simulation, et ses assertions sont inchangées. Il passe sur la branche et sur le code d’origine.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -304,7 +338,7 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 1. **Coût d’une publication complète sur le thread principal** (voir « Patchs de cargaison »). Sur Les Forges, environ 75 ms d’application par publication, jusqu’à 250 ms, plus l’admission du message. Il en reste 1,3 à 1,5 par seconde, presque toutes calmes ; les autres changements de dépendances (lit, repas, loisirs…) n’en provoquent plus que 0,1 par seconde.
 
    Prochaines étapes :
-   - profiler `applyWorld` et retirer ce qui est recalculé sans changement : signatures texte des tâches, des désignations et des toits, reconstruction des structures, morceaux du monde ;
+   - ~~profiler `applyWorld`~~ : fait, voir « Coût d’adoption d’une publication complète ». Restent à rendre incrémentales, par zone de la carte, la reconstruction des morceaux de ressources lors d’un ajout de plante (50 à 118 ms) et celle du mobilier lors d’une vraie construction (~100 ms) ;
    - rendre la copie défensive des paquets de phase moins coûteuse (`native-message-capture.ts`, épinglé) ;
    - ensuite seulement, adapter l’intervalle des publications calmes à leur coût réel : c’est un compromis avec le délai d’affichage des changements lents du monde.
 2. **Rendu three.js** : environ 36 à 48 % du thread principal en jeu, pour 148 maillages visibles et 72 appels de dessin. Postes :

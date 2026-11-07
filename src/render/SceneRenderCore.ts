@@ -1801,6 +1801,10 @@ export class SceneRenderCore {
   }
 
   protected buildStructures(world: World): void {
+    // A change limited to kinds drawn outside the furniture batch (sandbags)
+    // rebuilds only their batch; doors, timber and furniture are unchanged.
+    const kinds=this.structureSignature.changedKinds();
+    if(kinds&&this.immutableWorlds.has(world)&&this.furniturePresentation.updateIndependent(world,this.structureGroup,this.wallCutaway,this.boxes,kinds)){this.structureSignature.ackFurnitureBuild();return;}
     const prepared=this.preparedStructures;
     if(prepared?.world===world)this.doors.updateNative(world,this.wallCutaway,false,prepared.doors,prepared.axes,prepared.gateAxes);
     else this.doors.update(world,this.wallCutaway);this.timber.update(world,this.wallCutaway);this.furniturePresentation.update(world,this.structureGroup,this.wallCutaway,this.boxes,this.structureSignature.flowerChanges(),this.immutableWorlds.has(world));this.structureSignature.ackFurnitureBuild(); }

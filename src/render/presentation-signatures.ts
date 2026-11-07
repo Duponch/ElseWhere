@@ -93,6 +93,9 @@ export class StructurePresentationSignature {
     return this.valid&&this.flowerPlanValid?[...this.pendingFlowers].sort((a,b)=>a-b):undefined;
   }
 
+  /** Changed structure kinds are not tracked here: always a full build. */
+  changedKinds(): ReadonlySet<unknown> | undefined {return undefined;}
+
   /** Caller ACKs only after a full or partial build succeeds, never on throw. */
   ackFurnitureBuild(): void {
     this.pendingFlowers.clear();this.flowerPlanValid=this.valid;

@@ -86,6 +86,14 @@ export function captureStructureNavigation(world:World):StructureNavigationGeome
 export function structureMembershipToken(world:World):object {
   return sharedIndex(world);
 }
+/** The same token when the shared index already exists for this exact array
+ * (same validation), without building it. A caller that only needs the token
+ * to skip a cheaper scan uses this: a structures array seen once (a published
+ * World on the main thread) then costs that scan, not a full index build. */
+export function peekStructureMembershipToken(world:World):object|undefined {
+  const source=world.structures,index=sharedIndexes.get(source);
+  return index&&index.count===source.length&&index.first===source[0]&&index.last===source[source.length-1]&&index.width===world.width&&index.height===world.height?index:undefined;
+}
 /** Same result as `world.structures.find(s=>s.id===id)` (ids are immutable;
  * the first structure wins if an invalid world repeats an id). */
 const idIndexes=new WeakMap<readonly Structure[],{count:number;first:Structure|undefined;last:Structure|undefined;map:Map<unknown,Structure>}>();

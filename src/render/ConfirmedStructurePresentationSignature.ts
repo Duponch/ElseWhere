@@ -31,9 +31,14 @@ export class ConfirmedStructurePresentationSignature {
   private valid = false;
   private flowerPlanValid = false;
   private readonly pendingFlowers = new Set<number>();
+  /** Kinds of the structures whose slot changed, appeared or disappeared since
+   * the last furniture build ACK; `pendingOther` marks any change that is not
+   * a structure slot (reset, legacy text, door axes or packed furniture). */
+  private readonly pendingKinds = new Set<Scalar>();
+  private pendingOther = true;
 
   clear(): void {
-    this.pendingFlowers.clear();this.flowerPlanValid=false;
+    this.pendingFlowers.clear();this.flowerPlanValid=false;this.pendingKinds.clear();this.pendingOther=true;
     this.slots.length = this.scratch.length = 0;
     this.doorAxesKey = this.packageKey = undefined;
     this.signature = '';
@@ -47,6 +52,7 @@ export class ConfirmedStructurePresentationSignature {
     this.flowerPlanValid = false;
     let changed = !this.valid || this.slots.length !== structures.length || this.doorAxesKey !== doorAxesKey || this.packageKey !== packageKey;
     let flowerOnly = !changed && previousFlowerPlanValid;
+    if (!this.valid || this.doorAxesKey !== doorAxesKey || this.packageKey !== packageKey) this.pendingOther = true;
     this.valid = false;
     const v = this.scratch;
     for (let i = 0; i < structures.length; i++) {
@@ -74,11 +80,14 @@ export class ConfirmedStructurePresentationSignature {
           else for(let field=0;field<v.length;field++)if(field!==10&&field!==11&&!Object.is(old.values[field],v[field])){flowerOnly=false;break;}
           if(flowerOnly)this.pendingFlowers.add(i);
         }
+        if (old) this.pendingKinds.add(old.values[1]);
+        this.pendingKinds.add(v[1]);
         const flower = v[9] ? `${v[10]}:${v[11]}` : '';
         this.slots[i] = { values: v.slice(), text: `${v[0]}:${v[1]}:${v[2]}:${v[3]}:${v[4]}:${v[5]}:${v[6]}:${v[7]}:${v[8]}:${flower}:${v[12]}:${v[13]}:${v[14]}:${v[15]}:${v[16]}${v[17]===undefined?'':':vent'+v[17]}${v[18]===undefined?'':':crypto'+v[18]}${v[19]===undefined?'':':reactor'+v[19]}` };
         changed = true;
       }
     }
+    for (let i = structures.length; i < this.slots.length; i++) this.pendingKinds.add(this.slots[i]!.values[1]);
     this.slots.length = structures.length;
     if (changed) this.signature = doorAxesKey + packageKey + this.slots.map(slot => slot.text).join('|');
     this.doorAxesKey = doorAxesKey; this.packageKey = packageKey;
@@ -100,6 +109,7 @@ export class ConfirmedStructurePresentationSignature {
     this.flowerPlanValid = false;
     let changed = !this.valid || this.slots.length !== structures.length || this.doorAxesKey !== doorAxesKey || this.packageKey !== packageKey;
     let flowerOnly = !changed && previousFlowerPlanValid;
+    if (!this.valid || this.doorAxesKey !== doorAxesKey || this.packageKey !== packageKey) this.pendingOther = true;
     this.valid = false;
     const v = this.scratch;
     for (const i of indices) {
@@ -127,6 +137,8 @@ export class ConfirmedStructurePresentationSignature {
           else for(let field=0;field<v.length;field++)if(field!==10&&field!==11&&!Object.is(old.values[field],v[field])){flowerOnly=false;break;}
           if(flowerOnly)this.pendingFlowers.add(i);
         }
+        if (old) this.pendingKinds.add(old.values[1]);
+        this.pendingKinds.add(v[1]);
         const flower = v[9] ? `${v[10]}:${v[11]}` : '';
         this.slots[i] = { values: v.slice(), text: `${v[0]}:${v[1]}:${v[2]}:${v[3]}:${v[4]}:${v[5]}:${v[6]}:${v[7]}:${v[8]}:${flower}:${v[12]}:${v[13]}:${v[14]}:${v[15]}:${v[16]}${v[17]===undefined?'':':vent'+v[17]}${v[18]===undefined?'':':crypto'+v[18]}${v[19]===undefined?'':':reactor'+v[19]}` };
         changed = true;
@@ -147,9 +159,15 @@ export class ConfirmedStructurePresentationSignature {
     return this.valid&&this.flowerPlanValid?[...this.pendingFlowers].sort((a,b)=>a-b):undefined;
   }
 
+  /** Kinds of every structure slot that changed since the last furniture build
+   * ACK, or undefined when anything else changed (or the read is not valid). */
+  changedKinds(): ReadonlySet<Scalar> | undefined {
+    return this.valid && !this.pendingOther ? this.pendingKinds : undefined;
+  }
+
   /** Caller ACKs only after a full or partial build succeeds, never on throw. */
   ackFurnitureBuild(): void {
-    this.pendingFlowers.clear();this.flowerPlanValid=this.valid;
+    this.pendingFlowers.clear();this.flowerPlanValid=this.valid;this.pendingKinds.clear();this.pendingOther=!this.valid;
   }
 }
 

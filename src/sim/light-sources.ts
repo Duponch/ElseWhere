@@ -2,7 +2,7 @@ import {caveLightSources256} from './cave-flora-256.ts';
 import { isPowerActive } from './power-rules.ts';
 import { SUN_LAMP_RADIUS,SUN_LAMP_OVERLIGHT_RADIUS,sunLampActive } from './sun-lamp.ts';
 import type { Structure, World } from './types.ts';
-import { structureMembershipToken } from './structure-navigation.ts';
+import { peekStructureMembershipToken } from './structure-navigation.ts';
 
 export interface LightSource {cell:number;radius:number;red:number;green:number;blue:number;overlightRadius?:number}
 
@@ -35,7 +35,9 @@ export function lightSourcesFromMembers(world:World,members:readonly Structure[]
  * structure, including the stable order of equal cells after sorting. */
 const membersByToken=new WeakMap<object,readonly Structure[]>();
 function lightMembers(world:World):readonly Structure[] {
-  const token=structureMembershipToken(world);let members=membersByToken.get(token);
+  // Only an existing index is used (see peekStructureMembershipToken).
+  const token=peekStructureMembershipToken(world);if(!token)return world.structures.filter(s=>memberKinds.has(s.kind));
+  let members=membersByToken.get(token);
   if(!members){members=world.structures.filter(s=>memberKinds.has(s.kind));membersByToken.set(token,members);}
   return members;
 }

@@ -109,6 +109,11 @@ export function buildFurniture(world: World, group: THREE.Group, cutaway: boolea
 
 
 
+/** Structure kinds drawn only by their own batch, which no furniture producer
+ * reads: adding, removing or changing one leaves every furniture placement
+ * unchanged (tests/furniture-independent-kinds.test.ts). */
+export const FURNITURE_INDEPENDENT_KINDS:ReadonlySet<unknown>=new Set(['sandbags']);
+
 type FurnitureBatches=Pick<BoxBatches,'set'|'furnitureStamp'|'patchFurniture'|'patchFurnitureBatch'>;
 type FurnitureSpan={start:number;count:number};
 type SunLampCapture={ordinal:number;id:number;active:boolean};
@@ -137,6 +142,25 @@ export class FurniturePresentation {
   private state:FurnitureState|undefined;
 
   clear():void {this.state=undefined;}
+
+  /** Native resident path for a change limited to independent kinds (see
+   * FURNITURE_INDEPENDENT_KINDS): only their own batch is rebuilt, the owned
+   * furniture batch stays. Returns false, changing nothing, when the furniture
+   * batch is not owned for these settings, when another kind changed, or when
+   * a sun lamp changed state (a full build would recolor it). */
+  updateIndependent(world:World,group:THREE.Group,cutaway:boolean,batches:FurnitureBatches,kinds:ReadonlySet<unknown>):boolean {
+    const state=this.state;
+    if(!state||state.group!==group||state.batches!==batches||state.cutaway!==cutaway||state.width!==world.width||state.height!==world.height||
+      state.colorManagementEnabled!==ColorManagement.enabled||state.workingColorSpace!==ColorManagement.workingColorSpace||
+      batches.furnitureStamp()!==state.stamp||kinds.size===0)return false;
+    for(const kind of kinds)if(!FURNITURE_INDEPENDENT_KINDS.has(kind))return false;
+    for(const lamp of state.sunLamps){
+      const structure=world.structures[lamp.ordinal];
+      if(!structure||structure.id!==lamp.id||structure.kind!=='sun-lamp'||sunLampActive(world,structure)!==lamp.active)return false;
+    }
+    batches.set(group,'sandbags',sandbagParts(world));
+    return true;
+  }
 
   update(world:World,group:THREE.Group,cutaway:boolean,batches:FurnitureBatches,
     flowerChanges?:readonly number[],readonlyNative=false):void {

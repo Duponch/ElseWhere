@@ -1,6 +1,6 @@
 import {roomBarrierValue,roomBarrierCells} from './room-barriers.ts';
 import type { World } from './types.ts';
-import {structureMembershipToken} from './structure-navigation.ts';
+import {peekStructureMembershipToken} from './structure-navigation.ts';
 import { terrainWriteCount, verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
 
 export interface RoomSpace {
@@ -64,7 +64,9 @@ export class RoomTopologyCache {
     // Barrier codes depend only on structure kind/position/orientation, which
     // are immutable; an unchanged shared membership token (same array, same
     // members in the same order) therefore proves the codes are unchanged.
-    const token = world.width === width && Array.isArray(world.structures) ? structureMembershipToken(world as World) : undefined;
+    // Only an existing index is used: building one just for the token costs
+    // more than the barrier scan it would skip.
+    const token = world.width === width && Array.isArray(world.structures) ? peekStructureMembershipToken(world as World) : undefined;
     if (!token || token !== this.barrierToken || resized) {
       for (const building of world.structures) {
         const value = roomBarrierValue(building.kind);

@@ -44,7 +44,10 @@ test('an adjacent colonist acquires shared melee; deactivated ownership cannot s
 
 test('sealed enclosure uses a budgeted barrier mandate, never hypothetical travel',()=>{
   const {w,p,a}=fixture();p.x=9;p.z=10;a.x=20;a.z=20;w.pawns[1]!.x=21;w.pawns[1]!.z=20;
-  const door=w.structures.find(s=>s.kind==='door')!;door.kind='wall';delete door.door;
+  // Structure kind is immutable (shared structure index contract): replace the
+  // door by a wall in a new array, as the simulation does, not in place.
+  const door=w.structures.find(s=>s.kind==='door')!,{door:_open,...wall}={...door,kind:'wall' as const};
+  w.structures=w.structures.map(s=>s===door?wall:s);
   const before={x:p.x,z:p.z},budget={remaining:2,pairs:0};
   run(w,p,budget);expect(p.melee?.order).toMatchObject({auto:'prison-break',structure:true});
   expect(budget.remaining).toBeLessThan(2);expect({x:p.x,z:p.z}).toEqual(before);
