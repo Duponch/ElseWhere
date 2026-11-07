@@ -283,6 +283,8 @@ import {setResidentDeltaValidationInterval} from './bridge/resident-presentation
 import {LaunchProgress,type LaunchKind,type LaunchStage} from './ui/launch-progress';
 import {buildNativeLaunchPage} from './ui3d/native-launch';
 import {yieldToPaint} from './render/presentation-preparation-progress';
+import {prewarmNativeGlobe} from './ui3d/NativeGlobe';
+import {planetGeography256} from './sim/planet-geography-256';
 // The Worker is this same build. Deep save-grade validation of every adopted
 // delta froze the main thread on large colonies; sample it every 30 s
 // (checkpoints and the first delta after them are always fully validated).
@@ -1235,7 +1237,16 @@ async function openFront(page: 'home' | 'create' | 'load'): Promise<void> {
   setPanel(null); syncStorageButtons();
 }
 async function switchPanel(panel: Panel, preserveTool = false): Promise<void> {
-  if (panel === 'menu') { client.cancelShipCountdown298('menu');await pauseForMenu();await session.refreshSaves();saveManager?.refresh(); }
+  if (panel === 'menu') {
+    client.cancelShipCountdown298('menu');
+    // Show the menu at once: the pause and the saves it lists follow behind it.
+    setPanel(panel, preserveTool);
+    await pauseForMenu();
+    // Closed before the pause was confirmed: resume as an ordinary menu exit.
+    if(currentPanel!=='menu'&&menuResumeSpeed!==undefined&&!replacingWorld&&!frontMenu.isOpen()){const speed=menuResumeSpeed;menuResumeSpeed=undefined;void attempt(()=>client.setSpeed(deferredResumeGuard.held?0:speed));}
+    void session.refreshSaves().then(()=>{saveManager?.refresh();if(currentPanel==='menu')refreshNativeUi();},error=>notify(error instanceof Error?error.message:String(error),true));
+    return;
+  }
   setPanel(panel, preserveTool);
 }
 async function replaceColony(action: () => Promise<void>,confirmedDraft?:WorldCreationTicket256): Promise<void> {
@@ -1260,8 +1271,40 @@ async function replaceColony(action: () => Promise<void>,confirmedDraft?:WorldCr
     else if(snapshot?.startingArrival&&snapshot.startingArrival.phase!=='opened')renderer?.focusCell(snapshot.startingArrival.pods[0]!.cell);
   } finally { replacingWorld = false; endLaunch(); syncStorageButtons(); }
 }
+/** Panels whose first opening builds many pieces (tables, catalogues). */
+const PREWARMED_PANELS:readonly Exclude<Panel,null>[]=['wildlife','animals','work','schedule','assign','research','architect'];
+let uiPrewarm:{cancelled:boolean}|undefined;
+/** Builds the large panels' pieces ahead, one panel at a time, only while the
+ * game is paused, no page is open and the camera has been still for a second:
+ * their first opening then reuses parked pieces instead of painting them. */
+function startUiPrewarm():void {
+  if(uiPrewarm)uiPrewarm.cancelled=true;
+  if(!nativeUi)return;
+  const token={cancelled:false};uiPrewarm=token;
+  const pause=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
+  let view='',stillSince=0;
+  const idle=()=>{
+    const now=performance.now(),current=renderer?JSON.stringify(renderer.captureGraphicsView()):'';
+    if(current!==view){view=current;stillSince=now;}
+    return !!renderer&&!!snapshot&&currentSpeed===0&&currentPanel===null&&!nativeCustomPage&&!nativeUi?.hasOpenGamePage()&&!frontMenu.isOpen()&&!launchProgress&&!replacingWorld&&!presentationPreparation&&!simulationStopped&&!graphicsFault&&!document.hidden&&now-stillSince>=1000;
+  };
+  void (async()=>{
+    for(const panel of PREWARMED_PANELS){
+      for(;;){
+        await pause(400);
+        if(token.cancelled)return;
+        if(!idle())continue;
+        let done=true;
+        try{const page=buildNativePanel({...readNativeState(),panel},nativeActions());if(page)done=!!nativeUi?.prewarmPage(page);}
+        catch{/* Optional: the panel builds its pieces when opened. */}
+        if(done)break;
+      }
+    }
+    if(uiPrewarm===token)uiPrewarm=undefined;
+  })();
+}
 function beginLaunch(kind:LaunchKind):void {
-  endLaunch();launchTimeline.length=0;
+  endLaunch();launchTimeline.length=0;if(uiPrewarm){uiPrewarm.cancelled=true;uiPrewarm=undefined;}
   launchProgress=new LaunchProgress(kind,performance.now(),session.hasWorld&&!simulationStopped);
   launchTicker=setInterval(paintLaunch,500);paintLaunch();
   startEarlyRenderer();
@@ -1287,6 +1330,7 @@ function endLaunch():void {
   if(campaignOnly&&earlyRenderer){const unused=earlyRenderer;earlyRenderer=undefined;void unused.then(view=>view.dispose(),()=>{});}
   legacyLaunchPanel?.remove();legacyLaunchPanel=undefined;
   if(nativeUi){nativeUi.setFrontVisible(frontMenu.isOpen());refreshNativeUi();}
+  if(client.hasActiveMap&&snapshot)startUiPrewarm();
 }
 function reportLaunch(stage:LaunchStage,completed=0,total=1,phase?:string):void {
   if(!launchProgress)return;
@@ -2799,6 +2843,9 @@ async function prepareWorldView(): Promise<void> {
   catch(error){if(hasAuthority())throw error;}
   if(renderer!==activeRenderer||!hasAuthority()){activeRenderer.dispose();if(renderer===activeRenderer)renderer=undefined;if(campaignOnly)renderCampaignOnly();return;}
   activeRenderer.preparationProgress.observer=undefined;
+  // The World page's globe geometry takes about a second to build: do it
+  // behind the loading screen rather than at the page's first opening.
+  if(launchProgress&&nativeUi&&activeWorld.planet?.revision===3)try{const geography=planetGeography256(activeWorld.planet);prewarmNativeGlobe(geography.surface,geography.roads);}catch{/* The page prepares it when first shown. */}
   launchTimeline.push({stage:'prepared',at:performance.now()});
   el('loading')?.remove(); renderState();
   launchTimeline.push({stage:'rendered-state',at:performance.now()});

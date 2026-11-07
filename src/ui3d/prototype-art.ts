@@ -8,6 +8,9 @@ import * as THREE from 'three/webgpu';
 type Paint = string | CanvasGradient | CanvasPattern;
 export type CardboardDraw = (ctx: CanvasRenderingContext2D, wPx: number, hPx: number, rng: () => number) => void;
 export interface CardboardPieceOptions {
+  /** Opt-in: identical cut shapes share geometry owned by the art factory,
+   * released at its disposal rather than with the piece. */
+  sharedGeometry?:boolean;
   /** Use the same cut cardboard construction for silhouettes, not a flat decal. */
   outline?:THREE.Shape|THREE.Shape[];
   surface?:'panel';
@@ -378,40 +381,57 @@ function createHitOnlyPiece({w,h,depth=.044,seed=1,interactive=false,onClick=nul
   return group;
 }
 
+/** Canvas pixels up to which a piece paints on a software (CPU) canvas. */
+const SOFTWARE_CANVAS_MAX_PIXELS=262_144;
+interface CardboardGeometry { readonly face: THREE.BufferGeometry; readonly shadow: THREE.BufferGeometry }
+type CardboardGeometryCache = (key: string, make: () => CardboardGeometry) => CardboardGeometry;
+/** Distinct shared cut shapes kept; beyond it, pieces own their geometry. */
+const SHARED_CARDBOARD_GEOMETRIES = 4096;
 export function createCardboardPiece({
   w, h, depth = 0.044, bgColor = PALETTE.kraftBase,
   bevel = 0.026, seed = 1, drawFn, interactive = false,
-  onClick = null, hasBorder = true, tooltip = '', paper = true, textureWidth, textureHeight, uvPadding, cacheBackground = false, hitOnly = false, outline, surface
-}: CardboardPieceOptions, cardboardEdgeMat: THREE.MeshStandardMaterial, shadowMat: THREE.MeshBasicMaterial): CardboardPiece {
+  onClick = null, hasBorder = true, tooltip = '', paper = true, textureWidth, textureHeight, uvPadding, cacheBackground = false, hitOnly = false, outline, surface, sharedGeometry = false
+}: CardboardPieceOptions, cardboardEdgeMat: THREE.MeshStandardMaterial, shadowMat: THREE.MeshBasicMaterial, geometryCache?: CardboardGeometryCache): CardboardPiece {
   if(hitOnly)return createHitOnlyPiece({w,h,depth,seed,interactive,onClick,tooltip,drawFn,bgColor});
   const group = new THREE.Group() as CardboardPiece;
-  const shape = outline??createCutoutRectShape(w, h, bevel, seed);
+  const makeGeometry = (): CardboardGeometry => {
+    const shape = outline??createCutoutRectShape(w, h, bevel, seed);
 
-  // bevelEnabled: false -> Arête vive et franche de carton coupé aux ciseaux (zéro reflet plastique arrondi !)
-  const extrudeSettings = {
-    depth: depth,
-    bevelEnabled: false,
-    steps: 1
+    // bevelEnabled: false -> Arête vive et franche de carton coupé aux ciseaux (zéro reflet plastique arrondi !)
+    const extrudeSettings = {
+      depth: depth,
+      bevelEnabled: false,
+      steps: 1
+    };
+
+    const geo = paper ? new THREE.ExtrudeGeometry(shape, extrudeSettings) : new THREE.PlaneGeometry(w,h);
+
+    // Recalibrage UV sur [0..1] avec légère marge pour couvrir tous les sommets découpés
+    const pos = geo.attributes.position;
+    const uvs = geo.attributes.uv;
+    const spanW = w * (uvPadding??(paper?1.08:1));
+    const spanH = h * (uvPadding??(paper?1.08:1));
+    for (let i = 0; i < pos.count; i++) {
+      uvs.setXY(i, (pos.getX(i) + spanW / 2) / spanW, (pos.getY(i) + spanH / 2) / spanH);
+    }
+    uvs.needsUpdate = true;
+    return { face: geo, shadow: new THREE.ShapeGeometry(shape) };
   };
-
-  const geo = paper ? new THREE.ExtrudeGeometry(shape, extrudeSettings) : new THREE.PlaneGeometry(w,h);
-
-  // Recalibrage UV sur [0..1] avec légère marge pour couvrir tous les sommets découpés
-  const pos = geo.attributes.position;
-  const uvs = geo.attributes.uv;
-  const spanW = w * (uvPadding??(paper?1.08:1));
-  const spanH = h * (uvPadding??(paper?1.08:1));
-  for (let i = 0; i < pos.count; i++) {
-    uvs.setXY(i, (pos.getX(i) + spanW / 2) / spanW, (pos.getY(i) + spanH / 2) / spanH);
-  }
-  uvs.needsUpdate = true;
+  // Identical cut shapes (same size, bevel, seed and depth) share their GPU
+  // buffers: a table's hundreds of cells use a handful of geometries.
+  const { face: geo, shadow: shadowGeo } = sharedGeometry && !outline && geometryCache
+    ? geometryCache(JSON.stringify([w, h, depth, bevel, seed, paper, uvPadding]), makeGeometry)
+    : makeGeometry();
 
   const wPx = textureWidth??Math.max(128, Math.round(w * 280));
   const hPx = textureHeight??Math.max(84, Math.round(h * 280));
   const canvas = document.createElement('canvas');
   canvas.width = wPx;
   canvas.height = hPx;
-  const ctx = canvas.getContext('2d');
+  // Small pieces (buttons, table cells) paint on a software canvas: Chrome
+  // pays a GPU surface per accelerated canvas and a readback per upload,
+  // which made hundreds of cells cost hundreds of milliseconds to show.
+  const ctx = canvas.getContext('2d', wPx * hPx <= SOFTWARE_CANVAS_MAX_PIXELS ? { willReadFrequently: true } : undefined);
   if (!ctx) throw new Error('Canvas 2D is required for the original cardboard paint.');
 
   let background:HTMLCanvasElement|undefined,backgroundKey='',backgroundFill:Paint=PALETTE.kraftBase;
@@ -452,7 +472,6 @@ export function createCardboardPiece({
   group.add(mesh);
 
   // Ombre portée décalée
-  const shadowGeo = new THREE.ShapeGeometry(shape);
   const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
   shadowMesh.position.set(0.022, -0.026, -0.012);
   shadowMesh.visible=paper;
@@ -568,12 +587,25 @@ export class PrototypeCardboardArt {
   });
   private readonly pieces = new Set<CardboardPiece>();
   private readonly hitMeshes: THREE.Mesh[] = [];
+  /** Shared cut-shape geometries, never disposed with a piece. */
+  private readonly sharedGeometries = new Map<string, CardboardGeometry>();
+  private readonly sharedGeometrySet = new Set<THREE.BufferGeometry>();
+  private readonly geometryCache: CardboardGeometryCache = (key, make) => {
+    const cached = this.sharedGeometries.get(key);
+    if (cached) return cached;
+    const made = make();
+    if (this.sharedGeometries.size < SHARED_CARDBOARD_GEOMETRIES) {
+      this.sharedGeometries.set(key, made);
+      this.sharedGeometrySet.add(made.face);this.sharedGeometrySet.add(made.shadow);
+    }
+    return made;
+  };
   private readonly shelves = new Set<THREE.Mesh>();
 
   get interactiveMeshes(): readonly THREE.Mesh[] { return this.hitMeshes; }
 
   createPiece(options: CardboardPieceOptions): CardboardPiece {
-    const piece = createCardboardPiece(options, this.cardboardEdgeMat, this.shadowMat);
+    const piece = createCardboardPiece(options, this.cardboardEdgeMat, this.shadowMat, this.geometryCache);
     const redraw=piece.userData.redraw,setBase=piece.userData.setBaseTransform;
     piece.userData.redraw=(...args)=>{redraw(...args);this.revision++;this.resourceRevision++;};
     piece.userData.setBaseTransform=(...args)=>{setBase(...args);this.revision++;};
@@ -645,6 +677,29 @@ export class PrototypeCardboardArt {
   }
 
   /** Releases only this factory's paint and geometry; shared materials live until dispose(). */
+  /** Detach pieces kept for later reuse: out of the scene and of hit testing,
+   * resources kept. One pass over the hit list for the whole batch. */
+  parkPieces(pieces: Iterable<CardboardPiece>): void {
+    const meshes = new Set<THREE.Mesh>();
+    for (const piece of pieces) {
+      if (!this.pieces.has(piece)) continue;
+      for (const mesh of piece.userData.interactiveMeshes ?? []) meshes.add(mesh);
+      piece.removeFromParent();
+    }
+    if (!meshes.size) return;
+    let kept = 0;
+    for (const mesh of this.hitMeshes) if (!meshes.has(mesh)) this.hitMeshes[kept++] = mesh;
+    this.hitMeshes.length = kept;
+    this.revision++;
+  }
+
+  /** A parked piece returns to hit testing; its owner re-adds it to the scene. */
+  revivePiece(piece: CardboardPiece): void {
+    if (!this.pieces.has(piece)) return;
+    this.hitMeshes.push(...(piece.userData.interactiveMeshes ?? []));
+    this.revision++;
+  }
+
   disposePiece(piece: CardboardPiece): void {
     if (!this.pieces.delete(piece)) return;
     this.revision++;
@@ -670,12 +725,14 @@ export class PrototypeCardboardArt {
         if (material !== this.cardboardEdgeMat && material !== this.shadowMat) materials.add(material);
       }
     });
-    for (const geometry of geometries) geometry.dispose();
+    for (const geometry of geometries) if (!this.sharedGeometrySet.has(geometry)) geometry.dispose();
     for (const material of materials) material.dispose();
   }
 
   dispose(): void {
     for (const piece of this.pieces) this.disposePiece(piece);
+    for (const geometry of this.sharedGeometrySet) geometry.dispose();
+    this.sharedGeometrySet.clear();this.sharedGeometries.clear();
     for (const shelf of this.shelves) {
       this.disposeMeshes(shelf);
       shelf.removeFromParent();

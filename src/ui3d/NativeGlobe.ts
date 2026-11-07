@@ -31,6 +31,8 @@ interface PreparedSurface {
   readonly source:GlobeGeometry;
   readonly indices:Uint32Array;
   readonly linearColors:Uint8Array;
+  /** Vertex normals of the indexed surface, computed once per owner. */
+  readonly normals:Float32Array;
 }
 /** Only immutable physical owners and their actual road matrices key this cache. */
 const preparedSurfaces=new WeakMap<WorldPhysicalSurface,WeakMap<object,PreparedSurface>>();
@@ -83,10 +85,18 @@ function prepare(surface:WorldPhysicalSurface,roads:NativeGlobeRoads):PreparedSu
     linearColors[i+2]=LINEAR_BYTES[source.colors[i+2]!]!;
     linearColors[i+3]=source.colors[i+3]!;
   }
-  const result={source,indices,linearColors};
+  const normalSource=new THREE.BufferGeometry();
+  normalSource.setAttribute('position',new THREE.BufferAttribute(source.positions,3));normalSource.setIndex(new THREE.BufferAttribute(indices,1));
+  normalSource.computeVertexNormals();
+  const normals=(normalSource.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array;
+  const result={source,indices,linearColors,normals};
   if(!owners){owners=new WeakMap();preparedSurfaces.set(surface,owners);}
   owners.set(roads,result);return result;
 }
+
+/** Prepares a surface ahead (e.g. behind the loading screen) so that the
+ * first page showing it does not build its geometry. Pure cache warm-up. */
+export function prewarmNativeGlobe(surface:WorldPhysicalSurface,roads:NativeGlobeRoads=NO_ROADS):void {prepare(surface,roads);}
 
 /** A resident Three globe inside the existing native scene. This class creates
  * no canvas, renderer, DOM node, SVG, CSS layout, or simulation owner. */
@@ -167,7 +177,7 @@ export class NativeGlobe extends THREE.Group {
     geometry.setIndex(new THREE.BufferAttribute(prepared.indices,1));
     for(const range of prepared.source.ranges)
       if(range.count)geometry.addGroup(range.start,range.count,range.transparent?1:0);
-    geometry.computeVertexNormals();
+    geometry.setAttribute('normal',new THREE.BufferAttribute(prepared.normals,3));
     geometry.boundingSphere=new THREE.Sphere(new THREE.Vector3(),1.003);
     geometry.boundingBox=new THREE.Box3(new THREE.Vector3(-1.003,-1.003,-1.003),new THREE.Vector3(1.003,1.003,1.003));
     const changedOwner=surface!==this.surface,previous=this.surfaceMesh.geometry;

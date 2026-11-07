@@ -22,6 +22,13 @@ const PANEL_IDS=['architect','work','schedule','assign','animals','wildlife','re
 type NativePanelId=typeof PANEL_IDS[number];
 type Hit={piece:CardboardPiece;control?:NativeControl;input?:NonNullable<NativeRow['input']>;region?:NativeRect};
 type PagePiece={piece:CardboardPiece;hit:Hit;geometry:string;paint:string};
+/** Parked page pieces: at most this many, and this many canvas pixels (each
+ * pixel exists once on the CPU canvas and once in the GPU texture). Large
+ * pieces (page sheets, repainted with their rows anyway) are not parked. */
+/** Hand-cut outline variants of controls: same-size controls share geometry. */
+const CONTROL_CUT_VARIANTS=16;
+const PARKED_PAGE_PIECES=6000,PARKED_PAGE_PIXELS=16_000_000,PARKED_PIECE_MAX_PIXELS=250_000;
+const pagePiecePixels=(piece:CardboardPiece):number=>(piece.userData.wPx??0)*(piece.userData.hPx??0);
 export interface NativeStageOptions {
   onPanel:(panel:NativePanelId)=>void;
   onEscape:()=>void;
@@ -76,6 +83,10 @@ export class NativeStage {
   private dropdown:{controlId:string;pageId:string;box:{x:number;y:number;width:number;height:number};offset:number;index:number;pieces:CardboardPiece[]}|undefined;
   private readonly pagePieces:CardboardPiece[]=[];
   private readonly retainedPagePieces=new Map<string,PagePiece>();
+  /** Pieces of closed pages, kept so that reopening a page needs no geometry,
+   * paint or texture upload. Least recently parked first; bounded in pixels. */
+  private readonly parkedPagePieces=new Map<string,PagePiece>();
+  private parkedPagePixels=0;
   private pagePieceIds=new Set<string>();
   private readonly hits=new Map<THREE.Mesh,Hit>();
   private readonly insetControls=new WeakMap<CardboardPiece,Hit[]>();
@@ -309,6 +320,22 @@ export class NativeStage {
   }
   setTextEntities(entities:readonly NativeTextEntity[]):void{if(this.sharedTextEntities===entities)return;this.sharedTextEntities=entities;if(this.page&&!this.page.textEntities){this.rebuildPage(true);this.invalidate();}}
   setAutoHideBottom(enabled:boolean):void{this.autoHideBottom=enabled;this.bottomOpen=!enabled||this.lastPointer.y>=this.height-14;this.extraAnimating=true;this.invalidate();}
+  /** Builds a page's pieces without showing it and parks them, so that its
+   * first real opening reuses them. Only while no page is shown in game: no
+   * frame is rendered in between, and the empty page is restored at once. */
+  prewarmPage(page:NativePage):boolean{
+    if(this.closed||this.page||this.frontVisible||!this.worldVisible||this.shipCurtainOwner298!==undefined)return false;
+    const scroll=this.scroll;
+    this.page=page;
+    try{
+      this.rebuildPage(true);
+      // Upload the new pieces' paint now, not at the page's first frame.
+      const renderer=this.overlayRenderer;
+      if(renderer)for(const piece of this.pagePieces)renderer.initTexture(piece.userData.texture);
+    }
+    finally{this.page=null;this.rebuildPage(true);this.scroll=scroll;this.invalidate();}
+    return true;
+  }
   showPage(page:NativePage|null):void{
     if(this.closed)return;
     if(this.shipCurtainOwner298!==undefined&&page?.id!==this.shipCurtainPage298){
@@ -490,7 +517,10 @@ export class NativeStage {
     }
   }
   /** Called by the existing game renderer, using its device and frame loop. */
+  /** Renderer drawing this interface in game: page warm-ups upload to it. */
+  private overlayRenderer:THREE.WebGPURenderer|undefined;
   renderOverlay(renderer:THREE.WebGPURenderer,now=performance.now()):void{
+    this.overlayRenderer=renderer;
     if(this.closed||this.frontVisible||!this.worldVisible)return;
     const animated=this.moving.size>0||this.extraAnimating;
     this.animate(now);
@@ -1220,7 +1250,7 @@ export class NativeStage {
       if(control.active&&!control.glyph)drawMarkerLine(ctx,5,cssH-3,cssW-5,cssH-3,PALETTE.inkDark,1,rng);
       ctx.restore();
     };
-    const piece=this.pagePiece(control.id,{w,h,depth:.046,bevel:.038,uvPadding:1,textureWidth:Math.max(32,Math.ceil(cssW*2)),textureHeight:Math.max(32,Math.ceil(cssH*2)),bgColor:control.glyph?PALETTE.creamPaper:control.disabled?PALETTE.kraftLight:control.active?PALETTE.ochre:control.color??PALETTE.sageMountain,seed:this.seed(control.id),interactive:true,drawFn:draw},
+    const piece=this.pagePiece(control.id,{w,h,depth:.046,bevel:.038,uvPadding:1,textureWidth:Math.max(32,Math.ceil(cssW*2)),textureHeight:Math.max(32,Math.ceil(cssH*2)),bgColor:control.glyph?PALETTE.creamPaper:control.disabled?PALETTE.kraftLight:control.active?PALETTE.ochre:control.color??PALETTE.sageMountain,seed:this.seed(control.id)%CONTROL_CUT_VARIANTS+1,sharedGeometry:true,interactive:true,drawFn:draw},
       JSON.stringify([control.label,control.caption,control.description,control.icon,control.glyph,control.color,style,node,inset?.icon,!!inset?.disabled,!!control.active,!!control.disabled,!!control.select,this.textFontRevision]),x,y,z,control);
     piece.userData.nativeStyle=style;piece.userData.active=!!control.active;
     piece.userData.nativeMapToolPose=this.page?.layout==='palette'&&style==='icon';piece.userData.nativeMapToolTitle=control.label;
@@ -1271,6 +1301,17 @@ export class NativeStage {
     const geometry=JSON.stringify([options.w,options.h,options.depth??.044,options.bevel??.026,options.seed??1,!!options.interactive,options.paper,options.hitOnly,options.cacheBackground,options.textureWidth,options.textureHeight,options.uvPadding]);
     const paint=JSON.stringify([options.bgColor??PALETTE.kraftBase,options.surface,ink]);
     let record=this.retainedPagePieces.get(id),created=false;
+    if(!record){
+      const parked=this.parkedPagePieces.get(id);
+      if(parked){
+        this.parkedPagePieces.delete(id);this.parkedPagePixels-=pagePiecePixels(parked.piece);
+        if(parked.geometry===geometry){
+          this.art.revivePiece(parked.piece);parked.hit=this.register(parked.piece,control,input);
+          this.retainedPagePieces.set(id,parked);this.pageGroup.add(parked.piece);record=parked;
+          this.setPose(parked.piece,0);
+        }else this.art.disposePiece(parked.piece);
+      }
+    }
     const old=record,wasEditing=!!record&&this.editing===record.hit;
     const interaction=record?{hoverTarget:record.piece.userData.hoverTarget,hoverVal:record.piece.userData.hoverVal,pressVal:record.piece.userData.pressVal,hovered:this.hovered===record.piece,moving:this.moving.has(record.piece),pressed:this.down?.piece===record.piece}:undefined;
     if(record&&record.geometry!==geometry){this.unregister(record.piece);this.retainedPagePieces.delete(id);record=undefined;}
@@ -1296,10 +1337,28 @@ export class NativeStage {
     return piece;
   }
   private retirePagePieces():void{
+    const parked:CardboardPiece[]=[];
     for(const [id,record]of this.retainedPagePieces)if(!this.pagePieceIds.has(id)){
       if(this.editing===record.hit)this.finishEdit(false,false);
-      this.unregister(record.piece);this.retainedPagePieces.delete(id);
+      this.retainedPagePieces.delete(id);
+      const piece=record.piece;
+      if(this.mapToolLabelOwner===piece)this.clearMapToolLabel();
+      if(this.hintOwner===piece)this.clearHint();
+      if(this.hovered===piece)this.hover(null);this.moving.delete(piece);
+      for(const mesh of piece.userData.interactiveMeshes??[])this.hits.delete(mesh);
+      piece.userData.hoverTarget=piece.userData.hoverVal=piece.userData.pressVal=0;
+      const previous=this.parkedPagePieces.get(id);
+      if(previous){this.parkedPagePieces.delete(id);this.parkedPagePixels-=pagePiecePixels(previous.piece);this.art.disposePiece(previous.piece);}
+      if(pagePiecePixels(piece)>PARKED_PIECE_MAX_PIXELS){this.art.disposePiece(piece);continue;}
+      this.parkedPagePieces.set(id,record);this.parkedPagePixels+=pagePiecePixels(piece);parked.push(piece);
     }
+    if(!parked.length)return;
+    this.art.parkPieces(parked);
+    for(const [id,record]of this.parkedPagePieces){
+      if(this.parkedPagePieces.size<=PARKED_PAGE_PIECES&&this.parkedPagePixels<=PARKED_PAGE_PIXELS)break;
+      this.parkedPagePieces.delete(id);this.parkedPagePixels-=pagePiecePixels(record.piece);this.art.disposePiece(record.piece);
+    }
+    this.sceneRevision++;
   }
   private seed(text:string):number{let value=17;for(const c of text)value=(Math.imul(value,31)+c.charCodeAt(0))>>>0;return value;}
   private clearHint():void{
@@ -1398,6 +1457,6 @@ export class NativeStage {
     this.frontBackdrop.dispose();
     if(this.closed)return;this.hover(null);this.clearMapToolLabel();this.closed=true;this.resetShipCurtain298(false);this.countdownFrameAt298=undefined;this.countdownFrameDriver298=undefined;this.countdownFrameEligible298=false;this.countdownFeedEligible298=false;this.fontRequest++;this.clearHint();clearTimeout(this.noticeTimer);this.finishEdit(false,false);cancelAnimationFrame(this.frameId);
     setNativeCursor(document.documentElement,undefined);
-    for(const dispose of this.disposers)dispose();this.disposers.length=0;this.overlayCache.dispose();for(const image of this.portraitImages.values()){image.onload=null;image.onerror=null;}this.portraitImages.clear();this.globe?.dispose();this.selectionFill.geometry.dispose();this.selectionFill.material.dispose();this.selectionOutline.geometry.dispose();this.selectionOutline.material.dispose();this.shipCurtainMesh298.geometry.dispose();this.shipCurtainMaterial298.dispose();this.shipCurtainScene298.clear();this.art.dispose();this.ownRenderer.domElement.remove();void this.ownRenderer.dispose();this.hits.clear();this.moving.clear();this.retainedPagePieces.clear();
+    for(const dispose of this.disposers)dispose();this.disposers.length=0;this.overlayCache.dispose();for(const image of this.portraitImages.values()){image.onload=null;image.onerror=null;}this.portraitImages.clear();this.globe?.dispose();this.selectionFill.geometry.dispose();this.selectionFill.material.dispose();this.selectionOutline.geometry.dispose();this.selectionOutline.material.dispose();this.shipCurtainMesh298.geometry.dispose();this.shipCurtainMaterial298.dispose();this.shipCurtainScene298.clear();this.art.dispose();this.ownRenderer.domElement.remove();void this.ownRenderer.dispose();this.hits.clear();this.moving.clear();this.retainedPagePieces.clear();this.parkedPagePieces.clear();this.parkedPagePixels=0;
   }
 }

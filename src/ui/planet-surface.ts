@@ -18,7 +18,7 @@ export interface GlobeGeometry {
  tileIds:Uint32Array;centres:Float64Array;starts:Uint32Array;counts:Uint8Array;
  searchOrder:Uint32Array;search:SearchNode;pickRadiusSq:number;
 }
-const finiteVector=(v:GlobeVector,radius=1)=>v.length===3&&v.every(Number.isFinite)&&Math.abs(Math.hypot(...v)-radius)<1e-5*radius;
+const finiteVector=(v:GlobeVector,radius=1)=>v.length===3&&Number.isFinite(v[0])&&Number.isFinite(v[1])&&Number.isFinite(v[2])&&Math.abs(Math.hypot(v[0],v[1],v[2])-radius)<1e-5*radius;
 /** Corners are supplied by the complete canonical graph. In particular a
  * coverage boundary's retained neighbours cannot reconstruct its polygon. */
 export function prepareGlobeGeometry(input:GlobeSurfaceInput):GlobeGeometry {
@@ -27,7 +27,8 @@ export function prepareGlobeGeometry(input:GlobeSurfaceInput):GlobeGeometry {
  const tileIds=new Uint32Array(size),centres=new Float64Array(size*3),starts=new Uint32Array(size),counts=new Uint8Array(size),ids=new Set<number>();
  let vertices=0,triangles=0,pickRadiusSq=0;
  input.tiles.forEach((tile,row)=>{
-  if(!Number.isSafeInteger(tile.id)||tile.id<0||tile.id>0xffffffff||ids.has(tile.id)||tile.center.length!==3||tile.center.some(value=>!Number.isFinite(value))||Math.hypot(...tile.center)<=0||Math.hypot(...tile.center)>radius*1.00001)throw Error('Centre de case invalide.');ids.add(tile.id);
+  const c=tile.center,length=c.length===3?Math.hypot(c[0],c[1],c[2]):NaN;
+  if(!Number.isSafeInteger(tile.id)||tile.id<0||tile.id>0xffffffff||ids.has(tile.id)||c.length!==3||!Number.isFinite(c[0])||!Number.isFinite(c[1])||!Number.isFinite(c[2])||length<=0||length>radius*1.00001)throw Error('Centre de case invalide.');ids.add(tile.id);
   const corners=input.corners(tile.id);if(corners.length<3||corners.length>12||corners.some(c=>!finiteVector(c,radius)))throw Error('Polygone de case invalide.');
   for(const corner of corners){const x=corner[0]-tile.center[0],y=corner[1]-tile.center[1],z=corner[2]-tile.center[2];pickRadiusSq=Math.max(pickRadiusSq,(x*x+y*y+z*z)/(radius*radius));}
   tileIds[row]=tile.id;for(let axis=0;axis<3;axis++)centres[row*3+axis]=tile.center[axis]!/radius;starts[row]=vertices;counts[row]=corners.length;vertices+=corners.length+1;triangles+=corners.length;
@@ -38,7 +39,7 @@ export function prepareGlobeGeometry(input:GlobeSurfaceInput):GlobeGeometry {
  input.tiles.forEach((tile,row)=>{
   const start=starts[row]!,corners=input.corners(tile.id),pigment=input.pigment(tile.id);if(corners.length!==counts[row]||pigment.some(value=>!Number.isInteger(value)||value<0||value>255))throw Error('La géométrie du globe a changé pendant sa préparation.');
   for(let axis=0;axis<3;axis++)positions[start*3+axis]=tile.center[axis]!/radius;edges[start]=255;colors.set(pigment,start*4);colors[start*4+3]=255;
-  corners.forEach((corner,index)=>{for(let axis=0;axis<3;axis++)positions[(start+index+1)*3+axis]=corner[axis]!/radius;colors.set(pigment,(start+index+1)*4);colors[(start+index+1)*4+3]=255;indices.set([start,start+index+1,start+(index+1)%corners.length+1],cursor);cursor+=3;});
+  for(let index=0,count=corners.length;index<count;index++){const corner=corners[index]!,vertex=start+index+1;positions[vertex*3]=corner[0]!/radius;positions[vertex*3+1]=corner[1]!/radius;positions[vertex*3+2]=corner[2]!/radius;colors.set(pigment,vertex*4);colors[vertex*4+3]=255;indices[cursor]=start;indices[cursor+1]=vertex;indices[cursor+2]=start+(index+1)%count+1;cursor+=3;}
  });
  const ranges:{start:number;count:number;transparent:boolean}[]=[{start:0,count:faceIndices,transparent:false}];let extraVertex=faceVertices;
  for(const patch of decorations){positions.set(patch.positions,extraVertex*3);colors.set(patch.colors,extraVertex*4);edges.fill(255,extraVertex,extraVertex+patch.positions.length/3);ranges.push({start:cursor,count:patch.indices.length,transparent:true});for(const index of patch.indices){if(index>=patch.positions.length/3)throw Error('Indice décoratif invalide.');indices[cursor++]=extraVertex+index;}extraVertex+=patch.positions.length/3;}
