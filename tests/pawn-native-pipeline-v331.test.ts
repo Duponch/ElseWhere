@@ -148,26 +148,43 @@ test('material transitions preserve encoded edges, selected ownership and geomet
   }finally{layer.dispose();}
 });
 
-test('cold warm-up visits four body variants for both cameras and each shadow variant, then restores the active native choice',async()=>{
+// Since the grouped warm-up, every variant draws through a detached stand-in
+// that shares the body attributes, index and user data (same render-object
+// cache key as the body): one compilation per camera and ONE shadow warm-up
+// cover all four variants. The body itself keeps its material throughout.
+function standIns(object:THREE.Object3D,mesh:Body,source:THREE.InstancedBufferGeometry):Surface[]{
+  expect(object).toBeInstanceOf(THREE.Group);expect(object.parent).toBe(mesh.parent);
+  const children=object.children as Body[];
+  for(const child of children){
+    for(const [name,attribute] of Object.entries(source.attributes))expect(child.geometry.getAttribute(name)).toBe(attribute);
+    expect(child.geometry.index).toBe(source.index);expect(child.geometry.userData).toBe(source.userData);expect(child.geometry.instanceCount).toBe(1);
+    expect(child.castShadow).toBe(mesh.castShadow);expect(child.receiveShadow).toBe(mesh.receiveShadow);
+  }
+  return children.map(child=>child.material);
+}
+test('cold warm-up compiles the four body variants through stand-ins for both cameras and covers them with one shadow warm-up, then restores the active native choice',async()=>{
   const {world,exact,layer,frame}=setup();
   try{
     frame(0,101,iso(30));layer.setTexturesEnabled(false);
     const mesh=body(layer),source=layer.feedbackSource!,savedMaterial=mesh.material,scene=new THREE.Scene();scene.add(layer.group);
-    const cameras=[iso(30),perspective()],colour:{material:Surface;camera:THREE.Camera}[]=[],shadows:Surface[]=[];
+    const cameras=[iso(30),perspective()],colour:{materials:Surface[];camera:THREE.Camera}[]=[],shadows:Surface[][]=[];let group:THREE.Object3D|undefined;
     mesh.visible=false;source.instanceCount=0;
     const renderer={compileAsync:vi.fn(async(object:THREE.Object3D,camera:THREE.Camera,actualScene?:THREE.Scene)=>{
-      expect(object).toBe(mesh);expect(actualScene).toBe(scene);expect(mesh.visible).toBe(true);expect(source.instanceCount).toBe(1);
-      colour.push({material:mesh.material,camera});
+      expect(actualScene).toBe(scene);expect(mesh.visible).toBe(true);expect(source.instanceCount).toBe(1);expect(mesh.material).toBe(savedMaterial);
+      group??=object;expect(object).toBe(group);colour.push({materials:standIns(object,mesh,source),camera});
     })};
     await layer.prepareBodyPipelines(renderer as unknown as THREE.WebGPURenderer,scene,cameras,async()=>{
-      expect(mesh.visible).toBe(true);expect(source.instanceCount).toBe(1);
-      expect(colour).toHaveLength((shadows.length+1)*2);expect(colour.at(-1)!.material).toBe(mesh.material);shadows.push(mesh.material);
+      expect(mesh.visible).toBe(true);expect(source.instanceCount).toBe(1);expect(colour).toHaveLength(2);
+      let inScene=false;scene.traverse(object=>{if(object===group)inScene=true;});expect(inScene).toBe(true);
+      shadows.push(standIns(group!,mesh,source));
     });
-    expect(renderer.compileAsync).toHaveBeenCalledTimes(8);expect(shadows).toHaveLength(4);expect(new Set(shadows).size).toBe(4);
-    for(let variant=0;variant<4;variant++)for(let view=0;view<2;view++)expect(colour[variant*2+view]).toEqual({material:shadows[variant],camera:cameras[view]});
+    expect(renderer.compileAsync).toHaveBeenCalledTimes(2);expect(shadows).toHaveLength(1);
+    const variants=shadows[0]!;expect(variants).toHaveLength(4);expect(new Set(variants).size).toBe(4);
+    for(let view=0;view<2;view++)expect(colour[view]).toEqual({materials:variants,camera:cameras[view]});
+    expect(group!.parent).toBeNull();
     expect(mesh.material).toBe(savedMaterial);expect(mesh.visible).toBe(false);expect(source.instanceCount).toBe(0);expect(mesh.geometry).toBe(source);
-    // The temporary override cannot flip textures or the runtime native/LOD selection.
-    expect(savedMaterial).toBe(shadows[2]);layer.setTexturesEnabled(true);expect(mesh.material).toBe(shadows[3]);
+    // The warm-up cannot flip textures or the runtime native/LOD selection.
+    expect(savedMaterial).toBe(variants[2]);layer.setTexturesEnabled(true);expect(mesh.material).toBe(variants[3]);
     expect(layer.feedbackSource).toBe(source);expect(JSON.stringify(world)).toBe(exact);
   }finally{layer.dispose();}
 });
@@ -178,12 +195,12 @@ test.each(['colour','shadow'] as const)('warm-up restores material, visibility, 
     frame(0,101,iso(16));layer.setTexturesEnabled(false);
     const mesh=body(layer),source=layer.feedbackSource!,savedMaterial=mesh.material,scene=new THREE.Scene(),error=Error(`deliberate ${failure} warm rejection`);
     scene.add(layer.group);mesh.visible=false;source.instanceCount=0;
-    let colours=0,shadows=0;
-    const renderer={compileAsync:vi.fn(async()=>{colours++;if(failure==='colour'&&colours===3)throw error;})};
+    let colours=0,shadows=0,group:THREE.Object3D|undefined;
+    const renderer={compileAsync:vi.fn(async(object:THREE.Object3D)=>{group=object;colours++;if(failure==='colour'&&colours===2)throw error;})};
     await expect(layer.prepareBodyPipelines(renderer as unknown as THREE.WebGPURenderer,scene,[iso(30),perspective()],async()=>{
-      shadows++;if(failure==='shadow'&&shadows===2)throw error;
+      shadows++;if(failure==='shadow')throw error;
     })).rejects.toBe(error);
-    expect(colours).toBe(failure==='colour'?3:4);expect(shadows).toBe(failure==='colour'?1:2);
+    expect(colours).toBe(2);expect(shadows).toBe(failure==='colour'?0:1);expect(group!.parent).toBeNull();
     expect(mesh.material).toBe(savedMaterial);expect(mesh.visible).toBe(false);expect(source.instanceCount).toBe(0);expect(mesh.geometry).toBe(source);
     layer.setTexturesEnabled(true);const lodTextured=mesh.material;expect(lodTextured).not.toBe(savedMaterial);
     frame(1,101,iso(16));expect(mesh.material).toBe(lodTextured);

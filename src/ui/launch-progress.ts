@@ -15,14 +15,14 @@ const LABELS:Record<LaunchStage,string>={
   publish:'Transmission à l’affichage',
   renderer:'Initialisation du rendu',
   world:'Construction de la scène',
-  surfaces:'Peinture des arbres et des roches',
+  surfaces:'Préparation des surfaces',
   scene:'Compilation des matériaux',
   actors:'Préparation des personnages',
   shadows:'Préparation des ombres',
 };
 /** Expected seconds on the reference machine; they only shape the bar. The
  * migration weight is set from the number of versions actually crossed. */
-const WEIGHTS:Record<LaunchStage,number>={backup:2,read:1,migrate:0,validate:3,restore:1,map:10,publish:3,renderer:3,world:7,surfaces:9,scene:12,actors:29,shadows:1};
+const WEIGHTS:Record<LaunchStage,number>={backup:2,read:1,migrate:0,validate:2,restore:1,map:10,publish:4,renderer:.5,world:6,surfaces:8,scene:3,actors:12.5,shadows:.5};
 const MIGRATION_SECONDS_PER_VERSION=.8;
 const ORDER:Record<LaunchKind,readonly LaunchStage[]>={
   load:['backup','read','migrate','validate','restore','publish','renderer','world','surfaces','scene','actors','shadows'],
@@ -110,6 +110,6 @@ function detailFor(stage:LaunchStage,completed:number,total:number,phase?:string
   if(stage==='map'&&phase){const label=MAP_PHASES.find(([pattern])=>pattern.test(phase))?.[1];return label?`Étape ${Math.min(total,completed+1)} / ${total} · ${label}`:'';}
   if(stage==='migrate')return total>0?`Version ${completed} / ${total} à mettre à jour`:'';
   if(stage==='scene')return total>1?`${completed} / ${total} objets`:'';
-  if(stage==='actors')return total>1?`Variante ${Math.min(total,completed+1)} / ${total}`:'';
+  if(stage==='actors')return total===2?(completed===0?'Variantes de corps':'Ombres de la scène'):'';
   return '';
 }

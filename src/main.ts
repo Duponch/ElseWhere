@@ -301,6 +301,9 @@ let nativeHud:NativeHudCards|undefined;
 let nativeCustomPage:NativePage|undefined;
 /** Main-thread steps of the last launch with their time; diagnostics only. */
 const launchTimeline:{stage:string;at:number}[]=[];
+/** Graphics device and resident layers created while the Worker still loads
+ * the first colony; adopted by the next prepareWorldView. */
+let earlyRenderer:ReturnType<typeof MainColonyRenderer.create>|undefined;
 /** Loading screen of the colony being opened; observation only. */
 let launchProgress:LaunchProgress|undefined,launchTicker:ReturnType<typeof setInterval>|undefined,launchPaintQueued=false,legacyLaunchPanel:HTMLElement|undefined;
 let nativeHudHiddenInspectorKey:string|undefined;
@@ -1261,10 +1264,27 @@ function beginLaunch(kind:LaunchKind):void {
   endLaunch();launchTimeline.length=0;
   launchProgress=new LaunchProgress(kind,performance.now(),session.hasWorld&&!simulationStopped);
   launchTicker=setInterval(paintLaunch,500);paintLaunch();
+  startEarlyRenderer();
+}
+/** The renderer does not need the World: create it during the Worker's load
+ * instead of after it. Only for a first colony (no renderer to reuse). */
+function startEarlyRenderer():void {
+  if(renderer||earlyRenderer||!nativeUi||graphicsFault||simulationStopped)return;
+  shell.hidden=false;
+  const creation=MainColonyRenderer.create(el('viewport'),pickCell,groundGrassEnabled,graphicsStylePreferences);
+  earlyRenderer=creation;creation.catch(()=>{if(earlyRenderer===creation)earlyRenderer=undefined;});
+}
+async function takeRenderer():ReturnType<typeof MainColonyRenderer.create> {
+  const early=earlyRenderer;earlyRenderer=undefined;
+  if(early)try{return await early;}catch{/* A fresh creation reports its own failure. */}
+  return MainColonyRenderer.create(el('viewport'),pickCell,groundGrassEnabled,graphicsStylePreferences);
 }
 function endLaunch():void {
   if(!launchProgress)return;
   launchProgress=undefined;clearInterval(launchTicker);launchTicker=undefined;
+  // A refused or mapless launch keeps the menu: hide the unused viewport again.
+  if(!renderer&&!(client.hasActiveMap&&snapshot))shell.hidden=true;
+  if(campaignOnly&&earlyRenderer){const unused=earlyRenderer;earlyRenderer=undefined;void unused.then(view=>view.dispose(),()=>{});}
   legacyLaunchPanel?.remove();legacyLaunchPanel=undefined;
   if(nativeUi){nativeUi.setFrontVisible(frontMenu.isOpen());refreshNativeUi();}
 }
@@ -2711,7 +2731,7 @@ async function prepareWorldView(): Promise<void> {
   if (!renderer) {
     launchTimeline.push({stage:'renderer',at:performance.now()});
     if(launchProgress){reportLaunch('renderer');await yieldToPaint();if(!hasAuthority()){if(campaignOnly)renderCampaignOnly();return;}}
-    const created=await MainColonyRenderer.create(el('viewport'), pickCell, groundGrassEnabled,graphicsStylePreferences);
+    const created=await takeRenderer();
     if(!hasAuthority()){created.dispose();if(campaignOnly)renderCampaignOnly();return;}
     renderer=created;
     renderer.setDioramaEnabled(dioramaEnabled);

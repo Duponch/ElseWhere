@@ -143,6 +143,10 @@ class SharedSurfacePreparationCancelled extends SurfacePreparationSuperseded {}
 /** Consecutive superseded attempts retried at once inside one world admission;
  * beyond it the demand stays dirty and the next frame prepares again. */
 const SURFACE_SUPERSESSION_RETRIES=8;
+/** Pause between two background compilations of absent animal species. */
+const WILDLIFE_WARMUP_PAUSE_MS=400;
+/** Camera stillness required before one background species compilation. */
+const WILDLIFE_WARMUP_STILL_MS=1000;
 import type {FixedTreeCohortPlan} from './models/FixedTreeCohort';
 import type {TreeBakeDemand} from './origami/TreeBakeOwner';
 import {fixedTreePaintKey} from './surfaces/FixedTreeTextureSurface';
@@ -1478,6 +1482,38 @@ export class SceneRenderCore {
       try { this.dispose(); } catch { /* Preserve the original preparation error. */ }
       throw error;
     }finally{if(this.sharedSurfacePreparation===job)this.sharedSurfacePreparation=undefined;this.queuePausedTreeTextures();}
+    this.startWildlifeWarmup();
+  }
+
+  private wildlifeWarmup:{cancelled:boolean}|undefined;
+  /** Compiles the programs of the animal species absent at load, one species
+   * at a time, through a detached stand-in: nothing is drawn or published.
+   * Each compilation costs frames, so it runs only while the game is paused
+   * and the camera has been still for a second. A species appearing before
+   * its turn compiles when first drawn, as before this warm-up existed; its
+   * shadow program is always built at first draw. */
+  private startWildlifeWarmup():void{
+    if(this.wildlifeWarmup)this.wildlifeWarmup.cancelled=true;
+    const token={cancelled:false},rigs=this.wildlife.inactiveRigs();this.wildlifeWarmup=token;
+    const stopped=()=>token.cancelled||this.disposed||this.closingPresentation||!!this.fatalError;
+    const pause=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
+    let view='',stillSince=0;
+    const idle=()=>{
+      const now=performance.now(),current=JSON.stringify(this.captureGraphicsView());
+      if(current!==view){view=current;stillSince=now;}
+      return !this.preparing&&!this.holdSurfaceWorld&&!this.hostPort.hidden()&&this.received?.speed===0&&now-stillSince>=WILDLIFE_WARMUP_STILL_MS;
+    };
+    void (async()=>{
+      for(const rig of rigs){
+        await pause(WILDLIFE_WARMUP_PAUSE_MS);
+        while(!stopped()&&!idle())await pause(WILDLIFE_WARMUP_PAUSE_MS);
+        if(stopped())return;
+        if(this.wildlife.isActiveRig(rig))continue;
+        try{await this.renderer.compileAsync(rig.compileStandIn(),this.camera,this.scene);}
+        catch{/* Optional warm-up: the first draw compiles this species as before. */}
+      }
+      if(this.wildlifeWarmup===token)this.wildlifeWarmup=undefined;
+    })();
   }
 
   protected async preparePresentationResources(compileOnly=false,prepareTreeAssets=true): Promise<void> {
@@ -1499,7 +1535,8 @@ export class SceneRenderCore {
     const culling = new Map<THREE.Object3D, boolean>();
     const distant = this.overview.group.visible;
     const restorePawnFires=this.pawns.prepareFiresForCompile();
-    const restoreWildlife=this.wildlife.prepare();
+    // Absent species compile in the background once the colony is shown.
+    const restoreWildlife=this.wildlife.prepare('active');
     const restoreAnimalCargo=this.animalCargo.prepareForCompile();
     const restoreMechanoids=this.mechanoids.prepare();
     const restoreRopes=this.ropes.prepareForCompile();

@@ -80,6 +80,17 @@ import { bodyBloodPigment,bodyBloodWord } from './body-blood';
 import type { AnimalCorpseCarrier } from './animal-corpse-carrier';
 /** Stable all-rigid real time before the colonists' body atlas is admitted again. */
 const BODY_ATLAS_READMIT_MS=6000;
+/** One-instance mesh sharing the source's attribute objects, index and user
+ * data with another material. Never disposed: its attributes are the source's. */
+function bodyVariantStandIn(source:THREE.Mesh,material:THREE.Material):THREE.Mesh{
+  const from=source.geometry as THREE.InstancedBufferGeometry,geometry=new THREE.InstancedBufferGeometry();
+  for(const [name,attribute] of Object.entries(from.attributes))geometry.setAttribute(name,attribute);
+  if(from.index)geometry.setIndex(from.index);
+  geometry.userData=from.userData;geometry.instanceCount=1;
+  const mesh=new THREE.Mesh(geometry,material);mesh.name=source.name+' — warm-up stand-in';
+  mesh.frustumCulled=false;mesh.castShadow=source.castShadow;mesh.receiveShadow=source.receiveShadow;mesh.layers.mask=source.layers.mask;mesh.renderOrder=source.renderOrder;
+  return mesh;
+}
 // Two affine traits share one fragment location. Keep all decisions (skin,
 // equipment, corpse ribs and blood) in the fragment shader; vertex poses use
 // the original attributes and receive no additional buffer or approximation.
@@ -395,33 +406,40 @@ export class PawnLayer {
   }
   /** Call only while the owner suspends frames and prepares scene visibility.
    * compileAsync skips shadows; prepareShadow must request a real shadow pass.
-   * This temporary warm override never changes the chosen runtime variant. */
+   * Every body variant (and its wear effect) draws through a detached stand-in
+   * sharing the body attributes, index and user data: the same render-object
+   * cache key as the body itself. One compilation per camera and ONE shadow
+   * warm-up cover all variants. The body keeps its own material throughout. */
   async prepareBodyPipelines(renderer: THREE.WebGPURenderer, scene: THREE.Scene,
     cameras: readonly THREE.Camera[], prepareShadow: () => Promise<void>, progress?: (done:number,total:number)=>void): Promise<void> {
     const mesh = this.pawnMesh;
     if (!mesh) return;
     const geometry = mesh.geometry as THREE.InstancedBufferGeometry;
-    const savedMaterial = mesh.material, savedVisible = mesh.visible, savedCount = geometry.instanceCount;
+    const savedVisible = mesh.visible, savedCount = geometry.instanceCount;
     const effect=this.wearEffect,savedWear=effect?{visible:effect.visible,count:effect.geometry.instanceCount}:undefined;
     const restoreUnions=this.bodyPartUnions.map(union=>union.prepareForCompile());
+    const variants=[this.plainMaterial, this.texturedMaterial,
+      this.nativePlainMaterial, this.nativeTexturedMaterial,...(this.bodyAtlas?.materials??[])].filter((variant):variant is NonNullable<typeof variant>=>!!variant);
+    const stands=new THREE.Group();stands.name='Colonists — body variant warm-up stand-ins';
+    for(const variant of variants){
+      stands.add(bodyVariantStandIn(mesh,variant));
+      // Its material is never disposed: that would release the shared programs.
+      if(effect){const material=effect.material.clone();material.positionNode=variant.positionNode;stands.add(bodyVariantStandIn(effect,material));}
+    }
     try {
       mesh.visible = true;
       geometry.instanceCount = Math.max(1, savedCount);
       if(effect){effect.visible=true;effect.geometry.instanceCount=Math.max(1,effect.geometry.instanceCount);}
-      const variants=[this.plainMaterial, this.texturedMaterial,
-        this.nativePlainMaterial, this.nativeTexturedMaterial,...(this.bodyAtlas?.materials??[])].filter(variant=>!!variant);
-      for (const [index,variant] of variants.entries()) {
-        progress?.(index,variants.length);
-        mesh.material = variant;
-        if(effect){effect.material.positionNode=variant.positionNode;effect.material.needsUpdate=true;}
-        for(const camera of cameras){await renderer.compileAsync(mesh,camera,scene);if(effect)await renderer.compileAsync(effect,camera,scene);}
-        await prepareShadow();
-      }
+      (mesh.parent??scene).add(stands);
+      progress?.(0,2);
+      for(const camera of cameras)await renderer.compileAsync(stands,camera,scene);
+      progress?.(1,2);
+      await prepareShadow();
     } finally {
-      mesh.material = savedMaterial;
+      stands.removeFromParent();
       mesh.visible = savedVisible;
       geometry.instanceCount = savedCount;
-      if(effect&&savedWear){effect.material.positionNode=(savedMaterial as THREE.MeshStandardNodeMaterial).positionNode;effect.material.needsUpdate=true;effect.visible=savedWear.visible;effect.geometry.instanceCount=savedWear.count;}
+      if(effect&&savedWear){effect.visible=savedWear.visible;effect.geometry.instanceCount=savedWear.count;}
       for(const restore of restoreUnions)restore();
     }
   }

@@ -71,6 +71,23 @@ class SpeciesRig {
   private readonly sharedModel:AnimalModel;
   private bodyAtlas:ActorAtlasOwner|undefined;
   private readonly atlasRows=new Map<number,number>();private atlasPublishedCount=0;
+  /** Detached stand-in for compiling this rig's body and fire programs away
+   * from the drawn scene: new geometries sharing the SAME attribute objects,
+   * index and user data (same render-object cache key), current materials,
+   * one instance. Never added to a scene; never disposed (its attributes are
+   * this rig's own GPU buffers). */
+  compileStandIn():THREE.Group{
+    const group=new THREE.Group();
+    for(const source of [this.mesh,this.flames]as THREE.Mesh[]){
+      const from=source.geometry as THREE.InstancedBufferGeometry,stand=new THREE.InstancedBufferGeometry();
+      for(const [name,attribute] of Object.entries(from.attributes))stand.setAttribute(name,attribute);
+      if(from.index)stand.setIndex(from.index);
+      stand.userData=from.userData;stand.instanceCount=1;
+      const mesh=new THREE.Mesh(stand,source.material);mesh.frustumCulled=false;mesh.castShadow=source.castShadow;mesh.receiveShadow=source.receiveShadow;mesh.renderOrder=source.renderOrder;
+      group.add(mesh);
+    }
+    return group;
+  }
   private selectSurfaceMaterial():void{if(this.mesh)this.mesh.material=this.texturesEnabled?(this.bodyAtlas?.selectedMaterial(this.texturedMaterial)??this.texturedMaterial):this.plainMaterial;}
   actorAtlasStatus(){return this.bodyAtlas?.status();}
   private observeAtlasRow(id:number,slot:number,geometry:THREE.BufferGeometry):boolean{
@@ -638,7 +655,12 @@ export class WildlifeLayer {
   }
   actorPlaybackMetrics435(){return this.activeRigs.map(rig=>({species:rig.species,...rig.playbackMetrics435()}));}
   presentAnimations(pawns?:PawnLayer):void {for(const rig of this.activeRigs)rig.presentAnimations(pawns);}
-  prepare():()=>void{const restores=this.rigs.map(r=>r.prepare());return()=>{for(const restore of restores)restore();};}
+  /** Species present on the map are prepared behind the loading screen; the
+   * others compile in the background afterwards (compileStandIn). */
+  prepare(scope:'all'|'active'='all'):()=>void{const rigs=scope==='all'?this.rigs:this.activeRigs,restores=rigs.map(r=>r.prepare());return()=>{for(const restore of restores)restore();};}
+  /** Rigs whose programs a load-time preparation did not cover. */
+  inactiveRigs():readonly SpeciesRig[]{const active=new Set(this.activeRigs);return this.rigs.filter(rig=>!active.has(rig));}
+  isActiveRig(rig:SpeciesRig):boolean{return this.activeRigs.includes(rig);}
   dispose():void{
     if(this.surfaceClosed)return;this.surfaceClosed=true;this.surfaceRevision++;
     for(const r of this.rigs){
