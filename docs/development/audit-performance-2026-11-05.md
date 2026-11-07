@@ -14,6 +14,7 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Plus longue tâche, Les Éclaircies à ×6 | 290 ms | **136 ms**, et rare |
 | Client réel, Les Forges à ×1 | p95 154 à 179 ms (mesure de l’agent rendu) | **p95 28 ms**, 107 im/s, temps réel tenu |
 | Client réel, Les Forges à ×6 | — | **9,5 ticks/s** (6,7 avant les publications allégées) |
+| Adoption d’une publication complète, Les Forges à ×1 (client réel) | 98 ms en moyenne, pics de 250 à 330 ms à chaque construction ou plante ajoutée | **≈ 65 ms**, pics des ressources ≤ 24 ms, mur ajouté ≈ 15 ms |
 | Publications complètes, Les Forges à ×1 (Worker seul) | 6,8 par seconde (≈ 630 Ko chacune) | **≈ 1,9 par seconde** (≈ 3 avant les patchs de cargaison) |
 
 - **Exactitude.** Après chaque optimisation, l’état complet sérialisé reste identique au bit près sur les deux sauvegardes de référence.
@@ -302,6 +303,51 @@ Le jeton n’est maintenant utilisé que si l’index existe déjà ; sinon le b
 
 Rendre ces deux reconstructions incrémentales demande de découper leurs lots par zone de la carte : c’est la prochaine étape, plus profonde.
 
+### Mobilier par zones et ajouts de ressources à part (7 novembre, soir)
+
+Les deux reconstructions qui restaient sont maintenant limitées à ce qui change.
+
+**1. Mobilier par zones.** Le lot unique du mobilier est rangé par zones de 32 × 32 cases (`furniture-zones.ts`). Chaque zone contient ses pièces, dans l’ordre historique des producteurs, suivies de places réservées : des pièces invisibles de 0,1 mm, 1 m sous le sol, au moins 8 par zone ou un huitième de ses pièces. Le lot reste un seul maillage, donc un seul appel de dessin.
+
+Quand des structures changent :
+- les zones à moins de 2 cases d’une structure modifiée, ajoutée ou retirée sont recalculées, en un seul passage, avec le monde complet comme contexte. S’y ajoutent les zones des appareils alimentés par une structure modifiée (fil d’alimentation) ;
+- seules les pièces qui diffèrent sont écrites sur le GPU.
+
+La portée de 2 cases couvre les seuls producteurs qui regardent leurs voisins : portes (murs adjacents), enclos (clôtures adjacentes) et électricité (conduits adjacents et fil vers la structure qui alimente). Tous les autres ne lisent que leur propre structure, et uniquement des champs suivis par la signature des structures.
+
+La reconstruction complète reste faite dans ces cas : réinitialisation, vue coupée, autre lot, lampe solaire qui change d’état, zone qui déborde de ses places réservées, première pièce dans une zone vide.
+
+**Vérification du découpage**, hors navigateur, sur 4 parties de référence (Les Forges, Les Éclaircies, Les Aulnes intégrées et sièges), en vue normale et coupée : chaque zone calculée seule donne exactement les mêmes pièces, dans le même ordre, que la reconstruction complète restreinte à la zone. C’est vrai même sans marge de voisins.
+
+**2. Ajouts de ressources à part.** Une plante ou un arbre qui apparaît (semis, repousse) dans un morceau dont les autres membres n’ont pas changé d’identité va dans un morceau compagnon (`Resources x:z+`), reconstruit seul. Le morceau principal se contente de redimensionner ou de masquer.
+- Le compagnon est fondu dans son morceau, par une reconstruction complète, au-delà de 24 ressources, à un changement d’identité ou à une mise à jour complète.
+- Ses maillages passent par le même compilateur statique que les autres : pas d’appel de dessin supplémentaire, sauf ceux de l’usure des arêtes.
+
+**Vérifications dans le client réel.**
+- **Mobilier.** Après chaque session (Les Forges ×1, Les Aulnes ×3, Les Éclaircies ×3), les pièces visibles des lots du mobilier et des sacs de sable (matrices et couleurs) sont identiques à une reconstruction complète forcée.
+- **Ressources.** Les Forges ×1, 60 s : 28 morceaux compagnons construits, 9 compagnons actifs à la fin. Les triangles visibles, ressource par ressource, sont comparés à une reconstruction complète de tous les morceaux : 1 162 556 triangles des deux côtés. 23 ressources sur 11 767 diffèrent d’au plus 0,0001 unité. Elles sont toutes dans des morceaux principaux, sur des plantes en croissance : c’est le redimensionnement existant, pas le compagnon.
+- **Erreurs.** Aucune.
+
+**Tests.** Nouveau `tests/furniture-zones.test.ts` : changements à cheval sur des frontières de zones (mur contre une porte, clôtures, conduits, alimentation), retrait au milieu du tableau, colis de meuble, débordement, zone vide, réinitialisation, vue coupée. Chaque étape est comparée, pièce par pièce, à l’oracle historique disposé par zones.
+
+Oracles adaptés au nouveau découpage, sans retirer d’assertion :
+- `furniture-resident-presentation`, `furniture-box-batches`, `graphics-style-common-objects` et `furniture-independent-kinds` comparent le lot à `laidOut` (placements historiques disposés par zones, places réservées comprises) ;
+- `resource-deltas-v97` compare, ressource par ressource, les triangles dessinés avec la mise à jour complète (avant : égalité de structure du graphe de scène) ;
+- `resource-partition-v429` cherche la plante née dans son morceau ou son compagnon.
+
+Les deux tests de ressources adaptés passent aussi sur le code d’origine. Sur 173 fichiers comparés à la base, aucun échec propre à la branche hors ces adaptations. Seule exception : le test des pots de fleurs des Aulnes, qui dépasse son délai de 20 s sur la machine actuelle comme sur le code d’origine ; ses assertions passent avec un délai plus long.
+
+**Mesures**, Les Forges ×1, comparées au commit précédent, 2 passes de 40 s par build :
+
+| | Avant | Après |
+|---|---|---|
+| Adoption d’une publication complète, moyenne | 78,7 / 82,2 ms | **66,2 / 68,7 ms** |
+| Ressources, coût moyen par adoption | 18,9 / 18,0 ms | **4,4 / 4,5 ms** |
+| Ressources, pire cas | 154 / 116 ms | **20 / 24 ms** |
+| Ajout d’un mur en acier (mesure ciblée dans le navigateur) | ~100 ms (tout le mobilier) | **13 à 16 ms** |
+
+Le pire cas restant (~220 ms) est la toute première mise en place du mobilier après un chargement. Les postes suivants sont diffus, de 5 à 11 ms en moyenne chacun : tas, cultures, propreté.
+
 **Régression d’une nuit précédente corrigée côté test.** `tests/prison-break-combat-v269.test.ts` transformait une porte en mur en modifiant l’objet sur place. Cela viole le contrat de l’index partagé des structures : le type et la position d’une structure ne changent jamais sur place. Le test remplace maintenant le tableau, comme la simulation, et ses assertions sont inchangées. Il passe sur la branche et sur le code d’origine.
 
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
@@ -338,7 +384,7 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 1. **Coût d’une publication complète sur le thread principal** (voir « Patchs de cargaison »). Sur Les Forges, environ 75 ms d’application par publication, jusqu’à 250 ms, plus l’admission du message. Il en reste 1,3 à 1,5 par seconde, presque toutes calmes ; les autres changements de dépendances (lit, repas, loisirs…) n’en provoquent plus que 0,1 par seconde.
 
    Prochaines étapes :
-   - ~~profiler `applyWorld`~~ : fait, voir « Coût d’adoption d’une publication complète ». Restent à rendre incrémentales, par zone de la carte, la reconstruction des morceaux de ressources lors d’un ajout de plante (50 à 118 ms) et celle du mobilier lors d’une vraie construction (~100 ms) ;
+   - ~~profiler `applyWorld`~~ et ~~rendre incrémentaux le mobilier et les ajouts de ressources~~ : fait, voir « Coût d’adoption d’une publication complète » et « Mobilier par zones ». Restent des postes diffus de 5 à 11 ms par adoption : tas, cultures, propreté ;
    - rendre la copie défensive des paquets de phase moins coûteuse (`native-message-capture.ts`, épinglé) ;
    - ensuite seulement, adapter l’intervalle des publications calmes à leur coût réel : c’est un compromis avec le délai d’affichage des changements lents du monde.
 2. **Rendu three.js** : environ 36 à 48 % du thread principal en jeu, pour 148 maillages visibles et 72 appels de dessin. Postes :

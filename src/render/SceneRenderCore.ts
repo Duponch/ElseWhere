@@ -1807,7 +1807,7 @@ export class SceneRenderCore {
     if(kinds&&this.immutableWorlds.has(world)&&this.furniturePresentation.updateIndependent(world,this.structureGroup,this.wallCutaway,this.boxes,kinds)){this.structureSignature.ackFurnitureBuild();return;}
     const prepared=this.preparedStructures;
     if(prepared?.world===world)this.doors.updateNative(world,this.wallCutaway,false,prepared.doors,prepared.axes,prepared.gateAxes);
-    else this.doors.update(world,this.wallCutaway);this.timber.update(world,this.wallCutaway);this.furniturePresentation.update(world,this.structureGroup,this.wallCutaway,this.boxes,this.structureSignature.flowerChanges(),this.immutableWorlds.has(world));this.structureSignature.ackFurnitureBuild(); }
+    else this.doors.update(world,this.wallCutaway);this.timber.update(world,this.wallCutaway);this.furniturePresentation.update(world,this.structureGroup,this.wallCutaway,this.boxes,this.structureSignature.flowerChanges(),this.immutableWorlds.has(world),kinds);this.structureSignature.ackFurnitureBuild(); }
 
   protected buildJobs(world: World): void {
     if(!this.confirmedIntents){buildJobMarkers(world,this.jobGroup,this.wallCutaway,this.boxes);return;}

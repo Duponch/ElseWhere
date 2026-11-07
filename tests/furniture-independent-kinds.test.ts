@@ -6,7 +6,7 @@ import {FurniturePresentation,FURNITURE_INDEPENDENT_KINDS} from '../src/render/F
 import {ConfirmedStructurePresentationSignature} from '../src/render/ConfirmedStructurePresentationSignature';
 import {sandbagParts} from '../src/render/sandbag-parts';
 import type {Structure,World} from '../src/sim/types';
-import {expected,pot,RecordingBatches,structure} from './furniture-resident-fixtures';
+import {expected,laidOut,pot,RecordingBatches,structure} from './furniture-resident-fixtures';
 
 // Neighbour-aware producers (walls, doors, fences, pens, conduits, vents…) and
 // ordinary furniture, spaced on a grid so sandbags can touch each of them.
@@ -73,7 +73,7 @@ test('a change limited to sandbags rebuilds only their batch; anything else keep
   world.structures.push(structure('sandbags',90000,11,41));
   h.signature.read(world.structures,'','');expect(h.signature.changedKinds()).toEqual(new Set(['sandbags']));
   const sets=h.sandbagSets();expect(h.fast()).toBe(true);
-  expect(h.sandbagSets()).toBe(sets+1);expect(h.batches.calls).toHaveLength(1);expect(h.batches.items).toEqual(expected(world));
+  expect(h.sandbagSets()).toBe(sets+1);expect(h.batches.calls).toHaveLength(1);expect(h.batches.items).toEqual(laidOut(world,h.owner));
 
   // A changed sandbag material (same slot): still independent.
   world.structures.at(-1)!.material='cloth';h.signature.read(world.structures,'','');expect(h.fast()).toBe(true);
@@ -81,7 +81,7 @@ test('a change limited to sandbags rebuilds only their batch; anything else keep
   // A wall: the furniture batch must be rebuilt.
   world.structures.push(structure('wall',90001,20,41));h.signature.read(world.structures,'','');
   expect(h.signature.changedKinds()).toEqual(new Set(['wall']));expect(h.fast()).toBe(false);
-  h.full();expect(h.batches.calls).toHaveLength(2);expect(h.batches.items).toEqual(expected(world));
+  h.full();expect(h.batches.calls).toHaveLength(2);expect(h.batches.items).toEqual(laidOut(world,h.owner));
 
   // A sandbag inserted in the middle shifts later slots: other kinds appear.
   world.structures.splice(5,0,structure('sandbags',90002,1,1));h.signature.read(world.structures,'','');
@@ -96,7 +96,7 @@ test('a change limited to sandbags rebuilds only their batch; anything else keep
   world.structures.push(structure('sandbags',90006,5,1));h.signature.read(world.structures,'axes','packed');
   expect(h.fast(true)).toBe(false);
   expect(h.owner.updateIndependent(world,new THREE.Group(),false,h.batches.asNative(),new Set(['sandbags']))).toBe(false);
-  h.owner.clear();expect(h.fast()).toBe(false);h.full();expect(h.batches.items).toEqual(expected(world));
+  h.owner.clear();expect(h.fast()).toBe(false);h.full();expect(h.batches.items).toEqual(laidOut(world,h.owner));
 });
 
 test('a sun lamp that changed state since the furniture build forces the full build',()=>{
@@ -107,5 +107,5 @@ test('a sun lamp that changed state since the furniture build forces the full bu
   // The power state is part of the signature: the changed kinds include it.
   lamp.power={on:true,parentId:null};h.signature.read(world.structures,'','');
   expect(h.signature.changedKinds()).toEqual(new Set(['sandbags','sun-lamp']));expect(h.fast()).toBe(false);
-  h.full();expect(h.batches.items).toEqual(expected(world));
+  h.full();expect(h.batches.items).toEqual(laidOut(world,h.owner));
 });

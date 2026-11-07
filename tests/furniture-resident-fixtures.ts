@@ -4,6 +4,8 @@ import {createWorld} from '../src/sim/index';
 import {sowDaylily} from '../src/sim/flower-pot';
 import {buildFurniture} from '../src/render/FurnitureLayer';
 import type {BoxBatches as ReferenceBatches} from '../src/render/BoxBatches';
+import type {FurniturePresentation} from '../src/render/FurnitureLayer';
+import {furniturePlacementZone,hiddenFurnitureSlot} from '../src/render/furniture-zones';
 import type {BoxBatches} from '../src/render/BoxBatches';
 import type {BoxMesh} from '../src/render/BoxMesh';
 import type {Placement} from '../src/render/primitives';
@@ -65,6 +67,20 @@ export class RecordingBatches {
 }
 export function expected(world:World,cutaway=false):Placement[] {
   const recorder=new RecordingBatches();buildFurniture(world,new THREE.Group(),cutaway,recorder.asReference());return recorder.items;
+}
+/** The resident batch the zoned owner must hold: the historical placements,
+ * zone by zone in the owner's layout, each zone followed by reserved slots. */
+export function laidOut(world:World,owner:FurniturePresentation,cutaway=false):Placement[] {
+  const layout=owner.layout();if(!layout)throw new Error('Furniture owner has no layout');
+  const items=expected(world,cutaway),byId=new Map(world.structures.map(s=>[s.id,s] as const)),out:Placement[]=new Array(layout.total);
+  let placed=0;
+  for(const segment of layout.segments){
+    const zone=items.filter(p=>furniturePlacementZone(p,byId)===segment.key);
+    expect(zone.length).toBe(segment.count);placed+=zone.length;
+    for(let i=0;i<segment.capacity;i++)out[segment.start+i]=i<zone.length?{...zone[i]!}:hiddenFurnitureSlot(segment.key);
+  }
+  expect(placed).toBe(items.length);
+  return out;
 }
 export function mesh(group:THREE.Group):BoxMesh {
   expect(group.children.filter(c=>c.name==='furniture')).toHaveLength(1);

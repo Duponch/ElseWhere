@@ -31,7 +31,7 @@ import {sleepingSpotParts} from './sleeping-spot-parts';
 import { craftingSpotParts } from './crafting-spot-parts';
 import { stonecutterParts } from './stonecutter-parts';
 import { footprintCells } from '../sim/definitions';
-import { habitatParts, habitatPartsForStructure } from './habitat-parts';
+import { habitatParts } from './habitat-parts';
 import { sunLampActive } from '../sim/sun-lamp';
 import { ColorManagement } from 'three/webgpu';
 import { artParts } from './art-parts';
@@ -49,6 +49,7 @@ import {spikeTrapParts} from './spike-trap-parts';
 import { penParts } from './pen-parts';
 import { WORLD_SCALE } from '../world/scale';
 import type { Placement } from './primitives';
+import { furniturePlacementZone, hiddenFurnitureSlot, furnitureZoneSlack, furnitureStructureValues, sameFurnitureValues, structureCells, zonesNear, zoneSubjects, samePlacement } from './furniture-zones';
 
 /** Procedural furniture batches rebuilt only when structure content changes. */
 export function buildFurniture(world: World, group: THREE.Group, cutaway: boolean, batches: BoxBatches, contextWorld:World=world): void {
@@ -115,33 +116,61 @@ export function buildFurniture(world: World, group: THREE.Group, cutaway: boolea
 export const FURNITURE_INDEPENDENT_KINDS:ReadonlySet<unknown>=new Set(['sandbags']);
 
 type FurnitureBatches=Pick<BoxBatches,'set'|'furnitureStamp'|'patchFurniture'|'patchFurnitureBatch'>;
-type FurnitureSpan={start:number;count:number};
-type SunLampCapture={ordinal:number;id:number;active:boolean};
+type SunLampCapture={id:number;active:boolean};
+/** One zone of the resident furniture batch: its live placements (historical
+ * producer order, restricted to the zone) from `start`, then reserved slots
+ * up to `capacity`. */
+type FurnitureSegment={key:string;start:number;capacity:number;items:readonly Placement[]};
+type StructureCapture={values:readonly unknown[];cells:readonly {x:number;z:number}[];parentId:number|null|undefined};
 type FurnitureState={group:THREE.Group;batches:FurnitureBatches;cutaway:boolean;width:number;height:number;
   colorManagementEnabled:boolean;workingColorSpace:string;
-  stamp:object;items:Placement[];spans:Map<number,FurnitureSpan>;sunLamps:SunLampCapture[]};
+  stamp:object;total:number;segments:Map<string,FurnitureSegment>;
+  structures:Map<number,StructureCapture>;packed:Map<number,{key:string;x:number;z:number}>;sunLamps:SunLampCapture[]};
 
-/** Capture the shared authored model after the real set succeeds. Both visual
- * styles keep the same producer order, placements and furniture spans. */
-function buildFurnitureOwned(world:World,group:THREE.Group,cutaway:boolean,batches:FurnitureBatches):Placement[]|undefined {
-  let owned:Placement[]|undefined;
-  const sink:Pick<BoxBatches,'set'>={
-    set(...args:Parameters<BoxBatches['set']>):void {
-      batches.set(...args);
-      if(args[0]===group&&args[1]==='furniture')owned=args[2];
-    },
-  };
-  // The unchanged public body uses only set. This local nominal cast supplies
-  // that explicit port; it certifies no source World, Mesh or private capacity.
-  buildFurniture(world,group,cutaway,sink as BoxBatches);
-  return owned;
+/** Placements of the historical build, without writing them. */
+function captureFurniture(world:World,cutaway:boolean,contextWorld:World=world):{furniture:Placement[];sandbags:Placement[]} {
+  const out={furniture:[] as Placement[],sandbags:[] as Placement[]};
+  const sink={set(_group:THREE.Group,key:string,items:Placement[]):void{if(key==='furniture')out.furniture=items;else if(key==='sandbags')out.sandbags=items;}};
+  // The public body uses only set; this capture sink certifies no batch.
+  buildFurniture(world,undefined as unknown as THREE.Group,cutaway,sink as unknown as BoxBatches,contextWorld);
+  return out;
 }
+function groundPacked(world:World):Map<number,{key:string;x:number;z:number}> {
+  const packed=new Map<number,{key:string;x:number;z:number}>();
+  for(const p of world.packed??[])if(p.owner.type==='ground')packed.set(p.building.id,{key:`${p.building.kind}:${p.building.material}:${p.owner.x}:${p.owner.z}`,x:p.owner.x,z:p.owner.z});
+  return packed;
+}
+const zoneOrder=(a:string,b:string):number=>{const [ax,az]=a.split(':').map(Number) as [number,number],[bx,bz]=b.split(':').map(Number) as [number,number];return az-bz||ax-bx;};
 
-/** Renderer-owned list and spans, never a retained World or source structure. */
+/** Renderer-owned zone layout of the resident furniture batch, never a retained
+ * World or source structure. A structure change rewrites only the zones within
+ * reach of it (tests/furniture-zones.test.ts); anything else lays all out. */
 export class FurniturePresentation {
   private state:FurnitureState|undefined;
 
   clear():void {this.state=undefined;}
+
+  /** Diagnostics/tests: the current zone layout of the resident batch. */
+  layout():{total:number;segments:{key:string;start:number;capacity:number;count:number}[]}|undefined {
+    const s=this.state;if(!s)return;
+    return {total:s.total,segments:[...s.segments.values()].sort((a,b)=>a.start-b.start).map(g=>({key:g.key,start:g.start,capacity:g.capacity,count:g.items.length}))};
+  }
+
+  private owns(state:FurnitureState|undefined,world:World,group:THREE.Group,cutaway:boolean,batches:FurnitureBatches):state is FurnitureState {
+    return !!state&&state.group===group&&state.batches===batches&&state.cutaway===cutaway&&state.width===world.width&&state.height===world.height&&
+      state.colorManagementEnabled===ColorManagement.enabled&&state.workingColorSpace===ColorManagement.workingColorSpace&&batches.furnitureStamp()===state.stamp;
+  }
+  /** A complete build recolours the sun lamps on their schedule: a lamp that
+   * changed state keeps that complete build. */
+  private sunLampsUnchanged(state:FurnitureState,world:World):boolean {
+    if(!state.sunLamps.length)return true;
+    const byId=new Map(world.structures.map(s=>[s.id,s] as const));
+    for(const lamp of state.sunLamps){
+      const structure=byId.get(lamp.id);
+      if(!structure||structure.kind!=='sun-lamp'||sunLampActive(world,structure)!==lamp.active)return false;
+    }
+    return true;
+  }
 
   /** Native resident path for a change limited to independent kinds (see
    * FURNITURE_INDEPENDENT_KINDS): only their own batch is rebuilt, the owned
@@ -150,75 +179,120 @@ export class FurniturePresentation {
    * a sun lamp changed state (a full build would recolor it). */
   updateIndependent(world:World,group:THREE.Group,cutaway:boolean,batches:FurnitureBatches,kinds:ReadonlySet<unknown>):boolean {
     const state=this.state;
-    if(!state||state.group!==group||state.batches!==batches||state.cutaway!==cutaway||state.width!==world.width||state.height!==world.height||
-      state.colorManagementEnabled!==ColorManagement.enabled||state.workingColorSpace!==ColorManagement.workingColorSpace||
-      batches.furnitureStamp()!==state.stamp||kinds.size===0)return false;
+    if(!this.owns(state,world,group,cutaway,batches)||kinds.size===0)return false;
     for(const kind of kinds)if(!FURNITURE_INDEPENDENT_KINDS.has(kind))return false;
-    for(const lamp of state.sunLamps){
-      const structure=world.structures[lamp.ordinal];
-      if(!structure||structure.id!==lamp.id||structure.kind!=='sun-lamp'||sunLampActive(world,structure)!==lamp.active)return false;
+    if(!this.sunLampsUnchanged(state,world))return false;
+    // Captures of the independent structures follow the World, so a later zone
+    // diff does not see them as new. Prepared before the write, applied after.
+    const present=new Set<number>(),added:[number,StructureCapture][]=[];
+    for(const s of world.structures)if(FURNITURE_INDEPENDENT_KINDS.has(s.kind)){
+      present.add(s.id);const values=furnitureStructureValues(s);if(!values)return false;
+      const old=state.structures.get(s.id);if(!old||!sameFurnitureValues(old.values,values))added.push([s.id,{values,cells:structureCells(s),parentId:s.power?.parentId}]);
     }
     batches.set(group,'sandbags',sandbagParts(world));
+    for(const [id,capture] of state.structures)if(FURNITURE_INDEPENDENT_KINDS.has(capture.values[1])&&!present.has(id))state.structures.delete(id);
+    for(const [id,capture] of added)state.structures.set(id,capture);
     return true;
   }
 
+  /** `flowerChanges` or `changedKinds` (structure signature receipts) declare
+   * that only structure slots changed since the last build: the zones within
+   * reach of the changed structures are rewritten. Without them (reset, legacy
+   * text, door axes or packed furniture), or when a zone overflows its reserved
+   * slots, the whole batch is laid out again. */
   update(world:World,group:THREE.Group,cutaway:boolean,batches:FurnitureBatches,
-    flowerChanges?:readonly number[],readonlyNative=false):void {
+    flowerChanges?:readonly number[],readonlyNative=false,changedKinds?:ReadonlySet<unknown>):void {
     if(!readonlyNative){this.clear();buildFurniture(world,group,cutaway,batches as BoxBatches);return;}
     const state=this.state;
     // Keep only a local predecessor until every read/patch/capture succeeds.
     // A thrown producer or resident patch cannot leave that cache authorized.
     this.clear();
-    if(state&&state.group===group&&state.batches===batches&&state.cutaway===cutaway&&
-      state.width===world.width&&state.height===world.height&&flowerChanges!==undefined&&flowerChanges.length>0&&
-      state.colorManagementEnabled===ColorManagement.enabled&&state.workingColorSpace===ColorManagement.workingColorSpace){
-      const patches:{start:number;items:Placement[]}[]=[];
-      let possible=true,last=-1;
-      for(const ordinal of flowerChanges){
-        if(!Number.isSafeInteger(ordinal)||ordinal<=last){possible=false;break;}last=ordinal;
-        const structure=world.structures[ordinal];
-        if(!structure||structure.kind!=='flower-pot'){possible=false;break;}
-        const span=state.spans.get(structure.id);
-        if(!span||span.count!==6){possible=false;break;}
-        const items=habitatPartsForStructure(structure);
-        if(items.length!==6){possible=false;break;}
-        patches.push({start:span.start,items});
-      }
-      // A flower-triggered historical full build also recomputes civil lamp
-      // colors. Preserve that visible dependency rather than silently freezing it.
-      if(possible)for(const lamp of state.sunLamps){
-        const structure=world.structures[lamp.ordinal];
-        if(!structure||structure.id!==lamp.id||structure.kind!=='sun-lamp'||sunLampActive(world,structure)!==lamp.active){possible=false;break;}
-      }
-      if(possible){
-        if(batches.patchFurnitureBatch(group,'furniture',patches,state.items.length,state.stamp)){
-          for(const patch of patches)for(let i=0;i<patch.items.length;i++)state.items[patch.start+i]=patch.items[i]!;
-          this.state=state;
-          return;
-        }
-      }
+    if((flowerChanges!==undefined||changedKinds!==undefined)&&this.owns(state,world,group,cutaway,batches)&&this.sunLampsUnchanged(state,world)){
+      const next=this.patchZones(state,world,group,cutaway,batches);
+      if(next){this.state=next;return;}
     }
     // Clear first: exceptions and a refused resident patch cannot keep a cache
     // authorized against a partially modified or replaced batch.
     this.clear();
-    const items=buildFurnitureOwned(world,group,cutaway,batches);if(items===undefined)return;
-    const stamp=batches.furnitureStamp();if(stamp===undefined)return;
-    const potIds=new Set<number>(),sunLamps:SunLampCapture[]=[];
-    for(let ordinal=0;ordinal<world.structures.length;ordinal++){
-      const structure=world.structures[ordinal]!;
-      if(structure.kind==='flower-pot')potIds.add(structure.id);
-      else if(structure.kind==='sun-lamp')sunLamps.push({ordinal,id:structure.id,active:sunLampActive(world,structure)});
+    this.layOut(world,group,cutaway,batches);
+  }
+
+  private capture(world:World,previous?:Map<number,StructureCapture>):Map<number,StructureCapture>|undefined {
+    const structures=new Map<number,StructureCapture>();
+    for(const s of world.structures){
+      const values=furnitureStructureValues(s);if(!values||structures.has(s.id))return;
+      const old=previous?.get(s.id);
+      // Kind, position, orientation and footprint are immutable: same cells.
+      const cells=old&&old.values[1]===values[1]&&old.values[3]===values[3]&&old.values[4]===values[4]&&old.values[5]===values[5]&&old.values[6]===values[6]?old.cells:structureCells(s);
+      structures.set(s.id,{values,cells,parentId:s.power?.parentId});
     }
-    const spans=new Map<number,FurnitureSpan>();
-    for(let i=0;i<items.length;){
-      const id=items[i]!.key;
-      if(id===undefined||!potIds.has(id)){i++;continue;}
-      if(!Number.isSafeInteger(id)||spans.has(id))return;
-      let next=i+1;while(next<items.length&&items[next]!.key===id)next++;
-      spans.set(id,{start:i,count:next-i});i=next;
+    return structures;
+  }
+
+  private layOut(world:World,group:THREE.Group,cutaway:boolean,batches:FurnitureBatches):void {
+    const structures=this.capture(world);
+    const {furniture,sandbags}=captureFurniture(world,cutaway);
+    const byId=new Map(world.structures.map(s=>[s.id,s] as const)),zones=new Map<string,Placement[]>();
+    for(const p of furniture){const key=furniturePlacementZone(p,byId);let list=zones.get(key);if(!list){list=[];zones.set(key,list);}list.push(p);}
+    const laid:Placement[]=[],segments=new Map<string,FurnitureSegment>();
+    for(const key of [...zones.keys()].sort(zoneOrder)){
+      const items=zones.get(key)!,capacity=items.length+furnitureZoneSlack(items.length),start=laid.length;
+      for(const p of items)laid.push(p);
+      for(let i=items.length;i<capacity;i++)laid.push(hiddenFurnitureSlot(key));
+      segments.set(key,{key,start,capacity,items});
     }
+    batches.set(group,'furniture',laid);
+    batches.set(group,'sandbags',sandbags);
+    const stamp=batches.furnitureStamp();if(stamp===undefined||!structures)return;
+    const sunLamps=world.structures.filter(s=>s.kind==='sun-lamp').map(s=>({id:s.id,active:sunLampActive(world,s)}));
     this.state={group,batches,cutaway,width:world.width,height:world.height,
       colorManagementEnabled:ColorManagement.enabled,workingColorSpace:ColorManagement.workingColorSpace,
-      stamp,items,spans,sunLamps};
+      stamp,total:laid.length,segments,structures,packed:groundPacked(world),sunLamps};
+  }
+
+  /** Rewrite the zones within reach of every changed structure or packed
+   * parcel; undefined (nothing written) when the whole batch must be laid out. */
+  private patchZones(state:FurnitureState,world:World,group:THREE.Group,cutaway:boolean,batches:FurnitureBatches):FurnitureState|undefined {
+    const structures=this.capture(world,state.structures);if(!structures)return;
+    const dirty=new Set<string>(),changed=new Set<number>();
+    for(const [id,now] of structures){
+      const old=state.structures.get(id);
+      if(old&&sameFurnitureValues(old.values,now.values))continue;
+      changed.add(id);if(old)zonesNear(old.cells,dirty);zonesNear(now.cells,dirty);
+    }
+    for(const [id,old] of state.structures)if(!structures.has(id)){changed.add(id);zonesNear(old.cells,dirty);}
+    // A power lead is drawn by the consumer towards its saved parent.
+    if(changed.size)for(const capture of structures.values())if(capture.parentId!=null&&changed.has(capture.parentId))zonesNear(capture.cells,dirty);
+    const packed=groundPacked(world);
+    for(const [id,now] of packed){const old=state.packed.get(id);if(old?.key===now.key)continue;zonesNear([now],dirty);if(old)zonesNear([old],dirty);}
+    for(const [id,old] of state.packed)if(!packed.has(id))zonesNear([old],dirty);
+    if(!dirty.size)return {...state,structures,packed};
+    // Every dirty zone in one partial build: its subjects are the structures
+    // within reach; the complete World stays the context of every producer.
+    const subjects=zoneSubjects(world,dirty,s=>structures.get(s.id)?.cells??structureCells(s));
+    const {furniture}=captureFurniture({...world,...subjects},cutaway,world);
+    const byId=new Map(world.structures.map(s=>[s.id,s] as const)),fresh=new Map<string,Placement[]>();
+    for(const key of dirty)fresh.set(key,[]);
+    for(const p of furniture)fresh.get(furniturePlacementZone(p,byId))?.push(p);
+    const segments=new Map(state.segments),patches:{start:number;items:Placement[]}[]=[];
+    for(const [key,items] of fresh){
+      const segment=state.segments.get(key);
+      if(!segment){if(items.length)return;continue;}
+      if(items.length>segment.capacity)return;
+      // Only the slots whose placement differs are written.
+      let run:{start:number;items:Placement[]}|undefined;
+      for(let i=0;i<segment.capacity;i++){
+        const next=i<items.length?items[i]:undefined,old=i<segment.items.length?segment.items[i]:undefined;
+        if(next&&old?samePlacement(next,old):!next&&!old){run=undefined;continue;}
+        const value=next??hiddenFurnitureSlot(key);
+        if(run)run.items.push(value);else{run={start:segment.start+i,items:[value]};patches.push(run);}
+      }
+      segments.set(key,{...segment,items});
+    }
+    patches.sort((a,b)=>a.start-b.start);
+    if(patches.length&&!batches.patchFurnitureBatch(group,'furniture',patches,state.total,state.stamp))return;
+    // The sandbag batch is its own; a change of one of them rebuilds it too.
+    if([...changed].some(id=>FURNITURE_INDEPENDENT_KINDS.has((structures.get(id)??state.structures.get(id))?.values[1])))batches.set(group,'sandbags',sandbagParts(world));
+    return {...state,segments,structures,packed};
   }
 }

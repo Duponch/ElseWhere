@@ -36,8 +36,9 @@ test('one natural birth rebuilds only its64cell resource partition, including in
       expect(groups[i]!.children.find(child=>child.name==='Resources 1:0')).toBe(neighbors[i]);
       expect(meshes[i]!.map(mesh=>mesh.geometry)).toEqual(geometries[i]);
       expect(attributes[i]!.map(attribute=>attribute.version)).toEqual(versions[i]);
-      const target=groups[i]!.children.find(child=>child.name==='Resources 0:0')!;
-      expect(target.children.some(object=>(object as THREE.Mesh).userData.resourceRanges?.ranges.some((range:ResourceRangeData['ranges'][number])=>range.id===born.id))).toBe(true);
+      // The birth is drawn within its own partition: the chunk or its companion.
+      const targets=groups[i]!.children.filter(child=>child.name==='Resources 0:0'||child.name==='Resources 0:0+');
+      expect(targets.some(target=>target.children.some(object=>(object as THREE.Mesh).userData.resourceRanges?.ranges.some((range:ResourceRangeData['ranges'][number])=>range.id===born.id)))).toBe(true);
     }
     expect(neighborDisposals).toBe(0);
   }finally{raw.dispose();indexed.dispose();material.dispose();}

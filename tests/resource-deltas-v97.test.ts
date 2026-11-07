@@ -24,6 +24,36 @@ function appearance(group:THREE.Group) {
   }));
 }
 
+/** Visible triangles per resource range and mesh role (name, visibility,
+ * shadows): what is drawn, independent of how ranges are grouped in chunks.
+ * Additions may live in a chunk's companion (`Resources x:z+`). */
+function drawn(group:THREE.Group):Map<string,number[][]> {
+  const out=new Map<string,number[][]>();
+  for(const chunk of group.children)for(const object of chunk.children){
+    const mesh=object as THREE.Mesh,data=mesh.userData.resourceRanges as {ranges:{id:number;vertexStart:number;vertexCount:number}[]}|undefined;
+    if(!data)continue;
+    const geometry=mesh.geometry,index=geometry.index!.array,count=Math.min(index.length,geometry.drawRange.count);
+    const attributes=['position','normal','color'].map(name=>geometry.getAttribute(name) as THREE.BufferAttribute);
+    const owner=(v:number)=>data.ranges.find(r=>v>=r.vertexStart&&v<r.vertexStart+r.vertexCount)!.id;
+    for(let i=0;i<count;i+=3){
+      const key=`${owner(index[i]!)}@${mesh.name}@${mesh.visible}@${mesh.castShadow}@${mesh.receiveShadow}`;
+      const triangle:number[]=[];
+      for(let j=0;j<3;j++){const v=index[i+j]!;for(const a of attributes)for(let k=0;k<a.itemSize;k++)triangle.push(a.array[v*a.itemSize+k] as number);}
+      let list=out.get(key);if(!list){list=[];out.set(key,list);}list.push(triangle);
+    }
+  }
+  for(const list of out.values())list.sort((a,b)=>{for(let i=0;i<a.length;i++){const d=Math.round(a[i]!*1e3)-Math.round(b[i]!*1e3);if(d)return d;}return 0;});
+  return out;
+}
+/** Same drawn triangles; vertex values within 1e-4 (a resized member keeps
+ * the positions rescaled from its original build). */
+function expectSameDrawn(a:THREE.Group,b:THREE.Group):void {
+  const x=drawn(a),y=drawn(b);
+  expect([...x.keys()].sort()).toEqual([...y.keys()].sort());
+  for(const [key,list] of x){const other=y.get(key)!;expect(list.length,key).toBe(other.length);
+    for(let i=0;i<list.length;i++)for(let j=0;j<list[i]!.length;j++)expect(Math.abs(list[i]![j]!-other[i]![j]!),key).toBeLessThanOrEqual(1e-4);}
+}
+
 test('resource deltas match full chunk updates across growth, masks, replacement and chunk moves',()=>{
   const chunkSize=WORLD_SCALE.resourceChunkSize;
   const world:World=createWorld(42,chunkSize+8,chunkSize+8);
@@ -57,7 +87,7 @@ test('resource deltas match full chunk updates across growth, masks, replacement
     incremental.update(rendering,false,presentation.changes);
     full.update(rendering,false);
     expect(world.rng).toBe(rng);
-    expect(appearance(incrementalGroup)).toEqual(appearance(fullGroup));
+    expectSameDrawn(incrementalGroup,fullGroup);
     expect(incrementalGroup.children.find(chunk=>chunk.name===stableChunkName)).toBe(stable);
     expect(stableMeshes.map(mesh=>mesh.geometry)).toEqual(stableGeometries);
     expect(stableMeshes.map(mesh=>[mesh.geometry.index!.version,(mesh.geometry.getAttribute('position') as THREE.BufferAttribute).version])).toEqual(stableVersions);

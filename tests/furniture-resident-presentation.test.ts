@@ -10,19 +10,19 @@ import {deserializeWorld} from '../src/sim/serialization';
 import {decodeStoredSave} from '../src/ui/save-storage-codec';
 import {sunLampActive} from '../src/sim/sun-lamp';
 import {TICKS_PER_DAY,type World} from '../src/sim/types';
-import {camp,expected,growth,pot,RecordingBatches,structure} from './furniture-resident-fixtures';
+import {camp,growth,laidOut,pot,RecordingBatches,structure} from './furniture-resident-fixtures';
 
 function pipeline(world:World){
   const owner=new FurniturePresentation(),signature=new StructurePresentationSignature(),batches=new RecordingBatches(),group=new THREE.Group();
   const apply=(cutaway=false,readonlyNative=true,reset=false)=>{
     signature.read(world.structures,'','',reset);
     owner.update(world,group,cutaway,batches.asNative(),signature.flowerChanges(),readonlyNative);
-    signature.ackFurnitureBuild();expect(batches.items).toEqual(expected(world,cutaway));
+    signature.ackFurnitureBuild();expect(batches.items).toEqual(laidOut(world,owner,cutaway));
   };
   return {owner,signature,batches,group,apply};
 }
 
-test('unaltered public Aulnes payload keeps the historical global placements and order, then three distinct pots patch exactly',async()=>{
+test('unaltered public Aulnes payload keeps the historical placements and their order within each zone, then three distinct pots patch exactly',async()=>{
   const path='public/test-saves/v224/les-aulnes-sieges.json',raw=readFileSync(path,'utf8');
   const world=deserializeWorld(await decodeStoredSave(raw)),before=structuredClone(world),h=pipeline(world);
   h.apply();expect(world).toEqual(before);expect(h.batches.calls).toHaveLength(1);
@@ -35,7 +35,7 @@ test('unaltered public Aulnes payload keeps the historical global placements and
   expect(readFileSync(path,'utf8')).toBe(raw); // Synthetic later renders do not replace or claim a played archive.
 },20_000);
 
-test('same global batch remains byte-equivalent in placements across quarter thresholds, deaths and cumulative nonconsumed reads',()=>{
+test('same zoned batch remains byte-equivalent in placements across quarter thresholds, deaths and cumulative nonconsumed reads',()=>{
   const world=camp(),h=pipeline(world);h.apply();const initial=structuredClone(world);
   for(const value of [.25-Number.EPSILON,.25,.25+Number.EPSILON,.5,.75,1]){
     const previous=Math.floor(world.structures[1]!.flower!.plant!.growth*4);
@@ -58,7 +58,7 @@ test('reset, cutaway, owner clear, group replacement, shrink/presence and patch 
   h.owner.clear();growth(world,1,.75);full(true);
   const other=new THREE.Group();growth(world,1,1);h.signature.read(world.structures,'','');
   h.owner.update(world,other,true,h.batches.asNative(),h.signature.flowerChanges(),true);h.signature.ackFurnitureBuild();
-  expect(h.batches.calls.at(-1)!.kind).toBe('set');expect(h.batches.items).toEqual(expected(world,true));
+  expect(h.batches.calls.at(-1)!.kind).toBe('set');expect(h.batches.items).toEqual(laidOut(world,h.owner,true));
   full(true);world.structures.splice(4,1);full(true);
   world.structures[1]!.flower={allowSow:true};full(true);world.structures[1]=pot(102,8,8,.24);full(true);
   growth(world,1,.25);h.batches.rejectPatch=true;full(true);h.batches.rejectPatch=false;
@@ -77,7 +77,7 @@ test('the signature collision without Core build/ACK cannot later authorize a fl
   expect(h.signature.read(world.structures,'','')).toBe(old); // Real Core skips rebuilding on equal legacy text.
   growth(world,1,.25);h.signature.read(world.structures,'','');expect(h.signature.flowerChanges()).toBeUndefined();
   h.owner.update(world,h.group,false,h.batches.asNative(),h.signature.flowerChanges(),true);h.signature.ackFurnitureBuild();
-  expect(h.batches.calls.at(-1)!.kind).toBe('set');expect(h.batches.items).toEqual(expected(world));
+  expect(h.batches.calls.at(-1)!.kind).toBe('set');expect(h.batches.items).toEqual(laidOut(world,h.owner));
 });
 
 test('a coincident sun-lamp schedule boundary changes its electrical pieces instead of reusing stale furniture',()=>{

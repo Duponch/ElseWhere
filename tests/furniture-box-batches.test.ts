@@ -6,7 +6,8 @@ import {FurniturePresentation} from '../src/render/FurnitureLayer';
 import {StructurePresentationSignature} from '../src/render/presentation-signatures';
 import {buildFurniture} from '../src/render/FurnitureLayer';
 import type {Placement} from '../src/render/primitives';
-import {boxState,camp,expected,growth,layout,mesh} from './furniture-resident-fixtures';
+import {boxState,camp,expected,growth,laidOut,layout,mesh} from './furniture-resident-fixtures';
+import {sandbagParts} from '../src/render/sandbag-parts';
 
 test('successive six-piece patches retain one mesh, global F32 order, all resident bytes and exact ordered bounds',()=>{
   const world=camp(),a=new Reference(),b=new BoxBatches(),ga=new THREE.Group(),gb=new THREE.Group();
@@ -25,10 +26,10 @@ test('successive six-piece patches retain one mesh, global F32 order, all reside
   }finally{a.dispose();b.dispose();}
 });
 
-test('the actual resident Furniture owner and true BoxBatches agree with historical full building over three distinct pot updates',()=>{
+test('the actual resident Furniture owner and true BoxBatches agree with the zoned historical placements over three distinct pot updates',()=>{
   const world=camp(),a=new Reference(),b=new BoxBatches(),ga=new THREE.Group(),gb=new THREE.Group(),owner=new FurniturePresentation(),s=new StructurePresentationSignature();
   const apply=()=>{
-    s.read(world.structures,'','');buildFurniture(world,ga,false,a);owner.update(world,gb,false,b,s.flowerChanges(),true);s.ackFurnitureBuild();
+    s.read(world.structures,'','');owner.update(world,gb,false,b,s.flowerChanges(),true);s.ackFurnitureBuild();a.set(ga,'furniture',laidOut(world,owner));a.set(ga,'sandbags',sandbagParts(world));
     expect(boxState(gb)).toEqual(boxState(ga));layout(gb);
   };
   try{apply();for(const index of [1,4,8]){growth(world,index,.25);apply();}growth(world,1,.5);growth(world,4,.75);apply();}

@@ -41,6 +41,11 @@ const resourceIdentity=(world:World,resource:World['resources'][number]):string=
   return `${resource.kind}:${resource.x}:${resource.z}:${resource.stone??''}:${resource.species??''}${support?`:support=${support}`:''}`;
 };
 const rangeResourceId=(id:number):number=>id<0?Math.floor(-id/2):id;
+/** Largest companion chunk (resources added to a chunk since its last full
+ * rebuild). Beyond it, the chunk is rebuilt once with all its members. */
+const RESOURCE_CHUNK_ADDITIONS=24;
+const EXTRA_CHUNK='+';
+const spatialChunkKey=(key:string):string=>key.endsWith(EXTRA_CHUNK)?key.slice(0,-EXTRA_CHUNK.length):key;
 const CHOP_RECOIL_SECONDS = .55;
 type ResourceObject=THREE.Mesh|THREE.LineSegments;
 type TreePart = { mesh:ResourceObject; range:ResourceRange; positions:Float32Array; normals:Float32Array; expansions?:Float32Array; brush?:ResourceBrushData;upload:{start:number;count:number} };
@@ -472,7 +477,7 @@ export class ResourceLayer {
     this.graphicsComparisonRevision++;
     const keys=new Set<string>();for(const id of [...this.targetPreviewIds,...ids]){const key=this.resourceChunks.get(id);if(key)keys.add(key);}
     this.targetTint.restore();this.targetPreviewIds=new Set(ids);
-    for(const key of keys){const chunk=this.chunks.get(key);if(chunk)this.targetTint.apply(chunk.group,this.targetPreviewIds);}
+    for(const key of keys)for(const part of [key,key+EXTRA_CHUNK]){const chunk=this.chunks.get(part);if(chunk)this.targetTint.apply(chunk.group,this.targetPreviewIds);}
   }
   clearTargetPreview():void {if(this.targetPreviewIds.size)this.graphicsComparisonRevision++;this.targetTint.restore();this.targetPreviewIds.clear();}
   clear(): void { this.middleWind.reset();this.clearTargetPreview();this.preparedResources?.clear();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear(); this.treeCells.clear();this.treeCellsPending=undefined;this.cachedTreeUpdate=undefined;this.treeDemandEpoch++;this.refreshTreeCensus(); }
@@ -615,6 +620,16 @@ export class ResourceLayer {
     }
     this.refreshFixedTreeMaterials();
   }
+  /** Hide every member of a chunk and forget its trees and contribution; its
+   * group stays for reuse. */
+  private clearResourceChunk(key:string,previous:{signature:string;group:THREE.Group;visibleKeys:Set<number>;treeIds:number[];treeModels:readonly TreeModel[];treeCount:number;anonymousTreeCount:number}):void {
+    this.graphicsComparisonRevision++;
+    this.preparedResources?.forgetContribution(key);
+    retainResources(previous.group, new Set()); previous.visibleKeys.clear(); previous.signature = '';
+    for(const id of previous.treeIds){this.treeParts.delete(id);this.treeHits.delete(id);}
+    previous.treeIds=[];
+    previous.treeModels=[];previous.treeCount=0;previous.anonymousTreeCount=0;
+  }
   private updateWorldChunks(world: World, newMap: boolean, changes?: ReadonlyMap<number,NaturalPresentationChange>,frame?:SceneResourceFrame,appearance?:NaturalAppearanceReader): void {
     if(this.disposed)throw new Error('Resource layer disposed');this.cachedTreeUpdate={world,appearance};this.treeCatalog?.assertCurrent();
     const size=(r:World['resources'][number])=>appearance?.read(r).size??floraSize(world,r);
@@ -704,16 +719,33 @@ export class ResourceLayer {
     if(partial)for(const [id,key] of nextKeys) {
       if(key)this.resourceChunks.set(id,key);else this.resourceChunks.delete(id);
     }
-    for (const [key, previous] of this.chunks) if ((!partial||affected.has(key))&&!chunks.has(key) && previous.signature !== '') {
-      this.graphicsComparisonRevision++;
-      this.preparedResources?.forgetContribution(key);
-      retainResources(previous.group, new Set()); previous.visibleKeys.clear(); previous.signature = '';
-      for(const id of previous.treeIds){this.treeParts.delete(id);this.treeHits.delete(id);}
-      previous.treeIds=[];
-      previous.treeModels=[];previous.treeCount=0;previous.anonymousTreeCount=0;
+    // Resources added to a chunk whose other members keep their identity go to
+    // its companion chunk `${key}+`, rebuilt alone, while the chunk itself only
+    // resizes or hides. A companion beyond RESOURCE_CHUNK_ADDITIONS members, an
+    // identity change or a complete update rebuilds the chunk with all members
+    // and empties its companion.
+    const work=new Map<string,readonly World['resources'][number][]>(),extrasToClear=new Set<string>();
+    for(const [key,list] of chunks){
+      const previous=this.chunks.get(key),extraKey=key+EXTRA_CHUNK,extra=this.chunks.get(extraKey),extraActive=!!extra&&extra.signature!=='';
+      let base:World['resources'][number][]|undefined;const more:World['resources'][number][]=[];
+      if(partial&&previous&&previous.signature!==''){
+        base=[];
+        for(const r of list){
+          const now=identity(r),old=previous.identities.get(r.id);
+          if(old!==undefined){if(old===now){base.push(r);continue;}base=undefined;break;}
+          const added=extraActive?extra!.identities.get(r.id):undefined;
+          if(added!==undefined&&added!==now){base=undefined;break;}
+          more.push(r);
+        }
+        if(base&&more.length>RESOURCE_CHUNK_ADDITIONS)base=undefined;
+      }
+      if(base){work.set(key,base);if(more.length)work.set(extraKey,more);else if(extraActive)extrasToClear.add(extraKey);}
+      else work.set(key,list);
     }
+    if(partial)for(const key of affected)if(!chunks.has(key)&&this.chunks.get(key+EXTRA_CHUNK)?.signature)extrasToClear.add(key+EXTRA_CHUNK);
+    for (const [key, previous] of this.chunks) if (((!partial||affected.has(key))&&!work.has(key)||extrasToClear.has(key)) && previous.signature !== '') this.clearResourceChunk(key,previous);
     const rebuildStarted=performance.now();let rebuilt=0;
-    for (const [key, chunk] of chunks) {
+    for (const [key, chunk] of work) {
       const previous = this.chunks.get(key);
       const models=new Map<string,TreeModel>();let treeCount=0,anonymousTreeCount=0;
       const signature=chunk.map(resource=>{if(resource.kind==='tree'){treeCount++;if(resource.species===undefined)anonymousTreeCount++;if(resource.species!==undefined){if(!isTreeSpecies(resource.species))throw Error('Unsupported actual tree model species');const model=this.treeModels.get(resource.species,treeModelVariant(world));models.set(model.key,model);}}return`${resource.id}:${identity(resource)}:${size(resource)}:${resource.kind==='berries'&&ripe(resource)?1:0}:${leafless(resource)}`;}).join('|');
@@ -735,8 +767,10 @@ export class ResourceLayer {
         previous.signature=signature;previous.treeModels=[...models.values()];previous.treeCount=treeCount;previous.anonymousTreeCount=anonymousTreeCount;this.deferredChunks.delete(key);continue;
       }
       // Full rebuild: at least one per call (progress), then only within budget.
-      if(partial&&rebuilt>0&&performance.now()-rebuildStarted>=this.chunkRebuildBudgetMs){this.deferredChunks.add(key);continue;}
+      if(partial&&rebuilt>0&&performance.now()-rebuildStarted>=this.chunkRebuildBudgetMs){this.deferredChunks.add(spatialChunkKey(key));continue;}
       rebuilt++;this.deferredChunks.delete(key);
+      // A chunk rebuilt with all its members absorbs its companion's additions.
+      if(!key.endsWith(EXTRA_CHUNK)){const extra=this.chunks.get(key+EXTRA_CHUNK);if(extra&&extra.signature!=='')this.clearResourceChunk(key+EXTRA_CHUNK,extra);}
       if(previous)for(const id of previous.treeIds)this.treeParts.delete(id);
       const group = previous?.group ?? new THREE.Group();
       if (previous) {this.preparedResources?.forgetContribution(key);this.targetTint.restore(group);clearGroup(group);} else this.group.add(group);
@@ -811,7 +845,7 @@ export class ResourceLayer {
       for(const object of group.children){
         const mesh=object as ResourceObject,source=mesh.userData.resourceRanges as ResourceRangeData|undefined;
         if(!source)continue;
-        const [chunkX,chunkZ]=key.split(':').map(Number);
+        const [chunkX,chunkZ]=spatialChunkKey(key).split(':').map(Number);
         const east=chunkX!*WORLD_SCALE.resourceChunkSize+WORLD_SCALE.resourceChunkSize*.5>=world.width*.5,south=chunkZ!*WORLD_SCALE.resourceChunkSize+WORLD_SCALE.resourceChunkSize*.5>=world.height*.5;
         const quadrant=south?(east?3:2):(east?1:0);
         if(mesh instanceof THREE.Mesh&&!mesh.userData.referenceCompanion)setStaticSceneSource435(mesh,`resource:${key}:${this.sharedTreeMeshes.has(mesh)?this.sharedTreeCanopies.has(mesh)?'prepared-tree-canopy':'prepared-tree-body':mesh===canopy?'canopy':'body'}`,quadrant);

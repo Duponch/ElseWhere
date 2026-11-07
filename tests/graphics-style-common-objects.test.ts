@@ -8,7 +8,7 @@ import {DEFAULT_GRAPHICS_STYLE_PREFERENCES} from '../src/ui3d/native-preferences
 import {ITEM_SHAPES,createItemGeometry} from '../src/render/item-geometry';
 import {createChunkGeometry,chunkContour} from '../src/render/chunk-shape';
 import {StructurePresentationSignature} from '../src/render/presentation-signatures';
-import {camp,expected,growth,pot,RecordingBatches,structure} from './furniture-resident-fixtures';
+import {camp,expected,growth,laidOut,pot,RecordingBatches,structure} from './furniture-resident-fixtures';
 import type {Structure} from '../src/sim/types';
 
 const KINDS:readonly Structure['kind'][]=['bed','solar-generator','wood-generator','heater','table','stool','table-square','table-long','shelf','small-shelf'];
@@ -22,12 +22,12 @@ test('both graphics styles keep the ten Legacy furniture models and resident flo
  const before=JSON.stringify(world),oracle=expected(world),owners=[defaultContext,origamiContext].map(context=>({context,owner:withGraphicsStyle(context,()=>new FurniturePresentation()),batches:new RecordingBatches(),group:new THREE.Group(),signature:new StructurePresentationSignature()}));
  try{
   for(const kind of KINDS){const s=world.structures.find(s=>s.kind===kind)!;expect(oracle.some(p=>p.targetId===s.id||p.key===s.id),'Legacy producer absent: '+kind).toBe(true);}
-  for(const input of owners){input.signature.read(world.structures,'','',true);withGraphicsStyle(input.context,()=>input.owner.update(world,input.group,false,input.batches.asNative(),input.signature.flowerChanges(),true));input.signature.ackFurnitureBuild();expect(input.batches.items).toEqual(oracle);expect(input.batches.calls.map(c=>c.kind)).toEqual(['set']);}
+  for(const input of owners){input.signature.read(world.structures,'','',true);withGraphicsStyle(input.context,()=>input.owner.update(world,input.group,false,input.batches.asNative(),input.signature.flowerChanges(),true));input.signature.ackFurnitureBuild();expect(input.batches.items).toEqual(laidOut(world,input.owner));expect(input.batches.calls.map(c=>c.kind)).toEqual(['set']);}
   expect(JSON.stringify(world)).toBe(before);
   // The formerly style-specific replacement prevented the resident span path.
   // Shared forms now permit the SAME real six-part flower patch in both styles.
   growth(world,KINDS.length,.5);const patchedOracle=expected(world);
-  for(const input of owners){input.signature.read(world.structures,'','');withGraphicsStyle(input.context,()=>input.owner.update(world,input.group,false,input.batches.asNative(),input.signature.flowerChanges(),true));input.signature.ackFurnitureBuild();expect(input.batches.calls.at(-1)).toMatchObject({kind:'patch',count:6});expect(input.batches.items).toEqual(patchedOracle);}
+  for(const input of owners){input.signature.read(world.structures,'','');withGraphicsStyle(input.context,()=>input.owner.update(world,input.group,false,input.batches.asNative(),input.signature.flowerChanges(),true));input.signature.ackFurnitureBuild();expect(input.batches.calls.at(-1)).toMatchObject({kind:'patch'});expect(input.batches.calls.at(-1)!.count).toBeLessThanOrEqual(6);expect(input.batches.items).toEqual(laidOut(world,input.owner));expect(laidOut(world,input.owner).filter(p=>p.targetId!==undefined)).toHaveLength(patchedOracle.length);}
   const patchBefore=JSON.stringify(world),cutawayOracle=expected(world,true);
   for(const input of owners){withGraphicsStyle(input.context,()=>input.owner.update(world,input.group,true,input.batches.asNative(),undefined,false));expect(input.batches.items).toEqual(cutawayOracle);expect(input.batches.calls.at(-1)!.kind).toBe('set');}
   expect(JSON.stringify(world)).toBe(patchBefore);
