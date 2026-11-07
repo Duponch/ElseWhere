@@ -21,6 +21,7 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Nouvelle partie, de « Générer » au jeu affiché | 116 à 121 s | **48 s** |
 | Panne « Shared World/settings/camera/paint changed before publication » en jeu | en 1,2 s, caméra en mouvement à ×6 | **aucune** en 150 s |
 | Gels d’affichage pour préparer des surfaces en jeu (×6, 60 s) | 105, 1,5 s gelée au total | **18**, 0,37 s |
+| Ouverture d’un panneau du bas, Les Forges (Travail / Planning / Faune) | 506 / 786 à 1 058 / 296 ms | **61 / 62 / 32 ms** à la réouverture, 142 / 160 / 58 ms la première fois |
 
 - **Exactitude.** Après chaque optimisation, l’état complet sérialisé reste identique au bit près sur les deux sauvegardes de référence.
 - **Tests.** Chaque lot a été comparé test par test au commit d’origine : 0 régression.
@@ -446,6 +447,43 @@ La machine varie d’environ 15 % d’une passe à l’autre. À ×1, les 40 pre
 - application du monde : environ 12 %.
 
 Seuls 9 shaders sont construits en 25 s de jeu.
+
+### Interface : ouverture des panneaux (8 novembre)
+
+**Constat.** Cliquer sur un bouton du bas (Faune, Travail, Planning…) figeait le jeu un moment avant d’afficher la fenêtre. Mesuré sur Les Forges (80 colons, 241 animaux), du clic à la première image qui montre la page : Planning 0,8 à 1,1 s, Travail 0,5 s, Animaux 0,4 s, Menu 0,4 s, Faune 0,3 s, Monde 1,4 s la première fois.
+
+**Causes.**
+- Chaque contrôle d’une page, case de tableau comprise, est une pièce de carton 3D : géométrie découpée, canvas peint, texture envoyée au GPU. Fermer la page les détruisait toutes ; la rouvrir les recréait.
+- Chrome attribue une surface GPU à chaque petit canvas accéléré, puis le relit pour l’envoyer en texture WebGPU : des centaines de cases coûtaient des centaines de millisecondes de travail natif.
+- Le globe du Monde construisait sa géométrie (environ 120 000 cases) à la première ouverture.
+- Le Menu attendait la mise en pause et la relecture des sauvegardes avant de s’afficher.
+
+**Corrections.**
+- **Réserve de pièces.** Les pièces qui quittent une page sont mises en réserve, sans être détruites, puis retrouvées par identifiant à la page suivante ; leur peinture est comparée comme avant. Réserve bornée : 6 000 pièces et 16 millions de pixels de canvas ; les grandes feuilles de page n’y vont pas. La mise en réserve retire les pièces du lancer de rayons en un seul passage, au lieu d’un `indexOf` + `splice` par maillage.
+- **Canvas logiciels** (`willReadFrequently`) pour les petites pièces.
+- **Géométrie partagée.** Les contrôles de page ont 16 variantes de découpe, et les découpes identiques partagent leur géométrie. Ce partage est explicite (`sharedGeometry`) et la géométrie appartient à la fabrique ; les autres pièces gardent leur géométrie propre.
+- **Préparation à l’avance.** Partie en pause, aucune page ouverte, caméra immobile depuis une seconde : les grands panneaux (Faune, Animaux, Travail, Planning, Assignations, Recherches, Architecte) sont construits à l’avance, leurs textures envoyées au GPU, puis mis en réserve.
+- **Globe du Monde.** Géométrie et normales préparées derrière l’écran de chargement et mises en cache (les normales étaient recalculées à chaque affichage). Les boucles n’allouent plus rien par case ni par sommet ; mêmes valeurs.
+- **Menu.** Il s’affiche tout de suite ; la pause et la liste des sauvegardes suivent. Un menu fermé avant la confirmation de la pause rend la vitesse comme une sortie ordinaire.
+- **Rafraîchissement.** Avec une page de gestion ouverte, les rafraîchissements dus au monde passent de 5 à 2 par seconde ; les actions du joueur la rafraîchissent toujours immédiatement.
+
+**Mesures**, Les Forges, client réel, du clic à la première image :
+
+| Panneau | Avant | Première ouverture (préparée) | Réouverture |
+|---|---|---|---|
+| Travail | 506 ms | 142 ms | **61 ms** |
+| Planning | 786 à 1 058 ms | 160 ms | **62 ms** |
+| Animaux | 406 ms | 94 ms | **63 ms** |
+| Faune | 296 ms | 58 ms | **32 ms** |
+| Assignations | 324 ms | 90 ms | **45 ms** |
+| Recherches | 113 à 203 ms | 58 ms | **29 ms** |
+| Monde | 1 359 ms | 140 ms | **22 ms** |
+
+Sans préparation à l’avance (partie non mise en pause), la première ouverture de Travail ou de Planning coûte encore environ 0,4 à 0,5 s.
+
+**Tests.** Aucun échec propre à ces changements sur les 16 fichiers de l’interface native, comparés au commit de référence. Les deux échecs restants de `native-cardboard-art-v476` existent déjà sur ce commit (nouveaux pictogrammes).
+
+**Ce qui reste.** Sur Les Forges, le jeu lui-même, sans panneau, a encore environ 25 images au-dessus de 50 ms en 8 s à ×1 : adoption des publications complètes du Worker et application du monde. C’est désormais le poste principal de fluidité en jeu sur une grande colonie.
 
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
