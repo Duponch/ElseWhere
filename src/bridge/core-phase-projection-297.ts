@@ -77,6 +77,12 @@ export interface CoreDoorPatch297 {
  readonly id:number;
  readonly door:Readonly<NonNullable<World['structures'][number]['door']>>;
 }
+/** Frontier pile patch: the current record of a material pile that changed
+ * since the presented state (null: the pile no longer exists). */
+export interface CorePilePatch297 {
+ readonly id:number;
+ readonly pile:Readonly<World['piles'][number]>|null;
+}
 export interface CorePhaseEnvelopeFields297 {
  readonly audioCues:readonly AudioCue[];
  readonly epoch:number;
@@ -94,6 +100,8 @@ export interface CorePhaseEnvelopeFields297 {
  readonly poses297?:readonly CoreHumanPose297[];
  /** Frontier only, present only when non-empty. */
  readonly doors297?:readonly CoreDoorPatch297[];
+ /** Frontier only, present only when non-empty; ascending ids. */
+ readonly piles297?:readonly CorePilePatch297[];
 }
 /** A real discriminated union preserves reply narrowing in SimulationClient. */
 export type CorePhaseEnvelope297=
@@ -137,6 +145,8 @@ export interface CorePhaseTypedProjection297 {
  readonly poses297?:readonly CoreHumanPose297[];
  /** Door patches of this phase. */
  readonly doors297?:readonly CoreDoorPatch297[];
+ /** Pile patches of this phase. */
+ readonly piles297?:readonly CorePilePatch297[];
 }
 /** Header transport only. Never stored in the saved World. */
 export interface CoreFullPhaseMetadata297 {

@@ -85,6 +85,21 @@ export class SceneApplicationContext {
   this.shelfMembers=members;this.supportChanged=false;this.piles.prepareSupports(world,false,{cells:this.cells,identities:this.identities});
  }
 
+ /** Supports of a frontier pile-patch view of the prepared World `base`: same
+  * support cells (same structures); shelf identities are recomputed only when
+  * the view's shelf membership differs. The base's own state is unchanged. */
+ preparePileView297(view:World,base:World):boolean {
+  if(this.world!==base||!this.view||this.applying)return false;
+  const members=new Map<number,number[]>();
+  if(this.shelves.size)for(const p of view.piles)if(p.owner.type==='ground'){
+   const cell=p.owner.z*view.width+p.owner.x;if(!this.shelves.has(cell))continue;let ids=members.get(cell);if(!ids){ids=[];members.set(cell,ids);}ids.push(p.id);
+  }
+  let changed=members.size!==this.shelfMembers.size;
+  for(const [cell,ids]of members){ids.sort((a,b)=>a-b);if(!numbers(this.shelfMembers.get(cell),ids))changed=true;}
+  this.piles.registerView297(view,{cells:this.cells,identities:changed?pileIdentitySurfacesFromCells(view.width,view.piles,this.shelves):this.identities});
+  return true;
+ }
+
  prepare(world:World,reset=false,changedTiles:readonly number[]|null=null,resources?:SceneResourceFrame):SceneApplicationView|undefined {
   if(readSnapshotChanges(world,world)===undefined){this.clear();return;}
   if(!reset&&this.world===world&&this.view){this.applying=true;return this.view;}

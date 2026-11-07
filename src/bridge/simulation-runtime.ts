@@ -132,6 +132,10 @@ let lastPublishedTick=-1;
 /** Wall time of the last complete publication; see publishDuePhysical297. */
 let lastFullPublishedAt=-Infinity;
 const CALM_FULL_INTERVAL_MS=250;
+/** Frontier: oldest age of the published World when changes are pending. A
+ * saturated Worker (large colony at high speed) may run long batches whose
+ * tail comes rarely; the World is then refreshed within a batch at this age. */
+const CALM_FULL_MAX_AGE_MS=500;
 let stepMs = 0;
 let fault: SimulationFault | undefined;
 const motion = createMotionRecorder();
@@ -585,7 +589,8 @@ function publishDuePhysical297(force=false,batchTail=false):void {
   // costs a full encode in this Worker and a full adoption on the main thread.
   // Forced, hard (requiresFull), paused and non-frontier publications are unchanged.
   const tail=batchTail&&(!phasePublisher297.frontierMode297||now-lastFullPublishedAt>=CALM_FULL_INTERVAL_MS);
-  if(force||!quiet||tail||!phasePublisher297.frontierMode297&&phasePublisher297.quietBudgetExpired(now)){publishActualFull297();return;}
+  const stale=phasePublisher297.frontierMode297&&now-lastFullPublishedAt>=CALM_FULL_MAX_AGE_MS;
+  if(force||!quiet||tail||stale||!phasePublisher297.frontierMode297&&phasePublisher297.quietBudgetExpired(now)){publishActualFull297();return;}
   if(!phasePublisher297.frontierMode297)return;
  }
  if(!phasePublisher297.canPublishActors297)return;

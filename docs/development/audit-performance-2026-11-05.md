@@ -14,7 +14,7 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Plus longue tâche, Les Éclaircies à ×6 | 290 ms | **136 ms**, et rare |
 | Client réel, Les Forges à ×1 | p95 154 à 179 ms (mesure de l’agent rendu) | **p95 28 ms**, 107 im/s, temps réel tenu |
 | Client réel, Les Forges à ×6 | — | **9,5 ticks/s** (6,7 avant les publications allégées) |
-| Publications complètes, Les Forges à ×1 | 6,8 par seconde (≈ 630 Ko chacune) | **≈ 3 par seconde** |
+| Publications complètes, Les Forges à ×1 (Worker seul) | 6,8 par seconde (≈ 630 Ko chacune) | **≈ 1,9 par seconde** (≈ 3 avant les patchs de cargaison) |
 
 - **Exactitude.** Après chaque optimisation, l’état complet sérialisé reste identique au bit près sur les deux sauvegardes de référence.
 - **Tests.** Chaque lot a été comparé test par test au commit d’origine : 0 régression.
@@ -218,6 +218,58 @@ Côté thread principal, l’adoption des publications complètes est passée de
 - la désérialisation et la copie défensive des paquets de phase environ 7 %, dans un fichier épinglé ;
 - l’application du monde environ 12 %.
 
+### Patchs de cargaison (7 novembre)
+
+Après les patchs de pose et de porte, la dernière dépendance d’acteur qui imposait encore des publications complètes sur Les Forges était la cargaison des colons : environ 2,2 par seconde à ×1. Ramasser ou déposer un objet change à la fois le tas porté et les tas au sol.
+
+Les changements, sans effet sur la simulation (empreinte des Éclaircies inchangée) :
+
+1. **Patch de tas** (`piles297`). Quand le tas porté d’un colon change, le paquet frontière suivant porte l’enregistrement complet de chaque tas dont la présentation diffère de ce que l’affichage détient, et les identifiants des tas disparus.
+   - Le Worker garde une copie des tas tels qu’envoyés : prise à la publication complète, mise à jour à chaque patch envoyé.
+   - La comparaison ignore seulement l’horloge de pourriture (`rot`). Elle avance sur environ 320 denrées par seconde et n’est lue que par l’inspection, qui lit la publication complète.
+2. **Affichage.** Une vue « publication complète + tas patchés » suit les mêmes étapes qu’une adoption complète :
+   - animation de prise et de dépose ;
+   - mise à jour incrémentale des morceaux de tas : seuls les tas remplacés sont recalculés ;
+   - cargaison des colons.
+
+   La publication complète suivante reprend les animations depuis les derniers tas affichés : aucune animation n’est rejouée.
+3. **Âge maximal du monde publié** (500 ms). À ×6 sur une grande colonie, le Worker est saturé et ses lots sont longs. Les publications calmes ne partent qu’en fin de lot : sans les publications dures de cargaison, elles tombaient à 0,1 par seconde dans la simulation du Worker. En mode frontière, une publication calme part désormais dès que le monde publié a 500 ms, même au milieu d’un lot.
+
+**Défaut corrigé pendant le développement.** La première version recalculait les supports des tas (7 512 structures) à chaque patch : 5,4 ms en moyenne, jusqu’à 80 ms. Le patch utilise maintenant les supports déjà préparés, comme une adoption complète : 0,5 ms en moyenne, 1 ms au plus.
+
+**Vérification dans le client réel**, en comparant chaque colon patché avec la publication complète suivante, lorsque son tas porté est resté le même :
+
+| Partie | Colons comparés | Cargaison identique (type et taille) |
+|---|---|---|
+| Les Forges ×1, 30 s | 212 | 212 |
+| Les Forges ×6, 25 s | 186 | 186 |
+| Les Éclaircies ×1 et ×6 | 34 | 34 |
+
+Aucune animation de prise ou de dépose rejouée en double, aucune erreur.
+
+**Mesures, Les Forges.** Worker seul (Node, 20 s) :
+
+| | Avant | Après |
+|---|---|---|
+| ×1, publications complètes | 2,8/s | **1,9/s** |
+| ×1, paquets d’acteurs | 5,4/s | **6,9/s** |
+| ×6, publications complètes | 2,5/s | **1,5/s** |
+| ×6, paquets d’acteurs | 4,3/s | **5,5/s** |
+
+Client réel, deux passes par build, avec une machine chargée par d’autres applications :
+
+| | Avant | Après |
+|---|---|---|
+| ×1, publications complètes adoptées | 1,6 à 1,75/s | 1,3 à 1,45/s |
+| ×1, application des publications et des paquets | ≈ 13,8 % du thread principal | ≈ 14,2 % |
+| ×6, publications complètes adoptées | 1,05 à 1,45/s | 0,95 à 1,3/s |
+
+Dans le client, le gain reste faible : chaque patch de tas coûte environ 5 ms au thread principal, ce qui compense une partie des publications évitées. Le gain net est côté Worker.
+
+Ces mesures confirment surtout le coût d’une publication complète pour le thread principal sur Les Forges : environ 75 ms d’application (`applyWorld`), jusqu’à 250 ms, plus l’admission du message (`drainFrame`, 13 à 17 % du temps du thread). Ces pics sont des micro-gels. Réduire ce coût est désormais le levier principal, devant le nombre de publications.
+
+Fichier épinglé modifié volontairement, avec mise à jour de son empreinte : `core-phase-data-297.ts`, dont le lecteur strict valide `piles297`.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -249,14 +301,12 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 
 ## 6. Feuille de route recommandée (par gain attendu)
 
-1. **Publications complètes restantes sur une grande colonie** (≈ 3 par seconde sur Les Forges, voir « Publications allégées »). Les causes restantes :
-   - changements de dépendances d’acteurs autres que la pose : cargaison, lit, repas, loisirs…, ≈ 2 par seconde ;
-   - publications calmes, au plus 4 par seconde.
+1. **Coût d’une publication complète sur le thread principal** (voir « Patchs de cargaison »). Sur Les Forges, environ 75 ms d’application par publication, jusqu’à 250 ms, plus l’admission du message. Il en reste 1,3 à 1,5 par seconde, presque toutes calmes ; les autres changements de dépendances (lit, repas, loisirs…) n’en provoquent plus que 0,1 par seconde.
 
    Prochaines étapes :
-   - étendre les patchs à la cargaison ;
+   - profiler `applyWorld` et retirer ce qui est recalculé sans changement : signatures texte des tâches, des désignations et des toits, reconstruction des structures, morceaux du monde ;
    - rendre la copie défensive des paquets de phase moins coûteuse (`native-message-capture.ts`, épinglé) ;
-   - adapter l’intervalle des publications calmes à leur coût réel.
+   - ensuite seulement, adapter l’intervalle des publications calmes à leur coût réel : c’est un compromis avec le délai d’affichage des changements lents du monde.
 2. **Rendu three.js** : environ 36 à 48 % du thread principal en jeu, pour 148 maillages visibles et 72 appels de dessin. Postes :
    - uniformes par objet : 11 % ;
    - passe d’ombre : 6,5 % ;

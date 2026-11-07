@@ -1,6 +1,6 @@
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {readNativeCorePhaseInput297} from '../bridge/native-clone-resident';
-import type {CorePhaseTypedProjection297,CorePhaseAnchor297,CoreActorScene297,CoreHumanPose297,CoreDoorPatch297} from '../bridge/core-phase-projection-297';
+import type {CorePhaseTypedProjection297,CorePhaseAnchor297,CoreActorScene297,CoreHumanPose297,CoreDoorPatch297,CorePilePatch297} from '../bridge/core-phase-projection-297';
 import {OwnedOpaqueRevisions435} from './OwnedOpaqueRevisions435';
 import {ownActorPlaybackWorld435,isActorPlaybackWorld435} from './ActorPlayback435';
 import {StaticSceneCompiler435} from './StaticSceneCompiler435';
@@ -166,10 +166,19 @@ function isNaturalSceneWorld(value:World|{changed:boolean}):value is World {
 /** Read-only presentation view for a frontier pose patch: the presented Full
  * World at the phase's Core time, its humans replaced by the current actor
  * records and the patched humans' jobs inserted or replaced (same order). */
-function posedWorld297(world:World,actors:CoreActorScene297,poses:ReadonlyMap<number,CoreHumanPose297>,core:number):World {
+function posedWorld297(world:World,actors:CoreActorScene297,poses:ReadonlyMap<number,CoreHumanPose297>,core:number,piles:World['piles']=world.piles):World {
   const jobs=new Map<number,World['jobs'][number]>();for(const row of poses.values())if(row.job)jobs.set(row.job.id,row.job as World['jobs'][number]);
   const merged=jobs.size?[...world.jobs.map(job=>{const next=jobs.get(job.id);if(next)jobs.delete(job.id);return next??job;}),...jobs.values()]:world.jobs;
-  return {...world,tick:Math.floor(core/10),phaseCore297:core%10,pawns:actors.humans as World['pawns'],jobs:merged};
+  return {...world,tick:Math.floor(core/10),phaseCore297:core%10,pawns:actors.humans as World['pawns'],jobs:merged,piles};
+}
+/** The presented Full's piles with the frontier pile patches applied: patched
+ * records replace theirs in place, removed ones leave, new ones follow in id
+ * order. Untouched piles keep the Full's references. */
+function patchedPiles297(world:World,patches:ReadonlyMap<number,CorePilePatch297['pile']>):World['piles'] {
+  const added=new Map(patches),piles:World['piles']=[];
+  for(const pile of world.piles){if(!added.has(pile.id)){piles.push(pile);continue;}const next=added.get(pile.id);added.delete(pile.id);if(next)piles.push(next as World['piles'][number]);}
+  for(const [,next] of [...added].sort((a,b)=>a[0]-b[0]))if(next)piles.push(next as World['piles'][number]);
+  return piles;
 }
 export class SceneRenderCore {
   private rendererDisposal:Promise<void>|undefined;
@@ -528,30 +537,53 @@ export class SceneRenderCore {
     const last=applicable.at(-1)!,human=new Set<number>(),animal=new Set<number>(),mechanical=new Set<number>(),changedIds=new Set<number>();
     for(const p of applicable)for(const row of p.actors){changedIds.add(row.id);(row.kind==='human'?human:row.kind==='animal'?animal:mechanical).add(row.index);}
     const world=this.world;if(!world||last.world!==world)throw Error('Actor frontier lost its presented authentic Full');
-    const actors=last.actorScene;let posed=false,doored=false;
+    const actors=last.actorScene;let posed=false,doored=false,piled=false;
     // Patches accumulate until the next Full: a later packet about other doors
     // or humans must not revert the ones already presented.
-    for(const p of applicable){for(const row of p.poses297??[]){this.posePatches297.set(row.id,row);posed=true;}for(const row of p.doors297??[]){this.doorPatches297.set(row.id,row.door);doored=true;}}
+    for(const p of applicable){for(const row of p.poses297??[]){this.posePatches297.set(row.id,row);posed=true;}for(const row of p.doors297??[]){this.doorPatches297.set(row.id,row.door);doored=true;}for(const row of p.piles297??[]){this.pilePatches297.set(row.id,row.pile);piled=true;}}
     const poses=this.posePatches297;
     // Frontier door patch: animate the doors that opened or closed, as a Full
     // would, with the presented Full's door list and axes.
     if(doored)this.adoptDoors297(world,this.doorPatches297);
-    if(posed){
+    if(piled)this.patchedPiles297=patchedPiles297(world,this.pilePatches297);
+    // Like a Full adoption, pile support reads (cargo hand-off endpoints) use
+    // the prepared supports of the Full and of the registered views.
+    if(posed||piled)withPileSurfaceReads(()=>{
       // Frontier pose patch: the same human/effect derivation as a Full, over
-      // the presented Full World with the current humans and their jobs.
-      const view=posedWorld297(world,actors,poses,last.core);
+      // the presented Full World with the current humans and their jobs, and
+      // the patched piles (a carried pile changed in the same packet).
+      const view=posedWorld297(world,actors,poses,last.core,this.patchedPiles297??world.piles);
       // The view presents the same admitted Full: it inherits its playback ownership.
       ownActorPlaybackWorld435(view,isActorPlaybackWorld435(world));
+      if(this.patchedPiles297){
+        // Same cargo hand-off and pile chunks as a Full adoption, from the
+        // previously presented piles to the patched ones.
+        if(this.applicationContext?.preparePileView297(view,world))this.pileViews297.add(view);
+        if(piled){
+          const tick=this.hasTracks?this.timeline.tick:view.tick;
+          this.pawns.adoptCargo(this.pileView297??world,view,tick,this.hasTracks&&(this.received?.speed??0)>0);
+          this.updatePiles(view,false);
+        }
+        this.pileView297=view;
+      }
       this.pawns.update(view,this.pawns.blend.value,false,poses);
       this.actionVfx.update(view,this.pawns.feedbackSource!);
       this.brawlCloud.update(view,this.pawns.feedbackSource!);
       this.actionFeedback.update(view,this.selectedPawns,this.pawns.feedbackSource!,!!this.confirmedIntents);
-    }else this.pawns.adoptPhase297(world,[...human],actors,changedIds);
+    },this.applicationContext?.readSupports);
+    else this.pawns.adoptPhase297(world,[...human],actors,changedIds);
     this.wildlife.adoptPhase297(world,[...animal],actors,changedIds);this.mechanoids.adoptPhase297(world,[...mechanical],actors);
     this.actorScene297=actors;this.appliedCore297=last.core;this.confirmedPathDirty=true;
   }
   private readonly doorPatches297=new Map<number,CoreDoorPatch297['door']>();
   private readonly posePatches297=new Map<number,CoreHumanPose297>();
+  private readonly pilePatches297=new Map<number,CorePilePatch297['pile']>();
+  /** Presented Full's piles with the accumulated pile patches, and the latest
+   * view World presenting them (cargo hand-offs and pile chunks read it). */
+  private patchedPiles297:World['piles']|undefined;
+  private pileView297:World|undefined;
+  /** Pile-patch views whose pile supports are registered for incremental reads. */
+  private readonly pileViews297=new WeakSet<World>();
   private adoptDoors297(world:World,doors:ReadonlyMap<number,CoreDoorPatch297['door']>):void {
     const patch=<S extends World['structures'][number]>(s:S):S=>{const door=doors.get(s.id);return door&&s.door?{...s,door:door as NonNullable<S['door']>}:s;};
     const prepared=this.preparedStructures;
@@ -1055,8 +1087,10 @@ export class SceneRenderCore {
     else this.roofs.update(world,this.boxes,this.wallCutaway,newMap);
     if(this.roofAreasVisible){const key=`${(world.roofing?.build??[]).join(',')};${(world.roofing?.remove??[]).join(',')}`;
       if(key!==this.roofTintKey||newMap){this.roofTintKey=key;this.zonesTintDirty=true;}}
-    // A Full supersedes every frontier door/pose patch received since the last one.
-    this.doorPatches297.clear();this.posePatches297.clear();
+    // A Full supersedes every frontier door/pose/pile patch received since the
+    // last one. Cargo hand-offs continue from the piles last presented.
+    const cargoPrevious=this.pileView297??previousWorld;
+    this.doorPatches297.clear();this.posePatches297.clear();this.pilePatches297.clear();this.patchedPiles297=undefined;this.pileView297=undefined;
     const prepared=this.preparedStructures=application?.structures??this.structurePreparation?.read(world,resetPoses);
     if(prepared)this.doors.updateNative(world,this.wallCutaway,resetPoses,prepared.doors,prepared.axes,prepared.gateAxes);
     else this.doors.update(world,this.wallCutaway,resetPoses);
@@ -1087,7 +1121,7 @@ export class SceneRenderCore {
     const zoneChanged=this.updateGrowingZones(newMap);
     if(this.allowedAreaLayer.updateIntents(world,this.confirmedIntents?this.confirmedIntents.allowedAreas:world.allowedAreas,this.allowedAreaTarget,newMap,this.confirmedIntents?i=>knownCell256(world,i):undefined))this.zonesTintDirty=true;
     if(zoneChanged||newMap)this.zonesTintDirty=true;
-    this.pawns.adoptCargo(previousWorld??undefined,world,this.hasTracks?this.timeline.tick:world.tick,
+    this.pawns.adoptCargo(cargoPrevious??undefined,world,this.hasTracks?this.timeline.tick:world.tick,
       !resetPoses&&this.hasTracks&&(this.received?.speed??0)>0);
     this.updatePiles(world, newMap);
     const paused=this.received?.world===world&&this.received.speed===0;
@@ -1834,7 +1868,7 @@ export class SceneRenderCore {
       }
     }
     const hidden=this.pawns.hiddenPileQuantities();
-    const prepared=this.immutableWorlds.has(world)?this.applicationContext?.piles.read(world,hidden,newMap):undefined;
+    const prepared=this.immutableWorlds.has(world)||this.pileViews297.has(world)?this.applicationContext?.piles.read(world,hidden,newMap):undefined;
     if(prepared){
       this.designations.updatePileIcons(world,prepared.changedChunks,prepared.activeKeys,newMap);
       for(const [key,chunk]of this.pileChunks)if(!prepared.activeKeys.has(key)&&chunk.signature!==''){this.boxes.set(chunk.group,`pile:${key}`,[]);chunk.signature='';}
@@ -1928,8 +1962,9 @@ export class SceneRenderCore {
     const skyTick=confirmedPresentationTick;
     this.animationDetail.beginFrame(now,this.camera,this.viewportHeight,skyTick);
     if(this.turretTops.present(dt,this.received?.speed===0))this.invalidatePausedShadow(false);
-    if(this.world&&this.pawns.presentCargo(skyTick,this.world)){
-      this.invalidatePausedShadow(false);this.updatePiles(this.world,false);
+    const cargoWorld=this.pileView297??this.world;
+    if(cargoWorld&&this.pawns.presentCargo(skyTick,cargoWorld)){
+      this.invalidatePausedShadow(false);this.updatePiles(cargoWorld,false);
     }
     if(this.pawns.feedbackSource)this.actionFeedback.syncTravel(this.pawns.feedbackSource);
     if(this.world)this.wildlife.update(this.world,this.hasTracks?this.timeline:undefined,false,this.pawns,this.actorScene297,dtTweener297,this.received?.speed??0);

@@ -191,31 +191,48 @@ export function equalActorPhaseDependencies297(a:ActorPhaseDependencies297,b:Act
  if(!a||!b||!ownedDependencies297.has(a)||!ownedDependencies297.has(b))return false;
  return equalDependencyValue297(a.data,b.data);
 }
-/** Row slots of a human dependency row that a pose patch can carry: the work
- * contact (work pose, contact pose, reach, yaw) and the animation pose. */
-const HUMAN_CONTACT_SLOT297=11,HUMAN_POSE_SLOT297=12;
-/** Humans whose dependency rows differ ONLY in their contact/animation pose,
- * every other dependency (all other human slots, animals, cargo, mechanical
- * bodies, departures, carry pairs, map) being exactly equal. Those changes are
- * derived from the human's own record and its work target, so a frontier pose
- * patch (complete record + Worker-computed contact) presents them without a
- * complete World. `undefined` means some other dependency changed: the caller
- * must keep requesting a genuine Full. An empty list means no change. */
-export function poseOnlyDependencyChanges297(a:ActorPhaseDependencies297,b:ActorPhaseDependencies297):number[]|undefined {
+/** Row slots of a human dependency row that frontier patches can carry: the
+ * work contact (work pose, contact pose, reach, yaw), the animation pose, and
+ * the carried pile (presented from the pile patch of the same packet). */
+const HUMAN_CONTACT_SLOT297=11,HUMAN_POSE_SLOT297=12,HUMAN_CARGO_SLOT297=17;
+/** Changes between two dependency captures that frontier patches can present:
+ * `humans` lists the humans whose rows differ ONLY in their contact/animation
+ * pose and/or carried pile, every other dependency (all other human slots,
+ * animals, animal cargo, mechanical bodies, departures, carry pairs, map) being
+ * exactly equal; `cargo` tells whether a carried pile changed. A pose change is
+ * derived from the human's own record and its work target, so a pose patch
+ * (complete record + Worker-computed contact) presents it; a cargo change is
+ * presented with the pile patch of the same packet (the changed piles' current
+ * records). `undefined` means some other dependency changed: the caller must
+ * keep requesting a genuine Full. An empty list means no change. */
+export function patchableDependencyChanges297(a:ActorPhaseDependencies297,b:ActorPhaseDependencies297):{humans:number[];cargo:boolean}|undefined {
  if(!a||!b||!ownedDependencies297.has(a)||!ownedDependencies297.has(b))return undefined;
  const x=a.data as Record<string,unknown>,y=b.data as Record<string,unknown>;
  const keys=Object.keys(x);if(keys.length!==Object.keys(y).length)return undefined;
  for(const key of keys)if(key!=='human'&&(!Object.hasOwn(y,key)||!equalDependencyValue297(x[key],y[key])))return undefined;
  const before=x.human,after=y.human;if(!Array.isArray(before)||!Array.isArray(after)||before.length!==after.length)return undefined;
- const changed:number[]=[];
+ const humans:number[]=[];let cargo=false;
  for(let i=0;i<before.length;i++){
   const p=before[i] as unknown[],q=after[i] as unknown[];
   if(p===q)continue;if(!Array.isArray(p)||!Array.isArray(q)||p.length!==q.length||!Object.is(p[0],q[0]))return undefined;
-  let pose=false;
+  let changed=false;
   for(let slot=0;slot<p.length;slot++)if(!equalDependencyValue297(p[slot],q[slot])){
-   if(slot!==HUMAN_CONTACT_SLOT297&&slot!==HUMAN_POSE_SLOT297)return undefined;pose=true;
+   if(slot===HUMAN_CARGO_SLOT297)cargo=true;
+   else if(slot!==HUMAN_CONTACT_SLOT297&&slot!==HUMAN_POSE_SLOT297)return undefined;
+   changed=true;
   }
-  if(pose)changed.push(p[0] as number);
+  if(changed)humans.push(p[0] as number);
  }
- return changed;
+ return {humans,cargo};
+}
+/** Presentation equality of two material pile records: exact own-data
+ * equality of every field except the rot clock (`rot`: progress, rate and
+ * stamp advance on every stored food item, read only by the inspector, which
+ * reads the complete publication). */
+export function samePilePresentation297(a:MaterialPile,b:MaterialPile):boolean {
+ if(a===b)return true;
+ const x=Object.keys(a),y=Object.keys(b);let n=0;
+ for(const k of x){if(k==='rot')continue;n++;if(!Object.hasOwn(b,k)||!equalDependencyValue297((a as unknown as Record<string,unknown>)[k],(b as unknown as Record<string,unknown>)[k]))return false;}
+ for(const k of y)if(k!=='rot')n--;
+ return n===0;
 }

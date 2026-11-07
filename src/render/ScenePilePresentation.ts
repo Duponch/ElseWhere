@@ -94,6 +94,11 @@ export class ScenePilePresentation {
   this.shelfMembers=byCell;const state={cells:this.cells,identities:this.identities};this.supports.set(world,state);this.supportWorld=world;return state;
  }
 
+ /** Frontier pile-patch view: a presentation-only World over a prepared Full,
+  * same structures (same support cells), some pile records replaced. Its reads
+  * stay incremental: untouched piles keep the Full's references. */
+ registerView297(view:World,support:PileSurfaceReadPair):void{this.supports.set(view,support);}
+
  /** Only previously prepared immutable Worlds resolve. Returning undefined
   * leaves pile-surfaces' complete, application-local mutable fallback intact. */
  readSupports=(world:World):PileSurfaceReadPair|undefined=>this.supports.get(world);

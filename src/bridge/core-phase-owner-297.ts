@@ -61,7 +61,7 @@ export class CorePhaseFrameOwner297 {
   // removed means physical SIM cleanup, never erasure of playable history.
   for(const[id,value]of trace)if(value.endCore<input.toCore-640)trace.delete(id);
   const next:State={anchor:before.anchor,world:before.world,actorScene,actorMode:before.actorMode,core:input.toCore,nextId:input.nextId,seq:input.phaseSeq,tracks,trace};
-  const projection:CorePhaseTypedProjection297=Object.freeze({kind:'phase',audioCues:input.audioCues,anchor:before.anchor,phaseSeq:input.phaseSeq,nextId:input.nextId,fromCore:input.fromCore,core:input.toCore,speed:input.speed,world:before.world,actorScene,actors:input.actors,tracks,projectiles:input.projectiles,...input.poses297?{poses297:input.poses297}:{},...input.doors297?{doors297:input.doors297}:{}});
+  const projection:CorePhaseTypedProjection297=Object.freeze({kind:'phase',audioCues:input.audioCues,anchor:before.anchor,phaseSeq:input.phaseSeq,nextId:input.nextId,fromCore:input.fromCore,core:input.toCore,speed:input.speed,world:before.world,actorScene,actors:input.actors,tracks,projectiles:input.projectiles,...input.poses297?{poses297:input.poses297}:{},...input.doors297?{doors297:input.doors297}:{},...input.piles297?{piles297:input.piles297}:{}});
   const result=Object.freeze({previous:before,projection,owner:this.identity});this.prepared.set(result,next);return result;
  }
  commit(prepared:PreparedCorePhase297):CorePhaseTypedProjection297 {
