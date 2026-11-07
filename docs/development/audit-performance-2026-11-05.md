@@ -16,8 +16,11 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Client réel, Les Forges à ×6 | — | **9,5 ticks/s** (6,7 avant les publications allégées) |
 | Adoption d’une publication complète, Les Forges à ×1 (client réel) | 98 ms en moyenne, pics de 250 à 330 ms à chaque construction ou plante ajoutée | **≈ 65 ms**, pics des ressources ≤ 24 ms, mur ajouté ≈ 15 ms |
 | Publications complètes, Les Forges à ×1 (Worker seul) | 6,8 par seconde (≈ 630 Ko chacune) | **≈ 1,9 par seconde** (≈ 3 avant les patchs de cargaison) |
-| Chargement des Éclaircies (navigateur, profil neuf) | 119 s, panneau « Opération en attente » à 16 s | **75 s**, barre de progression, plus de panneau |
-| Nouvelle partie, de « Générer » au jeu affiché | 116 à 121 s | **72 s** |
+| Chargement des Éclaircies (navigateur, profil neuf) | 119 s, panneau « Opération en attente » à 16 s | **64 s**, barre de progression, plus de panneau |
+| Chargement d’une sauvegarde au schéma actuel (Éclaircies / Les Forges) | 78 / 82 s | **39 à 46 / 41 s** |
+| Nouvelle partie, de « Générer » au jeu affiché | 116 à 121 s | **48 s** |
+| Panne « Shared World/settings/camera/paint changed before publication » en jeu | en 1,2 s, caméra en mouvement à ×6 | **aucune** en 150 s |
+| Gels d’affichage pour préparer des surfaces en jeu (×6, 60 s) | 105, 1,5 s gelée au total | **18**, 0,37 s |
 
 - **Exactitude.** Après chaque optimisation, l’état complet sérialisé reste identique au bit près sur les deux sauvegardes de référence.
 - **Tests.** Chaque lot a été comparé test par test au commit d’origine : 0 régression.
@@ -397,6 +400,53 @@ Un second lancement, avec le cache de shaders du navigateur déjà rempli, ne ga
 - **Anciennes sauvegardes.** La montée de version revalide la sauvegarde complète à chaque version : 24 s pour Les Éclaircies, 57 s pour Les Forges dans le navigateur. Fusionner ces validations demande l’accord du projet, qui exige de valider strictement chaque ancien schéma avant sa migration.
 - **Première adoption du monde** (6 s) et **création du rendu** (3 à 4 s).
 
+### Panne d’affichage en pleine partie, puis second lot de chargement (7 novembre, nuit)
+
+**Panne « Affichage interrompu ».** En jeu, quand de nouveaux arbres, plantes ou animaux demandent une préparation de leurs surfaces partagées, la préparation vérifiait avant publication que la caméra n’avait pas bougé. Un simple déplacement pendant ce travail asynchrone l’annulait, et l’annulation remontait comme une panne : « Shared World/settings/camera/paint changed before publication ». Reproduit dans le navigateur en 1,2 s (Les Éclaircies ×6, caméra en mouvement).
+
+Correction :
+- les surfaces préparées dépendent de la densité (mode de projection, pixels physiques par case), déjà vérifiée à part, pas de l’endroit où regarde la caméra : la position n’est plus comparée ;
+- une préparation devenue obsolète lève `SurfacePreparationSuperseded` (nouvelle demande, densité, réglage, peinture, modèle d’acteur, cohorte d’arbres). L’admission du monde annule ses étapes et recommence depuis l’état courant, jusqu’à 8 fois de suite, puis à l’image suivante. Les autres erreurs arrêtent toujours l’affichage.
+
+Vérifié : 150 s à ×6 avec caméra en mouvement et zooms, 144 préparations, aucune panne. Nouveau test `surface-preparation-supersession`.
+
+**Gels d’affichage en jeu.** Chaque préparation de surfaces suspend les images. L’atlas du corps des colons (style Gouache) est refusé pour tous les colons dès qu’une pose n’est plus rigide (travail au sol, accroupi), puis réadmis : environ deux préparations par seconde à ×6.
+- Le passage d’une pose rigide à une pose déformée revient au rendu Source tout de suite, mais seulement si l’atlas est réellement dessiné.
+- Le retour à l’atlas attend 6 s de poses rigides stables, et seulement dans le style Gouache qui le cuit. Le style par défaut ne prépare plus rien sur un changement de pose.
+
+Les Éclaircies ×6, 60 s : 105 gels → 18, 1,5 s → 0,37 s de temps gelé ; préparations de l’atlas des colons 125 → 1. Nouveau test `body-atlas-pose-hysteresis`.
+
+**Second lot de chargement.** Pour une sauvegarde au schéma actuel, le Worker prend 8 à 11 s ; tout le reste est la préparation de l’affichage.
+
+| Coupe | Effet mesuré |
+|---|---|
+| Espèces animales absentes de la carte compilées plus tard (38 sur 53 aux Éclaircies) | compilation de la scène 15 → 3 s, premier passage d’ombres 20 → 11 s |
+| Six variantes de corps des colons compilées ensemble, un seul échauffement des ombres | variantes 13 → 10 s, ombres finales 0,7 → 0 s |
+| Rendu créé pendant le chargement par le Worker | 4 à 6 s masquées |
+
+Détails :
+- **Espèces absentes.** Au chargement, seules les espèces présentes sont préparées. Les autres sont compilées ensuite, une par une, sur une doublure détachée qui partage les attributs du squelette : même clé de cache, rien n’est dessiné. Cette compilation ne tourne que si la partie est en pause et la caméra immobile depuis une seconde, car chaque espèce coûte des images. Vérifié : après l’échauffement, la première apparition d’une espèce absente ne reconstruit ni son corps ni son feu. Une espèce qui apparaît avant son tour est compilée à sa première apparition, comme avant ; son ombre l’est toujours à ce moment.
+- **Variantes des colons.** Chaque variante passe par une doublure qui partage la géométrie du corps ; le corps garde son propre matériau. Le test v331 vérifie le nouveau protocole : chaque variante, les deux caméras, un seul échauffement des ombres qui les couvre toutes, état du corps restauré après un échec.
+- **Rendu anticipé.** Le rendu ne dépend pas du monde : il est créé dès le début du chargement d’une première colonie.
+
+| Lancement (navigateur, profil neuf) | Avant ce lot | Après |
+|---|---|---|
+| Les Éclaircies, schéma actuel | 78 à 85 s | **39 à 46 s** |
+| Les Forges, schéma actuel | 82 s | **41 s** |
+| Les Éclaircies, ancienne sauvegarde (schéma 263) | 75 s | **64 s** |
+| Nouvelle partie | 72 s | **48 s** |
+
+La machine varie d’environ 15 % d’une passe à l’autre. À ×1, les 40 premières secondes de jeu n’ont pas plus d’images au-dessus de 50 ms qu’avec l’échauffement désactivé.
+
+**Ce qui reste au lancement**, sauvegarde au schéma actuel : adoption du monde 5 à 7 s, préparation des surfaces avec une compilation complète de la scène 8 à 11 s, passage d’ombres 9 à 10 s.
+
+**En jeu, Les Forges ×1** (profil du client réel) :
+- rendu Three.js : environ 39 % du fil principal ;
+- adoption des publications du Worker : environ 16 %. Copie défensive des paquets de phase (`frozenDataCopy297`) et lecture des phases (`readCorePhaseData297`), fichiers épinglés ;
+- application du monde : environ 12 %.
+
+Seuls 9 shaders sont construits en 25 s de jeu.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -441,7 +491,10 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 
    Passer en `matrixAutoUpdate = false` les objets statiques, avec une mise à jour explicite quand ils bougent, est le levier le plus sûr.
 3. **Reconstruction d’un chunk de végétation** : encore 50 à 130 ms, mais rare, à l’apparition d’une plante dans le chunk. La découper en plusieurs images (corps, puis usure), ou calculer les tableaux dans un Worker.
-4. **Chargement.** Fait en partie (voir « Lancement d’une partie ») : 119 s → 75 s pour Les Éclaircies, avec une barre de progression. Restent, par gain attendu : un shader de squelette partagé par les 53 espèces animales, la compilation des seules variantes de personnage utiles, puis, avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).
+4. **Chargement.** Fait en grande partie (voir « Lancement d’une partie » et « Second lot de chargement ») : 39 à 46 s pour une sauvegarde au schéma actuel des Éclaircies, contre 119 s au départ, avec une barre de progression. Restent, par gain attendu :
+   - le passage d’ombres de la scène (9 à 10 s) et la compilation complète faite pendant la préparation des surfaces (8 à 11 s) ;
+   - l’adoption du monde (5 à 7 s) ;
+   - avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).
 5. **Simulation, 80 colons (81,5 ms par tick).** Le profil est désormais plat : planification du travail ≈ 15 % (ménage, chantiers, cuisine), faune ≈ 10 %, déplacement ≈ 16 %, température de surface ≈ 6 %, recherche ≈ 4 %. Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
 6. **Contenu sans montée de schéma** (voir § 5), puis les écarts RimWorld 1 à 4 et 8.
 7. **Planificateur en WorkGivers** façon RimWorld (écarts 5 et 6), avec mise à jour des tests.
