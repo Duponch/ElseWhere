@@ -418,13 +418,19 @@ export class PawnLayer {
     const savedVisible = mesh.visible, savedCount = geometry.instanceCount;
     const effect=this.wearEffect,savedWear=effect?{visible:effect.visible,count:effect.geometry.instanceCount}:undefined;
     const restoreUnions=this.bodyPartUnions.map(union=>union.prepareForCompile());
-    const variants=[this.plainMaterial, this.texturedMaterial,
-      this.nativePlainMaterial, this.nativeTexturedMaterial,...(this.bodyAtlas?.materials??[])].filter((variant):variant is NonNullable<typeof variant>=>!!variant);
+    // Only the variants of the current texture setting (LOD and native rigs,
+    // and the body atlas when textured). Switching textures changes every
+    // layer's materials at that moment, which then compile on their first draw.
+    const variants=(this.texturesEnabled?[this.texturedMaterial,this.nativeTexturedMaterial,...(this.bodyAtlas?.materials??[])]
+      :[this.plainMaterial,this.nativePlainMaterial]).filter((variant):variant is NonNullable<typeof variant>=>!!variant);
     const stands=new THREE.Group();stands.name='Colonists — body variant warm-up stand-ins';
     for(const variant of variants){
       stands.add(bodyVariantStandIn(mesh,variant));
       // Its material is never disposed: that would release the shared programs.
-      if(effect){const material=effect.material.clone();material.positionNode=variant.positionNode;stands.add(bodyVariantStandIn(effect,material));}
+      // three r186 NodeMaterial.copy skips the inherited alphaTest accessor
+      // (stored as _alphaTest): without it the clone compiles a program the
+      // wear never draws, and the real one is built again on its first draw.
+      if(effect){const material=effect.material.clone();material.alphaTest=effect.material.alphaTest;material.positionNode=variant.positionNode;stands.add(bodyVariantStandIn(effect,material));}
     }
     try {
       mesh.visible = true;

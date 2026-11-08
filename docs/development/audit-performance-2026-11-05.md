@@ -807,6 +807,20 @@ Sur Les Forges, la préparation de la scène passe de 26,5 à 21,2 s (une mesure
 
 **Tests.** 77 fichiers (faune, cache d'animation, pose des acteurs, scène) : 288 réussis et 88 en échec, ces 88 échouant de la même façon sur le commit précédent. Le seul écart trouvé en chemin, une compilation à froid du matériau animal sur un maillage de test, est corrigé par la recherche de l'espèce depuis sa géométrie.
 
+### Chargement : préchauffage des colons limité au réglage courant (8 novembre)
+
+**Constat.** Au chargement, le préchauffage des colons compilait quatre variantes de corps : avec et sans textures, chacune pour le squelette animé courant et pour le squelette d'origine de la vue rapprochée. Les variantes sans textures ne servent que si le joueur désactive les textures ; ce réglage change alors les matériaux de tous les autres calques, compilés à ce moment-là.
+
+Par ailleurs, la doublure qui préchauffe l'usure des colons perdait son test alpha. Dans three r186, `NodeMaterial.copy` ne recopie pas `alphaTest`, accesseur hérité dont la valeur est stockée dans `_alphaTest`. La doublure compilait donc un programme que l'usure ne dessine jamais, et le vrai programme était reconstruit à son premier dessin.
+
+**Corrections.**
+- Seules les variantes du réglage de textures courant sont préchauffées : squelette courant, squelette d'origine et, avec textures, atlas du corps.
+- La doublure d'usure reçoit le test alpha de l'usure réelle. Le préchauffage de l'usure pour la vue rapprochée compile lui aussi, désormais, le programme réellement utilisé.
+
+**Mesures** (Les Forges, constructions de shaders des colons) : 9 → **6**. Disparaissent les deux variantes sans textures (490 et 213 ms) et la reconstruction de l'usure réelle (566 ms), soit environ 1,3 s de fil principal au chargement.
+
+**Tests.** L'oracle du test v331 est mis à jour : le préchauffage couvre les deux variantes du réglage courant, vérifié pour chacun des deux réglages. 91 fichiers (scène, colons, faune) : 375 réussis et 111 en échec, ces derniers identiques sur le commit précédent. Les fichiers d'usure et de préchauffage, relancés après la correction du test alpha, n'ont aucun nouvel échec.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -873,6 +887,7 @@ Les autres rôles de pièce relus (atelier 27 par établi, cuisine 28 par cuisin
 4. **Chargement.** Fait en grande partie (voir « Lancement d’une partie », « Second lot de chargement » et « Chargement : ombres sans couleur, géographie allégée ») : 24 s pour une sauvegarde au schéma actuel des Éclaircies, contre 119 s au départ, avec une barre de progression. Restent, par gain attendu :
    - ~~le passage d’ombres de la scène~~ : programmes d’ombre sans graphe de couleur, 7,2 → 1,0 s de construction sur Les Forges ;
    - ~~un programme partagé entre espèces sauvages~~ : fait, voir « Chargement : un seul programme pour les animaux sauvages » (4,7 → 0,2 s sur Les Forges) ;
+   - ~~variantes des colons hors réglage courant~~ : fait, voir « Chargement : préchauffage des colons limité au réglage courant » (≈ 1,3 s) ;
    - un programme partagé entre lots instanciés de cultures (≈ 1,3 s sur Les Forges) ;
    - l’adoption du monde (≈ 4,3 s sur Les Forges) ;
    - avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).

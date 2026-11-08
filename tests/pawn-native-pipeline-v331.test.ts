@@ -151,7 +151,9 @@ test('material transitions preserve encoded edges, selected ownership and geomet
 // Since the grouped warm-up, every variant draws through a detached stand-in
 // that shares the body attributes, index and user data (same render-object
 // cache key as the body): one compilation per camera and ONE shadow warm-up
-// cover all four variants. The body itself keeps its material throughout.
+// cover the variants of the current texture setting (LOD and native rigs).
+// Switching textures switches every layer's materials, which then compile on
+// their first draw. The body itself keeps its material throughout.
 function standIns(object:THREE.Object3D,mesh:Body,source:THREE.InstancedBufferGeometry):Surface[]{
   expect(object).toBeInstanceOf(THREE.Group);expect(object.parent).toBe(mesh.parent);
   const children=object.children as Body[];
@@ -162,10 +164,10 @@ function standIns(object:THREE.Object3D,mesh:Body,source:THREE.InstancedBufferGe
   }
   return children.map(child=>child.material);
 }
-test('cold warm-up compiles the four body variants through stand-ins for both cameras and covers them with one shadow warm-up, then restores the active native choice',async()=>{
+test.each([false,true])('cold warm-up compiles the two body variants of the current texture setting (textures %s) through stand-ins for both cameras and covers them with one shadow warm-up, then restores the active native choice',async(textures)=>{
   const {world,exact,layer,frame}=setup();
   try{
-    frame(0,101,iso(30));layer.setTexturesEnabled(false);
+    frame(0,101,iso(30));layer.setTexturesEnabled(textures);
     const mesh=body(layer),source=layer.feedbackSource!,savedMaterial=mesh.material,scene=new THREE.Scene();scene.add(layer.group);
     const cameras=[iso(30),perspective()],colour:{materials:Surface[];camera:THREE.Camera}[]=[],shadows:Surface[][]=[];let group:THREE.Object3D|undefined;
     mesh.visible=false;source.instanceCount=0;
@@ -179,12 +181,15 @@ test('cold warm-up compiles the four body variants through stand-ins for both ca
       shadows.push(standIns(group!,mesh,source));
     });
     expect(renderer.compileAsync).toHaveBeenCalledTimes(2);expect(shadows).toHaveLength(1);
-    const variants=shadows[0]!;expect(variants).toHaveLength(4);expect(new Set(variants).size).toBe(4);
+    const variants=shadows[0]!;expect(variants).toHaveLength(2);expect(new Set(variants).size).toBe(2);
     for(let view=0;view<2;view++)expect(colour[view]).toEqual({materials:variants,camera:cameras[view]});
     expect(group!.parent).toBeNull();
     expect(mesh.material).toBe(savedMaterial);expect(mesh.visible).toBe(false);expect(source.instanceCount).toBe(0);expect(mesh.geometry).toBe(source);
-    // The warm-up cannot flip textures or the runtime native/LOD selection.
-    expect(savedMaterial).toBe(variants[2]);layer.setTexturesEnabled(true);expect(mesh.material).toBe(variants[3]);
+    // The warm-up cannot flip textures or the runtime native/LOD selection:
+    // the active native variant is the second one; the other setting's native
+    // variant is not among the warmed ones.
+    expect(savedMaterial).toBe(variants[1]);layer.setTexturesEnabled(!textures);expect(mesh.material).not.toBe(savedMaterial);expect(variants).not.toContain(mesh.material);
+    layer.setTexturesEnabled(textures);expect(mesh.material).toBe(savedMaterial);
     expect(layer.feedbackSource).toBe(source);expect(JSON.stringify(world)).toBe(exact);
   }finally{layer.dispose();}
 });
