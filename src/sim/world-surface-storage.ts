@@ -20,14 +20,17 @@ export interface StoredWorldSurface {
  rivers:number[][];roads:number[][];
 }
 export interface RestoredWorldSurface {surface:WorldPhysicalSurface;roads:WorldRoadLink[][]}
+// Only enumerable data properties are accepted: a structured copy of an
+// accepted value (which keeps exactly those) is therefore accepted too.
+const enumerableData=(d:PropertyDescriptor|undefined):boolean=>!!d&&Object.hasOwn(d,'value')&&d.enumerable===true;
 function record(value:unknown,keys:readonly string[]):value is Record<string,unknown>{
  if(value===null||typeof value!=='object'||Array.isArray(value))return false;
  const prototype=Object.getPrototypeOf(value);if(prototype!==null&&prototype!==Object.prototype)return false;
- const own=Reflect.ownKeys(value);return own.length===keys.length&&own.every(k=>typeof k==='string'&&keys.includes(k)&&Object.hasOwn(Object.getOwnPropertyDescriptor(value,k)!,'value'));
+ const own=Reflect.ownKeys(value);return own.length===keys.length&&own.every(k=>typeof k==='string'&&keys.includes(k)&&enumerableData(Object.getOwnPropertyDescriptor(value,k)));
 }
 function dense(value:unknown):value is unknown[]{
  if(!Array.isArray(value)||Object.getPrototypeOf(value)!==Array.prototype||Reflect.ownKeys(value).length!==value.length+1)return false;
- for(let i=0;i<value.length;i++){const d=Object.getOwnPropertyDescriptor(value,String(i));if(!d||!Object.hasOwn(d,'value'))return false;}return true;
+ for(let i=0;i<value.length;i++)if(!enumerableData(Object.getOwnPropertyDescriptor(value,String(i))))return false;return true;
 }
 const integer=(value:unknown,max:number):value is number=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=0&&value<=max;
 const finiteBits=(value:unknown):value is number=>integer(value,0xffffffff)&&(value&0x7f800000)!==0x7f800000;
@@ -71,6 +74,12 @@ export function validStoredWorldSurface(value:unknown):value is StoredWorldSurfa
  * validation. Old planet revisions never pass through this prospective path. */
 export function restoreWorldSurface(value:unknown):RestoredWorldSurface {
  if(!validStoredWorldSurface(value))throw Error('Invalid prospective world surface columns');
+ return restoreValidatedWorldSurface(value);
+}
+/** Same restoration for columns already accepted by validStoredWorldSurface,
+ * or a structured copy of such columns (enumerable data only, so the copy is
+ * accepted too): the column walk is not repeated on the copy. */
+export function restoreValidatedWorldSurface(value:StoredWorldSurface):RestoredWorldSurface {
  const geometry=cropSurfaceCells(generateCoveredSurfaceMesh(value.settings.coverage),value.settings.coverage,surfaceVisibilityAxis(value.settings.coverage));
  if(geometry.length!==value.biome.length)throw Error('Surface coverage/column count mismatch');
  const elevation=readFloatColumn(value.elevation),temperature=readFloatColumn(value.temperature),rainfall=readFloatColumn(value.rainfall),swampiness=readFloatColumn(value.swampiness);

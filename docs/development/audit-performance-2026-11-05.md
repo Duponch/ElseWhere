@@ -17,7 +17,7 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Adoption d’une publication complète, Les Forges à ×1 (client réel) | 98 ms en moyenne, pics de 250 à 330 ms à chaque construction ou plante ajoutée | **≈ 65 ms**, pics des ressources ≤ 24 ms, mur ajouté ≈ 15 ms |
 | Publications complètes, Les Forges à ×1 (Worker seul) | 6,8 par seconde (≈ 630 Ko chacune) | **≈ 1,9 par seconde** (≈ 3 avant les patchs de cargaison) |
 | Chargement des Éclaircies (navigateur, profil neuf) | 119 s, panneau « Opération en attente » à 16 s | **64 s**, barre de progression, plus de panneau |
-| Chargement d’une sauvegarde au schéma actuel (Éclaircies / Les Forges) | 78 / 82 s | **39 à 46 / 41 s** |
+| Chargement d’une sauvegarde au schéma actuel (Éclaircies / Les Forges) | 78 / 82 s | **24 / 25 s** (39 à 46 / 41 s avant les ombres sans couleur) |
 | Nouvelle partie, de « Générer » au jeu affiché | 116 à 121 s | **48 s** |
 | Panne « Shared World/settings/camera/paint changed before publication » en jeu | en 1,2 s, caméra en mouvement à ×6 | **aucune** en 150 s |
 | Gels d’affichage pour préparer des surfaces en jeu (×6, 60 s) | 105, 1,5 s gelée au total | **18**, 0,37 s |
@@ -575,6 +575,46 @@ Deux règles de la simulation tournaient plus souvent que dans le vrai jeu ; les
 - `survivor-colony` (trois jours de colonie) n’a pas pu tourner : il se bloque avant son premier cas, sans calcul, sur le commit de référence comme sur ce lot.
   - les tests unitaires qui appellent directement `updateWellbeing` gardent leur pas d’un tick.
 
+### Chargement : ombres sans couleur, géographie allégée (8 novembre)
+
+**Constat.** Au chargement des Forges, le fil principal passait 18,2 s à construire 209 shaders (temps JavaScript de Three.js, avant la compilation par le GPU). 45 d'entre eux, ceux de la passe d'ombre, en prenaient 7,2 s : 3,3 s pour les 21 espèces sauvages, 1,9 s pour les colons.
+
+**Cause.** Pour la passe d'ombre, Three.js r186 multiplie l'alpha de l'ombre par `material.colorNode.a` dès que le matériau a une couleur. Chaque shader d'ombre reconstruisait donc tout le graphe de couleur du matériau (pigments, traits, sang, usure) pour n'en garder que l'alpha. Sur nos matériaux, cette couleur est un `vec3` : l'alpha lu vaut toujours 1 (`vec4(couleur, 1.0).w` dans le code généré).
+
+**Correction** (`ReentrantRenderer`, adaptateur déjà propre à Three 0.186) : quand l'alpha ne peut pas changer l'ombre, le shader d'ombre garde la position, la profondeur et le masque d'exploration du matériau, sans son graphe de couleur.
+- L'alpha n'atteint la carte d'ombre que par un test d'alpha copié du matériau, ou par des ombres colorées (`shadowMap.transmitted`). Le matériau de la passe d'ombre ne mélange rien et écrit la profondeur.
+- Les matériaux avec `alphaTest`, `castShadowNode` ou des ombres colorées gardent le chemin de Three.js.
+- Aucun graphe de couleur projetant une ombre ne contient de `discard` ni d'écriture : le seul `discard` dans une couleur est l'encre de cuisson des atlas, hors de la scène ombrée.
+
+**Masque d'exploration partagé.** Une fois la couleur retirée, les variantes de matériau des colons (uni, texturé, natif, atlas) donnaient des shaders d'ombre identiques, mais chacun était construit à part : le masque d'exploration des acteurs était un graphe neuf par matériau, alors qu'il ne dépend d'aucun matériau. Ce graphe est maintenant un seul nœud, partagé par tous les acteurs sans masque propre, et l'adaptateur réutilise la même couleur d'ombre pour un même masque. Les variantes qui partagent leur pose partagent ainsi leur programme d'ombre : colons 13 → 9 compilations, ombres 45 → 41.
+
+**Exactitude.** Captures figées (jeu en pause, horloge de la page gelée), avec et sans l'adaptateur : 0 pixel différent sur Les Forges et sur Les Éclaircies, ombres des colons, animaux, arbres, murs et nuages comprises. Deux sessions identiques donnent aussi 0 pixel d'écart.
+
+**Géographie de la planète** (≈ 120 000 tuiles, reconstruite au chargement par le Worker puis par le fil principal) :
+- les colonnes de la surface étaient validées deux fois : sur la valeur reçue, puis sur sa copie `structuredClone`. La copie n'est plus revalidée. Pour que l'acceptation reste la même, la validation exige désormais des propriétés énumérables, les seules que garde une copie ;
+- le gel profond (≈ 1,3 million d'objets) gèle chaque objet avant ses enfants et s'arrête sur un objet déjà gelé, au lieu de tenir un ensemble des objets visités. Les arbres gelés sont des restaurations ou des sorties du générateur, dont les seuls objets gelés d'avance sont des tableaux vides constants : le résultat est le même.
+- `restoreCampaignGeography256` : 1,74 → 1,20 s par fil (médiane, Node).
+
+**Mesures.** Navigateur neuf (sans cache de shaders), build de production, trois passages en alternance avec le commit de référence, médianes ; de la demande de chargement à la partie affichée :
+
+| Sauvegarde au schéma actuel | Référence | Ce lot |
+|---|---|---|
+| Les Forges | 32,1 s | **25,2 s** |
+| Les Éclaircies | 30,1 s | **24,1 s** |
+| dont préparation de l'affichage, Les Forges / Les Éclaircies | 24,6 / 23,4 s | **18,5 / 18,1 s** |
+| dont arrivée du monde (Worker), Les Forges / Les Éclaircies | 7,6 / 6,7 s | **6,7 / 6,0 s** |
+
+Temps JavaScript de construction des shaders au chargement des Forges : 18,2 s → 12,6 s ; passe d'ombre 7,2 → 1,0 s.
+
+**Tests.** 225 fichiers (géographie, planète, ombres, rendu, masque d'exploration), comparés test par test au commit de référence : 1 153 réussis et 371 en échec des deux côtés, 0 régression. Les échecs sont ceux de tests anciens, déjà en échec sur la référence. Les tests du masque d'exploration ont été relancés après le partage du masque : seul échoue `origami-pipeline-budget`, qui appelle une méthode supprimée bien avant ce lot (`selectOrigamiPosition`, absente aussi de la référence).
+
+**Ce qui reste au chargement**, Les Forges :
+- shaders principaux des 21 espèces sauvages : 3,3 s. Chacune a sa propre texture d'animation, ses tables de traits et ses uniformes de groupe « rendu » : partager un programme demanderait de rendre ces ressources propres à chaque objet ;
+- variantes de matériau des colons (≈ 2,5 s) : elles basculent d'elles-mêmes en jeu (corps natif, atlas en Gouache), sauf les variantes sans texture ;
+- `InstancedMesh` : Three.js r186 met l'identifiant de l'objet dans la clé du programme, chaque lot de cultures (10 sur Les Forges, ≈ 130 ms chacun) reconstruit donc le sien ;
+- application du monde (≈ 4,3 s), dont maillages des colons et tables de traits ≈ 1,1 s, végétation ≈ 1 s.
+
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -621,9 +661,11 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 
    Passer en `matrixAutoUpdate = false` les objets statiques, avec une mise à jour explicite quand ils bougent, est le levier le plus sûr.
 3. **Reconstruction d’un chunk de végétation** : encore 50 à 130 ms, mais rare, à l’apparition d’une plante dans le chunk. La découper en plusieurs images (corps, puis usure), ou calculer les tableaux dans un Worker.
-4. **Chargement.** Fait en grande partie (voir « Lancement d’une partie » et « Second lot de chargement ») : 39 à 46 s pour une sauvegarde au schéma actuel des Éclaircies, contre 119 s au départ, avec une barre de progression. Restent, par gain attendu :
-   - le passage d’ombres de la scène (9 à 10 s) et la compilation complète faite pendant la préparation des surfaces (8 à 11 s) ;
-   - l’adoption du monde (5 à 7 s) ;
+4. **Chargement.** Fait en grande partie (voir « Lancement d’une partie », « Second lot de chargement » et « Chargement : ombres sans couleur, géographie allégée ») : 24 s pour une sauvegarde au schéma actuel des Éclaircies, contre 119 s au départ, avec une barre de progression. Restent, par gain attendu :
+   - ~~le passage d’ombres de la scène~~ : programmes d’ombre sans graphe de couleur, 7,2 → 1,0 s de construction sur Les Forges ;
+   - un programme partagé entre espèces sauvages (3,3 s sur Les Forges, et plus de compilation à l’arrivée d’une nouvelle espèce) ;
+   - un programme partagé entre lots instanciés de cultures (≈ 1,3 s sur Les Forges) ;
+   - l’adoption du monde (≈ 4,3 s sur Les Forges) ;
    - avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).
 5. **Simulation, 80 colons (81,5 ms par tick).** Le profil est désormais plat : planification du travail ≈ 15 % (ménage, chantiers, cuisine), faune ≈ 10 %, déplacement ≈ 16 %, température de surface ≈ 6 %, recherche ≈ 4 %. Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
 6. **Contenu sans montée de schéma** (voir § 5), puis les écarts RimWorld 1 à 4 et 8.

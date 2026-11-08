@@ -28,6 +28,9 @@ export class ExplorationMask256 {
  /** Unknown ground must not reveal the private roof/lamp field either. */
  readonly knownGround=this.visible;
  private readonly configured=new WeakSet<THREE.NodeMaterial>();
+ /** The actor visibility graph depends on no material: one node serves every
+  * actor without a solid owner, so variants sharing a pose share programs. */
+ private actorVisible:THREE.Node|undefined;
  constructor(){
   this.map.minFilter=this.map.magFilter=THREE.NearestFilter;this.map.generateMipmaps=false;this.map.flipY=false;this.map.onUpdate=()=>this.map.clearUpdateRanges();this.map.needsUpdate=true;
  }
@@ -45,11 +48,13 @@ export class ExplorationMask256 {
    const known=this.sample.sample(cell.add(.5).div(this.size)).level(float(0)).r.greaterThan(.5);
    visible=this.enabled.not().or(inside.not()).or(known);
   }
-  if(material.userData.explorationActor){
+  if(material.userData.explorationActor&&!material.userData.explorationSolid&&this.actorVisible)visible=this.actorVisible as typeof visible;
+  else if(material.userData.explorationActor){
    const anchor=varying(attribute('aTo','vec4').xz,'v_explorationOwner').add(.5).floor();
    const inside=anchor.x.greaterThanEqual(0).and(anchor.y.greaterThanEqual(0)).and(anchor.x.lessThan(this.size.x)).and(anchor.y.lessThan(this.size.y));
    const known=this.sample.sample(anchor.add(.5).div(this.size)).level(float(0)).r.greaterThan(.5);
    visible=visible.and(this.enabled.not().or(inside.not()).or(known));
+   if(!material.userData.explorationSolid)this.actorVisible=visible;
   }
   material.maskNode=mask?new THREE.OperatorNode('&&',convert(mask,'bool'),visible):visible;
   material.maskShadowNode=shadow?new THREE.OperatorNode('&&',convert(shadow,'bool'),visible):visible;

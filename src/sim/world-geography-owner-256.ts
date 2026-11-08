@@ -2,7 +2,7 @@
  * per simulation connection. Saves keep scalar columns and actual modifiers;
  * loading rebuilds recorded geometry only, never climate, rivers or RNG.
  * This owner is transient and cannot be serialized as a World authority. */
-import {storeWorldSurface,restoreWorldSurface,validStoredWorldSurface,type StoredWorldSurface} from './world-surface-storage.ts';
+import {storeWorldSurface,restoreValidatedWorldSurface,validStoredWorldSurface,type StoredWorldSurface} from './world-surface-storage.ts';
 import {validWorldFactionSelection,type ConfigurableWorldFaction} from './world-generation-settings.ts';
 import {validCoreWorldMutators256} from './world-local-mutators-256.ts';
 import type {WorldPhysicalSurface} from './world-surface-geography.ts';
@@ -18,10 +18,15 @@ const owners=new WeakSet<object>();
 const definitions=new WeakMap<object,CampaignGeography256>();
 function record(v:unknown,keys:readonly string[]):v is Record<string,unknown> {
  if(!v||typeof v!=='object'||Array.isArray(v)||![Object.prototype,null].includes(Object.getPrototypeOf(v)))return false;
- const own=Reflect.ownKeys(v);return own.length===keys.length&&own.every(k=>typeof k==='string'&&keys.includes(k)&&Object.hasOwn(Object.getOwnPropertyDescriptor(v,k)!,'value'));
+ const own=Reflect.ownKeys(v);return own.length===keys.length&&own.every(k=>{if(typeof k!=='string'||!keys.includes(k))return false;const d=Object.getOwnPropertyDescriptor(v,k)!;return Object.hasOwn(d,'value')&&d.enumerable===true;});
 }
-function freezeTree<T>(value:T,seen=new WeakSet<object>()):T {
- if(value&&typeof value==='object'&&!seen.has(value)){seen.add(value);for(const child of Object.values(value))freezeTree(child,seen);Object.freeze(value);}return value;
+/** Deep freeze, each object before its children: an object already frozen is
+ * not visited again, which also stops shared and cyclic references without a
+ * visited set (≈1.3 million planet objects). The trees frozen here are fresh
+ * restorations or generator outputs, whose only objects frozen beforehand are
+ * empty constant arrays: the result is the same as freezing children first. */
+function freezeTree<T>(value:T):T {
+ if(value!==null&&typeof value==='object'&&!Object.isFrozen(value)){Object.freeze(value);for(const child of Object.values(value))if(child!==null&&typeof child==='object')freezeTree(child);}return value;
 }
 export function validCampaignGeographyShape256(value:unknown):value is StoredCampaignGeography256 {
  if(!record(value,['revision','surface','mutators','factions'])||value.revision!==1||!validStoredWorldSurface(value.surface)||!validWorldFactionSelection(value.factions)
@@ -46,7 +51,9 @@ export function captureGeneratedGeography256(draft:GeographicWorldDraft256):Camp
  * allocation, own a primitive copy and then verify actual graph membership. */
 export function restoreCampaignGeography256(raw:unknown):CampaignGeography256 {
  if(!validCampaignGeographyShape256(raw))throw Error('Invalid campaign geography definition');
- const copied=structuredClone(raw),restored=restoreWorldSurface(copied.surface);
+ // The copy keeps exactly the enumerable data accepted above, so its columns
+ // are not walked a second time.
+ const copied=structuredClone(raw),restored=restoreValidatedWorldSurface(copied.surface);
  if(!validCoreWorldMutators256(copied.mutators,restored.surface.tiles))throw Error('Invalid saved campaign terrain modifiers');
  return owner(copied,restored.surface,restored.roads);
 }
