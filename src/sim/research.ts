@@ -23,6 +23,7 @@ import { workPriority } from './work-types.ts';
 import { cookingSpot } from './cooking-bills.ts';
 import { researchFacilityDistance,researchFacilityLinked } from './research-facilities.ts';
 import { CleanlinessCapture } from './filth-room.ts';
+import { glowIgnoredByBlindPawn } from './glow-rules-301.ts';
 import { isPowerActive } from './power-rules.ts';
 import { reservedServiceCells } from './service-reservations.ts';
 import { deconstructionReserved } from './deconstruction-rules.ts';
@@ -246,7 +247,7 @@ export function researchCleanlinessFactor(cleanliness:number|null):number {
  * topology and one lazily computed cleanliness result per requested room. */
 export function researchRate(pawn:Pawn,station:Structure,environment:WorkEnvironment,temperature:number,world:World):number {
   const c=pawnBody(pawn).capacities,skill=intellectualSkill(pawn);
-  const personal=Math.max(.1,(.08+.115*skill.level)*(.5+.5*Math.min(1.1,c.manipulation))*(.5+.5*Math.min(1.1,c.sight))*environment.speedAt(pawn));
+  const personal=Math.max(.1,(.08+.115*skill.level)*(.5+.5*Math.min(1.1,c.manipulation))*(.5+.5*Math.min(1.1,c.sight))*(glowIgnoredByBlindPawn(world,pawn)?1:environment.speedAt(pawn)));
   const room=environment.room(station),outdoor=room?.psychologicallyOutdoors??true;
   let cleanliness:number|null=outdoor?null:0;
   if(!outdoor)cleanliness=researchCleanliness(world,station,environment);

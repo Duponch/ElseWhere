@@ -28,6 +28,7 @@ test('solid volume retains no air; light, work role and heat use the real front 
   expect(room.cells).toHaveLength(43);expect(layout.indices[station.z*world.width+station.x]).toBe(-1);
   room.temperature=20;applyThermalSources(world,layout);expect(room.temperature).toBeCloseTo(20+2/43,12);
   applyCookingHeat(world,station,.5);expect(room.temperature).toBeCloseTo(20+3.6/43,12);
-  const work=new WorkEnvironmentCache().read(world);expect(work.room(front)?.role).toBe('workshop');expect(work.production(station,front)).toMatchObject({outdoors:1,roomRole:1,station:1});expect(work.lightAt(front)).toBeGreaterThan(0);
+  // Schema 301 (RimWorld 1.6): the crematorium has no workTableRoomRole, so alone it makes no workshop.
+  const work=new WorkEnvironmentCache().read(world);expect(work.room(front)?.role).toBe('none');expect(work.production(station,front)).toMatchObject({outdoors:1,roomRole:1,station:1});expect(work.lightAt(front)).toBeGreaterThan(0);
   station.power!.on=false;const temperature=room.temperature;applyThermalSources(world,layout);expect(room.temperature).toBe(temperature);
 });

@@ -711,6 +711,23 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 - **Points 5 et 6.** Ils changent un comportement que des centaines de tests épinglent au tick près.
 - **Point 5.** Il demande de réorganiser la planification en « WorkGivers » ordonnés comme dans RimWorld : type de travail, puis `priorityInType`, puis distance. Ce n’est pas un simple changement de constantes.
 
+### Écarts corrigés le 8 novembre : obscurité, crématorium, laboratoire
+
+Source : les définitions XML de RimWorld 1.6.4871 et sa bibliothèque, décompilée localement pour lecture (rien n'est recopié). Les quatre corrections valent pour la famille de schémas actuelle (301) ; les schémas historiques gardent leur comportement, aucune donnée sauvegardée ne change de forme.
+
+- **Obscurité et mécanoïdes.** Dans RimWorld, le facteur d'obscurité de la vitesse de déplacement (`StatPart_Glow` de `MoveSpeed` : ×0,8 sans lumière, ×1 à partir de 30 % de lumière) ne s'applique qu'aux humanoïdes (`humanlikeOnly`). Ici, les mécanoïdes ralentissaient aussi de 20 % dans le noir. Ils marchent désormais à pleine vitesse la nuit.
+- **Obscurité et cécité.** Le même facteur, sur la vitesse de déplacement et sur la vitesse de travail globale (`WorkSpeedGlobal`), est ignoré pour un pion incapable de voir (`ignoreIfIncapableOfSight`, vue à 0). Le lissage des sols le faisait déjà ; c'est maintenant le cas de la marche, de la recherche, des établis et des autres travaux.
+- **Crématorium électrique.** Il dérive de `BuildingBase`, sans `workTableRoomRole` (la [note de la crémation](../research/cremation-core-v314.md) le relevait déjà). Il ne subit donc pas le facteur ×0,8 hors d'un atelier et ne compte pas pour faire d'une pièce un atelier. Ici, il perdait 20 % hors d'un atelier.
+- **Rôle « laboratoire ».** `RoomRoleWorker_Laboratory` compte 60 points par bâtiment de rôle Laboratoire (bancs de recherche, laboratoire de drogues), et non 54. Le multi-analyseur, équipement sans ce rôle, ne compte pas. Exemple : une pièce avec un banc de recherche, un multi-analyseur et trois établis d'atelier est un atelier (81 contre 60), et non plus un laboratoire (108 contre 81).
+
+Les autres rôles de pièce relus (atelier 27 par établi, cuisine 28 par cuisinière, salle à manger 12 par table, loisirs 7, chambre et dortoir) étaient déjà conformes, comme la liste des établis pénalisés hors de leur pièce. Le banc de recherche avancé a bien, lui aussi, un facteur ×0,8 hors laboratoire : la règle actuelle était juste.
+
+**Exactitude et tests.**
+- Aucune des quatre parties de référence n'est touchée sur les durées mesurées. Les Forges après 150 ticks (deux passes), Les Éclaircies, Les Aulnes intégrées et Les Aulnes sièges après 300 ticks gardent leur empreinte : ces quatre règles n'y produisent aucune différence dans ces fenêtres.
+- Le nouveau fichier `tests/darkness-room-fidelity-301.test.ts` (5 cas) vérifie chaque règle, avec son comportement historique au schéma 300.
+- 402 fichiers de tests (mécanoïdes, crémation, recherche, établis, lumière, déplacement) : 0 régression face au commit précédent. Les fichiers ayant des échecs, relancés sur le commit précédent, y donnent les mêmes échecs, sauf un attendu : `cremation-presentation-v314` vérifiait qu'un crématorium seul fait de sa pièce un atelier ; son attendu suit désormais la règle de RimWorld (pièce sans rôle, aucun facteur).
+- `energy-colony.test.ts` et `prison-colony.test.ts`, campagnes longues, ne collectent aucun test sans leurs variables d'environnement, puis empêchent vitest de se terminer : le blocage est identique sur le commit précédent. Ils ont été retirés des listes, car ils bloquaient tout leur paquet de tests.
+
 ## 6. Feuille de route recommandée (par gain attendu)
 
 1. **Coût d’une publication complète sur le thread principal** (voir « Patchs de cargaison »). Sur Les Forges, environ 75 ms d’application par publication, jusqu’à 250 ms, plus l’admission du message. Il en reste 1,3 à 1,5 par seconde, presque toutes calmes ; les autres changements de dépendances (lit, repas, loisirs…) n’en provoquent plus que 0,1 par seconde.

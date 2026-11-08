@@ -252,6 +252,7 @@ import {validSpikeTrapCommand} from './spike-trap-save.ts';
 import {canPlaceSpikeTrap} from './spike-trap-placement.ts';
 import {initialSpikeTrapState} from './spike-trap-state.ts';
 import { captureFurnitureSight } from './furniture-sight.ts';
+import { glowIgnoredByBlindPawn } from './glow-rules-301.ts';
 import { applyShootingCommand } from './shooting.ts';
 import { expireStaggers } from './stagger.ts';
 import { collapseFromExhaustion,processDraftSleep } from './needs.ts';
@@ -1219,6 +1220,8 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     if(advanceClock){world.tick++;if(isCorePhysicalSchema297(Number(world.schemaVersion))){world.phaseCore297=0;beginCoreMacro297(campaignAuthority(world));syncWorldPawnsPhysicalCore297(campaignAuthority(world));}}advanceActualHiveComponents256(world);advanceAnimalAges256(world);finishSnowSteps(world);
     let light:LightEnvironment|undefined,lightKey:string|undefined;
     const getLight=()=>{if(!light){light=readPlantLight(world);lightKey=plantLightSourcesKey(world);}return light;};
+    // Darkness factor of a pawn's work speed (a blind pawn ignores it, schema 301).
+    const workGlow=(p:Pawn)=>glowIgnoredByBlindPawn(world,p)?1:getLight().speedAt(p);
     advanceHumanAges(world);
     sampleColonyEconomy(world);
     advanceArrivals(world);advanceHeatwaves(world);advanceMiscIncidents(world);advanceSmallIncidents(world);advanceVisitors(world);advancePodRescues(world);advanceFluIncidents(world);
@@ -1371,7 +1374,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(isDraftedTending(pawn)){
         pawn.draft!.lastActiveTick=world.tick;
         if(!processDraftSleep(world,pawn,needsContext)&&isDraftedTending(pawn))
-          processTending(world,pawn,needsContext,()=>getLight().speedAt(pawn),()=>searchCandidates(world,pawn,getBlocked(),occupied,budget));
+          processTending(world,pawn,needsContext,()=>workGlow(pawn),()=>searchCandidates(world,pawn,getBlocked(),occupied,budget));
         continue;
       }
       if(isDraftedRescue(world,pawn)){
@@ -1462,21 +1465,21 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(pawn.animalRescue){processAnimalRescue(world,pawn,needsContext);continue;}
       if(pawn.animalHandling){processHandling(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked});continue;}
       if(pawn.animalFeed){processAnimalFeeding(world,pawn,needsContext);continue;}
-      if(pawn.animalCare){processAnimalCare(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked},()=>getLight().speedAt(pawn));continue;}
+      if(pawn.animalCare){processAnimalCare(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked},()=>workGlow(pawn));continue;}
       if(pawn.hunting){processHunting(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked});continue;}
       if(pawn.burial){processBurial(world,pawn,needsContext);continue;}
       if(processCleaning(world,pawn,needsContext))continue;
       if(pawn.brewing){processBarrelExtraction265(world,pawn,needsContext.move,()=>wakePlanners(world));continue;}
-      if(pawn.deepWork){processDeepWork(world,pawn,needsContext,()=>getLight().speedAt(pawn));continue;}
+      if(pawn.deepWork){processDeepWork(world,pawn,needsContext,()=>workGlow(pawn));continue;}
       if(pawn.research){processResearch(world,pawn,needsContext.move,s=>researchRate(pawn,s,getEnvironment(),new TemperatureView(world,thermal).at(world,s),world),message=>event(world,'job',message));continue;}
       if(pawn.ward){processWarden(world,pawn,needsContext);continue;}
       if(pawn.feed){processFeeding(world,pawn,needsContext);continue;}
       if(pawn.surgery){processSurgery(world,pawn,needsContext,()=>getLight().lightAt(pawn),cell=>getLight().lightAt(cell));continue;}
-      if(pawn.tend){processTending(world,pawn,needsContext,()=>getLight().speedAt(pawn),()=>searchCandidates(world,pawn,getBlocked(),occupied,budget));continue;}
+      if(pawn.tend){processTending(world,pawn,needsContext,()=>workGlow(pawn),()=>searchCandidates(world,pawn,getBlocked(),occupied,budget));continue;}
       if(pawn.rescue){processRescue(world,pawn,needsContext);continue;}
       if (pawn.haul) { const refueling=pawn.haul.destination.type==='fuel';processHaul(world, pawn, (target, allow) => moveToward(world, pawn, target, allow, getBlocked, budget,false,getLight), () => {wakePlanners(world);if(refueling)invalidateEnvironment();});continue; }
       if(pawn.cooking) {const priorProduct=pawn.cooking.productId,priorPhase=pawn.cooking.phase;processCooking(world,pawn,{
-        workRate:(station,worker)=>getEnvironment().production(station,worker).total*((isFoodWorkstation(station.kind)||station.kind==='butcher-spot'||station.kind==='crafting-spot'||station.kind==='tailor-bench'||station.kind==='electric-tailor-bench'||station.kind==='machining-table'||station.kind==='art-bench'||station.kind==='drug-lab'||station.kind==='fueled-smithy'||station.kind==='electric-smithy'||station.kind==='brewery'||station.kind==='biofuel-refinery'||station.kind==='electric-crematorium'||station.kind==='electric-smelter')?tailoringTemperatureFactor(new TemperatureView(world,thermal).at(world,station.kind==='electric-crematorium'?pawn.cooking!.spot:station)):1)*(taskWork(pawn.cooking!)==='cook'||isMechSalvageRecipe(pawn.cooking!.recipe)||pawn.cooking!.recipe==='make-medicine'||isBiofuelRecipe(pawn.cooking!.recipe)||pawn.cooking!.recipe==='burn-apparel'||pawn.cooking!.recipe==='smelt-weapon'||pawn.cooking!.recipe==='smelt-apparel'||isSmithingRecipe267(pawn.cooking!.recipe)||pawn.cooking!.recipe==='cremate-corpse'?1:physicalWorkFactor(pawn,'craft',body)),
+        workRate:(station,worker)=>getEnvironment().production(station,worker,glowIgnoredByBlindPawn(world,worker)).total*((isFoodWorkstation(station.kind)||station.kind==='butcher-spot'||station.kind==='crafting-spot'||station.kind==='tailor-bench'||station.kind==='electric-tailor-bench'||station.kind==='machining-table'||station.kind==='art-bench'||station.kind==='drug-lab'||station.kind==='fueled-smithy'||station.kind==='electric-smithy'||station.kind==='brewery'||station.kind==='biofuel-refinery'||station.kind==='electric-crematorium'||station.kind==='electric-smelter')?tailoringTemperatureFactor(new TemperatureView(world,thermal).at(world,station.kind==='electric-crematorium'?pawn.cooking!.spot:station)):1)*(taskWork(pawn.cooking!)==='cook'||isMechSalvageRecipe(pawn.cooking!.recipe)||pawn.cooking!.recipe==='make-medicine'||isBiofuelRecipe(pawn.cooking!.recipe)||pawn.cooking!.recipe==='burn-apparel'||pawn.cooking!.recipe==='smelt-weapon'||pawn.cooking!.recipe==='smelt-apparel'||isSmithingRecipe267(pawn.cooking!.recipe)||pawn.cooking!.recipe==='cremate-corpse'?1:physicalWorkFactor(pawn,'craft',body)),
         candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),
         search:goals=>search(world,pawn,getBlocked(),occupied,budget,goals),
         move:(target,exact)=>moveToward(world,pawn,target,true,getBlocked,budget,exact,getLight),
@@ -1496,7 +1499,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
         if(!frame.admitAtContact(pawn))moveToward(world,pawn,constructionWorkTarget(world,job),false,getBlocked,budget,false,getLight);
         continue;
       }
-      if(job.tree){const beforeResources=world.resources,beforePiles=world.piles,beforeJobs=world.jobs;processTreeWork(world,pawn,job,(target,touch)=>moveToward(world,pawn,target,false,getBlocked,budget,false,getLight),getLight().speedAt(pawn));if(world.resources!==beforeResources||world.piles!==beforePiles||world.jobs!==beforeJobs){blocked=undefined;roofs=undefined;invalidateEnvironment();}continue;}
+      if(job.tree){const beforeResources=world.resources,beforePiles=world.piles,beforeJobs=world.jobs;processTreeWork(world,pawn,job,(target,touch)=>moveToward(world,pawn,target,false,getBlocked,budget,false,getLight),workGlow(pawn));if(world.resources!==beforeResources||world.piles!==beforePiles||world.jobs!==beforeJobs){blocked=undefined;roofs=undefined;invalidateEnvironment();}continue;}
       if(backgroundWorkRefusal(pawn,workType(job))){releaseWork(world,pawn);continue;}
        if ((job.growingZoneId !== undefined||job.flowerPotId!==undefined) && !growingJobValid(world, job)) { releaseWork(world, pawn); world.jobs = world.jobs.filter(j => j.id !== job.id); continue; }
       if (job.kind === 'sow' && groundPile(world, job)) { releaseWork(world, pawn); continue; }
@@ -1519,7 +1522,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
           if(outputPending&&pawn.planCooldown>0)continue;
           // The first failed producer already paid the completion work/XP.
           // A retry is output preflight, never another tick of plant work.
-          if(!outputPending)advanceWork(job.clearance,getLight().speedAt(pawn)*plantWorkRate(pawn,body,world.schemaVersion>=235&&clearingKind(world,plant)==='cut'?plantCanYieldNow(world,plant):plant.kind==='tree'&&choppable(world,plant)&&berryYield(world,plant)>0)*plantWorkGrowthFactor256(world,plant));
+          if(!outputPending)advanceWork(job.clearance,workGlow(pawn)*plantWorkRate(pawn,body,world.schemaVersion>=235&&clearingKind(world,plant)==='cut'?plantCanYieldNow(world,plant):plant.kind==='tree'&&choppable(world,plant)&&berryYield(world,plant)>0)*plantWorkGrowthFactor256(world,plant));
           if(outputPending||job.clearance.progress>=duration) {
             const quantity=gatherResource(world,plant,clearingKind(world,plant),job.id,pawn);
             if(quantity===null){retainClearingWorkAfterOutputRefusal(job,duration);pawn.planCooldown=20;continue;}
@@ -1535,7 +1538,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
         continue;
       }
       if(job.kind==='repair'){
-        if(ancientRepairContact256(world,pawn,job)){if(advanceRepair(world,pawn,job,getLight().speedAt(pawn),body)){releaseWork(world,pawn);world.jobs=world.jobs.filter(j=>j!==job);event(world,'job',`${pawn.name} a réparé l’ouvrage.`);}}
+        if(ancientRepairContact256(world,pawn,job)){if(advanceRepair(world,pawn,job,workGlow(pawn),body)){releaseWork(world,pawn);world.jobs=world.jobs.filter(j=>j!==job);event(world,'job',`${pawn.name} a réparé l’ouvrage.`);}}
         else moveToward(world,pawn,ancientRepairTarget256(world,job),false,getBlocked,budget,false,getLight);
         continue;
       }
@@ -1548,7 +1551,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
         continue;
       }
       if(job.kind==='sow'&&packedAt(world,job)){releaseWork(world,pawn);continue;}
-      if(job.furniture){if(advanceFurniture(world,pawn,job,target=>moveToward(world,pawn,target,false,getBlocked,budget,false,getLight),()=>releaseWork(world,pawn),()=>constructionWorkRate(pawn,job,getLight().speedAt(pawn),body))){blocked=undefined;roofs=undefined;invalidateEnvironment();wakePlanners(world);}continue;}
+      if(job.furniture){if(advanceFurniture(world,pawn,job,target=>moveToward(world,pawn,target,false,getBlocked,budget,false,getLight),()=>releaseWork(world,pawn),()=>constructionWorkRate(pawn,job,workGlow(pawn),body))){blocked=undefined;roofs=undefined;invalidateEnvironment();wakePlanners(world);}continue;}
       if(job.kind==='deconstruct'&&!deconstructionAvailable(world,job,pawn.id)){releaseWork(world,pawn);continue;}
       if(isConstruction(job)&&(pawn.skills.construction.level<(job.kind==='lay-floor'&&job.floor?FLOOR_DEFINITIONS[job.floor].skill:constructionSkillRequired(job.kind))||!constructionSupplied(world,job)||!constructionSiteFree(world,job,pawn.id))){releaseWork(world,pawn);continue;}
       if(job.kind==='smooth-floor'){
@@ -1560,7 +1563,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       }
       if(job.kind==='mine') {
         if(Math.max(Math.abs(pawn.x-job.x),Math.abs(pawn.z-job.z))===1) {
-          if(advanceMining(world,pawn,job,()=>getLight().speedAt(pawn),body)) {removeIdentity(world.jobs,job);pawn.jobId=null;pawn.state='idle';pawn.planCooldown=0;reconcileRoofSupport(world,false,job);reconcilePawnHealth(world,pawn);blocked=undefined;roofs=undefined;invalidateEnvironment();wakePlanners(world);event(world,'job',`${pawn.name} a terminé le minage.`);}
+          if(advanceMining(world,pawn,job,()=>workGlow(pawn),body)) {removeIdentity(world.jobs,job);pawn.jobId=null;pawn.state='idle';pawn.planCooldown=0;reconcileRoofSupport(world,false,job);reconcilePawnHealth(world,pawn);blocked=undefined;roofs=undefined;invalidateEnvironment();wakePlanners(world);event(world,'job',`${pawn.name} a terminé le minage.`);}
         } else moveToward(world,pawn,job,false,getBlocked,budget,false,getLight);
         continue;
       }
@@ -1585,7 +1588,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
         const cutOutputPending=world.schemaVersion>=235&&job.kind==='cut'&&job.flowerPotId===undefined&&workOutputPending(job,jobDuration(world,job));
         if(cutOutputPending&&pawn.planCooldown>0)continue;
         const physicalPlant=job.flowerPotId===undefined&&['harvest','cut','chop'].includes(job.kind)?resourceAt(world,job.z*world.width+job.x):undefined;
-        if(!cutOutputPending)advanceWork(job,plantJob?getLight().speedAt(pawn)*plantWorkRate(pawn,body,plantLearning)*(physicalPlant?plantWorkGrowthFactor256(world,physicalPlant):1):constructionWorkRate(pawn,job,getLight().speedAt(pawn),body));
+        if(!cutOutputPending)advanceWork(job,plantJob?workGlow(pawn)*plantWorkRate(pawn,body,plantLearning)*(physicalPlant?plantWorkGrowthFactor256(world,physicalPlant):1):constructionWorkRate(pawn,job,workGlow(pawn),body));
         if (cutOutputPending||workProgress(job) >= jobDuration(world, job)) {completeJob(world, pawn, job);blocked=undefined;roofs=undefined;invalidateEnvironment();}
       } else moveToward(world, pawn, job, false, getBlocked, budget,false,getLight);
     }
@@ -1639,7 +1642,7 @@ function woodWallOwner301(world:World):ReturnType<typeof createWoodWallCore301> 
  let light:LightEnvironment|undefined;
  const owner=createWoodWallCore301(world,{
   rate:p=>rateForPawn301(world,p),
-  light:p=>(light??=readPlantLight(world)).speedAt(p),
+  light:p=>glowIgnoredByBlindPawn(world,p)?1:(light??=readPlantLight(world)).speedAt(p),
   complete:(p,j)=>{completeJob(world,p,j);return !world.jobs.includes(j);},
   release:p=>releaseWork(world,p),
   event:message=>event(world,'job',message),

@@ -79,6 +79,6 @@ Dans le projet, un tick local vaut 10 ticks Core (ticks de RimWorld).
 - Un budget partagé de 8 recherches de chemin par tick local limite le coût ; un colon privé de budget réessaie au tick suivant.
 - Chaque fin de tâche ou de transport réveille tous les colons inactifs (`wakePlanners`), ce que RimWorld ne fait pas. Sur Les Forges, retirer ce réveil des fins autonomes ne change pas le coût de la planification (essai du 8 novembre, non retenu) : le coût vient de chaque évaluation complète.
 - Un colon affamé abandonne sa tâche en cours pour manger (`processNeedsDecision300`).
-- Pendant une tâche, les contrôles de validité parcourent pions et tas (`storageCapacity`, `constructionSiteFree`) au lieu de consulter la case.
+- Pendant une tâche, les contrôles de validité parcouraient pions et tas (`storageCapacity`, `constructionSiteFree`) au lieu de consulter la case. Depuis le 8 novembre, l'occupation des chantiers est indexée une fois par appel du planificateur, et l'occupation d'une case de stockage passe par l'index partagé des emprises (voir « Simulation des Forges : contrôles indexés » dans [l'audit des performances](../development/audit-performance-2026-11-05.md)). Le planificateur évalue toujours toutes les catégories à chaque appel.
 
 Le levier principal, pour la fidélité comme pour le coût, est donc un planificateur par niveaux de priorité avec arrêt au premier niveau trouvé, appuyé sur des listes tenues à jour. C’est un chantier à part entière.

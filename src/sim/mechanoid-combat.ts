@@ -2,6 +2,7 @@ import {recordShipCasketFilthMovement277} from './filth.ts';
 import {shipCasketCarrierOf277,syncShipCasketPassenger277} from './ship-casket-carry-277.ts';
 import {mechanicalDuty256,mechanicalOrder256,sleepingTempleMech256} from './temple-mech-duty-256.ts';
 import { mechanoidDefinition } from './mechanoid-definition.ts';
+import { glowAppliesToMechanoids } from './glow-rules-301.ts';
 import { mechanoidBodyModel } from './mechanoid-anatomy.ts';
 import { bodyEfficiencies } from './body-capacities.ts';
 import { HP_UNIT } from './injury-rules.ts';
@@ -95,7 +96,7 @@ function acquire(w:World,m:Mechanoid,budget:SearchBudget,batch:MechanoidCombatBa
 function travel(w:World,m:Mechanoid,next:Cell,getLight:LightReader,blocked:Uint8Array):boolean {
   if(!canStep(w,m,next,blocked,EMPTY))return false;
   const moving=mechaAssessment(m).capacities.moving;if(moving<=.15)return false;
-  const speedFactor=mechanoidDefinition(m.mechKind).moveSpeed/4.6*moving*getLight().speedAt(m)*weatherMoveFactor(w,m);
+  const speedFactor=mechanoidDefinition(m.mechKind).moveSpeed/4.6*moving*(glowAppliesToMechanoids(w)?getLight().speedAt(m):1)*weatherMoveFactor(w,m);
   const start=m.motion&&m.motion.end>=w.tick-1?m.motion.end:w.tick,terrainDelay=furnitureDelay(w,m,next);
   const motion:TravelSegment={from:{x:m.x,z:m.z},to:{...next},start,end:start+3*edgeLength(m,next)/speedFactor+terrainDelay,speedFactor,...terrainDelay?{terrainDelay}:{}};
   if(m.stagger&&m.stagger.untilCore/10>start)motion.stagger=mergeSlowIntervals([{start:Math.max(start,m.stagger.sinceCore/10),end:m.stagger.untilCore/10}]);
