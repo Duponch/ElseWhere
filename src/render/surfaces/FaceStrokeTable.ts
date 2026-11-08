@@ -127,11 +127,14 @@ export function compileFaceStrokeTable(source:THREE.BufferGeometry,options:FaceS
  const corners=Uint32Array.from({length:total},(_,i)=>index?.getX(i)??i),triangles:Triangle[]=[],parents=Int32Array.from({length:count},(_,i)=>i),buckets=new Map<string,{triangle:number;a:number;b:number}[]>();
  const root=(n:number):number=>{let r=n;while(parents[r]!==r)r=parents[r]!;while(parents[n]!==n){const next=parents[n]!;parents[n]=r;n=next;}return r;};
  const semantic=fields.filter(([name])=>name!=='position'&&!/normal|tangent|uv/i.test(name)),paintUvs=fields.filter(([name,a])=>/uv/i.test(name)&&a.itemSize>=2);
+ // A vertex's rounded position key, computed once per vertex (its point is
+ // read from the same position attribute every time).
+ const vertexKeys:(string|undefined)[]=[],pointKey=(vertex:number,point:THREE.Vector3)=>vertexKeys[vertex]??=key(point);
  for(let triangle=0;triangle<count;triangle++){
   const vertices=[corners[triangle*3]!,corners[triangle*3+1]!,corners[triangle*3+2]!] as const;if(vertices.some(v=>v>=p.count))throw Error('Face stroke index outside original vertex domain');
   const points=vertices.map(v=>new THREE.Vector3().fromBufferAttribute(p,v)) as [THREE.Vector3,THREE.Vector3,THREE.Vector3],normal=new THREE.Vector3().crossVectors(points[1].clone().sub(points[0]),points[2].clone().sub(points[0]));normal.normalize();
   const partition=semantic.map(([name,a])=>`${name}:${Array.from({length:a.itemSize},(_,c)=>a.getComponent(vertices[0],c)).join(',')}`).join('|'),t:Triangle={vertices,points,normal,plane:normal.dot(points[0]),partition};triangles.push(t);
-  for(let e=0;e<3;e++){const a=vertices[e]!,b=vertices[(e+1)%3]!,ka=key(points[e]!),kb=key(points[(e+1)%3]!),edgeKey=partition+'/'+(ka<kb?ka+'/'+kb:kb+'/'+ka);const bucket=buckets.get(edgeKey)??[];bucket.push({triangle,a,b});buckets.set(edgeKey,bucket);}
+  for(let e=0;e<3;e++){const a=vertices[e]!,b=vertices[(e+1)%3]!,ka=pointKey(vertices[e]!,points[e]!),kb=pointKey(vertices[(e+1)%3]!,points[(e+1)%3]!),edgeKey=partition+'/'+(ka<kb?ka+'/'+kb:kb+'/'+ka);const bucket=buckets.get(edgeKey)??[];bucket.push({triangle,a,b});buckets.set(edgeKey,bucket);}
  }
  const sameUv=(a:number,b:number)=>paintUvs.every(([,uv])=>Array.from({length:uv.itemSize},(_,c)=>Math.abs(uv.getComponent(a,c)-uv.getComponent(b,c))).every(d=>d<1e-7));
  if(options.mergeCoplanar!==false)for(const bucket of buckets.values())for(let i=0;i<bucket.length;i++)for(let j=i+1;j<bucket.length;j++){const x=bucket[i]!,y=bucket[j]!,a=triangles[x.triangle]!,b=triangles[y.triangle]!;if(a.normal.lengthSq()<.5||a.normal.dot(b.normal)<1-1e-7||Math.abs(a.plane-b.plane)>1e-6)continue;const same=key(new THREE.Vector3().fromBufferAttribute(p,x.a))===key(new THREE.Vector3().fromBufferAttribute(p,y.a));if(!sameUv(x.a,same?y.a:y.b)||!sameUv(x.b,same?y.b:y.a))continue;const ra=root(x.triangle),rb=root(y.triangle);if(ra!==rb)parents[Math.max(ra,rb)]=Math.min(ra,rb);}

@@ -724,6 +724,29 @@ Les tests ont été passés fichier par fichier : la machine, chargée par d'aut
 
 Pour les lots suivants, `tmp/perf/known-failures.py` garde les échecs déjà constatés sur la référence. La comparaison porte sur le statut de chaque test : un test qui échouait déjà ne peut pas révéler une régression en échouant de nouveau. Seuls les fichiers aux échecs inconnus sont donc relancés sur la référence, soit 1 fichier ici au lieu de 74.
 
+### Chargement : traits des modèles plus rapides (8 novembre)
+
+**Constat.** Au chargement des Éclaircies, le fil principal reste occupé presque sans pause pendant environ 25 secondes. La compilation des tables de traits des modèles (animaux, colons, surfaces naturelles) y prend 2,3 s, dont 2,1 s dans `createOrigamiBrushGeometry`. Cette fonction fabrique une géométrie temporaire de traits, uniquement pour en extraire les tables. Elle allouait :
+- un `Vector3` à chaque lecture de sommet ;
+- une clé de position en chaîne de caractères à chaque extrémité d'arête ;
+- un test d'expression régulière par composante de chaque sommet émis.
+
+**Corrections.** Mêmes résultats, au bit près.
+- La source de chaque valeur émise (position, UV, normale de face, zéro, interpolation, premier sommet) est décidée une fois par attribut, dans le même ordre de priorité.
+- Les calculs de `emit` (soustraction, longueur, normalisation, interpolation, produit vectoriel) se font sur des nombres, avec les mêmes opérations dans le même ordre que les `Vector3`.
+- La clé de position arrondie d'un sommet est calculée une fois par sommet, dans le générateur comme dans `compileFaceStrokeTable`.
+
+**Exactitude.** 175 sorties comparées entre l'ancien et le nouveau code, identiques au bit près : les géométries de traits des 53 espèces avec et sans usure, leurs tables compilées, et les 16 variantes du modèle humain.
+
+**Mesures.** Node, toutes les espèces, deux passes de chaque côté : géométries de traits 1 227 / 1 416 ms → **1 029 / 942 ms** (−20 à −34 %). Les tables complètes ne montrent pas d'écart mesurable (1 586 / 1 662 contre 1 815 / 1 520 ms, à froid). Le gain attendu au chargement est de l'ordre de 0,3 à 0,5 s, trop faible pour ressortir du bruit d'un chargement complet sur une machine chargée. La version de ce matin et ce lot chargent Les Éclaircies dans le même temps, à environ 40 s sous la charge de ce soir.
+
+**Tests.** 140 fichiers (traits, modèles origami, animaux, humains, surfaces) : 558 réussis et 40 en échec. Les 19 fichiers dont les échecs n'étaient pas encore connus, relancés sur le commit précédent, y donnent les mêmes échecs : 0 régression.
+
+**Ce qui reste au chargement** (profil du fil principal, Les Éclaircies) :
+- construction des shaders, environ 15 s sous charge : variantes de colons (dont environ 2,5 s de variantes préchauffées), une par espèce sauvage, et des maillages vides préchauffés pour éviter un gel en jeu ;
+- application du monde, environ 7 s (blocs de végétation, maillages des colons, terrain) ;
+- 14 programmes `Attached fire` qui ne font que reconstruire 2 codes déjà construits.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
