@@ -682,6 +682,25 @@ La carte de lumière elle-même coûte autant qu'avant : elle est réellement re
 
 `prison-colony.test.ts` n'exécute aucun test sans variable de campagne longue, mais il empêche vitest de se terminer après son rapport. Il bloquait tout son paquet de 60 fichiers jusqu'au délai de garde : il est retiré des listes, et ses voisins ont été passés un par un.
 
+### Simulation : animaux domestiques pris en charge (8 novembre)
+
+**Constat.** Aux Forges (241 animaux), deux contrôles faits pour chaque animal domestique, à chaque tick, parcouraient tous les colons pour une réponse presque toujours négative :
+- `animalClaimed` (« un colon s'occupe-t-il de cet animal ? ») construisait, pour chacun des 80 colons, la liste des animaux qu'il sert (mené, soigné, nourri, secouru, porté), puis y cherchait l'animal ;
+- `animalHandlingHolding` (« un colon le tient-il pour une interaction ? ») cherchait d'abord l'animal parmi toute la faune, puis parcourait les colons.
+
+**Corrections.** Mêmes réponses.
+- `pawnServesAnimal` répond sans construire la liste, avec la même égalité que `includes` (NaN compris).
+- `animalHandlingHolding` vérifie d'abord qu'un colon manipule cet animal. Les deux prises en charge possibles l'exigent ; sinon la réponse est non, sans chercher l'animal.
+
+**Exactitude.** État complet identique au bit près sur Les Forges (150 ticks), Les Éclaircies et les deux versions des Aulnes (300 ticks).
+
+**Mesures.** Sous profileur, Les Forges, 150 ticks : `animalHandlingHolding` 0,16 → 0,05 s, repos des animaux (`processAnimalRest`) 0,21 → 0,17 s. Environ 1 % de la simulation.
+
+**Tests.**
+90 fichiers de tests (premier paquet de la liste faune et tous les fichiers qui appellent directement ces fonctions ou le repos et la manipulation des animaux) : 467 réussis et 304 en échec. Les 47 fichiers ayant des échecs, relancés sur le commit précédent, y donnent les mêmes 304 échecs : 0 régression.
+
+Les tests ont été passés fichier par fichier : la machine, chargée par d'autres programmes (2 Go de mémoire virtuelle libre), et quelques fichiers lents (chargement des Aulnes, 80 à 100 s) bloquaient les paquets de 60. Les fichiers optionnels (`*.optin.test.ts`), sans variables d'environnement, ne collectent aucun test et empêchent vitest de se terminer : ils sont exclus des listes.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.

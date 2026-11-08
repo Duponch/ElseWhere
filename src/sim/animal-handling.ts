@@ -85,6 +85,9 @@ export function animalHandlingClaimed(w:World,id:number):boolean {
 }
 /** Only physical contact freezes wildlife movement, not a distant reservation. */
 export function animalHandlingHolding(w:World,id:number):boolean {
+  // Both holds below need a pawn handling this very animal id: without one,
+  // the answer is false, without looking the animal up among all wildlife.
+  if(!w.pawns.some(p=>p.animalHandling?.animalId===id))return false;
   const a=w.wildlife?.animals.find(a=>a.id===id);
   if(a&&w.pawns.some(p=>slaughterHolding(w,p,a)))return true;
   if(!a||!animalAvailable(a)||(a.motion?.end??0)>w.tick)return false;

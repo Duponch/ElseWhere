@@ -11,7 +11,20 @@ export function animalServiceIds(p:Pawn):readonly number[] {
   return [...(h?h.kind==='lead'?[h.animalId,...(h.ropees??[]),...(h.gatherId===undefined?[]:[h.gatherId])]:[h.animalId]:[]),
     ...(p.animalCare?[p.animalCare.animalId]:[]),...(p.animalFeed?[p.animalFeed.animalId]:[]),...(p.animalRescue?[p.animalRescue.animalId]:[]),...(p.shipCasketTask277?.action==='carry'&&p.shipCasketTask277.patient?.kind==='animal'?[p.shipCasketTask277.patient.id]:[])];
 }
-export const animalClaimed=(w:World,id:number,exceptPawn?:number):boolean=>w.pawns.some(p=>p.id!==exceptPawn&&animalServiceIds(p).includes(id))||w.schemaVersion>=256&&groupAnimalClaimed256(w,id,exceptPawn);
+/** Same as `animalServiceIds(p).includes(id)` (SameValueZero), without
+ * building the list: animalClaimed runs for every domestic animal and pawn. */
+export function pawnServesAnimal(p:Pawn,id:number):boolean {
+  const same=(value:number|undefined)=>value===id||value!==value&&id!==id;
+  const h=p.animalHandling;
+  if(h){
+    if(same(h.animalId))return true;
+    if(h.kind==='lead'&&((h.ropees??[]).includes(id)||h.gatherId!==undefined&&same(h.gatherId)))return true;
+  }
+  if(p.animalCare&&same(p.animalCare.animalId)||p.animalFeed&&same(p.animalFeed.animalId)||p.animalRescue&&same(p.animalRescue.animalId))return true;
+  const casket=p.shipCasketTask277;
+  return casket?.action==='carry'&&casket.patient?.kind==='animal'&&same(casket.patient.id);
+}
+export const animalClaimed=(w:World,id:number,exceptPawn?:number):boolean=>w.pawns.some(p=>p.id!==exceptPawn&&pawnServesAnimal(p,id))||w.schemaVersion>=256&&groupAnimalClaimed256(w,id,exceptPawn);
 export const animalCarrier=(w:World,id:number):Pawn|undefined=>shipCasketCarrierOf277(w,{kind:'animal',id})??w.pawns.find(p=>p.animalRescue?.animalId===id&&p.animalRescue.phase==='carry')??(w.schemaVersion>=256?groupAnimalCarrier256(w,id):undefined);
 export function animalSpotClaimed(w:World,id:number,exceptAnimal?:number,exceptPawn?:number):boolean {
   return w.pawns.some(p=>p.id!==exceptPawn&&p.animalRescue?.spotId===id&&p.animalRescue.animalId!==exceptAnimal)
