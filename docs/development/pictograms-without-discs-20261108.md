@@ -31,3 +31,26 @@ vrai producteur Canvas sur des aplats de contrôle. Aucun médaillon blanc ou
 contour circulaire derrière ces pictos, aucune erreur du renderer/JavaScript.
 Capture inspectée : `tmp/bare-pictograms/review.png`. Ce contrôle de composants
 ne constitue pas un parcours complet de partie ou une mesure de performance.
+
+## Pictos agrandis
+
+La demande suivante remplace les anciens rayons fixes par un ajustement à la
+silhouette réellement dessinée, trait compris, sans changer ses proportions.
+Les bornes sont calculées une seule fois par picto, puis réutilisées lors des
+repeints existants. Aucun traitement supplémentaire par image ou chargement.
+
+Marges réservées : 9 px sur les tuiles et catégories, 8 px avant le libellé,
+et une bande supérieure supplémentaire pour un raccourci tel que « B ».
+La barre de gestion réserve 12 px latéraux et sa zone de libellé actuelle.
+Les vitesses gardent une marge de 6 unités dans leur espace 48 × 37 ;
+Ordres/Zones gardent 7 px entre leur pictogramme et le bord/leur étiquette.
+Les médaillons restent supprimés et les boutons conservent leurs dimensions.
+
+Les 13 tests ciblés passent après agrandissement. La revue hors réseau montre
+les nouvelles tailles sur les vrais boutons de gestion, les tuiles, les
+catégories et les vitesses ; aucun monde de simulation n'est créé.
+
+TypeScript final PASS. Contrôle raster des 438 identifiants UI/outils/objets
+distincts : chaque picto peint dans sa boîte, sans pixel en dehors de la
+tolérance d'anticrénelage d'un pixel. Revue WebGL 2 finale sans erreur,
+avec le raccourci « B » conservé au-dessus du picto de mur.

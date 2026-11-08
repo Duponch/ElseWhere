@@ -1,4 +1,4 @@
-import {drawPicto} from '../ui/picto-artwork';
+import {drawPicto,drawPictoInBox} from '../ui/picto-artwork';
 import * as THREE from 'three/webgpu';
 
 /** Literal artwork from the user's diorama_carton_hud_3d_three_js_webgpu(3).html.
@@ -628,7 +628,7 @@ export class PrototypeCardboardArt {
     const drawTabFn: CardboardDraw = (ctx, wPx, hPx, rng = Math.random) => {
       // Keep the label's seeded paint identical after removing its icon disk.
       for (let point = 0; point < 14; point++) rng();
-      drawHandPaintedIcon(ctx, cfg.id, wPx / 2, hPx * 0.39, 24, '#261e18', cfg.color);
+      drawPictoInBox(ctx, cfg.id, 12, 10, wPx - 24, hPx - 62, '#261e18');
       ctx.save();
       ctx.translate(wPx / 2, hPx - 27);
       ctx.rotate((idx % 2 === 0 ? -0.035 : 0.035));

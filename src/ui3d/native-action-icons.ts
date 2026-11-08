@@ -1,5 +1,5 @@
 import {PALETTE} from './prototype-art';
-import {drawPicto,pictoSemanticId} from '../ui/picto-artwork';
+import {drawPicto,drawPictoInBox,pictoSemanticId} from '../ui/picto-artwork';
 
 type OriginalIcon='architecte'|'travail'|'planning'|'assignations'|'animaux'|'faune'|'recherches'|'quetes'|'monde'|'historique'|'factions'|'menu'|'ordres'|'zones';
 export type NativeActionIconKind=OriginalIcon|'wall'|'floor'|'floor-remove'|'bridge'|'bridge-remove'|'chair'|'bed'|'medical-bed'|'animal-bed'|'table'|'shelf'|'door'|'fence'|'flag'|'grave'|'thermometer'|'flame'|'lamp'|'horseshoe'|'chess'|'television'|'workbench'|'anvil'|'sword'|'gun'|'shield'|'shirt'|'power'|'wire'|'battery'|'solar'|'wind'|'rocket'|'reactor'|'casket'|'computer'|'sensors'|'mine'|'haul'|'axe'|'harvest'|'scissors'|'uninstall'|'deconstruct'|'cancel'|'growing'|'growing-remove'|'stockpile'|'stockpile-remove'|'roof'|'roof-remove'|'roof-ignore'|'home'|'home-remove'|'snow'|'snow-remove'|'pot'|'food'|'barrel'|'drop'|'drill'|'radar'|'chip'|'cross'|'limb'|'paint'|'foam'|'play'|'pause'|'save'|'load'|'export'|'copy'|'paste'|'back'|'rotate-left'|'rotate-right'|'information'|'plus'|'minus'|'check'|'fallback';
@@ -55,4 +55,11 @@ export function drawNativeActionIcon(ctx:CanvasRenderingContext2D,id:string,cx:n
   if(drawPicto(ctx,semantic,cx,cy,r,ink))return;
   const kind=nativeActionIconKind(id);
   if(!drawPicto(ctx,kind,cx,cy,r,ink))drawPicto(ctx,'information',cx,cy,r,ink);
+}
+
+export function drawNativeActionIconInBox(ctx:CanvasRenderingContext2D,id:string,x:number,y:number,width:number,height:number,ink='#261e18'):void {
+ const semantic=pictoSemanticId(id);
+ if(semantic==='forbid')ink=PALETTE.terracotta;else if(semantic==='allow')ink=PALETTE.pineDark;
+ if(drawPictoInBox(ctx,semantic,x,y,width,height,ink))return;
+ if(!drawPictoInBox(ctx,nativeActionIconKind(id),x,y,width,height,ink))drawPictoInBox(ctx,'information',x,y,width,height,ink);
 }

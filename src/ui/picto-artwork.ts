@@ -313,6 +313,16 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  if(unfinished){d.ellipse(49,49,10,10,P.paper);d.line([[49,43],[49,49],[54,52]],1.8,P.wood);}
  const artwork={id:original,strokes:d.strokes};cache.set(original,artwork);return artwork;
 }
+const fittedBounds=new Map<string,{left:number;top:number;right:number;bottom:number}>();
+/** Fit the actual painted silhouette, including its outline, inside a box. */
+export function drawPictoInBox(ctx:CanvasRenderingContext2D,id:string,x:number,y:number,width:number,height:number,ink=P.ink):boolean {
+ if(!Number.isFinite(x+y+width+height)||width<=0||height<=0)return false;
+ const art=pictoArtwork(id);if(!art)return false;
+ let bounds=fittedBounds.get(id);
+ if(!bounds){bounds={left:Infinity,top:Infinity,right:-Infinity,bottom:-Infinity};for(const stroke of art.strokes)for(const [px,py]of stroke.points){const pad=stroke.width/2;bounds.left=Math.min(bounds.left,px-pad);bounds.top=Math.min(bounds.top,py-pad);bounds.right=Math.max(bounds.right,px+pad);bounds.bottom=Math.max(bounds.bottom,py+pad);}fittedBounds.set(id,bounds);}
+ const scale=Math.min(width/(bounds.right-bounds.left),height/(bounds.bottom-bounds.top));
+ return drawPicto(ctx,id,x+width/2+(32-(bounds.left+bounds.right)/2)*scale,y+height/2+(32-(bounds.top+bounds.bottom)/2)*scale,27*scale,ink);
+}
 export function drawPicto(ctx:CanvasRenderingContext2D,id:string,cx:number,cy:number,r:number,ink=P.ink):boolean {
  if(!Number.isFinite(cx+cy+r)||r<=0)return false;const art=pictoArtwork(id);if(!art)return false;
  const scale=r/27;ctx.save();ctx.lineJoin='round';ctx.lineCap='round';
