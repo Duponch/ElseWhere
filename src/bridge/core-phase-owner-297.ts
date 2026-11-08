@@ -92,7 +92,10 @@ export class CorePhaseFrameOwner297 {
    if(!source||source.id!==row.id)throw Error('Changed Core actor escaped its anchored slot');
    const clone={...source} as unknown as Record<string,unknown>,optionals=row.kind==='human'?CORE_HUMAN_OPTIONAL297:row.kind==='animal'?CORE_ANIMAL_OPTIONAL297:CORE_MECH_OPTIONAL297;
    for(const key of optionals)if(!Object.hasOwn(row.fields,key))delete clone[key];
-   for(const key of Object.keys(row.fields))Object.defineProperty(clone,key,{value:(row.fields as unknown as Record<string,unknown>)[key],enumerable:true,writable:false,configurable:false});Object.freeze(clone);
+   // An already-own key is assigned (no inherited setter can run); a new one is
+   // defined. Freezing then gives the same frozen own-data record as before.
+   const values=row.fields as unknown as Record<string,unknown>;
+   for(const key of Object.keys(values)){if(Object.hasOwn(clone,key))clone[key]=values[key];else Object.defineProperty(clone,key,{value:values[key],enumerable:true,writable:true,configurable:true});}Object.freeze(clone);
    if(row.kind==='human')(humans??=base.humans.slice())[row.index]=clone as unknown as Readonly<Pawn>;
    else if(row.kind==='animal')(animals??=base.animals.slice())[row.index]=clone as unknown as Readonly<WildAnimal>;
    else (mechanical??=base.mechanical.slice())[row.index]=clone as unknown as Readonly<Mechanoid>;

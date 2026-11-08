@@ -912,7 +912,8 @@ const roomInspection = new RoomInspection();
 const orderMenu=new OrderMenu(client,notify);
 // An open management page repaints its whole sheet when its rows change:
 // follow the World at 2 Hz there; actions still refresh at once.
-const snapshotHud=new SnapshotHud(()=>renderState(),()=>nativeUi&&currentPanel?500:200);
+// Two frames after the adopting frame: see SnapshotHud.
+const snapshotHud=new SnapshotHud(()=>renderState(),()=>nativeUi&&currentPanel?500:200,34);
 let latestMotion: PawnTrack[] | undefined;
 let latestCoreFullInput297:object|undefined,latestCorePhaseInput297:object|undefined;
 let menuResumeSpeed: number | undefined;

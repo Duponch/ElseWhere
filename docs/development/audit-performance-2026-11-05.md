@@ -22,6 +22,7 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Panne « Shared World/settings/camera/paint changed before publication » en jeu | en 1,2 s, caméra en mouvement à ×6 | **aucune** en 150 s |
 | Gels d’affichage pour préparer des surfaces en jeu (×6, 60 s) | 105, 1,5 s gelée au total | **18**, 0,37 s |
 | Ouverture d’un panneau du bas, Les Forges (Travail / Planning / Faune) | 506 / 786 à 1 058 / 296 ms | **61 / 62 / 32 ms** à la réouverture, 142 / 160 / 58 ms la première fois |
+| Les Forges à ×1, 15 s : images au-dessus de 33 / 50 ms, p95 | 69 / 42, p95 29 ms | **39 / 29, p95 17 ms** |
 
 - **Exactitude.** Après chaque optimisation, l’état complet sérialisé reste identique au bit près sur les deux sauvegardes de référence.
 - **Tests.** Chaque lot a été comparé test par test au commit d’origine : 0 régression.
@@ -485,6 +486,44 @@ Sans préparation à l’avance (partie non mise en pause), la première ouvertu
 
 **Ce qui reste.** Sur Les Forges, le jeu lui-même, sans panneau, a encore environ 25 images au-dessus de 50 ms en 8 s à ×1 : adoption des publications complètes du Worker et application du monde. C’est désormais le poste principal de fluidité en jeu sur une grande colonie.
 
+### Fluidité en jeu sur Les Forges (8 novembre)
+
+**Constat.** À ×1, sans panneau ouvert, Les Forges (80 colons, 241 animaux, 21 122 plantes, 1 778 tas) avaient environ 3 images par seconde au-dessus de 50 ms. Mesure image par image dans le client réel :
+- chaque publication complète du Worker (≈ 1,7 par seconde) donnait **deux images longues consécutives** : l’adoption (≈ 70 ms, dont la mise à jour du HUD) puis l’application du monde (≈ 50 à 65 ms, sans rendu : la préparation des surfaces retenait l’affichage) ;
+- chaque paquet de phase des acteurs (≈ 7 par seconde, ≈ 100 lignes d’acteurs et 2 100 cases de chemin) coûtait ≈ 15 ms au fil principal : copie défensive à la réception, lecture stricte, puis recopie des acteurs ;
+- le Worker lui-même ne tenait que 70 à 85 % du temps réel à ×1 : une publication complète lui coûte ≈ 150 ms (encodage et envoi), soit plus de 20 % de son temps.
+
+**Corrections.**
+- **Cadence des publications calmes.** Leur intervalle suit maintenant leur coût mesuré dans le Worker : 8 fois le coût d’une publication, au moins 250 ms (inchangé sur une petite colonie) et au plus 1 s. Les ordres du joueur, la pause, les changements durs et les acteurs (phases, portes, tas portés) restent publiés aussitôt ; seuls les changements lents du monde (plantes, travaux, objets au sol, besoins) peuvent attendre jusqu’à 1 s sur une grande colonie.
+- **Paquets de phase.** La copie à la réception crée chaque objet par une seule copie de ses propriétés après les mêmes vérifications, au lieu d’un `defineProperty` par clé ; les éléments de tableau sont nommés par leur indice numérique. La lecture stricte reconnaît les valeurs produites par cette capture (objets gelés, données propres, tableaux denses) sans relire tous leurs descripteurs ; ailleurs, les vérifications complètes restent. La mise à jour d’un acteur assigne les champs déjà présents au lieu de les redéfinir. Mêmes refus, mêmes messages, mêmes objets gelés : la suite stricte de capture (23 cas) passe.
+- **HUD.** Sa mise à jour ordinaire attend 34 ms (deux images) au lieu de tomber dans l’image qui adopte la publication. Le dictionnaire des noms n’est plus retrié quand les noms n’ont pas changé.
+- **Surfaces préparées des boîtes.** La taille des tas suit leur quantité ; une variante de surface qui disparaissait puis revenait relançait une préparation et retenait l’affichage une image. Les variantes déjà dessinées restent préparées (jusqu’à 384). L’identifiant de variante est mis en cache par modèle et par taille exacte, au lieu d’une clé JSON calculée pour chaque boîte d’un lot reconstruit.
+
+**Mesures.** Client réel, Les Forges à ×1, 15 s, trois passages en alternance entre le commit de référence et ce lot, valeurs médianes :
+
+| Mesure | Avant | Après |
+|---|---|---|
+| Images au-dessus de 33 ms | 69 | **39** |
+| Images au-dessus de 50 ms | 42 | **29** |
+| p95 du temps d’image | 29,2 ms | **16,7 ms** |
+| p99 du temps d’image | 66,7 ms | 62,5 ms |
+| Images figées au-dessus de 50 ms (sans rendu, puis l’image suivante) | 23 | **12** |
+| Publications complètes appliquées | 32 | **16** |
+| Application d’une publication complète | 40,6 ms | 52,4 ms (davantage de changements par publication) |
+| Image d’adoption d’une publication complète | 67 ms | 63 ms |
+| Ticks de simulation présentés | 91 | 88 (même cadence, à la variation près) |
+
+En Node, sur les mêmes messages rejoués : un paquet de phase passe de ≈ 15 à ≈ 6,5 ms (capture 8,6 → 4,6 ms, lecture et mise à jour des acteurs 6,4 → 1,9 ms). Dans le Worker seul, les publications complètes passent de 1,3 à 0,8 par seconde et le Worker tient 92 % du temps réel au lieu de 78 % (variation entre passages importante).
+
+Les préparations de surfaces après chaque application restent : sur la première minute, de nouvelles tailles de tas apparaissent encore (182 → 206 variantes), puis les retenues viennent surtout des chunks de végétation reconstruits, dont les adresses de texture doivent être résolues avant d’être dessinées.
+
+**Tests.**
+- Comparaison test par test avec le commit de référence sur 99 fichiers du pont et des publications, puis sur les 61 fichiers touchés par les derniers changements : aucune régression.
+- La suite stricte de capture des phases (`native-phase-capture`) ne se chargeait plus depuis le 31 octobre : l’empreinte épinglée de `native-clone-resident.ts` n’avait pas été mise à jour. Les empreintes des trois fichiers sont à jour ; un cas attendait encore un refus d’allocation pour une phase « frontier », que le Full suivant explique depuis le 7 novembre : il vise désormais une phase ordinaire, où le refus s’applique toujours.
+- Le harnais des tests du Worker en mode « frontier » exigeait le schéma 297 alors que le jeu est au 301 : 5 fichiers échouaient dès la préparation. Il accepte désormais la famille de schémas physiques actuelle ; 9 cas repassent, les mêmes 6 échouent avant et après ces changements.
+
+**Ce qui reste.** Le coût d’une publication complète elle-même : adoption ≈ 40 ms (copie figée des acteurs ≈ 10 ms, correctifs de collections, sections), application ≈ 50 ms répartie sur une vingtaine de couches (tas, cultures, propreté, ressources, structures). Les 20 000 croissances de plantes renvoyées à chaque publication (températures froides : chaque plante est réancrée à chaque tick) en représentent une part.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -520,8 +559,9 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 
    Prochaines étapes :
    - ~~profiler `applyWorld`~~ et ~~rendre incrémentaux le mobilier et les ajouts de ressources~~ : fait, voir « Coût d’adoption d’une publication complète » et « Mobilier par zones ». Restent des postes diffus de 5 à 11 ms par adoption : tas, cultures, propreté ;
-   - rendre la copie défensive des paquets de phase moins coûteuse (`native-message-capture.ts`, épinglé) ;
-   - ensuite seulement, adapter l’intervalle des publications calmes à leur coût réel : c’est un compromis avec le délai d’affichage des changements lents du monde.
+   - ~~rendre la copie défensive des paquets de phase moins coûteuse~~ et ~~adapter l’intervalle des publications calmes à leur coût~~ : fait, voir « Fluidité en jeu sur Les Forges » ;
+   - réduire le coût d’une publication complète elle-même (adoption ≈ 40 ms, application ≈ 50 ms sur Les Forges), puis l’étaler : chacune donne encore deux images longues consécutives ;
+   - ne plus renvoyer à chaque publication les 20 000 croissances de plantes que le froid réancre à chaque tick, sans perdre l’exactitude du monde affiché.
 2. **Rendu three.js** : environ 36 à 48 % du thread principal en jeu, pour 148 maillages visibles et 72 appels de dessin. Postes :
    - uniformes par objet : 11 % ;
    - passe d’ombre : 6,5 % ;

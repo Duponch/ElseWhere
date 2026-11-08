@@ -32,6 +32,8 @@ type Style = 'solid' | 'overlay' | 'wire' | 'storage' | 'storage-home' | 'border
  * Each logical batch retains its GPU allocation, including when emptied.
  * Capacity grows geometrically only when content exceeds its high-water mark.
  */
+/** Prepared box variants kept in demand after they stop being drawn. */
+const RETAINED_BOX_VARIANTS=384;
 export class BoxBatches {
   private readonly graphicsStyle=currentGraphicsStyle();
   private readonly geometry:THREE.BufferGeometry;
@@ -290,11 +292,41 @@ export class BoxBatches {
   private ensurePreparedVariant(mesh:BoxMesh):THREE.InstancedBufferAttribute|undefined{
     if(!this.preparedSurfaces)return;let a=mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT) as THREE.InstancedBufferAttribute|undefined;if(!a){a=new THREE.InstancedBufferAttribute(new Float32Array(mesh.instanceMatrix.count).fill(-1),1).setUsage(THREE.StaticDrawUsage);mesh.geometry.setAttribute(PREPARED_SURFACE_VARIANT,a);}return a;
   }
+  /** Registered variant id per model and exact scale. registerVariant returns
+   * the same id for the same canonical key; this skips building that key (a
+   * JSON string per box) for every box of a rebuilt batch. Failures (invalid
+   * scales) are not cached and throw as before. */
+  private readonly variantIds=new Map<PreparedSurfaceModel,Map<number,Map<number,Map<number,number>>>>();
+  private preparedVariantId(owner:PreparedSurfaceOwner,model:PreparedSurfaceModel,sx:number,sy:number,sz:number):number{
+    let byX=this.variantIds.get(model);if(!byX){byX=new Map();this.variantIds.set(model,byX);}
+    let byY=byX.get(sx);if(!byY){byY=new Map();byX.set(sx,byY);}
+    let byZ=byY.get(sy);if(!byZ){byZ=new Map();byY.set(sy,byZ);}
+    let id=byZ.get(sz);if(id===undefined){id=owner.registerVariant(preparedDiagonalVariant(model,sx,sy,sz));byZ.set(sz,id);}
+    return id;
+  }
   private writePreparedVariant(mesh:BoxMesh,slot:number,item:Placement,geometry:THREE.BufferGeometry,atlas:boolean):void{
     const owner=this.preparedSurfaces;if(!owner||geometry===this.roundedRockGeometry||geometry===this.smallRockGeometry)return;const a=this.ensurePreparedVariant(mesh)!,model=atlas?this.preparedModels.get(this.surfaceModels!.geometries[4+this.itemAtlas.slot(item.shape as ItemShape|undefined)]!):this.preparedModels.get(geometry);if(!model)throw Error('Actual shared prop model absent');
-    const id=owner.registerVariant(preparedDiagonalVariant(model,item.sx??1,item.sy??1,item.sz??1)),old=a.getX(slot),counts=this.preparedBatchCounts.get(mesh)??new Map<number,number>();if(old>=0){const n=(counts.get(old)??0)-1;if(n>0)counts.set(old,n);else counts.delete(old);}counts.set(id,(counts.get(id)??0)+1);this.preparedBatchCounts.set(mesh,counts);a.setX(slot,id);a.needsUpdate=true;
+    const id=this.preparedVariantId(owner,model,item.sx??1,item.sy??1,item.sz??1),old=a.getX(slot),counts=this.preparedBatchCounts.get(mesh)??new Map<number,number>();if(old>=0){const n=(counts.get(old)??0)-1;if(n>0)counts.set(old,n);else counts.delete(old);}counts.set(id,(counts.get(id)??0)+1);this.preparedBatchCounts.set(mesh,counts);a.setX(slot,id);a.needsUpdate=true;
   }
-  private publishPreparedBatch(mesh:BoxMesh):void{this.preparedSurfaces?.setContribution(mesh,this.preparedBatchCounts.get(mesh)?.keys()??[]);}
+  /** Box sizes follow quantities (piles grow and shrink with each haul), so the
+   * same prepared variants keep leaving and coming back. A variant once drawn
+   * stays in the prepared demand: its return then needs no new bake nor the
+   * one-frame presentation hold of a demand change. Bounded; past the bound the
+   * retained set restarts from the variants actually drawn. */
+  private readonly retainedVariants=new Set<number>();
+  private publishPreparedBatch(mesh:BoxMesh):void{
+    const owner=this.preparedSurfaces;if(!owner)return;
+    const ids=[...this.preparedBatchCounts.get(mesh)?.keys()??[]];let grown=false;
+    for(const id of ids)if(!this.retainedVariants.has(id)){this.retainedVariants.add(id);grown=true;}
+    if(this.retainedVariants.size>RETAINED_BOX_VARIANTS){
+      this.retainedVariants.clear();
+      for(const [other,counts] of this.preparedBatchCounts)if(other!==mesh)for(const id of counts.keys())this.retainedVariants.add(id);
+      for(const id of ids)this.retainedVariants.add(id);grown=true;
+    }
+    // Retained first: a mesh's own change then never shrinks the demand.
+    if(grown)owner.setContribution(this.retainedVariants,this.retainedVariants);
+    owner.setContribution(mesh,ids);
+  }
 
   private allocateRockContour(mesh: BoxMesh): void {
     mesh.geometry.setAttribute('chunkContour',new THREE.InstancedBufferAttribute(new Float32Array(mesh.instanceMatrix.count*4),4).setUsage(THREE.StaticDrawUsage));
@@ -304,6 +336,7 @@ export class BoxBatches {
     for (const state of this.targetBatches.values()) state.tint.dispose();
     this.targetBatches.clear();this.targetGroups.clear();
     for (const mesh of this.batches.values()) {this.preparedSurfaces?.setContribution(mesh,[]);mesh.removeFromParent();mesh.dispose();}this.preparedBatchCounts.clear();
+    this.retainedVariants.clear();this.preparedSurfaces?.setContribution(this.retainedVariants,[]);
     this.batches.clear();
     this.itemBatchKeys.clear();
     this.furnitureRevision=undefined;

@@ -136,6 +136,17 @@ const CALM_FULL_INTERVAL_MS=250;
  * saturated Worker (large colony at high speed) may run long batches whose
  * tail comes rarely; the World is then refreshed within a batch at this age. */
 const CALM_FULL_MAX_AGE_MS=500;
+/** A calm Full costs a complete encode and send here, then a complete adoption
+ * and world application on the main thread, both growing with the colony. Its
+ * measured cost spaces calm Fulls: they stay near 1/CALM_FULL_COST_RATIO of the
+ * time. A small colony keeps CALM_FULL_INTERVAL_MS; a large one refreshes its
+ * slowly changing world state (jobs, items, plants, needs…) at most every
+ * CALM_FULL_INTERVAL_MAX_MS. Actors, doors and carried piles keep streaming in
+ * phase packets; commands, pauses and hard changes still publish at once. */
+const CALM_FULL_COST_RATIO=8,CALM_FULL_INTERVAL_MAX_MS=1000;
+/** Smoothed wall cost of an ordinary (non-checkpoint) Full publication. */
+let fullPublicationCostMs=0;
+const calmFullIntervalMs=():number=>Math.min(CALM_FULL_INTERVAL_MAX_MS,Math.max(CALM_FULL_INTERVAL_MS,fullPublicationCostMs*CALM_FULL_COST_RATIO));
 let stepMs = 0;
 let fault: SimulationFault | undefined;
 const motion = createMotionRecorder();
@@ -159,6 +170,7 @@ const audioCues=new AudioCueRecorder();
 const publishCapturedTick = (checkpoint = false) => {
   let published: { epoch: number; revision: number } | undefined;
   if (world) {
+    const publicationStarted=performance.now();
     const visible=visibleWorld();if(!visible){const header=snapshots.campaignHeader(checkpoint);actualViewEpoch301=header.epoch;setActualView301(world,null);send({type:'campaign-only',...header,stepMs,speed,...(()=>{const transport=snapshots.encodeCampaignSummary(campaignOnlySummary(world),checkpoint);return {summary:transport.state,...transport.geography?{geography:transport.geography}:{}};})(),urgentThreats:urgentThreats.snapshot()});audioCues.reset();lastPublishedTick=world.tick;for(const notice of takeCaravanTradeArrivals261(world))send({type:'caravan-trade-arrival',...notice,checkpoint:header});return header;}
     const audioPublication297=audioCues.preparePublication297(),cues=audioPublication297.cues;
     const packet = snapshots.encode(visible, stepMs, speed, checkpoint);
@@ -174,6 +186,7 @@ const publishCapturedTick = (checkpoint = false) => {
     audioCues.commitPublication297(audioPublication297);
     published = { epoch: packet.epoch, revision: packet.revision };
     lastFullPublishedAt=performance.now();
+    if(!checkpoint){const cost=lastFullPublishedAt-publicationStarted;fullPublicationCostMs=fullPublicationCostMs>0?fullPublicationCostMs*.7+cost*.3:cost;}
   }
   lastPublishedTick=world?.tick??-1;
   if(world&&published)for(const notice of takeCaravanTradeArrivals261(world))send({type:'caravan-trade-arrival',...notice,checkpoint:published});
@@ -587,12 +600,13 @@ function publishDuePhysical297(force=false,batchTail=false):void {
   // A default/legacy anchor retains its old same-civil/20ms hold policy.
   // A calm Full only refreshes slowly changing world state (jobs, items,
   // plants, needs…); actors keep streaming through phase packets. In frontier
-  // mode, cap calm Fulls at one per CALM_FULL_INTERVAL_MS of wall time instead
+  // mode, cap calm Fulls at one per calmFullIntervalMs() of wall time instead
   // of one per batch tail (up to one per macro tick at speed 6), because each
   // costs a full encode in this Worker and a full adoption on the main thread.
   // Forced, hard (requiresFull), paused and non-frontier publications are unchanged.
-  const tail=batchTail&&(!phasePublisher297.frontierMode297||now-lastFullPublishedAt>=CALM_FULL_INTERVAL_MS);
-  const stale=phasePublisher297.frontierMode297&&now-lastFullPublishedAt>=CALM_FULL_MAX_AGE_MS;
+  const interval=calmFullIntervalMs();
+  const tail=batchTail&&(!phasePublisher297.frontierMode297||now-lastFullPublishedAt>=interval);
+  const stale=phasePublisher297.frontierMode297&&now-lastFullPublishedAt>=Math.max(CALM_FULL_MAX_AGE_MS,interval);
   if(force||!quiet||tail||stale||!phasePublisher297.frontierMode297&&phasePublisher297.quietBudgetExpired(now)){publishActualFull297();return;}
   if(!phasePublisher297.frontierMode297)return;
  }

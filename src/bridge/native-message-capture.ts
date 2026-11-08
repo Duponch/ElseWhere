@@ -57,14 +57,23 @@ function ownedCore297(value:unknown,active:Set<object>,budget:{left:number},dept
   if(isArray297(value)){
    if(proto(value)!==arrayProto||ownKeys(value).length!==value.length+1)throw Error('Deferred Core array shape');
    const copy:unknown[]=[];
+   // Numeric keys name the same index properties without building a string
+   // per element; each element is still read and defined as own data.
    for(let i=0;i<value.length;i++){
-    const field=descriptor(value,String(i));if(!field?.enumerable||!('value'in field))throw Error('Deferred Core array data');
-    define(copy,String(i),{value:ownedCore297(field.value,active,budget,depth+1),writable:true,enumerable:true,configurable:true});
+    const field=descriptor(value,i);if(!field?.enumerable||!('value'in field))throw Error('Deferred Core array data');
+    define(copy,i,{value:ownedCore297(field.value,active,budget,depth+1),writable:true,enumerable:true,configurable:true});
    }
    return freeze(copy);
   }
-  const copy=outer(value);
-  for(const key of ownKeys(copy) as string[])copy[key]=ownedCore297(copy[key],active,budget,depth+1);
+  // Same checks and messages as outer(), then one own-data spread instead of
+  // a descriptor + defineProperty per key: CopyDataProperties creates data
+  // properties (no inherited setter) in the same key order. Children replace
+  // already-own properties, as before.
+  if(proto(value)!==objectProto&&proto(value)!==null)throw Error('Native deferred envelope requires own data');
+  const keys=ownKeys(value);
+  for(const key of keys){const field=descriptor(value,key);if(typeof key!=='string'||!field||!field.enumerable||!('value' in field))throw Error('Native deferred envelope data field');}
+  const copy:Data={...(value as Data)};
+  for(const key of keys as string[])copy[key]=ownedCore297(copy[key],active,budget,depth+1);
   return freeze(copy);
  }finally{setDelete297.call(active,value);}
 }

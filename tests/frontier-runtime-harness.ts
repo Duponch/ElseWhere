@@ -27,13 +27,14 @@ import {deserializeCampaign,serializeCampaign} from '../src/sim/serialization';
 import {finalizeInitialWorldRegistry} from '../src/sim/world-map-context';
 import {NATURAL_TERRAIN_BINDINGS_256} from '../src/sim/local-terrain-definitions-256';
 import {newDoorState} from '../src/sim/door-rules';
+import {isCorePhysicalSchema297} from '../src/sim/physical-schema-297';
 import type {Request,Response} from '../src/bridge/protocol';
 import type {World} from '../src/sim/types';
 
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();});
 export type QuietOptions={speed?:1|3|6;doorAtCore?:number;fireTicks?:number;deconstruct?:boolean;projectile?:boolean};
 export function prepared(options:QuietOptions={}){
- const w=deconstructionCamp(2,32);assert.equal(Number(w.schemaVersion),297);assert.equal(effectiveCore297(w),0);
+ const w=deconstructionCamp(2,32);assert.ok(isCorePhysicalSchema297(Number(w.schemaVersion)),'current physical schema family');assert.equal(effectiveCore297(w),0);
  w.tiles=Array.from({length:w.width*w.height},()=>({terrain:NATURAL_TERRAIN_BINDINGS_256.Soil}));w.resources=[];w.piles=[];w.jobs=[];w.structures=[];w.growingZones=[];w.stockpiles=[];
  if(w.wildlife)w.wildlife.animals=[];if(w.mechanoids)w.mechanoids=[];
  for(const [i,p]of w.pawns.entries()){Object.assign(p,{x:3,z:5+i*8,jobId:null,path:[],state:'idle',planCooldown:0,hunger:80,rest:80,needCooldown:20});p.schedule.fill('anything');p.recreation.level=100;for(const k of Object.keys(p.priorities)as(keyof typeof p.priorities)[])p.priorities[k]=0;}
