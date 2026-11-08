@@ -10,7 +10,7 @@ import {PICTOGRAM_IDS} from '/src/ui/pictograms';
 import {toolDefinitions} from '/src/ui3d/native-catalog';
 import {ITEM_DEFINITIONS} from '/src/sim/items';
 const errors=[],stage=new NativeStage({onPanel:()=>{},onEscape:()=>{},onError:message=>errors.push(message)});
-const checked=new Set([...PICTOGRAM_IDS,...toolDefinitions.map(x=>x.id),...Object.keys(ITEM_DEFINITIONS).map(id=>'item-'+id)]),probe=document.createElement('canvas');probe.width=96;probe.height=80;const probeCtx=probe.getContext('2d',{willReadFrequently:true});
+const checked=new Set(['pause','play','speed-double','speed-triple',...PICTOGRAM_IDS,...toolDefinitions.map(x=>x.id),...Object.keys(ITEM_DEFINITIONS).map(id=>'item-'+id)]),probe=document.createElement('canvas');probe.width=96;probe.height=80;const probeCtx=probe.getContext('2d',{willReadFrequently:true});
 for(const id of checked){probeCtx.clearRect(0,0,96,80);if(!drawPictoInBox(probeCtx,id,10,10,76,60))throw Error('Missing fitted artwork '+id);const pixels=probeCtx.getImageData(0,0,96,80).data;let painted=false;for(let y=0;y<80;y++)for(let x=0;x<96;x++)if(pixels[(y*96+x)*4+3]){painted=true;if(x<9||x>86||y<9||y>70)throw Error('Artwork exceeds its reserved box '+id);}if(!painted)throw Error('Empty fitted artwork '+id);}
 window.review={stage,errors,fitChecked:checked.size};stage.setTextFont('Comfortaa');stage.setFrontVisible(false);
 stage.showPage({id:'bare-icons',title:'Pictogrammes sans médaillon',width:1000,height:480,layout:'architect',rows:[

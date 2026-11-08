@@ -629,7 +629,7 @@ export class PrototypeCardboardArt {
       // Keep the label's seeded paint identical after removing its icon disk.
       for (let point = 0; point < 14; point++) rng();
       const iconWidth = wPx - 24, iconHeight = hPx - 62;
-      drawPictoInBox(ctx, cfg.id, 12 + iconWidth * .1, 10 + iconHeight * .1, iconWidth * .8, iconHeight * .8, '#261e18');
+      drawPictoInBox(ctx, cfg.id, 12 + iconWidth * .12, 10 + iconHeight * .12, iconWidth * .76, iconHeight * .76, '#261e18');
       ctx.save();
       ctx.translate(wPx / 2, hPx - 27);
       ctx.rotate((idx % 2 === 0 ? -0.035 : 0.035));

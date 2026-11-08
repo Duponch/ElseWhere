@@ -67,3 +67,21 @@ Les dimensions, couleurs, libellés et interactions des boutons sont conservés.
 Validation de cet ajustement : 13 tests PASS, revue visuelle WebGL 2 inspectée,
 438 pictos vérifiés dans leurs boîtes, aucune erreur JavaScript/renderer et
 `git diff --check` PASS.
+
+## Dernier ajustement : marge et vitesses dessinées
+
+La barre inférieure réduit encore ses pictos de 5 % par rapport au réglage
+précédent : sa boîte passe de 80 % à 76 % de la zone disponible, toujours
+centrée. Les autres marges restent inchangées.
+
+Pause, lecture, double et triple vitesse sont redessinées dans la source
+commune Canvas/SVG : bords doucement courbes, coins arrondis à la main,
+légères asymétries fixes, palette sauge/bleu mat et traits de pigment clair.
+Leurs deux barres ou une/deux/trois flèches restent immédiatement lisibles.
+Les quatre SVG publics correspondants sont régénérés ; le reste des images,
+les boutons, leurs états et les valeurs de vitesse ne changent pas.
+
+Les 13 tests ciblés passent après cette modification.
+
+TypeScript final PASS ; revue WebGL 2 inspectée sans erreur, avec contrôle
+raster de 442 pictos, dont les quatre symboles de temps redessinés.
