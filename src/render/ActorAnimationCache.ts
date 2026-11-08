@@ -1,4 +1,4 @@
-import { DataTexture,FloatType,NearestFilter,NoColorSpace,RGBAFormat,Vector2,type Node,type BufferAttribute,type InterleavedBufferAttribute } from 'three/webgpu';
+import { DataTexture,FloatType,NearestFilter,NoColorSpace,RGBAFormat,Vector2,type Node,type BufferAttribute,type InterleavedBufferAttribute,type TextureNode,type UniformNode } from 'three/webgpu';
 import { Fn,If,cos,float,instanceIndex,int,ivec2,renderGroup,sin,texture,uniform,vec4 } from 'three/tsl';
 import type { AnimationDetail } from './AnimationDetail';
 import { TURN_SECONDS } from './turn-presentation';
@@ -29,7 +29,14 @@ export class ActorAnimationCache {
   private originalOnly=false;
   private readonly minimumScale=uniform(1).setGroup(renderGroup);
   private readonly origins=uniform(new Vector2()).setGroup(renderGroup);
-  constructor(private readonly detail:AnimationDetail){}
+  /** This cache's own shader reads. A program shared by several caches
+   * builds an ActorAnimationCacheNodes over object-bound resources instead. */
+  readonly gpu:ActorAnimationCacheNodes;
+  constructor(private readonly detail:AnimationDetail){this.gpu=new ActorAnimationCacheNodes(detail,this.node,this.minimumScale,this.origins);}
+  /** The current resources read by the shader. */
+  get texture():DataTexture {return this.image;}
+  get minimumScaleValue():number {return this.minimumScale.value;}
+  get originsValue():Vector2 {return this.origins.value;}
   private makeTexture():DataTexture {
     const image=new DataTexture(this.values,ActorAnimationCache.ROW_TEXELS,this.capacity,RGBAFormat,FloatType);
     image.minFilter=image.magFilter=NearestFilter;image.generateMipmaps=false;
@@ -120,6 +127,39 @@ export class ActorAnimationCache {
     this.set(slot,63,this.origins.value.x,this.origins.value.y);
   }
   flush():void {if(this.dirty){this.image.needsUpdate=true;this.dirty=false;}}
+  cell(cell:number,index:Node<'uint'>=instanceIndex):Node<'vec4'> {return this.gpu.cell(cell,index);}
+  cellAt(cell:Node<'float'>,index:Node<'uint'>=instanceIndex):Node<'vec4'> {return this.gpu.cellAt(cell,index);}
+  cached(index:Node<'uint'>=instanceIndex) {return this.gpu.cached(index);}
+  poseNode(original:()=>Node<'vec4'>,index:Node<'uint'>=instanceIndex,cached?:Node<'bool'>):Node<'vec4'> {return this.gpu.poseNode(original,index,cached);}
+  clockNode(original:Node<'float'>,name:CachedActorClock,index:Node<'uint'>=instanceIndex,cached?:Node<'bool'>):Node<'float'> {return this.gpu.clockNode(original,name,index,cached);}
+  yawNode(yaw:Node<'float'>,kind:'cos'|'sin',index:Node<'uint'>=instanceIndex,cached?:Node<'bool'>):Node<'float'> {return this.gpu.yawNode(yaw,kind,index,cached);}
+  /** Live translation with the retained rig's heading; no cache means the caller's original path. */
+  presentedRoot(slot:number,from:Stream,to:Stream,travel:Stream,time:number,blend:number,result?:CachedActorPose):CachedActorPose|undefined {
+    if(this.get(slot,1,3)!==1)return;
+    const pose=sampleActorRoot(from,to,travel,slot,time,blend,result);pose.yaw=this.get(slot,0,3);return pose;
+  }
+  cpuPose(slot:number):CachedActorPose|undefined {
+    if(this.get(slot,1,3)!==1)return;
+    return {x:this.get(slot,0,0),y:this.get(slot,0,1),z:this.get(slot,0,2),yaw:this.get(slot,0,3)};
+  }
+  readRoot(slot:number,result:CachedActorPose):boolean {
+    if(this.get(slot,1,3)!==1)return false;
+    result.x=this.get(slot,0,0);result.y=this.get(slot,0,1);result.z=this.get(slot,0,2);result.yaw=this.get(slot,0,3);return true;
+  }
+  cpuClock(slot:number,name:CachedActorClock):number|undefined {
+    if(this.get(slot,1,3)!==1)return;
+    const value=this.get(slot,2,CLOCK_OFFSET[name]);
+    return name==='travelTime'?value+(this.get(slot,63,0)-this.origins.value.x)/TICKS_PER_SECOND:
+      name==='cargoTime'?value+(this.get(slot,63,1)-this.origins.value.y)/TICKS_PER_SECOND:value;
+  }
+  dispose():void {this.image.dispose();this.entries.length=0;}
+}
+
+/** Shader reads of one animation cache layout over explicit resources: the
+ * cache's own texture and uniforms, or object-bound ones in a program shared
+ * by several caches. The graphs are the ones the cache always built. */
+export class ActorAnimationCacheNodes {
+  constructor(private readonly detail:AnimationDetail,private readonly node:TextureNode,private readonly minimumScale:UniformNode<'float',number>,private readonly origins:UniformNode<'vec2',Vector2>){}
   cell(cell:number,index:Node<'uint'>=instanceIndex):Node<'vec4'> {const read=this.node.load(ivec2(cell,int(index)));read.updateMatrix=false;return read;}
   cellAt(cell:Node<'float'>,index:Node<'uint'>=instanceIndex):Node<'vec4'> {const read=this.node.load(ivec2(int(cell),int(index)));read.updateMatrix=false;return read;}
   cached(index:Node<'uint'>=instanceIndex) {
@@ -147,26 +187,6 @@ export class ActorAnimationCache {
   yawNode(yaw:Node<'float'>,kind:'cos'|'sin',index:Node<'uint'>=instanceIndex,cached:Node<'bool'>=this.cached(index)):Node<'float'> {
     return Fn(()=>{const result=float(0).toVar();If(cached,()=>{result.assign(this.cell(1,index)[kind==='cos'?'x':'y']);}).Else(()=>{result.assign(kind==='cos'?cos(yaw):sin(yaw));});return result;})().toVar();
   }
-  /** Live translation with the retained rig's heading; no cache means the caller's original path. */
-  presentedRoot(slot:number,from:Stream,to:Stream,travel:Stream,time:number,blend:number,result?:CachedActorPose):CachedActorPose|undefined {
-    if(this.get(slot,1,3)!==1)return;
-    const pose=sampleActorRoot(from,to,travel,slot,time,blend,result);pose.yaw=this.get(slot,0,3);return pose;
-  }
-  cpuPose(slot:number):CachedActorPose|undefined {
-    if(this.get(slot,1,3)!==1)return;
-    return {x:this.get(slot,0,0),y:this.get(slot,0,1),z:this.get(slot,0,2),yaw:this.get(slot,0,3)};
-  }
-  readRoot(slot:number,result:CachedActorPose):boolean {
-    if(this.get(slot,1,3)!==1)return false;
-    result.x=this.get(slot,0,0);result.y=this.get(slot,0,1);result.z=this.get(slot,0,2);result.yaw=this.get(slot,0,3);return true;
-  }
-  cpuClock(slot:number,name:CachedActorClock):number|undefined {
-    if(this.get(slot,1,3)!==1)return;
-    const value=this.get(slot,2,CLOCK_OFFSET[name]);
-    return name==='travelTime'?value+(this.get(slot,63,0)-this.origins.value.x)/TICKS_PER_SECOND:
-      name==='cargoTime'?value+(this.get(slot,63,1)-this.origins.value.y)/TICKS_PER_SECOND:value;
-  }
-  dispose():void {this.image.dispose();this.entries.length=0;}
 }
 
 /** The CPU sampler mirrors the shared edge/turn/furniture presentation node.

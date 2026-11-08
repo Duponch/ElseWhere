@@ -769,6 +769,44 @@ Pour les lots suivants, `tmp/perf/known-failures.py` garde les échecs déjà co
 - application du monde, environ 7 s (blocs de végétation, maillages des colons, terrain) ;
 - 14 programmes `Attached fire` qui ne font que reconstruire 2 codes déjà construits.
 
+### Chargement : un seul programme pour les animaux sauvages (8 novembre)
+
+**Constat.** Chaque espèce sauvage avait son propre matériau, donc son propre shader. three.js reconstruit alors tout le graphe de nœuds du shader pour chaque espèce, environ 215 ms de fil principal à chaque fois. Les programmes des espèces ne diffèrent pourtant que par quatre constantes et un tampon :
+- la cadence des pas ;
+- deux mesures de la pose couchée ;
+- l'échelle du sang (lièvres) ;
+- le tampon des traits.
+
+Les 38 espèces absentes de la carte étaient en plus compilées en arrière-plan après le chargement.
+
+**Correction.** Un programme partagé par toutes les espèces de même squelette et de même représentation des traits ; en pratique, un seul pour les 53 espèces. Le graphe est celui que chaque espèce construisait. Ses valeurs propres à l'espèce sont lues pour chaque objet dessiné, juste avant la mise à jour de ses liaisons GPU :
+- constantes ;
+- horloges ;
+- cache d'animation ;
+- texture de pelage ;
+- tampon des traits.
+
+three.js garde une copie des liaisons de groupe objet par objet dessiné. Chaque espèce garde donc ses propres liaisons d'une image à l'autre, sans en recréer.
+
+Le maillage d'une espèce est retrouvé par son propre cache d'animation, que porte sa géométrie : maillage de jeu, maillage de précompilation ou outil. Un objet sans espèce est refusé plutôt que dessiné avec les ressources d'une autre. La préparation des atlas garde les ressources fixes de chaque espèce.
+
+**Exactitude.** Pour les 15 espèces des Éclaircies, captures figées en gros plan, jeu en pause, entre la version précédente et ce lot : **0 pixel différent**. Un essai isolé (deux maillages, un matériau) confirme aussi une seule construction, les bonnes couleurs par objet et aucune liaison recréée sur 6 images.
+
+**Mesures** (construction des shaders) :
+
+| | Avant | Après |
+|---|---|---|
+| Les Éclaircies : constructions | 181 | 153 |
+| Les Éclaircies : programmes des animaux (corps + ombre) | 15 + 15 | 1 + 1 |
+| Les Forges : constructions | 205 | 165 |
+| Les Forges : temps total de construction | 16,5 s | 11,2 s |
+| Les Forges : corps des animaux (21 espèces) | 4,7 s | 0,2 s |
+| Après le chargement des Éclaircies : préchauffage des 38 espèces absentes | 85 constructions, 8,2 s, jusqu'à 334 ms d'un bloc, sur 44 s | 48 constructions, 0,6 s, sur 18 s |
+
+Sur Les Forges, la préparation de la scène passe de 26,5 à 21,2 s (une mesure de chaque côté). L'arrivée d'une nouvelle espèce en jeu ne compile plus de programme de corps.
+
+**Tests.** 77 fichiers (faune, cache d'animation, pose des acteurs, scène) : 288 réussis et 88 en échec, ces 88 échouant de la même façon sur le commit précédent. Le seul écart trouvé en chemin, une compilation à froid du matériau animal sur un maillage de test, est corrigé par la recherche de l'espèce depuis sa géométrie.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -834,7 +872,7 @@ Les autres rôles de pièce relus (atelier 27 par établi, cuisine 28 par cuisin
 3. **Reconstruction d’un chunk de végétation** : encore 50 à 130 ms, mais rare, à l’apparition d’une plante dans le chunk. La découper en plusieurs images (corps, puis usure), ou calculer les tableaux dans un Worker.
 4. **Chargement.** Fait en grande partie (voir « Lancement d’une partie », « Second lot de chargement » et « Chargement : ombres sans couleur, géographie allégée ») : 24 s pour une sauvegarde au schéma actuel des Éclaircies, contre 119 s au départ, avec une barre de progression. Restent, par gain attendu :
    - ~~le passage d’ombres de la scène~~ : programmes d’ombre sans graphe de couleur, 7,2 → 1,0 s de construction sur Les Forges ;
-   - un programme partagé entre espèces sauvages (3,3 s sur Les Forges, et plus de compilation à l’arrivée d’une nouvelle espèce) ;
+   - ~~un programme partagé entre espèces sauvages~~ : fait, voir « Chargement : un seul programme pour les animaux sauvages » (4,7 → 0,2 s sur Les Forges) ;
    - un programme partagé entre lots instanciés de cultures (≈ 1,3 s sur Les Forges) ;
    - l’adoption du monde (≈ 4,3 s sur Les Forges) ;
    - avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).

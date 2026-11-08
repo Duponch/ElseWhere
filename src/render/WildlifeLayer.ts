@@ -6,7 +6,9 @@ import {actorExplorationMaterial256} from './ExplorationMask256';
 import {isAnimalSpecies256} from '../sim/animal-core-v256';
 import { attachedFireMesh,presentAttachedFire, setFireTexturesEnabled } from './FireLayer';
 import { AnimationDetail } from './AnimationDetail';
-import {ActorAnimationCache,sampleActorRoot} from './ActorAnimationCache';
+import {ActorAnimationCache,ActorAnimationCacheNodes,sampleActorRoot} from './ActorAnimationCache';
+import {ObjectResourceBinder} from './object-bound-nodes';
+import type {AffineStrokeOwner} from './surfaces/AffineStrokeOwner';
 import {PawnTweener297} from './PawnTweener297';
 import {sampleAnimalRig} from './actor-animation-sampling';
 import * as THREE from 'three/webgpu';
@@ -15,7 +17,7 @@ import {AnimalModels,ANIMAL_SURFACE_PROFILE_STRIDE,type AnimalModel} from './mod
 import {applySharedPaintSurface,type SharedPaintSurfaceOptions} from './surfaces/SharedPaintSurface';
 import {createPreparedAffineStrokeNode} from './surfaces/AffineStrokeKernel';
 import {ActorAtlasOwner,actorPoseIsRigid} from './origami/baked/actors/ActorAtlasOwner';
-import {faceStrokeVertexHeaders,attachFaceStrokeGpuRetirement,createFaceStrokeNode} from './surfaces/FaceStrokeTable';
+import {faceStrokeVertexHeaders,attachFaceStrokeGpuRetirement,createFaceStrokeNode,type FaceStrokeData} from './surfaces/FaceStrokeTable';
 import {commonAnimalPresentationGeometry} from './origami/animal-geometry';
 import {ActorPartUnionIndex,readAnimalPartUnion} from './origami/actor-part-union';
 import { coreTimeSeconds,localTimeSeconds } from '../bridge/clock-rate';
@@ -56,6 +58,152 @@ export function animalGraphicsComparisonState(species:string,mesh:Pick<THREE.Mes
     |(mesh.material===sourceMaterial?64:0)|(ribbonsVisible?128:0)|(binding?.material.userData.origamiBakedBloodFree===true?256:0);
   return[species,mesh.geometry.uuid,material,flags];
 }
+/** Body pipeline shared by every species rig with the same bone set and
+ * stroke representation. The graph is the one each rig used to build for
+ * itself; its per-species constants and resources (gait rate, rest pose,
+ * blood scale, clocks, animation cache, coat texture and stroke buffer) are
+ * read for each drawn object instead, so one shader program serves all of
+ * these species rather than one program per species. */
+class WildlifeBodyProgram {
+  /** Rigs by their animation cache: any mesh drawing a rig's geometry (the
+   * rig's own mesh, a compile stand-in, a tool) carries it in its user data. */
+  private readonly rigsByCache=new WeakMap<ActorAnimationCache,SpeciesRig>();
+  readonly binder=new ObjectResourceBinder<SpeciesRig>('Wild animal body program',object=>{const cache=(object as THREE.Mesh).geometry?.userData.animationCache;return cache instanceof ActorAnimationCache?this.rigsByCache.get(cache):undefined;});
+  register(rig:SpeciesRig):void {this.rigsByCache.set(rig.animationCache,rig);}
+  readonly plain:THREE.MeshStandardNodeMaterial;
+  readonly textured:THREE.MeshStandardNodeMaterial;
+  constructor(first:SpeciesRig,travelTime:WildlifeLayer['travelTime'],detail:AnimationDetail,configure:((m:THREE.MeshStandardNodeMaterial)=>void)|undefined,graphics:GraphicsStyleContext,readonly bones:readonly number[],prepared:AffineStrokeOwner|undefined) {
+    const binder=this.binder,firstCache=first.animationCache;
+    const cache=new ActorAnimationCacheNodes(detail,binder.texture(rig=>rig.animationCache.texture,firstCache.texture),binder.uniform(rig=>rig.animationCache.minimumScaleValue,firstCache.minimumScaleValue),binder.uniform(rig=>rig.animationCache.originsValue,firstCache.originsValue));
+    const presentationTime=binder.uniform(rig=>rig.presentationTime,first.presentationTime),blend=binder.uniform(rig=>rig.blend.value,first.blend.value);
+    const gaitRate=binder.uniform(rig=>rig.gaitRate,first.gaitRate),bodyCenter=binder.uniform(rig=>rig.bodyCenter,first.bodyCenter),restFloor=binder.uniform(rig=>rig.restFloor,first.restFloor),bloodScale=binder.uniform(rig=>rig.bloodScale,first.bloodScale);
+    const coat=binder.texture(rig=>rig.coatTexture,first.coatTexture),clock={travelTime,blend,animationCache:cache};
+    const mat=material(0xffffff);configure?.(actorExplorationMaterial256(mat));
+    // The packed paint word replaces the original RGB input in this pipeline;
+    // the CPU color alias must never consume a second vertex attribute slot.
+    const paint=attribute('animalPaint','vec4'),baseColor=paint.rgb;
+    // Both texture encodings share ONE named clinical bind stream. Anonymous
+    // varyings constructed inside each lazy pigment Fn multiply when its
+    // branch is expanded by the pinned builder (as already handled for humans).
+    const bloodBind=varying(vec4(attribute('position','vec3'),attribute('animalPart','vec4').z),'v_animalBloodBind');
+    const withBlood=(base:THREE.Node<'vec3'>)=>bodyBloodPigment(base,bloodBind.w,bloodScale,attribute('animalPart','vec4').w.lessThan(0).select(float(1),float(0)),attribute('aBiology','vec3').y,bloodBind);
+    mat.vertexColors=false;mat.colorNode=withBlood(baseColor);
+    mat.roughness=.88;mat.metalness=.02;
+    mat.positionNode=Fn(()=>{
+      // Writes the drawn species' resources into this shared graph.
+      binder.toStack();
+      const cached=cache.cached().toVar();
+      const pose=pawnPresentationPose(clock,instanceIndex,cached),state=attribute('aAnimal','vec4'),part=attribute('animalPart','vec4'),biology=attribute('aBiology','vec3'),bone=part.x,pivot=attribute('bindPivot','vec3');
+      // The fallback is the complete original rig. Retained phases are CPU
+      // coefficients, so no second threshold or phase preparation runs here.
+      const time=presentationTime,decorativeSin=(phase:THREE.Node<'float'>)=>sin(phase);
+      const angle=float(0).toVar();
+      const phase=float(0).toVar();
+      If(cached.not(),()=>{
+      phase.assign(state.w.add(pose.xz.sub(attribute('aFrom','vec4').xz).length().mul(gaitRate)));
+      If(bone.equal(1),()=>{ angle.assign(decorativeSin(phase).mul(.5).mul(state.x)); });
+      If(bone.equal(2),()=>{ angle.assign(decorativeSin(phase.add(Math.PI)).mul(.6).mul(state.x)); });
+      If(bone.greaterThanEqual(3),()=>{
+        const attack=sin(travelTime.sub(state.w).mul(10).clamp(0,Math.PI)).mul(.9);
+        angle.assign(state.x.greaterThan(.5).select(decorativeSin(phase).mul(.06),
+          state.y.greaterThan(1).select(attack,state.y.mul(decorativeSin(time.mul(5)).mul(.12).add(.48)))));
+        If(state.x.lessThan(.5).and(state.y.lessThan(.5)).and(state.z.lessThan(.5)),()=>{
+          angle.assign(decorativeSin(time.add(state.w)).mul(.03));
+        });
+        // The outer shell bends continuously into the head. Existing detail
+        // pieces use bone 3 (full angle); shell vertices encode 4 + weight.
+        If(bone.greaterThanEqual(4),()=>{ angle.mulAssign(bone.sub(4)); });
+      });
+      });
+      const c=float(0).toVar(),s=float(0).toVar();
+      If(cached,()=>{const cachedIndex=float(0).toVar();bones.forEach((value,index)=>{If(bone.equal(value),()=>{cachedIndex.assign(index);});});const rotation=cache.cellAt(cachedIndex.add(8));c.assign(rotation.x);s.assign(rotation.y);}).Else(()=>{c.assign(cos(angle));s.assign(sin(angle));});
+      const p=positionLocal.sub(pivot);
+      const q=vec3(p.x,p.y.mul(c).sub(p.z.mul(s)),p.z.mul(c).add(p.y.mul(s))).add(pivot).toVar();
+      const n=normalLocal.toVar();
+      const normal=vec3(n.x,n.y.mul(c).sub(n.z.mul(s)),n.z.mul(c).add(n.y.mul(s))).toVar();
+      If(state.z.greaterThan(.5),()=>{
+        const x=q.x.toVar(),y=q.y.toVar(),nx=normal.x.toVar();
+        q.x.assign(bodyCenter.sub(y));q.y.assign(x.add(restFloor));
+        normal.x.assign(normal.y.negate());normal.y.assign(nx);
+      });
+      If(cached,()=>{q.y.addAssign(cache.cell(3).x);}).Else(()=>{q.y.addAssign(decorativeSin(phase).abs().mul(.08).mul(state.x));});
+      If(state.x.lessThan(.5).and(state.y.lessThan(.5)).and(state.z.lessThan(.5)).and(bone.equal(0).or(bone.greaterThanEqual(3))),()=>{
+        If(cached,()=>{q.y.addAssign(cache.cell(3).y);}).Else(()=>{q.y.addAssign(decorativeSin(time.add(state.w)).mul(.006));});
+      });
+      const bit=part.y,absent=biology.z;
+      If(bit.greaterThan(0).and(absent.div(bit.max(1)).floor().mod(2).greaterThan(.5)),()=>{ q.assign(vec3(0)); });
+      const eye=part.w;
+      If(eye.greaterThanEqual(0).and(eye.notEqual(state.z.greaterThan(1.5).select(float(1),float(0)))),()=>{ q.assign(vec3(0)); });
+      // Cargo uses the same confirmed carrier edge, pose and handoff as the
+      // former proxy. Every owner still draws in this species' existing batch.
+      const carrier=attribute('aCarrier','vec4'),transfer=attribute('aCorpseHandoff','vec2');
+      const from=attribute('aCorpseFrom','vec4'),to=attribute('aCorpseTo','vec4');
+      const held=vec3(q.x,q.y.sub(.16),q.z).mul(biology.x).add(vec3(0,0,WORLD_SCALE.carriedForward)).toVar();
+      If(carrier.x.greaterThan(.5),()=>{
+        const height=float(WORLD_SCALE.carriedHeight).toVar();
+        If(cached,()=>{height.assign(cache.cell(3).z);}).Else(()=>{
+        If(carrier.y.equal(1).or(carrier.y.equal(18)).or(carrier.y.equal(19)),()=>{ height.assign(.28); });
+        // Match the carrier's exempt interaction pose and cargo exactly.
+        If(carrier.y.greaterThan(1.5).and(carrier.y.lessThan(3.5)),()=>{ height.assign(sin(presentationTime.mul(4).add(carrier.z)).mul(.08).add(1.32)); });
+        If(carrier.y.equal(3),()=>{ height.addAssign(WORLD_SCALE.stoolHeight-.605*PAWN_MODEL_SCALE); });
+        If(carrier.y.equal(6),()=>{ height.assign(1.3); });
+        });
+        held.y.addAssign(height);
+      });
+      const cy=cache.yawNode(pose.w,'cos',instanceIndex,cached),sy=cache.yawNode(pose.w,'sin',instanceIndex,cached);
+      normalLocal.assign(vec3(normal.x.mul(cy).add(normal.z.mul(sy)),normal.y,normal.z.mul(cy).sub(normal.x.mul(sy))).normalize());
+      const grounded=vec3(q.x.mul(cy).add(q.z.mul(sy)),q.y,q.z.mul(cy).sub(q.x.mul(sy))).mul(biology.x).add(pose.xyz);
+      const result=grounded.toVar();
+      If(carrier.x.greaterThan(.5),()=>{ result.assign(vec3(held.x.mul(cy).add(held.z.mul(sy)),held.y,held.z.mul(cy).sub(held.x.mul(sy))).add(pose.xyz)); });
+      If(transfer.y.abs().greaterThan(.0001),()=>{
+        const progress=cache.clockNode(travelTime,'travelTime',instanceIndex,cached).sub(transfer.x).div(transfer.y.abs().sub(transfer.x).max(.001)).clamp(0,1);
+        const smooth=progress.mul(progress).mul(float(3).sub(progress.mul(2)));
+        const dc=cos(from.w),ds=sin(from.w);
+        const start=vec3(q.x.mul(dc).add(q.z.mul(ds)),q.y,q.z.mul(dc).sub(q.x.mul(ds))).mul(biology.x).add(from.xyz);
+        const ec=cos(to.w),es=sin(to.w);
+        const end=vec3(q.x.mul(ec).add(q.z.mul(es)),q.y,q.z.mul(ec).sub(q.x.mul(es))).mul(biology.x).add(to.xyz);
+        If(transfer.y.greaterThan(0),()=>{ result.assign(mix(start,result,smooth)); }).Else(()=>{ result.assign(mix(start,end,smooth)); });
+        const startNormal=vec3(normal.x.mul(dc).add(normal.z.mul(ds)),normal.y,normal.z.mul(dc).sub(normal.x.mul(ds)));
+        const endNormal=transfer.y.greaterThan(0).select(vec3(normal.x.mul(cy).add(normal.z.mul(sy)),normal.y,normal.z.mul(cy).sub(normal.x.mul(sy))),vec3(normal.x.mul(ec).add(normal.z.mul(es)),normal.y,normal.z.mul(ec).sub(normal.x.mul(es))));
+        normalLocal.assign(mix(startNormal,endNormal,smooth).normalize());
+      });
+      return result;
+    })();
+    const textured=material(0xffffff);configure?.(actorExplorationMaterial256(textured));
+    textured.positionNode=mat.positionNode;
+    textured.roughness=.88;textured.metalness=.02;
+    const surfaceUv=attribute('animalSurfaceUv','vec4'),word=paint.w,profile=word.mod(ANIMAL_SURFACE_PROFILE_STRIDE),faceId=word.div(ANIMAL_SURFACE_PROFILE_STRIDE).floor();
+    // Header and row reads use the drawn species' stroke buffer; the
+    // construction-time checks use the first rig's actual tables.
+    const strokes=binder.storage(rig=>rig.strokeBuffer,first.strokeBuffer,'vec4');
+    const buildStroke=()=>{
+      const headerChecks=prepared?.headerTable()??first.sharedModel.strokes;
+      const table={node:strokes,assertCurrent:()=>headerChecks.assertCurrent()} as unknown as FaceStrokeData;
+      const headers=faceStrokeVertexHeaders({table,faceId,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity},'v_animalStrokeHeader'),common={faceId,headers,faceUv:surfaceUv.xy,surfacePosition:undefined,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity,brushColor:graphics.brushColor.rgb,samplePigment:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>graphics.sampleStrokePigment(coordinates,dx,dy),sampleDry:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>graphics.sampleStrokeDry(coordinates,dx,dy)};
+      if(!prepared)return(body:THREE.Node<'vec3'>)=>createFaceStrokeNode(body,{...common,table,width:graphics.edgeWidth,irregularity:graphics.strokeImperfection});
+      const owner={source:prepared.source,irregularity:binder.uniform(rig=>rig.strokeIrregularity,first.strokeIrregularity),assertReady:()=>prepared.assertReady(),readRow:(row:THREE.Node<'int'>)=>strokes.element(row)} as unknown as AffineStrokeOwner;
+      return(body:THREE.Node<'vec3'>)=>createPreparedAffineStrokeNode(body,{...common,owner});
+    };
+    const pastelFromSample=(sample:THREE.Node<'vec4'>)=>withBlood(baseColor).mul(sample.r.mul(.8).add(.28));
+    const bodyOptions:SharedPaintSurfaceOptions={context:graphics,base:baseColor,pastel:pastelFromSample(texture(coat,surfaceUv.zw)),faceUv:surfaceUv.xy,profile,pigmentDomain:'game-static78',includeGeneric:true,gouacheTransform:withBlood,stroke:buildStroke()};applySharedPaintSurface(textured,bodyOptions);
+    this.plain=mat;this.textured=textured;
+  }
+  dispose():void {this.plain.dispose();this.textured.dispose();}
+}
+/** One program per distinct bone set and stroke representation; every
+ * species rig of a layer acquires its program here. */
+class WildlifeBodyPrograms {
+  private readonly programs=new Map<string,WildlifeBodyProgram>();
+  constructor(private readonly travelTime:WildlifeLayer['travelTime'],private readonly detail:AnimationDetail,private readonly configure:((m:THREE.MeshStandardNodeMaterial)=>void)|undefined){}
+  acquire(rig:SpeciesRig,graphics:GraphicsStyleContext,bones:readonly number[],prepared:AffineStrokeOwner|undefined):WildlifeBodyProgram {
+    const key=JSON.stringify([bones,prepared?['prepared',prepared.source.interiorCircle===true]:['source']]);
+    let program=this.programs.get(key);
+    if(!program){program=new WildlifeBodyProgram(rig,this.travelTime,this.detail,this.configure,graphics,bones,prepared);this.programs.set(key,program);}
+    program.register(rig);return program;
+  }
+  get size():number {return this.programs.size;}
+  dispose():void {const errors:unknown[]=[];for(const program of this.programs.values())try{program.dispose();}catch(e){errors.push(e);}this.programs.clear();if(errors.length)throw new AggregateError(errors,'Wild animal body programs disposal failed');}
+}
 /** Resident capacity and node graph. CPU supplies edges/phases at snapshots
  * and segment boundaries; continuous translation and the rig run on the GPU. */
 class SpeciesRig {
@@ -68,7 +216,7 @@ class SpeciesRig {
   origamiWear?:THREE.Mesh;
   private origamiGraphics?:GraphicsStyleContext;
   private texturesEnabled=true;
-  private readonly sharedModel:AnimalModel;
+  readonly sharedModel:AnimalModel;
   private bodyAtlas:ActorAtlasOwner|undefined;
   private readonly atlasRows=new Map<number,number>();private atlasPublishedCount=0;
   /** Detached stand-in for compiling this rig's body and fire programs away
@@ -83,7 +231,7 @@ class SpeciesRig {
       for(const [name,attribute] of Object.entries(from.attributes))stand.setAttribute(name,attribute);
       if(from.index)stand.setIndex(from.index);
       stand.userData=from.userData;stand.instanceCount=1;
-      const mesh=new THREE.Mesh(stand,source.material);mesh.frustumCulled=false;mesh.castShadow=source.castShadow;mesh.receiveShadow=source.receiveShadow;mesh.renderOrder=source.renderOrder;
+      const mesh=new THREE.Mesh(stand,source.material);if(source===this.mesh)this.bodyProgram.binder.attach(mesh,this);mesh.frustumCulled=false;mesh.castShadow=source.castShadow;mesh.receiveShadow=source.receiveShadow;mesh.renderOrder=source.renderOrder;
       group.add(mesh);
     }
     return group;
@@ -130,14 +278,21 @@ class SpeciesRig {
   clearPlayback435():void{this.playback435.clear();}
   private headings=new Map<number,TurnHeading>();
   private readonly gait=new GaitPhaseTracker();
-  private readonly gaitRate:number;
+  readonly gaitRate:number;
+  /** Per-species values and resources read by the shared body program. */
+  readonly bodyCenter:number;readonly restFloor:number;readonly bloodScale:number;readonly coatTexture:THREE.DataTexture;
+  private readonly strokeOwner:AffineStrokeOwner|undefined;
+  private readonly bodyProgram:WildlifeBodyProgram;
+  get presentationTime():number {return this.time.value;}
+  get strokeBuffer():THREE.StorageBufferAttribute {return this.strokeOwner?.buffer??this.sharedModel.strokes.buffer;}
+  get strokeIrregularity():number {return this.strokeOwner?.irregularity.value??0;}
   private readonly restingHeight:number;
   private readonly restingRadius:number;
   private animals:VisualAnimal[]=[];
   private revision=0;
   private hasFireActors=false;
   private surfaces:ReadonlyMap<number,number>=new Map();
-  constructor(readonly travelTime:WildlifeLayer['travelTime'],readonly species:string,surfaceTexture:THREE.DataTexture,style:AnimalSlaughterMarkerStyle,private readonly animationDetail:AnimationDetail,configure:((m:THREE.MeshStandardNodeMaterial)=>void)|undefined,models:AnimalModels) {
+  constructor(readonly travelTime:WildlifeLayer['travelTime'],readonly species:string,surfaceTexture:THREE.DataTexture,style:AnimalSlaughterMarkerStyle,private readonly animationDetail:AnimationDetail,configure:((m:THREE.MeshStandardNodeMaterial)=>void)|undefined,models:AnimalModels,programs:WildlifeBodyPrograms) {
     this.animationCache=new ActorAnimationCache(animationDetail);
     this.gaitRate=animalGaitRadiansPerUnit(species);
     const graphics=currentGraphicsStyle();if(!graphics)throw Error('Animal surfaces require their actual scene texture context');this.origamiGraphics=graphics;
@@ -151,108 +306,24 @@ class SpeciesRig {
     const restFloor=.025-bounds.min.x,bodyCenter=geometry.userData.origamiBodyCenter??animalParts(species)[0]!.center[1];
     this.restingHeight=bounds.max.x+restFloor;
     this.restingRadius=Math.max(Math.abs(bodyCenter-bounds.min.y),Math.abs(bodyCenter-bounds.max.y),Math.abs(bounds.min.z),Math.abs(bounds.max.z))+.1;
-    const mat=material(0xffffff);configure?.(actorExplorationMaterial256(mat));
-    // The packed paint word replaces the original RGB input in this pipeline;
-    // the CPU color alias must never consume a second vertex attribute slot.
+    this.bodyCenter=bodyCenter;this.restFloor=restFloor;this.bloodScale=species==='hare'||species==='snow-hare'?2:1;this.coatTexture=surfaceTexture;
+    this.strokeOwner=graphics.preparedStrokes.acquire(model.strokes);
+    const program=programs.acquire(this,graphics,this.sampledBones,this.strokeOwner);this.bodyProgram=program;
+    this.plainMaterial=program.plain;this.texturedMaterial=program.textured;
+    // Atlas preparation renders its own bake programs. They keep this rig's
+    // own static resources, never the object-bound ones of the shared program.
     const paint=attribute('animalPaint','vec4'),baseColor=paint.rgb;
-    // Both texture encodings share ONE named clinical bind stream. Anonymous
-    // varyings constructed inside each lazy pigment Fn multiply when its
-    // branch is expanded by the pinned builder (as already handled for humans).
     const bloodBind=varying(vec4(attribute('position','vec3'),attribute('animalPart','vec4').z),'v_animalBloodBind');
-    const withBlood=(base:THREE.Node<'vec3'>)=>bodyBloodPigment(base,bloodBind.w,species==='hare'||species==='snow-hare'?2:1,attribute('animalPart','vec4').w.lessThan(0).select(float(1),float(0)),attribute('aBiology','vec3').y,bloodBind);
-    mat.vertexColors=false;mat.colorNode=withBlood(baseColor);
-    mat.roughness=.88;mat.metalness=.02;
-    mat.positionNode=Fn(()=>{
-      const cached=this.animationCache.cached().toVar();
-      const pose=pawnPresentationPose(this,instanceIndex,cached),state=attribute('aAnimal','vec4'),part=attribute('animalPart','vec4'),biology=attribute('aBiology','vec3'),bone=part.x,pivot=attribute('bindPivot','vec3');
-      // The fallback is the complete original rig. Retained phases are CPU
-      // coefficients, so no second threshold or phase preparation runs here.
-      const time=this.time,decorativeSin=(phase:THREE.Node<'float'>)=>sin(phase);
-      const angle=float(0).toVar();
-      const phase=float(0).toVar();
-      If(cached.not(),()=>{
-      phase.assign(state.w.add(pose.xz.sub(attribute('aFrom','vec4').xz).length().mul(this.gaitRate)));
-      If(bone.equal(1),()=>{ angle.assign(decorativeSin(phase).mul(.5).mul(state.x)); });
-      If(bone.equal(2),()=>{ angle.assign(decorativeSin(phase.add(Math.PI)).mul(.6).mul(state.x)); });
-      If(bone.greaterThanEqual(3),()=>{
-        const attack=sin(this.travelTime.sub(state.w).mul(10).clamp(0,Math.PI)).mul(.9);
-        angle.assign(state.x.greaterThan(.5).select(decorativeSin(phase).mul(.06),
-          state.y.greaterThan(1).select(attack,state.y.mul(decorativeSin(time.mul(5)).mul(.12).add(.48)))));
-        If(state.x.lessThan(.5).and(state.y.lessThan(.5)).and(state.z.lessThan(.5)),()=>{
-          angle.assign(decorativeSin(time.add(state.w)).mul(.03));
-        });
-        // The outer shell bends continuously into the head. Existing detail
-        // pieces use bone 3 (full angle); shell vertices encode 4 + weight.
-        If(bone.greaterThanEqual(4),()=>{ angle.mulAssign(bone.sub(4)); });
-      });
-      });
-      const c=float(0).toVar(),s=float(0).toVar();
-      If(cached,()=>{const cachedIndex=float(0).toVar();this.sampledBones.forEach((value,index)=>{If(bone.equal(value),()=>{cachedIndex.assign(index);});});const rotation=this.animationCache.cellAt(cachedIndex.add(8));c.assign(rotation.x);s.assign(rotation.y);}).Else(()=>{c.assign(cos(angle));s.assign(sin(angle));});
-      const p=positionLocal.sub(pivot);
-      const q=vec3(p.x,p.y.mul(c).sub(p.z.mul(s)),p.z.mul(c).add(p.y.mul(s))).add(pivot).toVar();
-      const n=normalLocal.toVar();
-      const normal=vec3(n.x,n.y.mul(c).sub(n.z.mul(s)),n.z.mul(c).add(n.y.mul(s))).toVar();
-      If(state.z.greaterThan(.5),()=>{
-        const x=q.x.toVar(),y=q.y.toVar(),nx=normal.x.toVar();
-        q.x.assign(float(bodyCenter).sub(y));q.y.assign(x.add(restFloor));
-        normal.x.assign(normal.y.negate());normal.y.assign(nx);
-      });
-      If(cached,()=>{q.y.addAssign(this.animationCache.cell(3).x);}).Else(()=>{q.y.addAssign(decorativeSin(phase).abs().mul(.08).mul(state.x));});
-      If(state.x.lessThan(.5).and(state.y.lessThan(.5)).and(state.z.lessThan(.5)).and(bone.equal(0).or(bone.greaterThanEqual(3))),()=>{
-        If(cached,()=>{q.y.addAssign(this.animationCache.cell(3).y);}).Else(()=>{q.y.addAssign(decorativeSin(time.add(state.w)).mul(.006));});
-      });
-      const bit=part.y,absent=biology.z;
-      If(bit.greaterThan(0).and(absent.div(bit.max(1)).floor().mod(2).greaterThan(.5)),()=>{ q.assign(vec3(0)); });
-      const eye=part.w;
-      If(eye.greaterThanEqual(0).and(eye.notEqual(state.z.greaterThan(1.5).select(float(1),float(0)))),()=>{ q.assign(vec3(0)); });
-      // Cargo uses the same confirmed carrier edge, pose and handoff as the
-      // former proxy. Every owner still draws in this species' existing batch.
-      const carrier=attribute('aCarrier','vec4'),transfer=attribute('aCorpseHandoff','vec2');
-      const from=attribute('aCorpseFrom','vec4'),to=attribute('aCorpseTo','vec4');
-      const held=vec3(q.x,q.y.sub(.16),q.z).mul(biology.x).add(vec3(0,0,WORLD_SCALE.carriedForward)).toVar();
-      If(carrier.x.greaterThan(.5),()=>{
-        const height=float(WORLD_SCALE.carriedHeight).toVar();
-        If(cached,()=>{height.assign(this.animationCache.cell(3).z);}).Else(()=>{
-        If(carrier.y.equal(1).or(carrier.y.equal(18)).or(carrier.y.equal(19)),()=>{ height.assign(.28); });
-        // Match the carrier's exempt interaction pose and cargo exactly.
-        If(carrier.y.greaterThan(1.5).and(carrier.y.lessThan(3.5)),()=>{ height.assign(sin(this.time.mul(4).add(carrier.z)).mul(.08).add(1.32)); });
-        If(carrier.y.equal(3),()=>{ height.addAssign(WORLD_SCALE.stoolHeight-.605*PAWN_MODEL_SCALE); });
-        If(carrier.y.equal(6),()=>{ height.assign(1.3); });
-        });
-        held.y.addAssign(height);
-      });
-      const cy=this.animationCache.yawNode(pose.w,'cos',instanceIndex,cached),sy=this.animationCache.yawNode(pose.w,'sin',instanceIndex,cached);
-      normalLocal.assign(vec3(normal.x.mul(cy).add(normal.z.mul(sy)),normal.y,normal.z.mul(cy).sub(normal.x.mul(sy))).normalize());
-      const grounded=vec3(q.x.mul(cy).add(q.z.mul(sy)),q.y,q.z.mul(cy).sub(q.x.mul(sy))).mul(biology.x).add(pose.xyz);
-      const result=grounded.toVar();
-      If(carrier.x.greaterThan(.5),()=>{ result.assign(vec3(held.x.mul(cy).add(held.z.mul(sy)),held.y,held.z.mul(cy).sub(held.x.mul(sy))).add(pose.xyz)); });
-      If(transfer.y.abs().greaterThan(.0001),()=>{
-        const progress=this.animationCache.clockNode(this.travelTime,'travelTime',instanceIndex,cached).sub(transfer.x).div(transfer.y.abs().sub(transfer.x).max(.001)).clamp(0,1);
-        const smooth=progress.mul(progress).mul(float(3).sub(progress.mul(2)));
-        const dc=cos(from.w),ds=sin(from.w);
-        const start=vec3(q.x.mul(dc).add(q.z.mul(ds)),q.y,q.z.mul(dc).sub(q.x.mul(ds))).mul(biology.x).add(from.xyz);
-        const ec=cos(to.w),es=sin(to.w);
-        const end=vec3(q.x.mul(ec).add(q.z.mul(es)),q.y,q.z.mul(ec).sub(q.x.mul(es))).mul(biology.x).add(to.xyz);
-        If(transfer.y.greaterThan(0),()=>{ result.assign(mix(start,result,smooth)); }).Else(()=>{ result.assign(mix(start,end,smooth)); });
-        const startNormal=vec3(normal.x.mul(dc).add(normal.z.mul(ds)),normal.y,normal.z.mul(dc).sub(normal.x.mul(ds)));
-        const endNormal=transfer.y.greaterThan(0).select(vec3(normal.x.mul(cy).add(normal.z.mul(sy)),normal.y,normal.z.mul(cy).sub(normal.x.mul(sy))),vec3(normal.x.mul(ec).add(normal.z.mul(es)),normal.y,normal.z.mul(ec).sub(normal.x.mul(es))));
-        normalLocal.assign(mix(startNormal,endNormal,smooth).normalize());
-      });
-      return result;
-    })();
-    const textured=material(0xffffff);configure?.(actorExplorationMaterial256(textured));
-    textured.positionNode=mat.positionNode;
-    textured.roughness=.88;textured.metalness=.02;
+    const withBlood=(base:THREE.Node<'vec3'>)=>bodyBloodPigment(base,bloodBind.w,this.bloodScale,attribute('animalPart','vec4').w.lessThan(0).select(float(1),float(0)),attribute('aBiology','vec3').y,bloodBind);
     const surfaceUv=attribute('animalSurfaceUv','vec4'),word=paint.w,profile=word.mod(ANIMAL_SURFACE_PROFILE_STRIDE),faceId=word.div(ANIMAL_SURFACE_PROFILE_STRIDE).floor();
-    const buildStroke=(surfacePosition?:THREE.Node<'vec3'>,canonical=false)=>{
-      const prepared=canonical?undefined:graphics.preparedStrokes.acquire(model.strokes),table=prepared?.headerTable()??model.strokes,headers=faceStrokeVertexHeaders({table,faceId,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity},'v_animalStrokeHeader'),common={faceId,headers,faceUv:surfaceUv.xy,surfacePosition,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity,brushColor:graphics.brushColor.rgb,samplePigment:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>graphics.sampleStrokePigment(coordinates,dx,dy),sampleDry:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>graphics.sampleStrokeDry(coordinates,dx,dy)};
-      return prepared?(body:THREE.Node<'vec3'>)=>createPreparedAffineStrokeNode(body,{...common,owner:prepared}):(body:THREE.Node<'vec3'>)=>createFaceStrokeNode(body,{...common,table:model.strokes,width:graphics.edgeWidth,irregularity:graphics.strokeImperfection});
+    const canonicalStroke=(surfacePosition:THREE.Node<'vec3'>)=>{
+      const table=model.strokes,headers=faceStrokeVertexHeaders({table,faceId,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity},'v_animalStrokeHeader'),common={faceId,headers,faceUv:surfaceUv.xy,surfacePosition,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity,brushColor:graphics.brushColor.rgb,samplePigment:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>graphics.sampleStrokePigment(coordinates,dx,dy),sampleDry:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>graphics.sampleStrokeDry(coordinates,dx,dy)};
+      return(body:THREE.Node<'vec3'>)=>createFaceStrokeNode(body,{...common,table:model.strokes,width:graphics.edgeWidth,irregularity:graphics.strokeImperfection});
     };
-    this.pastelSourceTexture=surfaceTexture;this.pastelFromSample=sample=>withBlood(baseColor).mul(sample.r.mul(.8).add(.28));
-    const bodyOptions:SharedPaintSurfaceOptions={context:graphics,base:baseColor,pastel:this.pastelFromSample(texture(surfaceTexture,surfaceUv.zw)),faceUv:surfaceUv.xy,profile,pigmentDomain:'game-static78',includeGeneric:true,gouacheTransform:withBlood,stroke:buildStroke()};applySharedPaintSurface(textured,bodyOptions);
-    this.bodyBakeOptions=surfacePosition=>({...bodyOptions,surfacePosition,stroke:buildStroke(surfacePosition,true)});
-    this.plainMaterial=mat;this.texturedMaterial=textured;
-    this.mesh=new THREE.Mesh(geometry,textured);this.bodyAtlas=new ActorAtlasOwner({key:'animal-full-body:'+this.species+':'+this.mesh.uuid,kind:'animal',context:graphics,readPort:()=>this.bodySurfaceBakeSource(),ownerCount:()=>(this.mesh.geometry as THREE.InstancedBufferGeometry).instanceCount,changed:()=>this.selectSurfaceMaterial(),configure:material=>{configure?.(actorExplorationMaterial256(material));}});this.selectSurfaceMaterial();this.mesh.name=`Wild ${this.species} — GPU rig`;this.mesh.frustumCulled=false;this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.flames=attachedFireMesh(this.mesh.geometry,this,.6,this.animationDetail);
+    const pastelFromSample=(sample:THREE.Node<'vec4'>)=>withBlood(baseColor).mul(sample.r.mul(.8).add(.28));
+    this.pastelSourceTexture=surfaceTexture;this.pastelFromSample=pastelFromSample;
+    this.bodyBakeOptions=surfacePosition=>({context:graphics,base:baseColor,pastel:pastelFromSample(texture(surfaceTexture,surfaceUv.zw)),faceUv:surfaceUv.xy,profile,pigmentDomain:'game-static78',includeGeneric:true,gouacheTransform:withBlood,surfacePosition,stroke:canonicalStroke(surfacePosition)});
+    this.mesh=new THREE.Mesh(geometry,this.texturedMaterial);program.binder.attach(this.mesh,this);this.bodyAtlas=new ActorAtlasOwner({key:'animal-full-body:'+this.species+':'+this.mesh.uuid,kind:'animal',context:graphics,readPort:()=>this.bodySurfaceBakeSource(),ownerCount:()=>(this.mesh.geometry as THREE.InstancedBufferGeometry).instanceCount,changed:()=>this.selectSurfaceMaterial(),configure:material=>{configure?.(actorExplorationMaterial256(material));}});this.selectSurfaceMaterial();this.mesh.name=`Wild ${this.species} — GPU rig`;this.mesh.frustumCulled=false;this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.flames=attachedFireMesh(this.mesh.geometry,this,.6,this.animationDetail);
     this.selection=pawnSelectionMesh(this.mesh.geometry as THREE.InstancedBufferGeometry,this);this.selection.visible=false;
     (this.selection.geometry as THREE.InstancedBufferGeometry).instanceCount=0;
     this.slaughter=animalSlaughterMarker(this.mesh.geometry as THREE.InstancedBufferGeometry,this,style,geometry.boundingBox!.max.y);
@@ -283,7 +354,7 @@ class SpeciesRig {
       const wear=temporary.userData.origamiWear;if(!(wear instanceof THREE.InstancedBufferGeometry))throw Error('Actual animal physical-wear geometry missing');geometry=wear;
       for(const[name,a]of Object.entries(this.mesh.geometry.attributes))if(a instanceof THREE.InstancedBufferAttribute||a instanceof THREE.InterleavedBufferAttribute&&a.data instanceof THREE.InstancedInterleavedBuffer)geometry.setAttribute(name,a);geometry.instanceCount=(this.mesh.geometry as THREE.InstancedBufferGeometry).instanceCount;geometry.userData.animationCache=this.animationCache;
       material=graphics.createWearMaterial(this.plainMaterial.positionNode,attribute('animalPaintUv','vec2'));actorExplorationMaterial256(material);material.maskNode=this.plainMaterial.maskNode;material.maskShadowNode=this.plainMaterial.maskShadowNode;
-      effect=new THREE.Mesh(geometry,material);effect.name=`Wild ${this.species} — optional physical paint wear`;effect.frustumCulled=false;effect.castShadow=false;effect.receiveShadow=true;effect.userData.origamiTexturesEnabled=this.texturesEnabled;
+      effect=new THREE.Mesh(geometry,material);this.bodyProgram.binder.attach(effect,this);effect.name=`Wild ${this.species} — optional physical paint wear`;effect.frustumCulled=false;effect.castShadow=false;effect.receiveShadow=true;effect.userData.origamiTexturesEnabled=this.texturesEnabled;
       releaseGeometry=graphics.trackWearGeometry(geometry);releaseObject=graphics.trackEdgeObject(effect,'wear');this.origamiWear=effect;this.mesh.add(effect);this.installOrigamiPartUnions();this.refreshOrigamiPartUnion();
       const freeGeometry=releaseGeometry,freeObject=releaseObject;this.wearCleanup=()=>{try{freeObject();}finally{freeGeometry();}};attached=true;
     }finally{
@@ -595,6 +666,9 @@ export class WildlifeLayer {
   private readonly surfaceTextures={soft:createAnimalCoatTexture('soft'),short:createAnimalCoatTexture('short'),shaggy:createAnimalCoatTexture('shaggy')};
   private texturesEnabled=true;
   private readonly models=new AnimalModels();
+  private readonly bodyPrograms:WildlifeBodyPrograms;
+  /** Distinct body shader programs (one per bone set and stroke representation). */
+  get bodyProgramCount():number {return this.bodyPrograms.size;}
   private readonly graphicsContext:GraphicsStyleContext;
   private readonly ownsGraphicsContext:boolean;
   private readonly markerStyle:AnimalSlaughterMarkerStyle;
@@ -607,8 +681,9 @@ export class WildlifeLayer {
   private selected:ReadonlySet<number>=new Set();
   constructor(configure?:(m:THREE.MeshStandardNodeMaterial)=>void,loadTexture?:SceneTextureLoader,animationDetail=new AnimationDetail()){
     const graphics=currentGraphicsStyle();this.graphicsContext=graphics??new GraphicsStyleContext();this.ownsGraphicsContext=!graphics;
+    this.bodyPrograms=new WildlifeBodyPrograms(this.travelTime,animationDetail,configure);
     this.markerStyle=new AnimalSlaughterMarkerStyle(loadTexture);
-    this.rigs=withGraphicsStyle(this.graphicsContext,()=>ANIMAL_SPECIES_IDS.map(species=>new SpeciesRig(this.travelTime,species,this.surfaceTextures[animalCoat(species)],this.markerStyle,animationDetail,configure,this.models)));
+    this.rigs=withGraphicsStyle(this.graphicsContext,()=>ANIMAL_SPECIES_IDS.map(species=>new SpeciesRig(this.travelTime,species,this.surfaceTextures[animalCoat(species)],this.markerStyle,animationDetail,configure,this.models,this.bodyPrograms)));
     for(const rig of this.rigs){this.mesh.add(rig.mesh,rig.selection,rig.slaughter);this.flames.add(rig.flames);}
   }
   /** Read-only compatibility for historical evidence pages. This is an honest
@@ -668,11 +743,11 @@ export class WildlifeLayer {
       r.clearPlayback435();r.animationCache.dispose();
       r.disposeOrigamiCompanions();
       for(const m of [r.mesh,r.flames,r.selection,r.slaughter])m.geometry.dispose();
-      r.plainMaterial.dispose();r.texturedMaterial.dispose();
       (r.flames.material as THREE.Material).dispose();
       (r.selection.material as THREE.Material).dispose();
       (r.slaughter.material as THREE.Material).dispose();
     }
+    this.bodyPrograms.dispose();
     for(const texture of Object.values(this.surfaceTextures))texture.dispose();
     this.markerStyle.dispose();this.models.dispose();if(this.ownsGraphicsContext)this.graphicsContext.dispose();
   }

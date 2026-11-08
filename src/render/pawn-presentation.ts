@@ -7,7 +7,9 @@ import { TURN_SECONDS } from './turn-presentation';
 /** Shared by body, cargo and selection. XZ follows the authoritative edge;
  * only vertical presentation climbs furniture in its first/last third. */
 export type PresentationClock=Pick<PawnLayer,'travelTime'|'blend'>&{readonly animationCache?:ActorAnimationCache};
-export function pawnPresentationPose(clock:PresentationClock,index:Node<'uint'>=instanceIndex,cached?:Node<'bool'>):Node<'vec4'> {
+/** The pose graph needs only the clocks and, when cached, the cache's shader reads. */
+export type PresentationPoseClock=Pick<PawnLayer,'travelTime'|'blend'>&{readonly animationCache?:Pick<ActorAnimationCache,'poseNode'>};
+export function pawnPresentationPose(clock:PresentationPoseClock,index:Node<'uint'>=instanceIndex,cached?:Node<'bool'>):Node<'vec4'> {
   const original=()=>originalPresentationPose(clock);
   return clock.animationCache?clock.animationCache.poseNode(original,index,cached):original();
 }
