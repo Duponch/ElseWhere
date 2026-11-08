@@ -49,21 +49,25 @@ test('one stable-environment growth reader rereads settled values, changed ancho
 
 test('thermal settlement preserves uncached growth across three regions, different limits and different old anchors',()=>{
   const w=room(),layout=reconcileTemperature(w);
+  // Schema 301, as RimWorld 1.6 Plant.TickLong: a plant samples its temperature
+  // in the local tick of id % 2000 (every 200 local ticks). These five share one
+  // sampling tick (ids ≡ 0..4 mod 2000), reached by whole periods below.
+  const base=(Math.floor(w.nextId/2000)+1)*2000;w.nextId=base+5;
   w.resources=[
-    {id:w.nextId++,kind:'rice',x:4,z:4,amount:6,growth:.1,growthTick:1700,growthThermalFactor:.25},
-    {id:w.nextId++,kind:'wild-plant',species:'grass',x:5,z:4,amount:6,growth:.2,growthTick:1800,growthThermalFactor:.375},
-    {id:w.nextId++,kind:'rice',x:9,z:4,amount:6,growth:.3,growthTick:1900,growthThermalFactor:.5},
-    {id:w.nextId++,kind:'wild-plant',species:'agave',x:10,z:4,amount:6,growth:.4,growthTick:1950,growthThermalFactor:.625},
-    {id:w.nextId++,kind:'wild-plant',species:'grass',x:2,z:4,amount:6,growth:.5,growthTick:1750,growthThermalFactor:.75,growthLight:'artificial-full'},
+    {id:base,kind:'rice',x:4,z:4,amount:6,growth:.1,growthTick:1700,growthThermalFactor:.25},
+    {id:base+1,kind:'wild-plant',species:'grass',x:5,z:4,amount:6,growth:.2,growthTick:1800,growthThermalFactor:.375},
+    {id:base+2,kind:'rice',x:9,z:4,amount:6,growth:.3,growthTick:1900,growthThermalFactor:.5},
+    {id:base+3,kind:'wild-plant',species:'agave',x:10,z:4,amount:6,growth:.4,growthTick:1950,growthThermalFactor:.625},
+    {id:base+4,kind:'wild-plant',species:'grass',x:2,z:4,amount:6,growth:.5,growthTick:1750,growthThermalFactor:.75,growthLight:'artificial-full'},
   ];
   for(const plant of w.resources)w.tiles[plant.z*w.width+plant.x]!.terrain='soil-natural';
   expect(w.resources.map(p=>layout.indices[p.z*w.width+p.x]!)).toEqual([0,0,-1,-1,1]);
-  const rng=w.rng;w.tick+=9;w.thermal!.regions.forEach((r,i)=>r.temperature=50+i*.125);
+  const rng=w.rng;w.tick=(Math.floor(w.tick/200)+1)*200;w.thermal!.regions.forEach((r,i)=>r.temperature=50+i*.125);
   const expected=w.resources.map(p=>plantGrowth(w,p));updatePlantTemperatures(w,layout);
   expect(w.resources.map(p=>p.growthThermalFactor)).toEqual([.5,25/33,undefined,undefined,24.875/33]);
   expect(w.resources.map(p=>p.growthTick)).toEqual([w.tick,w.tick,w.tick,w.tick,w.tick]);
   for(const [i,plant] of w.resources.entries())expect(bits(plant.growth!)).toEqual(bits(expected[i]!));
-  w.tick+=9;w.thermal!.regions.forEach(r=>r.temperature=3);
+  w.tick+=200;w.thermal!.regions.forEach(r=>r.temperature=3);
   const next=w.resources.map(p=>plantGrowth(w,p));updatePlantTemperatures(w,layout);
   expect(w.resources.map(p=>p.growthThermalFactor)).toEqual([.5,.5,undefined,undefined,.5]);
   // The already-correct first crop is not rewritten, while changed species

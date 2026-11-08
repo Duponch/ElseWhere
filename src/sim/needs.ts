@@ -16,7 +16,7 @@ import { TICKS_PER_DAY } from './types.ts';
 import { processEating } from './eating.ts';
 import { pileFoodScore, foodSourceSearchGoals, selectFoodSource } from './food-selection.ts';
 import { planPasteRequest,pasteRequestValid } from './nutrient-paste.ts';
-import { updateWellbeing,type FurnitureSight } from './wellbeing.ts';
+import { updateWellbeing,type FurnitureSight,wellbeingLocalTicks} from './wellbeing.ts';
 import { processSleeping,offerSleeping300 } from './sleeping.ts';
 import { updateRecreation } from './recreation-rules.ts';
 import { updateRest } from './rest.ts';
@@ -177,7 +177,8 @@ export function updateNeeds(world: World, pawn: Pawn,body?:import('./body-capaci
   advanceRoomRest(world,pawn);
   if(!pawn.prisoner)updateRecreation(pawn,body,(colonyExpectation(world,pawn)?.joyToleranceDropPerDay??.18)*100/TICKS_PER_DAY);
   if (pawn.needCooldown > 0) pawn.needCooldown--;
-  updateWellbeing(world, pawn,body,readFurnitureSight,topology,readTemperature);
+  const wellbeingTicks=wellbeingLocalTicks(world,pawn);
+  if(wellbeingTicks)updateWellbeing(world, pawn,body,readFurnitureSight,topology,readTemperature,wellbeingTicks);
 }
 
 export function collapseFromExhaustion(world:World,pawn:Pawn,context:Pick<NeedContext,'event'>):void {

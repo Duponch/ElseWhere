@@ -162,14 +162,16 @@ export function moodTarget(thoughts:readonly MoodThought[]):number {
 export function moodFrozen(pawn:Pawn,body?:BodyAssessment):boolean {
   return (pawn.cryptosleepHeldAt271!==undefined||pawn.shipCryptosleepHeldAt277!==undefined)||pawn.state==='dead'||pawn.state==='sleeping'||!!pawn.medicalSleep||!(body??pawnBody(pawn)).canBeAwake;
 }
-export function updateMood(world:World,pawn:Pawn,body?:BodyAssessment,topology?:RelationshipTopology,readTemperature?:()=>number):void {
+/** `localTicks`: the local ticks this step covers (15 for a RimWorld need
+ * interval of 150 Core ticks); the target is read once, at the step. */
+export function updateMood(world:World,pawn:Pawn,body?:BodyAssessment,topology?:RelationshipTopology,readTemperature?:()=>number,localTicks=1):void {
   if(moodFrozen(pawn,body))return;
-  updateMoodFromThoughts(pawn,moodThoughts(world,pawn,topology,readTemperature,false),body);
+  updateMoodFromThoughts(pawn,moodThoughts(world,pawn,topology,readTemperature,false),body,localTicks);
 }
-export function updateMoodFromThoughts(pawn:Pawn,thoughts:readonly MoodThought[],body?:BodyAssessment):void {
+export function updateMoodFromThoughts(pawn:Pawn,thoughts:readonly MoodThought[],body?:BodyAssessment,localTicks=1):void {
   if(moodFrozen(pawn,body))return;
   const target=moodTarget(thoughts);
-  const amount=(target>pawn.mood?MOOD_RISE_PER_HOUR:MOOD_FALL_PER_HOUR)*24/TICKS_PER_DAY;
+  const amount=(target>pawn.mood?MOOD_RISE_PER_HOUR:MOOD_FALL_PER_HOUR)*24/TICKS_PER_DAY*localTicks;
   pawn.mood=target>pawn.mood?Math.min(target,pawn.mood+amount):Math.max(target,pawn.mood-amount);
 }
 export function expireMealMemories(world:World,pawn:Pawn):void {expireMealMemoriesAt(pawn,world.tick);}

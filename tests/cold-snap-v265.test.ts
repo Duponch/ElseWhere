@@ -109,16 +109,23 @@ test('existing fueled room heating counters cold leakage without changing the ou
   expect(coldSnapOffset(plain)).toBe(coldSnapOffset(heated));expect(outdoorTemperature(plain)).toBe(outdoorTemperature(heated));
 });
 
-test('outside crop growth settles its previous interval and stops in the cold rather than losing prior growth',()=>{
+test('outside crop growth settles its previous interval at its TickLong and stops in the cold rather than losing prior growth',()=>{
   const world=plantClimateFixture(20);
   // Resource producers replace the array, invalidating the fixture's indoor binding.
   world.resources=[{...world.resources[0]!,x:12,z:12,growth:.2,growthTick:world.tick}];
   const plant=world.resources[0]!;
+  // Schema 301, as RimWorld 1.6 Plant.TickLong: the plant reads its temperature
+  // once every 200 local ticks (2000 Core), in the local tick of id % 2000.
+  const nextSample=(after:number)=>{const slot=Math.floor(plant.id%2000/10);return after+1+((slot-(after+1))%200+200)%200;};
   season(world,t=>t>8&&t<12);const layout=reconcileTemperature(world);updatePlantTemperatures(world,layout);
-  const before=plantGrowth(world,plant);plateau(world);updatePlantTemperatures(world,layout);
+  plateau(world);const cold=nextSample(world.tick);
+  world.tick=cold-1;updatePlantTemperatures(world,layout);expect(plant.growthThermalFactor).toBeUndefined();
+  world.tick=cold;const before=plantGrowth(world,plant);updatePlantTemperatures(world,layout);
   expect(plant.growth).toBe(before);expect(plant.growthTick).toBe(world.tick);expect(plant.growthThermalFactor).toBe(0);
   world.tick+=30;expect(plantGrowth(world,plant)).toBe(before);
-  delete world.miscIncidents!.weather!.coldSnap;updatePlantTemperatures(world,layout);
+  delete world.miscIncidents!.weather!.coldSnap;const thaw=nextSample(world.tick);
+  world.tick=thaw-1;updatePlantTemperatures(world,layout);expect(plant.growthThermalFactor).toBe(0);
+  world.tick=thaw;updatePlantTemperatures(world,layout);
   expect(plantGrowth(world,plant)).toBe(before);expect(plant.growthThermalFactor).toBeUndefined();
   world.tick+=30;expect(plantGrowth(world,plant)).toBeGreaterThan(before);
 });

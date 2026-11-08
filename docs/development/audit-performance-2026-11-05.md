@@ -23,6 +23,7 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Gels d’affichage pour préparer des surfaces en jeu (×6, 60 s) | 105, 1,5 s gelée au total | **18**, 0,37 s |
 | Ouverture d’un panneau du bas, Les Forges (Travail / Planning / Faune) | 506 / 786 à 1 058 / 296 ms | **61 / 62 / 32 ms** à la réouverture, 142 / 160 / 58 ms la première fois |
 | Les Forges à ×1, 15 s : images au-dessus de 33 / 50 ms, p95 | 69 / 42, p95 29 ms | **39 / 29, p95 17 ms** |
+| Worker seul, Les Forges à ×1 : temps réel tenu | 78 à 92 % | **≈ 100 %** (plantes, besoins et humeur à la cadence de RimWorld) |
 
 - **Exactitude.** Après chaque optimisation, l’état complet sérialisé reste identique au bit près sur les deux sauvegardes de référence.
 - **Tests.** Chaque lot a été comparé test par test au commit d’origine : 0 régression.
@@ -528,6 +529,52 @@ En Node, sur les messages rejoués, l’adoption d’une publication complète p
 
 **Ce qui reste.** Le coût d’une publication complète elle-même : adoption ≈ 30 ms (vérification des acteurs ≈ 6 ms, trajectoires ≈ 5 ms, correctifs de collections, sections), application ≈ 50 ms répartie sur une vingtaine de couches (tas, cultures, propreté, ressources, structures). Les 20 000 croissances de plantes renvoyées à chaque publication (températures froides : chaque plante est réancrée à chaque tick) en représentent une part.
 
+### Plantes, besoins et humeur à la cadence de RimWorld (8 novembre)
+
+Deux règles de la simulation tournaient plus souvent que dans le vrai jeu ; les aligner améliore la fidélité et retire du travail à chaque tick. Source : la bibliothèque de RimWorld 1.6.4871 rev590, décompilée localement pour lecture (rien n’est recopié), voir [les cadences de RimWorld 1.6](../research/rimworld-16-tick-cadences.md). Les deux changements valent pour la famille de schémas actuelle (301) ; les schémas historiques gardent leur comportement, aucune donnée sauvegardée ne change de forme.
+
+**Température des plantes.**
+- Constat : par temps froid, sous 6 °C, le facteur de croissance suit la température. La simulation réancrait la croissance de toutes les plantes de la région à chaque variation, donc à chaque tick : environ 20 400 plantes sur Les Forges, toutes renvoyées à chaque publication complète.
+- RimWorld : une plante lit sa température à son `TickLong`, tous les 2 000 ticks Core, au tick où `TicksGame % 2000 == id % 2000`.
+- Désormais : chaque plante lit sa température une fois tous les 200 ticks locaux, dans le tick local qui contient cet instant.
+  - Un facteur changé solde la croissance écoulée au facteur précédent, puis vaut jusqu’à la lecture suivante.
+  - Les ticks écoulés depuis l’appel précédent sont tous lus, dans l’ordre.
+- Adaptations conservées :
+  - la lumière reste une intégrale continue, adaptation déjà documentée ;
+  - la lecture s’applique à l’intervalle qui suit, alors que RimWorld l’applique à celui qui vient de s’écouler.
+
+**Confort, souvenirs et humeur.**
+- Constat : sur la carte, ils avançaient à chaque tick local. Chaque fois, `moodThoughts` reconstruisait toutes les pensées de chaque colon éveillé (parcours de tous les tas, des pions et des structures), et le confort recherchait les meubles autour.
+- RimWorld : `Pawn_NeedsTracker` fait avancer chaque besoin une fois tous les 150 ticks, au tick haché du pion, par un pas de 150 ticks ; les pensées situationnelles sont recalculées à ce moment.
+- Désormais : sur la carte, confort, expiration des souvenirs et humeur avancent une fois par 150 ticks Core (le tick local qui contient l’instant haché du colon), par un pas de 15 ticks locaux. Le calcul de l’instant est celui que les caravanes utilisaient déjà. C’est la passe des besoins de la carte (`updateNeeds`) qui choisit ce tick ; `updateWellbeing` fait un pas de la durée qu’on lui donne.
+- Faim, repos et loisirs restent mis à jour à chaque tick local : leurs taux sont déjà ceux de RimWorld, et leur logique (sommeil médical, effondrement) dépend d’états lus à chaque tick.
+
+**Mesures.**
+- **Worker seul, en Node, Les Forges à ×1 :**
+  - croissances de plantes renvoyées par publication complète : 20 437 → **472** ;
+  - temps réel tenu : 78 à 92 % → **≈ 100 %** ;
+  - retard médian des tâches : 120 à 270 ms → **moins de 1 ms** ;
+  - sur 20 s :
+    - `updateNeeds` 0,59 → 0,11 s ;
+    - `updateWellbeing` 0,49 → 0,04 s ;
+    - `moodThoughts` 0,36 → 0,03 s ;
+    - publications complètes 4,6 → 2,3 s.
+- **Client réel, Les Forges à ×1, 15 s, en alternance avec la version publiée (trois passages chacun, médianes) :**
+  - images au-dessus de 33 ms : 29 → **15** ;
+  - p99 : 36 → **30 ms** ;
+  - application d’une publication complète : 30 → 28 ms ;
+  - images au-dessus de 50 ms : 4 → 5, rares les deux fois sur cette machine ce jour-là.
+  - Les publications complètes, moins coûteuses, sont un peu plus fréquentes (23 → 26 en 15 s) : leur intervalle suit leur coût.
+
+
+**Tests.**
+- Deux nouveaux fichiers : `plant-tick-long-temperature` (instant de lecture propre à chaque plante, rattrapage des ticks écoulés, schéma historique inchangé) et `needs-interval-150` (un pas tous les 15 ticks locaux par colon, à son instant, schéma historique par tick).
+- Comparaison test par test avec le commit de référence sur 288 fichiers de simulation (plantes, cultures, climat, humeur, confort, pensées). Les cas qui attendaient l’ancienne cadence ont été mis à jour, avec la règle de RimWorld en commentaire :
+  - le gel de la croissance par une vague de froid se lit au `TickLong` de la plante ;
+  - le solde exact de la croissance entre régions, plafonds et ancres différents (`thermal-pass-v434`) se vérifie à un instant d’échantillonnage commun ;
+- `survivor-colony` (trois jours de colonie) n’a pas pu tourner : il se bloque avant son premier cas, sans calcul, sur le commit de référence comme sur ce lot.
+  - les tests unitaires qui appellent directement `updateWellbeing` gardent leur pas d’un tick.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -565,7 +612,8 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
    - ~~profiler `applyWorld`~~ et ~~rendre incrémentaux le mobilier et les ajouts de ressources~~ : fait, voir « Coût d’adoption d’une publication complète » et « Mobilier par zones ». Restent des postes diffus de 5 à 11 ms par adoption : tas, cultures, propreté ;
    - ~~rendre la copie défensive des paquets de phase moins coûteuse~~ et ~~adapter l’intervalle des publications calmes à leur coût~~ : fait, voir « Fluidité en jeu sur Les Forges » ;
    - réduire le coût d’une publication complète elle-même (adoption ≈ 40 ms, application ≈ 50 ms sur Les Forges), puis l’étaler : chacune donne encore deux images longues consécutives ;
-   - ne plus renvoyer à chaque publication les 20 000 croissances de plantes que le froid réancre à chaque tick, sans perdre l’exactitude du monde affiché.
+   - ~~ne plus renvoyer à chaque publication les 20 000 croissances de plantes~~ : fait, voir « Plantes, besoins et humeur à la cadence de RimWorld » ;
+   - planificateur de travail par niveaux de priorité, avec arrêt au premier niveau trouvé et listes tenues à jour, comme RimWorld (voir [les cadences de RimWorld 1.6](../research/rimworld-16-tick-cadences.md#recherche-de-travail)) : c’est désormais le premier poste de la simulation (≈ 10 %).
 2. **Rendu three.js** : environ 36 à 48 % du thread principal en jeu, pour 148 maillages visibles et 72 appels de dessin. Postes :
    - uniformes par objet : 11 % ;
    - passe d’ombre : 6,5 % ;

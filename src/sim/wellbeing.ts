@@ -3,6 +3,8 @@ import { bedSlotCell,pawnBedSlot } from './bed-slots.ts';
 import {coupleBed285} from './couple-bed-285.ts';
 import { updateMood,expireMealMemories } from './mood.ts';
 import { rememberRoomUse } from './room-experience.ts';
+import { schemaAtLeast } from './schema-range.ts';
+import { groupPawnInterval256 } from './group-core-cadence-256.ts';
 export { comfortMood } from './mood.ts';
 import type { BodyAssessment } from './body-capacities.ts';
 import { TICKS_PER_DAY } from './types.ts';
@@ -19,7 +21,23 @@ import type { RoomTopology } from './room-topology.ts';
 export type FurnitureSight=()=>ShotGrid;
 
 /** Comfort is a level approaching the furniture's ceiling, not an instant bonus. */
-export function updateWellbeing(world: World, pawn: Pawn,body?:BodyAssessment,readSight?:FurnitureSight,topology?:RoomTopology|(()=>RoomTopology),readTemperature?:()=>number): void {
+/** RimWorld 1.6 Pawn_NeedsTracker: needs run their NeedInterval once every 150
+ * Core ticks, at the pawn's hashed tick (IsHashIntervalTick(150)), each by a
+ * full 150-tick step; situational thoughts are recalculated in that same call.
+ * The current schema family follows it on the map for comfort, memory expiry
+ * and mood: one step of 15 local ticks, in the local tick that contains the
+ * pawn's interval tick. Historical schemas keep their per-tick update. */
+const needInterval301=schemaAtLeast(301);
+/** Local ticks the map's need pass gives to updateWellbeing this tick: 15 at the
+ * pawn's interval and 0 otherwise (current family), 1 every tick before. */
+export function wellbeingLocalTicks(world:World,pawn:Pawn):number {
+  if(!needInterval301(Number(world.schemaVersion)))return 1;
+  // Local tick t owns Core ticks (t-1)*10+1 … t*10 (groupCoreTicks256).
+  const first=Math.max(0,(world.tick-1)*10+1);
+  return groupPawnInterval256(pawn.id,first,150,10)?15:0;
+}
+/** One step covering `localTicks` local ticks (see wellbeingLocalTicks). */
+export function updateWellbeing(world: World, pawn: Pawn,body?:BodyAssessment,readSight?:FurnitureSight,topology?:RoomTopology|(()=>RoomTopology),readTemperature?:()=>number,localTicks=1): void {
   const need = pawn.need;
   let ceiling = 0;
   let fallback:ShotGrid|undefined;
@@ -52,10 +70,10 @@ export function updateWellbeing(world: World, pawn: Pawn,body?:BodyAssessment,re
   // source. Keep lower ceilings unchanged, including their exact arithmetic.
   ceiling=Math.max(0,Math.min(100,ceiling));
   const perHour = pawn.comfort < ceiling ? 60 : -4;
-  pawn.comfort = pawn.comfort < ceiling ? Math.min(ceiling, pawn.comfort + perHour * 24 / TICKS_PER_DAY)
-    : Math.max(ceiling, pawn.comfort + perHour * 24 / TICKS_PER_DAY);
+  pawn.comfort = pawn.comfort < ceiling ? Math.min(ceiling, pawn.comfort + perHour * 24 / TICKS_PER_DAY * localTicks)
+    : Math.max(ceiling, pawn.comfort + perHour * 24 / TICKS_PER_DAY * localTicks);
   expireMealMemories(world,pawn);
-  updateMood(world,pawn,body,topology,readTemperature);
+  updateMood(world,pawn,body,topology,readTemperature,localTicks);
 }
 
 export function rememberMeal(world: World, pawn: Pawn, atTable: boolean, raw = false, food?: ItemId): void {
