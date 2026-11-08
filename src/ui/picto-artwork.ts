@@ -293,18 +293,16 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
   if(id==='fog'){d.line([[8,48],[48,48]],2,P.blue);d.line([[20,57],[58,57]],2,P.blue);}break;
  case 'play':
   d.path('M 21 12 Q 19 10 19 14 Q 20 32 19 51 Q 19 55 22 53 Q 37 44 52 33 Q 55 31 51 29 Q 36 20 21 12 Z',P.green);
-  d.path('M 24 19 Q 23 30 24 42',null,1.4,P.sage);break;
+  break;
  case 'pause':
   d.path('M 17 12 Q 21 11 26 12 Q 27 31 26 52 Q 22 54 16 52 Q 17 32 16 15 Q 16 12 17 12 Z',P.blue);
   d.path('M 39 11 Q 43 12 48 11 Q 47 32 48 51 Q 44 53 38 52 Q 39 32 38 14 Q 38 11 39 11 Z',P.blue);
-  d.path('M 20 18 Q 19 31 20 44',null,1.3,'#b7c6bf');
-  d.path('M 42 17 Q 41 31 42 43',null,1.3,'#b7c6bf');break;
+  break;
  case 'speed-double':case 'speed-triple':{
   const count=id==='speed-double'?2:3,w=count===2?21:15;
   for(let i=0;i<count;i++){
    const x=6+i*(w+2),top=14+(i%2),bottom=51-(i%2),tip=32+(i%2);
    d.path(`M ${x+1} ${top} Q ${x-1} ${top-1} ${x} ${top+3} Q ${x+1} 32 ${x} ${bottom-2} Q ${x-1} ${bottom+1} ${x+2} ${bottom-1} Q ${x+w*.6} 41 ${x+w-1} ${tip+1} Q ${x+w+1} ${tip} ${x+w-1} ${tip-2} Q ${x+w*.55} 22 ${x+1} ${top} Z`,P.blue);
-   d.path(`M ${x+4} ${top+9} Q ${x+3} 31 ${x+4} ${bottom-10}`,null,1.1,'#b7c6bf');
   }break;
  }
  case 'hourglass':d.path('M 17 9 L 47 9 Q 47 23 36 31 Q 47 41 47 55 L 17 55 Q 17 41 28 31 Q 17 22 17 9 Z',P.paper);d.path('M 20 14 L 44 14 Q 43 23 32 29 Q 22 22 20 14 Z',P.ochre,1);d.path('M 20 52 Q 22 43 32 37 Q 44 45 44 52 Z',P.ochre,1);d.line([[13,8],[51,8]],3,P.wood);d.line([[13,56],[51,56]],3,P.wood);break;

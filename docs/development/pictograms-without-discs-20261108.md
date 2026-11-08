@@ -85,3 +85,13 @@ Les 13 tests ciblés passent après cette modification.
 
 TypeScript final PASS ; revue WebGL 2 inspectée sans erreur, avec contrôle
 raster de 442 pictos, dont les quatre symboles de temps redessinés.
+
+## Symboles de temps sans traits de relief
+
+Les petits traits clairs intérieurs sont retirés des quatre symboles de temps,
+à la demande de l'utilisateur. Seuls les aplats et les contours dessinés à la
+main sont conservés : formes, couleurs principales, dimensions et marges ne
+changent pas. La source Canvas et les quatre SVG publics sont mis à jour.
+
+Validation : 13 tests ciblés PASS, revue WebGL 2 inspectée, contrôle raster de
+442 pictos PASS, aucune erreur JavaScript/renderer, `git diff --check` PASS.
