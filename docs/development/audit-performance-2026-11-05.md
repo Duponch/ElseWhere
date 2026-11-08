@@ -724,6 +724,28 @@ Les tests ont été passés fichier par fichier : la machine, chargée par d'aut
 
 Pour les lots suivants, `tmp/perf/known-failures.py` garde les échecs déjà constatés sur la référence. La comparaison porte sur le statut de chaque test : un test qui échouait déjà ne peut pas révéler une régression en échouant de nouveau. Seuls les fichiers aux échecs inconnus sont donc relancés sur la référence, soit 1 fichier ici au lieu de 74.
 
+### Simulation : pièces de l'environnement de travail et nettoyage (8 novembre)
+
+**Constat.** L'environnement de travail est reconstruit après chaque fin de tâche ou de transport. Il détermine les pièces, leur rôle et leur part d'extérieur, et il reparcourait à chaque fois les 7 500 structures des Forges, avec une recherche dans une liste de 30 types par structure. De son côté, le test d'éligibilité d'une saleté au nettoyage parcourait les tâches de nettoyage de tous les colons, pour chacune des ≈ 4 000 saletés de la carte.
+
+**Corrections.** Mêmes résultats.
+- Les pièces calculées sont réutilisées tant que restent identiques :
+  - la topologie et l'ensemble des cases couvertes ;
+  - la liste des structures, prouvée par le jeton partagé des emprises : types, cases et orientations sont immuables ;
+  - la largeur de carte et la famille de règles.
+- Les saletés déjà visées par la tâche d'un autre colon sont réunies une fois par appel dans un ensemble. `Set` et `includes` comparent de la même façon (SameValueZero).
+
+**Exactitude.** État complet identique au bit près sur Les Forges (150 ticks), Les Éclaircies et les deux versions des Aulnes (300 ticks).
+
+**Mesures.** Sous profileur, Les Forges, 150 ticks : `getEnvironment` 0,24 → 0,06 s, dont reconstruction des pièces 0,17 → 0,02 s ; éligibilité au nettoyage 0,05 → 0,01 s. Environ 1,4 % de la simulation.
+
+**Tests.**
+346 fichiers de tests (environnement de travail, nettoyage, saleté, recherche, production, rôles des pièces), en paquets parallèles : 1 757 réussis et 844 en échec. Seuls 8 fichiers avaient des échecs pas encore connus sur la référence ; relancés sur le commit précédent, ils donnent les mêmes échecs, à deux dépassements de délai près, dus à la charge du passage parallèle :
+- `cryptosleep-mapremoved-v447` : 30,5 s pour une limite de 30 s. Relancé seul sur ce lot, il passe en 18,2 s.
+- `habitat-apparel-colony` : 234 s pour une limite de 180 s, déjà observé à la limite des deux côtés.
+
+0 régression.
+
 ### Chargement : traits des modèles plus rapides (8 novembre)
 
 **Constat.** Au chargement des Éclaircies, le fil principal reste occupé presque sans pause pendant environ 25 secondes. La compilation des tables de traits des modèles (animaux, colons, surfaces naturelles) y prend 2,3 s, dont 2,1 s dans `createOrigamiBrushGeometry`. Cette fonction fabrique une géométrie temporaire de traits, uniquement pour en extraire les tables. Elle allouait :

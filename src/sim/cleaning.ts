@@ -20,9 +20,12 @@ export interface CleaningTask {snowCell?:number;targets:number[];forced:boolean;
 export interface CommandCleaning extends Cell {type:'clean-room';pawnId:number}
 export interface CleaningProposal {task:CleaningTask;path:Cell[];target:Cell;id:number}
 const distance=(a:Cell,b:Cell)=>Math.abs(a.x-b.x)+Math.abs(a.z-b.z);
-const eligible=(w:World,p:Pawn,f:FilthRecord,forced=false,policy?:AllowedAreaPolicy)=>(!policy||allowedAreaAllows(w,p,f,policy))&&inHome(w,f.z*w.width+f.x)&&(forced||w.tick*10-f.grownCore>=600)&&!w.pawns.some(q=>q!==p&&q.cleaning?.targets.includes(f.id));
+/** Filth ids in another pawn's cleaning task: the same answer as scanning
+ * every pawn's targets for each filth (Set and includes share SameValueZero). */
+const claimedByOthers=(w:World,p:Pawn):ReadonlySet<number>=>{const ids=new Set<number>();for(const q of w.pawns)if(q!==p&&q.cleaning)for(const id of q.cleaning.targets)ids.add(id);return ids;};
+const eligible=(w:World,p:Pawn,f:FilthRecord,forced=false,policy?:AllowedAreaPolicy,claimed?:ReadonlySet<number>)=>(!policy||allowedAreaAllows(w,p,f,policy))&&inHome(w,f.z*w.width+f.x)&&(forced||w.tick*10-f.grownCore>=600)&&!(claimed?claimed.has(f.id):w.pawns.some(q=>q!==p&&q.cleaning?.targets.includes(f.id)));
 const able=(p:Pawn)=>isColonist(p)&&!p.prisoner&&!p.draft&&!p.mental?.crisis&&!p.burning&&!medicalWorkRefusal(p);
-export function cleaningWanted(w:World,p:Pawn):boolean {const policy=captureAllowedArea(w,p);return !!workPriority(p,'clean')&&able(p)&&(!!w.filth?.items.some(f=>eligible(w,p,f,false,policy))||snowClearingWanted(w,p));}
+export function cleaningWanted(w:World,p:Pawn):boolean {const policy=captureAllowedArea(w,p);if(!workPriority(p,'clean')||!able(p))return false;const claimed=claimedByOthers(w,p);return !!w.filth?.items.some(f=>eligible(w,p,f,false,policy,claimed))||snowClearingWanted(w,p);}
 function route(w:World,p:Pawn,f:FilthRecord,reach:Reachability):Cell[]|null {
   const paths=[f,...workNeighbours(f,'mine')].filter(c=>fireTouch(w,c,f)&&canStopAt(w,c,reach)).map(c=>routeToCell(w,c,reach)).filter((v):v is Cell[]=>v!==null);
   paths.sort((a,b)=>routeCost(w,a,reach)-routeCost(w,b,reach)||a.length-b.length);return paths[0]??null;
@@ -34,7 +37,7 @@ function sameCleaningRoom(w:World,origin:Cell,target:Cell,capture:CleanlinessCap
 }
 export function cleaningProposal(w:World,p:Pawn,reach:Reachability):CleaningProposal|undefined {
   if(!cleaningWanted(w,p))return;
-  const policy=captureAllowedArea(w,p),targets=(w.filth?.items??[]).filter(f=>eligible(w,p,f,false,policy)).sort((a,b)=>distance(a,p)-distance(b,p)||a.id-b.id);
+  const policy=captureAllowedArea(w,p),claimed=claimedByOthers(w,p),targets=(w.filth?.items??[]).filter(f=>eligible(w,p,f,false,policy,claimed)).sort((a,b)=>distance(a,p)-distance(b,p)||a.id-b.id);
   for(const f of targets){const path=route(w,p,f,reach);if(!path)continue;
     const capture=captureCleanliness(w),near=targets.filter(v=>v!==f&&(v.x-f.x)**2+(v.z-f.z)**2<=30&&sameCleaningRoom(w,f,v,capture)).slice(0,14);
     return {id:f.id,target:{x:f.x,z:f.z},path,task:{targets:[f.id,...near.map(v=>v.id)],forced:false,phase:'approach',progress:0}};

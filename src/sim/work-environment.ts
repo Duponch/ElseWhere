@@ -3,8 +3,9 @@ import { isStove } from './food-workstations.ts';
 import { footprintCells } from './definitions.ts';
 import { cookingSpot } from './cooking-bills.ts';
 import { LightEnvironment, LightEnvironmentCache, lightSpeedFactor } from './light-environment.ts';
-import { type RoomSpace } from './room-topology.ts';
+import { type RoomSpace,type RoomTopology } from './room-topology.ts';
 import { schemaAtLeast } from './schema-range.ts';
+import { peekStructureMembershipToken } from './structure-navigation.ts';
 import type { Cell, Structure, World } from './types.ts';
 
 /* RimWorld 1.6.4871 (schema 301 family): the electric crematorium derives from
@@ -49,9 +50,16 @@ export class WorkEnvironment extends LightEnvironment {
 export class WorkEnvironmentCache {
   private readonly light=new LightEnvironmentCache();
   readonly localLight=this.light.localLight;
+  /* The rooms of the last read. They depend only on the topology, the roofed
+   * cells, the structure list (kinds, cells and orientations are immutable:
+   * an unchanged shared membership token proves the same structures in the
+   * same order), the map width and the rule family, so the same inputs give
+   * the same rooms. The map is never mutated after its read. */
+  private last?:{topology:RoomTopology;roofs:ReadonlySet<number>;token:object;width:number;rules301:boolean;rooms:ReadonlyMap<number,WorkRoom>};
   readLight(world:World):LightEnvironment {return this.light.read(world);}
   read(world:World,light=this.readLight(world)):WorkEnvironment {
-    const {topology,roofs}=light,rules301=roomRules301(Number(world.schemaVersion));
+    const {topology,roofs}=light,rules301=roomRules301(Number(world.schemaVersion)),token=peekStructureMembershipToken(world),last=this.last;
+    if(token&&last&&last.token===token&&last.topology===topology&&last.roofs===roofs&&last.width===world.width&&last.rules301===rules301)return new WorkEnvironment(light,last.rooms,rules301);
     const covered=new Map<number,number>(),scores=new Map<number,{beds:number;laboratory:number;workshop:number;kitchen:number;dining:number;recreation:number}>();
     for(const index of roofs){const room=topology.at(index%world.width,Math.floor(index/world.width));if(room?.kind==='space')covered.set(room.id,(covered.get(room.id)??0)+1);}
     for(const s of world.structures) {
@@ -73,6 +81,7 @@ export class WorkEnvironmentCache {
       }
       rooms.set(space.id,{space,covered:count,psychologicallyOutdoors,role});
     }
+    this.last=token?{topology,roofs,token,width:world.width,rules301,rooms}:undefined;
     return new WorkEnvironment(light,rooms,rules301);
   }
 }
