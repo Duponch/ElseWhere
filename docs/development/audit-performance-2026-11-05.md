@@ -7,7 +7,7 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Mesure | Avant | Après |
 |---|---|---|
 | Simulation, Les Éclaircies (3 colons) | 22,7 ms/tick, ×7,3 max | **11,5 ms/tick, ×14 max** |
-| Simulation, Les Forges (80 colons) | 216 ms/tick, ×0,77 max | **81,5 ms/tick, ×2,0 max** |
+| Simulation, Les Forges (80 colons) | 216 ms/tick, ×0,77 max | **62 ms/tick, ×2,7 max** (70,9 juste avant les contrôles indexés du 8 novembre) |
 | Simulation, Les Aulnes intégrées | 30,4 ms/tick | **15,6 ms/tick** |
 | Simulation, Les Aulnes sièges | 37,8 ms/tick | **21,6 ms/tick** |
 | Client réel, Les Éclaircies à ×6 | 34 ticks/s (×6 non tenu), 113 im/s, p95 26 ms | **38 ticks/s (×6 tenu), 150 im/s, p95 11 ms** |
@@ -615,6 +615,38 @@ Temps JavaScript de construction des shaders au chargement des Forges : 18,2 s �
 - application du monde (≈ 4,3 s), dont maillages des colons et tables de traits ≈ 1,1 s, végétation ≈ 1 s.
 
 
+### Simulation des Forges : contrôles indexés (8 novembre)
+
+**Constat.** Après le lot de chargement, le jeu affiché aux Forges est fluide à ×1 (142 images/s, p95 12 ms, 3 images au-dessus de 50 ms en 15 s). Mais ×3 et ×6 ne sont pas tenus : environ 10 ticks/s, soit 56 % de ×3 et 29 % de ×6. Le Worker de simulation est le goulot (Les Éclaircies tiennent ×6). La simulation seule coûtait 71 ms par tick, dont 22 % dans la planification du travail (`planWork`). Plusieurs contrôles y parcouraient toute la carte pour une réponse qui ne dépend que de quelques cases.
+
+**Corrections.** Toutes rendent exactement la même réponse que le parcours qu'elles remplacent.
+- **Inhumation.** Pour savoir s'il y a un corps à enterrer, le planificateur interrogeait `burialReason` pour chaque colon, vivant compris. Chaque appel cherchait d'abord la dépouille parmi les ≈ 1 800 tas. Pour un vivant, la réponse est toujours un refus : seuls les morts sont désormais examinés.
+- **Chantiers libres.** `constructionSiteFree` parcourait les 241 animaux et les 80 colons pour chacun des ≈ 240 chantiers, à chaque planification. Un index des cases occupées est construit une fois par appel du planificateur, pendant lequel le monde ne change pas. Il reprend les mêmes conditions : position, case de service, case de repas, rectangle du déplacement en cours. Un rectangle de plus de 64 cases, ou une case hors de la carte, garde le parcours direct.
+- **Petites plantes sous un cadre.** Chaque bâtisseur au travail sur un cadre parcourait les 21 000 ressources à chaque tick. Un index des petites plantes par case est tenu par tableau de ressources. Pendant qu'un monde tourne, ce tableau est remplacé, jamais modifié sur place (les ajouts de la génération changent sa longueur, ce qui reconstruit l'index), et une ressource ne change ni de type, ni d'espèce, ni de place.
+- **Obstacles d'un chantier.** La première plante gênante, dans l'ordre du tableau, est trouvée par un index case → ressources, au lieu d'un `find` sur toutes les ressources.
+- **Lit d'un colon.** Le contrôle « son lit existe-t-il ? » parcourait les 7 500 structures pour chaque colon, à chaque tick. L'index par identifiant confirme le cas courant (le lit existe) ; s'il ne le trouve pas, les parcours complets décident, comme avant.
+- **Capacité de stockage.** Les contrôles d'occupation d'une case de stockage parcouraient les 7 500 structures. En simulation, ils passent par l'index partagé des emprises, qui donne, dans l'ordre du tableau, exactement les structures occupant une case de la carte. La validation des sauvegardes garde les parcours.
+
+**Exactitude.** État complet sérialisé identique au bit près à celui du code de référence : Les Forges après 150 ticks (`84e7037d…`), Les Éclaircies (`e7e98a5d…`), Les Aulnes intégrées (`aaa91534…`) et Les Aulnes sièges (`a23ba92c…`) après 300 ticks.
+
+**Mesures.**
+Banc Node (`scripts/perf-save-bench.ts`), Les Forges, 150 ticks après 20 de chauffe, code de référence et branche en alternance, trois passes chacun. D'autres programmes chargeaient la machine pendant ces passes : les valeurs absolues sont plus hautes que le 6 novembre, seule la comparaison compte.
+
+| Les Forges, simulation seule | Référence | Ce lot |
+|---|---|---|
+| Temps moyen par tick, trois passes | 92,2 / 90,0 / 89,8 ms | **86,4 / 79,9 / 79,0 ms** |
+| Moyenne | 90,7 ms | **81,8 ms (−10 %)** |
+| Médiane des ticks complets, moyenne des trois passes | 78,6 ms | **68,3 ms (−13 %)** |
+
+Sur un profil pris plus tôt, machine moins chargée : 70,9 → 62,1 ms par tick (−12,3 %), et `planWork` −38 %.
+
+Le Worker réel à ×6 (`scripts/perf-worker-run.ts`, 20 s) a donné 140 et 166 ticks pour la référence, 161 et 145 pour la branche : sous cette charge, l'écart entre deux passes dépasse le gain attendu, cette mesure ne permet pas de conclure.
+
+**Tests.**
+675 fichiers (construction, chantiers et plantes, besoins et lits, stockage, placement au sol, planification, inhumation), comparés test par test au commit de référence : 3 000 réussis et 1 630 en échec sur la branche, 2 997 et 1 633 sur la référence, 0 régression. Les échecs communs sont ceux de tests anciens, déjà en échec sur la référence. Les trois tests de plus qui passent (`test-colonies-v98` : energy-food-12, prison-12, weather-fire-12) dépassaient sur la référence leur délai de 60 s, à cause de la charge de la machine.
+
+**Ce qui reste** dans la simulation des Forges (profil après ce lot) : planification du travail ≈ 16 %, déplacements des tâches internes (`advanceCoreMap297`) ≈ 12 %, faune ≈ 11 %, recherche ≈ 5 % (la propreté de la pièce est recalculée dès qu'une saleté change quelque part sur la carte), pousse des plantes sauvages ≈ 3 %.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -667,7 +699,7 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
    - un programme partagé entre lots instanciés de cultures (≈ 1,3 s sur Les Forges) ;
    - l’adoption du monde (≈ 4,3 s sur Les Forges) ;
    - avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).
-5. **Simulation, 80 colons (81,5 ms par tick).** Le profil est désormais plat : planification du travail ≈ 15 % (ménage, chantiers, cuisine), faune ≈ 10 %, déplacement ≈ 16 %, température de surface ≈ 6 %, recherche ≈ 4 %. Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
+5. **Simulation, 80 colons (≈ 62 ms par tick, voir « Simulation des Forges : contrôles indexés »).** Le profil est plat : planification du travail ≈ 16 % (ménage, chantiers, accessibilité), déplacements ≈ 12 %, faune ≈ 11 %, coûts de navigation reconstruits à chaque recherche ≈ 5 % (dont la moitié en lectures d'éclairage), recherche ≈ 5 %. Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
 6. **Contenu sans montée de schéma** (voir § 5), puis les écarts RimWorld 1 à 4 et 8.
 7. **Planificateur en WorkGivers** façon RimWorld (écarts 5 et 6), avec mise à jour des tests.
 8. **×12 pendant le sommeil**, une fois le débit suffisant. Le jeu de vitesses publié (`0|1|3|6`) apparaît dans 17 fichiers, dont 2 épinglés.

@@ -47,7 +47,7 @@ import { validSowingClearance } from './sowing-clearance.ts';
 import { sowingJobAllowed } from './farming.ts';
 import { constructionCandidates } from './construction-planner.ts';
 import { haulReservations } from './haul-reservations.ts';
-import { asBuilder, constructionHaulPriority, constructionObstructions, constructionSiteFree, isConstruction } from './construction-rules.ts';
+import { asBuilder, ConstructionOccupancy, constructionHaulPriority, constructionObstructions, constructionSiteFree, isConstruction } from './construction-rules.ts';
 import { productionPriority, planCooking, type CookingPlan } from './cooking-planner.ts';
 import { candidateAccess } from './candidate-access.ts';
 import { turretReloadCapacity,wantsTurretReload,turretReloadPawnReason } from './mini-turret-reload.ts';
@@ -151,7 +151,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
   if (budget.remaining === 0 || budget.pairs === 0) return;
   const animalRescuing=animalRescueWanted(world,pawn);
   const slaughtering=slaughterWanted(world,pawn),handling=slaughtering||handlingWanted(world,pawn),leading=leadingWanted(world,pawn),gathering=productWanted(world,pawn),vet=animalCareWanted(world,pawn),vetFeed=animalFeedingWanted(world,pawn);
-  const cleaning=cleaningWanted(world,pawn),burying=workPriority(pawn,'haul')>0&&world.structures.some(s=>isBurialContainer256(s.kind,world.schemaVersion)&&s.grave?.corpseId===undefined)&&world.pawns.some(p=>!burialReason(world,pawn,p));
+  const cleaning=cleaningWanted(world,pawn),burying=workPriority(pawn,'haul')>0&&world.structures.some(s=>isBurialContainer256(s.kind,world.schemaVersion)&&s.grave?.corpseId===undefined)&&world.pawns.some(p=>p.state==='dead'&&!burialReason(world,pawn,p));
   const fightingFire=firefightingTargets(world,pawn).length>0;
   let looseWort:boolean|undefined;
   const brewing=world.schemaVersion>=265&&workPriority(pawn,'haul')>0&&world.structures.some(s=>s.kind==='fermenting-barrel'&&s.fermentation&&(s.fermentation.wort>0&&s.fermentation.progress>=1||barrelFreeCapacity265(world,s.id,pawn.id)>0&&(looseWort??=world.piles.some(p=>p.item==='wort'&&p.owner.type==='ground'))));
@@ -314,11 +314,13 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     const isPrisonFood=prisonFoodChecker(world);
     const sources = world.piles.filter(pile => automaticallyHaulable(pile) && !isPrisonFood(pile) && pile.owner.type === 'ground' && allows(pile.owner) && pile.quantity > (sourceReserved.get(pile.id) ?? 0));
     const destinations: { destination: HaulDestination; target: Cell & { kind?: JobKind|import('./types.ts').StructureKind }; priority: number; workPriority:number; wood: number; food: number; 'ai-core'?:number; book?:number; beer?:number; wort?:number; plant?:number; chemfuel?:number; silver?:number; 'mech-corpse'?:number; corpse?:number; unfinished?:number; textile?:number; chunk?:number; steel?:number; gold?:number; uranium?:number; plasteel?:number; component?:number; 'advanced-component'?:number; weapon?:number; apparel?:number; neutroamine?:number; medicine?:number; blocks?:number; jade?:number; prosthesis?:number; items?:ReadonlyMap<ItemId,number>; reachable?: boolean }[] = [];
+    // The World is unchanged during this scan: one occupancy index serves every job.
+    let occupancy:ConstructionOccupancy|undefined;
     for (const job of world.jobs) {
       if(!allows(job))continue;
       const items=new Map<ItemId,number>();
       for(const cost of constructionRecipe(job).ingredients){const key=`${job.id}:${cost.item}`,capacity=cost.quantity-(delivered.get(key)??0)-(jobReserved.get(key)??0);if(capacity>0)items.set(cost.item,capacity);}
-      if (items.size && (job.kind==='fix-breakdown'?fixBreakdownWanted(world,job):constructionSiteFree(world,job,pawn.id,constructionObstacles.get(job.id)))) destinations.push({ destination: { type: 'job', jobId: job.id, forConstruction:asBuilder(pawn) }, target: job, priority: 5, workPriority:constructionHaulPriority(pawn), wood: 0, food: 0,items });
+      if (items.size && (job.kind==='fix-breakdown'?fixBreakdownWanted(world,job):constructionSiteFree(world,job,pawn.id,constructionObstacles.get(job.id),occupancy??=new ConstructionOccupancy(world)))) destinations.push({ destination: { type: 'job', jobId: job.id, forConstruction:asBuilder(pawn) }, target: job, priority: 5, workPriority:constructionHaulPriority(pawn), wood: 0, food: 0,items });
     }
     if(workPriority(pawn,'haul')>0)for (const fire of fires) destinations.push(fire.kind==='mini-turret'?{destination:{type:'turret',structureId:fire.id},target:fire,priority:5,workPriority:workPriority(pawn,'haul'),wood:0,food:0,steel:turretReloadCapacity(world,fire.id)}:{destination:{type:'fuel',structureId:fire.id},target:fire,priority:5,workPriority:workPriority(pawn,'haul'),wood:0,food:0,items:new Map([[fuelItem(fire.kind),fuelCapacity(world,fire.id)]])});
     for(const hopper of hoppers)destinations.push({destination:{type:'hopper',structureId:hopper.id},target:hopper,priority:3,workPriority:workPriority(pawn,'haul'),wood:0,food:75});

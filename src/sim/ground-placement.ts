@@ -1,5 +1,5 @@
 import {canMergeEggPile256,EMPTY_EGG_CONDITION_256} from './animal-egg-permission-v256.ts';
-import { groundOccupancyAllows, storageOccupancyAllows } from './occupancy.ts';
+import { groundOccupancyAllowsIndexed, storageOccupancyAllowsIndexed } from './occupancy.ts';
 import { isCookingOrder } from './order-types.ts';
 import { blockedCells, cellIndex, inBounds } from './pathfinding.ts';
 import { ITEM_DEFINITIONS, type ItemId } from './items.ts';
@@ -61,8 +61,8 @@ export function createGroundCapacityReader(world:World):GroundCapacityReader {
   return {piles,storage,reservations,packed:new Set(world.packed.filter(p=>p.owner.type==='ground').map(p=>p.owner.type==='ground'?p.owner.z*world.width+p.owner.x:-1))};
 }
 function shelfCapacity(world:World,cell:Cell,subject:ItemId|MaterialPile,exceptPawn:number|undefined,zone:StorageCell,geometry:StagingGeometryReader|undefined,reader?:GroundCapacityReader,policy=true):number {
-  if(!(policy?storageCellAccepts(world,zone,subject):shelfFixedAccepts(subject))||!(geometry?geometry.groundAllows(cell):groundOccupancyAllows(world,cell)))return 0;
-  if(policy&&!(geometry?.storageAllows?geometry.storageAllows(cell):storageOccupancyAllows(world,cell)))return 0;
+  if(!(policy?storageCellAccepts(world,zone,subject):shelfFixedAccepts(subject))||!(geometry?geometry.groundAllows(cell):groundOccupancyAllowsIndexed(world,cell)))return 0;
+  if(policy&&!(geometry?.storageAllows?geometry.storageAllows(cell):storageOccupancyAllowsIndexed(world,cell)))return 0;
   const facts=reader??createGroundCapacityReader(world),key=cell.z*world.width+cell.x;
   if(facts.packed.has(key))return 0;
   const piles=facts.piles.get(key)??[],reserved=new Map<ItemId,number>();
@@ -94,7 +94,7 @@ function cellCapacity(world: World, cell: Cell, item: ItemId, limit: number, exc
   const pile = groundPile(world, cell);
   if (pile && (pile.item!==item||!canMergeEggPile256(pile,condition))) return 0;
   let capacity = Math.min(limit,ITEM_DEFINITIONS[item].stackLimit)-(pile?.quantity??0);
-  if(capacity<=0||world.schemaVersion>=21&&(!(geometry?geometry.groundAllows(cell):groundOccupancyAllows(world,cell))||zone&&!(geometry?.storageAllows?geometry.storageAllows(cell):storageOccupancyAllows(world,cell))))return 0;
+  if(capacity<=0||world.schemaVersion>=21&&(!(geometry?geometry.groundAllows(cell):groundOccupancyAllowsIndexed(world,cell))||zone&&!(geometry?.storageAllows?geometry.storageAllows(cell):storageOccupancyAllowsIndexed(world,cell))))return 0;
   // Hot capacity queries must not allocate an array/generator of every transport.
   for (const pawn of world.pawns) {
     if(pawn.id!==exceptPawn)for(const i of pawn.surgery?.ingredients??[])if(i.stage!=='placed'&&i.cell.x===cell.x&&i.cell.z===cell.z)return 0;

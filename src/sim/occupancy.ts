@@ -1,4 +1,5 @@
 import { footprintContains } from './definitions.ts';
+import { captureStructureNavigation } from './structure-navigation.ts';
 import type { Cell, JobKind, StructureKind, World } from './types.ts';
 
 /** Core coexistence rules are distinct from our current planar transit rules.
@@ -122,6 +123,21 @@ export function groundOccupancyAllowsAt(world:World,cell:Cell,occupants:readonly
   if(!Number.isInteger(cell.x)||!Number.isInteger(cell.z)||cell.x<0||cell.z<0||cell.x>=world.width||cell.z>=world.height||['water','rock'].includes(world.tiles[cell.z*world.width+cell.x]!.terrain))return false;
   for(const s of occupants)if(world.schemaVersion<21?s.kind==='wall':!OCCUPANCY[s.kind].items)return false;
   if(world.schemaVersion<16)for(const j of world.jobs)if(j.kind==='wall'&&occupies(j,cell))return false;
+  return true;
+}
+/** Same verdicts as groundOccupancyAllows / storageOccupancyAllows, through
+ * the shared footprint index, which lists in source order exactly the
+ * structures occupying an in-map integer cell. For a running World only: the
+ * index assumes structures already validated (save checks keep the scans). */
+export function groundOccupancyAllowsIndexed(world:World,cell:Cell):boolean {
+  if(!Number.isInteger(cell.x)||!Number.isInteger(cell.z)||cell.x<0||cell.z<0||cell.x>=world.width||cell.z>=world.height)return false;
+  return groundOccupancyAllowsAt(world,cell,captureStructureNavigation(world).at(cell));
+}
+export function storageOccupancyAllowsIndexed(world:World,cell:Cell):boolean {
+  const indexed=Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height;
+  if(!indexed)return storageOccupancyAllows(world,cell);
+  for(const s of captureStructureNavigation(world).at(cell))if(occupies(s,cell)&&!OCCUPANCY[s.kind].store)return false;
+  for(const j of world.jobs)if(occupies(j,cell)&&occupancyOf(j.furniture?.kind??j.kind)?.store===false)return false;
   return true;
 }
 export function storageOccupancyAllows(world:World,cell:Cell):boolean {

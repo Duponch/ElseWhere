@@ -19,6 +19,24 @@ export const isConstructionLightPlant=(resource:Pick<Resource,'kind'|'species'>)
   resource.kind!=='rock'&&plantHarvestWorkCore(resource)<=200;
 /** Existing import retained; all eight current floors have fertility0. */
 export const isFloorLightPlant=isConstructionLightPlant;
+type LightPlantIndex={readonly length:number;readonly width:number;readonly height:number;readonly cells:ReadonlySet<number>;readonly other:readonly Resource[]};
+const lightPlantIndexes=new WeakMap<readonly Resource[],LightPlantIndex>();
+/** Whether a light plant stands on one of the cells: the same answer as
+ * scanning `world.resources`, from an index per resources array. A running
+ * World replaces that array instead of editing it in place (generation pushes
+ * change its length, which rebuilds the index), and a resource's kind,
+ * species and position never change. */
+export function lightPlantOnCells(world:Pick<World,'resources'|'width'|'height'>,cells:readonly {x:number;z:number}[]):boolean {
+  const list=world.resources,{width,height}=world,inside=(x:number,z:number)=>Number.isSafeInteger(x)&&Number.isSafeInteger(z)&&x>=0&&z>=0&&x<width&&z<height;
+  let index=lightPlantIndexes.get(list);
+  if(!index||index.length!==list.length||index.width!==width||index.height!==height){
+    const set=new Set<number>(),other:Resource[]=[];
+    for(const r of list)if(isConstructionLightPlant(r)){if(inside(r.x,r.z))set.add(r.z*width+r.x);else other.push(r);}
+    index={length:list.length,width,height,cells:set,other};lightPlantIndexes.set(list,index);
+  }
+  const found=index;
+  return cells.some(c=>inside(c.x,c.z)&&found.cells.has(c.z*width+c.x))||found.other.some(r=>cells.some(c=>c.x===r.x&&c.z===r.z));
+}
 export function constructionPlantBlocks(job:Job,resource:Resource):boolean {
   // Keep an accepted historical clearance's real elapsed work after migration.
   return job.clearance?.resourceId===resource.id||!isConstructionLightPlant(resource);

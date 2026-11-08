@@ -108,7 +108,7 @@ import {adoptSecondaryIncidents} from './secondary-incidents.ts';
 import {applySecondarySiteCommand} from './secondary-site.ts';
 import {secondaryCommand} from './secondary-site-state.ts';
 import type {SecondarySiteCommand} from './secondary-site-state.ts';
-import {isConstructionLightPlant,clearanceOutputPending,workOutputPending} from './construction-plants.ts';
+import {isConstructionLightPlant,lightPlantOnCells,clearanceOutputPending,workOutputPending} from './construction-plants.ts';
 import {planConstructionPlantRetirement,commitConstructionPlantRetirement,retainClearingWorkAfterOutputRefusal,retainWorkAfterOutputRefusal} from './plant-retirement.ts';
 import {applyTreeCommand,extractTreeReason,replantTreeReason,processTreeWork,advanceMinifiedTrees,isPlantDesignationJob,treeJobReason} from './tree-transfer.ts';
 import {applyDesignationCancel,cancelIntentJobs,clearPileHaulFlags} from './designation-cancel.ts';
@@ -1571,8 +1571,8 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
         // during load/designation. Retire their small plants at real work contact.
         const frameCells=isConstruction(job)&&job.construction==='frame'&&job.kind!=='lay-floor'&&job.kind!=='build-bridge'?footprintCells(job):undefined;
         // Empty footprints need no transaction, JSON signature or drop plan.
-        // Read living resources directly, so no stale cache can miss a plant.
-        if(frameCells&&world.resources.some(r=>isConstructionLightPlant(r)&&frameCells.some(c=>sameCell(c,r)))){
+        // The index follows the living resources array (see lightPlantOnCells).
+        if(frameCells&&lightPlantOnCells(world,frameCells)){
           const retirement=planConstructionPlantRetirement(world,job,job.id,'frame');
           if(!retirement||!commitConstructionPlantRetirement(world,retirement))continue;
         }

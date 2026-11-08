@@ -24,6 +24,9 @@ import { type FoodItemId } from './food-policy.ts';
 import { selfAllowedFood,selfFoodAccessible } from './prison-food.ts';
 import { capturePrisonTopology } from './prison-space.ts';
 import type { Cell, Pawn, World } from './types.ts';
+import { structureById } from './structure-navigation.ts';
+/** A bed structure with this id, found through the shared id index. */
+const bedById=(world:World,id:number):boolean=>{const bed=structureById(world,id);return !!bed&&bed.id===id&&isBedKind(bed.kind);};
 
 // Baseline adult: 1.6 nutrition/day; 100 meter points = one nutrition.
 export { HUNGER_PER_TICK } from './human-need-rates.ts';
@@ -95,7 +98,8 @@ export type NeedPreparation300='open'|'interrupted-sleep'|'interrupted-idle'|'di
  * missing bed, perform the existing exhaustion collapse or retry cargo; it
  * never grants rest/nutrition or advances an Eating/Sleeping processor. */
 export function prepareNeeds300(world:World,pawn:Pawn,context:NeedContext):NeedPreparation300 {
-  if (pawn.bedId !== null && !world.structures.some(bed => bed.id === pawn.bedId && isBedKind(bed.kind))&&!world.packed?.some(pack=>pack.building.id===pawn.bedId&&isBedKind(pack.building.kind))) pawn.bedId = null;
+  // The id index confirms the usual case (the bed exists); otherwise the full scans decide.
+  if (pawn.bedId !== null && !bedById(world,pawn.bedId) && !world.structures.some(bed => bed.id === pawn.bedId && isBedKind(bed.kind))&&!world.packed?.some(pack=>pack.building.id===pawn.bedId&&isBedKind(pack.building.kind))) pawn.bedId = null;
   if(pawn.bedId===null)delete pawn.bedSlot;
   collapseFromExhaustion(world,pawn,context);
   if(pawn.interruptedCargo){retryInterruptedCargo(world,pawn);if(pawn.interruptedCargo){if(pawn.need?.kind==='sleep')return 'interrupted-sleep';pawn.state='idle';return 'interrupted-idle';}}
