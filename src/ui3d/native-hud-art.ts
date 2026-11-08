@@ -1,7 +1,7 @@
-import {drawPicto} from '../ui/picto-artwork';
+import {drawPicto,drawPictoInBox} from '../ui/picto-artwork';
 import * as THREE from 'three/webgpu';
 import type {WeatherKind} from '../sim/weather-definitions';
-import {PALETTE,drawHandBlob,drawHandRect,drawMarkerLine,seededRandom,type CardboardPiece} from './prototype-art';
+import {PALETTE,drawHandRect,drawMarkerLine,seededRandom,type CardboardPiece} from './prototype-art';
 
 export type NativeWeatherIcon='sun'|'moon'|'eclipse'|'fog'|'rain'|'dry-storm'|'rain-storm'|'snow';
 export function nativeWeatherIcon(kind:WeatherKind,daylight:boolean,eclipse=false):NativeWeatherIcon {
@@ -50,8 +50,7 @@ export function drawNativeWeatherIcon(ctx:CanvasRenderingContext2D,icon:NativeWe
 export function drawNativeSpeedIcon(ctx:CanvasRenderingContext2D,width:number,height:number,speed:0|1|3|6,active:boolean,rng=seededRandom(48031)):void {
   ctx.save();ctx.scale(width/48,height/37);ctx.lineCap='round';ctx.lineJoin='round';
   const ink=PALETTE.inkDark;
-  drawHandBlob(ctx,24,18.5,13.7,PALETTE.creamPaper,ink,1.1,rng);
-  drawPicto(ctx,speed===0?'pause':speed===1?'play':speed===3?'speed-double':'speed-triple',24,18.5,11.5,active?'#305443':ink);
+  drawPictoInBox(ctx,speed===0?'pause':speed===1?'play':speed===3?'speed-double':'speed-triple',6,6,36,25,active?'#305443':ink);
   ctx.restore();
 }
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
-import {PrototypeCardboardArt,MANAGEMENT_BUTTONS,PALETTE,drawHandBlob,drawHandRect,drawMarkerLine,type CardboardPiece,type CardboardDraw,type CardboardPieceOptions} from './prototype-art';
-import {drawNativeActionIcon} from './native-action-icons';
+import {PrototypeCardboardArt,MANAGEMENT_BUTTONS,PALETTE,drawHandRect,drawMarkerLine,type CardboardPiece,type CardboardDraw,type CardboardPieceOptions} from './prototype-art';
+import {drawNativeActionIcon,drawNativeActionIconInBox} from './native-action-icons';
 import {applyNativeHudButtonPose} from './native-hud-art';
 import {applyNativeMapToolHover} from './native-map-tool-hover';
 import {createNativeTextLexicon,tokenizeNativeText,NATIVE_TEXT_STYLES,type NativeTextLexicon,type NativeTextEntity,type NativeTextSpan} from './native-rich-text';
@@ -206,7 +206,7 @@ export class NativeStage {
     this.anchors.bottomLeft.add(this.toolsDock);this.toolsDock.visible=false;
     for(const [index,kind]of (['orders','zones'] as const).entries()){
       const control:NativeControl={id:'map-dock:'+kind,label:kind==='orders'?'Ordres':'Zones',hint:kind==='orders'?'Ordres sur la carte':'Zones sur la carte',onActivate:()=>this.options.onTools?.(kind)};
-      const piece=this.art.createPiece({w:1.08,h:.46,depth:.046,bevel:.038,uvPadding:1,textureWidth:216,textureHeight:92,seed:381+index*5,bgColor:PALETTE.sageMountain,interactive:true,tooltip:control.hint,drawFn:(ctx,w,h,rng)=>{ctx.save();ctx.scale(w/108,h/46);drawHandBlob(ctx,23,23,17,PALETTE.creamPaper,PALETTE.inkDark,1.5,rng);drawNativeActionIcon(ctx,kind,23,23,11);drawHandRect(ctx,44,11,58,25,PALETTE.creamPaper,PALETTE.inkDark,1,rng);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';ctx.font=this.font(13,true);ctx.fillText(control.label,73,28,54);ctx.restore();}});
+      const piece=this.art.createPiece({w:1.08,h:.46,depth:.046,bevel:.038,uvPadding:1,textureWidth:216,textureHeight:92,seed:381+index*5,bgColor:PALETTE.sageMountain,interactive:true,tooltip:control.hint,drawFn:(ctx,w,h,rng)=>{ctx.save();ctx.scale(w/108,h/46);/* Preserve the seeded label paint after removing the icon disk. */for(let point=0;point<14;point++)rng();drawNativeActionIconInBox(ctx,kind,7,7,30,32);drawHandRect(ctx,44,11,58,25,PALETTE.creamPaper,PALETTE.inkDark,1,rng);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';ctx.font=this.font(13,true);ctx.fillText(control.label,73,28,54);ctx.restore();}});
       piece.userData.nativeId=control.id;piece.userData.nativeMapToolPose=true;piece.setBaseTransform(.54,index===0?1.63:1.09,.08);this.toolsDock.add(piece);this.register(piece,control);
     }
     // The reference's three lights, with the world key expressed in HUD-camera
@@ -1216,8 +1216,10 @@ export class NativeStage {
           ctx.stroke();
         }
       }else if(style==='tile'||style==='navigation'){
-        const radius=Math.min(23,cssW*.24,cssH*.24),cy=cssH*.34;drawHandBlob(ctx,cssW/2,cy,radius+5,PALETTE.creamPaper,ink,1.8,rng);icon(cssW/2,cy,radius*.77);
+        /* Preserve the seeded label paint after removing the icon disk. */for(let point=0;point<14;point++)rng();
         const lines=wrapNativeText(control.label,cssW-13,this.measure,13).slice(0,2),bandHeight=lines.length>1?31:24,bandY=cssH-bandHeight-4;
+        const iconTop=control.caption?21:9;
+        drawNativeActionIconInBox(ctx,control.icon??control.id,9,iconTop,cssW-18,bandY-iconTop-8,ink);
         ctx.save();ctx.translate(cssW/2,bandY+bandHeight/2);ctx.rotate(this.seed(control.id)%2?.024:-.024);drawHandRect(ctx,-cssW*.46,-bandHeight/2,cssW*.92,bandHeight,PALETTE.creamPaper,ink,1.1,rng);ctx.font=this.font(13,true);lines.forEach((line,index)=>ctx.fillText(line,0,4+(index-(lines.length-1)/2)*14,cssW-13));ctx.restore();
         if(control.caption){ctx.font=this.font(10,true);ctx.textAlign='right';ctx.fillText(control.caption,cssW-7,14,cssW-12);}
       }else if(style==='card'){
@@ -1226,7 +1228,7 @@ export class NativeStage {
         paint(cardInk.title,15,true);if(cardInk.caption.length){baseline+=4;paint(cardInk.caption,13,false);}if(cardInk.description.length){baseline+=4;ctx.fillStyle='#625139';paint(cardInk.description,13,false);}
         if(inset){drawHandRect(ctx,cssW-54,14,38,38,PALETTE.creamPaper,ink,1.2,rng);drawNativeActionIcon(ctx,inset.icon??inset.id,cssW-35,33,12,inset.disabled?'#8b7b60':ink,PALETTE.creamPaper);}
       }else if(style==='icon'){
-        icon(cssW/2,cssH/2,Math.min(cssW,cssH)*.35);
+        drawNativeActionIconInBox(ctx,control.icon??(control.label==='▶'?'play':control.id),6,6,cssW-12,cssH-12,ink);
       }else if(style==='research'&&node){
         icon(18,22,11);ctx.textAlign='left';ctx.font=this.font(12,true);wrapNativeText(control.label,cssW-42,this.measure,12).slice(0,2).forEach((line,index)=>ctx.fillText(line,36,19+index*15,cssW-42));
         const barWidth=cssW-38,filled=barWidth*THREE.MathUtils.clamp(node.points/Math.max(1,node.cost),0,1);

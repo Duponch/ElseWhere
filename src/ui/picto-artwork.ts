@@ -291,9 +291,20 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
   if(id==='dry-storm'||id==='rain-storm')bolt(d,34,48,.45);
   if(id==='weather-snow')for(const[x,y]of[[15,51],[33,55],[51,49]]){d.line([[x!-4,y!],[x!+4,y!]],1.4,P.darkBlue);d.line([[x!,y!-4],[x!,y!+4]],1.4,P.darkBlue);d.line([[x!-3,y!-3],[x!+3,y!+3]],1.1,P.darkBlue);}
   if(id==='fog'){d.line([[8,48],[48,48]],2,P.blue);d.line([[20,57],[58,57]],2,P.blue);}break;
- case 'play':d.shape([[21,11],[53,32],[20,54]],P.green);break;
- case 'pause':d.rect(16,12,10,41,P.darkBlue);d.rect(38,12,10,41,P.darkBlue);break;
- case 'speed-double':case 'speed-triple':for(let i=0;i<(id==='speed-double'?2:3);i++){const w=id==='speed-double'?21:15,x=6+i*(w+2);d.shape([[x,15],[x+w,32],[x,50]],P.darkBlue);}break;
+ case 'play':
+  d.path('M 21 12 Q 19 10 19 14 Q 20 32 19 51 Q 19 55 22 53 Q 37 44 52 33 Q 55 31 51 29 Q 36 20 21 12 Z',P.green);
+  break;
+ case 'pause':
+  d.path('M 17 12 Q 21 11 26 12 Q 27 31 26 52 Q 22 54 16 52 Q 17 32 16 15 Q 16 12 17 12 Z',P.blue);
+  d.path('M 39 11 Q 43 12 48 11 Q 47 32 48 51 Q 44 53 38 52 Q 39 32 38 14 Q 38 11 39 11 Z',P.blue);
+  break;
+ case 'speed-double':case 'speed-triple':{
+  const count=id==='speed-double'?2:3,w=count===2?21:15;
+  for(let i=0;i<count;i++){
+   const x=6+i*(w+2),top=14+(i%2),bottom=51-(i%2),tip=32+(i%2);
+   d.path(`M ${x+1} ${top} Q ${x-1} ${top-1} ${x} ${top+3} Q ${x+1} 32 ${x} ${bottom-2} Q ${x-1} ${bottom+1} ${x+2} ${bottom-1} Q ${x+w*.6} 41 ${x+w-1} ${tip+1} Q ${x+w+1} ${tip} ${x+w-1} ${tip-2} Q ${x+w*.55} 22 ${x+1} ${top} Z`,P.blue);
+  }break;
+ }
  case 'hourglass':d.path('M 17 9 L 47 9 Q 47 23 36 31 Q 47 41 47 55 L 17 55 Q 17 41 28 31 Q 17 22 17 9 Z',P.paper);d.path('M 20 14 L 44 14 Q 43 23 32 29 Q 22 22 20 14 Z',P.ochre,1);d.path('M 20 52 Q 22 43 32 37 Q 44 45 44 52 Z',P.ochre,1);d.line([[13,8],[51,8]],3,P.wood);d.line([[13,56],[51,56]],3,P.wood);break;
  case 'save':d.shape([[11,10],[44,10],[54,20],[54,55],[11,55]],P.blue);d.rect(20,11,22,15,P.paper);d.rect(20,36,26,18,P.paper);d.line([[26,42],[40,42]],1.2);break;
  case 'load':case 'export':d.path('M 9 34 L 9 54 L 55 54 L 55 34',null,2.7);if(id==='load'){d.line([[32,8],[32,42]],3,P.blue);d.line([[21,31],[32,42],[43,31]],3,P.blue);}else{d.line([[32,42],[32,8]],3,P.green);d.line([[21,19],[32,8],[43,19]],3,P.green);}break;
@@ -312,6 +323,16 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  if(remove){d.ellipse(49,49,11,11,P.paper,1.8,P.red);d.line([[44,44],[54,54]],2.6,P.red);d.line([[44,54],[54,44]],2.6,P.red);}
  if(unfinished){d.ellipse(49,49,10,10,P.paper);d.line([[49,43],[49,49],[54,52]],1.8,P.wood);}
  const artwork={id:original,strokes:d.strokes};cache.set(original,artwork);return artwork;
+}
+const fittedBounds=new Map<string,{left:number;top:number;right:number;bottom:number}>();
+/** Fit the actual painted silhouette, including its outline, inside a box. */
+export function drawPictoInBox(ctx:CanvasRenderingContext2D,id:string,x:number,y:number,width:number,height:number,ink=P.ink):boolean {
+ if(!Number.isFinite(x+y+width+height)||width<=0||height<=0)return false;
+ const art=pictoArtwork(id);if(!art)return false;
+ let bounds=fittedBounds.get(id);
+ if(!bounds){bounds={left:Infinity,top:Infinity,right:-Infinity,bottom:-Infinity};for(const stroke of art.strokes)for(const [px,py]of stroke.points){const pad=stroke.width/2;bounds.left=Math.min(bounds.left,px-pad);bounds.top=Math.min(bounds.top,py-pad);bounds.right=Math.max(bounds.right,px+pad);bounds.bottom=Math.max(bounds.bottom,py+pad);}fittedBounds.set(id,bounds);}
+ const scale=Math.min(width/(bounds.right-bounds.left),height/(bounds.bottom-bounds.top));
+ return drawPicto(ctx,id,x+width/2+(32-(bounds.left+bounds.right)/2)*scale,y+height/2+(32-(bounds.top+bounds.bottom)/2)*scale,27*scale,ink);
 }
 export function drawPicto(ctx:CanvasRenderingContext2D,id:string,cx:number,cy:number,r:number,ink=P.ink):boolean {
  if(!Number.isFinite(cx+cy+r)||r<=0)return false;const art=pictoArtwork(id);if(!art)return false;
