@@ -626,8 +626,8 @@ export class PrototypeCardboardArt {
     let active = false;
 
     const drawTabFn: CardboardDraw = (ctx, wPx, hPx, rng = Math.random) => {
-      const isAct = active;
-      drawHandBlob(ctx, wPx / 2, hPx * 0.39, 36, isAct ? '#fff9eb' : '#f2e8d2', '#261e18', 3.2, rng);
+      // Keep the label's seeded paint identical after removing its icon disk.
+      for (let point = 0; point < 14; point++) rng();
       drawHandPaintedIcon(ctx, cfg.id, wPx / 2, hPx * 0.39, 24, '#261e18', cfg.color);
       ctx.save();
       ctx.translate(wPx / 2, hPx - 27);
