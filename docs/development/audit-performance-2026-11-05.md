@@ -701,6 +701,29 @@ La carte de lumière elle-même coûte autant qu'avant : elle est réellement re
 
 Les tests ont été passés fichier par fichier : la machine, chargée par d'autres programmes (2 Go de mémoire virtuelle libre), et quelques fichiers lents (chargement des Aulnes, 80 à 100 s) bloquaient les paquets de 60. Les fichiers optionnels (`*.optin.test.ts`), sans variables d'environnement, ne collectent aucun test et empêchent vitest de se terminer : ils sont exclus des listes.
 
+### Simulation : propreté des laboratoires (8 novembre)
+
+**Constat.** La vitesse de recherche dépend de la propreté de la pièce du banc. Aux Forges, `researchCleanliness` coûtait environ 2,3 % du tick. À chaque appel, sa capture de propreté était refaite, avec le parcours des ≈ 4 000 saletés de la carte. La capture était gardée par environnement de travail, et cet environnement est recréé à chaque fin de tâche ou de transport. Sur 393 calculs de pièce mesurés en 60 ticks, 346 (88 %) trouvaient exactement les mêmes saletés que le calcul précédent.
+
+**Correction.** Mêmes résultats, au bit près.
+- La capture est gardée par topologie des pièces, la seule entrée qu'elle tire de l'environnement de travail.
+- Dans un même environnement, des saletés inchangées rendent la pièce déjà calculée, comme avant.
+- Sinon, la capture passe à une « époque » suivante si le tableau des saletés est le même, seulement prolongé, et si le sol et les toits n'ont pas changé. Chaque pièce déjà calculée est alors remise à jour à sa demande, exactement comme une capture neuve la calculerait :
+  - même départ de remplissage, même total du sol ;
+  - les saletés ajoutées sont reprises à la suite, dans le même ordre ;
+  - les scories et les sources de saleté sont relues.
+  
+  Si une condition manque, la capture est refaite. La suite des additions est donc la même qu'avant, et le résultat aussi, flottants compris.
+
+**Exactitude.** État complet identique au bit près sur Les Forges (150 ticks), Les Éclaircies et les deux versions des Aulnes (300 ticks).
+
+**Mesures.** Sous profileur, Les Forges, 150 ticks, part du temps de simulation : `researchCleanliness` ≈ 2,2 → 1,3 %. Le reste vient surtout de la relecture des scories parmi les ≈ 1 800 tas.
+
+**Tests.**
+102 fichiers de tests (recherche, propreté, nettoyage, pièces) : 474 réussis et 253 en échec. Les 74 fichiers ayant des échecs, relancés sur le commit précédent, y donnent les mêmes échecs, sauf `habitat-apparel-colony` (scénario de deux jours). Ce dernier dépasse son délai de 180 s selon la charge de la machine : 182,6 s sur la branche, 207 s sur le commit précédent relancé dans les mêmes conditions. Ce n'est pas une régression. `geothermal-migration-v440` a dépassé 300 s sur la branche.
+
+Pour les lots suivants, `tmp/perf/known-failures.py` garde les échecs déjà constatés sur la référence. La comparaison porte sur le statut de chaque test : un test qui échouait déjà ne peut pas révéler une régression en échouant de nouveau. Seuls les fichiers aux échecs inconnus sont donc relancés sur la référence, soit 1 fichier ici au lieu de 74.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -770,7 +793,7 @@ Les autres rôles de pièce relus (atelier 27 par établi, cuisine 28 par cuisin
    - un programme partagé entre lots instanciés de cultures (≈ 1,3 s sur Les Forges) ;
    - l’adoption du monde (≈ 4,3 s sur Les Forges) ;
    - avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).
-5. **Simulation, 80 colons (≈ 62 ms par tick, voir « Simulation des Forges : contrôles indexés »).** Le profil est plat : planification du travail ≈ 16 % (ménage, chantiers, accessibilité), déplacements ≈ 12 %, faune ≈ 11 %, coûts de navigation reconstruits à chaque recherche ≈ 3 % (≈ 5 % avant « Simulation : éclairage et coûts de navigation mémorisés »), recherche ≈ 5 %. Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
+5. **Simulation, 80 colons (≈ 62 ms par tick, voir « Simulation des Forges : contrôles indexés »).** Le profil est plat : planification du travail ≈ 16 % (ménage, chantiers, accessibilité), déplacements ≈ 12 %, faune ≈ 11 %, coûts de navigation reconstruits à chaque recherche ≈ 3 % (≈ 5 % avant « Simulation : éclairage et coûts de navigation mémorisés »), recherche ≈ 4 % (dont propreté des laboratoires ≈ 1,3 %, voir « Simulation : propreté des laboratoires »). Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
 6. **Contenu sans montée de schéma** (voir § 5), puis les écarts RimWorld 1 à 4 et 8.
 7. **Planificateur en WorkGivers** façon RimWorld (écarts 5 et 6), avec mise à jour des tests.
 8. **×12 pendant le sommeil**, une fois le débit suffisant. Le jeu de vitesses publié (`0|1|3|6`) apparaît dans 17 fichiers, dont 2 épinglés.

@@ -225,15 +225,23 @@ export function researchProposal(world:World,pawn:Pawn,reach:Reachability):{task
     const path=routeToJob(world,spot,reach,true);if(path)return {task:{stationId:s.id,spot,worked:0,...(facility?{facilityId:facility.id}:{})},path};
   }return null;
 }
-interface ResearchCleanlinessRead {capture:CleanlinessCapture;items:NonNullable<World['filth']>['items']|undefined;count:number}
-const cleanlinessCaptures=new WeakMap<WorkEnvironment,ResearchCleanlinessRead>();
+interface ResearchCleanlinessRead {capture:CleanlinessCapture;environment:WorkEnvironment;items:NonNullable<World['filth']>['items']|undefined;count:number}
+/* One capture per room topology. The work environment is rebuilt after every
+ * job end or haul, but a room's cleanliness reads only the world, this
+ * topology and the filth. Within one environment, unchanged filth returns the
+ * computed room; otherwise the capture enters a new epoch and each room is
+ * brought up to date on request exactly as a fresh capture would compute it
+ * (see CleanlinessCapture.extendFilth), or a fresh capture is made. */
+const cleanlinessCaptures=new WeakMap<WorkEnvironment['topology'],ResearchCleanlinessRead>();
 function researchCleanliness(world:World,station:Structure,environment:WorkEnvironment):number|null {
   const items=world.filth?.items,count=items?.length??0;
-  let read=cleanlinessCaptures.get(environment);
+  let read=cleanlinessCaptures.get(environment.topology);
   // Actual deposits append traces and removals replace the array. Their
   // identity/count is an O(1) revision; thickness does not alter this score.
-  // Topology/light remain immutable decision inputs, while filth is live.
-  if(!read||read.items!==items||read.count!==count){read={capture:new CleanlinessCapture(world,environment.topology),items,count};cleanlinessCaptures.set(environment,read);}
+  if(!read||read.capture.world!==world||read.environment!==environment||read.items!==items||read.count!==count){
+    if(read&&read.capture.world===world&&items&&read.items===items&&count>=read.count&&read.capture.extendFilth()){read.environment=environment;read.count=count;}
+    else {read={capture:new CleanlinessCapture(world,environment.topology),environment,items,count};cleanlinessCaptures.set(environment.topology,read);}
+  }
   return read.capture.room(station)?.cleanliness??null;
 }
 export function researchCleanlinessFactor(cleanliness:number|null):number {
