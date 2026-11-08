@@ -54,3 +54,16 @@ TypeScript final PASS. Contrôle raster des 438 identifiants UI/outils/objets
 distincts : chaque picto peint dans sa boîte, sans pixel en dehors de la
 tolérance d'anticrénelage d'un pixel. Revue WebGL 2 finale sans erreur,
 avec le raccourci « B » conservé au-dessus du picto de mur.
+
+## Marge supplémentaire sur la barre du bas
+
+À la demande suivante, seuls les pictos des boutons de gestion de la barre
+inférieure sont réduits de 20 % par rapport à l'agrandissement précédent.
+Ils restent centrés dans la même zone au-dessus de leur libellé, avec un retrait
+supplémentaire de 10 % sur chaque côté de cette zone. Les tuiles d'Architecte,
+les vitesses et Ordres/Zones gardent les tailles précédemment validées.
+Les dimensions, couleurs, libellés et interactions des boutons sont conservés.
+
+Validation de cet ajustement : 13 tests PASS, revue visuelle WebGL 2 inspectée,
+438 pictos vérifiés dans leurs boîtes, aucune erreur JavaScript/renderer et
+`git diff --check` PASS.

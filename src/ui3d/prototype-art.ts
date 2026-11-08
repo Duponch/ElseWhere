@@ -628,7 +628,8 @@ export class PrototypeCardboardArt {
     const drawTabFn: CardboardDraw = (ctx, wPx, hPx, rng = Math.random) => {
       // Keep the label's seeded paint identical after removing its icon disk.
       for (let point = 0; point < 14; point++) rng();
-      drawPictoInBox(ctx, cfg.id, 12, 10, wPx - 24, hPx - 62, '#261e18');
+      const iconWidth = wPx - 24, iconHeight = hPx - 62;
+      drawPictoInBox(ctx, cfg.id, 12 + iconWidth * .1, 10 + iconHeight * .1, iconWidth * .8, iconHeight * .8, '#261e18');
       ctx.save();
       ctx.translate(wPx / 2, hPx - 27);
       ctx.rotate((idx % 2 === 0 ? -0.035 : 0.035));
