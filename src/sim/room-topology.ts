@@ -31,6 +31,9 @@ export class RoomTopology {
     const id = this.labels[z * this.width + x]!;
     return id === -1 ? SOLID : id === -2 ? DOORWAY : this.spaces.get(id);
   }
+  /** Same as `at(x, z)?.kind === 'space'` for an in-map cell index: every
+   * positive label is a space id (solid -1, doorway -2), without a lookup. */
+  isSpaceIndex(index: number): boolean { return this.labels[index]! > 0; }
 }
 
 /** Caller-owned derived cache. Every read checks current barriers, including

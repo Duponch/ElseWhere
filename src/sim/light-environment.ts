@@ -35,6 +35,8 @@ export class LightEnvironmentCache {
   private readonly topology=new RoomTopologyCache();
   readonly localLight=new LocalLightCache();
   private readonly nonCaveLight=new LocalLightCache();
+  /** The last snapshot, returned again while all of its inputs are the same objects/values. */
+  private last?:LightEnvironment;
   speedAt(world:World,cell:Cell):number {
     if(Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height){
       const sky=annualNaturalLight(world),index=cell.z*world.width+cell.x;
@@ -46,6 +48,8 @@ export class LightEnvironmentCache {
   read(world:World):LightEnvironment {
     const topology=this.topology.read(world);
     const combined=this.localLight.read(world,topology),withoutCaves=caveLightSources256(world).length?this.nonCaveLight.read(world,topology,lightSources(world,false)):combined;
-    return new LightEnvironment(topology,roofCells(world),combined,annualNaturalLight(world),withoutCaves);
+    const roofs=roofCells(world),sky=annualNaturalLight(world),last=this.last;
+    if(last&&last.topology===topology&&last.roofs===roofs&&last.artificial===combined&&last.withoutCaves===withoutCaves&&last.sky===sky)return last;
+    return this.last=new LightEnvironment(topology,roofs,combined,sky,withoutCaves);
   }
 }

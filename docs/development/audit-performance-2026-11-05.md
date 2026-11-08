@@ -647,6 +647,41 @@ Le Worker réel à ×6 (`scripts/perf-worker-run.ts`, 20 s) a donné 140 et 166 
 
 **Ce qui reste** dans la simulation des Forges (profil après ce lot) : planification du travail ≈ 16 %, déplacements des tâches internes (`advanceCoreMap297`) ≈ 12 %, faune ≈ 11 %, recherche ≈ 5 % (la propreté de la pièce est recalculée dès qu'une saleté change quelque part sur la carte), pousse des plantes sauvages ≈ 3 %.
 
+### Simulation : éclairage et coûts de navigation mémorisés (8 novembre)
+
+**Constat.** Après les contrôles indexés, le profil des Forges montrait 5 % du temps dans `navigationCosts`, reconstruit à chaque recherche de chemin. Près de la moitié de ce temps allait aux lectures d'éclairage de `humanMoveSpeedFactor297` (vitesse de marche d'un colon selon la lumière). Chaque lecture de l'éclairage :
+- reconstruisait la liste des ≈ 150 sources de lumière (lampes, feux, plantes de grotte), avec leur tri ;
+- la comparait champ par champ à la dernière carte de lumière calculée ;
+- créait un nouvel objet `LightEnvironment`.
+
+La reconstruction de `navigationCosts` reparcourait aussi toutes les emprises des 7 500 structures pour leurs délais de traversée, alors que ces délais ne dépendent que de leur type et de leurs cases.
+
+**Corrections.** Toutes rendent exactement le même résultat.
+- **Sources de lumière** (`lightSources`). La liste triée est gardée par liste de structures éclairantes. Elle est réutilisée tant que chaque structure garde son type, sa case et son activité (alimentée, allumée, combustible), et que les sources des plantes de grotte gardent leur identité. Une source dépend seulement de ces trois valeurs. La liste partagée est gelée : aucun lecteur ne la modifie.
+- **Carte de lumière** (`LocalLightCache`). Si elle reçoit la même liste gelée, elle sait que les sources n'ont pas changé, sans comparer leurs champs. Si seule la topologie des pièces a changé, la recherche d'un obstacle modifié autour des sources lit directement le tableau des étiquettes de pièces, au lieu d'une recherche par case.
+- **Environnement d'éclairage** (`LightEnvironmentCache`). Le même objet est rendu tant que topologie, toits, cartes de lumière et lumière du ciel n'ont pas changé.
+- **Délais des structures** (`navigationCosts`). La part des structures (délais, cases à répétition, cases d'arrêt, pièges) est précalculée une fois par capture d'emprises, dans le même ordre d'insertion. Chaque recherche copie cette base et lit toujours en direct l'état des pièges, les cadres de chantier, les tas, le terrain, les portes et le feu.
+
+**Exactitude.** État complet sérialisé identique au bit près à celui du commit précédent : Les Forges après 150 ticks (`84e7037d…`), Les Éclaircies (`e7e98a5d…`), Les Aulnes intégrées (`aaa91534…`) et Les Aulnes sièges (`a23ba92c…`) après 300 ticks.
+
+**Mesures.**
+Même banc Node (Les Forges, 150 ticks après 20 de chauffe), sous profileur, commit précédent puis ce lot :
+
+| Les Forges, temps inclusif sur 150 ticks | Commit précédent | Ce lot |
+|---|---|---|
+| `navigationCosts` | 0,58 s | **0,37 s (−36 %)** |
+| Lectures d'éclairage (`LightEnvironmentCache.read`) | 0,35 s | **0,31 s** |
+| dont liste des sources (`lightSources`) | 0,11 s | **0,07 s** |
+
+Le gain total est d'environ 2 % du temps de simulation. Trois passes alternées sans profileur donnent 74,2 ms par tick pour le commit précédent et 72,1 ms pour ce lot : l'écart est de l'ordre du bruit de la machine, qui était chargée, et la première paire est même inversée.
+
+La carte de lumière elle-même coûte autant qu'avant : elle est réellement recalculée quand un obstacle change près d'une lampe ou qu'une source s'allume ou s'éteint, ce qui arrive souvent aux Forges, et ce calcul ne peut pas être fait par différence, la somme des sources étant plafonnée. Autre reste : la topologie des pièces relit les 62 500 cases du terrain dès qu'une case est écrite. La neige foulée à chaque pas suffit à déclencher cette relecture, alors que seules les roches comptent. La distinguer des remplacements de cases est un chantier à part.
+
+**Tests.**
+219 fichiers de tests (éclairage, navigation, chemins, pièges, portes, déplacements) : 1 157 réussis et 517 en échec. Les 142 fichiers ayant des échecs, relancés sur le commit précédent, donnent les mêmes 517 échecs : 0 régression. Après le dernier ajustement (comparaison des sources, topologie), 102 fichiers touchant la lumière, les pièces, la propreté et la beauté ont été relancés : 0 régression, y compris sur 17 fichiers nouveaux comparés au commit précédent (47 échecs identiques des deux côtés).
+
+`prison-colony.test.ts` n'exécute aucun test sans variable de campagne longue, mais il empêche vitest de se terminer après son rapport. Il bloquait tout son paquet de 60 fichiers jusqu'au délai de garde : il est retiré des listes, et ses voisins ont été passés un par un.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -699,7 +734,7 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
    - un programme partagé entre lots instanciés de cultures (≈ 1,3 s sur Les Forges) ;
    - l’adoption du monde (≈ 4,3 s sur Les Forges) ;
    - avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).
-5. **Simulation, 80 colons (≈ 62 ms par tick, voir « Simulation des Forges : contrôles indexés »).** Le profil est plat : planification du travail ≈ 16 % (ménage, chantiers, accessibilité), déplacements ≈ 12 %, faune ≈ 11 %, coûts de navigation reconstruits à chaque recherche ≈ 5 % (dont la moitié en lectures d'éclairage), recherche ≈ 5 %. Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
+5. **Simulation, 80 colons (≈ 62 ms par tick, voir « Simulation des Forges : contrôles indexés »).** Le profil est plat : planification du travail ≈ 16 % (ménage, chantiers, accessibilité), déplacements ≈ 12 %, faune ≈ 11 %, coûts de navigation reconstruits à chaque recherche ≈ 3 % (≈ 5 % avant « Simulation : éclairage et coûts de navigation mémorisés »), recherche ≈ 5 %. Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
 6. **Contenu sans montée de schéma** (voir § 5), puis les écarts RimWorld 1 à 4 et 8.
 7. **Planificateur en WorkGivers** façon RimWorld (écarts 5 et 6), avec mise à jour des tests.
 8. **×12 pendant le sommeil**, une fois le débit suffisant. Le jeu de vitesses publié (`0|1|3|6`) apparaît dans 17 fichiers, dont 2 épinglés.

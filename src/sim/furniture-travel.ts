@@ -224,12 +224,30 @@ function computeTerrainCostLayer(world:World,version:number,drafted:boolean,snow
   }
   return {terrain,maximum:terrainMaximum,marsh:marshPerceptionCosts};
 }
+/* Structure part of the navigation costs, per (immutable) shared geometry.
+ * Kinds and footprint cells never change for a geometry, so this is exactly
+ * what every search rebuilt from its entries: in entry order, the delay of the
+ * last structure setting a cell (inserted at its first setting), the repeater
+ * and stop cells, and the spike-trap entries, whose state is still read live. */
+interface StructureTravelBase {costs:ReadonlyMap<number,number>;repeaters:ReadonlySet<number>;stops:ReadonlySet<number>;traps:readonly StructureNavigationGeometry['entries'][number][]}
+const structureTravelBases=new WeakMap<StructureNavigationGeometry,StructureTravelBase>();
+function structureTravelBase(geometry:StructureNavigationGeometry):StructureTravelBase {
+  let base=structureTravelBases.get(geometry);if(base)return base;
+  const costs=new Map<number,number>(),repeaters=new Set<number>(),stops=new Set<number>(),traps:StructureTravelBase['traps'][number][]=[];
+  for(const entry of geometry.entries){
+    const p=FURNITURE_TRAVEL[entry.structure.kind];if(entry.structure.kind==='spike-trap')traps.push(entry);
+    for(const i of entry.cells){if(p.delay)costs.set(i,Math.round(p.delay/3*1000));if(p.repeat)repeaters.add(i);if(!p.stand)stops.add(i);}
+  }
+  base={costs,repeaters,stops,traps};structureTravelBases.set(geometry,base);return base;
+}
 /** Captured once per synchronous search. The terrain layer is shared only on an
  * exact unchanged-tiles proof (terrainCostLayer); every other part is fresh. */
 export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry):{costs:NavigationCostLookup|undefined;repeaters:ReadonlySet<number>;stops:ReadonlySet<number>;floors:NavigationCostLookup;coreMoveCosts297?:{cardinal:number;diagonal:number}} {
   const version=world.schemaVersion,width=world.width,snow=!!world.snow;
   geometry??=captureStructureNavigation(world);
-  const costs=new Map(frameCosts(world)),repeaters=new Set<number>(),stops=new Set<number>();
+  // Repeaters and stops start with the structure cells, in the same order.
+  const structureBase=version>=22&&geometry?structureTravelBase(geometry):undefined,frames=frameCosts(world);
+  const costs=structureBase&&!frames?new Map(structureBase.costs):new Map(frames),repeaters=new Set<number>(structureBase?.repeaters),stops=new Set<number>(structureBase?.stops);
   const actor=version>=226?spikeTrapNavigationActor(world,origin):undefined,knows=!!actor&&spikeTrapKnowsOf(world,actor),traps=new Map<number,number>();
   if(version>=22) {
     const add=(s:World['structures'][number],i:number)=>{
@@ -238,7 +256,10 @@ export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTe
       if(p.delay)costs.set(i,Math.round(p.delay/3*1000));
       if(p.repeat)repeaters.add(i);if(!p.stand)stops.add(i);
     };
-    if(geometry){for(const {structure,cells} of geometry.entries)for(const i of cells)add(structure,i);}
+    if(structureBase){
+      if(knows)for(const {structure,cells} of structureBase.traps)if(structure.spikeTrap)for(const i of cells)traps.set(i,SPIKE_TRAP_SEARCH_COST);
+      if(frames)for(const [i,v] of structureBase.costs)costs.set(i,v);
+    }
     else for(const s of world.structures)for(const c of footprintCells(s))add(s,c.z*width+c.x);
     for(const j of world.jobs)if(j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')for(const c of footprintCells(j))stops.add(c.z*width+c.x);
   }

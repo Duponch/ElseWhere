@@ -41,4 +41,39 @@ function lightMembers(world:World):readonly Structure[] {
   if(!members){members=world.structures.filter(s=>memberKinds.has(s.kind));membersByToken.set(token,members);}
   return members;
 }
-export function lightSources(world:World,includeCavePlants=true):LightSource[] {return structureLightSources(world,lightMembers(world)).concat(includeCavePlants?[...caveLightSources256(world)]:[]).sort((a,b)=>a.cell-b.cell);}
+/** Whether a member emits now: exactly the predicate of structureLightSources. */
+function memberActive(world:World,s:Structure):boolean {
+  switch(s.kind){
+    case 'glow-pod':return true;
+    case 'torch-lamp':case 'campfire':return !!s.fuel?.ticks;
+    case 'sun-lamp':return sunLampActive(world,s);
+    default:return isPowerActive(s);
+  }
+}
+/* The sorted sources of one member list, kept while every member keeps its
+ * kind, cell and activity, and the cave sources keep their identity. A
+ * source's fields depend only on those three, so the result is the array a
+ * fresh computation would give. The array is frozen and shared: readers only
+ * read it, and an identical array lets the light caches skip their
+ * field-by-field comparison. */
+interface SourcesMemo {kinds:Structure['kind'][];cells:Float64Array;active:Uint8Array;caves:readonly LightSource[];sources:readonly LightSource[]}
+const sourceMemos=new WeakMap<readonly Structure[],{caves?:SourcesMemo;plain?:SourcesMemo}>();
+const NO_CAVES:readonly LightSource[]=Object.freeze([]);
+export function lightSources(world:World,includeCavePlants=true):readonly LightSource[] {
+  if(!peekStructureMembershipToken(world))return structureLightSources(world,lightMembers(world)).concat(includeCavePlants?[...caveLightSources256(world)]:[]).sort((a,b)=>a.cell-b.cell);
+  const members=lightMembers(world),caves=includeCavePlants?caveLightSources256(world):NO_CAVES,width=world.width;
+  let slot=sourceMemos.get(members);if(!slot){slot={};sourceMemos.set(members,slot);}
+  const memo=includeCavePlants?slot.caves:slot.plain;
+  if(memo&&memo.caves===caves){
+    let same=true;
+    for(let i=0;i<members.length;i++){const s=members[i]!;
+      if(s.kind!==memo.kinds[i]||s.z*width+s.x!==memo.cells[i]||(memberActive(world,s)?1:0)!==memo.active[i]){same=false;break;}
+    }
+    if(same)return memo.sources;
+  }
+  const kinds:Structure['kind'][]=[],cells=new Float64Array(members.length),active=new Uint8Array(members.length);
+  for(let i=0;i<members.length;i++){const s=members[i]!;kinds.push(s.kind);cells[i]=s.z*width+s.x;active[i]=memberActive(world,s)?1:0;}
+  const sources=Object.freeze(structureLightSources(world,members).concat([...caves]).sort((a,b)=>a.cell-b.cell));
+  const next={kinds,cells,active,caves,sources};if(includeCavePlants)slot.caves=next;else slot.plain=next;
+  return sources;
+}

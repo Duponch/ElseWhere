@@ -1,5 +1,5 @@
 import { lightSources, type LightSource } from './light-sources.ts';
-import type { RoomTopology } from './room-topology.ts';
+import { RoomTopology } from './room-topology.ts';
 import type { World } from './types.ts';
 
 const RADIUS = 12;
@@ -15,7 +15,14 @@ function sameLightObstacles(sources:readonly LightSource[],before:RoomTopology,a
     minX=Math.min(minX,x-s.radius);maxX=Math.max(maxX,x+s.radius);
     minZ=Math.min(minZ,z-s.radius);maxZ=Math.max(maxZ,z+s.radius);
   }
-  for(let z=Math.max(0,minZ);z<=Math.min(after.height-1,maxZ);z++)for(let x=Math.max(0,minX);x<=Math.min(after.width-1,maxX);x++)
+  const x0=Math.max(0,minX),x1=Math.min(after.width-1,maxX),width=after.width;
+  if(before instanceof RoomTopology&&after instanceof RoomTopology){
+    // Same comparison on the label arrays, without a lookup per cell.
+    for(let z=Math.max(0,minZ);z<=Math.min(after.height-1,maxZ);z++)for(let i=z*width+x0,end=z*width+x1;i<=end;i++)
+      if(before.isSpaceIndex(i)!==after.isSpaceIndex(i))return false;
+    return true;
+  }
+  for(let z=Math.max(0,minZ);z<=Math.min(after.height-1,maxZ);z++)for(let x=x0;x<=x1;x++)
     if((before.at(x,z)?.kind==='space')!==(after.at(x,z)?.kind==='space'))return false;
   return true;
 }
@@ -44,6 +51,9 @@ export class LocalLightCache {
    * to NaN). Compared field by field instead of building the string. */
   private emitters?:{mixed:boolean;values:number[]};
   private light=new Float32Array(0);
+  /* A source array whose emitters are those of the last build. The shared
+   * source arrays are frozen, so the same array has the same emitters. */
+  private sources?:readonly LightSource[];
   rebuilds=0;
 
   private sameEmitters(sources:readonly LightSource[],mixed:boolean):boolean {
@@ -57,10 +67,13 @@ export class LocalLightCache {
     return true;
   }
   read(world:World,topology:RoomTopology,sources:readonly LightSource[]=lightSources(world)):Float32Array {
-    const mixed=sources.some(s=>s.green>s.red||s.blue>s.red),sameKey=this.sameEmitters(sources,mixed);
-    if(this.topology===topology&&sameKey)return this.light;
+    // A shared frozen source array identical to the last one has its emitters.
+    const known=sources===this.sources&&Object.isFrozen(sources);
+    if(known&&this.topology===topology)return this.light;
+    const mixed=sources.some(s=>s.green>s.red||s.blue>s.red),sameKey=known||this.sameEmitters(sources,mixed);
+    if(this.topology===topology&&sameKey){this.sources=sources;return this.light;}
     if(this.topology&&sameKey&&sameLightObstacles(sources,this.topology,topology)) {
-      this.topology=topology;return this.light;
+      this.topology=topology;this.sources=sources;return this.light;
     }
     // Retain the original work area and heap ordering without a larger source.
     const localRadius=sources.some(s=>s.radius>RADIUS)?14:RADIUS,SIDE=localRadius*2+1,AREA=SIDE*SIDE;
@@ -109,7 +122,7 @@ export class LocalLightCache {
     // Core keeps ordinary accumulated RGB capped at .5. A qualifying source
     // marks full light in this same flood, independently of other sources.
     if(overlight)for(let i=0;i<overlight.length;i++)if(overlight[i])light[i]=1;
-    this.topology=topology;this.emitters={mixed,values:sources.flatMap(s=>[s.cell,s.radius,s.red,s.green,s.blue,s.overlightRadius===undefined?0:1,s.overlightRadius??0])};this.light=light;this.rebuilds++;
+    this.topology=topology;this.emitters={mixed,values:sources.flatMap(s=>[s.cell,s.radius,s.red,s.green,s.blue,s.overlightRadius===undefined?0:1,s.overlightRadius??0])};this.light=light;this.sources=sources;this.rebuilds++;
     return light;
   }
 }
