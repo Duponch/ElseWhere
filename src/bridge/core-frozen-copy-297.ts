@@ -28,3 +28,33 @@ export function frozenDataCopy297<T>(value:T):T {
  };
  return copy(value,0) as T;
 }
+
+/* Same checks, budget, depth and messages as frozenDataCopy297, in the same
+ * order, but the given own-data tree is frozen in place and returned instead of
+ * copied. Only for data its caller exclusively owns and never writes again: the
+ * actors of a World just decoded from a Worker message, which the main thread
+ * only reads. After a refusal the tree may be partly frozen; the caller then
+ * discards it. */
+export function frozenDataInPlace297<T>(value:T):T {
+ const active=new Set<object>();let left=1048576;
+ const visit=(v:unknown,depth:number):void=>{
+  if(--left<0||depth>24)throw Error('Core phase payload budget exceeded');
+  if(v===undefined||v===null||typeof v==='string'||typeof v==='boolean')return;
+  if(typeof v==='number'){if(!Number.isFinite(v))throw Error('Nonfinite Core phase number');return;}
+  if(typeof v!=='object'||active.has(v))throw Error('Cyclic or non-data Core phase value');active.add(v);
+  try{
+   if(Array.isArray(v)&&Object.getPrototypeOf(v)===Array.prototype&&Reflect.ownKeys(v).length===v.length+1){
+    const n=v.length,values:unknown[]=new Array(n);let dense=true;
+    for(let i=0;i<n;i++){const d=Object.getOwnPropertyDescriptor(v,String(i));if(!d?.enumerable||!Object.hasOwn(d,'value')){dense=false;break;}values[i]=d.value;}
+    if(dense){for(let i=0;i<n;i++)visit(values[i],depth+1);Object.freeze(v);return;}
+   }
+   if(Array.isArray(v)||Object.getPrototypeOf(v)!==Object.prototype)throw Error('Core phase requires plain own data');
+   const keys=Reflect.ownKeys(v),values:unknown[]=new Array(keys.length);
+   for(let i=0;i<keys.length;i++){const k=keys[i]!;const d=typeof k==='string'?Object.getOwnPropertyDescriptor(v,k):undefined;if(!d||d.enumerable!==true||!Object.hasOwn(d,'value'))throw Error('Core phase requires plain own data');values[i]=d.value;}
+   for(let i=0;i<keys.length;i++)visit(values[i],depth+1);
+   Object.freeze(v);
+  }finally{active.delete(v);}
+ };
+ visit(value,0);
+ return value;
+}

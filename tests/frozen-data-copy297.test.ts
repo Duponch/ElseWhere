@@ -27,3 +27,23 @@ test('identical rejections',()=>{
   expect(outcome(()=>frozenDataCopy297(bad))).toBe(outcome(()=>copyCoreData297(bad)));
  }
 });
+
+// In place: the same frozen own data and the same refusals as the copy.
+test('in-place freezing matches the copy on real actors and refuses the same inputs',async()=>{
+ const {frozenDataInPlace297}=await import('../src/bridge/core-frozen-copy-297.ts');
+ const w=deconstructionCamp(3,32);
+ for(const value of [w.pawns,w.wildlife?.animals??[],w.mechanoids??[],{a:[1,{b:'x'}],c:null,d:undefined}]){
+  const source=structuredClone(value),expected=outcome(()=>frozenDataCopy297(structuredClone(value)));
+  const frozen=frozenDataInPlace297(source);expect(frozen).toBe(source);expect(outcome(()=>frozen)).toBe(expected);
+ }
+ const accessor={};Object.defineProperty(accessor,'x',{enumerable:true,get:()=>1});
+ const hidden={};Object.defineProperty(hidden,'x',{enumerable:false,value:1});
+ const holes=[1,,3];const extra=Object.assign([1,2],{k:3});
+ const cycle:Record<string,unknown>={};cycle.self=cycle;
+ const deep:Record<string,unknown>={};let cur=deep;for(let i=0;i<30;i++){const next={};cur.n=next;cur=next;}
+ class Custom{a=1}
+ for(const make of [()=>accessor,()=>hidden,()=>({[Symbol('s')]:1}),()=>holes,()=>extra,()=>cycle,()=>deep,()=>new Custom(),()=>({n:NaN}),()=>({f:()=>1}),()=>new Float32Array(2),()=>[Infinity],()=>({ok:{x:1},bad:{n:-Infinity}})]){
+  const copied=outcome(()=>frozenDataCopy297(make())),inPlace=outcome(()=>frozenDataInPlace297(make()));
+  expect(inPlace.startsWith('throw:')).toBe(copied.startsWith('throw:'));if(copied.startsWith('throw:'))expect(inPlace).toBe(copied);
+ }
+});

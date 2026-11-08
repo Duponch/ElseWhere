@@ -5,7 +5,7 @@ import type {Mechanoid} from '../sim/mechanoid-state';
 import type {PawnTrack} from './motion-tracks';
 import type {PresentationSegment} from '../sim/travel-timing';
 import {effectiveCore297} from '../sim/core-phase-297';
-import {frozenDataCopy297} from './core-frozen-copy-297';
+import {frozenDataCopy297,frozenDataInPlace297} from './core-frozen-copy-297';
 import {coreAnchor297,coreInteger297,coreOwnRecord297,copyCoreData297,readCorePhaseData297,validCoreTrace297} from './core-phase-data-297';
 import {CORE_HUMAN_OPTIONAL297,CORE_ANIMAL_OPTIONAL297,CORE_MECH_OPTIONAL297,type CoreActorMode297,type CoreActorScene297,type CoreHumanPose297,type CoreActorSceneRecord297,type CorePhaseAnchor297,type CoreFullPhaseMetadata297,type CorePhaseTypedProjection297,type CoreActorProjection297,type CoreProjectileTrace297} from './core-phase-projection-297';
 
@@ -32,10 +32,10 @@ export class CorePhaseFrameOwner297 {
   const anchor=coreAnchor297(world,epoch,revision,core,m.mapId),old=this.state,same=!reset&&old?.anchor.epoch===epoch&&old.anchor.mapId===m.mapId;
   if(same&&(core<old!.core||world.nextId<old!.nextId))throw Error('Full World predates its committed actor phase');
   if(!Array.isArray(motion))throw Error('Full Core anchor lost confirmed tracks');
-  const tracks=frozenDataCopy297(motion),trace=same?new Map(old!.trace):new Map<number,CoreProjectileTrace297>(),seen=new Set<number>();
+  const tracks=frozenDataInPlace297(motion),trace=same?new Map(old!.trace):new Map<number,CoreProjectileTrace297>(),seen=new Set<number>();
   for(const value of m.projectilesRetained){if(!validCoreTrace297(value,anchor,core)||seen.has(value.id))throw Error('Invalid retained Core projectile');seen.add(value.id);trace.set(value.id,value);}
   for(const[id,value]of trace)if(value.endCore<core-640)trace.delete(id);
-  const actorMode:CoreActorMode297=frontier?'frontier':'same-civil',actorScene=this.scene(core,frozenDataCopy297(world.pawns),frozenDataCopy297(world.wildlife?.animals??[]),frozenDataCopy297(world.mechanoids??[]));
+  const actorMode:CoreActorMode297=frontier?'frontier':'same-civil',actorScene=this.scene(core,frozenDataInPlace297(world.pawns),frozenDataInPlace297(world.wildlife?.animals??[]),frozenDataInPlace297(world.mechanoids??[]));
   const next:State={anchor,world,actorScene,actorMode,core,nextId:world.nextId,seq:0,tracks,trace};
   const projection:CorePhaseTypedProjection297=Object.freeze({kind:'full',audioCues:Object.freeze([]),anchor,phaseSeq:0,nextId:world.nextId,fromCore:core,core,speed,world,actorScene,actors:Object.freeze([]),tracks,projectiles:Object.freeze({upserted:Object.freeze([...trace.values()]),removed:Object.freeze([])})});
   const result=Object.freeze({previous:old,projection,owner:this.identity});this.prepared.set(result,next);return result;
