@@ -17,7 +17,7 @@ import { advanceAnimalHealth } from './wildlife-health.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell,CommandResult,Pawn,Structure,World } from './types.ts';
 import type { WildAnimal } from './wildlife-state.ts';
-import { structureById } from './structure-navigation.ts';
+import { structureById,structuresOfKind } from './structure-navigation.ts';
 
 export interface AnimalRescueProposal {task:AnimalRescueTask;path:Cell[];target:WildAnimal}
 export function animalRescueActorReady(w:World,p:Pawn):boolean {
@@ -60,7 +60,9 @@ function proposalFor(w:World,p:Pawn,reach:Reachability,a:WildAnimal,direct=false
   const path=slaughterContact(w,p,a)?[]:routeToJob(w,a,reach,false);if(!path)return;
   const rank=(s:Structure)=>s.medical?0:a.domestic?.bedId===s.id?1:2;
   const bedOwners=w.schemaVersion>=256?captureActorBeds256(w):undefined;
-  const spots=w.structures.filter(s=>allowedAreaAllows(w,p,s)&&animalSpotAvailable(w,s,a,p.id,bedOwners)).sort((x,y)=>rank(x)-rank(y)
+  // Only animal sleeping spots can be available (animalSpotAvailable): the
+  // kind index gives them in source order, instead of every structure.
+  const spots=structuresOfKind(w,'animal-sleeping-spot').filter(s=>allowedAreaAllows(w,p,s)&&animalSpotAvailable(w,s,a,p.id,bedOwners)).sort((x,y)=>rank(x)-rank(y)
     ||(x.x-a.x)**2+(x.z-a.z)**2-((y.x-a.x)**2+(y.z-a.z)**2)||x.id-y.id);
   for(const spot of spots)if(routeToCell(w,spot,reach))return {task:{animalId:a.id,spotId:spot.id,phase:'approach'},path,target:a};
 }
