@@ -1,5 +1,5 @@
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
-import {queryAreaMaterialPermission256} from './area-material-permission-256';
+import {queryAreaMaterialPermission256} from './area-material-permission-256.ts';
 import {naturalTerrainWalkable256} from './natural-terrain-movement-256.ts';
 import {foggedCell256} from './exploration-state-256.ts';
 import {canDesignateBridge} from './bridge.ts';

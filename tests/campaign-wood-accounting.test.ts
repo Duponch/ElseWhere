@@ -23,7 +23,7 @@ test('a real skilled chop credits only bounded physical wood, while double creat
   expect(plantHarvestYield(pawn)).toBe(1.06);
   const initial=conservedWood(w,ledger),beforeIds=new Set(w.piles.map(p=>p.id));
   trackWoodStep(w,ledger,()=>expect(gatherResource(w,tree,'chop',undefined,pawn)).toBe(13));
-  expect(ledger).toMatchObject({revision:1,nominalRemoved:12,produced:13,netYieldLost:0,netYieldBonus:1});
+  expect(ledger).toMatchObject({revision:2,nominalRemoved:12,produced:13,netYieldLost:0,netYieldBonus:1,woodConstructionLost:0});
   expect(conservedWood(w,ledger)).toBe(initial);
   expect(readWoodLedger(JSON.parse(JSON.stringify(ledger)))).toEqual(ledger);
   expect(()=>readWoodLedger(undefined)).toThrow(/historical bonuses/);

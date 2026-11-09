@@ -4,6 +4,8 @@ import type {ItemId} from '../../src/sim/items.ts';
 import type {MentalCrisis} from '../../src/sim/mental-state.ts';
 type RecordedMentalKind=MentalCrisis['kind'];
 import type {World} from '../../src/sim/types.ts';
+import * as probedEating from '../../src/sim/eating.ts';
+import { sameMapWorld } from './same-map.ts';
 
 export const RATION_DEADLINE=17*6000;
 export interface IngestionRecord {
@@ -90,11 +92,13 @@ export function observeIngestion(ledger:IngestionLedger,record:IngestionRecord):
 // This leaf registers the mock before any engine/pilot import. The state is
 // scoped to one original World; comparison forks and inactive tests are inert.
 const ingestionProbe=vi.hoisted(()=>({world:null as World|null,records:[] as IngestionRecord[]}));
-vi.mock('../../src/sim/eating.ts',async importOriginal=>{
-  const actual=await importOriginal<typeof import('../../src/sim/eating.ts')>();
-  return {...actual,processEating:(...args:Parameters<typeof actual.processEating>)=>{
+// Spy on the export binding every importer reads at call time
+// (a vi.mock factory deadlocks: the probed modules import each other).
+{
+  const actual={processEating:probedEating.processEating};
+  vi.spyOn(probedEating,'processEating').mockImplementation((...args:Parameters<typeof actual.processEating>)=>{
     const [world,pawn]=args;
-    if(ingestionProbe.world!==world)return actual.processEating(...args);
+    if(!sameMapWorld(ingestionProbe.world,world))return actual.processEating(...args);
     const task=pawn.need,portion=task?.kind==='eat'&&task.phase==='ingest'?world.piles.find(p=>p.id===task.carryPileId):undefined;
     // Capture the actual mental kind at physical ingestion; confused-wander
     // remains ordinary consumption. Only food-binge is impulsive below.
@@ -107,8 +111,8 @@ vi.mock('../../src/sim/eating.ts',async importOriginal=>{
       expect(ingestionProbe.records.some(r=>r.portionId===before.portionId)).toBe(false);
       ingestionProbe.records.push(before);
     }
-  }};
-});
+  });
+}
 export function trackIngestionStep(world:World,step:()=>void):IngestionRecord[] {
   if(ingestionProbe.world!==null)throw Error('Nested ingestion instrumentation.');
   ingestionProbe.records=[];ingestionProbe.world=world;

@@ -87,7 +87,11 @@ test.each([42,93,2048])('joueur ordinaire : cinq à huit jours, graine %i, camp 
         expect(socialImpact,JSON.stringify({seed,tick:world.tick,pawn:pawn.id,injury,opponentId,strike})).toBe(true);
         let allowed=socialInjuries.get(pawn.id);if(!allowed){allowed=new Map();socialInjuries.set(pawn.id,allowed);}allowed.set(injury.id,injury.bornAt);
       }
-      for(const [i,p] of world.pawns.entries())if(p.mood-moods[i]!>.04800001||p.mood-moods[i]!<-.03200001)throw new Error(`Mood discontinuity: seed ${seed}, tick ${world.tick}, pawn ${p.id}`);
+      // Mood moves toward its target at 12 (rise) / 8 (fall) per hour. From schema 301
+      // it is updated as RimWorld's need interval: once per 150 Core ticks, 15 local
+      // ticks at once (wellbeingLocalTicks); before, every local tick.
+      const moodSteps=Number(world.schemaVersion)>=301?15:1;
+      for(const [i,p] of world.pawns.entries())if(p.mood-moods[i]!>.04800001*moodSteps||p.mood-moods[i]!<-.03200001*moodSteps)throw new Error(`Mood discontinuity: seed ${seed}, tick ${world.tick}, pawn ${p.id}, ${moods[i]} -> ${p.mood}`);
       for (const event of world.events) if (event.tick === world.tick) { const match = event.message.match(/a récolté (\d+) (?:baies|riz)/); if (match) produced += Number(match[1]);if(event.message.includes(' a traité ')&&event.message.endsWith('avec Médicaments.'))medicineUsed++; }
       observeSimpleMealLedger(cookingLedger,world.events.filter(e=>e.tick===world.tick));
       for (const {id,quantity} of ingesting) if(world.events.some(e=>e.tick===world.tick&&e.message.startsWith(`${world.pawns.find(p=>p.id===id)!.name} a mangé`)&&!e.message.includes('avec l’aide'))) { meals.set(id, (meals.get(id)??0)+1); consumed += quantity; }

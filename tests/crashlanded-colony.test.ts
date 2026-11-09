@@ -17,6 +17,7 @@ import { deconstructionCamp } from './scenarios/deconstruction.ts';
 import { foodAccount, woodAccount } from './scenarios/colony-player.ts';
 import { survivorPlan } from './scenarios/survivor-player.ts';
 import type { Command,Job,Resource,World } from '../src/sim/types.ts';
+import { sameMapWorld } from './scenarios/same-map.ts';
 
 type Summary=ReturnType<typeof crashlandedSummary>;
 interface Ledger {
@@ -50,7 +51,7 @@ test('confirmed chopping and grazing balance physical tree wood, while an unrela
   expect(applyCommand(chopped,{type:'designate',kind:'chop',x:tree.x,z:tree.z}).ok).toBe(true);
   gatherProbe.records.length=0;gatherProbe.active=true;
   try{for(let i=0;i<1000&&chopped.resources.includes(tree);i++)stepWorld(chopped);}finally{gatherProbe.active=false;}
-  const production=gatherProbe.records.filter(r=>r.world===chopped&&r.kind==='chop'&&r.resourceKind==='tree');
+  const production=gatherProbe.records.filter(r=>sameMapWorld(r.world,chopped)&&r.kind==='chop'&&r.resourceKind==='tree');
   expect(production).toHaveLength(1);
   expect(production[0]).toMatchObject({kind:'chop',resourceKind:'tree',nominal:27});
   expect(production[0]!.quantity).toBeGreaterThan(0);
@@ -65,15 +66,16 @@ test('confirmed chopping and grazing balance physical tree wood, while an unrela
   const initialGraze=woodConserved(grazed);
   grazingProbe.records.length=0;grazingProbe.active=true;
   try{stepWorld(grazed);}finally{grazingProbe.active=false;}
-  const grazing=grazingProbe.records.filter(r=>r.world===grazed&&r.resourceId===poplar.id);
-  expect(grazing).toEqual([{world:grazed,resourceId:poplar.id,resourceKind:'tree',amount:27,removed:true,confirmed:true}]);
+  const grazing=grazingProbe.records.filter(r=>sameMapWorld(r.world,grazed)&&r.resourceId===poplar.id);
+  // The record's world is the same map (filtered above), possibly through its campaign root.
+  expect(grazing.map(({world:_world,...record})=>record)).toEqual([{resourceId:poplar.id,resourceKind:'tree',amount:27,removed:true,confirmed:true}]);
   expect(woodConserved(grazed)+grazing[0]!.amount).toBe(initialGraze);
   const unrelated:Resource={id:grazed.nextId++,kind:'tree',amount:5,x:5,z:5};grazed.resources.push(unrelated);
   const beforeLoss=woodConserved(grazed)+grazing[0]!.amount;
   unrelated.amount--;
   expect(woodConserved(grazed)+grazing[0]!.amount).toBe(beforeLoss-1);
 
-  const regrown=createWorld(42,20,20);regrown.tick=59;regrown.resources=[];regrown.piles=[];regrown.jobs=[];regrown.structures=[];
+  const regrown=createWorld(42,20,20);regrown.tick=59;if(regrown.corePathBudget297)regrown.corePathBudget297.tick=regrown.tick;if(regrown.deterioration)regrown.deterioration.lastTick=regrown.tick;regrown.resources=[];regrown.piles=[];regrown.jobs=[];regrown.structures=[];
   regrown.tiles=regrown.tiles.map(()=>({terrain:'grass'}));refreshStock(regrown);
   const roll=(value:number)=>{let n=value;n^=n<<13;n^=n>>>17;n^=n<<5;return {value:n>>>0,fraction:(n>>>0)/0x100000000};};
   let floraSeed=0;

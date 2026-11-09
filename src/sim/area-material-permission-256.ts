@@ -1,8 +1,8 @@
-import {isSchema256Or257} from './schema-compatibility-257';
-import {foggedCell256} from './exploration-state-256';
-import {materialAllowedForPlayer256,materialPermissionRefusal256,setMaterialForbidden256} from './material-permission-256';
-import type {AreaQuery} from './designation';
-import type {AreaCommand,CommandResult,MaterialPile,World} from './types';
+import {isSchema256Or257} from './schema-compatibility-257.ts';
+import {foggedCell256} from './exploration-state-256.ts';
+import {materialAllowedForPlayer256,materialPermissionRefusal256,setMaterialForbidden256} from './material-permission-256.ts';
+import type {AreaQuery} from './designation.ts';
+import type {AreaCommand,CommandResult,MaterialPile,World} from './types.ts';
 
 type PermissionPlan=Extract<AreaQuery,{ok:false}>|(Extract<AreaQuery,{ok:true}>&{piles:MaterialPile[]});
 function ownData(value:unknown,keys:readonly string[]):value is Record<string,unknown>{

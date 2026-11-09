@@ -75,7 +75,7 @@ import {isCaveHiveKind256} from './cave-hive-state-256.ts';
 import {advanceActualHiveComponents256} from './cave-hive-tick-256.ts';
 import {captureAnimalCombatThreats256} from './cave-hive-lord-256.ts';
 import {applyMaterialPermission256} from './material-permission-256.ts';
-import {applyAreaMaterialPermission256} from './area-material-permission-256';
+import {applyAreaMaterialPermission256} from './area-material-permission-256.ts';
 import {isShipChunk256} from './ship-chunk-256.ts';
 import {advanceCaravanIncidents261,pendingCaravan261} from './caravan-incidents-261.ts';
 import {advanceActualWorldPawns256} from './world-pawn-campaign-256.ts';

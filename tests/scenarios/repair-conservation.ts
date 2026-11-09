@@ -1,5 +1,7 @@
 import {expect,vi} from 'vitest';
 import type {World} from '../../src/sim/types.ts';
+import * as probedBreakdowns from '../../src/sim/breakdowns.ts';
+import { sameMapWorld } from './same-map.ts';
 
 /** External test notebook: no historical repair consumption is inferred. */
 export interface RepairLedger {revision:1;spent:number;successes:number;failures:number}
@@ -16,11 +18,13 @@ export function readRepairLedger(value:unknown):RepairLedger {
 }
 
 const repairProbe=vi.hoisted(()=>({world:null as World|null,ledger:null as RepairLedger|null}));
-vi.mock('../../src/sim/breakdowns.ts',async importOriginal=>{
-  const actual=await importOriginal<typeof import('../../src/sim/breakdowns.ts')>();
-  return {...actual,advanceBreakdownFix:(...args:Parameters<typeof actual.advanceBreakdownFix>)=>{
+// Spy on the export binding every importer reads at call time
+// (a vi.mock factory deadlocks: the probed modules import each other).
+{
+  const actual={advanceBreakdownFix:probedBreakdowns.advanceBreakdownFix};
+  vi.spyOn(probedBreakdowns,'advanceBreakdownFix').mockImplementation((...args:Parameters<typeof actual.advanceBreakdownFix>)=>{
     const [world,,job]=args,ledger=repairProbe.ledger;
-    if(repairProbe.world!==world||!ledger)return actual.advanceBreakdownFix(...args);
+    if(!sameMapWorld(repairProbe.world,world)||!ledger)return actual.advanceBreakdownFix(...args);
     const target=world.structures.find(s=>s.id===job.fixBreakdown?.structureId);
     const targetBefore=target?structuredClone(target):undefined;
     const components=world.piles.filter(p=>p.item==='component').map(p=>structuredClone(p));
@@ -49,8 +53,8 @@ vi.mock('../../src/sim/breakdowns.ts',async importOriginal=>{
     if(result==='success')ledger.successes++;else ledger.failures++;
     readRepairLedger(ledger);
     return result;
-  }};
-});
+  });
+}
 
 /** Compose with trackWoodStep; validation and accounting observe the real call.
  * Incomplete work/refusal consumes nothing. Even a later failing tick retains

@@ -71,6 +71,8 @@ report.browserChannel=browserChannel;report.url=targetUrl.href;
 const browser=await chromium.launch({channel:browserChannel,args:['--mute-audio']});
 try{for(const action of (process.env.HARVEST_ACTIONS??'mine,chop').split(',')){
  const w=createWorld(42,250,250);w.tick=2000;w.deterioration.lastTick=w.tick; // Declared initial noon, no past exposure.
+ // The physical path budget belongs to the current tick (as the engine does when it sets a world's tick).
+ if(w.corePathBudget297)w.corePathBudget297.tick=w.tick;
  const p=w.pawns[0],c=action==='mine'?w.tiles.map((t,i)=>({t,x:i%250,z:Math.floor(i/250)})).filter(v=>v.t.terrain==='rock').sort((a,b)=>(a.x-p.x)**2+(a.z-p.z)**2-((b.x-p.x)**2+(b.z-p.z)**2))[0]:p;
  const command={type:'area',action,from:{x:Math.max(0,c.x-20),z:Math.max(0,c.z-20)},to:{x:Math.min(249,c.x+20),z:Math.min(249,c.z+20)}};
  if(!applyCommand(w,command).ok)throw Error('Designation rejected');
@@ -105,7 +107,7 @@ const originalTraceAdvance=advanceSimulation;advanceSimulation=now=>{const at=pe
  await page.goto(targetUrl.href);await page.waitForFunction(()=>!!window.__lisiere);
  await page.waitForFunction(()=>!!window.__sync&&!!window.__harvestUi);
  const native=await page.evaluate(()=>window.__harvestUi.native);
- const clickNative=async id=>{await page.waitForFunction(id=>!!window.__harvestUi.point(id),id);const p=await page.evaluate(id=>window.__harvestUi.point(id),id);await page.mouse.click(p.x,p.y);};
+ const clickNative=async id=>{await page.waitForFunction(id=>!!window.__harvestUi.point(id),id).catch(async error=>{const near=await page.evaluate(id=>{const d=window.__harvestUi.state.ui;const all=[...(d?.controls??[]).map(c=>c.id+(c.disabled?' (disabled)':'')),...(d?.targets??[]).map(c=>c.nativeId)];const stem=id.split(/[-:]/)[0];return all.filter(x=>x&&x.includes(stem)).slice(0,40);},id);throw Error(`Native control ${id} not reachable; similar controls: ${near.join(', ')||'none'}`,{cause:error});});const p=await page.evaluate(id=>window.__harvestUi.point(id),id);await page.mouse.click(p.x,p.y);};
  const clickSpeed=async speed=>{if(native)await clickNative('hud:speed:'+speed);else await page.locator('[data-speed="'+speed+'"]').click();};
  if(native?(await page.evaluate(()=>{const a=window.__harvestUi.audio;return a.effects||a.music||a.effectsVolume!==0||a.musicVolume!==0;})):await page.locator('#sound-enabled').isChecked()||await page.locator('#music-enabled').isChecked())throw Error('Presentation checks must disable sound effects and music before play');
  report.uiInput=native?'NativeStage raycast; physical setup clicks and browser-timer pointer events':'legacy DOM controls';
@@ -117,7 +119,7 @@ const originalTraceAdvance=advanceSimulation;advanceSimulation=now=>{const at=pe
  });
  (report.preparation??=[]).push({action,ms:performance.now()-prepareStarted});
  await clickSpeed(0);
- if(native){await page.waitForFunction(()=>window.__harvestUi.ready&&window.__lisiere.speed===0);await clickNative('tab:menu');await clickNative('menu-load');await clickNative('select-save-lisiere.save.v1');await clickNative('load');}
+ if(native){await page.waitForFunction(()=>window.__harvestUi.ready&&window.__lisiere.speed===0);await clickNative('tab:menu');await clickNative('menu-load');await clickNative('select-save-lisiere.save.v1');await clickNative('load-selected');}
  else {await page.locator('[data-panel="menu"]').click();await page.locator('#load').click();}
  await page.keyboard.press('Escape');
  await page.waitForFunction(()=>window.__harvestUi.native?window.__harvestUi.ready&&window.__lisiere.speed===0:!document.querySelector('.game-shell').inert,undefined,{timeout:60000}).catch(async error=>{
@@ -153,5 +155,6 @@ const originalTraceAdvance=advanceSimulation;advanceSimulation=now=>{const at=pe
   if(r.latest<phase.tick+64||r.display>r.play||r.play>r.latest||r.latest-r.play>64||r.queued>64)throw Error('Incoherent recovery: '+JSON.stringify(r));
  }
  await page.screenshot({path:testOutputPath('artifacts/harvest-'+action+'-'+label+'.png')});await page.close();
+ if(process.env.HARVEST_DEBUG_PHASE)console.log(JSON.stringify({action,starvedFrames,controls:phase.controls,starvation:phase.starvation}));
  assertHarvestPhase(phase,process.env.HARVEST_VERIFY_SPEED!=='0',process.env.HARVEST_VERIFY!=='0',switches);
  }}finally{await browser.close();await writeTestFile('artifacts/harvest-sync-'+label+'.json',JSON.stringify(report,null,2)+'\n');}
