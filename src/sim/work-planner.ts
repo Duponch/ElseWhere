@@ -30,7 +30,7 @@ import { prisonFoodChecker } from './prison-food.ts';
 import { huntingWanted,huntingProposal } from './hunting.ts';
 import { wardenWanted,wardenProposal,startWarden } from './warden.ts';
 import {releaseReady,releaseProposal,startPrisonerRelease} from './prisoner-release.ts';
-import { researchWanted,researchProposal } from './research.ts';
+import { benchSpeedFactor, researchWanted,researchProposal } from './research.ts';
 import { feedingProposal,startFeeding } from './feeding.ts';
 import { FEED_HUNGER,needsAssistedFeeding,feedingWork } from './feeding-rules.ts';
 import { lyingPatient,tendingProposal,startTending } from './tending.ts';
@@ -70,7 +70,9 @@ export const PLAN_INTERVAL=20;
 export interface SearchStats { searches:{pawnId:number;mode:'all'|'nearest'|'full';visited:number;unreachedGroups:number;connectivityVisited?:number}[] }
 export interface SearchBudget { remaining:number; pairs:number; stats?:SearchStats;structureGeometry?:()=>StructureNavigationGeometry;
   /** The regions of the decision's navigation grid, only for that exact grid. */
-  regions?:(grid:Uint8Array)=>import('./regions.ts').RegionMap|undefined }
+  regions?:(grid:Uint8Array)=>import('./regions.ts').RegionMap|undefined;
+  /** The decision's work environment (rooms), for station speed factors. */
+  environment?:()=>import('./work-environment.ts').WorkEnvironment }
 export type NavigationGrid=()=>Uint8Array;
 const sameCell=(a:Cell,b:Cell)=>a.x===b.x&&a.z===b.z;
 
@@ -661,7 +663,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
   if(hunting()&&reachableBy('HunterHunt')&&(!best||workPriority(pawn,'hunt')<best.priority||workPriority(pawn,'hunt')===best.priority&&(rim||best.rank>=0))){const proposal=huntingProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={hunting:proposal,priority:workPriority(pawn,'hunt'),rank:-.5,distance:0,id:proposal.task.animalId,target:proposal.target};if(!rim||!best||cmp(candidate,best)<0)best=candidate;}}
   }});
   families.push({givers:[['Research']],run:()=>{
-  if(researching()&&reachableBy('Research')&&(!best||workPriority(pawn,'research')<best.priority||rim&&workPriority(pawn,'research')===best.priority)){const proposal=researchProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={research:proposal,priority:workPriority(pawn,'research'),rank:9,distance:0,id:proposal.task.stationId,target:proposal.task.spot};if(!rim||!best||cmp(candidate,best)<0)best=candidate;}}
+  if(researching()&&reachableBy('Research')&&(!best||workPriority(pawn,'research')<best.priority||rim&&workPriority(pawn,'research')===best.priority)){const proposal=researchProposal(world,pawn,reachable!,rim&&budget.environment?station=>benchSpeedFactor(world,station,budget.environment!()):undefined);if(proposal){const candidate:Candidate={research:proposal,priority:workPriority(pawn,'research'),rank:9,distance:0,id:proposal.task.stationId,target:proposal.task.spot};if(!rim||!best||cmp(candidate,best)<0)best=candidate;}}
   }});
   families.push({givers:[['Drill'],['GroundPenetratingScan']],run:()=>{
   if(deepWorking()&&(reachableBy('Drill')||reachableBy('GroundPenetratingScan')))for(const station of world.structures){

@@ -1292,7 +1292,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     const occupied = CIVIL_TRANSIT_BLOCKERS;
     const budget: SearchBudget = isCorePhysicalSchema297(Number(world.schemaVersion))?coreState297(world).movement.budget():{ remaining: PATH_SEARCHES_PER_TICK, pairs: 32768,stats:diagnostics,structureGeometry:structureNavigation.read };
     if(isCorePhysicalSchema297(Number(world.schemaVersion))){budget.stats=diagnostics;budget.structureGeometry=structureNavigation.read;}
-    budget.regions=getRegions;
+    budget.regions=getRegions;budget.environment=getEnvironment;
     const processMechanicalDecisions=()=>{
       const actors=world.mechanoids;if(!actors?.length)return;
       const batch=mechanoidCombatBatch(world,getBlocked);

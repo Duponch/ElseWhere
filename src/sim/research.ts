@@ -213,12 +213,20 @@ export function selectResearch(world:World,project:unknown):CommandResult {
   for(const local of [world,otherCampaignMap(world)])if(local)for(const pawn of local.pawns){if(pawn.research)releaseAssignments(local,pawn);pawn.planCooldown=0;}
   return {ok:true};
 }
-export function researchProposal(world:World,pawn:Pawn,reach:Reachability):{task:ResearchTask;path:Cell[]}|null {
+/** With `benchSpeed` (schema 301 family), benches are taken in RimWorld's
+ * order: WorkGiver_Researcher is prioritized by the bench's research speed
+ * factor, highest first, then the closest in straight-line distance.
+ * Otherwise by the historical Manhattan distance. */
+export function researchProposal(world:World,pawn:Pawn,reach:Reachability,benchSpeed?:(station:Structure)=>number):{task:ResearchTask;path:Cell[]}|null {
   if(!researchWanted(world,pawn))return null;
   const project=world.research!.project!;
   const reserved=reservedServiceCells(world,pawn.id);
   const stations=world.structures.filter(s=>allowedAreaAllows(world,pawn,s)&&(s.kind==='research-bench'||s.kind==='hi-tech-research-bench')&&researchStationUsable(world,s,project)&&!deconstructionReserved(world,s.id,pawn.id)&&!world.pawns.some(p=>p!==pawn&&p.research?.stationId===s.id))
     .sort((a,b)=>Math.abs(a.x-pawn.x)+Math.abs(a.z-pawn.z)-Math.abs(b.x-pawn.x)-Math.abs(b.z-pawn.z)||a.id-b.id);
+  if(benchSpeed){
+    const speed=new Map(stations.map(s=>[s.id,benchSpeed(s)]));
+    stations.sort((a,b)=>speed.get(b.id)!-speed.get(a.id)!||(a.x-pawn.x)**2+(a.z-pawn.z)**2-((b.x-pawn.x)**2+(b.z-pawn.z)**2)||a.id-b.id);
+  }
   for(const s of stations){const spot=cookingSpot(s);if(reserved.has(spot.z*world.width+spot.x)||!canStandAt(world,spot))continue;
     const facility=s.kind==='hi-tech-research-bench'?nearbyResearchFacility(world,s):undefined;
     if(needsResearchAnalyzer(project)&&!facility)continue;
@@ -253,14 +261,19 @@ export function researchCleanlinessFactor(cleanliness:number|null):number {
 }
 /** Integer micro-points persist work. Room stats reuse the current environment
  * topology and one lazily computed cleanliness result per requested room. */
-export function researchRate(pawn:Pawn,station:Structure,environment:WorkEnvironment,temperature:number,world:World):number {
-  const c=pawnBody(pawn).capacities,skill=intellectualSkill(pawn);
-  const personal=Math.max(.1,(.08+.115*skill.level)*(.5+.5*Math.min(1.1,c.manipulation))*(.5+.5*Math.min(1.1,c.sight))*(glowIgnoredByBlindPawn(world,pawn)?1:environment.speedAt(pawn)));
+/** A bench's research speed factor: bench type and linked analyzer, outdoors,
+ * room cleanliness and role. The work rate also applies the temperature. */
+export function benchSpeedFactor(world:World,station:Structure,environment:WorkEnvironment):number {
   const room=environment.room(station),outdoor=room?.psychologicallyOutdoors??true;
   let cleanliness:number|null=outdoor?null:0;
   if(!outdoor)cleanliness=researchCleanliness(world,station,environment);
   const facilityOffset=nearbyResearchFacility(world,station)?.kind==='multi-analyzer'?.1:0;
-  const bench=Math.max(.25,((station.kind==='hi-tech-research-bench'?1:.75)+facilityOffset)*(outdoor?.75:1)*researchCleanlinessFactor(cleanliness)*(room&&!outdoor&&room.role!=='laboratory'?.8:1)*tailoringTemperatureFactor(temperature));
+  return ((station.kind==='hi-tech-research-bench'?1:.75)+facilityOffset)*(outdoor?.75:1)*researchCleanlinessFactor(cleanliness)*(room&&!outdoor&&room.role!=='laboratory'?.8:1);
+}
+export function researchRate(pawn:Pawn,station:Structure,environment:WorkEnvironment,temperature:number,world:World):number {
+  const c=pawnBody(pawn).capacities,skill=intellectualSkill(pawn);
+  const personal=Math.max(.1,(.08+.115*skill.level)*(.5+.5*Math.min(1.1,c.manipulation))*(.5+.5*Math.min(1.1,c.sight))*(glowIgnoredByBlindPawn(world,pawn)?1:environment.speedAt(pawn)));
+  const bench=Math.max(.25,benchSpeedFactor(world,station,environment)*tailoringTemperatureFactor(temperature));
   return Math.round(.0825*personal*bench*RESEARCH_SCALE);
 }
 export function processResearch(world:World,pawn:Pawn,move:(target:Cell,exact:boolean)=>unknown,rate:(s:Structure)=>number,event:(text:string)=>void):void {
