@@ -821,6 +821,25 @@ Par ailleurs, la doublure qui préchauffe l'usure des colons perdait son test al
 
 **Tests.** L'oracle du test v331 est mis à jour : le préchauffage couvre les deux variantes du réglage courant, vérifié pour chacun des deux réglages. 91 fichiers (scène, colons, faune) : 375 réussis et 111 en échec, ces derniers identiques sur le commit précédent. Les fichiers d'usure et de préchauffage, relancés après la correction du test alpha, n'ont aucun nouvel échec.
 
+### Chargement : un seul programme pour les cultures (8 novembre)
+
+**Constat.** Chaque espèce de culture (riz, pommes de terre, coton, maïs, houblon…) est dessinée par son propre `InstancedMesh`. Pour un `InstancedMesh`, three.js r186 ajoute l'identifiant de l'objet à la clé de cache du programme : il reconstruit donc tout le graphe de nœuds pour chaque lot, environ 200 ms chacun, même avec un matériau commun. Les lots remplacés au premier chargement (capacité portée à la taille de la carte) étaient reconstruits une fois de plus.
+
+**Correction.** L'`InstancedMesh` reste le détenteur des données d'instances, avec la même API : matrices, couleurs, nombre, bornes. Les caméras ne le dessinent plus. Un maillage enfant ordinaire, sur une géométrie instanciée qui partage ses attributs, le dessine avec un programme commun à toutes les espèces. Ce programme reprend la transformation de three pour les instances :
+- matrice lue dans le tampon de stockage de l'objet dessiné (même mécanisme que pour les animaux sauvages) ;
+- transformation de la normale ;
+- couleur d'instance, multipliée par three comme pour un `InstancedMesh`.
+
+Les variantes de matériaux (avec et sans textures) sont des copies de ceux de la scène, tenues à jour à chaque mise à jour du calque. Elles reprennent aussi le test alpha, que `NodeMaterial.copy` ne recopie pas.
+
+**Exactitude.** Captures figées, référence contre ce lot, **0 pixel différent** :
+- les trois grands champs des Forges (≈ 830 plants chacun : riz, pommes de terre, coton), avec et sans textures ;
+- les deux cultures des Éclaircies.
+
+**Mesures** (constructions de shaders des cultures) : 10 → **2** sur Les Forges comme sur Les Éclaircies. Une reste au début du chargement, masquée par la lecture de la sauvegarde ; une sur le chemin critique au lieu de 4 à 5. Sur le chemin critique, cela retire environ 1 à 1,3 s de fil principal. L'apparition d'une nouvelle espèce de culture en jeu, comme le foin, ne reconstruit plus de programme.
+
+**Tests.** 141 fichiers (cultures, scène, colons, faune) : tous les échecs sont identiques sur le commit précédent. Deux fichiers de campagne (`crashlanded-colony`, `survivor-colony`) ne collectent aucun test sans leur variable d'environnement et empêchent vitest de se terminer, comme les campagnes déjà exclues ; leurs groupes ont été lancés avec un délai.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -888,7 +907,7 @@ Les autres rôles de pièce relus (atelier 27 par établi, cuisine 28 par cuisin
    - ~~le passage d’ombres de la scène~~ : programmes d’ombre sans graphe de couleur, 7,2 → 1,0 s de construction sur Les Forges ;
    - ~~un programme partagé entre espèces sauvages~~ : fait, voir « Chargement : un seul programme pour les animaux sauvages » (4,7 → 0,2 s sur Les Forges) ;
    - ~~variantes des colons hors réglage courant~~ : fait, voir « Chargement : préchauffage des colons limité au réglage courant » (≈ 1,3 s) ;
-   - un programme partagé entre lots instanciés de cultures (≈ 1,3 s sur Les Forges) ;
+   - ~~un programme partagé entre lots instanciés de cultures~~ : fait, voir « Chargement : un seul programme pour les cultures » (10 → 2 constructions) ;
    - l’adoption du monde (≈ 4,3 s sur Les Forges) ;
    - avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).
 5. **Simulation, 80 colons (≈ 62 ms par tick, voir « Simulation des Forges : contrôles indexés »).** Le profil est plat : planification du travail ≈ 16 % (ménage, chantiers, accessibilité), déplacements ≈ 12 %, faune ≈ 11 %, coûts de navigation reconstruits à chaque recherche ≈ 3 % (≈ 5 % avant « Simulation : éclairage et coûts de navigation mémorisés »), recherche ≈ 4 % (dont propreté des laboratoires ≈ 1,3 %, voir « Simulation : propreté des laboratoires »). Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.

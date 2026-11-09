@@ -44,7 +44,7 @@ export class ObjectResourceBinder<R extends object> extends THREE.Node {
   texture(read:(record:R)=>THREE.Texture,initial:THREE.Texture):THREE.TextureNode {
     const node=new ObjectBoundTextureNode(initial);this.slots.push({node,read});return node;
   }
-  storage<T extends 'vec4'|'float'|'uint'|'int'|'vec2'|'vec3'>(read:(record:R)=>THREE.StorageBufferAttribute,initial:THREE.StorageBufferAttribute,type:T):THREE.StorageBufferNode<T> {
+  storage<T extends 'vec4'|'float'|'uint'|'int'|'vec2'|'vec3'|'mat4'>(read:(record:R)=>THREE.StorageBufferAttribute,initial:THREE.StorageBufferAttribute,type:T):THREE.StorageBufferNode<T> {
     const node=new ObjectBoundStorageNode(initial,type,0).toReadOnly() as unknown as THREE.StorageBufferNode<T>;
     this.slots.push({node:node as unknown as {value:unknown},read});return node;
   }

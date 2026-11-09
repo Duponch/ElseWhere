@@ -20,6 +20,7 @@ import {PreparedSurfaceOwner,PREPARED_SURFACE_VARIANT} from './origami/baked/sur
 import {canonicalPreparedSurfaceSource} from './origami/baked/surfaces/PreparedSurfaceSource';
 import {preparedNaturalModel,preparedDiagonalVariant} from './origami/baked/surfaces/PreparedSurfaceVariants';
 import {createStylizedSurfaceTexture} from './stylized-surfaces';
+import {CropInstanceViews} from './crop-instance-views';
 
 /** Dedicated resident instancing: sowing never rebuilds forest/rock geometry. */
 export function cropGeometry(kind:ResidentCropKind):THREE.BufferGeometry {
@@ -93,7 +94,7 @@ class CropBatch {
   private readonly preparedSlots=new Map<number,number>();
   private readonly preparedCounts=new Map<number,number>();
   private preparedDemandDirty=false;
-  constructor(private readonly group:THREE.Group,readonly kind:ResidentCropKind,private material: THREE.Material,graphicsStyle:GraphicsStyleContext|undefined,sharedGeometry?:THREE.BufferGeometry,private readonly preparedSurface?:PreparedCropSurface) {
+  constructor(private readonly group:THREE.Group,readonly kind:ResidentCropKind,private material: THREE.Material,graphicsStyle:GraphicsStyleContext|undefined,sharedGeometry?:THREE.BufferGeometry,private readonly preparedSurface?:PreparedCropSurface,private readonly views?:CropInstanceViews) {
     if(kind==='cotton')this.ripe.setHex(0xf0ead7);
     if(kind==='potato')this.ripe.setHex(0x83964a);
     if(kind==='hops'){this.green.setHex(0x72966a);this.ripe.setHex(0xaabd78);}
@@ -104,7 +105,7 @@ class CropBatch {
     this.mesh = this.createMesh(128); this.group.add(this.mesh);
     void graphicsStyle;
   }
-  setMaterial(material:THREE.Material):void {this.material=material;this.mesh.material=material;}
+  setMaterial(material:THREE.Material):void {this.material=material;this.mesh.material=material;if(this.views)this.views.sync();}
   setTargetPreview(ids:ReadonlySet<number>):void {
     if(ids.size===this.targetPreviewIds.size&&[...ids].every(id=>this.targetPreviewIds.has(id)))return;
     this.targetTint.restore();this.targetPreviewIds=new Set(ids);this.tintTargets();
@@ -135,6 +136,7 @@ class CropBatch {
     mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage); mesh.count = 0;
     // Allocate colors before pipeline warmup, including maps with no crops yet.
     mesh.setColorAt(0, this.green); mesh.instanceColor!.setUsage(THREE.StaticDrawUsage); mesh.receiveShadow = true;
+    this.views?.attach(mesh);
     return mesh;
   }
   prepareForCompile(): () => void {
@@ -161,7 +163,7 @@ class CropBatch {
     if (required > this.mesh.instanceMatrix.count) {
       const old = this.mesh, mesh = this.createMesh(2 ** Math.ceil(Math.log2(required)));
       mesh.instanceMatrix.array.set(old.instanceMatrix.array); mesh.instanceColor!.array.set(old.instanceColor!.array);
-      this.group.remove(old); old.dispose(); this.mesh = mesh; this.group.add(mesh);
+      this.group.remove(old); this.views?.detach(old); old.dispose(); this.mesh = mesh; this.group.add(mesh);
     }
     let visibleCount = 0;
     for (const crop of crops) {
@@ -213,7 +215,7 @@ class CropBatch {
       firstMatrix=Math.min(firstMatrix,slot);lastMatrix=Math.max(lastMatrix,slot);this.forgetPreparedVariant(slot);this.slots.delete(id);this.captures.delete(id);this.insertionOrder.delete(id);this.liveSlots.delete(slot);this.free.push(slot);this.residentBounds.remove(slot);boundsChanged=true;
     }
     const required=Math.max(cropCount,reset&&this.kind!=='hops'?world.width*world.height:0),resized=required>this.mesh.instanceMatrix.count;
-    if(resized){const old=this.mesh,mesh=this.createMesh(2**Math.ceil(Math.log2(required)));mesh.instanceMatrix.array.set(old.instanceMatrix.array);mesh.instanceColor!.array.set(old.instanceColor!.array);mesh.count=old.count;this.group.remove(old);old.dispose();this.mesh=mesh;this.group.add(mesh);}
+    if(resized){const old=this.mesh,mesh=this.createMesh(2**Math.ceil(Math.log2(required)));mesh.instanceMatrix.array.set(old.instanceMatrix.array);mesh.instanceColor!.array.set(old.instanceColor!.array);mesh.count=old.count;this.group.remove(old);this.views?.detach(old);old.dispose();this.mesh=mesh;this.group.add(mesh);}
     let visibleCount=this.mesh.count;
     // Producer changes are already sorted by CURRENT source ordinal.
     for(const [id,{resource:crop,appearance}]of changes){
@@ -253,7 +255,7 @@ class CropBatch {
     if(resized){
       const old=this.mesh,mesh=this.createMesh(2**Math.ceil(Math.log2(required)));
       mesh.instanceMatrix.array.set(old.instanceMatrix.array);mesh.instanceColor!.array.set(old.instanceColor!.array);
-      this.group.remove(old);old.dispose();this.mesh=mesh;this.group.add(mesh);
+      this.group.remove(old);this.views?.detach(old);old.dispose();this.mesh=mesh;this.group.add(mesh);
     }
     let visibleCount=0;
     for(const crop of crops){
@@ -290,7 +292,7 @@ class CropBatch {
     if(lastMatrix>=firstMatrix||countChanged||resized||reset)this.mesh.computeBoundingSphere();
     this.publishPreparedDemand();this.tintTargets();
   }
-  dispose(): void {this.clearTargetPreview();this.residentBounds.clear();this.liveSlots.clear();this.insertionOrder.clear();this.captures.clear();this.mesh.dispose();if(this.ownsGeometry)this.geometry.dispose();}
+  dispose(): void {this.clearTargetPreview();this.residentBounds.clear();this.liveSlots.clear();this.insertionOrder.clear();this.captures.clear();this.views?.detach(this.mesh);this.mesh.dispose();if(this.ownsGeometry)this.geometry.dispose();}
 }
 
 /** Historical shapes and the small hops batch are prewarmed even empty.
@@ -311,6 +313,8 @@ export class CropLayer {
   requestPreparedSurfaceQualityRoute(route:'source'|'prepared'|undefined):void{this.preparedSurface?.requestQualityRoute(route);}
   private readonly partition=new CropPresentationPartition();
   private readonly prepared=new PreparedCropPresentation();
+  /** One shared program for all crop kinds (see CropInstanceViews). */
+  private readonly views:CropInstanceViews|undefined;
   constructor(private readonly plainMaterial:THREE.Material,private readonly texturedMaterial:THREE.Material=plainMaterial,pastelSource?:THREE.Texture){
     if(this.graphicsStyle&&texturedMaterial instanceof THREE.NodeMaterial){
       const originals=RESIDENT_CROP_KINDS.map(kind=>cropGeometry(kind));
@@ -329,10 +333,11 @@ export class CropLayer {
         this.sourceTextured=this.sharedTextured;this.sharedTextured=this.preparedSurface.addTarget({sourceMaterial:this.sharedTextured,pastelTexture:pastel,pastelUv:uv(),pastelFromSample:sample=>attribute('color','vec3').mul(sample.rgb),tint:attribute('color','vec3'),inkTint:instanceColor.max(vec3(.000001)).reciprocal(),faceId:attribute(SURFACE_STROKE_FACE,'float'),chartUv:attribute(SURFACE_STROKE_UV,'vec2')});
       }
     }
+    if([this.plainMaterial,this.texturedMaterial,this.sharedTextured].every(material=>!material||material instanceof THREE.NodeMaterial))this.views=new CropInstanceViews();
     this.batches=RESIDENT_CROP_KINDS.filter(kind=>kind!=='haygrass').map(kind=>this.createBatch(kind));
   }
-  private createBatch(kind:ResidentCropKind):CropBatch{return new CropBatch(this.group,kind,this.texturesEnabled?(this.sharedTextured??this.texturedMaterial):this.plainMaterial,this.graphicsStyle,this.surfaceModels?.geometries[RESIDENT_CROP_KINDS.indexOf(kind)],this.preparedVariants.get(kind));}
-  private syncSurfaceLighting():void{if(!this.sharedTextured||!(this.texturedMaterial instanceof THREE.NodeMaterial))return;for(const material of[this.sharedTextured,this.sourceTextured])if(material){material.outputNode=this.texturedMaterial.outputNode;material.maskNode=this.texturedMaterial.maskNode;material.maskShadowNode=this.texturedMaterial.maskShadowNode;}}
+  private createBatch(kind:ResidentCropKind):CropBatch{return new CropBatch(this.group,kind,this.texturesEnabled?(this.sharedTextured??this.texturedMaterial):this.plainMaterial,this.graphicsStyle,this.surfaceModels?.geometries[RESIDENT_CROP_KINDS.indexOf(kind)],this.preparedVariants.get(kind),this.views);}
+  private syncSurfaceLighting():void{if(this.sharedTextured&&this.texturedMaterial instanceof THREE.NodeMaterial)for(const material of[this.sharedTextured,this.sourceTextured])if(material){material.outputNode=this.texturedMaterial.outputNode;material.maskNode=this.texturedMaterial.maskNode;material.maskShadowNode=this.texturedMaterial.maskShadowNode;}this.views?.sync();}
   setTexturesEnabled(enabled:boolean):void {this.texturesEnabled=enabled;for(const batch of this.batches)batch.setMaterial(enabled?(this.sharedTextured??this.texturedMaterial):this.plainMaterial);}
   setTargetPreview(ids:ReadonlySet<number>):void {for(const batch of this.batches)batch.setTargetPreview(ids);}
   clearTargetPreview():void {for(const batch of this.batches)batch.clearTargetPreview();}
@@ -358,5 +363,5 @@ export class CropLayer {
     }
     for(const batch of this.batches)batch.update(world,reset||batch===created,crops[batch.kind],hydroponicCells,readGrowth);
   }
-  dispose():void {this.preparedSurface?.attachGpuRetirement(this.surfaceModels?.geometries??[]);this.preparedSurface?.dispose();this.prepared.clear();for(const batch of this.batches)batch.dispose();if(this.sourceTextured)this.sourceTextured.dispose();else this.sharedTextured?.dispose();this.surfaceModels?.dispose();this.ownedPastel?.dispose();}
+  dispose():void {this.preparedSurface?.attachGpuRetirement(this.surfaceModels?.geometries??[]);this.preparedSurface?.dispose();this.prepared.clear();for(const batch of this.batches)batch.dispose();this.views?.dispose();if(this.sourceTextured)this.sourceTextured.dispose();else this.sharedTextured?.dispose();this.surfaceModels?.dispose();this.ownedPastel?.dispose();}
 }
