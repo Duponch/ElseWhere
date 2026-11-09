@@ -883,6 +883,15 @@ Trois parcours répétés, remplacés à l'identique (état simulé des Forges i
 
 Les chronos de cette séance sont trop bruités pour isoler ces gains (charge concurrente sur la machine) ; seules les parts du profil sont retenues.
 
+- **Couchages des animaux** (`animal-rest.ts`, `animal-rescue.ts`) : seuls les couchages pour animaux peuvent être retenus ; l'index des structures par type les donne dans l'ordre d'origine, au lieu de filtrer toutes les structures de la carte.
+- **Capture des acteurs pour la publication** (`captureCoreActorFast297`, dans `core-frozen-copy-297.ts`) : `captureCoreActor297` reste figée (son contenu est vérifié par empreinte par la preuve de capture des phases). Le publieur utilise une version rapide qui copie avec `frozenDataCopy297`, déjà prouvée indiscernable de la copie de référence ; un test compare les deux captures sur de vrais acteurs, leurs refus et chaque descripteur. Dans le vrai Worker (Les Forges, ×6, parts du profil) : capture des acteurs 6,0 % → 3,4 % du temps du Worker, publication 23,3 % → 21,6 %.
+
+Mesure du vrai Worker (`scripts/perf-worker-run.ts`) : la publication vers l'affichage pèse presque autant que la simulation (≈ 35 % contre ≈ 50 %). Le plus gros poste restant est le clonage des messages (`structuredClone`, ≈ 4 %), fixé par la taille des publications (≈ 960 Ko par publication complète, 80 Ko par paquet frontière). Le réduire demande de changer le protocole de publication, chantier à part.
+
+Outils de test trouvés cassés pendant ce lot, antérieurs à ces changements :
+- les longues campagnes qui importent `tests/scenarios/wood-conservation.ts` se figent au chargement depuis le commit `432de2cf` (17 octobre) : les remplacements de modules (`vi.mock` avec `importOriginal`) s'attendent mutuellement. Le mode `spy: true` évite le blocage mais laisse passer des appels, donc il ne convient pas ;
+- `npm run test:presentation` échoue depuis le commit `649bba01` (1ᵉʳ novembre) : trois fichiers de `src/sim` importent sans extension, ce que Node refuse. Une fois ce point corrigé, son banc (`harvest-sync-bench.mjs`) construit un monde que le moteur refuse (« Stale physical path budget »).
+
 Pistes écartées : un index des tas par case (délai de déplacement, scories d'une pièce) ou des plantes (pousse sauvage) exigerait un journal de toutes les écritures de tas, environ 270 sites dans 131 fichiers. Un oubli fausserait silencieusement la simulation, sans moyen de le détecter à coût nul.
 
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
