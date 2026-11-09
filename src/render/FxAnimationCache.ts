@@ -81,6 +81,9 @@ export class FxAnimationCache {
     const x=int(row.mod(columns)).mul(this.cells).add(cell),y=int(row.div(columns));
     const read=this.node.load(ivec2(x,y));read.updateMatrix=false;return read;
   }
+  /** Whether the shader reads this cache (choose() keeps only the original
+   * graph without detail or with continuous middle detail). */
+  get reads():boolean {return !!this.detail&&!this.continuousMiddle;}
   choose<T extends 'float'|'vec2'|'vec3'|'vec4'>(original:()=>Node<T>,cached:()=>Node<T>,initial:Node<T>=vec3(0) as unknown as Node<T>,row:Node<'uint'>=this.slot):Node<T> {
     if(!this.detail||this.continuousMiddle)return original();
     // Retain one result in the caller's shader stack. Reusing a bare

@@ -39,17 +39,13 @@ export class AnimalSlaughterMarkerStyle {
   dispose():void {this.disposed=true;this.fallback.dispose();this.loaded?.dispose();}
 }
 
-/** Each species shares its body's resident trajectory attributes. Flags change
- * on confirmed snapshots only; movement is evaluated by the same GPU node. */
-export function animalSlaughterMarker(source:THREE.InstancedBufferGeometry,clock:Parameters<typeof pawnPresentationPose>[0],style:AnimalSlaughterMarkerStyle,height:number):THREE.Mesh {
-  const geometry=new THREE.InstancedBufferGeometry();
-  geometry.setAttribute('position',new THREE.Float32BufferAttribute([-.5,-.5,0,.5,-.5,0,-.5,.5,0,.5,.5,0],3));
-  geometry.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,0,1,1,1],2));geometry.setIndex([0,1,2,2,1,3]);
-  for(const name of ['aFrom','aTo','aTravel','aScale'])geometry.setAttribute(name,source.getAttribute(name));
-  geometry.setAttribute('aSlaughter',new THREE.InstancedBufferAttribute(new Float32Array(source.getAttribute('aFrom').count),1).setUsage(THREE.StaticDrawUsage));
-  geometry.instanceCount=0;
+/** The marker program: the same anchor and scale graph for every species. A
+ * shared program passes its object-bound height and the binder writing the
+ * drawn species' resources (placed in the anchor, read by both nodes). */
+export function animalSlaughterMarkerMaterial(clock:Parameters<typeof pawnPresentationPose>[0],style:AnimalSlaughterMarkerStyle,height:number|THREE.Node<'float'>,binder?:THREE.Node):THREE.SpriteNodeMaterial {
   const material=new THREE.SpriteNodeMaterial({transparent:true,depthTest:false,depthWrite:false,alphaTest:.12});
   const anchor=Fn(()=>{
+    binder?.toStack();
     const pose=pawnPresentationPose(clock);
     return vec3(pose.x,pose.y.add(attribute('aScale','float').mul(height)).add(.5),pose.z);
   })();
@@ -59,6 +55,17 @@ export function animalSlaughterMarker(source:THREE.InstancedBufferGeometry,clock
   material.scaleNode=vec2(style.scale).mul(style.perspective.greaterThan(.5).select(depth,1))
     .mul(inRange.select(1,0)).mul(attribute('aSlaughter','float')).mul(style.enabled);
   material.colorNode=style.icon.sample(uv());
+  return material;
+}
+/** Each species shares its body's resident trajectory attributes. Flags change
+ * on confirmed snapshots only; movement is evaluated by the same GPU node. */
+export function animalSlaughterMarker(source:THREE.InstancedBufferGeometry,clock:Parameters<typeof pawnPresentationPose>[0],style:AnimalSlaughterMarkerStyle,height:number,material:THREE.SpriteNodeMaterial=animalSlaughterMarkerMaterial(clock,style,height)):THREE.Mesh {
+  const geometry=new THREE.InstancedBufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute([-.5,-.5,0,.5,-.5,0,-.5,.5,0,.5,.5,0],3));
+  geometry.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,0,1,1,1],2));geometry.setIndex([0,1,2,2,1,3]);
+  for(const name of ['aFrom','aTo','aTravel','aScale'])geometry.setAttribute(name,source.getAttribute(name));
+  geometry.setAttribute('aSlaughter',new THREE.InstancedBufferAttribute(new Float32Array(source.getAttribute('aFrom').count),1).setUsage(THREE.StaticDrawUsage));
+  geometry.instanceCount=0;
   const mesh=new THREE.Mesh(geometry,material);mesh.name='Domestic slaughter — shared GPU trajectories';mesh.frustumCulled=false;mesh.renderOrder=5;mesh.visible=false;
   return mesh;
 }

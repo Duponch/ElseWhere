@@ -840,6 +840,20 @@ Les variantes de matériaux (avec et sans textures) sont des copies de ceux de l
 
 **Tests.** 141 fichiers (cultures, scène, colons, faune) : tous les échecs sont identiques sur le commit précédent. Deux fichiers de campagne (`crashlanded-colony`, `survivor-colony`) ne collectent aucun test sans leur variable d'environnement et empêchent vitest de se terminer, comme les campagnes déjà exclues ; leurs groupes ont été lancés avec un délai.
 
+### Chargement : feu attaché et marqueur d'abattage partagés entre espèces (9 novembre)
+
+**Constat.** Après le partage du corps, chaque espèce sauvage gardait deux programmes à elle : le feu qui brûle sur l'animal et le marqueur d'abattage. Ils ne diffèrent d'une espèce à l'autre que par l'horloge et le cache d'animation de l'espèce, ainsi que par la hauteur du marqueur. Sur Les Forges, ils comptaient 22 et 21 constructions au chargement, et ils étaient encore compilés pour les espèces absentes, après le chargement.
+
+**Correction.** Le programme partagé des corps fournit aussi ces deux matériaux. Leurs horloges, leur cache d'animation et la hauteur du marqueur sont lus pour chaque objet dessiné, par le même mécanisme que le corps.
+
+Le feu attaché des animaux garde son mode « milieu continu » : son cache d'effets n'est jamais lu par le shader, ce que le code vérifie. Ce cache reste propre à chaque espèce, côté CPU, et il est libéré avec elle.
+
+**Exactitude.** Les 15 espèces des Éclaircies, en gros plans figés : **0 pixel différent**. Un muffalo avec marqueur d'abattage forcé : image identique.
+
+**Mesures** (Les Forges) : feu attaché 22 → **2** constructions (343 → 27 ms), marqueur 21 → **1** (374 → 17 ms). Au total, 154 → **114** constructions de shaders au chargement.
+
+**Tests.** 78 fichiers (faune, feu, marqueur, scène) : 315 réussis et 89 en échec, ces derniers identiques sur le commit précédent.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.

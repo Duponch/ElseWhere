@@ -1,7 +1,7 @@
 import { PAWN_MODEL_SCALE } from '../world/scale';
 import * as THREE from 'three/webgpu';
 import { Fn,If,attribute,float,instanceIndex,positionLocal,positionGeometry,sin,cos,uniform,varying,vec2,vec3,mix,texture,uv,uint } from 'three/tsl';
-import { pawnPresentationPose,type PresentationClock } from './pawn-presentation';
+import { pawnPresentationPose,type PresentationClock,type PresentationPoseClock } from './pawn-presentation';
 import type { AnimationDetail } from './AnimationDetail';
 import { FxAnimationCache,fxActorCache,fxActorPose } from './FxAnimationCache';
 import { groundFireVisualScale } from './fire-paper';
@@ -128,30 +128,51 @@ export class FireLayer {
 /** Burning actors share their body's exact motion attributes, including stun,
  * slowed edges, furniture heights and carried-patient pose adjustments. */
 const attachedStates=new WeakMap<THREE.Mesh,{cache:FxAnimationCache;capacity:number;drawn:number[];scale:number;versions:number[];amounts:number[]}>();
-export function attachedFireMesh(source:THREE.BufferGeometry,clock:PresentationClock,scale=1,detail?:AnimationDetail):THREE.Mesh {
-  const geometry=fireGeometry(),count=source.getAttribute('aFrom').count;
-  const size=new THREE.InstancedBufferAttribute(new Float32Array(count),1);source.setAttribute('aFire',size);
-  const carried=source.hasAttribute('aMotion');
-  const scaled=source.hasAttribute('aScale');
-  for(const name of ['aFrom','aTo','aTravel','aFire',...(carried?['aMotion']:[]),...(scaled?['aScale']:[])])geometry.setAttribute(name,source.getAttribute(name));
-  const cache=new FxAnimationCache(3,detail);
-  geometry.setAttribute('fxSlot',new THREE.InstancedBufferAttribute(new Float32Array(count),1));
-  const slots=geometry.getAttribute('fxSlot') as THREE.InstancedBufferAttribute;for(let i=0;i<count;i++)slots.setX(i,i);
-  const material=fireMaterial(detail?uint(attribute('fxSlot','float')):instanceIndex);material.positionNode=cache.choose(()=>Fn(()=>{
+/** The original (non-cached) flame position graph of an attached fire. */
+function attachedFireOriginal(clock:PresentationPoseClock,scale:number,carried:boolean,scaled:boolean,before?:THREE.Node):THREE.Node<'vec3'> {
+  return Fn(()=>{
+    before?.toStack();
     const size=attribute('aFire','float'),pose=pawnPresentationPose(clock,uint(attribute('fxSlot','float')));
     const pulse=sin(clock.travelTime.mul(8).add(pose.x)).mul(.15).add(1);
     const local=vec3(positionLocal.x,positionLocal.y.add(.75).mul(pulse),positionLocal.z)
       .mul(size.mul(scale).mul(scaled?attribute('aScale','float'):float(1)));
     const offset=carried?attribute('aMotion','vec4').z.equal(6).select(vec3(sin(pose.w).mul(.3*PAWN_MODEL_SCALE),.95+.19*PAWN_MODEL_SCALE,cos(pose.w).mul(.3*PAWN_MODEL_SCALE)),vec3(0)):vec3(0);
     return size.greaterThan(0).select(local.add(pose.xyz).add(offset),vec3(0,-100,0));
-  })(),()=>{
-    const offset=cache.cell(1),shape=cache.cell(2),pose=pawnPresentationPose(clock,uint(attribute('fxSlot','float')));
-    return vec3(positionLocal.x,positionLocal.y.add(.75).mul(shape.x),positionLocal.z).mul(shape.y).add(pose.xyz).add(offset.xyz);
-  });
+  })() as THREE.Node<'vec3'>;
+}
+/** Shape flags an attached fire reads from its actor source. */
+export function attachedFireShape(source:THREE.BufferGeometry):{carried:boolean;scaled:boolean} {return{carried:source.hasAttribute('aMotion'),scaled:source.hasAttribute('aScale')};}
+/** One attached-fire program for several actor batches of the same shape
+ * whose clocks are read per drawn object (written by binder). It is the graph
+ * attachedFireMesh builds when its effect cache keeps continuous middle
+ * detail, which never reads the cache in the shader. */
+export function sharedAttachedFireMaterial(clock:PresentationPoseClock,scale:number,detail:AnimationDetail|undefined,shape:{carried:boolean;scaled:boolean},binder:THREE.Node):THREE.MeshBasicNodeMaterial {
+  const material=fireMaterial(detail?uint(attribute('fxSlot','float')):instanceIndex);
+  material.positionNode=attachedFireOriginal(clock,scale,shape.carried,shape.scaled,binder);return material;
+}
+export function attachedFireMesh(source:THREE.BufferGeometry,clock:PresentationClock,scale=1,detail?:AnimationDetail,shared?:THREE.MeshBasicNodeMaterial):THREE.Mesh {
+  const geometry=fireGeometry(),count=source.getAttribute('aFrom').count;
+  const size=new THREE.InstancedBufferAttribute(new Float32Array(count),1);source.setAttribute('aFire',size);
+  const {carried,scaled}=attachedFireShape(source);
+  for(const name of ['aFrom','aTo','aTravel','aFire',...(carried?['aMotion']:[]),...(scaled?['aScale']:[])])geometry.setAttribute(name,source.getAttribute(name));
+  const cache=new FxAnimationCache(3,detail);
+  geometry.setAttribute('fxSlot',new THREE.InstancedBufferAttribute(new Float32Array(count),1));
+  const slots=geometry.getAttribute('fxSlot') as THREE.InstancedBufferAttribute;for(let i=0;i<count;i++)slots.setX(i,i);
+  let material=shared;
+  if(!material){
+    material=fireMaterial(detail?uint(attribute('fxSlot','float')):instanceIndex);material.positionNode=cache.choose(()=>attachedFireOriginal(clock,scale,carried,scaled),()=>{
+      const offset=cache.cell(1),shape=cache.cell(2),pose=pawnPresentationPose(clock,uint(attribute('fxSlot','float')));
+      return vec3(positionLocal.x,positionLocal.y.add(.75).mul(shape.x),positionLocal.z).mul(shape.y).add(pose.xyz).add(offset.xyz);
+    });
+    material.addEventListener('dispose',()=>cache.dispose());
+  }else if(cache.reads)throw Error('A shared attached-fire program cannot read a per-batch effect cache');
   geometry.instanceCount=0;const mesh=new THREE.Mesh(geometry,material);mesh.frustumCulled=false;mesh.name='Attached fire — body GPU poses';
   attachedStates.set(mesh,{cache,capacity:0,drawn:[],scale,versions:[],amounts:[]});
-  material.addEventListener('dispose',()=>cache.dispose());return mesh;
+  return mesh;
 }
+/** Releases the effect cache of an attached fire drawn with a shared program
+ * (an owned program releases it with its material). */
+export function disposeAttachedFireCache(mesh:THREE.Mesh):void {attachedStates.get(mesh)?.cache.dispose();}
 
 /** Called after the body cache publication. Slots refer to the actor source,
  * even though only visible, burning actors occupy the compact flame stream. */

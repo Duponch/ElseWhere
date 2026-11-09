@@ -4,7 +4,7 @@ import {ActorPlayback435} from './ActorPlayback435';
 import {arrivalRotationYaw256} from '../sim/arrival-rotation-256';
 import {actorExplorationMaterial256} from './ExplorationMask256';
 import {isAnimalSpecies256} from '../sim/animal-core-v256';
-import { attachedFireMesh,presentAttachedFire, setFireTexturesEnabled } from './FireLayer';
+import { attachedFireMesh,attachedFireShape,disposeAttachedFireCache,presentAttachedFire,setFireTexturesEnabled,sharedAttachedFireMaterial } from './FireLayer';
 import { AnimationDetail } from './AnimationDetail';
 import {ActorAnimationCache,ActorAnimationCacheNodes,sampleActorRoot} from './ActorAnimationCache';
 import {ObjectResourceBinder} from './object-bound-nodes';
@@ -41,7 +41,7 @@ import { corpsePartAbsent } from '../sim/corpse-anatomy';
 import { autoSlaughterTargets } from '../sim/auto-slaughter';
 import {wildlifePresentationGroups,type VisualAnimal} from './wildlife-presentation-groups';
 import type { PawnLayer } from './PawnLayer';
-import {animalSlaughterMarker,AnimalSlaughterMarkerStyle} from './AnimalSlaughterMarker';
+import {animalSlaughterMarker,animalSlaughterMarkerMaterial,AnimalSlaughterMarkerStyle} from './AnimalSlaughterMarker';
 import type {SceneTextureLoader} from './scene-render-ports';
 import { growPawnBuffers } from './pawn-buffers';
 import {WildlifeBodyScale,WildlifeFrameState} from './wildlife-frame-state';
@@ -72,12 +72,18 @@ class WildlifeBodyProgram {
   register(rig:SpeciesRig):void {this.rigsByCache.set(rig.animationCache,rig);}
   readonly plain:THREE.MeshStandardNodeMaterial;
   readonly textured:THREE.MeshStandardNodeMaterial;
-  constructor(first:SpeciesRig,travelTime:WildlifeLayer['travelTime'],detail:AnimationDetail,configure:((m:THREE.MeshStandardNodeMaterial)=>void)|undefined,graphics:GraphicsStyleContext,readonly bones:readonly number[],prepared:AffineStrokeOwner|undefined) {
+  /** Slaughter marker of every species, anchored at its own height. */
+  readonly slaughter:THREE.SpriteNodeMaterial;
+  /** Attached fire of every species with the program's fire shape. */
+  readonly fire:THREE.MeshBasicNodeMaterial;readonly fireShape:{readonly carried:boolean;readonly scaled:boolean};
+  constructor(first:SpeciesRig,travelTime:WildlifeLayer['travelTime'],detail:AnimationDetail,configure:((m:THREE.MeshStandardNodeMaterial)=>void)|undefined,graphics:GraphicsStyleContext,readonly bones:readonly number[],prepared:AffineStrokeOwner|undefined,style:AnimalSlaughterMarkerStyle,fireShape:{readonly carried:boolean;readonly scaled:boolean}) {
     const binder=this.binder,firstCache=first.animationCache;
     const cache=new ActorAnimationCacheNodes(detail,binder.texture(rig=>rig.animationCache.texture,firstCache.texture),binder.uniform(rig=>rig.animationCache.minimumScaleValue,firstCache.minimumScaleValue),binder.uniform(rig=>rig.animationCache.originsValue,firstCache.originsValue));
     const presentationTime=binder.uniform(rig=>rig.presentationTime,first.presentationTime),blend=binder.uniform(rig=>rig.blend.value,first.blend.value);
     const gaitRate=binder.uniform(rig=>rig.gaitRate,first.gaitRate),bodyCenter=binder.uniform(rig=>rig.bodyCenter,first.bodyCenter),restFloor=binder.uniform(rig=>rig.restFloor,first.restFloor),bloodScale=binder.uniform(rig=>rig.bloodScale,first.bloodScale);
     const coat=binder.texture(rig=>rig.coatTexture,first.coatTexture),clock={travelTime,blend,animationCache:cache};
+    this.slaughter=animalSlaughterMarkerMaterial(clock,style,binder.uniform(rig=>rig.slaughterHeight,first.slaughterHeight),binder);
+    this.fireShape=fireShape;this.fire=sharedAttachedFireMaterial(clock,.6,detail,fireShape,binder);
     const mat=material(0xffffff);configure?.(actorExplorationMaterial256(mat));
     // The packed paint word replaces the original RGB input in this pipeline;
     // the CPU color alias must never consume a second vertex attribute slot.
@@ -188,17 +194,17 @@ class WildlifeBodyProgram {
     const bodyOptions:SharedPaintSurfaceOptions={context:graphics,base:baseColor,pastel:pastelFromSample(texture(coat,surfaceUv.zw)),faceUv:surfaceUv.xy,profile,pigmentDomain:'game-static78',includeGeneric:true,gouacheTransform:withBlood,stroke:buildStroke()};applySharedPaintSurface(textured,bodyOptions);
     this.plain=mat;this.textured=textured;
   }
-  dispose():void {this.plain.dispose();this.textured.dispose();}
+  dispose():void {this.plain.dispose();this.textured.dispose();this.slaughter.dispose();this.fire.dispose();}
 }
 /** One program per distinct bone set and stroke representation; every
  * species rig of a layer acquires its program here. */
 class WildlifeBodyPrograms {
   private readonly programs=new Map<string,WildlifeBodyProgram>();
-  constructor(private readonly travelTime:WildlifeLayer['travelTime'],private readonly detail:AnimationDetail,private readonly configure:((m:THREE.MeshStandardNodeMaterial)=>void)|undefined){}
-  acquire(rig:SpeciesRig,graphics:GraphicsStyleContext,bones:readonly number[],prepared:AffineStrokeOwner|undefined):WildlifeBodyProgram {
-    const key=JSON.stringify([bones,prepared?['prepared',prepared.source.interiorCircle===true]:['source']]);
+  constructor(private readonly travelTime:WildlifeLayer['travelTime'],private readonly detail:AnimationDetail,private readonly configure:((m:THREE.MeshStandardNodeMaterial)=>void)|undefined,private readonly style:AnimalSlaughterMarkerStyle){}
+  acquire(rig:SpeciesRig,graphics:GraphicsStyleContext,bones:readonly number[],prepared:AffineStrokeOwner|undefined,fireShape:{readonly carried:boolean;readonly scaled:boolean}):WildlifeBodyProgram {
+    const key=JSON.stringify([bones,prepared?['prepared',prepared.source.interiorCircle===true]:['source'],fireShape.carried,fireShape.scaled]);
     let program=this.programs.get(key);
-    if(!program){program=new WildlifeBodyProgram(rig,this.travelTime,this.detail,this.configure,graphics,bones,prepared);this.programs.set(key,program);}
+    if(!program){program=new WildlifeBodyProgram(rig,this.travelTime,this.detail,this.configure,graphics,bones,prepared,this.style,fireShape);this.programs.set(key,program);}
     program.register(rig);return program;
   }
   get size():number {return this.programs.size;}
@@ -231,7 +237,8 @@ class SpeciesRig {
       for(const [name,attribute] of Object.entries(from.attributes))stand.setAttribute(name,attribute);
       if(from.index)stand.setIndex(from.index);
       stand.userData=from.userData;stand.instanceCount=1;
-      const mesh=new THREE.Mesh(stand,source.material);if(source===this.mesh)this.bodyProgram.binder.attach(mesh,this);mesh.frustumCulled=false;mesh.castShadow=source.castShadow;mesh.receiveShadow=source.receiveShadow;mesh.renderOrder=source.renderOrder;
+      // Both stand-ins draw shared programs with this rig's resources.
+      const mesh=new THREE.Mesh(stand,source.material);this.bodyProgram.binder.attach(mesh,this);mesh.frustumCulled=false;mesh.castShadow=source.castShadow;mesh.receiveShadow=source.receiveShadow;mesh.renderOrder=source.renderOrder;
       group.add(mesh);
     }
     return group;
@@ -280,7 +287,7 @@ class SpeciesRig {
   private readonly gait=new GaitPhaseTracker();
   readonly gaitRate:number;
   /** Per-species values and resources read by the shared body program. */
-  readonly bodyCenter:number;readonly restFloor:number;readonly bloodScale:number;readonly coatTexture:THREE.DataTexture;
+  readonly bodyCenter:number;readonly restFloor:number;readonly bloodScale:number;readonly coatTexture:THREE.DataTexture;readonly slaughterHeight:number;
   private readonly strokeOwner:AffineStrokeOwner|undefined;
   private readonly bodyProgram:WildlifeBodyProgram;
   get presentationTime():number {return this.time.value;}
@@ -306,9 +313,9 @@ class SpeciesRig {
     const restFloor=.025-bounds.min.x,bodyCenter=geometry.userData.origamiBodyCenter??animalParts(species)[0]!.center[1];
     this.restingHeight=bounds.max.x+restFloor;
     this.restingRadius=Math.max(Math.abs(bodyCenter-bounds.min.y),Math.abs(bodyCenter-bounds.max.y),Math.abs(bounds.min.z),Math.abs(bounds.max.z))+.1;
-    this.bodyCenter=bodyCenter;this.restFloor=restFloor;this.bloodScale=species==='hare'||species==='snow-hare'?2:1;this.coatTexture=surfaceTexture;
+    this.slaughterHeight=bounds.max.y;this.bodyCenter=bodyCenter;this.restFloor=restFloor;this.bloodScale=species==='hare'||species==='snow-hare'?2:1;this.coatTexture=surfaceTexture;
     this.strokeOwner=graphics.preparedStrokes.acquire(model.strokes);
-    const program=programs.acquire(this,graphics,this.sampledBones,this.strokeOwner);this.bodyProgram=program;
+    const program=programs.acquire(this,graphics,this.sampledBones,this.strokeOwner,attachedFireShape(geometry));this.bodyProgram=program;
     this.plainMaterial=program.plain;this.texturedMaterial=program.textured;
     // Atlas preparation renders its own bake programs. They keep this rig's
     // own static resources, never the object-bound ones of the shared program.
@@ -323,10 +330,10 @@ class SpeciesRig {
     const pastelFromSample=(sample:THREE.Node<'vec4'>)=>withBlood(baseColor).mul(sample.r.mul(.8).add(.28));
     this.pastelSourceTexture=surfaceTexture;this.pastelFromSample=pastelFromSample;
     this.bodyBakeOptions=surfacePosition=>({context:graphics,base:baseColor,pastel:pastelFromSample(texture(surfaceTexture,surfaceUv.zw)),faceUv:surfaceUv.xy,profile,pigmentDomain:'game-static78',includeGeneric:true,gouacheTransform:withBlood,surfacePosition,stroke:canonicalStroke(surfacePosition)});
-    this.mesh=new THREE.Mesh(geometry,this.texturedMaterial);program.binder.attach(this.mesh,this);this.bodyAtlas=new ActorAtlasOwner({key:'animal-full-body:'+this.species+':'+this.mesh.uuid,kind:'animal',context:graphics,readPort:()=>this.bodySurfaceBakeSource(),ownerCount:()=>(this.mesh.geometry as THREE.InstancedBufferGeometry).instanceCount,changed:()=>this.selectSurfaceMaterial(),configure:material=>{configure?.(actorExplorationMaterial256(material));}});this.selectSurfaceMaterial();this.mesh.name=`Wild ${this.species} — GPU rig`;this.mesh.frustumCulled=false;this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.flames=attachedFireMesh(this.mesh.geometry,this,.6,this.animationDetail);
+    this.mesh=new THREE.Mesh(geometry,this.texturedMaterial);program.binder.attach(this.mesh,this);this.bodyAtlas=new ActorAtlasOwner({key:'animal-full-body:'+this.species+':'+this.mesh.uuid,kind:'animal',context:graphics,readPort:()=>this.bodySurfaceBakeSource(),ownerCount:()=>(this.mesh.geometry as THREE.InstancedBufferGeometry).instanceCount,changed:()=>this.selectSurfaceMaterial(),configure:material=>{configure?.(actorExplorationMaterial256(material));}});this.selectSurfaceMaterial();this.mesh.name=`Wild ${this.species} — GPU rig`;this.mesh.frustumCulled=false;this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.flames=attachedFireMesh(this.mesh.geometry,this,.6,this.animationDetail,program.fire);program.binder.attach(this.flames,this);
     this.selection=pawnSelectionMesh(this.mesh.geometry as THREE.InstancedBufferGeometry,this);this.selection.visible=false;
     (this.selection.geometry as THREE.InstancedBufferGeometry).instanceCount=0;
-    this.slaughter=animalSlaughterMarker(this.mesh.geometry as THREE.InstancedBufferGeometry,this,style,geometry.boundingBox!.max.y);
+    this.slaughter=animalSlaughterMarker(this.mesh.geometry as THREE.InstancedBufferGeometry,this,style,this.slaughterHeight,this.bodyProgram.slaughter);this.bodyProgram.binder.attach(this.slaughter,this);
     this.mesh.visible=false;this.flames.visible=false;this.installOrigamiPartUnions();this.refreshWearEffect();this.releaseFeatureRefresh=graphics.trackSharedSurfaceRefresh(()=>this.refreshWearEffect());
   }
   private refreshWearEffect():void{
@@ -681,8 +688,8 @@ export class WildlifeLayer {
   private selected:ReadonlySet<number>=new Set();
   constructor(configure?:(m:THREE.MeshStandardNodeMaterial)=>void,loadTexture?:SceneTextureLoader,animationDetail=new AnimationDetail()){
     const graphics=currentGraphicsStyle();this.graphicsContext=graphics??new GraphicsStyleContext();this.ownsGraphicsContext=!graphics;
-    this.bodyPrograms=new WildlifeBodyPrograms(this.travelTime,animationDetail,configure);
     this.markerStyle=new AnimalSlaughterMarkerStyle(loadTexture);
+    this.bodyPrograms=new WildlifeBodyPrograms(this.travelTime,animationDetail,configure,this.markerStyle);
     this.rigs=withGraphicsStyle(this.graphicsContext,()=>ANIMAL_SPECIES_IDS.map(species=>new SpeciesRig(this.travelTime,species,this.surfaceTextures[animalCoat(species)],this.markerStyle,animationDetail,configure,this.models,this.bodyPrograms)));
     for(const rig of this.rigs){this.mesh.add(rig.mesh,rig.selection,rig.slaughter);this.flames.add(rig.flames);}
   }
@@ -743,9 +750,8 @@ export class WildlifeLayer {
       r.clearPlayback435();r.animationCache.dispose();
       r.disposeOrigamiCompanions();
       for(const m of [r.mesh,r.flames,r.selection,r.slaughter])m.geometry.dispose();
-      (r.flames.material as THREE.Material).dispose();
+      disposeAttachedFireCache(r.flames);
       (r.selection.material as THREE.Material).dispose();
-      (r.slaughter.material as THREE.Material).dispose();
     }
     this.bodyPrograms.dispose();
     for(const texture of Object.values(this.surfaceTextures))texture.dispose();
