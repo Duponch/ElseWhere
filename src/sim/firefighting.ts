@@ -1,4 +1,6 @@
 import { workPriority } from './work-types.ts';
+import { urgentWorkEnabled } from './urgent-care.ts';
+import { rimWorkGiverOrder301 } from './work-givers-rimworld.ts';
 import { allowedAreaAllows,allowedAreaReason,captureAllowedArea } from './allowed-area-state.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
 import { isColonist,isPlayerPatient } from './affiliation.ts';
@@ -88,8 +90,11 @@ export function processFirefighting(w:World,p:Pawn,context:NeedContext):boolean 
     if(p.orders.active!==null||p.orders.queue.length||p.flee||p.melee||p.shooting||p.hunger<=0||p.rest<=0)return false;
     const current=currentPriority(w,p),priority=workPriority(p,'firefight');
     // Ordinary idle work is ranked by planWork. This is only a running-task
-    // interruption or the separate drafted contact reflex.
-    if(!priority||!p.draft&&(current===null||current<priority))return false;
+    // interruption or the separate drafted contact reflex. In the schema 301
+    // family an idle colonist whose firefighting is on Core's emergency list
+    // fights fires before eating (short of starvation), sleeping or relaxing,
+    // as JobGiver_Work(emergency) comes before those needs in Humanlike.
+    if(!priority||!p.draft&&(current===null?!urgentWorkEnabled(p,'firefight',w)||!rimWorkGiverOrder301(Number(w.schemaVersion)):current<priority))return false;
     const fires=firefightingTargets(w,p).filter(f=>!p.draft||fireTouch(w,p,firePosition(w,f)!));if(!fires.length)return false;
     const reach=context.search(new Set(fires.flatMap(f=>{const c=firePosition(w,f)!;return [c,...workNeighbours(c,'mine')].filter(v=>inside(w,v)&&fireTouch(w,v,c)).map(c=>c.z*w.width+c.x);})));if(!reach)return false;
     const proposal=firefightingProposal(w,p,reach);if(!proposal||p.draft&&!fireTouch(w,p,proposal.target))return false;

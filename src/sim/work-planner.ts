@@ -210,39 +210,15 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     if(scansDestination(a)&&scansDestination(b))return order(sourceKey(a),sourceKey(b))||horizontalDistanceSquared(pawn,a.target)-horizontalDistanceSquared(pawn,b.target);
     return 0;
   };
-  // Most thing givers search region by region from the pawn (RimWorld's
-  // ClosestThingReachable): the first region, in breadth-first order through
-  // the regions the pawn may enter, that lists a valid thing wins, then the
-  // closest thing in it; beyond the giver's region limit, the closest thing
-  // overall. A thing is listed in the regions it can be worked from: its own
-  // cell and, for a touch, the cells around it.
-  let regionSearch:{map:RegionMap;traversal:RegionTraversal}|undefined;
-  const regionSearchOf=()=>{
-    if(!regionSearch){
-      const grid=getBlocked(),map=budget.regions?.(grid)??regionMapFor(world,grid),doors=new Map<number,0|1>();
-      actorObstacleWrites(world,pawn,(index,value)=>{const r=index>=0&&index<map.regionOf.length?map.regionOf[index]!:-1;if(r>=0&&map.doorCell[r]===index)doors.set(index,value);});
-      regionSearch={map,traversal:regionTraversal(map,pawn.z*world.width+pawn.x,r=>{const cell=map.doorCell[r]!;return cell<0||(doors.get(cell)??map.grid[cell])===0;})};
-    }
-    return regionSearch;
-  };
-  const listingCells=(map:RegionMap,cell:Cell,touch:boolean):number[]=>{
-    const i=cell.z*world.width+cell.x,own=i>=0&&i<map.regionOf.length?map.regionOf[i]!:-1;
-    if(!touch&&own>=0)return [i];
-    const cells=[i];
-    for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++)if((dx||dz)&&inBounds(world,cell.x+dx,cell.z+dz))cells.push(i+dz*world.width+dx);
-    return cells;
-  };
-  const searchKey=(cell:Cell,giver:RimWorkGiverId):number=>{
-    const search=RIM_WORK_GIVER_SEARCH[giver];if(!search.regionwise)return 0;
-    const {map,traversal}=regionSearchOf();
-    return regionSearchKey(map,traversal,listingCells(map,cell,search.pathEnd==='touch'||search.pathEnd==='closest-touch'),search.maxRegions);
-  };
+  // RimWorld's target search order (regions, then the whole map).
+  const targetSearch=regionSearch(world,pawn,getBlocked,budget.regions);
+  const searchKey=(cell:Cell,giver:RimWorkGiverId):number=>targetSearch.key(cell,giver);
   const giverMemo=new WeakMap<Candidate,RimWorkGiverId>(),keyMemo=new WeakMap<Candidate,number>(),sourceKeyMemo=new WeakMap<Candidate,number>();
   const giverFor=(c:Candidate)=>{let g=giverMemo.get(c);if(g===undefined){g=giverOf(c);giverMemo.set(c,g);}return g;};
   const regionKey=(c:Candidate)=>{let k=keyMemo.get(c);if(k===undefined){const g=giverFor(c);k=searchKey(RIM_WORK_GIVER_SEARCH[g].pathEnd==='interaction'&&!scansDestination(c)?c.target:workCell(c),g);keyMemo.set(c,k);}return k;};
   // A delivery's resource is searched the same way, from the pawn.
   const sourceKey=(c:Candidate)=>{let k=sourceKeyMemo.get(c);if(k===undefined){k=searchKey(c.target,'ConstructDeliverResourcesToBlueprints');sourceKeyMemo.set(c,k);}return k;};
-  const order=(x:number,y:number)=>x===y?0:x<y?-1:1;
+  const order=compareSearchKeys;
   const cmp=(a:Candidate,b:Candidate):number=>rim
     ?compareRimWorkGivers(rimWorkGiver(giverFor(a)),a.priority,rimWorkGiver(giverFor(b)),b.priority)||order(regionKey(a),regionKey(b))||horizontalDistanceSquared(pawn,workCell(a))-horizontalDistanceSquared(pawn,workCell(b))||deliveryTie(a,b)||a.id-b.id
     :compareCandidate(a,b);
@@ -356,7 +332,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     const candidate:Candidate={prisonerRelease:proposal,priority:releasePriority,rank:-2,distance:Math.abs(pawn.x-patient.x)+Math.abs(pawn.z-patient.z),id:patient.id,target:patient};
     if(!best||cmp(candidate,best)<0)best=candidate;
   }
-  if(warding&&reachableBy('DeliverFoodToPrisoner')){const proposal=wardenProposal(world,pawn,reachable);if(proposal){const candidate:Candidate={ward:proposal,priority:workPriority(pawn,'warden'),rank:-2,distance:Math.abs(pawn.x-proposal.task.spot.x)+Math.abs(pawn.z-proposal.task.spot.z),id:proposal.task.patientId,target:proposal.task.spot};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  if(warding&&reachableBy('DeliverFoodToPrisoner')){const proposal=wardenProposal(world,pawn,reachable,rim?targetSearch:undefined);if(proposal){const candidate:Candidate={ward:proposal,priority:workPriority(pawn,'warden'),rank:-2,distance:Math.abs(pawn.x-proposal.task.spot.x)+Math.abs(pawn.z-proposal.task.spot.z),id:proposal.task.patientId,target:proposal.task.spot};if(!best||cmp(candidate,best)<0)best=candidate;}}
   if(fightingFire){const proposal=firefightingProposal(world,pawn,reachable);if(proposal){const candidate:Candidate={firefighting:proposal,priority:workPriority(pawn,'firefight'),rank:-7,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.fireId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
   if(selfCare){const proposal=patientProposal(world,pawn,reachable);if(proposal){const candidate:Candidate={patientRest:proposal,priority:workPriority(pawn,proposal.work),rank:proposal.work==='patient'?-6:-2,distance:0,id:pawn.id,target:pawn};if(!best||cmp(candidate,best)<0)best=candidate;}}
   if(selfTreatment){
@@ -415,7 +391,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
   const obstaclesOf=()=>constructionObstacles??=constructionObstructions(world);
   if(constructionReachable)for(const candidate of constructionCandidates(world,pawn,blocked,reachable,budget,obstaclesOf()))if(!best||cmp(candidate,best)<0)best=candidate;
   if(cooking && (!best || productionRank<=best.priority)) {
-    const proposal=planCooking(world,pawn,reachable,budget);
+    const proposal=planCooking(world,pawn,reachable,budget,undefined,rim?targetSearch:undefined);
     if(proposal){const candidate:Candidate={cooking:proposal,priority:proposal.priority,rank:-1,distance:Math.abs(pawn.x-proposal.station.x)+Math.abs(pawn.z-proposal.station.z),id:proposal.station.id,target:proposal.target};
       if(rim?!best||cmp(candidate,best)<0:!best||proposal.priority<best.priority||proposal.priority===best.priority&&best.rank>=-1)best=candidate;}
   }
@@ -558,21 +534,32 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
         known.set(destinationIndex,ok);return ok;
       };
       let hauled:Candidate|null=null;
+      // A pile already in storage of the highest priority has no better one.
+      let topPriority=-Infinity;for(const i of storageIndexes)topPriority=Math.max(topPriority,destinations[i]!.priority);
       scan:for(const pileIndex of sourceOrder){
         const source=at(pileIndex);
         if(hauled&&near(source)>near(hauled.target))break;
-        const facts=factsFor(pileIndex);if(facts.available<=0)continue;
+        const facts=factsFor(pileIndex);if(facts.available<=0||facts.currentPriority>=topPriority)continue;
         const {levels,usable:known}=storageOf(pileIndex);
         // The highest priority above the pile's current one that has a valid
         // cell, and in it the cell closest to the pile.
         for(const level of levels){
           if(level.priority<=facts.currentPriority)break;
           if(!level.open)continue;
-          const cells=level.cells.filter(i=>known.get(i)!==false).sort((a,b)=>horizontalDistanceSquared(source,destinations[a]!.target)-horizontalDistanceSquared(source,destinations[b]!.target)||a-b);
-          let found=false;
-          for(const destinationIndex of cells){
+          // Cells from the closest to the pile (ties by index); usually the
+          // first one is taken, so it is found by a scan rather than a sort.
+          let found=false;const tried=new Set<number>();
+          for(;;){
+            let destinationIndex=-1,closest=Infinity;
+            for(const i of level.cells){
+              if(known.get(i)===false||tried.has(i))continue;
+              const d=horizontalDistanceSquared(source,destinations[i]!.target);
+              if(d<closest||d===closest&&i<destinationIndex){closest=d;destinationIndex=i;}
+            }
+            if(destinationIndex<0)break;
             if(!spend())break scan;
             if(!usable(pileIndex,destinationIndex,known)){level.open--;continue;}
+            tried.add(destinationIndex);
             const candidate=pair(pileIndex,destinationIndex,hauled??best);
             if(candidate===false){found=true;break;}
             if(candidate){hauled=candidate;found=true;break;}
@@ -629,7 +616,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     const candidate:Candidate={deepWork:proposal,priority,rank,distance:Math.abs(pawn.x-proposal.task.spot.x)+Math.abs(pawn.z-proposal.task.spot.z),id:station.id,target:proposal.task.spot};
     if(!best||cmp(candidate,best)<0)best=candidate;
   }
-  if(cleaning&&reachableBy('CleanClearSnow')&&(!best||workPriority(pawn,'clean')<best.priority||rim&&workPriority(pawn,'clean')===best.priority)){const proposal=cleaningProposal(world,pawn,reachable!);if(proposal){
+  if(cleaning&&reachableBy('CleanClearSnow')&&(!best||workPriority(pawn,'clean')<best.priority||rim&&workPriority(pawn,'clean')===best.priority)){const proposal=cleaningProposal(world,pawn,reachable!,rim?targetSearch:undefined);if(proposal){
     if(!rim){startCleaning(pawn,proposal);return;}
     const candidate:Candidate={cleaning:proposal,priority:workPriority(pawn,'clean'),rank:0,distance:0,id:proposal.id,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
   if(burying&&(rim?!best||compareRimWorkGivers(rimWorkGiver('HaulCorpses'),workPriority(pawn,'haul'),rimWorkGiver(giverOf(best)),best.priority)<0:!best||workPriority(pawn,'haul')<best.priority||workPriority(pawn,'haul')===best.priority&&best.rank>1)&&assignBurial(world,pawn,()=>reachable))return;
@@ -665,5 +652,4 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
 }
 import { medicalWorkRefusal } from './health-rules.ts';
 import { compareRimWorkGivers,horizontalDistanceSquared,jobWorkGiver,RIM_WORK_GIVER_SEARCH,rimWorkGiver,rimWorkGiverOrder301,stationWorkGiver,type RimWorkGiverId } from './work-givers-rimworld.ts';
-import { regionMapFor,regionSearchKey,regionTraversal,type RegionMap,type RegionTraversal } from './regions.ts';
-import { actorObstacleWrites } from './combat-navigation.ts';
+import { compareSearchKeys,regionSearch } from './region-search.ts';

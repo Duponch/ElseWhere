@@ -24,6 +24,7 @@ import { clearQueuedOrders } from './player-orders.ts';
 import { releaseWork } from './work-release.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell,Pawn,World } from './types.ts';
+import { compareSearchKeys,type RegionSearch } from './region-search.ts';
 
 export interface WardenProposal {task:WardTask;path:Cell[]}
 const same=(a:Cell,b:Cell)=>a.x===b.x&&a.z===b.z;
@@ -57,18 +58,24 @@ function foodSpot(world:World,actor:Pawn,patient:Pawn,item:World['piles'][number
   return nearbyGround(world,patient,5).find(c=>allowedAreaAllows(world,actor,c)&&prisonRoom(world,c,map)?.id===room.id&&!groundPile(world,c)&&groundCapacity(world,c,item,actor.id)>=quantity
     &&!world.pawns.some(p=>p!==actor&&p.ward?.kind==='food'&&same(p.ward.spot,c))&&routeToCell(world,c,reach)!==null);
 }
-export function wardenProposal(world:World,actor:Pawn,reach:Reachability):WardenProposal|undefined {
+/** With `search` (schema 301 family), each giver takes its prisoners in
+ * RimWorld's order (region search from the warden, then straight-line
+ * distance); otherwise by identifier. Food delivery still precedes chats. */
+export function wardenProposal(world:World,actor:Pawn,reach:Reachability,search?:RegionSearch):WardenProposal|undefined {
   if(!actorReady(actor))return;
   let map:RoomTopology|undefined;const enclosure=()=>map??=capturePrisonTopology(world);
-  const patients=world.pawns.filter(p=>p!==actor&&allowedAreaAllows(world,actor,p)&&secure(p)&&!patientClaimed(world,p.id,actor)).sort((a,b)=>a.id-b.id);
-  for(const p of patients)if(!medicalWorkRefusal(actor)&&foodEligible(world,p,enclosure)){
+  const eligible=world.pawns.filter(p=>p!==actor&&allowedAreaAllows(world,actor,p)&&secure(p)&&!patientClaimed(world,p.id,actor));
+  const ordered=(giver:'DeliverFoodToPrisoner'|'ChatWithPrisoner')=>search
+    ?eligible.map(p=>({p,key:search.key(p,giver),near:(p.x-actor.x)**2+(p.z-actor.z)**2})).sort((a,b)=>compareSearchKeys(a.key,b.key)||a.near-b.near||a.p.id-b.p.id).map(e=>e.p)
+    :[...eligible].sort((a,b)=>a.id-b.id);
+  for(const p of ordered('DeliverFoodToPrisoner'))if(!medicalWorkRefusal(actor)&&foodEligible(world,p,enclosure)){
     const piles=world.piles.filter(i=>i.kind==='food'&&i.owner.type==='ground'&&!prisonRoom(world,i.owner,enclosure())&&i.quantity>reservedSource(world,i.id));
     const food=selectFood(world,actor,piles,reach,p,enclosure());if(!food)continue;
     const pile=piles.find(i=>i.id===food.id)!,quantity=mealQuantity(p,pile,pile.quantity-reservedSource(world,pile.id));
     const spot=foodSpot(world,actor,p,pile.item,quantity,reach,enclosure());if(!spot)continue;
     return {task:{kind:'food',patientId:p.id,sourcePileId:pile.id,carryPileId:null,quantity,spot,phase:'pickup'},path:food.path};
   }
-  for(const p of patients)if(chatEligible(world,actor,p)){
+  for(const p of ordered('ChatWithPrisoner'))if(chatEligible(world,actor,p)){
     const access=bedsideAccess(world,actor,p,reach);if(access)return {task:{kind:'chat',patientId:p.id,spot:access.spot,phase:'approach',progress:0,rapports:0},path:access.path};
   }
 }

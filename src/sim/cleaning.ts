@@ -15,6 +15,7 @@ import { FLOOR_DEFINITIONS } from './flooring.ts';
 import { thinFilth } from './filth.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell,Pawn,World } from './types.ts';
+import { compareSearchKeys,type RegionSearch } from './region-search.ts';
 
 export interface CleaningTask {snowCell?:number;targets:number[];forced:boolean;phase:'approach'|'clean';progress:number}
 export interface CommandCleaning extends Cell {type:'clean-room';pawnId:number}
@@ -35,9 +36,15 @@ function sameCleaningRoom(w:World,origin:Cell,target:Cell,capture:CleanlinessCap
   if(a?.kind==='space'&&b?.kind==='space')return a.id===b.id;
   return !!a&&a.kind==='space'&&b?.kind==='doorway'&&workNeighbours(target).some(c=>{const r=capture.topology.at(c.x,c.z);return r?.kind==='space'&&r.id===a.id;});
 }
-export function cleaningProposal(w:World,p:Pawn,reach:Reachability):CleaningProposal|undefined {
+/** With `search` (schema 301 family), filth is taken in RimWorld's order
+ * (WorkGiver_CleanFilth: the first of the 4 nearest regions holding filth,
+ * the closest filth in it, else the closest filth overall, in straight-line
+ * distance); otherwise by the historical Manhattan distance. */
+export function cleaningProposal(w:World,p:Pawn,reach:Reachability,search?:RegionSearch):CleaningProposal|undefined {
   if(!cleaningWanted(w,p))return;
-  const policy=captureAllowedArea(w,p),claimed=claimedByOthers(w,p),targets=(w.filth?.items??[]).filter(f=>eligible(w,p,f,false,policy,claimed)).sort((a,b)=>distance(a,p)-distance(b,p)||a.id-b.id);
+  const policy=captureAllowedArea(w,p),claimed=claimedByOthers(w,p),eligibleFilth=(w.filth?.items??[]).filter(f=>eligible(w,p,f,false,policy,claimed));
+  const targets=search?eligibleFilth.map(f=>({f,key:search.key(f,'CleanFilth'),near:(f.x-p.x)**2+(f.z-p.z)**2})).sort((a,b)=>compareSearchKeys(a.key,b.key)||a.near-b.near||a.f.id-b.f.id).map(e=>e.f)
+    :eligibleFilth.sort((a,b)=>distance(a,p)-distance(b,p)||a.id-b.id);
   for(const f of targets){const path=route(w,p,f,reach);if(!path)continue;
     const capture=captureCleanliness(w),near=targets.filter(v=>v!==f&&(v.x-f.x)**2+(v.z-f.z)**2<=30&&sameCleaningRoom(w,f,v,capture)).slice(0,14);
     return {id:f.id,target:{x:f.x,z:f.z},path,task:{targets:[f.id,...near.map(v=>v.id)],forced:false,phase:'approach',progress:0}};

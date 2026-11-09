@@ -99,7 +99,7 @@ export function alcoholBingeAdmission265(world:World,pawn:Pawn,budget?:SearchBud
 /** The engine calls after urgent ordinary needs and before work/recreation.
  * Search/release share its real tick-local navigation and conservative cargo. */
 export function processAutomaticAlcohol265(world:World,pawn:Pawn,context:NeedContext):boolean {
- if(!isSchema265OrLater(world.schemaVersion)||pawn.need||pawn.needCooldown>0||pawn.orders.active!==null||pawn.draft||!isColonist(pawn)||pawn.prisoner||pawn.visitor||pawn.raid||pawn.podRescue||['dead','downed','sleeping'].includes(pawn.state)||pawn.medicalSleep||pawn.health?.death||pawn.health?.body!==undefined||carrierOf(world,pawn.id)||urgentMedicalTask(pawn)||pawn.interruptedCargo||pawn.burning||pawn.bombRefuge||pawn.heatRefuge||pawn.stun||pawn.melee||pawn.shooting||pawn.mental?.crisis&&pawn.mental.crisis.kind!=='drug-binge')return false;
+ if(!isSchema265OrLater(world.schemaVersion)||pawn.need||pawn.needCooldown>0||pawn.orders.active!==null||pawn.draft||!isColonist(pawn)||pawn.prisoner||pawn.visitor||pawn.raid||pawn.podRescue||['dead','downed','sleeping'].includes(pawn.state)||pawn.medicalSleep||pawn.health?.death||pawn.health?.body!==undefined||carrierOf(world,pawn.id)||urgentMedicalTask(pawn,world)||pawn.interruptedCargo||pawn.burning||pawn.bombRefuge||pawn.heatRefuge||pawn.stun||pawn.melee||pawn.shooting||pawn.mental?.crisis&&pawn.mental.crisis.kind!=='drug-binge')return false;
  if(!beers(world).length)return false;
  const reason=alcoholChoice265(world,pawn);if(!reason)return false;
  const body=pawnBody(pawn);if(body.capacities.eating<=0||body.capacities.manipulation<=0)return false;

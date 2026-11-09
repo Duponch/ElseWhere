@@ -27,7 +27,7 @@ import type { NeedContext } from './needs.ts';
 import type { Pawn, World } from './types.ts';
 
 const labels: Record<RecreationActivity,string> = {horseshoes: 'jouer aux fers à cheval', skygaze: 'observer le ciel', chess:'jouer aux échecs','social-relax':'se détendre ensemble','visit-sick':'rendre visite à un malade','watch-television':'regarder la télévision',party:'participer à la fête',read:'lire un roman'};
-const urgentDoctorCall=(world:World,pawn:Pawn):boolean=>urgentWorkEnabled(pawn,'doctor')&&world.pawns.some(p=>p!==pawn&&allowedAreaAllows(world,pawn,p)&&lyingPatient(p)&&urgentTreatment(p));
+const urgentDoctorCall=(world:World,pawn:Pawn):boolean=>urgentWorkEnabled(pawn,'doctor',world)&&world.pawns.some(p=>p!==pawn&&allowedAreaAllows(world,pawn,p)&&lyingPatient(p)&&urgentTreatment(p));
 /** Search shares the existing bounded navigation budget. No gain in transit,
  * no worker/cargo preemption just because the timetable recommends recreation. */
 export function processRecreation(world: World, pawn: Pawn, context: NeedContext, afterWork = false, provider:'ordinary'|'idle300'='ordinary'): boolean {
@@ -41,7 +41,7 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
   const joy=pawn.recreation;
   if (joy.task) {
     const assignment=assignmentAt(world,pawn);
-    if (assignment==='work' || urgentMedicalTask(pawn) || urgentDoctorCall(world,pawn)
+    if (assignment==='work' || urgentMedicalTask(pawn,world) || urgentDoctorCall(world,pawn)
       || joy.task.activity==='visit-sick'&&world.pawns.some(p=>p.id===joy.task!.patientId&&urgentTreatment(p))
       || joy.task.activity==='chess'&&pawnBody(pawn).capacities.manipulation<=0
       || joy.task.activity==='watch-television'&&(world.schemaVersion<190||!isColonist(pawn)||!!pawn.prisoner||!!pawn.visitor||pawnBody(pawn).capacities.sight<=0)
@@ -88,7 +88,7 @@ export function offerRecreation300(world:World,pawn:Pawn,context:NeedContext,aft
   const idle300=isSchema300OrLater(Number(world.schemaVersion))&&provider==='idle300';
   if(idle300&&(effectiveCore297(world)<60000||assignment==='work'))return 'unavailable';
   if (world.tick<500 || pawn.hunting || pawn.research || pawn.need || pawn.jobId!==null || pawn.haul || pawn.cooking || pawn.burial || pawn.cleaning || pawn.needCooldown>0 || (!isSchema299OrLater(Number(world.schemaVersion)) && pawn.hunger<=20)
-    || !idle300&&(assignment==='work'||assignment==='sleep'&&!afterWork) || joy.level >= (idle300?99:assignment==='anything'?35:95) || urgentMedicalTask(pawn) || urgentDoctorCall(world,pawn)) return 'unavailable';
+    || !idle300&&(assignment==='work'||assignment==='sleep'&&!afterWork) || joy.level >= (idle300?99:assignment==='anything'?35:95) || urgentMedicalTask(pawn,world) || urgentDoctorCall(world,pawn)) return 'unavailable';
   const choices: {activity: RecreationActivity; weight: number}[] = [];
   let pins:ReturnType<typeof availablePins>|undefined,chessTables:ReturnType<typeof availableChessTables>|undefined;
   const televisions=world.schemaVersion>=190&&isColonist(pawn)&&!pawn.prisoner&&!pawn.visitor&&pawnBody(pawn).capacities.sight>0?availableTelevisions(world,pawn.id):[];

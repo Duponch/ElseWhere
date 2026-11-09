@@ -95,7 +95,7 @@ export function applyReadingPolicy295(world:World,pawnId:number,policyId:1|2):Co
 export function processReading295(world:World,pawn:Pawn,context:NeedContext):boolean {
  const task=pawn.recreation.task;if(task?.activity!=='read')return false;
  const manual=task.manual===true;
- if((Number(world.schemaVersion)!==295&&(Number(world.schemaVersion)!==296&&!isCorePhysicalSchema297(Number(world.schemaVersion))))||carrierOf(world,pawn.id)||!readingAllowed295(pawn,manual)||urgentMedicalTask(pawn)||!manual&&(assignmentAt(world,pawn)==='work'||!readingAutoNeeds295(pawn))||!allowedAreaRecreationAllowed(world,pawn,task))return stop(world,pawn);
+ if((Number(world.schemaVersion)!==295&&(Number(world.schemaVersion)!==296&&!isCorePhysicalSchema297(Number(world.schemaVersion))))||carrierOf(world,pawn.id)||!readingAllowed295(pawn,manual)||urgentMedicalTask(pawn,world)||!manual&&(assignmentAt(world,pawn)==='work'||!readingAutoNeeds295(pawn))||!allowedAreaRecreationAllowed(world,pawn,task))return stop(world,pawn);
  const book=readingBook295(world,pawn,task);if(!book)return stop(world,pawn);
  // Logical arrival is ahead of the captured rendered edge. A held book cannot
  // be picked up, enjoyed or dropped at that future position during this edge.

@@ -40,6 +40,8 @@ import { fuelCapacity, fuelStationReserved } from './fuel.ts';
 import { routeToCell, routeToJob, type Reachability } from './pathfinding.ts';
 import type { CookingTask, CookingIngredient } from './cooking-types.ts';
 import type { Cell, HaulTask, Pawn, Structure, World } from './types.ts';
+import { compareSearchKeys,type RegionSearch } from './region-search.ts';
+import { compareRimWorkGivers,rimWorkGiver,stationWorkGiver } from './work-givers-rimworld.ts';
 
 export interface CookingPlan {station:Structure;priority:number;target:Cell;path:Cell[];task?:CookingTask;refuel?:HaulTask}
 const same=(a:Cell,b:Cell)=>a.x===b.x&&a.z===b.z;
@@ -58,11 +60,18 @@ export function availableCookingStations(world:World,pawn:Pawn):Structure[] {
 }
 /** Select without mutation. The ordinary planner compares this proposal with
  * construction/growing/hauling before committing its reservations. */
-export function planCooking(world:World,pawn:Pawn,reachable:Reachability,budget:{pairs:number},options?:{stationId:number;forced:boolean}):CookingPlan|null {
+/** With `search` (schema 301 family), stations are taken in RimWorld's
+ * order: by the work giver of their bills (pawn priority, natural priority,
+ * priorityInType), then the giver's region search from the pawn to the
+ * station's work spot, then straight-line distance. */
+export function planCooking(world:World,pawn:Pawn,reachable:Reachability,budget:{pairs:number},options?:{stationId:number;forced:boolean},search?:RegionSearch):CookingPlan|null {
   const policy=captureAllowedArea(world,pawn),allows=(cell:Cell)=>!policy||allowedAreaAllows(world,pawn,cell,policy);
   const stations=availableCookingStations(world,pawn).filter(s=>!options||s.id===options.stationId);
   const priorities=new Map(stations.map(s=>[s.id,stationPriority(world,pawn,s)]));
-  stations.sort((a,b)=>priorities.get(a.id)!-priorities.get(b.id)!||distance(pawn,a)-distance(pawn,b)||a.id-b.id);
+  if(search){
+    const keys=new Map(stations.map(s=>[s.id,search.key(cookingSpot(s),stationWorkGiver(s))]));
+    stations.sort((a,b)=>compareRimWorkGivers(rimWorkGiver(stationWorkGiver(a)),priorities.get(a.id)!,rimWorkGiver(stationWorkGiver(b)),priorities.get(b.id)!)||compareSearchKeys(keys.get(a.id)!,keys.get(b.id)!)||distance(pawn,a)-distance(pawn,b)||a.id-b.id);
+  }else stations.sort((a,b)=>priorities.get(a.id)!-priorities.get(b.id)!||distance(pawn,a)-distance(pawn,b)||a.id-b.id);
   // Proposals below only read the World; reserve claims cannot change until
   // the caller commits a plan. Capture the same service cells at most once.
   let serviceCells:ReadonlySet<number>|undefined;

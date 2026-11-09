@@ -8,22 +8,27 @@ import { patientProposal,startPatientRest } from './patient-rest.ts';
 import { releaseWork } from './work-release.ts';
 import type { Reachability } from './pathfinding.ts';
 import type { Pawn,World } from './types.ts';
+import { rimWorkGiverOrder301 } from './work-givers-rimworld.ts';
 
 /** Emergency work is a branch at a decision point, not a global interrupt.
  * Core only promotes emergency providers whose priority reaches the best
- * enabled ordinary work category, even when that category has no ready job. */
-export function urgentWorkEnabled(pawn:Pawn,work:'patient'|'doctor'):boolean {
-  const priority=workPriority(pawn,work);
-  return priority>0&&Object.entries(pawn.priorities).every(([type,p])=>p===0||backgroundWorkRefusal(pawn,type as WorkType)!==undefined||p>=priority);
+ * enabled ordinary work category, even when that category has no ready job.
+ * In the schema 301 family the bound is exactly Core's
+ * (Pawn_WorkSettings.CacheWorkGiversInOrder): only work types that have an
+ * ordinary giver set it, so firefighting, whose only giver is an emergency
+ * one, never does. */
+export function urgentWorkEnabled(pawn:Pawn,work:'patient'|'doctor'|'firefight',world?:Pick<World,'schemaVersion'>):boolean {
+  const priority=workPriority(pawn,work),core=!!world&&rimWorkGiverOrder301(Number(world.schemaVersion));
+  return priority>0&&Object.entries(pawn.priorities).every(([type,p])=>p===0||core&&type==='firefight'||backgroundWorkRefusal(pawn,type as WorkType)!==undefined||p>=priority);
 }
 
 /** The 211 Core-tick bed review is represented by alternating 21/22 local
  * ticks. Phase derives from saved tick/ID, with no transient timer to lose. */
 export const medicalBedReview=(world:World,pawn:Pawn):boolean=>((world.tick%211)*10+pawn.id%211)%211<10;
 
-export function urgentMedicalTask(pawn:Pawn):boolean {
+export function urgentMedicalTask(pawn:Pawn,world?:Pick<World,'schemaVersion'>):boolean {
   return !!pawn.tend?.urgent||pawn.need?.kind==='sleep'&&pawn.need.medical==='patient'
-    &&urgentWorkEnabled(pawn,'patient')&&urgentTreatment(pawn);
+    &&urgentWorkEnabled(pawn,'patient',world)&&urgentTreatment(pawn);
 }
 
 /** Returns true when a decision must wait for navigation capacity. A failed
@@ -33,8 +38,8 @@ export function planUrgentCare(world:World,pawn:Pawn,search:()=>Reachability|nul
     ||world.restRules==='legacy'&&pawn.rest===0||pawn.jobId!==null||pawn.haul||pawn.research||pawn.cooking||pawn.ward||pawn.feed||pawn.tend||pawn.surgery||pawn.rescue||pawn.recreation.task)return false;
   if(pawn.need&&(pawn.need.kind!=='sleep'||pawn.need.phase!=='sleep'||!medicalBedReview(world,pawn)))return false;
   if(!pawn.need&&pawn.planCooldown>0)return false;
-  const patient=urgentWorkEnabled(pawn,'patient')&&urgentTreatment(pawn);
-  const doctor=urgentWorkEnabled(pawn,'doctor');
+  const patient=urgentWorkEnabled(pawn,'patient',world)&&urgentTreatment(pawn);
+  const doctor=urgentWorkEnabled(pawn,'doctor',world);
   const others=doctor?world.pawns.filter(p=>p!==pawn&&allowedAreaAllows(world,pawn,p)&&lyingPatient(p)&&urgentTreatment(p)):[];
   const self=doctor&&pawn.selfTend&&allowedAreaAllows(world,pawn,pawn)&&urgentTreatment(pawn);
   if(!patient&&!others.length&&!self)return false;

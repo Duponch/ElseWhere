@@ -104,14 +104,14 @@ export function prepareNeeds300(world:World,pawn:Pawn,context:NeedContext):NeedP
   collapseFromExhaustion(world,pawn,context);
   if(pawn.interruptedCargo){retryInterruptedCargo(world,pawn);if(pawn.interruptedCargo){if(pawn.need?.kind==='sleep')return 'interrupted-sleep';pawn.state='idle';return 'interrupted-idle';}}
   if(pawn.orders.active!==null)return 'direct-order';
-  if(world.schemaVersion>=50&&urgentMedicalTask(pawn))return pawn.need?.kind==='sleep'?'urgent-sleep':'urgent-work';
+  if(world.schemaVersion>=50&&urgentMedicalTask(pawn,world))return pawn.need?.kind==='sleep'?'urgent-sleep':'urgent-work';
   return 'open';
 }
 /** Read-only gates for an offer called outside the macro wrapper. Its owner
  * must run the real preparation at the intended point; no collapse/cargo
  * operation is repeated merely to ask whether a provider has an offer. */
 function needsOfferAllowed300(world:World,pawn:Pawn):boolean {
- return !pawn.interruptedCargo&&pawn.orders.active===null&&!(world.schemaVersion>=50&&urgentMedicalTask(pawn))
+ return !pawn.interruptedCargo&&pawn.orders.active===null&&!(world.schemaVersion>=50&&urgentMedicalTask(pawn,world))
   &&!((world.restRules==='legacy'?pawn.rest===0:pawn.collapsePending)&&pawn.need?.kind!=='sleep');
 }
 function offerFoodNeedResult300(world:World,pawn:Pawn,context:NeedContext,canPlan:boolean):NeedOffer300 {
