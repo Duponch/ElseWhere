@@ -35,7 +35,7 @@ import { medicalWorkRefusal,pawnBody } from './health-rules.ts';
 import { tailoringTemperatureFactor } from './crafting-quality.ts';
 import type { WorkEnvironment } from './work-environment.ts';
 import type { Cell,CommandResult,Pawn,Structure,World } from './types.ts';
-import { structureById } from './structure-navigation.ts';
+import { structuresOfKind, structureById } from './structure-navigation.ts';
 
 export const RESEARCH_SCALE=1_000_000;export const SHIP_CRYPTOSLEEP_RESEARCH_COST277=SHIP_CASKET_RESEARCH_277.scaledCost;export const SHIP_ENGINE_RESEARCH_COST276=SHIP_ENGINE_RESEARCH_276.points*RESEARCH_SCALE;
 export const SHIP_BASICS_RESEARCH_COST275=SHIP_RESEARCH_POINTS_275.basics*RESEARCH_SCALE;
@@ -167,7 +167,8 @@ export const needsHighTechBench=(project:ResearchProject):boolean=>isVictoryRese
 export const needsResearchAnalyzer=(project:ResearchProject):boolean=>isVictoryResearchProject298(project)?VICTORY_RESEARCH_CONTENT_298[project].requiresAnalyzer:(isShipResearchProject275(project)||isShipEngineResearchProject276(project)||isShipCasketResearchProject277(project))||project==='cryptosleep'||project==='vitals-monitor'||project==='fabrication'||project==='advanced-fabrication'||project==='recon-armor';
 /** The nearest usable analyzer supplies one link per desk, with shared use. */
 export function nearbyResearchFacility(world:World,station:Structure):Structure|undefined {
-  const linked=world.structures.filter(s=>s.kind==='multi-analyzer'&&researchFacilityLinked(world,station,s))
+  // Same members and order as filtering world.structures by kind.
+  const linked=structuresOfKind(world,'multi-analyzer').filter(s=>researchFacilityLinked(world,station,s))
     .sort((a,b)=>researchFacilityDistance(station,a)-researchFacilityDistance(station,b)||a.x-b.x||a.z-b.z||a.id-b.id)[0];
   return linked&&isPowerActive(linked)?linked:undefined;
 }

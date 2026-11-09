@@ -863,6 +863,15 @@ Refonte demandée : planification par niveaux de priorité comme RimWorld, puis 
 - **Régions** (`src/sim/regions.ts`) : blocs de 12 × 12, portes à part, liens, reconstruits seulement quand la grille change. L'accessibilité répond par composantes au lieu d'une inondation case par case, avec un résultat identique : l'état simulé des Forges reste le même bit à bit.
 - **Effet sur Les Forges** (1 500 ticks depuis la même sauvegarde) : 127 chantiers restants au lieu de 170, 857 tas rangés au lieu de 800, 1,2 colon inactif en moyenne au lieu de 1,8. Le temps de simulation par tick ne change pas de façon mesurable : l'accessibilité y coûtait déjà peu.
 
+Suite du même chantier :
+
+- **Premier donneur qui trouve** : les familles de candidats sont évaluées dans l'ordre des donneurs du colon et l'évaluation s'arrête dès qu'aucune famille restante ne peut battre le meilleur candidat. La planification coûte 27 % de moins sur Les Forges (1 423 → 1 033 ms pour 100 ticks), pour exactement le même travail effectué.
+- **Faits calculés à la demande** : les préalables (patients, factures, carburant, rang de production, tables de tas…) ne sont calculés que si une famille atteinte en a besoin. Encore −22 % (1 090 → 852 ms), état simulé identique bit à bit.
+- **Liste d'urgence** (`CacheWorkGiversInOrder`) : seuil fixé par les seuls types qui ont un donneur ordinaire, lutte contre le feu avant les besoins pour un colon inactif ; nettoyage, gardiennage et postes des factures dans l'ordre de RimWorld.
+- **Forge et couture séparées de l'artisanat** (schéma 302, migration 301 → 302 par numéro seul) : trois priorités et trois colonnes, comme les types Smithing, Tailoring et Crafting du Core.
+- **Recherche** : la table au plus grand facteur de vitesse de recherche d'abord, puis la plus proche (`WorkGiver_Researcher` priorisé). L'analyseur relié est trouvé dans l'index des structures par type, au lieu d'un parcours de toutes les structures.
+- **Masque de terrain** : le masque de cases marchables n'est plus reconstruit case par case quand aucune écriture de terrain n'a eu lieu depuis le dernier calcul (`terrainWriteCount`). Sous `VERIFY_TERRAIN_CACHES=1`, il est recalculé et comparé, et une différence sans écriture marquée lève une erreur.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.

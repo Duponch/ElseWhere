@@ -1,3 +1,4 @@
+import { terrainWriteCount,verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
 import {woodWallTouch301} from './wall-frame-kind-301.ts';
 import {canTouchSmoothFloor281} from './smooth-floor-281.ts';
 import {isShipPartKind276} from './ship-part-content-276.ts';
@@ -24,16 +25,21 @@ export const adjacent = (a: Cell, b: Cell): boolean => Math.abs(a.x - b.x) + Mat
 /* Terrain walkability per tiles array. Tile objects never change `terrain` in
  * place (every terrain edit replaces the Tile object), so revalidating by
  * object identity is exact and far cheaper than reclassifying every cell. */
-const terrainMasks=new WeakMap<readonly World['tiles'][number][],{refs:(World['tiles'][number]|undefined)[];mask:Uint8Array;revision:number}>();
+const terrainMasks=new WeakMap<readonly World['tiles'][number][],{refs:(World['tiles'][number]|undefined)[];mask:Uint8Array;revision:number;writes:number}>();
 /** Walkability per cell, validated by Tile identity (terrain is never mutated
- * in place). `revision` counts content changes of the returned mask. */
+ * in place). `revision` counts content changes of the returned mask. The same
+ * Tile[] with the same physical write count (terrain-mutation-journal) has no
+ * replaced tile, so the identity scan is skipped. */
 function terrainBlockedEntry(tiles:readonly World['tiles'][number][]):{mask:Uint8Array;revision:number} {
-  const n=tiles.length;let cached=terrainMasks.get(tiles);
-  if(!cached||cached.refs.length!==n){cached={refs:new Array(n),mask:new Uint8Array(n),revision:0};terrainMasks.set(tiles,cached);
+  const n=tiles.length,writes=terrainWriteCount(tiles);let cached=terrainMasks.get(tiles);
+  if(!cached||cached.refs.length!==n){cached={refs:new Array(n),mask:new Uint8Array(n),revision:0,writes};terrainMasks.set(tiles,cached);
     for(let i=0;i<n;i++){const tile=tiles[i]!;cached.refs[i]=tile;cached.mask[i]=naturalTerrainWalkable256(tile.terrain)?0:1;}
     return cached;}
-  const refs=cached.refs,mask=cached.mask;
+  if(cached.writes===writes&&!verifyTerrainWriteCaches)return cached;
+  const refs=cached.refs,mask=cached.mask,before=cached.revision;
   for(let i=0;i<n;i++){const tile=tiles[i]!;if(refs[i]!==tile){refs[i]=tile;const value=naturalTerrainWalkable256(tile.terrain)?0:1;if(mask[i]!==value){mask[i]=value;cached.revision++;}}}
+  if(verifyTerrainWriteCaches&&cached.writes===writes&&cached.revision!==before)throw Error('Terrain mask changed without a terrain write mark');
+  cached.writes=writes;
   return cached;
 }
 export function terrainBlockedMask(tiles:readonly World['tiles'][number][]):Uint8Array {return terrainBlockedEntry(tiles).mask;}
