@@ -1,6 +1,6 @@
-import {shipCasketCarrierOf277,syncShipCasketPassenger277} from './ship-casket-carry-277.ts';
+import {shipCasketCarrying277,syncShipCasketPassenger277} from './ship-casket-carry-277.ts';
 import {medicalCivilTick271} from './suspended-human-clock-271.ts';
-import {kidnapCarrierOf261,syncKidnappedPatient261,releaseKidnap261} from './caravan-kidnap-261.ts';
+import {syncKidnappedPatient261,releaseKidnap261} from './caravan-kidnap-261.ts';
 import {groupHumanCarrierOf257} from './group-human-admission-257.ts';
 import type { Cell,Pawn,World } from './types.ts';
 import { updatePawnHealth } from './health.ts';
@@ -14,7 +14,19 @@ export interface RescueTask {
 }
 export const cryptosleepCarrying271=(p:Pawn):boolean=>p.cryptosleepTask?.action==='carry'&&(p.cryptosleepTask.phase==='carry'||p.cryptosleepTask.phase==='closing');
 export const cryptosleepCarrierOf271=(w:World,id:number):Pawn|undefined=>w.pawns.find(p=>cryptosleepCarrying271(p)&&p.cryptosleepTask!.patientId===id);
-export const carrierOf=(world:World,patientId:number):Pawn|undefined=>world.pawns.find(p=>p.rescue?.phase==='carry'&&p.rescue.patientId===patientId||cryptosleepCarrying271(p)&&p.cryptosleepTask!.patientId===patientId)??shipCasketCarrierOf277(world,{kind:'human',id:patientId})??groupHumanCarrierOf257(world,patientId)??kidnapCarrierOf261(world,patientId);
+/** The pawn carrying a human, by precedence: a rescue or cryptosleep carrier,
+ * then a ship casket carrier, then a caravan group handler, then a kidnapper;
+ * the first in pawn order within each. One pass over the pawns instead of
+ * one per kind (the same result). */
+export const carrierOf=(world:World,patientId:number):Pawn|undefined=>{
+  let shipCasket:Pawn|undefined,kidnapper:Pawn|undefined;
+  for(const p of world.pawns){
+    if(p.rescue?.phase==='carry'&&p.rescue.patientId===patientId||cryptosleepCarrying271(p)&&p.cryptosleepTask!.patientId===patientId)return p;
+    if(!shipCasket&&shipCasketCarrying277(p)&&p.shipCasketTask277!.patient?.kind==='human'&&p.shipCasketTask277!.patient.id===patientId)shipCasket=p;
+    if(!kidnapper&&p.raid?.kidnap261?.phase==='carry'&&p.raid.kidnap261.patientId===patientId)kidnapper=p;
+  }
+  return shipCasket??groupHumanCarrierOf257(world,patientId)??kidnapper;
+};
 export const rescueClaim=(world:World,patientId:number,except?:number):Pawn|undefined=>world.pawns.find(p=>p.id!==except&&(p.rescue?.patientId===patientId||p.cryptosleepTask?.action==='carry'&&p.cryptosleepTask.patientId===patientId||p.id===patientId&&p.cryptosleepTask?.action==='enter'||p.shipCasketTask277?.action==='carry'&&p.shipCasketTask277.patient?.kind==='human'&&p.shipCasketTask277.patient.id===patientId||p.id===patientId&&p.shipCasketTask277?.action==='enter'));
 export function syncPatient(world:World,carrier:Pawn):void {
   syncShipCasketPassenger277(world,carrier);

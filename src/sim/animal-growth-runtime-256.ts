@@ -37,13 +37,20 @@ export function trackedAnimalBodySize256(species:WildAnimal['species'],tracker:P
 }
 /** The life-stage property reads persisted growth, including the same float
  * interpolation and epsilon as Core; it NEVER reconstructs growth from age. */
+function trackedLifeStageData256(species:WildAnimal['species'],fact:NonNullable<ReturnType<typeof facts.get>>,index:number){
+ const explicit=Object.hasOwn(CORE_ANIMAL_DATA_256,species)?CORE_ANIMAL_DATA_256[species as keyof typeof CORE_ANIMAL_DATA_256].lifeStages[index]!.defId:undefined;
+ const definition=explicit??(index===fact.stages.length-1?'AnimalAdult':index===0?'AnimalBaby':'AnimalJuvenile');
+ return Object.freeze({definition,index,minimumAgeTicks:Math.round(fact.stages[index]!.minAgeYears*year/10),...CORE_ANIMAL_LIFE_STAGES_256[definition]});
+}
+/** Static per species and stage: one frozen record each, instead of a new
+ * object on every read (several per animal and tick). */
+const trackedLifeStages256=new Map<WildAnimal['species'],ReturnType<typeof trackedLifeStageData256>[]>();
 export function trackedAnimalLifeStage256(species:WildAnimal['species'],tracker:Pick<AnimalGrowthTracker256,'value'>){
  const fact=facts.get(species);if(!fact)throw Error('Missing actual growth species');
  const years=f(f(fact.stages.at(-1)!.minAgeYears)*tracker.value),boundary=f(years+f(.000001));let index=0;
  for(let i=fact.stages.length-1;i>=0;i--)if(f(fact.stages[i]!.minAgeYears)<=boundary){index=i;break;}
- const explicit=Object.hasOwn(CORE_ANIMAL_DATA_256,species)?CORE_ANIMAL_DATA_256[species as keyof typeof CORE_ANIMAL_DATA_256].lifeStages[index]!.defId:undefined;
- const definition=explicit??(index===fact.stages.length-1?'AnimalAdult':index===0?'AnimalBaby':'AnimalJuvenile');
- return {definition,index,minimumAgeTicks:Math.round(fact.stages[index]!.minAgeYears*year/10),...CORE_ANIMAL_LIFE_STAGES_256[definition]};
+ let stages=trackedLifeStages256.get(species);if(!stages)trackedLifeStages256.set(species,stages=[]);
+ return stages[index]??=trackedLifeStageData256(species,fact,index);
 }
 export function synchronizeAnimalGrowthMedical256(a:GrowthAnimal256&{health?:{animalGrowth?:number}}):void {
  if(a.growthTracker&&a.health)a.health.animalGrowth=a.growthTracker.value;

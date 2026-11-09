@@ -15,6 +15,7 @@ import { haulingWork } from './haul-aside.ts';
 import type { Reachability } from './pathfinding.ts';
 import { inHome } from './repairs.ts';
 import { isRoomDoor } from './door-rules.ts';
+import { structureAnchors } from './structure-navigation.ts';
 import { extinguishFire } from './fire.ts';
 import { firePosition,ensureFireState,fireRandom,FIREFIGHT_COOLDOWN_CORE,type FireRecord } from './fire-rules.ts';
 import type { NeedContext } from './needs.ts';
@@ -22,7 +23,9 @@ import type { Cell,Pawn,World } from './types.ts';
 const same=(a:Cell,b:Cell)=>a.x===b.x&&a.z===b.z;
 const distance=(a:Cell,b:Cell)=>Math.abs(a.x-b.x)+Math.abs(a.z-b.z);
 const inside=(w:World,c:Cell)=>c.x>=0&&c.z>=0&&c.x<w.width&&c.z<w.height;
-const solid=(w:World,c:Cell)=>!inside(w,c)||w.tiles[c.z*w.width+c.x]?.terrain==='rock'||w.structures.some(s=>(s.kind==='wall'||s.kind==='cooler'||isRoomDoor(s.kind)&&!s.door?.open)&&same(s,c));
+// Structures anchored on the cell, from the shared anchor index: the same
+// members as scanning every structure for its anchor position.
+const solid=(w:World,c:Cell)=>!inside(w,c)||w.tiles[c.z*w.width+c.x]?.terrain==='rock'||structureAnchors(w).anchoredAt(c.x,c.z).some(s=>s.kind==='wall'||s.kind==='cooler'||isRoomDoor(s.kind)&&!s.door?.open);
 /** The diagonal wall-fire fix in Core 1.6.4528 is retained, with no reach through a solid corner. */
 export function fireTouch(w:World,actor:Cell,target:Cell):boolean {
   const dx=Math.abs(actor.x-target.x),dz=Math.abs(actor.z-target.z);if(dx>1||dz>1)return false;

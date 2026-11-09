@@ -873,6 +873,18 @@ Suite du même chantier :
 - **Priorités initiales** (`EnableAndInitialize`) : un humain qui rejoint la colonie (départ réel, arrivée, quête, rescapé, recrutement) a ses six types de travail les mieux maîtrisés et les six types toujours actifs à 3, le reste à 0, comme dans RimWorld. Les scénarios pédagogiques et les mondes de test gardent leurs priorités historiques.
 - **Masque de terrain** : un raccourci qui sautait la revalidation du masque de cases marchables en l'absence d'écriture marquée (`terrainWriteCount`) a été retiré le jour même. Il supposait que toute écriture de case est marquée ; un test qui remplace directement une case (`shallow-water-v403`) l'a mis en défaut. Le gain attendu (de l'ordre de 1 % de la simulation) ne justifie pas ce risque sans vérification complète sous `VERIFY_TERRAIN_CACHES=1`. Le masque reste revalidé par identité des objets `Tile`.
 
+### Simulation : stade de vie des animaux, porteurs et cases solides (9 novembre)
+
+Trois parcours répétés, remplacés à l'identique (état simulé des Forges identique bit à bit, empreinte `7314918c…`) :
+
+- **Stade de vie des animaux** (`trackedAnimalLifeStage256`) : lu plusieurs fois par animal et par tick (nutrition maximale, taille, besoins), il recréait à chaque lecture un objet complet. Le résultat ne dépend que de l'espèce et du stade : un enregistrement figé par espèce et stade suffit. Part du profil 0,96 % → 0,21 %.
+- **Qui porte ce colon** (`carrierOf`) : un seul passage sur les colons au lieu d'un par sorte de portage (sauvetage ou cryptosommeil, caisson spatial, groupe, enlèvement), avec la même priorité entre sortes. Part 1,48 % → 1,30 % : le coût tient surtout au nombre d'appels.
+- **Case solide pour atteindre une saleté ou un feu** (`firefighting.ts`) : les structures ancrées sur la case viennent de l'index partagé des ancrages au lieu d'un parcours de toutes les structures. Environ 0,6 % de la simulation.
+
+Les chronos de cette séance sont trop bruités pour isoler ces gains (charge concurrente sur la machine) ; seules les parts du profil sont retenues.
+
+Pistes écartées : un index des tas par case (délai de déplacement, scories d'une pièce) ou des plantes (pousse sauvage) exigerait un journal de toutes les écritures de tas, environ 270 sites dans 131 fichiers. Un oubli fausserait silencieusement la simulation, sans moyen de le détecter à coût nul.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
