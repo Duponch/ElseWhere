@@ -870,7 +870,7 @@ Suite du même chantier :
 - **Liste d'urgence** (`CacheWorkGiversInOrder`) : seuil fixé par les seuls types qui ont un donneur ordinaire, lutte contre le feu avant les besoins pour un colon inactif ; nettoyage, gardiennage et postes des factures dans l'ordre de RimWorld.
 - **Forge et couture séparées de l'artisanat** (schéma 302, migration 301 → 302 par numéro seul) : trois priorités et trois colonnes, comme les types Smithing, Tailoring et Crafting du Core.
 - **Recherche** : la table au plus grand facteur de vitesse de recherche d'abord, puis la plus proche (`WorkGiver_Researcher` priorisé). L'analyseur relié est trouvé dans l'index des structures par type, au lieu d'un parcours de toutes les structures.
-- **Masque de terrain** : le masque de cases marchables n'est plus reconstruit case par case quand aucune écriture de terrain n'a eu lieu depuis le dernier calcul (`terrainWriteCount`). Sous `VERIFY_TERRAIN_CACHES=1`, il est recalculé et comparé, et une différence sans écriture marquée lève une erreur.
+- **Masque de terrain** : un raccourci qui sautait la revalidation du masque de cases marchables en l'absence d'écriture marquée (`terrainWriteCount`) a été retiré le jour même. Il supposait que toute écriture de case est marquée ; un test qui remplace directement une case (`shallow-water-v403`) l'a mis en défaut. Le gain attendu (de l'ordre de 1 % de la simulation) ne justifie pas ce risque sans vérification complète sous `VERIFY_TERRAIN_CACHES=1`. Le masque reste revalidé par identité des objets `Tile`.
 
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
