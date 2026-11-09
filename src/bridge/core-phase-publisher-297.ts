@@ -7,10 +7,10 @@ import type {Mechanoid} from '../sim/mechanoid-state';
 import type {PresentationSegment} from '../sim/travel-timing';
 import type {PawnTrack} from './motion-tracks';
 import {effectiveCore297} from '../sim/core-phase-297';
-import {captureCoreActor297,coreAnchor297,coreMapId297,validCoreAudioCues297} from './core-phase-data-297';
+import {coreAnchor297,coreMapId297,validCoreAudioCues297} from './core-phase-data-297';
 import type {CoreActorProjection297,CorePhaseAnchor297,CorePhaseEnvelope297,CoreFullPhaseMetadata297,CoreProjectileEvents297,CoreProjectileTrace297,CoreMotionPatch297,CoreHumanPose297,CoreDoorPatch297,CorePilePatch297} from './core-phase-projection-297';
 import {structureById} from '../sim/structure-navigation';
-import {frozenDataCopy297} from './core-frozen-copy-297';
+import {captureCoreActorFast297,frozenDataCopy297} from './core-frozen-copy-297';
 
 type PriorTrack={sources:readonly PresentationSegment[];values:readonly PresentationSegment[]};
 const own=Object.hasOwn;
@@ -158,7 +158,7 @@ export class CorePhasePublisher297 {
   const core=effectiveCore297(world);if(this.pendingCore!==core||coreMapId297(world)!==before.anchor.mapId||before.actorMode297!=='frontier'&&Math.floor(core/10)!==Math.floor(before.anchor.core/10))throw Error('Actor watermark escaped its actual World anchor');
   const rows:CoreActorProjection297[]=[];
   for(const id of this.dirtyActors){const slot=this.slots.get(id);if(!slot)throw Error('New actor requires a full membership anchor');const source=slot.kind==='human'?world.pawns[slot.index]:slot.kind==='animal'?world.wildlife?.animals[slot.index]:world.mechanoids?.[slot.index];if(!source||source.id!==id)throw Error('Changed actor escaped its full layout');
-   const row=slot.kind==='human'?captureCoreActor297('human',slot.index,source as Pawn):slot.kind==='animal'?captureCoreActor297('animal',slot.index,source as WildAnimal):captureCoreActor297('mechanical',slot.index,source as Mechanoid);
+   const row=slot.kind==='human'?captureCoreActorFast297('human',slot.index,source as Pawn):slot.kind==='animal'?captureCoreActorFast297('animal',slot.index,source as WildAnimal):captureCoreActorFast297('mechanical',slot.index,source as Mechanoid);
    const sent=this.sentRows297.get(id);if(sent&&sent.kind===row.kind&&sent.index===row.index&&sameCoreValue297(sent.fields,row.fields)&&!this.poseDirty297.has(id))continue;
    rows.push(row);}
   rows.sort((a,b)=>a.id-b.id);

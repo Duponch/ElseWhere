@@ -47,3 +47,23 @@ test('in-place freezing matches the copy on real actors and refuses the same inp
   expect(inPlace.startsWith('throw:')).toBe(copied.startsWith('throw:'));if(copied.startsWith('throw:'))expect(inPlace).toBe(copied);
  }
 });
+
+// The publisher's actor capture must be indistinguishable from the pinned captureCoreActor297.
+test('fast actor capture matches captureCoreActor297 on real actors and refuses the same inputs',async()=>{
+ const {captureCoreActor297}=await import('../src/bridge/core-phase-data-297.ts');
+ const {captureCoreActorFast297}=await import('../src/bridge/core-frozen-copy-297.ts');
+ const w=deconstructionCamp(3,32);
+ const actors:[('human'|'animal'|'mechanical'),unknown][]=[...w.pawns.map(p=>['human',p] as ['human',unknown]),...(w.wildlife?.animals??[]).map(a=>['animal',a] as ['animal',unknown]),...(w.mechanoids??[]).map(m=>['mechanical',m] as ['mechanical',unknown])];
+ expect(actors.length).toBeGreaterThan(0);
+ const both=(kind:'human'|'animal'|'mechanical',index:number,actor:unknown)=>[outcome(()=>captureCoreActorFast297(kind as 'human',index,actor as never)),outcome(()=>captureCoreActor297(kind as 'human',index,actor as never))];
+ for(const [i,[kind,actor]] of actors.entries()){const [fast,pinned]=both(kind,i,actor);expect(fast).toBe(pinned);expect(fast.startsWith('ok:')).toBe(true);}
+ const pawn=structuredClone(w.pawns[0]!) as unknown as Record<string,unknown>;
+ const missing={...pawn};delete missing.path;
+ const accessor={...pawn};Object.defineProperty(accessor,'state',{enumerable:true,get:()=>'idle'});
+ const hidden={...pawn};Object.defineProperty(hidden,'x',{enumerable:false,value:1});
+ const nonData={...pawn,motion:{f:()=>1}};
+ for(const bad of [missing,accessor,hidden,nonData]){const [fast,pinned]=both('human',0,bad);expect(fast).toBe(pinned);expect(fast.startsWith('throw:')).toBe(true);}
+ const fast=captureCoreActorFast297('human',0,w.pawns[0]!),pinned=captureCoreActor297('human',0,w.pawns[0]!);
+ expect(Reflect.ownKeys(fast.fields)).toEqual(Reflect.ownKeys(pinned.fields));
+ for(const key of Reflect.ownKeys(pinned.fields))expect(Object.getOwnPropertyDescriptor(fast.fields,key)).toEqual(Object.getOwnPropertyDescriptor(pinned.fields,key));
+});

@@ -1,3 +1,7 @@
+import {CORE_ANIMAL_OPTIONAL297,CORE_ANIMAL_REQUIRED297,CORE_HUMAN_OPTIONAL297,CORE_HUMAN_REQUIRED297,CORE_MECH_OPTIONAL297,CORE_MECH_REQUIRED297,type CoreActorProjection297} from './core-phase-projection-297';
+import type {Pawn} from '../sim/types';
+import type {WildAnimal} from '../sim/wildlife-state';
+import type {Mechanoid} from '../sim/mechanoid-state';
 /* Same contract as copyCoreData297 (pinned in core-phase-data-297.ts): the
  * same budget, depth, cycle, finite-number, dense-array and plain-own-data
  * rejections with the same messages, and an identical deeply frozen result
@@ -58,3 +62,27 @@ export function frozenDataInPlace297<T>(value:T):T {
  visit(value,0);
  return value;
 }
+
+/* Same contract as captureCoreActor297 (pinned in core-phase-data-297.ts):
+ * the same fields in the same order (required, then optional), the same
+ * refusals for a missing required field or a field that is not own data, and
+ * a result identical to its copyCoreData297, here made by frozenDataCopy297.
+ * The publisher captures every changed actor of every phase. */
+export function captureCoreActorFast297(kind:'human',index:number,actor:Pawn):CoreActorProjection297;
+export function captureCoreActorFast297(kind:'animal',index:number,actor:WildAnimal):CoreActorProjection297;
+export function captureCoreActorFast297(kind:'mechanical',index:number,actor:Mechanoid):CoreActorProjection297;
+export function captureCoreActorFast297(kind:CoreActorProjection297['kind'],index:number,actor:Pawn|WildAnimal|Mechanoid):CoreActorProjection297 {
+ const required:readonly string[]=kind==='human'?CORE_HUMAN_REQUIRED297:kind==='animal'?CORE_ANIMAL_REQUIRED297:CORE_MECH_REQUIRED297;
+ const optional:readonly string[]=kind==='human'?CORE_HUMAN_OPTIONAL297:kind==='animal'?CORE_ANIMAL_OPTIONAL297:CORE_MECH_OPTIONAL297;
+ const source=actor as unknown as Record<string,unknown>,data:Record<string,unknown>={};
+ const take=(key:string,isRequired:boolean)=>{
+  const d=Object.getOwnPropertyDescriptor(source,key);
+  if(!d){if(isRequired)throw Error('Missing physical actor field');return;}
+  if(!d.enumerable||!Object.hasOwn(d,'value'))throw Error('Physical actor field is not own data');
+  data[key]=d.value;
+ };
+ for(const key of required)take(key,true);
+ for(const key of optional)take(key,required.includes(key));
+ return frozenDataCopy297({kind,id:actor.id,index,fields:data}) as unknown as CoreActorProjection297;
+}
+
