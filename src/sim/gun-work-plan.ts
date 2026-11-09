@@ -8,6 +8,7 @@ import { routeToJob,type Reachability } from './pathfinding.ts';
 import type { CookingPlan } from './cooking-planner.ts';
 import type { CookingBill } from './cooking-types.ts';
 import type { Cell,Pawn,Structure,World } from './types.ts';
+import { billWork } from './production-recipes.ts';
 
 /** An unfinished weapon is owned by its author; materials cannot start a second
  * copy while the linked object is held, unreachable or assigned elsewhere. */
@@ -25,7 +26,7 @@ export function planGunWork(world:World,pawn:Pawn,station:Structure,bill:Cooking
     const placed=ingredientPlaceFree(world,source,spot,bill.recipe,station);
     const cell=placed?source:[station,{x:spot.x-1,z:spot.z},{x:spot.x+1,z:spot.z},{x:spot.x,z:spot.z-1},{x:spot.x,z:spot.z+1}].find(c=>allows(c)&&ingredientPlaceFree(world,c,spot,bill.recipe,station)&&groundCapacity(world,c,pile.item,pawn.id)>=1);
     if(!cell)continue;
-    return {handled:true,plan:{station,priority:workPriority(pawn,'craft'),target:source,path,task:{recipe:bill.recipe,stationId:station.id,billId:bill.id,spot,actionCell:{x:source.x,z:source.z},phase:'gather',ingredients:[{pileId:pile.id,item:'unfinished-gun',quantity:1,stage:placed?'placed':'source',cell:{x:cell.x,z:cell.z}}],progress:0,productId:null,storageId:null}}};
+    return {handled:true,plan:{station,priority:workPriority(pawn,billWork(bill)),target:source,path,task:{recipe:bill.recipe,stationId:station.id,billId:bill.id,spot,actionCell:{x:source.x,z:source.z},phase:'gather',ingredients:[{pileId:pile.id,item:'unfinished-gun',quantity:1,stage:placed?'placed':'source',cell:{x:cell.x,z:cell.z}}],progress:0,productId:null,storageId:null}}};
   }
   return {handled:!!bound};
 }

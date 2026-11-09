@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {captureHumanOwners,type HumanOwnershipCapture} from './human-owners.ts';
 import {isColonist} from './affiliation.ts';
@@ -26,7 +27,7 @@ export function validFactionCommsTaskShape298(value:unknown,version:number,tick:
 }
 /** Cheap half in the already-existing Pawn traversal, not a new historic walk. */
 export function validFactionCommsPawnFields298(value:unknown,version:number,tick:number,width:number,height:number,coreNow298?:number):boolean {
- if(!object(value)||!Number.isSafeInteger(version)||version<1||version>301)return false;
+ if(!object(value)||!Number.isSafeInteger(version)||version<1||version>SCHEMA_VERSION)return false;
  if(!('factionComms298'in value))return true;
  return validFactionCommsTaskShape298(own(value,'factionComms298'),version,tick,width,height,coreNow298);
 }

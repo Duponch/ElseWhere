@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
 import {shipReactorThreatMap275,shipReactorThreatSeed275,shipReactorGenerationInterval275,shipReactorCycleHits275} from './ship-reactor-threats-275.ts';
 import {registeredCampaign} from './world-map-context.ts';
@@ -38,7 +39,7 @@ export function validateShipReactorThreats275(w:World,version:number=w.schemaVer
 /** Delta-only continuity after full next-world validation. A map replacement
  * is a checkpoint and has no predecessor here; cold RAW cannot prove history. */
 export function validShipReactorThreatContinuation275(previous:Pick<World,'schemaVersion'|'tick'|'shipReactorThreats275'>,next:Pick<World,'schemaVersion'|'tick'|'shipReactorThreats275'>):boolean {
- if(!int(previous.schemaVersion,1,301)||!int(next.schemaVersion,1,301)||!int(previous.tick)||!int(next.tick,previous.tick))return false;
+ if(!int(previous.schemaVersion,1,SCHEMA_VERSION)||!int(next.schemaVersion,1,SCHEMA_VERSION)||!int(previous.tick)||!int(next.tick,previous.tick))return false;
  const a=previous.shipReactorThreats275,b=next.shipReactorThreats275;
  if(!a)return !b||b.adoptedAtCore>=previous.tick*10;
  if(!b||a.revision!==b.revision||a.mapId!==b.mapId||a.tile!==b.tile||a.generationAtCore!==b.generationAtCore||a.adoptedAtCore!==b.adoptedAtCore||a.seed!==b.seed

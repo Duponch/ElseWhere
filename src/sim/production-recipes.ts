@@ -210,7 +210,7 @@ export const PRODUCTION_WORK_SCALE=10000;
 export const productionWorkTotal=(recipe:ProductionRecipe):number=>isSmithingRecipe267(recipe)?smithingWorkTotal267(recipe,'plasteel'):PRODUCTION_RECIPES[recipe].workTicks*PRODUCTION_WORK_SCALE;
 export const legacyProductionTicks=(recipe:ProductionRecipe):number=>recipe==='simple-meal'?60:200;
 export const taskRecipe=(task:CookingTask):ProductionRecipe=>(task.recipe??'simple-meal') as ProductionRecipe;
-export const taskWork=(task:CookingTask):WorkType=>PRODUCTION_RECIPES[taskRecipe(task)].work;
+export const taskWork=(task:CookingTask):WorkType=>billWork({recipe:taskRecipe(task)});
 export const isTailoring=(recipe:unknown):recipe is TailoringRecipe=>typeof recipe==='string'&&TAILORING_RECIPES.includes(recipe as TailoringRecipe);
 export const unfinishedItem=(recipe:TailoringRecipe):UnfinishedApparelItem=>({tribalwear:'unfinished-tribalwear',shirt:'unfinished-shirt',pants:'unfinished-pants',duster:'unfinished-duster',parka:'unfinished-parka',tuque:'unfinished-tuque'} as const)[recipe];
 export const stationRecipe=(station:Pick<Structure,'kind'>):ProductionRecipe|null=>station.kind==='fueled-smithy'||station.kind==='electric-smithy'?'make-plate-armor':station.kind==='brewery'?'brew-wort':station.kind==='electric-crematorium'?'cremate-corpse':station.kind==='electric-smelter'?'smelt-weapon':station.kind==='biofuel-refinery'?'chemfuel-from-wood':station.kind==='drug-lab'?'make-medicine':station.kind==='art-bench'?'small-sculpture':station.kind==='machining-table'?'make-revolver':station.kind==='fabrication-bench'?'make-component':isButcherStation(station.kind)?'butcher-creature':station.kind==='tailor-bench'||station.kind==='electric-tailor-bench'?'shirt':station.kind==='crafting-spot'?'tribalwear':station.kind==='campfire'||isStove(station.kind)?'simple-meal':station.kind==='stonecutter'?'stone-blocks':null;
@@ -218,8 +218,14 @@ export const stationRecipe=(station:Pick<Structure,'kind'>):ProductionRecipe|nul
  * power state changes the work factor in WorkEnvironment instead of
  * invalidating an already reserved bill or unfinished garment. */
 export const productionStationUsable=(station:Structure):boolean=>(station.kind!=='electric-smithy'&&station.kind!=='electric-crematorium'&&station.kind!=='electric-smelter'&&station.kind!=='machining-table'&&station.kind!=='fabrication-bench'&&station.kind!=='biofuel-refinery')||station.power?.on===true;
-export const stationWork=(station:Pick<Structure,'kind'>):'cook'|'craft'|'art'|'haul'=>station.kind==='brewery'?'cook':station.kind==='electric-crematorium'?'haul':station.kind==='art-bench'?'art':station.kind==='campfire'||isStove(station.kind)||isButcherStation(station.kind)?'cook':'craft';
-export const billWork=(bill:Pick<CookingBill,'recipe'>):'cook'|'craft'|'art'|'haul'=>PRODUCTION_RECIPES[bill.recipe].work;
+/** Core's bill work types: the smithy, machining table and fabrication bench
+ * are Smithing, the tailor benches Tailoring, the other crafting stations
+ * (crafting spot, stonecutter, smelter, refinery, drug lab) Crafting. */
+const smithingStation=(kind:Structure['kind']):boolean=>kind==='fueled-smithy'||kind==='electric-smithy'||kind==='machining-table'||kind==='fabrication-bench';
+const tailoringStation=(kind:Structure['kind']):boolean=>kind==='tailor-bench'||kind==='electric-tailor-bench';
+const craftingWork=(kind:Structure['kind']):'craft'|'smith'|'tailor'=>smithingStation(kind)?'smith':tailoringStation(kind)?'tailor':'craft';
+export const stationWork=(station:Pick<Structure,'kind'>):'cook'|'craft'|'smith'|'tailor'|'art'|'haul'=>station.kind==='brewery'?'cook':station.kind==='electric-crematorium'?'haul':station.kind==='art-bench'?'art':station.kind==='campfire'||isStove(station.kind)||isButcherStation(station.kind)?'cook':craftingWork(station.kind);
+export const billWork=(bill:Pick<CookingBill,'recipe'>):'cook'|'craft'|'smith'|'tailor'|'art'|'haul'=>{const recipe=PRODUCTION_RECIPES[bill.recipe];return recipe.work==='craft'?craftingWork(recipe.station):recipe.work;};
 export function admittedIngredient(bill:CookingBill,item:ItemId):item is ProductionIngredient {
   return PRODUCTION_RECIPES[bill.recipe].inputs.includes(item as ProductionIngredient)&&bill.filters[item as ProductionIngredient]===true;
 }

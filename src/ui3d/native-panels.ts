@@ -1,3 +1,4 @@
+import { storedPriority } from '../sim/work-types.ts';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {READING_POLICIES_295,effectiveReadingPolicy295} from '../sim/reading-state-295';
 import type {NativeUiState,NativeUiActions,NativePage,NativeRow,NativeControl} from './native-contract';
@@ -140,9 +141,9 @@ function architect(state:NativeUiState,actions:NativeUiActions,world:World):Nati
 const passionLabels=['Sans passion','Passion','Passion brûlante'] as const;
 function workSkill(pawn:Pawn,work:WorkType):{caption?:string;hint?:string} {
  const zero={level:0,xp:0,dailyXp:0,passion:0 as const};
- const skill=work==='mine'?miningSkill(pawn):work==='grow'||work==='gather'?plantSkill(pawn):work==='cook'?cookingSkill(pawn):work==='art'?artisticSkill(pawn):work==='handle'?pawn.skills.animals??zero:work==='warden'?pawn.skills.social??zero:work==='doctor'?pawn.skills.medicine:work==='build'?pawn.skills.construction:work==='hunt'?pawn.skills.shooting??zero:work==='craft'?pawn.skills.crafting??zero:work==='research'?pawn.skills.intellectual??zero:undefined;
+ const skill=work==='mine'?miningSkill(pawn):work==='grow'||work==='gather'?plantSkill(pawn):work==='cook'?cookingSkill(pawn):work==='art'?artisticSkill(pawn):work==='handle'?pawn.skills.animals??zero:work==='warden'?pawn.skills.social??zero:work==='doctor'?pawn.skills.medicine:work==='build'?pawn.skills.construction:work==='hunt'?pawn.skills.shooting??zero:work==='craft'||work==='smith'||work==='tailor'?pawn.skills.crafting??zero:work==='research'?pawn.skills.intellectual??zero:undefined;
  if(!skill)return {};
- const label=work==='mine'?'Minage':work==='grow'||work==='gather'?'Plantes':work==='cook'?'Cuisine':work==='art'?'Artistique':work==='handle'?'Animaux':work==='warden'?'Social':work==='doctor'?'Médecine':work==='hunt'?'Tir':work==='craft'?'Artisanat':work==='research'?'Intellectuel':'Construction';
+ const label=work==='mine'?'Minage':work==='grow'||work==='gather'?'Plantes':work==='cook'?'Cuisine':work==='art'?'Artistique':work==='handle'?'Animaux':work==='warden'?'Social':work==='doctor'?'Médecine':work==='hunt'?'Tir':work==='craft'||work==='smith'||work==='tailor'?'Artisanat':work==='research'?'Intellectuel':'Construction';
  const stats=work==='mine'?`vitesse ${Math.round(miningWorkSpeed(pawn)*100)} % avant lumière · rendement minéral ${Math.round(miningYield(pawn)*100)} % ; moyenne pondérée par les dégâts des coups sur le gisement`:work==='grow'||work==='gather'?`vitesse ${Math.round(plantWorkSpeed(pawn)*100)} % avant lumière · semis, récolte et abattage`:work==='cook'?`cuisson ${Math.round(cookingSpeed(pawn)*100)} % · rendement de boucherie ${Math.round(butcheryEfficiency(pawn)*100)} % avant poste`:work==='art'?'qualité des sculptures, sans effet direct sur la vitesse':work==='handle'?'Apprivoisement et entretien des lièvres · niveau Animaux 8 requis':work==='warden'?'nourrit les prisonniers et mène les conversations selon le mode choisi':work==='build'?`vitesse ${Math.round(constructionSpeed(pawn)*100)} % · apprentissage ${Math.round(learningFactor(skill,pawn)*100)} %`:`apprentissage ${Math.round(learningFactor(skill,pawn)*100)} %`;
  return {caption:`${skill.level}${' ♨'.repeat(skill.passion)}`,hint:`${label} ${skill.level}/20 · ${passionLabels[skill.passion]} · ${stats}`};
 }
@@ -179,14 +180,14 @@ function colonistTableToolbar(kind:ColonistTableKind,search:string,shown:number,
 function colonistTablePawn(id:number,kind:ColonistTableKind):Pawn {
  const pawn=currentPawn(id);if(!isColonist(pawn)||(kind!=='schedule'&&pawn.prisoner))throw Error('Cette personne n’est plus dans ce tableau.');return pawn;
 }
-const compactWorkLabels:Record<WorkType,string>={firefight:'Feu',patient:'Pat.',doctor:'Méd.',bedrest:'Repos',basic:'Man.',warden:'Geôle',handle:'Dress.',cook:'Cuisine',hunt:'Chasse',build:'Const.',grow:'Cult.',mine:'Mine',gather:'Forêt',art:'Art',craft:'Artis.',haul:'Trans.',clean:'Net.',research:'Rech.'};
+const compactWorkLabels:Record<WorkType,string>={firefight:'Feu',patient:'Pat.',doctor:'Méd.',bedrest:'Repos',basic:'Man.',warden:'Geôle',handle:'Dress.',cook:'Cuisine',hunt:'Chasse',build:'Const.',grow:'Cult.',mine:'Mine',gather:'Forêt',smith:'Forge',tailor:'Cout.',art:'Art',craft:'Artis.',haul:'Trans.',clean:'Net.',research:'Rech.'};
 function workPanel(world:World):NativePage {
  const {all,shown:pawns,search}=colonistTableRows('work',world);
  return {id:'work',title:'Travail',layout:'table',tableProfile:'colonists',contentKey:`work:${colonistTableKey(latest!)}:${search}`,subtitle:'Priorités manuelles : 1 haute · 4 basse · 0 désactivée. Le transport livre aussi les chantiers.',width:1480,rows:[
   {id:'work-headings',label:'Colon',value:'Activité',compact:true,columns:workColumns.map(c=>({label:compactWorkLabels[c.id],hint:c.label}))},
   colonistTableToolbar('work',search,pawns.length,all.length),
   ...pawns.map(pawn=>({...row(`worker-${pawn.id}`,pawn.name,host?.pawnActivity?.(pawn.id)??queryPawnStatus(world,pawn).reason,pawn.traits?.map(id=>TRAITS[id].label).join(' · ')??'Aucun trait attribué',workColumns.map(({id,label})=>{
-   const refusal=backgroundWorkRefusal(pawn,id),value=pawn.priorities[id],skill=workSkill(pawn,id);
+   const refusal=backgroundWorkRefusal(pawn,id),value=storedPriority(pawn,id),skill=workSkill(pawn,id);
    return colonistTableControl(`work-${pawn.id}-${id}`,String(value),()=>{},{caption:skill.caption,hint:[`Priorité ${label} · ${pawn.name}`,refusal?`${refusal} Priorité enregistrée : ${value}. Un ordre direct ne permet pas de contourner cette incapacité.`:undefined,skill.hint].filter(Boolean).join('\n'),disabled:!!refusal||pawn.state==='dead',active:value===1,select:{value:String(value),options:[0,1,2,3,4].map(priority=>({value:String(priority),label:String(priority),hint:priority===0?'Désactivé':`Priorité ${priority}${priority===1?' · haute':priority===4?' · basse':''}`})),onChange:value=>{const priority=Number(value);if(!Number.isInteger(priority)||priority<0||priority>4)throw Error('Priorité entière de 0 à 4 requise.');const current=colonistTablePawn(pawn.id,'work');return send({type:'priority',pawnId:current.id,work:id,value:priority});}}});
   })),compact:true})),
  ],onClose:()=>void host?.panel(null)};

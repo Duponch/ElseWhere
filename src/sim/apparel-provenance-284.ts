@@ -1,9 +1,10 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isSchema284OrLater} from './schema-compatibility-257.ts';
 import type {MaterialPile,Pawn} from './types.ts';
 
 /** Absence is unknown historical provenance, never evidence of cleanliness. */
 export function validApparelProvenance284(apparel:unknown,version:number):boolean {
- if(!Number.isInteger(version)||version<0||version>301||!apparel||typeof apparel!=='object')return false;
+ if(!Number.isInteger(version)||version<0||version>SCHEMA_VERSION||!apparel||typeof apparel!=='object')return false;
  const d=Object.getOwnPropertyDescriptor(apparel,'corpseWear284');
  if(!d)return !('corpseWear284'in apparel);
  return isSchema284OrLater(version)&&d.enumerable===true&&Object.hasOwn(d,'value')&&typeof d.value==='boolean';
@@ -20,7 +21,7 @@ export function markCorpseWornApparel284(items:readonly (Pick<MaterialPile,'kind
 /** Before historical migration/adoption only. Current custody and field guards
  * own284; its normal save/adoption path pays no recursive historical scan. */
 export function validApparelProvenanceHistoricalTransport284(value:unknown,version:number):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>301)return false;
+ if(!Number.isSafeInteger(version)||version<1||version>SCHEMA_VERSION)return false;
  if(isSchema284OrLater(version))return true;
  const domains=['piles','pawns','structures','jobs','packed','worldMaps','secondarySite','campaignMap','worldGroups','worldPawns','worldFactions','group','groupLosses','commercialTrip','civilianPost','visitors','raids','trade','orbital','prisonDepartures','arrivals','startingArrival','podRescues','scout','quests','wildlife'];
  let budget=2_000_000;const active=new Set<object>();

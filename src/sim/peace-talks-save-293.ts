@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {PEACE_TALKS_OUTCOMES_293,type PeaceTalksSite293} from './peace-talks-state-293.ts';
 import {ITEM_DEFINITIONS} from './items.ts';
@@ -58,7 +59,7 @@ export function validPeaceTalksSite293(value:unknown,c:WorldSitesValidationConte
 
 /** Only registry/transport envelopes: never inspect terrain, Things or actors. */
 export function validPeaceTalksHistorical293(raw:unknown,version:unknown):boolean {
- if(!int(version,1,301))return false;
+ if(!int(version,1,SCHEMA_VERSION))return false;
  const active=new Set<object>();let budget=100000;
  const lanes=['world','summary','dynamic','campaign','worldMaps','worldGroups','campaignMap','secondarySite','map','worldSites263','sites','maps','entries','groups','group','state','pending261','arrival261','battlefield261','retained','destination','action','quest','recent'] as const;
  const visit=(v:unknown,lane:string):boolean=>{
@@ -80,7 +81,7 @@ export function validPeaceTalksHistorical293(raw:unknown,version:unknown):boolea
  * This is never sufficient for campaign admission or publication. */
 export function validPeaceTalksRegistryScalars293(value:unknown):boolean {
  try{
-  if(!plain(value)||!int(value.schemaVersion,1,301))return false;
+  if(!plain(value)||!int(value.schemaVersion,1,SCHEMA_VERSION))return false;
   if((Number(value.schemaVersion)!==293&&(Number(value.schemaVersion)!==294&&(Number(value.schemaVersion)!==295&&(Number(value.schemaVersion)!==296&&!isCorePhysicalSchema297(Number(value.schemaVersion)))))))return validPeaceTalksHistorical293(value,value.schemaVersion);
   const d=data(value,'worldSites263');if(!d)return !('worldSites263'in value);
   const registry=d.value;if(!keys(registry,['revision','nextId','entries'],['quest'])||registry.revision!==1||!int(registry.nextId,1)||!dense(registry.entries,4096))return false;

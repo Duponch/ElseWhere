@@ -8,7 +8,9 @@ import { TICKS_PER_DAY, type Cell, type Pawn, type World } from './types.ts';
 import { structureById } from './structure-navigation.ts';
 
 /** A cell and provider family, not a reservation or a radius of boosted jobs. */
-export interface PriorityWork { cell:Cell; work:'build'|'haul'|'cook'|'craft'|'art'; startedAt:number }
+export interface PriorityWork { cell:Cell; work:'build'|'haul'|'cook'|'craft'|'smith'|'tailor'|'art'; startedAt:number }
+/** Before schema 302 smithing and tailoring are saved as crafting. */
+const savedWork=(world:Pick<World,'schemaVersion'>,work:PriorityWork['work']):PriorityWork['work']=>(work==='smith'||work==='tailor')&&Number(world.schemaVersion)<302?'craft':work;
 export const PRIORITY_WORK_TICKS=TICKS_PER_DAY/2;
 
 export function rememberPriorityWork(world:World,pawn:Pawn,command:OrderCommand,order?:QueuedOrder):void {
@@ -16,7 +18,7 @@ export function rememberPriorityWork(world:World,pawn:Pawn,command:OrderCommand,
   if(command.type==='order-job') {
     const job=world.jobs.find(j=>j.id===command.jobId);if(job&&isConstruction(job)){cell=job;work=job.installationWork??'build';}
   } else if(command.type==='order-cook') {
-    const station=structureById(world,command.structureId);cell=station;work=order&&isCookingOrder(order)?billWork({recipe:taskRecipe(order.cooking)}):order&&typeof order!=='number'&&!isCookingOrder(order)&&order.destination.type==='fuel'?haulingWork(order.destination) as PriorityWork['work']:station?stationWork(station):'cook';
+    const station=structureById(world,command.structureId);cell=station;work=order&&isCookingOrder(order)?savedWork(world,billWork({recipe:taskRecipe(order.cooking)})):order&&typeof order!=='number'&&!isCookingOrder(order)&&order.destination.type==='fuel'?haulingWork(order.destination) as PriorityWork['work']:station?savedWork(world,stationWork(station)):'cook';
   } else if(command.type==='order-haul'&&order&&typeof order!=='number'&&!isCookingOrder(order)) {
     const d=order.destination;
     if(d.type==='fuel'||d.type==='turret'){cell=structureById(world,d.structureId);work='haul';}
@@ -37,7 +39,7 @@ export function validatePriorityWork(world:World,version:number):string[] {
     const p=pawn.priorityWork;if(p===undefined)continue;
     if(version<23){errors.push('Legacy save contains priority work.');continue;}
     if(!p||typeof p!=='object'||Array.isArray(p)||Object.keys(p).some(k=>!['cell','work','startedAt'].includes(k))
-      ||!['build','haul','cook',...(version>=32?['craft']:[]),...(version>=104?['art']:[])].includes(p.work)||!Number.isSafeInteger(p.startedAt)||p.startedAt<0||p.startedAt>world.tick||world.tick-p.startedAt>=PRIORITY_WORK_TICKS
+      ||!['build','haul','cook',...(version>=32?['craft']:[]),...(version>=104?['art']:[]),...(version>=302?['smith','tailor']:[])].includes(p.work)||!Number.isSafeInteger(p.startedAt)||p.startedAt<0||p.startedAt>world.tick||world.tick-p.startedAt>=PRIORITY_WORK_TICKS
       ||!p.cell||typeof p.cell!=='object'||Array.isArray(p.cell)||Object.keys(p.cell).some(k=>!['x','z'].includes(k))
       ||!Number.isInteger(p.cell.x)||p.cell.x<0||p.cell.x>=world.width||!Number.isInteger(p.cell.z)||p.cell.z<0||p.cell.z>=world.height)errors.push('Invalid priority work intent.');
     // The clicked object can disappear while an accepted job/queue finishes.

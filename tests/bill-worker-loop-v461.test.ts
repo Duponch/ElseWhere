@@ -48,10 +48,11 @@ test('after a real interruption the new worker cannot steal the original author 
  accept(w,{type:'bill-worker-policy',structureId:station.id,billId:bill.id,policy:{pawnId:author.id,skillMin:0,skillMax:0}});
  until(w,()=>author.cooking?.phase==='work'&&(w.piles.find(p=>p.unfinished)?.unfinished?.progress??0)>50_000);
  const item=w.piles.find(p=>p.unfinished)!,id=item.id,progress=item.unfinished!.progress;
- accept(w,{type:'priority',pawnId:author.id,work:'craft',value:0});accept(w,{type:'bill-worker-policy',structureId:station.id,billId:bill.id,policy:{pawnId:other.id,skillMin:0,skillMax:0}});
+ // Tailoring has its own priority since schema 302 (Core's Tailoring work type).
+ accept(w,{type:'priority',pawnId:author.id,work:'tailor',value:0});accept(w,{type:'bill-worker-policy',structureId:station.id,billId:bill.id,policy:{pawnId:other.id,skillMin:0,skillMax:0}});
  const interrupted=exact(w);stepWorld(w,80);expect(w.piles.find(p=>p.id===id)?.unfinished).toMatchObject({authorId:author.id,progress});expect(other.cooking).toBeNull();expect(queryCookingBillStatus(w,station,bill).code).toBe('unfinished');expect(balance(w)).toBe(90);
  const reload=deserializeWorld(interrupted);stepWorld(reload,80);expect(serializeWorld(reload)).toBe(serializeWorld(w));
- accept(w,{type:'bill-worker-policy',structureId:station.id,billId:bill.id,policy:{pawnId:author.id,skillMin:0,skillMax:0}});accept(w,{type:'priority',pawnId:author.id,work:'craft',value:1});
+ accept(w,{type:'bill-worker-policy',structureId:station.id,billId:bill.id,policy:{pawnId:author.id,skillMin:0,skillMax:0}});accept(w,{type:'priority',pawnId:author.id,work:'tailor',value:1});
  until(w,()=>(w.piles.find(p=>p.id===id)?.unfinished?.progress??0)>progress);expect(w.piles.find(p=>p.id===id)?.unfinished?.authorId).toBe(author.id);expect(balance(w)).toBe(90);exact(w);
 },30000);
 

@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isSchema282OrLater} from './schema-compatibility-257.ts';
 
 const plain=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype;
@@ -6,7 +7,7 @@ const domains=['world','dynamic','campaign','wildlife','pawns','structures','pac
  * Human haul is old content. Terrain, resources and planetary geography are
  * never visited. The current version has no recursive adoption overhead. */
 export function validAnimalTrainingHistoricalTransport282(value:unknown,version:number):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>301)return false;
+ if(!Number.isSafeInteger(version)||version<1||version>SCHEMA_VERSION)return false;
  if(isSchema282OrLater(version))return true;
  let budget=2_000_000;const active=new Set<object>();
  const walk=(v:unknown,animal=false,animalOwners=false):boolean=>{

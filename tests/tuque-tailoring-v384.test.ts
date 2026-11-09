@@ -51,8 +51,9 @@ for(const [material,kind] of [['cloth','tailor-bench'],['muffalo-wool','electric
   accept(w,{type:'bill-add',structureId:bench.id,recipe:'tuque'});until(w,()=>!!unfinished(w)?.unfinished?.progress);
   const work=unfinished(w)!,workId=work.id;expect(work.unfinished).toMatchObject({authorId:pawn.id,material,units:20});expect(textile(w,material)).toBe(0);
   expect(validUnfinishedShape(work as unknown as Record<string,unknown>,244)).toBe(false);expect(validUnfinishedShape(work as unknown as Record<string,unknown>,245)).toBe(true);
-  accept(w,{type:'priority',pawnId:pawn.id,work:'craft',value:0});const prior=work.unfinished!.progress;stepWorld(w,5);expect(unfinished(w)?.id).toBe(workId);expect(work.unfinished!.progress).toBe(prior);
-  const resumed=deserializeWorld(serializeWorld(w));for(const state of [w,resumed])accept(state,{type:'priority',pawnId:pawn.id,work:'craft',value:1});
+  // Tailoring has its own priority since schema 302 (Core's Tailoring work type).
+  accept(w,{type:'priority',pawnId:pawn.id,work:'tailor',value:0});const prior=work.unfinished!.progress;stepWorld(w,5);expect(unfinished(w)?.id).toBe(workId);expect(work.unfinished!.progress).toBe(prior);
+  const resumed=deserializeWorld(serializeWorld(w));for(const state of [w,resumed])accept(state,{type:'priority',pawnId:pawn.id,work:'tailor',value:1});
   const start=w.tick,item=apparelItemFor('tuque',material);until(w,()=>w.piles.some(p=>p.item===item&&p.owner.type==='ground'));stepWorld(resumed,w.tick-start);
   expect(serializeWorld(resumed)).toBe(serializeWorld(w));expect(unfinished(w)).toBeUndefined();expect(w.tailoring?.completed).toBe(1);expect(pawn.skills.crafting!.xp).toBeGreaterThan(0);
   const product=w.piles.find(p=>p.item===item)!;expect(product.apparel).toMatchObject({hitPoints:80,material});expect(product.apparel!.quality).not.toBe('legendary');expect(textile(w,material)).toBe(0);
@@ -70,12 +71,12 @@ test('insufficient mixed textiles and twenty leather cannot become a tuque or co
 test('a wool-only replacement bill reuses its author work and cancellation physically refunds the same material',()=>{
   const {w,pawn,bench}=workshop();addGroundMaterial(w,'textile',20,{x:12,z:12},'muffalo-wool');
   accept(w,{type:'bill-add',structureId:bench.id,recipe:'tuque'});until(w,()=>!!unfinished(w)?.unfinished?.progress);
-  const work=unfinished(w)!,id=work.id,progress=work.unfinished!.progress;accept(w,{type:'priority',pawnId:pawn.id,work:'craft',value:0});
+  const work=unfinished(w)!,id=work.id,progress=work.unfinished!.progress;accept(w,{type:'priority',pawnId:pawn.id,work:'tailor',value:0});
   accept(w,{type:'bill-remove',structureId:bench.id,billId:bench.bills![0]!.id});expect(work.unfinished!.billId).toBeUndefined();
   accept(w,{type:'bill-add',structureId:bench.id,recipe:'tuque'});const bill=bench.bills![0]!;
   accept(w,{type:'bill-update',structureId:bench.id,billId:bill.id,settings:{...bill,filters:{cloth:false,'muffalo-wool':true}}});
-  accept(w,{type:'priority',pawnId:pawn.id,work:'craft',value:1});until(w,()=>work.unfinished!.progress>progress);expect(unfinished(w)?.id).toBe(id);
-  accept(w,{type:'priority',pawnId:pawn.id,work:'craft',value:0});const rng=w.rng;accept(w,{type:'cancel-unfinished',itemId:id});
+  accept(w,{type:'priority',pawnId:pawn.id,work:'tailor',value:1});until(w,()=>work.unfinished!.progress>progress);expect(unfinished(w)?.id).toBe(id);
+  accept(w,{type:'priority',pawnId:pawn.id,work:'tailor',value:0});const rng=w.rng;accept(w,{type:'cancel-unfinished',itemId:id});
   expect(unfinished(w)).toBeUndefined();expect(textile(w,'muffalo-wool')).toBe(15);expect(textile(w,'cloth')).toBe(0);expect(w.rng).toBe(rng);
   expect(w.tailoring).toMatchObject({cancelled:1,lostLeather:5});expect(textile(w,'muffalo-wool')+(w.tailoring?.lostLeather??0)).toBe(20);expect(validateWorld(w)).toEqual([]);
 });

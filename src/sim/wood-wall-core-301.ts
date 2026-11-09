@@ -1,3 +1,4 @@
+import {isFinishFrameSchema301} from './wall-frame-kind-301.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {dueThingIntervalDelta301} from './thing-interval-301.ts';
 import {constructionObstructions,constructionSiteFree} from './construction-rules.ts';
@@ -85,12 +86,12 @@ export function createWoodWallCore301(w:World,ports:WoodWallCorePorts301){
   /** Called by the existing macro AFTER this Core's fixed pass. No extra
    * fixed decrement, interval action, XP, work or RNG is performed here. */
   admitAtContact(pawn:Pawn):boolean{
-   if(Number(w.schemaVersion)!==301)return false;
+   if(!isFinishFrameSchema301(Number(w.schemaVersion)))return false;
    capture();const p=pawn as Human301,j=p.jobId===null?undefined:byId.get(p.jobId);
    return !!j&&begin(p,j,effectiveCore297(w));
   },
   advance(core:number):{actorsChanged:number[];requiresFull:boolean}{
-   if(Number(w.schemaVersion)!==301)return {actorsChanged:[],requiresFull:false};
+   if(!isFinishFrameSchema301(Number(w.schemaVersion)))return {actorsChanged:[],requiresFull:false};
    if(core!==effectiveCore297(w)||core!==last+1)throw Error('Frame301 requires one actual consecutive Core');
    last=core;capture();const changed:number[]=[];let full=false;
    for(const raw of w.pawns){const p=raw as Human301;if(p.state==='dead')continue;

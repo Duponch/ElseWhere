@@ -19,7 +19,8 @@ export const workColumns: readonly {id: WorkType; label: string}[] = [
   {id:'handle',label:'Dressage'}, {id:'cook',label:'Cuisine'},
   {id:'hunt',label:'Chasse'}, {id:'build',label:'Construction'},
   {id:'grow',label:'Culture'}, {id:'mine',label:'Minage'},
-  {id:'gather',label:'Foresterie'}, {id:'art',label:'Art'},
+  {id:'gather',label:'Foresterie'}, {id:'smith',label:'Forge'},
+  {id:'tailor',label:'Couture'}, {id:'art',label:'Art'},
   {id:'craft',label:'Artisanat'}, {id:'haul',label:'Transport'},
   {id:'clean',label:'Nettoyage'}, {id:'research',label:'Recherche'},
 ];

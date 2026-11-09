@@ -9,6 +9,7 @@ import {routeToCell,routeToJob,type Reachability} from './pathfinding.ts';
 import type {CookingBill} from './cooking-types.ts';
 import type {CookingPlan} from './cooking-planner.ts';
 import type {Cell,Pawn,Structure,World} from './types.ts';
+import { billWork } from './production-recipes.ts';
 
 /** A bound component workpiece waits for its author; fresh steel cannot bypass it. */
 export function planComponentWork(world:World,pawn:Pawn,station:Structure,bill:CookingBill,reach:Reachability,budget:{pairs:number}):{handled:boolean;plan?:CookingPlan} {
@@ -31,7 +32,7 @@ export function planComponentWork(world:World,pawn:Pawn,station:Structure,bill:C
     const path=surface?routeToCell(world,spot,reach):routeToJob(world,source,reach,true);if(!path)continue;
     const cell=placed?source:[station,{x:spot.x-1,z:spot.z},{x:spot.x+1,z:spot.z},{x:spot.x,z:spot.z-1},{x:spot.x,z:spot.z+1},...footprintCells(station)].find(c=>allows(c)&&componentWorkpiecePlaceFree(world,c,spot,bill.recipe,station)&&groundCapacity(world,c,piece.item,pawn.id)>=1);
     if(!cell)continue;
-    return {handled:true,plan:{station,priority:workPriority(pawn,'craft'),target:surface?spot:source,path,task:{recipe:bill.recipe,stationId:station.id,billId:bill.id,spot,actionCell:{x:source.x,z:source.z},phase:'gather',ingredients:[{pileId:piece.id,item:'unfinished-component',quantity:1,stage:placed?'placed':'source',cell:{x:cell.x,z:cell.z}}],progress:0,productId:null,storageId:null}}};
+    return {handled:true,plan:{station,priority:workPriority(pawn,billWork(bill)),target:surface?spot:source,path,task:{recipe:bill.recipe,stationId:station.id,billId:bill.id,spot,actionCell:{x:source.x,z:source.z},phase:'gather',ingredients:[{pileId:piece.id,item:'unfinished-component',quantity:1,stage:placed?'placed':'source',cell:{x:cell.x,z:cell.z}}],progress:0,productId:null,storageId:null}}};
   }
   return {handled:!!bound};
 }

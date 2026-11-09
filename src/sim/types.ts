@@ -1,6 +1,6 @@
 import type { ItemId } from './items.ts';
 import type { StorageConditions } from './storage-condition.ts';
-export const SCHEMA_VERSION = 301 as const;
+export const SCHEMA_VERSION = 302 as const;
 export const TICKS_PER_SECOND = 6;
 export const TICKS_PER_DAY = 6000;
 
@@ -11,7 +11,7 @@ export type BedSlot = 0 | 1;
 export type LocalRoadProp256 = import('./local-road-data-256.ts').LocalRoadProp256;
 export type StructureKind = 'ship-computer' | 'ship-sensors' | 'firefoam-popper' | 'ship-cryptosleep-casket' | 'ship-beam' | 'ship-engine' | 'ship-reactor' | 'cryptosleep-casket' | 'fueled-smithy' | 'electric-smithy' | 'brewery' | 'fermenting-barrel' | 'geothermal-generator' | import('./cave-hive-state-256.ts').CaveHiveKind256 | 'ship-chunk' | 'ancient-cryptosleep-casket' | import('./ancient-monument-props-256.ts').AncientMonumentKind256 | LocalRoadProp256 | 'torch-lamp' | 'vent' | 'shelf' | 'small-shelf' | 'spike-trap' | 'electric-crematorium' | 'double-bed' | 'electric-smelter' | 'sleeping-spot' | 'animal-sleeping-spot' | 'biofuel-refinery' | 'chemfuel-generator' | 'nutrient-paste-dispenser' | 'hopper' | 'orbital-beacon' | 'comms-console' | 'deep-drill' | 'ground-scanner' | 'vitals-monitor' | 'drug-lab' | 'hydroponics-basin' | 'mini-turret' | 'tube-television' | 'sandbags' | 'art-bench' | 'small-sculpture' | 'large-sculpture' | 'machining-table' | 'fabrication-bench' | 'hi-tech-research-bench' | 'multi-analyzer' | 'grave' | 'heater' | 'wind-turbine' | 'power-conduit' | 'power-switch' | 'battery' | 'solar-generator' | 'fueled-stove' | 'electric-stove' | 'butcher-table' | 'butcher-spot' | 'cooler' | 'research-bench' | 'tailor-bench' | 'electric-tailor-bench' | 'crafting-spot' | 'wood-generator' | 'sun-lamp' | 'standing-lamp' | 'passive-cooler' | 'door' | 'autodoor' | 'wall' | 'fence' | 'fence-gate' | 'pen-marker' | 'bedroll' | 'bed' | 'hospital-bed' | 'table' | 'table-square' | 'table-long' | 'stool' | 'dining-chair' | 'armchair' | 'end-table' | 'dresser' | 'flower-pot' | 'campfire' | 'horseshoes' | 'chess-table' | 'stonecutter';
 export type JobKind = 'smooth-floor' | 'build-bridge' | 'remove-bridge' | 'extract-tree' | 'replant-tree' | 'lay-floor' | 'remove-floor' | 'flick' | 'repair' | 'fix-breakdown' | 'build-roof' | 'remove-roof' | 'mine' | 'chop' | 'harvest' | 'cut' | 'sow' | 'deconstruct' | 'uninstall' | 'install' | Exclude<StructureKind,LocalRoadProp256|'ship-chunk'|'ancient-cryptosleep-casket'|import('./cave-hive-state-256.ts').CaveHiveKind256>;
-export type WorkType = 'handle' | 'art' | 'clean' | 'firefight' | 'warden' | 'basic' | 'hunt' | 'research' | 'patient' | 'bedrest' | 'doctor' | 'mine' | 'gather' | 'build' | 'haul' | 'grow' | 'cook' | 'craft';
+export type WorkType = 'handle' | 'art' | 'clean' | 'firefight' | 'warden' | 'basic' | 'hunt' | 'research' | 'patient' | 'bedrest' | 'doctor' | 'mine' | 'gather' | 'build' | 'haul' | 'grow' | 'cook' | 'craft' | 'smith' | 'tailor';
 export type Orientation = 0 | 1 | 2 | 3;
 export type Footprint = 'standard' | 'legacy-single';
 export type PawnState = 'idle' | 'moving' | 'working' | 'sleeping' | 'hungry' | 'eating' | 'recreating' | 'resting' | 'downed' | 'dead';
@@ -207,7 +207,9 @@ export interface Pawn extends Cell { /** Shared fixed catalogue: 1 novels allowe
   /** Actual local civil wait/move only; absence preserves historical state. */
   idleWander300?:import('./idle-wander-300.ts').IdleWander300;
   state: PawnState;
-  priorities: Record<WorkType, number>;
+  /** Smithing and Tailoring (schema 302) are optional: absent, they follow
+   * the crafting priority (see `storedPriority`). */
+  priorities: Record<Exclude<WorkType,'smith'|'tailor'>, number> & {smith?:number;tailor?:number};
   /** Serialized route and cadence make save/resume exactly reproducible. */
   path: Cell[];
   moveCooldown: number;

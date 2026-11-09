@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
 const tokens277=new Set(['ship-cryptosleep-casket','shipCryptosleep277','shipCasketTask277','shipCryptosleepHeldAt277','ship-cryptosleep','shipCryptosleep','heldShipCaskets277','shipCasketTerminal277','destroyed277','ship277','suspendedCore277',
  'order-enter-ship-casket','order-carry-ship-casket','eject-ship-casket']);
@@ -7,7 +8,7 @@ const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&
 /** Fence original RAW and sparse/public domains before migration/adoption.
  * It never reads terrain, resource arrays or the planetary payload. */
 export function validShipCasketHistoricalTransport277(value:unknown,version:number):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>301)return false;if(isSchema277OrLater(version))return true;
+ if(!Number.isSafeInteger(version)||version<1||version>SCHEMA_VERSION)return false;if(isSchema277OrLater(version))return true;
  let budget=2000000;const active=new Set<object>();
  const walk=(v:unknown):boolean=>{
   if(--budget<0)return false;if(v===null||typeof v!=='object')return true;

@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isSchema280OrLater} from './schema-compatibility-257.ts';
 import {validateSurgeries} from './surgery-save.ts';
 import type {World} from './types.ts';
@@ -11,7 +12,7 @@ const domains=['pawns','structures','jobs','packed','piles','worldMaps','seconda
  * with surgical intent/service. Historical bodies and doses stay unchanged.
  * Inspect real owner domains before migration or sparse reconstruction. */
 export function validPrisonerSurgeryHistoricalTransport280(value:unknown,version:number):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>301)return false;
+ if(!Number.isSafeInteger(version)||version<1||version>SCHEMA_VERSION)return false;
  if(isSchema280OrLater(version))return true;
  let budget=2_000_000;const active=new Set<object>();
  const walk=(v:unknown):boolean=>{
@@ -52,7 +53,7 @@ export function hasPrisonerSurgery280(w:World):boolean {
  * pairing. Ordinary Worlds never pay another clinical/topology validation. */
 export function validPrisonerSurgeryWorld280(w:World):boolean {
  try{
-  if(!Number.isSafeInteger(w.schemaVersion)||Number(w.schemaVersion)<1||Number(w.schemaVersion)>301)return false;
+  if(!Number.isSafeInteger(w.schemaVersion)||Number(w.schemaVersion)<1||Number(w.schemaVersion)>SCHEMA_VERSION)return false;
   if(!hasPrisonerSurgery280(w))return true;
   return isSchema280OrLater(w.schemaVersion)&&validateSurgeries(w,w.schemaVersion).length===0;
  }catch{return false;}

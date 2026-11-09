@@ -9,6 +9,7 @@ import {smithingRecipeAvailable267,isSmithingRecipe267,smithingWorkpiece267} fro
 import type {CookingPlan} from './cooking-planner.ts';
 import type {CookingBill} from './cooking-types.ts';
 import type {Cell,Pawn,Structure,World} from './types.ts';
+import { billWork } from './production-recipes.ts';
 
 /** A bound unfinished piece blocks a second manufacture even if its author
  * is away or its current location cannot be reached. No ingredient substitution. */
@@ -24,7 +25,7 @@ export function planSmithingWork267(w:World,p:Pawn,s:Structure,b:CookingBill,rea
   const source:Cell={x:q.owner.x,z:q.owner.z},path=routeToJob(w,source,reach,true);if(!path)continue;
   const placed=ingredientPlaceFree(w,source,spot,b.recipe,s),cell=placed?source:[s,{x:spot.x-1,z:spot.z},{x:spot.x+1,z:spot.z},{x:spot.x,z:spot.z-1},{x:spot.x,z:spot.z+1}].find(c=>allows(c)&&ingredientPlaceFree(w,c,spot,b.recipe,s)&&groundCapacity(w,c,q.item,p.id)>=1);
   if(!cell)continue;
-  return {handled:true,plan:{station:s,priority:workPriority(p,'craft'),target:source,path,task:{recipe:b.recipe,stationId:s.id,billId:b.id,spot,actionCell:{...source},phase:'gather',ingredients:[{pileId:q.id,item:smithingWorkpiece267(b.recipe),quantity:1,stage:placed?'placed':'source',cell:{x:cell.x,z:cell.z}}],progress:0,productId:null,storageId:null}}};
+  return {handled:true,plan:{station:s,priority:workPriority(p,billWork(b)),target:source,path,task:{recipe:b.recipe,stationId:s.id,billId:b.id,spot,actionCell:{...source},phase:'gather',ingredients:[{pileId:q.id,item:smithingWorkpiece267(b.recipe),quantity:1,stage:placed?'placed':'source',cell:{x:cell.x,z:cell.z}}],progress:0,productId:null,storageId:null}}};
  }
  return {handled:!!bound};
 }

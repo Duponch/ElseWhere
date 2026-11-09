@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {validBillWorkerPolicy283} from './bill-worker-rules-283.ts';
 import {isSchema283OrLater} from './schema-compatibility-257.ts';
 import {captureHumanOwners,type HumanOwnershipCapture} from './human-owners.ts';
@@ -60,7 +61,7 @@ function scanCurrent283(value:unknown,nextId:number,named:Set<number>):boolean {
 
 /** Pure scalar building guard, including actual minified originals. */
 export function validBillWorkerBuilding283(value:unknown,version:number,nextId?:number,named?:Set<number>):boolean {
- if(!plain(value)||!Number.isSafeInteger(version)||version<1||version>301)return false;
+ if(!plain(value)||!Number.isSafeInteger(version)||version<1||version>SCHEMA_VERSION)return false;
  const bills=Object.getOwnPropertyDescriptor(value,'bills');if(!bills)return !('bills'in value);
  if(!own(bills,'value'))return false;if(!Array.isArray(bills.value))return true; // Existing owner validates bills shape.
  for(let i=0;i<bills.value.length;i++){
@@ -102,7 +103,7 @@ function scan(value:unknown,version:number,nextId?:number,named?:Set<number>):bo
 }
 /** Historical fence before migration or patch reconstruction. */
 export function validBillWorkerHistoricalTransport283(value:unknown,version:number):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>301)return false;
+ if(!Number.isSafeInteger(version)||version<1||version>SCHEMA_VERSION)return false;
  return isSchema283OrLater(version)||scan(value,version);
 }
 

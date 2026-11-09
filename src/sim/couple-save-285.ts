@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {validPartyMemoryField292} from './party-memories-292.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
 import {bedSlotCell} from './bed-slots.ts';
@@ -24,7 +25,7 @@ function field(raw:object,key:string):unknown {
  if(!d)return key in raw?invalid:undefined;
  return d.enumerable===true&&Object.hasOwn(d,'value')&&d.value!==undefined?d.value:invalid;
 }
-const dates=(version:number,tick:number,civilTick:number)=>int(version,2,301)&&int(tick)&&int(civilTick,tick,Math.floor(Number.MAX_SAFE_INTEGER/10));
+const dates=(version:number,tick:number,civilTick:number)=>int(version,2,SCHEMA_VERSION)&&int(tick)&&int(civilTick,tick,Math.floor(Number.MAX_SAFE_INTEGER/10));
 
 export function validCoupleClock285(value:unknown,civilTick:number):value is CoupleClock285 {
  return int(civilTick,0,Math.floor(Number.MAX_SAFE_INTEGER/10))&&exact(value,['revision','rng'],['lastAttemptAtCore','nextAllowedAtCore'])

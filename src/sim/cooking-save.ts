@@ -1,3 +1,4 @@
+import { storedPriority } from './work-types.ts';
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
 import {validBillWorkerBuilding283} from './bill-worker-save-283.ts';
 import {isProstheticRecipe273} from './prosthetic-content-273.ts';
@@ -81,7 +82,7 @@ export function validateCooking(input:unknown,version:number,ids:Set<number>,mem
   const stations=new Set<number>(),spots=new Set<number>();
   for(const p of w.pawns)if(p.cooking) {
     const c=p.cooking,station=w.structures.find(s=>s.id===c.stationId&&stationAccepts(s,taskRecipe(c))),bill=station?.bills?.find(b=>b.id===c.billId);
-    if(!station||!bill||bill.recipe!==taskRecipe(c)||bill.suspended||p.priorities[taskWork(c)]===0&&!(version>=20&&p.orders.active==='cook')||p.jobId!==null||p.haul!==null||p.need!==null){errors.push('Invalid cooking task ownership.');continue;}
+    if(!station||!bill||bill.recipe!==taskRecipe(c)||bill.suspended||storedPriority(p,taskWork(c))===0&&!(version>=20&&p.orders.active==='cook')||p.jobId!==null||p.haul!==null||p.need!==null){errors.push('Invalid cooking task ownership.');continue;}
     if(c.recipe==='make-medicine'&&(!productionResearchUnlocked(w,c.recipe)||c.phase!=='output'&&!productionWorkerQualified(p,c.recipe)))errors.push('Unqualified medicine production.');
     if(isBiofuelRecipe(c.recipe)&&!productionResearchUnlocked(w,c.recipe))errors.push('Unavailable biofuel production.');
     if(isSmeltingRecipe(c.recipe)&&(!productionResearchUnlocked(w,c.recipe)||c.phase!=='output'&&!productionWorkerQualified(p,c.recipe)))errors.push('Unqualified smelting production.');

@@ -151,6 +151,8 @@ function pawnRecordShape(item:Record<string,unknown>,world:PawnRecordContext,ver
   if(!validTacticsShape(item.tactics,version,input as unknown as World))errors.push('Invalid tactics shape for schema.');
   if(!validAffiliationShape(item,version,input as unknown as World))errors.push('Invalid affiliation or flee shape for schema.');
   if(version>=46?!integer((item.priorities as Record<string,unknown>)?.doctor,0,4):(item.priorities as Record<string,unknown>)?.doctor!==undefined)errors.push('Invalid medical work priority for schema.');
+  // Smithing and Tailoring (302): absent follows the crafting priority.
+  for(const key of ['smith','tailor']){const value=(item.priorities as Record<string,unknown>)?.[key];if(version>=302?value!==undefined&&!integer(value,0,4):value!==undefined)errors.push('Invalid smithing or tailoring priority for schema.');}
   for(const key of ['patient','bedrest'])if(version>=47?!integer((item.priorities as Record<string,unknown>)?.[key],0,4):(item.priorities as Record<string,unknown>)?.[key]!==undefined)errors.push('Invalid patient priority for schema.');
   if(!validAttackMemory(item.lastAttack,version,validationTick,coreNow297))errors.push('Invalid attack memory for schema.');
   if(Object.hasOwn(item,'bombRefuge')&&!validBombRefugeShape(item.bombRefuge,version))errors.push('Invalid bomb refuge for schema.');

@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from '../sim/types.ts';
 import * as THREE from 'three/webgpu';
 import {attribute,positionLocal,uv} from 'three/tsl';
 import {FLORA_DEFINITIONS,PLANT_SPECIES} from '../sim/biome-flora';
@@ -59,7 +60,7 @@ interface PreviewEnvironmentRecord {
   site:{biome:'temperate-forest'};filth:{items:never[]};
 }
 function presentationRecord(width:number,height:number,resources:Resource[]=[],structures:Structure[]=[]):PreviewEnvironmentRecord {
-  return {schemaVersion:301,seed:123,width,height,tick:0,resources,structures,
+  return {schemaVersion:SCHEMA_VERSION,seed:123,width,height,tick:0,resources,structures,
     tiles:Array.from({length:width*height},():Tile=>({terrain:'soil'})),
     jobs:[],piles:[],packed:[],growingZones:[],pawns:[],animals:[],research:[],beds:[],items:[],home:[],stockpiles:[],
     site:{biome:'temperate-forest'},filth:{items:[]},

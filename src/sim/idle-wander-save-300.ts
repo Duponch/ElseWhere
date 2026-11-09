@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import type {HumanOwnershipCapture} from './human-owners.ts';
@@ -26,7 +27,7 @@ const competing=['priorityWork','draft','interruptedCargo','rescue','animalHandl
  * minted. Old absence is neutral and the clinical wander bit is never changed. */
 export function validIdleWanderPawn300(value:unknown,version:number,owner?:IdleWanderOwner300):boolean {
  try{
-  if(!object(value)||!integer(version,1,301))return false;
+  if(!object(value)||!integer(version,1,SCHEMA_VERSION))return false;
   if(!('idleWander300'in value))return true;
   if(!isSchema300OrLater(version)||!owner||!integer(owner.core)||!integer(owner.width,1)||!integer(owner.height,1))return false;
   const task=data(value,'idleWander300');if(!object(task))return false;

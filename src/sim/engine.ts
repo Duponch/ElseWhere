@@ -1,3 +1,4 @@
+import {isFinishFrameSchema301} from './wall-frame-kind-301.ts';
 import {createWoodWallCore301} from './wood-wall-core-301.ts';
 import {rateForPawn301} from './actual-view-301.ts';
 import {isSchema300OrLater,isSchema290OrLater} from './schema-compatibility-257.ts';
@@ -331,7 +332,7 @@ import { scheduleGrowing, cancelGrowingJobs, growingJobValid, finishSowing, jobD
 import { isPlant, harvestable,choppable,berryYield,plantCanYieldNow } from './plants.ts';
 import { search, searchCandidates, destinationValid, planWork, type SearchBudget, type NavigationGrid } from './work-planner.ts';
 import { regionMapFor } from './regions.ts';
-import { workPriority,workType } from './work-types.ts';
+import { disablesWork, storedPriority, workPriority,workType } from './work-types.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
 import { releaseAssignments, planCommandDrops, commitDrop, releaseWork, type DropPlan } from './work-release.ts';
 import {prepareLinkedStorageCommand286} from './linked-storage-plan-286.ts';
@@ -1016,10 +1017,13 @@ function applyCommandInternal(world: World, command: Exclude<LocalCommand,import
     return { ok: true };
   }
   if (command.type === 'priority') {
-    if (!['handle','art','clean','firefight','warden','basic','hunt','research','patient','bedrest','doctor','mine', 'gather', 'build', 'haul', 'grow', 'cook', 'craft'].includes(command.work) || !Number.isInteger(command.value) || command.value < 0 || command.value > 4) return refusal('invalid-priority', 'La priorité doit être comprise entre 0 et 4.');
+    if (!['handle','art','clean','firefight','warden','basic','hunt','research','patient','bedrest','doctor','mine', 'gather', 'build', 'haul', 'grow', 'cook', 'craft',...(Number(world.schemaVersion)>=302?['smith','tailor']:[])].includes(command.work) || !Number.isInteger(command.value) || command.value < 0 || command.value > 4) return refusal('invalid-priority', 'La priorité doit être comprise entre 0 et 4.');
     const pawn = world.pawns.find(candidate => candidate.id === command.pawnId);
     if (!pawn) return refusal('missing-target', 'Colon introuvable.');
     const background=backgroundWorkRefusal(pawn,command.work);if(command.value>0&&background)return refusal('invalid-priority',background);
+    // Smithing and Tailoring set apart from Crafting at the first change of
+    // any of the three: each then keeps its own priority.
+    if(Number(world.schemaVersion)>=302&&(command.work==='craft'||command.work==='smith'||command.work==='tailor')){pawn.priorities.smith=storedPriority(pawn,'smith');pawn.priorities.tailor=storedPriority(pawn,'tailor');}
     pawn.priorities[command.work] = command.value;
     if(command.value===0&&command.work==='haul'&&pawn.brewing)releaseWork(world,pawn,drops);
     if(command.value===0&&pawn.deepWork&&command.work===(pawn.deepWork.kind==='drill'?'mine':'research'))releaseWork(world,pawn,drops);
@@ -1035,7 +1039,7 @@ function applyCommandInternal(world: World, command: Exclude<LocalCommand,import
       (command.work==='basic'||command.work==='warden')&&!workPriority(pawn,'basic')&&!workPriority(pawn,'warden'):
       command.work===(world.pawns.find(p=>p.id===pawn.rescue!.patientId)?.prisoner?'warden':'doctor')))releaseWork(world,pawn,drops);
     const job = world.jobs.find(candidate => candidate.id === pawn.jobId);
-    if (command.value === 0 && ((job && workType(job) === command.work && pawn.orders.active===null) || (pawn.haul && pawn.orders.active!=='haul' && command.work === haulingWork(pawn.haul.destination)) || (pawn.cooking && pawn.orders.active!=='cook' && command.work === taskWork(pawn.cooking)))) releaseWork(world, pawn,drops);
+    if (command.value === 0 && ((job && workType(job) === command.work && pawn.orders.active===null) || (pawn.haul && pawn.orders.active!=='haul' && command.work === haulingWork(pawn.haul.destination)) || (pawn.cooking && pawn.orders.active!=='cook' && disablesWork(world,pawn,command.work,taskWork(pawn.cooking))))) releaseWork(world, pawn,drops);
     pawn.planCooldown = 0; refreshStock(world); return { ok: true };
   }
   if(command.type==='caravan-order'||command.type==='caravan-encounter-choice'||command.type==='caravan-meeting-trade')return refusal('invalid-command','La commande exige le vrai registre de caravanes.');
@@ -1436,7 +1440,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(pawn.cleaning?.forced&&processCleaning(world,pawn,needsContext))continue;
       // An admitted FinishFrame owns its whole finite visit. Its paid work,
       // expiry and Ready run in the real Core owner, not again in this macro.
-      const frameOwner301=Number(world.schemaVersion)===301?coreState297(world).frame:undefined;
+      const frameOwner301=isFinishFrameSchema301(Number(world.schemaVersion))?coreState297(world).frame:undefined;
       if(frameOwner301?.owns(pawn)){
         if(!pawn.frameToil301&&pawn.postureUntilCore301===undefined){
           const frame=frameOwner301.currentFrame(pawn);
@@ -1499,7 +1503,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       }
       // A job admitted by Main in THIS macro has not passed the earlier
       // owned-job branch. Admit its toil without paying old macro work once.
-      if(Number(world.schemaVersion)===301&&coreState297(world).frame!.owns(pawn)){
+      if(isFinishFrameSchema301(Number(world.schemaVersion))&&coreState297(world).frame!.owns(pawn)){
         const frame=coreState297(world).frame!;
         if(!frame.admitAtContact(pawn))moveToward(world,pawn,constructionWorkTarget(world,job),false,getBlocked,budget,false,getLight);
         continue;
@@ -1674,7 +1678,7 @@ function beginCoreMacro297(root:World):void {
 }
 
 function coreState297(world:World):CoreMap297 {
- let state=coreMaps297.get(world);if(!state){state={movement:createCoreMovement297(world),physics:createCorePhysics297(world),...(Number(world.schemaVersion)===301?{frame:woodWallOwner301(world)}:{}),...(isSchema300OrLater(Number(world.schemaVersion))?{idle:createIdleWanderCore300(world)}:{}),...(isSchema298OrLater(Number(world.schemaVersion))?{contacts:createConsoleContactCore298(world)}:{})};coreMaps297.set(world,state);}return state;
+ let state=coreMaps297.get(world);if(!state){state={movement:createCoreMovement297(world),physics:createCorePhysics297(world),...(isFinishFrameSchema301(Number(world.schemaVersion))?{frame:woodWallOwner301(world)}:{}),...(isSchema300OrLater(Number(world.schemaVersion))?{idle:createIdleWanderCore300(world)}:{}),...(isSchema298OrLater(Number(world.schemaVersion))?{contacts:createConsoleContactCore298(world)}:{})};coreMaps297.set(world,state);}return state;
 }
 function invalidateCoreCampaign297(root:World,reason:'macro'|'command'|'movement'|'impact'):void {
  for(const map of actualCoreMaps297(root)){invalidateHumanMoveSpeed297(map);const state=coreMaps297.get(map);if(state){state.physics.invalidate(reason);state.movement.invalidate();state.idle?.invalidate();state.frame?.invalidate();if(reason==='macro'||reason==='impact')state.contacts?.invalidateActive(effectiveCore297(map),reason);}}

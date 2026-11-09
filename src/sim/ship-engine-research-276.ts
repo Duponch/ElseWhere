@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isSchema276OrLater} from './schema-compatibility-257.ts';
 /** Pure research facts and read-only admission. The shared live service owns
  * station selection and progress; no record is initialized by these readers. */
@@ -27,7 +28,7 @@ const data=(v:object,key:string)=>{const d=Object.getOwnPropertyDescriptor(v,key
  * markers and selected ship-engine are rejected before276 and after283. */
 export function validShipEngineResearchDomain276(state:unknown,version:number,atLocal:number):boolean {
  try{
-  if(!int(version,1,301)||!int(atLocal,0,Number.MAX_SAFE_INTEGER))return false;
+  if(!int(version,1,SCHEMA_VERSION)||!int(atLocal,0,Number.MAX_SAFE_INTEGER))return false;
   if(state===undefined)return true;
   if(!plain(state))return false;
   const selected=data(state,'project')?.value,hasRecord='shipEngine'in state;

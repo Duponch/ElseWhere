@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import { gameLayout, workColumns } from '../src/ui/layout';
 
-// The French Core 1.6.4871 WorkTypeDef naturalPriority order, excluding
-// Smithing and Tailoring because Lisière has no separate work controls yet.
+// The French Core 1.6.4871 WorkTypeDef naturalPriority order, with Smithing
+// and Tailoring between Plant cutting and Art since schema 302.
 const coreOrder = [
   'firefight', 'patient', 'doctor', 'bedrest', 'basic', 'warden',
   'handle', 'cook', 'hunt', 'build', 'grow', 'mine', 'gather',
-  'art', 'craft', 'haul', 'clean', 'research',
+  'smith', 'tailor', 'art', 'craft', 'haul', 'clean', 'research',
 ];
 
 describe('Travail V118', () => {

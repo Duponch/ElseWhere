@@ -1,3 +1,5 @@
+import {isFinishFrameSchema301} from './wall-frame-kind-301.ts';
+import {SCHEMA_VERSION} from './types.ts';
 import {idleOtherActivity300} from './idle-wander-300.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {constructionRecipe} from './construction-materials.ts';
@@ -24,10 +26,10 @@ function exact(v:unknown,fields:readonly string[]):v is Record<string,unknown> {
  * existing work representation; neither load nor this guard creates history. */
 export function validFrameWorkJob301(value:unknown,version:number):boolean {
  try{
-  if(!record(value)||!integer(version,1,301))return false;
+  if(!record(value)||!integer(version,1,SCHEMA_VERSION))return false;
   if('jobTickDelta301'in value||'frameToil301'in value||'postureUntilCore301'in value)return false;
   if(!('frameWork301'in value))return true;
-  if(version!==301||data(value,'kind')!=='wall'||data(value,'material')!=='wood'||data(value,'construction')!=='frame'||'furniture'in value||'clearance'in value||'wallDoor296'in value)return false;
+  if(!isFinishFrameSchema301(version)||data(value,'kind')!=='wall'||data(value,'material')!=='wood'||data(value,'construction')!=='frame'||'furniture'in value||'clearance'in value||'wallDoor296'in value)return false;
   const work=data(value,'frameWork301');if(!exact(work,['required','done'])||data(work,'required')!==94.5||!single(data(work,'done'))||Number(data(work,'done'))<0)return false;
   const progress=data(value,'progress'),remainder=data(value,'workRemainder');
   if(!integer(progress)||remainder!==undefined&&!integer(remainder,1,WORK_FRACTIONS-1))return false;
@@ -65,10 +67,10 @@ function noOtherActivity(value:Record<string,unknown>,ownRetired=false):boolean 
  * Held/away/archive actors may retain the Thing counter, never these live jobs. */
 export function validFramePawn301(value:unknown,version:number,local=false,ownerCore?:number):boolean {
  try{
-  if(!record(value)||!integer(version,1,301)||'frameWork301'in value)return false;
-  if('jobTickDelta301'in value&&(version!==301||!integer(data(value,'jobTickDelta301'),0,14)))return false;
+  if(!record(value)||!integer(version,1,SCHEMA_VERSION)||'frameWork301'in value)return false;
+  if('jobTickDelta301'in value&&(!isFinishFrameSchema301(version)||!integer(data(value,'jobTickDelta301'),0,14)))return false;
   if('frameToil301'in value){
-   if(version!==301||!local||'postureUntilCore301'in value)return false;
+   if(!isFinishFrameSchema301(version)||!local||'postureUntilCore301'in value)return false;
    const toil=data(value,'frameToil301');if(!record(toil)||!integer(data(toil,'jobId'),1))return false;
    if(data(toil,'kind')==='work'){
     if(!exact(toil,['kind','jobId','ticksLeft'])||!integer(data(toil,'ticksLeft'),-2147483648,5000)||data(value,'jobId')!==data(toil,'jobId'))return false;
@@ -81,7 +83,7 @@ export function validFramePawn301(value:unknown,version:number,local=false,owner
   }
   if('postureUntilCore301'in value){
    const until=data(value,'postureUntilCore301');
-   if(version!==301||!local||!integer(ownerCore)||!integer(until,0,ownerCore+1)||!noOtherActivity(value))return false;
+   if(!isFinishFrameSchema301(version)||!local||!integer(ownerCore)||!integer(until,0,ownerCore+1)||!noOtherActivity(value))return false;
    const path=data(value,'path'),length=Array.isArray(path)?Object.getOwnPropertyDescriptor(path,'length'):undefined;
    if(!length||!Object.hasOwn(length,'value')||length.value!==0||data(value,'moveCooldown')!==0)return false;
    const motion=data(value,'motion');if(motion!==undefined&&motion!==null){if(!record(motion))return false;const end=data(motion,'end');if(typeof end!=='number'||!Number.isFinite(end)||end>ownerCore/10)return false;}
@@ -102,7 +104,7 @@ function localLink(p:Pawn,w:World):boolean {
 /** Reuse the existing owner capture; no new identity/ownership census. */
 export function validFrameOwners301(w:World,version:number,readOwners:()=>HumanOwnershipCapture):boolean {
  try{
-  if(!integer(version,1,301)||!validJobs(w,version))return false;
+  if(!integer(version,1,SCHEMA_VERSION)||!validJobs(w,version))return false;
   const core=effectiveCore297(w);
   for(const slot of readOwners().pawnOwners)if(slot.pawn&&(!validFramePawn301(slot.pawn,version,slot.kind==='map',slot.kind==='map'?core:undefined)||slot.kind==='map'&&(!w.pawns.includes(slot.pawn)||!localLink(slot.pawn,w))))return false;
   for(const row of(w.campaignMap?.revision===2?w.campaignMap.groups:[]))if('members'in row.state)for(const p of row.state.members)if(!validFramePawn301(p,version))return false;
@@ -115,7 +117,7 @@ export function validFrameOwners301(w:World,version:number,readOwners:()=>HumanO
 /** Narrow MAIN pass over original already guarded holder containers. */
 export function validFrameProjection301(w:World,version:number):boolean {
  try{
-  if(!integer(version,1,301)||!validJobs(w,version))return false;
+  if(!integer(version,1,SCHEMA_VERSION)||!validJobs(w,version))return false;
   const away=(p:unknown)=>validFramePawn301(p,version);
   const building=(s:Pick<World['structures'][number],'cryptosleep'|'shipCryptosleep277'|'casket'>):boolean=>{
    if(s.cryptosleep?.human&&!away(s.cryptosleep.human))return false;

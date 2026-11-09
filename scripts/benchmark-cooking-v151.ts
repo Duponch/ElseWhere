@@ -1,5 +1,6 @@
 /** Frozen pre-V151 cooking proposal for an independent decision and timing oracle.
  * The implementation below is copied from HEAD before the service-cell hoist. */
+import { storedPriority } from '../src/sim/work-types.ts';
 import {planArtWork} from '../src/sim/art-work-plan.ts';
 import {isArtRecipe} from '../src/sim/art-rules.ts';
 import { productionResearchUnlocked,productionWorkerQualified,validAdvancedComponentIngredients,validFlakIngredients } from '../src/sim/machining.ts';
@@ -29,14 +30,14 @@ export function hasCookingWork(world:World,pawn:Pawn):boolean {
   return productionPriority(world,pawn)<5;
 }
 export function availableCookingStations(world:World,pawn:Pawn):Structure[] {
-  return world.structures.filter(s=>stationRecipe(s)&&(s.kind!=='electric-stove'||foodStationUsable(s))&&productionStationUsable(s)&&pawn.priorities[stationWork(s)]>0&&s.bills?.some(b=>billWanted(world,b))
+  return world.structures.filter(s=>stationRecipe(s)&&(s.kind!=='electric-stove'||foodStationUsable(s))&&productionStationUsable(s)&&storedPriority(pawn,stationWork(s))>0&&s.bills?.some(b=>billWanted(world,b))
     &&!fuelStationReserved(world,s.id,pawn.id));
 }
 /** Select without mutation. The ordinary planner compares this proposal with
  * construction/growing/hauling before committing its reservations. */
 export function legacyPlanCooking(world:World,pawn:Pawn,reachable:Reachability,budget:{pairs:number},options?:{stationId:number;forced:boolean}):CookingPlan|null {
   const stations=availableCookingStations(world,pawn).filter(s=>!options||s.id===options.stationId)
-    .sort((a,b)=>pawn.priorities[stationWork(a)]-pawn.priorities[stationWork(b)]||distance(pawn,a)-distance(pawn,b)||a.id-b.id);
+    .sort((a,b)=>storedPriority(pawn,stationWork(a))-storedPriority(pawn,stationWork(b))||distance(pawn,a)-distance(pawn,b)||a.id-b.id);
   for(const station of stations) {
     if(fuelStationReserved(world,station.id,pawn.id))continue;
     const spot=cookingSpot(station);
@@ -54,7 +55,7 @@ export function legacyPlanCooking(world:World,pawn:Pawn,reachable:Reachability,b
           if(budget.pairs--<=0){budget.pairs=0;return null;}
           const path=routeToJob(world,pile.owner as Cell,reachable,true);
           if(!path)continue;
-          return {station,priority:pawn.priorities[stationWork(station)],target:pile.owner as Cell,path,refuel:{sourcePileId:pile.id,quantity:Math.min(10,capacity,pile.quantity-reservedSource(world,pile.id)),phase:'pickup',carryPileId:null,destination:{type:'fuel',structureId:station.id,forCooking:true,...(options?.forced?{forced:true}:{})}}};
+          return {station,priority:storedPriority(pawn,stationWork(station)),target:pile.owner as Cell,path,refuel:{sourcePileId:pile.id,quantity:Math.min(10,capacity,pile.quantity-reservedSource(world,pile.id)),phase:'pickup',carryPileId:null,destination:{type:'fuel',structureId:station.id,forCooking:true,...(options?.forced?{forced:true}:{})}}};
         }
         break;
       }
@@ -96,7 +97,7 @@ export function legacyPlanCooking(world:World,pawn:Pawn,reachable:Reachability,b
       }
       if(missing||!validFlakIngredients(bill.recipe,ingredients)||!validAdvancedComponentIngredients(bill.recipe,ingredients))continue; // Try the next bill if its filters admit other ingredients.
       const source=ingredients.find(i=>i.stage==='source'),target=source?world.piles.find(p=>p.id===source.pileId)!.owner as Cell:spot;
-      return {station,priority:pawn.priorities[stationWork(station)],target,path:source?routeToJob(world,target,reachable,true)!:toSpot,task:{...(bill.recipe!=='simple-meal'?{recipe:bill.recipe}:{}),stationId:station.id,billId:bill.id,spot,actionCell:{x:target.x,z:target.z},phase:'gather',ingredients,progress:0,productId:null,storageId:null}};
+      return {station,priority:storedPriority(pawn,stationWork(station)),target,path:source?routeToJob(world,target,reachable,true)!:toSpot,task:{...(bill.recipe!=='simple-meal'?{recipe:bill.recipe}:{}),stationId:station.id,billId:bill.id,spot,actionCell:{x:target.x,z:target.z},phase:'gather',ingredients,progress:0,productId:null,storageId:null}};
       }
     }
   }
@@ -105,7 +106,7 @@ export function legacyPlanCooking(world:World,pawn:Pawn,reachable:Reachability,b
 
 export function productionPriority(world:World,pawn:Pawn):number {
   let priority=5;
-  for(const s of world.structures)if(stationRecipe(s)&&s.bills?.some(b=>billWanted(world,b))){const p=pawn.priorities[stationWork(s)];if(p>0)priority=Math.min(priority,p);}
+  for(const s of world.structures)if(stationRecipe(s)&&s.bills?.some(b=>billWanted(world,b))){const p=storedPriority(pawn,stationWork(s));if(p>0)priority=Math.min(priority,p);}
   return priority;
 }
 
@@ -179,7 +180,7 @@ function runBenchmark():void {
   // valid colony continuation or a measurement of natural claim frequency.
   const controlled=structuredClone(world),worker=controlled.pawns.find(p=>availableCookingStations(controlled,p).filter(s=>cookingPlaceFree(controlled,cookingSpot(s))).length>=25);
   if(!worker)throw new Error('Need at least 25 free service spots for the controlled scenario.');
-  const ranked=availableCookingStations(controlled,worker).sort((a,b)=>worker.priorities[stationWork(a)]-worker.priorities[stationWork(b)]||distance(worker,a)-distance(worker,b)||a.id-b.id);
+  const ranked=availableCookingStations(controlled,worker).sort((a,b)=>storedPriority(worker,stationWork(a))-storedPriority(worker,stationWork(b))||distance(worker,a)-distance(worker,b)||a.id-b.id);
   const claimed=ranked.filter(s=>cookingPlaceFree(controlled,cookingSpot(s))).slice(0,24);
   const claimants=controlled.pawns.filter(p=>p.id!==worker.id).slice(0,claimed.length);
   const researchStation=controlled.structures.find(s=>s.kind==='research-bench')!;

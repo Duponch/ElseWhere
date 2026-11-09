@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {forestNativeSpecies291,treeSowingUnlocked291,isForestrySpecies291,isGrowingPlantInVersion291,TREE_SOWING_COST_291} from './forestry-content-291.ts';
 import type {World} from './types.ts';
@@ -53,7 +54,7 @@ const lanes:readonly [string,boolean?][]=[
  ['humans',true],['members',true],['people',true],['animals',true],['pawns',true],['human'],['pawn'],['animal'],['actor'],['scout'],['commercialTrip'],
 ];
 export function validForestryHistoricalTransport291(raw:unknown,version:unknown):boolean {
- if(!integer(version,1,301))return false;
+ if(!integer(version,1,SCHEMA_VERSION))return false;
  let budget=2_000_000;const active=new Set<object>();
  const list=(value:unknown,key:string):boolean=>{
   if(!Array.isArray(value))return key!=='visitor-member-id'&&plain(value)&&!!data(value,'upserted')&&visit(value,key);

@@ -1,3 +1,4 @@
+import { storedPriority } from '../src/sim/work-types.ts';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { expect,test } from 'vitest';
@@ -42,7 +43,7 @@ test('two station fallback preserves reserved, blocked and unreachable decisions
   const base=fresh();
   const pawn=base.pawns.find(p=>availableCookingStations(base,p).length>=2)!;
   expect(pawn).toBeDefined();
-  const ordered=availableCookingStations(base,pawn).sort((a,b)=>pawn.priorities[stationWork(a)]-pawn.priorities[stationWork(b)]||distance(pawn,a)-distance(pawn,b)||a.id-b.id);
+  const ordered=availableCookingStations(base,pawn).sort((a,b)=>storedPriority(pawn,stationWork(a))-storedPriority(pawn,stationWork(b))||distance(pawn,a)-distance(pawn,b)||a.id-b.id);
   const first=ordered[0]!,second=ordered[1]!,firstSpot=cookingSpot(first);
   expect(first.id).not.toBe(second.id);
   compare(base,pawn,undefined,{stationId:first.id,forced:true});

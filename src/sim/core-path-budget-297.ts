@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 export interface CorePathBudget297 {tick:number;remaining:number;pairs:number}
 const integer=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
@@ -5,7 +6,7 @@ const integer=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof 
 export function newCorePathBudget297(tick:number):CorePathBudget297 {if(!integer(tick))throw Error('Invalid actual path-budget owner tick');return {tick,remaining:8,pairs:32768};}
 /** One real LOCAL map. Campaign phase is explicit; it is not copied as an owner capability. */
 export function validCorePathBudget297(body:unknown,version:number,tick:number,phase:number,localOwner=true):boolean {
- if(!body||typeof body!=='object'||Array.isArray(body)||!integer(version,1,301))return false;
+ if(!body||typeof body!=='object'||Array.isArray(body)||!integer(version,1,SCHEMA_VERSION))return false;
  const present='corePathBudget297'in body;
  if(!isCorePhysicalSchema297(version)||!localOwner)return !present;
  if(!integer(tick)||!integer(phase,0,9))return false;

@@ -10,14 +10,13 @@ import { schemaAtLeast } from './schema-range.ts';
 export const rimWorkGiverOrder301=schemaAtLeast(301);
 
 /** Natural priority of RimWorld's work types, and the work type of ours that
- * holds the pawn's priority for it. Smithing, Tailoring and Crafting share
- * our single crafting priority. */
+ * holds the pawn's priority for it. */
 export const RIM_WORK_TYPES={
   Firefighter:{natural:1400,work:'firefight'},Patient:{natural:1350,work:'patient'},Doctor:{natural:1300,work:'doctor'},
   PatientBedRest:{natural:1200,work:'bedrest'},BasicWorker:{natural:1150,work:'basic'},Warden:{natural:1100,work:'warden'},
   Handling:{natural:1050,work:'handle'},Cooking:{natural:1000,work:'cook'},Hunting:{natural:950,work:'hunt'},
   Construction:{natural:900,work:'build'},Growing:{natural:700,work:'grow'},Mining:{natural:600,work:'mine'},
-  PlantCutting:{natural:500,work:'gather'},Smithing:{natural:470,work:'craft'},Tailoring:{natural:450,work:'craft'},
+  PlantCutting:{natural:500,work:'gather'},Smithing:{natural:470,work:'smith'},Tailoring:{natural:450,work:'tailor'},
   Art:{natural:430,work:'art'},Crafting:{natural:400,work:'craft'},Hauling:{natural:300,work:'haul'},
   Cleaning:{natural:200,work:'clean'},Research:{natural:100,work:'research'},
 } as const satisfies Record<string,{natural:number;work:WorkType}>;

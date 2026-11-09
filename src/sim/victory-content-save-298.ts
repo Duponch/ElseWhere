@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {AI_CORE_CONTENT_298,isAiCoreContentSchema298,isAiCoreItem298} from './ai-core-content-298.ts';
 import {isShipComputerSensorsKind298,isShipComputerSensorsSchema298,SHIP_COMPUTER_SENSORS_CONTENT_298} from './ship-computer-sensors-content-298.ts';
@@ -13,7 +14,7 @@ const closed=(v:Data,allowed:readonly string[],required:readonly string[])=>Refl
 /** Domain-only: conjoin the existing complete material/owner/ID guard. The
  * physical core may be delivered to a construction job; it is never a recipe. */
 export function validAiCorePile298(v:unknown,version:number):boolean {
- if(!integer(version,1,301)||!plain(v))return false;
+ if(!integer(version,1,SCHEMA_VERSION)||!plain(v))return false;
  const item=data(v,'item')?.value,kind=data(v,'kind')?.value;
  if(!isAiCoreItem298(item)&&kind!=='ai-core')return true;
  if(!isAiCoreContentSchema298(version)||item!=='ai-core'||kind!=='ai-core')return false;
@@ -26,7 +27,7 @@ export function validAiCorePile298(v:unknown,version:number):boolean {
 /** Ordinary complete building/job guards remain conjoined. No holder,
  * running component, quality, fuel, switch, breakdown or packed form exists. */
 export function validShipComputerSensorsField298(v:unknown,version:number,owner:'installed'|'job'|'packed'='installed'):boolean {
- if(!integer(version,1,301)||!plain(v))return false;
+ if(!integer(version,1,SCHEMA_VERSION)||!plain(v))return false;
  const kind=data(v,'kind');if(!kind)return !('kind'in v);
  if(!isShipComputerSensorsKind298(kind.value))return true;
  if(!isShipComputerSensorsSchema298(version)||owner==='packed')return false;
@@ -55,7 +56,7 @@ const catalogue=new Set(['kind','project','item','food','recipe','tool']),filter
 /** Original RAW/public sparse fence BEFORE migration. Same bounded traversal
  * convention as276/277; never read terrain/resources/planet or grant ownership. */
 export function validVictoryContentHistorical298(value:unknown,version:number):boolean {
- if(!integer(version,1,301))return false;if(isSchema298OrLater(version))return true;
+ if(!integer(version,1,SCHEMA_VERSION))return false;if(isSchema298OrLater(version))return true;
  let remaining=2_000_000;const active=new Set<object>();
  const walk=(v:unknown):boolean=>{
   if(--remaining<0)return false;if(v===null||typeof v!=='object')return true;

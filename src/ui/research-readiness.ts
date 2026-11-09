@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from '../sim/types.ts';
 import {knownBuilding256} from './exploration-readers-256';
 import {isSchema276OrLater,isSchema277OrLater} from '../sim/schema-compatibility-257';
 import { isColonist } from '../sim/affiliation';
@@ -44,7 +45,7 @@ const minimumSchema:Partial<Record<ResearchProject,number>>={
   hydroponics:203,'gun-turrets':193,'tube-television':190,'packaged-survival-meals':188,
   'hospital-bed':187,autodoors:143,
 };
-const admitted=(world:World,project:ResearchProject)=>Number.isSafeInteger(world.schemaVersion)&&Number(world.schemaVersion)<=301&&(project==='tree-sowing'?isSchema291OrLater(world.schemaVersion):project==='firefoam'?isSchema290OrLater(world.schemaVersion):project==='ship-cryptosleep'?isSchema277OrLater(world.schemaVersion):project==='ship-engine'?isSchema276OrLater(world.schemaVersion):world.schemaVersion>=(minimumSchema[project]??0));
+const admitted=(world:World,project:ResearchProject)=>Number.isSafeInteger(world.schemaVersion)&&Number(world.schemaVersion)<=SCHEMA_VERSION&&(project==='tree-sowing'?isSchema291OrLater(world.schemaVersion):project==='firefoam'?isSchema290OrLater(world.schemaVersion):project==='ship-cryptosleep'?isSchema277OrLater(world.schemaVersion):project==='ship-engine'?isSchema276OrLater(world.schemaVersion):world.schemaVersion>=(minimumSchema[project]??0));
 
 const sorted=(ids:number[])=>ids.sort((a,b)=>a-b);
 const local=(pawn:Pawn)=>isColonist(pawn)&&!pawn.prisoner&&!pawn.visitor&&!pawn.raid&&!pawn.podRescue&&pawn.state!=='dead'&&!pawn.health?.death;

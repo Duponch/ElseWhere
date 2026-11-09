@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {validCoveredInFirefoamField290} from './firefoam-actor-state-290.ts';
 
 const plain=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype;
@@ -20,7 +21,7 @@ export function validFirefoamActorOwners290(raw:unknown,version:number):boolean 
 export type FirefoamLaneReaderInternal290=(value:object,key:string)=>PropertyDescriptor|undefined|null;
 export type FirefoamEmptyOwnerLanesInternal290=(value:object,laneKeys:ReadonlySet<string>)=>boolean;
 export function validFirefoamActorOwnersWithLanesInternal290(raw:unknown,version:number,readLane:FirefoamLaneReaderInternal290,skipEmptyOwnerLanes?:FirefoamEmptyOwnerLanesInternal290):boolean {
- if(!Number.isSafeInteger(version)||version<1||version>301)return false;
+ if(!Number.isSafeInteger(version)||version<1||version>SCHEMA_VERSION)return false;
  const active=new Set<object>();let budget=2_000_000;
  const visit=(v:unknown,forbidden=false):boolean=>{
   if(--budget<0)return false;if(v===null||typeof v!=='object')return true;

@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {validNovelPile295,validReadingPawnFields295,validReadingTask295} from './book-save-295.ts';
 import {isDiningSeat,isDiningTable} from './dining.ts';
 import {adjacentToTable} from './recreation-space.ts';
@@ -9,7 +10,7 @@ import type {World} from './types.ts';
  * A reservation is a reference to the one existing exemplar, not another item. */
 export function validReadingWorld295(world:World):boolean {
  try{
-  const version=Number(world.schemaVersion);if(!Number.isSafeInteger(version)||version<1||version>301)return false;
+  const version=Number(world.schemaVersion);if(!Number.isSafeInteger(version)||version<1||version>SCHEMA_VERSION)return false;
   const piles=new Map<number,World['piles'][number]>();
   for(const pile of world.piles){
    if(!validNovelPile295(pile,version))return false;

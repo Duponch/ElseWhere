@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isVictoryResearchProject298,isVictoryResearchSchema298,VICTORY_RESEARCH_CONTENT_298,type VictoryResearchProject298,type VictoryResearchRecordKey298} from './victory-research-content-298.ts';
 
 export interface VictoryResearchProgress298 {readonly points:number;readonly completedAt?:number}
@@ -23,7 +24,7 @@ const projects=Object.freeze(['long-range-mineral-scanner','ship-computer','ship
  * prospective records/project selections; it never initializes progress. */
 export function validVictoryResearchDomain298(state:unknown,version:number,atLocal:number):boolean {
  try{
-  if(!int(version,1,301)||!int(atLocal,0,Number.MAX_SAFE_INTEGER))return false;
+  if(!int(version,1,SCHEMA_VERSION)||!int(atLocal,0,Number.MAX_SAFE_INTEGER))return false;
   if(state===undefined)return true;if(!plain(state))return false;
   const project=data(state,'project');if(!project&&'project'in state)return false;
   const selected=project?.value;

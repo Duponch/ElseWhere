@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {heldCore297,validationCore297,type PhaseWorld297} from './core-phase-297.ts';
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
@@ -57,7 +58,7 @@ function actualData277(value:unknown):boolean {
 /** Sparse descriptor-first field boundary. The owner guard owns complete
  * actors, clocks, namespace, bed bindings and personal possessions. */
 export function validShipCasketField277(v:unknown,version:number,tick:number,coreNow297?:number):boolean {
- if(!plain(v)||!integer(version,1,301)||!integer(tick))return false;
+ if(!plain(v)||!integer(version,1,SCHEMA_VERSION)||!integer(tick))return false;
  const kind=descriptor(v,'kind');if('kind'in v&&!kind)return false;
  if(kind?.value!=='ship-cryptosleep-casket')return !('shipCryptosleep277'in v);
  const field=descriptor(v,'shipCryptosleep277');

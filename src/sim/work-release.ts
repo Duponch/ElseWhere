@@ -28,7 +28,7 @@ import { zonesUnderPlan } from './construction-zones.ts';
 import { isShelfKind } from './shelf-storage.ts';
 import { constructionHaulId } from './construction-rules.ts';
 import type { Cell, Command, MaterialPile, Pawn, World } from './types.ts';
-import { workType } from './work-types.ts';
+import { disablesWork, workType } from './work-types.ts';
 import { haulingWork } from './haul-aside.ts';
 import { footprintCells } from './definitions.ts';
 import { queryArea } from './designation.ts';
@@ -94,7 +94,7 @@ export function planCommandDrops(world:World,command:Command|import('./cave-glow
     const pawn=world.pawns.find(p=>p.id===command.pawnId),job=world.jobs.find(j=>j.id===pawn?.jobId);
     if(pawn?.ward&&command.work==='warden'||pawn?.animalHandling&&command.work==='handle'||(pawn?.animalCare||pawn?.animalFeed||pawn?.animalRescue)&&command.work==='doctor')pawns.add(pawn.id);
     if(pawn?.burial&&command.work==='haul'&&pawn.orders.active!=='bury'||pawn?.cleaning&&!pawn.cleaning.forced&&command.work==='clean')pawns.add(pawn!.id);
-    if(pawn&&((pawn.surgery&&command.work==='doctor')||(pawn.tend&&command.work==='doctor'&&pawn.orders.active!=='tend')||(pawn.feed&&command.work===feedingWork(world.pawns.find(p=>p.id===pawn.feed!.patientId))&&pawn.orders.active!=='feed')||(pawn.brewing&&command.work==='haul')||(pawn.haul&&pawn.orders.active!=='haul'&&command.work===haulingWork(pawn.haul.destination))||(job&&workType(job)===command.work&&pawn.orders.active===null)||(pawn.cooking&&pawn.orders.active!=='cook'&&command.work === taskWork(pawn.cooking))))pawns.add(pawn.id);
+    if(pawn&&((pawn.surgery&&command.work==='doctor')||(pawn.tend&&command.work==='doctor'&&pawn.orders.active!=='tend')||(pawn.feed&&command.work===feedingWork(world.pawns.find(p=>p.id===pawn.feed!.patientId))&&pawn.orders.active!=='feed')||(pawn.brewing&&command.work==='haul')||(pawn.haul&&pawn.orders.active!=='haul'&&command.work===haulingWork(pawn.haul.destination))||(job&&workType(job)===command.work&&pawn.orders.active===null)||(pawn.cooking&&pawn.orders.active!=='cook'&&disablesWork(world,pawn,command.work,taskWork(pawn.cooking)))))pawns.add(pawn.id);
   } else if(command.type==='bill-remove'||command.type==='bill-update') {
     for(const pawn of world.pawns)if(pawn.cooking?.billId===command.billId&&pawn.cooking.stationId===command.structureId
       &&!(pawn.cooking.recipe==='burn-apparel'&&hasTravellingCargo(world,pawn)))pawns.add(pawn.id);

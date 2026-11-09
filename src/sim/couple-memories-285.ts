@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
 import {memoryAge271,memoryExpiry271,memoryReadTick271,validSuspendedMemory271} from './suspended-memory-271.ts';
 import {TICKS_PER_DAY} from './types.ts';
@@ -85,7 +86,7 @@ export function coupleOpinionOffset285(holder:Readonly<CoupleMemoryHolder285>,ot
 }
 
 const plain=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype;
-const versionAllowed=(version:number)=>int(version,2,301);
+const versionAllowed=(version:number)=>int(version,2,SCHEMA_VERSION);
 
 /** Shape only: the enclosing actual-owner guard checks self/nextId/namespace.
  * Presence starts ONLY285. No future version is inferred from a lower bound. */

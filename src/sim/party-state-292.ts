@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 export interface PartyMember292 {pawnId:number;joinedAtCore:number;presentCore:number}
 export interface PartyActive292 {
@@ -15,7 +16,7 @@ export function partyKeys292(v:unknown,required:readonly string[],optional:reado
 }
 export function partyDense292(v:unknown):v is unknown[]{return Array.isArray(v)&&v.length<=1_000_000&&Object.getPrototypeOf(v)===Array.prototype&&Reflect.ownKeys(v).length===v.length+1&&Array.from({length:v.length},(_,i)=>!!partyData292(v,String(i))).every(Boolean);}
 export function validPartyState292(value:unknown,version:number,tick:number,width:number,height:number,nextId=Number.MAX_SAFE_INTEGER):value is PartyState292|undefined{
- if(!partyInteger292(version,1,301)||!partyInteger292(tick,0,Math.floor(Number.MAX_SAFE_INTEGER/10)))return false;
+ if(!partyInteger292(version,1,SCHEMA_VERSION)||!partyInteger292(tick,0,Math.floor(Number.MAX_SAFE_INTEGER/10)))return false;
  if(value===undefined)return true;if((version!==292&&(version!==293&&(version!==294&&(version!==295&&(version!==296&&!isCorePhysicalSchema297(version))))))||!partyKeys292(value,['adoptedAtCore','nextCheckCore','rng','pending'],['lastStartedAtCore','active']))return false;
  const now=tick*10;
  if(!partyInteger292(value.adoptedAtCore,0,now)||!partyInteger292(value.nextCheckCore,value.adoptedAtCore+1)||!partyInteger292(value.rng,1,0xffffffff)||typeof value.pending!=='boolean')return false;

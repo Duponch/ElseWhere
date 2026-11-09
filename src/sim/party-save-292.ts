@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from './types.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {kidnapCarryPairs261} from './caravan-kidnap-261.ts';
 import {localWorldGroups} from './world-map-context.ts';
@@ -18,7 +19,7 @@ const lists=new Set(['sites','piles','items','jobs','groups','groupLosses','loss
 const lanes=['world','summary','dynamic','campaign','worldMaps','sites','map','secondarySite','campaignMap','piles','items','jobs','worldGroups','groups','group','state','pending261','groupLosses','losses','legacyTravellers','abandonedPawns','abandonedContents','worldPawns','owners','worldFactions','leaders','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277','casket','cryptosleep','shipCryptosleep277','occupant','structures','packed','building','visitors','raids','podRescues','prisonDepartures','departed','startingArrival','pods','humans','members','people','animals','pawns','human','pawn','animal','mech','actor','scout','commercialTrip','recreation','task'] as const;
 const humanLanes=new Set(['pawns','humans','members','people','human','pawn','actor']);
 export function validPartyHistoricalTransport292(raw:unknown,version:unknown):boolean {
- if(!integer(version,1,301))return false;let budget=2_000_000;const active=new Set<object>();
+ if(!integer(version,1,SCHEMA_VERSION))return false;let budget=2_000_000;const active=new Set<object>();
  const visit=(v:unknown,kind:string):boolean=>{
   if(--budget<0||!plain(v)||active.has(v))return false;active.add(v);
   if('party292'in v){if(!['world','map','dynamic'].includes(kind)||!validPartyField292(v,version,integer(data(v,'tick')?.value)?data(v,'tick')!.value:Math.floor(Number.MAX_SAFE_INTEGER/10),integer(data(v,'width')?.value,1)?data(v,'width')!.value:Number.MAX_SAFE_INTEGER,integer(data(v,'height')?.value,1)?data(v,'height')!.value:Number.MAX_SAFE_INTEGER))return false;}
@@ -58,7 +59,7 @@ function validLocalParty292(w:World):boolean {
 /** Candidate graph after the enclosing ordinary owner/identity admission. */
 export function validPartyWorld292(w:World):boolean {
  try{
-  if(!integer(w.schemaVersion,1,301))return false;
+  if(!integer(w.schemaVersion,1,SCHEMA_VERSION))return false;
   if(Array.isArray(w.pawns)){if(!validLocalParty292(w))return false;}else if('party292'in w)return false;
   if(w.secondarySite&&!validLocalParty292({...w.secondarySite.map,schemaVersion:w.schemaVersion,tick:w.tick,nextId:w.nextId} as World))return false;
   for(const site of w.worldMaps?.sites??[]){if(site.map){const map={...site.map,schemaVersion:w.schemaVersion,tick:w.tick,nextId:w.nextId} as World;if(!validLocalParty292(map))return false;}}

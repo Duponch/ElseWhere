@@ -1,3 +1,4 @@
+import { storedPriority } from './sim/work-types.ts';
 import {isSchema300OrLater} from './sim/schema-compatibility-257.ts';
 import {idleWanderTask300} from './sim/idle-wander-300.ts';
 import {isSchema298OrLater} from './sim/schema-compatibility-257.ts';
@@ -1955,7 +1956,7 @@ function updateWorkPanel(world: World, carriedPatients: ReadonlySet<number>): vo
     updateWorkSkills(row,pawn);
     row.querySelector('.work-activity')!.textContent = actionLabel(pawn, carriedPatients);
     for (const select of row.querySelectorAll<HTMLSelectElement>('select')) {
-      const work=select.dataset.work as WorkType;select.value=String(pawn.priorities[work]);
+      const work=select.dataset.work as WorkType;select.value=String(storedPriority(pawn,work));
       updateBackgroundWorkControl(select,pawn,work);
     }
   }
