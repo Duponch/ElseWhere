@@ -854,6 +854,15 @@ Le feu attaché des animaux garde son mode « milieu continu » : son cache d'ef
 
 **Tests.** 78 fichiers (faune, feu, marqueur, scène) : 315 réussis et 89 en échec, ces derniers identiques sur le commit précédent.
 
+### Planification du travail et régions à la RimWorld (9 novembre)
+
+Refonte demandée : planification par niveaux de priorité comme RimWorld, puis accessibilité par régions. Détail, sources et suite dans [la note de conception](work-planner-rimworld.md).
+
+- **Ordre des donneurs** (`src/sim/work-givers-rimworld.ts`) : registre des 20 types et des 105 donneurs du Core, avec la façon dont chacun cherche sa cible, relevée dans les classes du jeu. Pour les sauvegardes actuelles (schéma 301), chaque candidat appartient au donneur que RimWorld utiliserait. On compare d'abord les donneurs (priorité du colon, priorité naturelle, `priorityInType`, ordre des définitions), puis la cible : première région qui contient une cible valide pour les donneurs à recherche par régions, puis la plus proche à vol d'oiseau. Une famille qui ne peut plus gagner n'est pas évaluée.
+- **Transport** : la chose transportable la plus proche du colon, puis sa meilleure réserve (priorité, puis case la plus proche de la chose). Pour une livraison : la destination d'abord, puis la ressource la plus proche. La fenêtre tournante de paires source × destination disparaît pour ces sauvegardes.
+- **Régions** (`src/sim/regions.ts`) : blocs de 12 × 12, portes à part, liens, reconstruits seulement quand la grille change. L'accessibilité répond par composantes au lieu d'une inondation case par case, avec un résultat identique : l'état simulé des Forges reste le même bit à bit.
+- **Effet sur Les Forges** (1 500 ticks depuis la même sauvegarde) : 127 chantiers restants au lieu de 170, 857 tas rangés au lieu de 800, 1,2 colon inactif en moyenne au lieu de 1,8. Le temps de simulation par tick ne change pas de façon mesurable : l'accessibilité y coûtait déjà peu.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -871,7 +880,7 @@ Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisi
    - vêtements de mort −5 à −14 ;
    - trempé −3 ;
    - travail passionné +8 / +14 (1.6).
-5. **Ordre des types de travail à priorité égale.** `compareCandidate` utilise des rangs ad hoc ; par exemple l’artisanat passe avant la construction et la recherche avant le ménage. RimWorld suit l’ordre naturel de l’onglet Travail : Pompier > Patient > Docteur > Repos > Basique > Gardien > Animaux > Cuisine > Chasse > Construction > Culture > Minage > Coupe > Artisanat > Transport > Ménage > Recherche.
+5. ~~**Ordre des types de travail à priorité égale.**~~ Corrigé pour les sauvegardes actuelles, voir « Planification du travail et régions à la RimWorld ». `compareCandidate` utilise des rangs ad hoc ; par exemple l’artisanat passe avant la construction et la recherche avant le ménage. RimWorld suit l’ordre naturel de l’onglet Travail : Pompier > Patient > Docteur > Repos > Basique > Gardien > Animaux > Cuisine > Chasse > Construction > Culture > Minage > Coupe > Artisanat > Transport > Ménage > Recherche.
 6. **Priorités par défaut.** Ici : 1 / 2 / 3. Dans RimWorld, les priorités manuelles sont désactivées par défaut et tout ce qui est autorisé vaut 3. Conséquence actuelle : un colon blessé ou malade continue de travailler au lieu de se reposer.
 7. **Pas de ×12 automatique** quand tous les colons dorment (`TickManager.NothingHappeningInGame`).
 8. **Cultures Core manquantes** : fraise, herbe à fumer, psychoïde, soie du diable.
@@ -926,7 +935,7 @@ Les autres rôles de pièce relus (atelier 27 par établi, cuisine 28 par cuisin
    - avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).
 5. **Simulation, 80 colons (≈ 62 ms par tick, voir « Simulation des Forges : contrôles indexés »).** Le profil est plat : planification du travail ≈ 16 % (ménage, chantiers, accessibilité), déplacements ≈ 12 %, faune ≈ 11 %, coûts de navigation reconstruits à chaque recherche ≈ 3 % (≈ 5 % avant « Simulation : éclairage et coûts de navigation mémorisés »), recherche ≈ 4 % (dont propreté des laboratoires ≈ 1,3 %, voir « Simulation : propreté des laboratoires »). Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
 6. **Contenu sans montée de schéma** (voir § 5), puis les écarts RimWorld 1 à 4 et 8.
-7. **Planificateur en WorkGivers** façon RimWorld (écarts 5 et 6), avec mise à jour des tests.
+7. **Planificateur en WorkGivers** façon RimWorld : ordre des donneurs, transport et régions faits (voir « Planification du travail et régions à la RimWorld ») ; restent la liste d'urgence, le dédoublement de l'artisanat, les choix internes de certaines familles et les priorités par défaut (écart 6).
 8. **×12 pendant le sommeil**, une fois le débit suffisant. Le jeu de vitesses publié (`0|1|3|6`) apparaît dans 17 fichiers, dont 2 épinglés.
 
 ### Outils de mesure

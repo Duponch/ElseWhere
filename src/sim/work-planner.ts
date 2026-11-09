@@ -68,7 +68,9 @@ import { structureById,type StructureNavigationGeometry,structuresOfKind} from '
 import type { Cell, HaulDestination, Job, JobKind, MaterialKind, MaterialPile, Pawn, World } from './types.ts';
 export const PLAN_INTERVAL=20;
 export interface SearchStats { searches:{pawnId:number;mode:'all'|'nearest'|'full';visited:number;unreachedGroups:number;connectivityVisited?:number}[] }
-export interface SearchBudget { remaining:number; pairs:number; stats?:SearchStats;structureGeometry?:()=>StructureNavigationGeometry }
+export interface SearchBudget { remaining:number; pairs:number; stats?:SearchStats;structureGeometry?:()=>StructureNavigationGeometry;
+  /** The regions of the decision's navigation grid, only for that exact grid. */
+  regions?:(grid:Uint8Array)=>import('./regions.ts').RegionMap|undefined }
 export type NavigationGrid=()=>Uint8Array;
 const sameCell=(a:Cell,b:Cell)=>a.x===b.x&&a.z===b.z;
 
@@ -91,7 +93,7 @@ export function searchAllowed(world:World,pawn:Pawn,blocked:Uint8Array,occupied:
  * candidate. Precise routes share one resumable weighted search. */
 export function searchCandidates(world:World,pawn:Pawn,blocked:Uint8Array,occupied:ReadonlySet<number>,budget:SearchBudget,deferNavigation=false):Reachability|null {
   if(!budget.remaining)return null;budget.remaining--;
-  const result=candidateAccess(world,pawn,blocked,occupied,deferNavigation,pawn,budget.structureGeometry?.());
+  const result=candidateAccess(world,pawn,blocked,occupied,deferNavigation,pawn,budget.structureGeometry?.(),budget.regions?.(blocked));
   budget.stats?.searches.push({pawnId:pawn.id,mode:'all',get visited(){return result.visited;},unreachedGroups:0,get connectivityVisited(){return result.connectivityVisited;}});
   return result;
 }
@@ -131,6 +133,11 @@ interface Candidate {deepWork?:NonNullable<ReturnType<typeof deepWorkProposal>>}
 interface Candidate {animalFeed?:NonNullable<ReturnType<typeof animalFeedingProposal>>}
 interface Candidate {animalRescue?:NonNullable<ReturnType<typeof animalRescueProposal>>}
 interface Candidate {prisonerRelease?:NonNullable<ReturnType<typeof releaseProposal>>}
+interface Candidate {cleaning?:import('./cleaning.ts').CleaningProposal}
+/** A delivery's destination cell (the thing RimWorld's giver scans, or the storage). */
+interface Candidate {via?:Cell}
+/** The family of a candidate compared before its proposal is built. */
+interface Candidate {family?:'tend'|'feed'|'surgery'|'rescue'}
 function compareCandidate(a: Candidate, b: Candidate): number { return a.priority - b.priority || a.rank - b.rank || a.distance - b.distance || a.id - b.id; }
 export function canReach(world: World, target: Cell & { kind?: JobKind|import('./types.ts').StructureKind }, reachable: Reachability, allowTarget: boolean,geometry?:StructureNavigationGeometry): boolean {
   const cells = target.kind ? footprintCells(target as Job) : [target];
@@ -143,6 +150,102 @@ export function canReach(world: World, target: Cell & { kind?: JobKind|import('.
 export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, occupied: ReadonlySet<number>, budget: SearchBudget): void {
   const policy=captureAllowedArea(world,pawn),allows=(cell:Cell)=>!policy||allowedAreaAllows(world,pawn,cell,policy);
   const trip=world.commercialTrip;
+  // Schema 301 family: RimWorld's JobGiver_Work order. Each candidate belongs
+  // to the work giver RimWorld would use; givers are ordered by the pawn's
+  // priority, the work type's natural priority, priorityInType and definition
+  // order, and a giver's targets by straight-line distance. Older schemas keep
+  // their historical ranks.
+  const rim=rimWorkGiverOrder301(Number(world.schemaVersion));
+  const deliveryGiver=(destination:HaulDestination):RimWorkGiverId=>{
+    switch(destination.type){
+      case 'fuel':return 'Refuel';
+      case 'turret':return 'RearmTurrets';
+      case 'hopper':return 'CookFillHopper';
+      case 'fermenting-barrel':return 'FillFermentingBarrel';
+      case 'stockpile':return destination.forHunting?'HunterHunt':'HaulGeneral';
+      case 'job':{const job=world.jobs.find(j=>j.id===destination.jobId),frame=job?.construction==='frame';return destination.forConstruction?(frame?'ConstructDeliverResourcesToFrames':'ConstructDeliverResourcesToBlueprints'):(frame?'DeliverResourcesToFrames':'DeliverResourcesToBlueprints');}
+      case 'aside':return destination.constructionId!==undefined?(destination.forConstruction?'ConstructDeliverResourcesToBlueprints':'DeliverResourcesToBlueprints'):destination.growingZoneId!==undefined||destination.sowCell?'GrowerSow':'HaulGeneral';
+    }
+  };
+  const giverOf=(c:Candidate):RimWorkGiverId=>{
+    if(c.firefighting)return 'FightFires';
+    if(c.patientRest)return c.patientRest.work==='patient'?'PatientGoToBedTreatment':'PatientGoToBedRecuperate';
+    if(c.tend||c.family==='tend')return c.target===pawn?'DoctorTendToSelf':c.rank<=-5?'DoctorTendEmergency':'DoctorTendToHumanlikes';
+    if(c.feed||c.family==='feed')return world.pawns.find(p=>p.id===c.id)?.prisoner?'FeedPrisoner':'DoctorFeedHumanlikes';
+    if(c.surgery||c.family==='surgery')return 'DoBillsMedicalHumanOperation';
+    if(c.rescue||c.family==='rescue')return world.pawns.find(p=>p.id===c.id)?.prisoner?'TakePrisonerToBed':'DoctorRescue';
+    if(c.prisonerRelease){const basic=workPriority(pawn,'basic'),warden=workPriority(pawn,'warden');return basic>0&&(warden===0||basic<=warden)?'BasicReleasePrisoner':'ReleasePrisoner';}
+    if(c.ward)return c.ward.task.kind==='food'?'DeliverFoodToPrisoner':'ChatWithPrisoner';
+    if(c.brewing)return 'TakeBeerOutOfFermentingBarrel';
+    if(c.animalRescue)return 'DoctorRescue';
+    if(c.animalCare)return 'DoctorTendToAnimals';
+    if(c.animalFeed)return 'DoctorFeedAnimals';
+    if(c.animalLeading)return 'TakeToPen';
+    if(c.animalProduct)return c.animalProduct.task.kind==='milk'?'Milk':'Shear';
+    if(c.animalHandling){const kind=c.animalHandling.task.kind;return kind==='slaughter'?'Slaughter':kind==='tame'?'Tame':kind==='lead'?'TakeToPen':kind==='milk'?'Milk':kind==='shear'?'Shear':'Train';}
+    if(c.hunting)return 'HunterHunt';
+    if(c.research)return 'Research';
+    if(c.deepWork)return world.structures.find(s=>s.id===c.id)?.kind==='deep-drill'?'Drill':'GroundPenetratingScan';
+    if(c.cleaning)return c.cleaning.task.targets.length?'CleanFilth':'CleanClearSnow';
+    if(c.cooking)return stationWorkGiver(c.cooking.station);
+    if(c.destination)return deliveryGiver(c.destination);
+    if(c.job){
+      // A designated job's own blocking items or plants are cleared by its giver.
+      if(c.clearance&&isConstruction(c.job))return asBuilder(pawn)?'ConstructDeliverResourcesToBlueprints':'DeliverResourcesToBlueprints';
+      if(c.job.kind==='install')return asBuilder(pawn)?'ConstructDeliverResourcesToBlueprints':'DeliverResourcesToBlueprints';
+      return jobWorkGiver(c.job);
+    }
+    return 'HaulGeneral';
+  };
+  // Distance to the thing the giver scans: the station for bills; for a
+  // delivery the destination (blueprint, frame, refuelable, turret, hopper,
+  // barrel), the resource then being the one closest to the pawn; for general
+  // hauling the haulable thing, then its best storage (highest priority, then
+  // closest to the thing). Otherwise the target.
+  const scansDestination=(c:Candidate)=>!!c.via&&!!c.destination&&c.destination.type!=='stockpile'&&c.destination.type!=='aside';
+  const workCell=(c:Candidate):Cell=>c.cooking?c.cooking.station:scansDestination(c)?c.via!:c.target;
+  const deliveryTie=(a:Candidate,b:Candidate):number=>{
+    if(!a.via||!b.via||!a.destination||!b.destination)return 0;
+    if(a.destination.type==='stockpile'&&b.destination.type==='stockpile')return a.rank-b.rank||horizontalDistanceSquared(a.target,a.via)-horizontalDistanceSquared(b.target,b.via);
+    if(scansDestination(a)&&scansDestination(b))return order(sourceKey(a),sourceKey(b))||horizontalDistanceSquared(pawn,a.target)-horizontalDistanceSquared(pawn,b.target);
+    return 0;
+  };
+  // Most thing givers search region by region from the pawn (RimWorld's
+  // ClosestThingReachable): the first region, in breadth-first order through
+  // the regions the pawn may enter, that lists a valid thing wins, then the
+  // closest thing in it; beyond the giver's region limit, the closest thing
+  // overall. A thing is listed in the regions it can be worked from: its own
+  // cell and, for a touch, the cells around it.
+  let regionSearch:{map:RegionMap;traversal:RegionTraversal}|undefined;
+  const regionSearchOf=()=>{
+    if(!regionSearch){
+      const grid=getBlocked(),map=budget.regions?.(grid)??regionMapFor(world,grid),doors=new Map<number,0|1>();
+      actorObstacleWrites(world,pawn,(index,value)=>{const r=index>=0&&index<map.regionOf.length?map.regionOf[index]!:-1;if(r>=0&&map.doorCell[r]===index)doors.set(index,value);});
+      regionSearch={map,traversal:regionTraversal(map,pawn.z*world.width+pawn.x,r=>{const cell=map.doorCell[r]!;return cell<0||(doors.get(cell)??map.grid[cell])===0;})};
+    }
+    return regionSearch;
+  };
+  const listingCells=(map:RegionMap,cell:Cell,touch:boolean):number[]=>{
+    const i=cell.z*world.width+cell.x,own=i>=0&&i<map.regionOf.length?map.regionOf[i]!:-1;
+    if(!touch&&own>=0)return [i];
+    const cells=[i];
+    for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++)if((dx||dz)&&inBounds(world,cell.x+dx,cell.z+dz))cells.push(i+dz*world.width+dx);
+    return cells;
+  };
+  const searchKey=(cell:Cell,giver:RimWorkGiverId):number=>{
+    const search=RIM_WORK_GIVER_SEARCH[giver];if(!search.regionwise)return 0;
+    const {map,traversal}=regionSearchOf();
+    return regionSearchKey(map,traversal,listingCells(map,cell,search.pathEnd==='touch'||search.pathEnd==='closest-touch'),search.maxRegions);
+  };
+  const giverMemo=new WeakMap<Candidate,RimWorkGiverId>(),keyMemo=new WeakMap<Candidate,number>(),sourceKeyMemo=new WeakMap<Candidate,number>();
+  const giverFor=(c:Candidate)=>{let g=giverMemo.get(c);if(g===undefined){g=giverOf(c);giverMemo.set(c,g);}return g;};
+  const regionKey=(c:Candidate)=>{let k=keyMemo.get(c);if(k===undefined){const g=giverFor(c);k=searchKey(RIM_WORK_GIVER_SEARCH[g].pathEnd==='interaction'&&!scansDestination(c)?c.target:workCell(c),g);keyMemo.set(c,k);}return k;};
+  // A delivery's resource is searched the same way, from the pawn.
+  const sourceKey=(c:Candidate)=>{let k=sourceKeyMemo.get(c);if(k===undefined){k=searchKey(c.target,'ConstructDeliverResourcesToBlueprints');sourceKeyMemo.set(c,k);}return k;};
+  const order=(x:number,y:number)=>x===y?0:x<y?-1:1;
+  const cmp=(a:Candidate,b:Candidate):number=>rim
+    ?compareRimWorkGivers(rimWorkGiver(giverFor(a)),a.priority,rimWorkGiver(giverFor(b)),b.priority)||order(regionKey(a),regionKey(b))||horizontalDistanceSquared(pawn,workCell(a))-horizontalDistanceSquared(pawn,workCell(b))||deliveryTie(a,b)||a.id-b.id
+    :compareCandidate(a,b);
   if(groupOnMapMember(world,pawn.id)){pawn.planCooldown=20;return;}
   if(world.scout&&(world.scout.phase==='loading'||world.scout.phase==='leaving')&&world.scout.pawnId===pawn.id
     ||trip&&(trip.phase==='loading'||trip.phase==='leaving'||trip.phase==='unloading')&&trip.pawnId===pawn.id){pawn.planCooldown=20;return;}
@@ -190,7 +293,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     &&(job.kind!=='fix-breakdown'||fixBreakdownWanted(world,job)&&deliveredMaterial(world,job,'component')===1)
     && sowingJobAllowed(world,pawn,job) && (job.kind!=='sow'||!packedAt(world,job)) && job.escrow.wood >= JOB_WOOD_COST[job.kind] && (isSchema299OrLater(Number(world.schemaVersion)) || pawn.hunger > 20 || job.kind === 'harvest') && (job.kind!=='deconstruct'||deconstructionAvailable(world,job,pawn.id)) && (!job.furniture||furnitureReady(world,job,pawn)&&allows(furnitureWorkTarget(world,job))))
     .map(job => ({ job, target: treeWorkTarget(world,job)??ancientRepairTarget256(world,job), id: job.id, priority: workPriority(pawn,workType(job)), rank: job.kind==='fix-breakdown'?-3:job.kind==='flick'?-2.5:job.kind==='uninstall' ? -2 : job.kind==='deconstruct' ? job.wallDoor296?.plan?2:3 : workType(job) === 'gather' ? 0 : 1, distance: Math.abs(job.x-pawn.x)+Math.abs(job.z-pawn.z) }))
-    .sort(compareCandidate);
+    .sort(cmp);
   let reachable: Reachability | null = null;
   const first = ready[0];
   if (first && (!brewing||first.priority<workPriority(pawn,'haul')) && !deepWorking && (!handling||first.priority<workPriority(pawn,'handle')) && (!leading||first.priority<workPriority(pawn,'handle')) && (!gathering||first.priority<workPriority(pawn,'handle')) && (!vet||first.priority<workPriority(pawn,'doctor')) && (!vetFeed||first.priority<workPriority(pawn,'doctor')) && (!animalRescuing||first.priority<workPriority(pawn,'doctor')) && (!cleaning||first.priority<workPriority(pawn,'clean')) && (!burying||first.priority<workPriority(pawn,'haul')) && (!fightingFire||first.priority<workPriority(pawn,'firefight')) && (!warding||first.priority<workPriority(pawn,'warden')) && (!releasePatients.length||first.priority<releasePriority) && (!hunting||first.priority<workPriority(pawn,'hunt')) && (!researching||first.priority<=workPriority(pawn,'research')) && !selfCare && !selfTreatment && !tendable.length && !operations.length && !feedable.length && (!patients.length||patients.every(p=>workPriority(pawn,p.prisoner?'warden':'doctor')>first.priority)) && (!cooking || productionRank>first.priority) && (workPriority(pawn,'haul') === 0 || first.priority <= workPriority(pawn,'haul'))
@@ -238,41 +341,46 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     } else zoneReserved.set(task.destination.stockpileId,(zoneReserved.get(task.destination.stockpileId)??0)+task.quantity);
   }
   let best: Candidate | null = null;
-  if(brewing){
-    for(const candidate of fermentationHaulCandidates265(world,pawn,reachable))if(!best||compareCandidate(candidate,best)<0)best=candidate;
+  // RimWorld's first-giver rule: a family whose best possible giver (at the
+  // pawn's priority for it) comes after the best candidate's giver is never
+  // reached, so it is not evaluated at all. Equal givers still compare by
+  // distance. Historical schemas evaluate every family.
+  const reachableBy=(id:RimWorkGiverId,priority=workPriority(pawn,rimWorkGiver(id).work)):boolean=>!rim||priority>0&&(!best||compareRimWorkGivers(rimWorkGiver(id),priority,rimWorkGiver(giverFor(best)),best.priority)<=0);
+  if(brewing&&reachableBy('TakeBeerOutOfFermentingBarrel')){
+    for(const candidate of fermentationHaulCandidates265(world,pawn,reachable))if(!best||cmp(candidate,best)<0)best=candidate;
     const proposal=barrelExtractionProposal265(world,pawn,reachable);
-    if(proposal){const candidate:Candidate={brewing:proposal,priority:workPriority(pawn,'haul'),rank:-2,distance:proposal.path.length,id:proposal.task.barrelId,target:proposal.task.spot};if(!best||compareCandidate(candidate,best)<0)best=candidate;}
+    if(proposal){const candidate:Candidate={brewing:proposal,priority:workPriority(pawn,'haul'),rank:-2,distance:proposal.path.length,id:proposal.task.barrelId,target:proposal.task.spot};if(!best||cmp(candidate,best)<0)best=candidate;}
   }
-  for(const patient of releasePatients){
+  if(releasePatients.length&&(reachableBy('BasicReleasePrisoner')||reachableBy('ReleasePrisoner')))for(const patient of releasePatients){
     const proposal=releaseProposal(world,pawn,patient,reachable);if(!proposal)continue;
     const candidate:Candidate={prisonerRelease:proposal,priority:releasePriority,rank:-2,distance:Math.abs(pawn.x-patient.x)+Math.abs(pawn.z-patient.z),id:patient.id,target:patient};
-    if(!best||compareCandidate(candidate,best)<0)best=candidate;
+    if(!best||cmp(candidate,best)<0)best=candidate;
   }
-  if(warding){const proposal=wardenProposal(world,pawn,reachable);if(proposal){const candidate:Candidate={ward:proposal,priority:workPriority(pawn,'warden'),rank:-2,distance:Math.abs(pawn.x-proposal.task.spot.x)+Math.abs(pawn.z-proposal.task.spot.z),id:proposal.task.patientId,target:proposal.task.spot};if(!best||compareCandidate(candidate,best)<0)best=candidate;}}
-  if(fightingFire){const proposal=firefightingProposal(world,pawn,reachable);if(proposal){const candidate:Candidate={firefighting:proposal,priority:workPriority(pawn,'firefight'),rank:-7,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.fireId,target:proposal.target};if(!best||compareCandidate(candidate,best)<0)best=candidate;}}
-  if(selfCare){const proposal=patientProposal(world,pawn,reachable);if(proposal){const candidate:Candidate={patientRest:proposal,priority:workPriority(pawn,proposal.work),rank:proposal.work==='patient'?-6:-2,distance:0,id:pawn.id,target:pawn};if(!best||compareCandidate(candidate,best)<0)best=candidate;}}
+  if(warding&&reachableBy('DeliverFoodToPrisoner')){const proposal=wardenProposal(world,pawn,reachable);if(proposal){const candidate:Candidate={ward:proposal,priority:workPriority(pawn,'warden'),rank:-2,distance:Math.abs(pawn.x-proposal.task.spot.x)+Math.abs(pawn.z-proposal.task.spot.z),id:proposal.task.patientId,target:proposal.task.spot};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  if(fightingFire){const proposal=firefightingProposal(world,pawn,reachable);if(proposal){const candidate:Candidate={firefighting:proposal,priority:workPriority(pawn,'firefight'),rank:-7,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.fireId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  if(selfCare){const proposal=patientProposal(world,pawn,reachable);if(proposal){const candidate:Candidate={patientRest:proposal,priority:workPriority(pawn,proposal.work),rank:proposal.work==='patient'?-6:-2,distance:0,id:pawn.id,target:pawn};if(!best||cmp(candidate,best)<0)best=candidate;}}
   if(selfTreatment){
-    const candidate:Candidate={priority:workPriority(pawn,'doctor'),rank:-3.75,distance:0,id:pawn.id,target:pawn};
-    if(!best||compareCandidate(candidate,best)<0){const proposal=tendingProposal(world,pawn,pawn,reachable);if(proposal)best={...candidate,tend:proposal};}
+    const candidate:Candidate={priority:workPriority(pawn,'doctor'),rank:-3.75,distance:0,id:pawn.id,target:pawn,family:'tend'};
+    if(!best||cmp(candidate,best)<0){const proposal=tendingProposal(world,pawn,pawn,reachable);if(proposal)best={...candidate,tend:proposal};}
   }
   for(const patient of tendable){
-    const candidate:Candidate={priority:workPriority(pawn,'doctor'),rank:urgentTreatment(patient)?-5:-4,distance:Math.abs(patient.x-pawn.x)+Math.abs(patient.z-pawn.z),id:patient.id,target:patient};
-    if(best&&compareCandidate(candidate,best)>=0)continue;
+    const candidate:Candidate={priority:workPriority(pawn,'doctor'),rank:urgentTreatment(patient)?-5:-4,distance:Math.abs(patient.x-pawn.x)+Math.abs(patient.z-pawn.z),id:patient.id,target:patient,family:'tend'};
+    if(best&&cmp(candidate,best)>=0)continue;
     const proposal=tendingProposal(world,pawn,patient,reachable);if(proposal)best={...candidate,tend:proposal};
   }
   for(const patient of feedable){
-    const candidate:Candidate={priority:workPriority(pawn,feedingWork(patient)),rank:-3.5,distance:Math.abs(patient.x-pawn.x)+Math.abs(patient.z-pawn.z),id:patient.id,target:patient};
-    if(best&&compareCandidate(candidate,best)>=0)continue;
+    const candidate:Candidate={priority:workPriority(pawn,feedingWork(patient)),rank:-3.5,distance:Math.abs(patient.x-pawn.x)+Math.abs(patient.z-pawn.z),id:patient.id,target:patient,family:'feed'};
+    if(best&&cmp(candidate,best)>=0)continue;
     const proposal=feedingProposal(world,pawn,patient,reachable);if(proposal)best={...candidate,feed:proposal};
   }
   for(const patient of operations){
-    const candidate:Candidate={priority:workPriority(pawn,'doctor'),rank:-3.25,distance:Math.abs(patient.x-pawn.x)+Math.abs(patient.z-pawn.z),id:patient.id,target:patient};
-    if(best&&compareCandidate(candidate,best)>=0)continue;
+    const candidate:Candidate={priority:workPriority(pawn,'doctor'),rank:-3.25,distance:Math.abs(patient.x-pawn.x)+Math.abs(patient.z-pawn.z),id:patient.id,target:patient,family:'surgery'};
+    if(best&&cmp(candidate,best)>=0)continue;
     const proposal=surgeryProposal(world,pawn,patient,reachable);if(proposal)best={...candidate,surgery:proposal};
   }
   for(const patient of patients) {
-    const candidate:Candidate={priority:workPriority(pawn,patient.prisoner?'warden':'doctor'),rank:patient.prisoner?-4:-3,distance:Math.abs(patient.x-pawn.x)+Math.abs(patient.z-pawn.z),id:patient.id,target:patient};
-    if(best&&compareCandidate(candidate,best)>=0)continue;
+    const candidate:Candidate={priority:workPriority(pawn,patient.prisoner?'warden':'doctor'),rank:patient.prisoner?-4:-3,distance:Math.abs(patient.x-pawn.x)+Math.abs(patient.z-pawn.z),id:patient.id,target:patient,family:'rescue'};
+    if(best&&cmp(candidate,best)>=0)continue;
     const proposal=rescueProposal(world,pawn,patient,reachable);
     if(!proposal)continue;
     best={...candidate,rescue:proposal};
@@ -289,7 +397,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     if(job.kind==='deconstruct'&&!deconstructionAvailable(world,job,pawn.id))continue;
     const candidate: Candidate = { priority: workPriority(pawn,work), rank: job.kind==='fix-breakdown'?-3:job.kind==='flick'?-2.5:job.kind==='uninstall' ? -2 : job.kind==='deconstruct' ? job.wallDoor296?.plan?2:3 : work === 'gather' ? 0 : 1, distance: Math.abs(job.x - pawn.x) + Math.abs(job.z - pawn.z), id: job.id, job, target: treeWorkTarget(world,job)??ancientRepairTarget256(world,job) };
     if (job.kind === 'sow' && ground.has(cellIndex(world, job.x, job.z))) {
-      if (best && compareCandidate(candidate, best) >= 0) continue;
+      if (best && cmp(candidate, best) >= 0) continue;
       const source = world.piles.find(p => p.owner.type === 'ground' && sameCell(p.owner, job));
       // Clear one stack at a time. Do not compete with another eater or hauler
       // for an obstruction already being removed.
@@ -299,16 +407,20 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
       if (destination) best = { ...candidate, job: undefined, sourceId: source.id, quantity, destination };
       continue;
     }
-    if (sowingJobAllowed(world,pawn,job) && (!best || compareCandidate(candidate,best)<0) && canReach(world,ancientRepairTarget256(world,job),reachable,false,budget.structureGeometry?.())) best=candidate;
+    if (sowingJobAllowed(world,pawn,job) && (!best || cmp(candidate,best)<0) && canReach(world,ancientRepairTarget256(world,job),reachable,false,budget.structureGeometry?.())) best=candidate;
   }
-  for(const candidate of furnitureStorageCandidates(world,pawn,blocked,reachable,budget))if(!best||compareCandidate(candidate,best)<0)best=candidate;
-  const constructionObstacles=constructionObstructions(world);
-  for(const candidate of constructionCandidates(world,pawn,blocked,reachable,budget,constructionObstacles))if(!best||compareCandidate(candidate,best)<0)best=candidate;
+  if(reachableBy('HaulGeneral')||reachableBy('HaulGeneral',workPriority(pawn,'build')))for(const candidate of furnitureStorageCandidates(world,pawn,blocked,reachable,budget))if(!best||cmp(candidate,best)<0)best=candidate;
+  const constructionReachable=reachableBy('ConstructFinishFrames')||reachableBy('DeliverResourcesToBlueprints',workPriority(pawn,'haul'));
+  let constructionObstacles:ReturnType<typeof constructionObstructions>|undefined;
+  const obstaclesOf=()=>constructionObstacles??=constructionObstructions(world);
+  if(constructionReachable)for(const candidate of constructionCandidates(world,pawn,blocked,reachable,budget,obstaclesOf()))if(!best||cmp(candidate,best)<0)best=candidate;
   if(cooking && (!best || productionRank<=best.priority)) {
     const proposal=planCooking(world,pawn,reachable,budget);
-    if(proposal&&(!best||proposal.priority<best.priority||proposal.priority===best.priority&&best.rank>=-1))best={cooking:proposal,priority:proposal.priority,rank:-1,distance:Math.abs(pawn.x-proposal.station.x)+Math.abs(pawn.z-proposal.station.z),id:proposal.station.id,target:proposal.target};
+    if(proposal){const candidate:Candidate={cooking:proposal,priority:proposal.priority,rank:-1,distance:Math.abs(pawn.x-proposal.station.x)+Math.abs(pawn.z-proposal.station.z),id:proposal.station.id,target:proposal.target};
+      if(rim?!best||cmp(candidate,best)<0:!best||proposal.priority<best.priority||proposal.priority===best.priority&&best.rank>=-1)best=candidate;}
   }
-  if (Number.isFinite(constructionHaulPriority(pawn)) && (isSchema299OrLater(Number(world.schemaVersion)) || pawn.hunger > 20) && (!best || best.priority >= constructionHaulPriority(pawn))) {
+  if (Number.isFinite(constructionHaulPriority(pawn)) && (isSchema299OrLater(Number(world.schemaVersion)) || pawn.hunger > 20) && (!best || best.priority >= constructionHaulPriority(pawn))
+    && (reachableBy('RearmTurrets')||asBuilder(pawn)&&reachableBy('ConstructDeliverResourcesToFrames'))) {
     const zonesByCell = new Map(storage.map(zone => [cellIndex(world, zone.x, zone.z), zone]));
     const hoppersByCell=new Map([...structuresOfKind(world,'hopper')].map(s=>[cellIndex(world,s.x,s.z),s]));
     const isPrisonFood=prisonFoodChecker(world);
@@ -320,7 +432,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
       if(!allows(job))continue;
       const items=new Map<ItemId,number>();
       for(const cost of constructionRecipe(job).ingredients){const key=`${job.id}:${cost.item}`,capacity=cost.quantity-(delivered.get(key)??0)-(jobReserved.get(key)??0);if(capacity>0)items.set(cost.item,capacity);}
-      if (items.size && (job.kind==='fix-breakdown'?fixBreakdownWanted(world,job):constructionSiteFree(world,job,pawn.id,constructionObstacles.get(job.id),occupancy??=new ConstructionOccupancy(world)))) destinations.push({ destination: { type: 'job', jobId: job.id, forConstruction:asBuilder(pawn) }, target: job, priority: 5, workPriority:constructionHaulPriority(pawn), wood: 0, food: 0,items });
+      if (items.size && (job.kind==='fix-breakdown'?fixBreakdownWanted(world,job):constructionSiteFree(world,job,pawn.id,obstaclesOf().get(job.id),occupancy??=new ConstructionOccupancy(world)))) destinations.push({ destination: { type: 'job', jobId: job.id, forConstruction:asBuilder(pawn) }, target: job, priority: 5, workPriority:constructionHaulPriority(pawn), wood: 0, food: 0,items });
     }
     if(workPriority(pawn,'haul')>0)for (const fire of fires) destinations.push(fire.kind==='mini-turret'?{destination:{type:'turret',structureId:fire.id},target:fire,priority:5,workPriority:workPriority(pawn,'haul'),wood:0,food:0,steel:turretReloadCapacity(world,fire.id)}:{destination:{type:'fuel',structureId:fire.id},target:fire,priority:5,workPriority:workPriority(pawn,'haul'),wood:0,food:0,items:new Map([[fuelItem(fire.kind),fuelCapacity(world,fire.id)]])});
     for(const hopper of hoppers)destinations.push({destination:{type:'hopper',structureId:hopper.id},target:hopper,priority:3,workPriority:workPriority(pawn,'haul'),wood:0,food:75});
@@ -355,30 +467,30 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
       facts={ground:true,sourceAdmits,excess,currentPriority,available:pile.quantity - (sourceReserved.get(pile.id) ?? 0),outboundExcess:Math.max(0, excess - (outbound.get(sourceCell) ?? 0))};
       pileFacts[pileIndex]=facts;return facts;
     };
-    for (let offset = 0; offset < count; offset++) {
-      const index = (start + offset) % total;
-      const pileIndex = Math.floor(index / destinations.length);
+    // One source x destination pair: undefined when it cannot be a candidate,
+    // false when it cannot beat `against`, otherwise the candidate.
+    const pair=(pileIndex:number,destinationIndex:number,against:Candidate|null):Candidate|undefined|false=>{
       const pile = sources[pileIndex]!;
-      if (pile.owner.type !== 'ground') continue;
+      if (pile.owner.type !== 'ground') return;
       const facts = factsFor(pileIndex);
-      const destination = destinations[index % destinations.length]!;
-      if (destination.priority <= facts.currentPriority) continue;
-      if(destination.destination.type==='hopper'&&!hopperAccepts(pile.item))continue;
+      const destination = destinations[destinationIndex]!;
+      if (destination.priority <= facts.currentPriority) return;
+      if(destination.destination.type==='hopper'&&!hopperAccepts(pile.item))return;
       // A trap leaves items in place. Its replacement still requires a real
       // pickup and delivery, including salvage lying on the blueprint cell.
-      if (sameCell(pile.owner, destination.target) && !(world.schemaVersion>=226 && destination.destination.type==='job' && (destination.target as Job).kind==='spike-trap')) continue;
+      if (sameCell(pile.owner, destination.target) && !(world.schemaVersion>=226 && destination.destination.type==='job' && (destination.target as Job).kind==='spike-trap')) return;
       let available = facts.available;
       if (facts.sourceAdmits && facts.excess > 0 && destination.destination.type === 'stockpile') available = Math.min(available, facts.outboundExcess);
-      if (available <= 0) continue;
+      if (available <= 0) return;
       // Ranking is independent of capacity/access. A candidate that cannot beat
       // the winner cannot affect this decision; retain pair order/cursor/budget.
       const candidate:Candidate={priority:destination.workPriority,rank:2+(5-destination.priority)/10,
         distance:Math.abs(pawn.x-pile.owner.x)+Math.abs(pawn.z-pile.owner.z)+Math.abs(destination.target.x-pile.owner.x)+Math.abs(destination.target.z-pile.owner.z),id:pile.id,
-        sourceId:pile.id,quantity:0,destination:destination.destination,target:pile.owner};
-      if(best&&compareCandidate(candidate,best)>=0)continue;
+        sourceId:pile.id,quantity:0,destination:destination.destination,target:pile.owner,...rim?{via:{x:destination.target.x,z:destination.target.z}}:{}};
+      if(against&&cmp(candidate,against)>=0)return false;
       if(destination.destination.type==='stockpile') {
         const zone=zonesByCell.get(cellIndex(world,destination.target.x,destination.target.z))!;
-        if(!storageCellAccepts(world,zone,pile))continue;
+        if(!storageCellAccepts(world,zone,pile))return;
       }
       let capacity=destination.items?.get(pile.item)??destination[pile.kind]??0;
       // Same-priority storage pairs cannot win; avoid their pure capacity scan.
@@ -390,36 +502,138 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
         capacity=cached;
       }
       if(destination.destination.type==='hopper')capacity=hopperCapacity(world,destination.destination.structureId,pile.item,pawn.id);
-      if (capacity <= 0) continue;
+      if (capacity <= 0) return;
       let sourceAccess = sourceReachable.get(pile.id);
       if (sourceAccess === undefined) { sourceAccess = canReach(world, pile.owner, reachable, true); sourceReachable.set(pile.id, sourceAccess); }
-      if(!sourceAccess)continue;
+      if(!sourceAccess)return;
       destination.reachable??=canReach(world,destination.target,reachable,destination.destination.type!=='job');
-      if(!destination.reachable)continue;
-      candidate.quantity=Math.min(CARRY_CAPACITY,available,capacity);best=candidate;
+      if(!destination.reachable)return;
+      candidate.quantity=Math.min(CARRY_CAPACITY,available,capacity);return candidate;
+    };
+    if(!rim){
+      for (let offset = 0; offset < count; offset++) {
+        const index = (start + offset) % total;
+        const candidate=pair(Math.floor(index / destinations.length),index % destinations.length,best);
+        if(candidate)best=candidate;
+      }
+      budget.pairs -= count;
+      if (total) world.logisticsCursor = (start + count) % total;
+    }else if(total){
+      // RimWorld's order, without the rotating pair window. General hauling
+      // scans the haulable things from the closest; the first one with a
+      // better storage wins, with its best storage: the highest priority, then
+      // the cell closest to the thing. A delivery giver scans its destinations
+      // from the closest; the first one with a resource wins, with the
+      // resource closest to the pawn. Every pair looked at counts against the
+      // shared pair budget, which bounds the work of one tick.
+      const near=(cell:Cell)=>horizontalDistanceSquared(pawn,cell);
+      // Sources are ground piles: their owner is their cell.
+      const at=(i:number)=>sources[i]!.owner as Cell;
+      const sourceOrder=sources.map((_,i)=>i).sort((a,b)=>near(at(a))-near(at(b))||a-b);
+      const storageIndexes:number[]=[],scannedIndexes:number[]=[];
+      destinations.forEach((d,i)=>(d.destination.type==='stockpile'?storageIndexes:scannedIndexes).push(i));
+      let visited=0;const spend=()=>++visited<=budget.pairs;
+      // General hauling. Which storage cells accept a pile only depends on
+      // its storage key: listed once per key, by priority level. A cell's room
+      // and access are found on demand, once per key, and a level whose cells
+      // all lack room or access is skipped from then on.
+      interface StorageLevel {priority:number;cells:number[];open:number}
+      const storageFor=new Map<string,{levels:StorageLevel[];usable:Map<number,boolean>}>();
+      const storageOf=(pileIndex:number)=>{
+        const pile=sources[pileIndex]!,key=storageConditionKey(pile,world.tick,true);
+        let entry=storageFor.get(key);if(entry)return entry;
+        const accepted=storageIndexes.filter(i=>{const d=destinations[i]!;return storageCellAccepts(world,zonesByCell.get(cellIndex(world,d.target.x,d.target.z))!,pile);})
+          .sort((a,b)=>destinations[b]!.priority-destinations[a]!.priority||a-b);
+        const levels:StorageLevel[]=[];
+        for(const i of accepted){const priority=destinations[i]!.priority,last=levels[levels.length-1];if(last&&last.priority===priority){last.cells.push(i);last.open++;}else levels.push({priority,cells:[i],open:1});}
+        entry={levels,usable:new Map()};storageFor.set(key,entry);return entry;
+      };
+      const usable=(pileIndex:number,destinationIndex:number,known:Map<number,boolean>):boolean=>{
+        let ok=known.get(destinationIndex);if(ok!==undefined)return ok;
+        const pile=sources[pileIndex]!,d=destinations[destinationIndex]!,zone=zonesByCell.get(cellIndex(world,d.target.x,d.target.z))!;
+        const capacityKey=`${(d.destination as {stockpileId:number}).stockpileId}:${zone.quality||zone.hitPoints||zone.allowFresh===false||zone.allowRotten===false?storageConditionKey(pile,world.tick,zone.allowFresh===false||zone.allowRotten===false):pile.item}`;
+        let capacity=storageCapacities.get(capacityKey);
+        if(capacity===undefined){capacity=storageCapacity(world,zone,pile,undefined,undefined,placementFacts);storageCapacities.set(capacityKey,capacity);}
+        ok=capacity>0&&(d.reachable??=canReach(world,d.target,reachable,true));
+        known.set(destinationIndex,ok);return ok;
+      };
+      let hauled:Candidate|null=null;
+      scan:for(const pileIndex of sourceOrder){
+        const source=at(pileIndex);
+        if(hauled&&near(source)>near(hauled.target))break;
+        const facts=factsFor(pileIndex);if(facts.available<=0)continue;
+        const {levels,usable:known}=storageOf(pileIndex);
+        // The highest priority above the pile's current one that has a valid
+        // cell, and in it the cell closest to the pile.
+        for(const level of levels){
+          if(level.priority<=facts.currentPriority)break;
+          if(!level.open)continue;
+          const cells=level.cells.filter(i=>known.get(i)!==false).sort((a,b)=>horizontalDistanceSquared(source,destinations[a]!.target)-horizontalDistanceSquared(source,destinations[b]!.target)||a-b);
+          let found=false;
+          for(const destinationIndex of cells){
+            if(!spend())break scan;
+            if(!usable(pileIndex,destinationIndex,known)){level.open--;continue;}
+            const candidate=pair(pileIndex,destinationIndex,hauled??best);
+            if(candidate===false){found=true;break;}
+            if(candidate){hauled=candidate;found=true;break;}
+          }
+          if(found)break;
+        }
+      }
+      if(hauled&&(!best||cmp(hauled,best)<0))best=hauled;
+      // Deliveries, by giver then distance of the destination; for each, the
+      // piles of the items and kinds it takes, closest to the pawn first.
+      const byItem=new Map<string,number[]>(),byKind=new Map<string,number[]>();
+      for(const i of sourceOrder){const p=sources[i]!;let a=byItem.get(p.item);if(!a)byItem.set(p.item,a=[]);a.push(i);let b=byKind.get(p.kind);if(!b)byKind.set(p.kind,b=[]);b.push(i);}
+      const rank=new Map<number,number>();sourceOrder.forEach((i,k)=>rank.set(i,k));
+      const sourcesFor=(d:typeof destinations[number]):number[]=>{
+        const lists:number[][]=[];
+        if(d.items)for(const item of d.items.keys()){const a=byItem.get(item);if(a)lists.push(a);}
+        for(const [kind,list] of byKind)if(((d as unknown as Record<string,number|undefined>)[kind]??0)>0)lists.push(list);
+        if(lists.length===1)return lists[0]!;
+        return [...new Set(lists.flat())].sort((a,b)=>rank.get(a)!-rank.get(b)!);
+      };
+      const scanned=scannedIndexes.map(i=>{const d=destinations[i]!;const probe:Candidate={priority:d.workPriority,rank:0,distance:0,id:0,destination:d.destination,target:d.target,via:d.target};return {i,giver:rimWorkGiver(giverFor(probe)),priority:d.workPriority,key:regionKey(probe),near:near(d.target)};})
+        .filter(d=>d.priority>0).sort((a,b)=>compareRimWorkGivers(a.giver,a.priority,b.giver,b.priority)||order(a.key,b.key)||a.near-b.near||a.i-b.i);
+      const pileKeys=new Map<number,number>();
+      const pileKey=(i:number)=>{let k=pileKeys.get(i);if(k===undefined){k=searchKey(at(i),'ConstructDeliverResourcesToBlueprints');pileKeys.set(i,k);}return k;};
+      let delivered:Candidate|null=null;
+      deliver:for(const d of scanned){
+        if(delivered){const winner=rimWorkGiver(giverFor(delivered));if((compareRimWorkGivers(d.giver,d.priority,winner,delivered.priority)||order(d.key,regionKey(delivered))||d.near-near(delivered.via!))>0)break;}
+        else if(best&&compareRimWorkGivers(d.giver,d.priority,rimWorkGiver(giverFor(best)),best.priority)>0)break;
+        for(const pileIndex of [...sourcesFor(destinations[d.i]!)].sort((a,b)=>order(pileKey(a),pileKey(b))||rank.get(a)!-rank.get(b)!)){
+          if(!spend())break deliver;
+          const candidate=pair(pileIndex,d.i,delivered??best);
+          if(candidate===false)break;
+          if(candidate){delivered=candidate;break;}
+        }
+      }
+      if(delivered&&(!best||cmp(delivered,best)<0))best=delivered;
+      budget.pairs-=Math.min(visited,budget.pairs);
     }
-    budget.pairs -= count;
-    if (total) world.logisticsCursor = (start + count) % total;
   }
-  if(animalRescuing){const proposal=animalRescueProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalRescue:proposal,priority:workPriority(pawn,'doctor'),rank:-3.95,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||compareCandidate(candidate,best)<0)best=candidate;}}
-  if(vet){const proposal=animalCareProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalCare:proposal,priority:workPriority(pawn,'doctor'),rank:-3.9,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||compareCandidate(candidate,best)<0)best=candidate;}}
-  if(vetFeed){const proposal=animalFeedingProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalFeed:proposal,priority:workPriority(pawn,'doctor'),rank:-3.8,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||compareCandidate(candidate,best)<0)best=candidate;}}
-  if(leading){const proposal=leadingProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalLeading:proposal,priority:workPriority(pawn,'handle'),rank:-3.5,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||compareCandidate(candidate,best)<0)best=candidate;}}
-  if(gathering){const proposal=productProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalProduct:proposal,priority:workPriority(pawn,'handle'),rank:proposal.task.kind==='milk'?-.9:-.85,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||compareCandidate(candidate,best)<0)best=candidate;}}
-  if(slaughtering){const proposal=slaughterProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalHandling:proposal,priority:workPriority(pawn,'handle'),rank:-4,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||compareCandidate(candidate,best)<0)best=candidate;}}
-  if(handling){const proposal=handlingProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalHandling:proposal,priority:workPriority(pawn,'handle'),rank:-.25,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||compareCandidate(candidate,best)<0)best=candidate;}}
-  if(hunting&&(!best||workPriority(pawn,'hunt')<best.priority||workPriority(pawn,'hunt')===best.priority&&best.rank>=0)){const proposal=huntingProposal(world,pawn,reachable!);if(proposal)best={hunting:proposal,priority:workPriority(pawn,'hunt'),rank:-.5,distance:0,id:proposal.task.animalId,target:proposal.target};}
-  if(researching&&(!best||workPriority(pawn,'research')<best.priority)){const proposal=researchProposal(world,pawn,reachable!);if(proposal)best={research:proposal,priority:workPriority(pawn,'research'),rank:9,distance:0,id:proposal.task.stationId,target:proposal.task.spot};}
-  if(deepWorking)for(const station of world.structures){
+  if(animalRescuing&&reachableBy('DoctorRescue')){const proposal=animalRescueProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalRescue:proposal,priority:workPriority(pawn,'doctor'),rank:-3.95,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  if(vet&&reachableBy('DoctorTendToAnimals')){const proposal=animalCareProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalCare:proposal,priority:workPriority(pawn,'doctor'),rank:-3.9,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  if(vetFeed&&reachableBy('DoctorFeedAnimals')){const proposal=animalFeedingProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalFeed:proposal,priority:workPriority(pawn,'doctor'),rank:-3.8,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  if(leading&&reachableBy('TakeToPen')){const proposal=leadingProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalLeading:proposal,priority:workPriority(pawn,'handle'),rank:-3.5,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  if(gathering&&reachableBy('Milk')){const proposal=productProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalProduct:proposal,priority:workPriority(pawn,'handle'),rank:proposal.task.kind==='milk'?-.9:-.85,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  if(slaughtering&&reachableBy('Slaughter')){const proposal=slaughterProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalHandling:proposal,priority:workPriority(pawn,'handle'),rank:-4,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  if(handling&&reachableBy('Slaughter')){const proposal=handlingProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalHandling:proposal,priority:workPriority(pawn,'handle'),rank:-.25,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  if(hunting&&reachableBy('HunterHunt')&&(!best||workPriority(pawn,'hunt')<best.priority||workPriority(pawn,'hunt')===best.priority&&(rim||best.rank>=0))){const proposal=huntingProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={hunting:proposal,priority:workPriority(pawn,'hunt'),rank:-.5,distance:0,id:proposal.task.animalId,target:proposal.target};if(!rim||!best||cmp(candidate,best)<0)best=candidate;}}
+  if(researching&&reachableBy('Research')&&(!best||workPriority(pawn,'research')<best.priority||rim&&workPriority(pawn,'research')===best.priority)){const proposal=researchProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={research:proposal,priority:workPriority(pawn,'research'),rank:9,distance:0,id:proposal.task.stationId,target:proposal.task.spot};if(!rim||!best||cmp(candidate,best)<0)best=candidate;}}
+  if(deepWorking&&(reachableBy('Drill')||reachableBy('GroundPenetratingScan')))for(const station of world.structures){
     if(station.kind!=='deep-drill'&&station.kind!=='ground-scanner')continue;
     const priority=workPriority(pawn,station.kind==='deep-drill'?'mine':'research'),rank=station.kind==='deep-drill'?1.2:10;
-    if(priority<=0||best&&(priority>best.priority||priority===best.priority&&rank>best.rank))continue;
+    if(priority<=0||best&&(priority>best.priority||!rim&&priority===best.priority&&rank>best.rank))continue;
     const proposal=deepWorkProposal(world,pawn,station,reachable!);if(!proposal)continue;
     const candidate:Candidate={deepWork:proposal,priority,rank,distance:Math.abs(pawn.x-proposal.task.spot.x)+Math.abs(pawn.z-proposal.task.spot.z),id:station.id,target:proposal.task.spot};
-    if(!best||compareCandidate(candidate,best)<0)best=candidate;
+    if(!best||cmp(candidate,best)<0)best=candidate;
   }
-  if(cleaning&&(!best||workPriority(pawn,'clean')<best.priority)){const proposal=cleaningProposal(world,pawn,reachable!);if(proposal){startCleaning(pawn,proposal);return;}}
-  if(burying&&(!best||workPriority(pawn,'haul')<best.priority||workPriority(pawn,'haul')===best.priority&&best.rank>1)&&assignBurial(world,pawn,()=>reachable))return;
+  if(cleaning&&reachableBy('CleanClearSnow')&&(!best||workPriority(pawn,'clean')<best.priority||rim&&workPriority(pawn,'clean')===best.priority)){const proposal=cleaningProposal(world,pawn,reachable!);if(proposal){
+    if(!rim){startCleaning(pawn,proposal);return;}
+    const candidate:Candidate={cleaning:proposal,priority:workPriority(pawn,'clean'),rank:0,distance:0,id:proposal.id,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  if(burying&&(rim?!best||compareRimWorkGivers(rimWorkGiver('HaulCorpses'),workPriority(pawn,'haul'),rimWorkGiver(giverOf(best)),best.priority)<0:!best||workPriority(pawn,'haul')<best.priority||workPriority(pawn,'haul')===best.priority&&best.rank>1)&&assignBurial(world,pawn,()=>reachable))return;
+  if(best?.cleaning){startCleaning(pawn,best.cleaning);return;}
   if(best?.brewing){pawn.brewing=best.brewing.task;pawn.path=best.brewing.path;pawn.state=pawn.path.length?'moving':'working';return;}
   if(best?.deepWork){startDeepWork(pawn,best.deepWork);return;}
   if(best?.animalHandling){startHandling(pawn,best.animalHandling,world);return;}
@@ -450,3 +664,6 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
   }
 }
 import { medicalWorkRefusal } from './health-rules.ts';
+import { compareRimWorkGivers,horizontalDistanceSquared,jobWorkGiver,RIM_WORK_GIVER_SEARCH,rimWorkGiver,rimWorkGiverOrder301,stationWorkGiver,type RimWorkGiverId } from './work-givers-rimworld.ts';
+import { regionMapFor,regionSearchKey,regionTraversal,type RegionMap,type RegionTraversal } from './regions.ts';
+import { actorObstacleWrites } from './combat-navigation.ts';

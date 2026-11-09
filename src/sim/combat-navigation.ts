@@ -3,7 +3,7 @@ import {effectiveLocal297} from './core-phase-297.ts';
 import {targetDoorCanOpen263} from './world-target-building-263.ts';
 import { hostileTo,isColonist } from './affiliation.ts';
 import { isRoomDoor,isPassageDoor } from './door-rules.ts';
-import { structureAnchors } from './structure-navigation.ts';
+import { filteredStructures,structureAnchors } from './structure-navigation.ts';
 import { prisonDoorPassable } from './prison-space.ts';
 import { prisonBreakActive } from './prison-break-state.ts';
 import type { Cell,Pawn,World } from './types.ts';
@@ -25,13 +25,20 @@ export function hostileCells(world:World,pawn:Pawn|Mechanoid):Set<number> {
   }
   return cells;
 }
+/** The actor's own obstacles, as ordered writes to a grid cell (a later write
+ * wins): door verdicts, then hostile actors' cells. Only door structures are
+ * read: every door predicate below is false for any other kind. */
+export function actorObstacleWrites(world:World,origin:Cell,write:(index:number,value:0|1)=>void):void {
+  const pawn=actor(world,origin);if(!pawn)return;
+  const doors=filteredStructures(world,'passage-doors',s=>isPassageDoor(s.kind));
+  if(!isMechanoidTarget(pawn)&&prisonBreakActive(pawn))for(const s of doors)write(s.z*world.width+s.x,0);
+  if(!opensDoors(pawn))for(const s of doors)if(isRoomDoor(s.kind))write(s.z*world.width+s.x,(!isMechanoidTarget(pawn)&&pawn.prisoner?prisonDoorPassable(world,s):s.door?.open)?0:1);
+  if(!isMechanoidTarget(pawn))for(const s of doors){const may=targetDoorCanOpen263(world,pawn,s);if(may!==undefined&&(!pawn.prisoner||pawn.prisoner.releasedAt!==undefined||prisonBreakActive(pawn)))write(s.z*world.width+s.x,s.door?.open||may&&!s.door?.forbidden?0:1);}
+  for(const i of hostileCells(world,pawn))write(i,1);
+}
 /** Apply to the query's private grid, never to the caller's shared terrain mask. */
 export function addActorObstacles(world:World,origin:Cell,grid:Uint8Array):void {
-  const pawn=actor(world,origin);if(!pawn)return;
-  if(!isMechanoidTarget(pawn)&&prisonBreakActive(pawn))for(const s of world.structures)if(isPassageDoor(s.kind))grid[s.z*world.width+s.x]=0;
-  if(!opensDoors(pawn))for(const s of world.structures)if(isRoomDoor(s.kind))grid[s.z*world.width+s.x]=(!isMechanoidTarget(pawn)&&pawn.prisoner?prisonDoorPassable(world,s):s.door?.open)?0:1;
-  if(!isMechanoidTarget(pawn))for(const s of world.structures){const may=targetDoorCanOpen263(world,pawn,s);if(may!==undefined&&(!pawn.prisoner||pawn.prisoner.releasedAt!==undefined||prisonBreakActive(pawn)))grid[s.z*world.width+s.x]=s.door?.open||may&&!s.door?.forbidden?0:1;}
-  for(const i of hostileCells(world,pawn))grid[i]=1;
+  actorObstacleWrites(world,origin,(index,value)=>{grid[index]=value;});
 }
 export function actorStepAllowed(world:World,origin:Cell,next:Cell):boolean {
   const pawn=actor(world,origin);if(!pawn)return true;

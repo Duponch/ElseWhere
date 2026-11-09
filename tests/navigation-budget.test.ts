@@ -19,7 +19,9 @@ test('logistics proves only competitive access, retains ties and skips an inacce
   const {w,p}=setup(),stats:SearchStats={searches:[]},budget={remaining:8,pairs:32768,stats};
   planWork(w,p,()=>blockedCells(w),new Set(),budget);
   expect(p.haul?.destination).toEqual({type:'stockpile',stockpileId:w.stockpiles[0]!.id});
-  expect(p.haul?.quantity).toBe(10);expect(budget.pairs).toBe(32768-3);expect(budget.remaining).toBe(7);
+  // RimWorld's haul scan (schema 301) looks at the closest accepting cell
+  // first and stops there: one pair, not the whole window of three.
+  expect(p.haul?.quantity).toBe(10);expect(budget.pairs).toBe(32768-1);expect(budget.remaining).toBe(7);
   // Both close cells tie. Array order chooses the first; the remote reserve
   // cannot beat it and must not flood the map merely to prove its existence.
   expect(stats.searches[0]!.connectivityVisited).toBeLessThan(100);

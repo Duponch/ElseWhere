@@ -330,6 +330,7 @@ import { initializeHydroponicBasin,advanceHydroponics,hydroponicCropAllowed } fr
 import { scheduleGrowing, cancelGrowingJobs, growingJobValid, finishSowing, jobDuration, growingZoneAt, resourceAt } from './farming.ts';
 import { isPlant, harvestable,choppable,berryYield,plantCanYieldNow } from './plants.ts';
 import { search, searchCandidates, destinationValid, planWork, type SearchBudget, type NavigationGrid } from './work-planner.ts';
+import { regionMapFor } from './regions.ts';
 import { workPriority,workType } from './work-types.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
 import { releaseAssignments, planCommandDrops, commitDrop, releaseWork, type DropPlan } from './work-release.ts';
@@ -1281,9 +1282,13 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     const invalidateEnvironment=()=>{if(isCorePhysicalSchema297(Number(world.schemaVersion)))invalidateHumanMoveSpeed297(world);environment=undefined;light=undefined;furnitureSight=undefined;thermalDirty=true;structureNavigation.invalidate();};
     const getRoofs = () => roofs ??= new RoofContext(world);
     const getBlocked: NavigationGrid = () => blocked ??= blockedCells(world,false,structureNavigation.read());
+    // Regions of the current grid only: a replaced grid gets its own regions.
+    let regionGrid:Uint8Array|undefined,regionMap:import('./regions.ts').RegionMap|undefined;
+    const getRegions=(grid:Uint8Array)=>{if(grid!==blocked)return undefined;if(regionGrid!==grid){regionGrid=grid;regionMap=regionMapFor(world,grid);}return regionMap;};
     const occupied = CIVIL_TRANSIT_BLOCKERS;
     const budget: SearchBudget = isCorePhysicalSchema297(Number(world.schemaVersion))?coreState297(world).movement.budget():{ remaining: PATH_SEARCHES_PER_TICK, pairs: 32768,stats:diagnostics,structureGeometry:structureNavigation.read };
     if(isCorePhysicalSchema297(Number(world.schemaVersion))){budget.stats=diagnostics;budget.structureGeometry=structureNavigation.read;}
+    budget.regions=getRegions;
     const processMechanicalDecisions=()=>{
       const actors=world.mechanoids;if(!actors?.length)return;
       const batch=mechanoidCombatBatch(world,getBlocked);

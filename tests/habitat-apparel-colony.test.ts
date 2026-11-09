@@ -54,8 +54,19 @@ test('V89 colony migration: habitat and tailoring survive two days, then the rep
   world.research!.complexFurniture!.points=COMPLEX_FURNITURE_RESEARCH_COST-2_000_000;
 
   const storage=world.stockpiles.find(s=>groundCapacity(world,s,'cloth')>=60)!;expect(storage).toBeDefined();
-  accept(world,{type:'stockpile',enabled:true,x:storage.x,z:storage.z,filters:{...storage.filters,textile:true,unfinished:true,apparel:true},priority:4,capacity:75});
+  // A dedicated textile and apparel storage: other things (weapons, food…)
+  // would rightly be hauled to it as their best storage and fill its cells.
+  accept(world,{type:'stockpile',enabled:true,x:storage.x,z:storage.z,filters:{...(Object.fromEntries(Object.keys(storage.filters).map(k=>[k,false])) as typeof storage.filters),textile:true,unfinished:true,apparel:true},priority:4,capacity:75});
   addGroundMaterial(world,'textile',60,storage,'cloth');
+  // One empty apparel-only cell next to it: the other storage cells hold one
+  // stack each, and hauling fills them with whatever is closest to haulers.
+  let apparelCell:Cell|undefined;
+  for(let r=1;r<=8&&!apparelCell;r++)for(let dz=-r;dz<=r&&!apparelCell;dz++)for(let dx=-r;dx<=r&&!apparelCell;dx++){
+    const c={x:storage.x+dx,z:storage.z+dz};
+    if(world.stockpiles.some(s=>s.x===c.x&&s.z===c.z)||world.piles.some(p=>p.owner.type==='ground'&&p.owner.x===c.x&&p.owner.z===c.z)||world.structures.some(s=>s.x===c.x&&s.z===c.z))continue;
+    if(applyCommand(world,{type:'stockpile',enabled:true,x:c.x,z:c.z,filters:{...(Object.fromEntries(Object.keys(storage.filters).map(k=>[k,false])) as typeof storage.filters),apparel:true},priority:4,capacity:75}).ok)apparelCell=c;
+  }
+  expect(apparelCell).toBeDefined();
   const maintainedIndex=world.apparelPolicies!.findIndex(p=>p.id===2),maintained={...world.apparelPolicies![maintainedIndex]!,minHitPointsPercent:.9};world.apparelPolicies![maintainedIndex]=maintained;
   const oldShirtId=world.piles.find(p=>p.owner.type==='apparel'&&p.owner.pawnId===wearer.id&&p.item==='cloth-shirt')!.id;
   accept(world,{type:'apparel-policy-assign',pawnId:wearer.id,policyId:maintained.id,automatic:true});
@@ -70,6 +81,10 @@ test('V89 colony migration: habitat and tailoring survive two days, then the rep
     if(bench&&billAdded&&!productionStopped&&(world.tailoring?.completed??0)>initialTailoringCompleted){
       const produced=world.piles.filter(p=>p.item==='cloth-shirt'&&!initialShirtIds.has(p.id));
       expect(produced).toHaveLength(1);producedShirtId=produced[0]!.id;
+      // Stop production only once the tailor has put the shirt down: disabling
+      // his work while he carries it to storage drops it on the spot, as in
+      // RimWorld, and it then waits for an ordinary hauler.
+      if(produced[0]!.owner.type==='pawn'){stepWorld(world,50);continue;}
       const bill=bench.bills![0]!;accept(world,{type:'bill-update',structureId:bench.id,billId:bill.id,settings:{...bill,suspended:true}});accept(world,{type:'priority',pawnId:tailor.id,work:'craft',value:0});accept(world,{type:'priority',pawnId:tailor.id,work:'clean',value:1});productionStopped=true;
     }
     if(!cleaningEnabled&&chairCell&&world.structures.some(s=>s.kind==='dining-chair'&&s.x===chairCell!.x&&s.z===chairCell!.z)&&world.structures.some(s=>s.kind==='electric-tailor-bench')){accept(world,{type:'priority',pawnId:builder.id,work:'build',value:0});accept(world,{type:'priority',pawnId:builder.id,work:'clean',value:1});cleaningEnabled=true;}
