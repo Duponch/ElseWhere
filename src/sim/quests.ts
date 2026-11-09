@@ -1,3 +1,4 @@
+import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import { civilianAdmissionFits,civilianAwayCounts } from './civilian-away.ts';
 import { isColonist } from './affiliation.ts';
 import { offeredBackground,assignOfferedBackground } from './background-generation.ts';
@@ -52,6 +53,7 @@ function arrive(w:World,q:JoinerQuest):void {
   const entry=arrivalEntry(w,s.rng);if(!entry)return;
   const p=startingPawn(w.nextId,q.name,entry.x,entry.z,q.profile,55,w.seed,w.tick,w.schemaVersion);
   assignOfferedBackground(p,q,w.seed,w.tick);
+  if(initializesWorkLikeCore302(w.schemaVersion))enableAndInitializeWork(p);
   p.hunger=75;p.rest=80;p.foodPolicyId=w.foodPolicies[0]!.id;p.originQuestId=q.id;
   const shirt={id:w.nextId+1,kind:'apparel' as const,item:'cloth-shirt' as const,quantity:1,owner:{type:'apparel' as const,pawnId:p.id},apparel:newApparelState('cloth-shirt',undefined,w.schemaVersion)};
   const relationships=prepareRelationshipAdmission(w,p,q.relationship);

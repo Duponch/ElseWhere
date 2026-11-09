@@ -1,3 +1,4 @@
+import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259} from './world-affiliation-259.ts';
 import { arrivalTraits } from './traits.ts';
@@ -56,6 +57,7 @@ export function applyArrival(world:World,command:ArrivalCommand):CommandResult {
   if((Number(world.schemaVersion)===259||Number(world.schemaVersion)===260||(Number(world.schemaVersion)===261||(Number(world.schemaVersion)===262||isSchema263OrLater(Number(world.schemaVersion)))))&&world.worldFactions&&!bindBornHumanFaction259(world,pawn,world.worldFactions.playerFactionId))return refuse('L’instance de faction réelle manque pour cette arrivée.');
   assignOfferedBackground(pawn,o,world.seed,world.tick);
   if(o.traits)pawn.traits=[...o.traits];
+  if(initializesWorkLikeCore302(world.schemaVersion))enableAndInitializeWork(pawn);
   pawn.hunger=75;pawn.rest=80;pawn.foodPolicyId=world.foodPolicies[0]!.id;
   // Clothing crosses the map boundary with its owner; it is an external input,
   // not a withdrawal from colony stock or a textile-production recipe.

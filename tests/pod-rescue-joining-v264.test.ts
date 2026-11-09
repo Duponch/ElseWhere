@@ -12,7 +12,7 @@ import { podRescueIdentityRoll,podRescueOutdoorDanger,selectPodRescueOrigin } fr
 import { validatePodRescues } from '../src/sim/pod-rescue-save.ts';
 import { createPrisonerState } from '../src/sim/prisoner-state.ts';
 import { deserializeWorld,serializeWorld,validateWorld } from '../src/sim/serialization.ts';
-import { startingPawn } from '../src/sim/starting-pawns.ts';
+import { enableAndInitializeWork } from '../src/sim/work-initialization.ts';
 import { SCHEMA_VERSION,TICKS_PER_DAY,type Pawn,type World } from '../src/sim/types.ts';
 import { fixtureBuilding } from './scenarios/deconstruction.ts';
 import { medicalCamp } from './scenarios/health.ts';
@@ -96,7 +96,11 @@ test('joining preserves the actual person, possessions, personality and unfinish
   p.need={kind:'sleep',phase:'sleep',bedId:bed.id,target:{x:p.x,z:p.z},medical:'bedrest'};p.state='resting';
   const need=p.need;
   const baseline=structuredClone(p),health=p.health,skills=p.skills,items=structuredClone(w.piles),nextId=w.nextId,rng=w.rng;
-  const defaults=startingPawn(p.id,p.name,p.x,p.z,0,55,w.seed,w.tick).priorities;
+  // From schema 302 a joining human receives RimWorld's EnableAndInitialize
+  // (six best work types and the always-active ones at 3), from its own
+  // unchanged skills and background.
+  const initialized=structuredClone(p);enableAndInitializeWork(initialized);
+  const defaults=initialized.priorities;
   reconcilePodRescueResults(w);
   expect(w.pawns.find(q=>q.id===p.id)).toBe(p);expect(p.health).toBe(health);expect(p.skills).toBe(skills);
   expect(p.need).toBe(need);expect(p.need).toEqual(baseline.need);

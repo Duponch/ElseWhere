@@ -1,3 +1,5 @@
+import { isColonist } from './affiliation.ts';
+import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import {finalizeInitialWorldRegistry} from './world-map-context.ts';
 import {initializeSnowSurface} from './snow-surface.ts';
 import { resolveStartingSite,type StartingWorld } from './starting-world.ts';
@@ -131,6 +133,10 @@ export function createScenarioWorld(seed:number,size:number,id:ScenarioId=DEFAUL
     if(site?.revision===2)enableBiomeWildlife(world,site.biome);else if(natural)enableWildlife(world,undefined,'natural');else enableWildlife(world);
   }
   initializeCampBackgrounds(world);
+  // The starting colonists of a real start join the player faction
+  // (EnableAndInitialize), once their backgrounds and skills are final. The
+  // teaching camp and the armed encounter keep their historical setup.
+  if(natural&&initializesWorkLikeCore302(world.schemaVersion))for(const pawn of world.pawns)if(isColonist(pawn))enableAndInitializeWork(pawn);
   world.scenario={id,revision:id==='crashlanded'?(selectedSite?ARRIVING_CRASHLANDED_REVISION:SCENARIOS.crashlanded.revision):SCENARIO_REVISION,landing};
   if(selectedSite){
     world.planet=selectedSite.planet;

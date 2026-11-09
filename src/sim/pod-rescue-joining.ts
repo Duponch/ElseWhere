@@ -1,3 +1,4 @@
+import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import {commitJoinedPlayer259} from './world-affiliation-259.ts';
 import { comfortableTemperature,nextHeatSeverity } from './heat-rules.ts';
 import { nextColdSeverity } from './cold-rules.ts';
@@ -62,9 +63,11 @@ export function reconcilePodRescueJoining(w:World):void {
     if(!p.need){p.path=[];if(p.state==='moving')p.state='idle';}
     commitJoinedPlayer259(w,p);p.faction='colony';p.foodPolicyId=food.id;p.apparelPolicyId=apparel.id;
     p.apparelAutomation=true;p.nextApparelCheckAt=w.tick;
-    // Same defaults as startingPawn; background work restrictions remain
-    // enforced by workPriority. Skills, traits and all possessions stay intact.
-    p.priorities={handle:3,art:3,clean:3,firefight:1,warden:3,basic:3,hunt:2,research:3,patient:1,bedrest:3,doctor:1,mine:2,gather:2,build:2,haul:3,grow:2,cook:2,craft:2};
+    // Before schema 302, the same defaults as startingPawn; from 302, RimWorld's
+    // EnableAndInitialize. Background work restrictions remain enforced by
+    // workPriority. Skills, traits and all possessions stay intact.
+    if(initializesWorkLikeCore302(w.schemaVersion))enableAndInitializeWork(p);
+    else p.priorities={handle:3,art:3,clean:3,firefight:1,warden:3,basic:3,hunt:2,research:3,patient:1,bedrest:3,doctor:1,mine:2,gather:2,build:2,haul:3,grow:2,cook:2,craft:2};
     p.planCooldown=0;p.needCooldown=0;
     delete p.podRescue;
     incident.decision={at:w.tick,outcome:'joined',admittedAt};

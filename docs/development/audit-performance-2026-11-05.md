@@ -870,6 +870,7 @@ Suite du même chantier :
 - **Liste d'urgence** (`CacheWorkGiversInOrder`) : seuil fixé par les seuls types qui ont un donneur ordinaire, lutte contre le feu avant les besoins pour un colon inactif ; nettoyage, gardiennage et postes des factures dans l'ordre de RimWorld.
 - **Forge et couture séparées de l'artisanat** (schéma 302, migration 301 → 302 par numéro seul) : trois priorités et trois colonnes, comme les types Smithing, Tailoring et Crafting du Core.
 - **Recherche** : la table au plus grand facteur de vitesse de recherche d'abord, puis la plus proche (`WorkGiver_Researcher` priorisé). L'analyseur relié est trouvé dans l'index des structures par type, au lieu d'un parcours de toutes les structures.
+- **Priorités initiales** (`EnableAndInitialize`) : un humain qui rejoint la colonie (départ réel, arrivée, quête, rescapé, recrutement) a ses six types de travail les mieux maîtrisés et les six types toujours actifs à 3, le reste à 0, comme dans RimWorld. Les scénarios pédagogiques et les mondes de test gardent leurs priorités historiques.
 - **Masque de terrain** : un raccourci qui sautait la revalidation du masque de cases marchables en l'absence d'écriture marquée (`terrainWriteCount`) a été retiré le jour même. Il supposait que toute écriture de case est marquée ; un test qui remplace directement une case (`shallow-water-v403`) l'a mis en défaut. Le gain attendu (de l'ordre de 1 % de la simulation) ne justifie pas ce risque sans vérification complète sous `VERIFY_TERRAIN_CACHES=1`. Le masque reste revalidé par identité des objets `Tile`.
 
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
@@ -944,7 +945,7 @@ Les autres rôles de pièce relus (atelier 27 par établi, cuisine 28 par cuisin
    - avec l’accord du projet, la fusion des validations historiques (24 à 57 s pour une ancienne sauvegarde).
 5. **Simulation, 80 colons (≈ 62 ms par tick, voir « Simulation des Forges : contrôles indexés »).** Le profil est plat : planification du travail ≈ 16 % (ménage, chantiers, accessibilité), déplacements ≈ 12 %, faune ≈ 11 %, coûts de navigation reconstruits à chaque recherche ≈ 3 % (≈ 5 % avant « Simulation : éclairage et coûts de navigation mémorisés »), recherche ≈ 4 % (dont propreté des laboratoires ≈ 1,3 %, voir « Simulation : propreté des laboratoires »). Ensuite, passer en `TickRare` / `TickLong` ce que RimWorld ne met pas à jour à chaque tick.
 6. **Contenu sans montée de schéma** (voir § 5), puis les écarts RimWorld 1 à 4 et 8.
-7. **Planificateur en WorkGivers** façon RimWorld : ordre des donneurs, transport et régions faits (voir « Planification du travail et régions à la RimWorld ») ; restent la liste d'urgence, le dédoublement de l'artisanat, les choix internes de certaines familles et les priorités par défaut (écart 6).
+7. ~~**Planificateur en WorkGivers** façon RimWorld~~ — *fait* : ordre des donneurs, transport, régions, liste d'urgence, forge et couture séparées de l'artisanat, recherche par vitesse de table et priorités initiales (`EnableAndInitialize`) (voir « Planification du travail et régions à la RimWorld »).
 8. **×12 pendant le sommeil**, une fois le débit suffisant. Le jeu de vitesses publié (`0|1|3|6`) apparaît dans 17 fichiers, dont 2 épinglés.
 
 ### Outils de mesure

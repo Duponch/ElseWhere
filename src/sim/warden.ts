@@ -1,3 +1,4 @@
+import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import {commitJoinedPlayer259} from './world-affiliation-259.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
 import { allowedAreaAllows } from './allowed-area-state.ts';
@@ -113,6 +114,7 @@ function finishConversation(world:World,actor:Pawn,p:Pawn,context:NeedContext):b
   }else if(prisoner.mode==='recruit'){
     const raidGroup=p.raid?.group;p.recruitment={capturedAt:prisoner.capturedAt,recruitedAt:world.tick,fromFaction:'outlaws',...(raidGroup===undefined?{}:{raidGroup})};
     commitJoinedPlayer259(world,p);delete p.prisoner;delete p.raid;p.faction='colony';p.bedId=null;delete p.bedSlot;p.needCooldown=0;p.planCooldown=0;
+    if(initializesWorkLikeCore302(world.schemaVersion))enableAndInitializeWork(p);
     clearQueuedOrders(world,p);context.event(`${p.name} rejoint la colonie après les conversations avec ${actor.name}.`);
   }
   return true;
