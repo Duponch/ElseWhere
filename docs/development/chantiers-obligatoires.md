@@ -78,7 +78,7 @@ Deux filets de sécurité automatiques ne fonctionnent plus. Les régressions qu
 **Reste pour fermer ce chantier**, par classe (un passage, à refaire au calme) :
 - 17 images où le colon est affiché hors de son arête, mais à moins de 0,30 case : c'est l'approche de son poste de travail. L'ancienne preuve tolérait cette enveloppe sur les segments ; il faut l'équivalent sur la position, à partir des transitions d'approche que le contrôle enregistre déjà (`approach`, `workOffset`).
 - 6 images d'arrivée : le temps affiché a dépassé la fin de la dernière arête confirmée et le colon est au bout de l'arête, ou à moins de 0,30 case.
-- 6 images au démarrage (les trois colons, deux fois) : la position bouge de 0,7 case sans que le temps affiché avance, puis le temps saute de 1,4 tick en une image. C'est la reprise après une pause.
+- 6 images au premier passage de ×1 à ×6 (les trois colons, deux fois) : la position bouge de 0,7 case sans que le temps affiché avance, puis le temps saute de 1,4 tick en une image. Cause tracée image par image (`start-trace` du contrôle) : à une accélération, l'affichage se fige 30 à 70 ms le temps de remplir la réserve de la nouvelle vitesse, puis rejoint d'un coup ; les positions suivent une image plus tard. **Correction proposée, pas encore faite** : ne plus figer ni sauter à un changement de vitesse en cours de jeu, mais jouer ≈ 70 ms à la vitesse intermédiaire (moyenne de l'ancienne et de la nouvelle) jusqu'à ce que l'avance confirmée atteigne la nouvelle réserve, dans les deux sens. Cela donnerait aussi de la marge aux accélérations, et supprimerait le saut en avant d'environ 0,8 case fait aujourd'hui à chaque ralentissement de ×6 à ×1. À faire dans `MotionTimeline` avec ses tests de contrat (`fine-frontier-catchup297`, `confirmed-rate-events297`, `confirmed-supply-memory297`, `confirmed-underflow-recovery297`, `fine-overfull-join297`).
 - 2 images où l'arête confirmée a été sautée ou remplacée.
 - Les images où un colon est dessiné dans une case encore rocheuse (0 à 113 selon les passages).
 - Les accélérations passent avec peu de marge (jusqu'à 94 ms au calme, 102 ms sous charge).
@@ -106,6 +106,16 @@ Décidé par l'utilisateur le 10 novembre. À faire après le chantier 3, pas av
 - **Premier pas** : une liste de cibles chiffrées tirée du profil (gain attendu, risque pour les règles), avant de toucher au code.
 - **Contraintes** : une optimisation pure garde l'état simulé identique bit à bit (`scripts/perf-save-bench.ts`) ; la simulation reste déterministe.
 - **Fini quand** : ×3 est tenu sur Les Forges (18 ticks par seconde au banc `scripts/perf-worker-run.ts`), sans régression des règles.
+
+## Méthode de test (décidée le 10 novembre)
+
+La suite complète prend environ 4 heures : elle ne doit plus bloquer le travail.
+
+- **Avant chaque commit** : `sh scripts/test-related.sh` (les tests qui importent les fichiers modifiés, choisis par Vitest ; quelques minutes).
+- **Avant de pousser un changement large** : `sh scripts/test-fast.sh` (tout sauf les fichiers les plus lents de `scripts/slow-tests.txt`, qui font ≈ 80 % du temps).
+- **Une fois par nuit** : `sh scripts/test-chunked.sh` (suite complète), triée le lendemain contre la liste des échecs connus (`tmp/perf/known-failures.json`, à lire en UTF-8).
+- **Pendant une suite** : continuer à coder et à vérifier dans un second dossier de travail ; seules les mesures de vitesse attendent une machine au calme.
+- **Non décidé** : 116 fichiers n'ont que des tests en échec permanent (anciennes preuves figées sur de vieux formats) et coûtent ≈ 21 % du temps. Les sortir du lancement par défaut, sans les supprimer, attend l'accord de l'utilisateur.
 
 ## Références
 

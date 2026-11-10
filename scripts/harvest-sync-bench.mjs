@@ -36,7 +36,7 @@ const witness={position:{x,z},from:{x:f.getX(i),z:f.getZ(i)},to:{x:t.getX(i),z:t
 if(this.world.tiles[Math.round(z)*this.world.width+Math.round(x)]?.terrain==='rock'&&Math.hypot(x-Math.round(x),z-Math.round(z))<.35)b.solidOccupancy.push({tick:this.world.tick,play:this.timeline.tick,pawn:p.id,x,z});
 if(prev&&dt>0&&dt<100&&distance>dt*.013+.02){b.rawJumpCount++;const candidate={at:now,tick:this.world.tick,play:this.timeline.tick,distance,dt,pawn:p.id,state:p.state,from:[prev.position.x,prev.position.z],to:[x,z],segment:witness.segment,gpuFrom:[f.getX(i),f.getZ(i)],gpuTo:[t.getX(i),t.getZ(i)],gpuTravel:[travel.getX(i),travel.getY(i),travel.getZ(i),travel.getW(i)],workOffset:this.pawns.workOffsets.get(p.id),approach:this.pawns.approachTransitions.get(p.id),previousWitness:prev,currentWitness:witness};if(confirmedTravelExcess(prev,witness,dt))b.continuousTravelExcess.push(candidate);else b.jumps.push(candidate);}
 const track=this.timeline.tracks.get(p.id);if(track?.length&&track[0].start>this.timeline.tick)b.gaps.push({tick:this.world.tick,play:this.timeline.tick,first:track[0].start});
-b.poses.set(p.id,witness);});
+b.poses.set(p.id,witness);if(i===0){const last=b.frames.at(-1);if(last)last.pawn=[Math.round(x*1000)/1000,Math.round(z*1000)/1000,p.state];}});
 ${process.env.HARVEST_CONTACT_STALL==='1'?`if(!b.contactStalls.length&&this.timeline.tick>=2744.5&&this.timeline.tick<2746&&this.received?.speed===6){b.contactStalls.push({at:now,play:this.timeline.tick,milliseconds:30});const until=performance.now()+30;while(performance.now()<until){}}`:''}
 return result;};}
 `;
@@ -164,6 +164,10 @@ const originalTraceAdvance=advanceSimulation;advanceSimulation=now=>{const at=pe
    return {speed:c.speed,reserve:Math.round(c.speed*6*36)/1000,history:samples.join(' '),slowFrames:Math.round(100*slow.length/Math.max(1,frames.length))+'%',waitingFrames:waiting.length,incompatible:Math.round(100*frames.filter(f=>!f.compatible).length/Math.max(1,frames.length))+'%',frames:frames.length};
   });
   for(const row of phase.historyTrace)console.log('history-trace '+JSON.stringify(row));
+  // The first half second after the run starts (a resume from pause): one row per frame.
+  const first=data.frames[0]?.at??0;
+  for(const f of data.frames.filter(f=>f.at<first+500))console.log('start-trace '+JSON.stringify({ms:Math.round((f.at-first)*10)/10,dt:Math.round(f.dt*10)/10,speed:f.speed,play:Math.round(f.play*1000)/1000,history:Math.round(f.history*1000)/1000,waiting:f.buffering,worldTick:f.tick,pawn:f.pawn}));
+  for(const a of data.adopts.filter(a=>a.at<first+500))console.log('start-adopt '+JSON.stringify({ms:Math.round((a.at-first)*10)/10,tick:Math.round(a.tick*1000)/1000,speed:a.speed,was:a.previousSpeed,playBefore:Math.round(a.playBefore*1000)/1000,play:Math.round(a.play*1000)/1000,latest:Math.round(a.latest*1000)/1000,waiting:a.buffering}));
   // Program compilations requested in mid-game: start (ms after the run began),
   // wall duration, and the caller.
   const began=data.controls[0]?.at??0;
