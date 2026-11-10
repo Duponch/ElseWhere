@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {currentGraphicsStyle} from './graphics-style';
-import {attribute,float,fwidth,max,positionWorld,smoothstep,vec2,uv,texture} from 'three/tsl';
+import {attribute,float,vec2,uv,texture} from 'three/tsl';
 import {emitPitchedRoof,emptyRoofFaces,isRoofOutlineKind,pitchedRoofFaces,roofField,ROOF_CAP_CELLS,type RoofFaces} from './pitched-roof';
 import {buildingMaterialColor} from './building-material-color';
 import {ChunkedSurfaceMesh,regionGrid,type SurfaceSoup} from './ChunkedSurfaceMesh';
@@ -230,18 +230,17 @@ export class RoofLayer {
     // Exact old roof UVs remain the Pastel source. The original Gouache
     // side-face projection supplies its own regular authored coordinates.
     const point=attribute('position','vec3'),normal=attribute('normal','vec3').abs(),paintUv=normal.y.greaterThan(.5).select(uv(),normal.x.greaterThan(.5).select(vec2(point.z,point.y).div(8),vec2(point.x,point.y).div(8))),address=attribute(SURFACE_STROKE_UV,'vec3');
-    // Shingle courses follow the contour lines of each pitch (parallel to its
-    // eave, meeting on hips and valleys); staggered tabs across the slope.
-    const signed=attribute('normal','vec3'),slope=vec2(signed.x,signed.z),sloped=attribute('roofPart','float').lessThan(.5).and(signed.y.lessThan(.995));
-    const across=positionWorld.x.mul(slope.y.negate()).add(positionWorld.z.mul(slope.x)).div(max(slope.length(),float(1e-4)));
-    const rows=positionWorld.y.div(.165),row=rows.floor(),tabs=across.div(.45).add(row.mod(2).mul(.5)),tab=tabs.floor();
-    const tabHash=row.mul(12.9898).add(tab.mul(78.233)).sin().mul(43758.5453).fract();
-    const wy=max(fwidth(rows).mul(1.5),float(.05)),wx=max(fwidth(tabs).mul(1.5),float(.02)),fade=float(1).sub(smoothstep(float(.2),float(.5),fwidth(rows)));
-    const lap=float(1).sub(smoothstep(float(0),wy,rows.fract())),joint=float(1).sub(smoothstep(float(0),wx,tabs.fract())).mul(lap.oneMinus());
-    const shingles=float(1).add(tabHash.sub(.5).mul(.1)).mul(float(1).sub(lap.mul(.24).add(joint.mul(.12)).mul(fade)));
-    const base=attribute('color','vec3').mul(sloped.select(shingles,float(1)));
+    const base=attribute('color','vec3');
+    // Gouache, as on every other surface: the pigment runs continuously over
+    // each pitch at the historical density (one unit per unit seen from
+    // above, 0.6 on vertical faces), and the paper mask is always read in its
+    // painted middle band, so no cell or region border shows on a pitch.
+    const horizontal=normal.y.greaterThan(.5),along=normal.x.greaterThan(.5).select(point.z,point.x);
+    const planar=horizontal.select(point.xz,vec2(along,point.y));
+    const mirror=(t:THREE.Node<'float'>)=>float(1).sub(t.mod(2).sub(1).abs()).mul(.3).add(.35);
+    const paperUv=vec2(mirror(planar.x),mirror(planar.y)),pigmentUv=horizontal.select(point.xz,vec2(along,point.y).mul(.6));
     this.textured.roughness=.88;this.textured.metalness=.02;
-    const publishStroke=()=>applySharedPaintSurface(this.textured,{context,base,pastel:base.mul(texture(this.paint,uv()).rgb),faceUv:paintUv,stroke:naturalStroke(context,bank,address.z,address.xy)});bank.setPreparedRepresentationPublisher(()=>{publishStroke();this.textured.needsUpdate=true;});publishStroke();
+    const publishStroke=()=>applySharedPaintSurface(this.textured,{context,base,pastel:base.mul(texture(this.paint,uv()).rgb),faceUv:paintUv,pigmentUv,coverage:context?(_raw,profile)=>context.faceCoverageNode(paperUv,profile):undefined,stroke:naturalStroke(context,bank,address.z,address.xy)});bank.setPreparedRepresentationPublisher(()=>{publishStroke();this.textured.needsUpdate=true;});publishStroke();
     this.surface.visible = this.areas.visible = false;
   }
   setTexturesEnabled(enabled: boolean): void {

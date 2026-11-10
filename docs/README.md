@@ -1,6 +1,6 @@
 # Documentation d’Elsewhere
 
-**10 novembre 2026 — schéma 302 inchangé.** [Murs liés et toits en pente](development/linked-walls-pitched-roofs.md) : murs continus sans jointure entre cases (angles, T, croix, linteaux de porte), toits en croupe ou à deux pans avec pignons épousant l'emprise exacte. Un seul lot GPU chacun, mis à jour par régions ; présentation seulement.
+**10 novembre 2026 — schéma 302 inchangé.** [Murs liés et toits en pente](development/linked-walls-pitched-roofs.md) : murs continus sans jointure entre cases (angles, T, croix, linteaux de porte), toits en croupe ou à deux pans avec pignons épousant l'emprise exacte, peints dans la texture du style (Gouache ou Pastel) comme avant. Un seul lot GPU chacun, mis à jour par régions ; présentation seulement.
 
 **9 novembre 2026 — schéma 302.** [Planification du travail à la RimWorld](development/work-planner-rimworld.md) : ordre des donneurs de travail, recherche des cibles par régions, liste d'urgence, et types de travail Forge, Couture et Artisanat séparés (migration 301 → 302 par numéro seul). Sur Les Forges, environ 12 % de temps de simulation en moins par tick ; aucune parité exhaustive n'est annoncée.
 

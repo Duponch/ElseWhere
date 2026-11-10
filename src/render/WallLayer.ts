@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import {attribute,float,fwidth,max,mix,normalWorldGeometry,positionWorld,smoothstep,texture,uniform,vec2,vec3} from 'three/tsl';
+import {attribute,float,max,mix,normalWorldGeometry,positionWorld,texture,uniform,varying,vec2,vec3} from 'three/tsl';
 import type {World} from '../sim/types';
 import {currentGraphicsStyle} from './graphics-style';
 import {solidExplorationMaterial256} from './ExplorationMask256';
@@ -11,10 +11,10 @@ import {readWallGrid,wallChunkFaces,wallChunksNear,WALL_CHUNK_SIZE,type WallFace
 import {wallPaintTexture} from './wall-paint';
 export {wallPaintTexture} from './wall-paint';
 
-const FIELDS={normal:3,color:3,wallFamily:1} as const;
+const FIELDS={normal:3,color:3,wallFamily:1,wallPaper:3} as const;
 const tint=new THREE.Color(0x84baff);
 /** The wall soup as a region soup: geometry fields by attribute name. */
-export const wallSoup=(faces:WallFaces):SurfaceSoup=>({triangles:faces.triangles,position:faces.position,faceUv:faces.faceUv,partition:faces.seam,fields:{normal:faces.normal,color:faces.color,wallFamily:faces.family}});
+export const wallSoup=(faces:WallFaces):SurfaceSoup=>({triangles:faces.triangles,position:faces.position,faceUv:faces.faceUv,partition:faces.seam,fields:{normal:faces.normal,color:faces.color,wallFamily:faces.family,wallPaper:faces.paper}});
 
 /** Every linked wall and doorway lintel of a map in ONE resident mesh and one
  * draw. Each 32x32 region owns a reserved range of the shared buffers and a
@@ -43,33 +43,31 @@ export class WallLayer {
     this.targetMap.magFilter=this.targetMap.minFilter=THREE.NearestFilter;this.targetMap.generateMipmaps=false;this.targetMap.needsUpdate=true;
     for(const material of [this.textured,this.plain]){solidExplorationMaterial256(material);configure?.(material);material.userData.rendererOwned=true;}
     const context=currentGraphicsStyle(),position=positionWorld,normal=attribute('normal','vec3'),family=attribute('wallFamily','float');
-    const timber=family.mod(2).greaterThan(.5),cap=family.greaterThan(1.5),vertical=normal.y.abs().lessThan(.5);
+    const timber=family.mod(2).greaterThan(.5),vertical=normal.y.abs().lessThan(.5);
     const along=normal.x.abs().greaterThan(.5).select(position.z,position.x);
-    // Coursed boards (timber) or blocks (masonry), continuous along every run.
-    const courseHeight=timber.select(float(.4667),float(.35)),blockLength=timber.select(float(2.3),float(.7));
-    const rows=position.y.div(courseHeight),course=rows.floor(),fy=rows.fract();
-    const courseHash=course.mul(12.9898).sin().mul(43758.5453).fract();
-    const offset=timber.select(courseHash.mul(blockLength),course.mod(2).mul(blockLength.mul(.5)));
-    const blocks=along.add(offset).div(blockLength),fx=blocks.fract();
-    const blockHash=course.mul(12.9898).add(blocks.floor().mul(78.233)).sin().mul(43758.5453).fract();
-    const wy=max(fwidth(rows).mul(1.5),float(.04)),wx=max(fwidth(blocks).mul(1.5),float(.015));
-    const lap=float(1).sub(smoothstep(float(0),wy,fy)),mortar=max(lap,float(1).sub(smoothstep(float(0),wy,float(1).sub(fy))));
-    const joint=max(float(1).sub(smoothstep(float(0),wx,fx)),float(1).sub(smoothstep(float(0),wx,float(1).sub(fx))));
-    const lines=max(timber.select(lap,mortar),joint.mul(timber.select(float(.7),float(1))));
-    // Lines fade out when a course shrinks to a few pixels (far zoom).
-    const fade=float(1).sub(smoothstep(float(.18),float(.45),fwidth(rows)));
-    const relief=float(1).add(blockHash.sub(.5).mul(timber.select(float(.09),float(.07)))).mul(float(1).sub(lines.mul(fade).mul(timber.select(float(.2),float(.15)))));
-    const pattern=vertical.and(cap.not()).select(relief,float(1));
     // Order-target preview: one data texel per cell, read just inside the face.
     const cell=positionWorld.xz.sub(normalWorldGeometry.xz.mul(.025)).add(.5).floor();
     const targeted=this.targetNode.sample(cell.add(.5).div(this.targetSize)).level(float(0)).r;
     const vertex=attribute('color','vec3');
     const tinted=(rgb:THREE.Node<'vec3'>)=>mix(rgb,vec3(tint.r,tint.g,tint.b),targeted.mul(.32));
-    const base=tinted(vertex.mul(pattern));
+    const base=tinted(vertex);
+    // Gouache paper: the historical face mask (painted fill, unpainted
+    // irregular border) over each REAL face. Along a side face, s runs over
+    // the whole face; its first and last cell reach the mask border, the
+    // cells between sample a mirrored middle band, so no joint shows a border.
+    const paper=attribute('wallPaper','vec3'),s=paper.x,v=paper.y,length=paper.z;
+    const middle=(t:THREE.Node<'float'>)=>float(1).sub(t.mod(2).sub(1).abs()).mul(.3).add(.35);
+    const last=max(length,float(1)).sub(1);
+    const sideU=length.lessThanEqual(1.0001).select(s,s.lessThan(1).select(s.mul(.65),s.greaterThan(last).select(mix(middle(last),float(1),s.sub(last)),middle(s))));
+    const paperUv=vec2(length.lessThan(0).select(s,sideU),v);
+    const paperRaw=varying(vec2(length.lessThan(0).select(s,s.div(max(length,float(1)))),v),'v_wallPaperUv');
+    // Pigment continuous across joints, at the historical density: a side
+    // face of one cell spanned 1/sqrt(height) per unit, a cell top one unit.
+    const pigmentUv=vertical.select(vec2(along,position.y).mul(.6),position.xz);
     const planar=vertical.select(vec2(along,position.y),position.xz);
     const paint=timber.select(texture(this.timberPaint,planar.div(vec2(3.1,1.9))).rgb,texture(this.stonePaint,planar.div(2.2)).rgb);
     const address=attribute(SURFACE_STROKE_UV,'vec3'),bank=this.surface.bank;
-    const publish=()=>applySharedPaintSurface(this.textured,{context,base,pastel:base.mul(paint),faceUv:planar.div(4),stroke:naturalStroke(context,bank,address.z,address.xy)});
+    const publish=()=>applySharedPaintSurface(this.textured,{context,base,pastel:base.mul(paint),faceUv:paperRaw,pigmentUv,coverage:context?(_raw,profile)=>context.faceCoverageNode(paperUv,profile):undefined,stroke:naturalStroke(context,bank,address.z,address.xy)});
     bank.setPreparedRepresentationPublisher(()=>{publish();this.textured.needsUpdate=true;});publish();
     this.plain.vertexColors=false;this.plain.colorNode=tinted(vertex);
     this.mesh=new THREE.Mesh(this.surface.geometry,this.textured);

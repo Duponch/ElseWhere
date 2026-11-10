@@ -7,11 +7,11 @@
 **Murs.** Avant, chaque case de mur était un bloc indépendant (cube en pierre dans le lot de mobilier, planche biseautée instanciée pour le bois). Deux murs voisins montraient donc une jointure, un biseau et un contour à chaque case, d'où l'effet de poteaux collés. Désormais, tous les murs et les linteaux de porte forment une seule surface continue, l'équivalent 3D des murs « liés » de RimWorld :
 - aucune face, aucun biseau ni contour entre deux murs voisins, en ligne droite, en angle, en T ou en croix ;
 - les contours restent sur les vraies arêtes : extrémités, angles extérieurs, haut du mur, pied, changement de matériau et bande du chaperon ;
-- le bois est peint en lattes horizontales et la pierre en assises de blocs décalées, continues d'une case à l'autre et calculées en coordonnées monde (même rendu en Pastel et en Gouache, s'efface au loin) ;
+- la texture reste celle du style choisi, comme avant : peinture Gouache (pigment et papier) ou texture Pastel, continue d'une case à l'autre (voir « Peinture Gouache » plus bas) ;
 - une porte rejoint le mur par son linteau : en bois depuis le haut du vantail, en maçonnerie au-dessus de l'encadrement, qui reste visible. Les montants des murs voisins s'arrêtent sous le linteau. En vue coupée, l'ouverture reste libre ;
 - un mur construit ou retiré met à jour ses voisins (seulement la région concernée, voir plus bas).
 
-**Toits.** Les toits construits ne sont plus une dalle plate mais de vrais toits en pente, en tuiles de bois aux rangs qui suivent chaque pan. La forme dépend de l'emprise :
+**Toits.** Les toits construits ne sont plus une dalle plate mais de vrais toits en pente, peints avec la texture du style comme le reste du jeu. La forme dépend de l'emprise :
 - un rectangle au moins 1,5 fois plus long que large reçoit deux pans avec pignons aux petits côtés, dans la couleur du mur porteur ;
 - toute autre forme reçoit une croupe (pavillon) : carré, L, T, U, maison à cour intérieure, pièces voisines, toit partiel sans mur.
 
@@ -22,6 +22,16 @@ Le toit épouse l'emprise exacte : cases de toit construit, murs, portes, colonn
 La hauteur d'une croupe est la pente multipliée par la distance de Chebyshev (L∞) au dehors de la composante. Pour un contour en cases, ce champ est exactement le toit du squelette droit : faîtages, arêtiers et noues compris, quelle que soit la forme, trous inclus. Toutes ses lignes de pli tombent sur des demi-cases ou sur des diagonales qui passent par un centre de case. Un réseau de neuf points par case les triangule donc exactement : pas de trou, pas de fissure, pas de surface qui en traverse une autre. Une case plane donne deux triangles, une case traversée par un pli donne un éventail autour de son centre, et chaque arête partagée porte les mêmes sommets des deux côtés. Les tests vérifient sur un carré, un rectangle long, une grande salle, un L, un T, une cour intérieure, des pièces voisines et un contact en diagonale que chaque point de l'emprise élargie est couvert exactement une fois et que toute arête libre est sur le bord extérieur.
 
 Code : `src/render/pitched-roof.ts` (champ et émission), `src/render/RoofLayer.ts` (couche), tests `tests/pitched-roof.test.ts`.
+
+## Peinture Gouache
+
+La Gouache peint chaque face par un pigment (coups de pinceau) posé sur un papier dont le masque de remplissage, prévu pour des coordonnées de face dans [0,1], laisse un bord irrégulier non peint. Une première version des murs liés employait des coordonnées en unités monde : hors de [0,1], la lecture du masque, bloquée sur son bord, ne rendait que le papier uni, d'où des murs et des toits orange sans peinture. Corrigé le 10 novembre :
+- **côtés des murs** : chaque sommet connaît sa position le long de la face réelle complète (au-delà de sa région) et sa longueur. Par fragment, la première et la dernière case atteignent le bord du masque, les cases intermédiaires lisent une bande centrale en miroir. Le bord peint n'apparaît donc qu'aux vraies extrémités, jamais à une jonction ;
+- **dessus des murs** : bord seulement sur les arêtes réellement exposées, valeurs en miroir entre deux murs ;
+- **toits** : le masque est toujours lu dans sa zone peinte, si bien qu'aucune case ni région ne laisse de bord sur un pan ;
+- **pigment** : continu sur chaque face, à la densité des anciennes faces (0,6 par unité sur les côtés, 1 vu de dessus). Les contours restent ceux décrits plus haut.
+
+Les lattes, assises de blocs et rangs de bardeaux procéduraux de la première version sont retirés : la texture vient du style seul, comme avant. En Pastel, les murs gardent une texture de bois ou de pierre raccordable en coordonnées monde, et les toits la texture de toit historique.
 
 ## Un seul lot GPU, mis à jour par régions
 
@@ -55,7 +65,7 @@ Géométrie et mémoire :
 |---|---|---|
 | Triangles des murs | 560 552 (bois) + 3 384 (pierre) | 19 458 dessinés, 24 378 réservés |
 | Triangles du toit | 47 688 | 51 074 |
-| Murs : géométrie + banque de contours (CPU, même ordre côté GPU) | ≈ 1 Mo d'instances (estimation) | 3,8 Mo + 8 Mo |
+| Murs : géométrie + banque de contours (CPU, même ordre côté GPU) | ≈ 1 Mo d'instances (estimation) | 4,7 Mo + 8 Mo (avec les coordonnées papier) |
 | Toit : géométrie + banque de contours | 8,0 Mo + 8 à 16 Mo | 11,5 Mo + 8 Mo |
 
 La banque de contours croît par puissances de deux, d'où les valeurs rondes. Les anciennes planches ne sont plus préparées (cuisson de leurs surfaces) au chargement : cette mémoire libérée n'est pas comptée ici. Sur une colonie ordinaire comme Les Éclaircies (260 murs), ces volumes sont environ quinze fois plus petits.

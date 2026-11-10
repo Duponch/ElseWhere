@@ -105,20 +105,32 @@ export interface WallFaces {
   readonly family: number[];
   /** Contour partition: a material or band change draws a line. */
   readonly seam: number[];
+  /** Gouache paper coordinates (three per corner). Side faces: position s
+   * along the COMPLETE real face (cells), height fraction v, face length L;
+   * the paper mask is then shaped per fragment so its painted border only
+   * meets the true ends of the face. Tops and undersides: direct (u, v, -1). */
+  readonly paper: number[];
 }
-export const emptyWallFaces = (): WallFaces => ({ triangles: 0, position: [], normal: [], color: [], faceUv: [], family: [], seam: [] });
+export const emptyWallFaces = (): WallFaces => ({ triangles: 0, position: [], normal: [], color: [], faceUv: [], family: [], seam: [], paper: [] });
+
+/** Paper coordinate of a cell edge on a top surface: 0 or 1 on a true edge,
+ * alternately .35 and .65 between two network cells (mirrored, continuous),
+ * so the painted border never appears at a joint. */
+const edgePaper = (before: boolean, after: boolean, edge: number): number => before && after ? (edge & 1 ? .65 : .35) : after ? 0 : 1;
 
 type P = readonly [number, number, number];
 const scratch = new Color();
-function pushQuad(out: WallFaces, a: P, b: P, c: P, d: P, normal: P, color: number, family: number, seam: number): void {
+type Paper = readonly [number, number, number];
+function pushQuad(out: WallFaces, a: P, b: P, c: P, d: P, normal: P, color: number, family: number, seam: number, paper: readonly [Paper, Paper, Paper, Paper]): void {
   // Wind counter-clockwise when seen from outside the surface.
   const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
   const cross = (uy * vz - uz * vy) * normal[0] + (uz * vx - ux * vz) * normal[1] + (ux * vy - uy * vx) * normal[2];
-  const order = cross >= 0 ? [a, b, c, a, c, d] : [a, c, b, a, d, c];
+  const order = cross >= 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2], corners = [a, b, c, d];
   // Same working-space conversion as every other vertex/instance colour.
   const { r, g, b: bl } = scratch.setHex(color);
-  for (const p of order) {
-    out.position.push(p[0], p[1], p[2]); out.normal.push(normal[0], normal[1], normal[2]); out.color.push(r, g, bl);
+  for (const i of order) {
+    const p = corners[i]!, q = paper[i]!;
+    out.position.push(p[0], p[1], p[2]); out.normal.push(normal[0], normal[1], normal[2]); out.color.push(r, g, bl); out.paper.push(q[0], q[1], q[2]);
     out.faceUv.push(Math.abs(normal[1]) > .5 ? p[0] : Math.abs(normal[0]) > .5 ? p[2] : p[0], Math.abs(normal[1]) > .5 ? p[2] : p[1]);
     out.family.push(family); out.seam.push(seam);
   }
@@ -153,9 +165,11 @@ export function emitWallFaces(grid: WallGrid, include: (x: number, z: number) =>
   for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) {
     const c = code(x, z); if (!c || !include(x, z)) continue;
     const family = wallCodeFamily(c), cap = wallCapColor(c);
-    pushQuad(out, [x - .5, top, z - .5], [x + .5, top, z - .5], [x + .5, top, z + .5], [x - .5, top, z + .5], [0, 1, 0], cap, family + 2, seamOf(c, true));
+    const u0 = edgePaper(code(x - 1, z) !== 0, true, x), u1 = edgePaper(true, code(x + 1, z) !== 0, x + 1);
+    const v0 = edgePaper(code(x, z - 1) !== 0, true, z), v1 = edgePaper(true, code(x, z + 1) !== 0, z + 1);
+    pushQuad(out, [x - .5, top, z - .5], [x + .5, top, z - .5], [x + .5, top, z + .5], [x - .5, top, z + .5], [0, 1, 0], cap, family + 2, seamOf(c, true), [[u0, v0, -1], [u1, v0, -1], [u1, v1, -1], [u0, v1, -1]]);
     const bottom = lo(c);
-    if (bottom > 0) pushQuad(out, [x - .5, bottom, z - .5], [x + .5, bottom, z - .5], [x + .5, bottom, z + .5], [x - .5, bottom, z + .5], [0, -1, 0], shade(wallBodyColor(c), .82), family, seamOf(c, false));
+    if (bottom > 0) pushQuad(out, [x - .5, bottom, z - .5], [x + .5, bottom, z - .5], [x + .5, bottom, z + .5], [x - .5, bottom, z + .5], [0, -1, 0], shade(wallBodyColor(c), .82), family, seamOf(c, false), [[0, 0, -1], [1, 0, -1], [1, 1, -1], [0, 1, -1]]);
   }
   // Side runs: one quad per band per maximal run of equally exposed cells.
   for (const side of SIDES) {
@@ -167,32 +181,47 @@ export function emitWallFaces(grid: WallGrid, include: (x: number, z: number) =>
       if (!any) continue;
       for (let k = 0; k + 1 < bands.length; k++) {
       const yA = bands[k]!, yB = bands[k + 1]!, cap = yA >= capY - 1e-9;
-      let start = -1, key = 0, color = 0, family = 0;
+      let start = -1, key = 0, color = 0, family = 0, faceLo = 0, faceHi = 0;
+      // The real face of a cell on this side: exposed from its own bottom up
+      // to the bottom of the neighbour (a wall beside a doorway shows its jamb
+      // below the lintel only), with one material along the whole face.
+      const face = (x: number, z: number): readonly [number, number, number] | undefined => {
+        const c = code(x, z); if (!c) return;
+        const n = code(x + side.dx, z + side.dz), hi = n ? lo(n) : top, bottomY = lo(c);
+        return hi > bottomY + 1e-9 ? [c, bottomY, hi] : undefined;
+      };
+      const same = (f: readonly [number, number, number] | undefined, c: number, l: number, h: number) => !!f && f[0] === c && Math.abs(f[1] - l) < 1e-9 && Math.abs(f[2] - h) < 1e-9;
       const flush = (end: number) => {
         if (start < 0) return;
         const a = start, b = end; start = -1;
+        // The complete real face, beyond this region: paper continuity.
+        const lineX = (t: number) => side.alongX ? t : x0 + o, lineZ = (t: number) => side.alongX ? z0 + o : t;
+        const base = side.alongX ? x0 : z0, startCell = base + a, endCell = base + b - 1, c = code(lineX(startCell), lineZ(startCell));
+        let first = startCell, last = endCell;
+        while (same(face(lineX(first - 1), lineZ(first - 1)), c, faceLo, faceHi)) first--;
+        while (same(face(lineX(last + 1), lineZ(last + 1)), c, faceLo, faceHi)) last++;
+        const length = last - first + 1, sA = startCell - first, sB = endCell + 1 - first;
+        const vA = (yA - faceLo) / (faceHi - faceLo), vB = (yB - faceLo) / (faceHi - faceLo);
+        const paper: readonly [Paper, Paper, Paper, Paper] = [[sA, vA, length], [sB, vA, length], [sB, vB, length], [sA, vB, length]];
         if (side.alongX) {
           const z = z0 + o, plane = z + side.dz * .5;
-          pushQuad(out, [x0 + a - .5, yA, plane], [x0 + b - .5, yA, plane], [x0 + b - .5, yB, plane], [x0 + a - .5, yB, plane], side.normal, color, family, key);
+          pushQuad(out, [x0 + a - .5, yA, plane], [x0 + b - .5, yA, plane], [x0 + b - .5, yB, plane], [x0 + a - .5, yB, plane], side.normal, color, family, key, paper);
         } else {
           const x = x0 + o, plane = x + side.dx * .5;
-          pushQuad(out, [plane, yA, z0 + a - .5], [plane, yA, z0 + b - .5], [plane, yB, z0 + b - .5], [plane, yB, z0 + a - .5], side.normal, color, family, key);
+          pushQuad(out, [plane, yA, z0 + a - .5], [plane, yA, z0 + b - .5], [plane, yB, z0 + b - .5], [plane, yB, z0 + a - .5], side.normal, color, family, key, paper);
         }
       };
       for (let i = 0; i <= inner; i++) {
-        let exposed = false, nextKey = 0, nextColor = 0, nextFamily = 0;
+        let exposed = false, nextKey = 0, nextColor = 0, nextFamily = 0, nextLo = 0, nextHi = 0;
         if (i < inner) {
-          const x = side.alongX ? x0 + i : x0 + o, z = side.alongX ? z0 + o : z0 + i, c = code(x, z);
-          if (c && include(x, z)) {
-            // Exposed from the own bottom up to the neighbour's bottom: a wall
-            // beside a doorway shows its jamb below the lintel only.
-            const n = code(x + side.dx, z + side.dz), limit = n ? lo(n) : top;
-            exposed = yA >= lo(c) - 1e-9 && yB <= limit + 1e-9;
-            if (exposed) { nextKey = seamOf(c, cap); nextColor = cap ? wallCapColor(c) : wallBodyColor(c); nextFamily = wallCodeFamily(c) + (cap ? 2 : 0); }
+          const x = side.alongX ? x0 + i : x0 + o, z = side.alongX ? z0 + o : z0 + i, f = face(x, z);
+          if (f && include(x, z)) {
+            exposed = yA >= f[1] - 1e-9 && yB <= f[2] + 1e-9;
+            if (exposed) { const c = f[0]; nextKey = seamOf(c, cap); nextColor = cap ? wallCapColor(c) : wallBodyColor(c); nextFamily = wallCodeFamily(c) + (cap ? 2 : 0); nextLo = f[1]; nextHi = f[2]; }
           }
         }
-        if (start >= 0 && (!exposed || nextKey !== key || nextColor !== color || nextFamily !== family)) flush(i);
-        if (exposed && start < 0) { start = i; key = nextKey; color = nextColor; family = nextFamily; }
+        if (start >= 0 && (!exposed || nextKey !== key || nextColor !== color || nextFamily !== family || nextLo !== faceLo || nextHi !== faceHi)) flush(i);
+        if (exposed && start < 0) { start = i; key = nextKey; color = nextColor; family = nextFamily; faceLo = nextLo; faceHi = nextHi; }
       }
       }
     }
