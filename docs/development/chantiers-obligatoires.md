@@ -115,7 +115,7 @@ La suite complète prend environ 4 heures : elle ne doit plus bloquer le travail
 - **Avant de pousser un changement large** : `sh scripts/test-fast.sh` (tout sauf les fichiers les plus lents de `scripts/slow-tests.txt`, qui font ≈ 80 % du temps).
 - **Une fois par nuit** : `sh scripts/test-chunked.sh` (suite complète), triée le lendemain contre la liste des échecs connus (`tmp/perf/known-failures.json`, à lire en UTF-8).
 - **Pendant une suite** : continuer à coder et à vérifier dans un second dossier de travail ; seules les mesures de vitesse attendent une machine au calme.
-- **Non décidé** : 116 fichiers n'ont que des tests en échec permanent (anciennes preuves figées sur de vieux formats) et coûtent ≈ 21 % du temps. Les sortir du lancement par défaut, sans les supprimer, attend l'accord de l'utilisateur.
+- **Décidé par l'utilisateur le 10 novembre** : les 272 fichiers dont tous les tests échouent depuis longtemps (anciennes preuves figées sur de vieux formats, ≈ 13 % du temps de la suite complète) sont listés dans `tests/retired-tests.txt` et sortis du lancement par défaut, sans être supprimés ; `RETIRED_TESTS=1` les relance.
 
 ## Références
 

@@ -9,6 +9,9 @@ list=${1:-}; out=${2:-tmp/test-all.json}; limit=${3:-900}
 mkdir -p tmp; work=tmp/test-chunks-$$; mkdir -p "$work"
 if [ -z "$list" ]; then ls tests/*.test.ts > "$work/all.txt"; list="$work/all.txt"; fi
 grep -vE "\.optin\.test\.ts|/(energy|prison)-colony\.test\.ts|^tests/scenarios/" "$list" > "$work/list.txt"
+# Retired files (tests/retired-tests.txt) are excluded by the Vitest configuration;
+# drop them here too, so that no chunk is left without a single test file.
+if [ "$RETIRED_TESTS" != "1" ]; then grep -v "^#" tests/retired-tests.txt | grep -vxFf - "$work/list.txt" > "$work/kept.txt"; mv "$work/kept.txt" "$work/list.txt"; fi
 split -l 30 "$work/list.txt" "$work/part-"
 : > "$out.unfinished.txt"
 for part in "$work"/part-*; do

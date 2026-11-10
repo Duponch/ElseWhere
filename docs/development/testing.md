@@ -1,5 +1,13 @@
 # Stratégie de validation
 
+## Méthode du 10 novembre 2026
+
+La suite complète prend plus de deux heures : elle ne bloque plus le travail.
+- Avant un commit : `sh scripts/test-related.sh` (tests qui importent les fichiers modifiés).
+- Avant de pousser un changement large : `sh scripts/test-fast.sh` (tout sauf les fichiers lents de `scripts/slow-tests.txt`).
+- Une fois par nuit : `sh scripts/test-chunked.sh` (suite complète par lots), triée contre la liste des échecs connus, lue en UTF-8.
+- Les fichiers dont tous les tests échouent depuis longtemps sont listés dans `tests/retired-tests.txt` et sortis du lancement par défaut, sans être supprimés ; `RETIRED_TESTS=1` les relance.
+
 ## Priorité humaine du 15 octobre 2026
 
 Livrer des boucles cohérentes avec une passe ciblée regroupée et un court parcours UI couvrant les contrats touchés. Campagnes longues seulement périodiques ou motivées : ni une partie gagnée ni tous les événements possibles ne sont des conditions de livraison. Conserver les rouges et limites, clôturer honnêtement un objectif partiel, puis avancer les travaux indépendants. Réutiliser les preuves inchangées, éviter tableaux de preuves imbriqués et nouveau pilote par incident. Recherches RimWorld ciblées par domaine, avec règles primaires et références visuelles de l’UX ; réutiliser les conclusions vérifiées. Une note canonique par lot. Commits et pushes origin/main autorisés explicitement, publications produit regroupées. Ces consignes remplacent les anciennes mentions de push manuel ci-dessous.

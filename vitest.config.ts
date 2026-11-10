@@ -8,6 +8,9 @@ import viteConfig from './vite.config.ts';
 const root=path.dirname(fileURLToPath(import.meta.url)),nightFile='tests/daylight-speed-engine-v492.test.ts';
 const phaseFile='tests/native-phase-capture297.test.ts';
 const sha=(value:string)=>crypto.createHash('sha256').update(value).digest('hex');
+// Files whose every test has failed for a long time (tests/retired-tests.txt):
+// out of the default run, never deleted. RETIRED_TESTS=1 runs them again.
+const retired=process.env.RETIRED_TESTS==='1'?[]:fs.readFileSync(path.resolve(root,'tests/retired-tests.txt'),'utf8').split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!line.startsWith('#'));
 function phaseCapturePlugin(){
  const phasePaths=['src/bridge/native-message-capture.ts','src/bridge/core-phase-data-297.ts','src/bridge/native-clone-resident.ts'],expected=['7f010278a7ecc3dc68ae5b751d75d5697ddccbbf66ac97e78d0475d890795c63','ad64c17310473feac529e0a1e23f859d69343fc1d6e1867b88b911dd4802132e','dc565732f1f129ec6c444fe553042693214d2a1c88efd61769b38dba2df4a5f9'],norm=(v:string)=>path.resolve(v).split(path.sep).join('/').toLowerCase(),token='test-before-phase-capture492',helper=path.resolve(root,'tests/helpers/phase-capture-proof-v492.ts').split(path.sep).join('/'),rows=new Map<string,{path:string;id:string;body:string;sha:string}>();
  for(let i=0;i<phasePaths.length;i++){const p=phasePaths[i]!,id=path.resolve(root,p),body=fs.readFileSync(id,'utf8'),h=sha(body);if(h!==expected[i])throw Error('Exact qualified Phase3 body required '+p);rows.set(norm(id),{path:p,id,body,sha:h});}
@@ -66,7 +69,7 @@ export default defineConfig(async environment=>{
  // extends:false prevents Vitest/Vite's array concatenation from broadening Night include.
  // Both projects receive the current repository configuration explicitly.
  return {...vite,test:{...ordinaryTest,projects:[
-  {...vite,extends:false,test:{...ordinaryTest,name:'standard',exclude:[...(ordinaryTest.exclude??configDefaults.exclude),nightFile,phaseFile]}},
+  {...vite,extends:false,test:{...ordinaryTest,name:'standard',exclude:[...(ordinaryTest.exclude??configDefaults.exclude),nightFile,phaseFile,...retired]}},
   {...vite,extends:false,plugins:[...(vite.plugins??[]),lazyHistoricalProofPlugin('test-only-daylight-night-factories-v492',['src/sim/core-movement-297.ts'],nightFactoryPlugin)],test:{...ordinaryTest,name:'daylight-night',include:[nightFile],pool:'forks',maxWorkers:1,fileParallelism:false,testTimeout:60000,hookTimeout:60000}},
   {...vite,extends:false,plugins:[...(vite.plugins??[]),lazyHistoricalProofPlugin('test-only-native-phase-capture-proof-v492',['src/bridge/native-message-capture.ts','src/bridge/core-phase-data-297.ts','src/bridge/native-clone-resident.ts'],phaseCapturePlugin)],test:{...ordinaryTest,name:'native-phase-capture',include:[phaseFile],pool:'forks',maxWorkers:1,fileParallelism:false,testTimeout:60000,hookTimeout:60000}}
  ]}};
