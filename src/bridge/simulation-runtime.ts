@@ -46,7 +46,7 @@ import {campaignOnlySummary} from '../sim/world-map-presentation';
 import {deserializeCampaign,serializeCampaign} from '../sim/serialization';
 import { UrgentThreatObserver, validThreatPauseMode, type ThreatPauseMode } from './urgent-threats';
 import {selectedMap} from '../sim/secondary-site-context';
-import {campaignPresentation} from '../sim/secondary-site-presentation';
+import {campaignPresentation,campaignPresentationView} from '../sim/secondary-site-presentation';
 import { createScenarioWorld } from '../sim/new-game';
 import { MotionRecorder } from './motion-tracks';
 import { FixedClock } from './fixed-clock';
@@ -164,6 +164,16 @@ function visibleWorld():World|undefined {
   else{current=campaignPresentation(world! as World);if(presentationScope297)presentationMemo297={owner:world!,value:current};}
   if(current!==observedWorld){motion.reset();phasePublisher297.reset();audioCues.reset();presentationChanges=new PresentationChanges();observedWorld=current;}
   return current;
+}
+/* The owner check of visibleWorld() without rebuilding the projection's
+ * campaign fields (people, bed references, map and group choices): a calm
+ * frontier macro reads none of them, and the next complete publication rebuilds
+ * them before encoding. An unknown or changed projection takes the complete
+ * visibleWorld() path, with the same resets. */
+function visibleOwner297():World|undefined {
+  if(world?.worldMaps&&!selectedRegisteredMap(world)){observedWorld=undefined;return;}
+  if(!(presentationScope297&&presentationMemo297?.owner===world)){const view=campaignPresentationView(world! as World);if(view!==undefined&&view===observedWorld)return view;}
+  return visibleWorld();
 }
 const audioCues=new AudioCueRecorder();
 // Tick publications use this only after the presentation observers captured that tick.
@@ -643,12 +653,15 @@ function runCoreTask297(now:number):void {
   // Observe the SAME selected projection as the legacy discrete observer,
   // including cross-map incidents. No Natural/geography encoder runs here.
   if(result.localTickCompleted||hard||paused){
-   const current=visibleWorld();if(!current)throw Error('Selected publication owner disappeared during committed Core observation');
+   // A calm macro candidate first checks the projection's owner only; the
+   // projection itself is rebuilt when something below reads it.
+   const calmCandidate=result.localTickCompleted&&!hard&&!paused;
+   if(!(calmCandidate?visibleOwner297():visibleWorld()))throw Error('Selected publication owner disappeared during committed Core observation');
    // In frontier mode a completed calm macro already schedules a calm Full
    // (rate-limited in publishDuePhysical297) while actors keep streaming, so
    // the whole-world presentation signature is neither needed nor computed.
-   const calmMacro=result.localTickCompleted&&!hard&&!paused&&phasePublisher297.frontierMode297;
-   if(!calmMacro&&presentationChanges.capture(current))phasePublisher297.requestFull();
+   const calmMacro=calmCandidate&&phasePublisher297.frontierMode297;
+   if(!calmMacro){const current=visibleWorld();if(!current)throw Error('Selected publication owner disappeared during committed Core observation');if(presentationChanges.capture(current))phasePublisher297.requestFull();}
   }
   // visibleWorld may revoke an old map's Recorder/Audio/Publisher ownership.
   // Capture this Core only after that synchronous owner check.

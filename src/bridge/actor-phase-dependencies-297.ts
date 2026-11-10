@@ -121,8 +121,11 @@ function cargo(p:MaterialPile|undefined){
   p.humanCorpse?.pawnId,p.mechCorpse?[p.mechCorpse.mechKind,p.mechCorpse.heading,mechanoidVisualMask(p.mechCorpse)]:undefined];
 }
 /** After the ENTIRE macro suffix, plus actual prepareFull seeding. No BFS/RNG,
- * no Pawn/World/clinical record escapes; no clock or UI work counter is signed. */
-export function captureActorPhaseDependencies297(world:World):ActorPhaseDependencies297 {
+ * no Pawn/World/clinical record escapes; no clock or UI work counter is signed.
+ * `held` is an earlier capture of this module: a row (or section) exactly equal
+ * to its held owned copy keeps that copy instead of a new one, so the result
+ * has the same values and unchanged rows compare by identity. */
+export function captureActorPhaseDependencies297(world:World,held?:ActorPhaseDependencies297):ActorPhaseDependencies297 {
  if(!isCorePhysicalSchema297(Number(world.schemaVersion)))throw Error('Dependency capture requires actual schema297');
  const pawnsById=new Map(world.pawns.map(p=>[p.id,p])),jobs=new Map(world.jobs.map(j=>[j.id,j]));
  const bodies=new Map<number,MaterialPile>(),carried=new Map<number,MaterialPile>(),gear=new Map<number,string>(),apparel=new Map<number,unknown[]>();
@@ -176,8 +179,22 @@ export function captureActorPhaseDependencies297(world:World):ActorPhaseDependen
  const mechanical=(world.mechanoids??[]).map(a=>[a.id,a.mechKind,mechanoidVisualMask(a)]);
  const mechanicalBodies=world.piles.filter(p=>p.mechCorpse&&(p.owner.type==='ground'||p.owner.type==='pawn')).map(p=>[p.id,owner(p.owner),p.mechCorpse!.mechKind,p.mechCorpse!.heading,mechanoidVisualMask(p.mechCorpse!)]);
  const departed=(world.raids?.departed??[]).map(a=>[a.pawnId,cell(a.cell)]);
- const data=frozenDataCopy297({map:[world.seed,world.width,world.height],human,animalGroups,animalCargo,mechanical,mechanicalBodies,departed,
-  humanCarry:groupHumanCarryPairs257(world).map(p=>[p.carrierId,p.patientId])});
+ const prior=held&&ownedDependencies297.has(held)?held.data as Record<string,unknown>:undefined;
+ const keep=(old:unknown,fresh:unknown):unknown=>old!==undefined&&equalDependencyValue297(old,fresh)?old:frozenDataCopy297(fresh);
+ const keepRows=(old:unknown,fresh:readonly unknown[]):unknown=>{
+  const rows=Array.isArray(old)?old as readonly unknown[]:undefined,out:unknown[]=new Array(fresh.length);let same=!!rows&&rows.length===fresh.length;
+  for(let i=0;i<fresh.length;i++){const row=keep(rows?.[i],fresh[i]);if(row!==rows?.[i])same=false;out[i]=row;}
+  return same?rows:Object.freeze(out);
+ };
+ const priorGroups=Array.isArray(prior?.animalGroups)?prior.animalGroups as readonly (readonly unknown[])[]:undefined;
+ let sameGroups=!!priorGroups&&priorGroups.length===animalGroups.length;
+ const groups=animalGroups.map(([species,rows],i)=>{
+  const old=priorGroups?.[i],match=Array.isArray(old)&&old.length===2&&old[0]===species?old:undefined,kept=keepRows(match?.[1],rows as unknown[]);
+  if(match&&kept===match[1])return match;sameGroups=false;return Object.freeze([species,kept]);
+ });
+ const data=Object.freeze({map:keep(prior?.map,[world.seed,world.width,world.height]),human:keepRows(prior?.human,human),animalGroups:sameGroups?priorGroups:Object.freeze(groups),
+  animalCargo:keepRows(prior?.animalCargo,animalCargo),mechanical:keepRows(prior?.mechanical,mechanical),mechanicalBodies:keepRows(prior?.mechanicalBodies,mechanicalBodies),departed:keepRows(prior?.departed,departed),
+  humanCarry:keepRows(prior?.humanCarry,groupHumanCarryPairs257(world).map(p=>[p.carrierId,p.patientId]))});
  const result=Object.freeze({format:'actor-phase-dependencies-297-1' as const,data});ownedDependencies297.add(result);return result;
 }
 const equalDependencyValue297=(x:unknown,y:unknown):boolean=>{

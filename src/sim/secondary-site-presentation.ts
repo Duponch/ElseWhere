@@ -1,4 +1,4 @@
-import {registeredMapPresentation} from './world-map-presentation.ts';
+import {registeredMapPresentation,registeredMapPresentationView} from './world-map-presentation.ts';
 import {validRegisteredPresentation} from './world-map-projection-save.ts';
 import {alertManhunter,alertDownedColonist} from './status-alert-rules.ts';
 import {MAX_WILDLIFE} from './wildlife-state.ts';
@@ -54,6 +54,15 @@ export function campaignPresentation(world:World):World {
     createdAt:root.secondarySite.createdAt,visitIds:[...root.secondarySite.visit?.memberIds??[]],
     ...root.schemaVersion>=242?{incidents:otherMapIncidents(source)}:{}};
   return cached.view;
+}
+
+/** The object campaignPresentation() returns for the selected map, when that
+ * projection already exists; its fields are NOT refreshed here. For an identity
+ * check only: every reader of its contents calls campaignPresentation. */
+export function campaignPresentationView(world:World):World|undefined {
+  if(world.worldMaps)return registeredMapPresentationView(world);
+  const root=campaignAuthority(world);if(!root.secondarySite)return root;
+  const cached=projections.get(root);return cached&&cached.source===selectedMap(root)?cached.view:undefined;
 }
 
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);

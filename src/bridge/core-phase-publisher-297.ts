@@ -91,7 +91,7 @@ export class CorePhasePublisher297 {
   for(const kind of ['human','animal','mechanical'] as const){const actors=populations[kind],layout=before.anchor.layout[kind];
    if(actors.length!==layout.length||layout.some((id,index)=>actors[index]?.id!==id)){this.requestFull();return;}
   }
-  const dependencies=captureActorPhaseDependencies297(world);
+  const dependencies=captureActorPhaseDependencies297(world,this.pendingDependencies297??before.dependencies);
   // Compared with the latest baseline, including patches not yet sent. Only
   // contact/animation pose and carried-pile changes of existing humans can
   // travel as frontier patches; anything else still requires a genuine Full.
@@ -211,13 +211,25 @@ export class CorePhasePublisher297 {
   for(const p of world.projectiles??[]){const f=p.flight,durationCore=Math.max(.001,Math.hypot(f.destination.x-f.origin.x,f.destination.z-f.origin.z)/f.speedPerCoreTick),total=Math.ceil(durationCore);
    retained.set(p.id,frozenDataCopy297({id:p.id,emittedAtCore:p.emittedAtCore,endCore:p.arrival?p.advancedAtCore:p.emittedAtCore+total,durationCore,delayCore:total-durationCore,from:{x:f.origin.x,z:f.origin.z},to:{x:f.destination.x,z:f.destination.z},emp:p.weaponItem==='emp-launcher'}));}
   for(const[id,t]of retained)if(t.endCore<core-640)retained.delete(id);
-  const dependencies=actorMode297==='frontier'?captureActorPhaseDependencies297(world):undefined;
+  const dependencies=actorMode297==='frontier'?captureActorPhaseDependencies297(world,this.pendingDependencies297??this.state?.dependencies):undefined;
   const piles=actorMode297==='frontier'?new Map(world.piles.map(p=>[p.id,frozenDataCopy297(p) as Readonly<MaterialPile>])):undefined;
   // Runtime invokes this AFTER its actual snapshots.encode completed. The
   // closed codec alone enrolls tiles. A read-only peek can never repair them.
   const capturedTerrain=actorMode297==='frontier'?peekTerrainJournalCursor(world.tiles):undefined,terrainCursor=capturedTerrain&&Object.freeze(capturedTerrain);
   const metadata:CoreFullPhaseMetadata297=frozenDataCopy297({mapId:anchor.mapId,core,projectilesRetained:[...retained.values()],...actorMode297?{actorMode297}:{}}),nextTracks=new Map<number,PriorTrack>();
-  for(const track of tracks)nextTracks.set(track.id,{sources:track.segments.slice(),values:track.segments.map(value=>frozenDataCopy297(value))});
+  // Same rule as captureTracks: the Recorder owns segment identities, so a
+  // segment already copied at the committed baseline keeps that owned copy
+  // (stagger/stun arrays may be aliased: those are compared by value).
+  const committed=this.state?.tracks;
+  for(const track of tracks){
+   const prior=committed?.get(track.id),current=track.segments,values:PresentationSegment[]=new Array(current.length);
+   const offset=prior&&current.length?prior.sources.indexOf(current[0]!):-1;
+   for(let i=0;i<current.length;i++){
+    const piece=current[i]!,at=offset<0?-1:offset+i,held=at>=0&&at<prior!.sources.length&&prior!.sources[at]===piece?prior!.values[at]:undefined;
+    values[i]=held!==undefined&&!((own(piece,'stagger')||own(piece,'stuns'))&&!sameCoreValue297(held,piece))?held:frozenDataCopy297(piece);
+   }
+   nextTracks.set(track.id,{sources:current.slice(),values});
+  }
   return{metadata,anchor,core,generation,tracks:nextTracks,retained,actorMode297,dependencies,terrainCursor,piles};
  }
  commitFull(prepared:ReturnType<CorePhasePublisher297['prepareFull']>,sentAt:number):void {
