@@ -121,7 +121,7 @@ export function readCorePhaseData297(raw:unknown,a:CorePhaseAnchor297,expectedCo
  const captured=isCapturedCoreData297(raw),v=(captured?raw:copyCoreData297(raw)) as unknown;
  capturedShape297=captured;
  try{
- if(!rec297(v)||!exact(v,['type','epoch','mapId','baseRevision','phaseSeq','nextId','fromCore','toCore','speed','actors','tracks','projectiles','audioCues',...own(v,'poses297')?['poses297']:[],...own(v,'doors297')?['doors297']:[],...own(v,'piles297')?['piles297']:[]])||!(v.type==='actor-phase-297'||v.type==='actor-frontier-297'&&actorMode==='frontier')||v.epoch!==a.epoch||v.mapId!==a.mapId||v.baseRevision!==a.revision||v.phaseSeq!==expectedSeq||v.fromCore!==expectedCore||!coreInteger297(v.nextId,minimumNextId)||!coreInteger297(v.toCore,expectedCore)||v.type==='actor-phase-297'&&Math.floor(v.toCore/10)!==Math.floor(a.core/10)||(typeof v.speed!=='number'||![0,1,3,6].includes(v.speed)))throw Error('Invalid Core phase header/predecessor');
+ if(!rec297(v)||!exact(v,['type','epoch','mapId','baseRevision','phaseSeq','nextId','fromCore','toCore','speed','actors','tracks','projectiles','audioCues',...own(v,'poses297')?['poses297']:[],...own(v,'doors297')?['doors297']:[],...own(v,'piles297')?['piles297']:[],...own(v,'paths297')?['paths297']:[]])||!(v.type==='actor-phase-297'||v.type==='actor-frontier-297'&&actorMode==='frontier')||v.epoch!==a.epoch||v.mapId!==a.mapId||v.baseRevision!==a.revision||v.phaseSeq!==expectedSeq||v.fromCore!==expectedCore||!coreInteger297(v.nextId,minimumNextId)||!coreInteger297(v.toCore,expectedCore)||v.type==='actor-phase-297'&&Math.floor(v.toCore/10)!==Math.floor(a.core/10)||(typeof v.speed!=='number'||![0,1,3,6].includes(v.speed)))throw Error('Invalid Core phase header/predecessor');
  if(!validCoreAudioCues297(v.audioCues,Number(v.fromCore),Number(v.toCore)))throw Error('Invalid confirmed Core audio cues');
  if(!arr297(v.actors)||v.actors.length>a.layout.human.length+a.layout.animal.length+a.layout.mechanical.length||!v.actors.every(row=>actor(row,a))||new Set(v.actors.map(row=>Number((row as unknown as Data).id))).size!==v.actors.length)throw Error('Invalid physical actor phase');
  if(!arr297(v.tracks)||v.tracks.length>a.nextId||new Set(v.tracks.map(row=>rec297(row)?row.id:undefined)).size!==v.tracks.length)throw Error('Invalid Core motion patches');
@@ -136,8 +136,16 @@ export function readCorePhaseData297(raw:unknown,a:CorePhaseAnchor297,expectedCo
  if(own(v,'poses297')){const poses=v.poses297;if(v.type!=='actor-frontier-297'||!arr297(poses)||poses.length===0||poses.length>a.layout.human.length||!poses.every(row=>humanPose(row,a))||new Set(poses.map(row=>(row as Data).id)).size!==poses.length)throw Error('Invalid Core pose patches');}
  if(own(v,'doors297')){const doors=v.doors297;if(v.type!=='actor-frontier-297'||!arr297(doors)||doors.length===0||doors.length>Number(v.nextId)||!doors.every(row=>doorPatch(row,Number(v.nextId)))||new Set(doors.map(row=>(row as Data).id)).size!==doors.length)throw Error('Invalid Core door patches');}
  if(own(v,'piles297')){const piles=v.piles297;if(v.type!=='actor-frontier-297'||!arr297(piles)||piles.length===0||piles.length>Number(v.nextId)||!piles.every((row,i)=>pilePatch(row,Number(v.nextId))&&(i===0||Number((row as Data).id)>Number((piles[i-1] as Data).id))))throw Error('Invalid Core pile patches');}
+ if(own(v,'paths297')){const paths=v.paths297,rows=new Map((v.actors as Data[]).map(row=>[row.id,row]));if(v.type!=='actor-frontier-297'||!arr297(paths)||paths.length===0||paths.length>v.actors.length||!paths.every((row,i)=>pathKeep(row,a,rows)&&(i===0||Number((row as Data).id)>Number((paths[i-1] as Data).id))))throw Error('Invalid Core path patches');}
  return v as unknown as CorePhaseEnvelope297;
  }finally{capturedShape297=false;}
+}
+/** Frontier path patch: an actor of this packet whose row carries no cells,
+ * and how many cells of the path the renderer holds remain (its tail). */
+function pathKeep(row:unknown,a:CorePhaseAnchor297,rows:ReadonlyMap<unknown,Data>):boolean {
+ if(!rec297(row)||!exact(row,['id','keep'])||!coreInteger297(row.id,1,a.nextId-1)||!coreInteger297(row.keep,0,a.width*a.height))return false;
+ const fields=rows.get(row.id)?.fields;
+ return rec297(fields)&&arr297(fields.path)&&fields.path.length===0;
 }
 /** Frontier pile patch: an id and the pile's complete own-data record (with
  * its identity, quantity, item, kind and owner), or null once it is gone. */

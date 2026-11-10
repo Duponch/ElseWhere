@@ -43,6 +43,10 @@ Deux filets de sécurité automatiques ne fonctionnent plus. Les régressions qu
 
 ## 2. Refondre la publication du Worker vers l'affichage
 
+**État au 10 novembre : première tranche faite.** La part de la publication dans le Worker passe de ≈ 32 % à ≈ 24 % sur Les Forges à ×6 (même banc, passages alternés), et le jeu y avance de 12 à 16 % plus vite ; les paquets d'acteurs passent de 65 à 36 Ko à ×1. Détail dans l'[audit](audit-performance-2026-11-05.md), section « Publication du Worker allégée (10 novembre) ». Le contrôle de présentation échoue toujours, mais sur le seul retard des changements de vitesse (chantier 3).
+
+**Reste dans ce chantier : la publication complète** (≈ 980 Ko, une par seconde, 11 à 12 % du Worker et ≈ 80 ms au fil principal). Par ordre de gain attendu : fiche d'âge des plantes par une voie compacte (272 Ko), compteurs des colons et des animaux par colonnes au lieu de fiches entières (393 Ko), sections immuables retenues (66 Ko), horloge de pourriture des tas (59 Ko). Outil à utiliser pour chaque étape : `scripts/publication-replay-record.ts` (mêmes messages, ou même contenu reconstruit, qu'avant).
+
 - **Constat** (banc du vrai Worker `scripts/perf-worker-run.ts`, Les Forges, ×6, parts du profil) : la simulation (`stepWorld`) pèse ≈ 50 % du temps du Worker et la publication ≈ 35 %. Principaux postes :
   - `publishDuePhysical297` ≈ 22 % (dont publications complètes `publishActualFull297` ≈ 12 %) ;
   - préparation des phases (`preparePhase`) ≈ 6 % ;

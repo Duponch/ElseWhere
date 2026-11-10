@@ -102,7 +102,14 @@ export interface CorePhaseEnvelopeFields297 {
  readonly doors297?:readonly CoreDoorPatch297[];
  /** Frontier only, present only when non-empty; ascending ids. */
  readonly piles297?:readonly CorePilePatch297[];
+ /** Frontier only, present only when non-empty; ascending ids. */
+ readonly paths297?:readonly CorePathKeep297[];
 }
+/** Frontier path patch. The row of this actor in the same packet carries an
+ * empty `path`: its real path is the last `keep` cells of the path the renderer
+ * already holds for that actor (from its previous row in this anchor). An actor
+ * that walks along its route sends a count instead of every remaining cell. */
+export interface CorePathKeep297 {readonly id:number;readonly keep:number}
 /** A real discriminated union preserves reply narrowing in SimulationClient. */
 export type CorePhaseEnvelope297=
  |(CorePhaseEnvelopeFields297&{readonly type:'actor-phase-297'})

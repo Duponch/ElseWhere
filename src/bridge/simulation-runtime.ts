@@ -142,8 +142,11 @@ const CALM_FULL_MAX_AGE_MS=500;
  * time. A small colony keeps CALM_FULL_INTERVAL_MS; a large one refreshes its
  * slowly changing world state (jobs, items, plants, needs…) at most every
  * CALM_FULL_INTERVAL_MAX_MS. Actors, doors and carried piles keep streaming in
- * phase packets; commands, pauses and hard changes still publish at once. */
-const CALM_FULL_COST_RATIO=8,CALM_FULL_INTERVAL_MAX_MS=1000;
+ * phase packets; commands, pauses and hard changes still publish at once.
+ * The ratio was 8 until a Full became about a fifth cheaper here (10 November):
+ * it follows that cost so the main thread keeps the same rhythm of adoptions
+ * (about one per second on a large colony) instead of a faster one. */
+const CALM_FULL_COST_RATIO=10,CALM_FULL_INTERVAL_MAX_MS=1000;
 /** Smoothed wall cost of an ordinary (non-checkpoint) Full publication. */
 let fullPublicationCostMs=0;
 const calmFullIntervalMs=():number=>Math.min(CALM_FULL_INTERVAL_MAX_MS,Math.max(CALM_FULL_INTERVAL_MS,fullPublicationCostMs*CALM_FULL_COST_RATIO));
@@ -585,8 +588,13 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
 
 // Wall time funds a logical batch once. Each task commits at most one real
 // tick, keeping observers/publication atomic without monopolizing the port.
+/* Like the campaign projection, the selected physical map cannot change
+ * within one committed Core observation: it is looked up once per scope. */
+let physicalMemo297:{owner:CampaignState;value:World|undefined}|undefined;
 function physicalVisibleWorld297():World|undefined {
- return world?physicalVisibleCoreMap297(world as World):undefined;
+ if(!world)return undefined;
+ if(presentationScope297&&physicalMemo297?.owner===world)return physicalMemo297.value;
+ const value=physicalVisibleCoreMap297(world as World);if(presentationScope297)physicalMemo297={owner:world,value};return value;
 }
 function publishActualFull297():void {
  // Observers were already captured at the actual Core boundary. Calling
@@ -643,7 +651,7 @@ function runCoreTask297(now:number):void {
  const threatsChanged=result.localTickCompleted||result.maps.some(row=>row.observerEffects297.threatsChanged);
  const encounter=pendingCaravan261(world),entry=pendingWorldEntry263(world),threatPaused=threatsChanged&&urgentThreats.capture(world,threatPauseMode),paused=!!encounter||!!entry||threatPaused;
  if(threatPaused){speed=0;resetSimulationClock(now);}if(encounter)holdEncounterPause261(now);if(entry)holdWorldEntry263(now);
- presentationScope297=true;presentationMemo297=undefined;
+ presentationScope297=true;presentationMemo297=undefined;physicalMemo297=undefined;
  try{
  const visible=physicalVisibleWorld297();
  if(visible){
@@ -684,7 +692,7 @@ function runCoreTask297(now:number):void {
   }
   publishDuePhysical297(paused,batch.remaining===0);
  }else if(result.localTickCompleted||paused)publishCapturedTick();
- }finally{presentationScope297=false;presentationMemo297=undefined;}
+ }finally{presentationScope297=false;presentationMemo297=undefined;physicalMemo297=undefined;}
  if(paused){if(encounter)startEncounter261();if(entry)startWorldEntry263();return;}
  if(batch.remaining===0){coreBatch297=undefined;if(wakeDue)regularTasks.request();}else regularTasks.request();
 }

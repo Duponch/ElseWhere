@@ -100,7 +100,8 @@ const scope: any = {
   onmessage: null,
   postMessage(message: any) {
     if (message?.type === 'reply') replies.set(message.id, message);
-    message = expandPaths(message);
+    // RAW=1 records the messages as sent (path patches not rebuilt), to inspect the wire.
+    if (!process.env.RAW) message = expandPaths(message);
     const tick = message?.publication?.world?.tick ?? message?.world?.tick ?? message?.summary?.tick;
     if (typeof tick === 'number') { lastTick = Math.max(lastTick, tick); if (firstTick < 0) firstTick = tick; }
     // A reply's save text is hashed apart; operation progress carries wall durations only in older builds.

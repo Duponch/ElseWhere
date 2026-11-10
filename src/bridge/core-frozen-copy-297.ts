@@ -72,6 +72,16 @@ export function captureCoreActorFast297(kind:'human',index:number,actor:Pawn):Co
 export function captureCoreActorFast297(kind:'animal',index:number,actor:WildAnimal):CoreActorProjection297;
 export function captureCoreActorFast297(kind:'mechanical',index:number,actor:Mechanoid):CoreActorProjection297;
 export function captureCoreActorFast297(kind:CoreActorProjection297['kind'],index:number,actor:Pawn|WildAnimal|Mechanoid):CoreActorProjection297 {
+ return captureActor(kind,index,actor,false);
+}
+/* The row captureCoreActorFast297 makes, with the same refusals for every
+ * field, except that the path's cells are not copied: `path` (still required
+ * own data) becomes an empty frozen array. For a frontier row whose path the
+ * renderer rebuilds from the cells it already holds (see CorePathKeep297). */
+export function captureCoreActorHeldPath297(kind:CoreActorProjection297['kind'],index:number,actor:Pawn|WildAnimal|Mechanoid):CoreActorProjection297 {
+ return captureActor(kind,index,actor,true);
+}
+function captureActor(kind:CoreActorProjection297['kind'],index:number,actor:Pawn|WildAnimal|Mechanoid,heldPath:boolean):CoreActorProjection297 {
  const required:readonly string[]=kind==='human'?CORE_HUMAN_REQUIRED297:kind==='animal'?CORE_ANIMAL_REQUIRED297:CORE_MECH_REQUIRED297;
  const optional:readonly string[]=kind==='human'?CORE_HUMAN_OPTIONAL297:kind==='animal'?CORE_ANIMAL_OPTIONAL297:CORE_MECH_OPTIONAL297;
  const source=actor as unknown as Record<string,unknown>,data:Record<string,unknown>={};
@@ -83,6 +93,7 @@ export function captureCoreActorFast297(kind:CoreActorProjection297['kind'],inde
  };
  for(const key of required)take(key,true);
  for(const key of optional)take(key,required.includes(key));
+ if(heldPath)data.path=[];
  return frozenDataCopy297({kind,id:actor.id,index,fields:data}) as unknown as CoreActorProjection297;
 }
 

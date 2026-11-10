@@ -24,6 +24,8 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Ouverture d’un panneau du bas, Les Forges (Travail / Planning / Faune) | 506 / 786 à 1 058 / 296 ms | **61 / 62 / 32 ms** à la réouverture, 142 / 160 / 58 ms la première fois |
 | Les Forges à ×1, 15 s : images au-dessus de 33 / 50 ms, p95 | 69 / 42, p95 29 ms | **39 / 29, p95 17 ms** |
 | Worker seul, Les Forges à ×1 : temps réel tenu | 78 à 92 % | **≈ 100 %** (plantes, besoins et humeur à la cadence de RimWorld) |
+| Worker seul, Les Forges à ×6 : ticks joués en 20 s (publication allégée, 10 novembre) | 181 | **204 à 212** (+12 à +16 %) |
+| Paquet d’acteurs envoyé à l’affichage, Les Forges à ×1 / ×6 | 65 / 80 Ko | **36 / 59 Ko** |
 
 - **Exactitude.** Après chaque optimisation, l’état complet sérialisé reste identique au bit près sur les deux sauvegardes de référence.
 - **Tests.** Chaque lot a été comparé test par test au commit d’origine : 0 régression.
@@ -948,6 +950,59 @@ Aucun échec ne vient des deux corrections. Attention, en comparant à la liste 
 
 Le retard vient donc du fil principal : adoption des messages ou lecture du temps par l'affichage (`src/render/MotionTimeline.ts`). Piste à vérifier, pas une cause établie : en mode fin, chaque changement de vitesse remet le défilement en attente d'une réserve (`buffering`) et réinitialise l'estimation du débit confirmé. L'enregistrement des lots du Worker du contrôle (`HARVEST_TRACE=1`) est périmé : il cherche `stepWorld(world);` dans `simulation.worker.ts`, qui ne fait plus que déléguer à `simulation-runtime.ts`. Il faut le refaire côté fil principal avant de corriger.
 
+### Publication du Worker allégée (10 novembre)
+
+Chantier obligatoire n° 2 ([note](chantiers-obligatoires.md)), première tranche.
+
+**Constat.** Profil du vrai Worker (`scripts/perf-worker-run.ts`, Les Forges, ×6, 20 s) : la simulation prend 63 % du temps et tout ce qui sert à publier vers l'affichage 32 %, en une douzaine de postes de 1 à 5 % chacun. À ×6 le Worker ne joue que 8,5 à 9 ticks par seconde pour 36 demandés ; à ×1 il tient le temps réel avec presque tout son temps.
+
+**Ce qui change.** Les cinq premiers points ne changent aucun message envoyé.
+- **Projection de campagne.** À chaque tick, le Worker reconstruisait la vue de campagne de la carte affichée (personnes hors carte, lits, choix de cartes et de groupes) alors que seule une publication complète la lit. Un tick calme vérifie maintenant seulement que la carte affichée est la même ; la vue est reconstruite juste avant d'être encodée. Une erreur de cohérence de cette vue est donc signalée à la publication complète suivante (au plus 1 s plus tard) au lieu du tick même.
+- **Dépendances des acteurs** (apparence, pose, lit, cargaison… comparées à chaque tick pour savoir si les paquets d'acteurs suffisent) : une ligne égale à celle de la capture précédente garde sa copie au lieu d'être recopiée, et la comparaison suivante s'arrête à l'identité.
+- **Trajectoires d'une publication complète** : un segment déjà copié à la publication précédente garde sa copie (même règle que les paquets d'acteurs).
+- **Enregistreur de mouvements** : le schéma et l'heure locale sont lus une fois par capture au lieu de trois fois par acteur.
+- **Carte affichée** : cherchée une fois par tick publié au lieu de trois.
+- **Chemins des acteurs.** Chaque paquet d'acteurs renvoyait le chemin restant complet de chaque acteur en marche : 2 500 cases, 70 % du paquet. Un acteur qui avance sur sa route n'envoie plus que le nombre de cases restantes ; l'affichage garde la fin du chemin qu'il détient déjà (champ `paths297`). Un chemin replanifié, allongé ou dont une case a changé est renvoyé en entier, comme la première ligne après une publication complète. Le lecteur strict (`core-phase-data-297.ts`, épinglé par empreinte) accepte ce champ et le vérifie ; l'empreinte est mise à jour.
+- **Rythme des publications complètes.** Leur intervalle valait 8 fois leur coût (entre 250 ms et 1 s). Ce coût ayant baissé d'environ un cinquième, elles devenaient plus fréquentes (1,2 par seconde au lieu de 1,0 sur Les Forges à ×1), donc plus coûteuses pour le fil principal. Le facteur passe à 10 : même rythme qu'avant.
+
+**Exactitude.** Nouvel outil `scripts/publication-replay-record.ts` : le vrai Worker de présentation sous une horloge simulée, où le temps et l'ordre des tâches suivent un script fixe. Deux versions du code qui publient la même chose donnent le même enregistrement, message par message ; l'empreinte couvre les types, l'ordre des clés, les nombres exacts et les références partagées. Les chemins en compteur y sont reconstruits indépendamment du lecteur, puis comparés aux chemins complets de l'ancien code. Résultat sur Les Éclaircies et Les Forges, avec deux scripts d'horloge chacun : 268, 362, 202 et 282 messages identiques, sauvegarde finale identique.
+
+**Mesures.** Worker seul, Les Forges, 20 s après 8 s de chauffe, passages alternés entre le commit de départ et ce lot.
+
+| Mesure | Avant | Après |
+|---|---|---|
+| Ticks joués en 20 s à ×6 (6 passages chacun) | 181 (179 à 184) | **204 à 212** (197 à 222) |
+| Ticks joués en 20 s à ×3 (2 passages) | 186 | **205** |
+| Temps processeur du Worker à ×1 (temps réel tenu) | 98 à 104 % | **≈ 90 %** |
+| Paquet d'acteurs à ×6 : taille, copie à l'envoi | 80 Ko, 2,0 ms | **59 Ko, 1,3 ms** |
+| Paquet d'acteurs à ×1 : taille, copie à l'envoi | 65 Ko, 1,7 ms | **36 Ko, 0,7 ms** |
+| Publications complètes par seconde, ×1 / ×6 | 1,0 / 0,9 | 1,0 / 0,9 |
+| Les Éclaircies à ×6 : part de la vitesse demandée (1 passage) | 90,5 % | 93,7 % |
+
+Parts du profil à ×6 (un passage chacun) : publication 31,9 % → **23,7 %** du temps du Worker.
+
+| Poste | Avant | Après |
+|---|---|---|
+| Projection de campagne à chaque tick | 4,4 % | 0,6 % (dans la publication complète) |
+| Dépendances des acteurs à chaque tick | 3,7 % | 2,3 % |
+| Enregistreur de mouvements | 1,8 % | 1,0 % |
+| Préparation des paquets d'acteurs | 5,4 % | 5,0 % |
+| Envoi des paquets d'acteurs | 2,3 % | 1,4 % |
+| Publication complète (hors projection) | 12,4 % | 11,2 % |
+| Cues sonores | 1,4 % | 1,6 % |
+| Recherche de la carte affichée | 0,8 % | 0,5 % |
+
+**Tests.** 127 fichiers du pont et des publications : 755 réussis, les mêmes échecs connus qu'avant, dont la suite stricte de capture des phases (23 cas) avec la nouvelle empreinte. Nouveaux tests : chemins en compteur (12 cas : marche réelle d'un colon de bout en bout, chemin remplacé ou modifié, refus du lecteur) et réutilisation des dépendances (3 cas). Le contrôle de présentation échoue comme avant, sur le seul retard des changements de vitesse (chantier n° 3).
+
+**Ce qui reste.**
+- **La publication complète** : ≈ 100 ms dans le Worker, une par seconde, donc 11 à 12 % par construction. Elle pèse ≈ 980 Ko sur Les Forges :
+  - colons 250 Ko et animaux 143 Ko, renvoyés en entier parce que leurs compteurs (faim, repos, âge) changent à chaque tick ;
+  - plantes 272 Ko : ≈ 1 080 plantes par publication renvoyées en entier parce que leur fiche d'âge a avancé (une voie compacte comme celle de la croissance suffirait) ;
+  - tas 59 Ko (horloge de pourriture), travaux 47 Ko, températures 36 Ko ;
+  - sections qui ne changent jamais 66 Ko (factions, zones de culture, politiques).
+- **Le paquet d'acteurs d'un tick complet** : les 321 acteurs y figurent, car leurs compteurs de décision changent à chaque tick.
+- Postes fixes par publication complète : apparence des plantes 2,4 %, comparaison des ressources 2,9 %, sections auxiliaires 1,9 %.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.
@@ -1031,6 +1086,7 @@ Les autres rôles de pièce relus (atelier 27 par établi, cuisine 28 par cuisin
 | `scripts/perf-newgame-profile.ts` | Nouvelle partie par le vrai Worker, en Node : génération de la planète, du site et de la colonie, étapes et profil |
 | `scripts/perf-save-bench.ts` | Débit de simulation et empreinte d’état ; `PROFILE=…` pour un profil CPU, `VERIFY_TERRAIN_CACHES=1` pour la vérification des caches de terrain |
 | `scripts/perf-worker-run.ts` | Worker de production à une vitesse donnée : ticks tenus, publications par seconde et tailles, `FULL_REASONS=1` pour les causes de publication complète |
+| `scripts/publication-replay-record.ts`, `publication-replay-compare.mjs` | Enregistrement de tous les messages du Worker sous une horloge simulée, puis comparaison de deux versions du code : identique ou premier message différent |
 | `scripts/perf-client-profile.mjs` | Client réel (Chromium, WebGPU) : images/s, percentiles, longues tâches, profils en pause, ×1 et ×6 |
 | `scripts/perf-chunk-bench.mjs` | Reconstruction forcée de tous les chunks de végétation, avec empreinte de la géométrie |
 | `scripts/perf-profile-classify.mjs` | Longues tâches d’un profil, totalisées par cause |
