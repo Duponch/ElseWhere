@@ -26,7 +26,7 @@ import {animalHaulDoorPassable282} from './animal-haul-door-282.ts';
 import {isSchema282OrLater} from './schema-compatibility-257.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 import { animalSpecies } from './animal-species.ts';
-import {captureStructureNavigation,type StructureNavigationGeometry,filteredStructureEntries} from './structure-navigation.ts';
+import {captureStructureNavigation,type StructureNavigationGeometry,filteredStructures} from './structure-navigation.ts';
 import type { Cell,World } from './types.ts';
 import type {DistanceField} from './navigation-types.ts';
 /** Ranked food candidates resume a single frontier. Group once rather than
@@ -62,7 +62,7 @@ export function createAnimalNavigationReader(world:World,getGeometry?:()=>Struct
 /** Short-lived capture: no world mutation may interleave its searches/steps. */
 /** `allowClosedGate` is for planning a handler-led route only. Physical steps
  * must use the default navigation after the handler opens each passage. */
-const isAnimalSolidCandidate=(s:World['structures'][number]):boolean=>s.kind==='vent'||s.kind==='wall'||s.kind==='cooler'||s.kind==='fence'||s.kind==='table'||isPassageDoor(s.kind);
+const isPassageDoorStructure=(s:World['structures'][number]):boolean=>isPassageDoor(s.kind);
 /* Cells of the solid structure kinds for animals (vent, wall, cooler, fence
  * unless passable or flying, legacy tables): kinds never change, so the set is
  * fixed for a shared geometry. `mask` holds the in-map cells, `cells` every
@@ -92,15 +92,15 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
   let stand=physicalNow?undefined:captureStandability(world,geometry);
   const liveDoors=physicalNow?new Map<number,World['structures']>():undefined;
   const add=(s:Parameters<typeof footprintCells>[0])=>{for(const c of footprintCells(s))solids.add(c.z*width+c.x);};
-  // Only solid kinds and passage doors contribute below; when the geometry is
-  // the shared index of this world, iterate that cached subset (same order).
-  const solidEntries=geometry===captureStructureNavigation(world)?filteredStructureEntries(world,'animal-navigation-solids',isAnimalSolidCandidate):geometry.entries;
-  for(const {structure:s,cells} of solidEntries) {
-    if(isPassageDoor(s.kind)){
-      if(liveDoors){const index=s.z*width+s.x,row=liveDoors.get(index)??[];row.push(s);liveDoors.set(index,row);}
-      else if(s.door?.forbidden||!allowClosedGate&&(!s.door?.open||doorOpenness(s,world.tick)<1-1e-9))solids.add(s.z*width+s.x);
-    }
-  }
+  // Only passage doors contribute below (solid kinds come from the mask); when
+  // the geometry is the shared index of this world, read its cached door list
+  // (same structures, same order as filtering its entries).
+  const door=(s:World['structures'][number])=>{
+    if(liveDoors){const index=s.z*width+s.x,row=liveDoors.get(index)??[];row.push(s);liveDoors.set(index,row);}
+    else if(s.door?.forbidden||!allowClosedGate&&(!s.door?.open||doorOpenness(s,world.tick)<1-1e-9))solids.add(s.z*width+s.x);
+  };
+  if(geometry===captureStructureNavigation(world))for(const s of filteredStructures(world,'passage-doors',isPassageDoorStructure))door(s);
+  else for(const {structure:s} of geometry.entries)if(isPassageDoor(s.kind))door(s);
   for(const j of world.jobs)if(jobBlocksTransit(world,j))add(j);
   const liveDoorBlocked=(index:number):boolean=>{
     const doors=liveDoors?.get(index);if(!doors)return false;

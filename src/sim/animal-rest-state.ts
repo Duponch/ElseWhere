@@ -41,6 +41,13 @@ export const animalCarrier=(w:World,id:number):Pawn|undefined=>{
   }
   return rescuer??(w.schemaVersion>=256?groupAnimalCarrier256(w,id):undefined);
 };
+/** `!!animalCarrier(w,id)||animalClaimed(w,id)` with one pass over the pawns:
+ * a pawn that carries the animal (ship casket carry, rescue carry) also serves
+ * it, so the pawn part of animalCarrier adds nothing to the claim test. */
+export function animalCarriedOrClaimed(w:World,id:number):boolean {
+  for(const p of w.pawns)if(pawnServesAnimal(p,id))return true;
+  return w.schemaVersion>=256&&(!!groupAnimalCarrier256(w,id)||groupAnimalClaimed256(w,id));
+}
 export function animalSpotClaimed(w:World,id:number,exceptAnimal?:number,exceptPawn?:number):boolean {
   return w.pawns.some(p=>p.id!==exceptPawn&&p.animalRescue?.spotId===id&&p.animalRescue.animalId!==exceptAnimal)
     ||!!w.wildlife?.animals.some(a=>a.id!==exceptAnimal&&a.animalRest?.spotId===id);

@@ -4,7 +4,7 @@ import {claimLocalActorBed256,forgetLocalActorBed256,forgetLocalBedOwners256,loc
 import { canStandAt } from './furniture-travel.ts';
 import { veterinaryCareSpeciesAllowed,veterinaryNeedsRest } from './veterinary-rules.ts';
 import { autoSlaughterTargets,slaughterIntent } from './auto-slaughter.ts';
-import { animalCarrier,animalClaimed,animalSpotClaimed,releaseAnimalRescue } from './animal-rest-state.ts';
+import { animalCarrier,animalCarriedOrClaimed,animalClaimed,animalSpotClaimed,releaseAnimalRescue } from './animal-rest-state.ts';
 import type { Cell,Structure,World } from './types.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 import {captureAnimalAreaPolicy287,type AnimalAreaPolicy287} from './animal-area-policy-287.ts';
@@ -43,7 +43,7 @@ export function reconcileAnimalRest(w:World):void {
     if(a.domestic?.bedId!==undefined&&(a.state==='dead'||a.health?.death||!w.structures.some(s=>s.id===a.domestic!.bedId&&s.kind==='animal-sleeping-spot'&&!s.medical)))forgetLocalActorBed256(w,a);
     const t=a.animalRest;if(!t)continue;
     const s=structureById(w,t.spotId);
-    const policy=a.state!=='downed'&&!animalCarrier(w,a.id)&&!animalClaimed(w,a.id)?captureAnimalAreaPolicy287(w,a):undefined;
+    const policy=a.state!=='downed'&&!animalCarriedOrClaimed(w,a.id)?captureAnimalAreaPolicy287(w,a):undefined;
     if(s&&policy&&!policy.has(s.z*w.width+s.x)){clearRest(w,a);continue;}
     if(!s||!animalSpotAvailable(w,s,a)||animalCarrier(w,a.id)||a.burning||a.flee||a.threat||a.retaliation||a.strike||a.manhunter||slaughterIntent(w,a,w.schemaVersion,targets)
       ||t.phase==='travel'&&(a.state!=='moving'||animalClaimed(w,a.id))
@@ -56,7 +56,7 @@ export interface AnimalRestContext {
   readArea?:(a:WildAnimal)=>AnimalAreaPolicy287|undefined;
 }
 export function processAnimalRest(w:World,a:WildAnimal,ctx:AnimalRestContext):boolean {
-  if(w.schemaVersion<221||!a.domestic||a.state==='dead'||a.state==='downed'||animalCarrier(w,a.id)||animalClaimed(w,a.id))return false;
+  if(w.schemaVersion<221||!a.domestic||a.state==='dead'||a.state==='downed'||animalCarriedOrClaimed(w,a.id))return false;
   const policy=ctx.readArea?ctx.readArea(a):captureAnimalAreaPolicy287(w,a),inside=(c:Cell)=>!policy||policy.has(c.z*w.width+c.x);
   const wanted=(ctx.medicalRest?a.food>=ctx.nutrition*.45:a.rest<.3||ctx.night&&a.rest<.75)&&!a.sleepUntilCore;
   const t=a.animalRest;
