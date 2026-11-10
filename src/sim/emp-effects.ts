@@ -5,6 +5,7 @@ import { empStructureActive,empStructureSupported,empAdaptedUntilCore277,empStun
 import { mergeSlowIntervals,travelEnd } from './travel-timing.ts';
 import type { LivingTarget } from './combat-target.ts';
 import type { Mechanoid } from './mechanoid-state.ts';
+import { filteredStructures } from './structure-navigation.ts';
 import type { Structure,World } from './types.ts';
 
 /** Already-resolved EMP contact. No health, armour, energy or random stream is
@@ -49,7 +50,10 @@ export function advanceEmp(world:World,core=isCorePhysicalSchema297(Number(world
   for(const mech of world.mechanoids??[])if(mech.emp&&core>=Math.max(empAdaptedUntilCore277(mech.emp),empStunUntilCore277(mech.emp))){
     delete mech.emp;changed=true;
   }
-  for(const structure of world.structures)if(structure.emp&&core>=structure.emp.untilCore){delete structure.emp;changed=true;}
+  // Only supported kinds ever hold an EMP state (applyEmpEffect and the save
+  // validator both require it) and kinds never change: the shared per-kind
+  // list visits the same holders as the whole array, ten times per tick.
+  for(const structure of filteredStructures(world,'emp-supported',s=>empStructureSupported(s.kind)))if(structure.emp&&core>=structure.emp.untilCore){delete structure.emp;changed=true;}
   // Uninstalling a battery does not preserve a permanent EMP flag. Its clock
   // continues while packed, like its ordinary self discharge.
   for(const packed of world.packed)if(packed.building.emp&&core>=packed.building.emp.untilCore){delete packed.building.emp;changed=true;}

@@ -3,6 +3,7 @@ import {STRUCTURE_DEFINITIONS,footprintCells} from './definitions.ts';
 import {STRUCTURE_SHOT_FILL,FRAME_SHOT_FILL,resourceShotFill,itemShotFill} from './combat-content.ts';
 import {isPassageDoor} from './door-rules.ts';
 import {peekStructureMembershipToken} from './structure-navigation.ts';
+import {resourceArrayDelta} from './resource-array-delta.ts';
 import {constructionFinalWipesPlants,constructionFrameWipesPlants} from './construction-plants.ts';
 import {actualAdditionalPlantOwners256} from './actual-plant-physical-masks-256.ts';
 import {naturalTerrainWalkable256} from './natural-terrain-movement-256.ts';
@@ -107,24 +108,12 @@ function removeResource256(capture:LiveResourceCapture256,resource:Resource256):
   const count=capture.species.get(defId)!-1;if(count)capture.species.set(defId,count);else capture.species.delete(defId);
  }
 }
-/** Follows the new array when it is the previous one with some resources
- * removed (order kept) and others appended. Anything else (a reorder, an
- * insertion, a replaced resource, a large change) returns false: rebuild. */
+/** Follows the new array when resources were only removed or appended
+ * (resourceArrayDelta); anything else returns false: rebuild. */
 function deriveResourceCapture256(world:World,capture:LiveResourceCapture256):boolean {
- const old=capture.source,next=world.resources,removed:Resource256[]=[];let i=0,j=0;
- for(;j<next.length;j++){
-  const resource=next[j];if(i<old.length&&old[i]===resource){i++;continue;}
-  let k=i+1;while(k<old.length&&old[k]!==resource)k++;
-  if(k>=old.length)break;
-  if(removed.length+k-i>RESOURCE_DELTA_LIMIT256)return false;
-  while(i<k)removed.push(old[i++]!);i++;
- }
- if(removed.length+old.length-i>RESOURCE_DELTA_LIMIT256||next.length-j>RESOURCE_DELTA_LIMIT256)return false;
- while(i<old.length)removed.push(old[i++]!);
- // An appended resource that was also removed was moved: not this pattern.
- if(removed.length&&j<next.length){const gone=new Set(removed);for(let t=j;t<next.length;t++)if(gone.has(next[t]!))return false;}
- for(const resource of removed)removeResource256(capture,resource);
- for(let t=j;t<next.length;t++)addResource256(world,capture,next[t]!);
+ const old=capture.source,next=world.resources,delta=resourceArrayDelta(old,next,RESOURCE_DELTA_LIMIT256);if(!delta)return false;
+ for(const resource of delta.removed)removeResource256(capture,resource);
+ for(let t=delta.appendedFrom;t<next.length;t++)addResource256(world,capture,next[t]!);
  resourceCaptures256.delete(old);capture.source=next;resourceCaptures256.set(next,capture);
  return true;
 }

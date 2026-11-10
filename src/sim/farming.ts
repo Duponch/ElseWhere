@@ -6,7 +6,7 @@ import { furnitureDuration,packedAt } from './furniture-rules.ts';
 import { constructionRecipe } from './construction-materials.ts';
 import { deconstructionDuration } from './deconstruction-rules.ts';
 import { footprintCells, footprintContains, JOB_DURATION, STRUCTURE_DEFINITIONS } from './definitions.ts';
-import { captureStructureNavigation } from './structure-navigation.ts';
+import { captureStructureNavigation,type StructureNavigationGeometry } from './structure-navigation.ts';
 import {geyserBlocksPlantOrFloor256} from './local-geyser-state-256.ts';
 import { isCrop, isPlant, plantGrowth, PLANT_DEFINITIONS, sowingTemperatureAllowed } from './plants.ts';
 import { TemperatureView, outdoorTemperature,temperatureAt } from './temperature.ts';
@@ -122,12 +122,23 @@ export function jobDuration(world: World, job: Job, capturedResource?:Resource|n
   }
   return JOB_DURATION[job.kind];
 }
-interface Context { resources: Map<number, Resource>; fixed: Set<number>; hydroBlocked?:Set<number>; temperatures:TemperatureView;sows:Map<number,Job[]>;forestry:ReadonlySet<string> }
-function placedAndPlannedCells(world:World,planned:readonly Job[],placed:(s:World['structures'][number])=>boolean):Set<number> {
-  const cells=new Set<number>();
-  for(const {structure,cells:footprint} of captureStructureNavigation(world).entries)if(placed(structure))for(const i of footprint)cells.add(i);
-  for(const job of planned)for(const c of footprintCells(job))cells.add(index(world,c));
-  return cells;
+interface CellSet { has(cell:number):boolean }
+interface Context { resources: Map<number, Resource>; fixed: CellSet; hydroBlocked?:CellSet; temperatures:TemperatureView;sows:Map<number,Job[]>;forestry:ReadonlySet<string> }
+const notConduit=(s:World['structures'][number])=>s.kind!=='power-conduit',notConduitOrBasin=(s:World['structures'][number])=>s.kind!=='power-conduit'&&s.kind!=='hydroponics-basin';
+/* The placed structures' cells for each of the two predicates above, per
+ * shared structure geometry: it stands for one membership of the structures
+ * array, whose kinds and footprints never change. Never mutated; the planned
+ * jobs' cells are a separate per-call set. Read only through has(). */
+const placedCells=new WeakMap<StructureNavigationGeometry,Map<(s:World['structures'][number])=>boolean,ReadonlySet<number>>>();
+function placedAndPlannedCells(world:World,planned:readonly Job[],placed:(s:World['structures'][number])=>boolean):CellSet {
+  const geometry=captureStructureNavigation(world);
+  let byPredicate=placedCells.get(geometry);if(!byPredicate){byPredicate=new Map();placedCells.set(geometry,byPredicate);}
+  let structures=byPredicate.get(placed);
+  if(!structures){const cells=new Set<number>();for(const {structure,cells:footprint} of geometry.entries)if(placed(structure))for(const i of footprint)cells.add(i);structures=cells;byPredicate.set(placed,cells);}
+  const jobs=new Set<number>();
+  for(const job of planned)for(const c of footprintCells(job))jobs.add(index(world,c));
+  const fixed=structures;
+  return {has:cell=>fixed.has(cell)||jobs.has(cell)};
 }
 function context(world: World, queriedCells?:readonly number[]): Context {
   const planned=world.jobs.filter(j => j.kind==='replant-tree'||j.kind==='install'||j.kind!=='power-conduit'&&j.kind in STRUCTURE_DEFINITIONS);
@@ -136,7 +147,6 @@ function context(world: World, queriedCells?:readonly number[]): Context {
   // Validation asks about at most five cells: point queries, no expansion.
   const geometry=captureStructureNavigation(world),cellOf=(i:number)=>({x:i%world.width,z:Math.floor(i/world.width)});
   const occupiedAt=(i:number,placed:(s:World['structures'][number])=>boolean)=>{const c=cellOf(i);return geometry.at(c).some(placed)||planned.some(j=>footprintContains(j,c));};
-  const notConduit=(s:World['structures'][number])=>s.kind!=='power-conduit',notConduitOrBasin=(s:World['structures'][number])=>s.kind!=='power-conduit'&&s.kind!=='hydroponics-basin';
   const fixed=queriedCells?new Set(queriedCells.filter(i=>occupiedAt(i,notConduit))):placedAndPlannedCells(world,planned,notConduit);
   const hydroBlocked=world.growingZones.some(z=>z.basinId!==undefined)
     ?(queriedCells?new Set(queriedCells.filter(i=>occupiedAt(i,notConduitOrBasin))):placedAndPlannedCells(world,planned,notConduitOrBasin)):undefined;
