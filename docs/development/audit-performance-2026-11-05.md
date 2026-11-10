@@ -1097,6 +1097,13 @@ Ces correctifs n’ont **pas** été appliqués dans ce lot :
 - **Points 5 et 6.** Ils changent un comportement que des centaines de tests épinglent au tick près.
 - **Point 5.** Il demande de réorganiser la planification en « WorkGivers » ordonnés comme dans RimWorld : type de travail, puis `priorityInType`, puis distance. Ce n’est pas un simple changement de constantes.
 
+### Écart corrigé le 10 novembre : vitesse des prisonniers ; un point à vérifier
+
+Source : la bibliothèque de RimWorld 1.6.4871, décompilée localement pour lecture (rien n'est recopié).
+
+- **Prisonniers libérés ou en évasion.** `Pawn.TicksPerMove` multiplie la vitesse par 0,35 seulement tant que `RestraintsUtility.InRestraints` est vrai : pas pour un prisonnier libéré (`guest.Released`), ni pendant une évasion (`LordJob_PrisonBreak.NeverInRestraints`). Ici tout prisonnier marchait à ×0,35 : un prisonnier libéré se traînait jusqu'au bord de la carte et une évasion se rattrapait trop facilement. Corrigé pour la famille de schémas 301 (`restraint-rules-301.ts`, test `restraint-speed-301`), schémas historiques inchangés ; les parties de référence gardent leur empreinte.
+- **À vérifier : passage d'une porte à une porte.** `PathGrid.CalculatedCostAt` ajoute 45 ticks quand on entre dans une porte depuis une autre porte et qu'aucune des deux n'est en passage libre ; ce coût vaut aussi pour la durée du pas (`Pawn_PathFollower.CostToMoveIntoCell`). Il pèse sur les sas à deux portes. Aucune règle équivalente trouvée ici.
+
 ### Écarts corrigés le 8 novembre : obscurité, crématorium, laboratoire
 
 Source : les définitions XML de RimWorld 1.6.4871 et sa bibliothèque, décompilée localement pour lecture (rien n'est recopié). Les quatre corrections valent pour la famille de schémas actuelle (301) ; les schémas historiques gardent leur comportement, aucune donnée sauvegardée ne change de forme.
