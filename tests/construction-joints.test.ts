@@ -12,6 +12,8 @@ import { createTimberGeometry,timberCladdingParts,TimberCladdingLayer } from '..
 import { floorPartsForKind } from '../src/render/HygieneLayer';
 import { penParts } from '../src/render/pen-parts';
 import { doorLeafParts,doorParts } from '../src/render/door-parts';
+import { emitWallFaces,readWallGrid } from '../src/render/wall-network';
+import { WORLD_SCALE } from '../src/world/scale';
 
 const structure=(id:number,kind:Structure['kind'],x:number,z:number,material:Structure['material']='wood'):Structure=>({id,kind,x,z,material,orientation:0,footprint:'standard',...(kind==='door'||kind==='fence-gate'?{door:newDoorState(0)}:{})});
 function camp(structures:Structure[]):World {
@@ -59,18 +61,25 @@ test('selected timber ghost parts keep the real connected topology and exactly m
   } finally { layer.dispose(); }
 });
 
-test('masonry bodies and caps meet exactly in both directions, including mixed material joints',()=>{
+test('masonry walls meet exactly in both directions, including mixed material joints',()=>{
+  // Walls of every material are one linked surface (WallLayer), never boxes.
   const world=camp([structure(1,'wall',3,3,'steel'),structure(2,'wall',4,3,'granite-blocks'),structure(3,'wall',3,4,'steel')]);
   let parts:Placement[]=[];
   const batches={set(_group:THREE.Group,key:string,items:Placement[]){if(key==='furniture')parts=items;}} as unknown as BoxBatches;
   for(const cutaway of [false,true]) {
     buildFurniture(world,new THREE.Group(),cutaway,batches);
-    expect(parts).toHaveLength(6);
-    const bodies=parts.slice(0,3).map(bounds),caps=parts.slice(3).map(bounds);
-    for(const boxes of [bodies,caps]) {
-      expect(boxes[0]!.max.x).toBe(boxes[1]!.min.x);
-      expect(boxes[0]!.max.z).toBe(boxes[2]!.min.z);
+    expect(parts).toHaveLength(0);
+    const faces=emitWallFaces(readWallGrid(world,cutaway),()=>true,0,0,16,16),top=cutaway?WORLD_SCALE.wallCutawayHeight:WORLD_SCALE.wallHeight;
+    let area=0;
+    for(let t=0;t<faces.triangles;t++){
+      const v=(i:number)=>new THREE.Vector3().fromArray(faces.position,(t*3+i)*3),a=v(0),b=v(1),c=v(2),n=new THREE.Vector3().fromArray(faces.normal,t*9);
+      if(n.y>.5){expect(a.y).toBe(top);area+=new THREE.Vector3().subVectors(b,a).cross(new THREE.Vector3().subVectors(c,a)).length()/2;}
+      // No face lies on the two shared joints, whatever the materials.
+      const m=new THREE.Vector3().add(a).add(b).add(c).divideScalar(3);
+      if(Math.abs(n.x)>.5)expect(Math.abs(m.x-3.5)<1e-9&&m.z>2.5&&m.z<3.5).toBe(false);
+      if(Math.abs(n.z)>.5)expect(Math.abs(m.z-3.5)<1e-9&&m.x>2.5&&m.x<3.5).toBe(false);
     }
+    expect(area).toBeCloseTo(3,9);
   }
 });
 

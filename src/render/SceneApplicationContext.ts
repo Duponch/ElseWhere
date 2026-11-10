@@ -1,6 +1,6 @@
 import {readSnapshotChanges} from '../bridge/snapshot-changes';
 import {roofCoverage} from '../sim/roof-rules';
-import {isRoomDoor} from '../sim/door-rules';
+import {isRoofOutlineKind} from './pitched-roof';
 import {caveLightSources256} from '../sim/cave-flora-256';
 import {lightSourcesFromMembers,isStructureLightMember} from '../sim/light-sources';
 import type {World} from '../sim/types';
@@ -65,8 +65,9 @@ export class SceneApplicationContext {
  private prepareGeometry(world:World,geometry:readonly SceneStructureGeometry[],changed:boolean,visited:number):void {
   this.counts.geometryRows+=visited;
   if(!changed)return;
-  this.roofSupports=geometry.filter(s=>s.kind==='wall'||isRoomDoor(s.kind));
-  this.supportKey=this.roofSupports.map(s=>`${s.kind}:${s.x}:${s.z}`).join(',');
+  this.roofSupports=geometry.filter(s=>isRoofOutlineKind(s.kind));
+  // The id follows a rebuilt wall (gable colour = its material).
+  this.supportKey=this.roofSupports.map(s=>`${s.kind}:${s.x}:${s.z}:${s.id}`).join(',');
   this.emitters=geometry.flatMap((s,i)=>isStructureLightMember(s.kind)?[i]:[]);
   // The only physical primitive capture is StructurePreparation's. Surface
   // derivation consumes those copied primitives rather than rereading World.

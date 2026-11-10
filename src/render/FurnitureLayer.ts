@@ -53,16 +53,12 @@ import { furniturePlacementZone, hiddenFurnitureSlot, furnitureZoneSlack, furnit
 
 /** Procedural furniture batches rebuilt only when structure content changes. */
 export function buildFurniture(world: World, group: THREE.Group, cutaway: boolean, batches: BoxBatches, contextWorld:World=world): void {
-    const wallHeight = cutaway ? WORLD_SCALE.wallCutawayHeight : WORLD_SCALE.wallHeight;
-    const walls: Placement[] = [], wallCaps: Placement[] = [], bedFrames: Placement[] = [], bedding: Placement[] = [], pillows: Placement[] = [], headboards: Placement[] = [], woodParts: Placement[] = [];
+    // Walls of every material are drawn linked by WallLayer, never here.
+    const bedFrames: Placement[] = [], bedding: Placement[] = [], pillows: Placement[] = [], headboards: Placement[] = [], woodParts: Placement[] = [];
     for (const structure of world.structures) {
       const { x, z } = structure;
       const color = buildingMaterialColor(structure.material);
-      if (structure.kind === 'wall') {
-        // The timber batch supplies its own planks and overhanging trim.
-        if (structure.material === 'wood') continue;
-        walls.push({ targetId:structure.id, x, z, color, y: (wallHeight - 0.09) / 2 }); wallCaps.push({ targetId:structure.id, x, z, color, y: wallHeight - 0.045 });
-      } else if (structure.kind === 'bed') {
+      if (structure.kind === 'bed') {
         const cells = footprintCells(structure), last = cells[cells.length - 1]!;
         const cx = (x + last.x) / 2, cz = (z + last.z) / 2, ry = structure.orientation * Math.PI / 2;
         const length = structure.footprint === 'legacy-single' ? 0.93 : WORLD_SCALE.bedLength;
@@ -100,8 +96,6 @@ export function buildFurniture(world: World, group: THREE.Group, cutaway: boolea
       ...smithyParts267(world), ...brewingParts265(world), ...ventParts(world,cutaway), ...graveParts(world), ...foodWorkstationParts(world), ...electricalParts(contextWorld,cutaway,world.structures), ...passiveCoolerParts(world), ...doorParts(contextWorld,cutaway,world.structures), ...penParts(contextWorld,world.structures,cutaway), ...campfireParts(world), ...torchLampParts(world), ...recreationParts(world), ...stonecutterParts(world), ...craftingSpotParts(world), ...animalSleepingSpotParts(world), ...researchTailorParts(world), ...industryParts(world), ...habitatParts(world), ...artParts(world), ...drugLabParts(world),
       ...shipChunkParts256(world), ...ancientCasketParts256(world), ...cryptosleepParts271(world), ...ancientMonumentParts256(world), ...localRoadPropParts256(world), ...bedrollParts(world), ...hospitalBedParts(world), ...doubleBedParts(world), ...sleepingSpotParts(world), ...vitalsMonitorParts(world), ...deepDrillingParts(world), ...orbitalParts(world), ...nutrientPasteParts(world), ...biofuelParts(world), ...smeltingParts(world), ...crematoriumParts(world), ...firefoamParts290(world), ...spikeTrapParts(world), ...hydroponicsParts(world), ...miniTurretBaseParts(world), ...parcels,
       ...woodParts.map(p => ({ ...p, color: p.color ?? 0xa38559 })),
-      ...walls.map(p => ({ ...p, sx: 1, sy: wallHeight - 0.09, sz: 1, color: p.color ?? 0xa6916e })),
-      ...wallCaps.map(p => ({ ...p, sx: 1, sy: 0.09, sz: 1, color: p.color ?? 0xc3af86 })),
       ...bedFrames.map(p => ({ ...p, color: p.color ?? 0x795d41 })), ...bedding.map(p => ({ ...p, color: p.color??0xc7a977 })),
       ...pillows.map(p => ({ ...p, color: 0xe5d8b7 })), ...headboards.map(p => ({ ...p, color: p.color ?? 0x795d41 })),
     ]);

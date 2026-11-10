@@ -3,32 +3,36 @@ import * as THREE from 'three/webgpu';
 import { createWorld } from '../src/sim/index';
 import { BoxBatches } from '../src/render/BoxBatches';
 import { buildFurniture } from '../src/render/FurnitureLayer';
-import { TimberCladdingLayer } from '../src/render/TimberCladdingLayer';
+import { WallLayer } from '../src/render/WallLayer';
 import type { BoxMesh } from '../src/render/BoxMesh';
 
-test('wood walls move to the timber batch without duplicate furniture boxes; other materials remain', () => {
+test('walls of every material are linked by one wall layer, never duplicated as furniture boxes', () => {
   const world = createWorld(14, 16, 16);
   world.structures = [
     { id: 1, kind: 'wall', x: 3, z: 4, orientation: 0, footprint: 'standard', material: 'wood' },
     { id: 2, kind: 'wall', x: 5, z: 4, orientation: 0, footprint: 'standard', material: 'steel' },
+    { id: 3, kind: 'bed', x: 9, z: 9, orientation: 0, footprint: 'standard', material: 'wood' },
   ];
   const group = new THREE.Group();
   const boxes = new BoxBatches();
-  const timber = new TimberCladdingLayer();
+  const walls = new WallLayer();
   try {
     buildFurniture(world, group, false, boxes);
-    timber.update(world, false);
-    expect((group.getObjectByName('furniture') as BoxMesh).activeCount).toBe(2);
-    expect(timber.wallMesh.activeCount).toBe(1);
-    expect(timber.eaveMesh.activeCount).toBeGreaterThan(0);
+    walls.update(world, false);
+    const furniture = () => (group.getObjectByName('furniture') as BoxMesh).activeCount;
+    const bedParts = furniture();
+    expect(bedParts).toBeGreaterThan(0);
+    const separate = walls.triangles;
+    expect(separate).toBeGreaterThan(0);
 
-    world.structures[0]!.material = 'steel';
+    // A steel wall between them: one linked run, still no furniture box.
+    world.structures.push({ id: 4, kind: 'wall', x: 4, z: 4, orientation: 0, footprint: 'standard', material: 'steel' });
     buildFurniture(world, group, false, boxes);
-    timber.update(world, false);
-    expect((group.getObjectByName('furniture') as BoxMesh).activeCount).toBe(4);
-    expect(timber.wallMesh.activeCount).toBe(0);
+    walls.update(world, false);
+    expect(furniture()).toBe(bedParts);
+    expect(walls.triangles).toBeLessThan(separate + 2 * 18);
   } finally {
-    timber.dispose();
+    walls.dispose();
     boxes.dispose();
   }
 });

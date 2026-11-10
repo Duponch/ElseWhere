@@ -56,7 +56,7 @@ import { terrainSurfaceChanges,terrainTileChanges } from './terrain-state';
 import { doorOrientations } from '../sim/door-rules';
 import { DoorLayer } from './DoorLayer';
 import type { SceneStructurePreparation } from './SceneStructurePreparation';
-import { TimberCladdingLayer } from './TimberCladdingLayer';
+import { WallLayer } from './WallLayer';
 import { prepareShadowPipelines } from './shadow-preparation';
 import { PausedShadowCache } from './PausedShadowCache';
 import { installCommand } from '../sim/furniture-commands';
@@ -670,7 +670,7 @@ export class SceneRenderCore {
   protected readonly resourceGroup = new THREE.Group();
   protected readonly roofs=new RoofLayer(this.environmentLighting.configure,world=>this.applicationContext?.read(world)?.roofs);
   protected readonly doors=new DoorLayer(this.environmentLighting.configure,this.animationDetail);
-  protected readonly timber=new TimberCladdingLayer(this.environmentLighting.configure,this.ownedOpaqueRevisions435?.producer('timber'));
+  protected readonly walls=new WallLayer(this.environmentLighting.configure);
   protected readonly structureGroup = new THREE.Group();
   protected readonly jobGroup = new THREE.Group();
   protected readonly pileGroup = new THREE.Group();
@@ -867,7 +867,7 @@ export class SceneRenderCore {
     this.landscape.add(this.plants.group,this.overview.group,this.terrainGroup,this.resourceGroup,this.rocks.group);
     this.scene.add(this.mechanoids.group);
     this.scene.add(this.geysers.group);
-    this.scene.add(this.deepResources.mesh,this.areaPreview.mesh,this.turretRange.mesh,this.orderRockPreview.mesh,this.landscape,this.pileGroup,this.hygiene.group,this.wind.group,this.wildlife.mesh,this.wildlife.flames,this.animalCargo.group,this.ropes.mesh,this.fires.mesh,this.projectiles.mesh,this.roofs.surface,this.roofs.areas,this.doors.group,this.timber.group,this.crops.group, this.growing.group, this.allowedAreaLayer.group, this.structureGroup, this.jobGroup, this.designations.mesh, this.storageGroup, this.pawns.group,this.clouds.mesh,this.precipitation.mesh);
+    this.scene.add(this.deepResources.mesh,this.areaPreview.mesh,this.turretRange.mesh,this.orderRockPreview.mesh,this.landscape,this.pileGroup,this.hygiene.group,this.wind.group,this.wildlife.mesh,this.wildlife.flames,this.animalCargo.group,this.ropes.mesh,this.fires.mesh,this.projectiles.mesh,this.roofs.surface,this.roofs.areas,this.doors.group,this.walls.group,this.crops.group, this.growing.group, this.allowedAreaLayer.group, this.structureGroup, this.jobGroup, this.designations.mesh, this.storageGroup, this.pawns.group,this.clouds.mesh,this.precipitation.mesh);
     if (groundGrassEnabled) {
       this.grass = this.createGrass();
       this.grass.setTerrainPaint(this.terrainPaintTexture);
@@ -1269,7 +1269,7 @@ export class SceneRenderCore {
       this.overview.setTerrainMaterial(oldWater,nextWater,this.world,enabled);
     }
     this.boxes.setTexturesEnabled(enabled);
-    this.timber.setTexturesEnabled(enabled);
+    this.walls.setTexturesEnabled(enabled);
     this.doors.setTexturesEnabled(enabled);
     this.roofs.setTexturesEnabled(enabled);
     this.resources.setTexturesEnabled(enabled);
@@ -1547,7 +1547,7 @@ export class SceneRenderCore {
     const restoreWind=this.wind.prepareForCompile();
     const restoreRoofs=this.roofs.prepare();
     const restoreDoors=this.doors.prepareForCompile();
-    const restoreTimber=this.timber.prepareForCompile();
+    const restoreWalls=this.walls.prepare();
     const restoreCrops = this.crops.prepareForCompile();
     const restoreOverview = this.overview.prepareForCompile();
     const restorePlants = this.plants.prepareForCompile();
@@ -1610,7 +1610,7 @@ export class SceneRenderCore {
       // restorers must therefore run last to recover their real runtime flag.
       for (const [object, value] of culling) object.frustumCulled = value;
       restoreMechanoids();
-      restoreWind();restorePawnFires();restorePawnCargo();restoreWildlife();restoreAnimalCargo();restoreRopes();restoreFeedback();restoreActionVfx();restoreBrawlCloud();restoreStructureVfx();restoreRoofs();restoreDoors();restoreTimber();restoreCrops();restorePlants();restoreGrass();restoreDesignations();restoreFilth();restoreClouds();restorePrecipitation();
+      restoreWind();restorePawnFires();restorePawnCargo();restoreWildlife();restoreAnimalCargo();restoreRopes();restoreFeedback();restoreActionVfx();restoreBrawlCloud();restoreStructureVfx();restoreRoofs();restoreDoors();restoreWalls();restoreCrops();restorePlants();restoreGrass();restoreDesignations();restoreFilth();restoreClouds();restorePrecipitation();
       restoreSnow();restoreBoxes();restoreArea();restoreTurretRange();restoreHints();restoreOrderRock();restoreConstruction();restoreDeep();
       restoreOverview();
       restoreLabels?.();
@@ -1857,12 +1857,12 @@ export class SceneRenderCore {
 
   protected buildStructures(world: World): void {
     // A change limited to kinds drawn outside the furniture batch (sandbags)
-    // rebuilds only their batch; doors, timber and furniture are unchanged.
+    // rebuilds only their batch; doors, linked walls and furniture are unchanged.
     const kinds=this.structureSignature.changedKinds();
     if(kinds&&this.immutableWorlds.has(world)&&this.furniturePresentation.updateIndependent(world,this.structureGroup,this.wallCutaway,this.boxes,kinds)){this.structureSignature.ackFurnitureBuild();return;}
     const prepared=this.preparedStructures;
     if(prepared?.world===world)this.doors.updateNative(world,this.wallCutaway,false,prepared.doors,prepared.axes,prepared.gateAxes);
-    else this.doors.update(world,this.wallCutaway);this.timber.update(world,this.wallCutaway);this.furniturePresentation.update(world,this.structureGroup,this.wallCutaway,this.boxes,this.structureSignature.flowerChanges(),this.immutableWorlds.has(world),kinds);this.structureSignature.ackFurnitureBuild(); }
+    else this.doors.update(world,this.wallCutaway);this.walls.update(world,this.wallCutaway);this.furniturePresentation.update(world,this.structureGroup,this.wallCutaway,this.boxes,this.structureSignature.flowerChanges(),this.immutableWorlds.has(world),kinds);this.structureSignature.ackFurnitureBuild(); }
 
   protected buildJobs(world: World): void {
     if(!this.confirmedIntents){buildJobMarkers(world,this.jobGroup,this.wallCutaway,this.boxes);return;}
@@ -2194,7 +2194,7 @@ export class SceneRenderCore {
   protected refreshAreaPointer():void {}
   private clearOrderTargets():void {
     this.resources.clearTargetPreview();this.crops.clearTargetPreview();this.plants.clearTargetPreview();
-    this.boxes.clearTargetPreview();this.doors.clearTargetPreview();this.timber.clearTargetPreview();
+    this.boxes.clearTargetPreview();this.doors.clearTargetPreview();this.walls.clearTargetPreview();
     this.wind.clearTargetPreview();this.orderRockPreview.hide();
   }
   private updateOrderTargets(world:World,action:AreaAction,cells:readonly number[]):void {
@@ -2205,7 +2205,7 @@ export class SceneRenderCore {
     this.boxes.setTargetPreview(this.structureGroup,targets.structures);
     this.boxes.setTargetPreview(this.jobGroup,targets.jobs);
     for(const {group}of this.pileChunks.values())this.boxes.setTargetPreview(group,targets.chunks);
-    this.doors.setTargetPreview(targets.structures);this.timber.setTargetPreview(targets.structures);this.wind.setTargetPreview(targets.structures);
+    this.doors.setTargetPreview(targets.structures);this.walls.setTargetPreview(targets.structures);this.wind.setTargetPreview(targets.structures);
     this.orderRockPreview.updateRock(world,[...targets.rocks]);
   }
   setDesignationMinCellPixels(value:number):void { this.designations.setMinCellPixels(value);this.wildlife.setDesignationMinCellPixels(value); }
@@ -2395,7 +2395,7 @@ export class SceneRenderCore {
     this.ownedOpaqueRevisions435?.dispose();this.staticSceneCompiler435?.dispose();
     this.geysers.dispose();this.boxes.dispose();this.snowSurface.dispose();
     this.roofs.dispose();
-    this.timber.dispose();
+    this.walls.dispose();
     this.hygiene.dispose();
     this.actionFeedback.dispose();
     this.actionVfx.dispose();

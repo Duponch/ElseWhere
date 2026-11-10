@@ -47,8 +47,10 @@ test('one resident slab mesh rebuilds only when roof topology or cutaway changes
   expect(mesh.geometry).toBe(geometry);
   layer.update(world, batches, true);
   expect(mesh.geometry).not.toBe(geometry);
-  const y = mesh.geometry.getAttribute('position').getY(0);
-  expect(y).toBeCloseTo(WORLD_SCALE.wallCutawayHeight + .08);
+  // The eave line (lowest point of the pitched top) follows the cut walls.
+  const p = mesh.geometry.getAttribute('position'), n = mesh.geometry.getAttribute('normal');
+  const eave = Math.min(...Array.from({ length: p.count }, (_, i) => n.getY(i) > .5 ? p.getY(i) : Infinity));
+  expect(eave).toBeCloseTo(WORLD_SCALE.wallCutawayHeight + .08);
   layer.setTexturesEnabled(true); expect(mesh.material).toBe(layer.textured);
   world.roofing!.constructed = [];
   layer.update(world, batches, false);

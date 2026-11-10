@@ -4,6 +4,7 @@ import { BoxBatches } from '../src/render/BoxBatches';
 import { BoxMesh } from '../src/render/BoxMesh';
 import { DoorLayer } from '../src/render/DoorLayer';
 import { TimberCladdingLayer } from '../src/render/TimberCladdingLayer';
+import { WallLayer } from '../src/render/WallLayer';
 import { buildFurniture } from '../src/render/FurnitureLayer';
 import { buildJobMarkers } from '../src/render/JobLayer';
 import { pileParts } from '../src/render/pile-parts';
@@ -103,7 +104,22 @@ test('finished local furniture and every visible construction contribution retai
   buildFurniture(world, new THREE.Group(), false, sink as unknown as BoxBatches);
   expect(furniture.length).toBeGreaterThan(10);
   expect(furniture.every(part => part.targetId !== undefined)).toBe(true);
-  expect(new Set(furniture.map(part => part.targetId))).toEqual(new Set([12, 13, 14, 15]));
+  expect(new Set(furniture.map(part => part.targetId))).toEqual(new Set([13, 14, 15]));
+  // Walls of every material are drawn linked: their owner is kept per cell,
+  // and an order preview tints exactly their cells, then restores them.
+  const walls = new WallLayer();
+  walls.update(world, false);
+  const at = (s: { x: number; z: number }) => s.z * world.width + s.x, cells = world.structures.slice(0, 2).map(at);
+  const texels = () => Array.from(walls['targetMap'].image.data as Uint8Array);
+  const colours = Array.from(walls.mesh.geometry.getAttribute('color').array);
+  walls.setTargetPreview(new Set([12]));
+  expect(texels().flatMap((v, i) => v ? [i] : [])).toEqual([cells[1]]);
+  walls.setTargetPreview(new Set([11, 12]));
+  expect(texels().flatMap((v, i) => v ? [i] : [])).toEqual([...cells].sort((a, b) => a - b));
+  walls.clearTargetPreview();
+  expect(texels().every(v => v === 0)).toBe(true);
+  expect(Array.from(walls.mesh.geometry.getAttribute('color').array)).toEqual(colours);
+  walls.dispose();
   world.jobs = [
     { id: 30, kind: 'wall', x: 2, z: 8, orientation: 0, footprint: 'standard', status: 'pending', reservedBy: null, progress: 0, escrow: { wood: 0, food: 0 } },
     { id: 31, kind: 'table', x: 5, z: 8, orientation: 0, footprint: 'standard', status: 'active', reservedBy: null, progress: 20, construction: 'frame', escrow: { wood: 0, food: 0 } },

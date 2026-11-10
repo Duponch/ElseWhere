@@ -61,17 +61,10 @@ export function doorParts(world:World,cutaway:boolean,subjects:readonly World['s
   for(const s of subjects)if(isRoomDoor(s.kind)) {
     const axis=axes.get(s.z*world.width+s.x)??0;
     const ry=axis*Math.PI/2;
-    const neighboringMaterial=doorSurroundMaterial(world,s.x,s.z,axis,walls);
-    const surround=neighboringMaterial??s.material;
     const timber=doorHasTimberSpan(world,s.x,s.z,woodWalls);
-    const wallColor=buildingMaterialColor(surround,0xa6916e)??0xa6916e;
     const frameColor=s.material==='wood'?0x9e9e94:shade(doorLeafColor(s.material),.76);
-    // TimberCladdingLayer provides the broad upper plank and continuous cap.
-    // For masonry, this matching wall panel still stops well above the leaf.
-    if(!timber&&!cutaway) {
-      parts.push({targetId:s.id,x:s.x,z:s.z,y:(lintelTop+height-.09)/2,sx:1,sy:height-.09-lintelTop,sz:1,ry,color:wallColor});
-      parts.push({targetId:s.id,x:s.x,z:s.z,y:height-.045,sx:1,sy:.09,sz:1,ry,color:wallColor});
-    }
+    // The wall above the opening (timber from the leaf top, masonry above
+    // this frame lintel) is the linked wall network's lintel, see WallLayer.
     if(timber)for(const face of [-1,1]) {
       const dx=face*.49*Math.sin(ry),dz=face*.49*Math.cos(ry);
       if(!cutaway)parts.push({targetId:s.id,x:s.x+dx,z:s.z+dz,y:(openingTop+lintelTop)/2,sx:.92,sy:lintelTop-openingTop,sz:.09,ry,color:frameColor});

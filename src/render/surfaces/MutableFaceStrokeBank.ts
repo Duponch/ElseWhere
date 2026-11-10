@@ -31,7 +31,7 @@ export class MutableFaceStrokeBank implements FaceStrokeData {
   const data=new Float32Array(rows*4);data.set(this.data);this.data=data;this.attribute=new THREE.StorageBufferAttribute(data,4);this.node.value=this.attribute;
   this.free.push({first:oldRows,count:rows-oldRows});this.mergeFree();this.capacityPeak=rows;this.allocatedGpuUpperBoundBytes+=bytes;
  }
- publish(table:FaceStrokeData):FaceStrokeBankRegion{
+ publish(table:Pick<FaceStrokeData,'values'|'faceCount'|'edgeCount'|'maxEdgesPerFace'|'assertCurrent'>):FaceStrokeBankRegion{
   this.assertCurrent();table.assertCurrent();const rows=Math.ceil(table.values.length/8)*2;if(rows<2||table.faceCount*8>table.values.length)throw Error('Actual nonempty face-stroke records required');
   let index=this.free.findIndex(block=>block.count>=rows);if(index<0){this.grow(rows);index=this.free.findIndex(block=>block.count>=rows);}const slot=this.free[index]!;const first=slot.first;slot.first+=rows;slot.count-=rows;if(slot.count===0)this.free.splice(index,1);
   this.data.set(table.values,first*4);for(let face=0;face<table.faceCount;face++)this.data[first*4+face*8]=table.values[face*8]!+first;

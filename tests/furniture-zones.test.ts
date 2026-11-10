@@ -48,10 +48,12 @@ test('the zoned layout holds every historical placement, zone by zone, with rese
 test('changes next to zone borders rewrite only the affected slots and stay exact',()=>{
   const world=town(),h=pipeline(world);h.apply();
   const writes=()=>h.batches.calls.at(-1)!;
-  // A wall beside the door across the border: the door frame material follows.
-  world.structures.push({...structure('wall',5000,Z-1,11),material:'steel'});expect(h.apply()).toEqual(['patch']);
-  // Wood (drawn by the timber layer) instead of steel for that wall: a changed slot.
-  world.structures.at(-1)!.material='wood';expect(h.apply()).toEqual(['patch']);
+  // Walls are drawn by the linked wall layer: a new wall changes no slot.
+  world.structures.push({...structure('wall',5000,Z-1,11),material:'steel'});expect(h.apply()).toEqual([]);
+  // The door frame follows its walls: wood on both sides along its axis gives
+  // the thin timber frame, a neighbour-driven change of the door's slots.
+  world.structures.find(s=>s.kind==='wall'&&s.x===Z&&s.z===12)!.material='wood';expect(h.apply()).toEqual([]);
+  world.structures.find(s=>s.kind==='wall'&&s.x===Z&&s.z===10)!.material='wood';expect(h.apply()).toEqual(['patch']);
   // A fence joining the run across the z border, and a conduit next to the conduits.
   world.structures.push(structure('fence',5001,40,Z+3-1+1),structure('power-conduit',5002,45,Z));expect(h.apply().every(k=>k==='patch')).toBe(true);
   // Power: the lamp loses its parent, then the battery is removed from the middle of the array.
@@ -71,8 +73,8 @@ test('changes next to zone borders rewrite only the affected slots and stay exac
 test('an overflowing zone, a new zone, a reset or a cutaway lays the whole batch out again',()=>{
   const world=town(),h=pipeline(world);h.apply();
   const segment=h.owner.layout()!.segments[0]!,[zx,zz]=segment.key.split(':').map(Number) as [number,number];
-  // Enough walls (2 parts each) in that zone to exceed its reserved slots.
-  for(let i=0;i<segment.capacity;i++)world.structures.push({...structure('wall',8000+i,zx*Z+(i%Z),zz*Z+20+Math.floor(i/Z)),material:'steel'});
+  // Enough stools (5 parts each) in that zone to exceed its reserved slots.
+  for(let i=0;i<segment.capacity;i++)world.structures.push({...structure('stool',8000+i,zx*Z+(i%Z),zz*Z+20+Math.floor(i/Z))});
   expect(h.apply()).toEqual(['set']);
   // First furniture in an empty zone (x and z zones 2 and 0), then a second one there.
   expect(h.owner.layout()!.segments.some(g=>g.key==='2:0')).toBe(false);

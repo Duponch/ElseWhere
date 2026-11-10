@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { DoorLayer } from '../src/render/DoorLayer';
 import { DOOR_LEAF_BOTTOM, doorLeafTop, doorParts, doorSurroundMaterial } from '../src/render/door-parts';
-import { TimberCladdingLayer } from '../src/render/TimberCladdingLayer';
+import { emitWallFaces, readWallGrid, wallCodeBottom, wallCodeFamily, WALL_FAMILY_TIMBER } from '../src/render/wall-network';
 import { createWorld } from '../src/sim/index';
 import { newDoorState } from '../src/sim/door-rules';
 import type { Structure, World } from '../src/sim/types';
@@ -23,14 +23,16 @@ test('a lower door and recessed leaves fit a full-height wall in both axes',()=>
   for(const axis of [0,1] as const)for(const material of ['wood','steel','granite-blocks'] as const) {
     const world=doorway(axis,material),parts=doorParts(world,false),leaves=new DoorLayer();
     leaves.update(world,false);
-    expect(parts).toHaveLength(material==='wood'?6:5);
-    const [panel,cap,lintel,left,right]=material==='wood'?[undefined,undefined,parts[0],parts[1],parts[2]]:parts;
-    if(panel&&cap){
-      expect(panel.y+panel.sy!/2).toBeGreaterThanOrEqual(cap.y-cap.sy!/2);
-      expect(cap.y+cap.sy!/2).toBeCloseTo(WORLD_SCALE.wallHeight);
-      expect(panel.sz).toBe(1);
-      expect(panel.color).toBeDefined();
-    }
+    expect(parts).toHaveLength(material==='wood'?6:3);
+    const [lintel,left,right]=parts;
+    // The wall above the opening is the linked wall network's lintel, up to
+    // the full wall height: timber from the leaf top, masonry from the top
+    // of its deep frame lintel, so the frame stays visible below it.
+    const code=readWallGrid(world,false).codes[8*16+8]!;
+    expect(code).not.toBe(0);
+    expect(wallCodeBottom(code,false)).toBeCloseTo(material==='wood'?WORLD_SCALE.futureDoorClearance:lintel!.y+lintel!.sy!/2);
+    const lintelFaces=emitWallFaces(readWallGrid(world,false),(x,z)=>x===8&&z===8,0,0,16,16);
+    expect(Math.max(...lintelFaces.position.filter((_,i)=>i%3===1))).toBeCloseTo(WORLD_SCALE.wallHeight);
     expect(lintel!.y-lintel!.sy!/2).toBeCloseTo(WORLD_SCALE.futureDoorClearance);
     expect(left!.y+left!.sy!/2).toBeCloseTo(WORLD_SCALE.futureDoorClearance);
     expect(right!.y+right!.sy!/2).toBeCloseTo(WORLD_SCALE.futureDoorClearance);
@@ -73,12 +75,15 @@ test('a steel door in a wooden house receives a timber lintel rather than a full
   const world=doorway(0,'wood');
   world.structures[0]!.material='steel';
   expect(doorSurroundMaterial(world,8,8,0)).toBe('wood');
-  const parts=doorParts(world,false),timber=new TimberCladdingLayer(),leaves=new DoorLayer();
-  timber.update(world,false);leaves.update(world,false);
+  const parts=doorParts(world,false),leaves=new DoorLayer();
+  leaves.update(world,false);
   expect(parts).toHaveLength(6);
   expect(parts.every(part=>part.y+part.sy!/2<=doorLeafTop(false)+.11+1e-6)).toBe(true);
-  expect(timber.wallMesh.activeCount).toBe(3);
-  expect(timber.eaveMesh.activeCount).toBeGreaterThan(0);
+  // The linked walls carry a timber lintel above the steel leaves.
+  const grid=readWallGrid(world,false),code=grid.codes[8*16+8]!;
+  expect(wallCodeFamily(code)).toBe(WALL_FAMILY_TIMBER);
+  expect(wallCodeBottom(code,false)).toBeCloseTo(doorLeafTop(false));
+  expect([7,8,9].map(x=>grid.ids[8*16+x])).toEqual([world.structures[1]!.id,world.structures[0]!.id,world.structures[2]!.id]);
   expect(leaves.mesh.activeCount).toBe(2);
-  timber.dispose();leaves.dispose();
+  leaves.dispose();
 });
