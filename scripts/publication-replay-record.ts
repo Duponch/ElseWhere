@@ -96,12 +96,42 @@ function expandPaths(message: any): any {
   if (!keeps.size) return message;
   const { paths297: _paths, ...rest } = message; return { ...rest, actors };
 }
+// Compact resource updates of a complete publication (growth tuples, plant age
+// tuples), rebuilt here, independently of the readers, into the complete
+// records they stand for; they are then merged with the complete upserts and
+// sorted by id. A build that sends a tuple and one that sends the whole record
+// compare equal exactly when the record rebuilt from the tuple (from the record
+// held since the previous publication) is the record the other build sent.
+const heldResources = new Map<number, any>();
+function expandResources(message: any): any {
+  if (message?.type !== 'resident-publication' || message.publication?.type !== 'snapshot') return message;
+  const publication = message.publication;
+  if (publication.kind === 'checkpoint') { heldResources.clear(); for (const resource of publication.world.resources ?? []) heldResources.set(resource.id, structuredClone(resource)); return message; }
+  const changes = publication.resources; if (!changes) return message;
+  const touched = new Map<number, any>();
+  for (const id of changes.removed) heldResources.delete(id);
+  for (const resource of changes.upserted) touched.set(resource.id, structuredClone(resource));
+  const growth: Float64Array | undefined = changes.growth, life: Float64Array | undefined = changes.life;
+  for (let i = 0; growth && i < growth.length; i += 4) {
+    const id = growth[i]!, old = heldResources.get(id); if (!old || touched.has(id)) throw Error(`Growth tuple without a held resource ${id}`);
+    const next = { ...old, growth: growth[i + 1], growthTick: growth[i + 2] };
+    if (Number.isNaN(growth[i + 3]!)) delete next.growthThermalFactor; else next.growthThermalFactor = growth[i + 3];
+    touched.set(id, next);
+  }
+  for (let i = 0; life && i < life.length; i += 4) {
+    const id = life[i]!, old = heldResources.get(id); if (!old?.plantLife || touched.has(id)) throw Error(`Plant age tuple without a held record ${id}`);
+    touched.set(id, { ...old, plantLife: { ...old.plantLife, age: life[i + 1], darkTicks: life[i + 2], nextCheck: life[i + 3] } });
+  }
+  for (const [id, resource] of touched) heldResources.set(id, resource);
+  const { growth: _growth, life: _life, ...rest } = changes;
+  return { ...message, publication: { ...publication, resources: { ...rest, upserted: [...touched.values()].sort((a, b) => a.id - b.id) } } };
+}
 const scope: any = {
   onmessage: null,
   postMessage(message: any) {
     if (message?.type === 'reply') replies.set(message.id, message);
     // RAW=1 records the messages as sent (path patches not rebuilt), to inspect the wire.
-    if (!process.env.RAW) message = expandPaths(message);
+    if (!process.env.RAW) message = expandResources(expandPaths(message));
     const tick = message?.publication?.world?.tick ?? message?.world?.tick ?? message?.summary?.tick;
     if (typeof tick === 'number') { lastTick = Math.max(lastTick, tick); if (firstTick < 0) firstTick = tick; }
     // A reply's save text is hashed apart; operation progress carries wall durations only in older builds.

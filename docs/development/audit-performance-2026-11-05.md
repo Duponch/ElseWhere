@@ -952,7 +952,7 @@ Le retard vient donc du fil principal : adoption des messages ou lecture du temp
 
 ### Publication du Worker allégée (10 novembre)
 
-Chantier obligatoire n° 2 ([note](chantiers-obligatoires.md)), première tranche.
+Chantier obligatoire n° 2 ([note](chantiers-obligatoires.md)), deux premières tranches.
 
 **Constat.** Profil du vrai Worker (`scripts/perf-worker-run.ts`, Les Forges, ×6, 20 s) : la simulation prend 63 % du temps et tout ce qui sert à publier vers l'affichage 32 %, en une douzaine de postes de 1 à 5 % chacun. À ×6 le Worker ne joue que 8,5 à 9 ticks par seconde pour 36 demandés ; à ×1 il tient le temps réel avec presque tout son temps.
 
@@ -964,8 +964,9 @@ Chantier obligatoire n° 2 ([note](chantiers-obligatoires.md)), première tranch
 - **Carte affichée** : cherchée une fois par tick publié au lieu de trois.
 - **Chemins des acteurs.** Chaque paquet d'acteurs renvoyait le chemin restant complet de chaque acteur en marche : 2 500 cases, 70 % du paquet. Un acteur qui avance sur sa route n'envoie plus que le nombre de cases restantes ; l'affichage garde la fin du chemin qu'il détient déjà (champ `paths297`). Un chemin replanifié, allongé ou dont une case a changé est renvoyé en entier, comme la première ligne après une publication complète. Le lecteur strict (`core-phase-data-297.ts`, épinglé par empreinte) accepte ce champ et le vérifie ; l'empreinte est mise à jour.
 - **Rythme des publications complètes.** Leur intervalle valait 8 fois leur coût (entre 250 ms et 1 s). Ce coût ayant baissé d'environ un cinquième, elles devenaient plus fréquentes (1,2 par seconde au lieu de 1,0 sur Les Forges à ×1), donc plus coûteuses pour le fil principal. Le facteur passe à 10 : même rythme qu'avant.
+- **Âge des plantes (seconde tranche).** Tous les 200 ticks, la fiche d'âge d'une plante avance (`age`, `darkTicks`, `nextCheck`). La plante était alors renvoyée en entier : ≈ 1 080 fiches par publication complète sur Les Forges, 272 Ko. Elle est maintenant envoyée en trois nombres (`resources.life`, sur le modèle de `growth`), quand rien d'autre n'a changé ; feuillage, croissance ou tout autre champ modifié donnent toujours une fiche complète. Les deux lecteurs (décodeur de `snapshots.ts`, assembleur résident) reconstruisent la fiche et la valident comme avant. Côté affichage, ces plantes ne comptent plus comme des changements « de base » (index des ressources de la scène, partition des cultures, validation). L'option (`plantLifeDelta`) n'est activée que pour le Worker de présentation.
 
-**Exactitude.** Nouvel outil `scripts/publication-replay-record.ts` : le vrai Worker de présentation sous une horloge simulée, où le temps et l'ordre des tâches suivent un script fixe. Deux versions du code qui publient la même chose donnent le même enregistrement, message par message ; l'empreinte couvre les types, l'ordre des clés, les nombres exacts et les références partagées. Les chemins en compteur y sont reconstruits indépendamment du lecteur, puis comparés aux chemins complets de l'ancien code. Résultat sur Les Éclaircies et Les Forges, avec deux scripts d'horloge chacun : 268, 362, 202 et 282 messages identiques, sauvegarde finale identique.
+**Exactitude.** Nouvel outil `scripts/publication-replay-record.ts` : le vrai Worker de présentation sous une horloge simulée, où le temps et l'ordre des tâches suivent un script fixe. Deux versions du code qui publient la même chose donnent le même enregistrement, message par message ; l'empreinte couvre les types, l'ordre des clés, les nombres exacts et les références partagées. Les chemins en compteur y sont reconstruits indépendamment du lecteur, puis comparés aux chemins complets de l'ancien code. Résultat sur Les Éclaircies et Les Forges, avec deux scripts d'horloge chacun : 268, 362, 202 et 282 messages identiques, sauvegarde finale identique. Pour la seconde tranche, l'outil reconstruit aussi les fiches des plantes à partir des trois nombres et les compare aux fiches complètes de l'ancien code : identiques sur les quatre enregistrements, ordre des clés compris.
 
 **Mesures.** Worker seul, Les Forges, 20 s après 8 s de chauffe, passages alternés entre le commit de départ et ce lot.
 
@@ -977,6 +978,8 @@ Chantier obligatoire n° 2 ([note](chantiers-obligatoires.md)), première tranch
 | Paquet d'acteurs à ×6 : taille, copie à l'envoi | 80 Ko, 2,0 ms | **59 Ko, 1,3 ms** |
 | Paquet d'acteurs à ×1 : taille, copie à l'envoi | 65 Ko, 1,7 ms | **36 Ko, 0,7 ms** |
 | Publications complètes par seconde, ×1 / ×6 | 1,0 / 0,9 | 1,0 / 0,9 |
+| Publication complète à ×1 : taille, copie à l'envoi | 865 Ko, 14,5 ms | **728 Ko, 12,4 ms** |
+| Publication complète à ×6 : taille, copie à l'envoi | 955 Ko, 17,5 ms | **782 Ko, 13,6 ms** |
 | Les Éclaircies à ×6 : part de la vitesse demandée (1 passage) | 90,5 % | 93,7 % |
 
 Parts du profil à ×6 (un passage chacun) : publication 31,9 % → **23,7 %** du temps du Worker.
@@ -992,12 +995,22 @@ Parts du profil à ×6 (un passage chacun) : publication 31,9 % → **23,7 %** d
 | Cues sonores | 1,4 % | 1,6 % |
 | Recherche de la carte affichée | 0,8 % | 0,5 % |
 
-**Tests.** 127 fichiers du pont et des publications : 755 réussis, les mêmes échecs connus qu'avant, dont la suite stricte de capture des phases (23 cas) avec la nouvelle empreinte. Nouveaux tests : chemins en compteur (12 cas : marche réelle d'un colon de bout en bout, chemin remplacé ou modifié, refus du lecteur) et réutilisation des dépendances (3 cas). Le contrôle de présentation échoue comme avant, sur le seul retard des changements de vitesse (chantier n° 3).
+**Côté affichage.** Messages réels des Forges à ×1 rejoués sous Node dans le lecteur strict, l'assembleur résident et le propriétaire des phases (deux passages par version) :
+
+| Mesure | Avant | Après |
+|---|---|---|
+| Cases de chemin par paquet d'acteurs | 2 020 | **≈ 112** |
+| Un paquet d'acteurs : capture puis adoption | 4,0 + 1,5 ms | **1,05 + 1,0 ms** |
+| Une publication complète : assembleur puis scène d'acteurs | 12,7 + 13,0 ms | 14,3 + 12,4 ms (inchangé, au bruit près) |
+
+Avec 15 à 17 paquets par seconde, cela libère environ 47 ms de fil principal par seconde. La mesure dans le vrai client (images au-dessus de 33 et 50 ms) n'a pas pu être faite ce jour-là : le navigateur de test plantait au chargement des Forges, avec 3,6 Go de mémoire libre sur 16. Elle reste à faire.
+
+**Tests.** 127 fichiers du pont et des publications : 755 réussis, les mêmes échecs connus qu'avant, dont la suite stricte de capture des phases (23 cas) avec la nouvelle empreinte. Nouveaux tests : chemins en compteur (12 cas : marche réelle d'un colon de bout en bout, chemin remplacé ou modifié, refus du lecteur) et réutilisation des dépendances (3 cas). Le contrôle de présentation échoue comme avant, sur le seul retard des changements de vitesse (chantier n° 3). Seconde tranche : 88 fichiers des instantanés, de l'assembleur et des plantes, mêmes échecs connus ; 4 nouveaux cas (plante vieillie de bout en bout par les deux lecteurs, cas qui restent des fiches complètes, âge et croissance ensemble, refus des valeurs invalides).
 
 **Ce qui reste.**
 - **La publication complète** : ≈ 100 ms dans le Worker, une par seconde, donc 11 à 12 % par construction. Elle pèse ≈ 980 Ko sur Les Forges :
   - colons 250 Ko et animaux 143 Ko, renvoyés en entier parce que leurs compteurs (faim, repos, âge) changent à chaque tick ;
-  - plantes 272 Ko : ≈ 1 080 plantes par publication renvoyées en entier parce que leur fiche d'âge a avancé (une voie compacte comme celle de la croissance suffirait) ;
+  - ~~plantes 272 Ko : fiche d'âge~~ : fait (seconde tranche), il reste ≈ 40 Ko de plantes ;
   - tas 59 Ko (horloge de pourriture), travaux 47 Ko, températures 36 Ko ;
   - sections qui ne changent jamais 66 Ko (factions, zones de culture, politiques).
 - **Le paquet d'acteurs d'un tick complet** : les 321 acteurs y figurent, car leurs compteurs de décision changent à chaque tick.

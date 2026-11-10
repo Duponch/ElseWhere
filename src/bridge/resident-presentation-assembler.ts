@@ -1,3 +1,4 @@
+import {validPlantLife} from '../sim/plant-life-save.ts';
 import {validFrameProjection301} from '../sim/finish-frame-save-301.ts';
 import {validHumanIngestionProjection299} from '../sim/human-ingestion-save-299.ts';
 import {validIdleWanderProjection300} from '../sim/idle-wander-save-300.ts';
@@ -83,15 +84,21 @@ function projectionReferences(value:unknown,local:boolean):boolean {
  if(value.rootMapId!==null&&(!integer(value.rootMapId,0)||!maps.has(value.rootMapId)))return false;
  return value.selectedGroupId===null||integer(value.selectedGroupId,1)&&groups.has(value.selectedGroupId);
 }
-type Patch<T>={removed:number[];upserted:T[];order?:number[];growth?:Float64Array};
+type Patch<T>={removed:number[];upserted:T[];order?:number[];growth?:Float64Array;life?:Float64Array};
+/** Complete check of a record rebuilt from a plant age tuple (see ResourceChanges.life). */
+type LifeCheck<T>=(value:T)=>boolean;
+const lifeTuples=(life:unknown,limit:number):life is Float64Array=>life instanceof Float64Array&&Object.getPrototypeOf(life)===Float64Array.prototype&&life.length%4===0&&life.length<=limit*4;
 type Prepared<T>={values:T[];slots:Map<number,number>;indices:number[]|undefined;edge:ResourceStructureCandidate|undefined;baseEdge:ResourceStructureCandidate|undefined};
 
 /** Sparse existing-ID upserts and growth have no membership/order edits.
  * Keep all tuple guards and BASE upserts, without a writes Map or ID rescans.
  * A new ID/inconsistent index falls back without changing any owner. */
-function patchSparseGrowth<T extends {id:number}>(previous:T[],oldSlots:Map<number,number>,upserted:T[],growth:unknown,nextId:number,growthTick:number):Prepared<T>|undefined|null {
+function patchSparseGrowth<T extends {id:number}>(previous:T[],oldSlots:Map<number,number>,upserted:T[],growthRaw:unknown,nextId:number,growthTick:number,lifeRaw?:unknown,validLife?:LifeCheck<T>):Prepared<T>|undefined|null {
+ // Either list may be absent; a present one keeps every tuple guard.
+ const growth=growthRaw===undefined?new Float64Array():growthRaw,life=lifeRaw===undefined?new Float64Array():lifeRaw;
  if(!(growth instanceof Float64Array)||Object.getPrototypeOf(growth)!==Float64Array.prototype
   ||growth.length%4||growth.length>previous.length*4)return;
+ if(!lifeTuples(life,previous.length)||life.length&&!validLife)return;
  const touched=new Set<number>(),indices:number[]=[],updated:ResourceStructureCandidate['updated'][number][]=[],baseUpdated:ResourceStructureCandidate['updated'][number][]=[];
  let values=previous;
  // identified(upserted,nextId) already checked row shape and unique IDs.
@@ -112,6 +119,15 @@ function patchSparseGrowth<T extends {id:number}>(previous:T[],oldSlots:Map<numb
   if(values===previous)values=previous.slice();values[slot]=changed;
   touched.add(id);indices.push(slot);updated.push({id,afterOrdinal:slot});
  }
+ for(let index=0;index<life.length;index+=4){
+  const id=life[index]!,slot=oldSlots.get(id),old=previous[slot??-1] as (T&Partial<Resource>)|undefined;
+  if(!integer(id,1,nextId-1)||!old||!record(old.plantLife)||touched.has(id))return;
+  if(slot===undefined||old.id!==id)return null;
+  const changed={...old,plantLife:{...old.plantLife,age:life[index+1]!,darkTicks:life[index+2]!,nextCheck:life[index+3]!}} as T;
+  if(!validLife!(changed))return;
+  if(values===previous)values=previous.slice();values[slot]=changed;
+  touched.add(id);indices.push(slot);updated.push({id,afterOrdinal:slot});
+ }
  const edge:ResourceStructureCandidate={beforeCount:previous.length,afterCount:values.length,removed:[],added:[],updated};
  return {values,slots:oldSlots,indices,edge,baseEdge:{...edge,updated:baseUpdated}};
 }
@@ -119,13 +135,13 @@ function patchSparseGrowth<T extends {id:number}>(previous:T[],oldSlots:Map<numb
 /** No private index points at a mutable producer object. Membership/order
  * changes rebuild only that collection; sparse edits keep its stable slots. */
 function patchCollection<T extends {id:number}>(previous:T[],oldSlots:Map<number,number>,raw:unknown,nextId:number,
- growthTick?:number):Prepared<T>|undefined {
- if(!record(raw)||Object.keys(raw).some(key=>!['removed','upserted','order',...(growthTick===undefined?[]:['growth'])].includes(key))
+ growthTick?:number,validLife?:LifeCheck<T>):Prepared<T>|undefined {
+ if(!record(raw)||Object.keys(raw).some(key=>!['removed','upserted','order',...(growthTick===undefined?[]:['growth']),...(validLife?['life']:[])].includes(key))
   ||!own(raw,'removed')||!own(raw,'upserted')||!dense(raw.removed)||!identified(raw.upserted,nextId)
   ||own(raw,'order')&&!dense(raw.order))return;
  const patch=raw as unknown as Patch<T>,sparse=!patch.removed.length&&!own(raw,'order')&&patch.upserted.every(value=>oldSlots.has(value.id));
- if(growthTick!==undefined&&sparse&&own(raw,'growth')){
-  const prepared=patchSparseGrowth(previous,oldSlots,patch.upserted,patch.growth,nextId,growthTick);if(prepared!==null)return prepared;
+ if(growthTick!==undefined&&sparse&&(own(raw,'growth')||own(raw,'life'))){
+  const prepared=patchSparseGrowth(previous,oldSlots,patch.upserted,own(raw,'growth')?patch.growth??null:undefined,nextId,growthTick,own(raw,'life')?patch.life??null:undefined,validLife);if(prepared!==null)return prepared;
  }
  const touched=new Set<number>(),removed:{id:number;beforeOrdinal:number}[]=[];
  for(const id of patch.removed){if(!integer(id,1,nextId-1)||touched.has(id)||!oldSlots.has(id))return;touched.add(id);removed.push({id,beforeOrdinal:oldSlots.get(id)!});}
@@ -146,6 +162,17 @@ function patchCollection<T extends {id:number}>(previous:T[],oldSlots:Map<number
     ||!Number.isNaN(factor)&&(!Number.isFinite(factor)||factor<0||factor>1))return;
    const updated={...old,growth:value,growthTick:tick};
    if(Number.isNaN(factor))delete updated.growthThermalFactor;else updated.growthThermalFactor=factor;
+   touched.add(id);write(updated);
+  }
+ }
+ if(own(raw,'life')){
+  const life=patch.life;
+  if(!validLife||!lifeTuples(life,previous.length))return;
+  for(let index=0;index<life.length;index+=4){
+   const id=life[index]!,old=read(id) as (T&Partial<Resource>)|undefined;
+   if(!integer(id,1,nextId-1)||!old||!record(old.plantLife)||touched.has(id))return;
+   const updated={...old,plantLife:{...old.plantLife,age:life[index+1]!,darkTicks:life[index+2]!,nextCheck:life[index+3]!}} as T;
+   if(!validLife(updated))return;
    touched.add(id);write(updated);
   }
  }
@@ -348,7 +375,7 @@ export class ResidentPresentationAssembler {
    baseEdge=edge;
    if(own(packet,'tiles')){const prepared=tileChanges(tiles,packet.tiles);if(!prepared)return fail('Invalid resident tile indices');tiles=prepared.tiles;tileIndices=prepared.indices;}
    if(own(packet,'resources')){
-    const prepared=patchCollection(resources,this.resourceSlots,packet.resources,dynamic.nextId,dynamic.tick);if(!prepared)return fail('Invalid resident resource references');
+    const prepared=patchCollection(resources,this.resourceSlots,packet.resources,dynamic.nextId,dynamic.tick,value=>validPlantLife(value,dynamic.schemaVersion,dynamic));if(!prepared)return fail('Invalid resident resource references');
     resources=prepared.values;resourceSlots=prepared.slots;resourceIndices=prepared.indices;edge=prepared.edge;baseEdge=prepared.baseEdge;
    }
    if(own(packet,'piles')){

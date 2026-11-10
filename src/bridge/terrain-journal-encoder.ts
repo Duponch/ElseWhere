@@ -25,7 +25,7 @@ export class TerrainJournalSnapshotEncoder extends SnapshotEncoder<true> {
  private requireCheckpoint=false;
  // Even a small colony needs exact structure edges: a literal replacement
  // invalidates MAIN's topology/support readers on every ordinary publication.
- constructor(){super({structureDelta:true,minimumStructures:0});}
+ constructor(){super({structureDelta:true,minimumStructures:0,plantLifeDelta:true});}
  protected override createTileCache():TileSnapshotCache {return new JournalTileSnapshotCache();}
  protected forcePublicationCheckpoint():void {this.requireCheckpoint=true;}
  override encode(world:World,stepMs:number,speed:number,checkpoint=false):SnapshotMessage<true> {

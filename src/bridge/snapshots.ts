@@ -596,7 +596,11 @@ const validCapturedResourceId = (id: number): boolean => Number.isSafeInteger(id
 
 type DynamicWorld = Omit<NativeUIWorld298, 'tiles' | 'resources' | 'piles'> & { readonly piles?: never };
 type StructurelessDynamicWorld = Omit<DynamicWorld, 'structures'> & { readonly structures?: never };
-interface ResourceChanges { removed: number[]; upserted: Resource[]; order?: number[]; growth?:Float64Array }
+/** `growth`: id, growth, growthTick, thermal factor (NaN: absent). `life`
+ * (opt-in producer): id, then the plant age record's age, darkTicks and
+ * nextCheck, for a plant whose record differs from the receiver's only by
+ * those three numbers. Neither changes membership, order or a base field. */
+interface ResourceChanges { removed: number[]; upserted: Resource[]; order?: number[]; growth?:Float64Array; life?:Float64Array }
 interface PileChanges { removed: number[]; upserted: MaterialPile[]; order?: number[] }
 export interface StructureChanges { removed: number[]; upserted: Structure[]; order?: number[] }
 interface SnapshotHeader { corePhase297?:import('./core-phase-projection-297').CoreFullPhaseMetadata297; explorationApproachers?:import('../sim/exploration-door-256.ts').ExplorationApproacher256[]; geography?:PlanetGeographyTransport256; urgentThreats?:import('./urgent-threats').UrgentThreatSnapshot; motion?:import('../bridge/motion-tracks.ts').PawnTrack[]; audioCues?:import('../bridge/audio-cues.ts').AudioCue[]; type: 'snapshot'; epoch: number; revision: number; stepMs: number; speed: number }
@@ -690,6 +694,15 @@ const equalResourceBase = (a: Resource, b: Resource): boolean => a.id === b.id &
   && a.plantLife?.leaflessAt === b.plantLife?.leaflessAt && a.plantLife?.nextCheck === b.plantLife?.nextCheck
   && a.blight?.since === b.blight?.since && a.blight?.severity === b.blight?.severity && a.blight?.lastHarmTick === b.blight?.lastHarmTick
   && a.blight?.nextCheck === b.blight?.nextCheck && a.blight?.rng === b.blight?.rng;
+/** True when `next` is exactly `previous` with only its plant age record's
+ * age, darkTicks and nextCheck replaced: same keys in the same order at both
+ * levels, every other value identical (growth included). The receiver then
+ * rebuilds `next` from the record it holds and these three numbers. */
+function plantLifeOnlyChange(previous:Resource,next:Resource):boolean {
+  const before=previous.plantLife,after=next.plantLife;
+  if(!before||!after||typeof after.age!=='number'||typeof after.darkTicks!=='number'||typeof after.nextCheck!=='number')return false;
+  return equalPileValue({...previous,plantLife:{...before,age:after.age,darkTicks:after.darkTicks,nextCheck:after.nextCheck}},next);
+}
 const copyResource=(r:Resource):Resource=>({...r,...r.plantLife?{plantLife:{...r.plantLife}}:{},...r.blight?{blight:{...r.blight}}:{}});
 
 /** Preserve own-property presence, nested values and exact floating-point bits. */
@@ -901,6 +914,7 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
 
   private readonly structureDeltaRequested:boolean;
   private readonly minimumStructures:number;
+  private readonly plantLifeDelta:boolean;
   private structureDelta=false;
   private campaignOnly=false;
   private readonly geographicTransport=new PlanetGeographyTransportEncoder256();
@@ -914,11 +928,14 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
   discardDraftPreview():void {this.geographicTransport.discardDraftPreview();}
   encodeCampaignSummary(summary:CampaignSummary,checkpoint=false){return this.geographicTransport.encode(summary,checkpoint);}
   campaignHeader(checkpoint=false):{epoch:number;revision:number} {if(!this.campaignOnly||checkpoint){this.epoch++;this.revision=0;}this.campaignOnly=true;this.source=undefined;this.riverWater=undefined;this.tiles=this.createTileCache();this.resources.clear();this.piles.clear();this.structures.clear();this.orderedResources=[];this.orderedPiles=[];this.orderedStructures=[];return {epoch:this.epoch,revision:++this.revision};}
-  constructor(options:{structureDelta?:SparseStructures;minimumStructures?:number} = {}) {
+  constructor(options:{structureDelta?:SparseStructures;minimumStructures?:number;
+    /** Opt-in transport form: a plant whose age record alone advanced is sent as three numbers (`resources.life`). */
+    plantLifeDelta?:boolean} = {}) {
     const minimum=options.minimumStructures??0;
     if(!Number.isSafeInteger(minimum)||minimum<0)throw new RangeError('minimumStructures must be a nonnegative safe integer.');
     this.structureDeltaRequested=options.structureDelta===true;
     this.minimumStructures=minimum;
+    this.plantLifeDelta=options.plantLifeDelta===true;
   }
 
   /** postMessage must follow synchronously: it owns cloning the returned dynamic state. */
@@ -958,6 +975,7 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
     const tiles = this.tiles.diff(world.tiles);
     const upserted: Resource[] = [];
     const growthValues:number[]=[],growthUpdates:Resource[]=[];
+    const lifeValues:number[]=[],lifeUpdates:Resource[]=[];
     let nextOrder: Resource[] | undefined = world.resources.length !== this.orderedResources.length ? [] : undefined;
     let naturalSame=this.trackNaturalInputs&&world.resources.length===this.orderedResources.length;
     for (let index = 0; index < world.resources.length; index++) {
@@ -979,6 +997,10 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
         // change its thermal growth factor without cloning its full identities.
         if(sameBase&&resource.growth!==undefined&&resource.growthTick!==undefined){
           growthValues.push(resource.id,resource.growth,resource.growthTick,resource.growthThermalFactor??NaN);growthUpdates.push(copy);
+        }else if(this.plantLifeDelta&&!sameBase&&previous!==undefined&&plantLifeOnlyChange(previous,resource)){
+          // The age record advances for every plant at its own long tick: three
+          // numbers instead of the complete identity, and no base change.
+          const life=resource.plantLife!;lifeValues.push(resource.id,life.age,life.darkTicks,life.nextCheck);lifeUpdates.push(copy);
         }else upserted.push(copy);
         if (sameSlot) this.orderedResources[index] = copy;
         cached = copy;
@@ -986,10 +1008,11 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
       nextOrder?.push(cached!);
     }
     let changes: ResourceChanges | undefined;
-    if (upserted.length || growthUpdates.length || nextOrder) {
+    if (upserted.length || growthUpdates.length || lifeUpdates.length || nextOrder) {
       const removed: number[] = [];
       changes = { removed, upserted };
       if(growthValues.length)changes.growth=new Float64Array(growthValues);
+      if(lifeValues.length)changes.life=new Float64Array(lifeValues);
       // Metadata/quantities alone cannot alter membership or ordering. Only
       // structural edits need the ID set and an optional explicit order.
       if (nextOrder) {
@@ -1005,6 +1028,7 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
       for (const id of removed) this.resources.delete(id);
       for (const resource of upserted) this.resources.set(resource.id, resource);
       for (const resource of growthUpdates) this.resources.set(resource.id, resource);
+      for (const resource of lifeUpdates) this.resources.set(resource.id, resource);
       if (nextOrder) this.orderedResources = nextOrder;
     }
     const pileUpserts:MaterialPile[]=[];
@@ -1394,7 +1418,7 @@ export class SnapshotDecoder {
         beforeCount, afterCount: beforeCount, removed: [], added: [], updated: [],
       } : undefined;
       if (message.resources) {
-        const { removed, upserted, order, growth } = message.resources;
+        const { removed, upserted, order, growth, life } = message.resources;
         const sparse = !removed.length && !order && upserted.every(resource => this.resourceSlots.has(resource.id));
         let capturedBeforeCount = 0;
         const byId = sparse ? undefined : new Map<number, Resource>(resources.map((resource, ordinal): [number, Resource] => {
@@ -1442,6 +1466,16 @@ export class SnapshotDecoder {
             const updated={...old,growth:value,growthTick:tick};
             if(Number.isNaN(factor))delete updated.growthThermalFactor;else updated.growthThermalFactor=factor;
             if(!validPlantLife(updated,message.world.schemaVersion,message.world)||!validPlantThermalFactor(updated,message.world.schemaVersion)||!validCropBlight(updated,message.world.schemaVersion,message.world))return resync('Delta de croissance invalide.');
+            touched.add(id);write(updated);
+          }
+        }
+        if(life!==undefined){
+          if(!(life instanceof Float64Array)||life.length%4||life.length>previous.width*previous.height*4)return resync('Delta d’âge végétal invalide.');
+          for(let i=0;i<life.length;i+=4){
+            const id=life[i]!,old=read(id);
+            if(!old||!isPlant(old)||!old.plantLife||touched.has(id)||!Number.isSafeInteger(id))return resync('Delta d’âge végétal invalide.');
+            const updated={...old,plantLife:{...old.plantLife,age:life[i+1]!,darkTicks:life[i+2]!,nextCheck:life[i+3]!}};
+            if(!validPlantLife(updated,message.world.schemaVersion,message.world))return resync('Delta d’âge végétal invalide.');
             touched.add(id);write(updated);
           }
         }
