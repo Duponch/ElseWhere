@@ -4,7 +4,9 @@ Ouverts le 9 novembre 2026. Ces chantiers **doivent être faits**, quel que soit
 
 Ordre recommandé au départ : **1 avant 2**. La refonte de la publication touche ce que surveille le contrôle de présentation, l'un des outils cassés du chantier 1.
 
-**Ordre décidé par l'utilisateur le 10 novembre : chantier 2 d'abord, puis le chantier 3.** Les outils du chantier 1 sont réparés. Il en restait un point, le retard des changements de vitesse : il est sorti du chantier 1 et devient le chantier 3, **à reprendre dès que le chantier 2 est fini et vérifié**, sans attendre une nouvelle demande.
+**Ordre décidé par l'utilisateur le 10 novembre, après les deux premières tranches du chantier 2 : le chantier 3 (retard des changements de vitesse) maintenant, puis le chantier 4 (simulation). Le reste du chantier 2 passe après, son gain étant modeste.**
+
+Ordre précédent, du même jour : chantier 2 d'abord, puis le chantier 3. Les outils du chantier 1 sont réparés. Il en restait un point, le retard des changements de vitesse : il est sorti du chantier 1 et devient le chantier 3, **à reprendre dès que le chantier 2 est fini et vérifié**, sans attendre une nouvelle demande.
 
 ## 1. Réparer les outils de test cassés
 
@@ -80,6 +82,18 @@ Noté le 10 novembre à la demande de l'utilisateur, pour y revenir après la re
 - **Fini quand** : `npm run test:presentation` passe sur `main`, plusieurs passages de suite.
 - **Relevé du 10 novembre, après la première tranche du chantier 2** (un passage, client réel) : 3 changements de vitesse sur 22 au-dessus de 100 ms (142, 171 et 194 ms, tous vers ×1 ou ×6), contre des retards jusqu'à 1,6 s la veille. Mesure à refaire plusieurs fois avant d'en conclure quoi que ce soit.
 - **Autres attentes du même contrôle, masquées par celle-ci.** L'assertion sur la vitesse échoue la première et arrête le contrôle ; avec `HARVEST_VERIFY_SPEED=0`, la suivante échouerait aussi, et déjà avant le 10 novembre : 1 018 à 1 134 « sauts » de position et 57 à 116 images où un colon est dessiné dans une case encore rocheuse (`jumpCount`, `solidOccupancyCount` dans le rapport `artifacts/harvest-sync-verification.json`). À trier dans ce chantier : vrai défaut d'affichage ou seuil du contrôle périmé.
+
+## 4. Alléger la simulation des grandes colonies (après le chantier 3)
+
+Décidé par l'utilisateur le 10 novembre. À faire après le chantier 3, pas avant.
+
+- **Constat** (Worker réel, Les Forges, ×6, après les deux tranches du chantier 2) : un tick coûte ≈ 100 ms, dont ≈ 70 ms de simulation et ≈ 24 ms de publication. Le jeu joue ≈ 10 ticks par seconde pour 36 demandés. Même avec une publication gratuite, il plafonnerait vers 14.
+- **Ce qu'il faut** : ×3 demande moins de 55 ms par tick tout compris (simulation vers 35 à 40 ms, presque deux fois moins) ; ×6 demande moins de 28 ms (simulation vers 15 à 18 ms, environ quatre fois moins). Tenir ×3 sur Les Forges est l'objectif réaliste ; ×6 sur 80 colons et 241 animaux n'est pas promis.
+- **Profil plat**, pas de coupable unique (parts du Worker à ×6) : animaux ≈ 12 %, déplacements physiques ≈ 8 %, planification du travail ≈ 7 %, soins et repos des animaux ≈ 5 % chacun, températures ≈ 4 %, flore sauvage ≈ 3 %. Détail des optimisations déjà faites dans l'[audit](audit-performance-2026-11-05.md), sections « Simulation… ».
+- **Piste principale** : ne plus tout recalculer à chaque tick, comme RimWorld (`TickRare` toutes les 250 ticks, `TickLong` toutes les 2 000), voir [les cadences de RimWorld 1.6](../research/rimworld-16-tick-cadences.md). Tout changement de cadence est un changement de règle : il passe par un nouveau schéma et se vérifie contre le vrai jeu.
+- **Premier pas** : une liste de cibles chiffrées tirée du profil (gain attendu, risque pour les règles), avant de toucher au code.
+- **Contraintes** : une optimisation pure garde l'état simulé identique bit à bit (`scripts/perf-save-bench.ts`) ; la simulation reste déterministe.
+- **Fini quand** : ×3 est tenu sur Les Forges (18 ticks par seconde au banc `scripts/perf-worker-run.ts`), sans régression des règles.
 
 ## Références
 
