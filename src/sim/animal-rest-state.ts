@@ -1,4 +1,4 @@
-import {shipCasketCarrierOf277,syncShipCasketPassenger277} from './ship-casket-carry-277.ts';
+import {syncShipCasketPassenger277} from './ship-casket-carry-277.ts';
 import {groupAnimalClaimed256,groupAnimalCarrier256,syncGroupCarriedAnimals256,syncAllGroupCarriedAnimals256} from './group-animal-formation-256.ts';
 import type { Pawn,World } from './types.ts';
 
@@ -13,19 +13,34 @@ export function animalServiceIds(p:Pawn):readonly number[] {
 }
 /** Same as `animalServiceIds(p).includes(id)` (SameValueZero), without
  * building the list: animalClaimed runs for every domestic animal and pawn. */
+const sameServiceId=(value:number|undefined,id:number)=>value===id||value!==value&&id!==id;
 export function pawnServesAnimal(p:Pawn,id:number):boolean {
-  const same=(value:number|undefined)=>value===id||value!==value&&id!==id;
   const h=p.animalHandling;
   if(h){
-    if(same(h.animalId))return true;
-    if(h.kind==='lead'&&((h.ropees??[]).includes(id)||h.gatherId!==undefined&&same(h.gatherId)))return true;
+    if(sameServiceId(h.animalId,id))return true;
+    if(h.kind==='lead'&&(!!h.ropees?.includes(id)||h.gatherId!==undefined&&sameServiceId(h.gatherId,id)))return true;
   }
-  if(p.animalCare&&same(p.animalCare.animalId)||p.animalFeed&&same(p.animalFeed.animalId)||p.animalRescue&&same(p.animalRescue.animalId))return true;
+  if(p.animalCare&&sameServiceId(p.animalCare.animalId,id)||p.animalFeed&&sameServiceId(p.animalFeed.animalId,id)||p.animalRescue&&sameServiceId(p.animalRescue.animalId,id))return true;
   const casket=p.shipCasketTask277;
-  return casket?.action==='carry'&&casket.patient?.kind==='animal'&&same(casket.patient.id);
+  return casket?.action==='carry'&&casket.patient?.kind==='animal'&&sameServiceId(casket.patient.id,id);
 }
-export const animalClaimed=(w:World,id:number,exceptPawn?:number):boolean=>w.pawns.some(p=>p.id!==exceptPawn&&pawnServesAnimal(p,id))||w.schemaVersion>=256&&groupAnimalClaimed256(w,id,exceptPawn);
-export const animalCarrier=(w:World,id:number):Pawn|undefined=>shipCasketCarrierOf277(w,{kind:'animal',id})??w.pawns.find(p=>p.animalRescue?.animalId===id&&p.animalRescue.phase==='carry')??(w.schemaVersion>=256?groupAnimalCarrier256(w,id):undefined);
+export const animalClaimed=(w:World,id:number,exceptPawn?:number):boolean=>{
+  for(const p of w.pawns)if(p.id!==exceptPawn&&pawnServesAnimal(p,id))return true;
+  return w.schemaVersion>=256&&groupAnimalClaimed256(w,id,exceptPawn);
+};
+/** By precedence: a ship casket carrier, then an animal rescuer carrying it,
+ * then a caravan group handler; the first in pawn order within each. One pass
+ * over the pawns for the first two (the same result as one search per kind). */
+export const animalCarrier=(w:World,id:number):Pawn|undefined=>{
+  let rescuer:Pawn|undefined;
+  for(const p of w.pawns){
+    const c=p.shipCasketTask277;
+    if(c&&c.action==='carry'&&(c.phase==='carry'||c.phase==='closing')&&c.patient?.kind==='animal'&&c.patient.id===id)return p;
+    const r=p.animalRescue;
+    if(!rescuer&&r&&r.animalId===id&&r.phase==='carry')rescuer=p;
+  }
+  return rescuer??(w.schemaVersion>=256?groupAnimalCarrier256(w,id):undefined);
+};
 export function animalSpotClaimed(w:World,id:number,exceptAnimal?:number,exceptPawn?:number):boolean {
   return w.pawns.some(p=>p.id!==exceptPawn&&p.animalRescue?.spotId===id&&p.animalRescue.animalId!==exceptAnimal)
     ||!!w.wildlife?.animals.some(a=>a.id!==exceptAnimal&&a.animalRest?.spotId===id);

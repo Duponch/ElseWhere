@@ -56,7 +56,7 @@ export interface AnimalRestContext {
   readArea?:(a:WildAnimal)=>AnimalAreaPolicy287|undefined;
 }
 export function processAnimalRest(w:World,a:WildAnimal,ctx:AnimalRestContext):boolean {
-  if(w.schemaVersion<221||!a.domestic||animalCarrier(w,a.id)||a.state==='dead'||a.state==='downed'||animalClaimed(w,a.id))return false;
+  if(w.schemaVersion<221||!a.domestic||a.state==='dead'||a.state==='downed'||animalCarrier(w,a.id)||animalClaimed(w,a.id))return false;
   const policy=ctx.readArea?ctx.readArea(a):captureAnimalAreaPolicy287(w,a),inside=(c:Cell)=>!policy||policy.has(c.z*w.width+c.x);
   const wanted=(ctx.medicalRest?a.food>=ctx.nutrition*.45:a.rest<.3||ctx.night&&a.rest<.75)&&!a.sleepUntilCore;
   const t=a.animalRest;

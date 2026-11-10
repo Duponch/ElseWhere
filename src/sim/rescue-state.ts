@@ -1,4 +1,4 @@
-import {shipCasketCarrying277,syncShipCasketPassenger277} from './ship-casket-carry-277.ts';
+import {syncShipCasketPassenger277} from './ship-casket-carry-277.ts';
 import {medicalCivilTick271} from './suspended-human-clock-271.ts';
 import {syncKidnappedPatient261,releaseKidnap261} from './caravan-kidnap-261.ts';
 import {groupHumanCarrierOf257} from './group-human-admission-257.ts';
@@ -21,8 +21,9 @@ export const cryptosleepCarrierOf271=(w:World,id:number):Pawn|undefined=>w.pawns
 export const carrierOf=(world:World,patientId:number):Pawn|undefined=>{
   let shipCasket:Pawn|undefined,kidnapper:Pawn|undefined;
   for(const p of world.pawns){
-    if(p.rescue?.phase==='carry'&&p.rescue.patientId===patientId||cryptosleepCarrying271(p)&&p.cryptosleepTask!.patientId===patientId)return p;
-    if(!shipCasket&&shipCasketCarrying277(p)&&p.shipCasketTask277!.patient?.kind==='human'&&p.shipCasketTask277!.patient.id===patientId)shipCasket=p;
+    const r=p.rescue,crypto=p.cryptosleepTask,casket=p.shipCasketTask277;
+    if(r&&r.phase==='carry'&&r.patientId===patientId||crypto&&crypto.action==='carry'&&(crypto.phase==='carry'||crypto.phase==='closing')&&crypto.patientId===patientId)return p;
+    if(!shipCasket&&casket&&casket.action==='carry'&&(casket.phase==='carry'||casket.phase==='closing')&&casket.patient?.kind==='human'&&casket.patient.id===patientId)shipCasket=p;
     if(!kidnapper&&p.raid?.kidnap261?.phase==='carry'&&p.raid.kidnap261.patientId===patientId)kidnapper=p;
   }
   return shipCasket??groupHumanCarrierOf257(world,patientId)??kidnapper;
