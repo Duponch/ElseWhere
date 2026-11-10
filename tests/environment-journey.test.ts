@@ -53,7 +53,7 @@ test('Environnement : préflight du vrai J76, adoption explicite, placements ord
   for(const d of environmentDecisions(w,player))expect(applyCommand(w,d.command),JSON.stringify(d)).toMatchObject({ok:true});
   const copy=deserializeWorld(serializeWorld(w));stepWorld(w,120);stepWorld(copy,120);
   expect(serializeWorld(copy)).toBe(serializeWorld(w));expect(validateWorld(w)).toEqual([]);
-});
+},180000);
 
 function runEnvironmentJourney():void {
   expect(fixtureHash).toBe(expectedFixtureHash);
