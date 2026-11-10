@@ -4,7 +4,9 @@ Ouverts le 9 novembre 2026. Ces chantiers **doivent être faits**, quel que soit
 
 Ordre recommandé au départ : **1 avant 2**. La refonte de la publication touche ce que surveille le contrôle de présentation, l'un des outils cassés du chantier 1.
 
-**Ordre décidé par l'utilisateur le 10 novembre, après les deux premières tranches du chantier 2 : le chantier 3 (retard des changements de vitesse) maintenant, puis le chantier 4 (simulation). Le reste du chantier 2 passe après, son gain étant modeste.**
+**Dernière décision de l'utilisateur (10 novembre, soir) : passer au chantier 4 (simulation) maintenant.** Le chantier 3 est mis en pause avec ses sauts résiduels (4 à 20 par passage, quatre classes décrites plus bas) ; le contrôle de présentation sert d'indicateur pendant le chantier 4 : une régression y ferait remonter nettement le nombre de sauts. La classe « rattrapage après une salve du Worker » relève de toute façon du chantier 4. Reprendre ensuite le reste du chantier 3, puis le reste du chantier 2.
+
+Décision précédente, du même jour, après les deux premières tranches du chantier 2 : le chantier 3 (retard des changements de vitesse) maintenant, puis le chantier 4 (simulation). Le reste du chantier 2 passe après, son gain étant modeste.**
 
 Ordre précédent, du même jour : chantier 2 d'abord, puis le chantier 3. Les outils du chantier 1 sont réparés. Il en restait un point, le retard des changements de vitesse : il est sorti du chantier 1 et devient le chantier 3, **à reprendre dès que le chantier 2 est fini et vérifié**, sans attendre une nouvelle demande.
 
@@ -97,7 +99,7 @@ Noté le 10 novembre à la demande de l'utilisateur, pour y revenir après la re
 - **Relevé du 10 novembre, après la première tranche du chantier 2** (un passage, client réel) : 3 changements de vitesse sur 22 au-dessus de 100 ms (142, 171 et 194 ms, tous vers ×1 ou ×6), contre des retards jusqu'à 1,6 s la veille. Mesure à refaire plusieurs fois avant d'en conclure quoi que ce soit.
 - **Autres attentes du même contrôle, masquées par celle-ci.** L'assertion sur la vitesse échoue la première et arrête le contrôle ; avec `HARVEST_VERIFY_SPEED=0`, la suivante échouerait aussi, et déjà avant le 10 novembre : 1 018 à 1 134 « sauts » de position et 57 à 116 images où un colon est dessiné dans une case encore rocheuse (`jumpCount`, `solidOccupancyCount` dans le rapport `artifacts/harvest-sync-verification.json`). À trier dans ce chantier : vrai défaut d'affichage ou seuil du contrôle périmé.
 
-## 4. Alléger la simulation des grandes colonies (après le chantier 3)
+## 4. Alléger la simulation des grandes colonies (en cours depuis le 10 novembre au soir)
 
 Décidé par l'utilisateur le 10 novembre. À faire après le chantier 3, pas avant.
 
