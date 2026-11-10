@@ -16,9 +16,10 @@ import type {MaterialPile,World} from './types.ts';
  *    `item`, an element replaced by index) calls markPileWrite;
  *  - push/splice change the array length or its first or last element.
  * Outside a scope every reader scans, as before. At the start of each
- * outermost scope, and after any marked write, an index is first checked
- * against the piles, owners, kinds and items it was built from (identity);
- * so writes made between steps (tests, loaders, commands) need no mark.
+ * outermost scope, and after any marked write or change of length, an index
+ * is first checked against the piles, owners, kinds and items it was built
+ * from (identity), so writes made between steps (tests, loaders, commands)
+ * need no mark; piles pushed since are added, anything else rebuilds it.
  * setPileIndexVerification(true) makes every indexed answer recompute the
  * scan and throw on a difference, which exposes an unmarked write. */
 
@@ -58,21 +59,24 @@ export interface PileIndex {
 }
 interface Entry extends PileIndex {
   generation:number;epoch:number;length:number;first:MaterialPile|undefined;last:MaterialPile|undefined;
-  readonly piles:MaterialPile[];readonly owners:MaterialPile['owner'][];readonly kinds:MaterialPile['kind'][];readonly items:MaterialPile['item'][];
+  readonly groundAt:Map<number,MaterialPile[]>;readonly groundChunks:MaterialPile[];readonly groundMaterialFloors:MaterialPile[];
+  readonly wornOffsets:Map<number,number>;readonly undefinedWorn:Set<number>;readonly equipment:Map<number,MaterialPile>;
+  /** pile, owner, kind, item of each indexed pile, in array order. */
+  readonly seen:unknown[];
 }
 const entries=new WeakMap<readonly MaterialPile[],Entry>();
+let lastPiles:readonly MaterialPile[]|undefined,lastEntry:Entry|undefined;
 const inMap=(x:number,z:number,width:number,height:number)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<width&&z<height;
-function unchanged(piles:readonly MaterialPile[],e:Entry):boolean {
-  const n=piles.length;if(n!==e.piles.length)return false;
-  for(let i=0;i<n;i++){const p=piles[i]!;if(p!==e.piles[i]||p.owner!==e.owners[i]||p.kind!==e.kinds[i]||p.item!==e.items[i])return false;}
+/** True when the first `count` piles are the ones indexed, with the same owner, kind and item. */
+function unchanged(piles:readonly MaterialPile[],seen:readonly unknown[],count:number):boolean {
+  for(let i=0,j=0;i<count;i++,j+=4){const p=piles[i]!;if(p!==seen[j]||p.owner!==seen[j+1]||p.kind!==seen[j+2]||p.item!==seen[j+3])return false;}
   return true;
 }
-function build(world:World):Entry {
-  const piles=world.piles,width=world.width,height=world.height,version=world.schemaVersion;
-  const groundAt=new Map<number,MaterialPile[]>(),groundFacts=new Uint8Array(width*height),groundChunks:MaterialPile[]=[],groundMaterialFloors:MaterialPile[]=[];
-  const wornOffsets=new Map<number,number>(),undefinedWorn=new Set<number>(),equipment=new Map<number,MaterialPile>();
-  for(const p of piles){
-    const owner=p.owner;
+/** Adds piles[from..] to `e`, in array order: the same result as building with them. */
+function add(e:Entry,piles:readonly MaterialPile[],from:number):void {
+  const {width,height,version,groundAt,groundFacts,groundChunks,groundMaterialFloors,wornOffsets,undefinedWorn,equipment,seen}=e;
+  for(let n=piles.length,k=from;k<n;k++){
+    const p=piles[k]!,owner=p.owner;seen.push(p,owner,p.kind,p.item);
     if(owner.type==='ground'){
       const chunk=version>=28&&p.kind==='chunk',floor=materialFloorPile(version,p.kind);
       if(chunk)groundChunks.push(p);
@@ -90,19 +94,33 @@ function build(world:World):Entry {
       if(Number.isInteger(owner.pawnId)&&!equipment.has(owner.pawnId))equipment.set(owner.pawnId,p);
     }
   }
-  return {width,height,version,groundAt,groundFacts,groundChunks,groundMaterialFloors,wornOffsets,undefinedWorn,equipment,
-    generation,epoch,length:piles.length,first:piles[0],last:piles[piles.length-1],
-    piles:piles.slice(),owners:piles.map(p=>p.owner),kinds:piles.map(p=>p.kind),items:piles.map(p=>p.item)};
+}
+function build(world:World):Entry {
+  const piles=world.piles,width=world.width,height=world.height;
+  const e:Entry={width,height,version:world.schemaVersion,groundAt:new Map(),groundFacts:new Uint8Array(width*height),groundChunks:[],groundMaterialFloors:[],
+    wornOffsets:new Map(),undefinedWorn:new Set(),equipment:new Map(),seen:[],
+    generation,epoch,length:piles.length,first:piles[0],last:piles[piles.length-1]};
+  add(e,piles,0);
+  return e;
+}
+function current(e:Entry,piles:readonly MaterialPile[],n:number):Entry {
+  e.generation=generation;e.epoch=epoch;e.length=n;e.first=piles[0];e.last=piles[n-1];
+  lastPiles=piles;lastEntry=e;return e;
 }
 /** The index of `world`'s piles, or undefined outside a simulation step. */
 export function pileIndex(world:World):PileIndex|undefined {
   if(!scopeDepth)return undefined;
-  const piles=world.piles,n=piles.length;let e=entries.get(piles);
+  const piles=world.piles,n=piles.length;
+  let e=piles===lastPiles?lastEntry:entries.get(piles);
   if(e&&e.width===world.width&&e.height===world.height&&e.version===world.schemaVersion){
-    if(e.generation===generation&&e.epoch===epoch&&e.length===n&&e.first===piles[0]&&e.last===piles[n-1])return e;
-    if(unchanged(piles,e)){e.generation=generation;e.epoch=epoch;e.length=n;e.first=piles[0];e.last=piles[n-1];return e;}
+    if(e.generation===generation&&e.epoch===epoch&&e.length===n&&e.first===piles[0]&&e.last===piles[n-1]){
+      if(e!==lastEntry){lastPiles=piles;lastEntry=e;}
+      return e;
+    }
+    // Checked against what it was built from; piles pushed since are added.
+    if(n>=e.length&&unchanged(piles,e.seen,e.length)){if(n>e.length)add(e,piles,e.length);return current(e,piles,n);}
   }
-  e=build(world);entries.set(piles,e);return e;
+  e=build(world);entries.set(piles,e);return current(e,piles,n);
 }
 /** Throws when an indexed answer differs from the scan (verification mode). */
 export function pileIndexMismatch(what:string):never {throw Error(`Unmarked pile write: ${what} differs from the scan`);}

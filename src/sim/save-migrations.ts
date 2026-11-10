@@ -1,3 +1,4 @@
+import {markPileWrite} from './pile-index.ts';
 import { dropRetainingIdentity } from './ground-placement.ts';
 import type { World } from './types.ts';
 import { MAX_STACK } from './definitions.ts';
@@ -49,6 +50,7 @@ export function initializeDining(world: World): void {
 export function initializeFood(world: World): void {
   (world as unknown as {schemaVersion:number}).schemaVersion = 5; world.foodRules = 'legacy';
   for (const pile of world.piles) pile.item = legacyItem(pile.kind);
+  markPileWrite();
   for (const pawn of world.pawns) if (pawn.need?.kind === 'eat') pawn.need.quantity = 1;
 }
 
