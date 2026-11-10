@@ -1,3 +1,4 @@
+import {markTerrainCellChanged} from '../src/sim/terrain-mutation-journal';
 import { expect,test } from 'vitest';
 import { createWorld } from '../src/sim/engine';
 import { footprintCells } from '../src/sim/definitions';
@@ -146,7 +147,7 @@ test('local animal checks match the dense physical oracle before routes and afte
     // Same tick, different decision: a terrain edit (which replaces the Tile,
     // Tile contract) and a closing door must be visible, as must a
     // frame/ground-item removal.
-    world.tiles[3*world.width+3]={...world.tiles[3*world.width+3]!,terrain:'rock'};world.piles=[];world.jobs=[];
+    world.tiles[3*world.width+3]={...world.tiles[3*world.width+3]!,terrain:'rock'};markTerrainCellChanged(world.tiles,3*world.width+3);world.piles=[];world.jobs=[];
     const door=world.structures.find(s=>s.kind==='door'&&s.x===11)!;door.door!.open=false;door.door!.from=1;door.door!.changedAt=world.tick;
     check();
   }

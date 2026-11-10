@@ -1,3 +1,4 @@
+import { invalidateTerrainJournal } from './terrain-mutation-journal.ts';
 import { createScenarioWorld } from './new-game.ts';
 import { startingPawn } from './starting-pawns.ts';
 import { startingSkills, type SkillRecord } from './skills.ts';
@@ -71,6 +72,8 @@ export function prepareAdvancedColonyScenario(): World {
     const original = world.tiles[index]!;
     world.tiles[index] = { terrain: original.terrain === 'rich-soil' ? 'rich-soil' : 'grass' };
   }
+  // Tile replacements are terrain writes: caches keyed by the write count see them.
+  if (landscaped.size) invalidateTerrainJournal(world.tiles);
   world.structures = []; world.jobs = []; world.packed = []; world.stockpiles = [];
   world.growingZones = []; world.growingCursor = 0; world.events = [];
   world.piles = world.piles.filter(pile => pile.owner.type === 'apparel');

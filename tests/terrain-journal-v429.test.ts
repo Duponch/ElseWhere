@@ -115,4 +115,4 @@ test('real historical/public inputs keep strict SAVE and shared physical campaig
    expect(()=>plan.commit()).toThrow('stale');expect(world).toStrictEqual(changed);h.send();
   }
  }
-},90000);
+},240000); // 83 to 117 s measured alone on 10 November, depending on machine load.

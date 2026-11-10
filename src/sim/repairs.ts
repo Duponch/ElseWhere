@@ -24,8 +24,10 @@ export function reconcileRepairs(world:World):void {
     for(const p of world.pawns){if(p.jobId!==null&&removed.has(p.jobId))releaseAssignments(world,p);p.orders.queue=p.orders.queue.filter(o=>typeof o!=='number'||!removed.has(o));}
     world.jobs=world.jobs.filter(j=>!removed.has(j.id));
   }
-  const busy=new Set(world.jobs.map(j=>j.z*world.width+j.x));
-  for(const s of world.structures)if(roadPropCanRepair256(world,s)&&!s.breakdown&&(world.schemaVersion>=87?isRepairableStructure(s):isBarrier(s))&&s.damage&&inHome(world,s.z*world.width+s.x)&&!busy.has(s.z*world.width+s.x)&&Number.isSafeInteger(world.nextId+1)) {
+  // Same conjunction of pure tests, the rare one first: almost every structure
+  // is undamaged, and only a damaged one needs the job-cell set.
+  const repairable=world.schemaVersion>=87?isRepairableStructure:isBarrier;let busy:Set<number>|undefined;
+  for(const s of world.structures)if(s.damage&&roadPropCanRepair256(world,s)&&!s.breakdown&&repairable(s)&&inHome(world,s.z*world.width+s.x)&&!(busy??=new Set(world.jobs.map(j=>j.z*world.width+j.x))).has(s.z*world.width+s.x)&&Number.isSafeInteger(world.nextId+1)) {
     world.jobs.push({id:world.nextId++,kind:'repair',repair:{structureId:s.id},x:s.x,z:s.z,orientation:s.orientation,footprint:s.footprint,status:'pending',reservedBy:null,progress:0,escrow:{wood:0,food:0}});
   }
 }

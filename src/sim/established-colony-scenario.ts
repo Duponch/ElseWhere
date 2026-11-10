@@ -1,3 +1,4 @@
+import { invalidateTerrainJournal } from './terrain-mutation-journal.ts';
 import { createScenarioWorld } from './new-game.ts';
 import { startingPawn } from './starting-pawns.ts';
 import { startingSkills } from './skills.ts';
@@ -64,6 +65,8 @@ export function prepareEstablishedColonyScenario(): World {
     const original = world.tiles[index]!;
     world.tiles[index] = { terrain: original.terrain === 'rich-soil' ? 'rich-soil' : 'grass' };
   }
+  // Tile replacements are terrain writes: caches keyed by the write count see them.
+  if (landscaped.size) invalidateTerrainJournal(world.tiles);
   world.structures = []; world.jobs = []; world.packed = []; world.stockpiles = [];
   world.growingZones = []; world.growingCursor = 0; world.events = [];
   // Replace only this new preparation's ground dotation. Keep the original

@@ -111,6 +111,28 @@ Décidé par l'utilisateur le 10 novembre. À faire après le chantier 3, pas av
 - **Contraintes** : une optimisation pure garde l'état simulé identique bit à bit (`scripts/perf-save-bench.ts`) ; la simulation reste déterministe.
 - **Fini quand** : ×3 est tenu sur Les Forges (18 ticks par seconde au banc `scripts/perf-worker-run.ts`), sans régression des règles.
 
+**Cibles chiffrées (10 novembre, soir).** Banc `scripts/perf-save-bench.ts` (simulation seule, Node, Les Forges, 200 ticks) : 72 à 89 ms par tick selon la charge de la machine, empreinte d'état `7314918c…`. Parts du profil (temps inclusif) :
+
+| Poste | Part | Nature | Piste |
+|---|---|---|---|
+| Faune (`advanceWildlife`) | 11,7 % | structurelle | relations porteur / réservation / maniement cherchées sur tous les pions à chaque animal (≈ 3 %), recherche de menaces proches (`considerFlee`, 1,7 %), navigation |
+| Déplacements fins (ticks Core intermédiaires) | 11,4 % | structurelle | `startTravel` 4,7 % (vitesse, gêne du mobilier, cases hostiles recalculées à chaque pas), `canStep` 2,6 %, grille des cases bloquées 1,3 % |
+| Planification du travail (`planWork`) | 10,3 % | structurelle | ménage 1,9 %, chemins vers les tâches 1 %, accessibilité 0,8 % |
+| Température de surface et flore sauvage | 6,9 % | exacte | flore 4,5 %, dont capture spatiale de la carte reconstruite à chaque tick où une plante peut pousser (≈ 2,7 %) |
+| Cuisine, recherche, réparations, énergie | 2 à 3 % chacun | exacte surtout | réparations : tous les bâtiments testés à chaque tick |
+| Corps de `stepLocalWorld` | 5 % | à détailler | |
+| Récupération mémoire | 3,7 % | diffuse | allocations par tick |
+| Lectures des champs partagés de la carte (`tick`, `nextId`…) | 1,7 % | exacte | chaque lecture passe par une fonction de renvoi vers la campagne |
+
+« Exacte » : même état bit à bit, vérifié par l'empreinte sur Les Forges et Les Éclaircies. « Structurelle » : refonte d'un sous-système qui garde les règles, à prouver par l'empreinte ou, si l'ordre des tirages change, par les tests du domaine. Aucun changement de cadence n'est envisagé pour l'instant : un tick local vaut déjà 10 ticks de RimWorld, la simulation tourne donc déjà dix fois moins souvent que le jeu pour la plupart des systèmes.
+
+Le profil est plat : il n'y a pas de levier unique. Les postes exacts réunis valent ≈ 15 à 20 % ; atteindre ×3 demande aussi les trois refontes structurelles. **C'est un chantier de plusieurs jours.**
+
+**Fait le 10 novembre au soir (exact, même empreinte sur Les Forges et Les Éclaircies) :**
+- grille des cases bloquées : la vérification complète des 62 500 cases à chaque construction est sautée quand aucune case n'a été écrite (compteur d'écritures du terrain, déjà utilisé par d'autres caches ; `VERIFY_TERRAIN_CACHES=1` refait la vérification et lève une erreur sur une écriture non signalée) ;
+- réparations : le test « endommagé » passe en premier, les autres tests, plus coûteux, ne sont faits que pour les rares bâtiments endommagés ;
+- deux constructeurs de scénarios remplaçaient des cases sans les signaler au compteur : ils le font désormais.
+
 ## Méthode de test (décidée le 10 novembre)
 
 La suite complète prend environ 4 heures : elle ne doit plus bloquer le travail.
