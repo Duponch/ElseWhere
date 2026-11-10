@@ -35,12 +35,12 @@ function planBedInterruptions(world:World,actors:readonly Pawn[]):DropPlan|null 
 }
 export function applyPrisonBed(world:World,command:{bedId:number;enabled:boolean}):CommandResult {
   const bed=world.structures.find(s=>isBedKind(s.kind)&&s.id===command.bedId);
-  if(!bed||typeof command.enabled!=='boolean')return fail('Lit ou rÃ´le de prison invalide.');
-  if(bed.kind==='double-bed')return fail('Le lit double est rÃ©servÃ© au couchage civil.');
+  if(!bed||typeof command.enabled!=='boolean')return fail('Lit ou rôle de prison invalide.');
+  if(bed.kind==='double-bed')return fail('Le lit double est réservé au couchage civil.');
   const map=topology(world),room=map.at(bed.x,bed.z);
-  if(command.enabled&&(room?.kind!=='space'||room.touchesMapEdge))return fail('Un lit de prison exige une piÃ¨ce fermÃ©e ne touchant pas le bord de carte.');
+  if(command.enabled&&(room?.kind!=='space'||room.touchesMapEdge))return fail('Un lit de prison exige une pièce fermée ne touchant pas le bord de carte.');
   const beds=room?.kind==='space'&&!room.touchesMapEdge?world.structures.filter(s=>isBedKind(s.kind)&&map.at(s.x,s.z)===room):[bed];
-  if(command.enabled&&beds.some(b=>b.kind==='double-bed'))return fail('Cette piÃ¨ce contient un lit double civil : retirez-le avant de la convertir en prison.');
+  if(command.enabled&&beds.some(b=>b.kind==='double-bed'))return fail('Cette pièce contient un lit double civil : retirez-le avant de la convertir en prison.');
   const changed=beds.filter(b=>!!b.prisoner!==command.enabled);if(!changed.length)return {ok:true};
   const actors=affectedByBeds(world,changed),drops=planBedInterruptions(world,actors);if(!drops)return fail('Pas de place pour conserver les cargaisons interrompues par le changement de prison.');
   const bedOwners=world.schemaVersion>=256?captureActorBeds256(registeredCampaign(world)):undefined;
@@ -52,10 +52,10 @@ export function applyPrisonBed(world:World,command:{bedId:number;enabled:boolean
 export function applyPrisonerMode(world:World,command:{patientId:number;mode:PrisonerMode}):CommandResult {
   const p=world.pawns.find(p=>p.id===command.patientId);
   if(!p?.prisoner||p.state==='dead'||!['maintain','reduce','recruit',...world.schemaVersion>=202?['release']:[]].includes(command.mode))return fail('Prisonnier ou mode de conversation invalide.');
-  if(world.schemaVersion>=213&&isColonist(p)&&command.mode!=='maintain'&&command.mode!=='release')return fail('Ce colon appartient dÃ©jÃ  Ã  la colonie : maintien ou libÃ©ration uniquement.');
+  if(world.schemaVersion>=213&&isColonist(p)&&command.mode!=='maintain'&&command.mode!=='release')return fail('Ce colon appartient déjà à la colonie : maintien ou libération uniquement.');
   if(p.prisoner.mode===command.mode)return {ok:true};
-  if(prisonBreakActive(p))return fail('Il faut rÃ©primer la rÃ©volte avant de changer cette consigne.');
-  if(p.prisoner.releasedAt!==undefined)return fail('Cette personne a dÃ©jÃ  Ã©tÃ© libÃ©rÃ©e et quitte la carte.');
+  if(prisonBreakActive(p))return fail('Il faut réprimer la révolte avant de changer cette consigne.');
+  if(p.prisoner.releasedAt!==undefined)return fail('Cette personne a déjà été libérée et quitte la carte.');
   p.prisoner.mode=command.mode;
   // Already completed interaction effects/closing time are kept; no rollback.
   for(const actor of world.pawns){
@@ -133,7 +133,7 @@ export function processPrisoner(world:World,p:Pawn,context:NeedContext):boolean 
           if(p.need)processNeeds(world,p,context);
           return true;
         }
-        context.event(`${p.name} sâ€™Ã©chappe par une ouverture de la prison.`);
+        context.event(`${p.name} s’échappe par une ouverture de la prison.`);
       }
       const target=route.at(-1)??{x:p.x,z:p.z};p.prisoner.escape={...target};p.path=route;
       if(route.length){p.state='moving';context.move(target,true);}else{p.path=[];p.state='idle';}
