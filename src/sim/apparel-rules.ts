@@ -1,4 +1,6 @@
 import {isSchema284OrLater} from './schema-compatibility-257.ts';
+import {pileScopeGeneration} from './pile-scope.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
 import {APPAREL,APPAREL_MATERIALS,APPAREL_FAMILIES,type ApparelMaterial,type ApparelFamily,type ApparelItem,type ApparelDefinition} from './apparel-definitions.ts';
 export * from './apparel-definitions.ts';
 import {apparelCompatible,type ArmorPiece} from './armor.ts';
@@ -61,7 +63,25 @@ export function apparelInsulation(pile:MaterialPile):Readonly<{cold:number;heat:
   return {cold:d.coldInsulation*factor,heat:d.heatInsulation*factor};
 }
 /** Relative Core base speed effect; retain the game's existing travel calibration. */
+/* Inside a pile scope (pile-scope.ts) every wearer's offset is summed once,
+ * per pawn in pile order from 0: the same additions as the scan below. */
+let wornOffsets:{world:World;generation:number;offsets:Map<number,number>}|undefined;
+function scopedWornOffsets(world:World):Map<number,number>|undefined {
+  const generation=pileScopeGeneration(world);if(generation===undefined)return undefined;
+  if(wornOffsets?.world!==world||wornOffsets.generation!==generation){
+    const offsets=new Map<number,number>();
+    for(const p of world.piles){const owner=p.owner;if(owner.type==='apparel'&&Number.isInteger(owner.pawnId))offsets.set(owner.pawnId,(offsets.get(owner.pawnId)??0)+apparelDefinition(p).moveOffset);}
+    wornOffsets={world,generation,offsets};
+  }
+  return wornOffsets.offsets;
+}
 export function apparelMoveFactor(world:World,pawn:Pawn):number {
-  let offset=0;for(const p of world.piles)if(p.owner.type==='apparel'&&p.owner.pawnId===pawn.id)offset+=apparelDefinition(p).moveOffset;
+  const offsets=Number.isInteger(pawn.id)?scopedWornOffsets(world):undefined;
+  let offset=0;
+  if(offsets&&!verifyTerrainWriteCaches)offset=offsets.get(pawn.id)??0;
+  else{
+    for(const p of world.piles)if(p.owner.type==='apparel'&&p.owner.pawnId===pawn.id)offset+=apparelDefinition(p).moveOffset;
+    if(offsets&&(offsets.get(pawn.id)??0)!==offset)throw Error('Worn apparel changed inside a pile scope');
+  }
   return Math.max(.01,(4.6+offset)/4.6);
 }

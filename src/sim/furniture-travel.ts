@@ -16,6 +16,7 @@ import { spikeTrapKnowsOf,spikeTrapNavigationActor,SPIKE_TRAP_SEARCH_COST,SPIKE_
 import type { Cell, StructureKind, World } from './types.ts';
 import { captureStructureNavigation,type StructureNavigationGeometry } from './structure-navigation.ts';
 import { terrainWriteCount,verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
+import { pileScopeGeneration } from './pile-scope.ts';
 
 /** Core natural floors cost two Core ticks. Historical grass/soil stay neutral. */
 export function terrainTravelDelay(world:World,index:number):number {
@@ -139,21 +140,18 @@ export function captureStandability(world:World,geometry?:StructureNavigationGeo
   return cell=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height
     &&!['rock','water'].includes(world.tiles[cell.z*world.width+cell.x]!.terrain)&&!structures?.[cell.z*world.width+cell.x]&&!denied.has(cell.z*world.width+cell.x);
 }
-/* Ground pile facts per in-map cell, for one bounded scope in which no ground
- * pile changes: the Core movement pass (core-movement-297), which ends the
- * scope after it and drops the facts after any drafted pawn's turn, the only
- * part of that pass that may drop or take an item. Each step otherwise scans
- * every pile (about 1 800 on Les Forges). Same answers as the scan below: the
- * pile rules are an OR over the piles of a cell, and a pile outside the map
- * can match no in-map cell. VERIFY_TERRAIN_CACHES compares with the scan. */
+/* Ground pile facts per in-map cell, inside a pile scope (pile-scope.ts) in
+ * which no pile changes. Each step otherwise scans every pile (about 1 800 on
+ * Les Forges). Same answers as the scan below: the pile rules are an OR over
+ * the piles of a cell, and a pile outside the map can match no in-map cell.
+ * VERIFY_TERRAIN_CACHES compares every answer with the scan. */
 const PILE_CHUNK=1,PILE_MATERIAL=2;
-let groundPileScope:{world:World;source:World['piles'];length:number;ready:boolean}|undefined;
 /** One byte per cell, kept across scopes of a World with the piles, owners
  * and kinds it was built from: owner objects are replaced, never edited, when
  * a pile moves, so a scope that finds every pile, owner and kind identical
  * reuses the bytes; otherwise only the cells marked by the last build are
  * cleared and the bytes rebuilt. */
-interface GroundPileFacts {facts:Uint8Array;marked:number[];version:number;width:number;piles:World['piles'][number][];owners:World['piles'][number]['owner'][];kinds:World['piles'][number]['kind'][]}
+interface GroundPileFacts {generation:number;facts:Uint8Array;marked:number[];version:number;width:number;piles:World['piles'][number][];owners:World['piles'][number]['owner'][];kinds:World['piles'][number]['kind'][]}
 const groundPileFacts=new WeakMap<World,GroundPileFacts>();
 function sameGroundPiles(world:World,entry:GroundPileFacts):boolean {
   const piles=world.piles,n=piles.length;
@@ -161,17 +159,13 @@ function sameGroundPiles(world:World,entry:GroundPileFacts):boolean {
   for(let i=0;i<n;i++){const p=piles[i]!;if(p!==entry.piles[i]||p.owner!==entry.owners[i]||p.kind!==entry.kinds[i])return false;}
   return true;
 }
-export function beginGroundPileScope(world:World):void {groundPileScope={world,source:world.piles,length:world.piles.length,ready:false};}
-export function dropGroundPileFacts():void {if(groundPileScope)groundPileScope.ready=false;}
-export function endGroundPileScope():void {groundPileScope=undefined;}
 const materialFloorPile=(version:number,kind:string)=>version>=29&&kind==='steel'||version>=32&&kind==='blocks'||version>=41&&kind==='component'||version>=123&&(kind==='gold'||kind==='plasteel'||kind==='advanced-component');
 function scopedGroundPiles(world:World):Uint8Array|undefined {
-  const scope=groundPileScope;if(!scope||scope.world!==world)return undefined;
-  if(scope.source!==world.piles||scope.length!==world.piles.length){scope.source=world.piles;scope.length=world.piles.length;scope.ready=false;}
+  const generation=pileScopeGeneration(world);if(generation===undefined)return undefined;
   const size=world.width*world.height;let entry=groundPileFacts.get(world),fresh=false;
-  if(!entry||entry.facts.length!==size){entry={facts:new Uint8Array(size),marked:[],version:NaN,width:world.width,piles:[],owners:[],kinds:[]};groundPileFacts.set(world,entry);fresh=true;}
-  if(!scope.ready&&!fresh&&sameGroundPiles(world,entry))scope.ready=true;
-  if(!scope.ready){
+  if(!entry||entry.facts.length!==size){entry={generation:NaN,facts:new Uint8Array(size),marked:[],version:NaN,width:world.width,piles:[],owners:[],kinds:[]};groundPileFacts.set(world,entry);fresh=true;}
+  if(entry.generation!==generation&&!fresh&&sameGroundPiles(world,entry))entry.generation=generation;
+  if(entry.generation!==generation){
     const {facts,marked}=entry,version=world.schemaVersion,width=world.width,height=world.height;
     for(const i of marked)facts[i]=0;marked.length=0;
     entry.version=version;entry.width=width;entry.piles=world.piles.slice();entry.owners=entry.piles.map(p=>p.owner);entry.kinds=entry.piles.map(p=>p.kind);
@@ -180,7 +174,7 @@ function scopedGroundPiles(world:World):Uint8Array|undefined {
       const bits=(version>=28&&p.kind==='chunk'?PILE_CHUNK:0)|(materialFloorPile(version,p.kind)?PILE_MATERIAL:0);
       if(bits){const i=owner.z*width+owner.x;if(!facts[i])marked.push(i);facts[i]=facts[i]!|bits;}
     }
-    scope.ready=true;
+    entry.generation=generation;
   }
   return entry.facts;
 }

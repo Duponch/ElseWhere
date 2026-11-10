@@ -14,7 +14,7 @@ import {processDraft} from './drafting.ts';
 import {blockedCells,canStep} from './pathfinding.ts';
 import {CIVIL_TRANSIT_BLOCKERS} from './travel.ts';
 import {captureStructureNavigation} from './structure-navigation.ts';
-import {beginGroundPileScope,dropGroundPileFacts,endGroundPileScope} from './furniture-travel.ts';
+import {beginPileScope,dropPileFacts,endPileScope} from './pile-scope.ts';
 import {carrierOf} from './rescue-state.ts';
 import {medicallyStopped} from './health-rules.ts';
 import {isStunned} from './stun.ts';
@@ -38,7 +38,7 @@ export function createCoreMovement297(world:World){
   budget(){return budget;},
   advance():{actorsChanged:number[];changedCells:boolean;requiresFull:boolean;topologyChanged:boolean;deferredChange297:boolean;doorsMoved297:readonly number[]}{
    // Ground piles keep still during this pass, except in a drafted pawn's turn.
-   beginGroundPileScope(world);try{
+   beginPileScope(world);try{
    const now=effectiveLocal297(world),core=effectiveCore297(world),changed:number[]=[];let changedCells=false,requiresFull=false,deferredChange297=false;
    const touchPassengers=(carrier:World['pawns'][number])=>{
     passengers??=captureCorePassengers297(world);
@@ -66,7 +66,7 @@ export function createCoreMovement297(world:World){
     if(!pawn.path.length&&!tacticalActive)continue;
     if(medicallyStopped(pawn)||isStunned(pawn,core)||carrierOf(world,pawn.id))continue;
     const x=pawn.x,z=pawn.z,m=pawn.motion;
-    if(tactical){processDraft(world,pawn,grid,budget,readLight);dropGroundPileFacts();}
+    if(tactical){processDraft(world,pawn,grid,budget,readLight);dropPileFacts();}
     // The shared structure index (validated on each read) answers the door-corner
     // test of a diagonal step without scanning every structure, as for transit exits.
     else {const next=pawn.path[0];if(next&&canStep(world,pawn,next,grid(),CIVIL_TRANSIT_BLOCKERS,captureStructureNavigation(world))&&startTravel(world,pawn,next,readLight))pawn.path.shift();}
@@ -80,7 +80,7 @@ export function createCoreMovement297(world:World){
    // that reveals fog keeps the hard barrier.
    if(doors.changed&&!doors.moved297.length&&!doors.exploration297)deferredChange297=true;
    return {actorsChanged:changed,changedCells,requiresFull:doors.exploration297||requiresFull,topologyChanged:doors.topologyChanged,deferredChange297,doorsMoved297:doors.moved297.map(s=>s.id)};
-   }finally{endGroundPileScope();}
+   }finally{endPileScope();}
   }
  };
 }
