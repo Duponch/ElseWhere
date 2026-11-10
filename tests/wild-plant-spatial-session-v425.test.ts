@@ -143,6 +143,45 @@ describe('V425 ephemeral spatial flora',()=>{
   }
   expect(placed).toBeGreaterThan(0);expect(world).toStrictEqual(before);
  });
+ it('follows each replaced resources array exactly: removals, appends, reorders, replaced and duplicate plants',()=>{
+  // The prepared spawner keeps one capture per World and follows the next
+  // array when resources were only removed or appended; anything else is
+  // rebuilt. Every step must draw exactly what a complete cold capture draws.
+  const world=populated(),captured=coldReader().capture(world),input={...captured,rules:LOCAL_BIOME_RULES_256['temperate-forest']};
+  const order=validatePlantMap256(input),desired=createWildPlantSpawner256(input,order).desiredPlants;
+  const header={width:world.width,height:world.height,rules:input.rules,densityFactor:input.densityFactor,tileMinTemperature:input.tileMinTemperature,tileMaxTemperature:input.tileMaxTemperature,desiredPlants:desired};
+  const plant=(x:number,z:number,species:'grass'|'bush'|'pine')=>{const p=createWildPlantResource256(world,world.nextId++,x,z,species,.4,true);if(!p)throw Error('Missing real unit plant');return p;};
+  const compare=()=>{
+   const literal=createSpatialWildPlantSpawner256(session(world,input,desired),order),prepared=createActualPlantSpatialSpawner256(world,header,order);
+   const a=new WorldGenerationRandom(77),b=new WorldGenerationRandom(77);let picked=0;
+   for(let cell=0;cell<world.tiles.length;cell+=3){
+    const expected=literal.pick(cell,a,desired,true),actual=prepared.pick(cell,b,desired,true);
+    expect(actual).toBe(expected);expect(b.state).toEqual(a.state);expect(prepared.desiredAt(cell)).toBe(literal.desiredAt(cell));
+    if(expected!==undefined)picked++;
+   }
+   return picked;
+  };
+  let picked=compare();
+  const firstPlant=()=>world.resources.find(r=>r.species!==undefined)!;
+  const steps:((r:World['resources'])=>World['resources'])[]=[
+   r=>r.filter((_,i)=>i%3!==1),
+   r=>[...r,plant(20,20,'grass'),plant(21,20,'bush')],
+   r=>{const gone=firstPlant();return [...r.filter(x=>x!==gone),plant(gone.x,gone.z,'pine')];},
+   r=>[...r],
+   r=>[...r].reverse(),
+   r=>r.map((x,i)=>i===2?{...x}:x),
+   r=>r.slice(0,-1),
+   r=>[...r.slice(1),r[0]!],
+  ];
+  for(const step of steps){world.resources=step(world.resources);picked+=compare();}
+  expect(picked).toBeGreaterThan(0);
+  // A duplicate plant is refused, and leaves no partial capture behind.
+  const valid=world.resources,kept=firstPlant();
+  world.resources=[...valid,plant(kept.x,kept.z,'grass')];
+  expect(()=>createActualPlantSpatialSpawner256(world,header,order)).toThrow('Invalid existing initial plant');
+  world.resources=valid.filter(x=>x!==kept);compare();
+  world.resources=[...world.resources,kept];compare();
+ });
  it('keeps actual population duplicate refusals and failure atomicity before returning a spawner',()=>{
   for(const duplicatePot of [false,true]){
    const world=populated(),input=coldReader().capture(world),order=validatePlantMap256(input);

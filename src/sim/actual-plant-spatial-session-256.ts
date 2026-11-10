@@ -2,6 +2,7 @@ import {geyserCells256} from './local-geyser-state-256.ts';
 import {STRUCTURE_DEFINITIONS,footprintCells} from './definitions.ts';
 import {STRUCTURE_SHOT_FILL,FRAME_SHOT_FILL,resourceShotFill,itemShotFill} from './combat-content.ts';
 import {isPassageDoor} from './door-rules.ts';
+import {peekStructureMembershipToken} from './structure-navigation.ts';
 import {constructionFinalWipesPlants,constructionFrameWipesPlants} from './construction-plants.ts';
 import {actualAdditionalPlantOwners256} from './actual-plant-physical-masks-256.ts';
 import {naturalTerrainWalkable256} from './natural-terrain-movement-256.ts';
@@ -43,24 +44,110 @@ export function createActualPlantSpatialSpawner256(world:World,header:Header256,
  * array identity. Everything else (structures, frames, piles, potted plants,
  * geysers, tiles) is still read fresh by every capture. */
 interface ResourceCapture256 {readonly n:number;readonly owners:Uint8Array;readonly at:ReadonlyMap<number,ExistingGenerationPlant256>;readonly species:ReadonlyMap<string,number>;readonly total:number}
-const resourceCaptures256=new WeakMap<readonly World['resources'][number][],ResourceCapture256>();
+/* The latest capture of a World also keeps, per cell, how many of its
+ * resources set each bit, so that it can follow the next resources array
+ * instead of being rebuilt: the array is replaced whenever a plant is eaten,
+ * cut, sown or renewed. A capture always describes exactly the multiset of
+ * resources of its `source` array: bits are an OR (a count above zero), plant
+ * rows are keyed by cell and species counts by id, none of which depends on
+ * the order of the array, and nothing reads the iteration order of `at` or
+ * `species`. A derived capture is re-keyed to its new array and its old key
+ * dropped; captures are never retained past one renewal decision. */
+interface LiveResourceCapture256 extends ResourceCapture256 {
+ source:readonly Resource256[];readonly width:number;total:number;
+ readonly at:Map<number,ExistingGenerationPlant256>;readonly species:Map<string,number>;
+ readonly full:Uint32Array;readonly cover:Uint32Array;readonly blocks:Uint32Array;
+}
+type Resource256=World['resources'][number];
+const resourceCaptures256=new WeakMap<readonly Resource256[],LiveResourceCapture256>();
+const liveResourceCaptures256=new WeakMap<World,LiveResourceCapture256>();
+/** Above this many removed or added resources a rebuild is as cheap. */
+const RESOURCE_DELTA_LIMIT256=256;
 function resourceCapture256(world:World):ResourceCapture256 {
  const n=world.width*world.height,cached=resourceCaptures256.get(world.resources);
- if(cached&&cached.n===n)return cached;
- const owners=new Uint8Array(n),at=new Map<number,ExistingGenerationPlant256>(),species=new Map<string,number>();let total=0;
- for(const resource of world.resources){
-  const fill=resourceShotFill(resource),blocks=resource.kind!=='rock';
-  if(!Number.isFinite(fill)||fill<0||fill>1)throw Error('Missing physical plant fill definition');
-  if(!Number.isSafeInteger(resource.x)||!Number.isSafeInteger(resource.z)||resource.x<0||resource.z<0||resource.x>=world.width||resource.z>=world.height)throw Error('Physical plant owner outside its actual map');
-  const bits=(fill>.99?FULL:0)|(fill>=.01?COVER:0)|(blocks||fill>=.01?BLOCKS_PLANT:0),cell=resource.z*world.width+resource.x;
-  if(bits)owners[cell]=owners[cell]!|bits;
-  const defId=runtimePlantDef256(resource);
-  if(defId!==undefined){
-   if(at.has(cell))throw Error('Invalid existing initial plant');
-   at.set(cell,{cell,defId,nonStump:true});total++;species.set(defId,(species.get(defId)??0)+1);
-  }
+ if(cached&&cached.n===n){liveResourceCaptures256.set(world,cached);return cached;}
+ const live=liveResourceCaptures256.get(world);
+ if(live&&live.n===n&&live.width===world.width&&resourceCaptures256.get(live.source)===live){
+  try{if(deriveResourceCapture256(world,live))return live;}
+  // A rejected resource: the full rebuild below throws the original error.
+  catch{resourceCaptures256.delete(live.source);resourceCaptures256.delete(world.resources);liveResourceCaptures256.delete(world);}
  }
- const capture={n,owners,at,species,total};resourceCaptures256.set(world.resources,capture);return capture;
+ return buildResourceCapture256(world);
+}
+function buildResourceCapture256(world:World):LiveResourceCapture256 {
+ const n=world.width*world.height,owners=new Uint8Array(n),at=new Map<number,ExistingGenerationPlant256>(),species=new Map<string,number>();
+ const capture:LiveResourceCapture256={n,owners,at,species,total:0,source:world.resources,width:world.width,full:new Uint32Array(n),cover:new Uint32Array(n),blocks:new Uint32Array(n)};
+ for(const resource of world.resources)addResource256(world,capture,resource);
+ resourceCaptures256.set(world.resources,capture);liveResourceCaptures256.set(world,capture);return capture;
+}
+/** Exactly the per-resource step of the former full capture, plus the counts. */
+function addResource256(world:World,capture:LiveResourceCapture256,resource:Resource256):void {
+ const fill=resourceShotFill(resource),blocks=resource.kind!=='rock';
+ if(!Number.isFinite(fill)||fill<0||fill>1)throw Error('Missing physical plant fill definition');
+ if(!Number.isSafeInteger(resource.x)||!Number.isSafeInteger(resource.z)||resource.x<0||resource.z<0||resource.x>=world.width||resource.z>=world.height)throw Error('Physical plant owner outside its actual map');
+ const bits=(fill>.99?FULL:0)|(fill>=.01?COVER:0)|(blocks||fill>=.01?BLOCKS_PLANT:0),cell=resource.z*world.width+resource.x;
+ if(bits){capture.owners[cell]=capture.owners[cell]!|bits;if(bits&FULL)capture.full[cell]++;if(bits&COVER)capture.cover[cell]++;if(bits&BLOCKS_PLANT)capture.blocks[cell]++;}
+ const defId=runtimePlantDef256(resource);
+ if(defId!==undefined){
+  if(capture.at.has(cell))throw Error('Invalid existing initial plant');
+  capture.at.set(cell,{cell,defId,nonStump:true});capture.total++;capture.species.set(defId,(capture.species.get(defId)??0)+1);
+ }
+}
+/** The inverse of addResource256 for a resource of the capture's multiset. */
+function removeResource256(capture:LiveResourceCapture256,resource:Resource256):void {
+ const fill=resourceShotFill(resource),blocks=resource.kind!=='rock';
+ const bits=(fill>.99?FULL:0)|(fill>=.01?COVER:0)|(blocks||fill>=.01?BLOCKS_PLANT:0),cell=resource.z*capture.width+resource.x;
+ if(bits){
+  if(bits&FULL)capture.full[cell]--;if(bits&COVER)capture.cover[cell]--;if(bits&BLOCKS_PLANT)capture.blocks[cell]--;
+  capture.owners[cell]=(capture.full[cell]?FULL:0)|(capture.cover[cell]?COVER:0)|(capture.blocks[cell]?BLOCKS_PLANT:0);
+ }
+ const defId=runtimePlantDef256(resource);
+ if(defId!==undefined){
+  capture.at.delete(cell);capture.total--;
+  const count=capture.species.get(defId)!-1;if(count)capture.species.set(defId,count);else capture.species.delete(defId);
+ }
+}
+/** Follows the new array when it is the previous one with some resources
+ * removed (order kept) and others appended. Anything else (a reorder, an
+ * insertion, a replaced resource, a large change) returns false: rebuild. */
+function deriveResourceCapture256(world:World,capture:LiveResourceCapture256):boolean {
+ const old=capture.source,next=world.resources,removed:Resource256[]=[];let i=0,j=0;
+ for(;j<next.length;j++){
+  const resource=next[j];if(i<old.length&&old[i]===resource){i++;continue;}
+  let k=i+1;while(k<old.length&&old[k]!==resource)k++;
+  if(k>=old.length)break;
+  if(removed.length+k-i>RESOURCE_DELTA_LIMIT256)return false;
+  while(i<k)removed.push(old[i++]!);i++;
+ }
+ if(removed.length+old.length-i>RESOURCE_DELTA_LIMIT256||next.length-j>RESOURCE_DELTA_LIMIT256)return false;
+ while(i<old.length)removed.push(old[i++]!);
+ // An appended resource that was also removed was moved: not this pattern.
+ if(removed.length&&j<next.length){const gone=new Set(removed);for(let t=j;t<next.length;t++)if(gone.has(next[t]!))return false;}
+ for(const resource of removed)removeResource256(capture,resource);
+ for(let t=j;t<next.length;t++)addResource256(world,capture,next[t]!);
+ resourceCaptures256.delete(old);capture.source=next;resourceCaptures256.set(next,capture);
+ return true;
+}
+/* The (cell, bits) writes of the structures, in source order, per shared
+ * structure membership token: kinds and footprints never change while the
+ * token holds (see structure-navigation), so the writes, and the refusals
+ * of the loop, are the same. Without an existing token, computed afresh. */
+const structureOwnerWrites=new WeakMap<object,{readonly width:number;readonly height:number;readonly writes:Int32Array}>();
+function structureOwnerWrites256(world:World,index:(c:Cell)=>number):Int32Array {
+ const token=peekStructureMembershipToken(world),cached=token?structureOwnerWrites.get(token):undefined;
+ if(cached&&cached.width===world.width&&cached.height===world.height)return cached.writes;
+ const writes:number[]=[];
+ for(const structure of world.structures){
+  if(!Object.hasOwn(STRUCTURE_SHOT_FILL,structure.kind)||!Object.hasOwn(STRUCTURE_DEFINITIONS,structure.kind))throw Error('Missing physical plant structure metadata');
+  const fill=STRUCTURE_SHOT_FILL[structure.kind],edifice=ZERO_FILL_EDIFICES.has(structure.kind);
+  if(fill<.01&&structure.kind!=='power-conduit'&&!edifice)throw Error('Unresolved zero-fill edifice metadata');
+  const bits=(fill>.99?FULL:0)|(fill>=.01||edifice?COVER:0)|(constructionFinalWipesPlants(structure.kind)?BLOCKS_PLANT:0)|
+   (STRUCTURE_DEFINITIONS[structure.kind].blocksMovement?BLOCKED:0)|(isPassageDoor(structure.kind)?DOOR:structure.kind==='fence'?FENCE:0);
+  for(const cell of footprintCells(structure)){const i=index(cell);if(bits)writes.push(i,bits);}
+ }
+ const result=Int32Array.from(writes);
+ if(token)structureOwnerWrites.set(token,{width:world.width,height:world.height,writes:result});
+ return result;
 }
 /** Copy-on-write population: plants recorded during one decision stay local. */
 class OverlayPlantMap256 extends Map<number,ExistingGenerationPlant256> {
@@ -88,14 +175,8 @@ function captureActualPlantSpatialSession256(world:World,header:Header256,popula
    if(row.nonStump){population.totalPlants++;population.globalSpecies.set(row.defId,(population.globalSpecies.get(row.defId)??0)+1);}
   }else{(plantCells as Set<number>).add(row.cell);existing.push(row);}
  };
- for(const structure of world.structures){
-  if(!Object.hasOwn(STRUCTURE_SHOT_FILL,structure.kind)||!Object.hasOwn(STRUCTURE_DEFINITIONS,structure.kind))throw Error('Missing physical plant structure metadata');
-  const fill=STRUCTURE_SHOT_FILL[structure.kind],edifice=ZERO_FILL_EDIFICES.has(structure.kind);
-  if(fill<.01&&structure.kind!=='power-conduit'&&!edifice)throw Error('Unresolved zero-fill edifice metadata');
-  const bits=(fill>.99?FULL:0)|(fill>=.01||edifice?COVER:0)|(constructionFinalWipesPlants(structure.kind)?BLOCKS_PLANT:0)|
-   (STRUCTURE_DEFINITIONS[structure.kind].blocksMovement?BLOCKED:0)|(isPassageDoor(structure.kind)?DOOR:structure.kind==='fence'?FENCE:0);
-  for(const cell of footprintCells(structure))add(index(cell),bits);
- }
+ const structureWrites=structureOwnerWrites256(world,index);
+ for(let k=0;k<structureWrites.length;k+=2)add(structureWrites[k]!,structureWrites[k+1]!);
  for(const job of world.jobs)if(job.construction==='frame'){
   const kind=job.furniture?.kind??job.kind;if(job.kind==='lay-floor'||job.kind==='build-bridge')continue;
   if(!constructionFrameWipesPlants(kind))throw Error('Missing actual Thing Frame metadata');

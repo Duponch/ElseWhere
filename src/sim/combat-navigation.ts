@@ -25,6 +25,29 @@ export function hostileCells(world:World,pawn:Pawn|Mechanoid):Set<number> {
   }
   return cells;
 }
+/** The cells among `probes` that hostileCells(world,pawn) contains, without
+ * building the whole set: an actor's cells are compared with the probes first,
+ * and the (pure) hostility predicate is evaluated only for an actor standing
+ * on, or leaving, a probed cell. */
+function hostileProbeCells(world:World,pawn:Pawn|Mechanoid,probes:readonly number[]):Set<number> {
+  const local=isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick;
+  const hit=new Set<number>(),width=world.width;
+  for(const p of world.pawns){
+    if(p===pawn)continue;
+    const at=p.z*width+p.x,leaving=!!p.motion&&p.motion.end>local,from=leaving?p.motion!.from.z*width+p.motion!.from.x:0;
+    const atHit=probes.includes(at),fromHit=leaving&&probes.includes(from);
+    if(!atHit&&!fromHit)continue;
+    if((isMechanoidTarget(pawn)?!p.prisoner:hostileTo(pawn,p)||!!pawn.melee?.order&&!!p.melee?.order&&!(pawn.prisoner&&p.prisoner&&(prisonBreakActive(pawn)||prisonBreakActive(p))))&&p.state!=='dead'&&p.state!=='downed'){
+      if(atHit)hit.add(at);if(fromHit)hit.add(from);
+    }
+  }
+  for(const m of world.mechanoids??[]){
+    if(m===pawn||m.state==='dead'||m.state==='downed')continue;
+    const at=m.z*width+m.x;if(probes.includes(at))hit.add(at);
+    if(m.motion&&m.motion.end>local){const from=m.motion.from.z*width+m.motion.from.x;if(probes.includes(from))hit.add(from);}
+  }
+  return hit;
+}
 /** The actor's own obstacles, as ordered writes to a grid cell (a later write
  * wins): door verdicts, then hostile actors' cells. Only door structures are
  * read: every door predicate below is false for any other kind. */
@@ -42,7 +65,8 @@ export function addActorObstacles(world:World,origin:Cell,grid:Uint8Array):void 
 }
 export function actorStepAllowed(world:World,origin:Cell,next:Cell):boolean {
   const pawn=actor(world,origin);if(!pawn)return true;
-  const occupied=hostileCells(world,pawn),dx=next.x-origin.x,dz=next.z-origin.z;
+  const dx=next.x-origin.x,dz=next.z-origin.z,width=world.width;
+  const occupied=hostileProbeCells(world,pawn,dx&&dz?[next.z*width+next.x,origin.z*width+next.x,next.z*width+origin.x]:[next.z*width+next.x]);
   // Anchor-indexed lookups: same pure predicates over exactly the structures
   // anchored on the probed cells, instead of scanning every structure per step.
   const anchors=structureAnchors(world);
