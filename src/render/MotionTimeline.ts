@@ -135,6 +135,15 @@ export class MotionTimeline {
       }
       this.buffering=false;this.ready=now;
     }
+    // A delivery burst (stalled main thread, or a producer catching up) can leave
+    // more confirmed history than nominal playback ever consumes: the display
+    // would stay that far behind the simulation until the next pause or speed
+    // change, then jump all at once. Beyond 100 ms of excess, join the normal
+    // reserve now, exactly as after a late receipt.
+    if(fineCore297&&!this.buffering&&this.rate>0&&this.latest-this.tick>this.reserve+this.rate*FINE_OVERFULL_SECONDS297){
+      this.tick=this.latest-this.reserve;
+      this.chooseFineRate297();
+    }
     for(const track of tracks)this.tracks.set(track.id,track.segments);
   }
   advance(now:number):number {

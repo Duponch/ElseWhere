@@ -85,6 +85,7 @@ import { MotionTimeline } from './MotionTimeline';
 import type { PawnTrack } from '../bridge/motion-tracks';
 import { OverviewLayer } from './OverviewLayer';
 import * as THREE from 'three/webgpu';
+import {sceneProgramKeys,hasNewProgramKey} from './scene-program-keys';
 import { FurniturePresentation } from './FurnitureLayer';
 import { PawnLayer } from './PawnLayer';
 import { FrameMetrics } from './FrameMetrics';
@@ -315,6 +316,9 @@ export class SceneRenderCore {
     let job:Promise<void>;job=Promise.resolve().then(async()=>{try{await this.finishSurfacePreparation();}catch(error){if(!this.closingPresentation&&!this.fatalError)this.reportFailure('Admission des arbres interrompue : '+(error instanceof Error?error.message:String(error)));throw error;}}).finally(()=>{if(this.sharedSurfacePreparation===job)this.sharedSurfacePreparation=undefined;if(this.fixedTreeWorldPreparation===job)this.fixedTreeWorldPreparation=undefined;this.queuePausedTreeTextures();});
     this.fixedTreeWorldPreparation=this.sharedSurfacePreparation=job;void job.catch(()=>{});
   }
+  /** Program keys of the visible scene at its last compilation check (see
+   * sceneProgramKeys); undefined until the scene was compiled once. */
+  private compiledScenePrograms:Set<string>|undefined;
   private takePendingSurfaceWorld(){const entry=this.pendingSurfaceWorld;this.pendingSurfaceWorld=undefined;return entry;}
   private async finishSurfacePreparation():Promise<void>{
     try{
@@ -336,7 +340,17 @@ export class SceneRenderCore {
           const latestBeforePublish=this.takePendingSurfaceWorld();
           if(latestBeforePublish){reset=reset||latestBeforePublish.reset;entry={...latestBeforePublish,reset};continue;}
           assertCurrent();batch?.publish();this.uploadSharedSurfaceAssets();
-          if(batch?.ownerKeys.length){await this.renderer.compileAsync(this.scene,this.rig.orthographic);assertCurrent();await this.renderer.compileAsync(this.scene,this.rig.perspective);assertCurrent();}
+          if(batch?.ownerKeys.length){
+            // Compiling the whole scene blocks the main thread for 120 to 330 ms
+            // even when the batch needs no program (measured while mining: no
+            // new program, shader or pipeline in 17 of 18 batches). It is only
+            // needed when a visible object brings a material state, geometry
+            // layout or object kind that was not there at the previous check;
+            // anything this misses is compiled by its first ordinary draw.
+            const programs=sceneProgramKeys(this.scene);
+            if(hasNewProgramKey(programs,this.compiledScenePrograms)){await this.renderer.compileAsync(this.scene,this.rig.orthographic);assertCurrent();await this.renderer.compileAsync(this.scene,this.rig.perspective);assertCurrent();}
+            this.compiledScenePrograms=programs;
+          }
           const latestBeforeCommit=this.takePendingSurfaceWorld();
           if(latestBeforeCommit){reset=reset||latestBeforeCommit.reset;entry={...latestBeforeCommit,reset};continue;}
           trees?.commit();batch?.commit();this.resources.assertFixedTreeDrawReady();
@@ -1524,6 +1538,7 @@ export class SceneRenderCore {
       this.uploadSharedSurfaceAssets();
       await this.renderer.compileAsync(this.scene,this.rig.orthographic);
       await this.renderer.compileAsync(this.scene,this.rig.perspective);
+      this.compiledScenePrograms=sceneProgramKeys(this.scene);
       if(this.fatalError)throw Error(this.fatalError);
       return;
     }
@@ -1594,6 +1609,7 @@ export class SceneRenderCore {
       await this.renderer.compileAsync(this.scene, this.rig.orthographic,null,event=>{if(event.lengthComputable&&event.total>0)this.preparationProgress.report('scene',event.loaded,event.total);});
       preparePawnCargo();
       await this.renderer.compileAsync(this.scene, this.rig.perspective);
+      this.compiledScenePrograms=sceneProgramKeys(this.scene);
       await this.pawns.prepareBodyPipelines(this.renderer,this.scene,[this.rig.orthographic,this.rig.perspective],async()=>{
         const shadow=(this.room?.lighting.shadowLight??this.daylight.light).shadow,needsUpdate=shadow.needsUpdate;
         try {shadow.needsUpdate=true;preparePawnCargo();await prepareShadowPipelines(this.renderer,this.scene,this.rig.orthographic,this.boxes,true);}

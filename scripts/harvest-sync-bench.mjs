@@ -16,17 +16,17 @@ const stats=a=>{if(!a.length)return null;const s=a.slice().sort((a,b)=>a-b);retu
 const probe=`
 const visibleSpeedResponse=${visibleSpeedResponse.toString()};
 const confirmedTravelExcess=${confirmedTravelExcess.toString()};
-window.__sync={view:null,active:false,frames:[],snapshots:[],removals:[],previous:null,poses:new Map(),jumps:[],rawJumpCount:0,continuousTravelExcess:[],contactStalls:[],gaps:[],solidOccupancy:[],controls:[],lastPlay:null,receptions:0};
+window.__sync={view:null,active:false,frames:[],snapshots:[],removals:[],previous:null,poses:new Map(),jumps:[],rawJumpCount:0,continuousTravelExcess:[],contactStalls:[],gaps:[],solidOccupancy:[],controls:[],adopts:[],compiles:[],lastPlay:null,receptions:0};
 ${process.env.HARVEST_TRACE==='1'?`window.__sync.longTasks=[];new PerformanceObserver(list=>{for(const e of list.getEntries())window.__sync.longTasks.push({at:e.startTime,duration:e.duration});}).observe({type:'longtask'});`:''}
 document.addEventListener('click',e=>{const button=e.target.closest?.('[data-speed]');if(!button||!window.__sync.active)return;const b=window.__sync,speed=Number(button.dataset.speed),old=b.view.received?.speed;if(speed>0&&old>0&&speed!==old)b.controls.push({speed,previousSpeed:old,at:performance.now(),delay:null,fullRateDelay:null});},true);
 for(const method of ['frame','setWorld','applyWorld']){const original=ColonyRenderer.prototype[method];if(!original)continue;ColonyRenderer.prototype[method]=function(...args){
-const b=window.__sync;b.view=this;const old=this.world,start=performance.now(),result=original.apply(this,args);
+const b=window.__sync;b.view=this;${process.env.HARVEST_SPEED_TRACE==='1'?`if(this.renderer&&!this.renderer.__traced){this.renderer.__traced=true;const r=this.renderer,compile=r.compileAsync.bind(r);r.compileAsync=async(...a)=>{const size=()=>({builds:r._nodes?.nodeBuilderCache?.size,pipelines:r._pipelines?.caches?.size,vertex:r._pipelines?.programs?.vertex?.size,fragment:r._pipelines?.programs?.fragment?.size}),sizes=size();const at=performance.now(),stack=(new Error().stack||'').split(String.fromCharCode(10)).slice(2,7).map(l=>l.trim()).join(' | ');try{return await compile(...a);}finally{if(b.active){const after=size();b.compiles.push({at,ms:performance.now()-at,target:a[0]?.name||a[0]?.type,stack,newBuilds:after.builds-sizes.builds,newPipelines:after.pipelines-sizes.pipelines,newVertex:after.vertex-sizes.vertex,newFragment:after.fragment-sizes.fragment,builds:after.builds,pipelines:after.pipelines});}}};}if(this.timeline&&!this.timeline.__traced){this.timeline.__traced=true;const tl=this.timeline,adopt=tl.adopt.bind(tl);tl.adopt=(tick,speed,tracks,now,reset,closed,fine)=>{const before={play:tl.tick,latest:tl.latest,speed:tl.speed,buffering:tl.buffering};const r=adopt(tick,speed,tracks,now,reset,closed,fine);if(b.active&&(speed!==before.speed||tl.buffering!==before.buffering))b.adopts.push({at:performance.now(),tick,speed,previousSpeed:before.speed,playBefore:before.play,latestBefore:before.latest,play:tl.tick,latest:tl.latest,bufferingBefore:before.buffering,buffering:tl.buffering,reserve:tl.reserve,fine:!!fine});return r;};}`:''}const old=this.world,start=performance.now(),result=original.apply(this,args);
 if(!b.active)return result;
 if(method!=='frame'){b.snapshots.push({method,ms:performance.now()-start,tick:args[0].tick,play:this.timeline.tick,at:start});
 if((method==='applyWorld'||!ColonyRenderer.prototype.applyWorld)&&old&&old.jobs.length>args[0].jobs.length)b.removals.push({tick:args[0].tick,play:this.timeline.tick,removed:old.jobs.length-args[0].jobs.length});return result;}
 const now=args[0],dt=b.previous===null?0:now-b.previous;b.previous=now;
 const control=b.controls.at(-1);if(control&&b.lastPlay!==null&&dt>0){const delta=this.timeline.tick-b.lastPlay;if(control.delay===null&&visibleSpeedResponse(delta,dt,control.previousSpeed,control.speed))control.delay=performance.now()-control.at;if(control.fullRateDelay===null&&Math.abs(delta/dt-control.speed*.006)<.00001)control.fullRateDelay=performance.now()-control.at;}b.lastPlay=this.timeline.tick;
-b.frames.push({at:now,speed:this.received?.speed,dt,cpu:performance.now()-start,lag:(this.received?.world.tick??this.world.tick)-this.timeline.tick,tick:this.world.tick,play:this.timeline.tick});
+b.frames.push({at:now,buffering:this.timeline.buffering,history:this.timeline.latest-this.timeline.tick,fineRate:this.timeline.fineFrameRate297,nominal:this.timeline.rate,compatible:this.timeline.fineNominalCompatible297,speed:this.received?.speed,dt,cpu:performance.now()-start,lag:(this.received?.world.tick??this.world.tick)-this.timeline.tick,tick:this.world.tick,play:this.timeline.tick});
 const g=this.pawns.pawnMesh?.geometry;if(!g)return result;
 const f=g.getAttribute('aFrom'),t=g.getAttribute('aTo'),travel=g.getAttribute('aTravel'),motion=g.getAttribute('aMotion');
 this.world.pawns.forEach((p,i)=>{const duration=travel.getY(i)-travel.getX(i),a=duration>0?Math.min(1,Math.max(0,(this.pawns.travelTime.value-travel.getX(i))/duration)):this.pawns.blend.value;
@@ -130,16 +130,65 @@ const originalTraceAdvance=advanceSimulation;advanceSimulation=now=>{const at=pe
   }))};
   await page.screenshot({path:testOutputPath('artifacts/harvest-reload-'+action+'-'+label+'.png')});throw error;
  });
+ let cpuProfiler;
+ if(process.env.HARVEST_SPEED_TRACE==='1'){const cdp=await page.context().newCDPSession(page);await cdp.send('Profiler.enable');await cdp.send('Profiler.setSamplingInterval',{interval:500});const startedAt=await page.evaluate(()=>performance.now());await cdp.send('Profiler.start');cpuProfiler={cdp,startedAt};}
  await page.evaluate(()=>{window.__sync.active=true;});await clickSpeed(initialSpeed);
  if(switches)await page.evaluate(speeds=>{let i=0;window.__sync.switchTimer=setInterval(()=>window.__harvestUi.clickSpeed(speeds[i++%speeds.length]),2000);},speedCycle);
  await page.waitForFunction(start=>performance.now()-start>=0,await page.evaluate(s=>performance.now()+s*1000,seconds),{timeout:(seconds+15)*1000,polling:200});
  await page.evaluate(()=>clearInterval(window.__sync.switchTimer));await clickSpeed(0);
- const data=await page.evaluate(()=>{const b=window.__sync;b.active=false;const d=b.view.renderer.getContext().getConfiguration().device;return {workerBatches:b.workerBatches,workerSnapshots:b.workerSnapshots,adapter:{vendor:d.adapterInfo.vendor,architecture:d.adapterInfo.architecture},longTasks:b.longTasks,frames:b.frames,snapshots:b.snapshots,controls:b.controls,removals:b.removals,jumps:b.jumps,rawJumpCount:b.rawJumpCount,continuousTravelExcess:b.continuousTravelExcess,contactStalls:b.contactStalls,gaps:b.gaps,solidOccupancy:b.solidOccupancy,stepMs:b.stepMs,receptions:b.receptions,tick:b.view.world.tick,jobs:b.view.world.jobs.length};});
+ const data=await page.evaluate(()=>{const b=window.__sync;b.active=false;const d=b.view.renderer.getContext().getConfiguration().device;return {workerBatches:b.workerBatches,workerSnapshots:b.workerSnapshots,adapter:{vendor:d.adapterInfo.vendor,architecture:d.adapterInfo.architecture},longTasks:b.longTasks,frames:b.frames,snapshots:b.snapshots,adopts:b.adopts,compiles:b.compiles,controls:b.controls,removals:b.removals,jumps:b.jumps,rawJumpCount:b.rawJumpCount,continuousTravelExcess:b.continuousTravelExcess,contactStalls:b.contactStalls,gaps:b.gaps,solidOccupancy:b.solidOccupancy,stepMs:b.stepMs,receptions:b.receptions,tick:b.view.world.tick,jobs:b.view.world.jobs.length};});
  if(!Number.isFinite(data.stepMs)||data.receptions<1)throw Error('Presentation probe did not observe the actual MAIN snapshot reception');
  const starvation=presentationStarvations(data.frames);
  const starvedFrames=starvation.length;
  const trace=process.env.HARVEST_TRACE==='1'?{longTasks:data.longTasks,workerBatchMs:Object.fromEntries(['wakeGap','simulation','encoding','sending','elapsed'].map(k=>[k,stats((data.workerBatches??[]).filter(b=>b.speed>0).map(b=>b[k]))])),slowWorkerBatches:(data.workerBatches??[]).filter(b=>b.speed>0&&(b.elapsed>20||b.wakeGap>50)),workerDeliveryMs:stats((data.workerSnapshots??[]).map(s=>s.received-s.published)),workerPublicationGapMs:stats((data.workerSnapshots??[]).flatMap((s,i,a)=>i&&s.speed===a[i-1].speed?[s.published-a[i-1].published]:[])),starvationContext:starvation.slice(0,10).map(s=>({frames:data.frames.filter(f=>Math.abs(f.at-s.current.at)<300),snapshots:data.snapshots.filter(f=>Math.abs(f.at-s.current.at)<300),worker:(data.workerSnapshots??[]).filter(f=>Math.abs(f.received-s.current.at)<300),batches:(data.workerBatches??[]).filter(b=>Math.abs(b.at-s.current.at)<300)}))}:{};
  const phase={starvation:starvation.slice(0,10),starvedFrames,controls:data.controls,action,command,initialJobs:w.jobs.length,adapter:data.adapter,errors,tick:data.tick,remainingJobs:data.jobs,stepMs:data.stepMs,frames:stats(data.frames.filter(f=>f.dt>0).map(f=>f.dt)),frameCpu:stats(data.frames.map(f=>f.cpu)),lagTicks:stats(data.frames.map(f=>f.lag)),adoptions:stats(data.snapshots.map(s=>s.ms)),deliveries:stats(data.snapshots.filter(s=>s.method==='setWorld').map(s=>s.ms)),sceneApplications:stats(data.snapshots.filter(s=>s.method==='applyWorld').map(s=>s.ms)),jumpCount:data.jumps.length,jumps:data.jumps.slice(0,80),rawJumpCount:data.rawJumpCount,continuousTravelExcessCount:data.continuousTravelExcess.length,continuousTravelExcess:data.continuousTravelExcess.slice(0,10),contactStalls:data.contactStalls,gapCount:data.gaps.length,gaps:data.gaps.slice(0,5),solidOccupancyCount:data.solidOccupancy.length,solidOccupancy:data.solidOccupancy.slice(0,5),removals:data.removals,lagTimeline:data.frames.filter((_,i)=>i%240===0).map(f=>({tick:f.tick,play:f.play,lag:f.lag}))};report.phases.push(phase);console.log(JSON.stringify({action,frames:phase.frames,jumpCount:phase.jumpCount,rawJumpCount:phase.rawJumpCount,continuousTravelExcessCount:phase.continuousTravelExcessCount,solidOccupancyCount:phase.solidOccupancyCount}));
+ if(process.env.HARVEST_SPEED_TRACE==='1'){
+  // Main-thread side of each speed change: when the timeline adopted the new
+  // speed, how much confirmed history it had against its new reserve, how long
+  // playback waited, and the frames and World applications in between.
+  phase.speedTrace=data.controls.map(c=>{
+   const end=c.at+(c.delay??1000),adopt=data.adopts.find(a=>a.at>=c.at&&a.speed===c.speed&&a.previousSpeed===c.previousSpeed);
+   const frames=data.frames.filter(f=>f.at>=c.at-20&&f.at<=end+20),snaps=data.snapshots.filter(s=>s.at>=c.at-5&&s.at<=end+5);
+   const released=adopt&&adopt.buffering?data.adopts.find(a=>a.at>adopt.at&&!a.buffering)?.at??data.frames.find(f=>f.at>adopt.at&&!f.buffering)?.at:adopt?.at;
+   const round=v=>v===null||v===undefined?null:Math.round(v*100)/100;
+   return {switch:c.previousSpeed+'>'+c.speed,delay:round(c.delay),adoptAfter:round(adopt?adopt.at-c.at:null),history:round(adopt?adopt.latest-adopt.playBefore:null),reserve:round(adopt?.reserve),waited:round(adopt&&released!==undefined?released-adopt.at:null),seek:round(adopt?adopt.play-adopt.playBefore:null),
+    longestFrame:round(Math.max(0,...frames.map(f=>f.dt))),longestFrameCpu:round(Math.max(0,...frames.map(f=>f.cpu))),applications:snaps.map(s=>s.method+':'+Math.round(s.ms)).join(' ')};
+  });
+  for(const row of phase.speedTrace)console.log('speed-trace '+JSON.stringify(row));
+  // Between two speed changes: confirmed history ahead of the playhead (ticks),
+  // sampled every 250 ms, and the share of frames played below the nominal rate.
+  phase.historyTrace=data.controls.map((c,i)=>{
+   const until=data.controls[i+1]?.at??Infinity,frames=data.frames.filter(f=>f.at>=c.at&&f.at<until&&f.dt>0);
+   const samples=[];for(let at=c.at;at<Math.min(until,c.at+2000);at+=250){const f=frames.find(f=>f.at>=at);if(f)samples.push(Math.round(f.history*100)/100);}
+   const slow=frames.filter(f=>f.fineRate<f.nominal-1e-9),waiting=frames.filter(f=>f.buffering);
+   return {speed:c.speed,reserve:Math.round(c.speed*6*36)/1000,history:samples.join(' '),slowFrames:Math.round(100*slow.length/Math.max(1,frames.length))+'%',waitingFrames:waiting.length,incompatible:Math.round(100*frames.filter(f=>!f.compatible).length/Math.max(1,frames.length))+'%',frames:frames.length};
+  });
+  for(const row of phase.historyTrace)console.log('history-trace '+JSON.stringify(row));
+  // Program compilations requested in mid-game: start (ms after the run began),
+  // wall duration, and the caller.
+  const began=data.controls[0]?.at??0;
+  phase.compileTrace=(data.compiles??[]).map(c=>({at:Math.round(c.at-began),ms:Math.round(c.ms),newBuilds:c.newBuilds,newPipelines:c.newPipelines,newVertex:c.newVertex,newFragment:c.newFragment,builds:c.builds,pipelines:c.pipelines,target:c.target,nearSwitch:data.controls.filter(k=>c.at+c.ms>=k.at&&c.at<=k.at+(k.delay??1000)).map(k=>k.previousSpeed+'>'+k.speed+':'+Math.round(k.delay??-1)).join(' '),stack:c.stack.replace(/https?:\/\/[^/]+\//g,'').replace(/\?[^:)]*/g,'')}));
+  for(const row of phase.compileTrace)console.log('compile-trace '+JSON.stringify(row));
+  // Main-thread CPU profile: for each slow speed change, where the time went
+  // between the click and the first frame at the new rate.
+  if(cpuProfiler){
+   const {profile}=await cpuProfiler.cdp.send('Profiler.stop'),byId=new Map(profile.nodes.map(n=>[n.id,n])),parent=new Map();
+   for(const n of profile.nodes)for(const c of n.children??[])parent.set(c,n.id);
+   const name=n=>(n.callFrame.functionName||'(anon)')+' '+(n.callFrame.url.split('/').pop()||'').split('?')[0]+':'+(n.callFrame.lineNumber+1);
+   const micros=ms=>profile.startTime+(ms-cpuProfiler.startedAt)*1000;
+   phase.slowSpeedProfiles=data.controls.filter(c=>c.delay===null||c.delay>100).map(c=>{
+    const from=micros(c.at),to=micros(c.at+(c.delay??1000)),self=new Map(),top=new Map();let at=profile.startTime,total=0;
+    for(let i=0;i<profile.samples.length;i++){at+=profile.timeDeltas[i];if(at<from||at>to)continue;const node=byId.get(profile.samples[i]),ms=(profile.timeDeltas[i+1]??0)/1000;total+=ms;
+     const key=name(node);self.set(key,(self.get(key)??0)+ms);
+     // The outermost application frames of the sample tell which task it belongs to.
+     const stack=[];for(let cur=node.id;cur!==undefined;cur=parent.get(cur))stack.push(name(byId.get(cur)));const outer=stack.filter(f=>!f.startsWith('(root)')).slice(-3).reverse().join(' > ');top.set(outer,(top.get(outer)??0)+ms);}
+    const best=m=>[...m].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=>Math.round(v)+'ms '+k);
+    return {switch:c.previousSpeed+'>'+c.speed,delay:Math.round(c.delay??-1),sampledMs:Math.round(total),self:best(self),tasks:best(top)};
+   });
+   for(const row of phase.slowSpeedProfiles)console.log('slow-profile '+JSON.stringify(row));
+   if(process.env.HARVEST_PROFILE_OUT)await (await import('node:fs/promises')).writeFile(process.env.HARVEST_PROFILE_OUT,JSON.stringify({...profile,pageNowAtStart:cpuProfiler.startedAt}));
+  }
+ }
  Object.assign(phase,trace,{failedRequests});
  // Preserve a completed phase even if the host interrupts the next page.
  await writeTestFile('artifacts/harvest-sync-'+label+'.json',JSON.stringify(report,null,2)+'\n');

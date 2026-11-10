@@ -31,6 +31,7 @@ export class RockLayer {
   private readonly stroke=new RockStrokeTable();
   private readonly strokeFaces=new Set<number>();private strokeWorldRevision=0;
   private boundStrokeMode='';
+  private boundPreparedStrokes:object|undefined;
   private model:RockSurfaceModel|undefined;
   private previousModel:RockSurfaceModel|undefined;
   private pendingSlab=false;
@@ -115,7 +116,7 @@ export class RockLayer {
     // broad stone map with a new kraft frame on every small cliff facet.
     // Include vertex pigment before the ink, so it cannot tint the ink twice.
     const context=this.graphicsStyle,base=attribute('color','vec3'),surface=attribute(ROCK_SURFACE_UV,'vec3');
-    const prepared=context?.preparedStrokes.acquire(this.stroke,{faceIds:()=>[...this.strokeFaces],revision:()=>`${this.strokeWorldRevision}:${this.stroke.stats.patches}`,isLinear:()=>this.stroke.representationKey==='single',interiorCircle:true,onRepresentationChange:()=>this.bindSurface()}),headerTable=prepared?.headerTable()??this.stroke,read=prepared?.readRow??this.stroke.readRow;
+    const prepared=context?.preparedStrokes.acquire(this.stroke,{faceIds:()=>[...this.strokeFaces],revision:()=>`${this.strokeWorldRevision}:${this.stroke.stats.patches}`,isLinear:()=>this.stroke.representationKey==='single',interiorCircle:true,onRepresentationChange:()=>this.rebindSurfaceOnChange()}),headerTable=prepared?.headerTable()??this.stroke,read=prepared?.readRow??this.stroke.readRow;
     const headers=context?faceStrokeVertexHeaders({table:headerTable,faceId:surface.z,enabled:context.surfaceEncoding,opacity:context.lineOpacity,readRow:read},'v_rockStrokeHeader'):undefined;
     const common=context?{faceId:surface.z,headers,faceUv:surface.xy,enabled:context.surfaceEncoding,opacity:context.lineOpacity,brushColor:context.brushColor.rgb,samplePigment:(p:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>context.sampleStrokePigment(p,dx,dy),sampleDry:(p:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>context.sampleStrokeDry(p,dx,dy)}:undefined;
     const interiorCircle=context&&prepared?preparedAffineInteriorCircleVertex({owner:prepared,faceId:surface.z,enabled:context.surfaceEncoding,opacity:context.lineOpacity}):undefined;
@@ -126,8 +127,19 @@ export class RockLayer {
     // Neither rock body ever had an optional relief or physical-wear graph;
     // all ink settings are shared uniforms and need no feature refresh owner.
     this.plainMaterial.colorNode=ink(base);
-    this.boundStrokeMode=this.stroke.representationKey;
+    this.boundStrokeMode=this.stroke.representationKey;this.boundPreparedStrokes=prepared;
     this.plainMaterial.needsUpdate=true;this.texturedMaterial.needsUpdate=true;
+  }
+  /** The two color graphs depend only on who supplies the strokes (the prepared
+   * owner, or this table in its source form) and on the table's storage
+   * backend. The shared stroke owner reports every publication made in source
+   * form: rebuild the graphs only when one of those two actually changed.
+   * Rebuilding them on each mined rock made the renderer regenerate both
+   * programs (about 130 ms of main thread, twice) to find the same shaders. */
+  private rebindSurfaceOnChange():void {
+    const prepared=this.graphicsStyle?.preparedStrokes.acquire(this.stroke);
+    if(prepared===this.boundPreparedStrokes&&this.boundStrokeMode===this.stroke.representationKey)return;
+    this.bindSurface();
   }
   setTexturesEnabled(enabled:boolean):void {
     if(this.texturesEnabled===enabled)return;

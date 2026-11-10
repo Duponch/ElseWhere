@@ -30,6 +30,11 @@ export class RockFinalSurface {
  private readonly body:THREE.Node<'vec3'>;private readonly final:THREE.Node<'vec3'>;
  private readonly preparedJournal:ReturnType<typeof createOwnedMaterialResources435>;private readonly bodyJournal:ReturnType<typeof createOwnedMaterialResources435>;
  private current:RockFinalPublication={route:'source',style:'default'};private closed=false;
+ /** What the prepared material currently declares: its sampled map, whether it
+  * is the array bank, and the lookup buffer object. A publication that leaves
+  * all three and the color node as they are changes no program and no binding
+  * object, only buffer contents: the material is then left untouched. */
+ private declared!:{map:THREE.Texture;array:boolean;buffer:THREE.BufferAttribute};
  constructor(private readonly source:THREE.MeshStandardNodeMaterial,private readonly stone:THREE.Texture,configure?: (material:THREE.MeshStandardNodeMaterial)=>void){
   this.preparedMaterial=source.clone();this.bodyMaterial=source.clone();
   const sourceKeys=['positionNode','maskNode','maskShadowNode','outputNode','castShadowPositionNode','receivedShadowPositionNode']as const,sourceNodes=sourceKeys.map(key=>source[key]);
@@ -47,7 +52,7 @@ export class RockFinalSurface {
   const uv=attribute(ROCK_SURFACE_UV,'vec3'),at=uv.z.toInt().mul(2),a=this.lookup.node.element(at),b=this.lookup.node.element(at.add(int(1))),mapped=varying(uv.xy.mul(a.zw).add(a.xy),'v_rockFinalUv'),layer=varying(b.x,'v_rockFinalLayer').setInterpolation('flat','first');
   this.sample=texture(stone,mapped).depth(layer);this.final=this.sample.rgb;
   this.preparedMaterial.colorNode=this.body;this.bodyMaterial.colorNode=this.body;
-  this.preparedJournal=createOwnedMaterialResources435(this.preparedMaterial,this.resources(stone,false));
+  this.preparedJournal=createOwnedMaterialResources435(this.preparedMaterial,this.resources(stone,false));this.declared={map:stone,array:false,buffer:this.lookup.buffer};
   this.bodyJournal=createOwnedMaterialResources435(this.bodyMaterial,{textures:[stone],arrayTextures:[],sharedGroups:[]});
  }
  private resources(map:THREE.Texture,array:boolean){return{textures:[map],arrayTextures:array?[map]:[],sharedGroups:[],storage:[this.lookup.buffer]};}
@@ -56,8 +61,19 @@ export class RockFinalSurface {
  lookupStageUpperBytes(faceSpan:number){const current=this.lookup.buffer.array.byteLength,bytes=Math.max(current,32*2**Math.ceil(Math.log2(Math.max(1,faceSpan))));if(bytes>MAX)throw Error('Rock Source face span exceeds lookup binding limit');const growing=bytes>current;return{retainedGpuBytes:this.lookup.bytes+(growing?bytes:0),newCpuBytes:this.lookup.bytes+(growing?bytes:current),lookupBytes:bytes};}
  stage(binding:RockFinalPublication):SharedSurfacePreparationStage {
   if(this.closed)throw Error('Rock final surface retired');const before=this.current,previousColor=this.preparedMaterial.colorNode,previousMap=this.sample.value,lookup=binding.route==='prepared'?this.lookup.stage(binding.plan!.lookup):undefined;let published=false,committed=false,disposed=false;
-  const install=(value:RockFinalPublication)=>{const pure=value.route==='prepared'&&value.style==='origami';if(pure){value.bank!.assertCurrent();this.sample.value=value.bank!.texture;}this.preparedMaterial.colorNode=pure?this.final:this.body;this.preparedMaterial.needsUpdate=true;this.preparedJournal.publish(this.resources(pure?value.bank!.texture:this.stone,pure));this.current=value;};
-  const rollback=()=>{if(committed)throw Error('Transferred Rock surface cannot roll back');if(!published)return;lookup?.rollback();this.preparedMaterial.colorNode=previousColor;this.sample.value=previousMap;this.preparedMaterial.needsUpdate=true;this.preparedJournal.publish(this.resources(before.route==='prepared'&&before.style==='origami'?before.bank!.texture:this.stone,before.route==='prepared'&&before.style==='origami'));this.current=before;published=false;};
+  const install=(value:RockFinalPublication)=>{
+   const pure=value.route==='prepared'&&value.style==='origami';if(pure){value.bank!.assertCurrent();this.sample.value=value.bank!.texture;}
+   const color=pure?this.final:this.body,map=pure?value.bank!.texture:this.stone,buffer=this.lookup.buffer;
+   // Mining re-stages the rock lookup every few seconds with the same color
+   // node, map and buffer object. Marking the material then made the renderer
+   // regenerate its program (about 130 ms of main thread, twice) only to find
+   // the same shader and pipeline again.
+   if(this.preparedMaterial.colorNode!==color||this.declared.map!==map||this.declared.array!==pure||this.declared.buffer!==buffer){
+    this.preparedMaterial.colorNode=color;this.preparedMaterial.needsUpdate=true;this.preparedJournal.publish(this.resources(map,pure));this.declared={map,array:pure,buffer};
+   }
+   this.current=value;
+  };
+  const rollback=()=>{if(committed)throw Error('Transferred Rock surface cannot roll back');if(!published)return;lookup?.rollback();this.preparedMaterial.colorNode=previousColor;this.sample.value=previousMap;this.preparedMaterial.needsUpdate=true;{const array=before.route==='prepared'&&before.style==='origami',map=array?before.bank!.texture:this.stone;this.preparedJournal.publish(this.resources(map,array));this.declared={map,array,buffer:this.lookup.buffer};}this.current=before;published=false;};
   return{publish:()=>{if(disposed||published)throw Error('Rock surface stage unavailable');published=true;lookup?.publish();install(binding);},commit:()=>{if(!published)throw Error('Publish Rock surface before commit');lookup?.commit();committed=true;},rollback,dispose:()=>{if(disposed)return;if(!committed)rollback();lookup?.dispose();disposed=true;},stats:{lookup:lookup?.stats??null,fragment:binding.route==='prepared'?'one final RGBA fetch':'Source stone body',canonicalInkInFinalFragment:false}};
  }
  attachGpuRetirement(geometries:Iterable<THREE.BufferGeometry>):void{this.lookup.attach(geometries);}

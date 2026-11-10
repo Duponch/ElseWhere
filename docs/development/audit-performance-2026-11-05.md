@@ -25,6 +25,8 @@ Branche : `perf/sim-render-audit`. Ce document résume l’état du projet, les 
 | Les Forges à ×1, 15 s : images au-dessus de 33 / 50 ms, p95 | 69 / 42, p95 29 ms | **39 / 29, p95 17 ms** |
 | Worker seul, Les Forges à ×1 : temps réel tenu | 78 à 92 % | **≈ 100 %** (plantes, besoins et humeur à la cadence de RimWorld) |
 | Worker seul, Les Forges à ×6 : ticks joués en 20 s (publication allégée, 10 novembre) | 181 | **204 à 212** (+12 à +16 %) |
+| Changements de vitesse au-dessus de 100 ms au contrôle de présentation (sur 22) | 2 à 3, jusqu'à 331 ms | **0** |
+| Fil principal bloqué par des recompilations de scène en minant (45 s) | ≈ 2,6 s | **≈ 10 ms** |
 | Paquet d’acteurs envoyé à l’affichage, Les Forges à ×1 / ×6 | 65 / 80 Ko | **36 / 59 Ko** |
 
 - **Exactitude.** Après chaque optimisation, l’état complet sérialisé reste identique au bit près sur les deux sauvegardes de référence.
@@ -1015,6 +1017,44 @@ Avec 15 à 17 paquets par seconde, cela libère environ 47 ms de fil principal p
   - sections qui ne changent jamais 66 Ko (factions, zones de culture, politiques).
 - **Le paquet d'acteurs d'un tick complet** : les 321 acteurs y figurent, car leurs compteurs de décision changent à chaque tick.
 - Postes fixes par publication complète : apparence des plantes 2,4 %, comparaison des ressources 2,9 %, sections auxiliaires 1,9 %.
+
+### Changements de vitesse lents et gels d'image en minant (10 novembre)
+
+Chantier obligatoire n° 3 ([note](chantiers-obligatoires.md)).
+
+**Constat.** Au contrôle de présentation (trois colons qui minent, vitesse changée toutes les 2 s), 2 ou 3 changements de vitesse sur 22 mettaient 150 à 330 ms à se voir, au lieu de moins de 100 ms. Trace du fil principal (`HARVEST_SPEED_TRACE=1`, ajoutée à `scripts/harvest-sync-bench.mjs`) :
+- l'affichage adopte la nouvelle vitesse 9 à 23 ms après le clic : la livraison n'est pas en cause ;
+- chaque changement lent contient un trou de 100 à 260 ms sans image, pendant lequel le fil principal construit des programmes de rendu (`compileAsync` de three.js : 87 à 173 ms par appel) ;
+- ces constructions ne sont pas liées à la vitesse : il y en a 36 en 45 s, dont 18 de 120 à 330 ms, soit 2,6 s de fil principal bloqué. Un changement de vitesse paraît lent quand il tombe dessus ;
+- 17 de ces 18 constructions ne créent aucun programme, shader ni pipeline nouveau.
+
+**Causes.**
+- À chaque roche minée, les traits des rochers sont republiés. Tant qu'ils restent dans leur forme d'origine, le gestionnaire commun des traits prévient la couche des rochers à chaque publication, et celle-ci reconstruisait ses deux graphes de couleur et marquait ses matériaux « à reconstruire », même quand rien n'avait changé. Three.js régénérait alors les deux programmes pour retrouver les mêmes.
+- La préparation des surfaces recompilait ensuite toute la scène, pour les deux caméras, dès qu'un propriétaire de surface avait publié.
+- À ×6, après un à-coup (fil principal figé, ou Worker qui rattrape son retard), l'affichage recevait d'un coup 6 à 9 ticks confirmés et continuait à les jouer à vitesse normale : il restait ≈ 0,2 s derrière la simulation jusqu'au changement de vitesse suivant, où il rattrapait tout d'un coup.
+
+**Corrections.**
+- `RockLayer` : les graphes de couleur ne sont reconstruits que si le fournisseur des traits (forme préparée ou d'origine) ou le mode de stockage de la table a changé.
+- `RockFinalSurface` : une publication qui garde le même nœud de couleur, la même texture et le même tampon ne touche plus au matériau.
+- `SceneRenderCore` : la scène n'est recompilée que si un objet visible apporte un état de matériau, une disposition de géométrie ou un genre d'objet absent au contrôle précédent (`src/render/scene-program-keys.ts`). Ce qui échapperait à ce test est compilé à son premier dessin ordinaire.
+- `MotionTimeline` : au-delà de 100 ms d'avance confirmée en trop, l'affichage rejoint sa réserve normale tout de suite, comme après une réception tardive.
+
+**Mesures.** Contrôle de présentation dans le client réel, machine au calme, quatre passages avant et trois après.
+
+| Mesure | Avant | Après |
+|---|---|---|
+| Changements de vitesse au-dessus de 100 ms (sur 22) | 2 à 3 (148 à 331 ms) | **0** (maximum 75, 84 et 94 ms) |
+| Compilations de scène en 45 s | 36, dont 18 de plus de 120 ms | **4**, aucune au-dessus de 20 ms |
+| Fil principal bloqué par ces compilations | ≈ 2,6 s | **≈ 10 ms** |
+| Image la plus longue | 153 à 321 ms | **40 à 53 ms** |
+| p99 du temps d'image | 9,6 à 13,3 ms | 8,8 à 9,4 ms |
+| Avance confirmée à ×6 (réserve normale : 1,3 tick) | jusqu'à 8 à 14 ticks | 2,7 à 4 ticks |
+
+Les accélérations (×1 vers ×3, ×3 vers ×6) attendent encore 25 à 40 ms que la réserve de la nouvelle vitesse se remplisse : elles passent, avec peu de marge (jusqu'à 94 ms).
+
+**Tests.** 99 fichiers de rendu : les mêmes échecs connus qu'avant. Nouveaux cas : rattrapage de l'affichage (6), clés de programme de la scène (3).
+
+**Ce qui reste.** Le contrôle franchit maintenant l'attente sur la vitesse et échoue sur la suivante, jusque-là masquée : ≈ 1 100 « sauts » de position. Sur 80 sauts détaillés, 77 suivent exactement la route confirmée : le contrôle compare encore des segments de trajet lus dans les attributs du processeur graphique, alors que les acteurs y écrivent désormais leur position courante. Le témoin est donc périmé et doit être réécrit sur la position affichée, sans assouplir le critère. Les 3 autres sont un vrai saut de 0,7 case des trois colons à la même image, sans avance du temps affiché : à examiner. Enfin, dans un dossier de travail placé sous `tmp/`, le serveur de développement ne voit pas les fichiers modifiés : il faut le relancer après chaque changement.
 
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 

@@ -71,6 +71,10 @@ Deux filets de sécurité automatiques ne fonctionnent plus. Les régressions qu
 
 ## 3. Retard des changements de vitesse (à reprendre après le chantier 2)
 
+**État au 10 novembre, soir : le retard est corrigé, le contrôle de présentation ne passe pas encore.** Les 22 changements de vitesse passent sous 100 ms sur trois passages (maximum 94 ms). La cause n'était pas la vitesse : à chaque roche minée, les matériaux des rochers étaient marqués « à reconstruire » sans raison et toute la scène était recompilée (120 à 330 ms sans image, 36 fois en 45 s) ; l'affichage prenait aussi jusqu'à 0,2 s de retard à ×6 sans jamais le rattraper. Détail dans l'[audit](audit-performance-2026-11-05.md), section « Changements de vitesse lents et gels d'image en minant (10 novembre) ».
+
+**Reste pour fermer ce chantier :** réécrire le témoin des « sauts » du contrôle (périmé depuis que les acteurs écrivent leur position courante : 77 sauts sur 80 examinés suivent exactement la route confirmée), puis examiner le vrai saut de 0,7 case des trois colons à une même image et les images où un colon est dessiné dans une case encore rocheuse (0 à 113 selon les passages).
+
 Noté le 10 novembre à la demande de l'utilisateur, pour y revenir après la refonte de la publication.
 
 - **Symptôme** : au contrôle de présentation (`npm run test:presentation`), un changement de vitesse met parfois 0,14 à 1,6 s à se voir à l'écran, au lieu de moins de 0,1 s. Presque tous les cas sont vers ou depuis ×6. Défaut déjà présent avant le 9 novembre. C'est la seule raison pour laquelle ce contrôle ne passe pas encore.
