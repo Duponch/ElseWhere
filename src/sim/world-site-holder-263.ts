@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297 as frontierCore297} from './core-phase-297.ts';
 import {validAiCoreInformationReceipt298} from './faction-comms-save-298.ts';
@@ -47,7 +48,7 @@ export function prepareItemStashTransfer263(root:CampaignState,source:ItemStash2
  let used=false;
  const current=()=>!used&&(!paidCurrent||frontierCore297(root)===atCore)&&plainWorldPawnData256(source)&&root.tick===tick&&root.worldSites263===registry&&registry.entries===entries&&entries.includes(source)&&source.items===items&&items.length===originals.length&&items.every((p,i)=>p===originals[i]&&p.owner===owners[i]&&p.rot===rots[i])&&JSON.stringify(source)===before&&map.piles===piles&&piles.length===localItems.length&&piles.every((p,i)=>p===localItems[i])&&paidOriginalCurrent()&&recipients();
  if(!current())return null;
- return {current,commit(){if(!current())throw Error('Actual Site holder changed before its atomic map transfer');used=true;for(const p of placements){p.pile.owner=p.owner;if(p.forbidden)p.pile.forbidden=true;if(p.rot)p.pile.rot=p.rot;}piles.push(...originals);source.items=[];source.mapId=mapId;source.expiresAtCore=null;}};
+ return {current,commit(){if(!current())throw Error('Actual Site holder changed before its atomic map transfer');used=true;for(const p of placements){assignPileOwner(p.pile,p.owner);if(p.forbidden)p.pile.forbidden=true;if(p.rot)p.pile.rot=p.rot;}piles.push(...originals);source.items=[];source.mapId=mapId;source.expiresAtCore=null;}};
 }
 /** TimeoutComp's object destruction is prohibited while a Map exists. The
  * closed receipt owns only scalar lost identities; no hidden physical stock.

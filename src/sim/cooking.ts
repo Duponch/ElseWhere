@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {validProstheticIngredients273} from './machining.ts';
 import {isProstheticRecipe273} from './prosthetic-content-273.ts';
 import {beginProstheticWork273} from './prosthetic-work-273.ts';
@@ -59,7 +60,7 @@ import { structureById } from './structure-navigation.ts';
 const near=(a:{x:number;z:number},b:{x:number;z:number})=>Math.abs(a.x-b.x)+Math.abs(a.z-b.z)<=1;
 function take(world:World,pawn:Pawn,pile:MaterialPile,quantity:number):MaterialPile|null {
   if(!eggAllowedForPlayer256(pile)||pile.quantity<quantity||pile.owner.type!=='ground'||world.piles.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id))return null;
-  if(pile.quantity===quantity){pile.owner={type:'pawn',pawnId:pawn.id};return pile;}
+  if(pile.quantity===quantity){assignPileOwner(pile,{type:'pawn',pawnId:pawn.id});return pile;}
   if(world.piles.length>=32768||!Number.isSafeInteger(world.nextId+1))return null;
   pile.quantity-=quantity;
   const carried:MaterialPile={id:world.nextId++,item:pile.item,kind:pile.kind,quantity,owner:{type:'pawn',pawnId:pawn.id},...copyPileCondition(pile)};

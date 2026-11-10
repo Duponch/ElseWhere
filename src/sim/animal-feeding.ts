@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {releaseAnimalThermalRefuge288} from './animal-thermal-refuge-288.ts';
 import {eggAllowedForPlayer256} from './animal-egg-permission-v256.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
@@ -82,7 +83,7 @@ export function processAnimalFeeding(w:World,doctor:Pawn,ctx:NeedContext):void {
   if(t.phase==='pickup'){
     if(food.owner.type!=='ground'||!eggAllowedForPlayer256(food)){releaseFeeding(w,doctor);return;}
     if(!adjacent(doctor,food.owner)&&(doctor.x!==food.owner.x||doctor.z!==food.owner.z)){ctx.move(food.owner,false);return;}
-    if(food.quantity===t.quantity){food.owner={type:'pawn',pawnId:doctor.id};t.carryPileId=food.id;}
+    if(food.quantity===t.quantity){assignPileOwner(food,{type:'pawn',pawnId:doctor.id});t.carryPileId=food.id;}
     else{
       if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1)){releaseFeeding(w,doctor);return;}
       food.quantity-=t.quantity;t.carryPileId=w.nextId++;

@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {releaseAnimalThermalRefuge288} from './animal-thermal-refuge-288.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 // Scaria remains a real illness even after actual ClearMind.
@@ -212,7 +213,7 @@ export function processHandling(w:World,p:Pawn,ctx:HandlingContext):void {
     if(!pile||pile.owner.type!=='ground'||pile.kind!=='food'||!eggAllowedForPlayer256(pile)||!handlingFoodCollectable(w,pile.item,a)
       ||pile.quantity-reservedSource(w,pile.id,p.id)<task.quantity){interruptWork(w,p);return;}
     if(!adjacent(p,pile.owner)&&(p.x!==pile.owner.x||p.z!==pile.owner.z)){ctx.move(pile.owner,false);return;}
-    if(pile.quantity===task.quantity){pile.owner={type:'pawn',pawnId:p.id};task.carryPileId=pile.id;}
+    if(pile.quantity===task.quantity){assignPileOwner(pile,{type:'pawn',pawnId:p.id});task.carryPileId=pile.id;}
     else {
       if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1)){interruptWork(w,p);return;}
       pile.quantity-=task.quantity;task.carryPileId=w.nextId++;

@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {localIngestionCore299,commitHumanIngestion299,selfFoodPermission299} from './human-ingestion-clock299.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
@@ -65,7 +66,7 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
     if ((pawn.x !== pile.owner.x || pawn.z !== pile.owner.z) && !adjacent(pawn, pile.owner)) { context.move(pile.owner, false); return; }
     if(alcohol&&task.alcoholReason==='inventory'){if(!completeAlcoholInventory265(world,pawn,pile,task))release();return;}
     if (pile.quantity === task.quantity) {
-      pile.owner = { type: 'pawn', pawnId: pawn.id }; task.carryPileId = pile.id;
+      assignPileOwner(pile,{ type: 'pawn', pawnId: pawn.id }); task.carryPileId = pile.id;
     } else {
       if (world.piles.length >= 32768 || !Number.isSafeInteger(world.nextId + 1)) { release(); return; }
       pile.quantity -= task.quantity; task.carryPileId = world.nextId++;

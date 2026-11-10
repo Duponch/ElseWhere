@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {validGroupFreightPack258,groupPackedMassGrams258} from './group-freight-contract-258.ts';
 import {captureGroupMass} from './group-capture.ts';
 import {groupHumanHandler257} from './group-human-admission-257.ts';
@@ -66,7 +67,7 @@ export function nextGroupBedrollPickup256(w:World,g:PreparingBedrollGroup256):{p
 export function commitGroupBedrollPickup256(w:World,g:PreparingBedrollGroup256,p:Pawn):boolean {
  if(w.group!==g||g.phase!=='loading'||g.cursor!==g.manifest.length||!validGroupBedrollLoadingField256(g,w,w.schemaVersion))return false;const next=nextGroupBedrollPickup256(w,g);if(!next||next.carrier!==p||next.pack.owner.type!=='ground'||p.moveCooldown!==0||(p.motion?.end??0)>w.tick||Math.abs(p.x-next.pack.owner.x)+Math.abs(p.z-next.pack.owner.z)>1||reserved(w,next.pack.building.id,g.id))return false;
  if(w.schemaVersion>=258){const ids=new Set([...g.memberIds,...(g.animalPreparation?.lines.map(l=>l.animalId)??[])]),members=w.pawns.filter(a=>g.memberIds.includes(a.id)),animals=w.wildlife?.animals.filter(a=>ids.has(a.id))??[],items=w.piles.filter(a=>'pawnId'in a.owner&&ids.has(a.owner.pawnId)),packs=w.packed.filter(a=>a.owner.type==='inventory'&&ids.has(a.owner.pawnId)),mass=captureGroupMass(members,items,!!g.freight,w.schemaVersion,packs,animals),carrier=mass?.carriers.find(a=>a.pawnId===p.id),unit=groupPackedMassGrams258(next.pack,w.schemaVersion);if(!carrier||unit===undefined||g.animalPreparation?.lines.some(l=>l.handlerId===p.id&&l.mode==='carry')||!groupPackHandler258(p)||allowedAreaReason(w,p,next.pack.owner)||pendingGroupPackedDeliveries258(g,p.id)||g.manifest.slice(0,g.cursor).some(l=>l.carrierId===p.id&&l.animalCarrierId!==undefined&&!l.deliveredToAnimal))return false;if(next.line.animalCarrierId!==undefined){const a=selectedGroupPackAnimal258(w,g,next.line.animalCarrierId);if(!a||allowedAreaReason(w,p,a)||!groupPackedReceiverSpace258(w,g,a.id))return false;}else if(carrier.grams+unit>carrier.capacityGrams)return false;}
- next.pack.owner={type:'inventory',pawnId:p.id};next.line.loaded=true;p.path=[];p.state='idle';return true;
+ assignPileOwner(next.pack,{type:'inventory',pawnId:p.id});next.line.loaded=true;p.path=[];p.state='idle';return true;
 }
 
 /** Pure source rows for the existing formation panel, same reservation and

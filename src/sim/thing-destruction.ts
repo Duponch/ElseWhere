@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {planShipChunkKill256} from './ship-chunk-leavings-256.ts';
 import {planGraveRelease} from './burial.ts';
 import {planLocalRoadPropRubble256} from './local-road-prop-rubble-256.ts';
@@ -20,12 +21,12 @@ export function planStructureDestruction(world:World,structure:Structure,actors:
     packed:world.packed.filter(p=>p.building.id!==structure.id).map(p=>({...p,owner:{...p.owner}})),
     piles:shelfRemoval.view.piles};
   const graveRelease=structure.kind==='sarcophagus'?planGraveRelease(view,structure):{corpseId:null};if(!graveRelease)return null;
-  if(graveRelease.corpseId!==null)view.piles.find(p=>p.id===graveRelease.corpseId)!.owner={type:'ground',...graveRelease.cell!};
+  if(graveRelease.corpseId!==null)assignPileOwner(view.piles.find(p=>p.id===graveRelease.corpseId)!,{type:'ground',...graveRelease.cell!});
   const drops:DropPlan=new Map(shelfRemoval.drops);
   for(const actor of actors){
     if(hasTravellingCargo(world,actor))continue; // Logical arrival is not a physical drop contact.
     const pack=view.packed.find(p=>p.owner.type==='pawn'&&p.owner.pawnId===actor.id);
-    if(pack){const cell=furnitureDropCell(view,actor,actor.id);if(cell){pack.owner={type:'ground',...cell};drops.set(pack.building.id,cell);}}
+    if(pack){const cell=furnitureDropCell(view,actor,actor.id);if(cell){assignPileOwner(pack,{type:'ground',...cell});drops.set(pack.building.id,cell);}}
     const pile=view.piles.find(p=>p.owner.type==='pawn'&&p.owner.pawnId===actor.id);
     if(pile&&dropRetainingIdentity(view,pile,actor)&&pile.owner.type==='ground')drops.set(pile.id,{x:pile.owner.x,z:pile.owner.z});
   }

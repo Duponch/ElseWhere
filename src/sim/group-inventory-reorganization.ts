@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {SCHEMA_VERSION} from './types.ts';
 import {groupPackedMassGrams258} from './group-freight-mass-258.ts';
 import {canMergeEggPile256} from './animal-egg-permission-v256.ts';
@@ -43,7 +44,7 @@ export function draftSplitInventory(members:readonly CaravanPhysicalPawn256[],it
  for(const l of lines){const p=items.find(p=>p.id===l.pileId);if(!p||p.owner.type!=='inventory'||!whole(l.quantity)||l.quantity>p.quantity)return;}
  if(!validCaravanBedrollPacks256(packed,members,nextId,version,tick)||new Set(packedIds).size!==packedIds.length||packedIds.some(id=>!packed.some(p=>p.building.id===id)))return;
  const draftPacks=packed.map(p=>({...p,owner:{...p.owner}})),packedReceipts:GroupInventorySplitDraft['packedReceipts']=[];
- const draft=items.map(p=>{const q=structuredClone(p);if(stripOwnerId!==undefined&&'pawnId'in q.owner&&q.owner.pawnId===stripOwnerId)q.owner={type:'inventory',pawnId:stripOwnerId};return q;}),shares=new Map(items.map(p=>[p.id,new Map([[p.id,p.quantity]])])),receipts:GroupInventoryReceipt[]=[],randomState={rng};let freshId=nextId;
+ const draft=items.map(p=>{const q=structuredClone(p);if(stripOwnerId!==undefined&&'pawnId'in q.owner&&q.owner.pawnId===stripOwnerId)assignPileOwner(q,{type:'inventory',pawnId:stripOwnerId});return q;}),shares=new Map(items.map(p=>[p.id,new Map([[p.id,p.quantity]])])),receipts:GroupInventoryReceipt[]=[],randomState={rng};let freshId=nextId;
  const mass=(id:number)=>{const grams=inventoryMass(draft,id,version);if(grams===undefined)return;let total=grams;for(const pack of draftPacks)if(pack.owner.type==='inventory'&&pack.owner.pawnId===id){const unit=groupPackedMassGrams258(pack,version);if(unit===undefined)return;total+=unit;}return Number.isSafeInteger(total)?total:undefined;};
  if(members.some(p=>mass(p.id)===undefined))return;
  const choose=(current:number,candidates:readonly CaravanPhysicalPawn256[]):CaravanPhysicalPawn256=>{
@@ -61,7 +62,7 @@ export function draftSplitInventory(members:readonly CaravanPhysicalPawn256[],it
  const move=(p:MaterialPile,count:number,target:CaravanPhysicalPawn256,preferred?:number)=>{
   const from=owner(p)!,movedShares=splitShares(p,count,preferred);let fragment=p;
   if(count<p.quantity){fragment=structuredClone(p);fragment.id=newIdentity();fragment.quantity=count;p.quantity-=count;draft.push(fragment);}
-  shares.set(fragment.id,movedShares);fragment.owner={type:'inventory',pawnId:target.id};
+  shares.set(fragment.id,movedShares);assignPileOwner(fragment,{type:'inventory',pawnId:target.id});
   // ThingOwner walks existing inventory order, partially filling each real
   // stack before appending the remaining original fragment. Partial absorption
   // itself performs SplitOff, consuming a Thing ID even when absorbed at once.
@@ -78,7 +79,7 @@ export function draftSplitInventory(members:readonly CaravanPhysicalPawn256[],it
   }
   receipts.push({sourceId:p.id,quantity:fragment.quantity,fromPawnId:from,toPawnId:target.id,fragmentId:fragment.id});
  };
- const movePack=(pack:PackedFurniture,target:CaravanPhysicalPawn256)=>{if(pack.owner.type!=='inventory')throw Error('Packed thing has no inventory holder');packedReceipts.push({structureId:pack.building.id,fromPawnId:pack.owner.pawnId,toPawnId:target.id});pack.owner={type:'inventory',pawnId:target.id};};
+ const movePack=(pack:PackedFurniture,target:CaravanPhysicalPawn256)=>{if(pack.owner.type!=='inventory')throw Error('Packed thing has no inventory holder');packedReceipts.push({structureId:pack.building.id,fromPawnId:pack.owner.pawnId,toPawnId:target.id});assignPileOwner(pack,{type:'inventory',pawnId:target.id});};
  // Core first empties the selected people's inventories into the retained
  // cohort. Equipment/apparel never enters this redistribution.
  for(const p of childMembers)for(const pile of draft.filter(q=>q.owner.type==='inventory'&&q.owner.pawnId===p.id))move(pile,pile.quantity,choose(p.id,sourceMembers));
@@ -107,7 +108,7 @@ export function splitInventoryDraftCurrent(items:readonly MaterialPile[],draft:G
 /** Enclosing transaction already checks IDs, RNG, tick, group refs and members.
  * No callback, refusal or random draw follows this first write. */
 export function commitSplitInventory(draft:GroupInventorySplitDraft):void {
- for(const update of draft.packedUpdates)update.original.owner=update.owner;
+ for(const update of draft.packedUpdates)assignPileOwner(update.original,update.owner);
  for(const {original,next} of draft.updates){
   const target=original as unknown as Record<string,unknown>,source=next as unknown as Record<string,unknown>;
   for(const key of Object.keys(target))if(!Object.hasOwn(source,key))delete target[key];

@@ -1,6 +1,7 @@
 /** Approved bounded GenPlaceNear adaptation for this PassThrough/None Hive:
  * keep every original lot/minified owner and ID, without merging or wiping.
  * All destinations are prepared before any owner is changed. */
+import {assignPileOwner} from './pile-index.ts';
 import type {World} from './types.ts';
 import {captureHiveClosewalk256} from './cave-hive-closewalk-256.ts';
 import {caveRadialPattern256} from './local-cave-radial-256.ts';
@@ -18,5 +19,5 @@ export function planTempleHiveItemsAside256(w:World,cell:number):{commit():boole
   if(!target)return null;plans.push({row,before:JSON.stringify(row.owner),target});
  }
  const basePiles=w.piles,basePacks=w.packed;let done=false;
- return {commit(){if(done||w.piles!==basePiles||w.packed!==basePacks||plans.some(p=>JSON.stringify(p.row.owner)!==p.before))return false;done=true;for(const p of plans)p.row.owner=p.target;return true;}};
+ return {commit(){if(done||w.piles!==basePiles||w.packed!==basePacks||plans.some(p=>JSON.stringify(p.row.owner)!==p.before))return false;done=true;for(const p of plans)assignPileOwner(p.row,p.target);return true;}};
 }

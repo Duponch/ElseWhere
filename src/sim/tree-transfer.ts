@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {geyserBlocksPlantOrFloor256} from './local-geyser-state-256.ts';
 import {travelPieces} from './travel-timing.ts';
 import {gatherResource,clearingDuration,plantWorkGrowthFactor256} from './gathering.ts';
@@ -207,7 +208,7 @@ export function processTreeWork(w:World,p:Pawn,j:Job,move:(target:Cell,touch:boo
     permitted:(actor,job)=>!treeJobReason(w,job,actor),contact:(actor,c)=>contact(w,actor,c),move,
     stop:actor=>interruptWork(w,actor),plantSpeed:actor=>plantWorkSpeed(actor,body)*speed,
     learnPlants:actor=>{plantWorkRate(actor,body,true);},
-    pickupWhole:(actor,job)=>{if(job.tree.kind!=='replant')return false;const task=job.tree;const pile=w.piles.find(x=>x.id===task.sourcePileId);if(!pile||pile.owner.type!=='ground'||!contact(w,actor,pile.owner)||w.piles.some(x=>x.owner.type==='pawn'&&x.owner.pawnId===actor.id)||w.packed.some(x=>x.owner.type==='pawn'&&x.owner.pawnId===actor.id))return false;pile.owner={type:'pawn',pawnId:actor.id};return true;},
+    pickupWhole:(actor,job)=>{if(job.tree.kind!=='replant')return false;const task=job.tree;const pile=w.piles.find(x=>x.id===task.sourcePileId);if(!pile||pile.owner.type!=='ground'||!contact(w,actor,pile.owner)||w.piles.some(x=>x.owner.type==='pawn'&&x.owner.pawnId===actor.id)||w.packed.some(x=>x.owner.type==='pawn'&&x.owner.pawnId===actor.id))return false;assignPileOwner(pile,{type:'pawn',pawnId:actor.id});return true;},
     destinationReady:(actor,job)=>!treeJobReason(w,job,actor),
   });
   if(j.tree.kind==='replant')j.progress=j.tree.workCore;

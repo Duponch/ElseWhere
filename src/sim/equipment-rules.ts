@@ -1,6 +1,7 @@
 import {LONGSWORD_ITEMS_270,isLongswordItem270,longswordLabel270,longswordMaxHitPoints270,type LongswordItem270} from './longsword-content-270.ts';
 import {SPEAR_ITEMS_272,isSpearItem272,spearLabel272,spearMaxHitPoints272,type SpearItem272} from './spear-content-272.ts';
 import type { MaterialPile,Pawn,World } from './types.ts';
+import {pileIndex,pileIndexMismatch,verifyPileIndex} from './pile-index.ts';
 import type { ItemId } from './items.ts';
 import {MACE_ITEMS_269,isMaceItem269,maceLabel269,maceMaxHitPoints269,type MaceItem269} from './mace-content-269.ts';
 
@@ -15,7 +16,14 @@ export interface EquipmentTask {itemId:number;action:EquipmentAction;progress:nu
 export type EquipmentCommand={type:'order-equipment';pawnId:number;itemId:number;action:EquipmentAction;queue:boolean}
   |{type:'weapon-permission';itemId:number;allowed:boolean}
   |{type:'apparel-permission';itemId:number;allowed:boolean}|{type:'forget-weapon';pawnId:number};
-export const equippedWeapon=(world:World,pawn:Pawn):MaterialPile|undefined=>world.piles.find(p=>p.owner.type==='equipment'&&p.owner.pawnId===pawn.id);
+/** The first equipment pile of this pawn in array order (pile index inside a simulation step). */
+export function equippedWeapon(world:World,pawn:Pawn):MaterialPile|undefined {
+  const index=Number.isInteger(pawn.id)?pileIndex(world):undefined;
+  if(index&&!verifyPileIndex)return index.equipment.get(pawn.id);
+  const found=world.piles.find(p=>p.owner.type==='equipment'&&p.owner.pawnId===pawn.id);
+  if(index&&index.equipment.get(pawn.id)!==found)pileIndexMismatch('equipped weapon');
+  return found;
+}
 const longswordLabels270=Object.fromEntries(LONGSWORD_ITEMS_270.map(item=>[item,longswordLabel270(item)])) as Record<LongswordItem270,string>;
 const maceLabels269=Object.fromEntries(MACE_ITEMS_269.map(item=>[item,maceLabel269(item)])) as Record<MaceItem269,string>;
 const spearLabels272=Object.fromEntries(SPEAR_ITEMS_272.map(item=>[item,spearLabel272(item)])) as Record<SpearItem272,string>;

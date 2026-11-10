@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {releaseAnimalThermalRefuge288} from './animal-thermal-refuge-288.ts';
 import {isSchema282OrLater} from './schema-compatibility-257.ts';
 import {nextTrainable282,completeAnimalTraining282} from './animal-training-282.ts';
@@ -101,7 +102,7 @@ export function processAnimalTraining282(w:World,p:Pawn,task:AnimalTrainingTask2
    ||source.quantity-reservedSource(w,source.id,p.id)<task.quantity){stop();return;}
   if(!adjacent(p,source.owner)&&(p.x!==source.owner.x||p.z!==source.owner.z)){ctx.move(source.owner,false);return;}
   if((p.motion?.end??0)>w.tick||p.moveCooldown>0)return;
-  if(source.quantity===task.quantity){source.owner={type:'pawn',pawnId:p.id};task.carryPileId=source.id;}
+  if(source.quantity===task.quantity){assignPileOwner(source,{type:'pawn',pawnId:p.id});task.carryPileId=source.id;}
   else{
    if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1)){stop();return;}
    source.quantity-=task.quantity;task.carryPileId=w.nextId++;

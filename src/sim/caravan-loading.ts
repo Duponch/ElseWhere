@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import { candidateAccess } from './candidate-access.ts';
 import { refreshStock,reservedSource } from './materials.ts';
 import { groundCapacity,groundPile } from './ground-placement.ts';
@@ -38,7 +39,7 @@ export function applyScoutCommand(w:World,c:ScoutCommand):CommandResult {
     if(groundPile(w,cell)||w.packed.some(i=>i.owner.type==='ground'&&same(i.owner,cell))
       ||groundCapacity(w,cell,pile,p.id)<pile.quantity)
       return fail('La case du colon ne peut accueillir cette pile entière.');
-    pile.owner={type:'ground',...cell};
+    assignPileOwner(pile,{type:'ground',...cell});
     refreshStock(w);
     return {ok:true};
   }
@@ -92,7 +93,7 @@ export function processScoutLoading(w:World,p:Pawn,ctx:NeedContext):boolean {
     if(source.quantity>s.quantity&&(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1))){cancelPreparation(w,p);return false;}
     let foodPileId:number;
     if(source.quantity===s.quantity){
-      source.owner={type:'inventory',pawnId:p.id};
+      assignPileOwner(source,{type:'inventory',pawnId:p.id});
       foodPileId=source.id;
     }else{
       source.quantity-=s.quantity;

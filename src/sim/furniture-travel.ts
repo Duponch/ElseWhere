@@ -16,7 +16,7 @@ import { spikeTrapKnowsOf,spikeTrapNavigationActor,SPIKE_TRAP_SEARCH_COST,SPIKE_
 import type { Cell, StructureKind, World } from './types.ts';
 import { captureStructureNavigation,type StructureNavigationGeometry } from './structure-navigation.ts';
 import { terrainWriteCount,verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
-import { pileScopeGeneration } from './pile-scope.ts';
+import { PILE_CHUNK,PILE_MATERIAL_FLOOR,materialFloorPile,pileIndex,pileIndexMismatch,verifyPileIndex } from './pile-index.ts';
 
 /** Core natural floors cost two Core ticks. Historical grass/soil stay neutral. */
 export function terrainTravelDelay(world:World,index:number):number {
@@ -113,7 +113,13 @@ export function canStandAt(world:World,cell:Cell,geometry?:StructureNavigationGe
   geometry??=captureStructureNavigation(world);
   if(!Number.isInteger(cell.x)||!Number.isInteger(cell.z)||cell.x<0||cell.z<0||cell.x>=world.width||cell.z>=world.height||['rock','water'].includes(world.tiles[cell.z*world.width+cell.x]!.terrain))return false;
   for(const s of geometry?.at(cell)??world.structures)if((geometry||footprintContains(s,cell))&&(version<22?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand))return false;
-  if(version>=28&&world.piles.some(p=>p.kind==='chunk'&&p.owner.type==='ground'&&p.owner.x===cell.x&&p.owner.z===cell.z))return false;
+  if(version>=28){
+    // The cell is an in-map integer cell here: the pile index answers in a step.
+    const index=pileIndex(world),indexed=index?!!(index.groundFacts[cell.z*world.width+cell.x]!&PILE_CHUNK):undefined;
+    const chunk=indexed!==undefined&&!verifyPileIndex?indexed:world.piles.some(p=>p.kind==='chunk'&&p.owner.type==='ground'&&p.owner.x===cell.x&&p.owner.z===cell.z);
+    if(indexed!==undefined&&indexed!==chunk)pileIndexMismatch('standable chunk');
+    if(chunk)return false;
+  }
   return !world.jobs.some(j=>(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')&&footprintContains(j,cell));
 }
 /** For a batch of point queries in one read-only decision. Discard before any
@@ -136,47 +142,27 @@ export function captureStandability(world:World,geometry?:StructureNavigationGeo
   const structures=geometry?structureDeniedMask(world,geometry,version<22):undefined;
   if(!geometry)for(const s of world.structures)if(version<22?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand)add(s);
   for(const j of world.jobs)if(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')add(j);
-  if(version>=28)for(const p of world.piles)if(p.kind==='chunk'&&p.owner.type==='ground')denied.add(p.owner.z*world.width+p.owner.x);
+  if(version>=28)for(const p of groundChunkPiles(world))denied.add(p.owner.z*world.width+p.owner.x);
   return cell=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height
     &&!['rock','water'].includes(world.tiles[cell.z*world.width+cell.x]!.terrain)&&!structures?.[cell.z*world.width+cell.x]&&!denied.has(cell.z*world.width+cell.x);
 }
-/* Ground pile facts per in-map cell, inside a pile scope (pile-scope.ts) in
- * which no pile changes. Each step otherwise scans every pile (about 1 800 on
- * Les Forges). Same answers as the scan below: the pile rules are an OR over
- * the piles of a cell, and a pile outside the map can match no in-map cell.
- * VERIFY_TERRAIN_CACHES compares every answer with the scan. */
-const PILE_CHUNK=1,PILE_MATERIAL=2;
-/** One byte per cell, kept across scopes of a World with the piles, owners
- * and kinds it was built from: owner objects are replaced, never edited, when
- * a pile moves, so a scope that finds every pile, owner and kind identical
- * reuses the bytes; otherwise only the cells marked by the last build are
- * cleared and the bytes rebuilt. */
-interface GroundPileFacts {generation:number;facts:Uint8Array;marked:number[];version:number;width:number;piles:World['piles'][number][];owners:World['piles'][number]['owner'][];kinds:World['piles'][number]['kind'][]}
-const groundPileFacts=new WeakMap<World,GroundPileFacts>();
-function sameGroundPiles(world:World,entry:GroundPileFacts):boolean {
-  const piles=world.piles,n=piles.length;
-  if(n!==entry.piles.length||entry.version!==world.schemaVersion||entry.width!==world.width)return false;
-  for(let i=0;i<n;i++){const p=piles[i]!;if(p!==entry.piles[i]||p.owner!==entry.owners[i]||p.kind!==entry.kinds[i])return false;}
-  return true;
+/* Every ground chunk / material-floor pile, in array order: from the pile
+ * index inside a simulation step, else from a scan (the same filter). */
+type GroundPile=World['piles'][number]&{owner:{type:'ground';x:number;z:number}};
+function sameList(a:readonly unknown[],b:readonly unknown[]):boolean {if(a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(a[i]!==b[i])return false;return true;}
+function groundChunkPiles(world:World):readonly GroundPile[] {
+  const index=pileIndex(world);
+  if(index&&!verifyPileIndex)return index.groundChunks as readonly GroundPile[];
+  const scanned=world.piles.filter(p=>p.kind==='chunk'&&p.owner.type==='ground') as GroundPile[];
+  if(index&&!sameList(index.groundChunks,scanned))pileIndexMismatch('ground chunks');
+  return scanned;
 }
-const materialFloorPile=(version:number,kind:string)=>version>=29&&kind==='steel'||version>=32&&kind==='blocks'||version>=41&&kind==='component'||version>=123&&(kind==='gold'||kind==='plasteel'||kind==='advanced-component');
-function scopedGroundPiles(world:World):Uint8Array|undefined {
-  const generation=pileScopeGeneration(world);if(generation===undefined)return undefined;
-  const size=world.width*world.height;let entry=groundPileFacts.get(world),fresh=false;
-  if(!entry||entry.facts.length!==size){entry={generation:NaN,facts:new Uint8Array(size),marked:[],version:NaN,width:world.width,piles:[],owners:[],kinds:[]};groundPileFacts.set(world,entry);fresh=true;}
-  if(entry.generation!==generation&&!fresh&&sameGroundPiles(world,entry))entry.generation=generation;
-  if(entry.generation!==generation){
-    const {facts,marked}=entry,version=world.schemaVersion,width=world.width,height=world.height;
-    for(const i of marked)facts[i]=0;marked.length=0;
-    entry.version=version;entry.width=width;entry.piles=world.piles.slice();entry.owners=entry.piles.map(p=>p.owner);entry.kinds=entry.piles.map(p=>p.kind);
-    for(const p of world.piles){
-      const owner=p.owner;if(owner.type!=='ground'||!Number.isInteger(owner.x)||!Number.isInteger(owner.z)||owner.x<0||owner.z<0||owner.x>=width||owner.z>=height)continue;
-      const bits=(version>=28&&p.kind==='chunk'?PILE_CHUNK:0)|(materialFloorPile(version,p.kind)?PILE_MATERIAL:0);
-      if(bits){const i=owner.z*width+owner.x;if(!facts[i])marked.push(i);facts[i]=facts[i]!|bits;}
-    }
-    entry.generation=generation;
-  }
-  return entry.facts;
+function groundMaterialFloorPiles(world:World):readonly GroundPile[] {
+  const index=pileIndex(world),version=world.schemaVersion;
+  if(index&&!verifyPileIndex)return index.groundMaterialFloors as readonly GroundPile[];
+  const scanned=world.piles.filter(p=>materialFloorPile(version,p.kind)&&p.owner.type==='ground') as GroundPile[];
+  if(index&&!sameList(index.groundMaterialFloors,scanned))pileIndexMismatch('ground material floors');
+  return scanned;
 }
 const inMap=(world:World,c:Cell)=>Number.isInteger(c.x)&&Number.isInteger(c.z)&&c.x>=0&&c.z>=0&&c.x<world.width&&c.z<world.height;
 export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry):number {
@@ -199,12 +185,14 @@ export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:Du
   }
   let objectDelay=target?FURNITURE_TRAVEL[target].delay:frameAt(world,to)?FRAME_TRAVEL_DELAY:0;
   let repeats=target?FURNITURE_TRAVEL[target].repeat:false,materialDelay=0;
-  const facts=inMap(world,to)&&inMap(world,from)?scopedGroundPiles(world):undefined;
-  if(facts&&!verifyTerrainWriteCaches){
+  // Inside a simulation step, the pile index answers for the two in-map cells
+  // (an OR over each cell's ground piles; a pile outside the map matches none).
+  const facts=inMap(world,to)&&inMap(world,from)?pileIndex(world)?.groundFacts:undefined;
+  if(facts&&!verifyPileIndex){
     const atTo=facts[to.z*world.width+to.x]!,atFrom=facts[from.z*world.width+from.x]!;
     if(atTo&PILE_CHUNK){objectDelay=Math.max(objectDelay,4.2);repeats=true;}
     if(atFrom&PILE_CHUNK)previousRepeats=true;
-    if(atTo&PILE_MATERIAL)materialDelay=1.4;
+    if(atTo&PILE_MATERIAL_FLOOR)materialDelay=1.4;
   }else{
     const scoped=facts?{objectDelay,repeats,previousRepeats}:undefined;
     // One pass over the piles, cell test first: only ground piles on `to` or
@@ -218,8 +206,8 @@ export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:Du
     }
     if(scoped&&facts){
       const atTo=facts[to.z*world.width+to.x]!,atFrom=facts[from.z*world.width+from.x]!;
-      const expected={objectDelay:atTo&PILE_CHUNK?Math.max(scoped.objectDelay,4.2):scoped.objectDelay,repeats:scoped.repeats||!!(atTo&PILE_CHUNK),previousRepeats:scoped.previousRepeats||!!(atFrom&PILE_CHUNK),materialDelay:atTo&PILE_MATERIAL?1.4:0};
-      if(expected.objectDelay!==objectDelay||expected.repeats!==repeats||expected.previousRepeats!==previousRepeats||expected.materialDelay!==materialDelay)throw Error('Ground pile changed inside a pile scope');
+      const expected={objectDelay:atTo&PILE_CHUNK?Math.max(scoped.objectDelay,4.2):scoped.objectDelay,repeats:scoped.repeats||!!(atTo&PILE_CHUNK),previousRepeats:scoped.previousRepeats||!!(atFrom&PILE_CHUNK),materialDelay:atTo&PILE_MATERIAL_FLOOR?1.4:0};
+      if(expected.objectDelay!==objectDelay||expected.repeats!==repeats||expected.previousRepeats!==previousRepeats||expected.materialDelay!==materialDelay)pileIndexMismatch('travel delay piles');
     }
   }
   const actor=trap?spikeTrapNavigationActor(world,from):undefined,overrideCost=terrainOverride?.coreCost(world.tiles[to.z*world.width+to.x]!);
@@ -323,12 +311,12 @@ export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTe
   let terrain:Uint8Array|Uint16Array=new Uint8Array(world.tiles.length);let terrainMaximum=0;
   let marshPerceptionCosts:ReadonlyMap<number,number>=new Map<number,number>();
   if(version>=28) {
-    for(const p of world.piles)if(p.kind==='chunk'&&p.owner.type==='ground'){const i=p.owner.z*width+p.owner.x;costs.set(i,Math.max(costs.get(i)??0,1400));repeaters.add(i);stops.add(i);}
+    for(const p of groundChunkPiles(world)){const i=p.owner.z*width+p.owner.x;costs.set(i,Math.max(costs.get(i)??0,1400));repeaters.add(i);stops.add(i);}
     const drafted=!!actor&&'draft' in actor&&!!actor.draft;
     const layer=terrainCostLayer(world,version,drafted,snow,terrainOverride);
     terrain=layer.terrain;terrainMaximum=layer.maximum;marshPerceptionCosts=layer.marsh;
   }
-  if(version>=29)for(const p of world.piles)if((p.kind==='steel'||version>=32&&p.kind==='blocks'||version>=41&&p.kind==='component'||version>=123&&(p.kind==='gold'||p.kind==='plasteel'||p.kind==='advanced-component'))&&p.owner.type==='ground'){const i=p.owner.z*width+p.owner.x;floors.set(i,Math.max(floors.get(i)??0,467));costs.set(i,Math.max(costs.get(i)??0,467));}
+  if(version>=29)for(const p of groundMaterialFloorPiles(world)){const i=p.owner.z*width+p.owner.x;floors.set(i,Math.max(floors.get(i)??0,467));costs.set(i,Math.max(costs.get(i)??0,467));}
   // Door wait is added after the terrain/object/material maximum, not compared
   // with it. Preserve present zero entries for fully open doors on bare floors.
   for(const s of geometry?.roomDoors??world.structures)if(isRoomDoor(s.kind)) {const i=s.z*width+s.x;repeaters.delete(i);costs.set(i,Math.max(costs.get(i)??0,terrain[i]??0)+Math.round(doorWait(s,isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick)/3*1000));}

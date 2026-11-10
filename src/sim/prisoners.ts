@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {captureActorBeds256,forgetLocalActorBed256,forgetLocalBedOwners256} from './actor-bed-local-256.ts';
 import {registeredCampaign} from './world-map-context.ts';
 import { isBedKind } from './bed-kinds.ts';
@@ -30,7 +31,7 @@ function planBedInterruptions(world:World,actors:readonly Pawn[]):DropPlan|null 
   const shadow={...world,piles:world.piles.map(p=>({...p,owner:{...p.owner}})),packed:world.packed.map(p=>({...p,owner:{...p.owner}}))},result:DropPlan=new Map();
   for(const actor of actors){
     const plan=planCommandDrops(shadow,{type:'clear-orders',pawnId:actor.id});if(!plan)return null;
-    for(const [id,cell] of plan){result.set(id,cell);const pile=shadow.piles.find(p=>p.id===id);if(pile)pile.owner={type:'ground',...cell};const pack=shadow.packed.find(p=>p.building.id===id);if(pack)pack.owner={type:'ground',...cell};}
+    for(const [id,cell] of plan){result.set(id,cell);const pile=shadow.piles.find(p=>p.id===id);if(pile)assignPileOwner(pile,{type:'ground',...cell});const pack=shadow.packed.find(p=>p.building.id===id);if(pack)assignPileOwner(pack,{type:'ground',...cell});}
   }
   return result;
 }

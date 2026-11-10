@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {initializeFirefoamPopper290} from './firefoam-290.ts';
 import {pauseGlowPod256,resumeGlowPod256} from './cave-glowpod-minification-256.ts';
 import {prepareLinkedShelfInstall286,adoptLinkedShelfInstallWrites286} from './linked-storage-lifecycle-286.ts';
@@ -27,7 +28,7 @@ export function furnitureDropCell(world:World,origin:Cell,exceptPawn?:number):Ce
 export function releaseFurniture(world:World,pawn:Pawn,plan?:ReadonlyMap<number,Cell>):boolean {
   const pack=world.packed?.find(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id);if(!pack)return true;
   const cell=plan?.get(pack.building.id)??furnitureDropCell(world,pawn,pawn.id);if(!cell)return false;
-  pack.owner={type:'ground',...cell};return true;
+  assignPileOwner(pack,{type:'ground',...cell});return true;
 }
 
 interface FlowerWithdrawalPlan {ids:Set<number>;actors:Set<number>;drops:DropPlan}
@@ -89,7 +90,7 @@ export function advanceFurniture(world:World,pawn:Pawn,job:Job,move:(target:Cell
       commitShelfRemoval(world,removal);pack=detach(world,job,{type:'pawn',pawnId:pawn.id});resetWork(job);return true;
     }
   } else if(pack?.owner.type==='ground') {
-    pack.owner={type:'pawn',pawnId:pawn.id};resetWork(job);return true;
+    assignPileOwner(pack,{type:'pawn',pawnId:pawn.id});resetWork(job);return true;
   } else if(pack?.owner.type==='pawn') {
     const bedOwnership=prepareBedOwnershipTransition256(world,pack.building,'install');
     // The consulted hauling driver has no timed install work for a blueprint.

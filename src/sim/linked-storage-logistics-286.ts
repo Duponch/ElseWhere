@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema286OrLater} from './schema-compatibility-257.ts';
 import {dropRetainingIdentity} from './ground-placement.ts';
 import {hasTravellingCargo} from './interrupted-cargo.ts';
@@ -74,9 +75,9 @@ function prepareWrites286(world:World,ids:ReadonlySet<number>):{writes:MapRemova
   if(!!pile===!!pack)return;
   const owner={type:'ground' as const,x:cell.x,z:cell.z};
   if(pile){const original=world.piles.find(p=>p.id===id);if(!original||original.owner.type!=='pawn'||!stationary.has(original.owner.pawnId))return;
-   pile.owner=owner;put(original,'owner',owner);
+   assignPileOwner(pile,owner);put(original,'owner',owner);
   }else if(pack){const original=world.packed.find(p=>p.building.id===id);if(!original||original.owner.type!=='pawn'||!stationary.has(original.owner.pawnId))return;
-   pack.owner=owner;put(original,'owner',owner);
+   assignPileOwner(pack,owner);put(original,'owner',owner);
   }
   moves.push({id,owner});
  }

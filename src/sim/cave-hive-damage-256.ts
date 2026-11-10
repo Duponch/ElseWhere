@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
@@ -42,7 +43,7 @@ export function damageCaveHiveProp256(w:World,s:Structure,amount:number,cause:St
  if(w.piles.some(p=>p.owner.type==='job'&&ids.has(p.owner.jobId)))return false;
  const actors=w.pawns.filter(p=>p.jobId!==null&&ids.has(p.jobId)||p.haul?.whole&&p.haul.sourcePileId===s.id),dropView={...w,structures:w.structures.filter(b=>b!==s),packed:w.packed.filter(p=>p!==pack)},drops=planSelectedDrops(dropView,ids,new Set(actors.filter(p=>!hasTravellingCargo(dropView,p)).map(p=>p.id)));if(!drops)return false;
  const view:World={...w,structures:w.structures.filter(b=>b!==s),packed:w.packed.filter(p=>p!==pack).map(p=>({...p,owner:{...p.owner}})),piles:w.piles.map(p=>({...p,owner:{...p.owner}}))};
- for(const p of view.piles){const cell=drops.get(p.id);if(cell)p.owner={type:'ground',...cell};}for(const p of view.packed){const cell=drops.get(p.building.id);if(cell)p.owner={type:'ground',...cell};}
+ for(const p of view.piles){const cell=drops.get(p.id);if(cell)assignPileOwner(p,{type:'ground',...cell});}for(const p of view.packed){const cell=drops.get(p.building.id);if(cell)assignPileOwner(p,{type:'ground',...cell});}
  const fire=cause==='fire'?w.fires??ensureFireState({...w}):undefined,owner=pack?.owner,carrierId=owner?.type==='pawn'||owner?.type==='inventory'?owner.pawnId:undefined,origin=owner?.type==='ground'?owner:carrierId!==undefined?w.pawns.find(p=>p.id===carrierId)??s:s;
  const leaving=planCaveHiveKill256(view,s,origin,fire?.rng??rng,spawned);if(!leaving)return false;
  const destroyed=planNaturalHiveLoss256(w.destroyed,s.kind as 'insect-hive'|'glow-pod');if(!destroyed||fire&&!Number.isSafeInteger(fire.ledger.structures+1))return false;

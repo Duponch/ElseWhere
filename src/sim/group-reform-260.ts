@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {estimateGroupTravel} from './group-travel-estimate.ts';
 import {prepareReformDeparture260} from './group-reform-departure-260.ts';
@@ -91,7 +92,7 @@ export function prepareGroupReform260(w:World,c:GroupReformDraft260,previewOnly=
  const carriers=[...people,...actualAnimals].filter(p=>!('prisoner'in p&&p.prisoner)&&p.state!=='downed');if(!carriers.length)return fail('Aucun détenteur de fret n’est disponible.');
  const choose=()=>{const m=captureGroupMass(people,staged,true,w.schemaVersion,[],actualAnimals);if(!m)throw Error('Masse réelle inconnue');return carriers.slice().sort((a,b)=>(m.carriers.find(c=>c.pawnId===a.id)!.grams-m.carriers.find(c=>c.pawnId===b.id)!.grams)||a.id-b.id)[0]!.id;};
  for(const [pileId,quantity] of [...chosen].sort((a,b)=>a[0]-b[0])){const p=sourceMap.get(pileId)!,target=choose(),next=structuredClone(p);let moved:MaterialPile;if(quantity===p.quantity){moved=next;}else {if(!Number.isSafeInteger(nextId+1))return fail('Les identités de fragments sont épuisées.');moved=structuredClone(p);moved.id=nextId++;moved.quantity=quantity;next.quantity-=quantity;}
-  moved.owner={type:'inventory',pawnId:target};if(Number(w.schemaVersion)>=298)setMaterialForbidden256(moved,false);staged.push(moved);transfers.push({original:p,next,...moved!==next?{fragment:moved}:{}});receipts.push({sourceId:p.id,fragmentId:moved.id,quantity,toPawnId:target});
+  assignPileOwner(moved,{type:'inventory',pawnId:target});if(Number(w.schemaVersion)>=298)setMaterialForbidden256(moved,false);staged.push(moved);transfers.push({original:p,next,...moved!==next?{fragment:moved}:{}});receipts.push({sourceId:p.id,fragmentId:moved.id,quantity,toPawnId:target});
  }
  const packUpdates=packs.map(p=>({original:p,next:{...p,owner:{type:'inventory' as const,pawnId:choose()}}}));
  const mass=captureGroupMass(people,staged,true,w.schemaVersion,packUpdates.map(p=>p.next),actualAnimals);if(!mass)return fail('La masse ou les détenteurs finaux ne sont pas valides.');

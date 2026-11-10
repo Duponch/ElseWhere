@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isShipComputerSensorsKind298} from './ship-computer-sensors-content-298.ts';
 import {notifyShipRootDestruction298} from './ship-root-destruction-proof-298.ts';
@@ -51,7 +52,7 @@ export function finishDeconstruction(world: World, pawn: Pawn, job: Job): boolea
   const graveRelease=planGraveRelease(view,structure);if(!graveRelease)return false;
   // Occupy the preview cell before planning any other restitution. The same
   // body identity will be moved there only after all preflights succeed.
-  if(graveRelease.corpseId!==null)view.piles.find(p=>p.id===graveRelease.corpseId)!.owner={type:'ground',...graveRelease.cell!};
+  if(graveRelease.corpseId!==null)assignPileOwner(view.piles.find(p=>p.id===graveRelease.corpseId)!,{type:'ground',...graveRelease.cell!});
   const refunds: { item: ItemId; quantity: number; cell: { x:number; z:number } }[] = [];
   let rng = world.rng, lostWood = 0, lostSteel = 0, lostComponents=0,lostPlasteel=0,lostUranium=0,lostAdvancedComponents=0,lostAiCores=0,lostGold=0;
   if(structure.kind==='glow-pod')rng=shipChunkNextRandom256(rng).rng; // actual singleton leavingsRect, no material/filth under Deconstruct

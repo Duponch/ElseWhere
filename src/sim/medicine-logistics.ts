@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {materialAllowedForPlayer256} from './material-permission-256.ts';
 import { allowedAreaAllows } from './allowed-area-state.ts';
 import { MEDICINES,isMedicine,medicineAllowed,type TendMedicine } from './medicine-rules.ts';
@@ -46,7 +47,7 @@ export function pickupMedicalMedicine(world:World,doctor:Pawn,task:MedicalMedici
   const m=task.medicine!,pile=world.piles.find(p=>p.id===m.sourcePileId);
   if(!pile||!materialAllowedForPlayer256(pile)||pile.owner.type!=='ground'||!allowedAreaAllows(world,doctor,pile.owner)||reservedSource(world,pile.id)>pile.quantity){interruptWork(world,doctor);return;}
   if((doctor.x!==pile.owner.x||doctor.z!==pile.owner.z)&&!adjacent(doctor,pile.owner)){context.move(pile.owner,false);return;}
-  if(pile.quantity===m.quantity){pile.owner={type:'pawn',pawnId:doctor.id};m.carryPileId=pile.id;}
+  if(pile.quantity===m.quantity){assignPileOwner(pile,{type:'pawn',pawnId:doctor.id});m.carryPileId=pile.id;}
   else {
     if(world.piles.length>=32768||!Number.isSafeInteger(world.nextId+1)){interruptWork(world,doctor);return;}
     pile.quantity-=m.quantity;m.carryPileId=world.nextId++;

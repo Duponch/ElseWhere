@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import type {World,Pawn} from './types.ts';
 import type {WildAnimal} from './wildlife-state.ts';
 import type {PreparingGroup} from './group-capture.ts';
@@ -58,5 +59,5 @@ export function processGroupPackedDelivery258(w:World,g:PreparingGroup,p:Pawn,ct
  if(l.handoffReadyCore===undefined){if(!groupPackedReceiverSpace258(w,g,a.id))return 'refused';l.handoffReadyCore=w.tick*10+GROUP_PACK_HANDOFF_CORE_258;return 'handled';}
  if(w.tick*10<l.handoffReadyCore)return 'handled';
  if(!validGroupPackedDeadline258(l.handoffReadyCore,w,g)||!groupPackedReceiverSpace258(w,g,a.id))return 'refused';
- pack.owner={type:'inventory',pawnId:a.id};l.deliveredToAnimal=true;delete l.handoffReadyCore;return 'handled';
+ assignPileOwner(pack,{type:'inventory',pawnId:a.id});l.deliveredToAnimal=true;delete l.handoffReadyCore;return 'handled';
 }

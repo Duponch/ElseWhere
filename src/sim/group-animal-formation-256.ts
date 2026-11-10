@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {notifyDuckFlightJob256} from './duck-flight-runtime-256.ts';
 import {prospectiveHuman259} from './group-human-admission-259.ts';
@@ -95,7 +96,7 @@ export function processGroupAnimalDelivery256(w:World,g:PreparingGroup,p:Pawn,ct
  const a=w.wildlife?.animals.find(a=>a.id===line.animalCarrierId),pile=w.piles.find(i=>i.id===line.carriedPileId);if(!a||groupAnimalReason256(w,a,true)||!pile||pile.owner.type!=='inventory'||pile.owner.pawnId!==p.id||pile.item!==line.item||pile.quantity!==line.quantity){cancelGroupPreparation(w);return true;}
  if(!finished(w,p)||p.moveCooldown>0)return true;if(!slaughterContact(w,p,a)){ctx.move(a,false);return true;}if(!finished(w,a))return true;
  const allAnimals=g.animalPreparation!.lines.map(l=>w.wildlife!.animals.find(a=>a.id===l.animalId)!),ids=new Set([...g.memberIds,...allAnimals.map(a=>a.id)]),items=w.piles.filter(p=>'pawnId'in p.owner&&ids.has(p.owner.pawnId)),mass=captureGroupMass(w.pawns.filter(p=>g.memberIds.includes(p.id)),items,!!g.freight,w.schemaVersion,w.packed.filter(p=>p.owner.type==='inventory'&&ids.has(p.owner.pawnId)),allAnimals),carrier=mass?.carriers.find(p=>p.pawnId===a.id),unit=groupCaravanPileMass256(pile,!!g.freight,w.schemaVersion);if(!carrier||unit===undefined||carrier.grams+pile.quantity*unit>carrier.capacityGrams){cancelGroupPreparation(w);return true;}
- pile.owner={type:'inventory',pawnId:a.id};line.deliveredToAnimal=true;p.path=[];p.state='idle';return true;
+ assignPileOwner(pile,{type:'inventory',pawnId:a.id});line.deliveredToAnimal=true;p.path=[];p.state='idle';return true;
 }
 export const pendingGroupAnimalDeliveries256=(g:PreparingGroup):boolean=>g.manifest.slice(0,g.cursor).some(l=>l.animalCarrierId!==undefined&&!l.deliveredToAnimal);
 

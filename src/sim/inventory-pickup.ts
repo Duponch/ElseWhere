@@ -1,4 +1,5 @@
 /** Shared contact pickup without merging away a receipt identity. */
+import {assignPileOwner} from './pile-index.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
 import type { MaterialPile, Pawn, World } from './types.ts';
 import { copyPileCondition } from './pile-condition.ts';
@@ -39,6 +40,6 @@ export function inventoryPickupCurrent(world:World,plan:InventoryPickupPlan):boo
 export function commitInventoryPickup(world:World,plan:InventoryPickupPlan):boolean {
   if(!inventoryPickupCurrent(world,plan))return false;
   if(plan.split){plan.source.quantity-=plan.quantity;world.nextId++;world.piles.push(plan.carried);}
-  else plan.source.owner={type:'inventory',pawnId:plan.pawnId};
+  else assignPileOwner(plan.source,{type:'inventory',pawnId:plan.pawnId});
   return true;
 }

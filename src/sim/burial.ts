@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isBurialContainer256} from './ancient-monument-runtime-256.ts';
 import { storageAt,storageCellAccepts } from './shelf-storage.ts';
 import { workPriority } from './work-types.ts';
@@ -123,7 +124,7 @@ export function processBurial(w:World,actor:Pawn,context:NeedContext):void {
     if(!touch(actor,cell)){context.move(cell,false);return;}
     if((body.motion?.end??0)>w.tick||body.moveCooldown>0)return;
     if(w.piles.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===actor.id)||w.packed.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===actor.id)){interruptWork(w,actor);return;}
-    if(pile){if(pile.owner.type!=='ground'){interruptWork(w,actor);return;}pile.owner={type:'pawn',pawnId:actor.id};}
+    if(pile){if(pile.owner.type!=='ground'){interruptWork(w,actor);return;}assignPileOwner(pile,{type:'pawn',pawnId:actor.id});}
     else pile=pickUpRetainedHumanCorpse(w,actor,body.id)??undefined;
     if(!pile)return;
     t.corpseId=pile.id;t.phase='carry';actor.path=[];actor.planCooldown=0;updateHumanCorpseTemperatures(w);
@@ -133,7 +134,7 @@ export function processBurial(w:World,actor:Pawn,context:NeedContext):void {
   if(!footprintCells(grave).some(cell=>touch(actor,cell))){context.move(grave,false);return;}
   t.phase='bury';actor.path=[];actor.state='working';t.progress++;
   if(t.progress<BURIAL_TICKS)return;
-  pile.owner={type:'grave',graveId:grave.id};grave.grave!.corpseId=pile.id;
+  assignPileOwner(pile,{type:'grave',graveId:grave.id});grave.grave!.corpseId=pile.id;
   updateHumanCorpseTemperatures(w);releaseBurial(actor);actor.state='idle';actor.path=[];actor.planCooldown=0;
   context.event(`${actor.name} a inhumé ${body.name}.`);
 }
@@ -151,5 +152,5 @@ export function commitGraveRelease(w:World,grave:Structure,plan:GraveReleasePlan
   if(plan.corpseId===null)return grave.grave?.corpseId===undefined;
   const pile=w.piles.find(p=>p.id===plan.corpseId);
   if(!pile||!plan.cell||grave.grave?.corpseId!==pile.id||pile.owner.type!=='grave'||pile.owner.graveId!==grave.id)return false;
-  pile.owner={type:'ground',...plan.cell};delete grave.grave.corpseId;updateHumanCorpseTemperatures(w);return true;
+  assignPileOwner(pile,{type:'ground',...plan.cell});delete grave.grave.corpseId;updateHumanCorpseTemperatures(w);return true;
 }

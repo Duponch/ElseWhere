@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -137,7 +138,7 @@ export function transferPile(world:World,pile:MaterialPile,owner:MaterialOwner):
   if((pile.kind==='book'||pile.item==='novel')&&sameOwner(pile.owner,owner))return (Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))&&pile.kind==='book'&&pile.item==='novel'&&pile.quantity===1&&isNovelBook295(pile.book)&&owner.type!=='job'&&owner.type!=='equipment'&&owner.type!=='apparel'&&owner.type!=='grave';
   if((pile.kind==='book'||pile.item==='novel')&&!materialCanFit(world,pile.kind,pile.quantity,owner,pile.item,pile))return false;
   if(sameOwner(pile.owner,owner))return true;
-  if(pile.kind==='plant'){if(owner.type!=='ground'&&owner.type!=='pawn'&&owner.type!=='inventory')return false;if(owner.type==='ground'&&groundCapacity(world,owner,pile,pile.owner.type==='pawn'?pile.owner.pawnId:undefined)<1)return false;pile.owner={...owner};refreshStock(world);return true;}
+  if(pile.kind==='plant'){if(owner.type!=='ground'&&owner.type!=='pawn'&&owner.type!=='inventory')return false;if(owner.type==='ground'&&groundCapacity(world,owner,pile,pile.owner.type==='pawn'?pile.owner.pawnId:undefined)<1)return false;assignPileOwner(pile,{...owner});refreshStock(world);return true;}
   if((pile.kind==='corpse'||pile.kind==='mech-corpse')&&owner.type!=='ground'&&owner.type!=='pawn')return false;
   const carrier=pile.owner.type==='pawn'||animalHaulContents282(world,pile)&&pile.owner.type==='inventory'?pile.owner.pawnId:undefined;
   if(owner.type==='ground'&&groundCapacity(world,owner,pile,carrier)<pile.quantity)return false;
@@ -147,11 +148,11 @@ export function transferPile(world:World,pile:MaterialPile,owner:MaterialOwner):
       const moved=Math.min(remaining,ITEM_DEFINITIONS[pile.item].stackLimit-target.quantity);if(moved<=0)continue;
       mergePileEgg256(target,moved,pile.egg);mergePileContamination(target,moved,pile.foodPoison);mergeThingDamage(target,moved,pile.damage,pileMaxHp(target,world.schemaVersion));mergeRot(target,moved,rotAge(pile,world.tick),world.tick);target.quantity+=moved;remaining-=moved;if(!remaining)break;
     }
-    if(remaining){pile.quantity=remaining;pile.owner={...owner};}else removeIdentity(world.piles,pile);
+    if(remaining){pile.quantity=remaining;assignPileOwner(pile,{...owner});}else removeIdentity(world.piles,pile);
     refreshStock(world);return true;
   }
   const target=world.piles.find(p=>p!==pile&&p.item===pile.item&&sameOwner(p.owner,owner)&&canMergeEggPile256(p,pile)&&p.quantity+pile.quantity<=ITEM_DEFINITIONS[pile.item].stackLimit);
-  if(target){mergePileEgg256(target,pile.quantity,pile.egg);mergePileContamination(target,pile.quantity,pile.foodPoison);mergeThingDamage(target,pile.quantity,pile.damage,pileMaxHp(target,world.schemaVersion));mergeRot(target,pile.quantity,rotAge(pile,world.tick),world.tick);target.quantity+=pile.quantity;removeIdentity(world.piles,pile);}else pile.owner={...owner};
+  if(target){mergePileEgg256(target,pile.quantity,pile.egg);mergePileContamination(target,pile.quantity,pile.foodPoison);mergeThingDamage(target,pile.quantity,pile.damage,pileMaxHp(target,world.schemaVersion));mergeRot(target,pile.quantity,rotAge(pile,world.tick),world.tick);target.quantity+=pile.quantity;removeIdentity(world.piles,pile);}else assignPileOwner(pile,{...owner});
   refreshStock(world);return true;
 }
 /** Split only the delivered fraction. The held source identity and its states survive. */

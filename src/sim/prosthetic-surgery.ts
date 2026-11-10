@@ -1,3 +1,4 @@
+import {markPileWrite} from './pile-index.ts';
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
 import { allowedAreaReason } from './allowed-area-state.ts';
@@ -123,7 +124,7 @@ export function planArtificialRestitution273(w:World,p:Pawn,part:import('./body-
   if(!cell)return null;
   const pile:MaterialPile={id:w.nextId+result.length,item,kind:item==='wood'?'wood':'prosthesis',quantity:1,owner:{type:'ground',...cell}};
   result.push(pile);const target=groundPile(shadow,cell);
-  if(target){const index=shadow.piles.indexOf(target);shadow.piles[index]={...target,quantity:target.quantity+1};}else shadow.piles.push(pile);
+  if(target){const index=shadow.piles.indexOf(target);shadow.piles[index]={...target,quantity:target.quantity+1};markPileWrite();}else shadow.piles.push(pile);
   if(shadow.piles.length>32768)return null;
  }
  return result;

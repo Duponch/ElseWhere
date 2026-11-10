@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {localIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
 import {eggAllowedForPlayer256} from './animal-egg-permission-v256.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
@@ -71,7 +72,7 @@ export function processFeeding(world:World,doctor:Pawn,context:NeedContext):void
   if(t.phase==='pickup'){
     if(!eggAllowedForPlayer256(food)||food.owner.type!=='ground'||reservedSource(world,food.id)>food.quantity){interruptWork(world,doctor);return;}
     if((doctor.x!==food.owner.x||doctor.z!==food.owner.z)&&!adjacent(doctor,food.owner)){context.move(food.owner,false);return;}
-    if(food.quantity===t.quantity){food.owner={type:'pawn',pawnId:doctor.id};t.carryPileId=food.id;}
+    if(food.quantity===t.quantity){assignPileOwner(food,{type:'pawn',pawnId:doctor.id});t.carryPileId=food.id;}
     else {
       if(world.piles.length>=32768||!Number.isSafeInteger(world.nextId+1)){interruptWork(world,doctor);return;}
       food.quantity-=t.quantity;t.carryPileId=world.nextId++;

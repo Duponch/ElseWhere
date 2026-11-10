@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import { apparelDefinition,apparelLabel,conflictsWith,hasApparelParts,wornApparel } from './apparel-rules.ts';
 import { dropRetainingIdentity } from './ground-placement.ts';
 import { adjacent } from './pathfinding.ts';
@@ -37,7 +38,7 @@ export function processApparel(world:World,pawn:Pawn,pile:MaterialPile,context:N
     if(dropRetainingIdentity(world,pile,pawn)){delete pile.apparel!.forced;pile.apparel!.forbidden=true;report(world,`${pawn.name} retire ${apparelLabel(pile)}.`);}
     else report(world,`${pawn.name} conserve ${apparelLabel(pile)} : aucun dépôt disponible.`);
   } else if(!wornApparel(world,pawn).some(p=>conflictsWith(p,pile))) {
-    pile.owner={type:'apparel',pawnId:pawn.id};delete pile.apparel!.forbidden;if(task.automatic)delete pile.apparel!.forced;else pile.apparel!.forced=true;report(world,`${pawn.name} porte ${apparelLabel(pile)}.`);
+    assignPileOwner(pile,{type:'apparel',pawnId:pawn.id});delete pile.apparel!.forbidden;if(task.automatic)delete pile.apparel!.forced;else pile.apparel!.forced=true;report(world,`${pawn.name} porte ${apparelLabel(pile)}.`);
   }
   releaseWork(world,pawn);
 }

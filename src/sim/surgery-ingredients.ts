@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {artificialPartIngredient273} from './artificial-parts-rules.ts';
 import {isProstheticItem273} from './prosthetic-content-273.ts';
 import {materialAllowedForPlayer256} from './material-permission-256.ts';
@@ -89,7 +90,7 @@ export function gatherImplantIngredient(w:World,doctor:Pawn,task:SurgeryTask,con
     if(!near(doctor,pile.owner)){context.move(pile.owner,false);return true;}
     if(doctor.moveCooldown>0)return true;
     if(w.piles.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===doctor.id))return false;
-    if(pile.quantity===ingredient.quantity)pile.owner={type:'pawn',pawnId:doctor.id};
+    if(pile.quantity===ingredient.quantity)assignPileOwner(pile,{type:'pawn',pawnId:doctor.id});
     else {
       if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1))return false;
       const carried:MaterialPile={id:w.nextId++,item:pile.item,kind:pile.kind,quantity:ingredient.quantity,owner:{type:'pawn',pawnId:doctor.id},...copyPileCondition(pile)};
@@ -101,7 +102,7 @@ export function gatherImplantIngredient(w:World,doctor:Pawn,task:SurgeryTask,con
   if(!near(doctor,ingredient.cell)){context.move(ingredient.cell,false);return true;}
   if(doctor.moveCooldown>0)return true;
   if(groundPile(w,ingredient.cell)||groundCapacity(w,ingredient.cell,ingredient.item,doctor.id)<ingredient.quantity)return false;
-  pile.owner={type:'ground',...ingredient.cell};ingredient.stage='placed';
+  assignPileOwner(pile,{type:'ground',...ingredient.cell});ingredient.stage='placed';
   task.phase=task.ingredients!.some(i=>i.stage==='source')?'pickup':'approach';doctor.path=[];doctor.state='moving';refreshStock(w);return true;
 }
 

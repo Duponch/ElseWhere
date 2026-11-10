@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import {commitJoinedPlayer259} from './world-affiliation-259.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
@@ -129,7 +130,7 @@ export function processWarden(world:World,actor:Pawn,context:NeedContext):void {
     if(t.phase==='pickup'){
       if(pile.owner.type!=='ground'){interruptWork(world,actor);return;}
       if(!same(actor,pile.owner)&&!adjacent(actor,pile.owner)){context.move(pile.owner,false);return;}
-      if(pile.quantity===t.quantity){pile.owner={type:'pawn',pawnId:actor.id};t.carryPileId=pile.id;}
+      if(pile.quantity===t.quantity){assignPileOwner(pile,{type:'pawn',pawnId:actor.id});t.carryPileId=pile.id;}
       else{
         if(world.piles.length>=32768||!Number.isSafeInteger(world.nextId+1)){interruptWork(world,actor);return;}
         pile.quantity-=t.quantity;t.carryPileId=world.nextId++;world.piles.push({id:t.carryPileId,kind:'food',item:pile.item,quantity:t.quantity,owner:{type:'pawn',pawnId:actor.id},...copyPileCondition(pile)});
@@ -137,7 +138,7 @@ export function processWarden(world:World,actor:Pawn,context:NeedContext):void {
       t.phase='deliver';actor.path=[];actor.state='moving';return;
     }
     if(!same(actor,t.spot)){context.move(t.spot,true);return;}
-    pile.owner={type:'ground',...t.spot};p.needCooldown=0;
+    assignPileOwner(pile,{type:'ground',...t.spot});p.needCooldown=0;
     context.event(`${actor.name} dépose un repas dans la prison de ${p.name}.`);releaseWork(world,actor);return;
   }
   if(t.phase==='closing'){

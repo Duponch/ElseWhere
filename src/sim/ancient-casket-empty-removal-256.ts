@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {isAncientCasket256,type AncientCasket256} from './ancient-casket-state-256.ts';
@@ -52,8 +53,8 @@ export function planEmptyAncientCasketRemoval256(w:World,s:Structure,mode:'vanis
  // Only mutable physical piles/wrappers are previewed, never terrain/actors,
  // clock, map generation, medical records or the World campaign itself.
  const view:World={...w,structures:w.structures.filter(b=>b!==s),jobs:w.jobs.filter(j=>!ids.has(j.id)).map(j=>({...j,escrow:{...j.escrow}})),piles:w.piles.map(p=>({...p,owner:{...p.owner}})),packed:w.packed.map(p=>({...p,owner:{...p.owner}})),filth:w.filth?{...w.filth,items:w.filth.items.map(f=>({...f}))}:undefined};
- for(const p of view.piles){const at=drops.get(p.id);if(at)p.owner={type:'ground',...at};}
- for(const p of view.packed){const at=drops.get(p.building.id);if(at)p.owner={type:'ground',...at};}
+ for(const p of view.piles){const at=drops.get(p.id);if(at)assignPileOwner(p,{type:'ground',...at});}
+ for(const p of view.packed){const at=drops.get(p.building.id);if(at)assignPileOwner(p,{type:'ground',...at});}
  const products=mode==='vanish'?undefined:prepareAncientCasketLeavings256(view,s,mode,mode==='deconstruct'?w.rng:damageRng);
  if(products===null)return {ok:false,reason:'Actual casket leavings have no physical Near/permission/ID destination; source retained.'};
  let ledger=w.deconstructed,destroyed=w.destroyed;

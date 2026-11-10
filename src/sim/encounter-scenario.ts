@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import { newTactics } from './tactics-state.ts';
 import { startingPawn } from './starting-pawns.ts';
 import { generatePawnBackground } from './background-generation.ts';
@@ -27,6 +28,6 @@ export function setupEncounter(world:World):void {
   world.pawns.push(enemy);
   world.piles.push({id:world.nextId++,kind:'weapon',item:'revolver',quantity:1,owner:{type:'equipment',pawnId:enemy.id},weapon:newWeaponState()});
   const weapon=world.piles.find(p=>p.item==='revolver'&&p.owner.type==='ground');
-  if(weapon)weapon.owner={type:'equipment',pawnId:leader.id};
+  if(weapon)assignPileOwner(weapon,{type:'equipment',pawnId:leader.id});
   world.events.push({tick:0,type:'command',message:`Rencontre armée : hostile en ${site.x}, ${site.z}. ${leader.name} porte le revolver. Préparez soins et couchages : l’adversaire approche les cibles visibles, cherche une position de tir et riposte au contact.`});
 }

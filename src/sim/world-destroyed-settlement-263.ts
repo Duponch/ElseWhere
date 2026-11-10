@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {isColonist,isAdmittedGuest} from './affiliation.ts';
 import {plainWorldPawnData256} from './world-pawn-save-256.ts';
@@ -39,7 +40,7 @@ export function planDestroyedPackedDrop263(map:World):PackedFurniture[]|undefine
  const packed=map.packed.map(p=>({...p,owner:{...p.owner}})),view={...map,packed};
  for(const p of packed)if(p.owner.type==='inventory'&&settleInventoryOwner263(map,p.owner.pawnId)){
   const actor=map.pawns.find(a=>a.id===(p.owner as {pawnId:number}).pawnId)??map.wildlife?.animals.find(a=>a.id===(p.owner as {pawnId:number}).pawnId);
-  if(!actor)return;const cell=furnitureDropCell(view,settleInventoryOrigin263(map,actor),actor.id);if(!cell)return;p.owner={type:'ground',...cell};
+  if(!actor)return;const cell=furnitureDropCell(view,settleInventoryOrigin263(map,actor),actor.id);if(!cell)return;assignPileOwner(p,{type:'ground',...cell});
  }
  return packed;
 }

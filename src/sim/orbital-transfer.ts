@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
 import {isNovelBook295} from './book-state-295.ts';
 import { copyPileCondition } from './pile-condition.ts';
@@ -20,7 +21,7 @@ export function orbitalTake(w:World,id:number,quantity:number,owner:MaterialOwne
     pile.quantity-=quantity;part={...pile,id:w.nextId++,quantity,owner:{...pile.owner},...copyPileCondition(pile)};w.piles.push(part);
   }
   if(owner.type==='ground')return transferPile(w,part,owner);
-  part.owner={...owner};delete part.haulRequested;
+  assignPileOwner(part,{...owner});delete part.haulRequested;
   if(part.rot)part.rot={progress:rotAge(part,w.tick),atTick:w.tick,rate:0};
   return true;
 }

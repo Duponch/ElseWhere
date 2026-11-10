@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {advanceCoreStartingArrival256} from './starting-pod-runtime-256.ts';
 import {CORE_STARTING_ARRIVAL_PROFILE_256} from './starting-pod-state-256.ts';
 import { isConstruction } from './construction-rules.ts';
@@ -37,7 +38,7 @@ export function prepareStartingArrival(world:World,selectedPawnIds:readonly numb
     const pile=pod.items.find(p=>p.id===drop.pileId)!;
     if(groundPile(world,drop.cell)!==pile||!groundOccupancyAllows(world,drop.cell))throw new Error('Un dépôt initial est indisponible.');
   }
-  for(const pod of pods)for(const pile of pod.items)if(pile.owner.type==='ground')pile.owner={type:'starting-pod',podId:pod.id};
+  for(const pod of pods)for(const pile of pod.items)if(pile.owner.type==='ground')assignPileOwner(pile,{type:'starting-pod',podId:pod.id});
   const pawnIds=new Set(selectedPawnIds),pileIds=new Set(transportedPileIds);
   world.pawns=world.pawns.filter(p=>!pawnIds.has(p.id));world.piles=world.piles.filter(p=>!pileIds.has(p.id));world.nextId+=3;
   world.startingArrival={profile:STARTING_ARRIVAL_PROFILE,phase:'incoming',start:0,landAt:STARTING_ARRIVAL_FALL_TICKS,openAt:STARTING_ARRIVAL_FALL_TICKS+STARTING_ARRIVAL_OPEN_DELAY,personalTick:0,pods};
@@ -85,7 +86,7 @@ export function advanceStartingArrival(world:World):void {
     if(pod.pawn.health)pod.pawn.health.tick=world.tick;
     for(const pile of pod.items){
       if(pile.rot)pile.rot.atTick=world.tick;
-      if(pile.owner.type==='starting-pod')pile.owner={type:'ground',...pod.drops.find(d=>d.pileId===pile.id)!.cell};
+      if(pile.owner.type==='starting-pod')assignPileOwner(pile,{type:'ground',...pod.drops.find(d=>d.pileId===pile.id)!.cell});
     }
   }
   world.pawns.push(...state.pods.map(p=>p.pawn));

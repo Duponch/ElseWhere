@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {shipCasketHumanReferences277} from './ship-casket-notifications-277.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259,bornFactionForDef259} from './world-affiliation-259.ts';
@@ -154,7 +155,7 @@ function personalMeal(w:World,p:Pawn):void {
   if(quantity<source.quantity){
     if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1))return;
     carry={...source,id:w.nextId++,quantity,owner:{type:'pawn',pawnId:p.id},...copyPileCondition(source)};source.quantity-=quantity;w.piles.push(carry);p.visitor!.personalFoodIds.push(carry.id);
-  }else source.owner={type:'pawn',pawnId:p.id};
+  }else assignPileOwner(source,{type:'pawn',pawnId:p.id});
   p.need={kind:'eat',phase:'ingest',sourcePileId:source.id,carryPileId:carry.id,quantity,progress:0,dining:{target:{x:p.x,z:p.z},seatId:null,tableId:adjacentTable(w,p)?.id??null}};
   p.path=[];p.state='eating';
 }

@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isLongswordItem270} from './longsword-content-270.ts';
 import {isSpearItem272} from './spear-content-272.ts';
 import {isMaceItem269} from './mace-content-269.ts';
@@ -98,8 +99,8 @@ function exchange(world:World,pawn:Pawn,pile:MaterialPile):boolean {
   const old=equippedWeapon(world,pawn),view=old?{...world,piles:world.piles.filter(p=>p!==pile)}:world;
   const drop=old?nearbyGround(view,pawn).find(c=>groundCapacity(view,c,old.item,pawn.id)>=1):undefined;
   if(old&&!drop)return false;
-  if(old){old.owner={type:'ground',...drop!};delete old.weapon!.forbidden;}
-  pile.owner={type:'equipment',pawnId:pawn.id};if(pawn.draft)delete pawn.draft.holdFire;delete pile.weapon!.forbidden;delete pawn.droppedWeaponId;return true;
+  if(old){assignPileOwner(old,{type:'ground',...drop!});delete old.weapon!.forbidden;}
+  assignPileOwner(pile,{type:'equipment',pawnId:pawn.id});if(pawn.draft)delete pawn.draft.holdFire;delete pile.weapon!.forbidden;delete pawn.droppedWeaponId;return true;
 }
 export function processEquipment(world:World,pawn:Pawn,context:NeedContext):void {
   const task=pawn.equipmentTask;if(!task)return;
@@ -116,7 +117,7 @@ export function processEquipment(world:World,pawn:Pawn,context:NeedContext):void
   pawn.path=[];pawn.state='working';task.progress++;
   if(task.progress<3)return; // Core DropEquipment: 30 ticks, independent of skill.
   const drop=nearbyGround(world,pawn).find(c=>groundCapacity(world,c,pile!.item,pawn.id)>=1);
-  if(drop){pile!.owner={type:'ground',...drop};pile!.weapon!.forbidden=true;announce(world,`${pawn.name} dépose ${weaponLabel(pile!)}.`);}
+  if(drop){assignPileOwner(pile!,{type:'ground',...drop});pile!.weapon!.forbidden=true;announce(world,`${pawn.name} dépose ${weaponLabel(pile!)}.`);}
   else announce(world,`${pawn.name} garde son arme : aucun dépôt disponible.`);
   release(world,pawn);
 }

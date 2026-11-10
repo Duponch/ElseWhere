@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema282OrLater} from './schema-compatibility-257.ts';
 import {animalCarryLimit282,canAnimalHaul282} from './animal-training-282.ts';
 import {animalBody} from './wildlife-health.ts';
@@ -157,7 +158,7 @@ export function createAnimalHaulingPass282(w:World,readArea:(a:WildAnimal)=>Anim
   if(t.phase==='pickup'){
    if(pile.quantity<t.quantity||!Number.isSafeInteger(w.nextId+1)||pile.quantity>t.quantity&&w.piles.length>=32768){interruptAnimalHaul282(w,a);invalidate();return false;}
    t.pickupCell={x:pile.owner.type==='ground'?pile.owner.x:a.x,z:pile.owner.type==='ground'?pile.owner.z:a.z};
-   if(pile.quantity===t.quantity){pile.owner={type:'inventory',pawnId:a.id};t.carryPileId=pile.id;}
+   if(pile.quantity===t.quantity){assignPileOwner(pile,{type:'inventory',pawnId:a.id});t.carryPileId=pile.id;}
    else{pile.quantity-=t.quantity;const carry={...pile,...copyPileCondition(pile),id:w.nextId++,quantity:t.quantity,owner:{type:'inventory' as const,pawnId:a.id}};w.piles.push(carry);t.carryPileId=carry.id;}
    t.phase='deliver';refreshStock(w);invalidate();return true;
   }

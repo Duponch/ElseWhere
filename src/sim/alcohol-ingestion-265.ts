@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import {isColonist} from './affiliation.ts';
 import {allowedAreaAllows} from './allowed-area-state.ts';
@@ -121,7 +122,7 @@ export function completeAlcoholInventory265(world:World,pawn:Pawn,source:Materia
  * cargo. Taking one unit preserves any remainder and the container identity. */
 export function takeOwnedBeer265(world:World,pawn:Pawn,source:MaterialPile,task:Eat):boolean {
  if(source.owner.type!=='inventory'||source.owner.pawnId!==pawn.id||task.quantity!==1)return false;
- if(source.quantity===1){source.owner={type:'pawn',pawnId:pawn.id};task.carryPileId=source.id;}
+ if(source.quantity===1){assignPileOwner(source,{type:'pawn',pawnId:pawn.id});task.carryPileId=source.id;}
  else {if(world.piles.length>=32768||!Number.isSafeInteger(world.nextId+1))return false;source.quantity--;const id=world.nextId++;world.piles.push({id,item:'beer',kind:'beer',quantity:1,owner:{type:'pawn',pawnId:pawn.id},...copyPileCondition(source)});task.carryPileId=id;}
  task.phase='choose-spot';pawn.path=[];pawn.state='moving';return true;
 }

@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import { isBedKind } from './bed-kinds.ts';
 import { isColonist } from './affiliation.ts';
 import { isRoomDoor } from './door-rules.ts';
@@ -86,8 +87,8 @@ export function startPrisonBreak(world:World,initiator:Pawn):boolean {
     const drops=planCommandDrops(shadow,{type:'clear-orders',pawnId:p.id});if(!drops)return false;
     plans.set(p.id,drops);
     for(const [id,cell] of drops) {
-      const pile=shadow.piles.find(q=>q.id===id);if(pile)pile.owner={type:'ground',x:cell.x,z:cell.z};
-      const pack=shadow.packed.find(q=>q.building.id===id);if(pack)pack.owner={type:'ground',x:cell.x,z:cell.z};
+      const pile=shadow.piles.find(q=>q.id===id);if(pile)assignPileOwner(pile,{type:'ground',x:cell.x,z:cell.z});
+      const pack=shadow.packed.find(q=>q.building.id===id);if(pack)assignPileOwner(pack,{type:'ground',x:cell.x,z:cell.z});
     }
     return true;
   };

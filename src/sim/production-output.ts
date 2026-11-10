@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isPemmicanRecipe} from './pemmican-content.ts';
 import {isMechSalvageRecipe} from './mechanoid-salvage.ts';
 import { isKibbleRecipe } from './fodder-recipes.ts';
@@ -38,7 +39,7 @@ function processArtOutput(world:World,pawn:Pawn,context:ProductionContext,destin
     if(target?.filters.furniture&&allows(target)&&storageConditionAccepts(target,pack.building)&&storageOccupancyAllows(world,target)&&furnitureSlot(world,target,pawn.id)){
       task.actionCell={x:target.x,z:target.z};
       if(!near(pawn,target)){context.move(target,false);return;}
-      pack.owner={type:'ground',x:target.x,z:target.z};finish(pawn);return;
+      assignPileOwner(pack,{type:'ground',x:target.x,z:target.z});finish(pawn);return;
     }
     task.storageId=null;delete task.storageQuantity;
     if(pawn.planCooldown>0)return;
@@ -58,7 +59,7 @@ function processArtOutput(world:World,pawn:Pawn,context:ProductionContext,destin
   if(pawn.planCooldown>0)return;
   const targets=nearbyGround(world,pawn).filter(c=>allows(c)&&furnitureAsideAllowed(world,c,pawn.id,pack.building));
   const close=targets.find(c=>near(pawn,c));
-  if(close){task.actionCell={...close};pack.owner={type:'ground',...close};finish(pawn);return;}
+  if(close){task.actionCell={...close};assignPileOwner(pack,{type:'ground',...close});finish(pawn);return;}
   if(targets.length){
     const reach=context.candidates?context.candidates():context.search();if(!reach)return;
     for(const target of targets){

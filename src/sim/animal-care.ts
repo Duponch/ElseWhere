@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {releaseAnimalThermalRefuge288} from './animal-thermal-refuge-288.ts';
 import {materialAllowedForPlayer256} from './material-permission-256.ts';
 import {animalConditionCareTargets256,animalConditionTreatmentBatch256,animalConditionMedicineCount256,type ActualAnimalTreatment256} from './animal-condition-care-256.ts';
@@ -120,7 +121,7 @@ function pickup(w:World,doctor:Pawn,task:AnimalCareTask,ctx:NeedContext):void {
   const m=task.medicine!,pile=w.piles.find(p=>p.id===m.sourcePileId);
   if(!pile||!materialAllowedForPlayer256(pile)||pile.owner.type!=='ground'||reservedSource(w,pile.id)>pile.quantity){interruptWork(w,doctor);return;}
   if(!adjacent(doctor,pile.owner)&&(doctor.x!==pile.owner.x||doctor.z!==pile.owner.z)){ctx.move(pile.owner,false);return;}
-  if(pile.quantity===m.quantity){pile.owner={type:'pawn',pawnId:doctor.id};m.carryPileId=pile.id;}
+  if(pile.quantity===m.quantity){assignPileOwner(pile,{type:'pawn',pawnId:doctor.id});m.carryPileId=pile.id;}
   else {
     if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1)){interruptWork(w,doctor);return;}
     pile.quantity-=m.quantity;m.carryPileId=w.nextId++;

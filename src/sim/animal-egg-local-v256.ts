@@ -1,3 +1,4 @@
+import {markPileWrite} from './pile-index.ts';
 import {attachNewbornAnimalGrowth256} from './animal-growth-runtime-256.ts';
 import {heldDuckAnimal256} from './duck-owner-capture-256.ts';
 import {animalContentsLocation256} from './animal-local-contents-256.ts';
@@ -118,7 +119,7 @@ export function advanceLocalEggs256(world:World,layout?:ThermalLayout):void {
   const location=eggLocation(world,pile);temperature??=new TemperatureView(world,layout);
   const result=evolveFertilizedEgg256(pile.egg,species,{tick:world.tick,temperature:location?temperature.at(world,location.cell):temperature.outside,suspended:!location||location.suspended});pile.egg=result.state;
   if(result.action==='ruin'){
-   pile.item=ANIMAL_EGG_CONTENT_256[species].unfertilizedItem;delete pile.egg;Object.assign(pile,freshRot(pile.item,world.tick));changed=true;
+   pile.item=ANIMAL_EGG_CONTENT_256[species].unfertilizedItem;markPileWrite();delete pile.egg;Object.assign(pile,freshRot(pile.item,world.tick));changed=true;
   }else if(result.action==='hatch'&&location&&!location.suspended)changed=hatch(world,pile,species,location.cell)||changed;
  }
  if(changed)refreshStock(world);

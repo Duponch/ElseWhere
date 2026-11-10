@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
 import { copyPileCondition } from './pile-condition.ts';
 import { groundCapacity,nearbyGround } from './ground-placement.ts';
@@ -20,7 +21,7 @@ function take(w:World,id:number,quantity:number):MaterialPile|null {
 }
 function move(w:World,id:number,quantity:number,owner:MaterialOwner):boolean {
   const part=take(w,id,quantity);if(!part)return false;
-  if(owner.type!=='ground'){part.owner=owner;return true;}
+  if(owner.type!=='ground'){assignPileOwner(part,owner);return true;}
   return transferPile(w,part,owner);
 }
 function purchase(w:World,id:number,quantity:number,origin:{x:number;z:number}):boolean {
@@ -52,7 +53,7 @@ export function applyTrade(w:World,c:TradeCommand):CommandResult {
   for(const {good,quantity} of q.selectedArt)if(quantity<0){
     const pack=draft.packed.find(x=>x.building.id===good.packed.building.id);
     if(!pack||pack.owner.type!=='ground')return fail('Sculpture de vente indisponible.');
-    pack.owner={type:'inventory',pawnId:q.t.id};
+    assignPileOwner(pack,{type:'inventory',pawnId:q.t.id});
   }
   for(const {good,quantity} of q.selected)if(quantity>0&&!purchase(draft,good.pile.id,quantity,q.p))return fail('Sol encombré : aucune transaction n’a été effectuée.');
   for(const {good,quantity} of q.selectedArt)if(quantity>0){
@@ -60,7 +61,7 @@ export function applyTrade(w:World,c:TradeCommand):CommandResult {
     if(!pack||pack.owner.type!=='inventory'||pack.owner.pawnId!==q.t.id)return fail('Sculpture à acheter indisponible.');
     const cell=furnitureDropCell(draft,q.p);
     if(!cell)return fail('Sol encombré : aucune transaction n’a été effectuée.');
-    pack.owner={type:'ground',...cell};
+    assignPileOwner(pack,{type:'ground',...cell});
   }
   let money=Math.abs(q.paid);
   for(const s of q.paid>=0?q.stock.silver:q.stock.merchantSilver){

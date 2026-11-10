@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {animalAreaEffective287,animalAreaPolicyFromCells287} from './animal-area-policy-287.ts';
 import {animalAreaProtected287} from './animal-area-runtime-287.ts';
@@ -64,9 +65,9 @@ function prepareWrites(w:World,changes:readonly AnimalAreaChange287[],prior:Read
   if(pile){
    const owner=pile.owner;
    if(owner.type!=='pawn'&&(owner.type!=='job'||!Number.isSafeInteger(owner.jobId)||owner.jobId<1||!w.jobs.some(job=>job.id===owner.jobId)))return;
-   pile.owner={type:'ground',...cell};
+   assignPileOwner(pile,{type:'ground',...cell});
   }
-  else if(pack){if(pack.owner.type!=='pawn')return;pack.owner={type:'ground',...cell};}
+  else if(pack){if(pack.owner.type!=='pawn')return;assignPileOwner(pack,{type:'ground',...cell});}
  }
  // Every obsolete animal reservation is already absent from this view before
  // the first Near selection. Previous human drops occupy their admitted cells.

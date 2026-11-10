@@ -1,3 +1,4 @@
+import {markPileWrite} from './pile-index.ts';
 import {medicalCivilTick271,medicalElapsedTicks271} from './suspended-human-clock-271.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {advanceOffmapThermal259} from './offmap-thermal-259.ts';
@@ -72,7 +73,7 @@ export function advanceCaravanAnimalBiology256(w:World,g:Group,c:AnimalBiologica
  }
  for(const p of [...g.items]){const species=eggSpeciesForItem256(p.item);if(!species||!p.egg||p.owner.type!=='inventory')continue;const o=c.originForInventory(p.owner.pawnId);if(!o)throw Error('Fertilized egg has no real group holder');
   const result=evolveFertilizedEgg256(p.egg,species,{tick:w.tick,temperature:c.temperature,suspended:false});
-  if(result.action==='ruin'){const item=ANIMAL_EGG_CONTENT_256[species].unfertilizedItem;recordCaravanInventoryEffect256(g,p.item,-p.quantity);recordCaravanInventoryEffect256(g,item,p.quantity);p.item=item;delete p.egg;Object.assign(p,freshRot(item,w.tick));}
+  if(result.action==='ruin'){const item=ANIMAL_EGG_CONTENT_256[species].unfertilizedItem;recordCaravanInventoryEffect256(g,p.item,-p.quantity);recordCaravanInventoryEffect256(g,item,p.quantity);p.item=item;markPileWrite();delete p.egg;Object.assign(p,freshRot(item,w.tick));}
   else if(result.action==='hatch'){if(!animalMechanicalReadiness256(species).ok)throw Error('Unimplemented real hatcher species');
    const egg=result.state,randomState={rng:w.rng},holder=[...g.members,...g.animalOwners?.members??[]].find(a=>a.id===(p.owner as {pawnId:number}).pawnId);if(!holder)throw Error('Actual egg inventory holder absent');
    const babies=prepareNewborns(w,g,species,o,p.quantity,randomState,holder,egg.motherId!==undefined&&egg.fatherId!==undefined?{motherId:egg.motherId,fatherId:egg.fatherId}:undefined,egg.faction==='player'?{since:w.tick,care:'herbal',tameness:5,nextDecay:w.tick+6000}:undefined);

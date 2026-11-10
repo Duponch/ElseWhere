@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
 import {finishBarrelFill265} from './fermentation-runtime-265.ts';
 import {FERMENTING_SERVICE_TICKS_265} from './fermentation-state-265.ts';
@@ -35,7 +36,7 @@ export function processHaul(world: World, pawn: Pawn, move: (target: Cell, allow
     if (!aiCore298&&source.kind!=='book'&&source.kind!=='plant'&&source.kind!=='corpse'&&source.kind!=='mech-corpse'&&source.kind!=='unfinished'&&source.kind!=='weapon'&&source.kind!=='apparel'&&(!Number.isSafeInteger(world.nextId + 1) || (source.quantity > task.quantity && world.piles.length >= 32768))) { releaseWork(world, pawn); return; }
     task.pickupCell={x:source.owner.x,z:source.owner.z};
     if(aiCore298||source.kind==='book'||source.kind==='plant'||source.kind==='corpse'||source.kind==='mech-corpse'||source.kind==='unfinished'||source.kind==='weapon'||source.kind==='apparel'){
-      source.owner={type:'pawn',pawnId:pawn.id};task.carryPileId=source.id;task.phase='deliver';pawn.path=[];pawn.planCooldown=0;pawn.state='working';return;
+      assignPileOwner(source,{type:'pawn',pawnId:pawn.id});task.carryPileId=source.id;task.phase='deliver';pawn.path=[];pawn.planCooldown=0;pawn.state='working';return;
     }
     source.quantity -= task.quantity;
     if (!source.quantity) world.piles.splice(world.piles.indexOf(source), 1);

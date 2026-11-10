@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {worldPawnsPhysicalCore297} from './world-pawn-physical-clock-297.ts';
 import {heldCore297} from './core-phase-297.ts';
@@ -138,7 +139,7 @@ export function planShipCasketRemoval277(w:World,s:Structure,mode:'deconstruct'|
  if(!drops)return no('Worker cargo has no actual place');
  if(w.piles.some(i=>i.owner.type==='job'&&jobIds.has(i.owner.jobId)))return no('Actual delivered maintenance cargo requires cancellation');
  const random={rng:damageRng},draw=()=>healthRandom(random),view:World={...w,structures:w.structures.filter(b=>b!==c),piles:w.piles.map(i=>({...i,owner:{...i.owner}})),packed:w.packed.map(i=>({...i,owner:{...i.owner}})),jobs:w.jobs.filter(j=>!jobIds.has(j.id)).map(j=>({...j,escrow:{...j.escrow}})),filth:w.filth?{...w.filth,items:w.filth.items.map(f=>({...f}))}:undefined};
- for(const i of view.piles){const cell=drops.get(i.id);if(cell)i.owner={type:'ground',...cell};}for(const i of view.packed){const cell=drops.get(i.building.id);if(cell)i.owner={type:'ground',...cell};}
+ for(const i of view.piles){const cell=drops.get(i.id);if(cell)assignPileOwner(i,{type:'ground',...cell});}for(const i of view.packed){const cell=drops.get(i.building.id);if(cell)assignPileOwner(i,{type:'ground',...cell});}
  if(mode==='kill-finalize')for(const cell of shipCasketCells277(c,c.orientation))addFilth(view,cell,'building-rubble',1+Math.floor(draw()*3));
  const rubble={filth:view.filth,nextId:view.nextId},products:{item:ItemId;quantity:number;cell:Cell;id:number;forbidden:boolean}[]=[],returned=new Map<ItemId,number>(),ignored=new Set<string>();
  for(const cost of mode==='vanish'?[]:constructionRecipe(c).ingredients){

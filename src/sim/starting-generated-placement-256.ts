@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {captureStartingPlacePhysics256} from './starting-place-physics-256.ts';
 import {findStartingPlaceNear256,planStartingPlaceDirect256,type StartingPlaceThing256} from './starting-place-near-256.ts';
@@ -32,7 +33,7 @@ export function captureStartingGeneratedPlacement256(world:World,arrival:CoreSta
      mergePileEgg256(target,op.quantity,source.egg);mergePileContamination(target,op.quantity,source.foodPoison);mergeThingDamage(target,op.quantity,source.damage,pileMaxHp(target,256));mergeRot(target,op.quantity,rotAge(source,0),0);target.quantity+=op.quantity;
     }else {
      const next:MaterialPile=op.split?{...structuredClone(source),id:op.id,quantity:op.quantity,owner:{type:'ground',...cell}}:source;
-     next.quantity=op.quantity;next.owner={type:'ground',...cell};world.piles.push(next);const list=ground.get(key)??[];list.push(next);ground.set(key,list);
+     next.quantity=op.quantity;assignPileOwner(next,{type:'ground',...cell});world.piles.push(next);const list=ground.get(key)??[];list.push(next);ground.set(key,list);
     }
    }
    // The source is the last spawned original, or an unspawned remainder. An

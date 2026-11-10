@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {hasTravellingCargo,interruptWork} from './interrupted-cargo.ts';
 import {interruptAnimalStorage282} from './animal-hauling-282.ts';
 import {footprintCells} from './definitions.ts';
@@ -29,13 +30,13 @@ export function planShelfRemoval(world:World,s:Structure):ShelfRemovalPlan|null 
   }
   for(const p of world.pawns)if(p.haul?.destination.type==='stockpile'&&cells.has(p.haul.destination.stockpileId))carriers.add(p.id);
   const cargo=planPawnDrops(view,new Set([...carriers].filter(id=>!hasTravellingCargo(world,world.pawns.find(p=>p.id===id)!))));if(!cargo)return null;
-  for(const [id,cell] of cargo){drops.set(id,cell);const pile=view.piles.find(p=>p.id===id);if(pile)pile.owner={type:'ground',...cell};}
+  for(const [id,cell] of cargo){drops.set(id,cell);const pile=view.piles.find(p=>p.id===id);if(pile)assignPileOwner(pile,{type:'ground',...cell});}
   return {view,drops,carriers,cells};
 }
 /** Apply only the already placeable plan. Settings/cell IDs stay on a packed
  * building; content stays ground and cannot follow its furniture carrier. */
 export function commitShelfRemoval(world:World,plan:ShelfRemovalPlan):void {
-  for(const [id,cell] of plan.drops){const pile=world.piles.find(p=>p.id===id);if(pile)pile.owner={type:'ground',...cell};}
+  for(const [id,cell] of plan.drops){const pile=world.piles.find(p=>p.id===id);if(pile)assignPileOwner(pile,{type:'ground',...cell});}
   interruptAnimalStorage282(world,plan.cells);
   for(const p of world.pawns){
     if(plan.carriers.has(p.id)){if(hasTravellingCargo(world,p))interruptWork(world,p,true);else releaseWork(world,p,plan.drops);}

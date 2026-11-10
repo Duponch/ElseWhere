@@ -1,3 +1,5 @@
+import { pileIndex,pileIndexMismatch,verifyPileIndex } from './pile-index.ts';
+import {assignPileOwner} from './pile-index.ts';
 import {canMergeEggPile256,EMPTY_EGG_CONDITION_256} from './animal-egg-permission-v256.ts';
 import { groundOccupancyAllowsIndexed, storageOccupancyAllowsIndexed } from './occupancy.ts';
 import { isCookingOrder } from './order-types.ts';
@@ -24,13 +26,26 @@ export function nearbyGround(world: World, origin: Cell, radius = 12): Cell[] {
   }
   return result;
 }
+/* The ground piles of one cell, in array order: inside a simulation step and
+ * for an in-map integer cell, the pile index's list (owner moves are marked);
+ * otherwise a scan. A pile outside the map matches no in-map cell. */
+const EMPTY_PILES:readonly MaterialPile[]=Object.freeze([]);
+function indexedGroundPiles(world:World,cell:Cell):readonly MaterialPile[]|undefined {
+  if(!Number.isInteger(cell.x)||!Number.isInteger(cell.z)||cell.x<0||cell.z<0||cell.x>=world.width||cell.z>=world.height)return undefined;
+  const index=pileIndex(world);if(!index)return undefined;
+  const listed=index.groundAt.get(cell.z*world.width+cell.x)??EMPTY_PILES;
+  if(verifyPileIndex){const scanned=world.piles.filter(p=>p.owner.type==='ground'&&p.owner.x===cell.x&&p.owner.z===cell.z);if(scanned.length!==listed.length||scanned.some((p,i)=>p!==listed[i]))pileIndexMismatch('ground piles of a cell');}
+  return listed;
+}
 export function groundPile(world: World, cell: Cell): MaterialPile | undefined {
+  const listed=indexedGroundPiles(world,cell);if(listed)return listed[0];
   return world.piles.find(p=>p.owner.type==='ground' && p.owner.x===cell.x && p.owner.z===cell.z);
 }
-export function groundPilesAt(world:World,cell:Cell):MaterialPile[] {return world.piles.filter(p=>p.owner.type==='ground'&&p.owner.x===cell.x&&p.owner.z===cell.z);}
+export function groundPilesAt(world:World,cell:Cell):MaterialPile[] {const listed=indexedGroundPiles(world,cell);return listed?listed.slice():world.piles.filter(p=>p.owner.type==='ground'&&p.owner.x===cell.x&&p.owner.z===cell.z);}
 /** A merge target must fit the requested part, never an arbitrary first pile. */
 export function groundMergePile(world:World,cell:Cell,item:ItemId,quantity=1):MaterialPile|undefined {
-  return world.piles.find(p=>p.owner.type==='ground'&&p.owner.x===cell.x&&p.owner.z===cell.z&&p.item===item&&p.quantity+quantity<=ITEM_DEFINITIONS[item].stackLimit);
+  const listed=indexedGroundPiles(world,cell);
+  return (listed??world.piles).find(p=>p.owner.type==='ground'&&p.owner.x===cell.x&&p.owner.z===cell.z&&p.item===item&&p.quantity+quantity<=ITEM_DEFINITIONS[item].stackLimit);
 }
 interface PlacementReservation {item?:ItemId;quantity:number;pawnId:number;queued?:true;exclusive?:true}
 export interface GroundCapacityReader {piles:ReadonlyMap<number,readonly MaterialPile[]>;storage:ReadonlyMap<number,StorageCell>;reservations:ReadonlyMap<number,readonly PlacementReservation[]>;packed:ReadonlySet<number>}
@@ -152,5 +167,5 @@ export function dropRetainingIdentity(world: World, pile: MaterialPile, origin: 
   const facts=world.structures.some(s=>s.shelf)?createGroundCapacityReader(world):undefined;
   const cell=nearbyGround(world,origin).find(c=>!occupied.has(c.z*world.width+c.x)&&groundCapacity(world,c,pile,carrier,undefined,facts)>=pile.quantity);
   if(!cell) return false;
-  pile.owner={type:'ground',...cell}; return true;
+  assignPileOwner(pile,{type:'ground',...cell}); return true;
 }

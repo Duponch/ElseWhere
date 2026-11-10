@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {offMapIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
 import {medicalElapsedTicks271} from './suspended-human-clock-271.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
@@ -192,7 +193,7 @@ export function advanceScoutTrip(w:World):void {
   if(areaPlan)commitMapAreaEntry(s.pawn,areaPlan);if(bedPlan)commitActorBedEntry256(s.pawn,bedPlan);
   s.pawn.x=entry.x;s.pawn.z=entry.z;s.pawn.path=[];s.pawn.state='idle';s.pawn.moveCooldown=0;s.pawn.planCooldown=0;
   delete s.pawn.motion;
-  for(const pile of s.items)if(pile.owner.type==='inventory')pile.owner={type:'ground',...entry};
+  for(const pile of s.items)if(pile.owner.type==='inventory')assignPileOwner(pile,{type:'ground',...entry});
   w.pawns.push(s.pawn);w.piles.push(...s.items);delete w.scout;
   notifyActualExplorationSpawn256(w,s.pawn);
   log(w,`${s.pawn.name} revient au bord de la colonie avec ses possessions restantes.`);

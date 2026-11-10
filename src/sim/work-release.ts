@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {releaseIdleWander300} from './idle-wander-300.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import type {FactionCommsPawn298} from './faction-comms-state-298.ts';
@@ -169,7 +170,7 @@ export function planSelectedDrops(world:World,jobs:Set<number>,pawns:Set<number>
     const held=shadow.piles.filter(p=>(p.owner.type==='pawn'||captured.has(pawn.id)&&p.owner.type==='equipment')&&p.owner.pawnId===pawn.id);
     for(const pile of held)if(!add(pile,origin))return null;
     const pack=shadow.packed?.find(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id);
-    if(pack){const cell=furnitureDropCell(shadow,origin,pawn.id);if(!cell)return null;pack.owner={type:'ground',...cell};result.set(pack.building.id,cell);}
+    if(pack){const cell=furnitureDropCell(shadow,origin,pawn.id);if(!cell)return null;assignPileOwner(pack,{type:'ground',...cell});result.set(pack.building.id,cell);}
   }
   for(const pile of shadow.piles)if(pile.owner.type==='job'&&jobs.has(pile.owner.jobId)) {
     const job=world.jobs.find(j=>pile.owner.type==='job'&&j.id===pile.owner.jobId)!;
@@ -179,7 +180,7 @@ export function planSelectedDrops(world:World,jobs:Set<number>,pawns:Set<number>
 }
 export function commitDrop(world:World,pile:MaterialPile,origin:Cell,plan?:ReadonlyMap<number,Cell>):boolean {
   const cell=plan?.get(pile.id);
-  if(cell){pile.owner={type:'ground',...cell};return true;}
+  if(cell){assignPileOwner(pile,{type:'ground',...cell});return true;}
   return dropRetainingIdentity(world,pile,origin);
 }
 export function releaseWork(world:World,pawn:Pawn,plan?:DropPlan,ownerLoss=false):boolean {
@@ -240,10 +241,10 @@ export function clearReleasedPawnAssignments259(pawn:Pawn):void {
 /** Reform leaves unselected inventory on the same real map; no stock credit. */
 export function planReformInventoryDrops260(world:World,piles:readonly MaterialPile[],packs:readonly import('./furniture-rules.ts').PackedFurniture[],prior:DropPlan,vacated:ReadonlySet<number>=new Set(),humanOrigins?:ReadonlyMap<number,Cell>):DropPlan|null {
  const shadow={...world,piles:world.piles.filter(p=>!vacated.has(p.id)).map(p=>({...p,...piles.find(q=>q.id===p.id),owner:{...p.owner}})),packed:world.packed.filter(p=>!vacated.has(p.building.id)).map(p=>({...p,owner:{...p.owner}}))};
- for(const [id,cell] of prior){const p=shadow.piles.find(p=>p.id===id);if(p)p.owner={type:'ground',...cell};const pack=shadow.packed.find(p=>p.building.id===id);if(pack)pack.owner={type:'ground',...cell};}
+ for(const [id,cell] of prior){const p=shadow.piles.find(p=>p.id===id);if(p)assignPileOwner(p,{type:'ground',...cell});const pack=shadow.packed.find(p=>p.building.id===id);if(pack)assignPileOwner(pack,{type:'ground',...cell});}
  const result:DropPlan=new Map();
  for(const p of piles){if(p.owner.type!=='inventory')return null;const ownerId=p.owner.pawnId,holder=world.pawns.find(q=>q.id===ownerId)??world.wildlife?.animals.find(q=>q.id===ownerId),copy=shadow.piles.find(q=>q.id===p.id);if(!holder||!copy||!dropRetainingIdentity(shadow,copy,humanOrigins?.get(ownerId)??holder)||copy.owner.type!=='ground')return null;result.set(p.id,{x:copy.owner.x,z:copy.owner.z});}
- for(const p of packs){if(p.owner.type!=='inventory')return null;const ownerId=p.owner.pawnId,holder=world.pawns.find(q=>q.id===ownerId)??world.wildlife?.animals.find(q=>q.id===ownerId),copy=shadow.packed.find(q=>q.building.id===p.building.id);if(!holder||!copy)return null;const cell=furnitureDropCell(shadow,humanOrigins?.get(ownerId)??holder,holder.id);if(!cell)return null;copy.owner={type:'ground',...cell};result.set(p.building.id,cell);}return result;
+ for(const p of packs){if(p.owner.type!=='inventory')return null;const ownerId=p.owner.pawnId,holder=world.pawns.find(q=>q.id===ownerId)??world.wildlife?.animals.find(q=>q.id===ownerId),copy=shadow.packed.find(q=>q.building.id===p.building.id);if(!holder||!copy)return null;const cell=furnitureDropCell(shadow,humanOrigins?.get(ownerId)??holder,holder.id);if(!cell)return null;assignPileOwner(copy,{type:'ground',...cell});result.set(p.building.id,cell);}return result;
 }
 
 /** Existing job half of release, also reusable on a private Job record. */

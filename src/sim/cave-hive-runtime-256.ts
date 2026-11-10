@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
@@ -78,7 +79,7 @@ export function planActualHiveRuntime256(w:World,frontier:HiveRuntimeFrontier256
   if(stage.piles.some(p=>p.owner.type==='job'&&removedJobs.has(p.owner.jobId)))throw Error('Natural building removal has an actual foreign escrow');
   const actors=new Set(w.pawns.filter(p=>p.jobId!==null&&removedJobs.has(p.jobId)&&!hasTravellingCargo(stage,p)).map(p=>p.id)),drops=planSelectedDrops(stage,removedJobs,actors);if(!drops)throw Error('Actual natural-building cargo cannot be released');
   for(const [id,c] of drops)releases.set(id,c);
-  for(const p of stage.piles){const c=releases.get(p.id);if(c)p.owner={type:'ground',...c};}for(const p of stage.packed){const c=releases.get(p.building.id);if(c)p.owner={type:'ground',...c};}
+  for(const p of stage.piles){const c=releases.get(p.id);if(c)assignPileOwner(p,{type:'ground',...c});}for(const p of stage.packed){const c=releases.get(p.building.id);if(c)assignPileOwner(p,{type:'ground',...c});}
   stage.structures=stage.structures.filter(b=>b!==s);
   const plan=planCaveHiveKill256(stage,s,s,randomState.rng,true);if(!plan)throw Error('Actual natural-building killed leavings cannot fit');
   randomState.rng=plan.rng;if(plan.rubble){stage.filth=plan.rubble.filth;stage.nextId=plan.rubble.nextId;copiedFilth=true;}commitHiveKilledProducts256(stage,plan.hiveProducts);

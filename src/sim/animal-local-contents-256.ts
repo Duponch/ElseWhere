@@ -1,3 +1,4 @@
+import {assignPileOwner} from './pile-index.ts';
 import {groupPackedMassGrams258} from './group-freight-mass-258.ts';
 import {captureDuckFlyerOwners256,heldDuckAnimal256} from './duck-owner-capture-256.ts';
 import type {DuckFlyer256} from './duck-flyer-state-256.ts';
@@ -37,7 +38,7 @@ export function dropAnimalContentsOnDeath256(w:World,a:WildAnimal,wasSpawned:boo
  if(w.schemaVersion<256||!wasSpawned)return;if(!w.wildlife?.animals.includes(a)||!a.health?.death)throw Error('Actual local dead animal required');
  const cell=a.motion&&a.motion.end>w.tick?a.motion.from:a;
  for(const p of w.piles)if(p.owner.type==='inventory'&&p.owner.pawnId===a.id)dropRetainingIdentity(w,p,cell);
- for(const p of w.packed)if(p.owner.type==='inventory'&&p.owner.pawnId===a.id){const drop=furnitureDropCell(w,cell);if(drop)p.owner={type:'ground',...drop};}
+ for(const p of w.packed)if(p.owner.type==='inventory'&&p.owner.pawnId===a.id){const drop=furnitureDropCell(w,cell);if(drop)assignPileOwner(p,{type:'ground',...drop});}
  refreshStock(w);
 }
 /** Contents are counted once through their actual holder. Caller adds the

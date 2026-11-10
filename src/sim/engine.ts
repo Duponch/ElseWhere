@@ -1,3 +1,4 @@
+import {withPileIndexScope} from './pile-index.ts';
 import {isFinishFrameSchema301} from './wall-frame-kind-301.ts';
 import {createWoodWallCore301} from './wood-wall-core-301.ts';
 import {rateForPawn301} from './actual-view-301.ts';
@@ -1169,7 +1170,9 @@ function reconcileSmoothFloorJobs281(world:World,readGeometry?:()=>ReturnType<ty
 }
 const readPlantLight=(world:World):LightEnvironment=>environmentCache(world).readLight(world);
 const plantLightSourcesKey=(world:World):string=>lightSources(world).map(s=>`${s.cell}:${s.radius}:${s.red}:${s.green}:${s.blue}:${s.overlightRadius??0}`).join('|');
-export function stepWorld(world:CampaignState,ticks=1,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):void {
+/** Pile indexes (pile-index.ts) are available inside a simulation step only. */
+export function stepWorld(world:CampaignState,ticks=1,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):void {withPileIndexScope(()=>stepWorldInScope(world,ticks,diagnostics,caravans));}
+function stepWorldInScope(world:CampaignState,ticks=1,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):void {
   if(!Number.isInteger(ticks)||ticks<0||ticks>100000)throw new Error('Tick count must be an integer between 0 and 100000.');
   const root=campaignAuthority(world as World);
   if(isCorePhysicalSchema297(Number(root.schemaVersion))&&!macro297.has(root)){for(let i=0;i<ticks*10;i++)advanceWorldCore297(root,diagnostics,caravans);return;}
@@ -1718,6 +1721,9 @@ export interface AdvancedCoreMap297 extends CoreStepResult297 {mapId:number;worl
 /** A single authoritative physical step. Phase0 is an atomic global/local macro
  * transaction. Results borrow maps only until the synchronous bridge copies them. */
 export function advanceWorldCore297(world:CampaignState,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):{core:number;localTickCompleted:boolean;maps:readonly AdvancedCoreMap297[]} {
+ return withPileIndexScope(()=>advanceWorldCore297InScope(world,diagnostics,caravans));
+}
+function advanceWorldCore297InScope(world:CampaignState,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):{core:number;localTickCompleted:boolean;maps:readonly AdvancedCoreMap297[]} {
  const root=campaignAuthority(world as World);if(!isCorePhysicalSchema297(Number(root.schemaVersion)))throw Error('Physical stepping requires297');
  const previous=effectiveCore297(root),maps=actualCoreMaps297(root);
  if(pendingCaravan261(root)||pendingWorldEntry263(root))return {core:previous,localTickCompleted:false,maps:[]};
