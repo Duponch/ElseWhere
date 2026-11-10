@@ -175,7 +175,7 @@ function sameLocalData(body:LocalMapState|World,stamp:ReadonlyMap<string,unknown
 /** flushRegisteredMap would copy nothing: the view's local fields are exactly
  * its stamp, in order, and so are the original's unshared fields, with no
  * presentation field for the copy to delete. Without a stamp: not proven. */
-function flushIsNoop(view:World,original:LocalMapState|World,cache:{world:World;stamp:Map<string,unknown>}|undefined):boolean {
+function flushIsNoop(view:World,original:object,cache:{world:World;stamp:Map<string,unknown>}|undefined):boolean {
  if(cache?.world!==view)return false;
  const live=view as unknown as Record<string,unknown>,target=original as unknown as Record<string,unknown>;
  let it=cache.stamp.entries();

@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {structureAnchors} from './structure-navigation.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
 import {isSmoothedStone281} from './smooth-floor-terrain-281.ts';
@@ -17,7 +18,9 @@ const inside=(w:World,c:Cell)=>Number.isInteger(c.x)&&Number.isInteger(c.z)&&c.x
  * carry traces; walls, cooler shells and natural rock cannot. */
 function filthWalkable(w:World,c:Cell):boolean {
   if(!inside(w,c)||!terrainAcceptsFilth256(w.tiles[c.z*w.width+c.x]!))return false;
-  return !w.structures.some(s=>(s.kind==='vent'||s.kind==='wall'||s.kind==='cooler')&&same(s,c));
+  // The structures anchored on this in-map cell, from the shared anchor index:
+  // the same set as testing every structure's anchor against it.
+  return !structureAnchors(w).anchoredAt(c.x,c.z).some(s=>s.kind==='vent'||s.kind==='wall'||s.kind==='cooler');
 }
 function accepted(w:World,c:Cell,kind:FilthKind,spontaneous=false):boolean {
   const tile=w.tiles[c.z*w.width+c.x]!;
