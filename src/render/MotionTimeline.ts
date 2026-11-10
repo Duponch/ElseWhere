@@ -16,9 +16,16 @@ const FINE_RATE_WINDOW_MIN_MS297=40,FINE_RATE_WINDOW_MAX_MS297=200;
 const FINE_RATE_FILTER_MS297=80,FINE_RATE_CORRECTION_SECONDS297=.1;
 const FINE_BUFFER_BUDGET_SECONDS297=.08,FINE_OVERFULL_SECONDS297=.1;
 const FINE_CORE_QUANTUM297=LOCAL_TICKS_PER_SECOND/CORE_TICKS_PER_SECOND;
+// A running speed change plays at the mean of the old and new rates until the
+// confirmed history meets the new reserve; about 70 ms for a regular producer.
+const FINE_TRANSITION_MAX_MS297=250;
 /** Confirmed-time playout. Ordinary fine297 receipts add history without a seek.
  * Startup and a genuinely late receipt may join the bounded confirmed reserve;
  * pause joins the confirmed frontier exactly. Neither mode extrapolates. */
+/** Fine297 running speed change: from its change on, playback moves at `rate`
+ * until the confirmed history reaches the new reserve (`up`) or drains to it,
+ * or until `until` (wall ms). No freeze, no seek, no jump. */
+type Transition297={rate:number;up:boolean;until:number};
 export class MotionTimeline {
   private readonly playbackCursor435=new ConfirmedTrackCursor435();
   get playbackEnabled435():boolean{return this.playbackCursor435.enabled;}
@@ -30,7 +37,7 @@ export class MotionTimeline {
   private latest=0;
   private rate=0;
   private frameRate=0;
-  private readonly rateChanges:{at:number;rate:number}[]=[];
+  private readonly rateChanges:{at:number;rate:number;transition?:Transition297}[]=[];
   private speed=0;
   private previous=0;
   private ready=Infinity;
@@ -47,6 +54,16 @@ export class MotionTimeline {
   private fineNominalCompatible297=true;
   private fineOverfull297=false;
   private fineStartupProgressPending297=false;
+  /** The transition playing now; a pending one rides on its rate change. */
+  private transition297:Transition297|undefined;
+  private get inTransition297():boolean{return !!this.transition297||this.rateChanges.some(change=>!!change.transition);}
+  /** Ends the playing and pending transitions. */
+  private endTransition297(now:number):void {
+    if(!this.inTransition297)return;
+    this.transition297=undefined;for(const change of this.rateChanges)delete change.transition;
+    // The transition itself is not a supply sample: estimate from here.
+    this.resetFineRate297(this.latest,now,this.rate);this.fineStartupProgressPending297=false;
+  }
   private resetFineRate297(tick:number,now:number,rate:number):void {
     this.fineWindowAt297=this.fineEstimateAt297=now;this.fineWindowTick297=tick;
     this.fineEstimatedRate297=rate;this.fineNominalCompatible297=true;this.fineOverfull297=false;
@@ -81,6 +98,8 @@ export class MotionTimeline {
     const advancingFine297=fineCore297&&tick>this.latest;
     const resetFine297=fineCore297&&(reset||!wasFine297||speed!==this.speed);
     const lateFine297=fineCore297&&!resetFine297&&this.lastFineReceipt297!==undefined&&now-this.lastFineReceipt297>FINE_LATE_RECEIPT_MS297&&tick>this.latest;
+    // A speed change carried by a genuinely late receipt keeps the reserve join.
+    const lateChange297=fineCore297&&wasFine297&&!reset&&speed!==this.speed&&this.lastFineReceipt297!==undefined&&now-this.lastFineReceipt297>FINE_LATE_RECEIPT_MS297&&tick>this.latest;
     if(!fineCore297)this.lastFineReceipt297=undefined;
     else if(resetFine297||tick>this.latest)this.lastFineReceipt297=now;
     this.fineCore297=fineCore297;
@@ -88,13 +107,13 @@ export class MotionTimeline {
     if(fineCore297&&!wasFine297)this.fineFrameRate297=this.frameRate;
     this.reserve=fineCore297 ? speed*LOCAL_TICKS_PER_SECOND*FINE_BUFFER_MS297/1000 : MOTION_BUFFER_TICKS;
     this.playbackCursor435.configure(closed435,reset);
-    if(reset){this.tick=tick;this.latest=tick;this.previous=now;this.ready=Infinity;this.buffering=true;this.tracks.clear();this.speed=speed;this.rate=speed*LOCAL_TICKS_PER_SECOND;this.frameRate=this.fineFrameRate297=this.rate;this.rateChanges.length=0;}
+    if(reset){this.tick=tick;this.latest=tick;this.previous=now;this.ready=Infinity;this.buffering=true;this.tracks.clear();this.speed=speed;this.rate=speed*LOCAL_TICKS_PER_SECOND;this.frameRate=this.fineFrameRate297=this.rate;this.rateChanges.length=0;this.transition297=undefined;}
     // An adopted pause is authoritative presentation state, not a request or
     // predicted Core tick. Show its latest confirmed frontier immediately.
     // Running deliveries keep the ordinary smooth, buffered RAF policy below.
     if(speed===0){
       this.latest=Math.max(this.latest,tick);this.tick=this.latest;
-      this.speed=0;this.rate=this.frameRate=this.fineFrameRate297=0;this.rateChanges.length=0;
+      this.speed=0;this.rate=this.frameRate=this.fineFrameRate297=0;this.rateChanges.length=0;this.transition297=undefined;
       this.previous=Math.max(this.previous,now);this.ready=Infinity;this.buffering=true;
       for(const track of tracks)this.tracks.set(track.id,track.segments);
       return;
@@ -103,9 +122,20 @@ export class MotionTimeline {
     // RAF-only; the fine297 confirmed-frontier correction below is separate.
     if(speed!==this.speed) {
       if(speed>0){
-        if(this.rate===0||fineCore297){this.buffering=true;this.ready=Infinity;}
-        this.rate=speed*LOCAL_TICKS_PER_SECOND;
-        this.rateChanges.push({at:now,rate:this.rate});
+        const rate=speed*LOCAL_TICKS_PER_SECOND;
+        let transition:Transition297|undefined;
+        if(fineCore297&&this.rate>0&&!this.buffering&&!lateChange297){
+          // Running to running: keep playing. Freezing until the new reserve
+          // filled (speeding up) or seeking to it (slowing down) made the
+          // actors stop, then jump, at every speed change.
+          const before=this.rateChanges.findLast(change=>!!change.transition)?.transition?.rate??this.transition297?.rate??this.rate;
+          transition={rate:(before+rate)/2,up:rate>before,until:now+FINE_TRANSITION_MAX_MS297};
+        }else{
+          if(this.rate===0||fineCore297){this.buffering=true;this.ready=Infinity;}
+          this.endTransition297(now);
+        }
+        this.rate=rate;
+        this.rateChanges.push({at:now,rate:this.rate,...transition?{transition}:{}});
       }
       this.speed=speed;
     }
@@ -114,11 +144,12 @@ export class MotionTimeline {
       if(this.buffering&&this.fineStartupProgressPending297){
         // Startup delay before the first real Core is not a supply sample.
         if(advancingFine297){this.resetFineRate297(this.latest,now,this.rate);this.fineStartupProgressPending297=false;}
-      }else this.observeFineRate297(this.latest,now);
+      }else if(!this.inTransition297)this.observeFineRate297(this.latest,now);
     }
     // Only a true >100ms advancing-front gap seeks toward confirmed history.
     // Keep the normal reserve directly, so the next receipt needs no refill.
     if(lateFine297){
+      this.endTransition297(now);
       this.tick=Math.max(this.tick,this.latest-this.reserve);
       this.buffering=false;this.ready=now;
       this.chooseFineRate297();
@@ -140,7 +171,7 @@ export class MotionTimeline {
     // would stay that far behind the simulation until the next pause or speed
     // change, then jump all at once. Beyond 100 ms of excess, join the normal
     // reserve now, exactly as after a late receipt.
-    if(fineCore297&&!this.buffering&&this.rate>0&&this.latest-this.tick>this.reserve+this.rate*FINE_OVERFULL_SECONDS297){
+    if(fineCore297&&!this.buffering&&!this.inTransition297&&this.rate>0&&this.latest-this.tick>this.reserve+this.rate*FINE_OVERFULL_SECONDS297){
       this.tick=this.latest-this.reserve;
       this.chooseFineRate297();
     }
@@ -156,16 +187,22 @@ export class MotionTimeline {
     // Acknowledgement can arrive between frames or after the timestamp of the
     // pending RAF. Never apply a new speed retroactively to the whole interval:
     // repeated asymmetric changes would consume the confirmed buffer.
+    // From its own change on, a running speed change plays at its own rate.
+    const playRate=()=>this.transition297?this.transition297.rate:this.fineCore297?Math.min(this.frameRate,fineRate):this.frameRate;
     for(const change of this.rateChanges){
       if(change.at>now)break;
-      const rate=this.fineCore297?Math.min(this.frameRate,fineRate):this.frameRate;
-      delta+=Math.max(0,change.at-start)*rate/1000;
-      start=Math.max(start,change.at);this.frameRate=change.rate;fineRate=change.rate;consumed++;
+      delta+=Math.max(0,change.at-start)*playRate()/1000;
+      start=Math.max(start,change.at);this.frameRate=change.rate;fineRate=change.rate;this.transition297=change.transition;consumed++;
     }
     if(consumed)this.rateChanges.splice(0,consumed);
-    delta+=Math.max(0,now-start)*(this.fineCore297?Math.min(this.frameRate,fineRate):this.frameRate)/1000;
+    delta+=Math.max(0,now-start)*playRate()/1000;
     this.previous=Math.max(this.previous,now);
     this.tick=Math.min(this.latest,this.tick+delta);
+    const transition=this.transition297;
+    if(transition){
+      const history=this.latest-this.tick;
+      if(now>=transition.until||(transition.up?history>=this.reserve-1e-10:history<=this.reserve+1e-10))this.endTransition297(now);
+    }
     if(this.fineCore297){
       // Rare genuine no-progress outage: finish only acquired history, never
       // wait forever for another packet or advance a World/ACK/physical Core.

@@ -7,12 +7,20 @@ test('semantic speed timestamps, immediate Pause and new-owner reset survive ada
  t.adopt(101.44,6,[],40,false,true,true);t.advance(50);
  // A receipt may be later than a pending RAF. A semantic change can refill the
  // confirmed reserve, but its new rate cannot run before its timestamp.
+ // A running speed change no longer seeks: the playhead keeps its place, a
+ // stale RAF before the timestamp still plays at the OLD rate (x6), and after
+ // it the change plays at the mean rate (x3.5) until the history meets the
+ // new reserve (contract of 10 November 2026, previously a seek to it).
  t.adopt(101.8,1,[],60,false,true,true);const one=t.tick;
- expect(t.advance(58)).toBe(one);
- expect(t.advance(62)-one).toBeCloseTo(.012,12);
+ expect(one).toBeCloseTo(100.504,12);
+ expect(t.advance(58)-one).toBeCloseTo(.008*36,12);
+ expect(t.advance(62)-one).toBeCloseTo(.010*36+.002*21,12);
  t.adopt(103,6,[],80,false,true,true);const six=t.tick;
- expect(t.advance(79)).toBe(six);
- expect(t.advance(82)-six).toBeCloseTo(.072,12);
+ expect(six).toBe(t.tick);
+ // Up to the new timestamp the slowdown's mean rate still applies; after it,
+ // the speed-up plays at the mean of that rate and x6 (28.5 ticks/s).
+ expect(t.advance(79)-six).toBeCloseTo(.017*21,12);
+ expect(t.advance(82)-six).toBeCloseTo(.018*21+.002*28.5,12);
  t.adopt(103,0,[],83,false,true,true);
  expect(t.tick).toBe(103);expect(t.advance(100000)).toBe(103);
  // A load/new owner can legitimately restart at an earlier Core. Old rate,

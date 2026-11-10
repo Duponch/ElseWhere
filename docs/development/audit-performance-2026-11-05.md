@@ -1056,6 +1056,18 @@ Les accélérations (×1 vers ×3, ×3 vers ×6) attendent encore 25 à 40 ms qu
 
 **Ce qui reste.** Le contrôle franchit maintenant l'attente sur la vitesse et échoue sur la suivante, jusque-là masquée : ≈ 1 100 « sauts » de position. Sur 80 sauts détaillés, 77 suivent exactement la route confirmée : le contrôle compare encore des segments de trajet lus dans les attributs du processeur graphique, alors que les acteurs y écrivent désormais leur position courante. Le témoin est donc périmé et doit être réécrit sur la position affichée, sans assouplir le critère. Les 3 autres sont un vrai saut de 0,7 case des trois colons à la même image, sans avance du temps affiché : à examiner. Enfin, dans un dossier de travail placé sous `tmp/`, le serveur de développement ne voit pas les fichiers modifiés : il faut le relancer après chaque changement.
 
+### Changements de vitesse sans gel ni saut ; contrôle des sauts réécrit (10 novembre, soir)
+
+**Changements de vitesse.** À un changement de vitesse en cours de jeu, l'affichage se figeait jusqu'à ce que la réserve de la nouvelle vitesse soit remplie (accélération, 30 à 70 ms), ou sautait en avant jusqu'à elle (ralentissement de ×6 à ×1, environ 0,8 case). Désormais (`MotionTimeline`), il continue de jouer à la vitesse moyenne de l'ancienne et de la nouvelle jusqu'à ce que l'avance confirmée atteigne la nouvelle réserve, au plus 250 ms ; une réception vraiment tardive (plus de 100 ms) garde l'ancien rattrapage. Au contrôle de présentation, quatre passages tracés : délai maximum 37 à 41 ms (médiane 21 à 27), contre 75 à 94 ms le matin. Sur deux passages ordinaires suivants, machine moins calme : maximum 67 ms, puis un changement à 106 ms.
+
+**Témoin des sauts.** Depuis le 28 octobre, la position dessinée d'un colon est celle du `PawnTweener297`, portage du `PawnTweener` de RimWorld : un ressort de 0,09 × (durée d'image × 60 × vitesse) par image, et l'adoption directe de la position confirmée à ×5 et au-delà. À ×1 et ×3, un colon qui marche est donc dessiné ≈ 0,7 case derrière sa position confirmée, et rattrape ce retard d'un coup au passage à ×6, comme dans RimWorld. Le contrôle comparait des segments de trajet qui n'existent plus dans les attributs du processeur graphique. Il vérifie maintenant deux choses : la position confirmée (lue dans les copies des segments que garde le ressort) avance de façon continue selon la preuve d'origine, inchangée ; et la position dessinée est exactement le pas du ressort vers elle (`tweenedRootStep`). Les temps sont lus en absolu, l'origine locale étant recalée tous les 1 024 ticks, et un colon arrivé au bout de sa dernière arête doit se tenir exactement au bout de son segment.
+
+Résultat : sur ≈ 950 alertes brutes par passage, il reste **4 à 20 sauts**, contre ≈ 1 100. Classes restantes, à examiner une à une :
+- **Rattrapage après une salve du Worker** : à ×6 en minant, le Worker livre parfois 4 ticks d'un coup après une pause d'environ 100 ms ; l'affichage, dépassé de plus de 0,1 s, rejoint alors sa réserve d'un coup (≈ 4,4 ticks).
+- **Départ adopté en retard** : la première arête d'un nouveau trajet commence avant l'image où l'affichage l'apprend ; le colon, dessiné à l'arrêt, saute de 0,3 à 1 case.
+- **Arête corrigée** : le début d'une arête confirmée est déplacé de quelques centièmes de tick (correction du trajet).
+- **Segment du dessin différent de celui du contrôle**, pendant ≈ 1,5 tick pour un colon, sur un seul passage.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.

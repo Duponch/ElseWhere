@@ -30,41 +30,18 @@ export function confirmedTravelExcess(previous:TravelFrameWitness,current:Travel
   const distance=Math.hypot(current.position.x-previous.position.x,current.position.z-previous.position.z);
   if(!(distance>dt*.013+.02))return false; // Preserve the original raw alarm.
   const a=previous.segment,b=current.segment;
-  // Live actor roots. The renderer now writes an actor's current position as
-  // both ends of a zero-length leg, so no GPU leg exists to compare. The same
-  // proof is then made on the displayed position itself: in both frames it
-  // sits on its confirmed one-cell edge at the confirmed time, the two edges
-  // are one edge or exactly contiguous, and time advanced no faster than the
-  // x6 budget. Same tolerances as the leg proof; nothing bridges a gap.
-  const live=(w:TravelFrameWitness)=>w.start===0&&w.end===0&&w.from.x===w.to.x&&w.from.z===w.to.z&&w.from.x===w.position.x&&w.from.z===w.position.z;
-  if(live(previous)&&live(current)){
-    const sameEdge=a.start===b.start&&a.end===b.end&&a.from.x===b.from.x&&a.from.z===b.from.z&&a.to.x===b.to.x&&a.to.z===b.to.z;
-    const nextEdge=a.to.x===b.from.x&&a.to.z===b.from.z&&a.end===b.start;
-    if(!sameEdge&&!nextEdge)return false;
-    const LIVE_EPS_POSITION=.0002,LIVE_EPS_TICKS=.0006;
-    for(const frame of [previous,current]){
-      const s=frame.segment;
-      if(!Number.isInteger(s.from.x)||!Number.isInteger(s.from.z)||!Number.isInteger(s.to.x)||!Number.isInteger(s.to.z)
-        ||Math.max(Math.abs(s.to.x-s.from.x),Math.abs(s.to.z-s.from.z))!==1||s.end<=s.start)return false;
-      if(frame.play<s.start||frame.play>s.end)return false;
-      const alpha=(frame.play-s.start)/(s.end-s.start);
-      if(Math.hypot(frame.position.x-(s.from.x+(s.to.x-s.from.x)*alpha),frame.position.z-(s.from.z+(s.to.z-s.from.z)*alpha))>LIVE_EPS_POSITION)return false;
-    }
-    const ticks=current.play-previous.play;
-    if(ticks<=0||ticks>dt*.036+LIVE_EPS_TICKS)return false;
-    const length=(s:TravelFrameWitness['segment'])=>Math.hypot(s.to.x-s.from.x,s.to.z-s.from.z);
-    const arc=sameEdge?ticks/(a.end-a.start)*length(a)
-      :(a.end-previous.play)/(a.end-a.start)*length(a)+(current.play-b.start)/(b.end-b.start)*length(b);
-    return distance<=arc+2*LIVE_EPS_POSITION;
-  }
+  // Leg times are Float32 seconds from a local origin rebased every 1024 ticks
+  // (at most 1024/6 s, where half a Float32 step is 7.6e-6 s): the same instant
+  // read across a rebase differs by that rounding, never by 1e-5 s or more.
+  const same=(x:number,y:number)=>Math.abs(x-y)<=8e-6;
   const unchanged=a.start===b.start&&a.end===b.end&&a.from.x===b.from.x&&a.from.z===b.from.z&&a.to.x===b.to.x&&a.to.z===b.to.z
     &&previous.from.x===current.from.x&&previous.from.z===current.from.z
     &&previous.to.x===current.to.x&&previous.to.z===current.to.z
-    &&previous.start===current.start&&previous.end===current.end;
+    &&same(previous.start,current.start)&&same(previous.end,current.end);
   // Both authorities must meet at precisely the same cell and timestamp.
   // No tolerance bridges a gap, overlap, changed junction offset or missing leg.
   const contiguous=a.to.x===b.from.x&&a.to.z===b.from.z&&a.end===b.start
-    &&previous.to.x===current.from.x&&previous.to.z===current.from.z&&previous.end===current.start;
+    &&previous.to.x===current.from.x&&previous.to.z===current.from.z&&same(previous.end,current.start);
   if(!unchanged&&!contiguous)return false;
   const EPS_POSITION=.0002,EPS_ALPHA=.0002,EPS_SECONDS=.0001,EPS_TICKS=.0006;
   for(const frame of [previous,current]){
@@ -76,9 +53,13 @@ export function confirmedTravelExcess(previous:TravelFrameWitness,current:Travel
     if(Math.hypot(frame.from.x-s.from.x,frame.from.z-s.from.z)>.30
       ||Math.hypot(frame.to.x-s.to.x,frame.to.z-s.to.z)>.30)return false;
     if(Math.abs((frame.end-frame.start)-(s.end-s.start)/6)>EPS_SECONDS)return false;
-    if(frame.play<s.start||frame.play>s.end||frame.time<frame.start||frame.time>frame.end)return false;
-    const alphaTime=(frame.time-frame.start)/(frame.end-frame.start);
-    const alphaPlay=(frame.play-s.start)/(s.end-s.start);
+    if(frame.play<s.start||frame.time<frame.start)return false;
+    // Past the end of its last confirmed edge the actor has arrived: it must
+    // stand exactly at the end of its leg (the sampled leg clamps at its end).
+    const arrived=frame.play>s.end;
+    if(arrived?frame.time<frame.end-EPS_SECONDS:frame.time>frame.end+EPS_SECONDS)return false;
+    const alphaTime=arrived?1:Math.min(1,(frame.time-frame.start)/(frame.end-frame.start));
+    const alphaPlay=arrived?1:(frame.play-s.start)/(s.end-s.start);
     if(Math.abs(alphaTime-alphaPlay)>EPS_ALPHA
       ||Math.hypot(frame.position.x-(frame.from.x+(frame.to.x-frame.from.x)*alphaTime),
         frame.position.z-(frame.from.z+(frame.to.z-frame.from.z)*alphaTime))>EPS_POSITION)return false;
@@ -95,6 +76,30 @@ export function confirmedTravelExcess(previous:TravelFrameWitness,current:Travel
     if(distance>arc+2*EPS_POSITION)return false;
   }
   return true;
+}
+
+/** RimWorld's PawnTweener, ported in PawnTweener297: the drawn position follows
+ * the confirmed root with a spring of 0.09 x (frame seconds x 60 x speed) per
+ * frame, and adopts the root outright at speed 5 and above (x6), or freezes at
+ * pause. A frame is consistent when the drawn position is the previous drawn
+ * position moved toward the current root by at most that fraction; at x6 it
+ * must be the root itself. The snap when switching to x6 therefore follows
+ * the game's own rule, while any other displacement of the drawn position is
+ * refused. Injected into the browser via toString(). */
+export function tweenedRootStep(previous:{x:number;z:number},shown:{x:number;z:number},root:{x:number;z:number},dtMs:number,speed:number):boolean {
+  const EPS=.0005;
+  const finite=(v:{x:number;z:number})=>Number.isFinite(v.x)&&Number.isFinite(v.z);
+  if(!finite(previous)||!finite(shown)||!finite(root)||!Number.isFinite(dtMs)||dtMs<0||!Number.isFinite(speed)||speed<0)return false;
+  if(speed>=5)return Math.hypot(shown.x-root.x,shown.z-root.z)<=EPS;
+  if(speed===0)return Math.hypot(shown.x-previous.x,shown.z-previous.z)<=EPS;
+  const gap={x:root.x-previous.x,z:root.z-previous.z},length=Math.hypot(gap.x,gap.z),moved={x:shown.x-previous.x,z:shown.z-previous.z};
+  if(length<=EPS)return Math.hypot(moved.x,moved.z)<=2*EPS;
+  // The fraction of the gap covered, and the distance off the previous->root line.
+  const fraction=(moved.x*gap.x+moved.z*gap.z)/(length*length),off=Math.abs(moved.x*gap.z-moved.z*gap.x)/length;
+  // Frame timing seen here and by the renderer can differ slightly: a quarter
+  // of slack on the spring fraction, never a snap below x5.
+  const most=Math.min(1,.09*(dtMs/1000)*60*speed*1.25+.02);
+  return off<=EPS&&fraction>=-EPS/length&&fraction<=most+EPS/length;
 }
 
 /** Detect a sustained absence of presented-tick progress, not merely two
