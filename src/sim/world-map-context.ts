@@ -6,6 +6,43 @@ import type {World} from './types.ts';
 import type {CampaignState,LocalMapState,WorldMapRecord,WorldGroupRecord,CampaignSummary,SharedCampaignState} from './world-map-state.ts';
 const shared=new Set<string>([...CAMPAIGN_FIELDS,'worldMaps','worldGroups']);
 const presentation=new Set(['secondarySite','campaignPeople','campaignMap','group','groupLosses','civilianPost']);
+/* One accessor pair per shared field, each its own function literal reading a
+ * named property: closures made from one literal share a property cache, and
+ * a single `root[key]` getter for every field kept that cache megamorphic on
+ * each read of tick, nextId or schemaVersion. Same reads and writes. */
+type SharedRoot=Record<string,unknown>;
+const SHARED_ACCESSORS:Readonly<Record<string,(r:SharedRoot)=>{get():unknown;set(value:unknown):void}>>={
+ schemaVersion:r=>({get:()=>r.schemaVersion,set:value=>{r.schemaVersion=value;}}),
+ tick:r=>({get:()=>r.tick,set:value=>{r.tick=value;}}),
+ phaseCore297:r=>({get:()=>r.phaseCore297,set:value=>{r.phaseCore297=value;}}),
+ rng:r=>({get:()=>r.rng,set:value=>{r.rng=value;}}),
+ nextId:r=>({get:()=>r.nextId,set:value=>{r.nextId=value;}}),
+ planet:r=>({get:()=>r.planet,set:value=>{r.planet=value;}}),
+ worldFactions:r=>({get:()=>r.worldFactions,set:value=>{r.worldFactions=value;}}),
+ worldPawns:r=>({get:()=>r.worldPawns,set:value=>{r.worldPawns=value;}}),
+ escapedShips298:r=>({get:()=>r.escapedShips298,set:value=>{r.escapedShips298=value;}}),
+ research:r=>({get:()=>r.research,set:value=>{r.research=value;}}),
+ relationships:r=>({get:()=>r.relationships,set:value=>{r.relationships=value;}}),
+ drugPolicies:r=>({get:()=>r.drugPolicies,set:value=>{r.drugPolicies=value;}}),
+ nextDrugPolicyId:r=>({get:()=>r.nextDrugPolicyId,set:value=>{r.nextDrugPolicyId=value;}}),
+ foodPolicies:r=>({get:()=>r.foodPolicies,set:value=>{r.foodPolicies=value;}}),
+ nextFoodPolicyId:r=>({get:()=>r.nextFoodPolicyId,set:value=>{r.nextFoodPolicyId=value;}}),
+ apparelPolicies:r=>({get:()=>r.apparelPolicies,set:value=>{r.apparelPolicies=value;}}),
+ nextApparelPolicyId:r=>({get:()=>r.nextApparelPolicyId,set:value=>{r.nextApparelPolicyId=value;}}),
+ foodRules:r=>({get:()=>r.foodRules,set:value=>{r.foodRules=value;}}),
+ restRules:r=>({get:()=>r.restRules,set:value=>{r.restRules=value;}}),
+ gameProfile:r=>({get:()=>r.gameProfile,set:value=>{r.gameProfile=value;}}),
+ worldIncidents:r=>({get:()=>r.worldIncidents,set:value=>{r.worldIncidents=value;}}),
+ worldSites263:r=>({get:()=>r.worldSites263,set:value=>{r.worldSites263=value;}}),
+ tradeRequests284:r=>({get:()=>r.tradeRequests284,set:value=>{r.tradeRequests284=value;}}),
+ linkedStorage286:r=>({get:()=>r.linkedStorage286,set:value=>{r.linkedStorage286=value;}}),
+ worldMaps:r=>({get:()=>r.worldMaps,set:value=>{r.worldMaps=value;}}),
+ worldGroups:r=>({get:()=>r.worldGroups,set:value=>{r.worldGroups=value;}}),
+};
+const sharedAccessor=(root:CampaignState,key:string):{get():unknown;set(value:unknown):void}=>{
+ const make=Object.hasOwn(SHARED_ACCESSORS,key)?SHARED_ACCESSORS[key]:undefined;const r=root as unknown as SharedRoot;
+ return make?make(r):{get:()=>r[key],set:value=>{r[key]=value;}};
+};
 const authorities=new WeakMap<object,CampaignState>(),mapIds=new WeakMap<object,number>(),groupBindings=new WeakMap<object,WorldGroupRecord>();
 const groupSources=new WeakMap<object,number|null>(),projectionOrigins=new WeakMap<object,number|null>(),projectionFilth=new WeakSet<object>();
 const groupMemberProjectionContexts=new WeakMap<World,ReadonlyMap<number,GroupMemberProjectionContext>>();
@@ -67,15 +104,16 @@ export function registeredMap(w:CampaignState,id:number):World|undefined {
  const record=maps.sites.find(s=>s.id===id);if(!record)return;
  const body=id===maps.rootMapId&&hasLoadedRoot(root)?root:record.map;if(!body)return;
  let table=contexts.get(root);if(!table){table=new Map();contexts.set(root,table);}let cached=table.get(id);
- if(!cached||cached.record!==record||cached.body!==body||Object.hasOwn(cached.world,'phaseCore297')!==Object.hasOwn(root,'phaseCore297')){const view={...body} as World;for(const key of shared)if((key!=='worldFactions'&&key!=='worldPawns'&&key!=='worldSites263'&&key!=='tradeRequests284'&&key!=='linkedStorage286'&&key!=='phaseCore297')||Object.hasOwn(root,key))Object.defineProperty(view,key,{enumerable:true,configurable:false,get:()=>(root as unknown as Record<string,unknown>)[key],set:value=>{(root as unknown as Record<string,unknown>)[key]=value;}});authorities.set(view,root);mapIds.set(view,id);attachPost(view,root,record);cached={record,body,world:view,stamp:new Map(Object.entries(captureLocalMap(view)))};table.set(id,cached);}
- else {const data=currentLocalData(cached);for(const k of Object.keys(cached.world))if(!shared.has(k)&&!presentation.has(k)&&!Object.hasOwn(data,k))delete (cached.world as unknown as Record<string,unknown>)[k];Object.assign(cached.world,data);cached.stamp=new Map(Object.entries(captureLocalMap(body as World)));}
+ if(!cached||cached.record!==record||cached.body!==body||Object.hasOwn(cached.world,'phaseCore297')!==Object.hasOwn(root,'phaseCore297')){const view={...body} as World;for(const key of shared)if((key!=='worldFactions'&&key!=='worldPawns'&&key!=='worldSites263'&&key!=='tradeRequests284'&&key!=='linkedStorage286'&&key!=='phaseCore297')||Object.hasOwn(root,key)){const accessor=sharedAccessor(root,key);Object.defineProperty(view,key,{enumerable:true,configurable:false,get:accessor.get,set:accessor.set});}authorities.set(view,root);mapIds.set(view,id);attachPost(view,root,record);cached={record,body,world:view,stamp:new Map(Object.entries(captureLocalMap(view)))};table.set(id,cached);}
+ else if(!sameLocalData(cached.body,cached.stamp)){const data=currentLocalData(cached);for(const k of Object.keys(cached.world))if(!shared.has(k)&&!presentation.has(k)&&!Object.hasOwn(data,k))delete (cached.world as unknown as Record<string,unknown>)[k];Object.assign(cached.world,data);cached.stamp=new Map(Object.entries(captureLocalMap(body as World)));}
  // The optional owner is born at the first real link, possibly after this
  // stable map context was cached. Never add an own-undefined historical field.
  if(Object.hasOwn(root,'linkedStorage286')&&!Object.hasOwn(cached.world,'linkedStorage286'))Object.defineProperty(cached.world,'linkedStorage286',{enumerable:true,configurable:false,get:()=>root.linkedStorage286,set:value=>{root.linkedStorage286=value;}});
  return cached.world;
 }
 export function flushRegisteredMap(w:World):void {
- const root=registeredCampaign(w),id=registeredMapId(w);if(id===undefined)return;const record=root.worldMaps?.sites.find(s=>s.id===id);if(!record)return;const original=id===root.worldMaps!.rootMapId?root:record.map;if(!original||w===original)return;const next=captureLocalMap(w) as unknown as Record<string,unknown>,target=original as unknown as Record<string,unknown>;
+ const root=registeredCampaign(w),id=registeredMapId(w);if(id===undefined)return;const record=root.worldMaps?.sites.find(s=>s.id===id);if(!record)return;const original=id===root.worldMaps!.rootMapId?root:record.map;if(!original||w===original)return;
+ if(flushIsNoop(w,original,contexts.get(root)?.get(id)))return;const next=captureLocalMap(w) as unknown as Record<string,unknown>,target=original as unknown as Record<string,unknown>;
  for(const k of Object.keys(target))if(!shared.has(k)&&!Object.hasOwn(next,k))delete target[k];Object.assign(target,next);const cache=contexts.get(root)?.get(id);if(cache?.world===w)cache.stamp=new Map(Object.entries(next));
 }
 export const registeredMaps=(w:CampaignState):World[]=>{const root=registeredCampaign(w);return root.worldMaps?root.worldMaps.sites.slice().sort((a,b)=>a.id-b.id).flatMap(s=>{const map=registeredMap(root,s.id);return map?[map]:[];}):hasLoadedRoot(root)?[root]:[];};
@@ -119,5 +157,39 @@ export function postFor(root:CampaignState,owner:{postId?:number}):World['civili
 export function canAttachPost(w:World):boolean {const root=registeredCampaign(w),r=root.worldGroups;if(!r)return true;return r.canonicalPostId!==null||Number.isSafeInteger(r.nextPostId+1);}
 export function attachPost(view:World,root:CampaignState,owner:{postId?:number}):void {Object.defineProperty(view,'civilianPost',{enumerable:true,configurable:true,get:()=>postFor(root,owner),set:value=>{const r=root.worldGroups!;const linked=owner.postId??r.canonicalPostId;if(linked!==null&&linked!==undefined){const p=r.posts.find(p=>p.id===linked);if(!p)throw Error('Missing post owner');if(!value)throw Error('Cannot delete actual post stock');p.state=value;owner.postId=linked;}else{if(!value)return;if(!Number.isSafeInteger(r.nextPostId+1))throw Error('Post identity exhausted');const id=r.nextPostId++;r.posts.push({id,state:value});r.canonicalPostId=id;owner.postId=id;}}});}
 
+/* Fast paths of the two copies between a map's original local fields (`body`)
+ * and its stable view. Both copies are field-by-field: when no field differs
+ * they write nothing, and the stamp they rebuild holds the same keys, values
+ * and order as before. These checks prove that case and nothing else; any
+ * difference (a key added, removed, reordered, or a value not ===, NaN
+ * included) takes the original copy. */
+/** The original's local fields are still exactly the stamp: registeredMap would merge nothing. */
+function sameLocalData(body:LocalMapState|World,stamp:ReadonlyMap<string,unknown>):boolean {
+ const it=stamp.entries(),data=body as unknown as Record<string,unknown>;
+ for(const k of Object.keys(data)){
+  if(shared.has(k)||presentation.has(k))continue;
+  const entry=it.next();if(entry.done||entry.value[0]!==k||entry.value[1]!==data[k])return false;
+ }
+ return !!it.next().done;
+}
+/** flushRegisteredMap would copy nothing: the view's local fields are exactly
+ * its stamp, in order, and so are the original's unshared fields, with no
+ * presentation field for the copy to delete. Without a stamp: not proven. */
+function flushIsNoop(view:World,original:LocalMapState|World,cache:{world:World;stamp:Map<string,unknown>}|undefined):boolean {
+ if(cache?.world!==view)return false;
+ const live=view as unknown as Record<string,unknown>,target=original as unknown as Record<string,unknown>;
+ let it=cache.stamp.entries();
+ for(const k of Object.keys(live)){
+  if(shared.has(k)||presentation.has(k))continue;
+  const entry=it.next();if(entry.done||entry.value[0]!==k||entry.value[1]!==live[k])return false;
+ }
+ if(!it.next().done)return false;
+ it=cache.stamp.entries();
+ for(const k of Object.keys(target)){
+  if(shared.has(k))continue;if(presentation.has(k))return false;
+  const entry=it.next();if(entry.done||entry.value[0]!==k||entry.value[1]!==target[k])return false;
+ }
+ return !!it.next().done;
+}
 function currentLocalData(c:{body:LocalMapState|World;world:World;stamp:Map<string,unknown>}):LocalMapState {const body=captureLocalMap(c.body as World) as unknown as Record<string,unknown>,live=captureLocalMap(c.world) as unknown as Record<string,unknown>,result={...live};for(const k of new Set([...c.stamp.keys(),...Object.keys(body)])){const before=c.stamp.get(k),present=Object.hasOwn(body,k);if(present!==c.stamp.has(k)||body[k]!==before){if(present)result[k]=body[k];else delete result[k];}}return result as unknown as LocalMapState;}
 export function finalizeInitialWorldRegistry(w:World):void {initialWorldRegistry(w);if(w.tick!==0||!w.worldMaps||w.worldMaps.sites.length!==1||w.worldGroups!.groups.length)return;w.worldMaps.calendarOrigin=calendarTick(w,0);w.worldMaps.campaignSeed=w.planet?.generationSeed??w.seed;w.worldMaps.sites[0]!.tile=w.planet?.homeTile??null;contexts.delete(w);}

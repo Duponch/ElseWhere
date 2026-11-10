@@ -13,6 +13,7 @@ import {startTravel} from './movement.ts';
 import {processDraft} from './drafting.ts';
 import {blockedCells,canStep} from './pathfinding.ts';
 import {CIVIL_TRANSIT_BLOCKERS} from './travel.ts';
+import {captureStructureNavigation} from './structure-navigation.ts';
 import {carrierOf} from './rescue-state.ts';
 import {medicallyStopped} from './health-rules.ts';
 import {isStunned} from './stun.ts';
@@ -63,7 +64,9 @@ export function createCoreMovement297(world:World){
     if(medicallyStopped(pawn)||isStunned(pawn,core)||carrierOf(world,pawn.id))continue;
     const x=pawn.x,z=pawn.z,m=pawn.motion;
     if(tactical)processDraft(world,pawn,grid,budget,readLight);
-    else {const next=pawn.path[0];if(next&&canStep(world,pawn,next,grid(),CIVIL_TRANSIT_BLOCKERS)&&startTravel(world,pawn,next,readLight))pawn.path.shift();}
+    // The shared structure index (validated on each read) answers the door-corner
+    // test of a diagonal step without scanning every structure, as for transit exits.
+    else {const next=pawn.path[0];if(next&&canStep(world,pawn,next,grid(),CIVIL_TRANSIT_BLOCKERS,captureStructureNavigation(world))&&startTravel(world,pawn,next,readLight))pawn.path.shift();}
     if(m!==pawn.motion||x!==pawn.x||z!==pawn.z){if(!changed.includes(pawn.id))changed.push(pawn.id);touchPassengers(pawn);changedCells=true;}
    }
    const animal=animals.advance();for(const id of animal.actorsChanged)if(!changed.includes(id))changed.push(id);
