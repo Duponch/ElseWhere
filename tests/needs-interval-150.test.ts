@@ -5,6 +5,7 @@ import { updateWellbeing, wellbeingLocalTicks } from '../src/sim/wellbeing';
 import { groupPawnInterval256 } from '../src/sim/group-core-cadence-256';
 import { MOOD_FALL_PER_HOUR, MOOD_RISE_PER_HOUR, moodTarget, moodThoughts } from '../src/sim/mood';
 import { TICKS_PER_DAY, type World } from '../src/sim/types';
+import { stepWorld, validateWorld } from '../src/sim/index';
 
 // RimWorld 1.6 Pawn_NeedsTracker: NeedInterval once every 150 Core ticks at the
 // pawn's hashed tick, by a full 150-tick step. One local tick = 10 Core ticks:
@@ -51,4 +52,19 @@ test('a direct wellbeing step covers the given local ticks', () => {
 test('historical schemas keep the per-tick wellbeing pass', () => {
   const w = world(300), p = w.pawns.find(x => x.state !== 'dead' && x.state !== 'sleeping')!;
   for (let i = 0; i < 20; i++) { w.tick += 1; expect(wellbeingLocalTicks(w, p)).toBe(1); }
+});
+
+test('between intervals a memory still ends at its own tick, so the world stays valid', () => {
+  const w = world(), p = w.pawns.find(x => x.state !== 'dead' && x.state !== 'sleeping')!;
+  expect(validateWorld(w)).toEqual([]);
+  // Expiring at a tick that is not this pawn's interval: the case met once in
+  // the crashlanded campaign (a seen corpse, tick 136840), where saving failed.
+  let expiry = w.tick + 2;
+  while (due(p.id, expiry)) expiry++;
+  p.memories = [{ kind: 'ate-without-table', expiresAt: expiry }];
+  expect(validateWorld(w)).toEqual([]);
+  stepWorld(w, expiry - w.tick);
+  expect(w.tick).toBe(expiry);
+  expect(p.memories.some(m => m.expiresAt <= w.tick)).toBe(false);
+  expect(validateWorld(w)).toEqual([]);
 });

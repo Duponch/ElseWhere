@@ -894,6 +894,60 @@ Outils de test trouvés cassés pendant ce lot, antérieurs à ces changements :
 
 Pistes écartées : un index des tas par case (délai de déplacement, scories d'une pièce) ou des plantes (pousse sauvage) exigerait un journal de toutes les écritures de tas, environ 270 sites dans 131 fichiers. Un oubli fausserait silencieusement la simulation, sans moyen de le détecter à coût nul.
 
+### Tri des échecs des longues campagnes (9 novembre)
+
+Une fois les campagnes débloquées, quatre d'entre elles échouaient : délais dépassés, objectifs manqués. Chaque échec a été attribué à une cause : deux vrais défauts du jeu, deux attendus périmés, des délais trop courts.
+
+**Défaut 1 — colon bloqué en livrant un mur en bois (depuis le 1ᵉʳ novembre).**
+- Depuis le lot « finir le cadre » (schéma 301), le chemin vers un mur en bois en chantier vise aussi ses quatre cases diagonales, comme le contact de RimWorld. Les cadres de murs se touchent par les coins : `TouchPathEndModeUtility`, `CanInteractThroughCorners` ; la livraison se fait en mode `Touch`.
+- La livraison du bois (`processHaul`, `src/sim/hauling.ts`) n'acceptait encore que les quatre cases droites. Un porteur arrivé en diagonale restait « en déplacement », chemin vide, sans jamais livrer. Un autre colon reprenait ensuite la même boucle.
+- Exemple : « joueur ordinaire » graine 2048, un mur provisoire bloqué 4 jours à 3 bois sur 5, avec 88 bois posés à côté. Rejoué depuis la sauvegarde, il est livré et achevé en moins de 150 ticks après correction.
+- Correction : la livraison à un cadre de mur en bois (schéma 301 et suivants) accepte les mêmes huit cases de contact que le chemin. Les autres chantiers gardent le contact droit.
+- Test : `tests/frame-delivery-touch301.test.ts`, qui échoue sur l'ancien code.
+- Effet : ce blocage coûtait aussi du temps de calcul. Le raid passe de plus de 270 s à 150 s.
+
+**Défaut 2 — souvenirs expirés gardés jusqu'à l'intervalle du colon (depuis le 8 novembre).**
+- Depuis la cadence RimWorld de 150 ticks (`wellbeingLocalTicks`, schéma 301), les souvenirs expirés (repas, cadavres vus, deuils…) n'étaient retirés qu'à l'intervalle du colon, toutes les 15 unités de temps.
+- La validation de sauvegarde exige qu'aucun souvenir expiré ne subsiste. Entre l'expiration et l'intervalle, le monde était donc invalide, et une sauvegarde faite à ce moment-là était refusée.
+- Observé dans « Atterrissage » au tick 136 840 : souvenir « cadavre décomposé aperçu » expiré à ce tick exact.
+- Correction (`src/sim/needs.ts`) : hors de l'intervalle, les souvenirs expirés sont retirés à leur tick, comme avant le 8 novembre. L'humeur et le confort gardent la cadence de 150 ticks. À chaque intervalle, l'humeur lit les mêmes souvenirs qu'avant, puisque le pas d'humeur commence de toute façon par les faire expirer.
+- Écart assumé avec RimWorld : un souvenir y reste présent jusqu'au prochain intervalle, soit au plus 149 ticks de plus. Il est retiré ici à son tick exact. Cela ne change rien à l'humeur calculée ; seules les règles d'empilement d'un nouveau souvenir identique pendant ce court délai pourraient différer.
+- Test : nouveau cas dans `tests/needs-interval-150.test.ts`, qui échoue sur l'ancien code.
+
+**Attendus périmés.**
+- « Atterrissage » : le bilan comptait comme biens de la colonie les 13 composants du stock d'un vaisseau marchand en orbite (propriétaire `orbital-ship`). Il les exclut désormais (`tests/scenarios/survivor-player.ts`).
+- « Joueur ordinaire » graine 93 : avec l'ordre de travail RimWorld (schéma 301), où la cuisine passe avant la cueillette, le cuisinier transforme en repas unitaires tout stock de 10 unités. Les 40 unités d'un lot de quatre ne s'accumulent jamais : 34 cuissons unitaires, aucun lot.
+  - L'attendu « au moins un lot » est remplacé par : un lot est exigé dès qu'il a été observé réalisable, c'est-à-dire ingrédients suffisants et réserve de repas non atteinte, lu par `queryCookingBillStatus`.
+  - Les graines 42 et 2048 font toujours des lots.
+  - En septembre, le stock à la fin du jour 1 était de 66 unités avec 1 repas ; il est aujourd'hui de 22 unités avec 6 repas.
+
+**Délais.** Temps mesurés seuls, sur le code corrigé, avec une autre session active par moments : raid 150 s, Survivants 91 à 114 s (ancre 14 à 20 s), joueur ordinaire 210 à 342 s, Atterrissage 1 292 s. Nouveaux plafonds :
+
+| Campagne | Ancien plafond | Nouveau plafond |
+| --- | --- | --- |
+| Raid | 180 s | 360 s |
+| Survivants | 180 s | 360 s |
+| Ancre et préparation des Survivants | 20 s | 60 s |
+| Joueur ordinaire | 240 s | 600 s |
+| Atterrissage | 1 200 s | 2 400 s |
+
+Ce sont des plafonds de sécurité, pas des budgets de performance. Ils laissent de la marge à une machine chargée.
+
+**Suite complète sur les corrections (10 novembre).** 1 862 fichiers (campagnes et tests facultatifs à part) : 8 627 tests réussis. Comparés à la liste des échecs connus (`tmp/perf/known-failures.json`), 13 échecs n'y figurent pas :
+- 11 délais dépassés sous charge (paludisme ×3, deuil, cryptosommeil, alimentation, orage, habitat, scène V180, filtre de formation, refus de quête). Relancés seuls, ils passent tous, en 13 à 27 s pour un plafond de 30 s : marge faible, défaut antérieur.
+- `main-terminal298` (« MainUI14 exact source mismatch ») échoue de la même façon sur `main` sans les corrections.
+- `origami-endpoint-color` lit un fichier de `three` dans le `node_modules` du dossier de travail isolé, vide : artefact de l'environnement, le cas passe sur `main`.
+
+Aucun échec ne vient des deux corrections. Attention, en comparant à la liste : lire les rapports JSON de Vitest en UTF-8, sinon les titres accentués ne correspondent plus et apparaissent à tort comme nouveaux.
+
+**Changements de vitesse lents : le Worker n'est pas en cause.** Le contrôle de présentation relève des changements de vitesse lents (140 ms à 1,6 s, presque tous vers ou depuis ×6). La sonde `scripts/speed-latency-probe.ts` fait tourner le vrai Worker de présentation sous Node, sur le monde du contrôle (graine 42, 250², rectangle de minage, ×1 puis 6, 1, 3 toutes les 2 s, 17 changements). La demande de vitesse y passe par un minuteur, comme un message du navigateur : elle attend la fin de la tâche en cours du Worker.
+- Attente avant traitement : 0,2 à 29,5 ms ; réponse 5,6 à 7,7 ms après.
+- La simulation avance au nouveau rythme dès la tâche suivante : de ×1 à ×6, 18 ticks en 528 ms jusqu'à la publication suivante (34 par seconde pour 36 attendus).
+- Paquets d'acteurs toutes les 31 ms environ, quelle que soit la vitesse.
+- Retard de la boucle du Worker : médiane 10,8 ms, maximum 40 ms.
+
+Le retard vient donc du fil principal : adoption des messages ou lecture du temps par l'affichage (`src/render/MotionTimeline.ts`). Piste à vérifier, pas une cause établie : en mode fin, chaque changement de vitesse remet le défilement en attente d'une réserve (`buffering`) et réinitialise l'estimation du débit confirmé. L'enregistrement des lots du Worker du contrôle (`HARVEST_TRACE=1`) est périmé : il cherche `stepWorld(world);` dans `simulation.worker.ts`, qui ne fait plus que déléguer à `simulation-runtime.ts`. Il faut le refaire côté fil principal avant de corriger.
+
 ## 5. Écarts avec RimWorld (Core 1.5/1.6)
 
 Une grande partie des règles chiffrées est fidèle : temps, faim, repos, loisirs, beauté, confort, humeur de base, seuils et MTB des crises, déplacement, compétences, vitesses de travail, cultures existantes, températures, santé, combat et Cassandra Classic.

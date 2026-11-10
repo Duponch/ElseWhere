@@ -35,4 +35,4 @@ test('ordinary player builds, welcomes, faces a naturally scheduled raid, demobi
   expect(w.pawns.filter(isColonist).some(p=>p.social?.memories.length)).toBe(true);expect(w.pawns.filter(isColonist).some(p=>(p.skills.social?.xp??0)>0)).toBe(true);
   expect(summary.textile.fields).toBe(1);expect(summary.textile.plants).toBe(6);
   expect(postMeal&&postWork).toBe(true);if(injured)expect(treated).toBe(true);expect(w.structures.filter(s=>s.kind==='bed')).toHaveLength(4);expect(w.stock.food).toBeGreaterThan(0);
-},180000);
+},360000);

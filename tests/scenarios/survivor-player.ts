@@ -155,6 +155,8 @@ export function survivorSummary(w:World) {
   const p=survivorPlan(w,w.scenario?.id==='crashlanded'),storage=new Set(w.stockpiles.map(s=>s.z*w.width+s.x)),roof=new Set(w.roofing?.constructed);
   const colonyOwned=(q:World['piles'][number])=>{
     const owner=q.owner;
+    // An orbital trader's stock is the trader's goods, not the colony's.
+    if(owner.type==='orbital-ship')return false;
     return !('pawnId' in owner)||!!w.pawns.find(pawn=>pawn.id===owner.pawnId&&isColonist(pawn));
   };
   const amount=(item:ItemId,stored=false)=>w.piles.reduce((n,q)=>n+(q.item===item&&colonyOwned(q)&&(!stored||q.owner.type==='ground'&&storage.has(q.owner.z*w.width+q.owner.x))?q.quantity:0),0);

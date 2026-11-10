@@ -17,6 +17,7 @@ import { processEating } from './eating.ts';
 import { pileFoodScore, foodSourceSearchGoals, selectFoodSource } from './food-selection.ts';
 import { planPasteRequest,pasteRequestValid } from './nutrient-paste.ts';
 import { updateWellbeing,type FurnitureSight,wellbeingLocalTicks} from './wellbeing.ts';
+import { expireMealMemories } from './mood.ts';
 import { processSleeping,offerSleeping300 } from './sleeping.ts';
 import { updateRecreation } from './recreation-rules.ts';
 import { updateRest } from './rest.ts';
@@ -183,6 +184,11 @@ export function updateNeeds(world: World, pawn: Pawn,body?:import('./body-capaci
   if (pawn.needCooldown > 0) pawn.needCooldown--;
   const wellbeingTicks=wellbeingLocalTicks(world,pawn);
   if(wellbeingTicks)updateWellbeing(world, pawn,body,readFurnitureSight,topology,readTemperature,wellbeingTicks);
+  // Mood steps at the interval, but a memory still ends at its own tick: the
+  // save validation reads every memory against the current tick, so an expired
+  // one must not linger until the pawn's next interval. Mood at each interval
+  // reads the same memories either way (the step expires them first).
+  else expireMealMemories(world,pawn);
 }
 
 export function collapseFromExhaustion(world:World,pawn:Pawn,context:Pick<NeedContext,'event'>):void {

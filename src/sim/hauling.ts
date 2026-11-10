@@ -10,7 +10,8 @@ import { reloadableTurret,turretReloadPawnReason,TURRET_RELOAD_WORK_TICKS } from
 import { destinationCell, destinationValid } from './work-planner.ts';
 import { releaseWork } from './work-release.ts';
 import { footprintCells } from './definitions.ts';
-import { adjacent } from './pathfinding.ts';
+import { adjacent, workNeighbours } from './pathfinding.ts';
+import { woodWallTouch301 } from './wall-frame-kind-301.ts';
 import { transferPile } from './materials.ts';
 import {planConstructionPlantRetirement,commitConstructionPlantRetirement} from './plant-retirement.ts';
 import { haulingWork } from './work-types.ts';
@@ -46,7 +47,10 @@ export function processHaul(world: World, pawn: Pawn, move: (target: Cell, allow
   const carry = world.piles.find(item => item.id === task.carryPileId);
   if (!target || !carry) { releaseWork(world, pawn); return; }
   if((carry.kind==='ai-core'||carry.item==='ai-core')&&(!validAiCorePile298(carry,world.schemaVersion)||task.quantity!==1)){releaseWork(world,pawn);return;}
-  const atTarget = task.destination.type === 'job' ? footprintCells(target as Job).some(cell => adjacent(pawn, cell)) && !footprintCells(target as Job).some(cell => sameCell(pawn, cell)) : task.destination.type==='fuel'?footprintCells(target as Job).some(cell=>nearby(pawn,cell)):nearby(pawn, target);
+  // A wood wall Frame (schema 301+) is touched from its eight neighbours, the
+  // same goals the route to it uses: arriving diagonally is arriving.
+  const touch = task.destination.type === 'job' && woodWallTouch301(world, target as Job);
+  const atTarget = task.destination.type === 'job' ? footprintCells(target as Job).some(cell => touch ? workNeighbours(cell, undefined, true).some(next => sameCell(next, pawn)) : adjacent(pawn, cell)) && !footprintCells(target as Job).some(cell => sameCell(pawn, cell)) : task.destination.type==='fuel'?footprintCells(target as Job).some(cell=>nearby(pawn,cell)):nearby(pawn, target);
   if (!atTarget) { move(target, task.destination.type !== 'job'); return; }
   if(task.destination.type==='job'&&!constructionSiteFree(world,target as Job,pawn.id)){releaseWork(world,pawn);return;}
   if(task.destination.type==='job'&&(target as Job).kind!=='fix-breakdown'&&(target as Job).kind!=='lay-floor'){

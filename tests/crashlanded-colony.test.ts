@@ -278,4 +278,4 @@ test.each(resumed?[resumed.seed]:[42])('Atterrissage : 24 jours, deux récoltes 
   // growth/need/deadline is changed to make all food appear in this one run.
   // Watchdog includes doubled simulated duration and a larger real farm. This
   // is a hang limit, not a simulation performance acceptance threshold.
-},1200000);
+},2400000);

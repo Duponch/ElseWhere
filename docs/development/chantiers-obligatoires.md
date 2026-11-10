@@ -6,14 +6,18 @@ Ordre recommandé : **1 avant 2**. La refonte de la publication touche ce que su
 
 ## 1. Réparer les outils de test cassés
 
-**État au 9 novembre au soir : outillage réparé, échecs révélés à trier.**
+**État au 10 novembre, nuit : échecs des campagnes triés, deux vrais défauts du jeu corrigés, suite complète sans nouvel échec dû aux corrections.** Détail dans l'[audit](audit-performance-2026-11-05.md), section « Tri des échecs des longues campagnes (9 novembre) ».
+
+**Reste à faire dans ce chantier : le délai des changements de vitesse.** Mesuré sur le vrai Worker, ce n'est pas lui : il applique la nouvelle vitesse en moins de 40 ms et publie au nouveau rythme dès la tâche suivante. Le retard est donc côté fil principal (adoption des messages ou défilement de `MotionTimeline`). Ce délai ne dépend donc pas du chantier 2. L'enregistrement des lots du Worker dans le contrôle (`HARVEST_TRACE=1`) est périmé et doit être refait côté fil principal avant toute correction.
+
+Historique de l'état précédent (outillage réparé, échecs révélés à trier) :
 - Les longues campagnes ne se figent plus. Les sondes espionnent les fonctions exportées (`vi.spyOn` sur l'espace de noms du module) au lieu de remplacer les modules. Elles reconnaissent la même carte par son tableau de cases (`tests/scenarios/same-map.ts`), car la simulation peut leur passer l'objet racine de la campagne. Le bois détruit par un échec de construction est désormais compté (registre de bois en révision 2). Les campagnes d'instrumentation et de comptabilité du bois passent.
 - `npm run test:presentation` va jusqu'au bout. Il révèle un vrai défaut, déjà présent avant le 9 novembre : un changement de vitesse met parfois 0,15 à 1,6 s à prendre effet, au lieu de moins de 0,1 s. Mesuré deux fois sur le code du 9 novembre au matin et sur le code du soir.
-- **Reste à trier**, échecs déjà présents en grande partie sur le code du 9 novembre au matin :
-  - délais écrits en dur dépassés (raid 180 s, « joueur ordinaire » 240 s, ancre des survivants 20 s, survivants 180 s), à mesurer seul plutôt qu'en parallèle avant d'en conclure quoi que ce soit ;
-  - objectifs de partie manqués : « Atterrissage » (stock d'acier et de composants inattendu au tick 41000, aucun riz récolté pendant les premiers jours), « joueur ordinaire » (déconstruction attendue absente, un compteur à 0), « Survivants » (une valeur attendue à 3, obtenue à 0).
+- **Triés le 9 novembre au soir** (échecs déjà présents en grande partie sur le code du matin) :
+  - délais écrits en dur dépassés (raid 180 s, « joueur ordinaire » 240 s, ancre des survivants 20 s, survivants 180 s) : mesurés seuls, plafonds relevés ;
+  - objectifs de partie manqués : « Atterrissage » (composants d'un marchand en orbite comptés, puis monde invalide par un souvenir expiré), « joueur ordinaire » (mur bloqué faute de livraison en diagonale ; lot de quatre jamais réalisable en graine 93), « Survivants » (même mur bloqué).
 
-  Pour chacun, il faut établir s'il s'agit d'une règle volontairement changée depuis le 17 octobre (attendu à mettre à jour) ou d'une régression du jeu (à corriger).
+  Pour chacun, il fallait établir s'il s'agissait d'une règle volontairement changée depuis le 17 octobre (attendu à mettre à jour) ou d'une régression du jeu (à corriger) : voir l'audit.
 
 
 Deux filets de sécurité automatiques ne fonctionnent plus. Les régressions qu'ils devaient détecter peuvent passer inaperçues depuis les dates indiquées.

@@ -15,6 +15,7 @@ import { campChunks, campChunkNeedsHaul } from './scenarios/mining-player';
 import { completedStoneOpenings, emptyStoneAmounts, pendingStoneOpenings, stoneMatter } from './scenarios/stone-balance';
 import { STONE_KINDS } from '../src/sim/geology.ts';
 import { storageAccepts } from '../src/sim/storage-filters.ts';
+import { queryCookingBillStatus } from '../src/sim/cooking-diagnostics.ts';
 
 const SOCIAL_MELEE_INJURIES=new Set(['bruise','crack','crush','bite','cut','stab']);
 
@@ -55,6 +56,7 @@ test.each([42,93,2048])('joueur ordinaire : cinq à huit jours, graine %i, camp 
     const socialInjuries=new Map<number,Map<number,number>>();
     const temporarilyDowned=new Map<number,Set<number>>();
     const report: ReturnType<typeof colonySummary>[] = [];
+    let bulkFeasibleAt:number|null=null;
     for (let t = 0; t < (seed === 42 ? 48000 : 30000); t++) {
       // Seed 42 also exercises the browser player's four-hour observation cadence.
       if (t % (seed===42?1000:250) === 0) for (const decision of playerDecisions(world,{bulkMeals:true})) {
@@ -62,6 +64,11 @@ test.each([42,93,2048])('joueur ordinaire : cinq à huit jours, graine %i, camp 
         if(decision.command.type==='food-policy-assign'&&decision.command.policyId===3)rationAssignments++;
       }
       if(t===0)for(const decision of playerFocusDecisions(world))expect(applyCommand(world,decision.command)).toMatchObject({ok:true});
+      // Was a four-portion batch possible (forty usable units, reserve short)?
+      if(t%250===0&&bulkFeasibleAt===null)for(const fire of world.structures)if(fire.kind==='campfire'){
+        const bulk=fire.bills?.find(b=>b.recipe==='cook-simple-meal-bulk');
+        if(bulk&&queryCookingBillStatus(world,fire,bulk).code==='waiting')bulkFeasibleAt=world.tick;
+      }
       const ingesting = world.pawns.filter(p=>p.need?.kind==='eat' && p.need.phase==='ingest' && p.need.progress===49).map(p=>({id:p.id,quantity:p.need?.kind==='eat'?p.need.quantity:0}));
       const assistedIngesting=world.pawns.filter(p=>p.feed?.phase==='feed'&&p.feed.progress===FEED_TICKS-1).map(p=>({doctorId:p.id,patientId:p.feed!.patientId,quantity:p.feed!.quantity}));
       const socialOpponents=new Map<number,number>();
@@ -153,7 +160,11 @@ test.each([42,93,2048])('joueur ordinaire : cinq à huit jours, graine %i, camp 
     expect(report[4]!.roofing,context).toEqual({constructed:28,planned:28,removal:0});
     expect([...recreationKinds].sort(),context).toEqual(['horseshoes','skygaze','social-relax']);expect(recreationPawns.size,context).toBe(population);
     expect(cookingLedger.totals.portions,context).toBeGreaterThanOrEqual(12);
-    expect(cookingLedger.totals.bulkOperations,context).toBeGreaterThanOrEqual(1);
+    // A four-portion batch needs forty usable units while the meal reserve is
+    // short. Under RimWorld's work order (schema 301) the cook may turn every
+    // smaller stock into single meals for the whole campaign (seed 93): the
+    // batch is required once it was observed possible.
+    expect(cookingLedger.totals.bulkOperations>=1||bulkFeasibleAt===null,`${context}; bulk possible at ${bulkFeasibleAt}`).toBe(true);
     expect(rationAssignments,context).toBeGreaterThanOrEqual(3);
     expect(stoneOpenings.length,context).toBeGreaterThanOrEqual(4);
     expect(world.tiles.filter(t=>t.terrain==='rough-stone').length,context).toBeGreaterThanOrEqual(6);
@@ -206,4 +217,4 @@ test.each([42,93,2048])('joueur ordinaire : cinq à huit jours, graine %i, camp 
     expect(world.pawns[2]!.schedule[5]).toBe('anything');expect(world.pawns[2]!.schedule[21]).toBe('sleep');
 // This is a correctness journey with deep checkpoints, not a tick-time budget.
 // Keep a wall-clock ceiling while separate profiling measures simulation costs.
-}, 240000);
+}, 600000);

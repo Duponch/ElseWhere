@@ -20,7 +20,7 @@ test('Survivants : préparation naturelle reproductible et cinq commandes initia
     expect(survivorSummary(w).stored).toEqual({wood:0,steel:0,component:0,medicine:0,'survival-meal':0,'simple-meal':0});
     expect(validateWorld(w)).toEqual([]);
   }
-},20000);
+},60000);
 
 test('Survivants : dégager physiquement les contacts du dortoir avant ses murs',()=>{
   const w=createScenarioWorld(93,250,'survivors');
@@ -41,7 +41,7 @@ test('Survivants : dégager physiquement les contacts du dortoir avant ses murs'
   const walls=survivorDecisions(w).filter(d=>d.command.type==='designate'&&d.command.kind==='wall');
   expect(walls).toHaveLength(15);
   expect(validateWorld(w)).toEqual([]);
-},20000);
+},60000);
 
 test('Survivants : ancre spatiale conservée pendant livraison, achèvement partiel et reprise',()=>{
   const w=createScenarioWorld(2048,250,'survivors'),anchor=survivorPlan(w).anchor;
@@ -62,7 +62,7 @@ test('Survivants : ancre spatiale conservée pendant livraison, achèvement part
   }
   expect(sawFrame&&sawPartial).toBe(true);expect(w.structures.filter(s=>s.kind==='bed')).toHaveLength(3);
   expect(survivorPlan(w).anchor).toEqual(anchor);expect(survivorDecisions(w).some(d=>d.command.type==='designate'&&d.command.kind==='bed')).toBe(false);
-},20000);
+},60000);
 
 type Summary=ReturnType<typeof survivorSummary>;
 interface Ledger {consumed:number;harvested:number;cooked:number;meals:Record<number,number>;sleep:Record<number,number>}
@@ -132,4 +132,4 @@ test.each(resumed?[resumed.seed]:[42,93,2048])('Survivants : trois jours dans la
   // Crops need natural growth beyond this journey. Initial meals are not
   // confiscated to manufacture scarcity; the report distinguishes stored,
   // harvested and cooked food instead of claiming a closed economy already.
-},180000);
+},360000);
