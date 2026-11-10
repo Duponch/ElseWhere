@@ -139,6 +139,52 @@ export function captureStandability(world:World,geometry?:StructureNavigationGeo
   return cell=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height
     &&!['rock','water'].includes(world.tiles[cell.z*world.width+cell.x]!.terrain)&&!structures?.[cell.z*world.width+cell.x]&&!denied.has(cell.z*world.width+cell.x);
 }
+/* Ground pile facts per in-map cell, for one bounded scope in which no ground
+ * pile changes: the Core movement pass (core-movement-297), which ends the
+ * scope after it and drops the facts after any drafted pawn's turn, the only
+ * part of that pass that may drop or take an item. Each step otherwise scans
+ * every pile (about 1 800 on Les Forges). Same answers as the scan below: the
+ * pile rules are an OR over the piles of a cell, and a pile outside the map
+ * can match no in-map cell. VERIFY_TERRAIN_CACHES compares with the scan. */
+const PILE_CHUNK=1,PILE_MATERIAL=2;
+let groundPileScope:{world:World;source:World['piles'];length:number;ready:boolean}|undefined;
+/** One byte per cell, kept across scopes of a World with the piles, owners
+ * and kinds it was built from: owner objects are replaced, never edited, when
+ * a pile moves, so a scope that finds every pile, owner and kind identical
+ * reuses the bytes; otherwise only the cells marked by the last build are
+ * cleared and the bytes rebuilt. */
+interface GroundPileFacts {facts:Uint8Array;marked:number[];version:number;width:number;piles:World['piles'][number][];owners:World['piles'][number]['owner'][];kinds:World['piles'][number]['kind'][]}
+const groundPileFacts=new WeakMap<World,GroundPileFacts>();
+function sameGroundPiles(world:World,entry:GroundPileFacts):boolean {
+  const piles=world.piles,n=piles.length;
+  if(n!==entry.piles.length||entry.version!==world.schemaVersion||entry.width!==world.width)return false;
+  for(let i=0;i<n;i++){const p=piles[i]!;if(p!==entry.piles[i]||p.owner!==entry.owners[i]||p.kind!==entry.kinds[i])return false;}
+  return true;
+}
+export function beginGroundPileScope(world:World):void {groundPileScope={world,source:world.piles,length:world.piles.length,ready:false};}
+export function dropGroundPileFacts():void {if(groundPileScope)groundPileScope.ready=false;}
+export function endGroundPileScope():void {groundPileScope=undefined;}
+const materialFloorPile=(version:number,kind:string)=>version>=29&&kind==='steel'||version>=32&&kind==='blocks'||version>=41&&kind==='component'||version>=123&&(kind==='gold'||kind==='plasteel'||kind==='advanced-component');
+function scopedGroundPiles(world:World):Uint8Array|undefined {
+  const scope=groundPileScope;if(!scope||scope.world!==world)return undefined;
+  if(scope.source!==world.piles||scope.length!==world.piles.length){scope.source=world.piles;scope.length=world.piles.length;scope.ready=false;}
+  const size=world.width*world.height;let entry=groundPileFacts.get(world),fresh=false;
+  if(!entry||entry.facts.length!==size){entry={facts:new Uint8Array(size),marked:[],version:NaN,width:world.width,piles:[],owners:[],kinds:[]};groundPileFacts.set(world,entry);fresh=true;}
+  if(!scope.ready&&!fresh&&sameGroundPiles(world,entry))scope.ready=true;
+  if(!scope.ready){
+    const {facts,marked}=entry,version=world.schemaVersion,width=world.width,height=world.height;
+    for(const i of marked)facts[i]=0;marked.length=0;
+    entry.version=version;entry.width=width;entry.piles=world.piles.slice();entry.owners=entry.piles.map(p=>p.owner);entry.kinds=entry.piles.map(p=>p.kind);
+    for(const p of world.piles){
+      const owner=p.owner;if(owner.type!=='ground'||!Number.isInteger(owner.x)||!Number.isInteger(owner.z)||owner.x<0||owner.z<0||owner.x>=width||owner.z>=height)continue;
+      const bits=(version>=28&&p.kind==='chunk'?PILE_CHUNK:0)|(materialFloorPile(version,p.kind)?PILE_MATERIAL:0);
+      if(bits){const i=owner.z*width+owner.x;if(!facts[i])marked.push(i);facts[i]=facts[i]!|bits;}
+    }
+    scope.ready=true;
+  }
+  return entry.facts;
+}
+const inMap=(world:World,c:Cell)=>Number.isInteger(c.x)&&Number.isInteger(c.z)&&c.x>=0&&c.z>=0&&c.x<world.width&&c.z<world.height;
 export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry):number {
   const version=world.schemaVersion;
   if(version<22)return frameAt(world,to)?FRAME_TRAVEL_DELAY:0;
@@ -159,14 +205,28 @@ export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:Du
   }
   let objectDelay=target?FURNITURE_TRAVEL[target].delay:frameAt(world,to)?FRAME_TRAVEL_DELAY:0;
   let repeats=target?FURNITURE_TRAVEL[target].repeat:false,materialDelay=0;
-  // One pass over the piles, cell test first: only ground piles on `to` or
-  // `from` matter, for the chunk (repeat) rule and the material-floor rule.
-  for(const p of world.piles){
-    const owner=p.owner;if(owner.type!=='ground')continue;
-    const atTo=owner.x===to.x&&owner.z===to.z,atFrom=owner.x===from.x&&owner.z===from.z;
-    if(!atTo&&!atFrom)continue;
-    if(version>=28&&p.kind==='chunk'){if(atTo){objectDelay=Math.max(objectDelay,4.2);repeats=true;}if(atFrom)previousRepeats=true;}
-    if(atTo&&(version>=29&&p.kind==='steel'||version>=32&&p.kind==='blocks'||version>=41&&p.kind==='component'||version>=123&&(p.kind==='gold'||p.kind==='plasteel'||p.kind==='advanced-component')))materialDelay=1.4;
+  const facts=inMap(world,to)&&inMap(world,from)?scopedGroundPiles(world):undefined;
+  if(facts&&!verifyTerrainWriteCaches){
+    const atTo=facts[to.z*world.width+to.x]!,atFrom=facts[from.z*world.width+from.x]!;
+    if(atTo&PILE_CHUNK){objectDelay=Math.max(objectDelay,4.2);repeats=true;}
+    if(atFrom&PILE_CHUNK)previousRepeats=true;
+    if(atTo&PILE_MATERIAL)materialDelay=1.4;
+  }else{
+    const scoped=facts?{objectDelay,repeats,previousRepeats}:undefined;
+    // One pass over the piles, cell test first: only ground piles on `to` or
+    // `from` matter, for the chunk (repeat) rule and the material-floor rule.
+    for(const p of world.piles){
+      const owner=p.owner;if(owner.type!=='ground')continue;
+      const atTo=owner.x===to.x&&owner.z===to.z,atFrom=owner.x===from.x&&owner.z===from.z;
+      if(!atTo&&!atFrom)continue;
+      if(version>=28&&p.kind==='chunk'){if(atTo){objectDelay=Math.max(objectDelay,4.2);repeats=true;}if(atFrom)previousRepeats=true;}
+      if(atTo&&(version>=29&&p.kind==='steel'||version>=32&&p.kind==='blocks'||version>=41&&p.kind==='component'||version>=123&&(p.kind==='gold'||p.kind==='plasteel'||p.kind==='advanced-component')))materialDelay=1.4;
+    }
+    if(scoped&&facts){
+      const atTo=facts[to.z*world.width+to.x]!,atFrom=facts[from.z*world.width+from.x]!;
+      const expected={objectDelay:atTo&PILE_CHUNK?Math.max(scoped.objectDelay,4.2):scoped.objectDelay,repeats:scoped.repeats||!!(atTo&PILE_CHUNK),previousRepeats:scoped.previousRepeats||!!(atFrom&PILE_CHUNK),materialDelay:atTo&PILE_MATERIAL?1.4:0};
+      if(expected.objectDelay!==objectDelay||expected.repeats!==repeats||expected.previousRepeats!==previousRepeats||expected.materialDelay!==materialDelay)throw Error('Ground pile changed inside a pile scope');
+    }
   }
   const actor=trap?spikeTrapNavigationActor(world,from):undefined,overrideCost=terrainOverride?.coreCost(world.tiles[to.z*world.width+to.x]!);
   return Math.max(repeats&&previousRepeats?0:objectDelay,materialDelay,(overrideCost===undefined?terrainTravelDelay(world,to.z*world.width+to.x):overrideCost/10),world.snow?snowTravelDelay(world.tiles[to.z*world.width+to.x]!.snowDepth??0):0)
