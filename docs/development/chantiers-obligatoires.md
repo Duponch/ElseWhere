@@ -1,14 +1,16 @@
 # Chantiers obligatoires en attente
 
-Ouverts le 9 novembre 2026. Ces deux chantiers **doivent être faits**, quel que soit l'ordre des autres priorités. Toute IA ou personne qui reprend le projet (feuille de route, bilan, nouvelle session) doit les traiter ou les reporter explicitement, jamais les oublier. Retirer un chantier de cette note, et du renvoi en tête d'`AGENTS.md`, seulement une fois fait et vérifié.
+Ouverts le 9 novembre 2026. Ces chantiers **doivent être faits**, quel que soit l'ordre des autres priorités. Toute IA ou personne qui reprend le projet (feuille de route, bilan, nouvelle session) doit les traiter ou les reporter explicitement, jamais les oublier. Retirer un chantier de cette note, et du renvoi en tête d'`AGENTS.md`, seulement une fois fait et vérifié.
 
-Ordre recommandé : **1 avant 2**. La refonte de la publication touche ce que surveille le contrôle de présentation, l'un des outils cassés du chantier 1.
+Ordre recommandé au départ : **1 avant 2**. La refonte de la publication touche ce que surveille le contrôle de présentation, l'un des outils cassés du chantier 1.
+
+**Ordre décidé par l'utilisateur le 10 novembre : chantier 2 d'abord, puis le chantier 3.** Les outils du chantier 1 sont réparés. Il en restait un point, le retard des changements de vitesse : il est sorti du chantier 1 et devient le chantier 3, **à reprendre dès que le chantier 2 est fini et vérifié**, sans attendre une nouvelle demande.
 
 ## 1. Réparer les outils de test cassés
 
 **État au 10 novembre, nuit : échecs des campagnes triés, deux vrais défauts du jeu corrigés, suite complète sans nouvel échec dû aux corrections.** Détail dans l'[audit](audit-performance-2026-11-05.md), section « Tri des échecs des longues campagnes (9 novembre) ».
 
-**Reste à faire dans ce chantier : le délai des changements de vitesse.** Mesuré sur le vrai Worker, ce n'est pas lui : il applique la nouvelle vitesse en moins de 40 ms et publie au nouveau rythme dès la tâche suivante. Le retard est donc côté fil principal (adoption des messages ou défilement de `MotionTimeline`). Ce délai ne dépend donc pas du chantier 2. L'enregistrement des lots du Worker dans le contrôle (`HARVEST_TRACE=1`) est périmé et doit être refait côté fil principal avant toute correction.
+**Reste de ce chantier : le délai des changements de vitesse, déplacé au chantier 3 ci-dessous.**
 
 Historique de l'état précédent (outillage réparé, échecs révélés à trier) :
 - Les longues campagnes ne se figent plus. Les sondes espionnent les fonctions exportées (`vi.spyOn` sur l'espace de noms du module) au lieu de remplacer les modules. Elles reconnaissent la même carte par son tableau de cases (`tests/scenarios/same-map.ts`), car la simulation peut leur passer l'objet racine de la campagne. Le bois détruit par un échec de construction est désormais compté (registre de bois en révision 2). Les campagnes d'instrumentation et de comptabilité du bois passent.
@@ -58,6 +60,18 @@ Deux filets de sécurité automatiques ne fonctionnent plus. Les régressions qu
   - les fichiers `src/bridge/core-phase-data-297.ts`, `src/bridge/native-message-capture.ts` et `src/bridge/native-clone-resident.ts` sont figés par empreinte SHA (`phaseCapturePlugin` dans `vitest.config.ts`) : pour changer leur comportement, passer par une variante prouvée identique ailleurs, comme `core-frozen-copy-297.ts` ;
   - `npm run test:presentation` est requis, d'où le chantier 1 d'abord.
 - **Fini quand** : la part de la publication dans le Worker a nettement baissé sur Les Forges, mesurée par le même banc dans les mêmes conditions. Les tests de publication et le contrôle de présentation doivent passer.
+
+## 3. Retard des changements de vitesse (à reprendre après le chantier 2)
+
+Noté le 10 novembre à la demande de l'utilisateur, pour y revenir après la refonte de la publication.
+
+- **Symptôme** : au contrôle de présentation (`npm run test:presentation`), un changement de vitesse met parfois 0,14 à 1,6 s à se voir à l'écran, au lieu de moins de 0,1 s. Presque tous les cas sont vers ou depuis ×6. Défaut déjà présent avant le 9 novembre. C'est la seule raison pour laquelle ce contrôle ne passe pas encore.
+- **Ce qui est établi** : le Worker n'est pas en cause. La sonde `scripts/speed-latency-probe.ts` (vrai Worker de présentation sous Node, monde du contrôle, 17 changements) mesure une attente de 0,2 à 29,5 ms avant traitement, une réponse 5,6 à 7,7 ms après, et la simulation au nouveau rythme dès la tâche suivante. Chiffres détaillés dans l'[audit](audit-performance-2026-11-05.md), paragraphe « Changements de vitesse lents : le Worker n'est pas en cause ».
+- **Piste, pas une cause établie** : le défilement du temps côté affichage (`src/render/MotionTimeline.ts`). En mode fin, chaque changement de vitesse remet le défilement en attente d'une réserve (`buffering = true`, `ready = Infinity`) et réinitialise l'estimation du débit confirmé ; la reprise dépend ensuite de l'arrivée des paquets d'acteurs (`FINE_LATE_RECEIPT_MS297 = 100`). L'adoption des messages par le fil principal est l'autre candidat.
+- **Lien avec le chantier 2** : la cause ne dépend pas du volume publié par le Worker. Mais la refonte change la forme et la cadence des messages que `MotionTimeline` reçoit : refaire la mesure après elle, pas avant.
+- **Premier pas** : l'enregistrement de diagnostic du contrôle (`HARVEST_TRACE=1` dans `scripts/harvest-sync-bench.mjs`) est périmé. Il cherche `stepWorld(world);` et `advanceSimulation` dans `simulation.worker.ts`, qui ne fait plus que déléguer à `src/bridge/simulation-runtime.ts`. Le refaire côté fil principal : pour chaque changement, heure de la demande, de la réponse, de chaque message adopté, et état de `MotionTimeline` (attente, réserve, débit) image par image. Corriger seulement une fois la cause vue dans cette trace.
+- **Contraintes** : la présentation suit le tick confirmé ; pas de temps affiché non joué, pas de faux accusé de réception. Le critère du contrôle (`visibleSpeedResponse` dans `scripts/harvest-assertions.ts`) ne doit pas être assoupli.
+- **Fini quand** : `npm run test:presentation` passe sur `main`, plusieurs passages de suite.
 
 ## Références
 
