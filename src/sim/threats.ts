@@ -15,7 +15,7 @@ import { retryInterruptedCargo } from './interrupted-cargo.ts';
 import type { LightReader } from './light-environment.ts';
 import type { NavigationGrid,SearchBudget } from './work-planner.ts';
 import type { Cell,Pawn,World } from './types.ts';
-import { hostileCandidates,isAnimalTarget,meleeThreatTarget,type LivingTarget } from './combat-target.ts';
+import { activeCombatThreat,hostileCandidates,hostileTarget,isAnimalTarget,meleeThreatTarget,type LivingTarget } from './combat-target.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 
 export interface FleeState { target:Cell; /** Zero while travelling, otherwise end of cowering. */ until:number }
@@ -32,13 +32,24 @@ export function threatQueries(world:World,animalThreats?:readonly WildAnimal[]) 
     return targets;
   };
   return {queries,hostiles,
-    nearby:(p:Pawn)=>hostiles(p).filter(t=>distanceSquared(p,t)<64&&clearShotSegment(queries.grid(),p,t))};
+    nearby:(p:Pawn)=>hostiles(p).filter(t=>distanceSquared(p,t)<64&&clearShotSegment(queries.grid(),p,t)),
+    /** Same as nearby(p).length>0, without listing every hostile of the map:
+     * the distance is tested first, then the same pure hostility and shot
+     * predicates, then the melee threat. */
+    anyNearby:(p:Pawn):boolean=>{
+      const near=(t:LivingTarget)=>distanceSquared(p,t)<64&&hostileTarget(p,t)&&activeCombatThreat(t)&&clearShotSegment(queries.grid(),p,t);
+      for(const t of world.pawns)if(near(t))return true;
+      for(const t of animalThreats??world.wildlife?.animals??[])if(near(t))return true;
+      for(const t of world.mechanoids??[])if(near(t))return true;
+      const threat=meleeThreatTarget(world,p,world.tick*10,undefined,queries.grid);
+      return !!threat&&distanceSquared(p,threat)<64&&clearShotSegment(queries.grid(),p,threat);
+    }};
 }
 type Context=ReturnType<typeof threatQueries>;
 /** Forced civilian jobs and drafted control take precedence over default flee. */
 export function considerFlee(world:World,pawn:Pawn,context:Context):void {
   if(!isColonist(pawn)||pawn.draft||pawn.hostilityResponse!==undefined||pawn.shooting&&!pawn.hunting||pawn.melee||pawn.flee||pawn.need?.kind==='sleep'||pawn.orders.active!==null||pawn.orders.queue.length||pawn.priorityWork||pawn.equipmentTask)return;
-  if(!context.nearby(pawn).length)return;
+  if(!context.anyNearby(pawn))return;
   interruptDraftWork(world,pawn);
   pawn.flee={target:{x:pawn.x,z:pawn.z},until:0};pawn.path=[];pawn.planCooldown=0;
 }
@@ -78,7 +89,7 @@ export function processFlee(world:World,pawn:Pawn,context:Context,getBlocked:Nav
     pawn.state='idle';retryInterruptedCargo(world,pawn);
     // Preserve Core's refuge observation interval, but admit the next escape
     // in this decision once the observation interrupts cowering.
-    if((world.tick*10+pawn.id)%35<10&&context.nearby(pawn).length){flee.until=0;pawn.planCooldown=0;}
+    if((world.tick*10+pawn.id)%35<10&&context.anyNearby(pawn)){flee.until=0;pawn.planCooldown=0;}
     else {if(world.tick>=flee.until){delete pawn.flee;pawn.planCooldown=0;pawn.needCooldown=0;}return;}
   }
   if(!flee.until&&!pawn.path.length) {
