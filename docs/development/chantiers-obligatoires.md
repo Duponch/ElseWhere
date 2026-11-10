@@ -73,7 +73,15 @@ Deux filets de sécurité automatiques ne fonctionnent plus. Les régressions qu
 
 **État au 10 novembre, soir : le retard est corrigé, le contrôle de présentation ne passe pas encore.** Les 22 changements de vitesse passent sous 100 ms sur trois passages (maximum 94 ms). La cause n'était pas la vitesse : à chaque roche minée, les matériaux des rochers étaient marqués « à reconstruire » sans raison et toute la scène était recompilée (120 à 330 ms sans image, 36 fois en 45 s) ; l'affichage prenait aussi jusqu'à 0,2 s de retard à ×6 sans jamais le rattraper. Détail dans l'[audit](audit-performance-2026-11-05.md), section « Changements de vitesse lents et gels d'image en minant (10 novembre) ».
 
-**Reste pour fermer ce chantier :** réécrire le témoin des « sauts » du contrôle (périmé depuis que les acteurs écrivent leur position courante : 77 sauts sur 80 examinés suivent exactement la route confirmée), puis examiner le vrai saut de 0,7 case des trois colons à une même image et les images où un colon est dessiné dans une case encore rocheuse (0 à 113 selon les passages).
+**Témoin des « sauts » réécrit (10 novembre, soir).** Les acteurs écrivent désormais leur position courante au lieu d'un segment de trajet : la preuve de continuité se fait sur la position affichée, qui doit être sur son arête confirmée à l'instant affiché, à 0,0002 case près, dans les deux images (`confirmedTravelExcess` dans `scripts/harvest-assertions.ts`). Sur un passage, 954 alertes sur 985 sont ainsi prouvées continues ; il reste **31 écarts**, contre ≈ 1 100 avant.
+
+**Reste pour fermer ce chantier**, par classe (un passage, à refaire au calme) :
+- 17 images où le colon est affiché hors de son arête, mais à moins de 0,30 case : c'est l'approche de son poste de travail. L'ancienne preuve tolérait cette enveloppe sur les segments ; il faut l'équivalent sur la position, à partir des transitions d'approche que le contrôle enregistre déjà (`approach`, `workOffset`).
+- 6 images d'arrivée : le temps affiché a dépassé la fin de la dernière arête confirmée et le colon est au bout de l'arête, ou à moins de 0,30 case.
+- 6 images au démarrage (les trois colons, deux fois) : la position bouge de 0,7 case sans que le temps affiché avance, puis le temps saute de 1,4 tick en une image. C'est la reprise après une pause.
+- 2 images où l'arête confirmée a été sautée ou remplacée.
+- Les images où un colon est dessiné dans une case encore rocheuse (0 à 113 selon les passages).
+- Les accélérations passent avec peu de marge (jusqu'à 94 ms au calme, 102 ms sous charge).
 
 Noté le 10 novembre à la demande de l'utilisateur, pour y revenir après la refonte de la publication.
 
