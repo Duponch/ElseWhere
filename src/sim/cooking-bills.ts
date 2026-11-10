@@ -30,7 +30,7 @@ import type { CookingBill, BillSettings } from './cooking-types.ts';
 import type {StagingGeometryReader} from './staging-validation.ts';
 import { SCHEMA_VERSION,type Cell,type Structure,type World } from './types.ts';
 
-export const COOK_TICKS=60; // 300 reference work / 10 local ticks Ã— campfire factor 2.
+export const COOK_TICKS=60; // 300 reference work / 10 local ticks × campfire factor 2.
 export const INGREDIENT_UNITS=10; // 0.5 nutrition for the supported raw ingredients.
 export function newCookingBill(id:number,recipe:ProductionRecipe='simple-meal',version:number=SCHEMA_VERSION):CookingBill {
   const inputs=PRODUCTION_RECIPES[recipe].inputs.filter(i=>(isSchema272OrLater(version)||!isSpearItem272(i))&&(version>=270||!isLongswordItem270(i))&&(version>=269||!isMaceItem269(i))&&(version>=267||!isSmithingProduct267(i))&&(version>=256||!isFutureEcologyItem256(i))&&(version>=197||!V219_ITEM_IDS.some(future=>future===i)));
