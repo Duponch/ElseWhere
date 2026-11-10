@@ -1,6 +1,7 @@
 import {captureActorBeds256,forgetLocalActorBed256,forgetLocalBedOwners256} from './actor-bed-local-256.ts';
 import {registeredCampaign} from './world-map-context.ts';
 import { isBedKind } from './bed-kinds.ts';
+import { filteredStructures } from './structure-navigation.ts';
 import { isColonist } from './affiliation.ts';
 import { prisonBreakActive } from './prison-break-state.ts';
 import { canStandAt } from './furniture-travel.ts';
@@ -69,7 +70,7 @@ export function applyPrisonerMode(world:World,command:{patientId:number;mode:Pri
  * doubles keep their role and owners when a wall merges two existing rooms.
  * No new role is introduced when no prisoner bed exists. */
 export function reconcilePrisoners(world:World):void {
-  const marked=world.structures.filter(s=>isBedKind(s.kind)&&s.prisoner);
+  const marked=filteredStructures(world,'bed-kinds',s=>isBedKind(s.kind)).filter(s=>s.prisoner);
   let captured:RoomTopology|undefined;
   if(marked.length){const map=topology(world);captured=map;const prisons=new Set<number>();
     for(const bed of marked){const room=map.at(bed.x,bed.z);if(room?.kind==='space'&&!room.touchesMapEdge)prisons.add(room.id);}

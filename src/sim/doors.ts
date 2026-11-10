@@ -1,3 +1,4 @@
+import {filteredStructures} from './structure-navigation.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveLocal297} from './core-phase-297.ts';
 import {targetDoorCanOpen263,targetBuildingPlayerUse263} from './world-target-building-263.ts';
@@ -116,7 +117,7 @@ export function applyDoorCommand(world:World,c:DoorCommand):CommandResult {
 interface PhysicalDoors297 {open:Set<Structure>;changed:boolean;visibleChanged297:boolean;moved297:Set<Structure>}
 const physicalDoors297=new WeakMap<World,PhysicalDoors297>();
 function physicalDoorState297(w:World):PhysicalDoors297 {
- let state=physicalDoors297.get(w);if(!state){state={open:new Set(w.structures.filter(s=>isPassageDoor(s.kind)&&s.door?.open)),changed:false,visibleChanged297:false,moved297:new Set()};physicalDoors297.set(w,state);}return state;
+ let state=physicalDoors297.get(w);if(!state){state={open:new Set(filteredStructures(w,'passage-doors',s=>isPassageDoor(s.kind)).filter(s=>s.door?.open)),changed:false,visibleChanged297:false,moved297:new Set()};physicalDoors297.set(w,state);}return state;
 }
 export function invalidatePhysicalDoors297(w:World):void {physicalDoors297.delete(w);}
 /** Only open doors are inspected at physical cadence. Occupants/items are read

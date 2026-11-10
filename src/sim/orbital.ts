@@ -13,7 +13,7 @@ import { ORBITAL_ACTIVE_CHECKS,ORBITAL_CHECK,ORBITAL_CYCLE,ORBITAL_DELIVERY_LIMI
 import type { TradeLedger,TradeReceipt } from './trade-state.ts';
 import type { NeedContext } from './needs.ts';
 import type { CommandResult,Pawn,World } from './types.ts';
-import { structureById } from './structure-navigation.ts';
+import { filteredStructures,structureById } from './structure-navigation.ts';
 
 function emit(w:World,message:string):void {w.events.push({tick:w.tick,type:'command',message});if(w.events.length>80)w.events.splice(0,w.events.length-80);}
 export function adoptOrbital(w:World):void {
@@ -59,7 +59,7 @@ export function advanceOrbital(w:World):void {
   if(leaving.size){for(const ship of state.ships)if(leaving.has(ship.id)&&ship.announced)emit(w,`${ship.name} quitte définitivement l’orbite.`);
     state.ships=state.ships.filter(s=>!leaving.has(s.id));w.piles=w.piles.filter(p=>p.owner.type!=='orbital-ship'||!leaving.has(p.owner.shipId));
     for(const p of w.pawns)if(p.orbitalTrade&&leaving.has(p.orbitalTrade.shipId))stop(w,p);}
-  if(w.structures.some(s=>s.kind==='comms-console'&&isPowerActive(s)))for(const ship of state.ships)if(!ship.announced){ship.announced=true;emit(w,`${ship.name} est détecté en orbite.`);}
+  if(filteredStructures(w,'comms-consoles',s=>s.kind==='comms-console').some(s=>isPowerActive(s)))for(const ship of state.ships)if(!ship.announced){ship.announced=true;emit(w,`${ship.name} est détecté en orbite.`);}
   for(const delivery of [...state.pending])if(w.tick>=delivery.openAt){
     // Exclude this capsule from occupancy only; every other delivery retains its cell.
     const check={...w,orbital:{...state,pending:state.pending.filter(p=>p!==delivery)}};

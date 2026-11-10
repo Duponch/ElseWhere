@@ -15,11 +15,12 @@ import type { LightReader } from './light-environment.ts';
 import type { BombRefuge } from './mini-turret-state.ts';
 import type { Cell,Pawn,Structure,World } from './types.ts';
 import { miniTurretExplosive } from './bomb-eligibility.ts';
-import { structureById } from './structure-navigation.ts';
+import { filteredStructures,structureById } from './structure-navigation.ts';
 
 const distance=(a:Cell,b:Cell)=>(a.x-b.x)**2+(a.z-b.z)**2;
 /** Capture once after combat, then borrow through the actor pass. */
-export const captureBombDangerSources=(w:World):readonly Structure[]=>w.schemaVersion>=193?w.structures.filter(s=>actualBombWick256(s)):[];
+// actualBombWick256 holds only for the three cryptosleep casket kinds.
+export const captureBombDangerSources=(w:World):readonly Structure[]=>w.schemaVersion>=193?filteredStructures(w,'cryptosleep-casket-kinds',s=>s.kind==='ancient-cryptosleep-casket'||s.kind==='cryptosleep-casket'||s.kind==='ship-cryptosleep-casket').filter(s=>actualBombWick256(s)):[];
 export function validBombRefugeShape(v:unknown,version=193):v is BombRefuge {
   if(version<193||!v||typeof v!=='object'||Array.isArray(v))return false;
   const r=v as Record<string,unknown>,t=r.target as Record<string,unknown>|undefined;

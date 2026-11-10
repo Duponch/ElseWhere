@@ -1,3 +1,4 @@
+import {filteredStructures} from './structure-navigation.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
@@ -39,7 +40,10 @@ export function shelfStorageCells(s:Structure):StorageCell[] {
 }
 /** A read-only decision view, never a second mutable storage registry. */
 export function storageCells(world:Pick<World,'stockpiles'|'structures'>&Partial<Pick<World,'schemaVersion'|'worldFactions'>>):StorageCell[] {
-  return [...world.stockpiles,...world.structures.filter(s=>targetBuildingPlayerUse263(world,s)).flatMap(shelfStorageCells)];
+  // shelfStorageCells is empty but for shelf kinds: on a full World, the shared
+  // per-kind list visits the same shelves in the same order.
+  const structures='width' in world&&'tiles' in world?filteredStructures(world as World,'shelf-kinds',s=>isShelfKind(s.kind)):world.structures;
+  return [...world.stockpiles,...structures.filter(s=>targetBuildingPlayerUse263(world,s)).flatMap(shelfStorageCells)];
 }
 export function storageCellById(world:Pick<World,'stockpiles'|'structures'>&Partial<Pick<World,'schemaVersion'|'worldFactions'>>,id:number):StorageCell|undefined {
   const zone=world.stockpiles.find(z=>z.id===id);if(zone)return zone;
