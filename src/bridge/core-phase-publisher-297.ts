@@ -10,7 +10,7 @@ import {effectiveCore297} from '../sim/core-phase-297';
 import {coreAnchor297,coreMapId297,validCoreAudioCues297} from './core-phase-data-297';
 import type {CoreActorProjection297,CorePhaseAnchor297,CorePhaseEnvelope297,CoreFullPhaseMetadata297,CoreProjectileEvents297,CoreProjectileTrace297,CoreMotionPatch297,CoreHumanPose297,CoreDoorPatch297,CorePilePatch297,CorePathKeep297} from './core-phase-projection-297';
 import {structureById} from '../sim/structure-navigation';
-import {captureCoreActorFast297,captureCoreActorHeldPath297,frozenDataCopy297} from './core-frozen-copy-297';
+import {captureCoreActorFast297,captureCoreActorHeldPath297,frozenDataCopy297,sameCapturedActor297} from './core-frozen-copy-297';
 
 type PriorTrack={sources:readonly PresentationSegment[];values:readonly PresentationSegment[]};
 const own=Object.hasOwn;
@@ -177,6 +177,11 @@ export class CorePhasePublisher297 {
    // live path is its tail (the actor advanced along its route), the row
    // carries no cells and the packet says how many to keep.
    const keep=frontier&&sent&&sentCells&&sent.kind===slot.kind&&sent.index===slot.index?heldPathTail297(sent.fields.path,sentCells,live):-1;
+   // An unchanged actor (most of them after a macro tick marks all dirty)
+   // is kept unsent without first copying its row: the same answer as the
+   // comparison of the copy below (sameCapturedActor297).
+   if(sent&&sent.kind===slot.kind&&sent.index===slot.index&&!this.poseDirty297.has(id)&&(keep<0||keep===sent.fields.path.length)
+    &&sameCapturedActor297(slot.kind,source,sent.fields as unknown as Readonly<Record<string,unknown>>,keep>=0))continue;
    let row:CoreActorProjection297,actual:CoreActorProjection297,cells:readonly unknown[];
    if(keep>=0){
     const path=sent!.fields.path,from=path.length-keep;

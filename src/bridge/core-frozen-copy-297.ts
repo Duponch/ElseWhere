@@ -97,3 +97,48 @@ function captureActor(kind:CoreActorProjection297['kind'],index:number,actor:Paw
  return frozenDataCopy297({kind,id:actor.id,index,fields:data}) as unknown as CoreActorProjection297;
 }
 
+/* Whether a live value would copy (frozenDataCopy297) to a value equal to the
+ * sent copy `sent` (sameCoreValue297), without copying: the same refusals
+ * (plain own enumerable data, dense arrays, depth 24, finite numbers; a
+ * finite sent copy bounds cycles and the budget) and the same key order. */
+function sameLiveData297(sent:unknown,live:unknown,depth:number):boolean {
+ if(depth>24)return false;
+ if(sent===null||typeof sent!=='object')return Object.is(sent,live)&&(typeof live!=='number'||Number.isFinite(live));
+ if(live===null||typeof live!=='object')return false;
+ if(Array.isArray(sent)){
+  if(!Array.isArray(live)||Object.getPrototypeOf(live)!==Array.prototype||live.length!==sent.length||Reflect.ownKeys(live).length!==live.length+1)return false;
+  for(let i=0;i<live.length;i++){const d=Object.getOwnPropertyDescriptor(live,String(i));if(!d?.enumerable||!Object.hasOwn(d,'value')||!sameLiveData297(sent[i],d.value,depth+1))return false;}
+  return true;
+ }
+ if(Array.isArray(live)||Object.getPrototypeOf(live)!==Object.prototype)return false;
+ const keys=Object.keys(sent),liveKeys=Reflect.ownKeys(live);if(liveKeys.length!==keys.length)return false;
+ for(let i=0;i<keys.length;i++){
+  const k=liveKeys[i];if(k!==keys[i])return false;
+  const d=Object.getOwnPropertyDescriptor(live,k);if(!d||d.enumerable!==true||!Object.hasOwn(d,'value')||!sameLiveData297((sent as Record<string,unknown>)[k],d.value,depth+1))return false;
+ }
+ return true;
+}
+/** True when captureCoreActorFast297 (heldPath false) or
+ * captureCoreActorHeldPath297 keeping the whole sent path (heldPath true) would
+ * succeed and give fields equal to `sentFields` (sameCoreValue297), with no
+ * copy made: the same fields in the same order, each own data, each value
+ * equal. A held path is the sent path itself and is not compared. The phase
+ * publisher marks every actor changed after a macro tick and keeps an
+ * unchanged row unsent; this answers that before paying the copy. */
+export function sameCapturedActor297(kind:CoreActorProjection297['kind'],actor:Pawn|WildAnimal|Mechanoid,sentFields:Readonly<Record<string,unknown>>,heldPath:boolean):boolean {
+ const required:readonly string[]=kind==='human'?CORE_HUMAN_REQUIRED297:kind==='animal'?CORE_ANIMAL_REQUIRED297:CORE_MECH_REQUIRED297;
+ const optional:readonly string[]=kind==='human'?CORE_HUMAN_OPTIONAL297:kind==='animal'?CORE_ANIMAL_OPTIONAL297:CORE_MECH_OPTIONAL297;
+ const source=actor as unknown as Record<string,unknown>,sentKeys=Object.keys(sentFields);let at=0;
+ const seen=new Set<string>();
+ const take=(key:string,isRequired:boolean):boolean=>{
+  const d=Object.getOwnPropertyDescriptor(source,key);
+  if(!d)return !isRequired;
+  if(!d.enumerable||!Object.hasOwn(d,'value'))return false;
+  if(seen.has(key))return true;seen.add(key);
+  if(sentKeys[at++]!==key)return false;
+  return heldPath&&key==='path'?true:sameLiveData297(sentFields[key],d.value,1);
+ };
+ for(const key of required)if(!take(key,true))return false;
+ for(const key of optional)if(!take(key,required.includes(key)))return false;
+ return at===sentKeys.length;
+}
