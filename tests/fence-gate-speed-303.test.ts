@@ -2,6 +2,7 @@ import {expect,test} from 'vitest';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
 import {builtDoorState,doorMotionTicks,doorOpenness,fenceGateOpenTicks303,manualDoorOpenTicks,newDoorState} from '../src/sim/door-rules.ts';
 import {readyDoorEntry} from '../src/sim/doors.ts';
+import {navigationCosts} from '../src/sim/furniture-travel.ts';
 import {validateDoors} from '../src/sim/door-save.ts';
 import {serializeWorld,deserializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import {SCHEMA_VERSION,type Structure,type World} from '../src/sim/types.ts';
@@ -47,4 +48,15 @@ test('a gate of an older save takes the gate speed at its next opening, without 
   const migrated=deserializeWorld(JSON.stringify(json));
   expect(migrated.schemaVersion).toBe(303);expect(migrated).toEqual(old);
   expect(migrated.structures.find(s=>s.id===idle.id)!.door!.duration).toBeUndefined();
+});
+
+test('a human path search prices a closed gate at its opening time, like a door',()=>{
+  const bare=deconstructionCamp(1),i=20*bare.width+20,ground=navigationCosts(bare,bare.pawns[0]!).costs?.get(i)??0;
+  const w=deconstructionCamp(1),p=w.pawns[0]!;gate(w,'wood',20,20);
+  // Core path costs: 33 Core ticks more for a closed wood gate, its TicksToOpenNow.
+  expect(navigationCosts(w,p).costs?.get(i)).toBe(ground+33);
+  // A cell, not a pawn, and the same gate before schema 303 cost nothing more.
+  expect(navigationCosts(w,{x:p.x,z:p.z}).costs?.get(i)).toBe(navigationCosts(bare,{x:p.x,z:p.z}).costs?.get(i));
+  const old=deconstructionCamp(1);(old as {schemaVersion:number}).schemaVersion=302;gate(old,'wood',20,20);
+  expect(navigationCosts(old,old.pawns[0]!).costs?.get(i)??0).toBe(ground);
 });

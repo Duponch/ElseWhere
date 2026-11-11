@@ -7,14 +7,14 @@ import {isWetTerrain} from './shallow-water.ts';
 import {MARSH_PATH_COST_CORE,MARSH_PERCEIVED_CORE} from './marsh.ts';
 import {snowTravelDelay,snowSearchCost} from './snow-rules.ts';
 import { fireNavigationCosts,addFireNavigationCosts } from './fire-navigation.ts';
-import { doorWait,isRoomDoor } from './door-rules.ts';
+import { doorWait,isFenceGateSpeedSchema303,isRoomDoor } from './door-rules.ts';
 import { footprintCells, footprintContains } from './definitions.ts';
 import { frameAt, frameCosts, FRAME_TRAVEL_DELAY } from './construction-costs.ts';
 import { overlayNavigationCosts,type NavigationCostLookup } from './navigation-costs.ts';
 import { FLOOR_DEFINITIONS } from './flooring.ts';
 import { spikeTrapKnowsOf,spikeTrapNavigationActor,SPIKE_TRAP_SEARCH_COST,SPIKE_TRAP_WALK_DELAY } from './spike-trap-state.ts';
 import type { Cell, StructureKind, World } from './types.ts';
-import { captureStructureNavigation,type StructureNavigationGeometry } from './structure-navigation.ts';
+import { captureStructureNavigation,filteredStructures,type StructureNavigationGeometry } from './structure-navigation.ts';
 import { terrainWriteCount,verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
 import { PILE_CHUNK,PILE_MATERIAL_FLOOR,materialFloorPile,pileIndex,pileIndexMismatch,verifyPileIndex } from './pile-index.ts';
 
@@ -320,6 +320,13 @@ export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTe
   // Door wait is added after the terrain/object/material maximum, not compared
   // with it. Preserve present zero entries for fully open doors on bare floors.
   for(const s of geometry?.roomDoors??world.structures)if(isRoomDoor(s.kind)) {const i=s.z*width+s.x;repeaters.delete(i);costs.set(i,Math.max(costs.get(i)??0,terrain[i]??0)+Math.round(doorWait(s,isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick)/3*1000));}
+  // Schema 303: RimWorld 1.6 prices a fence gate like any door in a pawn's path
+  // search (PathUtility.GetDoorCost: its TicksToOpenNow unless in free
+  // passage). Applied to humans; animals keep their own gate rules.
+  if(isFenceGateSpeedSchema303(version)&&origin&&'id' in origin&&world.pawns.some(p=>p.id===(origin as {id:unknown}).id)) {
+    const now=isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick;
+    for(const s of filteredStructures(world,'fence-gates',s=>s.kind==='fence-gate')){const i=s.z*width+s.x;costs.set(i,Math.max(costs.get(i)??0,terrain[i]??0)+Math.round(doorWait(s,now)/3*1000));}
+  }
   const fire=fireNavigationCosts(world);
   // Trap avoidance is additive after the ordinary terrain/object maximum, like
   // fire danger. Its 800 Core cost already includes avoidance: do not add the
