@@ -1,3 +1,4 @@
+import {resourceArrayDelta} from './resource-array-delta.ts';
 import {STRUCTURE_DEFINITIONS} from './definitions.ts';
 import type {PlantSpecies} from './biome-flora.ts';
 import type {Job,JobKind,Resource,StructureKind,World} from './types.ts';
@@ -19,23 +20,44 @@ export const isConstructionLightPlant=(resource:Pick<Resource,'kind'|'species'>)
   resource.kind!=='rock'&&plantHarvestWorkCore(resource)<=200;
 /** Existing import retained; all eight current floors have fertility0. */
 export const isFloorLightPlant=isConstructionLightPlant;
-type LightPlantIndex={readonly length:number;readonly width:number;readonly height:number;readonly cells:ReadonlySet<number>;readonly other:readonly Resource[]};
+type LightPlantIndex={length:number;readonly width:number;readonly height:number;readonly counts:Uint32Array;readonly other:Resource[]};
 const lightPlantIndexes=new WeakMap<readonly Resource[],LightPlantIndex>();
+/* The last indexed resources array: a new array that only drops some of its
+ * resources and appends others (resourceArrayDelta) takes over its index,
+ * updated by those differences, instead of a full rebuild. The old array then
+ * loses its index (rebuilt if it is ever asked again). */
+let lastLightPlants:{list:readonly Resource[];index:LightPlantIndex}|undefined;
+const LIGHT_PLANT_DELTA_LIMIT=256;
 /** Whether a light plant stands on one of the cells: the same answer as
- * scanning `world.resources`, from an index per resources array. A running
- * World replaces that array instead of editing it in place (generation pushes
+ * scanning `world.resources`, from an index per resources array (a count of
+ * light plants per in-map cell, and the others in a list). A running World
+ * replaces that array instead of editing it in place (generation pushes
  * change its length, which rebuilds the index), and a resource's kind,
  * species and position never change. */
 export function lightPlantOnCells(world:Pick<World,'resources'|'width'|'height'>,cells:readonly {x:number;z:number}[]):boolean {
   const list=world.resources,{width,height}=world,inside=(x:number,z:number)=>Number.isSafeInteger(x)&&Number.isSafeInteger(z)&&x>=0&&z>=0&&x<width&&z<height;
   let index=lightPlantIndexes.get(list);
   if(!index||index.length!==list.length||index.width!==width||index.height!==height){
-    const set=new Set<number>(),other:Resource[]=[];
-    for(const r of list)if(isConstructionLightPlant(r)){if(inside(r.x,r.z))set.add(r.z*width+r.x);else other.push(r);}
-    index={length:list.length,width,height,cells:set,other};lightPlantIndexes.set(list,index);
+    const add=(target:LightPlantIndex,r:Resource,step:1|-1)=>{
+      if(!isConstructionLightPlant(r))return;
+      if(inside(r.x,r.z))target.counts[r.z*width+r.x]!+=step;
+      else if(step>0)target.other.push(r);else{const k=target.other.indexOf(r);if(k>=0)target.other.splice(k,1);}
+    };
+    const last=lastLightPlants,old=last?.index;
+    const delta=!index&&last&&old&&old.width===width&&old.height===height&&old.length===last.list.length&&lightPlantIndexes.get(last.list)===old
+      ?resourceArrayDelta(last.list,list,LIGHT_PLANT_DELTA_LIMIT):undefined;
+    if(delta&&old){
+      for(const r of delta.removed)add(old,r,-1);
+      for(let k=delta.appendedFrom;k<list.length;k++)add(old,list[k]!,1);
+      old.length=list.length;lightPlantIndexes.delete(last!.list);index=old;
+    }else{
+      index={length:list.length,width,height,counts:new Uint32Array(width*height),other:[]};
+      for(const r of list)add(index,r,1);
+    }
+    lightPlantIndexes.set(list,index);lastLightPlants={list,index};
   }
   const found=index;
-  return cells.some(c=>inside(c.x,c.z)&&found.cells.has(c.z*width+c.x))||found.other.some(r=>cells.some(c=>c.x===r.x&&c.z===r.z));
+  return cells.some(c=>inside(c.x,c.z)&&found.counts[c.z*width+c.x]!>0)||found.other.some(r=>cells.some(c=>c.x===r.x&&c.z===r.z));
 }
 export function constructionPlantBlocks(job:Job,resource:Resource):boolean {
   // Keep an accepted historical clearance's real elapsed work after migration.

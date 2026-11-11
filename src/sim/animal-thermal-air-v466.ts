@@ -28,13 +28,12 @@ export function createAnimalAirReader466(world:World):AnimalAirReader466 {
       regions=current;built=true;owners=current?current.slice():[];fallback=undefined;
       const size=world.width*world.height;
       // Preserve the public point reader's last-region priority on overlaps.
-      let valid=true;
-      for(const region of owners){for(const c of region.cells)if(!(Number.isInteger(c)&&c>=0&&c<size)){valid=false;break;}if(!valid)break;}
-      if(valid){
-        if(airScratch.stamp.length<size){airScratch.stamp=new Uint32Array(size);airScratch.slot=new Int32Array(size);}
-        build=++airScratch.build;const {stamp,slot}=airScratch;
-        for(let i=0;i<owners.length;i++)for(const c of owners[i]!.cells){stamp[c]=build;slot[c]=i;}
-      }else{fallback=new Map();for(const region of owners)for(const c of region.cells)fallback.set(c,region);}
+      // One pass over the cells; a cell that is not an index of this map
+      // (never in a real layout) falls back to the Map built from scratch.
+      if(airScratch.stamp.length<size){airScratch.stamp=new Uint32Array(size);airScratch.slot=new Int32Array(size);}
+      build=++airScratch.build;const {stamp,slot}=airScratch;let valid=true;
+      fill:for(let i=0;i<owners.length;i++)for(const c of owners[i]!.cells){if(!(Number.isInteger(c)&&c>=0&&c<size)){valid=false;break fill;}stamp[c]=build;slot[c]=i;}
+      if(!valid){build=++airScratch.build;fallback=new Map();for(const region of owners)for(const c of region.cells)fallback.set(c,region);}
     }
     const key=cell.z*world.width+cell.x;
     const region=fallback?fallback.get(key):airScratch.stamp[key]===build?owners[airScratch.slot[key]!]:undefined;

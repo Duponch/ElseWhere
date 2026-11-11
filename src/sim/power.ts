@@ -1,19 +1,22 @@
 import { PowerTopologyCache, bestPowerParent, validPowerParent, connectedPowerGroups } from './power-topology.ts';
 import { powerWatts,powerPotential,isPowerTrader } from './power-rules.ts';
 import { isPowerConnector } from './power-grid.ts';
+import { filteredStructures } from './structure-navigation.ts';
 import { sunLampScheduled } from './sun-lamp.ts';
 import { electricityDisabledAtCore } from './cassandra-world.ts';
 import { empStructureActive } from './emp-state.ts';
 import { BATTERY_START_RESERVE,BATTERY_START_THRESHOLD,batteryQuanta,leakBattery,chargeBatteries,dischargeBatteries,type BatteryOwner } from './power-battery.ts';
 import type { World, Structure } from './types.ts';
 
+const isConnectorKind=(s:Structure):boolean=>isPowerConnector(s.kind);
 const owners=new WeakMap<World,PowerTopologyCache>();
 function cache(world:World):PowerTopologyCache {let c=owners.get(world);if(!c){c=new PowerTopologyCache();owners.set(world,c);}return c;}
 /** Retain a valid parent, including when its source runs out of fuel. */
 export function reconcilePower(world:World):void {
   if(!world.structures.some(s=>s.power))return;
   const topology=cache(world).read(world);
-  for(const s of world.structures)if(isPowerConnector(s.kind)&&s.power) {
+  // The shared connector list: the same structures, in array order.
+  for(const s of filteredStructures(world,'power-connectors',isConnectorKind))if(s.power) {
     const p=s.power;
     // Clear before the balanced-network fast path. The player's actual switch
     // and connection survive the night; morning still uses ordinary startup.
@@ -40,7 +43,10 @@ const wantsPower=(s:Structure,world:World):boolean=>isPowerTrader(s.kind)&&!s.br
  * Our random stream and integer W are independent of Unity's implementation. */
 export function advancePower(world:World):void {
   reconcilePower(world);
-  const batteries=[...world.structures,...world.packed.map(p=>p.building)].filter((s):s is Structure&BatteryOwner=>!!s.battery&&!s.breakdown);
+  // Structures then packed buildings, in order, without copying the lists.
+  const batteries:(Structure&BatteryOwner)[]=[];
+  for(const s of world.structures)if(s.battery&&!s.breakdown)batteries.push(s as Structure&BatteryOwner);
+  for(const p of world.packed){const s=p.building;if(s.battery&&!s.breakdown)batteries.push(s as Structure&BatteryOwner);}
   if(!world.structures.some(s=>s.power)&&!batteries.length)return;
   const condition=world.worldIncidents?.active;
   const disabledDuringTick=!!condition&&condition.start*10<world.tick*10&&condition.endCore>(world.tick-1)*10;

@@ -39,14 +39,32 @@ export function temperatureAt(world:World,cell:Cell):number {
 
 export class TemperatureView {
   private temperatures?:Map<number,number>;
+  /* Without a layout: region slot + 1 per cell (0: no region) and the region
+   * temperatures read at construction, the same answers as a Map from cell to
+   * temperature filled in region order (last region wins). The Map is kept
+   * when a region cell is not an index of this map. */
+  private slots?:Int32Array;private temps?:number[];
   private layout?:ThermalLayout;
   private regions:ThermalRegion[];
   readonly outside:number;
   constructor(world:World,layout?:ThermalLayout) {
     this.outside=outdoorTemperature(world);this.layout=layout;this.regions=world.thermal?.regions??[];
-    if(!layout){this.temperatures=new Map();for(const r of this.regions)for(const i of r.cells)this.temperatures.set(i,r.temperature);}
+    if(!layout){
+      const regions=this.regions,size=world.width*world.height;let valid=Number.isSafeInteger(size)&&size>=0;
+      if(valid){
+        const slots=new Int32Array(size),temps:number[]=[];
+        fill:for(let k=0;k<regions.length;k++){const r=regions[k]!;temps.push(r.temperature);for(const i of r.cells){if(!(Number.isInteger(i)&&i>=0&&i<size)){valid=false;break fill;}slots[i]=k+1;}}
+        if(valid){this.slots=slots;this.temps=temps;}
+      }
+      if(!valid){this.temperatures=new Map();for(const r of regions)for(const i of r.cells)this.temperatures.set(i,r.temperature);}
+    }
   }
-  at(world:Pick<World,'width'>,cell:Cell):number {const i=cell.z*world.width+cell.x;return this.layout?this.regions[this.layout.indices[i]!]?.temperature??this.outside:this.temperatures!.get(i)??this.outside;}
+  at(world:Pick<World,'width'>,cell:Cell):number {
+    const i=cell.z*world.width+cell.x;
+    if(this.layout)return this.regions[this.layout.indices[i]!]?.temperature??this.outside;
+    if(this.slots){const slot=this.slots[i];return slot?this.temps![slot-1]??this.outside:this.outside;}
+    return this.temperatures!.get(i)??this.outside;
+  }
 }
 
 /** Ten Core ticks per local step. Deterministic mean wall exchange, thin roofs
