@@ -19,8 +19,10 @@ export type ResidentFilthPublication=Wire<SnapshotMessage<true>>;
 const own=(value:object,key:PropertyKey)=>Object.hasOwn(value,key);
 const integer=(value:unknown,min=0,max=Number.MAX_SAFE_INTEGER):value is number=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=min&&value<=max;
 function record(value:unknown):value is Data {
- return !!value&&typeof value==='object'&&!Array.isArray(value)&&Object.getPrototypeOf(value)===Object.prototype
-  &&Reflect.ownKeys(value).every(key=>typeof key==='string'&&Object.getOwnPropertyDescriptor(value,key)?.enumerable===true&&own(Object.getOwnPropertyDescriptor(value,key)!,'value'));
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.getPrototypeOf(value)!==Object.prototype)return false;
+ // One descriptor read per key (the same answer as reading it twice).
+ for(const key of Reflect.ownKeys(value)){if(typeof key!=='string')return false;const field=Object.getOwnPropertyDescriptor(value,key);if(field?.enumerable!==true||!own(field,'value'))return false;}
+ return true;
 }
 function dense(value:unknown):value is unknown[] {
  if(!Array.isArray(value)||Object.getPrototypeOf(value)!==Array.prototype||Reflect.ownKeys(value).length!==value.length+1)return false;

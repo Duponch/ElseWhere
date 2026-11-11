@@ -7,7 +7,12 @@ import type {SnapshotMessage} from './snapshots.ts';
 type Data=Record<string,unknown>;
 const own=(v:object,k:PropertyKey)=>Object.hasOwn(v,k);
 const integer=(v:unknown,min=0):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min;
-function record(v:unknown):v is Data {return !!v&&typeof v==='object'&&Object.getPrototypeOf(v)===Object.prototype&&Reflect.ownKeys(v).every(k=>typeof k==='string'&&Object.getOwnPropertyDescriptor(v,k)?.enumerable===true&&own(Object.getOwnPropertyDescriptor(v,k)!,'value'));}
+function record(v:unknown):v is Data {
+ if(!v||typeof v!=='object'||Object.getPrototypeOf(v)!==Object.prototype)return false;
+ // One descriptor read per key (the same answer as reading it twice).
+ for(const k of Reflect.ownKeys(v)){if(typeof k!=='string')return false;const d=Object.getOwnPropertyDescriptor(v,k);if(d?.enumerable!==true||!own(d,'value'))return false;}
+ return true;
+}
 function dense(v:unknown):v is unknown[]{if(!Array.isArray(v)||Object.getPrototypeOf(v)!==Array.prototype||Reflect.ownKeys(v).length!==v.length+1)return false;for(let i=0;i<v.length;i++){const d=Object.getOwnPropertyDescriptor(v,String(i));if(!d?.enumerable||!own(d,'value'))return false;}return true;}
 const exact=(v:Data,keys:string[])=>Object.keys(v).length===keys.length&&Object.keys(v).every(k=>keys.includes(k));
 function validPresentationStop297(v:Data,version:number):boolean {
@@ -29,12 +34,22 @@ function same(a:unknown,b:unknown):boolean {
  return keys.length===other.length&&keys.every((k,i)=>k===other[i]&&same((a as Data)[k as string],b[k as string]));
 }
 function freezeCopied(v:unknown):unknown {const result=copy(v);const freeze=(x:unknown):void=>{if(x&&typeof x==='object'){for(const key of Object.keys(x))freeze((x as Data)[key]);Object.freeze(x);}};freeze(result);return result;}
-function segment(v:unknown,version:number):v is PresentationSegment {
+/** The checks of segment() before its copy test. */
+function segmentFields(v:unknown,version:number):v is PresentationSegment {
  if(!record(v)||Object.keys(v).some(k=>!['from','to','start','end','terrainDelay','speedFactor','stagger','stuns','animalFlight','snowEntryPending','edgeStart','fromFraction','toFraction',...(isCorePhysicalSchema297(version)?['coreMove297','coreMoveWalk297','stop297']:[])].includes(k)))return false;
  if(!validCapturedCoreMove297(v,version)||!validPresentationStop297(v,version))return false;
  for(const name of ['from','to']){const c=v[name];if(!record(c)||!exact(c,['x','z'])||typeof c.x!=='number'||!Number.isFinite(c.x)||typeof c.z!=='number'||!Number.isFinite(c.z))return false;}
  if(typeof v.start!=='number'||!Number.isFinite(v.start)||typeof v.end!=='number'||!Number.isFinite(v.end)||v.end<v.start)return false;
+ return true;
+}
+function segment(v:unknown,version:number):v is PresentationSegment {
+ if(!segmentFields(v,version))return false;
  try{copy(v);return true;}catch{return false;}
+}
+/** A valid segment's copy, made once (segment() then copy() copied it twice). */
+function copiedSegment(v:unknown,version:number):PresentationSegment|undefined {
+ if(!segmentFields(v,version))return undefined;
+ try{return copy(v) as PresentationSegment;}catch{return undefined;}
 }
 interface Stamp {readonly owner:object;readonly generation:number}
 const certified=new WeakMap<object,Stamp>();
@@ -79,7 +94,7 @@ export class ResidentMotionEncoder {
       keep++;
      }
     }
-    const appended=current.slice(keep).map(value=>{if(!segment(value,packet.world.schemaVersion))throw Error('Invalid recorded motion segment');return copy(value) as PresentationSegment;});
+    const appended=current.slice(keep).map(value=>{const copied=copiedSegment(value,packet.world.schemaVersion);if(!copied)throw Error('Invalid recorded motion segment');return copied;});
     const values=prior?prior.values.slice(drop,drop+keep).concat(appended):appended;
     if(!prior||drop||keep!==prior.sources.length||appended.length)rows.push({id:track.id,drop,keep,append:appended});
     next.push({id:track.id,sources:current.slice(),values});
