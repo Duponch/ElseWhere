@@ -44,6 +44,9 @@ export interface PileIndex {
   readonly width:number;readonly height:number;readonly version:number;
   /** Ground piles of each in-map cell, in array order. */
   readonly groundAt:ReadonlyMap<number,readonly MaterialPile[]>;
+  /** Number of ground piles outside the map (absent from groundAt): a reader
+   * keyed by `z*width+x` scans instead while there is any. */
+  readonly groundOutside:number;
   /** PILE_CHUNK / PILE_MATERIAL_FLOOR of the in-map ground piles of each cell. */
   readonly groundFacts:Uint8Array;
   /** Every ground chunk pile (any position), in array order. */
@@ -60,7 +63,7 @@ export interface PileIndex {
   readonly equipment:ReadonlyMap<number,MaterialPile>;
 }
 interface Entry extends PileIndex {
-  generation:number;epoch:number;length:number;first:MaterialPile|undefined;last:MaterialPile|undefined;
+  generation:number;epoch:number;length:number;first:MaterialPile|undefined;last:MaterialPile|undefined;groundOutside:number;
   readonly groundAt:Map<number,MaterialPile[]>;readonly groundChunks:MaterialPile[];readonly groundMaterialFloors:MaterialPile[];readonly groundSlag:MaterialPile[];
   readonly wornOffsets:Map<number,number>;readonly undefinedWorn:Set<number>;readonly equipment:Map<number,MaterialPile>;
   /** pile, owner, kind, item of each indexed pile, in array order. */
@@ -87,7 +90,7 @@ function add(e:Entry,piles:readonly MaterialPile[],from:number):void {
       if(inMap(owner.x,owner.z,width,height)){
         const i=owner.z*width+owner.x,list=groundAt.get(i);if(list)list.push(p);else groundAt.set(i,[p]);
         groundFacts[i]=groundFacts[i]!|(chunk?PILE_CHUNK:0)|(floor?PILE_MATERIAL_FLOOR:0);
-      }
+      }else e.groundOutside++;
     }else if(owner.type==='apparel'){
       if(Number.isInteger(owner.pawnId)){
         const definition=Object.hasOwn(APPAREL,p.item)?APPAREL[p.item as ApparelItem]:undefined;
@@ -102,7 +105,7 @@ function build(world:World):Entry {
   const piles=world.piles,width=world.width,height=world.height;
   const e:Entry={width,height,version:world.schemaVersion,groundAt:new Map(),groundFacts:new Uint8Array(width*height),groundChunks:[],groundMaterialFloors:[],groundSlag:[],
     wornOffsets:new Map(),undefinedWorn:new Set(),equipment:new Map(),seen:[],
-    generation,epoch,length:piles.length,first:piles[0],last:piles[piles.length-1]};
+    generation,epoch,length:piles.length,first:piles[0],last:piles[piles.length-1],groundOutside:0};
   add(e,piles,0);
   return e;
 }

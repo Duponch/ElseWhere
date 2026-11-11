@@ -17,6 +17,8 @@ import { serviceCell } from './service-reservations.ts';
 import { spikeTrapPlacementAllowed } from './spike-trap-state.ts';
 import { isShelfKind,shelfFixedAccepts } from './shelf-storage.ts';
 import { structureById } from './structure-navigation.ts';
+import { resourceArrayDelta } from './resource-array-delta.ts';
+import { pileIndex,pileIndexMismatch,verifyPileIndex } from './pile-index.ts';
 
 export const isConstruction = (job: Pick<Job,'kind'>): boolean => job.kind==='build-bridge'||job.kind==='install'||job.kind==='lay-floor'||job.kind in STRUCTURE_DEFINITIONS;
 export const containsCell = (job: Job, cell: Cell): boolean => footprintCells(job).some(c=>c.x===cell.x&&c.z===cell.z);
@@ -48,28 +50,64 @@ export function constructionObstructions(world:World,candidates:readonly Job[]=w
   for(const pack of world.packed??[])if(pack.owner.type==='ground')for(const id of sites.get(pack.owner.z*world.width+pack.owner.x)??[])if(clearItems.has(id)&&world.jobs.find(j=>j.id===id)?.furniture?.structureId!==pack.building.id)result.get(id)!.pack??=pack;
   return result;
 }
-type ResourceCellIndex={readonly length:number;readonly width:number;readonly byCell:ReadonlyMap<number,readonly number[]>};
+type ResourceCellIndex={length:number;readonly width:number;readonly byCell:Map<number,Resource[]>};
 const resourceCellIndexes=new WeakMap<readonly Resource[],ResourceCellIndex>();
+/** The list whose index was last built or derived (deriving moves it on). */
+let lastResourceList:readonly Resource[]|undefined;
+const RESOURCE_CELL_DELTA_LIMIT=256;
+function buildResourceCellIndex(list:readonly Resource[],width:number):ResourceCellIndex {
+  const byCell=new Map<number,Resource[]>();
+  for(let i=0;i<list.length;i++){const r=list[i]!,key=r.z*width+r.x,at=byCell.get(key);if(at)at.push(r);else byCell.set(key,[r]);}
+  return {length:list.length,width,byCell};
+}
+/** Moves the index of `previous` to `next` when `next` is `previous` with some
+ * resources dropped and new ones appended (resourceArrayDelta): each cell
+ * list keeps array order. Validated before any change; false leaves it intact. */
+function deriveResourceCellIndex(previous:readonly Resource[],index:ResourceCellIndex,next:readonly Resource[]):boolean {
+  const width=index.width;if(previous.length!==index.length)return false;
+  const delta=resourceArrayDelta(previous,next,RESOURCE_CELL_DELTA_LIMIT);if(!delta)return false;
+  for(const r of delta.removed){const at=index.byCell.get(r.z*width+r.x);if(!at||!at.includes(r))return false;}
+  for(const r of delta.removed){const key=r.z*width+r.x,at=index.byCell.get(key)!;at.splice(at.indexOf(r),1);if(!at.length)index.byCell.delete(key);}
+  for(let k=delta.appendedFrom;k<next.length;k++){const r=next[k]!,key=r.z*width+r.x,at=index.byCell.get(key);if(at)at.push(r);else index.byCell.set(key,[r]);}
+  index.length=next.length;resourceCellIndexes.delete(previous);resourceCellIndexes.set(next,index);
+  return true;
+}
+function resourceCellIndex(world:World):ResourceCellIndex {
+  const list=world.resources,width=world.width;let index=resourceCellIndexes.get(list);
+  if(index&&index.length===list.length&&index.width===width)return index;
+  const previous=lastResourceList,old=previous&&previous!==list?resourceCellIndexes.get(previous):undefined;
+  if(!index&&previous&&old&&old.width===width&&deriveResourceCellIndex(previous,old,list))index=old;
+  else {index=buildResourceCellIndex(list,width);resourceCellIndexes.set(list,index);}
+  lastResourceList=list;return index;
+}
 /** The first resource, in array order, whose cell key `z*width+x` is one of
  * the keys and that is accepted: the same answer as `world.resources.find`
  * with that key test. Indexed per resources array, which a running World
  * replaces instead of editing in place; a resource never moves. */
 function firstResourceAt(world:World,keys:ReadonlySet<number>,accept:(resource:Resource)=>boolean):Resource|undefined {
-  const list=world.resources;let index=resourceCellIndexes.get(list);
-  if(!index||index.length!==list.length||index.width!==world.width){
-    const byCell=new Map<number,number[]>();
-    for(let i=0;i<list.length;i++){const r=list[i]!,key=r.z*world.width+r.x,at=byCell.get(key);if(at)at.push(i);else byCell.set(key,[i]);}
-    index={length:list.length,width:world.width,byCell};resourceCellIndexes.set(list,index);
-  }
-  let best=-1;
-  for(const key of keys)for(const i of index.byCell.get(key)??[])if((best<0||i<best)&&accept(list[i]!))best=i;
-  return best<0?undefined:list[best];
+  const index=resourceCellIndex(world);
+  let found:Resource|undefined,several:Set<Resource>|undefined;
+  for(const key of keys)for(const r of index.byCell.get(key)??[])if(accept(r)){if(found)(several??=new Set([found])).add(r);else found=r;break;}
+  // Several cells hold one: the first of them in array order.
+  if(several)for(const r of world.resources)if(several.has(r))return r;
+  return found;
+}
+/** The first ground pile, in array order, on one of the keys `z*width+x` and
+ * accepted: `world.piles.find` with that test, read from the pile index. */
+function firstGroundPileAt(world:World,keys:ReadonlySet<number>,accept:(pile:MaterialPile)=>boolean):MaterialPile|undefined {
+  const scan=()=>world.piles.find(p=>p.owner.type==='ground'&&keys.has(p.owner.z*world.width+p.owner.x)&&accept(p));
+  const index=pileIndex(world);if(!index||index.groundOutside)return scan();
+  let found:MaterialPile|undefined,several:Set<MaterialPile>|undefined;
+  for(const key of keys)for(const p of index.groundAt.get(key)??[])if(accept(p)){if(found)(several??=new Set([found])).add(p);else found=p;break;}
+  if(several){found=undefined;for(const p of world.piles)if(several.has(p)){found=p;break;}}
+  if(verifyPileIndex&&found!==scan())pileIndexMismatch('construction site pile');
+  return found;
 }
 export function constructionObstruction(world: World, job: Job):ConstructionObstruction {
   const cells=new Set(footprintCells(job).map(c=>c.z*world.width+c.x));
   const plant=firstResourceAt(world,cells,r=>constructionPlantBlocks(job,r));
   const kind=job.furniture?.kind??job.kind;
-  const pile=clearsGroundItems(world,kind)?world.piles.find(p=>p.owner.type==='ground'&&cells.has(p.owner.z*world.width+p.owner.x)&&(!isShelfKind(kind)||!shelfFixedAccepts(p))):undefined;
+  const pile=clearsGroundItems(world,kind)?firstGroundPileAt(world,cells,p=>!isShelfKind(kind)||!shelfFixedAccepts(p)):undefined;
   const pack=(job.kind==='sow'||clearsGroundItems(world,job.furniture?.kind??job.kind))?world.packed?.find(p=>p.owner.type==='ground'&&cells.has(p.owner.z*world.width+p.owner.x)&&p.building.id!==job.furniture?.structureId):undefined;
   return {plant,pile,pack};
 }
