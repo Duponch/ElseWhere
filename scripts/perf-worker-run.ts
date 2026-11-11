@@ -4,6 +4,7 @@
 // Usage (bundle with esbuild first):
 //   node tmp/perf/worker-run.mjs <save> [speed=6] [seconds=20] [warmupSeconds=5]
 //   PROFILE=out.cpuprofile ... records the measured window.
+//   PHASE_KEYS=1 sizes each part of the actor phase packets (KEYS=1: complete publications).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { performance } from 'node:perf_hooks';
@@ -15,6 +16,7 @@ const text = (() => { const t = readFileSync(savePath, 'utf8'); const r = JSON.p
 interface Stat { count: number; bytes: number; cloneMs: number }
 const stats = new Map<string, Stat>();
 const keySizes = { count: 0, parts: new Map<string, number>() };
+const phaseSizes = { count: 0, parts: new Map<string, number>() };
 let measuring = false, lastTick = -1, replies: any[] = [];
 const kindOf = (m: any): string => m?.type === 'snapshot' || m?.kind ? `${m.type ?? '?'}:${m.kind ?? m.resident?.kind ?? ''}` : String(m?.type ?? typeof m);
 const tickOf = (m: any): number | undefined => m?.world?.tick ?? m?.summary?.tick ?? m?.publication?.world?.tick ?? m?.tick;
@@ -40,6 +42,16 @@ const scope: any = {
       for (const [key, value] of Object.entries(pub)) if (key !== 'world') keySizes.parts.set(key, (keySizes.parts.get(key) ?? 0) + size(value));
       for (const [key, value] of Object.entries(pub.world ?? {})) keySizes.parts.set('world.' + key, (keySizes.parts.get('world.' + key) ?? 0) + size(value));
       for (const key of ['resources', 'piles', 'structures', 'tiles']) { const v = pub[key]; if (v && !Array.isArray(v)) { keySizes.parts.set(key + '.upserted#', (keySizes.parts.get(key + '.upserted#') ?? 0) + 1024 * (v.upserted?.length ?? 0)); keySizes.parts.set(key + '.removed#', (keySizes.parts.get(key + '.removed#') ?? 0) + 1024 * (v.removed?.length ?? 0)); if (v.growth) keySizes.parts.set(key + '.growth#', (keySizes.parts.get(key + '.growth#') ?? 0) + 1024 * v.growth.length / 4); } }
+    }
+    // PHASE_KEYS=1: JSON size of each part of an actor phase packet, and of
+    // each field of its actor rows (counts per packet as '#').
+    if (process.env.PHASE_KEYS && message?.type === 'actor-frontier-297' && phaseSizes.count < 200) {
+      phaseSizes.count++;
+      const size = (v: unknown) => JSON.stringify(v, (_k, x) => ArrayBuffer.isView(x) ? Array.from(x as any) : x)?.length ?? 0;
+      const add = (k: string, n: number) => phaseSizes.parts.set(k, (phaseSizes.parts.get(k) ?? 0) + n);
+      for (const [key, value] of Object.entries(copy)) { add(key, size(value)); if (Array.isArray(value)) add(key + '#', 1024 * value.length); }
+      for (const row of copy.actors ?? []) for (const [key, value] of Object.entries(row.fields ?? {})) add('actors.fields.' + key, size(value));
+      for (const track of copy.tracks ?? []) add('tracks.append#', 1024 * (track.append?.length ?? 0));
     }
   },
 };
@@ -101,6 +113,7 @@ console.log(JSON.stringify({
   workerCpuPct: +(100 * (cpu.user + cpu.system) / 1000 / wall).toFixed(1),
   taskLagMs: { p50: pct(.5), p95: pct(.95), p99: pct(.99), max: +(sorted.at(-1) ?? 0).toFixed(1) },
   fullRequests: Object.fromEntries([...fullReasons].sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, +(v / (wall / 1000)).toFixed(2)])),
+  ...(phaseSizes.count ? { phaseKB: Object.fromEntries([...phaseSizes.parts].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, v]) => [k, +(v / phaseSizes.count / 1024).toFixed(2)])) } : {}),
   ...(keySizes.count ? { publicationKB: Object.fromEntries([...keySizes.parts].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, v]) => [k, +(v / keySizes.count / 1024).toFixed(1)])) } : {}),
   posted: Object.fromEntries([...stats].map(([k, v]) => [k, { perS: +(v.count / (wall / 1000)).toFixed(1), ...(process.env.SIZES ? { avgKB: +(v.bytes / Math.min(v.count, 40) / 1024).toFixed(1) } : {}), cloneMsEach: +(v.cloneMs / v.count).toFixed(2) }])),
 }, null, 1));

@@ -1,6 +1,6 @@
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {structureById} from '../sim/structure-navigation.ts';
-import type {World,Pawn,Job,MaterialPile,Structure} from '../sim/types';
+import type {World,Pawn,Job,MaterialPile,Resource,Structure} from '../sim/types';
 import {appearanceOf} from '../sim/pawn-appearance';
 import {appearanceShape} from '../render/pawn-appearance-shape';
 import {humanLimbVisualMask} from '../render/human-anatomy-presentation';
@@ -161,11 +161,18 @@ export function captureActorPhaseDependencies297(world:World,held?:ActorPhaseDep
    p.raid?.kidnap261?[p.raid.kidnap261.phase,p.raid.kidnap261.patientId]:null,
    (world.fires?.items??[]).filter(f=>f.attachedPawnId===p.id).map(f=>[f.id,f.size])];
  });
- const animalGroups=[...wildlifePresentationGroups(world)].map(([species,rows])=>[species,rows.map(a=>{
+ // Meal targets of the presented animals, found in one pass over resources
+ // and piles: the first record with that id in array order, as find() gives
+ // (a find per eating animal scanned all 21 000 resources of a large colony).
+ const presented=[...wildlifePresentationGroups(world)],plantMeals=new Map<number,Resource|undefined>(),pileMeals=new Map<number,MaterialPile|undefined>();
+ for(const [,rows] of presented)for(const a of rows){const meal=a.meal;if(meal)(meal.kind==='plant'?plantMeals:pileMeals).set(meal.id,undefined);}
+ if(plantMeals.size)for(const r of world.resources)if(plantMeals.has(r.id)&&plantMeals.get(r.id)===undefined)plantMeals.set(r.id,r);
+ if(pileMeals.size)for(const p of world.piles)if(pileMeals.has(p.id)&&pileMeals.get(p.id)===undefined)pileMeals.set(p.id,p);
+ const animalGroups=presented.map(([species,rows])=>[species,rows.map(a=>{
   const corpse=a.corpsePile?.corpse,medical=corpse?.health??a.health;
   const blood=corpse?bodyBloodWord(corpse.health,part=>corpsePartAbsent(corpse,part)):bodyBloodWord(medical);
   const mask=corpse?corpseVisualMask(corpse):a.health?corpseVisualMask({animalId:a.id,species:a.species,sex:a.sex,ageTicks:a.ageTicks,health:a.health}):0;
-  const meal=a.meal,target=meal?.kind==='plant'?world.resources.find(r=>r.id===meal.id):meal?world.piles.find(p=>p.id===meal.id)?.owner:undefined;
+  const meal=a.meal,target=meal?.kind==='plant'?plantMeals.get(meal.id):meal?pileMeals.get(meal.id)?.owner:undefined;
   const doorId=a.manhunter?.door?.targetId,door=doorId===undefined?undefined:structureById(world,doorId);
   return [a.id,a.species,scale.read(corpse??a),blood,mask,a.domestic?.slaughter===true,quotas.has(a.id),
    meal?[meal.kind,meal.id,target&&'x' in target?cell(target):null]:null,structure(door),a.carrierId,
