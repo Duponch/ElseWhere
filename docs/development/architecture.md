@@ -1,5 +1,7 @@
 # Architecture et décisions
 
+**11 novembre 2026 — schéma 303.** [Bilan de la nuit du 11 novembre](bilan-nuit-20261111.md) : quatre écarts aux règles de RimWorld 1.6 corrigés (surcoût de 45 ticks d'une porte à une autre pour les colons, pièces de plus de 60 régions sans statistiques ni rôle, portails de clôture ouverts 1,15 fois plus vite qu'une porte et comptés comme une porte dans les chemins des colons), migration 302 → 303 par le seul numéro. Simulation des grandes colonies allégée (Les Forges, ≈ −27 % par tick, état identique) et sauvegarde contrôlée hors du fil de simulation.
+
 **9 novembre 2026 — schéma 302.** [Planification du travail à la RimWorld](work-planner-rimworld.md) : ordre des donneurs de travail, recherche des cibles par régions, liste d'urgence, et types de travail Forge, Couture et Artisanat séparés (migration 301 → 302 par numéro seul). Sur Les Forges, environ 12 % de temps de simulation en moins par tick ; aucune parité exhaustive n'est annoncée.
 
 **1 novembre 2026 — schéma 301.** [Travail de construction ciblé sur le mur en bois](construction-finish301.md) : cadence du constructeur, cumul du chantier, échecs et transitions de fin raccordés et qualifiés, avec sauvegarde/recharge identiques dans un essai séparé. Le lot civil300 reste acquis. La revue des fondations reste ouverte ; partie325, six ensembles et contenu demeurent en pause. Main au macro, autres constructions et cas de contact encore partiels ; aucune parité exhaustive ni fluidité globale certifiée.

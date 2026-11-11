@@ -1,5 +1,7 @@
 # Documentation d’Elsewhere
 
+**11 novembre 2026 — schéma 303.** [Bilan de la nuit du 11 novembre](development/bilan-nuit-20261111.md) : quatre écarts aux règles de RimWorld 1.6 corrigés (surcoût de 45 ticks d'une porte à une autre pour les colons, pièces de plus de 60 régions sans statistiques ni rôle, portails de clôture ouverts 1,15 fois plus vite qu'une porte et comptés comme une porte dans les chemins des colons), migration 302 → 303 par le seul numéro. Simulation des grandes colonies allégée (Les Forges, ≈ −27 % par tick, état identique) et sauvegarde contrôlée hors du fil de simulation.
+
 **10 novembre 2026 — schéma 302 inchangé.** [Murs liés et toits en pente](development/linked-walls-pitched-roofs.md) : murs continus sans jointure entre cases (angles, T, croix, linteaux de porte), toits en croupe ou à deux pans avec pignons épousant l'emprise exacte, peints dans la texture du style (Gouache ou Pastel) comme avant. Un seul lot GPU chacun, mis à jour par régions ; présentation seulement.
 
 **9 novembre 2026 — schéma 302.** [Planification du travail à la RimWorld](development/work-planner-rimworld.md) : ordre des donneurs de travail, recherche des cibles par régions, liste d'urgence, et types de travail Forge, Couture et Artisanat séparés (migration 301 → 302 par numéro seul). Sur Les Forges, environ 12 % de temps de simulation en moins par tick ; aucune parité exhaustive n'est annoncée.
