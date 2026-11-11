@@ -34,7 +34,7 @@ const LIGHT_PLANT_DELTA_LIMIT=256;
  * replaces that array instead of editing it in place (generation pushes
  * change its length, which rebuilds the index), and a resource's kind,
  * species and position never change. */
-export function lightPlantOnCells(world:Pick<World,'resources'|'width'|'height'>,cells:readonly {x:number;z:number}[]):boolean {
+function lightPlantIndex(world:Pick<World,'resources'|'width'|'height'>):LightPlantIndex {
   const list=world.resources,{width,height}=world,inside=(x:number,z:number)=>Number.isSafeInteger(x)&&Number.isSafeInteger(z)&&x>=0&&z>=0&&x<width&&z<height;
   let index=lightPlantIndexes.get(list);
   if(!index||index.length!==list.length||index.width!==width||index.height!==height){
@@ -56,8 +56,20 @@ export function lightPlantOnCells(world:Pick<World,'resources'|'width'|'height'>
     }
     lightPlantIndexes.set(list,index);lastLightPlants={list,index};
   }
-  const found=index;
+  return index;
+}
+export function lightPlantOnCells(world:Pick<World,'resources'|'width'|'height'>,cells:readonly {x:number;z:number}[]):boolean {
+  const {width,height}=world,inside=(x:number,z:number)=>Number.isSafeInteger(x)&&Number.isSafeInteger(z)&&x>=0&&z>=0&&x<width&&z<height;
+  const found=lightPlantIndex(world);
   return cells.some(c=>inside(c.x,c.z)&&found.counts[c.z*width+c.x]!>0)||found.other.some(r=>cells.some(c=>c.x===r.x&&c.z===r.z));
+}
+/** Whether some light plant's key `z*width+x` is one of the keys: false
+ * exactly when filtering `world.resources` by that key test and
+ * isConstructionLightPlant would find nothing. */
+export function lightPlantKeyIn(world:Pick<World,'resources'|'width'|'height'>,keys:ReadonlySet<number>):boolean {
+  const found=lightPlantIndex(world),{width}=world,size=found.counts.length;
+  for(const key of keys)if(Number.isInteger(key)&&key>=0&&key<size&&found.counts[key]!>0)return true;
+  return found.other.some(r=>keys.has(r.z*width+r.x));
 }
 export function constructionPlantBlocks(job:Job,resource:Resource):boolean {
   // Keep an accepted historical clearance's real elapsed work after migration.

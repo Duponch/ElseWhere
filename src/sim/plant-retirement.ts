@@ -1,5 +1,5 @@
 import {footprintCells} from './definitions.ts';
-import {constructionFinalWipesPlants,constructionFrameWipesPlants,isConstructionLightPlant} from './construction-plants.ts';
+import {constructionFinalWipesPlants,constructionFrameWipesPlants,isConstructionLightPlant,lightPlantKeyIn} from './construction-plants.ts';
 import {planSelectedDrops,releaseWork,type DropPlan} from './work-release.ts';
 import {refreshStock} from './materials.ts';
 import type {Job,Resource,Structure,World} from './types.ts';
@@ -28,7 +28,8 @@ export function planConstructionPlantRetirement(world:World,target:Job|Structure
   const kind='furniture' in target?target.furniture?.kind??target.kind:target.kind;
   const wipes=stage==='frame'?constructionFrameWipesPlants(kind):constructionFinalWipesPlants(kind);
   const cells=wipes?new Set(footprintCells(target).map(c=>c.z*world.width+c.x)):new Set<number>();
-  const plants=cells.size?world.resources.filter(r=>cells.has(r.z*world.width+r.x)&&isConstructionLightPlant(r)):[];
+  // The light-plant index answers "none here" without scanning every resource.
+  const plants=cells.size&&lightPlantKeyIn(world,cells)?world.resources.filter(r=>cells.has(r.z*world.width+r.x)&&isConstructionLightPlant(r)):[];
   const ids=new Set(plants.map(r=>r.id)),byCell=new Map(plants.map(r=>[r.z*world.width+r.x,r]));
   const obsolete=new Set<number>(),cleared=new Set<number>();
   if(ids.size)for(const job of world.jobs){
