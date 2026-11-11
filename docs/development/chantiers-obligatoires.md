@@ -49,6 +49,28 @@ Deux filets de sécurité automatiques ne fonctionnent plus. Les régressions qu
 
 **État au 10 novembre : deux tranches faites.** La part de la publication dans le Worker passe de ≈ 32 % à ≈ 24 % sur Les Forges à ×6 (même banc, passages alternés), et le jeu y avance de 12 à 16 % plus vite ; les paquets d'acteurs passent de 65 à ≈ 33 Ko à ×1 et coûtent 2,0 ms au fil principal au lieu de 5,5 ; la publication complète passe de 865 à 728 Ko à ×1. Détail dans l'[audit](audit-performance-2026-11-05.md), section « Publication du Worker allégée (10 novembre) ». Le contrôle de présentation échoue toujours, mais sur le seul retard des changements de vitesse (chantier 3).
 
+**Refonte complète décidée par l'utilisateur (11 novembre, après-midi) : plan et mesures de départ.** Worker réel à ×3 sur Les Forges, machine calme (16 h) : 78,1 % du rythme tenu. Une publication complète coûte ≈ 115 ms et part ≈ 1 fois par seconde. Environ 0,6 par seconde sont des publications « calmes » : chaque tick joué en réclame une, et la cadence `calmFullIntervalMs` (coût × 10, plafonné à 1 s) les espace. Environ 0,4 par seconde sont forcées (`observeMacroActors297` 0,23/s, autres 0,14/s). Espacer les calmes à 2 s ne gagne que ≈ 1,6 point, dans le bruit. Répartition d'une publication complète :
+
+| Composant | Part |
+|---|---|
+| Mise en forme des différences (`snapshots.ts` encode, terrain) | ≈ 27 % |
+| Apparence des plantes (`worker-natural-appearance.ts`) | ≈ 21 % (14 371 plantes en croissance sur 21 122 ressources) |
+| Sections annexes | ≈ 19 % (saletés 9 %, mouvements 7 %, zones 5 %) |
+| Copie du message | ≈ 14 % |
+| `prepareFull` | ≈ 6 % |
+| Projection de la carte visible | ≈ 5 % |
+
+Chaque composant compare toute la partie pour constater que presque rien n'a changé. Étapes, chacune exacte et vérifiée (contenu reconstruit identique par `scripts/publication-replay-record.ts`, mode de contrôle comparant au calcul complet) :
+
+0. **Cadence** : quand le Worker est saturé (crédit de l'horloge Core au-delà d'un lot), garder une publication calme par seconde au plus, même si elle devient moins chère. Sinon, le temps gagné repartirait en publications plus fréquentes.
+1. **Apparence des plantes** : ne réévaluer une plante qu'à partir d'une borne sûre de son prochain changement visible (quart de croissance, seuil de récolte, fin de « sans feuilles ») ou quand sa fiche change. Les cultures, à croissance affichée continue, restent évaluées à chaque fois.
+2. **Différences des ressources, piles et bâtiments** : journal des écritures, comme pour l'index des piles, puis comparaison des seules entités touchées.
+3. **Sections annexes** : saletés, mouvements et zones par changements suivis.
+4. **Colons et animaux** dans la publication complète : champs modifiés seulement.
+5. **Moins de publications forcées** : élargir ce que les phases transmettent.
+
+Gain visé : ≈ 12 à 14 % du Worker à ×3 sur Les Forges, et une adoption bien plus légère au fil principal. Mesures de débit uniquement machine calme ; avant toute mesure, l'outil `scripts/perf-worker-run.ts` ne doit plus convertir les messages en texte (il gonflait le coût des publications complètes d'environ 7 %).
+
 **Reste dans ce chantier : la publication complète** (≈ 980 Ko, une par seconde, 11 à 12 % du Worker et ≈ 80 ms au fil principal). Par ordre de gain attendu : compteurs des colons et des animaux par colonnes au lieu de fiches entières (393 Ko), sections immuables retenues (66 Ko), horloge de pourriture des tas (59 Ko). À faire aussi : la mesure dans le vrai client (images longues à ×1 sur Les Forges), impossible le 10 novembre faute de mémoire libre. Outil à utiliser pour chaque étape : `scripts/publication-replay-record.ts` (mêmes messages, ou même contenu reconstruit, qu'avant).
 
 **Fait le 10 novembre (seconde tranche) : la fiche d'âge des plantes en trois nombres.** Constat d'origine, gardé pour mémoire : une plante dont seule la fiche d'âge a avancé (`plantLife` : `age`, `darkTicks`, `nextCheck`, tous les 200 ticks) est renvoyée comme une fiche complète. Côté affichage, une fiche complète compte comme un changement « de base » de la ressource (`baseEdge` dans `src/bridge/resident-presentation-assembler.ts`, `resourceBaseUpdated` dans `src/bridge/snapshots.ts`), que lisent l'index des ressources de la scène (`src/render/scene-resource-index.ts`), la partition des cultures (`src/render/crop-presentation-partition.ts`) et la validation (`src/sim/owned-validation-resources.ts`). Sur Les Forges, cela fait ≈ 1 080 changements de base par publication complète pour rien de visible. Une voie compacte pour ces trois nombres, sur le modèle de la croissance (`growth`, déjà lue à trois endroits : l'encodeur et le décodeur de `snapshots.ts`, deux chemins de l'assembleur), retirerait les 272 Ko et ces changements de base. À vérifier avant : qu'aucun de ces trois lecteurs ne dépend de la fiche d'âge ; `leaflessAt` (feuillage) doit rester une fiche complète.

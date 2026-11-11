@@ -28,7 +28,9 @@ const scope: any = {
     const s = performance.now(); const copy = structuredClone(message); const cloneMs = performance.now() - s;
     const k = kindOf(message), row = stats.get(k) ?? { count: 0, bytes: 0, cloneMs: 0 };
     row.count++; row.cloneMs += cloneMs;
-    if (row.count <= 40) row.bytes += JSON.stringify(copy, (_k, v) => ArrayBuffer.isView(v) ? Array.from(v as any).length : v)?.length ?? 0;
+    // SIZES=1 only: the JSON sizing costs as much as the clone and would weigh on
+    // the measured Worker (about 7% of each complete publication before 11 November).
+    if (process.env.SIZES && row.count <= 40) row.bytes += JSON.stringify(copy, (_k, v) => ArrayBuffer.isView(v) ? Array.from(v as any).length : v)?.length ?? 0;
     stats.set(k, row);
     // KEYS=1: JSON size of each part of a complete publication.
     if (process.env.KEYS && message?.type === 'resident-publication' && keySizes.count < 20) {
@@ -98,6 +100,6 @@ console.log(JSON.stringify({
   taskLagMs: { p50: pct(.5), p95: pct(.95), p99: pct(.99), max: +(sorted.at(-1) ?? 0).toFixed(1) },
   fullRequests: Object.fromEntries([...fullReasons].sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, +(v / (wall / 1000)).toFixed(2)])),
   ...(keySizes.count ? { publicationKB: Object.fromEntries([...keySizes.parts].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, v]) => [k, +(v / keySizes.count / 1024).toFixed(1)])) } : {}),
-  posted: Object.fromEntries([...stats].map(([k, v]) => [k, { perS: +(v.count / (wall / 1000)).toFixed(1), avgKB: +(v.bytes / Math.min(v.count, 40) / 1024).toFixed(1), cloneMsEach: +(v.cloneMs / v.count).toFixed(2) }])),
+  posted: Object.fromEntries([...stats].map(([k, v]) => [k, { perS: +(v.count / (wall / 1000)).toFixed(1), ...(process.env.SIZES ? { avgKB: +(v.bytes / Math.min(v.count, 40) / 1024).toFixed(1) } : {}), cloneMsEach: +(v.cloneMs / v.count).toFixed(2) }])),
 }, null, 1));
 process.exit(0);
