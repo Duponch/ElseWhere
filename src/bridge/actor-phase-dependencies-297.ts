@@ -198,11 +198,19 @@ export function captureActorPhaseDependencies297(world:World,held?:ActorPhaseDep
   humanCarry:keepRows(prior?.humanCarry,groupHumanCarryPairs257(world).map(p=>[p.carrierId,p.patientId]))});
  const result=Object.freeze({format:'actor-phase-dependencies-297-1' as const,data});ownedDependencies297.add(result);return result;
 }
+/* Plain loops, no callback per element (this runs over every dependency row
+ * of every phase). Same result as every(): an index missing from x (a hole)
+ * is skipped, as every() skips it. */
 const equalDependencyValue297=(x:unknown,y:unknown):boolean=>{
  if(Object.is(x,y))return true;if(x===null||y===null||typeof x!=='object'||typeof y!=='object')return false;
- if(Array.isArray(x))return Array.isArray(y)&&x.length===y.length&&x.every((v,i)=>equalDependencyValue297(v,y[i]));
+ if(Array.isArray(x)){
+  if(!Array.isArray(y)||x.length!==y.length)return false;
+  for(let i=0;i<x.length;i++)if(i in x&&!equalDependencyValue297(x[i],y[i]))return false;
+  return true;
+ }
  if(Array.isArray(y))return false;const keys=Reflect.ownKeys(x),other=Reflect.ownKeys(y);if(keys.length!==other.length)return false;
- return keys.every(k=>Object.hasOwn(y,k)&&equalDependencyValue297((x as Record<PropertyKey,unknown>)[k],(y as Record<PropertyKey,unknown>)[k]));
+ for(let i=0;i<keys.length;i++){const k=keys[i]!;if(!Object.hasOwn(y,k)||!equalDependencyValue297((x as Record<PropertyKey,unknown>)[k],(y as Record<PropertyKey,unknown>)[k]))return false;}
+ return true;
 };
 /** Exact type/presence/value comparison; unknown or copied wrappers refuse. */
 export function equalActorPhaseDependencies297(a:ActorPhaseDependencies297,b:ActorPhaseDependencies297):boolean {
