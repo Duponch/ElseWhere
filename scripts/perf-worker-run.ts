@@ -61,6 +61,8 @@ if (process.env.FULL_REASONS) {
   const obs = proto.observe;
   proto.observe = function (value: any, macro: boolean, ...rest: any[]) { if (measuring && value?.requiresFull) fullReasons.set('observe(requiresFull)', (fullReasons.get('observe(requiresFull)') ?? 0) + 1); return obs.call(this, value, macro, ...rest); };
 }
+// VERIFY_NATURAL=1: every skipped plant appearance is recomputed and compared.
+if (process.env.VERIFY_NATURAL) (await import('../src/bridge/worker-natural-appearance.ts') as any).setNaturalAppearanceVerification?.(true);
 await import('../src/bridge/presentation.worker.ts');
 const request = (data: any) => scope.onmessage({ data });
 const waitReply = async (id: number) => { while (!replies.some(r => r.id === id)) await new Promise(r => setTimeout(r, 20)); const r = replies.find(x => x.id === id); if (!r.ok) throw Error('Request failed: ' + r.reason); };

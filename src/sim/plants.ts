@@ -104,6 +104,30 @@ function readPlantGrowth(world:World,plant:Resource,inputs?:GrowthPassInputs):nu
   return clamp(base + lightTime * factor / (def.growDays * TICKS_PER_DAY));
 }
 export function plantGrowth(world:World,plant:Resource):number {return readPlantGrowth(world,plant);}
+/** Highest fertility a growth reading can use: a hydroponics basin (2.8). */
+const GROWTH_BOUND_FERTILITY=3;
+/** A tick before which plantGrowth(world, plant) cannot exceed `target`, from
+ * the plant's stored record only, whatever happens meanwhile to roofs, light,
+ * terrain or basins. After its checkpoint (growth at growthTick) a plant gains
+ * at most one tick of full light per tick (both light integrals), at its stored
+ * thermal factor, at the highest fertility; readPlantGrowth otherwise returns
+ * the stored growth, never less. Infinity when the reading is constant (stored
+ * growth exactly 1, no checkpoint tick, not a plant, blighted) or cannot
+ * exceed `target` (target 1 or more). A change of the record invalidates the
+ * bound. Two ticks of margin absorb the rounding of the division. */
+export function plantGrowthExceedTickBound(plant:Resource,target:number):number {
+  const base=plant.growth??1;
+  if(base===1||!isPlant(plant)||plant.blight||plant.growthTick===undefined||!(target<1))return Infinity;
+  if(target<base)return -Infinity;
+  const def=plant.species?FLORA_DEFINITIONS[plant.species]:PLANT_DEFINITIONS[plant.kind as keyof typeof PLANT_DEFINITIONS];
+  if(!def)return -Infinity;
+  const fertility=Math.max(1,1-def.sensitivity+GROWTH_BOUND_FERTILITY*def.sensitivity),rate=Math.max(0,plant.growthThermalFactor??1)*fertility/(def.growDays*TICKS_PER_DAY);
+  if(!(rate>0))return Number.isFinite(rate)?Infinity:-Infinity;
+  const at=plant.growthTick+(target-base)/rate;
+  return Number.isFinite(at)?Math.floor(at)-1:-Infinity;
+}
+/** The growth a plant must exceed to be harvestable (see harvestable). */
+export const plantHarvestMinGrowth=(plant:Resource):number=>plant.species?FLORA_DEFINITIONS[plant.species].harvestMinGrowth:HARVEST_MIN_GROWTH;
 
 /** Shared environmental inputs for one synchronous evaluation. No resource
  * result, tile or World is cached globally; public plantGrowth keeps its

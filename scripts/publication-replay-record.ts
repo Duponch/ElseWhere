@@ -144,6 +144,8 @@ const scope: any = {
   },
 };
 (globalThis as any).self = scope;
+// VERIFY_NATURAL=1: every skipped plant appearance is recomputed and compared.
+if (process.env.VERIFY_NATURAL) (await import('../src/bridge/worker-natural-appearance.ts') as any).setNaturalAppearanceVerification?.(true);
 await import('../src/bridge/presentation.worker.ts');
 
 let id = 0;
