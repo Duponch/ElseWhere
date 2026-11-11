@@ -1,3 +1,4 @@
+import { resourceArrayDelta } from './resource-array-delta.ts';
 import {extractTreeDefinition} from './tree-transfer-rules.ts';
 import {clearingDuration,prospectivePlantWorkCore256} from './gathering.ts';
 import {terrainGroundFertility256,terrainHasProspectiveRules256} from './natural-terrain-runtime-256.ts';
@@ -29,15 +30,43 @@ const index = (world: World, cell: { x: number; z: number }) => cell.z * world.w
 
 // Derived indices contain no continuation state. Producers replace the arrays;
 // save/resume reconstructs these indices and retains the serialized scan cursor.
-const resourcesCache = new WeakMap<World, { source: Resource[]; cells: Map<number, Resource> }>();
+interface ResourceCellsCache { source: Resource[]; length: number; width: number; cells: Map<number, Resource>; counts?: Uint16Array }
+const resourcesCache = new WeakMap<World, ResourceCellsCache>();
 export const resourceAt = (world: World, cell: number): Resource | undefined => resourceCells(world).get(cell);
+/* The map is only read cell by cell (get), within calls that do not replace
+ * world.resources, so a new array that only drops resources and appends
+ * others (resourceArrayDelta) updates it in place: appended resources win
+ * their cell as they would in a rebuild (last wins); a dropped winner whose
+ * cell keeps another resource, a cell outside the map or a count overflow
+ * rebuilds. `counts` holds the resources per in-map cell. */
+const RESOURCE_CELLS_DELTA_LIMIT = 256;
+function deriveResourceCells(world: World, cached: ResourceCellsCache): boolean {
+  const counts = cached.counts, size = world.width * world.height;
+  if (!counts || cached.width !== world.width || counts.length !== size || cached.source.length !== cached.length) return false;
+  const next = world.resources, delta = resourceArrayDelta(cached.source, next, RESOURCE_CELLS_DELTA_LIMIT);
+  if (!delta) return false;
+  const at = (r: Resource) => { const i = index(world, r); return Number.isInteger(i) && i >= 0 && i < size ? i : -1; };
+  const dropped = new Map<number, number>(), appended = new Set<number>();
+  for (const r of delta.removed) { const i = at(r); if (i < 0) return false; dropped.set(i, (dropped.get(i) ?? 0) + 1); }
+  for (let k = delta.appendedFrom; k < next.length; k++) { const i = at(next[k]!); if (i < 0 || counts[i]! + 1 > 65535) return false; appended.add(i); }
+  for (const r of delta.removed) { const i = at(r); if (cached.cells.get(i) === r && counts[i]! - dropped.get(i)! > 0 && !appended.has(i)) return false; }
+  for (const r of delta.removed) { const i = at(r); counts[i]!--; if (cached.cells.get(i) === r && !appended.has(i)) cached.cells.delete(i); }
+  for (let k = delta.appendedFrom; k < next.length; k++) { const r = next[k]!, i = at(r); counts[i]!++; cached.cells.set(i, r); }
+  cached.source = next; cached.length = next.length;
+  return true;
+}
 function resourceCells(world: World): Map<number, Resource> {
   let cached = resourcesCache.get(world);
   if (!cached || cached.source !== world.resources) {
+    if (cached && deriveResourceCells(world, cached)) return cached.cells;
     // Same last-wins cell map, without an intermediate [cell, resource] pair per plant.
-    const cells = new Map<number, Resource>();
-    for (const r of world.resources) cells.set(index(world, r), r);
-    cached = { source: world.resources, cells };
+    const cells = new Map<number, Resource>(), size = world.width * world.height;
+    let counts: Uint16Array | undefined = new Uint16Array(size);
+    for (const r of world.resources) {
+      const i = index(world, r); cells.set(i, r);
+      if (counts) { if (Number.isInteger(i) && i >= 0 && i < size && counts[i]! < 65535) counts[i]!++; else counts = undefined; }
+    }
+    cached = { source: world.resources, length: world.resources.length, width: world.width, cells, counts };
     resourcesCache.set(world, cached);
   }
   return cached.cells;
