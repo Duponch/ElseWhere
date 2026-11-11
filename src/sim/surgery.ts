@@ -128,8 +128,8 @@ export function processSurgery(world:World,doctor:Pawn,context:NeedContext,docto
   // The actual work-time XP precedes the surgery statistic in Core.
   learnSkill(doctor.skills.medicine,surgeryBaseXp(task.workCore),doctor);
   const bed=structureById(world,task.bedId)!;
-  const capture=captureCleanliness(world),room=capture.room(bed);
-  const chance=surgerySuccessChance({doctor,medicine:task.consumedMedicine!,bedQuality:bed.quality,bedSurgeryFactor:bedSurgeryFactor(bed,world),patientGlow:patientGlow(bed),roomCleanliness:room?.cleanliness??null,outdoors:surgeryOutdoors(world,bed,capture)});
+  const capture=captureCleanliness(world);
+  const chance=surgerySuccessChance({doctor,medicine:task.consumedMedicine!,bedQuality:bed.quality,bedSurgeryFactor:bedSurgeryFactor(bed,world),patientGlow:patientGlow(bed),roomCleanliness:capture.cleanliness(bed),outdoors:surgeryOutdoors(world,bed,capture)});
   const outcome=resolveSurgeryOutcome(patient.health!,task.part,chance,()=>healthRandom(world));
   patient.health=outcome.record;
   if(outcome.kind==='success'){if(task.removeArtificial273){if(!removeArtificialPart273(patient.health,task.part,task.removeArtificial273))throw Error('Actual artificial root changed during removal');commitArtificialRestitution273(world,restitution);}else amputateSurgicalLimb(patient.health,task.part);}

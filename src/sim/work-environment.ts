@@ -1,3 +1,4 @@
+import { roomWithoutStats303 } from './room-region-limit-303.ts';
 import { isBedKind } from './bed-kinds.ts';
 import { isStove } from './food-workstations.ts';
 import { footprintCells } from './definitions.ts';
@@ -74,7 +75,7 @@ export class WorkEnvironmentCache {
       const count=covered.get(space.id)??0,unroofed=space.cellCount-count;
       const psychologicallyOutdoors=unroofed>=300||space.touchesMapEdge&&unroofed>=space.cellCount*.5;
       const score=scores.get(space.id);let role:WorkRoomRole='none';
-      if(!space.touchesMapEdge&&score) {
+      if(!space.touchesMapEdge&&score&&!roomWithoutStats303(world.schemaVersion,topology,space.id)) {
         // Count physical furniture, including one double, rather than its slots.
         const values={laboratory:score.laboratory,bedroom:score.beds===1?100000:0,dining:score.dining,recreation:score.recreation,workshop:score.workshop,kitchen:score.kitchen,barracks:score.beds>1?score.beds*100100:0};
         let best=0;for(const candidate of ['laboratory','bedroom','dining','recreation','workshop','barracks','kitchen'] as const)if(values[candidate]>best){best=values[candidate];role=candidate;}

@@ -1,4 +1,5 @@
 import { pileIndex,pileIndexMismatch,verifyPileIndex } from './pile-index.ts';
+import { roomWithoutStats303 } from './room-region-limit-303.ts';
 import { footprintCells } from './definitions.ts';
 import { FLOOR_DEFINITIONS } from './flooring.ts';
 import { FILTH_DEFINITIONS } from './filth-rules.ts';
@@ -69,6 +70,13 @@ export class CleanlinessCapture {
     if(!items||items!==this.items||w.tiles!==this.tiles||terrainWriteCount(w.tiles)!==this.tileWrites||!sameRoofIdentity(this.roofs,roofIdentity(w)))return false;
     this.epoch++;return true;
   }
+  /** The room's Cleanliness stat at `cell`: null outside a proper room and,
+   * from schema 303, in a room of more than 60 regions (roomless score). The
+   * room itself (membership, filth grouping) still comes from room(). */
+  cleanliness(cell:Cell):number|null {
+    const room=this.room(cell);
+    return !room||roomWithoutStats303(this.world.schemaVersion,this.topology,room.id)?null:room.cleanliness;
+  }
   room(cell:Cell):CleanlinessRoom|null {
     const w=this.world,space=this.topology.at(cell.x,cell.z);
     // A doorway or exterior may have a Room, but no ProperRoom stat map.
@@ -116,4 +124,4 @@ export class CleanlinessCapture {
 export function captureCleanliness(w:World):CleanlinessCapture {
   let cache=caches.get(w);if(!cache){cache=new RoomTopologyCache();caches.set(w,cache);}return new CleanlinessCapture(w,cache.read(w));
 }
-export const roomCleanliness=(w:World,c:Cell,capture=captureCleanliness(w)):number|null=>capture.room(c)?.cleanliness??null;
+export const roomCleanliness=(w:World,c:Cell,capture=captureCleanliness(w)):number|null=>capture.cleanliness(c);

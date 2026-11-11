@@ -98,8 +98,8 @@ export function processImplantSurgery(w:World,d:Pawn,context:NeedContext,doctorG
   learnSkill(d.skills.medicine,surgeryBaseXp(task.workCore),d);
   if(isProstheticItem273(task.implant))consumeImplantIngredients(w,task);
   const bed=structureById(w,task.bedId)!;
-  const capture=captureCleanliness(w),room=capture.room(bed);
-  const chance=surgerySuccessChance({doctor:d,medicine:task.consumedMedicine,bedQuality:bed.quality,bedSurgeryFactor:bedSurgeryFactor(bed,w),recipeFactor:1,patientGlow:patientGlow(bed),roomCleanliness:room?.cleanliness??null,outdoors:surgeryOutdoors(w,bed,capture)});
+  const capture=captureCleanliness(w);
+  const chance=surgerySuccessChance({doctor:d,medicine:task.consumedMedicine,bedQuality:bed.quality,bedSurgeryFactor:bedSurgeryFactor(bed,w),recipeFactor:1,patientGlow:patientGlow(bed),roomCleanliness:capture.cleanliness(bed),outdoors:surgeryOutdoors(w,bed,capture)});
   const outcome=resolveSurgeryOutcome(p.health!,task.part,chance,()=>healthRandom(w),{allowMissingPart:true});
   p.health=outcome.record;
   const success=outcome.kind==='success'&&installArtificialPart(p.health,task.part,task.implant);

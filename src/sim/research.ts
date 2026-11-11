@@ -251,7 +251,7 @@ function researchCleanliness(world:World,station:Structure,environment:WorkEnvir
     if(read&&read.capture.world===world&&items&&read.items===items&&count>=read.count&&read.capture.extendFilth()){read.environment=environment;read.count=count;}
     else {read={capture:new CleanlinessCapture(world,environment.topology),environment,items,count};cleanlinessCaptures.set(environment.topology,read);}
   }
-  return read.capture.room(station)?.cleanliness??null;
+  return read.capture.cleanliness(station);
 }
 export function researchCleanlinessFactor(cleanliness:number|null):number {
   if(cleanliness===null)return .75;

@@ -1,3 +1,4 @@
+import { roomWithoutStats303 } from './room-region-limit-303.ts';
 import { isBedKind } from './bed-kinds.ts';
 import { footprintCells } from './definitions.ts';
 import { daylilyBeauty } from './flower-pot.ts';
@@ -29,7 +30,7 @@ export class RoomQualityCapture {
   constructor(world:World,topology:RoomTopology){this.world=world;this.topology=topology;}
   room(cell:Cell):RoomQuality|null {
     const w=this.world,space=this.topology.at(cell.x,cell.z);
-    if(space?.kind!=='space'||space.touchesMapEdge)return null;
+    if(space?.kind!=='space'||space.touchesMapEdge||roomWithoutStats303(this.world.schemaVersion,this.topology,space.id))return null;
     const cached=this.rooms.get(space.id);if(cached)return cached;
     const index=(c:Cell)=>c.z*w.width+c.x,cells=new Set<number>([index(cell)]),adjacent=new Set<number>(),queue=[index(cell)];
     for(let head=0;head<queue.length;head++){

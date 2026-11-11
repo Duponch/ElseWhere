@@ -34,6 +34,30 @@ export class RoomTopology {
   /** Same as `at(x, z)?.kind === 'space'` for an in-map cell index: every
    * positive label is a space id (solid -1, doorway -2), without a lookup. */
   isSpaceIndex(index: number): boolean { return this.labels[index]! > 0; }
+  private regionCounts?: Map<number, number>;
+  /** RimWorld regions of a space: its connected parts (cardinal neighbours)
+   * within each 12 x 12 block aligned on the map grid (`Region.GridSize`,
+   * flood fill limited to `extentsLimit`). Computed once per topology, on
+   * the first request; derived only, never saved. */
+  regionCount(id: number): number {
+    if (!this.regionCounts) {
+      const {width, height, labels} = this, counts = new Map<number, number>(), seen = new Uint8Array(width * height), queue: number[] = [];
+      for (let root = 0; root < labels.length; root++) {
+        const label = labels[root]!;if (label <= 0 || seen[root]) continue;
+        const rx = root % width, rz = Math.floor(root / width), x0 = rx - rx % 12, z0 = rz - rz % 12, x1 = Math.min(width, x0 + 12), z1 = Math.min(height, z0 + 12);
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+        seen[root] = 1;queue.length = 0;queue.push(root);
+        for (let head = 0; head < queue.length; head++) {
+          const index = queue[head]!, x = index % width, z = Math.floor(index / width);
+          const visit = (n: number) => { if (!seen[n] && labels[n] === label) { seen[n] = 1;queue.push(n); } };
+          if (x > x0) visit(index - 1);if (x + 1 < x1) visit(index + 1);
+          if (z > z0) visit(index - width);if (z + 1 < z1) visit(index + width);
+        }
+      }
+      this.regionCounts = counts;
+    }
+    return this.regionCounts.get(id) ?? 0;
+  }
 }
 
 /** Caller-owned derived cache. Every read checks current barriers, including
