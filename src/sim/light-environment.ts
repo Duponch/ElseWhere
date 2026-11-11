@@ -37,13 +37,15 @@ export class LightEnvironmentCache {
   private readonly nonCaveLight=new LocalLightCache();
   /** The last snapshot, returned again while all of its inputs are the same objects/values. */
   private last?:LightEnvironment;
-  speedAt(world:World,cell:Cell):number {
+  /** `environment`, when given, supplies the snapshot instead of read(world):
+   * a caller that holds one for a pass where no light input can change. */
+  speedAt(world:World,cell:Cell,environment?:()=>LightEnvironment):number {
     if(Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height){
       const sky=annualNaturalLight(world),index=cell.z*world.width+cell.x;
       // Roof arrays are kept sorted (see roof-rules containsRoofCell): binary search, not O(roofs).
       if(Number.isFinite(sky)&&sky>=.3&&!isRoofed(world,index))return 1;
     }
-    return this.read(world).speedAt(cell);
+    return (environment?environment():this.read(world)).speedAt(cell);
   }
   read(world:World):LightEnvironment {
     const topology=this.topology.read(world);

@@ -1,3 +1,6 @@
+import {roofCells} from './roof-rules.ts';
+import {annualNaturalLight} from './environment.ts';
+import {terrainWriteCount} from './terrain-mutation-journal.ts';
 import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {idleWanderTask300,idleMotionAllowed300,idleOtherActivity300,releaseIdleWander300} from './idle-wander-300.ts';
 import {createAnimalCoreMovement297} from './animal-core-movement-297.ts';
@@ -28,14 +31,31 @@ export function createCoreMovement297(world:World){
  if(!owned){if(world.phaseCore297!==0)throw Error('Missing owned path budget inside physical interval');owned=world.corePathBudget297={tick:world.tick,remaining:8,pairs:32768};}
  if(owned.tick!==world.tick)throw Error('Stale physical path budget');
  const budget:SearchBudget={get remaining(){return owned!.remaining;},set remaining(value){owned!.remaining=value;},get pairs(){return owned!.pairs;},set pairs(value){owned!.pairs=value;}};
- const readLight:LightReader=Object.assign(()=>light.read(world),{speedAt:(cell:Cell)=>light.speedAt(world,cell)});
+ // One light snapshot per advance() while its inputs stay the same objects:
+ // structures (membership), tiles and their write count, roofs, resources
+ // (cave plant light) and the sky light of the hour. Door states do not affect
+ // light (a doorway always blocks it) and source activity (fuel, power) is not
+ // changed by a movement pass. read() returns the same snapshot while those
+ // inputs are unchanged, so this is the same answer without its full checks.
+ let lightPass:ReturnType<LightEnvironmentCache['read']>|undefined;
+ let lightKey:{structures:World['structures'];count:number;first:unknown;last:unknown;tiles:World['tiles'];writes:number;roofs:ReadonlySet<number>;resources:World['resources'];sky:number}|undefined;
+ const passLight=()=>{
+  const structures=world.structures,count=structures.length,tiles=world.tiles,roofs=roofCells(world),sky=annualNaturalLight(world),k=lightKey;
+  if(lightPass&&k&&k.structures===structures&&k.count===count&&k.first===structures[0]&&k.last===structures[count-1]&&k.tiles===tiles
+   &&k.writes===terrainWriteCount(tiles)&&k.roofs===roofs&&k.resources===world.resources&&(k.sky===sky||k.sky!==k.sky&&sky!==sky))return lightPass;
+  lightPass=light.read(world);
+  lightKey={structures,count,first:structures[0],last:structures[count-1],tiles,writes:terrainWriteCount(tiles),roofs,resources:world.resources,sky};
+  return lightPass;
+ };
+ const readLight:LightReader=Object.assign(()=>passLight(),{speedAt:(cell:Cell)=>light.speedAt(world,cell,passLight)});
  const grid=()=>blocked??=blockedCells(world);
  const animals=createAnimalCoreMovement297(world);
  return {
-  invalidate(){animals.invalidate();passengers=undefined;budget.structureGeometry=undefined;invalidatePhysicalDoors297(world);blocked=undefined;},
+  invalidate(){lightPass=undefined;lightKey=undefined;animals.invalidate();passengers=undefined;budget.structureGeometry=undefined;invalidatePhysicalDoors297(world);blocked=undefined;},
   beginMacro(next:SearchBudget){animals.beginMacro();passengers=undefined;owned=world.corePathBudget297={tick:world.tick,remaining:next.remaining,pairs:next.pairs};budget.stats=next.stats;budget.structureGeometry=next.structureGeometry;invalidatePhysicalDoors297(world);blocked=undefined;},
   budget(){return budget;},
   advance():{actorsChanged:number[];changedCells:boolean;requiresFull:boolean;topologyChanged:boolean;deferredChange297:boolean;doorsMoved297:readonly number[]}{
+   lightPass=undefined;lightKey=undefined;
    const now=effectiveLocal297(world),core=effectiveCore297(world),changed:number[]=[];let changedCells=false,requiresFull=false,deferredChange297=false;
    const touchPassengers=(carrier:World['pawns'][number])=>{
     passengers??=captureCorePassengers297(world);

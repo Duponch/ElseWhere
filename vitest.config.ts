@@ -22,8 +22,8 @@ function nightFactoryPlugin(){
  const core=path.resolve(root,'src/sim/core-movement-297.ts'),normalize=(value:string)=>path.resolve(value).split(path.sep).join('/').toLowerCase(),coreKey=normalize(core),extensionlessKey=normalize(core.slice(0,-3));
  const fullToken='test-daylight-full-a56-v492',dayToken='test-daylight-selected-v492',fullId=core+'?'+fullToken,dayId=core+'?'+dayToken;
  const full=fs.readFileSync(path.resolve(root,'tests/fixtures/daylight-core-full-a56-v492.ts.txt'),'utf8'),selected=fs.readFileSync(core,'utf8');
- if(sha(full)!=='a56c6254ea76f1d85717593052a2e4320dc355f34ad54769c25bec648512dc20'||sha(selected)!=='c046a029630025c1cf4bb0363bd309cbc3fc6d19dbf22c44b2808f34e1a8cfd4')throw Error('Exact historical full and selected daylight factory bodies required');
- process.env.DAYLIGHT_SPEED_BEFORE_CORE_SHA='a56c6254ea76f1d85717593052a2e4320dc355f34ad54769c25bec648512dc20';process.env.DAYLIGHT_SPEED_SELECTED_CORE_SHA='c046a029630025c1cf4bb0363bd309cbc3fc6d19dbf22c44b2808f34e1a8cfd4';
+ if(sha(full)!=='a56c6254ea76f1d85717593052a2e4320dc355f34ad54769c25bec648512dc20'||sha(selected)!=='da98fb84f07dd7b5b14e2a8553082f72751cc64c5a02511d6f9e0f5ffa4aae62')throw Error('Exact historical full and selected daylight factory bodies required');
+ process.env.DAYLIGHT_SPEED_BEFORE_CORE_SHA='a56c6254ea76f1d85717593052a2e4320dc355f34ad54769c25bec648512dc20';process.env.DAYLIGHT_SPEED_SELECTED_CORE_SHA='da98fb84f07dd7b5b14e2a8553082f72751cc64c5a02511d6f9e0f5ffa4aae62';
  const helper=path.resolve(root,'tests/helpers/daylight-core-factories-v492.ts').split(path.sep).join('/'),router=[
   'import {createCoreMovement297 as full} from '+JSON.stringify(fullId)+';',
   'import {createCoreMovement297 as daylight} from '+JSON.stringify(dayId)+';',
