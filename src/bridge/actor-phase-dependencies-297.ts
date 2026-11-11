@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
+import {structureById} from '../sim/structure-navigation.ts';
 import type {World,Pawn,Job,MaterialPile,Structure} from '../sim/types';
 import {appearanceOf} from '../sim/pawn-appearance';
 import {appearanceShape} from '../render/pawn-appearance-shape';
@@ -83,7 +84,7 @@ export function humanWorkContact297(world:World,pawn:Pawn,pawnsById:ReadonlyMap<
       const fuelDestination=pawn.haul?.destination.type==='fuel'||pawn.haul?.destination.type==='turret'?pawn.haul.destination:undefined;
       const orbitalReady=pawn.orbitalTrade?.phase==='ready'&&!pawn.stun;
       const pasteCollect=pasteCollectionSource(pawn);
-      const station=pawn.cryptosleepTask&&(pawn.state==='working'||arriving)?world.structures.find(s=>s.id===pawn.cryptosleepTask!.casketId):pasteCollect?world.structures.find(s=>s.id===pasteCollect.dispenserId):orbitalReady||arriving&&pawn.orbitalTrade ? world.structures.find(s=>s.id===pawn.orbitalTrade!.consoleId) : pawn.state==='working'||arriving ? pawn.deepWork ? world.structures.find(s=>s.id===pawn.deepWork!.structureId) : pawn.research ? world.structures.find(s=>s.id===pawn.research!.stationId) : pawn.cooking?.phase==='work' ? world.structures.find(s=>s.id===pawn.cooking!.stationId) : pawn.haul?.serviceProgress!==undefined&&fuelDestination ? world.structures.find(s=>s.id===fuelDestination.structureId) : undefined : undefined;
+      const station=pawn.cryptosleepTask&&(pawn.state==='working'||arriving)?structureById(world,pawn.cryptosleepTask!.casketId):pasteCollect?structureById(world,pasteCollect.dispenserId):orbitalReady||arriving&&pawn.orbitalTrade ? structureById(world,pawn.orbitalTrade!.consoleId) : pawn.state==='working'||arriving ? pawn.deepWork ? structureById(world,pawn.deepWork!.structureId) : pawn.research ? structureById(world,pawn.research!.stationId) : pawn.cooking?.phase==='work' ? structureById(world,pawn.cooking!.stationId) : pawn.haul?.serviceProgress!==undefined&&fuelDestination ? structureById(world,fuelDestination.structureId) : undefined : undefined;
       const workPose=pawnWorkPose(pawn,job,station?.kind);
       const stationCell=station ? footprintCells(station).reduce((best,cell)=>Math.hypot(cell.x-pawn.x,cell.z-pawn.z)<Math.hypot(best.x-pawn.x,best.z-pawn.z)?cell:best) : undefined;
       const patient=pawn.feed?.phase==='feed'?pawnsById.get(pawn.feed.patientId):pawn.tend?.phase==='tend'?pawnsById.get(pawn.tend.patientId):pawn.surgery?.phase==='work'?pawnsById.get(pawn.surgery.patientId):undefined;
@@ -139,11 +140,11 @@ export function captureActorPhaseDependencies297(world:World,held?:ActorPhaseDep
  const scale=new WildlifeBodyScale(),quotas=autoSlaughterTargets(world);
  const human=world.pawns.map(p=>{
   const contact=humanWorkContact297(world,p,pawnsById,jobs,0),couple=coupleBed285(world,p),sleepId=p.need?.kind==='sleep'?p.need.bedId:null;
-  const bed=couple??((p.state==='sleeping'||p.state==='resting'||p.state==='downed')&&sleepId!==null?world.structures.find(s=>s.id===sleepId):undefined);
+  const bed=couple??((p.state==='sleeping'||p.state==='resting'||p.state==='downed')&&sleepId!==null?structureById(world,sleepId):undefined);
   const slot=bed?pawnBedSlot(p,bed):undefined,seated=seatedOnFurniture(p),small=!!p.melee?.strike&&!!world.wildlife?.animals.some(a=>a.id===p.melee!.strike!.targetId&&a.species==='hare');
   const recreation=p.recreation.task,paste=pasteCollectionSource(p),identity=appearanceOf(p,world.seed),body=bodies.get(p.id),visitor=world.visitors?.groups.find(g=>g.id===p.visitor?.group);
   const dining=p.state==='eating'&&p.need?.kind==='eat'&&p.need.dining?adjacentTable(world,p):null;
-  const leisure=recreation&&recreation.buildingId!==null?world.structures.find(s=>s.id===recreation.buildingId):undefined;
+  const leisure=recreation&&recreation.buildingId!==null?structureById(world,recreation.buildingId):undefined;
   const patient=recreation?.activity==='visit-sick'?pawnsById.get(recreation.patientId!):undefined;
   return [p.id,identity,appearanceShape(identity),apparel.get(p.id)??[],gear.get(p.id),isColonist(p),p.visitor?!!visitor?.hostile:undefined,
    humanLimbVisualMask(p),bodyBloodWord(p.health),humanCorpseVisualStage(world,p,body),
@@ -165,7 +166,7 @@ export function captureActorPhaseDependencies297(world:World,held?:ActorPhaseDep
   const blood=corpse?bodyBloodWord(corpse.health,part=>corpsePartAbsent(corpse,part)):bodyBloodWord(medical);
   const mask=corpse?corpseVisualMask(corpse):a.health?corpseVisualMask({animalId:a.id,species:a.species,sex:a.sex,ageTicks:a.ageTicks,health:a.health}):0;
   const meal=a.meal,target=meal?.kind==='plant'?world.resources.find(r=>r.id===meal.id):meal?world.piles.find(p=>p.id===meal.id)?.owner:undefined;
-  const doorId=a.manhunter?.door?.targetId,door=doorId===undefined?undefined:world.structures.find(s=>s.id===doorId);
+  const doorId=a.manhunter?.door?.targetId,door=doorId===undefined?undefined:structureById(world,doorId);
   return [a.id,a.species,scale.read(corpse??a),blood,mask,a.domestic?.slaughter===true,quotas.has(a.id),
    meal?[meal.kind,meal.id,target&&'x' in target?cell(target):null]:null,structure(door),a.carrierId,
    a.corpsePile?[a.corpsePile.id,owner(a.corpsePile.owner),corpse?.facing]:null,

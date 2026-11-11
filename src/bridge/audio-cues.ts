@@ -2,6 +2,7 @@ import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {effectiveCore297} from '../sim/core-phase-297';
 import type { World } from '../sim/types.ts';
 import { isConstruction } from '../sim/construction-rules.ts';
+import { structureById } from '../sim/structure-navigation.ts';
 import { isTailoring, stationAccepts, taskRecipe } from '../sim/production-recipes.ts';
 import { WORK_FRACTIONS } from '../sim/work-progress.ts';
 import { isColonist } from '../sim/affiliation.ts';
@@ -188,11 +189,8 @@ export class AudioCueRecorder {
     for (const id of this.flickJobs.keys()) watchedSwitches.add(id);
     for (const id of flickJobs.keys()) watchedSwitches.add(id);
     const structures = new Set<number>();
-    let stations: Map<number, World['structures'][number]> | undefined;
-    const stationFor = (id: number): World['structures'][number] | undefined => {
-      stations ??= new Map(world.structures.map(station => [station.id, station]));
-      return stations.get(id);
-    };
+    // Shared id index: the first structure with this id, as world.structures.find.
+    const stationFor = (id: number): World['structures'][number] | undefined => structureById(world, id);
 
     const recordWork = (pawnId: number, key: string, progress: number, kind: AudioCueKind,
       x: number, z: number, active: boolean, intervals: readonly number[]): void => {
