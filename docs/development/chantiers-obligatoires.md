@@ -219,6 +219,8 @@ Au total, environ 13 % du temps de simulation retiré ce soir sur Les Forges (é
 
 **Mesure d'ensemble** (`scripts/perf-save-bench.ts`, simulation seule, Les Forges, 120 ticks, 6 passages alternés, Firefox ouvert sur la machine). Version publiée `f09fd23a` contre `91664985` : 83,7 → 69,3 ms par tick en médiane (−17 %), 68,4 → 62,1 ms au minimum (−9 %), 5 paires sur 6 en faveur de la version actuelle (écarts par paire de +9 % à −33 %), empreinte `f6be3c77` identique à chaque passage. Mesure bruitée ; le débit du Worker à ×3 reste à mesurer sur machine calme.
 
+**Publié sur Cloudflare Pages le 11 novembre au soir** (Production `904dc780-d0be-4c16-b134-e83bad7bfad5`, branche main, commit `2c3ef051`), depuis une copie exacte du commit (`git archive`) : typage et construction Pages réussis (1 142 fichiers), sauvegardes et fichiers publics identiques à la publication précédente (`ac803d9b`), seuls les scripts changent ; 36 réponses HTTPS identiques octet pour octet sur le site public et l'adresse fixe du déploiement. Ce contrôle ne remplace ni un parcours dans le navigateur ni une mesure d'images par seconde.
+
 ## Méthode de test (décidée le 10 novembre)
 
 La suite complète prend environ 4 heures : elle ne doit plus bloquer le travail.
