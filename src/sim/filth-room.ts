@@ -1,3 +1,4 @@
+import { pileIndex,pileIndexMismatch,verifyPileIndex } from './pile-index.ts';
 import { footprintCells } from './definitions.ts';
 import { FLOOR_DEFINITIONS } from './flooring.ts';
 import { FILTH_DEFINITIONS } from './filth-rules.ts';
@@ -5,7 +6,7 @@ import { isGrowingTerrain } from './soil.ts';
 import { RoomTopologyCache,type RoomTopology } from './room-topology.ts';
 import { isRoofed,roofIdentity,sameRoofIdentity,type RoofIdentity } from './roof-rules.ts';
 import { terrainWriteCount } from './terrain-mutation-journal.ts';
-import type { Cell,World } from './types.ts';
+import type { Cell,MaterialPile,World } from './types.ts';
 import { filteredStructures } from './structure-navigation.ts';
 
 const caches=new WeakMap<World,RoomTopologyCache>();
@@ -99,7 +100,14 @@ export class CleanlinessCapture {
   /** The slag and cleanliness-source terms, added after the filth. */
   private sourcesTotal(total:number,contains:(i:number)=>boolean,cells:ReadonlySet<number>):number {
     const w=this.world;
-    for(const p of w.piles)if(p.item==='slag-steel-chunk'&&p.owner.type==='ground'&&contains(p.owner.z*w.width+p.owner.x))total-=2;
+    // Inside a step the pile index lists the ground slag in array order: the
+    // same subtractions in the same order as the scan of every pile.
+    const index=pileIndex(w);let slag:readonly MaterialPile[]=w.piles;
+    if(index){
+      if(verifyPileIndex){const scanned=w.piles.filter(p=>p.item==='slag-steel-chunk'&&p.owner.type==='ground');if(scanned.length!==index.groundSlag.length||scanned.some((p,i)=>p!==index.groundSlag[i]))pileIndexMismatch('ground slag');}
+      slag=index.groundSlag;
+    }
+    for(const p of slag)if(p.item==='slag-steel-chunk'&&p.owner.type==='ground'&&contains(p.owner.z*w.width+p.owner.x))total-=2;
     // Only these kinds contribute (value 0 otherwise); same source order.
     for(const s of filteredStructures(w,'room-cleanliness-sources',isCleanlinessSource)){const value=s.kind==='spike-trap'?-5:s.kind==='electric-crematorium'?-20:s.kind==='hydroponics-basin'?-3:s.kind==='fueled-smithy'||s.kind==='electric-smithy'?-3:s.kind==='machining-table'?-2:s.kind==='butcher-table'?-15:s.kind==='stonecutter'||s.kind==='art-bench'?-5:0;if(value&&footprintCells(s).some(c=>contains(c.z*w.width+c.x)||s.kind==='electric-crematorium'&&neighbors(c).some(n=>cells.has(n.z*w.width+n.x))))total+=value;}
     return total;

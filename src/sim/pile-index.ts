@@ -50,6 +50,8 @@ export interface PileIndex {
   readonly groundChunks:readonly MaterialPile[];
   /** Every ground material-floor pile (any position), in array order. */
   readonly groundMaterialFloors:readonly MaterialPile[];
+  /** Every ground pile of slag (item 'slag-steel-chunk', any position), in array order. */
+  readonly groundSlag:readonly MaterialPile[];
   /** Sum of worn apparel move offsets per integer wearer id, added in array order from 0. */
   readonly wornOffsets:ReadonlyMap<number,number>;
   /** Wearers with an apparel pile whose item has no apparel definition: readers scan (and throw as before). */
@@ -59,7 +61,7 @@ export interface PileIndex {
 }
 interface Entry extends PileIndex {
   generation:number;epoch:number;length:number;first:MaterialPile|undefined;last:MaterialPile|undefined;
-  readonly groundAt:Map<number,MaterialPile[]>;readonly groundChunks:MaterialPile[];readonly groundMaterialFloors:MaterialPile[];
+  readonly groundAt:Map<number,MaterialPile[]>;readonly groundChunks:MaterialPile[];readonly groundMaterialFloors:MaterialPile[];readonly groundSlag:MaterialPile[];
   readonly wornOffsets:Map<number,number>;readonly undefinedWorn:Set<number>;readonly equipment:Map<number,MaterialPile>;
   /** pile, owner, kind, item of each indexed pile, in array order. */
   readonly seen:unknown[];
@@ -74,13 +76,14 @@ function unchanged(piles:readonly MaterialPile[],seen:readonly unknown[],count:n
 }
 /** Adds piles[from..] to `e`, in array order: the same result as building with them. */
 function add(e:Entry,piles:readonly MaterialPile[],from:number):void {
-  const {width,height,version,groundAt,groundFacts,groundChunks,groundMaterialFloors,wornOffsets,undefinedWorn,equipment,seen}=e;
+  const {width,height,version,groundAt,groundFacts,groundChunks,groundMaterialFloors,groundSlag,wornOffsets,undefinedWorn,equipment,seen}=e;
   for(let n=piles.length,k=from;k<n;k++){
     const p=piles[k]!,owner=p.owner;seen.push(p,owner,p.kind,p.item);
     if(owner.type==='ground'){
       const chunk=version>=28&&p.kind==='chunk',floor=materialFloorPile(version,p.kind);
       if(chunk)groundChunks.push(p);
       if(floor)groundMaterialFloors.push(p);
+      if(p.item==='slag-steel-chunk')groundSlag.push(p);
       if(inMap(owner.x,owner.z,width,height)){
         const i=owner.z*width+owner.x,list=groundAt.get(i);if(list)list.push(p);else groundAt.set(i,[p]);
         groundFacts[i]=groundFacts[i]!|(chunk?PILE_CHUNK:0)|(floor?PILE_MATERIAL_FLOOR:0);
@@ -97,7 +100,7 @@ function add(e:Entry,piles:readonly MaterialPile[],from:number):void {
 }
 function build(world:World):Entry {
   const piles=world.piles,width=world.width,height=world.height;
-  const e:Entry={width,height,version:world.schemaVersion,groundAt:new Map(),groundFacts:new Uint8Array(width*height),groundChunks:[],groundMaterialFloors:[],
+  const e:Entry={width,height,version:world.schemaVersion,groundAt:new Map(),groundFacts:new Uint8Array(width*height),groundChunks:[],groundMaterialFloors:[],groundSlag:[],
     wornOffsets:new Map(),undefinedWorn:new Set(),equipment:new Map(),seen:[],
     generation,epoch,length:piles.length,first:piles[0],last:piles[piles.length-1]};
   add(e,piles,0);
