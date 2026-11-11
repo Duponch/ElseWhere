@@ -37,3 +37,7 @@ Valider le texte relu par `validateWorld` seul ne suffit pas : le texte est la f
 - Une partie dont seul l'état en mémoire est invalide, mais dont le texte se recharge, est désormais gardée. Exemple : un champ indéfini, que le texte JSON ne transporte pas. L'ancien chemin la refusait. Le contrat retenu est « une sauvegarde gardée se recharge ».
 - La compression et l'écriture du texte côté affichage n'ont pas changé ; elles n'ont pas été mesurées ici.
 - Aucune sauvegarde complète n'a été jouée de bout en bout dans l'interface du jeu. Le client est couvert par le test avec faux Workers, et le vrai Worker de contrôle par l'essai dans le navigateur.
+
+## Publication
+
+Publié sur Cloudflare Pages le 11 novembre (Production `b06f1639`, branche main, commit `a68058d2`), depuis une copie exacte du commit. Typage et construction Pages réussis, avec le nouveau Worker de contrôle `save-check.worker-CSKmSTXG.js`. Fichiers publics inchangés. 36 réponses HTTPS identiques octet pour octet sur le site public et l'adresse fixe du déploiement. La publication inclut aussi les deux optimisations exactes de la journée : recherche des bâtiments par l'index partagé (Worker ×3 de 79,6 à 82,2 % sur Les Forges) et comparaison des dépendances d'acteurs en boucles simples.
