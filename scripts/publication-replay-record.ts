@@ -13,6 +13,8 @@
 //   npx esbuild scripts/publication-replay-record.ts --bundle --platform=node --format=esm --outfile=tmp/perf/replay-record.mjs
 //   node tmp/perf/replay-record.mjs <save> <out.json> [macroTicks=60] [profile=mixed|fast|slow]
 //   DUMP=<n> also writes message n as readable JSON, to diff two builds.
+//   BENCH=1 times the same scripted workload instead (CPU and wall, from load to
+//   the last tick; messages are cloned as postMessage would, not hashed).
 // Then: node scripts/publication-replay-compare.mjs a.json b.json
 import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -130,6 +132,15 @@ const scope: any = {
   onmessage: null,
   postMessage(message: any) {
     if (message?.type === 'reply') replies.set(message.id, message);
+    // BENCH=1: a fixed-workload timing bench. Each message pays the structured
+    // clone a browser pays at postMessage; nothing is hashed or expanded.
+    if (process.env.BENCH) {
+      structuredClone(message);
+      const t = message?.publication?.world?.tick ?? message?.world?.tick ?? message?.summary?.tick;
+      if (typeof t === 'number') { lastTick = Math.max(lastTick, t); if (firstTick < 0) firstTick = t; }
+      rows.push({ n: rows.length, at: now, type: String(message?.type), ...message?.publication?.kind ? { kind: message.publication.kind } : {}, bytes: 0, sha: '' });
+      return;
+    }
     // RAW=1 records the messages as sent (path patches not rebuilt), to inspect the wire.
     if (!process.env.RAW) message = expandResources(expandPaths(message));
     const tick = message?.publication?.world?.tick ?? message?.world?.tick ?? message?.summary?.tick;
@@ -158,12 +169,19 @@ const drain = () => { for (let guard = 0; tasks.length; guard++) { if (guard > 1
 const run = (macroTicks: number) => { const until = lastTick + macroTicks; for (let i = 0; lastTick < until; i++) { if (i > 200000) throw Error('Simulation does not advance'); now += 20; wake(); drain(); } };
 
 await request({ type: 'load', data: text, threatPauseMode: 'never' });
+const benchCpu = process.cpuUsage(), benchWall = process.hrtime.bigint(), benchFrom = rows.length;
 const third = Math.max(1, Math.floor(wantedTicks / 3));
 await request({ type: 'speed', speed: 6 }); run(third);
 await request({ type: 'speed', speed: 1 }); run(third);
 await request({ type: 'speed', speed: 0 }); for (let i = 0; i < 5; i++) { now += 20; wake(); drain(); }
 await request({ type: 'speed', speed: 3 }); run(third);
 await request({ type: 'speed', speed: 0 });
+if (process.env.BENCH) {
+  const cpu = process.cpuUsage(benchCpu), wall = Number(process.hrtime.bigint() - benchWall) / 1e6;
+  const kinds = new Map<string, number>(); for (const row of rows.slice(benchFrom)) { const k = row.type + (row.kind ? ':' + row.kind : ''); kinds.set(k, (kinds.get(k) ?? 0) + 1); }
+  console.log(JSON.stringify({ bench: true, save: savePath, profile, macroTicks: lastTick - firstTick, cpuMs: Math.round((cpu.user + cpu.system) / 1000), wallMs: Math.round(wall), kinds: Object.fromEntries(kinds) }));
+  process.exit(0);
+}
 const saved = await request({ type: 'save' });
 const kinds = new Map<string, number>(); for (const row of rows) { const k = row.type + (row.kind ? ':' + row.kind : ''); kinds.set(k, (kinds.get(k) ?? 0) + 1); }
 const out = { save: savePath, profile, macroTicks: lastTick - firstTick, messages: rows.length, kinds: Object.fromEntries(kinds), totalBytes: rows.reduce((s, r) => s + r.bytes, 0), allSha: sha(rows.map(r => r.sha).join('\n')), saveSha: sha(String(saved.data)), rows };
