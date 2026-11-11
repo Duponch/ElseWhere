@@ -1,3 +1,4 @@
+import {doorToDoorSurcharge303,isDoorToDoorSchema303,withDoorToDoorDelay303} from './door-to-door-303.ts';
 import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {idleWanderTask300} from './idle-wander-300.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -34,7 +35,9 @@ export function startTravel(world:World,pawn:Pawn,next:Cell,getLight?:LightReade
   // Carry fractional tick overshoot to the next edge; never round each diagonal up.
   let start = !freshStart297&&pawn.motion && pawn.motion.end >= now-(isCorePhysicalSchema297(Number(world.schemaVersion))?.1:1) ? pawn.motion.end : now;
   const door=doorAt(world,next);if(door)start=Math.max(start,door.door!.changedAt+(1-door.door!.from)*importDoorDuration(door));
-  const terrainDelay=furnitureDelay(world,pawn,next,undefined,geometry);
+  let terrainDelay=furnitureDelay(world,pawn,next,undefined,geometry);
+  // RimWorld's door-to-door surcharge (schema 303): a Core step only, see door-to-door-303.ts.
+  if(door&&isCorePhysicalSchema297(Number(world.schemaVersion))&&isDoorToDoorSchema303(Number(world.schemaVersion))&&doorToDoorSurcharge303(doorAt(world,pawn),door))terrainDelay=withDoorToDoorDelay303(terrainDelay);
   let speedFactor=isCorePhysicalSchema297(Number(world.schemaVersion))?humanMoveSpeedFactor297(world,pawn,getLight):(getLight?.()??new LightEnvironmentCache().read(world)).speedAt(pawn)*pawnBody(pawn).capacities.moving*apparelMoveFactor(world,pawn)*weatherMoveFactor(world,pawn);
   if(world.schemaVersion>=86&&!isCorePhysicalSchema297(Number(world.schemaVersion))){if(pawn.prisoner)speedFactor*=.35;if(pawn.rescue?.phase==='carry'||cryptosleepCarrying271(pawn)||shipCasketCarrying277(pawn)||groupHumanCarrying257(world,pawn.id)||kidnapCarrying261(pawn))speedFactor*=.6;}
   const coreMove297=isCorePhysicalSchema297(Number(world.schemaVersion)),walk297=((pawn.mental?.crisis?.kind==='sad-wander'||pawn.mental?.crisis?.kind==='food-binge')&&!pawn.need)||(isSchema300OrLater(Number(world.schemaVersion))&&idleWanderTask300(pawn)?.kind==='move');

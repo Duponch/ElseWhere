@@ -1,8 +1,17 @@
+import {DOOR_TO_DOOR_CORE303,isDoorToDoorSchema303} from './door-to-door-303.ts';
 /** Captured edge costs outlive their source. Do not recompute them from the
  * current furniture/floor: those may change while the admitted edge finishes. */
 export function validCapturedTravelDelay(value: unknown, version: number): boolean {
   if (value === undefined) return true;
   if (typeof value !== 'number' || !Number.isFinite(value) || version < 16) return false;
+  if (validTravelDelayBase(value, version)) return true;
+  // Schema 303: a door-to-door step adds 45 Core ticks to any valid delay,
+  // once (see door-to-door-303.ts); 4.5 alone is the surcharge on bare ground.
+  if (!isDoorToDoorSchema303(version)) return false;
+  const core = Math.round(value * 10) - DOOR_TO_DOOR_CORE303;
+  return core >= 0 && value === (core + DOOR_TO_DOOR_CORE303) / 10 && (core === 0 || validTravelDelayBase(core / 10, version));
+}
+function validTravelDelayBase(value: number, version: number): boolean {
   // Geographic mossy soil costs 3 Core ticks; a known trap adds 40 Core.
   // Keep these captured invoices even after the original ground changes.
   if (version >= 256 && (value === .3 || value === 4.3)) return true;
