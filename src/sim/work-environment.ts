@@ -49,8 +49,10 @@ export class WorkEnvironment extends LightEnvironment {
  * Local glow is rebuilt only on barrier or lit-source changes. Tick and roof
  * coverage affect sky sampling without rerunning the flood. */
 export class WorkEnvironmentCache {
-  private readonly light=new LightEnvironmentCache();
-  readonly localLight=this.light.localLight;
+  private readonly light:LightEnvironmentCache;
+  readonly localLight:LightEnvironmentCache['localLight'];
+  /** `light`: the map's shared cache (sharedLightEnvironmentCache) for the engine; a private one otherwise. */
+  constructor(light=new LightEnvironmentCache()){this.light=light;this.localLight=light.localLight;}
   /* The rooms of the last read. They depend only on the topology, the roofed
    * cells, the structure list (kinds, cells and orientations are immutable:
    * an unchanged shared membership token proves the same structures in the

@@ -55,3 +55,17 @@ export class LightEnvironmentCache {
     return this.last=new LightEnvironment(topology,roofs,combined,sky,withoutCaves);
   }
 }
+
+/* One cache per map, shared by its readers (Core movement, human move speed,
+ * surface environment, work environment). read() checks every input on each
+ * call (barriers and rock tiles, light sources and their activity, the
+ * opaque cells around the sources, roofs, sky light) and a reused light map
+ * is exactly the one a fresh build would give (sameLightObstacles), so a
+ * shared cache gives the same answers as one cache per reader. It only
+ * avoids rebuilding the same room topology and light map once per reader,
+ * and from scratch each time a reader dropped its own cache. */
+const sharedCaches=new WeakMap<World,LightEnvironmentCache>();
+export function sharedLightEnvironmentCache(world:World):LightEnvironmentCache {
+  let cache=sharedCaches.get(world);if(!cache){cache=new LightEnvironmentCache();sharedCaches.set(world,cache);}
+  return cache;
+}

@@ -20,13 +20,13 @@ import {captureStructureNavigation} from './structure-navigation.ts';
 import {carrierOf} from './rescue-state.ts';
 import {medicallyStopped} from './health-rules.ts';
 import {isStunned} from './stun.ts';
-import {LightEnvironmentCache,type LightReader} from './light-environment.ts';
+import {sharedLightEnvironmentCache,type LightEnvironmentCache,type LightReader} from './light-environment.ts';
 import type {SearchBudget} from './work-planner.ts';
 import type {Cell,World} from './types.ts';
 
 /** No needs, work production or autonomous planner is run at the physical rate. */
 export function createCoreMovement297(world:World){
- let blocked:Uint8Array|undefined,light=new LightEnvironmentCache(),passengers:ReturnType<typeof captureCorePassengers297>|undefined;
+ let blocked:Uint8Array|undefined,light:LightEnvironmentCache=sharedLightEnvironmentCache(world),passengers:ReturnType<typeof captureCorePassengers297>|undefined;
  let owned=world.corePathBudget297;
  if(!owned){if(world.phaseCore297!==0)throw Error('Missing owned path budget inside physical interval');owned=world.corePathBudget297={tick:world.tick,remaining:8,pairs:32768};}
  if(owned.tick!==world.tick)throw Error('Stale physical path budget');

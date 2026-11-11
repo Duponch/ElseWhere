@@ -6,7 +6,7 @@ import { adoptWind,advanceWind } from './wind.ts';
 import { advanceTemperature,outdoorTemperature,reconcileTemperature } from './temperature.ts';
 import { updatePlantTemperatures } from './thermal-plants.ts';
 import { reconcilePlantLighting } from './plant-lighting.ts';
-import { LightEnvironmentCache,type LightReader } from './light-environment.ts';
+import { sharedLightEnvironmentCache,type LightReader } from './light-environment.ts';
 import { advancePlantLife } from './plant-life.ts';
 import { advanceFires,fireDanger,igniteLightning } from './fire.ts';
 import { ensureFireState } from './fire-rules.ts';
@@ -35,9 +35,8 @@ export function advanceSurfaceWeather(world:World,chop:(cell:Cell)=>void):void {
   });
   if(world.wind)advanceWind(world,chop);
 }
-const lightCaches=new WeakMap<World,LightEnvironmentCache>();
 export function advanceSurfaceTemperature(world:World,layout:ThermalLayout,providedLight?:LightReader):ThermalLayout {
-  const light=providedLight??(()=>{let cache=lightCaches.get(world);if(!cache){cache=new LightEnvironmentCache();lightCaches.set(world,cache);}return cache.read(world);});
+  const light=providedLight??(()=>sharedLightEnvironmentCache(world).read(world));
   advanceTemperature(world,layout);
   advanceLocalGeysers256(world,layout);
   advanceGeothermalGenerators264(world,layout);

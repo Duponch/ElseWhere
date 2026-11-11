@@ -312,7 +312,7 @@ import { WorkEnvironmentCache, type WorkEnvironment } from './work-environment.t
 import { advanceBeautyNeeds } from './beauty-need.ts';
 import { advanceFlowerPots } from './flower-pot-work.ts';
 import { createFlowerPotState,cutFlowerPotPlant,flowerPotCanUninstall } from './flower-pot.ts';
-import type { LightEnvironment } from './light-environment.ts';
+import { sharedLightEnvironmentCache,type LightEnvironment } from './light-environment.ts';
 import { advanceWork,workProgress,setWorkUnits,WORK_FRACTIONS } from './work-progress.ts';
 import { TemperatureView, reconcileTemperature, advanceTemperature } from './temperature.ts';
 import { lightSources } from './light-sources.ts';
@@ -1161,7 +1161,7 @@ function completeJob(world: World, pawn: Pawn, job: Job): void {
 }
 const workEnvironments=new WeakMap<World,WorkEnvironmentCache>();
 function environmentCache(world:World):WorkEnvironmentCache {
-  let cache=workEnvironments.get(world);if(!cache){cache=new WorkEnvironmentCache();workEnvironments.set(world,cache);}return cache;
+  let cache=workEnvironments.get(world);if(!cache){cache=new WorkEnvironmentCache(sharedLightEnvironmentCache(world));workEnvironments.set(world,cache);}return cache;
 }
 function reconcileSmoothFloorJobs281(world:World,readGeometry?:()=>ReturnType<typeof captureStructureNavigation>):void {
   let invalid:Set<number>|undefined;let geometry:ReturnType<typeof captureStructureNavigation>|undefined;
