@@ -9,7 +9,7 @@ import {captureActualFogPhysical256} from './exploration-physical-256.ts';
 import {finishExplorationReveal256} from './exploration-runtime-256.ts';
 import { prisonDoorPassable } from './prison-space.ts';
 import { prisonBreakActive } from './prison-break-state.ts';
-import { DOOR_CLOSE_DELAY, doorAt, doorOpenness, doorOpenTicks, doorMotionTicks, isPassageDoor } from './door-rules.ts';
+import { DOOR_CLOSE_DELAY, doorAt, doorOpenness, doorOpenTicks, doorMotionTicks, fenceGateOpenTicks303, isFenceGateSpeedSchema303, isPassageDoor } from './door-rules.ts';
 import { invalidateAnimalPens } from './animal-pens.ts';
 import { isBlockMaterial } from './building-materials.ts';
 import {animalHaulDoorCanOpen282,animalHaulDoorPassable282} from './animal-haul-door-282.ts';
@@ -22,7 +22,9 @@ function openDoor(world:World,s:Structure):void {
   const now=isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick;
   const d=s.door!;
   const opening=!d.open;
-  if(!d.open){d.from=doorOpenness(s,now);d.changedAt=now;d.open=true;if(d.holdOpen)invalidateAnimalPens(world);}
+  if(!d.open){d.from=doorOpenness(s,now);d.changedAt=now;d.open=true;if(d.holdOpen)invalidateAnimalPens(world);
+    // A gate of an older save takes the Core gate speed from this opening (schema 303), its pose just rebased.
+    if(s.kind==='fence-gate'&&d.duration===undefined&&isFenceGateSpeedSchema303(world.schemaVersion))d.duration=fenceGateOpenTicks303(s);}
   // `changed` also marks a re-entry into an already open door (simulation
   // invalidation); only an actual opening changes what the door looks like.
   if(isCorePhysicalSchema297(Number(world.schemaVersion))){const state=physicalDoorState297(world);state.open.add(s);state.changed=true;if(opening)state.moved297.add(s);}

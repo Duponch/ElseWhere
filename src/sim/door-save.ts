@@ -3,7 +3,7 @@ import {effectiveLocal297} from './core-phase-297.ts';
 import {validExplorationDoorApproacher256,type ResolveExplorationApproacher256} from './exploration-door-256.ts';
 import {captureActualExplorationApproachers256} from './exploration-actors-256.ts';
 import {explorationEnabled256} from './exploration-state-256.ts';
-import { doorOpenness, doorMotionTicks, manualDoorOpenTicks } from './door-rules.ts';
+import { doorOpenness, doorMotionTicks, fenceGateOpenTicks303, isFenceGateSpeedSchema303, manualDoorOpenTicks } from './door-rules.ts';
 import type { World } from './types.ts';
 export function validateDoors(world:World,version:number,providedResolver?:ResolveExplorationApproacher256):string[] {
   const now297=isCorePhysicalSchema297(version)?effectiveLocal297(world):world.tick;
@@ -18,12 +18,14 @@ export function validateDoors(world:World,version:number,providedResolver?:Resol
       if(d!==undefined)errors.push('Unexpected door state.');continue;
     }
     const approach=!!d&&Object.hasOwn(d,'explorationApproacherId');
+    // Schema 303: a fence gate may record the Core gate speed (door-rules.ts).
+    const gateSpeed=s.kind==='fence-gate'&&!!d&&typeof d==='object'&&Object.hasOwn(d,'duration');
     try{if(d&&!validExplorationDoorApproacher256(d,version,explorationEnabled256(world),world.nextId,resolve)){errors.push('Invalid actual exploration door approach owner.');continue;}}catch{errors.push('Unresolved actual exploration actor owner.');continue;}
-    if(!d||typeof d!=='object'||Array.isArray(d)||Object.keys(d).length!==(s.kind==='autodoor'?8:7)+(approach?1:0)||!['open','holdOpen','forbidden'].every(k=>typeof d[k as keyof typeof d]==='boolean')
+    if(!d||typeof d!=='object'||Array.isArray(d)||Object.keys(d).length!==(s.kind==='autodoor'||gateSpeed?8:7)+(approach?1:0)||!['open','holdOpen','forbidden'].every(k=>typeof d[k as keyof typeof d]==='boolean')
       ||!(isCorePhysicalSchema297(version)?coreDate297(d.changedAt,0):Number.isSafeInteger(d.changedAt)&&d.changedAt>=0&&d.changedAt<=world.tick)||!Number.isFinite(d.from)||d.from<0||d.from>1
       ||!(isCorePhysicalSchema297(version)?coreDate297(d.lastTouch,-12):Number.isSafeInteger(d.lastTouch)&&d.lastTouch>= -12&&d.lastTouch<=world.tick)
       ||!(d.closeAt===null||Number.isFinite(d.closeAt)&&d.closeAt>=now297&&d.closeAt<=now297+21)
-      ||!d.open&&d.closeAt!==null||s.kind==='autodoor'&&(typeof d.duration!=='number'||![manualDoorOpenTicks(s),manualDoorOpenTicks(s)/4].includes(d.duration))) {errors.push('Invalid door state.');continue;}
+      ||!d.open&&d.closeAt!==null||gateSpeed&&!(isFenceGateSpeedSchema303(version)&&d.duration===fenceGateOpenTicks303(s))||s.kind==='autodoor'&&(typeof d.duration!=='number'||![manualDoorOpenTicks(s),manualDoorOpenTicks(s)/4].includes(d.duration))) {errors.push('Invalid door state.');continue;}
     if(s.orientation!==0||s.material===undefined)errors.push('Door requires an explicit material and automatic orientation.');
     // No new movement enters a closed/incompletely opened door. A later forbid
     // does not invalidate the committed edge; construction protects its corners.

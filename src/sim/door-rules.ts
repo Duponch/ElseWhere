@@ -1,6 +1,7 @@
 import type { Cell, Structure, World } from './types.ts';
 import { isBlockMaterial } from './building-materials.ts';
 import { structureAnchors } from './structure-navigation.ts';
+import { schemaAtLeast } from './schema-range.ts';
 
 /** Timed leaf segment, distinct from permission and logical opening. */
 export interface DoorState {
@@ -20,20 +21,34 @@ export const DOOR_CLOSE_DELAY=11;
 export const isRoomDoor=(kind:unknown):boolean=>kind==='door'||kind==='autodoor';
 export const isPassageDoor=(kind:unknown):boolean=>isRoomDoor(kind)||kind==='fence-gate';
 type DoorSubject=Pick<Structure,'material'>&{kind?:unknown;power?:Structure['power'];door?:DoorState};
+/** Stuff factor of Core's DoorOpenSpeed stat (stone blocks .45, wood 1.2). */
+const doorStuffSpeed=(material:unknown):number=>isBlockMaterial(material)? .45:material==='wood'?1.2:1;
 export const manualDoorOpenTicks=(s:Pick<Structure,'material'>):number=>
-  Math.round(45/(isBlockMaterial(s.material)? .45:s.material==='wood'?1.2:1))/10;
+  Math.round(45/doorStuffSpeed(s.material))/10;
+/* Fence gates (schema 303), RimWorld 1.6. `FenceGate` sets its DoorOpenSpeed
+ * base to 1.15 (Buildings_Structure.xml), so `Building_Door.TicksToOpenNow`,
+ * RoundToInt(45 / (1.15 x stuff factor)), is shorter than a door of the same
+ * material: wood 33 Core ticks instead of 38, steel and jade 39 instead of 45,
+ * stone blocks 87 instead of 100. A gate records this duration in its door
+ * state: built from schema 303, or, for a gate of an older save, from its next
+ * opening (its pose is rebased then, so it never jumps). */
+export const isFenceGateSpeedSchema303=schemaAtLeast(303);
+export const FENCE_GATE_OPEN_SPEED_303=1.15;
+export const fenceGateOpenTicks303=(s:Pick<Structure,'material'>):number=>
+  Math.round(45/(FENCE_GATE_OPEN_SPEED_303*doorStuffSpeed(s.material)))/10;
 /** Core's powered opening speed multiplier; never return zero because the
  * resident animation and save validator divide by this duration. */
 export const doorOpenTicks=(s:DoorSubject):number=>{
+  if(s.kind==='fence-gate')return s.door?.duration??manualDoorOpenTicks(s);
   const manual=manualDoorOpenTicks(s);
   return s.kind==='autodoor'&&s.power?.on===true&&!('breakdown' in s&&s.breakdown)?manual/4:manual;
 };
-export const doorMotionTicks=(s:DoorSubject):number=>s.kind==='autodoor'?(s.door?.duration??doorOpenTicks(s)):manualDoorOpenTicks(s);
+export const doorMotionTicks=(s:DoorSubject):number=>s.kind==='autodoor'||s.kind==='fence-gate'?(s.door?.duration??doorOpenTicks(s)):manualDoorOpenTicks(s);
 export const newDoorState=(tick:number):DoorState=>({open:false,holdOpen:false,forbidden:false,changedAt:tick,from:0,closeAt:null,lastTouch:-12});
 export function builtDoorState(world:World,s:Cell&DoorSubject):DoorState {
-  const state:DoorState={...newDoorState(world.tick),...(s.kind==='autodoor'?{duration:doorOpenTicks(s)}:{})};
+  const state:DoorState={...newDoorState(world.tick),...(s.kind==='autodoor'?{duration:doorOpenTicks(s)}:s.kind==='fence-gate'&&isFenceGateSpeedSchema303(world.schemaVersion)?{duration:fenceGateOpenTicks303(s)}:{})};
   if(world.piles.some(p=>p.owner.type==='ground'&&p.owner.x===s.x&&p.owner.z===s.z)||world.packed.some(p=>p.owner.type==='ground'&&p.owner.x===s.x&&p.owner.z===s.z)) {
-    state.open=true;state.closeAt=world.tick+doorOpenTicks(s)+DOOR_CLOSE_DELAY;
+    state.open=true;state.closeAt=world.tick+(state.duration??doorOpenTicks(s))+DOOR_CLOSE_DELAY;
   }
   return state;
 }
