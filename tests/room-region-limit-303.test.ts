@@ -4,13 +4,14 @@ import {captureCleanliness,roomCleanliness} from '../src/sim/filth-room.ts';
 import {captureRoomQuality} from '../src/sim/room-quality.ts';
 import {WorkEnvironmentCache} from '../src/sim/work-environment.ts';
 import {ROOM_REGION_LIMIT} from '../src/sim/room-region-limit-303.ts';
-import type {World} from '../src/sim/types.ts';
+import type {Structure,World} from '../src/sim/types.ts';
 
 // RimWorld 1.6: a room keeps its stats and role only up to 60 regions; a
 // region is a connected part of a 12 x 12 block aligned on the map grid.
+function wall(w:World,x:number,z:number):void {(fixtureBuilding(w,'wall',x,z) as Structure).material='wood';}
 function walled(w:World,x0:number,z0:number,x1:number,z1:number):void {
-  for(let x=x0-1;x<=x1+1;x++){fixtureBuilding(w,'wall',x,z0-1).material='wood';fixtureBuilding(w,'wall',x,z1+1).material='wood';}
-  for(let z=z0;z<=z1;z++){fixtureBuilding(w,'wall',x0-1,z).material='wood';fixtureBuilding(w,'wall',x1+1,z).material='wood';}
+  for(let x=x0-1;x<=x1+1;x++){wall(w,x,z0-1);wall(w,x,z1+1);}
+  for(let z=z0;z<=z1;z++){wall(w,x0-1,z);wall(w,x1+1,z);}
 }
 /** Two closed rooms: interior x 1..96 (9 grid blocks wide), z 1..60 (6 blocks)
  * for 54 regions, and z 63..134 (7 blocks: 63..71, ..., 132..134) for 63. */
