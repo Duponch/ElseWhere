@@ -34,6 +34,9 @@ export class RoomTopology {
   /** Same as `at(x, z)?.kind === 'space'` for an in-map cell index: every
    * positive label is a space id (solid -1, doorway -2), without a lookup. */
   isSpaceIndex(index: number): boolean { return this.labels[index]! > 0; }
+  /** The label of an index: a space id (> 0), -1 solid, -2 doorway, 0 never;
+   * undefined outside the map. Same answer as `at` on that index, as a number. */
+  labelAt(index: number): number | undefined { return this.labels[index]; }
   private regionCounts?: Map<number, number>;
   /** RimWorld regions of a space: its connected parts (cardinal neighbours)
    * within each 12 x 12 block aligned on the map grid (`Region.GridSize`,
@@ -41,17 +44,20 @@ export class RoomTopology {
    * the first request; derived only, never saved. */
   regionCount(id: number): number {
     if (!this.regionCounts) {
-      const {width, height, labels} = this, counts = new Map<number, number>(), seen = new Uint8Array(width * height), queue: number[] = [];
+      // Same flood as before, without a closure per visited cell: a block
+      // holds at most 144 cells, so a fixed queue serves every region.
+      const {width, height, labels} = this, counts = new Map<number, number>(), seen = new Uint8Array(width * height), queue = new Int32Array(144);
       for (let root = 0; root < labels.length; root++) {
         const label = labels[root]!;if (label <= 0 || seen[root]) continue;
         const rx = root % width, rz = Math.floor(root / width), x0 = rx - rx % 12, z0 = rz - rz % 12, x1 = Math.min(width, x0 + 12), z1 = Math.min(height, z0 + 12);
         counts.set(label, (counts.get(label) ?? 0) + 1);
-        seen[root] = 1;queue.length = 0;queue.push(root);
-        for (let head = 0; head < queue.length; head++) {
+        seen[root] = 1;queue[0] = root;let tail = 1;
+        for (let head = 0; head < tail; head++) {
           const index = queue[head]!, x = index % width, z = Math.floor(index / width);
-          const visit = (n: number) => { if (!seen[n] && labels[n] === label) { seen[n] = 1;queue.push(n); } };
-          if (x > x0) visit(index - 1);if (x + 1 < x1) visit(index + 1);
-          if (z > z0) visit(index - width);if (z + 1 < z1) visit(index + width);
+          let n = index - 1;if (x > x0 && !seen[n] && labels[n] === label) { seen[n] = 1;queue[tail++] = n; }
+          n = index + 1;if (x + 1 < x1 && !seen[n] && labels[n] === label) { seen[n] = 1;queue[tail++] = n; }
+          n = index - width;if (z > z0 && !seen[n] && labels[n] === label) { seen[n] = 1;queue[tail++] = n; }
+          n = index + width;if (z + 1 < z1 && !seen[n] && labels[n] === label) { seen[n] = 1;queue[tail++] = n; }
         }
       }
       this.regionCounts = counts;

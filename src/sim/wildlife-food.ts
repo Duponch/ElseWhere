@@ -4,7 +4,7 @@ import {isAnimalSpecies256} from './animal-core-v256.ts';
 import type { Cell,Resource,World } from './types.ts';
 import { ingestFoodRisk } from './food-hygiene.ts';
 import type { WildAnimal } from './wildlife-state.ts';
-import { harvestable,isPlant,plantGrowth } from './plants.ts';
+import { createPlantGrowthReader,harvestable,isPlant,plantGrowth } from './plants.ts';
 import { plantLeafless } from './plant-life.ts';
 import { ITEM_DEFINITIONS,type ItemId } from './items.ts';
 import { isAnimalMeat } from './biome-items.ts';
@@ -72,9 +72,11 @@ const grazingCaches=new WeakMap<World,{resources:readonly Resource[];tick:number
 function grazingCandidates(world:World):readonly GrazingCandidate[] {
   const cached=grazingCaches.get(world);
   if(cached&&cached.resources===world.resources&&cached.tick===world.tick&&cached.snow===world.snow)return cached.candidates;
-  const candidates:GrazingCandidate[]=[];
+  // One synchronous pass, no mutation inside: the pass reader shares the
+  // fertility and light-integral inputs of the same formula (createPlantGrowthReader).
+  const candidates:GrazingCandidate[]=[],readGrowth=createPlantGrowthReader(world);
   for(const r of world.resources)if((r.kind!=='haygrass'||world.schemaVersion>=227)&&isPlant(r)&&!plantLeafless(world,r)){
-    const growth=plantGrowth(world,r);
+    const growth=readGrowth(r);
     if(grazeablePlant(r,growth,world))candidates.push({r,growth,sourceGrowth:r.growth,sourceTick:r.growthTick,tree:r.kind==='tree'});
   }
   grazingCaches.set(world,{resources:world.resources,tick:world.tick,snow:world.snow,candidates});

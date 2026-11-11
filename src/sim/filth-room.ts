@@ -98,7 +98,9 @@ export class CleanlinessCapture {
     for(let k=0;k<shape.order.length;k++){const tile=w.tiles[shape.order[k]!]!;total+=tile.floor?FLOOR_DEFINITIONS[tile.floor].cleanliness:isGrowingTerrain(tile.terrain)?-1:0;}
     // Region lists include boundary objects, not every object across an open
     // adjacent room. The only nonzero adjacent surface in this slice is a door.
-    const contains=(i:number)=>cells.has(i)||adjacent.has(i)&&this.topology.at(i%w.width,Math.floor(i/w.width))?.kind==='doorway';
+    // The room's cells all carry its label and a doorway is labelled -2: the
+    // label read first spares the two set lookups for every other cell.
+    const topology=this.topology,contains=(i:number)=>{const label=topology.labelAt(i);return label===id&&cells.has(i)||label===-2&&adjacent.has(i);};
     const items=w.filth?.items??[];
     for(const f of items)if(contains(f.z*w.width+f.x))total+=FILTH_DEFINITIONS[f.kind].cleanliness;
     this.progress.set(id,{start:index,epoch:this.epoch,contains,afterFilth:total,filth:items.length});
