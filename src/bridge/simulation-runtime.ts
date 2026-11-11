@@ -43,7 +43,7 @@ import {configureSettlementLimit,validSettlementLimit} from '../sim/world-map-op
 import type {SettlementLimit,CampaignState} from '../sim/world-map-state';
 import {selectedRegisteredMap} from '../sim/world-map-context';
 import {campaignOnlySummary} from '../sim/world-map-presentation';
-import {deserializeCampaign,serializeCampaign} from '../sim/serialization';
+import {deserializeCampaign,serializeCampaign,serializeCampaignUnchecked} from '../sim/serialization';
 import { UrgentThreatObserver, validThreatPauseMode, type ThreatPauseMode } from './urgent-threats';
 import {selectedMap} from '../sim/secondary-site-context';
 import {campaignPresentation,campaignPresentationView} from '../sim/secondary-site-presentation';
@@ -567,7 +567,8 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
         resumeNeutralEncounter261(previousEncounter);
         if (result.affected !== undefined) data = JSON.stringify({ affected: result.affected, skipped: result.skipped });
       } else if (request.type === 'save') {
-        data = serializeCampaign(world);
+        // A deferred check keeps the complete validation off the simulation thread.
+        data = request.check==='deferred'?serializeCampaignUnchecked(world):serializeCampaign(world);
       }
     }
     const checkpoint = request.type === 'init' || request.type === 'load' || request.type === 'resync';

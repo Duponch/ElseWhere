@@ -1,4 +1,5 @@
 import {actualViewKey301} from './actual-view-wire-301.ts';
+import {SaveTextChecker,SAVE_CHECK_UNAVAILABLE} from './save-check.ts';
 import {isActualView301,type ActualView301} from '../sim/actual-view-301.ts';
 import {validGeographicCreationSize262,validGeographicCreationSeason262} from '../sim/geographic-creation-options-262';
 import {worldGenerationKey,validWorldGenerationSettings} from '../sim/world-generation-settings';
@@ -472,7 +473,21 @@ export class SimulationClient {
     return result;
   }
   async setMaxSettlements(value:SettlementLimit):Promise<void> {if(!validSettlementLimit(value))throw Error('Plafond de colonies invalide.');await this.request({type:'settlement-limit',maxSettlements:value});this.settlementMaximum=value;}
-  save() { return this.request({ type: 'save' }); }
+  /** The Worker writes the text; its complete validation runs off the
+   * simulation thread (save-check.ts), with the in-Worker check as fallback. */
+  async save():Promise<string|undefined> {
+    if(!this.saveChecker.available())return this.request({type:'save'});
+    const text=await this.request({type:'save',check:'deferred'});
+    if(typeof text!=='string')return this.request({type:'save'});
+    const refusal=await this.saveChecker.check(text);
+    if(refusal===SAVE_CHECK_UNAVAILABLE)return this.request({type:'save'});
+    if(refusal!==null)throw new SimulationRequestError(refusal,'refused');
+    return text;
+  }
+  private readonly saveChecker=new SaveTextChecker(()=>this.createSaveChecker());
+  /** Opt-in: the game's client returns the save-check Worker (main.ts);
+   * without one, saves keep the in-Worker validation. */
+  protected createSaveChecker():Worker|undefined {return undefined;}
   load(data: string) { if(this.hasCampPreparation||this.hasWorldCreationPreparation)return Promise.reject(new SimulationRequestError('Une préparation attend encore sa décision.','refused'));this.clearWorldDraft256();return this.request({ type: 'load', data,maxSettlements:this.settlementMaximum,threatPauseMode: this.threatPauseMode }); }
 
   private rejectPending(reason: Error) {
@@ -487,6 +502,7 @@ export class SimulationClient {
   }
 
   dispose() {
+    this.saveChecker.dispose();
     this.shipFrames298.abortUnknown(this.worker,'Le client a été fermé.');this.notifyShipState298();
     this.workerStopped(this.worker);this.worker.terminate();
     this.clearWorldDraft256();

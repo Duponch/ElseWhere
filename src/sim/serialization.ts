@@ -947,9 +947,29 @@ function validateV90Persistence(world:World,version:number):string[] {
 }
 
 export function serializeWorld(world: World): string {return serializeCampaign(world);}
+const invalidSaveMessage=(world:unknown,errors:readonly string[]):string=>
+  `Cannot save invalid world: ${errors.join(' ')}${errors.includes('Missing travel segment for movement delay.')?' Travel diagnostic: '+JSON.stringify((world as World).pawns.map(p=>({id:p.id,cooldown:p.moveCooldown,motion:p.motion}))):''}`;
 export function serializeCampaign(world:CampaignState):string {
-  const errors = validateWorld(world); if (errors.length) throw new Error(`Cannot save invalid world: ${errors.join(' ')}${errors.includes('Missing travel segment for movement delay.')?' Travel diagnostic: '+JSON.stringify((world as World).pawns.map(p=>({id:p.id,cooldown:p.moveCooldown,motion:p.motion}))):''}`);
+  const errors = validateWorld(world); if (errors.length) throw new Error(invalidSaveMessage(world,errors));
   const serialized = JSON.stringify(world); if (!withinSaveTextLimit(serialized)) throw new Error('Save exceeds supported size.'); return serialized;
+}
+/** The save text without validateWorld, for a save whose text is validated
+ * off the simulation thread before it is kept (SimulationClient.save, with
+ * savedCampaignRefusal). Same size refusal as serializeCampaign. The complete
+ * validation of a large colony is most of a save (about 1.2 s of 1.4 s on
+ * Les Forges); done here, it froze the simulation. */
+export function serializeCampaignUnchecked(world:CampaignState):string {
+  const serialized = JSON.stringify(world); if (!withinSaveTextLimit(serialized)) throw new Error('Save exceeds supported size.'); return serialized;
+}
+/** Whether the save text loads: the complete load path (deserializeCampaign,
+ * its strict validation included) on the text a later load will read.
+ * validateWorld of the parsed text alone is not that check: the save text is
+ * the stored form, which loading restores before validating it (a valid
+ * campaign's parsed text fails its map registry check). Undefined when the
+ * text loads, else a refusal in serializeCampaign's form. */
+export function savedCampaignRefusal(text:string):string|undefined {
+  try{deserializeCampaign(text);return undefined;}
+  catch(error){const message=error instanceof Error?error.message:String(error);return `Cannot save invalid world: ${message.replace(/^Invalid save: /,'')}`;}
 }
 export function deserializeCampaign(serialized: string,observer?:(step:CampaignLoadProgress)=>void): CampaignState {
   if(!observer)return deserializeCampaignObserved(serialized);

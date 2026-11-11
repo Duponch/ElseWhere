@@ -353,6 +353,8 @@ const client = (() => {
       return lane.reader;
     }
     protected override createWorker():Worker {const lane=lanes.get(this);if(!lane)throw Error('Missing native clone lane');return lane.createWorker();}
+    // Saves are validated off the simulation thread (bridge/save-check.ts).
+    protected override createSaveChecker():Worker {return new Worker(new URL('./bridge/save-check.worker.ts',import.meta.url),{type:'module'});}
     protected override readWorkerMessage(value:unknown){return readResidentWorkerMessage(value);}
     protected override withWorkerMessage(source:Worker,event:MessageEvent<unknown>,dispatch:()=>void):void {
       const lane=lanes.get(this);if(lane)lane.withWorkerMessage(source,event,dispatch);else dispatch();

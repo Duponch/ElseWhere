@@ -27,7 +27,8 @@ export type Request =
   | { id: number; type: 'speed'; speed: number; options?: ThreatSpeedOptions; pauseIntent?: {origin:number;at:number} }
   | { id: number; type: 'threat-pause-mode'; mode: ThreatPauseMode }
   | { id: number; type:'settlement-limit';maxSettlements:SettlementLimit }
-  | { id: number; type: 'save' }
+  /** check 'deferred': the text only; the client validates it off this thread (save-check.ts). */
+  | { id: number; type: 'save'; check?: 'deferred' }
   | { id: number; type: 'resync' }
   | { id: number; type: 'load'; maxSettlements?:SettlementLimit; data: string; threatPauseMode?: ThreatPauseMode };
 
