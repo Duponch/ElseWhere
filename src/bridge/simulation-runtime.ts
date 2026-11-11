@@ -149,7 +149,14 @@ const CALM_FULL_MAX_AGE_MS=500;
 const CALM_FULL_COST_RATIO=10,CALM_FULL_INTERVAL_MAX_MS=1000;
 /** Smoothed wall cost of an ordinary (non-checkpoint) Full publication. */
 let fullPublicationCostMs=0;
-const calmFullIntervalMs=():number=>Math.min(CALM_FULL_INTERVAL_MAX_MS,Math.max(CALM_FULL_INTERVAL_MS,fullPublicationCostMs*CALM_FULL_COST_RATIO));
+/** Until this wall time the Worker counts as saturated: a Core reservation
+ * came more than the 250 ms the clock credits at once after the previous one,
+ * so requested play time was lost. A saturated Worker keeps calm Fulls at
+ * CALM_FULL_INTERVAL_MAX_MS even when they get cheaper: the time a cheaper
+ * Full saves goes back to the simulation instead of more frequent Fulls. */
+let saturatedUntil=-Infinity;
+const CALM_FULL_SATURATION_HOLD_MS=2000;
+const calmFullIntervalMs=(now:number):number=>now<saturatedUntil?CALM_FULL_INTERVAL_MAX_MS:Math.min(CALM_FULL_INTERVAL_MAX_MS,Math.max(CALM_FULL_INTERVAL_MS,fullPublicationCostMs*CALM_FULL_COST_RATIO));
 let stepMs = 0;
 let fault: SimulationFault | undefined;
 const motion = createMotionRecorder();
@@ -623,7 +630,7 @@ function publishDuePhysical297(force=false,batchTail=false):void {
   // of one per batch tail (up to one per macro tick at speed 6), because each
   // costs a full encode in this Worker and a full adoption on the main thread.
   // Forced, hard (requiresFull), paused and non-frontier publications are unchanged.
-  const interval=calmFullIntervalMs();
+  const interval=calmFullIntervalMs(now);
   const tail=batchTail&&(!phasePublisher297.frontierMode297||now-lastFullPublishedAt>=interval);
   const stale=phasePublisher297.frontierMode297&&now-lastFullPublishedAt>=Math.max(CALM_FULL_MAX_AGE_MS,interval);
   if(force||!quiet||tail||stale||!phasePublisher297.frontierMode297&&phasePublisher297.quietBudgetExpired(now)){publishActualFull297();return;}
@@ -642,7 +649,7 @@ function publishDuePhysical297(force=false,batchTail=false):void {
 function runCoreTask297(now:number):void {
  if(!world||!isCorePhysicalSchema297(Number(world.schemaVersion)))throw Error('Core driver lost its current schema owner');
  if(coreBatch297&&coreBatch297.owner!==world){resetSimulationClock(now);return;}
- if(!coreBatch297){wakeDue=false;const budget=coreClock297.reserve(now,speed);if(budget===0){publishDuePhysical297(false,true);return;}coreBatch297={owner:world,remaining:budget,completed:0,simulationMs:0};}
+ if(!coreBatch297){wakeDue=false;const budget=coreClock297.reserve(now,speed);if(speed&&coreClock297.lastReserveGapMs>250)saturatedUntil=now+CALM_FULL_SATURATION_HOLD_MS;if(budget===0){publishDuePhysical297(false,true);return;}coreBatch297={owner:world,remaining:budget,completed:0,simulationMs:0};}
  const batch=coreBatch297;if((effectiveCore297(world)+1)%10===0)urgentThreats.prepareMaps(world);
  if(!coreClock297.consume())throw Error('Missing reserved Core transaction');
  const started=performance.now(),result=advanceWorldCore297(world,undefined,caravans);

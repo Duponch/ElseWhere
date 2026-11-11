@@ -5,6 +5,10 @@ export class FixedCoreClock297 {
   private previous=0;
   private remainder=0;
   private reserved=0;
+  private gapMs=0;
+  /** Wall time between the last two reservations. Past 250 ms the clock
+   * credits only 250 ms: the Worker could not keep the requested speed. */
+  get lastReserveGapMs():number {return this.gapMs;}
   reset(now:number):void {
     if(!Number.isFinite(now))throw Error('Invalid Core clock reset.');
     this.previous=now;this.remainder=0;this.reserved=0;
@@ -12,7 +16,8 @@ export class FixedCoreClock297 {
   reserve(now:number,speed:number):number {
     if(this.reserved!==0)throw Error('A Core clock reservation is already active.');
     if(!Number.isFinite(now)||!Number.isFinite(speed)||speed<0)throw Error('Invalid Core clock reservation.');
-    const elapsed=Math.min(250,Math.max(0,now-this.previous));
+    this.gapMs=Math.max(0,now-this.previous);
+    const elapsed=Math.min(250,this.gapMs);
     const next=speed?this.remainder+elapsed*speed*60:this.remainder;
     if(!Number.isFinite(next))throw Error('Core clock reservation overflow.');
     this.previous=Math.max(this.previous,now);
