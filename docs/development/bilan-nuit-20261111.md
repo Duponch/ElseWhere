@@ -73,3 +73,7 @@ Comparées au code décompilé de RimWorld 1.6 et aux données du jeu installé 
 - ×3 n'est pas tenu dans le Worker réel (81,6 %). Le reste de la simulation est plat : la suite passe par des refontes (cadence de la planification, faune) qui touchent les règles, et par le chantier 2 (publication, ≈ 23 % du Worker).
 - Un test (`main-terminal298`) ne se charge plus depuis des changements de `src/main.ts` antérieurs à ce travail : son épinglage du texte de `main.ts` date du 31 octobre et ses trois cas décrivent une structure qui n'existe plus. Non modifié.
 - Chantiers 3 et 2 inchangés cette nuit.
+
+## Publication (11 novembre, 14 h 10)
+
+À la demande de l'utilisateur, le commit `bc568060` est publié sur Cloudflare Pages (Production `bb5cf3dc-3fcb-4d50-a812-44b8140de317`, branche main) depuis une copie exacte du commit (`git archive`, 8 892 fichiers) : typage et construction Pages réussis (1 141 fichiers), fichiers publics et sauvegardes identiques à la version précédente (`445b2d3`, 9 novembre). 34 réponses HTTPS identiques octet pour octet sur le site public et l'adresse fixe du déploiement (pages, scripts, deux Workers, six sauvegardes). La version en ligne contient donc tout le chantier 4 et les quatre règles du schéma 303. Ce contrôle ne remplace ni un parcours dans le navigateur ni une mesure d'images par seconde.
