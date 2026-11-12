@@ -24,6 +24,8 @@ Règle et sources : [note canonique](../gameplay/animal-idle-wander-v304.md). Un
 
 La promenade coûte donc encore ≈ 4,7 ms par tick sur Les Forges et ≈ 1,65 ms sur Les Éclaircies, où il y a peu de décisions par tick (≈ 1) mais un coût fixe par tick : coûts de navigation de la carte (dont les milliers de morceaux de roche), grilles d'obstacles des lecteurs de la faune, comparaison des régions gardées. Piste suivante, non faite cette nuit (gain estimé ≈ 0,3 ms sur Les Éclaircies) : lire les morceaux de roche dans les faits de l'index des piles au lieu de les recopier dans les tables de coûts.
 
+**Worker réel à ×3 sur Les Forges** (`scripts/perf-worker-run.ts` : simulation, encodeur et publications dans le vrai Worker, piloté en temps réel dans Node, 30 s mesurées après 10 s de chauffe, 3 passages alternés, machine au calme) : la version publiée hier soir (`8c9c40d7`) tient **90,8 %** du rythme ×3 en médiane (87,2 à 91,3), la version de cette nuit **82,4 %** (79,4 à 82,9). Le profil du Worker garde la même part pour la publication ; la faune passe de 8,2 % à 10,8 % du temps du Worker, dont 3,9 % pour la promenade elle-même. Deux retouches exactes ont suivi (un seul balayage des cases par passe de la faune, seaux de la file de recherche réutilisés : −0,9 % par tick sur Les Forges). Piste pour retrouver l'essentiel : calculer les coûts de navigation à la demande, case par case, au lieu de toute la carte à chaque tick (servirait aussi les autres recherches des animaux).
+
 **Animal enragé devant une porte fermée** (même schéma, écart trouvé en vérifiant une campagne longue) : il vient désormais rôder près de la porte qui le sépare de ses cibles, comme `JobGiver_Manhunter`, au lieu de rester immobile au loin ; voir la note canonique.
 
 ## 2. Chargement des sauvegardes
@@ -61,10 +63,10 @@ E: n'avait plus que 37 Mo libres. Supprimés (tous recréables) : anciens bundle
 
 ## 6. Publication
 
-Commits poussés sur `origin/main` : `fba51516` (optimisations exactes), `4899edfa` (règle 304), `8b608307` (typage du test). Publié sur Cloudflare Pages depuis une copie exacte de `8b608307` (`git archive`) : typage et construction Pages réussis (1 142 fichiers, 8 nouveaux envoyés), déploiement Production `d91f31e8` sur la branche main ; 36 réponses HTTPS identiques octet pour octet sur le site public et l'adresse fixe du déploiement. Ce contrôle ne remplace ni un parcours dans le navigateur ni une mesure d'images par seconde.
+Commits poussés sur `origin/main` : `fba51516` (optimisations exactes), `4899edfa` (règle 304), `8b608307` (typage du test), `be324859` (deux retouches exactes de la promenade, republiées ensuite). Publié sur Cloudflare Pages depuis une copie exacte de `8b608307` (`git archive`) : typage et construction Pages réussis (1 142 fichiers, 8 nouveaux envoyés), déploiement Production `d91f31e8` sur la branche main ; 36 réponses HTTPS identiques octet pour octet sur le site public et l'adresse fixe du déploiement. Ce contrôle ne remplace ni un parcours dans le navigateur ni une mesure d'images par seconde.
 
 ## 7. Décisions pour l'utilisateur
 
 1. **Chargement des anciennes sauvegardes** : ne valider que le schéma d'origine de la sauvegarde et le schéma final (prototype : Les Forges publiée 82 → 8 s, monde identique). Chaque nouveau schéma ajoute sinon une validation complète au chargement de toutes les sauvegardes plus anciennes.
 2. **Campagne « Atterrissage » graine 42** : rendre le joueur scripté plus réaliste (secourir le défenseur, laisser manger les colons mobilisés), ou accepter cette divergence.
-3. **Coût restant de la promenade** (≈ +4,7 ms par tick sur Les Forges) : poursuivre (morceaux de roche lus dans l'index des piles, grilles d'obstacles partagées) ou passer à autre chose.
+3. **Coût de la promenade** : ≈ +4,7 ms par tick sur Les Forges en simulation seule, et dans le vrai Worker à ×3 le rythme tenu passe de 90,8 % à 82,4 %. Poursuivre (coûts de navigation calculés à la demande) ou accepter ce coût d'une règle plus fidèle.
