@@ -111,8 +111,12 @@ export class WeightedSearch {
   finish(goals?:ReadonlySet<number>,allGroups?:readonly ReadonlySet<number>[],isGoal?:(index:number)=>boolean):DistanceField {
     const field=this.advance(goals,allGroups,isGoal);
     // An exhausted frontier has settled every discovered cell. The untouched
-    // cells still contain their constructor's -2/Infinity sentinels.
-    if(this.pending!==undefined)for(let i=0;i<field.parents.length;i++)if(!this.settled[i]){field.parents[i]=-2;field.costs[i]=Infinity;}
+    // cells still contain their constructor's -2/Infinity sentinels; the only
+    // discovered cells left unsettled are the pending node and the queued ones.
+    if(this.pending!==undefined){
+      const {parents,costs}=field,reset=(i:number)=>{parents[i]=-2;costs[i]=Infinity;};
+      reset(this.pending);this.frontier.forEachQueued(reset);
+    }
     delete field.settled;this.finished=true;return field;
   }
 }

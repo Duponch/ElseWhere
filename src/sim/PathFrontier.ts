@@ -40,6 +40,10 @@ export class PathFrontier {
     this.buckets[node]=bucket;this.next[node]=head;this.previous[node]=-1;if(head>=0)this.previous[head]=node;this.heads[bucket]=node;
     if(head===-1)this.mark(bucket,true);
   }
+  /** Calls `visit` for every node still queued (each once). */
+  forEachQueued(visit:(node:number)=>void):void {
+    for(let bucket=0;bucket<this.heads.length;bucket++)for(let node=this.heads[bucket]!;node>=0;node=this.next[node]!)visit(node);
+  }
   pop():number|undefined {
     if(!this.count)return undefined;
     if(this.occupancy){const start=this.cursor%this.heads.length,next=this.successor(0,start)??this.successor(0,0)!;this.cursor+=(next-start+this.heads.length)%this.heads.length;}
