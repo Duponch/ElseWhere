@@ -49,3 +49,7 @@ Optimisations exactes gardées (même état bit à bit sur Les Forges et Les Éc
 ## 4. Tests
 
 Suite complète (lots de 30 fichiers, 3 processus, sans la campagne « Atterrissage » lancée à part) : par rapport à la nuit précédente, aucun échec nouveau une fois corrigés les deux problèmes qu'elle a révélés (le raccourci du masque de terrain, retiré ; un premier fichier de préparation des tests qui importait le module des sauvegardes et contournait ainsi les `vi.mock` de deux tests, remplacé par un simple drapeau global). Les 17 fichiers concernés ont été relancés avec le code final. Restent les échecs déjà connus et ceux liés à l'environnement : preuves locales absentes du dossier de travail, quatre démonstrations qui dépassent 30 s sous charge, empreinte figée de `main-terminal298`.
+
+## 5. Publication
+
+Commits poussés sur `origin/main` : `0b12c2c1` (validation au chargement), `5fca8975` (joueur scripté), `0386ccd3` (coût de la promenade), `65a9be6b` (documentation). Publié sur Cloudflare Pages depuis une copie exacte de `65a9be6b` (`git archive`) : typage et construction Pages réussis (1 142 fichiers), déploiement Production `f693a6c7` sur la branche main ; 36 réponses HTTPS identiques octet pour octet sur le site public et l'adresse fixe du déploiement. Ce contrôle ne remplace ni un parcours dans le navigateur ni une mesure d'images par seconde.
