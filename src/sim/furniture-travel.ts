@@ -362,6 +362,55 @@ export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTe
   return {...result,costs:coreNavigationUnits297(result.costs),floors:coreNavigationUnits297(result.floors)!,coreMoveCosts297:{cardinal:Math.round(Math.min(450,Math.max(1,base))),diagonal:Math.round(Math.min(450,Math.max(1,base*1.41421)))}};
 }
 
+/** navigationCosts(world, undefined, terrainOverride, geometry) for an animal
+ * (no actor: no trap knowledge, no draft, no human rules), each cell computed
+ * when a search reads it: the same values, has(), maxima, repeaters, stops and
+ * floors. Snapshots taken now (construction frames and their stops, the pile
+ * index facts of chunks and material floors, room door waits, fire) and the
+ * shared immutable layers (structure base, terrain cost layer) replace the
+ * map-wide capture. Iterating repeaters or stops is not supported. Falls back to
+ * the full capture before schema 29 or outside a simulation step. */
+export function lazyAnimalNavigationCosts(world:World,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry):ReturnType<typeof navigationCosts> {
+  const version=world.schemaVersion,width=world.width,size=world.width*world.height,snow=!!world.snow;
+  geometry??=captureStructureNavigation(world);
+  const index=version>=29?pileIndex(world):undefined;
+  if(!geometry||!index||verifyPileIndex||index.groundFacts.length!==size)return navigationCosts(world,undefined,terrainOverride,geometry,true);
+  const base=structureTravelBase(geometry),frames=frameCosts(world),facts=index.groundFacts.slice();
+  const frameStops=new Set<number>();
+  for(const j of world.jobs)if(j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')for(const c of footprintCells(j))frameStops.add(c.z*width+c.x);
+  const layer=terrainCostLayer(world,version,false,snow,terrainOverride),terrain=layer.terrain;
+  const now=isCorePhysicalSchema297(Number(version))?effectiveLocal297(world):world.tick;
+  // Room doors in the capture's order: each adds its wait after the maximum.
+  const doors=new Map<number,number[]>();
+  for(const s of geometry.roomDoors??world.structures)if(isRoomDoor(s.kind)){const i=s.z*width+s.x,list=doors.get(i);const wait=Math.round(doorWait(s,now)/3*1000);if(list)list.push(wait);else doors.set(i,[wait]);}
+  let anyChunk=false,anyFloor=false;for(let i=0;i<size;i++){const f=facts[i]!;if(f&PILE_CHUNK)anyChunk=true;if(f&PILE_MATERIAL_FLOOR)anyFloor=true;if(anyChunk&&anyFloor)break;}
+  const initial=(i:number):number|undefined=>{const v=base.costs.get(i);return v!==undefined||!frames?v:frames.get(i);};
+  /** The capture's object cost at i (its `costs` map entry). */
+  const sparse=(i:number):number|undefined=>{
+    let v=initial(i);const f=facts[i]!;
+    if(f&PILE_CHUNK)v=Math.max(v??0,1400);
+    if(f&PILE_MATERIAL_FLOOR)v=Math.max(v??0,467);
+    const waits=doors.get(i);if(waits)for(const wait of waits)v=Math.max(v??0,terrain[i]??0)+wait;
+    return v;
+  };
+  let initialMaximum=base.costs.size?base.costMaximum:-Infinity;
+  if(frames)for(const [i,v] of frames)if(!base.costs.has(i)&&v>initialMaximum)initialMaximum=v;
+  let sparseMaximum=initialMaximum;if(anyChunk)sparseMaximum=Math.max(sparseMaximum,1400);if(anyFloor)sparseMaximum=Math.max(sparseMaximum,467);
+  for(const i of doors.keys())sparseMaximum=Math.max(sparseMaximum,sparse(i)!);
+  const anySparse=base.costs.size>0||!!frames?.size||anyChunk||anyFloor||doors.size>0;
+  const overlay=(extra:(i:number)=>number|undefined,extraMaximum:number):NavigationCostLookup=>({
+    get(i){const floor=terrain[i]||undefined,value=extra(i);return value===undefined?floor:Math.max(value,floor??0);},
+    has:i=>!!terrain[i]||extra(i)!==undefined,maximum:Math.max(layer.maximum,extraMaximum)});
+  const fire=fireNavigationCosts(world);
+  const costs=anySparse||layer.maximum?addFireNavigationCosts(addFireNavigationCosts(overlay(sparse,sparseMaximum),fire),layer.marsh):addFireNavigationCosts(addFireNavigationCosts(undefined,fire),layer.marsh);
+  const floorExtra=(i:number)=>facts[i]!&PILE_MATERIAL_FLOOR?467:undefined;
+  const floors=addFireNavigationCosts(addFireNavigationCosts(overlay(floorExtra,anyFloor?467:-Infinity),fire),layer.marsh)!;
+  const unsupported=():never=>{throw Error('Lazy navigation sets cannot be iterated');};
+  const lazySet=(has:(i:number)=>boolean):ReadonlySet<number>=>({has,get size():number{return unsupported();},forEach:unsupported,entries:unsupported,keys:unsupported,values:unsupported,[Symbol.iterator]:unsupported}) as ReadonlySet<number>;
+  const repeaters=lazySet(i=>(base.repeaters.has(i)||!!(facts[i]!&PILE_CHUNK))&&!doors.has(i));
+  const stops=lazySet(i=>base.stops.has(i)||frameStops.has(i)||!!(facts[i]!&PILE_CHUNK));
+  return {costs,repeaters,stops,floors};
+}
 /** Converts the captured legacy integer normalization back into integer Core
  * costs. No new dense map, actor lookup or allocation in the search loop. */
 export function coreNavigationUnits297(costs:NavigationCostLookup|undefined):NavigationCostLookup|undefined {

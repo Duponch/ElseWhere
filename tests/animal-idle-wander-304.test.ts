@@ -6,6 +6,9 @@ import {animalWanderWaitEnd304,ANIMAL_WANDER_WAIT_MAX_CORE304} from '../src/sim/
 import {idleHashOffset300} from '../src/sim/idle-wander-300.ts';
 import {validateWildlife} from '../src/sim/wildlife-save.ts';
 import {SCHEMA_VERSION,type World} from '../src/sim/types.ts';
+import {navigationCosts,lazyAnimalNavigationCosts} from '../src/sim/furniture-travel.ts';
+import {captureStructureNavigation} from '../src/sim/structure-navigation.ts';
+import {withPileIndexScope} from '../src/sim/pile-index.ts';
 
 // Les Éclaircies: a real geographic colony with tame and wild animals.
 const PATH='public/test-saves/v419/les-eclaircies.json';
@@ -82,4 +85,16 @@ test('a schema 303 save migrates to 304 by its number only',()=>{
  a.wander!.job={kind:'wait',untilCore:w.tick*10+450};
  const tooLong=serializeWorld(w).replace(`{"schemaVersion":${SCHEMA_VERSION},`,'{"schemaVersion":303,');
  expect(()=>deserializeWorld(tooLong)).toThrow(/Invalid version303 save/);
+},LONG);
+
+test('the on-demand navigation costs of the wander equal the full capture on every cell',()=>{
+ const w=load();for(let i=0;i<30;i++)stepWorld(w);
+ withPileIndexScope(()=>{
+  const g=captureStructureNavigation(w),full=navigationCosts(w,undefined,undefined,g,true),lazy=lazyAnimalNavigationCosts(w,undefined,g);
+  expect(lazy.costs?.maximum).toBe(full.costs?.maximum);expect(lazy.floors.maximum).toBe(full.floors.maximum);
+  let differences=0;
+  for(let i=0;i<w.width*w.height;i++)if(lazy.costs?.get(i)!==full.costs?.get(i)||lazy.costs?.has(i)!==full.costs?.has(i)||lazy.floors.get(i)!==full.floors.get(i)
+   ||lazy.floors.has(i)!==full.floors.has(i)||lazy.repeaters.has(i)!==full.repeaters.has(i)||lazy.stops.has(i)!==full.stops.has(i))differences++;
+  expect(differences).toBe(0);
+ });
 },LONG);

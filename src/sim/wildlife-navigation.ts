@@ -17,7 +17,7 @@ import { weatherMoveFactor } from './weather-exposure.ts';
 import { routeToCell,hasReachableCell,inBounds,terrainBlockedMask } from './pathfinding.ts';
 import { jobBlocksTransit } from './construction-rules.ts';
 import { footprintCells } from './definitions.ts';
-import { captureStandability,navigationCosts,furnitureDelay,knownSpikeTrapCosts } from './furniture-travel.ts';
+import { captureStandability,navigationCosts,furnitureDelay,knownSpikeTrapCosts,lazyAnimalNavigationCosts } from './furniture-travel.ts';
 import { addFireNavigationCosts } from './fire-navigation.ts';
 import { doorOpenness,isPassageDoor } from './door-rules.ts';
 import { WeightedSearch,WeightedSearchScratch } from './weighted-search.ts';
@@ -298,7 +298,7 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
       // Computed once per tick without trap knowledge (no actor: nothing else
       // of navigationCosts depends on an animal); an animal knowing the traps
       // reads the same costs with the known traps' additive layer on top.
-      const variant=duck?(flying?'flying':'duck'):'land',plain=()=>idleWanderCosts(world,`${variant}:false`,geometry,()=>navigationCosts(world,undefined,override,geometry,true));
+      const variant=duck?(flying?'flying':'duck'):'land',plain=()=>idleWanderCosts(world,`${variant}:false`,geometry,()=>lazyAnimalNavigationCosts(world,override,geometry));
       const n=spikeTrapKnowsOf(world,a)?idleWanderCosts(world,`${variant}:true`,geometry,()=>{const base=plain(),traps=knownSpikeTrapCosts(world,geometry);
         return {...base,costs:addFireNavigationCosts(base.costs,traps),floors:addFireNavigationCosts(base.floors,traps)!};}):plain();
       const policy=area(a),scratch=idleScratch(world),pooled=scratch.acquire();
