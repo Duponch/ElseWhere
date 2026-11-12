@@ -1,5 +1,7 @@
 # Documentation d’Elsewhere
 
+**12 novembre 2026 — schéma 304.** [Promenade des animaux comme dans RimWorld 1.6](gameplay/animal-idle-wander-v304.md) : un animal oisif alterne une attente de 2 à 8 secondes et une promenade vers une case tirée autour d'un point de départ propre à sa nature (troupeau, enclos, colonie), au lieu de faire des pas au hasard sur place ; migration 303 → 304 par le seul numéro. [Bilan de la nuit du 12 novembre](development/bilan-nuit-20261112.md).
+
 **11 novembre 2026 — schéma 303.** [Bilan de la nuit du 11 novembre](development/bilan-nuit-20261111.md) : quatre écarts aux règles de RimWorld 1.6 corrigés (surcoût de 45 ticks d'une porte à une autre pour les colons, pièces de plus de 60 régions sans statistiques ni rôle, portails de clôture ouverts 1,15 fois plus vite qu'une porte et comptés comme une porte dans les chemins des colons), migration 302 → 303 par le seul numéro. Simulation des grandes colonies allégée (Les Forges, ≈ −27 % par tick, état identique) et sauvegarde contrôlée hors du fil de simulation.
 
 **10 novembre 2026 — schéma 302 inchangé.** [Murs liés et toits en pente](development/linked-walls-pitched-roofs.md) : murs continus sans jointure entre cases (angles, T, croix, linteaux de porte), toits en croupe ou à deux pans avec pignons épousant l'emprise exacte, peints dans la texture du style (Gouache ou Pastel) comme avant. Un seul lot GPU chacun, mis à jour par régions ; présentation seulement.

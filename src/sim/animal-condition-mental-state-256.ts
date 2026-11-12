@@ -1,4 +1,7 @@
 import type {WildAnimal} from './wildlife-state.ts';
+/** Schema 304: the longest idle wander wait a save may hold (2 x 240 ticks
+ * plus the 15-tick hash window, animal-idle-wander-304.ts). */
+export const ANIMAL_WANDER_WAIT_MAX_CORE304=500;
 export interface AnimalWanderState256 {
  revision:1;
  /** Pawn_MindState ctor's CLR default. Reset's true is a different event. */
@@ -30,7 +33,7 @@ export function validAnimalMindFields256(value:Record<string,unknown>,version:nu
   if(Object.hasOwn(w,'job')){
    if(!local)return false;
    if(!object(w.job))return false;const j=w.job;if(!data(j,'kind'))return false;
-   if(j.kind==='wait'){if(!exact(j,['kind','untilCore'])||!data(j,'untilCore')||!integer(j.untilCore,0,Number.MAX_SAFE_INTEGER)||j.untilCore>clock*10+200)return false;}
+   if(j.kind==='wait'){if(!exact(j,['kind','untilCore'])||!data(j,'untilCore')||!integer(j.untilCore,0,Number.MAX_SAFE_INTEGER)||j.untilCore>clock*10+(version>=304?ANIMAL_WANDER_WAIT_MAX_CORE304:200))return false;}
    else if(j.kind==='goto'){
     if(!exact(j,['kind','destination'])||!data(j,'destination')||!object(j.destination)||!exact(j.destination,['x','z'])||!data(j.destination,'x')||!data(j.destination,'z')||!integer(j.destination.x,0,width-1)||!integer(j.destination.z,0,height-1))return false;
    }else return false;

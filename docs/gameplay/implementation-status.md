@@ -1,5 +1,7 @@
 # Ce qui est jouable et ce qui manque
 
+**12 novembre 2026 — schéma 304.** [Promenade des animaux comme dans RimWorld 1.6](animal-idle-wander-v304.md) : un animal oisif alterne une attente de 2 à 8 secondes et une promenade vers une case tirée autour d'un point de départ propre à sa nature (troupeau, enclos, colonie), au lieu de faire des pas au hasard sur place ; migration 303 → 304 par le seul numéro. [Bilan de la nuit du 12 novembre](../development/bilan-nuit-20261112.md).
+
 **11 novembre 2026 — schéma 303.** [Bilan de la nuit du 11 novembre](../development/bilan-nuit-20261111.md) : quatre écarts aux règles de RimWorld 1.6 corrigés (surcoût de 45 ticks d'une porte à une autre pour les colons, pièces de plus de 60 régions sans statistiques ni rôle, portails de clôture ouverts 1,15 fois plus vite qu'une porte et comptés comme une porte dans les chemins des colons), migration 302 → 303 par le seul numéro. Simulation des grandes colonies allégée (Les Forges, ≈ −27 % par tick, état identique) et sauvegarde contrôlée hors du fil de simulation.
 
 **9 novembre 2026 — schéma 302.** [Planification du travail à la RimWorld](../development/work-planner-rimworld.md) : ordre des donneurs de travail, recherche des cibles par régions, liste d'urgence, et types de travail Forge, Couture et Artisanat séparés (migration 301 → 302 par numéro seul). Sur Les Forges, environ 12 % de temps de simulation en moins par tick ; aucune parité exhaustive n'est annoncée.

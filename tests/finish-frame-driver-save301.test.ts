@@ -8,7 +8,7 @@ import type {Job} from '../src/sim/types.ts';
 // produced by gameplay. Only the final case exercises real neutral migration.
 function setup(){
  const w=createWorld(42,32,32),p=w.pawns[0]!;
- expect(Number(w.schemaVersion)).toBe(303);
+ expect(Number(w.schemaVersion)).toBe(304);
  p.jobId=null;p.haul=null;p.need=null;p.cooking=null;p.recreation.task=null;
  p.orders.active=null;p.orders.queue=[];p.path=[];p.moveCooldown=0;delete p.motion;
  return {w,p};
@@ -65,7 +65,7 @@ describe('FinishFrame301 persisted Driver phases',()=>{
   const w=createWorld(42,32,32);
   const legacy=JSON.parse(JSON.stringify(w));
   legacy.schemaVersion=300;
-  const expected={...legacy,schemaVersion:303};
+  const expected={...legacy,schemaVersion:304};
   const loaded=deserializeWorld(JSON.stringify(legacy));
   expect(JSON.parse(serializeWorld(loaded))).toEqual(expected);
   for(const p of loaded.pawns)for(const key of ['jobTickDelta301','frameToil301','postureUntilCore301'])

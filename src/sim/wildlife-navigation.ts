@@ -1,3 +1,4 @@
+import {spikeTrapKnowsOf} from './spike-trap-state.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveLocal297} from './core-phase-297.ts';
@@ -15,9 +16,10 @@ import { weatherMoveFactor } from './weather-exposure.ts';
 import { routeToCell,hasReachableCell,inBounds,terrainBlockedMask } from './pathfinding.ts';
 import { jobBlocksTransit } from './construction-rules.ts';
 import { footprintCells } from './definitions.ts';
-import { captureStandability,navigationCosts,furnitureDelay } from './furniture-travel.ts';
+import { captureStandability,navigationCosts,furnitureDelay,knownSpikeTrapCosts } from './furniture-travel.ts';
+import { addFireNavigationCosts } from './fire-navigation.ts';
 import { doorOpenness,isPassageDoor } from './door-rules.ts';
-import { WeightedSearch } from './weighted-search.ts';
+import { WeightedSearch,WeightedSearchScratch } from './weighted-search.ts';
 import { scaleNavigationCosts } from './navigation-costs.ts';
 import {captureAnimalAreaPolicy287,type AnimalAreaPolicy287} from './animal-area-policy-287.ts';
 import { meleeContact } from './melee-space.ts';
@@ -43,6 +45,38 @@ function rankedFood(world:World,cells:Cell[],search:WeightedSearch,rank:(c:Cell)
 
 /** Same species/flight geometry for the decision loop and cold validators.
  * The reader lives for one synchronous pass; geometry remains lazy/shared. */
+/* Navigation costs of the schema 304 idle wander, computed once per local
+ * tick and shared by every wandering animal of that tick: they depend on the
+ * animal only through its spike-trap knowledge and, for ducks, its water
+ * terrain (the key); the same geometry is required. */
+const idleCostsByWorld=new WeakMap<World,{tick:number;geometry:StructureNavigationGeometry;costs:Map<string,ReturnType<typeof navigationCosts>>}>();
+function idleWanderCosts(world:World,key:string,geometry:StructureNavigationGeometry,compute:()=>ReturnType<typeof navigationCosts>):ReturnType<typeof navigationCosts> {
+  let entry=idleCostsByWorld.get(world);
+  if(!entry||entry.tick!==world.tick||entry.geometry!==geometry){entry={tick:world.tick,geometry,costs:new Map()};idleCostsByWorld.set(world,entry);}
+  let costs=entry.costs.get(key);if(!costs){costs=compute();entry.costs.set(key,costs);}
+  return costs;
+}
+/* One reusable search scratch per world for the idle wander searches, which
+ * end with their decision (release). A search started while it is held gets
+ * fresh arrays. */
+const idleScratches=new WeakMap<World,WeightedSearchScratch>();
+function idleScratch(world:World):WeightedSearchScratch {
+  const size=world.width*world.height;let scratch=idleScratches.get(world);
+  if(!scratch||scratch.size!==size){scratch=new WeightedSearchScratch(size);idleScratches.set(world,scratch);}
+  return scratch;
+}
+/** Whether an animal walks through fences (no roamer, or a legacy hare or
+ * predator): the reader kind used for its ordinary navigation. */
+export function animalPassesFences(animal:WildAnimal):boolean {
+  return isAnimalSpecies256(animal.species)?animalCore256(animal.species).race.roamMtbDays===null:
+    animal.species==='hare'||animal.species==='snow-hare'||!!animalSpecies(animal.species).predator;
+}
+/** A reader for which closed doors are passable (TraverseMode.PassDoors), for
+ * the path a manhunter imagines through a door it cannot open (schema 304). */
+export function animalDoorPassingNavigation(world:World,animal:WildAnimal,geometry?:StructureNavigationGeometry):ReturnType<typeof animalNavigation> {
+  const duck=world.schemaVersion>=256&&animal.species==='duck'?animal:undefined;
+  return animalNavigation(world,true,animalPassesFences(animal),duck,false,geometry);
+}
 export type AnimalNavigationReader=((a:WildAnimal)=>ReturnType<typeof animalNavigation>)&{invalidate():void};
 export function createAnimalNavigationReader(world:World,getGeometry?:()=>StructureNavigationGeometry,readArea:(a:WildAnimal)=>AnimalAreaPolicy287|undefined=a=>captureAnimalAreaPolicy287(world,a),physicalNow?:()=>number):AnimalNavigationReader {
   let geometry:StructureNavigationGeometry|undefined,ordinary:ReturnType<typeof animalNavigation>|undefined,unfenced:ReturnType<typeof animalNavigation>|undefined;
@@ -53,8 +87,7 @@ export function createAnimalNavigationReader(world:World,getGeometry?:()=>Struct
       const flying=duckFlying256(animal.flight);let nav=ducks.get(flying);
       if(!nav){nav=animalNavigation(world,false,true,animal,false,captured(),readArea,physicalNow);ducks.set(flying,nav);}return nav;
     }
-    const passFence=isAnimalSpecies256(animal.species)?animalCore256(animal.species).race.roamMtbDays===null:
-      animal.species==='hare'||animal.species==='snow-hare'||animalSpecies(animal.species).predator;
+    const passFence=animalPassesFences(animal);
     return passFence?unfenced??=animalNavigation(world,false,true,undefined,false,captured(),readArea,physicalNow):ordinary??=animalNavigation(world,false,false,undefined,false,captured(),readArea,physicalNow);
   };
   return Object.assign(read,{invalidate(){geometry=undefined;ordinary=undefined;unfenced=undefined;ducks.clear();}});
@@ -201,6 +234,12 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
     return free(cell)&&(!policy||policy.has(index))&&!geometry.at(cell).some(s=>isPassageDoor(s.kind))&&isGoal(index);
   };
   return {free,geometry,
+    /** The route grid of this reader (1 = blocked), for readers that work on
+     * the whole map; read only. */
+    blockedGrid:()=>routeGrid(),
+    /** Which obstacle rules this reader applies (its grids compare with the
+     * grids of the same key). */
+    regionKey:`${flying?'f':'w'}${fencePassable?'u':'o'}${allowClosedGate?'g':''}`,
     /** An unreachable higher-priority medical bed already spent the quota.
      * Reuse its exhausted field once, without starving a useful refuge. */
     failedThermalRefugeRoute(a:Cell,isGoal:(index:number)=>boolean):Cell[]|null|undefined {
@@ -243,6 +282,21 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
         canReach(c:Cell){if(!haulPoint(a,c,true)||policy&&!policy.has(c.z*width+c.x))return false;const i=c.z*width+c.x;return hasReachableCell(search.advance(new Set([i])),i);},
         pathTo(c:Cell){if(!haulPoint(a,c,true)||policy&&!policy.has(c.z*width+c.x))return;const i=c.z*width+c.x,reach=search.advance(new Set([i]));return hasReachableCell(reach,i)?routeToCell(world,c,reach)??undefined:undefined;},
       };
+    },
+    /** Schema 304 idle wander (animal-idle-wander-304): the same frontier as
+     * wanderSearch, with the navigation costs of the tick (idleWanderCosts). */
+    idleWanderSearch(a:WildAnimal){
+      // Computed once per tick without trap knowledge (no actor: nothing else
+      // of navigationCosts depends on an animal); an animal knowing the traps
+      // reads the same costs with the known traps' additive layer on top.
+      const variant=duck?(flying?'flying':'duck'):'land',plain=()=>idleWanderCosts(world,`${variant}:false`,geometry,()=>navigationCosts(world,undefined,override,geometry,true));
+      const n=spikeTrapKnowsOf(world,a)?idleWanderCosts(world,`${variant}:true`,geometry,()=>{const base=plain(),traps=knownSpikeTrapCosts(world,geometry);
+        return {...base,costs:addFireNavigationCosts(base.costs,traps),floors:addFireNavigationCosts(base.floors,traps)!};}):plain();
+      const policy=area(a),scratch=idleScratch(world),pooled=scratch.acquire();
+      const search=new WeightedSearch(width,world.height,a.z*width+a.x,routeGrid(),scaleNavigationCosts(n.costs,3),n.repeaters,scaleNavigationCosts(n.floors,3),corners,policy?.costs,undefined,pooled?scratch:undefined);
+      let released=false;
+      const live=()=>{if(released)throw Error('Idle wander search read after its release');};
+      return {release(){if(!released){released=true;if(pooled)scratch.release();}},perceivedCostUnits(c:Cell){return inBounds(world,c.x,c.z)?n.costs?.get(c.z*width+c.x)??0:0;},canReach(c:Cell){live();if(!inBounds(world,c.x,c.z)||!free(c)||policy&&!policy.has(c.z*width+c.x))return false;const i=c.z*width+c.x;return hasReachableCell(search.advance(new Set([i])),i);},pathTo(c:Cell){live();if(!inBounds(world,c.x,c.z)||!free(c)||policy&&!policy.has(c.z*width+c.x))return;const i=c.z*width+c.x,reach=search.advance(new Set([i]));return hasReachableCell(reach,i)?routeToCell(world,c,reach)??undefined:undefined;}};
     },
     /** One quota-granted frontier shared by all confusion destination tickets. */
     wanderSearch(a:Cell){

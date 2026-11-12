@@ -24,7 +24,7 @@ function airlock(hold:'none'|'first'|'second'='none') {
 const length=(w:World)=>w.pawns[0]!.motion!.end-w.pawns[0]!.motion!.start;
 
 test('a Core step from one door into another pays 45 Core ticks unless one door is held open',()=>{
-  expect(SCHEMA_VERSION).toBe(303);
+  expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(303);
   const paid=airlock();expect(isCorePhysicalSchema297(paid.w.schemaVersion)).toBe(true);
   expect(startTravel(paid.w,paid.p,{x:17,z:16})).toBe(true);
   for(const hold of ['first','second'] as const){
@@ -57,5 +57,5 @@ test('a schema 302 save migrates by number only; its captured steps keep their c
   const {w,p}=airlock('second');expect(startTravel(w,p,{x:17,z:16})).toBe(true);
   const old=JSON.parse(serializeWorld(w));old.schemaVersion=302;
   const migrated=deserializeWorld(JSON.stringify(old));
-  expect(migrated.schemaVersion).toBe(303);expect(migrated).toEqual(w);
+  expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);expect(migrated).toEqual(w);
 });

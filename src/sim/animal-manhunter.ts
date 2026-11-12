@@ -12,6 +12,7 @@ import { animalBody } from './wildlife-health.ts';
 import { isRoomDoor,doorOpenness } from './door-rules.ts';
 import { meleeContact } from './melee-space.ts';
 import { moveAnimal,type animalNavigation } from './wildlife-navigation.ts';
+import { isAnimalIdleWanderSchema304,randomCellInRegionsNear304 } from './animal-idle-wander-304.ts';
 import { cancelShooting } from './shooting-state.ts';
 import { cancelMelee } from './melee-state.ts';
 import type { WildAnimal } from './wildlife-state.ts';
@@ -74,7 +75,25 @@ export function advanceAnimalManhunter(w:World,a:WildAnimal,core=isCorePhysicalS
   }
 }
 /** No search occurs without the rotating wildlife caller granting its token. */
-export function processAnimalManhunter(w:World,a:WildAnimal,nav:ReturnType<typeof animalNavigation>,physical:Uint8Array,takeSearch:()=>boolean):boolean {
+/** JobGiver_Manhunter without a reachable target: the path to the target
+ * through doors (TraverseMode.PassDoors), its last cell before the first door
+ * the animal cannot pass, then a Goto to a random cell of the 9 regions near
+ * that cell (CellFinder.RandomRegionNear), or a 30-tick wait when that cell is
+ * the animal's own. Draws come from the manhunter's own stream. */
+function loiterNearBlockingDoor304(w:World,a:WildAnimal,nav:ReturnType<typeof animalNavigation>,doorNav:ReturnType<typeof animalNavigation>,candidates:readonly ({x:number;z:number;id:number})[],physical:Uint8Array):boolean {
+  const through=doorNav.humanPursuitRoute(a,candidates,physical);if(!through)return false;
+  let from={x:a.x,z:a.z},before:{x:number;z:number}|undefined;
+  for(const next of through.path){
+    if(!nav.step(from,next)){if(w.structures.some(s=>s.x===next.x&&s.z===next.z&&isRoomDoor(s.kind)))before=from;break;}
+    from=next;
+  }
+  if(!before)return false;
+  const cell=randomCellInRegionsNear304(w,nav,before,9,()=>random(a));if(!cell)return false;
+  if(cell.x===a.x&&cell.z===a.z){a.path=[];a.state='idle';a.nextDecision=w.tick+3;return true;}
+  const path=nav.route(a,[cell]);if(!path?.length)return false;
+  a.path=path;a.nextDecision=w.tick+25;moveAnimal(w,a,nav.step,animalBody(a).capacities.moving);return true;
+}
+export function processAnimalManhunter(w:World,a:WildAnimal,nav:ReturnType<typeof animalNavigation>,physical:Uint8Array,takeSearch:()=>boolean,doorNav?:()=>ReturnType<typeof animalNavigation>):boolean {
   const m=a.manhunter;if(!m)return false;
   if(m.permanent261&&a.state==='sleeping'){if(a.rest<1&&!a.sleepUntilCore)return true;a.state='idle';a.nextDecision=w.tick;}
   if(a.strike||a.stun){a.path=[];a.state='idle';return true;}
@@ -108,7 +127,10 @@ export function processAnimalManhunter(w:World,a:WildAnimal,nav:ReturnType<typeo
     const candidates=m.permanent261?permanentManhunterTargets261(w):w.pawns.filter(p=>p.state!=='dead'&&p.state!=='downed'&&!carrierOf(w,p.id));
     // Keep an engaged target when reachable; alternatives reuse the same field.
     const route=nav.humanPursuitRoute(a,target?[target,...candidates.filter(p=>p!==target)]:candidates,physical,!!target);
-    if(route){if(m.targetId!==route.targetId)notifyDuckFlightJob256(w,a,'AttackMelee',()=>wildlifeRandom(w.wildlife!));m.targetId=route.targetId;a.path=route.path;}else{delete m.targetId;a.path=[];}
+    if(route){if(m.targetId!==route.targetId)notifyDuckFlightJob256(w,a,'AttackMelee',()=>wildlifeRandom(w.wildlife!));m.targetId=route.targetId;a.path=route.path;}else{delete m.targetId;a.path=[];
+      // Schema 304, JobGiver_Manhunter: a target reachable only through a
+      // door the animal cannot open draws it near that door, where it loiters.
+      if(isAnimalIdleWanderSchema304(w.schemaVersion)&&doorNav&&candidates.length&&loiterNearBlockingDoor304(w,a,nav,doorNav(),candidates,physical))return true;}
     a.nextDecision=w.tick+25;
   }
   if(a.path.length){if(moveAnimal(w,a,nav.step,animalBody(a).capacities.moving)&&!a.path.length)a.nextDecision=w.tick;}else a.state='idle';return true;

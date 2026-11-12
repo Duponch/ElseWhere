@@ -15,7 +15,7 @@ function gate(w:World,material:Structure['material'],x=16,z=16):Structure {
 }
 
 test('a fence gate opens 1.15 times as fast as a door of the same material',()=>{
-  expect(SCHEMA_VERSION).toBe(303);
+  expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(303);
   const values=(['wood','steel','jade','granite-blocks'] as const).map(material=>[fenceGateOpenTicks303({material}),manualDoorOpenTicks({material})]);
   expect(values).toEqual([[3.3,3.8],[3.9,4.5],[3.9,4.5],[8.7,10]]);
   const w=deconstructionCamp(1),s=gate(w,'wood');
@@ -46,7 +46,7 @@ test('a gate of an older save takes the gate speed at its next opening, without 
   const old=deconstructionCamp(1),idle={id:old.nextId++,kind:'fence-gate',material:'steel',x:20,z:20,orientation:0,footprint:'standard',door:newDoorState(old.tick)} as Structure;
   old.structures.push(idle);const json=JSON.parse(serializeWorld(old));json.schemaVersion=302;
   const migrated=deserializeWorld(JSON.stringify(json));
-  expect(migrated.schemaVersion).toBe(303);expect(migrated).toEqual(old);
+  expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);expect(migrated).toEqual(old);
   expect(migrated.structures.find(s=>s.id===idle.id)!.door!.duration).toBeUndefined();
 });
 

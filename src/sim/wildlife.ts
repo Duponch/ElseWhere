@@ -17,6 +17,7 @@ import {processHivePriority256,processHiveWander256} from './cave-hive-lord-256.
 import {reconcileHiveMaintenance256} from './cave-hive-maintenance-256.ts';
 import {cobraAdmissionReason256} from './cobra-admission-256.ts';
 import {processAnimalConfusedWander256} from './animal-confused-wander-256.ts';
+import {isAnimalIdleWanderSchema304,processAnimalIdleWander304} from './animal-idle-wander-304.ts';
 import {animalClinicalRandom256} from './animal-condition-medical-frontier-256.ts';
 import {finishArrivalFacing256} from './arrival-rotation-256.ts';
 import {attachGeneratedAnimalGrowth256} from './animal-growth-runtime-256.ts';
@@ -43,7 +44,7 @@ import { blockedCells } from './pathfinding.ts';
 import { advanceAnimalHealth,animalBody } from './wildlife-health.ts';
 import { animalEscape } from './wildlife-flight.ts';
 import { animalFoods,animalMealTarget,finishAnimalMeal,grazingPen,reservedPlantWorkCells,type AnimalFood } from './wildlife-food.ts';
-import { animalNavigation,createAnimalNavigationReader,moveAnimal } from './wildlife-navigation.ts';
+import { animalDoorPassingNavigation,animalNavigation,createAnimalNavigationReader,moveAnimal } from './wildlife-navigation.ts';
 import { structureNavigationReader } from './structure-navigation.ts';
 import { HARE,MAX_WILDLIFE,wildlifeRandom,type WildAnimal,type WildlifeState } from './wildlife-state.ts';
 import { isPlant } from './plants.ts';
@@ -268,7 +269,7 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
     if(a.strike){a.path=[];if(a.state!=='sleeping')a.state='idle';continue;}
     if(a.predation&&(a.burning||a.flee))cancelAnimalPredation(world,a);
     if(a.burning&&processBurningAnimal(world,a,{free:c=>getNav(a).free(c),route:goals=>{if(searches>=1)return null;searches++;return getNav(a).route(a,goals);},move:()=>{moveAnimal(world,a,getNav(a).step,body.capacities.moving,getNav(a).geometry);}}))continue;
-    if(a.manhunter&&processAnimalManhunter(world,a,getNav(a),getPhysical(),()=>{if(searches>=1)return false;searches++;return true;}))continue;
+    if(a.manhunter&&processAnimalManhunter(world,a,getNav(a),getPhysical(),()=>{if(searches>=1)return false;searches++;return true;},()=>animalDoorPassingNavigation(world,a,structureNavigation.read())))continue;
     if(moveAnimalMelee(world,a,()=>getNav(a),getPhysical,getShot))continue;
     if(a.stun)continue;
     if(!a.flee&&processHivePriority256(world,a,()=>getNav(a),getPhysical,()=>{if(searches>=1)return false;searches++;return true;}))continue;
@@ -428,6 +429,13 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
     if(!medicalRest&&animalHaulAvailable282(world,a,night)&&hauling.start(a,n,takeHaulSearch))continue;
     const falloutWander=toxicFalloutActive294(world)?processAnimalFalloutShelter294(world,a,{nav:n,canSearch:()=>searches<1,takeSearch:takeHaulSearch,startJob:()=>notifyDuckFlightJob256(world,a,'GotoWander',()=>wildlifeRandom(s)),move:()=>{moveAnimal(world,a,n.step,body.capacities.moving,n.geometry);}}):0;
     if(falloutWander===1)continue;
+    // Schema 304: RimWorld's JobGiver_Wander (wait, then walk to a cell drawn
+    // around the node's root), see animal-idle-wander-304.ts.
+    if(isAnimalIdleWanderSchema304(world.schemaVersion)&&a.wander){
+      processAnimalIdleWander304(world,a,{nav:n,reach:()=>n.idleWanderSearch(a),random:animalClinicalRandom256(()=>wildlifeRandom(s)),
+        move:()=>{moveAnimal(world,a,n.step,body.capacities.moving,n.geometry);},policy:areaPolicy,roofedOnly:falloutWander===2});
+      continue;
+    }
     // Bounded neighbouring moves avoid full-map wandering floods. No random
     // walk through walls/closed doors; diagonal length stays Euclidean.
     const pen=grazingPen(world,a);
