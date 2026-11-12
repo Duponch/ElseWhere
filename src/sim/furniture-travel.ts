@@ -411,6 +411,18 @@ export function lazyAnimalNavigationCosts(world:World,terrainOverride?:DuckTerra
   const stops=lazySet(i=>base.stops.has(i)||frameStops.has(i)||!!(facts[i]!&PILE_CHUNK));
   return {costs,repeaters,stops,floors};
 }
+/** navigationCosts(world, origin, terrainOverride, geometry) for an animal
+ * origin, on demand: the trap-free costs of lazyAnimalNavigationCosts, plus
+ * the known spike traps' additive layer when the animal knows them (additive
+ * layers commute). A human, drafted or pawn origin keeps the full capture. */
+export function animalNavigationCosts(world:World,origin:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry):ReturnType<typeof navigationCosts> {
+  const actor=world.schemaVersion>=226?spikeTrapNavigationActor(world,origin):undefined;
+  if('id' in origin&&world.pawns.some(p=>p.id===(origin as {id:unknown}).id)||actor&&'draft' in actor&&!!actor.draft)return navigationCosts(world,origin,terrainOverride,geometry);
+  const lazy=lazyAnimalNavigationCosts(world,terrainOverride,geometry);
+  if(!actor||!spikeTrapKnowsOf(world,actor))return lazy;
+  const traps=knownSpikeTrapCosts(world,geometry);
+  return {...lazy,costs:addFireNavigationCosts(lazy.costs,traps),floors:addFireNavigationCosts(lazy.floors,traps)!};
+}
 /** Converts the captured legacy integer normalization back into integer Core
  * costs. No new dense map, actor lookup or allocation in the search loop. */
 export function coreNavigationUnits297(costs:NavigationCostLookup|undefined):NavigationCostLookup|undefined {
