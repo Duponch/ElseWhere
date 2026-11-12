@@ -10,7 +10,7 @@ import { fireNavigationCosts,addFireNavigationCosts } from './fire-navigation.ts
 import { doorWait,isFenceGateSpeedSchema303,isRoomDoor } from './door-rules.ts';
 import { footprintCells, footprintContains } from './definitions.ts';
 import { frameAt, frameCosts, FRAME_TRAVEL_DELAY } from './construction-costs.ts';
-import { overlayNavigationCosts,type NavigationCostLookup } from './navigation-costs.ts';
+import { LayeredMap,LayeredSet,overlayNavigationCosts,type NavigationCostLookup } from './navigation-costs.ts';
 import { FLOOR_DEFINITIONS } from './flooring.ts';
 import { spikeTrapKnowsOf,spikeTrapNavigationActor,SPIKE_TRAP_SEARCH_COST,SPIKE_TRAP_WALK_DELAY } from './spike-trap-state.ts';
 import type { Cell, StructureKind, World } from './types.ts';
@@ -142,9 +142,16 @@ export function captureStandability(world:World,geometry?:StructureNavigationGeo
   const structures=geometry?structureDeniedMask(world,geometry,version<22):undefined;
   if(!geometry)for(const s of world.structures)if(version<22?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand)add(s);
   for(const j of world.jobs)if(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')add(j);
-  if(version>=28)for(const p of groundChunkPiles(world))denied.add(p.owner.z*world.width+p.owner.x);
-  return cell=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height
-    &&!['rock','water'].includes(world.tiles[cell.z*world.width+cell.x]!.terrain)&&!structures?.[cell.z*world.width+cell.x]&&!denied.has(cell.z*world.width+cell.x);
+  // Ground chunks: inside a simulation step, a copy of the pile index's facts
+  // taken now (the same cells as the chunk list, as a snapshot); else the list.
+  const index=version>=28?pileIndex(world):undefined;
+  const chunks=index&&!verifyPileIndex&&index.groundFacts.length===world.width*world.height?index.groundFacts.slice():undefined;
+  if(version>=28&&!chunks)for(const p of groundChunkPiles(world))denied.add(p.owner.z*world.width+p.owner.x);
+  return cell=>{
+    if(!Number.isInteger(cell.x)||!Number.isInteger(cell.z)||cell.x<0||cell.z<0||cell.x>=world.width||cell.z>=world.height)return false;
+    const i=cell.z*world.width+cell.x,terrain=world.tiles[i]!.terrain;
+    return terrain!=='rock'&&terrain!=='water'&&!structures?.[i]&&!(chunks&&chunks[i]!&PILE_CHUNK)&&!denied.has(i);
+  };
 }
 /* Every ground chunk / material-floor pile, in array order: from the pile
  * index inside a simulation step, else from a scan (the same filter). */
@@ -217,23 +224,24 @@ export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:Du
 interface TerrainCostLayer {terrain:Uint8Array|Uint16Array;maximum:number;marsh:ReadonlyMap<number,number>}
 /** Per-cell terrain search costs, a pure function of the tiles (terrain, floor,
  * bridge, snow), the schema, site/snow flags and the drafted marsh perception.
- * Without a terrain override the layer is reused while the same Tile[] keeps
+ * Without a terrain override, or with one naming its layerKey, the layer is reused while the same Tile[] keeps
  * the same physical write count (every physical cell write marks its cell, see
  * terrain-mutation-journal); flooring can mutate between actors within a tick
  * and is still observed through that count. Consumers only read the layer. */
-const terrainLayers=new WeakMap<readonly World['tiles'][number][],{writes:number;version:number;site:boolean;snow:boolean;layers:(TerrainCostLayer|undefined)[]}>();
+const terrainLayers=new WeakMap<readonly World['tiles'][number][],{writes:number;version:number;site:boolean;snow:boolean;layers:Map<string,TerrainCostLayer>}>();
 function terrainCostLayer(world:World,version:number,drafted:boolean,snow:boolean,terrainOverride?:DuckTerrainOverride256):TerrainCostLayer {
   const tiles=world.tiles,hasSite=!!world.site;
-  if(terrainOverride)return computeTerrainCostLayer(world,version,drafted,snow,hasSite,terrainOverride);
+  // An override is kept only when it names itself a pure function of the tile.
+  if(terrainOverride&&terrainOverride.layerKey===undefined)return computeTerrainCostLayer(world,version,drafted,snow,hasSite,terrainOverride);
   const writes=terrainWriteCount(tiles);let entry=terrainLayers.get(tiles);
-  if(!entry||entry.writes!==writes||entry.version!==version||entry.site!==hasSite||entry.snow!==snow){entry={writes,version,site:hasSite,snow,layers:[]};terrainLayers.set(tiles,entry);}
-  const slot=drafted?1:0,cached=entry.layers[slot];
+  if(!entry||entry.writes!==writes||entry.version!==version||entry.site!==hasSite||entry.snow!==snow){entry={writes,version,site:hasSite,snow,layers:new Map()};terrainLayers.set(tiles,entry);}
+  const slot=`${drafted?1:0}${terrainOverride?.layerKey??''}`,cached=entry.layers.get(slot);
   if(cached){
-    if(verifyTerrainWriteCaches){const fresh=computeTerrainCostLayer(world,version,drafted,snow,hasSite);
+    if(verifyTerrainWriteCaches){const fresh=computeTerrainCostLayer(world,version,drafted,snow,hasSite,terrainOverride);
       if(fresh.maximum!==cached.maximum||fresh.terrain.length!==cached.terrain.length||fresh.terrain.some((v,i)=>v!==cached.terrain[i])||fresh.marsh.size!==cached.marsh.size||[...fresh.marsh].some(([k,v])=>cached.marsh.get(k)!==v))throw Error('Unmarked terrain write under an unchanged Tile[] count');}
     return cached;
   }
-  return entry.layers[slot]=computeTerrainCostLayer(world,version,drafted,snow,hasSite);
+  const layer=computeTerrainCostLayer(world,version,drafted,snow,hasSite,terrainOverride);entry.layers.set(slot,layer);return layer;
 }
 function computeTerrainCostLayer(world:World,version:number,drafted:boolean,snow:boolean,hasSite:boolean,terrainOverride?:DuckTerrainOverride256):TerrainCostLayer {
   let terrain:Uint8Array|Uint16Array=new Uint8Array(world.tiles.length);let terrainMaximum=0;const marshPerceptionCosts=new Map<number,number>();
@@ -271,7 +279,7 @@ function computeTerrainCostLayer(world:World,version:number,drafted:boolean,snow
  * what every search rebuilt from its entries: in entry order, the delay of the
  * last structure setting a cell (inserted at its first setting), the repeater
  * and stop cells, and the spike-trap entries, whose state is still read live. */
-interface StructureTravelBase {costs:ReadonlyMap<number,number>;repeaters:ReadonlySet<number>;stops:ReadonlySet<number>;traps:readonly StructureNavigationGeometry['entries'][number][]}
+interface StructureTravelBase {costs:ReadonlyMap<number,number>;costMaximum:number;repeaters:ReadonlySet<number>;stops:ReadonlySet<number>;traps:readonly StructureNavigationGeometry['entries'][number][]}
 const structureTravelBases=new WeakMap<StructureNavigationGeometry,StructureTravelBase>();
 function structureTravelBase(geometry:StructureNavigationGeometry):StructureTravelBase {
   let base=structureTravelBases.get(geometry);if(base)return base;
@@ -280,16 +288,32 @@ function structureTravelBase(geometry:StructureNavigationGeometry):StructureTrav
     const p=FURNITURE_TRAVEL[entry.structure.kind];if(entry.structure.kind==='spike-trap')traps.push(entry);
     for(const i of entry.cells){if(p.delay)costs.set(i,Math.round(p.delay/3*1000));if(p.repeat)repeaters.add(i);if(!p.stand)stops.add(i);}
   }
-  base={costs,repeaters,stops,traps};structureTravelBases.set(geometry,base);return base;
+  let costMaximum=-Infinity;for(const value of costs.values())if(value>costMaximum)costMaximum=value;
+  base={costs,costMaximum,repeaters,stops,traps};structureTravelBases.set(geometry,base);return base;
+}
+/** The spike-trap search costs that navigationCosts adds, after the ordinary
+ * maximum, for an actor knowing the traps: the same cells and values. The
+ * additive layers commute, so they can be added to the costs captured for an
+ * actor that does not know them. */
+export function knownSpikeTrapCosts(world:World,geometry?:StructureNavigationGeometry):Map<number,number> {
+  const traps=new Map<number,number>();if(world.schemaVersion<226)return traps;
+  geometry??=captureStructureNavigation(world);
+  const structureBase=geometry?structureTravelBase(geometry):undefined;
+  if(structureBase){for(const {structure,cells} of structureBase.traps)if(structure.spikeTrap)for(const i of cells)traps.set(i,SPIKE_TRAP_SEARCH_COST);}
+  else for(const s of world.structures)if(s.kind==='spike-trap'&&s.spikeTrap)for(const c of footprintCells(s))traps.set(c.z*world.width+c.x,SPIKE_TRAP_SEARCH_COST);
+  return traps;
 }
 /** Captured once per synchronous search. The terrain layer is shared only on an
  * exact unchanged-tiles proof (terrainCostLayer); every other part is fresh. */
-export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry):{costs:NavigationCostLookup|undefined;repeaters:ReadonlySet<number>;stops:ReadonlySet<number>;floors:NavigationCostLookup;coreMoveCosts297?:{cardinal:number;diagonal:number}} {
+export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry,layered=false):{costs:NavigationCostLookup|undefined;repeaters:ReadonlySet<number>;stops:ReadonlySet<number>;floors:NavigationCostLookup;coreMoveCosts297?:{cardinal:number;diagonal:number}} {
   const version=world.schemaVersion,width=world.width,snow=!!world.snow;
   geometry??=captureStructureNavigation(world);
   // Repeaters and stops start with the structure cells, in the same order.
   const structureBase=version>=22&&geometry?structureTravelBase(geometry):undefined,frames=frameCosts(world);
-  const costs=structureBase&&!frames?new Map(structureBase.costs):new Map(frames),repeaters=new Set<number>(structureBase?.repeaters),stops=new Set<number>(structureBase?.stops);
+  // layered: the same reads over the shared structure part instead of copies
+  // of it (no copy for a short search; slower lookups for a long one).
+  const costs:Map<number,number>|LayeredMap=layered&&structureBase&&!frames?new LayeredMap(structureBase.costs,structureBase.costMaximum):structureBase&&!frames?new Map(structureBase.costs):new Map(frames);
+  const repeaters:Set<number>|LayeredSet=layered?new LayeredSet(structureBase?.repeaters):new Set<number>(structureBase?.repeaters),stops:Set<number>|LayeredSet=layered?new LayeredSet(structureBase?.stops):new Set<number>(structureBase?.stops);
   const actor=version>=226?spikeTrapNavigationActor(world,origin):undefined,knows=!!actor&&spikeTrapKnowsOf(world,actor),traps=new Map<number,number>();
   if(version>=22) {
     const add=(s:World['structures'][number],i:number)=>{

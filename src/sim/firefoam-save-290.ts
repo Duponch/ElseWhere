@@ -9,6 +9,7 @@ import {validCoveredInFirefoamField290} from './firefoam-actor-state-290.ts';
 import {validFirefoamActorOwnersWithLanesInternal290,type FirefoamLaneReaderInternal290,type FirefoamEmptyOwnerLanesInternal290} from './firefoam-actor-save-290.ts';
 import {filthCheckPeriod} from './filth-rules.ts';
 import {CAMPAIGN_FIELDS} from './secondary-site-state.ts';
+import {laneOrder} from './save-lanes.ts';
 import type {World} from './types.ts';
 
 const own=(v:object,k:PropertyKey)=>Object.hasOwn(v,k);
@@ -89,11 +90,12 @@ const lanes:readonly Branch[]=[
 ];
 
 const laneKeys:ReadonlySet<string>=new Set(lanes.map(([key])=>key));
+const laneReads=laneOrder(lanes.map(([key])=>key));
 const feetLaneKeys:ReadonlySet<string>=new Set(['carried']),filthLaneKeys:ReadonlySet<string>=new Set(['items']);
 
 function scan(raw:unknown,version:number,contexts?:Record<string,unknown>[],identities?:{add(value:number):unknown},readLane:FirefoamLaneReaderInternal290=Object.getOwnPropertyDescriptor,skipEmptyOwnerLanes?:FirefoamEmptyOwnerLanesInternal290,tracePositive?:TracePositiveInternal290):boolean {
  if(!plain(raw))return false;
- let budget=2_000_000;const active=new Set<object>();
+ let budget=2_000_000;const active=new Set<object>(),inheritedLanes=laneReads.inherited();
  const list=(v:unknown,kind:Kind):boolean=>{
   if(!Array.isArray(v)){
    if(!plain(v)||active.has(v))return false;const d=field(v,'upserted');if(!d)return false;
@@ -170,7 +172,11 @@ function scan(raw:unknown,version:number,contexts?:Record<string,unknown>[],iden
   const branches:readonly Branch[]=kind==='feet'?[['carried','carried',true]]:kind==='filth'?[['items','trace',true]]:kind==='health'||kind==='trace'||kind==='carried'||kind==='research'?[]:lanes;
   // Proof removes only an empty edge loop, after all semantics/IDs/context.
   if(branches.length&&skipEmptyOwnerLanes?.(v,kind==='feet'?feetLaneKeys:kind==='filth'?filthLaneKeys:laneKeys)){active.delete(v);return true;}
-  for(const [key,child,array]of branches){
+  // With the ordinary reader, only the lanes present on this plain object,
+  // in lane order (save-lanes); a lane reader of the native path reads all.
+  const present=branches===lanes&&!inheritedLanes&&readLane===Object.getOwnPropertyDescriptor?laneReads.present(v):undefined;
+  for(let n=0,count=present?present.length:branches.length;n<count;n++){
+   const [key,child,array]=branches[present?present[n]!:n]!;
    const d=readLane(v,key);if(d===null)continue;if(!d){if(key in v)return false;continue;}
    if(!d.enumerable||!own(d,'value'))return false;if(d.value===undefined||d.value===null||typeof d.value!=='object')continue;
    // Animals and mechanics are local only in their actual map collections;

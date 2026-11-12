@@ -2,13 +2,16 @@ import {naturalTerrainCosts256,naturalTerrainWalkable256} from './natural-terrai
 import {duckFlying256} from './duck-flight-state-256.ts';
 import type {World,Tile,Cell} from './types.ts';
 import type {WildAnimal} from './wildlife-state.ts';
-export interface DuckTerrainOverride256 {coreCost(tile:Tile):number|undefined;perceivedCore(tile:Tile):number|undefined}
+/** layerKey names the override when it is a pure function of the tile's
+ * terrain, floor and bridge: terrain cost layers built with it can then be kept
+ * like the plain ones (furniture-travel terrainCostLayer). */
+export interface DuckTerrainOverride256 {readonly layerKey?:string;coreCost(tile:Tile):number|undefined;perceivedCore(tile:Tile):number|undefined}
 /** Only actual Duck256. No replacement of solid buildings, snow or material
  * cost; callers overlay these independently in the existing cost producer. */
 export function duckTerrainOverride256(w:Pick<World,'schemaVersion'>,a:Pick<WildAnimal,'species'|'flight'>):DuckTerrainOverride256|undefined {
  if(w.schemaVersion<256||a.species!=='duck')return;
  const flying=duckFlying256(a.flight),water=(t:Tile)=>!t.bridge&&!t.floor&&!!naturalTerrainCosts256(t.terrain)?.water;
- return {coreCost:t=>water(t)?1:flying?0:undefined,perceivedCore:t=>water(t)?0:flying?0:undefined};
+ return {layerKey:flying?'duck-flying':'duck',coreCost:t=>water(t)?1:flying?0:undefined,perceivedCore:t=>water(t)?0:flying?0:undefined};
 }
 /** WaterDeep alone declares forcePassableByFlyingPawns. OceanDeep does not. */
 export function duckTerrainWalkable256(w:Pick<World,'schemaVersion'>,a:Pick<WildAnimal,'species'|'flight'>,terrain:unknown):boolean {return naturalTerrainWalkable256(terrain)||w.schemaVersion>=256&&a.species==='duck'&&duckFlying256(a.flight)&&terrain==='water-deep';}

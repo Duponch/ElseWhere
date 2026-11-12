@@ -1,4 +1,5 @@
 import {SCHEMA_VERSION} from './types.ts';
+import {laneOrder} from './save-lanes.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {kidnapCarryPairs261} from './caravan-kidnap-261.ts';
 import {localWorldGroups} from './world-map-context.ts';
@@ -18,8 +19,9 @@ export function validPartyTask292(value:unknown,version:number,tick:number,width
 const lists=new Set(['sites','piles','items','jobs','groups','groupLosses','losses','legacyTravellers','abandonedPawns','abandonedContents','owners','leaders','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277','structures','packed','departed','pods','humans','members','people','animals','pawns']);
 const lanes=['world','summary','dynamic','campaign','worldMaps','sites','map','secondarySite','campaignMap','piles','items','jobs','worldGroups','groups','group','state','pending261','groupLosses','losses','legacyTravellers','abandonedPawns','abandonedContents','worldPawns','owners','worldFactions','leaders','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277','casket','cryptosleep','shipCryptosleep277','occupant','structures','packed','building','visitors','raids','podRescues','prisonDepartures','departed','startingArrival','pods','humans','members','people','animals','pawns','human','pawn','animal','mech','actor','scout','commercialTrip','recreation','task'] as const;
 const humanLanes=new Set(['pawns','humans','members','people','human','pawn','actor']);
+const laneReads=laneOrder(lanes);
 export function validPartyHistoricalTransport292(raw:unknown,version:unknown):boolean {
- if(!integer(version,1,SCHEMA_VERSION))return false;let budget=2_000_000;const active=new Set<object>();
+ if(!integer(version,1,SCHEMA_VERSION))return false;let budget=2_000_000;const active=new Set<object>(),inherited=laneReads.inherited();
  const visit=(v:unknown,kind:string):boolean=>{
   if(--budget<0||!plain(v)||active.has(v))return false;active.add(v);
   if('party292'in v){if(!['world','map','dynamic'].includes(kind)||!validPartyField292(v,version,integer(data(v,'tick')?.value)?data(v,'tick')!.value:Math.floor(Number.MAX_SAFE_INTEGER/10),integer(data(v,'width')?.value,1)?data(v,'width')!.value:Number.MAX_SAFE_INTEGER,integer(data(v,'height')?.value,1)?data(v,'height')!.value:Number.MAX_SAFE_INTEGER))return false;}
@@ -35,7 +37,9 @@ export function validPartyHistoricalTransport292(raw:unknown,version:unknown):bo
    active.delete(value);return true;
   };
   if('upserted'in v){const d=data(v,'upserted');if(!d||!list(d.value,kind))return false;}
-  for(const lane of lanes){const d=Object.getOwnPropertyDescriptor(v,lane);if(!d){if(lane in v)return false;continue;}if(!d.enumerable||!Object.hasOwn(d,'value'))return false;if(d.value===undefined||d.value===null||typeof d.value!=='object')continue;const child=kind==='visitors'&&lane==='groups'?'visitor-group':kind==='visitor-group'&&lane==='members'?'visitor-member-id':lane;if(!(lists.has(lane)?list(d.value,child):visit(d.value,child)))return false;}
+  // Only the lanes present on this plain object, in lane order (save-lanes).
+  const present=inherited?undefined:laneReads.present(v);
+  for(let n=0,count=present?present.length:lanes.length;n<count;n++){const lane=lanes[present?present[n]!:n]!;const d=Object.getOwnPropertyDescriptor(v,lane);if(!d){if(lane in v)return false;continue;}if(!d.enumerable||!Object.hasOwn(d,'value'))return false;if(d.value===undefined||d.value===null||typeof d.value!=='object')continue;const child=kind==='visitors'&&lane==='groups'?'visitor-group':kind==='visitor-group'&&lane==='members'?'visitor-member-id':lane;if(!(lists.has(lane)?list(d.value,child):visit(d.value,child)))return false;}
   active.delete(v);return true;
  };
  try{return visit(raw,'world');}catch{return false;}

@@ -5,6 +5,34 @@ import { EMPTY_NAVIGATION_COSTS,type NavigationCostLookup } from './navigation-c
 
 const DIRECTIONS = [[0,-1],[1,0],[0,1],[-1,0],[1,-1],[1,1],[-1,1],[-1,-1]] as const;
 
+/** The map-sized arrays of one search at a time, at the constructor's
+ * sentinels between searches. A search given this scratch records every cell
+ * it touches (a cost leaving Infinity) and release() resets only those: a
+ * short search on a large map then costs its own area, not the map's. The
+ * results are those of fresh arrays. */
+export class WeightedSearchScratch {
+  readonly parents:Int32Array;readonly costs:Float64Array;readonly settled:Uint8Array;
+  readonly next:Int32Array;readonly previous:Int32Array;readonly buckets:Int32Array;
+  private touched:Int32Array;private count=0;private busy=false;
+  constructor(readonly size:number){
+    this.parents=new Int32Array(size).fill(-2);this.costs=new Float64Array(size).fill(Infinity);this.settled=new Uint8Array(size);
+    this.next=new Int32Array(size).fill(-1);this.previous=new Int32Array(size).fill(-1);this.buckets=new Int32Array(size).fill(-1);
+    this.touched=new Int32Array(Math.min(size,4096));
+  }
+  /** Takes the scratch for one search; false while another search holds it. */
+  acquire():boolean{if(this.busy)return false;this.busy=true;return true;}
+  touch(index:number):void{
+    if(this.count===this.touched.length){const grown=new Int32Array(Math.min(this.size,this.touched.length*2));grown.set(this.touched);this.touched=grown;}
+    this.touched[this.count++]=index;
+  }
+  /** Ends the search that held the scratch: its field must not be read again. */
+  release():void{
+    const {parents,costs,settled,next,previous,buckets,touched}=this;
+    for(let k=0;k<this.count;k++){const i=touched[k]!;parents[i]=-2;costs[i]=Infinity;settled[i]=0;next[i]=-1;previous[i]=-1;buckets[i]=-1;}
+    this.count=0;this.busy=false;
+  }
+}
+
 /** Resumable Dijkstra. Keep the same queue order and finish the entire equal-cost
  * layer, so a later request returns the exact same parents as one full flood. */
 export class WeightedSearch {
@@ -23,19 +51,24 @@ export class WeightedSearch {
   private readonly floors:NavigationCostLookup;
   private readonly corners:ReadonlySet<number>;
   private readonly additiveCosts?:NavigationCostLookup;
-  constructor(width:number, height:number, start:number, unavailable:Uint8Array, extraCosts?:NavigationCostLookup,repeaters:ReadonlySet<number>=new Set(),floors:NavigationCostLookup=EMPTY_NAVIGATION_COSTS,corners:ReadonlySet<number>=new Set(),additiveCosts?:NavigationCostLookup,moveCosts?:{cardinal:number;diagonal:number}) {
+  private readonly scratch?:WeightedSearchScratch;
+  constructor(width:number, height:number, start:number, unavailable:Uint8Array, extraCosts?:NavigationCostLookup,repeaters:ReadonlySet<number>=new Set(),floors:NavigationCostLookup=EMPTY_NAVIGATION_COSTS,corners:ReadonlySet<number>=new Set(),additiveCosts?:NavigationCostLookup,moveCosts?:{cardinal:number;diagonal:number},scratch?:WeightedSearchScratch) {
     this.cardinal=moveCosts?.cardinal??CARDINAL_COST;this.diagonal=moveCosts?.diagonal??DIAGONAL_COST;
     this.additiveCosts=additiveCosts;
     this.extraCosts=extraCosts;this.repeaters=repeaters;this.floors=floors;this.corners=corners;
     this.width=width;this.height=height;this.unavailable=unavailable;
-    const size=width*height,parents=new Int32Array(size).fill(-2),costs=new Float64Array(size).fill(Infinity);
-    this.settled=new Uint8Array(size);this.field={parents,costs,start,visited:0,unreachedGroups:0,settled:this.settled};
+    const size=width*height;
+    // A scratch (acquired by the caller) is clean: the same sentinels.
+    if(scratch&&scratch.size!==size)throw Error('Search scratch of another map size');
+    this.scratch=scratch;
+    const parents=scratch?scratch.parents:new Int32Array(size).fill(-2),costs=scratch?scratch.costs:new Float64Array(size).fill(Infinity);
+    this.settled=scratch?scratch.settled:new Uint8Array(size);this.field={parents,costs,start,visited:0,unreachedGroups:0,settled:this.settled};
     const maximum=extraCosts?.maximum??0;
-    this.frontier=new PathFrontier(costs,this.diagonal+maximum+(additiveCosts?.maximum??0),!!additiveCosts);costs[start]=0;parents[start]=-1;this.frontier.push(start);this.pending=this.frontier.pop();
+    this.frontier=new PathFrontier(costs,this.diagonal+maximum+(additiveCosts?.maximum??0),!!additiveCosts,scratch);scratch?.touch(start);costs[start]=0;parents[start]=-1;this.frontier.push(start);this.pending=this.frontier.pop();
   }
   advance(goals?:ReadonlySet<number>,allGroups?:readonly ReadonlySet<number>[],isGoal?:(index:number)=>boolean):DistanceField {
     if(this.finished)throw new Error('A finalized path field cannot be resumed.');
-    const {parents,costs,start}=this.field,size=parents.length,blocked=this.unavailable;
+    const {parents,costs,start}=this.field,size=parents.length,blocked=this.unavailable,scratch=this.scratch;
     let goalCost=Infinity,remaining=0;
     if(goals)for(const index of goals)if(this.settled[index])goalCost=Math.min(goalCost,costs[index]!);
     const membership=new Map<number,number[]>(),reached=new Set<number>();
@@ -61,7 +94,7 @@ export class WeightedSearch {
         if(nx<0||nz<0||nx>=this.width||nz>=this.height||blocked[next]||this.settled[next])continue;
         if(dx&&dz&&(blocked[index+dx]||blocked[index+dz*this.width]||this.corners.has(index+dx)||this.corners.has(index+dz*this.width)))continue;
         const cost=costs[index]!+(dx&&dz?this.diagonal:this.cardinal)+(this.repeaters.has(index)&&this.repeaters.has(next)?this.floors.get(next)??0:this.extraCosts?.get(next)??0)+(this.additiveCosts?.get(next)??0);
-        if(cost<costs[next]!) {costs[next]=cost;parents[next]=index;this.frontier.push(next);}
+        if(cost<costs[next]!) {if(scratch!==undefined&&costs[next]===Infinity)scratch.touch(next);costs[next]=cost;parents[next]=index;this.frontier.push(next);}
       }
       this.pending=this.frontier.pop();
     }

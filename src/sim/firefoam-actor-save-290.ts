@@ -1,4 +1,5 @@
 import {SCHEMA_VERSION} from './types.ts';
+import {laneOrder} from './save-lanes.ts';
 import {validCoveredInFirefoamField290} from './firefoam-actor-state-290.ts';
 
 const plain=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype;
@@ -9,6 +10,7 @@ const lanes=new Set(['world','summary','dynamic','campaign','map','worldMaps','s
  'human','pawn','animal','mech','actor','piles','items','corpse','mechCorpse','worldGroups','groups','state','group','pending261','people','animalOwners','members',
  'groupLosses','animalLosses','losses','abandonedPawns','abandonedContents','humans','worldPawns','owners','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277',
  'worldFactions','leaders','visitors','podRescues','departed','startingArrival','pods','scout','commercialTrip','legacyTravellers','upserted']);
+const laneList:readonly string[]=[...lanes],laneReads=laneOrder(laneList);
 
 /** Supplemental closed owner-context fence. Main guards still own actor shapes,
  * IDs and clocks. Relative remaining time is valid unchanged in frozen owners. */
@@ -22,7 +24,7 @@ export type FirefoamLaneReaderInternal290=(value:object,key:string)=>PropertyDes
 export type FirefoamEmptyOwnerLanesInternal290=(value:object,laneKeys:ReadonlySet<string>)=>boolean;
 export function validFirefoamActorOwnersWithLanesInternal290(raw:unknown,version:number,readLane:FirefoamLaneReaderInternal290,skipEmptyOwnerLanes?:FirefoamEmptyOwnerLanesInternal290):boolean {
  if(!Number.isSafeInteger(version)||version<1||version>SCHEMA_VERSION)return false;
- const active=new Set<object>();let budget=2_000_000;
+ const active=new Set<object>(),inheritedLanes=laneReads.inherited();let budget=2_000_000;
  const visit=(v:unknown,forbidden=false):boolean=>{
   if(--budget<0)return false;if(v===null||typeof v!=='object')return true;
   if(active.has(v)||!Array.isArray(v)&&!plain(v))return false;
@@ -46,7 +48,11 @@ export function validFirefoamActorOwnersWithLanesInternal290(raw:unknown,version
    if('coveredInFirefoam290'in v)return false;
    // All actor semantics above still run, even when no custody edge exists.
    if(skipEmptyOwnerLanes?.(v,lanes)){active.delete(v);return true;}
-   for(const key of lanes){
+   // With the ordinary reader, only the lanes present on this plain object,
+   // in lane order (save-lanes); a lane reader of the native path reads all.
+   const present=!inheritedLanes&&readLane===Object.getOwnPropertyDescriptor?laneReads.present(v):undefined;
+   for(let n=0,count=present?present.length:laneList.length;n<count;n++){
+    const key=laneList[present?present[n]!:n]!;
     const d=readLane(v,key);if(d===null)continue;if(!d){if(key in v)return false;continue;}
     if(!d.enumerable||!own(d,'value'))return false;
     let initial=blocked;

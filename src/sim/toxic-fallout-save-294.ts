@@ -1,4 +1,5 @@
 import {SCHEMA_VERSION} from './types.ts';
+import {laneOrder} from './save-lanes.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import type {CassandraMiscCalendar} from './cassandra-misc.ts';
 import {TICKS_PER_DAY,type World} from './types.ts';
@@ -57,6 +58,8 @@ export function validToxicFalloutHistoricalTransport294(raw:unknown,version:unkn
   if(!int(version,1,SCHEMA_VERSION))return false;
   const active=new Set<object>();let budget=2000000;
   const lanes=['world','summary','dynamic','campaign','worldMaps','worldGroups','worldPawns','campaignMap','secondarySite','map','maps','sites','entries','groups','group','state','groupLosses','pending261','battlefield261','retained','people','pawns','wildlife','animals','piles','items','packed','building','structures','body','cryptosleep','shipCryptosleep277','occupant','human','pawn','animal','actor','contents','lost','abandoned','abandonedContents','abandonedPawns','humans','pods','animalLosses','losses','members','owners','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277','casket','upserted'] as const;
+  // Only the lanes present on a plain object, in lane order (save-lanes).
+  const laneReads=laneOrder(lanes),inheritedLanes=laneReads.inherited();
   const visit=(v:unknown,lane:string,context:Record<string,unknown>,corpseRot=false,holder?:Record<string,unknown>,actor?:Record<string,unknown>):boolean=>{
    if(--budget<0)return false;if(v===null||typeof v!=='object')return true;
    if(Array.isArray(v)){
@@ -83,7 +86,8 @@ export function validToxicFalloutHistoricalTransport294(raw:unknown,version:unkn
    }
    if('miscIncidents'in v){const d=data(v,'miscIncidents');if(!d||!visit(d.value,'miscIncidents',local))return false;}
    for(const key of ['rot','corpseRot'])if(key in v){const d=data(v,key);if(!d||!visit(d.value,key,local,key==='corpseRot'||lane==='body'||data(v,'kind')?.value==='corpse',v,key==='corpseRot'?v:actor))return false;}
-   for(const key of lanes)if(key in v){const d=data(v,key);if(!d||!visit(d.value,key,local,false,undefined,key==='body'?v:undefined))return false;}
+   const present=inheritedLanes?undefined:laneReads.present(v);
+   for(let n=0,count=present?present.length:lanes.length;n<count;n++){const key=lanes[present?present[n]!:n]!;if(key in v){const d=data(v,key);if(!d||!visit(d.value,key,local,false,undefined,key==='body'?v:undefined))return false;}}
    active.delete(v);return true;
   };
   return visit(raw,'world',{});

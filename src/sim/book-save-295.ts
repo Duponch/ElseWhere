@@ -1,4 +1,5 @@
 import {SCHEMA_VERSION} from './types.ts';
+import {laneOrder} from './save-lanes.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {isNovelBook295} from './book-state-295.ts';
 
@@ -77,6 +78,8 @@ export function validNovelHistoricalTransport295(raw:unknown,version:unknown):bo
   if(!supported(version))return false;
   const active=new Set<object>();let budget=2_000_000;
   const lanes=['world','summary','dynamic','campaign','worldMaps','worldGroups','worldPawns','worldFactions','campaignMap','secondarySite','map','maps','sites','entries','groups','group','state','groupLosses','pending261','battlefield261','retained','people','pawns','wildlife','animals','piles','items','packed','building','structures','body','cryptosleep','shipCryptosleep277','occupant','human','pawn','animal','actor','contents','lost','abandoned','abandonedContents','abandonedPawns','humans','pods','animalLosses','losses','members','owners','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277','casket','upserted','orbital','ships','deliveries','cargo','pending','departures','commercialTrip','civilianPost','visitors','raids','trade','prisonDepartures','arrivals','startingArrival','podRescues','scout','quests','worldSites263','tradeRequests284','requests','rewards','options','stockpiles','filters','shelf','settings','policy','privatePolicy','linkedStorage286','policies','recreation','task','bought','sold','recent','lines','ledger','destroyed','stock'] as const;
+  // Only the lanes present on a plain object, in lane order (save-lanes).
+  const laneReads=laneOrder(lanes),inheritedLanes=laneReads.inherited();
   const visit=(v:unknown,lane:string):boolean=>{
    if(--budget<0)return false;if(v===null||typeof v!=='object')return true;
    if(active.has(v))return false;active.add(v);
@@ -94,7 +97,8 @@ export function validNovelHistoricalTransport295(raw:unknown,version:unknown):bo
     }else if(data(v,'kind')?.value==='book'||novelItem&&('owner'in v||'id'in v||lane==='piles'||lane==='upserted'))return false;
     if(!validReadingPawnFields295(v,version))return false;
     if((data(v,'activity')?.value==='read'||'bookId'in v)&&!validReadingTask295(v,version))return false;
-    for(const key of lanes)if(key in v){const d=data(v,key);if(!d||!visit(d.value,key))return false;}
+    const present=inheritedLanes?undefined:laneReads.present(v);
+    for(let n=0,count=present?present.length:lanes.length;n<count;n++){const key=lanes[present?present[n]!:n]!;if(key in v){const d=data(v,key);if(!d||!visit(d.value,key))return false;}}
    }
    active.delete(v);return true;
   };

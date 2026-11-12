@@ -1,6 +1,7 @@
 import {SCHEMA_VERSION} from './types.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {forestNativeSpecies291,treeSowingUnlocked291,isForestrySpecies291,isGrowingPlantInVersion291,TREE_SOWING_COST_291} from './forestry-content-291.ts';
+import {laneOrder} from './save-lanes.ts';
 import type {World} from './types.ts';
 
 const own=(value:object,key:PropertyKey)=>Object.hasOwn(value,key);
@@ -53,9 +54,10 @@ const lanes:readonly [string,boolean?][]=[
  ['visitors'],['podRescues'],['departed',true],['startingArrival'],['pods',true],['animalOwners'],
  ['humans',true],['members',true],['people',true],['animals',true],['pawns',true],['human'],['pawn'],['animal'],['actor'],['scout'],['commercialTrip'],
 ];
+const laneReads=laneOrder(lanes.map(([key])=>key));
 export function validForestryHistoricalTransport291(raw:unknown,version:unknown):boolean {
  if(!integer(version,1,SCHEMA_VERSION))return false;
- let budget=2_000_000;const active=new Set<object>();
+ let budget=2_000_000;const active=new Set<object>(),inherited=laneReads.inherited();
  const list=(value:unknown,key:string):boolean=>{
   if(!Array.isArray(value))return key!=='visitor-member-id'&&plain(value)&&!!data(value,'upserted')&&visit(value,key);
   if(active.has(value)||value.length>1_000_000)return false;active.add(value);
@@ -70,7 +72,10 @@ export function validForestryHistoricalTransport291(raw:unknown,version:unknown)
   if(kind==='research'&&!validForestryResearch291(value,version))return false;
   active.add(value);
   if(own(value,'upserted')){const d=data(value,'upserted');if(!d||!list(d.value,kind)){active.delete(value);return false;}}
-  for(const[key,array]of lanes){
+  // Only the lanes present on this plain object, in lane order (save-lanes).
+  const present=inherited?undefined:laneReads.present(value);
+  for(let n=0,count=present?present.length:lanes.length;n<count;n++){
+   const [key,array]=lanes[present?present[n]!:n]!;
    const d=Object.getOwnPropertyDescriptor(value,key);if(!d){if(key in value)return false;continue;}
    if(!d.enumerable||!own(d,'value'))return false;
    if(d.value===undefined||d.value===null||typeof d.value!=='object')continue;

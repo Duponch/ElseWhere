@@ -9,7 +9,10 @@ export class PathFrontier {
   private cursor=0;
   private readonly costs:Float64Array;
   private readonly occupancy?:Uint32Array[];
-  constructor(costs:Float64Array,maxEdgeCost=1414,indexOccupied=false) {this.heads=new Int32Array(maxEdgeCost+1).fill(-1);this.costs=costs;this.next=new Int32Array(costs.length).fill(-1);this.previous=new Int32Array(costs.length).fill(-1);this.buckets=new Int32Array(costs.length).fill(-1);
+  /** `arrays`: map-sized next/previous/buckets already at -1 (a reused search
+   * scratch, see WeightedSearchScratch); else fresh ones. */
+  constructor(costs:Float64Array,maxEdgeCost=1414,indexOccupied=false,arrays?:{readonly next:Int32Array;readonly previous:Int32Array;readonly buckets:Int32Array}) {this.heads=new Int32Array(maxEdgeCost+1).fill(-1);this.costs=costs;
+    if(arrays){this.next=arrays.next;this.previous=arrays.previous;this.buckets=arrays.buckets;}else{this.next=new Int32Array(costs.length).fill(-1);this.previous=new Int32Array(costs.length).fill(-1);this.buckets=new Int32Array(costs.length).fill(-1);}
     if(indexOccupied){this.occupancy=[];let length=this.heads.length;do{length=Math.ceil(length/32);this.occupancy.push(new Uint32Array(length));}while(length>1);}}
   private mark(bucket:number,present:boolean):void {
     if(!this.occupancy)return;
