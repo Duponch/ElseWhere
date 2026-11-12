@@ -41,7 +41,7 @@ La promenade coûte donc encore ≈ 4,7 ms par tick sur Les Forges et ≈ 1,65 m
 
 Mesures (Node, machine chargée par la suite de tests, donc indicatives) : Les Forges publiée 80 → 63 s (−21 %), Les Éclaircies 31,5 → 26,1 s (−17 %), Les Forges au schéma courant ≈ 5,4 → 4,5 s.
 
-**Proposition, non appliquée (règle du projet).** Ne valider que le schéma d'origine de la sauvegarde et le schéma final, pas chaque étape intermédiaire produite par nos propres migrations : prototype de mesure, Les Forges publiée 81,9 → 8,3 s, monde chargé identique à l'octet. La règle « valider strictement l'ancien schéma avant migration » resterait respectée pour le schéma de la sauvegarde ; on perdrait la détection, à chaque étape, d'une erreur dans nos propres migrations (la validation finale reste). À décider par l'utilisateur.
+**Proposition, non appliquée (règle du projet).** Ne valider que le schéma d'origine de la sauvegarde et le schéma final, pas chaque étape intermédiaire produite par nos propres migrations : prototype de mesure, Les Forges publiée 81,9 → 8,3 s, monde chargé identique à l'octet. La règle « valider strictement l'ancien schéma avant migration » resterait respectée pour le schéma de la sauvegarde ; on perdrait la détection, à chaque étape, d'une erreur dans nos propres migrations (la validation finale reste). À décider par l'utilisateur. **Appliquée le soir du 12 novembre avec son accord**, la suite de tests gardant la validation de chaque étape : voir [bilan-soir-20261112.md](bilan-soir-20261112.md).
 
 ## 3. Simulation : optimisations exactes
 
@@ -72,3 +72,5 @@ Commits poussés sur `origin/main` : `fba51516` (optimisations exactes), `4899ed
 1. **Chargement des anciennes sauvegardes** : ne valider que le schéma d'origine de la sauvegarde et le schéma final (prototype : Les Forges publiée 82 → 8 s, monde identique). Chaque nouveau schéma ajoute sinon une validation complète au chargement de toutes les sauvegardes plus anciennes.
 2. **Campagne « Atterrissage » graine 42** : rendre le joueur scripté plus réaliste (secourir le défenseur, laisser manger les colons mobilisés), ou accepter cette divergence.
 3. **Coût de la promenade** : ≈ +4,7 ms par tick sur Les Forges en simulation seule, et dans le vrai Worker à ×3 le rythme tenu passe de 90,8 % à 82,4 %. Poursuivre (coûts de navigation calculés à la demande) ou accepter ce coût d'une règle plus fidèle.
+
+**Réponses de l'utilisateur (soir du 12 novembre)** : 1 oui, 2 améliorer le joueur scripté, 3 continuer à réduire le coût ; suite dans [bilan-soir-20261112.md](bilan-soir-20261112.md).
