@@ -54,8 +54,17 @@ E: n'avait plus que 37 Mo libres. Supprimés (tous recréables) : anciens bundle
 
 ## 5. Tests
 
-TESTS
+- **Suite complète** (lots de 30 fichiers, 3 processus, ≈ 2 h 10, pendant que d'autres mesures tournaient) : 10 608 tests, 1 844 échecs dont 1 794 déjà connus (`tmp/perf/known-failures.json`). Les 52 autres : 43 lisent des preuves locales absentes du dossier de travail utilisé (`tmp/test-runs/...`, sources de `three`) ; 4 tests de démonstration dépassent 30 s sous charge (≈ 29 s chacun seul, avec ou sans la règle 304) ; 2 fichiers figent l'empreinte d'un source modifié le 11 novembre (`daylight-speed-engine-v492`, `main-terminal298`), et ré-épingler montre d'autres échecs plus anciens (fixtures au schéma 298) : laissés tels quels ; 1 campagne diverge (ci-dessous).
+- **Ciblés avec le code final** : promenade (5 tests, dont la partie rechargée identique à la partie continue et la migration), animal enragé (2), portes et portails du schéma 303 (7), 111 fichiers de tests d'animaux, de faune et de caravanes : aucun nouvel échec. Optimisations exactes : 948 tests des modules touchés et 91 des retombées toxiques, aucun nouvel échec réel.
+- **Campagne « Atterrissage » graine 42** : passe sans la règle 304 ; avec elle, le déroulement diverge : un muffalo devient enragé (vengeance après une chasse), vient rôder près de l'abri comme dans RimWorld, met à terre le seul colon armé posté dehors, et le joueur scripté du test garde les deux autres colons mobilisés à l'abri tant que l'animal vit ; ils finissent affamés (un colon mobilisé ne mange pas seul, comme dans RimWorld). Limite du joueur scripté (il ne secourt pas le défenseur et ne fait pas manger des colons mobilisés), pas un écart de règle : non modifiée sans l'avis de l'utilisateur.
+- Le commit de la règle (`4899edfa`) laissait deux erreurs de typage dans le nouveau test de l'animal enragé (la construction Pages les a révélées) ; corrigé par `8b608307`, mêmes assertions, avant la publication.
 
 ## 6. Publication
 
-PUBLICATION
+Commits poussés sur `origin/main` : `fba51516` (optimisations exactes), `4899edfa` (règle 304), `8b608307` (typage du test). Publié sur Cloudflare Pages depuis une copie exacte de `8b608307` (`git archive`) : typage et construction Pages réussis (1 142 fichiers, 8 nouveaux envoyés), déploiement Production `d91f31e8` sur la branche main ; 36 réponses HTTPS identiques octet pour octet sur le site public et l'adresse fixe du déploiement. Ce contrôle ne remplace ni un parcours dans le navigateur ni une mesure d'images par seconde.
+
+## 7. Décisions pour l'utilisateur
+
+1. **Chargement des anciennes sauvegardes** : ne valider que le schéma d'origine de la sauvegarde et le schéma final (prototype : Les Forges publiée 82 → 8 s, monde identique). Chaque nouveau schéma ajoute sinon une validation complète au chargement de toutes les sauvegardes plus anciennes.
+2. **Campagne « Atterrissage » graine 42** : rendre le joueur scripté plus réaliste (secourir le défenseur, laisser manger les colons mobilisés), ou accepter cette divergence.
+3. **Coût restant de la promenade** (≈ +4,7 ms par tick sur Les Forges) : poursuivre (morceaux de roche lus dans l'index des piles, grilles d'obstacles partagées) ou passer à autre chose.
