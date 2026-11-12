@@ -19,6 +19,7 @@ import { medicalBleed } from '../../src/sim/injury-state.ts';
 import { medicalWorkRefusal } from '../../src/sim/health-rules.ts';
 import { needsAssistedFeeding } from '../../src/sim/feeding-rules.ts';
 import { wantsRescue } from '../../src/sim/rescue.ts';
+import { isForcedConsuming } from '../../src/sim/consuming.ts';
 import { shotPlan,shootingQueries } from '../../src/sim/shooting.ts';
 import type { Cell, DesignateCommand } from '../../src/sim/types.ts';
 import { survivorDecisions, survivorPlan, survivorSummary } from './survivor-player.ts';
@@ -32,13 +33,9 @@ export function crashlandedDecisions(w:World):Decision[] {
   const defender=people.find(p=>!violentWorkRefusal(p)&&!!equippedWeapon(w,p));
   const angry=w.wildlife?.animals.filter(a=>a.manhunter&&a.state!=='dead'&&a.state!=='downed')??[];
   if(angry.length){
-    const inactive=people.filter(p=>!p.draft);
-    if(inactive.length)return [{reason:'L’alerte signale un animal en rage : interrompre les travaux et les ordres de soins avant de rejoindre l’abri.',command:{type:'draft',pawnIds:inactive.map(p=>p.id),enabled:true}}];
-    const camp=survivorPlan(w,true),out:Decision[]=[];
-    const inside=(c:Cell)=>c.x>camp.room.from.x&&c.x<camp.room.to.x&&c.z>camp.room.from.z&&c.z<camp.room.to.z;
-    for(const [i,p] of people.filter(p=>p!==defender).entries())if(!inside(p)&&!p.draft?.target){
-      out.push({reason:'Rejoindre physiquement l’intérieur de l’abri et laisser la porte se refermer.',command:{type:'draft-move',pawnIds:[p.id],target:{x:camp.anchor.x+1+i%3,z:camp.anchor.z+3},queue:false}});
-    }
+    const shelter=shelterDecisions(w,people,defender,angry,'L’alerte signale un animal en rage : interrompre les travaux et les ordres de soins avant de rejoindre l’abri.',true);
+    if(shelter.drafting)return shelter.out;
+    const camp=survivorPlan(w,true),out=shelter.out;
     if(defender){
       if(defender.draft?.holdFire)out.push({reason:'Autoriser le défenseur équipé à tirer sur la menace animale réelle.',command:{type:'fire-at-will',pawnIds:[defender.id],enabled:true}});
       const target=[...angry].sort((a,b)=>(a.x-defender.x)**2+(a.z-defender.z)**2-(b.x-defender.x)**2-(b.z-defender.z)**2||a.id-b.id)[0]!;
@@ -62,7 +59,11 @@ export function crashlandedDecisions(w:World):Decision[] {
   if(w.raids?.active||w.raids?.mechActive) {
     if(defender&&!defender.draft)return [{reason:'La lettre annonce une attaque : mobiliser la personne équipée du revolver.',command:{type:'draft',pawnIds:[defender.id],enabled:true}}];
     if(defender?.draft?.holdFire)return [{reason:'Autoriser le tir contre les assaillants qui approchent.',command:{type:'fire-at-will',pawnIds:[defender.id],enabled:true}}];
-    return [];
+    if(defender)return [];
+    // The armed defender is down: the others shelter as from an angry animal
+    // (with no position to read for mechanoids: no fetch, rescue or meal).
+    const raiders=w.raids?.mechActive?undefined:w.pawns.filter(p=>!!p.raid&&!p.raid.exiting&&p.state!=='dead'&&p.state!=='downed');
+    return shelterDecisions(w,people,undefined,raiders,'Le défenseur est à terre : interrompre les travaux et rejoindre l’abri.',false).out;
   }
   const drafted=people.filter(p=>p.draft).map(p=>p.id);
   if(drafted.length)return [{reason:'L’assaut est terminé : reprendre les activités civiles et les soins.',command:{type:'draft',pawnIds:drafted,enabled:false}}];
@@ -74,6 +75,79 @@ export function crashlandedDecisions(w:World):Decision[] {
   if(w.piles.some(i=>i.item===wanted&&(i.owner.type==='equipment'||i.owner.type==='apparel')&&i.owner.pawnId===candidate.id))return out;
   const item=w.piles.find(i=>i.item===wanted&&i.owner.type==='ground'&&queryOrderOptions(w,candidate.id,i.owner).some(o=>o.equipmentItemId===i.id&&o.enabled));
   if(item)out.push({reason: wanted==='revolver'?'Préparer la défense avec le revolver réellement fourni.':'Enfiler le gilet avant de reprendre le travail.',command:{type:'order-equipment',pawnId:candidate.id,itemId:item.id,action:wanted==='revolver'?'equip':'wear',queue:false}});
+  return out;
+}
+
+type Colonist=World['pawns'][number];
+const farFrom=(threats:readonly Cell[],c:Cell,cells:number)=>threats.every(a=>Math.max(Math.abs(a.x-c.x),Math.abs(a.z-c.z))>=cells);
+
+/** Everyone but the armed defender shelters in the room from `threats`
+ * (undefined: positions unknown): drafted first (a decision of its own), then
+ * the downed defender's weapon fetched, the downed rescued and (`meals`: an
+ * animal that stays outside, not raiders who come in) the hungry fed while the
+ * threats are far, and the others walked inside. */
+function shelterDecisions(w:World,people:readonly Colonist[],defender:Colonist|undefined,threats:readonly Cell[]|undefined,draftReason:string,meals:boolean):{drafting:boolean;out:Decision[]} {
+  const fetch=defender||!threats?undefined:groundWeaponFetch(w,people,threats);
+  const inactive=people.filter(p=>!p.draft&&p!==fetch?.pawn);
+  if(inactive.length)return {drafting:true,out:[{reason:draftReason,command:{type:'draft',pawnIds:inactive.map(p=>p.id),enabled:true}}]};
+  const camp=survivorPlan(w,true),out:Decision[]=[];
+  const inside=(c:Cell)=>c.x>camp.room.from.x&&c.x<camp.room.to.x&&c.z>camp.room.from.z&&c.z<camp.room.to.z;
+  if(fetch){
+    // Equipping is an undrafted order: undraft first, then pick the weapon up.
+    const p=fetch.pawn;
+    if(p.draft)out.push({reason:'Le défenseur est à terre et la menace s’est éloignée de son arme : démobiliser le meilleur tireur restant pour la ramasser.',command:{type:'draft',pawnIds:[p.id],enabled:false}});
+    else if(!p.equipmentTask){
+      const option=queryOrderOptions(w,p.id,{x:fetch.x,z:fetch.z}).find(o=>o.enabled&&o.equipmentItemId===fetch.weapon.id&&o.equipmentAction==='equip');
+      out.push(option?{reason:'Ramasser et équiper l’arme du défenseur à terre.',command:{type:'order-equipment',pawnId:p.id,itemId:fetch.weapon.id,action:'equip',queue:false}}
+        :{reason:'L’arme tombée n’est pas accessible : revenir à l’abri.',command:{type:'draft',pawnIds:[p.id],enabled:true}});
+    }
+  }
+  const sheltered=people.filter(p=>p!==defender&&p!==fetch?.pawn&&!!p.draft);
+  if(threats)out.push(...shelterCareDecisions(w,sheltered,threats,meals));
+  const busy=(p:typeof people[number])=>!!p.rescue||isForcedConsuming(p)||out.some(d=>'pawnId' in d.command&&d.command.pawnId===p.id);
+  for(const [i,p] of sheltered.entries())if(!inside(p)&&!p.draft?.target&&!busy(p)){
+    out.push({reason:'Rejoindre physiquement l’intérieur de l’abri et laisser la porte se refermer.',command:{type:'draft-move',pawnIds:[p.id],target:{x:camp.anchor.x+1+i%3,z:camp.anchor.z+3},queue:false}});
+  }
+  return {drafting:false,out};
+}
+
+
+/** The armed defender is down and the weapon lies on the ground: the best
+ * remaining shooter fetches it while every threat is at least 8 cells from
+ * it, as a player would before going out. */
+function groundWeaponFetch(w:World,people:readonly Colonist[],threats:readonly Cell[]):{pawn:Colonist;weapon:World['piles'][number];x:number;z:number}|undefined {
+  const weapon=w.piles.find(i=>i.item==='revolver'&&i.owner.type==='ground');
+  if(!weapon||weapon.owner.type!=='ground')return;
+  const {x,z}=weapon.owner;if(!farFrom(threats,{x,z},8))return;
+  const pawn=people.filter(p=>!violentWorkRefusal(p)&&!medicallyStopped(p)&&!p.rescue&&!isForcedConsuming(p))
+    .sort((a,b)=>b.skills.shooting.level-a.skills.shooting.level||a.id-b.id)[0];
+  return pawn&&{pawn,weapon,x,z};
+}
+
+/** While colonists shelter from a threat, the player still sends one
+ * of them, drafted, to bring in a downed colonist, or to eat when hungry, if
+ * every threat is at least 10 cells from the patient or the food: RimWorld's
+ * drafted pawns neither eat nor rescue on their own. */
+/** Cooked meals first, then the survival rations kept for emergencies and
+ * journeys, then raw food. */
+const mealRank=(item:string)=>item==='survival-meal'?1:item.includes('meal')?0:2;
+function shelterCareDecisions(w:World,sheltered:readonly Colonist[],threats:readonly Cell[],meals:boolean):Decision[] {
+  const out:Decision[]=[],free=sheltered.filter(p=>!p.rescue&&!isForcedConsuming(p)&&!p.need&&!p.collapsePending&&!carrierOf(w,p.id));
+  const patients=w.pawns.filter(p=>isColonist(p)&&p.state==='downed'&&wantsRescue(p)&&!carrierOf(w,p.id)&&farFrom(threats,p,10));
+  for(const patient of patients)for(const doctor of free){
+    if(out.some(d=>'pawnId' in d.command&&d.command.pawnId===doctor.id))continue;
+    const rescue=queryOrderOptions(w,doctor.id,patient).find(o=>o.enabled&&o.rescuePatientId===patient.id);
+    if(rescue){out.push({reason:'La menace s’est éloignée du blessé : le ramener sur un lit de l’abri.',command:{type:'order-rescue',pawnId:doctor.id,patientId:patient.id,queue:false}});break;}
+  }
+  for(const p of meals?free:[]){
+    if(p.hunger>=25||out.some(d=>'pawnId' in d.command&&d.command.pawnId===p.id))continue;
+    const meals=w.piles.filter(i=>i.kind==='food'&&i.owner.type==='ground'&&farFrom(threats,i.owner as Cell,10))
+      .sort((a,b)=>{const ca=a.owner as Cell,cb=b.owner as Cell;return mealRank(a.item)-mealRank(b.item)||Math.max(Math.abs(ca.x-p.x),Math.abs(ca.z-p.z))-Math.max(Math.abs(cb.x-p.x),Math.abs(cb.z-p.z))||a.id-b.id;});
+    for(const meal of meals){
+      const cell=meal.owner as Cell,option=queryOrderOptions(w,p.id,{x:cell.x,z:cell.z}).find(o=>o.enabled&&o.consumePileId===meal.id);
+      if(option){out.push({reason:'Le colon à l’abri a faim et la menace est loin de la nourriture : aller manger, toujours mobilisé.',command:{type:'order-consume',pawnId:p.id,pileId:meal.id,queue:false}});break;}
+    }
+  }
   return out;
 }
 
@@ -97,21 +171,31 @@ function medicalDecisions(w:World):Decision[] {
   const patients=colonists.filter(p=>treatmentTarget(p)||needsAssistedFeeding(p)||wantsRescue(p))
     .sort((a,b)=>Number(urgentTreatment(b))-Number(urgentTreatment(a))||bleeding(b)-bleeding(a)||a.hunger-b.hunger||a.id-b.id);
   if(!patients.length)return [];
+  // A doctor already tending is redirected, as a player would, to an urgent
+  // patient who bleeds more than the one being tended.
+  const top=patients[0]!,tendingLess=(p:typeof colonists[number])=>!!p.tend&&urgentTreatment(top)&&p.tend.patientId!==top.id
+    &&bleeding(top)>bleeding(colonists.find(c=>c.id===p.tend!.patientId)??top);
   const doctors=colonists.filter(p=>!p.draft&&!p.mental?.crisis&&!medicalWorkRefusal(p)&&!p.interruptedCargo&&!p.collapsePending
-    &&!p.tend&&!p.feed&&!p.rescue&&p.need?.kind!=='eat'&&p.hunger>30&&p.rest>20&&!urgentTreatment(p))
+    &&(!p.tend||tendingLess(p))&&!p.feed&&!p.rescue&&p.need?.kind!=='eat'&&!urgentTreatment(p)
+    // A bleeding patient is cared for by a doctor who is hungry or tired but
+    // not yet starving or exhausted.
+    &&(urgentTreatment(top)?p.hunger>12&&p.rest>10:p.hunger>30&&p.rest>20))
     .sort((a,b)=>Number(!!treatmentTarget(a))-Number(!!treatmentTarget(b))||bleeding(a)-bleeding(b)||b.skills.medicine.level-a.skills.medicine.level||a.id-b.id);
+  let priority:Decision|undefined;
   for(const patient of patients)for(const doctor of doctors){
-    if(patient===doctor)continue;
-    if(doctor.priorities.doctor!==1)return [{reason:'Confier les soins au meilleur médecin actuellement apte, avant les travaux ordinaires.',command:{type:'priority',pawnId:doctor.id,work:'doctor',value:1}}];
+    if(patient===doctor||doctor.tend&&patient!==top)continue;
+    // The priority and the care order go together, as a player gives both at once.
+    const setPriority:Decision[]=doctor.priorities.doctor!==1?[{reason:'Confier les soins au meilleur médecin actuellement apte, avant les travaux ordinaires.',command:{type:'priority',pawnId:doctor.id,work:'doctor',value:1}}]:[];
     const options=queryOrderOptions(w,doctor.id,patient);
     const rescue=options.find(o=>o.enabled&&o.rescuePatientId===patient.id);
-    if(rescue)return [{reason:'Secourir le blessé vers un vrai lit accessible.',command:{type:'order-rescue',pawnId:doctor.id,patientId:patient.id,queue:false}}];
+    if(rescue)return [...setPriority,{reason:'Secourir le blessé vers un vrai lit accessible.',command:{type:'order-rescue',pawnId:doctor.id,patientId:patient.id,queue:false}}];
     const tend=options.find(o=>o.enabled&&o.tendPatientId===patient.id);
-    if(tend)return [{reason:'Faire traiter les blessures au chevet dès la fin du combat, en interrompant au besoin le travail ordinaire.',command:{type:'order-tend',pawnId:doctor.id,patientId:patient.id,queue:false}}];
+    if(tend)return [...setPriority,{reason:'Faire traiter les blessures au chevet dès la fin du combat, en interrompant au besoin le travail ordinaire.',command:{type:'order-tend',pawnId:doctor.id,patientId:patient.id,queue:false}}];
     const feed=options.find(o=>o.enabled&&o.feedPatientId===patient.id);
-    if(feed)return [{reason:'Apporter physiquement un aliment autorisé au patient qui a faim pendant sa convalescence.',command:{type:'order-feed',pawnId:doctor.id,patientId:patient.id,queue:false}}];
+    if(feed)return [...setPriority,{reason:'Apporter physiquement un aliment autorisé au patient qui a faim pendant sa convalescence.',command:{type:'order-feed',pawnId:doctor.id,patientId:patient.id,queue:false}}];
+    priority??=setPriority[0];
   }
-  return [];
+  return priority?[priority]:[];
 }
 
 
