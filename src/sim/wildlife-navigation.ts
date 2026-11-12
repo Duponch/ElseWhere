@@ -1,4 +1,5 @@
 import {spikeTrapKnowsOf} from './spike-trap-state.ts';
+import { verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveLocal297} from './core-phase-297.ts';
@@ -82,15 +83,23 @@ export function createAnimalNavigationReader(world:World,getGeometry?:()=>Struct
   let geometry:StructureNavigationGeometry|undefined,ordinary:ReturnType<typeof animalNavigation>|undefined,unfenced:ReturnType<typeof animalNavigation>|undefined;
   const ducks=new Map<boolean,ReturnType<typeof animalNavigation>>();
   const captured=()=>geometry??=getGeometry?.()??captureStructureNavigation(world);
+  // One terrain scan for all the readers of this synchronous pass (no tile is
+  // replaced during it; checked against a fresh scan in verification mode).
+  let terrain:Uint8Array|undefined,terrainCopy:Uint8Array|undefined;
+  const terrainMask=():Uint8Array=>{
+    if(!terrain){terrain=terrainBlockedMask(world.tiles);if(verifyTerrainWriteCaches)terrainCopy=terrain.slice();return terrain;}
+    if(verifyTerrainWriteCaches){const fresh=terrainBlockedMask(world.tiles);if(fresh.length!==terrainCopy!.length||fresh.some((v,i)=>v!==terrainCopy![i]))throw Error('Terrain changed inside one wildlife navigation pass');}
+    return terrain;
+  };
   const read=(animal:WildAnimal)=>{
     if(world.schemaVersion>=256&&animal.species==='duck'){
       const flying=duckFlying256(animal.flight);let nav=ducks.get(flying);
-      if(!nav){nav=animalNavigation(world,false,true,animal,false,captured(),readArea,physicalNow);ducks.set(flying,nav);}return nav;
+      if(!nav){nav=animalNavigation(world,false,true,animal,false,captured(),readArea,physicalNow,terrainMask);ducks.set(flying,nav);}return nav;
     }
     const passFence=animalPassesFences(animal);
-    return passFence?unfenced??=animalNavigation(world,false,true,undefined,false,captured(),readArea,physicalNow):ordinary??=animalNavigation(world,false,false,undefined,false,captured(),readArea,physicalNow);
+    return passFence?unfenced??=animalNavigation(world,false,true,undefined,false,captured(),readArea,physicalNow,terrainMask):ordinary??=animalNavigation(world,false,false,undefined,false,captured(),readArea,physicalNow,terrainMask);
   };
-  return Object.assign(read,{invalidate(){geometry=undefined;ordinary=undefined;unfenced=undefined;ducks.clear();}});
+  return Object.assign(read,{invalidate(){geometry=undefined;ordinary=undefined;unfenced=undefined;ducks.clear();terrain=undefined;terrainCopy=undefined;}});
 }
 /** Short-lived capture: no world mutation may interleave its searches/steps. */
 /** `allowClosedGate` is for planning a handler-led route only. Physical steps
@@ -110,7 +119,7 @@ function animalStaticSolids(world:World,geometry:StructureNavigationGeometry,fen
     entry={width:world.width,size,fence,legacy,mask,cells:Int32Array.from(cells)};list.push(entry);}
   return entry;
 }
-export function animalNavigation(world:World,allowClosedGate=false,fencePassable=false,actor?:WildAnimal,capturedFlight=false,providedGeometry?:StructureNavigationGeometry,readArea:(a:WildAnimal)=>AnimalAreaPolicy287|undefined=a=>captureAnimalAreaPolicy287(world,a),physicalNow?:()=>number) {
+export function animalNavigation(world:World,allowClosedGate=false,fencePassable=false,actor?:WildAnimal,capturedFlight=false,providedGeometry?:StructureNavigationGeometry,readArea:(a:WildAnimal)=>AnimalAreaPolicy287|undefined=a=>captureAnimalAreaPolicy287(world,a),physicalNow?:()=>number,terrainMask:()=>Uint8Array=()=>terrainBlockedMask(world.tiles)) {
   let failedRoute:{actor:Cell;x:number;z:number;tick:number;field:DistanceField}|undefined;
   const area=(start:Cell)=>{if(!isSchema287OrLater(Number(world.schemaVersion)))return;const original=world.wildlife?.animals.find(a=>a===start);return original?readArea(original):undefined;};
   const duck=world.schemaVersion>=256&&actor?.species==='duck'?actor:undefined,override=duck&&duckTerrainOverride256(world,duck),flying=!!duck&&(capturedFlight||duckFlying256(duck.flight));
@@ -156,7 +165,7 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
   const routeGrid=()=>{
     if(!blocked){blocked=new Uint8Array(width*world.height);
       // Non-flying terrainFree is exactly naturalTerrainWalkable256: reuse the shared mask.
-      if(!flying){const mask=terrainBlockedMask(world.tiles);blocked.set(mask.length<=blocked.length?mask:mask.subarray(0,blocked.length));}
+      if(!flying){const mask=terrainMask();blocked.set(mask.length<=blocked.length?mask:mask.subarray(0,blocked.length));}
       else for(let i=0;i<world.tiles.length;i++){const t=world.tiles[i]!.terrain;if(!terrainFree(t))blocked[i]=1;}
       for(const i of solidKinds.cells)blocked[i]=1;for(const i of solids)blocked[i]=1;}
     // A physical reader retains geometry, never a frozen door phase. Route

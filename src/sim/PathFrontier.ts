@@ -11,7 +11,7 @@ export class PathFrontier {
   private readonly occupancy?:Uint32Array[];
   /** `arrays`: map-sized next/previous/buckets already at -1 (a reused search
    * scratch, see WeightedSearchScratch); else fresh ones. */
-  constructor(costs:Float64Array,maxEdgeCost=1414,indexOccupied=false,arrays?:{readonly next:Int32Array;readonly previous:Int32Array;readonly buckets:Int32Array}) {this.heads=new Int32Array(maxEdgeCost+1).fill(-1);this.costs=costs;
+  constructor(costs:Float64Array,maxEdgeCost=1414,indexOccupied=false,arrays?:{readonly next:Int32Array;readonly previous:Int32Array;readonly buckets:Int32Array;heads?(length:number):Int32Array}) {this.heads=arrays?.heads?arrays.heads(maxEdgeCost+1):new Int32Array(maxEdgeCost+1).fill(-1);this.costs=costs;
     if(arrays){this.next=arrays.next;this.previous=arrays.previous;this.buckets=arrays.buckets;}else{this.next=new Int32Array(costs.length).fill(-1);this.previous=new Int32Array(costs.length).fill(-1);this.buckets=new Int32Array(costs.length).fill(-1);}
     if(indexOccupied){this.occupancy=[];let length=this.heads.length;do{length=Math.ceil(length/32);this.occupancy.push(new Uint32Array(length));}while(length>1);}}
   private mark(bucket:number,present:boolean):void {

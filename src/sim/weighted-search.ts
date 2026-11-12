@@ -14,11 +14,14 @@ export class WeightedSearchScratch {
   readonly parents:Int32Array;readonly costs:Float64Array;readonly settled:Uint8Array;
   readonly next:Int32Array;readonly previous:Int32Array;readonly buckets:Int32Array;
   private touched:Int32Array;private count=0;private busy=false;
+  /** The frontier's bucket heads, all -1 between searches; kept for one length. */
+  private bucketHeads?:Int32Array;
   constructor(readonly size:number){
     this.parents=new Int32Array(size).fill(-2);this.costs=new Float64Array(size).fill(Infinity);this.settled=new Uint8Array(size);
     this.next=new Int32Array(size).fill(-1);this.previous=new Int32Array(size).fill(-1);this.buckets=new Int32Array(size).fill(-1);
     this.touched=new Int32Array(Math.min(size,4096));
   }
+  heads(length:number):Int32Array{if(this.bucketHeads?.length!==length)this.bucketHeads=new Int32Array(length).fill(-1);return this.bucketHeads;}
   /** Takes the scratch for one search; false while another search holds it. */
   acquire():boolean{if(this.busy)return false;this.busy=true;return true;}
   touch(index:number):void{
@@ -28,6 +31,10 @@ export class WeightedSearchScratch {
   /** Ends the search that held the scratch: its field must not be read again. */
   release():void{
     const {parents,costs,settled,next,previous,buckets,touched}=this;
+    // A node still queued heads or follows in its bucket: clearing the heads
+    // of the touched nodes' buckets empties every bucket.
+    const heads=this.bucketHeads;
+    if(heads)for(let k=0;k<this.count;k++){const b=buckets[touched[k]!]!;if(b>=0)heads[b]=-1;}
     for(let k=0;k<this.count;k++){const i=touched[k]!;parents[i]=-2;costs[i]=Infinity;settled[i]=0;next[i]=-1;previous[i]=-1;buckets[i]=-1;}
     this.count=0;this.busy=false;
   }
