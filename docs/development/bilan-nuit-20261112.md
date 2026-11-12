@@ -63,7 +63,7 @@ E: n'avait plus que 37 Mo libres. Supprimés (tous recréables) : anciens bundle
 
 ## 6. Publication
 
-Commits poussés sur `origin/main` : `fba51516` (optimisations exactes), `4899edfa` (règle 304), `8b608307` (typage du test), `be324859` (deux retouches exactes de la promenade, republiées ensuite). Publié sur Cloudflare Pages depuis une copie exacte de `8b608307` (`git archive`) : typage et construction Pages réussis (1 142 fichiers, 8 nouveaux envoyés), déploiement Production `d91f31e8` sur la branche main ; 36 réponses HTTPS identiques octet pour octet sur le site public et l'adresse fixe du déploiement. Ce contrôle ne remplace ni un parcours dans le navigateur ni une mesure d'images par seconde.
+Commits poussés sur `origin/main` : `fba51516` (optimisations exactes), `4899edfa` (règle 304), `8b608307` (typage du test), `be324859` (deux retouches exactes de la promenade), `c732e51a` (documentation). Republié ensuite depuis `c732e51a` : déploiement Production `63058abf`, 1 142 fichiers, 36 réponses HTTPS identiques octet pour octet. Publié sur Cloudflare Pages depuis une copie exacte de `8b608307` (`git archive`) : typage et construction Pages réussis (1 142 fichiers, 8 nouveaux envoyés), déploiement Production `d91f31e8` sur la branche main ; 36 réponses HTTPS identiques octet pour octet sur le site public et l'adresse fixe du déploiement. Ce contrôle ne remplace ni un parcours dans le navigateur ni une mesure d'images par seconde.
 
 ## 7. Décisions pour l'utilisateur
 
