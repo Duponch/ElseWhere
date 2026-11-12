@@ -66,8 +66,10 @@ function lazyHistoricalProofPlugin(name:string,observedPaths:readonly string[],f
 }
 export default defineConfig(async environment=>{
  const inherited=await viteConfig(environment),{test:inheritedTest={},...vite}=inherited;
+ // Every test validates each intermediate schema of a migrated save (tests/setup-migration-steps.ts).
  // VERIFY_PILE_INDEX=1 compares every pile index answer with a scan (src/sim/pile-index.ts).
- const ordinaryTest=process.env.VERIFY_PILE_INDEX==='1'?{...inheritedTest,setupFiles:[...[inheritedTest.setupFiles??[]].flat(),path.resolve(root,'tests/setup-pile-index-verification.ts')]}:inheritedTest;
+ const setupFiles=[...[inheritedTest.setupFiles??[]].flat(),path.resolve(root,'tests/setup-migration-steps.ts'),...(process.env.VERIFY_PILE_INDEX==='1'?[path.resolve(root,'tests/setup-pile-index-verification.ts')]:[])];
+ const ordinaryTest={...inheritedTest,setupFiles};
  // extends:false prevents Vitest/Vite's array concatenation from broadening Night include.
  // Both projects receive the current repository configuration explicitly.
  return {...vite,test:{...ordinaryTest,projects:[

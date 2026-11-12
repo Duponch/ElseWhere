@@ -442,8 +442,30 @@ function validateCampaignSchema(input:unknown,version:Parameters<typeof validate
 export interface CampaignLoadProgress {stage:'read'|'migrate'|'validate'|'restore';completed:number;total:number}
 let loadProgress:{observer:(step:CampaignLoadProgress)=>void;first:number;reported:number}|undefined;
 function reportLoadProgress(step:CampaignLoadProgress):void {try{loadProgress?.observer(step);}catch{/* Observation only. */}}
-function validateSchema(raw: unknown, version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 101 | 103 | 104 | 105 | 106 | 109 | 119 | 120 | 121 | 122 | 123 | 124 | 125 | 127 | 134 | 135 | 138 | 139 | 141 | 143 | 144 | 148 | 150 | 152 | 154 | 155 | 156 | 157 | 159 | 160 | 161 | 162 | 163 | 164 | 165 | 166 | 167 | 168 | 169 | 170 | 171 | 172 | 173 | 174 | 175 | 176 | 177 | 178 | 179 | 180 | 181 | 182 | 183 | 184 | 185 | 186 | 187 | 188 | 189 | 190 | 191 | 192 | 193 | 194 | 195 | 196 | 197 | 198 | 199 | 200 | 201 | 202 | 203 | 204 | 205 | 206 | 207 | 208 | 209 | 210 | 211 | 212 | 213 | 214 | 215 | 216 | 217 | 218 | 219 | 220 | 221 | 222 | 223 | 224 | 225 | 226 | 227 | 228 | 229 | 230 | 231 | 232 | 233 | 234 | 235 | 236 | 237 | 238 | 239 | 240 | 241 | 242 | 243 | 244 | 245 | 246 | 247 | 248 | 249 | 250 | 251 | 252 | 253 | 254 | 255 | 256 | 257 | 258 | 259 | 260 | 261|262|263|264|265|266|267|268|269|270|271|272|273|274|275|276|277|278|279|280|281|282|283|284|285|286|287|288|289|290|291|292|293|294|295|296|297|298|299|300|301|302|303|304, relationshipContext = true,registeredIds?:Set<number>,generatedContext?:{readonly calendarOrigin:number;readonly settlement?:true;readonly settlementDimensions?:Readonly<{width:number;height:number}>;readonly worldTarget263?:WorldTargetGenerated263},registeredNonStartingSettlement=false): string[] {
+/** Loading validates the save at its own schema (the first schema the
+ * migration chain validates) and the final world, not each intermediate schema
+ * produced by our own migrations: about 40 complete validations of a large
+ * colony saved (Les Forges, schema 263: 82 s to 8 s, same world).
+ * setMigrationStepValidation(true), on in the test suite
+ * (tests/setup-migration-steps.ts), validates every step again, so an error in
+ * a migration is caught at its step there. */
+type MigrationStepFlag={__verifyMigrationSteps?:boolean};
+/* The switch is a global, so that the test setup sets it without importing
+ * any module (a module imported there would escape the tests' vi.mock). */
+export function setMigrationStepValidation(on:boolean):void {(globalThis as MigrationStepFlag).__verifyMigrationSteps=on;}
+const verifyMigrationSteps=():boolean=>(globalThis as MigrationStepFlag).__verifyMigrationSteps===true;
+function reportMigrationStep(version:number):void {
   if(loadProgress&&version!==loadProgress.reported&&version<SCHEMA_VERSION){loadProgress.reported=version;reportLoadProgress({stage:'migrate',completed:Math.max(0,version-loadProgress.first),total:SCHEMA_VERSION-loadProgress.first});}
+}
+/** Whether the migration chain validates this schema (see verifyMigrationSteps);
+ * a skipped step still reports its loading progress. */
+function migrationStep(chain:{origin?:number},version:number):boolean {
+  chain.origin??=version;
+  if(verifyMigrationSteps()||chain.origin===version)return true;
+  reportMigrationStep(version);return false;
+}
+function validateSchema(raw: unknown, version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 101 | 103 | 104 | 105 | 106 | 109 | 119 | 120 | 121 | 122 | 123 | 124 | 125 | 127 | 134 | 135 | 138 | 139 | 141 | 143 | 144 | 148 | 150 | 152 | 154 | 155 | 156 | 157 | 159 | 160 | 161 | 162 | 163 | 164 | 165 | 166 | 167 | 168 | 169 | 170 | 171 | 172 | 173 | 174 | 175 | 176 | 177 | 178 | 179 | 180 | 181 | 182 | 183 | 184 | 185 | 186 | 187 | 188 | 189 | 190 | 191 | 192 | 193 | 194 | 195 | 196 | 197 | 198 | 199 | 200 | 201 | 202 | 203 | 204 | 205 | 206 | 207 | 208 | 209 | 210 | 211 | 212 | 213 | 214 | 215 | 216 | 217 | 218 | 219 | 220 | 221 | 222 | 223 | 224 | 225 | 226 | 227 | 228 | 229 | 230 | 231 | 232 | 233 | 234 | 235 | 236 | 237 | 238 | 239 | 240 | 241 | 242 | 243 | 244 | 245 | 246 | 247 | 248 | 249 | 250 | 251 | 252 | 253 | 254 | 255 | 256 | 257 | 258 | 259 | 260 | 261|262|263|264|265|266|267|268|269|270|271|272|273|274|275|276|277|278|279|280|281|282|283|284|285|286|287|288|289|290|291|292|293|294|295|296|297|298|299|300|301|302|303|304, relationshipContext = true,registeredIds?:Set<number>,generatedContext?:{readonly calendarOrigin:number;readonly settlement?:true;readonly settlementDimensions?:Readonly<{width:number;height:number}>;readonly worldTarget263?:WorldTargetGenerated263},registeredNonStartingSettlement=false): string[] {
+  reportMigrationStep(version);
   const legacyV2 = version === 2;
   const errors: string[] = [];
   if (!record(raw)) return ['World must be an object.'];
@@ -1061,170 +1083,171 @@ function deserializeCampaignObserved(serialized: string): CampaignState {
     &&!validDoubleBedTransport(input as unknown as World,Number(input.schemaVersion)))throw new Error(`Invalid version ${input.schemaVersion} save: Future double bed or bed slot.`);
   if(record(input)&&Number(input.schemaVersion)<=222&&(Object.hasOwn(input,'allowedAreas')
     ||Array.isArray(input.pawns)&&input.pawns.some(p=>record(p)&&(Object.hasOwn(p,'allowedAreaId')||Object.hasOwn(p,'allowedAreaReturn')))))throw new Error(`Invalid version ${input.schemaVersion} save: Future allowed area fields.`);
+  const chain:{origin?:number}={};
   if (record(input) && input.schemaVersion === 1) input = migrateLegacy(input);
   if (record(input) && input.schemaVersion === 2) {
-    const errors = validateSchema(input, 2);
+    const errors = (migrationStep(chain,2)?validateSchema(input, 2):[]);
     if (errors.length) throw new Error(`Invalid version 2 save: ${errors.join(' ')}`);
     input.schemaVersion = 4;
     initializeNeeds(input as unknown as World);
     initializeDining(input as unknown as World);
   }
   if (record(input) && input.schemaVersion === 3) {
-    const errors = validateSchema(input, 3);
+    const errors = (migrationStep(chain,3)?validateSchema(input, 3):[]);
     if (errors.length) throw new Error(`Invalid version 3 save: ${errors.join(' ')}`);
     input.schemaVersion = 4;
     initializeDining(input as unknown as World);
   }
   if (record(input) && input.schemaVersion === 4) {
-    const errors = validateSchema(input, 4);
+    const errors = (migrationStep(chain,4)?validateSchema(input, 4):[]);
     if (errors.length) throw new Error(`Invalid version 4 save: ${errors.join(' ')}`);
     initializeFood(input as unknown as World);
   }
   if (record(input) && input.schemaVersion === 5) {
-    const errors=validateSchema(input,5);if(errors.length) throw new Error(`Invalid version 5 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,5)?validateSchema(input,5):[]);if(errors.length) throw new Error(`Invalid version 5 save: ${errors.join(' ')}`);
     initializeSpatial(input as unknown as World);
   }
   if (record(input) && input.schemaVersion === 6) {
-    const errors=validateSchema(input,6); if(errors.length) throw new Error(`Invalid version 6 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,6)?validateSchema(input,6):[]); if(errors.length) throw new Error(`Invalid version 6 save: ${errors.join(' ')}`);
     initializePlants(input as unknown as World);
   }
   if (record(input) && input.schemaVersion === 7) {
-    const errors=validateSchema(input,7); if(errors.length) throw new Error(`Invalid version 7 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,7)?validateSchema(input,7):[]); if(errors.length) throw new Error(`Invalid version 7 save: ${errors.join(' ')}`);
     initializeFarming(input as unknown as World);
   }
   if (record(input) && input.schemaVersion === 8) {
-    const errors = validateSchema(input, 8); if (errors.length) throw new Error(`Invalid version 8 save: ${errors.join(' ')}`);
+    const errors = (migrationStep(chain,8)?validateSchema(input, 8):[]); if (errors.length) throw new Error(`Invalid version 8 save: ${errors.join(' ')}`);
     // Existing paths, reservations and meals continue; only future decisions change.
     input.schemaVersion = 9;
   }
   if(record(input)&&input.schemaVersion===9) {
-    const errors=validateSchema(input,9);if(errors.length)throw new Error(`Invalid version 9 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,9)?validateSchema(input,9):[]);if(errors.length)throw new Error(`Invalid version 9 save: ${errors.join(' ')}`);
     for(const pawn of (input as unknown as World).pawns){pawn.cooking=null;pawn.priorities.cook=2;}
     input.schemaVersion=10; // No old campfires: preserve all existing objects and tasks.
   }
   if(record(input)&&input.schemaVersion===10) {
-    const errors=validateSchema(input,10);if(errors.length)throw new Error(`Invalid version 10 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,10)?validateSchema(input,10):[]);if(errors.length)throw new Error(`Invalid version 10 save: ${errors.join(' ')}`);
     initializePreservation(input as unknown as World);
   }
   if(record(input)&&input.schemaVersion===11) {
-    const errors=validateSchema(input,11);if(errors.length)throw new Error(`Invalid version 11 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,11)?validateSchema(input,11):[]);if(errors.length)throw new Error(`Invalid version 11 save: ${errors.join(' ')}`);
     initializeSchedules(input as unknown as World);
   }
   if(record(input)&&input.schemaVersion===12) {
-    const errors=validateSchema(input,12);if(errors.length)throw new Error(`Invalid version 12 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,12)?validateSchema(input,12):[]);if(errors.length)throw new Error(`Invalid version 12 save: ${errors.join(' ')}`);
     initializeFoodPolicies(input as unknown as World);
   }
   if(record(input)&&input.schemaVersion===13) {
-    const errors=validateSchema(input,13);if(errors.length)throw new Error(`Invalid version 13 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,13)?validateSchema(input,13):[]);if(errors.length)throw new Error(`Invalid version 13 save: ${errors.join(' ')}`);
     input.schemaVersion=14; // Positions, active edges, jobs and reservations are preserved.
   }
   if(record(input)&&input.schemaVersion===14) {
-    const errors=validateSchema(input,14);if(errors.length)throw new Error(`Invalid version 14 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,14)?validateSchema(input,14):[]);if(errors.length)throw new Error(`Invalid version 14 save: ${errors.join(' ')}`);
     initializeRecreation(input as unknown as World);
   }
   if(record(input)&&input.schemaVersion===15) {
-    const errors=validateSchema(input,15);if(errors.length)throw new Error(`Invalid version 15 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,15)?validateSchema(input,15):[]);if(errors.length)throw new Error(`Invalid version 15 save: ${errors.join(' ')}`);
     initializeConstruction(input as unknown as World);
   }
   if(record(input)&&input.schemaVersion===16) {
-    const errors=validateSchema(input,16);if(errors.length)throw new Error(`Invalid version 16 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,16)?validateSchema(input,16):[]);if(errors.length)throw new Error(`Invalid version 16 save: ${errors.join(' ')}`);
     initializePlayerOrders(input as unknown as World);
   }
   if(record(input)&&input.schemaVersion===17) {
-    const errors=validateSchema(input,17);if(errors.length)throw new Error(`Invalid version 17 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,17)?validateSchema(input,17):[]);if(errors.length)throw new Error(`Invalid version 17 save: ${errors.join(' ')}`);
     input.schemaVersion=18; // Existing numeric work orders and active tasks continue unchanged.
   }
   if(record(input)&&input.schemaVersion===18) {
-    const errors=validateSchema(input,18);if(errors.length)throw new Error(`Invalid version 18 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,18)?validateSchema(input,18):[]);if(errors.length)throw new Error(`Invalid version 18 save: ${errors.join(' ')}`);
     input.schemaVersion=19; // New contextual providers; preserve existing tasks and quantities.
   }
   if(record(input)&&input.schemaVersion===19) {
-    const errors=validateSchema(input,19);if(errors.length)throw new Error(`Invalid version 19 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,19)?validateSchema(input,19):[]);if(errors.length)throw new Error(`Invalid version 19 save: ${errors.join(' ')}`);
     input.schemaVersion=20; // Preserve tasks; enable queued recipes and sowing-clearance intents.
   }
   if(record(input)&&input.schemaVersion===20) {
-    const errors=validateSchema(input,20);if(errors.length)throw new Error(`Invalid version 20 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,20)?validateSchema(input,20):[]);if(errors.length)throw new Error(`Invalid version 20 save: ${errors.join(' ')}`);
     initializeOccupancy(input as unknown as World);
   }
   if(record(input)&&input.schemaVersion===21) {
-    const errors=validateSchema(input,21);if(errors.length)throw new Error(`Invalid version 21 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,21)?validateSchema(input,21):[]);if(errors.length)throw new Error(`Invalid version 21 save: ${errors.join(' ')}`);
     initializeFurnitureTravel(input as unknown as World);
   }
   if(record(input)&&input.schemaVersion===22) {
-    const errors=validateSchema(input,22);if(errors.length)throw new Error(`Invalid version 22 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,22)?validateSchema(input,22):[]);if(errors.length)throw new Error(`Invalid version 22 save: ${errors.join(' ')}`);
     input.schemaVersion=23; // No invented priority for orders accepted by an older version.
   }
   if(record(input)&&input.schemaVersion===23) {
-    const errors=validateSchema(input,23);if(errors.length)throw new Error(`Invalid version 23 save: ${errors.join(' ')}`);
+    const errors=(migrationStep(chain,23)?validateSchema(input,23):[]);if(errors.length)throw new Error(`Invalid version 23 save: ${errors.join(' ')}`);
     input.schemaVersion=24;input.deconstructed={count:0,lostWood:0,fuelTicks:0};
   }
-  if(record(input)&&input.schemaVersion===24){const errors=validateSchema(input,24);if(errors.length)throw new Error(`Invalid version 24 save: ${errors.join(' ')}`);input.schemaVersion=25;input.packed=[];}
-  if(record(input)&&input.schemaVersion===25){const errors=validateSchema(input,25);if(errors.length)throw new Error(`Invalid version 25 save: ${errors.join(' ')}`);input.schemaVersion=26;}
-  if(record(input)&&input.schemaVersion===26){const errors=validateSchema(input,26);if(errors.length)throw new Error(`Invalid version 26 save: ${errors.join(' ')}`);input.schemaVersion=27;}
-  if(record(input)&&input.schemaVersion===27){const errors=validateSchema(input,27);if(errors.length)throw new Error(`Invalid version 27 save: ${errors.join(' ')}`);input.schemaVersion=28;for(const p of (input as unknown as World).pawns)p.priorities.mine=2;}
-  if(record(input)&&input.schemaVersion===28){const errors=validateSchema(input,28);if(errors.length)throw new Error(`Invalid version 28 save: ${errors.join(' ')}`);input.schemaVersion=29;}
-  if(record(input)&&input.schemaVersion===29){const errors=validateSchema(input,29);if(errors.length)throw new Error(`Invalid version 29 save: ${errors.join(' ')}`);input.schemaVersion=30;}
-  if(record(input)&&input.schemaVersion===30){const errors=validateSchema(input,30);if(errors.length)throw new Error(`Invalid version 30 save: ${errors.join(' ')}`);input.schemaVersion=31;}
-  if(record(input)&&input.schemaVersion===31){const errors=validateSchema(input,31);if(errors.length)throw new Error(`Invalid version 31 save: ${errors.join(' ')}`);input.schemaVersion=32;const w=input as unknown as World;for(const p of w.pawns)p.priorities.craft=2;for(const s of [...w.structures,...w.packed.map(p=>p.building)])if(s.kind==='stonecutter')s.bills=[];}
-  if(record(input)&&input.schemaVersion===32){const errors=validateSchema(input,32);if(errors.length)throw new Error(`Invalid version 32 save: ${errors.join(' ')}`);input.schemaVersion=33;}
-  if(record(input)&&input.schemaVersion===33){const errors=validateSchema(input,33);if(errors.length)throw new Error(`Invalid version 33 save: ${errors.join(' ')}`);input.schemaVersion=34;}
-  if(record(input)&&input.schemaVersion===34){const errors=validateSchema(input,34);if(errors.length)throw new Error(`Invalid version 34 save: ${errors.join(' ')}`);input.schemaVersion=35;}
-  if(record(input)&&input.schemaVersion===35){const errors=validateSchema(input,35);if(errors.length)throw new Error(`Invalid version 35 save: ${errors.join(' ')}`);const w=input as unknown as World;for(const p of w.pawns)if(p.cooking)p.cooking.progress*=productionWorkTotal(taskRecipe(p.cooking))/legacyProductionTicks(taskRecipe(p.cooking));input.schemaVersion=36;}
-  if(record(input)&&input.schemaVersion===36){const errors=validateSchema(input,36);if(errors.length)throw new Error(`Invalid version 36 save: ${errors.join(' ')}`);initializeLightWork(input as unknown as World);}
-  if(record(input)&&input.schemaVersion===37){const errors=validateSchema(input,37);if(errors.length)throw new Error('Invalid version 37 save: '+errors.join(' '));input.schemaVersion=38;}
-  if(record(input)&&input.schemaVersion===38){const errors=validateSchema(input,38);if(errors.length)throw new Error('Invalid version 38 save: '+errors.join(' '));input.schemaVersion=39;}
-  if(record(input)&&input.schemaVersion===39){const errors=validateSchema(input,39);if(errors.length)throw new Error('Invalid version 39 save: '+errors.join(' '));input.schemaVersion=40;}
-  if(record(input)&&input.schemaVersion===40){const errors=validateSchema(input,40);if(errors.length)throw new Error('Invalid version 40 save: '+errors.join(' '));input.schemaVersion=41;}
-  if(record(input)&&input.schemaVersion===41){const errors=validateSchema(input,41);if(errors.length)throw new Error('Invalid version 41 save: '+errors.join(' '));input.schemaVersion=42;}
-  if(record(input)&&input.schemaVersion===42){const errors=validateSchema(input,42);if(errors.length)throw new Error('Invalid version 42 save: '+errors.join(' '));const w=input as unknown as World;for(const p of w.pawns){p.skills=initialSkills(8,0);delete (p.skills as Partial<typeof p.skills>).medicine;delete (p.skills as Partial<typeof p.skills>).shooting;delete (p.skills as Partial<typeof p.skills>).melee;delete p.skills.cooking;}input.schemaVersion=43;}
-  if(record(input)&&input.schemaVersion===43){const errors=validateSchema(input,43);if(errors.length)throw new Error('Invalid version 43 save: '+errors.join(' '));input.schemaVersion=44;}
-  if(record(input)&&input.schemaVersion===44){const errors=validateSchema(input,44);if(errors.length)throw new Error('Invalid version 44 save: '+errors.join(' '));input.schemaVersion=45;}
-  if(record(input)&&input.schemaVersion===45){const errors=validateSchema(input,45);if(errors.length)throw new Error('Invalid version 45 save: '+errors.join(' '));for(const p of (input as unknown as World).pawns)p.priorities.doctor=1;input.schemaVersion=46;}
-  if(record(input)&&input.schemaVersion===46){const errors=validateSchema(input,46);if(errors.length)throw new Error('Invalid version 46 save: '+errors.join(' '));for(const p of (input as unknown as World).pawns){p.priorities.patient=1;p.priorities.bedrest=3;p.skills.medicine={level:8,xp:0,dailyXp:0,passion:0};}input.schemaVersion=47;}
-  if(record(input)&&input.schemaVersion===47){const errors=validateSchema(input,47);if(errors.length)throw new Error('Invalid version 47 save: '+errors.join(' '));input.schemaVersion=48;}
-  if(record(input)&&input.schemaVersion===48){const errors=validateSchema(input,48);if(errors.length)throw new Error('Invalid version 48 save: '+errors.join(' '));input.schemaVersion=49;}
-  if(record(input)&&input.schemaVersion===49){const errors=validateSchema(input,49);if(errors.length)throw new Error('Invalid version 49 save: '+errors.join(' '));input.schemaVersion=50;}
-  if(record(input)&&input.schemaVersion===50){const errors=validateSchema(input,50);if(errors.length)throw new Error('Invalid version 50 save: '+errors.join(' '));input.schemaVersion=51;}
-  if(record(input)&&input.schemaVersion===51){const errors=validateSchema(input,51);if(errors.length)throw new Error('Invalid version 51 save: '+errors.join(' '));input.schemaVersion=52;}
-  if(record(input)&&input.schemaVersion===52){const errors=validateSchema(input,52);if(errors.length)throw new Error('Invalid version 52 save: '+errors.join(' '));input.schemaVersion=53;}
-  if(record(input)&&input.schemaVersion===53){const errors=validateSchema(input,53);if(errors.length)throw new Error('Invalid version 53 save: '+errors.join(' '));input.schemaVersion=54;}
-  if(record(input)&&input.schemaVersion===54){const errors=validateSchema(input,54);if(errors.length)throw new Error('Invalid version 54 save: '+errors.join(' '));input.schemaVersion=55;}
-  if(record(input)&&input.schemaVersion===55){const errors=validateSchema(input,55);if(errors.length)throw new Error('Invalid version 55 save: '+errors.join(' '));for(const p of (input as unknown as World).pawns)p.skills.shooting={level:8,xp:0,dailyXp:0,passion:0};input.schemaVersion=56;}
-  if(record(input)&&input.schemaVersion===56){const errors=validateSchema(input,56);if(errors.length)throw new Error('Invalid version 56 save: '+errors.join(' '));input.schemaVersion=57;}
-  if(record(input)&&input.schemaVersion===57){const errors=validateSchema(input,57);if(errors.length)throw new Error('Invalid version 57 save: '+errors.join(' '));input.schemaVersion=58;}
-  if(record(input)&&input.schemaVersion===58){const errors=validateSchema(input,58);if(errors.length)throw new Error('Invalid version 58 save: '+errors.join(' '));for(const p of (input as unknown as World).pawns)p.skills.melee={level:8,xp:0,dailyXp:0,passion:0};input.schemaVersion=59;}
-  if(record(input)&&input.schemaVersion===59){const errors=validateSchema(input,59);if(errors.length)throw new Error('Invalid version 59 save: '+errors.join(' '));input.schemaVersion=60;}
-  if(record(input)&&input.schemaVersion===60){const errors=validateSchema(input,60);if(errors.length)throw new Error('Invalid version 60 save: '+errors.join(' '));input.schemaVersion=61;}
-  if(record(input)&&input.schemaVersion===61){const errors=validateSchema(input,61);if(errors.length)throw new Error('Invalid version 61 save: '+errors.join(' '));input.schemaVersion=62;}
-  if(record(input)&&input.schemaVersion===62){const errors=validateSchema(input,62);if(errors.length)throw new Error('Invalid version 62 save: '+errors.join(' '));input.schemaVersion=63;}
-  if(record(input)&&input.schemaVersion===63){const errors=validateSchema(input,63);if(errors.length)throw new Error('Invalid version 63 save: '+errors.join(' '));input.schemaVersion=64;}
-  if(record(input)&&input.schemaVersion===64){const errors=validateSchema(input,64);if(errors.length)throw new Error('Invalid version 64 save: '+errors.join(' '));input.schemaVersion=65;}
-  if(record(input)&&input.schemaVersion===65){const errors=validateSchema(input,65);if(errors.length)throw new Error('Invalid version 65 save: '+errors.join(' '));input.schemaVersion=66;}
-  if(record(input)&&input.schemaVersion===66){const errors=validateSchema(input,66);if(errors.length)throw new Error('Invalid version 66 save: '+errors.join(' '));input.schemaVersion=67;}
-  if(record(input)&&input.schemaVersion===67){const errors=validateSchema(input,67);if(errors.length)throw new Error('Invalid version 67 save: '+errors.join(' '));input.schemaVersion=68;}
-  if(record(input)&&input.schemaVersion===68){const errors=validateSchema(input,68);if(errors.length)throw new Error('Invalid version 68 save: '+errors.join(' '));input.schemaVersion=69;}
-  if(record(input)&&input.schemaVersion===69){const errors=validateSchema(input,69);if(errors.length)throw new Error('Invalid version 69 save: '+errors.join(' '));input.schemaVersion=70;}
-  if(record(input)&&input.schemaVersion===70){const errors=validateSchema(input,70);if(errors.length)throw new Error('Invalid version 70 save: '+errors.join(' '));input.schemaVersion=71;}
-  if(record(input)&&input.schemaVersion===71){const errors=validateSchema(input,71);if(errors.length)throw new Error('Invalid version 71 save: '+errors.join(' '));input.schemaVersion=72;}
-  if(record(input)&&input.schemaVersion===72){const errors=validateSchema(input,72);if(errors.length)throw new Error('Invalid version 72 save: '+errors.join(' '));input.schemaVersion=73;for(const p of (input as unknown as World).pawns)p.priorities.research=3;}
-  if(record(input)&&input.schemaVersion===73){const errors=validateSchema(input,73);if(errors.length)throw new Error('Invalid version 73 save: '+errors.join(' '));input.schemaVersion=74;}
-  if(record(input)&&input.schemaVersion===74){const errors=validateSchema(input,74);if(errors.length)throw new Error('Invalid version 74 save: '+errors.join(' '));input.schemaVersion=75;}
-  if(record(input)&&input.schemaVersion===75){const errors=validateSchema(input,75);if(errors.length)throw new Error('Invalid version 75 save: '+errors.join(' '));input.schemaVersion=76;}
-  if(record(input)&&input.schemaVersion===76){const errors=validateSchema(input,76);if(errors.length)throw new Error('Invalid version 76 save: '+errors.join(' '));input.schemaVersion=77;}
-  if(record(input)&&input.schemaVersion===77){const errors=validateSchema(input,77);if(errors.length)throw new Error('Invalid version 77 save: '+errors.join(' '));input.schemaVersion=78;}
-  if(record(input)&&input.schemaVersion===78){const errors=validateSchema(input,78);if(errors.length)throw new Error('Invalid version 78 save: '+errors.join(' '));input.schemaVersion=79;for(const p of (input as unknown as World).pawns)p.priorities.hunt=0;}
-  if(record(input)&&input.schemaVersion===79){const errors=validateSchema(input,79);if(errors.length)throw new Error('Invalid version 79 save: '+errors.join(' '));input.schemaVersion=80;}
-  if(record(input)&&input.schemaVersion===80){const errors=validateSchema(input,80);if(errors.length)throw new Error('Invalid version 80 save: '+errors.join(' '));input.schemaVersion=81;}
-  if(record(input)&&input.schemaVersion===81){const errors=validateSchema(input,81);if(errors.length)throw new Error('Invalid version 81 save: '+errors.join(' '));input.schemaVersion=82;}
-  if(record(input)&&input.schemaVersion===82){const errors=validateSchema(input,82);if(errors.length)throw new Error('Invalid version 82 save: '+errors.join(' '));input.schemaVersion=83;}
-  if(record(input)&&input.schemaVersion===83){const errors=validateSchema(input,83);if(errors.length)throw new Error('Invalid version 83 save: '+errors.join(' '));input.schemaVersion=84;}
-  if(record(input)&&input.schemaVersion===84){const errors=validateSchema(input,84);if(errors.length)throw new Error('Invalid version 84 save: '+errors.join(' '));input.schemaVersion=85;for(const p of (input as unknown as World).pawns)p.priorities.basic=3;}
-  if(record(input)&&input.schemaVersion===85){const errors=validateSchema(input,85);if(errors.length)throw new Error('Invalid version 85 save: '+errors.join(' '));input.schemaVersion=86;for(const p of (input as unknown as World).pawns)p.priorities.warden=3;}
-  if(record(input)&&input.schemaVersion===86){const errors=validateSchema(input,86);if(errors.length)throw new Error('Invalid version 86 save: '+errors.join(' '));input.schemaVersion=87;for(const p of (input as unknown as World).pawns)p.priorities.firefight=1;}
-  if(record(input)&&input.schemaVersion===87){const errors=validateSchema(input,87);if(errors.length)throw new Error('Invalid version 87 save: '+errors.join(' '));input.schemaVersion=88;}
-  if(record(input)&&input.schemaVersion===88){const errors=validateSchema(input,88);if(errors.length)throw new Error('Invalid version 88 save: '+errors.join(' '));input.schemaVersion=89;for(const p of (input as unknown as World).pawns)p.priorities.clean=p.visitor?0:3;}
+  if(record(input)&&input.schemaVersion===24){const errors=(migrationStep(chain,24)?validateSchema(input,24):[]);if(errors.length)throw new Error(`Invalid version 24 save: ${errors.join(' ')}`);input.schemaVersion=25;input.packed=[];}
+  if(record(input)&&input.schemaVersion===25){const errors=(migrationStep(chain,25)?validateSchema(input,25):[]);if(errors.length)throw new Error(`Invalid version 25 save: ${errors.join(' ')}`);input.schemaVersion=26;}
+  if(record(input)&&input.schemaVersion===26){const errors=(migrationStep(chain,26)?validateSchema(input,26):[]);if(errors.length)throw new Error(`Invalid version 26 save: ${errors.join(' ')}`);input.schemaVersion=27;}
+  if(record(input)&&input.schemaVersion===27){const errors=(migrationStep(chain,27)?validateSchema(input,27):[]);if(errors.length)throw new Error(`Invalid version 27 save: ${errors.join(' ')}`);input.schemaVersion=28;for(const p of (input as unknown as World).pawns)p.priorities.mine=2;}
+  if(record(input)&&input.schemaVersion===28){const errors=(migrationStep(chain,28)?validateSchema(input,28):[]);if(errors.length)throw new Error(`Invalid version 28 save: ${errors.join(' ')}`);input.schemaVersion=29;}
+  if(record(input)&&input.schemaVersion===29){const errors=(migrationStep(chain,29)?validateSchema(input,29):[]);if(errors.length)throw new Error(`Invalid version 29 save: ${errors.join(' ')}`);input.schemaVersion=30;}
+  if(record(input)&&input.schemaVersion===30){const errors=(migrationStep(chain,30)?validateSchema(input,30):[]);if(errors.length)throw new Error(`Invalid version 30 save: ${errors.join(' ')}`);input.schemaVersion=31;}
+  if(record(input)&&input.schemaVersion===31){const errors=(migrationStep(chain,31)?validateSchema(input,31):[]);if(errors.length)throw new Error(`Invalid version 31 save: ${errors.join(' ')}`);input.schemaVersion=32;const w=input as unknown as World;for(const p of w.pawns)p.priorities.craft=2;for(const s of [...w.structures,...w.packed.map(p=>p.building)])if(s.kind==='stonecutter')s.bills=[];}
+  if(record(input)&&input.schemaVersion===32){const errors=(migrationStep(chain,32)?validateSchema(input,32):[]);if(errors.length)throw new Error(`Invalid version 32 save: ${errors.join(' ')}`);input.schemaVersion=33;}
+  if(record(input)&&input.schemaVersion===33){const errors=(migrationStep(chain,33)?validateSchema(input,33):[]);if(errors.length)throw new Error(`Invalid version 33 save: ${errors.join(' ')}`);input.schemaVersion=34;}
+  if(record(input)&&input.schemaVersion===34){const errors=(migrationStep(chain,34)?validateSchema(input,34):[]);if(errors.length)throw new Error(`Invalid version 34 save: ${errors.join(' ')}`);input.schemaVersion=35;}
+  if(record(input)&&input.schemaVersion===35){const errors=(migrationStep(chain,35)?validateSchema(input,35):[]);if(errors.length)throw new Error(`Invalid version 35 save: ${errors.join(' ')}`);const w=input as unknown as World;for(const p of w.pawns)if(p.cooking)p.cooking.progress*=productionWorkTotal(taskRecipe(p.cooking))/legacyProductionTicks(taskRecipe(p.cooking));input.schemaVersion=36;}
+  if(record(input)&&input.schemaVersion===36){const errors=(migrationStep(chain,36)?validateSchema(input,36):[]);if(errors.length)throw new Error(`Invalid version 36 save: ${errors.join(' ')}`);initializeLightWork(input as unknown as World);}
+  if(record(input)&&input.schemaVersion===37){const errors=(migrationStep(chain,37)?validateSchema(input,37):[]);if(errors.length)throw new Error('Invalid version 37 save: '+errors.join(' '));input.schemaVersion=38;}
+  if(record(input)&&input.schemaVersion===38){const errors=(migrationStep(chain,38)?validateSchema(input,38):[]);if(errors.length)throw new Error('Invalid version 38 save: '+errors.join(' '));input.schemaVersion=39;}
+  if(record(input)&&input.schemaVersion===39){const errors=(migrationStep(chain,39)?validateSchema(input,39):[]);if(errors.length)throw new Error('Invalid version 39 save: '+errors.join(' '));input.schemaVersion=40;}
+  if(record(input)&&input.schemaVersion===40){const errors=(migrationStep(chain,40)?validateSchema(input,40):[]);if(errors.length)throw new Error('Invalid version 40 save: '+errors.join(' '));input.schemaVersion=41;}
+  if(record(input)&&input.schemaVersion===41){const errors=(migrationStep(chain,41)?validateSchema(input,41):[]);if(errors.length)throw new Error('Invalid version 41 save: '+errors.join(' '));input.schemaVersion=42;}
+  if(record(input)&&input.schemaVersion===42){const errors=(migrationStep(chain,42)?validateSchema(input,42):[]);if(errors.length)throw new Error('Invalid version 42 save: '+errors.join(' '));const w=input as unknown as World;for(const p of w.pawns){p.skills=initialSkills(8,0);delete (p.skills as Partial<typeof p.skills>).medicine;delete (p.skills as Partial<typeof p.skills>).shooting;delete (p.skills as Partial<typeof p.skills>).melee;delete p.skills.cooking;}input.schemaVersion=43;}
+  if(record(input)&&input.schemaVersion===43){const errors=(migrationStep(chain,43)?validateSchema(input,43):[]);if(errors.length)throw new Error('Invalid version 43 save: '+errors.join(' '));input.schemaVersion=44;}
+  if(record(input)&&input.schemaVersion===44){const errors=(migrationStep(chain,44)?validateSchema(input,44):[]);if(errors.length)throw new Error('Invalid version 44 save: '+errors.join(' '));input.schemaVersion=45;}
+  if(record(input)&&input.schemaVersion===45){const errors=(migrationStep(chain,45)?validateSchema(input,45):[]);if(errors.length)throw new Error('Invalid version 45 save: '+errors.join(' '));for(const p of (input as unknown as World).pawns)p.priorities.doctor=1;input.schemaVersion=46;}
+  if(record(input)&&input.schemaVersion===46){const errors=(migrationStep(chain,46)?validateSchema(input,46):[]);if(errors.length)throw new Error('Invalid version 46 save: '+errors.join(' '));for(const p of (input as unknown as World).pawns){p.priorities.patient=1;p.priorities.bedrest=3;p.skills.medicine={level:8,xp:0,dailyXp:0,passion:0};}input.schemaVersion=47;}
+  if(record(input)&&input.schemaVersion===47){const errors=(migrationStep(chain,47)?validateSchema(input,47):[]);if(errors.length)throw new Error('Invalid version 47 save: '+errors.join(' '));input.schemaVersion=48;}
+  if(record(input)&&input.schemaVersion===48){const errors=(migrationStep(chain,48)?validateSchema(input,48):[]);if(errors.length)throw new Error('Invalid version 48 save: '+errors.join(' '));input.schemaVersion=49;}
+  if(record(input)&&input.schemaVersion===49){const errors=(migrationStep(chain,49)?validateSchema(input,49):[]);if(errors.length)throw new Error('Invalid version 49 save: '+errors.join(' '));input.schemaVersion=50;}
+  if(record(input)&&input.schemaVersion===50){const errors=(migrationStep(chain,50)?validateSchema(input,50):[]);if(errors.length)throw new Error('Invalid version 50 save: '+errors.join(' '));input.schemaVersion=51;}
+  if(record(input)&&input.schemaVersion===51){const errors=(migrationStep(chain,51)?validateSchema(input,51):[]);if(errors.length)throw new Error('Invalid version 51 save: '+errors.join(' '));input.schemaVersion=52;}
+  if(record(input)&&input.schemaVersion===52){const errors=(migrationStep(chain,52)?validateSchema(input,52):[]);if(errors.length)throw new Error('Invalid version 52 save: '+errors.join(' '));input.schemaVersion=53;}
+  if(record(input)&&input.schemaVersion===53){const errors=(migrationStep(chain,53)?validateSchema(input,53):[]);if(errors.length)throw new Error('Invalid version 53 save: '+errors.join(' '));input.schemaVersion=54;}
+  if(record(input)&&input.schemaVersion===54){const errors=(migrationStep(chain,54)?validateSchema(input,54):[]);if(errors.length)throw new Error('Invalid version 54 save: '+errors.join(' '));input.schemaVersion=55;}
+  if(record(input)&&input.schemaVersion===55){const errors=(migrationStep(chain,55)?validateSchema(input,55):[]);if(errors.length)throw new Error('Invalid version 55 save: '+errors.join(' '));for(const p of (input as unknown as World).pawns)p.skills.shooting={level:8,xp:0,dailyXp:0,passion:0};input.schemaVersion=56;}
+  if(record(input)&&input.schemaVersion===56){const errors=(migrationStep(chain,56)?validateSchema(input,56):[]);if(errors.length)throw new Error('Invalid version 56 save: '+errors.join(' '));input.schemaVersion=57;}
+  if(record(input)&&input.schemaVersion===57){const errors=(migrationStep(chain,57)?validateSchema(input,57):[]);if(errors.length)throw new Error('Invalid version 57 save: '+errors.join(' '));input.schemaVersion=58;}
+  if(record(input)&&input.schemaVersion===58){const errors=(migrationStep(chain,58)?validateSchema(input,58):[]);if(errors.length)throw new Error('Invalid version 58 save: '+errors.join(' '));for(const p of (input as unknown as World).pawns)p.skills.melee={level:8,xp:0,dailyXp:0,passion:0};input.schemaVersion=59;}
+  if(record(input)&&input.schemaVersion===59){const errors=(migrationStep(chain,59)?validateSchema(input,59):[]);if(errors.length)throw new Error('Invalid version 59 save: '+errors.join(' '));input.schemaVersion=60;}
+  if(record(input)&&input.schemaVersion===60){const errors=(migrationStep(chain,60)?validateSchema(input,60):[]);if(errors.length)throw new Error('Invalid version 60 save: '+errors.join(' '));input.schemaVersion=61;}
+  if(record(input)&&input.schemaVersion===61){const errors=(migrationStep(chain,61)?validateSchema(input,61):[]);if(errors.length)throw new Error('Invalid version 61 save: '+errors.join(' '));input.schemaVersion=62;}
+  if(record(input)&&input.schemaVersion===62){const errors=(migrationStep(chain,62)?validateSchema(input,62):[]);if(errors.length)throw new Error('Invalid version 62 save: '+errors.join(' '));input.schemaVersion=63;}
+  if(record(input)&&input.schemaVersion===63){const errors=(migrationStep(chain,63)?validateSchema(input,63):[]);if(errors.length)throw new Error('Invalid version 63 save: '+errors.join(' '));input.schemaVersion=64;}
+  if(record(input)&&input.schemaVersion===64){const errors=(migrationStep(chain,64)?validateSchema(input,64):[]);if(errors.length)throw new Error('Invalid version 64 save: '+errors.join(' '));input.schemaVersion=65;}
+  if(record(input)&&input.schemaVersion===65){const errors=(migrationStep(chain,65)?validateSchema(input,65):[]);if(errors.length)throw new Error('Invalid version 65 save: '+errors.join(' '));input.schemaVersion=66;}
+  if(record(input)&&input.schemaVersion===66){const errors=(migrationStep(chain,66)?validateSchema(input,66):[]);if(errors.length)throw new Error('Invalid version 66 save: '+errors.join(' '));input.schemaVersion=67;}
+  if(record(input)&&input.schemaVersion===67){const errors=(migrationStep(chain,67)?validateSchema(input,67):[]);if(errors.length)throw new Error('Invalid version 67 save: '+errors.join(' '));input.schemaVersion=68;}
+  if(record(input)&&input.schemaVersion===68){const errors=(migrationStep(chain,68)?validateSchema(input,68):[]);if(errors.length)throw new Error('Invalid version 68 save: '+errors.join(' '));input.schemaVersion=69;}
+  if(record(input)&&input.schemaVersion===69){const errors=(migrationStep(chain,69)?validateSchema(input,69):[]);if(errors.length)throw new Error('Invalid version 69 save: '+errors.join(' '));input.schemaVersion=70;}
+  if(record(input)&&input.schemaVersion===70){const errors=(migrationStep(chain,70)?validateSchema(input,70):[]);if(errors.length)throw new Error('Invalid version 70 save: '+errors.join(' '));input.schemaVersion=71;}
+  if(record(input)&&input.schemaVersion===71){const errors=(migrationStep(chain,71)?validateSchema(input,71):[]);if(errors.length)throw new Error('Invalid version 71 save: '+errors.join(' '));input.schemaVersion=72;}
+  if(record(input)&&input.schemaVersion===72){const errors=(migrationStep(chain,72)?validateSchema(input,72):[]);if(errors.length)throw new Error('Invalid version 72 save: '+errors.join(' '));input.schemaVersion=73;for(const p of (input as unknown as World).pawns)p.priorities.research=3;}
+  if(record(input)&&input.schemaVersion===73){const errors=(migrationStep(chain,73)?validateSchema(input,73):[]);if(errors.length)throw new Error('Invalid version 73 save: '+errors.join(' '));input.schemaVersion=74;}
+  if(record(input)&&input.schemaVersion===74){const errors=(migrationStep(chain,74)?validateSchema(input,74):[]);if(errors.length)throw new Error('Invalid version 74 save: '+errors.join(' '));input.schemaVersion=75;}
+  if(record(input)&&input.schemaVersion===75){const errors=(migrationStep(chain,75)?validateSchema(input,75):[]);if(errors.length)throw new Error('Invalid version 75 save: '+errors.join(' '));input.schemaVersion=76;}
+  if(record(input)&&input.schemaVersion===76){const errors=(migrationStep(chain,76)?validateSchema(input,76):[]);if(errors.length)throw new Error('Invalid version 76 save: '+errors.join(' '));input.schemaVersion=77;}
+  if(record(input)&&input.schemaVersion===77){const errors=(migrationStep(chain,77)?validateSchema(input,77):[]);if(errors.length)throw new Error('Invalid version 77 save: '+errors.join(' '));input.schemaVersion=78;}
+  if(record(input)&&input.schemaVersion===78){const errors=(migrationStep(chain,78)?validateSchema(input,78):[]);if(errors.length)throw new Error('Invalid version 78 save: '+errors.join(' '));input.schemaVersion=79;for(const p of (input as unknown as World).pawns)p.priorities.hunt=0;}
+  if(record(input)&&input.schemaVersion===79){const errors=(migrationStep(chain,79)?validateSchema(input,79):[]);if(errors.length)throw new Error('Invalid version 79 save: '+errors.join(' '));input.schemaVersion=80;}
+  if(record(input)&&input.schemaVersion===80){const errors=(migrationStep(chain,80)?validateSchema(input,80):[]);if(errors.length)throw new Error('Invalid version 80 save: '+errors.join(' '));input.schemaVersion=81;}
+  if(record(input)&&input.schemaVersion===81){const errors=(migrationStep(chain,81)?validateSchema(input,81):[]);if(errors.length)throw new Error('Invalid version 81 save: '+errors.join(' '));input.schemaVersion=82;}
+  if(record(input)&&input.schemaVersion===82){const errors=(migrationStep(chain,82)?validateSchema(input,82):[]);if(errors.length)throw new Error('Invalid version 82 save: '+errors.join(' '));input.schemaVersion=83;}
+  if(record(input)&&input.schemaVersion===83){const errors=(migrationStep(chain,83)?validateSchema(input,83):[]);if(errors.length)throw new Error('Invalid version 83 save: '+errors.join(' '));input.schemaVersion=84;}
+  if(record(input)&&input.schemaVersion===84){const errors=(migrationStep(chain,84)?validateSchema(input,84):[]);if(errors.length)throw new Error('Invalid version 84 save: '+errors.join(' '));input.schemaVersion=85;for(const p of (input as unknown as World).pawns)p.priorities.basic=3;}
+  if(record(input)&&input.schemaVersion===85){const errors=(migrationStep(chain,85)?validateSchema(input,85):[]);if(errors.length)throw new Error('Invalid version 85 save: '+errors.join(' '));input.schemaVersion=86;for(const p of (input as unknown as World).pawns)p.priorities.warden=3;}
+  if(record(input)&&input.schemaVersion===86){const errors=(migrationStep(chain,86)?validateSchema(input,86):[]);if(errors.length)throw new Error('Invalid version 86 save: '+errors.join(' '));input.schemaVersion=87;for(const p of (input as unknown as World).pawns)p.priorities.firefight=1;}
+  if(record(input)&&input.schemaVersion===87){const errors=(migrationStep(chain,87)?validateSchema(input,87):[]);if(errors.length)throw new Error('Invalid version 87 save: '+errors.join(' '));input.schemaVersion=88;}
+  if(record(input)&&input.schemaVersion===88){const errors=(migrationStep(chain,88)?validateSchema(input,88):[]);if(errors.length)throw new Error('Invalid version 88 save: '+errors.join(' '));input.schemaVersion=89;for(const p of (input as unknown as World).pawns)p.priorities.clean=p.visitor?0:3;}
   if(record(input)&&input.schemaVersion===89){
-    const errors=validateSchema(input,89);if(errors.length)throw new Error('Invalid version 89 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,89)?validateSchema(input,89):[]);if(errors.length)throw new Error('Invalid version 89 save: '+errors.join(' '));
     const world=input as unknown as World,registry=createDefaultApparelPolicyRegistry(false,false,false,false);
     for(const structure of [...world.structures,...world.packed.map(pack=>pack.building)])if(['bed','table','stool'].includes(structure.kind))structure.quality='normal';
     for(const pile of world.piles){
@@ -1248,16 +1271,16 @@ function deserializeCampaignObserved(serialized: string): CampaignState {
     }
     input.schemaVersion=90;
   }
-  if(record(input)&&input.schemaVersion===90){const errors=validateSchema(input,90);if(errors.length)throw new Error('Invalid version 90 save: '+errors.join(' '));input.schemaVersion=91;}
-  if(record(input)&&input.schemaVersion===91){const errors=validateSchema(input,91);if(errors.length)throw new Error('Invalid version 91 save: '+errors.join(' '));input.schemaVersion=101;}
-  if(record(input)&&input.schemaVersion===101){const errors=validateSchema(input,101);if(errors.length)throw new Error('Invalid version 101 save: '+errors.join(' '));input.schemaVersion=103;}
-  if(record(input)&&input.schemaVersion===103){const errors=validateSchema(input,103);if(errors.length)throw new Error('Invalid version 103 save: '+errors.join(' '));input.schemaVersion=104;for(const pawn of (input as unknown as World).pawns)pawn.priorities.art=0;}
-  if(record(input)&&input.schemaVersion===104){const errors=validateSchema(input,104);if(errors.length)throw new Error('Invalid version 104 save: '+errors.join(' '));input.schemaVersion=105;}
-  if(record(input)&&input.schemaVersion===105){const errors=validateSchema(input,105);if(errors.length)throw new Error('Invalid version 105 save: '+errors.join(' '));input.schemaVersion=106;for(const pawn of (input as unknown as World).pawns)pawn.priorities.handle=0;}
-  if(record(input)&&input.schemaVersion===106){const errors=validateSchema(input,106);if(errors.length)throw new Error('Invalid version 106 save: '+errors.join(' '));input.schemaVersion=109;}
-  if(record(input)&&input.schemaVersion===109){const errors=validateSchema(input,109);if(errors.length)throw new Error('Invalid version 109 save: '+errors.join(' '));input.schemaVersion=119;}
+  if(record(input)&&input.schemaVersion===90){const errors=(migrationStep(chain,90)?validateSchema(input,90):[]);if(errors.length)throw new Error('Invalid version 90 save: '+errors.join(' '));input.schemaVersion=91;}
+  if(record(input)&&input.schemaVersion===91){const errors=(migrationStep(chain,91)?validateSchema(input,91):[]);if(errors.length)throw new Error('Invalid version 91 save: '+errors.join(' '));input.schemaVersion=101;}
+  if(record(input)&&input.schemaVersion===101){const errors=(migrationStep(chain,101)?validateSchema(input,101):[]);if(errors.length)throw new Error('Invalid version 101 save: '+errors.join(' '));input.schemaVersion=103;}
+  if(record(input)&&input.schemaVersion===103){const errors=(migrationStep(chain,103)?validateSchema(input,103):[]);if(errors.length)throw new Error('Invalid version 103 save: '+errors.join(' '));input.schemaVersion=104;for(const pawn of (input as unknown as World).pawns)pawn.priorities.art=0;}
+  if(record(input)&&input.schemaVersion===104){const errors=(migrationStep(chain,104)?validateSchema(input,104):[]);if(errors.length)throw new Error('Invalid version 104 save: '+errors.join(' '));input.schemaVersion=105;}
+  if(record(input)&&input.schemaVersion===105){const errors=(migrationStep(chain,105)?validateSchema(input,105):[]);if(errors.length)throw new Error('Invalid version 105 save: '+errors.join(' '));input.schemaVersion=106;for(const pawn of (input as unknown as World).pawns)pawn.priorities.handle=0;}
+  if(record(input)&&input.schemaVersion===106){const errors=(migrationStep(chain,106)?validateSchema(input,106):[]);if(errors.length)throw new Error('Invalid version 106 save: '+errors.join(' '));input.schemaVersion=109;}
+  if(record(input)&&input.schemaVersion===109){const errors=(migrationStep(chain,109)?validateSchema(input,109):[]);if(errors.length)throw new Error('Invalid version 109 save: '+errors.join(' '));input.schemaVersion=119;}
   if(record(input)&&input.schemaVersion===119){
-    const errors=validateSchema(input,119);if(errors.length)throw new Error('Invalid version 119 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,119)?validateSchema(input,119):[]);if(errors.length)throw new Error('Invalid version 119 save: '+errors.join(' '));
     const world=input as unknown as World;
     for(const animal of world.wildlife?.animals??[])if(animal.domestic&&(animal.species==='muffalo'||animal.species==='dromedary'&&animal.sex==='female'))animal.domestic.productFullness=0;
     for(const structure of [...world.structures,...world.packed.map(pack=>pack.building)])for(const bill of structure.bills??[]){
@@ -1267,550 +1290,550 @@ function deserializeCampaignObserved(serialized: string): CampaignState {
     input.schemaVersion=120;
   }
   if(record(input)&&input.schemaVersion===120){
-    const errors=validateSchema(input,120);if(errors.length)throw new Error('Invalid version 120 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,120)?validateSchema(input,120):[]);if(errors.length)throw new Error('Invalid version 120 save: '+errors.join(' '));
     const world=input as unknown as World;
     for(const animal of world.wildlife?.animals??[])animal.ageTicks=adultAgeTicks(animal.species);
     for(const pile of world.piles)if(pile.corpse)pile.corpse.ageTicks=adultAgeTicks(pile.corpse.species);
     input.schemaVersion=121;
   }
   if(record(input)&&input.schemaVersion===121){
-    const errors=validateSchema(input,121);if(errors.length)throw new Error('Invalid version 121 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,121)?validateSchema(input,121):[]);if(errors.length)throw new Error('Invalid version 121 save: '+errors.join(' '));
     for(const pawn of (input as unknown as World).pawns){pawn.recreation.tolerance.cerebral=0;pawn.recreation.bored.cerebral=false;}
     input.schemaVersion=122;
   }
   if(record(input)&&input.schemaVersion===122){
-    const errors=validateSchema(input,122);if(errors.length)throw new Error('Invalid version 122 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,122)?validateSchema(input,122):[]);if(errors.length)throw new Error('Invalid version 122 save: '+errors.join(' '));
     input.schemaVersion=123;
     adoptExoticMerchantSchedule(input as unknown as World);
   }
   if(record(input)&&input.schemaVersion===123){
-    const errors=validateSchema(input,123);if(errors.length)throw new Error('Invalid version 123 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,123)?validateSchema(input,123):[]);if(errors.length)throw new Error('Invalid version 123 save: '+errors.join(' '));
     for(const pawn of (input as unknown as World).pawns){pawn.recreation.tolerance.social=0;pawn.recreation.bored.social=false;}
     input.schemaVersion=124;
   }
   if(record(input)&&input.schemaVersion===124){
-    const errors=validateSchema(input,124);if(errors.length)throw new Error('Invalid version 124 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,124)?validateSchema(input,124):[]);if(errors.length)throw new Error('Invalid version 124 save: '+errors.join(' '));
     // New negative memories and physical fights arise only after play resumes.
     input.schemaVersion=125;
   }
   if(record(input)&&input.schemaVersion===125){
-    const errors=validateSchema(input,125);if(errors.length)throw new Error('Invalid version 125 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,125)?validateSchema(input,125):[]);if(errors.length)throw new Error('Invalid version 125 save: '+errors.join(' '));
     // A future opportunity is scheduled without introducing illness or spending
     // the established simulation PRNG on an old colony's migration boundary.
     input.schemaVersion=127;
     adoptFluIncidents(input as unknown as World);
   }
   if(record(input)&&input.schemaVersion===127){
-    const errors=validateSchema(input,127);if(errors.length)throw new Error('Invalid version 127 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,127)?validateSchema(input,127):[]);if(errors.length)throw new Error('Invalid version 127 save: '+errors.join(' '));
     // No trait, exchange, opinion or mood is granted to an old colony.
     input.schemaVersion=134;
   }
   if(record(input)&&input.schemaVersion===134){
-    const errors=validateSchema(input,134);if(errors.length)throw new Error('Invalid version 134 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,134)?validateSchema(input,134):[]);if(errors.length)throw new Error('Invalid version 134 save: '+errors.join(' '));
     // Existing one-animal leads resume unchanged; new ropes are acquired only
     // at physical contact after this neutral migration.
     input.schemaVersion=135;
   }
   if(record(input)&&input.schemaVersion===135){
-    const errors=validateSchema(input,135);if(errors.length)throw new Error('Invalid version 135 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,135)?validateSchema(input,135):[]);if(errors.length)throw new Error('Invalid version 135 save: '+errors.join(' '));
     const world=input as unknown as World;
     for(const pawn of world.pawns)pawn.age=legacyHumanAge();
     for(const departure of world.visitors?.departed??[])departure.pawn.age=legacyHumanAge();
     input.schemaVersion=138;
   }
   if(record(input)&&input.schemaVersion===138){
-    const errors=validateSchema(input,138);if(errors.length)throw new Error('Invalid version 138 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,138)?validateSchema(input,138):[]);if(errors.length)throw new Error('Invalid version 138 save: '+errors.join(' '));
     // Research, ingredients and authored work begin only after play resumes.
     input.schemaVersion=139;
   }
   if(record(input)&&input.schemaVersion===139){
-    const errors=validateSchema(input,139);if(errors.length)throw new Error('Invalid version 139 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,139)?validateSchema(input,139):[]);if(errors.length)throw new Error('Invalid version 139 save: '+errors.join(' '));
     // New equipment is earned only through future work or trade. Persisted
     // clothing policies, including player restrictions, are left untouched.
     input.schemaVersion=141;
   }
   if(record(input)&&input.schemaVersion===141){
-    const errors=validateSchema(input,141);if(errors.length)throw new Error('Invalid version 141 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,141)?validateSchema(input,141):[]);if(errors.length)throw new Error('Invalid version 141 save: '+errors.join(' '));
     // A researched design is not granted to existing colonies retroactively.
     input.schemaVersion=143;
   }
   if(record(input)&&input.schemaVersion===143){
-    const errors=validateSchema(input,143);if(errors.length)throw new Error('Invalid version 143 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,143)?validateSchema(input,143):[]);if(errors.length)throw new Error('Invalid version 143 save: '+errors.join(' '));
     const world=input as unknown as World;
     world.breakdown=newBreakdownCalendar(world.seed,world.tick);
     input.schemaVersion=144;
   }
   if(record(input)&&input.schemaVersion===144){
-    const errors=validateSchema(input,144);if(errors.length)throw new Error('Invalid version 144 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,144)?validateSchema(input,144):[]);if(errors.length)throw new Error('Invalid version 144 save: '+errors.join(' '));
     // New research, bills and equipment are earned only after play resumes.
     // Preserve the PRNG and every existing player policy unchanged.
     input.schemaVersion=148;
   }
   if(record(input)&&input.schemaVersion===148){
-    const errors=validateSchema(input,148);if(errors.length)throw new Error('Invalid version 148 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,148)?validateSchema(input,148):[]);if(errors.length)throw new Error('Invalid version 148 save: '+errors.join(' '));
     // A new crisis can occur only through future simulation. Preserve all
     // existing moods, tasks, reservations and the simulation PRNG exactly.
     input.schemaVersion=150;
   }
   if(record(input)&&input.schemaVersion===150){
-    const errors=validateSchema(input,150);if(errors.length)throw new Error('Invalid version 150 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,150)?validateSchema(input,150):[]);if(errors.length)throw new Error('Invalid version 150 save: '+errors.join(' '));
     // Existing policies, food, memories, spoilage and PRNG continue unchanged.
     // New meals arise only through future physical production and ingestion.
     input.schemaVersion=152;
   }
   if(record(input)&&input.schemaVersion===152){
-    const errors=validateSchema(input,152);if(errors.length)throw new Error('Invalid version 152 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,152)?validateSchema(input,152):[]);if(errors.length)throw new Error('Invalid version 152 save: '+errors.join(' '));
     // Production and ingestion grant the new meal and memory only during play.
     // Preserve existing food policies, spoilage, tasks and PRNG unchanged.
     input.schemaVersion=154;
   }
   if(record(input)&&input.schemaVersion===154){
-    const errors=validateSchema(input,154);if(errors.length)throw new Error('Invalid version 154 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,154)?validateSchema(input,154):[]);if(errors.length)throw new Error('Invalid version 154 save: '+errors.join(' '));
     // The new meal, recipe and policy permission can arise only after play resumes.
     // Keep every identity, quantity, task, memory, food age and PRNG state intact.
     input.schemaVersion=155;
   }
   if(record(input)&&input.schemaVersion===155){
-    const errors=validateSchema(input,155);if(errors.length)throw new Error('Invalid version 155 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,155)?validateSchema(input,155):[]);if(errors.length)throw new Error('Invalid version 155 save: '+errors.join(' '));
     // New content begins only after play resumes. Keep policies, inventories,
     // active work, food condition, memories and the PRNG untouched.
     input.schemaVersion=156;
   }
   if(record(input)&&input.schemaVersion===156){
-    const errors=validateSchema(input,156);if(errors.length)throw new Error('Invalid version 156 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,156)?validateSchema(input,156):[]);if(errors.length)throw new Error('Invalid version 156 save: '+errors.join(' '));
     // New content arises only through future play; leave all existing state intact.
     input.schemaVersion=157;
   }
   if(record(input)&&input.schemaVersion===157){
-    const errors=validateSchema(input,157);if(errors.length)throw new Error('Invalid version 157 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,157)?validateSchema(input,157):[]);if(errors.length)throw new Error('Invalid version 157 save: '+errors.join(' '));
     // New content arises only through future play; preserve the existing state.
     input.schemaVersion=159;
   }
   if(record(input)&&input.schemaVersion===159){
-    const errors=validateSchema(input,159);if(errors.length)throw new Error('Invalid version 159 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,159)?validateSchema(input,159):[]);if(errors.length)throw new Error('Invalid version 159 save: '+errors.join(' '));
     // The bulk bill is chosen in later play, never granted to an older world.
     input.schemaVersion=160;
   }
   if(record(input)&&input.schemaVersion===160){
-    const errors=validateSchema(input,160);if(errors.length)throw new Error('Invalid version 160 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,160)?validateSchema(input,160):[]);if(errors.length)throw new Error('Invalid version 160 save: '+errors.join(' '));
     // The mixed fine bulk bill is chosen only during later play.
     input.schemaVersion=161;
   }
   if(record(input)&&input.schemaVersion===161){
-    const errors=validateSchema(input,161);if(errors.length)throw new Error('Invalid version 161 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,161)?validateSchema(input,161):[]);if(errors.length)throw new Error('Invalid version 161 save: '+errors.join(' '));
     // The vegetarian fine bulk bill is chosen only during later play.
     input.schemaVersion=162;
   }
   if(record(input)&&input.schemaVersion===162){
-    const errors=validateSchema(input,162);if(errors.length)throw new Error('Invalid version 162 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,162)?validateSchema(input,162):[]);if(errors.length)throw new Error('Invalid version 162 save: '+errors.join(' '));
     // The carnivore fine bulk bill is chosen only during later play.
     input.schemaVersion=163;
   }
   if(record(input)&&input.schemaVersion===163){
-    const errors=validateSchema(input,163);if(errors.length)throw new Error('Invalid version 163 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,163)?validateSchema(input,163):[]);if(errors.length)throw new Error('Invalid version 163 save: '+errors.join(' '));
     // The mixed lavish bulk bill is chosen only during later play.
     input.schemaVersion=164;
   }
   if(record(input)&&input.schemaVersion===164){
-    const errors=validateSchema(input,164);if(errors.length)throw new Error('Invalid version 164 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,164)?validateSchema(input,164):[]);if(errors.length)throw new Error('Invalid version 164 save: '+errors.join(' '));
     // The vegetarian lavish bulk bill is chosen only during later play.
     input.schemaVersion=165;
   }
   if(record(input)&&input.schemaVersion===165){
-    const errors=validateSchema(input,165);if(errors.length)throw new Error('Invalid version 165 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,165)?validateSchema(input,165):[]);if(errors.length)throw new Error('Invalid version 165 save: '+errors.join(' '));
     // The carnivore lavish bulk bill is chosen only during later play.
     input.schemaVersion=166;
   }
   if(record(input)&&input.schemaVersion===166){
-    const errors=validateSchema(input,166);if(errors.length)throw new Error('Invalid version 166 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,166)?validateSchema(input,166):[]);if(errors.length)throw new Error('Invalid version 166 save: '+errors.join(' '));
     // No retrospective plants, doses or RNG draws; only future wild renewal may use the new species.
     input.schemaVersion=167;
   }
   if(record(input)&&input.schemaVersion===167){
-    const errors=validateSchema(input,167);if(errors.length)throw new Error('Invalid version 167 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,167)?validateSchema(input,167):[]);if(errors.length)throw new Error('Invalid version 167 save: '+errors.join(' '));
     // An absent Plants profile retains the old neutral work and harvest behavior
     // until a colonist performs future plant work. No past XP or RNG is invented.
     input.schemaVersion=168;
   }
   if(record(input)&&input.schemaVersion===168){
-    const errors=validateSchema(input,168);if(errors.length)throw new Error('Invalid version 168 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,168)?validateSchema(input,168):[]);if(errors.length)throw new Error('Invalid version 168 save: '+errors.join(' '));
     // No retrospective event, calendar, exposure or RNG draw. Playing resumes
     // the selected profile through an explicit prospective engine adoption.
     input.schemaVersion=169;
   }
   if(record(input)&&input.schemaVersion===169){
-    const errors=validateSchema(input,169);if(errors.length)throw new Error('Invalid version 169 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,169)?validateSchema(input,169):[]);if(errors.length)throw new Error('Invalid version 169 save: '+errors.join(' '));
     // Death memories arise at future transitions, never from retained historical bodies.
     input.schemaVersion=170;
   }
   if(record(input)&&input.schemaVersion===170){
-    const errors=validateSchema(input,170);if(errors.length)throw new Error('Invalid version 170 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,170)?validateSchema(input,170):[]);if(errors.length)throw new Error('Invalid version 170 save: '+errors.join(' '));
     input.schemaVersion=171;
   }
   if(record(input)&&input.schemaVersion===171){
-    const errors=validateSchema(input,171);if(errors.length)throw new Error('Invalid version 171 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,171)?validateSchema(input,171):[]);if(errors.length)throw new Error('Invalid version 171 save: '+errors.join(' '));
     // The quest calendar is enabled only through a later player decision.
     input.schemaVersion=172;
   }
   if(record(input)&&input.schemaVersion===172){
-    const errors=validateSchema(input,172);if(errors.length)throw new Error('Invalid version 172 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,172)?validateSchema(input,172):[]);if(errors.length)throw new Error('Invalid version 172 save: '+errors.join(' '));
     // Flashstorm exists only at a future eligible Misc opportunity.
     input.schemaVersion=173;
   }
   if(record(input)&&input.schemaVersion===173){
-    const errors=validateSchema(input,173);if(errors.length)throw new Error('Invalid version 173 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,173)?validateSchema(input,173):[]);if(errors.length)throw new Error('Invalid version 173 save: '+errors.join(' '));
     // No departed animal, route, ecological history or random draw is invented.
     input.schemaVersion=174;
   }
   if(record(input)&&input.schemaVersion===174){
-    const errors=validateSchema(input,174);if(errors.length)throw new Error('Invalid version 174 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,174)?validateSchema(input,174):[]);if(errors.length)throw new Error('Invalid version 174 save: '+errors.join(' '));
     // No patient, capsule, injuries, items, admission or random draw is invented.
     input.schemaVersion=175;
   }
   if(record(input)&&input.schemaVersion===175){
-    const errors=validateSchema(input,175);if(errors.length)throw new Error('Invalid version 175 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,175)?validateSchema(input,175):[]);if(errors.length)throw new Error('Invalid version 175 save: '+errors.join(' '));
     // Absent quality/HP ranges retain historical storage rules without invented settings.
     input.schemaVersion=176;
   }
   if(record(input)&&input.schemaVersion===176){
-    const errors=validateSchema(input,176);if(errors.length)throw new Error('Invalid version 176 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,176)?validateSchema(input,176):[]);if(errors.length)throw new Error('Invalid version 176 save: '+errors.join(' '));
     // No lamp, crop, light history, power or random draw is invented.
     input.schemaVersion=177;
   }
   if(record(input)&&input.schemaVersion===177){
-    const errors=validateSchema(input,177);if(errors.length)throw new Error('Invalid version 177 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,177)?validateSchema(input,177):[]);if(errors.length)throw new Error('Invalid version 177 save: '+errors.join(' '));
     // No predator, consumed anatomy, hunt, food or ecological target is invented.
     input.schemaVersion=178;
   }
   if(record(input)&&input.schemaVersion===178){
-    const errors=validateSchema(input,178);if(errors.length)throw new Error('Invalid version 178 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,178)?validateSchema(input,178):[]);if(errors.length)throw new Error('Invalid version 178 save: '+errors.join(' '));
     // No request, dose, operation, anesthetic or medical history is invented.
     input.schemaVersion=179;
   }
   if(record(input)&&input.schemaVersion===179){
-    const errors=validateSchema(input,179);if(errors.length)throw new Error('Invalid version 179 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,179)?validateSchema(input,179):[]);if(errors.length)throw new Error('Invalid version 179 save: '+errors.join(' '));
     // No expedition, destination, stock, money or purchase is invented.
     input.schemaVersion=180;
   }
   if(record(input)&&input.schemaVersion===180){
-    const errors=validateSchema(input,180);if(errors.length)throw new Error('Invalid version 180 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,180)?validateSchema(input,180):[]);if(errors.length)throw new Error('Invalid version 180 save: '+errors.join(' '));
     // No exposure, discharge, clock or random draw is invented.
     input.schemaVersion=181;
   }
   if(record(input)&&input.schemaVersion===181){
-    const errors=validateSchema(input,181);if(errors.length)throw new Error('Invalid version 181 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,181)?validateSchema(input,181):[]);if(errors.length)throw new Error('Invalid version 181 save: '+errors.join(' '));
     // No cultivated plant, medicine, profile, exposure, progress or draw is invented.
     input.schemaVersion=182;
   }
   if(record(input)&&input.schemaVersion===182){
-    const errors=validateSchema(input,182);if(errors.length)throw new Error('Invalid version 182 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,182)?validateSchema(input,182):[]);if(errors.length)throw new Error('Invalid version 182 save: '+errors.join(' '));
     // No incident, rage, mental clock or random draw is invented.
     input.schemaVersion=183;
   }
   if(record(input)&&input.schemaVersion===183){
-    const errors=validateSchema(input,183);if(errors.length)throw new Error('Invalid version 183 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,183)?validateSchema(input,183):[]);if(errors.length)throw new Error('Invalid version 183 save: '+errors.join(' '));
     // No World calendar, condition, stored energy or random draw is invented.
     input.schemaVersion=184;
   }
   if(record(input)&&input.schemaVersion===184){
-    const errors=validateSchema(input,184);if(errors.length)throw new Error('Invalid version 184 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,184)?validateSchema(input,184):[]);if(errors.length)throw new Error('Invalid version 184 save: '+errors.join(' '));
     // No cargo, trade, silver, stock or progress is granted.
     input.schemaVersion=185;
   }
   if(record(input)&&input.schemaVersion===185){
-    const errors=validateSchema(input,185);if(errors.length)throw new Error('Invalid version 185 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,185)?validateSchema(input,185):[]);if(errors.length)throw new Error('Invalid version 185 save: '+errors.join(' '));
     // No Mining profile, past XP, yield contribution or random draw is invented.
     // Missing contributions from historical rock damage remain neutral at use.
     input.schemaVersion=186;
   }
   if(record(input)&&input.schemaVersion===186){
-    const errors=validateSchema(input,186);if(errors.length)throw new Error('Invalid version 186 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,186)?validateSchema(input,186):[]);if(errors.length)throw new Error('Invalid version 186 save: '+errors.join(' '));
     // No hospital bed, research, ingredients or clinical history is invented.
     input.schemaVersion=187;
   }
   if(record(input)&&input.schemaVersion===187){
-    const errors=validateSchema(input,187);if(errors.length)throw new Error('Invalid version 187 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,187)?validateSchema(input,187):[]);if(errors.length)throw new Error('Invalid version 187 save: '+errors.join(' '));
     // Existing rations remain unchanged; no project, bill, meal or work is granted.
     input.schemaVersion=188;
   }
   if(record(input)&&input.schemaVersion===188){
-    const errors=validateSchema(input,188);if(errors.length)throw new Error('Invalid version 188 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,188)?validateSchema(input,188):[]);if(errors.length)throw new Error('Invalid version 188 save: '+errors.join(' '));
     input.schemaVersion=189;
   }
   if(record(input)&&input.schemaVersion===189){
-    const errors=validateSchema(input,189);if(errors.length)throw new Error('Invalid version 189 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,189)?validateSchema(input,189):[]);if(errors.length)throw new Error('Invalid version 189 save: '+errors.join(' '));
     initializeTelevisionRecreation(input as unknown as World);
     input.schemaVersion=190;
   }
   if(record(input)&&input.schemaVersion===190){
-    const errors=validateSchema(input,190);if(errors.length)throw new Error('Invalid version 190 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,190)?validateSchema(input,190):[]);if(errors.length)throw new Error('Invalid version 190 save: '+errors.join(' '));
     // Past, skills, priorities, offers, archives and all RNG streams stay exact.
     input.schemaVersion=191;
   }
   if(record(input)&&input.schemaVersion===191){
-    const errors=validateSchema(input,191);if(errors.length)throw new Error('Invalid version 191 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,191)?validateSchema(input,191):[]);if(errors.length)throw new Error('Invalid version 191 save: '+errors.join(' '));
     // No crisis, target, threat, counter or random draw is added to old owners.
     input.schemaVersion=192;
   }
   if(record(input)&&input.schemaVersion===192){
-    const errors=validateSchema(input,192);if(errors.length)throw new Error('Invalid version 192 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,192)?validateSchema(input,192):[]);if(errors.length)throw new Error('Invalid version 192 save: '+errors.join(' '));
     // Existing owners, histories, research and RNG stay exact; only the version advances.
     input.schemaVersion=193;
   }
   if(record(input)&&input.schemaVersion===193){
-    const errors=validateSchema(input,193);if(errors.length)throw new Error('Invalid version 193 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,193)?validateSchema(input,193):[]);if(errors.length)throw new Error('Invalid version 193 save: '+errors.join(' '));
     // No actor, carcass, raid permission, salvage count or draw is added to old owners.
     input.schemaVersion=194;
   }
   if(record(input)&&input.schemaVersion===194){
-    const errors=validateSchema(input,194);if(errors.length)throw new Error('Invalid version 194 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,194)?validateSchema(input,194):[]);if(errors.length)throw new Error('Invalid version 194 save: '+errors.join(' '));
     // No relationship, partner, offer, memory, archive or draw is invented.
     input.schemaVersion=195;
   }
   if(record(input)&&input.schemaVersion===195){
-    const errors=validateSchema(input,195);if(errors.length)throw new Error('Invalid version 195 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,195)?validateSchema(input,195):[]);if(errors.length)throw new Error('Invalid version 195 save: '+errors.join(' '));
     // Existing owners remain unchanged; planet and groups are prospective commands.
     input.schemaVersion=196;
   }
   if(record(input)&&input.schemaVersion===196){
-    const errors=validateSchema(input,196);if(errors.length)throw new Error('Invalid version 196 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,196)?validateSchema(input,196):[]);if(errors.length)throw new Error('Invalid version 196 save: '+errors.join(' '));
     // Races, ranged permission and corpse filters remain prospective; number only.
     input.schemaVersion=197;
   }
   if(record(input)&&input.schemaVersion===197){
-    const errors=validateSchema(input,197);if(errors.length)throw new Error('Invalid version 197 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,197)?validateSchema(input,197):[]);if(errors.length)throw new Error('Invalid version 197 save: '+errors.join(' '));
     // Human Busy clocks are adopted only at their first prospective Core pass.
     input.schemaVersion=198;
   }
   if(record(input)&&input.schemaVersion===198){
-    const errors=validateSchema(input,198);if(errors.length)throw new Error('Invalid version 198 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,198)?validateSchema(input,198):[]);if(errors.length)throw new Error('Invalid version 198 save: '+errors.join(' '));
     // Existing capsules retain their affiliation and outcome; joining is prospective.
     input.schemaVersion=199;
   }
   if(record(input)&&input.schemaVersion===199){
-    const errors=validateSchema(input,199);if(errors.length)throw new Error('Invalid version 199 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,199)?validateSchema(input,199):[]);if(errors.length)throw new Error('Invalid version 199 save: '+errors.join(' '));
     // The weather envelope is adopted only by a future played step.
     input.schemaVersion=200;
   }
   if(record(input)&&input.schemaVersion===200){
-    const errors=validateSchema(input,200);if(errors.length)throw new Error('Invalid version 200 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,200)?validateSchema(input,200):[]);if(errors.length)throw new Error('Invalid version 200 save: '+errors.join(' '));
     // Electrical accidents begin only on a future played step.
     input.schemaVersion=201;
   }
   if(record(input)&&input.schemaVersion===201){
-    const errors=validateSchema(input,201);if(errors.length)throw new Error('Invalid version 201 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,201)?validateSchema(input,201):[]);if(errors.length)throw new Error('Invalid version 201 save: '+errors.join(' '));
     input.schemaVersion=202;
   }
   if(record(input)&&input.schemaVersion===202){
-    const errors=validateSchema(input,202);if(errors.length)throw new Error('Invalid version 202 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,202)?validateSchema(input,202):[]);if(errors.length)throw new Error('Invalid version 202 save: '+errors.join(' '));
     // Existing soil zones and plants are untouched; basins are prospective.
     input.schemaVersion=203;
   }
   if(record(input)&&input.schemaVersion===203){
-    const errors=validateSchema(input,203);if(errors.length)throw new Error('Invalid version 203 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,203)?validateSchema(input,203):[]);if(errors.length)throw new Error('Invalid version 203 save: '+errors.join(' '));
     // Prison breaks are adopted prospectively; no prisoner history is invented.
     input.schemaVersion=204;
   }
   if(record(input)&&input.schemaVersion===204){
-    const errors=validateSchema(input,204);if(errors.length)throw new Error('Invalid version 204 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,204)?validateSchema(input,204):[]);if(errors.length)throw new Error('Invalid version 204 save: '+errors.join(' '));
     // Blight is prospective: neither infections nor incident history are invented.
     input.schemaVersion=205;
   }
   if(record(input)&&input.schemaVersion===205){
-    const errors=validateSchema(input,205);if(errors.length)throw new Error('Invalid version 205 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,205)?validateSchema(input,205):[]);if(errors.length)throw new Error('Invalid version 205 save: '+errors.join(' '));
     // Drug production is prospective; no bench, research, ingredient or bill is added.
     input.schemaVersion=206;
   }
   if(record(input)&&input.schemaVersion===206){
-    const errors=validateSchema(input,206);if(errors.length)throw new Error('Invalid version 206 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,206)?validateSchema(input,206):[]);if(errors.length)throw new Error('Invalid version 206 save: '+errors.join(' '));
     // Immune diseases and their incident stream are adopted only by future play.
     input.schemaVersion=207;
   }
   if(record(input)&&input.schemaVersion===207){
-    const errors=validateSchema(input,207);if(errors.length)throw new Error('Invalid version 207 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,207)?validateSchema(input,207):[]);if(errors.length)throw new Error('Invalid version 207 save: '+errors.join(' '));
     // EMP weapons and their retained effects are prospective, with no invented history.
     input.schemaVersion=208;
   }
   if(record(input)&&input.schemaVersion===208){
-    const errors=validateSchema(input,208);if(errors.length)throw new Error('Invalid version 208 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,208)?validateSchema(input,208):[]);if(errors.length)throw new Error('Invalid version 208 save: '+errors.join(' '));
     // Perceived deaths and corpse exposure begin prospectively during play.
     input.schemaVersion=209;
   }
   if(record(input)&&input.schemaVersion===209){
-    const errors=validateSchema(input,209);if(errors.length)throw new Error('Invalid version 209 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,209)?validateSchema(input,209):[]);if(errors.length)throw new Error('Invalid version 209 save: '+errors.join(' '));
     // Wooden prostheses and their surgical ingredients require future play.
     input.schemaVersion=210;
   }
   if(record(input)&&input.schemaVersion===210){
-    const errors=validateSchema(input,210);if(errors.length)throw new Error('Invalid version 210 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,210)?validateSchema(input,210):[]);if(errors.length)throw new Error('Invalid version 210 save: '+errors.join(' '));
     // Hospital support is prospective: preserve all research, terrain and RNG.
     input.schemaVersion=211;
   }
   if(record(input)&&input.schemaVersion===211){
-    const errors=validateSchema(input,211);if(errors.length)throw new Error('Invalid version 211 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,211)?validateSchema(input,211):[]);if(errors.length)throw new Error('Invalid version 211 save: '+errors.join(' '));
     // Herd veterinary care is prospective; no animal, medicine or intent is added.
     input.schemaVersion=212;
   }
   if(record(input)&&input.schemaVersion===212){
-    const errors=validateSchema(input,212);if(errors.length)throw new Error('Invalid version 212 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,212)?validateSchema(input,212):[]);if(errors.length)throw new Error('Invalid version 212 save: '+errors.join(' '));
     // Arrest is prospective; retain all people, possessions, intent and RNG.
     input.schemaVersion=213;
   }
   if(record(input)&&input.schemaVersion===213){
-    const errors=validateSchema(input,213);if(errors.length)throw new Error('Invalid version 213 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,213)?validateSchema(input,213):[]);if(errors.length)throw new Error('Invalid version 213 save: '+errors.join(' '));
     // Assisted animal feeding is prospective; no food, health or intent is added.
     input.schemaVersion=214;
   }
   if(record(input)&&input.schemaVersion===214){
-    const errors=validateSchema(input,214);if(errors.length)throw new Error('Invalid version 214 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,214)?validateSchema(input,214):[]);if(errors.length)throw new Error('Invalid version 214 save: '+errors.join(' '));
     // Deep resources are prospective; no discovery, work, stock or RNG is added.
     input.schemaVersion=215;
   }
   if(record(input)&&input.schemaVersion===215){
-    const errors=validateSchema(input,215);if(errors.length)throw new Error('Invalid version 215 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,215)?validateSchema(input,215):[]);if(errors.length)throw new Error('Invalid version 215 save: '+errors.join(' '));
     // Prospective orbital calendar: no stock, RNG, task or arrival is synthesized.
     input.schemaVersion=216;
   }
   if(record(input)&&input.schemaVersion===216){
-    const errors=validateSchema(input,216);if(errors.length)throw new Error('Invalid version 216 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,216)?validateSchema(input,216):[]);if(errors.length)throw new Error('Invalid version 216 save: '+errors.join(' '));
     input.schemaVersion=217;adoptPasteFoodPolicies(input as unknown as World);
   }
   if(record(input)&&input.schemaVersion===217){
-    const errors=validateSchema(input,217);if(errors.length)throw new Error('Invalid version 217 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,217)?validateSchema(input,217):[]);if(errors.length)throw new Error('Invalid version 217 save: '+errors.join(' '));
     // Refining and stored fuel are prospective: preserve every original reserve.
     input.schemaVersion=218;
   }
   if(record(input)&&input.schemaVersion===218){
-    const errors=validateSchema(input,218);if(errors.length)throw new Error('Invalid version 218 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,218)?validateSchema(input,218):[]);if(errors.length)throw new Error('Invalid version 218 save: '+errors.join(' '));
     adoptStockpileZones(input as unknown as World);
     input.schemaVersion=219;
   }
   if(record(input)&&input.schemaVersion===219){
-    const errors=validateSchema(input,219);if(errors.length)throw new Error('Invalid version 219 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,219)?validateSchema(input,219):[]);if(errors.length)throw new Error('Invalid version 219 save: '+errors.join(' '));
     // Slaughter is an explicit future intent: preserve every herd, owner and RNG.
     input.schemaVersion=220;
   }
   if(record(input)&&input.schemaVersion===220){
-    const errors=validateSchema(input,220);if(errors.length)throw new Error('Invalid version 220 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,220)?validateSchema(input,220):[]);if(errors.length)throw new Error('Invalid version 220 save: '+errors.join(' '));
     // Sleeping places and rescue are prospective; no owner or actor is invented.
     input.schemaVersion=221;
   }
   if(record(input)&&input.schemaVersion===221){
-    const errors=validateSchema(input,221);if(errors.length)throw new Error('Invalid version 221 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,221)?validateSchema(input,221):[]);if(errors.length)throw new Error('Invalid version 221 save: '+errors.join(' '));
     // Smelting is prospective; keep original objects, bills, skills and streams.
     input.schemaVersion=222;
   }
   if(record(input)&&input.schemaVersion===222){
-    const errors=validateSchema(input,222);if(errors.length)throw new Error('Invalid version 222 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,222)?validateSchema(input,222):[]);if(errors.length)throw new Error('Invalid version 222 save: '+errors.join(' '));
     // Areas and assignments are prospective; original owners and streams are untouched.
     input.schemaVersion=223;
   }
   if(record(input)&&input.schemaVersion===223){
-    const errors=validateSchema(input,223);if(errors.length)throw new Error('Invalid version 223 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,223)?validateSchema(input,223):[]);if(errors.length)throw new Error('Invalid version 223 save: '+errors.join(' '));
     // Double beds and their durable slots are prospective; no owner is inferred.
     input.schemaVersion=224;
   }
   if(record(input)&&input.schemaVersion===224){
-    const errors=validateSchema(input,224);if(errors.length)throw new Error('Invalid version 224 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,224)?validateSchema(input,224):[]);if(errors.length)throw new Error('Invalid version 224 save: '+errors.join(' '));
     input.schemaVersion=225; // No station, filter, task or death history is invented.
   }
   if(record(input)&&input.schemaVersion===225){
-    const errors=validateSchema(input,225);if(errors.length)throw new Error('Invalid version 225 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,225)?validateSchema(input,225):[]);if(errors.length)throw new Error('Invalid version 225 save: '+errors.join(' '));
     input.schemaVersion=226; // No trap, contact, switch, material or random state is created.
   }
   if(record(input)&&input.schemaVersion===226){
-    const errors=validateSchema(input,226);if(errors.length)throw new Error('Invalid version 226 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,226)?validateSchema(input,226):[]);if(errors.length)throw new Error('Invalid version 226 save: '+errors.join(' '));
     input.schemaVersion=227; // No crop, item, bill, diet permission or random state is created.
   }
   if(record(input)&&input.schemaVersion===227){
-    const errors=validateSchema(input,227);if(errors.length)throw new Error('Invalid version 227 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,227)?validateSchema(input,227):[]);if(errors.length)throw new Error('Invalid version 227 save: '+errors.join(' '));
     input.schemaVersion=228; // No herd limit, designation, task or random state is created.
   }
   if(record(input)&&input.schemaVersion===228){
-    const errors=validateSchema(input,228);if(errors.length)throw new Error('Invalid version 228 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,228)?validateSchema(input,228):[]);if(errors.length)throw new Error('Invalid version 228 save: '+errors.join(' '));
     input.schemaVersion=229; // No shelf, cell identity, item, policy or random draw is created.
   }
   if(record(input)&&input.schemaVersion===229){
-    const errors=validateSchema(input,229);if(errors.length)throw new Error('Invalid version 229 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,229)?validateSchema(input,229):[]);if(errors.length)throw new Error('Invalid version 229 save: '+errors.join(' '));
     input.schemaVersion=230; // No candidate, planet, climate or random draw is added.
   }
   if(record(input)&&input.schemaVersion===230){
-    const errors=validateSchema(input,230);if(errors.length)throw new Error('Invalid version 230 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,230)?validateSchema(input,230):[]);if(errors.length)throw new Error('Invalid version 230 save: '+errors.join(' '));
     input.schemaVersion=231; // No capsule, person, possession, clinical clock or random draw is created.
   }
   if(record(input)&&input.schemaVersion===231){
-    const errors=validateSchema(input,231);if(errors.length)throw new Error('Invalid version 231 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,231)?validateSchema(input,231):[]);if(errors.length)throw new Error('Invalid version 231 save: '+errors.join(' '));
     input.schemaVersion=232; // No sleeping spot, role, assignment, clinical record or random draw is created.
   }
   if(record(input)&&input.schemaVersion===232){
-    const errors=validateSchema(input,232);if(errors.length)throw new Error('Invalid version 232 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,232)?validateSchema(input,232):[]);if(errors.length)throw new Error('Invalid version 232 save: '+errors.join(' '));
     input.schemaVersion=233; // No tactical task, medicine, posture, clinical clock or random draw is created.
   }
   if(record(input)&&input.schemaVersion===233){
-    const errors=validateSchema(input,233);if(errors.length)throw new Error('Invalid version 233 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,233)?validateSchema(input,233):[]);if(errors.length)throw new Error('Invalid version 233 save: '+errors.join(' '));
     input.schemaVersion=234; // No forced meal, cargo, need, dining place or random draw is created.
   }
-  if(record(input)&&input.schemaVersion===234){const errors=validateSchema(input,234);if(errors.length)throw new Error('Invalid version234 save: '+errors.join(' '));input.schemaVersion=235;}
-  if(record(input)&&input.schemaVersion===235){const errors=validateSchema(input,235);if(errors.length)throw new Error('Invalid version235 save: '+errors.join(' '));input.schemaVersion=236;}
+  if(record(input)&&input.schemaVersion===234){const errors=(migrationStep(chain,234)?validateSchema(input,234):[]);if(errors.length)throw new Error('Invalid version234 save: '+errors.join(' '));input.schemaVersion=235;}
+  if(record(input)&&input.schemaVersion===235){const errors=(migrationStep(chain,235)?validateSchema(input,235):[]);if(errors.length)throw new Error('Invalid version235 save: '+errors.join(' '));input.schemaVersion=236;}
   if(record(input)&&input.schemaVersion===236){
-    const errors=validateSchema(input,236);if(errors.length)throw new Error('Invalid version236 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,236)?validateSchema(input,236):[]);if(errors.length)throw new Error('Invalid version236 save: '+errors.join(' '));
     input.schemaVersion=237; // No guest admission, person, possession, clinical clock or random draw is created.
   }
   if(record(input)&&input.schemaVersion===237){
-    const errors=validateSchema(input,237);if(errors.length)throw new Error('Invalid version237 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,237)?validateSchema(input,237):[]);if(errors.length)throw new Error('Invalid version237 save: '+errors.join(' '));
     input.schemaVersion=238; // No captured lean, past projectile, clock, person or draw is invented.
   }
-  if(record(input)&&input.schemaVersion===238){const old=validateSchema(input,238);if(old.length)throw new Error('Invalid version238 save: '+old.join(' '));input.schemaVersion=239;}
+  if(record(input)&&input.schemaVersion===238){const old=(migrationStep(chain,238)?validateSchema(input,238):[]);if(old.length)throw new Error('Invalid version238 save: '+old.join(' '));input.schemaVersion=239;}
   if(record(input)&&input.schemaVersion===239){
-    const errors=validateSchema(input,239);if(errors.length)throw new Error('Invalid version239 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,239)?validateSchema(input,239):[]);if(errors.length)throw new Error('Invalid version239 save: '+errors.join(' '));
     input.schemaVersion=240; // No site, people, goods, research, RNG or progress is invented.
   }
   if(record(input)&&input.schemaVersion===240){
-    const errors=validateCampaignSchema(input,240);if(errors.length)throw new Error('Invalid version240 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,240)?validateCampaignSchema(input,240):[]);if(errors.length)throw new Error('Invalid version240 save: '+errors.join(' '));
     input.schemaVersion=241; // No ore, item, recipe permission, research, person or random draw is created.
   }
   if(record(input)&&input.schemaVersion===241){
-    const errors=validateCampaignSchema(input,241);if(errors.length)throw new Error('Invalid version241 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,241)?validateCampaignSchema(input,241):[]);if(errors.length)throw new Error('Invalid version241 save: '+errors.join(' '));
     input.schemaVersion=242; // No calendar, actor, draw, item or past opportunity is granted by loading.
   }
   if(record(input)&&input.schemaVersion===242){
-    const errors=validateCampaignSchema(input,242);if(errors.length)throw new Error('Invalid version242 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,242)?validateCampaignSchema(input,242):[]);if(errors.length)throw new Error('Invalid version242 save: '+errors.join(' '));
     input.schemaVersion=243; // Neither map is regenerated; no silver, person, progress, ID or draw is granted.
   }
   if(record(input)&&input.schemaVersion===243){
-    const errors=validateCampaignSchema(input,243);if(errors.length)throw new Error('Invalid version243 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,243)?validateCampaignSchema(input,243):[]);if(errors.length)throw new Error('Invalid version243 save: '+errors.join(' '));
     input.schemaVersion=244; // No vent, service, resource, temperature, ID or draw is created on either map.
   }
   if(record(input)&&input.schemaVersion===244){
-    const errors=validateCampaignSchema(input,244);if(errors.length)throw new Error('Invalid version244 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,244)?validateCampaignSchema(input,244):[]);if(errors.length)throw new Error('Invalid version244 save: '+errors.join(' '));
     input.schemaVersion=245; // Both maps stay literal: no garment, permission, material, work, ID or random draw.
   }
   if(record(input)&&input.schemaVersion===245){
-    const errors=validateCampaignSchema(input,245);if(errors.length)throw new Error('Invalid version245 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,245)?validateCampaignSchema(input,245):[]);if(errors.length)throw new Error('Invalid version245 save: '+errors.join(' '));
     input.schemaVersion=246; // Both maps remain literal; no marsh, terrain, plant, ID or draw is generated.
   }
   if(record(input)&&input.schemaVersion===246){
-    const errors=validateCampaignSchema(input,246);if(errors.length)throw new Error('Invalid version246 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,246)?validateCampaignSchema(input,246):[]);if(errors.length)throw new Error('Invalid version246 save: '+errors.join(' '));
     input.schemaVersion=247; // Both maps remain literal: no foundation, wood, work, ID or draw is granted.
   }
   if(record(input)&&input.schemaVersion===247){
-    const errors=validateCampaignSchema(input,247);if(errors.length)throw new Error('Invalid version247 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,247)?validateCampaignSchema(input,247):[]);if(errors.length)throw new Error('Invalid version247 save: '+errors.join(' '));
     input.schemaVersion=248; // Both maps remain literal: no food, permission, research, work, ID or draw is granted.
   }
   if(record(input)&&input.schemaVersion===248){
-    const errors=validateCampaignSchema(input,248);if(errors.length)throw new Error('Invalid version248 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,248)?validateCampaignSchema(input,248):[]);if(errors.length)throw new Error('Invalid version248 save: '+errors.join(' '));
     input.schemaVersion=249; // Both maps remain literal: no torch, fuel, work, owner, ID or draw is granted.
   }
   if(record(input)&&input.schemaVersion===249){
-    const errors=validateCampaignSchema(input,249);if(errors.length)throw new Error('Invalid version249 save: '+errors.join(' '));
+    const errors=(migrationStep(chain,249)?validateCampaignSchema(input,249):[]);if(errors.length)throw new Error('Invalid version249 save: '+errors.join(' '));
     input.schemaVersion=250; // Existing groups remain literal: no mixed-provision permission, stock, counter or history is granted.
   }
   if(record(input)&&input.schemaVersion===250){
-    const old=validateCampaignSchema(input,250);if(old.length)throw new Error('Invalid version250 save: '+old.join(' '));
+    const old=(migrationStep(chain,250)?validateCampaignSchema(input,250):[]);if(old.length)throw new Error('Invalid version250 save: '+old.join(' '));
     input.schemaVersion=251; // Both maps remain literal: no disposal bill, garment, work, ID or random draw.
   }
   if(record(input)&&input.schemaVersion===251){
-    const old=validateCampaignSchema(input,251);if(old.length)throw new Error('Invalid version251 save: '+old.join(' '));
+    const old=(migrationStep(chain,251)?validateCampaignSchema(input,251):[]);if(old.length)throw new Error('Invalid version251 save: '+old.join(' '));
     // Both old maps are valid before the prospective calendar is introduced.
     // No old exposure, damage, random draw, item or owner is reconstructed.
     input.schemaVersion=252;
@@ -1819,73 +1842,78 @@ function deserializeCampaignObserved(serialized: string): CampaignState {
       input.secondarySite.map.deterioration=createDeteriorationState(Number(input.secondarySite.map.seed),Number(input.tick));
   }
   if(record(input)&&input.schemaVersion===252){
-    const old=validateCampaignSchema(input,252);if(old.length)throw new Error('Invalid version252 save: '+old.join(' '));
+    const old=(migrationStep(chain,252)?validateCampaignSchema(input,252):[]);if(old.length)throw new Error('Invalid version252 save: '+old.join(' '));
     input.schemaVersion=253; // Both maps/groups remain literal: no freight contract, stock, receipt, baseline or history granted.
   }
   if(record(input)&&input.schemaVersion===253){
-    const old=validateCampaignSchema(input,253);if(old.length)throw new Error('Invalid version253 save: '+old.join(' '));
+    const old=(migrationStep(chain,253)?validateCampaignSchema(input,253):[]);if(old.length)throw new Error('Invalid version253 save: '+old.join(' '));
     input.schemaVersion=254; // Both maps remain literal: no shallow water, bridge, person, stock, ID or draw generated.
   }
-  if(record(input)&&input.schemaVersion===254){const old=validateCampaignSchema(input,254);if(old.length)throw new Error('Invalid version254 save: '+old.join(' '));input.schemaVersion=255;migrateWorldRegistry(input as unknown as World);}
-  if(record(input)&&input.schemaVersion===255){const old=validateCampaignSchema(input,255);if(old.length)throw new Error('Invalid version255 save: '+old.join(' '));input.schemaVersion=256; /* No geography, faction, leader, history or draw is offered. */}
+  if(record(input)&&input.schemaVersion===254){const old=(migrationStep(chain,254)?validateCampaignSchema(input,254):[]);if(old.length)throw new Error('Invalid version254 save: '+old.join(' '));input.schemaVersion=255;migrateWorldRegistry(input as unknown as World);}
+  if(record(input)&&input.schemaVersion===255){const old=(migrationStep(chain,255)?validateCampaignSchema(input,255):[]);if(old.length)throw new Error('Invalid version255 save: '+old.join(' '));input.schemaVersion=256; /* No geography, faction, leader, history or draw is offered. */}
   if(record(input)&&input.schemaVersion===256){
-    const old=validateCampaignSchema(input,256);if(old.length)throw new Error('Invalid version256 save: '+old.join(' '));
+    const old=(migrationStep(chain,256)?validateCampaignSchema(input,256):[]);if(old.length)throw new Error('Invalid version256 save: '+old.join(' '));
     input.schemaVersion=257; // Every map/group stays literal: no admission, actor, permission, task, owner, ID or random draw is created.
   }
-  if(record(input)&&input.schemaVersion===257){const old=validateCampaignSchema(input,257);if(old.length)throw new Error('Invalid version257 save: '+old.join(' '));input.schemaVersion=258; /* No freight, package, receipt, opening, owner or random draw is created. */}
-  if(record(input)&&input.schemaVersion===258){const old=validateCampaignSchema(input,258);if(old.length)throw new Error('Invalid version258 save: '+old.join(' '));input.schemaVersion=259; /* No affiliation, prisoner history, admission2, exit receipt, lifecycle or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===259){const old=validateCampaignSchema(input,259);if(old.length)throw new Error('Invalid version259 save: '+old.join(' '));input.schemaVersion=260; /* No Reform birth, pressure, raid or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===260){const old=validateCampaignSchema(input,260);if(old.length)throw new Error('Invalid version260 save: '+old.join(' '));input.schemaVersion=261; /* Number only. No encounter, story, route action, birth, captivity or role is offered. */}
-  if(record(input)&&input.schemaVersion===261){const old=validateCampaignSchema(input,261);if(old.length)throw new Error('Invalid version261 save: '+old.join(' '));input.schemaVersion=262; /* Number only after strict original-map validation. No fauna/climate/encounter marker, actor or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===262){const old=validateCampaignSchema(input,262);if(old.length)throw new Error('Invalid version262 save: '+old.join(' '));input.schemaVersion=263; /* Number only, after strict validation of every original262 map. No Site, defence, held Thing, quest calendar, population watcher, arrival or history is offered. */}
-  if(record(input)&&input.schemaVersion===263){const old=validateCampaignSchema(input,263);if(old.length)throw new Error('Invalid version263 save: '+old.join(' '));input.schemaVersion=264; /* Number only. No research, generator, sprayer, material, heat or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===264){const old=validateCampaignSchema(input,264);if(old.length)throw new Error('Invalid version264 save: '+old.join(' '));input.schemaVersion=265; /* Number only. No hops, wort, beer, fermentation, policy, alcohol, research, history or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===265){const old=validateCampaignSchema(input,265);if(old.length)throw new Error('Invalid version265 save: '+old.join(' '));input.schemaVersion=266; /* Number only. No past caravan rest, fatigue gain, comfort or service is invented. */}
-  if(record(input)&&input.schemaVersion===266){const old=validateCampaignSchema(input,266);if(old.length)throw new Error('Invalid version266 save: '+old.join(' '));input.schemaVersion=267; /* Number only. No forge, armor, ingredient, policy, research or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===267){const old=validateCampaignSchema(input,267);if(old.length)throw new Error('Invalid version267 save: '+old.join(' '));input.schemaVersion=268; /* Number only. No knife, receipt, bill, permission, progress, owner, ID or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===268){const old=validateCampaignSchema(input,268);if(old.length)throw new Error('Invalid version268 save: '+old.join(' '));input.schemaVersion=269; /* Number only: no mace, tool, bill, filter, work, resource, history or random draw. */}
-  if(record(input)&&input.schemaVersion===269){const old=validateCampaignSchema(input,269);if(old.length)throw new Error('Invalid version269 save: '+old.join(' '));input.schemaVersion=270; /* Number only: no long-blade research, sword, work, owner, progress or random draw. */}
-  if(record(input)&&input.schemaVersion===270){const old=validateCampaignSchema(input,270);if(old.length)throw new Error('Invalid version270 save: '+old.join(' '));input.schemaVersion=271; /* Number only: no cryptosleep research, holder, clinical anchor, memory pause, person, goods or random draw. */}
-  if(record(input)&&input.schemaVersion===271){const old=validateCampaignSchema(input,271);if(old.length)throw new Error('Invalid version271 save: '+old.join(' '));input.schemaVersion=272; /* Number only: no spear, work, research, progress, person, goods or random draw. */}
-  if(record(input)&&input.schemaVersion===272){const old=validateCampaignSchema(input,272);if(old.length)throw new Error('Invalid version272 save: '+old.join(' '));input.schemaVersion=273; /* Number only: no implant, research, work, surgery, dose, injury, owner or random draw. */}
-  if(record(input)&&input.schemaVersion===273){const old=validateCampaignSchema(input,273);if(old.length)throw new Error('Invalid version273 save: '+old.join(' '));input.schemaVersion=274; /* Number only: no gift, price, goodwill, relation transition, receipt, person, goods or random draw. */}
-  if(record(input)&&input.schemaVersion===274){const old=validateCampaignSchema(input,274);if(old.length)throw new Error('Invalid version274 save: '+old.join(' '));input.schemaVersion=275; /* Number only: no ship research, building, startup, threat, time, power, goods or random draw. */}
-  if(record(input)&&input.schemaVersion===275){const old=validateCampaignSchema(input,275);if(old.length)throw new Error('Invalid version275 save: '+old.join(' '));input.schemaVersion=276; /* Number only: no hull, engine, research, work, power, network, goods, time or random draw. */}
-  if(record(input)&&input.schemaVersion===276){const old=validateCampaignSchema(input,276);if(old.length)throw new Error('Invalid version276 save: '+old.join(' '));input.schemaVersion=277; /* Number only: no spatial casket, research, task, suspension, occupant, goods, time, power or random draw. */}
-  if(record(input)&&input.schemaVersion===277){const old=validateCampaignSchema(input,277);if(old.length)throw new Error('Invalid version277 save: '+old.join(' '));input.schemaVersion=278; /* Number only after every original map is validated: no reserve filter, bill, item, work, time or random draw. */}
-  if(record(input)&&input.schemaVersion===278){const old=validateCampaignSchema(input,278);if(old.length)throw new Error('Invalid version278 save: '+old.join(' '));input.schemaVersion=279; /* Number only: preserve objects, custody, receipts, sampled wealth, bills, time and random draws. */}
-  if(record(input)&&input.schemaVersion===279){const old=validateCampaignSchema(input,279);if(old.length)throw new Error('Invalid version279 save: '+old.join(' '));input.schemaVersion=280; /* Number only: no surgery request, patient/bed role, medical state, inventory, dossier, time or random draw. */}
-  if(record(input)&&input.schemaVersion===280){const old=validateCampaignSchema(input,280);if(old.length)throw new Error('Invalid version280 save: '+old.join(' '));input.schemaVersion=281; /* Number only: no terrain, rock identity, smoothing intention/progress, skill, inventory, time or random draw. */}
-  if(record(input)&&input.schemaVersion===281){const old=validateCampaignSchema(input,281);if(old.length)throw new Error('Invalid version281 save: '+old.join(' '));input.schemaVersion=282; /* Number only: no animal training, learned step, intent, area, cargo, master, clock, food or random draw. */}
-  if(record(input)&&input.schemaVersion===282){const old=validateCampaignSchema(input,282);if(old.length)throw new Error('Invalid version282 save: '+old.join(' '));input.schemaVersion=283; /* Number only: no bill worker, skill range, person, work, item, date or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===283){const old=validateCampaignSchema(input,283);if(old.length)throw new Error('Invalid version283 save: '+old.join(' '));input.schemaVersion=284; /* Number only: no quest, reward, worker, cloth provenance, person, item, clock or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===284){const old=validateCampaignSchema284(input);if(old.length)throw new Error('Invalid version284 save: '+old.join(' '));input.schemaVersion=285; /* Number only: no couple task, opportunity, cooldown, memory, person, item, clock or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===285){const old=validateCampaignSchema285(input);if(old.length)throw new Error('Invalid version285 save: '+old.join(' '));input.schemaVersion=286; /* Number only: no storage group, link, private policy, item, clock, skill or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===286){const old=validateCampaignSchema286(input);if(old.length)throw new Error('Invalid version286 save: '+old.join(' '));input.schemaVersion=287; /* Number only: no animal area, return, movement, work, clock, goods or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===287){const old=validateCampaignSchema287(input);if(old.length)throw new Error('Invalid version287 save: '+old.join(' '));input.schemaVersion=288; /* Number only: no animal refuge, route, wait, health, owner, cargo, clock, work or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===288){const old=validateCampaignSchema288(input);if(old.length)throw new Error('Invalid version288 save: '+old.join(' '));input.schemaVersion=289; /* Number only: no reserve pause, policy, product, work, owner, clock or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===289){const old=validateCampaignSchema289(input);if(old.length)throw new Error('Invalid version289 save: '+old.join(' '));input.schemaVersion=290; /* Number only: no apparatus, research, foam, protection, task, wave, option or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===290){const old=validateCampaignSchema290(input);if(old.length)throw new Error('Invalid version290 save: '+old.join(' '));input.schemaVersion=291; /* Number only: no research, choice, tree, sown origin, work, life, XP or random draw is offered. */}
-  if(record(input)&&Number(input.schemaVersion)===291){const old=validateCampaignSchema291(input);if(old.length)throw new Error('Invalid version291 save: '+old.join(' '));input.schemaVersion=292; /* Number only: no Party, occasion, pending, duration, presence, memory, task or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===292){const old=validateCampaignSchema292(input);if(old.length)throw new Error('Invalid version292 save: '+old.join(' '));input.schemaVersion=293; /* Number only: no offer, tag, outcome, diplomat, XP, relation, loot, attack or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===293){const old=validateCampaignSchema293(input);if(old.length)throw new Error('Invalid version293 save: '+old.join(' '));input.schemaVersion=294; /* Number only: no condition calendar, random draw, cursor, exposure, resistance, plant damage or rot is offered. */}
-  if(record(input)&&input.schemaVersion===294){const old=validateCampaignSchema294(input);if(old.length)throw new Error('Invalid version294 save: '+old.join(' '));input.schemaVersion=295; /* Number only: no book, stock, policy, tolerance, task, XP, mood, duration or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===295){const old=validateCampaignSchema295(input);if(old.length)throw new Error('Invalid version295 save: '+old.join(' '));input.schemaVersion=296; /* Number only: no wall-door plan, identity, work origin, designation, material, restitution or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===296){const old=validateCampaignSchema(input,296);if(old.length)throw new Error('Invalid version296 save: '+old.join(' '));input.schemaVersion=297;input.phaseCore297=0;adoptMigratedCorePathBudgets297(input); /* Prospective phase0 only: captured pace, urgency, edge, coordinate, owner, work, time and random draw unchanged. */}
-  if(record(input)&&input.schemaVersion===297){const old=validateCampaignSchema(input,297);if(old.length)throw new Error('Invalid version297 save: '+old.join(' '));input.schemaVersion=298; /* Number only: preserve committed Core phase, consumed per-map path budgets, captured owners, routes, RNG and IDs; no AI/content/departure grant. */}
-  if(record(input)&&input.schemaVersion===298){const old=validateCampaignSchema(input,298);if(old.length)throw new Error('Invalid version298 save: '+old.join(' '));input.schemaVersion=299; /* Number only: preserve original data, physical phase, routes, owners, RNG and IDs. Missing ingestion/provider history stays absent, never inferred. */}
-  if(record(input)&&input.schemaVersion===299){const old=validateCampaignSchema(input,299);if(old.length)throw new Error('Invalid version299 save: '+old.join(' '));input.schemaVersion=300; /* Number only: keep the existing ordinary/clinical wander bit, committed phase, paths, owners, RNG and IDs. Do not create an idle task or reset history. */}
-  if(record(input)&&input.schemaVersion===300){const old=validateCampaignSchema(input,300);if(old.length)throw new Error('Invalid version300 save: '+old.join(' '));input.schemaVersion=301; /* Number only. Preserve every owner, task, work fraction, committed phase, RNG and identity. Missing Thing counter, Frame work/toil and posture history stay absent. */}
-  if(record(input)&&input.schemaVersion===301){const old=validateCampaignSchema(input,301);if(old.length)throw new Error('Invalid version301 save: '+old.join(' '));input.schemaVersion=302; /* Number only: Smithing and Tailoring follow each pawn's crafting priority until set apart. No priority, bill, task, owner, phase or random draw is offered. */}
-  if(record(input)&&input.schemaVersion===302){const old=validateCampaignSchema(input,302);if(old.length)throw new Error('Invalid version302 save: '+old.join(' '));input.schemaVersion=303; /* Number only: a step already captured keeps its cost; the door-to-door surcharge applies to steps started after loading. No edge, owner, phase or random draw is changed. */}
-  if(record(input)&&input.schemaVersion===303){const old=validateCampaignSchema(input,303);if(old.length)throw new Error('Invalid version303 save: '+old.join(' '));input.schemaVersion=304; /* Number only: an animal's current wander job is kept; the RimWorld idle wander applies to its next decision. No edge, owner, phase or random draw is changed. */}
+  if(record(input)&&input.schemaVersion===257){const old=(migrationStep(chain,257)?validateCampaignSchema(input,257):[]);if(old.length)throw new Error('Invalid version257 save: '+old.join(' '));input.schemaVersion=258; /* No freight, package, receipt, opening, owner or random draw is created. */}
+  if(record(input)&&input.schemaVersion===258){const old=(migrationStep(chain,258)?validateCampaignSchema(input,258):[]);if(old.length)throw new Error('Invalid version258 save: '+old.join(' '));input.schemaVersion=259; /* No affiliation, prisoner history, admission2, exit receipt, lifecycle or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===259){const old=(migrationStep(chain,259)?validateCampaignSchema(input,259):[]);if(old.length)throw new Error('Invalid version259 save: '+old.join(' '));input.schemaVersion=260; /* No Reform birth, pressure, raid or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===260){const old=(migrationStep(chain,260)?validateCampaignSchema(input,260):[]);if(old.length)throw new Error('Invalid version260 save: '+old.join(' '));input.schemaVersion=261; /* Number only. No encounter, story, route action, birth, captivity or role is offered. */}
+  if(record(input)&&input.schemaVersion===261){const old=(migrationStep(chain,261)?validateCampaignSchema(input,261):[]);if(old.length)throw new Error('Invalid version261 save: '+old.join(' '));input.schemaVersion=262; /* Number only after strict original-map validation. No fauna/climate/encounter marker, actor or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===262){const old=(migrationStep(chain,262)?validateCampaignSchema(input,262):[]);if(old.length)throw new Error('Invalid version262 save: '+old.join(' '));input.schemaVersion=263; /* Number only, after strict validation of every original262 map. No Site, defence, held Thing, quest calendar, population watcher, arrival or history is offered. */}
+  if(record(input)&&input.schemaVersion===263){const old=(migrationStep(chain,263)?validateCampaignSchema(input,263):[]);if(old.length)throw new Error('Invalid version263 save: '+old.join(' '));input.schemaVersion=264; /* Number only. No research, generator, sprayer, material, heat or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===264){const old=(migrationStep(chain,264)?validateCampaignSchema(input,264):[]);if(old.length)throw new Error('Invalid version264 save: '+old.join(' '));input.schemaVersion=265; /* Number only. No hops, wort, beer, fermentation, policy, alcohol, research, history or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===265){const old=(migrationStep(chain,265)?validateCampaignSchema(input,265):[]);if(old.length)throw new Error('Invalid version265 save: '+old.join(' '));input.schemaVersion=266; /* Number only. No past caravan rest, fatigue gain, comfort or service is invented. */}
+  if(record(input)&&input.schemaVersion===266){const old=(migrationStep(chain,266)?validateCampaignSchema(input,266):[]);if(old.length)throw new Error('Invalid version266 save: '+old.join(' '));input.schemaVersion=267; /* Number only. No forge, armor, ingredient, policy, research or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===267){const old=(migrationStep(chain,267)?validateCampaignSchema(input,267):[]);if(old.length)throw new Error('Invalid version267 save: '+old.join(' '));input.schemaVersion=268; /* Number only. No knife, receipt, bill, permission, progress, owner, ID or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===268){const old=(migrationStep(chain,268)?validateCampaignSchema(input,268):[]);if(old.length)throw new Error('Invalid version268 save: '+old.join(' '));input.schemaVersion=269; /* Number only: no mace, tool, bill, filter, work, resource, history or random draw. */}
+  if(record(input)&&input.schemaVersion===269){const old=(migrationStep(chain,269)?validateCampaignSchema(input,269):[]);if(old.length)throw new Error('Invalid version269 save: '+old.join(' '));input.schemaVersion=270; /* Number only: no long-blade research, sword, work, owner, progress or random draw. */}
+  if(record(input)&&input.schemaVersion===270){const old=(migrationStep(chain,270)?validateCampaignSchema(input,270):[]);if(old.length)throw new Error('Invalid version270 save: '+old.join(' '));input.schemaVersion=271; /* Number only: no cryptosleep research, holder, clinical anchor, memory pause, person, goods or random draw. */}
+  if(record(input)&&input.schemaVersion===271){const old=(migrationStep(chain,271)?validateCampaignSchema(input,271):[]);if(old.length)throw new Error('Invalid version271 save: '+old.join(' '));input.schemaVersion=272; /* Number only: no spear, work, research, progress, person, goods or random draw. */}
+  if(record(input)&&input.schemaVersion===272){const old=(migrationStep(chain,272)?validateCampaignSchema(input,272):[]);if(old.length)throw new Error('Invalid version272 save: '+old.join(' '));input.schemaVersion=273; /* Number only: no implant, research, work, surgery, dose, injury, owner or random draw. */}
+  if(record(input)&&input.schemaVersion===273){const old=(migrationStep(chain,273)?validateCampaignSchema(input,273):[]);if(old.length)throw new Error('Invalid version273 save: '+old.join(' '));input.schemaVersion=274; /* Number only: no gift, price, goodwill, relation transition, receipt, person, goods or random draw. */}
+  if(record(input)&&input.schemaVersion===274){const old=(migrationStep(chain,274)?validateCampaignSchema(input,274):[]);if(old.length)throw new Error('Invalid version274 save: '+old.join(' '));input.schemaVersion=275; /* Number only: no ship research, building, startup, threat, time, power, goods or random draw. */}
+  if(record(input)&&input.schemaVersion===275){const old=(migrationStep(chain,275)?validateCampaignSchema(input,275):[]);if(old.length)throw new Error('Invalid version275 save: '+old.join(' '));input.schemaVersion=276; /* Number only: no hull, engine, research, work, power, network, goods, time or random draw. */}
+  if(record(input)&&input.schemaVersion===276){const old=(migrationStep(chain,276)?validateCampaignSchema(input,276):[]);if(old.length)throw new Error('Invalid version276 save: '+old.join(' '));input.schemaVersion=277; /* Number only: no spatial casket, research, task, suspension, occupant, goods, time, power or random draw. */}
+  if(record(input)&&input.schemaVersion===277){const old=(migrationStep(chain,277)?validateCampaignSchema(input,277):[]);if(old.length)throw new Error('Invalid version277 save: '+old.join(' '));input.schemaVersion=278; /* Number only after every original map is validated: no reserve filter, bill, item, work, time or random draw. */}
+  if(record(input)&&input.schemaVersion===278){const old=(migrationStep(chain,278)?validateCampaignSchema(input,278):[]);if(old.length)throw new Error('Invalid version278 save: '+old.join(' '));input.schemaVersion=279; /* Number only: preserve objects, custody, receipts, sampled wealth, bills, time and random draws. */}
+  if(record(input)&&input.schemaVersion===279){const old=(migrationStep(chain,279)?validateCampaignSchema(input,279):[]);if(old.length)throw new Error('Invalid version279 save: '+old.join(' '));input.schemaVersion=280; /* Number only: no surgery request, patient/bed role, medical state, inventory, dossier, time or random draw. */}
+  if(record(input)&&input.schemaVersion===280){const old=(migrationStep(chain,280)?validateCampaignSchema(input,280):[]);if(old.length)throw new Error('Invalid version280 save: '+old.join(' '));input.schemaVersion=281; /* Number only: no terrain, rock identity, smoothing intention/progress, skill, inventory, time or random draw. */}
+  if(record(input)&&input.schemaVersion===281){const old=(migrationStep(chain,281)?validateCampaignSchema(input,281):[]);if(old.length)throw new Error('Invalid version281 save: '+old.join(' '));input.schemaVersion=282; /* Number only: no animal training, learned step, intent, area, cargo, master, clock, food or random draw. */}
+  if(record(input)&&input.schemaVersion===282){const old=(migrationStep(chain,282)?validateCampaignSchema(input,282):[]);if(old.length)throw new Error('Invalid version282 save: '+old.join(' '));input.schemaVersion=283; /* Number only: no bill worker, skill range, person, work, item, date or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===283){const old=(migrationStep(chain,283)?validateCampaignSchema(input,283):[]);if(old.length)throw new Error('Invalid version283 save: '+old.join(' '));input.schemaVersion=284; /* Number only: no quest, reward, worker, cloth provenance, person, item, clock or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===284){const old=(migrationStep(chain,284)?validateCampaignSchema284(input):[]);if(old.length)throw new Error('Invalid version284 save: '+old.join(' '));input.schemaVersion=285; /* Number only: no couple task, opportunity, cooldown, memory, person, item, clock or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===285){const old=(migrationStep(chain,285)?validateCampaignSchema285(input):[]);if(old.length)throw new Error('Invalid version285 save: '+old.join(' '));input.schemaVersion=286; /* Number only: no storage group, link, private policy, item, clock, skill or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===286){const old=(migrationStep(chain,286)?validateCampaignSchema286(input):[]);if(old.length)throw new Error('Invalid version286 save: '+old.join(' '));input.schemaVersion=287; /* Number only: no animal area, return, movement, work, clock, goods or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===287){const old=(migrationStep(chain,287)?validateCampaignSchema287(input):[]);if(old.length)throw new Error('Invalid version287 save: '+old.join(' '));input.schemaVersion=288; /* Number only: no animal refuge, route, wait, health, owner, cargo, clock, work or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===288){const old=(migrationStep(chain,288)?validateCampaignSchema288(input):[]);if(old.length)throw new Error('Invalid version288 save: '+old.join(' '));input.schemaVersion=289; /* Number only: no reserve pause, policy, product, work, owner, clock or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===289){const old=(migrationStep(chain,289)?validateCampaignSchema289(input):[]);if(old.length)throw new Error('Invalid version289 save: '+old.join(' '));input.schemaVersion=290; /* Number only: no apparatus, research, foam, protection, task, wave, option or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===290){const old=(migrationStep(chain,290)?validateCampaignSchema290(input):[]);if(old.length)throw new Error('Invalid version290 save: '+old.join(' '));input.schemaVersion=291; /* Number only: no research, choice, tree, sown origin, work, life, XP or random draw is offered. */}
+  if(record(input)&&Number(input.schemaVersion)===291){const old=(migrationStep(chain,291)?validateCampaignSchema291(input):[]);if(old.length)throw new Error('Invalid version291 save: '+old.join(' '));input.schemaVersion=292; /* Number only: no Party, occasion, pending, duration, presence, memory, task or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===292){const old=(migrationStep(chain,292)?validateCampaignSchema292(input):[]);if(old.length)throw new Error('Invalid version292 save: '+old.join(' '));input.schemaVersion=293; /* Number only: no offer, tag, outcome, diplomat, XP, relation, loot, attack or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===293){const old=(migrationStep(chain,293)?validateCampaignSchema293(input):[]);if(old.length)throw new Error('Invalid version293 save: '+old.join(' '));input.schemaVersion=294; /* Number only: no condition calendar, random draw, cursor, exposure, resistance, plant damage or rot is offered. */}
+  if(record(input)&&input.schemaVersion===294){const old=(migrationStep(chain,294)?validateCampaignSchema294(input):[]);if(old.length)throw new Error('Invalid version294 save: '+old.join(' '));input.schemaVersion=295; /* Number only: no book, stock, policy, tolerance, task, XP, mood, duration or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===295){const old=(migrationStep(chain,295)?validateCampaignSchema295(input):[]);if(old.length)throw new Error('Invalid version295 save: '+old.join(' '));input.schemaVersion=296; /* Number only: no wall-door plan, identity, work origin, designation, material, restitution or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===296){const old=(migrationStep(chain,296)?validateCampaignSchema(input,296):[]);if(old.length)throw new Error('Invalid version296 save: '+old.join(' '));input.schemaVersion=297;input.phaseCore297=0;adoptMigratedCorePathBudgets297(input); /* Prospective phase0 only: captured pace, urgency, edge, coordinate, owner, work, time and random draw unchanged. */}
+  if(record(input)&&input.schemaVersion===297){const old=(migrationStep(chain,297)?validateCampaignSchema(input,297):[]);if(old.length)throw new Error('Invalid version297 save: '+old.join(' '));input.schemaVersion=298; /* Number only: preserve committed Core phase, consumed per-map path budgets, captured owners, routes, RNG and IDs; no AI/content/departure grant. */}
+  if(record(input)&&input.schemaVersion===298){const old=(migrationStep(chain,298)?validateCampaignSchema(input,298):[]);if(old.length)throw new Error('Invalid version298 save: '+old.join(' '));input.schemaVersion=299; /* Number only: preserve original data, physical phase, routes, owners, RNG and IDs. Missing ingestion/provider history stays absent, never inferred. */}
+  if(record(input)&&input.schemaVersion===299){const old=(migrationStep(chain,299)?validateCampaignSchema(input,299):[]);if(old.length)throw new Error('Invalid version299 save: '+old.join(' '));input.schemaVersion=300; /* Number only: keep the existing ordinary/clinical wander bit, committed phase, paths, owners, RNG and IDs. Do not create an idle task or reset history. */}
+  if(record(input)&&input.schemaVersion===300){const old=(migrationStep(chain,300)?validateCampaignSchema(input,300):[]);if(old.length)throw new Error('Invalid version300 save: '+old.join(' '));input.schemaVersion=301; /* Number only. Preserve every owner, task, work fraction, committed phase, RNG and identity. Missing Thing counter, Frame work/toil and posture history stay absent. */}
+  if(record(input)&&input.schemaVersion===301){const old=(migrationStep(chain,301)?validateCampaignSchema(input,301):[]);if(old.length)throw new Error('Invalid version301 save: '+old.join(' '));input.schemaVersion=302; /* Number only: Smithing and Tailoring follow each pawn's crafting priority until set apart. No priority, bill, task, owner, phase or random draw is offered. */}
+  if(record(input)&&input.schemaVersion===302){const old=(migrationStep(chain,302)?validateCampaignSchema(input,302):[]);if(old.length)throw new Error('Invalid version302 save: '+old.join(' '));input.schemaVersion=303; /* Number only: a step already captured keeps its cost; the door-to-door surcharge applies to steps started after loading. No edge, owner, phase or random draw is changed. */}
+  if(record(input)&&input.schemaVersion===303){const old=(migrationStep(chain,303)?validateCampaignSchema(input,303):[]);if(old.length)throw new Error('Invalid version303 save: '+old.join(' '));input.schemaVersion=304; /* Number only: an animal's current wander job is kept; the RimWorld idle wander applies to its next decision. No edge, owner, phase or random draw is changed. */}
   reportLoadProgress({stage:'validate',completed:0,total:2});
   const errors = validateWorld(input); if (errors.length) throw new Error(`Invalid save: ${errors.join(' ')}`);
   const world = input as World;
+  const resources=hasLoadedRoot(world)?world.resources:undefined;
   if(hasLoadedRoot(world))consolidateLooseRocks(world);
   reportLoadProgress({stage:'validate',completed:1,total:2});
-  const normalizedErrors = validateWorld(world);
-  if (normalizedErrors.length) throw new Error(`Invalid consolidated save: ${normalizedErrors.join(' ')}`);
+  // The world validated above is validated again only when merging loose rocks
+  // replaced its resources (or with setMigrationStepValidation).
+  if(verifyMigrationSteps()||(hasLoadedRoot(world)&&world.resources!==resources)){
+    const normalizedErrors = validateWorld(world);
+    if (normalizedErrors.length) throw new Error(`Invalid consolidated save: ${normalizedErrors.join(' ')}`);
+  }
   reportLoadProgress({stage:'restore',completed:0,total:1});
   freezeAdmittedNativeWorldPawnOrder256(world);
   freezeAdmittedRiverWaterCampaign256(world);
