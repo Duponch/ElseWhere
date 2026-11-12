@@ -37,6 +37,10 @@ function terrainBlockedEntry(tiles:readonly World['tiles'][number][]):{mask:Uint
   return cached;
 }
 export function terrainBlockedMask(tiles:readonly World['tiles'][number][]):Uint8Array {return terrainBlockedEntry(tiles).mask;}
+/** The shared walkability mask with its content revision as of its last
+ * validation (terrainBlockedMask), without validating it again: for a caller
+ * that has just read the mask and replaces no tile meanwhile. */
+export function terrainBlockedLastState(tiles:readonly World['tiles'][number][]):{readonly mask:Uint8Array;readonly revision:number}|undefined {return terrainMasks.get(tiles);}
 const isSolidBlocker=(kind:World['structures'][number]['kind'],legacy:boolean):boolean=>kind==='wall'||kind==='cooler'||kind==='vent'||kind==='electric-crematorium'||isShipPartKind276(kind)||kind==='geothermal-generator'||kind==='nutrient-paste-dispenser'||legacy&&kind==='table';
 /* Per (immutable) shared geometry: the solid structure cells (kind only) and
  * the passage doors, plus the union of the terrain mask and those cells for

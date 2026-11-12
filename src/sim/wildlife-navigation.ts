@@ -14,14 +14,14 @@ import {finishSnowStep} from './snow-surface.ts';
 import {animalBodySize} from './animal-life.ts';
 import { mergeSlowIntervals,travelEnd } from './travel-timing.ts';
 import { weatherMoveFactor } from './weather-exposure.ts';
-import { routeToCell,hasReachableCell,inBounds,terrainBlockedMask } from './pathfinding.ts';
+import { routeToCell,hasReachableCell,inBounds,terrainBlockedMask,terrainBlockedLastState } from './pathfinding.ts';
 import { jobBlocksTransit } from './construction-rules.ts';
 import { footprintCells } from './definitions.ts';
 import { animalNavigationCosts,captureStandability,navigationCosts,furnitureDelay,knownSpikeTrapCosts,lazyAnimalNavigationCosts } from './furniture-travel.ts';
 import { addFireNavigationCosts } from './fire-navigation.ts';
 import { doorOpenness,isPassageDoor } from './door-rules.ts';
 import { WeightedSearch,WeightedSearchScratch } from './weighted-search.ts';
-import { scaleNavigationCosts } from './navigation-costs.ts';
+import { scaleNavigationCosts,type NavigationCostLookup } from './navigation-costs.ts';
 import {captureAnimalAreaPolicy287,type AnimalAreaPolicy287} from './animal-area-policy-287.ts';
 import { meleeContact } from './melee-space.ts';
 import {START_STRUCTURE_PHYSICS_256} from './player-start-physics-256.ts';
@@ -50,12 +50,39 @@ function rankedFood(world:World,cells:Cell[],search:WeightedSearch,rank:(c:Cell)
  * tick and shared by every wandering animal of that tick: they depend on the
  * animal only through its spike-trap knowledge and, for ducks, its water
  * terrain (the key); the same geometry is required. */
-const idleCostsByWorld=new WeakMap<World,{tick:number;geometry:StructureNavigationGeometry;costs:Map<string,ReturnType<typeof navigationCosts>>}>();
-function idleWanderCosts(world:World,key:string,geometry:StructureNavigationGeometry,compute:()=>ReturnType<typeof navigationCosts>):ReturnType<typeof navigationCosts> {
+const idleCostsByWorld=new WeakMap<World,{tick:number;geometry:StructureNavigationGeometry;costs:Map<string,ReturnType<typeof navigationCosts>>;scaled:Map<string,NavigationCostLookup|undefined>}>();
+function idleWanderEntry(world:World,geometry:StructureNavigationGeometry) {
   let entry=idleCostsByWorld.get(world);
-  if(!entry||entry.tick!==world.tick||entry.geometry!==geometry){entry={tick:world.tick,geometry,costs:new Map()};idleCostsByWorld.set(world,entry);}
+  if(!entry||entry.tick!==world.tick||entry.geometry!==geometry){entry={tick:world.tick,geometry,costs:new Map(),scaled:new Map()};idleCostsByWorld.set(world,entry);}
+  return entry;
+}
+function idleWanderCosts(world:World,key:string,geometry:StructureNavigationGeometry,compute:()=>ReturnType<typeof navigationCosts>):ReturnType<typeof navigationCosts> {
+  const entry=idleWanderEntry(world,geometry);
   let costs=entry.costs.get(key);if(!costs){costs=compute();entry.costs.set(key,costs);}
   return costs;
+}
+/* The x3 search costs of one key of the tick, each cell's value kept once
+ * read: the lookup is a function of snapshots taken when the costs were built
+ * (lazyAnimalNavigationCosts), so a kept value is the value read again. The
+ * arrays are reused from tick to tick (a new stamp per costs object). */
+interface CostMemo {stamp:Uint32Array;defined:Uint8Array;value:Float64Array;epoch:number}
+const costMemos=new WeakMap<World,Map<string,CostMemo>>();
+function idleScaledCosts(world:World,key:string,geometry:StructureNavigationGeometry,costs:NavigationCostLookup|undefined):NavigationCostLookup|undefined {
+  const entry=idleWanderEntry(world,geometry);
+  if(entry.scaled.has(key))return entry.scaled.get(key);
+  const inner=scaleNavigationCosts(costs,3);let result=inner;
+  if(inner){
+    const size=world.width*world.height;let memos=costMemos.get(world);if(!memos){memos=new Map();costMemos.set(world,memos);}
+    let memo=memos.get(key);if(!memo||memo.stamp.length!==size){memo={stamp:new Uint32Array(size),defined:new Uint8Array(size),value:new Float64Array(size),epoch:0};memos.set(key,memo);}
+    if(memo.epoch>=0xfffffffe){memo.stamp.fill(0);memo.epoch=0;}
+    const epoch=++memo.epoch,{stamp,defined,value}=memo;
+    result={get(i){
+      if(!(i>=0&&i<size))return inner.get(i);
+      if(stamp[i]===epoch)return defined[i]?value[i]:undefined;
+      const v=inner.get(i);stamp[i]=epoch;if(v===undefined)defined[i]=0;else{defined[i]=1;value[i]=v;}return v;
+    },has:i=>inner.has(i),maximum:inner.maximum};
+  }
+  entry.scaled.set(key,result);return result;
 }
 /* One reusable search scratch per world for the idle wander searches, which
  * end with their decision (release). A search started while it is held gets
@@ -109,7 +136,22 @@ const isPassageDoorStructure=(s:World['structures'][number]):boolean=>isPassageD
  * unless passable or flying, legacy tables): kinds never change, so the set is
  * fixed for a shared geometry. `mask` holds the in-map cells, `cells` every
  * index exactly as the former per-reader Set received them. */
-interface AnimalStaticSolids {width:number;size:number;fence:boolean;legacy:boolean;mask:Uint8Array;cells:Int32Array}
+interface AnimalStaticSolids {width:number;size:number;fence:boolean;legacy:boolean;mask:Uint8Array;cells:Int32Array;base?:{terrain:Uint8Array;revision:number;data:Uint8Array}}
+/* The non-flying route grid before live doors and transit jobs: the shared
+ * terrain mask (copied as the former per-reader grid received it) with the
+ * in-map solid kind cells, kept while that mask's content revision holds.
+ * `terrain` was just read for this pass, in which no tile is replaced. */
+function animalRouteBase(world:World,solids:AnimalStaticSolids,terrain:Uint8Array):Uint8Array {
+  const size=world.width*world.height,state=terrainBlockedLastState(world.tiles);
+  if(!state||state.mask!==terrain){const data=new Uint8Array(size);data.set(terrain.length<=size?terrain:terrain.subarray(0,size));for(let i=0;i<size;i++)if(solids.mask[i])data[i]=1;return data;}
+  let base=solids.base;
+  if(!base||base.terrain!==terrain||base.revision!==state.revision){
+    const data=new Uint8Array(size);data.set(terrain.length<=size?terrain:terrain.subarray(0,size));
+    for(let i=0;i<size;i++)if(solids.mask[i])data[i]=1;
+    base=solids.base={terrain,revision:state.revision,data};
+  }
+  return base.data;
+}
 const animalSolidsByGeometry=new WeakMap<StructureNavigationGeometry,AnimalStaticSolids[]>();
 function animalStaticSolids(world:World,geometry:StructureNavigationGeometry,fence:boolean,legacy:boolean):AnimalStaticSolids {
   const size=world.width*world.height;let list=animalSolidsByGeometry.get(geometry);if(!list){list=[];animalSolidsByGeometry.set(geometry,list);}
@@ -165,9 +207,11 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
   const routeGrid=()=>{
     if(!blocked){blocked=new Uint8Array(width*world.height);
       // Non-flying terrainFree is exactly naturalTerrainWalkable256: reuse the shared mask.
-      if(!flying){const mask=terrainMask();blocked.set(mask.length<=blocked.length?mask:mask.subarray(0,blocked.length));}
-      else for(let i=0;i<world.tiles.length;i++){const t=world.tiles[i]!.terrain;if(!terrainFree(t))blocked[i]=1;}
-      for(const i of solidKinds.cells)blocked[i]=1;for(const i of solids)blocked[i]=1;}
+      // With the in-map solid kind cells already in the shared base.
+      if(!flying)blocked.set(animalRouteBase(world,solidKinds,terrainMask()));
+      else{for(let i=0;i<world.tiles.length;i++){const t=world.tiles[i]!.terrain;if(!terrainFree(t))blocked[i]=1;}
+        for(const i of solidKinds.cells)blocked[i]=1;}
+      for(const i of solids)blocked[i]=1;}
     // A physical reader retains geometry, never a frozen door phase. Route
     // queries refresh only the sparse door entries; point steps scan no map.
     if(liveDoors)for(const index of liveDoors.keys())blocked[index]=Number(solidAt(index)||!terrainFree(world.tiles[index]?.terrain)||liveDoorBlocked(index));
@@ -299,10 +343,11 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
       // of navigationCosts depends on an animal); an animal knowing the traps
       // reads the same costs with the known traps' additive layer on top.
       const variant=duck?(flying?'flying':'duck'):'land',plain=()=>idleWanderCosts(world,`${variant}:false`,geometry,()=>lazyAnimalNavigationCosts(world,override,geometry));
-      const n=spikeTrapKnowsOf(world,a)?idleWanderCosts(world,`${variant}:true`,geometry,()=>{const base=plain(),traps=knownSpikeTrapCosts(world,geometry);
+      const knows=spikeTrapKnowsOf(world,a),key=`${variant}:${knows}`;
+      const n=knows?idleWanderCosts(world,key,geometry,()=>{const base=plain(),traps=knownSpikeTrapCosts(world,geometry);
         return {...base,costs:addFireNavigationCosts(base.costs,traps),floors:addFireNavigationCosts(base.floors,traps)!};}):plain();
       const policy=area(a),scratch=idleScratch(world),pooled=scratch.acquire();
-      const search=new WeightedSearch(width,world.height,a.z*width+a.x,routeGrid(),scaleNavigationCosts(n.costs,3),n.repeaters,scaleNavigationCosts(n.floors,3),corners,policy?.costs,undefined,pooled?scratch:undefined);
+      const search=new WeightedSearch(width,world.height,a.z*width+a.x,routeGrid(),idleScaledCosts(world,key,geometry,n.costs),n.repeaters,scaleNavigationCosts(n.floors,3),corners,policy?.costs,undefined,pooled?scratch:undefined);
       let released=false;
       const live=()=>{if(released)throw Error('Idle wander search read after its release');};
       return {release(){if(!released){released=true;if(pooled)scratch.release();}},perceivedCostUnits(c:Cell){return inBounds(world,c.x,c.z)?n.costs?.get(c.z*width+c.x)??0:0;},canReach(c:Cell){live();if(!inBounds(world,c.x,c.z)||!free(c)||policy&&!policy.has(c.z*width+c.x))return false;const i=c.z*width+c.x;return hasReachableCell(search.advance(new Set([i])),i);},pathTo(c:Cell){live();if(!inBounds(world,c.x,c.z)||!free(c)||policy&&!policy.has(c.z*width+c.x))return;const i=c.z*width+c.x,reach=search.advance(new Set([i]));return hasReachableCell(reach,i)?routeToCell(world,c,reach)??undefined:undefined;}};
