@@ -65,11 +65,11 @@ test('flu progression, immunity and treatment are deterministic across split con
   expect(uninterrupted.flu!.immunity).toBeGreaterThan(0);
   expect(fluNeedsRest(uninterrupted)).toBe(true);
   expect(fluTendable(uninterrupted)).toBe(true);
-  expect(tendFlu(uninterrupted,1000)).toBe(true);
+  expect(tendFlu(uninterrupted,1000,316)).toBe(true);
   const expiry=uninterrupted.flu!.tend!.expiresAtCore;
   expect(expiry).toBe(uninterrupted.tick*10+30_000);
   expect(fluNextTendCore(uninterrupted.flu!)).toBe(expiry-6000+1);
-  expect(tendFlu(uninterrupted,0)).toBe(false);
+  expect(tendFlu(uninterrupted,0,316)).toBe(false);
   const treated=structuredClone(uninterrupted),untreated=structuredClone(uninterrupted);
   delete untreated.flu!.tend;
   advanceMedical(treated,300,resting,noDraw);advanceMedical(untreated,300,resting,noDraw);
@@ -100,7 +100,7 @@ test('flu is a physical medical target, while immunity ends tending before the d
   expect(treatmentTarget(p)).toEqual({flu:true});
   expect(treatmentTargets(p)).toHaveLength(1);
   expect(medicalRestNeeded(p)).toBe(true);
-  expect(tendFlu(p.health,900)).toBe(true);
+  expect(tendFlu(p.health,900,316)).toBe(true);
   expect(treatmentTarget(p)).toBeUndefined();
   p.health.flu!.immunity=FLU_UNIT;
   expect(medicalRestNeeded(p)).toBe(false);

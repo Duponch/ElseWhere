@@ -122,13 +122,13 @@ test('World clinical consultation reads the physically occupied bed, excluding t
 });
 
 test('hospital tending adds an offset after potency and variance, before self reduction and all medication caps',()=>{
-  expect(tendQuality(1,.5,false,undefined,.1)).toBe(400);
-  expect(tendQuality(1,.5,false,'herbal-medicine',.1)).toBe(700);
-  expect(tendQuality(1,.5,true,'medicine',.1)).toBe(770);
-  expect(tendQuality(.2,1,true,'medicine',.1)).toBe(385);
-  expect(tendQuality(5,0,false,'herbal-medicine',.1)).toBe(700);
-  expect(tendQuality(5,0,false,'medicine',.1)).toBe(1000);
-  expect(tendQuality(5,0,false,'glitterworld-medicine',.1)).toBe(1300);
+  expect(tendQuality(1,.5,false,undefined,.1,316)).toBe(400);
+  expect(tendQuality(1,.5,false,'herbal-medicine',.1,316)).toBe(700);
+  expect(tendQuality(1,.5,true,'medicine',.1,316)).toBe(770);
+  expect(tendQuality(.2,1,true,'medicine',.1,316)).toBe(385);
+  expect(tendQuality(5,0,false,'herbal-medicine',.1,316)).toBe(700);
+  expect(tendQuality(5,0,false,'medicine',.1,316)).toBe(1000);
+  expect(tendQuality(5,0,false,'glitterworld-medicine',.1,316)).toBe(1300);
   // These historical witnesses distinguish the old variation/clamp order.
   expect(tendQuality(5,0,false,'herbal-medicine')).toBe(450);
   expect(tendQuality(.2,1,true,'medicine')).toBe(390);

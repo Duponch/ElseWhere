@@ -7,6 +7,9 @@ export const FLU_INITIAL=1_000_000;
 export const FLU_INTERVAL=20; // 200 Core ticks.
 export const FLU_TEND_DURATION_CORE=30_000; // 12 Core hours.
 export const FLU_TEND_OVERLAP_CORE=6_000;
+/** Schema 317: TendTicksFull (12 + 3 h) x 2500 and TendTicksOverlap 3 h. */
+export const FLU_TEND_DURATION_CORE317=37_500;
+export const FLU_TEND_OVERLAP_CORE317=7_500;
 const MAJOR_VOMIT_CHANCE=1-Math.exp(-600/(1.5*60_000));
 const EXTREME_VOMIT_CHANCE=1-Math.exp(-600/(.75*60_000));
 

@@ -18,6 +18,7 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 | Vêtements vendus par les visiteurs | 314 | Tous les vêtements ordinaires représentés, matière selon les fréquences Core | [V314](../gameplay/visitor-clothing-v314.md) |
 | Corrections de fidélité : récoltes, cuisine, animaux | 315 | Rendement de récolte, plantes abîmées, cuisiniers maladroits, apprivoisement et dressage, portées du lièvre | [V315](../gameplay/work-animal-fidelity-v315.md) |
 | Arc court | 316 | Première arme à distance sans poudre : fabrication, flèches qui coupent, vente par les visiteurs | [V316](../gameplay/short-bow-v316.md) |
+| Corrections de fidélité : soins | 317 | Soin en lit d'hôpital, durée du soin de la grippe, expérience pour un animal | [V317](../gameplay/health-fidelity-v317.md) |
 
 ## 2. Fidélité : écarts trouvés et corrigés
 
@@ -26,6 +27,7 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 - **Audit du catalogue.** Un audit en lecture seule a comparé les chiffres du catalogue au jeu de base (recettes, bâtiments, recherches, objets, armes). Il a trouvé 14 écarts et deux erreurs de formule de beauté, corrigés dans le lot 311.
 - **Audit des règles d'humeur, de besoins et de compétences.** Presque tout concordait. Il a trouvé six écarts, corrigés dans le lot 313.
 - **Audit des plantes, des animaux et des vitesses de travail.** Cultures, flore sauvage, statistiques des animaux, vitesses de travail et électricité concordaient. Il a trouvé six écarts, corrigés dans le lot 315 : rendement de récolte, plantes abîmées, cuisiniers maladroits, apprivoisement et dressage, portées du lièvre.
+- **Audits du combat, de la santé et de la vie sociale.** Trois audits en parallèle ont relevé respectivement 9, 4 et 8 écarts. Les corrections figurent dans les lots 317 à 319, les écarts restants au point 7.
 - **Chemise : fausse alerte vérifiée.** La « Chemise » d'Elsewhere est la chemise boutonnée du jeu de base, avec les mêmes valeurs. C'est le t-shirt qui manque.
 
 ## 3. Inventaire du catalogue

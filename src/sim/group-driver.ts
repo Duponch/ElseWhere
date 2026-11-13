@@ -290,7 +290,7 @@ export function advanceGroup(w:World):void {
  const random=()=>healthRandom(w),notice=(_person:Pawn,message:string)=>groupLog(w,message);
   const ingestion=g.reorganization?g.members.reduce((all,p)=>{const one=ingestGroupFood256(w,g as AwayGroup,p,{random,notice,...(isSchema299OrLater(Number(w.schemaVersion))?{coreAt299:effectiveCore297(w)}:{})});all.massRemovedGrams+=one.massRemovedGrams;all.removed.push(...one.removed);return all;},{massRemovedGrams:0,removed:[] as {pawnId:number;grams:number}[]}):advanceGroupIngestion(g,{tick:w.tick,schemaVersion:w.schemaVersion,...(isSchema299OrLater(Number(w.schemaVersion))?{coreAt299:effectiveCore297(w)}:{}),foodPolicies:w.foodPolicies,foodPoisonFactor:w.gameProfile?.difficulty==='adventure-story'?.75:1,random,notice});
   const alcohol=advanceGroupAlcohol265(g,{tick:w.tick,schemaVersion:w.schemaVersion,drugPolicies:w.drugPolicies,resting:stationary,random,notice});
-  const care=advanceGroupCare(g,{tick:w.tick,random});
+  const care=advanceGroupCare(g,{tick:w.tick,random,schemaVersion:w.schemaVersion});
   const mass=applyConsumedGroupMass(travel.mass,[ingestion,alcohol,care]);
   travel={mass,incapableIds:g.members.filter(p=>p.state==='downed'||hasMentalBreak(p)||pawnBody(p).capacities.moving<=0).map(p=>p.id),anyRestNeed:g.members.length>0};
   advanceGroupJoy(g,{tick:w.tick,stationary,random});

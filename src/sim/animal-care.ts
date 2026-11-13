@@ -149,7 +149,8 @@ export function processAnimalCare(w:World,doctor:Pawn,ctx:AnimalCareContext,ligh
   const batch=animalConditionTreatmentBatch256(patient.health!,animalCareTargets(patient),!!task.medicine);
   if(!batch.length){releaseCare(w,doctor);return;}
   const item=task.medicine?.item;
-  learnSkill(doctor.skills.medicine,tendXp(item),doctor);
+  // Core Toils_Tend: 175 XP base for an animal patient from schema 317.
+  learnSkill(doctor.skills.medicine,tendXp(item,w.schemaVersion>=317),doctor);
   const quality=medicalTendQuality(doctor),record=patient.health!;
   let roomFactor:number|undefined;
   for(const target of batch){

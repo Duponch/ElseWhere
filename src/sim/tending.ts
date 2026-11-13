@@ -100,7 +100,7 @@ export function processTending(world:World,doctor:Pawn,context:NeedContext,light
   if(task.progress<task.duration)return;
   const item=task.medicine?.item,batch=treatmentBatch(treatmentTargets(patient),!!item);if(!batch.length){releaseTending(world,doctor);return;}
   resolveHumanTendBatch(patient,doctor,batch,{random:()=>healthRandom(world),awardJobXp:true,medicine:item,
-    bedOffset:bedTendOffset(currentMedicalBed(world,patient),world),infectionRoomFactor:()=>infectionRoomFactor(world,patient)});
+    bedOffset:bedTendOffset(currentMedicalBed(world,patient),world),infectionRoomFactor:()=>infectionRoomFactor(world,patient),schemaVersion:world.schemaVersion});
   consumeMedicine(world,task);
   reconcilePawnHealth(world,patient);
   context.event(`${doctor.name} a traité ${'animalConditionId'in batch[0]!?'une tumeur':batch[0]!.infectionId!==undefined?'une infection':batch[0]!.flu?'la grippe':batch[0]!.disease==='malaria'?'le paludisme':batch[0]!.disease==='plague'?'la peste':batch[0]!.disease==='gut-worms'?'les vers intestinaux':batch[0]!.disease==='muscle-parasites'?'les parasites musculaires':batch[0]!.disease==='fibrous-mechanites'?'les mécanites fibreuses':batch[0]!.disease==='sensory-mechanites'?'les mécanites sensorielles':`${batch.length} plaie(s)`} ${doctor===patient?'sur soi':`de ${patient.name}`} ${item?`avec ${ITEM_DEFINITIONS[item].label}`:'sans médicament'}.`);

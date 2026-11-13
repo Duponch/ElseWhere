@@ -49,7 +49,8 @@ export interface GroupCareContext {
   core256?:{tick:number;delta:number};
   onlyAnimals256?:true;
   random():number;
-
+  /** World schema (flu tend duration from 317). */
+  schemaVersion?:number;
 }
 /** Delta=10 Core. Local stable ID phase adapts Core's hash offset, without a
  * persisted cadence or tick+ID overflow. One consultation per crossing. */
@@ -126,7 +127,7 @@ export function advanceGroupCare(group:ActiveGroup,c:GroupCareContext):ConsumedG
         else if(target.part!==undefined)applied=tendMissingPart(record,target.part);
         if(!applied)throw Error('Stale actual animal treatment target');
       }
-    }else {const patientDraft={...patient,health:record},doctorDraft=doctor===patient?patientDraft:doctor;resolveHumanTendBatch(patientDraft,doctorDraft,humanBatch!,{random:c.random,awardJobXp:false,medicine:item,bedOffset:0,infectionRoomFactor:()=>1000});}
+    }else {const patientDraft={...patient,health:record},doctorDraft=doctor===patient?patientDraft:doctor;resolveHumanTendBatch(patientDraft,doctorDraft,humanBatch!,{schemaVersion:c.schemaVersion,random:c.random,awardJobXp:false,medicine:item,bedOffset:0,infectionRoomFactor:()=>1000});}
     if(item&&item!=='medicine')recordCaravanInventoryEffect256(group,item,-1);
     patient.health=record;
     if(medicine&&item){

@@ -10,7 +10,7 @@ import { tendFlu } from './flu-state.ts';
 import { tendImmuneDisease } from './immune-diseases-state.ts';
 import { isParasiteKind306,tendParasite306 } from './parasites-306.ts';
 import { isMechaniteKind307,tendMechanite307 } from './mechanites-307.ts';
-import type { Pawn } from './types.ts';
+import { SCHEMA_VERSION,type Pawn } from './types.ts';
 
 export interface HumanTendContext {
   random():number;
@@ -20,6 +20,8 @@ export interface HumanTendContext {
   /** Actual occupied hospital bed only. Off-map owner without a delivered bed supplies zero. */
   bedOffset:number;
   infectionRoomFactor():number;
+  /** World schema: hospital-bed quality and flu tend duration rules. */
+  schemaVersion?:number;
 }
 const key=(t:RankedTreatment)=>'animalConditionId'in t?`condition:${t.animalConditionId}`:t.injuryId!==undefined?`injury:${t.injuryId}`:
   t.infectionId!==undefined?`infection:${t.infectionId}`:t.flu?'flu':t.disease?`disease:${t.disease}`:`missing:${t.part}`;
@@ -40,14 +42,14 @@ export function resolveHumanTendBatch(patient:Pawn,doctor:Pawn,batch:readonly Ra
       const base=f(Math.max(0,Math.min(f(rule.maxQuality),f(f(f(f(quality)*f(rule.potency))+f(c.bedOffset))*f(doctor===patient?.7:1)))));
       applied=tendAnimalAgeCondition256(patient.health,target.animalConditionId,base,rule.maxQuality,animalClinicalRandom256(c.random));
     }else if(target.injuryId!==undefined){
-      applied=tendInjury(patient.health,target.injuryId,tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset));
+      applied=tendInjury(patient.health,target.injuryId,tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset,(c.schemaVersion??SCHEMA_VERSION)));
       if(patient.health.injuries.some(i=>i.id===target.injuryId&&i.infection)){
         roomFactor??=c.infectionRoomFactor();
         captureInfectionTendRoom(patient.health,target.injuryId,roomFactor);
       }
-    }else if(target.infectionId!==undefined)applied=tendInfection(patient.health,target.infectionId,tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset));
-    else if(target.flu)applied=tendFlu(patient.health,tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset));
-    else if(target.disease){const disease=target.disease,q=tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset);applied=isParasiteKind306(disease)?tendParasite306(patient.health,disease,q):isMechaniteKind307(disease)?tendMechanite307(patient.health,disease,q):tendImmuneDisease(patient.health,disease,q);}
+    }else if(target.infectionId!==undefined)applied=tendInfection(patient.health,target.infectionId,tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset,(c.schemaVersion??SCHEMA_VERSION)));
+    else if(target.flu)applied=tendFlu(patient.health,tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset,(c.schemaVersion??SCHEMA_VERSION)),(c.schemaVersion??SCHEMA_VERSION));
+    else if(target.disease){const disease=target.disease,q=tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset,(c.schemaVersion??SCHEMA_VERSION));applied=isParasiteKind306(disease)?tendParasite306(patient.health,disease,q):isMechaniteKind307(disease)?tendMechanite307(patient.health,disease,q):tendImmuneDisease(patient.health,disease,q);}
     else applied=tendMissingPart(patient.health,target.part);
     if(!applied)throw Error('Treatment producer refused a prevalidated target');
   }

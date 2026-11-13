@@ -60,7 +60,7 @@ export function validateMedicalRecord(value:unknown,allowGunshot=true,allowBite=
   if(value.hypothermia!==undefined&&(!allowCold||!integer(value.hypothermia,1,1_000_000_000)))return fail;
   if(value.malnutrition!==undefined&&(!allowMalnutrition||!integer(value.malnutrition,1,1_000_000_000)))return fail;
   if(!validFoodPoisoning(value.foodPoisoning,value.tick,allowFoodPoison,version)||animal&&object(value.foodPoisoning)&&value.foodPoisoning.cause==='dangerous-food')return fail;
-  if(!validFlu(value as unknown as MedicalRecord,allowFlu&&!animal)||!validImmuneDiseases(value.immuneDiseases,value as unknown as MedicalRecord,version)||!validParasites306(value.parasites306,version,Number(value.tick))||!validMechanites307(value.mechanites307,version,Number(value.tick)))return fail;
+  if(!validFlu(value as unknown as MedicalRecord,allowFlu&&!animal,version>=317)||!validImmuneDiseases(value.immuneDiseases,value as unknown as MedicalRecord,version)||!validParasites306(value.parasites306,version,Number(value.tick))||!validMechanites307(value.mechanites307,version,Number(value.tick)))return fail;
   if(!validAnesthetic(value.anesthetic,value.tick,version>=179&&!mechanical&&(!animal||isSchema277OrLater(version)),undefined,medicalCivilTick271(value as unknown as MedicalRecord),version))return fail;
   if(value.ageAilments!==undefined&&(!Array.isArray(value.ageAilments)||value.ageAilments.length<1||value.ageAilments.length>2||new Set(value.ageAilments).size!==value.ageAilments.length||value.ageAilments.some(a=>a!=='bad-back'&&a!=='frail')))return fail;
   const ids=new Set<number>();let total=0;

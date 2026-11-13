@@ -40,7 +40,7 @@ export function advanceGroupAnimalMeters256(g:AwayGroup,coreTick:number,marks:Gr
 /** Legacy humans keep their old cadence even after a real animal transfer. */
 export function advanceLegacyAnimalInterval256(w:World,g:AwayGroup,coreTick:number,deltaCore:number,carried:ReadonlySet<number>,marks:GroupRestMarks256):void {
  const moving=g.phase==='travelling'&&!g.paused&&g.stop===null,env=groupAnimalEnvironment256(w,g,coreTick);for(const p of groupPhysicalPawns256(g))if('species'in p){if(p.ageTicks===0)continue;if(!moving||carried.has(p.id))marks.mark(p,coreTick,.8);satisfyCaravanAnimalFood256(w,g,p,{...env,random:()=>healthRandom(w)});}
- advanceGroupCare(g,{tick:w.tick,core256:{tick:coreTick,delta:deltaCore},onlyAnimals256:true,random:()=>healthRandom(w)});
+ advanceGroupCare(g,{tick:w.tick,core256:{tick:coreTick,delta:deltaCore},onlyAnimals256:true,random:()=>healthRandom(w),schemaVersion:w.schemaVersion});
 }
 
 export function adoptCaravanOtherFoodClimate256(w:World,g:AwayGroup):void {

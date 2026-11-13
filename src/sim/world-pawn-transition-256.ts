@@ -67,7 +67,7 @@ export function prepareWorldPawnEntryEffects256(input:WorldPawnOwner256,atCore:n
   if((options.version!==259&&options.version!==260&&(options.version!==261&&(Number(options.version)!==262&&!isSchema263OrLater(Number(options.version)))))||options.situation!=='Free'||!validMechanicalWorldPawn259(row,Number(options.version),registry)||typeof row.enteredAtAbsCore!=='number'||!Number.isSafeInteger(row.enteredAtAbsCore)||row.enteredAtAbsCore<0)return {ok:false,reason:'Mechanical PassedToWorld requires its actual cleaned original, faction and DeSpawn clock'};
   delete row.free;if(!terminalWorldPawn256(row))row.free=true;return {ok:true,row};
  }
- if(options.situation!=='CaravanMember'&&!terminalWorldPawn256(row)&&row.actor.health&&groupPawnInterval256(row.actor.id,atCore,7500,1))for(let n=0;n<30;n++)autoTendWorldPawn256(row.actor.health);
+ if(options.situation!=='CaravanMember'&&!terminalWorldPawn256(row)&&row.actor.health&&groupPawnInterval256(row.actor.id,atCore,7500,1))for(let n=0;n<30;n++)autoTendWorldPawn256(row.actor.health,Number(options.version));
  let factionId=row.factionId;
  const free=!row.startingPawnLeftBehind&&!terminalWorldPawn256(row),change=free&&(row.kind==='human'&&factionId===null||oldFaction&&(WORLD_FACTION_DEFINITIONS_256[oldFaction.def].player||oldFaction.def==='Ancients'||oldFaction.def==='AncientsHostile'));
  if(change&&!row.startingPawnLeftBehind&&options.situation===undefined)return {ok:false,reason:'PassedToWorld faction change requires its actual situation authority'};

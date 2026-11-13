@@ -107,7 +107,7 @@ function advancePreparedWorldPawnRow256(row:WorldPawnOwner256,toCore:number,rand
  if(!mothball&&h){const status=medicalStatus(h);if(status==='dead'){commitToxicDeath256(h,random);if(row.kind==='animal'){commitScariaDeath261(h,scariaRotChance,random);delete row.actor.manhunter;}a.state='dead';if(row.kind==='human')markCorpseWornApparel284(row.items,row.actor,version);row.mode='dead';delete row.free;row.clockCore=h.death!.tick*10;return {ok:true};}a.state=status==='downed'?'downed':'idle';
  }
  row.clockCore=toCore;
- if(!mothball&&h&&groupPawnInterval256(a.id,toCore,7500,Math.min(delta,10)))autoTendWorldPawn256(h);
+ if(!mothball&&h&&groupPawnInterval256(a.id,toCore,7500,Math.min(delta,10)))autoTendWorldPawn256(h,Number(version));
  return {ok:true};
 }
 /** Same declared current263 animal adaptation at campaign life and the

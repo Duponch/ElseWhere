@@ -17,7 +17,7 @@ function patient(){
 test('flu card states severity, immunity, care quality and the exact renewal gate',()=>{
   const {record}=patient();
   expect(fluInspection(record)).toMatchObject({stage:'major',summary:'Grippe majeure · gravité 70.0 % · immunité 10.0 %.',care:'Aucun soin actif.',guidance:'Nouveau soin possible maintenant.'});
-  expect(tendFlu(record,800)).toBe(true);
+  expect(tendFlu(record,800,316)).toBe(true);
   expect(fluInspection(record)).toMatchObject({care:'Soin actif · qualité 80.0 % · effet restant 12.0 h.',guidance:'Renouvellement dans 9.6 h.'});
   record.tick=5400;expect(fluInspection(record)?.guidance).toBe('Renouvellement dans < 0,1 h.');
   record.tick=5401;expect(fluInspection(record)?.guidance).toBe('Nouveau soin possible maintenant.');

@@ -59,7 +59,7 @@ describe('prospective WorldPawns real-owner nucleus (prepared records)',()=>{
  });
  it('tends without doctor/medicine RNG, and mothball advances age only while scars remain permanent',()=>{
   const owner=row(17,14990),a=owner.actor,h=a.health=createAnimalMedicalRecord256({schemaVersion:256,tick:1499},a);
-  h.injuries.push({id:1,part:'torso',kind:'cut',severity:1000,bornAt:1499});h.nextInjuryId=2;expect(autoTendWorldPawn256(h)).toBe(1);expect(h.injuries[0]!.tended).toBe(WORLD_AUTO_TEND_QUALITY_256);
+  h.injuries.push({id:1,part:'torso',kind:'cut',severity:1000,bornAt:1499});h.nextInjuryId=2;expect(autoTendWorldPawn256(h,317)).toBe(1);expect(h.injuries[0]!.tended).toBe(WORLD_AUTO_TEND_QUALITY_256);
   h.injuries[0]!.scar={threshold:1000,pain:0};const permanent=JSON.stringify(h.injuries),s=state([owner],14990),rng={rng:123};
   const first=prepareWorldPawnLife256(s,15000,rng);if(!first.ok)throw Error(first.reason);first.commit();expect(owner.mode).toBe('mothballed');const age=a.ageTicks;
   const idle=prepareWorldPawnLife256(s,15010,rng);if(!idle.ok)throw Error(idle.reason);idle.commit();expect(a.ageTicks).toBe(age);expect(JSON.stringify(a.health!.injuries)).toBe(permanent);
