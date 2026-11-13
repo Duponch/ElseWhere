@@ -2,6 +2,7 @@ import {BIOME_DISEASE_FACTS_256,biomeDiseaseChoice256} from './biome-disease-fac
 import { isPlayerPatient } from './affiliation.ts';
 import { acquireFlu } from './flu-state.ts';
 import { acquireImmuneDisease } from './immune-diseases-state.ts';
+import { acquireParasite306,isParasites306,PARASITE_LABELS306,type ParasiteKind306 } from './parasites-306.ts';
 import type { ImmuneDiseaseKind } from './immune-diseases-types.ts';
 import { createMedicalRecord } from './injury-state.ts';
 import { reconcilePawnHealth,updatePawnHealth } from './health.ts';
@@ -148,6 +149,37 @@ export function resolveImmuneDiseaseIncident(world:World,kind:ImmuneDiseaseKind,
   return acquired;
 }
 
+/** Schema 306: Core Disease_GutWorms / Disease_MuscleParasites. The victim
+ * count comes from all candidates (20 to 50 %, at least one); victims are
+ * then drawn among those who can catch it: not already infected and, for gut
+ * worms, with a stomach. No immunity, so no contract roll. Uses the prospective
+ * disease extension's random stream and counters. */
+export function resolveParasiteIncident306(world:World,kind:ParasiteKind306,
+  state:ImmuneDiseaseIncidentCalendar|undefined=world.fluIncidents?.immuneDiseases):number {
+  if(!state||!isParasites306(Number(world.schemaVersion)))return 0;
+  const all=fluCandidates(world);if(!all.length)return 0;
+  const candidates=all.filter(p=>!p.health?.parasites306?.[kind]&&(kind!=='gut-worms'||!p.health?.missing.some(m=>m.part==='stomach'||m.part==='torso')));
+  if(!candidates.length)return 0;
+  const min=coreRound(all.length*.2),max=coreRound(all.length*.5);
+  const requested=Math.min(99_999,Math.max(1,min+Math.floor(random(state)*(max-min+1))));
+  let acquired=0;const names:string[]=[];
+  for(let index=0;index<Math.min(requested,candidates.length);index++){
+    const swap=index+Math.floor(random(state)*(candidates.length-index));
+    [candidates[index],candidates[swap]]=[candidates[swap]!,candidates[index]!];
+    const pawn=candidates[index]!;
+    if(pawn.health&&pawn.health.tick<world.tick)updatePawnHealth(world,pawn);
+    if(pawn.state==='dead')continue;
+    const record=pawn.health??=createMedicalRecord(world.tick);
+    if(!acquireParasite306(record,kind))continue;
+    reconcilePawnHealth(world,pawn);acquired++;names.push(pawn.name);
+  }
+  if(acquired){
+    state.episodes++;state.cases+=acquired;
+    emit(world,`${PARASITE_LABELS306[kind]} : ${names.join(', ')} ${acquired===1?'est atteint':'sont atteints'}. Consultez Santé : des soins répétés en viennent à bout.`);
+  }
+  return acquired;
+}
+
 /** O(1) on 99/100 ticks and O(n) only when a disease opportunity is drawn.
  * Remaining unimplemented disease selections keep their original silent share.
  * The historical exponential category chance is a documented local adaptation. */
@@ -164,6 +196,7 @@ export function advanceFluIncidents(world:World):void {
     const selected=biomeDiseaseChoice256(site.biome,random(state));
     if(selected==='Disease_Flu'){state.fluDraws++;resolveFluIncident(world,state);}
     else if(state.immuneDiseases&&(selected==='Disease_Plague'||selected==='Disease_Malaria')){state.immuneDiseases.draws++;resolveImmuneDiseaseIncident(world,selected==='Disease_Plague'?'plague':'malaria',state.immuneDiseases);}
+    else if(state.immuneDiseases&&isParasites306(Number(world.schemaVersion))&&(selected==='Disease_GutWorms'||selected==='Disease_MuscleParasites')){state.immuneDiseases.draws++;resolveParasiteIncident306(world,selected==='Disease_GutWorms'?'gut-worms':'muscle-parasites',state.immuneDiseases);}
     // Other selected diseases consume their opportunity, as in the existing
     // bounded implementation. This does not claim a complete storyteller.
     return;

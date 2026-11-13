@@ -103,7 +103,7 @@ export function processTending(world:World,doctor:Pawn,context:NeedContext,light
     bedOffset:bedTendOffset(currentMedicalBed(world,patient),world),infectionRoomFactor:()=>infectionRoomFactor(world,patient)});
   consumeMedicine(world,task);
   reconcilePawnHealth(world,patient);
-  context.event(`${doctor.name} a traité ${'animalConditionId'in batch[0]!?'une tumeur':batch[0]!.infectionId!==undefined?'une infection':batch[0]!.flu?'la grippe':batch[0]!.disease==='malaria'?'le paludisme':batch[0]!.disease==='plague'?'la peste':`${batch.length} plaie(s)`} ${doctor===patient?'sur soi':`de ${patient.name}`} ${item?`avec ${ITEM_DEFINITIONS[item].label}`:'sans médicament'}.`);
+  context.event(`${doctor.name} a traité ${'animalConditionId'in batch[0]!?'une tumeur':batch[0]!.infectionId!==undefined?'une infection':batch[0]!.flu?'la grippe':batch[0]!.disease==='malaria'?'le paludisme':batch[0]!.disease==='plague'?'la peste':batch[0]!.disease==='gut-worms'?'les vers intestinaux':batch[0]!.disease==='muscle-parasites'?'les parasites musculaires':`${batch.length} plaie(s)`} ${doctor===patient?'sur soi':`de ${patient.name}`} ${item?`avec ${ITEM_DEFINITIONS[item].label}`:'sans médicament'}.`);
   task.progress-=task.duration;
   if(!treatmentTarget(patient)||task.urgent&&doctor===patient){releaseTending(world,doctor);if(task.urgent){doctor.planCooldown=0;doctor.needCooldown=0;}}
   else if(task.useMedicine&&!task.medicine){task.phase='find-medicine';doctor.state='moving';}

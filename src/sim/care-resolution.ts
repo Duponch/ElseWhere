@@ -8,6 +8,7 @@ import { tendInjury,tendMissingPart } from './injury-state.ts';
 import { tendInfection,captureInfectionTendRoom } from './infection-state.ts';
 import { tendFlu } from './flu-state.ts';
 import { tendImmuneDisease } from './immune-diseases-state.ts';
+import { isParasiteKind306,tendParasite306 } from './parasites-306.ts';
 import type { Pawn } from './types.ts';
 
 export interface HumanTendContext {
@@ -45,7 +46,7 @@ export function resolveHumanTendBatch(patient:Pawn,doctor:Pawn,batch:readonly Ra
       }
     }else if(target.infectionId!==undefined)applied=tendInfection(patient.health,target.infectionId,tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset));
     else if(target.flu)applied=tendFlu(patient.health,tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset));
-    else if(target.disease)applied=tendImmuneDisease(patient.health,target.disease,tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset));
+    else if(target.disease){const disease=target.disease,q=tendQuality(quality,c.random(),doctor===patient,c.medicine,c.bedOffset);applied=isParasiteKind306(disease)?tendParasite306(patient.health,disease,q):tendImmuneDisease(patient.health,disease,q);}
     else applied=tendMissingPart(patient.health,target.part);
     if(!applied)throw Error('Treatment producer refused a prevalidated target');
   }

@@ -19,6 +19,8 @@ import { createFluInspection,updateFluInspection } from './flu-inspection';
 import { activeImmuneDisease,createImmuneDiseasesInspection,updateImmuneDiseasesInspection,IMMUNE_DISEASE_LABELS } from './immune-diseases-inspection';
 import { IMMUNE_DISEASE_KINDS } from '../sim/immune-diseases-types';
 import { immuneDiseaseModifiers } from '../sim/immune-diseases-rules';
+import { parasiteModifiers306 } from '../sim/parasites-306';
+import { createParasitesInspection306,updateParasitesInspection306 } from './parasites-inspection';
 import { foodPoisoningStage,FOOD_POISON_UNIT } from '../sim/food-poisoning';
 import { bodyDescription } from './burial-controls';
 import { isCarePatient,isColonist } from '../sim/affiliation';
@@ -177,7 +179,7 @@ export function healthCapacityTooltip(pawn:Pawn,key:typeof CAPACITY_LABELS[numbe
   if(key==='consciousness')rows.push({label:'Douleur totale',value:percent(pawn.health?medicalPain(pawn.health):0)},{label:'Respiration',value:percent(c.breathing)},{label:'Pompage du sang',value:percent(c.bloodPumping)},{label:'Filtrage du sang',value:percent(c.bloodFiltration)});
   const health=pawn.health;
   if(health){
-    const modifiers:ReadonlyArray<[string,object]>=[['Perte de sang',bloodConsciousness(health.bloodLoss)],['Coup de chaleur',heatModifiers(health.heatstroke)],['Hypothermie',coldModifiers(health.hypothermia)],['Malnutrition',malnutritionModifiers(health.malnutrition)],['Infection',infectionModifiers(health)],['Grippe',fluModifiers(health.flu)],['Mal de cryptosommeil',cryptosleepSicknessModifiers256(health.cryptosleepSickness)],['Paludisme / peste',immuneDiseaseModifiers(health)],['Intoxication alimentaire',foodPoisoningModifiers(health.foodPoisoning)],['Anesthésie',anestheticModifiers(health.anesthetic)]];
+    const modifiers:ReadonlyArray<[string,object]>=[['Perte de sang',bloodConsciousness(health.bloodLoss)],['Coup de chaleur',heatModifiers(health.heatstroke)],['Hypothermie',coldModifiers(health.hypothermia)],['Malnutrition',malnutritionModifiers(health.malnutrition)],['Infection',infectionModifiers(health)],['Grippe',fluModifiers(health.flu)],['Mal de cryptosommeil',cryptosleepSicknessModifiers256(health.cryptosleepSickness)],['Paludisme / peste',immuneDiseaseModifiers(health)],['Parasites',parasiteModifiers306(health)],['Intoxication alimentaire',foodPoisoningModifiers(health.foodPoisoning)],['Anesthésie',anestheticModifiers(health.anesthetic)]];
     for(const [label,modifier] of modifiers)for(const [field,value] of Object.entries(modifier)){
       if(typeof value!=='number'||!field.startsWith(key))continue;
       if(field.endsWith('Offset')&&value!==0)rows.push({label,value:`${value>0?'+':''}${percent(value)} points`});
@@ -250,7 +252,7 @@ export function createHealthInspection(panel:HTMLElement,selected?:()=>Pawn|unde
   const conditionsTitle=document.createElement('h4');conditionsTitle.textContent='État de santé';conditionsTitle.className='health-accessible-heading';conditions.append(conditionsTitle);
   const empty=document.createElement('p');empty.dataset.health='healthy';empty.className='health-empty';empty.textContent='Aucune affection';conditions.append(empty);
   const injuries=document.createElement('div');injuries.dataset.health='injuries';injuries.className='health-injury-list';conditions.append(injuries);
-  createInfectionInspection(conditions);createFluInspection(conditions);createImmuneDiseasesInspection(conditions);
+  createInfectionInspection(conditions);createFluInspection(conditions);createImmuneDiseasesInspection(conditions);createParasitesInspection306(conditions);
   for(const name of ['food-poisoning','cryptosleep-sickness','malnutrition','thermal','stagger','anesthetic','alcohol']){
     const p=document.createElement('p');p.dataset.health=name;conditions.append(p);
   }
@@ -300,7 +302,7 @@ export function healthStatusText(pawn:Pawn,world?:World):string {
   if(pawn.state==='dead')return [world?bodyDescription(world,pawn):'Décédé',firefoamProtectionText290(pawn.health,true)].filter(Boolean).join(' · ');
   const health=pawn.health;
   if(!health)return 'Aucune lésion';
-  return `${pawn.state==='downed'?'À terre · ':''}${cryptosleepSick256(health.cryptosleepSickness)||health.flu?.severity||activeImmuneDisease(health)?'Malade · ':''}Douleur ${Math.round(medicalPain(health)*100)} % · Sang perdu ${(health.bloodLoss/BLOOD_UNIT*100).toFixed(1)} % · Saignement ${(medicalBleed(health)*100).toFixed(0)} %/jour${health.coveredInFirefoam290?' · '+firefoamProtectionText290(health):''}`;
+  return `${pawn.state==='downed'?'À terre · ':''}${cryptosleepSick256(health.cryptosleepSickness)||health.flu?.severity||activeImmuneDisease(health)||health.parasites306?'Malade · ':''}Douleur ${Math.round(medicalPain(health)*100)} % · Sang perdu ${(health.bloodLoss/BLOOD_UNIT*100).toFixed(1)} % · Saignement ${(medicalBleed(health)*100).toFixed(0)} %/jour${health.coveredInFirefoam290?' · '+firefoamProtectionText290(health):''}`;
 }
 
 /** Selected pawn only, at HUD cadence. Save strings never enter innerHTML. */
@@ -337,7 +339,7 @@ export function updateHealthInspection(panel:HTMLElement,pawn:Pawn,world?:World)
   }
   updateInfectionInspection(details,health);
   updateFluInspection(details,health);
-  updateImmuneDiseasesInspection(details,health);
+  updateImmuneDiseasesInspection(details,health);updateParasitesInspection306(details,health);
   for(const kind of IMMUNE_DISEASE_KINDS){
     const section=details.querySelector<HTMLElement>(`[data-health="${kind}"]`);if(!section||section.hidden)continue;
     const summary=section.querySelector<HTMLElement>('[data-disease="summary"]')!,care=section.querySelector<HTMLElement>('[data-disease="care"]')!,guidance=section.querySelector<HTMLElement>('[data-disease="guidance"]')!;
@@ -367,7 +369,7 @@ export function updateHealthInspection(panel:HTMLElement,pawn:Pawn,world?:World)
   const self=details.querySelector<HTMLInputElement>('#self-tend-policy');if(self){self.checked=!!pawn.selfTend;self.disabled=pawn.state==='dead';}
   const hint=details.querySelector('[data-health="self-tend-hint"]');if(hint)hint.textContent=pawn.selfTend&&pawn.priorities.doctor===0?'Auto-soins autorisés, mais Médecin est désactivé dans Travail.':'';
   const status=details.querySelector<HTMLElement>('[data-health="status"]')!;
-  status.textContent=pawn.state==='dead'?(world?bodyDescription(world,pawn):'Décédé'):pawn.state==='downed'?'À terre':cryptosleepSick256(health?.cryptosleepSickness)||health?.flu?.severity||activeImmuneDisease(health)?'Malade':'';
+  status.textContent=pawn.state==='dead'?(world?bodyDescription(world,pawn):'Décédé'):pawn.state==='downed'?'À terre':cryptosleepSick256(health?.cryptosleepSickness)||health?.flu?.severity||activeImmuneDisease(health)||health?.parasites306?'Malade':'';
   status.hidden=!status.textContent;setTooltip(status,{title:'État général',body:healthStatusText(pawn,world)});
   const bleeding=details.querySelector<HTMLElement>('[data-health="bleeding"]')!,bleed=health?medicalBleed(health):0;
   bleeding.textContent=bleed>0?`Saignement : ${percent(bleed)}/jour`:health?.bloodLoss?`Sang perdu : ${percent(health.bloodLoss/BLOOD_UNIT)}`:'';
@@ -385,7 +387,7 @@ export function updateHealthInspection(panel:HTMLElement,pawn:Pawn,world?:World)
   const injuries=details.querySelector<HTMLElement>('[data-health="injuries"]')!,injuryRows=clinicalRows(pawn),injurySignature=JSON.stringify([injuryRows,health?.bloodLoss]);
   if(injuries.dataset.signature!==injurySignature){injuries.dataset.signature=injurySignature;injuries.replaceChildren(...injuryRows.map(row=>clinicalElement(pawn,row)));}
   const healthy=details.querySelector<HTMLElement>('[data-health="healthy"]')!;
-  healthy.hidden=alcohol.length>0||injuryRows.length>0||!!health?.infections?.cases.length||!!health?.flu||!!health?.immuneDiseases||!!poison||!!health?.malnutrition||!!stage||!!coldStage||!!pawn.stagger||!!health?.cryptosleepSickness||!!health?.anesthetic||pawn.state==='dead';
+  healthy.hidden=alcohol.length>0||injuryRows.length>0||!!health?.infections?.cases.length||!!health?.flu||!!health?.immuneDiseases||!!health?.parasites306||!!poison||!!health?.malnutrition||!!stage||!!coldStage||!!pawn.stagger||!!health?.cryptosleepSickness||!!health?.anesthetic||pawn.state==='dead';
   for(const name of ['food-poisoning','cryptosleep-sickness','malnutrition','thermal','stagger','anesthetic','alcohol']){
     const row=details.querySelector<HTMLElement>(`[data-health="${name}"]`)!;row.hidden=!row.textContent;row.tabIndex=0;if(row.textContent)setTooltip(row,{title:row.textContent.split(' · ')[0],body:row.textContent});
   }

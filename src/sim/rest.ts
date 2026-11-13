@@ -9,6 +9,7 @@ import { BUILDING_MATERIALS } from './building-materials.ts';
 import { bedRestEffectiveness } from './furniture-stats.ts';
 
 import { BED_REST_PER_TICK,GROUND_REST_PER_TICK,depletedHumanRest } from './human-need-rates.ts';
+import { parasiteRestFactor306 } from './parasites-306.ts';
 export { REST_PER_TICK,LEGACY_REST_PER_TICK,BED_REST_PER_TICK,GROUND_REST_PER_TICK,restFallFactor } from './human-need-rates.ts';
 const COLLAPSE_INTERVAL = TICKS_PER_DAY / 400;
 
@@ -24,7 +25,7 @@ export function updateRest(world: World, pawn: Pawn): void {
   if(pawn.state==='dead')return;
   if(carrierOf(world,pawn.id)){
     delete pawn.medicalSleep;
-    pawn.rest=depletedHumanRest(pawn.rest,world.restRules==='legacy');
+    pawn.rest=depletedHumanRest(pawn.rest,world.restRules==='legacy',parasiteRestFactor306(pawn.health));
     return;
   }
   const coupleAwake285=isSchema285OrLater(world.schemaVersion)&&pawn.coupleTask285!==undefined;
@@ -44,10 +45,10 @@ export function updateRest(world: World, pawn: Pawn): void {
       return s.kind!=='hospital-bed'||s.x===pawn.x&&s.z===pawn.z&&need.target.x===s.x&&need.target.z===s.z;
     }):undefined;
     if(pawn.medicalSleep)pawn.rest=Math.min(100,pawn.rest+(bed&&bed.kind!=='sleeping-spot'?BED_REST_PER_TICK*(bed.kind==='bedroll'||bed.kind==='hospital-bed'||bed.kind==='double-bed'?bedRestEffectiveness(bed):(bed.material?BUILDING_MATERIALS[bed.material].restFactor:1)):GROUND_REST_PER_TICK));
-    else pawn.rest=depletedHumanRest(pawn.rest,world.restRules==='legacy');
+    else pawn.rest=depletedHumanRest(pawn.rest,world.restRules==='legacy',parasiteRestFactor306(pawn.health));
     return;
   }
-  if (coupleAwake285||pawn.state !== 'sleeping') pawn.rest = depletedHumanRest(pawn.rest,world.restRules==='legacy');
+  if (coupleAwake285||pawn.state !== 'sleeping') pawn.rest = depletedHumanRest(pawn.rest,world.restRules==='legacy',parasiteRestFactor306(pawn.health));
   if (world.restRules === 'legacy') { pawn.restZeroTicks = 0; pawn.collapsePending = false; return; }
   pawn.restZeroTicks = pawn.rest < 0.01 && pawn.state !== 'sleeping' ? Math.min(4500, pawn.restZeroTicks + 1) : 0;
   if (pawn.rest >= 0.01 || pawn.hunger <= 0 || pawn.need?.kind === 'sleep') { pawn.collapsePending = false; return; }

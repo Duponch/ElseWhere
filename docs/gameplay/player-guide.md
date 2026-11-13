@@ -12,6 +12,10 @@ Un clic sur une **carte de sauvegarde** charge directement cette partie en pause
 
 Avec une fenêtre de jeu ouverte, utilisez le bouton droit maintenu pour tourner la caméra, le bouton central pour la déplacer et la molette pour zoomer, en commençant sur le terrain libre. Le contexte Ordres reste ouvert. Un clic gauche extérieur ferme la fenêtre. Le curseur en mode ordre associe une petite flèche de carton beige au dessin de l’action choisie ; **Échap** revient à la sélection.
 
+## Soigner les vers intestinaux et les parasites musculaires — V306
+
+Ces deux maladies peuvent toucher une partie de la colonie. Les **vers intestinaux** donnent faim deux fois plus vite. Les **parasites musculaires** fatiguent deux fois plus vite et réduisent la manipulation et le déplacement. Toutes deux ajoutent de la douleur. Elles ne mettent pas la vie en danger, mais ne passent pas seules : chaque soin agit environ deux jours et peut être renouvelé juste avant sa fin, et la maladie disparaît quand les soins reçus totalisent 300 % de qualité. Gardez des médicaments et un bon médecin. La fiche Santé montre le soin en cours et l'avancée de la guérison.
+
 ## Profiter d'une aurore, accueillir des animaux — V305
 
 La nuit, une **aurore** peut colorer le ciel : les habitants à découvert gagnent +14 d'humeur tant qu'elle dure, rien sous un toit. Elle s'efface quand le jour revient.

@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V306 — schéma 306 :** [Vers intestinaux et parasites musculaires](parasites-v306.md). Ces deux maladies du conteur, déjà tirées sans effet sur les sites géographiques, rendent désormais vraiment malades : douleur, faim ou repos accélérés, capacités réduites, soins de 51 heures (48 + 3 de chevauchement) jusqu'à 300 % de qualité cumulée. Le vomissement des vers et les autres maladies manquantes restent absents.
+
 **V305 — schéma 305 :** [Aurore, animal apprivoisé seul, animaux de ferme et capsules de ressources](misc-incidents-v305.md). Quatre incidents du conteur, déjà tirés sans effet, ont désormais leurs règles du jeu de base. L'onde et l'apaisement psychiques attendent un genre pour les humains ; les autres incidents divers manquants restent absents.
 
 **V483 qualifiée localement — schéma 296, non publiée :** [Porte sur mur fini](door-over-wall-v483.md). Retrait réel, phase ouverte et porte payée, intentions séparées et propriétaires conservés. 303cas distincts par reprises, natif68,954s/16exports/9captures, type15,573s/build5,052s, présentation160,082s/44changements≤41,3ms. Coût ciblé résiduel trois plans17,439/6,457ms checkpoint/delta ; aucun gain FPS global. Production295/b969 inchangée. Reprendre le réarbitrage vers une continuation réelle des Éclaircies ; six ensembles ouverts.

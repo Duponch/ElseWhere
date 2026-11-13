@@ -106,6 +106,10 @@ export function nativeClinicalConditionRows(health: MedicalRecord | undefined, s
   };
   if (health.flu) episode('flu', 'Grippe', health.flu, FLU_UNIT);
   for (const [kind, state] of Object.entries(health.immuneDiseases ?? {})) if (state) episode(kind, kind === 'malaria' ? 'Paludisme' : 'Peste', state, IMMUNE_DISEASE_UNIT);
+  for (const [kind, state] of Object.entries(health.parasites306 ?? {})) if (state) {
+    const left = state.tend ? Math.max(0, state.tend.expiresAtCore - clock) : 0;
+    rows.push(row(`${kind}-cure`, kind === 'gut-worms' ? 'Vers intestinaux' : 'Parasites musculaires', `Guérison ${percent(state.totalTend / 3000)}`, `${kind === 'gut-worms' ? 'Faim deux fois plus rapide' : 'Fatigue deux fois plus rapide, manipulation et déplacement −30 points'} · douleur +20 % · ${left > 0 ? `soin de qualité ${percent(state.tend!.quality / 1000)}, ${(left / 2500).toFixed(1)} h restantes` : 'aucun soin actif'}${suspended ? ' · Horloge suspendue' : ''}`));
+  }
   if (health.foodPoisoning) rows.push(row('food-poisoning', 'Intoxication alimentaire', `Gravité ${percent(health.foodPoisoning.severity / FOOD_POISON_UNIT)}`, health.foodPoisoning.vomit ? 'Vomit' : undefined));
   if (health.toxicBuildup) rows.push(row('toxic-buildup', 'Charge toxique', percent(health.toxicBuildup.severity), health.toxicBuildup.vomit || health.toxicBuildup.vomitRequestedAt !== undefined ? 'Nausée ou vomissement engagé' : undefined));
   if (health.anesthetic) rows.push(row('anesthetic', 'Anesthésie', percent(health.anesthetic.severity / ANESTHETIC_UNIT), suspended ? 'Dissipation suspendue pendant le cryptosommeil' : 'Dissipation selon le temps clinique actif'));
