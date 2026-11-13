@@ -1,4 +1,5 @@
 import {isSchema284OrLater} from './schema-compatibility-257.ts';
+import {isGarmentItem312} from './apparel-definitions.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {validApparelProvenance284} from './apparel-provenance-284.ts';
 import {isSchema279OrLater} from './schema-compatibility-257.ts';
@@ -22,7 +23,7 @@ const capturedApparelCandidates=(version:number):MaterialPile[]=>{
     if(version<267&&isSmithingApparel267(item))continue;
     if(version<256&&isCoreStartingApparel256(item))continue;
     const historical=item==='flak-vest'||item==='cloth-shirt'||version>=72&&item==='cloth-tribalwear';
-    if(version<90&&!historical||version<91&&V91_ITEM_IDS.includes(item)||version<120&&V120_ANIMAL_PRODUCT_ITEMS.includes(item)||version<141&&item==='flak-helmet'||version<148&&item==='recon-helmet'||version<241&&item==='recon-armor'||version<245&&item.endsWith('-tuque')||version<178&&item.startsWith('foxfur-')||version<308&&isTextileApparelItem308(item))continue;
+    if(version<90&&!historical||version<91&&V91_ITEM_IDS.includes(item)||version<120&&V120_ANIMAL_PRODUCT_ITEMS.includes(item)||version<141&&item==='flak-helmet'||version<148&&item==='recon-helmet'||version<241&&item==='recon-armor'||version<245&&item.endsWith('-tuque')||version<178&&item.startsWith('foxfur-')||version<308&&isTextileApparelItem308(item)||version<312&&isGarmentItem312(item))continue;
     const key=APPAREL[item].family??item;
     if(seen.has(key))continue;
     seen.add(key);out.push(capturedApparel(item,version));
@@ -39,7 +40,7 @@ export function validApparelShape(p:Record<string,unknown>,version:number):boole
   if(!validStartingApparelColor256(a,item,version))return false;
   if(version<256&&isCoreStartingApparel256(item))return false;
   const historical=item==='flak-vest'||item==='cloth-shirt'||version>=72&&item==='cloth-tribalwear';
-  if(version<90&&!historical||version<91&&V91_ITEM_IDS.includes(item)||version<120&&V120_ANIMAL_PRODUCT_ITEMS.includes(item)||version<141&&item==='flak-helmet'||version<148&&item==='recon-helmet'||version<241&&item==='recon-armor'||version<245&&item.endsWith('-tuque')||version<178&&item.startsWith('foxfur-')||version<308&&isTextileApparelItem308(item))return false;
+  if(version<90&&!historical||version<91&&V91_ITEM_IDS.includes(item)||version<120&&V120_ANIMAL_PRODUCT_ITEMS.includes(item)||version<141&&item==='flak-helmet'||version<148&&item==='recon-helmet'||version<241&&item==='recon-armor'||version<245&&item.endsWith('-tuque')||version<178&&item.startsWith('foxfur-')||version<308&&isTextileApparelItem308(item)||version<312&&isGarmentItem312(item))return false;
   return Object.keys(a).every(k=>['quality','hitPoints','forbidden',...(version>=90?['material','forced']:[]),...(isSchema256Or257(version)?['birthColor']:[]),...(isSchema284OrLater(version)?['corpseWear284']:[])].includes(k))
     &&typeof a.quality==='string'&&(WEAPON_QUALITIES as readonly string[]).includes(a.quality)
     &&typeof a.hitPoints==='number'&&Number.isInteger(a.hitPoints)&&a.hitPoints>0&&a.hitPoints<=definition.hitPoints

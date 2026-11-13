@@ -1,4 +1,5 @@
 import {PROSTHETIC_ITEM_DEFINITIONS_273} from './prosthetic-content-273.ts';
+import { GARMENT_ITEM_DEFINITIONS312 } from './apparel-definitions.ts';
 import {SPEAR_ITEM_DEFINITIONS_272} from './spear-content-272.ts';
 import {LONGSWORD_ITEM_DEFINITIONS_270} from './longsword-content-270.ts';
 import {MACE_ITEM_DEFINITIONS_269} from './mace-content-269.ts';
@@ -45,6 +46,9 @@ export const ITEM_DEFINITIONS = Object.freeze({
   ...ANIMAL_ITEM_DEFINITIONS_256,
   ...BIOME_ITEM_DEFINITIONS,
   ...TEXTILE_APPAREL_ITEM_DEFINITIONS308,
+  ...GARMENT_ITEM_DEFINITIONS312,
+  'unfinished-tshirt':Object.freeze({label:'T-shirt inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0xd8c8a2}),
+  'unfinished-jacket':Object.freeze({label:'Blouson inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0xd8c8a2}),
   ...ANIMAL_PRODUCT_ITEM_DEFINITIONS,
   'scyther-corpse':Object.freeze({label:'Carcasse de Scyther',kind:'mech-corpse',stackLimit:1,nutrition:0,maxIngest:0,color:0x93a4a5}),
   'lancer-corpse':Object.freeze({label:'Carcasse de Lancier',kind:'mech-corpse',stackLimit:1,nutrition:0,maxIngest:0,color:0xa49d88}),

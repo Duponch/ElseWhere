@@ -28,7 +28,8 @@ const unfinished=(w:World)=>w.piles.find(p=>p.unfinished?.recipe==='tuque');
 const textile=(w:World,item:'cloth'|'muffalo-wool'|'light-leather')=>w.piles.filter(p=>p.item===item).reduce((n,p)=>n+p.quantity,0);
 
 test('tuques add only two products and preserve the historical family/material catalogue',()=>{
-  expect(APPAREL_FAMILIES).toEqual(['tribalwear','shirt','pants','duster','parka']);
+  // Schema 312 adds the T-shirt and the jacket after the five historical families.
+  expect(APPAREL_FAMILIES).toEqual(['tribalwear','shirt','pants','duster','parka','tshirt','jacket']);
   for(const family of APPAREL_FAMILIES)for(const material of APPAREL_MATERIALS)expect(APPAREL[apparelItemFor(family,material)]).toBeDefined();
   // Schema 308 adds the three new wools' tuques after these two.
   expect(Object.keys(APPAREL).filter(item=>item.endsWith('-tuque')).sort()).toEqual(['alpaca-wool-tuque','bison-wool-tuque','cloth-tuque','megasloth-wool-tuque','muffalo-wool-tuque']);

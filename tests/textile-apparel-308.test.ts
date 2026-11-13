@@ -90,7 +90,8 @@ test('migration 307 -> 308: policies that allowed plain leather or muffalo wool 
   const all=migrated.apparelPolicies![0]!,clothOnly=migrated.apparelPolicies![2]!;
   expect(all.allowedItems).toEqual(expect.arrayContaining(['dog-leather-shirt','wolf-leather-parka','alpaca-wool-tuque','megasloth-wool-pants']));
   expect(all.allowedMaterials).toEqual(expect.arrayContaining([...TEXTILE_MATERIALS308]));
-  expect(clothOnly.allowedItems).toEqual(['cloth-shirt']);expect(clothOnly.allowedMaterials).toEqual(['cloth']);
+  // Then migration 311 -> 312 adds the T-shirt of an allowed shirt.
+  expect(clothOnly.allowedItems).toEqual(['cloth-shirt','cloth-tshirt']);expect(clothOnly.allowedMaterials).toEqual(['cloth']);
   expect(validateWorld(migrated)).toEqual([]);
   // Old items keep their order; the new ones follow.
   expect(all.allowedItems.slice(0,legacy.apparelPolicies[0]!.allowedItems.length)).toEqual(legacy.apparelPolicies[0]!.allowedItems);

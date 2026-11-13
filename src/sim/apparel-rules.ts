@@ -26,7 +26,7 @@ export interface ApparelState {
 /** Every textile garment id is `${material}-${family}`. */
 const familyItems=(family:Exclude<ApparelFamily,'tuque'>)=>Object.freeze(Object.fromEntries(APPAREL_MATERIALS.map(material=>[material,`${material}-${family}`]))) as Readonly<Record<ApparelMaterial,ApparelItem>>;
 const ITEM_BY_FAMILY: Readonly<Record<Exclude<ApparelFamily,'tuque'>, Readonly<Record<ApparelMaterial, ApparelItem>>>> = Object.freeze({
-  tribalwear:familyItems('tribalwear'),shirt:familyItems('shirt'),pants:familyItems('pants'),duster:familyItems('duster'),parka:familyItems('parka'),
+  tribalwear:familyItems('tribalwear'),shirt:familyItems('shirt'),pants:familyItems('pants'),duster:familyItems('duster'),parka:familyItems('parka'),tshirt:familyItems('tshirt'),jacket:familyItems('jacket'),
 });
 export function apparelItemFor(family:ApparelFamily,material:ApparelMaterial):ApparelItem {
   if(family==='tuque'){

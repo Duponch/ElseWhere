@@ -6,7 +6,7 @@ import {isSchema278OrLater} from './schema-compatibility-257.ts';
 import type {ApparelCountFilter278,CookingBill} from './cooking-types.ts';
 import type {Cell,Pawn,World} from './types.ts';
 
-const RECIPES=['tribalwear','shirt','pants','duster','parka','tuque','make-flak-vest','make-flak-helmet','make-recon-helmet','make-recon-armor','make-plate-armor','make-simple-helmet'] as const;
+const RECIPES=['tribalwear','shirt','pants','duster','parka','tuque','tshirt','jacket','make-flak-vest','make-flak-helmet','make-recon-helmet','make-recon-armor','make-plate-armor','make-simple-helmet'] as const;
 export type ApparelCountRecipe278=typeof RECIPES[number];
 export const isApparelCountRecipe278=(value:unknown):value is ApparelCountRecipe278=>typeof value==='string'&&(RECIPES as readonly string[]).includes(value);
 export const newApparelCountFilter278=():ApparelCountFilter278=>({hpMin:0,hpMax:100,qualityMin:'awful',qualityMax:'legendary',includeEquipped:false});

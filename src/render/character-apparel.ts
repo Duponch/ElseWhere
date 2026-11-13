@@ -1,4 +1,5 @@
 import {packStartingApparelTint256,startingApparelTintHex256} from '../sim/starting-apparel-color-256';
+import {GARMENT_ITEMS312,type GarmentItem312} from '../sim/apparel-definitions';
 import { APPAREL,apparelLabel,type ApparelItem } from '../sim/apparel-rules';
 import {isSmithingApparel267} from '../sim/smithing-apparel-267';
 import {itemCargoKind} from './item-presentation';
@@ -16,7 +17,7 @@ export function apparelProjection(world:World):ReadonlyMap<number,readonly Mater
 export function apparelAppearance(pieces:readonly MaterialPile[]=[]) {
   const family=(name:string)=>pieces.find(p=>APPAREL[p.item as ApparelItem]?.family===name);
   const tuque=family('tuque'),vest=pieces.find(p=>p.item==='flak-vest');
-  const shirt=family('shirt'),tribal=family('tribalwear'),pants=pieces.find(p=>p.item==='flak-pants')??family('pants'),outer=family('duster')??family('parka');
+  const shirt=family('shirt')??family('tshirt'),tribal=family('tribalwear'),pants=pieces.find(p=>p.item==='flak-pants')??family('pants'),outer=family('duster')??family('parka')??family('jacket');
   const plate=pieces.find(p=>isSmithingApparel267(p.item)&&p.item.endsWith('-plate-armor'));
   const simple=pieces.find(p=>isSmithingApparel267(p.item)&&p.item.endsWith('-simple-helmet'));
   const recon=pieces.find(p=>p.item==='recon-armor'),top=plate??recon??outer??tribal??shirt,definition=top?APPAREL[top.item as ApparelItem]:undefined;
@@ -26,7 +27,7 @@ export function apparelAppearance(pieces:readonly MaterialPile[]=[]) {
     simpleHelmetMaterial:simple?SIMPLE_HELMET_ITEMS267.indexOf(simple.item as typeof SIMPLE_HELMET_ITEMS267[number])+1:0,
     plasteelHelmet:pieces.some(p=>p.item==='plasteel-flak-helmet'),
     reconHelmet:pieces.some(p=>p.item==='recon-helmet'),tuque:tuque?(tuque.item==='cloth-tuque'?1:2):0,
-    silhouette:plate?6:recon?5:outer?(definition!.family==='parka'?4:3):tribal?2:shirt?1:0,
+    silhouette:plate?6:recon?5:outer?(definition!.family==='parka'||definition!.family==='jacket'?4:3):tribal?2:shirt?1:0,
     pants:pants?(pants.item==='flak-pants'?(pants.apparel?.birthColor?(pants.apparel.birthColor.r===Math.fround(.62)?9:10):8):(['cloth','light-leather','plainleather','bluefur','camelhide','muffalo-wool','foxfur'].indexOf(legacyPantsMaterial308(APPAREL[pants.item as ApparelItem].material??'cloth'))+1)):0,
     ...(vest?.apparel?.birthColor&&!outer?{vestTintCode:packStartingApparelTint256(vest.apparel.birthColor),vestTintColor:startingApparelTintHex256(vest.apparel.birthColor)}:{}),
     color:definition?.color,signature:pieces.map(p=>p.item+(p.apparel?.birthColor?':'+Object.values(p.apparel.birthColor).join(','):'')).sort().join(' '),description:pieces.map(apparelLabel).join(', ')||'Aucun vêtement équipé'};
@@ -37,6 +38,7 @@ export const SIMPLE_HELMET_ITEMS267=['steel-simple-helmet','plasteel-simple-helm
 export const SIMPLE_HELMET_COLORS267=Object.freeze(SIMPLE_HELMET_ITEMS267.map(item=>APPAREL[item].color));
 export const APPAREL_CARGO:Readonly<Record<ApparelItem,number>>=Object.freeze({
   ...Object.fromEntries(TEXTILE_APPAREL_ITEMS308.map(item=>[item,itemCargoKind(item)])) as Record<TextileApparelItem308,number>,
+  ...Object.fromEntries(GARMENT_ITEMS312.map(item=>[item,itemCargoKind(item)])) as Record<GarmentItem312,number>,
   'wood-plate-armor':itemCargoKind('wood-plate-armor'),'steel-plate-armor':itemCargoKind('steel-plate-armor'),
   'plasteel-plate-armor':itemCargoKind('plasteel-plate-armor'),'uranium-plate-armor':itemCargoKind('uranium-plate-armor'),
   'silver-plate-armor':itemCargoKind('silver-plate-armor'),'gold-plate-armor':itemCargoKind('gold-plate-armor'),

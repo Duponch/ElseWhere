@@ -20,7 +20,7 @@ export interface UnfinishedState {
   /** V90 owner of all incorporated units. Legacy objects omit it and are cloth. */
   material?:TailoringMaterial;
   /** V90 total; cloth remains readable for the two legacy recipes. */
-  units?:20|40|45|60|80;
+  units?:20|40|45|60|70|80;
   cloth?:60|45;
   parts:number[];
   billId?:number;
@@ -83,7 +83,7 @@ export function validUnfinishedShape(p:Record<string,unknown>,version:number):bo
   if(p.item==='unfinished-flak-vest'||p.item==='unfinished-flak-helmet'||p.item==='unfinished-recon-helmet'||p.item==='unfinished-recon-armor'||p.item==='unfinished-gun'||p.item==='unfinished-sculpture'||p.item==='unfinished-component')return p.unfinished===undefined;
   if(p.kind!=='unfinished')return p.unfinished===undefined;
   const u=p.unfinished;
-  if(version<72||!record(p.owner)||!['ground','pawn'].includes(String(p.owner.type))||p.quantity!==1||!record(u)||!isTailoring(u.recipe)||u.recipe==='tuque'&&version<245)return false;
+  if(version<72||!record(p.owner)||!['ground','pawn'].includes(String(p.owner.type))||p.quantity!==1||!record(u)||!isTailoring(u.recipe)||u.recipe==='tuque'&&version<245||(u.recipe==='tshirt'||u.recipe==='jacket')&&version<312)return false;
   const recipe=u.recipe,legacy=version<90,units=PRODUCTION_RECIPES[recipe].units;
   if(legacy)return (p.item==='unfinished-tribalwear'||version>=73&&p.item==='unfinished-shirt')
     &&Object.keys(u).every(k=>['recipe','authorId','progress','cloth','parts','billId'].includes(k))&&(version>=73||recipe==='tribalwear')&&p.item===unfinishedItem(recipe)

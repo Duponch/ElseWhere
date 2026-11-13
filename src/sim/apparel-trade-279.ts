@@ -21,6 +21,8 @@ const recipes:Readonly<Record<ApparelFamily,Readonly<{units:number;workCore:numb
  tribalwear:Object.freeze({units:60,workCore:1800}),shirt:Object.freeze({units:45,workCore:2700}),
  pants:Object.freeze({units:40,workCore:1600}),duster:Object.freeze({units:80,workCore:10000}),
  parka:Object.freeze({units:80,workCore:8000}),tuque:Object.freeze({units:20,workCore:1200}),
+ // Schema 312: Core BasicShirt and Jacket.
+ tshirt:Object.freeze({units:40,workCore:1600}),jacket:Object.freeze({units:70,workCore:7000}),
 });
 export const APPAREL_TRADE_ITEMS_279:readonly OrdinaryApparelItem279[]=Object.freeze(
  (Object.keys(APPAREL) as ApparelItem[]).filter((item):item is OrdinaryApparelItem279=>!!APPAREL[item].family&&!!APPAREL[item].material),

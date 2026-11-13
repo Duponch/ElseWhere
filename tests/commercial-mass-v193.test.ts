@@ -7,7 +7,7 @@ import type { MaterialPile } from '../src/sim/types.ts';
 import { medicalCamp } from './scenarios/health.ts';
 
 test('all 35 textiles and delivered gear have Core mass independent of quality, HP and stuff',()=>{
-  const grams={tribalwear:500,shirt:300,pants:500,duster:2000,parka:2000};
+  const grams={tribalwear:500,shirt:300,pants:500,duster:2000,parka:2000,tshirt:250,jacket:1700};
   for(const material of APPAREL_MATERIALS)for(const family of APPAREL_FAMILIES)
     expect(commercialItemMassGrams(apparelItemFor(family,material))).toBe(grams[family]);
   for(const [item,mass] of Object.entries({'flak-vest':4000,'flak-helmet':1200,'recon-helmet':1000,revolver:1400,'bolt-action-rifle':3500,'plasteel-knife':500,silver:8,'survival-meal':300,medicine:500,component:600}))

@@ -1,9 +1,10 @@
 import {describe,expect,test} from 'vitest';
+import {GARMENT_ITEMS312,isGarmentItem312} from '../src/sim/apparel-definitions.ts';
 import {APPAREL_TRADE_ITEMS_279,APPAREL_TRADE_279,APPAREL_TRADE_MATERIAL_VALUES_279,isOrdinaryApparel279,isNewApparelTrade279,type OrdinaryApparelItem279} from '../src/sim/apparel-trade-279.ts';
 import {APPAREL,LEGACY_APPAREL_MATERIALS308 as APPAREL_MATERIALS,type ApparelMaterial,type ApparelFamily} from '../src/sim/apparel-definitions.ts';
 import {isTextileApparelItem308,TEXTILE_APPAREL_ITEMS308} from '../src/sim/textile-apparel-308.ts';
-// V456 covers the 37 historical products; schema 308 adds 78 more (tests/textile-apparel-308.test.ts).
-const V456_ITEMS=APPAREL_TRADE_ITEMS_279.filter(item=>!isTextileApparelItem308(item));
+// V456 covers the 37 historical products; schema 308 adds 78 more and schema 312 the 44 T-shirts and jackets.
+const V456_ITEMS=APPAREL_TRADE_ITEMS_279.filter(item=>!isTextileApparelItem308(item)&&!isGarmentItem312(item));
 import {PRODUCTION_RECIPES,tailoringMaterialAllowed} from '../src/sim/production-recipes.ts';
 import {tradeCatalogueEntry} from '../src/sim/trade-catalogue.ts';
 import {pileMarketValue,tradeRefusal,tradeUnitPrice} from '../src/sim/trade-prices.ts';
@@ -23,7 +24,7 @@ const person=(id:number,faction:Pawn['faction']='colony'):Pawn=>({id,faction,sta
 describe('V456 ordinary apparel catalogue, value and channel boundaries',()=>{
  test('the immutable catalogue contains exactly the37 existing ordinary products and no armor or invented material',()=>{
   expect(V456_ITEMS).toHaveLength(37);
-  expect(APPAREL_TRADE_ITEMS_279).toHaveLength(37+TEXTILE_APPAREL_ITEMS308.length);
+  expect(APPAREL_TRADE_ITEMS_279).toHaveLength(37+TEXTILE_APPAREL_ITEMS308.length+GARMENT_ITEMS312.length);
   expect(new Set(V456_ITEMS).size).toBe(37);
   expect(V456_ITEMS.filter(isNewApparelTrade279)).toHaveLength(35);
   expect(Object.isFrozen(APPAREL_TRADE_ITEMS_279)&&Object.isFrozen(APPAREL_TRADE_279)&&Object.isFrozen(APPAREL_TRADE_MATERIAL_VALUES_279)).toBe(true);

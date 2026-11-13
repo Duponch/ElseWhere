@@ -13,6 +13,7 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 | Maladie du sommeil | 309 | Maladie tropicale tirée sans effet ; durée de soin propre à chaque maladie | [V309](../gameplay/sleeping-sickness-v309.md) |
 | Hiver volcanique | 310 | −7 °C, ciel plus sombre, faune réduite, pas de loisirs dehors | [V310](../gameplay/volcanic-winter-v310.md) |
 | Corrections de fidélité | 311 | Points de vie de 8 bâtiments, construction des générateurs, beauté (valeurs et formule) | [V311](../gameplay/core-fidelity-v311.md) |
+| T-shirt et blouson | 312 | Deux vêtements Core dans 22 matières | [V312](../gameplay/garments-v312.md) |
 
 ## 2. Fidélité : écarts trouvés et corrigés
 

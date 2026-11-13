@@ -7,7 +7,10 @@ export const LEGACY_APPAREL_MATERIALS308 = ['cloth', 'light-leather', 'plainleat
 export const APPAREL_MATERIALS = [...LEGACY_APPAREL_MATERIALS308, ...TEXTILE_MATERIALS308] as const;
 export type ApparelMaterial = typeof APPAREL_MATERIALS[number];
 /** Historical families admit every existing material. Tuques are a limited family. */
-export const APPAREL_FAMILIES = ['tribalwear', 'shirt', 'pants', 'duster', 'parka'] as const;
+/** Schema 312: Core Apparel_BasicShirt (T-shirt) and Apparel_Jacket. */
+export const GARMENT_FAMILIES312 = ['tshirt', 'jacket'] as const;
+export type GarmentFamily312 = typeof GARMENT_FAMILIES312[number];
+export const APPAREL_FAMILIES = ['tribalwear', 'shirt', 'pants', 'duster', 'parka', ...GARMENT_FAMILIES312] as const;
 export type ApparelFamily = typeof APPAREL_FAMILIES[number] | 'tuque';
 
 export interface ApparelMaterialDefinition {
@@ -45,6 +48,10 @@ export const APPAREL_FAMILY_DEFINITIONS: Readonly<Record<ApparelFamily, ApparelF
   // Core48 equip ticks are quantized to50 Core ticks by our 10-Core step.
   tuque:Object.freeze({label:'Tuque',hitPoints:80,equipTicks:5,coverage:apparelCoverage(['headgear'],['upper-head']),armorFactor:.2,coldFactor:.5,heatFactor:0}),
   parka: Object.freeze({label:'Parka',hitPoints:180,equipTicks:18,coverage:apparelCoverage(['shell'],['torso','neck','shoulders','arms']),armorFactor:.2,coldFactor:2,heatFactor:0}),
+  // Core BasicShirt: OnSkin, Torso and Shoulders; Jacket: Shell, Torso, Neck,
+  // Shoulders, Arms. EquipDelay 1.5 s = 90 Core ticks.
+  tshirt: Object.freeze({label:'T-shirt',hitPoints:100,equipTicks:9,coverage:apparelCoverage(['skin'],['torso','shoulders']),armorFactor:.2,coldFactor:.22,heatFactor:.1}),
+  jacket: Object.freeze({label:'Blouson',hitPoints:160,equipTicks:9,coverage:apparelCoverage(['shell'],['torso','neck','shoulders','arms']),armorFactor:.3,coldFactor:.8,heatFactor:.3}),
 });
 
 export interface ApparelDefinition {
@@ -72,6 +79,10 @@ const textileDefinition = (family: ApparelFamily, material: ApparelMaterial): Ap
   });
 };
 
+/** Every material's T-shirt and jacket (schema 312), in catalogue order. */
+export type GarmentItem312=`${ApparelMaterial}-${GarmentFamily312}`;
+export const GARMENT_ITEMS312:readonly GarmentItem312[]=Object.freeze(APPAREL_MATERIALS.flatMap(m=>GARMENT_FAMILIES312.map(f=>`${m}-${f}` as GarmentItem312)));
+export const isGarmentItem312=(value:unknown):value is GarmentItem312=>typeof value==='string'&&(GARMENT_ITEMS312 as readonly string[]).includes(value);
 export type ApparelItem=`${ApparelMaterial}-${Exclude<ApparelFamily,'tuque'>}`|'cloth-tuque'|'muffalo-wool-tuque'|TextileApparelItem308|'flak-vest'|'flak-helmet'|'recon-helmet'|'recon-armor'|'flak-pants'|'plasteel-flak-helmet'|SmithingApparel267;
 /** Existing cloth ids stay canonical so old saves and reservations retain identity. */
 export const APPAREL:Readonly<Record<ApparelItem,ApparelDefinition>> = Object.freeze({
@@ -124,5 +135,7 @@ export const APPAREL:Readonly<Record<ApparelItem,ApparelDefinition>> = Object.fr
   'recon-armor':Object.freeze({label:'Combinaison de reconnaissance',hitPoints:280,equipTicks:66,color:0x879da4,coverage:apparelCoverage(['middle','shell'],['torso','neck','shoulders','arms','legs']),ratings:Object.freeze({sharp:.92,blunt:.4,heat:.46}),moveOffset:0,coldInsulation:64,heatInsulation:9}),
   'recon-helmet': Object.freeze({label:'Casque de reconnaissance',hitPoints:120,equipTicks:12,color:0x879da4,coverage:apparelCoverage(['headgear'],['full-head']),ratings:Object.freeze({sharp:.92,blunt:.4,heat:.46}),moveOffset:0,coldInsulation:4,heatInsulation:2}),
   ...Object.fromEntries(TEXTILE_APPAREL_ITEMS308.map(item=>{const i=item.lastIndexOf('-');return [item,textileDefinition(item.slice(i+1) as ApparelFamily,item.slice(0,i) as ApparelMaterial)];})) as Record<TextileApparelItem308,ApparelDefinition>,
+  ...Object.fromEntries(GARMENT_ITEMS312.map(item=>{const i=item.lastIndexOf('-');return [item,textileDefinition(item.slice(i+1) as ApparelFamily,item.slice(0,i) as ApparelMaterial)];})) as Record<GarmentItem312,ApparelDefinition>,
 });
-
+type GarmentItemDefinition312={readonly label:string;readonly kind:'apparel';readonly stackLimit:1;readonly nutrition:0;readonly maxIngest:0;readonly color:number};
+export const GARMENT_ITEM_DEFINITIONS312=Object.freeze(Object.fromEntries(GARMENT_ITEMS312.map(item=>[item,Object.freeze({label:APPAREL[item].label,kind:'apparel' as const,stackLimit:1 as const,nutrition:0 as const,maxIngest:0 as const,color:APPAREL[item].color})]))) as Readonly<Record<GarmentItem312,GarmentItemDefinition312>>;

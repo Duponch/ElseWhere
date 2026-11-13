@@ -14,7 +14,8 @@ const candidate=(id:number,item:keyof typeof APPAREL,quality:'normal'|'excellent
 
 test('five garment families have cloth and light-leather identities, stats and bounded recipes',()=>{
   const ids=new Set<string>();
-  for(const family of APPAREL_FAMILIES)for(const material of ['cloth','light-leather'] as const){
+  // The five historical families; schema 312 T-shirts and jackets are covered by garments-312.
+  for(const family of APPAREL_FAMILIES.filter(f=>f!=='tshirt'&&f!=='jacket'))for(const material of ['cloth','light-leather'] as const){
     const item=apparelItemFor(family,material);ids.add(item);
     expect(APPAREL[item]).toMatchObject({family,material});
     expect(newApparelState(item)).toMatchObject({material,hitPoints:APPAREL[item].hitPoints});
@@ -31,7 +32,7 @@ test('five garment families have cloth and light-leather identities, stats and b
   expect(PRODUCTION_RECIPES.parka).toMatchObject({units:80,workTicks:800});
   expect(()=>recipeProduct('shirt',[{item:'cloth'},{item:'light-leather'}])).toThrow('one material');
   expect(stationRecipe({kind:'electric-tailor-bench'})).toBe('shirt');
-  expect(stationRecipes({kind:'electric-tailor-bench'})).toEqual(['shirt','pants','duster','parka','tribalwear','tuque']);
+  expect(stationRecipes({kind:'electric-tailor-bench'})).toEqual(['shirt','pants','duster','parka','tribalwear','tuque','tshirt','jacket']);
 });
 
 test('daily wear and randomized policy cadence replay from explicit independent streams',()=>{

@@ -12,6 +12,10 @@ Un clic sur une **carte de sauvegarde** charge directement cette partie en pause
 
 Avec une fenêtre de jeu ouverte, utilisez le bouton droit maintenu pour tourner la caméra, le bouton central pour la déplacer et la molette pour zoomer, en commençant sur le terrain libre. Le contexte Ordres reste ouvert. Un clic gauche extérieur ferme la fenêtre. Le curseur en mode ordre associe une petite flèche de carton beige au dessin de l’action choisie ; **Échap** revient à la sélection.
 
+## T-shirt et blouson — V312
+
+Après la recherche des vêtements complexes, l'établi de tailleur coud aussi des **t-shirts**, rapides à faire mais peu chauds, et des **blousons**, une couche extérieure plus légère que la parka qui protège un peu mieux. Le blouson se porte par-dessus un t-shirt ou une chemise.
+
 ## Traverser un hiver volcanique — V310
 
 Après le jour 60, une éruption lointaine peut voiler le ciel pendant une à six semaines. Il fait 7 °C de moins, les journées sont plus sombres, les cultures en plein air et les panneaux solaires produisent moins, et la faune se raréfie. Personne ne se détend dehors : prévoyez une salle de loisirs couverte, des réserves de nourriture, du chauffage et une source d'énergie qui ne dépend pas du soleil.
