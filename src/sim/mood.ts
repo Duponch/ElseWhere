@@ -1,3 +1,4 @@
+import {localAuroraThought305} from './misc-incidents-305.ts';
 import {partyMoodThoughts292,expirePartyMemories292} from './party-memories-292.ts';
 import {readingActive295} from './reading-state-295.ts';
 import {memoryExpiry271,memoryReadTick271} from './suspended-memory-271.ts';
@@ -84,6 +85,8 @@ export interface PersonalMoodContext {
   ambientTemperature460?:number;
   deathSituation?:MoodThought;lost?:readonly MoodThought[];
   toxicFallout294?:MoodThought;
+  /** Schema 305: an aurora seen from an uncovered position. */
+  aurora305?:MoodThought;
 }
 /** Held position differs deliberately from the spawned-only dose pass. Rescue,
  * captive and casket-service carriers resolve through their existing owner.
@@ -107,7 +110,7 @@ export function moodThoughts(world:World,pawn:Pawn,topology?:RelationshipTopolog
     items:world.piles,expectation:colonyExpectation(world,pawn),difficultyMood:colonistMoodOffset(world,pawn),
     ...(isSchema282OrLater(world.schemaVersion)&&pawn.cryptosleepHeldAt271===undefined&&pawn.shipCryptosleepHeldAt277===undefined
       ?{ambientTemperature460:readTemperature?readTemperature():temperatureAt(world,pawn)}:{}),
-    environment:{comfort:pawn.comfort,beauty:pawn.beauty},housing:relationshipHousingThought(world,pawn,topology),deathSituation:colonistUnburiedThought(world,pawn),toxicFallout294:localToxicFalloutThought294(world,pawn)});
+    environment:{comfort:pawn.comfort,beauty:pawn.beauty},housing:relationshipHousingThought(world,pawn,topology),deathSituation:colonistUnburiedThought(world,pawn),toxicFallout294:localToxicFalloutThought294(world,pawn),aurora305:localAuroraThought305(world,pawn)});
 }
 export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly MoodThought[] {
   if((pawn.cryptosleepHeldAt271!==undefined||pawn.shipCryptosleepHeldAt277!==undefined))c={...c,tick:memoryReadTick271(pawn,c.tick)};
@@ -120,6 +123,7 @@ export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly M
   if(c.lost)thoughts.push(...c.lost);
   if(c.deathSituation)thoughts.push(c.deathSituation);
   if(c.toxicFallout294)thoughts.push(c.toxicFallout294);
+  if(c.aurora305)thoughts.push(c.aurora305);
   if(readingActive295(pawn)&&pawn.skills.intellectual?.passion)thoughts.push(readingPassion295[pawn.skills.intellectual.passion-1]!);
   if(pawn.familyBereavement)thoughts.push(...familyBereavementThoughtsAt(pawn,c.tick,c.relationPeople??c.people));
   if(pawn.romanceMemories)thoughts.push(...romanceMoodThoughtsAt(pawn,c.tick,c.relationPeople??c.people));

@@ -13,7 +13,9 @@ export type InitialGeneratedAnimal256=WildAnimal&{ageCoreRemainder:number};
 export type InitialAnimalConstruction256=
  |{status:'ready';animal:InitialGeneratedAnimal256;ageCoreTicks:number;ageSamples:number;growth:number;nextGrowthCheckCore:number}
  |{status:'blocked';reason:string;branch?:string;giver?:string;year?:number;ageCoreTicks?:number;scarCount?:number;partIndex?:number};
-export interface InitialWildAnimalInput256 {fact:InitialAnimalFact256;id:number;cell:{x:number;z:number};tick:number;random:InitialAnimalRandom256;unspawnedAnimals:readonly WildAnimal[]}
+export interface InitialWildAnimalInput256 {fact:InitialAnimalFact256;id:number;cell:{x:number;z:number};tick:number;random:InitialAnimalRandom256;unspawnedAnimals:readonly WildAnimal[];
+ /** A requested sex (schema 305 farm animals) replaces the random draw. */
+ forcedSex?:'male'|'female'}
 /** Historical caller contract is preserved. New WorldPawns generation calls
  * the fresh branch only AFTER its true redress transaction consumed Chance. */
 export function constructInitialWildAnimal256(input:InitialWildAnimalInput256):InitialAnimalConstruction256 {
@@ -35,7 +37,7 @@ export function constructFreshInitialWildAnimal256(input:Omit<InitialWildAnimalI
  if(fact.needsRest){random.float(.9,1);random.float(.9,1);}
  let sex:WildAnimal['sex'];
  const forced=fact.fixedGender??(fact.forceGender==='None'?null:fact.forceGender);
- if(forced==='Male')sex='male';else if(forced==='Female')sex='female';else if(fact.hasGenders)sex=random.value()<.5?'male':'female';else return {status:'blocked',reason:'genderless owner is not represented'};
+ if(forced==='Male')sex='male';else if(forced==='Female')sex='female';else if(fact.hasGenders)sex=input.forcedSex??(random.value()<.5?'male':'female');else return {status:'blocked',reason:'genderless owner is not represented'};
  const age=drawInitialAnimalAge256(fact,random);
  // All46 Core wild kinds have cryptosleepCommonality0 and no chronological
  // range: the direct comparison nevertheless consumes a Value, unlike Chance0.

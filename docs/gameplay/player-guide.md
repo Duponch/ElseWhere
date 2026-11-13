@@ -12,6 +12,12 @@ Un clic sur une **carte de sauvegarde** charge directement cette partie en pause
 
 Avec une fenêtre de jeu ouverte, utilisez le bouton droit maintenu pour tourner la caméra, le bouton central pour la déplacer et la molette pour zoomer, en commençant sur le terrain libre. Le contexte Ordres reste ouvert. Un clic gauche extérieur ferme la fenêtre. Le curseur en mode ordre associe une petite flèche de carton beige au dessin de l’action choisie ; **Échap** revient à la sélection.
 
+## Profiter d'une aurore, accueillir des animaux — V305
+
+La nuit, une **aurore** peut colorer le ciel : les habitants à découvert gagnent +14 d'humeur tant qu'elle dure, rien sous un toit. Elle s'efface quand le jour revient.
+
+Parfois, un **animal sauvage** de la carte rejoint la colonie de lui-même, comme s'il venait d'être apprivoisé. Des **animaux de ferme** (dromadaires, canards, yacks, ânes ou alpagas) peuvent aussi arriver par le bord de la carte, au moins une femelle et un mâle : prévoyez un enclos et de la nourriture. Des **capsules de fret** peuvent aussi tomber : après leur ouverture, une cargaison d'une seule sorte (bois, acier, nourriture, médicaments, composants…) attend d'être rangée près du point d'impact, avec une scorie d'acier. Détails dans [la note V305](misc-incidents-v305.md).
+
 ## Poser une porte sur un mur construit
 
 **V483 locale qualifiée, non publiée.** Dans **Architecte → Structure**, choisissez une porte et son matériau, puis posez son plan sur un mur construit compatible. Le constructeur retire d'abord réellement le mur, même si les matériaux de la porte manquent encore. Le retrait récupère une partie de l'ancienne matière ; la case reste ouverte jusqu'aux livraisons et au travail de la nouvelle porte.

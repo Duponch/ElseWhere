@@ -1,3 +1,5 @@
+import {resolveSelectedResourcePod305,advanceResourcePod305} from './resource-pods-305.ts';
+import {isMiscIncidents305,resolveSelectedSelfTame305,resolveSelectedFarmAnimals305} from './misc-incidents-305.ts';
 import {homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
 import { climateTick,seasonTemperature,siteClimateDefinition } from './site-climate.ts';
 import { eligibleFlashstorm,resolveSelectedFlashstorm } from './flashstorm.ts';
@@ -26,6 +28,9 @@ export const MISC_ECLIPSE_WEIGHT=1.5;
 export const MISC_SHORT_CIRCUIT_WEIGHT=1;
 export const MISC_CROP_BLIGHT_WEIGHT=.3;
 export const MISC_TOXIC_FALLOUT_WEIGHT=.12;
+export const MISC_SELF_TAME_WEIGHT305=1;
+export const MISC_FARM_ANIMALS_WEIGHT305=.4;
+export const MISC_RESOURCE_POD_WEIGHT305=1;
 export const MISC_HEAT_COOLDOWN=30*TICKS_PER_DAY;
 export const MISC_COLD_COOLDOWN=30*TICKS_PER_DAY;
 export const MISC_ECLIPSE_COOLDOWN=15*TICKS_PER_DAY;
@@ -51,6 +56,8 @@ export interface CassandraMiscCalendar {
   shortCircuits?:ShortCircuitCalendar;
   cropBlights?:CropBlightCalendar;
   toxicFallout?:ToxicFalloutCalendar294;
+  /** Schema 305: resource pods dropped so far, and the pod not yet opened. */
+  resourcePods305?:number;resourcePod305?:import('./resource-pods-305.ts').ResourcePodPending305;
 }
 
 function random(state:CassandraMiscCalendar):number {
@@ -146,6 +153,14 @@ function consumeOpportunity(world:World,state:CassandraMiscCalendar):void {
   else if(ticket>=MISC_HEAT_WEIGHT+MISC_FLASHSTORM_WEIGHT+MISC_POD_WEIGHT+MISC_COLD_WEIGHT+MISC_ECLIPSE_WEIGHT+MISC_SHORT_CIRCUIT_WEIGHT+MISC_CROP_BLIGHT_WEIGHT&&ticket<MISC_HEAT_WEIGHT+MISC_FLASHSTORM_WEIGHT+MISC_POD_WEIGHT+MISC_COLD_WEIGHT+MISC_ECLIPSE_WEIGHT+MISC_SHORT_CIRCUIT_WEIGHT+MISC_CROP_BLIGHT_WEIGHT+MISC_TOXIC_FALLOUT_WEIGHT&&eligibleToxicFallout294(world)){
     resolveSelectedToxicFallout294(world,Math.floor(random(state)*0x100000000)||1);
   }
+  // Schema 305: the Self-tame then Farm animals tickets follow, in the space
+  // that drew nothing before (misc-incidents-305).
+  else if(isMiscIncidents305(Number(world.schemaVersion))){
+    const supported=MISC_HEAT_WEIGHT+MISC_FLASHSTORM_WEIGHT+MISC_POD_WEIGHT+MISC_COLD_WEIGHT+MISC_ECLIPSE_WEIGHT+MISC_SHORT_CIRCUIT_WEIGHT+MISC_CROP_BLIGHT_WEIGHT+MISC_TOXIC_FALLOUT_WEIGHT;
+    if(ticket>=supported&&ticket<supported+MISC_SELF_TAME_WEIGHT305)resolveSelectedSelfTame305(world,()=>random(state));
+    else if(ticket>=supported+MISC_SELF_TAME_WEIGHT305&&ticket<supported+MISC_SELF_TAME_WEIGHT305+MISC_FARM_ANIMALS_WEIGHT305)resolveSelectedFarmAnimals305(world,Math.floor(random(state)*0x100000000)||1);
+    else if(ticket>=supported+MISC_SELF_TAME_WEIGHT305+MISC_FARM_ANIMALS_WEIGHT305&&ticket<supported+MISC_SELF_TAME_WEIGHT305+MISC_FARM_ANIMALS_WEIGHT305+MISC_RESOURCE_POD_WEIGHT305)resolveSelectedResourcePod305(world,Math.floor(random(state)*0x100000000)||1);
+  }
 }
 
 /** End is processed before any draw at the same tick. The introductory
@@ -165,6 +180,7 @@ export function advanceMiscIncidents(world:World):void {
     checkpointEclipseGrowth(world);delete weather.eclipse;
     emit(world,'L’éclipse se termine. La lumière naturelle et les générateurs solaires retrouvent leur fonctionnement habituel.');
   }
+  advanceResourcePod305(world);
   if(homeIncidentsBlocked261(world))return;
   if(!state.introDone&&world.tick>=MISC_INTRO_TICK){
     state.introDone=true;

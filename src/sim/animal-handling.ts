@@ -180,15 +180,20 @@ function carried(w:World,p:Pawn,task:AnimalHandlingTask) {
   return w.piles.find(i=>i.id===task.carryPileId&&i.owner.type==='pawn'&&i.owner.pawnId===p.id
     &&i.kind==='food'&&eggAllowedForPlayer256(i)&&handlingFoodAllowed(w,i.item,w.wildlife?.animals.find(a=>a.id===task.animalId))&&i.quantity===task.quantity);
 }
+/** A wild animal joins the colony: the conversion of a successful taming,
+ * also used by the schema 305 self-tame and farm animal incidents. */
+export function adoptAsColonyAnimal(w:World,a:WildAnimal):void {
+  if(isSchema287OrLater(w.schemaVersion)){delete a.animalThermalRefuge288;delete a.animalMapAreas287;delete a.animalAreaReturn287;}tameHiveInsect256(w,a);a.domestic={since:w.tick,care:'herbal',tameness:MAX_TAMENESS,nextDecay:w.tick+TAMENESS_DECAY,lastTraining:w.tick,...(productKind(a)?{productFullness:0}:{})};
+  delete a.taming;delete a.flee;delete a.threat;delete a.retaliation;
+  if(w.hunting)w.hunting.targets=w.hunting.targets.filter(id=>id!==a.id);
+  for(const hunter of w.pawns)if(hunter.hunting?.animalId===a.id){cancelHunting(hunter);hunter.path=[];hunter.state='idle';hunter.planCooldown=0;}
+}
 function finish(w:World,p:Pawn,a:WildAnimal,task:AnimalHandlingTask,ctx:NeedContext):void {
   const skill=p.skills.animals;
   if(skill)learnSkill(skill,task.kind==='tame'?90_000:70_000,p);
   const success=healthRandom(w)<(task.kind==='tame'?tameChance(p)*tameWildnessFactor256(a.species):trainChance(p));
   if(task.kind==='tame') {
-    if(success){if(isSchema287OrLater(w.schemaVersion)){delete a.animalThermalRefuge288;delete a.animalMapAreas287;delete a.animalAreaReturn287;}tameHiveInsect256(w,a);a.domestic={since:w.tick,care:'herbal',tameness:MAX_TAMENESS,nextDecay:w.tick+TAMENESS_DECAY,lastTraining:w.tick,...(productKind(a)?{productFullness:0}:{})};
-      delete a.taming;delete a.flee;delete a.threat;delete a.retaliation;
-      if(w.hunting)w.hunting.targets=w.hunting.targets.filter(id=>id!==a.id);
-      for(const hunter of w.pawns)if(hunter.hunting?.animalId===a.id){cancelHunting(hunter);hunter.path=[];hunter.state='idle';hunter.planCooldown=0;}
+    if(success){adoptAsColonyAnimal(w,a);
       ctx.event(`${p.name} a apprivoisé ${animalSpecies(a.species).label} ${a.id}.`);
     } else ctx.event(`${p.name} n’a pas réussi à apprivoiser ${animalSpecies(a.species).label} ${a.id}.`);
   } else if(a.domestic) {

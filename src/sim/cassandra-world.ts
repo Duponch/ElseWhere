@@ -1,3 +1,4 @@
+import {isMiscIncidents305,resolveSelectedAurora305,advanceAurora305} from './misc-incidents-305.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 
 export const WORLD_CHECK_INTERVAL=100;
@@ -9,6 +10,8 @@ export interface CassandraWorldCalendar {
   checks:number;opportunities:number;flares:number;
   lastStart?:number;lastEndCore?:number;
   active?:{start:number;endCore:number};
+  /** Schema 305: Aurora, the other World ticket (misc-incidents-305). */
+  auroras?:number;lastAuroraStart?:number;aurora?:import('./misc-incidents-305.ts').AuroraState305;
 }
 function random(state:CassandraWorldCalendar):number {
   let n=state.rng;n^=n<<13;n^=n>>>17;n^=n<<5;state.rng=n>>>0;
@@ -49,6 +52,7 @@ export function electricityDisabledAtCore(world:World,coreTick:number):boolean {
 /** Called AFTER advancePower: its ten boundaries still see the ending condition. */
 export function advanceWorldIncidents(world:World):void {
   const state=world.worldIncidents;if(!state||!world.gameProfile)return;
+  advanceAurora305(world);
   if(state.active&&world.tick*10>state.active.endCore){
     delete state.active;emit(world,'L’éruption solaire se termine. Les appareils redémarrent selon leur alimentation et leurs interrupteurs réels.');
   }
@@ -61,4 +65,5 @@ export function advanceWorldIncidents(world:World):void {
   const ticket=random(state)*4;
   // Eclipse and Aurora keep their absent tickets; no retries or renormalization.
   if(ticket>=1.5&&ticket<2.8)resolveSelectedSolarFlare(world);
+  else if(ticket>=2.8&&isMiscIncidents305(Number(world.schemaVersion)))resolveSelectedAurora305(world,()=>random(state));
 }

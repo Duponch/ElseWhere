@@ -6,6 +6,18 @@ import {validWeatherIncidents} from './weather-incident-save.ts';
 import {validShortCircuits} from './short-circuit-save.ts';
 import {validCropBlightCalendar} from './plant-blight-save.ts';
 import {validToxicFalloutCalendar294} from './toxic-fallout-save-294.ts';
+import {RESOURCE_POD_FALL_TICKS305,RESOURCE_POD_OPEN_TICKS305} from './resource-pods-305.ts';
+/** Schema 305 resource pods: a positive count, and at most one unopened pod
+ * dropped on a check tick, its timings exact and its opening possibly late. */
+function validResourcePods305(value:Record<string,unknown>,tick:number):boolean {
+  const count=value.resourcePods305,pod=value.resourcePod305;
+  if(count===undefined)return pod===undefined;
+  if(!integer(count,1))return false;
+  if(pod===undefined)return true;
+  if(!object(pod)||!keys(pod,['start','landAt','openAt','cell','seed'])||Object.keys(pod).length!==5||!integer(pod.start,0,tick)||Number(pod.start)%MISC_CHECK_INTERVAL!==0&&pod.start!==MISC_INTRO_TICK)return false;
+  if(pod.landAt!==Number(pod.start)+RESOURCE_POD_FALL_TICKS305||pod.openAt!==Number(pod.landAt)+RESOURCE_POD_OPEN_TICKS305||!integer(pod.seed,1,0xffffffff))return false;
+  const c=pod.cell;return object(c)&&keys(c,['x','z'])&&Object.keys(c).length===2&&integer(c.x)&&integer(c.z);
+}
 
 const object=(value:unknown):value is Record<string,unknown>=>!!value&&typeof value==='object'&&!Array.isArray(value);
 const integer=(value:unknown,min=0,max=Number.MAX_SAFE_INTEGER):value is number=>Number.isSafeInteger(value)&&Number(value)>=min&&Number(value)<=max;
@@ -20,7 +32,7 @@ export function validMiscIncidents(value:unknown,version:number,world:Pick<World
   const toxic=object(value)?Object.getOwnPropertyDescriptor(value,'toxicFallout'):undefined;
   if(object(value)&&'toxicFallout'in value&&((version!==294&&(version!==295&&(version!==296&&!isCorePhysicalSchema297(version))))||!toxic||toxic.enumerable!==true||!Object.hasOwn(toxic,'value')||toxic.value===undefined))return false;
   if(version<169||!world.gameProfile||!object(value)||
-    !keys(value,['profile','adoptedAt','rng','nextCheck','introDone','checks','opportunities','heatwaves','lastHeatwaveStart','active',...version>=200?['weather']:[],...version>=201?['shortCircuits']:[],...version>=205?['cropBlights']:[],...(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))?['toxicFallout']:[]])||
+    !keys(value,['profile','adoptedAt','rng','nextCheck','introDone','checks','opportunities','heatwaves','lastHeatwaveStart','active',...version>=200?['weather']:[],...version>=201?['shortCircuits']:[],...version>=205?['cropBlights']:[],...(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))?['toxicFallout']:[],...version>=305?['resourcePods305','resourcePod305']:[]])||
     value.profile!=='cassandra-misc-v1'||!integer(value.adoptedAt,0,world.tick)||!integer(value.rng,1,0xffffffff)||
     !integer(value.nextCheck,MISC_FIRST_CHECK)||value.nextCheck%MISC_CHECK_INTERVAL!==0||
     value.nextCheck!==Math.max(MISC_FIRST_CHECK,(Math.floor(scheduleTick/MISC_CHECK_INTERVAL)+1)*MISC_CHECK_INTERVAL)||
@@ -53,7 +65,8 @@ export function validMiscIncidents(value:unknown,version:number,world:Pick<World
   return validWeatherIncidents(value.weather,version,world,calendar)&&validShortCircuits(value.shortCircuits,version,world,calendar)
     &&validCropBlightCalendar(value.cropBlights,version,world,calendar)
     &&validToxicFalloutCalendar294(toxic?.value,version,world as World,calendar)
-    &&(value.cropBlights===undefined&&toxic===undefined||calendar.heatwaves+(calendar.weather?.coldSnaps??0)+(calendar.weather?.eclipses??0)+(calendar.shortCircuits?.count??0)+(calendar.cropBlights?.count??0)+(calendar.toxicFallout?.count??0)<=calendar.opportunities);
+    &&(value.cropBlights===undefined&&toxic===undefined||calendar.heatwaves+(calendar.weather?.coldSnaps??0)+(calendar.weather?.eclipses??0)+(calendar.shortCircuits?.count??0)+(calendar.cropBlights?.count??0)+(calendar.toxicFallout?.count??0)+(calendar.resourcePods305??0)<=calendar.opportunities)
+    &&validResourcePods305(value,world.tick);
 }
 
 export function validateMiscIncidents(world:World,version=world.schemaVersion):string[] {

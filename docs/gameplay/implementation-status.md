@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V305 — schéma 305 :** [Aurore, animal apprivoisé seul, animaux de ferme et capsules de ressources](misc-incidents-v305.md). Quatre incidents du conteur, déjà tirés sans effet, ont désormais leurs règles du jeu de base. L'onde et l'apaisement psychiques attendent un genre pour les humains ; les autres incidents divers manquants restent absents.
+
 **V483 qualifiée localement — schéma 296, non publiée :** [Porte sur mur fini](door-over-wall-v483.md). Retrait réel, phase ouverte et porte payée, intentions séparées et propriétaires conservés. 303cas distincts par reprises, natif68,954s/16exports/9captures, type15,573s/build5,052s, présentation160,082s/44changements≤41,3ms. Coût ciblé résiduel trois plans17,439/6,457ms checkpoint/delta ; aucun gain FPS global. Production295/b969 inchangée. Reprendre le réarbitrage vers une continuation réelle des Éclaircies ; six ensembles ouverts.
 
 **V482 publiée — schéma 295, production b969b256 :** [Roman physique acheté et lu](novel-v482.md). Achat, livraison, lecture et conservation du même exemplaire acquis ; 76 nouveaux cas et 119 voisins par reprises, deux anciens rouges reproduits. Parcours natif, recharges exactes, typage et compilation acquis ; coût JS ciblé documenté sans gain FPS global. Les six ensembles restent ouverts. [Publication vérifiée](../development/publication-v482.md).
