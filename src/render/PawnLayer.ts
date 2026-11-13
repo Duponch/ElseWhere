@@ -666,7 +666,7 @@ export class PawnLayer {
         const dye=pawnDyeNode(true),equipmentVertex=RESIDENT_WEAPON_VISUALS269.reduce((matches,weapon)=>matches.or(dye.equal(weapon.dye)),dye.equal(-999));
         If(equipmentVertex,()=>{
           const hand=makeOriginalPosition({bone:3,point:vec3(...ORIGAMI_EQUIPMENT_HAND)}).toVar();
-          const sling=dye.equal(-4).or(dye.equal(-9)).or(dye.equal(SPEAR_DYE272));
+          const sling=dye.equal(-4).or(dye.equal(-9)).or(dye.equal(SPEAR_DYE272)).or(dye.equal(-16));
           const stowed=makeOriginalPosition({bone:0,point:sling.select(vec3(...ORIGAMI_EQUIPMENT_SLING),vec3(...ORIGAMI_EQUIPMENT_BELT))}).toVar();
           const reach=sin(this.travelTime.sub(motion.w).mul(4).clamp(0,1).mul(Math.PI));
           for(const weapon of RESIDENT_WEAPON_VISUALS269)If(dye.equal(weapon.dye),()=>{animated.assign(origamiEquipmentPositionNode(weapon.item,positionLocal,hand,stowed,motion.z,motion.y,reach,recoil));});
@@ -675,7 +675,12 @@ export class PawnLayer {
       }else for(const weapon of RESIDENT_WEAPON_VISUALS269) {
         const isWeapon=pawnDyeNode(this.referenceRig).equal(weapon.dye);
         const along=positionLocal.y.sub(.68),across=positionLocal.x.sub(.205),depth=positionLocal.z;
-        if(weapon.item==='bolt-action-rifle'||weapon.item==='emp-launcher') {
+        if(weapon.item==='short-bow'){
+          // At rest the stave (bind Z after the weapon swap) runs up the back;
+          // aimed, the stave stands upright with the string toward the archer.
+          If(isWeapon,()=>{ animated.assign(vec3(depth.mul(.30).add(across).add(.13),depth.mul(.78).add(along.mul(.12)).add(.84),along.mul(.8).add(.25))); });
+          If(shooting.and(isWeapon),()=>{ animated.assign(vec3(across.add(.10*this.humanBind.weaponXScale),depth.add(this.humanBind.gunY).add(recoil.mul(.035)),along.add(this.humanBind.gunZ).sub(recoil.mul(.12)))); });
+        } else if(weapon.item==='bolt-action-rifle'||weapon.item==='emp-launcher') {
           // High diagonal sling at rest: the long gun remains legible above
           // the torso. During aim its authored barrel (+Y) points forward.
           If(isWeapon,()=>{ animated.assign(vec3(along.mul(.30).add(across).add(.13),along.mul(.78).add(depth.mul(.12)).add(.84),depth.mul(.8).add(.25))); });
@@ -1015,13 +1020,16 @@ export class PawnLayer {
       if(this.referenceRig){
         const equipmentVertex=RESIDENT_WEAPON_VISUALS269.reduce((matches,weapon)=>matches.or(dye.equal(weapon.dye)),dye.equal(-999));
         If(equipmentVertex,()=>{
-          const hand=this.cachedPawnPosition({bone:3,point:vec3(...ORIGAMI_EQUIPMENT_HAND)}).toVar(),sling=dye.equal(-4).or(dye.equal(-9)).or(dye.equal(SPEAR_DYE272));
+          const hand=this.cachedPawnPosition({bone:3,point:vec3(...ORIGAMI_EQUIPMENT_HAND)}).toVar(),sling=dye.equal(-4).or(dye.equal(-9)).or(dye.equal(SPEAR_DYE272)).or(dye.equal(-16));
           const stowed=this.cachedPawnPosition({bone:0,point:sling.select(vec3(...ORIGAMI_EQUIPMENT_SLING),vec3(...ORIGAMI_EQUIPMENT_BELT))}).toVar();
           for(const weapon of RESIDENT_WEAPON_VISUALS269)If(dye.equal(weapon.dye),()=>{animated.assign(origamiEquipmentPositionNode(weapon.item,positionLocal,hand,stowed,motion.z,motion.y,this.animationCache.cell(3).w,recoil));});
         });
         for(const weapon of RESIDENT_WEAPON_VISUALS269)If(dye.equal(weapon.dye).and(attribute('aEquipment','vec4').x.floor().notEqual(weapon.equipment)),()=>{animated.assign(vec3(0));});
       }else for(const weapon of RESIDENT_WEAPON_VISUALS269){const isWeapon=dye.equal(weapon.dye),along=positionLocal.y.sub(.68),across=positionLocal.x.sub(.205),depth=positionLocal.z;
-        if(weapon.item==='bolt-action-rifle'||weapon.item==='emp-launcher'){
+        if(weapon.item==='short-bow'){
+          If(isWeapon,()=>{animated.assign(vec3(depth.mul(.30).add(across).add(.13),depth.mul(.78).add(along.mul(.12)).add(.84),along.mul(.8).add(.25)));});
+          If(shooting.and(isWeapon),()=>{animated.assign(vec3(across.add(.10*this.humanBind.weaponXScale),depth.add(this.humanBind.gunY).add(recoil.mul(.035)),along.add(this.humanBind.gunZ).sub(recoil.mul(.12))));});
+        }else if(weapon.item==='bolt-action-rifle'||weapon.item==='emp-launcher'){
           If(isWeapon,()=>{animated.assign(vec3(along.mul(.30).add(across).add(.13),along.mul(.78).add(depth.mul(.12)).add(.84),depth.mul(.8).add(.25)));});
           If(shooting.and(isWeapon),()=>{animated.assign(vec3(across.add(.10*this.humanBind.weaponXScale),depth.add(this.humanBind.gunY).add(recoil.mul(.035)),along.add(this.humanBind.gunZ).sub(recoil.mul(.12))));});
         }else if(weapon.item==='spear-family'){If(isWeapon,()=>{animated.assign(spearPositionNode272(along,across,depth,this.animationCache.cell(3).w,motion.y,motion.z.equal(8).or(motion.z.equal(WORK_POSE.groundMelee))));});

@@ -265,6 +265,7 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  case 'flak-vest':case 'plate-armor':case 'recon-armor':case 'shield':d.path('M 22 10 L 15 15 L 10 33 L 19 36 L 18 54 L 46 54 L 45 36 L 54 33 L 49 15 L 42 10 Q 32 22 22 10 Z',id==='shield'?P.blue:color);d.line([[23,27],[41,27]],2,P.paper);d.line([[23,35],[41,35]],2,P.paper);d.line([[32,23],[32,49]],1.4);break;
  case 'flak-helmet':case 'recon-helmet':case 'simple-helmet':d.path('M 10 36 Q 11 10 32 10 Q 54 12 54 38 L 49 41 L 45 50 L 36 50 L 36 36 Z',color);d.line([[11,37],[45,36]],3,P.paper);if(id==='recon-helmet')d.rect(35,28,22,10,P.blue);break;
  case 'revolver':case 'bolt-action-rifle':case 'emp-launcher':d.shape([[8,23],[55,23],[55,32],[32,32],[27,40],[22,39],[17,55],[7,51],[15,33],[8,33]],P.stone);d.rect(7,24,14,9,P.wood);d.line([[30,32],[30,40],[24,40]],1.5);if(id==='bolt-action-rifle'){d.rect(39,19,20,5,P.darkBlue);}if(id==='emp-launcher')d.ellipse(48,28,8,8,P.blue);break;
+ case 'short-bow':case 'unfinished-bow':d.path('M 22 6 Q 54 32 22 58',null,4.5,P.wood);if(id==='short-bow')d.line([[22,6],[22,58]],1.1,P.paper);d.rect(34,27,6,10,P.ochre);break;
  case 'plasteel-knife':case 'knife':case 'longsword':case 'spear':case 'mace':{
   const material=item?color:P.silver;
   if(id==='spear'){d.line([[9,57],[42,23]],4,P.wood);d.shape([[35,22],[55,5],[48,32],[41,29]],material);d.line([[41,25],[50,14]],1.1,P.paper);break;}

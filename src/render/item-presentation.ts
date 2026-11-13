@@ -65,8 +65,8 @@ export function itemGeometry(item:ItemId,quantity:number=ITEM_DEFINITIONS[item].
     if(item==='plasteel')for(const x of [-.075,.075])box(x,.245,0,.025,.018,.35,0xc3dedc);
   }else if(item==='silver'){
     for(const [x,z,h] of [[-.18,-.06,.06],[.06,-.1,.1],[.15,.13,.045],[-.10,.16,.035]])add('item-disc',x!,h!/2,z!, .20,h!, .20,color);
-  }else if(definition.kind==='weapon'||item==='unfinished-gun'||item==='unfinished-knife'||item==='unfinished-mace'||item==='unfinished-longsword'||item==='unfinished-spear'){
-    const weapon=weaponVisual(item==='unfinished-gun'?'bolt-action-rifle':item==='unfinished-knife'?'plasteel-knife':item==='unfinished-mace'?'steel-mace':item==='unfinished-longsword'?'steel-longsword':item==='unfinished-spear'?'steel-spear':item);
+  }else if(definition.kind==='weapon'||item==='unfinished-bow'||item==='unfinished-gun'||item==='unfinished-knife'||item==='unfinished-mace'||item==='unfinished-longsword'||item==='unfinished-spear'){
+    const weapon=weaponVisual(item==='unfinished-bow'?'short-bow':item==='unfinished-gun'?'bolt-action-rifle':item==='unfinished-knife'?'plasteel-knife':item==='unfinished-mace'?'steel-mace':item==='unfinished-longsword'?'steel-longsword':item==='unfinished-spear'?'steel-spear':item);
     for(const [index,p] of (weapon?.parts??[]).entries()){
       // The knife blank has no sharpened point or fitted guard yet. Its broad
       // blade and bare tang reuse the original authored knife dimensions.
@@ -74,7 +74,9 @@ export function itemGeometry(item:ItemId,quantity:number=ITEM_DEFINITIONS[item].
       if(item==='unfinished-mace'&&index!==0&&index!==2)continue;
       if(item==='unfinished-longsword'&&index!==0&&index!==4)continue;
       if(item==='unfinished-spear'&&index!==0&&index!==5)continue;
-      box(p.center[0]!, .07+p.center[2]!,p.center[1]!,p.size[0]!,p.size[2]!,p.size[1]!,item==='unfinished-gun'||item==='unfinished-knife'||item==='unfinished-mace'||item==='unfinished-longsword'||item==='unfinished-spear'?color:p.color);
+      // The bow blank is the bare stave: no grip wrap, no string yet.
+      if(item==='unfinished-bow'&&(index===0||index===7))continue;
+      box(p.center[0]!, .07+p.center[2]!,p.center[1]!,p.size[0]!,p.size[2]!,p.size[1]!,item==='unfinished-bow'||item==='unfinished-gun'||item==='unfinished-knife'||item==='unfinished-mace'||item==='unfinished-longsword'||item==='unfinished-spear'?color:p.color);
     }
   }else if(item.endsWith('-plate-armor')||item==='unfinished-plate-armor'){
     add('item-vest',0,.13,0,.65,.24,.68,color);for(const side of [-1,1]){box(side*.28,.20,-.16,.21,.14,.24);box(side*.18,.08,.36,.24,.11,.28);}box(0,.27,.04,.22,.035,.29,0xb6bba7);

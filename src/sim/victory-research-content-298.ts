@@ -3,7 +3,7 @@ import {isSchema298OrLater} from './schema-compatibility-257.ts';
  * Existing research runtime/save guards must explicitly admit the future data.
  * The long-range scanner's operational service is NOT qualified by this leaf. */
 export const VICTORY_RESEARCH_SCHEMA_298=298 as const;
-export const isVictoryResearchSchema298=(value:unknown):value is typeof VICTORY_RESEARCH_SCHEMA_298|299|300|301|302|303|304|305|306|307|308|309|310|311|312|313|314|315=>isSchema298OrLater(value);
+export const isVictoryResearchSchema298=(value:unknown):value is typeof VICTORY_RESEARCH_SCHEMA_298|299|300|301|302|303|304|305|306|307|308|309|310|311|312|313|314|315|316=>isSchema298OrLater(value);
 export const VICTORY_RESEARCH_SCALE_298=1_000_000;
 
 /** Distinct from the existing ground-scanner. Machining is a real hidden

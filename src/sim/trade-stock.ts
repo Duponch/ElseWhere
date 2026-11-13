@@ -16,6 +16,8 @@ export const VISITOR_RANGED_POOL:readonly StockCandidate[]=Object.freeze([
   {value:530},{value:1160},{value:1000},{value:1000},{value:265},{value:245},{value:315},
   {value:44.64},{value:109.2},{value:66},{value:104.4},{value:1010},{value:1355},
 ]);
+/** Index of Core Bow_Short (value 44.64) in the ranged pool, sold from 316. */
+export const VISITOR_SHORT_BOW_INDEX316=19;
 /** The 22 Core Clothing definitions use abstract (no stuff) base values. The
  * tribal garment is Sellable-only; the flak vest has no Clothing trade tag. */
 export const VISITOR_CLOTHING_POOL:readonly StockCandidate[]=Object.freeze([
@@ -91,7 +93,9 @@ export function generateVisitorStock(seed:number,pawnId:number,nextId:number,tic
   // it can buy either but creates zero units, so no cloth quantity is invented.
   if(integer(state,0,1)){
     const candidate=select(state,VISITOR_RANGED_POOL),quality=traderQuality(state);
-    if(candidate.item)add(candidate.item,1,quality);
+    // Schema 316: pool entry 19 is Core Bow_Short (same random draws).
+    const item=candidate.item??(version>=316&&VISITOR_RANGED_POOL.indexOf(candidate)===VISITOR_SHORT_BOW_INDEX316?'short-bow':undefined);
+    if(item)add(item,1,quality);
   }
   if(integer(state,0,1)){
     const candidate=select(state,VISITOR_CLOTHING_POOL),roll=random(state),cloth=roll<VISITOR_SHIRT_CLOTH_CHANCE,quality=traderQuality(state);

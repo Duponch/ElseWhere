@@ -4,7 +4,7 @@ import type { Cell,Pawn,World } from './types.ts';
 
 export interface ShootingClock {lastAdvancedAtCore:number;pausedCore:number}
 export type ShootingStance=({phase:'aim';startedAtCore:number;endsAtCore:number;targetStartedDowned:boolean;lean?:Cell}
-  |{phase:'cooldown';startedAtCore:number;endsAtCore:number})&{weaponItem?:'bolt-action-rifle'|'emp-launcher';clock?:ShootingClock};
+  |{phase:'cooldown';startedAtCore:number;endsAtCore:number})&{weaponItem?:'bolt-action-rifle'|'emp-launcher'|'short-bow';clock?:ShootingClock};
 export type ShootingClockStep='duplicate'|'paused'|'active';
 
 /** The order can be cancelled/replaced without erasing post-shot recovery. */

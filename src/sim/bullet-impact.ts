@@ -13,6 +13,9 @@ export interface UnarmoredBullet {
   part?:BodyPartId;
   height?:BodyPart['height'];
   depth?:BodyPart['depth'];
+  /** Schema 316 arrows: Core Arrow damage makes a Cut (Crack on a solid
+   * part) instead of a Gunshot. Absent for every bullet. */
+  injury?:'cut';
 }
 export interface BulletImpactResult {
   record:MedicalRecord;
@@ -26,7 +29,8 @@ export function validateUnarmoredBullet(hit:UnarmoredBullet,model=HUMAN_MODEL):v
   // Bound the producer to an integer milli-HP envelope before allocating/RNG.
   if(!Number.isFinite(hit.damage)||hit.damage<0||!Number.isSafeInteger(hit.damage*HP_UNIT)||hit.damage>1000000||
     hit.part!==undefined&&(!modelHasPart(model,hit.part)||BODY_PARTS[hit.part].conceptual)||
-    hit.height!==undefined&&!['top','middle','bottom'].includes(hit.height)||hit.depth!==undefined&&!['inside','outside'].includes(hit.depth))throw new Error('Invalid unarmored bullet');
+    hit.height!==undefined&&!['top','middle','bottom'].includes(hit.height)||hit.depth!==undefined&&!['inside','outside'].includes(hit.depth)||
+    hit.injury!==undefined&&hit.injury!=='cut')throw new Error('Invalid unarmored bullet');
 }
 const draw=(random:MedicalRandom):number=>{const n=random();if(!Number.isFinite(n)||n<0||n>=1)throw new Error('Invalid impact random draw');return n;};
 
@@ -59,7 +63,7 @@ export function resolveUnarmoredBullet(record:MedicalRecord,hit:UnarmoredBullet,
   if(!part)return result;
   const guarded=protect?.(part,hit.damage),damage=guarded?.amount??hit.damage;
   if(!damage)return result;
-  const kind=(id:BodyPartId)=>!guarded?.converted?'gunshot' as const:PART_INJURY_RULES[id].solid?'crack' as const:PART_INJURY_RULES[id].skin?'bruise' as const:'crush' as const;
+  const kind=(id:BodyPartId)=>!guarded?.converted?(hit.injury==='cut'?PART_INJURY_RULES[id].solid?'crack' as const:'cut' as const:'gunshot' as const):PART_INJURY_RULES[id].solid?'crack' as const:PART_INJURY_RULES[id].skin?'bruise' as const:'crush' as const;
   let severity=damage*HP_UNIT;
   const definition=BODY_PARTS[part],hp=remainingPartHealth(next,part);
   if(definition.depth==='outside'&&definition.parent!==null&&severity>=hp) {

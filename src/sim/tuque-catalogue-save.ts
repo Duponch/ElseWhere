@@ -4,14 +4,17 @@ import {GARMENT_ITEMS312} from './apparel-definitions.ts';
 const TUQUE_ITEMS=new Set(['cloth-tuque','muffalo-wool-tuque','unfinished-tuque']);
 /** Schema 312 T-shirts and jackets follow the same rule before 312. */
 const GARMENTS_312=new Set<string>([...GARMENT_ITEMS312,'unfinished-tshirt','unfinished-jacket']);
+/** Schema 316 short bow: item, workpiece, recipe and its projectiles/stances. */
+const BOW_316=new Set<string>(['short-bow','unfinished-bow']);
 export function validTuqueCatalogueTransport(value:unknown,version:number):boolean {
-  if(version>=312)return true;
-  const tuque=version<245,blocked=(item:string)=>tuque&&TUQUE_ITEMS.has(item)||GARMENTS_312.has(item),recipe=(r:unknown)=>tuque&&r==='tuque'||r==='tshirt'||r==='jacket';
+  if(version>=316)return true;
+  const tuque=version<245,garments=version<312,blocked=(item:string)=>tuque&&TUQUE_ITEMS.has(item)||garments&&GARMENTS_312.has(item)||BOW_316.has(item),
+    recipe=(r:unknown)=>tuque&&r==='tuque'||garments&&(r==='tshirt'||r==='jacket')||r==='make-short-bow';
   const visit=(v:unknown):boolean=>{
     if(Array.isArray(v))return v.every(visit);
     if(!v||typeof v!=='object')return true;
     for(const [key,child] of Object.entries(v)){
-      if(key==='item'&&typeof child==='string'&&blocked(child))return false;
+      if((key==='item'||key==='weaponItem')&&typeof child==='string'&&blocked(child))return false;
       if(key==='recipe'&&recipe(child))return false;
       if(key==='allowedItems'&&Array.isArray(child)&&child.some(i=>blocked(String(i))))return false;
       if(['items','filters','bought','sold'].includes(key)&&child&&typeof child==='object'&&Object.keys(child).some(i=>blocked(i)))return false;
@@ -25,11 +28,11 @@ export function validTuqueCatalogueTransport(value:unknown,version:number):boole
 /** Existing validation passes revisit only domains that can own items,
  * reservations, recipes or permissions. No terrain/resource/grid traversal;
  * validateCampaignSchema forwards the same check to the secondary local map. */
-const TUQUE_DOMAINS=['piles','pawns','structures','jobs','packed','stockpiles','apparelPolicies',
+const TUQUE_DOMAINS=['piles','pawns','structures','jobs','packed','stockpiles','apparelPolicies','projectiles',
   'group','groupLosses','commercialTrip','civilianPost','visitors','raids','trade','orbital',
   'prisonDepartures','arrivals','startingArrival','podRescues','scout','quests','destroyed','deconstructed'] as const;
 export function validTuqueCatalogueDomains(value:unknown,version:number):boolean {
-  if(version>=312||!value||typeof value!=='object'||Array.isArray(value))return true;
+  if(version>=316||!value||typeof value!=='object'||Array.isArray(value))return true;
   const world=value as Record<string,unknown>;
   return TUQUE_DOMAINS.every(key=>validTuqueCatalogueTransport(world[key],version));
 }

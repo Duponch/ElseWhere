@@ -36,6 +36,20 @@ const EMP_LAUNCHER_PARTS = [
   {size:[.12,.035,.035],center:[.10,.15,0],color:0x9ebbc4},
 ] as const;
 
+/** Schema 316 short bow, an original simple stave: leather grip, two limbs
+ * stepping back toward their tips and a light string. The stave runs along
+ * the bind Y axis so the aimed bow stands upright, string toward the archer. */
+export const SHORT_BOW_PARTS = [
+  {size:[.045,.13,.04],center:[0,0,0],color:0x5b3a22},
+  {size:[.035,.20,.03],center:[-.008,.165,0],color:0x9a6b3f},
+  {size:[.030,.16,.027],center:[-.03,.335,0],color:0x93653b},
+  {size:[.026,.08,.024],center:[-.058,.45,0],color:0x7c5532},
+  {size:[.035,.20,.03],center:[-.008,-.165,0],color:0x9a6b3f},
+  {size:[.030,.16,.027],center:[-.03,-.335,0],color:0x93653b},
+  {size:[.026,.08,.024],center:[-.058,-.45,0],color:0x7c5532},
+  {size:[.008,.94,.008],center:[-.072,0,0],color:0xe8e0c8},
+] as const;
+export const SHORT_BOW_DYE316=-16;
 /** Resident variants share one rig, one cargo batch and the same authored parts
  * as ground piles. Dye tags -2/-3 are already used by clothing. */
 export const WEAPON_VISUALS = [
@@ -44,6 +58,7 @@ export const WEAPON_VISUALS = [
   {item:'bolt-action-rifle',equipment:2,cargo:70,dye:-4,parts:RIFLE_PARTS},
   {item:'plasteel-knife',equipment:3,cargo:71,dye:-5,parts:KNIFE_PARTS},
   {item:'emp-launcher',equipment:4,cargo:73,dye:-9,parts:EMP_LAUNCHER_PARTS},
+  {item:'short-bow',equipment:8,cargo:0,dye:-16,parts:SHORT_BOW_PARTS},
 ] as const;
 /** Optional resident families are separate from the four historical concrete
  * visuals: a family key is never a real ItemId or a ground/cargo item. */

@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V316 — schéma 316 :** [Arc court](short-bow-v316.md). Première arme à distance sans poudre : 30 bois au poste d'artisanat ou à la forge, flèches qui coupent (fêlure sur les parties dures), profil de tir du jeu de base, vente par les visiteurs.
+
 **V315 — schéma 315 :** [Corrections de fidélité : récoltes, cuisine et animaux](work-animal-fidelity-v315.md). Un audit des plantes, des animaux et des vitesses de travail a confirmé six écarts, corrigés : rendement de récolte aux niveaux 17 à 19, rendement de toute plante abîmée, vitesse des cuisiniers maladroits, tolérance des capacités et sauvagerie pour apprivoiser et dresser, portées du lièvre.
 
 **V314 — schéma 314 :** [Vêtements vendus par les visiteurs](visitor-clothing-v314.md). Les marchands visiteurs proposent tous les vêtements ordinaires représentés (chemise, pantalon, t-shirt, blouson, cache-poussière, parka, tuque), dans une matière tirée selon les fréquences du jeu de base, avec les mêmes tirages aléatoires qu'avant.

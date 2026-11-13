@@ -1,6 +1,7 @@
 import {PROSTHETIC_ITEM_DEFINITIONS_273} from './prosthetic-content-273.ts';
 import { GARMENT_ITEM_DEFINITIONS312 } from './apparel-definitions.ts';
 import {SPEAR_ITEM_DEFINITIONS_272} from './spear-content-272.ts';
+import {SHORT_BOW_COLOR_316} from './short-bow-316.ts';
 import {LONGSWORD_ITEM_DEFINITIONS_270} from './longsword-content-270.ts';
 import {MACE_ITEM_DEFINITIONS_269} from './mace-content-269.ts';
 import {SMITHING_APPAREL_ITEM_DEFINITIONS267} from './smithing-apparel-267.ts';
@@ -32,6 +33,7 @@ export const ITEM_DEFINITIONS = Object.freeze({
   'unfinished-spear':Object.freeze({label:'Lance inachevée',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0x87958f}),
   'unfinished-longsword':Object.freeze({label:'Épée longue inachevée',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0x87958f}),
   'unfinished-mace':Object.freeze({label:'Masse inachevée',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0x87958f}),
+  'unfinished-bow':Object.freeze({label:'Arc inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:SHORT_BOW_COLOR_316}),
   'unfinished-knife':Object.freeze({label:'Couteau inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0xa0b2b5}),
   'unfinished-plate-armor':Object.freeze({label:'Armure de plaques inachevée',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0x87958f}),
   'unfinished-simple-helmet':Object.freeze({label:'Casque simple inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0x87958f}),
@@ -92,6 +94,7 @@ export const ITEM_DEFINITIONS = Object.freeze({
   silver:Object.freeze({label:'Argent',kind:'silver',stackLimit:500,nutrition:0,maxIngest:0,color:0xc7c9cc}),
   'bolt-action-rifle':Object.freeze({label:'Fusil à verrou',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x695342}),
   'emp-launcher':Object.freeze({label:'Lanceur EMP',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x749da6}),
+  'short-bow':Object.freeze({label:'Arc court',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:SHORT_BOW_COLOR_316}),
   'plasteel-knife':Object.freeze({label:'Couteau en plastacier',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0xa0b2b5}),
   revolver:Object.freeze({label:'Revolver',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x606b72}),
   'herbal-medicine':Object.freeze({label:'Plantes médicinales',kind:'medicine',stackLimit:25,nutrition:0,maxIngest:0,color:0x7d985c}),

@@ -1,3 +1,4 @@
+import {SHORT_BOW_BASE_VALUE_316} from './short-bow-316.ts';
 import {LONGSWORD_ITEMS_270,longswordBaseValue270,longswordMaxHitPoints270} from './longsword-content-270.ts';
 import {SPEAR_ITEMS_272,spearBaseValue272,spearMaxHitPoints272} from './spear-content-272.ts';
 import type { ItemId } from './items.ts';
@@ -55,6 +56,8 @@ export const TRADE_CATALOGUE:Readonly<Partial<Record<ItemId,TradeCatalogueEntry>
   revolver:gear(135.4,100,true,true),'bolt-action-rifle':gear(253.2,100,true,true),'plasteel-knife':gear(284.256,280,false,true),
   // Fixed materials + Core work value: 75*1.9 + 8*32 + 30000*.0036.
   'emp-launcher':gear(506.5,100,true,true),
+  // Schema 316: Core Bow_Short, 30 wood x 1.2 + 2400 x 0.0036.
+  'short-bow':gear(SHORT_BOW_BASE_VALUE_316,100,true,true),
 });
 export const tradeCatalogueEntry=(item:ItemId):TradeCatalogueEntry|undefined=>TRADE_CATALOGUE[item];
 import {MACE_ITEMS_269,maceBaseValue269,maceMaxHitPoints269} from './mace-content-269.ts';

@@ -8,6 +8,7 @@ import { advanceBulletFlight } from './bullet-flight.ts';
 import {captureCoreProjectileBatch297 as captureProjectileBatch} from './core-projectile-batch-297.ts';
 import { projectileProfile } from './ranged-statistics.ts';
 import { damageUnarmoredPawnWithBullet } from './bullet-damage.ts';
+import { arrowHit316 } from './short-bow-316.ts';
 import { healthRandom } from './health.ts';
 import type { ProjectileScene } from './projectile-rules.ts';
 import type { WorldProjectile } from './projectile-state.ts';
@@ -110,10 +111,10 @@ export function createCoreProjectileStepper297(world:World) {
     if(pod){if(!damageStartingPod256(world,pod,profile.damage,core))throw new RangeError('Cannot commit Bullet active transporter impact');impact();}
     if(animal){
       const launcher=world.pawns.find(pawn=>`pawn:${pawn.id}`===p.flight.launcherKey);
-      damageAnimalWithBullet(world,animal,{damage:profile.damage},core,launcher,launcher?.id);
+      damageAnimalWithBullet(world,animal,{damage:profile.damage,...arrowHit316(p.weaponItem)},core,launcher,launcher?.id);
       impact();
     }
-    if(mech){damageMechanoidWithBullet(world,mech,{damage:profile.damage},core,profile.armorPenetration);delayMechanoidImpact(world,mech,core,false,profile.stoppingPower);impact();}
+    if(mech){damageMechanoidWithBullet(world,mech,{damage:profile.damage,...arrowHit316(p.weaponItem)},core,profile.armorPenetration);delayMechanoidImpact(world,mech,core,false,profile.stoppingPower);impact();}
     if(structure||packed){
       if(!applyStructureExternalDamage(world,(structure??packed?.building)!,profile.damage,profile.damage,'bullet',world.rng,core,p.flight.launcherKey as BombInstigatorKey))throw new RangeError('Cannot commit Bullet structure impact');impact();
     }else if(barrier){
@@ -122,7 +123,7 @@ export function createCoreProjectileStepper297(world:World) {
     if(pile){if(!damagePile(world,pile,profile.damage,'bullet'))throw new RangeError('Cannot commit Bullet pile impact');impact();}
     if(resource){if(!damageResource(world,resource,profile.damage,'bullet'))throw new RangeError('Cannot commit Bullet plant impact');impact();}
     if(pawn) {
-      const result=damageUnarmoredPawnWithBullet(world,pawn,{damage:profile.damage},profile.armorPenetration);
+      const result=damageUnarmoredPawnWithBullet(world,pawn,{damage:profile.damage,...arrowHit316(p.weaponItem)},profile.armorPenetration);
       applyBulletStagger(world,pawn,core,profile.stoppingPower);
       if(result?.layers.some(l=>l.severity>0))disturbance.damage(pawn,core,wasLying);
       // A fall can change posture, release a carried patient and drop objects.

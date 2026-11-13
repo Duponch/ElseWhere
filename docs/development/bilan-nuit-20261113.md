@@ -17,6 +17,7 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 | Corrections de fidélité : humeur | 313 | Fatigue et attentes en voyage, prisonniers, plaie infectée, seuils de beauté | [V313](../gameplay/mood-fidelity-v313.md) |
 | Vêtements vendus par les visiteurs | 314 | Tous les vêtements ordinaires représentés, matière selon les fréquences Core | [V314](../gameplay/visitor-clothing-v314.md) |
 | Corrections de fidélité : récoltes, cuisine, animaux | 315 | Rendement de récolte, plantes abîmées, cuisiniers maladroits, apprivoisement et dressage, portées du lièvre | [V315](../gameplay/work-animal-fidelity-v315.md) |
+| Arc court | 316 | Première arme à distance sans poudre : fabrication, flèches qui coupent, vente par les visiteurs | [V316](../gameplay/short-bow-v316.md) |
 
 ## 2. Fidélité : écarts trouvés et corrigés
 
@@ -73,4 +74,14 @@ Ensuite, `node tmp/publication-20261113/verify-http.mjs` (avec `DEPLOY_URL` sur 
 
 ## 7. Suite prévue
 
-À compléter.
+Par ordre de priorité :
+
+1. **Publication.** Déployer la construction prête après votre accord, puis la refaire pour inclure les lots suivants.
+2. **Écarts d'audit restants.**
+   - **Combat :** un pillard à terre peut mourir selon l'« intention de population » du conteur ; ce calcul et son historique ne sont pas encore modélisés. Restent aussi l'armure naturelle des animaux, le report des dégâts sur les petites créatures et l'efficacité des membres blessés pour les coups à mains nues.
+   - **Santé :** il manque l'écart aléatoire du soin des personnes hors carte.
+   - **Vie sociale :** interactions entre prisonniers, souvenir « m'a recruté », âge dans la compatibilité, règles des visites aux malades.
+3. **Armes et objets.** Arc recourbé et grand arc, armes à feu courantes (pistolet automatique, fusil à pompe, fusil d'assaut, mitrailleuse, fusil de précision), puis pénoxycyline et politique générale des drogues.
+4. **Contenu à modéliser en 3D.** Animaux de ferme (vache, poule, mouton, chèvre, cochon), tables de billard et de poker.
+5. **Performances.** Refonte de la publication du Worker vers l'affichage (chantier 2) : publier seulement les colons et animaux modifiés, à mesurer d'abord dans le vrai client.
+6. **Campagne « Atterrissage ».** Améliorer la défense du joueur scripté pour le raid du jour 22.

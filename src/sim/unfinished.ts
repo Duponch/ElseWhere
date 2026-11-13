@@ -78,7 +78,7 @@ export function cancelUnfinished(world:World,itemId:number):CommandResult {
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const int=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):boolean=>Number.isSafeInteger(v)&&Number(v)>=min&&Number(v)<=max;
 export function validUnfinishedShape(p:Record<string,unknown>,version:number):boolean {
-  if(isSmithingWorkpiece267(p.item))return isSchema267OrLater(version)&&(p.item!=='unfinished-knife'||version===268||isSchema269OrLater(version))&&(p.item!=='unfinished-mace'||isSchema269OrLater(version))&&(p.item!=='unfinished-longsword'||isSchema270OrLater(version))&&(p.item!=='unfinished-spear'||isSchema272OrLater(version))&&!Object.hasOwn(p,'unfinished');
+  if(isSmithingWorkpiece267(p.item))return isSchema267OrLater(version)&&(p.item!=='unfinished-knife'||version===268||isSchema269OrLater(version))&&(p.item!=='unfinished-mace'||isSchema269OrLater(version))&&(p.item!=='unfinished-longsword'||isSchema270OrLater(version))&&(p.item!=='unfinished-spear'||isSchema272OrLater(version))&&(p.item!=='unfinished-bow'||version>=316)&&!Object.hasOwn(p,'unfinished');
   if(p.item==='unfinished-prosthetic')return isSchema273OrLater(version)&&!Object.hasOwn(p,'unfinished');
   if(p.item==='unfinished-flak-vest'||p.item==='unfinished-flak-helmet'||p.item==='unfinished-recon-helmet'||p.item==='unfinished-recon-armor'||p.item==='unfinished-gun'||p.item==='unfinished-sculpture'||p.item==='unfinished-component')return p.unfinished===undefined;
   if(p.kind!=='unfinished')return p.unfinished===undefined;

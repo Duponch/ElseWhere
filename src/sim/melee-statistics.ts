@@ -49,6 +49,10 @@ export function meleeTools(world:World,pawn:Pawn,body=()=>pawnBody(pawn)):MeleeT
       if(world.schemaVersion>=270)for(const part of ['handle','tip','edge'] as const){const tool=longswordTool270(`${weapon.item}-${part}`);add(tool.id,tool.damage*factor,tool.kind);}
     } else if(isMaceItem269(weapon.item)){
       if(world.schemaVersion>=269)for(const part of ['handle','head'] as const){const tool=maceTool269(`${weapon.item}-${part}`);add(tool.id,tool.damage*factor,tool.kind);}
+    } else if(weapon.item==='short-bow'){
+      // Core Bow_Short: one limb tool, Blunt and Poke, power 9, cooldown 2 s:
+      // the two existing gun verbs without the grip.
+      const damage=9*factor;add('barrel',damage,'blunt');add('barrel-poke',damage,'poke');
     } else {const damage=9*factor;add('grip',damage,'blunt');add('barrel',damage,'blunt');add('barrel-poke',damage,'poke');}
   }
   return rankMeleeTools(tools);

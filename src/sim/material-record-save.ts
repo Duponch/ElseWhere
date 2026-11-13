@@ -54,6 +54,7 @@ export function validatePileRecordShape(item:Record<string,unknown>,world:Pick<W
  if(!isSchema273OrLater(version)&&(isProstheticItem273(item.item)||item.item==='unfinished-prosthetic'||Object.hasOwn(item,'prostheticWork273')))return ['Future industrial prosthetics.'];
  if(!validProstheticWorkShape273(item,version))errors.push('Invalid prosthetic work.');
  if(!isSchema272OrLater(version)&&(isSpearItem272(item.item)||item.item==='unfinished-spear'))return ['Future spear catalogue.'];
+ if(version<316&&(item.item==='short-bow'||item.item==='unfinished-bow'))return ['Future short bow catalogue.'];
  if(!isSchema269OrLater(version)&&(isMaceItem269(item.item)||item.item==='unfinished-mace'))return ['Future mace catalogue.'];
  if(!isSchema270OrLater(version)&&(isLongswordItem270(item.item)||item.item==='unfinished-longsword'))return ['Future longsword catalogue.'];
  if(version<268&&item.item==='unfinished-knife')return ['Future knife manufacture.'];

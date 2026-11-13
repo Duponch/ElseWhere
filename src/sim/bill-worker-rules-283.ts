@@ -20,6 +20,7 @@ const recipeSkills:Readonly<Record<ProductionRecipe,ProductionRecipeSkill283|nul
  'cremate-corpse':null,
  'smelt-slag':null,
  'make-spear':'crafting',
+ 'make-short-bow':'crafting',
  'make-longsword':'crafting',
  'make-mace':'crafting',
  'make-plasteel-knife':'crafting',
