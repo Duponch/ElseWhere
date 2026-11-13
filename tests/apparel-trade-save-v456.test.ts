@@ -1,4 +1,6 @@
 import {expect,test} from 'vitest';
+import {isTextileApparelItem308} from '../src/sim/textile-apparel-308.ts';
+import {isGarmentItem312} from '../src/sim/apparel-definitions.ts';
 import {APPAREL_TRADE_ITEMS_279,isOrdinaryApparel279} from '../src/sim/apparel-trade-279.ts';
 import {validApparelShape} from '../src/sim/apparel-save.ts';
 import {newApparelState} from '../src/sim/apparel-rules.ts';
@@ -36,8 +38,10 @@ function public279(w:World){
 }
 
 test('all37 ordinary garments admit only279 inventory, preserving quantity, material, forced and existing body/ground rules',()=>{
- expect(APPAREL_TRADE_ITEMS_279).toHaveLength(37);
- for(const item of APPAREL_TRADE_ITEMS_279){
+ // The 37 products of schema 279; schemas 308 and 312 add garments that did not exist then.
+ const v279=APPAREL_TRADE_ITEMS_279.filter(item=>!isTextileApparelItem308(item)&&!isGarmentItem312(item));
+ expect(v279).toHaveLength(37);
+ for(const item of v279){
   const p={id:1,item,kind:'apparel',quantity:1,owner:{type:'inventory',pawnId:2},apparel:newApparelState(item)};
   expect(validApparelShape(p,279),item).toBe(true);expect(validApparelShape(p,278),item).toBe(false);expect(validApparelShape(p,280),item).toBe(false);
   expect(validApparelShape({...p,owner:{type:'ground',x:1,z:1}},278),item).toBe(true);

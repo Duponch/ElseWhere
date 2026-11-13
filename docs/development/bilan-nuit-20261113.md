@@ -15,6 +15,7 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 | Corrections de fidélité | 311 | Points de vie de 8 bâtiments, construction des générateurs, beauté (valeurs et formule) | [V311](../gameplay/core-fidelity-v311.md) |
 | T-shirt et blouson | 312 | Deux vêtements Core dans 22 matières | [V312](../gameplay/garments-v312.md) |
 | Corrections de fidélité : humeur | 313 | Fatigue et attentes en voyage, prisonniers, plaie infectée, seuils de beauté | [V313](../gameplay/mood-fidelity-v313.md) |
+| Vêtements vendus par les visiteurs | 314 | Tous les vêtements ordinaires représentés, matière selon les fréquences Core | [V314](../gameplay/visitor-clothing-v314.md) |
 
 ## 2. Fidélité : écarts trouvés et corrigés
 
