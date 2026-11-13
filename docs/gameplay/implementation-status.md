@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V307 — schéma 307 :** [Mécanites fibreuses et sensorielles](mechanites-v307.md). Les deux dernières maladies « locales » tirées sans effet atteignent désormais de vrais habitants : gravité qui monte de 25 % par jour, soins qui la freinent, disparition en 15 à 30 jours ; capacités augmentées, mais douleur et fatigue. La maladie du sommeil et la dégradation d'organes restent absentes.
+
 **V306 — schéma 306 :** [Vers intestinaux et parasites musculaires](parasites-v306.md). Ces deux maladies du conteur, déjà tirées sans effet sur les sites géographiques, rendent désormais vraiment malades : douleur, faim ou repos accélérés, capacités réduites, soins de 51 heures (48 + 3 de chevauchement) jusqu'à 300 % de qualité cumulée. Le vomissement des vers et les autres maladies manquantes restent absents.
 
 **V305 — schéma 305 :** [Aurore, animal apprivoisé seul, animaux de ferme et capsules de ressources](misc-incidents-v305.md). Quatre incidents du conteur, déjà tirés sans effet, ont désormais leurs règles du jeu de base. L'onde et l'apaisement psychiques attendent un genre pour les humains ; les autres incidents divers manquants restent absents.

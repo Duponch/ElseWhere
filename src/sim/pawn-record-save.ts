@@ -60,7 +60,7 @@ import { validRescueShape,validateRescues } from './rescue-save.ts';
 import { validAnimalRescueShape } from './animal-rest-save.ts';
 import { validSkills } from './skills-save.ts';
 import { initializePlayerOrders, validatePlayerOrders, validSowingDestination } from './player-orders-save.ts';
-import { validateTravel,MIN_PAWN_SPEED_V87,MAX_PAWN_DELAY_V87,MAX_PAWN_DELAY_V226,MIN_PAWN_SPEED_V86,MAX_PAWN_DELAY_V86 } from './travel-validation.ts';
+import { validateTravel,MIN_PAWN_SPEED_V87,MAX_PAWN_DELAY_V87,MAX_PAWN_DELAY_V226,MIN_PAWN_SPEED_V86,MAX_PAWN_DELAY_V86,maxPawnSpeedFactor307 } from './travel-validation.ts';
 import { validPrisonerPawnShape,validatePrisoners } from './prisoner-save.ts';
 import { CARRY_CAPACITY, footprintCells, JOB_WOOD_COST, MAX_STACK } from './definitions.ts';
 import type { Resource,World } from './types.ts';
@@ -194,7 +194,7 @@ function pawnRecordShape(item:Record<string,unknown>,world:PawnRecordContext,ver
   if(version>=6 && item.motion!=null) {
     const m=item.motion;
     if(!record(m)||'stop297'in m||!record(m.from)||!record(m.to)||!coord(m.from)||!coord(m.to)||typeof m.start!=='number'||typeof m.end!=='number'||!Number.isFinite(m.start)||!Number.isFinite(m.end)||m.start<0||m.start>physicalLocalNow297||m.to.x!==item.x||m.to.z!==item.z||Math.max(Math.abs((m.to.x as number)-(m.from.x as number)),Math.abs((m.to.z as number)-(m.from.z as number)))!==1) errors.push('Invalid travel segment.');
-    else if(!validCapturedCoreMove297(m,version)||!validStunIntervals(m.stuns,version,m.start as number,validationTick,coreNow297)||!validSlowIntervals(m.stagger,version,m.start as number,validationTick,coreNow297)||(m.speedFactor!==undefined&&(version<37||typeof m.speedFactor!=='number'||!Number.isFinite(m.speedFactor)||m.speedFactor<(version>=87?MIN_PAWN_SPEED_V87:version>=86?MIN_PAWN_SPEED_V86:version>=65?.128*((4.6-.12)/4.6)/2:version>=63?.128*((4.6-.12)/4.6):version>=45?.128:.8)||m.speedFactor>1))||!validCapturedTravelDelay(m.terrainDelay,version)||Math.abs(m.end-travelEnd(m as unknown as TravelSegment))>1e-7 || Math.abs((item.moveCooldown as number)-Math.max(0,m.end-physicalLocalNow297))>1e-7) errors.push('Inconsistent travel duration.');
+    else if(!validCapturedCoreMove297(m,version)||!validStunIntervals(m.stuns,version,m.start as number,validationTick,coreNow297)||!validSlowIntervals(m.stagger,version,m.start as number,validationTick,coreNow297)||(m.speedFactor!==undefined&&(version<37||typeof m.speedFactor!=='number'||!Number.isFinite(m.speedFactor)||m.speedFactor<(version>=87?MIN_PAWN_SPEED_V87:version>=86?MIN_PAWN_SPEED_V86:version>=65?.128*((4.6-.12)/4.6)/2:version>=63?.128*((4.6-.12)/4.6):version>=45?.128:.8)||m.speedFactor>maxPawnSpeedFactor307(version)))||!validCapturedTravelDelay(m.terrainDelay,version)||Math.abs(m.end-travelEnd(m as unknown as TravelSegment))>1e-7 || Math.abs((item.moveCooldown as number)-Math.max(0,m.end-physicalLocalNow297))>1e-7) errors.push('Inconsistent travel duration.');
   }
   const haul = item.haul;
   if(record(haul)&&record(haul.destination)&&!validCraftingFuelDestination269(haul.destination,version))errors.push('Invalid or future crafting refuel purpose.');

@@ -9,7 +9,7 @@ import {consumeActivityValid} from './consuming.ts';
 import {validForcedConsumePawnShape} from './consume-save.ts';
 import {travelEnd,validSlowIntervals,validStunIntervals} from './travel-timing.ts';
 import {validCapturedTravelDelay} from './captured-travel-delay.ts';
-import {MIN_PAWN_SPEED_V87,MAX_PAWN_DELAY_V226} from './travel-validation.ts';
+import {MIN_PAWN_SPEED_V87,MAX_PAWN_DELAY_V226,maxPawnSpeedFactor307 } from './travel-validation.ts';
 import {reservedSourcesByPile} from './materials.ts';
 import {captureStandability} from './furniture-travel.ts';
 import {validDiningPlace} from './dining.ts';
@@ -57,7 +57,7 @@ function validTravel(p:Pawn,w:World):boolean {
  return !!m&&typeof m==='object'&&!('stop297'in m)&&cell(m.from,w)&&cell(m.to,w)&&same(m.to,p)&&step(m.from,m.to)===1
   &&Number.isFinite(m.start)&&Number.isFinite(m.end)&&m.start>=0&&m.start<=effectiveLocal297(w)
   &&validCapturedCoreMove297(m,w.schemaVersion)&&validStunIntervals(m.stuns,w.schemaVersion,m.start,w.tick,isCorePhysicalSchema297(w.schemaVersion)?effectiveCore297(w):undefined)&&validSlowIntervals(m.stagger,w.schemaVersion,m.start,w.tick,isCorePhysicalSchema297(w.schemaVersion)?effectiveCore297(w):undefined)
-  &&(m.speedFactor===undefined||Number.isFinite(m.speedFactor)&&m.speedFactor>=MIN_PAWN_SPEED_V87&&m.speedFactor<=1)
+  &&(m.speedFactor===undefined||Number.isFinite(m.speedFactor)&&m.speedFactor>=MIN_PAWN_SPEED_V87&&m.speedFactor<=maxPawnSpeedFactor307(w.schemaVersion))
   &&validCapturedTravelDelay(m.terrainDelay,w.schemaVersion)&&Math.abs(m.end-travelEnd(m))<=1e-7
   &&Math.abs(p.moveCooldown-Math.max(0,m.end-effectiveLocal297(w)))<=1e-7;
 }

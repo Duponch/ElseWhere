@@ -1,6 +1,7 @@
 import {schemaAtLeast} from './schema-range.ts';
 import {HP_UNIT} from './injury-rules.ts';
 import type {MedicalRecord} from './injury-types.ts';
+import {mechaniteModifiers307} from './mechanites-307.ts';
 
 /* Schema 306: the two Core local infections that the disease incident drew
  * without effect (Disease_GutWorms, Disease_MuscleParasites). Core numbers:
@@ -39,7 +40,7 @@ const NONE=Object.freeze({pain:0,manipulationOffset:0,movingOffset:0});
 /** Hunger fall factor: x2 with gut worms. */
 export const parasiteHungerFactor306=(record:Pick<MedicalRecord,'parasites306'>|undefined):number=>record?.parasites306?.['gut-worms']?2:1;
 /** Rest fall factor: x2 with muscle parasites. */
-export const parasiteRestFactor306=(record:Pick<MedicalRecord,'parasites306'>|undefined):number=>record?.parasites306?.['muscle-parasites']?2:1;
+export const parasiteRestFactor306=(record:Pick<MedicalRecord,'parasites306'|'mechanites307'>|undefined):number=>(record?.parasites306?.['muscle-parasites']?2:1)+(record?.mechanites307?mechaniteModifiers307(record).restOffset:0);
 export const hasParasites306=(record:Pick<MedicalRecord,'parasites306'>|undefined):boolean=>!!record?.parasites306;
 
 export function parasiteTendable306(record:MedicalRecord,kind:ParasiteKind306):boolean {

@@ -16,6 +16,7 @@ import { advanceMalnutrition } from './malnutrition.ts';
 import { advanceFoodPoisoning } from './food-poisoning.ts';
 import { advanceFlu } from './flu-evolution.ts';
 import { advanceImmuneDiseases } from './immune-diseases-evolution.ts';
+import { advanceMechanites307 } from './mechanites-307.ts';
 import { advanceAnesthetic } from './anesthetic.ts';
 import { isMechanoidKind } from './mechanoid-definition.ts';
 import {medicalCivilTick271,medicalCivilCore271} from './suspended-human-clock-271.ts';
@@ -59,7 +60,8 @@ export function advanceMedical(record:MedicalRecord,ticks:number,context:Medical
   if(pending&&!Number.isSafeInteger((record.infections?.nextId??1)+pending))throw new Error('Infection identities exhausted');
   if((record.infections?.cases.length||pending)&&!Number.isSafeInteger((record.tick+ticks)*10))throw new Error('Infection clock exhausted');
   if(record.immuneDiseases&&!Number.isSafeInteger((record.tick+ticks)*10))throw new Error('Immune disease clock exhausted');
-  if(!fallout&&!animalConditions&&!alcoholClinicalActive265(record.alcohol)&&!record.injuries.length&&!record.missing.length&&!record.bloodLoss&&!record.infections?.cases.length&&!record.infections?.immunity&&!record.foodPoisoning&&!record.toxicBuildup&&!record.cryptosleepSickness&&!record.flu&&!record.immuneDiseases&&!record.anesthetic&&!(context.malnutritionRate&&(context.starving||record.malnutrition))){advanceCoveredInFirefoam290(record,ticks*10);record.tick+=ticks;if(record.civilTick271!==undefined)record.civilTick271=endCivil;return;}
+  if(record.mechanites307&&!Number.isSafeInteger((record.tick+ticks)*10))throw new Error('Mechanite clock exhausted');
+  if(!fallout&&!animalConditions&&!alcoholClinicalActive265(record.alcohol)&&!record.injuries.length&&!record.missing.length&&!record.bloodLoss&&!record.infections?.cases.length&&!record.infections?.immunity&&!record.foodPoisoning&&!record.toxicBuildup&&!record.cryptosleepSickness&&!record.flu&&!record.immuneDiseases&&!record.mechanites307&&!record.anesthetic&&!(context.malnutritionRate&&(context.starving||record.malnutrition))){advanceCoveredInFirefoam290(record,ticks*10);record.tick+=ticks;if(record.civilTick271!==undefined)record.civilTick271=endCivil;return;}
   const end=record.tick+ticks;
   while(record.tick<end) {
     record.tick++;
@@ -102,6 +104,7 @@ export function advanceMedical(record:MedicalRecord,ticks:number,context:Medical
     advanceInfections(record,context,random);
     if(record.death)return;
     advanceImmuneDiseases(record,context);
+    advanceMechanites307(record);
     if(record.death)return;
     advanceFlu(record,context);
     if(record.death)return;

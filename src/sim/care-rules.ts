@@ -12,9 +12,10 @@ import { fluNeedsRest,fluTendable } from './flu-state.ts';
 import { immuneDiseaseTargets,immuneDiseasesNeedRest } from './immune-diseases-state.ts';
 import type { ImmuneDiseaseKind } from './immune-diseases-types.ts';
 import { parasiteTargets306,type ParasiteKind306 } from './parasites-306.ts';
+import { mechaniteTargets307,type MechaniteKind307 } from './mechanites-307.ts';
 
 export interface TendTask { drafted?:true; patientId:number; spot:Cell; phase:'find-medicine'|'pickup'|'approach'|'tend'; progress:number; duration?:number; urgent?:true; useMedicine?:true; medicine?:TendMedicine }
-export type TreatmentTarget={animalConditionId:number;injuryId?:never;part?:never;infectionId?:never;flu?:never;disease?:never}|{injuryId:number;part?:never;infectionId?:never;flu?:never;disease?:never}|{part:BodyPartId;injuryId?:never;infectionId?:never;flu?:never;disease?:never}|{infectionId:number;injuryId?:never;part?:never;flu?:never;disease?:never}|{flu:true;injuryId?:never;part?:never;infectionId?:never;disease?:never}|{disease:ImmuneDiseaseKind|ParasiteKind306;injuryId?:never;part?:never;infectionId?:never;flu?:never};
+export type TreatmentTarget={animalConditionId:number;injuryId?:never;part?:never;infectionId?:never;flu?:never;disease?:never}|{injuryId:number;part?:never;infectionId?:never;flu?:never;disease?:never}|{part:BodyPartId;injuryId?:never;infectionId?:never;flu?:never;disease?:never}|{infectionId:number;injuryId?:never;part?:never;flu?:never;disease?:never}|{flu:true;injuryId?:never;part?:never;infectionId?:never;disease?:never}|{disease:ImmuneDiseaseKind|ParasiteKind306|MechaniteKind307;injuryId?:never;part?:never;infectionId?:never;flu?:never};
 export type RankedTreatment=TreatmentTarget&{priority:number;severity:number};
 export function treatmentTargets(p:Pawn):RankedTreatment[] {
   const h=p.health;if(!h||h.death||medicalCare(p)==='none')return [];
@@ -23,7 +24,7 @@ export function treatmentTargets(p:Pawn):RankedTreatment[] {
   for(const m of h.missing)if(freshMissing(h,m))list.push({part:m.part,priority:medicalModel(h).byId[m.part].hp*.12*PART_INJURY_RULES[m.part].bleed*1.5,severity:HP_UNIT});
   if(h.infections)for(const t of infectionTargets(h))list.push({infectionId:t.infectionId,priority:t.priority,severity:t.severity});
   if(fluTendable(h))list.push({flu:true,priority:h.flu!.severity>=833_000_000?1:.025,severity:h.flu!.severity/FLU_UNIT*1000});
-  list.push(...immuneDiseaseTargets(h),...parasiteTargets306(h),...animalConditionCareTargets256(h));
+  list.push(...immuneDiseaseTargets(h),...parasiteTargets306(h),...mechaniteTargets307(h),...animalConditionCareTargets256(h));
   return list.sort((a,b)=>b.priority-a.priority||b.severity-a.severity);
 }
 /** One medicine treats the first injury even above 20 HP, then fits later
@@ -53,6 +54,7 @@ export function treatmentTarget(p:Pawn):TreatmentTarget|undefined {
   if(fluTendable(h))consider({flu:true},h.flu!.severity>=833_000_000?1:.025,h.flu!.severity/FLU_UNIT*1000);
   for(const t of immuneDiseaseTargets(h))consider({disease:t.disease},t.priority,t.severity);
   for(const t of parasiteTargets306(h))consider({disease:t.disease},t.priority,t.severity);
+  for(const t of mechaniteTargets307(h))consider({disease:t.disease},t.priority,t.severity);
   for(const t of animalConditionCareTargets256(h))consider({animalConditionId:t.animalConditionId},t.priority,t.severity);
   return best?.target;
 }

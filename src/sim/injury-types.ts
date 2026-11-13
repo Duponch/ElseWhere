@@ -44,6 +44,8 @@ export interface MedicalRecord {
   immuneDiseases?:Partial<Record<import('./immune-diseases-types.ts').ImmuneDiseaseKind,import('./immune-diseases-types.ts').ImmuneDiseaseState>>;
   /** Schema 306: gut worms and muscle parasites. */
   parasites306?:import('./parasites-306.ts').Parasites306;
+  /** Schema 307: fibrous and sensory mechanites. */
+  mechanites307?:import('./mechanites-307.ts').Mechanites307;
   /** Absent is the historical human profile. Animal ownership is validated. */
   body?:import('./animal-species.ts').AnimalSpeciesId|import('./mechanoid-definition.ts').MechanoidKind;
   /** Only new animal species256: immutable owner birth anchor on the clinical clock. */

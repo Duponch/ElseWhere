@@ -7,7 +7,7 @@ import { validateMedicalRecord } from './injury-validation.ts';
 import { medicalStatus } from './injury-state.ts';
 import { travelEnd,validSlowIntervals,validStunIntervals } from './travel-timing.ts';
 import { validCapturedTravelDelay } from './captured-travel-delay.ts';
-import { MIN_PAWN_SPEED_V87,MAX_PAWN_DELAY_V226 } from './travel-validation.ts';
+import { MIN_PAWN_SPEED_V87,MAX_PAWN_DELAY_V226,maxPawnSpeedFactor307 } from './travel-validation.ts';
 import { validDraftShape } from './drafting-save.ts';
 import { consumeActivityValid } from './consuming.ts';
 import { FOOD_ITEMS } from './food-policy.ts';
@@ -42,7 +42,7 @@ function validConsumeTravel(pawn:Pawn,world:World):boolean {
   if(!record(m)||'stop297'in m||!cell(m.from,world)||!cell(m.to,world)||!same(m.to,pawn)||stepDistance(m.from,m.to)!==1
     ||!Number.isFinite(m.start)||!Number.isFinite(m.end)||m.start<0||m.start>effectiveLocal297(world))return false;
   return validCapturedCoreMove297(m,world.schemaVersion)&&validStunIntervals(m.stuns,world.schemaVersion,m.start,world.tick,isCorePhysicalSchema297(world.schemaVersion)?effectiveCore297(world):undefined)&&validSlowIntervals(m.stagger,world.schemaVersion,m.start,world.tick,isCorePhysicalSchema297(world.schemaVersion)?effectiveCore297(world):undefined)
-    &&(m.speedFactor===undefined||Number.isFinite(m.speedFactor)&&m.speedFactor>=MIN_PAWN_SPEED_V87&&m.speedFactor<=1)
+    &&(m.speedFactor===undefined||Number.isFinite(m.speedFactor)&&m.speedFactor>=MIN_PAWN_SPEED_V87&&m.speedFactor<=maxPawnSpeedFactor307(world.schemaVersion))
     &&validCapturedTravelDelay(m.terrainDelay,world.schemaVersion)&&Math.abs(m.end-travelEnd(m))<=1e-7
     &&Math.abs(pawn.moveCooldown-Math.max(0,m.end-effectiveLocal297(world)))<=1e-7;
 }

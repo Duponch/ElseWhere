@@ -3,6 +3,7 @@ import { isPlayerPatient } from './affiliation.ts';
 import { acquireFlu } from './flu-state.ts';
 import { acquireImmuneDisease } from './immune-diseases-state.ts';
 import { acquireParasite306,isParasites306,PARASITE_LABELS306,type ParasiteKind306 } from './parasites-306.ts';
+import { acquireMechanite307,isMechanites307,MECHANITE_LABELS307,type MechaniteKind307 } from './mechanites-307.ts';
 import type { ImmuneDiseaseKind } from './immune-diseases-types.ts';
 import { createMedicalRecord } from './injury-state.ts';
 import { reconcilePawnHealth,updatePawnHealth } from './health.ts';
@@ -180,6 +181,35 @@ export function resolveParasiteIncident306(world:World,kind:ParasiteKind306,
   return acquired;
 }
 
+/** Schema 307: Core Disease_FibrousMechanites / Disease_SensoryMechanites,
+ * on the whole body. Same victim count and draw as the parasites; one more
+ * draw per victim fixes the 15 to 30 day lifetime. Without an immunity record
+ * the contract chance is 1. */
+export function resolveMechaniteIncident307(world:World,kind:MechaniteKind307,
+  state:ImmuneDiseaseIncidentCalendar|undefined=world.fluIncidents?.immuneDiseases):number {
+  if(!state||!isMechanites307(Number(world.schemaVersion)))return 0;
+  const all=fluCandidates(world);if(!all.length)return 0;
+  const candidates=all.filter(p=>!p.health?.mechanites307?.[kind]);if(!candidates.length)return 0;
+  const min=coreRound(all.length*.2),max=coreRound(all.length*.5);
+  const requested=Math.min(99_999,Math.max(1,min+Math.floor(random(state)*(max-min+1))));
+  let acquired=0;const names:string[]=[];
+  for(let index=0;index<Math.min(requested,candidates.length);index++){
+    const swap=index+Math.floor(random(state)*(candidates.length-index));
+    [candidates[index],candidates[swap]]=[candidates[swap]!,candidates[index]!];
+    const pawn=candidates[index]!;
+    if(pawn.health&&pawn.health.tick<world.tick)updatePawnHealth(world,pawn);
+    if(pawn.state==='dead')continue;
+    const record=pawn.health??=createMedicalRecord(world.tick);
+    if(!acquireMechanite307(record,kind,random(state)))continue;
+    reconcilePawnHealth(world,pawn);acquired++;names.push(pawn.name);
+  }
+  if(acquired){
+    state.episodes++;state.cases+=acquired;
+    emit(world,`${MECHANITE_LABELS307[kind]} : ${names.join(', ')} ${acquired===1?'est atteint':'sont atteints'}. Elles disparaissent seules en 15 à 30 jours ; des soins freinent leur progression.`);
+  }
+  return acquired;
+}
+
 /** O(1) on 99/100 ticks and O(n) only when a disease opportunity is drawn.
  * Remaining unimplemented disease selections keep their original silent share.
  * The historical exponential category chance is a documented local adaptation. */
@@ -197,6 +227,7 @@ export function advanceFluIncidents(world:World):void {
     if(selected==='Disease_Flu'){state.fluDraws++;resolveFluIncident(world,state);}
     else if(state.immuneDiseases&&(selected==='Disease_Plague'||selected==='Disease_Malaria')){state.immuneDiseases.draws++;resolveImmuneDiseaseIncident(world,selected==='Disease_Plague'?'plague':'malaria',state.immuneDiseases);}
     else if(state.immuneDiseases&&isParasites306(Number(world.schemaVersion))&&(selected==='Disease_GutWorms'||selected==='Disease_MuscleParasites')){state.immuneDiseases.draws++;resolveParasiteIncident306(world,selected==='Disease_GutWorms'?'gut-worms':'muscle-parasites',state.immuneDiseases);}
+    else if(state.immuneDiseases&&isMechanites307(Number(world.schemaVersion))&&(selected==='Disease_FibrousMechanites'||selected==='Disease_SensoryMechanites')){state.immuneDiseases.draws++;resolveMechaniteIncident307(world,selected==='Disease_FibrousMechanites'?'fibrous-mechanites':'sensory-mechanites',state.immuneDiseases);}
     // Other selected diseases consume their opportunity, as in the existing
     // bounded implementation. This does not claim a complete storyteller.
     return;
