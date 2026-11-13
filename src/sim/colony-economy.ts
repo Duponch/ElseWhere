@@ -20,7 +20,9 @@ export interface ColonyEconomy {
 
 export const freeColonist = (pawn:Pawn):boolean => isColonist(pawn)&&!pawn.prisoner&&!pawn.visitor&&pawn.state!=='dead';
 export function colonyExpectation(world:World,pawn:Pawn):ColonyExpectation|undefined {
-  return world.economy&&freeColonist(pawn)?expectationForWealth(world.economy.wealth.knownTotal):undefined;
+  // Schema 313: a prisoner of the colony on the map also has the map's expectations (Core).
+  const prisoner313=Number(world.schemaVersion)>=313&&!!pawn.prisoner&&!pawn.visitor&&pawn.state!=='dead';
+  return world.economy&&(freeColonist(pawn)||prisoner313)?expectationForWealth(world.economy.wealth.knownTotal):undefined;
 }
 /** Explicit on historical worlds: never infer yesterday's prosperity or losses. */
 export function adoptColonyEconomy(world:World):boolean {

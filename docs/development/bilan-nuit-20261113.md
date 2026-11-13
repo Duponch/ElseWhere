@@ -14,12 +14,14 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 | Hiver volcanique | 310 | −7 °C, ciel plus sombre, faune réduite, pas de loisirs dehors | [V310](../gameplay/volcanic-winter-v310.md) |
 | Corrections de fidélité | 311 | Points de vie de 8 bâtiments, construction des générateurs, beauté (valeurs et formule) | [V311](../gameplay/core-fidelity-v311.md) |
 | T-shirt et blouson | 312 | Deux vêtements Core dans 22 matières | [V312](../gameplay/garments-v312.md) |
+| Corrections de fidélité : humeur | 313 | Fatigue et attentes en voyage, prisonniers, plaie infectée, seuils de beauté | [V313](../gameplay/mood-fidelity-v313.md) |
 
 ## 2. Fidélité : écarts trouvés et corrigés
 
 - **Durée d'un soin.** Dans le jeu de base, un soin agit pendant sa durée de base plus 3 heures de chevauchement, et on peut le renouveler pendant ces 3 dernières heures. Les nouvelles maladies suivent cette règle.
 - **Vitesse au-delà de 100 %.** Le jeu de base rend plus rapide une personne dont la capacité de déplacement dépasse 100 %. Nos sauvegardes refusaient toute vitesse au-dessus de 100 % ; elles l'acceptent désormais à partir du schéma 307.
 - **Audit du catalogue.** Un audit en lecture seule a comparé les chiffres du catalogue au jeu de base (recettes, bâtiments, recherches, objets, armes). Il a trouvé 14 écarts et deux erreurs de formule de beauté, corrigés dans le lot 311.
+- **Audit des règles d'humeur, de besoins et de compétences.** Presque tout concordait. Il a trouvé six écarts, corrigés dans le lot 313.
 - **Chemise : fausse alerte vérifiée.** La « Chemise » d'Elsewhere est la chemise boutonnée du jeu de base, avec les mêmes valeurs. C'est le t-shirt qui manque.
 
 ## 3. Inventaire du catalogue
@@ -32,6 +34,22 @@ Un inventaire en lecture seule a comparé les 714 définitions d'objets du jeu d
 - **Drogues :** seules la bière et les médicaments existent. La pénoxycyline est le prochain candidat utile : elle protège du paludisme, de la peste et de la maladie du sommeil.
 - **Mobilier de loisir et de confort :** il manque notamment l'anneau de jeu de pierres, les tables de poker et de billard, et le canapé.
 
-## 4. Suite prévue
+## 4. Performances (Les Forges, 80 colons)
+
+Mesures prises sur la machine au calme, après le lot 311 :
+
+| Mesure | Valeur |
+|---|---|
+| Simulation seule (Node, 120 ticks) | 44,0 ms par tick, soit au plus ×3,8 |
+| Worker réel à ×3 (20 s) | 86,8 % du rythme tenu, contre 82,4 % au bilan du 12 au soir |
+| Part du Worker : simulation / publication | 70,7 % / 17,6 % |
+
+Ce sont des mesures uniques, sans alternance avec la version précédente ; l'écart avec hier n'est donc pas une mesure comparée.
+
+Le profil de la simulation est désormais plat. Les plus gros postes sont la faune (9 % du profil, dont 3,5 % pour la promenade), le choix du travail (6,6 %) et la température des surfaces (3,7 %). Aucune ligne isolée ne dépasse 0,2 % : une optimisation exacte ne trouve plus de gros morceau.
+
+Côté publication, les plus gros postes sont la publication complète (environ 100 ms par seconde, encodage et sections auxiliaires) et les paquets d'acteurs (5,8 %, dont 1,3 % pour la comparaison de toutes les piles). Cette comparaison ne peut pas se limiter aux piles modifiées : le journal des piles signale qu'une pile a changé, pas laquelle. Le prochain gain passe par la refonte de la publication déjà engagée (chantier 2).
+
+## 5. Suite prévue
 
 À compléter.

@@ -60,6 +60,9 @@ const hungerStage=(value:number)=>value<=0?2:value<12?1:value<24?0:-1;
 const restStage=(value:number)=>value<1?2:value<14?1:value<28?0:-1;
 const comfortStage=(value:number)=>value<10?0:value<60?-1:value<70?1:value<80?2:value<90?3:4;
 const beautyStage=(value:number)=>value<=1?0:value<15?1:value<35?2:value<65?-1:value<85?3:value<99?4:5;
+/** Schema 313: Core Need_Beauty.CurCategory uses strict '>' bounds (an exact
+ * 35 is still ugly, an exact 65 still neutral). */
+const beautyStage313=(value:number)=>value<=1?0:value<=15?1:value<=35?2:value<=65?-1:value<=85?3:value<=99?4:5;
 const joyStage=(value:number)=>value<1?0:value<15?1:value<30?2:value<70?-1:value<85?3:4;
 const painStage=(value:number)=>value<.0001?-1:value<.15?0:value<.4?1:value<.8?2:3;
 export const comfortMood=(value:number):number=>comforts[comfortStage(value)]?.offset??0;
@@ -78,6 +81,10 @@ export interface PersonalMoodContext {
   /** SIM may omit these new names; identity grouping and values are unchanged. */
   resolveCoupleNames285?:boolean;
   items:readonly MaterialPile[];expectation?:ColonyExpectation;difficultyMood:number;
+  /** Schema of the rules (313: Core despawned thoughts, wound infection sickness, beauty bounds). */
+  schemaVersion?:number;
+  /** Off the map (a caravan): Core gives no thought whose def is not validWhileDespawned. */
+  despawned313?:boolean;
   /** Absent off-map: never reuse the former map room, comfort or beauty. */
   environment?:{comfort:number;beauty:number};housing?:MoodThought;
   /** Actual owner's current air, including caravans; independent from furniture.
@@ -107,7 +114,7 @@ export function moodThoughts(world:World,pawn:Pawn,topology?:RelationshipTopolog
   return personalMoodThoughts(pawn,{lost:lostThoughts(world,pawn,()=>captureRelationshipPeople(world)),tick:world.tick,people:{get:id=>world.pawns.find(p=>p.id===id)},
     ...relationPeople?{relationPeople}:{},
     ...pawn.coupleMemories285?{resolveCoupleNames285,couplePeople285:{get:(id:number)=>world.pawns.find(p=>p.id===id)??(coupleNamespace285??=captureRelationshipPeople(world)).get(id)}}:{},
-    items:world.piles,expectation:colonyExpectation(world,pawn),difficultyMood:colonistMoodOffset(world,pawn),
+    items:world.piles,expectation:colonyExpectation(world,pawn),difficultyMood:colonistMoodOffset(world,pawn),schemaVersion:Number(world.schemaVersion),
     ...(isSchema282OrLater(world.schemaVersion)&&pawn.cryptosleepHeldAt271===undefined&&pawn.shipCryptosleepHeldAt277===undefined
       ?{ambientTemperature460:readTemperature?readTemperature():temperatureAt(world,pawn)}:{}),
     environment:{comfort:pawn.comfort,beauty:pawn.beauty},housing:relationshipHousingThought(world,pawn,topology),deathSituation:colonistUnburiedThought(world,pawn),toxicFallout294:localToxicFalloutThought294(world,pawn),aurora305:localAuroraThought305(world,pawn)});
@@ -133,8 +140,9 @@ export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly M
   const difficultyMood=c.difficultyMood;
   if(difficultyMood)thoughts.push(situation('difficulty-mood','Récit d’aventure',difficultyMood,'Bonus d’humeur du niveau d’aventure choisi.'));
   for(const id of pawn.traits??[]){const trait=TRAITS[id];if(trait.mood)thoughts.push({id:`trait-${id}`,label:trait.label,offset:trait.mood,kind:'situation',description:trait.description});}
-  for(const t of [pawn.hunger<=0?starvation[Math.max(0,malnutritionStage(pawn.health?.malnutrition)-1)]:hunger[hungerStage(pawn.hunger)],fatigue[restStage(pawn.rest)],c.environment?comforts[comfortStage(c.environment.comfort)]:undefined,c.environment?beauty[beautyStage(c.environment.beauty)]:undefined,pawn.prisoner?undefined:leisure[joyStage(pawn.recreation.level)],pains[painStage(pawn.health?medicalPain(pawn.health):0)]])if(t)thoughts.push(t);
-  if((pawn.health?.toxicBuildup?.severity??0)>=Math.fround(.04)||cryptosleepSick256(pawn.health?.cryptosleepSickness)||(pawn.health?.flu?.severity??0)>0||(pawn.health?.immuneDiseases?.malaria?.severity??0)>0||(pawn.health?.immuneDiseases?.plague?.severity??0)>0||(pawn.health?.immuneDiseases?.['sleeping-sickness']?.severity??0)>0||!!pawn.health?.parasites306||!!pawn.health?.mechanites307)thoughts.push(sick);
+  const v313=(c.schemaVersion??0)>=313;
+  for(const t of [pawn.hunger<=0?starvation[Math.max(0,malnutritionStage(pawn.health?.malnutrition)-1)]:hunger[hungerStage(pawn.hunger)],v313&&c.despawned313?undefined:fatigue[restStage(pawn.rest)],c.environment?comforts[comfortStage(c.environment.comfort)]:undefined,c.environment?beauty[(v313?beautyStage313:beautyStage)(c.environment.beauty)]:undefined,pawn.prisoner?undefined:leisure[joyStage(pawn.recreation.level)],pains[painStage(pawn.health?medicalPain(pawn.health):0)]])if(t)thoughts.push(t);
+  if((pawn.health?.toxicBuildup?.severity??0)>=Math.fround(.04)||cryptosleepSick256(pawn.health?.cryptosleepSickness)||(pawn.health?.flu?.severity??0)>0||(pawn.health?.immuneDiseases?.malaria?.severity??0)>0||(pawn.health?.immuneDiseases?.plague?.severity??0)>0||v313&&!!pawn.health?.infections?.cases.length||(pawn.health?.immuneDiseases?.['sleeping-sickness']?.severity??0)>0||!!pawn.health?.parasites306||!!pawn.health?.mechanites307)thoughts.push(sick);
   const ambientTemperature460=pawn.cryptosleepHeldAt271===undefined&&pawn.shipCryptosleepHeldAt277===undefined?c.ambientTemperature460:undefined;
   let condition=1,minComfortable460=16,maxComfortable460=26;
   for(const pile of c.items)if(pile.owner.type==='apparel'&&pile.owner.pawnId===pawn.id){

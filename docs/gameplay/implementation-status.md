@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V313 — schéma 313 :** [Corrections de fidélité : humeur](mood-fidelity-v313.md). Un audit des règles d'humeur, de besoins et de compétences face au jeu de base a confirmé six écarts, corrigés : pas de fatigue ni d'attentes de la colonie en voyage, attentes et bonus de difficulté des prisonniers, « Malade » pour une plaie infectée, seuils exacts de la beauté.
+
 **V312 — schéma 312 :** [T-shirt et blouson](garments-v312.md). Deux vêtements courants du jeu de base, dans les 22 matières de couture, avec les migrations des politiques de tenue. Les visiteurs ne les vendent pas encore.
 
 **V311 — schéma 311 :** [Corrections de fidélité](core-fidelity-v311.md). Un audit du catalogue face au jeu de base a révélé des écarts, maintenant corrigés : points de vie de huit bâtiments (migration des dégâts proportionnelle), niveau de construction des deux générateurs à combustible, beauté des bâtiments électriques, du lit d'hôpital, des étagères et de trois pierres, ordre et arrondi de la formule de beauté.

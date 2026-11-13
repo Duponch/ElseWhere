@@ -1,4 +1,5 @@
 import {assignPileOwner} from './pile-index.ts';
+import {VERY_LOW_EXPECTATION313} from './expectations.ts';
 import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {advanceGroupAlcohol265} from './alcohol-caravan-265.ts';
@@ -256,11 +257,11 @@ export function advanceGroupPersonalFrontier(w:World,prospective?:GroupPersonalF
   let travel=captureGroupTravel(g,p=>({incapable:p.state==='downed'||hasMentalBreak(p)||pawnBody(p).capacities.moving<=0,restNeed:true}),w.schemaVersion);
   if(!travel)throw Error('Invalid group owner mass');
   const routePreview=prospective?undefined:advanceGroupRoute(w.planet,g,planetCostContext(w,travel.mass),travel).state;
-  const stationary=prospective?.resting??(g.phase!=='travelling'||!!routePreview&&'members' in routePreview&&!!routePreview.stop),people=captureHumanOwners(w).people,expectation=colonyExpectation(w,g.members[0]!);
+  const stationary=prospective?.resting??(g.phase!=='travelling'||!!routePreview&&'members' in routePreview&&!!routePreview.stop),people=captureHumanOwners(w).people,expectation=Number(w.schemaVersion)>=313?VERY_LOW_EXPECTATION313:colonyExpectation(w,g.members[0]!);
   const random=()=>healthRandom(w),notice=(_person:Pawn,message:string)=>groupLog(w,message);
   if(prospective&&(!g.travel||w.schemaVersion<256))throw Error('Missing prospective personal owner');
   const result=advanceGroupPersonal(g,{...prospective?{deferNeedMeters256:true as const,clinicalRestFor256:prospective.clinicalRestFor256}:{},tick:w.tick,schemaVersion:w.schemaVersion,...(Number(w.schemaVersion)===259||Number(w.schemaVersion)===260||(Number(w.schemaVersion)===261||(Number(w.schemaVersion)===262||isSchema263OrLater(Number(w.schemaVersion)))))?{ambientTemperature259:groupAmbientTemperature256(w,g)}:{},seed:w.seed,seedFor:p=>g!.reorganization?.memberOrigins.find(o=>o.pawnId===p.id)?.context.seed??w.seed,legacyFood:w.foodRules==='legacy',legacyRest:w.restRules==='legacy',resting:stationary,
-    infectionChanceFactor:w.gameProfile?.difficulty==='adventure-story'?.75:1,mood:{people,expectation,difficultyMood:colonistMoodOffset(w,g.members[0]!)},lostThoughts:p=>lostThoughts(w,p,people),joyToleranceFall:(expectation?.joyToleranceDropPerDay??.18)*100/6000,random,notice});
+    infectionChanceFactor:w.gameProfile?.difficulty==='adventure-story'?.75:1,mood:{people,expectation,difficultyMood:colonistMoodOffset(w,g.members[0]!),...Number(w.schemaVersion)>=313?{schemaVersion:Number(w.schemaVersion),despawned313:true}:{}},lostThoughts:p=>lostThoughts(w,p,people),joyToleranceFall:(expectation?.joyToleranceDropPerDay??.18)*100/6000,random,notice});
   if(!result)return;
   if(result.deceased.length){
     for(const p of result.deceased)markCorpseWornApparel284(g.items,p,w.schemaVersion);

@@ -26,3 +26,6 @@ export function expectationForWealth(mapWealth: number): ColonyExpectation {
   if (!Number.isFinite(mapWealth) || mapWealth < 0) throw new RangeError('Invalid map wealth.');
   return COLONY_EXPECTATIONS.find(stage => stage.nextWealth === null || mapWealth < stage.nextWealth)!;
 }
+/** Schema 313: Core ExpectationsUtility gives VeryLow to a player pawn or a
+ * colony prisoner that has no map (in a caravan). */
+export const VERY_LOW_EXPECTATION313:ColonyExpectation=COLONY_EXPECTATIONS.find(e=>e.id==='very-low')!;
