@@ -18,6 +18,8 @@ import { foodAccount, woodAccount } from './scenarios/colony-player.ts';
 import { survivorPlan } from './scenarios/survivor-player.ts';
 import type { Command,Job,Resource,World } from '../src/sim/types.ts';
 import { sameMapWorld } from './scenarios/same-map.ts';
+import { footprintCells } from '../src/sim/definitions.ts';
+import { medicalBleed } from '../src/sim/injury-state.ts';
 
 type Summary=ReturnType<typeof crashlandedSummary>;
 interface Ledger {
@@ -245,7 +247,14 @@ test.each(resumed?[resumed.seed]:[42])('Atterrissage : 24 jours, deux récoltes 
   writeTestFileSync(`tmp/crashlanded-final-${version}-${seed}.json`,serializeWorld(w));writeTestFileSync(`artifacts/crashlanded-colony-${version}-${seed}.json`,JSON.stringify(report));
   const context=JSON.stringify({seed,milestones,ledger,ingestionLedger,final});
   const survivors=w.pawns.filter(isColonist);expect(survivors,context).toHaveLength(3);
-  expect(survivors.every(p=>p.state!=='dead'&&p.state!=='downed'&&p.hunger>0&&p.rest>0),context).toBe(true);
+  // A colonist wounded shortly before J24 may still be convalescing: downed is
+  // accepted only lying in a real bed of its own need, no longer bleeding
+  // (decision of the user, 12 November 2026).
+  const convalescing=(p:World['pawns'][number])=>{
+    const need=p.need,bed=need?.kind==='sleep'&&need.bedId!==null?w.structures.find(s=>s.id===need.bedId):undefined;
+    return p.state==='downed'&&!!bed&&footprintCells(bed).some(c=>c.x===p.x&&c.z===p.z)&&(!p.health||medicalBleed(p.health)===0);
+  };
+  expect(survivors.every(p=>p.state!=='dead'&&(p.state!=='downed'||convalescing(p))&&p.hunger>0&&p.rest>0),context).toBe(true);
   expect(final.beds,context).toBe(3);expect(final.shelteredBeds,context).toBe(3);
   expect(final.walls,context).toBe(15);expect(final.doors,context).toBe(1);
   expect(final.foodChain.zones,context).toEqual(expect.arrayContaining([expect.objectContaining({plant:'rice',cells:80}),expect.objectContaining({plant:'potato',cells:24}),expect.objectContaining({plant:'corn',cells:24})]));
