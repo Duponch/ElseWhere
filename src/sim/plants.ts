@@ -9,6 +9,7 @@ import { climateTick,type ClimateWorld } from './site-climate.ts';
 import { soilFertility } from './soil.ts';
 import { isCropKind, type CropKind } from './crops.ts';
 import { FLORA_DEFINITIONS } from './biome-flora.ts';
+import { resourceMaxHp } from './thing-damage-rules.ts';
 import { hydroponicFertility } from './hydroponics.ts';
 
 export const PLANT_DEFINITIONS = Object.freeze({
@@ -202,6 +203,12 @@ export function berryYield(world: World, plant: Resource): number {
   const growth = plantGrowth(world, plant);
   const minimum=plant.species?FLORA_DEFINITIONS[plant.species].harvestMinGrowth:HARVEST_MIN_GROWTH;
   if(growth<=minimum)return 0;
+  // Core Plant.YieldNow: Lerp(0.5, 1, HitPoints/MaxHitPoints) for every plant
+  // from schema 315; before, only healroot and haygrass were sensitive.
+  if(world.schemaVersion>=315){
+    const max=resourceMaxHp(plant),remaining=max>0?Math.max(0,Math.min(1,1-(plant.damage??0)/max)):1;
+    return plant.amount*(.5+.5*(growth-minimum)/(1-minimum))*(.5+.5*remaining);
+  }
   const medicinal=plant.kind==='healroot'||plant.species==='healroot-wild';
   const healthSensitive=medicinal||plant.kind==='haygrass';
   const remaining=healthSensitive?Math.max(0,Math.min(1,1-(plant.damage??0)/(medicinal?FLORA_DEFINITIONS['healroot-wild'].hitPoints:85))):1;
@@ -227,7 +234,7 @@ export function harvestRoll(world: World, plant: Resource, worker?:Pawn): { quan
     let rng=world.rng;
     const random=()=>{rng^=rng<<13;rng^=rng>>>17;rng^=rng<<5;rng>>>=0;return rng/0x100000000;};
     const round=(value:number)=>Math.floor(value)+(random()<value%1?1:0);
-    const efficiency=plantHarvestYield(worker);
+    const efficiency=plantHarvestYield(worker,undefined,world.schemaVersion);
     if(plant.kind!=='tree'&&random()>efficiency)return {quantity:0,rng};
     let quantity=round(berryYield(world,plant));
     if(efficiency>1)quantity=round(quantity*efficiency);

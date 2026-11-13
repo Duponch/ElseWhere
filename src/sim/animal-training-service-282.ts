@@ -27,7 +27,7 @@ import {releaseWork} from './work-release.ts';
 import {interruptWork} from './interrupted-cargo.ts';
 import type {NeedContext} from './needs.ts';
 import type {AnimalHandlingTask} from './domestic-state.ts';
-import type {Pawn,World} from './types.ts';
+import {SCHEMA_VERSION,type Pawn,type World} from './types.ts';
 import type {WildAnimal} from './wildlife-state.ts';
 
 export type AnimalTrainingTask282=AnimalHandlingTask&{kind:'train';trainable:AnimalTrainingSkill282;feedUnits:number};
@@ -77,13 +77,16 @@ function maxFeedTicks282(a:WildAnimal,units:number,item:ItemId):number {
  return Math.max(1,Math.ceil(ANIMAL_TRAINING_CHAT_TICKS_282*units*(ITEM_DEFINITIONS[item].nutrition/100)/Math.min(.15*minimum,.3)));
 }
 const factor=(value:number,weight:number,defect:number)=>Math.max(0,Math.min(1,1-weight*(1-Math.max(defect,Math.min(1,value)))));
+// Core allowed defect from schema 315: InverseLerp(0, 1 - defect, value) below 100 %.
+const factor315=(value:number,weight:number,defect:number)=>1-weight*(1-(value<1&&defect!==0?Math.max(0,Math.min(1,value/(1-defect))):Math.max(0,Math.min(1,value))));
 /** New trainable chance only. The historical maintenance .75 stays literal.
  * The real bonded starter is evidence of Bond; a new master is not a bond. */
-export function animalTrainingChance282(p:Pawn,a:WildAnimal):number {
+export function animalTrainingChance282(p:Pawn,a:WildAnimal,version=SCHEMA_VERSION):number {
  if(!isAnimalSpecies256(a.species))return 0;
  const f=Math.fround,c=pawnBody(p).capacities,level=effectiveSkillLevel(p,'animals',p.skills.animals?.level??0);
  let stat=f(f(.10)+f(f(.05)*level));
- stat=f(stat*f(factor(c.talking,.7,.2)));stat=f(stat*f(factor(c.hearing,.3,.05)));stat=f(stat*f(factor(c.manipulation,.5,.2)));
+ const cf=version>=315?factor315:factor;
+ stat=f(stat*f(cf(c.talking,.7,.2)));stat=f(stat*f(cf(c.hearing,.3,.05)));stat=f(stat*f(cf(c.manipulation,.5,.2)));
  stat=Math.max(.01,stat);const wildness=animalCore256(a.species).stats.Wildness;
  let chance=f(stat*f(f(1.5)-f(wildness)));if(a.startingPet?.bondedPawnId===p.id)chance=f(chance*5);
  return Math.max(0,Math.min(1,chance));
@@ -126,7 +129,7 @@ export function processAnimalTraining282(w:World,p:Pawn,task:AnimalTrainingTask2
  if(task.step===5&&task.finalStartedCore===undefined){
   if(p.skills.animals)learnSkill(p.skills.animals,70_000,p);
   // The existing medical stream is this clone's declared attempt RNG.
-  const success=healthRandom(w)<animalTrainingChance282(p,a);
+  const success=healthRandom(w)<animalTrainingChance282(p,a,w.schemaVersion);
   if(!completeAnimalTraining282(w,a,task.trainable,success,p.id)){stop();return;}
   task.finalStartedCore=w.tick*10;
   ctx.event(`${p.name} ${success?'a réussi':'n’a pas réussi'} la leçon ${task.trainable==='haul'?'de transport':task.trainable==='obedience'?'d’obéissance':'d’apprivoisement'} de ${a.id}.`);

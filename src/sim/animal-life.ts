@@ -118,6 +118,9 @@ export function advanceAnimalLife(world:World):void {
   }
 }
 
+/** Core hare litterSizeCurve (1,0) (1.5,1) (2,1) (2.5,0), rounded: one baby
+ * 25 %, two 75 % from schema 315 (one draw, as before; older chance 50 %). */
+export const hareSecondBabyChance315=(version:number):number=>version>=315?.75:.5;
 function birth(world:World,mother:WildAnimal):void {
   if(isAnimalSpecies256(mother.species)){birth256(world,mother);return;}
   const s=world.wildlife!,pregnancy=mother.pregnancy!;
@@ -134,7 +137,7 @@ function birth(world:World,mother:WildAnimal):void {
       if((!pen||pen.has(key))&&nav.free(c)&&!occupied.has(key)){places.push(c);occupied.add(key);}
     }
   if(!places.length)return;
-  const litter=mother.species==='hare'||mother.species==='snow-hare'?1+(wildlifeRandom(s)<.5?1:0):1;
+  const litter=mother.species==='hare'||mother.species==='snow-hare'?1+(wildlifeRandom(s)<hareSecondBabyChance315(world.schemaVersion)?1:0):1;
   const births=places.slice(0,litter);
   for(const place of births){
     const child:WildAnimal={id:world.nextId++,species:mother.species,sex:wildlifeRandom(s)<.5?'female':'male',ageTicks:0,

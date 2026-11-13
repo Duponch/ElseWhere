@@ -172,7 +172,7 @@ export function processCooking(world:World,pawn:Pawn,context:ProductionContext):
   const culinary=taskWork(task)==='cook',mechanical=isMechSalvageRecipe(task.recipe);
   if(task.progress<total){
     if(culinary||mechanical||medicine){if(!Number.isSafeInteger((task.workTicks??0)+1)||((task.workTicks??0)+1)>Math.floor(Number.MAX_SAFE_INTEGER/1000))return;task.workTicks=(task.workTicks??0)+1;}
-    const speed=prosthetic?biofuelProductionSpeed(pawn):smithing?biofuelProductionSpeed(pawn):brewing?brewingSpeed265(pawn):burningApparel?cremationSpeed(pawn):cremation?cremationSpeed(pawn):smelting?smeltingSpeed(pawn):biofuel?biofuelProductionSpeed(pawn):medicine?medicineProductionSpeed(pawn):mechanical?mechSalvageSpeed(pawn):task.recipe==='butcher-creature'?butcherySpeed(pawn):culinary?cookingSpeed(pawn):1;
+    const speed=prosthetic?biofuelProductionSpeed(pawn):smithing?biofuelProductionSpeed(pawn):brewing?brewingSpeed265(pawn):burningApparel?cremationSpeed(pawn):cremation?cremationSpeed(pawn):smelting?smeltingSpeed(pawn):biofuel?biofuelProductionSpeed(pawn):medicine?medicineProductionSpeed(pawn):mechanical?mechSalvageSpeed(pawn):task.recipe==='butcher-creature'?butcherySpeed(pawn):culinary?cookingSpeed(pawn,world.schemaVersion):1;
     const fraction=medicine||biofuel?1:consumeCookingFuel(station);if(!medicine&&!biofuel)applyCookingHeat(world,station,fraction);
     task.progress=Math.min(total,task.progress+Math.round(context.workRate(station,pawn)*speed*PRODUCTION_WORK_SCALE*fraction));
   }

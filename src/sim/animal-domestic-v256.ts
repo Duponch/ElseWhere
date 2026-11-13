@@ -11,6 +11,14 @@ export function animalHandlingSkill256(species:WildAnimal['species']):number|und
  for(let i=1;i<points.length;i++)if(w<=points[i]![0]){const a=points[i-1]!,b=points[i]!;value=a[1]+Math.max(0,(w-a[0])/(b[0]-a[0]))*(b[1]-a[1]);break;}
  return even(Math.max(0,Math.min(20,value)));
 }
+/** Core Wildness of the original wild species (Hare, Snowhare, Deer, Gazelle,
+ * Muffalo, Dromedary, Fox_Red, Fox_Fennec), used from schema 315. */
+export const LEGACY_WILDNESS315:Readonly<Record<string,number>>=Object.freeze({hare:.75,'snow-hare':.75,deer:.75,gazelle:.75,muffalo:.6,dromedary:.25,'red-fox':.75,'fennec-fox':.75});
+export const animalWildness315=(species:WildAnimal['species']):number=>isAnimalSpecies256(species)?animalCore256(species).stats.Wildness:LEGACY_WILDNESS315[species]??.5;
+/** Core TameChanceFactorCurve_Wildness (1 -> 0, 0.5 -> 1, 0 -> 2). */
+export const tameWildnessFactor315=(species:WildAnimal['species']):number=>Math.max(0,Math.min(2,2*(1-animalWildness315(species))));
+/** Core trainability factor LerpDouble(0, 1, 1.5, 0.5, wildness). */
+export const trainWildnessFactor315=(species:WildAnimal['species']):number=>Math.max(.5,Math.min(1.5,1.5-animalWildness315(species)));
 export const tameWildnessFactor256=(species:WildAnimal['species']):number=>isAnimalSpecies256(species)?Math.max(0,Math.min(2,2*(1-animalCore256(species).stats.Wildness))):1;
 /** Only RawBad/RawTasty physical food piles, matching the animal's actual
  * food flags; no meat substitution for a strict carnivore or hay pickup. */

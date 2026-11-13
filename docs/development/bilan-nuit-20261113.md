@@ -16,6 +16,7 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 | T-shirt et blouson | 312 | Deux vêtements Core dans 22 matières | [V312](../gameplay/garments-v312.md) |
 | Corrections de fidélité : humeur | 313 | Fatigue et attentes en voyage, prisonniers, plaie infectée, seuils de beauté | [V313](../gameplay/mood-fidelity-v313.md) |
 | Vêtements vendus par les visiteurs | 314 | Tous les vêtements ordinaires représentés, matière selon les fréquences Core | [V314](../gameplay/visitor-clothing-v314.md) |
+| Corrections de fidélité : récoltes, cuisine, animaux | 315 | Rendement de récolte, plantes abîmées, cuisiniers maladroits, apprivoisement et dressage, portées du lièvre | [V315](../gameplay/work-animal-fidelity-v315.md) |
 
 ## 2. Fidélité : écarts trouvés et corrigés
 
@@ -23,6 +24,7 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 - **Vitesse au-delà de 100 %.** Le jeu de base rend plus rapide une personne dont la capacité de déplacement dépasse 100 %. Nos sauvegardes refusaient toute vitesse au-dessus de 100 % ; elles l'acceptent désormais à partir du schéma 307.
 - **Audit du catalogue.** Un audit en lecture seule a comparé les chiffres du catalogue au jeu de base (recettes, bâtiments, recherches, objets, armes). Il a trouvé 14 écarts et deux erreurs de formule de beauté, corrigés dans le lot 311.
 - **Audit des règles d'humeur, de besoins et de compétences.** Presque tout concordait. Il a trouvé six écarts, corrigés dans le lot 313.
+- **Audit des plantes, des animaux et des vitesses de travail.** Cultures, flore sauvage, statistiques des animaux, vitesses de travail et électricité concordaient. Il a trouvé six écarts, corrigés dans le lot 315 : rendement de récolte, plantes abîmées, cuisiniers maladroits, apprivoisement et dressage, portées du lièvre.
 - **Chemise : fausse alerte vérifiée.** La « Chemise » d'Elsewhere est la chemise boutonnée du jeu de base, avec les mêmes valeurs. C'est le t-shirt qui manque.
 
 ## 3. Inventaire du catalogue

@@ -5,7 +5,7 @@ import {isSchema287OrLater} from './schema-compatibility-257.ts';
 
 import {tameHiveInsect256} from './cave-hive-lifecycle-256.ts';
 import {startingPetFourNoTamenessDecay256} from './starting-pet-four-tameness-256.ts';
-import {animalHandlingSkill256,tameWildnessFactor256,animalHandlingFood256,PEN_ANIMALS_256} from './animal-domestic-v256.ts';
+import {animalHandlingSkill256,tameWildnessFactor256,tameWildnessFactor315,trainWildnessFactor315,animalHandlingFood256,PEN_ANIMALS_256} from './animal-domestic-v256.ts';
 import {isAnimalSpecies256} from './animal-core-v256.ts';
 import {eggAllowedForPlayer256} from './animal-egg-permission-v256.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
@@ -25,7 +25,7 @@ import type { NeedContext } from './needs.ts';
 import { adjacent, routeToJob, type Reachability } from './pathfinding.ts';
 import { copyPileCondition } from './pile-condition.ts';
 import { learnSkill } from './skills.ts';
-import { TICKS_PER_DAY, type Cell, type CommandResult, type Pawn, type World } from './types.ts';
+import { SCHEMA_VERSION, TICKS_PER_DAY, type Cell, type CommandResult, type Pawn, type World } from './types.ts';
 import { animalBody } from './wildlife-health.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 import { interruptWork } from './interrupted-cargo.ts';
@@ -161,13 +161,27 @@ export function applyTaming(w:World,cmd:Extract<DomesticCommand,{type:'tame'}>):
 function capacityFactor(value:number,weight:number,allowedDefect:number):number {
   return Math.max(0,Math.min(1,1-weight*(1-Math.max(allowedDefect,Math.min(1,value)))));
 }
-export function tameChance(p:Pawn):number {
+/** Core PawnCapacityFactor.GetFactor with max 1, weighted as StatWorker does:
+ * below 100 %, the allowed defect rescales InverseLerp(0, 1 - defect, value). */
+export function coreCapacityFactor315(value:number,weight:number,allowedDefect:number):number {
+  const rescaled=value<1&&allowedDefect!==0?Math.max(0,Math.min(1,value/(1-allowedDefect))):Math.min(1,value);
+  return 1-weight*(1-Math.max(0,rescaled));
+}
+/** TameAnimalChance stat; from schema 315 it carries no extra factor: the
+ * animal's wildness is applied separately by tameWildnessFactor315. */
+export function tameChance(p:Pawn,version=SCHEMA_VERSION):number {
   const c=pawnBody(p).capacities,level=p.skills.animals?.level??0;
+  if(version>=315)return Math.max(.01,(.04+.03*level)
+    *coreCapacityFactor315(c.talking,.9,.2)*coreCapacityFactor315(c.hearing,.3,.05)*coreCapacityFactor315(c.manipulation,.5,.2));
   return Math.max(.01,(.04+.03*level)*.5
     *capacityFactor(c.talking,.9,.2)*capacityFactor(c.hearing,.3,.05)*capacityFactor(c.manipulation,.5,.2));
 }
-export function trainChance(p:Pawn):number {
+/** TrainAnimalChance stat; from schema 315 the wildness factor is applied
+ * separately by trainWildnessFactor315 (the old literal .75 was the hare's). */
+export function trainChance(p:Pawn,version=SCHEMA_VERSION):number {
   const c=pawnBody(p).capacities,level=p.skills.animals?.level??0;
+  if(version>=315)return Math.max(.01,(.10+.05*level)
+    *coreCapacityFactor315(c.talking,.7,.2)*coreCapacityFactor315(c.hearing,.3,.05)*coreCapacityFactor315(c.manipulation,.5,.2));
   return Math.max(.01,(.10+.05*level)*.75
     *capacityFactor(c.talking,.7,.2)*capacityFactor(c.hearing,.3,.05)*capacityFactor(c.manipulation,.5,.2));
 }
@@ -191,7 +205,9 @@ export function adoptAsColonyAnimal(w:World,a:WildAnimal):void {
 function finish(w:World,p:Pawn,a:WildAnimal,task:AnimalHandlingTask,ctx:NeedContext):void {
   const skill=p.skills.animals;
   if(skill)learnSkill(skill,task.kind==='tame'?90_000:70_000,p);
-  const success=healthRandom(w)<(task.kind==='tame'?tameChance(p)*tameWildnessFactor256(a.species):trainChance(p));
+  const v=w.schemaVersion;
+  const success=healthRandom(w)<(v>=315?(task.kind==='tame'?tameChance(p,v)*tameWildnessFactor315(a.species):trainChance(p,v)*trainWildnessFactor315(a.species))
+    :task.kind==='tame'?tameChance(p,v)*tameWildnessFactor256(a.species):trainChance(p,v));
   if(task.kind==='tame') {
     if(success){adoptAsColonyAnimal(w,a);
       ctx.event(`${p.name} a apprivoisé ${animalSpecies(a.species).label} ${a.id}.`);

@@ -1,14 +1,20 @@
 import { pawnBody } from './health-rules.ts';
 import { learnSkill,type SkillRecord } from './skills.ts';
-import type { Pawn } from './types.ts';
+import { SCHEMA_VERSION,type Pawn } from './types.ts';
 
 export const cookingSkill=(pawn:Pawn):SkillRecord=>pawn.skills.cooking??{level:0,xp:0,dailyXp:0,passion:0};
 /** Core CookingSpeed combines skill and capacities into a score before its curve.
  * Environment factors are supplied independently by the station. */
-export function cookingSpeed(pawn:Pawn):number {
+export function cookingSpeed(pawn:Pawn,version=SCHEMA_VERSION):number {
   const c=pawnBody(pawn).capacities;
   const score=Math.max(-20,Math.min(20,cookingSkill(pawn).level+16*(Math.min(1.5,c.manipulation)-1)+4*(Math.min(1.5,c.sight)-1)));
-  return score<0?.4+.015*score:.4+.06*score;
+  return cookSpeedCurve315(score,version);
+}
+/** Core CookSpeed postProcessCurve (-20, 0.01) (0, 0.4) (20, 1.6), then its
+ * minValue 0.1, from schema 315; the older slope below 0 was 0.015. */
+export function cookSpeedCurve315(score:number,version=SCHEMA_VERSION):number {
+  if(score<0)return version>=315?Math.max(.1,.4+.0195*score):.4+.015*score;
+  return .4+.06*score;
 }
 export function butcherySpeed(pawn:Pawn):number {
   const c=pawnBody(pawn).capacities;
