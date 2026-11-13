@@ -50,6 +50,24 @@ Le profil de la simulation est désormais plat. Les plus gros postes sont la fau
 
 Côté publication, les plus gros postes sont la publication complète (environ 100 ms par seconde, encodage et sections auxiliaires) et les paquets d'acteurs (5,8 %, dont 1,3 % pour la comparaison de toutes les piles). Cette comparaison ne peut pas se limiter aux piles modifiées : le journal des piles signale qu'une pile a changé, pas laquelle. Le prochain gain passe par la refonte de la publication déjà engagée (chantier 2).
 
-## 5. Suite prévue
+## 5. Tests
+
+Chaque lot a sa série de tests propres, plus ses tests voisins, choisis par nom de fichier : maladies, soins, besoins, vêtements, couture, factures, commerce, météo, plantes, faune, beauté, humeur, caravanes et migrations. Aucun lot n'a laissé d'échec nouveau. Les seuls ajustements portent sur des tests qui comptaient l'ancien catalogue (37 vêtements, 55 recettes, 5 familles) ou qui fabriquaient une sauvegarde ancienne en renumérotant un monde récent. Ceux-ci passent maintenant par `tests/scenarios/old-schema.ts`, qui retire d'abord le contenu que le schéma visé ne pouvait pas avoir.
+
+**Campagne « Atterrissage » (graine 42).** Elle reste rouge au raid du jour 22. Hier soir, elle échouait sur « défense tombée » ; elle échoue maintenant un peu plus tôt dans ce même raid, quand un colon meurt ou s'épuise. La version d'avant le lot 313 donne exactement le même échec : ce lot n'en est pas la cause. Les incidents et les maladies ajoutés cette nuit modifient le déroulement de la partie, et la défense scriptée ne tient toujours pas ce raid. C'est un travail sur le joueur scripté du test, pas une règle à corriger.
+
+Le test facultatif de retraite de caravane échouait déjà avant ces lots.
+
+## 6. Publication
+
+Construction prête depuis une copie exacte du commit `e5b994f5` (lot 313), par `git archive` : typage et construction Pages réussis, 1 142 fichiers, dans `tmp/publication-20261113/source/dist`. **Le déploiement en production a été refusé par le mode automatique.** Il attend votre accord. La commande, depuis ce dossier :
+
+```
+npx wrangler pages deploy dist --branch main
+```
+
+Ensuite, `node tmp/publication-20261113/verify-http.mjs` (avec `DEPLOY_URL` sur l'adresse de déploiement, depuis `E:/Code/RimWorld`) compare 36 fichiers octet par octet entre le site et la construction. La production publique reste celle du 12 au soir (`f693a6c7`, commit `65a9be6b`).
+
+## 7. Suite prévue
 
 À compléter.
