@@ -49,7 +49,7 @@ export class RoomQualityCapture {
       const footprint=footprintCells(s),inside=footprint.some(c=>cells.has(index(c)));
       if(!inside&&!footprint.some(c=>adjacent.has(index(c))))continue;
       wealth+=structureRoomMarketValue(s);
-      if(contains(index(s)))totalBeauty+=structureBeauty(s)+(s.kind==='flower-pot'?daylilyBeauty(s.flower?.plant):0);
+      if(contains(index(s)))totalBeauty+=structureBeauty(s,w.schemaVersion)+(s.kind==='flower-pot'?daylilyBeauty(s.flower?.plant):0);
       if(inside&&isBedKind(s.kind))beds++;
       if(!structureRoomStandable(s.kind))for(const c of footprint)cannotStand.add(index(c));
       const dirt=s.kind==='electric-crematorium'?-20:s.kind==='fueled-smithy'||s.kind==='electric-smithy'?-3:s.kind==='machining-table'?-2:s.kind==='butcher-table'?-15:s.kind==='stonecutter'||s.kind==='art-bench'?-5:0;

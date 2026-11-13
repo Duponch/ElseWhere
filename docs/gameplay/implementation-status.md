@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V311 — schéma 311 :** [Corrections de fidélité](core-fidelity-v311.md). Un audit du catalogue face au jeu de base a révélé des écarts, maintenant corrigés : points de vie de huit bâtiments (migration des dégâts proportionnelle), niveau de construction des deux générateurs à combustible, beauté des bâtiments électriques, du lit d'hôpital, des étagères et de trois pierres, ordre et arrondi de la formule de beauté.
+
 **V310 — schéma 310 :** [Hiver volcanique](volcanic-winter-v310.md). L'incident « divers » tiré sans effet s'applique désormais : −7 °C, ciel plus sombre (cultures et solaire ralentis), faune réduite de moitié et pas de loisirs en plein air, pendant 7,5 à 40 jours. La couleur du ciel à l'écran reste à faire.
 
 **V309 — schéma 309 :** [Maladie du sommeil](sleeping-sickness-v309.md). La maladie tropicale tirée sans effet atteint désormais de vrais habitants : elle progresse lentement, l'immunité s'acquiert, les soins la ralentissent pendant 35 heures et elle peut tuer. Le vomissement des stades avancés reste absent.

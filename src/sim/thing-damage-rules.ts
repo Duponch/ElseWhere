@@ -1,4 +1,5 @@
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
+import { SCHEMA_VERSION } from './types.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {AI_CORE_CONTENT_298} from './ai-core-content-298.ts';
 import {NOVEL_MAX_HIT_POINTS_295} from './book-state-295.ts';
@@ -65,7 +66,13 @@ const BUILDINGS:Readonly<Record<string,readonly [number,number,boolean]>>={
 };
 const STUFF_HP:Readonly<Record<string,number>>={wood:.65,steel:1,jade:.5,'granite-blocks':1.7,'limestone-blocks':1.55,'marble-blocks':1.2,'sandstone-blocks':1.4,'slate-blocks':1.3};
 const STUFF_BUILDINGS=new Set(['shelf','small-shelf','spike-trap','electric-crematorium','double-bed','drug-lab','fence','fence-gate','pen-marker','wall','door','autodoor','bedroll','bed','hospital-bed','table','table-square','table-long','stool','dining-chair','end-table','dresser','flower-pot','horseshoes','chess-table','stonecutter','butcher-table','fueled-stove','electric-stove','tailor-bench','electric-tailor-bench','research-bench','art-bench','small-sculpture','large-sculpture']);
-export const structureMaxHp=(s:Pick<Structure,'kind'|'material'>)=>isAncientMonumentKind256(s.kind)&&ancientMonumentMaterial256(s.kind,s.material,256)?ancientMonumentMaxHp256(s.kind,s.material):Object.hasOwn(s,'factionId')&&(s.kind==='wall'||s.kind==='door'||s.kind==='table'||s.kind==='table-square')&&ancientMonumentMaterial256('column',s.material,256)?ancientNeutralMaxHp256(s.kind,s.material):s.material==='jade'&&isHabitatFurnitureKind(s.kind)?Math.round(FURNITURE_DEFINITIONS[s.kind].maxHitPoints*.5):s.kind==='bedroll'&&isBedrollTextile256(s.material)?Math.round(75*BEDROLL_TEXTILES_256[s.material].hitPointsFactor):Math.round((BUILDINGS[s.kind]?.[0]??0)*(STUFF_BUILDINGS.has(s.kind)?STUFF_HP[s.material??'wood']??1:1));
+/** Schema 311: Core MaxHitPoints of eight buildings whose table value was
+ * wrong before (Fence, FenceGate, PenMarker, Table2x4c, DiningChair,
+ * EndTable, Dresser, PlantPot). Older schemas keep validating with theirs. */
+const BUILDING_HP311:Readonly<Record<string,number>>=Object.freeze({fence:40,'fence-gate':20,'pen-marker':100,'table-long':150,'dining-chair':100,'end-table':75,dresser:120,'flower-pot':75});
+export const HP_CHANGED_KINDS311:readonly string[]=Object.freeze(Object.keys(BUILDING_HP311));
+const buildingBaseHp=(kind:string,version:number):number=>Number(version)>=311&&Object.hasOwn(BUILDING_HP311,kind)?BUILDING_HP311[kind]!:BUILDINGS[kind]?.[0]??0;
+export const structureMaxHp=(s:Pick<Structure,'kind'|'material'>,version:number=SCHEMA_VERSION)=>isAncientMonumentKind256(s.kind)&&ancientMonumentMaterial256(s.kind,s.material,256)?ancientMonumentMaxHp256(s.kind,s.material):Object.hasOwn(s,'factionId')&&(s.kind==='wall'||s.kind==='door'||s.kind==='table'||s.kind==='table-square')&&ancientMonumentMaterial256('column',s.material,256)?ancientNeutralMaxHp256(s.kind,s.material):s.material==='jade'&&isHabitatFurnitureKind(s.kind)?Math.round(FURNITURE_DEFINITIONS[s.kind].maxHitPoints*.5):s.kind==='bedroll'&&isBedrollTextile256(s.material)?Math.round(75*BEDROLL_TEXTILES_256[s.material].hitPointsFactor):Math.round(buildingBaseHp(s.kind,version)*(STUFF_BUILDINGS.has(s.kind)?STUFF_HP[s.material??'wood']??1:1));
 export const structureFlammability=(s:Pick<Structure,'kind'|'material'>)=>isAncientMonumentKind256(s.kind)?ANCIENT_MONUMENT_DEFS_256[s.kind].flammability*(s.material==='wood'?1:s.material==='steel'?.4:0):s.material==='jade'?0:s.kind==='bedroll'&&isBedrollTextile256(s.material)?BEDROLL_TEXTILES_256[s.material].flammabilityFactor:(BUILDINGS[s.kind]?.[1]??0)*(STUFF_BUILDINGS.has(s.kind)?s.material?.endsWith('-blocks')?0:s.material==='steel'?.4:1:1);
 export const structureLeavesResources=(s:Pick<Structure,'kind'>)=>isAncientMonumentKind256(s.kind)|| (BUILDINGS[s.kind]?.[2]??false);
 export const resourceMaxHp=(r:Pick<Resource,'kind'|'species'>)=>floraDefinition(r)?.hitPoints??(r.kind==='healroot'?60:r.kind==='tree'?200:r.kind==='berries'?120:r.kind==='corn'?150:r.kind==='rock'?0:85);
@@ -122,3 +129,19 @@ export type FireItemLoss=Partial<Record<ItemId,number>>;
 
 export const isRepairableStructure=(s:Pick<Structure,'kind'|'material'>):boolean=>structureMaxHp(s)>0;
 import {isMaceItem269,maceMaterial269,MACE_DEFINITIONS_269} from './mace-content-269.ts';
+/** Migration 310 -> 311: a damaged building of a corrected kind keeps the
+ * same fraction of its hit points (at least one, and at least one point of
+ * damage while it was damaged). Applies to every saved building record. */
+export function rescaleStructureDamage311(value:unknown):void {
+  if(Array.isArray(value)){for(const v of value)rescaleStructureDamage311(v);return;}
+  if(!value||typeof value!=='object')return;
+  const o=value as Record<string,unknown>;
+  if(typeof o.kind==='string'&&Object.hasOwn(BUILDING_HP311,o.kind)&&Number.isSafeInteger(o.damage)&&Number.isSafeInteger(o.id)&&Number(o.damage)>0){
+    const s=o as unknown as Pick<Structure,'kind'|'material'>,oldMax=structureMaxHp(s,310),newMax=structureMaxHp(s,311);
+    if(oldMax>0&&newMax>0&&Number(o.damage)<oldMax){
+      const hp=Math.max(1,Math.round((oldMax-Number(o.damage))*newMax/oldMax)),damage=Math.max(1,newMax-hp);
+      if(damage<newMax)o.damage=damage;
+    }
+  }
+  for(const v of Object.values(o))if(v&&typeof v==='object')rescaleStructureDamage311(v);
+}

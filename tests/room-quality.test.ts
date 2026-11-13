@@ -1,4 +1,5 @@
 import { describe,it,expect } from 'vitest';
+import {FURNITURE_DEFINITIONS,roundCoreBeauty311} from '../src/sim/furniture-stats.ts';
 import { roomCamp } from './scenarios/rooms.ts';
 import { RoomTopologyCache } from '../src/sim/room-topology.ts';
 import { RoomQualityCapture } from '../src/sim/room-quality.ts';
@@ -6,7 +7,7 @@ import { captureWorldBeauty } from '../src/sim/beauty-need.ts';
 import { captureCleanliness } from '../src/sim/filth-room.ts';
 import { RoomBeautyInspection } from '../src/ui/room-beauty-inspection.ts';
 import { addFilth } from '../src/sim/filth.ts';
-import { sowDaylily } from '../src/sim/flower-pot.ts';
+import { daylilyBeauty,sowDaylily } from '../src/sim/flower-pot.ts';
 
 const cell={x:13,z:13};
 describe('qualité physique des pièces V103',()=>{
@@ -33,7 +34,8 @@ describe('qualité physique des pièces V103',()=>{
   it('fleur, saleté et dégâts sont capturés même à tick constant, puis la brèche retire toute statistique de pièce',()=>{
     const w=roomCamp();w.resources=[];const cache=new RoomTopologyCache(),ui=new RoomBeautyInspection(),read=()=>ui.read(w,cache.read(w),cell)!;
     const first=read();w.structures.push({id:w.nextId++,kind:'flower-pot',...cell,orientation:0,footprint:'standard',material:'marble-blocks',quality:'good',flower:{allowSow:true,plant:sowDaylily(w.tick)}});
-    const flower=read();expect(flower.total-first.total).toBe(19);expect(flower.wealth).toBeGreaterThan(first.wealth);
+    // Schema 311 Core Beauty: marble factor 1.35, quality after the stuff offset, then rounding.
+    const flower=read();expect(flower.total-first.total).toBe(roundCoreBeauty311((FURNITURE_DEFINITIONS['flower-pot'].beauty*1.35+1)*2)+daylilyBeauty(sowDaylily(w.tick)));expect(flower.wealth).toBeGreaterThan(first.wealth);
     addFilth(w,cell,'blood');const dirty=read();expect(dirty.cleanliness).toBeLessThan(flower.cleanliness);expect(dirty.impressiveness).toBeLessThan(flower.impressiveness);
     const pot=w.structures.at(-1)!;pot.damage=70;expect(read().wealth).toBeLessThan(dirty.wealth);
     const count=ui.rebuilds;w.tick++;

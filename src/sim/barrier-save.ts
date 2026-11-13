@@ -29,7 +29,7 @@ export function validateBarriers(world:World,version:number):string[] {
       ||ledger.resources!==undefined&&(!validFireResourceLosses(ledger.resources,version)||!Object.keys(ledger.resources as object).length)
       ||ledger.woodPotentialLost!==undefined&&(!integer(ledger.woodPotentialLost,1)||!object(ledger.resources)||!integer(ledger.resources.tree,1)))errors.push('Invalid destroyed building ledger.');
   }
-  for(const s of [...world.structures,...(world.packed??[]).map(p=>p.building)])if(s.damage!==undefined&&(version<67||!(version>=87?isRepairableStructure(s):isBarrier(s))||!integer(s.damage,1,(version>=87?structureMaxHp(s):barrierMaxHp(s))-1)))errors.push('Invalid barrier damage.');
+  for(const s of [...world.structures,...(world.packed??[]).map(p=>p.building)])if(s.damage!==undefined&&(version<67||!(version>=87?isRepairableStructure(s):isBarrier(s))||!integer(s.damage,1,(version>=87?structureMaxHp(s,version):barrierMaxHp(s))-1)))errors.push('Invalid barrier damage.');
   for(const j of world.jobs){
     const r:unknown=j.repair;
     if(j.kind!=='repair'){if(r!==undefined)errors.push('Unexpected repair target.');continue;}

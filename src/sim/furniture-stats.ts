@@ -1,4 +1,5 @@
 import {BEDROLL_TEXTILES_256,type BedrollTextile256} from './bedroll-textiles-256.ts';
+import {SCHEMA_VERSION} from './types.ts';
 import { isBedKind } from './bed-kinds.ts';
 import { WEAPON_QUALITIES,type WeaponQuality } from './equipment-rules.ts';
 
@@ -114,9 +115,10 @@ export function sculptureMaxHitPoints(kind:SculptureKind,materialName:SculptureM
 }
 /** StatWorker applies stuff offset before quality. Above 100 Beauty it rounds
  * to the nearest multiple of five using Core's midpoint-to-even rule. */
-export function sculptureBeauty(value:FurnitureLike):number {
+export function sculptureBeauty(value:FurnitureLike,version:number=SCHEMA_VERSION):number {
   if(!isSculptureKind(value.kind))return 0;
   const material=isSculptureMaterial(value.material)?SCULPTURE_MATERIALS[value.material]:undefined;
+  if(Number(version)>=311)return coreBeauty311(SCULPTURE_DEFINITIONS[value.kind].beauty,material?.beautyFactor??1,material?.beautyOffset??0,QUALITY_BEAUTY[furnitureQuality(value.quality)]);
   const raw=(SCULPTURE_DEFINITIONS[value.kind].beauty*(material?.beautyFactor??1)+(material?.beautyOffset??0))*QUALITY_BEAUTY[furnitureQuality(value.quality)];
   if(raw<=100)return raw;
   const units=raw/5,lower=Math.floor(units),fraction=units-lower;
@@ -148,8 +150,29 @@ export function furnitureWorkToBuildCore(kind:HabitatFurnitureKind,materialName:
 export function furnitureMaxHitPoints(kind:HabitatFurnitureKind,materialName:FurnitureMaterial):number {
   return FURNITURE_DEFINITIONS[kind].maxHitPoints*FURNITURE_MATERIALS[materialName].hitPointsFactor;
 }
-export function furnitureBeauty(value:FurnitureLike):number {
+/** Schema 311: Core Beauty finalisation. The stuff factor applies to a positive
+ * base only, the stuff offset is added, the quality factor applies to a
+ * positive value only, then the value is rounded (midpoint to even) and, above
+ * 100, to the nearest multiple of five. */
+export function roundCoreBeauty311(value:number):number {
+  const even=(x:number)=>{const f=Math.floor(x);return x-f===.5?(f%2===0?f:f+1):Math.round(x);};
+  const v=even(value);return v>100?5*even(v/5):v;
+}
+export const coreBeauty311=(base:number,factor:number,offset:number,quality:number):number=>{
+  let v=base>0?base*factor:base;v+=offset;if(v>0)v*=quality;return roundCoreBeauty311(v);
+};
+/** Core stuff Beauty factors that the furniture table had at 1 before 311. */
+const BEAUTY_FACTOR311:Readonly<Record<string,number>>=Object.freeze({'marble-blocks':1.35,'sandstone-blocks':1.1,'slate-blocks':1.1});
+export const furnitureBeautyFactor311=(material:unknown,version:number):number=>
+  Number(version)>=311&&typeof material==='string'&&Object.hasOwn(BEAUTY_FACTOR311,material)?BEAUTY_FACTOR311[material]!:isFurnitureMaterial(material)?FURNITURE_MATERIALS[material].beautyFactor:1;
+export function furnitureBeauty(value:FurnitureLike,version:number=SCHEMA_VERSION):number {
   if(!isHabitatFurnitureKind(value.kind))return 0;
+  if(Number(version)>=311){
+    // Core: shelves have Beauty 0.5 (ShelfBase), the hospital bed has none.
+    const base=value.kind==='shelf'||value.kind==='small-shelf'?.5:value.kind==='hospital-bed'?0:FURNITURE_DEFINITIONS[value.kind].beauty;
+    const m=isFurnitureMaterial(value.material)?FURNITURE_MATERIALS[value.material]:undefined;
+    return coreBeauty311(base,furnitureBeautyFactor311(value.material,version),m?.beautyOffset??0,QUALITY_BEAUTY[furnitureQuality(value.quality)]);
+  }
   const base=FURNITURE_DEFINITIONS[value.kind].beauty,m=isFurnitureMaterial(value.material)?FURNITURE_MATERIALS[value.material]:undefined;
   const scaled=base>0?base*(m?.beautyFactor??1)*QUALITY_BEAUTY[furnitureQuality(value.quality)]:base;
   return scaled+(m?.beautyOffset??0);

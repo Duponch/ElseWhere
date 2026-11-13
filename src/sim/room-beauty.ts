@@ -1,8 +1,9 @@
 import {isShipCasketKind277,SHIP_CASKET_CONTENT_277} from './ship-casket-content-277.ts';
+import {SCHEMA_VERSION} from './types.ts';
 import {hasSmoothedStoneSubstrate281,SMOOTHED_STONE_FACTS_281} from './smooth-floor-terrain-281.ts';
 import {isShipPartKind276} from './ship-part-content-276.ts';
 import {isAncientMonumentKind256,ANCIENT_MONUMENT_DEFS_256} from './ancient-monument-props-256.ts';
-import {QUALITY_BEAUTY,furnitureQuality} from './furniture-stats.ts';
+import { coreBeauty311,furnitureBeautyFactor311,QUALITY_BEAUTY,furnitureQuality} from './furniture-stats.ts';
 import { furnitureBeauty,isFurnitureMaterial,isHabitatFurnitureKind,isSculptureKind,sculptureBeauty,FURNITURE_MATERIALS,type FurnitureLike } from './furniture-stats.ts';
 import type { RoomTopology } from './room-topology.ts';
 
@@ -17,6 +18,8 @@ export interface BeautyInput {
   structures:readonly BeautyStructure[];
   filth?:readonly BeautyFilth[];
   objects?:readonly BeautyObject[];
+  /** Schema whose Beauty rules apply (current when absent). */
+  version?:number;
 }
 
 export const FLOOR_BEAUTY=Object.freeze({
@@ -46,9 +49,13 @@ export function filthBeauty(filth:Pick<BeautyFilth,'kind'>,outdoors=false):numbe
   return Object.hasOwn(FILTH_BEAUTY,filth.kind)?FILTH_BEAUTY[filth.kind as keyof typeof FILTH_BEAUTY]:0;
 }
 export function groundObjectBeauty(object:BeautyObject):number {return object.visible===false?0:object.beauty??-4;}
-export function structureBeauty(structure:BeautyStructure):number {
+/** Schema 311: Core Beauty of power buildings that had none here. */
+const POWER_BEAUTY311:Readonly<Record<string,number>>=Object.freeze({'wind-turbine':-12,battery:-15,'wood-generator':-20,'power-conduit':-2,'power-switch':-2});
+export function structureBeauty(structure:BeautyStructure,version:number=SCHEMA_VERSION):number {
+  const v311=Number(version)>=311;
+  if(v311&&Object.hasOwn(POWER_BEAUTY311,structure.kind))return POWER_BEAUTY311[structure.kind]!;
   if(structure.kind==='firefoam-popper')return -8;
-  if(isAncientMonumentKind256(structure.kind)){const m=isFurnitureMaterial(structure.material)?FURNITURE_MATERIALS[structure.material]:undefined,d=ANCIENT_MONUMENT_DEFS_256[structure.kind];return d.beauty*(m?.beautyFactor??1)*(d.quality?QUALITY_BEAUTY[furnitureQuality(structure.quality)]:1)+(m?.beautyOffset??0);}
+  if(isAncientMonumentKind256(structure.kind)){const m=isFurnitureMaterial(structure.material)?FURNITURE_MATERIALS[structure.material]:undefined,d=ANCIENT_MONUMENT_DEFS_256[structure.kind];if(v311)return coreBeauty311(d.beauty,furnitureBeautyFactor311(structure.material,version),m?.beautyOffset??0,d.quality?QUALITY_BEAUTY[furnitureQuality(structure.quality)]:1);return d.beauty*(m?.beautyFactor??1)*(d.quality?QUALITY_BEAUTY[furnitureQuality(structure.quality)]:1)+(m?.beautyOffset??0);}
   if(isShipCasketKind277(structure.kind))return SHIP_CASKET_CONTENT_277.beauty;
   if(isShipPartKind276(structure.kind))return 0; // Fixed inputs, no Stuff or Beauty override.
   if(structure.kind==='ship-chunk')return -20;
@@ -63,10 +70,11 @@ export function structureBeauty(structure:BeautyStructure):number {
   if(structure.kind==='tube-television')return 0;
   if(structure.kind==='sandbags'||structure.kind==='ancient-road-barrier')return -10;
   if(structure.kind==='ancient-road-lamp')return 0;
-  if(isHabitatFurnitureKind(structure.kind))return furnitureBeauty(structure);
-  if(isSculptureKind(structure.kind))return sculptureBeauty(structure);
+  if(isHabitatFurnitureKind(structure.kind))return furnitureBeauty(structure,version);
+  if(isSculptureKind(structure.kind))return sculptureBeauty(structure,version);
   const material=isFurnitureMaterial(structure.material)?FURNITURE_MATERIALS[structure.material]:undefined;
   const base=structure.kind==='electric-crematorium'?-10:structure.baseBeauty??0;
+  if(v311)return coreBeauty311(base,furnitureBeautyFactor311(structure.material,version),material?.beautyOffset??0,1);
   return (base>0?base*(material?.beautyFactor??1):base)+(material?.beautyOffset??0);
 }
 export function beautyBand(value:number):BeautyBand {
@@ -97,7 +105,7 @@ export class BeautyMap {
 export class BeautyMapCache {
   private dirty=true;private map:BeautyMap|undefined;
   private tiles:readonly BeautyTile[]|undefined;private structures:readonly BeautyStructure[]|undefined;
-  private filth:readonly BeautyFilth[]|undefined;private objects:readonly BeautyObject[]|undefined;
+  private filth:readonly BeautyFilth[]|undefined;private objects:readonly BeautyObject[]|undefined;private version:number|undefined;
   private width=-1;private height=-1;private invalidated=new Set<number>();
   rebuilds=0;
   invalidateAll():void {this.dirty=true;this.invalidated.clear();}
@@ -105,7 +113,7 @@ export class BeautyMapCache {
   invalidateStructure(structure:BeautyStructure):void {this.invalidateCell(structure.beautyCell??structure);}
   invalidatedCells():readonly number[]{return [...this.invalidated].sort((a,b)=>a-b);}
   read(input:BeautyInput):BeautyMap {
-    const changed=this.width!==input.width||this.height!==input.height||this.tiles!==input.tiles||this.structures!==input.structures||this.filth!==input.filth||this.objects!==input.objects;
+    const changed=this.width!==input.width||this.height!==input.height||this.tiles!==input.tiles||this.structures!==input.structures||this.filth!==input.filth||this.objects!==input.objects||this.version!==input.version;
     if(!changed&&!this.dirty)return this.map!;
     if(!Number.isInteger(input.width)||!Number.isInteger(input.height)||input.width<1||input.height<1||input.tiles.length!==input.width*input.height)throw new RangeError('Invalid beauty map dimensions.');
     const size=input.width*input.height,inside=new Float64Array(size),outside=new Float64Array(size),thingsIn=new Float64Array(size),thingsOut=new Float64Array(size);
@@ -114,10 +122,10 @@ export class BeautyMapCache {
       outside[i]=!tile.floor&&(tile.terrain==='grass'||tile.terrain==='soil'||tile.terrain==='rich-soil'||tile.terrain==='gravel')?0:value;
     }
     const index=(cell:BeautyCell)=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<input.width&&cell.z<input.height?cell.z*input.width+cell.x:-1;
-    for(const structure of input.structures){const i=index(structure.beautyCell??structure);if(i<0)continue;const value=structureBeauty(structure);thingsIn[i]+=value;thingsOut[i]+=value;}
+    for(const structure of input.structures){const i=index(structure.beautyCell??structure);if(i<0)continue;const value=structureBeauty(structure,input.version);thingsIn[i]+=value;thingsOut[i]+=value;}
     for(const filth of input.filth??[]){const i=index(filth);if(i<0)continue;thingsIn[i]+=filthBeauty(filth,false);thingsOut[i]+=filthBeauty(filth,true);}
     for(const object of input.objects??[]){const i=index(object);if(i<0)continue;const value=groundObjectBeauty(object);thingsIn[i]+=value;thingsOut[i]+=value;}
-    this.width=input.width;this.height=input.height;this.tiles=input.tiles;this.structures=input.structures;this.filth=input.filth;this.objects=input.objects;
+    this.width=input.width;this.height=input.height;this.tiles=input.tiles;this.structures=input.structures;this.filth=input.filth;this.objects=input.objects;this.version=input.version;
     this.map=new BeautyMap(input.width,input.height,inside,outside,thingsIn,thingsOut);this.dirty=false;this.invalidated.clear();this.rebuilds++;return this.map;
   }
 }

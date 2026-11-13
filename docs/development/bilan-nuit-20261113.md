@@ -12,11 +12,13 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 | Vêtements dans tous les cuirs et laines | 308 | 15 matières de couture, 78 vêtements, migration des politiques de tenue | [V308](../gameplay/textile-apparel-v308.md) |
 | Maladie du sommeil | 309 | Maladie tropicale tirée sans effet ; durée de soin propre à chaque maladie | [V309](../gameplay/sleeping-sickness-v309.md) |
 | Hiver volcanique | 310 | −7 °C, ciel plus sombre, faune réduite, pas de loisirs dehors | [V310](../gameplay/volcanic-winter-v310.md) |
+| Corrections de fidélité | 311 | Points de vie de 8 bâtiments, construction des générateurs, beauté (valeurs et formule) | [V311](../gameplay/core-fidelity-v311.md) |
 
 ## 2. Fidélité : écarts trouvés et corrigés
 
 - **Durée d'un soin.** Dans le jeu de base, un soin agit pendant sa durée de base plus 3 heures de chevauchement, et on peut le renouveler pendant ces 3 dernières heures. Les nouvelles maladies suivent cette règle.
 - **Vitesse au-delà de 100 %.** Le jeu de base rend plus rapide une personne dont la capacité de déplacement dépasse 100 %. Nos sauvegardes refusaient toute vitesse au-dessus de 100 % ; elles l'acceptent désormais à partir du schéma 307.
+- **Audit du catalogue.** Un audit en lecture seule a comparé les chiffres du catalogue au jeu de base (recettes, bâtiments, recherches, objets, armes). Il a trouvé 14 écarts et deux erreurs de formule de beauté, corrigés dans le lot 311.
 - **Chemise : fausse alerte vérifiée.** La « Chemise » d'Elsewhere est la chemise boutonnée du jeu de base, avec les mêmes valeurs. C'est le t-shirt qui manque.
 
 ## 3. Inventaire du catalogue

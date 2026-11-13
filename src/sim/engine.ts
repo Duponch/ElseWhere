@@ -1565,7 +1565,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(job.kind==='sow'&&packedAt(world,job)){releaseWork(world,pawn);continue;}
       if(job.furniture){if(advanceFurniture(world,pawn,job,target=>moveToward(world,pawn,target,false,getBlocked,budget,false,getLight),()=>releaseWork(world,pawn),()=>constructionWorkRate(pawn,job,workGlow(pawn),body))){blocked=undefined;roofs=undefined;invalidateEnvironment();wakePlanners(world);}continue;}
       if(job.kind==='deconstruct'&&!deconstructionAvailable(world,job,pawn.id)){releaseWork(world,pawn);continue;}
-      if(isConstruction(job)&&(pawn.skills.construction.level<(job.kind==='lay-floor'&&job.floor?FLOOR_DEFINITIONS[job.floor].skill:constructionSkillRequired(job.kind))||!constructionSupplied(world,job)||!constructionSiteFree(world,job,pawn.id))){releaseWork(world,pawn);continue;}
+      if(isConstruction(job)&&(pawn.skills.construction.level<(job.kind==='lay-floor'&&job.floor?FLOOR_DEFINITIONS[job.floor].skill:constructionSkillRequired(job.kind,world.schemaVersion))||!constructionSupplied(world,job)||!constructionSiteFree(world,job,pawn.id))){releaseWork(world,pawn);continue;}
       if(job.kind==='smooth-floor'){
         if(smoothFloorReason281(world,job,job.id,structureNavigation.read())){cancelIntentJobs(world,new Set([job.id]));continue;}
         if(canTouchSmoothFloor281(world,pawn,job,structureNavigation.read())){

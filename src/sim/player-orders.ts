@@ -91,7 +91,7 @@ export function orderReadiness(world: World, pawn: Pawn, job: Job, accepted=fals
     const plant=clearingPlant(world,job);
     if((!accepted||job.clearance)&&plant&&plant.kind!=='rock')return;
     if(job.clearance)return 'La plante à dégager a disparu.';
-    const skill=constructionSkillRequired(job.kind);if(pawn.skills.construction.level<skill)return `Construction ${skill} nécessaire pour finir cet ouvrage.`;
+    const skill=constructionSkillRequired(job.kind,world.schemaVersion);if(pawn.skills.construction.level<skill)return `Construction ${skill} nécessaire pour finir cet ouvrage.`;
     if (!constructionSupplied(world,job)) return 'Approvisionnement nécessaire ; choisissez Livrer les matériaux.';
     if (!constructionSiteFree(world,job,pawn.id)) return 'Chantier gêné ; dégagez les piles ou attendez le passage des colons.';
   }

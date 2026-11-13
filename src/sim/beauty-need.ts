@@ -17,7 +17,7 @@ export function worldBeautyInput(world:World):BeautyInput {
     ...world.structures.flatMap(s=>s.kind==='flower-pot'?[{id:s.id,x:s.x,z:s.z,kind:'flower',beauty:daylilyBeauty(s.flower?.plant)}]:[])];
   // The pot keeps its material/quality contribution; the plant is additional.
   // A baseBeauty override on a furniture kind is ignored by structureBeauty.
-  return {width:world.width,height:world.height,tiles:world.tiles,structures:world.structures,filth:world.filth?.items,objects};
+  return {width:world.width,height:world.height,tiles:world.tiles,structures:world.structures,filth:world.filth?.items,objects,version:Number(world.schemaVersion)};
 }
 export function captureWorldBeauty(world:World,topology:RoomTopology,cache=new BeautyMapCache()):RoomBeautyCapture {
   return new RoomBeautyCapture(cache.read(worldBeautyInput(world)),topology);

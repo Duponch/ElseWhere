@@ -42,7 +42,7 @@ export function constructionCandidates(world:World,pawn:Pawn,blocked:Uint8Array,
       const candidate=planFurnitureTransport(world,pawn,obstacle.pack,blocked,reach,budget,job);if(candidate)result.push(candidate);
     } else if(job.kind==='install'&&Number.isFinite(constructionHaulPriority(pawn))&&furnitureReady(world,job,pawn)&&allows(furnitureWorkTarget(world,job))&&canReach(world,job,reach,false)&&canReach(world,furnitureWorkTarget(world,job),reach,false)) {
       result.push({...base,priority:constructionHaulPriority(pawn),target:furnitureWorkTarget(world,job),job});
-    } else if(job.construction==='frame'&&pawn.skills.construction.level>=(job.kind==='lay-floor'&&job.floor?FLOOR_DEFINITIONS[job.floor].skill:constructionSkillRequired(job.kind))&&workPriority(pawn,'build')>0&&constructionSupplied(world,job)&&constructionSiteFree(world,job,pawn.id,obstacle)&&canReach(world,job,reach,false)) {
+    } else if(job.construction==='frame'&&pawn.skills.construction.level>=(job.kind==='lay-floor'&&job.floor?FLOOR_DEFINITIONS[job.floor].skill:constructionSkillRequired(job.kind,world.schemaVersion))&&workPriority(pawn,'build')>0&&constructionSupplied(world,job)&&constructionSiteFree(world,job,pawn.id,obstacle)&&canReach(world,job,reach,false)) {
       result.push({...base,priority:workPriority(pawn,'build'),target:job,job});
     }
   }
