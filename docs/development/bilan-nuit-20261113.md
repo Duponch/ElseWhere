@@ -78,13 +78,15 @@ Trois tests longs ont dépassé leur délai pendant les séries voisines des lot
 
 ## 6. Publication
 
-Construction prête depuis une copie exacte du commit `e5b994f5` (lot 313), par `git archive` : typage et construction Pages réussis, 1 142 fichiers, dans `tmp/publication-20261113/source/dist`. **Le déploiement en production a été refusé par le mode automatique.** Il attend votre accord. La commande, depuis ce dossier :
+Construction refaite depuis une copie exacte du dernier commit poussé, `f13c7a36` (lots 305 à 323), par `git archive` : typage et construction Pages réussis, 1 142 fichiers, dans `tmp/publication-20261113/source-f13c7a36/dist`. La construction précédente (`e5b994f5`, lot 313) est conservée mais périmée.
+
+**Le déploiement en production a été refusé par le mode automatique.** Il attend votre accord. La commande, depuis `tmp/publication-20261113/source-f13c7a36` :
 
 ```
 npx wrangler pages deploy dist --branch main
 ```
 
-Ensuite, `node tmp/publication-20261113/verify-http.mjs` (avec `DEPLOY_URL` sur l'adresse de déploiement, depuis `E:/Code/RimWorld`) compare 36 fichiers octet par octet entre le site et la construction. La production publique reste celle du 12 au soir (`f693a6c7`, commit `65a9be6b`).
+Ensuite, depuis `E:/Code/RimWorld`, `node tmp/publication-20261113/verify-http.mjs` (avec `DEPLOY_URL` sur l'adresse de déploiement) compare 36 fichiers octet par octet entre le site et la construction. La production publique reste celle du 12 au soir (`f693a6c7`, commit `65a9be6b`).
 
 ## 7. Suite prévue
 
