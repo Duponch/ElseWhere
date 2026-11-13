@@ -22,6 +22,8 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 | Corrections de fidélité : combat | 318 | Animaux de la colonie à terre, taille des animaux visés, recul par balle, étourdissement contondant | [V318](../gameplay/combat-fidelity-v318.md) |
 | Corrections de fidélité : vie sociale | 319 | Souvenir « M'a recruté », bagarres (pacifiques, malnutrition), fer à cheval, visites aux malades | [V319](../gameplay/social-fidelity-v319.md) |
 | Mort des pillards à terre | 320 | Chance de mort selon l'intention de population de Cassandra | [V320](../gameplay/raider-death-v320.md) |
+| Armure naturelle | 321 | Tortue et insectes de caverne protégés comme par une armure portée | [V321](../gameplay/natural-armor-v321.md) |
+| Fusil à pompe | 322 | Arme courte portée fabriquée à l'atelier d'usinage, vendue par les visiteurs avec le lanceur IEM | [V322](../gameplay/pump-shotgun-v322.md) |
 
 ## 2. Fidélité : écarts trouvés et corrigés
 

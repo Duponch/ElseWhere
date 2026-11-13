@@ -15,7 +15,7 @@ const samePoint=(a:{x:number;z:number},b:unknown)=>record(b)&&keys(b,['x','z'])&
 
 /** Unknown JSON is rejected before touching references or calling the resolver. */
 export function validWorldProjectile(value:unknown,world:Pick<World,'width'|'height'|'tick'>,version=88,coreNow297?:number):value is WorldProjectile {
-  if(!record(value)||!keys(value,['id','quality','emittedAtCore','advancedAtCore','flight','relations','arrival',...(version>=88?['weaponItem']:[])])||value.weaponItem!==undefined&&value.weaponItem!=='bolt-action-rifle'&&!(version>=193&&value.weaponItem==='mini-turret-gun')&&!(version>=197&&(value.weaponItem==='lancer-gun'||value.weaponItem==='pikeman-gun'))&&!(version>=208&&value.weaponItem==='emp-launcher')&&!(version>=316&&value.weaponItem==='short-bow'))return false;
+  if(!record(value)||!keys(value,['id','quality','emittedAtCore','advancedAtCore','flight','relations','arrival',...(version>=88?['weaponItem']:[])])||value.weaponItem!==undefined&&value.weaponItem!=='bolt-action-rifle'&&!(version>=193&&value.weaponItem==='mini-turret-gun')&&!(version>=197&&(value.weaponItem==='lancer-gun'||value.weaponItem==='pikeman-gun'))&&!(version>=208&&value.weaponItem==='emp-launcher')&&!(version>=316&&value.weaponItem==='short-bow')&&!(version>=322&&value.weaponItem==='pump-shotgun'))return false;
   const end=isCorePhysicalSchema297(version)?validationCore297(version,world.tick,coreNow297):world.tick*CORE_TICKS_PER_LOCAL;
   if(!Number.isSafeInteger(end)||!integer(value.id,1)||!integer(value.emittedAtCore,0,end)||!integer(value.advancedAtCore,value.emittedAtCore,end))return false;
   const f=value.flight,r=value.relations;

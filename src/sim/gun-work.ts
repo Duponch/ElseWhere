@@ -95,7 +95,7 @@ export function detachMissingGunBills(world:World):void {
 export function validGunWorkShape(p:Record<string,unknown>,version:number):boolean {
   if(p.item!=='unfinished-gun')return p.gunWork===undefined;
   const work=p.gunWork,owner=p.owner;
-  if(version<101||p.kind!=='unfinished'||p.quantity!==1||!record(owner)||!['ground','pawn'].includes(String(owner.type))||!record(work)||!isGunRecipe(work.recipe)||version<208&&work.recipe==='make-emp-launcher')return false;
+  if(version<101||p.kind!=='unfinished'||p.quantity!==1||!record(owner)||!['ground','pawn'].includes(String(owner.type))||!record(work)||!isGunRecipe(work.recipe)||version<208&&work.recipe==='make-emp-launcher'||version<322&&work.recipe==='make-pump-shotgun')return false;
   const recipe=work.recipe,required=GUN_REQUIREMENTS[recipe];
   if(Object.keys(work).some(k=>!['recipe','authorId','progress','parts','billId'].includes(k))||!integer(work.authorId,1)||!integer(work.progress,0,productionWorkTotal(recipe))||work.billId!==undefined&&!integer(work.billId,1)||!Array.isArray(work.parts)||work.parts.length<2||work.parts.length>63)return false;
   const totals={steel:0,component:0};

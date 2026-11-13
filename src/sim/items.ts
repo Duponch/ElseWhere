@@ -94,6 +94,7 @@ export const ITEM_DEFINITIONS = Object.freeze({
   silver:Object.freeze({label:'Argent',kind:'silver',stackLimit:500,nutrition:0,maxIngest:0,color:0xc7c9cc}),
   'bolt-action-rifle':Object.freeze({label:'Fusil à verrou',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x695342}),
   'emp-launcher':Object.freeze({label:'Lanceur EMP',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x749da6}),
+  'pump-shotgun':Object.freeze({label:'Fusil à pompe',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x5f6a70}),
   'short-bow':Object.freeze({label:'Arc court',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:SHORT_BOW_COLOR_316}),
   'plasteel-knife':Object.freeze({label:'Couteau en plastacier',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0xa0b2b5}),
   revolver:Object.freeze({label:'Revolver',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x606b72}),

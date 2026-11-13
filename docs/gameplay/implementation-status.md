@@ -23,6 +23,10 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V322 — schéma 322 :** [Fusil à pompe](pump-shotgun-v322.md). 60 acier et 3 composants à l'atelier d'usinage (Armurerie, Artisanat 5) ; portée 15,9, 18 dégâts, pouvoir d'arrêt 3 ; les visiteurs vendent aussi le fusil à pompe et le lanceur IEM.
+
+**V321 — schéma 321 :** [Armure naturelle des créatures](natural-armor-v321.md). La tortue et les insectes de caverne (mégascarabée, mégaraignée, spélopède) ont leur armure du jeu de base contre les balles, les flèches et les coups ; les créatures sans armure ne tirent rien de plus.
+
 **V320 — schéma 320 :** [Mort des pillards à terre](raider-death-v320.md). Un humain d'une autre faction mis à terre par la violence meurt selon l'intention de population de Cassandra (de 26 % à 87 %), qui dépend du nombre de colons et des arrivées récentes ; les raids laissent des morts.
 
 **V319 — schéma 319 :** [Corrections de fidélité : vie sociale et loisirs](social-fidelity-v319.md). Un audit des prisonniers, de la vie sociale et des loisirs a confirmé huit écarts ; six sont corrigés : souvenir « M'a recruté », personne pacifique et malnutrition dans les bagarres, Tir entraîné au fer à cheval, seuil et fin des visites aux malades.

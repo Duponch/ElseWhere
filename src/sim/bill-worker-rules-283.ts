@@ -21,6 +21,7 @@ const recipeSkills:Readonly<Record<ProductionRecipe,ProductionRecipeSkill283|nul
  'smelt-slag':null,
  'make-spear':'crafting',
  'make-short-bow':'crafting',
+ 'make-pump-shotgun':'crafting',
  'make-longsword':'crafting',
  'make-mace':'crafting',
  'make-plasteel-knife':'crafting',

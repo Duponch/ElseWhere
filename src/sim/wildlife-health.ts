@@ -1,3 +1,4 @@
+import {naturalArmor321,naturalArmorProtection321} from './natural-armor-321.ts';
 import {animalBodySize} from './animal-life.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
@@ -95,7 +96,8 @@ export function damageAnimalWithBullet(w:World,a:WildAnimal,hit:UnarmoredBullet,
   requireAnimalDeathCapacity256(w,a);advanceAnimalHealth(w,a);if(a.health?.death)return;
   const random={rng:w.rng};
   const record=a.health??createAnimalMedicalRecord256(w,a);
-  const impact=resolveUnarmoredBullet(record,hit,()=>healthRandom(random));
+  const armor=w.schemaVersion>=321&&hit.armorPenetration!==undefined?naturalArmor321(a):undefined;
+  const impact=resolveUnarmoredBullet(record,hit,()=>healthRandom(random),armor?naturalArmorProtection321(armor,'sharp',hit.armorPenetration!,()=>healthRandom(random)):undefined);
   if(!impact.selected)return;
   const preyId=a.predation?.targetId;
   commitAnimalImpact(w,a,impact.record,random,core,instigatorId===undefined?undefined:combatTargetKeyForHive256(w,instigatorId));

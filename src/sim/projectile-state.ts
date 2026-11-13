@@ -7,7 +7,7 @@ import type { LivingTargetKey } from './combat-target.ts';
 export interface ProjectileRelations { friendlyPawnIds:number[]; friendlyFireFactor:number;friendlyTargetKeys?:LivingTargetKey[] }
 export interface WorldProjectile {
   /** Absent is the historical revolver. Independent of the current equipment. */
-  weaponItem?:'bolt-action-rifle'|'emp-launcher'|'short-bow'|'mini-turret-gun'|'lancer-gun'|'pikeman-gun';
+  weaponItem?:'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'mini-turret-gun'|'lancer-gun'|'pikeman-gun';
   id:number;
   quality:WeaponQuality;
   emittedAtCore:number;

@@ -56,6 +56,7 @@ export function validBillSettings(value:unknown,recipe:ProductionRecipe='simple-
   if(recipe==='tuque'&&version<245)return false;
   if((recipe==='tshirt'||recipe==='jacket')&&version<312)return false;
   if(recipe==='make-emp-launcher'&&version<208)return false;
+  if(recipe==='make-pump-shotgun'&&version<322)return false;
   if(!value||typeof value!=='object'||Array.isArray(value))return false;
   const v=value as BillSettings;
   const reservePause=Object.getOwnPropertyDescriptor(value,'reservePause');

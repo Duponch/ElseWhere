@@ -1,3 +1,4 @@
+import {naturalArmor321,naturalArmorProtection321} from './natural-armor-321.ts';
 import {meleeStunCore318} from './stun.ts';
 import {combatTargetKey} from './combat-target.ts';
 import {applyToxicBite256} from './toxic-buildup-256.ts';
@@ -65,7 +66,8 @@ export function strikeLivingTarget(w:World,attacker:LivingTarget,target:LivingTa
     const protection=isPawnTarget(target)?apparelProtection(w,target,category,tool.penetration,random):undefined;
     const record=target.health??(isAnimalTarget(target)?createAnimalMedicalRecord256(w,target):{...createMedicalRecord(w.tick),...(isMechanoidTarget(target)?{body:target.mechKind}:{})});
     const input=isMechanoidTarget(target)?{...structuredClone(record),tick:w.tick}:record;
-    const impact=resolveUnarmoredMelee(input,{damage,kind:tool.kind},random,isMechanoidTarget(target)?mechanoidProtection(category,tool.penetration,random,target.mechKind):protection?.protect);
+    const natural=isAnimalTarget(target)&&w.schemaVersion>=321?naturalArmor321(target):undefined;
+    const impact=resolveUnarmoredMelee(input,{damage,kind:tool.kind},random,isMechanoidTarget(target)?mechanoidProtection(category,tool.penetration,random,target.mechKind):natural?naturalArmorProtection321(natural,category,tool.penetration,random):protection?.protect);
     if(w.schemaVersion>=256&&tool.kind==='toxic-bite'&&!isMechanoidTarget(target)){applyToxicBite256(impact.record,impact.totalDamageDealt,isAnimalTarget(target)?animalBodySize(target):1,toxicResistance256(target),random,!!options.huntingForFood);reconcileMedicalDeath(impact.record);}
     protection?.commit();injured=impact.layers.length>0;stun=impact.stun;
     if(isAnimalTarget(target))commitAnimalImpact(w,target,impact.record,randomState,core,combatTargetKey(attacker));

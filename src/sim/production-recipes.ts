@@ -144,9 +144,10 @@ function validMixedMealIngredients(ingredients:readonly {item:ProductionIngredie
   return protein===required&&vegetable===required;
 }
 
-export type GunRecipe='make-revolver'|'make-bolt-action-rifle'|'make-emp-launcher';
-export const isGunRecipe=(v:unknown):v is GunRecipe=>v==='make-revolver'||v==='make-bolt-action-rifle'||v==='make-emp-launcher';
-export const GUN_REQUIREMENTS={ 'make-revolver':{steel:30,component:2,skill:3}, 'make-bolt-action-rifle':{steel:60,component:3,skill:5},'make-emp-launcher':{steel:75,component:8,skill:4} } as const;
+export type GunRecipe='make-revolver'|'make-bolt-action-rifle'|'make-emp-launcher'|'make-pump-shotgun';
+export const isGunRecipe=(v:unknown):v is GunRecipe=>v==='make-revolver'||v==='make-bolt-action-rifle'||v==='make-emp-launcher'||v==='make-pump-shotgun';
+export const GUN_REQUIREMENTS={ 'make-revolver':{steel:30,component:2,skill:3}, 'make-bolt-action-rifle':{steel:60,component:3,skill:5},'make-emp-launcher':{steel:75,component:8,skill:4},'make-pump-shotgun':{steel:60,component:3,skill:5} } as const;
+const gunItem322=(recipe:GunRecipe)=>recipe==='make-revolver'?'revolver':recipe==='make-emp-launcher'?'emp-launcher':recipe==='make-pump-shotgun'?'pump-shotgun':'bolt-action-rifle';
 export const PRODUCTION_RECIPES = Object.freeze({
   'make-prosthetic-arm':Object.freeze({label:'Fabriquer un bras prothétique',station:'machining-table',work:'craft',inputs:['steel','component'] as readonly ProductionIngredient[],units:44,workTicks:PROSTHETIC_PRODUCTION_WORK_TICKS_273,outputUnits:1}),
   'make-prosthetic-leg':Object.freeze({label:'Fabriquer une jambe prothétique',station:'machining-table',work:'craft',inputs:['steel','component'] as readonly ProductionIngredient[],units:44,workTicks:PROSTHETIC_PRODUCTION_WORK_TICKS_273,outputUnits:1}),
@@ -172,6 +173,7 @@ export const PRODUCTION_RECIPES = Object.freeze({
   'large-sculpture':Object.freeze({label:'Grande sculpture',station:'art-bench',work:'art',inputs:ART_MATERIALS as readonly ProductionIngredient[],units:100,workTicks:3000,outputUnits:1}),
   'make-revolver':Object.freeze({label:'Revolver',station:'machining-table',work:'craft',inputs:['steel','component'] as readonly ProductionIngredient[],units:32,workTicks:400,outputUnits:1}),
   'make-bolt-action-rifle':Object.freeze({label:'Fusil à verrou',station:'machining-table',work:'craft',inputs:['steel','component'] as readonly ProductionIngredient[],units:63,workTicks:1200,outputUnits:1}),
+  'make-pump-shotgun':Object.freeze({label:'Fusil à pompe',station:'machining-table',work:'craft',inputs:['steel','component'] as readonly ProductionIngredient[],units:63,workTicks:1200,outputUnits:1}),
   'make-emp-launcher':Object.freeze({label:'Lanceur EMP',station:'machining-table',work:'craft',inputs:['steel','component'] as readonly ProductionIngredient[],units:83,workTicks:3000,outputUnits:1}),
   'make-flak-vest':Object.freeze({label:'Gilet pare-balles',station:'machining-table',work:'craft',inputs:['cloth','steel','component'] as readonly ProductionIngredient[],units:91,workTicks:900,outputUnits:1}),
   'make-flak-helmet':Object.freeze({label:'Casque pare-balles',station:'machining-table',work:'craft',inputs:['steel','component','plasteel'] as readonly ProductionIngredient[],units:52,workTicks:800,outputUnits:1}),
@@ -254,7 +256,7 @@ export function recipeProduct(recipe:ProductionRecipe,ingredients:readonly {item
   if(isBiofuelRecipe(recipe))return 'chemfuel';
   if(recipe==='make-medicine')return 'medicine';
   if(isArtRecipe(recipe))throw new RangeError('Sculptures are whole furniture products');
-  if(isGunRecipe(recipe))return recipe==='make-revolver'?'revolver':recipe==='make-emp-launcher'?'emp-launcher':'bolt-action-rifle';
+  if(isGunRecipe(recipe))return gunItem322(recipe);
   if(isFlakRecipe(recipe))return recipe==='make-flak-vest'?'flak-vest':recipe==='make-flak-helmet'?'flak-helmet':recipe==='make-recon-armor'?'recon-armor':'recon-helmet';
   if(recipe==='smash-mechanoid'||recipe==='shred-mechanoid')return 'steel';
   if(recipe==='make-component')return 'component';
@@ -274,7 +276,7 @@ export function isRecipeProduct(recipe:ProductionRecipe,item:ItemId):boolean {
   if(isBiofuelRecipe(recipe))return item==='chemfuel';
   if(recipe==='make-medicine')return item==='medicine';
   if(isArtRecipe(recipe))return false;
-  if(isGunRecipe(recipe))return item===(recipe==='make-revolver'?'revolver':recipe==='make-emp-launcher'?'emp-launcher':'bolt-action-rifle');
+  if(isGunRecipe(recipe))return item===gunItem322(recipe);
   if(isFlakRecipe(recipe))return item===(recipe==='make-flak-vest'?'flak-vest':recipe==='make-flak-helmet'?'flak-helmet':recipe==='make-recon-armor'?'recon-armor':'recon-helmet');
   if(recipe==='smash-mechanoid'||recipe==='shred-mechanoid')return item==='steel';
   if(recipe==='make-component')return item==='component';
@@ -284,7 +286,7 @@ export function isRecipeProduct(recipe:ProductionRecipe,item:ItemId):boolean {
 }
 export function tailoringProduct(recipe:TailoringRecipe,material:TailoringMaterial):ApparelItem { return apparelItemFor(recipe,material); }
 
-export const stationRecipes=(station:Pick<Structure,'kind'>):readonly ProductionRecipe[]=>station.kind==='fueled-smithy'||station.kind==='electric-smithy'?['make-plate-armor','make-simple-helmet','make-plasteel-knife','make-mace','make-longsword','make-spear','make-short-bow']:station.kind==='brewery'?['brew-wort']:station.kind==='electric-crematorium'?['cremate-corpse','burn-apparel']:station.kind==='electric-smelter'?['smelt-weapon','smelt-slag','smelt-apparel']:station.kind==='biofuel-refinery'?['chemfuel-from-wood','chemfuel-from-organics']:station.kind==='art-bench'?['small-sculpture','large-sculpture']:station.kind==='machining-table'?['make-prosthetic-arm','make-prosthetic-leg','make-revolver','make-bolt-action-rifle','make-emp-launcher','make-flak-vest','make-flak-helmet','shred-mechanoid','make-simple-helmet']:station.kind==='fabrication-bench'?['make-component','make-advanced-component','make-recon-helmet','make-recon-armor']:(station.kind==='tailor-bench'||station.kind==='electric-tailor-bench')?['shirt','pants','duster','parka','tribalwear','tuque','tshirt','jacket']:station.kind==='crafting-spot'?['tribalwear','smash-mechanoid','make-plasteel-knife','make-short-bow']:isStove(station.kind)?['make-pemmican','simple-meal','cook-simple-meal-bulk','fine-meal','cook-fine-meal-bulk','vegetarian-fine-meal','cook-vegetarian-fine-meal-bulk','carnivore-fine-meal','cook-carnivore-fine-meal-bulk','lavish-meal','cook-lavish-meal-bulk','vegetarian-lavish-meal','cook-vegetarian-lavish-meal-bulk','cook-carnivore-lavish-meal','cook-carnivore-lavish-meal-bulk','cook-survival-meal']:station.kind==='campfire'?['burn-apparel','make-pemmican','simple-meal','cook-simple-meal-bulk']:isButcherStation(station.kind)?['butcher-creature','make-kibble']:stationRecipe(station)?[stationRecipe(station)!]:[];
+export const stationRecipes=(station:Pick<Structure,'kind'>):readonly ProductionRecipe[]=>station.kind==='fueled-smithy'||station.kind==='electric-smithy'?['make-plate-armor','make-simple-helmet','make-plasteel-knife','make-mace','make-longsword','make-spear','make-short-bow']:station.kind==='brewery'?['brew-wort']:station.kind==='electric-crematorium'?['cremate-corpse','burn-apparel']:station.kind==='electric-smelter'?['smelt-weapon','smelt-slag','smelt-apparel']:station.kind==='biofuel-refinery'?['chemfuel-from-wood','chemfuel-from-organics']:station.kind==='art-bench'?['small-sculpture','large-sculpture']:station.kind==='machining-table'?['make-prosthetic-arm','make-prosthetic-leg','make-revolver','make-bolt-action-rifle','make-pump-shotgun','make-emp-launcher','make-flak-vest','make-flak-helmet','shred-mechanoid','make-simple-helmet']:station.kind==='fabrication-bench'?['make-component','make-advanced-component','make-recon-helmet','make-recon-armor']:(station.kind==='tailor-bench'||station.kind==='electric-tailor-bench')?['shirt','pants','duster','parka','tribalwear','tuque','tshirt','jacket']:station.kind==='crafting-spot'?['tribalwear','smash-mechanoid','make-plasteel-knife','make-short-bow']:isStove(station.kind)?['make-pemmican','simple-meal','cook-simple-meal-bulk','fine-meal','cook-fine-meal-bulk','vegetarian-fine-meal','cook-vegetarian-fine-meal-bulk','carnivore-fine-meal','cook-carnivore-fine-meal-bulk','lavish-meal','cook-lavish-meal-bulk','vegetarian-lavish-meal','cook-vegetarian-lavish-meal-bulk','cook-carnivore-lavish-meal','cook-carnivore-lavish-meal-bulk','cook-survival-meal']:station.kind==='campfire'?['burn-apparel','make-pemmican','simple-meal','cook-simple-meal-bulk']:isButcherStation(station.kind)?['butcher-creature','make-kibble']:stationRecipe(station)?[stationRecipe(station)!]:[];
 export const stationAccepts=(station:Pick<Structure,'kind'>,recipe:ProductionRecipe):boolean=>stationRecipes(station).includes(recipe);
 
 /** Snapshot-only display total; the authoritative workpiece owns its material. */

@@ -50,6 +50,16 @@ export const SHORT_BOW_PARTS = [
   {size:[.008,.94,.008],center:[-.072,0,0],color:0xe8e0c8},
 ] as const;
 export const SHORT_BOW_DYE316=-16;
+/** Schema 322 pump shotgun, original shape: wide barrel over a tube
+ * magazine, sliding fore-end, receiver and a wooden stock. */
+const PUMP_SHOTGUN_PARTS = [
+  {size:[.56,.05,.05],center:[.20,.07,0],color:0x5f6a70},
+  {size:[.44,.035,.035],center:[.17,.025,0],color:0x4d575c},
+  {size:[.14,.06,.06],center:[.14,.03,0],color:0x6e5238},
+  {size:[.20,.09,.065],center:[-.10,.04,0],color:0x6b767b},
+  {size:[.06,.12,.05],center:[-.12,-.045,0],color:0x5a4330},
+  {size:[.26,.12,.055],center:[-.33,0,0],color:0x7f5f42},
+] as const;
 /** Resident variants share one rig, one cargo batch and the same authored parts
  * as ground piles. Dye tags -2/-3 are already used by clothing. */
 export const WEAPON_VISUALS = [
@@ -58,7 +68,8 @@ export const WEAPON_VISUALS = [
   {item:'bolt-action-rifle',equipment:2,cargo:70,dye:-4,parts:RIFLE_PARTS},
   {item:'plasteel-knife',equipment:3,cargo:71,dye:-5,parts:KNIFE_PARTS},
   {item:'emp-launcher',equipment:4,cargo:73,dye:-9,parts:EMP_LAUNCHER_PARTS},
-  {item:'short-bow',equipment:8,cargo:0,dye:-16,parts:SHORT_BOW_PARTS},
+  {item:'short-bow',equipment:8,cargo:186,dye:-16,parts:SHORT_BOW_PARTS},
+  {item:'pump-shotgun',equipment:9,cargo:187,dye:-17,parts:PUMP_SHOTGUN_PARTS},
 ] as const;
 /** Optional resident families are separate from the four historical concrete
  * visuals: a family key is never a real ItemId or a ground/cargo item. */

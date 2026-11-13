@@ -58,6 +58,8 @@ export const TRADE_CATALOGUE:Readonly<Partial<Record<ItemId,TradeCatalogueEntry>
   'emp-launcher':gear(506.5,100,true,true),
   // Schema 316: Core Bow_Short, 30 wood x 1.2 + 2400 x 0.0036.
   'short-bow':gear(SHORT_BOW_BASE_VALUE_316,100,true,true),
+  // Schema 322: 60 x 1.9 + 3 x 32 + 12000 x 0.0036.
+  'pump-shotgun':gear(253.2,100,true,true),
 });
 export const tradeCatalogueEntry=(item:ItemId):TradeCatalogueEntry|undefined=>TRADE_CATALOGUE[item];
 import {MACE_ITEMS_269,maceBaseValue269,maceMaxHitPoints269} from './mace-content-269.ts';

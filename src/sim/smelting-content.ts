@@ -8,7 +8,7 @@ import {SMITHING_APPAREL_ITEMS267,isSmithingApparel267,smithingApparelStuff267,t
 export type SmeltingRecipe='smelt-weapon'|'smelt-slag'|'smelt-apparel';
 export const SMELTING_WORK_TICKS=160;
 export const SMELTING_MAX_OUTPUT=250;
-export const SMELTING_WEAPONS:readonly WeaponItem[]=Object.freeze(['revolver','bolt-action-rifle','emp-launcher','plasteel-knife',...MACE_ITEMS_269.filter(item=>maceMaterial269(item)!=='wood'),...LONGSWORD_ITEMS_270.filter(item=>longswordMaterial270(item)!=='wood'),...SPEAR_ITEMS_272.filter(item=>spearMaterial272(item)!=='wood')]);
+export const SMELTING_WEAPONS:readonly WeaponItem[]=Object.freeze(['revolver','bolt-action-rifle','emp-launcher','pump-shotgun','plasteel-knife',...MACE_ITEMS_269.filter(item=>maceMaterial269(item)!=='wood'),...LONGSWORD_ITEMS_270.filter(item=>longswordMaterial270(item)!=='wood'),...SPEAR_ITEMS_272.filter(item=>spearMaterial272(item)!=='wood')]);
 export const SMELTING_APPAREL_INPUTS267=Object.freeze(SMITHING_APPAREL_ITEMS267.filter(item=>smithingApparelStuff267(item)!=='wood'));
 export const SMELTING_APPAREL_MAX_OUTPUT267=425;
 export const isSmeltingRecipe=(value:unknown):value is SmeltingRecipe=>value==='smelt-weapon'||value==='smelt-slag'||value==='smelt-apparel';
