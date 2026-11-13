@@ -117,7 +117,7 @@ export function resolveFluIncident(world:World,state:FluIncidentCalendar=world.f
  * Victim sampling/admission/luck consume only the prospective extension. */
 export function resolveImmuneDiseaseIncident(world:World,kind:ImmuneDiseaseKind,
   state:ImmuneDiseaseIncidentCalendar|undefined=world.fluIncidents?.immuneDiseases):number {
-  if(world.schemaVersion<207||!state)return 0;
+  if(world.schemaVersion<207||!state||kind==='sleeping-sickness'&&Number(world.schemaVersion)<309)return 0;
   if(kind==='malaria'){
     const site=world.site;
     // The geographic selector already owns the resolved biome weights. Keep
@@ -145,7 +145,7 @@ export function resolveImmuneDiseaseIncident(world:World,kind:ImmuneDiseaseKind,
   }
   if(acquired){
     state.episodes++;state.cases+=acquired;
-    emit(world,`${kind==='malaria'?'Paludisme':'Peste'} : ${names.join(', ')} ${acquired===1?'est malade':'sont malades'}. Consultez Santé, organisez les soins et le repos au lit.`);
+    emit(world,`${kind==='malaria'?'Paludisme':kind==='plague'?'Peste':'Maladie du sommeil'} : ${names.join(', ')} ${acquired===1?'est malade':'sont malades'}. Consultez Santé, organisez les soins et le repos au lit.`);
   }
   return acquired;
 }
@@ -226,6 +226,7 @@ export function advanceFluIncidents(world:World):void {
     const selected=biomeDiseaseChoice256(site.biome,random(state));
     if(selected==='Disease_Flu'){state.fluDraws++;resolveFluIncident(world,state);}
     else if(state.immuneDiseases&&(selected==='Disease_Plague'||selected==='Disease_Malaria')){state.immuneDiseases.draws++;resolveImmuneDiseaseIncident(world,selected==='Disease_Plague'?'plague':'malaria',state.immuneDiseases);}
+    else if(state.immuneDiseases&&Number(world.schemaVersion)>=309&&selected==='Disease_SleepingSickness'){state.immuneDiseases.draws++;resolveImmuneDiseaseIncident(world,'sleeping-sickness',state.immuneDiseases);}
     else if(state.immuneDiseases&&isParasites306(Number(world.schemaVersion))&&(selected==='Disease_GutWorms'||selected==='Disease_MuscleParasites')){state.immuneDiseases.draws++;resolveParasiteIncident306(world,selected==='Disease_GutWorms'?'gut-worms':'muscle-parasites',state.immuneDiseases);}
     else if(state.immuneDiseases&&isMechanites307(Number(world.schemaVersion))&&(selected==='Disease_FibrousMechanites'||selected==='Disease_SensoryMechanites')){state.immuneDiseases.draws++;resolveMechaniteIncident307(world,selected==='Disease_FibrousMechanites'?'fibrous-mechanites':'sensory-mechanites',state.immuneDiseases);}
     // Other selected diseases consume their opportunity, as in the existing

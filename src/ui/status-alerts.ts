@@ -113,7 +113,7 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
   counted('flu-critical',flu.filter(p=>p.health!.flu!.immunity<FLU_UNIT&&fluStage(p.health!.flu!.severity)==='extreme'),n=>`Urgence médicale : ${n} colon(s) avec une grippe extrême`,'health');
   counted('flu',flu,n=>`${n} colon(s) grippé(s) · consulter Santé`,'health');
   for(const kind of IMMUNE_DISEASE_KINDS){
-    const cases=living.filter(p=>!!p.health?.immuneDiseases?.[kind]?.severity),label=kind==='malaria'?'paludisme':'peste';
+    const cases=living.filter(p=>!!p.health?.immuneDiseases?.[kind]?.severity),label=kind==='malaria'?'paludisme':kind==='plague'?'peste':'la maladie du sommeil';
     counted(`${kind}-critical`,cases.filter(p=>{const d=p.health!.immuneDiseases![kind]!;return d.immunity<IMMUNE_DISEASE_UNIT&&['extreme','critical'].includes(immuneDiseaseStage(kind,d.severity));}),n=>`Urgence médicale : ${n} colon(s) avec ${label} grave`,'health');
     counted(kind,cases,n=>`${n} colon(s) avec ${label} · consulter Santé`,'health');
   }

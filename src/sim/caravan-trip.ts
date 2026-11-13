@@ -46,7 +46,7 @@ export function scoutRegistryView(w:World):World {
 
 function acuteCondition(p:Pawn):boolean {
   const h=p.health;
-  return !!h&&(!!h.death||h.injuries.length>0||h.missing.length>0||h.bloodLoss>0||!!h.heatstroke||!!h.hypothermia||!!h.malnutrition||!!h.infections||!!h.flu||!!h.immuneDiseases?.malaria?.severity||!!h.immuneDiseases?.plague?.severity||!!h.immuneDiseases?.malaria?.vomit||!!h.foodPoisoning||!!h.cryptosleepSickness||!!h.anesthetic||medicalStatus(h)!=='mobile');
+  return !!h&&(!!h.death||h.injuries.length>0||h.missing.length>0||h.bloodLoss>0||!!h.heatstroke||!!h.hypothermia||!!h.malnutrition||!!h.infections||!!h.flu||!!h.immuneDiseases?.malaria?.severity||!!h.immuneDiseases?.plague?.severity||!!h.immuneDiseases?.['sleeping-sickness']?.severity||!!h.immuneDiseases?.malaria?.vomit||!!h.foodPoisoning||!!h.cryptosleepSickness||!!h.anesthetic||medicalStatus(h)!=='mobile');
 }
 function activeTask(p:Pawn):boolean {
   return p.jobId!==null||p.haul!==null||p.cooking!==null||p.need!==null||p.orders.active!==null||p.orders.queue.length>0

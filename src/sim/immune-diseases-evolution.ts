@@ -20,5 +20,5 @@ export function advanceImmuneDiseases(record:MedicalRecord,context:MedicalContex
     state.immunity=Math.max(0,Math.min(IMMUNE_DISEASE_UNIT,state.immunity+Math.round(immuneDiseaseImmunityPerDay(record,kind,context,filtration)*IMMUNE_DISEASE_UNIT/6000)));
     if(!state.severity&&!state.immunity&&!state.vomit)delete states[kind];
   }
-  if(!states.malaria&&!states.plague)delete record.immuneDiseases;
+  if(!IMMUNE_DISEASE_KINDS.some(kind=>states[kind]))delete record.immuneDiseases;
 }

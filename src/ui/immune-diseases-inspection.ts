@@ -3,7 +3,7 @@ import { immuneDiseaseNextTendCore,immuneDiseaseTendable } from '../sim/immune-d
 import { IMMUNE_DISEASE_KINDS,type ImmuneDiseaseKind } from '../sim/immune-diseases-types';
 import type { MedicalRecord } from '../sim/injury-types';
 
-export const IMMUNE_DISEASE_LABELS={malaria:'Paludisme',plague:'Peste'} as const;
+export const IMMUNE_DISEASE_LABELS={malaria:'Paludisme',plague:'Peste','sleeping-sickness':'Maladie du sommeil'} as const;
 const stages={minor:'léger',major:'majeur',extreme:'extrême',critical:'critique'} as const;
 const hours=(core:number):string=>core<250?'< 0,1 h':`${(core/2500).toFixed(1)} h`;
 const percent=(value:number):string=>`${(value>=IMMUNE_DISEASE_UNIT?100:Math.min(99.9,value*100/IMMUNE_DISEASE_UNIT)).toFixed(1)} %`;

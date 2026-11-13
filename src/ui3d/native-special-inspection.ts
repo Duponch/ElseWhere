@@ -105,7 +105,7 @@ export function nativeClinicalConditionRows(health: MedicalRecord | undefined, s
     if (state.vomit) rows.push(row(`${id}-vomit`, 'Épisode de vomissement en cours'));
   };
   if (health.flu) episode('flu', 'Grippe', health.flu, FLU_UNIT);
-  for (const [kind, state] of Object.entries(health.immuneDiseases ?? {})) if (state) episode(kind, kind === 'malaria' ? 'Paludisme' : 'Peste', state, IMMUNE_DISEASE_UNIT);
+  for (const [kind, state] of Object.entries(health.immuneDiseases ?? {})) if (state) episode(kind, kind === 'malaria' ? 'Paludisme' : kind === 'plague' ? 'Peste' : 'Maladie du sommeil', state, IMMUNE_DISEASE_UNIT);
   for (const [kind, state] of Object.entries(health.parasites306 ?? {})) if (state) {
     const left = state.tend ? Math.max(0, state.tend.expiresAtCore - clock) : 0;
     rows.push(row(`${kind}-cure`, kind === 'gut-worms' ? 'Vers intestinaux' : 'Parasites musculaires', `Guérison ${percent(state.totalTend / 3000)}`, `${kind === 'gut-worms' ? 'Faim deux fois plus rapide' : 'Fatigue deux fois plus rapide, manipulation et déplacement −30 points'} · douleur +20 % · ${left > 0 ? `soin de qualité ${percent(state.tend!.quality / 1000)}, ${(left / 2500).toFixed(1)} h restantes` : 'aucun soin actif'}${suspended ? ' · Horloge suspendue' : ''}`));

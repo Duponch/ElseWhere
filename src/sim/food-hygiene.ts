@@ -70,7 +70,7 @@ export function processPawnVomiting(w:World,p:Pawn):boolean {
   // Completing that episode can exhaust the final reason to keep the record.
   const diseases=p.health?.immuneDiseases;
   if(malaria&&diseases?.malaria===malaria&&!malaria.severity&&!malaria.immunity&&!malaria.vomit){
-    delete diseases.malaria;if(!diseases.plague)delete p.health!.immuneDiseases;
+    delete diseases.malaria;if(!diseases.plague&&!diseases['sleeping-sickness'])delete p.health!.immuneDiseases;
   }
   if(!chosen)return false;
   if(toxic?.vomitRequestedAt!==undefined)return false;

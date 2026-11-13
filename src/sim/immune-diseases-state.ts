@@ -1,5 +1,5 @@
 import { HP_UNIT } from './injury-rules.ts';
-import { IMMUNE_DISEASE_DEFINITIONS,IMMUNE_DISEASE_INITIAL,IMMUNE_DISEASE_TEND_DURATION_CORE,IMMUNE_DISEASE_TEND_OVERLAP_CORE,IMMUNE_DISEASE_UNIT } from './immune-diseases-rules.ts';
+import { immuneDiseaseTendCore,IMMUNE_DISEASE_DEFINITIONS,IMMUNE_DISEASE_INITIAL,IMMUNE_DISEASE_TEND_OVERLAP_CORE,IMMUNE_DISEASE_UNIT } from './immune-diseases-rules.ts';
 import { IMMUNE_DISEASE_KINDS,type ImmuneDiseaseKind,type ImmuneDiseaseState } from './immune-diseases-types.ts';
 import type { MedicalRecord } from './injury-types.ts';
 
@@ -22,7 +22,7 @@ export function immuneDiseaseTendable(record:MedicalRecord,kind:ImmuneDiseaseKin
 export function tendImmuneDisease(record:MedicalRecord,kind:ImmuneDiseaseKind,quality:number):boolean {
   if(!Number.isSafeInteger(quality)||quality<0||quality>1300)throw new Error('Invalid immune disease tending quality');
   const state=record.immuneDiseases?.[kind];if(!state||!immuneDiseaseTendable(record,kind))return false;
-  const expiresAtCore=Math.max(record.tick*10,state.tend?.expiresAtCore??0)+IMMUNE_DISEASE_TEND_DURATION_CORE;
+  const expiresAtCore=Math.max(record.tick*10,state.tend?.expiresAtCore??0)+immuneDiseaseTendCore(kind);
   if(!Number.isSafeInteger(expiresAtCore))throw new Error('Immune disease treatment clock exhausted');
   state.tend={quality,expiresAtCore};return true;
 }

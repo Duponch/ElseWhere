@@ -677,7 +677,7 @@ function validSurgeryTransport(pawn:Pawn,world:Pick<World,'schemaVersion'|'tick'
  * Legacy dossiers do not acquire an additional anatomical census. */
 function validImmuneDiseaseTransport(pawn:Pawn,world:Pick<World,'schemaVersion'|'tick'|'width'|'height'>,archived=false):boolean {
   const record=pawn.health;
-  if(!record||!Object.hasOwn(record,'immuneDiseases')&&!['malaria','plague'].includes(record.death?.cause??''))return true;
+  if(!record||!Object.hasOwn(record,'immuneDiseases')&&!['malaria','plague','sleeping-sickness'].includes(record.death?.cause??''))return true;
   if(validateMedicalRecord(record,true,true,true,true,false,false,true,true,true,true,true,world.schemaVersion,world.schemaVersion>=127)!==null
     ||!validMedicalCivilHeader271(record,world.schemaVersion)||medicalCivilTick271(record)>world.tick||!archived&&!record.death&&medicalCivilTick271(record)!==world.tick)return false;
   const vomit=record.immuneDiseases?.malaria?.vomit;

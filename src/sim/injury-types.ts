@@ -62,7 +62,7 @@ export interface MedicalRecord {
   /** V84: hunger damage independent of wounds, billionths of severity. */
   malnutrition?:number;
   infections?:InfectionState;
-  death?:{tick:number;cause:'execution'|'blood-loss'|'vital-failure'|'trauma'|'heatstroke'|'hypothermia'|'downed'|'infection'|'malnutrition'|'flu'|'malaria'|'plague'|'heart-artery-blockage'|'heart-attack'|'toxic-buildup'|'scaria'};
+  death?:{tick:number;cause:'execution'|'blood-loss'|'vital-failure'|'trauma'|'heatstroke'|'hypothermia'|'downed'|'infection'|'malnutrition'|'flu'|'malaria'|'plague'|'sleeping-sickness'|'heart-artery-blockage'|'heart-attack'|'toxic-buildup'|'scaria'};
 }
 export interface MedicalContext {
   /** Civil endpoint of this unsuspended interval; never includes a held gap. */

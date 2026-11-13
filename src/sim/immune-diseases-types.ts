@@ -1,6 +1,7 @@
 import type { VomitState } from './food-poisoning.ts';
 
-export const IMMUNE_DISEASE_KINDS=['malaria','plague'] as const;
+/** Schema 309 adds sleeping sickness (Core SleepingSickness). */
+export const IMMUNE_DISEASE_KINDS=['malaria','plague','sleeping-sickness'] as const;
 export type ImmuneDiseaseKind=typeof IMMUNE_DISEASE_KINDS[number];
 /** V207 human systemic episode; severity and immunity are billionths. */
 export interface ImmuneDiseaseState {

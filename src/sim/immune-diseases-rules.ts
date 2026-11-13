@@ -10,7 +10,11 @@ export const IMMUNE_DISEASE_TEND_OVERLAP_CORE=7_500;
 export const IMMUNE_DISEASE_DEFINITIONS=Object.freeze({
   malaria:Object.freeze({severityPerDay:.3702,severityPerDayImmune:-.7297,immunityPerDay:.3145,immunityPerDayNotSick:-.03,tendedPerDay:.232,lifeThreateningAt:910_000_000}),
   plague:Object.freeze({severityPerDay:.666,severityPerDayImmune:-.333,immunityPerDay:.5224,immunityPerDayNotSick:-.02,tendedPerDay:.3628,lifeThreateningAt:900_000_000}),
+  // Core SleepingSickness: slow, long tends (32 h + 3 h overlap).
+  'sleeping-sickness':Object.freeze({severityPerDay:.12,severityPerDayImmune:-.176,immunityPerDay:.1,immunityPerDayNotSick:-.02,tendedPerDay:.07,lifeThreateningAt:875_000_000}),
 });
+/** Core TendTicksFull per disease: (base + 3 h overlap) x 2500. */
+export const immuneDiseaseTendCore=(kind:ImmuneDiseaseKind):number=>kind==='sleeping-sickness'?87_500:IMMUNE_DISEASE_TEND_DURATION_CORE;
 export interface ImmuneDiseaseModifiers {
   pain:number;consciousnessOffset:number;consciousnessMax:number;
   manipulationOffset:number;breathingOffset:number;bloodFiltrationOffset:number;
@@ -18,6 +22,7 @@ export interface ImmuneDiseaseModifiers {
 const NONE:ImmuneDiseaseModifiers=Object.freeze({pain:0,consciousnessOffset:0,consciousnessMax:Infinity,manipulationOffset:0,breathingOffset:0,bloodFiltrationOffset:0});
 export function immuneDiseaseStage(kind:ImmuneDiseaseKind,severity:number):'none'|'minor'|'major'|'extreme'|'critical' {
   if(severity<=0)return 'none';
+  if(kind==='sleeping-sickness')return severity>=875_000_000?'critical':severity>=625_000_000?'extreme':severity>=437_500_000?'major':'minor';
   return kind==='malaria'?(severity>=910_000_000?'critical':severity>=780_000_000?'major':'minor'):
     severity>=900_000_000?'critical':severity>=800_000_000?'extreme':severity>=600_000_000?'major':'minor';
 }
@@ -27,7 +32,14 @@ export function immuneDiseaseModifiers(record:MedicalRecord):ImmuneDiseaseModifi
   let pain=0,consciousnessOffset=0,consciousnessMax=Infinity,manipulationOffset=0,breathingOffset=0,bloodFiltrationOffset=0;
   for(const kind of IMMUNE_DISEASE_KINDS){
     const stage=immuneDiseaseStage(kind,record.immuneDiseases[kind]?.severity??0);if(stage==='none')continue;
-    if(kind==='malaria'){
+    if(kind==='sleeping-sickness'){
+      const s=record.immuneDiseases[kind]!.severity;
+      if(s>=937_500_000){pain+=.15;consciousnessMax=Math.min(consciousnessMax,.1);manipulationOffset-=.2;}
+      else if(s>=875_000_000){pain+=.1;consciousnessOffset-=.2;manipulationOffset-=.2;}
+      else if(s>=625_000_000){pain+=.05;consciousnessOffset-=.15;manipulationOffset-=.06;}
+      else if(s>=437_500_000){pain+=.03;consciousnessOffset-=.04;manipulationOffset-=.04;}
+      else{pain+=.02;consciousnessOffset-=.02;manipulationOffset-=.02;}
+    }else if(kind==='malaria'){
       bloodFiltrationOffset-=stage==='critical'?.22:stage==='major'?.2:.1;
       if(stage==='critical'){consciousnessMax=.1;manipulationOffset-=.1;pain+=.3;}
       else if(stage==='major'){consciousnessOffset-=.12;manipulationOffset-=.08;pain+=.3;}
