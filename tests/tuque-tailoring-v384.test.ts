@@ -30,8 +30,9 @@ const textile=(w:World,item:'cloth'|'muffalo-wool'|'light-leather')=>w.piles.fil
 test('tuques add only two products and preserve the historical family/material catalogue',()=>{
   expect(APPAREL_FAMILIES).toEqual(['tribalwear','shirt','pants','duster','parka']);
   for(const family of APPAREL_FAMILIES)for(const material of APPAREL_MATERIALS)expect(APPAREL[apparelItemFor(family,material)]).toBeDefined();
-  expect(Object.keys(APPAREL).filter(item=>item.endsWith('-tuque')).sort()).toEqual(['cloth-tuque','muffalo-wool-tuque']);
-  expect(PRODUCTION_RECIPES.tuque).toMatchObject({inputs:['cloth','muffalo-wool'],units:20,workTicks:120,outputUnits:1});
+  // Schema 308 adds the three new wools' tuques after these two.
+  expect(Object.keys(APPAREL).filter(item=>item.endsWith('-tuque')).sort()).toEqual(['alpaca-wool-tuque','bison-wool-tuque','cloth-tuque','megasloth-wool-tuque','muffalo-wool-tuque']);
+  expect(PRODUCTION_RECIPES.tuque).toMatchObject({inputs:['cloth','muffalo-wool','alpaca-wool','bison-wool','megasloth-wool'],units:20,workTicks:120,outputUnits:1});
   expect(productionWorkTotal('tuque')).toBe(1200000);expect(PRODUCTION_RECIPES.parka.workTicks).toBe(800);
   expect(stationRecipes({kind:'tailor-bench'})).toContain('tuque');expect(stationRecipes({kind:'electric-tailor-bench'})).toContain('tuque');expect(stationRecipes({kind:'crafting-spot'})).not.toContain('tuque');
   expect(()=>apparelItemFor('tuque','light-leather')).toThrow(RangeError);

@@ -1,7 +1,10 @@
 /** Pure item/coverage/stat definitions. Keep catalogue initialization independent of medical, work and production runtime cycles. */
 import {apparelCoverage,type ApparelCoverage,type ArmorRatings} from './armor.ts';
 import {SMITHING_APPAREL_DEFINITIONS267,type SmithingApparel267,type ArmorStuff267} from './smithing-apparel-267.ts';
-export const APPAREL_MATERIALS = ['cloth', 'light-leather', 'plainleather', 'bluefur', 'camelhide', 'muffalo-wool', 'foxfur'] as const;
+import {TEXTILE_MATERIALS308,TEXTILE_MATERIAL_FACTS308,TEXTILE_APPAREL_ITEMS308,type TextileApparelItem308,type TextileMaterial308} from './textile-apparel-308.ts';
+/** The seven historical materials, then (schema 308) every other Core leather and wool. */
+export const LEGACY_APPAREL_MATERIALS308 = ['cloth', 'light-leather', 'plainleather', 'bluefur', 'camelhide', 'muffalo-wool', 'foxfur'] as const;
+export const APPAREL_MATERIALS = [...LEGACY_APPAREL_MATERIALS308, ...TEXTILE_MATERIALS308] as const;
 export type ApparelMaterial = typeof APPAREL_MATERIALS[number];
 /** Historical families admit every existing material. Tuques are a limited family. */
 export const APPAREL_FAMILIES = ['tribalwear', 'shirt', 'pants', 'duster', 'parka'] as const;
@@ -22,6 +25,7 @@ export const APPAREL_MATERIAL_DEFINITIONS: Readonly<Record<ApparelMaterial, Appa
   camelhide:Object.freeze({label:'cuir de chameau',color:0xc3a375,armor:Object.freeze({sharp:.81,blunt:.24,heat:1.5}),coldInsulation:16,heatInsulation:24}),
   'muffalo-wool':Object.freeze({label:'laine de mufalo',color:0xb3c0ba,armor:Object.freeze({sharp:.36,blunt:0,heat:1.1}),coldInsulation:28,heatInsulation:12}),
   foxfur:Object.freeze({label:'fourrure de renard',color:0xb26422,armor:Object.freeze({sharp:.81,blunt:.21,heat:1.5}),coldInsulation:20,heatInsulation:16}),
+  ...Object.fromEntries(TEXTILE_MATERIALS308.map(m=>{const f=TEXTILE_MATERIAL_FACTS308[m];return [m,Object.freeze({label:f.label,color:f.color,armor:f.armor,coldInsulation:f.coldInsulation,heatInsulation:f.heatInsulation})];})) as Record<TextileMaterial308,ApparelMaterialDefinition>,
 });
 
 interface ApparelFamilyDefinition {
@@ -62,13 +66,13 @@ const textileDefinition = (family: ApparelFamily, material: ApparelMaterial): Ap
   const garment=APPAREL_FAMILY_DEFINITIONS[family],stuff=APPAREL_MATERIAL_DEFINITIONS[material];
   return Object.freeze({
     label:`${garment.label} en ${stuff.label}`,
-    hitPoints:Math.round(garment.hitPoints*(['plainleather','bluefur','camelhide'].includes(material)?1.3:1)),equipTicks:garment.equipTicks,color:stuff.color,coverage:garment.coverage,
+    hitPoints:Math.round(garment.hitPoints*((TEXTILE_MATERIALS308 as readonly string[]).includes(material)?TEXTILE_MATERIAL_FACTS308[material as TextileMaterial308].hitPointsFactor:['plainleather','bluefur','camelhide'].includes(material)?1.3:1)),equipTicks:garment.equipTicks,color:stuff.color,coverage:garment.coverage,
     ratings:Object.freeze({sharp:stuff.armor.sharp*garment.armorFactor,blunt:stuff.armor.blunt*garment.armorFactor,heat:stuff.armor.heat*garment.armorFactor}),
     moveOffset:0,family,material,coldInsulation:stuff.coldInsulation*garment.coldFactor,heatInsulation:stuff.heatInsulation*garment.heatFactor,
   });
 };
 
-export type ApparelItem=`${ApparelMaterial}-${Exclude<ApparelFamily,'tuque'>}`|'cloth-tuque'|'muffalo-wool-tuque'|'flak-vest'|'flak-helmet'|'recon-helmet'|'recon-armor'|'flak-pants'|'plasteel-flak-helmet'|SmithingApparel267;
+export type ApparelItem=`${ApparelMaterial}-${Exclude<ApparelFamily,'tuque'>}`|'cloth-tuque'|'muffalo-wool-tuque'|TextileApparelItem308|'flak-vest'|'flak-helmet'|'recon-helmet'|'recon-armor'|'flak-pants'|'plasteel-flak-helmet'|SmithingApparel267;
 /** Existing cloth ids stay canonical so old saves and reservations retain identity. */
 export const APPAREL:Readonly<Record<ApparelItem,ApparelDefinition>> = Object.freeze({
   ...SMITHING_APPAREL_DEFINITIONS267,
@@ -119,5 +123,6 @@ export const APPAREL:Readonly<Record<ApparelItem,ApparelDefinition>> = Object.fr
   // Core 1.6 Apparel_ArmorHelmetRecon: FullHead, Overhead, fixed ratings.
   'recon-armor':Object.freeze({label:'Combinaison de reconnaissance',hitPoints:280,equipTicks:66,color:0x879da4,coverage:apparelCoverage(['middle','shell'],['torso','neck','shoulders','arms','legs']),ratings:Object.freeze({sharp:.92,blunt:.4,heat:.46}),moveOffset:0,coldInsulation:64,heatInsulation:9}),
   'recon-helmet': Object.freeze({label:'Casque de reconnaissance',hitPoints:120,equipTicks:12,color:0x879da4,coverage:apparelCoverage(['headgear'],['full-head']),ratings:Object.freeze({sharp:.92,blunt:.4,heat:.46}),moveOffset:0,coldInsulation:4,heatInsulation:2}),
+  ...Object.fromEntries(TEXTILE_APPAREL_ITEMS308.map(item=>{const i=item.lastIndexOf('-');return [item,textileDefinition(item.slice(i+1) as ApparelFamily,item.slice(0,i) as ApparelMaterial)];})) as Record<TextileApparelItem308,ApparelDefinition>,
 });
 

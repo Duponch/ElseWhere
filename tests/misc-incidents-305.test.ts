@@ -1,4 +1,5 @@
 import {expect,test} from 'vitest';
+import {asOldSchema} from './scenarios/old-schema.ts';
 import {createWorld} from '../src/sim/engine.ts';
 import {crashlandedProfile} from '../src/sim/game-profile.ts';
 import {adoptWorldIncidents,advanceWorldIncidents,WORLD_FIRST_CHECK} from '../src/sim/cassandra-world.ts';
@@ -92,7 +93,7 @@ test('farm animals: two to ten tame animals of one farm kind arrive at the edge,
 test('a schema 304 save migrates to 305 by its number only',()=>{
   const w=colony(24,false);const current=serializeWorld(w);
   expect(current.startsWith(`{"schemaVersion":${SCHEMA_VERSION},`)).toBe(true);
-  const old=current.replace(`{"schemaVersion":${SCHEMA_VERSION},`,'{"schemaVersion":304,');
+  const old=asOldSchema(current,304);
   expect(serializeWorld(deserializeWorld(old))).toBe(current);
 });
 

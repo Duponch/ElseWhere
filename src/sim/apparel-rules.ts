@@ -1,6 +1,7 @@
 import {isSchema284OrLater} from './schema-compatibility-257.ts';
 import {pileIndex,pileIndexMismatch,verifyPileIndex} from './pile-index.ts';
 import {APPAREL,APPAREL_MATERIALS,APPAREL_FAMILIES,type ApparelMaterial,type ApparelFamily,type ApparelItem,type ApparelDefinition} from './apparel-definitions.ts';
+import {FABRIC_TEXTILES308,type FabricTextile308} from './textile-apparel-308.ts';
 export * from './apparel-definitions.ts';
 import {apparelCompatible,type ArmorPiece} from './armor.ts';
 import {QUALITY_LABELS,WEAPON_QUALITIES,type WeaponQuality} from './equipment-rules.ts';
@@ -22,18 +23,17 @@ export interface ApparelState {
   forced?:true;
 }
 
+/** Every textile garment id is `${material}-${family}`. */
+const familyItems=(family:Exclude<ApparelFamily,'tuque'>)=>Object.freeze(Object.fromEntries(APPAREL_MATERIALS.map(material=>[material,`${material}-${family}`]))) as Readonly<Record<ApparelMaterial,ApparelItem>>;
 const ITEM_BY_FAMILY: Readonly<Record<Exclude<ApparelFamily,'tuque'>, Readonly<Record<ApparelMaterial, ApparelItem>>>> = Object.freeze({
-  tribalwear:Object.freeze({cloth:'cloth-tribalwear','light-leather':'light-leather-tribalwear','plainleather':'plainleather-tribalwear','bluefur':'bluefur-tribalwear','camelhide':'camelhide-tribalwear','muffalo-wool':'muffalo-wool-tribalwear',foxfur:'foxfur-tribalwear'}),
-  shirt:Object.freeze({cloth:'cloth-shirt','light-leather':'light-leather-shirt','plainleather':'plainleather-shirt','bluefur':'bluefur-shirt','camelhide':'camelhide-shirt','muffalo-wool':'muffalo-wool-shirt',foxfur:'foxfur-shirt'}),
-  pants:Object.freeze({cloth:'cloth-pants','light-leather':'light-leather-pants','plainleather':'plainleather-pants','bluefur':'bluefur-pants','camelhide':'camelhide-pants','muffalo-wool':'muffalo-wool-pants',foxfur:'foxfur-pants'}),
-  duster:Object.freeze({cloth:'cloth-duster','light-leather':'light-leather-duster','plainleather':'plainleather-duster','bluefur':'bluefur-duster','camelhide':'camelhide-duster','muffalo-wool':'muffalo-wool-duster',foxfur:'foxfur-duster'}),
-  parka:Object.freeze({cloth:'cloth-parka','light-leather':'light-leather-parka','plainleather':'plainleather-parka','bluefur':'bluefur-parka','camelhide':'camelhide-parka','muffalo-wool':'muffalo-wool-parka',foxfur:'foxfur-parka'}),
+  tribalwear:familyItems('tribalwear'),shirt:familyItems('shirt'),pants:familyItems('pants'),duster:familyItems('duster'),parka:familyItems('parka'),
 });
 export function apparelItemFor(family:ApparelFamily,material:ApparelMaterial):ApparelItem {
   if(family==='tuque'){
     if(material==='cloth')return 'cloth-tuque';
     if(material==='muffalo-wool')return 'muffalo-wool-tuque';
-    throw new RangeError('Tuque requires cloth or muffalo wool');
+    if((FABRIC_TEXTILES308 as readonly string[]).includes(material))return `${material as FabricTextile308}-tuque`;
+    throw new RangeError('Tuque requires a fabric');
   }
   return ITEM_BY_FAMILY[family][material];
 }

@@ -1,5 +1,6 @@
 import {ITEM_DEFINITIONS,type ItemId} from './items.ts';
 import {APPAREL_MATERIALS,apparelItemFor} from './apparel-rules.ts';
+import {FABRIC_TEXTILES308} from './textile-apparel-308.ts';
 import {smithingMaterials267,smithingProduct267} from './smithing-content-267.ts';
 import {BIOFUEL_ORGANIC_INPUTS,type ProductionRecipe} from './production-recipes.ts';
 import type {ResearchState} from './research.ts';
@@ -59,7 +60,7 @@ const rawRecipes:Partial<Record<RawFamily284,readonly TradeRequestRecipe284[]>>=
  chemfuel:[recipe('chemfuel-from-wood',2000,[['wood']],['biofuelRefining'],35),recipe('chemfuel-from-organics',2500,[BIOFUEL_ORGANIC_INPUTS],['biofuelRefining'],35)],
 };
 const textiles=(family:'shirt'|'tribalwear'|'pants'|'duster'|'parka'|'tuque'):readonly ItemId[]=>
- (family==='tuque'?['cloth','muffalo-wool'] as const:APPAREL_MATERIALS).map(material=>apparelItemFor(family,material));
+ (family==='tuque'?['cloth','muffalo-wool',...FABRIC_TEXTILES308] as const:APPAREL_MATERIALS).map(material=>apparelItemFor(family,material));
 const metals=['steel','plasteel','uranium','silver','gold'] as const;
 const smith=(id:Parameters<typeof smithingMaterials267>[0])=>smithingMaterials267(id).map(m=>smithingProduct267(id,m));
 
@@ -72,7 +73,7 @@ export const TRADE_REQUEST_CONTENT_284:readonly TradeRequestContent284[]=Object.
  entry('pants',textiles('pants'),85.76,.5,[recipe('pants',1600,[APPAREL_MATERIALS],['completedAt'])],'Pantalons'),
  entry('duster',textiles('duster'),196,2,[recipe('duster',10000,[APPAREL_MATERIALS],['completedAt'])],'Cache-poussières'),
  entry('parka',textiles('parka'),188.8,2,[recipe('parka',8000,[APPAREL_MATERIALS])],'Parkas'),
- entry('tuque',textiles('tuque'),44.32,.07,[recipe('tuque',1200,[['cloth','muffalo-wool']],['completedAt'])],'Tuques'),
+ entry('tuque',textiles('tuque'),44.32,.07,[recipe('tuque',1200,[['cloth','muffalo-wool',...FABRIC_TEXTILES308]],['completedAt'])],'Tuques'),
  // Only the represented plasteel knife route is admitted locally. The native
  // family's default-stuff work is steel1800, not plasteel3960.
  entry('knife',['plasteel-knife'],66.48,.5,[recipe('make-plasteel-knife',1800,[['plasteel']])],'Couteaux'),

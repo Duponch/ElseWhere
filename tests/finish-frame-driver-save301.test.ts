@@ -1,4 +1,5 @@
 import {describe,expect,test} from 'vitest';
+import {stripFutureContent} from './scenarios/old-schema.ts';
 import {createWorld,serializeWorld,deserializeWorld} from '../src/sim/index.ts';
 import {validFramePawn301,validFrameProjection301,validFrameWorkJob301} from '../src/sim/finish-frame-save-301.ts';
 import type {Job} from '../src/sim/types.ts';
@@ -8,7 +9,7 @@ import type {Job} from '../src/sim/types.ts';
 // produced by gameplay. Only the final case exercises real neutral migration.
 function setup(){
  const w=createWorld(42,32,32),p=w.pawns[0]!;
- expect(Number(w.schemaVersion)).toBe(307);
+ expect(Number(w.schemaVersion)).toBe(308);
  p.jobId=null;p.haul=null;p.need=null;p.cooking=null;p.recreation.task=null;
  p.orders.active=null;p.orders.queue=[];p.path=[];p.moveCooldown=0;delete p.motion;
  return {w,p};
@@ -64,8 +65,9 @@ describe('FinishFrame301 persisted Driver phases',()=>{
  test('300 migration changes only the number and never invents Driver history',()=>{
   const w=createWorld(42,32,32);
   const legacy=JSON.parse(JSON.stringify(w));
-  legacy.schemaVersion=300;
-  const expected={...legacy,schemaVersion:307};
+  legacy.schemaVersion=300;stripFutureContent(legacy,300);
+  // The 308 migration gives the stripped policies back their new garments.
+  const expected={...JSON.parse(JSON.stringify(w)),schemaVersion:308};
   const loaded=deserializeWorld(JSON.stringify(legacy));
   expect(JSON.parse(serializeWorld(loaded))).toEqual(expected);
   for(const p of loaded.pawns)for(const key of ['jobTickDelta301','frameToil301','postureUntilCore301'])

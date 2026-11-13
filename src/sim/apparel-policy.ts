@@ -3,6 +3,7 @@ import {CORE_STARTING_APPAREL_256,isCoreStartingApparel256} from './starting-gea
 import { APPAREL, isApparelFamily, APPAREL_MATERIALS, APPAREL_MATERIAL_DEFINITIONS, type ApparelFamily, type ApparelItem, type ApparelMaterial, type ApparelState } from './apparel-rules.ts';
 import { WEAPON_QUALITIES, type WeaponQuality } from './equipment-rules.ts';
 import {ARMOR_STUFFS267,ARMOR_STUFF_DEFINITIONS267,SMITHING_APPAREL_ITEMS267,isSmithingApparel267,type ArmorStuff267} from './smithing-apparel-267.ts';
+import {FABRIC_TEXTILES308,TEXTILE_APPAREL_ITEMS308,TEXTILE_MATERIALS308,isTextileApparelItem308,isTextileMaterial308} from './textile-apparel-308.ts';
 
 export type ApparelPolicyMaterial=ApparelMaterial|ArmorStuff267;
 export const APPAREL_POLICY_MATERIALS267:readonly ApparelPolicyMaterial[]=Object.freeze([...APPAREL_MATERIALS,...ARMOR_STUFFS267]);
@@ -47,16 +48,16 @@ export interface ApparelPolicyRegistry {apparelPolicies:ApparelPolicy[];nextAppa
 const clonePolicy=(policy:ApparelPolicy):ApparelPolicy=>({...policy,allowedItems:[...policy.allowedItems],allowedMaterials:[...policy.allowedMaterials]});
 // The pre-V90 migration requests the old catalogue via includeWool=false.
 // It must not acquire later V141 headgear before its own strict validation.
-export const createDefaultApparelPolicyRegistry=(includeWool=true,includeHelmet=includeWool,includePredators=true,includeTuque=includeHelmet,includeCoreStartingGear=false,includeSmithing=false):ApparelPolicyRegistry=>({apparelPolicies:[DEFAULT_APPAREL_POLICY,TEXTILE_APPAREL_POLICY].map(policy=>{
+export const createDefaultApparelPolicyRegistry=(includeWool=true,includeHelmet=includeWool,includePredators=true,includeTuque=includeHelmet,includeCoreStartingGear=false,includeSmithing=false,includeTextiles308=true):ApparelPolicyRegistry=>({apparelPolicies:[DEFAULT_APPAREL_POLICY,TEXTILE_APPAREL_POLICY].map(policy=>{
   const copy=clonePolicy(policy);
-  return {...copy,allowedItems:[...copy.allowedItems.filter(item=>(includeTuque||APPAREL[item].family!=='tuque')&&(includePredators||APPAREL[item].material!=='foxfur')&&(includeWool||APPAREL[item].material!=='muffalo-wool')&&(includeHelmet||item!=='flak-helmet'&&item!=='recon-helmet'&&item!=='recon-armor')),...includeCoreStartingGear?CORE_STARTING_APPAREL_256:[],...includeSmithing?SMITHING_APPAREL_ITEMS267:[]],
-    allowedMaterials:[...copy.allowedMaterials.filter(material=>(includeWool||material!=='muffalo-wool')&&(includePredators||material!=='foxfur')),...includeSmithing?ARMOR_STUFFS267:[]]};
+  return {...copy,allowedItems:[...copy.allowedItems.filter(item=>(includeTuque||APPAREL[item].family!=='tuque')&&(includePredators||APPAREL[item].material!=='foxfur')&&(includeWool||APPAREL[item].material!=='muffalo-wool')&&(includeHelmet||item!=='flak-helmet'&&item!=='recon-helmet'&&item!=='recon-armor')&&!isTextileApparelItem308(item)),...includeCoreStartingGear?CORE_STARTING_APPAREL_256:[],...includeSmithing?SMITHING_APPAREL_ITEMS267:[],...includeTextiles308?TEXTILE_APPAREL_ITEMS308:[]],
+    allowedMaterials:[...copy.allowedMaterials.filter(material=>(includeWool||material!=='muffalo-wool')&&(includePredators||material!=='foxfur')&&!isTextileMaterial308(material)),...includeSmithing?ARMOR_STUFFS267:[],...includeTextiles308?TEXTILE_MATERIALS308:[]]};
 }),nextApparelPolicyId:3});
 
-export function validApparelPolicy(policy:ApparelPolicy,version=267):boolean {
+export function validApparelPolicy(policy:ApparelPolicy,version=Number.MAX_SAFE_INTEGER):boolean {
   return !!policy&&Number.isSafeInteger(policy.id)&&policy.id>0&&typeof policy.label==='string'&&policy.label.length>0
-    &&Array.isArray(policy.allowedItems)&&new Set(policy.allowedItems).size===policy.allowedItems.length&&policy.allowedItems.every(i=>Object.hasOwn(APPAREL,i)&&(version>=267||!isSmithingApparel267(i)))
-    &&Array.isArray(policy.allowedMaterials)&&new Set(policy.allowedMaterials).size===policy.allowedMaterials.length&&policy.allowedMaterials.every(m=>APPAREL_POLICY_MATERIALS267.includes(m)&&(version>=267||!(ARMOR_STUFFS267 as readonly string[]).includes(m)))
+    &&Array.isArray(policy.allowedItems)&&new Set(policy.allowedItems).size===policy.allowedItems.length&&policy.allowedItems.every(i=>Object.hasOwn(APPAREL,i)&&(version>=267||!isSmithingApparel267(i))&&(version>=308||!isTextileApparelItem308(i)))
+    &&Array.isArray(policy.allowedMaterials)&&new Set(policy.allowedMaterials).size===policy.allowedMaterials.length&&policy.allowedMaterials.every(m=>APPAREL_POLICY_MATERIALS267.includes(m)&&(version>=267||!(ARMOR_STUFFS267 as readonly string[]).includes(m))&&(version>=308||!isTextileMaterial308(m)))
     &&qualities.includes(policy.minQuality)&&qualities.includes(policy.maxQuality)&&qualities.indexOf(policy.minQuality)<=qualities.indexOf(policy.maxQuality)
     &&Number.isFinite(policy.minHitPointsPercent)&&Number.isFinite(policy.maxHitPointsPercent)&&policy.minHitPointsPercent>=0&&policy.maxHitPointsPercent<=1&&policy.minHitPointsPercent<=policy.maxHitPointsPercent;
 }
@@ -107,3 +108,24 @@ export function chooseApparelReplacement(policy:ApparelPolicy,worn:readonly Appa
 
 /** Convenience constructor for adapters that already know family and material. */
 export const policyAllowsFamily=(policy:ApparelPolicy,family:ApparelFamily,material:ApparelMaterial):boolean=>isApparelFamily(family)&&policy.allowedItems.some(i=>APPAREL[i].family===family&&APPAREL[i].material===material)&&policy.allowedMaterials.includes(material);
+
+/** Migration 307 -> 308. A policy that allowed the plain leather (or muffalo
+ * wool) variant of a garment also allows the new leathers (or wools) of that
+ * garment, as Core filters do by stuff category; same for the material list.
+ * Nothing else changes and no garment is given. */
+export function extendApparelPolicies308(policies:unknown):void {
+  if(!Array.isArray(policies))return;
+  const wools=FABRIC_TEXTILES308;
+  for(const policy of policies){
+    if(!policy||typeof policy!=='object'||!Array.isArray(policy.allowedItems)||!Array.isArray(policy.allowedMaterials))continue;
+    const items:string[]=policy.allowedItems,materials:string[]=policy.allowedMaterials,add=(list:string[],value:string)=>{if(!list.includes(value))list.push(value);};
+    // Same order as a fresh policy: catalogue order of the new garments.
+    const allowLeather=new Set(['tribalwear','shirt','pants','duster','parka'].filter(f=>items.includes(`plainleather-${f}`)));
+    const allowWool=new Set(['tribalwear','shirt','pants','duster','parka','tuque'].filter(f=>items.includes(`muffalo-wool-${f}`)));
+    for(const item of TEXTILE_APPAREL_ITEMS308){
+      const cut=item.lastIndexOf('-'),material=item.slice(0,cut),family=item.slice(cut+1);
+      if((wools as readonly string[]).includes(material)?allowWool.has(family):allowLeather.has(family))add(items,item);
+    }
+    for(const m of TEXTILE_MATERIALS308)if((wools as readonly string[]).includes(m)?materials.includes('muffalo-wool'):materials.includes('plainleather'))add(materials,m);
+  }
+}

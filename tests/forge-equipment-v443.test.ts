@@ -51,7 +51,8 @@ test.each(ROWS)('%s preserves material-specific HP, protection, unrounded work/v
 test('armor Stuff does not admit textile recipes or enrich historical policy defaults; future filters remain strict',()=>{
  expect(APPAREL_MATERIALS).not.toContain('steel');expect(APPAREL_MATERIALS).not.toContain('wood');expect(Object.hasOwn(APPAREL,'steel-shirt')).toBe(false);
  expect(()=>smithingProduct267('make-simple-helmet','wood')).toThrow();expect(SMITHING_APPAREL_ITEMS267).toHaveLength(11);
- const old=createDefaultApparelPolicyRegistry(true,true,true,true,true),current=createDefaultApparelPolicyRegistry(true,true,true,true,true,true);
+ // Registries as at schemas 266/267: without the schema 308 leather and wool garments.
+ const old=createDefaultApparelPolicyRegistry(true,true,true,true,true,false,false),current=createDefaultApparelPolicyRegistry(true,true,true,true,true,true,false);
  expect(old.apparelPolicies.every(p=>validApparelPolicy(p,266))).toBe(true);expect(old.apparelPolicies[0]!.allowedItems).not.toContain('steel-plate-armor');expect(old.apparelPolicies[0]!.allowedMaterials).not.toContain('steel');
  const policy=current.apparelPolicies[0]!,garment=pile('steel-plate-armor');
  expect(validApparelPolicy(policy,267)).toBe(true);expect(validApparelPolicy(policy,266)).toBe(false);expect(apparelPolicyAllows(policy,{...garment,item:'steel-plate-armor',apparel:garment.apparel!})).toBe(true);

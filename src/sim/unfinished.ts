@@ -1,6 +1,7 @@
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
 import { allowedAreaAllows,allowedAreaWorkAllowed } from './allowed-area-state.ts';
 import { isApparelMaterial,APPAREL_MATERIAL_DEFINITIONS } from './apparel-rules.ts';
+import { isTextileMaterial308 } from './textile-apparel-308.ts';
 import { healthRandom } from './health.ts';
 import { releaseAssignments } from './work-release.ts';
 import { isCookingOrder } from './order-types.ts';
@@ -90,7 +91,7 @@ export function validUnfinishedShape(p:Record<string,unknown>,version:number):bo
     &&int(u.progress,0,productionWorkTotal(recipe))&&(u.billId===undefined||int(u.billId,1));
   const material=u.material,storedUnits=u.units;
   return p.item===unfinishedItem(recipe)&&Object.keys(u).every(k=>['recipe','authorId','progress','material','units','cloth','parts','billId'].includes(k))
-    &&(isApparelMaterial(material)&&tailoringMaterialAllowed(recipe,material)&&(version>=91||material==='cloth'||material==='light-leather')&&(version>=120||material!=='muffalo-wool')&&(version>=178||material!=='foxfur'))&&storedUnits===units&&(u.cloth===undefined||material==='cloth'&&(recipe==='tribalwear'||recipe==='shirt')&&u.cloth===units)
+    &&(isApparelMaterial(material)&&tailoringMaterialAllowed(recipe,material)&&(version>=91||material==='cloth'||material==='light-leather')&&(version>=120||material!=='muffalo-wool')&&(version>=178||material!=='foxfur')&&(version>=308||!isTextileMaterial308(material)))&&storedUnits===units&&(u.cloth===undefined||material==='cloth'&&(recipe==='tribalwear'||recipe==='shirt')&&u.cloth===units)
     &&int(u.authorId,1)&&Array.isArray(u.parts)&&u.parts.length>0&&u.parts.length<=80&&u.parts.every(n=>int(n,1,75))&&u.parts.reduce((a:number,b:number)=>a+b,0)===storedUnits
     &&int(u.progress,0,productionWorkTotal(recipe))&&(u.billId===undefined||int(u.billId,1));
 }

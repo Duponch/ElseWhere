@@ -2,6 +2,7 @@ import {packStartingApparelTint256,startingApparelTintHex256} from '../sim/start
 import { APPAREL,apparelLabel,type ApparelItem } from '../sim/apparel-rules';
 import {isSmithingApparel267} from '../sim/smithing-apparel-267';
 import {itemCargoKind} from './item-presentation';
+import {TEXTILE_APPAREL_ITEMS308,type TextileApparelItem308} from '../sim/textile-apparel-308';
 import type { World,MaterialPile } from '../sim/types';
 
 /** One snapshot projection for map and portraits; no render-owned inventory. */
@@ -24,9 +25,9 @@ export function apparelAppearance(pieces:readonly MaterialPile[]=[]) {
     plateArmor:!!plate,simpleHelmet:!!simple,simpleHelmetColor:simple?APPAREL[simple.item as ApparelItem].color:undefined,
     simpleHelmetMaterial:simple?SIMPLE_HELMET_ITEMS267.indexOf(simple.item as typeof SIMPLE_HELMET_ITEMS267[number])+1:0,
     plasteelHelmet:pieces.some(p=>p.item==='plasteel-flak-helmet'),
-    reconHelmet:pieces.some(p=>p.item==='recon-helmet'),tuque:tuque?(tuque.item==='muffalo-wool-tuque'?2:1):0,
+    reconHelmet:pieces.some(p=>p.item==='recon-helmet'),tuque:tuque?(tuque.item==='cloth-tuque'?1:2):0,
     silhouette:plate?6:recon?5:outer?(definition!.family==='parka'?4:3):tribal?2:shirt?1:0,
-    pants:pants?(pants.item==='flak-pants'?(pants.apparel?.birthColor?(pants.apparel.birthColor.r===Math.fround(.62)?9:10):8):(['cloth','light-leather','plainleather','bluefur','camelhide','muffalo-wool','foxfur'].indexOf(APPAREL[pants.item as ApparelItem].material??'cloth')+1)):0,
+    pants:pants?(pants.item==='flak-pants'?(pants.apparel?.birthColor?(pants.apparel.birthColor.r===Math.fround(.62)?9:10):8):(['cloth','light-leather','plainleather','bluefur','camelhide','muffalo-wool','foxfur'].indexOf(legacyPantsMaterial308(APPAREL[pants.item as ApparelItem].material??'cloth'))+1)):0,
     ...(vest?.apparel?.birthColor&&!outer?{vestTintCode:packStartingApparelTint256(vest.apparel.birthColor),vestTintColor:startingApparelTintHex256(vest.apparel.birthColor)}:{}),
     color:definition?.color,signature:pieces.map(p=>p.item+(p.apparel?.birthColor?':'+Object.values(p.apparel.birthColor).join(','):'')).sort().join(' '),description:pieces.map(apparelLabel).join(', ')||'Aucun vêtement équipé'};
 }
@@ -35,6 +36,7 @@ export function apparelAppearance(pieces:readonly MaterialPile[]=[]) {
 export const SIMPLE_HELMET_ITEMS267=['steel-simple-helmet','plasteel-simple-helmet','uranium-simple-helmet','silver-simple-helmet','gold-simple-helmet'] as const;
 export const SIMPLE_HELMET_COLORS267=Object.freeze(SIMPLE_HELMET_ITEMS267.map(item=>APPAREL[item].color));
 export const APPAREL_CARGO:Readonly<Record<ApparelItem,number>>=Object.freeze({
+  ...Object.fromEntries(TEXTILE_APPAREL_ITEMS308.map(item=>[item,itemCargoKind(item)])) as Record<TextileApparelItem308,number>,
   'wood-plate-armor':itemCargoKind('wood-plate-armor'),'steel-plate-armor':itemCargoKind('steel-plate-armor'),
   'plasteel-plate-armor':itemCargoKind('plasteel-plate-armor'),'uranium-plate-armor':itemCargoKind('uranium-plate-armor'),
   'silver-plate-armor':itemCargoKind('silver-plate-armor'),'gold-plate-armor':itemCargoKind('gold-plate-armor'),
@@ -80,3 +82,13 @@ export function foldedApparel(item:ApparelItem) {
   return [{size:[.42,.12,.48],center:[0,0,0],color},
     {size:[.16,.025,.12],center:[0,.073,-.12],color:item==='flak-vest'?0x3d4945:0xf0e8d5}];
 }
+
+/** The pants colour code holds sixteen values (simple helmet pigment shares
+ * the word): the schema 308 leathers and wools reuse the nearest of the seven
+ * historical pants colours (leathers by family, wools as wool). */
+const PANTS_COLOUR_FALLBACK308:Readonly<Record<string,string>>=Object.freeze({
+  'dog-leather':'camelhide','bear-leather':'plainleather','bird-leather':'bluefur','chinchilla-fur':'muffalo-wool','elephant-leather':'muffalo-wool',
+  'guinea-pig-fur':'foxfur','heavy-fur':'camelhide','lizard-leather':'plainleather','panthera-fur':'bluefur','pig-leather':'light-leather',
+  'rhinoceros-leather':'muffalo-wool','wolf-leather':'bluefur','alpaca-wool':'camelhide','bison-wool':'plainleather','megasloth-wool':'camelhide',
+});
+export const legacyPantsMaterial308=(material:string):string=>PANTS_COLOUR_FALLBACK308[material]??material;

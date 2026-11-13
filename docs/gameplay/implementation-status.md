@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V308 — schéma 308 :** [Vêtements dans tous les cuirs et laines](textile-apparel-v308.md). Les quinze cuirs et laines déjà produits deviennent des matières de couture, avec les caractéristiques du jeu de base : 78 nouveaux vêtements. Les politiques qui autorisaient le cuir ordinaire ou la laine de mufalo autorisent aussi les nouveaux. Le t-shirt, le blouson et plusieurs chapeaux du jeu de base restent absents.
+
 **V307 — schéma 307 :** [Mécanites fibreuses et sensorielles](mechanites-v307.md). Les deux dernières maladies « locales » tirées sans effet atteignent désormais de vrais habitants : gravité qui monte de 25 % par jour, soins qui la freinent, disparition en 15 à 30 jours ; capacités augmentées, mais douleur et fatigue. La maladie du sommeil et la dégradation d'organes restent absentes.
 
 **V306 — schéma 306 :** [Vers intestinaux et parasites musculaires](parasites-v306.md). Ces deux maladies du conteur, déjà tirées sans effet sur les sites géographiques, rendent désormais vraiment malades : douleur, faim ou repos accélérés, capacités réduites, soins de 51 heures (48 + 3 de chevauchement) jusqu'à 300 % de qualité cumulée. Le vomissement des vers et les autres maladies manquantes restent absents.

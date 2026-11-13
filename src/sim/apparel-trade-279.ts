@@ -1,11 +1,13 @@
 import {APPAREL,type ApparelItem,type ApparelFamily,type ApparelMaterial} from './apparel-definitions.ts';
+import {TEXTILE_MATERIALS308,TEXTILE_MATERIAL_FACTS308,type TextileApparelItem308,type TextileMaterial308} from './textile-apparel-308.ts';
 
 /** Core1.6.4871 ordinary textiles already represented by the tailoring chain.
  * Values are knowledge, not permission to trade raw textiles in any channel. */
 export const APPAREL_TRADE_MATERIAL_VALUES_279:Readonly<Record<ApparelMaterial,number>>=Object.freeze({
  cloth:1.5,'light-leather':1.9,plainleather:2.1,bluefur:2.3,camelhide:2.3,'muffalo-wool':2.7,foxfur:3.5,
+ ...Object.fromEntries(TEXTILE_MATERIALS308.map(m=>[m,TEXTILE_MATERIAL_FACTS308[m].marketValue])) as Record<TextileMaterial308,number>,
 });
-export type OrdinaryApparelItem279=`${ApparelMaterial}-${Exclude<ApparelFamily,'tuque'>}`|'cloth-tuque'|'muffalo-wool-tuque';
+export type OrdinaryApparelItem279=`${ApparelMaterial}-${Exclude<ApparelFamily,'tuque'>}`|'cloth-tuque'|'muffalo-wool-tuque'|TextileApparelItem308;
 export interface ApparelTradeProfile279 {
  readonly family:ApparelFamily;
  readonly material:ApparelMaterial;

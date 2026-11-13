@@ -1,6 +1,9 @@
 import {describe,expect,test} from 'vitest';
 import {APPAREL_TRADE_ITEMS_279,APPAREL_TRADE_279,APPAREL_TRADE_MATERIAL_VALUES_279,isOrdinaryApparel279,isNewApparelTrade279,type OrdinaryApparelItem279} from '../src/sim/apparel-trade-279.ts';
-import {APPAREL,APPAREL_MATERIALS,type ApparelMaterial,type ApparelFamily} from '../src/sim/apparel-definitions.ts';
+import {APPAREL,LEGACY_APPAREL_MATERIALS308 as APPAREL_MATERIALS,type ApparelMaterial,type ApparelFamily} from '../src/sim/apparel-definitions.ts';
+import {isTextileApparelItem308,TEXTILE_APPAREL_ITEMS308} from '../src/sim/textile-apparel-308.ts';
+// V456 covers the 37 historical products; schema 308 adds 78 more (tests/textile-apparel-308.test.ts).
+const V456_ITEMS=APPAREL_TRADE_ITEMS_279.filter(item=>!isTextileApparelItem308(item));
 import {PRODUCTION_RECIPES,tailoringMaterialAllowed} from '../src/sim/production-recipes.ts';
 import {tradeCatalogueEntry} from '../src/sim/trade-catalogue.ts';
 import {pileMarketValue,tradeRefusal,tradeUnitPrice} from '../src/sim/trade-prices.ts';
@@ -19,11 +22,12 @@ const person=(id:number,faction:Pawn['faction']='colony'):Pawn=>({id,faction,sta
 
 describe('V456 ordinary apparel catalogue, value and channel boundaries',()=>{
  test('the immutable catalogue contains exactly the37 existing ordinary products and no armor or invented material',()=>{
-  expect(APPAREL_TRADE_ITEMS_279).toHaveLength(37);
-  expect(new Set(APPAREL_TRADE_ITEMS_279).size).toBe(37);
-  expect(APPAREL_TRADE_ITEMS_279.filter(isNewApparelTrade279)).toHaveLength(35);
+  expect(V456_ITEMS).toHaveLength(37);
+  expect(APPAREL_TRADE_ITEMS_279).toHaveLength(37+TEXTILE_APPAREL_ITEMS308.length);
+  expect(new Set(V456_ITEMS).size).toBe(37);
+  expect(V456_ITEMS.filter(isNewApparelTrade279)).toHaveLength(35);
   expect(Object.isFrozen(APPAREL_TRADE_ITEMS_279)&&Object.isFrozen(APPAREL_TRADE_279)&&Object.isFrozen(APPAREL_TRADE_MATERIAL_VALUES_279)).toBe(true);
-  for(const item of APPAREL_TRADE_ITEMS_279){expect(isOrdinaryApparel279(item)).toBe(true);expect(Object.isFrozen(APPAREL_TRADE_279[item])).toBe(true);}
+  for(const item of V456_ITEMS){expect(isOrdinaryApparel279(item)).toBe(true);expect(Object.isFrozen(APPAREL_TRADE_279[item])).toBe(true);}
   for(const item of ['cloth-tuque','muffalo-wool-tuque','plainleather-shirt'])expect(isOrdinaryApparel279(item)).toBe(true);
   for(const item of ['light-leather-tuque','plainleather-tuque','steel-shirt','flak-vest','recon-armor','steel-plate-armor','unfinished-shirt','toString','__proto__',null,{},[]])expect(isOrdinaryApparel279(item)).toBe(false);
  });
@@ -98,7 +102,7 @@ describe('V456 ordinary apparel catalogue, value and channel boundaries',()=>{
  });
 
  test('the35 new permissions apply only to the standard local visitor while every value remains known',()=>{
-  for(const item of APPAREL_TRADE_ITEMS_279.filter(isNewApparelTrade279)){
+  for(const item of V456_ITEMS.filter(isNewApparelTrade279)){
    const p=garment(item);
    expect(pileMarketValue(p)).toBeGreaterThan(0);
    expect(tradeRefusal(p,'sell',0)).toBeUndefined();
@@ -127,7 +131,7 @@ describe('V456 ordinary apparel catalogue, value and channel boundaries',()=>{
 
 describe('V456 material wealth, existing owners and unfinished inputs',()=>{
  test('all37 finished ordinary garments are known once at their market value, independent of sale permission',()=>{
-  const w=readerWorld({piles:APPAREL_TRADE_ITEMS_279.map((item,i)=>garment(item,i+1))});
+  const w=readerWorld({piles:V456_ITEMS.map((item,i)=>garment(item,i+1))});
   const before=JSON.stringify(w),value=colonyWealth(w);
   // Independent sum of the native normal/intact table after market rounding.
   expect(value.items).toBeCloseTo(5673.78,8);expect(value.unpricedPileIds).toEqual([]);expect(value.complete).toBe(true);

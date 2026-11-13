@@ -8,6 +8,7 @@ import {eggSpeciesForItem256} from './animal-egg-content-v256.ts';
 import {ANIMAL_ITEM_DEFINITIONS_256} from './animal-items-v256.ts';
 import type { MaterialKind, MaterialPile, Pawn, World } from './types.ts';
 import { BIOME_ITEM_DEFINITIONS,isAnimalMeat } from './biome-items.ts';
+import { TEXTILE_APPAREL_ITEM_DEFINITIONS308 } from './textile-apparel-308.ts';
 import { ANIMAL_PRODUCT_ITEM_DEFINITIONS } from './animal-product-items.ts';
 
 /** Prospective V219 carcasses; historical bills and filters do not adopt them. */
@@ -43,6 +44,7 @@ export const ITEM_DEFINITIONS = Object.freeze({
   ...CAVE_ITEM_DEFINITIONS_256,
   ...ANIMAL_ITEM_DEFINITIONS_256,
   ...BIOME_ITEM_DEFINITIONS,
+  ...TEXTILE_APPAREL_ITEM_DEFINITIONS308,
   ...ANIMAL_PRODUCT_ITEM_DEFINITIONS,
   'scyther-corpse':Object.freeze({label:'Carcasse de Scyther',kind:'mech-corpse',stackLimit:1,nutrition:0,maxIngest:0,color:0x93a4a5}),
   'lancer-corpse':Object.freeze({label:'Carcasse de Lancier',kind:'mech-corpse',stackLimit:1,nutrition:0,maxIngest:0,color:0xa49d88}),

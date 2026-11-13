@@ -1,4 +1,5 @@
 import {expect,test} from 'vitest';
+import {asOldSchema} from './scenarios/old-schema.ts';
 import {medicineCamp} from './scenarios/medicine.ts';
 import {medicalCamp} from './scenarios/health.ts';
 import {createMedicalRecord,medicalPain} from '../src/sim/injury-state.ts';
@@ -112,7 +113,7 @@ test('save: mechanites round-trip at 307, are refused at 306, and a 306 save mig
   const bad=structuredClone(p.health);bad.mechanites307!['fibrous-mechanites']!.severity=MECHANITE_MIN307-1;
   expect(check(bad,SCHEMA_VERSION)).not.toBeNull();
   delete p.health.mechanites307;const current=serializeWorld(w);
-  const old=current.replace(`{"schemaVersion":${SCHEMA_VERSION},`,'{"schemaVersion":306,');
+  const old=asOldSchema(current,306);
   expect(serializeWorld(deserializeWorld(old))).toBe(current);
 });
 

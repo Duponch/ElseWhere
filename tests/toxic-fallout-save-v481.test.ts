@@ -1,4 +1,5 @@
 import {expect,test} from 'vitest';
+import {stripFutureContent} from './scenarios/old-schema.ts';
 import {createWorld,refreshStock,stepWorld} from '../src/sim/index.ts';
 import {adoptMiscIncidents} from '../src/sim/cassandra-misc.ts';
 import {validMiscIncidents} from '../src/sim/cassandra-misc-save.ts';
@@ -65,7 +66,7 @@ function creditedCorpse(){
 }
 
 test('293 complete campaign migration changes only the number and offers no condition or random draw',()=>{
- const w=colony(),old=JSON.parse(serializeWorld(w));old.schemaVersion=293;
+ const w=colony(),old=JSON.parse(serializeWorld(w));old.schemaVersion=293;stripFutureContent(old,293);
  expect(validateCampaignSchema293(old)).toEqual([]);const before=JSON.stringify(old),restored=deserializeWorld(before);
  expect(JSON.parse(serializeWorld(restored))).toEqual({...old,schemaVersion:SCHEMA_VERSION});expect(JSON.stringify(old)).toBe(before);
  expect(restored.miscIncidents!.toxicFallout).toBeUndefined();expect(restored.miscIncidents!.rng).toBe(w.miscIncidents!.rng);expect(restored.rng).toBe(w.rng);
@@ -79,7 +80,7 @@ test('current exact whole reload preserves private condition RNG, full-cycle cur
 });
 
 test('293 full validation refuses a current condition before migration and leaves the input untouched',()=>{
- const old=JSON.parse(serializeWorld(declaredActive()));old.schemaVersion=293;const before=JSON.stringify(old);
+ const old=JSON.parse(serializeWorld(declaredActive()));old.schemaVersion=293;stripFutureContent(old,293);const before=JSON.stringify(old);
  expect(validateCampaignSchema293(old).length).toBeGreaterThan(0);expect(()=>deserializeWorld(before)).toThrow(/ToxicFallout/);expect(JSON.stringify(old)).toBe(before);
 });
 
@@ -298,7 +299,7 @@ test('schema264 still refuses the two prospective policy fields in a campaign su
  // New constructors enable the267 smithing catalogue. The diagnosed264
  // fixture instead uses its native pre267 catalogue, preserving the same two
  // initial policy IDs, labels, quality ranges and hit-point thresholds.
- Object.assign(withoutPolicies,createDefaultApparelPolicyRegistry(true,true,true,true,false,false));
+ Object.assign(withoutPolicies,createDefaultApparelPolicyRegistry(true,true,true,true,false,false,false));
  const view264=groupWorld(withoutPolicies as unknown as typeof summary,null),shared264=view264?validateCampaignSharedFields(view264):['No campaign-only264 view'];
  expect(validCampaignSummary(withoutPolicies),JSON.stringify({shared264,researchKeys:Object.keys(view264?.research??{}),keys:Object.keys(withoutPolicies)})).toBe(true);
  const historical={...withoutPolicies,drugPolicies:summary.drugPolicies,nextDrugPolicyId:summary.nextDrugPolicyId};

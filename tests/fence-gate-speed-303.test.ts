@@ -1,4 +1,5 @@
 import {expect,test} from 'vitest';
+import {stripFutureContent} from './scenarios/old-schema.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
 import {builtDoorState,doorMotionTicks,doorOpenness,fenceGateOpenTicks303,manualDoorOpenTicks,newDoorState} from '../src/sim/door-rules.ts';
 import {readyDoorEntry} from '../src/sim/doors.ts';
@@ -25,7 +26,7 @@ test('a fence gate opens 1.15 times as fast as a door of the same material',()=>
 });
 
 test('before schema 303 a gate keeps the door speed, and a recorded gate speed is refused',()=>{
-  const w=deconstructionCamp(1);(w as {schemaVersion:number}).schemaVersion=302;
+  const w=deconstructionCamp(1);(w as {schemaVersion:number}).schemaVersion=302;stripFutureContent(w,302);
   const s=gate(w,'wood');expect(s.door!.duration).toBeUndefined();expect(doorMotionTicks(s)).toBe(3.8);
   expect(validateDoors(w,302)).toEqual([]);
   s.door!.duration=3.3;expect(validateDoors(w,302)).toContain('Invalid door state.');
@@ -44,7 +45,7 @@ test('a gate of an older save takes the gate speed at its next opening, without 
   expect(validateDoors(w,303)).toEqual([]);
   // The migrated number alone does not convert a gate that is not opened.
   const old=deconstructionCamp(1),idle={id:old.nextId++,kind:'fence-gate',material:'steel',x:20,z:20,orientation:0,footprint:'standard',door:newDoorState(old.tick)} as Structure;
-  old.structures.push(idle);const json=JSON.parse(serializeWorld(old));json.schemaVersion=302;
+  old.structures.push(idle);const json=JSON.parse(serializeWorld(old));json.schemaVersion=302;stripFutureContent(json,302);
   const migrated=deserializeWorld(JSON.stringify(json));
   expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);expect(migrated).toEqual(old);
   expect(migrated.structures.find(s=>s.id===idle.id)!.door!.duration).toBeUndefined();
@@ -57,6 +58,6 @@ test('a human path search prices a closed gate at its opening time, like a door'
   expect(navigationCosts(w,p).costs?.get(i)).toBe(ground+33);
   // A cell, not a pawn, and the same gate before schema 303 cost nothing more.
   expect(navigationCosts(w,{x:p.x,z:p.z}).costs?.get(i)).toBe(navigationCosts(bare,{x:p.x,z:p.z}).costs?.get(i));
-  const old=deconstructionCamp(1);(old as {schemaVersion:number}).schemaVersion=302;gate(old,'wood',20,20);
+  const old=deconstructionCamp(1);(old as {schemaVersion:number}).schemaVersion=302;stripFutureContent(old,302);gate(old,'wood',20,20);
   expect(navigationCosts(old,old.pawns[0]!).costs?.get(i)??0).toBe(ground);
 });

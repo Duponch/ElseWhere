@@ -1,4 +1,5 @@
 import {readFileSync} from 'node:fs';
+import {asOldSchema} from './scenarios/old-schema.ts';
 import {expect,test} from 'vitest';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
 import {stepWorld} from '../src/sim/engine.ts';
@@ -78,12 +79,12 @@ test('a schema 303 save migrates to 304 by its number only',()=>{
  // Freshly loaded: no state yet that only schema 304 admits.
  const w=load();
  const current=serializeWorld(w);expect(current.startsWith(`{"schemaVersion":${SCHEMA_VERSION},`)).toBe(true);
- const old=current.replace(`{"schemaVersion":${SCHEMA_VERSION},`,'{"schemaVersion":303,');
+ const old=asOldSchema(current,303);
  expect(serializeWorld(deserializeWorld(old))).toBe(current);
  // The old schema is validated strictly first: a wait longer than its 200.
  const a=(w.wildlife?.animals??[]).find(x=>x.wander&&x.state!=='dead')!;
  a.wander!.job={kind:'wait',untilCore:w.tick*10+450};
- const tooLong=serializeWorld(w).replace(`{"schemaVersion":${SCHEMA_VERSION},`,'{"schemaVersion":303,');
+ const tooLong=asOldSchema(serializeWorld(w),303);
  expect(()=>deserializeWorld(tooLong)).toThrow(/Invalid version303 save/);
 },LONG);
 

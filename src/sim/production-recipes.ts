@@ -9,6 +9,7 @@ import type { WeaponItem } from './equipment-rules.ts';
 import { KIBBLE_INPUTS,KIBBLE_INPUT_UNITS,KIBBLE_WORK_TICKS,KIBBLE_OUTPUT_UNITS,isKibbleRecipe } from './fodder-recipes.ts';
 import { ANIMAL_MEAT_ITEMS, ANIMAL_CORPSE_ITEMS, ANIMAL_LEATHER_ITEMS, isAnimalMeat } from './biome-items.ts';
 import { APPAREL_MATERIALS,isApparelMaterial,apparelItemFor, type ApparelItem, type ApparelMaterial } from './apparel-rules.ts';
+import { FABRIC_TEXTILES308 } from './textile-apparel-308.ts';
 import { isStove, isButcherStation } from './food-workstations.ts';
 import { ITEM_DEFINITIONS,MECH_CORPSE_ITEMS,type MechCorpseItem,type ItemId } from './items.ts';
 import type { CookingBill, CookingTask } from './cooking-types.ts';
@@ -184,7 +185,7 @@ export const PRODUCTION_RECIPES = Object.freeze({
   tribalwear:Object.freeze({label:'Tenue tribale',station:'crafting-spot',work:'craft',inputs:APPAREL_MATERIALS as readonly ProductionIngredient[],units:60,workTicks:180,outputUnits:1}),
   pants:Object.freeze({label:'Pantalon',station:'tailor-bench',work:'craft',inputs:APPAREL_MATERIALS as readonly ProductionIngredient[],units:40,workTicks:160,outputUnits:1}),
   duster:Object.freeze({label:'Cache-poussière',station:'tailor-bench',work:'craft',inputs:APPAREL_MATERIALS as readonly ProductionIngredient[],units:80,workTicks:1000,outputUnits:1}),
-  tuque:Object.freeze({label:'Tuque',station:'tailor-bench',work:'craft',inputs:['cloth','muffalo-wool'] as readonly ProductionIngredient[],units:20,workTicks:120,outputUnits:1}),
+  tuque:Object.freeze({label:'Tuque',station:'tailor-bench',work:'craft',inputs:['cloth','muffalo-wool',...FABRIC_TEXTILES308] as readonly ProductionIngredient[],units:20,workTicks:120,outputUnits:1}),
   parka:Object.freeze({label:'Parka',station:'tailor-bench',work:'craft',inputs:APPAREL_MATERIALS as readonly ProductionIngredient[],units:80,workTicks:800,outputUnits:1}),
   // Neutral recipe work, before station/room/light factors; Core ticks / 10.
   'simple-meal': Object.freeze({label:'Repas simple',station:'campfire',work:'cook',inputs:['raw-fungus','rice','berries','milk',...ANIMAL_MEAT_ITEMS,'potato','corn','agave-fruit'] as readonly ProductionIngredient[],units:10,workTicks:30,outputUnits:1}),

@@ -12,6 +12,10 @@ Un clic sur une **carte de sauvegarde** charge directement cette partie en pause
 
 Avec une fenêtre de jeu ouverte, utilisez le bouton droit maintenu pour tourner la caméra, le bouton central pour la déplacer et la molette pour zoomer, en commençant sur le terrain libre. Le contexte Ordres reste ouvert. Un clic gauche extérieur ferme la fenêtre. Le curseur en mode ordre associe une petite flèche de carton beige au dessin de l’action choisie ; **Échap** revient à la sélection.
 
+## Coudre dans tous les cuirs et laines — V308
+
+Tous les cuirs et toutes les laines que donnent vos animaux se cousent désormais à l'établi de tailleur : tenue tribale, chemise, pantalon, cache-poussière et parka, ainsi que la tuque pour les laines. Les fourrures de chinchilla et de cochon d'Inde ou la laine de mégapareux tiennent très chaud ; les cuirs d'ours, de rhinocéros ou la fourrure épaisse protègent mieux des coups ; le cuir d'éléphant et celui de rhinocéros sont très solides. Les factures déjà créées n'utilisent les nouvelles matières que si vous les cochez dans leur filtre.
+
 ## Vivre avec des mécanites — V307
 
 Les **mécanites fibreuses** rendent plus habile, plus rapide et améliorent la circulation sanguine ; les **mécanites sensorielles** améliorent la vue, l'ouïe et la parole. Mais toutes deux font mal et fatiguent, et leur gravité monte de 25 % par jour : au-delà de 50 %, la douleur triple. Des soins réguliers les maintiennent au premier stade. Elles disparaissent d'elles-mêmes en 15 à 30 jours.

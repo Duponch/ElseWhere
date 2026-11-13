@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import {stripFutureContent} from './scenarios/old-schema.ts';
 import { applyCommand, createWorld, deserializeWorld, serializeWorld, validateWorld } from '../src/sim/index';
 import { billWork, stationWork } from '../src/sim/production-recipes';
 import { disablesWork, storedPriority, workPriority } from '../src/sim/work-types';
@@ -64,7 +65,7 @@ describe('schema 302', () => {
     const { w, p } = colony();
     p.priorities.craft = 3; delete p.priorities.smith; delete p.priorities.tailor;
     const raw = JSON.parse(serializeWorld(w));
-    raw.schemaVersion = 301;
+    raw.schemaVersion = 301; stripFutureContent(raw, 301);
     const migrated = deserializeWorld(JSON.stringify(raw));
     expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
     expect(migrated.pawns[0]!.priorities.smith).toBeUndefined();
