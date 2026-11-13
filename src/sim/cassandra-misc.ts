@@ -1,4 +1,6 @@
 import {resolveSelectedResourcePod305,advanceResourcePod305} from './resource-pods-305.ts';
+import {advanceVolcanicWinter310,resolveSelectedVolcanicWinter310} from './volcanic-winter-310.ts';
+import {isVolcanicWinter310} from './volcanic-winter-state-310.ts';
 import {isMiscIncidents305,resolveSelectedSelfTame305,resolveSelectedFarmAnimals305} from './misc-incidents-305.ts';
 import {homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
 import { climateTick,seasonTemperature,siteClimateDefinition } from './site-climate.ts';
@@ -31,6 +33,7 @@ export const MISC_TOXIC_FALLOUT_WEIGHT=.12;
 export const MISC_SELF_TAME_WEIGHT305=1;
 export const MISC_FARM_ANIMALS_WEIGHT305=.4;
 export const MISC_RESOURCE_POD_WEIGHT305=1;
+export const MISC_VOLCANIC_WINTER_WEIGHT310=.08;
 export const MISC_HEAT_COOLDOWN=30*TICKS_PER_DAY;
 export const MISC_COLD_COOLDOWN=30*TICKS_PER_DAY;
 export const MISC_ECLIPSE_COOLDOWN=15*TICKS_PER_DAY;
@@ -58,6 +61,8 @@ export interface CassandraMiscCalendar {
   toxicFallout?:ToxicFalloutCalendar294;
   /** Schema 305: resource pods dropped so far, and the pod not yet opened. */
   resourcePods305?:number;resourcePod305?:import('./resource-pods-305.ts').ResourcePodPending305;
+  /** Schema 310 volcanic winter: count, last start (local tick) and the active interval. */
+  volcanicWinters310?:number;lastVolcanicWinterStart310?:number;volcanicWinter310?:import('./volcanic-winter-state-310.ts').VolcanicWinter310;
 }
 
 function random(state:CassandraMiscCalendar):number {
@@ -160,6 +165,7 @@ function consumeOpportunity(world:World,state:CassandraMiscCalendar):void {
     if(ticket>=supported&&ticket<supported+MISC_SELF_TAME_WEIGHT305)resolveSelectedSelfTame305(world,()=>random(state));
     else if(ticket>=supported+MISC_SELF_TAME_WEIGHT305&&ticket<supported+MISC_SELF_TAME_WEIGHT305+MISC_FARM_ANIMALS_WEIGHT305)resolveSelectedFarmAnimals305(world,Math.floor(random(state)*0x100000000)||1);
     else if(ticket>=supported+MISC_SELF_TAME_WEIGHT305+MISC_FARM_ANIMALS_WEIGHT305&&ticket<supported+MISC_SELF_TAME_WEIGHT305+MISC_FARM_ANIMALS_WEIGHT305+MISC_RESOURCE_POD_WEIGHT305)resolveSelectedResourcePod305(world,Math.floor(random(state)*0x100000000)||1);
+    else if(isVolcanicWinter310(Number(world.schemaVersion))&&ticket>=supported+MISC_SELF_TAME_WEIGHT305+MISC_FARM_ANIMALS_WEIGHT305+MISC_RESOURCE_POD_WEIGHT305&&ticket<supported+MISC_SELF_TAME_WEIGHT305+MISC_FARM_ANIMALS_WEIGHT305+MISC_RESOURCE_POD_WEIGHT305+MISC_VOLCANIC_WINTER_WEIGHT310)resolveSelectedVolcanicWinter310(world,()=>random(state));
   }
 }
 
@@ -181,6 +187,7 @@ export function advanceMiscIncidents(world:World):void {
     emit(world,'L’éclipse se termine. La lumière naturelle et les générateurs solaires retrouvent leur fonctionnement habituel.');
   }
   advanceResourcePod305(world);
+  advanceVolcanicWinter310(world);
   if(homeIncidentsBlocked261(world))return;
   if(!state.introDone&&world.tick>=MISC_INTRO_TICK){
     state.introDone=true;

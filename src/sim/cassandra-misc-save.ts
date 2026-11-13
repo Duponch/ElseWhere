@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {validVolcanicWinter310} from './volcanic-winter-state-310.ts';
 import {tempMapModern261,tempMapAdoptedAtCore261} from './temp-map-incidents-261.ts';
 import { MISC_CHECK_INTERVAL,MISC_FIRST_CHECK,MISC_HEAT_COOLDOWN,MISC_INTRO_TICK } from './cassandra-misc.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
@@ -19,6 +20,14 @@ function validResourcePods305(value:Record<string,unknown>,tick:number):boolean 
   const c=pod.cell;return object(c)&&keys(c,['x','z'])&&Object.keys(c).length===2&&integer(c.x)&&integer(c.z);
 }
 
+/** Schema 310: a positive count, a last start in the past and at most one
+ * active interval that began at that start. */
+function validVolcanicWinters310(value:Record<string,unknown>,tick:number):boolean {
+  const count=value.volcanicWinters310,last=value.lastVolcanicWinterStart310,active=value.volcanicWinter310;
+  if(count===undefined)return last===undefined&&active===undefined;
+  if(!integer(count,1)||!integer(last,0,tick)||!validVolcanicWinter310(active,tick))return false;
+  return active===undefined||(active as {startCore:number}).startCore===Number(last)*10;
+}
 const object=(value:unknown):value is Record<string,unknown>=>!!value&&typeof value==='object'&&!Array.isArray(value);
 const integer=(value:unknown,min=0,max=Number.MAX_SAFE_INTEGER):value is number=>Number.isSafeInteger(value)&&Number(value)>=min&&Number(value)<=max;
 const keys=(value:Record<string,unknown>,allowed:readonly string[])=>Object.keys(value).every(key=>allowed.includes(key));
@@ -32,7 +41,7 @@ export function validMiscIncidents(value:unknown,version:number,world:Pick<World
   const toxic=object(value)?Object.getOwnPropertyDescriptor(value,'toxicFallout'):undefined;
   if(object(value)&&'toxicFallout'in value&&((version!==294&&(version!==295&&(version!==296&&!isCorePhysicalSchema297(version))))||!toxic||toxic.enumerable!==true||!Object.hasOwn(toxic,'value')||toxic.value===undefined))return false;
   if(version<169||!world.gameProfile||!object(value)||
-    !keys(value,['profile','adoptedAt','rng','nextCheck','introDone','checks','opportunities','heatwaves','lastHeatwaveStart','active',...version>=200?['weather']:[],...version>=201?['shortCircuits']:[],...version>=205?['cropBlights']:[],...(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))?['toxicFallout']:[],...version>=305?['resourcePods305','resourcePod305']:[]])||
+    !keys(value,['profile','adoptedAt','rng','nextCheck','introDone','checks','opportunities','heatwaves','lastHeatwaveStart','active',...version>=200?['weather']:[],...version>=201?['shortCircuits']:[],...version>=205?['cropBlights']:[],...(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))?['toxicFallout']:[],...version>=305?['resourcePods305','resourcePod305']:[],...version>=310?['volcanicWinters310','lastVolcanicWinterStart310','volcanicWinter310']:[]])||
     value.profile!=='cassandra-misc-v1'||!integer(value.adoptedAt,0,world.tick)||!integer(value.rng,1,0xffffffff)||
     !integer(value.nextCheck,MISC_FIRST_CHECK)||value.nextCheck%MISC_CHECK_INTERVAL!==0||
     value.nextCheck!==Math.max(MISC_FIRST_CHECK,(Math.floor(scheduleTick/MISC_CHECK_INTERVAL)+1)*MISC_CHECK_INTERVAL)||
@@ -65,8 +74,8 @@ export function validMiscIncidents(value:unknown,version:number,world:Pick<World
   return validWeatherIncidents(value.weather,version,world,calendar)&&validShortCircuits(value.shortCircuits,version,world,calendar)
     &&validCropBlightCalendar(value.cropBlights,version,world,calendar)
     &&validToxicFalloutCalendar294(toxic?.value,version,world as World,calendar)
-    &&(value.cropBlights===undefined&&toxic===undefined||calendar.heatwaves+(calendar.weather?.coldSnaps??0)+(calendar.weather?.eclipses??0)+(calendar.shortCircuits?.count??0)+(calendar.cropBlights?.count??0)+(calendar.toxicFallout?.count??0)+(calendar.resourcePods305??0)<=calendar.opportunities)
-    &&validResourcePods305(value,world.tick);
+    &&(value.cropBlights===undefined&&toxic===undefined||calendar.heatwaves+(calendar.weather?.coldSnaps??0)+(calendar.weather?.eclipses??0)+(calendar.shortCircuits?.count??0)+(calendar.cropBlights?.count??0)+(calendar.toxicFallout?.count??0)+(calendar.resourcePods305??0)+(calendar.volcanicWinters310??0)<=calendar.opportunities)
+    &&validResourcePods305(value,world.tick)&&validVolcanicWinters310(value,world.tick);
 }
 
 export function validateMiscIncidents(world:World,version=world.schemaVersion):string[] {

@@ -2,7 +2,7 @@ import {isSchema298OrLater} from './schema-compatibility-257.ts';
 /** Prospective original Elsewhere data, derived from the verified Core facts.
  * This leaf grants no acquisition, stock, migration or construction admission. */
 export const AI_CORE_CONTENT_SCHEMA_298=298 as const;
-export const isAiCoreContentSchema298=(value:unknown):value is typeof AI_CORE_CONTENT_SCHEMA_298|299|300|301|302|303|304|305|306|307|308|309=>isSchema298OrLater(value);
+export const isAiCoreContentSchema298=(value:unknown):value is typeof AI_CORE_CONTENT_SCHEMA_298|299|300|301|302|303|304|305|306|307|308|309|310=>isSchema298OrLater(value);
 
 /** Sellable lets a trader BUY the player's object. ExoticMisc does not let a
  * trader create this object for sale; the physical information/cache path owns

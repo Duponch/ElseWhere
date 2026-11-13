@@ -1,4 +1,5 @@
 import { activeColdSnap, coldSnapOffset } from '../sim/cold-snap';
+import {volcanicTemperatureOffset310,volcanicWinterActive310} from '../sim/volcanic-winter-state-310';
 import { activeEclipse } from '../sim/eclipse';
 import {toxicFalloutActive294} from '../sim/toxic-fallout-state-294';
 import { TICKS_PER_DAY, type World } from '../sim/types';
@@ -7,7 +8,7 @@ import { createNotificationLetterDetails } from './notification-letter';
 
 type WeatherWorld = Pick<World, 'tick' | 'miscIncidents'> & {schemaVersion?:number};
 export interface WeatherConditionInspection {
-  kind: 'cold-snap' | 'eclipse' | 'toxic-fallout';
+  kind: 'cold-snap' | 'eclipse' | 'toxic-fallout' | 'volcanic-winter';
   title: string;
   summary: string;
   body: string;
@@ -39,11 +40,18 @@ export function weatherConditionInspection(world: WeatherWorld): WeatherConditio
     kind:'toxic-fallout',title:'Retombées toxiques',summary:'Retombées toxiques · restez sous un toit',
     body:'Des retombées toxiques touchent cette carte. Placez les personnes et les animaux sous un toit réellement construit ou naturel, et adaptez leurs zones et leurs travaux. Un mur seul ne protège pas ; les personnes couchées au sol et les animaux dehors restent exposés. Surveillez l’accumulation toxique dans Santé. Les vêtements actuellement disponibles n’offrent pas de protection contre ces retombées. Les plantes et les denrées non couvertes peuvent être perdues ; les objets sensibles à la détérioration s’abîment trois fois plus vite lorsqu’ils sont exposés. Les arrivées spontanées de plantes et de faune sont interrompues. La fin arrête les nouvelles expositions, sans guérir les lésions ni restituer les plantes ou les biens perdus.',
   });
+  const volcanic=world.miscIncidents?.volcanicWinter310;
+  if(volcanic&&volcanicWinterActive310(world)){
+    const offset=volcanicTemperatureOffset310(world).toLocaleString('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1});
+    conditions.push({kind:'volcanic-winter',title:'Hiver volcanique',
+      summary:`Hiver volcanique · ${offset} °C · reste ${remainingTime(Math.ceil(volcanic.endCore/10)-world.tick)}`,
+      body:`Des cendres voilent le ciel : la température extérieure baisse de ${offset} °C, les journées sont plus sombres, les cultures et les panneaux solaires produisent moins, la faune se raréfie et personne ne se détend en plein air. Prévoyez des réserves de nourriture et du chauffage.`});
+  }
   return conditions;
 }
 
 export function weatherConditionLabel(world: WeatherWorld): string {
-  return [activeColdSnap(world) ? 'Vague de froid' : '', activeEclipse(world) ? 'Éclipse' : '',toxicFalloutActive294(world)?'Retombées toxiques':''].filter(Boolean).join(' · ');
+  return [activeColdSnap(world) ? 'Vague de froid' : '', activeEclipse(world) ? 'Éclipse' : '',toxicFalloutActive294(world)?'Retombées toxiques':'',volcanicWinterActive310(world)?'Hiver volcanique':''].filter(Boolean).join(' · ');
 }
 
 /** Informational letters reuse the existing alerts; they issue no commands. */

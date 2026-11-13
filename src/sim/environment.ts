@@ -1,4 +1,5 @@
 import { TICKS_PER_DAY } from './types.ts';
+import { volcanicGlow310,volcanicWinterStrength310 } from './volcanic-winter-state-310.ts';
 import { climateTick,siteClimateDefinition,TICKS_PER_YEAR,type ClimateWorld } from './site-climate.ts';
 import { eclipseLightFactor,ECLIPSE_MAX_DURATION,type EclipseWorld } from './eclipse.ts';
 
@@ -43,7 +44,7 @@ export function seasonalNaturalLight(latitude:number,civilTick:number):number {
 export function annualNaturalLight(world:ClimateWorld,tick=world.tick):number {
   const civil=climateTick(world,tick);
   const base=world.climate?seasonalNaturalLight(siteClimateDefinition(world).latitude,civil):naturalLight(civil);
-  return base*eclipseLightFactor(world,tick);
+  return volcanicGlow310(base*eclipseLightFactor(world,tick),volcanicWinterStrength310(world,tick));
 }
 
 // Shared immutable annual table: one profile, ~2.9MB, O(1) interval queries.
@@ -71,7 +72,35 @@ export function annualGrowingLightIntegral(world:ClimateWorld,tick=world.tick):n
     const values=annualPrefix(siteClimateDefinition(world).latitude),years=Math.floor(civil/TICKS_PER_YEAR),remainder=civil-years*TICKS_PER_YEAR;
     base=years*values[TICKS_PER_YEAR]!+values[remainder]!;
   }
-  return base-eclipseGrowingLightLoss(world,tick);
+  return base-eclipseGrowingLightLoss(world,tick)-volcanicGrowingLightLoss310(world,tick);
+}
+
+/** Schema 310 volcanic winter: the growth lost to the darker sky, as a prefix
+ * table over the condition's own ticks (at most 240,001 doubles, ~1.9 MB per
+ * live World, built once). Plants are checkpointed at its start and end. */
+interface VolcanicLoss {startCore:number;endCore:number;civilStart:number;latitude:number|undefined;values:Float64Array}
+const volcanicLosses=new WeakMap<object,VolcanicLoss>();
+function volcanicGrowingLightLoss310(world:ClimateWorld,tick:number):number {
+  const v=world.miscIncidents?.volcanicWinter310;
+  if(!v)return 0;
+  const start=v.startCore/10,duration=Math.ceil((v.endCore-v.startCore)/10);
+  if(tick<=start)return 0;
+  const civilStart=climateTick(world,start),latitude=world.climate?siteClimateDefinition(world).latitude:undefined;
+  let cached=volcanicLosses.get(world);
+  if(!cached||cached.startCore!==v.startCore||cached.endCore!==v.endCore||cached.civilStart!==civilStart||cached.latitude!==latitude){
+    const values=new Float64Array(duration+1);
+    for(let offset=1;offset<=duration;offset++){
+      const civil=civilStart+offset,phase=((civil%TICKS_PER_DAY)+TICKS_PER_DAY)%TICKS_PER_DAY/TICKS_PER_DAY;
+      let loss=0;
+      if(phase>=.25&&phase<=.8){
+        const base=latitude===undefined?naturalLight(civil):seasonalNaturalLight(latitude,civil);
+        loss=Math.max(0,(base-.51)/.49)-Math.max(0,(volcanicGlow310(base,volcanicWinterStrength310(world,start+offset))-.51)/.49);
+      }
+      values[offset]=values[offset-1]!+loss;
+    }
+    cached={startCore:v.startCore,endCore:v.endCore,civilStart,latitude,values};volcanicLosses.set(world,cached);
+  }
+  return cached.values[Math.min(duration,tick-start)]!;
 }
 
 interface EclipseLoss {start:number;end:number;civilStart:number;latitude:number|undefined;values:Float64Array}

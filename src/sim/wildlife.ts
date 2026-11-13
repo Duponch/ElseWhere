@@ -1,4 +1,5 @@
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
+import { volcanicAnimalDensityFactor310 } from './volcanic-winter-state-310.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {recordShipCasketFilthMovement277} from './filth.ts';
 import {createAnimalThermalPass466,createAnimalAirReader466} from './animal-thermal-air-v466.ts';
@@ -135,11 +136,13 @@ function advancePopulation(world:World,s:WildlifeState):void {
   if(!Number.isSafeInteger(population.checks+1))return;
   population.nextCheck=world.tick+ANIMAL_POPULATION_CHECK_TICKS;population.checks++;
   if(toxicFalloutActive294(world))return;
-  if(wildPopulationWeight(s)>=population.targetWeight||duckPhysicalOwnerCount256(world)>=MAX_WILDLIFE)return;
+  // Core AnimalDensityFactor (schema 310 volcanic winter) scales the desired density.
+  const densityFactor=volcanicAnimalDensityFactor310(world);
+  if(wildPopulationWeight(s)>=population.targetWeight*densityFactor||duckPhysicalOwnerCount256(world)>=MAX_WILDLIFE)return;
   const biome=faunaBiome(population.biome,s.profile==='biome-fauna-v2');
   const maximumGroup=biome.entries.reduce((maximum,entry)=>Math.max(maximum,animalSpecies(entry.species).wildGroupSize[1]),0);
   if(!Number.isSafeInteger(population.arrivals+1)||!Number.isSafeInteger(world.nextId+Math.min(maximumGroup,MAX_WILDLIFE-s.animals.length)))return;
-  if(wildlifeRandom(s)>=.026955556*biome.animalDensity)return;
+  if(wildlifeRandom(s)>=.026955556*biome.animalDensity*densityFactor)return;
   const speciesId=selectBiomeSpecies(biome,wildlifeRandom(s));if(!speciesId)return;
   const species=animalSpecies(speciesId),[min,max]=species.wildGroupSize,count=min+Math.floor(wildlifeRandom(s)*(max-min+1));
   const added=placeSpeciesGroup(world,s,speciesId,count,true);if(added)population.arrivals++;

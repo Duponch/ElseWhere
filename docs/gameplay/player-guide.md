@@ -12,6 +12,10 @@ Un clic sur une **carte de sauvegarde** charge directement cette partie en pause
 
 Avec une fenêtre de jeu ouverte, utilisez le bouton droit maintenu pour tourner la caméra, le bouton central pour la déplacer et la molette pour zoomer, en commençant sur le terrain libre. Le contexte Ordres reste ouvert. Un clic gauche extérieur ferme la fenêtre. Le curseur en mode ordre associe une petite flèche de carton beige au dessin de l’action choisie ; **Échap** revient à la sélection.
 
+## Traverser un hiver volcanique — V310
+
+Après le jour 60, une éruption lointaine peut voiler le ciel pendant une à six semaines. Il fait 7 °C de moins, les journées sont plus sombres, les cultures en plein air et les panneaux solaires produisent moins, et la faune se raréfie. Personne ne se détend dehors : prévoyez une salle de loisirs couverte, des réserves de nourriture, du chauffage et une source d'énergie qui ne dépend pas du soleil.
+
 ## Maladie du sommeil — V309
 
 En forêt tropicale ou dans un marécage tropical, la **maladie du sommeil** peut toucher une partie de la colonie. Elle avance lentement, mais affaiblit fortement la conscience aux stades avancés et peut tuer. Gardez les malades au lit et faites-les soigner : un soin la ralentit pendant 35 heures, le temps que l'immunité se forme.

@@ -25,7 +25,7 @@ export type NativeDomainAlertAction =
   | {kind: 'quests'; questId?: number; requestId?: number; siteId?: number}
   | {kind: 'trade'; traderId?: number}
   | {kind: 'orbital'; shipId?: number}
-  | {kind: 'site'; condition: 'starting-arrival' | 'heatwave' | 'cold-snap' | 'eclipse' | 'toxic-fallout' | 'solar-flare' | 'flashstorm' | 'short-circuit'}
+  | {kind: 'site'; condition: 'starting-arrival' | 'heatwave' | 'cold-snap' | 'eclipse' | 'toxic-fallout' | 'volcanic-winter' | 'solar-flare' | 'flashstorm' | 'short-circuit'}
   | {kind: 'raid-focus'; raidId: number; mechanical: boolean};
 
 export interface NativeDomainAlert {
