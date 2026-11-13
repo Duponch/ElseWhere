@@ -1,6 +1,6 @@
 import type { ItemId } from './items.ts';
 import type { StorageConditions } from './storage-condition.ts';
-export const SCHEMA_VERSION = 319 as const;
+export const SCHEMA_VERSION = 320 as const;
 export const TICKS_PER_SECOND = 6;
 export const TICKS_PER_DAY = 6000;
 
@@ -314,6 +314,9 @@ export interface World {
   /** Prospective physical frontier; required by297 RAW, absent on older saves. */
   phaseCore297?: number;
   corePathBudget297?: {tick:number;remaining:number;pairs:number};
+  /** Core tick of the last colonist gain (schema 320, population adaptation);
+   * absent: the game start. */
+  populationGainCore320?: number;
   /** V1–V4 continuations retain their former nutrition economy explicitly. */
   foodRules: 'legacy' | 'adult';
   seed: number;

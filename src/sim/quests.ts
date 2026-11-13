@@ -1,3 +1,4 @@
+import {notePopulationGain320} from './population-intent-320.ts';
 import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import { civilianAdmissionFits,civilianAwayCounts } from './civilian-away.ts';
 import { isColonist } from './affiliation.ts';
@@ -60,7 +61,7 @@ function arrive(w:World,q:JoinerQuest):void {
   if(relationships===null)return;
   w.nextId+=2;w.pawns.push(p);w.piles.push(shirt);
   if(relationships!==undefined)w.relationships=relationships;
-  q.pawnId=p.id;q.entry=entry;q.arrivedAt=w.tick;
+  q.pawnId=p.id;q.entry=entry;q.arrivedAt=w.tick;notePopulationGain320(w);
   log(w,`${q.name} entre au bord de la carte et rejoint la colonie. Ses poursuivants sont toujours attendus.`);
 }
 function pursue(w:World,q:JoinerQuest):void {

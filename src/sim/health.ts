@@ -1,3 +1,4 @@
+import {deathOnDownedChance320,deathOnDownedEligible320} from './population-intent-320.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {stopCapturedTravel297} from './movement.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
@@ -39,6 +40,11 @@ function announce(world:World,message:string):void {world.events.push({tick:worl
 export function reconcilePawnHealth(world:World,pawn:Pawn,body=pawnBody(pawn),externalViolence=false,retainTravellingCargo=false):void {
   if(!pawn.health)return;
   if(externalViolence)notifyKidnapLordHarm261(world,pawn);
+  // Core CheckForStateChange (schema 320): a non-colony humanlike downed by
+  // external violence dies with the population-intent chance.
+  if(externalViolence&&pawn.state!=='downed'&&pawn.state!=='dead'&&!pawn.health.death&&deathOnDownedEligible320(world,pawn)
+    &&medicalStatus(pawn.health,body)==='downed'&&healthRandom(world)<deathOnDownedChance320(world))
+    pawn.health.death={tick:medicalCivilTick271(pawn.health),cause:'downed'};
   const status=medicalStatus(pawn.health,body);if(status==='dead')commitToxicDeath256(pawn.health,()=>healthRandom(world));
   if(status!=='mobile') {
     if(isCorePhysicalSchema297(Number(world.schemaVersion))&&pawn.state!==status)stopCapturedTravel297(world,pawn);

@@ -81,7 +81,7 @@ export function* draftActualGroupCamp256(input:CampaignState,groupId:number,runt
  if(!record||!g||!('members'in g))return blocked('entry-preflight','Actual away group required');
  const planet=root.planet,geography=planet.geography,tile=g.tile,calendarOrigin=maps.calendarOrigin;
  // Read authoritative CAMPAIGN_FIELDS, not a group projection's local header.
- const campaign=Object.fromEntries(CAMPAIGN_FIELDS.filter(k=>Object.hasOwn(root,k)).map(k=>[k,root[k]])) as Pick<World,CampaignField>&{schemaVersion:256|257|258|259|260|261|262|263|264|265|266|267|268|269|270|271|272|273|274|275|276|277|278|279|280|281|282|283|284|285|286|287|288|289|290|291|292|293|294|295|296|297|298|299|300|301|302|303|304|305|306|307|308|309|310|311|312|313|314|315|316|317|318|319;planet:typeof planet;worldFactions:NonNullable<World['worldFactions']>};
+ const campaign=Object.fromEntries(CAMPAIGN_FIELDS.filter(k=>Object.hasOwn(root,k)).map(k=>[k,root[k]])) as Pick<World,CampaignField>&{schemaVersion:256|257|258|259|260|261|262|263|264|265|266|267|268|269|270|271|272|273|274|275|276|277|278|279|280|281|282|283|284|285|286|287|288|289|290|291|292|293|294|295|296|297|298|299|300|301|302|303|304|305|306|307|308|309|310|311|312|313|314|315|316|317|318|319|320;planet:typeof planet;worldFactions:NonNullable<World['worldFactions']>};
  const captured=sharedMutableStamp(root),planetStamp=planetScalarStamp(planet),mapStamp=mapRegistryStamp(root),groupStamp=JSON.stringify(g),sites=maps.sites.slice();
  const retained=captureCampRetainedAnimals256(root),retainedStamp=JSON.stringify(retained);
  const runtimeStamp=JSON.stringify({adjacent:runtime.adjacentPermutation,fog:runtime.fog,context:runtime.context,rng:runtime.animalRuntimeRng});

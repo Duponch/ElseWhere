@@ -1,3 +1,4 @@
+import {notePopulationGain320} from './population-intent-320.ts';
 import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import {commitJoinedPlayer259} from './world-affiliation-259.ts';
 import { comfortableTemperature,nextHeatSeverity } from './heat-rules.ts';
@@ -61,7 +62,7 @@ export function reconcilePodRescueJoining(w:World):void {
     // A guest's bare path is an exit intention. A real meal/medical/rest task
     // retains its path, bed, ownership and other actors' treatment commitments.
     if(!p.need){p.path=[];if(p.state==='moving')p.state='idle';}
-    commitJoinedPlayer259(w,p);p.faction='colony';p.foodPolicyId=food.id;p.apparelPolicyId=apparel.id;
+    commitJoinedPlayer259(w,p);notePopulationGain320(w);p.faction='colony';p.foodPolicyId=food.id;p.apparelPolicyId=apparel.id;
     p.apparelAutomation=true;p.nextApparelCheckAt=w.tick;
     // Before schema 302, the same defaults as startingPawn; from 302, RimWorld's
     // EnableAndInitialize. Background work restrictions remain enforced by
