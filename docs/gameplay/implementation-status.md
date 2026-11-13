@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V323 — schéma 323 :** [L'âge dans la vie sociale](social-age-v323.md). L'écart d'âge entre en compte dans la compatibilité (+0,45 au même âge, −0,45 à 20 ans d'écart) et réduit les bagarres au-delà de 10 ans d'écart.
+
 **V322 — schéma 322 :** [Fusil à pompe](pump-shotgun-v322.md). 60 acier et 3 composants à l'atelier d'usinage (Armurerie, Artisanat 5) ; portée 15,9, 18 dégâts, pouvoir d'arrêt 3 ; les visiteurs vendent aussi le fusil à pompe et le lanceur IEM.
 
 **V321 — schéma 321 :** [Armure naturelle des créatures](natural-armor-v321.md). La tortue et les insectes de caverne (mégascarabée, mégaraignée, spélopède) ont leur armure du jeu de base contre les balles, les flèches et les coups ; les créatures sans armure ne tirent rien de plus.

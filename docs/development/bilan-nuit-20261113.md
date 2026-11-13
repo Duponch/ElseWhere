@@ -1,4 +1,4 @@
-# Nuit du 12 au 13 novembre 2026 : maladies, vêtements et incidents
+# Nuit du 12 au 13 novembre 2026 : maladies, vêtements, armes et fidélité aux règles
 
 Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur les performances, la fidélité aux règles de RimWorld et les manques du jeu (fonctionnalités, règles, catalogue, objets), sans proposer de choix. Les règles sont relevées dans les définitions installées de RimWorld 1.6 Core. Le code et les textes sont propres à Elsewhere.
 
@@ -24,6 +24,7 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 | Mort des pillards à terre | 320 | Chance de mort selon l'intention de population de Cassandra | [V320](../gameplay/raider-death-v320.md) |
 | Armure naturelle | 321 | Tortue et insectes de caverne protégés comme par une armure portée | [V321](../gameplay/natural-armor-v321.md) |
 | Fusil à pompe | 322 | Arme courte portée fabriquée à l'atelier d'usinage, vendue par les visiteurs avec le lanceur IEM | [V322](../gameplay/pump-shotgun-v322.md) |
+| L'âge dans la vie sociale | 323 | Compatibilité et bagarres selon l'écart d'âge | [V323](../gameplay/social-age-v323.md) |
 
 ## 2. Fidélité : écarts trouvés et corrigés
 
@@ -32,7 +33,7 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 - **Audit du catalogue.** Un audit en lecture seule a comparé les chiffres du catalogue au jeu de base (recettes, bâtiments, recherches, objets, armes). Il a trouvé 14 écarts et deux erreurs de formule de beauté, corrigés dans le lot 311.
 - **Audit des règles d'humeur, de besoins et de compétences.** Presque tout concordait. Il a trouvé six écarts, corrigés dans le lot 313.
 - **Audit des plantes, des animaux et des vitesses de travail.** Cultures, flore sauvage, statistiques des animaux, vitesses de travail et électricité concordaient. Il a trouvé six écarts, corrigés dans le lot 315 : rendement de récolte, plantes abîmées, cuisiniers maladroits, apprivoisement et dressage, portées du lièvre.
-- **Audits du combat, de la santé et de la vie sociale.** Trois audits en parallèle ont relevé respectivement 9, 4 et 8 écarts. Les corrections figurent dans les lots 317 à 319, les écarts restants au point 7.
+- **Audits du combat, de la santé et de la vie sociale.** Trois audits en parallèle ont relevé respectivement 9, 4 et 8 écarts. Les corrections figurent dans les lots 317 à 321 et 323 ; les écarts restants sont au point 7.
 - **Chemise : fausse alerte vérifiée.** La « Chemise » d'Elsewhere est la chemise boutonnée du jeu de base, avec les mêmes valeurs. C'est le t-shirt qui manque.
 
 ## 3. Inventaire du catalogue
@@ -69,6 +70,12 @@ Chaque lot a sa série de tests propres, plus ses tests voisins, choisis par nom
 
 Le test facultatif de retraite de caravane échouait déjà avant ces lots.
 
+**Campagne « prison » (après le jour 42).** Elle échoue sur son grand livre des composants (47 comptés contre 34 attendus). La même campagne échoue identiquement sur la version 318, avant les lots 319 et 320. Cause probable : depuis le lot 305, une capsule de ressources peut livrer des composants (13 unités ici), et ce grand livre de test ne compte pas ces livraisons. C'est un oracle à mettre à jour, pas un défaut du jeu.
+
+**Étourdissement de 2 secondes (lot 318).** Cinq anciens tests de mêlée, de tir et de promenade supposaient l'ancienne valeur de 45 ticks. Ils ont été ajustés, ainsi que les validations de sauvegarde qui bornaient l'étourdissement à 45 ticks.
+
+Trois tests longs ont dépassé leur délai pendant les séries voisines des lots 319 et 320 (machine chargée par trois exécutions parallèles).
+
 ## 6. Publication
 
 Construction prête depuis une copie exacte du commit `e5b994f5` (lot 313), par `git archive` : typage et construction Pages réussis, 1 142 fichiers, dans `tmp/publication-20261113/source/dist`. **Le déploiement en production a été refusé par le mode automatique.** Il attend votre accord. La commande, depuis ce dossier :
@@ -83,12 +90,19 @@ Ensuite, `node tmp/publication-20261113/verify-http.mjs` (avec `DEPLOY_URL` sur 
 
 Par ordre de priorité :
 
-1. **Publication.** Déployer la construction prête après votre accord, puis la refaire pour inclure les lots suivants.
+1. **Publication.** Déployer la construction prête après votre accord (voir section 6).
 2. **Écarts d'audit restants.**
-   - **Combat :** un pillard à terre peut mourir selon l'« intention de population » du conteur ; ce calcul et son historique ne sont pas encore modélisés. Restent aussi l'armure naturelle des animaux, le report des dégâts sur les petites créatures et l'efficacité des membres blessés pour les coups à mains nues.
-   - **Santé :** il manque l'écart aléatoire du soin des personnes hors carte.
-   - **Vie sociale :** interactions entre prisonniers, souvenir « m'a recruté », âge dans la compatibilité, règles des visites aux malades.
-3. **Armes et objets.** Arc recourbé et grand arc, armes à feu courantes (pistolet automatique, fusil à pompe, fusil d'assaut, mitrailleuse, fusil de précision), puis pénoxycyline et politique générale des drogues.
+   - **Combat :** report des dégâts sur les petites créatures, efficacité des membres blessés pour les coups à mains nues, langue qui saigne.
+   - **Santé :** écart aléatoire du soin des personnes hors carte.
+   - **Vie sociale :** prisonniers entre eux, malade visité dans n'importe quel lit, choix du malade selon l'opinion et la distance.
+   - **Pillards :** une partie des pillards à terre meurt désormais (lot 320). Les catégories de pillards du jeu de base (résistance, recrutement possible ou non) restent à modéliser.
+3. **Armes et objets.**
+   - Arc recourbé et grand arc, qui demandent les recherches tribales correspondantes.
+   - Pistolet automatique (recherche « culasse non verrouillée »).
+   - Armes à rafales (fusil d'assaut, mitrailleuse), qui demandent le tir en rafale.
+   - Pénoxycyline et politique générale des drogues.
 4. **Contenu à modéliser en 3D.** Animaux de ferme (vache, poule, mouton, chèvre, cochon), tables de billard et de poker.
 5. **Performances.** Refonte de la publication du Worker vers l'affichage (chantier 2) : publier seulement les colons et animaux modifiés, à mesurer d'abord dans le vrai client.
-6. **Campagne « Atterrissage ».** Améliorer la défense du joueur scripté pour le raid du jour 22.
+6. **Tests de campagne.**
+   - « Atterrissage » : améliorer la défense du joueur scripté pour le raid du jour 22.
+   - « Prison » : faire compter au grand livre les livraisons des capsules de ressources.

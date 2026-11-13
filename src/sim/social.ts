@@ -1,3 +1,4 @@
+import {HUMAN_YEAR_TICKS} from './human-age.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
 import { isColonist,distanceSquared } from './affiliation.ts';
 import {alcoholModifiers265} from './alcohol-rules-265.ts';
@@ -45,14 +46,32 @@ function curve(value:number,points:readonly (readonly [number,number])[]):number
 }
 /** Pair affinity needs no PRNG draw. Slave, gene and age rules remain outside
  * this human social slice. */
-export function negativeInteractionFactor(world:World,initiator:Pawn,recipient:Pawn,compatibility=socialCompatibility(world.seed,initiator.id,recipient.id)):number {
+/** Biological age in years; a historical pawn without age is 30, as the
+ * legacy age record. */
+const ageYears323=(p:Pawn):number=>(p.age?.biologicalTicks??30*HUMAN_YEAR_TICKS)/HUMAN_YEAR_TICKS;
+/** Core CompatibilityWith (schema 323): the per-pair constant plus
+ * Clamp(LerpDouble(0, 20, 0.45, -0.45, age gap), -0.45, 0.45). */
+export function pairCompatibility323(world:World,a:Pawn,b:Pawn):number {
+  const base=socialCompatibility(world.seed,a.id,b.id);
+  if(world.schemaVersion<323)return base;
+  const gap=Math.abs(ageYears323(a)-ageYears323(b));
+  return base+Math.max(-.45,Math.min(.45,.45-.9*gap/20));
+}
+/** Core SocialFightChance age factor (schema 323): over 10 whole years apart,
+ * LerpDouble(10, 50, 1, 0.25, gap capped at 50). */
+export function ageFightFactor323(world:World,a:Pawn,b:Pawn):number {
+  if(world.schemaVersion<323)return 1;
+  const gap=Math.min(50,Math.abs(Math.floor(ageYears323(a))-Math.floor(ageYears323(b))));
+  return gap>10?1-.75*(gap-10)/40:1;
+}
+export function negativeInteractionFactor(world:World,initiator:Pawn,recipient:Pawn,compatibility=pairCompatibility323(world,initiator,recipient)):number {
   if(initiator.traits?.includes('kind'))return 0;
   return curve(opinionOf(initiator,recipient.id,world.tick,world),opinionWeight)
     *curve(compatibility,compatibilityWeight)
     *(initiator.traits?.includes('abrasive')?2.3:1);
 }
 export function passiveSocialWeights(world:World,initiator:Pawn,recipient:Pawn,people?:RelationshipPeople):{chitchat:number;'deep-talk':number;'kind-words':number;slight:number;insult:number;'romance-attempt':number;breakup:number} {
-  const compatibility=socialCompatibility(world.seed,initiator.id,recipient.id);
+  const compatibility=pairCompatibility323(world,initiator,recipient);
   const negative=negativeInteractionFactor(world,initiator,recipient,compatibility);
   return {chitchat:1,'deep-talk':deepTalkWeight(compatibility),'kind-words':initiator.traits?.includes('kind') ? .01 : 0,slight:.02*negative,insult:.007*negative,
     'romance-attempt':romanceSelectionWeight(world,initiator,recipient,people),breakup:breakupSelectionWeight(world,initiator,recipient)};
@@ -64,7 +83,7 @@ export function socialFightChance(world:World,recipient:Pawn,initiator:Pawn,kind
   const capacities=pawnBody(recipient).capacities;
   const usable=(value:number)=>Math.max(0,Math.min(1,(value-.3)/.7));
   return Math.min(1,(kind==='slight' ? .005 : .04)*usable(capacities.manipulation)*usable(capacities.moving)
-    *curve(opinionOf(recipient,initiator.id,world.tick,world),fightOpinionWeight)*(recipient.traits?.includes('bloodlust')?4:1)*(recipient.health?alcoholModifiers265(recipient.health).socialFightFactor:1)*malnutrition319);
+    *curve(opinionOf(recipient,initiator.id,world.tick,world),fightOpinionWeight)*(recipient.traits?.includes('bloodlust')?4:1)*(recipient.health?alcoholModifiers265(recipient.health).socialFightFactor:1)*malnutrition319*ageFightFactor323(world,recipient,initiator));
 }
 /** Passive exchanges do not acquire reservations, cancel work or retime an edge. */
 export function exchangeSocial(world:World,a:Pawn,b:Pawn,kind:SocialInteractionKind,grid?:ShotGrid):boolean {
