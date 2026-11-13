@@ -35,8 +35,9 @@ test('a real mid-edge stun preserves the wander owner and its exact save until m
  expect(strict.status).toBe('applied');expect(resident.status).toBe('applied');
  if(strict.status!=='applied'||resident.status!=='applied')throw Error('Suspended owner refused');
  expect(resident.world).toStrictEqual(strict.world);expect(resident.world.pawns.find(q=>q.id===p.id)?.idleWander300).toEqual(task);
- let held=0;while(isStunned(p,effectiveCore297(w))&&held++<46){advanceWorldCore297(w);expect(idleWanderTask300(p)).toBe(task);}
- expect(held).toBeGreaterThan(0);expect(held).toBeLessThan(46);
+ // Core Blunt stun: 120 Core ticks from schema 318.
+ let held=0;while(isStunned(p,effectiveCore297(w))&&held++<121){advanceWorldCore297(w);expect(idleWanderTask300(p)).toBe(task);}
+ expect(held).toBeGreaterThan(0);expect(held).toBeLessThan(121);
  let finished=0;while(idleWanderTask300(p)===task&&finished++<600)advanceWorldCore297(w);
  expect(finished).toBeLessThan(600);expect(idleWanderTask300(p)).not.toBe(task);
  expect(validateWorld(w)).toEqual([]);
@@ -62,6 +63,8 @@ test('a stunned Wait_Wander retains its original deadline and can expire in its 
 test('accepting a suspended owner still refuses accessor, future-start and excessive-duration stun records',()=>{
  // Isolated shape inputs, not an imported or continued campaign.
  const w=createWorld(42,32,32),p=w.pawns[0]!;
+ // These shapes are checked against the schema 300 contract (45-tick stun).
+ (w as {schemaVersion:number}).schemaVersion=317;
  p.hunger=100;p.rest=100;p.recreation.level=100;
  const c:IdleWanderContext300={blocked:()=>blockedCells(w),candidates:()=>null,search:()=>null,release:()=>releaseWork(w,p),move:()=>{},event:()=>{}};
  expect(offerIdleWander300(w,p,c)).toBe('admitted');applyMeleeStun(w,p,effectiveCore297(w));

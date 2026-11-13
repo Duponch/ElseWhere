@@ -147,9 +147,11 @@ test('presentation ignores continuous clock payment but publishes real suspensio
   stepWorld(w);expect(validateWorld(w)).toEqual([]);
   expect(p.shooting!.stance!.clock!.pausedCore).toBe(19);
   expect(view.capture(w)).toBe(false);expect(view.capture(deserializeWorld(serializeWorld(w)))).toBe(false);
-  for(let i=0;i<3;i++)stepWorld(w);
-  expect(p.stun).toBeUndefined();expect(p.shooting!.stance!.phase).toBe('aim');expect(view.capture(w)).toBe(true);
-  stepWorld(w);expect(p.lastAttack?.atCore).toBe(30062);expect(p.shooting!.stance!.phase).toBe('cooldown');expect(view.capture(w)).toBe(true);
+  // Schema 318: the 120-tick Blunt stun ends at 30131; the remaining six
+  // warmup ticks then emit at 30137, inside the same local step.
+  for(let i=0;i<10;i++)stepWorld(w);
+  expect(p.stun).toBeDefined();expect(p.shooting!.stance!.phase).toBe('aim');
+  stepWorld(w);expect(p.stun).toBeUndefined();expect(p.lastAttack?.atCore).toBe(30137);expect(p.shooting!.stance!.phase).toBe('cooldown');expect(view.capture(w)).toBe(true);
   const recovery=structuredClone(p.shooting!.stance);
   expect(applyCommand(w,{type:'draft-stop',pawnIds:[p.id]}).ok).toBe(true);
   expect(p.shooting!.stance).toEqual(recovery);expect(view.capture(w)).toBe(true);

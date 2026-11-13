@@ -66,7 +66,7 @@ function historicalTargetKind(w:World,id:number):'pawn'|'animal'|'mech'|undefine
 export function validateShooting(world:World,version:number=world.schemaVersion,registeredIds?:NumericMembershipLookup):string[] {
   const errors:string[]=[];
   for(const p of world.pawns)if(p.shooting!==undefined) {
-    if(!validShootingShape(p.shooting,version,world.tick,isCorePhysicalSchema297(version)?effectiveCore297(world):undefined)||!validShootingLeanOwner(p,world,version)||!validStunShape(p.stun,version,world.tick,45,isCorePhysicalSchema297(version)?effectiveCore297(world):undefined)){errors.push('Invalid shooting state for schema.');continue;}
+    if(!validShootingShape(p.shooting,version,world.tick,isCorePhysicalSchema297(version)?effectiveCore297(world):undefined)||!validShootingLeanOwner(p,world,version)||!validStunShape(p.stun,version,world.tick,version>=318?120:45,isCorePhysicalSchema297(version)?effectiveCore297(world):undefined)){errors.push('Invalid shooting state for schema.');continue;}
     const {order,stance}=p.shooting;
     const suspended=version>=198&&stance?.phase==='aim'&&!!p.stun&&effectiveCore297(world)<p.stun.untilCore;
     if(order){const weapon=equippedWeapon(world,p);if(!weapon||!isRangedWeaponItem(weapon.item)||order.hunt&&weapon.item==='emp-launcher'||stance?.phase==='aim'&&(stance.weaponItem??'revolver')!==weapon.item)errors.push('Invalid ranged weapon/aim profile.');}

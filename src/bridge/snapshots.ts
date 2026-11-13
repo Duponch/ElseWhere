@@ -1335,7 +1335,7 @@ export class SnapshotDecoder {
       if(!validMentalTransport(pawn,message.world))return resync('Crise mentale, menace ou autorité de mêlée invalide pour ce snapshot.');
       if(!validShootingShape(pawn.shooting,message.world.schemaVersion,message.world.tick,isCorePhysicalSchema297(Number(message.world.schemaVersion))?effectiveCore297(message.world):undefined)
         ||!validShootingLeanOwner(pawn,message.world,message.world.schemaVersion)
-        ||pawn.shooting!==undefined&&!validStunShape(pawn.stun,message.world.schemaVersion,message.world.tick,45,isCorePhysicalSchema297(Number(message.world.schemaVersion))?effectiveCore297(message.world):undefined))return resync('Phase de tir humaine invalide pour ce snapshot.');
+        ||pawn.shooting!==undefined&&!validStunShape(pawn.stun,message.world.schemaVersion,message.world.tick,Number(message.world.schemaVersion)>=318?120:45,isCorePhysicalSchema297(Number(message.world.schemaVersion))?effectiveCore297(message.world):undefined))return resync('Phase de tir humaine invalide pour ce snapshot.');
       if(!validBackgroundTransport(pawn,message.world.schemaVersion))return resync('Âge ou passé personnel invalide pour ce snapshot.');
       if(!validSurgeryTransport(pawn,message.world))return resync('État chirurgical ou anesthésique invalide pour ce snapshot.');
       if(!validImmuneDiseaseTransport(pawn,message.world))return resync('Maladie immunitaire invalide pour ce snapshot.');

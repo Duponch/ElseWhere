@@ -1,3 +1,4 @@
+import {animalBodySize} from './animal-life.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {medicalCivilTick271,medicalElapsedTicks271} from './suspended-human-clock-271.ts';
@@ -101,12 +102,15 @@ export function damageAnimalWithBullet(w:World,a:WildAnimal,hit:UnarmoredBullet,
   // A predator's own prey is not a third-party ranged interruption. Without
   // an identified instigator, preserve the hunt rather than invent ownership.
   if(danger&&(preyId===undefined||instigatorId!==undefined&&instigatorId!==preyId))scareAnimal(w,a,danger,core);
-  delayAnimalImpact(a,core);
+  // Core StaggerHandler.Notify_BulletImpact: a body larger than the
+  // projectile's stopping power keeps its pace (schema 318).
+  if(w.schemaVersion<318||hit.stoppingPower===undefined||animalBodySize(a)<=hit.stoppingPower+.001)delayAnimalImpact(a,core);
 }
 /** Shared violent-injury transaction; delayed blood loss never enters it. */
 export function commitAnimalImpact(w:World,a:WildAnimal,record:import('./injury-types.ts').MedicalRecord,random:{rng:number},core=isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveCore297(w):w.tick*10,instigator?:import('./mini-turret-state.ts').BombInstigatorKey,collapse=false):void {
   const lordId=a.hive?.lordId;
-  if(a.state!=='downed'&&medicalStatus(record)==='downed'&&healthRandom(random)<.5)record.death={tick:w.tick,cause:'downed'};
+  // Core DeathOnDownedChance_NonColonyAnimal: never for a colony animal (318).
+  if(a.state!=='downed'&&medicalStatus(record)==='downed'&&!(w.schemaVersion>=318&&a.domestic)&&healthRandom(random)<.5)record.death={tick:w.tick,cause:'downed'};
   const death=planAnimalDeathExplosion256(w,a,record,core);death.commit();
   commitToxicDeath256(record,()=>healthRandom(random));
   // Death decisions belong to this same impact stream, including callers

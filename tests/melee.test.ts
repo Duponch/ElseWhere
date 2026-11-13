@@ -74,9 +74,10 @@ test('stun holds a moving pawn at its exact fraction, resumes continuously and s
   const w=meleeCamp(),p=w.pawns[0];expect(startTravel(w,p,{x:7,z:10})).toBe(true);stepWorld(w);
   const old=p.motion!.end;applyMeleeStun(w,p,w.tick*10);
   const pieces=travelPieces(p.motion!);const hold=pieces.find(s=>s.fromFraction===s.toFraction)!;
-  expect(hold.end-hold.start).toBe(4.5);expect(p.motion!.end).toBeCloseTo(old+4.5);expect(hold.fromFraction).toBeGreaterThan(0);
+  // Core Blunt stun: 120 Core ticks, 12 local ticks (schema 318).
+  expect(hold.end-hold.start).toBe(12);expect(p.motion!.end).toBeCloseTo(old+12);expect(hold.fromFraction).toBeGreaterThan(0);
   const recorder=new MotionRecorder();recorder.capture(w);expect(recorder.snapshot().find(t=>t.id===p.id)!.segments.some(s=>s.fromFraction===s.toFraction)).toBe(true);
-  const copy=deserializeWorld(serializeWorld(w));for(let i=0;i<12;i++){stepWorld(w);stepWorld(copy);expect(copy).toEqual(w);expect(validateWorld(w)).toEqual([]);}
+  const copy=deserializeWorld(serializeWorld(w));for(let i=0;i<20;i++){stepWorld(w);stepWorld(copy);expect(copy).toEqual(w);expect(validateWorld(w)).toEqual([]);}
 });
 
 test('stun and stagger share an edge without changing prior distances: independent small-step timing oracle',()=>{

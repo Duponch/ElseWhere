@@ -16,6 +16,9 @@ export interface UnarmoredBullet {
   /** Schema 316 arrows: Core Arrow damage makes a Cut (Crack on a solid
    * part) instead of a Gunshot. Absent for every bullet. */
   injury?:'cut';
+  /** Projectile stopping power (Core default 0.5); used from schema 318 for
+   * the bullet stagger of an animal. Absent: the historical stagger. */
+  stoppingPower?:number;
 }
 export interface BulletImpactResult {
   record:MedicalRecord;
@@ -30,7 +33,7 @@ export function validateUnarmoredBullet(hit:UnarmoredBullet,model=HUMAN_MODEL):v
   if(!Number.isFinite(hit.damage)||hit.damage<0||!Number.isSafeInteger(hit.damage*HP_UNIT)||hit.damage>1000000||
     hit.part!==undefined&&(!modelHasPart(model,hit.part)||BODY_PARTS[hit.part].conceptual)||
     hit.height!==undefined&&!['top','middle','bottom'].includes(hit.height)||hit.depth!==undefined&&!['inside','outside'].includes(hit.depth)||
-    hit.injury!==undefined&&hit.injury!=='cut')throw new Error('Invalid unarmored bullet');
+    hit.injury!==undefined&&hit.injury!=='cut'||hit.stoppingPower!==undefined&&(!Number.isFinite(hit.stoppingPower)||hit.stoppingPower<0))throw new Error('Invalid unarmored bullet');
 }
 const draw=(random:MedicalRandom):number=>{const n=random();if(!Number.isFinite(n)||n<0||n>=1)throw new Error('Invalid impact random draw');return n;};
 

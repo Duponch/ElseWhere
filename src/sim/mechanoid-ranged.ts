@@ -168,7 +168,7 @@ export function advanceMechanoidRanged(w:World,m:Mechanoid,core:number,q:Mechano
   if(!('reason' in plan)){
     const {target,line}=plan,c=q.body(m).capacities,cover=shotCover(q.grid(),m,target,combatTargetKey(target));
     const report=shotAim({distance:line.distance,pawnAccuracy:shootingAccuracy(8,c.sight,c.manipulation).perCell,
-      weaponAccuracy:profile.accuracy,targetSize:combatTargetSize(target),standing:!['sleeping','resting','downed'].includes(target.state),
+      weaponAccuracy:profile.accuracy,targetSize:combatTargetSize(target,w.schemaVersion),standing:!['sleeping','resting','downed'].includes(target.state),
       weather:weatherShotFactor(w,m,target),blindSmoke:false},cover.passChance);
     const random={rng:w.rng},emission=emitRevolverBullet({grid:q.grid(),line,origin:{x:m.x+.5,z:m.z+.5},launcherKey:`mech:${m.id}`,equipmentKey:null,
       target:{key:combatTargetKey(target),cell:target,full:false,canBenefitFromCover:true},aim:report,cover,profile,canHitOtherPawns:true,

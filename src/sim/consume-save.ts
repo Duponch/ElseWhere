@@ -7,7 +7,7 @@ import { validateMedicalRecord } from './injury-validation.ts';
 import { medicalStatus } from './injury-state.ts';
 import { travelEnd,validSlowIntervals,validStunIntervals } from './travel-timing.ts';
 import { validCapturedTravelDelay } from './captured-travel-delay.ts';
-import { MIN_PAWN_SPEED_V87,MAX_PAWN_DELAY_V226,maxPawnSpeedFactor307 } from './travel-validation.ts';
+import { MIN_PAWN_SPEED_V87,maxPawnDelay318,maxPawnSpeedFactor307 } from './travel-validation.ts';
 import { validDraftShape } from './drafting-save.ts';
 import { consumeActivityValid } from './consuming.ts';
 import { FOOD_ITEMS } from './food-policy.ts';
@@ -36,7 +36,7 @@ const cell=(v:unknown,w:Pick<World,'width'|'height'>):v is Cell=>closed(v,['x','
 /** Same captured segment arithmetic as the existing Pawn guard, without any
  * World census or navigation rebuild. A held task cannot fabricate stationarity. */
 function validConsumeTravel(pawn:Pawn,world:World):boolean {
-  if(!Number.isFinite(pawn.moveCooldown)||pawn.moveCooldown<0||pawn.moveCooldown>MAX_PAWN_DELAY_V226)return false;
+  if(!Number.isFinite(pawn.moveCooldown)||pawn.moveCooldown<0||pawn.moveCooldown>maxPawnDelay318(world.schemaVersion))return false;
   const m=pawn.motion;
   if(m==null)return pawn.moveCooldown===0;
   if(!record(m)||'stop297'in m||!cell(m.from,world)||!cell(m.to,world)||!same(m.to,pawn)||stepDistance(m.from,m.to)!==1

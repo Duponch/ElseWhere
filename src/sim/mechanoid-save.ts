@@ -49,7 +49,7 @@ export function validMechanoidShape(value:unknown,version:number,tick:number,hel
     ||!integer(value.id,1)||!isMechanoidKind(value.mechKind)||version<197&&value.mechKind!=='scyther'||!integer(value.x)||!integer(value.z)
     ||typeof value.state!=='string'||!['idle','moving','working','downed','dead'].includes(value.state)||!finite(value.heading,-Math.PI*2,Math.PI*2)
     ||!finite(value.moveCooldown,0,1000)||!integer(value.planCooldown,0,1000)||!Array.isArray(value.path)||!value.path.every(cell)
-    ||!validStagger(value.stagger,version,tick,coreNow297)||!validStunShape(value.stun,version,tick,45,coreNow297)
+    ||!validStagger(value.stagger,version,tick,coreNow297)||!validStunShape(value.stun,version,tick,version>=318?120:45,coreNow297)
     ||Object.hasOwn(value,'emp')&&(value.emp===undefined||!validMechanoidEmpState(value.emp,version,tick,value.state==='dead'||value.state==='downed',coreNow297)))return false;
   const m=value as unknown as Mechanoid;
   if(m.health!==undefined&&!validMechaMedicalRecord(m.health,tick,m.state==='dead',m.mechKind,version))return false;

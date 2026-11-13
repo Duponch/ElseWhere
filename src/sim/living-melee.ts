@@ -1,3 +1,4 @@
+import {meleeStunCore318} from './stun.ts';
 import {combatTargetKey} from './combat-target.ts';
 import {applyToxicBite256} from './toxic-buildup-256.ts';
 import {animalBodySize} from './animal-life.ts';
@@ -73,7 +74,7 @@ export function strikeLivingTarget(w:World,attacker:LivingTarget,target:LivingTa
   }
   w.rng=randomState.rng;
   if(isAnimalTarget(target))delayAnimalImpact(target,core,stun||!!(options.surprise&&options.surpriseStun),
-    options.surprise&&options.surpriseStun?Math.max(45,Math.round(options.surpriseStun*30)):45);
+    options.surprise&&options.surpriseStun?Math.max(45,Math.round(options.surpriseStun*30)):meleeStunCore318(w.schemaVersion));
   else if(isMechanoidTarget(target))delayMechanoidImpact(w,target,core,stun);
   else {
     if(outcome==='hit'){reconcilePawnHealth(w,target,undefined,true);if(injured)disturbance.damage(target,core,immobile);}

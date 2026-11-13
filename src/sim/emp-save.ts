@@ -1,3 +1,4 @@
+import {maxStunHold318} from './travel-validation.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297,effectiveLocal297,validationCore297} from './core-phase-297.ts';
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
@@ -36,7 +37,7 @@ export function validMechanoidEmpIntervals(value:unknown,version:number,start:nu
   return value.every(s=>{
     if(!object(s)||!keys(s,['start','end'])||typeof s.start!=='number'||!Number.isFinite(s.start)||typeof s.end!=='number'||!Number.isFinite(s.end)
       ||s.start<start||s.start>physicalLocalNow297||s.end<=s.start||s.start<=previous||!Number.isSafeInteger(s.end*10)||s.end>physicalLocalNow297+EMP_MAX_STUN_CORE_TICKS/10
-      ||s.end>physicalLocalNow297+4.5&&(!object(emp)||s.end*10!==empStunUntilCore277(emp as unknown as import('./emp-state.ts').EmpAdaptationState)))return false;
+      ||s.end>physicalLocalNow297+maxStunHold318(version)&&(!object(emp)||s.end*10!==empStunUntilCore277(emp as unknown as import('./emp-state.ts').EmpAdaptationState)))return false;
     previous=s.end;return true;
   });
 }

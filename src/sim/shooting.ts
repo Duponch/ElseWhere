@@ -131,7 +131,7 @@ export function advanceShooter(world:World,pawn:Pawn,core:number,queries:Queries
   if(core<shot.stance.endsAtCore)return;
   const {target,weapon,profile,line}=plan,standing=!['sleeping','resting','downed'].includes(target.state),body=queries.body(pawn).capacities;
   const cover=shotCover(queries.grid(),pawn,target,combatTargetKey(target));
-  const aim=shotAim({distance:line.distance,pawnAccuracy:shootingAccuracy(pawn.skills.shooting.level,body.sight,body.manipulation).perCell,weaponAccuracy:profile.accuracy,targetSize:combatTargetSize(target),standing,weather:weatherShotFactor(world,pawn,target),blindSmoke:false},cover.passChance);
+  const aim=shotAim({distance:line.distance,pawnAccuracy:shootingAccuracy(pawn.skills.shooting.level,body.sight,body.manipulation).perCell,weaponAccuracy:profile.accuracy,targetSize:combatTargetSize(target,world.schemaVersion),standing,weather:weatherShotFactor(world,pawn,target),blindSmoke:false},cover.passChance);
   const random={rng:world.rng};
   // The current18/102/210-Core warmups exceed Core lean saturation (14Core).
   // Capture the warmup offset, not the newly queried line. Legacy aims stay base.

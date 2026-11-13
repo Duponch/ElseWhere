@@ -1,3 +1,4 @@
+import {meleeStunCore318} from './stun.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveLocal297} from './core-phase-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
@@ -51,7 +52,7 @@ export function damageMechanoidWithBomb(w:World,m:Mechanoid,core:number,amount=B
 export function delayMechanoidImpact(w:World,m:Mechanoid,core:number,stun=false,stoppingPower=1):void {
   owner(w,m,core);if(m.state==='dead'||m.state==='downed')return;
   if(stoppingPower+.001>=1){const previous=m.stagger;m.stagger={sinceCore:previous&&previous.untilCore>=core?previous.sinceCore:core,untilCore:Math.max(previous?.untilCore??0,core+95)};}
-  if(stun){const previous=m.stun;m.stun={sinceCore:previous&&previous.untilCore>=core?previous.sinceCore:core,untilCore:Math.max(previous?.untilCore??0,core+45)};}
+  if(stun){const previous=m.stun;m.stun={sinceCore:previous&&previous.untilCore>=core?previous.sinceCore:core,untilCore:Math.max(previous?.untilCore??0,core+meleeStunCore318(w.schemaVersion))};}
   const motion=m.motion;if(!motion||motion.end<=core/10)return;
   const next={...motion};
   if(m.stagger)next.stagger=mergeSlowIntervals([...(motion.stagger??[]),{start:Math.max(motion.start,core/10),end:m.stagger.untilCore/10}]);

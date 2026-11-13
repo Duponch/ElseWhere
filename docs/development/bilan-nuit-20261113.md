@@ -19,6 +19,7 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 | Corrections de fidélité : récoltes, cuisine, animaux | 315 | Rendement de récolte, plantes abîmées, cuisiniers maladroits, apprivoisement et dressage, portées du lièvre | [V315](../gameplay/work-animal-fidelity-v315.md) |
 | Arc court | 316 | Première arme à distance sans poudre : fabrication, flèches qui coupent, vente par les visiteurs | [V316](../gameplay/short-bow-v316.md) |
 | Corrections de fidélité : soins | 317 | Soin en lit d'hôpital, durée du soin de la grippe, expérience pour un animal | [V317](../gameplay/health-fidelity-v317.md) |
+| Corrections de fidélité : combat | 318 | Animaux de la colonie à terre, taille des animaux visés, recul par balle, étourdissement contondant | [V318](../gameplay/combat-fidelity-v318.md) |
 
 ## 2. Fidélité : écarts trouvés et corrigés
 

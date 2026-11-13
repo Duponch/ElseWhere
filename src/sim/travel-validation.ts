@@ -8,6 +8,11 @@ export const MIN_PAWN_SPEED_V86=.128*((4.6-.12)/4.6)/2*.35;
 export const MIN_PAWN_SPEED_V87=MIN_PAWN_SPEED_V86*.8;
 export const MAX_PAWN_DELAY_V87=Math.ceil(3*Math.SQRT2/MIN_PAWN_SPEED_V87+5+4.5);
 export const MAX_PAWN_DELAY_V226=MAX_PAWN_DELAY_V87+4;
+/** Schema 318: a Blunt stun holds an edge 12 local ticks instead of 4.5. */
+export const MAX_PAWN_DELAY_V318=MAX_PAWN_DELAY_V226+8;
+export const maxPawnDelay318=(version:number):number=>version>=318?MAX_PAWN_DELAY_V318:MAX_PAWN_DELAY_V226;
+/** Longest local stun hold beyond now accepted on a captured edge. */
+export const maxStunHold318=(version:number):number=>version>=318?12:4.5;
 /** Schema 307: a Moving capacity above 100 % (fibrous mechanites) makes a
  * pawn faster, as in Core's MoveSpeed; earlier schemas never exceeded 1. */
 export const maxPawnSpeedFactor307=(version:number):number=>Number(version)>=307?2:1;

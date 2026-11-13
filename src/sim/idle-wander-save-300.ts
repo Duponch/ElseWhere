@@ -47,7 +47,9 @@ export function validIdleWanderPawn300(value:unknown,version:number,owner?:IdleW
   const stun=data(value,'stun');if(stun!==undefined&&stun!==null){
    if(!object(stun)||!keys(stun,['sinceCore','untilCore']))return false;
    const since=data(stun,'sinceCore'),until=data(stun,'untilCore');
-   if(!integer(since,0,owner.core)||!integer(until,owner.core+1,owner.core+45)||until-since<45)return false;
+   // Schema 318: the Core Blunt stun lasts 120 ticks (45 before).
+   const length=version>=318?120:45;
+   if(!integer(since,0,owner.core)||!integer(until,owner.core+1,owner.core+length)||until-since<length)return false;
   }
   const social=data(value,'social');if(social!==undefined&&social!==null){if(!object(social))return false;const fight=data(social,'fight');if(fight!==undefined&&fight!==null&&fight!==false)return false;}
   const health=data(value,'health');if(health!==undefined&&health!==null){if(!object(health))return false;const death=data(health,'death');if(death!==undefined&&death!==null&&death!==false)return false;}

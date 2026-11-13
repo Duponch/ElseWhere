@@ -104,11 +104,11 @@ test('a real melee recovery pauses once per EMP Core and resumes its remaining p
   expect(m.melee?.strike?.atCore).not.toBe(at);expect(m.health).toBeUndefined();
 });
 
-test('historical 45-Core impact stun does not introduce the new EMP melee recovery clock',()=>{
+test('a Blunt impact stun (120 Core from schema 318) does not introduce the new EMP melee recovery clock',()=>{
   const {w,m,victim}=mechanoidCombatCamp();m.x=victim.x-1;m.z=victim.z;
   for(let i=0;i<8&&!m.melee?.strike;i++)stepWorld(w);
   expect(m.melee?.strike).toBeTruthy();const end=m.melee!.strike!.untilCore,core=w.tick*10;
-  delayMechanoidImpact(w,m,core,true);expect(m.stun?.untilCore).toBe(core+45);expect(m.emp).toBeUndefined();
+  delayMechanoidImpact(w,m,core,true);expect(m.stun?.untilCore).toBe(core+120);expect(m.emp).toBeUndefined();
   stepWorld(w,3);expect(m.melee?.strike?.untilCore).toBe(end);expect(m.melee?.strike?.empPause).toBeUndefined();
   expect(validateWorld(w)).toEqual([]);
 });

@@ -1,3 +1,4 @@
+import {animalBodySize} from './animal-life.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {activeHiveInsect256} from './cave-hive-lord-256.ts';
@@ -32,7 +33,8 @@ export function combatTargetByKey(w:World,key:LivingTargetKey):LivingTarget|unde
   const id=Number(key.slice(key.indexOf(':')+1)),target=combatTarget(w,id);
   return target&&combatTargetKey(target)===key?target:undefined;
 }
-export const combatTargetSize=(p:LivingTarget)=>isAnimalTarget(p)?.2:1;
+/** Schema 318: an animal offers its real body size (Core ShotReport). */
+export const combatTargetSize=(p:LivingTarget,version:number)=>isAnimalTarget(p)?(version>=318?animalBodySize(p):.2):1;
 /** Hostile mechanical factions share one relation; mental hostility does not
  * turn another machine into an enemy of that faction. */
 export function mechanoidEnemy(w:World,m:Mechanoid,t:LivingTarget):boolean {

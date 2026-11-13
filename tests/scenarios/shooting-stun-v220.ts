@@ -1,3 +1,4 @@
+import {meleeStunCore318} from '../../src/sim/stun.ts';
 import { applyCommand,stepWorld } from '../../src/sim/engine.ts';
 import { equippedWeapon } from '../../src/sim/equipment-rules.ts';
 import { pawnBody } from '../../src/sim/health-rules.ts';
@@ -62,7 +63,7 @@ export function produceShootingStunImpact(fixture:ShootingStunFixture):ShootingS
   const targetMobile=!['dead','downed','sleeping'].includes(target.state)&&pawnBody(target).capacities.moving>0;
   const injuries=(shooter.health?.injuries??[]).map(i=>({part:i.part,kind:i.kind,severity:i.severity}));
   const eligible=!!strike&&strike.outcome==='hit'&&['left-fist','right-fist'].includes(strike.tool)
-    &&strike.atCore===beforeImpactCore+1&&!!stun&&stun.sinceCore===strike.atCore&&stun.untilCore===strike.atCore+45
+    &&strike.atCore===beforeImpactCore+1&&!!stun&&stun.sinceCore===strike.atCore&&stun.untilCore===strike.atCore+meleeStunCore318(world.schemaVersion)
     &&!['dead','downed','sleeping'].includes(shooter.state)&&moving>0&&manipulation>0&&armed&&targetMobile&&injuries.length>0
     &&before.endsAtCore>strike.atCore&&before.endsAtCore<stun.untilCore;
   return {eligible,strike,stun,state:shooter.state,moving,manipulation,armed,targetMobile,injuries};

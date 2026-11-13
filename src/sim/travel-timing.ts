@@ -1,3 +1,4 @@
+import {maxStunHold318} from './travel-validation.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297,effectiveLocal297,validationCore297} from './core-phase-297.ts';
 import {capturedCoreMoveDuration297} from './human-move-core-297.ts';
@@ -59,7 +60,7 @@ export function validStunIntervals(value:unknown,version:number,start:number,tic
   if(version<59||!Array.isArray(value)||!value.length||value.length>4096)return false;
   let previous=start-1;
   return value.every(s=>{
-    if(!s||typeof s!=='object'||Object.keys(s).some(k=>k!=='start'&&k!=='end')||!Number.isFinite(s.start)||!Number.isFinite(s.end)||s.start<start||s.start>physicalLocalNow297||s.end<=s.start||s.start<=previous||!Number.isSafeInteger(s.end*10)||s.end>physicalLocalNow297+4.5)return false;
+    if(!s||typeof s!=='object'||Object.keys(s).some(k=>k!=='start'&&k!=='end')||!Number.isFinite(s.start)||!Number.isFinite(s.end)||s.start<start||s.start>physicalLocalNow297||s.end<=s.start||s.start<=previous||!Number.isSafeInteger(s.end*10)||s.end>physicalLocalNow297+maxStunHold318(version))return false;
     previous=s.end;return true;
   });
 }

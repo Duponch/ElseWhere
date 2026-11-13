@@ -60,7 +60,7 @@ import { validRescueShape,validateRescues } from './rescue-save.ts';
 import { validAnimalRescueShape } from './animal-rest-save.ts';
 import { validSkills } from './skills-save.ts';
 import { initializePlayerOrders, validatePlayerOrders, validSowingDestination } from './player-orders-save.ts';
-import { validateTravel,MIN_PAWN_SPEED_V87,MAX_PAWN_DELAY_V87,MAX_PAWN_DELAY_V226,MIN_PAWN_SPEED_V86,MAX_PAWN_DELAY_V86,maxPawnSpeedFactor307 } from './travel-validation.ts';
+import { validateTravel,MIN_PAWN_SPEED_V87,MAX_PAWN_DELAY_V87,MAX_PAWN_DELAY_V226,MAX_PAWN_DELAY_V318,MIN_PAWN_SPEED_V86,MAX_PAWN_DELAY_V86,maxPawnSpeedFactor307 } from './travel-validation.ts';
 import { validPrisonerPawnShape,validatePrisoners } from './prisoner-save.ts';
 import { CARRY_CAPACITY, footprintCells, JOB_WOOD_COST, MAX_STACK } from './definitions.ts';
 import type { Resource,World } from './types.ts';
@@ -158,7 +158,7 @@ function pawnRecordShape(item:Record<string,unknown>,world:PawnRecordContext,ver
   if(Object.hasOwn(item,'bombRefuge')&&!validBombRefugeShape(item.bombRefuge,version))errors.push('Invalid bomb refuge for schema.');
   if(version<192&&Object.hasOwn(item,'meleeThreat')||!validMeleeThreatShape(item.meleeThreat,version,validationTick,coreNow297))errors.push('Invalid melee threat for schema.');
   if(!validStagger(item.stagger,version,validationTick,coreNow297))errors.push('Invalid stagger state for schema.');
-  if(!validMeleeShape(item.melee,version,validationTick,coreNow297)||!validStunShape(item.stun,version,validationTick,45,coreNow297))errors.push('Invalid melee or stun shape for schema.');
+  if(!validMeleeShape(item.melee,version,validationTick,coreNow297)||!validStunShape(item.stun,version,validationTick,version>=318?120:45,coreNow297))errors.push('Invalid melee or stun shape for schema.');
   if(!validShootingShape(item.shooting,version,validationTick,coreNow297)||!validShootingLeanOwner(item,world,version))errors.push('Invalid shooting state for schema.');
   if(!validDraftShape(item.draft,version,input as unknown as World))errors.push('Invalid draft state for schema.');
   if(!validEquipmentShape(item,version))errors.push('Invalid equipment state for schema.');
@@ -178,7 +178,7 @@ function pawnRecordShape(item:Record<string,unknown>,world:PawnRecordContext,ver
   if (typeof item.name !== 'string' || item.name.length === 0 || item.name.length > 80 || !bounded(item.hunger) || !bounded(item.rest) || !bounded(item.mood)
     || !oneOf(item.state, legacyV2 ? ['idle', 'moving', 'working', 'sleeping', 'hungry'] : ['idle', 'moving', 'working', 'sleeping', 'hungry', 'eating', ...(version>=15?['recreating']:[]),...(version>=45?['downed','dead']:[]),...(version>=47?['resting']:[])]) || !(item.jobId === null || integer(item.jobId, 1))
     || !record(item.priorities) || !integer(item.priorities.gather, 0, 4) || !integer(item.priorities.build, 0, 4) || !integer(item.priorities.haul, 0, 4) || (version >= 8 && !integer(item.priorities.grow, 0, 4))
-    || !(version < 6 ? integer(item.moveCooldown, 0, 3) : typeof item.moveCooldown === 'number' && Number.isFinite(item.moveCooldown) && item.moveCooldown >= 0 && item.moveCooldown <= (version>=226?MAX_PAWN_DELAY_V226:version>=87?MAX_PAWN_DELAY_V87:version>=86?MAX_PAWN_DELAY_V86:version>=65?78:version>=59?49.5:version>=57?45:version>=45?38.146:version>=37?10.304:version>=22?8.443:version>=16?5.643:4.243)) || !integer(item.planCooldown, 0, 20)) errors.push('Invalid pawn state.');
+    || !(version < 6 ? integer(item.moveCooldown, 0, 3) : typeof item.moveCooldown === 'number' && Number.isFinite(item.moveCooldown) && item.moveCooldown >= 0 && item.moveCooldown <= (version>=318?MAX_PAWN_DELAY_V318:version>=226?MAX_PAWN_DELAY_V226:version>=87?MAX_PAWN_DELAY_V87:version>=86?MAX_PAWN_DELAY_V86:version>=65?78:version>=59?49.5:version>=57?45:version>=45?38.146:version>=37?10.304:version>=22?8.443:version>=16?5.643:4.243)) || !integer(item.planCooldown, 0, 20)) errors.push('Invalid pawn state.');
   if (!Array.isArray(item.path) || item.path.length > size) errors.push('Invalid pawn path.');
   else {
     let previous = item;

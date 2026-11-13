@@ -94,7 +94,7 @@ export function advanceWorldProjectiles(world:World,beforeCore?:(core:number)=>b
     if(pod){if(!damageStartingPod256(world,pod,profile.damage,core))throw new RangeError('Cannot commit Bullet active transporter impact');impact();}
     if(animal){
       const launcher=world.pawns.find(pawn=>`pawn:${pawn.id}`===p.flight.launcherKey);
-      damageAnimalWithBullet(world,animal,{damage:profile.damage,...arrowHit316(p.weaponItem)},core,launcher,launcher?.id);
+      damageAnimalWithBullet(world,animal,{damage:profile.damage,...arrowHit316(p.weaponItem),stoppingPower:profile.stoppingPower},core,launcher,launcher?.id);
       impact();
     }
     if(mech){damageMechanoidWithBullet(world,mech,{damage:profile.damage,...arrowHit316(p.weaponItem)},core,profile.armorPenetration);delayMechanoidImpact(world,mech,core,false,profile.stoppingPower);impact();}

@@ -9,7 +9,7 @@ import {consumeActivityValid} from './consuming.ts';
 import {validForcedConsumePawnShape} from './consume-save.ts';
 import {travelEnd,validSlowIntervals,validStunIntervals} from './travel-timing.ts';
 import {validCapturedTravelDelay} from './captured-travel-delay.ts';
-import {MIN_PAWN_SPEED_V87,MAX_PAWN_DELAY_V226,maxPawnSpeedFactor307 } from './travel-validation.ts';
+import {MIN_PAWN_SPEED_V87,maxPawnDelay318,maxPawnSpeedFactor307 } from './travel-validation.ts';
 import {reservedSourcesByPile} from './materials.ts';
 import {captureStandability} from './furniture-travel.ts';
 import {validDiningPlace} from './dining.ts';
@@ -52,7 +52,7 @@ export function validAlcoholConsumePawnShape265(pawn:{need?:unknown;orders?:unkn
   &&(d.seatId===null||int(d.seatId,1,w.nextId-1))&&(d.tableId===null||int(d.tableId,1,w.nextId-1));
 }
 function validTravel(p:Pawn,w:World):boolean {
- if(!Number.isFinite(p.moveCooldown)||p.moveCooldown<0||p.moveCooldown>MAX_PAWN_DELAY_V226)return false;
+ if(!Number.isFinite(p.moveCooldown)||p.moveCooldown<0||p.moveCooldown>maxPawnDelay318(w.schemaVersion))return false;
  const m=p.motion;if(m==null)return p.moveCooldown===0;
  return !!m&&typeof m==='object'&&!('stop297'in m)&&cell(m.from,w)&&cell(m.to,w)&&same(m.to,p)&&step(m.from,m.to)===1
   &&Number.isFinite(m.start)&&Number.isFinite(m.end)&&m.start>=0&&m.start<=effectiveLocal297(w)

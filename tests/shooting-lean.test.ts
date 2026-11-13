@@ -40,11 +40,11 @@ test('range admission remains measured from the logical pawn before leaning',()=
 
 test('real Blunt stun pauses paid warmup, preserving source and exact save/replay without extra work',()=>{
  const s=leanScene('revolver','lean',12);s.third.x=4;s.third.z=11;roundtrip(s.w);expect(shoot(s).ok).toBe(true);stepWorld(s.w);
- expect(applyCommand(s.w,{type:'melee',pawnIds:[s.third.id],targetId:s.p.id}).ok).toBe(true);stepWorld(s.w);expect(s.p.stun).toEqual({sinceCore:30011,untilCore:30056});expect(s.p.shooting?.stance).toMatchObject({phase:'aim',lean:{x:0,z:-1}});
+ expect(applyCommand(s.w,{type:'melee',pawnIds:[s.third.id],targetId:s.p.id}).ok).toBe(true);stepWorld(s.w);expect(s.p.stun).toEqual({sinceCore:30011,untilCore:30131});expect(s.p.shooting?.stance).toMatchObject({phase:'aim',lean:{x:0,z:-1}});
  expect(applyCommand(s.w,{type:'draft-stop',pawnIds:[s.third.id]}).ok).toBe(true);const copy=roundtrip(s.w),xp=s.p.skills.shooting.xp;
  for(let n=0;n<3;n++){const before=serializeWorld(s.w);advanceShooter(s.w,s.p,s.w.tick*10,shootingQueries(s.w));expect(serializeWorld(s.w)).toBe(before);}
- while(s.w.tick<3006){stepWorld(s.w);stepWorld(copy);expect(copy).toEqual(s.w);expect(s.p.skills.shooting.xp).toBe(xp);expect(s.w.projectiles).toBeUndefined();roundtrip(s.w);}
- stepWorld(s.w);stepWorld(copy);expect(copy).toEqual(s.w);const projectile=s.w.projectiles?.find(p=>p.flight.launcherKey===`pawn:${s.p.id}`);expect(projectile?.emittedAtCore).toBe(30062);expect(projectile?.flight.origin).toEqual({x:4.5,z:10});
+ while(s.w.tick<3013){stepWorld(s.w);stepWorld(copy);expect(copy).toEqual(s.w);expect(s.p.skills.shooting.xp).toBe(xp);expect(s.w.projectiles).toBeUndefined();roundtrip(s.w);}
+ stepWorld(s.w);stepWorld(copy);expect(copy).toEqual(s.w);const projectile=s.w.projectiles?.find(p=>p.flight.launcherKey===`pawn:${s.p.id}`);expect(projectile?.emittedAtCore).toBe(30137);expect(projectile?.flight.origin).toEqual({x:4.5,z:10});
 });
 
 test('cooldown, movement cancellation and an already launched flight remain independently physical',()=>{
