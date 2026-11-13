@@ -76,7 +76,7 @@ export const visitablePatient = (world:World,p:Pawn,requireLowJoy=true):boolean 
   const need=p.need;
   return need?.kind==='sleep'&&!!need.medical&&need.phase==='sleep'&&need.bedId!==null
     &&p.x===need.target.x&&p.z===need.target.z&&world.structures.some(s=>s.id===need.bedId&&isBedKind(s.kind)&&s.medical===true&&s.x===p.x&&s.z===p.z)
-    &&p.state==='resting'&&(!requireLowJoy||p.recreation.level<=35)&&p.hunger>0&&p.rest>=33&&canSocialize(world,p,false);
+    &&p.state==='resting'&&(!requireLowJoy||(world.schemaVersion>=319?p.recreation.level<30:p.recreation.level<=35))&&p.hunger>0&&p.rest>=33&&canSocialize(world,p,false);
 };
 export const visitPatient = (world:World,id:number,requireLowJoy=true):Pawn|undefined => world.pawns.find(p=>p.id===id&&visitablePatient(world,p,requireLowJoy));
 export const nearVisitPatient = (patient:Pawn,cell:Cell):boolean => (patient.x-cell.x)**2+(patient.z-cell.z)**2<=5&&!(patient.x===cell.x&&patient.z===cell.z);

@@ -20,6 +20,7 @@ Consigne de l'utilisateur : avancer toute la nuit sans attendre de relance sur l
 | Arc court | 316 | Première arme à distance sans poudre : fabrication, flèches qui coupent, vente par les visiteurs | [V316](../gameplay/short-bow-v316.md) |
 | Corrections de fidélité : soins | 317 | Soin en lit d'hôpital, durée du soin de la grippe, expérience pour un animal | [V317](../gameplay/health-fidelity-v317.md) |
 | Corrections de fidélité : combat | 318 | Animaux de la colonie à terre, taille des animaux visés, recul par balle, étourdissement contondant | [V318](../gameplay/combat-fidelity-v318.md) |
+| Corrections de fidélité : vie sociale | 319 | Souvenir « M'a recruté », bagarres (pacifiques, malnutrition), fer à cheval, visites aux malades | [V319](../gameplay/social-fidelity-v319.md) |
 
 ## 2. Fidélité : écarts trouvés et corrigés
 

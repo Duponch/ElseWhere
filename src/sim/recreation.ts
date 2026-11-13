@@ -62,12 +62,17 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
       if(task.elapsed>0&&task.elapsed%32===0)visitSocialExchange(world,pawn,patient);
     }
     if(task.activity==='social-relax'&&task.elapsed===0||task.activity==='visit-sick'&&task.elapsed===0)rememberRoomUse(world,pawn,'recreation');
+    if(task.activity==='horseshoes'&&world.schemaVersion>=319){
+      pawn.skills.shooting??={level:0,xp:0,dailyXp:0,passion:0};
+      learnSkill(pawn.skills.shooting,30,pawn); // Core Play_Horseshoes joyXpPerTick 0.003.
+    }
     if(task.activity==='chess') {
       pawn.skills.intellectual??={level:0,xp:0,dailyXp:0,passion:0};
       learnSkill(pawn.skills.intellectual,20,pawn); // Core 0.002 XP per tick, ten Core ticks per local tick.
     }
     task.elapsed++;
-    if(joy.level>99.99||task.elapsed>=(task.activity==='visit-sick'?VISIT_SICK_DURATION:RECREATION_DURATION)) {
+    const full=task.activity==='visit-sick'&&world.schemaVersion>=319?joy.level>99.99&&(visitPatient(world,task.patientId!,false)?.recreation.level??100)>99.99:joy.level>99.99;
+    if(full||task.elapsed>=(task.activity==='visit-sick'?VISIT_SICK_DURATION:RECREATION_DURATION)) {
       context.event(`${pawn.name} termine son loisir : ${labels[task.activity]}.`);
       context.release();
     }

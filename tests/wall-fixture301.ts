@@ -10,7 +10,7 @@ import type {Job,Pawn,World} from '../src/sim/types.ts';
  * loaded, no frame/toil history is installed, and every subsequent Core is
  * advanced by the real candidate Engine. */
 export function fixture(wide=false){
- const w=createWorld(42,32,32);expect(Number(w.schemaVersion)).toBe(318);
+ const w=createWorld(42,32,32);expect(Number(w.schemaVersion)).toBe(319);
  for(const p of w.pawns){
   p.hunger=100;p.rest=100;p.recreation.level=100;p.schedule.fill('work');
   for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;

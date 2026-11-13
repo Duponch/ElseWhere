@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V319 — schéma 319 :** [Corrections de fidélité : vie sociale et loisirs](social-fidelity-v319.md). Un audit des prisonniers, de la vie sociale et des loisirs a confirmé huit écarts ; six sont corrigés : souvenir « M'a recruté », personne pacifique et malnutrition dans les bagarres, Tir entraîné au fer à cheval, seuil et fin des visites aux malades.
+
 **V318 — schéma 318 :** [Corrections de fidélité : combat](combat-fidelity-v318.md). Un audit du combat a confirmé neuf écarts ; quatre sont corrigés : survie à terre des animaux de la colonie, vraie taille des animaux visés, recul par balle selon la taille et le pouvoir d'arrêt, étourdissement contondant de 2 secondes.
 
 **V317 — schéma 317 :** [Corrections de fidélité : soins](health-fidelity-v317.md). Un audit de la santé et de la médecine a confirmé quatre écarts ; trois sont corrigés : plafond du soin en lit d'hôpital avant l'écart aléatoire, soin de grippe de 12 + 3 heures, 175 points d'expérience pour soigner un animal.

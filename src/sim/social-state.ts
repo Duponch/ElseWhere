@@ -7,7 +7,7 @@ import { RELATIONSHIP_OPINION,type RelationshipViewKind } from './relationship-s
 import { expireRomanceMemories,romanceOpinionCauses,type RomanceOpinionKind } from './romance-memories.ts';
 import {coupleOpinionOffset285,COUPLE_MEMORY_DURATION_285} from './couple-memories-285.ts';
 
-export type SocialKind='chitchat'|'deep-talk'|'rapport'|'kind-words'|'slight'|'insult'|'fight-cathartic'|'fight-angering';
+export type SocialKind='chitchat'|'deep-talk'|'rapport'|'kind-words'|'slight'|'insult'|'fight-cathartic'|'fight-angering'|'recruited-me';
 export type SocialInteractionKind=SocialKind|'romance-attempt'|'breakup';
 export interface SocialMemory { otherId:number;kind:SocialKind;at:number;offset:number;suspendedTicks?:number }
 export interface SocialState {
@@ -17,8 +17,12 @@ export interface SocialState {
   fight?:{opponentId:number;startedAt:number};
   memories:SocialMemory[];
 }
-export const SOCIAL_LABELS:Readonly<Record<SocialInteractionKind,string>>=Object.freeze({'chitchat':'Bavardage','deep-talk':'Discussion approfondie',rapport:'Rapprochement','kind-words':'Mots gentils',slight:'Vexation',insult:'Insulte','fight-cathartic':'Bagarre cathartique','fight-angering':'Bagarre rageante','romance-attempt':'Tentative amoureuse',breakup:'Rupture'});
+export const SOCIAL_LABELS:Readonly<Record<SocialInteractionKind,string>>=Object.freeze({'chitchat':'Bavardage','deep-talk':'Discussion approfondie',rapport:'Rapprochement','kind-words':'Mots gentils',slight:'Vexation',insult:'Insulte','fight-cathartic':'Bagarre cathartique','fight-angering':'Bagarre rageante','recruited-me':'M’a recruté','romance-attempt':'Tentative amoureuse',breakup:'Rupture'});
 export const DEEP_TALK_DURATION=20*TICKS_PER_DAY;
+/** Core ThoughtDef RecruitedMe (schema 319): 120 days. */
+export const RECRUITED_ME_DURATION=120*TICKS_PER_DAY;
+export const RECRUITED_ME_OPINION=20;
+export const socialMemoryDuration=(kind:SocialKind):number=>kind==='recruited-me'?RECRUITED_ME_DURATION:DEEP_TALK_DURATION;
 export const INSULT_MOOD_DURATION=2*TICKS_PER_DAY;
 
 /** Independent stream: social rolls never perturb mining, medicine or raids. */
@@ -46,7 +50,8 @@ export function deepTalkWeight(compatibility:number):number {
 export function memoryOffset(memory:SocialMemory,tick:number):number {
   const age=Math.max(0,memoryAge271(memory,memory.at,tick));
   if(memory.kind==='chitchat')return Math.min(10,Math.max(0,memory.offset-Math.floor(age/TICKS_PER_DAY)));
-  return memory.offset*Math.max(0,Math.min(1,(DEEP_TALK_DURATION-age)/(DEEP_TALK_DURATION*.3)));
+  const duration=socialMemoryDuration(memory.kind);
+  return memory.offset*Math.max(0,Math.min(1,(duration-age)/(duration*.3)));
 }
 function roundPositiveOpinion(n:number):number {const lo=Math.floor(n);return n<=0?0:Math.max(1,n-lo===.5?lo+lo%2:Math.round(n));}
 function roundOpinion(n:number):number {return n<0?-roundPositiveOpinion(-n):roundPositiveOpinion(n);}
@@ -56,10 +61,10 @@ const relationLabels:Readonly<Record<RelationshipViewKind,string>>={parent:'Pare
 export function opinionCauses(pawn:Pawn,otherId:number,tick:number,world?:World):OpinionCause[] {
   tick=memoryReadTick271(pawn,tick);
   const memories=pawn.social?.memories.filter(m=>m.otherId===otherId&&memoryOffset(m,tick)!==0)??[];
-  const causes:OpinionCause[]=(['chitchat','deep-talk','rapport','kind-words','slight','insult','fight-cathartic','fight-angering'] as const).flatMap(kind=>{
+  const causes:OpinionCause[]=(['chitchat','deep-talk','rapport','kind-words','slight','insult','fight-cathartic','fight-angering','recruited-me'] as const).flatMap(kind=>{
     const group=memories.filter(m=>m.kind===kind).sort((a,b)=>b.at-a.at);if(!group.length)return [];
     const value=roundOpinion(group.reduce((s,m,i)=>s+memoryOffset(m,tick)*((kind==='deep-talk'||kind==='kind-words'||kind==='slight'||kind==='insult'||kind==='fight-cathartic'||kind==='fight-angering') ? .9**i : 1),0));
-    const nextChange=kind==='chitchat'?memoryExpiry271(group[0]!,group[0]!.at+(Math.floor((memoryAge271(group[0]!,group[0]!.at,tick))/TICKS_PER_DAY)+1)*TICKS_PER_DAY):Math.min(...group.map(m=>memoryExpiry271(m,m.at+DEEP_TALK_DURATION)));
+    const nextChange=kind==='chitchat'?memoryExpiry271(group[0]!,group[0]!.at+(Math.floor((memoryAge271(group[0]!,group[0]!.at,tick))/TICKS_PER_DAY)+1)*TICKS_PER_DAY):Math.min(...group.map(m=>memoryExpiry271(m,m.at+socialMemoryDuration(kind))));
     return [{kind,count:group.length,value,nextChange,label:SOCIAL_LABELS[kind],description:'Souvenir dirigé d’un échange social réel.'}];
   });
   if(world&&world.schemaVersion>=195&&world.relationships?.links.length)for(const kind of relationshipIndex(world).kinds(pawn.id,otherId)){
@@ -107,10 +112,10 @@ export function expireSocialMemories(pawn:Pawn,tick:number):void {
 export function addSocialMemory(state:SocialState,otherId:number,kind:SocialKind,tick:number,impact:number):void {
   const same=state.memories.filter(m=>m.kind===kind&&m.otherId===otherId);
   if(kind==='chitchat'&&same.length){same[0]!.offset+=.66*impact;return;}
-  if(kind!=='chitchat'&&same.length>=(kind==='rapport'?50:kind==='fight-cathartic'||kind==='fight-angering'?5:10))state.memories.splice(state.memories.indexOf(same.reduce((a,b)=>a.at<=b.at?a:b)),1);
+  if(kind!=='chitchat'&&same.length>=(kind==='recruited-me'?1:kind==='rapport'?50:kind==='fight-cathartic'||kind==='fight-angering'?5:10))state.memories.splice(state.memories.indexOf(same.reduce((a,b)=>a.at<=b.at?a:b)),1);
   const all=state.memories.filter(m=>m.kind===kind);
   if(all.length>=300)state.memories.splice(state.memories.indexOf(all.reduce((a,b)=>a.at<=b.at?a:b)),1);
-  state.memories.push({otherId,kind,at:tick,offset:(kind==='chitchat'?.66:kind==='rapport'?2:kind==='kind-words'?15:kind==='slight'?-5:kind==='insult'?-15:kind==='fight-cathartic'?38:kind==='fight-angering'?-22:15)*impact});
+  state.memories.push({otherId,kind,at:tick,offset:(kind==='chitchat'?.66:kind==='rapport'?2:kind==='kind-words'?15:kind==='slight'?-5:kind==='insult'?-15:kind==='fight-cathartic'?38:kind==='fight-angering'?-22:15)*(kind==='recruited-me'?0:impact)+(kind==='recruited-me'?RECRUITED_ME_OPINION:0)});
 }
 
 /** Called once when an actual social fight ends, including before its first

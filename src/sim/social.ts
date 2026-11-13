@@ -1,6 +1,8 @@
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
 import { isColonist,distanceSquared } from './affiliation.ts';
 import {alcoholModifiers265} from './alcohol-rules-265.ts';
+import {malnutritionStage} from './malnutrition.ts';
+import {violentWorkRefusal} from './colonist-backgrounds.ts';
 import { pawnBody } from './health-rules.ts';
 import { carrierOf } from './rescue-state.ts';
 import { clearShotSegment,type ShotGrid } from './combat-space.ts';
@@ -57,10 +59,12 @@ export function passiveSocialWeights(world:World,initiator:Pawn,recipient:Pawn,p
 }
 /** The opinion factor reads the recipient after its new directed memory. */
 export function socialFightChance(world:World,recipient:Pawn,initiator:Pawn,kind:'slight'|'insult'):number {
+  if(world.schemaVersion>=319&&violentWorkRefusal(recipient))return 0;
+  const malnutrition319=world.schemaVersion>=319?[1,1.5,2,2.5,3,1][malnutritionStage(recipient.health?.malnutrition)]!:1;
   const capacities=pawnBody(recipient).capacities;
   const usable=(value:number)=>Math.max(0,Math.min(1,(value-.3)/.7));
   return Math.min(1,(kind==='slight' ? .005 : .04)*usable(capacities.manipulation)*usable(capacities.moving)
-    *curve(opinionOf(recipient,initiator.id,world.tick,world),fightOpinionWeight)*(recipient.traits?.includes('bloodlust')?4:1)*(recipient.health?alcoholModifiers265(recipient.health).socialFightFactor:1));
+    *curve(opinionOf(recipient,initiator.id,world.tick,world),fightOpinionWeight)*(recipient.traits?.includes('bloodlust')?4:1)*(recipient.health?alcoholModifiers265(recipient.health).socialFightFactor:1)*malnutrition319);
 }
 /** Passive exchanges do not acquire reservations, cancel work or retime an edge. */
 export function exchangeSocial(world:World,a:Pawn,b:Pawn,kind:SocialInteractionKind,grid?:ShotGrid):boolean {

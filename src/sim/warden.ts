@@ -116,6 +116,8 @@ function finishConversation(world:World,actor:Pawn,p:Pawn,context:NeedContext):b
     const raidGroup=p.raid?.group;p.recruitment={capturedAt:prisoner.capturedAt,recruitedAt:world.tick,fromFaction:'outlaws',...(raidGroup===undefined?{}:{raidGroup})};
     commitJoinedPlayer259(world,p);delete p.prisoner;delete p.raid;p.faction='colony';p.bedId=null;delete p.bedSlot;p.needCooldown=0;p.planCooldown=0;
     if(initializesWorkLikeCore302(world.schemaVersion))enableAndInitializeWork(p);
+    // Core DoRecruit: the new colonist remembers who recruited them (319).
+    if(world.schemaVersion>=319){const state=p.social??={rng:socialSeed(world.seed,p.id),memories:[]};expireSocialMemories(p,world.tick);addSocialMemory(state,actor.id,'recruited-me',world.tick,1);}
     clearQueuedOrders(world,p);context.event(`${p.name} rejoint la colonie après les conversations avec ${actor.name}.`);
   }
   return true;
