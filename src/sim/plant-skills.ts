@@ -28,7 +28,7 @@ export function plantWorkSpeed(pawn:Pawn,body?:BodyAssessment):number {
 }
 
 /** PlantHarvestYield stat before growth, health, and stochastic rounding. */
-export function plantHarvestYield(pawn:Pawn,body?:BodyAssessment,version=SCHEMA_VERSION):number {
+export function plantHarvestYield(pawn:Pawn,body?:BodyAssessment,version:number=SCHEMA_VERSION):number {
   const capabilities=pawn.health?(body??pawnBody(pawn)).capacities:HEALTHY_BODY.capacities;
   const manipulation=1+.3*(capabilities.manipulation-1);
   const sight=1+.2*(Math.min(1,capabilities.sight)-1);

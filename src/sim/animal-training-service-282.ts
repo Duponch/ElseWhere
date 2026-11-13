@@ -81,7 +81,7 @@ const factor=(value:number,weight:number,defect:number)=>Math.max(0,Math.min(1,1
 const factor315=(value:number,weight:number,defect:number)=>1-weight*(1-(value<1&&defect!==0?Math.max(0,Math.min(1,value/(1-defect))):Math.max(0,Math.min(1,value))));
 /** New trainable chance only. The historical maintenance .75 stays literal.
  * The real bonded starter is evidence of Bond; a new master is not a bond. */
-export function animalTrainingChance282(p:Pawn,a:WildAnimal,version=SCHEMA_VERSION):number {
+export function animalTrainingChance282(p:Pawn,a:WildAnimal,version:number=SCHEMA_VERSION):number {
  if(!isAnimalSpecies256(a.species))return 0;
  const f=Math.fround,c=pawnBody(p).capacities,level=effectiveSkillLevel(p,'animals',p.skills.animals?.level??0);
  let stat=f(f(.10)+f(f(.05)*level));

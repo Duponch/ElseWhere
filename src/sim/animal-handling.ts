@@ -169,7 +169,7 @@ export function coreCapacityFactor315(value:number,weight:number,allowedDefect:n
 }
 /** TameAnimalChance stat; from schema 315 it carries no extra factor: the
  * animal's wildness is applied separately by tameWildnessFactor315. */
-export function tameChance(p:Pawn,version=SCHEMA_VERSION):number {
+export function tameChance(p:Pawn,version:number=SCHEMA_VERSION):number {
   const c=pawnBody(p).capacities,level=p.skills.animals?.level??0;
   if(version>=315)return Math.max(.01,(.04+.03*level)
     *coreCapacityFactor315(c.talking,.9,.2)*coreCapacityFactor315(c.hearing,.3,.05)*coreCapacityFactor315(c.manipulation,.5,.2));
@@ -178,7 +178,7 @@ export function tameChance(p:Pawn,version=SCHEMA_VERSION):number {
 }
 /** TrainAnimalChance stat; from schema 315 the wildness factor is applied
  * separately by trainWildnessFactor315 (the old literal .75 was the hare's). */
-export function trainChance(p:Pawn,version=SCHEMA_VERSION):number {
+export function trainChance(p:Pawn,version:number=SCHEMA_VERSION):number {
   const c=pawnBody(p).capacities,level=p.skills.animals?.level??0;
   if(version>=315)return Math.max(.01,(.10+.05*level)
     *coreCapacityFactor315(c.talking,.7,.2)*coreCapacityFactor315(c.hearing,.3,.05)*coreCapacityFactor315(c.manipulation,.5,.2));
