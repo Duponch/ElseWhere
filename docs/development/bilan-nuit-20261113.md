@@ -78,33 +78,26 @@ Trois tests longs ont dépassé leur délai pendant les séries voisines des lot
 
 ## 6. Publication
 
-Construction refaite depuis une copie exacte du dernier commit poussé, `f13c7a36` (lots 305 à 323), par `git archive` : typage et construction Pages réussis, 1 142 fichiers, dans `tmp/publication-20261113/source-f13c7a36/dist`. La construction précédente (`e5b994f5`, lot 313) est conservée mais périmée.
+**Publié le 13 novembre à 13 h, après votre accord.** Construction faite depuis une copie exacte du commit `f13c7a36` (lots 305 à 323), par `git archive` : typage et construction Pages réussis, 1 142 fichiers. Déploiement Cloudflare `8bc4cbdf` en production (branche `main`, 20 s, 8 fichiers nouveaux envoyés, 1 132 déjà présents). Vérification HTTPS : 18 fichiers comparés octet par octet sur l'adresse de production et sur celle du déploiement, 36 contrôles sur 36 identiques. Reçu : `tmp/publication-20261113/verify-f13c7a36.json`.
 
-**Le déploiement en production a été refusé par le mode automatique.** Il attend votre accord. La commande, depuis `tmp/publication-20261113/source-f13c7a36` :
-
-```
-npx wrangler pages deploy dist --branch main
-```
-
-Ensuite, depuis `E:/Code/RimWorld`, `node tmp/publication-20261113/verify-http.mjs` (avec `DEPLOY_URL` sur l'adresse de déploiement) compare 36 fichiers octet par octet entre le site et la construction. La production publique reste celle du 12 au soir (`f693a6c7`, commit `65a9be6b`).
+Ce lot remplace la production du 12 au soir (`f693a6c7`, commit `65a9be6b`). Aucune nouvelle mesure de performance n'est déduite de la publication.
 
 ## 7. Suite prévue
 
 Par ordre de priorité :
 
-1. **Publication.** Déployer la construction prête après votre accord (voir section 6).
-2. **Écarts d'audit restants.**
+1. **Écarts d'audit restants.**
    - **Combat :** report des dégâts sur les petites créatures, efficacité des membres blessés pour les coups à mains nues, langue qui saigne.
    - **Santé :** écart aléatoire du soin des personnes hors carte.
    - **Vie sociale :** prisonniers entre eux, malade visité dans n'importe quel lit, choix du malade selon l'opinion et la distance.
    - **Pillards :** une partie des pillards à terre meurt désormais (lot 320). Les catégories de pillards du jeu de base (résistance, recrutement possible ou non) restent à modéliser.
-3. **Armes et objets.**
+2. **Armes et objets.**
    - Arc recourbé et grand arc, qui demandent les recherches tribales correspondantes.
    - Pistolet automatique (recherche « culasse non verrouillée »).
    - Armes à rafales (fusil d'assaut, mitrailleuse), qui demandent le tir en rafale.
    - Pénoxycyline et politique générale des drogues.
-4. **Contenu à modéliser en 3D.** Animaux de ferme (vache, poule, mouton, chèvre, cochon), tables de billard et de poker.
-5. **Performances.** Refonte de la publication du Worker vers l'affichage (chantier 2) : publier seulement les colons et animaux modifiés, à mesurer d'abord dans le vrai client.
-6. **Tests de campagne.**
+3. **Contenu à modéliser en 3D.** Animaux de ferme (vache, poule, mouton, chèvre, cochon), tables de billard et de poker.
+4. **Performances.** Refonte de la publication du Worker vers l'affichage (chantier 2) : publier seulement les colons et animaux modifiés, à mesurer d'abord dans le vrai client.
+5. **Tests de campagne.**
    - « Atterrissage » : améliorer la défense du joueur scripté pour le raid du jour 22.
    - « Prison » : faire compter au grand livre les livraisons des capsules de ressources.
