@@ -28,6 +28,8 @@ interface Binding {
    * `reconciled` mode of each plant, aligned with `plants`, which is also its
    * growthLight when the pass ended. */
   modes?:Resource['growthLight'][];
+  /** The number of the pass that set `modes` (see writingPasses). */
+  modesPass?:number;
 }
 type RoofArrays=RoofIdentity;
 const bindings=new WeakMap<World,Binding>();
@@ -38,10 +40,11 @@ const roofArrays=roofIdentity,sameRoofArrays=sameRoofIdentity;
  * the artificial field; when those are unchanged a plant object already
  * reconciled (and whose growthLight was not altered since) needs no work. */
 const reconciled=new WeakMap<Resource,{key:object;mode:Resource['growthLight']}>();
-/* The world of the last pass that wrote `reconciled` entries. While it is the
- * world being reconciled, the entries of the plants of its binding are those
- * its last pass left: key regimeKey297, mode the binding's `modes`. */
-let lastWritingWorld:World|undefined;
+/* Passes that may write `reconciled` entries, of every world, numbered. While
+ * a binding's `modesPass` is the last one, no pass wrote entries since its
+ * own: the entries of its plants are those it left (key regimeKey297, mode
+ * its `modes`). A number, not a World reference, so no world is retained. */
+let writingPasses=0;
 const sameCoverage=(previous:readonly number[],current:readonly number[]|undefined):boolean=>
   previous.length===(current?.length??0)&&previous.every((cell,i)=>cell===current![i]);
 
@@ -76,10 +79,10 @@ export function reconcilePlantLighting(world:World,provided:LightEnvironment|Lig
   // The previous binding's plants, whose `reconciled` entries are known
   // without reading the WeakMap (key regimeKey, mode carriedModes[j]): its last
   // pass was complete and no other world's pass wrote entries since.
-  const carriedPlants=regimeKey&&lastWritingWorld===world&&previous!.modes?previous!.plants:undefined,carriedModes=previous?.modes;
+  const carriedPlants=regimeKey&&previous!.modes&&previous!.modesPass===writingPasses?previous!.plants:undefined,carriedModes=previous?.modes;
   // One entry pushed per plant, in order.
   const plants=binding.plants,modes:Resource['growthLight'][]=[];
-  binding.modes=undefined;lastWritingWorld=world;
+  binding.modes=undefined;const pass=++writingPasses;
   let hasCaptured=false,j=0;
   for(let i=0;i<plants.length;i++) {
     const plant=plants[i]!;
@@ -100,5 +103,5 @@ export function reconcilePlantLighting(world:World,provided:LightEnvironment|Lig
     checkpointPlantGrowth(world,plant);
     if(mode===undefined)delete plant.growthLight;else plant.growthLight=mode;
   }
-  Object.assign(binding,{artificial,hasCaptured,constructed,coverage:[...(constructed??[])],width:world.width,height:world.height,roofs,regimeKey297:key,modes:world.schemaVersion>=256?modes:undefined});
+  Object.assign(binding,{artificial,hasCaptured,constructed,coverage:[...(constructed??[])],width:world.width,height:world.height,roofs,regimeKey297:key,modes:world.schemaVersion>=256?modes:undefined,modesPass:pass});
 }
