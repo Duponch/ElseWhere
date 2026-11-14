@@ -33,8 +33,20 @@ function terrainBlockedEntry(tiles:readonly World['tiles'][number][]):{mask:Uint
     for(let i=0;i<n;i++){const tile=tiles[i]!;cached.refs[i]=tile;cached.mask[i]=naturalTerrainWalkable256(tile.terrain)?0:1;}
     return cached;}
   const refs=cached.refs,mask=cached.mask;
-  for(let i=0;i<n;i++){const tile=tiles[i]!;if(refs[i]!==tile){refs[i]=tile;const value=naturalTerrainWalkable256(tile.terrain)?0:1;if(mask[i]!==value){mask[i]=value;cached.revision++;}}}
+  // Identity comparison of every cell, eight at a time (a memory-bound loop:
+  // fewer branches); a block with a difference is redone cell by cell, in
+  // index order, exactly as the plain loop.
+  let i=0;
+  for(;i+7<n;i+=8){
+    if(refs[i]===tiles[i]&&refs[i+1]===tiles[i+1]&&refs[i+2]===tiles[i+2]&&refs[i+3]===tiles[i+3]&&refs[i+4]===tiles[i+4]&&refs[i+5]===tiles[i+5]&&refs[i+6]===tiles[i+6]&&refs[i+7]===tiles[i+7])continue;
+    for(let k=i;k<i+8;k++)refreshTerrainCell(cached,tiles,k);
+  }
+  for(;i<n;i++)refreshTerrainCell(cached,tiles,i);
   return cached;
+}
+function refreshTerrainCell(cached:{refs:(World['tiles'][number]|undefined)[];mask:Uint8Array;revision:number},tiles:readonly World['tiles'][number][],i:number):void {
+  const tile=tiles[i]!;if(cached.refs[i]===tile)return;
+  cached.refs[i]=tile;const value=naturalTerrainWalkable256(tile.terrain)?0:1;if(cached.mask[i]!==value){cached.mask[i]=value;cached.revision++;}
 }
 export function terrainBlockedMask(tiles:readonly World['tiles'][number][]):Uint8Array {return terrainBlockedEntry(tiles).mask;}
 /** The shared walkability mask with its content revision as of its last

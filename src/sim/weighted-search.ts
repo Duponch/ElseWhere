@@ -3,7 +3,9 @@ import { CARDINAL_COST, DIAGONAL_COST } from './movement.ts';
 import type { DistanceField } from './navigation-types.ts';
 import { EMPTY_NAVIGATION_COSTS,type NavigationCostLookup } from './navigation-costs.ts';
 
-const DIRECTIONS = [[0,-1],[1,0],[0,1],[-1,0],[1,-1],[1,1],[-1,1],[-1,-1]] as const;
+/* The eight steps in relaxation order [[0,-1],[1,0],[0,1],[-1,0],[1,-1],
+ * [1,1],[-1,1],[-1,-1]]: four cardinal steps, then the four diagonals. */
+const DX=Int8Array.of(0,1,0,-1,1,1,-1,-1),DZ=Int8Array.of(-1,0,1,0,-1,1,1,-1);
 
 /** The map-sized arrays of one search at a time, at the constructor's
  * sentinels between searches. A search given this scratch records every cell
@@ -90,20 +92,31 @@ export class WeightedSearch {
       if(known)reached.add(group);else if(viable)remaining++;
     }
     if(allGroups&&!remaining)goalCost=0;
-    while(this.pending!==undefined&&costs[this.pending]!<=goalCost) {
-      const index=this.pending;this.settled[index]=1;this.field.visited++;
+    // The loop below reads the same lookups in the same order as a plain
+    // relaxation of the eight DIRECTIONS; it only keeps per-node facts in
+    // locals (every lookup is a pure function of its index during a search).
+    const settled=this.settled,width=this.width,height=this.height,frontier=this.frontier,field=this.field;
+    const corners=this.corners,repeaters=this.repeaters,floors=this.floors,extraCosts=this.extraCosts,additiveCosts=this.additiveCosts;
+    const cardinal=this.cardinal,diagonal=this.diagonal;
+    let pending=this.pending;
+    while(pending!==undefined&&costs[pending]!<=goalCost) {
+      const index=pending;settled[index]=1;field.visited++;
       if(goals?.has(index))goalCost=costs[index]!;
-      if(isGoal?.(index)){goalCost=costs[index]!;this.field.goalIndex=Math.min(this.field.goalIndex??Infinity,index);}
+      if(isGoal?.(index)){goalCost=costs[index]!;field.goalIndex=Math.min(field.goalIndex??Infinity,index);}
       if(allGroups){for(const group of membership.get(index)??[])if(!reached.has(group)){reached.add(group);remaining--;}if(!remaining)goalCost=costs[index]!;}
-      const x=index%this.width,z=Math.floor(index/this.width);
-      for(const [dx,dz] of DIRECTIONS) {
-        const nx=x+dx,nz=z+dz,next=nz*this.width+nx;
-        if(nx<0||nz<0||nx>=this.width||nz>=this.height||blocked[next]||this.settled[next])continue;
-        if(dx&&dz&&(blocked[index+dx]||blocked[index+dz*this.width]||this.corners.has(index+dx)||this.corners.has(index+dz*this.width)))continue;
-        const cost=costs[index]!+(dx&&dz?this.diagonal:this.cardinal)+(this.repeaters.has(index)&&this.repeaters.has(next)?this.floors.get(next)??0:this.extraCosts?.get(next)??0)+(this.additiveCosts?.get(next)??0);
-        if(cost<costs[next]!) {if(scratch!==undefined&&costs[next]===Infinity)scratch.touch(next);costs[next]=cost;parents[next]=index;this.frontier.push(next);}
+      const x=index%width,z=Math.floor(index/width),base=costs[index]!;
+      // repeaters.has(index) is asked once, and only when a neighbour is
+      // relaxed, as the expression it replaces (it short-circuits on it).
+      let repeat=-1;
+      for(let k=0;k<8;k++) {
+        const dx=DX[k]!,dz=DZ[k]!,nx=x+dx,nz=z+dz,next=nz*width+nx;
+        if(nx<0||nz<0||nx>=width||nz>=height||blocked[next]||settled[next])continue;
+        if(k>=4&&(blocked[index+dx]||blocked[index+dz*width]||corners.has(index+dx)||corners.has(index+dz*width)))continue;
+        if(repeat<0)repeat=repeaters.has(index)?1:0;
+        const cost=base+(k>=4?diagonal:cardinal)+(repeat===1&&repeaters.has(next)?floors.get(next)??0:extraCosts?.get(next)??0)+(additiveCosts?.get(next)??0);
+        if(cost<costs[next]!) {if(scratch!==undefined&&costs[next]===Infinity)scratch.touch(next);costs[next]=cost;parents[next]=index;frontier.push(next);}
       }
-      this.pending=this.frontier.pop();
+      pending=this.pending=frontier.pop();
     }
     this.field.unreachedGroups=remaining;return this.field;
   }
