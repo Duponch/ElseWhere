@@ -1,5 +1,5 @@
 import { daylilyBeauty } from './flower-pot.ts';
-import { BeautyMap,BeautyMapCache,RoomBeautyCapture,floorBeauty,filthBeauty,groundObjectBeauty,markDefaultPerceptionCells,structureBeauty,type BeautyCell,type BeautyInput } from './room-beauty.ts';
+import { BeautyMap,BeautyMapCache,RoomBeautyCapture,floorBeauty,filthBeauty,groundObjectBeauty,markDefaultPerceptionCells,structureBeauty,type BeautyCell,type BeautyInput,type BeautyStructure } from './room-beauty.ts';
 import type { RoomTopology } from './room-topology.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 import { isShelfKind,shelfStorageCells } from './shelf-storage.ts';
@@ -41,16 +41,16 @@ function beautyMapAt(world:World,perceivers:readonly BeautyCell[]):BeautyMap {
     outside[i]=!tile.floor&&(tile.terrain==='grass'||tile.terrain==='soil'||tile.terrain==='rich-soil'||tile.terrain==='gravel')?0:value;
   }
   const index=(cell:BeautyCell)=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<width&&cell.z<height?cell.z*width+cell.x:-1;
-  for(const structure of world.structures){const i=index(structure.beautyCell??structure);if(i<0||!needed[i])continue;const value=structureBeauty(structure,version);thingsIn[i]+=value;thingsOut[i]+=value;}
+  for(const structure of world.structures as readonly BeautyStructure[]){const i=index(structure.beautyCell??structure);if(i<0||!needed[i])continue;const value=structureBeauty(structure,version);thingsIn[i]+=value;thingsOut[i]+=value;}
   for(const filth of world.filth?.items??[]){const i=index(filth);if(i<0||!needed[i])continue;thingsIn[i]+=filthBeauty(filth,false);thingsOut[i]+=filthBeauty(filth,true);}
   let protectedCells:Set<number>|undefined;
   for(const p of world.piles)if(p.owner.type==='ground'){
     const i=index(p.owner);if(i<0||!needed[i])continue;
     protectedCells??=new Set(world.structures.filter(s=>isShelfKind(s.kind)).flatMap(s=>shelfStorageCells(s).map(c=>c.z*world.width+c.x)));
-    const value=groundObjectBeauty({beauty:p.kind==='corpse'?-20:-4,visible:!protectedCells.has(p.owner.z*world.width+p.owner.x)});thingsIn[i]+=value;thingsOut[i]+=value;
+    const value=groundObjectBeauty({x:p.owner.x,z:p.owner.z,beauty:p.kind==='corpse'?-20:-4,visible:!protectedCells.has(p.owner.z*world.width+p.owner.x)});thingsIn[i]+=value;thingsOut[i]+=value;
   }
-  for(const p of world.packed)if(p.owner.type==='ground'){const i=index(p.owner);if(i<0||!needed[i])continue;const value=groundObjectBeauty({beauty:-4});thingsIn[i]+=value;thingsOut[i]+=value;}
-  for(const s of world.structures)if(s.kind==='flower-pot'){const i=index(s);if(i<0||!needed[i])continue;const value=groundObjectBeauty({beauty:daylilyBeauty(s.flower?.plant)});thingsIn[i]+=value;thingsOut[i]+=value;}
+  for(const p of world.packed)if(p.owner.type==='ground'){const i=index(p.owner);if(i<0||!needed[i])continue;const value=groundObjectBeauty({x:p.owner.x,z:p.owner.z,beauty:-4});thingsIn[i]+=value;thingsOut[i]+=value;}
+  for(const s of world.structures)if(s.kind==='flower-pot'){const i=index(s);if(i<0||!needed[i])continue;const value=groundObjectBeauty({x:s.x,z:s.z,beauty:daylilyBeauty(s.flower?.plant)});thingsIn[i]+=value;thingsOut[i]+=value;}
   return new BeautyMap(width,height,inside,outside,thingsIn,thingsOut);
 }
 
