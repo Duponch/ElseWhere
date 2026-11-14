@@ -2,22 +2,28 @@ import { TICKS_PER_DAY,type Cell,type MaterialPile,type Pawn } from './types.ts'
 
 export type VisitorPhase='arriving'|'staying'|'leaving';
 export type VisitorKind='traveler'|'visitor';
-export type VisitorAgendaKind=VisitorKind|'exotic';
+export type VisitorAgendaKind=VisitorKind|'exotic'|'caravan';
 export interface VisitorState {group:number;role:'traveler'|'visitor'|'trader';merchantKind?:'exotic';phase:VisitorPhase;goal:Cell|null;personalFoodIds:number[];medicalGuestAt?:number}
-export interface VisitorGroup {id:number;kind:VisitorKind;members:number[];entry:Cell;spot:Cell;phase:VisitorPhase;startedAt:number;arrivedAt:number|null;durationCore:number;hostile:boolean;reason?:'timeout'|'danger'|'hostile'|'blocked'}
+export interface VisitorGroup {id:number;kind:VisitorKind;members:number[];entry:Cell;spot:Cell;phase:VisitorPhase;startedAt:number;arrivedAt:number|null;durationCore:number;hostile:boolean;reason?:'timeout'|'danger'|'hostile'|'blocked';
+  /** Schema 332: a Core trader caravan (kind visitor), never added to an older group. */
+  caravan332?:import('./trader-caravans-332.ts').TraderCaravan332}
 /** Frozen departure evidence, not a simulated world population. */
 export interface VisitorDeparture {group:number;tick:number;pawn:Pawn;items:MaterialPile[];packed?:import('./furniture-rules.ts').PackedFurniture[]}
 export interface VisitorAgenda {rng:number;cycle:number;last:number;pending:number[]}
 interface VisitorOwner {adoptedAt:number;rng:number;serial:number;groups:VisitorGroup[];departed:VisitorDeparture[]}
-export interface HomeVisitorCalendar extends VisitorOwner {profile:'cassandra-visitors-v1';introAt:number|null;traveler:VisitorAgenda;visitor:VisitorAgenda;exotic?:VisitorAgenda}
+export interface HomeVisitorCalendar extends VisitorOwner {profile:'cassandra-visitors-v1';introAt:number|null;traveler:VisitorAgenda;visitor:VisitorAgenda;exotic?:VisitorAgenda;
+  /** Schema 332: Cassandra TraderCaravanArrival opportunities (5 a year from day 5, 6 days apart). */
+  caravan332?:VisitorAgenda}
 /** Created only by an actual TempMap arrival. The RNG is a receipt of that
  * admission, never a second incident stream. No home opportunity is installed. */
-export interface TempTravelerCalendar261 extends VisitorOwner {profile:'temp-travelers261-v1';introAt?:never;traveler?:never;visitor?:never;exotic?:never}
+export interface TempTravelerCalendar261 extends VisitorOwner {profile:'temp-travelers261-v1';introAt?:never;traveler?:never;visitor?:never;exotic?:never;caravan332?:never}
 export type VisitorCalendar=HomeVisitorCalendar|TempTravelerCalendar261;
 export const VISITOR_YEAR=60*TICKS_PER_DAY;
 export const VISITOR_INTERVAL=100;
 export const INTRO_VISITOR_TICK=2.5*TICKS_PER_DAY;
-export const VISITOR_FLOWS=Object.freeze({traveler:{minimum:TICKS_PER_DAY,count:6,spacing:TICKS_PER_DAY},visitor:{minimum:3*TICKS_PER_DAY,count:4,spacing:5*TICKS_PER_DAY},exotic:{minimum:6*TICKS_PER_DAY,count:2,spacing:15*TICKS_PER_DAY}});
+export const VISITOR_FLOWS=Object.freeze({traveler:{minimum:TICKS_PER_DAY,count:6,spacing:TICKS_PER_DAY},visitor:{minimum:3*TICKS_PER_DAY,count:4,spacing:5*TICKS_PER_DAY},exotic:{minimum:6*TICKS_PER_DAY,count:2,spacing:15*TICKS_PER_DAY},
+  // Core StorytellerCompProperties_FactionInteraction TraderCaravanArrival (Cassandra).
+  caravan:{minimum:5*TICKS_PER_DAY,count:5,spacing:6*TICKS_PER_DAY}});
 export function visitorRandom(s:{rng:number}):number {let x=s.rng;x^=x<<13;x^=x>>>17;x^=x<<5;s.rng=x>>>0;return s.rng/4294967296;}
 
 /** Same yearly opportunity counts, 1,000-Core-tick buckets and forward spacing
@@ -33,7 +39,7 @@ export function prepareVisitorCycle(a:VisitorAgenda,kind:VisitorAgendaKind):void
   throw new Error('Cannot schedule neutral visitor opportunities.');
 }
 export function newVisitorAgenda(seed:number,kind:VisitorAgendaKind,tick:number,prospective=false):VisitorAgenda {
-  const a:VisitorAgenda={rng:((seed^(kind==='traveler'?0x88a1641:kind==='exotic'?0x123e70c:0x88b4371))>>>0)||1,cycle:0,last:-VISITOR_YEAR,pending:[]};
+  const a:VisitorAgenda={rng:((seed^(kind==='traveler'?0x88a1641:kind==='exotic'?0x123e70c:kind==='caravan'?0xca7a332:0x88b4371))>>>0)||1,cycle:0,last:-VISITOR_YEAR,pending:[]};
   if(prospective){
     // Jump directly to the first unstarted annual window. No historical RNG
     // catch-up loop, arrival, old last-date or population is reconstructed.

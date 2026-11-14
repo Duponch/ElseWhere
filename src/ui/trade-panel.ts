@@ -5,7 +5,7 @@ import {apparelLabel,apparelDefinition} from '../sim/apparel-rules';
 import { negotiatorRefusal,tradingAtContact } from '../sim/trade-contact';
 import { tradeGoods,quoteTrade,tradeImprovement } from '../sim/trade-goods';
 import { isSculptureMaterial,sculptureMaxHitPoints } from '../sim/furniture-stats';
-import { visitorMayTrade } from '../sim/visitors';
+import { visitorMayTrade,visitorMerchantLabel } from '../sim/visitors';
 import type { Command,World } from '../sim/types';
 import type { TradeLine } from '../sim/trade-state';
 import './trade-panel.css';
@@ -45,7 +45,7 @@ export function createTradeUI(send:(c:Command)=>Promise<unknown>,pause:()=>Promi
   function render(){
     if(!current||!dialog.open)return;
     const w=current,merchants=w.pawns.filter(p=>visitorMayTrade(w,p));
-    options(trader,merchants.map(p=>({id:p.id,label:p.name})));
+    options(trader,merchants.map(p=>({id:p.id,label:visitorMerchantLabel(w,p)})));
     options(colonist,w.pawns.filter(p=>isColonist(p)&&p.state!=='dead').map(p=>({id:p.id,label:`${p.name} · Social ${p.skills.social?.level??0}`})));
     const p=w.pawns.find(p=>p.id===Number(colonist.value)),t=w.pawns.find(p=>p.id===Number(trader.value));
     trader.hidden=colonist.hidden=!w.visitors;contact.textContent=w.visitors?'Rejoindre le marchand':'Autoriser les prochaines visites';

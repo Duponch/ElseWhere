@@ -7,7 +7,7 @@ import {APPAREL} from './apparel-definitions.ts';
 import {isSchema279OrLater} from './schema-compatibility-257.ts';
 import { SCHEMA_VERSION,type MaterialPile } from './types.ts';
 
-interface StockCandidate {readonly value:number;readonly item?:ItemId}
+export interface StockCandidate {readonly value:number;readonly item?:ItemId}
 /** All 25 Core-only WeaponRanged candidates participate. Unsupported selections
  * stay absent; their weights are never reassigned to the two delivered guns. */
 export const VISITOR_RANGED_POOL:readonly StockCandidate[]=Object.freeze([
@@ -63,16 +63,16 @@ export function visitorSelectionWeight(value:number):number {
   if(value<=5000)return .2-(value-1500)/35000;
   return .1;
 }
-function random(state:{rng:number}):number {
+export function random(state:{rng:number}):number {
   let n=state.rng;n^=n<<13;n^=n>>>17;n^=n<<5;state.rng=n>>>0;return state.rng/4294967296;
 }
-function integer(state:{rng:number},min:number,max:number):number{return min+Math.floor(random(state)*(max-min+1));}
-function select(state:{rng:number},pool:readonly StockCandidate[]):StockCandidate {
+export function integer(state:{rng:number},min:number,max:number):number{return min+Math.floor(random(state)*(max-min+1));}
+export function select(state:{rng:number},pool:readonly StockCandidate[]):StockCandidate {
   let ticket=random(state)*pool.reduce((sum,p)=>sum+visitorSelectionWeight(p.value),0);
   for(const candidate of pool){ticket-=visitorSelectionWeight(candidate.value);if(ticket<0)return candidate;}
   return pool[pool.length-1]!;
 }
-function traderQuality(state:{rng:number}):WeaponQuality {
+export function traderQuality(state:{rng:number}):WeaponQuality {
   const gaussian=Math.sqrt(-2*Math.log(Math.max(1/4294967296,random(state))))*Math.sin(2*Math.PI*random(state));
   return WEAPON_QUALITIES[Math.max(2,Math.min(5,Math.floor(2.5+gaussian)))]!;
 }

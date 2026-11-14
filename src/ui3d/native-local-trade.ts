@@ -3,7 +3,7 @@ import type { Cell, Command, MaterialPile, Pawn, World } from '../sim/types';
 import type { TradeLine } from '../sim/trade-state';
 import { isColonist } from '../sim/affiliation';
 import { registeredMapId } from '../sim/world-map-context';
-import { visitorMayTrade } from '../sim/visitors';
+import { visitorMayTrade, visitorMerchantLabel } from '../sim/visitors';
 import { negotiatorRefusal, tradingAtContact } from '../sim/trade-contact';
 import { tradeGoods, quoteTrade } from '../sim/trade-goods';
 import { orbitalAtContact, orbitalTradeGoods, orbitalTradeReason, quoteOrbitalTrade } from '../sim/orbital-rules';
@@ -60,7 +60,7 @@ export function createNativeLocalTrade(options: NativeLocalTradeOptions) {
   function selectedPawn(world: World): Pawn | undefined { return world.pawns.find(pawn => pawn.id === pawnId); }
   function peers(world: World) {
     return mode === 'visitors'
-      ? world.pawns.filter(pawn => visitorMayTrade(world, pawn)).map(pawn => ({ id: pawn.id, label: pawn.name }))
+      ? world.pawns.filter(pawn => visitorMayTrade(world, pawn)).map(pawn => ({ id: pawn.id, label: visitorMerchantLabel(world, pawn) }))
       : (world.orbital?.ships ?? []).filter(ship => ship.announced && ship.departAt > world.tick).map(ship => ({ id: ship.id, label: `${ship.name} · ${ship.kind === 'bulk' ? 'Gros' : 'Exotique'} · départ dans ${ship.departAt - world.tick} pas` }));
   }
   function syncChoices(world: World): void {

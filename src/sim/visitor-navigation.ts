@@ -11,7 +11,9 @@ export const visitorAtEdge=(w:World,c:Cell):boolean=>c.x===0||c.z===0||c.x===w.w
 const EMPTY:ReadonlySet<number>=new Set();
 /** All captures are owned by this incident decision. No imaginary breach graph.
  * Exterior meeting-site selection is a documented local geometric adaptation. */
-export function visitorArrival(w:World,salt:number,count:number,kind:VisitorKind):{entry:Cell;sites:Cell[];spot:Cell;parking:Cell[]}|null {
+export function visitorArrival(w:World,salt:number,count:number,kind:VisitorKind,wide=false):{entry:Cell;sites:Cell[];spot:Cell;parking:Cell[]}|null {
+  // Schema 332 caravans (up to 24 people) spread over a wider entry and halt.
+  const reach=wide?7:5,halt=wide?36:16;
   const colonists=w.pawns.filter(p=>isColonist(p)&&p.state!=='dead');if(!colonists.length)return null;
   const blocked=blockedCells(w),stand=captureStandability(w),occupied=new Set(w.pawns.flatMap(p=>[p.z*w.width+p.x,...p.motion&&p.motion.end>w.tick?[p.motion.from.z*w.width+p.motion.from.x]:[]]));
   const centers=w.structures.filter(s=>isBedKind(s.kind)&&!s.prisoner);
@@ -34,8 +36,8 @@ export function visitorArrival(w:World,salt:number,count:number,kind:VisitorKind
     const access=candidateAccess(w,spot,blocked,EMPTY),usable=edges.filter(c=>access.has(c.z*w.width+c.x));if(!usable.length)continue;
     const entry=usable[(salt>>>0)%usable.length]!;
     const near:Cell[]=[];
-    for(let z=Math.max(0,entry.z-5);z<=Math.min(w.height-1,entry.z+5);z++)for(let x=Math.max(0,entry.x-5);x<=Math.min(w.width-1,entry.x+5);x++){
-      const c={x,z},i=z*w.width+x;if(distanceSquared(entry,c)<=25&&!blocked[i]&&!occupied.has(i)&&stand(c)&&access.has(i))near.push(c);
+    for(let z=Math.max(0,entry.z-reach);z<=Math.min(w.height-1,entry.z+reach);z++)for(let x=Math.max(0,entry.x-reach);x<=Math.min(w.width-1,entry.x+reach);x++){
+      const c={x,z},i=z*w.width+x;if(distanceSquared(entry,c)<=reach*reach&&!blocked[i]&&!occupied.has(i)&&stand(c)&&access.has(i))near.push(c);
     }
     near.sort((a,b)=>distanceSquared(a,entry)-distanceSquared(b,entry)||a.z-b.z||a.x-b.x);
     if(near.length<count)continue;
@@ -45,7 +47,7 @@ export function visitorArrival(w:World,salt:number,count:number,kind:VisitorKind
       const destination={...far[(salt>>>8)%Math.min(8,far.length)]!};
       return {entry:{...entry},sites:near.slice(0,count),spot:destination,parking:Array.from({length:count},()=>({...destination}))};
     }
-    const parking=candidates.filter(c=>distanceSquared(c,spot)<=16&&access.has(c.z*w.width+c.x)).slice(0,count);
+    const parking=candidates.filter(c=>distanceSquared(c,spot)<=halt&&access.has(c.z*w.width+c.x)).slice(0,count);
     if(parking.length<count)continue;
     return {entry:{...entry},sites:near.slice(0,count),spot:{...spot},parking};
   }

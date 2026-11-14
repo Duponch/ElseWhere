@@ -7,6 +7,7 @@ import { sculptureTradeUnitPrice,tradeRefusal,tradeUnitPrice } from './trade-pri
 import { isSculptureKind } from './furniture-stats.ts';
 import { structureRoomMarketValue } from './room-market-value.ts';
 import { tradingAtContact } from './trade-contact.ts';
+import { caravanDealsIn332 } from './trader-caravans-332.ts';
 import type { MaterialPile,Pawn,World } from './types.ts';
 import type { PackedFurniture } from './furniture-rules.ts';
 import type { TradeLine } from './trade-state.ts';
@@ -18,6 +19,8 @@ export function tradeGoods(w:World,p:Pawn,t:Pawn):{goods:TradeGood[];artGoods:Pa
   const improvement=tradeImprovement(p),goods:TradeGood[]=[],artGoods:PackedTradeGood[]=[],silver:MaterialPile[]=[],merchantSilver:MaterialPile[]=[];
   const home=new Set(w.home??[]),zones=new Set(storageCells(w).map(z=>z.z*w.width+z.x));
   let reach:ReturnType<typeof reachableCells>|undefined;
+  // Schema 332: a caravan trader deals in its own Core kind's goods.
+  const caravan=t.visitor?.role==='trader'?w.visitors?.groups.find(g=>g.id===t.visitor!.group)?.caravan332:undefined,deals=caravan?caravanDealsIn332(caravan.traderKind):undefined;
   for(const pile of w.piles) {
     const held=pile.owner.type==='inventory'&&pile.owner.pawnId===t.id&&!t.visitor?.personalFoodIds.includes(pile.id);
     const o=pile.owner,colonial=o.type==='ground'&&(home.has(o.z*w.width+o.x)||zones.has(o.z*w.width+o.x));
@@ -29,7 +32,7 @@ export function tradeGoods(w:World,p:Pawn,t:Pawn):{goods:TradeGood[];artGoods:Pa
       if(routeToJob(w,o,reach,true)===null)continue;
     }
     if(pile.item==='silver'){(held?merchantSilver:silver).push({...pile,quantity:available});continue;}
-    const side=held?'buy':'sell',refusal=tradeRefusal(pile,side,w.tick,t.visitor?.merchantKind,'visitor',w.schemaVersion),unitPrice=tradeUnitPrice(pile,side,improvement);
+    const side=held?'buy':'sell',refusal=tradeRefusal(pile,side,w.tick,t.visitor?.merchantKind,'visitor',w.schemaVersion,deals),unitPrice=tradeUnitPrice(pile,side,improvement);
     goods.push({pile,side,available,unitPrice:unitPrice??0,...refusal?{refusal}:unitPrice===undefined?{refusal:'Objet non négociable.'}:{}});
   }
   for(const packed of w.packed) {

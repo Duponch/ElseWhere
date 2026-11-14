@@ -312,6 +312,7 @@ import { adoptFluIncidents } from './flu-incidents.ts';
 import { validFluIncidents } from './flu-incidents-save.ts';
 import { validEmpStructureTransport,validEmpProductionTransport } from './emp-save.ts';
 import { adoptExoticMerchantSchedule } from './visitors.ts';
+import { adoptTraderCaravanSchedule332 } from './trader-caravan-migration-332.ts';
 import { isFurnitureQuality } from './furniture-stats.ts';
 import {validCoupleHistoricalTransport285} from './couple-owner-save-285.ts';
 import {validLinkedStorageHistorical286,validLinkedStorageWorld286} from './linked-storage-save-286.ts';
@@ -1932,7 +1933,7 @@ function deserializeCampaignObserved(serialized: string): CampaignState {
   if(record(input)&&input.schemaVersion===328){const old=(migrationStep(chain,328)?validateCampaignSchema(input,328):[]);if(old.length)throw new Error('Invalid version328 save: '+old.join(' '));input.schemaVersion=329; /* Core misc lottery with population intent, eclipse in the World component, quest acceptance at the hit, colony animals in threat points */}
   if(record(input)&&input.schemaVersion===329){const old=(migrationStep(chain,329)?validateCampaignSchema(input,329):[]);if(old.length)throw new Error('Invalid version329 save: '+old.join(' '));input.schemaVersion=330; /* pirates may stage before their assault (Core StageThenAttack) */}
   if(record(input)&&input.schemaVersion===330){const old=(migrationStep(chain,330)?validateCampaignSchema(input,330):[]);if(old.length)throw new Error('Invalid version330 save: '+old.join(' '));input.schemaVersion=331; /* raids by every hostile faction */}
-  if(record(input)&&input.schemaVersion===331){const old=(migrationStep(chain,331)?validateCampaignSchema(input,331):[]);if(old.length)throw new Error('Invalid version331 save: '+old.join(' '));input.schemaVersion=332; /* Core trader caravans, prospective agenda */}
+  if(record(input)&&input.schemaVersion===331){const old=(migrationStep(chain,331)?validateCampaignSchema(input,331):[]);if(old.length)throw new Error('Invalid version331 save: '+old.join(' '));input.schemaVersion=332;adoptTraderCaravanSchedule332(input as unknown as World); /* Core trader caravans, prospective agenda */}
   reportLoadProgress({stage:'validate',completed:0,total:2});
   const errors = validateWorld(input); if (errors.length) throw new Error(`Invalid save: ${errors.join(' ')}`);
   const world = input as World;

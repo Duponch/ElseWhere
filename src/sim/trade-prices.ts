@@ -81,7 +81,9 @@ export function sculptureTradeUnitPrice(value:number,direction:TradeDirection,im
 /** Core visitor and caravan traders buy any item worth at least 15 silver a
  * unit (StockGenerator_BuyExpensiveSimple) and drugs (schema 327). */
 export const VISITOR_EXPENSIVE_BUYS_327:ReadonlySet<string>=new Set(['gold','advanced-component','ai-core','novel','prosthetic-arm','prosthetic-leg','beer']);
-export function tradeRefusal(pile:MaterialPile,direction:TradeDirection,tick:number,merchantKind?:'exotic',channel:TradeChannel279='visitor',version:number=0):string|undefined {
+/** `caravanDeals` (schema 332): the items a Core trader caravan's stock
+ * generators handle; it sells them and buys them back. */
+export function tradeRefusal(pile:MaterialPile,direction:TradeDirection,tick:number,merchantKind?:'exotic',channel:TradeChannel279='visitor',version:number=0,caravanDeals?:ReadonlySet<string>):string|undefined {
   const entry=tradeCatalogueEntry(pile.item);
   if(!entry)return 'Cet objet n’a pas de profil commercial disponible.';
   if(pile.quantity<=0||ticksUntilRot(pile,tick)<=0)return 'Cet objet n’est plus disponible.';
@@ -90,7 +92,7 @@ export function tradeRefusal(pile:MaterialPile,direction:TradeDirection,tick:num
   if(direction==='sell'&&tainted327(pile,version))return 'Personne n’achète un vêtement porté par un mort.';
   if(direction==='buy'&&!entry.playerCanBuy)return 'Cet objet n’est pas vendu par les marchands.';
   if(isNewApparelTrade279(pile.item)&&(merchantKind==='exotic'||channel!=='visitor'))return 'Ces vêtements se négocient avec un visiteur ordinaire présent sur la carte.';
-  if(!entry.visitorHandles&&!(merchantKind==='exotic'&&['gold','plasteel','uranium','advanced-component','neutroamine','recon-armor'].includes(pile.item))&&!(version>=327&&direction==='sell'&&VISITOR_EXPENSIVE_BUYS_327.has(pile.item)))return 'Ce visiteur ne commerce pas cette catégorie d’objets.';
+  if(!entry.visitorHandles&&!caravanDeals?.has(pile.item)&&!(merchantKind==='exotic'&&['gold','plasteel','uranium','advanced-component','neutroamine','recon-armor'].includes(pile.item))&&!(version>=327&&direction==='sell'&&VISITOR_EXPENSIVE_BUYS_327.has(pile.item)))return 'Ce visiteur ne commerce pas cette catégorie d’objets.';
   if(pileMarketValue(pile)===undefined)return 'L’état de cet objet ne permet pas de calculer son prix.';
   return undefined;
 }

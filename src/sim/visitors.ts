@@ -2,7 +2,11 @@ import {assignPileOwner} from './pile-index.ts';
 import {shipCasketHumanReferences277} from './ship-casket-notifications-277.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259,bornFactionForDef259} from './world-affiliation-259.ts';
-import {tempMapModern261,tempMapAdoptedAtCore261,tempMapTarget261} from './temp-map-incidents-261.ts';
+import {tempMapModern261,tempMapAdoptedAtCore261,tempMapTarget261,homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
+import {populationIntent320} from './population-intent-320.ts';
+import {allyIncidentFraction332,caravanApparel332,caravanGuardPoints332,caravanLabel332,caravanSeed332,caravanStayCore332,chooseCaravanGuards332,drawCaravanSource332,drawCaravanTraderKind332,generateCaravanStock332,
+  CARAVAN_GUARDS_332,CARAVAN_MAX_MEMBERS_332,CARAVAN_TRADER_KINDS_332,CARAVAN_TRADERS_332} from './trader-caravans-332.ts';
+import {newWeaponState} from './equipment-rules.ts';
 import { releaseAllowedAreaReturn } from './allowed-area-state.ts';
 import { activeThreat,hostileTo,isColonist,isAdmittedVisitorGuest } from './affiliation.ts';
 import { treatmentTarget,medicalRestNeeded } from './care-rules.ts';
@@ -24,7 +28,7 @@ import { generatePawnBackground } from './background-generation.ts';
 import { generateExoticStock,generateVisitorStock } from './trade-stock.ts';
 import { visitorArrival,visitorAtEdge,visitorExit } from './visitor-navigation.ts';
 import { PLAN_INTERVAL } from './work-planner.ts';
-import { consumeVisitorOpportunity,INTRO_VISITOR_TICK,newVisitorAgenda,visitorPoints,visitorRandom,type VisitorGroup,type VisitorKind } from './visitor-state.ts';
+import { consumeVisitorOpportunity,INTRO_VISITOR_TICK,newVisitorAgenda,visitorPoints,visitorRandom,type HomeVisitorCalendar,type VisitorGroup,type VisitorKind } from './visitor-state.ts';
 import type { MaterialPile,Pawn,World } from './types.ts';
 
 const log=(w:World,message:string)=>{w.events.push({tick:w.tick,type:'command',message});if(w.events.length>80)w.events.splice(0,w.events.length-80);};
@@ -34,6 +38,8 @@ export function enableVisitors(w:World,withIntro=false,prospective=false):void {
   w.visitors={profile:'cassandra-visitors-v1',adoptedAt:w.tick,rng:((w.seed^0x88c0173)>>>0)||1,serial:0,
     introAt:!prospective&&withIntro&&w.tick===0?INTRO_VISITOR_TICK:null,traveler:newVisitorAgenda(w.seed,'traveler',w.tick,prospective),visitor:newVisitorAgenda(w.seed,'visitor',w.tick,prospective),
     ...w.schemaVersion>=123?{exotic:newVisitorAgenda(w.seed,'exotic',w.tick,prospective)}:{},groups:[],departed:[]};
+  // Schema 332: appended last, the very place the 331 migration adopts it.
+  if(w.schemaVersion>=332)(w.visitors as HomeVisitorCalendar).caravan332=newVisitorAgenda(w.seed,'caravan',w.tick,prospective);
 }
 /** V122→V123 migration: discard past exotic opportunities without touching the
  * old visitor agendas, stock, actor identities, or the business RNG. */
@@ -46,7 +52,8 @@ export function resumeProspectiveVisitorSchedule261(w:World):void {
   if((Number(w.schemaVersion)!==261&&(Number(w.schemaVersion)!==262&&!isSchema263OrLater(Number(w.schemaVersion))))||tempMapTarget261(w)||tempMapAdoptedAtCore261(w)===undefined)return;
   const s=w.visitors;if(!s){enableVisitors(w,false,true);return;}
   w.visitors={...s,profile:'cassandra-visitors-v1',introAt:null,
-    traveler:newVisitorAgenda(w.seed,'traveler',w.tick,true),visitor:newVisitorAgenda(w.seed,'visitor',w.tick,true),exotic:newVisitorAgenda(w.seed,'exotic',w.tick,true)};
+    traveler:newVisitorAgenda(w.seed,'traveler',w.tick,true),visitor:newVisitorAgenda(w.seed,'visitor',w.tick,true),exotic:newVisitorAgenda(w.seed,'exotic',w.tick,true),
+    ...Number(w.schemaVersion)>=332?{caravan332:newVisitorAgenda(w.seed,'caravan',w.tick,true)}:{}};
 }
 const groupOf=(w:World,p:Pawn)=>w.visitors?.groups.find(g=>g.id===p.visitor?.group);
 export function visitorMayTrade(w:World,p:Pawn):boolean {
@@ -70,6 +77,12 @@ function leaveGroup(w:World,g:VisitorGroup,reason:VisitorGroup['reason']):void {
     if(isAdmittedVisitorGuest(p)&&(carrierOf(w,p.id)||p.need||treatmentTarget(p)||medicalRestNeeded(p)))continue;
     p.path=[];p.planCooldown=0;
     if(p.need?.kind==='sleep'&&p.state!=='dead'&&p.state!=='downed'){p.need=null;p.state='idle';}
+  }
+  if(g.caravan332){
+    // Core MessageTraderCaravanLeaving and the visitor danger exits.
+    const label=caravanLabel332(w,g.caravan332);
+    log(w,reason==='timeout'?`La caravane commerciale (${label}) repart avec ses marchandises restantes.`:reason==='hostile'?`La caravane commerciale (${label}) interrompt les échanges après une agression et se retire.`:`La caravane commerciale (${label}) interrompt sa halte face au danger.`);
+    return;
   }
   log(w,reason==='timeout'?'Les visiteurs terminent leur halte et cherchent la sortie.':reason==='hostile'?'Les visiteurs interrompent les échanges après une agression et se retirent.':'Les visiteurs interrompent leur halte face au danger.');
 }
@@ -130,7 +143,7 @@ export function advanceVisitors(w:World):void {
       ||moving.some(p=>w.pawns.some(q=>activeThreat(q)&&hostileTo(p,q)&&(p.x-q.x)**2+(p.z-q.z)**2<=25**2))){leaveGroup(w,g,'danger');continue;}
     if(g.phase==='arriving'&&moving.length&&moving.every(p=>p.visitor!.goal&&p.x===p.visitor!.goal.x&&p.z===p.visitor!.goal.z&&p.moveCooldown===0)){
       if(g.kind==='traveler'){leaveGroup(w,g,'timeout');for(const p of moving)p.visitor!.goal={...g.spot};}
-      else {g.phase='staying';g.arrivedAt=w.tick;for(const p of members)p.visitor!.phase='staying';log(w,'Les visiteurs font halte près de la colonie.');}
+      else {g.phase='staying';g.arrivedAt=w.tick;for(const p of members)p.visitor!.phase='staying';log(w,g.caravan332?'La caravane commerciale fait halte près de la colonie ; son marchand attend les échanges.':'Les visiteurs font halte près de la colonie.');}
     }
     if(g.phase==='staying'&&(w.tick-g.arrivedAt!)*10>g.durationCore)leaveGroup(w,g,'timeout');
   }
@@ -141,7 +154,61 @@ export function advanceVisitors(w:World):void {
   if(s.introAt!==null&&w.tick>=s.introAt){const due=w.tick===s.introAt;s.introAt=null;if(due)arrive(w,'visitor',true);}
   if(consumeVisitorOpportunity(s.traveler,'traveler',w.tick))arrive(w,'traveler');
   if(consumeVisitorOpportunity(s.visitor,'visitor',w.tick))arrive(w,'visitor');
-  if(s.exotic&&consumeVisitorOpportunity(s.exotic,'exotic',w.tick))arrive(w,'visitor',false,true);
+  // From schema 332 Core's exotic caravan kind replaces this home-grown
+  // merchant: its agenda keeps its clock but no longer admits anyone.
+  if(s.exotic&&consumeVisitorOpportunity(s.exotic,'exotic',w.tick)&&w.schemaVersion<332)arrive(w,'visitor',false,true);
+  if(s.caravan332&&consumeVisitorOpportunity(s.caravan332,'caravan',w.tick)&&w.schemaVersion>=332)arriveTraderCaravan332(w);
+}
+/** Schema 332 Core TraderCaravanArrival. The opportunity is consumed even when
+ * refused. Faction, trader kind, guards and wares are drawn from a private
+ * stream of this opportunity, then committed together with a real entry;
+ * a refusal creates no person, pile or identity. Wares are carried by the
+ * trader: Core's pack animals (one per eight wares) are not generated. */
+export function arriveTraderCaravan332(w:World):boolean {
+  const s=w.visitors as HomeVisitorCalendar;
+  if(homeIncidentsBlocked261(w)||!w.foodPolicies[0]||!w.pawns.some(p=>isColonist(p)&&p.state!=='dead')||w.pawns.some(p=>p.faction==='outlaws'&&!p.prisoner&&activeThreat(p))
+    ||s.serial>=Number.MAX_SAFE_INTEGER||s.departed.length+w.pawns.length+civilianAwayCounts(w).people>=w.width*w.height)return false;
+  const random={rng:caravanSeed332(w.seed,w.tick,s.serial)},draw=()=>visitorRandom(random);
+  // StorytellerComp_FactionInteraction: the ally fraction accepts the hit.
+  const accept=allyIncidentFraction332(w);if(accept<=0||draw()>=accept)return false;
+  const intent=populationIntent320(w),source=drawCaravanSource332(w,intent,draw);if(!source)return false;
+  const kind=drawCaravanTraderKind332(source.family,intent,draw);if(!kind)return false;
+  const trader=CARAVAN_TRADERS_332[source.family],guards=chooseCaravanGuards332(caravanGuardPoints332(draw)-trader.cost,source.family,draw);
+  const count=1+guards.length;if(count>CARAVAN_MAX_MEMBERS_332)return false;
+  const arrival=visitorArrival(w,Math.floor(draw()*4294967296),count,'visitor',true);
+  if(!arrival||!civilianAdmissionFits(w,count))return false;
+  const id=s.serial+1,apparel=caravanApparel332(source.family),pawns:Pawn[]=[],piles:MaterialPile[]=[];let nextId=w.nextId;
+  const label=CARAVAN_TRADER_KINDS_332[kind].label;
+  for(let i=0;i<count;i++){
+    const guard=i?guards[i-1]!:undefined,name=guard?CARAVAN_GUARDS_332[guard].label:label.charAt(0).toUpperCase()+label.slice(1);
+    const p=startingPawn(nextId++,`${name} ${id}.${i+1}`,arrival.sites[i]!.x,arrival.sites[i]!.z,0,55,w.seed,w.tick,w.schemaVersion);
+    p.faction='outlanders';if(w.worldFactions&&(source.factionId===null||!bindBornHumanFaction259(w,p,source.factionId)))return false;p.foodPolicyId=w.foodPolicies[0]!.id;
+    delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;
+    for(const value of Object.values(p.skills))if(typeof value==='object'){value.level=0;value.passion=0;}
+    generatePawnBackground(p,w.seed,!!guard,!guard);
+    for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;
+    p.visitor={group:id,role:guard?'visitor':'trader',phase:'arriving',goal:{...arrival.parking[i]!},personalFoodIds:[]};
+    piles.push({id:nextId++,kind:'apparel',item:apparel,quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState(apparel,undefined,w.schemaVersion)});
+    const weapon=guard?CARAVAN_GUARDS_332[guard].weapon:trader.weapon;
+    piles.push({id:nextId++,kind:'weapon',item:weapon,quantity:1,owner:{type:'equipment',pawnId:p.id},weapon:newWeaponState(weapon)});
+    if(!guard){const stock=generateCaravanStock332(random.rng,p.id,nextId,w.tick,kind);piles.push(...stock.piles);nextId=stock.nextId;random.rng=stock.rng;}
+    // The same personal provisions as a visitor; wares are never eaten.
+    const foodDraw=draw(),item=foodDraw<.75?'simple-meal':'survival-meal',quantity=draw()<5/6?3:2,foodId=nextId++;
+    piles.push({id:foodId,kind:'food',item,quantity,owner:{type:'inventory',pawnId:p.id},...freshRot(item,w.tick)});p.visitor.personalFoodIds=[foodId];
+    pawns.push(p);
+  }
+  const durationCore=caravanStayCore332(draw);
+  if(!Number.isSafeInteger(nextId)||!civilianAdmissionFits(w,count,piles.length))return false;
+  w.nextId=nextId;w.pawns.push(...pawns);w.piles.push(...piles);s.serial=id;
+  const caravan={traderKind:kind,factionId:source.factionId};
+  s.groups.push({id,kind:'visitor',members:pawns.map(p=>p.id),entry:arrival.entry,spot:arrival.spot,phase:'arriving',startedAt:w.tick,arrivedAt:null,durationCore,hostile:false,caravan332:caravan});
+  log(w,`Caravane commerciale : ${caravanLabel332(w,caravan)} approche avec ${count} personne(s). Elle vend ses marchandises et achète aussi.`);
+  return true;
+}
+/** Trade lists: the merchant's name, plus its caravan kind and faction. */
+export function visitorMerchantLabel(w:World,p:Pawn):string {
+  const caravan=groupOf(w,p)?.caravan332;
+  return caravan&&p.visitor?.role==='trader'?`${p.name} · caravane, ${caravanLabel332(w,caravan)}`:p.name;
 }
 function personalMeal(w:World,p:Pawn):void {
   if(p.need||p.hunger>30||!captureStandability(w)(p))return;

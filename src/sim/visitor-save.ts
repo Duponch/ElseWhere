@@ -37,6 +37,7 @@ import { TICKS_PER_DAY,type Cell,type MaterialPile,type Pawn,type World } from '
 import { APPAREL_POLICY_INTERVAL } from './apparel-renewal.ts';
 import { validMentalShape,validMeleeThreatShape } from './mental-save.ts';
 import {validTempTravelerHeader261,visitorAgendaClock261} from './temp-travelers-save-261.ts';
+import {CARAVAN_MAX_MEMBERS_332,CARAVAN_STAY_MAX_CORE_332,CARAVAN_STAY_MIN_CORE_332,validTraderCaravan332} from './trader-caravans-332.ts';
 
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const integer=(v:unknown,min:number,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
@@ -173,8 +174,8 @@ export function validateVisitors(w:World,version:number,ids:Set<number>):string[
   if(state===undefined)return w.pawns.some(p=>p.visitor)?['Visitor without calendar.']:[];
   const agendaClock=visitorAgendaClock261(w,version),agendaWorld={tick:agendaClock};
   const temp=object(state)&&Object.getOwnPropertyDescriptor(state,'profile')?.value==='temp-travelers261-v1';
-  if(temp?!validTempTravelerHeader261(state,w,version):!object(state)||Object.keys(state).length!==9+(version>=123?1:0)||!keys(state,['profile','adoptedAt','rng','serial','introAt','traveler','visitor',...(version>=123?['exotic']:[]),'groups','departed'])||state.profile!=='cassandra-visitors-v1'||!integer(state.adoptedAt,0,w.tick)||!integer(state.rng,1,0xffffffff)||!integer(state.serial,0)
-    ||state.introAt!==null&&(state.adoptedAt!==0||state.introAt!==INTRO_VISITOR_TICK||agendaClock>=INTRO_VISITOR_TICK)||!validAgenda(state.traveler,'traveler',agendaWorld)||!validAgenda(state.visitor,'visitor',agendaWorld)||version>=123&&!validAgenda(state.exotic,'exotic',agendaWorld)||!Array.isArray(state.groups)||state.groups.length>w.width*w.height||!Array.isArray(state.departed)||state.departed.length>w.width*w.height)return ['Invalid visitor calendar.'];
+  if(temp?!validTempTravelerHeader261(state,w,version):!object(state)||Object.keys(state).length!==9+(version>=123?1:0)+(version>=332?1:0)||!keys(state,['profile','adoptedAt','rng','serial','introAt','traveler','visitor',...(version>=123?['exotic']:[]),...(version>=332?['caravan332']:[]),'groups','departed'])||state.profile!=='cassandra-visitors-v1'||!integer(state.adoptedAt,0,w.tick)||!integer(state.rng,1,0xffffffff)||!integer(state.serial,0)
+    ||state.introAt!==null&&(state.adoptedAt!==0||state.introAt!==INTRO_VISITOR_TICK||agendaClock>=INTRO_VISITOR_TICK)||!validAgenda(state.traveler,'traveler',agendaWorld)||!validAgenda(state.visitor,'visitor',agendaWorld)||version>=123&&!validAgenda(state.exotic,'exotic',agendaWorld)||version>=332&&!validAgenda(state.caravan332,'caravan',agendaWorld)||!Array.isArray(state.groups)||state.groups.length>w.width*w.height||!Array.isArray(state.departed)||state.departed.length>w.width*w.height)return ['Invalid visitor calendar.'];
   const errors:string[]=[],s=w.visitors!,groups=new Set<number>(),members=new Set<number>(),departed=new Set<number>();
   if(temp&&(s.groups.some(g=>!object(g)||g.kind!=='traveler')||s.departed.some(d=>!object(d)||!object(d.pawn)||!object(d.pawn.visitor)||d.pawn.visitor.role!=='traveler')))errors.push('TempMap owner contains a non-traveler.');
   for(const d of s.departed){
@@ -196,13 +197,18 @@ export function validateVisitors(w:World,version:number,ids:Set<number>):string[
   const held277=captureShipCasketHumans277(w),cohort277=[...w.pawns,...held277.map(h=>h.pawn)];
   for(const g of s.groups){
     if(temp&&(!object(g)||!cell(g.spot,w)||!edge(g.spot,w)))errors.push('TempMap traveler has no physical edge destination.');
-    if(!object(g)||!keys(g,['id','kind','members','entry','spot','phase','startedAt','arrivedAt','durationCore','hostile','reason'])||!integer(g.id,1,s.serial)||groups.has(g.id)||!['traveler','visitor'].includes(String(g.kind))||!Array.isArray(g.members)||!g.members.length||g.members.length>12||new Set(g.members).size!==g.members.length||!g.members.every(id=>integer(id,1,w.nextId-1))||!cell(g.entry,w)||!edge(g.entry,w)||!cell(g.spot,w)||!phases.includes(String(g.phase))||!integer(g.startedAt,s.adoptedAt,w.tick)||g.arrivedAt!==null&&!integer(g.arrivedAt,g.startedAt,w.tick)||typeof g.hostile!=='boolean'||(g.kind==='traveler'?g.durationCore!==0:g.durationCore<8000||g.durationCore>=22000)||!integer(g.durationCore,0)||g.phase==='staying'&&(g.arrivedAt===null||g.kind!=='visitor')||g.phase==='arriving'&&g.arrivedAt!==null||(g.phase==='leaving'?!['timeout','danger','hostile','blocked'].includes(String(g.reason)):g.reason!==undefined)){errors.push('Invalid visitor group.');continue;}
+    // Schema 332: a Core trader caravan is a visitor group with its record,
+    // up to 24 members and Core's 27000-45000 tick halt.
+    const caravan=object(g)&&Object.hasOwn(g,'caravan332');
+    if(caravan&&(version<332||!object(g)||g.kind!=='visitor'||!validTraderCaravan332(g.caravan332,w))){errors.push('Invalid trader caravan.');continue;}
+    if(!object(g)||!keys(g,['id','kind','members','entry','spot','phase','startedAt','arrivedAt','durationCore','hostile','reason',...(version>=332?['caravan332']:[])])||!integer(g.id,1,s.serial)||groups.has(g.id)||!['traveler','visitor'].includes(String(g.kind))||!Array.isArray(g.members)||!g.members.length||g.members.length>(caravan?CARAVAN_MAX_MEMBERS_332:12)||new Set(g.members).size!==g.members.length||!g.members.every(id=>integer(id,1,w.nextId-1))||!cell(g.entry,w)||!edge(g.entry,w)||!cell(g.spot,w)||!phases.includes(String(g.phase))||!integer(g.startedAt,s.adoptedAt,w.tick)||g.arrivedAt!==null&&!integer(g.arrivedAt,g.startedAt,w.tick)||typeof g.hostile!=='boolean'||(g.kind==='traveler'?g.durationCore!==0:caravan?g.durationCore<CARAVAN_STAY_MIN_CORE_332||g.durationCore>=CARAVAN_STAY_MAX_CORE_332:g.durationCore<8000||g.durationCore>=22000)||!integer(g.durationCore,0)||g.phase==='staying'&&(g.arrivedAt===null||g.kind!=='visitor')||g.phase==='arriving'&&g.arrivedAt!==null||(g.phase==='leaving'?!['timeout','danger','hostile','blocked'].includes(String(g.reason)):g.reason!==undefined)){errors.push('Invalid visitor group.');continue;}
     groups.add(g.id);
     if(g.hostile&&g.reason!=='hostile')errors.push('Hostile visitor group without hostile departure.');
     for(const id of g.members){if(members.has(id)||!cohort277.some(p=>p.id===id&&p.visitor?.group===g.id)&&!s.departed.some(d=>d.pawn.id===id&&d.group===g.id)&&!shipCasketTerminalParticipant277(w,id,'human',g.id,'visitor'))errors.push('Invalid visitor group membership.');members.add(id);}
   }
   for(const p of cohort277)if(p.visitor){const v=p.visitor,g=s.groups.find(g=>g.id===v.group);
     if(!validVisitorShape(p as unknown as Record<string,unknown>,version,w)||p.faction!=='outlanders'||p.prisoner||p.raid||p.trade||p.draft||!g||!g.members.includes(p.id)||v.phase!==g.phase||g.kind==='traveler'&&v.role!=='traveler'||g.kind==='visitor'&&v.role==='traveler')errors.push('Invalid visitor mandate.');
+    if(g?.caravan332&&(v.merchantKind!==undefined||p.worldAffiliation259&&p.worldAffiliation259.factionId!==g.caravan332.factionId))errors.push('Invalid trader caravan member.');
     if(!v.personalFoodIds.every(id=>[...w.piles,...held277.find(h=>h.pawn===p)?.items??[]].some(i=>i.id===id&&i.kind==='food'&&(i.owner.type==='inventory'||i.owner.type==='pawn')&&i.owner.pawnId===p.id)))errors.push('Invalid visitor personal food ownership.');
     const admitted=version>=237&&hasVisitorMedicalGuestMarker(p);
     if(admitted&&(!g||!integer(v.medicalGuestAt,g.startedAt,w.tick)))errors.push('Invalid visitor medical admission chronology.');
