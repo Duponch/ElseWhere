@@ -43,8 +43,9 @@ Une sauvegarde 328 passe à 329 en changeant seulement son numéro.
 
 `tests/storyteller-fidelity-329.test.ts` couvre :
 - la loterie (incidents retirés, groupe de population, repli) ;
-- le premier incident divers, à travers les deux scènes de démonstration.
 - l'éclipse du composant « monde » ;
 - l'acceptation des quêtes ;
 - les animaux dans les points ;
 - la migration.
+
+Le premier incident divers est vérifié par les tests des deux scènes de démonstration (`tests/misc-demo-v180.test.ts`, `tests/flashstorm-demo-v184.test.ts`).
