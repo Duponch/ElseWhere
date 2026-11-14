@@ -156,8 +156,12 @@ test('new bare substrate visibility affects colony wealth separately from physic
  expect(floorRoomMarketValue(hidden.tiles[index]!)).toBe(5);expect(colonyWealth(hidden).floors).toBe(0);
  const covered={...hidden,tiles:hidden.tiles.map((t,i)=>i===index?{...t,floor:'wood-planks' as const}:t)};
  const historical={...covered,tiles:covered.tiles.map((t,i)=>i===index?{...t,terrain:'grass' as const,stone:undefined}:t)};
- expect(colonyWealth(covered).floors).toBeCloseTo(floorRoomMarketValue(covered.tiles[index]!));
- expect(colonyWealth(covered).floors).toBe(colonyWealth(historical).floors); // No retroactive floor/fog fix.
+ // Schema 327 (Core WealthWatcher): nothing under the fog counts, floors included.
+ expect(colonyWealth(covered).floors).toBe(0);expect(colonyWealth(historical).floors).toBe(0);
+ // Before 327 the laid floor counted under the fog.
+ const at326=<T extends object>(v:T):T=>({...v,schemaVersion:326});
+ expect(colonyWealth(at326(covered)).floors).toBeCloseTo(floorRoomMarketValue(covered.tiles[index]!));
+ expect(colonyWealth(at326(covered)).floors).toBe(colonyWealth(at326(historical)).floors); // No retroactive floor/fog fix.
 });
 
 test('resident terrain paint patches rough to smooth by real stone pigment with unchanged texture budget and alpha convention',()=>{
