@@ -124,8 +124,15 @@ const graphs=new WeakMap<Nav,RegionGraph>();
 function sameRegionGrid(cache:RegionCache,w:World,grid:Uint8Array,portals:Set<number>):boolean {
  if(cache.width!==w.width||cache.height!==w.height||cache.grid.length!==grid.length||cache.portals.size!==portals.size)return false;
  for(const i of portals)if(!cache.portals.has(i))return false;
- const kept=cache.grid;
- for(let i=0;i<grid.length;i++)if(grid[i]!==kept[i]&&!portals.has(i))return false;
+ const kept=cache.grid;let i=0;
+ // Four cells per comparison where both arrays allow it; a differing word is
+ // read again cell by cell, with the same test as the plain loop.
+ if(grid.byteOffset%4===0&&kept.byteOffset%4===0){
+  const words=grid.length>>2,a=new Uint32Array(grid.buffer,grid.byteOffset,words),b=new Uint32Array(kept.buffer,kept.byteOffset,words);
+  for(let k=0;k<words;k++)if(a[k]!==b[k])for(let c=k*4;c<k*4+4;c++)if(grid[c]!==kept[c]&&!portals.has(c))return false;
+  i=words*4;
+ }
+ for(;i<grid.length;i++)if(grid[i]!==kept[i]&&!portals.has(i))return false;
  return true;
 }
 function regionGraph(w:World,nav:Nav):RegionGraph {

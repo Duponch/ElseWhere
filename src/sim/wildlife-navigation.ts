@@ -209,7 +209,9 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
       // Non-flying terrainFree is exactly naturalTerrainWalkable256: reuse the shared mask.
       // With the in-map solid kind cells already in the shared base.
       if(!flying)blocked.set(animalRouteBase(world,solidKinds,terrainMask()));
-      else{for(let i=0;i<world.tiles.length;i++){const t=world.tiles[i]!.terrain;if(!terrainFree(t))blocked[i]=1;}
+      // Flying: a cell is blocked when its terrain is not walkable (the shared
+      // mask, 1) unless it is deep water; only those cells read their tile.
+      else{const mask=terrainMask(),tiles=world.tiles;for(let i=0;i<tiles.length;i++)if(mask[i]===1&&tiles[i]!.terrain!=='water-deep')blocked[i]=1;
         for(const i of solidKinds.cells)blocked[i]=1;}
       for(const i of solids)blocked[i]=1;}
     // A physical reader retains geometry, never a frozen door phase. Route

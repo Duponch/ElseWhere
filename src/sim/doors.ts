@@ -75,7 +75,9 @@ export function approachAutodoor(world:World,pawn:Pawn,next:Cell):void {
 /** Index bodies/edges/items once, rather than scanning every actor for each door.
  * Edge endpoints protect the physical passage until the GPU-visible body clears. */
 export function updateDoors(world:World):void {
-  const doors=world.structures.filter(s=>isPassageDoor(s.kind));if(!doors.length)return;
+  // The shared list: the same structures, in the same order, as filtering the
+  // structures array (only read here).
+  const doors=filteredStructures(world,'passage-doors',s=>isPassageDoor(s.kind));if(!doors.length)return;
   const bodies=new Set<number>(),friendly=new Set<number>(),objects=new Set<number>();
   const add=(c:Cell)=>bodies.add(c.z*world.width+c.x);
   for(const p of world.pawns){if(p.state==='dead'&&(p.body?.pileId!==undefined||p.body?.lostAt!==undefined))continue;add(p);if(p.motion&&p.motion.end>world.tick)add(p.motion.from);if(isColonist(p)||p.visitor||p.prisoner?.releasedAt!==undefined){friendly.add(p.z*world.width+p.x);if(p.motion&&p.motion.end>world.tick)friendly.add(p.motion.from.z*world.width+p.motion.from.x);}}

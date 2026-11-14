@@ -7,6 +7,7 @@ import { coldSnapOffset } from './cold-snap.ts';
 import { applyThermalSources } from './thermal-sources.ts';
 import { TICKS_PER_DAY, type Cell, type World } from './types.ts';
 import { ThermalTopologyCache, type ThermalLayout } from './thermal-topology.ts';
+import { structureById } from './structure-navigation.ts';
 
 export interface ThermalRegion {cells:number[];temperature:number}
 export interface ThermalState {regions:ThermalRegion[]}
@@ -82,20 +83,15 @@ export function advanceTemperature(world:World,layout:ThermalLayout):void {
     for(const i of shape.equalize){const target=layout.indices[i]!;change+=((target===-2?(r.temperature+outside)/2:air(target))-r.temperature)*.00017*10/r.cells.length;}
     r.temperature=Math.max(-273.15,Math.min(1000,r.temperature+change));
   }
-  // This call mutates air and cooler modes only. Preserve Array.find's first
-  // matching ID, while avoiding a full structure scan for every portal. Never
-  // retain this lookup across a call or a mutable public World edit.
-  const structuresById=new Map<number,World['structures'][number]>();
-  const wanted=new Set<number>();for(const door of layout.doors)if(door.neighbors.length>=2)wanted.add(door.id);
-  if(wanted.size)for(const structure of world.structures)if(wanted.delete(structure.id)){
-    structuresById.set(structure.id,structure);if(!wanted.size)break;
-  }
+  // This call mutates air and cooler modes only. Array.find's first matching
+  // ID, from the shared id index (validated on each read), without a scan of
+  // every structure.
   for(const door of layout.doors) {
     const neighbors=door.neighbors;if(!neighbors.length)continue;
     const mean=neighbors.reduce((n,id)=>n+(id<0?outside:regions[id]!.temperature),0)/neighbors.length;
     const own=layout.indices[door.cell]!;if(own>=0)regions[own]!.temperature=mean;
     if(neighbors.length<2)continue;
-    const open=structuresById.get(door.id)!.door!.open,rate=10/(open?34:375);
+    const open=structureById(world,door.id)!.door!.open,rate=10/(open?34:375);
     for(const id of neighbors)if(id>=0){const r=regions[id]!;r.temperature+=(mean-r.temperature)*Math.min(1,rate/r.cells.length);}
   }
   // Core also exchanges through walls for a doorway without an adjacent
