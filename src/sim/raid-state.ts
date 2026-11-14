@@ -5,8 +5,13 @@ export interface RaidDeparture { group:number; pawnId:number; name:string; cell:
 /** Available pirate projections only; these are Core pawn-kind combatPower
  * costs, not the market prices of their limited local equipment. */
 export const RAID_ROLE_COST=Object.freeze({drifter:35,thrasher:50,scavenger:50,pirate:65} as const);
-export type RaidRole=keyof typeof RAID_ROLE_COST;
-export interface RaidComposition {budget:number;roster:RaidRole[]}
+export type PirateRaidRole=keyof typeof RAID_ROLE_COST;
+/** Schema 331: tribal and outlander Core pawn kinds join the pirate roles. */
+export type RaidRole=PirateRaidRole|import('./raid-factions-331.ts').RaidKind331;
+/** group331 (schema 331) names the tribal or outlander Core combat group
+ * maker; absent, the roster is the historical pirate projection. */
+export interface RaidComposition {budget:number;roster:RaidRole[];group331?:import('./raid-factions-331.ts').RaidMaker331}
+export interface PirateRaidComposition {budget:number;roster:PirateRaidRole[]}
 const PIRATE_MAX_PAWN_COST:readonly (readonly [number,number])[]=[[0,35],[70,50],[700,100],[1300,150],[100000,10000]];
 /** Core Factions_Misc.xml pirate curve with MaxPawnCost's cheapest-kind floor.
  * The local immediate attack uses one required pawn, so that cap adds nothing. */
@@ -27,7 +32,10 @@ export interface RaidGroup {shipReactor275?:import('./ship-reactor-threats-275.t
    * staging). Absent: immediate attack. */
   stage330?:{point:Cell;untilCore:number;endedAtCore?:number}; reason?:'losses'|'timeout'|'colony-down'|'trader-lost'|'non-hostile'; composition?:RaidComposition; originQuestId?:number;caravan261?:CaravanRaidProvenance261 }
 export interface RaidResult {destroyed277?:number;shipReactor275?:import('./ship-reactor-threats-275.ts').ShipReactorRaidSource275;tempIncident261?:import('./temp-map-raids-261.ts').TempRaidSource261; mechanoid?:true;mechComposition?:import('./mechanoid-raid-state.ts').MechanoidRaidComposition; id:number; tick:number; reason:'defended'|'withdrawn'|'colony-down'; killed:number; downed:number; escaped:number;captured?:number;composition?:RaidComposition; originQuestId?:number;caravan261?:CaravanRaidProvenance261;memberCount261?:number }
-export interface RaidCalendar {extraMechActive261?:import('./mechanoid-raid-state.ts').MechanoidRaidGroup[];extraActive261?:RaidGroup[];extraResults261?:RaidResult[]; mechanoid?:import('./mechanoid-raid-state.ts').MechanoidRaidPolicy;mechActive?:import('./mechanoid-raid-state.ts').MechanoidRaidGroup; profile:'camp-raids-v1'|'cassandra-raids-v1'|'camp-pressure-v1'|'ship-reactor-raids-v1'; rng:number; nextCheck:number|null; serial:number; completed:number; active?:RaidGroup; last?:RaidResult; departed:RaidDeparture[];cassandra?:import('./cassandra-raids.ts').CassandraRaidAgenda }
+export interface RaidCalendar {extraMechActive261?:import('./mechanoid-raid-state.ts').MechanoidRaidGroup[];extraActive261?:RaidGroup[];extraResults261?:RaidResult[]; mechanoid?:import('./mechanoid-raid-state.ts').MechanoidRaidPolicy;mechActive?:import('./mechanoid-raid-state.ts').MechanoidRaidGroup; profile:'camp-raids-v1'|'cassandra-raids-v1'|'camp-pressure-v1'|'ship-reactor-raids-v1'; rng:number; nextCheck:number|null; serial:number; completed:number; active?:RaidGroup; last?:RaidResult; departed:RaidDeparture[];cassandra?:import('./cassandra-raids.ts').CassandraRaidAgenda;
+  /** Schema 331: world faction of the last Cassandra home raid (Core
+   * StoryState.lastRaidFaction), whose next raid weight is multiplied by 0.4. */
+  lastFaction331?:number }
 /** True while a schema 330 group is still staging. */
 export const raidStaging330=(g:Pick<RaidGroup,'stage330'>|undefined):boolean=>!!g?.stage330&&g.stage330.endedAtCore===undefined;
 export function raidRandom(s:Pick<RaidCalendar,'rng'>):number {let x=s.rng;x^=x<<13;x^=x>>>17;x^=x<<5;s.rng=x>>>0;return s.rng/4294967296;}

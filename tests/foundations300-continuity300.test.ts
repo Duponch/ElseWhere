@@ -10,8 +10,8 @@ import {validHumanIngestionPawn299} from '../src/sim/human-ingestion-save-299.ts
 import {foodBingeDue299,localIngestionCore299,commitHumanIngestion299} from '../src/sim/human-ingestion-clock299.ts';
 import type {Pawn,World} from '../src/sim/types.ts';
 
-test('299 through330 retain physical phase and food provenance; historical and next future fields stay closed',()=>{
- for(const version of [299,300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,318,319,320,321,322,323,324,325,326,327,328,329,330]){
+test('299 through331 retain physical phase and food provenance; historical and next future fields stay closed',()=>{
+ for(const version of [299,300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,318,319,320,321,322,323,324,325,326,327,328,329,330,331]){
   const frame={schemaVersion:version,tick:123,phaseCore297:7};
   expect(isCorePhysicalSchema297(version)).toBe(true);expect(isSchema298OrLater(version)).toBe(true);expect(isSchema299OrLater(version)).toBe(true);
   expect(validPhaseCore297(frame,version)).toBe(true);expect(effectiveCore297(frame)).toBe(1237);
@@ -19,9 +19,9 @@ test('299 through330 retain physical phase and food provenance; historical and n
   expect(validHumanIngestionPawn299({lastIngestAtCore299:1238},version,1237)).toBe(false);
  }
  expect(validHumanIngestionPawn299({lastIngestAtCore299:0},298,0)).toBe(false);
- expect(isCorePhysicalSchema297(331)).toBe(false);expect(isSchema298OrLater(331)).toBe(false);expect(isSchema299OrLater(331)).toBe(false);
- expect(validPhaseCore297({schemaVersion:331,tick:123,phaseCore297:7},331)).toBe(false);
- expect(validHumanIngestionPawn299({},331,0)).toBe(false);
+ expect(isCorePhysicalSchema297(332)).toBe(false);expect(isSchema298OrLater(332)).toBe(false);expect(isSchema299OrLater(332)).toBe(false);
+ expect(validPhaseCore297({schemaVersion:332,tick:123,phaseCore297:7},332)).toBe(false);
+ expect(validHumanIngestionPawn299({},332,0)).toBe(false);
 });
 
 test('food299 rules continue on300 at the actual ingestion commit, with no generated history',()=>{
@@ -41,7 +41,7 @@ test('strict299 migrates number-only; historical fields cannot smuggle a future3
  // deserialize validates that299 record strictly before migration. No campaign is advanced.
  const before=JSON.parse(fs.readFileSync(new URL('./fixtures/food-binge-cadence299-canonical298.json',import.meta.url),'utf8'));
  before.schemaVersion=299;stripFutureContent(before,299);
- const expected=structuredClone(before);expected.schemaVersion=330;
+ const expected=structuredClone(before);expected.schemaVersion=331;
  // Migration 307 -> 308 extends the policies that allowed plain leather or muffalo wool.
  extendApparelPolicies308(expected.apparelPolicies);extendApparelPolicies312(expected.apparelPolicies);
  const after=deserializeCampaign(JSON.stringify(before));expect(after).toStrictEqual(expected);expect(validateWorld(after)).toEqual([]);

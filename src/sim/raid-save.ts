@@ -21,6 +21,7 @@ import { bombRefugeRouteTarget } from './bomb-refuge-route.ts';
 import { CASSANDRA_CYCLE_START,validCassandraAgenda } from './cassandra-raids.ts';
 import { validWeaponShape,validateEquipment } from './equipment-save.ts';
 import { RAID_ROLE_COST,pirateMaxPawnCost } from './raid-state.ts';
+import {RAID_FAMILY_MIN_POINTS_331,RAID_KINDS_331,RAID_MAKERS_331,cheapestRaidOption331,isRaidMaker331,raidFamilyOfFaction331,raidMaxPawnCost331,type RaidKind331} from './raid-factions-331.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 
 /** Local ticks the schema 330 planned staging added to the give-up deadline. */
@@ -28,15 +29,32 @@ const stageTicks330=(a:Record<string,unknown>):number=>{const st=a.stage330;if(!
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const integer=(v:unknown,min:number,max=Number.MAX_SAFE_INTEGER):v is number=>Number.isSafeInteger(v)&&Number(v)>=min&&Number(v)<=max;
 const keys=(v:Record<string,unknown>,allowed:string[])=>Object.keys(v).every(k=>allowed.includes(k));
-export function validComposition(value:unknown,count:number,version:number,cassandra:boolean,economy:boolean):boolean {
-  if(version<105||!cassandra||!economy||!object(value)||!keys(value,['budget','roster'])||
+/** faction331: the caller validates a Cassandra home raid, whose schema 331
+ * composition may name a tribal or outlander group maker. */
+export function validComposition(value:unknown,count:number,version:number,cassandra:boolean,economy:boolean,faction331=false):boolean {
+  if(version<105||!cassandra||!economy||!object(value)||!keys(value,['budget','roster',...faction331&&version>=331?['group331']:[]])||
     typeof value.budget!=='number'||!Number.isFinite(value.budget)||value.budget<35||value.budget>10000||
     !Array.isArray(value.roster)||value.roster.length!==count||count<1||count>Math.floor(value.budget/35))return false;
+  if(value.group331!==undefined)return validComposition331(value.group331,value.budget,value.roster,count);
   let spent=0;
   const maxCost=pirateMaxPawnCost(value.budget);
   for(const role of value.roster){if(typeof role!=='string'||!Object.hasOwn(RAID_ROLE_COST,role))return false;
     const cost=RAID_ROLE_COST[role as keyof typeof RAID_ROLE_COST];if(cost>maxCost)return false;spent+=cost;}
   return spent<=value.budget&&value.budget-spent<35;
+}
+/** Schema 331 tribal/outlander roster: the maker's options within the Core
+ * maximum pawn cost, one faction leader kind at most, and spending stopped
+ * only when no option fits the points left. */
+function validComposition331(maker:unknown,budget:number,roster:unknown[],count:number):boolean {
+  if(!isRaidMaker331(maker))return false;
+  const family=RAID_MAKERS_331[maker].family;
+  if(budget<RAID_FAMILY_MIN_POINTS_331[family]||count<1)return false;
+  const maxCost=raidMaxPawnCost331(family,budget);let spent=0,leaders=0;
+  for(const kind of roster){
+    if(!RAID_MAKERS_331[maker].options.some(o=>o.kind===kind))return false;
+    const k=RAID_KINDS_331[kind as RaidKind331];if(k.cost>maxCost)return false;spent+=k.cost;if(k.leader)leaders++;
+  }
+  return leaders<=1&&spent<=budget&&budget-spent<cheapestRaidOption331(maker,leaders>0,maxCost);
 }
 /** V183's announced pursuit is the one bounded 35-point drifter. Its raid
  * does not depend on the ambient wealth budget or Cassandra cycle. */
@@ -49,7 +67,7 @@ export function validateRaids(w:World,version:number,ids:Set<number>):string[] {
   const cell=(v:unknown):boolean=>object(v)&&Object.keys(v).length===2&&integer(v.x,0,w.width-1)&&integer(v.z,0,w.height-1);
   if(version<68)return state!==undefined||w.pawns.some(p=>p.raid!==undefined)?['Legacy save contains raid state.']:[];
   if(state===undefined)return w.pawns.some(p=>p.raid!==undefined)?['Raider without calendar.']:[];
-  if(!object(state)||!keys(state,['profile','rng','nextCheck','serial','completed','active','last','departed','cassandra',...(version>=194?['mechanoid','mechActive']:[]),...((version===261||(Number(version)===262||isSchema263OrLater(Number(version))))?['extraActive261','extraResults261','extraMechActive261']:[])])||!['camp-raids-v1','cassandra-raids-v1',...version>=260?['camp-pressure-v1']:[],...(isSchema275OrLater(version)?['ship-reactor-raids-v1']:[])].includes(String(state.profile))||!integer(state.rng,1,4294967295)||!integer(state.serial,0)||!integer(state.completed,0,state.serial)||!Array.isArray(state.departed)||state.departed.length>w.width*w.height)return ['Invalid raid calendar.'];
+  if(!object(state)||!keys(state,['profile','rng','nextCheck','serial','completed','active','last','departed','cassandra',...(version>=194?['mechanoid','mechActive']:[]),...(version>=331?['lastFaction331']:[]),...((version===261||(Number(version)===262||isSchema263OrLater(Number(version))))?['extraActive261','extraResults261','extraMechActive261']:[])])||!['camp-raids-v1','cassandra-raids-v1',...version>=260?['camp-pressure-v1']:[],...(isSchema275OrLater(version)?['ship-reactor-raids-v1']:[])].includes(String(state.profile))||!integer(state.rng,1,4294967295)||!integer(state.serial,0)||!integer(state.completed,0,state.serial)||!Array.isArray(state.departed)||state.departed.length>w.width*w.height)return ['Invalid raid calendar.'];
   const shipOwner=isSchema275OrLater(version)&&Object.hasOwn(w,'shipReactorThreats275')&&validateShipReactorThreats275(w,version).length===0,shipOnly=state.profile==='ship-reactor-raids-v1';
   if(shipOnly&&(!shipOwner||state.nextCheck!==null||state.cassandra!==undefined||state.active!==undefined||state.mechActive!==undefined))return ['Invalid dormant ship reactor raid owner.'];
   const collectionErrors=validateTempRaidCollections261(w,version);if(collectionErrors.length)return collectionErrors;
@@ -59,6 +77,9 @@ export function validateRaids(w:World,version:number,ids:Set<number>):string[] {
   const cassandra=state.profile==='cassandra-raids-v1';
   if(cassandra?version<82||!w.gameProfile||!validCassandraAgenda(state.cassandra,agendaTick,version):state.cassandra!==undefined)return ['Invalid Cassandra raid agenda.'];
   const s=w.raids!,a:unknown=s.active,last:unknown=s.last;
+  // Schema 331: the world faction of the last Cassandra home raid (Core
+  // StoryState.lastRaidFaction), a real faction able to raid.
+  if(state.lastFaction331!==undefined&&(version<331||!cassandra||s.serial<1||!integer(state.lastFaction331,1)||raidFamilyOfFaction331(w,state.lastFaction331)===undefined))errors.push('Invalid last raid faction.');
   // Cassandra's already-validated agenda fixes its exact future window. The
   // gap from an early opportunity to the next cycle's late opportunity can
   // exceed one cycle; a rolling cycle-length bound would reject that save.
@@ -77,7 +98,7 @@ export function validateRaids(w:World,version:number,ids:Set<number>):string[] {
   if(version>=194)lastKeys.push('mechanoid','mechComposition');
   if(version===261||Number(version)===262||isSchema263OrLater(Number(version)))lastKeys.push('caravan261','memberCount261','tempIncident261');
   if(isSchema275OrLater(version))lastKeys.push('shipReactor275');
-  if(s.completed===0?last!==undefined:!object(last)||!keys(last,lastKeys)||(multi?!integer(last.id,1,s.serial)||last.id===s.active?.id||last.id===s.mechActive?.id||(s.extraActive261??[]).some(g=>g.id===last.id)||(s.extraMechActive261??[]).some(g=>g.id===last.id):last.id!==s.completed)||!integer(last.tick,0,w.tick)||!['defended','withdrawn','colony-down'].includes(String(last.reason))||!['killed','downed','escaped'].every(k=>integer(last[k],0,lastCount))||last.destroyed277!==undefined&&(!isSchema277OrLater(version)||!integer(last.destroyed277,1,lastCount))||last.captured!==undefined&&(version<86||!integer(last.captured,1,lastCount))||questLast&&(!integer(last.originQuestId,1,w.quests?.serial??0)||!validQuestComposition(last.composition))||last.composition!==undefined&&!pressureLast&&!reactorLast&&(questLast?!validQuestComposition(last.composition):last.tick<CASSANDRA_CYCLE_START||!w.economy||last.tick<w.economy.adoptedAt||!validComposition(last.composition,lastCount,version,cassandra,true))||Number(last.killed)+Number(last.downed)+Number(last.escaped)+Number(last.captured??0)+Number(last.destroyed277??0)!==lastCount)errors.push('Invalid raid outcome.');
+  if(s.completed===0?last!==undefined:!object(last)||!keys(last,lastKeys)||(multi?!integer(last.id,1,s.serial)||last.id===s.active?.id||last.id===s.mechActive?.id||(s.extraActive261??[]).some(g=>g.id===last.id)||(s.extraMechActive261??[]).some(g=>g.id===last.id):last.id!==s.completed)||!integer(last.tick,0,w.tick)||!['defended','withdrawn','colony-down'].includes(String(last.reason))||!['killed','downed','escaped'].every(k=>integer(last[k],0,lastCount))||last.destroyed277!==undefined&&(!isSchema277OrLater(version)||!integer(last.destroyed277,1,lastCount))||last.captured!==undefined&&(version<86||!integer(last.captured,1,lastCount))||questLast&&(!integer(last.originQuestId,1,w.quests?.serial??0)||!validQuestComposition(last.composition))||last.composition!==undefined&&!pressureLast&&!reactorLast&&(questLast?!validQuestComposition(last.composition):last.tick<CASSANDRA_CYCLE_START||!w.economy||last.tick<w.economy.adoptedAt||!validComposition(last.composition,lastCount,version,cassandra,true,cassandra&&last.tempIncident261===undefined&&last.caravan261===undefined))||Number(last.killed)+Number(last.downed)+Number(last.escaped)+Number(last.captured??0)+Number(last.destroyed277??0)!==lastCount)errors.push('Invalid raid outcome.');
   if(reactorLast&&object(last)&&(!shipOwner||last.caravan261!==undefined||last.tempIncident261!==undefined||last.originQuestId!==undefined||last.memberCount261!==undefined||!validShipReactorRaidSource275(last.shipReactor275,w,Number(last.tick),last.mechanoid===true?'mechanoid':'human')||last.mechanoid!==true&&!validComposition(last.composition,lastCount,version,true,true)))errors.push('Invalid retained ship reactor raid outcome.');
   if(object(last)&&Object.hasOwn(last,'tempIncident261')&&(!validTempRaidSource261(last.tempIncident261,w,undefined,Number(last.tick))||!integer(last.memberCount261,1,w.nextId-1)))errors.push('Invalid real TempMap raid outcome.');
   if(object(last)&&last.tempIncident261===undefined&&(last.caravan261!==undefined||last.memberCount261!==undefined)&&(!integer(last.memberCount261,1,w.nextId-1)||!object(last.caravan261)||!integer(last.caravan261.bornAtCore,0,w.tick*10)||!validCaravanRaidProvenance261(last.caravan261,w,Number(last.caravan261.bornAtCore)/10,undefined,Number(last.tick))))errors.push('Invalid actual caravan raid result provenance.');
@@ -103,9 +124,12 @@ export function validateRaids(w:World,version:number,ids:Set<number>):string[] {
     const pressureHuman=object(a)&&object(a.caravan261)&&a.caravan261.kind==='pressure';const caravan=object(a)&&a.caravan261!==undefined&&!pressureHuman;
     const expectedCount=caravan&&object(a)&&Array.isArray(a.members)?a.members.length:object(a)&&object(a.composition)&&Array.isArray(a.composition.roster)?a.composition.roster.length:Number(object(a)?a.id:s.serial)===1?1:2;
     const questGroup=object(a)&&a.originQuestId!==undefined;
-    if(!object(a)||!keys(a,['id','startedAt','deadline','lossPermille','members','lost','phase','reason',...(version>=105?['composition']:[]),...(version>=172?['originQuestId']:[]),...(version>=330?['stage330']:[]),...(version===261||(Number(version)===262||isSchema263OrLater(Number(version))))?['caravan261']:[]])||(multi?!integer(a.id,1,s.serial):a.id!==s.serial)||!integer(a.startedAt,0,w.tick)||!(caravan?a.deadline===null&&a.lossPermille===null&&validCaravanRaidProvenance261(a.caravan261,w,a.startedAt,Array.isArray(a.members)?a.members as number[]:undefined):integer(a.deadline,a.startedAt+2600+stageTicks330(a),a.startedAt+3800+stageTicks330(a))&&integer(a.lossPermille,400,700))||!['assault','withdraw'].includes(String(a.phase))||!Array.isArray(a.members)||a.members.length!==expectedCount||questGroup&&(!integer(a.originQuestId,1,w.quests?.serial??0)||!validQuestComposition(a.composition))||a.composition===undefined&&version>=105&&cassandra&&!questGroup&&a.startedAt>=CASSANDRA_CYCLE_START&&!!w.economy&&a.startedAt>w.economy.adoptedAt||a.composition!==undefined&&!pressureHuman&&(questGroup?!validQuestComposition(a.composition):a.startedAt<CASSANDRA_CYCLE_START||!w.economy||a.startedAt<w.economy.adoptedAt||!validComposition(a.composition,expectedCount,version,cassandra,true))||new Set(a.members).size!==a.members.length||!a.members.every(id=>integer(id,1,w.nextId-1))||!Array.isArray(a.lost)||!a.lost.every((id,i)=>a.members instanceof Array&&a.members.includes(id)&&(i===0||Number(id)>Number((a.lost as unknown[])[i-1])))||!(a.phase==='assault'?a.reason===undefined:(caravan?['trader-lost','non-hostile']:['losses','timeout','colony-down']).includes(String(a.reason))))return [...errors,'Invalid active raid group.'];
+    if(!object(a)||!keys(a,['id','startedAt','deadline','lossPermille','members','lost','phase','reason',...(version>=105?['composition']:[]),...(version>=172?['originQuestId']:[]),...(version>=330?['stage330']:[]),...(version===261||(Number(version)===262||isSchema263OrLater(Number(version))))?['caravan261']:[]])||(multi?!integer(a.id,1,s.serial):a.id!==s.serial)||!integer(a.startedAt,0,w.tick)||!(caravan?a.deadline===null&&a.lossPermille===null&&validCaravanRaidProvenance261(a.caravan261,w,a.startedAt,Array.isArray(a.members)?a.members as number[]:undefined):integer(a.deadline,a.startedAt+2600+stageTicks330(a),a.startedAt+3800+stageTicks330(a))&&integer(a.lossPermille,400,700))||!['assault','withdraw'].includes(String(a.phase))||!Array.isArray(a.members)||a.members.length!==expectedCount||questGroup&&(!integer(a.originQuestId,1,w.quests?.serial??0)||!validQuestComposition(a.composition))||a.composition===undefined&&version>=105&&cassandra&&!questGroup&&a.startedAt>=CASSANDRA_CYCLE_START&&!!w.economy&&a.startedAt>w.economy.adoptedAt||a.composition!==undefined&&!pressureHuman&&(questGroup?!validQuestComposition(a.composition):a.startedAt<CASSANDRA_CYCLE_START||!w.economy||a.startedAt<w.economy.adoptedAt||!validComposition(a.composition,expectedCount,version,cassandra,true,cassandra&&a.caravan261===undefined))||new Set(a.members).size!==a.members.length||!a.members.every(id=>integer(id,1,w.nextId-1))||!Array.isArray(a.lost)||!a.lost.every((id,i)=>a.members instanceof Array&&a.members.includes(id)&&(i===0||Number(id)>Number((a.lost as unknown[])[i-1])))||!(a.phase==='assault'?a.reason===undefined:(caravan?['trader-lost','non-hostile']:['losses','timeout','colony-down']).includes(String(a.reason))))return [...errors,'Invalid active raid group.'];
     if(object(a)&&a.caravan261!==undefined&&(!validCaravanRaidProvenance261(a.caravan261,w,Number(a.startedAt),Array.isArray(a.members)?a.members as number[]:undefined)||pressureHuman&&!validComposition(a.composition,expectedCount,version,true,true)))return [...errors,'Invalid actual incident raid provenance.'];
     const group=s.active!;
+    // Schema 331: present raiders belong to a world faction of the roster's family.
+    const family=group.composition?.group331?RAID_MAKERS_331[group.composition.group331].family:'pirate',registry=w.worldFactions;
+    if(version>=331&&group.composition&&group.caravan261===undefined&&registry&&w.pawns.some(p=>p.raid?.group===group.id&&p.worldAffiliation259?.factionId!=null&&p.worldAffiliation259.factionId!==registry.playerFactionId&&raidFamilyOfFaction331(w,p.worldAffiliation259.factionId)!==family))errors.push('Raider outside the raid faction family.');
     // Schema 330 staging: a real point, before the assault, at most Core 15000 ticks after the start.
     if(group.stage330!==undefined){const st:unknown=group.stage330;if(!object(st)||!keys(st,['point','untilCore','endedAtCore'])||!cell(st.point)||!integer(st.untilCore,group.startedAt*10+5000,group.startedAt*10+15000)
       ||st.endedAtCore!==undefined&&!integer(st.endedAtCore,group.startedAt*10,Math.min(Number(st.untilCore)+10,w.tick*10))||st.endedAtCore===undefined&&group.phase!=='assault')errors.push('Invalid raid staging.');}

@@ -4,12 +4,12 @@ import {stepWorld} from '../src/sim/engine.ts';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {asOldSchema} from './scenarios/old-schema.ts';
-import type {World} from '../src/sim/types.ts';
+import {SCHEMA_VERSION,type World} from '../src/sim/types.ts';
 
 const setVersion=(w:World,v:number)=>{(w as {schemaVersion:number}).schemaVersion=v;};
 /** A real Atterrissage game (Cassandra) and a pirate raid created at a free
  * edge cell with the given calendar seed. */
-function raidAt(seed:number,version=330):{w:World;group:ReturnType<typeof createRaidGroup>} {
+function raidAt(seed:number,version:number=SCHEMA_VERSION):{w:World;group:ReturnType<typeof createRaidGroup>} {
   const w=createScenarioWorld(42,32,'crashlanded');setVersion(w,version);
   for(let z=0;z<w.height;z++)for(const x of [0,w.width-1]){
     const group=createRaidGroup(w,{count:1,sites:[{x,z}],random:{rng:seed}});
@@ -30,7 +30,7 @@ test('a Cassandra pirate raid may stage before its assault, about half the time'
 });
 
 test('the staged group defends its point, then assaults after the Core delay',()=>{
-  const {w}=staged(330)!,group=w.raids!.active!,stage=group.stage330!;
+  const {w}=staged(SCHEMA_VERSION)!,group=w.raids!.active!,stage=group.stage330!;
   expect(stage.untilCore-w.tick*10).toBeGreaterThanOrEqual(5000);expect(stage.untilCore-w.tick*10).toBeLessThanOrEqual(15000);
   expect(group.deadline!-w.tick).toBeGreaterThanOrEqual(2600+Math.ceil((stage.untilCore-w.tick*10)/10));
   expect(w.events.at(-1)!.message).toMatch(/se regroupe/);
@@ -63,7 +63,7 @@ test('a long staging keeps a valid save, before and after the assault',()=>{
 });
 
 test('a staging point outside the Core window is refused in a save',()=>{
-  const {w}=staged(330)!,group=w.raids!.active!;
+  const {w}=staged(SCHEMA_VERSION)!,group=w.raids!.active!;
   group.stage330!.untilCore=group.startedAt*10+20000;
   expect(validateWorld(w).length).toBeGreaterThan(0);
   // An assault start in the future is refused too.

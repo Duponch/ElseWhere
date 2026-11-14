@@ -70,7 +70,7 @@ export function validateTempRaidCollections261(w:World,version:number):string[] 
   else if(raw.memberCount261!==undefined)errors.push('Unowned retained cohort count.');
   if(!temp&&!mech&&composition!==undefined){
    const quest=raw.originQuestId!==undefined;
-   if(quest?(!int(raw.originQuestId,1,w.quests?.serial??0)||!plain(composition)||!fields(composition,['budget','roster'])||composition.budget!==35||!dense(composition.roster,1)||composition.roster.length!==1||composition.roster[0]!=='drifter'):(!reactor&&!caravan&&(raw.tick<CASSANDRA_CYCLE_START||!w.economy||raw.tick<w.economy.adoptedAt)||!validComposition(composition,count,version,true,true)))errors.push('Invalid retained real raid composition.');
+   if(quest?(!int(raw.originQuestId,1,w.quests?.serial??0)||!plain(composition)||!fields(composition,['budget','roster'])||composition.budget!==35||!dense(composition.roster,1)||composition.roster.length!==1||composition.roster[0]!=='drifter'):(!reactor&&!caravan&&(raw.tick<CASSANDRA_CYCLE_START||!w.economy||raw.tick<w.economy.adoptedAt)||!validComposition(composition,count,version,true,true,!reactor&&!caravan&&s.profile==='cassandra-raids-v1')))errors.push('Invalid retained real raid composition.');
   }else if(raw.originQuestId!==undefined&&!temp)errors.push('Retained quest lost its actual composition.');
  }
  if(results.length>s.completed)errors.push('Retained results exceed real completions.');

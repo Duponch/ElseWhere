@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V331 — schéma 331 :** [Raids de toutes les factions hostiles](raid-factions-v331.md). Cassandra tire la faction de chaque raid comme le jeu de base : chaque faction hostile pèse 1, les mécanoïdes leur courbe, la faction du raid précédent 0,4 fois son poids ; à 1 000 points, un raid sur quatre est mécanique au lieu de 57 %. Tribus et étrangers attaquent avec leurs types du jeu de base que la colonie peut équiper (arcs, lances, masses, épées longues, fusils) ; prisonniers encore au profil du vagabond.
+
 **V330 — schéma 330 :** [Pirates qui se regroupent avant l'assaut](raid-staging-v330.md). Un raid pirate de Cassandra tire sa stratégie comme le jeu de base : environ un sur deux se regroupe près du bord, défend un rayon de 28 cases, puis attaque après 5 000 à 15 000 ticks ou 30 % de pertes.
 
 **V329 — schéma 329 :** [Conteur : incidents divers, éclipse, quêtes et animaux](storyteller-fidelity-v329.md). Les incidents divers suivent la loterie du jeu de base (incidents impossibles retirés, intention de population) ; l'éclipse vient du composant monde ; l'acceptation des quêtes se lit à leur date ; les animaux de la colonie comptent dans les points de menace.

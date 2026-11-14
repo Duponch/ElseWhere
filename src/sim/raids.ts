@@ -13,8 +13,10 @@ import { isColonist } from './affiliation.ts';
 import { carrierOf } from './rescue-state.ts';
 import { CASSANDRA_CYCLE_START,consumeCassandraOpportunity,INTRO_RAID_TICK } from './cassandra-raids.ts';
 import { raidEntries,atMapEdge } from './raid-space.ts';
-import { RAID_ROLE_COST,pirateMaxPawnCost,raidRandom,raidStaging330,type RaidComposition,type RaidRole } from './raid-state.ts';
+import { RAID_ROLE_COST,pirateMaxPawnCost,raidRandom,raidStaging330,type PirateRaidComposition,type PirateRaidRole } from './raid-state.ts';
 import { createRaidGroup,RAID_ROLE_OPTIONS } from './raid-spawn.ts';
+import {chooseRaidComposition331,drawRaidFaction331} from './raid-factions-331.ts';
+import {chooseMechanoidComposition} from './mechanoid-raid-composition.ts';
 import {shipReactorBeacon275} from './ship-reactor-threats-275.ts';
 import type {RaidGroup} from './raid-state.ts';
 import { computeThreatPoints,summaryHealthPercent } from './threat-points.ts';
@@ -25,9 +27,9 @@ import { TICKS_PER_DAY,type World,type Pawn } from './types.ts';
 const log=(w:World,message:string)=>{w.events.push({tick:w.tick,type:'command',message});if(w.events.length>80)w.events.splice(0,w.events.length-80);};
 /** Local projection of a Core pirate group, using only physical weapon types
  * Lisière implements. Weighted choices spend until no available role fits. */
-export function chooseRaidComposition(budget:number,random:{rng:number}):RaidComposition {
+export function chooseRaidComposition(budget:number,random:{rng:number}):PirateRaidComposition {
   if(!Number.isFinite(budget)||budget<35||budget>10000)throw new RangeError('Invalid raid budget.');
-  const roster:RaidRole[]=[],maxCost=pirateMaxPawnCost(budget);let remaining=budget;
+  const roster:PirateRaidRole[]=[],maxCost=pirateMaxPawnCost(budget);let remaining=budget;
   for(;;){
     const eligible=RAID_ROLE_OPTIONS.filter(option=>RAID_ROLE_COST[option.role]<=remaining&&RAID_ROLE_COST[option.role]<=maxCost);
     if(!eligible.length)break;
@@ -110,6 +112,9 @@ export function advanceRaids(w:World):void {
   }
   const random={rng:s.rng};
   const mechRandom=s.mechanoid?{rng:s.mechanoid.rng}:undefined;
+  // Schema 331: Cassandra draws the raiding faction among every hostile world
+  // faction, the introductory raid included (Core forces 40 points).
+  if(cassandra&&w.schemaVersion>=331&&w.worldFactions&&(points!==undefined||w.tick===INTRO_RAID_TICK)){startFactionRaid331(w,points??40,random,mechRandom,points===undefined);return;}
   const mech=points!==undefined&&mechRandom?chooseMechanoidOpportunity(w,points,mechRandom):undefined;
   if(mech!==undefined){
     if(mech===null){s.mechanoid!.rng=mechRandom!.rng;return;}
@@ -121,6 +126,25 @@ export function advanceRaids(w:World):void {
     if(!cassandra)s.nextCheck=w.tick+TICKS_PER_DAY/4;
     return;
   }else if(mechRandom){s.mechanoid!.rng=mechRandom.rng;s.mechanoid!.lastFaction='outlaws';}
+}
+/** One Cassandra home raid by a faction drawn with the Core weights. The
+ * draw uses the mechanical policy RNG when the colony admitted mechanoids,
+ * as the historical mechanoid-or-pirate choice did; failures commit nothing
+ * more than that choice did. */
+function startFactionRaid331(w:World,points:number,random:{rng:number},mechRandom:{rng:number}|undefined,intro:boolean):void {
+  const s=w.raids!,draw=mechRandom??random,pick=drawRaidFaction331(w,points,()=>raidRandom(draw));
+  if(!pick){if(mechRandom)s.mechanoid!.rng=mechRandom.rng;return;}
+  if(pick.family==='mechanoid'){
+    const composition=chooseMechanoidComposition(points,mechRandom!,w.schemaVersion>=197&&!!s.mechanoid!.ranged);
+    if(!composition){s.mechanoid!.rng=mechRandom!.rng;return;}
+    if(createMechanoidRaid(w,composition,mechRandom!))s.lastFaction331=pick.factionId;
+    return;
+  }
+  const composition=intro?undefined:pick.family==='pirate'?chooseRaidComposition(points,random):chooseRaidComposition331(points,pick.family,random);
+  const count=composition?.roster.length??(s.serial===0?1:2),sites=raidEntries(w,s.rng,count);
+  if(!sites||!createRaidGroup(w,{count,sites,random,faction331:{factionId:pick.factionId,family:pick.family},...(composition?{composition}:{})}))return;
+  if(mechRandom){s.mechanoid!.rng=mechRandom.rng;s.mechanoid!.lastFaction='outlaws';}
+  s.lastFaction331=pick.factionId;
 }
 /** Remove only an actor physically at the boundary, after travel/recovery.
  * Export carried equipment with identity/quality/HP; ground loot stays here. */

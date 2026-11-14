@@ -6,7 +6,7 @@ import {adoptFluIncidents,FLU_CHECK_INTERVAL,FLU_FIRST_CHECK} from '../src/sim/f
 import {enableCassandraRaids,INTRO_RAID_TICK} from '../src/sim/cassandra-raids.ts';
 import {advanceRaids,chooseRaidComposition} from '../src/sim/raids.ts';
 import {validateRaids} from '../src/sim/raid-save.ts';
-import {RAID_ROLE_COST,pirateMaxPawnCost} from '../src/sim/raid-state.ts';
+import {RAID_ROLE_COST,pirateMaxPawnCost,type PirateRaidRole} from '../src/sim/raid-state.ts';
 import {injurePawn} from '../src/sim/health.ts';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import type {World} from '../src/sim/types.ts';
@@ -108,7 +108,7 @@ test('intro is fixed; an adopted Cassandra occasion has priced physical raiders 
     expect(pawn.faction).toBe('outlaws');expect(id).toBeGreaterThanOrEqual(priorId);
     expect(gear).toHaveLength(1);
     expect(gear[0]!.item).toBe(({drifter:'plasteel-knife',thrasher:'plasteel-knife',
-      scavenger:'revolver',pirate:'bolt-action-rifle'} as const)[composition.roster[index]!]);
+      scavenger:'revolver',pirate:'bolt-action-rifle'} as const)[composition.roster[index]! as PirateRaidRole]);
   }
   const invalid=structuredClone(world);invalid.raids!.active!.composition!.budget=0;
   expect(validateRaids(raidContext105(invalid),105,new Set())).toContain('Invalid active raid group.');
