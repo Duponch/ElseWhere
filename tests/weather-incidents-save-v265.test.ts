@@ -1,6 +1,7 @@
 import {expect,test} from 'vitest';
 import {SnapshotDecoder,SnapshotEncoder} from '../src/bridge/snapshots.ts';
 import {adoptMiscIncidents,adoptWeatherIncidents,advanceMiscIncidents,MISC_FIRST_CHECK} from '../src/sim/cassandra-misc.ts';
+import {adoptWorldIncidents,advanceWorldIncidents,WORLD_FIRST_CHECK} from '../src/sim/cassandra-world.ts';
 import {validMiscIncidents} from '../src/sim/cassandra-misc-save.ts';
 import {crashlandedProfile} from '../src/sim/game-profile.ts';
 import {enableCassandraRaids} from '../src/sim/cassandra-raids.ts';
@@ -20,9 +21,20 @@ function colony():World {
   if(w.site.revision===2)initializeWildFlora(w,w.site);
   enableCassandraRaids(w);adoptFluIncidents(w);adoptSiteClimate(w);adoptMiscIncidents(w);return w;
 }
+/** A world where an ordinary ticket selected the incident. Schema 329: the
+ * cold snap comes from the Core Misc lottery and the eclipse from the World
+ * component, so the private calendar seed is searched rather than fixed. */
+const selectedCache=new Map<string,World>();
 function selected(kind:'coldSnap'|'eclipse'):World {
-  const w=colony();adoptWeatherIncidents(w);w.miscIncidents!.rng=kind==='coldSnap'?11:15;
-  w.tick=MISC_FIRST_CHECK;advanceMiscIncidents(w);expect(w.miscIncidents!.weather![kind]).toBeDefined();return w;
+  const cached=selectedCache.get(kind);if(cached)return structuredClone(cached);
+  const base=colony();adoptWeatherIncidents(base);if(kind==='eclipse')adoptWorldIncidents(base);
+  for(let seed=1;seed<200000;seed++){
+    const w=structuredClone(base);
+    if(kind==='coldSnap'){w.miscIncidents!.rng=seed;w.tick=MISC_FIRST_CHECK;advanceMiscIncidents(w);}
+    else{w.tick=WORLD_FIRST_CHECK;w.worldIncidents!.nextCheck=w.tick;w.worldIncidents!.rng=seed;advanceWorldIncidents(w);}
+    if(w.miscIncidents!.weather![kind]){selectedCache.set(kind,w);return structuredClone(w);}
+  }
+  throw Error('No calendar seed selects '+kind);
 }
 
 test('actual ordinary tickets select the two new incidents once, without spending World RNG',()=>{

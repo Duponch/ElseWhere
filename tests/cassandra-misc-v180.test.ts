@@ -19,6 +19,9 @@ function cassandra(tick=0,seed=42):World {
   const world=createWorld(seed,16,16);world.pawns=[];world.gameProfile=crashlandedProfile();world.tick=tick;
   adoptMiscIncidents(world);return world;
 }
+/** The seeds below were chosen for the single-ticket lottery used before
+ * schema 329; tests/storyteller-fidelity-329.test.ts covers the Core one. */
+const lottery328=(world:World):World=>{(world as {schemaVersion:number}).schemaVersion=328;return world;};
 function warm(world:World):void {
   const definition=siteClimateDefinition(world);
   const warmDay=Array.from({length:60},(_,day)=>day).find(day=>
@@ -47,7 +50,7 @@ test('Cassandra adopts prospectively, while historical camps keep their calendar
   world.tick=MISC_INTRO_TICK;advanceMiscIncidents(world);
   expect(state.introDone).toBe(true);expect(state.opportunities).toBe(1);expect(world.rng).toBe(worldRng);
   advanceMiscIncidents(world);expect(state.opportunities).toBe(1);
-  const selected=cassandra(MISC_INTRO_TICK-1,13312);
+  const selected=lottery328(cassandra(MISC_INTRO_TICK-1,13312));
   warm(selected);selected.tick=MISC_INTRO_TICK;advanceMiscIncidents(selected);
   expect(selected.miscIncidents!.active?.start).toBe(MISC_INTRO_TICK);
   expect(selected.miscIncidents!.heatwaves).toBe(1);
@@ -66,13 +69,13 @@ test('category checks use linear Core MTB and silent unimplemented tickets',()=>
   expect(state.checks).toBe(1);expect(state.nextCheck).toBe(MISC_FIRST_CHECK+100);
   expect(state.rng).not.toBe(firstRng);
   advanceMiscIncidents(world);expect(state.checks).toBe(1);
-  const selected=cassandra(MISC_FIRST_CHECK-1);
+  const selected=lottery328(cassandra(MISC_FIRST_CHECK-1));
   warm(selected);selected.miscIncidents!.rng=1;
   selected.tick=MISC_FIRST_CHECK;advanceMiscIncidents(selected);
   expect(selected.miscIncidents!).toMatchObject({checks:1,opportunities:1,heatwaves:1});
   expect(selected.miscIncidents!.active?.start).toBe(MISC_FIRST_CHECK);
   // A chosen unsupported ticket consumes the opportunity without creating heat.
-  const other=cassandra(MISC_INTRO_TICK-1);
+  const other=lottery328(cassandra(MISC_INTRO_TICK-1));
   warm(other);other.miscIncidents!.rng=0x12345678;
   other.tick=MISC_INTRO_TICK;advanceMiscIncidents(other);
   expect(other.miscIncidents!.opportunities).toBe(1);

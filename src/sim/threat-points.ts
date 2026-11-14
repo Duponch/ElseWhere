@@ -19,6 +19,8 @@ export interface ThreatPointsInput {
   /** Schema 328: Core reads the days factor at whole days passed
    * (DaysPassedSinceSettle); the minimum points keep the fractional day. */
   readonly timeFactorWholeDays?: boolean;
+  /** Schema 329: colony animals able to learn Release (animal-threat-points-329.ts). */
+  readonly animalPoints?: number;
 }
 
 export interface ThreatPointsResult {
@@ -104,7 +106,9 @@ export function computeThreatPoints(input: ThreatPointsInput): ThreatPointsResul
     (.35 * freeColonists + .65 * colonistHealthSum);
   const adaptationFactor = curve(ADAPT_FACTOR, adaptationDays);
   const timeFactor = curve(TIME_FACTOR, input.timeFactorWholeDays ? Math.floor(elapsedDays) : elapsedDays);
-  const unclampedPoints = (wealthPoints + colonistPoints) * adaptationFactor * .6 * timeFactor;
+  const animalPoints = input.animalPoints ?? 0;
+  if (!validFinite(animalPoints, 0)) throw new RangeError('Invalid threat-points input.');
+  const unclampedPoints = (wealthPoints + colonistPoints + animalPoints) * adaptationFactor * .6 * timeFactor;
   const minimum = minimumThreatPoints(elapsedDays, seedBucket);
   return {points: Math.min(10000, Math.max(minimum, unclampedPoints)), wealthPoints,
     colonistPoints, adaptationFactor, timeFactor, minimum, unclampedPoints};

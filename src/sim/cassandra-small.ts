@@ -1,3 +1,4 @@
+import {homeAnimalThreatPoints329} from './animal-threat-points-329.ts';
 import {homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
 import { isColonist } from './affiliation.ts';
 import { ANIMAL_SPECIES } from './animal-species.ts';
@@ -92,7 +93,7 @@ function consumeOpportunity(world:World,state:CassandraSmallCalendar):void {
 function acceptanceNow(world:World):number {
   if(!world.economy)return 1;
   const colonists=world.pawns.filter(p=>isColonist(p)&&p.state!=='dead'&&!p.prisoner&&!p.visitor);
-  return smallAcceptance(computeThreatPoints({timeFactorWholeDays:world.schemaVersion>=328,knownWealth:world.economy.wealth.knownStorytellerWealth,
+  return smallAcceptance(computeThreatPoints({timeFactorWholeDays:world.schemaVersion>=328,animalPoints:homeAnimalThreatPoints329(world),knownWealth:world.economy.wealth.knownStorytellerWealth,
     freeColonists:colonists.length,
     colonistHealthSum:colonists.reduce((sum,p)=>sum+(p.health?summaryHealthPercent(p.health):1),0),
     elapsedDays:world.tick/TICKS_PER_DAY,adaptationDays:world.economy.adaptationDays,

@@ -1,3 +1,4 @@
+import {resolveSelectedEclipse} from './cassandra-misc.ts';
 import {isMiscIncidents305,resolveSelectedAurora305,advanceAurora305} from './misc-incidents-305.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 
@@ -64,6 +65,8 @@ export function advanceWorldIncidents(world:World):void {
   state.opportunities++;
   const ticket=random(state)*4;
   // Eclipse and Aurora keep their absent tickets; no retries or renormalization.
-  if(ticket>=1.5&&ticket<2.8)resolveSelectedSolarFlare(world);
+  // Schema 329: the eclipse is this World component's Core incident.
+  if(ticket<1.5&&world.schemaVersion>=329&&world.miscIncidents)resolveSelectedEclipse(world,world.miscIncidents,()=>random(state));
+  else if(ticket>=1.5&&ticket<2.8)resolveSelectedSolarFlare(world);
   else if(ticket>=2.8&&isMiscIncidents305(Number(world.schemaVersion)))resolveSelectedAurora305(world,()=>random(state));
 }

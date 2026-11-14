@@ -33,7 +33,10 @@ export function advanceQuestPopulation263(s:WorldQuestCalendar263,core:number,co
  if(consecutive&&Math.floor((s.populationAtCore-171)/30000)!==Math.floor((core-171)/30000))s.populationAdaptationDays+=.5;
  s.knownColonistIds=[...colonistIds];s.populationAtCore=core;
 }
-interface QuestSelection263 {points:number;progress:number;adjustedPopulation:number;hasFreeColonist:boolean;hasHomeMap:boolean;tradeRequests284?:boolean;peaceTalks293?:boolean}
+interface QuestSelection263 {points:number;progress:number;adjustedPopulation:number;hasFreeColonist:boolean;hasHomeMap:boolean;tradeRequests284?:boolean;peaceTalks293?:boolean;
+ /** Schema 329: Core compares the cycle's random value with the day curve at
+  * the hit; the curve depends only on time, so it is read at the hit date. */
+ acceptAtHit329?:boolean}
 /** Unsupported Core roots keep their tickets. Selecting one is a no-op,
  * never a fabricated quest or a redistribution towards ItemStash. Their
  * unimplemented CanRun/refire clauses are a declared catalogue limitation. */
@@ -60,7 +63,7 @@ export function advanceWorldQuestCalendar263(s:WorldQuestCalendar263,core:number
  if(cycle!==s.cycle){s.cycle=cycle;s.pendingCore=null;
   if(core===cycle*CYCLE){
    const proposed=Math.max(cycle*CYCLE+Math.floor(random(s)*(CYCLE/CHECK))*CHECK,(s.previousHitInterval*CHECK)+SPACING);
-   if(proposed<(cycle+1)*CYCLE&&random(s)<questAcceptance263(core))s.pendingCore=proposed;
+   if(proposed<(cycle+1)*CYCLE&&random(s)<questAcceptance263(input.acceptAtHit329?proposed:core))s.pendingCore=proposed;
   }
  }
  if(s.pendingCore===null||s.pendingCore>core)return null;

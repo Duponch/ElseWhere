@@ -1,3 +1,4 @@
+import {homeAnimalThreatPoints329} from './animal-threat-points-329.ts';
 import {drawBigThreat328} from './big-threats-328.ts';
 import {shipCasketHumanReferences277,shipCasketTerminalParticipant277} from './ship-casket-notifications-277.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
@@ -89,7 +90,7 @@ export function advanceRaids(w:World):void {
   // introductory raid and every legacy calendar retain their exact draws.
   const budgeted=cassandra&&w.tick!==INTRO_RAID_TICK&&!!w.economy;
   const freeColonists=budgeted?w.pawns.filter(p=>isColonist(p)&&p.state!=='dead'&&!p.prisoner&&!p.visitor):[];
-  const points=budgeted?computeThreatPoints({timeFactorWholeDays:w.schemaVersion>=328,
+  const points=budgeted?computeThreatPoints({timeFactorWholeDays:w.schemaVersion>=328,animalPoints:homeAnimalThreatPoints329(w),
     knownWealth:w.economy!.wealth.knownStorytellerWealth,
     freeColonists:freeColonists.length,
     colonistHealthSum:freeColonists.reduce((sum,p)=>sum+(p.health?summaryHealthPercent(p.health):1),0),

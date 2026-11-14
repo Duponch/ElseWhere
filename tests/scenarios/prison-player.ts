@@ -1,3 +1,4 @@
+import { backgroundWorkRefusal } from '../../src/sim/colonist-backgrounds.ts';
 import { isColonist } from '../../src/sim/affiliation.ts';
 import { canDesignate } from '../../src/sim/engine.ts';
 import { footprintCells,STRUCTURE_DEFINITIONS } from '../../src/sim/definitions.ts';
@@ -186,7 +187,8 @@ export function prisonDecisions(w:World,s:PrisonPlayerState):Decision[] {
   // Existing bills may already match the old policy, so population growth also
   // produces the missing update directly, retaining filters and suspension.
   for(const station of w.structures)for(const bill of station.bills??[])if(bill.recipe==='simple-meal'&&bill.target!==mealTarget&&!bills.has(`${station.id}:${bill.id}`))out.push({reason:'Prévoir trois repas par personne avec les mêmes ingrédients et postes.',command:{type:'bill-update',structureId:station.id,billId:bill.id,settings:{mode:'until',target:mealTarget,suspended:station.kind==='fueled-stove'?electricReady:bill.suspended,filters:{...bill.filters},radius:bill.radius,destination:bill.destination}}});
-  const priority=(p:Pawn,work:WorkType,value:number,reason:string)=>{if(p.priorities[work]!==value)out.push({reason,command:{type:'priority',pawnId:p.id,work,value}});};
+  // A player never assigns a work type the person's past forbids.
+  const priority=(p:Pawn,work:WorkType,value:number,reason:string)=>{if(p.priorities[work]!==value&&!backgroundWorkRefusal(p,work))out.push({reason,command:{type:'priority',pawnId:p.id,work,value}});};
   const cook=[...people].sort((a,b)=>(b.skills.cooking?.level??0)-(a.skills.cooking?.level??0)||a.id-b.id)[0]!;
   const warden=[...people].filter(p=>p!==cook).sort((a,b)=>(b.skills.social?.level??0)-(a.skills.social?.level??0)||a.id-b.id)[0]??cook;
   priority(warden,'warden',1,'Confier les repas et conversations au geôlier, en conservant un cuisinier distinct.');
