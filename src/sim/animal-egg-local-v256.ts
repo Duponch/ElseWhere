@@ -114,7 +114,12 @@ function hatch(world:World,pile:MaterialPile,species:EggSpecies256,cell:Cell):bo
 export function advanceLocalEggs256(world:World,layout?:ThermalLayout):void {
  if(world.schemaVersion<256)return;
  let temperature:TemperatureView|undefined,changed=false;
- for(const pile of [...world.piles]){
+ // Piles before the first egg pile are skipped without any effect: start the
+ // copied pass there (none at all on most ticks).
+ const piles=world.piles;let first=0;
+ while(first<piles.length&&!(eggSpeciesForItem256(piles[first]!.item)&&piles[first]!.egg))first++;
+ if(first>=piles.length)return;
+ for(const pile of piles.slice(first)){
   const species=eggSpeciesForItem256(pile.item);if(!species||!pile.egg)continue;
   // Skyfaller does not tick its nested Pawn/ThingOwner. Preserve the actual
   // egg anchor as well as progress for compact capture at personalTick.

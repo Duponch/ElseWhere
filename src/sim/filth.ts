@@ -79,7 +79,8 @@ export function recordFilthMovement(w:World,p:Pawn):void {
   const gain=(kind:FilthKind)=>{const held=feet.carried.find(c=>c.kind===kind);if(held){if(held.thickness<5)held.thickness++;}else feet.carried.push({kind,thickness:1});};
   if(filthRandom(state)<.1){
     if(!tile.floor&&!tile.bridge&&isGrowingTerrain(tile.terrain)){feet.lastTerrain='dirt';if(!feet.carried.some(c=>c.kind==='dirt'))gain('dirt');}
-    for(const f of [...state.items])if(f.kind!=='rock-rubble'&&f.kind!=='building-rubble'&&same(f,p)&&f.thickness>1&&w.tick*10-f.grownCore>400){gain(f.kind);thinFilth(w,f);}
+    // Thinning a record thicker than 1 never removes it: the array stays as it is.
+    for(const f of state.items)if(f.kind!=='rock-rubble'&&f.kind!=='building-rubble'&&same(f,p)&&f.thickness>1&&w.tick*10-f.grownCore>400){gain(f.kind);thinFilth(w,f);}
   }
   if(filthRandom(state)<.005)addFilth(w,p,feet.lastTerrain&&filthRandom(state)<.66?'dirt':'trash',1,true);
   if(!feet.carried.length&&!feet.lastTerrain)delete p.filthFeet;
@@ -93,7 +94,8 @@ export function recordFilthMovement297(w:World,p:Pawn):boolean {
   const gain=(kind:FilthKind)=>{const held=feet.carried.find(c=>c.kind===kind);if(held){if(held.thickness<5)held.thickness++;}else feet.carried.push({kind,thickness:1});};
   if(filthRandom(state)<.1){
     if(!tile.floor&&!tile.bridge&&isGrowingTerrain(tile.terrain)){feet.lastTerrain='dirt';if(!feet.carried.some(c=>c.kind==='dirt'))gain('dirt');}
-    for(const f of [...state.items])if(f.kind!=='rock-rubble'&&f.kind!=='building-rubble'&&same(f,p)&&f.thickness>1&&effectiveCore297(w)-f.grownCore>400){gain(f.kind);thinFilth(w,f);changed=true;}
+    // Thinning a record thicker than 1 never removes it: the array stays as it is.
+    for(const f of state.items)if(f.kind!=='rock-rubble'&&f.kind!=='building-rubble'&&same(f,p)&&f.thickness>1&&effectiveCore297(w)-f.grownCore>400){gain(f.kind);thinFilth(w,f);changed=true;}
   }
   if(filthRandom(state)<.005)changed=addFilth(w,p,feet.lastTerrain&&filthRandom(state)<.66?'dirt':'trash',1,true)||changed;
   if(!feet.carried.length&&!feet.lastTerrain)delete p.filthFeet;

@@ -7,6 +7,7 @@ import { productKind, productReady } from './animal-products.ts';
 import { slaughterContact,slaughterHandlerAvailable } from './animal-slaughter.ts';
 import { autoSlaughterTargets,slaughterIntent } from './auto-slaughter.ts';
 import type { AnimalSpeciesId } from './animal-species.ts';
+import { structuresOfKind } from './structure-navigation.ts';
 import type { World } from './types.ts';
 
 /** Death, corpse conversion and loss of tameness can precede a travelling
@@ -22,7 +23,8 @@ export function reconcileDomesticWork(world:World):void {
     // once per pass, never retaining an index across commands, ticks or maps.
     if(!penMarkers){
       penMarkers=new Map();
-      for(const structure of world.structures)if(structure.kind==='pen-marker'&&structure.pen)
+      // The shared per-kind list: the pen markers of the array, in its order.
+      for(const structure of structuresOfKind(world,'pen-marker'))if(structure.pen)
         penMarkers.set(structure.id,structure.pen.accepted);
     }
     if(!penMarkers.get(id)?.includes(animal.species))delete animal.domestic!.penMarkerId;

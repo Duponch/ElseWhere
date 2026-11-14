@@ -5,4 +5,10 @@ export type EggSpecies256=keyof typeof ANIMAL_EGG_CONTENT_256;
 export const isEggSpecies256=(value:unknown):value is EggSpecies256=>typeof value==='string'&&Object.hasOwn(ANIMAL_EGG_CONTENT_256,value);
 export type FertilizedEggItem256=typeof ANIMAL_EGG_CONTENT_256[EggSpecies256]['fertilizedItem'];
 export type UnfertilizedEggItem256=typeof ANIMAL_EGG_CONTENT_256[EggSpecies256]['unfertilizedItem'];
-export function eggSpeciesForItem256(value:unknown):EggSpecies256|undefined {return (Object.keys(ANIMAL_EGG_CONTENT_256) as EggSpecies256[]).find(id=>ANIMAL_EGG_CONTENT_256[id].fertilizedItem===value||ANIMAL_EGG_CONTENT_256[id].unfertilizedItem===value);}
+/** Item → first species (key order) whose fertilized or unfertilized item it is:
+ * the answer of scanning the constant table, read once (called for every pile). */
+const EGG_SPECIES_BY_ITEM_256=(()=>{const map=new Map<unknown,EggSpecies256>();
+ for(const id of Object.keys(ANIMAL_EGG_CONTENT_256) as EggSpecies256[]){const d=ANIMAL_EGG_CONTENT_256[id];
+  if(!map.has(d.fertilizedItem))map.set(d.fertilizedItem,id);if(!map.has(d.unfertilizedItem))map.set(d.unfertilizedItem,id);}
+ return map;})();
+export function eggSpeciesForItem256(value:unknown):EggSpecies256|undefined {return typeof value==='string'?EGG_SPECIES_BY_ITEM_256.get(value):undefined;}

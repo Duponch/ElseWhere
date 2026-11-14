@@ -1169,7 +1169,15 @@ function reconcileSmoothFloorJobs281(world:World,readGeometry?:()=>ReturnType<ty
   if(invalid)cancelIntentJobs(world,invalid);
 }
 const readPlantLight=(world:World):LightEnvironment=>environmentCache(world).readLight(world);
-const plantLightSourcesKey=(world:World):string=>lightSources(world).map(s=>`${s.cell}:${s.radius}:${s.red}:${s.green}:${s.blue}:${s.overlightRadius??0}`).join('|');
+/** The fields of the light sources, in order: two keys compare as their former
+ * text `cell:radius:red:green:blue:overlight` joined by `|` (numeric fields,
+ * whose text holds neither separator), without building that text. */
+const plantLightSourcesKey=(world:World):unknown[]=>{const key:unknown[]=[];for(const s of lightSources(world))key.push(s.cell,s.radius,s.red,s.green,s.blue,s.overlightRadius??0);return key;};
+const samePlantLightSourcesKey=(a:readonly unknown[]|undefined,b:readonly unknown[]):boolean=>{
+  if(!a||a.length!==b.length)return false;
+  for(let i=0;i<a.length;i++){const x=a[i],y=b[i];if(x!==y&&String(x)!==String(y))return false;}
+  return true;
+};
 /** Pile indexes (pile-index.ts) are available inside a simulation step only. */
 export function stepWorld(world:CampaignState,ticks=1,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):void {withPileIndexScope(()=>stepWorldInScope(world,ticks,diagnostics,caravans));}
 function stepWorldInScope(world:CampaignState,ticks=1,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):void {
@@ -1226,7 +1234,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     const firefoamLocalMechs290=isSchema290OrLater(Number(world.schemaVersion))?new Set((world.mechanoids??[]).filter(m=>m.state!=='dead'&&m.health?.coveredInFirefoam290).map(m=>m.id)):undefined;
     flushColonyLosses(world);
     if(advanceClock){world.tick++;if(isCorePhysicalSchema297(Number(world.schemaVersion))){world.phaseCore297=0;beginCoreMacro297(campaignAuthority(world));syncWorldPawnsPhysicalCore297(campaignAuthority(world));}}advanceActualHiveComponents256(world);advanceAnimalAges256(world);finishSnowSteps(world);
-    let light:LightEnvironment|undefined,lightKey:string|undefined;
+    let light:LightEnvironment|undefined,lightKey:unknown[]|undefined;
     const getLight=()=>{if(!light){light=readPlantLight(world);lightKey=plantLightSourcesKey(world);}return light;};
     // Darkness factor of a pawn's work speed (a blind pawn ignores it, schema 301).
     const workGlow=(p:Pawn)=>glowIgnoredByBlindPawn(world,p)?1:getLight().speedAt(p);
@@ -1636,7 +1644,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     refreshStock(world);reconcileBillReservePauses289(world);reconcileSpikeTrapContacts(world);
     if(thermalDirty)thermal=reconcileTemperature(world);
     updateFoodTemperatures(world,thermal);
-    if(light&&lightKey!==plantLightSourcesKey(world))light=undefined;
+    if(light&&!samePlantLightSourcesKey(lightKey,plantLightSourcesKey(world)))light=undefined;
     reconcilePlantLighting(world,getLight);updatePlantTemperatures(world,thermal);reconcileSmoothFloorJobs281(world,structureNavigation.read);reconcilePrisoners(world);reconcileRescues(world);reconcileWarden(world);reconcilePatientRest(world);reconcileTending(world);reconcileSurgery(world);reconcilePasteRequests(world);reconcileFeeding(world);reconcileEquipmentTasks(world);const contactRoster298=coreMaps297.get(world)?.contacts;contactRoster298?.beginRosterSync(effectiveCore297(world));for(let slot298=0;slot298<world.pawns.length;slot298++){const pawn=world.pawns[slot298]!;if(factionCommsTask298(pawn))reconcileFactionComms298(world,pawn);if(pawn.orbitalTrade)reconcileOrbitalTrade(world,pawn);if(pawn.deepWork)reconcileDeepWork(world,pawn);reconcileWeaponMemory(world,pawn);contactRoster298?.observeRosterPawn(pawn,slot298);}contactRoster298?.finishRosterSync();
     reconcileGroupAdmission257(world);
     reconcileAnimalHauls282(world);

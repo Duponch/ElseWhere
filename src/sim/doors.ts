@@ -1,4 +1,5 @@
 import {filteredStructures} from './structure-navigation.ts';
+import {pileIndex,pileIndexMismatch,verifyPileIndex} from './pile-index.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveLocal297} from './core-phase-297.ts';
 import {targetDoorCanOpen263,targetBuildingPlayerUse263} from './world-target-building-263.ts';
@@ -82,7 +83,16 @@ export function updateDoors(world:World):void {
   const add=(c:Cell)=>bodies.add(c.z*world.width+c.x);
   for(const p of world.pawns){if(p.state==='dead'&&(p.body?.pileId!==undefined||p.body?.lostAt!==undefined))continue;add(p);if(p.motion&&p.motion.end>world.tick)add(p.motion.from);if(isColonist(p)||p.visitor||p.prisoner?.releasedAt!==undefined){friendly.add(p.z*world.width+p.x);if(p.motion&&p.motion.end>world.tick)friendly.add(p.motion.from.z*world.width+p.motion.from.x);}}
   for(const a of world.wildlife?.animals??[]){add(a);if(a.motion&&a.motion.end>world.tick)add(a.motion.from);}
-  for(const p of world.piles)if(p.owner.type==='ground')objects.add(p.owner.z*world.width+p.owner.x);
+  // `objects` is only read at door cells: inside a step, the pile index gives
+  // the door cells holding a ground pile now (no pile outside the map), as the scan.
+  const index=pileIndex(world);
+  if(index&&!index.groundOutside){
+    for(const s of doors){const i=s.z*world.width+s.x;if(index.groundAt.has(i))objects.add(i);}
+    if(verifyPileIndex){
+      const scanned=new Set<number>();for(const p of world.piles)if(p.owner.type==='ground')scanned.add(p.owner.z*world.width+p.owner.x);
+      for(const s of doors){const i=s.z*world.width+s.x;if(scanned.has(i)!==objects.has(i))pileIndexMismatch('door ground objects');}
+    }
+  }else for(const p of world.piles)if(p.owner.type==='ground')objects.add(p.owner.z*world.width+p.owner.x);
   for(const p of world.packed)if(p.owner.type==='ground')objects.add(p.owner.z*world.width+p.owner.x);
   for(const s of doors) {
     const d=s.door!,i=s.z*world.width+s.x;

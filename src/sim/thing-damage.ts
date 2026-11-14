@@ -67,6 +67,13 @@ function removeJobs(world:World,ids:Set<number>,retainTravellingCargo=false):voi
 export function cancelResourceHarvests(world:World,resource:Resource):void {
   removeJobs(world,new Set(world.jobs.filter(job=>job.kind==='harvest'&&at(job,resource)).map(job=>job.id)));
 }
+/** `list.filter(c=>c!==r)` (a new array, the rest in order), by two copies
+ * around the single occurrence instead of a test per resource. */
+function withoutResource(list:readonly Resource[],r:Resource):Resource[] {
+  const at=list.indexOf(r);
+  if(at<0||list.indexOf(r,at+1)>=0)return list.filter(c=>c!==r);
+  return list.slice(0,at).concat(list.slice(at+1));
+}
 /** Shared destructive plant boundary; the cause never creates a harvest. */
 export function damageResource(world:World,r:Resource,amount:number,reason:'fire'|'frost'|'darkness'|'age'|'bullet'|'bomb'|'rotting'|'blight'|'roof'|'fallout'='fire'):boolean {
   const max=resourceMaxHp(r);if(!max||!positive(amount)||!world.resources.includes(r))return false;
@@ -77,7 +84,7 @@ export function damageResource(world:World,r:Resource,amount:number,reason:'fire
   if(neutral===null)return false;
   if(ledger&&(!addSafe(ledger.resources[r.kind]??0,1)||!addSafe(ledger.woodPotentialLost,woodPotential)))return false;
   const jobs=new Set(world.jobs.filter(j=>at(j,r)&&['mine','chop','cut','harvest','extract-tree'].includes(j.kind)).map(j=>j.id));
-  removeJobs(world,jobs,reason==='roof');world.resources=world.resources.filter(candidate=>candidate!==r);
+  removeJobs(world,jobs,reason==='roof');world.resources=withoutResource(world.resources,r);
   // The clearance step ended without a harvest. Keep its construction intent,
   // materials and unrelated queued work, but release this now-obsolete claim:
   // an unsupplied blueprint cannot retain a finishing-work reservation.

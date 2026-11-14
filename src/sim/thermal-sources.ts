@@ -2,15 +2,20 @@ import { isPowerActive } from './power-rules.ts';
 import { applyHeaterHeat } from './heater.ts';
 import { SUN_LAMP_HEAT_PER_SECOND,sunLampActive } from './sun-lamp.ts';
 import { cookingSpot } from './cooking-bills.ts';
+import { filteredStructures } from './structure-navigation.ts';
 import type { Structure, World } from './types.ts';
 import type { ThermalLayout } from './thermal-topology.ts';
 
 /** Heat per Core second, distributed over six local steps. Fuel consumption
  * stays independent: an idle or outdoor passive cooler still uses its wood.
  * As with the fire, continuous clamping replaces Core's staggered impulses. */
+/** The only kinds the loop below changes anything for (any other structure
+ * reaches no branch); kinds never change, so the shared filtered list has the
+ * same structures, in the same order, as the scan. */
+const THERMAL_SOURCE_KINDS=new Set<Structure['kind']>(['heater','insect-hive','sun-lamp','electric-smithy','electric-smelter','electric-crematorium','electric-stove','fueled-stove','wood-generator','chemfuel-generator','torch-lamp','campfire','passive-cooler']);
 export function applyThermalSources(world:World,layout:ThermalLayout):void {
   const regions=world.thermal?.regions;
-  for(const source of world.structures) {
+  for(const source of filteredStructures(world,'thermal-sources',s=>THERMAL_SOURCE_KINDS.has(s.kind))) {
     if(source.kind==='heater'){applyHeaterHeat(world,source,layout);continue;}
     if(!regions)continue;
     if(source.kind==='insect-hive') {
