@@ -1,3 +1,4 @@
+import {isResistanceKind334} from './prisoner-resistance-334.ts';
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
 import {shipCasketHumanReferences277,shipCasketTerminalParticipant277} from './ship-casket-notifications-277.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
@@ -140,7 +141,7 @@ export function validateRaids(w:World,version:number,ids:Set<number>):string[] {
   }
   for(const p of [...w.pawns,...shipCasketHumanReferences277(w)]){const r:unknown=p.raid;if(r===undefined)continue;
     const owner=object(r)?raidGroup261(w,Number(r.group)):undefined;
-    if(!object(r)||!keys(r,['group','exiting','goal',...((version===261||(Number(version)===262||isSchema263OrLater(Number(version))))?['kidnap261']:[])])||!integer(r.group,1,s.serial)||typeof r.exiting!=='boolean'||r.goal!==null&&!cell(r.goal)||p.faction!=='outlaws'||(owner?!owner.members.includes(p.id)||(p.prisoner?!r.exiting||r.goal!==null:r.exiting!==(owner.phase==='withdraw'||(version===261||(Number(version)===262||isSchema263OrLater(Number(version))))&&(kidnapDutyExiting261(w,p.id)||object(r.kidnap261)&&r.kidnap261.phase==='carry'))):!r.exiting)){errors.push('Invalid raider mandate.');continue;}
+    if(!object(r)||!keys(r,['group','exiting','goal',...((version===261||(Number(version)===262||isSchema263OrLater(Number(version))))?['kidnap261']:[]),...(version>=334?['kind334']:[])])||r.kind334!==undefined&&!isResistanceKind334(r.kind334)||!integer(r.group,1,s.serial)||typeof r.exiting!=='boolean'||r.goal!==null&&!cell(r.goal)||p.faction!=='outlaws'||(owner?!owner.members.includes(p.id)||(p.prisoner?!r.exiting||r.goal!==null:r.exiting!==(owner.phase==='withdraw'||(version===261||(Number(version)===262||isSchema263OrLater(Number(version))))&&(kidnapDutyExiting261(w,p.id)||object(r.kidnap261)&&r.kidnap261.phase==='carry'))):!r.exiting)){errors.push('Invalid raider mandate.');continue;}
     if(p.prisoner&&(!r.exiting||r.goal!==null))errors.push('Captive retains a raid navigation mandate.');
     const goal=bombRefugeRouteTarget(p,r.goal as {x:number;z:number}|null,version);
     if(!(version>=87&&p.burning)&&!p.prisoner&&p.path.length&&!p.melee&&!p.tactics&&!p.need&&(!goal||p.path.at(-1)!.x!==goal.x||p.path.at(-1)!.z!==goal.z))errors.push('Raid route misses its goal.');

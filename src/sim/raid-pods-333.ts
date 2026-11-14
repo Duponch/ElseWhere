@@ -43,7 +43,7 @@ function openRaidPod333(w:World,group:RaidGroup,index:number,core:number):boolea
   const cell=free(pod.cell)?pod.cell:nearbyGround(w,pod.cell).find(free);if(!cell)return false;
   const role=group.composition?.roster[index],maker=group.composition?.group331;
   const made=makeRaider(w,{groupId:group.id,index,pawnId:pod.pawnId,nextId:w.nextId,cell:{x:cell.x,z:cell.z},factionId:arrival.factionId,
-    tribe:!!maker&&RAID_MAKERS_331[maker].family==='tribe',weapon:role?raidRoleWeapon(role):group.id>1&&index===0?'revolver':undefined,exiting:group.phase==='withdraw'});
+    tribe:!!maker&&RAID_MAKERS_331[maker].family==='tribe',weapon:role?raidRoleWeapon(role):group.id>1&&index===0?'revolver':undefined,exiting:group.phase==='withdraw',...role?{kind:role}:{}});
   if(!made)return false;
   w.pawns.push(made.pawn);w.piles.push(...made.piles);w.nextId=made.nextId;pod.openedAtCore=core;
   busy.add(cell.z*w.width+cell.x);

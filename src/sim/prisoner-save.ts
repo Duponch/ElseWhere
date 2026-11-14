@@ -1,3 +1,4 @@
+import {isResistanceKind334,resistanceBounds334} from './prisoner-resistance-334.ts';
 import {isSchema272OrLater} from './schema-compatibility-257.ts';
 import {isSpearItem272} from './spear-content-272.ts';
 import {isLongswordItem270} from './longsword-content-270.ts';
@@ -58,8 +59,8 @@ export function validPrisonBreakBindings(w:World,version:number):boolean {
 /** Same dossier shape, also used for the real dormant former-prisoner record.
  * Detached conversation history may predate today; no chat is replayed. */
 export function validPrisonerStateRecord259(s:unknown,version:number,w:World,detached=false):boolean {
-  if(!object(s)||!keys(s,['capturedAt','initialResistance','resistance','mode','lastChatTick','chatDay','chatCount','rng','escape',...(version>=202?['releasedAt']:[]),...(version>=204?['breakout']:[])])
-    ||!integer(s.capturedAt,0,w.tick)||!integer(s.initialResistance,7,12)||typeof s.resistance!=='number'||!Number.isFinite(s.resistance)||s.resistance<0||s.resistance>s.initialResistance
+  if(!object(s)||!keys(s,['capturedAt','initialResistance','resistance','mode','lastChatTick','chatDay','chatCount','rng','escape',...(version>=202?['releasedAt']:[]),...(version>=204?['breakout']:[]),...(version>=334?['kind334']:[])])
+    ||!integer(s.capturedAt,0,w.tick)||s.kind334!==undefined&&!isResistanceKind334(s.kind334)||!integer(s.initialResistance,...resistanceBounds334(s.kind334))||typeof s.resistance!=='number'||!Number.isFinite(s.resistance)||s.resistance<0||s.resistance>s.initialResistance
     ||typeof s.mode!=='string'||!['maintain','reduce','recruit',...(version>=202?['release']:[])].includes(s.mode)||!integer(s.rng,1,0xffffffff)||!integer(s.chatDay,0,prisonDay(w))||(!detached&&s.chatDay!==prisonDay(w))||!integer(s.chatCount,0,2)
     ||s.lastChatTick!==undefined&&!integer(s.lastChatTick,s.capturedAt,w.tick)||s.chatCount>0&&s.lastChatTick===undefined
     ||s.escape!==undefined&&(!cell(s.escape,w)||!edge(s.escape,w))

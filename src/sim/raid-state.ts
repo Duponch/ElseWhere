@@ -1,6 +1,9 @@
 import type { Cell,MaterialPile } from './types.ts';
 
-export interface RaiderState { group:number; exiting:boolean; goal:Cell|null; kidnap261?:import('./caravan-kidnap-261.ts').RaiderKidnap261 }
+export interface RaiderState { group:number; exiting:boolean; goal:Cell|null; kidnap261?:import('./caravan-kidnap-261.ts').RaiderKidnap261;
+  /** Schema 334: the raider's pawn kind (its roster role), read at capture for
+   * the Core initial resistance range. Absent before 334 or without a roster. */
+  kind334?:RaidRole }
 export interface RaidDeparture { group:number; pawnId:number; name:string; cell:Cell; tick:number; items:MaterialPile[];reason?:'released';capturedAt?:number;releasedAt?:number }
 /** Available pirate projections only; these are Core pawn-kind combatPower
  * costs, not the market prices of their limited local equipment. */

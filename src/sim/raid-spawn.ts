@@ -80,7 +80,7 @@ export function createRaidGroup(w:World,options:RaidSpawnOptions):RaidGroup|null
     for(let i=0;i<at.length;i++){
       const factionId=era&&w.worldFactions?chosen?.factionId??bornFactionForDef259(w,'Pirate'):undefined;if(era&&w.worldFactions&&factionId===undefined)return null;
       const weapon=roster?raidRoleWeapon(roster[i]!):id>1&&i===0?'revolver':undefined;
-      const made=makeRaider(w,{groupId:id,index:i,pawnId:next,nextId:next+1,cell:at[i]!,factionId,tribe:chosen?.family==='tribe',weapon,exiting:false});if(!made)return null;
+      const made=makeRaider(w,{groupId:id,index:i,pawnId:next,nextId:next+1,cell:at[i]!,factionId,tribe:chosen?.family==='tribe',weapon,exiting:false,...roster?{kind:roster[i]!}:{}});if(!made)return null;
       next=made.nextId;generated.push(made.pawn);piles.push(...made.piles);
     }
     return {generated,piles,next};
@@ -124,9 +124,9 @@ const raiderFactionEra=(w:Pick<World,'schemaVersion'>):boolean=>Number(w.schemaV
 /** One raider with its clothes and weapon, born at `cell`: the walking
  * arrival and (schema 333) the opening of a drop pod. Null when its world
  * faction cannot be bound; nothing is written to the world. */
-export function makeRaider(w:World,o:{groupId:number;index:number;pawnId:number;nextId:number;cell:Cell;factionId:number|undefined;tribe:boolean;weapon:WeaponItem|undefined;exiting:boolean}):{pawn:Pawn;piles:MaterialPile[];nextId:number}|null {
+export function makeRaider(w:World,o:{groupId:number;index:number;pawnId:number;nextId:number;cell:Cell;factionId:number|undefined;tribe:boolean;weapon:WeaponItem|undefined;exiting:boolean;kind?:RaidRole}):{pawn:Pawn;piles:MaterialPile[];nextId:number}|null {
   let next=o.nextId;
-  const p=startingPawn(o.pawnId,`Assaillant ${o.groupId}.${o.index+1}`,o.cell.x,o.cell.z,0,55,w.seed,w.tick,w.schemaVersion);p.faction='outlaws';if(raiderFactionEra(w)&&w.worldFactions&&!bindBornHumanFaction259(w,p,o.factionId!))return null;p.raid={group:o.groupId,exiting:o.exiting,goal:null};p.skills.shooting.level=4;p.skills.melee.level=4;p.foodPolicyId=w.foodPolicies[0]!.id;
+  const p=startingPawn(o.pawnId,`Assaillant ${o.groupId}.${o.index+1}`,o.cell.x,o.cell.z,0,55,w.seed,w.tick,w.schemaVersion);p.faction='outlaws';if(raiderFactionEra(w)&&w.worldFactions&&!bindBornHumanFaction259(w,p,o.factionId!))return null;p.raid={group:o.groupId,exiting:o.exiting,goal:null,...w.schemaVersion>=334&&o.kind?{kind334:o.kind}:{}};p.skills.shooting.level=4;p.skills.melee.level=4;p.foodPolicyId=w.foodPolicies[0]!.id;
   if(w.schemaVersion>=191)generatePawnBackground(p,w.seed,true);
   // Schema 331: tribal raiders wear tribal wear (Core Neolithic apparel tag).
   const apparel=o.tribe?'cloth-tribalwear':'cloth-shirt',piles:MaterialPile[]=[];
