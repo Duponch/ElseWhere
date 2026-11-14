@@ -7,7 +7,9 @@
  * order), shared references and cycles kept as shared references and cycles.
  * Anything else (a Map, a Date, a typed array, a class instance, a function, a
  * sparse array, a key named __proto__…) makes the whole call return
- * structuredClone(value), so the result and any error are its own. */
+ * structuredClone(value), so the result and any error are its own. One
+ * difference: a Proxy is copied through its traps where structuredClone
+ * refuses it; simulation data holds no Proxy. */
 const UNSUPPORTED=Symbol('unsupported');
 function copy(value:unknown,seen:Map<object,unknown>):unknown {
   if(typeof value!=='object'){if(typeof value==='function'||typeof value==='symbol')throw UNSUPPORTED;return value;}
