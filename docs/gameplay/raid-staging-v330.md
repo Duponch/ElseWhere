@@ -30,12 +30,13 @@ Cela ne concerne que les raids de la colonie tirés par Cassandra. Les raids des
 
 ## Sauvegardes
 
-Une sauvegarde 329 passe à 330 en changeant seulement son numéro. Un regroupement enregistré doit avoir un point réel et une fin comprise dans la fenêtre du jeu de base.
+Une sauvegarde 329 passe à 330 en changeant seulement son numéro. Un regroupement enregistré doit avoir un point réel et une fin comprise dans la fenêtre du jeu de base. Il reste enregistré après le début de l'assaut, avec l'heure de ce début, car le délai de renoncement a été repoussé de la durée prévue du regroupement.
 
 ## Vérifications
 
 `tests/raid-staging-330.test.ts` couvre :
 - la part des raids qui se regroupent, et aucun avant 330 ;
 - la défense du point, puis l'assaut après le délai ;
+- une sauvegarde valide avec un regroupement long, avant et après l'assaut (défaut trouvé par la campagne « prison ») ;
 - le refus d'une fin hors fenêtre ;
 - la migration.

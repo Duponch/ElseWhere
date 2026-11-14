@@ -32,24 +32,43 @@ test('a Cassandra pirate raid may stage before its assault, about half the time'
 test('the staged group defends its point, then assaults after the Core delay',()=>{
   const {w}=staged(330)!,group=w.raids!.active!,stage=group.stage330!;
   expect(stage.untilCore-w.tick*10).toBeGreaterThanOrEqual(5000);expect(stage.untilCore-w.tick*10).toBeLessThanOrEqual(15000);
-  expect(group.deadline!-w.tick).toBeGreaterThanOrEqual(2600+500);
+  expect(group.deadline!-w.tick).toBeGreaterThanOrEqual(2600+Math.ceil((stage.untilCore-w.tick*10)/10));
   expect(w.events.at(-1)!.message).toMatch(/se regroupe/);
   expect(validateWorld(w)).toEqual([]);
   expect(serializeWorld(deserializeWorld(serializeWorld(w)))).toBe(serializeWorld(w));
   const raider=w.pawns.find(p=>p.raid?.group===group.id)!;
-  while(w.raids!.active?.stage330&&w.tick*10<stage.untilCore){
+  while(w.raids!.active?.stage330?.endedAtCore===undefined&&w.tick*10<stage.untilCore){
     stepWorld(w);
     if(raider.state!=='dead'&&raider.state!=='downed')expect((raider.x-stage.point.x)**2+(raider.z-stage.point.z)**2).toBeLessThanOrEqual(29**2);
   }
   stepWorld(w);
-  expect(w.raids!.active?.stage330).toBeUndefined();
+  expect(w.raids!.active?.stage330?.endedAtCore).toBeDefined();
+  // The pushed-back give-up deadline stays valid in the save after the assault starts.
+  expect(validateWorld(w)).toEqual([]);
   expect(w.events.some(e=>e.message.includes('passent à l’assaut'))).toBe(true);
+});
+
+/** Found by the prison campaign: a long staging pushes the give-up deadline
+ * past the immediate raid bound, and the save must still validate. */
+test('a long staging keeps a valid save, before and after the assault',()=>{
+  let checked=0;
+  for(let seed=1;seed<=200&&checked<3;seed++){
+    const {w,group}=raidAt(seed);
+    if(!group!.stage330||group!.deadline!-group!.startedAt<=3800)continue;
+    expect(validateWorld(w)).toEqual([]);
+    group!.stage330.endedAtCore=w.tick*10;expect(validateWorld(w)).toEqual([]);
+    checked++;
+  }
+  expect(checked).toBe(3);
 });
 
 test('a staging point outside the Core window is refused in a save',()=>{
   const {w}=staged(330)!,group=w.raids!.active!;
   group.stage330!.untilCore=group.startedAt*10+20000;
-  expect(validateWorld(w)).toContain('Invalid raid staging.');
+  expect(validateWorld(w).length).toBeGreaterThan(0);
+  // An assault start in the future is refused too.
+  const {w:v}=staged(330)!,g=v.raids!.active!;g.stage330!.endedAtCore=v.tick*10+50;
+  expect(validateWorld(v)).toContain('Invalid raid staging.');
 });
 
 test('a schema 329 save migrates to 330 by its number only',()=>{

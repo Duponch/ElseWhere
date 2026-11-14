@@ -1,3 +1,4 @@
+import {raidStaging330} from './raid-state.ts';
 import {raidGroup261} from './temp-map-raids-261.ts';
 import {processKidnapDuty261} from './caravan-kidnap-lord-261.ts';
 import {processPhysicalKidnap261} from './caravan-kidnap-261.ts';
@@ -38,7 +39,7 @@ export function processRaider(w:World,p:Pawn,getBlocked:NavigationGrid,budget:Se
     if(distanceSquared(p,caravan.defendSpot)>28**2){moveToward(w,p,caravan.defendSpot,false,getBlocked,budget,false,getLight);r.goal=p.path.at(-1)??null;}
     else{p.path=[];r.goal=null;p.state='idle';}return;
   }
-  const stage=!r.exiting?raidGroup261(w,r.group)?.stage330:undefined;
+  const group=!r.exiting?raidGroup261(w,r.group):undefined,stage=raidStaging330(group)?group!.stage330:undefined;
   if(stage){
     p.tactics??=newTactics();
     processTactics(w,p,getBlocked,budget,getLight,{center:stage.point,radius:28});
