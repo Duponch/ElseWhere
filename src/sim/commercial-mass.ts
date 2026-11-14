@@ -1,3 +1,4 @@
+import {BOW_FACTS_326} from './bows-326.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
@@ -18,7 +19,7 @@ import type { MaterialPile,Pawn,World } from './types.ts';
 export interface CommercialMass {grams:number;capacityGrams:number}
 const FIXED:Readonly<Partial<Record<ItemId,number>>>=Object.freeze({
   pemmican:18,hay:14,kibble:15,chemfuel:50,'nutrient-paste-meal':440,silver:8,'survival-meal':300,medicine:500,neutroamine:20,component:600,cloth:26,'muffalo-wool':28,
-  revolver:1400,'bolt-action-rifle':3500,'plasteel-knife':500,'emp-launcher':3400,'short-bow':800,'pump-shotgun':3400,
+  revolver:1400,'bolt-action-rifle':3500,'plasteel-knife':500,'emp-launcher':3400,'short-bow':800,'pump-shotgun':3400,'recurve-bow':BOW_FACTS_326['recurve-bow'].massGrams,greatbow:BOW_FACTS_326.greatbow.massGrams,
   'flak-vest':4000,'flak-helmet':1200,'flak-pants':4000,'plasteel-flak-helmet':1200,'recon-helmet':1000,'recon-armor':9000,uranium:1000,
 });
 // Core Mass: BasicShirt 0.25 kg, Jacket 1.7 kg (schema 312).

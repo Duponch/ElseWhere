@@ -21,11 +21,11 @@ export function validShootingShape(value:unknown,version:number,tick:number,core
   if(value.order!==null&&(!record(value.order)||!keys(value.order,['targetId','weaponId','startedDowned',...(version>=60?['auto']:[]),...(version>=79?['hunt']:[])])||!integer(value.order.targetId,1)||!integer(value.order.weaponId,1)||typeof value.order.startedDowned!=='boolean'||!validAutomaticAttack(value.order.auto,version,tick)||value.order.hunt!==undefined&&(value.order.hunt!==true||value.order.auto!==undefined||value.order.startedDowned!==false)))return false;
   const s=value.stance;if(s===null)return value.order!==null;
   if(record(s)&&'lean' in s&&(!Object.hasOwn(s,'lean')||version<238||s.phase!=='aim'||!validLeanOffset(s.lean)))return false;
-  if(!record(s)||version<198&&Object.hasOwn(s,'clock')||!keys(s,['phase','startedAtCore','endsAtCore',...(s.phase==='aim'?['targetStartedDowned']:[]),...(version>=88?['weaponItem']:[]),...(version>=198?['clock']:[]),...(version>=238&&s.phase==='aim'?['lean']:[])])||s.weaponItem!==undefined&&s.weaponItem!=='bolt-action-rifle'&&!(version>=208&&s.weaponItem==='emp-launcher')&&!(version>=316&&s.weaponItem==='short-bow')&&!(version>=322&&s.weaponItem==='pump-shotgun')||!integer(s.startedAtCore,0,physicalCoreNow297)||!integer(s.endsAtCore,physicalCoreNow297+1))return false;
+  if(!record(s)||version<198&&Object.hasOwn(s,'clock')||!keys(s,['phase','startedAtCore','endsAtCore',...(s.phase==='aim'?['targetStartedDowned']:[]),...(version>=88?['weaponItem']:[]),...(version>=198?['clock']:[]),...(version>=238&&s.phase==='aim'?['lean']:[])])||s.weaponItem!==undefined&&s.weaponItem!=='bolt-action-rifle'&&!(version>=208&&s.weaponItem==='emp-launcher')&&!(version>=316&&s.weaponItem==='short-bow')&&!(version>=322&&s.weaponItem==='pump-shotgun')&&!(version>=326&&(s.weaponItem==='recurve-bow'||s.weaponItem==='greatbow'))||!integer(s.startedAtCore,0,physicalCoreNow297)||!integer(s.endsAtCore,physicalCoreNow297+1))return false;
   if(s.phase!=='aim'&&s.phase!=='cooldown'||s.phase==='aim'&&(value.order===null||typeof s.targetStartedDowned!=='boolean'))return false;
   if(record(value.order)&&value.order.hunt&&s.weaponItem==='emp-launcher')return false;
-  // EMP launcher and short bow carry their own warmup and cooldown.
-  const own=s.weaponItem==='emp-launcher'||s.weaponItem==='short-bow'||s.weaponItem==='pump-shotgun';
+  // EMP launcher, bows and pump shotgun carry their own warmup and cooldown.
+  const own=s.weaponItem==='emp-launcher'||s.weaponItem==='short-bow'||s.weaponItem==='pump-shotgun'||s.weaponItem==='recurve-bow'||s.weaponItem==='greatbow';
   const emp=own?rangedWeaponProfile(s.weaponItem,'normal'):undefined;
   if(own&&!emp)return false;
   const duration=emp?(s.phase==='aim'?emp.warmupCoreTicks:emp.cooldownCoreTicks):s.phase==='aim'?(s.weaponItem?102:18):(s.weaponItem?90:96);

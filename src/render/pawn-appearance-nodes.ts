@@ -4,6 +4,7 @@ import { BODY_PROPORTIONS } from './pawn-appearance-shape';
 import {LONGSWORD_DYE270} from './longsword-parts270';
 import {SPEAR_DYE272} from './spear-parts272';
 import {MACE_DYE269} from './mace-parts269';
+import {RECURVE_BOW_DYE326,GREATBOW_DYE326} from './weapon-shape';
 import {ORIGAMI_HUMAN_BIND,HUMAN_REFERENCE_SCALE} from './origami/human-geometry';
 
 /** Original CPU aliases remain inspectable; the Origami shader spends one
@@ -34,7 +35,7 @@ export function pawnMorph(point:Node<'vec3'>,origami=false,traits?:{bone:Node<'f
   const body=vec3(point.x.mul(legs.select(hip,arms.select(shoulder,torso))),point.y,point.z.mul(depth));
   const shaped=head.select(vec3(point.x.mul(headWidth),point.y,point.z),body);
   // Weapons preserve their dimensions, with only their holster shifted outwards.
-  const weapon=dye.equal(-1).or(dye.equal(-4)).or(dye.equal(-5)).or(dye.equal(-16)).or(dye.equal(-17)).or(dye.equal(MACE_DYE269)).or(dye.equal(LONGSWORD_DYE270)).or(dye.equal(SPEAR_DYE272));
+  const weapon=dye.equal(-1).or(dye.equal(-4)).or(dye.equal(-5)).or(dye.equal(-16)).or(dye.equal(-17)).or(dye.equal(RECURVE_BOW_DYE326)).or(dye.equal(GREATBOW_DYE326)).or(dye.equal(MACE_DYE269)).or(dye.equal(LONGSWORD_DYE270)).or(dye.equal(SPEAR_DYE272));
   const equipped=weapon.select(vec3(point.x.add(shoulder.sub(1).mul(.205)),point.y,point.z),shaped);
   if(!origami)return equipped;
   // -30/-31/-32 are the resident axe/pickaxe/sickle tags from pawn-geometry.

@@ -60,6 +60,32 @@ const PUMP_SHOTGUN_PARTS = [
   {size:[.06,.12,.05],center:[-.12,-.045,0],color:0x5a4330},
   {size:[.26,.12,.055],center:[-.33,0,0],color:0x7f5f42},
 ] as const;
+/** Schema 326 recurve bow, original shape: the short bow's grip with longer
+ * limbs whose tips turn back away from the string. Same bind axes. */
+const RECURVE_BOW_PARTS = [
+  {size:[.045,.13,.04],center:[0,0,0],color:0x4e3220},
+  {size:[.036,.22,.031],center:[-.01,.175,0],color:0x8a5a36},
+  {size:[.031,.17,.028],center:[-.034,.36,0],color:0x83552f},
+  {size:[.027,.09,.025],center:[-.022,.48,0],color:0x6a4426},
+  {size:[.036,.22,.031],center:[-.01,-.175,0],color:0x8a5a36},
+  {size:[.031,.17,.028],center:[-.034,-.36,0],color:0x83552f},
+  {size:[.027,.09,.025],center:[-.022,-.48,0],color:0x6a4426},
+  {size:[.008,1.0,.008],center:[-.05,0,0],color:0xe8e0c8},
+] as const;
+export const RECURVE_BOW_DYE326=-18;
+/** Schema 326 greatbow, original shape: a tall plain stave, about as tall as
+ * the archer, with a wrapped grip and a long string. */
+const GREATBOW_PARTS = [
+  {size:[.05,.15,.045],center:[0,0,0],color:0x4a2f1d},
+  {size:[.04,.24,.034],center:[-.01,.195,0],color:0x7a5030},
+  {size:[.034,.20,.03],center:[-.038,.41,0],color:0x734a2c},
+  {size:[.028,.10,.026],center:[-.064,.555,0],color:0x5f3e24},
+  {size:[.04,.24,.034],center:[-.01,-.195,0],color:0x7a5030},
+  {size:[.034,.20,.03],center:[-.038,-.41,0],color:0x734a2c},
+  {size:[.028,.10,.026],center:[-.064,-.555,0],color:0x5f3e24},
+  {size:[.008,1.2,.008],center:[-.08,0,0],color:0xe8e0c8},
+] as const;
+export const GREATBOW_DYE326=-19;
 /** Resident variants share one rig, one cargo batch and the same authored parts
  * as ground piles. Dye tags -2/-3 are already used by clothing. */
 export const WEAPON_VISUALS = [
@@ -70,6 +96,8 @@ export const WEAPON_VISUALS = [
   {item:'emp-launcher',equipment:4,cargo:73,dye:-9,parts:EMP_LAUNCHER_PARTS},
   {item:'short-bow',equipment:8,cargo:186,dye:-16,parts:SHORT_BOW_PARTS},
   {item:'pump-shotgun',equipment:9,cargo:187,dye:-17,parts:PUMP_SHOTGUN_PARTS},
+  {item:'recurve-bow',equipment:10,cargo:188,dye:RECURVE_BOW_DYE326,parts:RECURVE_BOW_PARTS},
+  {item:'greatbow',equipment:11,cargo:189,dye:GREATBOW_DYE326,parts:GREATBOW_PARTS},
 ] as const;
 /** Optional resident families are separate from the four historical concrete
  * visuals: a family key is never a real ItemId or a ground/cargo item. */

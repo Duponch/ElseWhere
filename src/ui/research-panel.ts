@@ -8,6 +8,7 @@ import {researchLinks,researchNodePosition as nodePosition,researchPrerequisiteL
 export {researchLinks} from './research-tree';
 import {captureResearchStationIssues,readResearchReadiness,type ResearchStationCapture,type ResearchStationIssue} from './research-readiness';
 import {isSchema290OrLater,isSchema291OrLater} from '../sim/schema-compatibility-257.ts';
+import {isBowResearch326,isBowSchema326} from '../sim/bows-326.ts';
 export {researchProjects} from './research-projects';
 export interface ResearchPanelActions {onOpenWork?:()=>void;onOpenProduction?:()=>void}
 
@@ -44,6 +45,7 @@ export function updateResearchPanel(root: HTMLElement, world: World, send: (comm
   const stations=captureResearchStationIssues(world);
   if(root.dataset.selectedResearch==='tree-sowing'&&!isSchema291OrLater(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
   if(root.dataset.selectedResearch==='firefoam'&&!isSchema290OrLater(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
+  if(isBowResearch326(root.dataset.selectedResearch)&&!isBowSchema326(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
   if(!projectById.has(root.dataset.selectedResearch as ResearchProject))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
   const readiness=readResearchReadiness(world,root.dataset.selectedResearch as ResearchProject,stations);
   root.classList.add('research-reference');
@@ -84,6 +86,7 @@ export function updateResearchPanel(root: HTMLElement, world: World, send: (comm
   for(const project of researchProjects){
     if(project.id==='tree-sowing'){const node=root.querySelector<HTMLElement>('[data-research-node="tree-sowing"]')!;node.hidden=!isSchema291OrLater(world.schemaVersion);if(node.hidden)continue;}
     if(project.id==='firefoam'){const node=root.querySelector<HTMLElement>('[data-research-node="firefoam"]')!;node.hidden=!isSchema290OrLater(world.schemaVersion);if(node.hidden)continue;}
+    if(isBowResearch326(project.id)){const node=root.querySelector<HTMLElement>(`[data-research-node="${project.id}"]`)!;node.hidden=!isBowSchema326(world.schemaVersion);if(node.hidden)continue;}
     const done=researchUnlocked(world,project.id),active=world.research?.project===project.id,progress=project.progress(world),points=(progress?.points??0)/RESEARCH_SCALE,missing=researchPrerequisite(world,project.id);
     root.querySelector<HTMLProgressElement>(`[data-${project.prefix}-progress]`)!.value=points;
     const initial=done&&progress?.completedAt===0&&(world.scenario?.id==='survivors'||world.scenario?.id==='crashlanded');

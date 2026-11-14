@@ -38,6 +38,7 @@ export interface ResearchReadiness {
 }
 /** The explicit version gates in selectResearch, without invoking a command. */
 const minimumSchema:Partial<Record<ResearchProject,number>>={
+  'recurve-bow':326,greatbow:326,
   'long-range-mineral-scanner':298,'ship-computer':298,'ship-sensors':298,
   'tree-sowing':291,'ship-cryptosleep':277,'ship-engine':276,
   'ship-basics':275,'ship-reactor':275,prosthetics:273,cryptosleep:271,'long-blades':270,brewing:265,'geothermal-power':264,pemmican:248,'biofuel-refining':218,'nutrient-paste':217,'deep-drilling':215,'ground-scanner':215,

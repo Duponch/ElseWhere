@@ -2,6 +2,7 @@ import {PROSTHETIC_ITEM_DEFINITIONS_273} from './prosthetic-content-273.ts';
 import { GARMENT_ITEM_DEFINITIONS312 } from './apparel-definitions.ts';
 import {SPEAR_ITEM_DEFINITIONS_272} from './spear-content-272.ts';
 import {SHORT_BOW_COLOR_316} from './short-bow-316.ts';
+import {BOW_FACTS_326} from './bows-326.ts';
 import {LONGSWORD_ITEM_DEFINITIONS_270} from './longsword-content-270.ts';
 import {MACE_ITEM_DEFINITIONS_269} from './mace-content-269.ts';
 import {SMITHING_APPAREL_ITEM_DEFINITIONS267} from './smithing-apparel-267.ts';
@@ -96,6 +97,8 @@ export const ITEM_DEFINITIONS = Object.freeze({
   'emp-launcher':Object.freeze({label:'Lanceur EMP',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x749da6}),
   'pump-shotgun':Object.freeze({label:'Fusil à pompe',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x5f6a70}),
   'short-bow':Object.freeze({label:'Arc court',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:SHORT_BOW_COLOR_316}),
+  'recurve-bow':Object.freeze({label:'Arc recourbé',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:BOW_FACTS_326['recurve-bow'].color}),
+  greatbow:Object.freeze({label:'Grand arc',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:BOW_FACTS_326.greatbow.color}),
   'plasteel-knife':Object.freeze({label:'Couteau en plastacier',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0xa0b2b5}),
   revolver:Object.freeze({label:'Revolver',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x606b72}),
   'herbal-medicine':Object.freeze({label:'Plantes médicinales',kind:'medicine',stackLimit:25,nutrition:0,maxIngest:0,color:0x7d985c}),

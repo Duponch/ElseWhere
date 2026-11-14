@@ -266,6 +266,9 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  case 'flak-helmet':case 'recon-helmet':case 'simple-helmet':d.path('M 10 36 Q 11 10 32 10 Q 54 12 54 38 L 49 41 L 45 50 L 36 50 L 36 36 Z',color);d.line([[11,37],[45,36]],3,P.paper);if(id==='recon-helmet')d.rect(35,28,22,10,P.blue);break;
  case 'revolver':case 'bolt-action-rifle':case 'emp-launcher':case 'pump-shotgun':d.shape([[8,23],[55,23],[55,32],[32,32],[27,40],[22,39],[17,55],[7,51],[15,33],[8,33]],P.stone);d.rect(7,24,14,9,P.wood);d.line([[30,32],[30,40],[24,40]],1.5);if(id==='bolt-action-rifle'){d.rect(39,19,20,5,P.darkBlue);}if(id==='pump-shotgun'){d.rect(36,32,12,5,P.wood);}if(id==='emp-launcher')d.ellipse(48,28,8,8,P.blue);break;
  case 'short-bow':case 'unfinished-bow':d.path('M 22 6 Q 54 32 22 58',null,4.5,P.wood);if(id==='short-bow')d.line([[22,6],[22,58]],1.1,P.paper);d.rect(34,27,6,10,P.ochre);break;
+ // Recurve: limb tips turned back toward the archer; greatbow: a taller stave.
+ case 'recurve-bow':d.path('M 27 5 Q 19 9 24 15 Q 52 32 24 49 Q 19 55 27 59',null,4.5,P.wood);d.line([[25,9],[25,55]],1.1,P.paper);d.rect(35,27,6,10,P.ochre);break;
+ case 'greatbow':d.path('M 19 2 Q 58 32 19 62',null,5,P.wood);d.line([[19,2],[19,62]],1.1,P.paper);d.rect(35,26,7,12,P.ochre);break;
  case 'plasteel-knife':case 'knife':case 'longsword':case 'spear':case 'mace':{
   const material=item?color:P.silver;
   if(id==='spear'){d.line([[9,57],[42,23]],4,P.wood);d.shape([[35,22],[55,5],[48,32],[41,29]],material);d.line([[41,25],[50,14]],1.1,P.paper);break;}

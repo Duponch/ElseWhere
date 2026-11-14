@@ -4,6 +4,7 @@ import {researchProjects,type ProjectNode} from './research-projects';
 /** Existing research hierarchy and geometry, shared by the legacy reader and
  * native meshes. Importing this module does not construct a UI or read a World. */
 export const researchLinks:readonly (readonly [ResearchProject,ResearchProject])[]=[
+  ['recurve-bow','greatbow'],
   ['microelectronics','long-range-mineral-scanner'],['machining','long-range-mineral-scanner'],
   ['ship-basics','ship-computer'],['ship-basics','ship-sensors'],['long-range-mineral-scanner','ship-sensors'],
   ['ship-basics','ship-cryptosleep'],['cryptosleep','ship-cryptosleep'],
@@ -24,6 +25,7 @@ export const RESEARCH_NODE_WIDTH=142,RESEARCH_NODE_HEIGHT=66,RESEARCH_GRAPH_WIDT
 export const RESEARCH_GRAPH_HEIGHT=Math.ceil(Math.max(740,...researchProjects.map(project=>22+(project.y-20)*.66+RESEARCH_NODE_HEIGHT+22)));
 export const researchNodePosition=(project:Pick<ProjectNode,'x'|'y'>)=>({x:20+(project.x-24)*.82,y:22+(project.y-20)*.66});
 export const researchPrerequisiteLabels:ReadonlyMap<ResearchProject,readonly string[]>=new Map<ResearchProject,string[]>([
+  ['recurve-bow',[]],['greatbow',['Arc recourbé']],
   ['long-range-mineral-scanner',['Microélectronique','Usinage']],
   ['ship-computer',['Construction de vaisseau']],['ship-sensors',['Construction de vaisseau','Scanner minéral longue portée']],
   ['firefoam',['Électricité (acquise au départ)']],

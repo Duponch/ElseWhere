@@ -55,7 +55,7 @@ function startAim(world:World,pawn:Pawn,core:number,queries:Queries):void {
   if(isStunned(pawn,core)||pawn.melee?.strike||(pawn.motion?.end??0)*CORE_TICKS_PER_LOCAL>core)return;
   const plan=shotPlan(world,pawn,order.targetId,queries);
   if('reason' in plan||plan.weapon.id!==order.weaponId){cancelShooting(pawn);return;}
-  pawn.shooting!.stance={phase:'aim',startedAtCore:core,endsAtCore:core+plan.profile.warmupCoreTicks,targetStartedDowned:plan.target.state==='downed',...plan.weapon.item!=='revolver'?{weaponItem:plan.weapon.item as 'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'}:{},
+  pawn.shooting!.stance={phase:'aim',startedAtCore:core,endsAtCore:core+plan.profile.warmupCoreTicks,targetStartedDowned:plan.target.state==='downed',...plan.weapon.item!=='revolver'?{weaponItem:plan.weapon.item as 'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'}:{},
     ...world.schemaVersion>=198?{clock:{lastAdvancedAtCore:core,pausedCore:0}}:{},
     ...world.schemaVersion>=238&&(plan.line.from.x!==pawn.x||plan.line.from.z!==pawn.z)?{lean:{x:plan.line.from.x-pawn.x,z:plan.line.from.z-pawn.z}}:{}};
   pawn.state='idle';
@@ -146,7 +146,7 @@ export function advanceShooter(world:World,pawn:Pawn,core:number,queries:Queries
   pawn.lastAttack={targetId:target.id,atCore:core};
   if(shot.order.auto?.kind==='response')shot.order.auto.remaining--;
   if(shot.order.auto?.kind==='draft')shot.order=null;
-  shot.stance={phase:'cooldown',startedAtCore:core,endsAtCore:core+profile.cooldownCoreTicks,...weapon.item!=='revolver'?{weaponItem:weapon.item as 'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'}:{},
+  shot.stance={phase:'cooldown',startedAtCore:core,endsAtCore:core+profile.cooldownCoreTicks,...weapon.item!=='revolver'?{weaponItem:weapon.item as 'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'}:{},
     ...suspendedClock?{clock:{lastAdvancedAtCore:core,pausedCore:0}}:{}};
 }
 

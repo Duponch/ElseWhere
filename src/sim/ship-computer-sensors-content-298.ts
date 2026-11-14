@@ -2,7 +2,7 @@ import {isSchema298OrLater} from './schema-compatibility-257.ts';
 /** Prospective original definitions. Geometry, research admission, material
  * delivery, power topology and launch remain separate, unimplemented services. */
 export const SHIP_COMPUTER_SENSORS_SCHEMA_298=298 as const;
-export const isShipComputerSensorsSchema298=(value:unknown):value is typeof SHIP_COMPUTER_SENSORS_SCHEMA_298|299|300|301|302|303|304|305|306|307|308|309|310|311|312|313|314|315|316|317|318|319|320|321|322|323|324|325=>isSchema298OrLater(value);
+export const isShipComputerSensorsSchema298=(value:unknown):value is typeof SHIP_COMPUTER_SENSORS_SCHEMA_298|299|300|301|302|303|304|305|306|307|308|309|310|311|312|313|314|315|316|317|318|319|320|321|322|323|324|325|326=>isSchema298OrLater(value);
 export const SHIP_COMPUTER_SENSORS_KINDS_298=Object.freeze(['ship-computer','ship-sensors'] as const);
 export type ShipComputerSensorsKind298=typeof SHIP_COMPUTER_SENSORS_KINDS_298[number];
 export const isShipComputerSensorsKind298=(value:unknown):value is ShipComputerSensorsKind298=>value==='ship-computer'||value==='ship-sensors';

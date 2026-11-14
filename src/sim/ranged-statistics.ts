@@ -2,11 +2,12 @@ import type { AccuracyCurve } from './combat-report.ts';
 import { WEAPON_QUALITIES,isRangedWeaponItem,type WeaponQuality } from './equipment-rules.ts';
 import { TICKS_PER_DAY } from './types.ts';
 import { SHORT_BOW_RANGED_316 } from './short-bow-316.ts';
+import { BOW_FACTS_326,type BowRanged326 } from './bows-326.ts';
 import { MINI_TURRET_PROFILE } from './mini-turret-profile.ts';
 import { LANCER_GUN_PROFILE,PIKEMAN_GUN_PROFILE } from './mechanoid-ranged-profile.ts';
 
 /** Projectile identity is broader than inventory/equipment ItemId. */
-export type ProjectileProfileId='revolver'|'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'mini-turret-gun'|'lancer-gun'|'pikeman-gun';
+export type ProjectileProfileId='revolver'|'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'|'mini-turret-gun'|'lancer-gun'|'pikeman-gun';
 
 /** Data/units shared by the persistent shooting skill and attack producer. See the explicit
  * current/historical source decisions in research/ranged-statistics-reference. */
@@ -73,10 +74,18 @@ const shotgunProfiles=Object.freeze(Object.fromEntries(WEAPON_QUALITIES.map((qua
   accuracy:Object.freeze([.80,.87,.77,.64].map(a=>Math.min(1,a*accuracyFactors[i]))) as AccuracyCurve,
   range:15.9,warmupCoreTicks:54,cooldownCoreTicks:75,projectileTilesPerCoreTick:55/100,stoppingPower:3,
 })])) as Record<WeaponQuality,RevolverProfile>);
+/** Schema 326 recurve bow and greatbow: same quality factors. */
+const qualityProfiles326=(r:BowRanged326)=>Object.freeze(Object.fromEntries(WEAPON_QUALITIES.map((quality,i)=>[quality,Object.freeze({
+  quality,damage:rangedRound(r.damage*damageFactors[i]),armorPenetration:r.armorPenetration*damageFactors[i],
+  accuracy:Object.freeze(r.accuracy.map(a=>Math.min(1,a*accuracyFactors[i]))) as AccuracyCurve,
+  range:r.range,warmupCoreTicks:r.warmupCoreTicks,cooldownCoreTicks:r.cooldownCoreTicks,
+  projectileTilesPerCoreTick:r.projectileTilesPerCoreTick,stoppingPower:r.stoppingPower,
+})])) as Record<WeaponQuality,RevolverProfile>);
+const recurveBowProfiles=qualityProfiles326(BOW_FACTS_326['recurve-bow'].ranged),greatbowProfiles=qualityProfiles326(BOW_FACTS_326.greatbow.ranged);
 export function rangedWeaponProfile(item:unknown,quality:WeaponQuality):RevolverProfile|undefined {
   if(!isRangedWeaponItem(item))return undefined;
   if(!WEAPON_QUALITIES.includes(quality))throw new RangeError('Invalid weapon quality');
-  return item==='revolver'?profiles[quality]:item==='emp-launcher'?empProfiles[quality]:item==='short-bow'?bowProfiles[quality]:item==='pump-shotgun'?shotgunProfiles[quality]:rifleProfiles[quality];
+  return item==='revolver'?profiles[quality]:item==='emp-launcher'?empProfiles[quality]:item==='short-bow'?bowProfiles[quality]:item==='pump-shotgun'?shotgunProfiles[quality]:item==='recurve-bow'?recurveBowProfiles[quality]:item==='greatbow'?greatbowProfiles[quality]:rifleProfiles[quality];
 }
 export function projectileProfile(item:unknown,quality:WeaponQuality):RevolverProfile|undefined {
   if(item==='mini-turret-gun'||item==='lancer-gun'||item==='pikeman-gun')return quality==='normal'?

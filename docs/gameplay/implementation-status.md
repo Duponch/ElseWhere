@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V326 — schéma 326 :** [Arc recourbé et grand arc](bows-v326.md). Recherches Arc recourbé (400) puis Grand arc (600) au bureau simple ; 40 ou 60 bois au poste d'artisanat ou à la forge (Artisanat 5 et 6) ; la flèche recourbée fait une blessure par estoc, la grande flèche une coupure ; les visiteurs vendent aussi les deux arcs.
+
 **V325 — schéma 325 :** [Prisonniers entre eux et visites aux malades](social-fidelity-v325.md). Les prisonniers d'une même faction se parlent ; on rend visite à un malade dans n'importe quel lit, jamais à un convalescent, en le choisissant selon l'opinion et la distance.
 
 **V324 — schéma 324 :** [Petites créatures, membres blessés et soins hors carte](combat-health-fidelity-v324.md). Un coup d'au moins 10 dégâts frappe deux fois une créature d'échelle de santé 0,5 ou moins ; les poings, les dents et les attaques des animaux suivent l'efficacité des membres ; la langue ne saigne pas ; les soins hors carte varient comme dans le jeu de base.

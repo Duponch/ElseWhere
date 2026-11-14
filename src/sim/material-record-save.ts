@@ -55,6 +55,7 @@ export function validatePileRecordShape(item:Record<string,unknown>,world:Pick<W
  if(!validProstheticWorkShape273(item,version))errors.push('Invalid prosthetic work.');
  if(!isSchema272OrLater(version)&&(isSpearItem272(item.item)||item.item==='unfinished-spear'))return ['Future spear catalogue.'];
  if(version<316&&(item.item==='short-bow'||item.item==='unfinished-bow'))return ['Future short bow catalogue.'];
+ if(version<326&&(item.item==='recurve-bow'||item.item==='greatbow'))return ['Future recurve or great bow catalogue.'];
  if(version<322&&item.item==='pump-shotgun')return ['Future pump shotgun catalogue.'];
  if(!isSchema269OrLater(version)&&(isMaceItem269(item.item)||item.item==='unfinished-mace'))return ['Future mace catalogue.'];
  if(!isSchema270OrLater(version)&&(isLongswordItem270(item.item)||item.item==='unfinished-longsword'))return ['Future longsword catalogue.'];

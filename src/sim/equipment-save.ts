@@ -26,7 +26,7 @@ export function validEquipmentShape(p:Record<string,unknown>,version:number):boo
 export function validWeaponShape(p:Record<string,unknown>,version:number):boolean {
   if(p.kind!=='weapon')return p.weapon===undefined;
   const w=p.weapon;
-  return version>=52&&isWeaponItem(p.item)&&(version>=269||!isMaceItem269(p.item))&&(version>=270||!isLongswordItem270(p.item))&&(isSchema272OrLater(version)||!isSpearItem272(p.item))&&(version>=208||p.item!=='emp-launcher')&&(version>=316||p.item!=='short-bow')&&(version>=322||p.item!=='pump-shotgun')&&(version>=88||p.item==='revolver')&&record(p.owner)&&p.owner.type!=='job'&&record(w)&&Object.keys(w).every(k=>['quality','hitPoints','forbidden'].includes(k))
+  return version>=52&&isWeaponItem(p.item)&&(version>=269||!isMaceItem269(p.item))&&(version>=270||!isLongswordItem270(p.item))&&(isSchema272OrLater(version)||!isSpearItem272(p.item))&&(version>=208||p.item!=='emp-launcher')&&(version>=316||p.item!=='short-bow')&&(version>=326||p.item!=='recurve-bow'&&p.item!=='greatbow')&&(version>=322||p.item!=='pump-shotgun')&&(version>=88||p.item==='revolver')&&record(p.owner)&&p.owner.type!=='job'&&record(w)&&Object.keys(w).every(k=>['quality','hitPoints','forbidden'].includes(k))
     &&typeof w.quality==='string'&&(WEAPON_QUALITIES as readonly string[]).includes(w.quality)
     &&typeof w.hitPoints==='number'&&Number.isInteger(w.hitPoints)&&w.hitPoints>0&&w.hitPoints<=weaponMaxHitPoints(p.item)
     &&(w.forbidden===undefined||w.forbidden===true)&&p.quantity===1;

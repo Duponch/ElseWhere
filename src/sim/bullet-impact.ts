@@ -14,8 +14,10 @@ export interface UnarmoredBullet {
   height?:BodyPart['height'];
   depth?:BodyPart['depth'];
   /** Schema 316 arrows: Core Arrow damage makes a Cut (Crack on a solid
-   * part) instead of a Gunshot. Absent for every bullet. */
-  injury?:'cut';
+   * part) instead of a Gunshot. Schema 326 recurve arrows: Core
+   * ArrowHighVelocity makes a Stab (Crack on a solid part). Absent for every
+   * bullet. */
+  injury?:'cut'|'stab';
   /** Projectile stopping power (Core default 0.5); used from schema 318 for
    * the bullet stagger of an animal. Absent: the historical stagger. */
   stoppingPower?:number;
@@ -36,7 +38,7 @@ export function validateUnarmoredBullet(hit:UnarmoredBullet,model=HUMAN_MODEL):v
   if(!Number.isFinite(hit.damage)||hit.damage<0||!Number.isSafeInteger(hit.damage*HP_UNIT)||hit.damage>1000000||
     hit.part!==undefined&&(!modelHasPart(model,hit.part)||BODY_PARTS[hit.part].conceptual)||
     hit.height!==undefined&&!['top','middle','bottom'].includes(hit.height)||hit.depth!==undefined&&!['inside','outside'].includes(hit.depth)||
-    hit.injury!==undefined&&hit.injury!=='cut'||hit.stoppingPower!==undefined&&(!Number.isFinite(hit.stoppingPower)||hit.stoppingPower<0)||hit.armorPenetration!==undefined&&(!Number.isFinite(hit.armorPenetration)||hit.armorPenetration<0))throw new Error('Invalid unarmored bullet');
+    hit.injury!==undefined&&hit.injury!=='cut'&&hit.injury!=='stab'||hit.stoppingPower!==undefined&&(!Number.isFinite(hit.stoppingPower)||hit.stoppingPower<0)||hit.armorPenetration!==undefined&&(!Number.isFinite(hit.armorPenetration)||hit.armorPenetration<0))throw new Error('Invalid unarmored bullet');
 }
 const draw=(random:MedicalRandom):number=>{const n=random();if(!Number.isFinite(n)||n<0||n>=1)throw new Error('Invalid impact random draw');return n;};
 
@@ -73,7 +75,7 @@ export function resolveUnarmoredBullet(record:MedicalRecord,hit:UnarmoredBullet,
   const apply=(part:BodyPartId):BodyPartId=>{
     const guarded=protect?.(part,hit.damage),damage=guarded?.amount??hit.damage;
     if(!damage)return part;
-    const kind=(id:BodyPartId)=>!guarded?.converted?(hit.injury==='cut'?PART_INJURY_RULES[id].solid?'crack' as const:'cut' as const:'gunshot' as const):PART_INJURY_RULES[id].solid?'crack' as const:PART_INJURY_RULES[id].skin?'bruise' as const:'crush' as const;
+    const kind=(id:BodyPartId)=>!guarded?.converted?(hit.injury?PART_INJURY_RULES[id].solid?'crack' as const:hit.injury:'gunshot' as const):PART_INJURY_RULES[id].solid?'crack' as const:PART_INJURY_RULES[id].skin?'bruise' as const:'crush' as const;
     let severity=damage*HP_UNIT;
     const definition=BODY_PARTS[part],hp=remainingPartHealth(next,part);
     if(definition.depth==='outside'&&definition.parent!==null&&severity>=hp) {
