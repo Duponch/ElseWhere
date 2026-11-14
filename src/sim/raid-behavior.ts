@@ -1,4 +1,5 @@
 import {raidStaging330} from './raid-state.ts';
+import {raidStagePoint333} from './raid-arrival-333.ts';
 import {raidGroup261} from './temp-map-raids-261.ts';
 import {processKidnapDuty261} from './caravan-kidnap-lord-261.ts';
 import {processPhysicalKidnap261} from './caravan-kidnap-261.ts';
@@ -41,11 +42,13 @@ export function processRaider(w:World,p:Pawn,getBlocked:NavigationGrid,budget:Se
   }
   const group=!r.exiting?raidGroup261(w,r.group):undefined,stage=raidStaging330(group)?group!.stage330:undefined;
   if(stage){
+    // Schema 333 groups each stage at their own arrival point (Core: a Lord a group).
+    const point=raidStagePoint333(group!.arrival333,group!.members,p.id)??stage.point;
     p.tactics??=newTactics();
-    processTactics(w,p,getBlocked,budget,getLight,{center:stage.point,radius:28});
+    processTactics(w,p,getBlocked,budget,getLight,{center:point,radius:28});
     if(p.tactics?.targetId!==null&&p.tactics?.targetId!==undefined)return;
     delete p.tactics;
-    if(distanceSquared(p,stage.point)>36){moveToward(w,p,stage.point,false,getBlocked,budget,false,getLight);r.goal=p.path.at(-1)??null;}
+    if(distanceSquared(p,point)>36){moveToward(w,p,point,false,getBlocked,budget,false,getLight);r.goal=p.path.at(-1)??null;}
     else{p.path=[];r.goal=null;p.state='idle';}return;
   }
   if(p.melee?.order?.structure){if(w.structures.some(s=>s.id===p.melee!.order!.targetId&&isBarrier(s))){processMelee(w,p,getBlocked,budget,getLight);return;}cancelMelee(p);p.path=[];r.goal=null;}

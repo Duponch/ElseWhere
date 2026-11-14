@@ -77,6 +77,7 @@ import { WeatherCloudLayer } from './WeatherCloudLayer';
 import { OrbitalDeliveryLayer } from './OrbitalDeliveryLayer';
 import { PodRescueLayer } from './PodRescueLayer';
 import { StartingArrivalLayer } from './StartingArrivalLayer';
+import { RaidPodLayer } from './RaidPodLayer';
 import { WeatherPrecipitationLayer } from './WeatherPrecipitationLayer';
 import { weatherRainRate, weatherSnowRate } from '../sim/weather';
 import { visualWindDirection } from './visual-weather';
@@ -649,6 +650,7 @@ export class SceneRenderCore {
   protected readonly orbitalDelivery = new OrbitalDeliveryLayer(this.environmentLighting.configure,this.animationDetail);
   protected readonly podRescue = new PodRescueLayer(this.environmentLighting.configure,this.animationDetail);
   protected readonly startingArrival = new StartingArrivalLayer(this.environmentLighting.configure,this.animationDetail);
+  protected readonly raidPods = new RaidPodLayer(this.environmentLighting.configure);
 
   readonly backend: string;
   protected readonly renderer: THREE.WebGPURenderer;
@@ -901,7 +903,7 @@ export class SceneRenderCore {
     selectionGeometry.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(9),3));
     this.objectSelection = new THREE.Mesh(selectionGeometry,new THREE.MeshBasicNodeMaterial({color:0xfff5d6,side:THREE.DoubleSide,depthTest:false,depthWrite:false,transparent:true,opacity:1,forceSinglePass:true}));
     this.objectSelection.visible=false;this.objectSelection.frustumCulled=false;this.objectSelection.renderOrder=GROUND_OVERLAY_RENDER_ORDER.selection;
-    this.scene.add(this.hover,this.constructionPreview.group,this.objectSelection,this.recreationHints.group,this.actionFeedback.group,this.actionVfx.group,this.brawlCloud.group,this.structureVfx.group,this.podRescue.group,this.orbitalDelivery.group,this.startingArrival.group);
+    this.scene.add(this.hover,this.constructionPreview.group,this.objectSelection,this.recreationHints.group,this.actionFeedback.group,this.actionVfx.group,this.brawlCloud.group,this.structureVfx.group,this.podRescue.group,this.orbitalDelivery.group,this.startingArrival.group,this.raidPods.group);
     } catch (error) {
       try { this.dispose(); } catch { /* Static create also closes the device. */ }
       throw error;
@@ -1172,6 +1174,7 @@ export class SceneRenderCore {
     else this.structureVfx.adopt(world,newMap);
     this.podRescue.adopt(world);this.orbitalDelivery.adopt(world);
     if(this.startingArrival.adopt(world,resetPoses))this.invalidatePausedShadow();
+    if(this.raidPods.adopt(world))this.invalidatePausedShadow();
     this.resources.adoptChopWork(previousWorld??undefined,world,resetPoses,resourceFrame);
     this.actionFeedback.update(world,this.selectedPawns,this.pawns.feedbackSource!,!!this.confirmedIntents);
     this.wildlife.update(world,this.hasTracks?this.timeline:undefined,resetPoses,this.pawns);
@@ -1298,7 +1301,7 @@ export class SceneRenderCore {
     this.clouds.setTexturesEnabled(enabled);
     this.grass?.setTexturesEnabled(enabled);
     this.podRescue.setTexturesEnabled(enabled);this.orbitalDelivery.setTexturesEnabled(enabled);
-    this.startingArrival.setTexturesEnabled(enabled);
+    this.startingArrival.setTexturesEnabled(enabled);this.raidPods.setTexturesEnabled(enabled);
     this.environmentLighting.exploration.bind(this.scene);
     this.landscape.needsUpdate=true;
     this.reconcileStaticCompiler435();
@@ -1572,7 +1575,7 @@ export class SceneRenderCore {
     const restoreFilth=this.hygiene.filth.prepareForCompile();
     const restoreClouds=this.clouds.prepareForCompile();
     const restorePodRescue=this.podRescue.prepareForCompile();
-    const restoreStartingArrival=this.startingArrival.prepareForCompile();
+    const restoreStartingArrival=this.startingArrival.prepareForCompile(),restoreRaidPods=this.raidPods.prepareForCompile();
     const restoreOrbitalDelivery=this.orbitalDelivery.prepareForCompile();
     const restorePrecipitation=this.precipitation.prepareForCompile();
     const restoreBoxes=this.boxes.prepareEmptyShadows();
@@ -1631,7 +1634,7 @@ export class SceneRenderCore {
       restoreOverview();
       restoreLabels?.();
       restorePodRescue();restoreOrbitalDelivery();
-      restoreStartingArrival();
+      restoreStartingArrival();restoreRaidPods();
       restoreDiorama?.();
       this.overview.group.visible = distant; this.terrainGroup.visible = this.resourceGroup.visible = this.plants.group.visible = !distant;
       this.rocks.setDistant(distant); this.landscape.refresh(this.backend==='WebGPU'&&distant); this.preparing = this.holdSurfaceWorld;
@@ -2082,6 +2085,7 @@ export class SceneRenderCore {
     this.actionVfx.setView(this.camera);this.structureVfx.setView(this.camera,this.controls.target);
     this.actionVfx.present(skyTick);this.brawlCloud.present(skyTick);this.structureVfx.present(skyTick);this.podRescue.present(skyTick);this.orbitalDelivery.present(skyTick);
     if(this.startingArrival.present(skyTick,this.received?.world.tick??this.world?.tick??skyTick))this.invalidatePausedShadow();
+    if(this.raidPods.present(skyTick,this.received?.world.tick??this.world?.tick??skyTick))this.invalidatePausedShadow();
     if(this.texturesEnabled)this.paintedWater.present(skyTick/TICKS_PER_SECOND);
     if(this.animationDetail.shouldSample(this.skyAnimation,(this.world?.width??1)/2,0,(this.world?.height??1)/2)){
       this.daylight.update(this.world?calendarTick(this.world,skyTick):skyTick, this.controls.target,this.world??undefined);
@@ -2418,7 +2422,7 @@ export class SceneRenderCore {
     this.brawlCloud.dispose();
     this.structureVfx.dispose();
     this.podRescue.dispose();this.orbitalDelivery.dispose();
-    this.startingArrival.dispose();
+    this.startingArrival.dispose();this.raidPods.dispose();
     this.hostPort.disposeLabels();
     this.overview.dispose();
     this.deepResources.dispose();

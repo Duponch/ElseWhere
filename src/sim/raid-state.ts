@@ -30,7 +30,10 @@ export interface RaidGroup {shipReactor275?:import('./ship-reactor-threats-275.t
    * Core tick untilCore or 30 % losses, then assaults (endedAtCore set; the
    * record stays, as the give-up deadline was pushed back by the planned
    * staging). Absent: immediate attack. */
-  stage330?:{point:Cell;untilCore:number;endedAtCore?:number}; reason?:'losses'|'timeout'|'colony-down'|'trader-lost'|'non-hostile'; composition?:RaidComposition; originQuestId?:number;caravan261?:CaravanRaidProvenance261 }
+  stage330?:{point:Cell;untilCore:number;endedAtCore?:number};
+  /** Schema 333 Cassandra home raid: its Core arrival mode, entry points and
+   * drop pods (raiders of an unopened pod are only reserved member IDs). */
+  arrival333?:import('./raid-arrival-333.ts').RaidArrival333; reason?:'losses'|'timeout'|'colony-down'|'trader-lost'|'non-hostile'; composition?:RaidComposition; originQuestId?:number;caravan261?:CaravanRaidProvenance261 }
 export interface RaidResult {destroyed277?:number;shipReactor275?:import('./ship-reactor-threats-275.ts').ShipReactorRaidSource275;tempIncident261?:import('./temp-map-raids-261.ts').TempRaidSource261; mechanoid?:true;mechComposition?:import('./mechanoid-raid-state.ts').MechanoidRaidComposition; id:number; tick:number; reason:'defended'|'withdrawn'|'colony-down'; killed:number; downed:number; escaped:number;captured?:number;composition?:RaidComposition; originQuestId?:number;caravan261?:CaravanRaidProvenance261;memberCount261?:number }
 export interface RaidCalendar {extraMechActive261?:import('./mechanoid-raid-state.ts').MechanoidRaidGroup[];extraActive261?:RaidGroup[];extraResults261?:RaidResult[]; mechanoid?:import('./mechanoid-raid-state.ts').MechanoidRaidPolicy;mechActive?:import('./mechanoid-raid-state.ts').MechanoidRaidGroup; profile:'camp-raids-v1'|'cassandra-raids-v1'|'camp-pressure-v1'|'ship-reactor-raids-v1'; rng:number; nextCheck:number|null; serial:number; completed:number; active?:RaidGroup; last?:RaidResult; departed:RaidDeparture[];cassandra?:import('./cassandra-raids.ts').CassandraRaidAgenda;
   /** Schema 331: world faction of the last Cassandra home raid (Core

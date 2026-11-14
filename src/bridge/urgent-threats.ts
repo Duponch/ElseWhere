@@ -78,7 +78,9 @@ export class UrgentThreatObserver {
   }
   private read(map: LocalMap,detected=false): MapBaseline {
     const raids:MapBaseline['raids'] = new Map(), animals = new Map<number, number>();
-    for(const group of [...map.raids?.active?[map.raids.active]:[],...map.raids?.extraActive261??[]])raids.set('raid:'+group.id,{kind:'raid',startedAt:group.startedAt,count:group.members.length,actorId:group.members[0]});
+    // Schema 333 drop pods: a raider exists only once its pod opened; no
+    // actor target is invented for a raid still in the air.
+    for(const group of [...map.raids?.active?[map.raids.active]:[],...map.raids?.extraActive261??[]]){const pods=group.arrival333?.pods,actorId=pods?pods.find(p=>p.openedAtCore!==undefined)?.pawnId:group.members[0];raids.set('raid:'+group.id,{kind:'raid',startedAt:group.startedAt,count:group.members.length,...actorId!==undefined?{actorId}:{}});}
     for(const group of mechRaidGroups261(map))raids.set('mechanoid:'+group.id,{kind:'mechanoid',startedAt:group.startedAt,count:group.members.length,actorId:group.members[0]});
     for (const a of map.wildlife?.animals ?? []) if (a.manhunter) animals.set(a.id, a.manhunter!.startedAtCore);
     const warnings=new Set((map.ancientShrineWarnings?.pairs??[]).filter(p=>p.letter).map(p=>p.triggerId+':'+p.letter!.tick));

@@ -17,7 +17,7 @@ import {defaultWorldGenerationSettings} from '../src/sim/world-generation-settin
 import {WorldGenerationRandom} from '../src/sim/world-generation-random.ts';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import type {SettlementTile} from '../src/sim/world-settlement-placement.ts';
-import {TICKS_PER_DAY,type World} from '../src/sim/types.ts';
+import {SCHEMA_VERSION,TICKS_PER_DAY,type World} from '../src/sim/types.ts';
 
 const setVersion=(w:World,v:number)=>{(w as {schemaVersion:number}).schemaVersion=v;};
 /** A Cassandra colony with an economy, given the real default world faction
@@ -103,6 +103,10 @@ test('tribal and outlander rosters spend their points with Core makers, costs an
  * fixed on main in parallel, so the validations below use raids that attack
  * at once (the seed loops only skip staged draws). */
 const attacksNow=(group:{stage330?:unknown}|null|undefined)=>!!group&&!group.stage330;
+/** Schema 333: the raiders are on the map (not yet inside drop pods). */
+const landed=(group:{stage330?:unknown;arrival333?:{pods?:unknown}}|null|undefined)=>attacksNow(group)&&!group!.arrival333?.pods;
+/** The raid's world faction, read from a raider or from its drop pods. */
+const raidFactionId=(w:World,group:{members:number[];arrival333?:{factionId?:number}})=>group.arrival333?.factionId??w.pawns.find(p=>p.id===group.members[0])!.worldAffiliation259!.factionId!;
 const roundTrip=(w:World)=>JSON.parse(JSON.stringify(w)) as World;
 
 /** A Cassandra composition belongs to a cycle raid: play the intro raid, end
@@ -118,7 +122,7 @@ function cycleOpportunity():World {
 test('a tribal or outlander raid arrives with its real gear, clothes and world faction',()=>{
   for(const [def,family] of [['TribeSavage','tribe'],['OutlanderRough','outlander']] as const){
     let w=colony(),group:ReturnType<typeof createRaidGroup>=null,composition=chooseRaidComposition331(600,family,{rng:1});
-    for(let seed=1;seed<=40&&!attacksNow(group);seed++){
+    for(let seed=1;seed<=40&&!landed(group);seed++){
       w=cycleOpportunity();const random={rng:seed*40503+7};composition=chooseRaidComposition331(600,family,random);
       const sites=freeEdge(w,composition.roster.length);
       expect(createRaidGroup(w,{count:sites.length,sites,random:{...random},composition,faction331:{factionId:factionOf(w,'Pirate').id,family}})).toBeNull();
@@ -126,7 +130,7 @@ test('a tribal or outlander raid arrives with its real gear, clothes and world f
       group=createRaidGroup(w,{count:sites.length,sites,random,composition,faction331:{factionId:factionOf(w,def).id,family}});
       expect(group).not.toBeNull();
     }
-    expect(attacksNow(group)).toBe(true);
+    expect(landed(group)).toBe(true);
     const faction=factionOf(w,def);
     if(family==='outlander')expect(composition.group331).toBe('outlander');
     for(const [i,id] of group!.members.entries()){
@@ -136,11 +140,11 @@ test('a tribal or outlander raid arrives with its real gear, clothes and world f
       expect(w.piles.find(i=>i.owner.type==='apparel'&&i.owner.pawnId===id)!.item).toBe(family==='tribe'?'cloth-tribalwear':'cloth-shirt');
     }
     expect(w.events.at(-1)!.message).toContain(faction.name);
-    expect(validateRaids(w,331,new Set())).toEqual([]);
-    const copy=roundTrip(w);expect(copy.raids).toEqual(w.raids);expect(validateRaids(copy,331,new Set())).toEqual([]);
+    expect(validateRaids(w,SCHEMA_VERSION,new Set())).toEqual([]);
+    const copy=roundTrip(w);expect(copy.raids).toEqual(w.raids);expect(validateRaids(copy,SCHEMA_VERSION,new Set())).toEqual([]);
     // A raider of another family, or this roster in a 330 save, is refused.
     const forged=structuredClone(w);forged.pawns.find(p=>p.id===group!.members[0])!.worldAffiliation259!.factionId=factionOf(w,'Pirate').id;
-    expect(validateRaids(forged,331,new Set())).toContain('Raider outside the raid faction family.');
+    expect(validateRaids(forged,SCHEMA_VERSION,new Set())).toContain('Raider outside the raid faction family.');
     const old=structuredClone(w);delete old.raids!.lastFaction331;
     expect(validateRaids(old,330,new Set())).toContain('Invalid active raid group.');
   }
@@ -157,7 +161,7 @@ test('Cassandra draws the faction of her intro and later raids; the roster follo
     expect(intro.members).toHaveLength(1);expect(intro.composition).toBeUndefined();
     expect(w.raids!.lastFaction331).toBe(raider.worldAffiliation259!.factionId);
     seen.add('intro-'+(introDef==='Pirate'?'pirate':'tribe'));
-    if(attacksNow(intro))expect(validateRaids(w,331,new Set())).toEqual([]);
+    if(attacksNow(intro))expect(validateRaids(w,SCHEMA_VERSION,new Set())).toEqual([]);
     // End the intro, then play the first cycle raid with a real wealth budget.
     raider.state='dead';advanceRaids(w);expect(w.raids!.active).toBeUndefined();
     const due=w.raids!.cassandra!.pending[0]!;clock(w,due);
@@ -165,13 +169,13 @@ test('Cassandra draws the faction of her intro and later raids; the roster follo
     e.sampledAt=Math.floor(due/501)*501;e.nextSampleAt=e.sampledAt+501;e.nextAdaptAt=Math.ceil((due+1)/3000)*3000;
     advanceRaids(w);
     const active=w.raids!.active;if(!active)continue;
-    const def=defOf(w,w.pawns.find(p=>p.id===active.members[0])!.worldAffiliation259!.factionId!);
+    const def=defOf(w,raidFactionId(w,active));
     const family=def==='Pirate'?'pirate':def.startsWith('Tribe')?'tribe':'outlander';
     expect(active.composition!.group331===undefined?'pirate':RAID_MAKERS_331[active.composition!.group331].family).toBe(family);
     expect(active.members.length).toBe(active.composition!.roster.length);
     expect(w.raids!.lastFaction331).toBe(factionOf(w,def).id);
     seen.add(family);
-    if(attacksNow(active)){expect(validateRaids(w,331,new Set())).toEqual([]);expect(validateRaids(roundTrip(w),331,new Set())).toEqual([]);}
+    if(attacksNow(active)){expect(validateRaids(w,SCHEMA_VERSION,new Set())).toEqual([]);expect(validateRaids(roundTrip(w),SCHEMA_VERSION,new Set())).toEqual([]);}
   }
   expect([...seen].sort()).toEqual(['intro-pirate','intro-tribe','outlander','pirate','tribe']);
 });
@@ -180,12 +184,12 @@ test('the new raid fields are refused before 331 by the direct validators',()=>{
   let w=colony();
   for(let seed=1;seed<=40;seed++){w=colony();w.raids!.rng=seed*977+1;clock(w,INTRO_RAID_TICK);advanceRaids(w);if(attacksNow(w.raids!.active))break;}
   expect(w.raids!.lastFaction331).toBeDefined();
-  expect(validateRaids(w,331,new Set())).toEqual([]);
+  expect(validateRaids(w,SCHEMA_VERSION,new Set())).toEqual([]);
   expect(validateRaids(w,330,new Set())).toContain('Invalid raid calendar.');
   const player=structuredClone(w);player.raids!.lastFaction331=w.worldFactions!.playerFactionId;
-  expect(validateRaids(player,331,new Set())).toContain('Invalid last raid faction.');
+  expect(validateRaids(player,SCHEMA_VERSION,new Set())).toContain('Invalid last raid faction.');
   const insect=structuredClone(w);insect.raids!.lastFaction331=factionOf(w,'Insect').id;
-  expect(validateRaids(insect,331,new Set())).toContain('Invalid last raid faction.');
+  expect(validateRaids(insect,SCHEMA_VERSION,new Set())).toContain('Invalid last raid faction.');
   const composition=chooseRaidComposition331(300,'tribe',{rng:5});
   expect(validComposition(composition,composition.roster.length,330,true,true,true)).toBe(false);
 });

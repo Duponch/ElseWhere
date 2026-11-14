@@ -1,4 +1,5 @@
-import {raidStaging330} from '../sim/raid-state.ts';
+import {raidStaging330,type RaidGroup} from '../sim/raid-state.ts';
+import {raidArrivalLabel333,raidPodsPending333} from '../sim/raid-arrival-333.ts';
 import {mechRaidGroups261} from '../sim/mechanical-raid-groups-261';
 import {raidGroups261} from '../sim/temp-map-raids-261';
 import type { Command,World } from '../sim/types';
@@ -11,6 +12,16 @@ const mechanicalSummary=(kinds:readonly MechanoidKind[]):string=>{
   return [...counts].map(([kind,count])=>`${mechanoidDefinition(kind).label} ×${count}`).join(' · ')||'0 machine';
 };
 
+/** Schema 333: the raid's arrival mode and its pods still closed. */
+function arrivalNote333(raid:RaidGroup):string {
+  const a=raid.arrival333;if(!a)return '';
+  const pending=raidPodsPending333(a);
+  return ` · ${raidArrivalLabel333(a)}${pending?` (${pending} capsule${pending>1?'s':''} en approche)`:''}`;
+}
+function arrivalBody333(raid:RaidGroup):string {
+  const a=raid.arrival333!,where=a.mode==='center-drop'?'en plein cœur de la colonie':a.mode==='random-drop'?'dispersées dans toute la zone':'à l’écart de la colonie';
+  return `Des capsules d’assaillants tombent du ciel ${where}. Chaque assaillant en sort armé à l’ouverture de sa capsule, peu après l’impact ; une capsule perce un toit léger, jamais un toit de roche épais. ${raidStaging330(raid)?'Ils se regrouperont autour de leur point de chute avant l’assaut.':'Ils attaqueront aussitôt sortis.'} Mobilisez les défenseurs et couvrez les points de chute.`;
+}
 export interface ObservedRaidMembers {id:number;mechanical:boolean;members:readonly number[];}
 /** Only this raid's present physical owners. A downed raider remains locatable.
  * Mechanical bodies retain their original ID but no persisted raid group;
@@ -68,9 +79,9 @@ export function createRaidUI(send:(c:Command)=>Promise<unknown>,focus:FocusNotif
     if(!raid&&!mech&&!last){details.remove();if(dialog.open)dialog.close();return;}
     const remaining=raid?w.pawns.filter(p=>humanGroups.some(g=>g.members.includes(p.id))&&p.state!=='dead'&&p.state!=='downed').length:0;
     const mechanicalRemaining=mech?w.mechanoids?.filter(m=>mechanicalGroups.some(g=>g.members.includes(m.id))&&m.state!=='dead'&&m.state!=='downed')??[]:[];
-    title.textContent=mech?`Raid mécanique : ${mechanicalSummary(mechanicalRemaining.map(m=>m.mechKind))}${mechanicalGroups.length>1?' · '+mechanicalGroups.length+' groupes':''} · ${mechanicalGroups.some(g=>g.phase==='assault')?'assaut':'regroupement'}`:raid?raid.phase==='assault'?`Raid : ${remaining} assaillant(s)${raidStaging330(raid)?' · regroupement':''}`:'Retraite des assaillants':last?.mechanoid?'Assaut mécanique terminé':'Assaut terminé';
+    title.textContent=mech?`Raid mécanique : ${mechanicalSummary(mechanicalRemaining.map(m=>m.mechKind))}${mechanicalGroups.length>1?' · '+mechanicalGroups.length+' groupes':''} · ${mechanicalGroups.some(g=>g.phase==='assault')?'assaut':'regroupement'}`:raid?raid.phase==='assault'?`Raid : ${remaining} assaillant(s)${arrivalNote333(raid)}${raidStaging330(raid)?' · regroupement':''}`:'Retraite des assaillants':last?.mechanoid?'Assaut mécanique terminé':'Assaut terminé';
     letter.textContent=title.textContent;locate.hidden=!raidNotificationTargets(w,observed).length;
-    body.textContent=mech?mech.phase==='staging'?'Les machines hostiles se regroupent avant leur assaut. Leur défense est déjà active. Préparez vos positions et votre circuit de défense.':'Les machines hostiles attaquent la colonie. Leur anatomie et les phases de leurs gestes sont inspectables ; aucun soin, recrutement ou ordre colonial ne leur est accordé.':raid?raidStaging330(raid)?'Les assaillants se regroupent près du bord de la carte avant leur assaut. Ils se défendent déjà autour de leur point de regroupement. Préparez vos positions ; l’assaut viendra après un délai ou s’ils perdent près d’un tiers des leurs.':raid.phase==='assault'?'Des ennemis arrivent par le bord et attaquent la colonie. Mobilisez les défenseurs, placez-les et préparez les secours. Les assaillants peuvent frapper les murs ou portes qui leur barrent l’accès.':'Les assaillants cherchent une sortie physique. Surveillez les blessés ; les survivants encore sur la carte restent hostiles.':last?.mechanoid?`Bilan confirmé : ${mechanicalSummary(last.mechComposition?.roster??[])} neutralisé(s). Une carcasse entière devient disponible après la fin de son déplacement et de sa récupération. Transportez-la pour une facture de concassage ou de broyage ; l’acier est produit à la finition réelle.`:`Bilan à la fin de l’assaut : ${last!.killed} ennemi(s) mort(s), ${last!.downed} à terre, ${last!.escaped} parti(s). Démobilisez, soignez les colons et réparez les ouvrages dans la zone de foyer. Les corps restent sur place pour les secours et la sépulture.`;
+    body.textContent=mech?mech.phase==='staging'?'Les machines hostiles se regroupent avant leur assaut. Leur défense est déjà active. Préparez vos positions et votre circuit de défense.':'Les machines hostiles attaquent la colonie. Leur anatomie et les phases de leurs gestes sont inspectables ; aucun soin, recrutement ou ordre colonial ne leur est accordé.':raid?raidPodsPending333(raid.arrival333)?arrivalBody333(raid):raidStaging330(raid)?'Les assaillants se regroupent près du bord de la carte avant leur assaut. Ils se défendent déjà autour de leur point de regroupement. Préparez vos positions ; l’assaut viendra après un délai ou s’ils perdent près d’un tiers des leurs.':raid.phase==='assault'?'Des ennemis arrivent par le bord et attaquent la colonie. Mobilisez les défenseurs, placez-les et préparez les secours. Les assaillants peuvent frapper les murs ou portes qui leur barrent l’accès.':'Les assaillants cherchent une sortie physique. Surveillez les blessés ; les survivants encore sur la carte restent hostiles.':last?.mechanoid?`Bilan confirmé : ${mechanicalSummary(last.mechComposition?.roster??[])} neutralisé(s). Une carcasse entière devient disponible après la fin de son déplacement et de sa récupération. Transportez-la pour une facture de concassage ou de broyage ; l’acier est produit à la finition réelle.`:`Bilan à la fin de l’assaut : ${last!.killed} ennemi(s) mort(s), ${last!.downed} à terre, ${last!.escaped} parti(s). Démobilisez, soignez les colons et réparez les ouvrages dans la zone de foyer. Les corps restent sur place pour les secours et la sépulture.`;
     details.update(document.getElementById('alerts')!,!locate.hidden,true);
   }};
 }
