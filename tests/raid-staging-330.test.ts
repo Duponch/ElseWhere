@@ -67,7 +67,7 @@ test('a staging point outside the Core window is refused in a save',()=>{
   group.stage330!.untilCore=group.startedAt*10+20000;
   expect(validateWorld(w).length).toBeGreaterThan(0);
   // An assault start in the future is refused too.
-  const {w:v}=staged(330)!,g=v.raids!.active!;g.stage330!.endedAtCore=v.tick*10+50;
+  const {w:v}=staged(SCHEMA_VERSION)!,g=v.raids!.active!;g.stage330!.endedAtCore=v.tick*10+50;
   expect(validateWorld(v)).toContain('Invalid raid staging.');
 });
 
