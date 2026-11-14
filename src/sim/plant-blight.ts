@@ -28,7 +28,8 @@ function capture(world:World):BlightIndex {
   let index=indices.get(world);
   if(!index||index.source!==world.resources){
     const buckets=Array.from({length:CROP_BLIGHT_INTERVAL},()=>[] as Resource[]),cells=new Map<number,Resource>();
-    for(const plant of world.resources)if(isCrop(plant)&&plant.species===undefined){
+    // Wild flora (most resources) has a species: tested first, the same result.
+    for(const plant of world.resources)if(plant.species===undefined&&isCrop(plant)){
       cells.set(plant.z*world.width+plant.x,plant);
       if(plant.blight)buckets[plant.blight.nextCheck%CROP_BLIGHT_INTERVAL]!.push(plant);
     }
