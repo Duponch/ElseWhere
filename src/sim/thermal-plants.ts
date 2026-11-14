@@ -5,7 +5,7 @@ import { outdoorTemperature } from './temperature.ts';
 import type { ThermalLayout } from './thermal-topology.ts';
 import type { Resource, World } from './types.ts';
 import { schemaAtLeast } from './schema-range.ts';
-import { resourceArrayDelta } from './resource-array-delta.ts';
+import { resourceArrayDelta,resourceSnapshot,sameResources } from './resource-array-delta.ts';
 
 interface Group { plants:Resource[]; region:number; factor?:number }
 interface Binding { source:Resource[]; layout:ThermalLayout; groups:Group[] }
@@ -18,17 +18,17 @@ const PLANT_TICK_LONG_CORE=2000,CORE_PER_LOCAL=10,PLANT_TICK_LONG_LOCAL=PLANT_TI
 /** The current schema family samples temperature at each plant's TickLong;
  * historical schemas keep their immediate regional update. */
 const sampledAtTickLong=schemaAtLeast(301);
-interface Schedule { source:Resource[]; length:number; buckets:Resource[][] }
+interface Schedule { source:Resource[]; snapshot:readonly Resource[]; buckets:Resource[][] }
 const schedules=new WeakMap<World,Schedule>(),sampledTicks=new WeakMap<World,number>();
 const plantTickLongSlot=(plant:Resource):number=>Math.floor(plant.id%PLANT_TICK_LONG_CORE/CORE_PER_LOCAL);
 const SCHEDULE_DELTA_LIMIT=256;
 /** The schedule of `next` from the previous one, when resources were only
- * removed or appended (resourceArrayDelta) and the previous array was not
- * pushed to since: a resource's id, kind and species never change, so each
+ * removed or appended (resourceArrayDelta) and the previous array still holds
+ * the elements it was built from: a resource's id, kind and species never change, so each
  * bucket keeps its plants in array order, as a rebuild would. Undefined (the
  * caller rebuilds) on any other change. The previous schedule is consumed. */
 function derivedSchedule(old:Schedule,next:Resource[]):Schedule|undefined {
-  if(old.source.length!==old.length)return undefined;
+  if(!sameResources(old.source,old.snapshot))return undefined;
   const delta=resourceArrayDelta(old.source,next,SCHEDULE_DELTA_LIMIT);if(!delta)return undefined;
   const buckets=old.buckets;
   for(const r of delta.removed)if(isPlant(r)){
@@ -37,7 +37,7 @@ function derivedSchedule(old:Schedule,next:Resource[]):Schedule|undefined {
     if(bucket.indexOf(r,k)>=0)return undefined; // a repeated object: rebuild
   }
   for(let t=delta.appendedFrom;t<next.length;t++){const r=next[t]!;if(isPlant(r)){const bucket=buckets[plantTickLongSlot(r)];if(!bucket)return undefined;bucket.push(r);}}
-  return {source:next,length:next.length,buckets};
+  return {source:next,snapshot:resourceSnapshot(next),buckets};
 }
 
 /** Each plant samples its temperature factor at its own TickLong only. A changed
@@ -54,7 +54,7 @@ function updatePlantTemperaturesAtTickLong(world:World,layout:ThermalLayout):voi
     else {
       const buckets:Resource[][]=Array.from({length:PLANT_TICK_LONG_LOCAL},()=>[]);
       for(const plant of world.resources)if(isPlant(plant))buckets[plantTickLongSlot(plant)]!.push(plant);
-      schedule={source:world.resources,length:world.resources.length,buckets};
+      schedule={source:world.resources,snapshot:resourceSnapshot(world.resources),buckets};
     }
     schedules.set(world,schedule);
   }

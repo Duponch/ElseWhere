@@ -8,6 +8,15 @@ type Resource=World['resources'][number];
  * removed or appended returns undefined: the caller rebuilds. Derived caches
  * use it when `world.resources` is replaced, which happens on most ticks; a
  * resource's kind, species and position never change. */
+/** A copy of `list`'s elements, kept by a derived cache with `list`. */
+export const resourceSnapshot=(list:readonly Resource[]):readonly Resource[]=>list.slice();
+/** True when `list` still holds exactly the elements of `snapshot` (not pushed
+ * to or edited in place since): a cache built from it may follow its delta. */
+export function sameResources(list:readonly Resource[],snapshot:readonly Resource[]):boolean {
+ if(list.length!==snapshot.length)return false;
+ for(let i=0;i<list.length;i++)if(list[i]!==snapshot[i])return false;
+ return true;
+}
 export function resourceArrayDelta(previous:readonly Resource[],next:readonly Resource[],limit:number):{readonly removed:readonly Resource[];appendedFrom:number}|undefined {
  if(limit>SHARED_DELTA_LIMIT)return computeDelta(previous,next,limit);
  // Several derived caches ask for the same pair in one tick: the answer for

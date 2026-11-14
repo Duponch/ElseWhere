@@ -3,7 +3,7 @@ import { isRoofed,roofCoverage,roofIdentity,sameRoofIdentity,type RoofIdentity }
 import type { LightEnvironment,LightReader } from './light-environment.ts';
 import type { Resource,World } from './types.ts';
 import { structuresOfKind } from './structure-navigation.ts';
-import { resourceArrayDelta } from './resource-array-delta.ts';
+import { resourceArrayDelta,resourceSnapshot,sameResources } from './resource-array-delta.ts';
 
 /** Settle the captured light/thermal interval before changing either regime.
  * Roof producers still call this before mutating physical coverage. */
@@ -14,8 +14,8 @@ export function checkpointPlantGrowth(world:World,plant:Resource):void {
 
 interface Binding {
   source:Resource[];
-  /** source.length when `plants` was derived (a push since makes it stale). */
-  sourceLength:number;
+  /** The elements of `source` when `plants` was derived (an edit since makes it stale). */
+  sourceSnapshot:readonly Resource[];
   plants:Resource[];
   artificial:Float32Array|undefined;
   hasCaptured:boolean;
@@ -51,10 +51,10 @@ let writingPasses=0;
 const PLANT_DELTA_LIMIT=256;
 /** `next.filter(isPlant)` from the previous binding's plants, when resources
  * were only removed or appended (resourceArrayDelta) and the previous array
- * was not pushed to since: a resource's kind and species never change, so the
+ * still holds the elements it was derived from: a resource's kind and species never change, so the
  * kept plants stay in order and the appended ones follow. Undefined: filter. */
 function derivedPlants(previous:Binding,next:Resource[]):Resource[]|undefined {
-  if(previous.source.length!==previous.sourceLength)return undefined;
+  if(!sameResources(previous.source,previous.sourceSnapshot))return undefined;
   const delta=resourceArrayDelta(previous.source,next,PLANT_DELTA_LIMIT);if(!delta)return undefined;
   const removed=delta.removed.filter(isPlant),plants:Resource[]=[];let k=0;
   for(const r of previous.plants){if(k<removed.length&&r===removed[k]){k++;continue;}plants.push(r);}
@@ -75,7 +75,7 @@ export function reconcilePlantLighting(world:World,provided:LightEnvironment|Lig
   if(!binding||binding.source!==world.resources) {
     const plants=(binding&&derivedPlants(binding,world.resources))??world.resources.filter(isPlant);
     // hasCaptured is only read below schema 256 (a complete pass replaces it).
-    binding={source:world.resources,sourceLength:world.resources.length,plants,hasCaptured:world.schemaVersion<256&&plants.some(p=>p.growthLight!==undefined),artificial:undefined,
+    binding={source:world.resources,sourceSnapshot:resourceSnapshot(world.resources),plants,hasCaptured:world.schemaVersion<256&&plants.some(p=>p.growthLight!==undefined),artificial:undefined,
       constructed:undefined,coverage:[],width:0,height:0};
     bindings.set(world,binding);
   }

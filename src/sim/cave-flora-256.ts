@@ -1,7 +1,7 @@
 import type {FloraDefinition} from './biome-flora.ts';
 import type {LightSource} from './light-sources.ts';
 import type {Resource,World} from './types.ts';
-import {resourceArrayDelta} from './resource-array-delta.ts';
+import {resourceArrayDelta,resourceSnapshot,sameResources} from './resource-array-delta.ts';
 export const CAVE_PLANT_SPECIES_256=['glowstool','agarilux','bryolux'] as const;
 export type CavePlantSpecies256=typeof CAVE_PLANT_SPECIES_256[number];
 // Same answer as CAVE_PLANT_SPECIES_256.includes(species) (called for every resource).
@@ -20,16 +20,16 @@ export function caveLightDamage256(glowWithoutCaves:number,elapsedCore=2000):num
  const low=Math.fround(.0001),high=Math.fround(.001),rate=Math.fround(low+Math.fround(Math.fround(high-low)*glowWithoutCaves));
  return glowWithoutCaves>0?Math.ceil(Math.fround(rate*elapsedCore)):0;
 }
-interface CaveLightBinding {width:number;length:number;plants:readonly Resource[];sources:readonly LightSource[]}
+interface CaveLightBinding {width:number;snapshot:readonly Resource[];plants:readonly Resource[];sources:readonly LightSource[]}
 const lightBindings=new WeakMap<Resource[],CaveLightBinding>();
 let lastBound:{list:Resource[];binding:CaveLightBinding}|undefined;
 const CAVE_DELTA_LIMIT=256;
 /** The cave plants of `list` in array order, from the last bound array when
  * resources were only removed or appended (resourceArrayDelta) and that array
- * was not pushed to since: a resource's species never changes, so this is the
+ * still holds the elements it was bound with: a resource's species never changes, so this is the
  * scan's answer. Undefined: scan. */
 function derivedCavePlants(list:Resource[]):Resource[]|undefined {
- const last=lastBound;if(!last||last.list===list||last.list.length!==last.binding.length)return undefined;
+ const last=lastBound;if(!last||last.list===list||!sameResources(last.list,last.binding.snapshot))return undefined;
  const delta=resourceArrayDelta(last.list,list,CAVE_DELTA_LIMIT);if(!delta)return undefined;
  const removed=delta.removed.filter(r=>isCavePlant256(r.species)),plants:Resource[]=[];let k=0;
  for(const r of last.binding.plants){if(k<removed.length&&r===removed[k]){k++;continue;}plants.push(r);}
@@ -45,5 +45,5 @@ export function caveLightSources256(world:Pick<World,'schemaVersion'|'resources'
  const list=world.resources,plants=(lastBound?.binding.width===world.width?derivedCavePlants(list):undefined)??list.filter(r=>isCavePlant256(r.species,world.schemaVersion));
  const sources:LightSource[]=[];for(const r of plants){
   const d=CAVE_PLANT_FACTS_256[r.species as CavePlantSpecies256];sources.push({cell:r.z*world.width+r.x,radius:d.radius,red:d.red,green:d.green,blue:d.blue});
- }sources.sort((a,b)=>a.cell-b.cell);binding={width:world.width,length:list.length,plants,sources};lightBindings.set(list,binding);lastBound={list,binding};return sources;
+ }sources.sort((a,b)=>a.cell-b.cell);binding={width:world.width,snapshot:resourceSnapshot(list),plants,sources};lightBindings.set(list,binding);lastBound={list,binding};return sources;
 }
