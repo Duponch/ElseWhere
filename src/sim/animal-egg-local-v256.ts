@@ -54,7 +54,10 @@ export function beginAnimalEggLay256(world:World,a:WildAnimal,route:(goals:Cell[
   path=route(near.slice(start).concat(near.slice(0,start)));
  }
  if(!path)return false;
- a.path=path;a.eggLay={target:{...(path.at(-1)??a)},progress:0};a.state=path.length?'moving':'idle';return true;
+ // An animal already on its laying cell has an empty route: the target is
+ // its position, never a copy of the whole animal record.
+ const end=path.at(-1)??a;
+ a.path=path;a.eggLay={target:{x:end.x,z:end.z},progress:0};a.state=path.length?'moving':'idle';return true;
 }
 /** Return true while this physical job owns the animal. */
 export function processAnimalEggLay256(world:World,a:WildAnimal,move:()=>void):boolean {
