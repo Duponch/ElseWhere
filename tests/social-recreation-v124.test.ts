@@ -24,7 +24,8 @@ function scene():{world:World; visitor:Pawn; patient:Pawn} {
   const bed={id:world.nextId++,kind:'bed' as const,x:patient.x,z:patient.z,orientation:0 as const,footprint:'legacy-single' as const,medical:true as const,quality:'normal' as const};
   world.structures.push(bed);patient.need={kind:'sleep',phase:'sleep',bedId:bed.id,target:{x:patient.x,z:patient.z},medical:'bedrest'};
   patient.health=createMedicalRecord(world.tick);patient.health.nextInjuryId=2;
-  patient.health.injuries.push({id:1,part:'left-arm',kind:'bruise',severity:1000,bornAt:world.tick-1,tended:1000});
+  // Schema 325: at least 8 HP of healing injuries, or the patient is about to recover.
+  patient.health.injuries.push({id:1,part:'left-arm',kind:'bruise',severity:9000,bornAt:world.tick-1,tended:1000});
   patient.priorities.bedrest=1;
   refreshStock(world);
   return {world,visitor,patient};
@@ -90,8 +91,8 @@ test('a patient leaving medical rest after the visitor acts remains saveable unt
   expect(resumedVisitor.recreation.task).toBeNull();
 });
 
-test('a sick visit requires a medical bed',()=>{
-  const {world,patient}=scene();
+test('before schema 325, a sick visit requires a medical bed',()=>{
+  const {world,patient}=scene();(world as {schemaVersion:number}).schemaVersion=324;
   world.structures[0]!.medical=undefined;
   expect(visitPatient(world,patient.id)).toBeUndefined();
 });

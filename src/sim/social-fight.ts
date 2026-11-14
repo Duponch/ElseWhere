@@ -76,9 +76,10 @@ export function activeSocialFight(world:World,pawn:Pawn,targetId:number):boolean
 }
 
 /** Core checks recovery every 30 Core ticks after 420 Core ticks of fighting.
- * At MTB 0.02 Core days (1,200 Core ticks), each check succeeds at this rate. */
-export function socialFightRecoveryDue(pawn:Pawn,core:number):boolean {
+ * At MTB 0.02 Core days (1,200 Core ticks), Core Rand.MTBEventOccurs succeeds
+ * with chance 30/1200 per check (schema 325); 1-exp(-30/1200) before. */
+export function socialFightRecoveryDue(pawn:Pawn,core:number,version:number=0):boolean {
   const state=pawn.social;if(!state?.fight)return false;
   return core-state.fight.startedAt*10>=420&&(core+pawn.id)%30===0
-    &&socialRandom(state)<1-Math.exp(-30/1200);
+    &&socialRandom(state)<(version>=325?30/1200:1-Math.exp(-30/1200));
 }

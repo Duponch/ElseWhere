@@ -10,7 +10,18 @@ import {interruptWork} from './interrupted-cargo.ts';
 import { allowedAreaAllows,captureAllowedArea } from './allowed-area-state.ts';
 import { assignmentAt } from './schedule.ts';
 import { gainRecreation, RECREATION_GAIN, RECREATION_DURATION, VISIT_SICK_DURATION, recreationKind, recreationRandom, type RecreationActivity, type RecreationTask } from './recreation-rules.ts';
-import { adjacentToTable, availableChessTables, availablePins, availableTelevisions, captureRecreationResources, chessCells, horseshoeCells, isGatherSpot, nearVisitPatient, recreationSiteValid, recreationSpace, visitablePatient, visitPatient,type RecreationSpace } from './recreation-space.ts';
+import { adjacentToTable, availableChessTables, availablePins, availableTelevisions, captureRecreationResources, chessCells, horseshoeCells, isGatherSpot, nearVisitPatient, recreationSiteValid, recreationSpace, visitablePatient, visitPatient, visitChanceScore325,type RecreationSpace } from './recreation-space.ts';
+import { opinionOf } from './social-state.ts';
+/** Core FindRandomSickPawn (schema 325): one patient drawn by opinion and
+ * distance. An unreachable patient makes this visit fail rather than move on
+ * to another one (adaptation: Core leaves unreachable patients out first). */
+function pickVisitPatient325(world:World,pawn:Pawn,patients:readonly Pawn[]):Pawn[] {
+  if(patients.length<2)return [...patients];
+  const weights=patients.map(p=>visitChanceScore325(opinionOf(pawn,p.id,world.tick,world),Math.hypot(pawn.x-p.x,pawn.z-p.z)));
+  let draw=recreationRandom(world)*weights.reduce((sum,w)=>sum+w,0);
+  for(let i=0;i<patients.length-1;i++){draw-=weights[i]!;if(draw<0)return [patients[i]!];}
+  return [patients.at(-1)!];
+}
 import { reservedServiceCells } from './service-reservations.ts';
 import { isColonist } from './affiliation.ts';
 import { televisionWatchCells,TELEVISION_GAIN_FACTOR,TELEVISION_WEIGHT } from './television-recreation.ts';
@@ -149,7 +160,7 @@ export function offerRecreation300(world:World,pawn:Pawn,context:NeedContext,aft
           if(!reserved.has(key))candidates.push({activity,buildingId:spot.id,...(seat?{seatId:seat.id}:{}),target,phase:'travel',elapsed:0});
         }
       }
-      else for(const patient of patients)for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){
+      else for(const patient of world.schemaVersion>=325?pickVisitPatient325(world,pawn,patients):patients)for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){
         const target={x:patient.x+dx,z:patient.z+dz},key=cellIndex(world,target.x,target.z),seat=seats.get(key);
         if(nearVisitPatient(patient,target)&&!reserved.has(key))candidates.push({activity,buildingId:null,patientId:patient.id,...(seat?{seatId:seat.id}:{}),target,phase:'travel',elapsed:0});
       }

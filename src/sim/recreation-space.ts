@@ -73,11 +73,24 @@ export const isGatherSpot = (s:Structure):boolean => isDiningTable(s.kind)||s.ki
 export const gatherActive = (s:Structure):boolean => s.gatherSpot!==false&&(s.kind!=='campfire'||!!s.fuel?.ticks&&s.power?.switchOn!==false);
 export const adjacentToTable = (table:Structure,cell:Cell):boolean => footprintCells(table).some(part=>Math.abs(part.x-cell.x)+Math.abs(part.z-cell.z)===1);
 export const visitablePatient = (world:World,p:Pawn,requireLowJoy=true):boolean => {
-  const need=p.need;
+  const need=p.need,anyBed=world.schemaVersion>=325;
   return need?.kind==='sleep'&&!!need.medical&&need.phase==='sleep'&&need.bedId!==null
-    &&p.x===need.target.x&&p.z===need.target.z&&world.structures.some(s=>s.id===need.bedId&&isBedKind(s.kind)&&s.medical===true&&s.x===p.x&&s.z===p.z)
-    &&p.state==='resting'&&(!requireLowJoy||(world.schemaVersion>=319?p.recreation.level<30:p.recreation.level<=35))&&p.hunger>0&&p.rest>=33&&canSocialize(world,p,false);
+    &&p.x===need.target.x&&p.z===need.target.z&&world.structures.some(s=>s.id===need.bedId&&isBedKind(s.kind)&&(anyBed||s.medical===true)&&s.x===p.x&&s.z===p.z)
+    &&p.state==='resting'&&(!requireLowJoy||(world.schemaVersion>=319?p.recreation.level<30:p.recreation.level<=35))&&p.hunger>0&&p.rest>=33&&canSocialize(world,p,false)
+    &&!(anyBed&&aboutToRecover325(p));
 };
+/** Core SickPawnVisitUtility.AboutToRecover (schema 325), for a patient
+ * resting awake in bed: no disease still fought and less than 8 HP of
+ * healing injuries (scars excluded) means nobody comes to visit. */
+export const aboutToRecover325=(p:Pawn):boolean=>{
+  const h=p.health;if(!h)return true;
+  if(h.infections?.cases.length||h.flu||h.immuneDiseases&&Object.values(h.immuneDiseases).some(Boolean))return false;
+  let severity=0;for(const injury of h.injuries)if(injury.scar===undefined)severity+=injury.severity;
+  return severity<8000;
+};
+/** Core SickPawnVisitUtility.VisitChanceScore (schema 325): opinion from
+ * 0.05 at -100 to 2 at +100, times 1 near to 0.2 at 150 cells and beyond. */
+export const visitChanceScore325=(opinion:number,distance:number):number=>(.05+1.95*(opinion+100)/200)*Math.max(.2,Math.min(1,1-.8*distance/150));
 export const visitPatient = (world:World,id:number,requireLowJoy=true):Pawn|undefined => world.pawns.find(p=>p.id===id&&visitablePatient(world,p,requireLowJoy));
 export const nearVisitPatient = (patient:Pawn,cell:Cell):boolean => (patient.x-cell.x)**2+(patient.z-cell.z)**2<=5&&!(patient.x===cell.x&&patient.z===cell.z);
 

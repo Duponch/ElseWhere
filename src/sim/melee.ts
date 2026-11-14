@@ -101,7 +101,7 @@ export function advanceMelee(world:World,pawn:Pawn,core:number,contactGrid:()=>U
     }
     return false;
   }
-  if(m.order?.auto==='social'&&socialFightRecoveryDue(pawn,core)){finishSocialFight(world,pawn);return false;}
+  if(m.order?.auto==='social'&&socialFightRecoveryDue(pawn,core,world.schemaVersion)){finishSocialFight(world,pawn);return false;}
   const auto=m.order?.auto;
   if(auto==='draft'||auto==='response'){
     if(!automaticPermission(pawn,auto)||!automaticTarget(world,pawn,m.order!.targetId))cancelMelee(pawn);

@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V325 — schéma 325 :** [Prisonniers entre eux et visites aux malades](social-fidelity-v325.md). Les prisonniers d'une même faction se parlent ; on rend visite à un malade dans n'importe quel lit, jamais à un convalescent, en le choisissant selon l'opinion et la distance.
+
 **V324 — schéma 324 :** [Petites créatures, membres blessés et soins hors carte](combat-health-fidelity-v324.md). Un coup d'au moins 10 dégâts frappe deux fois une créature d'échelle de santé 0,5 ou moins ; les poings, les dents et les attaques des animaux suivent l'efficacité des membres ; la langue ne saigne pas ; les soins hors carte varient comme dans le jeu de base.
 
 **V323 — schéma 323 :** [L'âge dans la vie sociale](social-age-v323.md). L'écart d'âge entre en compte dans la compatibilité (+0,45 au même âge, −0,45 à 20 ans d'écart) et réduit les bagarres au-delà de 10 ans d'écart.

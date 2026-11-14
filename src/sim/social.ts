@@ -1,6 +1,6 @@
 import {HUMAN_YEAR_TICKS} from './human-age.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
-import { isColonist,distanceSquared } from './affiliation.ts';
+import { isColonist,distanceSquared,factionOf } from './affiliation.ts';
 import {alcoholModifiers265} from './alcohol-rules-265.ts';
 import {malnutritionStage} from './malnutrition.ts';
 import {violentWorkRefusal} from './colonist-backgrounds.ts';
@@ -21,9 +21,22 @@ import type { Pawn,World } from './types.ts';
 const stateFor=(w:World,p:Pawn):SocialState=>p.social??={rng:socialSeed(w.seed,p.id),memories:[]};
 export function canSocialize(world:World,pawn:Pawn,initiate:boolean,carried?:ReadonlySet<number>):boolean {
   if(isSchema285OrLater(world.schemaVersion)&&pawn.coupleTask285)return false;
-  if(!isColonist(pawn)||pawn.state==='dead'||pawn.state==='downed'||pawn.state==='sleeping'||pawn.medicalSleep||pawn.mental?.crisis||pawn.stun||pawn.shooting||pawn.melee||pawn.social?.fight||pawn.flee||pawn.tactics||(carried?carried.has(pawn.id):carrierOf(world,pawn.id)))return false;
+  return isColonist(pawn)&&socialBodyReady(world,pawn,initiate,carried);
+}
+function socialBodyReady(world:World,pawn:Pawn,initiate:boolean,carried?:ReadonlySet<number>):boolean {
+  if(pawn.state==='dead'||pawn.state==='downed'||pawn.state==='sleeping'||pawn.medicalSleep||pawn.mental?.crisis||pawn.stun||pawn.shooting||pawn.melee||pawn.social?.fight||pawn.flee||pawn.tactics||(carried?carried.has(pawn.id):carrierOf(world,pawn.id)))return false;
   const body=pawnBody(pawn);return body.canBeAwake&&(!initiate||body.capacities.talking>0);
 }
+/** Core TryInteractRandomly (schema 325): a prisoner of the colony talks with
+ * the other prisoners of its own faction, never with a colonist. Not while
+ * breaking out, escaping or released. */
+export function prisonerCanSocialize325(world:World,pawn:Pawn,initiate:boolean,carried?:ReadonlySet<number>):boolean {
+  const prisoner=pawn.prisoner;
+  return world.schemaVersion>=325&&!!prisoner&&!isColonist(pawn)&&!prisoner.breakout?.active&&!prisoner.escape&&prisoner.releasedAt===undefined&&socialBodyReady(world,pawn,initiate,carried);
+}
+const socialMember=(world:World,pawn:Pawn,initiate:boolean,carried?:ReadonlySet<number>):boolean=>canSocialize(world,pawn,initiate,carried)||prisonerCanSocialize325(world,pawn,initiate,carried);
+/** Colonists talk with colonists, prisoners with prisoners of their faction. */
+export const sameSocialCircle325=(a:Pawn,b:Pawn):boolean=>isColonist(a)?isColonist(b):!!a.prisoner&&!!b.prisoner&&!isColonist(b)&&factionOf(a)===factionOf(b);
 /** Full obstacles only: no combat lean, no navigation and no scan of map vegetation.
  * Built lazily for this synchronous interaction pass, never retained after mutation. */
 function socialSight(world:World):ShotGrid {
@@ -73,8 +86,10 @@ export function negativeInteractionFactor(world:World,initiator:Pawn,recipient:P
 export function passiveSocialWeights(world:World,initiator:Pawn,recipient:Pawn,people?:RelationshipPeople):{chitchat:number;'deep-talk':number;'kind-words':number;slight:number;insult:number;'romance-attempt':number;breakup:number} {
   const compatibility=pairCompatibility323(world,initiator,recipient);
   const negative=negativeInteractionFactor(world,initiator,recipient,compatibility);
+  // Prisoners do not court one another here (an adaptation: Core allows it).
+  const prisoners=!!initiator.prisoner||!!recipient.prisoner;
   return {chitchat:1,'deep-talk':deepTalkWeight(compatibility),'kind-words':initiator.traits?.includes('kind') ? .01 : 0,slight:.02*negative,insult:.007*negative,
-    'romance-attempt':romanceSelectionWeight(world,initiator,recipient,people),breakup:breakupSelectionWeight(world,initiator,recipient)};
+    'romance-attempt':prisoners?0:romanceSelectionWeight(world,initiator,recipient,people),breakup:prisoners?0:breakupSelectionWeight(world,initiator,recipient)};
 }
 /** The opinion factor reads the recipient after its new directed memory. */
 export function socialFightChance(world:World,recipient:Pawn,initiator:Pawn,kind:'slight'|'insult'):number {
@@ -90,7 +105,7 @@ export function exchangeSocial(world:World,a:Pawn,b:Pawn,kind:SocialInteractionK
   if(kind==='fight-cathartic'||kind==='fight-angering')return false;
   if((kind==='kind-words'&&!a.traits?.includes('kind'))
     ||(a.traits?.includes('kind')&&(kind==='slight'||kind==='insult')))return false;
-  if(!world.pawns.includes(a)||!world.pawns.includes(b)||!canSocialize(world,a,true)||!canSocialize(world,b,false)||world.tick-(a.social?.last?.tick??-1000)<12||!goodSocialPosition(world,a,b,grid))return false;
+  if(!world.pawns.includes(a)||!world.pawns.includes(b)||!sameSocialCircle325(a,b)||!socialMember(world,a,true)||!socialMember(world,b,false)||world.tick-(a.social?.last?.tick??-1000)<12||!goodSocialPosition(world,a,b,grid))return false;
   if(kind==='romance-attempt'||kind==='breakup'){
     const outcome=performRomanceExchange(world,a,b,kind);if(!outcome)return false;
     const sa=stateFor(world,a),sb=stateFor(world,b);
@@ -134,7 +149,7 @@ export function advanceSocial(world:World):void {
   for(const p of world.pawns){
     expireSocialMemories(p,world.tick);
     if(p.recreation.task?.activity==='visit-sick'&&p.recreation.task.phase==='active')continue;
-    if(!canSocialize(world,p,true,carried)){if(p.social)delete p.social.wants;continue;}
+    if(!socialMember(world,p,true,carried)){if(p.social)delete p.social.wants;continue;}
     if(p.draft&&p.social)delete p.social.wants;
     const prior=p.social,last=prior?.last?.tick??-1000,pending=!!prior?.wants;
     if(pending?(world.tick*10+p.id)%91>=10:(world.tick+p.id)%6!==0||world.tick<=last+32)continue;
@@ -142,7 +157,7 @@ export function advanceSocial(world:World):void {
     const intensive=p.recreation.task?.activity==='social-relax'&&p.recreation.task.phase==='active'&&p.state==='recreating';
     if(!pending&&socialRandom(s)>=60/(p.draft?22000:intensive?550:6600))continue;
     if(world.tick-last<12)continue;
-    const candidates=world.pawns.filter(q=>q!==p&&distanceSquared(p,q)<=36&&canSocialize(world,q,false,carried));
+    const candidates=world.pawns.filter(q=>q!==p&&distanceSquared(p,q)<=36&&sameSocialCircle325(p,q)&&socialMember(world,q,false,carried));
     if(candidates.length){grid??=socialSight(world);const eligible=candidates.filter(q=>goodSocialPosition(world,p,q,grid));
       if(eligible.length){const other=eligible[Math.floor(socialRandom(s)*eligible.length)]!;
         if(world.schemaVersion>=195)people??=captureRelationshipPeople(world);
