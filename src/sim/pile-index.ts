@@ -59,13 +59,15 @@ export interface PileIndex {
   readonly wornOffsets:ReadonlyMap<number,number>;
   /** Wearers with an apparel pile whose item has no apparel definition: readers scan (and throw as before). */
   readonly undefinedWorn:ReadonlySet<number>;
+  /** Apparel piles per integer wearer id, in array order. */
+  readonly worn:ReadonlyMap<number,readonly MaterialPile[]>;
   /** First equipment pile per integer pawn id, in array order. */
   readonly equipment:ReadonlyMap<number,MaterialPile>;
 }
 interface Entry extends PileIndex {
   generation:number;epoch:number;length:number;first:MaterialPile|undefined;last:MaterialPile|undefined;groundOutside:number;
   readonly groundAt:Map<number,MaterialPile[]>;readonly groundChunks:MaterialPile[];readonly groundMaterialFloors:MaterialPile[];readonly groundSlag:MaterialPile[];
-  readonly wornOffsets:Map<number,number>;readonly undefinedWorn:Set<number>;readonly equipment:Map<number,MaterialPile>;
+  readonly wornOffsets:Map<number,number>;readonly undefinedWorn:Set<number>;readonly worn:Map<number,MaterialPile[]>;readonly equipment:Map<number,MaterialPile>;
   /** pile, owner, kind, item of each indexed pile, in array order. */
   readonly seen:unknown[];
 }
@@ -79,7 +81,7 @@ function unchanged(piles:readonly MaterialPile[],seen:readonly unknown[],count:n
 }
 /** Adds piles[from..] to `e`, in array order: the same result as building with them. */
 function add(e:Entry,piles:readonly MaterialPile[],from:number):void {
-  const {width,height,version,groundAt,groundFacts,groundChunks,groundMaterialFloors,groundSlag,wornOffsets,undefinedWorn,equipment,seen}=e;
+  const {width,height,version,groundAt,groundFacts,groundChunks,groundMaterialFloors,groundSlag,wornOffsets,undefinedWorn,worn,equipment,seen}=e;
   for(let n=piles.length,k=from;k<n;k++){
     const p=piles[k]!,owner=p.owner;seen.push(p,owner,p.kind,p.item);
     if(owner.type==='ground'){
@@ -93,6 +95,7 @@ function add(e:Entry,piles:readonly MaterialPile[],from:number):void {
       }else e.groundOutside++;
     }else if(owner.type==='apparel'){
       if(Number.isInteger(owner.pawnId)){
+        const list=worn.get(owner.pawnId);if(list)list.push(p);else worn.set(owner.pawnId,[p]);
         const definition=Object.hasOwn(APPAREL,p.item)?APPAREL[p.item as ApparelItem]:undefined;
         if(definition)wornOffsets.set(owner.pawnId,(wornOffsets.get(owner.pawnId)??0)+definition.moveOffset);else undefinedWorn.add(owner.pawnId);
       }
@@ -104,7 +107,7 @@ function add(e:Entry,piles:readonly MaterialPile[],from:number):void {
 function build(world:World):Entry {
   const piles=world.piles,width=world.width,height=world.height;
   const e:Entry={width,height,version:world.schemaVersion,groundAt:new Map(),groundFacts:new Uint8Array(width*height),groundChunks:[],groundMaterialFloors:[],groundSlag:[],
-    wornOffsets:new Map(),undefinedWorn:new Set(),equipment:new Map(),seen:[],
+    wornOffsets:new Map(),undefinedWorn:new Set(),worn:new Map(),equipment:new Map(),seen:[],
     generation,epoch,length:piles.length,first:piles[0],last:piles[piles.length-1],groundOutside:0};
   add(e,piles,0);
   return e;
@@ -130,3 +133,14 @@ export function pileIndex(world:World):PileIndex|undefined {
 }
 /** Throws when an indexed answer differs from the scan (verification mode). */
 export function pileIndexMismatch(what:string):never {throw Error(`Unmarked pile write: ${what} differs from the scan`);}
+const NO_PILES:readonly MaterialPile[]=[];
+/** `world.piles.filter(p=>p.owner.type==='apparel'&&p.owner.pawnId===pawnId)`,
+ * from the index inside a step (do not modify the returned list). */
+export function wornPiles(world:World,pawnId:number):readonly MaterialPile[] {
+  const index=Number.isInteger(pawnId)?pileIndex(world):undefined;
+  const indexed=index?index.worn.get(pawnId)??NO_PILES:undefined;
+  if(indexed&&!verifyPileIndex)return indexed;
+  const scanned=world.piles.filter(p=>p.owner.type==='apparel'&&p.owner.pawnId===pawnId);
+  if(indexed&&(indexed.length!==scanned.length||indexed.some((p,i)=>p!==scanned[i])))pileIndexMismatch('worn apparel');
+  return scanned;
+}

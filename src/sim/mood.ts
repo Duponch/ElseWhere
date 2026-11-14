@@ -30,6 +30,7 @@ import { expireRomanceMemories,romanceMoodThoughtsAt } from './romance-memories.
 import {coupleMoodThoughts285,expireCoupleMemories285} from './couple-memories-285.ts';
 import { relationshipHousingThought,type RelationshipTopology } from './relationship-housing.ts';
 import { captureRelationshipPeople } from './relationship-namespace.ts';
+import { wornPiles } from './pile-index.ts';
 import type { BodyAssessment } from './body-capacities.ts';
 import { TICKS_PER_DAY,type Pawn,type World,type MaterialPile } from './types.ts';
 
@@ -114,7 +115,8 @@ export function moodThoughts(world:World,pawn:Pawn,topology?:RelationshipTopolog
   return personalMoodThoughts(pawn,{lost:lostThoughts(world,pawn,()=>captureRelationshipPeople(world)),tick:world.tick,people:{get:id=>world.pawns.find(p=>p.id===id)},
     ...relationPeople?{relationPeople}:{},
     ...pawn.coupleMemories285?{resolveCoupleNames285,couplePeople285:{get:(id:number)=>world.pawns.find(p=>p.id===id)??(coupleNamespace285??=captureRelationshipPeople(world)).get(id)}}:{},
-    items:world.piles,expectation:colonyExpectation(world,pawn),difficultyMood:colonistMoodOffset(world,pawn),schemaVersion:Number(world.schemaVersion),
+    // Only the pawn's own apparel piles are read from `items` (in array order).
+    items:wornPiles(world,pawn.id),expectation:colonyExpectation(world,pawn),difficultyMood:colonistMoodOffset(world,pawn),schemaVersion:Number(world.schemaVersion),
     ...(isSchema282OrLater(world.schemaVersion)&&pawn.cryptosleepHeldAt271===undefined&&pawn.shipCryptosleepHeldAt277===undefined
       ?{ambientTemperature460:readTemperature?readTemperature():temperatureAt(world,pawn)}:{}),
     environment:{comfort:pawn.comfort,beauty:pawn.beauty},housing:relationshipHousingThought(world,pawn,topology),deathSituation:colonistUnburiedThought(world,pawn),toxicFallout294:localToxicFalloutThought294(world,pawn),aurora305:localAuroraThought305(world,pawn)});
