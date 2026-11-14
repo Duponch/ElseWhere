@@ -8,7 +8,22 @@ type Resource=World['resources'][number];
  * removed or appended returns undefined: the caller rebuilds. Derived caches
  * use it when `world.resources` is replaced, which happens on most ticks; a
  * resource's kind, species and position never change. */
-export function resourceArrayDelta(previous:readonly Resource[],next:readonly Resource[],limit:number):{removed:Resource[];appendedFrom:number}|undefined {
+export function resourceArrayDelta(previous:readonly Resource[],next:readonly Resource[],limit:number):{readonly removed:readonly Resource[];appendedFrom:number}|undefined {
+ if(limit>SHARED_DELTA_LIMIT)return computeDelta(previous,next,limit);
+ // Several derived caches ask for the same pair in one tick: the answer for
+ // the largest shared limit, kept for that pair while both lengths hold, is
+ // the answer for any smaller limit when it removes and appends no more than
+ // it (each limit check only bounds counts that grow as the walk proceeds).
+ let m=memo;
+ if(!m||m.previous!==previous||m.next!==next||m.previousLength!==previous.length||m.nextLength!==next.length){
+  m={previous,next,previousLength:previous.length,nextLength:next.length,delta:computeDelta(previous,next,SHARED_DELTA_LIMIT)};memo=m;
+ }
+ const d=m.delta;
+ return d&&d.removed.length<=limit&&next.length-d.appendedFrom<=limit?d:undefined;
+}
+const SHARED_DELTA_LIMIT=1024;
+let memo:{previous:readonly Resource[];next:readonly Resource[];previousLength:number;nextLength:number;delta:{readonly removed:readonly Resource[];appendedFrom:number}|undefined}|undefined;
+function computeDelta(previous:readonly Resource[],next:readonly Resource[],limit:number):{readonly removed:readonly Resource[];appendedFrom:number}|undefined {
  const removed:Resource[]=[];let i=0,j=0;
  for(;j<next.length;j++){
   const resource=next[j];if(i<previous.length&&previous[i]===resource){i++;continue;}
@@ -21,5 +36,5 @@ export function resourceArrayDelta(previous:readonly Resource[],next:readonly Re
  while(i<previous.length)removed.push(previous[i++]!);
  // An appended resource that was also removed was moved: not this pattern.
  if(removed.length&&j<next.length){const gone=new Set(removed);for(let t=j;t<next.length;t++)if(gone.has(next[t]!))return undefined;}
- return {removed,appendedFrom:j};
+ return {removed:Object.freeze(removed),appendedFrom:j};
 }
