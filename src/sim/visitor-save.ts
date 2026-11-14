@@ -1,3 +1,4 @@
+import {validNovelPile295} from './book-save-295.ts';
 import {isFinishFrameSchema301} from './wall-frame-kind-301.ts';
 import {validHumanIngestionPawn299} from './human-ingestion-save-299.ts';
 import {isSchema299OrLater} from './schema-compatibility-257.ts';
@@ -154,6 +155,9 @@ export function validVisitorMedicalDeparture(d:import('./visitor-state.ts').Visi
   return d.pawn.visitor.personalFoodIds.every(id=>d.items.some(p=>p.id===id&&p.kind==='food'&&p.owner.type==='inventory'));
 }
 function validExportedPile(value:unknown,pawnId:number,tick:number,w:World):value is MaterialPile {
+  // Schema 295: a novel carries its own book state (visitors buy novels from
+  // 327); it leaves in the departed visitor's inventory.
+  if(object(value)&&(value.item==='novel'||value.kind==='book'))return validNovelPile295(value,w.schemaVersion)&&integer(value.id,1,w.nextId-1)&&object(value.owner)&&value.owner.type==='inventory'&&value.owner.pawnId===pawnId;
   if(!object(value)||!keys(value,['id','kind','item','quantity','owner','rot','apparel','weapon','damage',...(w.schemaVersion>=89?['foodPoison']:[])])||!integer(value.id,1,w.nextId-1)||typeof value.item!=='string'||w.schemaVersion<227&&['hay','kibble'].includes(value.item)||!Object.hasOwn(ITEM_DEFINITIONS,value.item)||!validFoodContamination(value.foodPoison,value.item as keyof typeof ITEM_DEFINITIONS,w.schemaVersion>=89)||!object(value.owner)||Object.keys(value.owner).length!==2||!['inventory','apparel','equipment'].includes(String(value.owner.type))||value.owner.pawnId!==pawnId)return false;
   if(!validMechCorpseShape(value,w.schemaVersion,tick))return false;
   const def=ITEM_DEFINITIONS[value.item as keyof typeof ITEM_DEFINITIONS];
