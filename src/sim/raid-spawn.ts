@@ -62,10 +62,22 @@ export function createRaidGroup(w:World,options:RaidSpawnOptions):RaidGroup|null
   const random={rng:options.random.rng};
   const deadline=w.tick+2600+Math.floor(raidRandom(random)*1201),lossPermille=400+Math.floor(raidRandom(random)*301);
   const group:RaidGroup={id,startedAt:w.tick,deadline,lossPermille,members:generated.map(p=>p.id),lost:[],phase:'assault'};
+  // Core ResolveRaidStrategy (schema 330): ImmediateAttack 1, ImmediateAttackSmart
+  // (0,0)-(1000,0.5) on points, StageThenAttack 1; siege, sappers and breach are
+  // absent and leave the draw. Staging lasts Core 5000-15000 ticks; the give-up
+  // timer then starts with the assault.
+  if(!independent&&w.schemaVersion>=330&&s.profile==='cassandra-raids-v1'){
+    const smart=Math.min(.5,Math.max(0,(composition?.budget??0)/2000));
+    if(raidRandom(random)*(2+smart)<1){
+      const delayCore=5000+Math.floor(raidRandom(random)*10001);
+      group.stage330={point:{x:sites[0]!.x,z:sites[0]!.z},untilCore:w.tick*10+delayCore};
+      group.deadline=deadline+Math.ceil(delayCore/10);
+    }
+  }
   if(composition)group.composition=composition;
   if(independent)group.shipReactor275={...options.shipReactor275!};
   w.nextId=next;w.pawns.push(...generated);w.piles.push(...piles);if(!options.preserveCalendarRng&&!independent)s.rng=random.rng;options.random.rng=random.rng;s.serial=id;
   if(independent){s.extraActive261??=[];s.extraResults261??=s.last?[structuredClone(s.last)]:[];s.extraActive261.push(group);}else{s.nextCheck=null;s.active=group;}
-  w.events.push({tick:w.tick,type:'command',message:`Raid : ${count} assaillant(s) arrive(nt) au bord de la carte et attaque(nt) immédiatement. Mobilisez la défense.`});if(w.events.length>80)w.events.splice(0,w.events.length-80);
+  w.events.push({tick:w.tick,type:'command',message:group.stage330?`Raid : ${count} assaillant(s) arrive(nt) au bord de la carte et se regroupe(nt) avant d’attaquer. Préparez la défense.`:`Raid : ${count} assaillant(s) arrive(nt) au bord de la carte et attaque(nt) immédiatement. Mobilisez la défense.`});if(w.events.length>80)w.events.splice(0,w.events.length-80);
   return group;
 }

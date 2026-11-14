@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V330 — schéma 330 :** [Pirates qui se regroupent avant l'assaut](raid-staging-v330.md). Un raid pirate de Cassandra tire sa stratégie comme le jeu de base : environ un sur deux se regroupe près du bord, défend un rayon de 28 cases, puis attaque après 5 000 à 15 000 ticks ou 30 % de pertes.
+
 **V329 — schéma 329 :** [Conteur : incidents divers, éclipse, quêtes et animaux](storyteller-fidelity-v329.md). Les incidents divers suivent la loterie du jeu de base (incidents impossibles retirés, intention de population) ; l'éclipse vient du composant monde ; l'acceptation des quêtes se lit à leur date ; les animaux de la colonie comptent dans les points de menace.
 
 **V328 — schéma 328 :** [Conteur : grosses menaces, premier pillard, saisons](storyteller-fidelity-v328.md). Après le jour 20, les grosses menaces suivent les poids du jeu de base (les menaces absentes laissent passer le créneau) ; le premier pillard ne meurt pas à terre ; chaleur et hiver volcanique s'excluent ; jours entiers pour les points ; pas de folie d'animal sous le brouillard.

@@ -46,7 +46,12 @@ export function stopRaidEngagement(p:Pawn):void {cancelShooting(p);cancelMelee(p
 function advanceHumanRaidGroup(w:World,a:RaidGroup,independent=false):void {
  const s=w.raids!,cassandra=s.profile==='cassandra-raids-v1',members=[...w.pawns,...shipCasketHumanReferences277(w)].filter(p=>a.members.includes(p.id)),terminal=a.members.flatMap(id=>{const r=shipCasketTerminalParticipant277(w,id,'human',a.id);return r?[r]:[];}),destroyed=terminal.filter(r=>r.destroyed).length;
  for(const p of members)if((p.state==='dead'||p.state==='downed'||p.prisoner||p.recruitment?.raidGroup===a.id)&&!a.lost.includes(p.id))a.lost.push(p.id);a.lost.sort((a,b)=>a-b);
- if(a.phase==='assault'){
+ if(a.stage330&&(w.tick*10>=a.stage330.untilCore||a.lost.length*10>=a.members.length*3)){
+  delete a.stage330;
+  for(const p of members)if(p.raid&&!p.prisoner){p.raid.goal=null;p.path=[];p.planCooldown=0;delete p.tactics;}
+  log(w,'Les assaillants regroupés passent à l’assaut.');
+ }
+ if(a.phase==='assault'&&!a.stage330){
   const reason=a.lossPermille!==null&&a.lost.length*1000>=a.members.length*a.lossPermille?'losses':a.deadline!==null&&w.tick>=a.deadline?'timeout':!w.pawns.some(p=>isColonist(p)&&p.state!=='dead'&&p.state!=='downed')?'colony-down':undefined;
   if(reason){a.phase='withdraw';a.reason=reason;for(const p of members)if(p.raid&&!p.prisoner){p.raid.exiting=true;stopRaidEngagement(p);}log(w,reason==='losses'?'Les assaillants battent en retraite après leurs pertes.':reason==='timeout'?'Les assaillants abandonnent et cherchent une sortie.':'La défense est tombée. Les assaillants se retirent ; les victimes restent sur place.');}
  }

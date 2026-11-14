@@ -38,6 +38,15 @@ export function processRaider(w:World,p:Pawn,getBlocked:NavigationGrid,budget:Se
     if(distanceSquared(p,caravan.defendSpot)>28**2){moveToward(w,p,caravan.defendSpot,false,getBlocked,budget,false,getLight);r.goal=p.path.at(-1)??null;}
     else{p.path=[];r.goal=null;p.state='idle';}return;
   }
+  const stage=!r.exiting?raidGroup261(w,r.group)?.stage330:undefined;
+  if(stage){
+    p.tactics??=newTactics();
+    processTactics(w,p,getBlocked,budget,getLight,{center:stage.point,radius:28});
+    if(p.tactics?.targetId!==null&&p.tactics?.targetId!==undefined)return;
+    delete p.tactics;
+    if(distanceSquared(p,stage.point)>36){moveToward(w,p,stage.point,false,getBlocked,budget,false,getLight);r.goal=p.path.at(-1)??null;}
+    else{p.path=[];r.goal=null;p.state='idle';}return;
+  }
   if(p.melee?.order?.structure){if(w.structures.some(s=>s.id===p.melee!.order!.targetId&&isBarrier(s))){processMelee(w,p,getBlocked,budget,getLight);return;}cancelMelee(p);p.path=[];r.goal=null;}
   let searched=false;
   if(!r.exiting){
