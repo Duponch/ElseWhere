@@ -35,7 +35,7 @@ test('refinery footprint occupies six rotated cells and the generator stays at f
 test('construction consumes fixed steel and three components with the Core work conversion',()=>{
   expect(constructionRecipe({kind:'biofuel-refinery',material:'steel'})).toEqual({ingredients:[{item:'steel',quantity:150},{item:'component',quantity:3}],work:200,coreWork:2000});
   expect(constructionRecipe({kind:'chemfuel-generator',material:'steel'})).toEqual({ingredients:[{item:'steel',quantity:100},{item:'component',quantity:3}],work:250,coreWork:2500});
-  expect(constructionSkillRequired('biofuel-refinery')).toBe(4);expect(constructionSkillRequired('chemfuel-generator')).toBe(0);
+  expect(constructionSkillRequired('biofuel-refinery')).toBe(4);expect(constructionSkillRequired('chemfuel-generator',310)).toBe(0);expect(constructionSkillRequired('chemfuel-generator')).toBe(6);
   for(const kind of ['biofuel-refinery','chemfuel-generator']){expect(validConstructionMaterial(kind,'steel',217)).toBe(false);expect(validConstructionMaterial(kind,'wood',218)).toBe(false);expect(minifiable(kind)).toBe(false);}
 });
 test('chemfuel has physical nonfood quantity, mass, damage and market value without merchant acquisition',()=>{
