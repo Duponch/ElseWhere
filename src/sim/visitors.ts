@@ -152,12 +152,22 @@ export function advanceVisitors(w:World):void {
   // literally dormant. TempMap MTB admissions own their separate shared RNG.
   if(s.profile==='temp-travelers261-v1'||tempMapModern261(w))return;
   if(s.introAt!==null&&w.tick>=s.introAt){const due=w.tick===s.introAt;s.introAt=null;if(due)arrive(w,'visitor',true);}
-  if(consumeVisitorOpportunity(s.traveler,'traveler',w.tick))arrive(w,'traveler');
-  if(consumeVisitorOpportunity(s.visitor,'visitor',w.tick))arrive(w,'visitor');
+  if(consumeVisitorOpportunity(s.traveler,'traveler',w.tick)&&allyAccepts335(w,'traveler'))arrive(w,'traveler');
+  if(consumeVisitorOpportunity(s.visitor,'visitor',w.tick)&&allyAccepts335(w,'visitor'))arrive(w,'visitor');
   // From schema 332 Core's exotic caravan kind replaces this home-grown
   // merchant: its agenda keeps its clock but no longer admits anyone.
   if(s.exotic&&consumeVisitorOpportunity(s.exotic,'exotic',w.tick)&&w.schemaVersion<332)arrive(w,'visitor',false,true);
   if(s.caravan332&&consumeVisitorOpportunity(s.caravan332,'caravan',w.tick)&&w.schemaVersion>=332)arriveTraderCaravan332(w);
+}
+/** Schema 335 StorytellerComp_FactionInteraction: travelers and visitors,
+ * like trader caravans, come only for the share of the hits that the ally
+ * fraction accepts (none without a friendly faction). The acceptance is a
+ * private draw of this opportunity; the visitor stream is untouched. */
+export function allyAccepts335(w:World,kind:'traveler'|'visitor'):boolean {
+  if(w.schemaVersion<335)return true;
+  const accept=allyIncidentFraction332(w);if(accept<=0)return false;if(accept>=1)return true;
+  const random={rng:((w.seed^Math.imul(w.tick+1,0x9e3779b1)^(kind==='traveler'?0x7a11e335:0x715e0335))>>>0)||1};
+  return visitorRandom(random)<accept;
 }
 /** Schema 332 Core TraderCaravanArrival. The opportunity is consumed even when
  * refused. Faction, trader kind, guards and wares are drawn from a private
