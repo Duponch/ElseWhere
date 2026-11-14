@@ -3,6 +3,7 @@ import { isRoofed,roofCoverage,roofIdentity,sameRoofIdentity,type RoofIdentity }
 import type { LightEnvironment,LightReader } from './light-environment.ts';
 import type { Resource,World } from './types.ts';
 import { structuresOfKind } from './structure-navigation.ts';
+import { resourceArrayDelta } from './resource-array-delta.ts';
 
 /** Settle the captured light/thermal interval before changing either regime.
  * Roof producers still call this before mutating physical coverage. */
@@ -13,6 +14,8 @@ export function checkpointPlantGrowth(world:World,plant:Resource):void {
 
 interface Binding {
   source:Resource[];
+  /** source.length when `plants` was derived (a push since makes it stale). */
+  sourceLength:number;
   plants:Resource[];
   artificial:Float32Array|undefined;
   hasCaptured:boolean;
@@ -45,6 +48,20 @@ const reconciled=new WeakMap<Resource,{key:object;mode:Resource['growthLight']}>
  * own: the entries of its plants are those it left (key regimeKey297, mode
  * its `modes`). A number, not a World reference, so no world is retained. */
 let writingPasses=0;
+const PLANT_DELTA_LIMIT=256;
+/** `next.filter(isPlant)` from the previous binding's plants, when resources
+ * were only removed or appended (resourceArrayDelta) and the previous array
+ * was not pushed to since: a resource's kind and species never change, so the
+ * kept plants stay in order and the appended ones follow. Undefined: filter. */
+function derivedPlants(previous:Binding,next:Resource[]):Resource[]|undefined {
+  if(previous.source.length!==previous.sourceLength)return undefined;
+  const delta=resourceArrayDelta(previous.source,next,PLANT_DELTA_LIMIT);if(!delta)return undefined;
+  const removed=delta.removed.filter(isPlant),plants:Resource[]=[];let k=0;
+  for(const r of previous.plants){if(k<removed.length&&r===removed[k]){k++;continue;}plants.push(r);}
+  if(k!==removed.length)return undefined;
+  for(let t=delta.appendedFrom;t<next.length;t++){const r=next[t]!;if(isPlant(r))plants.push(r);}
+  return plants;
+}
 const sameCoverage=(previous:readonly number[],current:readonly number[]|undefined):boolean=>
   previous.length===(current?.length??0)&&previous.every((cell,i)=>cell===current![i]);
 
@@ -56,9 +73,9 @@ export function reconcilePlantLighting(world:World,provided:LightEnvironment|Lig
   let binding=bindings.get(world);
   const previous=binding;
   if(!binding||binding.source!==world.resources) {
-    const plants=world.resources.filter(isPlant);
+    const plants=(binding&&derivedPlants(binding,world.resources))??world.resources.filter(isPlant);
     // hasCaptured is only read below schema 256 (a complete pass replaces it).
-    binding={source:world.resources,plants,hasCaptured:world.schemaVersion<256&&plants.some(p=>p.growthLight!==undefined),artificial:undefined,
+    binding={source:world.resources,sourceLength:world.resources.length,plants,hasCaptured:world.schemaVersion<256&&plants.some(p=>p.growthLight!==undefined),artificial:undefined,
       constructed:undefined,coverage:[],width:0,height:0};
     bindings.set(world,binding);
   }

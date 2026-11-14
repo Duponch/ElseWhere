@@ -1,9 +1,11 @@
 import type {FloraDefinition} from './biome-flora.ts';
 import type {LightSource} from './light-sources.ts';
 import type {Resource,World} from './types.ts';
+import {resourceArrayDelta} from './resource-array-delta.ts';
 export const CAVE_PLANT_SPECIES_256=['glowstool','agarilux','bryolux'] as const;
 export type CavePlantSpecies256=typeof CAVE_PLANT_SPECIES_256[number];
-export const isCavePlant256=(species:unknown,version=256):species is CavePlantSpecies256=>version>=256&&(CAVE_PLANT_SPECIES_256 as readonly unknown[]).includes(species);
+// Same answer as CAVE_PLANT_SPECIES_256.includes(species) (called for every resource).
+export const isCavePlant256=(species:unknown,version=256):species is CavePlantSpecies256=>version>=256&&(species==='glowstool'||species==='agarilux'||species==='bryolux');
 /** Original catalogue: resolved scalar facts, original labels and pigments. */
 export const CAVE_FLORA_DEFINITIONS_256:Readonly<Record<CavePlantSpecies256,FloraDefinition>>={
  glowstool:{label:'Champignon luisant',kind:'wild-plant',growDays:40,minFertility:.01,sensitivity:.15,harvestMinGrowth:.65,yield:20,product:'raw-fungus',persistent:false,nutrition:.5,hitPoints:100,flammability:1,maxGrowthTemperature:58,coldLeafless:true,lifespanMultiplier:8},
@@ -18,13 +20,30 @@ export function caveLightDamage256(glowWithoutCaves:number,elapsedCore=2000):num
  const low=Math.fround(.0001),high=Math.fround(.001),rate=Math.fround(low+Math.fround(Math.fround(high-low)*glowWithoutCaves));
  return glowWithoutCaves>0?Math.ceil(Math.fround(rate*elapsedCore)):0;
 }
-const lightBindings=new WeakMap<Resource[],{width:number;sources:readonly LightSource[]}>();
+interface CaveLightBinding {width:number;length:number;plants:readonly Resource[];sources:readonly LightSource[]}
+const lightBindings=new WeakMap<Resource[],CaveLightBinding>();
+let lastBound:{list:Resource[];binding:CaveLightBinding}|undefined;
+const CAVE_DELTA_LIMIT=256;
+/** The cave plants of `list` in array order, from the last bound array when
+ * resources were only removed or appended (resourceArrayDelta) and that array
+ * was not pushed to since: a resource's species never changes, so this is the
+ * scan's answer. Undefined: scan. */
+function derivedCavePlants(list:Resource[]):Resource[]|undefined {
+ const last=lastBound;if(!last||last.list===list||last.list.length!==last.binding.length)return undefined;
+ const delta=resourceArrayDelta(last.list,list,CAVE_DELTA_LIMIT);if(!delta)return undefined;
+ const removed=delta.removed.filter(r=>isCavePlant256(r.species)),plants:Resource[]=[];let k=0;
+ for(const r of last.binding.plants){if(k<removed.length&&r===removed[k]){k++;continue;}plants.push(r);}
+ if(k!==removed.length)return undefined;
+ for(let t=delta.appendedFrom;t<list.length;t++){const r=list[t]!;if(isCavePlant256(r.species))plants.push(r);}
+ return plants;
+}
 /** Producers replace Resource[] after add/remove/replant. Read only after
  * adoption/step; there is no frame scan or per-plant light object. */
 export function caveLightSources256(world:Pick<World,'schemaVersion'|'resources'|'width'>):readonly LightSource[] {
  if(world.schemaVersion<256)return [];
  let binding=lightBindings.get(world.resources);if(binding&&binding.width===world.width)return binding.sources;
- const sources:LightSource[]=[];for(const r of world.resources)if(isCavePlant256(r.species,world.schemaVersion)){
-  const d=CAVE_PLANT_FACTS_256[r.species];sources.push({cell:r.z*world.width+r.x,radius:d.radius,red:d.red,green:d.green,blue:d.blue});
- }sources.sort((a,b)=>a.cell-b.cell);binding={width:world.width,sources};lightBindings.set(world.resources,binding);return sources;
+ const list=world.resources,plants=(lastBound?.binding.width===world.width?derivedCavePlants(list):undefined)??list.filter(r=>isCavePlant256(r.species,world.schemaVersion));
+ const sources:LightSource[]=[];for(const r of plants){
+  const d=CAVE_PLANT_FACTS_256[r.species as CavePlantSpecies256];sources.push({cell:r.z*world.width+r.x,radius:d.radius,red:d.red,green:d.green,blue:d.blue});
+ }sources.sort((a,b)=>a.cell-b.cell);binding={width:world.width,length:list.length,plants,sources};lightBindings.set(list,binding);lastBound={list,binding};return sources;
 }
