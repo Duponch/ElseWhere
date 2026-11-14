@@ -13,7 +13,7 @@ const notice=(root:CampaignState,map:World,message:string)=>{for(const rows of [
 export function campThreatPoints260(w:World):number|undefined {
  if(!w.economy||w.gameProfile?.difficulty!=='adventure-story')return;
  const free=w.pawns.filter(p=>isColonist(p)&&p.state!=='dead'&&!p.prisoner&&!p.visitor);
- return computeThreatPoints({knownWealth:w.economy.wealth.knownStorytellerWealth,freeColonists:free.length,
+ return computeThreatPoints({timeFactorWholeDays:w.schemaVersion>=328,knownWealth:w.economy.wealth.knownStorytellerWealth,freeColonists:free.length,
   colonistHealthSum:free.reduce((n,p)=>n+(p.health?summaryHealthPercent(p.health):1),0),elapsedDays:w.tick/TICKS_PER_DAY,
   adaptationDays:w.economy.adaptationDays,seedBucket:Math.floor(w.tick/250)}).points*1.5;
 }

@@ -61,7 +61,8 @@ export function adoptSmallIncidents(world:World):void {
  * immune. The separate controller owns waking and interruption on success. */
 export function smallAnimalCandidates(world:World):WildAnimal[] {
   const maximum=world.tick<7*TICKS_PER_DAY?40:150;
-  return world.wildlife?.animals.filter(animal=>!animal.domestic&&animal.state!=='dead'&&
+  const fog=world.schemaVersion>=328;
+  return world.wildlife?.animals.filter(animal=>!animal.domestic&&animal.state!=='dead'&&!(fog&&world.tiles[Math.round(animal.z)*world.width+Math.round(animal.x)]?.fogged)&&
     animal.state!=='downed'&&!animal.manhunter&&!animal.retaliation&&
     ANIMAL_SPECIES[animal.species].combatPower<=maximum)??[];
 }
@@ -91,7 +92,7 @@ function consumeOpportunity(world:World,state:CassandraSmallCalendar):void {
 function acceptanceNow(world:World):number {
   if(!world.economy)return 1;
   const colonists=world.pawns.filter(p=>isColonist(p)&&p.state!=='dead'&&!p.prisoner&&!p.visitor);
-  return smallAcceptance(computeThreatPoints({knownWealth:world.economy.wealth.knownStorytellerWealth,
+  return smallAcceptance(computeThreatPoints({timeFactorWholeDays:world.schemaVersion>=328,knownWealth:world.economy.wealth.knownStorytellerWealth,
     freeColonists:colonists.length,
     colonistHealthSum:colonists.reduce((sum,p)=>sum+(p.health?summaryHealthPercent(p.health):1),0),
     elapsedDays:world.tick/TICKS_PER_DAY,adaptationDays:world.economy.adaptationDays,

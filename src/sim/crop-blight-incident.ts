@@ -12,7 +12,7 @@ export interface CropBlightCalendar {adoptedAt:number;count:number;lastStart?:nu
 export function cropBlightIncidentPoints(world:World):number {
   if(!world.economy)return 35;
   const colonists=world.pawns.filter(freeColonist);
-  return computeThreatPoints({knownWealth:world.economy.wealth.knownStorytellerWealth,
+  return computeThreatPoints({timeFactorWholeDays:world.schemaVersion>=328,knownWealth:world.economy.wealth.knownStorytellerWealth,
     freeColonists:colonists.length,colonistHealthSum:colonists.reduce((n,p)=>n+(p.health?summaryHealthPercent(p.health):1),0),
     elapsedDays:world.tick/TICKS_PER_DAY,adaptationDays:world.economy.adaptationDays,seedBucket:Math.floor(world.tick/250)}).points;
 }

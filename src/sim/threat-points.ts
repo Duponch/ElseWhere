@@ -16,6 +16,9 @@ export interface ThreatPointsInput {
   readonly adaptationDays: number;
   /** Stable integer identifying the local equivalent of Core's 2,500-tick bucket. */
   readonly seedBucket: number;
+  /** Schema 328: Core reads the days factor at whole days passed
+   * (DaysPassedSinceSettle); the minimum points keep the fractional day. */
+  readonly timeFactorWholeDays?: boolean;
 }
 
 export interface ThreatPointsResult {
@@ -100,7 +103,7 @@ export function computeThreatPoints(input: ThreatPointsInput): ThreatPointsResul
   const colonistPoints = curve(COLONIST_POINTS, knownWealth) *
     (.35 * freeColonists + .65 * colonistHealthSum);
   const adaptationFactor = curve(ADAPT_FACTOR, adaptationDays);
-  const timeFactor = curve(TIME_FACTOR, elapsedDays);
+  const timeFactor = curve(TIME_FACTOR, input.timeFactorWholeDays ? Math.floor(elapsedDays) : elapsedDays);
   const unclampedPoints = (wealthPoints + colonistPoints) * adaptationFactor * .6 * timeFactor;
   const minimum = minimumThreatPoints(elapsedDays, seedBucket);
   return {points: Math.min(10000, Math.max(minimum, unclampedPoints)), wealthPoints,

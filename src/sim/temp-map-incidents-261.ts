@@ -42,7 +42,7 @@ export function adoptTempMapIncidents261(w:World):void {
 export function tempMapThreatPoints261(w:World):number|undefined {
  if(w.gameProfile?.difficulty!=='adventure-story')return;
  const people=w.pawns.filter(p=>isColonist(p)&&!p.prisoner&&!p.visitor&&p.state!=='dead');
- return computeThreatPoints({knownWealth:(w.economy?.wealth??colonyWealth(w)).knownStorytellerWealth,freeColonists:people.length,
+ return computeThreatPoints({timeFactorWholeDays:w.schemaVersion>=328,knownWealth:(w.economy?.wealth??colonyWealth(w)).knownStorytellerWealth,freeColonists:people.length,
   colonistHealthSum:people.reduce((n,p)=>n+(p.health?summaryHealthPercent(p.health):1),0),elapsedDays:w.tick/6000,adaptationDays:w.economy?.adaptationDays??0,seedBucket:Math.floor(w.tick/250)}).points;
 }
 function visibility(w:World):number {

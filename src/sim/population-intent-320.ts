@@ -51,7 +51,10 @@ export const deathOnDownedChance320=(w:World):number=>curve320(populationIntent3
 export function notePopulationGain320(w:World):void {if(w.schemaVersion>=320)w.populationGainCore320=w.tick*10;}
 /** A non-colony humanlike (raider, visitor, trader) violently downed, not a
  * prisoner of the colony. */
-export const deathOnDownedEligible320=(w:World,p:Pawn):boolean=>w.schemaVersion>=320&&!isColonist(p)&&!p.prisoner;
+export const deathOnDownedEligible320=(w:World,p:Pawn):boolean=>w.schemaVersion>=320&&!isColonist(p)&&!p.prisoner&&!introRaider328(w,p);
+/** Core StorytellerComp_ClassicIntro (schema 328): the first raider of a
+ * Cassandra game is forced down instead of killed and skips this roll. */
+export const introRaider328=(w:World,p:Pawn):boolean=>w.schemaVersion>=328&&w.raids?.profile==='cassandra-raids-v1'&&p.raid?.group===1;
 export function validPopulationGain320(value:unknown,version:number,tick:number):boolean {
   return value===undefined||version>=320&&Number.isSafeInteger(value)&&Number(value)>=0&&Number(value)<=tick*10;
 }

@@ -1,3 +1,4 @@
+import {drawBigThreat328} from './big-threats-328.ts';
 import {shipCasketHumanReferences277,shipCasketTerminalParticipant277} from './ship-casket-notifications-277.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
 import {mechRaidGroups261,multiRaid261} from './mechanical-raid-groups-261.ts';
@@ -9,7 +10,7 @@ import {advanceCaravanRaid261} from './caravan-raid-261.ts';
 import { chooseMechanoidOpportunity,createMechanoidRaid,advanceMechanoidRaid } from './mechanoid-raids.ts';
 import { isColonist } from './affiliation.ts';
 import { carrierOf } from './rescue-state.ts';
-import { consumeCassandraOpportunity,INTRO_RAID_TICK } from './cassandra-raids.ts';
+import { CASSANDRA_CYCLE_START,consumeCassandraOpportunity,INTRO_RAID_TICK } from './cassandra-raids.ts';
 import { raidEntries,atMapEdge } from './raid-space.ts';
 import { RAID_ROLE_COST,pirateMaxPawnCost,raidRandom,type RaidComposition,type RaidRole } from './raid-state.ts';
 import { createRaidGroup,RAID_ROLE_OPTIONS } from './raid-spawn.ts';
@@ -87,9 +88,8 @@ export function advanceRaids(w:World):void {
   // Only adopted Cassandra colonies use the new wealth budget. The fixed
   // introductory raid and every legacy calendar retain their exact draws.
   const budgeted=cassandra&&w.tick!==INTRO_RAID_TICK&&!!w.economy;
-  const random={rng:s.rng};
   const freeColonists=budgeted?w.pawns.filter(p=>isColonist(p)&&p.state!=='dead'&&!p.prisoner&&!p.visitor):[];
-  const points=budgeted?computeThreatPoints({
+  const points=budgeted?computeThreatPoints({timeFactorWholeDays:w.schemaVersion>=328,
     knownWealth:w.economy!.wealth.knownStorytellerWealth,
     freeColonists:freeColonists.length,
     colonistHealthSum:freeColonists.reduce((sum,p)=>sum+(p.health?summaryHealthPercent(p.health):1),0),
@@ -97,6 +97,12 @@ export function advanceRaids(w:World):void {
     adaptationDays:w.economy!.adaptationDays,
     seedBucket:Math.floor(w.tick/250),
   }).points:undefined;
+  if(cassandra&&w.schemaVersion>=328&&w.tick!==INTRO_RAID_TICK){
+    // Core suppresses the cycle at DaysPassed <= minDaysPassed (day 11.0).
+    if(w.tick===CASSANDRA_CYCLE_START)return;
+    if(drawBigThreat328(Math.floor(w.tick/TICKS_PER_DAY),points,()=>raidRandom(s))!=='raid')return;
+  }
+  const random={rng:s.rng};
   const mechRandom=s.mechanoid?{rng:s.mechanoid.rng}:undefined;
   const mech=points!==undefined&&mechRandom?chooseMechanoidOpportunity(w,points,mechRandom):undefined;
   if(mech!==undefined){

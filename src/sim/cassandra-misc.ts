@@ -93,7 +93,7 @@ export function adoptWeatherIncidents(world:World):void {
 
 /** The daily temperature swing is not a seasonal eligibility signal. */
 export function eligibleMiscHeatwave(world:World,state:CassandraMiscCalendar=world.miscIncidents!):boolean {
-  if(!world.gameProfile||!world.climate||!state||state.active||state.weather?.coldSnap||world.heatwaves?.active||
+  if(!world.gameProfile||!world.climate||!state||state.active||state.weather?.coldSnap||world.heatwaves?.active||world.schemaVersion>=328&&!!state.volcanicWinter310||
     state.lastHeatwaveStart!==undefined&&world.tick-state.lastHeatwaveStart<MISC_HEAT_COOLDOWN)return false;
   const site=siteClimateDefinition(world);
   return seasonTemperature(site.latitude,site.meanTemperature,climateTick(world))>=20;

@@ -9,6 +9,7 @@ const emit=(world:World,message:string)=>{world.events.push({tick:world.tick,typ
 export function eligibleVolcanicWinter310(world:World):boolean {
   const state=world.miscIncidents;
   return !!state&&isVolcanicWinter310(Number(world.schemaVersion))&&!!world.gameProfile&&!homeIncidentsBlocked261(world)&&!state.volcanicWinter310
+    &&!(Number(world.schemaVersion)>=328&&(!!state.active||!!world.heatwaves?.active))
     &&world.tick>=VOLCANIC_WINTER_FIRST_DAY310*TICKS_PER_DAY&&Number.isSafeInteger(world.tick*10+VOLCANIC_WINTER_MAX_CORE310)
     &&(state.lastVolcanicWinterStart310===undefined||world.tick-state.lastVolcanicWinterStart310>=VOLCANIC_WINTER_REFIRE_DAYS310*TICKS_PER_DAY);
 }
