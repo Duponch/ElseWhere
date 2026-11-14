@@ -86,7 +86,9 @@ export function createCoreMovement297(world:World){
     if(tactical)processDraft(world,pawn,grid,budget,readLight);
     // The shared structure index (validated on each read) answers the door-corner
     // test of a diagonal step without scanning every structure, as for transit exits.
-    else {const next=pawn.path[0];if(next&&canStep(world,pawn,next,grid(),CIVIL_TRANSIT_BLOCKERS,captureStructureNavigation(world))&&startTravel(world,pawn,next,readLight))pawn.path.shift();}
+    // startTravel is admitted: the stun/medical/carrier tests above and canStep's
+    // actorStepAllowed(world, pawn, next) were just answered, nothing changed since.
+    else {const next=pawn.path[0];if(next&&canStep(world,pawn,next,grid(),CIVIL_TRANSIT_BLOCKERS,captureStructureNavigation(world))&&startTravel(world,pawn,next,readLight,undefined,false,true))pawn.path.shift();}
     if(m!==pawn.motion||x!==pawn.x||z!==pawn.z){if(!changed.includes(pawn.id))changed.push(pawn.id);touchPassengers(pawn);changedCells=true;}
    }
    const animal=animals.advance();for(const id of animal.actorsChanged)if(!changed.includes(id))changed.push(id);

@@ -27,10 +27,14 @@ export { edgeLength,TRAVEL_TICKS,type TravelSegment } from './travel-timing.ts';
 export const CARDINAL_COST = 1000;
 export const DIAGONAL_COST = 1414;
 export const edgeCost = (a:Cell,b:Cell):number => a.x!==b.x && a.z!==b.z ? DIAGONAL_COST : CARDINAL_COST;
-export function startTravel(world:World,pawn:Pawn,next:Cell,getLight?:LightReader,geometry?:StructureNavigationGeometry,freshStart297=false):boolean {
+/** `admitted`: the caller has just found, with no world change since, that
+ * the pawn is not stunned (at the current Core), not medically stopped, not
+ * carried, and that actorStepAllowed(world, pawn, next) holds: the same tests
+ * are not repeated (their answers are the same). */
+export function startTravel(world:World,pawn:Pawn,next:Cell,getLight?:LightReader,geometry?:StructureNavigationGeometry,freshStart297=false,admitted=false):boolean {
   const now=isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick;
   if(isCorePhysicalSchema297(Number(world.schemaVersion))&&(pawn.motion?.end??0)>now)return false;
-  if(isStunned(pawn,isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveCore297(world):world.tick*10)||medicallyStopped(pawn)||carrierOf(world,pawn.id)||!actorStepAllowed(world,pawn,next))return false;
+  if(!admitted&&(isStunned(pawn,isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveCore297(world):world.tick*10)||medicallyStopped(pawn)||carrierOf(world,pawn.id)||!actorStepAllowed(world,pawn,next)))return false;
   if(!readyDoorEntry(world,pawn,next))return false;
   // Carry fractional tick overshoot to the next edge; never round each diagonal up.
   let start = !freshStart297&&pawn.motion && pawn.motion.end >= now-(isCorePhysicalSchema297(Number(world.schemaVersion))?.1:1) ? pawn.motion.end : now;
