@@ -28,7 +28,7 @@ export function quoteMeetingTrade261(root:Pick<CampaignState,'schemaVersion'|'ti
   if(i.owner.type!=='inventory'||i.item==='silver')continue;
   // Only the actual merchant's current inventory is the current producer's stock.
   if(side==='buy'&&i.owner.pawnId!==p.traderId)continue;
-  const refusal=tradeRefusal(i,side,root.tick,undefined,'caravan'),price=tradeUnitPrice(i,side,improvement);
+  const refusal=tradeRefusal(i,side,root.tick,undefined,'caravan',root.schemaVersion),price=tradeUnitPrice(i,side,improvement);
   goods.push({id:i.id,item:i.item,side,available:i.quantity,unitPrice:price??null,...refusal?{refusal}:price===undefined?{refusal:'Ce bien n’a pas de prix représenté.'}:{}});
  }
  let net=0;

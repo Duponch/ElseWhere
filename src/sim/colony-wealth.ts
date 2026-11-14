@@ -8,7 +8,7 @@ import { pileMarketValue } from './trade-prices.ts';
 import { tradeCatalogueEntry } from './trade-catalogue.ts';
 import { isPlayerCasket271 } from './cryptosleep-state-271.ts';
 import type { ItemId } from './items.ts';
-import type { MaterialPile, Pawn, World } from './types.ts';
+import type { MaterialPile, Pawn, Structure, World } from './types.ts';
 
 /** Values unavailable from the saved model are reported, never silently
  * replaced by a generic price. Known totals are lower bounds in that case. */
@@ -79,12 +79,12 @@ function unfinishedIngredientValue(pile: MaterialPile): number | undefined {
   return undefined;
 }
 
-function knownPileValue(pile: MaterialPile): number | undefined {
+function knownPileValue(pile: MaterialPile, version: number): number | undefined {
   if (pile.kind === 'chunk') return 0; // Core ChunkRockBase has no cost, work or MarketValue.
   if (pile.kind === 'unfinished') return unfinishedIngredientValue(pile);
   // A known market value is independent of whether the visitor trades it.
   if (!tradeCatalogueEntry(pile.item)) return undefined;
-  const unit = pileMarketValue(pile);
+  const unit = pileMarketValue(pile, version);
   return unit === undefined ? undefined : unit * pile.quantity;
 }
 
@@ -101,9 +101,15 @@ export function colonyWealth(world: World): ColonyWealth {
   for (const owner of held) pawns.set(owner.pawn.id,owner.pawn);
   const unpricedPileIds: number[] = [], unpricedPackedIds: number[] = [], unpricedStructureIds: number[] = [], unpricedPawnIds: number[] = [];
   let items = 0, structures = 0, floors = 0;
+  // Schema 327: Core counts only the player's own buildings and nothing under
+  // the fog. A structure without a faction field is the colony's own.
+  const fog327 = world.schemaVersion >= 327, player327 = world.worldFactions?.playerFactionId;
+  const playerBuilding327 = (s: Structure): boolean => !fog327 || !Object.hasOwn(s,'factionId') || s.factionId === undefined || s.factionId !== null && s.factionId === player327;
   for (const piles of [world.piles,...held.map(owner=>owner.items)]) for (const pile of piles) {
     if (!pileOnPlayerMap(pile,pawns)&&!animalHaulContents282(world,pile)) continue;
-    const value = knownPileValue(pile);
+    // Core WealthWatcher skips an item lying under the fog (schema 327).
+    if (fog327 && pile.owner.type === 'ground' && world.tiles[pile.owner.z*world.width+pile.owner.x]?.fogged) continue;
+    const value = knownPileValue(pile, world.schemaVersion);
     if (value === undefined) unpricedPileIds.push(pile.id);
     else items += value;
   }
@@ -115,6 +121,7 @@ export function colonyWealth(world: World): ColonyWealth {
     catch (error) { if (!(error instanceof RangeError)) throw error; unpricedPackedIds.push(pack.building.id); }
   }
   for (const building of world.structures) {
+    if (!playerBuilding327(building)) continue;
     try {
       // WealthWatcher uses MarketValueIgnoreHp for artificial player buildings.
       structures += structureRoomMarketValue({...building,damage:0});
@@ -124,7 +131,7 @@ export function colonyWealth(world: World): ColonyWealth {
     // Core counts the visible top terrain, including beneath a fallen edifice.
     // Preserve historical overlay counts; only the new bare substrate adopts
     // that fog boundary. A room's physical terrain value remains independent.
-    if(tile.fogged&&!tile.floor&&!tile.bridge&&hasSmoothedStoneSubstrate281(tile))continue;
+    if(tile.fogged&&(fog327||!tile.floor&&!tile.bridge&&hasSmoothedStoneSubstrate281(tile)))continue;
     floors += floorRoomMarketValue(tile);
   }
   // Pawn MarketValue needs age/life stage, all Core capacities, full skill set,

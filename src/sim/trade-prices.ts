@@ -23,9 +23,14 @@ export function tradeHealthFactor(fraction:number):number {
   if(hp<.9)return .5+(hp-.6)*(5/3);
   return 1;
 }
-export function pileMarketValue(pile:Pick<MaterialPile,'item'|'weapon'|'apparel'|'damage'|'book'>):number|undefined {
+/** Core StatPart_WornByCorpse (schema 327): apparel taken from a corpse is
+ * worth a tenth, after quality and before the hit-point factor. */
+export const TAINTED_VALUE_FACTOR_327=.1;
+const tainted327=(pile:Pick<MaterialPile,'apparel'>,version:number):boolean=>version>=327&&pile.apparel?.corpseWear284===true;
+export function pileMarketValue(pile:Pick<MaterialPile,'item'|'weapon'|'apparel'|'damage'|'book'>,version:number=0):number|undefined {
   const entry=tradeCatalogueEntry(pile.item);if(!entry)return undefined;
   let value=entry.baseMarketValue;
+  if(!entry.hasQuality&&tainted327(pile,version))value*=TAINTED_VALUE_FACTOR_327;
   if(entry.hasQuality){
     if(pile.item==='novel'&&(!isNovelBook295(pile.book)||pile.weapon!==undefined||pile.apparel!==undefined||pile.damage!==undefined&&(!Number.isInteger(pile.damage)||pile.damage<0||pile.damage>=NOVEL_MAX_HIT_POINTS_295)))return undefined;
     const state=pile.weapon??pile.apparel,quality=pile.item==='novel'?pile.book?.quality:state?.quality;
@@ -33,6 +38,7 @@ export function pileMarketValue(pile:Pick<MaterialPile,'item'|'weapon'|'apparel'
     if(quality===undefined||hitPoints===undefined||!Number.isFinite(hitPoints))return undefined;
     const index=WEAPON_QUALITIES.indexOf(quality);if(index<0)return undefined;
     value+=Math.min(value*(qualityFactors[index]!-1),qualityGains[index]!);
+    if(tainted327(pile,version))value*=TAINTED_VALUE_FACTOR_327;
     if(entry.healthAffectsPrice)value*=tradeHealthFactor(hitPoints/entry.maxHitPoints);
   }
   if(pile.item==='ai-core'){const damage=pile.damage??0;if(!Number.isInteger(damage)||damage<0||damage>=100)return undefined;if(entry.healthAffectsPrice)value*=tradeHealthFactor((100-damage)/100);}
@@ -72,14 +78,19 @@ export function sculptureTradeUnitPrice(value:number,direction:TradeDirection,im
 }
 /** The ordinary visitor and the V123 exotic visitor use their own finite stock;
  * category permission is checked against the merchant present at contact. */
-export function tradeRefusal(pile:MaterialPile,direction:TradeDirection,tick:number,merchantKind?:'exotic',channel:TradeChannel279='visitor'):string|undefined {
+/** Core visitor and caravan traders buy any item worth at least 15 silver a
+ * unit (StockGenerator_BuyExpensiveSimple) and drugs (schema 327). */
+export const VISITOR_EXPENSIVE_BUYS_327:ReadonlySet<string>=new Set(['gold','advanced-component','ai-core','novel','prosthetic-arm','prosthetic-leg','beer']);
+export function tradeRefusal(pile:MaterialPile,direction:TradeDirection,tick:number,merchantKind?:'exotic',channel:TradeChannel279='visitor',version:number=0):string|undefined {
   const entry=tradeCatalogueEntry(pile.item);
   if(!entry)return 'Cet objet n’a pas de profil commercial disponible.';
   if(pile.quantity<=0||ticksUntilRot(pile,tick)<=0)return 'Cet objet n’est plus disponible.';
   if(direction==='sell'&&!entry.playerCanSell)return 'Cet objet ne peut pas être revendu.';
+  // Core TradeUtility.PlayerSellableNow: no trader buys apparel worn by a corpse.
+  if(direction==='sell'&&tainted327(pile,version))return 'Personne n’achète un vêtement porté par un mort.';
   if(direction==='buy'&&!entry.playerCanBuy)return 'Cet objet n’est pas vendu par les marchands.';
   if(isNewApparelTrade279(pile.item)&&(merchantKind==='exotic'||channel!=='visitor'))return 'Ces vêtements se négocient avec un visiteur ordinaire présent sur la carte.';
-  if(!entry.visitorHandles&&!(merchantKind==='exotic'&&['gold','plasteel','uranium','advanced-component','neutroamine','recon-armor'].includes(pile.item)))return 'Ce visiteur ne commerce pas cette catégorie d’objets.';
+  if(!entry.visitorHandles&&!(merchantKind==='exotic'&&['gold','plasteel','uranium','advanced-component','neutroamine','recon-armor'].includes(pile.item))&&!(version>=327&&direction==='sell'&&VISITOR_EXPENSIVE_BUYS_327.has(pile.item)))return 'Ce visiteur ne commerce pas cette catégorie d’objets.';
   if(pileMarketValue(pile)===undefined)return 'L’état de cet objet ne permet pas de calculer son prix.';
   return undefined;
 }

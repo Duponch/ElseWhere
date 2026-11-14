@@ -29,7 +29,7 @@ export function tradeGoods(w:World,p:Pawn,t:Pawn):{goods:TradeGood[];artGoods:Pa
       if(routeToJob(w,o,reach,true)===null)continue;
     }
     if(pile.item==='silver'){(held?merchantSilver:silver).push({...pile,quantity:available});continue;}
-    const side=held?'buy':'sell',refusal=tradeRefusal(pile,side,w.tick,t.visitor?.merchantKind),unitPrice=tradeUnitPrice(pile,side,improvement);
+    const side=held?'buy':'sell',refusal=tradeRefusal(pile,side,w.tick,t.visitor?.merchantKind,'visitor',w.schemaVersion),unitPrice=tradeUnitPrice(pile,side,improvement);
     goods.push({pile,side,available,unitPrice:unitPrice??0,...refusal?{refusal}:unitPrice===undefined?{refusal:'Objet non négociable.'}:{}});
   }
   for(const packed of w.packed) {

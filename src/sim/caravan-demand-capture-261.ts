@@ -27,7 +27,7 @@ export function captureCurrentDemand261(g:AwayGroup,playerFactionId:number,versi
  if(g.members.some(p=>!p.worldAffiliation259))return {ok:false,reason:'La demande ne possède pas une affiliation humaine prise en charge.'};
  const animals=(g.animalOwners?.members??[]).map(a=>({id:a.id,marketValue:currentAnimalDemandValue261(a)}));
  if(animals.some(a=>a.marketValue===undefined))return {ok:false,reason:'Un animal exige un prix clinique qui n’est pas représenté.'};
- const objects:DemandCapture['objects'][number][]=g.items.map(p=>({kind:'pile',id:p.id,quantity:p.quantity,unitMarketValue:pileMarketValue(p),unitMassKg:(groupCaravanPileMass256(p,freightGroup(g),version)??NaN)/1000,apparel:p.owner.type==='apparel',equipmentDestroyedOnDrop:false}));
+ const objects:DemandCapture['objects'][number][]=g.items.map(p=>({kind:'pile',id:p.id,quantity:p.quantity,unitMarketValue:pileMarketValue(p,Number(version)),unitMassKg:(groupCaravanPileMass256(p,freightGroup(g),version)??NaN)/1000,apparel:p.owner.type==='apparel',equipmentDestroyedOnDrop:false}));
  try{for(const p of g.packed??[])objects.push({kind:'packed',id:p.building.id,quantity:1,unitMarketValue:structureRoomMarketValue(p.building),unitMassKg:(groupPackedMassGrams258(p,version)??NaN)/1000,apparel:false,equipmentDestroyedOnDrop:false});}
  catch(error){if(!(error instanceof RangeError))throw error;return {ok:false,reason:'Un meuble réel ne possède pas de prix représenté.'};}
  if(objects.some(p=>p.unitMarketValue===undefined||!Number.isFinite(p.unitMassKg)||p.unitMassKg!<=0))return {ok:false,reason:'Un bien réel ne possède pas son prix ou sa masse.'};

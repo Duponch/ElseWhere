@@ -78,7 +78,7 @@ export function captureKnownWorldThreat298(payer:World):KnownWorldThreatCapture2
  };
  const pileValue=(p:MaterialPile)=>{
   if(pileIds.has(p.id)||humanIds.has(p.id)||animalIds.has(p.id)||packedIds.has(p.id))throw Error('Une possession possède deux propriétaires World.');pileIds.add(p.id);
-  const unit=p.kind==='chunk'?0:p.kind==='unfinished'?undefined:pileMarketValue(p);
+  const unit=p.kind==='chunk'?0:p.kind==='unfinished'?undefined:pileMarketValue(p,Number(root.schemaVersion));
   if(unit===undefined){unpricedPiles.add(p.id);return 0;}return unit*p.quantity;
  };
  const packedValue=(p:PackedFurniture)=>{

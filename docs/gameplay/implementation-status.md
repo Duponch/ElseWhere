@@ -23,6 +23,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V327 — schéma 327 :** [Commerce : vêtements de cadavre, achats des visiteurs, richesse](trade-fidelity-v327.md). Les vêtements retirés d'un mort valent un dixième et ne se vendent plus ; les visiteurs achètent or, composants avancés, cœur d'IA, romans, prothèses et bière ; la richesse ne compte que les bâtiments de la colonie et rien sous le brouillard.
+
 **V326 — schéma 326 :** [Arc recourbé et grand arc](bows-v326.md). Recherches Arc recourbé (400) puis Grand arc (600) au bureau simple ; 40 ou 60 bois au poste d'artisanat ou à la forge (Artisanat 5 et 6) ; la flèche recourbée fait une blessure par estoc, la grande flèche une coupure ; les visiteurs vendent aussi les deux arcs.
 
 **V325 — schéma 325 :** [Prisonniers entre eux et visites aux malades](social-fidelity-v325.md). Les prisonniers d'une même faction se parlent ; on rend visite à un malade dans n'importe quel lit, jamais à un convalescent, en le choisissant selon l'opinion et la distance.
