@@ -266,7 +266,8 @@ export function foodAccount(world: World): number {
   // animal-to-food producer so existing balances compare initial food + harvest;
   // this does not remove losses, consumption or the 10-to-1 recipe transform.
   return world.piles.filter(p=>{
-    if(p.kind!=='food') return false;
+    // An orbital trader's stock belongs to the ship, not to the colony.
+    if(p.kind!=='food'||p.owner.type==='orbital-ship') return false;
     const owner=p.owner;
     return !('pawnId' in owner)||!!world.pawns.find(q=>q.id===owner.pawnId&&isColonist(q));
   }).reduce((n,p)=>n+p.quantity,0) + spoiledUnits(world) - (world.butchery?.meat??0);
