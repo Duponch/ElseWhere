@@ -161,6 +161,24 @@ function animalStaticSolids(world:World,geometry:StructureNavigationGeometry,fen
     entry={width:world.width,size,fence,legacy,mask,cells:Int32Array.from(cells)};list.push(entry);}
   return entry;
 }
+/* Goal filters: food goals repeat cells (five per food, neighbours overlap).
+ * Each in-map cell's answer is computed once per filter (nothing it reads
+ * changes during the filter), with stamps shared by every reader. */
+let goalStamp=0,goalStamps:Uint32Array|undefined,goalAnswers:Uint8Array|undefined;
+/** `goals.filter(c=>free(c)&&(!policy||policy.has(z*width+x)))`, `free` being
+ * false outside the map. */
+function freeGoalCells(goals:readonly Cell[],width:number,height:number,free:(c:Cell)=>boolean,policy:{has(index:number):boolean}|undefined):Cell[] {
+  const size=width*height;
+  if(!goalStamps||goalStamps.length!==size||goalStamp>=0xffffffff){goalStamps=new Uint32Array(size);goalAnswers=new Uint8Array(size);goalStamp=0;}
+  const stamp=++goalStamp,stamps=goalStamps,answers=goalAnswers!,out:Cell[]=[];
+  for(const c of goals){
+    if(!Number.isInteger(c.x)||!Number.isInteger(c.z)||c.x<0||c.z<0||c.x>=width||c.z>=height){if(free(c)&&(!policy||policy.has(c.z*width+c.x)))out.push(c);continue;}
+    const i=c.z*width+c.x;
+    if(stamps[i]!==stamp){stamps[i]=stamp;answers[i]=free(c)&&(!policy||policy.has(i))?1:0;}
+    if(answers[i])out.push(c);
+  }
+  return out;
+}
 export function animalNavigation(world:World,allowClosedGate=false,fencePassable=false,actor?:WildAnimal,capturedFlight=false,providedGeometry?:StructureNavigationGeometry,readArea:(a:WildAnimal)=>AnimalAreaPolicy287|undefined=a=>captureAnimalAreaPolicy287(world,a),physicalNow?:()=>number,terrainMask:()=>Uint8Array=()=>terrainBlockedMask(world.tiles)) {
   let failedRoute:{actor:Cell;x:number;z:number;tick:number;field:DistanceField}|undefined;
   const area=(start:Cell)=>{if(!isSchema287OrLater(Number(world.schemaVersion)))return;const original=world.wildlife?.animals.find(a=>a===start);return original?readArea(original):undefined;};
@@ -253,7 +271,7 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
   };
   function findRoute(a:Cell,goals:Cell[],exitFallback=false,rank?:(c:Cell)=>number):{kind:'food'|'exit';path:Cell[]}|undefined {
     failedRoute=undefined;
-    const policy=area(a),cells=goals.filter(c=>free(c)&&(!policy||policy.has(c.z*world.width+c.x))),indices=new Set(cells.map(c=>c.z*world.width+c.x));
+    const policy=area(a),cells=freeGoalCells(goals,world.width,world.height,free,policy),indices=new Set(cells.map(c=>c.z*world.width+c.x));
     if(!indices.size&&!exitFallback)return;
     const edges:Cell[]=[];
     if(exitFallback){
@@ -382,7 +400,7 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
     },
     foodOrExitRoute:(a:Cell,goals:Cell[],rank?:(c:Cell)=>number)=>findRoute(a,goals,true,rank),
     foodPreyOrExitRoute(a:Cell,goals:Cell[],prey:readonly (Cell&{id:number})[],exitFallback=false,rank?:(c:Cell)=>number):{kind:'food'|'prey'|'exit';path:Cell[];targetId?:number}|undefined {
-      const policy=area(a),cells=goals.filter(c=>free(c)&&(!policy||policy.has(c.z*width+c.x))),indices=new Set(cells.map(c=>c.z*width+c.x));
+      const policy=area(a),cells=freeGoalCells(goals,width,world.height,free,policy),indices=new Set(cells.map(c=>c.z*width+c.x));
       if(!indices.size&&!prey.length&&!exitFallback)return;
       const n=animalNavigationCosts(world,a,override,geometry),search=new WeightedSearch(width,world.height,a.z*width+a.x,routeGrid(),scaleNavigationCosts(n.costs,3),n.repeaters,scaleNavigationCosts(n.floors,3),corners,policy?.costs);
       if(indices.size){
