@@ -140,6 +140,16 @@ const DEFAULT_PERCEPTION_OFFSETS=(()=>{
   return new Int8Array(out);
 })();
 
+/** Marks in `needed` every in-map cell that `perceived(cell)` (default radius,
+ * no visibility test) can read for this cell; nothing when it reads none. */
+export function markDefaultPerceptionCells(width:number,height:number,cell:BeautyCell,needed:Uint8Array):void {
+  if(!Number.isInteger(cell.x)||!Number.isInteger(cell.z)||cell.x<0||cell.z<0||cell.x>=width||cell.z>=height)return;
+  for(let offset=0;offset<DEFAULT_PERCEPTION_OFFSETS.length;offset+=2){
+    const x=cell.x+DEFAULT_PERCEPTION_OFFSETS[offset]!,z=cell.z+DEFAULT_PERCEPTION_OFFSETS[offset+1]!;
+    if(x>=0&&z>=0&&x<width&&z<height)needed[z*width+x]=1;
+  }
+}
+
 /** A single capture is reusable by every pawn/UI query in the decision pass.
  * Each enclosed room floods once and is then retained by its topology id. */
 export class RoomBeautyCapture {
