@@ -115,7 +115,10 @@ function finishConversation(world:World,actor:Pawn,p:Pawn,context:NeedContext):b
     context.event(`${actor.name} réduit la résistance de ${p.name} de ${reduction.toFixed(2)} (${prisoner.resistance.toFixed(2)} restante).`);
   }else if(prisoner.mode==='recruit'){
     const raidGroup=p.raid?.group;p.recruitment={capturedAt:prisoner.capturedAt,recruitedAt:world.tick,fromFaction:'outlaws',...(raidGroup===undefined?{}:{raidGroup})};
-    commitJoinedPlayer259(world,p);notePopulationGain320(world);delete p.prisoner;delete p.raid;p.faction='colony';p.bedId=null;delete p.bedSlot;p.needCooldown=0;p.planCooldown=0;
+    commitJoinedPlayer259(world,p);notePopulationGain320(world);delete p.prisoner;delete p.raid;p.faction='colony';p.bedId=null;delete p.bedSlot;
+    // Core SetGuestStatus releases the prison bed: the global claim goes too,
+    // or the save holds a bed owner with no matching local bed.
+    if(world.schemaVersion>=256)delete p.mapBed;p.needCooldown=0;p.planCooldown=0;
     if(initializesWorkLikeCore302(world.schemaVersion))enableAndInitializeWork(p);
     // Core DoRecruit: the new colonist remembers who recruited them (319).
     if(world.schemaVersion>=319){const state=p.social??={rng:socialSeed(world.seed,p.id),memories:[]};expireSocialMemories(p,world.tick);addSocialMemory(state,actor.id,'recruited-me',world.tick,1);}

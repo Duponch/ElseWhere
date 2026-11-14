@@ -14,6 +14,13 @@ import { crashlandedThreatActive } from './scenarios/crashlanded-player.ts';
 import { survivorPlan } from './scenarios/survivor-player.ts';
 import { blockedCells,reachableCells,routeToJob } from '../src/sim/pathfinding.ts';
 import type { Command,World } from '../src/sim/types.ts';
+import { ITEM_DEFINITIONS,type ItemId } from '../src/sim/items.ts';
+/** Item opened by a resource pod event, from its label, with its quantity. */
+const podDelivery=(message:string):{item:ItemId;quantity:number}|undefined=>{
+  const match=message.match(/^Les capsules se sont ouvertes : (\d+) × (.+) à récupérer/);if(!match)return undefined;
+  const item=(Object.keys(ITEM_DEFINITIONS) as ItemId[]).find(id=>ITEM_DEFINITIONS[id].label===match[2]);
+  expect(item,message).toBeDefined();return {item:item!,quantity:Number(match[1])};
+};
 
 // Project-owned Lisière world from the published V85 energy continuation.
 // gzip stores precisely those bytes; this is not a private RimWorld save.
@@ -22,7 +29,9 @@ const fixtureHash=createHash('sha256').update(fixtureBytes).digest('hex');
 const expectedFixtureHash='514086e50ea7a571dbdc8e5540e5c9cdcaa8113cc3dba51a7e06d69df1611fa3';
 const energyReport=JSON.parse(readFileSync('artifacts/energy-colony-v85.json','utf8')) as {player:EnergyPlayerState};
 const loadFixture=()=>deserializeWorld(fixtureBytes.toString('utf8'));
-interface Ledger {consumed:number;harvested:number;cooked:number;steelMined:number;componentsMined:number;medicineConsumed:number;meals:Record<number,number>;mealsByStation:Record<string,number>}
+interface Ledger {consumed:number;harvested:number;cooked:number;steelMined:number;componentsMined:number;medicineConsumed:number;meals:Record<number,number>;mealsByStation:Record<string,number>;
+  /** Resource pods (schema 305) deliver goods from outside the colony. */
+  podSteel?:number;podComponents?:number;podFood?:number}
 interface Checkpoint { woodLedger:WoodLedger;repairLedger:RepairLedger;
   protocol:'prison-v86';fixtureHash:string;world:string;player:PrisonPlayerState;ledger:Ledger;
   initial:{wood:number;food:number;animalEaten:number;steel:number;component:number;medicine:number};
@@ -41,6 +50,8 @@ const captiveMealInTransit=(w:World)=>w.pawns.reduce((total,pawn)=>{
   return total+(pile?.quantity??0);
 },0);
 
+// The two preflights load and replay the real day-42 fixture: well over the
+// default 30 s on a busy machine, so they carry their own limit.
 test('Prison : préflight du réapprovisionnement au-delà de la clairière épuisée, sans injection',()=>{
   const w=loadFixture(),player=newPrisonPlayer(w,energyReport.player),before=serializeWorld(w),wood=woodAccount(w),resources=structuredClone(w.resources);
   expect(w.piles.filter(p=>p.item==='wood')).toEqual([]);
@@ -60,7 +71,7 @@ test('Prison : préflight du réapprovisionnement au-delà de la clairière épu
   expect(supply.pendingCuts).toBe(cuts.length);expect(supply.pendingYield).toBeGreaterThan(0);
   expect(prisonWoodDecisions(w,player.campAnchor)).toEqual([]); // Existing cuts count before another batch.
   expect(w.resources).toEqual(resources);expect(woodAccount(w)).toBe(wood);expect(validateWorld(w)).toEqual([]);
-});
+},180_000);
 
 // Central runner selects this bounded preflight before scheduling the long test.
 test('Prison : préflight de continuation V85, prison ordinaire et carnet sans injection',()=>{
@@ -77,7 +88,7 @@ test('Prison : préflight de continuation V85, prison ordinaire et carnet sans i
   for(const d of prisonDecisions(w,player)){const result=applyCommand(w,d.command);expect(result,JSON.stringify({tick:w.tick,...d,result})).toMatchObject({ok:true});}
   const copy=deserializeWorld(serializeWorld(w));stepWorld(w,120);stepWorld(copy,120);
   expect(serializeWorld(copy)).toBe(serializeWorld(w));expect(validateWorld(w)).toEqual([]);
-});
+},180_000);
 
 function runPrisonJourney(stopTick?:number):void {
   expect(fixtureHash).toBe(expectedFixtureHash);
@@ -98,8 +109,8 @@ function runPrisonJourney(stopTick?:number):void {
     observations.push(structuredClone(prisonSummary(w,player)));const c=context();
     expect(validateWorld(w),c).toEqual([]);expect(survivorPlan(w,true).anchor,c).toEqual(player.campAnchor);
     expect(conservedWood(w,woodLedger),c).toBeCloseTo(initial.wood,7);
-    expect(metalAccount(w,'steel'),c).toBe(initial.steel+ledger.steelMined);expect(metalAccount(w,'component')+repairLedger.spent,c).toBe(initial.component+ledger.componentsMined);
-    expect(foodAccount(w)+captiveMealInTransit(w)+ledger.consumed+9*ledger.cooked+(w.wildlife?.eatenItems??0)-initial.animalEaten,c).toBe(initial.food+ledger.harvested);
+    expect(metalAccount(w,'steel'),c).toBe(initial.steel+ledger.steelMined+(ledger.podSteel??0));expect(metalAccount(w,'component')+repairLedger.spent,c).toBe(initial.component+ledger.componentsMined+(ledger.podComponents??0));
+    expect(foodAccount(w)+captiveMealInTransit(w)+ledger.consumed+9*ledger.cooked+(w.wildlife?.eatenItems??0)-initial.animalEaten,c).toBe(initial.food+ledger.harvested+(ledger.podFood??0));
     expect(player.initialColonists.every(id=>w.pawns.some(p=>p.id===id&&isColonist(p)&&p.state!=='dead')),c).toBe(true);
   };
   const continuation=()=>{
@@ -127,6 +138,8 @@ function runPrisonJourney(stopTick?:number):void {
     for(const e of w.events.filter(e=>e.tick===w.tick)){
       const eaten=e.message.match(/a mangé une portion \((\d+) ×/),person=[...names].find(([name])=>e.message.startsWith(`${name} `)),id=person?.[1];
       if(eaten){ledger.consumed+=Number(eaten[1]);if(id!==undefined){ledger.meals[id]=(ledger.meals[id]??0)+1;const p=w.pawns.find(p=>p.id===id);if(p?.prisoner&&id===player.targetId){player.fedCaptive++;player.milestones.fedCaptive??=w.tick;}if(id===player.recruitId)player.recruitMeals++;}}
+      const pod=podDelivery(e.message);
+      if(pod){if(pod.item==='steel')ledger.podSteel=(ledger.podSteel??0)+pod.quantity;else if(pod.item==='component')ledger.podComponents=(ledger.podComponents??0)+pod.quantity;else if(ITEM_DEFINITIONS[pod.item].kind==='food')ledger.podFood=(ledger.podFood??0)+pod.quantity;}
       const harvest=e.message.match(/a récolté (\d+) (baies|riz|pommes de terre|maïs)/);if(harvest)ledger.harvested+=Number(harvest[1]);
       if(e.message.includes('a cuisiné 1 repas simple')){ledger.cooked++;const kind=person?stations.get(person[0]):undefined;expect(kind,e.message).toBeDefined();ledger.mealsByStation[kind!]=(ledger.mealsByStation[kind!]??0)+1;}
       if(e.message.includes('réduit la résistance de ')){player.conversations++;player.milestones.resistanceReduced??=w.tick;}

@@ -50,7 +50,8 @@ export function energyHomeDecisions(w:World,s:Pick<EnergyPlayerState,'origin'>):
   return out;
 }
 export function metalAccount(w:World,item:'steel'|'component'):number {
-  return w.piles.reduce((n,p)=>n+(p.item===item?p.quantity:0),0)+w.structures.reduce((n,s)=>n+requiredMaterial(s,item),0)+w.packed.reduce((n,p)=>n+requiredMaterial(p.building,item),0)+(w.destroyed?.lost[item]??0)+(item==='steel'?w.deconstructed.lostSteel??0:w.deconstructed.lostComponents??0);
+  // An orbital trader's stock belongs to the ship, not to the colony.
+  return w.piles.reduce((n,p)=>n+(p.item===item&&p.owner.type!=='orbital-ship'?p.quantity:0),0)+w.structures.reduce((n,s)=>n+requiredMaterial(s,item),0)+w.packed.reduce((n,p)=>n+requiredMaterial(p.building,item),0)+(w.destroyed?.lost[item]??0)+(item==='steel'?w.deconstructed.lostSteel??0:w.deconstructed.lostComponents??0);
 }
 export function newEnergyPlayer(w:World):EnergyPlayerState {
   const camp=survivorPlan(w,true).anchor,occupied=new Set([...w.structures.flatMap(footprintCells),...w.jobs.flatMap(footprintCells),...w.stockpiles,...w.piles.flatMap(p=>p.owner.type==='ground'?[p.owner]:[])].map(c=>c.z*w.width+c.x));
