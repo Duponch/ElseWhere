@@ -23,6 +23,9 @@ import { isForcedConsuming } from '../../src/sim/consuming.ts';
 import { shotPlan,shootingQueries } from '../../src/sim/shooting.ts';
 import type { Cell, DesignateCommand } from '../../src/sim/types.ts';
 import { survivorDecisions, survivorPlan, survivorSummary } from './survivor-player.ts';
+// A warm shelter gets a wood passive cooler, as in the main colony campaign
+// (a Core heat wave adds 17 °C; heatstroke builds above 36 °C).
+import { coolingDecisions } from './cooling-player.ts';
 
 export const crashlandedThreatActive=(w:World):boolean=>!!w.raids?.active||!!w.raids?.mechActive||!!w.wildlife?.animals.some(a=>a.manhunter&&a.state!=='dead'&&a.state!=='downed');
 
@@ -69,7 +72,7 @@ export function crashlandedDecisions(w:World):Decision[] {
   if(drafted.length)return [{reason:'L’assaut est terminé : reprendre les activités civiles et les soins.',command:{type:'draft',pawnIds:drafted,enabled:false}}];
   const beds=accessibleBedDecisions(w);if(beds!==undefined)return beds;
   const medical=medicalDecisions(w);if(medical.length)return medical;
-  const out=[...survivorDecisions(w,true),...foodInfrastructureDecisions(w)],candidate=defender??[...people].sort((a,b)=>b.skills.shooting.level-a.skills.shooting.level||a.id-b.id)[0];
+  const out=[...coolingDecisions(w),...survivorDecisions(w,true),...foodInfrastructureDecisions(w)],candidate=defender??[...people].sort((a,b)=>b.skills.shooting.level-a.skills.shooting.level||a.id-b.id)[0];
   if(!candidate||candidate.equipmentTask||candidate.orders.active!==null||candidate.need||candidate.hunger<50||candidate.rest<40)return out;
   const wanted=defender?'flak-vest':'revolver';
   if(w.piles.some(i=>i.item===wanted&&(i.owner.type==='equipment'||i.owner.type==='apparel')&&i.owner.pawnId===candidate.id))return out;
