@@ -30,7 +30,7 @@ export function captureWorldBeauty(world:World,topology:RoomTopology,cache=new B
  * Each needed cell receives the same contributions, added in the same order
  * (structures, filth, then ground piles, packed furniture and flower pots),
  * so it holds the same value. */
-function beautyMapAt(world:World,perceivers:readonly BeautyCell[]):BeautyMap {
+export function beautyMapAt(world:World,perceivers:readonly BeautyCell[]):BeautyMap {
   const width=world.width,height=world.height,tiles=world.tiles;
   if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||tiles.length!==width*height)throw new RangeError('Invalid beauty map dimensions.');
   const size=width*height,version=Number(world.schemaVersion),needed=new Uint8Array(size);
