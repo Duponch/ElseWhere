@@ -22,7 +22,7 @@ import { planCookingOrder } from '../../src/sim/player-cooking.ts';
 import { isCookingOrder } from '../../src/sim/order-types.ts';
 import { PRODUCTION_RECIPES } from '../../src/sim/production-recipes.ts';
 import { plantGrowth, plantTemperatureFactor } from '../../src/sim/plants.ts';
-import { availableNutrition } from '../../src/sim/items.ts';
+import { availableNutrition,ITEM_DEFINITIONS,type ItemId } from '../../src/sim/items.ts';
 import { spoiledUnits } from '../../src/sim/food-preservation.ts';
 import { canDesignate } from '../../src/sim/engine.ts';
 import { planHaulOrder } from '../../src/sim/player-hauling.ts';
@@ -270,7 +270,12 @@ export function foodAccount(world: World): number {
     if(p.kind!=='food'||p.owner.type==='orbital-ship') return false;
     const owner=p.owner;
     return !('pawnId' in owner)||!!world.pawns.find(q=>q.id===owner.pawnId&&isColonist(q));
-  }).reduce((n,p)=>n+p.quantity,0) + spoiledUnits(world) - (world.butchery?.meat??0);
+  }).reduce((n,p)=>n+p.quantity,0) + spoiledUnits(world) + burnedFoodUnits(world) - (world.butchery?.meat??0);
+}
+/** Food items a fire destroyed (an egg laid in the open, a stack left near a
+ * burning tree): gone from the stock but still produced. */
+export function burnedFoodUnits(world: World): number {
+  return Object.entries(world.fires?.ledger?.items??{}).reduce((sum,[item,n])=>sum+((ITEM_DEFINITIONS[item as ItemId]?.kind==='food'&&ITEM_DEFINITIONS[item as ItemId].nutrition>0)?(n??0):0),0);
 }
 
 /** A first look around the landing site, then return before building the camp. */

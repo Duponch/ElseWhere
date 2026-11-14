@@ -20,6 +20,7 @@ import type { Command,Job,Resource,World } from '../src/sim/types.ts';
 import { sameMapWorld } from './scenarios/same-map.ts';
 import { footprintCells } from '../src/sim/definitions.ts';
 import { medicalBleed } from '../src/sim/injury-state.ts';
+import { isEggSpecies256 } from '../src/sim/animal-egg-content-v256.ts';
 
 type Summary=ReturnType<typeof crashlandedSummary>;
 interface Ledger {
@@ -28,6 +29,13 @@ interface Ledger {
   riceHarvestsByCell:Record<number,number>;mealsByStation:Record<string,number>;
   consumedByItem:Record<string,number>;lastSurvivalMealTick:number;nonRationIngestionsLastWeek:Record<number,number>;
   meals:Record<number,number>;sleep:Record<number,number>;
+  /** Food a non-colonist carried and left in the colony (a dead refugee's
+   * provisions): it enters the colony account without a harvest. */
+  foreignFood?:number;
+  /** Eggs laid by animals (ducks from a farm animals incident) minus eggs
+   * that hatched: food that enters or leaves the colony without a harvest,
+   * a meal or an ingestion. */
+  eggFlux?:number;
 }
 interface Checkpoint { woodLedger:WoodLedger;repairLedger:RepairLedger;
   protocol:'food-chain-v84';instrumentation:3|4;ingestionLedger?:IngestionLedger;seed:number;world:string;initial:{wood:number;food:number;steel:number;component:number};ledger:Ledger;
@@ -152,7 +160,7 @@ test.each(resumed?[resumed.seed]:[42])('Atterrissage : 24 jours, deux récoltes 
     expect(validateWorld(w),context).toEqual([]);
     expect(conservedWood(w,woodLedger),context).toBeCloseTo(initial.wood,7);
     expect({...s.materials,component:s.materials.component+repairLedger.spent},context).toEqual({steel:initial.steel,component:initial.component});
-    expect(foodAccount(w)+ledger.consumed+9*ledger.cooked+(w.wildlife?.eatenItems??0),context).toBe(initial.food+ledger.harvested);
+    expect(foodAccount(w)+ledger.consumed+9*ledger.cooked+(w.wildlife?.eatenItems??0),context).toBe(initial.food+ledger.harvested+(ledger.foreignFood??0)+(ledger.eggFlux??0));
     readIngestionLedger(ingestionLedger,w.tick,w.nextId);
     // Food poisoning can drive hunger to zero between the physical pickup and
     // ingestion. A colonist actively eating is already resolving that state;
@@ -193,7 +201,16 @@ test.each(resumed?[resumed.seed]:[42])('Atterrissage : 24 jours, deux récoltes 
       const patient=w.pawns.find(p=>p.id===doctor.feed!.patientId),pile=w.piles.find(p=>p.id===doctor.feed!.carryPileId);
       if(patient&&pile){eating.set(patient.name,pile.item);assisted.set(patient.id,{tick:w.tick+1,pawnId:patient.id,portionId:pile.id,item:pile.item,quantity:pile.quantity,source:'assisted',mentalKind:patient.mental?.crisis?.kind??null});}
     }
+    const foreign=new Map(w.piles.flatMap(p=>{const o=p.owner;if(p.kind!=='food'||!('pawnId' in o))return [];const owner=w.pawns.find(q=>q.id===o.pawnId);return owner&&!isColonist(owner)?[[p.id,{quantity:p.quantity,ownerId:owner.id}] as const]:[];}));
+    const eggsAt=(x:number,z:number)=>w.piles.reduce((n,p)=>n+(p.kind==='food'&&p.item.includes('egg')&&p.owner.type==='ground'&&p.owner.x===x&&p.owner.z===z?p.quantity:0),0);
+    const laying=(w.wildlife?.animals??[]).filter(a=>a.eggLay).map(a=>({a,x:a.eggLay!.target.x,z:a.eggLay!.target.z,before:eggsAt(a.eggLay!.target.x,a.eggLay!.target.z)}));
+    const animalIds=new Set((w.wildlife?.animals??[]).map(a=>a.id));
     const ingestions=trackIngestionStep(w,()=>trackMaintenanceStep(w,repairLedger,()=>trackWoodStep(w,woodLedger,()=>stepWorld(w))));
+    for(const [id,before] of foreign){
+      const pile=w.piles.find(p=>p.id===id),o=pile?.owner,holder=o&&'pawnId' in o?w.pawns.find(q=>q.id===o.pawnId):undefined;
+      if(pile&&!(holder&&!isColonist(holder)))ledger.foreignFood=(ledger.foreignFood??0)+pile.quantity;
+      else if(!pile&&w.pawns.find(q=>q.id===before.ownerId)?.state==='dead')ledger.foreignFood=(ledger.foreignFood??0)+before.quantity;
+    }
     const currentEvents=w.events.filter(e=>e.tick===w.tick);
     for(const e of currentEvents) {
       const eaten=e.message.match(/a mangé une portion \((\d+) ×/);
@@ -232,6 +249,9 @@ test.each(resumed?[resumed.seed]:[42])('Atterrissage : 24 jours, deux récoltes 
         const station=[...stations].find(([name])=>e.message.startsWith(`${name} a cuisiné`))?.[1]??'unmatched';ledger.mealsByStation[station]=(ledger.mealsByStation[station]??0)+1;
       }
     }
+    for(const l of laying)if(!l.a.eggLay&&l.a.eggLayer?.progress===0)ledger.eggFlux=(ledger.eggFlux??0)+eggsAt(l.x,l.z)-l.before;
+    const hatched=(w.wildlife?.animals??[]).filter(a=>!animalIds.has(a.id)&&isEggSpecies256(a.species)&&a.ageTicks===0).length;
+    if(hatched)ledger.eggFlux=(ledger.eggFlux??0)-hatched;
     for(const p of w.pawns)if(p.state==='sleeping'&&p.need?.kind==='sleep'&&p.need.bedId!==null)ledger.sleep[p.id]=(ledger.sleep[p.id]??0)+1;
     if(w.tick%6000===0) {
       const saved=serializeWorld(w),copy=deserializeWorld(saved);stepWorld(w,100);stepWorld(copy,100);
