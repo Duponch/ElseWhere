@@ -11,7 +11,7 @@ export interface MeleeImpact { damage:number;kind:MeleeDamage;part?:BodyPartId }
 export interface MeleeImpactResult {record:MedicalRecord;selected:BodyPartId|null;layers:ResolvedInjury[];stun:boolean;totalDamageDealt:number}
 /** Unarmored natural adult. Independent resolution, explicit random stream;
  * actor, XP, cadence and attack commands belong to the combat controller. */
-export function resolveUnarmoredMelee(record:MedicalRecord,hit:MeleeImpact,random:()=>number,protect?:ImpactProtection):MeleeImpactResult {
+export function resolveUnarmoredMelee(record:MedicalRecord,hit:MeleeImpact,random:()=>number,protect?:ImpactProtection,smallPawn324=false):MeleeImpactResult {
   if(hit.kind==='toxic-bite')hit={...hit,kind:'bite'};
   const model=medicalModel(record),{parts:HUMAN_BODY,byId:BODY_PARTS,index:BODY_INDEX,coverage:BODY_COVERAGE}=model,PART_INJURY_RULES=injuryPartRules(model,record);
   if(!Number.isFinite(hit.damage)||hit.damage<0||hit.damage>1000000||!['blunt','poke','bite','cut','stab','scratch'].includes(hit.kind)||hit.part!==undefined&&(!modelHasPart(model,hit.part)||BODY_PARTS[hit.part].conceptual||BODY_PARTS[hit.part].depth!=='outside'))throw new RangeError('Invalid melee impact');
@@ -23,13 +23,13 @@ export function resolveUnarmoredMelee(record:MedicalRecord,hit:MeleeImpact,rando
     const total=candidates.reduce((n,p)=>n+BODY_COVERAGE[BODY_INDEX[p.id]],0);if(!total)return null;
     let roll=draw()*total;for(const p of candidates){roll-=BODY_COVERAGE[BODY_INDEX[p.id]];if(roll<0)return p.id;}return candidates.at(-1)!.id;
   };
-  let part=hit.part??select(id=>BODY_PARTS[id].depth==='outside');if(!part)return result;
-  if((hit.kind==='poke'||hit.kind==='stab')&&draw()<(hit.kind==='stab'?.6:.4))part=select(id=>BODY_PARTS[id].depth==='inside'&&isWithinPart(id,part!,model))??part;
-  result.selected=part;
-  const guarded=protect?.(part,hit.damage),amount=guarded?.amount??hit.damage;if(!amount)return result;
+  let first=hit.part??select(id=>BODY_PARTS[id].depth==='outside');if(!first)return result;
+  if((hit.kind==='poke'||hit.kind==='stab')&&draw()<(hit.kind==='stab'?.6:.4))first=select(id=>BODY_PARTS[id].depth==='inside'&&isWithinPart(id,first!,model))??first;
+  result.selected=first;
+  let guarded:ReturnType<ImpactProtection>|undefined,last:BodyPartId=first;
   const kind=(id:BodyPartId):InjuryKind=>PART_INJURY_RULES[id].solid?'crack':!guarded?.converted&&hit.kind==='scratch'?'cut':!guarded?.converted&&(hit.kind==='bite'||hit.kind==='cut'||hit.kind==='stab')?hit.kind:PART_INJURY_RULES[id].skin?'bruise':'crush';
   const add=(id:BodyPartId,damage:number)=>{
-    const severity=Math.round(damage*HP_UNIT),hp=remainingPartHealth(next,id)/HP_UNIT;
+    last=id;const severity=Math.round(damage*HP_UNIT),hp=remainingPartHealth(next,id)/HP_UNIT;
     if(severity>0){const layer={part:id,kind:kind(id),severity};result.layers.push(layer);delete next.death;addResolvedInjuryBatch(next,[layer],draw);}
     const dealt=Math.min(severity/HP_UNIT,hp);result.totalDamageDealt=Math.fround(result.totalDamageDealt+Math.fround(dealt));return Math.min(damage,hp);
   };
@@ -39,6 +39,11 @@ export function resolveUnarmoredMelee(record:MedicalRecord,hit:MeleeImpact,rando
     const chance=Math.max(0,Math.min(1,((damage-hp)/BODY_PARTS[id].hp-min)/(max-min)));
     return draw()<chance?damage:Math.max(0,hp-1);
   };
+  // One Core ApplyDamageToPart on an exact part: armor, then the damage
+  // worker's own spread. 'last' follows Core DamageResult.LastHitPart.
+  const apply=(target:BodyPartId):void=>{
+  let part=target;last=part;
+  guarded=protect?.(part,hit.damage);const amount=guarded?.amount??hit.damage;if(!amount)return;
   if(hit.kind==='scratch') {
     // Scratch has one adjacent outside layer, not Cut's stochastic spread.
     // The local medical record represents its lesions with existing cut wounds.
@@ -73,12 +78,17 @@ export function resolveUnarmoredMelee(record:MedicalRecord,hit:MeleeImpact,rando
     }
     if(!next.death) {
       const root=HUMAN_BODY.find(p=>p.parent===null)!,head=isWithinPart(part,record.body==='scyther'?'scyther-neck':'neck',model);
-      if(part===root.id||head)result.stun=draw()<curve(amount/root.hp,head?[[.04,.2],[.5,1]]:[[.4,0],[.9,.15]]);
+      if(part===root.id||head){const stun=draw()<curve(amount/root.hp,head?[[.04,.2],[.5,1]]:[[.4,0],[.9,.15]]);result.stun=result.stun||stun;}
     }
   } else {
     const damage=preserve(part,amount,hit.kind==='bite'?0:.4,hit.kind==='bite'?.1:1);
     const inner=BODY_PARTS[part].depth==='inside';
     for(let id:BodyPartId|null=part;id!==null;id=BODY_PARTS[id].parent){const outside=BODY_PARTS[id].depth==='outside';add(id,damage*(inner?(outside?.75:.4):1));if(outside)break;}
   }
+  };
+  apply(first);
+  // Core ApplySmallPawnDamagePropagation (schema 324), as for bullets.
+  const parent=BODY_PARTS[last].parent;
+  if(smallPawn324&&model.healthScale<=.5001&&hit.damage>=10&&!next.death&&parent!==null&&remainingPartHealth(next,parent)>0&&BODY_COVERAGE[BODY_INDEX[parent]]>0)apply(parent);
   return result;
 }

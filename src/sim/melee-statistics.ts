@@ -3,7 +3,10 @@ import {isLongswordItem270} from './longsword-content-270.ts';
 import {isSpearItem272} from './spear-content-272.ts';
 import {isSpearToolId272,spearTool272,type SpearToolId272} from './spear-combat-272.ts';
 import {isLongswordToolId270,longswordTool270,type LongswordToolId270} from './longsword-combat-270.ts';
-import { HUMAN_BODY } from './body-definition.ts';
+import { HUMAN_BODY,type BodyGroup,type BodyPartId } from './body-definition.ts';
+import { bodyEfficiencies } from './body-capacities.ts';
+import { medicalModel } from './body-model.ts';
+import { HP_UNIT } from './injury-rules.ts';
 import { equippedWeapon,isWeaponItem,weaponMeleeQualityFactor } from './equipment-rules.ts';
 import { pawnBody } from './health-rules.ts';
 import { partMissing } from './injury-state.ts';
@@ -34,10 +37,15 @@ export function meleeTools(world:World,pawn:Pawn,body=()=>pawnBody(pawn)):MeleeT
   const tools:MeleeTool[]=[];
   const add=(id:MeleeToolId,damage:number,kind:MeleeDamage,factor=1,penetration=damage*.015)=>{const cooldownCore=meleeRecoveryCore(id);tools.push({id,damage,kind,penetration,cooldownCore,weight:damage*(1+penetration)/(cooldownCore/60)*factor});};
   const exists=(id:typeof HUMAN_BODY[number]['id'])=>!pawn.health||!partMissing(pawn.health,id);
+  const efficiency=bodyToolEfficiency324(world,pawn);
   // LeftHand/RightHand groups are the fingers; missing every finger removes the tool.
-  for(const side of ['left','right'] as const)if(isSchema273OrLater(world.schemaVersion)&&pawn.health?.artificialParts?.some(p=>p.kind==='prosthetic-arm'&&p.part===`${side}-shoulder`)||HUMAN_BODY.some(p=>p.groups.includes(`${side}-hand`)&&exists(p.id)))add(`${side}-fist`,8.2,'blunt');
-  if(exists('jaw'))add('teeth',8.2,'bite',.07);
-  if(exists('head'))add('head',5,'blunt',.2);
+  for(const side of ['left','right'] as const){
+    if(isSchema273OrLater(world.schemaVersion)&&pawn.health?.artificialParts?.some(p=>p.kind==='prosthetic-arm'&&p.part===`${side}-shoulder`)){add(`${side}-fist`,8.2,'blunt');continue;}
+    if(!HUMAN_BODY.some(p=>p.groups.includes(`${side}-hand`)&&exists(p.id)))continue;
+    const factor=efficiency?efficiency.group(`${side}-hand`):1;if(factor>0)add(`${side}-fist`,8.2*factor,'blunt');
+  }
+  if(exists('jaw')){const factor=efficiency?efficiency.part('jaw'):1;if(factor>0)add('teeth',8.2*factor,'bite',.07);}
+  if(exists('head'))add('head',5*(efficiency?Math.max(.4,efficiency.part('head')):1),'blunt',.2);
   const weapon=equippedWeapon(world,pawn);
   if(weapon?.weapon&&isWeaponItem(weapon.item)&&!pawn.equipmentDropPending&&body().capacities.manipulation>0) {
     const factor=weaponMeleeQualityFactor(weapon.weapon.quality);
@@ -56,6 +64,17 @@ export function meleeTools(world:World,pawn:Pawn,body=()=>pawnBody(pawn)):MeleeT
     } else {const damage=9*factor;add('grip',damage,'blunt');add('barrel',damage,'blunt');add('barrel-poke',damage,'poke');}
   }
   return rankMeleeTools(tools);
+}
+/** Core VerbProperties.GetDamageFactorFor (schema 324): a body tool hits as
+ * hard as the average efficiency of the natural parts of its linked group
+ * (the fingers of a fist, the jaw for the teeth); the head butt keeps at
+ * least 0.4. Undefined for a healthy body or an older schema. */
+export function bodyToolEfficiency324(world:{schemaVersion:number},pawn:Pick<Pawn,'health'>):{group:(group:BodyGroup)=>number;part:(id:BodyPartId)=>number}|undefined {
+  const record=pawn.health;
+  if(world.schemaVersion<324||!record||!record.injuries.length&&!record.missing.length)return undefined;
+  const model=medicalModel(record),efficiency=bodyEfficiencies({damage:record.injuries.map(i=>({part:i.part,loss:i.severity/HP_UNIT})),missing:record.missing.map(m=>m.part),pain:0},model);
+  const part=(id:BodyPartId)=>partMissing(record,id)?0:efficiency[model.index[id]]!;
+  return {part,group:group=>{let sum=0,count=0;for(const p of model.parts)if(p.groups.includes(group)&&!partMissing(record,p.id)){sum+=efficiency[model.index[p.id]]!;count++;}return count?sum/count:0;}};
 }
 export function rankMeleeTools(tools:readonly MeleeTool[]):MeleeTool[] {
   const highest=Math.max(...tools.map(t=>t.weight));

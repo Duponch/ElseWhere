@@ -139,7 +139,7 @@ export function advanceHiveStructureMelee256(w:World,a:WildAnimal,core:number,ge
  const target=structureById(w,job.targetId);if(!target){delete a.hiveJob;return false;}
  const physical=getPhysical();
  if(!footprintCells(target).some(c=>meleeContact(w,a,c,physical)))return false;
- const state={rng:w.rng},tool=chooseMeleeTool(animalMeleeTools(a),()=>healthRandom(state));if(!tool)return false;
+ const state={rng:w.rng},tool=chooseMeleeTool(animalMeleeTools(a,w.schemaVersion),()=>healthRandom(state));if(!tool)return false;
  const raw=Math.max(1,tool.damage*(.8+healthRandom(state)*.4)),damage=Math.floor(raw)+Number(healthRandom(state)<raw%1);
  if(!damageStructure(w,target,damage,'melee',state.rng,{core,rawAmount:raw,instigatorKey:`animal:${a.id}`}))return false;
  a.strike={targetId:w.structures.includes(target)?target.id:null,structure:{x:target.x,z:target.z},atCore:core,untilCore:core+tool.cooldownCore,tool:tool.id,outcome:'hit'};a.path=[];a.state='idle';if(!w.structures.includes(target))delete a.hiveJob;return true;

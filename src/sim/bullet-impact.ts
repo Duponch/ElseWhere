@@ -57,7 +57,7 @@ export function selectBulletPart(record:MedicalRecord,random:MedicalRandom,heigh
 
 /** Owned copy plus explicit draw source: no World, clock, render or hidden RNG.
  * Resolve first, then commit the returned record and caller PRNG together. */
-export function resolveUnarmoredBullet(record:MedicalRecord,hit:UnarmoredBullet,random:MedicalRandom,protect?:ImpactProtection):BulletImpactResult {
+export function resolveUnarmoredBullet(record:MedicalRecord,hit:UnarmoredBullet,random:MedicalRandom,protect?:ImpactProtection,smallPawn324=false):BulletImpactResult {
   const model=medicalModel(record),{byId:BODY_PARTS,index:BODY_INDEX,coverage:BODY_COVERAGE}=model;
   const PART_INJURY_RULES=injuryPartRules(model,record);
   validateUnarmoredBullet(hit,model);
@@ -67,23 +67,35 @@ export function resolveUnarmoredBullet(record:MedicalRecord,hit:UnarmoredBullet,
   if(record.death||!hit.damage||hit.part&&partMissing(record,hit.part))return result;
   const part=hit.part??selectBulletPart(next,random,hit.height,hit.depth);result.selected=part;
   if(!part)return result;
-  const guarded=protect?.(part,hit.damage),damage=guarded?.amount??hit.damage;
-  if(!damage)return result;
-  const kind=(id:BodyPartId)=>!guarded?.converted?(hit.injury==='cut'?PART_INJURY_RULES[id].solid?'crack' as const:'cut' as const:'gunshot' as const):PART_INJURY_RULES[id].solid?'crack' as const:PART_INJURY_RULES[id].skin?'bruise' as const:'crush' as const;
-  let severity=damage*HP_UNIT;
-  const definition=BODY_PARTS[part],hp=remainingPartHealth(next,part);
-  if(definition.depth==='outside'&&definition.parent!==null&&severity>=hp) {
-    const destructionChance=Math.min(1,(severity-hp)/(definition.hp*HP_UNIT*.7));
-    if(draw(random)>=destructionChance){severity=Math.max(0,hp-HP_UNIT);result.preserved=true;}
-  }
-  const layers:ResolvedInjury[]=[{part,kind:kind(part),severity}];
-  if(definition.depth==='inside')for(let parent=definition.parent;parent!==null;parent=BODY_PARTS[parent].parent) {
-    const outer=BODY_PARTS[parent];
-    // Reference propagation repeats damage, not an excess remainder. No second
-    // armor or outside-preservation roll for these duplicated layers.
-    if(remainingPartHealth(next,parent)>0&&BODY_COVERAGE[BODY_INDEX[parent]]>0)layers.push({part:parent,kind:kind(parent),severity:Math.max(HP_UNIT,severity)});
-    if(outer.depth==='outside')break;
-  }
-  addResolvedInjuryBatch(next,layers,()=>draw(random));
+  const layers:ResolvedInjury[]=[];
+  // One Core ApplyDamageToPart: armor, outside preservation, inside-to-outside
+  // duplication. Returns the last part the hit touched (Core LastHitPart).
+  const apply=(part:BodyPartId):BodyPartId=>{
+    const guarded=protect?.(part,hit.damage),damage=guarded?.amount??hit.damage;
+    if(!damage)return part;
+    const kind=(id:BodyPartId)=>!guarded?.converted?(hit.injury==='cut'?PART_INJURY_RULES[id].solid?'crack' as const:'cut' as const:'gunshot' as const):PART_INJURY_RULES[id].solid?'crack' as const:PART_INJURY_RULES[id].skin?'bruise' as const:'crush' as const;
+    let severity=damage*HP_UNIT;
+    const definition=BODY_PARTS[part],hp=remainingPartHealth(next,part);
+    if(definition.depth==='outside'&&definition.parent!==null&&severity>=hp) {
+      const destructionChance=Math.min(1,(severity-hp)/(definition.hp*HP_UNIT*.7));
+      if(draw(random)>=destructionChance){severity=Math.max(0,hp-HP_UNIT);result.preserved=true;}
+    }
+    const local:ResolvedInjury[]=[{part,kind:kind(part),severity}];
+    if(definition.depth==='inside')for(let parent=definition.parent;parent!==null;parent=BODY_PARTS[parent].parent) {
+      const outer=BODY_PARTS[parent];
+      // Reference propagation repeats damage, not an excess remainder. No second
+      // armor or outside-preservation roll for these duplicated layers.
+      if(remainingPartHealth(next,parent)>0&&BODY_COVERAGE[BODY_INDEX[parent]]>0)local.push({part:parent,kind:kind(parent),severity:Math.max(HP_UNIT,severity)});
+      if(outer.depth==='outside')break;
+    }
+    addResolvedInjuryBatch(next,local,()=>draw(random));
+    layers.push(...local);return local.at(-1)!.part;
+  };
+  const last=apply(part);
+  // Core ApplySmallPawnDamagePropagation (schema 324): a creature of health
+  // scale 0.5 or less hit for 10 damage or more takes the full hit a second
+  // time on the parent of the last part touched. Skipped on a dead record.
+  const parent=BODY_PARTS[last].parent;
+  if(smallPawn324&&model.healthScale<=.5001&&hit.damage>=10&&!next.death&&parent!==null&&remainingPartHealth(next,parent)>0&&BODY_COVERAGE[BODY_INDEX[parent]]>0)apply(parent);
   result.layers=layers;return result;
 }

@@ -22,6 +22,8 @@ export interface AnimalMeleeProfile {
   readonly cooldownCore:number;
   readonly chanceFactor:number;
   readonly surpriseStun?:number;
+  /** Core ensureLinkedBodyPartsGroupAlwaysUsable: efficiency never below 0.4. */
+  readonly alwaysUsable?:true;
 }
 export interface AnimalSpeciesProfile {
   readonly id:AnimalSpeciesId;

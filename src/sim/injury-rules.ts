@@ -35,7 +35,7 @@ function partRules(model:BodyModel){return Object.freeze(Object.fromEntries(mode
   if(isMechanoidKind(model.kind))return [part.id,Object.freeze({solid:true,skin:false,bleed:0,delicate:false,scarFactor:0})];
   const solid=bone(part.id),eye=part.id.endsWith('-eye');
   const skin=part.depth==='outside'&&!eye&&!['jaw','tongue','waist'].includes(part.id);
-  return [part.id,Object.freeze({solid,skin,bleed:solid?0:part.id==='heart'?5:part.id==='neck'?4:part.id==='head'?2:1,
+  return [part.id,Object.freeze({solid,skin,bleed:solid||part.id==='tongue'?0:part.id==='heart'?5:part.id==='neck'?4:part.id==='head'?2:1,
     delicate:eye||part.id==='brain',scarFactor:part.id==='brain'?9999999:eye?15:part.id==='spine'?6:solid?0:1})];
 })) as Record<BodyPartId,Readonly<{solid:boolean;skin:boolean;bleed:number;delicate:boolean;scarFactor:number}>>);}
 export const PART_INJURY_RULES=partRules(HUMAN_MODEL);

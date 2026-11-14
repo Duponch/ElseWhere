@@ -7,7 +7,7 @@ import { clearShotSegment,type ShotGrid } from './combat-space.ts';
 import { captureWorldShotGrid } from './combat-world.ts';
 import { carrierOf } from './rescue-state.ts';
 import { partMissing } from './injury-state.ts';
-import { chooseMeleeTool,rankMeleeTools,type MeleeTool } from './melee-statistics.ts';
+import { bodyToolEfficiency324,chooseMeleeTool,rankMeleeTools,type MeleeTool } from './melee-statistics.ts';
 import { meleeContact } from './melee-space.ts';
 import { strikeLivingTarget } from './living-melee.ts';
 import { healthRandom } from './health.ts';
@@ -25,10 +25,17 @@ import { animalManhunterTarget } from './animal-manhunter.ts';
 import { isRoomDoor } from './door-rules.ts';
 import { damageBarrier } from './barriers.ts';
 
-export function animalMeleeTools(a:WildAnimal):MeleeTool[]{
+export function animalMeleeTools(a:WildAnimal,version:number=0):MeleeTool[]{
   const tools:MeleeTool[]=[];
+  const efficiency=bodyToolEfficiency324({schemaVersion:version},a);
   for(const tool of actualAnimalMeleeProfile256(a))
-    if(!a.health||(tool.sourceParts??[tool.sourcePart]).some(part=>!partMissing(a.health!,part)))tools.push({id:tool.id,damage:tool.damage*actualAnimalMeleeDamageFactor256(a),penetration:tool.penetration,kind:tool.kind,cooldownCore:tool.cooldownCore,weight:tool.damage*(1+tool.penetration)/(tool.cooldownCore/60)*tool.chanceFactor});
+    if(!a.health||(tool.sourceParts??[tool.sourcePart]).some(part=>!partMissing(a.health!,part))){
+      // Core GetDamageFactorFor (schema 324), for the native tools whose
+      // linked group is known: damage and selection weight follow the parts.
+      let factor=1;
+      if(efficiency&&tool.sourceParts){let sum=0,count=0;for(const part of tool.sourceParts)if(!partMissing(a.health!,part)){sum+=efficiency.part(part);count++;}factor=count?sum/count:0;if(tool.alwaysUsable)factor=Math.max(factor,.4);if(factor<=0)continue;}
+      tools.push({id:tool.id,damage:tool.damage*factor*actualAnimalMeleeDamageFactor256(a),penetration:tool.penetration,kind:tool.kind,cooldownCore:tool.cooldownCore,weight:tool.damage*factor*(1+tool.penetration)/(tool.cooldownCore/60)*tool.chanceFactor});
+    }
   return rankMeleeTools(tools);
 }
 /** Threat memory is not a manhunter state. Exact distance/expiry boundaries,
@@ -88,7 +95,7 @@ export function advanceAnimalMelee(w:World,a:WildAnimal,core:number,blocked:()=>
     const door=w.structures.find(s=>s.id===m.door!.targetId&&isRoomDoor(s.kind)&&s.door);
     if(!door||core>=m.door.untilCore||m.door.remaining<=0){delete m.door;return false;}
     if(a.strike||a.stun||(a.motion?.end??0)>core/10||!meleeContact(w,a,door,blocked()))return false;
-    const state={rng:w.rng},tool=chooseMeleeTool(animalMeleeTools(a),()=>healthRandom(state));if(!tool)return false;
+    const state={rng:w.rng},tool=chooseMeleeTool(animalMeleeTools(a,w.schemaVersion),()=>healthRandom(state));if(!tool)return false;
     const raw=Math.max(1,tool.damage*(.8+healthRandom(state)*.4)),damage=Math.floor(raw)+Number(healthRandom(state)<raw%1);
     a.strike={targetId:door.id,structure:{x:door.x,z:door.z},atCore:core,untilCore:core+tool.cooldownCore,tool:tool.id,outcome:'hit'};
     if(!damageBarrier(w,door,damage,state.rng)){delete a.strike;return false;}
@@ -111,7 +118,7 @@ export function advanceAnimalMelee(w:World,a:WildAnimal,core:number,blocked:()=>
   if((hunt||m)&&(target.motion?.end??0)>core/10)return false;
   if(!hunt&&!m&&!duty&&(!a.retaliation||core>=a.retaliation.untilCore)){notifyDuckFlightJob256(w,a,'AttackMelee',()=>wildlifeRandom(w.wildlife!));a.retaliation={targetId:target.id,untilCore:core+200};}
   if(!meleeContact(w,a,target,blocked()))return false;
-  const state={rng:w.rng},tool=chooseMeleeTool(animalMeleeTools(a),()=>healthRandom(state));
+  const state={rng:w.rng},tool=chooseMeleeTool(animalMeleeTools(a,w.schemaVersion),()=>healthRandom(state));
   if(!tool){if(hunt)cancelAnimalPredation(w,a);return false;}
   const surprise=!!hunt?.firstHit;
   const surpriseStun=surprise?actualAnimalMeleeProfile256(a).find(t=>t.id===tool.id)?.surpriseStun:undefined;

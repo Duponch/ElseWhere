@@ -17,8 +17,11 @@ export function worldPawnTendTargets256(h:MedicalRecord):RankedTreatment[]{
  list.push(...infectionTargets(h).map(({part:_part,...target})=>target));if(fluTendable(h))list.push({flu:true,priority:h.flu!.severity>=833000000?1:.025,severity:h.flu!.severity/1000000000*1000});list.push(...immuneDiseaseTargets(h),...parasiteTargets306(h),...mechaniteTargets307(h));
  return list.sort((a,b)=>b.priority-a.priority||b.severity-a.severity);
 }
-export function autoTendWorldPawn256(h:MedicalRecord,version:number):number {
- const targets=worldPawnTendTargets256(h),first=targets[0];if(!first)return 0;if(targets.slice(1).some(t=>t.priority===first.priority&&t.severity===first.severity))throw Error('Native equal-priority tend order is not represented');const q=WORLD_AUTO_TEND_QUALITY_256;
+/** Core HediffComp_TendDuration.CompTended (schema 324): the 0.225 base
+ * plus Rand.Range(-0.25, 0.25), clamped to the no-medicine maximum 0.7. */
+export const worldAutoTendQuality324=(draw:()=>number):number=>Math.round(Math.max(0,Math.min(.7,.225+draw()*.5-.25))*1000);
+export function autoTendWorldPawn256(h:MedicalRecord,version:number,draw?:()=>number):number {
+ const targets=worldPawnTendTargets256(h),first=targets[0];if(!first)return 0;if(targets.slice(1).some(t=>t.priority===first.priority&&t.severity===first.severity))throw Error('Native equal-priority tend order is not represented');const q=version>=324&&draw?worldAutoTendQuality324(draw):WORLD_AUTO_TEND_QUALITY_256;
  if(first.injuryId!==undefined){if(!tendInjury(h,first.injuryId,q))throw Error('Stale WorldPawn wound');if(h.injuries.some(i=>i.id===first.injuryId&&i.infection))captureInfectionTendRoom(h,first.injuryId,1000);return 1;}
  // WoundInfection inherits tendAllAtOnce=false. No medicine means one case.
  if(first.infectionId!==undefined)return Number(tendInfection(h,first.infectionId,q));

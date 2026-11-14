@@ -61,7 +61,7 @@ export function planSpikeTrapImpact(world:World,key:LivingTargetKey,material:Con
       const random={rng:draft.rng},draw=()=>healthRandom(random);
       const clothes=!isAnimalTarget(actor)&&!isMechanoidTarget(actor)?seriesApparelProtection(draft,actor,penetration,draw):undefined;
       const protect=isMechanoidTarget(actor)?mechanoidProtection('sharp',penetration,draw,actor.mechKind):clothes?.protect;
-      const impact=resolveUnarmoredMelee(actor.health,{damage,kind:'stab'},draw,protect);
+      const impact=resolveUnarmoredMelee(actor.health,{damage,kind:'stab'},draw,protect,draft.schemaVersion>=324);
       draft.rng=random.rng;
       clothes?.commit();
       // Releasing an equipment task can also release a carried patient whose
