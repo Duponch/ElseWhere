@@ -16,7 +16,8 @@ import { addSocialMemory,deepTalkWeight,expireSocialMemories,opinionOf,SOCIAL_LA
 import { breakupSelectionWeight,performRomanceExchange,romanceSelectionWeight } from './romance.ts';
 import { captureRelationshipPeople } from './relationship-namespace.ts';
 import type { RelationshipPeople } from './relationship-state.ts';
-import type { Pawn,World } from './types.ts';
+import type { Pawn,Structure,World } from './types.ts';
+import { filteredStructures } from './structure-navigation.ts';
 
 const stateFor=(w:World,p:Pawn):SocialState=>p.social??={rng:socialSeed(w.seed,p.id),memories:[]};
 export function canSocialize(world:World,pawn:Pawn,initiate:boolean,carried?:ReadonlySet<number>):boolean {
@@ -39,8 +40,9 @@ const socialMember=(world:World,pawn:Pawn,initiate:boolean,carried?:ReadonlySet<
 export const sameSocialCircle325=(a:Pawn,b:Pawn):boolean=>isColonist(a)?isColonist(b):!!a.prisoner&&!!b.prisoner&&!isColonist(b)&&factionOf(a)===factionOf(b);
 /** Full obstacles only: no combat lean, no navigation and no scan of map vegetation.
  * Built lazily for this synchronous interaction pass, never retained after mutation. */
+const isFullShotFill=(s:Structure):boolean=>STRUCTURE_SHOT_FILL[s.kind]>.99;
 function socialSight(world:World):ShotGrid {
-  const blocked=new Set<number>();for(const s of world.structures)if(STRUCTURE_SHOT_FILL[s.kind]>.99&&!(isRoomDoor(s.kind)&&s.door?.open))for(const c of footprintCells(s))blocked.add(c.z*world.width+c.x);
+  const blocked=new Set<number>();for(const s of filteredStructures(world,'full-shot-fill',isFullShotFill))if(!(isRoomDoor(s.kind)&&s.door?.open))for(const c of footprintCells(s))blocked.add(c.z*world.width+c.x);
   return {width:world.width,height:world.height,coverAt:()=>undefined,blocksSight:(x,z)=>world.tiles[z*world.width+x]?.terrain==='rock'||blocked.has(z*world.width+x)};
 }
 export function goodSocialPosition(world:World,a:Pawn,b:Pawn,grid:ShotGrid=socialSight(world)):boolean {

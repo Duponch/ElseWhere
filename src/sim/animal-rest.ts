@@ -21,7 +21,7 @@ export function animalSpotAvailable(w:World,s:Structure,a:WildAnimal,exceptPawn?
 }
 export function animalRestingSpot(w:World,a:WildAnimal):Structure|undefined {
   if(w.schemaVersion<221||a.animalRest?.phase!=='sleep'||(a.motion?.end??0)>w.tick)return;
-  return w.structures.find(s=>s.id===a.animalRest!.spotId&&s.kind==='animal-sleeping-spot'&&same(s,a));
+  return structuresOfKind(w,'animal-sleeping-spot').find(s=>s.id===a.animalRest!.spotId&&same(s,a));
 }
 function clearRest(w:World,a:WildAnimal):void {
   if(!a.animalRest)return;
@@ -40,7 +40,7 @@ export function reconcileAnimalRest(w:World):void {
   if(w.schemaVersion<221)return;
   const targets=autoSlaughterTargets(w);
   for(const a of w.wildlife?.animals??[]){
-    if(a.domestic?.bedId!==undefined&&(a.state==='dead'||a.health?.death||!w.structures.some(s=>s.id===a.domestic!.bedId&&s.kind==='animal-sleeping-spot'&&!s.medical)))forgetLocalActorBed256(w,a);
+    if(a.domestic?.bedId!==undefined&&(a.state==='dead'||a.health?.death||!structuresOfKind(w,'animal-sleeping-spot').some(s=>s.id===a.domestic!.bedId&&!s.medical)))forgetLocalActorBed256(w,a);
     const t=a.animalRest;if(!t)continue;
     const s=structureById(w,t.spotId);
     const policy=a.state!=='downed'&&!animalCarriedOrClaimed(w,a.id)?captureAnimalAreaPolicy287(w,a):undefined;

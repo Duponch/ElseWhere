@@ -85,10 +85,17 @@ export function bestPowerParent(topology:PowerTopology,lamp:Cell,disallowedNets?
  * `new Map(structures.map(s=>[s.id,s]))`, the same connectors in array order. */
 const idMaps=new WeakMap<object,ReadonlyMap<number,Structure>>();
 const isConnectorKind=(s:Structure):boolean=>isPowerConnector(s.kind);
+/* The structures of each topology group, per (topology, membership token):
+ * a topology's groups never change once built and the id map is that of the
+ * token, so `ids.map(id=>byId.get(id))` gives the same lists; each call copies them. */
+const groupMembers=new WeakMap<PowerTopology,{token:object;members:readonly Structure[][]}>();
 export function connectedPowerGroups(world:World,topology:PowerTopology):Structure[][] {
   const token=structureMembershipToken(world);let byId=idMaps.get(token);
   if(!byId){byId=new Map(world.structures.map(s=>[s.id,s]));idMaps.set(token,byId);}
-  const groups=new Map(topology.groups.map(ids=>[ids[0]!,ids.map(id=>byId.get(id)!)]));
+  let cached=groupMembers.get(topology);
+  if(!cached||cached.token!==token){cached={token,members:topology.groups.map(ids=>ids.map(id=>byId.get(id)!))};groupMembers.set(topology,cached);}
+  const members=cached.members;
+  const groups=new Map(topology.groups.map((ids,k)=>[ids[0]!,members[k]!.slice()]));
   for(const s of filteredStructures(world,'power-connectors',isConnectorKind))if(s.power?.parentId!=null) {
     const net=topology.netOf.get(s.power.parentId);if(net!==undefined)groups.get(net)!.push(s);
   }

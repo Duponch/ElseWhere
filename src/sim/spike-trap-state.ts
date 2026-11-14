@@ -1,5 +1,6 @@
 import type { LivingTarget,LivingTargetKey } from './combat-target.ts';
 import type { Cell,Structure,World } from './types.ts';
+import { structuresOfKind } from './structure-navigation.ts';
 
 export interface SpikeTrapState { autoRebuild:boolean; touching:LivingTargetKey[] }
 export const SPIKE_TRAP_SEARCH_COST=Math.round(800/30*1000);
@@ -42,7 +43,7 @@ export const spikeTrapTargetKey=(actor:LivingTarget):LivingTargetKey=>`${'specie
 export function captureSpikeTrapContacts(world:World,atCore:number):{traps:ReadonlyMap<number,Structure>;actors:ReadonlyMap<number,readonly LivingTarget[]>} {
   const traps=new Map<number,Structure>(),actors=new Map<number,LivingTarget[]>();
   if(world.schemaVersion<226)return {traps,actors};
-  for(const s of world.structures)if(s.kind==='spike-trap'&&s.spikeTrap)traps.set(s.z*world.width+s.x,s);
+  for(const s of structuresOfKind(world,'spike-trap'))if(s.spikeTrap)traps.set(s.z*world.width+s.x,s);
   if(!traps.size)return {traps,actors};
   const carriedPawns=new Set<number>(),carriedAnimals=new Set<number>();
   for(const p of world.pawns){if(p.rescue?.phase==='carry')carriedPawns.add(p.rescue.patientId);if(p.animalRescue?.phase==='carry')carriedAnimals.add(p.animalRescue.animalId);}

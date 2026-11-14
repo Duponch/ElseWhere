@@ -239,7 +239,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
   const cleaning=once(()=>cleaningWanted(world,pawn)),burying=once(()=>workPriority(pawn,'haul')>0&&world.structures.some(s=>isBurialContainer256(s.kind,world.schemaVersion)&&s.grave?.corpseId===undefined)&&world.pawns.some(p=>p.state==='dead'&&!burialReason(world,pawn,p)));
   const fightingFire=once(()=>firefightingTargets(world,pawn).length>0);
   let looseWort:boolean|undefined;
-  const brewing=once(()=>world.schemaVersion>=265&&workPriority(pawn,'haul')>0&&world.structures.some(s=>s.kind==='fermenting-barrel'&&s.fermentation&&(s.fermentation.wort>0&&s.fermentation.progress>=1||barrelFreeCapacity265(world,s.id,pawn.id)>0&&(looseWort??=world.piles.some(p=>p.item==='wort'&&p.owner.type==='ground')))));
+  const brewing=once(()=>world.schemaVersion>=265&&workPriority(pawn,'haul')>0&&structuresOfKind(world,'fermenting-barrel').some(s=>s.fermentation&&(s.fermentation.wort>0&&s.fermentation.progress>=1||barrelFreeCapacity265(world,s.id,pawn.id)>0&&(looseWort??=world.piles.some(p=>p.item==='wort'&&p.owner.type==='ground')))));
   const deepWorking=once(()=>deepWorkWanted(world,pawn));
   const researching=once(()=>researchWanted(world,pawn)),hunting=once(()=>huntingWanted(world,pawn)),warding=once(()=>wardenWanted(world,pawn));
   const releasePatients=once(()=>world.pawns.filter(p=>releaseReady(world,pawn,p)));

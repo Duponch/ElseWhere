@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {structuresOfKind} from './structure-navigation.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
 import {isShipPartKind277} from './ship-casket-graph-277.ts';
@@ -86,7 +87,7 @@ export function advanceShipReactors275(w:World):ShipReactorAdvance275 {
  const ready:{id:number;state:ShipReactorState275}[]=[];let starting=false,next=Infinity;
  // isShipReactor275 needs an own data `kind` equal to 'ship-reactor', which the
  // plain read then returns: testing it first skips a descriptor per structure.
- for(const s of w.structures)if(s.kind==='ship-reactor'&&isShipReactor275(s)&&Object.hasOwn(s,'shipReactor275')){
+ for(const s of structuresOfKind(w,'ship-reactor'))if(isShipReactor275(s)&&Object.hasOwn(s,'shipReactor275')){
   const state=s.shipReactor275;
   if(!state||!validShipReactorState275(state,state.state==='starting'?Math.min(now,state.endCore):now,w.schemaVersion))throw Error('Invalid actual ship reactor before its physical step');
   if(state.state==='starting'){

@@ -9,7 +9,7 @@ import {actualNativeSevenFacts256} from './actual-animal-profile-256.ts';
 import {TemperatureView,thermalLayout} from './temperature.ts';
 import {groundFire} from './fire-rules.ts';
 import {isPassageDoor} from './door-rules.ts';
-import {filteredStructures} from './structure-navigation.ts';
+import {filteredStructures,structuresOfKind} from './structure-navigation.ts';
 import {spikeTrapKnowsOf} from './spike-trap-state.ts';
 import {reservedServiceCells} from './service-reservations.ts';
 import {idleHashOffset300,idleChillBuilding300} from './idle-wander-300.ts';
@@ -358,7 +358,8 @@ function herdRoot(w:World,a:ActualAnimalMind256,nav:Nav,allowed:(c:Cell)=>boolea
 function penRoot(w:World,a:ActualAnimalMind256,reach:AnimalWanderReachability256):Cell {
  if(grazingPen(w,a))return {x:a.x,z:a.z};
  let best:Structure|undefined,distance=0;
- for(const s of w.structures)if(s.kind==='pen-marker'&&penRegion(w,s.id)&&reach.canReach(s)){const d=(s.x-a.x)**2+(s.z-a.z)**2;if(!best||d<distance){best=s;distance=d;}}
+ // The shared per-kind list: the pen markers of the array, in its order.
+ for(const s of structuresOfKind(w,'pen-marker'))if(penRegion(w,s.id)&&reach.canReach(s)){const d=(s.x-a.x)**2+(s.z-a.z)**2;if(!best||d<distance){best=s;distance=d;}}
  return best?{x:best.x,z:best.z}:{x:a.x,z:a.z};
 }
 
