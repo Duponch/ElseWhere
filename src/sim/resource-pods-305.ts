@@ -2,7 +2,7 @@ import {schemaAtLeast} from './schema-range.ts';
 import {TRADE_CATALOGUE} from './trade-catalogue.ts';
 import {ITEM_DEFINITIONS,type ItemId} from './items.ts';
 import {freshRot} from './food-preservation.ts';
-import {nearbyGround,groundCapacity} from './ground-placement.ts';
+import {nearbyGround,groundCapacity,groundPile} from './ground-placement.ts';
 import {isColonist} from './affiliation.ts';
 import {blockedCells} from './pathfinding.ts';
 import {candidateAccess} from './candidate-access.ts';
@@ -85,12 +85,13 @@ export function advanceResourcePod305(world:World):void {
   const {item,stacks}=resourcePodContents305(pending.seed),made:MaterialPile[]=[];
   const draft:World={...world,piles:[...world.piles]};let nextId=world.nextId;
   const place=(subject:ItemId,quantity:number):boolean=>{
+    // One new stack per free floor cell: a cell already holding a stack (this
+    // pod's or an older one) is skipped, never given a second stack.
     for(const cell of nearbyGround(draft,pending.cell)){
-      while(quantity>0){
-        const room=Math.min(quantity,groundCapacity(draft,cell,subject));if(room<=0)break;
-        const pile:MaterialPile={id:nextId++,kind:ITEM_DEFINITIONS[subject].kind,item:subject,quantity:room,owner:{type:'ground',x:cell.x,z:cell.z},...freshRot(subject,world.tick)} as MaterialPile;
-        draft.piles.push(pile);made.push(pile);quantity-=room;
-      }
+      if(groundPile(draft,cell))continue;
+      const room=Math.min(quantity,groundCapacity(draft,cell,subject));if(room<=0)continue;
+      const pile:MaterialPile={id:nextId++,kind:ITEM_DEFINITIONS[subject].kind,item:subject,quantity:room,owner:{type:'ground',x:cell.x,z:cell.z},...freshRot(subject,world.tick)} as MaterialPile;
+      draft.piles.push(pile);made.push(pile);quantity-=room;
       if(!quantity)return true;
     }
     return false;
