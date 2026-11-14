@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {clonePlainData} from './plain-clone.ts';
 import {worldPawnPhysicalCore297} from './world-pawn-physical-clock-297.ts';
 import {medicalCivilTick271,medicalElapsedTicks271} from './suspended-human-clock-271.ts';
 import {markCorpseWornApparel284} from './apparel-provenance-284.ts';
@@ -143,7 +144,7 @@ export function prepareWorldPawnLife256(state:WorldPawnsState256,atCore:number,r
  const rngBefore=randomOwner.rng,randomState={rng:rngBefore},random=()=>healthRandom(randomState);
  if(!Object.getOwnPropertyDescriptor(state,'atCore')?.writable||!Object.getOwnPropertyDescriptor(randomOwner,'rng')?.writable||state.owners.some(row=>row.mode!=='dead'&&(!mutableWorldPawnOriginal256(row.actor)||!Object.getOwnPropertyDescriptor(row,'clockCore')?.writable||!Object.getOwnPropertyDescriptor(row,'mode')?.writable)))return {ok:false,reason:'WorldPawn life requires mutable actual worker owners'};
  const notices:string[]=[];
- const atBefore=state.atCore,membership=state.owners.slice(),pairs=orderedWorldPawnRows256(state).filter(r=>r.mode!=='dead'&&(r.mode!=='mothballed'||atCore%15000===0)).map(row=>({row,before:JSON.stringify(row),draft:structuredClone(row)}));
+ const atBefore=state.atCore,membership=state.owners.slice(),pairs=orderedWorldPawnRows256(state).filter(r=>r.mode!=='dead'&&(r.mode!=='mothballed'||atCore%15000===0)).map(row=>({row,before:JSON.stringify(row),draft:clonePlainData(row)}));
  // Preflight every coupled interval before changing even an earlier PRIVATE
  // row outcome or consuming a birthday trial. Original/RNG adoption is later.
  for(const {draft} of pairs)if(draft.kind==='animal'&&draft.mode==='active'&&atCore>draft.clockCore){const interval=worldPawnEggIntervalBoundary256(draft.actor,draft.clockCore,atCore);if(interval)return {ok:false,reason:interval};}
