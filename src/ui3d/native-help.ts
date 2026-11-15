@@ -4,12 +4,15 @@ import {LESSONS, type FirstGesturesLearning, type FirstGesturesLearningState} fr
 import {readFirstDayGuide, type FirstDayGuideAction} from '../ui/first-day-guide';
 import {captureFoodReadability} from '../sim/food-readability';
 import {knownBuilding256, knownPile256} from '../ui/exploration-readers-256';
+import {GESTURE_ACTION_LABELS} from '../ui/guidance-card';
 
 export interface NativeHelpActions extends Pick<NativeUiActions, 'showPage' | 'panel' | 'category' | 'tool'> {
   currentWorld?: () => World | undefined;
   onGuideAction?: (action: FirstDayGuideAction) => void | Promise<unknown>;
   learning?: FirstGesturesLearning;
   close?: () => void;
+  /** On-screen advice card of the current colony: show or hide it again. */
+  guidanceCard?: {shown: boolean; toggle: () => void};
 }
 
 interface HelpSection {id: string; title: string; text: string; action?: FirstDayGuideAction; actionLabel?: string}
@@ -37,6 +40,7 @@ const shortcutRows: readonly NativeRow[] = [
   {id: 'key-f1-f3', label: 'F1 / F2 / F3', detail: 'Ouvrir ou fermer Travail / Planning / Assignations.'},
   {id: 'key-f8', label: 'F8', detail: 'Ouvrir Monde sur les cartes.'},
   {id: 'key-save', label: 'Ctrl+S / ⌘+S', detail: 'Sauvegarder la partie actuelle.'},
+  {id: 'key-help', label: 'H', detail: 'Ouvrir ce carnet de survie pendant la partie ; le bouton Aide, en haut à droite, fait de même.'},
   {id: 'key-escape', label: 'Échap', detail: 'Annuler le ciblage de combat, fermer l’ordre contextuel ou annuler le tracé, puis fermer le panneau et retirer la sélection.'},
   {id: 'key-rotate', label: 'Q / E', detail: 'Tourner le meuble ou le plan orientable en cours de placement.'},
   {id: 'key-tools', label: 'M / C / B / L / X / S', detail: 'Choisir Miner / Abattre / Mur / Lit / Annuler / Réserve.'},
@@ -79,7 +83,7 @@ export function buildNativeHelp(actions: NativeHelpActions): NativePage[] {
   const gestureRows: NativeRow[] = [{id: 'gestures-intro', label: 'Premiers gestes', detail: 'Un petit parcours facultatif. Ces repères sont conservés dans ce navigateur pour toutes vos parties.'}];
   for (const lesson of LESSONS) gestureRows.push({id: `gesture-${lesson.id}`, label: lesson.title,
     value: learned[lesson.id] === 'confirmed' ? 'Ordre accepté' : learned[lesson.id] === 'declared' ? 'Je connais déjà ce geste' : 'À découvrir',
-    detail: lesson.instruction, controls: [actionControl(`gesture-open-${lesson.id}`, lesson.id === 'work' ? 'Ouvrir Travail' : lesson.id === 'storage' ? 'Choisir Réserve' : lesson.id === 'beds' ? 'Choisir Couchage au sol' : 'Choisir Zone de culture', lesson.action)]});
+    detail: lesson.instruction, controls: [actionControl(`gesture-open-${lesson.id}`, GESTURE_ACTION_LABELS[lesson.id], lesson.action)]});
   gestureRows.push({id: 'gestures-meaning', label: 'Ce que confirme le parcours', detail: '« Ordre accepté » confirme le geste d’interface. Il ne prouve aucun transport, semis, récolte ou chantier payé achevé. Les huit rubriques des conseils décrivent la colonie actuelle.'});
   const gestureControls: NativeControl[] = [];
   if (learning) {
@@ -106,7 +110,9 @@ export function buildNativeHelp(actions: NativeHelpActions): NativePage[] {
       {id: 'help-first-day-link', label: 'Votre première journée', detail: 'Travail, stockage, ordres, couchages, cultures, cuisine, soins et sauvegardes.', controls: [{id: 'help-first-day-open', label: 'Lire le carnet', onActivate: () => open(firstDay.id)}]},
       {id: 'help-shortcuts-link', label: 'Commandes et raccourcis', detail: 'Clavier, caméra, désignations sur la carte et ordres directs.', controls: [{id: 'help-shortcuts-open', label: 'Voir les commandes', onActivate: () => open(shortcuts.id)}]},
       {id: 'help-gestures-link', label: 'Premiers gestes', detail: 'Quatre repères facultatifs, séparés de la progression réelle de la partie.', controls: [{id: 'help-gestures-open', label: 'Voir le parcours', onActivate: () => open(gestures.id)}]},
-      {id: 'help-current-link', label: 'Conseils actuels', detail: 'Les huit préparations sont lues dans le même état confirmé.', controls: [{id: 'help-current-open', label: 'Consulter la colonie', onActivate: () => open(currentPage.id)}]}
+      {id: 'help-current-link', label: 'Conseils actuels', detail: 'Les huit préparations sont lues dans le même état confirmé.', controls: [{id: 'help-current-open', label: 'Consulter la colonie', onActivate: () => open(currentPage.id)}]},
+      ...actions.guidanceCard ? [{id: 'help-card-link', label: 'Carte de conseils', detail: 'Les premiers gestes et les huit préparations restent à l’écran, en bas à gauche. La replier ou la fermer n’efface aucun repère.',
+        controls: [{id: 'help-card-toggle', label: actions.guidanceCard.shown ? 'Masquer la carte' : 'Afficher la carte', onActivate: actions.guidanceCard.toggle}]}] : []
     ]};
   return [index, firstDay, shortcuts, gestures, currentPage];
 }

@@ -1,11 +1,13 @@
 import type {NativePage,NativeRow} from './native-contract';
 import type {LaunchProgressView} from '../ui/launch-progress';
+import {nativeTipRow} from './native-tips';
 
 const elapsed=(seconds:number):string=>seconds<60?`${seconds} s`:`${Math.floor(seconds/60)} min ${String(seconds%60).padStart(2,'0')} s`;
 
 /** Loading screen while a colony opens. Presentation only; the stop action is
- * offered only when a request stopped reporting progress. */
-export function buildNativeLaunchPage(view:LaunchProgressView,waiting?:{message:string;onStop:()=>void}):NativePage {
+ * offered only when a request stopped reporting progress. A gameplay tip, when
+ * given, is shown below the progress like on the reference loading screens. */
+export function buildNativeLaunchPage(view:LaunchProgressView,waiting?:{message:string;onStop:()=>void},tip?:string):NativePage {
   const percent=Math.floor(view.fraction*100);
   const rows:NativeRow[]=[
     {id:'launch-progress',label:'Progression',meter:{value:view.fraction,max:1,label:`${percent} %`,color:'#63885d',secondary:{value:view.stageFraction,max:1,color:'#987743'}}},
@@ -13,6 +15,7 @@ export function buildNativeLaunchPage(view:LaunchProgressView,waiting?:{message:
     ...view.steps.map((step,index):NativeRow=>({id:`launch-step-${index}`,label:`${step.state==='done'?'✓':step.state==='active'?'▸':'·'}  ${step.label}`,emphasis:step.state==='pending'?'muted':'normal',dense:true})),
     {id:'launch-elapsed',label:'Temps écoulé',value:elapsed(view.elapsedSeconds),dense:true},
   ];
+  if(tip)rows.push(nativeTipRow(tip));
   if(waiting)rows.push({id:'launch-waiting',label:waiting.message,emphasis:'heading'});
   return {id:'native-launch',title:view.title,modal:true,closable:false,rows,
     ...waiting?{actions:[{id:'launch-stop',label:'Arrêter la simulation',onActivate:waiting.onStop}]}:{}};

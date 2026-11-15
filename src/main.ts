@@ -12,6 +12,9 @@ import {buildNativePanel,buildNativeToolPalette,syncNativePanelState} from './ui
 import {buildNativeEncounter,buildNativeFactions,setNativeWorldTab,focusNativeCaravanTrade} from './ui3d/native-world';
 import {nativeOrderPage,cancelNativeOrderPage} from './ui3d/native-orders';
 import {nativeHelpPage} from './ui3d/native-help';
+import {createNativeGuidance,type NativeGuidanceCard} from './ui3d/native-guidance-card';
+import {loadingTips} from './ui3d/native-tips';
+import {createGuidanceCardSession,isHelpShortcut} from './ui/guidance-card';
 import {createNativeSaveManager} from './ui3d/native-saves';
 import {createNativeLocalTrade} from './ui3d/native-local-trade';
 import {createNativeFactionComms298} from './ui3d/native-faction-comms-298';
@@ -54,7 +57,7 @@ import {THREAT_PAUSE_PREFERENCE_KEY,createThreatPausePreference,readThreatPauseP
 import {createUrgentThreatFeedback,urgentThreatLabel,type UrgentThreatTarget} from './ui/urgent-threat-feedback';
 import { createAllowedAreaControls } from './ui/allowed-area-controls';
 import './ui/allowed-area-controls.css';
-import { createFirstDayGuide } from './ui/first-day-guide';
+import { createFirstDayGuide,readFirstDayGuide } from './ui/first-day-guide';
 import {createFirstGesturesLearning,FIRST_GESTURES_STORAGE_KEY} from './ui/first-gestures-learning';
 import {createFirstGesturesGuide} from './ui/first-gestures-guide';
 import { createStartingArrivalUI } from './ui/starting-arrival';
@@ -466,6 +469,11 @@ function confirmedFoodReadability():FoodReadability|undefined {
   return latestFoodReadability??=captureFoodReadability(snapshot,{pileVisible:p=>knownPile256(snapshot!,p),structureVisible:s=>knownBuilding256(snapshot!,s)});
 }
 let guideAfterStartingArrival=false;
+/** Native advice card: interface state only, never written into a World. */
+const guidanceSession=createGuidanceCardSession();
+let nativeGuidance:NativeGuidanceCard|undefined,nativeGuidanceSync:((force?:boolean)=>void)|undefined;
+let nativeViewport:{width:number;height:number;unitsPerPixel:number;bottom:number;left:number}|undefined;
+let appliedGuidanceReserve=0;
 let selectedPawn: number | undefined;
 let colonistInspector: ColonistInspectorState | undefined;
 let selectedCell: { x: number; z: number } | undefined;
@@ -958,7 +966,7 @@ const session = new GameSession(client, saveRepository, prepareWorld, () => {
 },()=>{queueMicrotask(()=>snapshotHud.request(true));});
 const frontHost = document.createElement('div'); document.querySelector('#app')!.append(frontHost);
 if(nativeMode){
-  nativeUi=new NativeStage({onTools:showNativeToolPalette,onViewport:(w,h,k,bottom,left)=>nativeHud?.setViewport(w,h,k,bottom??96,left),onWindowLayout:bounds=>nativeHud?.setWindowBounds(bounds)??false,onPointer:updateNativeDockPointer,onAnimate:dt=>nativeHud?.animate(dt)??false,countdownFrame298:{canFeed:nativeShipFrameEligible298,canPresent:nativeShipCurtainEligible298,feed:delta=>{client.feedShipFrame298(delta);nativeShipTerminal298?.frame(delta);}},onPanel:id=>{
+  nativeUi=new NativeStage({onTools:showNativeToolPalette,onViewport:(w,h,k,bottom,left)=>{nativeViewport={width:w,height:h,unitsPerPixel:k,bottom:bottom??96,left};applyNativeHudViewport();},onWindowLayout:bounds=>nativeHud?.setWindowBounds(bounds)??false,onPointer:updateNativeDockPointer,onAnimate:dt=>nativeHud?.animate(dt)??false,countdownFrame298:{canFeed:nativeShipFrameEligible298,canPresent:nativeShipCurtainEligible298,feed:delta=>{client.feedShipFrame298(delta);nativeShipTerminal298?.frame(delta);}},onPanel:id=>{
     nativeCustomPage=undefined;nativeToolPalette=undefined;
     if(id==='factions'){nativeCustomPage=buildNativeFactions(readNativeState(),nativeActions());nativeUi!.showPage(nativeCustomPage);return;}
     void attempt(()=>switchPanel(currentPanel===id?null:id));
@@ -985,6 +993,12 @@ if(nativeMode){
     showPage:page=>{nativeCustomPage=page;nativeUi!.showPage(page);}});
   nativeUi.setUiScale(nativeUiScale);
   const viewport=nativeUi.getViewportMetrics();nativeHud.setViewport(viewport.width,viewport.height,viewport.unitsPerPixel,viewport.bottomDockHeight??96,viewport.leftHudBottom);nativeHud.setNotificationsAutoHide(nativeDockPreferences.notifications);nativeHud.setRightDockOpen(nativeRightDockOpen);nativeUi.setAutoHideBottom(nativeDockPreferences.bottom);
+  const guidance=createNativeGuidance(nativeUi.art,nativeUi.anchors,{session:guidanceSession,learning:()=>firstGesturesLearning,world:()=>snapshot,
+    blocked:()=>frontMenu.isOpen()||replacingWorld||!!launchProgress,sections:world=>readFirstDayGuide(world,confirmedFoodReadability()),now:()=>performance.now(),
+    openHelp,guide:action=>{void attempt(()=>performNativeGuideAction(action));},invalidate:()=>nativeUi?.invalidate(),
+    afterSync:()=>{if(nativeGuidance&&nativeGuidance.reservedHeight!==appliedGuidanceReserve)applyNativeHudViewport();}});
+  nativeGuidance=guidance.card;nativeGuidanceSync=guidance.sync;
+  nativeViewport={width:viewport.width,height:viewport.height,unitsPerPixel:viewport.unitsPerPixel,bottom:viewport.bottomDockHeight??96,left:viewport.leftHudBottom};applyNativeHudViewport();
   // Old controls are a disabled development witness only. Native scene layout
   // and input never read their measurements, values, handlers or visibility.
   for(const child of shell.children)if(child.id!=='viewport'){
@@ -994,19 +1008,32 @@ if(nativeMode){
 // Help is shared by both entry points, outside the hidden/inert colony shell.
 const helpDialog=el<HTMLDialogElement>('help');document.querySelector('#app')!.append(helpDialog);
 let helpOpener:HTMLElement|null=null;
+/** Opens the tool, panel or person named by a first-day advice, from the help
+ * pages or the on-screen card. Interface routes only, never a game command. */
+async function performNativeGuideAction(action:import('./ui/first-day-guide').FirstDayGuideAction):Promise<void> {
+  nativeCustomPage=undefined;if(frontMenu.isOpen())frontMenu.hide();
+  if(action.target){focusNotification(action.target);if(action.tab)setNativeInspectorTab(action.tab);refreshNativeUi();return;}
+  if(action.worldTab)setNativeWorldTab(action.worldTab==='group'?'groups':'individual');
+  if(action.tool){setTool(action.tool);return;}
+  if(action.mapTools){await switchPanel('architect');setCategory(action.mapTools);return;}
+  if(action.panel)await switchPanel(action.panel);if(action.category)setCategory(action.category);
+}
+/** Left column space of the advice card is taken from the resource list. */
+function applyNativeHudViewport():void {
+  const v=nativeViewport;if(!v)return;
+  nativeGuidance?.setViewport(v.width,v.height,v.unitsPerPixel,v.left);
+  appliedGuidanceReserve=nativeGuidance?.reservedHeight??0;
+  nativeHud?.setViewport(v.width,v.height,v.unitsPerPixel,v.bottom,v.left-appliedGuidanceReserve);
+}
+function syncNativeGuidance(force=false):void {nativeGuidanceSync?.(force);}
 function openHelp():void {
   if(nativeUi){
     renderer?.cancelDesignation();altInspectorHeld=false;nativeUi.setWorldReadout(null);
     const close=()=>{nativeCustomPage=undefined;if(frontMenu.isOpen())frontMenu.showHome(session.hasWorld);else refreshNativeUi();};
-    nativeCustomPage=nativeHelpPage({...nativeActions(),currentWorld:()=>snapshot,learning:firstGesturesLearning,close,
-      onGuideAction:async action=>{
-        nativeCustomPage=undefined;if(frontMenu.isOpen())frontMenu.hide();
-        if(action.target){focusNotification(action.target);if(action.tab)setNativeInspectorTab(action.tab);refreshNativeUi();return;}
-        if(action.worldTab)setNativeWorldTab(action.worldTab==='group'?'groups':'individual');
-        if(action.tool){setTool(action.tool);return;}
-        if(action.mapTools){await switchPanel('architect');setCategory(action.mapTools);return;}
-        if(action.panel)await switchPanel(action.panel);if(action.category)setCategory(action.category);
-      }});nativeUi.showPage(nativeCustomPage);return;
+    const card=nativeGuidance&&snapshot&&!frontMenu.isOpen()?{shown:guidanceSession.mode!=='closed',toggle:()=>{
+      if(guidanceSession.mode==='closed')guidanceSession.reopen();else guidanceSession.close();close();syncNativeGuidance(true);}}:undefined;
+    nativeCustomPage=nativeHelpPage({...nativeActions(),currentWorld:()=>snapshot,learning:firstGesturesLearning,close,guidanceCard:card,onGuideAction:performNativeGuideAction});
+    nativeUi.showPage(nativeCustomPage);return;
   }
   if(helpDialog.open)return;
   helpOpener=document.activeElement instanceof HTMLElement?document.activeElement:null;
@@ -1085,6 +1112,7 @@ const frontOptions:FrontMenuOptions = {
   onStart: async draft => {
     await replaceColony(() => session.create(draft.seed, draft.size, 'crashlanded',draft.site,draft.startingParty,draft.startingWorld));
     guideAfterStartingArrival=!!snapshot?.startingArrival&&snapshot.startingArrival.phase!=='opened';
+    guidanceSession.newColony();
     learningReadout.open=!guideAfterStartingArrival;syncFirstDayGuide();
   },
   onLoad: async key => replaceColony(() => session.load(key)),
@@ -1103,7 +1131,7 @@ const frontOptions:FrontMenuOptions = {
 const frontMenu=nativeUi?createNativeFrontMenu(frontOptions,page=>{
   // While a colony opens, its loading screen covers the menu pages.
   if(launchProgress){paintLaunch();return;}
-  nativeUi!.setFrontVisible(page!==null);nativeHud?.setVisible(page===null&&!!snapshot);nativeUi!.showPage(page);
+  nativeUi!.setFrontVisible(page!==null);nativeHud?.setVisible(page===null&&!!snapshot);nativeGuidance?.setHudVisible(page===null&&!!snapshot);syncNativeGuidance();nativeUi!.showPage(page);
 }):createFrontMenu(frontHost,frontOptions);
 const nativeSaveManager=nativeUi?createNativeSaveManager({
   readSaves:()=>session.saves(),refresh:()=>session.refreshSaves(),save,saveNamed:(label,key,revision)=>session.saveNamed(label,key,revision),
@@ -1200,6 +1228,7 @@ function refreshNativeUi():void {
   nativeUi.setTextEntities(nativeTextEntitiesFor(snapshot,campaignOnly));
   nativeUi.setWorldVisible(!!snapshot&&!!renderer);nativeHud?.setVisible(!!snapshot&&!frontMenu.isOpen());
   if(snapshot){nativeHud?.setSelection([...selection.ids]);nativeHud?.update(snapshot,currentSpeed,renderer?.stats.fps??0);}
+  nativeGuidance?.setHudVisible(!!snapshot&&!frontMenu.isOpen()&&!launchProgress);syncNativeGuidance();
   nativeHud?.setViewState({walls:wallCutaway?'coupés':'hauts',roofs:nativeRoofsVisible,foliage:foliageVisible,zones:nativeZonesVisible,camera:nativePerspective?'perspective':'iso'});
   if(launchProgress){paintLaunch();return;}
   const state=readNativeState(),actions=nativeActions(),terminalPage=nativeShipTerminal298?.update(state);
@@ -1271,6 +1300,8 @@ async function replaceColony(action: () => Promise<void>,confirmedDraft?:WorldCr
     if (simulationStopped) throw new Error('La simulation s’est arrêtée pendant la préparation de l’affichage. Chargez une colonie validée pour reprendre.');
     statusAlerts.reset();raidUI.reset();heatwaveUI.reset();flashstormUI.reset();weatherConditionUI.reset();tradeUI.reset();
     guideAfterStartingArrival=false;learningReadout.open=false;firstDayGuide.reset();firstGesturesGuide.reset();startingArrivalUI.reset();
+    // A created colony opens the advice card after its pods; a loaded one keeps a tab.
+    if(confirmedDraft)guidanceSession.newColony();else guidanceSession.loadedColony();
     if(snapshot)startingArrivalUI.update(snapshot,currentSpeed);
     clearSelection(); setPanel(campaignOnly?'world':null); frontMenu.hide();
     if (snapshot?.pawns[0]) renderer?.focusPawn(snapshot.pawns[0].id);
@@ -1330,7 +1361,7 @@ async function takeRenderer():ReturnType<typeof MainColonyRenderer.create> {
 }
 function endLaunch():void {
   if(!launchProgress)return;
-  launchProgress=undefined;clearInterval(launchTicker);launchTicker=undefined;
+  launchProgress=undefined;clearInterval(launchTicker);launchTicker=undefined;loadingTips.reset();
   // A refused or mapless launch keeps the menu: hide the unused viewport again.
   if(!renderer&&!(client.hasActiveMap&&snapshot))shell.hidden=true;
   if(campaignOnly&&earlyRenderer){const unused=earlyRenderer;earlyRenderer=undefined;void unused.then(view=>view.dispose(),()=>{});}
@@ -1351,7 +1382,7 @@ function paintLaunch():void {
   const view=launchProgress.view(performance.now());
   if(nativeUi){
     const waiting=waitingRequests.size?{message:'La simulation ne signale plus d’avancement. Le résultat reste inconnu ; vous pouvez attendre ou arrêter la simulation.',onStop:()=>client.stop()}:undefined;
-    nativeUi.setFrontVisible(true);nativeHud?.setVisible(false);nativeUi.showPage(buildNativeLaunchPage(view,waiting));return;
+    nativeUi.setFrontVisible(true);nativeHud?.setVisible(false);nativeGuidance?.setHudVisible(false);nativeUi.showPage(buildNativeLaunchPage(view,waiting,loadingTips.current(performance.now())));return;
   }
   if(!legacyLaunchPanel){
     legacyLaunchPanel=document.createElement('section');legacyLaunchPanel.id='launch-progress';legacyLaunchPanel.setAttribute('role','status');
@@ -2359,7 +2390,7 @@ const firstGesturesGuide=createFirstGesturesGuide(el('first-gestures-guide'),{le
   performFirstDayGuideAction(action);
 }});
 function syncFirstDayGuide():void {
-  if(nativeUi)return;
+  if(nativeUi){syncNativeGuidance(true);return;}
   const pending=!!snapshot?.startingArrival&&snapshot.startingArrival.phase!=='opened';
   if(guideAfterStartingArrival&&!pending&&!frontMenu.isOpen()&&!replacingWorld){guideAfterStartingArrival=false;learningReadout.open=true;}
   firstDayGuide.setActive(learningReadout.open&&!pending&&!frontMenu.isOpen()&&!replacingWorld);
@@ -2587,6 +2618,7 @@ document.addEventListener('keydown', event => {
   if (event.target instanceof HTMLElement && (event.target.matches('input, select, textarea') || event.target.isContentEditable)) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); void attempt(save); return; }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
+  if (isHelpShortcut(event)) { event.preventDefault(); if (!event.repeat) openHelp(); return; }
   if (event.code === 'Space') { event.preventDefault();const token=client.getThreatPauseToken(),speed=currentSpeed===0?lastSpeed:0;void attempt(() => changeSpeed(speed,token)); return; }
   if (event.key === 'Escape') { event.preventDefault(); if(shootingControls.active){shootingControls.cancel();renderState();return;} if (orderMenu.close() || renderer?.cancelDesignation()) return; void attempt(() => switchPanel(null)); clearSelection(); return; }
   if (event.key === 'Tab' || event.key === 'F1' || event.key === 'F2' || event.key === 'F3') { event.preventDefault(); const panel = event.key === 'Tab' ? 'architect' : event.key === 'F1' ? 'work' : event.key === 'F2' ? 'schedule' : 'assign'; setPanel(currentPanel === panel ? null : panel); return; }

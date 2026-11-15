@@ -3,6 +3,7 @@ import type { NativeControl, NativePage, NativeRow } from './native-contract';
 import { createWorldCreationFlow256 } from '../ui/world-creation-flow';
 import type { WorldCreationProgress256 } from '../ui/world-creation-contract';
 import { planetGenerationStep } from '../ui/launch-progress';
+import { loadingTips, nativeTipRow } from './native-tips';
 import { worldCreationCalendarFacts262, CREATION_SEASON_LABELS_262 } from '../ui/world-creation-calendar-262';
 import { randomSiteSeed } from '../ui/front-site';
 import { defaultWorldGenerationSettings, validWorldGenerationSettings, isIntrinsicWorldFaction, CONFIGURABLE_WORLD_FACTIONS, type ConfigurableWorldFaction } from '../sim/world-generation-settings';
@@ -71,6 +72,25 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   let graphicsPreferenceGeneration=0;
   let loadSearch='',selectedLoadKey:string|undefined;
   let confirmation: { message: string; accept: () => void | Promise<unknown> } | undefined;
+  let tipTicker: ReturnType<typeof setInterval> | undefined, shownTip: string | undefined;
+
+  /** Gameplay tips during world creation's long steps only (planet, site,
+   * colony map), as on the reference loading screens; the tip moves on with
+   * real time while the step lasts. */
+  function loadingTip(): string | undefined {
+    const active = open && !externalPage && busy && !!status && (page === 'world' || page === 'site' || page === 'pawns');
+    if (!active) {
+      if (tipTicker !== undefined) { clearInterval(tipTicker); tipTicker = undefined; }
+      if (shownTip !== undefined) { shownTip = undefined; loadingTips.reset(); }
+      return undefined;
+    }
+    shownTip = loadingTips.current(performance.now());
+    tipTicker ??= setInterval(() => {
+      if (!(open && !externalPage && busy && status)) { loadingTip(); return; }
+      if (loadingTips.current(performance.now()) !== shownTip) paint();
+    }, 1000);
+    return shownTip;
+  }
 
   function paint(): void {
     if (!open||externalPage) return;
@@ -84,6 +104,8 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     const result = renderPage();
     if (error) result.rows.unshift({ id: 'front-error', label: error });
     if (status) result.rows.unshift({ id: 'front-status', label: status, ...statusMeter!==undefined?{meter:{value:statusMeter,max:1,label:`${Math.floor(statusMeter*100)} %`,color:'#63885d'}}:{} });
+    const tip = loadingTip();
+    if (tip) result.rows.splice(1, 0, nativeTipRow(tip, 'navigation'));
     result.id = `front-${page}`; result.modal = true;
     result.onClose = () => { if (!busy && !pending) back(); };
     show(presentNativeFront(result,page,{button:control,field:input,tests:testCatalogue}));
