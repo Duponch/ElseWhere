@@ -8,12 +8,15 @@ import {fixtureBuilding} from './scenarios/deconstruction';
 import {scytherCamp} from './scenarios/scyther-v213';
 import {newMiniTurretState} from '../src/sim/mini-turret-state';
 
-test('V319 hypothermia is actionable at the existing threshold, ordered by identity and independent of labels',()=>{
+// Alerts lot A (Core Alert_Hypothermia): the threshold is now the serious stage
+// (0.35) in air outside the safe range, instead of the former 0.04.
+test('V319 hypothermia is actionable at the Core serious threshold, ordered by identity and independent of labels',()=>{
   const w=createWorld(319,32,32),[a,b,c]=w.pawns;
   for(const p of [a!,b!,c!])p.health=createMedicalRecord(w.tick);
-  a!.name='<img src=x> hypothermie';a!.health!.hypothermia=40000000;b!.health!.hypothermia=90000000;c!.health!.hypothermia=39999999;
+  w.thermal={regions:[{cells:[a!,b!,c!].map(p=>p.z*w.width+p.x),temperature:-40}]};
+  a!.name='<img src=x> hypothermie';a!.health!.hypothermia=350000000;b!.health!.hypothermia=900000000;c!.health!.hypothermia=349999999;
   const row=readStatusAlerts(w).find(r=>r.key==='hypothermia')!;
-  expect(row.text).toBe('2 colon(s) en hypothermie');expect(row.targets).toEqual([a!,b!].sort((p,q)=>p.id-q.id).map(p=>actorNotificationTarget(p.id)));expect(row.tab).toBe('health');
+  expect(row.text).toBe('2 colons en hypothermie grave');expect(row.targets).toEqual([a!,b!].sort((p,q)=>p.id-q.id).map(p=>actorNotificationTarget(p.id)));expect(row.tab).toBe('health');
   w.pawns.reverse();expect(readStatusAlerts(w).find(r=>r.key==='hypothermia')!.targets).toEqual(row.targets);
 });
 test.each(['flu','malaria','plague'] as const)('V319 %s keeps urgent and ordinary alerts distinct and points to the real patient',kind=>{
@@ -30,16 +33,20 @@ test('V319 malaria urgency preserves its distinct 91% threshold',()=>{
 });
 test('V319 severe infection exposes its own patients rather than every colonist',()=>{
   const w=createWorld(319,32,32),p=w.pawns[0]!,q=w.pawns[1]!;p.health=createMedicalRecord(w.tick);q.health=createMedicalRecord(w.tick);
-  p.health.infections={nextId:2,immunity:0,cases:[{id:1,part:'torso',bornAt:w.tick,severity:870000000,luck:1000000}]};q.health.hypothermia=40000000;
-  const rows=readStatusAlerts(w);expect(rows.find(r=>r.key==='infection-critical')!.targets).toEqual([actorNotificationTarget(p.id)]);expect(rows.find(r=>r.key==='hypothermia')!.targets).toEqual([actorNotificationTarget(q.id)]);
+  p.health.infections={nextId:2,immunity:0,cases:[{id:1,part:'torso',bornAt:w.tick,severity:870000000,luck:1000000}]};q.health.malnutrition=1;
+  const rows=readStatusAlerts(w);expect(rows.find(r=>r.key==='infection-critical')!.targets).toEqual([actorNotificationTarget(p.id)]);expect(rows.find(r=>r.key==='malnutrition')!.targets).toEqual([actorNotificationTarget(q.id)]);
 });
 test('V319 food, missing beds, storage and disabled work open explicit management contexts',()=>{
-  const w=createWorld(319,32,32);w.piles=[];w.structures=[];w.stockpiles=[];
+  // Core Alert_LowFood only starts after 150 000 Core ticks (15 000 local).
+  const w=createWorld(319,32,32);w.piles=[];w.structures=[];w.stockpiles=[];w.tick=15000;
   const rows=readStatusAlerts(w);expect(rows.find(r=>r.key==='food-reserves')).toMatchObject({targets:[],context:{panel:'assign'}});expect(rows.find(r=>r.key==='beds')).toMatchObject({targets:[],context:{panel:'architect',category:'furniture'}});expect(rows.find(r=>r.key==='no-stockpile')).toMatchObject({targets:[],context:{panel:'architect',tool:'stockpile'}});
 });
-test('V319 dead colonial bodies do not borrow a similarly named living target and missing bodies open history',()=>{
-  const w=createWorld(319,32,32),p=w.pawns[0]!;p.state='dead';p.body={observedAt:w.tick,lostAt:w.tick};w.pawns[1]!.name=p.name;
-  expect(readStatusAlerts(w).find(r=>r.key==='deaths')).toMatchObject({text:'1 colon(s) décédé(s)',targets:[],context:{panel:'history'}});
+// Alerts lot A: the permanent death count became Core's unburied-colonist alert.
+test('V319 dead colonial bodies do not borrow a similarly named living target and lost bodies leave no alert',()=>{
+  const w=createWorld(319,32,32),p=w.pawns[0]!,q=w.pawns[2]!;p.state='dead';p.body={observedAt:w.tick,lostAt:w.tick};w.pawns[1]!.name=p.name;
+  expect(readStatusAlerts(w).some(r=>r.key==='colonist-unburied')).toBe(false);
+  q.state='dead';q.name=p.name;
+  expect(readStatusAlerts(w).find(r=>r.key==='colonist-unburied')).toMatchObject({text:'Colon laissé sans sépulture',targets:[actorNotificationTarget(q.id)]});
 });
 test('V319 turret wick has a precise structure target, not a cell cycling slot',()=>{
   const w=createWorld(319,32,32),turret=fixtureBuilding(w,'mini-turret',8,8);

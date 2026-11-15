@@ -53,9 +53,11 @@ describe('native HUD bounds and severity · V485',()=>{
   });
 
   it('uses semantic urgency while keeping neutral and explicitly resolved incident cards neutral',()=>{
-    for(const key of ['research-project','domain:visitors','pending-jobs','party','idle'])expect(nativeHudAlertColor({key})).toBe(PALETTE.creamPaper);
-    for(const key of ['hungry','food-reserves','infection','mood-risk-high'])expect(nativeHudAlertColor({key})).toBe(PALETTE.ochre);
-    for(const key of ['infection-critical','downed','bleeding','fire','turret-wick:12','campaign:42:raid:8'])expect(nativeHudAlertColor({key})).toBe(PALETTE.terracotta);
+    // Alerts lot A: colour follows the explicit Core priority (Critical red,
+    // High ochre, Medium plain) instead of the former key regexes.
+    for(const key of ['research-project','domain:visitors','pending-jobs','party','idle','hungry','infection','need-meal-source'])expect(nativeHudAlertColor({key})).toBe(PALETTE.creamPaper);
+    for(const key of ['food-reserves','mood-risk-minor','bleeding','turret-wick:12','campaign:42:raid:8','need-warden','colonist-unburied'])expect(nativeHudAlertColor({key})).toBe(PALETTE.ochre);
+    for(const key of ['infection-critical','downed','fire','hypothermia','mood-risk-high'])expect(nativeHudAlertColor({key})).toBe(PALETTE.terracotta);
     expect(nativeHudAlertColor({key:'domain:raid-last:7',domain:{severity:'info'}})).toBe(PALETTE.creamPaper);
     expect(nativeHudAlertColor({key:'domain:condition',domain:{severity:'warning'}})).toBe(PALETTE.ochre);
   });

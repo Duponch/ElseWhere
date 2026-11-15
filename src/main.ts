@@ -990,6 +990,8 @@ if(nativeMode){
     domain:openNativeDomainAlert,campaign:target=>{nativeCustomPage=undefined;void attempt(async()=>{const reason=await viewUrgentThreat(target);if(reason)throw Error(reason);});},
     context:context=>{nativeCustomPage=undefined;if(context.tool){setTool(context.tool);return;}if(context.worldTab)setNativeWorldTab(context.worldTab==='group'?'groups':'individual');void attempt(async()=>{await switchPanel(context.panel);if(context.category)setCategory(context.category);});},
     speed:value=>{const token=client.getThreatPauseToken();void attempt(()=>changeSpeed(value,token));},view:applyNativeViewControl,
+    // Core Notify_Started: bell for High/Critical, one critical notice (threat sound).
+    alertStarted:started=>{if(started.priority==='critical'){audio.playInterface('ui.threat');nativeUi?.showNotice(`Alerte critique : ${started.text}`);}else if(started.bell)audio.playInterface('ui.panel');},
     showPage:page=>{nativeCustomPage=page;nativeUi!.showPage(page);}});
   nativeUi.setUiScale(nativeUiScale);
   const viewport=nativeUi.getViewportMetrics();nativeHud.setViewport(viewport.width,viewport.height,viewport.unitsPerPixel,viewport.bottomDockHeight??96,viewport.leftHudBottom);nativeHud.setNotificationsAutoHide(nativeDockPreferences.notifications);nativeHud.setRightDockOpen(nativeRightDockOpen);nativeUi.setAutoHideBottom(nativeDockPreferences.bottom);

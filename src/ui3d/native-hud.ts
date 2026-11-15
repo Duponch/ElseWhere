@@ -18,15 +18,16 @@ import {apparelAppearance} from '../render/character-apparel';
 import {humanLimbVisualMask} from '../render/human-anatomy-presentation';
 import {portraitDataUrl, portraitExpressionOf} from '../ui/pawn-portrait';
 import {knownBuilding256, knownNutrition256, knownPile256, knownPosition256, knownStockCounts256} from '../ui/exploration-readers-256';
-import {readStatusAlerts, type StatusAlert} from '../ui/status-alerts';
+import type {StatusAlert} from '../ui/status-alerts';
 import type {NativePage, NativeRow} from './native-contract';
 import {NATIVE_RIGHT_DOCK_WIDTH} from './native-layout';
 import {NotificationFocusCycle,type NotificationTarget} from '../ui/notification-focus';
-import {readNativeDomainAlerts,type NativeDomainAlert} from './native-domain-alerts';
+import type {NativeDomainAlert} from './native-domain-alerts';
 import {weatherConditionLabel} from '../ui/weather-inspection';
 import {STORAGE_FILTER_TREE,type StorageFilterNode} from '../ui/storage-filter-tree';
 import {modelIconUrl} from '../ui/pictograms';
-type HudAlert=StatusAlert&{domain?:NativeDomainAlert};
+import {coreAlertPriority,type CoreAlertPriority} from '../ui/alert-priority';
+import {ALERT_PULSE_LEVELS,ALERT_RECHECK_MS,AlertActivationTracker,AlertBounce,alertHoverText,alertPulseLevel,readNativeAlertRows,type HudAlert} from './native-alert-list';
 import {PrototypeCardboardArt, PALETTE, createMaskingTape, drawHandBlob, drawHandRect, drawMarkerLine, type CardboardPiece, type CardboardPieceOptions} from './prototype-art';
 import {applyNativeHudButtonPose,drawNativeSpeedIcon,drawNativeWeatherIcon,nativeWeatherColor,nativeWeatherIcon,nativeWeatherOutline,type NativeWeatherIcon} from './native-hud-art';
 
@@ -46,7 +47,11 @@ export interface NativeHudActions {
   domain?: (alert:NativeDomainAlert)=>void;
   campaign?: (target:NonNullable<StatusAlert['campaign']>)=>void;
   context?: (target:NonNullable<StatusAlert['context']>)=>void;
+  /** A High or Critical alert just appeared (Core Alert.Notify_Started). `bell`
+   * is already throttled to one every 0.5 s; Critical also posts one notice. */
+  alertStarted?: (started:NativeAlertStart)=>void;
 }
+export interface NativeAlertStart {key:string;text:string;priority:Exclude<CoreAlertPriority,'medium'>;bell:boolean;targets:readonly NotificationTarget[]}
 export type NativeHudViewAction='walls'|'roofs'|'foliage'|'zones'|'home'|'camera';
 export interface NativeHudViewState {walls:string;roofs:boolean;foliage:boolean;zones:boolean;camera:string}
 export interface NativeHudWindowBounds {x:number;y:number;width:number;height:number}
@@ -79,7 +84,13 @@ interface AlertCard {
   height: number;
   lines: string[];
   color: string;
+  /** Background actually painted: the pulse shade of a Critical card. */
+  painted: string;
+  critical: boolean;
   signature: string;
+  baseX: number;
+  baseY: number;
+  rotation: number;
   piece: CardboardPiece;
 }
 interface PortraitCard {
@@ -110,18 +121,24 @@ const hex = (value: number) => `#${value.toString(16).padStart(6, '0')}`;
 const rounded = (value: number) => Math.round(Math.max(0, Math.min(100, value)));
 const amount = (value: number) => value.toLocaleString('fr-FR', {maximumFractionDigits: 2});
 
-/** Domain severity is authoritative, including a resolved incident marked info.
- * Older status alerts have stable semantic keys; their translated text is never
- * parsed to decide urgency. Evaluated only while updating the alert records. */
-export function nativeHudAlertColor(alert:Pick<StatusAlert,'key'|'tab'>&{domain?:Pick<NativeDomainAlert,'severity'>}):string {
+/** Letter projections keep the colour of their letter class (danger, warning,
+ * information), including a resolved incident marked info. Every other card is
+ * coloured by its explicit Core priority (alert-priority.ts): Critical red,
+ * High ochre, Medium plain. Labels are never parsed. */
+export function nativeHudAlertColor(alert:Pick<StatusAlert,'key'|'tab'|'priority'>&{domain?:Pick<NativeDomainAlert,'severity'>}):string {
   if(alert.domain)return alert.domain.severity==='danger'?PALETTE.terracotta:alert.domain.severity==='warning'?PALETTE.ochre:PALETTE.creamPaper;
-  const key=alert.key;
-  if(/(?:^|[:-])(?:critical|downed|bleeding|threat|manhunter|deaths?|fire|malnutrition|hypothermia)(?:$|[:-])/.test(key)||
-    /^(?:turret-wick|casket-wick|prison-break|mechanical-threat|mental|availability-death)(?:$|:)/.test(key)||
-    /^campaign:[^:]+:(?:raid|mechanoid|manhunter|downed):/.test(key))return PALETTE.terracotta;
-  if(/^(?:hungry|food-reserves|food-policy-blocked|infection|flu|malaria|plague|sad-wander|food-binge|mood-risk-minor|mood-risk-high|camp-pressure|availability-local|colonist-availability|blight)(?:$|:)/.test(key))return PALETTE.ochre;
-  return PALETTE.creamPaper;
+  const priority=coreAlertPriority(alert);
+  return priority==='critical'?PALETTE.terracotta:priority==='high'?PALETTE.ochre:PALETTE.creamPaper;
 }
+/** Critical pulse shades, from the full red (top level) towards cream, so the
+ * dark ink stays readable while the card pulses. */
+const mixHex=(a:string,b:string,t:number)=>{
+  const pa=parseInt(a.slice(1),16),pb=parseInt(b.slice(1),16),c=(shift:number)=>Math.round(((pa>>shift)&255)*(1-t)+((pb>>shift)&255)*t);
+  return `#${((c(16)<<16)|(c(8)<<8)|c(0)).toString(16).padStart(6,'0')}`;
+};
+export const nativeAlertPulseColor=(level:number):string=>mixHex(PALETTE.terracotta,PALETTE.creamPaper,(1-level/(ALERT_PULSE_LEVELS-1))*.45);
+/** Letter dossiers (offers, quests, trade) open on click like Core quest alerts. */
+const DOSSIER_ACTIONS=new Set<NativeDomainAlert['action']['kind']>(['arrivals','quests','trade','orbital']);
 
 function fitText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, width: number): void {
   ctx.fillText(text, x, y, Math.max(1, width));
@@ -180,6 +197,19 @@ export class NativeHudCards {
   private readonly nextButton: CardboardPiece;
   private readonly rosterButton: CardboardPiece;
   private readonly allAlertsButton: CardboardPiece;
+  private readonly alertUpButton: CardboardPiece;
+  private readonly alertDownButton: CardboardPiece;
+  private readonly alertActivation=new AlertActivationTracker();
+  private readonly alertBounces=new Map<string,AlertBounce>();
+  private alertScroll=0;
+  private alertsReadAt=-Infinity;
+  private alertsPending=false;
+  private alertSession='';
+  private alertTick=-Infinity;
+  private alertLastShown=-1;
+  private lastBellAt=-Infinity;
+  private pulseSeconds=0;
+  private pulseLevel=-1;
   private portraits: PortraitCard[] = [];
   private alertCards: AlertCard[] = [];
   private world?: World;
@@ -199,7 +229,8 @@ export class NativeHudCards {
   private shown = true;
   private disposed = false;
 
-  constructor(private readonly art: PrototypeCardboardArt, anchors: NativeHudAnchors, private readonly actions: NativeHudActions) {
+  /** `clock` is real time in milliseconds (alert cadence and bell throttle). */
+  constructor(private readonly art: PrototypeCardboardArt, anchors: NativeHudAnchors, private readonly actions: NativeHudActions, private readonly clock:()=>number=()=>performance.now()) {
     anchors.topCenter.add(this.colonistsGroup);
     anchors.topLeft.add(this.resourcesGroup);
     anchors.topRight.add(this.alertsGroup,this.fpsGroup,this.alertHandleGroup);
@@ -260,8 +291,14 @@ export class NativeHudCards {
     this.allAlertsButton = this.makePiece({w: 1.46, h: .25, depth: 0.036, bgColor: PALETTE.creamPaper, seed: 973, interactive: true,
       drawFn: (ctx, w, h) => this.drawCaption(ctx, w, h, `${this.alerts.length} alertes · tout voir`,146,25), onClick: () => this.showAlerts()});
     this.allAlertsButton.userData.nativeId='hud:alerts:all';
+    this.allAlertsButton.userData.tooltip='Ouvrir la liste complète des alertes · molette sur les alertes : faire défiler';
     this.allAlertsButton.setBaseTransform(-.73,-.25,0);
-    this.alertsGroup.add(this.allAlertsButton);
+    this.alertUpButton=this.smallButton('▲',9311,()=>this.scrollAlerts(-1));
+    this.alertUpButton.userData.nativeId='hud:alerts:up';this.alertUpButton.userData.tooltip='Alertes précédentes';
+    this.alertDownButton=this.smallButton('▼',9313,()=>this.scrollAlerts(1));
+    this.alertDownButton.userData.nativeId='hud:alerts:down';this.alertDownButton.userData.tooltip='Alertes suivantes';
+    this.alertUpButton.visible=this.alertDownButton.visible=false;
+    this.alertsGroup.add(this.allAlertsButton,this.alertUpButton,this.alertDownButton);
     this.setViewport(1440,1000,.01);
     this.setVisible(false);
   }
@@ -278,18 +315,62 @@ export class NativeHudCards {
     }
     if (this.world === world) return;
     this.world = world;
-    if (!world) { this.setVisible(false); return; }
+    if (!world) { this.alertSession=''; this.setVisible(false); return; }
     this.colonists = world.pawns.filter(p => isColonist(p) && !p.prisoner && p.state !== 'dead').sort((a, b) => a.id - b.id);
     this.page = Math.max(0, Math.min(this.page, Math.ceil(this.colonists.length / this.portraitCapacity) - 1));
     this.food = captureFoodReadability(world, {pileVisible: pile => knownPile256(world, pile), structureVisible: structure => knownBuilding256(world, structure)});
     this.physicalNutrition = knownNutrition256(world);
     this.readResources(world);
-    const rank=(alert:HudAlert)=>alert.domain?.severity==='danger'||/critical|downed|bleeding|threat|manhunter|death|fire|infection|malnutrition/.test(alert.key)?0:alert.domain?.severity==='warning'?1:2;
-    this.alerts = [...readStatusAlerts(world, this.food),...readNativeDomainAlerts(world,speed).map(domain=>({...domain,domain}))].sort((a,b)=>rank(a)-rank(b));
+    this.readAlerts(world);
     this.refreshPortraits(world);
     this.refreshResources();
     this.refreshAlerts();
     this.refreshWeather(world);
+  }
+
+  /** Core cadence: one full reading at most every 400 ms of real time; a newer
+   * snapshot in between is read by the next due animation frame. A new game, a
+   * load or another map adopts its current alerts silently (no bell, as Core's
+   * one-second grace after loading). Only High and Critical starts are signalled. */
+  private readAlerts(world:World):void {
+    const campaign=world.campaignMap,map=!campaign?'':campaign.revision===2?`m${campaign.activeMapId}`:campaign.active;
+    const session=`${world.seed}:${map}`,fresh=session!==this.alertSession||world.tick<this.alertTick,now=this.clock();
+    if(!fresh&&now-this.alertsReadAt<ALERT_RECHECK_MS){this.alertsPending=true;return;}
+    this.alertsPending=false;this.alertsReadAt=now;this.alertSession=session;this.alertTick=world.tick;
+    const {ordered,started}=this.alertActivation.update(readNativeAlertRows(world,this.food,this.speedValue<0?undefined:this.speedValue),fresh);
+    this.alerts=ordered;
+    if(fresh)this.alertBounces.clear();
+    for(const row of started){
+      if(row.priority==='medium')continue;
+      this.alertBounces.set(row.key,new AlertBounce());
+      const bell=now-this.lastBellAt>500;if(bell)this.lastBellAt=now;
+      this.actions.alertStarted?.({key:row.key,text:row.text,priority:row.priority,bell,targets:row.targets});
+    }
+  }
+
+  /** Left click: a letter dossier opens; otherwise the camera jumps to and
+   * selects the next culprit (right click: the previous one), as Core's
+   * Alert.OnClick. Rows without culprit open their management context, a
+   * remote map, or their details. */
+  private activateAlert(key:string,direction:1|-1):void {
+    const alert=this.alerts.find(row=>row.key===key);
+    if(!alert){if(direction>0)this.showAlerts();return;}
+    const domain=alert.domain;
+    if(direction>0&&domain&&DOSSIER_ACTIONS.has(domain.action.kind)&&this.actions.domain){this.actions.domain(domain);return;}
+    if(alert.targets.length&&this.actions.focus){
+      const target=direction>0?this.alertFocus.next(key,alert.targets):this.alertFocus.previous(key,alert.targets);
+      if(target){this.actions.focus(target,alert.tab);return;}
+    }
+    if(direction<0)return;
+    if(alert.campaign&&this.actions.campaign){this.actions.campaign(alert.campaign);return;}
+    if(alert.context&&this.actions.context){this.actions.context(alert.context);return;}
+    this.showAlert(key);
+  }
+  private scrollAlerts(direction:number):void {
+    if(direction>0&&this.alertLastShown<this.alerts.length-1)this.alertScroll++;
+    else if(direction<0&&this.alertScroll>0)this.alertScroll--;
+    else return;
+    this.refreshAlerts();
   }
 
   setSelection(ids: readonly number[]): void {
@@ -383,6 +464,7 @@ export class NativeHudCards {
       changed=applyNativeHudButtonPose(piece)||changed;
       if(piece.userData.nativeActivePose===target)this.activePoses.delete(piece);
     }
+    changed=this.animateAlerts(deltaSeconds)||changed;
     const target=this.rightDockOpen?0:3.16;
     const before=this.rightDockOffset;
     if(Math.abs(before-target)<.001){this.rightDockOffset=target;return changed;}
@@ -392,6 +474,32 @@ export class NativeHudCards {
     this.alertHandle.setBaseTransform(-.14-(3.16-this.rightDockOffset),-.56,.1);
     this.alertsGroup.visible=this.shown&&!!this.world&&(this.rightDockOpen||this.rightDockOffset<3.16);
     return true;
+  }
+
+  /** Deferred alert reading, Core start bounce and Critical red pulse. The pulse
+   * is quantised (alertPulseLevel), so a critical card repaints a few times a
+   * second, never every frame. */
+  private animateAlerts(deltaSeconds:number):boolean {
+    let changed=false;
+    if(this.alertsPending&&this.world&&this.clock()-this.alertsReadAt>=ALERT_RECHECK_MS){this.readAlerts(this.world);this.refreshAlerts();changed=true;}
+    if(this.alertBounces.size){
+      const cards=new Map(this.alertCards.map(card=>[card.key,card]));
+      for(const [key,bounce] of this.alertBounces){
+        const offset=bounce.step(deltaSeconds),card=cards.get(key);
+        if(card){this.placePiece(card.piece,card.baseX-offset/100,card.baseY,.02,card.rotation);changed=true;}
+        if(bounce.idle)this.alertBounces.delete(key);
+      }
+    }
+    const critical=this.alertsGroup.visible?this.alertCards.filter(card=>card.critical):[];
+    if(critical.length){
+      this.pulseSeconds+=Math.max(0,deltaSeconds);
+      const level=alertPulseLevel(this.pulseSeconds);
+      if(level!==this.pulseLevel){
+        this.pulseLevel=level;const color=nativeAlertPulseColor(level);
+        for(const card of critical)if(card.painted!==color){card.painted=color;card.piece.redraw(undefined,color);changed=true;}
+      }
+    }
+    return changed;
   }
 
   getRightDockBounds():{left:number;top:number;right:number;bottom:number} {
@@ -615,41 +723,55 @@ export class NativeHudCards {
     const previous=new Map(this.alertCards.map(card=>[card.key,card]));
     this.alertCards=[];
     const ctx=this.allAlertsButton.userData.ctx;ctx.font=`bold 13px ${FONT}`;
-    let y=.32;
-    this.alerts.slice(0,4).forEach((alert,idx)=>{
-      const room=availableHeight-y*100-40;
-      if(room<28)return;
-      const originalLines=inkLines(ctx,alert.text,maxWidth-28),maxLines=Math.max(1,Math.floor((room-12)/17));
+    // Core draws every active alert. Here the column ends above the time board:
+    // what does not fit scrolls (wheel or arrows), the footer opens the list.
+    const total=this.alerts.length,wrapped=this.alerts.map(alert=>inkLines(ctx,alert.text,maxWidth-28)),cardHeight=(lines:number)=>Math.max(28,lines*17+12);
+    const fitsFrom=(start:number):boolean=>{let top=32;for(let i=start;i<total;i++){const h=cardHeight(wrapped[i]!.length);if(h>availableHeight-top-40)return false;top+=h+6;}return true;};
+    this.alertScroll=Math.max(0,Math.min(this.alertScroll,total-1));
+    while(this.alertScroll>0&&fitsFrom(this.alertScroll-1))this.alertScroll--;
+    const pulse=nativeAlertPulseColor(this.pulseLevel<0?ALERT_PULSE_LEVELS-1:this.pulseLevel);
+    let y=.32,last=this.alertScroll-1;
+    for(let index=this.alertScroll;index<total;index++){
+      const alert=this.alerts[index]!,idx=index-this.alertScroll,room=availableHeight-y*100-40;
+      if(room<28)break;
+      const originalLines=wrapped[index]!,maxLines=Math.max(1,Math.floor((room-12)/17));
       const lines=originalLines.slice(0,maxLines);
       if(lines.length<originalLines.length)lines[lines.length-1]=`${lines.at(-1)??''}…`;
       const width=Math.min(maxWidth,Math.max(82,...lines.map(line=>ctx.measureText(line).width+28)));
-      const height=Math.max(28,lines.length*17+12);
-      const color=nativeHudAlertColor(alert);
-      const seed=idx*29+53,signature=JSON.stringify([lines,color]);
+      const height=cardHeight(lines.length);
+      const color=nativeHudAlertColor(alert),critical=!alert.domain&&coreAlertPriority(alert)==='critical',painted=critical?pulse:color;
+      const seed=idx*29+53,signature=JSON.stringify([lines,color,critical]);
       let entry=previous.get(alert.key);previous.delete(alert.key);
       if(entry&&(entry.seed!==seed||entry.width!==width||entry.height!==height)){this.dropPiece(entry.piece);entry=undefined;}
       if(!entry){
-        const live={key:alert.key,seed,width,height,lines,color,signature} as AlertCard;
-        live.piece=this.makePiece({w:width/100,h:height/100,depth:.046,bgColor:color,bevel:.038,surface:'panel',seed,interactive:true,
+        const live={key:alert.key,seed,width,height,lines,color,painted,critical,signature,baseX:0,baseY:0,rotation:0} as AlertCard;
+        live.piece=this.makePiece({w:width/100,h:height/100,depth:.046,bgColor:painted,bevel:.038,surface:'panel',seed,interactive:true,
           drawFn:(ctx,w,h,rng)=>{
             ctx.save();ctx.scale(w/live.width,h/live.height);drawHandRect(ctx,4,5,4,live.height-10,live.color===PALETTE.creamPaper?PALETTE.ochre:PALETTE.creamPaper,null,0,rng);
             ctx.fillStyle=PALETTE.inkDark;ctx.font=`bold 13px ${FONT}`;ctx.textAlign='left';
             live.lines.forEach((line,index)=>ctx.fillText(line,14,19+index*17,live.width-24));ctx.restore();
-          },onClick:()=>this.showAlert(live.key)});
+          },onClick:()=>this.activateAlert(live.key,1)});
+        live.piece.userData.onSecondary=()=>this.activateAlert(live.key,-1);
+        live.piece.userData.onWheel=(direction:number)=>this.scrollAlerts(direction);
         entry=live;this.alertsGroup.add(entry.piece);
       }else{
         const changed=entry.signature!==signature;
-        Object.assign(entry,{lines,color,signature});
-        if(changed)entry.piece.redraw(undefined,color);
+        Object.assign(entry,{lines,color,critical,signature});
+        if(changed){entry.painted=painted;entry.piece.redraw(undefined,painted);}
       }
       entry.piece.userData.nativeId=`hud:alert:${alert.key}`;
-      entry.piece.userData.tooltip=alert.text;
-      this.placePiece(entry.piece,-width/200,-y-height/200,.02,idx%2===0?-.005:.005);
-      this.alertCards.push(entry);y+=(height+6)/100;
-    });
+      entry.piece.userData.tooltip=alertHoverText(this.world,alert);
+      entry.baseX=-width/200;entry.baseY=-y-height/200;entry.rotation=idx%2===0?-.005:.005;
+      this.placePiece(entry.piece,entry.baseX-(this.alertBounces.get(alert.key)?.position??0)/100,entry.baseY,.02,entry.rotation);
+      this.alertCards.push(entry);y+=(height+6)/100;last=index;
+    }
     for(const entry of previous.values())this.dropPiece(entry.piece);
-    this.allAlertsButton.visible=this.alerts.length>this.alertCards.length;
+    this.alertLastShown=last;
+    const overflow=this.alertScroll>0||last<total-1,arrows=overflow&&maxWidth>=240;
+    this.allAlertsButton.visible=overflow;
     this.placePiece(this.allAlertsButton,-.73,-y-.125);
+    this.alertUpButton.visible=arrows&&this.alertScroll>0;this.alertDownButton.visible=arrows&&last<total-1;
+    this.placePiece(this.alertUpButton,-2.06,-y-.125,.02);this.placePiece(this.alertDownButton,-1.68,-y-.125,.02);
     if(this.allAlertsCount!==this.alerts.length){this.allAlertsCount=this.alerts.length;this.allAlertsButton.redraw();}
     this.alertHandleGroup.visible=this.notificationsAutoHide&&this.shown&&!!this.world&&this.alerts.length>0;
   }
@@ -707,6 +829,7 @@ export class NativeHudCards {
     const alert = this.alerts.find(row => row.key === key);
     if (!alert) { this.showAlerts(); return; }
     const rows: NativeRow[] = [{id: 'text', label: alert.text}];
+    if (alert.explanation) rows.push({id: 'explanation', label: alert.explanation});
     if (alert.tooltip) {
       if (alert.tooltip.title) rows.push({id: 'title', label: alert.tooltip.title});
       rows.push({id: 'body', label: alert.tooltip.body});
@@ -745,7 +868,7 @@ export class NativeHudCards {
     for(const image of this.resourceImages.values()){image.onload=null;image.onerror=null;}this.resourceImages.clear();
     for (const piece of this.ownedPieces) this.art.disposePiece(piece);
     this.ownedPieces.clear();
-    this.tags.length=0;this.alertCards=[];
+    this.tags.length=0;this.alertCards=[];this.alertBounces.clear();this.alertActivation.reset();
     this.activePoses.clear();
     this.rail.geometry.dispose();
     (this.rail.material as THREE.Material).dispose();

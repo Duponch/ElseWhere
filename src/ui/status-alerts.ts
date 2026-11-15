@@ -1,12 +1,12 @@
 import {mechRaidGroups261} from '../sim/mechanical-raid-groups-261';
-import {knownPosition256,knownBuilding256,knownNutrition256,knownPile256} from './exploration-readers-256';
+import {knownPosition256,knownBuilding256,knownPile256} from './exploration-readers-256';
 import type {MapIncident,CampaignSummary} from '../sim/world-map-state';
 import {mapDisplayName} from './map-registry-adapter';
-import {alertManhunter,alertDownedColonist} from '../sim/status-alert-rules';
+import {alertManhunter} from '../sim/status-alert-rules';
 import { isColonist,activeThreat } from '../sim/affiliation';
-import { isBedKind } from '../sim/bed-kinds';
-import { bedSlotsCount } from '../sim/bed-slots';
 import { storageCells } from '../sim/shelf-storage';
+import {freeColonistsSpawned,readColonistsNeedRescue,readColonistsNeedTend,readCropBlight,readFireInHomeArea,readIdleColonists,readLowFood,readNeedColonistBeds,readNeedDefenses,readNeedJoySources,readNeedMealSource,readNeedWarden,readSeriousHypothermia,readUnburiedColonists} from './core-colony-alerts';
+import type {CoreAlertPriority} from './alert-priority';
 import { constructionRecipe } from '../sim/construction-materials';
 import { firePosition } from '../sim/fire-rules';
 import { FLU_UNIT,fluStage } from '../sim/flu-rules';
@@ -30,7 +30,11 @@ import {readResearchReadiness} from './research-readiness';
 import {partyView292} from './party-inspection-292';
 
 export interface NotificationContext { panel:Exclude<Panel,null>;category?:ArchitectCategory;tool?:'stockpile';worldTab?:'group'|'individual'; }
-export interface StatusAlert { key:string;text:string;targets:NotificationTarget[];context?:NotificationContext;tab?:'health'|'needs'|'prisoner';tooltip?:TooltipContent;campaign?:({mapId:number}|{site:'home'|'secondary'})&{actorId?:number}; }
+export interface StatusAlert { key:string;text:string;targets:NotificationTarget[];context?:NotificationContext;tab?:'health'|'needs'|'prisoner';tooltip?:TooltipContent;campaign?:({mapId:number}|{site:'home'|'secondary'})&{actorId?:number};
+  /** Explicit Core priority; when absent the key family decides (alert-priority.ts). */
+  priority?:CoreAlertPriority;
+  /** Core info-pane explanation shown on hover and in the details page. */
+  explanation?:string; }
 export function readCampaignMapAlerts(summary:Pick<CampaignSummary,'maps'|'incidents'>):StatusAlert[]{
  return [...summary.maps.filter(map=>map.campPressure?.alert).map(map=>({key:`camp-pressure:${map.id}`,text:`${mapDisplayName(map)} · détecté · risque mécanique · voir`,targets:[],campaign:{mapId:map.id}})),...summary.incidents.map(incident=>{const map=summary.maps.find(map=>map.id===incident.mapId),place=map?mapDisplayName(map):`Carte ${incident.mapId}`,label=incident.kind==='raid'?'assaillant(s)':incident.kind==='mechanoid'?'mécanoïde(s)':incident.kind==='manhunter'?'animal(aux) en rage':incident.kind==='downed'?'colon(s) à terre':'visiteur(s)';return {key:`campaign:${incident.mapId}:${incident.kind}:${incident.actorId}`,text:`${place} · ${incident.count} ${label} · voir`,targets:[],campaign:{mapId:incident.mapId,actorId:incident.actorId}};})];
 }
@@ -82,6 +86,8 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
     rows.push({key:`campaign:${'mapId' in incident?incident.mapId:incident.site}:${incident.kind}:${incident.actorId}`,text:`${place} · ${incident.count} ${label} hors carte · voir`,targets:[],campaign:{...target,actorId:incident.actorId}});
   }
   const add=(key:string,text:string,targets:NotificationTarget[],context?:NotificationContext,tab?:StatusAlert['tab'])=>rows.push({key,text,targets,...context?{context}:{},...tab?{tab}:{}});
+  const free=freeColonistsSpawned(world),core=(row:StatusAlert|undefined)=>{if(row)rows.push(row);};
+  core(readFireInHomeArea(world));
   const party=partyView292(world);
   if(party&&knownPosition256(world,party.site))add('party',`Fête · ${party.members.length} participant(s) · ${party.remaining}`,
     [cellNotificationTarget('party-site',party.site),...people(world,living.filter(p=>p.id===party.organizerId))]);
@@ -105,7 +111,7 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
   const enraged=world.wildlife?.animals.filter(a=>alertManhunter(a)&&knownPosition256(world,a))??[];
   if(enraged.length)add('manhunter',`${enraged.length} ${enraged.length>1?'animaux':'animal'} en rage`,actors(enraged));
   counted('malnutrition',living.filter(p=>(p.health?.malnutrition??0)>0),n=>`${n} colon(s) en malnutrition`,'health');
-  counted('hypothermia',living.filter(p=>(p.health?.hypothermia??0)>=40000000),n=>`${n} colon(s) en hypothermie`,'health');
+  core(readSeriousHypothermia(world,free));
   const infected=living.filter(p=>!!p.health?.infections?.cases.length);
   counted('infection-critical',infected.filter(p=>p.health!.infections!.immunity<INFECTION_UNIT&&p.health!.infections!.cases.some(c=>['extreme','critical'].includes(infectionStage(c.severity)))),n=>`Urgence médicale : ${n} colon(s) avec une infection grave`,'health');
   counted('infection',infected,n=>`${n} colon(s) avec une infection · consulter Santé`,'health');
@@ -117,10 +123,11 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
     counted(`${kind}-critical`,cases.filter(p=>{const d=p.health!.immuneDiseases![kind]!;return d.immunity<IMMUNE_DISEASE_UNIT&&['extreme','critical'].includes(immuneDiseaseStage(kind,d.severity));}),n=>`Urgence médicale : ${n} colon(s) avec ${label} grave`,'health');
     counted(kind,cases,n=>`${n} colon(s) avec ${label} · consulter Santé`,'health');
   }
-  counted('downed',living.filter(alertDownedColonist),n=>`${n} colon(s) à terre`,'health');
+  core(readColonistsNeedRescue(world,free));
   counted('bleeding',living.filter(p=>p.health&&medicalBleed(p.health)>=.1),n=>`${n} colon(s) saignent`,'health');
-  counted('deaths',colonists.filter(p=>p.state==='dead'),n=>`${n} colon(s) décédé(s)`,'health');
-  if(knownNutrition256(world)<living.length*1.6)add('food-reserves','Réserves de nourriture faibles',[],{panel:'assign'});
+  core(readColonistsNeedTend(world,free));
+  core(readUnburiedColonists(world,free));
+  core(readLowFood(world,free));
   if(food.blockedPawnIds.length){
     const ids=new Set(food.blockedPawnIds),names=world.pawns.filter(p=>ids.has(p.id)).map(p=>p.name);
     rows.push({key:'food-policy-blocked',text:`Régime alimentaire à vérifier · ${food.blockedPawnIds.length} colon(s)`,targets:[],context:{panel:'assign'},tooltip:{title:'Aucun type autorisé parmi les piles évaluées',body:`Personnes concernées : ${names.join(', ')}. Les piles fraîches au sol et leur propre portion portée ne contiennent aucun type autorisé par le régime. Accès, réservations, partage et autonomie non évalués. Les repas déjà engagés sont conservés.`}});
@@ -134,11 +141,13 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
   if(world.pawns.every(p=>p.priorities.haul===0&&p.priorities.build===0)&&world.jobs.some(j=>knownPosition256(world,j)&&constructionRecipe(j).ingredients.length>0))add('disabled-construction','Construction/transport désactivés : chantiers non approvisionnés',[],{panel:'work'});
   const interrupted=world.pawns.filter(p=>p.interruptedCargo);
   if(interrupted.length)add('interrupted-cargo',`${interrupted.length} cargaison(s) conservée(s) : fin de déplacement ou sol proche à libérer`,people(world,interrupted),{panel:'work'});
-  counted('idle',world.pawns.filter(p=>isColonist(p)&&!p.prisoner&&p.state==='idle'&&!p.draft&&!p.flee&&!p.mental?.crisis&&!p.interruptedCargo),n=>`${n} colon(s) disponible(s)`);
-  const beds=world.structures.filter(s=>isBedKind(s.kind)&&!s.medical&&!s.prisoner&&knownBuilding256(world,s)).reduce((n,s)=>n+bedSlotsCount(s),0);
-  if(beds<living.length)add('beds',`${living.length-beds} couchage(s) manquant(s)`,[],{panel:'architect',category:'furniture'});
-  const prisoners=world.pawns.filter(p=>p.prisoner&&p.state!=='dead');
-  if(prisoners.length)add('prisoners',`${prisoners.length} prisonnier(s) · ${living.some(p=>p.priorities.warden>0)?'Geôlier activé':'Geôlier désactivé'}`,people(world,prisoners),{panel:'work'},'prisoner');
+  core(readIdleColonists(world,free));
+  core(readNeedColonistBeds(world,free));
+  core(readNeedWarden(world,free));
+  core(readNeedMealSource(world,free));
+  core(readNeedDefenses(world,free));
+  core(readNeedJoySources(world,free));
+  core(readCropBlight(world));
   return rows;
 }
 

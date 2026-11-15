@@ -49,7 +49,9 @@ afterEach(()=>vi.unstubAllGlobals());
 test('an available team keeps the normal seven guide sections and existing idle targets',()=>{
   const w=camp();expect(readAvailabilityStatusAlerts(w)).toEqual([]);
   expect(readFirstDayGuide(w)).toHaveLength(7);expect(work(w).action).toEqual({panel:'work'});
-  expect(readStatusAlerts(w).find(row=>row.key==='idle')?.targets).toEqual(w.pawns.map(p=>actorNotificationTarget(p.id)));
+  // Alerts lot A: Core Alert_ColonistsIdle waits for the first whole day.
+  const later=structuredClone(w);later.tick=6000;
+  expect(readStatusAlerts(later).find(row=>row.key==='idle')?.targets).toEqual(w.pawns.map(p=>actorNotificationTarget(p.id)));
 });
 test('all downed colonists have an explicit explanation and retain the ordinary medical alert',()=>{
   const w=blocked(),rows=readAvailabilityStatusAlerts(w),first=w.pawns[0]!;
@@ -100,7 +102,9 @@ test('confirmed local deaths preserve named facts and route total absence to Men
   const w=camp();for(const p of w.pawns)death(w,p);
   expect(readAvailabilityStatusAlerts(w)[0]).toMatchObject({targets:[],context:{panel:'menu'}});
   expect(readAvailabilityStatusAlerts(w).filter(row=>row.key.startsWith('availability-death:'))).toHaveLength(3);
-  expect(readStatusAlerts(w).find(row=>row.key==='deaths')?.context).toEqual({panel:'history'});
+  // Alerts lot A: Core Alert_ColonistLeftUnburied needs a free colonist on the
+  // map; with everyone dead only the named availability facts remain.
+  expect(readStatusAlerts(w).some(row=>row.key==='colonist-unburied'||row.key==='deaths')).toBe(false);
   expect(work(w).action).toEqual({panel:'menu'});expect(work(w).detail).toContain('décès confirmé');
 });
 test('an original group loss links to Group while total living absence still opens Menu',()=>{

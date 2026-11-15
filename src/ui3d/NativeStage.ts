@@ -768,7 +768,10 @@ export class NativeStage {
     this.setPointerOverUi(!!hit&&hit.piece!==this.worldReadout||this.frontVisible||!!this.page?.modal);
     if(hit||this.frontVisible||this.page?.modal)this.gesture();
     if(!hit){if(this.frontVisible||this.page?.modal)this.swallow(event);else{this.worldPress={pointerId:event.pointerId,button:event.button};if(event.button!==0)setNativeCursor(document.documentElement,'grabbing');}return;}
-    this.swallow(event);if(event.button!==0)return;
+    this.swallow(event);
+    // Right click on a HUD alert card: previous culprit (Core Alert.OnClick).
+    if(event.button===2&&!hit.control?.disabled&&typeof hit.piece.userData.onSecondary==='function'){hit.piece.userData.onSecondary();this.invalidate();return;}
+    if(event.button!==0)return;
     if(hit.piece.userData.nativeStatic)return;
     if(hit.control?.disabled)return;
     if(hit.control?.paint){const paint=hit.control.paint;this.paintDrag={pointerId:event.pointerId,group:paint.group,indices:new Set([paint.index]),onPaint:paint.onPaint};hit.piece.userData.pressVal=.7;this.moving.add(hit.piece);this.invalidate();return;}
@@ -920,7 +923,9 @@ export class NativeStage {
     }
     const hit=this.hit(event.clientX,event.clientY);
     if(hit||this.frontVisible||this.page?.modal){
-      this.swallow(event);if(hit&&!this.pagePieces.includes(hit.piece))return;if(this.maxScroll<=0)return;
+      this.swallow(event);
+      if(hit&&!this.pagePieces.includes(hit.piece)){if(typeof hit.piece.userData.onWheel==='function'&&event.deltaY){hit.piece.userData.onWheel(Math.sign(event.deltaY));this.invalidate();}return;}
+      if(this.maxScroll<=0)return;
       const delta=event.deltaMode===1?event.deltaY*16:event.deltaMode===2?event.deltaY*this.height:event.deltaY;
       const next=THREE.MathUtils.clamp(this.scroll+delta,0,this.maxScroll);
       if(next!==this.scroll){this.scroll=next;this.hover(null);this.rebuildPage(true);this.invalidate();}

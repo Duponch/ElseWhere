@@ -44,11 +44,13 @@ test('V379 an off-map alert calls navigation with the latest real-ID metadata, n
 
 test('V319 status nodes retain keyboard identity, count changes and per-key ring while refreshing their actual target data',()=>{
   documentFixture();const host=new NodeFixture(),focus=vi.fn(),context=vi.fn(),tab=vi.fn(),ui=createStatusAlerts(host as unknown as HTMLElement,{},{focus,context,tab});
-  const w=createWorld(319,32,32),[a,b,c]=w.pawns;for(const p of [a!,b!]){p.health=createMedicalRecord(w.tick);p.health.hypothermia=40000000;}
-  ui.update(w);const node=host.children.find(n=>n.dataset.alert==='hypothermia')!;expect(node.tabIndex).toBe(0);expect(node.attributes.get('role')).toBe('button');node.onclick!();expect(focus).toHaveBeenLastCalledWith(actorNotificationTarget(a!.id));expect(tab).toHaveBeenLastCalledWith('health');
+  // Alerts lot A moved hypothermia to Core's serious threshold; malnutrition
+  // keeps the same counted, health-tab row shape for this DOM identity contract.
+  const w=createWorld(319,32,32),[a,b,c]=w.pawns;for(const p of [a!,b!]){p.health=createMedicalRecord(w.tick);p.health.malnutrition=1;}
+  ui.update(w);const node=host.children.find(n=>n.dataset.alert==='malnutrition')!;expect(node.tabIndex).toBe(0);expect(node.attributes.get('role')).toBe('button');node.onclick!();expect(focus).toHaveBeenLastCalledWith(actorNotificationTarget(a!.id));expect(tab).toHaveBeenLastCalledWith('health');
   const writes=node.textWrites,click=node.onclick;ui.update(structuredClone(w));expect(node.textWrites).toBe(writes);expect(node.onclick).toBe(click);
-  const copy=structuredClone(w);copy.pawns[0]!.health!.hypothermia=0;copy.pawns[2]!.health=createMedicalRecord(copy.tick);copy.pawns[2]!.health!.hypothermia=40000000;ui.update(copy);
-  expect(host.children.find(n=>n.dataset.alert==='hypothermia')).toBe(node);expect(node.textContent).toBe('2 colon(s) en hypothermie');
+  const copy=structuredClone(w);copy.pawns[0]!.health!.malnutrition=0;copy.pawns[2]!.health=createMedicalRecord(copy.tick);copy.pawns[2]!.health!.malnutrition=1;ui.update(copy);
+  expect(host.children.find(n=>n.dataset.alert==='malnutrition')).toBe(node);expect(node.textContent).toBe('2 colon(s) en malnutrition');
   const event={key:'Enter',preventDefault:vi.fn(),stopPropagation:vi.fn()};node.onkeydown!(event);expect(event.preventDefault).toHaveBeenCalledOnce();expect(event.stopPropagation).toHaveBeenCalledOnce();expect(focus).toHaveBeenLastCalledWith(actorNotificationTarget(b!.id));
   node.onkeydown!({...event,key:' '});expect(focus).toHaveBeenLastCalledWith(actorNotificationTarget(c!.id));expect(context).not.toHaveBeenCalled();
 });

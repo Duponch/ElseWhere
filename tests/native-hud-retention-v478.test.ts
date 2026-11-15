@@ -199,7 +199,9 @@ describe('retained native HUD alerts',()=>{
   it('matches freshly painted ink after retention and maintains overflow count and cleanup',()=>{
     const f=fixture(),g=fixture();
     try{
-      const rows=Array.from({length:5},(_,index)=>alert(`notice-${index}`,`Message ${index}`));
+      // Alerts lot A shows every alert that fits (Core has no four-card cap):
+      // 30 short rows still overflow the default column, four never do.
+      const rows=Array.from({length:30},(_,index)=>alert(`notice-${index}`,`Message ${index}`));
       f.alerts(rows);const first=f.piece('hud:alert:notice-0'),all=f.piece('hud:alerts:all');
       expect(all.visible).toBe(true);
       ink(first).length=0;
@@ -265,7 +267,8 @@ describe('responsive retained HUD reservations · V485',()=>{
   it('keeps the alerts and overflow footer above the weather board and leaves settled paint untouched',()=>{
     const f=fixture();
     try{
-      const rows=Array.from({length:7},(_,index)=>alert(`bounded-${index}`,`Alerte actuelle ${index}`));
+      // Alerts lot A: enough rows to overflow even the tallest viewport (no four-card cap).
+      const rows=Array.from({length:40},(_,index)=>alert(`bounded-${index}`,`Alerte actuelle ${index}`));
       for(const viewport of [{width:480,height:400,bottom:96},{width:720,height:500,bottom:174},{width:1440,height:800,bottom:96}]){
         f.hud.setViewport(viewport.width,viewport.height,.01,viewport.bottom,60);f.alerts(rows);
         const all=f.piece('hud:alerts:all'),weather=f.piece('hud:clock');

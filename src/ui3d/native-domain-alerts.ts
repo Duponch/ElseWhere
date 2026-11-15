@@ -39,6 +39,9 @@ export interface NativeDomainAlert {
   action: NativeDomainAlertAction;
 }
 
+/** How long a resolved incident report (assault, condition end) stays listed. */
+export const RESOLVED_REPORT_TICKS = 600;
+
 function timeLeft(ticks: number, elapsed = false): string {
   const exact = Math.max(0, ticks) * 1440 / TICKS_PER_DAY;
   const minutes = elapsed ? Math.floor(exact) : Math.ceil(exact);
@@ -130,7 +133,9 @@ export function readNativeDomainAlerts(world: World, speed?: number): NativeDoma
     const body = machines.phase === 'staging' ? 'Les machines hostiles se regroupent avant leur assaut. Leur défense est déjà active. Préparez vos positions et votre circuit de défense.' : 'Les machines hostiles attaquent la colonie. Leur anatomie et les phases de leurs gestes sont inspectables ; aucun soin, recrutement ou ordre colonial ne leur est accordé.';
     add(`mech-raid:${machines.id}`, text, text, body, {kind: 'raid-focus', raidId: machines.id, mechanical: true}, 'danger', raidNotificationTargets(world));
   }
-  if (!humans && !machines && lastRaid) {
+  // A finished assault is a one-off report (a Core letter), not a lasting alert:
+  // like the ends of conditions below, it stays only 600 ticks after the end.
+  if (!humans && !machines && lastRaid && world.tick >= lastRaid.tick && world.tick - lastRaid.tick < RESOLVED_REPORT_TICKS) {
     const text = lastRaid.mechanoid ? 'Assaut mécanique terminé' : 'Assaut terminé';
     const body = lastRaid.mechanoid
       ? `Bilan confirmé : ${mechanicalSummary(lastRaid.mechComposition?.roster ?? [])} neutralisé(s). Une carcasse entière devient disponible après la fin de son déplacement et de sa récupération. Transportez-la pour une facture de concassage ou de broyage ; l’acier est produit à la finition réelle.`
@@ -167,8 +172,10 @@ export function readNativeDomainAlerts(world: World, speed?: number): NativeDoma
   const short = shortCircuitInspection(world), shortState = world.miscIncidents?.shortCircuits?.last;
   if (short && shortState) add(`short-circuit:${shortState.at}`, short.summary, short.title, short.body, {kind: 'site', condition: 'short-circuit'}, 'warning', [cellNotificationTarget(`short-circuit:${shortState.at}`, shortState.center)]);
 
+  // Core has no visitor alert (arrival is a one-off letter): the card exists
+  // only while visitors are actually here, or when an old save must opt in.
   const visitors = world.pawns.filter(pawn => pawn.visitor && pawn.state !== 'dead'), trader = visitors.find(pawn => visitorMayTrade(world, pawn));
-  add('visitors', world.visitors ? `Visiteurs : ${visitors.length} · Commerce` : 'Activer les visites', 'Visiteurs et commerce',
+  if (!world.visitors || visitors.length) add('visitors', world.visitors ? `Visiteurs : ${visitors.length} · Commerce` : 'Activer les visites', 'Visiteurs et commerce',
     world.visitors ? 'Les biens à vendre et l’argent doivent être accessibles dans le foyer ou une réserve. Les objets réservés, portés et les provisions personnelles sont exclus. Les achats seront déposés au contact, puis rangés par les colons.' : 'Cette ancienne partie conserve son calendrier. Autorisez les visites à partir de maintenant.',
     {kind: 'trade', ...trader ? {traderId: trader.id} : {}}, 'info', visitors.map(visitor => actorNotificationTarget(visitor.id)));
   const ships = world.orbital?.ships.filter(ship => ship.announced && ship.departAt > world.tick) ?? [];

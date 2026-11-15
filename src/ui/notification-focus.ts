@@ -10,19 +10,22 @@ export type NotificationTarget =
   | { key:string;kind:'cell';cell:Cell };
 
 /** Each notification owns its cursor. A removed last target advances to the next
- * surviving member of the previous ring before considering newly added targets. */
+ * surviving member of the previous ring before considering newly added targets.
+ * `previous` walks the same ring backwards (right click on a Core alert). */
 export class NotificationFocusCycle {
   private cursors=new Map<string,{last:string;ring:string[]}>();
-  next(key:string,targets:readonly NotificationTarget[]):NotificationTarget|undefined {
+  next(key:string,targets:readonly NotificationTarget[]):NotificationTarget|undefined {return this.step(key,targets,1);}
+  previous(key:string,targets:readonly NotificationTarget[]):NotificationTarget|undefined {return this.step(key,targets,-1);}
+  private step(key:string,targets:readonly NotificationTarget[],direction:1|-1):NotificationTarget|undefined {
     const unique=[...new Map(targets.map(target=>[target.key,target])).values()];
     if(!unique.length)return;
     const cursor=this.cursors.get(key),index=cursor?unique.findIndex(target=>target.key===cursor.last):-1;
-    let next=unique[0]!;
-    if(index>=0)next=unique[(index+1)%unique.length]!;
+    let next=direction>0?unique[0]!:unique.at(-1)!;
+    if(index>=0)next=unique[(index+direction+unique.length)%unique.length]!;
     else if(cursor){
-      const oldIndex=cursor.ring.indexOf(cursor.last);
-      for(let offset=1;offset<=cursor.ring.length;offset++){
-        const successor=cursor.ring[(oldIndex+offset)%cursor.ring.length];
+      const oldIndex=cursor.ring.indexOf(cursor.last),size=cursor.ring.length;
+      for(let offset=1;offset<=size;offset++){
+        const successor=cursor.ring[((oldIndex+direction*offset)%size+size)%size];
         const found=unique.find(target=>target.key===successor);
         if(found){next=found;break;}
       }
