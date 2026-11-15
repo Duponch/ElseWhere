@@ -99,7 +99,7 @@ Les visiteurs et les caravanes marchandes peuvent vendre un pistolet automatique
 
 ## Limites
 
-- **Fusil-mitrailleur, mitraillette lourde, fusil d'assaut :** pas encore faits (recherche GasOperation non livrée).
+- **Fusil-mitrailleur, mitraillette lourde, fusil d'assaut :** pas encore faits au schéma 340 (recherche GasOperation non livrée) ; livrés au [schéma 342](guns-v342.md) avec le fusil à chaîne et le fusil de précision.
 - **Planification du rendu des acteurs cuits :** comme pour les arcs et le fusil à pompe, la table de l'atlas des acteurs ne connaît pas encore ces armes ; le rendu ordinaire les affiche.
 
 ## Sauvegardes
