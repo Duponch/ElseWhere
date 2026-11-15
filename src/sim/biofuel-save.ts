@@ -79,9 +79,12 @@ export function validBiofuelTransport(w:World,version:number,powerTopology?:Powe
     }
     for(const p of w.piles)if(chem(p)&&!validChemfuelPile(p,w,version,w.tick))return false;
     for(const slot of foreign)for(const p of slot.items)if(chem(p)&&!validChemfuelPile(p,w,version,slot.validationTick))return false;
-    // Local production has no negotiated acquisition/sale in this release.
-    if(w.civilianPost?.stock.some(chem)||[w.spoiled,w.trade?.bought,w.trade?.sold].some(v=>v&&Object.hasOwn(v,'chemfuel'))
-      ||w.trade?.recent.some(r=>r.lines.some(l=>'item' in l&&l.item==='chemfuel')))return false;
+    // Local production has no negotiated acquisition/sale before schema 338,
+    // where only the orbital bulk goods trader (Core Chemfuel 200~600) trades
+    // it: a receipt naming a person on the map as its trader stays refused.
+    if(w.civilianPost?.stock.some(chem)||w.spoiled&&Object.hasOwn(w.spoiled,'chemfuel')
+      ||version<338&&[w.trade?.bought,w.trade?.sold].some(v=>v&&Object.hasOwn(v,'chemfuel'))
+      ||w.trade?.recent.some(r=>r.lines.some(l=>'item' in l&&l.item==='chemfuel')&&(version<338||w.pawns.some(p=>p.id===r.traderId))))return false;
     for(const z of w.stockpiles)if(Object.hasOwn(z.filters??{},'chemfuel')&&typeof z.filters.chemfuel!=='boolean'
       ||Object.hasOwn(z.items??{},'chemfuel')&&typeof z.items!.chemfuel!=='boolean')return false;
     const reservations=new Map<number,number>();

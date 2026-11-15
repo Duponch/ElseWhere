@@ -14,6 +14,7 @@ import type { TradeLedger,TradeReceipt } from './trade-state.ts';
 import type { NeedContext } from './needs.ts';
 import type { CommandResult,Pawn,World } from './types.ts';
 import { filteredStructures,structureById } from './structure-navigation.ts';
+import { releaseDraftForTrade338 } from './drafted-negotiator-338.ts';
 
 function emit(w:World,message:string):void {w.events.push({tick:w.tick,type:'command',message});if(w.events.length>80)w.events.splice(0,w.events.length-80);}
 export function adoptOrbital(w:World):void {
@@ -51,7 +52,7 @@ export function orderOrbitalTrade(w:World,pawnId:number,shipId:number,consoleId:
   const reason=orbitalTradeReason(w,p,ship,console);if(reason)return fail(reason);
   const spot=orbitalConsoleSpot(console),path=routeToCell(w,spot,reachableCells(w,p,blockedCells(w),new Set()));if(!path)return fail('Console inaccessible.');
   const drops=planCommandDrops(w,{type:'order-orbital-trade',pawnId,shipId,consoleId});if(!drops||!releaseWork(w,p,drops))return fail('Pas de place pour déposer la cargaison.');
-  clearQueuedOrders(w,p);delete p.priorityWork;p.orbitalTrade={shipId,consoleId,spot,phase:'approach',startedAt:w.tick};p.path=path;p.state='moving';p.planCooldown=0;return {ok:true};
+  clearQueuedOrders(w,p);delete p.priorityWork;releaseDraftForTrade338(w,p);p.orbitalTrade={shipId,consoleId,spot,phase:'approach',startedAt:w.tick};p.path=path;p.state='moving';p.planCooldown=0;return {ok:true};
 }
 export function advanceOrbital(w:World):void {
   const state=w.orbital;if(!state)return;

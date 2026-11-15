@@ -10,6 +10,7 @@ import { validatePreservation } from './food-preservation-save.ts';
 import { microelectronicsUnlocked } from './research.ts';
 import { orbitalConsoleSpot,ORBITAL_BULK_EXTRAS } from './orbital-rules.ts';
 import { orbitalBeerCatalogue265,orbitalNovelCatalogue295,ORBITAL_STOCK } from './orbital-stock.ts';
+import { ORBITAL_TRADE_SCHEMA_338,orbitalMayHold338 } from './orbital-trade-338.ts';
 import { pileMaxHp } from './thing-damage-rules.ts';
 import { serviceCell } from './service-reservations.ts';
 import { validatePower } from './power-save.ts';
@@ -89,14 +90,16 @@ export function validOrbitalTransport(w:World,version:number,powerTopology?:Powe
       const o=p.owner;
       if(o.type!=='orbital-ship'&&o.type!=='orbital-cargo')return false;
       const ship=o.type==='orbital-ship'?w.orbital!.ships.find(s=>s.id===o.shipId):undefined;
-      const allowed=ship?(version===295||(version===296||isCorePhysicalSchema297(version)))&&orbitalNovelCatalogue295(version,ship.kind,p.item)||orbitalBeerCatalogue265(version,ship.kind,p.item)||ORBITAL_STOCK[ship.kind].some(([item])=>item===p.item)||ship.kind==='bulk'&&ORBITAL_BULK_EXTRAS.has(p.item)
+      // Schema 338: Core WillTrade of the ship's kind (its stock or its purchases).
+      const current338=version>=ORBITAL_TRADE_SCHEMA_338;
+      const allowed=current338?ship?orbitalMayHold338(ship.kind,p.item):orbitalMayHold338('bulk',p.item)||orbitalMayHold338('exotic',p.item):ship?(version===295||(version===296||isCorePhysicalSchema297(version)))&&orbitalNovelCatalogue295(version,ship.kind,p.item)||orbitalBeerCatalogue265(version,ship.kind,p.item)||ORBITAL_STOCK[ship.kind].some(([item])=>item===p.item)||ship.kind==='bulk'&&ORBITAL_BULK_EXTRAS.has(p.item)
         :(version===295||(version===296||isCorePhysicalSchema297(version)))&&orbitalNovelCatalogue295(version,'bulk',p.item)||orbitalBeerCatalogue265(version,'bulk',p.item)||Object.values(ORBITAL_STOCK).some(stock=>stock.some(([item])=>item===p.item))||ORBITAL_BULK_EXTRAS.has(p.item);
       if(!obj(o)||!keys(o,o.type==='orbital-ship'?['type','shipId']:['type','deliveryId'])
         ||o.type==='orbital-ship'&&!ships.has(o.shipId)||o.type==='orbital-cargo'&&!deliveries.has(o.deliveryId)
         ||!int(p.id,1,w.nextId-1)||ids.has(p.id)||!Object.hasOwn(ITEM_DEFINITIONS,p.item)
         ||p.kind!==ITEM_DEFINITIONS[p.item].kind||!int(p.quantity,1,ITEM_DEFINITIONS[p.item].stackLimit)
-        ||['corpse','mech-corpse','unfinished','weapon','apparel','chunk','blocks'].includes(p.kind)
-        ||!allowed||!validNovelPile295(p,version)||p.haulRequested!==undefined||Object.keys(p).some(k=>!['id','kind','item','quantity','owner','rot','foodPoison','damage',...((version===295||(version===296||isCorePhysicalSchema297(version)))&&p.kind==='book'?['book','forbidden']:[])].includes(k))
+        ||['corpse','mech-corpse','unfinished','weapon',...current338?[]:['apparel'],'chunk','blocks'].includes(p.kind)
+        ||!allowed||!validNovelPile295(p,version)||p.haulRequested!==undefined||Object.keys(p).some(k=>!['id','kind','item','quantity','owner','rot','foodPoison','damage',...((version===295||(version===296||isCorePhysicalSchema297(version)))&&p.kind==='book'?['book','forbidden']:[]),...current338?['forbidden',...p.kind==='apparel'?['apparel']:[]]:[]].includes(k))
         ||p.damage!==undefined&&!int(p.damage,p.kind==='book'?0:1,pileMaxHp(p)-1)||validatePileRecordShape(p as unknown as Record<string,unknown>,w,version).length
         ||validatePreservation({...w,piles:[p]},version).length)return false;
       ids.add(p.id);if(o.type==='orbital-cargo')cargo.add(o.deliveryId);

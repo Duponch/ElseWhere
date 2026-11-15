@@ -49,7 +49,9 @@ export function validApparelShape(p:Record<string,unknown>,version:number):boole
     // Ordinary garments gain inventory custody only in279; the three remaining
     // carried armor types join in284. Actual custodian and holder membership
     // remain the owning domain's responsibility.
-    &&!(a.forbidden===true&&a.forced===true)&&p.quantity===1&&record(p.owner)&&typeof p.owner.type==='string'&&['ground','pawn','apparel',...(isSchema279OrLater(version)&&isOrdinaryApparel279(item)||version>=241&&item==='recon-armor'||version>=267&&isSmithingApparel267(item)||isSchema284OrLater(version)&&['flak-vest','flak-helmet','recon-helmet'].includes(item)?['inventory']:[]),...(version>=231?['starting-pod']:[]),...(isSchema284OrLater(version)?['trade-request284']:[])].includes(p.owner.type)
+    &&!(a.forbidden===true&&a.forced===true)&&p.quantity===1&&record(p.owner)&&typeof p.owner.type==='string'&&['ground','pawn','apparel',...(isSchema279OrLater(version)&&isOrdinaryApparel279(item)||version>=241&&item==='recon-armor'||version>=267&&isSmithingApparel267(item)||isSchema284OrLater(version)&&['flak-vest','flak-helmet','recon-helmet'].includes(item)?['inventory']:[]),...(version>=231?['starting-pod']:[]),...(isSchema284OrLater(version)?['trade-request284']:[]),
+      // Schema 338: Orbital_BulkGoods stocks and buys Clothing-tagged garments.
+      ...(version>=338&&(isOrdinaryApparel279(item)||isSmithingApparel267(item))?['orbital-ship','orbital-cargo']:[])].includes(p.owner.type)
     &&(a.forced===undefined||p.owner.type==='apparel');
 }
 export function validateApparel(world:World,version:number=world.schemaVersion):string[] {

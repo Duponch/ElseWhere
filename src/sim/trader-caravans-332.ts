@@ -36,11 +36,11 @@ const single=(item:ItemId,min:number,max:number):StockGenerator332=>({kind:'sing
 const ALL_RANGED=Object.freeze(VISITOR_RANGED_POOL.map((_,i)=>i));
 /** Core RangedNeolithic order: Bow_Short, Pila (absent), Bow_Recurve, Bow_Great. */
 const NEOLITHIC_RANGED=Object.freeze([19,20,21,22]);
-const ALL_CLOTHING=Object.freeze(VISITOR_CLOTHING_POOL.map((_,i)=>i));
+export const ALL_CLOTHING=Object.freeze(VISITOR_CLOTHING_POOL.map((_,i)=>i));
 /** BasicClothing tag (the Sellable tribal wear is never generated): cowboy and
  * bowler hats, tribal headdress, tuque, war mask, war veil, hood, parka, pants,
  * T-shirt, button-down shirt, duster, jacket, robe. */
-const BASIC_CLOTHING=Object.freeze([0,1,2,3,4,5,8,12,13,14,15,16,17,21]);
+export const BASIC_CLOTHING=Object.freeze([0,1,2,3,4,5,8,12,13,14,15,16,17,21]);
 /** maxTechLevelGenerate Neolithic: tribal headdress, war mask, war veil, parka;
  * the Clothing tag adds the cloth mask. */
 const NEOLITHIC_BASIC_CLOTHING=Object.freeze([2,4,5,12]);

@@ -13,6 +13,7 @@ import { roundTradeSilver,tradeUnitPrice } from './trade-prices.ts';
 import { ticksUntilRot } from './food-preservation.ts';
 import { reservedSource } from './materials.ts';
 import { orbitalBeerCatalogue265,orbitalNovelCatalogue295,ORBITAL_STOCK } from './orbital-stock.ts';
+import { orbitalItemRefusal338 } from './orbital-trade-338.ts';
 import type { TradeGood } from './trade-goods.ts';
 import type { TradeLine } from './trade-state.ts';
 import type { OrbitalShip } from './orbital-state.ts';
@@ -42,7 +43,7 @@ export function orbitalCoverage(w:World):Set<number> {
 export function orbitalTradeReason(w:World,p:Pawn,ship:OrbitalShip,console?:Structure):string|undefined {
   if(w.schemaVersion<216||!w.orbital)return 'Le commerce orbital n’est pas encore adopté.';
   if(!w.orbital.ships.includes(ship)||w.tick>=ship.departAt)return 'Le vaisseau a quitté l’orbite.';
-  const reason=negotiatorRefusal(p);if(reason)return reason;
+  const reason=negotiatorRefusal(p,w.schemaVersion,'comms');if(reason)return reason;
   if(!w.pawns.includes(p)||p.state==='dead'||p.state==='downed'||p.state==='sleeping'||p.flee||carrierOf(w,p.id)||p.hunger<=24||p.rest<=15)return 'Négociateur indisponible.';
   if(!orbitalPoweredBeacon(w))return 'Une balise orbitale alimentée est nécessaire.';
   console??=structureById(w,p.orbitalTrade?.consoleId);
@@ -65,6 +66,7 @@ export function orbitalAtContact(w:World,p:Pawn,ship:OrbitalShip):boolean {
 export function orbitalOtherActivity(w:World,p:Pawn):boolean {return !!(factionCommsTask298(p)||p.need||p.jobId!==null||p.orders.active!==null||p.orders.queue.length||p.haul||p.cooking||p.brewing||p.deepWork||p.trade||p.research||p.hunting||p.animalHandling||p.rescue||p.tend||p.feed||p.ward||p.surgery||p.animalCare||p.animalFeed||p.animalRescue||p.equipmentTask||p.burial||p.cleaning||p.firefighting||p.shooting||p.melee||p.tactics||p.flee||p.heatRefuge||p.bombRefuge||p.recreation.task||w.piles.some(i=>i.owner.type==='pawn'&&i.owner.pawnId===p.id));}
 export const ORBITAL_BULK_EXTRAS=new Set(['light-leather','muffalo-wool','foxfur','berries','rice','potato','corn','hare-meat','red-fox-meat','survival-meal']);
 export function orbitalItemRefusal(pile:MaterialPile,side:'buy'|'sell',w:World,ship:OrbitalShip):string|undefined {
+  if(w.schemaVersion>=338)return orbitalItemRefusal338(pile,side,w.tick,ship.kind);
   const e=tradeCatalogueEntry(pile.item);
   if(!e||pile.quantity<=0||ticksUntilRot(pile,w.tick)<=0)return 'Objet indisponible ou sans profil commercial.';
   if(pile.kind==='weapon'||pile.kind==='apparel'||pile.unfinished||pile.corpse||pile.humanCorpse||pile.mechCorpse)return 'Ce profil orbital ne commerce pas cet objet.';

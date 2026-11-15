@@ -7,6 +7,7 @@ import { refreshStock,transferPile } from './materials.ts';
 import { orderTrade } from './trade-contact.ts';
 import { quoteTrade } from './trade-goods.ts';
 import { enableVisitors } from './visitors.ts';
+import { applyTradeGoodwill338,planTradeGoodwill338,soldSilver338 } from './trade-goodwill-338.ts';
 import type { TradeCommand,TradeLedger,TradeReceipt } from './trade-state.ts';
 import type { CommandResult,MaterialOwner,MaterialPile,World } from './types.ts';
 
@@ -81,8 +82,13 @@ export function applyTrade(w:World,c:TradeCommand):CommandResult {
   if([ledger.count,ledger.silverPaid,ledger.silverReceived,ledger.forgone,...Object.values(ledger.bought),...Object.values(ledger.sold),...Object.values(ledger.artBought??{}),...Object.values(ledger.artSold??{})].some(n=>!Number.isSafeInteger(n)||n<0))return fail('Compteurs du commerce hors limites.');
   if(draft.piles.length>32768||draft.piles.some(p=>p.quantity>ITEM_DEFINITIONS[p.item].stackLimit))return fail('Capacité physique dépassée.');
   ledger.recent.push(receipt);if(ledger.recent.length>80)ledger.recent.shift();
+  // Schema 338: Core Faction.Notify_PlayerTraded on the trader's world faction.
+  const goodwill=planTradeGoodwill338(w.worldFactions,q.t.worldAffiliation259?.factionId,soldSilver338([
+    ...q.selected.filter(l=>l.quantity<0).map(l=>({count:-l.quantity,unitPrice:l.good.unitPrice})),
+    ...q.selectedArt.filter(l=>l.quantity<0).map(l=>({count:1,unitPrice:l.good.unitPrice}))]),w.schemaVersion);
   w.piles=draft.piles;w.packed=draft.packed;w.nextId=draft.nextId;w.trade=ledger;refreshStock(w);
   delete q.p.trade;q.p.path=[];q.p.state='idle';q.p.planCooldown=0;
   w.events.push({tick:w.tick,type:'command',message:`${q.p.name} a conclu un échange avec ${q.t.name} (${q.paid>=0?q.paid+' argent payé':-q.paid+' argent reçu'}).`});if(w.events.length>80)w.events.shift();
+  if(goodwill){w.events.push({tick:w.tick,type:'command',message:applyTradeGoodwill338(goodwill)});if(w.events.length>80)w.events.shift();}
   return {ok:true};
 }

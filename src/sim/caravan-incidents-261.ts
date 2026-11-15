@@ -8,6 +8,7 @@ import {caravanFactionCandidates261,selectCaravanFaction261,type CaravanFactionC
 import {CARAVAN_BIOME_MTB_261,groupVisibility261,caravanIncidentOccurs261} from './caravan-incident-calculation-261.ts';
 import {CARAVAN_INCIDENTS_261,caravanIncidentTooRecent261,firedCaravanStory261,type EncounterGroup261,type CaravanIncident261} from './caravan-encounter-state-261.ts';
 import {draftForeignRoster261} from './caravan-foreign-roster-261.ts';
+import {CARAVAN_TRADER_KINDS_332} from './trader-caravans-332.ts';
 import {captureCurrentDemand261,selectCurrentDemand261} from './caravan-demand-capture-261.ts';
 import type {CampaignState,WorldGroupRecord} from './world-map-state.ts';
 import type {WorldLandBiome} from './world-biome-selection.ts';
@@ -82,7 +83,8 @@ export function advanceCaravanIncidents261(root:CampaignState):boolean {
    root.nextId=roster.nextId;root.rng=roster.rng;
    if(incident!=='ambush')record.story261=firedCaravanStory261(record.story261,incident,root.tick*10);
    root.worldGroups.selectedGroupId=g.id;
-   root.worldGroups.events.push({tick:root.tick,type:'command',message:incidentMessage261(incident)});
+   const met=roster.meeting?.caravanKind338;
+   root.worldGroups.events.push({tick:root.tick,type:'command',message:met?`La caravane rencontre une caravane marchande (${CARAVAN_TRADER_KINDS_332[met].label}) : Commerce, Attaquer ou Continuer.`:incidentMessage261(incident)});
    if(root.worldGroups.events.length>80)root.worldGroups.events.shift();return true;
   }
  }

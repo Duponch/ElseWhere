@@ -6,6 +6,8 @@ import {copyPileCondition} from './pile-condition.ts';
 import {captureGroupMass} from './group-capture.ts';
 import {freightGroup} from './group-freight.ts';
 import {withGroupExchange} from './group-reorganization-balance.ts';
+import {applyTradeGoodwill338,planTradeGoodwill338,soldSilver338} from './trade-goodwill-338.ts';
+import {caravanDealsIn332} from './trader-caravans-332.ts';
 import type {CampaignState,WorldGroupRecord} from './world-map-state.ts';
 import type {MaterialPile} from './types.ts';
 
@@ -20,15 +22,17 @@ const fail=(reason:string)=>({ok:false as const,reason});
 export function quoteMeetingTrade261(root:Pick<CampaignState,'schemaVersion'|'tick'|'nextId'>,record:WorldGroupRecord,lines:readonly MeetingTradeLine261[]):Quote261 {
  const p=record.pending261,g=record.state;
  if((Number(root.schemaVersion)!==261&&(Number(root.schemaVersion)!==262&&!isSchema263OrLater(Number(root.schemaVersion))))||p?.kind!=='meeting'||p.decision!=='open'||record.localMapId!==null||!('members'in g)||g.lastPersonalTick!==root.tick||p.atCore!==root.tick*10)return fail('La rencontre commerciale n’est plus disponible.');
- const negotiator=bestGroupNegotiator(g.members),trader=p.people.find(a=>a.id===p.traderId);
+ const negotiator=bestGroupNegotiator(g.members,Number(root.schemaVersion)),trader=p.people.find(a=>a.id===p.traderId);
  if(!negotiator||!trader||trader.state==='dead'||trader.state==='downed')return fail('Un négociateur et le véritable marchand doivent être disponibles.');
  if(!Array.isArray(lines)||lines.length>128||new Set(lines.map(l=>l.pileId)).size!==lines.length||lines.some(l=>!l||Reflect.ownKeys(l).length!==2||!Number.isSafeInteger(l.pileId)||!Number.isSafeInteger(l.quantity)||!l.quantity||Math.abs(l.quantity)>250000))return fail('Panier de rencontre invalide.');
  const improvement=tradeImprovement(negotiator),goods:MeetingTradeGood261[]=[];
+ // Schema 338: a met trader caravan sells and buys back its own kind's goods.
+ const deals=p.caravanKind338?caravanDealsIn332(p.caravanKind338):undefined;
  for(const [items,side] of [[g.items,'sell'],[p.items,'buy']] as const)for(const i of items){
   if(i.owner.type!=='inventory'||i.item==='silver')continue;
   // Only the actual merchant's current inventory is the current producer's stock.
   if(side==='buy'&&i.owner.pawnId!==p.traderId)continue;
-  const refusal=tradeRefusal(i,side,root.tick,undefined,'caravan',root.schemaVersion),price=tradeUnitPrice(i,side,improvement);
+  const refusal=tradeRefusal(i,side,root.tick,undefined,'caravan',root.schemaVersion,deals),price=tradeUnitPrice(i,side,improvement);
   goods.push({id:i.id,item:i.item,side,available:i.quantity,unitPrice:price??null,...refusal?{refusal}:price===undefined?{refusal:'Ce bien n’a pas de prix représenté.'}:{}});
  }
  let net=0;
@@ -66,5 +70,9 @@ export function prepareMeetingTrade261(root:CampaignState,record:WorldGroupRecor
  if(!recipients())return fail('Un véritable détenteur du panier n’est pas modifiable.');
  const sameOriginals=(actual:readonly object[],originals:readonly object[])=>actual.length===originals.length&&actual.every((a,i)=>a===originals[i]);
  const current=()=>!used&&root.worldGroups===registry&&registry.groups===recordsBefore&&recordsBefore[recordSlotBefore]===record&&recipients()&&root.tick===tick&&root.nextId===allocator&&record.state===g&&record.pending261===p&&sameOriginals(g.items,playerBefore)&&sameOriginals(p.items,foreignBefore)&&sameOriginals(g.members,membersBefore)&&sameOriginals(p.people,peopleBefore)&&JSON.stringify(record)===before&&quoteMeetingTrade261(root,record,lines).ok;
- return {ok:true,current,commit(){if(!current())throw Error('Stale real meeting trade');used=true;for(const [i,next]of updates){i.quantity=next.quantity;assignPileOwner(i,next.owner);}g.items=player;g.reorganization=history;p.items=foreign;root.nextId=nextId;root.worldGroups!.events.push({tick,type:'command',message:`Échange de rencontre conclu : ${q.paid>=0?q.paid+' argent payé':-q.paid+' argent reçu'}${q.forgone?', '+q.forgone+' argent abandonné explicitement':''}.`});if(root.worldGroups!.events.length>80)root.worldGroups!.events.splice(0,root.worldGroups!.events.length-80);}};
+ // Schema 338: Core Faction.Notify_PlayerTraded on the met caravan's faction.
+ const sold=soldSilver338(lines.filter(l=>l.quantity<0).map(l=>({count:-l.quantity,unitPrice:q.goods.find(good=>good.id===l.pileId)!.unitPrice!})));
+ return {ok:true,current,commit(){if(!current())throw Error('Stale real meeting trade');used=true;for(const [i,next]of updates){i.quantity=next.quantity;assignPileOwner(i,next.owner);}g.items=player;g.reorganization=history;p.items=foreign;root.nextId=nextId;root.worldGroups!.events.push({tick,type:'command',message:`Échange de rencontre conclu : ${q.paid>=0?q.paid+' argent payé':-q.paid+' argent reçu'}${q.forgone?', '+q.forgone+' argent abandonné explicitement':''}.`});
+  const goodwill=planTradeGoodwill338(root.worldFactions,p.factionId,sold,Number(root.schemaVersion));if(goodwill)root.worldGroups!.events.push({tick,type:'command',message:applyTradeGoodwill338(goodwill)});
+  if(root.worldGroups!.events.length>80)root.worldGroups!.events.splice(0,root.worldGroups!.events.length-80);}};
 }

@@ -30,7 +30,7 @@ function capture(w:World){
  const g=w.group,target=groupGeographicTradeTarget256(w,g),root=registeredCampaign(w),factions=root.worldFactions;
  if(!target||!factions||!validCivilianPostShape(target.post,w.tick,w.nextId,w.schemaVersion))return no('Le comptoir réellement visité n’est plus disponible.');
  const faction=diplomaticGiftFaction274(factions,target.factionId,w.schemaVersion);if(!faction.ok)return faction;
- const negotiator=bestGroupNegotiator(g.members);if(!negotiator)return no('Un adulte libre, éveillé et capable de négocier doit être présent.');
+ const negotiator=bestGroupNegotiator(g.members,w.schemaVersion);if(!negotiator)return no('Un adulte libre, éveillé et capable de négocier doit être présent.');
  const mass=captureGroupMass(g.members,g.items,freightGroup(g),w.schemaVersion,g.packed,g.animalOwners?.members);if(!mass)return no('Les détenteurs ou la charge de la caravane sont invalides.');
  const settlement=factions.settlements.find(s=>s.id===target.settlementId);if(!settlement)return no('L’établissement destinataire réel est absent.');
  return {ok:true as const,g,target,root,factions,faction:faction.faction,relation:faction.relation,negotiator,mass,settlement};

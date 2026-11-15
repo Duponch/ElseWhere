@@ -13,6 +13,7 @@ import {validCaravanAnimalRecord256} from './group-animal-record-save-256.ts';
 import {validWorldAffiliationForeignKeys259} from './world-affiliation-259.ts';
 import {plainWorldPawnData256} from './world-pawn-save-256.ts';
 import {worldGroupContext} from './world-map-context.ts';
+import {CARAVAN_FAMILY_BY_DEF_332,CARAVAN_TRADER_KINDS_332,isCaravanTraderKind332} from './trader-caravans-332.ts';
 import type {CampaignState} from './world-map-state.ts';
 import type {EncounterGroup261,PendingCaravanEncounter261} from './caravan-encounter-state-261.ts';
 const int=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
@@ -22,13 +23,15 @@ const dense=(v:unknown,max:number):v is unknown[]=>Array.isArray(v)&&v.length<=m
 /** Envelope is checked before any nested record is interpreted as an actor. */
 export function validPendingEncounterShape261(value:unknown,version:number,nextId:number,atCore:number):value is PendingCaravanEncounter261|undefined {
  if(value===undefined)return true;
- if((version!==261&&(Number(version)!==262&&!isSchema263OrLater(Number(version))))||!plainWorldPawnData256(value)||!plain(value)||!['meeting','demand','ambush',...((version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version)))))?['peace-talks']:[])].includes(String(value.kind))||!exact(value,['revision','kind','decision','atCore','factionId','people','animals','items','packed',...value.kind==='peace-talks'?['peaceTalksSiteId293']:[],...value.kind==='demand'?['demands']:[],...value.kind==='meeting'?['traderId','guardIds']:[],...value.animalAmbush261===true?['animalAmbush261']:[]])||value.revision!==1||!int(value.atCore,0,atCore)||!(value.animalAmbush261===true?value.kind==='ambush'&&value.factionId===null:int(value.factionId,1))||!dense(value.people,nextId)||(value.animalAmbush261===true?value.people.length!==0:!value.people.length)||!dense(value.animals,nextId)||!dense(value.items,nextId)||!dense(value.packed,nextId))return false;
+ if((version!==261&&(Number(version)!==262&&!isSchema263OrLater(Number(version))))||!plainWorldPawnData256(value)||!plain(value)||!['meeting','demand','ambush',...((version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version)))))?['peace-talks']:[])].includes(String(value.kind))||!exact(value,['revision','kind','decision','atCore','factionId','people','animals','items','packed',...value.kind==='peace-talks'?['peaceTalksSiteId293']:[],...value.kind==='demand'?['demands']:[],...value.kind==='meeting'?['traderId','guardIds',...Number(version)>=338&&Object.hasOwn(value,'caravanKind338')?['caravanKind338']:[]]:[],...value.animalAmbush261===true?['animalAmbush261']:[]])||value.revision!==1||!int(value.atCore,0,atCore)||!(value.animalAmbush261===true?value.kind==='ambush'&&value.factionId===null:int(value.factionId,1))||!dense(value.people,nextId)||(value.animalAmbush261===true?value.people.length!==0:!value.people.length)||!dense(value.animals,nextId)||!dense(value.items,nextId)||!dense(value.packed,nextId))return false;
  if((value.kind==='ambush'||value.kind==='peace-talks')?value.decision!=='forced':value.kind==='meeting'?!['open','attack'].includes(String(value.decision)):!['open','fight'].includes(String(value.decision)))return false;
  if(value.animalAmbush261===true&&(value.animals.length<2||value.animals.length>100||value.items.length||value.packed.length)||Object.hasOwn(value,'animalAmbush261')&&value.animalAmbush261!==true)return false;
  if(value.kind==='peace-talks'&&(!int(value.peaceTalksSiteId293,1)||value.animals.length))return false;
  const people=value.people;
  if(value.kind==='meeting'){
   if(!int(value.traderId,1,nextId-1)||!people.some(p=>plain(p)&&p.id===value.traderId)||!dense(value.guardIds,people.length)||new Set(value.guardIds).size!==value.guardIds.length||value.guardIds.some(id=>!int(id,1,nextId-1)||id===value.traderId||!people.some(p=>plain(p)&&p.id===id)))return false;
+  // Schema 338: an optional (old meetings migrate without it) known kind.
+  if(Object.hasOwn(value,'caravanKind338')&&!isCaravanTraderKind332(value.caravanKind338))return false;
  }
  if(value.kind==='demand'){
   if(!dense(value.demands,nextId)||!value.demands.length)return false;
@@ -55,6 +58,7 @@ export function validatePendingEncounterRecords261(root:Pick<CampaignState,'sche
  if(!validPendingEncounterShape261(p,root.schemaVersion,root.nextId,root.tick*10))return ['Invalid pending projected encounter'];
  const factions=root.worldFactions,g=record.state;
  if(!context||!factions||record.localMapId!==null||!('members'in g)||!record.encounters261||!(p.animalAmbush261===true?p.factionId===null:factions.factions.some(f=>f.id===p.factionId&&f.id!==factions.playerFactionId)))return ['Pending encounter has no exclusive current caravan/faction owner'];
+ if(p.kind==='meeting'&&p.caravanKind338!==undefined&&CARAVAN_FAMILY_BY_DEF_332[factions.factions.find(f=>f.id===p.factionId)!.def]!==CARAVAN_TRADER_KINDS_332[p.caravanKind338].family)return ['Pending caravan trader kind does not belong to its faction'];
  const errors:string[]=[],holders=new Set<number>();
  const add=(id:number)=>{if(!int(id,1,root.nextId-1)||globalIds.has(id))errors.push('Duplicate or invalid pending original');globalIds.add(id);};
  for(const actor of p.people){

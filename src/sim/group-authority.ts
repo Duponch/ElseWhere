@@ -18,6 +18,7 @@ import {validCaravanBedrollPacks256} from './group-bedroll-capture-256.ts';
 import {previewGroupBedrollLoading256} from './group-bedroll-loading-256.ts';
 import {groupGeographicTradeTarget256,commitGeographicGroupPost256} from './group-geographic-post-256.ts';
 import {registeredCampaign,registeredMapId,pawnWorldGroup,boundWorldGroup,initialWorldRegistry,withWorldGroup} from './world-map-context.ts';
+import {applyTradeGoodwill338,planTradeGoodwill338} from './trade-goodwill-338.ts';
 import {GROUP_FREIGHT_SCHEMA,newGroupFreight,freightGroup} from './group-freight.ts';
 import {GROUP_PROVISIONS_SCHEMA,newGroupProvisions,mixedGroupProvisions,groupProvisionCounts,groupProvisionMinimum,freshGroupProvision} from './group-provisions.ts';
 import {secondaryLocalGroupAllowed} from './secondary-site.ts';
@@ -210,7 +211,7 @@ export function groupPermission(w:World):GroupPermissionView {
   const actions:Record<GroupPanelAction,GroupActionPermission>={adopt:{ok:!w.planet},start:{ok:!!w.planet&&!g&&!w.scout&&!w.commercialTrip&&(w.schemaVersion>=255||!!w.expeditionSite||!(w.secondarySite?.visit||legacyMap?.visitIds.length))},cancel:{ok:!!g&&!away(g)},pause:{ok:away(g)},route:{ok:away(g)},return:{ok:away(g)},buy:{ok:false},sell:{ok:false},unload:{ok:!!w.planet&&(!g||g.phase==='unloading')}};
   let trade:GroupPermissionView['trade']=null;
   if(w.planet&&away(g)&&g.phase==='at-site'&&(w.planet.revision===3||w.planet.civilianTile!==null&&g.tile===w.planet.civilianTile)&&mass){
-    const env=tradeEnvironment(w,mass),buy=quoteGroupTrade(g,env,'buy',[]),sell=quoteGroupTrade(g,env,'sell',[]),negotiator=bestGroupNegotiator(g.members)??null;
+    const env=tradeEnvironment(w,mass),buy=quoteGroupTrade(g,env,'buy',[]),sell=quoteGroupTrade(g,env,'sell',[]),negotiator=bestGroupNegotiator(g.members,w.schemaVersion)??null;
     const goods=(q:typeof buy,direction:'buy'|'sell')=>q.ok?q.goods.map(good=>({pile:(direction==='buy'?env.post!.stock:g.items).find(p=>p.id===good.pileId)!,available:good.available,unitPrice:good.unitPrice})):[];
     trade={negotiator,...!buy.ok?{refusal:buy.reason}:{},groupSilver:g.items.filter(p=>p.owner.type==='inventory'&&p.item==='silver').reduce((n,p)=>n+p.quantity,0),postSilver:env.post?.stock.filter(p=>p.item==='silver').reduce((n,p)=>n+p.quantity,0)??0,buys:goods(buy,'buy'),sells:goods(sell,'sell')};
     actions.buy={ok:buy.ok,...!buy.ok?{reason:buy.reason}:{}};actions.sell={ok:sell.ok,...!sell.ok?{reason:sell.reason}:{}};
@@ -275,8 +276,12 @@ export function applyGroupCommand(w:World,c:GroupCommand):CommandResult {
     if(!draft)return fail('Le devis, le stock, les fonds ou la charge du groupe ont changé.');
     // Pure transfer draft is complete before this closed adoption. Original
     // Pawn owners never change, and all goods/currency/counters adopt together.
+    // Schema 338: Core Faction.Notify_PlayerTraded on the settlement's faction.
+    const goodwill=env.siteOwner?planTradeGoodwill338(registeredCampaign(w).worldFactions,env.siteOwner.factionId,draft.sold338,w.schemaVersion):undefined;
     if(env.siteOwner)commitGeographicGroupPost256(w,env.siteOwner.postId,draft.post);else w.civilianPost=draft.post;w.group=draft.group;w.nextId=draft.nextId;
-    groupLog(w,direction==='buy'?'Le groupe a acheté les marchandises au comptoir.':'Le groupe a vendu son fret au comptoir.');return {ok:true};
+    groupLog(w,direction==='buy'?'Le groupe a acheté les marchandises au comptoir.':'Le groupe a vendu son fret au comptoir.');
+    if(goodwill)groupLog(w,applyTradeGoodwill338(goodwill));
+    return {ok:true};
   }
   return fail('Commande de groupe inconnue.');
 }

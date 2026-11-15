@@ -43,7 +43,7 @@ function memberInventory(c:CommercialOwnerContext):MaterialPile[] {
 export function quoteOwnerTrade(c:CommercialOwnerContext,direction:CommercialDirection,lines:readonly CommercialBuyLine[]):OwnerQuote {
   if(!validCivilianPostShape(c.post,c.tick,c.nextId,c.version)||!c.members.includes(c.negotiator)||new Set(c.members.map(p=>p.id)).size!==c.members.length||c.members.some(p=>p.state==='dead'||p.health?.death))return reject('Propriétaires ou comptoir inadmissibles.');
   if(c.additionalInventoryOwners!==undefined&&(c.version<256||c.groupProspective!==true||new Set([...c.members,...c.additionalInventoryOwners].map(p=>p.id)).size!==c.members.length+c.additionalInventoryOwners.length||c.additionalInventoryOwners.some(a=>a.state==='dead'||a.health?.death)))return reject('Propriétaires animaux commerciaux inadmissibles.');
-  const reason=negotiatorRefusal(c.negotiator);if(reason)return reject(reason);
+  const reason=negotiatorRefusal(c.negotiator,c.version);if(reason)return reject(reason);
   if(direction==='sell'&&c.version<185)return reject('La vente de textiles n’est pas disponible dans ce schéma.');
   if(!integer(c.mass.grams)||!integer(c.mass.capacityGrams)||!integer(c.inventoryLimit,1)||!integer(c.pileCountElsewhere))return reject('Masse ou limites commerciales inadmissibles.');
   const limit=direction==='buy'?COMMERCIAL_MAX_STOCK:c.inventoryLimit;

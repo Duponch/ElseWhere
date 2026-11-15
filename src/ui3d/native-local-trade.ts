@@ -160,7 +160,7 @@ export function createNativeLocalTrade(options: NativeLocalTradeOptions) {
       if (!world.pawns.some(person => person.id === peerId && visitorMayTrade(world, person))) return 'Aucun marchand disponible. Les visiteurs ne commercent pas tous.';
       if (!pawn) return 'Aucun négociateur disponible.';
       if (pawn.trade?.traderId === peerId) return ready(world) ? `Au contact · avantage du négociateur ${(tradeImprovement(pawn) * 100).toFixed(1)} %` : 'Le négociateur rejoint le marchand.';
-      return negotiatorRefusal(pawn) ?? 'Rejoindre reprend le temps si nécessaire. La partie se met en pause au contact.';
+      return negotiatorRefusal(pawn, world.schemaVersion) ?? 'Rejoindre reprend le temps si nécessaire. La partie se met en pause au contact.';
     }
     if (!world.orbital) return 'Le calendrier orbital sera adopté par les événements futurs.';
     const ship = world.orbital.ships.find(ship => ship.id === peerId && ship.announced && ship.departAt > world.tick), console = world.structures.find(structure => structure.id === consoleId);
@@ -171,7 +171,7 @@ export function createNativeLocalTrade(options: NativeLocalTradeOptions) {
   }
   function contactReason(world: World): string | undefined {
     const pawn = selectedPawn(world); if (!pawn) return 'Choisissez un négociateur.';
-    if (mode === 'visitors') return !world.pawns.some(person => person.id === peerId && visitorMayTrade(world, person)) ? 'Choisissez un marchand disponible.' : pawn.trade ? 'Un contact est déjà engagé.' : negotiatorRefusal(pawn);
+    if (mode === 'visitors') return !world.pawns.some(person => person.id === peerId && visitorMayTrade(world, person)) ? 'Choisissez un marchand disponible.' : pawn.trade ? 'Un contact est déjà engagé.' : negotiatorRefusal(pawn, world.schemaVersion);
     const ship = world.orbital?.ships.find(ship => ship.id === peerId), console = world.structures.find(structure => structure.id === consoleId);
     return !ship ? 'Choisissez un vaisseau détecté.' : pawn.orbitalTrade ? 'Un appel est déjà engagé.' : orbitalTradeReason(world, pawn, ship, console);
   }

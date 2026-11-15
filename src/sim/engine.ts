@@ -1438,6 +1438,15 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
         }
         continue;
       }
+      // Schema 338: a drafted negotiator carries out its ordered trade (Core
+      // TryTakeOrderedJob) and stays drafted; it resumes waiting afterwards.
+      if(pawn.draft&&world.schemaVersion>=338&&(pawn.orbitalTrade||pawn.trade)){
+        if(processDraftSleep(world,pawn,needsContext)||!pawn.draft)continue;
+        pawn.draft.lastActiveTick=world.tick;
+        if(pawn.orbitalTrade&&processOrbitalTrade(world,pawn,needsContext))continue;
+        if(pawn.trade&&processTrade(world,pawn,needsContext))continue;
+        if(pawn.draft){processDraft(world,pawn,getBlocked,budget,getLight);if(pawn.moveCooldown===0)retryInterruptedCargo(world,pawn);}continue;
+      }
       if(pawn.draft){if(!processDraftSleep(world,pawn,needsContext)){processDraft(world,pawn,getBlocked,budget,getLight);if(pawn.moveCooldown===0)retryInterruptedCargo(world,pawn);}continue;}
       if(pawn.firefighting&&processFirefighting(world,pawn,needsContext))continue;
       if(pawn.interruptedCargo){processNeeds(world,pawn,needsContext);continue;}

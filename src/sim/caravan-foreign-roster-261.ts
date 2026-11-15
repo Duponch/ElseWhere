@@ -11,9 +11,10 @@ import {newWeaponState} from './equipment-rules.ts';
 import {freshRot} from './food-preservation.ts';
 import {bindBornHumanFaction259} from './world-affiliation-259.ts';
 import {healthRandom} from './health.ts';
+import {draftCaravanMeetingRoster338} from './caravan-meeting-roster-338.ts';
 import type {Pawn,MaterialPile,World} from './types.ts';
 
-export interface ForeignRoster261 {people:Pawn[];items:MaterialPile[];nextId:number;rng:number;composition?:import('./raid-state.ts').RaidComposition;meeting?:{traderId:number;guardIds:number[]}}
+export interface ForeignRoster261 {people:Pawn[];items:MaterialPile[];nextId:number;rng:number;composition?:import('./raid-state.ts').RaidComposition;meeting?:{traderId:number;guardIds:number[];caravanKind338?:import('./trader-caravans-332.ts').CaravanTraderKind332}}
 /** Only current Elsewhere human constructors/content are used. Off-map originals
  * have no fake spawn/Lord/calendar/visitor membership. Their later physical map
  * entry installs the real controller once. No new biology, names or equipment
@@ -21,6 +22,8 @@ export interface ForeignRoster261 {people:Pawn[];items:MaterialPile[];nextId:num
 export function draftForeignRoster261(w:World,kind:'combat'|'trader',factionId:number,points:number,initialRng:number):ForeignRoster261|null {
  if((Number(w.schemaVersion)!==261&&(Number(w.schemaVersion)!==262&&!isSchema263OrLater(Number(w.schemaVersion))))||!w.worldFactions||!w.worldFactions.factions.some(f=>f.id===factionId&&f.id!==w.worldFactions!.playerFactionId)||!w.foodPolicies[0]||!Number.isSafeInteger(initialRng)||initialRng<1||initialRng>0xffffffff)return null;
  const random={rng:initialRng};
+ // Schema 338: the met caravan is a Core Trader group of the faction's caravan trader kinds.
+ if(kind==='trader'&&Number(w.schemaVersion)>=338)return draftCaravanMeetingRoster338(w,factionId,random);
  const composition=kind==='combat'?Number.isFinite(points)&&points>=35&&points<=10000?chooseRaidComposition(points,random):undefined:undefined;
  if(kind==='combat'&&!composition?.roster.length)return null;
  const profiles=kind==='combat'?composition!.roster.map(role=>({label:'Assaillant',guard:true,weapon:RAID_ROLE_OPTIONS.find(r=>r.role===role)!.weapon}))

@@ -50,9 +50,9 @@ export function createTradeUI(send:(c:Command)=>Promise<unknown>,pause:()=>Promi
     const p=w.pawns.find(p=>p.id===Number(colonist.value)),t=w.pawns.find(p=>p.id===Number(trader.value));
     trader.hidden=colonist.hidden=!w.visitors;contact.textContent=w.visitors?'Rejoindre le marchand':'Autoriser les prochaines visites';
     close.disabled=busy;trader.disabled=colonist.disabled=busy||!!p?.trade;
-    contact.disabled=busy||!!w.visitors&&(!p||!t||!!p.trade||!!negotiatorRefusal(p));
+    contact.disabled=busy||!!w.visitors&&(!p||!t||!!p.trade||!!negotiatorRefusal(p,w.schemaVersion));
     const ready=!!p&&!!t&&tradingAtContact(w,p,t);table.hidden=hint.hidden=confirm.hidden=shortfall.hidden=!ready;
-    status.textContent=!w.visitors?'Cette ancienne partie conserve son calendrier. Autorisez les visites à partir de maintenant.':!t?'Aucun marchand disponible. Les visiteurs ne commercent pas tous.':p?.trade?.traderId===t.id?(ready?`Au contact · avantage du négociateur ${(tradeImprovement(p)*100).toFixed(1)} %`:'Le négociateur rejoint le marchand.'):(p&&negotiatorRefusal(p))??'Rejoindre reprend le temps si nécessaire. La partie se mettra en pause au contact.';
+    status.textContent=!w.visitors?'Cette ancienne partie conserve son calendrier. Autorisez les visites à partir de maintenant.':!t?'Aucun marchand disponible. Les visiteurs ne commercent pas tous.':p?.trade?.traderId===t.id?(ready?`Au contact · avantage du négociateur ${(tradeImprovement(p)*100).toFixed(1)} %`:'Le négociateur rejoint le marchand.'):(p&&negotiatorRefusal(p,w.schemaVersion))??'Rejoindre reprend le temps si nécessaire. La partie se mettra en pause au contact.';
     if(!ready){total.textContent='';confirm.disabled=true;return;}
     const key=`${p.id}:${t.id}:${p.trade!.startedAt}`;
     if(readyKey!==key&&!busy){readyKey=key;void run(pause);}

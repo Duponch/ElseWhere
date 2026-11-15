@@ -32,7 +32,9 @@ interface EncounterForeignOwners261 {
 }
 export type PendingCaravanEncounter261=
  | (EncounterForeignOwners261&{kind:'peace-talks';decision:'forced';peaceTalksSiteId293:number})
- | (EncounterForeignOwners261&{kind:'meeting';decision:'open'|'attack';traderId:number;guardIds:number[]})
+ | (EncounterForeignOwners261&{kind:'meeting';decision:'open'|'attack';traderId:number;guardIds:number[];
+   /** Schema 338: the Core caravan trader kind of the met Trader group. */
+   caravanKind338?:import('./trader-caravans-332.ts').CaravanTraderKind332})
  | (EncounterForeignOwners261&{kind:'ambush';decision:'forced'})
  | (Omit<EncounterForeignOwners261,'factionId'|'animalAmbush261'>&{kind:'ambush';decision:'forced';factionId:null;animalAmbush261:true})
  | (EncounterForeignOwners261&{kind:'demand';decision:'open'|'fight';demands:CaravanDemandLine261[]});
