@@ -12,6 +12,12 @@ Un clic sur une **carte de sauvegarde** charge directement cette partie en pause
 
 Avec une fenêtre de jeu ouverte, utilisez le bouton droit maintenu pour tourner la caméra, le bouton central pour la déplacer et la molette pour zoomer, en commençant sur le terrain libre. Le contexte Ordres reste ouvert. Un clic gauche extérieur ferme la fenêtre. Le curseur en mode ordre associe une petite flèche de carton beige au dessin de l’action choisie ; **Échap** revient à la sélection.
 
+## Lire les alertes de droite
+
+Les alertes apparaissent après les dix premières secondes de jeu, comme dans RimWorld. Elles sont triées : **critiques** en rouge qui pulse (incendie dans la zone de foyer, colon à secourir, hypothermie grave, risque de crise majeure, urgence médicale), puis **hautes** en ocre (colon à soigner, couchages ou nourriture insuffisants, geôlier nécessaire, corps sans sépulture, défenses), puis **moyennes**. Une nouvelle alerte haute ou critique glisse et sonne ; une critique affiche aussi un avis en haut de l’écran.
+
+Survolez une carte pour lire l’explication et les noms concernés. **Clic gauche** : la caméra va sur le cas suivant et le sélectionne ; **clic droit** : le précédent. Une alerte sans cas à montrer ouvre le réglage utile, par exemple Architecte pour des lits ou Travail pour un geôlier. Si la colonne déborde, faites défiler à la molette ou avec ▲ ▼ ; « tout voir » ouvre la liste complète. Certaines alertes ne valent que pour une période : colons inoccupés à partir du premier jour, source de repas à partir du deuxième, défenses du deuxième au cinquième jour, nourriture après deux jours et demi, couchages pendant les trente premiers jours. [Règles et limites](alerts-core-a.md).
+
 ## T-shirt et blouson — V312
 
 Après la recherche des vêtements complexes, l'établi de tailleur coud aussi des **t-shirts**, rapides à faire mais peu chauds, et des **blousons**, une couche extérieure plus légère que la parka qui protège un peu mieux. Le blouson se porte par-dessus un t-shirt ou une chemise.
@@ -621,6 +627,8 @@ Sélectionnez le meuble pour régler sa **Priorité**, les objets autorisés, le
 ## Retrouver la cible d’une alerte — V319
 
 Cliquer sur une hypothermie sélectionne la personne et ouvre Santé ; cliquer de nouveau passe à la suivante. Un assaut terminé permet de retrouver l’assaillant à terre ou sa dépouille présente. Le petit bouton i ouvre la lettre complète. Sans cible encore présente, l’information ou la gestion pertinente reste disponible. Les étagères ne sont pas encore livrées dans ce lot.
+
+Depuis le [lot A des alertes](alerts-core-a.md), dans l’interface en carton : **clic gauche** sur une carte d’alerte va au cas suivant et le sélectionne, **clic droit** revient au précédent ; une offre, une quête ou un marchand ouvre son dossier. Le survol donne l’explication et les noms concernés.
 
 **Schéma 228 — V318 : [régulation du troupeau](auto-slaughter-v318.md).** Maxima par espèce/sexe/stade avec abattage physique et mandats manuels indépendants.
 
