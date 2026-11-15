@@ -74,7 +74,7 @@ Dès 340, les sortes de personnages du jeu de base dont l'étiquette d'arme est 
 | Conseiller municipal, marchand | 200 | revolver ou pistolet automatique (environ une chance sur deux) |
 | Mercenaire | 330–650 | les mêmes, le lanceur IEM et des armes non livrées |
 
-- Les gardes, mercenaires et marchands des caravanes suivent la même règle que les pillards de même sorte.
+- Les gardes, mercenaires et marchands des caravanes, venues à la colonie ou rencontrées sur la carte du monde, suivent la même règle que les pillards de même sorte.
 - Le tirage vient de la graine de la partie et de l'identité du personnage : il ne fait avancer aucun flux aléatoire partagé. Un pillard arrivé en capsule reçoit la même arme qu'à pied.
 
 ## Commerce
