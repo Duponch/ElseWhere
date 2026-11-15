@@ -214,7 +214,7 @@ test('a dose does not cure an existing infection',()=>{
 });
 
 test('before schema 337 the item, its kind, recipes, research, policy entry and clinical record are refused',()=>{
-  const old=SCHEMA_VERSION-1;
+  const old=336;
   expect(validTuqueCatalogueTransport({piles:[{item:'penoxycyline'}]},old)).toBe(false);
   expect(validTuqueCatalogueTransport({bills:[{recipe:'make-penoxycyline-bulk'}]},old)).toBe(false);
   expect(validTuqueCatalogueTransport({filters:{drug:true}},old)).toBe(false);
@@ -238,10 +238,10 @@ test('before schema 337 the item, its kind, recipes, research, policy entry and 
 
 test('a schema 336 save migrates to 337 by its number only, without any dose, research or entry',()=>{
   const camp=medicalCamp(),current=serializeWorld(camp);
-  const migrated=deserializeWorld(asOldSchema(current,SCHEMA_VERSION-1));
+  const migrated=deserializeWorld(asOldSchema(current,336));
   expect(serializeWorld(migrated)).toBe(current);
   expect(migrated.drugPolicies!.every(p=>!Object.hasOwn(p,'penoxycyline337'))).toBe(true);
   expect(migrated.pawns.every(p=>!p.health?.penoxycyline337)).toBe(true);
   const {w}=lab();learned(w,false);const labSave=serializeWorld(w);
-  expect(serializeWorld(deserializeWorld(asOldSchema(labSave,SCHEMA_VERSION-1)))).toBe(labSave);
+  expect(serializeWorld(deserializeWorld(asOldSchema(labSave,336)))).toBe(labSave);
 });
