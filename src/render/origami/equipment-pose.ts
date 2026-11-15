@@ -23,6 +23,12 @@ export const ORIGAMI_WEAPON_BIND:Readonly<Record<OrigamiWeaponKind,{grip:Point;s
  // Holstered at the belt like the revolver.
  'autopistol':{grip:[-.08,-.05,0],sign:-1,ranged:true,sling:false,stowedAxis:[0,-.95,-Math.sqrt(1-.95**2)]},
  'machine-pistol':{grip:[-.08,-.045,0],sign:-1,ranged:true,sling:false,stowedAxis:[0,-.95,-Math.sqrt(1-.95**2)]},
+ // Schema 342 long guns: slung across the back like the shotgun.
+ 'chain-shotgun':{grip:[-.12,-.045,0],sign:1,ranged:true,sling:true,stowedAxis:[-.6,.8,0]},
+ 'heavy-smg':{grip:[-.13,-.045,0],sign:1,ranged:true,sling:true,stowedAxis:[-.6,.8,0]},
+ 'lmg':{grip:[-.15,-.045,0],sign:1,ranged:true,sling:true,stowedAxis:[-.6,.8,0]},
+ 'assault-rifle':{grip:[-.13,-.045,0],sign:1,ranged:true,sling:true,stowedAxis:[-.6,.8,0]},
+ 'sniper-rifle':{grip:[-.15,-.045,0],sign:1,ranged:true,sling:true,stowedAxis:[-.6,.8,0]},
  'plasteel-knife':{grip:[-.11,0,0],sign:-1,ranged:false,sling:false,stowedAxis:[0,-.95,-Math.sqrt(1-.95**2)]},
  'mace-family':{grip:[-.235,0,0],sign:1,ranged:false,sling:false,stowedAxis:[0,-.9,-Math.sqrt(1-.9**2)]},
  'longsword-family':{grip:[-.385,0,0],sign:1,ranged:false,sling:false,stowedAxis:[0,-.6,-.8]},
@@ -38,7 +44,7 @@ export function encodeOrigamiEquipment(code:number,ready:boolean,strike=false):n
 export function origamiWeaponVisualSignal(pawn:Pick<Pawn,'draft'|'shooting'|'melee'|'state'|'stun'>,item:string|undefined):{ready:boolean;strike:boolean} {
  if(!item||pawn.stun||['dead','downed','sleeping','resting'].includes(pawn.state))return {ready:false,strike:false};
  const tool=pawn.melee?.strike?.tool;
- const strike=!!tool&&(tool.startsWith(item+'-')||(item==='plasteel-knife'&&tool.startsWith('knife-'))||(['revolver','bolt-action-rifle','emp-launcher','short-bow','pump-shotgun','recurve-bow','greatbow','autopistol','machine-pistol'].includes(item)&&['grip','barrel','barrel-poke'].includes(tool)));
+ const strike=!!tool&&(tool.startsWith(item+'-')||(item==='plasteel-knife'&&tool.startsWith('knife-'))||(['revolver','bolt-action-rifle','emp-launcher','short-bow','pump-shotgun','recurve-bow','greatbow','autopistol','machine-pistol','chain-shotgun','heavy-smg','lmg','assault-rifle','sniper-rifle'].includes(item)&&['grip','barrel','barrel-poke'].includes(tool)));
  return {ready:!!pawn.draft||!!pawn.shooting?.stance||strike,strike};
 }
 export interface OrigamiEquipmentState {pose:number;activity:number;equipment:number;cargo:number;limbMask?:number;reach:number;recoil:number}

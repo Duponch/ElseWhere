@@ -1,6 +1,7 @@
 import {recordHomeIncident341} from './recent-incidents-341.ts';
 import {assignPileOwner} from './pile-index.ts';
-import {gunKindWeapon340,isBlowbackSchema340,isGunKind340} from './blowback-340.ts';
+import {isBlowbackSchema340,isGunKind340} from './blowback-340.ts';
+import {gunKindWeapon342} from './guns-342.ts';
 import {shipCasketHumanReferences277} from './ship-casket-notifications-277.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259,bornFactionForDef259} from './world-affiliation-259.ts';
@@ -205,7 +206,7 @@ export function arriveTraderCaravan332(w:World):boolean {
     piles.push({id:nextId++,kind:'apparel',item:apparel,quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState(apparel,undefined,w.schemaVersion)});
     // Schema 340: Gun-tagged Core kinds draw their gun (blowback-340.ts).
     const fixedWeapon=guard?CARAVAN_GUARDS_332[guard].weapon:trader.weapon,coreKind=guard?CARAVAN_GUARDS_332[guard].core:trader.core;
-    const weapon=isBlowbackSchema340(w.schemaVersion)&&isGunKind340(coreKind)?gunKindWeapon340(coreKind,fixedWeapon,w.seed,p.id):fixedWeapon;
+    const weapon=isBlowbackSchema340(w.schemaVersion)&&isGunKind340(coreKind)?gunKindWeapon342(coreKind,fixedWeapon,w.seed,p.id,w.schemaVersion):fixedWeapon;
     piles.push({id:nextId++,kind:'weapon',item:weapon,quantity:1,owner:{type:'equipment',pawnId:p.id},weapon:newWeaponState(weapon)});
     if(!guard){const stock=generateCaravanStock332(random.rng,p.id,nextId,w.tick,kind,w.schemaVersion);piles.push(...stock.piles);nextId=stock.nextId;random.rng=stock.rng;}
     // The same personal provisions as a visitor; wares are never eaten.

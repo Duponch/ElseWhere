@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import {APPAREL} from '../../sim/apparel-rules';
 import {PAWN_MODEL_SCALE} from '../../world/scale';
-import {RESIDENT_WEAPON_VISUALS269} from '../weapon-shape';
+import {RESIDENT_WEAPON_VISUALS269,LONG_GUNS_342} from '../weapon-shape';
 import {buildOrigamiHumanReference,humanBox,humanVerticalPrism,HUMAN_REFERENCE_BIND,HUMAN_REFERENCE_PIGMENTS,HUMAN_PAINT_PROFILES as P,type HumanPoint,type OrigamiHumanPart,type HumanPaintProfile} from './human-reference';
 import {registerReferencePaintProfile} from './reference-profiles';
 import {createReferenceEdgeGeometry,createPhysicalEdgeWearGeometry} from './reference-edges';
@@ -113,7 +113,7 @@ export function origamiHumanParts(includeSmithing=false,includeMace=false,includ
   // its shaders use these dimensions when aiming, slinging or striking.
   for(const variant of RESIDENT_WEAPON_VISUALS269)if((variant.item!=='mace-family'||includeMace)&&(variant.item!=='longsword-family'||includeLongsword)&&(variant.item!=='spear-family'||includeSpear))for(const [i,part]of variant.parts.entries()){
     const inv=1/HUMAN_REFERENCE_SCALE;
-    const long=variant.item==='bolt-action-rifle'||variant.item==='emp-launcher'||variant.item==='short-bow'||variant.item==='recurve-bow'||variant.item==='greatbow'||variant.item==='pump-shotgun'||variant.item==='mace-family'||variant.item==='longsword-family'||variant.item==='spear-family';
+    const long=variant.item==='bolt-action-rifle'||variant.item==='emp-launcher'||variant.item==='short-bow'||variant.item==='recurve-bow'||variant.item==='greatbow'||variant.item==='pump-shotgun'||(LONG_GUNS_342 as readonly string[]).includes(variant.item)||variant.item==='mace-family'||variant.item==='longsword-family'||variant.item==='spear-family';
     box(`weapon-${variant.item}-${i}`,[part.size[2]*inv/PAWN_MODEL_SCALE,part.size[0]*inv/PAWN_MODEL_SCALE,part.size[1]*inv/PAWN_MODEL_SCALE],[(.205+part.center[2]/PAWN_MODEL_SCALE)*inv,(.68+(long?1:-1)*part.center[0]/PAWN_MODEL_SCALE)*inv,part.center[1]*inv/PAWN_MODEL_SCALE],0,[0,.61*inv,0],variant.dye,P.steel,part.color);
   }
   const hand:HumanPoint=[.32,.82,.05],shoulder:HumanPoint=[.32,1.12,0];

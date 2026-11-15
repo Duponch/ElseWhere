@@ -86,16 +86,16 @@ test('target zero uses restart minus one and cannot be released by the ordinary 
   expect(nextBillReservePaused289(current,()=>4)).toBe(true);
 });
 
-test('the 65 current recipes expose reserve pause only for the 61 recipes already accepting an until reserve',()=>{
+test('the 70 current recipes expose reserve pause only for the 66 recipes already accepting an until reserve',()=>{
   const recipes=Object.keys(PRODUCTION_RECIPES) as ProductionRecipe[];
   // 55 before schema 312, then the T-shirt and the jacket (312), the short
   // bow (316), the pump shotgun (322), the recurve bow and the greatbow (326),
   // penoxycyline and its bulk bill (337), the autopistol and the machine
-  // pistol (340).
-  expect(recipes).toHaveLength(65);
+  // pistol (340), the five gas-operated and precision guns (342).
+  expect(recipes).toHaveLength(70);
   const unsupported=recipes.filter(recipe=>!supportsBillReservePause289(recipe));
   expect(unsupported.sort()).toEqual(['burn-apparel','cremate-corpse','smelt-apparel','smelt-weapon']);
-  expect(recipes.filter(supportsBillReservePause289)).toHaveLength(61);
+  expect(recipes.filter(supportsBillReservePause289)).toHaveLength(66);
   for(const recipe of recipes){
     expect(validBillReservePauseState289(state(),289,recipe)).toBe(!unsupported.includes(recipe));
   }

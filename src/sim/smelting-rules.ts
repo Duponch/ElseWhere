@@ -1,3 +1,4 @@
+import {GUNS_FACTS_342,isGun342} from './guns-342.ts';
 import {isLongswordItem270,longswordMaterial270,longswordUnits270} from './longsword-content-270.ts';
 import {isSpearItem272,spearMaterial272,spearUnits272} from './spear-content-272.ts';
 import {materialAllowedForPlayer256} from './material-permission-256.ts';
@@ -65,7 +66,8 @@ export function smeltingYield(item:WeaponItem|SmithingApparel267,random:()=>numb
     if(smithingApparelStuff267(item)==='wood')throw Error('Wooden apparel is not smeltable');
     return roundYield(smithingApparelUnits267(item)*.25,random);
   }
-  return roundYield((item==='bolt-action-rifle'||item==='pump-shotgun'?60:item==='emp-launcher'?75:item==='machine-pistol'?45:30)*.25,random);
+  // Schema 342 guns: 25 % of their own steel (GUNS_FACTS_342).
+  return roundYield((isGun342(item)?GUNS_FACTS_342[item].steel:item==='bolt-action-rifle'||item==='pump-shotgun'?60:item==='emp-launcher'?75:item==='machine-pistol'?45:30)*.25,random);
 }
 export function validSmeltingProduct(item:unknown,quantity:unknown,recipe:unknown='smelt-weapon',version:number=SCHEMA_VERSION):boolean {
   if(recipe==='smelt-apparel')return Number.isInteger(quantity)&&(['steel','plasteel','uranium'].includes(String(item))?[10,42,43].includes(Number(quantity)):['silver','gold'].includes(String(item))&&[100,425].includes(Number(quantity)));

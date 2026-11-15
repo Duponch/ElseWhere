@@ -4,6 +4,7 @@ import {SPEAR_ITEM_DEFINITIONS_272} from './spear-content-272.ts';
 import {SHORT_BOW_COLOR_316} from './short-bow-316.ts';
 import {BOW_FACTS_326} from './bows-326.ts';
 import {BLOWBACK_FACTS_340} from './blowback-340.ts';
+import {GUNS_FACTS_342} from './guns-342.ts';
 import {LONGSWORD_ITEM_DEFINITIONS_270} from './longsword-content-270.ts';
 import {MACE_ITEM_DEFINITIONS_269} from './mace-content-269.ts';
 import {SMITHING_APPAREL_ITEM_DEFINITIONS267} from './smithing-apparel-267.ts';
@@ -99,6 +100,12 @@ export const ITEM_DEFINITIONS = Object.freeze({
   'pump-shotgun':Object.freeze({label:'Fusil à pompe',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x5f6a70}),
   autopistol:Object.freeze({label:BLOWBACK_FACTS_340.autopistol.label,kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:BLOWBACK_FACTS_340.autopistol.color}),
   'machine-pistol':Object.freeze({label:BLOWBACK_FACTS_340['machine-pistol'].label,kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:BLOWBACK_FACTS_340['machine-pistol'].color}),
+  // Schema 342: GasOperation and PrecisionRifling guns (guns-342.ts).
+  'chain-shotgun':Object.freeze({label:GUNS_FACTS_342['chain-shotgun'].label,kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:GUNS_FACTS_342['chain-shotgun'].color}),
+  'heavy-smg':Object.freeze({label:GUNS_FACTS_342['heavy-smg'].label,kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:GUNS_FACTS_342['heavy-smg'].color}),
+  lmg:Object.freeze({label:GUNS_FACTS_342.lmg.label,kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:GUNS_FACTS_342.lmg.color}),
+  'assault-rifle':Object.freeze({label:GUNS_FACTS_342['assault-rifle'].label,kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:GUNS_FACTS_342['assault-rifle'].color}),
+  'sniper-rifle':Object.freeze({label:GUNS_FACTS_342['sniper-rifle'].label,kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:GUNS_FACTS_342['sniper-rifle'].color}),
   'short-bow':Object.freeze({label:'Arc court',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:SHORT_BOW_COLOR_316}),
   'recurve-bow':Object.freeze({label:'Arc recourbé',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:BOW_FACTS_326['recurve-bow'].color}),
   greatbow:Object.freeze({label:'Grand arc',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:BOW_FACTS_326.greatbow.color}),

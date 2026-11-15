@@ -4,11 +4,12 @@ import { TICKS_PER_DAY } from './types.ts';
 import { SHORT_BOW_RANGED_316 } from './short-bow-316.ts';
 import { BOW_FACTS_326,type BowRanged326 } from './bows-326.ts';
 import { BLOWBACK_FACTS_340,type BlowbackRanged340,type RangedBurst340 } from './blowback-340.ts';
+import { GUNS_FACTS_342,GUNS_ITEMS_342,isGun342,type Gun342 } from './guns-342.ts';
 import { MINI_TURRET_PROFILE } from './mini-turret-profile.ts';
 import { LANCER_GUN_PROFILE,PIKEMAN_GUN_PROFILE } from './mechanoid-ranged-profile.ts';
 
 /** Projectile identity is broader than inventory/equipment ItemId. */
-export type ProjectileProfileId='revolver'|'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'|'autopistol'|'machine-pistol'|'mini-turret-gun'|'lancer-gun'|'pikeman-gun';
+export type ProjectileProfileId='revolver'|'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'|'autopistol'|'machine-pistol'|'chain-shotgun'|'heavy-smg'|'lmg'|'assault-rifle'|'sniper-rifle'|'mini-turret-gun'|'lancer-gun'|'pikeman-gun';
 
 /** Data/units shared by the persistent shooting skill and attack producer. See the explicit
  * current/historical source decisions in research/ranged-statistics-reference. */
@@ -95,10 +96,13 @@ const qualityProfiles340=(r:BlowbackRanged340)=>Object.freeze(Object.fromEntries
   projectileTilesPerCoreTick:r.projectileTilesPerCoreTick,stoppingPower:r.stoppingPower,...r.burst?{burst:r.burst}:{},
 })])) as Record<WeaponQuality,RevolverProfile>);
 const autopistolProfiles=qualityProfiles340(BLOWBACK_FACTS_340.autopistol.ranged),machinePistolProfiles=qualityProfiles340(BLOWBACK_FACTS_340['machine-pistol'].ranged);
+/** Schema 342 GasOperation and PrecisionRifling guns: same quality factors,
+ * their Core bursts (the sniper rifle fires single shots). */
+const gunProfiles342=Object.freeze(Object.fromEntries(GUNS_ITEMS_342.map(item=>[item,qualityProfiles340(GUNS_FACTS_342[item].ranged)]))) as Readonly<Record<Gun342,Record<WeaponQuality,RevolverProfile>>>;
 export function rangedWeaponProfile(item:unknown,quality:WeaponQuality):RevolverProfile|undefined {
   if(!isRangedWeaponItem(item))return undefined;
   if(!WEAPON_QUALITIES.includes(quality))throw new RangeError('Invalid weapon quality');
-  return item==='revolver'?profiles[quality]:item==='emp-launcher'?empProfiles[quality]:item==='short-bow'?bowProfiles[quality]:item==='pump-shotgun'?shotgunProfiles[quality]:item==='recurve-bow'?recurveBowProfiles[quality]:item==='greatbow'?greatbowProfiles[quality]:item==='autopistol'?autopistolProfiles[quality]:item==='machine-pistol'?machinePistolProfiles[quality]:rifleProfiles[quality];
+  return item==='revolver'?profiles[quality]:item==='emp-launcher'?empProfiles[quality]:item==='short-bow'?bowProfiles[quality]:item==='pump-shotgun'?shotgunProfiles[quality]:item==='recurve-bow'?recurveBowProfiles[quality]:item==='greatbow'?greatbowProfiles[quality]:item==='autopistol'?autopistolProfiles[quality]:item==='machine-pistol'?machinePistolProfiles[quality]:isGun342(item)?gunProfiles342[item][quality]:rifleProfiles[quality];
 }
 export function projectileProfile(item:unknown,quality:WeaponQuality):RevolverProfile|undefined {
   if(item==='mini-turret-gun'||item==='lancer-gun'||item==='pikeman-gun')return quality==='normal'?

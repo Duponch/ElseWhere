@@ -1,6 +1,7 @@
 import {SHORT_BOW_BASE_VALUE_316} from './short-bow-316.ts';
 import {BOW_FACTS_326} from './bows-326.ts';
 import {BLOWBACK_FACTS_340} from './blowback-340.ts';
+import {GUNS_FACTS_342} from './guns-342.ts';
 import {LONGSWORD_ITEMS_270,longswordBaseValue270,longswordMaxHitPoints270} from './longsword-content-270.ts';
 import {SPEAR_ITEMS_272,spearBaseValue272,spearMaxHitPoints272} from './spear-content-272.ts';
 import type { ItemId } from './items.ts';
@@ -64,6 +65,9 @@ export const TRADE_CATALOGUE:Readonly<Partial<Record<ItemId,TradeCatalogueEntry>
   'pump-shotgun':gear(253.2,100,true,true),
   // Schema 340: Core Gun_Autopistol and Gun_MachinePistol (30/45 steel x 1.9 + 2/3 x 32 + 5000/11000 x 0.0036).
   autopistol:gear(BLOWBACK_FACTS_340.autopistol.baseValue,100,true,true),'machine-pistol':gear(BLOWBACK_FACTS_340['machine-pistol'].baseValue,100,true,true),
+  // Schema 342: steel x 1.9 + components x 32 + WorkToMake x 0.0036 (404.6, 356.9, 424.9, 482, 532).
+  'chain-shotgun':gear(GUNS_FACTS_342['chain-shotgun'].baseValue,100,true,true),'heavy-smg':gear(GUNS_FACTS_342['heavy-smg'].baseValue,100,true,true),lmg:gear(GUNS_FACTS_342.lmg.baseValue,100,true,true),
+  'assault-rifle':gear(GUNS_FACTS_342['assault-rifle'].baseValue,100,true,true),'sniper-rifle':gear(GUNS_FACTS_342['sniper-rifle'].baseValue,100,true,true),
   // Schema 326: Core Bow_Recurve (40 wood, 5000 work) and Bow_Great (60 wood,
   // 9000 work), wood x 1.2 + work x 0.0036.
   'recurve-bow':gear(BOW_FACTS_326['recurve-bow'].baseValue,100,true,true),greatbow:gear(BOW_FACTS_326.greatbow.baseValue,100,true,true),

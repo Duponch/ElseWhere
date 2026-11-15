@@ -1,3 +1,4 @@
+import {isGun342} from './guns-342.ts';
 import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -58,6 +59,7 @@ export function validatePileRecordShape(item:Record<string,unknown>,world:Pick<W
  if(version<316&&(item.item==='short-bow'||item.item==='unfinished-bow'))return ['Future short bow catalogue.'];
  if(version<326&&(item.item==='recurve-bow'||item.item==='greatbow'))return ['Future recurve or great bow catalogue.'];
  if(version<340&&(item.item==='autopistol'||item.item==='machine-pistol'))return ['Future autopistol or machine pistol catalogue.'];
+ if(version<342&&isGun342(item.item))return ['Future gas-operated or precision gun catalogue.'];
  if(version<322&&item.item==='pump-shotgun')return ['Future pump shotgun catalogue.'];
  if(!isSchema269OrLater(version)&&(isMaceItem269(item.item)||item.item==='unfinished-mace'))return ['Future mace catalogue.'];
  if(!isSchema270OrLater(version)&&(isLongswordItem270(item.item)||item.item==='unfinished-longsword'))return ['Future longsword catalogue.'];

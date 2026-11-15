@@ -1,3 +1,4 @@
+import {isGunRecipe342} from './guns-342.ts';
 import {isPenoxycyline337,isPenoxycylineRecipe337} from './penoxycyline-337.ts';
 import {isSchema289OrLater} from './schema-compatibility-257.ts';
 import {isSchema273OrLater,isSchema278OrLater,isSchema283OrLater} from './schema-compatibility-257.ts';
@@ -60,6 +61,7 @@ export function validBillSettings(value:unknown,recipe:ProductionRecipe='simple-
   if(recipe==='make-emp-launcher'&&version<208)return false;
   if(recipe==='make-pump-shotgun'&&version<322)return false;
   if((recipe==='make-autopistol'||recipe==='make-machine-pistol')&&version<340)return false;
+  if(isGunRecipe342(recipe)&&version<342)return false;
   if(!value||typeof value!=='object'||Array.isArray(value))return false;
   const v=value as BillSettings;
   const reservePause=Object.getOwnPropertyDescriptor(value,'reservePause');

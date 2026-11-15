@@ -102,6 +102,58 @@ const MACHINE_PISTOL_PARTS = [
   {size:[.07,.12,.055],center:[-.08,-.045,0],color:0x3f3a36},
 ] as const;
 export const MACHINE_PISTOL_DYE340=-21;
+/** Schema 342 long guns, slung and aimed like the rifle and the shotgun. */
+export const LONG_GUNS_342=Object.freeze(['chain-shotgun','heavy-smg','lmg','assault-rifle','sniper-rifle'] as const);
+/** Schema 342 long guns, original shapes on the shotgun/rifle bind (barrel
+ * along +X, stock behind): a chain shotgun with a drum under a short heavy
+ * barrel; a heavy SMG with a slotted shroud, folded metal stock and a box
+ * magazine; an LMG with a long barrel, box magazine and folded bipod; an
+ * assault rifle with a curved magazine and carry rail; a sniper rifle with a
+ * long thin barrel, a scope and a wooden stock. */
+const CHAIN_SHOTGUN_PARTS = [
+  {size:[.40,.06,.06],center:[.20,.07,0],color:0x5b6670},
+  {size:[.24,.10,.07],center:[-.08,.045,0],color:0x66717a},
+  {size:[.12,.12,.10],center:[.02,-.04,0],color:0x3d4a52},
+  {size:[.06,.12,.05],center:[-.12,-.045,0],color:0x4a4038},
+  {size:[.24,.11,.055],center:[-.32,.005,0],color:0x6e5640},
+] as const;
+export const CHAIN_SHOTGUN_DYE342=-22;
+const HEAVY_SMG_PARTS = [
+  {size:[.30,.06,.06],center:[.17,.065,0],color:0x7d878c},
+  {size:[.26,.09,.065],center:[-.06,.05,0],color:0x535f66},
+  {size:[.05,.19,.045],center:[.06,-.06,0],color:0x2f383c},
+  {size:[.06,.12,.05],center:[-.13,-.045,0],color:0x3f3a36},
+  {size:[.20,.03,.03],center:[-.29,.05,0],color:0x46524f},
+  {size:[.03,.09,.04],center:[-.38,.02,0],color:0x46524f},
+] as const;
+export const HEAVY_SMG_DYE342=-23;
+const LMG_PARTS = [
+  {size:[.62,.05,.05],center:[.27,.07,0],color:0x4d5a52},
+  {size:[.30,.11,.075],center:[-.07,.05,0],color:0x5c6860},
+  {size:[.10,.11,.10],center:[-.03,-.04,0],color:0x38433c},
+  {size:[.06,.12,.05],center:[-.15,-.045,0],color:0x3f3a36},
+  {size:[.24,.11,.055],center:[-.34,.01,0],color:0x5a4a38},
+  {size:[.22,.02,.02],center:[.40,.035,.025],color:0x2f3833},
+  {size:[.22,.02,.02],center:[.40,.035,-.025],color:0x2f3833},
+] as const;
+export const LMG_DYE342=-24;
+const ASSAULT_RIFLE_PARTS = [
+  {size:[.40,.045,.045],center:[.22,.065,0],color:0x4f5a60},
+  {size:[.30,.09,.065],center:[-.04,.05,0],color:0x5d686e},
+  {size:[.05,.15,.045],center:[.04,-.05,0],color:0x2e3639},
+  {size:[.06,.12,.05],center:[-.13,-.045,0],color:0x3a3633},
+  {size:[.24,.11,.05],center:[-.31,.01,0],color:0x3c4448},
+  {size:[.20,.025,.03],center:[-.03,.11,0],color:0x2e3639},
+] as const;
+export const ASSAULT_RIFLE_DYE342=-25;
+const SNIPER_RIFLE_PARTS = [
+  {size:[.70,.04,.04],center:[.27,.06,0],color:0x5a5248},
+  {size:[.30,.08,.065],center:[-.07,.045,0],color:0x6a6156},
+  {size:[.26,.06,.06],center:[-.04,.13,0],color:0x2d3134},
+  {size:[.06,.12,.05],center:[-.15,-.045,0],color:0x5a4330},
+  {size:[.28,.13,.055],center:[-.35,0,0],color:0x7f5f42},
+] as const;
+export const SNIPER_RIFLE_DYE342=-26;
 /** Resident variants share one rig, one cargo batch and the same authored parts
  * as ground piles. Dye tags -2/-3 are already used by clothing. */
 export const WEAPON_VISUALS = [
@@ -116,6 +168,11 @@ export const WEAPON_VISUALS = [
   {item:'greatbow',equipment:11,cargo:189,dye:GREATBOW_DYE326,parts:GREATBOW_PARTS},
   {item:'autopistol',equipment:12,cargo:190,dye:AUTOPISTOL_DYE340,parts:AUTOPISTOL_PARTS},
   {item:'machine-pistol',equipment:13,cargo:191,dye:MACHINE_PISTOL_DYE340,parts:MACHINE_PISTOL_PARTS},
+  {item:'chain-shotgun',equipment:14,cargo:192,dye:CHAIN_SHOTGUN_DYE342,parts:CHAIN_SHOTGUN_PARTS},
+  {item:'heavy-smg',equipment:15,cargo:193,dye:HEAVY_SMG_DYE342,parts:HEAVY_SMG_PARTS},
+  {item:'lmg',equipment:16,cargo:194,dye:LMG_DYE342,parts:LMG_PARTS},
+  {item:'assault-rifle',equipment:17,cargo:195,dye:ASSAULT_RIFLE_DYE342,parts:ASSAULT_RIFLE_PARTS},
+  {item:'sniper-rifle',equipment:18,cargo:196,dye:SNIPER_RIFLE_DYE342,parts:SNIPER_RIFLE_PARTS},
 ] as const;
 /** Optional resident families are separate from the four historical concrete
  * visuals: a family key is never a real ItemId or a ground/cargo item. */

@@ -25,7 +25,7 @@ const aliases:Readonly<Record<string,string>>={
  'small-shelf':'small-shelf',horseshoe:'horseshoes','animal-bed':'animal-sleeping-spot','medical-bed':'hospital-bed',
  sword:'longsword',gun:'revolver',cross:'medicine',shirt:'shirt',limb:'prosthetic-leg',paint:'palette',food:'meal',pot:'cooking-pot',drop:'chemfuel',flag:'factions',sensors:'ship-sensors',
  'rotate-left':'rotate-left','rotate-right':'rotate-right','clear-orders':'cancel','manage-work':'travail','toggle-draft':'shield',mobilize:'shield','target-shot':'target','target-melee':'longsword','fire-at-will':'revolver',
- 'tree-sowing':'resource-tree',firefoam:'foam','ship-cryptosleep':'ship-casket','ship-basics':'rocket',prosthetics:'prosthetic-leg',cryptosleep:'casket','long-blades':'longsword',brewing:'brewery','geothermal-power':'geothermal-generator','biofuel-refining':'refinery','nutrient-paste':'paste-dispenser','deep-drilling':'drill','sterile-materials':'sterile-tile','drug-production':'drug-lab','penoxycyline-production':'drug-lab','medicine-production':'medicine','gun-turrets':'mini-turret','complex-furniture':'chair',stonecutting:'stonecutter',smithing:'smithy',gunsmithing:'revolver','blowback-operation':'machine-pistol','complex-clothing':'shirt','packaged-survival-meals':'meal',autodoors:'autodoor','flak-armor':'flak-vest',batteries:'battery','solar-power':'solar','air-conditioning':'cooler',microelectronics:'chip','advanced-fabrication':'fabrication','long-range-mineral-scanner':'radar',
+ 'tree-sowing':'resource-tree',firefoam:'foam','ship-cryptosleep':'ship-casket','ship-basics':'rocket',prosthetics:'prosthetic-leg',cryptosleep:'casket','long-blades':'longsword',brewing:'brewery','geothermal-power':'geothermal-generator','biofuel-refining':'refinery','nutrient-paste':'paste-dispenser','deep-drilling':'drill','sterile-materials':'sterile-tile','drug-production':'drug-lab','penoxycyline-production':'drug-lab','medicine-production':'medicine','gun-turrets':'mini-turret','complex-furniture':'chair',stonecutting:'stonecutter',smithing:'smithy',gunsmithing:'revolver','blowback-operation':'machine-pistol','gas-operation':'lmg','precision-rifling':'sniper-rifle','complex-clothing':'shirt','packaged-survival-meals':'meal',autodoors:'autodoor','flak-armor':'flak-vest',batteries:'battery','solar-power':'solar','air-conditioning':'cooler',microelectronics:'chip','advanced-fabrication':'fabrication','long-range-mineral-scanner':'radar',
 };
 export function pictoSemanticId(id:string):string {
  let key=id;
@@ -272,6 +272,19 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  // Schema 340 blowback guns: a slide over a slanted grip; the machine pistol
  // adds a long magazine ahead of the trigger guard.
  case 'autopistol':case 'machine-pistol':d.shape([[10,20],[52,20],[52,30],[30,30],[27,34],[24,54],[13,54],[17,30],[10,30]],P.stone);d.rect(13,31,8,21,P.wood);d.line([[30,30],[30,37],[24,37]],1.5);if(id==='machine-pistol'){d.rect(33,30,7,24,P.darkBlue);d.rect(52,22,7,5,P.stone);}else d.line([[14,24],[48,24]],1.1,P.paper);break;
+ // Schema 342 long guns: wooden or metal stock, receiver and barrel; a drum
+ // (chain shotgun), a forward box magazine (heavy SMG), a bipod (LMG), a
+ // curved magazine (assault rifle) or a scope (sniper rifle).
+ case 'chain-shotgun':case 'heavy-smg':case 'lmg':case 'assault-rifle':case 'sniper-rifle':{
+  const muzzle=id==='sniper-rifle'||id==='lmg'?61:id==='heavy-smg'?52:56;
+  d.shape([[3,27],[17,24],[17,34],[5,40]],id==='heavy-smg'?P.stone:P.wood);d.rect(17,23,22,10,P.stone);
+  d.rect(39,id==='chain-shotgun'?24:25,muzzle-39,id==='chain-shotgun'?6:4,P.stone);d.shape([[23,33],[29,33],[26,44],[21,43]],P.wood);d.line([[30,33],[30,39],[25,39]],1.5);
+  if(id==='chain-shotgun')d.ellipse(35,40,6,6,P.darkBlue);
+  if(id==='heavy-smg'){d.rect(33,33,5,13,P.darkBlue);d.rect(39,23,10,8,P.silver);}
+  if(id==='lmg'){d.rect(31,33,8,8,P.darkBlue);d.line([[53,29],[49,44]],1.6);d.line([[53,29],[57,44]],1.6);}
+  if(id==='assault-rifle'){d.path('M 32 33 L 38 33 Q 40 41 37 48 L 32 46 Q 34 40 32 33 Z',P.darkBlue);d.line([[20,23],[22,18],[34,18],[36,23]],1.6);}
+  if(id==='sniper-rifle'){d.rect(20,15,18,6,P.darkBlue);d.ellipse(38,18,2.5,3.5,P.blue,1.2);d.line([[25,21],[25,23]],1.4);d.line([[33,21],[33,23]],1.4);}
+  break;}
  case 'short-bow':case 'unfinished-bow':d.path('M 22 6 Q 54 32 22 58',null,4.5,P.wood);if(id==='short-bow')d.line([[22,6],[22,58]],1.1,P.paper);d.rect(34,27,6,10,P.ochre);break;
  // Recurve: limb tips turned back toward the archer; greatbow: a taller stave.
  case 'recurve-bow':d.path('M 27 5 Q 19 9 24 15 Q 52 32 24 49 Q 19 55 27 59',null,4.5,P.wood);d.line([[25,9],[25,55]],1.1,P.paper);d.rect(35,27,6,10,P.ochre);break;

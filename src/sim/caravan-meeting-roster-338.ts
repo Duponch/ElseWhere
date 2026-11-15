@@ -1,5 +1,6 @@
 import {startingPawn} from './starting-pawns.ts';
-import {gunKindWeapon340,isBlowbackSchema340,isGunKind340} from './blowback-340.ts';
+import {isBlowbackSchema340,isGunKind340} from './blowback-340.ts';
+import {gunKindWeapon342} from './guns-342.ts';
 import {generatePawnBackground} from './background-generation.ts';
 import {newApparelState} from './apparel-rules.ts';
 import {newWeaponState} from './equipment-rules.ts';
@@ -41,7 +42,7 @@ export function draftCaravanMeetingRoster338(w:World,factionId:number,random:{rn
   items.push({id:nextId++,kind:'apparel',item:apparel,quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState(apparel,undefined,w.schemaVersion)});
   // Schema 340: Gun-tagged Core kinds draw their gun, as in visitors.ts.
   const fixedWeapon=guard?CARAVAN_GUARDS_332[guard].weapon:trader.weapon,coreKind=guard?CARAVAN_GUARDS_332[guard].core:trader.core;
-  const weapon=isBlowbackSchema340(w.schemaVersion)&&isGunKind340(coreKind)?gunKindWeapon340(coreKind,fixedWeapon,w.seed,p.id):fixedWeapon;
+  const weapon=isBlowbackSchema340(w.schemaVersion)&&isGunKind340(coreKind)?gunKindWeapon342(coreKind,fixedWeapon,w.seed,p.id,w.schemaVersion):fixedWeapon;
   items.push({id:nextId++,kind:'weapon',item:weapon,quantity:1,owner:{type:'equipment',pawnId:p.id},weapon:newWeaponState(weapon)});
   if(!guard){const stock=generateCaravanStock332(random.rng,p.id,nextId,w.tick,kind,w.schemaVersion);items.push(...stock.piles);nextId=stock.nextId;random.rng=stock.rng;}
   // The same personal provisions as the historical met traders.

@@ -8,7 +8,7 @@ export interface ShootingClock {lastAdvancedAtCore:number;pausedCore:number}
  * burst's own target, independent of the order. shotsLeft 0: Core's VerbTick
  * reset the burst (stun, weapon lost) and the gap stance only runs out. */
 export interface ShootingBurst340 {targetId:number;shotsLeft:number}
-export type ShootingWeaponItem='bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'|'autopistol'|'machine-pistol';
+export type ShootingWeaponItem='bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'|'autopistol'|'machine-pistol'|'chain-shotgun'|'heavy-smg'|'lmg'|'assault-rifle'|'sniper-rifle';
 export type ShootingStance=({phase:'aim';startedAtCore:number;endsAtCore:number;targetStartedDowned:boolean;lean?:Cell}
   |{phase:'cooldown';startedAtCore:number;endsAtCore:number;burst?:ShootingBurst340})&{weaponItem?:ShootingWeaponItem;clock?:ShootingClock};
 export type ShootingClockStep='duplicate'|'paused'|'active';

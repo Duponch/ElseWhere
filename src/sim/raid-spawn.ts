@@ -17,7 +17,8 @@ import {RAID_FAMILY_MIN_POINTS_331,RAID_KINDS_331,RAID_MAKERS_331,isRaidKind331,
 import {RaidArrivalSpace333,drawRaidArrivalMode333,layoutRaidArrival333,raidArrivalMessage333,raidArrivalPointsFactor333,resolveRaidArrivalCenter333,type RaidArrival333} from './raid-arrival-333.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import type {WeaponItem} from './equipment-rules.ts';
-import {gunKindWeapon340,isBlowbackSchema340,type GunKind340} from './blowback-340.ts';
+import {isBlowbackSchema340,type GunKind340} from './blowback-340.ts';
+import {gunKindWeapon342} from './guns-342.ts';
 
 export const RAID_ROLE_OPTIONS:readonly {role:PirateRaidRole;weight:number;weapon:'plasteel-knife'|'revolver'|'bolt-action-rifle'}[]=[
   {role:'drifter',weight:10,weapon:'plasteel-knife'},
@@ -47,11 +48,13 @@ const GUN_KIND_OF_ROLE340:Readonly<Partial<Record<RaidRole,GunKind340>>>=Object.
 /** Pirate roles keep their historical weapons; schema 331 kinds carry theirs.
  * From schema 340 the Gun kinds draw their gun as Core does (weapon money
  * and price weights, from the person's own identity); a Core gun Elsewhere
- * does not deliver keeps the historical weapon. */
+ * does not deliver keeps the historical weapon. From schema 342 the four
+ * gas-operated and precision Gun-tagged guns are delivered and the sniper
+ * rifle (not Gun-tagged in Core) leaves the table (guns-342.ts). */
 export function raidRoleWeapon(role:RaidRole,owner?:{world:Pick<World,'schemaVersion'|'seed'>;pawnId:number}):WeaponItem|undefined {
   const fixed=isRaidKind331(role)?RAID_KINDS_331[role].weapon:RAID_ROLE_OPTIONS.find(option=>option.role===role)?.weapon;
   const kind=GUN_KIND_OF_ROLE340[role];
-  return owner&&kind&&fixed&&isBlowbackSchema340(owner.world.schemaVersion)?gunKindWeapon340(kind,fixed,owner.world.seed,owner.pawnId):fixed;
+  return owner&&kind&&fixed&&isBlowbackSchema340(owner.world.schemaVersion)?gunKindWeapon342(kind,fixed,owner.world.seed,owner.pawnId,owner.world.schemaVersion):fixed;
 }
 /** A roster role admitted by this composition: the pirate projection, or
  * (schema 331) the options of its tribal or outlander group maker. */
