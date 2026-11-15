@@ -94,14 +94,13 @@ Les visiteurs et les caravanes marchandes peuvent vendre un pistolet automatique
 
 - Modèles originaux : le pistolet automatique a une culasse carrée sur sa carcasse et une crosse inclinée ; le pistolet-mitrailleur une carcasse plus longue, un manchon de canon et un long chargeur devant la poignée.
 - Les deux se portent à la ceinture et se tiennent comme le revolver.
-- Pictogrammes propres aux deux armes ; la recherche reprend celui du pistolet-mitrailleur.
+- Pictogrammes propres aux deux armes, produits par `scripts/rebuild-pictograms.mts` ; la recherche reprend celui du pistolet-mitrailleur.
 - Le son de tir suit chaque début de récupération observé ; une rafale arrêtée faute de cible n'en joue aucun.
 
 ## Limites
 
 - **Fusil-mitrailleur, mitraillette lourde, fusil d'assaut :** pas encore faits (recherche GasOperation non livrée).
 - **Planification du rendu des acteurs cuits :** comme pour les arcs et le fusil à pompe, la table de l'atlas des acteurs ne connaît pas encore ces armes ; le rendu ordinaire les affiche.
-- **Pictogrammes statiques :** `scripts/rebuild-pictograms.mts` échoue avant d'écrire sur des pictogrammes manquants plus anciens (vestes, t-shirts, arc inachevé) ; les pictogrammes des deux armes sont dessinés et produits à la demande.
 
 ## Sauvegardes
 

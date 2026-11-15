@@ -1,6 +1,6 @@
 {
   "style": "adult-hand-20261107",
-  "icons": 698,
+  "icons": 701,
   "ids": [
     "advanced-fabrication",
     "air-conditioning",
@@ -24,6 +24,7 @@
     "bedroll",
     "biofuel-refinery",
     "biofuel-refining",
+    "blowback-operation",
     "brewery",
     "brewing",
     "build-bridge",
@@ -128,6 +129,7 @@
     "item-alpaca-wool-tuque",
     "item-arctic-fox-corpse",
     "item-arctic-wolf-corpse",
+    "item-autopistol",
     "item-bear-leather",
     "item-bear-leather-duster",
     "item-bear-leather-jacket",
@@ -343,6 +345,7 @@
     "item-lizard-leather-tshirt",
     "item-lynx-corpse",
     "item-lynx-meat",
+    "item-machine-pistol",
     "item-marble-blocks",
     "item-marble-chunk",
     "item-medicine",
