@@ -15,7 +15,7 @@ import {blockedCells,reachableCells} from '../src/sim/pathfinding.ts';
 import {applyCommand,stepWorld} from '../src/sim/engine.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
-import type {Cell,Pawn,Structure,World} from '../src/sim/types.ts';
+import {SCHEMA_VERSION,type Cell,type Pawn,type Structure,type World} from '../src/sim/types.ts';
 
 const setVersion=(w:World,v:number)=>{(w as {schemaVersion:number}).schemaVersion=v;};
 const reach=(w:World,p:Pawn)=>reachableCells(w,p,blockedCells(w),new Set());
@@ -57,7 +57,7 @@ test('surgery on a patient between two beds goes to the bed interaction cell fro
   setVersion(w,338);
   expect(surgeryProposal(w,doctor,patient,reach(w,doctor))).toBeUndefined();
   expect(bedServicePlace339(w,patient,beyondFoot)).toBe(false);
-  setVersion(w,339);
+  setVersion(w,SCHEMA_VERSION);
   // The real operation: the surgeon takes the medicine and works from the foot.
   until(w,()=>doctor.surgery?.phase==='work');
   expect(doctor).toMatchObject({x:10,z:12,state:'working'});expect(surgeryReason(w,doctor,patient,true)).toBeUndefined();valid(w);
@@ -70,7 +70,7 @@ test('feeding a patient between two beds falls back to beyond the foot; elsewher
   Object.assign(neighbour,{x:25,z:25});Object.assign(doctor,{x:10,z:16});doctor.priorities.doctor=1;
   addGroundMaterial(w,'food',3,{x:12,z:16},'simple-meal');refreshStock(w);
   expect(feedingProposal(w,doctor,patient,reach(w,doctor))?.task.spot).toEqual(beyondFoot);
-  setVersion(w,338);expect(feedingProposal(w,doctor,patient,reach(w,doctor))).toBeUndefined();setVersion(w,339);
+  setVersion(w,338);expect(feedingProposal(w,doctor,patient,reach(w,doctor))).toBeUndefined();setVersion(w,SCHEMA_VERSION);
   until(w,()=>doctor.feed?.phase==='feed');expect(doctor).toMatchObject({x:10,z:12});valid(w);
   until(w,()=>!doctor.feed);expect(patient.hunger).toBeGreaterThan(20);valid(w);
 
@@ -98,7 +98,7 @@ test('a warden talks with a prisoner lying between two beds from beyond the foot
   expect(applyCommand(w,{type:'priority',pawnId:warden.id,work:'warden',value:1}).ok).toBe(true);
   const proposal=wardenProposal(w,warden,reach(w,warden));
   expect(proposal?.task).toMatchObject({kind:'chat',spot:beyondFoot});
-  setVersion(w,338);expect(wardenProposal(w,warden,reach(w,warden))).toBeUndefined();setVersion(w,339);
+  setVersion(w,338);expect(wardenProposal(w,warden,reach(w,warden))).toBeUndefined();setVersion(w,SCHEMA_VERSION);
   until(w,()=>warden.ward?.kind==='chat'&&warden.ward.phase==='rapport');
   expect(warden).toMatchObject({x:10,z:12});valid(w);
 });
