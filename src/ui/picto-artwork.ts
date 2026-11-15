@@ -85,10 +85,10 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
   const key=id.slice(5),definition=Object.hasOwn(ITEM_DEFINITIONS,key)?ITEM_DEFINITIONS[key as keyof typeof ITEM_DEFINITIONS]:undefined;
   if(!definition){cache.set(original,null);return;}
   item=true;color='#'+definition.color.toString(16).padStart(6,'0');id=key;
-  unfinished=id.startsWith('unfinished-');if(unfinished){id=id.slice(11);if(id==='gun')id='revolver';if(id==='prosthetic')id='prosthetic-arm';if(id==='component')id='component';}
+  unfinished=id.startsWith('unfinished-');if(unfinished){id=id.slice(11);if(id==='gun')id='revolver';if(id==='prosthetic')id='prosthetic-arm';if(id==='component')id='component';if(id==='bow')id='unfinished-bow';}
   if(/-meat$/.test(id))id='meat';else if(/-corpse$/.test(id)){animal(d,id,color);d.line([[44,6],[55,17]],2.2,P.red);d.line([[44,17],[55,6]],2.2,P.red);id='drawn';}
   else if(/-egg(?:-(?:un)?fertilized)?$/.test(id)||id==='egg')id='egg';
-  else if(/-(shirt|tribalwear|parka|pants|duster|tuque|plate-armor|simple-helmet|flak-helmet)$/.test(id))id=id.match(/(shirt|tribalwear|parka|pants|duster|tuque|plate-armor|simple-helmet|flak-helmet)$/)![0];
+  else if(/-(tshirt|shirt|jacket|tribalwear|parka|pants|duster|tuque|plate-armor|simple-helmet|flak-helmet)$/.test(id))id=id.match(/-(tshirt|shirt|jacket|tribalwear|parka|pants|duster|tuque|plate-armor|simple-helmet|flak-helmet)$/)![1]!;
   else if(/-wool$/.test(id))id='wool';else if(/leather|fur|camelhide/.test(id))id='leather';
   else if(/-blocks$/.test(id))id='blocks';else if(/-chunk$/.test(id))id='chunk';
   else if(/meal/.test(id))id='meal';else if(/longsword$/.test(id))id='longsword';else if(/spear$/.test(id))id='spear';else if(/mace$/.test(id))id='mace';
@@ -260,6 +260,9 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  case 'beer':d.rect(13,17,31,36,P.ochre);d.path('M 45 22 Q 62 18 57 40 Q 55 46 45 43',null,3,P.wood);for(const x of[18,27,36])d.ellipse(x,17,6,5,P.paper);d.line([[21,29],[21,44]],1.4,P.paper);break;
  case 'cloth':case 'leather':d.path('M 11 15 L 44 12 L 53 46 L 19 53 L 16 44 L 10 45 L 13 34 L 8 28 Z',color);d.path('M 16 20 L 40 18 L 46 42 L 22 46 Z',null,1,P.paper);break;
  case 'wool':for(const[x,y]of[[21,23],[36,19],[45,30],[37,42],[22,44],[14,33]])d.ellipse(x!,y!,11,10,color,1.4);d.ellipse(30,32,12,12,color,1.4);d.path('M 20 29 Q 31 21 39 30 M 18 36 Q 31 29 41 37',null,1.2,P.paper);break;
+ // T-shirt: short sleeves and a round collar; jacket: a shirt cut with lapels and a zip.
+ case 'tshirt':d.path('M 23 11 L 13 15 L 6 26 L 15 31 L 20 26 L 20 52 L 45 52 L 45 26 L 50 31 L 59 26 L 52 15 L 42 11 Q 32 19 23 11 Z',color);d.path('M 25 13 Q 32 21 40 13',null,1.3,P.paper);break;
+ case 'jacket':d.path('M 23 11 L 15 15 L 5 29 L 15 36 L 21 28 L 20 54 L 45 54 L 44 28 L 49 36 L 59 29 L 49 15 L 41 11 Q 32 20 23 11 Z',color);d.path('M 24 12 L 30 24 M 40 12 L 34 24',null,1.6,P.paper);d.line([[32,24],[32,53]],1.4);break;
  case 'shirt':case 'tribalwear':case 'parka':case 'duster':d.path(`M 23 11 L 15 15 L 5 29 L 15 36 L 21 28 L 20 ${id==='duster'?58:52} L 45 ${id==='duster'?58:52} L 44 28 L 49 36 L 59 29 L 49 15 L 41 11 Q 32 20 23 11 Z`,color);d.path('M 25 13 Q 32 24 39 13',null,1.3,P.paper);if(id==='parka'){d.path('M 21 14 Q 17 2 32 3 Q 47 2 44 15',null,5,P.paper);}if(id==='duster'||id==='parka')d.line([[32,22],[32,51]],1.3);break;
  case 'pants':d.shape([[17,10],[47,10],[50,55],[34,55],[31,31],[28,55],[13,55]],color);d.line([[18,18],[46,18]],1.3,P.paper);d.line([[32,13],[32,23]],1.2);break;
  case 'tuque':d.path('M 14 40 Q 11 13 32 12 Q 53 13 51 40 Z',color);d.rect(10,39,45,13,color);for(const x of[19,29,39,48])d.line([[x,42],[x,49]],1.1,P.paper);d.ellipse(32,8,5,5,color);break;
