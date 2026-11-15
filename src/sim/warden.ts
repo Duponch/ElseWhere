@@ -7,7 +7,7 @@ import { allowedAreaAllows } from './allowed-area-state.ts';
 import { workPriority } from './work-types.ts';
 import { prisonBreakActive } from './prison-break-state.ts';
 import { isColonist } from './affiliation.ts';
-import { bedsideAccess,patientClaimed } from './care-access.ts';
+import { bedsideAccess,patientClaimed,bedServicePlace339 } from './care-access.ts';
 import { needsAssistedFeeding,FEED_HUNGER } from './feeding-rules.ts';
 import { copyPileCondition } from './pile-condition.ts';
 import { selectFood } from './food-selection.ts';
@@ -79,7 +79,7 @@ export function wardenProposal(world:World,actor:Pawn,reach:Reachability,search?
     return {task:{kind:'food',patientId:p.id,sourcePileId:pile.id,carryPileId:null,quantity,spot,phase:'pickup'},path:food.path};
   }
   for(const p of ordered('ChatWithPrisoner'))if(chatEligible(world,actor,p)){
-    const access=bedsideAccess(world,actor,p,reach);if(access)return {task:{kind:'chat',patientId:p.id,spot:access.spot,phase:'approach',progress:0,rapports:0},path:access.path};
+    const access=bedsideAccess(world,actor,p,reach,undefined,false,'interaction');if(access)return {task:{kind:'chat',patientId:p.id,spot:access.spot,phase:'approach',progress:0,rapports:0},path:access.path};
   }
 }
 export function startWarden(actor:Pawn,proposal:WardenProposal):void {
@@ -151,8 +151,8 @@ export function processWarden(world:World,actor:Pawn,context:NeedContext):void {
     actor.state='working';if(++t.progress>=PRISON_RAPPORT_TICKS)releaseWork(world,actor);return;
   }
   if(!chatEligible(world,actor,p)){interruptWork(world,actor);return;}
-  if(!adjacent(actor,p)){
-    t.phase='approach';const reach=context.search();if(!reach)return;const access=bedsideAccess(world,actor,p,reach);
+  if(!(bedServicePlace339(world,p,actor)||adjacent(actor,p))){
+    t.phase='approach';const reach=context.search();if(!reach)return;const access=bedsideAccess(world,actor,p,reach,undefined,false,'interaction');
     if(!access){interruptWork(world,actor);return;}t.spot=access.spot;context.move(t.spot,true);return;
   }
   t.spot={x:actor.x,z:actor.z};actor.path=[];actor.state='working';t.phase='rapport';

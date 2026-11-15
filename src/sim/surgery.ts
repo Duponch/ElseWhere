@@ -11,7 +11,7 @@ import { amputateSurgicalLimb } from './surgery-anatomy.ts';
 import { resolveSurgeryOutcome } from './surgery-outcomes.ts';
 import { administerAnesthetic,canAdministerAnesthetic } from './anesthetic.ts';
 import { medicalWorkRefusal } from './health-rules.ts';
-import { lyingPatient,patientClaimed,bedsideAccess } from './care-access.ts';
+import { lyingPatient,patientClaimed,bedsideAccess,bedServicePlace339 } from './care-access.ts';
 import { rescueBedAvailable } from './medical-beds.ts';
 import { carrierOf } from './rescue-state.ts';
 import { currentMedicalBed,bedSurgeryFactor } from './hospital-medical-stats.ts';
@@ -55,13 +55,13 @@ export function surgeryReason(world:World,doctor:Pawn,patient:Pawn|undefined,acc
   if(bed?.kind==='double-bed')return 'L’opération exige un lit simple : le lit double reste un couchage civil.';
   if(!bed||!rescueBedAvailable(world,bed,patient,doctor.id)||patient.x!==bed.x||patient.z!==bed.z||task&&task.bedId!==bed.id)return 'Le lit du patient n’est plus disponible.';
   if(patientClaimed(world,patient.id,doctor))return 'Le patient est déjà pris en charge.';
-  if(task&&(Math.abs(task.spot.x-bed.x)+Math.abs(task.spot.z-bed.z)!==1||!canStandAt(world,task.spot)||reservedServiceCells(world,doctor.id).has(task.spot.z*world.width+task.spot.x)))return 'Le chevet n’est plus disponible.';
+  if(task&&(!(bedServicePlace339(world,patient,task.spot)||(Math.abs(task.spot.x-bed.x)+Math.abs(task.spot.z-bed.z)===1&&canStandAt(world,task.spot)))||reservedServiceCells(world,doctor.id).has(task.spot.z*world.width+task.spot.x)))return 'Le chevet n’est plus disponible.';
   return undefined;
 }
 export function surgeryProposal(world:World,doctor:Pawn,patient:Pawn,reach:Reachability):{task:SurgeryTask;path:Cell[]}|undefined {
   if(patient.surgeryRequest?.implant)return implantSurgeryProposal(world,doctor,patient,reach);
   if(surgeryReason(world,doctor,patient))return;
-  const access=bedsideAccess(world,doctor,patient,reach);if(!access)return;
+  const access=bedsideAccess(world,doctor,patient,reach,undefined,false,'interaction');if(!access)return;
   const task:SurgeryTask={patientId:patient.id,part:patient.surgeryRequest!.part,bedId:patient.need!.kind==='sleep'?patient.need!.bedId!:-1,spot:access.spot,phase:'approach',progress:0,workCore:0,...patient.surgeryRequest!.removeArtificial273?{removeArtificial273:patient.surgeryRequest!.removeArtificial273}:{}};
   const path=reserveMedicalMedicine(world,doctor,patient,task,reach,1);if(!path)return;
   return {task,path};

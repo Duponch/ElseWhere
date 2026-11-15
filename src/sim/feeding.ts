@@ -24,7 +24,7 @@ import type { Cell,CommandResult,Pawn,World } from './types.ts';
 export function feedingProposal(world:World,doctor:Pawn,patient:Pawn,reach:Reachability):{task:FeedTask;path:Cell[]}|undefined {
   if(feedingReason(world,doctor,patient))return;
   const sources=world.piles.filter(p=>p.kind==='food'&&p.owner.type==='ground'&&p.quantity>reservedSource(world,p.id));
-  const access=bedsideAccess(world,doctor,patient,reach);if(!access)return;
+  const access=bedsideAccess(world,doctor,patient,reach,undefined,false,'touch');if(!access)return;
   const food=selectFoodSource(world,doctor,sources,reach,patient);if(!food)return;
   if(food.kind==='paste')return {task:{patientId:patient.id,spot:access.spot,sourcePileId:null,carryPileId:null,quantity:1,phase:'pickup',progress:0,paste:food.request},path:food.path};
   const pile=sources.find(p=>p.id===food.id)!;

@@ -3,7 +3,7 @@ import { workPriority } from './work-types.ts';
 import { prisonBreakActive } from './prison-break-state.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
 import { isCarePatient } from './affiliation.ts';
-import { lyingPatient,patientClaimed } from './care-access.ts';
+import { lyingPatient,patientClaimed,bedServicePlace339 } from './care-access.ts';
 import { medicalWorkRefusal } from './health-rules.ts';
 import { freshMissing } from './injury-state.ts';
 import { carrierOf } from './rescue-state.ts';
@@ -31,5 +31,5 @@ export function feedingReason(world:World,doctor:Pawn,patient:Pawn|undefined,acc
     :patientClaimed(world,patient.id,doctor)?'Ce patient est déjà réservé par un médecin.':undefined);
 }
 export function feedingPlaceValid(world:World,task:FeedTask,patient:Pawn):boolean {
-  return Math.abs(task.spot.x-patient.x)+Math.abs(task.spot.z-patient.z)===1&&canStandAt(world,task.spot);
+  return bedServicePlace339(world,patient,task.spot)||Math.abs(task.spot.x-patient.x)+Math.abs(task.spot.z-patient.z)===1&&canStandAt(world,task.spot);
 }

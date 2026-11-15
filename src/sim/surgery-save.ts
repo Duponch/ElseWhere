@@ -2,7 +2,7 @@ import {isSchema273OrLater,isSchema280OrLater} from './schema-compatibility-257.
 import {anestheticCivilBornAt271} from './anesthetic.ts';
 import { isColonist } from './affiliation.ts';
 import { isBedKind } from './bed-kinds.ts';
-import { lyingPatient } from './care-access.ts';
+import { lyingPatient,bedServicePlace339 } from './care-access.ts';
 import { canStandAt } from './furniture-travel.ts';
 import { medicalWorkRefusal } from './health-rules.ts';
 import { rescueBedAvailable } from './medical-beds.ts';
@@ -93,7 +93,7 @@ export function validateSurgeries(w:World,version:number,onlyBedIds?:ReadonlySet
       ||patient.surgeryRequest.implant!==t.implant||patient.surgeryRequest.removeArtificial273!==t.removeArtificial273||surgeryRequestReason(patient,t.part,{version,...(t.phase==='work'?{allowAnesthetic:true as const}:{}),...(t.implant?{implant:t.implant}:{}),...(t.removeArtificial273?{removeArtificial273:t.removeArtificial273}:{})}))errors.push('Surgical task lacks an eligible matching patient.');
     if(patients.has(t.patientId))errors.push('Duplicate surgical patient reservation.');patients.add(t.patientId);
     if(!bed||bed.kind==='double-bed'||bed.prisoner&&(!isSchema280OrLater(version)||!patient?.prisoner)||!patient||!rescueBedAvailable(w,bed,patient,p.id)||!lyingPatient(patient)||patient.need?.kind!=='sleep'||patient.need.bedId!==bed.id||patient.x!==bed.x||patient.z!==bed.z
-      ||Math.abs(t.spot.x-bed.x)+Math.abs(t.spot.z-bed.z)!==1||!canStandAt(w,t.spot))errors.push('Surgical patient or bedside is not physically installed.');
+      ||!(bedServicePlace339(w,patient,t.spot)||(Math.abs(t.spot.x-bed.x)+Math.abs(t.spot.z-bed.z)===1&&canStandAt(w,t.spot))))errors.push('Surgical patient or bedside is not physically installed.');
     if(w.pawns.some(other=>other!==p&&(other.tend?.patientId===t.patientId||other.feed?.patientId===t.patientId||other.ward?.patientId===t.patientId||other.rescue?.patientId===t.patientId
       ||serviceCell(other,w)&&serviceKey(serviceCell(other,w)!)===serviceKey(t.spot))))errors.push('Surgery conflicts with a patient or bedside reservation.');
     // A queued sustaining command retains its independent priority intent.

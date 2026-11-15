@@ -7,7 +7,7 @@ import { isBedKind } from './bed-kinds.ts';
 import { bombRefugeRouteTarget } from './bomb-refuge-route.ts';
 import { validApparelShape,validateApparel } from './apparel-save.ts';
 import { isColonist } from './affiliation.ts';
-import { patientClaimed } from './care-access.ts';
+import { patientClaimed,bedServicePlace339 } from './care-access.ts';
 import { validWeaponShape,validateEquipment } from './equipment-save.ts';
 import { groundCapacity,groundPile } from './ground-placement.ts';
 import { medicalWorkRefusal } from './health-rules.ts';
@@ -154,7 +154,7 @@ export function validatePrisoners(w:World,version:number,ids:Set<number>):string
       if(p.state!=='moving')errors.push('Invalid warden delivery phase.');
     }else if(t.phase==='approach'){
       if(p.state!=='moving')errors.push('Invalid warden approach phase.');
-    }else if(p.state!=='working'||p.moveCooldown>0||p.path.length||!same(p,t.spot)||t.phase==='rapport'&&patient&&!adjacent(p,patient))errors.push('Warden conversation lacks physical service.');
+    }else if(p.state!=='working'||p.moveCooldown>0||p.path.length||!same(p,t.spot)||t.phase==='rapport'&&patient&&!(bedServicePlace339(w,patient,p)||adjacent(p,patient)))errors.push('Warden conversation lacks physical service.');
   }
   return errors;
 }

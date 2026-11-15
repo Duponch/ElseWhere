@@ -16,7 +16,7 @@ import {addMaterial,refreshStock} from './materials.ts';
 import { resolveSurgeryOutcome } from './surgery-outcomes.ts';
 import { administerAnesthetic,canAdministerAnesthetic } from './anesthetic.ts';
 import { medicalWorkRefusal } from './health-rules.ts';
-import { lyingPatient,patientClaimed,bedsideAccess } from './care-access.ts';
+import { lyingPatient,patientClaimed,bedsideAccess,bedServicePlace339 } from './care-access.ts';
 import { rescueBedAvailable } from './medical-beds.ts';
 import { carrierOf } from './rescue-state.ts';
 import { currentMedicalBed,bedSurgeryFactor } from './hospital-medical-stats.ts';
@@ -55,12 +55,12 @@ export function implantSurgeryReason(w:World,d:Pawn,p:Pawn|undefined,accepted=fa
   if(bed?.kind==='double-bed')return 'L’opération exige un lit simple : le lit double reste un couchage civil.';
   if(!bed||!rescueBedAvailable(w,bed,p,d.id)||p.x!==bed.x||p.z!==bed.z||task&&task.bedId!==bed.id)return 'Le lit du patient n’est plus disponible.';
   if(patientClaimed(w,p.id,d))return 'Le patient est déjà pris en charge.';
-  if(task&&(Math.abs(task.spot.x-bed.x)+Math.abs(task.spot.z-bed.z)!==1||!canStandAt(w,task.spot)||reservedServiceCells(w,d.id).has(task.spot.z*w.width+task.spot.x)))return 'Le chevet n’est plus disponible.';
+  if(task&&(!(bedServicePlace339(w,p,task.spot)||(Math.abs(task.spot.x-bed.x)+Math.abs(task.spot.z-bed.z)===1&&canStandAt(w,task.spot)))||reservedServiceCells(w,d.id).has(task.spot.z*w.width+task.spot.x)))return 'Le chevet n’est plus disponible.';
   return undefined;
 }
 export function implantSurgeryProposal(w:World,d:Pawn,p:Pawn,reach:Reachability):{task:SurgeryTask;path:Cell[]}|undefined {
   if(implantSurgeryReason(w,d,p))return;
-  const access=bedsideAccess(w,d,p,reach);if(!access)return;
+  const access=bedsideAccess(w,d,p,reach,undefined,false,'interaction');if(!access)return;
   const planned=planImplantIngredients(w,d,p,access.spot,reach);if(!planned)return;
   return {path:planned.path,task:{patientId:p.id,part:p.surgeryRequest!.part,implant:p.surgeryRequest!.implant,bedId:currentMedicalBed(w,p,false)!.id,spot:access.spot,ingredients:planned.ingredients,phase:'pickup',progress:0,workCore:0}};
 }

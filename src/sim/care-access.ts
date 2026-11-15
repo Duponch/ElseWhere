@@ -54,19 +54,44 @@ export function bedInteractionCells336(world:World,patient:Pawn):Cell[]|undefine
 
 export const lyingPatient=(p:Pawn):boolean=>p.state!=='dead'&&p.moveCooldown===0&&p.need?.kind==='sleep'&&p.need.phase==='sleep'&&p.need.bedId!==null;
 export const patientClaimed=(world:World,patientId:number,except:Pawn):boolean=>shipCasketPatientClaimed277(world,{kind:'human',id:patientId},except.id)||world.pawns.some(p=>p!==except&&(p.tend?.patientId===patientId||p.feed?.patientId===patientId||p.ward?.patientId===patientId||p.surgery?.patientId===patientId||p.rescue?.patientId===patientId||p.cryptosleepTask?.action==='carry'&&p.cryptosleepTask.patientId===patientId||p.id===patientId&&p.cryptosleepTask?.action==='enter'));
+/** Schema 339: Core goes to the bed's interaction cell for surgery
+ * (JobDriver_DoBill, PathEndMode.InteractionCell on a pawn in bed) and the
+ * same cells serve a warden's chat with a prisoner in bed; feeding goes to a
+ * cell touching the patient (PathEndMode.Touch). */
+export type BedsideService339='interaction'|'touch';
+/** Schema 339: whether `spot` is one of the bed's interaction cells of a
+ * lying patient (standable). It widens each service's older place rule, which
+ * stays valid, so a service engaged before the migration keeps its cell. */
+export function bedServicePlace339(world:World,patient:Pawn,spot:Cell):boolean {
+  if(world.schemaVersion<339)return false;const cells=bedInteractionCells336(world,patient);if(!cells)return false;
+  return canStandAt(world,spot)&&cells.some(c=>c.x===spot.x&&c.z===spot.z);
+}
 /** One decision owns this search and reservation view; never retained across ticks. */
-export function bedsideAccess(world:World,doctor:Pawn,patient:Pawn,reach:Reachability,additionalReserved?:ReadonlySet<number>,interaction336=false):{spot:Cell;path:Cell[];cost:number}|undefined {
+export function bedsideAccess(world:World,doctor:Pawn,patient:Pawn,reach:Reachability,additionalReserved?:ReadonlySet<number>,interaction336=false,service339?:BedsideService339):{spot:Cell;path:Cell[];cost:number}|undefined {
   const reserved=reservedServiceCells(world,doctor.id);let best:{spot:Cell;path:Cell[];cost:number}|undefined;
-  // Schema 336 tending: the first reachable free cell in Core's bed order
-  // (Core goes to its first cell; a reserved or unreachable one is skipped).
-  const cells=interaction336&&world.schemaVersion>=336?bedInteractionCells336(world,patient):undefined;
+  const free=(c:Cell)=>!reserved.has(c.z*world.width+c.x)&&!additionalReserved?.has(c.z*world.width+c.x);
+  // Schema 336 tending (and 339 surgery and chat): the first reachable free
+  // cell in Core's bed order (Core goes to its first cell; a reserved or
+  // unreachable one is skipped).
+  const cells=interaction336&&world.schemaVersion>=336||service339&&world.schemaVersion>=339?bedInteractionCells336(world,patient):undefined;
+  if(cells&&service339==='touch'&&!interaction336){
+    // Schema 339 feeding (Core Touch): the cheapest cell touching the patient.
+    // Core may stop on a neighbouring bed; Elsewhere never stands on a bed, so
+    // the bed's farther cells (beyond the foot) are the fallback.
+    const near=(c:Cell)=>Math.max(Math.abs(c.x-patient.x),Math.abs(c.z-patient.z))<=1;
+    for(const pool of [cells.filter(near),cells.filter(c=>!near(c))]){
+      for(const spot of pool)if(free(spot)){const path=routeToCell(world,spot,reach);if(path){const cost=routeCost(world,path,reach);if(!best||cost<best.cost)best={spot,path,cost};}}
+      if(best)return best;
+    }
+    return;
+  }
   if(cells){
-    for(const spot of cells)if(!reserved.has(spot.z*world.width+spot.x)&&!additionalReserved?.has(spot.z*world.width+spot.x)){
+    for(const spot of cells)if(free(spot)){
       const path=routeToCell(world,spot,reach);if(path)return {spot,path,cost:routeCost(world,path,reach)};
     }
     return;
   }
-  for(const spot of workNeighbours(patient))if(canStandAt(world,spot)&&!reserved.has(spot.z*world.width+spot.x)&&!additionalReserved?.has(spot.z*world.width+spot.x)){
+  for(const spot of workNeighbours(patient))if(canStandAt(world,spot)&&free(spot)){
     const path=routeToCell(world,spot,reach);if(path){const cost=routeCost(world,path,reach);if(!best||cost<best.cost)best={spot,path,cost};}
   }
   return best;
