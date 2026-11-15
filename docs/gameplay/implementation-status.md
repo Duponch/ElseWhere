@@ -25,6 +25,8 @@ Huit vrais ordres avec pause/reprise, reclics, rafale et stabilité du dernier o
 
 Le typage, la compilation et378cas ciblés passent, avec trois échecs historiques conservés ; Cloudflare reste V491/schéma 296 jusqu’au déploiement distinct. La campagne94de/T3328 est intacte ; victoire, confort global et six ensembles restent ouverts et la poursuite générale reste pausée. Les descriptions suivantes sont historiques.
 
+**V337 — schéma 337 :** [Pénoxycyline et prise programmée](penoxycyline-v337.md). Recherche Production de pénoxycyline (500, après Production de drogues) ; 2 neutroamine → 1 dose au laboratoire de drogues (ou 8 → 4) ; une dose protège environ 5,56 jours du paludisme, de la maladie du sommeil et de la peste, sans soigner une infection existante ; prise programmée tous les N jours dans les politiques de drogues, depuis l'inventaire ou la pile la plus proche. Surdose, prise ordonnée, inventaire gardé, caravanes et commerce non représentés.
+
 **V336 — schéma 336 :** [Soigner un patient alité, colon enlevé](bedside-tending-v336.md). Le médecin soigne depuis la première case libre de l'ordre du jeu de base autour du lit (côtés, pied, au-delà) au lieu des seules cases voisines de la tête : des lits côte à côte contre un mur ne laissent plus mourir un blessé faute de place. Un colon enlevé coûte l'adaptation d'un colon perdu.
 
 **V335 — schéma 335 :** [Voyageurs et visiteurs selon la part de factions amies](visitor-ally-fraction-v335.md). Comme les caravanes marchandes, chaque occasion de voyageurs ou de visiteurs n'est retenue qu'avec la part de factions amies du jeu de base (60 % à 100 %) ; aucune visite sans faction amie.
