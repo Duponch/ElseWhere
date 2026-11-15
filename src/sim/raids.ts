@@ -1,5 +1,7 @@
 import {homeAnimalThreatPoints329} from './animal-threat-points-329.ts';
 import {drawBigThreat328} from './big-threats-328.ts';
+import {isConcurrentRaids341,raidSlotTaken341} from './concurrent-raids-341.ts';
+import {homeRecentFactor341,recordHomeIncident341} from './recent-incidents-341.ts';
 import {shipCasketHumanReferences277,shipCasketTerminalParticipant277} from './ship-casket-notifications-277.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
 import {mechRaidGroups261,multiRaid261} from './mechanical-raid-groups-261.ts';
@@ -63,10 +65,11 @@ function advanceHumanRaidGroup(w:World,a:RaidGroup,independent=false):void {
  // Schema 333: raiders still in their falling or closed pods keep the raid on.
  if(!members.some(p=>p.state!=='dead'&&p.state!=='downed'&&!p.prisoner&&!isColonist(p))&&!raidPodsPending333(a.arrival333)){
   const captured=members.filter(p=>p.state!=='dead'&&(p.prisoner||p.recruitment?.raidGroup===a.id)).length;
-  s.last={id:a.id,tick:w.tick,reason:a.reason==='colony-down'?'colony-down':s.departed.some(d=>a.members.includes(d.pawnId))?'withdrawn':'defended',killed:members.filter(p=>p.state==='dead').length+terminal.filter(r=>!r.destroyed&&r.actor.health?.death).length,...destroyed?{destroyed277:destroyed}:{},downed:members.filter(p=>p.state==='downed'&&!p.prisoner&&!p.recruitment).length,escaped:a.members.length-members.length-terminal.length,...captured?{captured}:{},...a.composition?{composition:a.composition}:{},...a.originQuestId!==undefined?{originQuestId:a.originQuestId}:{},...a.caravan261?{caravan261:a.caravan261,memberCount261:a.members.length}:{},...a.shipReactor275?{shipReactor275:{...a.shipReactor275}}:{}};
+  s.last={id:a.id,tick:w.tick,reason:a.reason==='colony-down'?'colony-down':s.departed.some(d=>a.members.includes(d.pawnId))?'withdrawn':'defended',killed:members.filter(p=>p.state==='dead').length+terminal.filter(r=>!r.destroyed&&r.actor.health?.death).length,...destroyed?{destroyed277:destroyed}:{},downed:members.filter(p=>p.state==='downed'&&!p.prisoner&&!p.recruitment).length,escaped:a.members.length-members.length-terminal.length,...captured?{captured}:{},...a.composition?{composition:a.composition}:{},...a.originQuestId!==undefined?{originQuestId:a.originQuestId}:{},...a.caravan261?{caravan261:a.caravan261,memberCount261:a.members.length}:{},...a.shipReactor275?{shipReactor275:{...a.shipReactor275}}:{},...a.concurrent341?{concurrent341:true as const}:{}};
   for(const p of members)if(p.raid&&!p.prisoner){p.raid.exiting=true;stopRaidEngagement(p);}
   retainRaidResult261(w);s.completed++;if(independent)s.extraActive261=s.extraActive261!.filter(g=>g!==a);else delete s.active;
-  if(!a.shipReactor275&&!tempMapModern261(w)&&!mechRaidGroups261(w).length&&!s.extraActive261?.length)s.nextCheck=s.profile==='camp-pressure-v1'?null:cassandra?s.cassandra!.pending[0]!:w.tick+Math.floor(TICKS_PER_DAY*(6+raidRandom(s)*2));
+  // A concurrent group (schema 341) may end while the primary raid goes on.
+  if(!a.shipReactor275&&!tempMapModern261(w)&&!s.active&&!mechRaidGroups261(w).length&&!s.extraActive261?.length)s.nextCheck=s.profile==='camp-pressure-v1'?null:cassandra?s.cassandra!.pending[0]!:w.tick+Math.floor(TICKS_PER_DAY*(6+raidRandom(s)*2));
   log(w,'Assaut terminé. Vérifiez les blessés, les stocks et les ouvrages endommagés.');
  }
 }
@@ -77,22 +80,25 @@ function restoreShipFreeAgenda275(w:World):void {
 /** Calendar and group outcomes, once per tick. Pawn controllers own movement. */
 export function advanceRaids(w:World):void {
   const s=w.raids;if(!s)return;advanceKidnapLord261(w);advanceTempMapRaids261(w);
-  if(isSchema275OrLater(w.schemaVersion))for(const group of s.extraActive261?.slice()??[])if(group.shipReactor275)advanceHumanRaidGroup(w,group,true);
+  // Independent reactor Lords and (schema 341) concurrent Cassandra raids.
+  if(isSchema275OrLater(w.schemaVersion))for(const group of s.extraActive261?.slice()??[])if(group.shipReactor275||group.concurrent341)advanceHumanRaidGroup(w,group,true);
   const multi=multiRaid261(w);if(multi)advanceMechanoidRaid(w);
   if(s.profile==='ship-reactor-raids-v1')return;
   if(advanceCaravanRaid261(w))return;
   if(s.profile==='camp-pressure-v1'&&!s.active){if(!multi&&s.mechActive)advanceMechanoidRaid(w);return;}
   const cassandra=s.profile==='cassandra-raids-v1',opportunity=cassandra&&!tempMapModern261(w)&&consumeCassandraOpportunity(w,s);
+  // Schema 341: an ongoing raid no longer swallows Cassandra's opportunity.
+  const concurrent=cassandra&&isConcurrentRaids341(w.schemaVersion);
   restoreShipFreeAgenda275(w);
   const beacon=shipReactorBeacon275(w);
   if(beacon&&!cassandra&&s.nextCheck!==null&&w.tick>=s.nextCheck)s.nextCheck=w.tick+Math.floor(TICKS_PER_DAY*(6+raidRandom(s)*2));
-  if(!multi&&s.mechActive){advanceMechanoidRaid(w);restoreShipFreeAgenda275(w);return;}
-  if(multi&&!s.active&&mechRaidGroups261(w).some(g=>!g.shipReactor275))return;
+  if(!multi&&s.mechActive){advanceMechanoidRaid(w);restoreShipFreeAgenda275(w);if(!concurrent)return;}
+  if(!concurrent&&multi&&!s.active&&mechRaidGroups261(w).some(g=>!g.shipReactor275))return;
   const a=s.active;
   if(a){
     advanceHumanRaidGroup(w,a);
     restoreShipFreeAgenda275(w);
-    return;
+    if(!concurrent)return;
   }
   if(tempMapModern261(w))return;
   if(beacon)return;
@@ -112,21 +118,26 @@ export function advanceRaids(w:World):void {
   if(cassandra&&w.schemaVersion>=328&&w.tick!==INTRO_RAID_TICK){
     // Core suppresses the cycle at DaysPassed <= minDaysPassed (day 11.0).
     if(w.tick===CASSANDRA_CYCLE_START)return;
-    if(drawBigThreat328(Math.floor(w.tick/TICKS_PER_DAY),points,()=>raidRandom(s))!=='raid')return;
+    // Schema 341: the absent big threats carry their recent-incident factor,
+    // and a drawn one joins the home record as if it had fired.
+    const recent=homeRecentFactor341(w),threat=drawBigThreat328(Math.floor(w.tick/TICKS_PER_DAY),points,()=>raidRandom(s),recent);
+    if(threat!=='raid'){if(recent)recordHomeIncident341(w,threat);return;}
   }
   const random={rng:s.rng};
   const mechRandom=s.mechanoid?{rng:s.mechanoid.rng}:undefined;
   // Schema 331: Cassandra draws the raiding faction among every hostile world
   // faction, the introductory raid included (Core forces 40 points).
-  if(cassandra&&w.schemaVersion>=331&&w.worldFactions&&(points!==undefined||w.tick===INTRO_RAID_TICK)){startFactionRaid331(w,points??40,random,mechRandom,points===undefined);return;}
+  // Schema 341: with a raid slot taken, the new raid arrives beside it.
+  const beside=raidSlotTaken341(w);
+  if(cassandra&&w.schemaVersion>=331&&w.worldFactions&&(points!==undefined||w.tick===INTRO_RAID_TICK)){startFactionRaid331(w,points??40,random,mechRandom,points===undefined,beside);return;}
   const mech=points!==undefined&&mechRandom?chooseMechanoidOpportunity(w,points,mechRandom):undefined;
   if(mech!==undefined){
     if(mech===null){s.mechanoid!.rng=mechRandom!.rng;return;}
-    createMechanoidRaid(w,mech,mechRandom!);return;
+    createMechanoidRaid(w,mech,mechRandom!,undefined,beside);return;
   }
   const composition=points!==undefined?chooseRaidComposition(points,random):undefined;
   const count=composition?.roster.length??(s.serial===0?1:2),sites=raidEntries(w,s.rng,count);
-  if(!sites||!createRaidGroup(w,{count,sites,random,...(composition?{composition,recompose333:chooseRaidComposition}:{})})){
+  if(!sites||!createRaidGroup(w,{count,sites,random,...(composition?{composition,recompose333:chooseRaidComposition}:{}),...beside?{concurrent341:true}:{}})){
     if(!cassandra)s.nextCheck=w.tick+TICKS_PER_DAY/4;
     return;
   }else if(mechRandom){s.mechanoid!.rng=mechRandom.rng;s.mechanoid!.lastFaction='outlaws';}
@@ -135,20 +146,20 @@ export function advanceRaids(w:World):void {
  * draw uses the mechanical policy RNG when the colony admitted mechanoids,
  * as the historical mechanoid-or-pirate choice did; failures commit nothing
  * more than that choice did. */
-function startFactionRaid331(w:World,points:number,random:{rng:number},mechRandom:{rng:number}|undefined,intro:boolean):void {
+function startFactionRaid331(w:World,points:number,random:{rng:number},mechRandom:{rng:number}|undefined,intro:boolean,beside=false):void {
   const s=w.raids!,draw=mechRandom??random,pick=drawRaidFaction331(w,points,()=>raidRandom(draw));
   if(!pick){if(mechRandom)s.mechanoid!.rng=mechRandom.rng;return;}
   if(pick.family==='mechanoid'){
     const composition=chooseMechanoidComposition(points,mechRandom!,w.schemaVersion>=197&&!!s.mechanoid!.ranged);
     if(!composition){s.mechanoid!.rng=mechRandom!.rng;return;}
-    if(createMechanoidRaid(w,composition,mechRandom!))s.lastFaction331=pick.factionId;
+    if(createMechanoidRaid(w,composition,mechRandom!,undefined,beside))s.lastFaction331=pick.factionId;
     return;
   }
   const composition=intro?undefined:pick.family==='pirate'?chooseRaidComposition(points,random):chooseRaidComposition331(points,pick.family,random);
   const count=composition?.roster.length??(s.serial===0?1:2),sites=raidEntries(w,s.rng,count);
   const family=pick.family;
   const recompose333=(budget:number,r:{rng:number})=>family==='pirate'?chooseRaidComposition(budget,r):chooseRaidComposition331(budget,family,r);
-  if(!sites||!createRaidGroup(w,{count,sites,random,faction331:{factionId:pick.factionId,family},...(composition?{composition,recompose333}:{})}))return;
+  if(!sites||!createRaidGroup(w,{count,sites,random,faction331:{factionId:pick.factionId,family},...(composition?{composition,recompose333}:{}),...beside?{concurrent341:true}:{}}))return;
   if(mechRandom){s.mechanoid!.rng=mechRandom.rng;s.mechanoid!.lastFaction='outlaws';}
   s.lastFaction331=pick.factionId;
 }

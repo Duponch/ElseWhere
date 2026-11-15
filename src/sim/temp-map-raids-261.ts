@@ -62,7 +62,7 @@ export function admitTempMapManhunters261(w:World,points:number,random:{rng:numb
 export function advanceTempMapRaids261(w:World):void {
  const s=w.raids;if(!s?.extraActive261)return;
  for(const a of s.extraActive261.slice()){
-  if(a.shipReactor275)continue; // Its ordinary human retreat controller owns it.
+  if(a.shipReactor275||a.concurrent341)continue; // Its ordinary human retreat controller owns it.
   const members=w.pawns.filter(p=>a.members.includes(p.id)),lost=(p:World['pawns'][number])=>p.state==='dead'||p.state==='downed'||!!p.prisoner||p.recruitment?.raidGroup===a.id;
   for(const p of members)if(lost(p)&&!a.lost.includes(p.id))a.lost.push(p.id);a.lost.sort((a,b)=>a-b);
   if(members.some(p=>!lost(p)&&!isColonist(p)))continue;

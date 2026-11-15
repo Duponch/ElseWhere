@@ -1,3 +1,4 @@
+import {WORLD_RECENT_INCIDENTS_341,isRecentIncidents341,validRecentIncidents341} from './recent-incidents-341.ts';
 import { WORLD_FIRST_CHECK,WORLD_CHECK_INTERVAL,SOLAR_FLARE_COOLDOWN } from './cassandra-world.ts';
 import type { World } from './types.ts';
 import { AURORA_MIN_DURATION_CORE305,AURORA_MAX_DURATION_CORE305,AURORA_REFIRE_TICKS305 } from './misc-incidents-305.ts';
@@ -20,14 +21,14 @@ const keys=(v:Record<string,unknown>,allowed:readonly string[])=>Object.keys(v).
 export function validWorldIncidents(value:unknown,version:number,world:Pick<World,'tick'|'gameProfile'>):boolean {
   if(value===undefined)return true;
   if(version<184||!world.gameProfile||!object(value)||
-    !keys(value,['profile','adoptedAt','rng','nextCheck','checks','opportunities','flares','lastStart','lastEndCore','active',...(version>=305?['auroras','lastAuroraStart','aurora']:[])])||
+    !keys(value,['profile','adoptedAt','rng','nextCheck','checks','opportunities','flares','lastStart','lastEndCore','active',...(version>=305?['auroras','lastAuroraStart','aurora']:[]),...(isRecentIncidents341(version)?['recent341']:[])])||
     value.profile!=='cassandra-world-v1'||!integer(value.adoptedAt,0,world.tick)||!integer(value.rng,1,0xffffffff)||
     !integer(value.nextCheck,WORLD_FIRST_CHECK)||value.nextCheck%WORLD_CHECK_INTERVAL!==0||
     value.nextCheck!==Math.max(WORLD_FIRST_CHECK,(Math.floor(world.tick/WORLD_CHECK_INTERVAL)+1)*WORLD_CHECK_INTERVAL)||
     !integer(value.checks)||!integer(value.opportunities,0,value.checks)||!integer(value.flares,0,value.opportunities))return false;
   const first=Math.max(WORLD_FIRST_CHECK,(Math.floor(value.adoptedAt/WORLD_CHECK_INTERVAL)+1)*WORLD_CHECK_INTERVAL);
   if(value.checks>Math.max(0,Math.floor((world.tick-first)/WORLD_CHECK_INTERVAL)+1))return false;
-  if(!validAurora305(value,first,world.tick))return false;
+  if(!validAurora305(value,first,world.tick)||!validRecentIncidents341(value.recent341,version,WORLD_RECENT_INCIDENTS_341))return false;
   if(value.flares===0)return value.lastStart===undefined&&value.lastEndCore===undefined&&value.active===undefined;
   if(!integer(value.lastStart,first+(value.flares-1)*SOLAR_FLARE_COOLDOWN,world.tick)||
     value.lastStart%WORLD_CHECK_INTERVAL!==0||!integer(value.lastEndCore,value.lastStart*10+9000,value.lastStart*10+30000))return false;

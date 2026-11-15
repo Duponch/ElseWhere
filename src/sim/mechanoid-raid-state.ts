@@ -12,6 +12,8 @@ export interface MechanoidRaidComposition { budget:number;roster:MechanoidKind[]
 export interface MechanoidRaidGroup {
   shipReactor275?:import('./ship-reactor-threats-275.ts').ShipReactorRaidSource275;
   source260?:'camp-pressure';
+  /** Schema 341: a Cassandra mechanoid raid born beside another raid group. */
+  concurrent341?:true;
   id:number;startedAt:number;members:number[];lost:number[];
   phase:'staging'|'assault';
   stage:{point:Cell;activatedAtCore:number;delayCore:number};

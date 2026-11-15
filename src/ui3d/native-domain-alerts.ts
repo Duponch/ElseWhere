@@ -118,8 +118,10 @@ export function readNativeDomainAlerts(world: World, speed?: number): NativeDoma
   const humans = humanGroups[0], machines = mechanicalGroups[0], lastRaid = world.raids?.last;
   if (humans) {
     const ids = new Set(humanGroups.flatMap(group => group.members)), remaining = world.pawns.filter(pawn => ids.has(pawn.id) && pawn.state !== 'dead' && pawn.state !== 'downed').length;
-    const text = humans.phase === 'assault' ? `Raid : ${remaining} assaillant(s)` : 'Retraite des assaillants';
-    const body = humans.phase === 'assault' ? 'Des ennemis arrivent par le bord et attaquent la colonie. Mobilisez les défenseurs, placez-les et préparez les secours. Les assaillants peuvent frapper les murs ou portes qui leur barrent l’accès.' : 'Les assaillants cherchent une sortie physique. Surveillez les blessés ; les survivants encore sur la carte restent hostiles.';
+    // Schema 341: several raids may share the map; any group still attacking keeps the alert on assault.
+    const attacking = humanGroups.some(group => group.phase === 'assault'), groups = humanGroups.length > 1 ? ` · ${humanGroups.length} groupes` : '';
+    const text = attacking ? `Raid : ${remaining} assaillant(s)${groups}` : 'Retraite des assaillants';
+    const body = attacking ? 'Des ennemis arrivent par le bord et attaquent la colonie. Mobilisez les défenseurs, placez-les et préparez les secours. Les assaillants peuvent frapper les murs ou portes qui leur barrent l’accès.' : 'Les assaillants cherchent une sortie physique. Surveillez les blessés ; les survivants encore sur la carte restent hostiles.';
     add(`raid:${humans.id}`, text, text, body, {kind: 'raid-focus', raidId: humans.id, mechanical: false}, 'danger', people([...ids]));
   }
   if (machines) {

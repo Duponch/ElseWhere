@@ -1,5 +1,6 @@
 import {shipCasketTerminalParticipant277} from './ship-casket-notifications-277.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
+import {isConcurrentRaids341} from './concurrent-raids-341.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {actualMechanicalBirthFaction259} from './mechanoid-world-faction-259.ts';
 import {mechRaidGroups261,multiRaid261,beginMechanicalMulti261} from './mechanical-raid-groups-261.ts';
@@ -32,9 +33,11 @@ export function chooseMechanoidOpportunity(w:World,points:number,random:{rng:num
   if(raidRandom(random)*(mech+pirate)>=mech)return undefined;
   return chooseMechanoidComposition(points,random,w.schemaVersion>=197&&!!policy.ranged);
 }
-function adoptMechanoidRaid(w:World,composition:MechanoidRaidComposition,random:{rng:number},sites=raidEntries(w,random.rng,composition.roster.length),source260?:'camp-pressure',shipReactor275?:ShipReactorRaidSource275):MechanoidRaidGroup|null {
+function adoptMechanoidRaid(w:World,composition:MechanoidRaidComposition,random:{rng:number},sites=raidEntries(w,random.rng,composition.roster.length),source260?:'camp-pressure',shipReactor275?:ShipReactorRaidSource275,concurrent341=false):MechanoidRaidGroup|null {
   if(shipReactor275&&!validShipReactorRaidSource275(shipReactor275,w,w.tick,'mechanoid'))return null;
-  const s=w.raids,count=composition.roster.length,prospective=!!shipReactor275||source260!==undefined&&(Number(w.schemaVersion)===261||(Number(w.schemaVersion)===262||isSchema263OrLater(Number(w.schemaVersion))))&&tempMapModern261(w),worldFaction259=(Number(w.schemaVersion)===259||Number(w.schemaVersion)===260||(Number(w.schemaVersion)===261||(Number(w.schemaVersion)===262||isSchema263OrLater(Number(w.schemaVersion)))))?actualMechanicalBirthFaction259(w.worldFactions):undefined;
+  // Schema 341: a Cassandra machine raid arriving beside another raid group.
+  if(concurrent341&&(shipReactor275||source260||!isConcurrentRaids341(w.schemaVersion)||w.raids?.profile!=='cassandra-raids-v1'))return null;
+  const s=w.raids,count=composition.roster.length,prospective=concurrent341||!!shipReactor275||source260!==undefined&&(Number(w.schemaVersion)===261||(Number(w.schemaVersion)===262||isSchema263OrLater(Number(w.schemaVersion))))&&tempMapModern261(w),worldFaction259=(Number(w.schemaVersion)===259||Number(w.schemaVersion)===260||(Number(w.schemaVersion)===261||(Number(w.schemaVersion)===262||isSchema263OrLater(Number(w.schemaVersion)))))?actualMechanicalBirthFaction259(w.worldFactions):undefined;
   if((Number(w.schemaVersion)===259||Number(w.schemaVersion)===260||(Number(w.schemaVersion)===261||(Number(w.schemaVersion)===262||isSchema263OrLater(Number(w.schemaVersion)))))&&!worldFaction259)return null;
   if(w.schemaVersion<194||!s?.mechanoid||!shipReactor275&&(source260?s.profile!=='camp-pressure-v1':s.profile!=='cassandra-raids-v1')||!Number.isSafeInteger(w.tick*10+14999)||!prospective&&(!!s.active||!!s.mechActive)||!sites||sites.length!==count
     ||!Number.isSafeInteger(count)||count<1||!validMechanoidComposition(composition,w.schemaVersion>=197&&!!s.mechanoid.ranged)
@@ -53,19 +56,20 @@ function adoptMechanoidRaid(w:World,composition:MechanoidRaidComposition,random:
   const draft={rng:random.rng},delayCore=5000+Math.floor(raidRandom(draft)*10000),id=s.serial+1;
   const generated:Mechanoid[]=sites.map((c,i)=>({id:w.nextId+i,mechKind:composition.roster[i]!,...c,state:'idle',...worldFaction259?{worldFaction259:{...worldFaction259}}:{},
     path:[],heading:0,moveCooldown:0,planCooldown:0,raid:{group:id,goal:null}}));
-  const group:MechanoidRaidGroup={...source260?{source260}:{},...shipReactor275?{shipReactor275:{...shipReactor275}}:{},id,startedAt:w.tick,members:generated.map(m=>m.id),lost:[],phase:'staging',
+  const group:MechanoidRaidGroup={...source260?{source260}:{},...shipReactor275?{shipReactor275:{...shipReactor275}}:{},...concurrent341?{concurrent341:true as const}:{},id,startedAt:w.tick,members:generated.map(m=>m.id),lost:[],phase:'staging',
     stage:{point:{...sites[0]!},activatedAtCore:w.tick*10,delayCore},composition:{budget:composition.budget,roster:[...composition.roster]}};
   w.nextId+=count;(w.mechanoids??=[]).push(...generated);s.serial=id;if(!shipReactor275)s.nextCheck=null;
   if(shipReactor275||prospective&&(s.active||s.mechActive||multiRaid261(w)))beginMechanicalMulti261(w);
-  if(shipReactor275||s.mechActive)s.extraMechActive261!.push(group);else s.mechActive=group;
+  if(shipReactor275||concurrent341||s.mechActive)s.extraMechActive261!.push(group);else s.mechActive=group;
   if(!source260&&!shipReactor275){s.mechanoid.rng=draft.rng;s.mechanoid.lastFaction='mechanoid';}random.rng=draft.rng;
   w.events.push({tick:w.tick,type:'command',message:composition.roster.every(k=>k==='scyther')?`${count} Scyther(s) arrivent et se préparent à attaquer. Leur défense est déjà active.`:
     `${count} mécanoïdes (${composition.roster.map(k=>mechanoidDefinition(k).label).join(', ')}) arrivent et se préparent à attaquer. Leur défense est déjà active.`});
   if(w.events.length>80)w.events.splice(0,w.events.length-80);
   return group;
 }
-export function createMechanoidRaid(w:World,composition:MechanoidRaidComposition,random:{rng:number},sites?:Cell[]):MechanoidRaidGroup|null {
- return adoptMechanoidRaid(w,composition,random,sites);
+/** concurrent341: schema 341 raid arriving while a raid slot is taken. */
+export function createMechanoidRaid(w:World,composition:MechanoidRaidComposition,random:{rng:number},sites?:Cell[],concurrent341=false):MechanoidRaidGroup|null {
+ return adoptMechanoidRaid(w,composition,random,sites,undefined,undefined,concurrent341);
 }
 export function createShipReactorMechanoidRaid275(w:World,points:number,random:{rng:number},source:ShipReactorRaidSource275):MechanoidRaidGroup|null {
  if(!isSchema275OrLater(w.schemaVersion)||!w.raids?.mechanoid)return null;
@@ -88,7 +92,7 @@ function advanceMechanicalGroup(w:World,g:MechanoidRaidGroup,core:number):boolea
   if(g.lost.length===g.members.length){
     const destroyed=g.members.filter(id=>shipCasketTerminalParticipant277(w,id,'mechanical',g.id)?.destroyed).length;
     s.last={id:g.id,tick:w.tick,reason:'defended',killed:g.members.length-destroyed,...destroyed?{destroyed277:destroyed}:{},downed:0,escaped:0,
-      mechanoid:true,mechComposition:{budget:g.composition.budget,roster:[...g.composition.roster]},...g.shipReactor275?{shipReactor275:{...g.shipReactor275}}:{}};
+      mechanoid:true,mechComposition:{budget:g.composition.budget,roster:[...g.composition.roster]},...g.shipReactor275?{shipReactor275:{...g.shipReactor275}}:{},...g.concurrent341?{concurrent341:true as const}:{}};
     retainRaidResult261(w);s.completed++;
     if(s.mechActive===g)delete s.mechActive;else s.extraMechActive261=s.extraMechActive261!.filter(row=>row!==g);
     if(!g.shipReactor275&&!tempMapModern261(w)&&!s.active&&!mechRaidGroups261(w).length&&!s.extraActive261?.length)s.nextCheck=s.profile==='camp-pressure-v1'?null:s.cassandra!.pending[0]!;

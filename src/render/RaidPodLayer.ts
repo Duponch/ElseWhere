@@ -100,11 +100,13 @@ export class RaidPodLayer {
   }
   private adoptBody(world:World):boolean {
     this.confirmedTick=world.tick;
-    const arrival=world.raids?.active?.arrival333,all=arrival?.pods??[];
+    // Every home raid group (schema 341: several may fall at once) with its own arrival clock.
+    const groups=[...world.raids?.active?[world.raids.active]:[],...(world.raids?.extraActive261??[]).filter(g=>g.concurrent341===true)];
     // A pod is drawn while falling, closed, or during its opening receipt.
-    const rows:RaidPod333[]=[];
-    for(const pod of all)if(pod.openedAtCore===undefined||world.tick<pod.openedAtCore/10+RAID_POD_OPENING_TICKS)if(rows.length<RAID_POD_CAPACITY)rows.push(pod);
-    const key=arrival&&rows.length?`${arrival.atCore}|${rows.map(p=>`${p.pawnId}:${p.cell.x}:${p.cell.z}:${p.landAtCore}:${p.openedAtCore??-1}`).join('|')}`:'';
+    const rows:RaidPod333[]=[],arrivedAt:number[]=[];
+    for(const group of groups){const arrival=group.arrival333;
+      for(const pod of arrival?.pods??[])if(pod.openedAtCore===undefined||world.tick<pod.openedAtCore/10+RAID_POD_OPENING_TICKS)if(rows.length<RAID_POD_CAPACITY){rows.push(pod);arrivedAt.push(arrival!.atCore);}}
+    const key=rows.length?rows.map((p,i)=>`${arrivedAt[i]}:${p.pawnId}:${p.cell.x}:${p.cell.z}:${p.landAtCore}:${p.openedAtCore??-1}`).join('|'):'';
     if(key===this.key)return false;
     this.key=key;
     if(!rows.length){this.retireAt=undefined;if(!this.mesh.activeCount)return false;this.mesh.activeCount=0;this.revision++;return true;}
@@ -114,7 +116,7 @@ export class RaidPodLayer {
     rows.forEach((pod,row)=>{
       const yaw=((pod.pawnId*2654435761)>>>0)/0x100000000*Math.PI*2;
       for(let part=0;part<RAID_POD_PARTS;part++){const i=row*RAID_POD_PARTS+part;
-        this.place.setXYZW(i,pod.cell.x,pod.cell.z,yaw,arrival!.atCore/10);this.clock.setXY(i,pod.landAtCore/10,pod.openedAtCore===undefined?-1:pod.openedAtCore/10);}
+        this.place.setXYZW(i,pod.cell.x,pod.cell.z,yaw,arrivedAt[row]!/10);this.clock.setXY(i,pod.landAtCore/10,pod.openedAtCore===undefined?-1:pod.openedAtCore/10);}
       this.mesh.boundingSphere.union(new THREE.Sphere(new THREE.Vector3(pod.cell.x,12.5,pod.cell.z),13.5));
     });
     this.place.needsUpdate=this.clock.needsUpdate=true;

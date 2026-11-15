@@ -13,6 +13,7 @@ import { eligibleShortCircuit,resolveSelectedShortCircuit,type ShortCircuitCalen
 import { eligibleCropBlight,resolveSelectedCropBlight,type CropBlightCalendar } from './crop-blight-incident.ts';
 import {eligibleToxicFallout294,resolveSelectedToxicFallout294} from './toxic-fallout-incident-294.ts';
 import type {ToxicFalloutCalendar294} from './toxic-fallout-state-294.ts';
+import {homeRecentFactor341,recordHomeIncident341,type HomeRecentIncident341} from './recent-incidents-341.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 
 /** A deliberately fixed local envelope for the Core Misc category. Core
@@ -64,6 +65,8 @@ export interface CassandraMiscCalendar {
   resourcePods305?:number;resourcePod305?:import('./resource-pods-305.ts').ResourcePodPending305;
   /** Schema 310 volcanic winter: count, last start (local tick) and the active interval. */
   volcanicWinters310?:number;lastVolcanicWinterStart310?:number;volcanicWinter310?:import('./volcanic-winter-state-310.ts').VolcanicWinter310;
+  /** Schema 341: the home map's last incidents, newest first (recent-incidents-341). */
+  recent341?:string[];
 }
 
 function random(state:CassandraMiscCalendar):number {
@@ -135,19 +138,20 @@ export function resolveSelectedEclipse(world:World,state:CassandraMiscCalendar=w
 }
 
 /** Schema 329: the Core Misc lottery, see misc-lottery-329.ts. The eclipse
- * belongs to the World component (cassandra-world.ts). */
-function consumeOpportunity329(world:World,state:CassandraMiscCalendar,intro:boolean):void {
+ * belongs to the World component (cassandra-world.ts). Each `resolve` says
+ * whether its incident really fired. */
+export function miscLotteryRows329(world:World,state:CassandraMiscCalendar):MiscRow329[] {
   const draw=()=>random(state),seed=()=>Math.floor(random(state)*0x100000000)||1;
-  const rows:MiscRow329[]=[
-    {id:'heat-wave',weight:MISC_HEAT_WEIGHT,population:null,eligible:()=>eligibleMiscHeatwave(world,state),resolve:()=>{resolveSelectedHeatwave(world,state);}},
-    {id:'flashstorm',weight:MISC_FLASHSTORM_WEIGHT,population:null,eligible:()=>eligibleFlashstorm(world),resolve:()=>{resolveSelectedFlashstorm(world,seed());}},
-    {id:'refugee-pod',weight:1.5,population:0,resolve:()=>{resolveSelectedPodRescue(world,seed());}},
-    {id:'cold-snap',weight:MISC_COLD_WEIGHT,population:null,eligible:()=>!!state.weather&&eligibleColdSnap(world),resolve:()=>{resolveSelectedColdSnap(world,state);}},
-    {id:'resource-pod',weight:1,population:null,resolve:()=>{resolveSelectedResourcePod305(world,seed());}},
+  return [
+    {id:'heat-wave',weight:MISC_HEAT_WEIGHT,population:null,eligible:()=>eligibleMiscHeatwave(world,state),resolve:()=>resolveSelectedHeatwave(world,state)},
+    {id:'flashstorm',weight:MISC_FLASHSTORM_WEIGHT,population:null,eligible:()=>eligibleFlashstorm(world),resolve:()=>resolveSelectedFlashstorm(world,seed())},
+    {id:'refugee-pod',weight:1.5,population:0,resolve:()=>resolveSelectedPodRescue(world,seed())},
+    {id:'cold-snap',weight:MISC_COLD_WEIGHT,population:null,eligible:()=>!!state.weather&&eligibleColdSnap(world),resolve:()=>resolveSelectedColdSnap(world,state)},
+    {id:'resource-pod',weight:1,population:null,resolve:()=>resolveSelectedResourcePod305(world,seed())},
     {id:'psychic-soothe',weight:1,population:null},
-    {id:'self-tame',weight:1,population:null,resolve:()=>{resolveSelectedSelfTame305(world,draw);}},
+    {id:'self-tame',weight:1,population:null,resolve:()=>resolveSelectedSelfTame305(world,draw)},
     {id:'ambrosia-sprout',weight:1,population:null},
-    {id:'farm-animals',weight:.4,population:null,resolve:()=>{resolveSelectedFarmAnimals305(world,seed());}},
+    {id:'farm-animals',weight:.4,population:null,resolve:()=>resolveSelectedFarmAnimals305(world,seed())},
     {id:'wanderer-join',weight:.4,population:-.4},
     {id:'thrumbo-passes',weight:.7,population:null},
     {id:'ransom-demand',weight:2,population:.4,eligible:()=>false},
@@ -155,19 +159,28 @@ function consumeOpportunity329(world:World,state:CassandraMiscCalendar,intro:boo
     {id:'herd-migration',weight:1,population:null},
     {id:'wild-man',weight:1,population:0},
     {id:'psychic-drone',weight:1,population:null},
-    {id:'toxic-fallout',weight:MISC_TOXIC_FALLOUT_WEIGHT,population:null,eligible:()=>eligibleToxicFallout294(world),resolve:()=>{resolveSelectedToxicFallout294(world,seed());}},
-    {id:'volcanic-winter',weight:.08,population:null,eligible:()=>eligibleVolcanicWinter310(world),resolve:()=>{resolveSelectedVolcanicWinter310(world,draw);}},
-    {id:'short-circuit',weight:MISC_SHORT_CIRCUIT_WEIGHT,population:null,eligible:()=>eligibleShortCircuit(world),resolve:()=>{resolveSelectedShortCircuit(world,seed());}},
-    {id:'crop-blight',weight:MISC_CROP_BLIGHT_WEIGHT,population:null,eligible:()=>eligibleCropBlight(world),resolve:()=>{resolveSelectedCropBlight(world,seed());}},
+    {id:'toxic-fallout',weight:MISC_TOXIC_FALLOUT_WEIGHT,population:null,eligible:()=>eligibleToxicFallout294(world),resolve:()=>resolveSelectedToxicFallout294(world,seed())},
+    {id:'volcanic-winter',weight:.08,population:null,eligible:()=>eligibleVolcanicWinter310(world),resolve:()=>resolveSelectedVolcanicWinter310(world,draw)},
+    {id:'short-circuit',weight:MISC_SHORT_CIRCUIT_WEIGHT,population:null,eligible:()=>eligibleShortCircuit(world),resolve:()=>resolveSelectedShortCircuit(world,seed())},
+    {id:'crop-blight',weight:MISC_CROP_BLIGHT_WEIGHT,population:null,eligible:()=>eligibleCropBlight(world),resolve:()=>resolveSelectedCropBlight(world,seed())},
     {id:'alphabeavers',weight:.5,population:null},
   ];
+}
+/** One Misc opportunity from schema 329. From schema 341 the draw carries the
+ * recent-incident weights and a fired incident joins the home record; an
+ * absent ticket counts as fired when it could fire (recent-incidents-341.ts). */
+export function consumeMiscOpportunity329(world:World,state:CassandraMiscCalendar,intro:boolean):void {
+  const draw=()=>random(state),rows=miscLotteryRows329(world,state),recent=homeRecentFactor341(world);
   // Core ClassicIntro (day 4.4): one weighted draw over every home Misc
   // incident, without the CanFireNow filter or the population group draw.
-  (intro?drawIntroMiscIncident329(world,rows,draw):drawMiscIncident329(world,rows,draw))?.resolve?.();
+  const row=intro?drawIntroMiscIncident329(world,rows,draw,recent):drawMiscIncident329(world,rows,draw,recent);
+  if(!row)return;
+  if(!recent){row.resolve?.();return;}
+  if(row.resolve?row.resolve():!row.eligible||row.eligible())recordHomeIncident341(world,row.id as HomeRecentIncident341);
 }
 function consumeOpportunity(world:World,state:CassandraMiscCalendar,intro=false):void {
   state.opportunities++;
-  if(world.schemaVersion>=329){consumeOpportunity329(world,state,intro);return;}
+  if(world.schemaVersion>=329){consumeMiscOpportunity329(world,state,intro);return;}
   const ticket=random(state)*MISC_RAW_WEIGHT;
   if(ticket<MISC_HEAT_WEIGHT)resolveSelectedHeatwave(world,state);
   else if(ticket<MISC_HEAT_WEIGHT+MISC_FLASHSTORM_WEIGHT&&eligibleFlashstorm(world)){

@@ -1,3 +1,4 @@
+import {concurrentHumanGroups341} from './concurrent-raids-341.ts';
 import {shipCasketActor277} from './ship-casket-state-277.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {mechRaidGroups261} from './mechanical-raid-groups-261.ts';
@@ -71,7 +72,7 @@ function scan(root:CampaignState,rows:readonly Mechanical[]){
   const arrival=map.startingArrival;if(arrival?.profile==='crashlanded-pods-core256-v1'&&arrival.phase!=='opened')for(const pod of arrival.pods){ref(pod.id,'initial-pod-holder');ref(pod.skyfallerId,'initial-skyfaller');for(const p of pod.items)pile(p,'initial-pod');}
   for(const q of map.quests?.entries??[]){ref(q.pawnId,'actual-joiner-quest');ref(q.relationship?.otherId,'actual-quest-offer');}
   ref(map.arrivals?.pending?.relationship?.otherId,'actual-arrival-offer');
-  for(const id of map.raids?.active?.members??[])ref(id,'actual-raid-member');for(const group of mechRaidGroups261(map))for(const id of group.members)ref(id,'actual-mechanical-lord');
+  for(const id of map.raids?.active?.members??[])ref(id,'actual-raid-member');for(const g of concurrentHumanGroups341(map.raids))for(const id of g.members)ref(id,'actual-raid-member');for(const group of mechRaidGroups261(map))for(const id of group.members)ref(id,'actual-mechanical-lord');
   for(const projectile of map.projectiles??[]){ref(projectile.id,'projectile-namespace');key(projectile.flight.launcherKey,'actual-projectile-launcher');key(projectile.flight.intendedKey,'actual-projectile-intended');key(projectile.flight.usedKey,'actual-projectile-used');key(projectile.arrival?.targetKey,'actual-projectile-arrival');for(const k of projectile.relations.friendlyTargetKeys??[])key(k,'projectile-launch-relation',false);}
   for(const wave of map.bombWaves??[]){ref(wave.id,'bomb-namespace');ref(wave.sourceId,'actual-bomb-source');key(wave.instigatorKey,'actual-bomb-instigator');for(const k of wave.damagedThingKeys)key(k,'bomb-impact-history',false);}
   for(const ship of map.orbital?.pending??[])ref(ship.negotiatorId,'actual-orbital-negotiator');

@@ -1,4 +1,5 @@
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
+import {isConcurrentRaids341} from './concurrent-raids-341.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259,bornFactionForDef259} from './world-affiliation-259.ts';
 import { civilianAdmissionFits } from './civilian-away.ts';
@@ -37,6 +38,9 @@ export interface RaidSpawnOptions {
   /** Schema 333: the faction's group maker, to spend the points an arrival
    * mode leaves (Core AdjustedRaidPoints). Without it the roster stays. */
   recompose333?:(budget:number,random:{rng:number})=>RaidComposition;
+  /** Schema 341 Cassandra home raid arriving while a raid slot is taken
+   * (concurrent-raids-341.ts): an independent group with every ordinary rule. */
+  concurrent341?:true;
 }
 /** Core kinds of the roles whose weapon tags are exactly Gun (schema 340). */
 const GUN_KIND_OF_ROLE340:Readonly<Partial<Record<RaidRole,GunKind340>>>=Object.freeze({scavenger:'Scavenger',pirate:'Pirate','town-guard':'Town_Guard','town-councilman':'Town_Councilman','mercenary-gunner':'Mercenary_Gunner'});
@@ -60,9 +64,10 @@ export function rosterRoleFits(composition:RaidComposition,role:unknown):boolean
 export function createRaidGroup(w:World,options:RaidSpawnOptions):RaidGroup|null {
   const s=w.raids,{count,sites,composition}=options;
   const scout=w.scout?.phase==='travelling'||w.scout?.phase==='awaiting-entry'?w.scout:w.commercialTrip&&'pawn' in w.commercialTrip?w.commercialTrip:undefined;
-  const independent=options.shipReactor275!==undefined;
+  const independent=options.shipReactor275!==undefined,concurrent=options.concurrent341===true;
   if(independent&&!validShipReactorRaidSource275(options.shipReactor275,w,w.tick,'human'))return null;
-  if(!s||!independent&&(!!s.active||!!s.mechActive)||!Number.isSafeInteger(count)||count<1||sites.length!==count
+  if(concurrent&&(independent||!isConcurrentRaids341(w.schemaVersion)||s?.profile!=='cassandra-raids-v1'||options.preserveCalendarRng))return null;
+  if(!s||!independent&&!concurrent&&(!!s.active||!!s.mechActive)||!Number.isSafeInteger(count)||count<1||sites.length!==count
     ||s.serial>=Number.MAX_SAFE_INTEGER||w.nextId>Number.MAX_SAFE_INTEGER-count*3
     ||!civilianAdmissionFits(w,count,count*2)
     ||s.departed.length+count>w.width*w.height||!w.foodPolicies[0]
@@ -122,7 +127,8 @@ export function createRaidGroup(w:World,options:RaidSpawnOptions):RaidGroup|null
   if(arrival)group.arrival333=arrival;
   if(independent)group.shipReactor275={...options.shipReactor275!};
   w.nextId=made.next;w.pawns.push(...made.generated);w.piles.push(...made.piles);if(!options.preserveCalendarRng&&!independent)s.rng=random.rng;options.random.rng=random.rng;s.serial=id;
-  if(independent){s.extraActive261??=[];s.extraResults261??=s.last?[structuredClone(s.last)]:[];s.extraActive261.push(group);}else{s.nextCheck=null;s.active=group;}
+  if(concurrent)group.concurrent341=true;
+  if(independent||concurrent){s.extraActive261??=[];s.extraResults261??=s.last?[structuredClone(s.last)]:[];s.extraActive261.push(group);if(concurrent)s.nextCheck=null;}else{s.nextCheck=null;s.active=group;}
   const label=chosen?` (${w.worldFactions!.factions.find(f=>f.id===chosen.factionId)!.name})`:'';
   w.events.push({tick:w.tick,type:'command',message:arrival?raidArrivalMessage333(arrival,label,group.members.length,!!group.stage330):group.stage330?`Raid${label} : ${count} assaillant(s) arrive(nt) au bord de la carte et se regroupe(nt) avant d’attaquer. Préparez la défense.`:`Raid${label} : ${count} assaillant(s) arrive(nt) au bord de la carte et attaque(nt) immédiatement. Mobilisez la défense.`});if(w.events.length>80)w.events.splice(0,w.events.length-80);
   return group;

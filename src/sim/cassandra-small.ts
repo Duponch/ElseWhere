@@ -1,3 +1,4 @@
+import {recordHomeIncident341} from './recent-incidents-341.ts';
 import {homeAnimalThreatPoints329} from './animal-threat-points-329.ts';
 import {homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
 import { isColonist } from './affiliation.ts';
@@ -77,7 +78,7 @@ export function resolveSelectedSmallAnimal(world:World,state:CassandraSmallCalen
   if(!candidates.length)return false;
   const animal=candidates[Math.floor(random(state)*candidates.length)]!;
   if(!startAnimalManhunter(world,animal))return false;
-  state.incidents++;state.lastIncidentTick=world.tick;
+  state.incidents++;state.lastIncidentTick=world.tick;recordHomeIncident341(world,'animal-insanity-single');
   world.events.push({tick:world.tick,type:'need',message:`Un ${ANIMAL_SPECIES[animal.species].label} sauvage est en rage : fuyez, abritez-vous derrière une porte fermée ou défendez les personnes exposées.`});
   if(world.events.length>80)world.events.splice(0,world.events.length-80);
   return true;
@@ -86,7 +87,8 @@ export function resolveSelectedSmallAnimal(world:World,state:CassandraSmallCalen
 function consumeOpportunity(world:World,state:CassandraSmallCalendar):void {
   state.opportunities++;
   // The only Core home-map ticket has positive effective weight even after
-  // recent-incident factors. Eligibility is checked without renormalization.
+  // recent-incident factors (schema 341 records it when it fires, but a lone
+  // ticket is always drawn). Eligibility is checked without renormalization.
   if(random(state)*SMALL_RAW_WEIGHT<SMALL_ANIMAL_WEIGHT)resolveSelectedSmallAnimal(world,state);
 }
 

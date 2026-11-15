@@ -17,11 +17,15 @@ export const BIG_THREATS_328=Object.freeze([
 export type BigThreat328=typeof BIG_THREATS_328[number]['id'];
 export const FORCE_RAID_DAYS_328=20;
 
-/** points undefined (no wealth record yet) leaves every ticket eligible. */
-export function drawBigThreat328(wholeDays:number,points:number|undefined,random:()=>number):BigThreat328 {
+/** points undefined (no wealth record yet) leaves every ticket eligible.
+ * From schema 341 `recent` gives the recent-incident factor of each ticket
+ * (recent-incidents-341.ts); the raid ignores it, as Core's RaidEnemy is
+ * flagged ignoreRecentSelectionWeighting. */
+export function drawBigThreat328(wholeDays:number,points:number|undefined,random:()=>number,recent?:(id:string)=>number):BigThreat328 {
   if(wholeDays<FORCE_RAID_DAYS_328)return 'raid';
   const rows=BIG_THREATS_328.filter(row=>points===undefined||points>=row.minPoints);
-  let roll=random()*rows.reduce((sum,row)=>sum+row.weight,0);
-  for(const row of rows){roll-=row.weight;if(roll<0)return row.id;}
+  const weight=recent?(row:typeof rows[number])=>row.id==='raid'?row.weight:row.weight*recent(row.id):(row:typeof rows[number])=>row.weight;
+  let roll=random()*rows.reduce((sum,row)=>sum+weight(row),0);
+  for(const row of rows){roll-=weight(row);if(roll<0)return row.id;}
   return rows.at(-1)!.id;
 }

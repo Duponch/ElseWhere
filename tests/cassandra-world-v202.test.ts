@@ -32,7 +32,11 @@ test('private World category preserves absent weights, rejects without reroll an
     expect(draw(seed)/2**32).toBeLessThan(1/900);
     expect(state).toMatchObject({checks:1,opportunities:1,flares:seed===1?0:1});
     expect(w.rng).toBe(rng);expect(w.miscIncidents).toBe(misc);expect(w.weather).toBe(weather);
-    expect(validWorldIncidents(state,184,w)).toBe(true);
+    // Schema 341 records a fired World incident (recent-incidents-341.ts);
+    // the 184 shape is checked without that later record.
+    const {recent341,...shape184}=state;
+    expect(recent341).toEqual(seed===1?undefined:['solar-flare']);
+    expect(validWorldIncidents(state,w.schemaVersion,w)).toBe(true);expect(validWorldIncidents(shape184,184,w)).toBe(true);
     if(seed===1){expect(state.active).toBeUndefined();expect(state.rng).toBe(draw(draw(seed)));}
     else expect(state.active).toEqual({start:WORLD_FIRST_CHECK,endCore:WORLD_FIRST_CHECK*10+9000});
   }

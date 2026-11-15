@@ -1,5 +1,6 @@
 import {shipCasketMechanicalReferences277,shipCasketTerminalParticipant277} from './ship-casket-notifications-277.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
+import {isConcurrentRaids341} from './concurrent-raids-341.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {multiRaid261} from './mechanical-raid-groups-261.ts';
 import {registeredCampaign,registeredMapId} from './world-map-context.ts';
@@ -21,7 +22,7 @@ export function validateMechanoidRaids(w:World,version:number=w.schemaVersion,re
   const rangedAt=version>=197&&object(p)&&object(p.ranged)&&int(p.ranged.adoptedAt)?p.ranged.adoptedAt:undefined;
   for(const g of groups){
     const cell=(v:unknown)=>object(v)&&Object.keys(v).length===2&&keys(v,['x','z'])&&int(v.x,0,w.width-1)&&int(v.z,0,w.height-1);
-    if(!p||!multi&&s.active||!object(g)||!keys(g,['id','startedAt','members','lost','phase','stage','composition',...version>=260?['source260']:[],...(isSchema275OrLater(version)?['shipReactor275']:[])])||object(g)&&Object.hasOwn(g,'source260')&&g.source260!=='camp-pressure'||object(g)&&Object.hasOwn(g,'shipReactor275')&&(!validShipReactorRaidSource275(g.shipReactor275,w,w.tick,'mechanoid')||g.source260!==undefined||g.shipReactor275.atCore!==Number(g.startedAt)*10)||(multi?!int(g.id,1,s.serial):g.id!==s.serial)||!int(g.startedAt,object(p)&&int(p.adoptedAt)?p.adoptedAt:0,w.tick)
+    if(!p||!multi&&s.active||!object(g)||!keys(g,['id','startedAt','members','lost','phase','stage','composition',...version>=260?['source260']:[],...(isSchema275OrLater(version)?['shipReactor275']:[]),...(isConcurrentRaids341(version)?['concurrent341']:[])])||object(g)&&Object.hasOwn(g,'concurrent341')&&(g.concurrent341!==true||!multi||(s.mechActive as unknown)===g||s.profile!=='cassandra-raids-v1'||g.source260!==undefined||g.shipReactor275!==undefined)||object(g)&&Object.hasOwn(g,'source260')&&g.source260!=='camp-pressure'||object(g)&&Object.hasOwn(g,'shipReactor275')&&(!validShipReactorRaidSource275(g.shipReactor275,w,w.tick,'mechanoid')||g.source260!==undefined||g.shipReactor275.atCore!==Number(g.startedAt)*10)||(multi?!int(g.id,1,s.serial):g.id!==s.serial)||!int(g.startedAt,object(p)&&int(p.adoptedAt)?p.adoptedAt:0,w.tick)
       ||!validMechComposition(g.composition,rangedAt!==undefined&&Number(g.startedAt)>=rangedAt)||!Array.isArray(g.members)||!object(g.composition)||!Array.isArray(g.composition.roster)||g.members.length!==g.composition.roster.length
       ||!g.members.every(id=>int(id,1,w.nextId-1))||new Set(g.members).size!==g.members.length||!Array.isArray(g.lost)
       ||!g.lost.every((id,i)=>Array.isArray(g.members)&&g.members.includes(id)&&(i===0||Number(id)>Number((g.lost as unknown[])[i-1])))

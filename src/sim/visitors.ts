@@ -1,3 +1,4 @@
+import {recordHomeIncident341} from './recent-incidents-341.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {gunKindWeapon340,isBlowbackSchema340,isGunKind340} from './blowback-340.ts';
 import {shipCasketHumanReferences277} from './ship-casket-notifications-277.ts';
@@ -152,13 +153,15 @@ export function advanceVisitors(w:World):void {
   // Maintain the same real groups above, but leave historical home tickets
   // literally dormant. TempMap MTB admissions own their separate shared RNG.
   if(s.profile==='temp-travelers261-v1'||tempMapModern261(w))return;
-  if(s.introAt!==null&&w.tick>=s.introAt){const due=w.tick===s.introAt;s.introAt=null;if(due)arrive(w,'visitor',true);}
-  if(consumeVisitorOpportunity(s.traveler,'traveler',w.tick)&&allyAccepts335(w,'traveler'))arrive(w,'traveler');
-  if(consumeVisitorOpportunity(s.visitor,'visitor',w.tick)&&allyAccepts335(w,'visitor'))arrive(w,'visitor');
+  // Schema 341: each arrival that really happens joins the home record of
+  // recent incidents (Core VisitorGroup and TravelerGroup, FactionArrival).
+  if(s.introAt!==null&&w.tick>=s.introAt){const due=w.tick===s.introAt;s.introAt=null;if(due&&arrive(w,'visitor',true))recordHomeIncident341(w,'visitor-group');}
+  if(consumeVisitorOpportunity(s.traveler,'traveler',w.tick)&&allyAccepts335(w,'traveler')&&arrive(w,'traveler'))recordHomeIncident341(w,'traveler-group');
+  if(consumeVisitorOpportunity(s.visitor,'visitor',w.tick)&&allyAccepts335(w,'visitor')&&arrive(w,'visitor'))recordHomeIncident341(w,'visitor-group');
   // From schema 332 Core's exotic caravan kind replaces this home-grown
   // merchant: its agenda keeps its clock but no longer admits anyone.
   if(s.exotic&&consumeVisitorOpportunity(s.exotic,'exotic',w.tick)&&w.schemaVersion<332)arrive(w,'visitor',false,true);
-  if(s.caravan332&&consumeVisitorOpportunity(s.caravan332,'caravan',w.tick)&&w.schemaVersion>=332)arriveTraderCaravan332(w);
+  if(s.caravan332&&consumeVisitorOpportunity(s.caravan332,'caravan',w.tick)&&w.schemaVersion>=332&&arriveTraderCaravan332(w))recordHomeIncident341(w,'trader-caravan');
 }
 /** Schema 335 StorytellerComp_FactionInteraction: travelers and visitors,
  * like trader caravans, come only for the share of the hits that the ally

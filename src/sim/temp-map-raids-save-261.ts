@@ -2,6 +2,7 @@ import {isSchema277OrLater} from './schema-compatibility-257.ts';
 import {shipCasketHumanReferences277,shipCasketTerminalParticipant277} from './ship-casket-notifications-277.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
+import {isConcurrentRaids341} from './concurrent-raids-341.ts';
 import {sameRaidResult261} from './temp-map-raids-261.ts';
 import {validCaravanRaidProvenance261} from './caravan-raid-save-261.ts';
 import {validMechComposition} from './mechanoid-raid-save.ts';
@@ -27,20 +28,31 @@ export function validateTempRaidCollections261(w:World,version:number):string[] 
  const collectionKeys=['extraActive261','extraMechActive261','extraResults261'];
  if(!collectionKeys.some(has))return collectionKeys.some(k=>k in s)?['Inherited multi-raid state.']:[];
  const marker=tempMapRecord261(w)?.tempIncidents261,ship=isSchema275OrLater(version)&&Object.hasOwn(w,'shipReactorThreats275')&&validateShipReactorThreats275(w,version).length===0;
- if((version!==261&&(Number(version)!==262&&!isSchema263OrLater(Number(version))))||!marker&&!ship||!has('extraResults261')||!has('extraActive261')&&!has('extraMechActive261')||!dense(extra,s.serial)||!dense(mechanical,s.serial)||!dense(results,s.serial)||collectionKeys.some(k=>k in s&&!has(k)||has(k)&&(()=>{const d=Object.getOwnPropertyDescriptor(s,k);return !d||!d.enumerable||!Object.hasOwn(d,'value');})()))return ['Invalid prospective multi-raid owner.'];
+ // Schema 341: a Cassandra home raid born beside another one is its own proof.
+ const concurrent=isConcurrentRaids341(version)&&s.profile==='cassandra-raids-v1',listed=(v:unknown)=>Array.isArray(v)?v as unknown[]:[];
+ const concurrentProof=concurrent&&[...listed(extra),...listed(mechanical),...listed(results)].some(r=>plain(r)&&r.concurrent341===true);
+ if((version!==261&&(Number(version)!==262&&!isSchema263OrLater(Number(version))))||!marker&&!ship&&!concurrentProof||!has('extraResults261')||!has('extraActive261')&&!has('extraMechActive261')||!dense(extra,s.serial)||!dense(mechanical,s.serial)||!dense(results,s.serial)||collectionKeys.some(k=>k in s&&!has(k)||has(k)&&(()=>{const d=Object.getOwnPropertyDescriptor(s,k);return !d||!d.enumerable||!Object.hasOwn(d,'value');})()))return ['Invalid prospective multi-raid owner.'];
  const witnesses=Number(!!s.active)+Number(!!s.mechActive)+extra.length+mechanical.length+results.length;
  const mechanicalProof=!!marker&&witnesses>=2&&(mechanical.length>0||s.mechActive?.source260==='camp-pressure'&&s.mechActive.startedAt*10>marker.adoptedAtCore&&(!!s.active||extra.length>0||results.length>0)||results.some(r=>plain(r)&&r.mechanoid===true&&int(r.tick,Math.floor(marker.adoptedAtCore/10)+1,w.tick)));
  const shipProof=ship&&[...extra,...mechanical,...results].some(r=>plain(r)&&validShipReactorRaidSource275(r.shipReactor275,w));
- if(!shipProof&&(!extra.length&&!results.length&&!mechanicalProof||has('extraMechActive261')&&!mechanicalProof))return ['Multi-raid owner has no actual prospective birth.'];
+ if(!shipProof&&!concurrentProof&&(!extra.length&&!results.length&&!mechanicalProof||has('extraMechActive261')&&!mechanicalProof))return ['Multi-raid owner has no actual prospective birth.'];
  const errors:string[]=[],groups=new Set<number>(),members=new Set<number>();
  for(const g of [...s.active?[s.active]:[],...s.mechActive?[s.mechActive]:[]]){if(!plain(g)||!int(g.id,1,s.serial)||!dense(g.members,w.width*w.height))return ['Invalid real primary Lord in multi mode.'];if(groups.has(g.id))errors.push('Primary Lords share one group ID.');groups.add(g.id);for(const id of g.members){if(members.has(id))errors.push('Primary Lords share one original.');members.add(id);}}
  for(const raw of mechanical){
-  const reactor=plain(raw)&&Object.hasOwn(raw,'shipReactor275');
-  if(!plain(raw)||(reactor?!ship||raw.source260!==undefined||!validShipReactorRaidSource275(raw.shipReactor275,w,w.tick,'mechanoid')||raw.shipReactor275.atCore!==Number(raw.startedAt)*10:!marker||raw.source260!=='camp-pressure')||!int(raw.id,1,s.serial)||groups.has(raw.id)||!int(raw.startedAt,reactor?0:Math.floor(marker!.adoptedAtCore/10)+1,w.tick)||!dense(raw.members,w.width*w.height)||!raw.members.length||!dense(raw.lost,raw.members.length)||!plain(raw.composition)||!dense(raw.composition.roster,raw.members.length)||!plain(raw.stage)){errors.push('Invalid independent mechanical Lord.');continue;}
+  const reactor=plain(raw)&&Object.hasOwn(raw,'shipReactor275'),beside=plain(raw)&&Object.hasOwn(raw,'concurrent341');
+  if(!plain(raw)||(reactor?!ship||beside||raw.source260!==undefined||!validShipReactorRaidSource275(raw.shipReactor275,w,w.tick,'mechanoid')||raw.shipReactor275.atCore!==Number(raw.startedAt)*10:beside?!concurrent||raw.concurrent341!==true||raw.source260!==undefined:!marker||raw.source260!=='camp-pressure')||!int(raw.id,1,s.serial)||groups.has(raw.id)||!int(raw.startedAt,reactor||beside?0:Math.floor(marker!.adoptedAtCore/10)+1,w.tick)||!dense(raw.members,w.width*w.height)||!raw.members.length||!dense(raw.lost,raw.members.length)||!plain(raw.composition)||!dense(raw.composition.roster,raw.members.length)||!plain(raw.stage)){errors.push('Invalid independent mechanical Lord.');continue;}
   groups.add(raw.id);for(const id of raw.members){if(!int(id,1,w.nextId-1)||members.has(id))errors.push('Mechanical Lords share one original.');else members.add(id);}
  }
 
  for(const raw of extra){
+  // Schema 341 concurrent Cassandra raid: the raid validator checks it as it
+  // checks the primary group (raid-save.ts); here only its Lord identity.
+  if(plain(raw)&&Object.hasOwn(raw,'concurrent341')){
+   if(!concurrent||raw.concurrent341!==true||Object.hasOwn(raw,'shipReactor275')||Object.hasOwn(raw,'tempIncident261')||!int(raw.id,1,s.serial)||groups.has(raw.id)||!dense(raw.members,w.width*w.height)){errors.push('Invalid concurrent Cassandra raid Lord.');continue;}
+   groups.add(raw.id);
+   for(const id of raw.members){if(members.has(Number(id))){errors.push('Raid Lords share one original.');continue;}members.add(Number(id));}
+   continue;
+  }
   if(plain(raw)&&Object.hasOwn(raw,'shipReactor275')){
    if(!ship||!validShipReactorHumanGroup275(raw,w)||groups.has(Number(raw.id))){errors.push('Invalid independent ship reactor human Lord.');continue;}
    groups.add(Number(raw.id));
@@ -57,10 +69,11 @@ export function validateTempRaidCollections261(w:World,version:number):string[] 
  }
  const resultIds=new Set<number>();
  for(const raw of results){
-  if(!plain(raw)||!fields(raw,['id','tick','reason','killed','downed','escaped'],['captured','composition','originQuestId','caravan261','memberCount261','mechanoid','mechComposition','tempIncident261',...(isSchema277OrLater(version)?['destroyed277']:[]),...(isSchema275OrLater(version)?['shipReactor275']:[])])||!int(raw.id,1,s.serial)||groups.has(raw.id)||resultIds.has(raw.id)||!int(raw.tick,0,w.tick)||!['defended','withdrawn','colony-down'].includes(String(raw.reason))){errors.push('Invalid retained actual raid result.');continue;}
+  if(!plain(raw)||!fields(raw,['id','tick','reason','killed','downed','escaped'],['captured','composition','originQuestId','caravan261','memberCount261','mechanoid','mechComposition','tempIncident261',...(isSchema277OrLater(version)?['destroyed277']:[]),...(isSchema275OrLater(version)?['shipReactor275']:[]),...(isConcurrentRaids341(version)?['concurrent341']:[])])||!int(raw.id,1,s.serial)||groups.has(raw.id)||resultIds.has(raw.id)||!int(raw.tick,0,w.tick)||!['defended','withdrawn','colony-down'].includes(String(raw.reason))){errors.push('Invalid retained actual raid result.');continue;}
   resultIds.add(raw.id);
   const temp=Object.hasOwn(raw,'tempIncident261'),caravan=Object.hasOwn(raw,'caravan261'),mech=Object.hasOwn(raw,'mechanoid')||Object.hasOwn(raw,'mechComposition');
   const reactor=Object.hasOwn(raw,'shipReactor275');
+  if(Object.hasOwn(raw,'concurrent341')&&(!concurrent||raw.concurrent341!==true||temp||caravan||reactor||raw.originQuestId!==undefined||raw.memberCount261!==undefined)){errors.push('Invalid retained concurrent Cassandra raid result.');continue;}
   const composition=raw.composition,count=temp||caravan?raw.memberCount261:mech&&plain(raw.mechComposition)&&Array.isArray(raw.mechComposition.roster)?raw.mechComposition.roster.length:plain(composition)&&Array.isArray(composition.roster)?composition.roster.length:raw.id===1?1:2;
   if(!int(count,1,w.nextId-1)||!['killed','downed','escaped'].every(k=>int(raw[k],0,count))||Object.hasOwn(raw,'destroyed277')&&(!isSchema277OrLater(version)||!int(raw.destroyed277,1,count))||Object.hasOwn(raw,'captured')&&!int(raw.captured,1,count)||Number(raw.killed)+Number(raw.downed)+Number(raw.escaped)+Number(raw.captured??0)+Number(raw.destroyed277??0)!==count){errors.push('Retained raid counts do not conserve their actual cohort.');continue;}
   if(reactor&&(!ship||temp||caravan||raw.originQuestId!==undefined||raw.memberCount261!==undefined||!validShipReactorRaidSource275(raw.shipReactor275,w,raw.tick,mech?'mechanoid':'human')))errors.push('Invalid retained ship reactor raid provenance.');

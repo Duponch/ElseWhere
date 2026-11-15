@@ -1,3 +1,4 @@
+import {recordHomeIncident341} from './recent-incidents-341.ts';
 import { isColonist } from './affiliation.ts';
 import { isPowerActive } from './power-rules.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
@@ -73,7 +74,8 @@ export function advanceOrbital(w:World):void {
   state.nextCheckAt=(Math.floor(w.tick/ORBITAL_CHECK)+1)*ORBITAL_CHECK;
   while(w.tick>=state.cycleStart+ORBITAL_CYCLE){state.cycleStart+=ORBITAL_CYCLE;state.scheduledAt=state.cycleStart+Math.floor(orbitalRandom(state)*ORBITAL_ACTIVE_CHECKS)*ORBITAL_CHECK;}
   if(w.tick!==state.scheduledAt||!w.gameProfile||!w.pawns.some(p=>isColonist(p)&&p.state!=='dead')||state.ships.length>=ORBITAL_SHIP_LIMIT)return;
-  createOrbitalShip(w,orbitalRandom(state)<.5?'bulk':'exotic');
+  // Schema 341: an orbital trader that arrives joins the home record (Core OrbitalVisitor).
+  if(createOrbitalShip(w,orbitalRandom(state)<.5?'bulk':'exotic'))recordHomeIncident341(w,'orbital-trader');
 }
 const emptyLedger=():TradeLedger=>({count:0,silverPaid:0,silverReceived:0,forgone:0,bought:{},sold:{},recent:[]});
 export function applyOrbitalTrade(w:World,c:OrbitalCommand):CommandResult {

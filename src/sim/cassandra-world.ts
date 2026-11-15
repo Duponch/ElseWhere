@@ -1,5 +1,6 @@
 import {resolveSelectedEclipse} from './cassandra-misc.ts';
 import {isMiscIncidents305,resolveSelectedAurora305,advanceAurora305} from './misc-incidents-305.ts';
+import {recordWorldIncident341,worldRecentFactor341,type WorldRecentIncident341} from './recent-incidents-341.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 
 export const WORLD_CHECK_INTERVAL=100;
@@ -13,6 +14,8 @@ export interface CassandraWorldCalendar {
   active?:{start:number;endCore:number};
   /** Schema 305: Aurora, the other World ticket (misc-incidents-305). */
   auroras?:number;lastAuroraStart?:number;aurora?:import('./misc-incidents-305.ts').AuroraState305;
+  /** Schema 341: the planet's last incidents, newest first (recent-incidents-341). */
+  recent341?:string[];
 }
 function random(state:CassandraWorldCalendar):number {
   let n=state.rng;n^=n<<13;n^=n>>>17;n^=n<<5;state.rng=n>>>0;
@@ -63,10 +66,27 @@ export function advanceWorldIncidents(world:World):void {
   state.checks++;
   if(random(state)>=WORLD_CATEGORY_CHANCE)return;
   state.opportunities++;
+  const recent=worldRecentFactor341(world);
+  if(recent){drawWorldIncident341(world,state,recent);return;}
   const ticket=random(state)*4;
   // Eclipse and Aurora keep their absent tickets; no retries or renormalization.
   // Schema 329: the eclipse is this World component's Core incident.
   if(ticket<1.5&&world.schemaVersion>=329&&world.miscIncidents)resolveSelectedEclipse(world,world.miscIncidents,()=>random(state));
   else if(ticket>=1.5&&ticket<2.8)resolveSelectedSolarFlare(world);
   else if(ticket>=2.8&&isMiscIncidents305(Number(world.schemaVersion)))resolveSelectedAurora305(world,()=>random(state));
+}
+/** Schema 341: the same three World tickets (Core Eclipse 1.5, SolarFlare
+ * 1.3, Aurora 1.2), each weighed by its recent-incident factor; a ticket that
+ * fires joins the planet's record. As before, an ineligible ticket is
+ * consumed without a retry. */
+function drawWorldIncident341(world:World,state:CassandraWorldCalendar,recent:(id:string)=>number):void {
+  const rows:{id:WorldRecentIncident341;weight:number;resolve:()=>boolean}[]=[
+    {id:'eclipse',weight:1.5,resolve:()=>!!world.miscIncidents&&resolveSelectedEclipse(world,world.miscIncidents,()=>random(state))},
+    {id:'solar-flare',weight:1.3,resolve:()=>resolveSelectedSolarFlare(world)},
+    {id:'aurora',weight:1.2,resolve:()=>resolveSelectedAurora305(world,()=>random(state))},
+  ];
+  const weight=(row:typeof rows[number])=>row.weight*recent(row.id);
+  let roll=random(state)*rows.reduce((sum,row)=>sum+weight(row),0),pick=rows.at(-1)!;
+  for(const row of rows){roll-=weight(row);if(roll<0){pick=row;break;}}
+  if(pick.resolve())recordWorldIncident341(world,pick.id);
 }
