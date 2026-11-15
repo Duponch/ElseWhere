@@ -60,9 +60,18 @@ export function crashlandedDecisions(w:World):Decision[] {
     return out;
   }
   if(w.raids?.active||w.raids?.mechActive) {
-    if(defender&&!defender.draft)return [{reason:'La lettre annonce une attaque : mobiliser la personne équipée du revolver.',command:{type:'draft',pawnIds:[defender.id],enabled:true}}];
-    if(defender?.draft?.holdFire)return [{reason:'Autoriser le tir contre les assaillants qui approchent.',command:{type:'fire-at-will',pawnIds:[defender.id],enabled:true}}];
-    if(defender)return [];
+    // Every armed colonist defends; those without a weapon shelter.
+    const armed=people.filter(p=>!violentWorkRefusal(p)&&!!equippedWeapon(w,p));
+    const call=armed.filter(p=>!p.draft);
+    if(call.length)return [{reason:'La lettre annonce une attaque : mobiliser les personnes armées.',command:{type:'draft',pawnIds:call.map(p=>p.id),enabled:true}}];
+    const holding=armed.filter(p=>p.draft?.holdFire);
+    if(holding.length)return [{reason:'Autoriser le tir contre les assaillants qui approchent.',command:{type:'fire-at-will',pawnIds:holding.map(p=>p.id),enabled:true}}];
+    if(defender){
+      const unarmed=people.filter(p=>!armed.includes(p));
+      if(!unarmed.length||w.raids?.mechActive)return [];
+      const raiders=w.pawns.filter(p=>!!p.raid&&!p.raid.exiting&&p.state!=='dead'&&p.state!=='downed');
+      return shelterDecisions(w,unarmed,defender,raiders,'Une attaque est en cours : les personnes sans arme rejoignent l’abri.',false).out;
+    }
     // The armed defender is down: the others shelter as from an angry animal
     // (with no position to read for mechanoids: no fetch, rescue or meal).
     const raiders=w.raids?.mechActive?undefined:w.pawns.filter(p=>!!p.raid&&!p.raid.exiting&&p.state!=='dead'&&p.state!=='downed');
@@ -75,13 +84,28 @@ export function crashlandedDecisions(w:World):Decision[] {
   const out=[...coolingDecisions(w),...survivorDecisions(w,true),...foodInfrastructureDecisions(w)],candidate=defender??[...people].sort((a,b)=>b.skills.shooting.level-a.skills.shooting.level||a.id-b.id)[0];
   if(!candidate||candidate.equipmentTask||candidate.orders.active!==null||candidate.need||candidate.hunger<50||candidate.rest<40)return out;
   const wanted=defender?'flak-vest':'revolver';
-  if(w.piles.some(i=>i.item===wanted&&(i.owner.type==='equipment'||i.owner.type==='apparel')&&i.owner.pawnId===candidate.id))return out;
+  if(w.piles.some(i=>i.item===wanted&&(i.owner.type==='equipment'||i.owner.type==='apparel')&&i.owner.pawnId===candidate.id))return [...out,...spareWeaponDecisions(w,people)];
   const item=w.piles.find(i=>i.item===wanted&&i.owner.type==='ground'&&queryOrderOptions(w,candidate.id,i.owner).some(o=>o.equipmentItemId===i.id&&o.enabled));
   if(item)out.push({reason: wanted==='revolver'?'Préparer la défense avec le revolver réellement fourni.':'Enfiler le gilet avant de reprendre le travail.',command:{type:'order-equipment',pawnId:candidate.id,itemId:item.id,action:wanted==='revolver'?'equip':'wear',queue:false}});
   return out;
 }
 
 type Colonist=World['pawns'][number];
+/** Once the defender holds the revolver and wears the vest, the other
+ * colonists take the starting rifle, then the knife, best shooter first, as a
+ * player arms everyone who can fight. One order at a time. */
+function spareWeaponDecisions(w:World,people:readonly Colonist[]):Decision[] {
+  const unarmed=people.filter(p=>!violentWorkRefusal(p)&&!equippedWeapon(w,p)&&!p.equipmentTask&&p.orders.active===null&&!p.need&&p.hunger>=50&&p.rest>=40)
+    .sort((a,b)=>b.skills.shooting.level-a.skills.shooting.level||a.id-b.id);
+  for(const item of ['bolt-action-rifle','plasteel-knife'] as const){
+    const weapon=w.piles.find(i=>i.item===item&&i.owner.type==='ground');if(!weapon||weapon.owner.type!=='ground')continue;
+    for(const p of unarmed){
+      if(queryOrderOptions(w,p.id,weapon.owner).some(o=>o.equipmentItemId===weapon.id&&o.enabled&&o.equipmentAction==='equip'))
+        return [{reason:item==='bolt-action-rifle'?'Armer un second colon avec le fusil de départ.':'Armer le dernier colon avec le couteau de départ.',command:{type:'order-equipment',pawnId:p.id,itemId:weapon.id,action:'equip',queue:false}}];
+    }
+  }
+  return [];
+}
 const farFrom=(threats:readonly Cell[],c:Cell,cells:number)=>threats.every(a=>Math.max(Math.abs(a.x-c.x),Math.abs(a.z-c.z))>=cells);
 
 /** Everyone but the armed defender shelters in the room from `threats`
