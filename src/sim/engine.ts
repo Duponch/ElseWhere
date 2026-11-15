@@ -1,3 +1,4 @@
+import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {withPileIndexScope} from './pile-index.ts';
 import {isFinishFrameSchema301} from './wall-frame-kind-301.ts';
 import {createWoodWallCore301} from './wood-wall-core-301.ts';
@@ -47,6 +48,7 @@ import {newCryptosleepHolder271} from './cryptosleep-state-271.ts';
 import {isSmithingRecipe267} from './smithing-content-267.ts';
 import {isSchema263OrLater} from './schema-compatibility-257.ts';
 import {processAutomaticAlcohol265} from './alcohol-ingestion-265.ts';
+import {processScheduledPenoxycyline337} from './penoxycyline-intake-337.ts';
 import {applyDrugPolicyCommand265} from './alcohol-policy-265.ts';
 import {advanceFermentation265,processBarrelExtraction265} from './fermentation-runtime-265.ts';
 import {newFermentationState265} from './fermentation-state-265.ts';
@@ -488,7 +490,7 @@ function applyArea(world: World, command: AreaCommand, drops:DropPlan): CommandR
     const settings=target??command;
     for(const cells of zoneCellComponents(world.width,selection.cells)){
       const zoneId=target?stockpileZoneId(target):world.nextId;
-      for(const index of cells)world.stockpiles.push({id:world.nextId++,zoneId,x:index%world.width,z:Math.floor(index/world.width),filters:{...(settings.filters??{wood:true,food:true,...(world.schemaVersion>=265?{wort:true,beer:true}:{}),...((Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))?{book:true}:{})})},...(settings.items!==undefined?{items:{...settings.items}}:{}),...copyStorageConditions(settings),priority:settings.priority??2,capacity:settings.capacity??ITEM_DEFINITIONS.silver.stackLimit});
+      for(const index of cells)world.stockpiles.push({id:world.nextId++,zoneId,x:index%world.width,z:Math.floor(index/world.width),filters:{...(settings.filters??{wood:true,food:true,...(isPenoxycyline337(world.schemaVersion)?{drug:true}:{}),...(world.schemaVersion>=265?{wort:true,beer:true}:{}),...((Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))?{book:true}:{})})},...(settings.items!==undefined?{items:{...settings.items}}:{}),...copyStorageConditions(settings),priority:settings.priority??2,capacity:settings.capacity??ITEM_DEFINITIONS.silver.stackLimit});
     }
   } else {
     const cells = new Set(selection.cells);
@@ -1062,7 +1064,7 @@ function applyCommandInternal(world: World, command: Exclude<LocalCommand,import
         || [...world.structures, ...world.jobs].some(item => !['deconstruct','uninstall'].includes(item.kind)&&(world.schemaVersion>=219?occupancyOf('furniture' in item?item.furniture?.kind??item.kind:item.kind)?.zones===false:occupancyOf('furniture' in item?item.furniture?.kind??item.kind:item.kind)?.zones!==true)&&occupies(item,command))) return refusal('occupied', 'Stockage impossible sur cette cellule occupée ou infranchissable.');
       if (existing) {
         for(const cell of stockpileZoneCells(world,existing.id))patchStockpilePolicy(cell,command);
-      } else {const id=world.nextId++;world.stockpiles.push({ id,zoneId:id, x: command.x, z: command.z, filters: { ...(command.filters ?? { wood: true, food: true,...(world.schemaVersion>=265?{wort:true,beer:true}:{}),...((Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))?{book:true}:{}) }) },...(command.items!==undefined?{items:{...command.items}}:{}),...copyStorageConditions(command), priority: command.priority ?? 2, capacity: command.capacity ?? ITEM_DEFINITIONS.silver.stackLimit });}
+      } else {const id=world.nextId++;world.stockpiles.push({ id,zoneId:id, x: command.x, z: command.z, filters: { ...(command.filters ?? { wood: true, food: true,...(isPenoxycyline337(world.schemaVersion)?{drug:true}:{}),...(world.schemaVersion>=265?{wort:true,beer:true}:{}),...((Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))?{book:true}:{}) }) },...(command.items!==undefined?{items:{...command.items}}:{}),...copyStorageConditions(command), priority: command.priority ?? 2, capacity: command.capacity ?? ITEM_DEFINITIONS.silver.stackLimit });}
     }
     for(const pawn of world.pawns)if(pawn.cooking?.storageId!==null&&pawn.cooking?.storageId!==undefined&&affectedIds.has(pawn.cooking.storageId)){pawn.cooking.storageId=null;delete pawn.cooking.storageQuantity;pawn.path=[];pawn.planCooldown=0;}
     // Re-evaluate pending capacity reservations atomically after the policy change.
@@ -1474,6 +1476,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       // another provider, a replacement job or a new idle/recreation offer.
       if(!pendingCurrent300){
         if(processAutomaticAlcohol265(world,pawn,needsContext))continue;
+        if(processScheduledPenoxycyline337(world,pawn,needsContext))continue;
       if(processParty292(world,pawn,needsContext))continue;
       if (!pawn.animalHandling&&!pawn.animalCare&&!pawn.animalFeed&&!pawn.animalRescue&&!pawn.ward&&!pawn.feed&&!pawn.tend&&!pawn.surgery&&!pawn.rescue&&pawn.orders.active===null&&processRecreation(world, pawn, needsContext)) continue;
       if(!pawn.surgery&&pawn.planCooldown===0&&recoverDroppedWeapon(world,pawn,()=>searchCandidates(world,pawn,getBlocked(),occupied,budget)))continue;

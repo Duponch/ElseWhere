@@ -1,3 +1,4 @@
+import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {cancelToxicVomit256} from './toxic-buildup-256.ts';
 import { releaseFurniture } from './furniture-transfer.ts';
 import { pawnBody } from './health-rules.ts';
@@ -16,8 +17,8 @@ export function interruptWork(world:World,pawn:Pawn,retainTravellingCargo=false)
   // also retains the real beer from an interrupted automatic drink.
   // Health can interrupt before the actor dispatcher has observed that edge;
   // its logical arrival cell is not yet a physical drop location.
-  if((retainTravellingCargo||pawn.recreation.task?.activity==='read')&&hasTravellingCargo(world,pawn)||(pawn.need?.kind==='eat'&&(pawn.need.forced===true||world.schemaVersion>=265&&pawn.need.alcoholReason!==undefined)||world.jobs.some(j=>j.id===pawn.jobId&&j.tree))&&(pawn.motion?.end??0)>world.tick
-    &&world.piles.some(p=>(p.kind==='food'||p.kind==='plant'||world.schemaVersion>=265&&p.kind==='beer'||world.jobs.some(j=>j.id===pawn.jobId&&j.tree))&&p.owner.type==='pawn'&&p.owner.pawnId===pawn.id)){
+  if((retainTravellingCargo||pawn.recreation.task?.activity==='read')&&hasTravellingCargo(world,pawn)||(pawn.need?.kind==='eat'&&(pawn.need.forced===true||world.schemaVersion>=265&&pawn.need.alcoholReason!==undefined||isPenoxycyline337(world.schemaVersion)&&pawn.need.drugReason337!==undefined)||world.jobs.some(j=>j.id===pawn.jobId&&j.tree))&&(pawn.motion?.end??0)>world.tick
+    &&world.piles.some(p=>(p.kind==='food'||p.kind==='plant'||world.schemaVersion>=265&&p.kind==='beer'||isPenoxycyline337(world.schemaVersion)&&p.kind==='drug'||world.jobs.some(j=>j.id===pawn.jobId&&j.tree))&&p.owner.type==='pawn'&&p.owner.pawnId===pawn.id)){
     releaseAssignments(world,pawn);pawn.interruptedCargo=true;pawn.planCooldown=0;return;
   }
   if(releaseWork(world,pawn))return;

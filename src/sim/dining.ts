@@ -37,7 +37,8 @@ export function validDiningPlace(world: World, place: DiningPlace): boolean {
  * is geometric; reachability still follows the real obstacles. A single shared
  * search is deferred until there is a candidate requiring a route.
  */
-export function chooseDiningPlace(world: World, pawn: Pawn, context: NeedContext,beer=false): { place: DiningPlace; path: Cell[] } | null {
+/** `standingOnly`: Core chairSearchRadius 0 (pills), chewed standing nearby. */
+export function chooseDiningPlace(world: World, pawn: Pawn, context: NeedContext,beer=false,standingOnly=false): { place: DiningPlace; path: Cell[] } | null {
   const key = (cell: Cell): number => cell.z * world.width + cell.x;
   const reserved = reservedServiceCells(world,pawn.id);
   // Index surfaces once per decision, rather than rescanning all furniture per seat.
@@ -50,7 +51,7 @@ export function chooseDiningPlace(world: World, pawn: Pawn, context: NeedContext
   for (const item of world.jobs) if (item.kind === 'wall' || isDiningTable(item.kind)) for (const cell of footprintCells(item)) fixed.add(key(cell));
   const candidates: DiningPlace[] = [];
   const topology=pawn.prisoner?capturePrisonTopology(world):undefined;
-  for (const seat of world.structures) {
+  if(!standingOnly)for (const seat of world.structures) {
     if(!allowedAreaAllows(world,pawn,seat))continue;
     if(!prisonerAllowedCell(world,pawn,seat,topology))continue;
     if (!isDiningSeat(seat.kind) || !targetBuildingPlayerUse263(world,seat) || deconstructionReserved(world,seat.id,pawn.id) || world.schemaVersion>=22&&!canStandAt(world,seat) || reserved.has(key(seat)) || distance(pawn, seat) > (beer?25:MATERIAL_DEFINITIONS.food.chairSearchRadius) ** 2) continue;

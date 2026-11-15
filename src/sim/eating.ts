@@ -3,6 +3,8 @@ import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {localIngestionCore299,commitHumanIngestion299,selfFoodPermission299} from './human-ingestion-clock299.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import {beerPile265,completeAlcoholInventory265,takeOwnedBeer265,ingestBeer265} from './alcohol-ingestion-265.ts';
+import {isPenoxycyline337,PENOXYCYLINE_FACTS_337} from './penoxycyline-337.ts';
+import {penoxycylinePile337,takeOwnedPenoxycyline337,ingestPenoxycyline337} from './penoxycyline-intake-337.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
 import { copyPileCondition } from './pile-condition.ts';
 import { ingestFoodRisk } from './food-hygiene.ts';
@@ -29,8 +31,10 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
   // eating keeps its historical release, location choice and resolution.
   const release=()=>{if(task.forced)interruptDraftWork(world,pawn);else context.release();};
   const alcohol=isSchema265OrLater(world.schemaVersion)&&task.alcoholReason!==undefined;
+  // Schema 337 scheduled pill: same physical eat job, a drug pile, eaten standing.
+  const drug=isPenoxycyline337(world.schemaVersion)&&task.drugReason337!==undefined;
   const ignoreFoodForbidden299=isSchema299OrLater(Number(world.schemaVersion))&&task.foodBinge299===true;
-  if(alcohol){
+  if(alcohol||drug){
     const body=pawnBody(pawn);
     // Recheck after every health transition, before pickup, inventory transfer
     // or ingestion work. Hard interruption retains any in-flight cargo and
@@ -40,7 +44,8 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
   if(task.forced&&!consumeActivityValid(world,pawn)){release();return;}
   if(task.forced&&(pawn.moveCooldown>0||(pawn.motion?.end??0)>world.tick))return;
   const ownBeer=isSchema265OrLater(world.schemaVersion)&&task.alcoholReason!==undefined&&task.alcoholReason!=='inventory'&&task.phase==='pickup'&&world.piles.some(p=>p.id===task.sourcePileId&&p.owner.type==='inventory'&&p.owner.pawnId===pawn.id&&beerPile265(p));
-  if(!ownBeer&&task.alcoholReason!=='binge'&&!allowedAreaServicesAllowed(world,pawn)){release();return;}
+  const ownDrug=drug&&task.phase==='pickup'&&world.piles.some(p=>p.id===task.sourcePileId&&p.owner.type==='inventory'&&p.owner.pawnId===pawn.id&&penoxycylinePile337(p));
+  if(!ownBeer&&!ownDrug&&task.alcoholReason!=='binge'&&!allowedAreaServicesAllowed(world,pawn)){release();return;}
   if(task.phase==='pickup'&&task.paste){
     if(!pasteRequestValid(world,pawn,task.paste)){release();return;}
     const spot=task.paste.spot;
@@ -51,10 +56,12 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
     task.carryPileId=meal.id;task.phase='collect';pawn.path=[];pawn.state='moving';return;
   }
   const pile = world.piles.find(item => item.id === (task.phase === 'pickup' ? task.sourcePileId : task.carryPileId));
-  if (!pile || !(alcohol?beerPile265(pile):pile.kind==='food')||task.alcoholReason!=='binge'&&!selfFoodPermission299(pile,ignoreFoodForbidden299)) { release(); return; }
+  if (!pile || !(alcohol?beerPile265(pile):drug?penoxycylinePile337(pile):pile.kind==='food')||task.alcoholReason!=='binge'&&!selfFoodPermission299(pile,ignoreFoodForbidden299)) { release(); return; }
   if(alcohol&&(task.paste||task.phase==='collect'||(task.alcoholReason==='inventory'?(task.phase!=='pickup'||task.quantity<1||task.quantity>3):task.quantity!==1))){release();return;}
+  if(drug&&(task.paste||task.phase==='collect'||task.quantity!==1)){release();return;}
   if (task.phase === 'pickup') {
     if(alcohol&&pile.owner.type==='inventory'){if(!takeOwnedBeer265(world,pawn,pile,task))release();return;}
+    if(drug&&pile.owner.type==='inventory'){if(!takeOwnedPenoxycyline337(world,pawn,pile,task))release();return;}
     if (pile.owner.type !== 'ground' || reservedSource(world, pile.id) > pile.quantity) { release(); return; }
     if(task.forced&&!consumeContactValid(world,pawn)){
       const contact=pawn.path.at(-1);
@@ -89,7 +96,7 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
   if (task.phase === 'choose-spot') {
     const choice=task.forced&&pawn.draft
       ?consumeContactValid(world,pawn)?{place:{target:{x:pawn.x,z:pawn.z},seatId:null,tableId:adjacentTable(world,pawn)?.id??null},path:[]}:null
-      :chooseDiningPlace(world, pawn, context,alcohol);
+      :chooseDiningPlace(world, pawn, context,alcohol,drug);
     if (!choice) {if(task.forced&&pawn.draft)release();return;}
     if(task.forced&&!consumeContactValid(world,pawn,choice.place.target)){release();return;}
     task.dining = choice.place; task.phase = 'travel'; pawn.path = choice.path;
@@ -106,7 +113,7 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
   }
   pawn.state = 'eating';
   advanceWork(task,physicalEatingFactor(pawn));
-  if (task.progress >= INGEST_TICKS) {
+  if (task.progress >= (drug?PENOXYCYLINE_FACTS_337.ingestTicks:INGEST_TICKS)) {
     const ingestedAt299=localIngestionCore299(world,pawn);
     world.piles.splice(world.piles.indexOf(pile), 1);
     pawn.hunger = Math.min(100, pawn.hunger + nutritionOf(pile));
@@ -114,6 +121,10 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
     if(alcohol){
       pawn.need=null;pawn.state='idle';pawn.planCooldown=0;pawn.needCooldown=0;if(task.forced)pawn.orders.active=null;
       ingestBeer265(world,pawn);context.event(`${pawn.name} a bu une bière.`);return;
+    }
+    if(drug){
+      pawn.need=null;pawn.state='idle';pawn.planCooldown=0;pawn.needCooldown=0;
+      ingestPenoxycyline337(world,pawn);context.event(`${pawn.name} a pris une dose de pénoxycyline.`);return;
     }
     const atTable = adjacentTable(world, pawn) !== null;
     rememberMeal(world, pawn, atTable, rawFoodThought(pile.item), pile.item);

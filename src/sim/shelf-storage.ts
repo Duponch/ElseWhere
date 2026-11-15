@@ -1,3 +1,4 @@
+import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {filteredStructures} from './structure-navigation.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -19,7 +20,7 @@ export interface ShelfStorageSettings extends StorageConditions {filters:Storage
 export interface ShelfStorageState {cells:number[];settings:ShelfStorageSettings;linked286?:import('./linked-storage-state-286.ts').LinkedShelfMember286}
 export interface StorageCell extends StockpileCell {shelfId?:number}
 export function newShelfStorage(cells:readonly number[],version:number=SCHEMA_VERSION):ShelfStorageState {
-  return {cells:[...cells],settings:{priority:3,capacity:500,filters:{...(isSchema298OrLater(version)?{'ai-core':true}:{}),...((version===295||(version===296||isCorePhysicalSchema297(version)))?{book:true}:{}),...(isSchema273OrLater(version)?{prosthesis:true}:{}),...(version>=265?{wort:true,beer:true}:{}),wood:true,food:true,chemfuel:true,neutroamine:true,silver:true,unfinished:true,textile:true,steel:true,gold:true,uranium:true,plasteel:true,component:true,'advanced-component':true,medicine:true,weapon:true,apparel:true,blocks:true}}};
+  return {cells:[...cells],settings:{priority:3,capacity:500,filters:{...(isSchema298OrLater(version)?{'ai-core':true}:{}),...((version===295||(version===296||isCorePhysicalSchema297(version)))?{book:true}:{}),...(isSchema273OrLater(version)?{prosthesis:true}:{}),...(isPenoxycyline337(version)?{drug:true}:{}),...(version>=265?{wort:true,beer:true}:{}),wood:true,food:true,chemfuel:true,neutroamine:true,silver:true,unfinished:true,textile:true,steel:true,gold:true,uranium:true,plasteel:true,component:true,'advanced-component':true,medicine:true,weapon:true,apparel:true,blocks:true}}};
 }
 /** Fixed physical exclusions are independent of the player's policy. */
 export function shelfFixedAccepts(subject:ItemId|MaterialPile):boolean {

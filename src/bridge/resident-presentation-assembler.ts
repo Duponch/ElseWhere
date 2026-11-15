@@ -305,7 +305,7 @@ export class ResidentPresentationAssembler {
   // The two campaign-owned fields travel together. Reuse their native scalar
   // registry contract, without scanning alcohol dossiers in this read model.
   if(!isSchema265OrLater(raw.schemaVersion)?own(raw,'drugPolicies')||own(raw,'nextDrugPolicyId'):
-   own(raw,'drugPolicies')!==own(raw,'nextDrugPolicyId')||own(raw,'drugPolicies')&&(raw.drugPolicies===undefined||raw.nextDrugPolicyId===undefined)||!validDrugPolicyRegistry265(raw.drugPolicies,raw.nextDrugPolicyId))return fail();
+   own(raw,'drugPolicies')!==own(raw,'nextDrugPolicyId')||own(raw,'drugPolicies')&&(raw.drugPolicies===undefined||raw.nextDrugPolicyId===undefined)||!validDrugPolicyRegistry265(raw.drugPolicies,raw.nextDrugPolicyId,Number(raw.schemaVersion)))return fail();
   if(!validNovelHistoricalTransport295(raw,raw.schemaVersion))return fail();
   if(!validToxicFalloutTransport294(raw,raw.schemaVersion))return fail();
   if(!validPeaceTalksHistorical293(raw,raw.schemaVersion)||!validPartyHistoricalTransport292(raw,raw.schemaVersion)||!validForestryHistoricalTransport291(raw,raw.schemaVersion)||!validFirefoamHistoricalTransport290(raw,raw.schemaVersion)||!validBillPauseHistoricalTransport289(raw,raw.schemaVersion)||!validAnimalThermalRefugeHistoricalTransport288(raw,raw.schemaVersion)||!validAnimalAreaHistoricalTransport287(raw,raw.schemaVersion)||!validLinkedStorageHistorical286(raw,raw.schemaVersion)||!validCoupleHistoricalTransport285(raw,raw.schemaVersion)||!validTradeRequestHistorical284(raw,raw.schemaVersion)||!validApparelProvenanceHistoricalTransport284(raw,raw.schemaVersion)||!validBillWorkerHistoricalTransport283(raw,raw.schemaVersion))return fail();

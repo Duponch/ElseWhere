@@ -106,6 +106,9 @@ export function itemGeometry(item:ItemId,quantity:number=ITEM_DEFINITIONS[item].
       add('item-disc',x,.13,0,item==='milk'?.18:.13,.23,item==='milk'?.18:.13,color);
       add('item-disc',x,.265,0,.09,.07,.09,0xd8ddcf);add('item-disc',x,.308,0,.10,.022,.10,item==='milk'?0x7798b1:0x647f88);
     }
+  }else if(item==='penoxycyline'){
+    box(0,.03,0,.36,.05,.26,0xe7e1d2);
+    for(const [x,z] of [[-.1,-.05],[0,.05],[.1,-.05]])add('item-disc',x!,.075,z!,.075,.035,.075,color);
   }else if(item==='chemfuel'){
     box(0,.16,0,.30,.30,.28);box(.07,.33,-.07,.08,.07,.09,0x687c60);
     for(const x of [-.10,.02])box(x,.35,.03,.035,.08,.045,0x596e5b);box(-.04,.40,.03,.15,.025,.045,0x596e5b);

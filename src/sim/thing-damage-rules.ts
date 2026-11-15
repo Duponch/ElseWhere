@@ -92,7 +92,7 @@ export function pileMaxHp(p:Pick<MaterialPile,'kind'|'item'>,version=p.item==='a
   if(p.kind==='apparel')return APPAREL[p.item as keyof typeof APPAREL]?.hitPoints??0;
   if(p.kind==='weapon')return weaponMaxHitPoints(p.item);if(p.kind==='corpse'||p.kind==='mech-corpse')return 100;
   if(p.kind==='food')return ['nutrient-paste-meal','simple-meal','fine-meal','vegetarian-fine-meal','carnivore-fine-meal','lavish-meal','vegetarian-lavish-meal','carnivore-lavish-meal','survival-meal','legacy-portion'].includes(p.item)?50:60;
-  if(p.kind==='chemfuel')return 50;if(p.kind==='medicine')return 60;if(p.kind==='neutroamine')return 50;if(p.kind==='unfinished')return 50;
+  if(p.kind==='chemfuel')return 50;if(p.kind==='medicine')return 60;if(p.kind==='neutroamine')return 50;if(p.kind==='drug')return 50;if(p.kind==='unfinished')return 50;
   if(version>=193){if(p.kind==='chunk')return 300;if(p.item==='muffalo-wool')return 90;if(p.item==='advanced-component')return 70;if(['plainleather','bluefur','camelhide','foxfur'].includes(p.item))return 60;}
   return p.item==='wood'?150:p.item==='cloth'?80:p.item==='light-leather'?60:p.item==='component'?70:0;
 }
@@ -114,7 +114,7 @@ export function pileFlammability(p:Pick<MaterialPile,'kind'|'item'>):number {
   if(p.kind==='mech-corpse')return 0;
   if(p.kind==='weapon')return p.item==='plasteel-knife'?0:.5;if(p.kind==='corpse')return .7;if(p.kind==='food')return p.item==='pemmican'?.6:p.item==='hay'?1.5:1;
   if(p.kind==='medicine')return p.item==='herbal-medicine'?1.3:.7;
-  if(p.kind==='chemfuel')return 2;if(p.kind==='neutroamine')return .7;
+  if(p.kind==='chemfuel')return 2;if(p.kind==='neutroamine')return .7;if(p.kind==='drug')return .7;
   // Unfinished apparel inherits the default zero stat; its embedded cloth is not a second ground pile.
   return p.item==='wood'?1:p.item==='cloth'?1.2:p.item==='light-leather'?1:p.item==='component'?.6:0;
 }

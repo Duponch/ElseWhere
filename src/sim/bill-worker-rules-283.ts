@@ -21,6 +21,8 @@ const recipeSkills:Readonly<Record<ProductionRecipe,ProductionRecipeSkill283|nul
  'smelt-slag':null,
  'make-spear':'crafting',
  'make-short-bow':'crafting',
+ 'make-penoxycyline':'intellectual',
+ 'make-penoxycyline-bulk':'intellectual',
  'make-recurve-bow':'crafting',
  'make-greatbow':'crafting',
  'make-pump-shotgun':'crafting',

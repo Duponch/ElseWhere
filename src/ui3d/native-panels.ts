@@ -41,7 +41,8 @@ import {buildNativeResearch,resetNativeResearch} from './native-research';
 import {expectationForWealth} from '../sim/expectations';
 import {ITEM_DEFINITIONS} from '../sim/items';
 import {FOOD_ITEMS} from '../sim/food-policy';
-import {effectiveDrugPolicies265,type BeerPolicy265} from '../sim/alcohol-policy-265';
+import {effectiveDrugPolicies265,penoxycylinePolicyOf337,type BeerPolicy265} from '../sim/alcohol-policy-265';
+import {isPenoxycyline337,type PenoxycylinePolicy337} from '../sim/penoxycyline-337';
 import {APPAREL,type ApparelItem} from '../sim/apparel-rules';
 import {APPAREL_POLICY_MATERIALS267,apparelPolicyMaterialLabel267} from '../sim/apparel-policy';
 import {WEAPON_QUALITIES,QUALITY_LABELS,type WeaponQuality} from '../sim/equipment-rules';
@@ -429,13 +430,20 @@ function foodEditor(id:number):void {
 function drugEditor(id:number):void {
  const policy=effectiveDrugPolicies265(currentWorld()).find(p=>p.id===id);if(!policy)throw Error('Cette politique n’existe plus.');
  let name=policy.name,beer:BeerPolicy265={...policy.beer};
+ const withPenoxycyline=isPenoxycyline337(currentWorld().schemaVersion);let penoxycyline:PenoxycylinePolicy337={...penoxycylinePolicyOf337(policy)};
+ const penoxycylineNumbers:readonly [keyof Pick<PenoxycylinePolicy337,'daysFrequency'|'onlyIfMoodBelow'|'onlyIfJoyBelow'>,string,number,number,number][]=[['daysFrequency','Pénoxycyline : fréquence en jours',1,.1,25],['onlyIfMoodBelow','Pénoxycyline : seulement si humeur inférieure (%)',100,1,100],['onlyIfJoyBelow','Pénoxycyline : seulement si loisir inférieur (%)',100,1,100]];
  const booleans:readonly [keyof Pick<BeerPolicy265,'allowedForAddiction'|'allowedForJoy'|'allowScheduled'>,string][]=[['allowedForAddiction','Autoriser pour dépendance'],['allowedForJoy','Autoriser pour loisir'],['allowScheduled','Prise programmée']];
  const numbers:readonly [keyof Pick<BeerPolicy265,'daysFrequency'|'onlyIfMoodBelow'|'onlyIfJoyBelow'|'takeToInventory'>,string,number,number,number][]=[['daysFrequency','Fréquence en jours',1,.1,25],['onlyIfMoodBelow','Seulement si humeur inférieure (%)',100,1,100],['onlyIfJoyBelow','Seulement si loisir inférieur (%)',100,1,100],['takeToInventory','Quantité dans l’inventaire',1,0,3]];
  const make=():NativePage=>detailPage(`drug-policy-${id}`,policy.name,[
   {id:'drug-name',label:'Nom',input:{value:name,maxLength:60,onCommit:value=>{name=value;}}},row('drug-item','Substance','Bière','Les effets passent par une consommation physique ; ce réglage ne donne aucun objet.'),
   ...booleans.map(([key,label])=>row(`drug-${key}`,label,undefined,undefined,[button(`drug-${key}-toggle`,beer[key]?'Oui':'Non',()=>{beer={...beer,[key]:!beer[key]};open(make());},{active:beer[key]})])),
   ...numbers.map(([key,label,scale,min,max]):NativeRow=>({id:`drug-${key}`,label,input:{value:String(beer[key]*scale),kind:'number',onCommit:value=>{const n=Number(value);if(!Number.isFinite(n)||n<min||n>max||key==='takeToInventory'&&!Number.isInteger(n))throw Error(`Valeur attendue entre ${min} et ${max}.`);beer={...beer,[key]:n/scale};}}})),
- ],[button('drug-apply','Appliquer',async()=>{await send({type:'drug-policy-update',policyId:id,name,beer:{...beer}});back();}),button('drug-copy','Dupliquer',()=>inputPage(`drug-copy-${id}`,'Dupliquer',`${name} copie`,value=>send({type:'drug-policy-create',name:value,copyFromId:id}))),button('drug-default','Choisir par défaut',async()=>{await send({type:'drug-policy-default',policyId:id});back();}),button('drug-delete','Supprimer',()=>confirm(`drug-delete-${id}`,'Supprimer cette politique ?',policy.name,()=>send({type:'drug-policy-delete',policyId:id})))]);
+  ...(withPenoxycyline?[
+   row('drug-penoxycyline','Substance','Pénoxycyline','Médicament préventif : une dose protège environ 5,5 jours du paludisme, de la maladie du sommeil et de la peste. Le jeu de base conseille une prise tous les cinq jours ; la politique par défaut ne la programme pas.'),
+   row('drug-penoxycyline-scheduled','Pénoxycyline : prise programmée',undefined,undefined,[button('drug-penoxycyline-scheduled-toggle',penoxycyline.allowScheduled?'Oui':'Non',()=>{penoxycyline={...penoxycyline,allowScheduled:!penoxycyline.allowScheduled};open(make());},{active:penoxycyline.allowScheduled})]),
+   ...penoxycylineNumbers.map(([key,label,scale,min,max]):NativeRow=>({id:`drug-penoxycyline-${key}`,label,input:{value:String(penoxycyline[key]*scale),kind:'number',onCommit:value=>{const n=Number(value);if(!Number.isFinite(n)||n<min||n>max)throw Error(`Valeur attendue entre ${min} et ${max}.`);penoxycyline={...penoxycyline,[key]:n/scale};}}})),
+  ]:[]),
+ ],[button('drug-apply','Appliquer',async()=>{await send({type:'drug-policy-update',policyId:id,name,beer:{...beer},...(withPenoxycyline?{penoxycyline337:{...penoxycyline}}:{})});back();}),button('drug-copy','Dupliquer',()=>inputPage(`drug-copy-${id}`,'Dupliquer',`${name} copie`,value=>send({type:'drug-policy-create',name:value,copyFromId:id}))),button('drug-default','Choisir par défaut',async()=>{await send({type:'drug-policy-default',policyId:id});back();}),button('drug-delete','Supprimer',()=>confirm(`drug-delete-${id}`,'Supprimer cette politique ?',policy.name,()=>send({type:'drug-policy-delete',policyId:id})))]);
  open(make());
 }
 function apparelEditor(id:number):void {

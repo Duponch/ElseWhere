@@ -27,6 +27,7 @@ export const STORAGE_FILTER_TREE:readonly StorageFilterNode[]=[
   ]),
   branch('manufactured','Produits manufacturés',[
     branch('medicines','Médicaments',kind('medicine')),
+    branch('drugs','Drogues',kind('drug')),
     branch('prostheses','Prothèses',kind('prosthesis')),
     branch('brewing-products','Brassage',leaves(id=>id==='wort'||id==='beer')),
     branch('brewing-plants','Matières végétales',leaves(id=>id==='hops')),

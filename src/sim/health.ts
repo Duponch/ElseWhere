@@ -1,3 +1,4 @@
+import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {deathOnDownedChance320,deathOnDownedEligible320} from './population-intent-320.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {stopCapturedTravel297} from './movement.ts';
@@ -80,7 +81,7 @@ export function reconcilePawnHealth(world:World,pawn:Pawn,body=pawnBody(pawn),ex
     pawn.need=null;delete pawn.medicalSleep;pawn.state='idle';pawn.planCooldown=0;pawn.needCooldown=0;
     announce(world,`${pawn.name} peut de nouveau se relever.`);
   }
-  if(world.schemaVersion>=265&&pawn.need?.kind==='eat'&&pawn.need.alcoholReason!==undefined&&(body.capacities.eating<=0||body.capacities.manipulation<=0))interruptWork(world,pawn,retainTravellingCargo);
+  if((world.schemaVersion>=265&&pawn.need?.kind==='eat'&&pawn.need.alcoholReason!==undefined||isPenoxycyline337(world.schemaVersion)&&pawn.need?.kind==='eat'&&pawn.need.drugReason337!==undefined)&&(body.capacities.eating<=0||body.capacities.manipulation<=0))interruptWork(world,pawn,retainTravellingCargo);
   if(body.capacities.manipulation===0&&(pawn.hunting||pawn.research||pawn.equipmentTask||pawn.jobId!==null||pawn.ward||pawn.feed||pawn.tend||pawn.surgery||pawn.rescue||pawn.animalRescue||pawn.haul||pawn.cooking||pawn.recreation.task?.activity==='chess'||pawn.orders.active!==null||pawn.orders.queue.length||pawn.priorityWork))interruptWork(world,pawn,retainTravellingCargo);
   if(body.capacities.manipulation===0)delete pawn.shooting;
   dropIncapacitatedEquipment(world,pawn);

@@ -1,3 +1,4 @@
+import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
 import {validLinkedShelfField286} from './linked-storage-save-286.ts';
@@ -20,7 +21,7 @@ export function validShelfSettings(value:unknown,version:number):boolean {
   if(object(value)&&!validAiCoreStorageFilters298(value.filters,version))return false;
   if(object(value)&&object(value.filters)&&'book'in value.filters){const d=Object.getOwnPropertyDescriptor(value.filters,'book');if((version!==295&&(version!==296&&!isCorePhysicalSchema297(version)))||!d||!d.enumerable||!Object.hasOwn(d,'value')||typeof d.value!=='boolean')return false;}
   if(version<229||!object(value)||Reflect.ownKeys(value).some(k=>typeof k!=='string'||!['filters','priority','capacity','items','quality','hitPoints','allowFresh','allowRotten'].includes(k)))return false;
-  return object(value.filters)&&Reflect.ownKeys(value.filters).every(k=>typeof k==='string'&&storageKeys.has(k)&&(k!=='book'||(version===295||(version===296||isCorePhysicalSchema297(version))))&&(isSchema273OrLater(version)||k!=='prosthesis')&&(version>=265||k!=='wort'&&k!=='beer')&&(version>=256||k!=='jade')&&(version>=241||k!=='uranium')&&(version>=235||k!=='plant')&&typeof value.filters![k as never]==='boolean')
+  return object(value.filters)&&Reflect.ownKeys(value.filters).every(k=>typeof k==='string'&&storageKeys.has(k)&&(k!=='book'||(version===295||(version===296||isCorePhysicalSchema297(version))))&&(isSchema273OrLater(version)||k!=='prosthesis')&&(version>=265||k!=='wort'&&k!=='beer')&&(isPenoxycyline337(version)||k!=='drug')&&(version>=256||k!=='jade')&&(version>=241||k!=='uranium')&&(version>=235||k!=='plant')&&typeof value.filters![k as never]==='boolean')
     &&integer(value.priority,1,5)&&value.capacity===500&&validStorageItems(value.items,version)&&validStorageConditions(value,version);
 }
 /** Reciprocal building/state admission, shared by files and snapshots. */

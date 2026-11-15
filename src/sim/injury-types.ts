@@ -46,6 +46,8 @@ export interface MedicalRecord {
   parasites306?:import('./parasites-306.ts').Parasites306;
   /** Schema 307: fibrous and sensory mechanites. */
   mechanites307?:import('./mechanites-307.ts').Mechanites307;
+  /** Schema 337: Core PenoxycylineHigh and the penoxycyline take record. */
+  penoxycyline337?:import('./penoxycyline-337.ts').PenoxycylineState337;
   /** Absent is the historical human profile. Animal ownership is validated. */
   body?:import('./animal-species.ts').AnimalSpeciesId|import('./mechanoid-definition.ts').MechanoidKind;
   /** Only new animal species256: immutable owner birth anchor on the clinical clock. */

@@ -36,9 +36,28 @@ function validBows326(value:unknown):boolean {
   };
   return visit(value);
 }
+/** Schema 337 penoxycyline: item, its drug kind, recipes, storage and trade
+ * permissions or ledgers. Its research and policy entry have their own guards. */
+function validPenoxycyline337(value:unknown):boolean {
+  const recipe=(v:unknown)=>v==='make-penoxycyline'||v==='make-penoxycyline-bulk';
+  const visit=(v:unknown):boolean=>{
+    if(Array.isArray(v))return v.every(visit);
+    if(!v||typeof v!=='object')return true;
+    for(const [key,child] of Object.entries(v)){
+      if(key==='item'&&child==='penoxycyline'||key==='kind'&&child==='drug'||key==='recipe'&&recipe(child))return false;
+      if(key==='allowedItems'&&Array.isArray(child)&&child.includes('penoxycyline'))return false;
+      if(['items','filters','bought','sold'].includes(key)&&child&&typeof child==='object'&&(Object.hasOwn(child,'penoxycyline')||Object.hasOwn(child,'drug')))return false;
+      if(!visit(child))return false;
+    }
+    return true;
+  };
+  return visit(value);
+}
 /** Schema 316 short bow: item, workpiece, recipe and its projectiles/stances. */
 const BOW_316=new Set<string>(['short-bow','unfinished-bow']);
 export function validTuqueCatalogueTransport(value:unknown,version:number):boolean {
+  if(version>=337)return true;
+  if(!validPenoxycyline337(value))return false;
   if(version>=326)return true;
   if(!validBows326(value))return false;
   if(version>=322)return true;
@@ -67,7 +86,7 @@ const TUQUE_DOMAINS=['piles','pawns','structures','jobs','packed','stockpiles','
   'group','groupLosses','commercialTrip','civilianPost','visitors','raids','trade','orbital',
   'prisonDepartures','arrivals','startingArrival','podRescues','scout','quests','destroyed','deconstructed'] as const;
 export function validTuqueCatalogueDomains(value:unknown,version:number):boolean {
-  if(version>=326||!value||typeof value!=='object'||Array.isArray(value))return true;
+  if(version>=337||!value||typeof value!=='object'||Array.isArray(value))return true;
   const world=value as Record<string,unknown>;
   return TUQUE_DOMAINS.every(key=>validTuqueCatalogueTransport(world[key],version));
 }

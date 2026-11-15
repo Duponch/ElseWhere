@@ -55,6 +55,7 @@ import {validSmithingHistoricalTransport267,validSmithingCatalogueDomains267} fr
 import {validateSmithingWorks267} from './smithing-save-267.ts';
 import {isSchema263OrLater} from './schema-compatibility-257.ts';
 import {validAlcoholWorld265} from './alcohol-state-265.ts';
+import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {validBrewingCatalogueDomains265,validBrewingHistoricalTransport265} from './brewing-catalogue-save-265.ts';
 import {validFermentationWorld265} from './fermentation-save-265.ts';
 import {validGeothermalWorld264} from './geothermal-state-264.ts';
@@ -833,9 +834,9 @@ function validateSchema(raw: unknown, version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 1
         const pile = pileById.get((need.phase === 'pickup' ? need.sourcePileId : need.carryPileId)??-1);
         if (need.phase === 'pickup'&&need.paste) { /* Shared guard checks the six real reserved ingredients. */
         } else if (need.phase === 'pickup') {
-          if (pawn.state !== 'moving' || need.progress !== 0 || need.carryPileId !== null || !pile || !(pile.kind==='food'||version>=265&&need.alcoholReason&&pile.kind==='beer'&&pile.item==='beer') || !(pile.owner.type==='ground'||version>=265&&need.alcoholReason&&pile.owner.type==='inventory'&&pile.owner.pawnId===pawn.id) || reservedSource(world, pile.id) > pile.quantity) errors.push('Invalid meal reservation.');
+          if (pawn.state !== 'moving' || need.progress !== 0 || need.carryPileId !== null || !pile || !(pile.kind==='food'||version>=265&&need.alcoholReason&&pile.kind==='beer'&&pile.item==='beer'||isPenoxycyline337(version)&&need.drugReason337&&pile.kind==='drug'&&pile.item==='penoxycyline') || !(pile.owner.type==='ground'||(version>=265&&need.alcoholReason||isPenoxycyline337(version)&&need.drugReason337)&&pile.owner.type==='inventory'&&pile.owner.pawnId===pawn.id) || reservedSource(world, pile.id) > pile.quantity) errors.push('Invalid meal reservation.');
         } else {
-          if (owned[0]?.id !== need.carryPileId || !pile || !(pile.kind==='food'||version>=265&&need.alcoholReason&&pile.kind==='beer'&&pile.item==='beer') || pile.quantity !== (need.quantity ?? 1) || pile.owner.type !== 'pawn' || pile.owner.pawnId !== pawn.id) errors.push('Invalid ingestion ownership or state.');
+          if (owned[0]?.id !== need.carryPileId || !pile || !(pile.kind==='food'||version>=265&&need.alcoholReason&&pile.kind==='beer'&&pile.item==='beer'||isPenoxycyline337(version)&&need.drugReason337&&pile.kind==='drug'&&pile.item==='penoxycyline') || pile.quantity !== (need.quantity ?? 1) || pile.owner.type !== 'pawn' || pile.owner.pawnId !== pawn.id) errors.push('Invalid ingestion ownership or state.');
           if (need.phase === 'ingest' ? pawn.state !== 'eating' || pawn.path.length > 0 : pawn.state !== 'moving' || need.progress !== 0) errors.push('Invalid meal phase or state.');
         }
         if (version >= 5 && pile && need.quantity > (version>=265&&need.alcoholReason==='inventory'?3:ITEM_DEFINITIONS[pile.item].maxIngest)) errors.push('Meal exceeds item ingestion limit.');

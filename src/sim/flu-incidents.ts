@@ -1,3 +1,4 @@
+import { isPenoxycyline337,penoxycylineImmuneTo337 } from './penoxycyline-337.ts';
 import {BIOME_DISEASE_FACTS_256,biomeDiseaseChoice256} from './biome-disease-facts-256.ts';
 import { isPlayerPatient } from './affiliation.ts';
 import { acquireFlu } from './flu-state.ts';
@@ -130,13 +131,17 @@ export function resolveImmuneDiseaseIncident(world:World,kind:ImmuneDiseaseKind,
   const candidates=fluCandidates(world);if(!candidates.length)return 0;
   const min=coreRound(candidates.length*.2),max=coreRound(candidates.length*.5);
   const requested=Math.min(99_999,Math.max(1,min+Math.floor(random(state)*(max-min+1))));
-  let acquired=0;const names:string[]=[];
+  let acquired=0;const names:string[]=[],blocked:string[]=[];
   for(let index=0;index<Math.min(requested,candidates.length);index++){
     const swap=index+Math.floor(random(state)*(candidates.length-index));
     [candidates[index],candidates[swap]]=[candidates[swap]!,candidates[index]!];
     const pawn=candidates[index]!,disease=pawn.health?.immuneDiseases?.[kind];
-    const contractChance=disease?.severity?0:Math.max(0,1-(disease?.immunity??0)/600_000_000);
-    if(random(state)>=contractChance)continue;
+    // Schema 337: PenoxycylineHigh makes the contract chance 0 before any
+    // other check (Core ImmunityHandler, immunity cause reported); the roll
+    // is still drawn, as for an existing case, so the stream keeps its shape.
+    const protectedNow=isPenoxycyline337(world.schemaVersion)&&penoxycylineImmuneTo337(pawn.health,world.tick,kind);
+    const contractChance=disease?.severity||protectedNow?0:Math.max(0,1-(disease?.immunity??0)/600_000_000);
+    if(random(state)>=contractChance){if(protectedNow)blocked.push(pawn.name);continue;}
     if(pawn.health&&pawn.health.tick<world.tick)updatePawnHealth(world,pawn);
     if(pawn.state==='dead')continue;
     const record=pawn.health??=createMedicalRecord(world.tick),luck=800_000+Math.floor(random(state)*400_001);
@@ -147,6 +152,8 @@ export function resolveImmuneDiseaseIncident(world:World,kind:ImmuneDiseaseKind,
     state.episodes++;state.cases+=acquired;
     emit(world,`${kind==='malaria'?'Paludisme':kind==='plague'?'Peste':'Maladie du sommeil'} : ${names.join(', ')} ${acquired===1?'est malade':'sont malades'}. Consultez Santé, organisez les soins et le repos au lit.`);
   }
+  // Core adds the protected victims to the letter (LetterDisease_Blocked).
+  if(blocked.length)emit(world,`${kind==='malaria'?'Paludisme':kind==='plague'?'Peste':'Maladie du sommeil'} bloqué par la pénoxycyline : ${blocked.join(', ')}.`);
   return acquired;
 }
 

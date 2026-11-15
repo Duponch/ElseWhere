@@ -1,16 +1,19 @@
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import {campaignPhysicalCaptures} from './campaign-people.ts';
 import {isCarePatient} from './affiliation.ts';
+import {isPenoxycyline337,validPenoxycylinePolicy337,DEFAULT_PENOXYCYLINE_POLICY_337,type PenoxycylinePolicy337} from './penoxycyline-337.ts';
 import type {Pawn,World} from './types.ts';
 
 export interface BeerPolicy265 {
   allowedForAddiction:boolean;allowedForJoy:boolean;allowScheduled:boolean;
   daysFrequency:number;onlyIfMoodBelow:number;onlyIfJoyBelow:number;takeToInventory:number;
 }
-export interface DrugPolicy265 {id:number;name:string;beer:BeerPolicy265}
+/** Schema 337 adds the optional penoxycyline entry; absent is Core's default
+ * entry (unscheduled, every 1 day), never a historical choice. */
+export interface DrugPolicy265 {id:number;name:string;beer:BeerPolicy265;penoxycyline337?:PenoxycylinePolicy337}
 export type DrugPolicyCommand265=
  |{type:'drug-policy-create';name:string;copyFromId?:number}
- |{type:'drug-policy-update';policyId:number;name?:string;beer?:BeerPolicy265}
+ |{type:'drug-policy-update';policyId:number;name?:string;beer?:BeerPolicy265;penoxycyline337?:PenoxycylinePolicy337}
  |{type:'drug-policy-delete';policyId:number}
  |{type:'drug-policy-assign';pawnId:number;policyId:number}
  |{type:'drug-policy-default';policyId:number};
@@ -40,12 +43,16 @@ export function validBeerPolicy265(v:unknown):v is BeerPolicy265 {
  [v.onlyIfMoodBelow,v.onlyIfJoyBelow].every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=.01&&n<=1)&&
  Number.isInteger(v.takeToInventory)&&Number(v.takeToInventory)>=0&&Number(v.takeToInventory)<=3;
 }
-export function validDrugPolicyRegistry265(policies:unknown,nextId:unknown):boolean {
+export const penoxycylinePolicyOf337=(policy:Pick<DrugPolicy265,'penoxycyline337'>):Readonly<PenoxycylinePolicy337>=>policy.penoxycyline337??DEFAULT_PENOXYCYLINE_POLICY_337;
+/** `version` admits the schema 337 penoxycyline entry; callers that only know
+ * a registry without its world keep the historical three fields. */
+export function validDrugPolicyRegistry265(policies:unknown,nextId:unknown,version=0):boolean {
  if(policies===undefined||nextId===undefined)return policies===undefined&&nextId===undefined;
  if(!Array.isArray(policies)||policies.length<1||policies.length>32||!Number.isSafeInteger(nextId)||Number(nextId)<2||Reflect.ownKeys(policies).length!==policies.length+1)return false;
  const ids=new Set<number>();
  for(let i=0;i<policies.length;i++){const d=Object.getOwnPropertyDescriptor(policies,String(i));if(!d||!('value'in d)||!d.enumerable)return false;const p=d.value;
-  if(!fields(p,['id','name','beer'])||!Number.isSafeInteger(p.id)||Number(p.id)<1||Number(p.id)>=Number(nextId)||ids.has(Number(p.id))||!name(p.name)||!validBeerPolicy265(p.beer))return false;ids.add(Number(p.id));}
+  const penoxycyline=isPenoxycyline337(version)&&plain(p)&&Object.hasOwn(p,'penoxycyline337');
+  if(!fields(p,['id','name','beer',...(penoxycyline?['penoxycyline337']:[])])||penoxycyline&&!validPenoxycylinePolicy337((p as Record<string,unknown>).penoxycyline337)||!Number.isSafeInteger(p.id)||Number(p.id)<1||Number(p.id)>=Number(nextId)||ids.has(Number(p.id))||!name(p.name)||!validBeerPolicy265(p.beer))return false;ids.add(Number(p.id));}
  return true;
 }
 /** Command boundary only. Absent old registries are materialized at an actual
@@ -59,7 +66,7 @@ export function applyDrugPolicyCommand265(world:World,command:DrugPolicyCommand2
   if(policies.length>=32||!Number.isSafeInteger((world.nextDrugPolicyId??2)+1))return 'Limite de politiques atteinte.';
   const next=world.nextDrugPolicyId??2;
   world.drugPolicies??=[structuredClone(social)];world.nextDrugPolicyId=next+1;
-  world.drugPolicies.push({id:next,name:command.name.trim(),beer:{...(source?.beer??entry(true,false))}});return null;
+  world.drugPolicies.push({id:next,name:command.name.trim(),beer:{...(source?.beer??entry(true,false))},...(isPenoxycyline337(world.schemaVersion)&&source?.penoxycyline337?{penoxycyline337:{...source.penoxycyline337}}:{})});return null;
  }
  const policy=policies.find(p=>p.id===command.policyId);if(!policy)return 'Politique introuvable.';
  if(command.type==='drug-policy-assign'){
@@ -67,10 +74,11 @@ export function applyDrugPolicyCommand265(world:World,command:DrugPolicyCommand2
   pawn.drugPolicyId=policy.id;pawn.needCooldown=0;return null;
  }
  if(command.type==='drug-policy-update'){
-  if(command.name===undefined&&command.beer===undefined||command.name!==undefined&&!name(command.name)||command.beer!==undefined&&!validBeerPolicy265(command.beer))return 'Réglages de consommation invalides.';
+  if(command.penoxycyline337!==undefined&&(!isPenoxycyline337(world.schemaVersion)||!validPenoxycylinePolicy337(command.penoxycyline337)))return 'Réglages de pénoxycyline invalides.';
+  if(command.name===undefined&&command.beer===undefined&&command.penoxycyline337===undefined||command.name!==undefined&&!name(command.name)||command.beer!==undefined&&!validBeerPolicy265(command.beer))return 'Réglages de consommation invalides.';
   world.drugPolicies??=[structuredClone(social)];world.nextDrugPolicyId??=2;
   const actual=world.drugPolicies.find(p=>p.id===policy.id)!;
-  if(command.name!==undefined)actual.name=command.name.trim();if(command.beer!==undefined)actual.beer={...command.beer};
+  if(command.name!==undefined)actual.name=command.name.trim();if(command.beer!==undefined)actual.beer={...command.beer};if(command.penoxycyline337!==undefined)actual.penoxycyline337={...command.penoxycyline337};
   for(const pawn of users())if(drugPolicyFor265(world,pawn).id===policy.id)pawn.needCooldown=0;return null;
  }
  if(command.type==='drug-policy-default'){

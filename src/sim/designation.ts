@@ -1,3 +1,4 @@
+import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
 import {queryAreaMaterialPermission256} from './area-material-permission-256.ts';
 import {naturalTerrainWalkable256} from './natural-terrain-movement-256.ts';
@@ -33,6 +34,7 @@ export function validStorageSettings(settings: StorageSettings,version:number=SC
   if(filters?filters.enumerable!==true||!Object.hasOwn(filters,'value'):'filters'in settings)return false;
   if(!validNovelStorageFilters295(filters?.value,version)||!validAiCoreStorageFilters298(filters?.value,version))return false;
   if(settings.filters&&Object.hasOwn(settings.filters,'prosthesis')&&(!isSchema273OrLater(version)||typeof settings.filters.prosthesis!=='boolean'))return false;
+  if(settings.filters&&Object.hasOwn(settings.filters,'drug')&&(!isPenoxycyline337(version)||typeof settings.filters.drug!=='boolean'))return false;
   if(settings.filters&&Object.hasOwn(settings.filters,'jade')&&(version<256||typeof settings.filters.jade!=='boolean'))return false;
   if(settings.filters&&Object.hasOwn(settings.filters,'plant')&&(version<235||typeof settings.filters.plant!=='boolean'))return false;
   if(settings.filters?.corpse!==undefined&&(version<79||typeof settings.filters.corpse!=='boolean'))return false;

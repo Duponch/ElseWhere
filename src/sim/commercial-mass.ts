@@ -1,3 +1,4 @@
+import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {BOW_FACTS_326} from './bows-326.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -37,6 +38,8 @@ export function commercialItemMassGrams(item:ItemId,version:number=SCHEMA_VERSIO
   if(isMaceItem269(item))return version>=269?1250:undefined;
   if(isSmithingApparel267(item))return version>=267?smithingApparelMass267(item):undefined;
   if(version<256&&isCoreStartingApparel256(item))return undefined;
+  // Schema 337: Core Penoxycyline weighs 0.005 kg.
+  if(item==='penoxycyline')return isPenoxycyline337(version)?5:undefined;
   if(item==='hops'||item==='wort'||item==='beer')return version>=265?(item==='hops'?30:item==='wort'?800:300):undefined;
   if(item==='jade')return version>=256?500:undefined;
   if(item==='slag-steel-chunk')return version>=256?8000:undefined;

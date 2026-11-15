@@ -1907,6 +1907,7 @@ function actionLabel(pawn: Pawn, carriedPatients: ReadonlySet<number>) {
   if(pawn.animalCare)return 'Soins vétérinaires';
   if(pawn.animalFeed)return 'Alimentation assistée animale';
   if(pawn.cooking)return queryPawnStatus(snapshot!,pawn,confirmedFoodReadability()).reason;
+  if(pawn.need?.kind==='eat'&&pawn.need.drugReason337)return pawn.need.phase==='ingest'?'Prend une dose de pénoxycyline':'Va prendre une dose de pénoxycyline';
   if(pawn.need?.kind==='eat'&&pawn.need.alcoholReason)return pawn.need.alcoholReason==='inventory'?'Prend des bières pour son inventaire':pawn.need.phase==='ingest'?'Boit une bière':'Rejoint une bière';
   if(pawn.brewing)return pawn.path.length||pawn.moveCooldown>0?'Rejoint le fût de fermentation':'Extrait la bière du fût';
   if (pawn.need) return queryPawnStatus(snapshot!,pawn,confirmedFoodReadability()).reason;

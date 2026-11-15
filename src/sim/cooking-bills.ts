@@ -1,3 +1,4 @@
+import {isPenoxycyline337,isPenoxycylineRecipe337} from './penoxycyline-337.ts';
 import {isSchema289OrLater} from './schema-compatibility-257.ts';
 import {isSchema273OrLater,isSchema278OrLater,isSchema283OrLater} from './schema-compatibility-257.ts';
 import {validBillWorkerPolicy283} from './bill-worker-rules-283.ts';
@@ -52,6 +53,7 @@ export function validBillSettings(value:unknown,recipe:ProductionRecipe='simple-
   if(isCremationRecipe(recipe)&&version<225)return false;
   if(isBiofuelRecipe(recipe)&&version<218)return false;
   if(recipe==='make-medicine'&&version<206)return false;
+  if(isPenoxycylineRecipe337(recipe)&&!isPenoxycyline337(version))return false;
   if(recipe==='make-recon-armor'&&version<241)return false;
   if(recipe==='tuque'&&version<245)return false;
   if((recipe==='tshirt'||recipe==='jacket')&&version<312)return false;
