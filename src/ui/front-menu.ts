@@ -635,9 +635,9 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
         <h3>Vos provisions</h3><dl class="front-supplies">
           <div><dt>Bois</dt><dd>300</dd></div><div><dt>Acier</dt><dd>450</dd></div><div><dt>Composants</dt><dd>30</dd></div>
           <div><dt>Rations de survie</dt><dd>50</dd></div><div><dt>Médicaments</dt><dd>30</dd></div><div><dt>Argent</dt><dd>800</dd></div>
-          <div><dt>Fusil à verrou</dt><dd>1</dd></div><div><dt>Revolver</dt><dd>1</dd></div><div><dt>Couteau en plastacier</dt><dd>1</dd></div><div><dt>Gilet pare-balles</dt><dd>1</dd></div>
-        </dl><p class="front-small">Trois personnes choisies parmi huit candidats. Chaque personne porte une chemise en tissu. Taille de pierre, Mobilier complexe, Vêtements complexes et Climatisation sont déjà connus.</p>
-        <div class="front-limitation"><strong>Une adaptation encore partielle</strong><p>Les survivants et leurs fournitures arrivent en capsules. Le casque, le pantalon de protection, l’animal domestique et les provisions dispersées du scénario de référence restent absents.</p></div>
+          <div><dt>Fusil à verrou</dt><dd>1</dd></div><div><dt>Revolver</dt><dd>1</dd></div><div><dt>Couteau en plastacier</dt><dd>1</dd></div><div><dt>Gilet pare-balles</dt><dd>1</dd></div><div><dt>Pantalon pare-balles</dt><dd>1</dd></div><div><dt>Casque pare-balles en plastacier</dt><dd>1</dd></div>
+        </dl><p class="front-small">Trois personnes choisies parmi huit candidats. Chaque personne porte une chemise en tissu. Taille de pierre, Mobilier complexe, Vêtements complexes, Climatisation et Pâte nutritive sont déjà connus.</p>
+        <div class="front-limitation"><strong>Une adaptation encore partielle</strong><p>Les survivants, leurs fournitures et un animal de compagnie arrivent en capsules ; des provisions sont dispersées autour. Tout arrive interdit, comme dans le jeu de base : autorisez ce que vous voulez utiliser. Le conteur et une partie du contenu restent incomplets.</p></div>
       </article></div>`;
     const list = find<HTMLDivElement>('.front-choice-list');
     list.append(unavailable('Tribu perdue'), unavailable('Le riche explorateur'), unavailable('Brutalité nue'), unavailable('Personnalisé'),unavailable('Steam Workshop'));

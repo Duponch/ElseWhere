@@ -70,12 +70,18 @@ export function validStartingArrivalShape(value:unknown,version:number,w:Pick<Wo
   return true;
 }
 
+/** Schema 343: the only social state of a contained starting colonist is its
+ * CrashedTogether opinion of the two others, dated tick 0. */
+function crashedTogetherOnly343(social:unknown):boolean {
+  if(!object(social)||!keys(social,['rng','memories'])||!integer(social.rng,1,0xffffffff)||!Array.isArray(social.memories)||social.memories.length!==2)return false;
+  return social.memories.every(m=>object(m)&&keys(m,['otherId','kind','at','offset'])&&m.kind==='crashed-together'&&m.at===0&&m.offset===25&&integer(m.otherId,1))&&new Set(social.memories.map(m=>(m as {otherId:number}).otherId)).size===2;
+}
 const INITIAL_PAWN_KEYS=['id','name','x','z','appearance','age','health','medicalCare','skills','recreation','foodPolicyId',
   'apparelPolicyId','apparelAutomation','nextApparelCheckAt','schedule','restZeroTicks','collapsePending','hunger','rest','mood',
   'comfort','beauty','memories','orders','jobId','haul','cooking','need','bedId','needCooldown','state','priorities','path',
   'moveCooldown','planCooldown','traits','background','faction'];
 function freshPawn(p:Record<string,unknown>,world:World,version:number):boolean {
-  if(Object.keys(p).some(k=>!INITIAL_PAWN_KEYS.includes(k)&&!(k==='mental'&&isSchema256Or257(version)&&world.site?.revision===3&&world.climate?.revision===4&&world.planet?.revision===3))||!integer(p.id,1,world.nextId-1)||p.state!=='idle'
+  if(Object.keys(p).some(k=>!INITIAL_PAWN_KEYS.includes(k)&&!(k==='mental'&&isSchema256Or257(version)&&world.site?.revision===3&&world.climate?.revision===4&&world.planet?.revision===3)&&!(k==='social'&&version>=343&&crashedTogetherOnly343(p.social)))||!integer(p.id,1,world.nextId-1)||p.state!=='idle'
     ||p.faction!==undefined&&p.faction!=='colony'||p.jobId!==null||p.haul!==null||p.cooking!==null||p.need!==null||p.bedId!==null
     ||p.moveCooldown!==0||p.planCooldown!==0||p.needCooldown!==0||p.restZeroTicks!==0||p.collapsePending!==false
     ||!empty(p.path)||!empty(p.memories)||!object(p.orders)||!keys(p.orders,['active','queue'])||p.orders.active!==null||!empty(p.orders.queue)

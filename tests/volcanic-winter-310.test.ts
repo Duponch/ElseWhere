@@ -7,7 +7,7 @@ import {annualNaturalLight,annualGrowingLightIntegral} from '../src/sim/environm
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import {eligibleVolcanicWinter310,resolveSelectedVolcanicWinter310} from '../src/sim/volcanic-winter-310.ts';
 import {VOLCANIC_WINTER_MAX_CORE310,VOLCANIC_WINTER_MIN_CORE310,VOLCANIC_WINTER_TRANSITION_CORE310,volcanicAnimalDensityFactor310,volcanicWinterStrength310} from '../src/sim/volcanic-winter-state-310.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import {SCHEMA_VERSION,TICKS_PER_DAY,type World} from '../src/sim/types.ts';
 
 function colony():World{
@@ -64,5 +64,5 @@ test('the calendar keeps the condition exactly, and a 309 save migrates by its n
   // A real new game, with no clock jump.
   const plain=createScenarioWorld(42,32,'crashlanded'),current=serializeWorld(plain);
   expect(validateWorld(plain)).toEqual([]);
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,309)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,309)))).toBe(asMigratedCurrent(current));
 });

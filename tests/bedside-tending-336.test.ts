@@ -1,7 +1,7 @@
 import {expect,test} from 'vitest';
 import {medicalCamp,controlledInjury} from './scenarios/health.ts';
 import {fixtureBuilding} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import {bedSlotCell} from '../src/sim/bed-slots.ts';
 import {bedInteractionCells336} from '../src/sim/care-access.ts';
 import {tendingProposal,tendingPlaceValid} from '../src/sim/tending.ts';
@@ -74,5 +74,5 @@ test('a kidnapped colonist costs the adaptation of a lost colonist from 336',()=
 
 test('a schema 335 save migrates to 336 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,335)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,335)))).toBe(asMigratedCurrent(current));
 });

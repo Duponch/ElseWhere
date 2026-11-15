@@ -1,4 +1,5 @@
 import {validGeographicCreationSize262,validGeographicCreationSeason262,type GeographicCreationSize262,type GeographicCreationSeason262} from './geographic-creation-options-262.ts';
+import {giveCrashlandedStartThoughts343} from './crashlanded-start-343.ts';
 import {initializeGeographicRenewal262} from './geographic-renewal-state-262.ts';
 import {crashlandedProfile} from './game-profile.ts';
 import {constructAncientCasketGroupIds256,type AncientCasketGroupIds256} from './ancient-casket-group-ids-256.ts';
@@ -161,6 +162,8 @@ export function* createGeographicNewGame256(input:GeographicNewGameInput256,bind
  adoptWind(w);ensureFireState(w);finalizeInitialWorldRegistry(w);
  if(!w.worldMaps)throw Error('Actual new campaign registry missing');
  w.worldMaps.generationRuntime=finishMapGenerationRuntime256(runtimeBirth,working);w.worldMaps.nextLordId=lordIds.nextId;w.worldMaps.nextAncientCasketGroupId=casketGroupIds.nextId;
+ // Schema 343: CrashedTogether and NewColonyOptimism to the three originals in their pods.
+ if(w.startingArrival&&'pods'in w.startingArrival)giveCrashlandedStartThoughts343(w,w.startingArrival.pods.map(p=>p.pawn));
  requireOriginalStartingWorld256(w,request);
  if(w.planet!==planet||w.worldFactions!==draft.factions||w.tick!==0||w.nextId<roster.nextId||w.worldPawns!==roster.worldPawns||w.planet.geography!==geography.definition)throw Error('Actual new-game owner/clock frontier changed');
  const errors=validateWorld(w);if(errors.length)throw Error('Actual Base_Player candidate refused: '+errors.join(' '));

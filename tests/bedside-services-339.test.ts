@@ -1,7 +1,7 @@
 import {expect,test} from 'vitest';
 import {medicalCamp,controlledInjury} from './scenarios/health.ts';
 import {fixtureBuilding} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import {bedSlotCell} from '../src/sim/bed-slots.ts';
 import {bedServicePlace339} from '../src/sim/care-access.ts';
 import {surgeryProposal,surgeryReason} from '../src/sim/surgery.ts';
@@ -105,5 +105,5 @@ test('a warden talks with a prisoner lying between two beds from beyond the foot
 
 test('a schema 338 save migrates to 339 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,338)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,338)))).toBe(asMigratedCurrent(current));
 });

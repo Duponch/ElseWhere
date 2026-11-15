@@ -8,7 +8,7 @@ import {WorldGenerationRandom} from '../src/sim/world-generation-random.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import type {SettlementTile} from '../src/sim/world-settlement-placement.ts';
 import type {World} from '../src/sim/types.ts';
 
@@ -57,5 +57,5 @@ test('without a friendly faction no traveler arrives at its opportunity',()=>{
 
 test('a schema 334 save migrates to 335 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,334)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,334)))).toBe(asMigratedCurrent(current));
 });

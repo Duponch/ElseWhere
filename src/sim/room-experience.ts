@@ -6,13 +6,17 @@ import {coupleBed285} from './couple-bed-285.ts';
 import { captureRoomQuality } from './room-quality.ts';
 import { IMPRESSION_LABELS,ROOM_MEMORY_DURATION,ROOM_MEMORY_OFFSETS } from './room-impressiveness.ts';
 import { healthRandom } from './health.ts';
+import {FIRST_DAYS_MEMORIES_343,SLEEP_MEMORY_KINDS_343,isFirstDays343,isFirstDaysMemory343,setFirstDaysMemory343,type FirstDaysMemoryKind343} from './first-days-memories-343.ts';
+import {sleepMemoryKinds343} from './first-days-sleep-343.ts';
 import type { MoodThought } from './mood.ts';
 import type { Pawn,World } from './types.ts';
 
-export type RoomMemoryKind=keyof typeof ROOM_MEMORY_OFFSETS;
+/** Schema 343 adds the sleep, soaking-wet and darkness entries, each with its
+ * own Core duration (first-days-memories-343). */
+export type RoomMemoryKind=keyof typeof ROOM_MEMORY_OFFSETS|FirstDaysMemoryKind343;
 export interface RoomMemory {kind:RoomMemoryKind;stage:number;expiresAt:number;suspendedTicks?:number}
 export interface RoomRest {nextAt:number;applied:boolean}
-const labels:Record<RoomMemoryKind,string>={bedroom:'Chambre',barracks:'Dortoir',dining:'Salle du dernier repas',recreation:'Salle du dernier loisir'};
+const labels:Record<keyof typeof ROOM_MEMORY_OFFSETS,string>={bedroom:'Chambre',barracks:'Dortoir',dining:'Salle du dernier repas',recreation:'Salle du dernier loisir'};
 const admitted=(w:World,p:Pawn)=>w.schemaVersion>=103&&(p.faction??'colony')==='colony'&&!p.visitor&&!p.prisoner&&p.state!=='dead';
 type RoomRestTask285=Extract<NonNullable<Pawn['need']>,{kind:'sleep'}>|NonNullable<Pawn['coupleTask285']>;
 /** The acquired room clock moves with actual continuous lying-down use.
@@ -22,7 +26,7 @@ function roomRestTask285(w:World,p:Pawn):RoomRestTask285|undefined {
  return isSchema285OrLater(w.schemaVersion)&&p.coupleTask285&&coupleBed285(w,p)?p.coupleTask285:undefined;
 }
 
-function remember(w:World,p:Pawn,kind:RoomMemoryKind,stage:number):void {
+function remember(w:World,p:Pawn,kind:keyof typeof ROOM_MEMORY_OFFSETS,stage:number):void {
   if(ROOM_MEMORY_OFFSETS[kind][stage]==null)return;
   p.roomMemories=[...(p.roomMemories??[]).filter(m=>m.kind!==kind),{kind,stage,expiresAt:w.tick+ROOM_MEMORY_DURATION}];
 }
@@ -33,9 +37,14 @@ export function rememberRoomUse(w:World,p:Pawn,kind:'dining'|'recreation'):void 
   const room=captureRoomQuality(w).room(p);if(room)remember(w,p,kind,room.stage);
 }
 function applyBedroomMemory(w:World,p:Pawn):void {
-  p.roomMemories=p.roomMemories?.filter(m=>m.kind!=='bedroom'&&m.kind!=='barracks');
+  const v343=isFirstDays343(w.schemaVersion);
+  p.roomMemories=p.roomMemories?.filter(m=>m.kind!=='bedroom'&&m.kind!=='barracks'&&!(v343&&(SLEEP_MEMORY_KINDS_343 as readonly string[]).includes(m.kind)));
   if(!p.roomMemories?.length)delete p.roomMemories;
-  const task=roomRestTask285(w,p);if(!task||task.bedId===null||task.bedId!==p.bedId)return;
+  const task=roomRestTask285(w,p);
+  // Schema 343: ApplyBedThoughts also gives cold, heat, outdoors and ground,
+  // whatever the bed (none, a sleeping spot, a bed owned by someone else).
+  if(v343&&task)for(const kind of sleepMemoryKinds343(w,p,task.bedId===null?undefined:w.structures.find(s=>s.id===task.bedId&&isBedKind(s.kind))))setFirstDaysMemory343(p,kind,w.tick);
+  if(!task||task.bedId===null||task.bedId!==p.bedId)return;
   const bed=w.structures.find(s=>s.id===task.bedId&&isBedKind(s.kind));
   if(!bed||bed.medical||bed.prisoner)return;
   if(bed.kind==='double-bed'){
@@ -72,7 +81,10 @@ export function expireRoomMemoriesAt(p:Pawn,tick:number):void {
 export function roomMoodThoughts(w:World,p:Pawn):MoodThought[]{return roomMoodThoughtsAt(p,w.tick);}
 export function roomMoodThoughtsAt(p:Pawn,tick:number):MoodThought[]{
   tick=memoryReadTick271(p,tick);
-  return (p.roomMemories??[]).filter(m=>memoryExpiry271(m,m.expiresAt)>tick).map(m=>({id:`room-${m.kind}`,label:`${labels[m.kind]} · ${IMPRESSION_LABELS[m.stage]}`,offset:ROOM_MEMORY_OFFSETS[m.kind][m.stage]!,kind:'memory',expiresAt:memoryExpiry271(m,m.expiresAt),description:'Souvenir d’un usage réel de cette pièce, durant un jour. La pièce actuelle ne remplace pas le lieu de ce souvenir.'}));
+  // The darkness entry is a light sample, read by mood as a situation.
+  return (p.roomMemories??[]).filter(m=>memoryExpiry271(m,m.expiresAt)>tick&&m.kind!=='darkness').map(m=>isFirstDaysMemory343(m.kind)
+    ?{id:m.kind,label:FIRST_DAYS_MEMORIES_343[m.kind].label,offset:FIRST_DAYS_MEMORIES_343[m.kind].offset,kind:'memory' as const,expiresAt:memoryExpiry271(m,m.expiresAt),description:FIRST_DAYS_MEMORIES_343[m.kind].description}
+    :{id:`room-${m.kind}`,label:`${labels[m.kind]} · ${IMPRESSION_LABELS[m.stage]}`,offset:ROOM_MEMORY_OFFSETS[m.kind][m.stage]!,kind:'memory' as const,expiresAt:memoryExpiry271(m,m.expiresAt),description:'Souvenir d’un usage réel de cette pièce, durant un jour. La pièce actuelle ne remplace pas le lieu de ce souvenir.'});
 }
 
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -82,10 +94,13 @@ export function validRoomExperience(p:Record<string,unknown>,version:number,tick
   const memories=p.roomMemories,need=p.need,rest=record(need)?need.roomRest:undefined;
   if(version<103)return memories===undefined&&rest===undefined;
   if(memories!==undefined){
-    if(!Array.isArray(memories)||!memories.length||memories.length>3)return false;
+    const v343=isFirstDays343(version);
+    if(!Array.isArray(memories)||!memories.length||memories.length>(v343?3+6:3))return false;
     const kinds=new Set<string>();let bedroom=false;
     for(const m of memories){
-      if(!record(m)||Object.keys(m).some(k=>!['kind','stage','expiresAt','suspendedTicks'].includes(k))||typeof m.kind!=='string'||!Object.hasOwn(ROOM_MEMORY_OFFSETS,m.kind)||!integer(m.stage,0,9)||!validSuspendedMemory271(m,version,tick,Number(m.expiresAt)-ROOM_MEMORY_DURATION)||!integer(memoryExpiry271(m,Number(m.expiresAt)),(civilTick===tick?tick:Math.max(tick,Number(m.expiresAt)-ROOM_MEMORY_DURATION))+1,(civilTick===tick?tick:Math.max(tick,Number(m.expiresAt)-ROOM_MEMORY_DURATION))+ROOM_MEMORY_DURATION)||civilTick!==tick&&!integer(Number(m.expiresAt)-ROOM_MEMORY_DURATION,0,civilTick)||ROOM_MEMORY_OFFSETS[m.kind as RoomMemoryKind][Number(m.stage)]==null||kinds.has(m.kind))return false;
+      if(!record(m)||typeof m.kind!=='string')return false;
+      const first=v343&&isFirstDaysMemory343(m.kind),duration=first?FIRST_DAYS_MEMORIES_343[m.kind as FirstDaysMemoryKind343].duration:ROOM_MEMORY_DURATION;
+      if(Object.keys(m).some(k=>!['kind','stage','expiresAt','suspendedTicks'].includes(k))||!first&&!Object.hasOwn(ROOM_MEMORY_OFFSETS,m.kind)||!(first?m.stage===0:integer(m.stage,0,9))||!validSuspendedMemory271(m,version,tick,Number(m.expiresAt)-duration)||!integer(memoryExpiry271(m,Number(m.expiresAt)),(civilTick===tick?tick:Math.max(tick,Number(m.expiresAt)-duration))+1,(civilTick===tick?tick:Math.max(tick,Number(m.expiresAt)-duration))+duration)||civilTick!==tick&&!integer(Number(m.expiresAt)-duration,0,civilTick)||!first&&ROOM_MEMORY_OFFSETS[m.kind as keyof typeof ROOM_MEMORY_OFFSETS][Number(m.stage)]==null||kinds.has(m.kind))return false;
       kinds.add(m.kind);if(m.kind==='bedroom'||m.kind==='barracks'){if(bedroom)return false;bedroom=true;}
     }
   }

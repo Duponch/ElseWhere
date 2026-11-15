@@ -4,7 +4,7 @@ import {damageAnimalWithBullet} from '../src/sim/wildlife-health.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
 import {animalCombatCamp} from './scenarios/animal-combat.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 
 test('tortoises and cave insects carry their Core natural armor; ordinary animals none',()=>{
   expect(naturalArmor321({species:'tortoise'} as never)).toEqual({sharp:.5,blunt:.35});
@@ -34,5 +34,5 @@ test('an ordinary animal keeps its exact random draws when shot',()=>{
 
 test('a schema 320 save migrates to 321 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,320)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,320)))).toBe(asMigratedCurrent(current));
 });

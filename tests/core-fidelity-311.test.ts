@@ -5,7 +5,7 @@ import {structureBeauty} from '../src/sim/room-beauty.ts';
 import {FURNITURE_DEFINITIONS,QUALITY_BEAUTY,furnitureBeauty,roundCoreBeauty311} from '../src/sim/furniture-stats.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import {SCHEMA_VERSION,type Structure} from '../src/sim/types.ts';
 
 const building=(kind:string,material='wood',extra:Partial<Structure>={})=>({id:9,kind,x:3,z:3,orientation:0,footprint:'standard',material,...extra}) as unknown as Structure;
@@ -60,5 +60,5 @@ test('Beauty follows Core: power buildings are ugly, the hospital bed and plain 
 test('a schema 310 save migrates to 311 unchanged when nothing is damaged',()=>{
   const w=createScenarioWorld(42,32,'crashlanded'),current=serializeWorld(w);
   expect(current.startsWith(`{"schemaVersion":${SCHEMA_VERSION},`)).toBe(true);
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,310)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,310)))).toBe(asMigratedCurrent(current));
 });

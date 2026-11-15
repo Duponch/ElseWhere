@@ -6,7 +6,7 @@ import {applyMeleeStun,meleeStunCore318} from '../src/sim/stun.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
 import {animalCombatCamp} from './scenarios/animal-combat.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import type {World} from '../src/sim/types.ts';
 
 const setVersion=(w:World,v:number)=>{(w as {schemaVersion:number}).schemaVersion=v;};
@@ -54,5 +54,5 @@ test('a blunt stun lasts 120 Core ticks (2 s), as Core Blunt bluntStunDuration',
 
 test('a schema 317 save migrates to 318 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,317)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,317)))).toBe(asMigratedCurrent(current));
 });

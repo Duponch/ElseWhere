@@ -5,7 +5,7 @@ import {HUMAN_YEAR_TICKS} from '../src/sim/human-age.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
 import {equipmentCamp} from './scenarios/equipment.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import type {World} from '../src/sim/types.ts';
 
 const setVersion=(w:World,v:number)=>{(w as {schemaVersion:number}).schemaVersion=v;};
@@ -31,5 +31,5 @@ test('pawns more than ten years apart fight less, down to a quarter fifty years 
 
 test('a schema 322 save migrates to 323 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,322)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,322)))).toBe(asMigratedCurrent(current));
 });

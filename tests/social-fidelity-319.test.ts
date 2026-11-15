@@ -9,7 +9,7 @@ import {MALNUTRITION_UNIT} from '../src/sim/malnutrition.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {recruitmentUiFixture} from './scenarios/prison-camp.ts';
 import {equipmentCamp} from './scenarios/equipment.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import {TICKS_PER_DAY,type World} from '../src/sim/types.ts';
 
 const setVersion=(w:World,v:number)=>{(w as {schemaVersion:number}).schemaVersion=v;};
@@ -59,5 +59,5 @@ test('a pawn incapable of violence is never drawn into a fight; malnutrition mak
 
 test('a schema 318 save migrates to 319 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,318)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,318)))).toBe(asMigratedCurrent(current));
 });

@@ -560,8 +560,8 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     if (page === 'scenario') return { id: '', title: 'Scénario', rows: [
       { id: 'scenario', label: 'Atterrissage forcé', detail: 'Trois survivants arrivent dans un territoire inconnu. Adaptation partielle.', controls: [control('crashlanded', 'Choisi', () => {}, false, true)] },
       { id: 'supplies', label: 'Vos provisions', value: 'Bois 300 · Acier 450 · Composants 30 · Rations 50 · Médicaments 30 · Argent 800' },
-      { id: 'equipment', label: 'Équipement', value: 'Fusil à verrou · Revolver · Couteau en plastacier · Gilet pare-balles · Chemises en tissu' },
-      { id: 'knowledge', label: 'Trois personnes parmi huit candidats', detail: 'Taille de pierre, Mobilier complexe, Vêtements complexes et Climatisation déjà connus. Casque, pantalon de protection, animal domestique et provisions dispersées restent absents.' },
+      { id: 'equipment', label: 'Équipement', value: 'Fusil à verrou · Revolver · Couteau en plastacier · Gilet, pantalon et casque pare-balles · Chemises en tissu' },
+      { id: 'knowledge', label: 'Trois personnes parmi huit candidats', detail: 'Taille de pierre, Mobilier complexe, Vêtements complexes, Climatisation et Pâte nutritive déjà connus. Un animal de compagnie vous accompagne, lié à un colon s’il peut apprendre l’obéissance. Le contenu des capsules et les provisions dispersées arrivent interdits : autorisez-les.' },
       { id: 'other-scenarios', label: 'Autres scénarios', controls: ['Tribu perdue', 'Le riche explorateur', 'Brutalité nue', 'Personnalisé', 'Steam Workshop'].map(label => control(label, label, () => {}, true)) },
     ], actions: navigation(control('scenario-next', 'Suivant', () => navigate('story'))) };
     if (page === 'story') return { id: '', title: 'Narrateur et aventure', rows: [

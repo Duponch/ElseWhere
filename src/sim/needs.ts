@@ -6,6 +6,7 @@ import { bedAssignmentReason,bedSlotCell,bedSlotClaimed,pawnBedSlot } from './be
 import { colonyExpectation } from './colony-economy.ts';
 import { depletedHumanHunger } from './human-need-rates.ts';
 import { advanceRoomRest } from './room-experience.ts';
+import {advanceSoakingWet343,isFirstDays343} from './first-days-343.ts';
 import { resetTactics } from './tactics-state.ts';
 import type { Reachability } from './pathfinding.ts';
 import { interruptWork,retryInterruptedCargo } from './interrupted-cargo.ts';
@@ -182,6 +183,7 @@ export function updateNeeds(world: World, pawn: Pawn,body?:import('./body-capaci
   advanceRoomRest(world,pawn);
   if(!pawn.prisoner)updateRecreation(pawn,body,(colonyExpectation(world,pawn)?.joyToleranceDropPerDay??.18)*100/TICKS_PER_DAY);
   if (pawn.needCooldown > 0) pawn.needCooldown--;
+  if(isFirstDays343(world.schemaVersion))advanceSoakingWet343(world,pawn);
   const wellbeingTicks=wellbeingLocalTicks(world,pawn);
   if(wellbeingTicks)updateWellbeing(world, pawn,body,readFurnitureSight,topology,readTemperature,wellbeingTicks);
   // Mood steps at the interval, but a memory still ends at its own tick: the

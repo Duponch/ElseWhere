@@ -7,7 +7,7 @@ import {colonistMoodOffset,crashlandedProfile} from '../src/sim/game-profile.ts'
 import {VERY_LOW_EXPECTATION313} from '../src/sim/expectations.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import type {World} from '../src/sim/types.ts';
 
 const ids=(w:World,p:World['pawns'][number])=>moodThoughts(w,p).map(t=>t.id);
@@ -52,5 +52,5 @@ test('a prisoner of the colony has the map expectations and the difficulty mood 
 
 test('a schema 312 save migrates to 313 by its number only',()=>{
   const w=createScenarioWorld(42,32,'crashlanded'),current=serializeWorld(w);
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,312)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,312)))).toBe(asMigratedCurrent(current));
 });

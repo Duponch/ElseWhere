@@ -1,5 +1,7 @@
 import {isTextileApparelItem308,isTextileMaterial308} from '../../src/sim/textile-apparel-308.ts';
 import {isGarmentItem312} from '../../src/sim/apparel-definitions.ts';
+import {deserializeWorld,serializeWorld} from '../../src/sim/serialization.ts';
+const FIRST_DAYS_KINDS_343=['slept-in-cold','slept-in-heat','slept-outside','slept-on-ground','soaking-wet','darkness'];
 
 /** A current save relabelled as an older schema must first drop the content
  * that the older schema could not hold; strict validation still refuses it.
@@ -7,7 +9,10 @@ import {isGarmentItem312} from '../../src/sim/apparel-definitions.ts';
  * 312: the T-shirts and jackets; schema 332: the trader caravan agenda of a
  * home visitor calendar (an arrived caravan group is kept, and refused);
  * schema 341: the recent-incident records of the Misc and World calendars
- * (a concurrent raid group is kept, and refused). */
+ * (a concurrent raid group is kept, and refused); schema 343: the
+ * CrashedTogether opinions, the NewColonyOptimism of a new game and the
+ * sleep, soaking-wet and darkness memories (an emptied social state that
+ * never interacted, and an emptied memory list, are removed). */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -24,9 +29,22 @@ function strip(value:unknown,version:number):void {
   }
   if(version<332&&o.profile==='cassandra-visitors-v1'&&Object.hasOwn(o,'caravan332'))delete o.caravan332;
   if(version<341&&(o.profile==='cassandra-misc-v1'||o.profile==='cassandra-world-v1')&&Object.hasOwn(o,'recent341'))delete o.recent341;
+  if(version<343){
+    if(Array.isArray(o.lostMemories))o.lostMemories=(o.lostMemories as {kind?:unknown}[]).filter(m=>m?.kind!=='new-colony-start343');
+    if(Array.isArray(o.roomMemories)){o.roomMemories=(o.roomMemories as {kind?:unknown}[]).filter(m=>!FIRST_DAYS_KINDS_343.includes(String(m?.kind)));if(!(o.roomMemories as unknown[]).length)delete o.roomMemories;}
+    const social=o.social as Record<string,unknown>|undefined;
+    if(social&&typeof social==='object'&&Array.isArray(social.memories)){
+      social.memories=(social.memories as {kind?:unknown}[]).filter(m=>m?.kind!=='crashed-together');
+      if(!(social.memories as unknown[]).length&&Object.keys(social).every(k=>k==='rng'||k==='memories'))delete o.social;
+    }
+  }
   for(const v of Object.values(o))if(v&&typeof v==='object')strip(v,version);
 }
+/** What any old save of `current` becomes once migrated: the content a later
+ * schema gives only at creation is absent (schema 343: the CrashedTogether
+ * opinions and NewColonyOptimism of a new Crashlanded colony). */
+export const asMigratedCurrent=(current:string):string=>serializeWorld(deserializeWorld(asOldSchema(current,342)));
 /** Same as asOldSchema on a parsed save or an in-memory world (mutated). */
 export function stripFutureContent(value:unknown,version:number):void {
-  if(version<341)strip(value,version);
+  if(version<343)strip(value,version);
 }

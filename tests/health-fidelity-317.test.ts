@@ -5,7 +5,7 @@ import {createMedicalRecord} from '../src/sim/injury-state.ts';
 import {validateMedicalRecord} from '../src/sim/injury-validation.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import type {MedicalRecord} from '../src/sim/injury-types.ts';
 
 const valid=(r:MedicalRecord,version:number)=>validateMedicalRecord(r,true,true,true,true,false,false,true,true,true,true,true,version,true);
@@ -48,5 +48,5 @@ test('tending an animal gives 175 medicine XP instead of 500',()=>{
 
 test('a schema 316 save migrates to 317 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,316)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,316)))).toBe(asMigratedCurrent(current));
 });

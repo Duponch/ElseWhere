@@ -1,6 +1,6 @@
 import {expect,test} from 'vitest';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import {crashlandedProfile} from '../src/sim/game-profile.ts';
 import {adoptColonyEconomy} from '../src/sim/colony-economy.ts';
 import {adoptFluIncidents,FLU_CHECK_INTERVAL,FLU_FIRST_CHECK} from '../src/sim/flu-incidents.ts';
@@ -103,5 +103,5 @@ test('a saved prisoner keeps its resistance within its recorded kind',()=>{
 
 test('a schema 333 save migrates to 334 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,333)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,333)))).toBe(asMigratedCurrent(current));
 });

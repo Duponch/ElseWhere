@@ -9,7 +9,7 @@ import {createPrisonerState} from '../src/sim/prisoner-state.ts';
 import {createMedicalRecord} from '../src/sim/injury-state.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import type {Pawn,World} from '../src/sim/types.ts';
 
 const setVersion=(w:World,v:number)=>{(w as {schemaVersion:number}).schemaVersion=v;};
@@ -90,5 +90,5 @@ test('a social fight stops with the Core chance of 30 in 1200 per check',()=>{
 
 test('a schema 324 save migrates to 325 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,324)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,324)))).toBe(asMigratedCurrent(current));
 });

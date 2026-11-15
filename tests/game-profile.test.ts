@@ -12,7 +12,7 @@ import { advanceRaids } from '../src/sim/raids';
 import { validateRaids } from '../src/sim/raid-save';
 import { CASSANDRA_ACTIVE_TICKS,CASSANDRA_CYCLE_START,CASSANDRA_CYCLE_TICKS,CASSANDRA_MIN_SPACING,INTRO_RAID_TICK,consumeCassandraOpportunity,enableCassandraRaids,validCassandraAgenda } from '../src/sim/cassandra-raids';
 import { atMapEdge } from '../src/sim/raid-space';
-import { COMPLEX_FURNITURE_RESEARCH_COST,STONECUTTING_RESEARCH_COST } from '../src/sim/research';
+import { COMPLEX_FURNITURE_RESEARCH_COST,NUTRIENT_PASTE_RESEARCH_COST,STONECUTTING_RESEARCH_COST } from '../src/sim/research';
 import { deconstructionCamp } from './scenarios/deconstruction';
 import { adoptFluIncidents } from '../src/sim/flu-incidents';
 import { adultAgeTicks } from '../src/sim/animal-life';
@@ -29,7 +29,7 @@ test('explicit Crashlanded adaptation has physical supplies, mature wild food an
     const world=createScenarioWorld(seed,250,'crashlanded'),legacy=createScenarioWorld(seed,250,'survivors');
     expect(world.tick).toBe(0);expect(world.scenario!.id).toBe('crashlanded');expect(world.gameProfile).toEqual(crashlandedProfile());
     expect(stock(world)).toEqual({...stock(legacy),silver:800,'bolt-action-rifle':1,'plasteel-knife':1});
-    expect(world.research).toEqual({...legacy.research,stonecutting:{points:STONECUTTING_RESEARCH_COST,completedAt:0},complexFurniture:{points:COMPLEX_FURNITURE_RESEARCH_COST,completedAt:0}});
+    expect(world.research).toEqual({...legacy.research,stonecutting:{points:STONECUTTING_RESEARCH_COST,completedAt:0},complexFurniture:{points:COMPLEX_FURNITURE_RESEARCH_COST,completedAt:0},nutrientPaste:{points:NUTRIENT_PASTE_RESEARCH_COST,completedAt:0}});
     expect(world.site?.hilliness).toBe('small-hills');expect(legacy.site).toBeUndefined();
     expect(world.pawns).toHaveLength(3);expect(world.arrivals).toBeUndefined();expect(world.heatwaves).toBeUndefined();
     expect(world.raids!.nextCheck).toBe(INTRO_RAID_TICK);expect(legacy.arrivals).toBeDefined();expect(legacy.heatwaves).toBeDefined();
@@ -46,7 +46,8 @@ test('explicit Crashlanded adaptation has physical supplies, mature wild food an
 test('adventure difficulty changes colonist mood target and delayed infection acquisition, not exposure rolls, enemies or physiology',()=>{
   const legacy=createScenarioWorld(42,32,'survivors'),world=createScenarioWorld(42,32,'crashlanded');
   const p=world.pawns[0]!,old=legacy.pawns[0]!;
-  expect(moodTarget(moodThoughts(world,p))-moodTarget(moodThoughts(legacy,old))).toBe(5);
+  // Schema 343: the Crashlanded colony also starts with NewColonyOptimism (+10).
+  expect(moodTarget(moodThoughts(world,p).filter(t=>t.id!=='lost-new-colony-null'))-moodTarget(moodThoughts(legacy,old))).toBe(5);
   const enemy={...p,faction:'outlaws' as const};
   expect(moodThoughts(world,enemy).some(t=>t.id==='difficulty-mood')).toBe(false);
   expect(playerInfectionFactor(world,enemy)).toBe(1);

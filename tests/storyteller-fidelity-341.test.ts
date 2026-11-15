@@ -1,6 +1,6 @@
 import {expect,test} from 'vitest';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import {crashlandedProfile} from '../src/sim/game-profile.ts';
 import {adoptColonyEconomy} from '../src/sim/colony-economy.ts';
 import {adoptFluIncidents,FLU_CHECK_INTERVAL,FLU_FIRST_CHECK} from '../src/sim/flu-incidents.ts';
@@ -288,7 +288,7 @@ test('the records are strict in saves and absent before 341',()=>{
 
 test('a schema 340 save migrates to 341 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,340)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,340)))).toBe(asMigratedCurrent(current));
 });
 
 test('pods of several raids are drawn together, each on its own clock',async()=>{

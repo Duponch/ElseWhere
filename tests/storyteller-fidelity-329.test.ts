@@ -10,7 +10,7 @@ import {domesticColony} from './scenarios/domestic-colony.ts';
 import {ANIMAL_SPECIES} from '../src/sim/animal-species.ts';
 import {animalCore256,isAnimalSpecies256} from '../src/sim/animal-core-v256.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import type {World} from '../src/sim/types.ts';
 
 const setVersion=(w:World,v:number)=>{(w as {schemaVersion:number}).schemaVersion=v;};
@@ -73,5 +73,5 @@ test('colony animals that can learn attack add to the threat points',()=>{
 
 test('a schema 328 save migrates to 329 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,328)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,328)))).toBe(asMigratedCurrent(current));
 });

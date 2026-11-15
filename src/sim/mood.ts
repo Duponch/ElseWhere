@@ -8,6 +8,7 @@ import {cryptosleepSick256} from './cryptosleep-sickness-256.ts';
 import {lostThoughts} from './world-map-lost.ts';
 import {isSchema282OrLater} from './schema-compatibility-257.ts';
 import {thermalMoodThoughts460} from './thermal-mood-v460.ts';
+import {bondedAnimalThoughts343,darknessThought343,isFirstDays343} from './first-days-343.ts';
 import {toxicFalloutActive294} from './toxic-fallout-state-294.ts';
 import {carrierOf} from './rescue-state.ts';
 import {isRoofed} from './roof-rules.ts';
@@ -95,6 +96,8 @@ export interface PersonalMoodContext {
   toxicFallout294?:MoodThought;
   /** Schema 305: an aurora seen from an uncovered position. */
   aurora305?:MoodThought;
+  /** Schema 343: bonded animal master thoughts, read from the pawn's map. */
+  bondedAnimals343?:readonly MoodThought[];
 }
 /** Held position differs deliberately from the spawned-only dose pass. Rescue,
  * captive and casket-service carriers resolve through their existing owner.
@@ -119,7 +122,8 @@ export function moodThoughts(world:World,pawn:Pawn,topology?:RelationshipTopolog
     items:wornPiles(world,pawn.id),expectation:colonyExpectation(world,pawn),difficultyMood:colonistMoodOffset(world,pawn),schemaVersion:Number(world.schemaVersion),
     ...(isSchema282OrLater(world.schemaVersion)&&pawn.cryptosleepHeldAt271===undefined&&pawn.shipCryptosleepHeldAt277===undefined
       ?{ambientTemperature460:readTemperature?readTemperature():temperatureAt(world,pawn)}:{}),
-    environment:{comfort:pawn.comfort,beauty:pawn.beauty},housing:relationshipHousingThought(world,pawn,topology),deathSituation:colonistUnburiedThought(world,pawn),toxicFallout294:localToxicFalloutThought294(world,pawn),aurora305:localAuroraThought305(world,pawn)});
+    environment:{comfort:pawn.comfort,beauty:pawn.beauty},housing:relationshipHousingThought(world,pawn,topology),deathSituation:colonistUnburiedThought(world,pawn),toxicFallout294:localToxicFalloutThought294(world,pawn),aurora305:localAuroraThought305(world,pawn),
+    ...isFirstDays343(world.schemaVersion)?{bondedAnimals343:bondedAnimalThoughts343(world,pawn)}:{}});
 }
 export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly MoodThought[] {
   if((pawn.cryptosleepHeldAt271!==undefined||pawn.shipCryptosleepHeldAt277!==undefined))c={...c,tick:memoryReadTick271(pawn,c.tick)};
@@ -133,6 +137,9 @@ export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly M
   if(c.deathSituation)thoughts.push(c.deathSituation);
   if(c.toxicFallout294)thoughts.push(c.toxicFallout294);
   if(c.aurora305)thoughts.push(c.aurora305);
+  if(c.bondedAnimals343)thoughts.push(...c.bondedAnimals343);
+  // EnvironmentDark is not valid while despawned (a caravan).
+  if(isFirstDays343(c.schemaVersion)&&!c.despawned313){const dark=darknessThought343(pawn,c.tick);if(dark)thoughts.push(dark);}
   if(readingActive295(pawn)&&pawn.skills.intellectual?.passion)thoughts.push(readingPassion295[pawn.skills.intellectual.passion-1]!);
   if(pawn.familyBereavement)thoughts.push(...familyBereavementThoughtsAt(pawn,c.tick,c.relationPeople??c.people));
   if(pawn.romanceMemories)thoughts.push(...romanceMoodThoughtsAt(pawn,c.tick,c.relationPeople??c.people));

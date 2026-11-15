@@ -8,7 +8,7 @@ import {autoTendWorldPawn256,worldAutoTendQuality324} from '../src/sim/world-paw
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
 import {equipmentCamp} from './scenarios/equipment.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import type {World} from '../src/sim/types.ts';
 
 const hare=()=>({...createMedicalRecord(0),body:'hare' as const});
@@ -60,5 +60,5 @@ test('world pawns get the random band of a tend without medicine',()=>{
 
 test('a schema 323 save migrates to 324 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,323)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,323)))).toBe(asMigratedCurrent(current));
 });

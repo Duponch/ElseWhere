@@ -3,7 +3,7 @@ import {createRaidGroup} from '../src/sim/raid-spawn.ts';
 import {stepWorld} from '../src/sim/engine.ts';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import {SCHEMA_VERSION,type World} from '../src/sim/types.ts';
 
 const setVersion=(w:World,v:number)=>{(w as {schemaVersion:number}).schemaVersion=v;};
@@ -73,5 +73,5 @@ test('a staging point outside the Core window is refused in a save',()=>{
 
 test('a schema 329 save migrates to 330 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,329)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,329)))).toBe(asMigratedCurrent(current));
 });

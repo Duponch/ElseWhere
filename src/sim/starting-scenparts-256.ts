@@ -24,6 +24,7 @@ import {adoptColonyEconomy} from './colony-economy.ts';
 import {AIR_CONDITIONING_COST,CLOTHING_RESEARCH_COST,COMPLEX_FURNITURE_RESEARCH_COST,STONECUTTING_RESEARCH_COST} from './research.ts';
 import {isColonist} from './affiliation.ts';
 import type {WorldGenerationRandom} from './world-generation-random.ts';
+import {grantClassicStartResearch343} from './crashlanded-start-343.ts';
 import type {Cell,World} from './types.ts';
 export const STARTING_SCENPARTS_SEED_PART_256=1561683158;
 /** Exact delivered order, intentionally distinct from a complete Core scenario. */
@@ -132,6 +133,7 @@ export function applyStartingOriginalScenParts256(world:World,input:{start850:nu
 export function adoptDeliveredStartingSystems256(world:World,landing:Cell):void {
  if(!isSchema256Or257(world.schemaVersion)||world.tick!==0||world.site?.revision!==3||world.planet?.revision!==3||!world.startingArrival||Object.hasOwn(world,'gameProfile')&&!validGameProfile(world.gameProfile,256,{id:'crashlanded'})||['scenario','research','raids','visitors','fluIncidents','miscIncidents','economy'].some(k=>Object.hasOwn(world,k)))throw Error('Starting systems already owned');
  world.research={project:null,points:CLOTHING_RESEARCH_COST,completedAt:0,airConditioning:{points:AIR_CONDITIONING_COST,completedAt:0},stonecutting:{points:STONECUTTING_RESEARCH_COST,completedAt:0},complexFurniture:{points:COMPLEX_FURNITURE_RESEARCH_COST,completedAt:0}};
+ grantClassicStartResearch343(world);
  world.gameProfile??=crashlandedProfile();world.scenario={id:'crashlanded',revision:ARRIVING_CRASHLANDED_REVISION,landing:{...landing}};
  enableCassandraRaids(world);adoptFluIncidents(world);adoptMiscIncidents(world);enableVisitors(world,true);adoptColonyEconomy(world);
 }

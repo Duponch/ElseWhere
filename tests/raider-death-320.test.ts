@@ -3,7 +3,7 @@ import {adjustedPopulation320,curve320,deathOnDownedChance320,deathOnDownedEligi
 import {damageUnarmoredPawnWithBullet} from '../src/sim/bullet-damage.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import {firingCamp} from './scenarios/shooting.ts';
 import type {World} from '../src/sim/types.ts';
 
@@ -53,5 +53,5 @@ test('before schema 320 the adaptation field is refused and no raider dies when 
 
 test('a schema 319 save migrates to 320 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,319)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,319)))).toBe(asMigratedCurrent(current));
 });

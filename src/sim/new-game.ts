@@ -39,6 +39,7 @@ import { replaceRelationshipLinks } from './relationship-runtime.ts';
 import { crashlandedHumanAge } from './human-age.ts';
 import { initializeCampTraits } from './traits.ts';
 import { adoptEnvironment } from './environment-step.ts';
+import {giveCrashlandedStartThoughts343,grantClassicStartResearch343} from './crashlanded-start-343.ts';
 import type { Cell,World } from './types.ts';
 import { enableBiomeWildlife,enableWildlife } from './wildlife.ts';
 
@@ -128,7 +129,7 @@ export function createScenarioWorld(seed:number,size:number,id:ScenarioId=DEFAUL
   if(id==='sentry')setupEncounter(world);
   else {
     initializeCampTraits(world);
-    if(id==='crashlanded'){world.gameProfile=crashlandedProfile();world.research!.stonecutting={points:STONECUTTING_RESEARCH_COST,completedAt:0};world.research!.complexFurniture={points:COMPLEX_FURNITURE_RESEARCH_COST,completedAt:0};enableCassandraRaids(world);adoptFluIncidents(world);adoptMiscIncidents(world);}
+    if(id==='crashlanded'){world.gameProfile=crashlandedProfile();world.research!.stonecutting={points:STONECUTTING_RESEARCH_COST,completedAt:0};world.research!.complexFurniture={points:COMPLEX_FURNITURE_RESEARCH_COST,completedAt:0};grantClassicStartResearch343(world);enableCassandraRaids(world);adoptFluIncidents(world);adoptMiscIncidents(world);}
     else {enableArrivals(world);enableRaids(world);enableHeatwaves(world);}
     if(site?.revision===2)enableBiomeWildlife(world,site.biome);else if(natural)enableWildlife(world,undefined,'natural');else enableWildlife(world);
   }
@@ -156,7 +157,11 @@ export function createScenarioWorld(seed:number,size:number,id:ScenarioId=DEFAUL
     });
     if(links.length&&!replaceRelationshipLinks(world,links))throw new Error('Les relations initiales contredisent les colons choisis.');
   }else initializeCampRelationships(world);
+  const startingColonists=id==='crashlanded'&&start?start.pawnIds.map(pawnId=>world.pawns.find(p=>p.id===pawnId)!):[];
   if(selectedSite&&start)prepareStartingArrival(world,start.pawnIds,start.transportedPileIds);
   if(surface==='snow-phased-v1'||site?.biome==='tundra')initializeSnowSurface(world);
-  finalizeInitialWorldRegistry(world);return world;
+  finalizeInitialWorldRegistry(world);
+  // Schema 343: CrashedTogether and NewColonyOptimism, once, at creation.
+  if(startingColonists.length)giveCrashlandedStartThoughts343(world,startingColonists);
+  return world;
 }

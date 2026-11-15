@@ -8,7 +8,7 @@ import {tameWildnessFactor315,trainWildnessFactor315,tameWildnessFactor256} from
 import {hareSecondBabyChance315} from '../src/sim/animal-life.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import type {Resource,World} from '../src/sim/types.ts';
 import type {WildAnimal} from '../src/sim/wildlife-state.ts';
 
@@ -86,5 +86,5 @@ test('a hare gives birth to two babies three times out of four',()=>{
 
 test('a schema 314 save migrates to 315 by its number only',()=>{
   const current=serializeWorld(world());
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,314)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,314)))).toBe(asMigratedCurrent(current));
 });

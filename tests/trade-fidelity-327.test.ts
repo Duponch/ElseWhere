@@ -5,7 +5,7 @@ import {pileMarketValue,tradeRefusal} from '../src/sim/trade-prices.ts';
 import {colonyWealth} from '../src/sim/colony-wealth.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
 import {deserializeWorld,serializeWorld} from '../src/sim/serialization.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedCurrent,asOldSchema} from './scenarios/old-schema.ts';
 import type {MaterialPile,World} from '../src/sim/types.ts';
 
 const setVersion=(w:World,v:number)=>{(w as {schemaVersion:number}).schemaVersion=v;};
@@ -51,5 +51,5 @@ test('colony wealth counts only the colony buildings and nothing under the fog',
 
 test('a schema 326 save migrates to 327 by its number only',()=>{
   const current=serializeWorld(createScenarioWorld(42,32,'crashlanded'));
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,326)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,326)))).toBe(asMigratedCurrent(current));
 });
