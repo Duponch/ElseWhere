@@ -47,6 +47,16 @@ export function notifyColonyLoss(world:World,pawn:Pawn,kind:'downed'|'died'):voi
   if(previous){if(kind==='died'){previous.kind=kind;previous.population=population;}return;}
   pending.push({pawnId:pawn.id,kind,population});state.pendingLosses=pending;
 }
+/** Schema 336 (Core StoryWatcher_Adaptation, AdaptationEvent.Kidnapped): a
+ * free colonist carried off the map costs the adaptation of a lost colonist,
+ * by the population after the loss, at once (the colonist leaves the map, so
+ * nothing is queued). A violent fall queued this tick for the same colonist
+ * is dropped, as Core resolves the loss instead of the fall. */
+export function notifyColonistKidnapped336(world:World,pawn:Pawn):void {
+  const state=world.economy;if(!state||world.schemaVersion<336||!freeColonist(pawn))return;
+  if(state.pendingLosses){state.pendingLosses=state.pendingLosses.filter(loss=>loss.pawnId!==pawn.id);if(!state.pendingLosses.length)delete state.pendingLosses;}
+  state.adaptationDays=loseThreatAdaptationForColonistLoss(state.adaptationDays,world.pawns.filter(freeColonist).length-1);
+}
 /** Also flushed before advancing the next tick, so a paused damage command
  * has identical continuation before and after saving. */
 export function flushColonyLosses(world:World):void {

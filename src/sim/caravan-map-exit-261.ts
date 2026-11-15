@@ -1,3 +1,4 @@
+import {notifyColonistKidnapped336} from './colony-economy.ts';
 import {preparePartyRelease292} from './party-release-292.ts';
 import {medicalCivilTick271} from './suspended-human-clock-271.ts';
 import {prepareCoupleRelease285,type CoupleReleasePlan285} from './couple-release-285.ts';
@@ -91,6 +92,7 @@ export function prepareMapRaiderWorldExit261(w:World,carrier:Pawn,patient?:Pawn)
   if(active?.tempIncident261)for(const id of removedIds)if(active.members.includes(id)&&!active.lost.includes(id))active.lost.push(id);if(active?.tempIncident261)active.lost.sort((a,b)=>a-b);
   commitNativeWorldPawnOrder256(state,nativeBefore,staged.nativeOrder);root.rng=random.rng;
   const ids=new Set(originals.map(p=>p.id)),movedItems=new Set(prepared.flatMap(p=>p.items)),movedPacks=new Set(prepared.flatMap(p=>p.packed));
+  if(patient)notifyColonistKidnapped336(w,patient);
   w.pawns=w.pawns.filter(p=>!ids.has(p.id));w.piles=w.piles.filter(p=>!movedItems.has(p));w.packed=w.packed.filter(p=>!movedPacks.has(p));
   if(patient)notifyBillWorkerUnavailable283(w,patient.id);
   // Same local combat cancellation as the existing physical exitRaider;

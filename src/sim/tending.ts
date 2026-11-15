@@ -1,3 +1,4 @@
+import {bedInteractionCells336} from './care-access.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
 import { draftedTendingReason,draftedTendingPlaceValid } from './drafted-tending.ts';
 import { allowedAreaReason } from './allowed-area-state.ts';
@@ -54,10 +55,11 @@ export function tendingProposal(world:World,doctor:Pawn,patient:Pawn,reach:Reach
     }
     return;
   }
-  const best=bedsideAccess(world,doctor,patient,reach);
+  const best=bedsideAccess(world,doctor,patient,reach,undefined,true);
   return best?prepare({patientId:patient.id,spot:best.spot,phase:'approach',progress:0},best.path):undefined;
 }
 export function tendingPlaceValid(world:World,doctor:Pawn,patient:Pawn,task:TendTask):boolean {
+  if(patient!==doctor&&world.schemaVersion>=336){const cells=bedInteractionCells336(world,patient);if(cells)return canStandAt(world,task.spot)&&cells.some(c=>c.x===task.spot.x&&c.z===task.spot.z);}
   const distance=Math.abs(task.spot.x-patient.x)+Math.abs(task.spot.z-patient.z);
   return canStandAt(world,task.spot)&&(patient===doctor?(task.phase==='pickup'||distance<=(task.phase==='approach'?1:0)):distance===1);
 }

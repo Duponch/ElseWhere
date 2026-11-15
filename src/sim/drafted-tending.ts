@@ -1,3 +1,4 @@
+import {bedInteractionCells336} from './care-access.ts';
 import { isCarePatient,isColonist } from './affiliation.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
 import { medicalWorkRefusal } from './health-rules.ts';
@@ -58,6 +59,7 @@ export function draftedTendingReason(world:World,doctor:Pawn,patient:Pawn|undefi
   }
 }
 export function draftedTendingPlaceValid(world:World,_doctor:Pawn,patient:Pawn,task:TendTask):boolean {
+  if(world.schemaVersion>=336){const cells=bedInteractionCells336(world,patient);if(cells)return canStandAt(world,task.spot)&&cells.some(c=>c.x===task.spot.x&&c.z===task.spot.z);}
   return canStandAt(world,task.spot)&&Math.abs(task.spot.x-patient.x)+Math.abs(task.spot.z-patient.z)===1;
 }
 export function draftedTendingProposal(world:World,doctor:Pawn,patient:Pawn,reach:Reachability):{task:TendTask;path:Cell[]}|undefined {
@@ -69,7 +71,7 @@ export function draftedTendingProposal(world:World,doctor:Pawn,patient:Pawn,reac
   for(const actor of world.pawns)if(actor.id!==doctor.id){
     const cell=serviceCell(actor,world);if(cell)additionalReserved.add(cell.z*world.width+cell.x);
   }
-  const best=bedsideAccess(world,doctor,patient,reach,additionalReserved);
+  const best=bedsideAccess(world,doctor,patient,reach,additionalReserved,true);
   return best?{task:{drafted:true,patientId:patient.id,spot:best.spot,phase:'approach',progress:0},path:best.path}:undefined;
 }
 export function applyDraftedTending(world:World,command:DraftedTendingCommand):CommandResult {
