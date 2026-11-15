@@ -53,9 +53,28 @@ function validPenoxycyline337(value:unknown):boolean {
   };
   return visit(value);
 }
+/** Schema 340 autopistol and machine pistol: items, recipes, bullets in
+ * flight and stances (their workpiece is the shared unfinished gun). */
+function validBlowback340(value:unknown):boolean {
+  const gun=(v:unknown)=>v==='autopistol'||v==='machine-pistol',recipe=(v:unknown)=>v==='make-autopistol'||v==='make-machine-pistol';
+  const visit=(v:unknown):boolean=>{
+    if(Array.isArray(v))return v.every(visit);
+    if(!v||typeof v!=='object')return true;
+    for(const [key,child] of Object.entries(v)){
+      if((key==='item'||key==='weaponItem')&&gun(child)||key==='recipe'&&recipe(child))return false;
+      if(key==='allowedItems'&&Array.isArray(child)&&child.some(gun))return false;
+      if(['items','filters','bought','sold'].includes(key)&&child&&typeof child==='object'&&(Object.hasOwn(child,'autopistol')||Object.hasOwn(child,'machine-pistol')))return false;
+      if(!visit(child))return false;
+    }
+    return true;
+  };
+  return visit(value);
+}
 /** Schema 316 short bow: item, workpiece, recipe and its projectiles/stances. */
 const BOW_316=new Set<string>(['short-bow','unfinished-bow']);
 export function validTuqueCatalogueTransport(value:unknown,version:number):boolean {
+  if(version>=340)return true;
+  if(!validBlowback340(value))return false;
   if(version>=337)return true;
   if(!validPenoxycyline337(value))return false;
   if(version>=326)return true;
@@ -86,7 +105,7 @@ const TUQUE_DOMAINS=['piles','pawns','structures','jobs','packed','stockpiles','
   'group','groupLosses','commercialTrip','civilianPost','visitors','raids','trade','orbital',
   'prisonDepartures','arrivals','startingArrival','podRescues','scout','quests','destroyed','deconstructed'] as const;
 export function validTuqueCatalogueDomains(value:unknown,version:number):boolean {
-  if(version>=337||!value||typeof value!=='object'||Array.isArray(value))return true;
+  if(version>=340||!value||typeof value!=='object'||Array.isArray(value))return true;
   const world=value as Record<string,unknown>;
   return TUQUE_DOMAINS.every(key=>validTuqueCatalogueTransport(world[key],version));
 }

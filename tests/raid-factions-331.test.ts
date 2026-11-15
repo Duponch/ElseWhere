@@ -7,7 +7,7 @@ import {adoptColonyEconomy} from '../src/sim/colony-economy.ts';
 import {adoptFluIncidents,FLU_CHECK_INTERVAL,FLU_FIRST_CHECK} from '../src/sim/flu-incidents.ts';
 import {consumeCassandraOpportunity,enableCassandraRaids,INTRO_RAID_TICK} from '../src/sim/cassandra-raids.ts';
 import {advanceRaids} from '../src/sim/raids.ts';
-import {createRaidGroup} from '../src/sim/raid-spawn.ts';
+import {createRaidGroup,raidRoleWeapon} from '../src/sim/raid-spawn.ts';
 import {raidEntries} from '../src/sim/raid-space.ts';
 import {validComposition,validateRaids} from '../src/sim/raid-save.ts';
 import {mechFactionCommonality} from '../src/sim/mechanoid-raid-composition.ts';
@@ -136,7 +136,9 @@ test('a tribal or outlander raid arrives with its real gear, clothes and world f
     for(const [i,id] of group!.members.entries()){
       const p=w.pawns.find(q=>q.id===id)!,kind=RAID_KINDS_331[composition.roster[i] as RaidKind331];
       expect(p.faction).toBe('outlaws');expect(p.worldAffiliation259?.factionId).toBe(faction.id);
-      expect(w.piles.find(i=>i.owner.type==='equipment'&&i.owner.pawnId===id)!.item).toBe(kind.weapon);
+      // From schema 340 the Gun kinds draw their gun (blowback-340.ts); others keep theirs.
+      expect(w.piles.find(i=>i.owner.type==='equipment'&&i.owner.pawnId===id)!.item).toBe(raidRoleWeapon(composition.roster[i] as RaidKind331,{world:w,pawnId:id}));
+      if(family==='tribe')expect(raidRoleWeapon(composition.roster[i] as RaidKind331,{world:w,pawnId:id})).toBe(kind.weapon);
       expect(w.piles.find(i=>i.owner.type==='apparel'&&i.owner.pawnId===id)!.item).toBe(family==='tribe'?'cloth-tribalwear':'cloth-shirt');
     }
     expect(w.events.at(-1)!.message).toContain(faction.name);

@@ -60,5 +60,7 @@ test('a real produced shot retains structure origin and reuses an explicit explo
 
 test('recipe presentation uses steel, a fixed gun and its real prerequisite',()=>{
   expect(placementMaterial('mini-turret','wood')).toBe('steel');expect(buildingLabels['mini-turret']).toBe('Mini-tourelle automatique');
-  expect(researchProjects.find(p=>p.id==='gun-turrets')).toMatchObject({cost:500});expect(researchLinks).toContainEqual(['gunsmithing','gun-turrets']);
+  expect(researchProjects.find(p=>p.id==='gun-turrets')).toMatchObject({cost:500});
+  // Schema 340: Core BlowbackOperation sits between Gunsmithing and the turrets.
+  expect(researchLinks).toContainEqual(['blowback-operation','gun-turrets']);expect(researchLinks).toContainEqual(['gunsmithing','blowback-operation']);
 });

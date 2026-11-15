@@ -9,6 +9,7 @@ import { equippedWeapon,isRangedWeaponItem } from './equipment-rules.ts';
 import { shootingOrderAuthority } from './shooting-state.ts';
 import { validStunShape } from './melee-save.ts';
 import { rangedWeaponProfile } from './ranged-statistics.ts';
+import { burstGapStanceTicks340,burstNextShotDelay340,type RangedBurst340 } from './blowback-340.ts';
 import type { Cell,World } from './types.ts';
 
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -21,20 +22,34 @@ export function validShootingShape(value:unknown,version:number,tick:number,core
   if(value.order!==null&&(!record(value.order)||!keys(value.order,['targetId','weaponId','startedDowned',...(version>=60?['auto']:[]),...(version>=79?['hunt']:[])])||!integer(value.order.targetId,1)||!integer(value.order.weaponId,1)||typeof value.order.startedDowned!=='boolean'||!validAutomaticAttack(value.order.auto,version,tick)||value.order.hunt!==undefined&&(value.order.hunt!==true||value.order.auto!==undefined||value.order.startedDowned!==false)))return false;
   const s=value.stance;if(s===null)return value.order!==null;
   if(record(s)&&'lean' in s&&(!Object.hasOwn(s,'lean')||version<238||s.phase!=='aim'||!validLeanOffset(s.lean)))return false;
-  if(!record(s)||version<198&&Object.hasOwn(s,'clock')||!keys(s,['phase','startedAtCore','endsAtCore',...(s.phase==='aim'?['targetStartedDowned']:[]),...(version>=88?['weaponItem']:[]),...(version>=198?['clock']:[]),...(version>=238&&s.phase==='aim'?['lean']:[])])||s.weaponItem!==undefined&&s.weaponItem!=='bolt-action-rifle'&&!(version>=208&&s.weaponItem==='emp-launcher')&&!(version>=316&&s.weaponItem==='short-bow')&&!(version>=322&&s.weaponItem==='pump-shotgun')&&!(version>=326&&(s.weaponItem==='recurve-bow'||s.weaponItem==='greatbow'))||!integer(s.startedAtCore,0,physicalCoreNow297)||!integer(s.endsAtCore,physicalCoreNow297+1))return false;
+  if(!record(s)||version<198&&Object.hasOwn(s,'clock')||!keys(s,['phase','startedAtCore','endsAtCore',...(s.phase==='aim'?['targetStartedDowned']:[]),...(version>=88?['weaponItem']:[]),...(version>=198?['clock']:[]),...(version>=238&&s.phase==='aim'?['lean']:[]),...(version>=340&&s.phase==='cooldown'?['burst']:[])])||s.weaponItem!==undefined&&s.weaponItem!=='bolt-action-rifle'&&!(version>=208&&s.weaponItem==='emp-launcher')&&!(version>=316&&s.weaponItem==='short-bow')&&!(version>=322&&s.weaponItem==='pump-shotgun')&&!(version>=326&&(s.weaponItem==='recurve-bow'||s.weaponItem==='greatbow'))&&!(version>=340&&(s.weaponItem==='autopistol'||s.weaponItem==='machine-pistol'))||!integer(s.startedAtCore,0,physicalCoreNow297)||!integer(s.endsAtCore,physicalCoreNow297+1))return false;
   if(s.phase!=='aim'&&s.phase!=='cooldown'||s.phase==='aim'&&(value.order===null||typeof s.targetStartedDowned!=='boolean'))return false;
   if(record(value.order)&&value.order.hunt&&s.weaponItem==='emp-launcher')return false;
-  // EMP launcher, bows and pump shotgun carry their own warmup and cooldown.
-  const own=s.weaponItem==='emp-launcher'||s.weaponItem==='short-bow'||s.weaponItem==='pump-shotgun'||s.weaponItem==='recurve-bow'||s.weaponItem==='greatbow';
+  // EMP launcher, bows, pump shotgun and blowback guns carry their own warmup and cooldown.
+  const own=s.weaponItem==='emp-launcher'||s.weaponItem==='short-bow'||s.weaponItem==='pump-shotgun'||s.weaponItem==='recurve-bow'||s.weaponItem==='greatbow'||s.weaponItem==='autopistol'||s.weaponItem==='machine-pistol';
   const emp=own?rangedWeaponProfile(s.weaponItem,'normal'):undefined;
   if(own&&!emp)return false;
-  const duration=emp?(s.phase==='aim'?emp.warmupCoreTicks:emp.cooldownCoreTicks):s.phase==='aim'?(s.weaponItem?102:18):(s.weaponItem?90:96);
+  // Schema 340: a burst's gap stance lasts ticksBetweenBurstShots + 1.
+  const burst=s.phase==='cooldown'&&Object.hasOwn(s,'burst')?s.burst:undefined;
+  if(burst!==undefined&&!validBurst340(burst,s,emp?.burst,physicalCoreNow297))return false;
+  const duration=burst!==undefined?burstGapStanceTicks340(emp!.burst!):emp?(s.phase==='aim'?emp.warmupCoreTicks:emp.cooldownCoreTicks):s.phase==='aim'?(s.weaponItem?102:18):(s.weaponItem?90:96);
   if(version<198||!Object.hasOwn(s,'clock')&&s.clock===undefined)return s.endsAtCore-s.startedAtCore===duration;
   const c=s.clock;
   if(!Object.hasOwn(s,'clock')||!record(c)||Reflect.ownKeys(c).length!==2||!Object.hasOwn(c,'lastAdvancedAtCore')||!Object.hasOwn(c,'pausedCore')
     ||!integer(physicalCoreNow297,0)||c.lastAdvancedAtCore!==physicalCoreNow297||!integer(c.lastAdvancedAtCore,s.startedAtCore)
     ||!integer(c.pausedCore,0,c.lastAdvancedAtCore-s.startedAtCore))return false;
   return Number.isSafeInteger(s.startedAtCore+duration+c.pausedCore)&&s.endsAtCore-s.startedAtCore-c.pausedCore===duration;
+}
+/** Schema 340 burst of a gap stance: its own target and the shots left
+ * (0 once reset). An active burst was never stunned, and its next shot is
+ * still to come at the Core rhythm of the weapon. */
+function validBurst340(value:unknown,stance:Record<string,unknown>,burst:RangedBurst340|undefined,now:number):boolean {
+  if(!burst||burst.shots<2||!record(value)||Reflect.ownKeys(value).length!==2||!Object.hasOwn(value,'targetId')||!Object.hasOwn(value,'shotsLeft')
+    ||!integer(value.targetId,1)||!integer(value.shotsLeft,0,burst.shots-1))return false;
+  if(value.shotsLeft===0)return true;
+  const clock=stance.clock,start=Number(stance.startedAtCore);
+  if(record(clock)&&clock.pausedCore!==0)return false;
+  return Number.isSafeInteger(now)&&start+burstNextShotDelay340(burst,value.shotsLeft===burst.shots-1)>now;
 }
 /** A captured cardinal offset is history, not a new sight/path query. */
 function validLeanOffset(value:unknown):value is Cell {
@@ -71,6 +86,8 @@ export function validateShooting(world:World,version:number=world.schemaVersion,
     const {order,stance}=p.shooting;
     const suspended=version>=198&&stance?.phase==='aim'&&!!p.stun&&effectiveCore297(world)<p.stun.untilCore;
     if(order){const weapon=equippedWeapon(world,p);if(!weapon||!isRangedWeaponItem(weapon.item)||order.hunt&&weapon.item==='emp-launcher'||stance?.phase==='aim'&&(stance.weaponItem??'revolver')!==weapon.item)errors.push('Invalid ranged weapon/aim profile.');}
+    const burst=stance?.phase==='cooldown'?stance.burst:undefined;
+    if(burst&&(!integer(burst.targetId,1,world.nextId-1)||burst.targetId===p.id))errors.push('Invalid shooting burst target.');
     if(order?.auto&&(order.startedDowned||stance?.phase==='aim'&&stance.targetStartedDowned||order.auto.kind==='draft'&&p.draft?.holdFire||order.auto.kind==='response'&&order.auto.remaining===0&&stance?.phase!=='cooldown'))errors.push('Invalid automatic shooting phase.');
     if(p.state==='dead'||p.state==='downed'||p.jobId!==null||p.haul||p.cooking||p.equipmentTask||p.tend||p.ward||p.feed||p.rescue||p.need||p.recreation.task||p.orders.active!==null||(p.priorityWork||p.orders.queue.length)&&!(version>=79&&(!order||order.hunt)))errors.push('Shooting conflicts with another activity.');
     if(order){

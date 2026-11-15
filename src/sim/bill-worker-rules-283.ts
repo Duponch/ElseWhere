@@ -26,6 +26,8 @@ const recipeSkills:Readonly<Record<ProductionRecipe,ProductionRecipeSkill283|nul
  'make-recurve-bow':'crafting',
  'make-greatbow':'crafting',
  'make-pump-shotgun':'crafting',
+ 'make-autopistol':'crafting',
+ 'make-machine-pistol':'crafting',
  'make-longsword':'crafting',
  'make-mace':'crafting',
  'make-plasteel-knife':'crafting',

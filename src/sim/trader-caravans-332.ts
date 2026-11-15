@@ -5,7 +5,7 @@ import {tradeCatalogueEntry} from './trade-catalogue.ts';
 import {curve320} from './population-intent-320.ts';
 import {WORLD_FACTION_DEFINITIONS_256,type WorldFactionDef256} from './world-faction-catalog.ts';
 import {integer,random,select,traderQuality,visitorClothingStuff314,VISITOR_CLOTHING_FAMILIES314,VISITOR_CLOTHING_POOL,
-  VISITOR_RANGED_ITEMS322,VISITOR_RANGED_ITEMS326,VISITOR_RANGED_POOL,VISITOR_SHORT_BOW_INDEX316,type VisitorStockPlan} from './trade-stock.ts';
+  VISITOR_RANGED_ITEMS322,VISITOR_RANGED_ITEMS326,VISITOR_RANGED_ITEMS340,VISITOR_RANGED_POOL,VISITOR_SHORT_BOW_INDEX316,type VisitorStockPlan} from './trade-stock.ts';
 import type {WeaponQuality,WeaponItem} from './equipment-rules.ts';
 import type {ApparelItem} from './apparel-definitions.ts';
 import type {MaterialPile,World} from './types.ts';
@@ -184,11 +184,12 @@ export function drawCaravanSource332(w:Pick<World,'worldFactions'>,populationInt
 
 /** Mathf.RoundToInt (to even on halves). */
 const roundToInt=(n:number):number=>{const lo=Math.floor(n),part=n-lo;return part===.5?lo+(Math.abs(lo)%2):Math.round(n);};
-const rangedItem=(index:number):ItemId|undefined=>VISITOR_RANGED_POOL[index]?.item??(index===VISITOR_SHORT_BOW_INDEX316?'short-bow':VISITOR_RANGED_ITEMS322[index]??VISITOR_RANGED_ITEMS326[index]);
+/** Schema 340 adds the autopistol and machine pistol entries (same draws). */
+const rangedItem=(index:number,version=340):ItemId|undefined=>VISITOR_RANGED_POOL[index]?.item??(index===VISITOR_SHORT_BOW_INDEX316?'short-bow':VISITOR_RANGED_ITEMS322[index]??VISITOR_RANGED_ITEMS326[index]??(version>=340?VISITOR_RANGED_ITEMS340[index]:undefined));
 /** Pure pre-plan of a caravan trader's wares, committed only with a real
  * arrival. Every represented generator of the Core kind runs in its order;
  * large counts become real stacks. Private PRNG, Core distributions. */
-export function generateCaravanStock332(seed:number,pawnId:number,nextId:number,tick:number,kind:CaravanTraderKind332):VisitorStockPlan {
+export function generateCaravanStock332(seed:number,pawnId:number,nextId:number,tick:number,kind:CaravanTraderKind332,version=340):VisitorStockPlan {
   if(!Number.isInteger(seed)||seed<0||seed>0xffffffff||!Number.isSafeInteger(pawnId)||pawnId<=0||!Number.isSafeInteger(nextId)||nextId<=0||!Number.isSafeInteger(tick)||tick<0||!isCaravanTraderKind332(kind))throw new RangeError('Invalid caravan stock planning input.');
   const state={rng:seed||1},piles:MaterialPile[]=[];
   const add=(item:ItemId,quantity:number,quality?:WeaponQuality)=>{
@@ -207,7 +208,7 @@ export function generateCaravanStock332(seed:number,pawnId:number,nextId:number,
     for(let i=0;i<g.count;i++){
       const candidate=select(state,pool);
       if(g.kind==='ranged'){
-        const quality=traderQuality(state),item=rangedItem(VISITOR_RANGED_POOL.indexOf(candidate));
+        const quality=traderQuality(state),item=rangedItem(VISITOR_RANGED_POOL.indexOf(candidate),version);
         if(item)add(item,1,quality);
       }else{
         const roll=random(state),quality=traderQuality(state),family=VISITOR_CLOTHING_FAMILIES314[VISITOR_CLOTHING_POOL.indexOf(candidate)];

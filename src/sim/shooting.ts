@@ -9,8 +9,9 @@ import { automaticPermission,automaticTarget } from './automatic-combat-state.ts
 import { cancelMelee } from './melee-state.ts';
 import { isStunned } from './stun.ts';
 import { assaultTarget,hostileTo,isColonist,distanceSquared } from './affiliation.ts';
-import type { CommandResult,Pawn,World } from './types.ts';
-import type { ShootingCommand } from './shooting-state.ts';
+import type { Cell,CommandResult,Pawn,World } from './types.ts';
+import type { ShootingBurst340,ShootingCommand,ShootingStance,ShootingWeaponItem } from './shooting-state.ts';
+import { burstGapStanceTicks340,burstNextShotDelay340,type RangedBurst340 } from './blowback-340.ts';
 import { advanceShootingClock,cancelShooting,shootingOrderAuthority } from './shooting-state.ts';
 import { equippedWeapon,isRangedWeaponItem } from './equipment-rules.ts';
 import { pawnBody,medicallyStopped } from './health-rules.ts';
@@ -21,7 +22,7 @@ import { shotAim,shotCover } from './combat-report.ts';
 import { emitRevolverBullet,type BulletEmissionInput } from './bullet-emission.ts';
 import { emitEmpProjectile } from './emp-emission.ts';
 import { registerWorldProjectile } from './projectile-system.ts';
-import { CORE_TICKS_PER_LOCAL,rangedWeaponProfile,shootingAccuracy,rangedTimings } from './ranged-statistics.ts';
+import { CORE_TICKS_PER_LOCAL,rangedWeaponProfile,shootingAccuracy,rangedTimings,type ProjectileProfileId } from './ranged-statistics.ts';
 import { learnSkill,XP_SCALE } from './skills.ts';
 import { healthRandom } from './health.ts';
 import { captureStandability } from './furniture-travel.ts';
@@ -55,7 +56,7 @@ function startAim(world:World,pawn:Pawn,core:number,queries:Queries):void {
   if(isStunned(pawn,core)||pawn.melee?.strike||(pawn.motion?.end??0)*CORE_TICKS_PER_LOCAL>core)return;
   const plan=shotPlan(world,pawn,order.targetId,queries);
   if('reason' in plan||plan.weapon.id!==order.weaponId){cancelShooting(pawn);return;}
-  pawn.shooting!.stance={phase:'aim',startedAtCore:core,endsAtCore:core+plan.profile.warmupCoreTicks,targetStartedDowned:plan.target.state==='downed',...plan.weapon.item!=='revolver'?{weaponItem:plan.weapon.item as 'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'}:{},
+  pawn.shooting!.stance={phase:'aim',startedAtCore:core,endsAtCore:core+plan.profile.warmupCoreTicks,targetStartedDowned:plan.target.state==='downed',...plan.weapon.item!=='revolver'?{weaponItem:plan.weapon.item as ShootingWeaponItem}:{},
     ...world.schemaVersion>=198?{clock:{lastAdvancedAtCore:core,pausedCore:0}}:{},
     ...world.schemaVersion>=238&&(plan.line.from.x!==pawn.x||plan.line.from.z!==pawn.z)?{lean:{x:plan.line.from.x-pawn.x,z:plan.line.from.z-pawn.z}}:{}};
   pawn.state='idle';
@@ -100,6 +101,8 @@ export function advanceShooter(world:World,pawn:Pawn,core:number,queries:Queries
       // Adoption is prospective at the previous publication; no past stun is repaid.
       shot.stance.clock??={lastAdvancedAtCore:core-1,pausedCore:0};
       if(advanceShootingClock(shot.stance,core,stunned)==='duplicate')return;
+      // Schema 340: Core VerbTick resets a burst on a stunned tick; its gap stance stays.
+      if(stunned&&shot.stance.phase==='cooldown'&&shot.stance.burst&&shot.stance.burst.shotsLeft>0)shot.stance.burst.shotsLeft=0;
     }
     if(stunned&&shot.stance?.phase==='aim')return;
     if(shot.order&&(shot.order.hunt?!huntingPermission(world,pawn,shot.order.targetId)
@@ -120,6 +123,7 @@ export function advanceShooter(world:World,pawn:Pawn,core:number,queries:Queries
     return;
   }
   if(shot.stance?.phase==='cooldown') {
+    if(shot.stance.burst&&shot.stance.burst.shotsLeft>0){continueBurst340(world,pawn,core,queries);if(!pawn.shooting||shot.stance?.phase!=='cooldown')return;}
     if(core<shot.stance.endsAtCore)return;
     shot.stance=null;if(shot.order?.auto?.kind==='response'&&shot.order.auto.remaining===0)shot.order=null;if(!shot.order){delete pawn.shooting;return;}
   }
@@ -129,25 +133,73 @@ export function advanceShooter(world:World,pawn:Pawn,core:number,queries:Queries
   const plan=shotPlan(world,pawn,shot.order.targetId,queries);
   if('reason' in plan||plan.weapon.id!==shot.order.weaponId||!shot.stance.targetStartedDowned&&plan.target.state==='downed'){cancelShooting(pawn);return;}
   if(core<shot.stance.endsAtCore)return;
-  const {target,weapon,profile,line}=plan,standing=!['sleeping','resting','downed'].includes(target.state),body=queries.body(pawn).capacities;
-  const cover=shotCover(queries.grid(),pawn,target,combatTargetKey(target));
-  const aim=shotAim({distance:line.distance,pawnAccuracy:shootingAccuracy(pawn.skills.shooting.level,body.sight,body.manipulation).perCell,weaponAccuracy:profile.accuracy,targetSize:combatTargetSize(target,world.schemaVersion),standing,weather:weatherShotFactor(world,pawn,target),blindSmoke:false},cover.passChance);
-  const random={rng:world.rng};
+  const {target,weapon,profile}=plan;
   // The current18/102/210-Core warmups exceed Core lean saturation (14Core).
   // Capture the warmup offset, not the newly queried line. Legacy aims stay base.
-  const lean=world.schemaVersion>=238?shot.stance.lean:undefined;
-  const origin={x:pawn.x+.5+(lean?.x??0)*.5,z:pawn.z+.5+(lean?.z??0)*.5};
-  const emissionInput:BulletEmissionInput={grid:queries.grid(),line,origin,launcherKey:`pawn:${pawn.id}`,equipmentKey:`pile:${weapon.id}`,target:{key:combatTargetKey(target),cell:target,full:false,canBenefitFromCover:true},aim,cover,profile,canHitOtherPawns:true,preventFriendlyFire:false,coverAnchor:key=>queries.targets().anchor(key)};
-  // Forced-radius distance uses the logical pawn cell, independently of DrawPos.
-  const emission=weapon.item==='emp-launcher'?emitEmpProjectile(emissionInput,()=>healthRandom(random),pawn):emitRevolverBullet(emissionInput,()=>healthRandom(random));
-  registerWorldProjectile(world,emission.flight,profile.quality,{friendlyPawnIds:world.pawns.filter(p=>!hostileTo(pawn,p)).map(p=>p.id),friendlyFireFactor:friendlyFireFactor(world)},random.rng,core,weapon.item as 'revolver'|'bolt-action-rifle'|'emp-launcher');
+  emitShot(world,pawn,core,queries,plan,world.schemaVersion>=238?shot.stance.lean:undefined);
   // Same projectile rules; only the documented hostile learning rate differs.
+  // Core Verb_Shoot.WarmupComplete: one learning per burst, over its full cycle.
   if(target.state!=='downed')learnSkill(pawn.skills.shooting,(hostileTarget(pawn,target)?170:20)*rangedTimings(profile).learningCycleSeconds*XP_SCALE,pawn);
   pawn.lastAttack={targetId:target.id,atCore:core};
   if(shot.order.auto?.kind==='response')shot.order.auto.remaining--;
   if(shot.order.auto?.kind==='draft')shot.order=null;
-  shot.stance={phase:'cooldown',startedAtCore:core,endsAtCore:core+profile.cooldownCoreTicks,...weapon.item!=='revolver'?{weaponItem:weapon.item as 'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'}:{},
+  const burst=profile.burst&&profile.burst.shots>1?profile.burst:undefined;
+  if(burst){shot.stance=burstGapStance340(core,weapon.item as ShootingWeaponItem,burst,{targetId:target.id,shotsLeft:burst.shots-1});continueBurst340(world,pawn,core,queries);return;}
+  shot.stance={phase:'cooldown',startedAtCore:core,endsAtCore:core+profile.cooldownCoreTicks,...weapon.item!=='revolver'?{weaponItem:weapon.item as ShootingWeaponItem}:{},
     ...suspendedClock?{clock:{lastAdvancedAtCore:core,pausedCore:0}}:{}};
+}
+
+type ShotPlan=Extract<ReturnType<typeof shotPlan>,{weapon:unknown}>;
+/** One projectile of a shot or a burst: cover, aim and emission are computed
+ * at this Core tick, as Core's ShotReport for every TryCastShot. */
+function emitShot(world:World,pawn:Pawn,core:number,queries:Queries,plan:Pick<ShotPlan,'target'|'weapon'|'profile'|'line'>,lean:Cell|undefined):void {
+  const {target,weapon,profile,line}=plan,standing=!['sleeping','resting','downed'].includes(target.state),body=queries.body(pawn).capacities;
+  const cover=shotCover(queries.grid(),pawn,target,combatTargetKey(target));
+  const aim=shotAim({distance:line.distance,pawnAccuracy:shootingAccuracy(pawn.skills.shooting.level,body.sight,body.manipulation).perCell,weaponAccuracy:profile.accuracy,targetSize:combatTargetSize(target,world.schemaVersion),standing,weather:weatherShotFactor(world,pawn,target),blindSmoke:false},cover.passChance);
+  const random={rng:world.rng};
+  const origin={x:pawn.x+.5+(lean?.x??0)*.5,z:pawn.z+.5+(lean?.z??0)*.5};
+  const emissionInput:BulletEmissionInput={grid:queries.grid(),line,origin,launcherKey:`pawn:${pawn.id}`,equipmentKey:`pile:${weapon.id}`,target:{key:combatTargetKey(target),cell:target,full:false,canBenefitFromCover:true},aim,cover,profile,canHitOtherPawns:true,preventFriendlyFire:false,coverAnchor:key=>queries.targets().anchor(key)};
+  // Forced-radius distance uses the logical pawn cell, independently of DrawPos.
+  const emission=weapon.item==='emp-launcher'?emitEmpProjectile(emissionInput,()=>healthRandom(random),pawn):emitRevolverBullet(emissionInput,()=>healthRandom(random));
+  registerWorldProjectile(world,emission.flight,profile.quality,{friendlyPawnIds:world.pawns.filter(p=>!hostileTo(pawn,p)).map(p=>p.id),friendlyFireFactor:friendlyFireFactor(world)},random.rng,core,weapon.item as ProjectileProfileId);
+}
+
+/** Schema 340: the busy stance between two burst shots (Core
+ * Stance_Cooldown(ticksBetweenBurstShots + 1)), started at the last shot. */
+function burstGapStance340(core:number,weaponItem:ShootingWeaponItem,burst:RangedBurst340,state:ShootingBurst340):ShootingStance {
+  return {phase:'cooldown',startedAtCore:core,endsAtCore:core+burstGapStanceTicks340(burst),weaponItem,clock:{lastAdvancedAtCore:core,pausedCore:0},burst:state};
+}
+/** Core tick of the next shot of an active burst, from its gap stance. */
+export function burstNextShotCore340(stance:ShootingStance,burst:RangedBurst340):number {
+  if(stance.phase!=='cooldown'||!stance.burst)throw new Error('No burst');
+  return stance.startedAtCore+burstNextShotDelay340(burst,stance.burst.shotsLeft===burst.shots-1);
+}
+/** Core Verb.VerbTick/TryCastNextBurstShot for a pawn whose gap stance holds
+ * shots. Neither the order, its target's posture nor hostility matter: the
+ * burst stops when the weapon is gone (the gap stance then runs out), or when
+ * the target is gone or out of range or sight (the weapon cooldown starts at
+ * this tick). Stun is handled by the caller (Core resets the burst). */
+function continueBurst340(world:World,pawn:Pawn,core:number,queries:Queries):void {
+  for(;;){
+    const shot=pawn.shooting,stance=shot?.stance;
+    if(!shot||stance?.phase!=='cooldown'||!stance.burst||stance.burst.shotsLeft<=0)return;
+    const weapon=equippedWeapon(world,pawn),profile=weapon?.weapon&&weapon.item===stance.weaponItem&&!pawn.equipmentDropPending?rangedWeaponProfile(weapon.item,weapon.weapon.quality):undefined;
+    const burst=profile?.burst;
+    if(!weapon||!profile||!burst){stance.burst.shotsLeft=0;return;}
+    if(core<burstNextShotCore340(stance,burst))return;
+    const target=combatTarget(world,stance.burst.targetId);
+    const line=target&&target.state!=='dead'&&target.id!==pawn.id&&!queries.carried(target.id)
+      ?findShotLine(queries.grid(),pawn,{cell:target,leans:!isAnimalTarget(target)&&!['downed','resting','sleeping'].includes(target.state)},profile.range):undefined;
+    if(!target||!line?.ok){
+      shot.stance={phase:'cooldown',startedAtCore:core,endsAtCore:core+profile.cooldownCoreTicks,weaponItem:stance.weaponItem!,clock:{lastAdvancedAtCore:core,pausedCore:0}};return;
+    }
+    // A fresh shoot line per shot (Core TryFindShootLineFromTo), lean included.
+    emitShot(world,pawn,core,queries,{target,weapon,profile,line},line.from.x!==pawn.x||line.from.z!==pawn.z?{x:line.from.x-pawn.x,z:line.from.z-pawn.z}:undefined);
+    pawn.lastAttack={targetId:target.id,atCore:core};
+    const left=stance.burst.shotsLeft-1;
+    shot.stance=left>0?burstGapStance340(core,stance.weaponItem!,burst,{targetId:target.id,shotsLeft:left})
+      :{phase:'cooldown',startedAtCore:core,endsAtCore:core+profile.cooldownCoreTicks,weaponItem:stance.weaponItem!,clock:{lastAdvancedAtCore:core,pausedCore:0}};
+  }
 }
 
 export function startAutonomousShot(world:World,pawn:Pawn,target:LivingTarget,queries:Queries):boolean {

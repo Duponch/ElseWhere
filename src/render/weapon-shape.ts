@@ -86,6 +86,22 @@ const GREATBOW_PARTS = [
   {size:[.008,1.2,.008],center:[-.08,0,0],color:0xe8e0c8},
 ] as const;
 export const GREATBOW_DYE326=-19;
+/** Schema 340 autopistol, original shape: a square slide over its frame and
+ * a raked grip; the machine pistol adds a boxy receiver, a short barrel
+ * shroud and a long magazine ahead of the grip. */
+const AUTOPISTOL_PARTS = [
+  {size:[.24,.055,.05],center:[.035,.06,0],color:0x5d6a70},
+  {size:[.16,.035,.045],center:[.015,.02,0],color:0x46524f},
+  {size:[.07,.13,.055],center:[-.08,-.05,0],color:0x3f3a36},
+] as const;
+export const AUTOPISTOL_DYE340=-20;
+const MACHINE_PISTOL_PARTS = [
+  {size:[.30,.07,.06],center:[.03,.055,0],color:0x4b5a61},
+  {size:[.09,.04,.04],center:[.22,.06,0],color:0x38454b},
+  {size:[.045,.17,.04],center:[.02,-.07,0],color:0x2f383c},
+  {size:[.07,.12,.055],center:[-.08,-.045,0],color:0x3f3a36},
+] as const;
+export const MACHINE_PISTOL_DYE340=-21;
 /** Resident variants share one rig, one cargo batch and the same authored parts
  * as ground piles. Dye tags -2/-3 are already used by clothing. */
 export const WEAPON_VISUALS = [
@@ -98,6 +114,8 @@ export const WEAPON_VISUALS = [
   {item:'pump-shotgun',equipment:9,cargo:187,dye:-17,parts:PUMP_SHOTGUN_PARTS},
   {item:'recurve-bow',equipment:10,cargo:188,dye:RECURVE_BOW_DYE326,parts:RECURVE_BOW_PARTS},
   {item:'greatbow',equipment:11,cargo:189,dye:GREATBOW_DYE326,parts:GREATBOW_PARTS},
+  {item:'autopistol',equipment:12,cargo:190,dye:AUTOPISTOL_DYE340,parts:AUTOPISTOL_PARTS},
+  {item:'machine-pistol',equipment:13,cargo:191,dye:MACHINE_PISTOL_DYE340,parts:MACHINE_PISTOL_PARTS},
 ] as const;
 /** Optional resident families are separate from the four historical concrete
  * visuals: a family key is never a real ItemId or a ground/cargo item. */

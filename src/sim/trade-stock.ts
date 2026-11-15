@@ -24,6 +24,9 @@ export const VISITOR_RANGED_ITEMS322:Readonly<Partial<Record<number,ItemId>>>=Ob
 /** Schema 326: pool entries 21 (Bow_Recurve, value 66) and 22 (Bow_Great,
  * value 104.4), in Core RangedNeolithic order, are sold (same random draws). */
 export const VISITOR_RANGED_ITEMS326:Readonly<Partial<Record<number,ItemId>>>=Object.freeze({21:'recurve-bow',22:'greatbow'});
+/** Schema 340: pool entries 1 (Gun_Autopistol) and 2 (Gun_MachinePistol), in
+ * Core RangedIndustrial order, are sold (same random draws). */
+export const VISITOR_RANGED_ITEMS340:Readonly<Partial<Record<number,ItemId>>>=Object.freeze({1:'autopistol',2:'machine-pistol'});
 /** The 22 Core Clothing definitions use abstract (no stuff) base values. The
  * tribal garment is Sellable-only; the flak vest has no Clothing trade tag. */
 export const VISITOR_CLOTHING_POOL:readonly StockCandidate[]=Object.freeze([
@@ -102,7 +105,7 @@ export function generateVisitorStock(seed:number,pawnId:number,nextId:number,tic
     // Schema 316: pool entry 19 is Core Bow_Short; 322 and 326 add more
     // represented entries (same random draws).
     const index=VISITOR_RANGED_POOL.indexOf(candidate);
-    const item=candidate.item??(version>=316&&index===VISITOR_SHORT_BOW_INDEX316?'short-bow':version>=322?VISITOR_RANGED_ITEMS322[index]??(version>=326?VISITOR_RANGED_ITEMS326[index]:undefined):undefined);
+    const item=candidate.item??(version>=316&&index===VISITOR_SHORT_BOW_INDEX316?'short-bow':version>=322?VISITOR_RANGED_ITEMS322[index]??(version>=326?VISITOR_RANGED_ITEMS326[index]??(version>=340?VISITOR_RANGED_ITEMS340[index]:undefined):undefined):undefined);
     if(item)add(item,1,quality);
   }
   if(integer(state,0,1)){

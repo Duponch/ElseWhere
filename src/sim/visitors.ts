@@ -1,4 +1,5 @@
 import {assignPileOwner} from './pile-index.ts';
+import {gunKindWeapon340,isBlowbackSchema340,isGunKind340} from './blowback-340.ts';
 import {shipCasketHumanReferences277} from './ship-casket-notifications-277.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259,bornFactionForDef259} from './world-affiliation-259.ts';
@@ -199,9 +200,11 @@ export function arriveTraderCaravan332(w:World):boolean {
     for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;
     p.visitor={group:id,role:guard?'visitor':'trader',phase:'arriving',goal:{...arrival.parking[i]!},personalFoodIds:[]};
     piles.push({id:nextId++,kind:'apparel',item:apparel,quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState(apparel,undefined,w.schemaVersion)});
-    const weapon=guard?CARAVAN_GUARDS_332[guard].weapon:trader.weapon;
+    // Schema 340: Gun-tagged Core kinds draw their gun (blowback-340.ts).
+    const fixedWeapon=guard?CARAVAN_GUARDS_332[guard].weapon:trader.weapon,coreKind=guard?CARAVAN_GUARDS_332[guard].core:trader.core;
+    const weapon=isBlowbackSchema340(w.schemaVersion)&&isGunKind340(coreKind)?gunKindWeapon340(coreKind,fixedWeapon,w.seed,p.id):fixedWeapon;
     piles.push({id:nextId++,kind:'weapon',item:weapon,quantity:1,owner:{type:'equipment',pawnId:p.id},weapon:newWeaponState(weapon)});
-    if(!guard){const stock=generateCaravanStock332(random.rng,p.id,nextId,w.tick,kind);piles.push(...stock.piles);nextId=stock.nextId;random.rng=stock.rng;}
+    if(!guard){const stock=generateCaravanStock332(random.rng,p.id,nextId,w.tick,kind,w.schemaVersion);piles.push(...stock.piles);nextId=stock.nextId;random.rng=stock.rng;}
     // The same personal provisions as a visitor; wares are never eaten.
     const foodDraw=draw(),item=foodDraw<.75?'simple-meal':'survival-meal',quantity=draw()<5/6?3:2,foodId=nextId++;
     piles.push({id:foodId,kind:'food',item,quantity,owner:{type:'inventory',pawnId:p.id},...freshRot(item,w.tick)});p.visitor.personalFoodIds=[foodId];

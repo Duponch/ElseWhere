@@ -316,7 +316,9 @@ export class AudioCueRecorder {
       if (stance?.phase === 'cooldown') {
         shooting.set(pawn.id, stance.startedAtCore);
         emittedShots.add(`${pawn.id}:${stance.startedAtCore}`);
-        if (this.initialized && previousShooting.get(pawn.id) !== stance.startedAtCore) {
+        // A burst stopped before its next shot starts a cooldown without firing.
+        if (this.initialized && previousShooting.get(pawn.id) !== stance.startedAtCore
+          && (pawn.lastAttack === undefined || pawn.lastAttack.atCore === stance.startedAtCore)) {
           this.add({ id: `shot:${pawn.id}:${stance.startedAtCore}`, tick: world.tick,
             kind: 'weapon.gunshot', x: pawn.x + .5, z: pawn.z + .5 });
         }

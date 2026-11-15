@@ -16,6 +16,7 @@ import {RAID_FAMILY_MIN_POINTS_331,RAID_KINDS_331,RAID_MAKERS_331,isRaidKind331,
 import {RaidArrivalSpace333,drawRaidArrivalMode333,layoutRaidArrival333,raidArrivalMessage333,raidArrivalPointsFactor333,resolveRaidArrivalCenter333,type RaidArrival333} from './raid-arrival-333.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import type {WeaponItem} from './equipment-rules.ts';
+import {gunKindWeapon340,isBlowbackSchema340,type GunKind340} from './blowback-340.ts';
 
 export const RAID_ROLE_OPTIONS:readonly {role:PirateRaidRole;weight:number;weapon:'plasteel-knife'|'revolver'|'bolt-action-rifle'}[]=[
   {role:'drifter',weight:10,weapon:'plasteel-knife'},
@@ -37,9 +38,16 @@ export interface RaidSpawnOptions {
    * mode leaves (Core AdjustedRaidPoints). Without it the roster stays. */
   recompose333?:(budget:number,random:{rng:number})=>RaidComposition;
 }
-/** Pirate roles keep their historical weapons; schema 331 kinds carry theirs. */
-export function raidRoleWeapon(role:RaidRole):WeaponItem|undefined {
-  return isRaidKind331(role)?RAID_KINDS_331[role].weapon:RAID_ROLE_OPTIONS.find(option=>option.role===role)?.weapon;
+/** Core kinds of the roles whose weapon tags are exactly Gun (schema 340). */
+const GUN_KIND_OF_ROLE340:Readonly<Partial<Record<RaidRole,GunKind340>>>=Object.freeze({scavenger:'Scavenger',pirate:'Pirate','town-guard':'Town_Guard','town-councilman':'Town_Councilman','mercenary-gunner':'Mercenary_Gunner'});
+/** Pirate roles keep their historical weapons; schema 331 kinds carry theirs.
+ * From schema 340 the Gun kinds draw their gun as Core does (weapon money
+ * and price weights, from the person's own identity); a Core gun Elsewhere
+ * does not deliver keeps the historical weapon. */
+export function raidRoleWeapon(role:RaidRole,owner?:{world:Pick<World,'schemaVersion'|'seed'>;pawnId:number}):WeaponItem|undefined {
+  const fixed=isRaidKind331(role)?RAID_KINDS_331[role].weapon:RAID_ROLE_OPTIONS.find(option=>option.role===role)?.weapon;
+  const kind=GUN_KIND_OF_ROLE340[role];
+  return owner&&kind&&fixed&&isBlowbackSchema340(owner.world.schemaVersion)?gunKindWeapon340(kind,fixed,owner.world.seed,owner.pawnId):fixed;
 }
 /** A roster role admitted by this composition: the pirate projection, or
  * (schema 331) the options of its tribal or outlander group maker. */
@@ -79,7 +87,7 @@ export function createRaidGroup(w:World,options:RaidSpawnOptions):RaidGroup|null
     const generated:Pawn[]=[],piles:MaterialPile[]=[];let next=w.nextId;
     for(let i=0;i<at.length;i++){
       const factionId=era&&w.worldFactions?chosen?.factionId??bornFactionForDef259(w,'Pirate'):undefined;if(era&&w.worldFactions&&factionId===undefined)return null;
-      const weapon=roster?raidRoleWeapon(roster[i]!):id>1&&i===0?'revolver':undefined;
+      const weapon=roster?raidRoleWeapon(roster[i]!,{world:w,pawnId:next}):id>1&&i===0?'revolver':undefined;
       const made=makeRaider(w,{groupId:id,index:i,pawnId:next,nextId:next+1,cell:at[i]!,factionId,tribe:chosen?.family==='tribe',weapon,exiting:false,...roster?{kind:roster[i]!}:{}});if(!made)return null;
       next=made.nextId;generated.push(made.pawn);piles.push(...made.piles);
     }

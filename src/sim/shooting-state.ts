@@ -3,8 +3,14 @@ import { workPriority } from './work-types.ts';
 import type { Cell,Pawn,World } from './types.ts';
 
 export interface ShootingClock {lastAdvancedAtCore:number;pausedCore:number}
+/** Schema 340 Core burst (Verb.burstShotsLeft): between two shots the pawn
+ * holds the gap cooldown stance (ticksBetweenBurstShots + 1) aimed at the
+ * burst's own target, independent of the order. shotsLeft 0: Core's VerbTick
+ * reset the burst (stun, weapon lost) and the gap stance only runs out. */
+export interface ShootingBurst340 {targetId:number;shotsLeft:number}
+export type ShootingWeaponItem='bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'|'autopistol'|'machine-pistol';
 export type ShootingStance=({phase:'aim';startedAtCore:number;endsAtCore:number;targetStartedDowned:boolean;lean?:Cell}
-  |{phase:'cooldown';startedAtCore:number;endsAtCore:number})&{weaponItem?:'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow';clock?:ShootingClock};
+  |{phase:'cooldown';startedAtCore:number;endsAtCore:number;burst?:ShootingBurst340})&{weaponItem?:ShootingWeaponItem;clock?:ShootingClock};
 export type ShootingClockStep='duplicate'|'paused'|'active';
 
 /** The order can be cancelled/replaced without erasing post-shot recovery. */

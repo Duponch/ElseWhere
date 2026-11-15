@@ -3,11 +3,12 @@ import { WEAPON_QUALITIES,isRangedWeaponItem,type WeaponQuality } from './equipm
 import { TICKS_PER_DAY } from './types.ts';
 import { SHORT_BOW_RANGED_316 } from './short-bow-316.ts';
 import { BOW_FACTS_326,type BowRanged326 } from './bows-326.ts';
+import { BLOWBACK_FACTS_340,type BlowbackRanged340,type RangedBurst340 } from './blowback-340.ts';
 import { MINI_TURRET_PROFILE } from './mini-turret-profile.ts';
 import { LANCER_GUN_PROFILE,PIKEMAN_GUN_PROFILE } from './mechanoid-ranged-profile.ts';
 
 /** Projectile identity is broader than inventory/equipment ItemId. */
-export type ProjectileProfileId='revolver'|'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'|'mini-turret-gun'|'lancer-gun'|'pikeman-gun';
+export type ProjectileProfileId='revolver'|'bolt-action-rifle'|'emp-launcher'|'short-bow'|'pump-shotgun'|'recurve-bow'|'greatbow'|'autopistol'|'machine-pistol'|'mini-turret-gun'|'lancer-gun'|'pikeman-gun';
 
 /** Data/units shared by the persistent shooting skill and attack producer. See the explicit
  * current/historical source decisions in research/ranged-statistics-reference. */
@@ -39,6 +40,9 @@ export interface RevolverProfile {
   readonly cooldownCoreTicks:number;
   readonly projectileTilesPerCoreTick:number;
   readonly stoppingPower:number;
+  /** Schema 340 generic Core burst (burstShotCount and ticksBetweenBurstShots);
+   * absent: a single shot per warmup. */
+  readonly burst?:RangedBurst340;
 }
 const accuracyFactors=[.8,.9,1,1.1,1.2,1.35,1.5],damageFactors=[.9,1,1,1,1,1.25,1.5];
 const profiles=Object.freeze(Object.fromEntries(WEAPON_QUALITIES.map((quality,i)=>[quality,Object.freeze({
@@ -82,10 +86,19 @@ const qualityProfiles326=(r:BowRanged326)=>Object.freeze(Object.fromEntries(WEAP
   projectileTilesPerCoreTick:r.projectileTilesPerCoreTick,stoppingPower:r.stoppingPower,
 })])) as Record<WeaponQuality,RevolverProfile>);
 const recurveBowProfiles=qualityProfiles326(BOW_FACTS_326['recurve-bow'].ranged),greatbowProfiles=qualityProfiles326(BOW_FACTS_326.greatbow.ranged);
+/** Schema 340 autopistol and machine pistol: same quality factors; the
+ * machine pistol carries its Core burst. */
+const qualityProfiles340=(r:BlowbackRanged340)=>Object.freeze(Object.fromEntries(WEAPON_QUALITIES.map((quality,i)=>[quality,Object.freeze({
+  quality,damage:rangedRound(r.damage*damageFactors[i]),armorPenetration:r.armorPenetration*damageFactors[i],
+  accuracy:Object.freeze(r.accuracy.map(a=>Math.min(1,a*accuracyFactors[i]))) as AccuracyCurve,
+  range:r.range,warmupCoreTicks:r.warmupCoreTicks,cooldownCoreTicks:r.cooldownCoreTicks,
+  projectileTilesPerCoreTick:r.projectileTilesPerCoreTick,stoppingPower:r.stoppingPower,...r.burst?{burst:r.burst}:{},
+})])) as Record<WeaponQuality,RevolverProfile>);
+const autopistolProfiles=qualityProfiles340(BLOWBACK_FACTS_340.autopistol.ranged),machinePistolProfiles=qualityProfiles340(BLOWBACK_FACTS_340['machine-pistol'].ranged);
 export function rangedWeaponProfile(item:unknown,quality:WeaponQuality):RevolverProfile|undefined {
   if(!isRangedWeaponItem(item))return undefined;
   if(!WEAPON_QUALITIES.includes(quality))throw new RangeError('Invalid weapon quality');
-  return item==='revolver'?profiles[quality]:item==='emp-launcher'?empProfiles[quality]:item==='short-bow'?bowProfiles[quality]:item==='pump-shotgun'?shotgunProfiles[quality]:item==='recurve-bow'?recurveBowProfiles[quality]:item==='greatbow'?greatbowProfiles[quality]:rifleProfiles[quality];
+  return item==='revolver'?profiles[quality]:item==='emp-launcher'?empProfiles[quality]:item==='short-bow'?bowProfiles[quality]:item==='pump-shotgun'?shotgunProfiles[quality]:item==='recurve-bow'?recurveBowProfiles[quality]:item==='greatbow'?greatbowProfiles[quality]:item==='autopistol'?autopistolProfiles[quality]:item==='machine-pistol'?machinePistolProfiles[quality]:rifleProfiles[quality];
 }
 export function projectileProfile(item:unknown,quality:WeaponQuality):RevolverProfile|undefined {
   if(item==='mini-turret-gun'||item==='lancer-gun'||item==='pikeman-gun')return quality==='normal'?
@@ -101,7 +114,9 @@ export function rangedTimings(profile:RevolverProfile,aimFactor=1,cooldownFactor
   const rawCooldownCore=profile.cooldownCoreTicks*Math.max(.01,cooldownFactor);
   const warmupCore=rangedRound(profile.warmupCoreTicks*Math.max(.01,aimFactor)),cooldownCore=rangedRound(rawCooldownCore);
   // WarmupComplete XP uses the verb's base warmup, not the aiming-time factor.
-  return {warmup:warmupCore/CORE_TICKS_PER_LOCAL,cooldown:cooldownCore/CORE_TICKS_PER_LOCAL,cycle:(warmupCore+cooldownCore)/CORE_TICKS_PER_LOCAL,learningCycleSeconds:(profile.warmupCoreTicks+rawCooldownCore)/60};
+  // Core AdjustedFullCycleTime adds the burst's (shots-1) x ticksBetween.
+  const burstCore=profile.burst?(profile.burst.shots-1)*profile.burst.ticksBetween:0;
+  return {warmup:warmupCore/CORE_TICKS_PER_LOCAL,cooldown:cooldownCore/CORE_TICKS_PER_LOCAL,cycle:(warmupCore+cooldownCore)/CORE_TICKS_PER_LOCAL,learningCycleSeconds:(profile.warmupCoreTicks+rawCooldownCore+burstCore)/60};
 }
 /** Destination jitter must already be captured; no draw or target tracking here. */
 export function projectileFlightTicks(distance:number,profile:RevolverProfile):number {
