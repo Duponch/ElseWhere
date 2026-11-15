@@ -201,7 +201,7 @@ test('the met caravan record keeps its kind strictly, and buys back its own ware
   expect(validPendingEncounterShape261(migrated,338,r.nextId,atCore)).toBe(true);
   expect(validPendingEncounterShape261(migrated,337,r.nextId,atCore)).toBe(true);
   // The kind must belong to the met faction's caravan family.
-  const family=(p:PendingCaravanEncounter261)=>validatePendingEncounterRecords261({schemaVersion:338,nextId:r.nextId,tick:w.tick,worldFactions:w.worldFactions},
+  const family=(p:PendingCaravanEncounter261)=>validatePendingEncounterRecords261({schemaVersion:w.schemaVersion,nextId:r.nextId,tick:w.tick,worldFactions:w.worldFactions},
     {originMapId:0,localMapId:null,context:{},state:{members:[w.pawns[0]!],items:[]},encounters261:{revision:1},pending261:p} as never,w,new Set(),new Set());
   const mismatch='Pending caravan trader kind does not belong to its faction';
   expect(family({...pending,caravanKind338:'tribe-bulk'} as PendingCaravanEncounter261)).toEqual([mismatch]);
@@ -212,7 +212,7 @@ test('the met caravan record keeps its kind strictly, and buys back its own ware
   const wares:MaterialPile[]=[{id:r.nextId+1,kind:'steel',item:'steel',quantity:50,owner:{type:'inventory',pawnId:traderId}},{id:r.nextId+2,kind:'silver',item:'silver',quantity:900,owner:{type:'inventory',pawnId:traderId}}];
   const quote=(p:PendingCaravanEncounter261)=>{
     const record={originMapId:0,localMapId:null,context:{},state:{members:[negotiator],items:[steel],lastPersonalTick:w.tick},pending261:{...p,items:wares}} as unknown as WorldGroupRecord;
-    const q=quoteMeetingTrade261({schemaVersion:338,tick:w.tick,nextId:r.nextId+3},record,[]);if(!q.ok)throw Error(q.reason);return q.goods;
+    const q=quoteMeetingTrade261({schemaVersion:w.schemaVersion,tick:w.tick,nextId:r.nextId+3},record,[]);if(!q.ok)throw Error(q.reason);return q.goods;
   };
   const withKind=quote({...pending,caravanKind338:'outlander-bulk'} as PendingCaravanEncounter261);
   expect(withKind.find(g=>g.id===steel.id)!.refusal).toBeUndefined();
