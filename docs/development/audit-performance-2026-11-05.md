@@ -57,7 +57,7 @@ Le projet compte environ 195 000 lignes de TypeScript : 1 544 fichiers dans `src
 Outil ajouté : `scripts/perf-save-bench.ts`. Il charge une vraie sauvegarde, exécute N ticks macro (10 Core par tick) et produit le temps par tick, la vitesse maximale soutenable et un **SHA-256 de l’état complet** comme preuve de déterminisme.
 
 ```bash
-npx esbuild scripts/perf-save-bench.ts --bundle --platform=node --format=esm --keep-names --outfile=tmp/perf/bench.mjs
+npx esbuild scripts/perf-save-bench.ts --bundle --platform=node --format=esm --outfile=tmp/perf/bench.mjs
 node tmp/perf/bench.mjs public/test-saves/v432/les-forges-crash-test.json 40
 PROFILE=tmp/perf/out.cpuprofile node tmp/perf/bench.mjs public/test-saves/v419/les-eclaircies.json 300
 node scripts/perf-profile-summary.mjs tmp/perf/out.cpuprofile
