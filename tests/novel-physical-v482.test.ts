@@ -60,8 +60,9 @@ test('commercial generation consumes exactly two private draws and persists orig
 });
 
 test.each(['bulk','exotic'] as const)('future %s stock appends one indivisible Novel after all historical draws and IDs',kind=>{
- // Historical stock-input witness only; World models the current schema295.
- const old={...emptyLandscape(482,32,32),schemaVersion:294} as unknown as World,current=emptyLandscape(482,32,32);old.nextId=current.nextId=200;
+ // Historical stock-input witness only; World models schema295 to 337 (schema
+ // 338 adds the orbital chemfuel, garments and prostheses, see trade-fidelity-338).
+ const old={...emptyLandscape(482,32,32),schemaVersion:294} as unknown as World,current={...emptyLandscape(482,32,32),schemaVersion:337} as unknown as World;old.nextId=current.nextId=200;
  const ship:OrbitalShip={id:100,kind,name:'Declared stock fixture',arrivedAt:0,departAt:4000,announced:true},before=structuredClone(ship),a={rng:12345},b={rng:12345};
  const oldPiles=orbitalStock(old,ship,a),newPiles=orbitalStock(current,ship,b);
  expect(newPiles.slice(0,-1)).toEqual(oldPiles);expect(newPiles.at(-1)).toMatchObject({id:old.nextId,item:'novel',kind:'book',quantity:1,owner:{type:'orbital-ship',shipId:100}});
