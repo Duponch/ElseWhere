@@ -125,7 +125,7 @@ Les 51 recherches d'Elsewhere ont les coûts et les bureaux du jeu de base.
 
 1. **Vague 1, faite le 16 novembre :** alertes A ; aide visible en partie et conseils de chargement ; premiers jours et pensées du quotidien (schéma 343).
 2. **Vague 2, faite le 16 novembre :** moteur et notions de l'assistant d'apprentissage ; onglet Travail (344) ; travail passionné et besoin d'espace (345) ; sélection et ordres du quotidien (346) ; la surbrillance des commandes, prévue en vague 3, est faite aussi.
-3. **Vague 3, en cours :** prérequis puis tutoriel en 37 étapes ; lettres ; réserve d'humeur ; dépouiller ; alertes B ; animal qui devient enragé quand on le blesse ou qu'un apprivoisement échoue (tiré par le jeu de base, jamais par Elsewhere).
+3. **Vague 3, en cours :** prérequis du tutoriel (fait le 16 novembre, schéma 347) puis tutoriel en 37 étapes ; lettres ; réserve d'humeur ; dépouiller ; alertes B ; animal qui devient enragé quand on le blesse ou qu'un apprivoisement échoue (fait le 16 novembre, schéma 348).
 4. **Vague 4 :** contenu précoce, puis les manques C.
 
 Les lots déjà engagés plus tôt (conteur, commerce, armes) ne sont pas repris pour l'instant ; leurs restes figurent dans le [bilan du 15](bilan-20261115.md).

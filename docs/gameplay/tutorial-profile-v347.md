@@ -39,7 +39,7 @@ Chaque règle reprend une vérification `TutorSystem.TutorialMode` du jeu de bas
 | Aucun échec de construction | JobDriver_ConstructFinishFrame (pas de tirage) | pas de tirage pour le mur en bois, seule construction dont l'échec est modélisé |
 | Météo toujours dégagée | WeatherDecider.ChooseNextWeather | Dégagé choisi sans tirage, la durée reste tirée |
 | Les pillards ne volent pas | Trigger_HighValueThingsAround | les raids d'Elsewhere n'ont pas encore de phase de vol : rien à couper |
-| Les prédateurs ne chassent pas les pions du joueur | FoodUtility (prédation) | les prédateurs d'Elsewhere ne chassent que des animaux, jamais un colon ; voir les limites pour les animaux de la colonie |
+| Les prédateurs ne chassent pas les pions du joueur | FoodUtility (prédation) | les prédateurs d'Elsewhere ne chassent que des animaux, jamais un colon ; pendant le tutoriel, ils ne chassent pas non plus les animaux de la colonie (ajouté à l'intégration, avec le lot 348) |
 
 ## Valeurs de la difficulté Bâtisseur de communauté
 
@@ -93,9 +93,9 @@ La partie redevient une partie normale : alertes, crises, bagarres, romances, é
 
 - **Narrateurs** : Elsewhere n'offre que Cassandra en Récit d'aventure ; le changement de narrateur n'est proposé que pour finir le tutoriel (le jeu de base le permet à tout moment).
 - **Contenu imposé** : les pommes de terre vont sur la case visée ou, si une autre pile l'occupe, sur la plus proche qui a de la place (une pile par case). Le filon évite les cases occupées par une personne, un animal, un travail, un sol posé ou une ressource qui n'est pas une plante, au lieu de les déplacer ; sa forme suit le tirage de lump existant sur un flux privé. Le flux de tirage est celui de la partie, pas celui du jeu de base.
-- **Prédateurs** : la règle du tutoriel épargne aussi les animaux de la colonie ; ce filtre appartient à `animalPreyCandidates` (`src/sim/wildlife-predation.ts`), laissé à un autre lot en cours. Les colons ne sont jamais des proies.
+- **Prédateurs** : le filtre qui épargne les animaux de la colonie pendant le tutoriel a été ajouté à l'intégration, avec le lot 348 (`animalPreyCandidates`, test `tests/tutorial-wildlife-348.test.ts`). Les colons ne sont jamais des proies.
 - **États mentaux** : la confusion d'un colon atteint de démence (épisode clinique) n'est pas encore bloquée ; les animaux de la colonie ne sont pas couverts.
-- **Scarie** : deux lecteurs (`animal-scaria-261.ts`, `wildlife-health.ts`) gardent l'ancienne lecture ; la scarie ne peut pas apparaître pendant le tutoriel (aucun incident), mais ils doivent passer à la table de difficulté.
+- **Scarie** : à l'intégration, avec le lot 348, les deux lecteurs (`animal-scaria-261.ts`, `wildlife-health.ts`) passent à la table de difficulté : en Bâtisseur de communauté, la chance de pourriture est 0 et ne consomme aucun tirage.
 - **Cartes temporaires** : camps, champs de bataille de caravane et informations sur un cœur d'IA restent refusés pendant le tutoriel (ils attendent le profil Récit d'aventure).
 - **Assaillant dégâts jusqu'à terre** : la leçon DownRaider met aussi tous les ennemis à terre si un colon tombe ; cette aide appartient à la leçon et viendra avec elle.
 - Les leçons, leur ordre, leurs textes, le verrouillage des actions, les objets de départ suivis et le compagnon animal du scénario ne sont pas dans ce lot.
