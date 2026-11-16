@@ -58,6 +58,12 @@ export interface FrontMenuOptions {
   worldCreation?:WorldCreationCallbacks256;
   getWorldCreationPlayer?:()=>WorldCreationPlayer256;
   getMaxSettlements?:()=>SettlementLimit;getMaxSettlementsPending?:()=>boolean;onMaxSettlementsChange?:(value:SettlementLimit)=>Promise<boolean>;
+  /** Learning helper (browser knowledge shared by all colonies): on/off and a
+   * reset of every notion, as Core's Options → Gameplay. */
+  getLearningHelperEnabled?:()=>boolean;onLearningHelperEnabledChange?:(value:boolean)=>boolean;onLearningHelperReset?:()=>boolean;
+  /** A one-time learning message (Core TriggeredModal concept), already
+   * marked learned when returned; undefined once known. */
+  learningNotice?:(id:'max-colonies')=>{title:string;text:string}|undefined;
   getThreatPauseMode?:()=>ThreatPauseMode;getThreatPausePending?:()=>boolean;onThreatPauseModeChange?:(mode:ThreatPauseMode)=>Promise<boolean>;
   getAutosaveMinutes?:()=>number;
   onAutosaveMinutesChange?:(minutes:number)=>boolean;

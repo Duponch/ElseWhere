@@ -14,7 +14,7 @@ import {nativeOrderPage,cancelNativeOrderPage} from './ui3d/native-orders';
 import {nativeHelpPage} from './ui3d/native-help';
 import {createNativeGuidance,type NativeGuidanceCard} from './ui3d/native-guidance-card';
 import {loadingTips} from './ui3d/native-tips';
-import {createGuidanceCardSession,isHelpShortcut} from './ui/guidance-card';
+import {createGuidanceCardSession,isHelpShortcut,startingArrivalPending} from './ui/guidance-card';
 import {createNativeSaveManager} from './ui3d/native-saves';
 import {createNativeLocalTrade} from './ui3d/native-local-trade';
 import {createNativeFactionComms298} from './ui3d/native-faction-comms-298';
@@ -60,6 +60,7 @@ import './ui/allowed-area-controls.css';
 import { createFirstDayGuide,readFirstDayGuide } from './ui/first-day-guide';
 import {createFirstGesturesLearning,FIRST_GESTURES_STORAGE_KEY} from './ui/first-gestures-learning';
 import {createFirstGesturesGuide} from './ui/first-gestures-guide';
+import {createLearningRuntime,installLearningCameraInput,LEARNING_TICK_MS,type LearningRuntime} from './ui/learning-runtime';
 import { createStartingArrivalUI } from './ui/starting-arrival';
 let allowedAreaEditId:number|undefined;
 import {PresentationQueue} from './render/PresentationQueue';
@@ -341,6 +342,8 @@ function openResearchContext(panel:'work'|'architect'):void {
 // Only this fixed Worker/client and the fixed MAIN consumers can reach these
 // decoders. The command facade exposes no adoption or World callback entry.
 let firstGesturesLearning:ReturnType<typeof createFirstGesturesLearning>|undefined;
+/** Learning helper: browser knowledge and real time only, never the World. */
+let learningRuntime:LearningRuntime|undefined;
 let drainMainAdmissionsBeforeFrame=()=>{};
 let notifyMainAdmissionAvailability=()=>{};
 let mainAdmissionCanFrame=()=>false;
@@ -409,9 +412,10 @@ const client = (() => {
     setActualView301:(...args:Parameters<SimulationClient['setActualView301']>)=>native.setActualView301(...args),
     init: (...args: Parameters<SimulationClient['init']>) => native.init(...args),
     command: async (command:Parameters<SimulationClient['command']>[0]) => {
-      const learning=firstGesturesLearning,token=learning?.prepare(command,snapshot);
+      const learning=firstGesturesLearning,given=snapshot,token=learning?.prepare(command,given);
       const result=await native.command(command);
       if(token)learning?.confirm(token,result);
+      learningRuntime?.command(command,result,given);
       return result;
     },
     cancelCampEntry256:(...args:Parameters<SimulationClient['cancelCampEntry256']>)=>native.cancelCampEntry256(...args),
@@ -989,7 +993,7 @@ if(nativeMode){
   nativeHud=new NativeHudCards(nativeUi.art,nativeUi.anchors,{selectPawn,focus:(target,tab)=>{nativeCustomPage=undefined;focusNotification(target);if(tab)setNativeInspectorTab(tab);refreshNativeUi();},
     domain:openNativeDomainAlert,campaign:target=>{nativeCustomPage=undefined;void attempt(async()=>{const reason=await viewUrgentThreat(target);if(reason)throw Error(reason);});},
     context:context=>{nativeCustomPage=undefined;if(context.tool){setTool(context.tool);return;}if(context.worldTab)setNativeWorldTab(context.worldTab==='group'?'groups':'individual');void attempt(async()=>{await switchPanel(context.panel);if(context.category)setCategory(context.category);});},
-    speed:value=>{const token=client.getThreatPauseToken();void attempt(()=>changeSpeed(value,token));},view:applyNativeViewControl,
+    speed:value=>{learningRuntime?.speed(value);const token=client.getThreatPauseToken();void attempt(()=>changeSpeed(value,token));},view:applyNativeViewControl,
     // Core Notify_Started: bell for High/Critical, one critical notice (threat sound).
     alertStarted:started=>{if(started.priority==='critical'){audio.playInterface('ui.threat');nativeUi?.showNotice(`Alerte critique : ${started.text}`);}else if(started.bell)audio.playInterface('ui.panel');},
     showPage:page=>{nativeCustomPage=page;nativeUi!.showPage(page);}});
@@ -998,6 +1002,7 @@ if(nativeMode){
   const guidance=createNativeGuidance(nativeUi.art,nativeUi.anchors,{session:guidanceSession,learning:()=>firstGesturesLearning,world:()=>snapshot,
     blocked:()=>frontMenu.isOpen()||replacingWorld||!!launchProgress,sections:world=>readFirstDayGuide(world,confirmedFoodReadability()),now:()=>performance.now(),
     openHelp,guide:action=>{void attempt(()=>performNativeGuideAction(action));},invalidate:()=>nativeUi?.invalidate(),
+    concepts:()=>learningRuntime?.helper.shown??[],markConcept:id=>learningRuntime?.helper.markLearned(id),
     afterSync:()=>{if(nativeGuidance&&nativeGuidance.reservedHeight!==appliedGuidanceReserve)applyNativeHudViewport();}});
   nativeGuidance=guidance.card;nativeGuidanceSync=guidance.sync;
   nativeViewport={width:viewport.width,height:viewport.height,unitsPerPixel:viewport.unitsPerPixel,bottom:viewport.bottomDockHeight??96,left:viewport.leftHudBottom};applyNativeHudViewport();
@@ -1076,6 +1081,9 @@ const frontOptions:FrontMenuOptions = {
   }),
   onHelp:openHelp,
   getMaxSettlements:()=>settlementPreference.value,getMaxSettlementsPending:()=>settlementPreference.pending||threatPausePreference.pending,onMaxSettlementsChange:value=>settlementPreference.set(value),
+  getLearningHelperEnabled:()=>learningRuntime?.helper.enabled??true,onLearningHelperEnabledChange:value=>learningRuntime?.helper.setEnabled(value)??false,
+  onLearningHelperReset:()=>learningRuntime?.helper.reset()??false,
+  learningNotice:id=>{const concept=learningRuntime?.helper.modalIfNotKnown(id);return concept?{title:concept.title,text:concept.text}:undefined;},
   getThreatPauseMode:()=>threatPausePreference.mode,getThreatPausePending:()=>threatPausePreference.pending||settlementPreference.pending,onThreatPauseModeChange:mode=>threatPausePreference.set(mode),
   getAutosaveMinutes:()=>autosaveIntervalMinutes,onAutosaveMinutesChange:setAutosaveMinutes,
   onExport:exportCurrentColony,
@@ -1148,7 +1156,7 @@ function openNativeDomainAlert(alert:NativeDomainAlert):void {
   if(alert.action.kind==='arrivals'){nativeCustomPage=buildNativeArrivals(readNativeState(),nativeActions());nativeUi.showPage(nativeCustomPage);}
   else if(alert.action.kind==='quests'){nativeCustomPage=undefined;void attempt(()=>switchPanel('quests'));}
   else if(alert.action.kind==='trade')nativeLocalTrade?.openVisitors();
-  else if(alert.action.kind==='orbital')nativeLocalTrade?.openOrbital();
+  else if(alert.action.kind==='orbital')openLearningOrbitalTrade(()=>nativeLocalTrade?.openOrbital());
 }
 function setNativeUiScale(value:number):boolean {
   nativeUiScale=normalizeNativeUiScale(value);nativeUi?.setUiScale(nativeUiScale);
@@ -1199,7 +1207,7 @@ function nativeActions():NativeUiActions {
       renderState();return result;
     },
     panel:panel=>switchPanel(panel),category:setCategory,tool:setTool,selectPawn,
-    speed:value=>{const token=client.getThreatPauseToken();return changeSpeed(value,token);},rotate:direction=>{if(isShipComputerSensorsKind298(currentTool))return;placementOrientation=((placementOrientation+direction+4)%4) as Orientation;renderer?.setPlacementRotation(placementOrientation);refreshNativeUi();},
+    speed:value=>{learningRuntime?.speed(value);const token=client.getThreatPauseToken();return changeSpeed(value,token);},rotate:direction=>{if(isShipComputerSensorsKind298(currentTool))return;placementOrientation=((placementOrientation+direction+4)%4) as Orientation;renderer?.setPlacementRotation(placementOrientation);refreshNativeUi();},
     material:material=>{if(isShipComputerSensorsKind298(currentTool))return;nativeConstructionMaterial=material;renderer?.setConstructionMaterial(material);refreshNativeUi();},
     creationStorage:settings=>{nativeCreationStorage=structuredClone(settings);refreshNativeUi();},
     front:openFront,save,exportSave:exportCurrentColony,
@@ -1207,7 +1215,7 @@ function nativeActions():NativeUiActions {
     showPage:page=>{nativeCustomPage=page;nativeUi?.showPage(page);},refresh:()=>renderState(),clearSelection,
     readState:readNativeState,closePage:()=>{nativeToolPalette=undefined;nativeCustomPage=undefined;renderState();},
     pawnActivity:id=>{const pawn=snapshot?.pawns.find(p=>p.id===id);return pawn&&snapshot?actionLabel(pawn,carriedPatientsOf(snapshot)):'';},
-    openVisitorTrade:()=>nativeLocalTrade?.openVisitors(),openOrbitalTrade:id=>nativeLocalTrade?.openOrbital(id),openFactionComms298:id=>{void attempt(async()=>nativeFactionComms298?.open(id));},
+    openVisitorTrade:()=>nativeLocalTrade?.openVisitors(),openOrbitalTrade:id=>openLearningOrbitalTrade(()=>nativeLocalTrade?.openOrbital(id)),openFactionComms298:id=>{void attempt(async()=>nativeFactionComms298?.open(id));},
     launchShip298:id=>nativeShipTerminal298?.openLaunch(id),
     resizeZone:(kind,id,shrink)=>{nativeCustomPage=undefined;editZone(kind,id,shrink);},
     paintAllowedArea:(id,enabled)=>{if(!snapshot?.allowedAreas?.some(area=>area.id===id))return;nativeCustomPage=undefined;setPanel(null);applyTool(enabled?'allowed-expand':'allowed-shrink');allowedAreaEditId=id;renderer?.setAllowedAreaTarget(id);},
@@ -1304,6 +1312,7 @@ async function replaceColony(action: () => Promise<void>,confirmedDraft?:WorldCr
     guideAfterStartingArrival=false;learningReadout.open=false;firstDayGuide.reset();firstGesturesGuide.reset();startingArrivalUI.reset();
     // A created colony opens the advice card after its pods; a loaded one keeps a tab.
     if(confirmedDraft)guidanceSession.newColony();else guidanceSession.loadedColony();
+    learningRuntime?.levelLoaded();
     if(snapshot)startingArrivalUI.update(snapshot,currentSpeed);
     clearSelection(); setPanel(campaignOnly?'world':null); frontMenu.hide();
     if (snapshot?.pawns[0]) renderer?.focusPawn(snapshot.pawns[0].id);
@@ -2387,6 +2396,26 @@ firstGesturesLearning=createFirstGesturesLearning({
   write:value=>localStorage.setItem(FIRST_GESTURES_STORAGE_KEY,value),
   changed:()=>syncFirstDayGuide(),
 });
+learningRuntime=createLearningRuntime({
+  read:key=>localStorage.getItem(key),write:(key,value)=>localStorage.setItem(key,value),
+  world:()=>snapshot,epoch:()=>campaignPresentationEpoch,
+  playing:()=>!!snapshot&&!frontMenu.isOpen()&&!replacingWorld&&!launchProgress&&!simulationStopped&&!startingArrivalPending(snapshot),
+  arrivalPending:()=>startingArrivalPending(snapshot),menuOpen:()=>currentPanel==='menu',
+  observe:()=>({hoveredId:nativeUi?.hoveredNativeId,pageId:nativeUi?.shownPageId,panel:currentPanel,tileInspector:altInspectorHeld}),
+  now:()=>performance.now(),activated:()=>guidanceSession.attention(),changed:()=>syncNativeGuidance(true),showModal:showLearningModal,
+});
+setInterval(()=>learningRuntime?.tick(),LEARNING_TICK_MS);
+installLearningCameraInput(learningRuntime,el('viewport'),()=>!!snapshot&&!frontMenu.isOpen()&&!replacingWorld&&currentPanel===null&&!nativeUi?.shownPageId&&!nativeUi?.hoveredNativeId);
+/** A one-time learning message (Core TriggeredModal); `then` continues. */
+function showLearningModal(concept:{title:string;text:string},then?:()=>void):void {
+  if(!nativeUi){notify(`${concept.title} · ${concept.text}`);then?.();return;}
+  let done=false;
+  const close=()=>{if(done)return;done=true;if(nativeCustomPage?.id==='native-learning-modal'){nativeCustomPage=undefined;refreshNativeUi();}then?.();};
+  nativeCustomPage={id:'native-learning-modal',title:concept.title,modal:true,rows:[{id:'native-learning-modal-text',label:concept.text}],
+    actions:[{id:'native-learning-modal-ok',label:'Compris',onActivate:close}],onClose:close};
+  nativeUi.showPage(nativeCustomPage);
+}
+function openLearningOrbitalTrade(open:()=>void):void {if(learningRuntime)learningRuntime.orbitalTrade(open);else open();}
 const firstGesturesGuide=createFirstGesturesGuide(el('first-gestures-guide'),{learning:firstGesturesLearning,onAction:action=>{
   if(action.tool){learningReadout.open=false;firstDayGuide.setActive(false);firstGesturesGuide.setActive(false);setTool(action.tool);return;}
   performFirstDayGuideAction(action);
@@ -2509,7 +2538,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-close-p
   const preserveTool = currentPanel === 'architect' && currentTool !== 'select';
   void attempt(() => switchPanel(null, preserveTool));
 };
-for (const button of document.querySelectorAll<HTMLButtonElement>('[data-speed]')) button.onclick = () => { const token=client.getThreatPauseToken(),speed=Number(button.dataset.speed);void attempt(() => changeSpeed(speed,token)); };
+for (const button of document.querySelectorAll<HTMLButtonElement>('[data-speed]')) button.onclick = () => { const token=client.getThreatPauseToken(),speed=Number(button.dataset.speed);learningRuntime?.speed(speed);void attempt(() => changeSpeed(speed,token)); };
 el('save').onclick = () => { void attempt(save); }; el('load').onclick = () => { void attempt(() => load()); };
 el('restore-previous').onclick = () => { void attempt(() => load(PREVIOUS_KEY)); };
 el('browse-saves').onclick = () => { void attempt(() => openFront('load')); };
@@ -2621,11 +2650,11 @@ document.addEventListener('keydown', event => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); void attempt(save); return; }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   if (isHelpShortcut(event)) { event.preventDefault(); if (!event.repeat) openHelp(); return; }
-  if (event.code === 'Space') { event.preventDefault();const token=client.getThreatPauseToken(),speed=currentSpeed===0?lastSpeed:0;void attempt(() => changeSpeed(speed,token)); return; }
+  if (event.code === 'Space') { event.preventDefault();const token=client.getThreatPauseToken(),speed=currentSpeed===0?lastSpeed:0;learningRuntime?.speed(speed,true);void attempt(() => changeSpeed(speed,token)); return; }
   if (event.key === 'Escape') { event.preventDefault(); if(shootingControls.active){shootingControls.cancel();renderState();return;} if (orderMenu.close() || renderer?.cancelDesignation()) return; void attempt(() => switchPanel(null)); clearSelection(); return; }
   if (event.key === 'Tab' || event.key === 'F1' || event.key === 'F2' || event.key === 'F3') { event.preventDefault(); const panel = event.key === 'Tab' ? 'architect' : event.key === 'F1' ? 'work' : event.key === 'F2' ? 'schedule' : 'assign'; setPanel(currentPanel === panel ? null : panel); return; }
   const speeds: Record<string, number> = { '1': 1, '2': 3, '3': 6 };
-  if (event.key in speeds) { const token=client.getThreatPauseToken(),speed=speeds[event.key];void attempt(() => changeSpeed(speed,token)); return; }
+  if (event.key in speeds) { const token=client.getThreatPauseToken(),speed=speeds[event.key];learningRuntime?.speed(speed);void attempt(() => changeSpeed(speed,token)); return; }
   if(event.key.toLowerCase()==='r'&&selection.ids.size){event.preventDefault();if(!event.repeat)toggleDraft(snapshot?.pawns.filter(p=>selection.ids.has(p.id)&&isColonist(p)&&!p.prisoner)??[],c=>void attempt(async()=>{await client.command(c);renderState();}));return;}
   if(!snapshot)return;
   const shortcuts: Record<string, Tool> = { m:'mine', c: 'chop', r: 'harvest', b: 'wall', l: 'bed', x: 'cancel' };
@@ -2944,7 +2973,7 @@ const metricsInterval = setInterval(() => {
     el('metrics').textContent = `${renderer.backend} · ${renderer.stats.frameMs.toFixed(1)} ms/image · p95 ${renderer.stats.frameP95.toFixed(1)} ms · simulation ${stepMs.toFixed(2)} ms/tick · son ${soundState}, ${sound.loaded} MP3, ${sound.playedOneShots} effets, dernier ${sound.lastKind ?? '—'} · musique ${song.state}${song.track ? ` (${song.track})` : ''}`;
   }
 }, 1000);
-window.addEventListener('pagehide', event => { if (event.persisted) return; clearInterval(metricsInterval);nativeLocalTrade?.dispose();nativeFactionComms298?.dispose();nativeSaveManager?.dispose();nativeHud?.dispose();nativeShipTerminal298?.dispose();nativeUi?.dispose(); client.dispose(); audio.dispose(); music.dispose(); renderer?.dispose(); saveRepository.close(); });
+window.addEventListener('pagehide', event => { learningRuntime?.flush(); if (event.persisted) return; clearInterval(metricsInterval);nativeLocalTrade?.dispose();nativeFactionComms298?.dispose();nativeSaveManager?.dispose();nativeHud?.dispose();nativeShipTerminal298?.dispose();nativeUi?.dispose(); client.dispose(); audio.dispose(); music.dispose(); renderer?.dispose(); saveRepository.close(); });
 mainAdmissionCanFrame=()=>renderer instanceof MainColonyRenderer&&renderer.admissionFrameReady&&!presentationPreparation&&!replacingWorld&&!simulationStopped&&!graphicsFault&&!graphicsRecovering&&!frontMenu.isOpen()&&!document.hidden;
 if(nativeMode){
   // Compatibility bookkeeping is detached after bootstrap. No legacy control

@@ -22,7 +22,11 @@ export interface GuidanceCardGesture {
   learned:number;total:number;saved:boolean;
   current?:{id:FirstGestureId;position:number;title:string;instruction:string;actionLabel:string;action:FirstDayGuideAction};
 }
+/** A notion shown by the learning helper (Core LearningReadout row). */
+export interface GuidanceCardConcept {id:string;title:string;text:string;knowledge:number}
 export interface GuidanceCardModel {
+  /** Learning helper notions, in activation order; empty when it is off. */
+  concepts:readonly GuidanceCardConcept[];
   gesture:GuidanceCardGesture;
   /** Same order and facts as Aide → Conseils actuels; empty without a map. */
   checks:readonly GuidanceCardCheck[];
@@ -30,10 +34,19 @@ export interface GuidanceCardModel {
 }
 export interface GuidanceLearningView {state:FirstGesturesLearningState;current:FirstGestureId|undefined;saved:boolean}
 
-/** The single place deciding what the card shows. Later helpers (learning
- * concepts, tutorial lessons) are expected to add their rows here. */
-export function readGuidanceCard(input:{learning?:GuidanceLearningView;sections?:readonly FirstDayGuideSection[]}):GuidanceCardModel {
-  return {gesture:readGuidanceGesture(input.learning),...readGuidanceChecks(input.sections)};
+/** The single place deciding what the card shows: the learning helper's
+ * notions first (as Core's readout), then the first gestures and the
+ * first-day preparations. Later helpers (tutorial lessons) add rows here. */
+export function readGuidanceCard(input:{learning?:GuidanceLearningView;sections?:readonly FirstDayGuideSection[];concepts?:readonly GuidanceCardConcept[]}):GuidanceCardModel {
+  return {concepts:readGuidanceConcepts(input.concepts),gesture:readGuidanceGesture(input.learning),...readGuidanceChecks(input.sections)};
+}
+
+/** Shown notions, each a copy with its knowledge clamped to 0..1. Core
+ * selects three at most on its own, but Important and Critical opportunities
+ * add more; the card keeps six, the newest last. */
+export const GUIDANCE_MAX_CONCEPTS=6;
+export function readGuidanceConcepts(concepts:readonly GuidanceCardConcept[]|undefined):GuidanceCardConcept[] {
+  return (concepts??[]).slice(-GUIDANCE_MAX_CONCEPTS).map(concept=>({id:concept.id,title:concept.title,text:concept.text,knowledge:Math.min(1,Math.max(0,concept.knowledge))}));
 }
 
 export function readGuidanceGesture(learning:GuidanceLearningView|undefined):GuidanceCardGesture {
@@ -53,7 +66,8 @@ function readGuidanceChecks(sections:readonly FirstDayGuideSection[]|undefined):
 }
 
 /** Short label of the collapsed tab; reads browser knowledge only. */
-export function guidanceTabLabel(gesture:Pick<GuidanceCardGesture,'learned'|'total'|'state'>):string {
+export function guidanceTabLabel(gesture:Pick<GuidanceCardGesture,'learned'|'total'|'state'>,concepts=0):string {
+  if(concepts>0)return `Conseils · ${concepts} notion${concepts>1?'s':''} à lire`;
   return gesture.state==='off'?'Conseils':`Conseils · ${gesture.learned}/${gesture.total} gestes`;
 }
 
@@ -81,6 +95,10 @@ export interface GuidanceCardSession {
   expand():void;
   close():void;
   reopen():void;
+  /** A learning notion became shown: like Core's readout, the card shows it
+   * even if it was collapsed or closed (the helper itself is turned off in
+   * the Options). Before the starting pods open, the pending opening stays. */
+  attention():void;
 }
 
 /** Mode transitions of the card, like the learning readout of Core: shown on
@@ -99,6 +117,7 @@ export function createGuidanceCardSession():GuidanceCardSession {
     expand(){if(mode==='collapsed')mode='expanded';},
     close(){mode='closed';awaitingArrival=false;closedThisSession=true;},
     reopen(){mode='expanded';awaitingArrival=false;closedThisSession=false;},
+    attention(){if(awaitingArrival)return;mode='expanded';closedThisSession=false;},
   };
 }
 

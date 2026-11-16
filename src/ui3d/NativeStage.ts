@@ -336,6 +336,10 @@ export class NativeStage {
     finally{this.page=null;this.rebuildPage(true);this.scroll=scroll;this.invalidate();}
     return true;
   }
+  /** Native id of the control under the pointer (read by the learning helper). */
+  get hoveredNativeId():string|undefined{const id=this.hovered?.userData.nativeId;return typeof id==='string'&&id?id:undefined;}
+  /** Id of the page shown, if any (read by the learning helper). */
+  get shownPageId():string|undefined{return this.page?.id||undefined;}
   showPage(page:NativePage|null):void{
     if(this.closed)return;
     if(this.shipCurtainOwner298!==undefined&&page?.id!==this.shipCurtainPage298){

@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import {PALETTE,drawHandBlob,drawHandRect,type CardboardPiece,type CardboardPieceOptions,type PrototypeCardboardArt} from './prototype-art';
 import {wrapNativeText} from './native-layout';
-import {GUIDANCE_STATUS_LABELS,guidanceTabLabel,readGuidanceCard,readGuidanceGesture,startingArrivalPending,type GuidanceCardMode,type GuidanceCardModel,type GuidanceCardSession} from '../ui/guidance-card';
+import {GUIDANCE_STATUS_LABELS,guidanceTabLabel,readGuidanceCard,readGuidanceConcepts,readGuidanceGesture,startingArrivalPending,type GuidanceCardConcept,type GuidanceCardMode,type GuidanceCardModel,type GuidanceCardSession} from '../ui/guidance-card';
 import type {FirstDayGuideAction,FirstDayGuideSection,FirstDayGuideStatus} from '../ui/first-day-guide';
 import type {FirstGesturesLearning} from '../ui/first-gestures-learning';
 import type {World} from '../sim/types';
@@ -16,6 +16,8 @@ export interface NativeGuidanceActions {
   guide(action:FirstDayGuideAction):void;
   startGestures():void;
   declareGesture():void;
+  /** "Compris": the learning helper notion is marked learned. */
+  markConcept?(id:string):void;
   invalidate?():void;
 }
 export interface NativeGuidanceView {visible:boolean;mode:GuidanceCardMode;model:GuidanceCardModel}
@@ -30,8 +32,8 @@ const PAD=10,ROW=18,BUTTON=24,TAB=28,COMPACT_CHECKS=4;
 type Ink={kind:'text';text:string;x:number;y:number;size:number;bold?:boolean;color:string;width:number}
   |{kind:'dot';x:number;y:number;color:string}|{kind:'rule';y:number};
 interface ButtonBox {id:string;label:string;hint:string;x:number;y:number;width:number;height:number;color:string;onClick:()=>void}
-interface RowBox {id:string;hint:string;y:number;onClick:()=>void}
-interface CardLayout {variant:'full'|'compact'|'tab'|'none';width:number;height:number;ink:Ink[];buttons:ButtonBox[];rows:RowBox[]}
+interface RowBox {id:string;hint:string;y:number;height?:number;onClick:()=>void}
+interface CardLayout {variant:'full'|'compact'|'minimal'|'tab'|'none';width:number;height:number;ink:Ink[];buttons:ButtonBox[];rows:RowBox[]}
 
 /** The advice card of the native play view: compact first-day facts and the
  * four optional gestures, painted on the same cardboard as the HUD. It sits
@@ -89,7 +91,8 @@ export class NativeGuidanceCard {
   update(view:NativeGuidanceView):void {
     if(this.disposed)return;
     const before=this.view;this.view=view;
-    if(before&&before.visible===view.visible&&before.mode===view.mode&&(before.model===view.model||view.mode!=='expanded'&&guidanceTabLabel(before.model.gesture)===guidanceTabLabel(view.model.gesture)))return;
+    const tab=(model:GuidanceCardModel)=>guidanceTabLabel(model.gesture,model.concepts.length);
+    if(before&&before.visible===view.visible&&before.mode===view.mode&&(before.model===view.model||view.mode!=='expanded'&&tab(before.model)===tab(view.model)))return;
     this.apply();
   }
   /** Pixels used at the bottom of the left column, 0 when nothing is shown. */
@@ -130,22 +133,26 @@ export class NativeGuidanceCard {
     const bottom=this.columnBottom(),space=bottom-12-MIN_RESOURCES;
     const tab=():CardLayout=>bottom-12-60>=TAB?this.tabLayout(view,width):{variant:'none',width,height:0,ink:[],buttons:[],rows:[]};
     if(view.mode==='collapsed')return tab();
-    const full=this.cardLayout(view,width,false);
+    const full=this.cardLayout(view,width,'full');
     if(full.height<=space)return full;
-    const compact=this.cardLayout(view,width,true);
-    return compact.height<=space?compact:tab();
+    const compact=this.cardLayout(view,width,'compact');
+    if(compact.height<=space)return compact;
+    // Notions shown: keep their titles and Compris before the other parts.
+    const minimal=view.model.concepts.length?this.cardLayout(view,width,'minimal'):undefined;
+    return minimal&&minimal.height<=space?minimal:tab();
   }
 
   private tabLayout(view:NativeGuidanceView,width:number):CardLayout {
-    const label=`${guidanceTabLabel(view.model.gesture)} ›`;
+    const label=`${guidanceTabLabel(view.model.gesture,view.model.concepts.length)} ›`;
     return {variant:'tab',width,height:TAB,ink:[],rows:[],buttons:[
       {id:'hud:guidance:tab',label,hint:'Déplier la carte de conseils',x:0,y:0,width:width-30,height:TAB,color:PALETTE.kraftBase,onClick:()=>this.actions.expand()},
       {id:'hud:guidance:tab-close',label:'×',hint:'Fermer la carte de conseils · Aide la rouvre',x:width-26,y:2,width:26,height:TAB-4,color:PALETTE.kraftLight,onClick:()=>this.actions.close()},
     ]};
   }
 
-  private cardLayout(view:NativeGuidanceView,width:number,compact:boolean):CardLayout {
-    const ink:Ink[]=[],buttons:ButtonBox[]=[],rows:RowBox[]=[],inner=width-2*PAD,{gesture,checks,ready}=view.model;
+  private cardLayout(view:NativeGuidanceView,width:number,level:'full'|'compact'|'minimal'):CardLayout {
+    const compact=level!=='full';
+    const ink:Ink[]=[],buttons:ButtonBox[]=[],rows:RowBox[]=[],inner=width-2*PAD,{gesture,checks,ready,concepts}=view.model;
     const lines=(text:string,y:number,size:number,options:{bold?:boolean;color?:string;max?:number}={}):number=>{
       const step=size+3;
       for(const line of this.wrap(text,inner,size,options.bold,options.max)){ink.push({kind:'text',text:line,x:PAD,y:y+size,size,bold:options.bold,color:options.color??PALETTE.inkDark,width:inner});y+=step;}
@@ -154,7 +161,28 @@ export class NativeGuidanceCard {
     ink.push({kind:'text',text:'Conseils',x:PAD,y:20,size:15,bold:true,color:PALETTE.inkDark,width:inner-60});
     buttons.push({id:'hud:guidance:collapse',label:'–',hint:'Replier la carte de conseils',x:width-56,y:5,width:22,height:20,color:PALETTE.kraftLight,onClick:()=>this.actions.collapse()});
     buttons.push({id:'hud:guidance:close',label:'×',hint:'Fermer la carte de conseils · Aide la rouvre',x:width-30,y:5,width:22,height:20,color:PALETTE.kraftLight,onClick:()=>this.actions.close()});
-    let y=lines(`Premiers gestes · ${gesture.learned}/${gesture.total}`,30,13,{bold:true});
+    let y=30;
+    if(concepts.length){
+      // Learning helper notions (Core LearningReadout): title, text, Compris.
+      y=lines(`Notions à découvrir · ${concepts.length}`,y,13,{bold:true});
+      for(const concept of concepts){
+        const top=y,id=concept.id;
+        y=lines(concept.title,y,12,{bold:true,max:2,color:PALETTE.pineDark});
+        if(level!=='minimal')y=lines(concept.text,y,12,{max:level==='full'?6:3});
+        const progress=concept.knowledge>0&&concept.knowledge<1?`\nAcquis à ${Math.round(concept.knowledge*100)} %`:'';
+        rows.push({id:`hud:guidance:concept:${id}`,hint:`${concept.title}\n${concept.text}${progress}`,y:top,height:Math.max(ROW,y-top),onClick:()=>{}});
+        buttons.push({id:`hud:guidance:concept:${id}:learned`,label:'Compris',hint:'Je connais cette notion : elle ne sera plus proposée (Options → Réinitialiser l’assistant la remet).',
+          x:PAD,y:y+2,width:84,height:22,color:PALETTE.creamPaper,onClick:()=>this.actions.markConcept?.(id)});
+        y+=22+8;
+      }
+      ink.push({kind:'rule',y});y+=6;
+    }
+    if(level==='minimal'){
+      buttons.push({id:'hud:guidance:help',label:'Carnet de survie (H)',hint:'Ouvrir l’aide : premiers gestes, commandes et conseils détaillés',x:PAD,y:y+2,width:inner,height:BUTTON,color:PALETTE.creamPaper,onClick:()=>this.actions.openHelp()});
+      y+=BUTTON+PAD+2;
+      return {variant:'minimal',width,height:Math.ceil(y),ink,buttons,rows};
+    }
+    y=lines(`Premiers gestes · ${gesture.learned}/${gesture.total}`,y,13,{bold:true});
     const buttonRow=(entries:{id:string;label:string;hint:string;onClick:()=>void}[]):void=>{
       const gap=6,each=(inner-gap*(entries.length-1))/entries.length;
       entries.forEach((entry,index)=>buttons.push({...entry,x:PAD+index*(each+gap),y:y+3,width:each,height:BUTTON,color:index===0?PALETTE.ochre:PALETTE.creamPaper}));
@@ -199,7 +227,7 @@ export class NativeGuidanceCard {
       if(base.x!==px||base.y!==py||base.z!==z)piece.setBaseTransform(px,py,z);
     };
     // Panel: one painted sheet with all ink; it only blocks world clicks.
-    if(layout.variant==='full'||layout.variant==='compact'){
+    if(layout.variant==='full'||layout.variant==='compact'||layout.variant==='minimal'){
       const geometry=`${layout.width}|${layout.height}`;
       if(this.panel&&this.panel.userData.geometry!==geometry){this.drop(this.panel);this.panel=undefined;}
       if(!this.panel){
@@ -238,10 +266,11 @@ export class NativeGuidanceCard {
     for(const row of layout.rows){
       liveRows.add(row.id);
       let piece=this.rows.get(row.id);
-      if(piece&&piece.userData.w!==inner*unit){this.drop(piece);this.rows.delete(row.id);piece=undefined;}
-      if(!piece){piece=this.piece({w:inner*unit,h:ROW*unit,hitOnly:true,interactive:true,drawFn:()=>{}});this.rows.set(row.id,piece);this.cardGroup.add(piece);}
+      const height=row.height??ROW;
+      if(piece&&(piece.userData.w!==inner*unit||piece.userData.rowHeight!==height)){this.drop(piece);this.rows.delete(row.id);piece=undefined;}
+      if(!piece){piece=this.piece({w:inner*unit,h:height*unit,hitOnly:true,interactive:true,drawFn:()=>{}});piece.userData.rowHeight=height;this.rows.set(row.id,piece);this.cardGroup.add(piece);}
       piece.userData.nativeId=row.id;piece.userData.tooltip=row.hint;piece.userData.onClick=row.onClick;
-      place(piece,PAD,row.y,inner,ROW,.06);
+      place(piece,PAD,row.y,inner,height,.06);
     }
     for(const [id,piece] of this.rows)if(!liveRows.has(id)){this.drop(piece);this.rows.delete(id);}
   }
@@ -273,6 +302,10 @@ export interface NativeGuidanceOptions {
   blocked:()=>boolean;
   /** First-day facts of the confirmed snapshot (Aide → Conseils actuels). */
   sections:(world:World)=>readonly FirstDayGuideSection[];
+  /** Learning helper notions shown now (browser knowledge, never the World). */
+  concepts?:()=>readonly GuidanceCardConcept[];
+  /** "Compris" on a notion. */
+  markConcept?:(id:string)=>void;
   now:()=>number;
   openHelp:()=>void;
   guide:(action:FirstDayGuideAction)=>void;
@@ -293,14 +326,17 @@ export function createNativeGuidance(art:PrototypeCardboardArt,anchors:NativeGui
     const world=options.world(),session=options.session;
     const visible=session.sync({world:!!world,arrivalPending:startingArrivalPending(world),blocked:options.blocked()});
     const learning=options.learning(),view=learning?{state:learning.state,current:learning.current,saved:learning.saved}:undefined;
-    const key=view?JSON.stringify([view.state,view.saved]):'';
+    // Knowledge is rounded to tenths: a notion's tooltip progress, not every
+    // per-frame credit, decides whether the card is rebuilt.
+    const concepts=readGuidanceConcepts(options.concepts?.());
+    const key=JSON.stringify([view?[view.state,view.saved]:0,concepts.map(concept=>[concept.id,Math.round(concept.knowledge*10)])]);
     let model:GuidanceCardModel;
     if(visible&&session.mode==='expanded'&&world){
       const now=options.now();
       if(force||!cached||cached.learning!==key||cached.world!==world&&now-cached.at>=GUIDANCE_READ_INTERVAL_MS){
-        model=readGuidanceCard({learning:view,sections:options.sections(world)});cached={model,world,at:now,learning:key};
+        model=readGuidanceCard({learning:view,sections:options.sections(world),concepts});cached={model,world,at:now,learning:key};
       }else model=cached.model;
-    }else{model={gesture:readGuidanceGesture(view),checks:[],ready:0};cached=undefined;}
+    }else{model={concepts,gesture:readGuidanceGesture(view),checks:[],ready:0};cached=undefined;}
     card.update({visible,mode:session.mode,model});
     options.afterSync?.();
   };
@@ -312,6 +348,7 @@ export function createNativeGuidance(art:PrototypeCardboardArt,anchors:NativeGui
     guide:action=>options.guide(action),
     startGestures:()=>{options.learning()?.start();sync(true);},
     declareGesture:()=>{options.learning()?.declareCurrentKnown();sync(true);},
+    markConcept:id=>{options.markConcept?.(id);sync(true);},
     invalidate:()=>options.invalidate?.(),
   });
   return {card,sync};

@@ -71,7 +71,8 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   let optionSection:typeof optionSections[number]['id']='game';
   let graphicsPreferenceGeneration=0;
   let loadSearch='',selectedLoadKey:string|undefined;
-  let confirmation: { message: string; accept: () => void | Promise<unknown> } | undefined;
+  let confirmation: { message: string; accept: () => void | Promise<unknown>; title?: string; acceptLabel?: string } | undefined;
+  let notice: { title: string; text: string } | undefined;
   let tipTicker: ReturnType<typeof setInterval> | undefined, shownTip: string | undefined;
 
   /** Gameplay tips during world creation's long steps only (planet, site,
@@ -95,10 +96,16 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   function paint(): void {
     if (!open||externalPage) return;
     if (confirmation) {
-      show({ id: 'front-confirm', title: 'Confirmer le départ', modal: true, layout:'setup',width:620,height:280,rows: [{ id: 'confirmation', region:'details',label: confirmation.message }], actions: [
+      show({ id: 'front-confirm', title: confirmation.title ?? 'Confirmer le départ', modal: true, layout:'setup',width:620,height:280,rows: [{ id: 'confirmation', region:'details',label: confirmation.message }], actions: [
         control('confirm-cancel', 'Annuler', () => { confirmation = undefined; }),
-        control('confirm-accept', 'Confirmer', () => { const accept = confirmation!.accept; confirmation = undefined; return accept(); }),
+        control('confirm-accept', confirmation.acceptLabel ?? 'Confirmer', () => { const accept = confirmation!.accept; confirmation = undefined; return accept(); }),
       ], onClose: () => { confirmation = undefined; paint(); } });
+      return;
+    }
+    if (notice) {
+      show({ id: 'front-learning-notice', title: notice.title, modal: true, layout:'setup',width:620,height:280,rows: [{ id: 'learning-notice', region:'details',label: notice.text }], actions: [
+        control('learning-notice-accept', 'Compris', () => { notice = undefined; }),
+      ], onClose: () => { notice = undefined; paint(); } });
       return;
     }
     const result = renderPage();
@@ -110,7 +117,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     result.onClose = () => { if (!busy && !pending) back(); };
     show(presentNativeFront(result,page,{button:control,field:input,tests:testCatalogue}));
   }
-  function navigate(next: Page): void { externalPage=false;page = next; open = true; error = ''; status = '';statusMeter=undefined; confirmation = undefined; paint(); }
+  function navigate(next: Page): void { externalPage=false;page = next; open = true; error = ''; status = '';statusMeter=undefined; confirmation = undefined; notice = undefined; paint(); }
   function fail(cause: unknown): void { error = errorMessage(cause); paint(); }
   function control(id: string, label: string, action: () => unknown, disabled = false, active = false, allowBusy = false): NativeControl {
     return { id, label, disabled: disabled || (!allowBusy && (busy || pending)), active, onActivate: async () => {
@@ -241,8 +248,18 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       await run(() => preference(options.onThreatPauseModeChange!(value)), 'Application du choix…');
     }, value => THREAT_PAUSE_CHOICES.find(c => c.value === value)!.label, options.getThreatPausePending?.()));
     if (options.getMaxSettlements && options.onMaxSettlementsChange) rows.push(choice('settlements', 'Nombre maximal de colonies', options.getMaxSettlements(), SETTLEMENT_LIMIT_CHOICES, async value => {
+      const before = options.getMaxSettlements!();
       await run(() => preference(options.onMaxSettlementsChange!(value)), 'Application du choix…');
+      // Core Dialog_Options: a raised limit above one shows its note once.
+      if (value !== before && value > 1) notice = options.learningNotice?.('max-colonies') ?? notice;
     }, String, options.getMaxSettlementsPending?.()));
+    if (options.getLearningHelperEnabled && options.onLearningHelperEnabledChange) rows.push(
+      { ...toggle('learning-helper', 'Assistant d’apprentissage', options.getLearningHelperEnabled(), value => preference(options.onLearningHelperEnabledChange!(value))),
+        hint: 'Propose, pendant la partie, des notions sur les commandes et les règles, au bon moment. Ce que vous avez appris est gardé par ce navigateur pour toutes vos colonies.' });
+    if (options.onLearningHelperReset) rows.push({ id: 'learning-helper-reset', label: 'Notions apprises', hint: 'Oublier toutes les notions apprises : l’assistant les proposera de nouveau. Les premiers gestes du carnet ne changent pas.',
+      controls: [control('learning-helper-reset', 'Réinitialiser l’assistant', () => { confirmation = { title: 'Réinitialiser l’assistant', acceptLabel: 'Réinitialiser',
+        message: 'Toutes les notions de l’assistant d’apprentissage seront oubliées dans ce navigateur et pourront être proposées de nouveau. Cette action ne touche ni vos colonies ni le parcours des premiers gestes.',
+        accept: () => preference(options.onLearningHelperReset!()) }; })] });
     rows.push(toggle('textures', 'Textures 3D stylisées', options.getTexturesEnabled(), value => preference(options.onTexturesEnabledChange(value))),
       toggle('grass', 'Tapis d’herbe', options.getGroundGrassEnabled(), value => preference(options.onGroundGrassEnabledChange(value))),
       toggle('diorama', 'Diorama en carton', options.getDioramaEnabled(), value => preference(options.onDioramaEnabledChange(value))),
@@ -275,7 +292,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       toggle('music', 'Musique', options.getMusicEnabled(), value => preference(options.onMusicEnabledChange(value))),
       range('music-volume', 'Volume de la musique', Math.round(options.getMusicVolume() * 100), 0, 100, 1, value => preference(options.onMusicVolumeChange(value / 100)), false, ' %'));
     const sectionOf=(id:string):typeof optionSections[number]['id']=>{
-      if(['autosave','threat','settlements'].includes(id))return 'game';
+      if(['autosave','threat','settlements','learning-helper','learning-helper-reset'].includes(id))return 'game';
       if(['ui-scale','auto-hide-bottom','auto-hide-notifications','designation','item-label','font'].includes(id))return 'interface';
       if(id.startsWith('light-'))return 'lighting';
       if(['sound','sound-volume','test-sound','music','music-volume'].includes(id))return 'audio';
@@ -575,7 +592,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     parameters = { seed, settings: defaultWorldGenerationSettings(), size: 250, season: 'auto' };
     roster = createStartingCandidateRoster(teamSeed); inspected = roster[0]!.serial; navigate('scenario');
   }
-  function hide(): void { generation++; flow?.cancel(); confirmation = undefined; open = false; if (!pending) busy = false; show(null); }
+  function hide(): void { generation++; flow?.cancel(); confirmation = undefined; notice = undefined; open = false; if (!pending) busy = false; show(null); }
   return {
     showHome(nextHasGame = hasGame) { if (busy || pending) return; hasGame = nextHasGame; navigate('home'); },
     setHasGame(next) { hasGame = next; if (page === 'home') paint(); },
