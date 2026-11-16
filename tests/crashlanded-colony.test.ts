@@ -216,7 +216,9 @@ test.each(resumed?[resumed.seed]:[42])('Atterrissage : 24 jours, deux récoltes 
       const eaten=e.message.match(/a mangé une portion \((\d+) ×/);
       if(eaten){
         const quantity=Number(eaten[1]);
-        const pawn=w.pawns.find(p=>e.message.startsWith(`${p.name} a mangé`)),item=pawn?eating.get(pawn.name):undefined;
+        // A visitor may eat and leave the map in the same tick: its name comes
+        // from the eaters seen before the step, and only colonists are counted.
+        const pawn=w.pawns.find(p=>e.message.startsWith(`${p.name} a mangé`)),name=pawn?.name??[...eating.keys()].find(n=>e.message.startsWith(`${n} a mangé`)),item=name===undefined?undefined:eating.get(name);
         expect(item,`Consumed physical item missing at tick ${w.tick}: ${e.message}`).toBeDefined();
         if(!pawn||!isColonist(pawn))continue;
         const physical=ingestions.filter(r=>r.pawnId===pawn.id&&r.item===item&&r.quantity===quantity);
