@@ -39,7 +39,8 @@ function jobSkill(job:Job):BackgroundSkillId|undefined {
  * position). A drafted pawn's automatic fire or blow comes from its Wait job
  * and has no active skill. Work, at its work phase only: a bill
  * (Toils_Recipe: the recipe's workSkill), research (Intellectual), tending a
- * person or an animal and surgery (Medicine), a prisoner chat (Social),
+ * person or an animal and surgery (Medicine), a prisoner chat and its final
+ * recruit attempt (Social),
  * taming and training except while feeding, milking and shearing (Animals),
  * a deep drill (Mining) or a ground scanner (Intellectual), and the map jobs
  * above. Reading, recreation, hauling, cleaning, firefighting, feeding,
@@ -57,7 +58,8 @@ export function activeSkill345(world:World,pawn:Pawn):BackgroundSkillId|undefine
   if(pawn.tend)return pawn.tend.phase==='tend'?'medicine':undefined;
   if(pawn.animalCare)return pawn.animalCare.phase==='treat'?'medicine':undefined;
   if(pawn.surgery)return pawn.surgery.phase==='work'?'medicine':undefined;
-  if(pawn.ward)return pawn.ward.kind==='chat'&&pawn.ward.phase==='rapport'?'social':undefined;
+  // ConvinceRecruitee and the closing TryRecruit wait (its effect precedes it); not the approach.
+  if(pawn.ward)return pawn.ward.kind==='chat'&&(pawn.ward.phase==='rapport'||pawn.ward.phase==='closing')?'social':undefined;
   const handling=pawn.animalHandling;
   if(handling){
     if(handling.phase!=='interact')return;

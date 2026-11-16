@@ -164,6 +164,8 @@ test('the active skill of each kind of work, at its work phase only',()=>{
  expect(read({surgery:{phase:'work'} as Pawn['surgery']})).toBe('medicine');
  expect(read({ward:{kind:'chat',patientId:2,spot:{x:1,z:1},phase:'rapport',progress:0,rapports:0}})).toBe('social');
  expect(read({ward:{kind:'chat',patientId:2,spot:{x:1,z:1},phase:'approach',progress:0,rapports:0}})).toBeUndefined();
+ expect(read({ward:{kind:'chat',patientId:2,spot:{x:1,z:1},phase:'closing',progress:0,rapports:5}})).toBe('social');
+ expect(read({ward:{kind:'food',patientId:2,sourcePileId:1,carryPileId:null,quantity:1,spot:{x:1,z:1},phase:'deliver'}})).toBeUndefined();
  const handling=(kind:string,step=0,phase='interact')=>({animalId:2,kind,sourcePileId:0,carryPileId:null,quantity:0,phase,step,progress:0}) as unknown as Pawn['animalHandling'];
  expect([read({animalHandling:handling('tame')}),read({animalHandling:handling('train',2)}),read({animalHandling:handling('train',5)}),read({animalHandling:handling('milk')}),read({animalHandling:handling('slaughter')}),read({animalHandling:handling('lead')}),read({animalHandling:handling('tame',0,'approach')})])
   .toEqual(['animals',undefined,'animals','animals',undefined,undefined,undefined]);
