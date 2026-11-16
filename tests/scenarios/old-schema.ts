@@ -12,7 +12,9 @@ const FIRST_DAYS_KINDS_343=['slept-in-cold','slept-in-heat','slept-outside','sle
  * (a concurrent raid group is kept, and refused); schema 343: the
  * CrashedTogether opinions, the NewColonyOptimism of a new game and the
  * sleep, soaking-wet and darkness memories (an emptied social state that
- * never interacted, and an emptied memory list, are removed). */
+ * never interacted, and an emptied memory list, are removed); schema 344: the
+ * campaign's simple Work tab setting (an older game always has manual
+ * priorities). */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -46,5 +48,6 @@ function strip(value:unknown,version:number):void {
 export const asMigratedCurrent=(current:string):string=>serializeWorld(deserializeWorld(asOldSchema(current,342)));
 /** Same as asOldSchema on a parsed save or an in-memory world (mutated). */
 export function stripFutureContent(value:unknown,version:number):void {
+  if(version<344&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).simpleWorkTab344;
   if(version<343)strip(value,version);
 }

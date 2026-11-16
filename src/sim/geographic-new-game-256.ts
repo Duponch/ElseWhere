@@ -56,6 +56,7 @@ import {adoptWind} from './wind.ts';
 import {ensureFireState} from './fire-rules.ts';
 import {validateWorld} from './serialization.ts';
 import { structuresOfKind } from './structure-navigation.ts';
+import { isSchema344OrLater } from './work-tab-344.ts';
 
 const BASE_STEPS=new Set(['ElevationFertility','MutatorPostElevationFertility','RocksFromGrid','Terrain','MutatorPostTerrain','Roads','MutatorCriticalStructures','MutatorNonCriticalStructures','ScatterShrines','ScatterRuinsSimple','FindPlayerStartSpot','ScenParts','Plants','SteamGeysers','RockChunks','CaveHives','Snow','Animals','Fog','MutatorFinal']);
 export const BASE_PLAYER_GENERATION_ORDER_256=Object.freeze(CORE_4871_GEN_STEP_DEFS.filter(row=>BASE_STEPS.has(row.defName)).sort((a,b)=>a.order-b.order||a.index-b.index));
@@ -105,6 +106,8 @@ export function* createGeographicNewGame256(input:GeographicNewGameInput256,bind
  // This factory exposes only the same supported Crashlanded preset. Establish
  // it here before750 difficulty consumers; never infer it in a reader/load.
  w.gameProfile=crashlandedProfile();
+ // Core PlaySettings is born with the game too: the simple Work tab (344).
+ if(isSchema344OrLater(w.schemaVersion))w.simpleWorkTab344=true;
  attachStartingOriginalRoster256(w,roster);
  const stream=(part:number)=>new WorldGenerationRandom(localGenerationStepSeed(description.mapSeed,part,0));
  yield {phase:'Roads390',completed:5,total};

@@ -25,7 +25,7 @@ export const GAMEPLAY_TIPS:readonly string[]=Object.freeze([
   // Premiers jours
   'Une nouvelle colonie commence en pause : Reprendre fait atterrir les capsules et libère les trois survivants.',
   'Du bois et de l’acier sont dispersés au sol dès l’arrivée : une réserve les regroupe à l’abri.',
-  'Dans Travail, 1 est la priorité la plus forte et 0 désactive un métier.',
+  'Dans Travail, cochez les métiers de chaque colon ; avec Priorités manuelles, 1 est fait en premier.',
   'Un couchage au sol est gratuit et immédiat, mais on y récupère moins bien que dans un vrai lit.',
   'Une marque de couchage ne crée ni toit ni abri : murs, porte et toit protègent du froid et de la pluie.',
   'Une zone de culture ne nourrit personne tant que ses plants ne sont pas semés, mûrs et récoltés.',

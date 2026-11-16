@@ -4,7 +4,7 @@ import {drawNativeActionIcon,drawNativeActionIconInBox} from './native-action-ic
 import {applyNativeHudButtonPose} from './native-hud-art';
 import {applyNativeMapToolHover} from './native-map-tool-hover';
 import {createNativeTextLexicon,tokenizeNativeText,NATIVE_TEXT_STYLES,type NativeTextLexicon,type NativeTextEntity,type NativeTextSpan} from './native-rich-text';
-import type {NativeControl,NativeControlStyle,NativePage,NativeRow,NativeShipCurtainPhase298} from './native-contract';
+import type {NativeControl,NativeControlStyle,NativeGesture,NativePage,NativeRow,NativeShipCurtainPhase298} from './native-contract';
 import {NativeGlobe} from './NativeGlobe';
 import {NativeOverlayCache} from './NativeOverlayCache';
 import {NativeDamageTracker} from './NativeDamageTracker';
@@ -775,6 +775,9 @@ export class NativeStage {
     this.swallow(event);
     // Right click on a HUD alert card: previous culprit (Core Alert.OnClick).
     if(event.button===2&&!hit.control?.disabled&&typeof hit.piece.userData.onSecondary==='function'){hit.piece.userData.onSecondary();this.invalidate();return;}
+    // Right click on a control that has its own secondary meaning (Core work
+    // cells and columns), acted on press like Core's MouseDown.
+    if(event.button===2&&!hit.control?.disabled&&hit.control?.onSecondary){this.secondary(hit,{shift:event.shiftKey});return;}
     if(event.button!==0)return;
     if(hit.piece.userData.nativeStatic)return;
     if(hit.control?.disabled)return;
@@ -809,7 +812,7 @@ export class NativeStage {
     const dismissInspector=!!(down.outsidePage&&page&&page.id===down.outsidePage&&!this.frontVisible&&!page.modal&&page.closable!==false
       &&page.layout==='inspector'&&page.id.startsWith('inspect-pawn-')&&/^hud:speed:(0|1|3|6)$/.test(id)&&this.options.onHudInspectorDismiss);
     if(down.outsidePage&&page?.id===down.outsidePage&&!dismissInspector)this.dismissPage();
-    this.activate(hit,dismissInspector);
+    this.activate(hit,dismissInspector,{shift:event.shiftKey});
   }
   private belongsToPage(hit:Hit|undefined):boolean{if(!hit)return false;if(this.dropdown?.pieces.includes(hit.piece))return true;for(let parent:THREE.Object3D|null=hit.piece;parent;parent=parent.parent)if(parent===this.pageGroup)return true;return false;}
   private dismissPage():void{const page=this.page;if(!page||page.closable===false)return;this.activationSerial++;this.closeDropdown();this.clearHint();try{page.onClose?.();if(!this.frontVisible||!page.onClose)this.options.onEscape();}catch(error){this.options.onError(String(error));}}
@@ -819,7 +822,17 @@ export class NativeStage {
     this.pointer.set(x/(this.width*this.displayScale)*2-1,1-y/(this.height*this.displayScale)*2);this.scene.updateMatrixWorld(true);this.raycaster.setFromCamera(this.pointer,this.camera);
     return this.globe.hitTest(this.raycaster);
   }
-  private activate(hit:Hit,dismissInspector=false):void{
+  private secondary(hit:Hit,gesture:NativeGesture):void{
+    const action=hit.control?.onSecondary;if(!action)return;
+    ++this.activationSerial;const id=hit.control!.id;
+    try{
+      this.options.onActivate?.(id);const result=action(gesture),pending=result!=null&&typeof (result as PromiseLike<unknown>).then==='function';
+      if(pending){this.pendingActions++;this.updatePointerCursor();}
+      void Promise.resolve(result).catch(error=>{if(!this.closed)this.options.onError(error instanceof Error?error.message:String(error));}).finally(()=>{if(pending){this.pendingActions--;if(!this.closed)this.updatePointerCursor(this.hit(this.lastPointer.x*this.displayScale,this.lastPointer.y*this.displayScale));}});
+    }catch(error){if(!this.closed)this.options.onError(error instanceof Error?error.message:String(error));}
+    this.invalidate();
+  }
+  private activate(hit:Hit,dismissInspector=false,gesture?:NativeGesture):void{
     if(hit.control?.disabled)return;
     if(hit.input&&this.editing===hit&&this.editor){this.editor.focus({preventScroll:true});return;}
     const serial=++this.activationSerial,id=hit.control?.id??String(hit.piece.userData.nativeId??''),pageId=this.page?.id;
@@ -838,7 +851,7 @@ export class NativeStage {
         if(dismissInspector&&this.page&&this.page.id===pageId&&!this.frontVisible&&!this.page.modal&&this.page.closable!==false){
           this.closeDropdown();this.clearHint();this.options.onHudInspectorDismiss?.();
         }
-        if(id)this.options.onActivate?.(id);const result=action(),pending=result!=null&&typeof (result as PromiseLike<unknown>).then==='function';
+        if(id)this.options.onActivate?.(id);const result=action(gesture),pending=result!=null&&typeof (result as PromiseLike<unknown>).then==='function';
         if(pending){this.pendingActions++;this.updatePointerCursor();}
         void Promise.resolve(result).catch(error=>{if(!this.closed)this.options.onError(error instanceof Error?error.message:String(error));}).finally(()=>{if(pending){this.pendingActions--;if(!this.closed)this.updatePointerCursor(this.hit(this.lastPointer.x*this.displayScale,this.lastPointer.y*this.displayScale));}});
       }
@@ -1096,7 +1109,9 @@ export class NativeStage {
       }
       if(row.columns){
         const columns=nativeMatrixColumns(row,r.x,r.width,row.columns.length,r.matrixTail,box.matrixColumnWeights);
-        row.columns.forEach((column,index)=>{const cell=columns[index]!,hintPiece=this.pagePiece('column:'+row.id+':'+index,{w:cell.width*k,h:r.height*k,paper:false,hitOnly:true,interactive:true,drawFn:()=>{}},column.hint??column.label,(cell.x-this.horizontalOffset(row.region)+cell.width/2-box.width/2)*k,(box.height/2-cy)*k,.04);hintPiece.userData.nativeStatic=true;hintPiece.userData.tooltip=column.hint??column.label;group.add(hintPiece);});
+        // A header column with a control is interactive (Core work columns:
+        // click sorts, Shift-click sets the column); others only carry a hint.
+        row.columns.forEach((column,index)=>{const cell=columns[index]!,hint=column.control?.hint??column.hint??column.label,hintPiece=this.pagePiece(column.control?.id??'column:'+row.id+':'+index,{w:cell.width*k,h:r.height*k,paper:false,hitOnly:true,interactive:true,drawFn:()=>{}},hint,(cell.x-this.horizontalOffset(row.region)+cell.width/2-box.width/2)*k,(box.height/2-cy)*k,.04,column.control);if(!column.control)hintPiece.userData.nativeStatic=true;hintPiece.userData.tooltip=hint;group.add(hintPiece);});
       }
       const controls=row.controls??[];
       let graphCard:CardboardPiece|undefined;const graphInset=r.controls.find(control=>control.style==='icon'),graphMain=r.controls.find(control=>control.style==='research'||control.style==='card');
@@ -1203,7 +1218,7 @@ export class NativeStage {
     if(line&&lines<maxLines){ctx.fillText(line,x,y,width);lines++;}return lines;
   }
   private control(control:NativeControl,x:number,y:number,w:number,h:number,z:number,style:NativeControlStyle=control.presentation??'button',node?:NativeRow['graphNode'],inset?:NativeControl):CardboardPiece{
-    const cssW=w*100,cssH=h*100,workCell=/^work-\d+-/.test(control.id)&&!!control.select;
+    const cssW=w*100,cssH=h*100,workCell=/^work-\d+-/.test(control.id)&&(!!control.select||!!control.onSecondary);
     const draw:CardboardDraw=(ctx,wp,hp,rng)=>{
       ctx.save();ctx.scale(wp/cssW,hp/cssH);ctx.fillStyle=control.disabled?'#8b7b60':PALETTE.inkDark;ctx.textAlign='center';
       const ink=control.disabled?'#776c55':PALETTE.inkDark;
@@ -1253,7 +1268,8 @@ export class NativeStage {
         while(label.length>1&&this.measure(label,font,true)>available)label=label.slice(0,-1);
         if(label!==control.label)label=label.trimEnd()+'…';
         if(workCell)ctx.font=this.font(17,true);
-        ctx.fillText(label,cssW/2+(inlineIcon?12:0)-(control.select&&!workCell?4:0),control.caption?workCell?cssH*.43:14:cssH/2+4,available);
+        if(control.mark==='check'){const cx=cssW/2,cy=control.caption&&workCell?cssH*.43-5:cssH/2;ctx.save();ctx.strokeStyle=ink;ctx.lineWidth=2.6;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(cx-6,cy);ctx.lineTo(cx-1.5,cy+5);ctx.lineTo(cx+7,cy-6);ctx.stroke();ctx.restore();}
+        else ctx.fillText(label,cssW/2+(inlineIcon?12:0)-(control.select&&!workCell?4:0),control.caption?workCell?cssH*.43:14:cssH/2+4,available);
         }
         if(control.caption){ctx.font=this.font(workCell?12:11,workCell);ctx.fillStyle=workCell?'#392b20':'#5b5b42';ctx.fillText(control.caption,cssW/2,cssH-5,cssW-6);}
       }
@@ -1262,7 +1278,7 @@ export class NativeStage {
       ctx.restore();
     };
     const piece=this.pagePiece(control.id,{w,h,depth:.046,bevel:.038,uvPadding:1,textureWidth:Math.max(32,Math.ceil(cssW*2)),textureHeight:Math.max(32,Math.ceil(cssH*2)),bgColor:control.glyph?PALETTE.creamPaper:control.disabled?PALETTE.kraftLight:control.active?PALETTE.ochre:control.color??PALETTE.sageMountain,seed:this.seed(control.id)%CONTROL_CUT_VARIANTS+1,sharedGeometry:true,interactive:true,drawFn:draw},
-      JSON.stringify([control.label,control.caption,control.description,control.icon,control.glyph,control.color,style,node,inset?.icon,!!inset?.disabled,!!control.active,!!control.disabled,!!control.select,this.textFontRevision]),x,y,z,control);
+      JSON.stringify([control.label,control.caption,control.description,control.icon,control.glyph,control.color,style,node,inset?.icon,!!inset?.disabled,!!control.active,!!control.disabled,!!control.select,this.textFontRevision,control.mark]),x,y,z,control);
     piece.userData.nativeStyle=style;piece.userData.active=!!control.active;
     piece.userData.nativeMapToolPose=this.page?.layout==='palette'&&style==='icon';piece.userData.nativeMapToolTitle=control.label;
     piece.userData.nativeToolbarPose=style==='tile'||style==='navigation'||style==='tab';this.setPose(piece,piece.userData.hoverVal);
@@ -1279,7 +1295,7 @@ export class NativeStage {
     for(const row of page.rows){
       for(const control of row.controls??[])controls.set(control.id,this.rowControl(row,control));if(row.input)inputs.set(row.id,row.input);
       hints.set('row-hint:'+row.id,this.rowHint(row));
-      row.columns?.forEach((column,index)=>hints.set('column:'+row.id+':'+index,column.hint??column.label));
+      row.columns?.forEach((column,index)=>{if(column.control)controls.set(column.control.id,column.control);else hints.set('column:'+row.id+':'+index,column.hint??column.label);});
     }
     for(const control of page.actions??[])controls.set(control.id,control);
     controls.set('page:close',this.closeControl());

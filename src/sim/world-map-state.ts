@@ -10,6 +10,7 @@ import type {World,Cell,Pawn,MaterialPile} from './types.ts';
 import type {CampaignField,SecondaryMap} from './secondary-site-state.ts';
 import type {GroupState,GroupLoss} from './group-state.ts';
 import type {PackedFurniture} from './furniture-rules.ts';
+import {isSchema344OrLater} from './work-tab-344.ts';
 export const WORLD_MAP_SCHEMA=255;
 export type SettlementLimit=1|2|3|4|5;
 export type WorldMapKind='settlement'|'camp'|'legacy-site'|'battlefield'|'foreign-settlement'|'quest-site';
@@ -77,7 +78,7 @@ const dataRecord=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='objec
 /** Pure envelope attestation; the complete worker save guard remains authoritative. */
 export function isMaplessCampaign(value:unknown):value is MaplessCampaign {
  if(!dataRecord(value)||!Number.isSafeInteger(value.schemaVersion)||Number(value.schemaVersion)<255||!dataRecord(value.worldMaps)||!dataRecord(value.worldGroups))return false;
- const allowed=[...(isSchema298OrLater(Number(value.schemaVersion))?['escapedShips298']:[]),'schemaVersion','tick',...(isCorePhysicalSchema297(Number(value.schemaVersion))?['phaseCore297']:[]),'rng','nextId','planet','research','relationships','foodPolicies','nextFoodPolicyId','apparelPolicies','nextApparelPolicyId','foodRules','restRules','gameProfile','worldIncidents','worldMaps','worldGroups',...(Number(value.schemaVersion)>=265?['drugPolicies','nextDrugPolicyId']:[]),...(Number(value.schemaVersion)>=256?['worldFactions','worldPawns']:[]),...(isSchema263OrLater(Number(value.schemaVersion))?['worldSites263']:[]),...(isSchema284OrLater(value.schemaVersion)?['tradeRequests284']:[]),...(isSchema286OrLater(value.schemaVersion)?['linkedStorage286']:[])];
+ const allowed=[...(isSchema298OrLater(Number(value.schemaVersion))?['escapedShips298']:[]),'schemaVersion','tick',...(isCorePhysicalSchema297(Number(value.schemaVersion))?['phaseCore297']:[]),'rng','nextId','planet','research','relationships','foodPolicies','nextFoodPolicyId','apparelPolicies','nextApparelPolicyId','foodRules','restRules','gameProfile','worldIncidents','worldMaps','worldGroups',...(Number(value.schemaVersion)>=265?['drugPolicies','nextDrugPolicyId']:[]),...(Number(value.schemaVersion)>=256?['worldFactions','worldPawns']:[]),...(isSchema263OrLater(Number(value.schemaVersion))?['worldSites263']:[]),...(isSchema284OrLater(value.schemaVersion)?['tradeRequests284']:[]),...(isSchema286OrLater(value.schemaVersion)?['linkedStorage286']:[]),...(isSchema344OrLater(value.schemaVersion)?['simpleWorkTab344']:[])];
  if(Reflect.ownKeys(value).some(k=>typeof k!=='string'||!allowed.includes(k)))return false;
  const m=value.worldMaps,g=value.worldGroups;return m.revision===1&&m.rootMapId===null&&m.selectedMapId===null&&Array.isArray(m.sites)&&m.sites.length===0&&Reflect.ownKeys(m.sites).length===1&&g.revision===1&&Array.isArray(g.groups)&&Array.isArray(g.losses)&&Array.isArray(g.abandonedPawns)&&Array.isArray(g.abandonedContents)&&Array.isArray(g.legacyTravellers)&&Array.isArray(g.events);
 }

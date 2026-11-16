@@ -28,24 +28,31 @@ function fixture(panel: 'work' | 'schedule' | 'architect' = 'work') {
 }
 
 describe('native work and schedule retain their direct confirmed interactions', () => {
-  it('shows the twenty named columns and changes every priority through the local 0–4 selector', async () => {
+  // Schema 344: Core's Work tab cycles a cell by click (left up, right down)
+  // instead of the former local 0–4 selector; the same real commands.
+  it('shows the twenty named columns and cycles every priority with left and right clicks', async () => {
     const f = fixture(), pawn = f.world.pawns[0]!, beforeOthers = f.world.pawns.slice(1).map(pawn => ({ ...pawn.priorities }));
     expect(f.page.layout).toBe('table');
     expect(f.page.rows[0]!.columns?.map(column => column.hint)).toEqual(workColumns.map(column => column.label));
     expect(f.page.rows[0]!.columns?.every(column => column.label.length > 0 && column.label.length <= 7)).toBe(true);
     const worker = f.page.rows.find(row => row.id === `worker-${pawn.id}`)!;
     expect(worker.controls).toHaveLength(20); expect(worker.value).toBe(`Activité confirmée ${pawn.id}`);
-    const select = f.control(`work-${pawn.id}-build`);
-    expect(select.select!.options.map(option => [option.value, option.label])).toEqual(['0', '1', '2', '3', '4'].map(value => [value, value]));
-    expect(select.caption).toContain(String(pawn.skills.construction.level));
-    expect(select.hint).toContain('Construction'); expect(select.hint).toContain('apprentissage');
-    await select.onActivate();
-    expect(f.actions.showPage).not.toHaveBeenCalled(); expect(f.actions.command).not.toHaveBeenCalled();
-    for (const priority of [0, 1, 2, 3, 4]) {
-      await select.select!.onChange(String(priority));
+    const cell = f.control(`work-${pawn.id}-build`);
+    expect(cell.select).toBeUndefined(); expect(typeof cell.onSecondary).toBe('function');
+    expect(cell.caption).toContain(String(pawn.skills.construction.level));
+    expect(cell.hint).toContain('Construction'); expect(cell.hint).toContain('apprentissage');
+    pawn.priorities.build = 0; f.rebuild();
+    for (const priority of [4, 3, 2, 1, 0]) {
+      await f.control(cell.id).onActivate();
       expect(pawn.priorities.build).toBe(priority);
       expect(f.actions.command).toHaveBeenLastCalledWith({ type: 'priority', pawnId: pawn.id, work: 'build', value: priority });
-      f.rebuild(); expect(f.control(select.id).select!.value).toBe(String(priority));
+      f.rebuild(); expect(f.control(cell.id).label).toBe(priority ? String(priority) : '');
+    }
+    for (const priority of [1, 2, 3, 4, 0]) {
+      await f.control(cell.id).onSecondary!();
+      expect(pawn.priorities.build).toBe(priority);
+      expect(f.actions.command).toHaveBeenLastCalledWith({ type: 'priority', pawnId: pawn.id, work: 'build', value: priority });
+      f.rebuild();
     }
     expect(f.world.pawns.slice(1).map(pawn => pawn.priorities)).toEqual(beforeOthers);
     expect(f.page.id).toBe('work'); expect(f.actions.showPage).not.toHaveBeenCalled();
@@ -70,37 +77,39 @@ describe('native work and schedule retain their direct confirmed interactions', 
       expect(control.hint).toContain(`${label} ${record.level}/20`);
       expect(control.hint).toContain(passion);
       expect(control.hint).toContain('apprentissage');
-      expect(control.select!.value).toBe(String(pawn.priorities[work]));
+      expect(control.label).toBe(pawn.priorities[work] ? String(pawn.priorities[work]) : '');
     }
     expect(f.actions.command).not.toHaveBeenCalled();
   });
 
   it('rejects invalid values, busy edits, and an incapacity newly applied to the real owner', async () => {
-    const f = fixture(), pawn = f.world.pawns[0]!, select = f.control(`work-${pawn.id}-haul`).select!, saved = pawn.priorities.haul;
-    for (const value of ['-1', '5', '1.5', 'not-a-priority']) expect(() => select.onChange(value)).toThrow('0 à 4');
-    expect(f.actions.command).not.toHaveBeenCalled();
+    const f = fixture(), pawn = f.world.pawns[0]!; pawn.priorities.haul = 3; f.rebuild();
+    const cell = f.control(`work-${pawn.id}-haul`), saved = pawn.priorities.haul;
+    for (const value of [-1, 5, 1.5]) expect(applyCommand(f.world, { type: 'priority', pawnId: pawn.id, work: 'haul', value }).ok).toBe(false);
+    expect(pawn.priorities.haul).toBe(saved); expect(f.actions.command).not.toHaveBeenCalled();
     f.state.busy = true;
-    await expect(Promise.resolve().then(() => select.onChange('2'))).rejects.toThrow('opération courante');
+    await expect(Promise.resolve().then(() => cell.onActivate())).rejects.toThrow('opération courante');
     expect(f.actions.command).not.toHaveBeenCalled(); f.state.busy = false;
     pawn.background = { childhood: 'school-child', adulthood: 'researcher' };
-    await expect(Promise.resolve().then(() => select.onChange('2'))).rejects.toThrow('Incapacité liée au passé');
+    await expect(Promise.resolve().then(() => cell.onActivate())).rejects.toThrow('Incapacité liée au passé');
     expect(pawn.priorities.haul).toBe(saved);
     f.rebuild(); const refused = f.control(`work-${pawn.id}-haul`);
-    expect(refused.disabled).toBe(true); expect(refused.select!.value).toBe(String(saved));
+    expect(refused.disabled).toBe(true); expect(refused.label).toBe('');
     expect(refused.hint).toContain('Priorité enregistrée');
   });
 
-  it('keeps the existing command-in-flight guard while a selector waits for confirmation', async () => {
-    const f = fixture(), pawn = f.world.pawns[0]!, select = f.control(`work-${pawn.id}-build`).select!;
+  it('keeps the existing command-in-flight guard while a click waits for confirmation', async () => {
+    const f = fixture(), pawn = f.world.pawns[0]!; pawn.priorities.build = 3; f.rebuild();
+    const cell = f.control(`work-${pawn.id}-build`);
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
     vi.mocked(f.actions.command).mockImplementationOnce(async command => { await gate; return applyCommand(f.world, command); });
-    const pending = select.onChange('1');
-    await expect(Promise.resolve().then(() => select.onChange('3'))).rejects.toThrow('opération courante');
+    const pending = cell.onActivate();
+    await expect(Promise.resolve().then(() => cell.onActivate())).rejects.toThrow('opération courante');
     expect(f.actions.command).toHaveBeenCalledTimes(1);
     release(); await pending;
-    expect(pawn.priorities.build).toBe(1);
-    await select.onChange('3'); expect(pawn.priorities.build).toBe(3);
+    expect(pawn.priorities.build).toBe(2);
+    await cell.onActivate(); expect(pawn.priorities.build).toBe(1);
   });
 
   it('paints the supplied drag hours with one real command and leaves every other hour unchanged', async () => {

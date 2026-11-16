@@ -317,6 +317,9 @@ export interface World {
   /** Core tick of the last colonist gain (schema 320, population adaptation);
    * absent: the game start. */
   populationGainCore320?: number;
+  /** Core PlaySettings.useWorkPriorities off (schema 344): the simple Work tab.
+   * Campaign-wide; absent means manual priorities. See work-tab-344.ts. */
+  simpleWorkTab344?: true;
   /** V1–V4 continuations retain their former nutrition economy explicitly. */
   foodRules: 'legacy' | 'adult';
   seed: number;
@@ -414,7 +417,8 @@ export type Command = import('./faction-comms-state-298.ts').FactionCommsCommand
   | {type:'cooler-target';structureId:number;target:number}
   | {type:'cooler-adjust';structureId:number;offset:-10|-1|1|10|null}
   | {type:'research-project';project:import('./research.ts').ResearchProject|null}
-  | { type: 'priority'; pawnId: number; work: WorkType; value: number };
+  | { type: 'priority'; pawnId: number; work: WorkType; value: number }
+  | import('./work-tab-344.ts').WorkTabCommand344;
 export type RefusalCode = 'invalid-command' | 'out-of-bounds' | 'occupied' | 'incompatible-resource' | 'missing-target' | 'invalid-priority' | 'invalid-storage';
 export interface CommandResult { ok: boolean; reason?: string; code?: RefusalCode; affected?: number; skipped?: number }
 export interface JobDiagnostic { code: 'clearing' | 'blocked' | 'working' | 'ready' | 'delivering' | 'missing-materials' | 'waiting-worker'; reason: string; delivered: number; required: number }

@@ -9,7 +9,23 @@ export const workType=(job:Pick<Job,'kind'|'growingZoneId'|'flowerPotId'|'instal
  * save, or a priority never set apart) smiths and tails at its crafting
  * priority, exactly as before. */
 export const storedPriority=(pawn:Pick<Pawn,'priorities'>,work:WorkType):number=>work==='smith'||work==='tailor'?pawn.priorities[work]??pawn.priorities.craft:pawn.priorities[work];
-export const workPriority=(pawn:Pick<Pawn,'priorities'|'background'>,work:WorkType):number=>backgroundWorkRefusal(pawn,work)?0:storedPriority(pawn,work);
+/** Core's Pawn_WorkSettings.GetPriority answers 3 for every enabled work type
+ * while the Work tab is simple (schema 344, see work-tab-344.ts). The engine
+ * sets this around each step and command of a campaign in that mode, so every
+ * reader of workPriority (work-giver order included) sees the same value; the
+ * stored manual priority is kept for a return to manual priorities. Outside
+ * those calls, and below schema 344, the stored priority is read as before. */
+let simpleWorkTab=false;
+export function withWorkTabMode344<R>(simple:boolean,run:()=>R):R {
+  const previous=simpleWorkTab;simpleWorkTab=simple;
+  try{return run();}finally{simpleWorkTab=previous;}
+}
+/** The mode of the current step or command (false outside them). */
+export const workTabIsSimple344=():boolean=>simpleWorkTab;
+export const workPriority=(pawn:Pick<Pawn,'priorities'|'background'>,work:WorkType):number=>{
+  const value=backgroundWorkRefusal(pawn,work)?0:storedPriority(pawn,work);
+  return simpleWorkTab&&value>0?3:value;
+};
 /** Whether disabling `changed` disables the running work `running`: the same
  * work type, or crafting for smithing or tailoring that still follow it (an
  * older save; from schema 302 a change of the crafting priority first sets

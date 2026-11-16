@@ -1,7 +1,7 @@
 import { storedPriority } from '../sim/work-types.ts';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {READING_POLICIES_295,effectiveReadingPolicy295} from '../sim/reading-state-295';
-import type {NativeUiState,NativeUiActions,NativePage,NativeRow,NativeControl} from './native-contract';
+import type {NativeUiState,NativeUiActions,NativePage,NativeRow,NativeControl,NativeGesture} from './native-contract';
 import {buildNativeWorld,syncNativeWorldState,nativePaidAiSiteFacts298,focusNativePaidAiSite298} from './native-world';
 import {effectiveCore297} from '../sim/core-phase-297';
 import {nativeArrivalRows} from './native-arrivals';
@@ -55,7 +55,8 @@ import {registeredMapId} from '../sim/world-map-context';
 import {previewBackgroundSkills} from '../sim/background-generation';
 import {startingSkills} from '../sim/skills';
 import {biologicalYears,chronologicalYears} from '../sim/human-age';
-import {backgroundInspectionRows,backgroundSkillSummary} from '../ui/background-inspection';
+import {backgroundInspectionRows,backgroundSkillSummary,BACKGROUND_SKILL_LABELS} from '../ui/background-inspection';
+import {isSchema344OrLater,simpleWorkTab344,shownWorkPriority344,nextCellPriority344,nextWorkSort344,sortWorkRows344,relevantSkills344,relevantSkillAverage344,relevantPassion344,veryBadSkill344,type WorkClick344,type WorkSort344} from '../sim/work-tab-344';
 import {offeredRelationshipText} from '../ui/relationship-inspection';
 import type {JoinerQuest} from '../sim/quest-state';
 import type {TradeRequest284} from '../sim/trade-request-state-284';
@@ -156,7 +157,7 @@ function colonistTableKey(state:NativeUiState):string {
  const world=state.world;return world?`${state.epoch??''}:${registeredMapId(world)??''}:${world.seed}:${world.width}:${world.height}`:'none';
 }
 function colonistTableSearch(kind:ColonistTableKind):string {
- const key=colonistTableKey(latest!);if(key!==colonistTableIdentity){for(const id of ['work','schedule','assign'] as const)colonistTableSearches[id]='';scheduleClipboard=undefined;colonistTableIdentity=key;}
+ const key=colonistTableKey(latest!);if(key!==colonistTableIdentity){for(const id of ['work','schedule','assign'] as const)colonistTableSearches[id]='';scheduleClipboard=undefined;workSort=undefined;colonistTableIdentity=key;}
  return colonistTableSearches[kind];
 }
 /** Local view callbacks never reuse the owner or scope captured by an older map. */
@@ -168,7 +169,8 @@ function colonistTableControl(id:string,label:string,onActivate:NativeControl['o
  const control=button(id,label,onActivate,extra);
  return {...control,onActivate:colonistTableGuard(control.onActivate),
   ...(control.select?{select:{...control.select,onChange:colonistTableGuard(control.select.onChange)}}:{}),
-  ...(control.paint?{paint:{...control.paint,onPaint:colonistTableGuard(control.paint.onPaint)}}:{})};
+  ...(control.paint?{paint:{...control.paint,onPaint:colonistTableGuard(control.paint.onPaint)}}:{}),
+  ...(control.onSecondary?{onSecondary:colonistTableGuard(control.onSecondary)}:{})};
 }
 function colonistTableRows(kind:ColonistTableKind,world:World):{all:Pawn[];shown:Pawn[];search:string} {
  const search=colonistTableSearch(kind),needle=colonistSearchText(search.trim());
@@ -182,15 +184,56 @@ function colonistTablePawn(id:number,kind:ColonistTableKind):Pawn {
  const pawn=currentPawn(id);if(!isColonist(pawn)||(kind!=='schedule'&&pawn.prisoner))throw Error('Cette personne n’est plus dans ce tableau.');return pawn;
 }
 const compactWorkLabels:Record<WorkType,string>={firefight:'Feu',patient:'Pat.',doctor:'Méd.',bedrest:'Repos',basic:'Man.',warden:'Geôle',handle:'Dress.',cook:'Cuisine',hunt:'Chasse',build:'Const.',grow:'Cult.',mine:'Mine',gather:'Forêt',smith:'Forge',tailor:'Cout.',art:'Art',craft:'Artis.',haul:'Trans.',clean:'Net.',research:'Rech.'};
+/** Table order only (Core PawnTable sorting is not saved); reset with the map. */
+let workSort:WorkSort344|undefined;
+/** WidgetsWork.DrawWorkBoxBackground: Awful → Bad below 4, Bad → Mid up to
+ * 14, Mid → Excellent up to 20, by the relevant skill average. */
+const WORK_BOX:readonly (readonly [number,readonly [number,number,number]])[]=[[0,[201,147,124]],[4,[211,185,143]],[14,[183,192,143]],[20,[144,181,124]]];
+function workBoxColor(average:number):string {
+ const value=Math.max(0,Math.min(20,average));let i=0;while(i<WORK_BOX.length-2&&value>WORK_BOX[i+1]![0])i++;
+ const [a,from]=WORK_BOX[i]!,[b,to]=WORK_BOX[i+1]!,t=(value-a)/(b-a);
+ return '#'+from.map((c,k)=>Math.round(c+(to[k]!-c)*t).toString(16).padStart(2,'0')).join('');
+}
+const decimal=(value:number)=>value.toLocaleString('fr-FR',{maximumFractionDigits:1});
+function workCell(pawn:Pawn,work:WorkType,label:string,simple:boolean):NativeControl {
+ const refusal=backgroundWorkRefusal(pawn,work),stored=storedPriority(pawn,work),shown=refusal?0:shownWorkPriority344(pawn,work,simple),skill=workSkill(pawn,work);
+ const skills=relevantSkills344(work),average=relevantSkillAverage344(pawn,work),warning=!refusal&&veryBadSkill344(pawn,work,shown);
+ // The click reads the CURRENT pawn and mode: a retained cell never replays an old value.
+ const click=(button:WorkClick344)=>()=>{const current=colonistTablePawn(pawn.id,'work'),mode=simpleWorkTab344(currentWorld());return send({type:'priority',pawnId:current.id,work,value:nextCellPriority344(shownWorkPriority344(current,work,mode),mode,button)});};
+ const state=refusal?'impossible':simple?shown>0?'activé':'désactivé':shown===0?'désactivé':`priorité ${shown}${shown===1?' (faite en premier)':shown===4?' (la plus basse)':''}`;
+ const hint=[`${label} · ${pawn.name} : ${state}`,
+  refusal?`${pawn.name} ne peut pas faire ce travail. ${refusal} Priorité enregistrée : ${stored}. Un ordre direct ne permet pas de contourner cette incapacité.`:undefined,
+  !refusal&&skills.length?`Compétences utiles : ${skills.map(id=>BACKGROUND_SKILL_LABELS[id]).join(', ')} · moyenne ${decimal(average)}/20`:undefined,
+  warning?'Compétence très faible pour ce travail.':undefined,
+  refusal?undefined:skill.hint,
+  refusal?undefined:simple?'Clic : cocher ou décocher.':'Clic gauche : priorité plus haute (vide → 4 → 1 → vide) · clic droit : plus basse.'].filter(Boolean).join('\n');
+ const passion=relevantPassion344(pawn,work);
+ return colonistTableControl(`work-${pawn.id}-${work}`,refusal?'':simple?shown>0?'Activé':'':shown>0?String(shown):'',click('primary'),{
+  caption:skill.caption===undefined?(passion?'♨'.repeat(passion):undefined):`${skill.caption}${warning?' !':''}`,hint,disabled:!!refusal||pawn.state==='dead',
+  color:refusal?undefined:workBoxColor(average),...(simple&&shown>0?{mark:'check' as const}:{}),onSecondary:click('secondary')});
+}
+function workHeader(work:WorkType,label:string,full:string,simple:boolean):{label:string;hint:string;control:NativeControl} {
+ const sorted=workSort?.work===work?workSort.descending?' ↑':' ↓':'';
+ const act=(button:WorkClick344)=>(gesture?:NativeGesture)=>{
+  if(gesture?.shift){const ids=sortWorkRows344(colonistTableRows('work',currentWorld()).shown,workSort).map(p=>p.id);return ids.length?send({type:'priority-column',work,pawnIds:ids,click:button}):undefined;}
+  workSort=nextWorkSort344(workSort,work,button);back();
+ };
+ const hint=[full,
+  workSort?.work===work?(workSort.descending?'Trié : compétence croissante de haut en bas.':'Trié : compétence décroissante de haut en bas.'):undefined,
+  'Clic : trier par compétence moyenne (clic suivant : sens inverse, puis ordre normal ; clic droit : sens opposé).',
+  simple?'Maj + clic gauche : cocher toute la colonne · Maj + clic droit : tout décocher.':'Maj + clic gauche : toute la colonne un cran plus haut · Maj + clic droit : un cran plus bas.'].filter(Boolean).join('\n');
+ return {label:label+sorted,hint:full,control:colonistTableControl(`work-column-${work}`,full,act('primary'),{hint,onSecondary:act('secondary')})};
+}
 function workPanel(world:World):NativePage {
- const {all,shown:pawns,search}=colonistTableRows('work',world);
- return {id:'work',title:'Travail',layout:'table',tableProfile:'colonists',contentKey:`work:${colonistTableKey(latest!)}:${search}`,subtitle:'Priorités manuelles : 1 haute · 4 basse · 0 désactivée. Le transport livre aussi les chantiers.',width:1480,rows:[
-  {id:'work-headings',label:'Colon',value:'Activité',compact:true,columns:workColumns.map(c=>({label:compactWorkLabels[c.id],hint:c.label}))},
+ const {all,shown,search}=colonistTableRows('work',world),simple=simpleWorkTab344(world),pawns=sortWorkRows344(shown,workSort);
+ const manualToggle=colonistTableControl('work-manual-priorities','Priorités manuelles',()=>send({type:'work-tab-mode',manual:simpleWorkTab344(currentWorld())}),{active:!simple,
+  hint:simple?'Désactivé : chaque travail est simplement coché ou non, tous au même rang (priorité 3).\nCliquer pour régler des priorités de 1 à 4 ; celles déjà réglées reviennent.':'Activé : priorités 1 à 4, la priorité 1 est faite en premier.\nCliquer pour revenir aux cases à cocher ; les priorités réglées sont conservées.'});
+ return {id:'work',title:'Travail',layout:'table',tableProfile:'colonists',contentKey:`work:${colonistTableKey(latest!)}:${search}`,
+  subtitle:simple?'Cases à cocher : un travail coché est fait, dans l’ordre naturel des travaux. Le transport livre aussi les chantiers.':'Priorités manuelles : 1 est fait en premier, 4 en dernier, vide désactivé. Le transport livre aussi les chantiers.',
+  width:1480,...(isSchema344OrLater(world.schemaVersion)?{actions:[manualToggle]}:{}),rows:[
+  {id:'work-headings',label:'Colon',value:'Activité',compact:true,columns:workColumns.map(c=>workHeader(c.id,compactWorkLabels[c.id],c.label,simple))},
   colonistTableToolbar('work',search,pawns.length,all.length),
-  ...pawns.map(pawn=>({...row(`worker-${pawn.id}`,pawn.name,host?.pawnActivity?.(pawn.id)??queryPawnStatus(world,pawn).reason,pawn.traits?.map(id=>TRAITS[id].label).join(' · ')??'Aucun trait attribué',workColumns.map(({id,label})=>{
-   const refusal=backgroundWorkRefusal(pawn,id),value=storedPriority(pawn,id),skill=workSkill(pawn,id);
-   return colonistTableControl(`work-${pawn.id}-${id}`,String(value),()=>{},{caption:skill.caption,hint:[`Priorité ${label} · ${pawn.name}`,refusal?`${refusal} Priorité enregistrée : ${value}. Un ordre direct ne permet pas de contourner cette incapacité.`:undefined,skill.hint].filter(Boolean).join('\n'),disabled:!!refusal||pawn.state==='dead',active:value===1,select:{value:String(value),options:[0,1,2,3,4].map(priority=>({value:String(priority),label:String(priority),hint:priority===0?'Désactivé':`Priorité ${priority}${priority===1?' · haute':priority===4?' · basse':''}`})),onChange:value=>{const priority=Number(value);if(!Number.isInteger(priority)||priority<0||priority>4)throw Error('Priorité entière de 0 à 4 requise.');const current=colonistTablePawn(pawn.id,'work');return send({type:'priority',pawnId:current.id,work:id,value:priority});}}});
-  })),compact:true})),
+  ...pawns.map(pawn=>({...row(`worker-${pawn.id}`,pawn.name,host?.pawnActivity?.(pawn.id)??queryPawnStatus(world,pawn).reason,pawn.traits?.map(id=>TRAITS[id].label).join(' · ')??'Aucun trait attribué',workColumns.map(({id,label})=>workCell(pawn,id,label,simple))),compact:true})),
  ],onClose:()=>void host?.panel(null)};
 }
 const assignmentColors:Record<ScheduleAssignment,string>={anything:'#e9d2a9',work:'#dfb7a4',sleep:'#c2d5e0',recreation:'#c9dfc1'};

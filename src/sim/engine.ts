@@ -335,7 +335,8 @@ import { scheduleGrowing, cancelGrowingJobs, growingJobValid, finishSowing, jobD
 import { isPlant, harvestable,choppable,berryYield,plantCanYieldNow } from './plants.ts';
 import { search, searchCandidates, destinationValid, planWork, type SearchBudget, type NavigationGrid } from './work-planner.ts';
 import { regionMapFor } from './regions.ts';
-import { disablesWork, storedPriority, workPriority,workType } from './work-types.ts';
+import { disablesWork, storedPriority, workPriority,workType,withWorkTabMode344 } from './work-types.ts';
+import {simpleWorkTab344,applyWorkTabMode344,priorityColumnRefusal344,priorityColumnChanges344} from './work-tab-344.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
 import { releaseAssignments, planCommandDrops, commitDrop, releaseWork, type DropPlan } from './work-release.ts';
 import {prepareLinkedStorageCommand286} from './linked-storage-plan-286.ts';
@@ -355,7 +356,7 @@ import { patchStockpilePolicy,stockpileZoneId,stockpileZoneCells,stockpileCellsB
 import { constructionLineCells, isLineBuildKind, type LineBuildKind } from './construction-line.ts';
 import { processNeeds,processNeedsDecision300, updateNeeds } from './needs.ts';
 export { HUNGER_PER_TICK, REST_PER_TICK } from './needs.ts';
-import type { AreaCommand, BuildLineCommand, Cell, Command, CommandResult, DesignateCommand, Job, JobKind, Pawn, RefusalCode, StorageSettings, World } from './types.ts';
+import type { AreaCommand, BuildLineCommand, Cell, Command, CommandResult, DesignateCommand, Job, JobKind, Pawn, RefusalCode, StorageSettings, WorkType, World } from './types.ts';
 export { JOB_DURATION, JOB_WOOD_COST } from './definitions.ts';
 
 const PATH_SEARCHES_PER_TICK = 8;
@@ -678,7 +679,12 @@ export function canDesignate(world: World, command: DesignateCommand|import('./c
   if(wallTarget&&(command.kind==='door'||command.kind==='autodoor')&&!canAttachWallDoor296(world,wallTarget,command.kind,command.material??'wood'))return refusal('occupied','Le mur, ses ordres ou la limite des identités ne permettent pas ce plan de porte.');
   return { ok: true };
 }
+/** Every command runs with its campaign's Work tab mode (schema 344): while
+ * the tab is simple, workPriority reads 3 for each enabled work. */
 export function applyCommand(world: World, command: Command,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256): CommandResult {
+ return withWorkTabMode344(simpleWorkTab344(campaignAuthority(world)),()=>applyCommandInMode(world,command,caravans));
+}
+function applyCommandInMode(world: World, command: Command,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256): CommandResult {
  if(isCorePhysicalSchema297(Number(world.schemaVersion)))invalidateCoreCampaign297(campaignAuthority(world),'command');
  const tradeType=command&&typeof command==='object'?Object.getOwnPropertyDescriptor(command,'type'):undefined;
  if(tradeType&&'value'in tradeType&&typeof tradeType.value==='string'&&tradeType.value.startsWith('trade-request-'))return applyTradeRequestCommand284(world,command);
@@ -715,6 +721,9 @@ function applyLocalCommand(world: World, command: LocalCommand): CommandResult {
   // future clothing actions; no task/thermal reconciliation is triggered here.
   if(command.type==='apparel-policy-update')return applyApparelPolicyUpdate(world,command);
   if(command.type==='apparel-policy-copy'||command.type==='apparel-policy-rename')return applyApparelPolicyName(world,command);
+  // Campaign setting only (Core MainTabWindow_Work marks the work-giver order
+  // dirty): no task, priority or reconciliation changes.
+  if(command.type==='work-tab-mode')return applyWorkTabMode344(campaignAuthority(world),command);
   const result=applyCommandInternal(world,command);
   if(command.type==='firefoam-auto-rebuild')return result;
   if(command.type==='bill-pause-policy'||command.type==='bill-pause-resume')return result;
@@ -735,7 +744,31 @@ function applyLocalCommand(world: World, command: LocalCommand): CommandResult {
   if(result.ok)reconcileSpikeTrapContacts(world);
   return result;
 }
-function applyCommandInternal(world: World, command: Exclude<LocalCommand,import('./world-map-state.ts').WorldMapCommand|{type:'apparel-policy-update'|'apparel-policy-copy'|'apparel-policy-rename'|'egg-forbid'|'material-forbid'|'read-book-295'|'reading-policy-295'}>): CommandResult {
+/** Sets one stored priority and releases the work it disables, exactly as the
+ * 'priority' command always did (also each pawn of a 'priority-column'). */
+function setWorkPriority(world:World,pawn:Pawn,work:WorkType,value:number,drops:DropPlan):void {
+  // Smithing and Tailoring set apart from Crafting at the first change of
+  // any of the three: each then keeps its own priority.
+  if(Number(world.schemaVersion)>=302&&(work==='craft'||work==='smith'||work==='tailor')){pawn.priorities.smith=storedPriority(pawn,'smith');pawn.priorities.tailor=storedPriority(pawn,'tailor');}
+  pawn.priorities[work] = value;
+  if(value===0&&work==='haul'&&pawn.brewing)releaseWork(world,pawn,drops);
+  if(value===0&&pawn.deepWork&&work===(pawn.deepWork.kind==='drill'?'mine':'research'))releaseWork(world,pawn,drops);
+  if(value===0&&(work==='handle'&&pawn.animalHandling||work==='doctor'&&(pawn.animalCare||pawn.animalFeed||pawn.animalRescue)))releaseWork(world,pawn,drops);
+  if(work==='hunt'&&value===0&&pawn.hunting){cancelHunting(pawn);pawn.path=[];pawn.state='idle';}if(work==='research'&&value===0&&pawn.research)releaseAssignments(world,pawn);
+  if(value===0&&pawn.feed&&work===feedingWork(world.pawns.find(p=>p.id===pawn.feed!.patientId))&&pawn.orders.active!=='feed')releaseWork(world,pawn,drops);
+  if(work==='doctor'&&value===0&&(pawn.surgery||pawn.tend&&pawn.orders.active!=='tend'))releaseWork(world,pawn);
+  if(work==='clean'&&value===0&&pawn.cleaning&&!pawn.cleaning.forced)releaseWork(world,pawn,drops);
+  if(work==='haul'&&value===0&&pawn.burial&&pawn.orders.active!=='bury')releaseWork(world,pawn,drops);
+  if(work==='firefight'&&value===0&&pawn.firefighting&&!pawn.firefighting.forced)releaseWork(world,pawn,drops);
+  if(work==='warden'&&value===0&&pawn.ward)releaseWork(world,pawn,drops);
+  if(value===0&&pawn.rescue&&pawn.orders.active!=='rescue'&&(pawn.rescue.release?
+    (work==='basic'||work==='warden')&&!workPriority(pawn,'basic')&&!workPriority(pawn,'warden'):
+    work===(world.pawns.find(p=>p.id===pawn.rescue!.patientId)?.prisoner?'warden':'doctor')))releaseWork(world,pawn,drops);
+  const job = world.jobs.find(candidate => candidate.id === pawn.jobId);
+  if (value === 0 && ((job && workType(job) === work && pawn.orders.active===null) || (pawn.haul && pawn.orders.active!=='haul' && work === haulingWork(pawn.haul.destination)) || (pawn.cooking && pawn.orders.active!=='cook' && disablesWork(world,pawn,work,taskWork(pawn.cooking))))) releaseWork(world, pawn,drops);
+  pawn.planCooldown = 0;
+}
+function applyCommandInternal(world: World, command: Exclude<LocalCommand,import('./world-map-state.ts').WorldMapCommand|{type:'apparel-policy-update'|'apparel-policy-copy'|'apparel-policy-rename'|'egg-forbid'|'material-forbid'|'read-book-295'|'reading-policy-295'|'work-tab-mode'}>): CommandResult {
   if(command.type==='firefoam-auto-rebuild')return applyFirefoamAutoRebuild290(world,command);
   if(command.type==='firefoam-trigger')return applyFirefoamTrigger290(world,command);
   if(command.type==='trade-request-answer'||command.type==='trade-request-dismiss'||command.type==='trade-request-fulfill')return applyTradeRequestCommand284(world,command);
@@ -1024,26 +1057,16 @@ function applyCommandInternal(world: World, command: Exclude<LocalCommand,import
     const pawn = world.pawns.find(candidate => candidate.id === command.pawnId);
     if (!pawn) return refusal('missing-target', 'Colon introuvable.');
     const background=backgroundWorkRefusal(pawn,command.work);if(command.value>0&&background)return refusal('invalid-priority',background);
-    // Smithing and Tailoring set apart from Crafting at the first change of
-    // any of the three: each then keeps its own priority.
-    if(Number(world.schemaVersion)>=302&&(command.work==='craft'||command.work==='smith'||command.work==='tailor')){pawn.priorities.smith=storedPriority(pawn,'smith');pawn.priorities.tailor=storedPriority(pawn,'tailor');}
-    pawn.priorities[command.work] = command.value;
-    if(command.value===0&&command.work==='haul'&&pawn.brewing)releaseWork(world,pawn,drops);
-    if(command.value===0&&pawn.deepWork&&command.work===(pawn.deepWork.kind==='drill'?'mine':'research'))releaseWork(world,pawn,drops);
-    if(command.value===0&&(command.work==='handle'&&pawn.animalHandling||command.work==='doctor'&&(pawn.animalCare||pawn.animalFeed||pawn.animalRescue)))releaseWork(world,pawn,drops);
-    if(command.work==='hunt'&&command.value===0&&pawn.hunting){cancelHunting(pawn);pawn.path=[];pawn.state='idle';}if(command.work==='research'&&command.value===0&&pawn.research)releaseAssignments(world,pawn);
-    if(command.value===0&&pawn.feed&&command.work===feedingWork(world.pawns.find(p=>p.id===pawn.feed!.patientId))&&pawn.orders.active!=='feed')releaseWork(world,pawn,drops);
-    if(command.work==='doctor'&&command.value===0&&(pawn.surgery||pawn.tend&&pawn.orders.active!=='tend'))releaseWork(world,pawn);
-    if(command.work==='clean'&&command.value===0&&pawn.cleaning&&!pawn.cleaning.forced)releaseWork(world,pawn,drops);
-    if(command.work==='haul'&&command.value===0&&pawn.burial&&pawn.orders.active!=='bury')releaseWork(world,pawn,drops);
-    if(command.work==='firefight'&&command.value===0&&pawn.firefighting&&!pawn.firefighting.forced)releaseWork(world,pawn,drops);
-    if(command.work==='warden'&&command.value===0&&pawn.ward)releaseWork(world,pawn,drops);
-    if(command.value===0&&pawn.rescue&&pawn.orders.active!=='rescue'&&(pawn.rescue.release?
-      (command.work==='basic'||command.work==='warden')&&!workPriority(pawn,'basic')&&!workPriority(pawn,'warden'):
-      command.work===(world.pawns.find(p=>p.id===pawn.rescue!.patientId)?.prisoner?'warden':'doctor')))releaseWork(world,pawn,drops);
-    const job = world.jobs.find(candidate => candidate.id === pawn.jobId);
-    if (command.value === 0 && ((job && workType(job) === command.work && pawn.orders.active===null) || (pawn.haul && pawn.orders.active!=='haul' && command.work === haulingWork(pawn.haul.destination)) || (pawn.cooking && pawn.orders.active!=='cook' && disablesWork(world,pawn,command.work,taskWork(pawn.cooking))))) releaseWork(world, pawn,drops);
-    pawn.planCooldown = 0; refreshStock(world); return { ok: true };
+    setWorkPriority(world,pawn,command.work,command.value,drops);
+    refreshStock(world); return { ok: true };
+  }
+  // Shift-click on a Work column (schema 344): each listed pawn's priority as
+  // the 'priority' command sets it, then one stock refresh.
+  if(command.type==='priority-column'){
+    const reason=priorityColumnRefusal344(world,command);if(reason)return refusal('invalid-priority',reason);
+    const changes=priorityColumnChanges344(world,command);
+    for(const {pawn,value} of changes)setWorkPriority(world,pawn,command.work,value,drops);
+    refreshStock(world); return {ok:true,affected:changes.length};
   }
   if(command.type==='caravan-order'||command.type==='caravan-encounter-choice'||command.type==='caravan-meeting-trade')return refusal('invalid-command','La commande exige le vrai registre de caravanes.');
   if (!['designate', 'cancel', 'stockpile'].includes(command.type)) return refusal('invalid-command', 'Commande inconnue.');
@@ -1181,7 +1204,7 @@ const samePlantLightSourcesKey=(a:readonly unknown[]|undefined,b:readonly unknow
   return true;
 };
 /** Pile indexes (pile-index.ts) are available inside a simulation step only. */
-export function stepWorld(world:CampaignState,ticks=1,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):void {withPileIndexScope(()=>stepWorldInScope(world,ticks,diagnostics,caravans));}
+export function stepWorld(world:CampaignState,ticks=1,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):void {withWorkTabMode344(simpleWorkTab344(campaignAuthority(world as World)),()=>withPileIndexScope(()=>stepWorldInScope(world,ticks,diagnostics,caravans)));}
 function stepWorldInScope(world:CampaignState,ticks=1,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):void {
   if(!Number.isInteger(ticks)||ticks<0||ticks>100000)throw new Error('Tick count must be an integer between 0 and 100000.');
   const root=campaignAuthority(world as World);
@@ -1741,7 +1764,7 @@ export interface AdvancedCoreMap297 extends CoreStepResult297 {mapId:number;worl
 /** A single authoritative physical step. Phase0 is an atomic global/local macro
  * transaction. Results borrow maps only until the synchronous bridge copies them. */
 export function advanceWorldCore297(world:CampaignState,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):{core:number;localTickCompleted:boolean;maps:readonly AdvancedCoreMap297[]} {
- return withPileIndexScope(()=>advanceWorldCore297InScope(world,diagnostics,caravans));
+ return withWorkTabMode344(simpleWorkTab344(campaignAuthority(world as World)),()=>withPileIndexScope(()=>advanceWorldCore297InScope(world,diagnostics,caravans)));
 }
 function advanceWorldCore297InScope(world:CampaignState,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):{core:number;localTickCompleted:boolean;maps:readonly AdvancedCoreMap297[]} {
  const root=campaignAuthority(world as World);if(!isCorePhysicalSchema297(Number(root.schemaVersion)))throw Error('Physical stepping requires297');

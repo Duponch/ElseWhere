@@ -14,6 +14,10 @@ import type {NativeTextEntity} from './native-rich-text';
 /** Presentation-only curtain events; no owner object or simulation permission. */
 export type NativeShipCurtainPhase298='closing'|'held'|'clear'|'reset';
 
+/** Pointer facts of one activation, for controls whose meaning depends on
+ * them (Core tables: Shift-click on a column header). Keyboard activation has
+ * none. */
+export interface NativeGesture {shift:boolean}
 /** Renderer-neutral native interface. No element, HTML, CSS, browser layout or
  * synthetic click is an authority for a visible control. */
 export interface NativeControl {
@@ -30,9 +34,13 @@ export interface NativeControl {
   /** Wrapped secondary information on a full-row painted card. */
   description?:string;
   presentation?:NativeControlStyle;
+  /** Drawn mark in place of the label text (the label stays the accessible name). */
+  mark?:'check';
   select?:{value:string;options:readonly {value:string;label:string;hint?:string;disabled?:boolean}[];onChange:(value:string)=>void|Promise<unknown>};
   paint?:{group:string;index:number;onPaint:(indices:readonly number[])=>void|Promise<unknown>};
-  onActivate:()=>void|Promise<unknown>;
+  onActivate:(gesture?:NativeGesture)=>void|Promise<unknown>;
+  /** Right click (secondary button) on the control, when it has its own meaning. */
+  onSecondary?:(gesture?:NativeGesture)=>void|Promise<unknown>;
   /** View-only pointer/focus preview, released by the native hover owner. */
   onHover?:(hovered:boolean)=>void;
 }
@@ -53,7 +61,8 @@ export interface NativeRow {
   region?:'navigation'|'catalogue'|'details'|'graph';
   controlStyle?:NativeControlStyle;
   graphNode?:{x:number;y:number;width:number;height:number;points:number;cost:number;state:'done'|'active'|'locked'|'available'};
-  columns?:readonly {label:string;hint?:string}[];
+  /** A column with a control is an interactive header (sort, Shift-click). */
+  columns?:readonly {label:string;hint?:string;control?:NativeControl}[];
   meter?:{value:number;max?:number;label?:string;color?:string;passion?:0|1|2;secondary?:{value:number;max?:number;label?:string;color?:string}};
   controls?:NativeControl[];
   /** Equal-width cells are used by work and schedule matrices. */

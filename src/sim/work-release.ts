@@ -28,8 +28,9 @@ import { resetWork } from './work-progress.ts';
 import { zonesUnderPlan } from './construction-zones.ts';
 import { isShelfKind } from './shelf-storage.ts';
 import { constructionHaulId } from './construction-rules.ts';
-import type { Cell, Command, MaterialPile, Pawn, World } from './types.ts';
+import type { Cell, Command, MaterialPile, Pawn, WorkType, World } from './types.ts';
 import { disablesWork, workType } from './work-types.ts';
+import { priorityColumnChanges344 } from './work-tab-344.ts';
 import { haulingWork } from './haul-aside.ts';
 import { footprintCells } from './definitions.ts';
 import { queryArea } from './designation.ts';
@@ -46,6 +47,15 @@ export function humanSleepingSpotActors(world:World,ids:ReadonlySet<number>):Paw
   return world.pawns.filter(p=>p.need?.kind==='sleep'&&ids.has(p.need.bedId??-1)
     ||p.rescue&&ids.has(p.rescue.bedId)||p.surgery&&ids.has(p.surgery.bedId)
     ||p.ward&&patients.has(p.ward.patientId)||p.feed&&patients.has(p.feed.patientId)||p.tend&&patients.has(p.tend.patientId));
+}
+
+/** The workers a priority set to 0 releases: the 'priority' command, and each
+ * pawn a Shift-click on a Work column turns off (schema 344). */
+function priorityZeroReleases(world:World,pawnId:number,work:WorkType,pawns:Set<number>):void {
+  const pawn=world.pawns.find(p=>p.id===pawnId),job=world.jobs.find(j=>j.id===pawn?.jobId);
+  if(pawn?.ward&&work==='warden'||pawn?.animalHandling&&work==='handle'||(pawn?.animalCare||pawn?.animalFeed||pawn?.animalRescue)&&work==='doctor')pawns.add(pawn.id);
+  if(pawn?.burial&&work==='haul'&&pawn.orders.active!=='bury'||pawn?.cleaning&&!pawn.cleaning.forced&&work==='clean')pawns.add(pawn!.id);
+  if(pawn&&((pawn.surgery&&work==='doctor')||(pawn.tend&&work==='doctor'&&pawn.orders.active!=='tend')||(pawn.feed&&work===feedingWork(world.pawns.find(p=>p.id===pawn.feed!.patientId))&&pawn.orders.active!=='feed')||(pawn.brewing&&work==='haul')||(pawn.haul&&pawn.orders.active!=='haul'&&work===haulingWork(pawn.haul.destination))||(job&&workType(job)===work&&pawn.orders.active===null)||(pawn.cooking&&pawn.orders.active!=='cook'&&disablesWork(world,pawn,work,taskWork(pawn.cooking)))))pawns.add(pawn.id);
 }
 
 /** Plan only ownership released by this command, before any command mutation.
@@ -92,10 +102,9 @@ export function planCommandDrops(world:World,command:Command|import('./cave-glow
     for(const p of world.pawns)if(p.haul?.whole&&p.haul.destination.type==='aside'&&same(p.haul.destination,command))pawns.add(p.id);
     const zone=world.stockpiles.find(z=>same(z,command));if(zone)for(const cell of stockpileZoneCells(world,zone.id))zones.add(cell.id);
   } else if(command.type==='priority'&&command.value===0) {
-    const pawn=world.pawns.find(p=>p.id===command.pawnId),job=world.jobs.find(j=>j.id===pawn?.jobId);
-    if(pawn?.ward&&command.work==='warden'||pawn?.animalHandling&&command.work==='handle'||(pawn?.animalCare||pawn?.animalFeed||pawn?.animalRescue)&&command.work==='doctor')pawns.add(pawn.id);
-    if(pawn?.burial&&command.work==='haul'&&pawn.orders.active!=='bury'||pawn?.cleaning&&!pawn.cleaning.forced&&command.work==='clean')pawns.add(pawn!.id);
-    if(pawn&&((pawn.surgery&&command.work==='doctor')||(pawn.tend&&command.work==='doctor'&&pawn.orders.active!=='tend')||(pawn.feed&&command.work===feedingWork(world.pawns.find(p=>p.id===pawn.feed!.patientId))&&pawn.orders.active!=='feed')||(pawn.brewing&&command.work==='haul')||(pawn.haul&&pawn.orders.active!=='haul'&&command.work===haulingWork(pawn.haul.destination))||(job&&workType(job)===command.work&&pawn.orders.active===null)||(pawn.cooking&&pawn.orders.active!=='cook'&&disablesWork(world,pawn,command.work,taskWork(pawn.cooking)))))pawns.add(pawn.id);
+    priorityZeroReleases(world,command.pawnId,command.work,pawns);
+  } else if(command.type==='priority-column') {
+    for(const change of priorityColumnChanges344(world,command))if(change.value===0)priorityZeroReleases(world,change.pawn.id,command.work,pawns);
   } else if(command.type==='bill-remove'||command.type==='bill-update') {
     for(const pawn of world.pawns)if(pawn.cooking?.billId===command.billId&&pawn.cooking.stationId===command.structureId
       &&!(pawn.cooking.recipe==='burn-apparel'&&hasTravellingCargo(world,pawn)))pawns.add(pawn.id);

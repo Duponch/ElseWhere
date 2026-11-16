@@ -33,10 +33,11 @@ describe('compact opt-in colonist management tables',()=>{
   }
  });
  it('keeps priority and schedule payloads tied to their true pawn and refuses stale retained table controls',async()=>{
-  const f=fixture(),p=f.world.pawns[0]!,priority=f.control(`work-${p.id}-build`).select!;
-  await priority.onChange('1');expect(p.priorities.build).toBe(1);expect(f.actions.command).toHaveBeenLastCalledWith({type:'priority',pawnId:p.id,work:'build',value:1});
-  f.state.busy=true;await expect(Promise.resolve().then(()=>priority.onChange('3'))).rejects.toThrow('opération courante');f.state.busy=false;
-  f.state.epoch!++;await expect(Promise.resolve().then(()=>priority.onChange('3'))).rejects.toThrow('autre carte');expect(f.actions.command).toHaveBeenCalledTimes(1);
+  // Schema 344: a work cell is clicked (Core WidgetsWork), no longer a 0–4 selector.
+  const f=fixture(),p=f.world.pawns[0]!;p.priorities.build=2;f.rebuild();const priority=f.control(`work-${p.id}-build`);
+  await priority.onActivate();expect(p.priorities.build).toBe(1);expect(f.actions.command).toHaveBeenLastCalledWith({type:'priority',pawnId:p.id,work:'build',value:1});
+  f.state.busy=true;await expect(Promise.resolve().then(()=>priority.onActivate())).rejects.toThrow('opération courante');f.state.busy=false;
+  f.state.epoch!++;await expect(Promise.resolve().then(()=>priority.onActivate())).rejects.toThrow('autre carte');expect(f.actions.command).toHaveBeenCalledTimes(1);
   f.state.panel='schedule';f.rebuild();await f.control('brush-recreation').onActivate();f.rebuild();
   const hours=f.control(`hour-${p.id}-6`).paint!;await hours.onPaint([6,7,7,-1,24]);
   expect(f.actions.command).toHaveBeenLastCalledWith({type:'schedule-paint',pawnId:p.id,hours:[6,7],assignment:'recreation'});
