@@ -37,6 +37,9 @@ export interface NativeStageOptions {
   onError:(message:string)=>void;
   onGesture?:()=>void;
   onActivate?:(id:string)=>void;
+  /** Core TutorSystem.AllowAction: false refuses this activation (the
+   * caller shows why). Asked before any control acts. */
+  allowActivate?:(id:string,control:NativeControl|undefined)=>boolean;
   onCancelWorldInteraction?:()=>void;
   onTools?:(kind:'orders'|'zones')=>void;
   onViewport?:(width:number,height:number,unitsPerPixel:number,bottomDockHeight:number,leftHudBottom:number)=>void;
@@ -860,6 +863,7 @@ export class NativeStage {
   private secondary(hit:Hit,gesture:NativeGesture):void{
     const action=hit.control?.onSecondary;if(!action)return;
     ++this.activationSerial;const id=hit.control!.id;
+    if(this.options.allowActivate&&!this.options.allowActivate(id,hit.control)){this.invalidate();return;}
     try{
       this.options.onActivate?.(id);const result=action(gesture),pending=result!=null&&typeof (result as PromiseLike<unknown>).then==='function';
       if(pending){this.pendingActions++;this.updatePointerCursor();}
@@ -879,6 +883,7 @@ export class NativeStage {
       const live=pageBound?this.pageControls.find(current=>(current.control?.id??String(current.piece.userData.nativeId??''))===id)
         :[...this.hits.values()].find(current=>current.piece===hit.piece)??(hit.piece.parent?hit:undefined);
       if(!live||live.control?.disabled)return;
+      if(this.options.allowActivate&&!this.options.allowActivate(id,live.control))return;
       if(live.input){this.beginEdit(live);return;}
       if(live.control?.select){this.openDropdown(live);return;}
       const action=live.control?.onActivate??live.piece.userData.onClick;

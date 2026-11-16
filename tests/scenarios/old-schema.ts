@@ -14,7 +14,8 @@ const FIRST_DAYS_KINDS_343=['slept-in-cold','slept-in-heat','slept-outside','sle
  * sleep, soaking-wet and darkness memories (an emptied social state that
  * never interacted, and an emptied memory list, are removed); schema 344: the
  * campaign's simple Work tab setting (an older game always has manual
- * priorities); schema 345: the room size need. */
+ * priorities); schema 345: the room size need; schema 349: the tutorial
+ * lessons' record (a 347/348 tutorial had none). */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -51,5 +52,7 @@ export const asMigratedCurrent=(current:string):string=>serializeWorld(deseriali
 /** Same as asOldSchema on a parsed save or an in-memory world (mutated). */
 export function stripFutureContent(value:unknown,version:number):void {
   if(version<344&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).simpleWorkTab344;
+  // Schema 349: the lessons' record of a tutorial game.
+  if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
   if(version<345)strip(value,version);
 }

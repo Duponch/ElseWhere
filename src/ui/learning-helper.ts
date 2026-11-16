@@ -124,6 +124,9 @@ export function createLearningHelper(options:LearningHelperOptions){
   const opportunities=new Map<string,number>();
   const active:string[]=[];
   let secondsSinceLesson=LEARNING_INITIAL_SECONDS_SINCE_LESSON,sinceLoad=LEARNING_GRACE_SECONDS,sinceDialog=LEARNING_GRACE_SECONDS,checkClock=0;
+  /** Core TutorSystem.AdaptiveTrainingEnabled is false while the Tutor (its
+   * disableAdaptiveTraining) runs the tutorial: nothing is shown or opened. */
+  let suspended=false;
 
   const knowledge=(id:string):number=>record.knowledge[id]??0;
   const isComplete=(id:string):boolean=>knowledge(id)>LEARNING_COMPLETE;
@@ -184,8 +187,9 @@ export function createLearningHelper(options:LearningHelperOptions){
     get relaxDesire(){return relaxDesire();},
     /** Shown concepts, in activation order (modal ones never). */
     get active():readonly string[]{return [...active];},
+    get suspended(){return suspended;},
     get shown():ShownConcept[]{
-      if(!record.enabled)return [];
+      if(!record.enabled||suspended)return [];
       return active.map(id=>{const concept=byId.get(id)!;return {id,title:concept.title,text:concept.text,knowledge:knowledge(id)};});
     },
     concept:(id:string)=>byId.get(id),
@@ -193,7 +197,7 @@ export function createLearningHelper(options:LearningHelperOptions){
     /** Core LessonAutoActivator.TeachOpportunity. */
     teachOpportunity(id:string,type:LearningOpportunity):boolean {
       const concept=byId.get(id);
-      if(!concept||!record.enabled||isComplete(id)||isModalConcept(concept))return false;
+      if(!concept||!record.enabled||suspended||isComplete(id)||isModalConcept(concept))return false;
       opportunities.set(id,OPPORTUNITY_VALUES[type]);
       if(type!=='good-to-know'||active.length<LEARNING_GOOD_TO_KNOW_SHOWN_LIMIT)return tryInitiate(id);
       return false;
@@ -209,6 +213,14 @@ export function createLearningHelper(options:LearningHelperOptions){
       // Larger gestures are written at once; per-frame credit waits for the timer.
       if(added>=KNOWLEDGE_AMOUNTS.small&&dirty)persist();
     },
+    /** Core PlayerKnowledgeDatabase.SetKnowledge (Instruction_LearnConcept
+     * resets its concept to 0 when its lesson starts). */
+    setKnowledge(id:string,value:number):void {if(!byId.has(id)||!Number.isFinite(value))return;setKnowledge(id,value);if(dirty)persist();notify();},
+    /** The tutorial runs (Core AdaptiveTrainingEnabled false): the shown
+     * notions leave the card and nothing new opens until it ends. */
+    setSuspended(value:boolean):void {if(suspended===value)return;suspended=value;notify();},
+    /** Core LessonAutoActivator.Notify_TutorialEnding: the relax timer restarts now. */
+    tutorialEnded():void {secondsSinceLesson=0;},
     /** "Compris" (Core Mark learned): knowledge 1. */
     markLearned(id:string):void {if(!byId.has(id))return;setKnowledge(id,1);opportunities.set(id,0);if(dirty)persist();notify();},
     /** Core TutorUtility.DoModalDialogIfNotKnown: the concept to show once,
@@ -234,7 +246,7 @@ export function createLearningHelper(options:LearningHelperOptions){
       if(!(seconds>0)||!Number.isFinite(seconds))return;
       sinceLoad+=seconds;sinceDialog+=seconds;sinceWrite+=seconds;
       if(dirty&&sinceWrite>=LEARNING_WRITE_INTERVAL_SECONDS)persist();
-      if(!record.enabled||!context.playing)return;
+      if(!record.enabled||suspended||!context.playing)return;
       secondsSinceLesson+=seconds;
       if(sinceLoad<LEARNING_GRACE_SECONDS||sinceDialog<LEARNING_GRACE_SECONDS||context.menuOpen)return;
       checkClock+=seconds;

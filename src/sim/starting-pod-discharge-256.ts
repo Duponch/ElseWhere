@@ -1,3 +1,4 @@
+import {recordTutorialStartingItem349} from './tutorial-lessons-349.ts';
 import {findStartingPlaceNear256,planStartingPlaceDirect256,type StartingPlaceThing256} from './starting-place-near-256.ts';
 import {captureStartingPlacePhysics256} from './starting-place-physics-256.ts';
 import {prepareStartingHeldClinicalResume256} from './starting-held-clinical-256.ts';
@@ -80,6 +81,9 @@ export function prepareStartingPodDischarge256(world:World,arrival:CoreStartingA
    if('species'in actor){actor.nextDecision=world.tick;world.wildlife!.animals.push(actor);}else world.pawns.push(actor);
   }
   arrival.pods.splice(arrival.pods.indexOf(pod),1);arrival.openedCells.push({...pod.cell});
+  // Schema 349, ActiveTransporter: the items a pod places (or tops up) in a
+  // tutorial are its starting items; the slag of the pod is not one of them.
+  if(world.gameProfile?.tutorial347?.lessons349)for(const pile of [...changed.keys(),...actualItems])if(pile.item!=='slag-steel-chunk')recordTutorialStartingItem349(world,pile.id);
   fog.commit();refreshStock(world);
  }};
 }

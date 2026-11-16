@@ -2,6 +2,7 @@ import {validGeographicCreationSize262,validGeographicCreationSeason262,type Geo
 import {giveCrashlandedStartThoughts343} from './crashlanded-start-343.ts';
 import {initializeGeographicRenewal262} from './geographic-renewal-state-262.ts';
 import {crashlandedProfile,isSchema347OrLater,tutorialProfile347} from './game-profile.ts';
+import {createTutorialLessons349,isSchema349OrLater} from './tutorial-lessons-state-349.ts';
 import {violentWorkRefusal} from './colonist-backgrounds.ts';
 import {constructAncientCasketGroupIds256,type AncientCasketGroupIds256} from './ancient-casket-group-ids-256.ts';
 import {configuredGeographicStartClock256} from './geographic-start-clock-256.ts';
@@ -110,7 +111,8 @@ export function* createGeographicNewGame256(input:GeographicNewGameInput256,bind
  // Creation choices exist before MapGenerator in the real new-game lifecycle.
  // This factory exposes only the same supported Crashlanded preset. Establish
  // it here before750 difficulty consumers; never infer it in a reader/load.
- w.gameProfile=input.tutorial?tutorialProfile347():crashlandedProfile();
+ // Schema 349: the tutorial's lessons record (Tutor and TutorialState) is born with it.
+ w.gameProfile=input.tutorial?tutorialProfile347(isSchema349OrLater(Number(w.schemaVersion))?createTutorialLessons349():undefined):crashlandedProfile();
  // Core PlaySettings is born with the game too: the simple Work tab (344).
  if(isSchema344OrLater(w.schemaVersion))w.simpleWorkTab344=true;
  attachStartingOriginalRoster256(w,roster);

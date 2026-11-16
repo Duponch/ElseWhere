@@ -38,6 +38,7 @@ import { portraitDataUrl, portraitExpressionOf } from '../ui/pawn-portrait';
 import { nativeClinicalConditionRows } from './native-special-inspection';
 import { NATIVE_UI_SCALE_LIMITS,normalizeGraphicsStylePreferences,ORIGAMI_STYLE_CONTROLS,origamiStyleDisplayScale,formatOrigamiStyleValue,type GraphicsStylePreferences } from './native-preferences';
 import {presentNativeFront} from './native-front-presentation';
+import {tutorialBiomeTag349} from '../ui/tutorial-actions-349';
 
 type Page = 'home' | 'scenario' | 'story' | 'world' | 'site' | 'pawns' | 'load' | 'tests' | 'options';
 const names: Record<string, string> = {
@@ -120,12 +121,34 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     result.onClose = () => { if (!busy && !pending) back(); };
     show(presentNativeFront(result,page,{button:control,field:input,tests:testCatalogue}));
   }
-  function navigate(next: Page): void { externalPage=false;page = next; open = true; error = ''; status = '';statusMeter=undefined; confirmation = undefined; notice = undefined; paint(); }
+  function navigate(next: Page): void { const previous=open?page:undefined;externalPage=false;page = next; open = true; error = ''; status = '';statusMeter=undefined; confirmation = undefined; notice = undefined; tutorialPages(previous,next); paint(); }
+  /** Core Page.DoNext/DoBack (PageClosed) and Page.PostOpen (PageStart-<page>)
+   * of the three creation pages, while the tutorial is being prepared. */
+  const CORE_PAGES:Partial<Record<Page,string>>={world:'CreateWorldParams',site:'SelectStartingSite',pawns:'ConfigureStartingPawns'};
+  function tutorialPages(previous:Page|undefined,next:Page|undefined):void {
+    const lessons=options.tutorialLessons;if(!lessons||!tutorial||previous===next)return;
+    if(previous&&CORE_PAGES[previous])lessons.notify('PageClosed');
+    if(next&&CORE_PAGES[next])lessons.notify(`PageStart-${CORE_PAGES[next]}`);
+    else lessons.end();
+  }
+  /** Core AllowAction tags of the creation pages' controls. */
+  function tutorialTag(id:string):string|undefined {
+    if(!tutorial||!CORE_PAGES[page])return undefined;
+    if(id==='front-back')return 'GotoPrevPage';
+    if(id==='generate-world'||id==='start-colony'||id==='confirm-site')return 'GotoNextPage';
+    if(/^(?:promote|up|down)-\d+$/.test(id))return 'ReorderPawn';
+    if(/^reroll-\d+$/.test(id))return 'RandomizePawn';
+    if(id==='site-view-facts')return 'ITab-Terrain-Open';
+    if(id==='site-view-places'||id==='site-view-factions')return 'ITab-Planet-Open';
+    return undefined;
+  }
   function fail(cause: unknown): void { error = errorMessage(cause); paint(); }
   function control(id: string, label: string, action: () => unknown, disabled = false, active = false, allowBusy = false): NativeControl {
     return { id, label, disabled: disabled || (!allowBusy && (busy || pending)), active, onActivate: async () => {
       if (disabled || (!allowBusy && (busy || pending))) return;
       error = '';
+      const tag=tutorialTag(id),refusal=tag?options.tutorialLessons?.allow(tag):undefined;
+      if(refusal!==undefined){error=refusal;paint();return;}
       try { await action(); } catch (cause) { error = errorMessage(cause); }
       paint();
     } };
@@ -355,10 +378,25 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     return{id:'',title:tutorial?'Tutoriel · Créer le monde':'Créer le monde',layout:'setup',setupCatalogueWidth:400,rows,actions:[...navigation(),control('reset-world','Réinitialiser tout',()=>update(()=>{parameters={seed:randomSiteSeed(),settings:defaultWorldGenerationSettings(),size:250,season:'auto'};})),primary]};
   }
 
+  /** Core ChooseLandingSite: only the tiles whose ChooseBiome tag the lesson
+   * allows (temperate forest, flat, no landmark) are offered, and one of them
+   * is marked on the globe (Core: a smoothed patch near the screen center;
+   * here the allowed tile with the most allowed neighbours). */
+  let siteChoices:{key:string;tiles:number[];suggested:number|null}|undefined;
+  function tutorialSiteChoices(surface:{tiles:readonly {biome:string;hilliness:string;neighbours:readonly number[]}[]},scope:string):{tiles:number[];suggested:number|null} {
+    const lessons=options.tutorialLessons;
+    const filtering=!!lessons&&tutorial&&lessons.allow('ChooseBiome-Elsewhere-None-None')!==undefined;
+    if(!filtering)return {tiles:eligible,suggested:null};
+    const key=`${scope}:${eligible.length}`;if(siteChoices?.key===key)return siteChoices;
+    const tiles=eligible.filter(id=>{const tile=surface.tiles[id]!;return lessons!.allow(tutorialBiomeTag349(tile.biome,tile.hilliness))===undefined;});
+    const set=new Set(tiles);let suggested:number|null=null,best=-1;
+    for(const id of tiles){const score=surface.tiles[id]!.neighbours.filter(n=>set.has(n)).length;if(score>best){best=score;suggested=id;}}
+    siteChoices={key,tiles,suggested};return siteChoices;
+  }
   function renderSite(): NativePage {
     const preview=flow?.preview;
     if(!preview)return{id:'',title:'Lieu de départ',rows:[{id:'missing-preview',label:'Le monde préparé n’est plus disponible.'}],actions:[control('regenerate','Revenir aux paramètres',()=>navigate('world'))]};
-    const surface=preview.geography.surface,scope=`${generation}:${preview.generation}:${preview.key}`;
+    const surface=preview.geography.surface,scope=`${generation}:${preview.generation}:${preview.key}`,offered=tutorialSiteChoices(surface,scope).tiles,suggested=tutorialSiteChoices(surface,scope).suggested;
     if(nativeSiteView.scope!==scope){nativeSiteView.scope=scope;nativeSiteView.tab='facts';}
     const choose=(id:number)=>{
       if(!open||page!=='site'||busy||pending||flow?.preview!==preview)throw Error('Le choix du lieu n’est plus disponible dans cette préparation.');
@@ -367,16 +405,16 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     };
     const changeView=(tab:typeof nativeSiteView.tab)=>{if(open&&page==='site'&&!busy&&!pending&&flow?.preview===preview)nativeSiteView.tab=tab;};
     const random=control('tile-random','Lieu aléatoire',()=>{
-      const limit=Math.floor(0x100000000/eligible.length)*eligible.length;let draw:number;
+      const limit=Math.floor(0x100000000/offered.length)*offered.length;let draw:number;
       do{draw=crypto.getRandomValues(new Uint32Array(1))[0]!;}while(draw>=limit);
-      choose(eligible[draw%eligible.length]!);siteOffset=Math.floor(eligible.indexOf(selectedTile!)/16)*16;
-    },!eligible.length);
+      choose(offered[draw%offered.length]!);siteOffset=Math.floor(offered.indexOf(selectedTile!)/16)*16;
+    },!offered.length);
     const rows:NativeRow[]=[{id:'site-views',region:'navigation',label:'',controlStyle:'tab',compact:true,controls:[
       control('site-view-facts','Lieu choisi',()=>changeView('facts'),false,nativeSiteView.tab==='facts'),
       control('site-view-places','Lieux disponibles',()=>changeView('places'),false,nativeSiteView.tab==='places'),
       control('site-view-factions','Factions',()=>changeView('factions'),false,nativeSiteView.tab==='factions'),
     ]},{...input('tile-input','Numéro de case',selectedTile===null?'':String(selectedTile),value=>choose(Number(value)),'number'),region:'navigation',compact:true},
-      {id:'site-selection-tools',region:'navigation',presentation:'plain',compact:true,label:`${eligible.length} lieux disponibles`,controls:[random],hint:'La sélection ne génère pas de carte locale. Confirmer valide ce lieu avant le choix des personnages.'}];
+      {id:'site-selection-tools',region:'navigation',presentation:'plain',compact:true,label:`${offered.length} lieux disponibles`,controls:[random],hint:'La sélection ne génère pas de carte locale. Confirmer valide ce lieu avant le choix des personnages.'}];
     const detail=(row:NativeRow):NativeRow=>({...row,region:'details',presentation:'plain',dense:true,compact:true});
     if(nativeSiteView.tab==='facts'){
       if(selectedTile===null)rows.push(detail({id:'site-list-summary',label:'Choisissez un lieu sur le globe ou dans la liste.',hint:'Le numéro de case et le bouton Lieu aléatoire restent disponibles au-dessus.'}));
@@ -390,14 +428,14 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
         facts.forEach(([label,value],index)=>rows.push(detail({id:`site-fact-${index+2}`,label:label!,value:value!})));
       }
     }else if(nativeSiteView.tab==='places'){
-      rows.push(detail({id:'site-list-summary',label:`${eligible.length} lieux disponibles`,hint:'Choisir une ligne ouvre les informations du lieu sans créer de carte.'}));
-      for(const id of eligible.slice(siteOffset,siteOffset+16)){
+      rows.push(detail({id:'site-list-summary',label:`${offered.length} lieux disponibles`,hint:'Choisir une ligne ouvre les informations du lieu sans créer de carte.'}));
+      for(const id of offered.slice(siteOffset,siteOffset+16)){
         const tile=surface.tiles[id]!;
         rows.push(detail({id:`tile-${id}`,label:`Case ${id} · ${nativeSiteBiome(tile.biome)}`,value:`${tile.meanTemperature.toFixed(1)} °C · ${Math.round(tile.rainfall)} mm/an · ${HILLINESS_LABELS[tile.hilliness]}`,controls:[control(`choose-tile-${id}`,'Choisir',()=>choose(id),false,selectedTile===id)]}));
       }
-      rows.push(detail({id:'tile-pagination',label:`${siteOffset+(eligible.length?1:0)}–${Math.min(siteOffset+16,eligible.length)} / ${eligible.length}`,controls:[
+      rows.push(detail({id:'tile-pagination',label:`${siteOffset+(offered.length?1:0)}–${Math.min(siteOffset+16,offered.length)} / ${offered.length}`,controls:[
         control('tiles-previous','Précédents',()=>{siteOffset=Math.max(0,siteOffset-16);},siteOffset===0),
-        control('tiles-next','Suivants',()=>{siteOffset+=16;},siteOffset+16>=eligible.length),
+        control('tiles-next','Suivants',()=>{siteOffset+=16;},siteOffset+16>=offered.length),
       ]}));
     }else{
       for(const faction of preview.factions.filter(faction=>!faction.hidden)){
@@ -406,10 +444,13 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       }
     }
     return{id:'',title:'Choisir le lieu de départ',layout:'setup',columnRatio:.58,contentKey:`${scope}:${nativeSiteView.tab}:${selectedTile??'none'}`,rows,
-      visual:{kind:'planet',surface,roads:preview.geography.roads,selected:selectedTile,markers:preview.settlements.map(settlement=>({tile:settlement.tile,label:settlement.name,color:0x8d7e9c})),onSelect:id=>{
-        error='';try{choose(id);siteOffset=Math.floor(eligible.indexOf(id)/16)*16;}catch(cause){error=errorMessage(cause);}paint();
+      visual:{kind:'planet',surface,roads:preview.geography.roads,selected:selectedTile,markers:[...preview.settlements.map(settlement=>({tile:settlement.tile,label:settlement.name,color:0x8d7e9c})),...suggested!==null?[{tile:suggested,label:'Lieu conseillé',color:0xd9993e}]:[]],onSelect:id=>{
+        error='';try{choose(id);siteOffset=Math.max(0,Math.floor(offered.indexOf(id)/16)*16);}catch(cause){error=errorMessage(cause);}paint();
       }},actions:navigation(control('confirm-site','Suivant',()=>{
         if(selectedTile===null)return;
+        // Page_SelectStartingSite.CanDoNext: the tile's ChooseBiome tag.
+        const chosen=surface.tiles[selectedTile]!,refusal=tutorial?options.tutorialLessons?.allow(tutorialBiomeTag349(chosen.biome,chosen.hilliness)):undefined;
+        if(refusal!==undefined)throw Error(refusal);
         const calendar=worldCreationCalendarFacts262(surface.tiles[selectedTile]!,parameters.season);
         confirmation={message:`Confirmer la case ${selectedTile} · ${parameters.size} × ${parameters.size} · ${calendar.choice} · ${calendar.date} ?`,accept:confirmSite};
       },selectedTile===null))};
@@ -425,6 +466,9 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       if(!current()||!Number.isSafeInteger(target)||target<0||target>=roster.length)return;
       const from=roster.findIndex(candidate=>candidate.serial===serial);if(from<0||from===target)return;
       const next=[...roster];next.splice(target,0,next.splice(from,1)[0]!);roster=next;
+      // Page_ConfigureStartingPawns: ReorderPawn, and ReorderPawnOptionalToStarting
+      // when a left-behind candidate joins the starting group.
+      if(tutorial){options.tutorialLessons?.notify('ReorderPawn');if(from>=3&&target<3)options.tutorialLessons?.notify('ReorderPawnOptionalToStarting');}
     };
     const rows: NativeRow[]=[{id:'party-help',region:'navigation',presentation:'plain',compact:true,label:'Choisir trois personnes',value:'Les trois premiers partent.',hint:'Sélectionnez un candidat dans la liste puis choisissez sa place dans le dossier. Monter et descendre conservent les huit profils et leur ordre relatif.'}];
     for(const [index,descriptor] of roster.entries()){
@@ -451,7 +495,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
         const name=value.trim();if(!validStartingCandidateName(name))throw Error('Le nom doit contenir 1 à 80 caractères, sans caractères de contrôle.');
         roster=roster.map(candidate=>candidate.serial===descriptor.serial?{...candidate,nameOverride:name}:candidate);
       },'text',80);
-      identity.controls=[{...control(`reroll-${descriptor.serial}`,'↻',()=>{if(live(descriptor.serial,descriptor.generation))roster=rerollStartingCandidateForRoster(teamSeed,roster,descriptor.serial);}),hint:'Renouveler ce candidat : les sept autres profils et leur ordre sont conservés.'}];
+      identity.controls=[{...control(`reroll-${descriptor.serial}`,'↻',()=>{if(live(descriptor.serial,descriptor.generation)){roster=rerollStartingCandidateForRoster(teamSeed,roster,descriptor.serial);if(tutorial)options.tutorialLessons?.notify('RandomizePawn');}}),hint:'Renouveler ce candidat : les sept autres profils et leur ordre sont conservés.'}];
       rows.push({...identity,region:'details',dense:true,compact:true},{id:'candidate-age',region:'details',dense:true,compact:true,label:'Âge bio. / chrono.',value:pawn.age?`${biologicalYears(pawn.age)} / ${chronologicalYears(pawn.age)} ans`:'Non renseigné'});
       rows.push(details({id:'candidate-actions',label:'',controls:[
         {...control(`promote-${descriptor.serial}`,selected?'Laisser sur place':'Choisir pour le départ',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)<3?3:2);}),hint:selected?'Place ce profil après les trois personnes choisies ; le candidat suivant rejoint le départ.':'Place ce profil en troisième position ; la dernière personne choisie passe dans les réserves.'},
@@ -600,12 +644,13 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   function showTutorial(): void { startCreation(true); }
   function startCreation(learn: boolean): void {
     if (busy || pending) return;
+    if(learn)options.tutorialLessons?.begin();else if(tutorial)options.tutorialLessons?.end();
     tutorial = learn; difficultyChosen = reloadChosen = learn; invalidateDraft();
     let seed = ''; try { seed = randomSiteSeed(); teamSeed = Number(randomSiteSeed()); } catch { teamSeed = 0; }
     parameters = { seed, settings: defaultWorldGenerationSettings(), size: 250, season: 'auto' };
     roster = createStartingCandidateRoster(teamSeed); inspected = roster[0]!.serial; navigate(learn ? 'world' : 'scenario');
   }
-  function hide(): void { generation++; flow?.cancel(); confirmation = undefined; notice = undefined; open = false; if (!pending) busy = false; show(null); }
+  function hide(): void { if(open)tutorialPages(page,undefined); generation++; flow?.cancel(); confirmation = undefined; notice = undefined; open = false; if (!pending) busy = false; show(null); }
   return {
     showHome(nextHasGame = hasGame) { if (busy || pending) return; hasGame = nextHasGame; navigate('home'); },
     setHasGame(next) { hasGame = next; if (page === 'home') paint(); },

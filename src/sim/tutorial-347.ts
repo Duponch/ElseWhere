@@ -40,16 +40,19 @@ import {addGroundMaterial} from './materials.ts';
 import {healthRandom} from './health.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {isSchema347OrLater,tutorialMode347,type GameProfile,type TutorialState347} from './game-profile.ts';
+import {endTutorialLessons349} from './tutorial-lessons-state-349.ts';
 export {isSchema347OrLater};
 import type {Cell,CommandResult,Job,Tile,World} from './types.ts';
 
-export type TutorialCommand347=
+export type TutorialContentCommand347=
   | {type:'tutorial-potatoes'}
   | {type:'tutorial-steel-lump'}
   | {type:'tutorial-raid'}
   | {type:'choose-storyteller';storyteller:'cassandra-partial';difficulty:'adventure-story'};
+/** Every tutorial command; schema 349 adds the lessons' chain. */
+export type TutorialCommand347=TutorialContentCommand347|import('./tutorial-lessons-349.ts').TutorialLessonCommand349;
 const TYPES=new Set(['tutorial-potatoes','tutorial-steel-lump','tutorial-raid','choose-storyteller']);
-export const isTutorialCommand347=(c:unknown):c is TutorialCommand347=>!!c&&typeof c==='object'&&TYPES.has(String((c as {type?:unknown}).type));
+export const isTutorialCommand347=(c:unknown):c is TutorialContentCommand347=>!!c&&typeof c==='object'&&TYPES.has(String((c as {type?:unknown}).type));
 
 /** Core InstructionDef AddBillSimpleMeal: giveOnActivateDef/Count. */
 export const TUTORIAL_POTATOES_347=75;
@@ -130,9 +133,13 @@ function lumpStone(w:World,center:Cell):StoneKind {
  * wipes plants (GenSpawn WipeMode.Vanish) without yield. Adaptations: a cell
  * holding a person, an animal, a job, a floor or bridge, or a non-plant
  * resource is left out of the lump instead of being displaced. */
-function scatterSteelLump(w:World,state:TutorialState347):CommandResult {
-  if(state.steelLumpAtCore!==undefined)return refuse('Le filon d’acier du tutoriel a déjà été placé.');
-  const rect=findUsableRect347(w,10,10,0,true);if(!rect)return refuse('Aucun emplacement dégagé de 10 × 10 près du centre de la carte.');
+function scatterSteelLump(w:World,state:TutorialState347):CommandResult {return scatterTutorialSteelLump347(w,state).result;}
+/** The same, with the rect and the lump cells (Instruction_MineSteel keeps
+ * the steel cells of the rect, schema 349). */
+export function scatterTutorialSteelLump347(w:World,state:TutorialState347):{result:CommandResult;rect?:TutorialRect347;cells:number[]} {
+  const failed=(reason:string)=>({result:refuse(reason),cells:[] as number[]});
+  if(state.steelLumpAtCore!==undefined)return failed('Le filon d’acier du tutoriel a déjà été placé.');
+  const rect=findUsableRect347(w,10,10,0,true);if(!rect)return failed('Aucun emplacement dégagé de 10 × 10 près du centre de la carte.');
   const center=tutorialRectCenter347(rect),n=w.width*w.height,occupied=new Uint8Array(n);
   for(const p of w.pawns){occupied[p.z*w.width+p.x]=1;if(p.motion&&p.motion.end>w.tick)occupied[p.motion.from.z*w.width+p.motion.from.x]=1;}
   for(const a of [...w.wildlife?.animals??[],...w.mechanoids??[]])if(a.state!=='dead'){occupied[a.z*w.width+a.x]=1;if(a.motion&&a.motion.end>w.tick)occupied[a.motion.from.z*w.width+a.motion.from.x]=1;}
@@ -144,8 +151,8 @@ function scatterSteelLump(w:World,state:TutorialState347):CommandResult {
   const size=TUTORIAL_LUMP_SIZE_347.min+Math.floor(healthRandom(w)*(TUTORIAL_LUMP_SIZE_347.max-TUTORIAL_LUMP_SIZE_347.min+1));
   const random=new WorldGenerationRandom(Math.floor(healthRandom(w)*0x100000000));
   const cells=localIrregularOreLump256(w.width,w.height,center.z*w.width+center.x,size,allows,random);
-  if(!cells.length)return refuse('Aucune case libre pour le filon d’acier.');
-  if(!Number.isSafeInteger(w.nextId+cells.length))return refuse('Identités épuisées.');
+  if(!cells.length)return failed('Aucune case libre pour le filon d’acier.');
+  if(!Number.isSafeInteger(w.nextId+cells.length))return failed('Identités épuisées.');
   const stone=lumpStone(w,center),site3=w.site?.revision===3,wiped=new Set(cells);
   w.resources=w.resources.filter(r=>!wiped.has(r.z*w.width+r.x));
   for(const i of cells){
@@ -155,7 +162,7 @@ function scatterSteelLump(w:World,state:TutorialState347):CommandResult {
   invalidateAnimalPens(w);
   state.steelLumpAtCore=effectiveCore297(w);
   w.events.push({tick:w.tick,type:'command',message:'Un filon d’acier compacté est apparu près du centre de la carte.'});if(w.events.length>80)w.events.splice(0,w.events.length-80);
-  return {ok:true,affected:cells.length};
+  return {result:{ok:true,affected:cells.length},rect,cells:[...cells]};
 }
 
 /** Lesson DownRaider activation: Core RaidEnemy with the points of one
@@ -187,7 +194,8 @@ function sendRaid(w:World,state:TutorialState347):CommandResult {
  * simulated tick. */
 function chooseStoryteller(w:World,state:TutorialState347):CommandResult {
   const root=campaignAuthority(w),core=effectiveCore297(w);
-  const next:GameProfile={revision:1,storyteller:'cassandra-partial',difficulty:'adventure-story',saveMode:'reloadable',tutorial347:{...state,endedAtCore:core}};
+  // Schema 349: TutorialState.Notify_TutorialEnding clears the lessons' state.
+  const next:GameProfile={revision:1,storyteller:'cassandra-partial',difficulty:'adventure-story',saveMode:'reloadable',tutorial347:{...endTutorialLessons349(state),endedAtCore:core}};
   root.gameProfile=next;if(w!==root&&w.gameProfile!==next)w.gameProfile=next;
   adoptFluIncidents(w);
   if(!w.visitors){enableVisitors(w);const born=w.visitors as World['visitors']|undefined;if(born&&'introAt'in born&&w.tick<INTRO_VISITOR_TICK)born.introAt=INTRO_VISITOR_TICK;}
@@ -195,7 +203,7 @@ function chooseStoryteller(w:World,state:TutorialState347):CommandResult {
   return {ok:true};
 }
 
-export function applyTutorialCommand347(w:World,c:TutorialCommand347):CommandResult {
+export function applyTutorialCommand347(w:World,c:TutorialContentCommand347):CommandResult {
   if(!c||typeof c!=='object')return refuse('Commande invalide.');
   const state=tutorialState(w);
   if(!isSchema347OrLater(Number(w.schemaVersion))||!state)return refuse('Cette commande n’existe que pendant le tutoriel.');

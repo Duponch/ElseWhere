@@ -1,4 +1,5 @@
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
+import {validTutorialLessonsShape349,validateTutorialLessons349} from './tutorial-lessons-state-349.ts';
 import type { World } from './types.ts';
 
 const record=(v:unknown):v is Record<string,unknown>=>typeof v==='object'&&v!==null&&!Array.isArray(v);
@@ -7,8 +8,11 @@ const dataKeys=(v:Record<string,unknown>,required:readonly string[],optional:rea
 const coreTick=(v:unknown):boolean=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=0;
 /** Schema 347 tutorial record: Core ticks only, each mark at most once;
  * `ended` says whether the ChooseStoryteller handover happened. */
-export function validTutorialState347(value:unknown,ended:boolean,tick?:number):boolean {
-  if(!record(value)||!dataKeys(value,['revision'],['potatoesAtCore','steelLumpAtCore','raidAtCore','endedAtCore'])||value.revision!==1)return false;
+export function validTutorialState347(value:unknown,ended:boolean,tick?:number,version?:number):boolean {
+  // Schema 349: the lessons' record (only a tutorial created at 349 has it).
+  const lessons=version!==undefined&&version>=349?['lessons349']:[];
+  if(!record(value)||!dataKeys(value,['revision'],['potatoesAtCore','steelLumpAtCore','raidAtCore','endedAtCore',...lessons])||value.revision!==1)return false;
+  if(Object.hasOwn(value,'lessons349')&&!validTutorialLessonsShape349(value.lessons349,Object.hasOwn(value,'endedAtCore')))return false;
   const limit=tick===undefined?Number.MAX_SAFE_INTEGER:tick*10+9;
   for(const key of ['potatoesAtCore','steelLumpAtCore','raidAtCore','endedAtCore'] as const)if(Object.hasOwn(value,key)&&(!coreTick(value[key])||Number(value[key])>limit))return false;
   return ended===Object.hasOwn(value,'endedAtCore');
@@ -26,7 +30,7 @@ export function validGameProfile(value:unknown,version:number,scenario:unknown,e
   if(version>=347&&Object.hasOwn(value,'tutorial347')){
     if(!dataKeys(value,['revision','storyteller','difficulty','saveMode','tutorial347']))return false;
     const tutor=value.storyteller==='tutor'&&value.difficulty==='community-builder',handed=value.storyteller==='cassandra-partial'&&value.difficulty==='adventure-story';
-    return (tutor||handed)&&validTutorialState347(value.tutorial347,handed,tick);
+    return (tutor||handed)&&validTutorialState347(value.tutorial347,handed,tick,version);
   }
   return Object.keys(value).length===4&&Object.keys(value).every(k=>['revision','storyteller','difficulty','saveMode'].includes(k))&&
     value.storyteller==='cassandra-partial'&&value.difficulty==='adventure-story';
@@ -35,7 +39,8 @@ export function validateGameProfile(world:World,temporaryTarget263=false):string
   if(temporaryTarget263&&isSchema263OrLater(Number(world.schemaVersion)))return [];
   if(!world.gameProfile||world.expeditionSite&&world.schemaVersion>=240)return [];
   const tutorial=world.gameProfile.tutorial347;
-  if(tutorial&&!validTutorialState347(tutorial,world.gameProfile.storyteller!=='tutor',world.tick))return ['Invalid or future tutorial record.'];
+  if(tutorial&&!validTutorialState347(tutorial,world.gameProfile.storyteller!=='tutor',world.tick,Number(world.schemaVersion)))return ['Invalid or future tutorial record.'];
+  if(tutorial){const lessons=validateTutorialLessons349(world);if(lessons.length)return lessons;}
   // The Tutor has no storyteller comps: no calendar of its incidents exists
   // before the handover (the raid calendar stays, silent, for the tutor raid).
   if(world.gameProfile.storyteller==='tutor'&&(['fluIncidents','miscIncidents','smallIncidents','visitors','quests','podRescues'] as const).some(k=>world[k]!==undefined))return ['The Tutor storyteller has no incident calendar.'];

@@ -26,6 +26,10 @@ const BY_ID:Readonly<Record<string,string>>=Object.freeze({
   'zones-areas-open':'zones:allowed-areas','areas-manage':'zones:allowed-areas',
   'group-formation-open':'world:form-caravan',
   'animal-tame':'tame',
+  // Schema 349, the tutorial's lessons: page Next buttons, the plant
+  // selector of a growing zone and the storyteller choice of the Menu.
+  'generate-world':'next-page','confirm-site':'next-page','start-colony':'next-page',
+  'special-crop-select':'growing-plant','menu-choose-storyteller':'choose-storyteller',
 });
 /** Families of ids, tested in order after the fixed ones. */
 const BY_PATTERN:readonly [RegExp,(match:RegExpExecArray)=>string][]=[
@@ -38,6 +42,9 @@ const BY_PATTERN:readonly [RegExp,(match:RegExpExecArray)=>string][]=[
   [/^assign-response-\d+$/,()=>'hostility-response'],
   [/^assign-reading-\d+$/,()=>'reading-policy'],
   [/^wildlife-\d+-tame$/,()=>'tame'],
+  [/^tool-([a-z0-9-]+)-material$/,match=>`material:${match[1]}`],
+  [/^(?:promote|up)-\d+$/,()=>'reorder-pawn'],
+  [/^reroll-\d+$/,()=>'randomize-pawn'],
 ];
 const cache=new Map<string,string|null>();
 /** Tag of an existing native control, read from its stable id (no tag:

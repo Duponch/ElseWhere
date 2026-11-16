@@ -1,3 +1,4 @@
+import {recordTutorialStartingItem349} from './tutorial-lessons-349.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {captureRandomClosewalk256,randomClosewalkCellNear256} from './random-closewalk-256.ts';
 import {claimCoreStartingScatterFrontier256} from './starting-pod-birth-256.ts';
@@ -89,6 +90,8 @@ export function applyCoreStartingScatter256(world:World,arrival:CoreStartingArri
    }else {
     const source:MaterialPile={id:world.nextId++,item:spec.item,kind:definition!.kind,quantity,owner:{type:'ground',...loc}};setMaterialForbidden256(source,true);
     captureStartingGeneratedPlacement256(world,arrival,loc)(source);
+    // Schema 349, GenStep_ScatterThings: a near-start item of a tutorial is a starting item.
+    if(spec.near&&world.gameProfile?.tutorial347?.lessons349&&world.piles.some(p=>p.id===source.id))recordTutorialStartingItem349(world,source.id);
    }
    placed+=quantity;used.push(loc);
   }

@@ -62,6 +62,9 @@ import {createFirstGesturesLearning,FIRST_GESTURES_STORAGE_KEY} from './ui/first
 import {createFirstGesturesGuide} from './ui/first-gestures-guide';
 import {createLearningRuntime,installLearningCameraInput,LEARNING_TICK_MS,type LearningRuntime} from './ui/learning-runtime';
 import {learningHighlightTags} from './ui/native-highlight-tags';
+import {createTutorialEngine349,type TutorialEngine349} from './ui/tutorial-engine-349';
+import {tutorialCommandActions349,tutorialInspectorTag349,tutorialMainTabEvent349,tutorialMainTabTag349,tutorialStuffTag349,tutorialToolTag349,type TutorialAction349} from './ui/tutorial-actions-349';
+import {NativeTutorialCard} from './ui3d/native-tutorial-card';
 import { createStartingArrivalUI } from './ui/starting-arrival';
 let allowedAreaEditId:number|undefined;
 import {PresentationQueue} from './render/PresentationQueue';
@@ -345,6 +348,17 @@ function openResearchContext(panel:'work'|'architect'):void {
 let firstGesturesLearning:ReturnType<typeof createFirstGesturesLearning>|undefined;
 /** Learning helper: browser knowledge and real time only, never the World. */
 let learningRuntime:LearningRuntime|undefined;
+/** Schema 349: the tutorial's lessons (interface engine) and their card. */
+let tutorialLessons:TutorialEngine349|undefined;
+let nativeTutorialCard:NativeTutorialCard|undefined;
+/** Core TutorSystem.AllowAction: refused with the lesson's instruction as a message. */
+function tutorialAllows(action:TutorialAction349):boolean {
+  const refusal=tutorialLessons?.allow(action);if(refusal===undefined)return true;
+  if(refusal){audio.playInterface('ui.reject');notify(refusal,true);}
+  return false;
+}
+/** Core TutorSystem.Notify_Event of an interface action. */
+function tutorialNotify(tag:string|undefined):void {if(tag)tutorialLessons?.notify(tag);}
 let drainMainAdmissionsBeforeFrame=()=>{};
 let notifyMainAdmissionAvailability=()=>{};
 let mainAdmissionCanFrame=()=>false;
@@ -413,8 +427,13 @@ const client = (() => {
     setActualView301:(...args:Parameters<SimulationClient['setActualView301']>)=>native.setActualView301(...args),
     init: (...args: Parameters<SimulationClient['init']>) => native.init(...args),
     command: async (command:Parameters<SimulationClient['command']>[0]) => {
+      // Schema 349: the tutorial's lesson filters the gated actions before
+      // they are sent (designators, gizmos, the storyteller choice).
+      const tutorial=tutorialLessons?.active?tutorialCommandActions349(command,snapshot):undefined;
+      if(tutorial?.gate){const refusal=tutorialLessons!.allow(tutorial.gate);if(refusal!==undefined)throw new Error(refusal||'Action indisponible pendant cette étape du tutoriel.');}
       const learning=firstGesturesLearning,given=snapshot,token=learning?.prepare(command,given);
       const result=await native.command(command);
+      if(tutorial?.event)tutorialLessons?.notify(tutorial.event.tag);
       if(token)learning?.confirm(token,result);
       learningRuntime?.command(command,result,given);
       return result;
@@ -971,14 +990,24 @@ const session = new GameSession(client, saveRepository, prepareWorld, () => {
 },()=>{queueMicrotask(()=>snapshotHud.request(true));});
 const frontHost = document.createElement('div'); document.querySelector('#app')!.append(frontHost);
 if(nativeMode){
-  nativeUi=new NativeStage({onTools:showNativeToolPalette,onViewport:(w,h,k,bottom,left)=>{nativeViewport={width:w,height:h,unitsPerPixel:k,bottom:bottom??96,left};applyNativeHudViewport();},onWindowLayout:bounds=>nativeHud?.setWindowBounds(bounds)??false,onPointer:updateNativeDockPointer,onAnimate:dt=>nativeHud?.animate(dt)??false,countdownFrame298:{canFeed:nativeShipFrameEligible298,canPresent:nativeShipCurtainEligible298,feed:delta=>{client.feedShipFrame298(delta);nativeShipTerminal298?.frame(delta);}},onPanel:id=>{
+  nativeUi=new NativeStage({onTools:kind=>{if(nativeToolPalette===kind||tutorialAllows({tag:'MainTab-Architect-Open'})){const opening=nativeToolPalette!==kind;showNativeToolPalette(kind);if(opening)tutorialNotify('MainTab-Architect-Open');}},onViewport:(w,h,k,bottom,left)=>{nativeViewport={width:w,height:h,unitsPerPixel:k,bottom:bottom??96,left};applyNativeHudViewport();},onWindowLayout:bounds=>nativeHud?.setWindowBounds(bounds)??false,onPointer:updateNativeDockPointer,onAnimate:dt=>{const hud=nativeHud?.animate(dt)??false;return (nativeTutorialCard?.animate()??false)||hud;},countdownFrame298:{canFeed:nativeShipFrameEligible298,canPresent:nativeShipCurtainEligible298,feed:delta=>{client.feedShipFrame298(delta);nativeShipTerminal298?.frame(delta);}},onPanel:id=>{
     nativeCustomPage=undefined;nativeToolPalette=undefined;
-    if(id==='factions'){nativeCustomPage=buildNativeFactions(readNativeState(),nativeActions());nativeUi!.showPage(nativeCustomPage);return;}
+    if(id==='factions'){if(!tutorialAllows({tag:'MainTab-Factions-Open'}))return;nativeCustomPage=buildNativeFactions(readNativeState(),nativeActions());nativeUi!.showPage(nativeCustomPage);tutorialNotify('MainTab-Factions-Open');return;}
     void attempt(()=>switchPanel(currentPanel===id?null:id));
   },onEscape:()=>{cancelNativeOrderPage();nativeCustomPage=undefined;renderer?.cancelSelection();renderer?.cancelDesignation();if(frontMenu.isOpen())return;setPanel(null);clearSelection();},
     onHudInspectorDismiss:()=>{nativeHudHiddenInspectorKey=nativePawnInspectorKey();nativeCustomPage=undefined;nativeUi!.showPage(null);},onError:message=>notify(message,true),
     onGesture:()=>{unlockAudioFromGesture();music.unlock();},
     onActivate:id=>audio.playInterface(id.startsWith('tab:')||id.includes('back')?'ui.panel':'ui.click'),
+    // Schema 349: the tutorial's intro absorbs every input; an inspector tab
+    // is a gated action (InspectPaneUtility.InterfaceToggleTab).
+    allowActivate:(id,control)=>{
+      if(!tutorialLessons?.active)return true;
+      if(tutorialLessons.introBlocking)return false;
+      const tab=control?.active?undefined:tutorialInspectorTag349(id);
+      if(tab&&!tutorialAllows({tag:tab}))return false;
+      if(tab)tutorialNotify(tab);
+      return true;
+    },
     onCancelWorldInteraction:()=>{renderer?.cancelSelection();renderer?.cancelDesignation();},
   });
   nativeShipTerminal298=createNativeShipTerminal298({readState:readNativeState,
@@ -1006,6 +1035,7 @@ if(nativeMode){
     concepts:()=>learningRuntime?.helper.shown??[],markConcept:id=>learningRuntime?.helper.markLearned(id),
     afterSync:()=>{if(nativeGuidance&&nativeGuidance.reservedHeight!==appliedGuidanceReserve)applyNativeHudViewport();syncNativeHighlights();}});
   nativeGuidance=guidance.card;nativeGuidanceSync=guidance.sync;
+  nativeTutorialCard=new NativeTutorialCard(nativeUi.art,nativeUi.hudRoot,()=>performance.now());
   nativeViewport={width:viewport.width,height:viewport.height,unitsPerPixel:viewport.unitsPerPixel,bottom:viewport.bottomDockHeight??96,left:viewport.leftHudBottom};applyNativeHudViewport();
   // Old controls are a disabled development witness only. Native scene layout
   // and input never read their measurements, values, handlers or visibility.
@@ -1030,6 +1060,7 @@ async function performNativeGuideAction(action:import('./ui/first-day-guide').Fi
 function applyNativeHudViewport():void {
   const v=nativeViewport;if(!v)return;
   nativeGuidance?.setViewport(v.width,v.height,v.unitsPerPixel,v.left);
+  nativeTutorialCard?.setViewport(v.width,v.height,v.unitsPerPixel);
   appliedGuidanceReserve=nativeGuidance?.reservedHeight??0;
   nativeHud?.setViewport(v.width,v.height,v.unitsPerPixel,v.bottom,v.left-appliedGuidanceReserve);
 }
@@ -1038,7 +1069,20 @@ function syncNativeGuidance(force=false):void {nativeGuidanceSync?.(force);}
  * painted on the advice card pulse; none once learned, folded or closed. */
 function syncNativeHighlights():void {
   const helper=learningRuntime?.helper;
-  nativeUi?.setHighlightTags(helper&&nativeGuidance?learningHighlightTags(nativeGuidance.shownConcepts,id=>helper.concept(id)?.highlightTags):[]);
+  const tags=helper&&nativeGuidance?learningHighlightTags(nativeGuidance.shownConcepts,id=>helper.concept(id)?.highlightTags):[];
+  // Lesson_Instruction.highlightTags of the tutorial's active lesson.
+  const lesson=tutorialLessons?.highlightTags()??[];
+  nativeUi?.setHighlightTags(lesson.length?[...new Set([...tags,...lesson])].sort():tags);
+}
+/** Card, highlights and map outline of the tutorial's active lesson. */
+let tutorialOutlineKey='';
+function syncTutorialLesson():void {
+  const engine=tutorialLessons;
+  const shown=!!engine&&!replacingWorld&&!launchProgress&&(frontMenu.isOpen()?engine.inCreation:!!snapshot);
+  if(nativeTutorialCard?.update(shown?engine!.view():undefined,shown))nativeUi?.invalidate();
+  const outline=shown&&!frontMenu.isOpen()?engine!.outline():null,key=JSON.stringify(outline);
+  if(key!==tutorialOutlineKey){tutorialOutlineKey=key;renderer?.setMapOutline(outline);}
+  syncNativeHighlights();
 }
 function openHelp():void {
   if(nativeUi){
@@ -1079,6 +1123,9 @@ const worldCreationBackend256:WorldCreationCallbacks256={
  start:(ticket,party,context)=>session.createConfirmedDraft(()=>client.startWorldDraft256(ticket,party,context)),
 };
 const frontOptions:FrontMenuOptions = {
+  // Schema 349: the tutorial's first five lessons, on the creation pages.
+  tutorialLessons:{begin:()=>{tutorialLessons?.beginCreation();syncTutorialLesson();},end:()=>{tutorialLessons?.endCreation();syncTutorialLesson();},
+    notify:tag=>{tutorialLessons?.notify(tag);syncTutorialLesson();},allow:tag=>tutorialLessons?.allow({tag})},
   getUiAutoHide:()=>({...nativeDockPreferences}),onUiAutoHideChange:setNativeDockPreferences,
   getUiScale:()=>nativeUiScale,onUiScaleChange:setNativeUiScale,
   getWorldCreationPlayer:()=>({...worldCreationPlayer256}),
@@ -1215,7 +1262,7 @@ function nativeActions():NativeUiActions {
     },
     panel:panel=>switchPanel(panel),category:setCategory,tool:setTool,selectPawn,
     speed:value=>{learningRuntime?.speed(value);const token=client.getThreatPauseToken();return changeSpeed(value,token);},rotate:direction=>{if(isShipComputerSensorsKind298(currentTool))return;placementOrientation=((placementOrientation+direction+4)%4) as Orientation;renderer?.setPlacementRotation(placementOrientation);refreshNativeUi();},
-    material:material=>{if(isShipComputerSensorsKind298(currentTool))return;nativeConstructionMaterial=material;renderer?.setConstructionMaterial(material);refreshNativeUi();},
+    material:material=>{if(isShipComputerSensorsKind298(currentTool))return;if(!tutorialAllows({tag:tutorialStuffTag349(currentTool,material)}))return;nativeConstructionMaterial=material;renderer?.setConstructionMaterial(material);refreshNativeUi();},
     creationStorage:settings=>{nativeCreationStorage=structuredClone(settings);refreshNativeUi();},
     front:openFront,save,exportSave:exportCurrentColony,
     openSaveManager:openNativeSaveManager,openOptions:openNativeOptions,openHelp,
@@ -1289,6 +1336,13 @@ async function openFront(page: 'home' | 'create' | 'load'): Promise<void> {
   setPanel(null); syncStorageButtons();
 }
 async function switchPanel(panel: Panel, preserveTool = false): Promise<void> {
+  // Core MainButtonWorker.InterfaceTryActivate: an opening tab is a gated
+  // action (never the Menu), then MainTab-<tab>-Open is told.
+  const openingTab=panel!==null&&panel!==currentPanel;
+  if(openingTab){const tag=tutorialMainTabTag349(panel);if(tag&&!tutorialAllows({tag}))return;}
+  try{await switchPanelInner(panel,preserveTool);}finally{if(openingTab&&currentPanel===panel)tutorialNotify(tutorialMainTabEvent349(panel));}
+}
+async function switchPanelInner(panel: Panel, preserveTool: boolean): Promise<void> {
   if (panel === 'menu') {
     client.cancelShipCountdown298('menu');
     // Show the menu at once: the pause and the saves it lists follow behind it.
@@ -1533,6 +1587,10 @@ function setPanel(panel: Panel, preserveTool = false) {
   if (panel === 'work' && snapshot) updateWorkPanel(snapshot,carriedPatientsOf(snapshot));
 }
 function applyTool(tool: Tool) {
+  // Core Designator.ProcessInput: selecting a designator is a gated action;
+  // leaving the tool is ClearDesignatorSelection.
+  if(tool!==currentTool&&tool!=='select'){const tag=tutorialToolTag349(tool);if(tag&&!tutorialAllows({tag}))return;}
+  if(tool==='select'&&currentTool!=='select')queueMicrotask(()=>tutorialNotify('ClearDesignatorSelection'));
   if(nativeUi){
     zoneEditTarget=undefined;renderer?.setZoneTarget(undefined);allowedAreaEditId=undefined;renderer?.setAllowedAreaTarget(undefined);shootingControls.cancel();
     if(tool==='ship-cryptosleep-casket'&&currentTool!==tool){placementOrientation=2;renderer?.setPlacementRotation(placementOrientation);}
@@ -2411,7 +2469,25 @@ learningRuntime=createLearningRuntime({
   observe:()=>({hoveredId:nativeUi?.hoveredNativeId,pageId:nativeUi?.shownPageId,panel:currentPanel,tileInspector:altInspectorHeld}),
   now:()=>performance.now(),activated:()=>guidanceSession.attention(),changed:()=>syncNativeGuidance(true),showModal:showLearningModal,
 });
-setInterval(()=>learningRuntime?.tick(),LEARNING_TICK_MS);
+// Schema 349: the tutorial's lessons, on the helper's cadence (a quarter of a second).
+tutorialLessons=createTutorialEngine349({
+  world:()=>campaignOnly?undefined:snapshot,epoch:()=>campaignPresentationEpoch,
+  playing:()=>!!snapshot&&!frontMenu.isOpen()&&!replacingWorld&&!launchProgress&&!simulationStopped,
+  send:command=>client.command(command),
+  helper:{knowledge:id=>learningRuntime?.helper.knowledge(id)??0,isComplete:id=>learningRuntime?.helper.isComplete(id)??false,setKnowledge:(id,value)=>learningRuntime?.helper.setKnowledge(id,value)},
+  selectedStructure:()=>selectedObjects.length===1&&selectedObjects[0]!.kind==='structure'?selectedObjects[0]!.id:undefined,
+  now:()=>performance.now(),
+  // Lesson_Instruction.resetBuildDesignatorStuffs: the material goes back to wood.
+  resetMaterial:()=>{nativeConstructionMaterial='wood';renderer?.setConstructionMaterial(placementMaterial(currentTool,nativeConstructionMaterial));},
+  changed:()=>syncTutorialLesson(),
+  // LessonAutoActivator.Notify_TutorialEnding: the learning helper starts again from now.
+  ended:()=>{learningRuntime?.helper.setSuspended(false);learningRuntime?.helper.tutorialEnded();syncNativeGuidance(true);},
+});
+setInterval(()=>{
+  const engine=tutorialLessons;
+  if(engine){engine.tick();learningRuntime?.helper.setSuspended(engine.suspendsHelper);syncTutorialLesson();}
+  learningRuntime?.tick();
+},LEARNING_TICK_MS);
 installLearningCameraInput(learningRuntime,el('viewport'),()=>!!snapshot&&!frontMenu.isOpen()&&!replacingWorld&&currentPanel===null&&!nativeUi?.shownPageId&&!nativeUi?.hoveredNativeId);
 /** A one-time learning message (Core TriggeredModal); `then` continues. */
 function showLearningModal(concept:{title:string;text:string},then?:()=>void):void {

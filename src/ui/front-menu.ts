@@ -81,6 +81,9 @@ export interface FrontMenuOptions {
   getItemLabelMinCellPixels?: () => number;
   onItemLabelMinCellPixelsChange?: (value:number) => boolean;
   onDesignationMinCellPixelsChange?: (value:number) => boolean;
+  /** Schema 349: the tutorial's lessons on the creation pages (Core TutorSystem
+   * Notify_Event / AllowAction). `allow` returns the refusal message. */
+  tutorialLessons?:{begin():void;end():void;notify(tag:string):void;allow(tag:string):string|undefined};
   onStart: (draft: FrontMenuDraft) => Promise<void>;
   onLoad: (key: string) => Promise<void>;
   onResume: () => Promise<void>;

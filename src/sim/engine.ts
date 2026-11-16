@@ -1,5 +1,6 @@
 import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {applyTutorialCommand347,isTutorialCommand347} from './tutorial-347.ts';
+import {advanceTutorialDownRaider349,applyTutorialLessonCommand349,isTutorialLessonCommand349} from './tutorial-lessons-349.ts';
 import {withPileIndexScope} from './pile-index.ts';
 import {isFinishFrameSchema301} from './wall-frame-kind-301.ts';
 import {createWoodWallCore301} from './wood-wall-core-301.ts';
@@ -773,6 +774,8 @@ function setWorkPriority(world:World,pawn:Pawn,work:WorkType,value:number,drops:
 function applyCommandInternal(world: World, command: Exclude<LocalCommand,import('./world-map-state.ts').WorldMapCommand|{type:'apparel-policy-update'|'apparel-policy-copy'|'apparel-policy-rename'|'egg-forbid'|'material-forbid'|'read-book-295'|'reading-policy-295'|'work-tab-mode'}>): CommandResult {
   // Schema 347: the tutorial's forced content and its storyteller handover.
   if(isTutorialCommand347(command))return applyTutorialCommand347(world,command);
+  // Schema 349: the chain of the tutorial lessons.
+  if(isTutorialLessonCommand349(command))return applyTutorialLessonCommand349(world,command);
   if(command.type==='firefoam-auto-rebuild')return applyFirefoamAutoRebuild290(world,command);
   if(command.type==='firefoam-trigger')return applyFirefoamTrigger290(world,command);
   if(command.type==='trade-request-answer'||command.type==='trade-request-dismiss'||command.type==='trade-request-fulfill')return applyTradeRequestCommand284(world,command);
@@ -1675,6 +1678,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     advanceShipReactorThreats275(world,reactorStep275.starting);
     if(reactorStep275.completed)event(world,'command',reactorStep275.completed===1?'Un réacteur stellaire a terminé son démarrage.':`${reactorStep275.completed} réacteurs stellaires ont terminé leur démarrage.`);
     advanceRaids(world);
+    advanceTutorialDownRaider349(world);
     advanceQuests(world);
     advanceSocial(world);
     advanceParty292(world,getLight().topology);

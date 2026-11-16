@@ -14,6 +14,32 @@ export interface TutorialState347 {
   raidAtCore?:number;
   /** Core TutorialState.endTick: the ChooseStoryteller handover. */
   endedAtCore?:number;
+  /** Schema 349: the lessons (src/sim/tutorial-lessons-349.ts). */
+  lessons349?:TutorialLessons349;
+}
+/** Core Tutor.activeLesson and TutorialState of a tutorial created at schema
+ * 349; the per-lesson fields exist only while their lesson is active. */
+export interface TutorialLessons349 {
+  revision:1;
+  /** TutorialState.introDone. */
+  introDone:boolean;
+  /** TutorialState.startingItems: ids of the Things placed for the player at
+   * the start (pods, near-start scatter); weapons only after UnforbidStartingResources. */
+  startingItems:number[];
+  /** The active lesson of the map (absent before GameStartDialogClosed and after the end). */
+  active?:import('./tutorial-lessons-349.ts').TutorialLessonId349;
+  /** TutorialState.roomRect (BuildRoomWalls onward). */
+  roomRect?:import('./tutorial-347.ts').TutorialRect347;
+  /** TutorialState.sandbagsRect (BuildSandbags onward). */
+  sandbagsRect?:import('./tutorial-347.ts').TutorialRect347;
+  /** Instruction_PlaceStockpile / Instruction_PlaceGrowingZone rect. */
+  zoneRect?:import('./tutorial-347.ts').TutorialRect347;
+  /** Instruction_MineSteel.mineCells (cell indices, ascending). */
+  mineCells?:number[];
+  /** Instruction_ExpandArea.startingAreaCount. */
+  areaStart?:number;
+  /** Instruction_FinishConstruction.initialBlueprintsCount. */
+  blueprints?:number;
 }
 /** Applied creation choices. Absence preserves every historical camp rule.
  * Schema 347 adds the Core tutorial (Tutor storyteller, Easy difficulty,
@@ -32,8 +58,8 @@ export function crashlandedProfile():GameProfile {
 /** Core MainMenuDrawer.InitLearnToPlay: storyteller Tutor (hidden, no
  * storyteller comps, alerts and permadeath disabled) at its forced
  * difficulty Easy ("community builder"), scenario Tutorial. */
-export function tutorialProfile347():GameProfile {
-  return {revision:1,storyteller:'tutor',difficulty:'community-builder',saveMode:'reloadable',tutorial347:{revision:1}};
+export function tutorialProfile347(lessons?:TutorialLessons349):GameProfile {
+  return {revision:1,storyteller:'tutor',difficulty:'community-builder',saveMode:'reloadable',tutorial347:{revision:1,...lessons?{lessons349:lessons}:{}}};
 }
 /** Schema 347: the Core tutorial profile and its rules. */
 export const isSchema347OrLater=(version:number):boolean=>Number(version)>=347;

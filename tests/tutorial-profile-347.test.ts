@@ -60,7 +60,8 @@ describe('a tutorial game: Tutor, Easy, scenario Tutorial',()=>{
  it('has the profile, its rules and the cloth of the Tutorial scenario',()=>{
   const w=tutorialGame;
   expect(w.schemaVersion).toBe(SCHEMA_VERSION);
-  expect(w.gameProfile).toEqual({revision:1,storyteller:'tutor',difficulty:'community-builder',saveMode:'reloadable',tutorial347:{revision:1}});
+  // Schema 349 adds the lessons' record (tests/tutorial-lessons-349.test.ts).
+  expect(w.gameProfile).toEqual({revision:1,storyteller:'tutor',difficulty:'community-builder',saveMode:'reloadable',tutorial347:{revision:1,lessons349:expect.objectContaining({revision:1,introDone:true})}});
   expect(w.scenario?.id).toBe('crashlanded');
   expect(tutorialMode347(w)).toBe(true);expect(alertsDisabled347(w)).toBe(true);expect(storytellerIncidents347(w)).toBe(false);
   // No storyteller comps: only the silent raid agenda is born.
@@ -139,7 +140,7 @@ describe('a tutorial game: Tutor, Easy, scenario Tutorial',()=>{
   refused(w,{type:'choose-storyteller',storyteller:'cassandra-partial',difficulty:'community-builder'},/non disponible/);
   const core=w.tick*10+(w.phaseCore297??0);
   ok(w,{type:'choose-storyteller',storyteller:'cassandra-partial',difficulty:'adventure-story'});
-  expect(w.gameProfile).toEqual({...crashlandedProfile(),tutorial347:{revision:1,endedAtCore:core}});
+  expect(w.gameProfile).toEqual({...crashlandedProfile(),tutorial347:{revision:1,endedAtCore:core,lessons349:{revision:1,introDone:true,startingItems:[]}}});
   expect(tutorialMode347(w)).toBe(false);expect(alertsDisabled347(w)).toBe(false);expect(storytellerIncidents347(w)).toBe(true);
   expect(colonistMoodOffset(w,colonists(w)[0]!)).toBe(5);expect(researchSpeedFactor347(w)).toBe(1);
   // Storyteller.Notify_DefChanged: its calendars start now.
