@@ -442,7 +442,17 @@ Une marque de couchage ne crée ni toit ni température adaptée. Le bouton **Ai
 et la touche **H** ouvrent la même aide ; elle décrit les outils existants
 sans donner d’ordres ou de fournitures à votre place. Pendant les chargements
 et la création du monde, une astuce change toutes les 17,5 secondes.
-[Carte, bouton Aide et astuces](guidance-native-1.md).
+[Carte, bouton Aide et astuces](guidance-native-1.md). Pendant la partie,
+l’**assistant d’apprentissage** ajoute à cette carte des notions au moment
+utile ; voir plus bas.
+
+## Assistant d’apprentissage
+
+En haut de la carte **Conseils**, la rubrique **Notions à découvrir** propose de courtes notions sur les commandes et les règles : d’abord la caméra, la vitesse et la pause, puis les réserves, l’interdiction, les cultures, les armes, le travail… Elles arrivent l’une après l’autre, au plus trois à la fois, et plus vite quand la situation l’exige : une attaque propose de mobiliser et d’équiper vos colons, un colon à terre de le secourir, un incendie d’étendre la zone de foyer, un poste de production construit d’ouvrir ses factures, des marchands de commercer.
+
+Une notion disparaît quand vous pratiquez ce qu’elle explique (déplacer la caméra, tracer une réserve, mobiliser, changer une priorité, survoler une alerte…) ou quand vous cliquez **Compris**. Survolez-la pour relire son texte et voir votre progression. Une nouvelle notion rouvre la carte, même repliée ou fermée.
+
+Dans **Options → Jeu**, **Assistant d’apprentissage** l’active ou le désactive, et **Réinitialiser l’assistant** oublie toutes les notions après confirmation. Ce que vous avez appris est gardé par ce navigateur pour toutes vos colonies ; les premiers gestes déjà repérés comptent comme appris. Trois messages s’affichent une seule fois : en ouvrant le commerce orbital, en demandant d’actionner un appareil, et en autorisant plus d’une colonie. L’assistant ne donne aucun ordre et n’écrit rien dans la partie. [Règles, notions et limites](learning-helper.md).
 
 ## Sauvegarder votre essai
 
@@ -509,7 +519,7 @@ Le parcours **Premiers gestes**, dans la carte Conseils et dans **Aide → Premi
 
 Après la sortie des capsules, la carte **Conseils** s’ouvre en bas à gauche, au-dessus des boutons Ordres et Zones. Chaque préparation porte une pastille d’état ; survolez-la pour lire les faits actuels et cliquez-la pour ouvrir Travail, Zones, Meubles, Production ou Assignations. **Aide → Conseils actuels** donne le texte complet des huit préparations. Le carnet distingue les chantiers des objets construits ; une réserve de rations ou une culture ne garantit pas la nourriture future. Un lit double libre compte une place avant affectation : inspectez le lit pour choisir ses occupants. Pour équiper une arme, sélectionnez un seul colon, faites un clic droit sur l’arme au sol, puis choisissez **Équiper**.
 
-La carte est facultative et ne donne aucun ordre à votre place. **–** la replie en onglet, **×** la ferme ; repliée ou fermée, elle ne lit plus la colonie et vos repères de gestes restent intacts. **Aide → Carte de conseils** la rouvre. Les alertes conservent leurs clics vers les personnes ou lieux concernés. Le bouton **Aide** en haut à droite, ou la touche **H**, ouvre l’aide générale, avec culture, cuisine, toit, température, soins et sauvegardes. Une partie chargée garde seulement l’onglet replié, ou rien si vous avez fermé la carte pendant cette visite, sans modifier votre progression. [Contrôles et limites](first-days-v334.md).
+La carte est facultative et ne donne aucun ordre à votre place. **–** la replie en onglet, **×** la ferme ; repliée ou fermée, elle ne lit plus la colonie et vos repères de gestes restent intacts. Une nouvelle notion de l’[assistant d’apprentissage](learning-helper.md) la rouvre. **Aide → Carte de conseils** la rouvre. Les alertes conservent leurs clics vers les personnes ou lieux concernés. Le bouton **Aide** en haut à droite, ou la touche **H**, ouvre l’aide générale, avec culture, cuisine, toit, température, soins et sauvegardes. Une partie chargée garde seulement l’onglet replié, ou rien si vous avez fermé la carte pendant cette visite, sans modifier votre progression. [Contrôles et limites](first-days-v334.md).
 
 ## Préparer sa colonie — V333
 
