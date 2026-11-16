@@ -1,3 +1,4 @@
+import {scariaRotChance347} from './game-profile.ts';
 import {naturalArmor321,naturalArmorProtection321} from './natural-armor-321.ts';
 import {animalBodySize} from './animal-life.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -42,7 +43,7 @@ export const animalBody=(a:WildAnimal)=>{
 export function reconcileAnimalHealth(w:World,a:WildAnimal):void {
   if(!a.health)return;
   if(a.health.death&&isAnimalSpecies256(a.species))a.ageTicks=a.health.tick-a.health.animalBirthTick!;
-  const status=medicalStatus(a.health);if(status==='dead'){commitToxicDeath256(a.health,()=>healthRandom(w));commitScariaDeath261(a.health,w.gameProfile?.difficulty==='adventure-story'?.333:undefined,()=>healthRandom(w));if(a.health.scaria261)a.corpseRot=scariaCorpseRot261(a.health,a.corpseRot??{progress:0,atTick:w.tick});}
+  const status=medicalStatus(a.health);if(status==='dead'){commitToxicDeath256(a.health,()=>healthRandom(w));commitScariaDeath261(a.health,scariaRotChance347(w),()=>healthRandom(w));if(a.health.scaria261)a.corpseRot=scariaCorpseRot261(a.health,a.corpseRot??{progress:0,atTick:w.tick});}
   if(w.schemaVersion>=256&&status==='dead'){if(a.state!=='dead'){detachHiveInsect256(w,a);const wasSpawned=!animalCarrier(w,a.id);dropAnimalContentsOnDeath256(w,a,wasSpawned);cancelAnimalLocalGroupIntents256(w,a.id);}delete a.mapBed;if(a.domestic)delete a.domestic.bedId;}
   if(status!=='mobile') {
     delete a.animalThermalRefuge288;
@@ -121,7 +122,7 @@ export function commitAnimalImpact(w:World,a:WildAnimal,record:import('./injury-
   commitToxicDeath256(record,()=>healthRandom(random));
   // Death decisions belong to this same impact stream, including callers
   // which retain it after reconciliation (melee, explosions and Hive hooks).
-  commitScariaDeath261(record,w.gameProfile?.difficulty==='adventure-story'?.333:undefined,()=>healthRandom(random));
+  commitScariaDeath261(record,scariaRotChance347(w),()=>healthRandom(random));
   w.rng=random.rng;a.health=record;reconcileAnimalHealth(w,a);
   if(lordId!==null&&lordId!==undefined){if(a.state==='dead'){if(!collapse)receiveHiveMemo256(w,'pawn-lost',core,lordId);}else{const f=hiveInstigatorFaction256(w,instigator);notifyHivePawnHarmed256(w,lordId,f.hasFaction,f.parentFaction,core,()=>healthRandom(random));}w.rng=random.rng;}
 }

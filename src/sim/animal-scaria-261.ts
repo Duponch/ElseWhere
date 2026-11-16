@@ -4,6 +4,7 @@ import {startAnimalManhunter} from './animal-manhunter.ts';
 import {createAnimalMedicalRecord256} from './animal-clinical-age-v256.ts';
 import {planAnimalDeathExplosion256} from './animal-death-explosion-v256.ts';
 import {healthRandom} from './health.ts';
+import {scariaRotChance347} from './game-profile.ts';
 import {CARAVAN_MANHUNTER_DATA_261} from './caravan-manhunter-data-261.ts';
 import {animalCarrier} from './animal-rest-state.ts';
 import {carrierOf} from './rescue-state.ts';
@@ -45,14 +46,15 @@ export function advanceScariaRecord261(h:MedicalRecord,core:number,permanent:boo
 export function commitScariaDeath261(h:MedicalRecord,chance:number|undefined,draw:()=>number):void {
  const s=h.scaria261;if(!s||!h.death||Object.hasOwn(s,'deathRot'))return;
  if(chance===undefined||!Number.isFinite(chance)||chance<0||chance>1)throw Error('Scaria death requires actual current difficulty rot chance');
- s.deathRot=draw()<chance;
+ // Rand.Chance: no draw at 0 or below, nor at 1 or above (the Easy difficulty's 0).
+ s.deathRot=chance<=0?false:chance>=1?true:draw()<chance;
 }
 export function advanceAnimalScaria261(w:World,a:WildAnimal):void {
  if((Number(w.schemaVersion)!==261&&(Number(w.schemaVersion)!==262&&!isSchema263OrLater(Number(w.schemaVersion))))||!a.health?.scaria261||a.health.death)return;
  const s=a.health.scaria261,permanent=a.manhunter?.permanent261===true;
  if(!(s.manhunterCore>0&&permanent&&(w.tick-(medicalCivilTick271(a.health)-a.health.tick))*10-s.manhunterCore>300000)){advanceScariaRecord261(a.health,w.tick*10,permanent);return;}
  const record=structuredClone(a.health);advanceScariaRecord261(record,w.tick*10,a.manhunter?.permanent261===true);
- if(record.death){const death=planAnimalDeathExplosion256(w,a,record);commitScariaDeath261(record,w.gameProfile?.difficulty==='adventure-story'?.333:undefined,()=>healthRandom(w));death.commit();}
+ if(record.death){const death=planAnimalDeathExplosion256(w,a,record);commitScariaDeath261(record,scariaRotChance347(w),()=>healthRandom(w));death.commit();}
  a.health=record;
 }
 export function scariaCorpseRot261(h:MedicalRecord|undefined,rot:{progress:number;atTick:number;rate?:number}):typeof rot {return h?.scaria261?.deathRot?{...rot,progress:Math.max(rot.progress,15000)}:rot;}

@@ -1,4 +1,5 @@
 import {animalCore256,isAnimalSpecies256} from './animal-core-v256.ts';
+import {tutorialMode347} from './game-profile.ts';
 import {actualAnimalProfile256} from './actual-animal-profile-256.ts';
 import { animalBodySize,animalLifeStage } from './animal-life.ts';
 import { freshMissing,partMissing } from './injury-state.ts';
@@ -46,7 +47,9 @@ export function animalPreyScore(predator:WildAnimal,prey:WildAnimal):number {
 }
 /** Biological order only. The caller filters contact places with one shared field. */
 export function animalPreyCandidates(w:World,predator:WildAnimal):WildAnimal[] {
-  return (w.wildlife?.animals??[]).filter(prey=>acceptableAnimalPrey(predator,prey))
+  // Core BestPawnToHuntForPredator: in tutorial mode the player's pawns are never prey.
+  const tutorial=tutorialMode347(w);
+  return (w.wildlife?.animals??[]).filter(prey=>acceptableAnimalPrey(predator,prey)&&!(tutorial&&prey.domestic))
     .sort((a,b)=>animalPreyScore(predator,b)-animalPreyScore(predator,a)||a.id-b.id);
 }
 /** Release the intention and its unstarted route, never the captured edge/recovery. */
