@@ -57,6 +57,7 @@ export class NativeGuidanceCard {
   private hudVisible=false;
   private reserve=0;
   private variant:CardLayout['variant']='none';
+  private conceptIds:readonly string[]=[];
   private disposed=false;
 
   constructor(private readonly art:PrototypeCardboardArt,anchors:NativeGuidanceAnchors,private readonly actions:NativeGuidanceActions){
@@ -98,9 +99,12 @@ export class NativeGuidanceCard {
   /** Pixels used at the bottom of the left column, 0 when nothing is shown. */
   get reservedHeight():number {return this.reserve;}
   get shownVariant():CardLayout['variant'] {return this.variant;}
+  /** Notions whose text is painted on the card now (none when it is folded
+   * to its tab, closed or hidden): their controls are highlighted. */
+  get shownConcepts():readonly string[] {return this.conceptIds;}
 
   dispose():void {
-    if(this.disposed)return;this.disposed=true;
+    if(this.disposed)return;this.disposed=true;this.conceptIds=[];
     for(const piece of this.owned)this.art.disposePiece(piece);
     this.owned.clear();this.buttons.clear();this.rows.clear();this.panel=undefined;
     this.cardGroup.removeFromParent();this.helpGroup.removeFromParent();
@@ -111,6 +115,8 @@ export class NativeGuidanceCard {
     const shown=this.hudVisible&&!!this.view?.visible;
     const layout=shown&&this.view?this.layout(this.view):{variant:'none' as const,width:0,height:0,ink:[],buttons:[],rows:[]};
     this.variant=layout.variant;this.reserve=layout.variant==='none'?0:layout.height+12;
+    const listed=layout.variant==='full'||layout.variant==='compact'||layout.variant==='minimal'?this.view?.model.concepts.map(concept=>concept.id)??[]:[];
+    if(listed.join('|')!==this.conceptIds.join('|'))this.conceptIds=listed;
     this.render(layout);
     // Group visibility is not a paint change: ask for one frame only then.
     const card=layout.variant!=='none';

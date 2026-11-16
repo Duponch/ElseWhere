@@ -36,6 +36,10 @@ export interface NativeControl {
   presentation?:NativeControlStyle;
   /** Drawn mark in place of the label text (the label stays the accessible name). */
   mark?:'check';
+  /** Highlight tag (Core UIHighlighter): the control pulses while a shown
+   * notion or lesson names it. Existing controls also get one from their id
+   * (src/ui/native-highlight-tags.ts). Presentation only. */
+  highlight?:string;
   select?:{value:string;options:readonly {value:string;label:string;hint?:string;disabled?:boolean}[];onChange:(value:string)=>void|Promise<unknown>};
   paint?:{group:string;index:number;onPaint:(indices:readonly number[])=>void|Promise<unknown>};
   onActivate:(gesture?:NativeGesture)=>void|Promise<unknown>;

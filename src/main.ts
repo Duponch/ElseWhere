@@ -61,6 +61,7 @@ import { createFirstDayGuide,readFirstDayGuide } from './ui/first-day-guide';
 import {createFirstGesturesLearning,FIRST_GESTURES_STORAGE_KEY} from './ui/first-gestures-learning';
 import {createFirstGesturesGuide} from './ui/first-gestures-guide';
 import {createLearningRuntime,installLearningCameraInput,LEARNING_TICK_MS,type LearningRuntime} from './ui/learning-runtime';
+import {learningHighlightTags} from './ui/native-highlight-tags';
 import { createStartingArrivalUI } from './ui/starting-arrival';
 let allowedAreaEditId:number|undefined;
 import {PresentationQueue} from './render/PresentationQueue';
@@ -1003,7 +1004,7 @@ if(nativeMode){
     blocked:()=>frontMenu.isOpen()||replacingWorld||!!launchProgress,sections:world=>readFirstDayGuide(world,confirmedFoodReadability()),now:()=>performance.now(),
     openHelp,guide:action=>{void attempt(()=>performNativeGuideAction(action));},invalidate:()=>nativeUi?.invalidate(),
     concepts:()=>learningRuntime?.helper.shown??[],markConcept:id=>learningRuntime?.helper.markLearned(id),
-    afterSync:()=>{if(nativeGuidance&&nativeGuidance.reservedHeight!==appliedGuidanceReserve)applyNativeHudViewport();}});
+    afterSync:()=>{if(nativeGuidance&&nativeGuidance.reservedHeight!==appliedGuidanceReserve)applyNativeHudViewport();syncNativeHighlights();}});
   nativeGuidance=guidance.card;nativeGuidanceSync=guidance.sync;
   nativeViewport={width:viewport.width,height:viewport.height,unitsPerPixel:viewport.unitsPerPixel,bottom:viewport.bottomDockHeight??96,left:viewport.leftHudBottom};applyNativeHudViewport();
   // Old controls are a disabled development witness only. Native scene layout
@@ -1033,6 +1034,12 @@ function applyNativeHudViewport():void {
   nativeHud?.setViewport(v.width,v.height,v.unitsPerPixel,v.bottom,v.left-appliedGuidanceReserve);
 }
 function syncNativeGuidance(force=false):void {nativeGuidanceSync?.(force);}
+/** Core LearningReadout.HighlightAllTags: the controls named by the notions
+ * painted on the advice card pulse; none once learned, folded or closed. */
+function syncNativeHighlights():void {
+  const helper=learningRuntime?.helper;
+  nativeUi?.setHighlightTags(helper&&nativeGuidance?learningHighlightTags(nativeGuidance.shownConcepts,id=>helper.concept(id)?.highlightTags):[]);
+}
 function openHelp():void {
   if(nativeUi){
     renderer?.cancelDesignation();altInspectorHeld=false;nativeUi.setWorldReadout(null);
@@ -2938,6 +2945,8 @@ async function start() {
     stopSimulation: () => client.stop('Arrêt de contrôle de la simulation.'),
     projectCell: (x: number,z: number) => renderer!.projectCell(x,z),
     projectPawn: (id:number) => renderer?.screenPawns().find(pawn=>pawn.id===id),
+    /** Outline of a rectangle of cells (future tutorial), presentation only. */
+    setMapOutline: (rect:{x:number;z:number;width:number;height:number}|null) => { renderer?.setMapOutline(rect); return renderer?.mapOutlineRect ?? null; },
   } });
   syncStorageButtons();
   if (!diagnosticStart) return;

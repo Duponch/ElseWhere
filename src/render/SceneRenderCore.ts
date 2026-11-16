@@ -49,6 +49,7 @@ import { SceneResourceIndex, readSceneResourceFrame, type SceneResourceFrame } f
 import { ProjectileLayer } from './ProjectileLayer';
 import { EnvironmentLighting } from './EnvironmentLighting';
 import { RangeOutlineLayer } from './RangeOutlineLayer';
+import { MapOutlineLayer,type MapOutlineRect } from './MapOutlineLayer';
 import { PresentationQueue } from './PresentationQueue';
 import { MOTION_HISTORY_TICKS } from '../bridge/motion-tracks';
 import { RoofLayer } from './RoofLayer';
@@ -722,6 +723,7 @@ export class SceneRenderCore {
   protected textureDimensionLimit = Infinity;
   protected readonly areaPreview=new AreaPreviewLayer();
   protected readonly turretRange=new RangeOutlineLayer();
+  protected readonly mapOutline=new MapOutlineLayer();
   protected readonly constructionPreview=new ConstructionPreviewLayer();
   protected areaIndex: AreaIndex | undefined;
   protected orderTargetIndex: OrderTargetIndex | undefined;
@@ -883,7 +885,7 @@ export class SceneRenderCore {
     this.landscape.add(this.plants.group,this.overview.group,this.terrainGroup,this.resourceGroup,this.rocks.group);
     this.scene.add(this.mechanoids.group);
     this.scene.add(this.geysers.group);
-    this.scene.add(this.deepResources.mesh,this.areaPreview.mesh,this.turretRange.mesh,this.orderRockPreview.mesh,this.landscape,this.pileGroup,this.hygiene.group,this.wind.group,this.wildlife.mesh,this.wildlife.flames,this.animalCargo.group,this.ropes.mesh,this.fires.mesh,this.projectiles.mesh,this.roofs.surface,this.roofs.areas,this.doors.group,this.walls.group,this.crops.group, this.growing.group, this.allowedAreaLayer.group, this.structureGroup, this.jobGroup, this.designations.mesh, this.storageGroup, this.pawns.group,this.clouds.mesh,this.precipitation.mesh);
+    this.scene.add(this.deepResources.mesh,this.areaPreview.mesh,this.turretRange.mesh,this.mapOutline.mesh,this.orderRockPreview.mesh,this.landscape,this.pileGroup,this.hygiene.group,this.wind.group,this.wildlife.mesh,this.wildlife.flames,this.animalCargo.group,this.ropes.mesh,this.fires.mesh,this.projectiles.mesh,this.roofs.surface,this.roofs.areas,this.doors.group,this.walls.group,this.crops.group, this.growing.group, this.allowedAreaLayer.group, this.structureGroup, this.jobGroup, this.designations.mesh, this.storageGroup, this.pawns.group,this.clouds.mesh,this.precipitation.mesh);
     if (groundGrassEnabled) {
       this.grass = this.createGrass();
       this.grass.setTerrainPaint(this.terrainPaintTexture);
@@ -974,6 +976,8 @@ export class SceneRenderCore {
     const at=coreInput?coreInput.core/10:world.tick;
     const previous=this.received?.world;
     const reset=resetPresentation||!previous||world.tick<previous.tick||world.seed!==previous.seed||world.width!==previous.width||world.height!==previous.height;
+    // Another map: an outline drawn for the previous one no longer applies.
+    if(previous&&(world.seed!==previous.seed||world.width!==previous.width||world.height!==previous.height))this.mapOutline?.hide();
     const previousCore=previous&&this.coreFullInputs297.get(previous),ownerChanged=!!coreInput&&!!previousCore&&(coreInput.anchor.epoch!==previousCore.anchor.epoch||coreInput.anchor.mapId!==previousCore.anchor.mapId);
     const calm=deferCalmFull297===true&&!!coreInput&&!reset&&!ownerChanged&&speed>0&&!!tracks;
     if(!calm)this.releaseCalmFullFrame297();
@@ -1471,6 +1475,15 @@ export class SceneRenderCore {
     this.areaSignature='';this.updateHover();
   }
 
+  /** Outline of a rectangle of map cells for the interface (the future
+   * tutorial's target areas): presentation only, the World is never written;
+   * null removes it. Clamped to the shown map. */
+  setMapOutline(rect:MapOutlineRect|null):void {
+    const world=this.world;
+    if(!rect||!world){this.mapOutline.hide();return;}
+    this.mapOutline.show(rect,world.width,world.height,world.snow?SNOW_OVERLAY_LIFT:0);
+  }
+  get mapOutlineRect():MapOutlineRect|undefined {return this.mapOutline.rectangle;}
   /** Hide canopies for inspection while retaining trunks and all game rules. */
   setFoliageVisible(visible: boolean): void {
     if(this.grassVisible!==visible)this.invalidatePausedShadow();
@@ -1582,6 +1595,7 @@ export class SceneRenderCore {
     const restoreSnow=this.snowSurface.prepareForCompile();
     const restoreArea=this.areaPreview.prepareForCompile();
     const restoreTurretRange=this.turretRange.prepareForCompile();
+    const restoreMapOutline=this.mapOutline?.prepareForCompile()??(()=>{});
     const restoreHints=this.recreationHints.prepareForCompile();
     const restoreOrderRock=this.orderRockPreview.prepareForCompile();
     const restoreConstruction=this.constructionPreview.prepareForCompile();
@@ -1630,7 +1644,7 @@ export class SceneRenderCore {
       for (const [object, value] of culling) object.frustumCulled = value;
       restoreMechanoids();
       restoreWind();restorePawnFires();restorePawnCargo();restoreWildlife();restoreAnimalCargo();restoreRopes();restoreFeedback();restoreActionVfx();restoreBrawlCloud();restoreStructureVfx();restoreRoofs();restoreDoors();restoreWalls();restoreCrops();restorePlants();restoreGrass();restoreDesignations();restoreFilth();restoreClouds();restorePrecipitation();
-      restoreSnow();restoreBoxes();restoreArea();restoreTurretRange();restoreHints();restoreOrderRock();restoreConstruction();restoreDeep();
+      restoreSnow();restoreBoxes();restoreArea();restoreTurretRange();restoreMapOutline();restoreHints();restoreOrderRock();restoreConstruction();restoreDeep();
       restoreOverview();
       restoreLabels?.();
       restorePodRescue();restoreOrbitalDelivery();
@@ -2403,6 +2417,7 @@ export class SceneRenderCore {
     if (this.hostPort.selectionReady() && this.rig && this.hover) this.cancelDesignation();
     this.areaPreview.dispose();
     this.turretRange.dispose();
+    this.mapOutline?.dispose();
     this.recreationHints.dispose();
     this.orderRockPreview.dispose();
     this.constructionPreview.dispose();

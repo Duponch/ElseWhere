@@ -44,6 +44,9 @@ export interface LearningConcept {
   priority:number;
   needsOpportunity:boolean;
   opportunityDecays:boolean;
+  /** Core ConceptDef.highlightTags: native controls that pulse while the
+   * notion is shown in the advice card (src/ui/native-highlight-tags.ts). */
+  highlightTags?:readonly string[];
 }
 export const isModalConcept=(concept:Pick<LearningConcept,'priority'>):boolean=>concept.priority<=0;
 

@@ -1,5 +1,75 @@
 import type {LearningConcept} from './learning-helper';
 
+/** Highlight tags of each learning notion: Core's ConceptDef.highlightTags
+ * (Data/Core/Defs/Tutor/Concepts_*.xml, RimWorld 1.6) mapped to Elsewhere's
+ * controls. Core's Architect → Zone and Architect → Orders paths are the
+ * Zones and Orders palettes here; Core's ITab tabs are inspector tabs or
+ * actions. Couchages and Recherche (Elsewhere notions) take the tags of the
+ * tutorial instructions BuildBeds and OpenMainTabResearch. */
+const HIGHLIGHT_TAGS:Readonly<Record<string,readonly string[]>>=Object.freeze({
+  // ReformCaravan: MainTab-World-Closed, ReformCaravan.
+  'reform-caravan':['tab:world','world:form-caravan'],
+  // Drafting: Draft.
+  drafting:['draft'],
+  // BuildOrbitalTradeBeacon: MainTab-Architect-Closed, DesignationCategoryButton-Misc-Closed, Designator-Build-OrbitalTradeBeacon.
+  'orbital-beacon':['tab:architect','category:production','tool:orbital-beacon'],
+  // BillsTab: ITab-Bills-Closed.
+  bills:['inspector:bills'],
+  // DrugAddiction: ITab-Needs-Closed.
+  addiction:['inspector:needs'],
+  // DrugPolicies: MainTab-Assign-Closed, ManageDrugPolicies.
+  'drug-policies':['tab:assign','manage-drug-policies'],
+  // PrisonerTab: ITab-Prisoner-Closed.
+  prisoners:['inspector:prisoner'],
+  // Shelves: Designator-Build-Shelf.
+  shelves:['tool:shelf'],
+  // Books: MainTab-Assign-Closed, ReadingAssignPolicy.
+  books:['tab:assign','reading-policy'],
+  // TimeControls and Pause: TimeControls.
+  'time-controls':['time-controls'],
+  pause:['time-controls'],
+  // Stockpiles: MainTab-Architect-Closed, DesignationCategoryButton-Zone-Closed, Designator-ZoneAddStockpile_Resources.
+  stockpiles:['tools:zones','tool:stockpile'],
+  // Forbidding: ToggleForbidden.
+  forbidding:['forbid'],
+  // BuildBeds instruction: Architect, Furniture, Designator-Build-Bed.
+  beds:['tab:architect','category:furniture','tool:sleeping-spot','tool:bed'],
+  // GrowingFood: Architect, Zone, Designator-ZoneAdd_Growing.
+  growing:['tools:zones','tool:growing'],
+  // Alerts: Alerts.
+  alerts:['alerts'],
+  // Mining: Architect, Orders, Designator-Mine.
+  mining:['tools:orders','tool:mine'],
+  // OpenMainTabResearch instruction: MainTab-Research-Closed.
+  research:['tab:research'],
+  // WorkTab: MainTab-Work-Closed.
+  'work-tab':['tab:work'],
+  // ForbiddingDoors: ToggleForbidden-Door.
+  'forbidding-doors':['forbid-door'],
+  // FormCaravan: MainTab-World-Closed, FormCaravan, ReformCaravan.
+  'form-caravan':['tab:world','world:form-caravan'],
+  // AnimalTaming: Architect, Orders, Designator-Tame (taming is asked in Faune here).
+  'animal-taming':['tab:wildlife','tame'],
+  // AnimalTraining: ITab-Training-Closed (training rows of the animal inspector).
+  'animal-training':['animal-training'],
+  // InfoCard: InfoCard.
+  'info-card':['info-card'],
+  // StorageTab: ITab-Storage-Closed.
+  'storage-tab':['inspector:storage'],
+  // HomeArea: Architect, Zone, Designator-AreaHomeExpand.
+  'home-area':['tools:zones','tool:home'],
+  // HostilityResponse: HostilityResponse.
+  'hostility-response':['hostility-response'],
+  // AllowedAreas: Architect, Schedule, Zone, AreaAllowedExpand, AreaAllowedClear (areas are assigned in Assignations here).
+  'allowed-areas':['tools:zones','zones:allowed-areas','tab:assign'],
+  // TimeAssignments: MainTab-Schedule-Closed.
+  'time-assignments':['tab:schedule'],
+  // Outfits: MainTab-Assign-Closed, ManageOutfits.
+  outfits:['tab:assign','manage-outfits'],
+  // HistoryTab: MainTab-History-Closed.
+  'history-tab':['tab:history'],
+});
+
 /** The notions of the learning helper: French texts written for Elsewhere's
  * own controls and rules (no text taken from the reference game). Group,
  * priority, needsOpportunity and opportunityDecays are Core's ConceptDef
@@ -7,8 +77,8 @@ import type {LearningConcept} from './learning-helper';
  * Core's definition order, which settles equal desires. Two notions marked
  * core:'Elsewhere' cover first gestures that have no Core concept.
  * Update a text when its rule changes. */
-const self=(id:string,core:string,priority:number,title:string,text:string):LearningConcept=>({id,core,group:'self-show',title,text,priority,needsOpportunity:false,opportunityDecays:true});
-const chance=(id:string,core:string,title:string,text:string,decays=true):LearningConcept=>({id,core,group:'opportunistic',title,text,priority:50,needsOpportunity:true,opportunityDecays:decays});
+const self=(id:string,core:string,priority:number,title:string,text:string):LearningConcept=>({id,core,group:'self-show',title,text,priority,needsOpportunity:false,opportunityDecays:true,highlightTags:HIGHLIGHT_TAGS[id]??[]});
+const chance=(id:string,core:string,title:string,text:string,decays=true):LearningConcept=>({id,core,group:'opportunistic',title,text,priority:50,needsOpportunity:true,opportunityDecays:decays,highlightTags:HIGHLIGHT_TAGS[id]??[]});
 const modal=(id:string,core:string,title:string,text:string):LearningConcept=>({id,core,group:'modal',title,text,priority:-1000,needsOpportunity:false,opportunityDecays:true});
 
 export const LEARNING_CONCEPTS:readonly LearningConcept[]=Object.freeze([

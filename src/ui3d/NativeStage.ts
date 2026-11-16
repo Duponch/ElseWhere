@@ -13,6 +13,7 @@ import {NativeFrontBackdrop} from './NativeFrontBackdrop';
 import {normalizeNativeUiScale} from './native-preferences';
 import {NativeHitPose} from './NativeHitPose';
 import {NativeHoverPreview} from './native-hover-preview';
+import {NativeHighlightPass,type NativeHighlightCandidate,type NativeHighlightPiece} from './native-highlight';
 import {setNativeCursor} from '../ui/native-cardboard-cursors';
 import {SHIP_FRAME_MAXIMUM_DELTA_298} from '../bridge/ship-countdown-wire-298';
 import {NATIVE_UI,NATIVE_RIGHT_DOCK_WIDTH,layoutNativePage,nativeVisualWidth,nativeMatrixColumns,nativeMatrixHeadingLines,nativeTableRowScroll,wrapNativeText,nativeCardInk,type NativePageBox,type NativeRowBox,type NativeRect,type NativeRegion,type NativeRegionBox} from './native-layout';
@@ -129,6 +130,9 @@ export class NativeStage {
   private shipCurtainPageHandoff298=false;
   private shipCurtainDisplayDirty298=false;
   private standaloneNeedsRender298=true;
+  /** Pulsing frames of highlighted controls, drawn after the cached image. */
+  private readonly highlight=new NativeHighlightPass();
+  private readonly highlightPoint=new THREE.Vector3();
   private frameId=0;
   private closed=false;
   private initialized=false;
@@ -248,7 +252,7 @@ export class NativeStage {
   diagnostics(){
     this.scene.updateMatrixWorld(true);
     return {...this.stats,mapToolHover:this.mapToolLabelOwner?{id:this.mapToolLabelOwner.userData.nativeId,title:this.mapToolLabelTitle,labelVisible:!!this.mapToolLabel?.visible,value:this.mapToolLabelOwner.userData.hoverVal,scale:this.mapToolLabelOwner.scale.x}:null,displayScale:this.displayScale,logicalViewport:{width:this.width,height:this.height},bottomDockHeight:this.bottomDockHeight,cache:this.overlayCache.stats,standby:this.standby.stats,activeAnimations:this.moving.size,uiObjects:this.art.interactiveMeshes.length,
-      mode:'native-meshes',page:this.page?.id??null,scroll:this.scroll,maxScroll:this.maxScroll,pageBounds:this.pageBox?{x:this.pageBox.x,y:this.pageBox.y,width:this.pageBox.width,height:this.pageBox.height}:null,dropdown:this.dropdown?{owner:this.dropdown.controlId,...this.dropdown.box}:null,bottomDock:{autoHide:this.autoHideBottom,open:this.bottomOpen,offset:this.bottomOffset,page:this.managementPage,pages:this.managementPages},front:this.frontVisible,frontBackdrop:this.frontBackdrop.diagnostics,globe:this.globeDiagnostics(),
+      mode:'native-meshes',highlight:this.highlight.diagnostics,page:this.page?.id??null,scroll:this.scroll,maxScroll:this.maxScroll,pageBounds:this.pageBox?{x:this.pageBox.x,y:this.pageBox.y,width:this.pageBox.width,height:this.pageBox.height}:null,dropdown:this.dropdown?{owner:this.dropdown.controlId,...this.dropdown.box}:null,bottomDock:{autoHide:this.autoHideBottom,open:this.bottomOpen,offset:this.bottomOffset,page:this.managementPage,pages:this.managementPages},front:this.frontVisible,frontBackdrop:this.frontBackdrop.diagnostics,globe:this.globeDiagnostics(),
       readout:this.worldReadout?{visible:this.worldReadout.visible,paper:this.worldReadout.userData.paper,width:this.worldReadout.userData.w*100,height:this.worldReadout.userData.h*100,lines:this.worldReadoutLines,scroll:this.worldReadoutScroll,maxScroll:this.worldReadoutMaxScroll}:null,
       tooltip:this.hintPiece?{width:this.hintPiece.userData.w*100,height:this.hintPiece.userData.h*100}:null,
       regions:this.pageBox?.regions,inspectorParts:this.pageBox?.inspectorParts,graph:this.page?.research?{x:this.graphX,y:this.regionOffsets.graph,width:this.page.research.width,height:this.page.research.height,bounds:this.pageBox?.regions.graph}:null,
@@ -538,15 +542,46 @@ export class NativeStage {
         if(damage)this.cacheRevision++;
       }
       this.overlayCache.draw(renderer,this.scene,this.camera,this.cacheRevision,false,damage??undefined);
+      this.renderHighlights(renderer,now);
       this.renderShipCurtain298(renderer);this.shipCurtainDisplayDirty298=false;
       this.stats.renderMs=performance.now()-start;this.stats.drawCalls=renderer.info.render.drawCalls-draws;this.stats.overlayRenders++;return;
     }
     const auto=renderer.autoClear,target=renderer.getRenderTarget();renderer.autoClear=false;
     try{
       renderer.clearDepth();const start=performance.now(),draws=renderer.info.render.drawCalls;renderer.render(this.scene,this.camera);
+      this.renderHighlights(renderer,now);
       this.renderShipCurtain298(renderer);this.shipCurtainDisplayDirty298=false;
       this.stats.renderMs=performance.now()-start;this.stats.drawCalls=renderer.info.render.drawCalls-draws;this.stats.overlayRenders++;
     }finally{renderer.autoClear=auto;renderer.setRenderTarget(target);}
+  }
+  /** Tags whose controls pulse (Core UIHighlighter), from the learning
+   * helper today and the tutorial later. Presentation only. */
+  setHighlightTags(tags:readonly string[]):void{if(this.highlight.setTags(tags))this.invalidate();}
+  /** In game only, after the cached interface: nothing when no tag is set.
+   * Controls are looked up when pieces are created or parked or the page is
+   * rebuilt; each frame follows the highlighted ones only. */
+  private renderHighlights(renderer:THREE.WebGPURenderer,now:number):void{
+    const pass=this.highlight;if(!pass?.active)return;
+    pass.sync(this.art.pieceRevision,visit=>this.visitHighlightCandidates(visit));
+    if(pass.update(now/1000,this.scene,(piece,center)=>this.highlightCovered(piece,center),this.reducedMotion.matches))pass.render(renderer,this.camera);
+  }
+  private visitHighlightCandidates(visit:(candidate:NativeHighlightCandidate)=>void):void{
+    for(const hit of this.pageControls)if(hit.region&&hit.control)visit({piece:hit.piece,control:hit.control,region:hit.region});
+    const seen=new Set<CardboardPiece>();
+    for(const mesh of this.art.interactiveMeshes){
+      const piece=mesh.userData.widgetGroup as CardboardPiece|undefined;if(!piece||seen.has(piece))continue;seen.add(piece);
+      visit({piece,control:this.hits.get(mesh)?.control});
+    }
+  }
+  /** A page covers the HUD below it, a modal page every control but its
+   * own, and an open list the controls under it. */
+  private highlightCovered(piece:NativeHighlightPiece,center:THREE.Vector3):boolean{
+    const point=this.highlightPoint.copy(center).project(this.camera),x=(point.x+1)*this.width/2,y=(1-point.y)*this.height/2;
+    const inside=(box:{x:number;y:number;width:number;height:number})=>x>=box.x&&x<=box.x+box.width&&y>=box.y&&y<=box.y+box.height;
+    const list=this.dropdown;if(list&&!list.pieces.includes(piece as CardboardPiece)&&inside(list.box))return true;
+    const page=this.page,box=this.pageBox;if(!page||!box)return false;
+    for(let node:THREE.Object3D|null=piece;node;node=node.parent)if(node===this.pageGroup)return false;
+    return !!page.modal||inside(box);
   }
   /** No World or admission capability: this is only the existing RAF source. */
   private countdownDriver298():'game'|'standalone'|undefined{return this.frontVisible||this.standalone?'standalone':this.worldVisible?'game':undefined;}
@@ -1042,6 +1077,8 @@ export class NativeStage {
   }
   private rebuildPage(force=false):void{
     const page=this.page;
+    // Page controls are rebound or rebuilt: highlighted ones are looked up again.
+    if(page||this.pageControls.length)this.highlight?.invalidate();
     const entities=page?.textEntities??this.sharedTextEntities;
     if(entities!==this.inkTextEntities){this.inkTextEntities=entities;this.textEntityRevision++;this.semanticInk.clear();}
     this.textLexicon=createNativeTextLexicon(entities);
@@ -1484,6 +1521,6 @@ export class NativeStage {
     this.frontBackdrop.dispose();
     if(this.closed)return;this.hover(null);this.clearMapToolLabel();this.closed=true;this.resetShipCurtain298(false);this.countdownFrameAt298=undefined;this.countdownFrameDriver298=undefined;this.countdownFrameEligible298=false;this.countdownFeedEligible298=false;this.fontRequest++;this.clearHint();clearTimeout(this.noticeTimer);this.finishEdit(false,false);cancelAnimationFrame(this.frameId);
     setNativeCursor(document.documentElement,undefined);
-    for(const dispose of this.disposers)dispose();this.disposers.length=0;this.overlayCache.dispose();for(const image of this.portraitImages.values()){image.onload=null;image.onerror=null;}this.portraitImages.clear();this.globe?.dispose();this.selectionFill.geometry.dispose();this.selectionFill.material.dispose();this.selectionOutline.geometry.dispose();this.selectionOutline.material.dispose();this.shipCurtainMesh298.geometry.dispose();this.shipCurtainMaterial298.dispose();this.shipCurtainScene298.clear();this.art.dispose();this.ownRenderer.domElement.remove();void this.ownRenderer.dispose();this.hits.clear();this.moving.clear();this.retainedPagePieces.clear();this.parkedPagePieces.clear();this.parkedPagePixels=0;
+    for(const dispose of this.disposers)dispose();this.disposers.length=0;this.overlayCache.dispose();for(const image of this.portraitImages.values()){image.onload=null;image.onerror=null;}this.portraitImages.clear();this.globe?.dispose();this.selectionFill.geometry.dispose();this.selectionFill.material.dispose();this.selectionOutline.geometry.dispose();this.selectionOutline.material.dispose();this.shipCurtainMesh298.geometry.dispose();this.shipCurtainMaterial298.dispose();this.shipCurtainScene298.clear();this.highlight.dispose();this.art.dispose();this.ownRenderer.domElement.remove();void this.ownRenderer.dispose();this.hits.clear();this.moving.clear();this.retainedPagePieces.clear();this.parkedPagePieces.clear();this.parkedPagePixels=0;
   }
 }

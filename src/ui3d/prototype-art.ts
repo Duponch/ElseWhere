@@ -573,6 +573,9 @@ export class PrototypeCardboardArt {
   /** Geometry, material or texture ownership changes; transform-only poses do
    * not invalidate retained resource descriptors. */
   resourceRevision=0;
+  /** Pieces created, parked, revived or disposed (not repaints or moves):
+   * the highlight pass looks its controls up again only then. */
+  pieceRevision=0;
   readonly cardboardEdgeMat = new THREE.MeshStandardMaterial({
     color: PALETTE.edgeCream,
     roughness: 1.0,
@@ -613,6 +616,7 @@ export class PrototypeCardboardArt {
     this.hitMeshes.push(...(piece.userData.interactiveMeshes ?? []));
     this.revision++;
     this.resourceRevision++;
+    this.pieceRevision++;
     return piece;
   }
 
@@ -692,6 +696,7 @@ export class PrototypeCardboardArt {
     for (const mesh of this.hitMeshes) if (!meshes.has(mesh)) this.hitMeshes[kept++] = mesh;
     this.hitMeshes.length = kept;
     this.revision++;
+    this.pieceRevision++;
   }
 
   /** A parked piece returns to hit testing; its owner re-adds it to the scene. */
@@ -699,11 +704,13 @@ export class PrototypeCardboardArt {
     if (!this.pieces.has(piece)) return;
     this.hitMeshes.push(...(piece.userData.interactiveMeshes ?? []));
     this.revision++;
+    this.pieceRevision++;
   }
 
   disposePiece(piece: CardboardPiece): void {
     if (!this.pieces.delete(piece)) return;
     this.revision++;
+    this.pieceRevision++;
     this.resourceRevision++;
     for (const mesh of piece.userData.interactiveMeshes ?? []) {
       const index = this.hitMeshes.indexOf(mesh);
