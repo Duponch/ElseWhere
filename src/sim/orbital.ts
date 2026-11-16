@@ -1,4 +1,5 @@
 import {recordHomeIncident341} from './recent-incidents-341.ts';
+import {storytellerIncidents347} from './game-profile.ts';
 import { isColonist } from './affiliation.ts';
 import { isPowerActive } from './power-rules.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
@@ -73,7 +74,8 @@ export function advanceOrbital(w:World):void {
   if(w.tick<state.nextCheckAt)return;
   state.nextCheckAt=(Math.floor(w.tick/ORBITAL_CHECK)+1)*ORBITAL_CHECK;
   while(w.tick>=state.cycleStart+ORBITAL_CYCLE){state.cycleStart+=ORBITAL_CYCLE;state.scheduledAt=state.cycleStart+Math.floor(orbitalRandom(state)*ORBITAL_ACTIVE_CHECKS)*ORBITAL_CHECK;}
-  if(w.tick!==state.scheduledAt||!w.gameProfile||!w.pawns.some(p=>isColonist(p)&&p.state!=='dead')||state.ships.length>=ORBITAL_SHIP_LIMIT)return;
+  // Schema 347: no orbital trader is sent while the Tutor tells the story.
+  if(w.tick!==state.scheduledAt||!storytellerIncidents347(w)||!w.pawns.some(p=>isColonist(p)&&p.state!=='dead')||state.ships.length>=ORBITAL_SHIP_LIMIT)return;
   // Schema 341: an orbital trader that arrives joins the home record (Core OrbitalVisitor).
   if(createOrbitalShip(w,orbitalRandom(state)<.5?'bulk':'exotic'))recordHomeIncident341(w,'orbital-trader');
 }

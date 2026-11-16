@@ -1,4 +1,5 @@
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
+import {supportedCoreProfile347} from './game-profile.ts';
 /** Core-only750 composition on the SAME unpublished map and step Rand.
  * No generic symbol interpreter or external outcome callback. Human population
  * is the declared existing-NPC adaptation, not native PawnGenerator parity.
@@ -28,7 +29,8 @@ const podTypes=['ancient-friendly','ancient-incapped','ancient-half-eaten','anci
 function frontier(w:World,owners:ActualTempleOwners256){return {nextThingId:w.nextId,nextCasketGroupId:owners.casketGroupIds.nextId};}
 function admitted(w:World,owners:ActualTempleOwners256,random:WorldGenerationRandom):void {
  if(!unpublishedAncientGeneration256(w,true)||!(random instanceof WorldGenerationRandom)||!owners||!owners.casketGroupIds||!Number.isInteger(owners.casketGroupIds.nextId)||owners.casketGroupIds.nextId<0||owners.casketGroupIds.nextId>2147483646)throw Error('Actual unpublished Temple750 map/step stream/casket-group authority required');
- const p=w.gameProfile;if(!p||p.revision!==1||p.storyteller!=='cassandra-partial'||p.difficulty!=='adventure-story'||p.saveMode!=='reloadable')throw Error('Actual Temple peacefulTemples is unresolved for this profile');
+ // Easy (the tutorial's difficulty) inherits peacefulTemples=false as Medium.
+ const p=w.gameProfile;if(!supportedCoreProfile347(p))throw Error('Actual Temple peacefulTemples is unresolved for this profile');
  if(!w.worldFactions||w.worldFactions.revision!==1)throw Error('Actual Temple faction registry is absent');
  for(const def of ['Mechanoid','Insect','Ancients','AncientsHostile'])if(w.worldFactions.factions.filter(f=>f.def===def).length>1)throw Error('Ambiguous actual Temple faction');
 }

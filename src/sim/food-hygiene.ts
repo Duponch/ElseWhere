@@ -1,4 +1,5 @@
 import {processToxicVomit256,toxicVomitEngagement256} from './toxic-vomit-256.ts';
+import {foodPoisonFactor347} from './game-profile.ts';
 import {processAlcoholVomit265} from './alcohol-vomit-265.ts';
 import {cancelMelee} from './melee-state.ts';
 import {cancelShooting} from './shooting-state.ts';
@@ -27,7 +28,7 @@ import type { MaterialPile,Pawn,World } from './types.ts';
  * camp retains factor one; a new mechanism never pretends it is Adventure. */
 export function ingestFoodRisk(w:World,p:Pawn|WildAnimal,food:Pick<MaterialPile,'item'|'foodPoison'>,human=true):void {
   if(w.schemaVersion<89)return;
-  const cause=ingestionFoodPoison(food,human,w.gameProfile?.difficulty==='adventure-story'?.75:1,()=>healthRandom(w));
+  const cause=ingestionFoodPoison(food,human,foodPoisonFactor347(w),()=>healthRandom(w));
   if(!cause)return;
   p.health??=human?createMedicalRecord(w.tick):createAnimalMedicalRecord256(w,p as WildAnimal);
   p.health.foodPoisoning=exposeFoodPoisoningAtRecord(p.health,cause,food.item,w.tick);

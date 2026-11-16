@@ -1,4 +1,5 @@
 import {isPenoxycyline337} from './penoxycyline-337.ts';
+import {applyTutorialCommand347,isTutorialCommand347} from './tutorial-347.ts';
 import {withPileIndexScope} from './pile-index.ts';
 import {isFinishFrameSchema301} from './wall-frame-kind-301.ts';
 import {createWoodWallCore301} from './wood-wall-core-301.ts';
@@ -770,6 +771,8 @@ function setWorkPriority(world:World,pawn:Pawn,work:WorkType,value:number,drops:
   pawn.planCooldown = 0;
 }
 function applyCommandInternal(world: World, command: Exclude<LocalCommand,import('./world-map-state.ts').WorldMapCommand|{type:'apparel-policy-update'|'apparel-policy-copy'|'apparel-policy-rename'|'egg-forbid'|'material-forbid'|'read-book-295'|'reading-policy-295'|'work-tab-mode'}>): CommandResult {
+  // Schema 347: the tutorial's forced content and its storyteller handover.
+  if(isTutorialCommand347(command))return applyTutorialCommand347(world,command);
   if(command.type==='firefoam-auto-rebuild')return applyFirefoamAutoRebuild290(world,command);
   if(command.type==='firefoam-trigger')return applyFirefoamTrigger290(world,command);
   if(command.type==='trade-request-answer'||command.type==='trade-request-dismiss'||command.type==='trade-request-fulfill')return applyTradeRequestCommand284(world,command);

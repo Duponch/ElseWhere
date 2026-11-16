@@ -1,4 +1,5 @@
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
+import {tutorialMode347} from './game-profile.ts';
 import {draftManhunterRoster261} from './caravan-manhunter-261.ts';
 import {planetTile} from './planet-geography-256.ts';
 import {worldGroupContext} from './world-map-context.ts';
@@ -42,6 +43,8 @@ export function caravanMapAllowed261(root:CampaignState,tile:number):boolean {
  * Current PNJ points deliberately reuse the existing visitor/combat producer;
  * this approved adaptation does not claim native pawn-MarketValue parity. */
 export function advanceCaravanIncidents261(root:CampaignState):boolean {
+ // Schema 347: the Tutor has no storyteller comps, caravans included.
+ if(tutorialMode347(root))return false;
  if((Number(root.schemaVersion)!==261&&(Number(root.schemaVersion)!==262&&!isSchema263OrLater(Number(root.schemaVersion))))||!root.worldGroups||root.planet?.revision!==3||!root.worldFactions||!root.worldPawns||root.tick*10%1000!==0||pendingCaravan261(root))return false;
  const factions=actualFactionCapture(root);if(!factions)return false;
  for(const raw of root.worldGroups.groups){

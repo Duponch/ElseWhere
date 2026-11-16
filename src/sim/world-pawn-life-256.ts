@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {scariaRotChance347} from './game-profile.ts';
 import {clonePlainData} from './plain-clone.ts';
 import {worldPawnPhysicalCore297} from './world-pawn-physical-clock-297.ts';
 import {medicalCivilTick271,medicalElapsedTicks271} from './suspended-human-clock-271.ts';
@@ -154,7 +155,7 @@ export function prepareWorldPawnLife256(state:WorldPawnsState256,atCore:number,r
  // A true native order or an absent actual mind/tracker retains the old guard.
  for(const {draft} of pairs){
   const provisionalMothball263=provisionalAnimalMothball263(draft,version,nativeBefore);
-  const result=advancePreparedWorldPawnRow256(draft,atCore,random,notices,version,randomOwner.gameProfile?.difficulty==='adventure-story'?.333:undefined,provisionalMothball263,!firefoamActiveIds||firefoamActiveIds.has(draft.actor.id));if(!result.ok)return result;
+  const result=advancePreparedWorldPawnRow256(draft,atCore,random,notices,version,scariaRotChance347(randomOwner),provisionalMothball263,!firefoamActiveIds||firefoamActiveIds.has(draft.actor.id));if(!result.ok)return result;
  }
  const deceasedHumanIds:number[]=[];
  for(const {row,draft} of pairs)if(row.mode!=='dead'&&draft.mode==='dead'){

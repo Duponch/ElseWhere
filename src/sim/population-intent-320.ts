@@ -1,5 +1,6 @@
 import {isColonist} from './affiliation.ts';
 import type {Pawn,World} from './types.ts';
+import {enemyDeathOnDownedFactor347} from './game-profile.ts';
 
 /** Core StorytellerUtilityPopulation and StoryWatcher_PopAdaptation, used
  * from schema 320 for the death of a downed non-colony humanlike.
@@ -46,12 +47,20 @@ export function populationIntent320(w:World):number {
   const intent=curve320(adjustedPopulation320(w),POP_CURVE);
   return intent>0?intent*curve320(populationAdaptDays320(w),ADAPT_CURVE):intent;
 }
-export const deathOnDownedChance320=(w:World):number=>curve320(populationIntent320(w),DEATH_ON_DOWNED_CURVE)*DIFFICULTY_FACTOR;
+/** Schema 347: the profile's enemyDeathOnDownedChanceFactor (Easy .9 during
+ * the tutorial); Medium keeps the historical 1. */
+export const deathOnDownedChance320=(w:World):number=>curve320(populationIntent320(w),DEATH_ON_DOWNED_CURVE)*(Number(w.schemaVersion)>=347?enemyDeathOnDownedFactor347(w):DIFFICULTY_FACTOR);
 /** Every real colonist gain resets the adaptation (Core GainedColonist). */
 export function notePopulationGain320(w:World):void {if(w.schemaVersion>=320)w.populationGainCore320=w.tick*10;}
 /** A non-colony humanlike (raider, visitor, trader) violently downed, not a
  * prisoner of the colony. */
-export const deathOnDownedEligible320=(w:World,p:Pawn):boolean=>w.schemaVersion>=320&&!isColonist(p)&&!p.prisoner&&!introRaider328(w,p);
+export const deathOnDownedEligible320=(w:World,p:Pawn):boolean=>w.schemaVersion>=320&&!isColonist(p)&&!p.prisoner&&!introRaider328(w,p)&&!forcedDowned347(w,p);
+/** Schema 347 raidForceOneDowned (Pawn_HealthTracker.forceDowned): the
+ * marked member of a live raid group skips the death roll. */
+export function forcedDowned347(w:World,p:Pawn):boolean {
+  const s=w.raids,group=p.raid?.group;if(Number(w.schemaVersion)<347||!s||group===undefined)return false;
+  return s.active?.id===group&&s.active.forcedDowned347===p.id||!!s.extraActive261?.some(g=>g.id===group&&g.forcedDowned347===p.id);
+}
 /** Core StorytellerComp_ClassicIntro (schema 328): the first raider of a
  * Cassandra game is forced down instead of killed and skips this roll. */
 export const introRaider328=(w:World,p:Pawn):boolean=>w.schemaVersion>=328&&w.raids?.profile==='cassandra-raids-v1'&&p.raid?.group===1;

@@ -27,6 +27,7 @@ import { computeThreatPoints,summaryHealthPercent } from './threat-points.ts';
 import { cancelShooting } from './shooting-state.ts';
 import { cancelMelee } from './melee-state.ts';
 import { TICKS_PER_DAY,type World,type Pawn } from './types.ts';
+import {tutorialMode347,tutorialOrigin347} from './game-profile.ts';
 
 const log=(w:World,message:string)=>{w.events.push({tick:w.tick,type:'command',message});if(w.events.length>80)w.events.splice(0,w.events.length-80);};
 /** Local projection of a Core pirate group, using only physical weapon types
@@ -86,7 +87,9 @@ export function advanceRaids(w:World):void {
   if(s.profile==='ship-reactor-raids-v1')return;
   if(advanceCaravanRaid261(w))return;
   if(s.profile==='camp-pressure-v1'&&!s.active){if(!multi&&s.mechActive)advanceMechanoidRaid(w);return;}
-  const cassandra=s.profile==='cassandra-raids-v1',opportunity=cassandra&&!tempMapModern261(w)&&consumeCassandraOpportunity(w,s);
+  // Schema 347: while the Tutor tells the story (no storyteller comps) the
+  // agenda still runs, so a due opportunity is consumed and never fires.
+  const cassandra=s.profile==='cassandra-raids-v1',opportunity=cassandra&&!tempMapModern261(w)&&consumeCassandraOpportunity(w,s)&&!tutorialMode347(w);
   // Schema 341: an ongoing raid no longer swallows Cassandra's opportunity.
   const concurrent=cassandra&&isConcurrentRaids341(w.schemaVersion);
   restoreShipFreeAgenda275(w);
@@ -156,10 +159,13 @@ function startFactionRaid331(w:World,points:number,random:{rng:number},mechRando
     return;
   }
   const composition=intro?undefined:pick.family==='pirate'?chooseRaidComposition(points,random):chooseRaidComposition331(points,pick.family,random);
-  const count=composition?.roster.length??(s.serial===0?1:2),sites=raidEntries(w,s.rng,count);
+  // Schema 347: after a tutorial (whose raid took the first serial) the
+  // introductory raid is still Core's one forced-downed raider.
+  const afterTutorial=intro&&tutorialOrigin347(w);
+  const count=composition?.roster.length??(s.serial===0||afterTutorial?1:2),sites=raidEntries(w,s.rng,count);
   const family=pick.family;
   const recompose333=(budget:number,r:{rng:number})=>family==='pirate'?chooseRaidComposition(budget,r):chooseRaidComposition331(budget,family,r);
-  if(!sites||!createRaidGroup(w,{count,sites,random,faction331:{factionId:pick.factionId,family},...(composition?{composition,recompose333}:{}),...beside?{concurrent341:true}:{}}))return;
+  if(!sites||!createRaidGroup(w,{count,sites,random,faction331:{factionId:pick.factionId,family},...(composition?{composition,recompose333}:{}),...beside?{concurrent341:true}:{},...afterTutorial?{forceOneDowned347:true as const}:{}}))return;
   if(mechRandom){s.mechanoid!.rng=mechRandom.rng;s.mechanoid!.lastFaction='outlaws';}
   s.lastFaction331=pick.factionId;
 }

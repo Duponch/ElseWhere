@@ -1,4 +1,5 @@
 import {groupIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
+import {foodPoisonFactor347} from './game-profile.ts';
 import {recordCaravanAnimalConsumption256} from './group-animal-food-256.ts';
 import type {Pawn,World,MaterialPile} from './types.ts';
 import {TICKS_PER_DAY} from './types.ts';
@@ -39,7 +40,7 @@ export function ingestGroupFood256(w:World,g:GroupFoodOwner256,p:Pawn,c:{coreAt2
  if(!Number.isSafeInteger(prior)||!Number.isSafeInteger(prior+quantity))throw Error('Prospective food counter overflow');
  const ingestedAt299=groupIngestionCore299(g,p,w.schemaVersion,w.tick,c.coreAt299);
  if(ordinary)recordCaravanAnimalConsumption256(g,pile.item,quantity);
- const cause=ingestionFoodPoison(pile,true,w.gameProfile?.difficulty==='adventure-story'?.75:1,c.random);
+ const cause=ingestionFoodPoison(pile,true,foodPoisonFactor347(w),c.random);
  if(pile.quantity===quantity)g.items.splice(g.items.indexOf(pile),1);else pile.quantity-=quantity;
  p.hunger=Math.min(100,p.hunger+ITEM_DEFINITIONS[pile.item].nutrition*quantity);commitHumanIngestion299(p,ingestedAt299);rememberIngestionAt(p,w.tick,{raw:rawFoodThought(pile.item),food:pile.item});
  if(ordinary){}else if(fruit)counter![pile.item as GroupForagedItem256]=prior+quantity;else if(pile.item==='pemmican'){if(g.provisions)g.provisions.pemmicanConsumedUnits=prior+quantity;else g.reorganization!.pemmicanSinceOpening!.consumed=prior+quantity;}else g.ledger.foodConsumed=prior+quantity;

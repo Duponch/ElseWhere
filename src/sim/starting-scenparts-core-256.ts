@@ -13,7 +13,7 @@ export function applyCoreStartingScenParts256(world:World,input:{roster:Starting
  requireOriginalStartingRoster256(world,input.roster);
  // Creation choices precede terrain/temples. The same confirmed profile may
  // already exist; other starting systems still belong exclusively to875.
- if(Object.hasOwn(world,'gameProfile')&&!validGameProfile(world.gameProfile,256,{id:'crashlanded'}))throw Error('Unconfirmed creation profile before875');
+ if(Object.hasOwn(world,'gameProfile')&&!validGameProfile(world.gameProfile,Math.max(256,Number(world.schemaVersion)),{id:'crashlanded'}))throw Error('Unconfirmed creation profile before875');
  if(['scenario','research','raids','visitors','fluIncidents','miscIncidents','economy'].some(k=>Object.hasOwn(world,k)))throw Error('Starting systems already owned before875');
  const arrival=applyCoreStartingPodBirth256(world,input.roster,input.start850,random);
  const scattered=applyCoreStartingScatter256(world,arrival,input.start850,input.layoutRects,random);

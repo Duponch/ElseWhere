@@ -1,4 +1,5 @@
 import {drawIntroMiscIncident329,drawMiscIncident329,type MiscRow329} from './misc-lottery-329.ts';
+import {storytellerIncidents347} from './game-profile.ts';
 import {resolveSelectedResourcePod305,advanceResourcePod305} from './resource-pods-305.ts';
 import {advanceVolcanicWinter310,eligibleVolcanicWinter310,resolveSelectedVolcanicWinter310} from './volcanic-winter-310.ts';
 import {isVolcanicWinter310} from './volcanic-winter-state-310.ts';
@@ -82,7 +83,8 @@ function emit(world:World,message:string):void {
 
 /** A continuation starts from the next check, with no retrospective draws. */
 export function adoptMiscIncidents(world:World):void {
-  if(homeIncidentsBlocked261(world)||!world.gameProfile||world.miscIncidents)return;
+  // Schema 347: the Tutor has no storyteller comps; adopted at its handover.
+  if(homeIncidentsBlocked261(world)||!storytellerIncidents347(world)||world.miscIncidents)return;
   world.miscIncidents={profile:'cassandra-misc-v1',adoptedAt:world.tick,
     rng:((world.seed^0x4c5ca180)>>>0)||1,
     nextCheck:Math.max(MISC_FIRST_CHECK,(Math.floor(world.tick/MISC_CHECK_INTERVAL)+1)*MISC_CHECK_INTERVAL),

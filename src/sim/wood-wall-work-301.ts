@@ -1,4 +1,5 @@
 import {constructionSpeed,learnSkill} from './skills.ts';
+import {tutorialMode347} from './game-profile.ts';
 import {pawnBody} from './health-rules.ts';
 import {constructionSuccessChance301} from './construction-success-301.ts';
 import {isColonist} from './affiliation.ts';
@@ -41,7 +42,9 @@ export function workWoodWallInterval301(w:World,p:Pawn,j:Job,delta:number,light:
  const physical=F(F(caps.manipulation)*F(F(.8)+F(F(.2)*F(Math.min(1,caps.sight)))));
  const speed=F(F(F(constructionSpeed(p))*physical)*F(light));
  const increment=F(F(speed*F(1.7))*F(delta));
- if(isColonist(p)){
+ // Schema 347: JobDriver_ConstructFinishFrame skips the failure roll in
+ // the tutorial (no draw).
+ if(isColonist(p)&&!tutorialMode347(w)){
   const success=F(constructionSuccessChance301(p,body));
   const risk=F(F(1)-F(Math.pow(success,F(increment/paid.required))));
   const draw=healthRandom(w); // also consumed at success==1

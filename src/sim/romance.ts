@@ -1,4 +1,5 @@
 import { isColonist } from './affiliation.ts';
+import {tutorialMode347} from './game-profile.ts';
 import { HUMAN_YEAR_TICKS } from './human-age.ts';
 import { captureRelationshipPeople } from './relationship-namespace.ts';
 import { relationshipIndex,replaceRelationshipLinks } from './relationship-runtime.ts';
@@ -17,6 +18,8 @@ const secondary=(w:World,a:Pawn,b:Pawn)=>romanceAgeFactor(years(a),years(b))*kno
 /** Selection happens only after the existing social presence/LOS admission.
  * Orientation and beauty are neutral until actual profiles exist. */
 export function romanceSelectionWeight(world:World,a:Pawn,b:Pawn,people?:RelationshipPeople):number {
+  // Schema 347: InteractionWorker_RomanceAttempt weighs 0 in the tutorial.
+  if(tutorialMode347(world))return 0;
   if(!adults(world,a,b))return 0;
   const index=relationshipIndex(world),known=people??captureRelationshipPeople(world);
   if(livingPartnerId(index,known,a.id)!==undefined||livingPartnerId(index,known,b.id)!==undefined)return 0;

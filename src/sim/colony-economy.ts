@@ -1,4 +1,5 @@
 import { isColonist } from './affiliation.ts';
+import {adaptationGrowthFactor347} from './game-profile.ts';
 import { colonyWealth, type ColonyWealth } from './colony-wealth.ts';
 import { expectationForWealth, type ColonyExpectation } from './expectations.ts';
 import { advanceThreatAdaptationHalfDay, loseThreatAdaptationForColonistLoss, loseThreatAdaptationForViolentDowning } from './threat-points.ts';
@@ -70,7 +71,7 @@ export function advanceColonyAdaptation(world:World):void {
   const state=world.economy;if(!state)return;
   flushColonyLosses(world);
   if(world.tick>=state.nextAdaptAt){
-    state.adaptationDays=advanceThreatAdaptationHalfDay(state.adaptationDays,world.tick/TICKS_PER_DAY);
+    state.adaptationDays=advanceThreatAdaptationHalfDay(state.adaptationDays,world.tick/TICKS_PER_DAY,adaptationGrowthFactor347(world));
     state.nextAdaptAt=world.tick+ADAPTATION_INTERVAL;
   }
 }

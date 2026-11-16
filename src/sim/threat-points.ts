@@ -115,10 +115,10 @@ export function computeThreatPoints(input: ThreatPointsInput): ThreatPointsResul
 }
 
 /** One Core half-day update, after any downing/loss notifications in that tick. */
-export function advanceThreatAdaptationHalfDay(adaptationDays: number, elapsedDays: number): number {
+export function advanceThreatAdaptationHalfDay(adaptationDays: number, elapsedDays: number, growthFactorOverZero = .75): number {
   if (!validFinite(adaptationDays, -60, 100) || !validFinite(elapsedDays, 0)) throw new RangeError('Invalid adaptation state.');
   if (adaptationDays >= 0 && Math.floor(elapsedDays) < 30) return adaptationDays;
-  const growth = .5 * curve(GROWTH_RATE, adaptationDays) * (adaptationDays > 0 ? .75 : 1);
+  const growth = .5 * curve(GROWTH_RATE, adaptationDays) * (adaptationDays > 0 ? growthFactorOverZero : 1);
   return Math.min(100, adaptationDays + growth);
 }
 

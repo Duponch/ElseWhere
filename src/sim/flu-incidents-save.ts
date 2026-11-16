@@ -9,7 +9,8 @@ const integer=(value:unknown,min:number,max=Number.MAX_SAFE_INTEGER):value is nu
  * Crashlanded profile carries its own strictly prospective disease clock. */
 export function validFluIncidents(world:World,version:number):boolean {
   const raw:unknown=world.fluIncidents;
-  if(version<127||!world.gameProfile)return raw===undefined;
+  // Schema 347: the Tutor has no disease comp; the clock is born at its handover.
+  if(version<127||!world.gameProfile||world.gameProfile.storyteller==='tutor')return raw===undefined;
   if(!object(raw)||Object.keys(raw).length!==(Object.hasOwn(raw,'immuneDiseases')?8:7)||!Object.keys(raw).every(key=>
     ['profile','rng','nextCheck','checks','fluDraws','episodes','cases',...(version>=207?['immuneDiseases']:[])].includes(key)))return false;
   if(Object.hasOwn(raw,'immuneDiseases')){

@@ -420,7 +420,8 @@ export type Command = import('./faction-comms-state-298.ts').FactionCommsCommand
   | {type:'cooler-adjust';structureId:number;offset:-10|-1|1|10|null}
   | {type:'research-project';project:import('./research.ts').ResearchProject|null}
   | { type: 'priority'; pawnId: number; work: WorkType; value: number }
-  | import('./work-tab-344.ts').WorkTabCommand344;
+  | import('./work-tab-344.ts').WorkTabCommand344
+  | import('./tutorial-347.ts').TutorialCommand347;
 export type RefusalCode = 'invalid-command' | 'out-of-bounds' | 'occupied' | 'incompatible-resource' | 'missing-target' | 'invalid-priority' | 'invalid-storage';
 export interface CommandResult { ok: boolean; reason?: string; code?: RefusalCode; affected?: number; skipped?: number }
 export interface JobDiagnostic { code: 'clearing' | 'blocked' | 'working' | 'ready' | 'delivering' | 'missing-materials' | 'waiting-worker'; reason: string; delivered: number; required: number }

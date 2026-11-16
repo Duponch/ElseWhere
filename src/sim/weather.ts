@@ -1,4 +1,5 @@
 import {biomeWeatherCommonality256,WEATHER_ORDER_256} from './biome-weather-256.ts';
+import {tutorialMode347} from './game-profile.ts';
 import { captureStandability } from './furniture-travel.ts';
 import { isRoofed } from './roof-rules.ts';
 import { preventsRain } from './flashstorm.ts';
@@ -45,8 +46,13 @@ export function weatherWeights(w:World,temperature:number,rainfall:number):Array
 }
 function nextWeather(w:World,inputs:WeatherInputs):void {
   const s=w.weather!,weights=weatherWeights(w,inputs.outsideTemperature,inputs.rainfall),sum=weights.reduce((n,v)=>n+v.weight,0);
-  let choice:WeatherKind='clear',roll=random(s)*sum;
-  for(const v of weights){roll-=v.weight;if(roll<0){choice=v.kind;break;}}
+  let choice:WeatherKind='clear';
+  // Schema 347: WeatherDecider.ChooseNextWeather picks Clear, without a
+  // draw, in the tutorial whenever the biome lists it (every biome does).
+  if(!tutorialMode347(w)||!weights.some(v=>v.kind==='clear')){
+    let roll=random(s)*sum;
+    for(const v of weights){roll-=v.weight;if(roll<0){choice=v.kind;break;}}
+  }
   s.previous=s.current;s.current=choice;s.ageCore=0;
   s.durationCore=WEATHER[choice].storm?15000+Math.floor(random(s)*25001):16000+Math.floor(random(s)*144001);
 }

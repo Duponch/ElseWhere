@@ -1,4 +1,5 @@
 import {resolveSelectedEclipse} from './cassandra-misc.ts';
+import {storytellerIncidents347} from './game-profile.ts';
 import {isMiscIncidents305,resolveSelectedAurora305,advanceAurora305} from './misc-incidents-305.ts';
 import {recordWorldIncident341,worldRecentFactor341,type WorldRecentIncident341} from './recent-incidents-341.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
@@ -26,7 +27,7 @@ function emit(world:World,message:string):void {
   if(world.events.length>80)world.events.splice(0,world.events.length-80);
 }
 export function adoptWorldIncidents(world:World):void {
-  if(!world.gameProfile||world.worldIncidents)return;
+  if(!storytellerIncidents347(world)||world.worldIncidents)return;
   const nextCheck=Math.max(WORLD_FIRST_CHECK,(Math.floor(world.tick/WORLD_CHECK_INTERVAL)+1)*WORLD_CHECK_INTERVAL);
   if(!Number.isSafeInteger(nextCheck))return;
   world.worldIncidents={profile:'cassandra-world-v1',adoptedAt:world.tick,

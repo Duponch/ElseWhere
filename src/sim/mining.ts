@@ -1,4 +1,5 @@
 import {markTerrainCellChanged} from './terrain-mutation-journal.ts';
+import {effectiveMineableYield347} from './game-profile.ts';
 import {collapsedRockAt256,excavatedCollapsedRock256} from './collapsed-rocks-256.ts';
 import {prepareRemovedFogMineable256,commitRemovedFogBlocker256} from './exploration-runtime-256.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
@@ -46,7 +47,8 @@ export function advanceMining(world:World,pawn:Pawn,job:Job,lightFactor:()=>numb
   // Preserve one local global draw per extraction, including integral yields.
   // Core's separate drop and rounding draws are explicitly adapted here.
   const roll=rng/0x100000000;
-  const rawQuantity=ore?ore.yield*contribution!:0;
+  // Core EffectiveMineableYield: RoundToInt(yield x mineYieldFactor) (Easy 1.2).
+  const rawQuantity=ore?effectiveMineableYield347(world,ore.yield)*contribution!:0;
   const nearest=Math.round(rawQuantity),roundedQuantity=Math.abs(rawQuantity-nearest)<=1e-12?nearest:rawQuantity;
   const baseQuantity=Math.floor(roundedQuantity);
   const quantity=ore?Math.max(1,baseQuantity+(roll<roundedQuantity-baseQuantity?1:0)):roll<CHUNK_CHANCE?1:0;

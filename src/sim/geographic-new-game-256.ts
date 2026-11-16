@@ -1,7 +1,8 @@
 import {validGeographicCreationSize262,validGeographicCreationSeason262,type GeographicCreationSize262,type GeographicCreationSeason262} from './geographic-creation-options-262.ts';
 import {giveCrashlandedStartThoughts343} from './crashlanded-start-343.ts';
 import {initializeGeographicRenewal262} from './geographic-renewal-state-262.ts';
-import {crashlandedProfile} from './game-profile.ts';
+import {crashlandedProfile,isSchema347OrLater,tutorialProfile347} from './game-profile.ts';
+import {violentWorkRefusal} from './colonist-backgrounds.ts';
 import {constructAncientCasketGroupIds256,type AncientCasketGroupIds256} from './ancient-casket-group-ids-256.ts';
 import {configuredGeographicStartClock256} from './geographic-start-clock-256.ts';
 /** One unpublished Base_Player256 candidate. Progress never exposes a World;
@@ -61,7 +62,10 @@ import { isSchema344OrLater } from './work-tab-344.ts';
 const BASE_STEPS=new Set(['ElevationFertility','MutatorPostElevationFertility','RocksFromGrid','Terrain','MutatorPostTerrain','Roads','MutatorCriticalStructures','MutatorNonCriticalStructures','ScatterShrines','ScatterRuinsSimple','FindPlayerStartSpot','ScenParts','Plants','SteamGeysers','RockChunks','CaveHives','Snow','Animals','Fog','MutatorFinal']);
 export const BASE_PLAYER_GENERATION_ORDER_256=Object.freeze(CORE_4871_GEN_STEP_DEFS.filter(row=>BASE_STEPS.has(row.defName)).sort((a,b)=>a.order-b.order||a.index-b.index));
 const EXPECTED=['ElevationFertility','MutatorPostElevationFertility','RocksFromGrid','Terrain','MutatorPostTerrain','Roads','MutatorCriticalStructures','MutatorNonCriticalStructures','ScatterShrines','ScatterRuinsSimple','FindPlayerStartSpot','ScenParts','Plants','SteamGeysers','RockChunks','CaveHives','Snow','Animals','Fog','MutatorFinal'];
-export interface GeographicNewGameInput256 {draft:GeographicWorldDraft256;geography:CampaignGeography256;tile:number;size:GeographicCreationSize262;season?:GeographicCreationSeason262;scenario:'crashlanded';startingParty:StartingParty}
+export interface GeographicNewGameInput256 {draft:GeographicWorldDraft256;geography:CampaignGeography256;tile:number;size:GeographicCreationSize262;season?:GeographicCreationSeason262;scenario:'crashlanded';startingParty:StartingParty;
+ /** Schema 347: Core "Learn to play" (scenario Tutorial, child of Crashlanded;
+  * storyteller Tutor at Easy). */
+ tutorial?:true}
 export interface GeographicNewGameProgress256 {phase:string;completed:number;total:number}
 export interface InitialGenerationWorking256 {adjacentPermutation:number[];adjacentUses:number;edgeContext?:FogEdgeSelectionContext256;rootsToUnfog:number[]}
 /** The concrete750 implementation must run ScatterShrines INCLUDING its
@@ -75,6 +79,7 @@ export interface GeographicNewGameBindings256 {shrines750:ActualShrines750256}
 export function requireGeographicNewGameInputs256(input:GeographicNewGameInput256,bindings:GeographicNewGameBindings256|undefined):{bindings:GeographicNewGameBindings256;request:StartingOriginalRequest256} {
  if(!bindings||typeof bindings.shrines750?.generate!=='function')throw Error('Unresolved actual ScatterShrines750/interior_ancientTemple producer; Base_Player cannot be published');
  if(!input||!validGeographicCreationSize262(input.size)||input.season!==undefined&&!validGeographicCreationSeason262(input.season)||input.scenario!=='crashlanded'||!validStartingOriginalRequest256(input.startingParty))throw Error('The actual eight-entry original roster is required, never a three-entry preview');
+ if(input.tutorial!==undefined&&(input.tutorial!==true||!isSchema347OrLater(SCHEMA_VERSION)))throw Error('Unknown tutorial request');
  const {draft,geography,tile}=input;
  if(!draft||draft.revision!==1||!isCampaignGeography256(geography)||geography.surface!==draft.surface||geography.roads!==draft.roads||draft.factions.generatedAt!==0||!Number.isSafeInteger(draft.nextThingId)||draft.nextThingId<1||!Number.isSafeInteger(tile)||tile<0||tile>=geography.surface.tiles.length)throw Error('Actual confirmed geographic draft/owner/frontier required');
  if(BASE_PLAYER_GENERATION_ORDER_256.length!==EXPECTED.length||BASE_PLAYER_GENERATION_ORDER_256.some((d,i)=>d.defName!==EXPECTED[i]))throw Error('Observed Core Base_Player order disagrees; no alphabetical or omitted750 substitution');
@@ -101,14 +106,17 @@ export function* createGeographicNewGame256(input:GeographicNewGameInput256,bind
  // empty working rectangles/roots do not stand in for a captured old owner.
  const layoutRects:AncientRect256[]=[],usedRects:AncientRect256[]=[];
  yield {phase:'physical10-220',completed:0,total};
- const physical=prepareGeographicPhysicalMap256({schemaVersion:SCHEMA_VERSION,planet,factions:draft.factions,tile,width:size,height:size,tick:0,calendarOrigin,nextId:roster.nextId,rng:runtimeRng,initialWeather:{gameInitDataPresent:true,daysPassedSinceSettle:0},definitionContext:{isStartingMap:true,mapInitializing:true,tutorial:false,nomadicFactor:.5,usedRectCells:new Set()}}),w=physical.world;
+ const physical=prepareGeographicPhysicalMap256({schemaVersion:SCHEMA_VERSION,planet,factions:draft.factions,tile,width:size,height:size,tick:0,calendarOrigin,nextId:roster.nextId,rng:runtimeRng,initialWeather:{gameInitDataPresent:true,daysPassedSinceSettle:0},definitionContext:{isStartingMap:true,mapInitializing:true,tutorial:input.tutorial===true,nomadicFactor:.5,usedRectCells:new Set()}}),w=physical.world;
  // Creation choices exist before MapGenerator in the real new-game lifecycle.
  // This factory exposes only the same supported Crashlanded preset. Establish
  // it here before750 difficulty consumers; never infer it in a reader/load.
- w.gameProfile=crashlandedProfile();
+ w.gameProfile=input.tutorial?tutorialProfile347():crashlandedProfile();
  // Core PlaySettings is born with the game too: the simple Work tab (344).
  if(isSchema344OrLater(w.schemaVersion))w.simpleWorkTab344=true;
  attachStartingOriginalRoster256(w,roster);
+ // Core Page_ConfigureStartingPawns refuses, in tutorial mode, a starting
+ // group with a pawn incapable of violence.
+ if(input.tutorial&&roster.selected.some(e=>violentWorkRefusal(e.pawn)!==undefined))throw Error('Le tutoriel demande trois colons capables de se battre.');
  const stream=(part:number)=>new WorldGenerationRandom(localGenerationStepSeed(description.mapSeed,part,0));
  yield {phase:'Roads390',completed:5,total};
  const roads=populateGeographicRoads256(w,usedRects,portableLocalRoadAngular256);

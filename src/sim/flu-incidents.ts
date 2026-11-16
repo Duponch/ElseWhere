@@ -1,4 +1,5 @@
 import { isPenoxycyline337,penoxycylineImmuneTo337 } from './penoxycyline-337.ts';
+import {storytellerIncidents347} from './game-profile.ts';
 import {BIOME_DISEASE_FACTS_256,biomeDiseaseChoice256} from './biome-disease-facts-256.ts';
 import { isPlayerPatient } from './affiliation.ts';
 import { acquireFlu } from './flu-state.ts';
@@ -67,7 +68,7 @@ function emit(world:World,message:string):void {
 /** Adopt prospectively. An old save never receives a retrospective roll, and
  * merely adding this state does not consume either RNG stream. */
 export function adoptFluIncidents(world:World):void {
-  if(!world.gameProfile||world.fluIncidents)return;
+  if(!storytellerIncidents347(world)||world.fluIncidents)return;
   world.fluIncidents={profile:'cassandra-flu-v1',rng:((world.seed^0xf10a1270)>>>0)||1,
     nextCheck:Math.max(FLU_FIRST_CHECK,(Math.floor(world.tick/FLU_CHECK_INTERVAL)+1)*FLU_CHECK_INTERVAL),
     checks:0,fluDraws:0,episodes:0,cases:0};

@@ -14,7 +14,7 @@ import {BIOME_LABELS,HILLINESS_LABELS} from '../sim/site';
 import {STONE_LABELS} from '../sim/geology';
 import { createStartingCandidateRoster, previewStartingCandidate, previewStartingParty, rerollStartingCandidateForRoster, validStartingCandidateName, startingPartyMissingWork, type StartingCandidateDescriptor } from '../sim/starting-candidates';
 import { startingOriginalRequestFromRoster256 } from '../sim/starting-original-request-256';
-import { BACKGROUND_SKILL_IDS, BACKGROUND_WORK_LABELS, CHILDHOODS, ADULTHOODS, backgroundSkillRefusal, backgroundWorkRefusal } from '../sim/colonist-backgrounds';
+import { BACKGROUND_SKILL_IDS, BACKGROUND_WORK_LABELS, CHILDHOODS, ADULTHOODS, backgroundSkillRefusal, backgroundWorkRefusal, violentWorkRefusal } from '../sim/colonist-backgrounds';
 import { biologicalYears, chronologicalYears } from '../sim/human-age';
 import { captureRelationshipIndex, relationshipKinds } from '../sim/relationship-state';
 import { TRAITS } from '../sim/traits';
@@ -59,6 +59,9 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   let page: Page = 'home', open = false, hasGame = false, busy = false, pending = false;
   let externalPage=false;
   let error = '', status = '', generation = 0, difficultyChosen = false, reloadChosen = false;
+  /** Core "Learn to play" (MainMenuDrawer.InitLearnToPlay): scenario Tutorial,
+   * storyteller Tutor at Easy; the scenario and storyteller pages are skipped. */
+  let tutorial = false;
   /** Planet generation progress, 0..1, shown with the status. */
   let statusMeter:number|undefined;
   let parameters = { seed: '', settings: defaultWorldGenerationSettings(), size: 250 as GeographicCreationOptions262['size'], season: 'auto' as GeographicCreationOptions262['season'] };
@@ -163,7 +166,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   function back(): void {
     if (page === 'home') { if (hasGame) void run(options.onResume, 'Reprise de la colonie…'); return; }
     if (page === 'site') { flow?.cancel(); selectedTile = null; navigate('world'); }
-    else navigate(({ pawns: 'site', world: 'story', story: 'scenario', tests: 'load' } as Partial<Record<Page, Page>>)[page] ?? 'home');
+    else navigate(({ pawns: 'site', world: tutorial ? 'home' : 'story', story: 'scenario', tests: 'load' } as Partial<Record<Page, Page>>)[page] ?? 'home');
   }
   const navigation = (next?: NativeControl): NativeControl[] => [control('front-back', 'Retour', back), ...(next ? [next] : [])];
   function invalidateDraft(): void { generation++; flow?.cancel(); selectedTile = null; eligible = []; }
@@ -177,7 +180,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   async function generateWorld(): Promise<void> {
     if (!flow || !options.getWorldCreationPlayer) throw Error('La préparation du monde n’est pas disponible.');
     if (!validWorldGenerationSettings(parameters.settings)) throw Error('Les paramètres du monde sont invalides. Vérifiez les factions.');
-    const player = options.getWorldCreationPlayer();
+    const player = tutorial ? { ...options.getWorldCreationPlayer(), scenario: 'tutorial' } : options.getWorldCreationPlayer();
     invalidateDraft(); const mine = generation;
     busy = true; status = 'Préparation de la planète…';statusMeter=0; paint();
     try {
@@ -205,6 +208,11 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   }
   function askStart(): void {
     const request = startingOriginalRequestFromRoster256(teamSeed, roster), missing = startingPartyMissingWork(teamSeed, request.selected);
+    // Core Page_ConfigureStartingPawns: in the tutorial every starting colonist can fight.
+    if (tutorial) {
+      const unable = request.selected.map(d => previewStartingCandidate(teamSeed, d)).filter(p => violentWorkRefusal(p) !== undefined);
+      if (unable.length) throw Error(`Le tutoriel demande trois colons capables de se battre : ${unable.map(p => p.name).join(', ')} ne peu${unable.length > 1 ? 'vent' : 't'} pas. Remplacez-le${unable.length > 1 ? 's' : ''} par un autre candidat.`);
+    }
     if (missing.length) confirmation = { message: `Personne dans cette équipe ne peut assurer : ${missing.map(work => BACKGROUND_WORK_LABELS[work]).join(', ')}. Commencer malgré ces incapacités ?`, accept: start };
     else void start();
   }
@@ -344,7 +352,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     });
     rows.push(details({id:'world-add-factions',label:'Ajouter une faction',controls:addControls}),details({id:'reset-factions',label:'Factions',controls:[control('reset-factions','Réinitialiser',()=>update(()=>{parameters.settings.factions=defaultWorldGenerationSettings().factions;}))]}));
     const primary=busy&&!pending?control('cancel-generation','Annuler la génération',()=>{invalidateDraft();busy=false;status='';paint();},false,false,true):control('generate-world','Générer',generateWorld,!flow||!options.getWorldCreationPlayer);
-    return{id:'',title:'Créer le monde',layout:'setup',setupCatalogueWidth:400,rows,actions:[...navigation(),control('reset-world','Réinitialiser tout',()=>update(()=>{parameters={seed:randomSiteSeed(),settings:defaultWorldGenerationSettings(),size:250,season:'auto'};})),primary]};
+    return{id:'',title:tutorial?'Tutoriel · Créer le monde':'Créer le monde',layout:'setup',setupCatalogueWidth:400,rows,actions:[...navigation(),control('reset-world','Réinitialiser tout',()=>update(()=>{parameters={seed:randomSiteSeed(),settings:defaultWorldGenerationSettings(),size:250,season:'auto'};})),primary]};
   }
 
   function renderSite(): NativePage {
@@ -551,11 +559,12 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     if (page === 'pawns') return renderPawns();
     if (page === 'home') return { id: '', title: 'ELSEWHERE', subtitle: 'Trois vies. Un nouveau foyer. À vous d’écrire la suite.', rows: [
       ...(hasGame ? [{ id: 'resume', label: 'Colonie en pause', controls: [control('resume', 'Reprendre la colonie', () => run(options.onResume, 'Reprise de la colonie…'))] }] : []),
+      { id: 'home-tutorial', label: 'Apprendre à jouer', detail: 'Une partie guidée, sans incident ni menace jusqu’au choix du narrateur.', controls: [control('tutorial', 'Tutoriel', showTutorial)] },
       { id: 'home-new', label: 'Nouvelle partie', controls: [control('new-game', 'Nouvelle partie', showCreation)] },
       { id: 'home-load', label: 'Vos colonies', controls: [control('load-game', 'Charger une partie', () => navigate('load'))] },
       { id: 'home-options', label: 'Préférences locales', controls: [control('options', 'Options', () => navigate('options'))] },
       ...(options.onHelp ? [{ id: 'home-help', label: 'Aide', controls: [control('help', 'Aide', () => {externalPage=true;options.onHelp!();})] }] : []),
-      { id: 'later', label: 'En développement', controls: ['Tutoriel', 'Mods', 'Crédits'].map(label => control(`later-${label}`, label, () => {}, true)) },
+      { id: 'later', label: 'En développement', controls: ['Mods', 'Crédits'].map(label => control(`later-${label}`, label, () => {}, true)) },
     ] };
     if (page === 'scenario') return { id: '', title: 'Scénario', rows: [
       { id: 'scenario', label: 'Atterrissage forcé', detail: 'Trois survivants arrivent dans un territoire inconnu. Adaptation partielle.', controls: [control('crashlanded', 'Choisi', () => {}, false, true)] },
@@ -585,12 +594,16 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     return renderLoad();
   }
 
-  function showCreation(): void {
+  function showCreation(): void { startCreation(false); }
+  /** Core InitLearnToPlay: straight to the world parameters, then the site
+   * and the colonists, with the Tutor at Easy and saves always reloadable. */
+  function showTutorial(): void { startCreation(true); }
+  function startCreation(learn: boolean): void {
     if (busy || pending) return;
-    difficultyChosen = reloadChosen = false; invalidateDraft();
+    tutorial = learn; difficultyChosen = reloadChosen = learn; invalidateDraft();
     let seed = ''; try { seed = randomSiteSeed(); teamSeed = Number(randomSiteSeed()); } catch { teamSeed = 0; }
     parameters = { seed, settings: defaultWorldGenerationSettings(), size: 250, season: 'auto' };
-    roster = createStartingCandidateRoster(teamSeed); inspected = roster[0]!.serial; navigate('scenario');
+    roster = createStartingCandidateRoster(teamSeed); inspected = roster[0]!.serial; navigate(learn ? 'world' : 'scenario');
   }
   function hide(): void { generation++; flow?.cancel(); confirmation = undefined; notice = undefined; open = false; if (!pending) busy = false; show(null); }
   return {

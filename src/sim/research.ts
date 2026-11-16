@@ -1,4 +1,5 @@
 import {isSchema298OrLater,isSchema290OrLater} from './schema-compatibility-257.ts';
+import {researchSpeedFactor347} from './game-profile.ts';
 import {PENOXYCYLINE_FACTS_337,isPenoxycyline337} from './penoxycyline-337.ts';
 import {BOW_RESEARCH_326,isBowResearch326,isBowSchema326,bowResearchUnlocked326,bowResearchPrerequisite326} from './bows-326.ts';
 export {recurveBowUnlocked326,greatbowUnlocked326} from './bows-326.ts';
@@ -294,7 +295,9 @@ export function researchRate(pawn:Pawn,station:Structure,environment:WorkEnviron
   const c=pawnBody(pawn).capacities,skill=intellectualSkill(pawn);
   const personal=Math.max(.1,(.08+.115*skill.level)*(.5+.5*Math.min(1.1,c.manipulation))*(.5+.5*Math.min(1.1,c.sight))*(glowIgnoredByBlindPawn(world,pawn)?1:environment.speedAt(pawn)));
   const bench=Math.max(.25,benchSpeedFactor(world,station,environment)*tailoringTemperatureFactor(temperature));
-  return Math.round(.0825*personal*bench*RESEARCH_SCALE);
+  // Core ResearchPerformed x researchSpeedFactor (1.2 at the tutorial's Easy).
+  const difficulty=researchSpeedFactor347(world);
+  return Math.round(difficulty===1?.0825*personal*bench*RESEARCH_SCALE:.0825*personal*bench*RESEARCH_SCALE*difficulty);
 }
 export function processResearch(world:World,pawn:Pawn,move:(target:Cell,exact:boolean)=>unknown,rate:(s:Structure)=>number,event:(text:string)=>void):void {
   if(!allowedAreaServicesAllowed(world,pawn)){releaseAssignments(world,pawn);return;}

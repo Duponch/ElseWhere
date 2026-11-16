@@ -1,4 +1,5 @@
 import {recordHomeIncident341} from './recent-incidents-341.ts';
+import {storytellerIncidents347} from './game-profile.ts';
 import {homeAnimalThreatPoints329} from './animal-threat-points-329.ts';
 import {homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
 import { isColonist } from './affiliation.ts';
@@ -52,7 +53,7 @@ export function smallAcceptance(points:number):number {
 /** Loading/migrating alone must not adopt. A resumed colony skips the entire
  * already-started cycle and consumes no retrospective random draws. */
 export function adoptSmallIncidents(world:World):void {
-  if(homeIncidentsBlocked261(world)||world.schemaVersion<183||!world.gameProfile||world.smallIncidents)return;
+  if(homeIncidentsBlocked261(world)||world.schemaVersion<183||!storytellerIncidents347(world)||world.smallIncidents)return;
   world.smallIncidents={profile:'cassandra-small-v1',adoptedAt:world.tick,
     rng:((world.seed^0x5a11c201)>>>0)||1,nextCheck:smallNextCheck(world.tick),
     cycle:smallCycleAt(world.tick),pending:[],introDone:world.tick>=SMALL_INTRO_TICK,

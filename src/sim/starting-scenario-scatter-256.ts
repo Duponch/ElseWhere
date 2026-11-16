@@ -23,6 +23,9 @@ const SCATTER=Object.freeze([
  {item:'ship-chunk',count:3,near:false,roof:false},{item:'steel',count:720,near:false,roof:true},
  {item:'survival-meal',count:7,near:false,roof:true},
 ] as const);
+/** Schema 347, scenario Tutorial (child of Crashlanded): its one extra part,
+ * ScenPart_ScatterThingsNearPlayerStart Cloth x300, after the inherited ones. */
+const TUTORIAL_SCATTER_347=Object.freeze({item:'cloth',count:300,near:true,roof:true} as const);
 const inside=(r:StartingScatterRectangle256,c:Readonly<Cell>)=>c.x>=r.minX&&c.x<=r.maxX&&c.z>=r.minZ&&c.z<=r.maxZ;
 /** Actual five ScenParts in XML order, on the same875 stream AFTER pods.
  * No state reset per embedded scatterer: their SeedPart is not pushed by the
@@ -31,7 +34,7 @@ export function applyCoreStartingScatter256(world:World,arrival:CoreStartingArri
  if(world.startingArrival!==arrival||!isSchema256Or257(world.schemaVersion)||world.tick!==0||world.site?.revision!==3||world.pawns.length||world.jobs.length||!Number.isInteger(start850)||start850<0||start850>=world.tiles.length||!Array.isArray(layoutRects)||layoutRects.some(r=>![r.minX,r.maxX,r.minZ,r.maxZ].every(Number.isInteger)||r.minX>r.maxX||r.minZ>r.maxZ))throw Error('Missing actual875 scatter frontier');
  claimCoreStartingScatterFrontier256(arrival,random);
  const width=world.width,height=world.height,start={x:start850%width,z:Math.floor(start850/width)},roofs=roofCells(world),report:{item:string;requested:number;placed:number}[]=[];
- for(const spec of SCATTER){
+ for(const spec of world.gameProfile?.tutorial347?[...SCATTER,TUTORIAL_SCATTER_347]:SCATTER){
   const building=spec.item==='ship-chunk',definition=building?undefined:ITEM_DEFINITIONS[spec.item],counts=divideStartingScatterCount256(spec.count,building?1:definition!.stackLimit,spec.item==='survival-meal',random),used:Cell[]=[];
   let cluster=-1,left=0,placed=0;
   // Steel/Wood/Meal stacks do not alter regions. A ShipChunk does, so its

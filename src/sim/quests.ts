@@ -1,4 +1,5 @@
 import {notePopulationGain320} from './population-intent-320.ts';
+import {storytellerIncidents347} from './game-profile.ts';
 import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import { civilianAdmissionFits,civilianAwayCounts } from './civilian-away.ts';
 import { isColonist } from './affiliation.ts';
@@ -13,7 +14,7 @@ import { startingPawn } from './starting-pawns.ts';
 import { QUEST_HISTORY_LIMIT,QUEST_OFFER_TICKS,QUEST_RETRY_TICKS,type JoinerQuest,type QuestCommand } from './quest-state.ts';
 import { TICKS_PER_DAY,type CommandResult,type World } from './types.ts';
 
-export const questsSupported=(w:World):boolean=>!!w.gameProfile&&w.raids?.profile==='cassandra-raids-v1';
+export const questsSupported=(w:World):boolean=>storytellerIncidents347(w)&&w.raids?.profile==='cassandra-raids-v1';
 const offMap=(w:World)=>w.scout&&(w.scout.phase==='travelling'||w.scout.phase==='awaiting-entry')?w.scout:w.commercialTrip&&'pawn' in w.commercialTrip?w.commercialTrip:undefined;
 function admission(w:World):boolean {
   return civilianAdmissionFits(w,1,1)

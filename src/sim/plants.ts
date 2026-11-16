@@ -1,4 +1,5 @@
 import {plantCompletelyIgnoresFertility256,plantSubstrateAllowed256} from './plant-substrate-256.ts';
+import {cropYieldFactor347} from './game-profile.ts';
 import {naturalPlantSubstrate256,terrainGroundFertility256} from './natural-terrain-runtime-256.ts';
 import {isCavePlant256} from './cave-flora-256.ts';
 import { TICKS_PER_DAY, type Pawn, type Resource, type World } from './types.ts';
@@ -207,7 +208,9 @@ export function berryYield(world: World, plant: Resource): number {
   // from schema 315; before, only healroot and haygrass were sensitive.
   if(world.schemaVersion>=315){
     const max=resourceMaxHp(plant),remaining=max>0?Math.max(0,Math.min(1,1-(plant.damage??0)/max)):1;
-    return plant.amount*(.5+.5*(growth-minimum)/(1-minimum))*(.5+.5*remaining);
+    // Core YieldNow x cropYieldFactor (1.2 at the tutorial's Easy).
+    const value=plant.amount*(.5+.5*(growth-minimum)/(1-minimum))*(.5+.5*remaining),difficulty=cropYieldFactor347(world);
+    return difficulty===1?value:value*difficulty;
   }
   const medicinal=plant.kind==='healroot'||plant.species==='healroot-wild';
   const healthSensitive=medicinal||plant.kind==='haygrass';

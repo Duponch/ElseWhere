@@ -14,7 +14,7 @@ import {canStandAt} from './furniture-travel.ts';
 import {ITEM_DEFINITIONS,type ItemId} from './items.ts';
 import {addMaterial} from './materials.ts';
 import {replaceRelationshipLinks} from './relationship-runtime.ts';
-import {crashlandedProfile} from './game-profile.ts';
+import {crashlandedProfile,tutorialMode347} from './game-profile.ts';
 import {validGameProfile} from './game-profile-save.ts';
 import {enableCassandraRaids} from './cassandra-raids.ts';
 import {adoptFluIncidents} from './flu-incidents.ts';
@@ -131,9 +131,12 @@ export function applyStartingOriginalScenParts256(world:World,input:{start850:nu
  * faithful875 possessions/arrival. Initial human birth/research/storyteller
  * tuning remains an explicit adaptation; no Core global completion is claimed. */
 export function adoptDeliveredStartingSystems256(world:World,landing:Cell):void {
- if(!isSchema256Or257(world.schemaVersion)||world.tick!==0||world.site?.revision!==3||world.planet?.revision!==3||!world.startingArrival||Object.hasOwn(world,'gameProfile')&&!validGameProfile(world.gameProfile,256,{id:'crashlanded'})||['scenario','research','raids','visitors','fluIncidents','miscIncidents','economy'].some(k=>Object.hasOwn(world,k)))throw Error('Starting systems already owned');
+ if(!isSchema256Or257(world.schemaVersion)||world.tick!==0||world.site?.revision!==3||world.planet?.revision!==3||!world.startingArrival||Object.hasOwn(world,'gameProfile')&&!validGameProfile(world.gameProfile,Math.max(256,Number(world.schemaVersion)),{id:'crashlanded'})||['scenario','research','raids','visitors','fluIncidents','miscIncidents','economy'].some(k=>Object.hasOwn(world,k)))throw Error('Starting systems already owned');
  world.research={project:null,points:CLOTHING_RESEARCH_COST,completedAt:0,airConditioning:{points:AIR_CONDITIONING_COST,completedAt:0},stonecutting:{points:STONECUTTING_RESEARCH_COST,completedAt:0},complexFurniture:{points:COMPLEX_FURNITURE_RESEARCH_COST,completedAt:0}};
  grantClassicStartResearch343(world);
  world.gameProfile??=crashlandedProfile();world.scenario={id:'crashlanded',revision:ARRIVING_CRASHLANDED_REVISION,landing:{...landing}};
- enableCassandraRaids(world);adoptFluIncidents(world);adoptMiscIncidents(world);enableVisitors(world,true);adoptColonyEconomy(world);
+ // Schema 347: the Tutor has no storyteller comps. Its raid agenda is born
+ // (silent until the handover, it carries the tutorial raid); the disease,
+ // incident and visitor calendars are born at the handover.
+ enableCassandraRaids(world);if(!tutorialMode347(world)){adoptFluIncidents(world);adoptMiscIncidents(world);enableVisitors(world,true);}adoptColonyEconomy(world);
 }

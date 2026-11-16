@@ -1,4 +1,5 @@
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
+import {tutorialMode347} from './game-profile.ts';
 import {processHumanConfusedWander256,recoverHumanConfusion256} from './human-condition-mind-256.ts';
 import {alcoholBingeAdmission265,processAutomaticAlcohol265} from './alcohol-ingestion-265.ts';
 import { expireMentalCatharsisAt } from './mental-state.ts';
@@ -22,7 +23,12 @@ import type { AggressiveCrisisKind,MentalCrisis } from './mental-state.ts';
 import type { SearchBudget } from './work-planner.ts';
 import type { Pawn,World } from './types.ts';
 
+/** Schema 347 tutorial (TutorSystem.TutorialMode): MentalBreakWorker.
+ * BreakCanOccur and MentalStateHandler.TryStartMentalState refuse every
+ * pawn of the player's faction (a prisoner is not of it). */
+export const tutorialSparesMind347=(world:World,pawn:Pawn):boolean=>tutorialMode347(world)&&isColonist(pawn)&&!pawn.prisoner;
 function commitBreak(world:World,pawn:Pawn,crisis:MentalCrisis,rng=world.rng):boolean {
+  if(tutorialSparesMind347(world,pawn))return false;
   const thoughts=moodThoughts(world,pawn).filter(t=>t.offset<0);
   const strongest=Math.min(0,...thoughts.map(t=>t.offset));
   const candidates=thoughts.filter(t=>t.offset<=strongest*.5);
@@ -97,6 +103,8 @@ export function updateMentalBreak(world:World,pawn:Pawn,budget?:SearchBudget):vo
   if(m.cooldown||pawn.state==='downed'||moodFrozen(pawn))return;
   const level=m.below[2]>2000?2:m.below[1]>2000?1:m.below[0]>2000?0:-1;
   if(level<0)return;
+  // The thresholds are still tracked; no break can be chosen (no draw).
+  if(tutorialSparesMind347(world,pawn))return;
   if(world.schemaVersion<192){
     if(healthRandom(world)<150/(BREAK_MTB_DAYS[Math.max(0,level)]!*60000)){
       if(!pawn.prisoner&&healthRandom(world)<.8/(.8+.5))startFoodBinge(world,pawn);else startSadWander(world,pawn);

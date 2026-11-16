@@ -1,4 +1,5 @@
 import {assignPileOwner} from './pile-index.ts';
+import {foodPoisonFactor347,profileInfectionFactor347} from './game-profile.ts';
 import {VERY_LOW_EXPECTATION313} from './expectations.ts';
 import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {effectiveCore297} from './core-phase-297.ts';
@@ -261,7 +262,7 @@ export function advanceGroupPersonalFrontier(w:World,prospective?:GroupPersonalF
   const random=()=>healthRandom(w),notice=(_person:Pawn,message:string)=>groupLog(w,message);
   if(prospective&&(!g.travel||w.schemaVersion<256))throw Error('Missing prospective personal owner');
   const result=advanceGroupPersonal(g,{...prospective?{deferNeedMeters256:true as const,clinicalRestFor256:prospective.clinicalRestFor256}:{},tick:w.tick,schemaVersion:w.schemaVersion,...(Number(w.schemaVersion)===259||Number(w.schemaVersion)===260||(Number(w.schemaVersion)===261||(Number(w.schemaVersion)===262||isSchema263OrLater(Number(w.schemaVersion)))))?{ambientTemperature259:groupAmbientTemperature256(w,g)}:{},seed:w.seed,seedFor:p=>g!.reorganization?.memberOrigins.find(o=>o.pawnId===p.id)?.context.seed??w.seed,legacyFood:w.foodRules==='legacy',legacyRest:w.restRules==='legacy',resting:stationary,
-    infectionChanceFactor:w.gameProfile?.difficulty==='adventure-story'?.75:1,mood:{people,expectation,difficultyMood:colonistMoodOffset(w,g.members[0]!),...Number(w.schemaVersion)>=313?{schemaVersion:Number(w.schemaVersion),despawned313:true}:{}},lostThoughts:p=>lostThoughts(w,p,people),joyToleranceFall:(expectation?.joyToleranceDropPerDay??.18)*100/6000,random,notice});
+    infectionChanceFactor:profileInfectionFactor347(w),mood:{people,expectation,difficultyMood:colonistMoodOffset(w,g.members[0]!),...Number(w.schemaVersion)>=313?{schemaVersion:Number(w.schemaVersion),despawned313:true}:{}},lostThoughts:p=>lostThoughts(w,p,people),joyToleranceFall:(expectation?.joyToleranceDropPerDay??.18)*100/6000,random,notice});
   if(!result)return;
   if(result.deceased.length){
     for(const p of result.deceased)markCorpseWornApparel284(g.items,p,w.schemaVersion);
@@ -288,7 +289,7 @@ export function advanceGroup(w:World):void {
  let travel=travelAtFrontier.travel;
  const stationary=travelAtFrontier.stationary;
  const random=()=>healthRandom(w),notice=(_person:Pawn,message:string)=>groupLog(w,message);
-  const ingestion=g.reorganization?g.members.reduce((all,p)=>{const one=ingestGroupFood256(w,g as AwayGroup,p,{random,notice,...(isSchema299OrLater(Number(w.schemaVersion))?{coreAt299:effectiveCore297(w)}:{})});all.massRemovedGrams+=one.massRemovedGrams;all.removed.push(...one.removed);return all;},{massRemovedGrams:0,removed:[] as {pawnId:number;grams:number}[]}):advanceGroupIngestion(g,{tick:w.tick,schemaVersion:w.schemaVersion,...(isSchema299OrLater(Number(w.schemaVersion))?{coreAt299:effectiveCore297(w)}:{}),foodPolicies:w.foodPolicies,foodPoisonFactor:w.gameProfile?.difficulty==='adventure-story'?.75:1,random,notice});
+  const ingestion=g.reorganization?g.members.reduce((all,p)=>{const one=ingestGroupFood256(w,g as AwayGroup,p,{random,notice,...(isSchema299OrLater(Number(w.schemaVersion))?{coreAt299:effectiveCore297(w)}:{})});all.massRemovedGrams+=one.massRemovedGrams;all.removed.push(...one.removed);return all;},{massRemovedGrams:0,removed:[] as {pawnId:number;grams:number}[]}):advanceGroupIngestion(g,{tick:w.tick,schemaVersion:w.schemaVersion,...(isSchema299OrLater(Number(w.schemaVersion))?{coreAt299:effectiveCore297(w)}:{}),foodPolicies:w.foodPolicies,foodPoisonFactor:foodPoisonFactor347(w),random,notice});
   const alcohol=advanceGroupAlcohol265(g,{tick:w.tick,schemaVersion:w.schemaVersion,drugPolicies:w.drugPolicies,resting:stationary,random,notice});
   const care=advanceGroupCare(g,{tick:w.tick,random,schemaVersion:w.schemaVersion});
   const mass=applyConsumedGroupMass(travel.mass,[ingestion,alcohol,care]);

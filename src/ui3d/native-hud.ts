@@ -1,4 +1,5 @@
 import {drawPicto} from '../ui/picto-artwork';
+import {alertsDisabled347} from '../sim/game-profile';
 import * as THREE from 'three/webgpu';
 import type {MaterialPile, Pawn, World} from '../sim/types';
 import {TICKS_PER_DAY} from '../sim/types';
@@ -341,7 +342,8 @@ export class NativeHudCards {
     const session=`${world.seed}:${map}`,fresh=session!==this.alertSession||world.tick<this.alertTick,now=this.clock();
     if(!fresh&&now-this.alertsReadAt<ALERT_RECHECK_MS){this.alertsPending=true;return;}
     this.alertsPending=false;this.alertsReadAt=now;this.alertSession=session;this.alertTick=world.tick;
-    const {ordered,started}=this.alertActivation.update(readNativeAlertRows(world,this.food,this.speedValue<0?undefined:this.speedValue),fresh);
+    // Core StorytellerDef.disableAlerts (the tutorial's Tutor): no alert.
+    const {ordered,started}=this.alertActivation.update(alertsDisabled347(world)?[]:readNativeAlertRows(world,this.food,this.speedValue<0?undefined:this.speedValue),fresh);
     this.alerts=ordered;
     if(fresh)this.alertBounces.clear();
     for(const row of started){

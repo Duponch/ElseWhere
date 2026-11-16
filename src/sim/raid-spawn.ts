@@ -42,6 +42,11 @@ export interface RaidSpawnOptions {
   /** Schema 341 Cassandra home raid arriving while a raid slot is taken
    * (concurrent-raids-341.ts): an independent group with every ordinary rule. */
   concurrent341?:true;
+  /** Schema 347 tutorial raid (Instruction_DownRaider): EdgeWalkIn and
+   * ImmediateAttack are given, not drawn; the raiders walk in at `sites`. */
+  walkInNow347?:true;
+  /** Schema 347 raidForceOneDowned in a game begun as the tutorial. */
+  forceOneDowned347?:true;
 }
 /** Core kinds of the roles whose weapon tags are exactly Gun (schema 340). */
 const GUN_KIND_OF_ROLE340:Readonly<Partial<Record<RaidRole,GunKind340>>>=Object.freeze({scavenger:'Scavenger',pirate:'Pirate','town-guard':'Town_Guard','town-councilman':'Town_Councilman','mercenary-gunner':'Mercenary_Gunner'});
@@ -109,7 +114,7 @@ export function createRaidGroup(w:World,options:RaidSpawnOptions):RaidGroup|null
   // (0,0)-(1000,0.5) on points, StageThenAttack 1; siege, sappers and breach are
   // absent and leave the draw. Staging lasts Core 5000-15000 ticks; the give-up
   // timer then starts with the assault.
-  if(!independent&&w.schemaVersion>=330&&s.profile==='cassandra-raids-v1'){
+  if(!independent&&!options.walkInNow347&&w.schemaVersion>=330&&s.profile==='cassandra-raids-v1'){
     const smart=Math.min(.5,Math.max(0,(composition?.budget??0)/2000));
     if(raidRandom(random)*(2+smart)<1){
       const delayCore=5000+Math.floor(raidRandom(random)*10001);
@@ -119,7 +124,8 @@ export function createRaidGroup(w:World,options:RaidSpawnOptions):RaidGroup|null
   }
   // Schema 333: the Core arrival mode, drawn after every earlier draw.
   let final=composition,arrival:RaidArrival333|undefined;
-  if(!independent&&w.schemaVersion>=333&&s.profile==='cassandra-raids-v1'){
+  if(options.walkInNow347)arrival={mode:'edge-walk-in',atCore:effectiveCore297(w),centers:[{x:sites[0]!.x,z:sites[0]!.z}]};
+  else if(!independent&&w.schemaVersion>=333&&s.profile==='cassandra-raids-v1'){
     const planned=planArrival333(w,{count,sites,composition,chosen,staged:!!group.stage330,recompose:options.recompose333,random,initial:made,generate});
     if(!planned)return null;
     ({arrival,made,composition:final}=planned);
@@ -127,6 +133,7 @@ export function createRaidGroup(w:World,options:RaidSpawnOptions):RaidGroup|null
     if(group.stage330)group.stage330.point={...arrival.centers[0]!};
   }
   if(final)group.composition=final;
+  if(options.forceOneDowned347&&group.members.length)group.forcedDowned347=group.members[0]!;
   if(arrival)group.arrival333=arrival;
   if(independent)group.shipReactor275={...options.shipReactor275!};
   w.nextId=made.next;w.pawns.push(...made.generated);w.piles.push(...made.piles);if(!options.preserveCalendarRng&&!independent)s.rng=random.rng;options.random.rng=random.rng;s.serial=id;

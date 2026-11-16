@@ -1,4 +1,5 @@
 import { isColonist } from './affiliation.ts';
+import {tutorialMode347} from './game-profile.ts';
 import { interruptDraftWork } from './drafting.ts';
 import { medicallyStopped,pawnBody } from './health-rules.ts';
 import { cancelMelee } from './melee-state.ts';
@@ -31,11 +32,15 @@ function planSocialFight(world:World,a:Pawn,b:Pawn):FightPlan[]|null {
 }
 /** Read-only eligibility check before a social RNG draw. */
 export function canStartSocialFight(world:World,a:Pawn,b:Pawn):boolean {
+  // Schema 347: Pawn_InteractionsTracker.CheckSocialFightStart refuses in the
+  // tutorial before its chance roll.
+  if(tutorialMode347(world))return false;
   return planSocialFight(world,a,b)!==null;
 }
 /** Capture both physical routes before interrupting either actor's work. A failed
  * fight roll leaves the social exchange and all work reservations untouched. */
 export function startSocialFight(world:World,a:Pawn,b:Pawn):boolean {
+  if(tutorialMode347(world))return false;
   const plans=planSocialFight(world,a,b);if(!plans)return false;
   for(const {pawn} of plans)interruptDraftWork(world,pawn);
   for(const {pawn,target,path} of plans){

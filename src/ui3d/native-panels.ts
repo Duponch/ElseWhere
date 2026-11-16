@@ -1,4 +1,5 @@
 import { storedPriority } from '../sim/work-types.ts';
+import {storytellerIncidents347,tutorialMode347} from '../sim/game-profile';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {READING_POLICIES_295,effectiveReadingPolicy295} from '../sim/reading-state-295';
 import type {NativeUiState,NativeUiActions,NativePage,NativeRow,NativeControl,NativeGesture} from './native-contract';
@@ -616,7 +617,7 @@ function questsPanel(state:NativeUiState):NativePage {
  let activeCount=0,pastCount=0;
  const section=(target:NativeRow[],id:string,label:string,entries:NativeRow[])=>{if(entries.length)target.push(narrativeHeading(id,label),...entries);};
  if(state.world){
-  const world=state.world,eligible=!!world.gameProfile&&world.raids?.profile==='cassandra-raids-v1',current:NativeRow[]=[],history:NativeRow[]=[];
+  const world=state.world,eligible=storytellerIncidents347(world)&&world.raids?.profile==='cassandra-raids-v1',current:NativeRow[]=[],history:NativeRow[]=[];
   if(!world.quests&&eligible)current.push({...row('quest-enable','Demandes d’asile',undefined,'Après activation, une première demande peut se présenter après huit jours de jeu.',[narrativeButton('quest-enable-action','Recevoir des demandes',fresh=>{if(fresh.world&&!fresh.world.quests&&fresh.world.gameProfile&&fresh.world.raids?.profile==='cassandra-raids-v1')return send({type:'enable-quests'});})]),presentation:'plain'});
   for(const quest of [...(world.quests?.entries??[])].reverse()){
    const ongoing=quest.status==='offered'||quest.status==='accepted',id=quest.id,target=ongoing?current:history;
@@ -696,6 +697,11 @@ function menuPanel(state:NativeUiState,actions:NativeUiActions):NativePage {
   menuAction('menu-load','Charger',()=>host?.front('load'),state.busy),
   menuAction('menu-export','Exporter',fresh=>{if(fresh.hasGame&&!fresh.fault)return host?.exportSave();},state.busy||!state.hasGame||!!state.fault),
  ],state.fault));
+ // Schema 347 tutorial: Core's ChooseStoryteller step (Options, storyteller
+ // settings) hands the game to a real storyteller and ends the tutorial.
+ if(world&&tutorialMode347(world))rows.push(compact('menu-storyteller','Narrateur : Tuteur (tutoriel)',[
+  menuAction('menu-choose-storyteller','Choisir Cassandra Classique · Récit d’aventure',fresh=>{if(fresh.world&&tutorialMode347(fresh.world))return send({type:'choose-storyteller',storyteller:'cassandra-partial',difficulty:'adventure-story'});},state.busy),
+ ],'Pendant le tutoriel, aucun incident ni alerte, difficulté Bâtisseur de communauté. Choisir le narrateur termine le tutoriel : raids, visiteurs, maladies et autres événements commencent à partir de maintenant.'));
  const saved=state.saves,named=saved.filter(save=>save.kind==='named').length,automatic=saved.filter(save=>save.kind==='auto').length;
  rows.push(compact('menu-saves','Sauvegardes',[
   ...(actions.openSaveManager?[menuAction('native-manage-saves','Gérer les sauvegardes',()=>host?.openSaveManager?.(),state.busy)]:[]),
