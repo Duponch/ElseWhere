@@ -14,7 +14,7 @@ const FIRST_DAYS_KINDS_343=['slept-in-cold','slept-in-heat','slept-outside','sle
  * sleep, soaking-wet and darkness memories (an emptied social state that
  * never interacted, and an emptied memory list, are removed); schema 344: the
  * campaign's simple Work tab setting (an older game always has manual
- * priorities). */
+ * priorities); schema 345: the room size need. */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -31,6 +31,8 @@ function strip(value:unknown,version:number):void {
   }
   if(version<332&&o.profile==='cassandra-visitors-v1'&&Object.hasOwn(o,'caravan332'))delete o.caravan332;
   if(version<341&&(o.profile==='cassandra-misc-v1'||o.profile==='cassandra-world-v1')&&Object.hasOwn(o,'recent341'))delete o.recent341;
+  // Schema 345: the room size need of colonists and prisoners.
+  if(version<345&&Object.hasOwn(o,'roomSize345'))delete o.roomSize345;
   if(version<343){
     if(Array.isArray(o.lostMemories))o.lostMemories=(o.lostMemories as {kind?:unknown}[]).filter(m=>m?.kind!=='new-colony-start343');
     if(Array.isArray(o.roomMemories)){o.roomMemories=(o.roomMemories as {kind?:unknown}[]).filter(m=>!FIRST_DAYS_KINDS_343.includes(String(m?.kind)));if(!(o.roomMemories as unknown[]).length)delete o.roomMemories;}
@@ -49,5 +51,5 @@ export const asMigratedCurrent=(current:string):string=>serializeWorld(deseriali
 /** Same as asOldSchema on a parsed save or an in-memory world (mutated). */
 export function stripFutureContent(value:unknown,version:number):void {
   if(version<344&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).simpleWorkTab344;
-  if(version<343)strip(value,version);
+  if(version<345)strip(value,version);
 }

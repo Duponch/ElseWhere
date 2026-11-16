@@ -3,6 +3,7 @@ import { bedSlotCell,pawnBedSlot } from './bed-slots.ts';
 import {coupleBed285} from './couple-bed-285.ts';
 import { updateMood,expireMealMemories } from './mood.ts';
 import {isFirstDays343,sampleDarkness343} from './first-days-343.ts';
+import {advanceRoomSize345,isMoodBasics345} from './room-size-need-345.ts';
 import { rememberRoomUse } from './room-experience.ts';
 import { schemaAtLeast } from './schema-range.ts';
 import { groupPawnInterval256 } from './group-core-cadence-256.ts';
@@ -79,6 +80,8 @@ export function updateWellbeing(world: World, pawn: Pawn,body?:BodyAssessment,re
   updateMood(world,pawn,body,topology,readTemperature,localTicks);
   // Schema 343: RecentMemoryInterval follows the mood step of the same interval.
   if(isFirstDays343(world.schemaVersion))sampleDarkness343(world,pawn,body);
+  // Schema 345: Need_RoomSize steps after Need_Mood in the same interval (NeedDef order).
+  if(isMoodBasics345(world.schemaVersion))advanceRoomSize345(world,pawn,body,topology);
 }
 
 export function rememberMeal(world: World, pawn: Pawn, atTable: boolean, raw = false, food?: ItemId): void {

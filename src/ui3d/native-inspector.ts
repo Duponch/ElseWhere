@@ -101,6 +101,7 @@ import { animalRescueReason } from '../sim/animal-rescue';
 import { eggSpeciesForItem256 } from '../sim/animal-egg-content-v256';
 import { eggAllowedForPlayer256 } from '../sim/animal-egg-permission-v256';
 import { LightEnvironmentCache } from '../sim/light-environment';
+import { isMoodBasics345, roomSizeAdmitted345, roomSizeLevel345 } from '../sim/room-size-need-345';
 
 type Tab = 'journal' | 'gear' | 'social' | 'bio' | 'needs' | 'health' | 'prisoner';
 const tabs: readonly [Tab, string][] = [['journal', 'Journal'], ['gear', 'Matériel'], ['social', 'Social'], ['bio', 'Bio'], ['needs', 'Besoins'], ['health', 'Santé'], ['prisoner', 'Prisonnier']];
@@ -267,6 +268,11 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   } else if (activeTab === 'needs') {
     rows.push(heading('needs', 'Besoins'));
     for (const [key, label] of [['hunger', 'Nourriture'], ['rest', 'Sommeil'], ['beauty', 'Beauté'], ['comfort', 'Confort']] as const) rows.push(alive ? meterRow(`need-${key}`, label, pawn[key], 100, `${needHelp[key]} Repères de la jauge : ${NEED_THRESHOLDS[key].map(value => `${value} %`).join(' · ')}.`, `${Math.round(pawn[key])} %`) : row(`need-${key}`, label, '—', 'Décédé · Dossier arrêté au décès.'));
+    // Schema 345: Core's room size need (colonists and prisoners), sampled at each need interval.
+    if (isMoodBasics345(world.schemaVersion) && roomSizeAdmitted345(pawn)) {
+      const space = roomSizeLevel345(pawn) * 100;
+      rows.push(alive ? meterRow('need-room-size', 'Espace', space, 100, `Surface de la pièce perçue autour de ce colon, dans un rayon d’environ huit cases ; dehors, le besoin remonte vers 100 %. Le niveau rejoint la valeur de la pièce actuelle à raison de 90 points par heure et reste figé pendant le sommeil. Dans une pièce intérieure, éveillé : sous 1 % intérieur confiné (−10), sous 30 % intérieur exigu (−5), à partir de 70 % intérieur spacieux (+5). Repères de la jauge : 1 · 30 · 70 %.`, `${Math.round(space)} %`) : row('need-room-size', 'Espace', '—', 'Décédé · Dossier arrêté au décès.'));
+    }
     rows.push(alive ? meterRow('recreation-level', 'Loisirs', pawn.recreation.level, 100, 'Sous 30 % : manque de loisirs ; sous 15 % : manque important ; sous 1 % : privation. À partir de 70 et 85 % : loisirs satisfaisants. Varier les activités évite la lassitude. Une famille lassante redevient intéressante sous 30 %. Repères de la jauge : 15 · 30 · 70 · 85 %.', `${pawn.recreation.level.toFixed(1)} %`) : row('recreation-level', 'Loisirs', '—'));
     const recreationLabels = { reading:'Lecture', solitary: 'Détente solitaire', dexterity: 'Dextérité', cerebral: 'Jeux cérébraux', social: 'Loisirs sociaux', television: 'Télévision', chemical: 'Consommation de boissons' };
     const pleasure = rows.find(entry => entry.id === 'recreation-level')!;
