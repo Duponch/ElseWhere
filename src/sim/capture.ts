@@ -12,13 +12,14 @@ import { clearQueuedOrders } from './player-orders.ts';
 import { planCommandDrops,releaseWork,type DropPlan } from './work-release.ts';
 import { dropRetainingIdentity } from './ground-placement.ts';
 import { createPrisonerState } from './prisoner-state.ts';
+import { draftedOrdersActive346,releaseDraftForOrder346 } from './drafted-orders-346.ts';
 import type { Cell,CommandResult,Pawn,World } from './types.ts';
 
 export const canCapturePatient=(p:Pawn):boolean=>factionOf(p)==='outlaws'&&!p.prisoner&&p.state==='downed';
 export function captureReason(world:World,actor:Pawn,patient:Pawn|undefined,accepted=false):string|undefined {
   const areaReason=patient&&!(accepted&&actor.rescue?.phase==='carry')?allowedAreaReason(world,actor,patient):undefined;if(areaReason)return areaReason;
   return !isColonist(actor)||actor.prisoner?'Seul un colon libre peut capturer.'
-    :actor.draft?'Démobilisez ce colon avant la capture.'
+    :actor.draft&&!draftedOrdersActive346(world.schemaVersion)?'Démobilisez ce colon avant la capture.'
     :medicalWorkRefusal(actor)??(actor.mental?.crisis?'Ce colon est en crise mentale.'
     :carrierOf(world,actor.id)?'Ce colon est transporté.'
     :!accepted&&actor.interruptedCargo?'La cargaison doit être déposée avant la capture.'
@@ -42,7 +43,7 @@ export function applyCapture(world:World,command:{pawnId:number;patientId:number
   if(!proposal)return fail('Il faut un lit de prison libre dans une pièce fermée et un trajet praticable.');
   const drops=planCommandDrops(world,{type:'order-capture',...command});
   if(!drops||!releaseWork(world,actor,drops))return fail('Pas de place pour déposer la cargaison avant la capture.');
-  clearQueuedOrders(world,actor);delete actor.priorityWork;
+  clearQueuedOrders(world,actor);delete actor.priorityWork;releaseDraftForOrder346(world,actor);
   startRescue(world,actor,proposal,true,true);return {ok:true};
 }
 /** All possessions are preflighted at the actual destination before the status

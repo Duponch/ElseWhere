@@ -249,6 +249,7 @@ import { isStunned } from './stun.ts';
 import { processTactics } from './tactics.ts';
 import { considerFlee,processFlee,processSentry,threatQueries } from './threats.ts';
 import { retryInterruptedCargo,interruptWork } from './interrupted-cargo.ts';
+import { draftedOrderAdmitted346,isDraftedEquipment346 } from './drafted-orders-346.ts';
 import { applyDraftCommand,processDraft,interruptDraftWork } from './drafting.ts';
 import { advanceWorldCombat } from './combat-system.ts';
 import {applySpikeTrapSwitch,reconcileSpikeTrapContacts,spikeTrapWindow} from './spike-traps.ts';
@@ -880,7 +881,7 @@ function applyCommandInternal(world: World, command: Exclude<LocalCommand,import
   if(typeof command.type==='string'&&'pawnId' in command&&command.type.startsWith('order-')&&world.pawns.find(p=>p.id===command.pawnId)?.shooting?.stance?.phase==='cooldown')return {ok:false,code:'invalid-command',reason:'Le colon récupère après son tir.'};
   if(command.type==='draft'||command.type==='draft-move'||command.type==='draft-stop'||command.type==='fire-at-will')return applyDraftCommand(world,command);
   if(typeof command.type==='string'&&command.type.startsWith('order-')&&'pawnId' in command&&world.pawns.find(p=>p.id===command.pawnId)?.draft
-    &&!(world.schemaVersion>=237&&command.type==='order-rescue')&&!(world.schemaVersion>=234&&command.type==='order-consume')&&!(world.schemaVersion>=233&&command.type==='order-drafted-tend')&&!(world.schemaVersion>=193&&command.type==='order-haul'&&command.target?.type==='turret'))return refusal('invalid-command','Démobilisez ce colon avant un ordre civil.');
+    &&!(world.schemaVersion>=237&&command.type==='order-rescue')&&!(world.schemaVersion>=234&&command.type==='order-consume')&&!(world.schemaVersion>=233&&command.type==='order-drafted-tend')&&!(world.schemaVersion>=193&&command.type==='order-haul'&&command.target?.type==='turret')&&!draftedOrderAdmitted346(world,command))return refusal('invalid-command','Démobilisez ce colon avant un ordre civil.');
   if(command.type==='clear-orders'&&world.pawns.find(p=>p.id===command.pawnId)?.draft)return applyDraftCommand(world,{type:'draft-stop',pawnIds:[command.pawnId]});
   if(command.type==='order-equipment'||command.type==='weapon-permission'||command.type==='apparel-permission'||command.type==='forget-weapon')return applyEquipment(world,command);
   if(command.type==='order-feed')return applyFeeding(world,command);
@@ -1390,7 +1391,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(isForcedConsuming(pawn)&&!consumeActivityValid(world,pawn))interruptDraftWork(world,pawn);
       if(pawn.jobId!==null&&(pawn.stun||pawn.burning||pawn.bombRefuge||pawn.heatRefuge||pawn.tactics||pawn.draft)){const tree=world.jobs.find(j=>j.id===pawn.jobId&&j.tree);if(tree&&treeJobReason(world,tree,pawn))interruptWork(world,pawn);}
       if(pawn.state==='downed'||carrierOf(world,pawn.id)||isStunned(pawn,world.tick*10))continue;
-      if(!isDraftedTending(pawn)&&!isDraftedRescue(world,pawn)&&!isForcedConsuming(pawn)&&(hasAdversary||pawn.meleeThreat&&world.tick*10-pawn.meleeThreat.atCore<=400)&&!pawn.prisoner&&!pawn.mental?.crisis){considerAutomaticCombat(world,pawn,budget,animalThreats);considerFlee(world,pawn,getThreats());}
+      if(!isDraftedTending(pawn)&&!isDraftedRescue(world,pawn)&&!isForcedConsuming(pawn)&&!isDraftedEquipment346(world,pawn)&&(hasAdversary||pawn.meleeThreat&&world.tick*10-pawn.meleeThreat.atCore<=400)&&!pawn.prisoner&&!pawn.mental?.crisis){considerAutomaticCombat(world,pawn,budget,animalThreats);considerFlee(world,pawn,getThreats());}
       if(pawn.need?.kind==='eat' && pawn.need.dining && !validDiningPlace(world,pawn.need.dining)) {pawn.need.phase='choose-spot';pawn.need.dining=null;pawn.need.progress=0;delete pawn.need.workRemainder;pawn.path=[];pawn.state='moving';}
       if(factionCommsTask298(pawn))reconcileFactionComms298(world,pawn);if(pawn.orbitalTrade)reconcileOrbitalTrade(world,pawn);if(pawn.deepWork)reconcileDeepWork(world,pawn);
       reconcileAllowedAreaPawn(world,pawn);
@@ -1469,6 +1470,12 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
         if(pawn.orbitalTrade&&processOrbitalTrade(world,pawn,needsContext))continue;
         if(pawn.trade&&processTrade(world,pawn,needsContext))continue;
         if(pawn.draft){processDraft(world,pawn,getBlocked,budget,getLight);if(pawn.moveCooldown===0)retryInterruptedCargo(world,pawn);}continue;
+      }
+      // Schema 346: a drafted colonist carries out its ordered equip, wear or
+      // drop (Core TryTakeOrderedJob) and stays drafted; it waits afterwards.
+      if(isDraftedEquipment346(world,pawn)){
+        if(processDraftSleep(world,pawn,needsContext)||!pawn.draft)continue;
+        pawn.draft.lastActiveTick=world.tick;processEquipment(world,pawn,needsContext);continue;
       }
       if(pawn.draft){if(!processDraftSleep(world,pawn,needsContext)){processDraft(world,pawn,getBlocked,budget,getLight);if(pawn.moveCooldown===0)retryInterruptedCargo(world,pawn);}continue;}
       if(pawn.firefighting&&processFirefighting(world,pawn,needsContext))continue;

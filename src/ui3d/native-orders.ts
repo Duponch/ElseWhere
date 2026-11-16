@@ -1,5 +1,9 @@
 import type {SimulationClient} from '../bridge/SimulationClient';
-import type {Cell, Command, World} from '../sim/types';
+import type {Cell, Command, Pawn, World} from '../sim/types';
+import {draftedOrdersActive346} from '../sim/drafted-orders-346';
+import {groundPilesAt} from '../sim/ground-placement';
+import {equippedWeapon} from '../sim/equipment-rules';
+import {canCapturePatient} from '../sim/capture';
 import type {OrderOption} from '../sim/player-orders';
 import {isColonist} from '../sim/affiliation';
 import {footprintContains} from '../sim/definitions';
@@ -24,6 +28,29 @@ export interface NativeOrderClient {
   report?: (message: string, error?: boolean) => void;
 }
 let revision = 0;
+
+/** Schema 346: the one selected colonist, when it is drafted. Core's drafted
+ * ordinary providers are Multiselect = false. */
+function draftedOrdinaryActor346(world: World, ids: readonly number[], selected: readonly Pawn[]): Pawn | undefined {
+  return draftedOrdersActive346(world.schemaVersion) && ids.length === 1 && selected.length === 1 && selected[0]!.draft ? selected[0] : undefined;
+}
+/** A cell with something the drafted actor may equip, wear, eat or drink, or
+ * its own cell while it holds a weapon (DropEquipment). Read locally so that a
+ * plain drafted move stays immediate. */
+function draftedCellContext346(world: World, actor: Pawn, at: Cell): boolean {
+  return groundPilesAt(world, at).some(pile => pile.kind === 'weapon' || pile.kind === 'apparel')
+    || contextConsumesFood(world, new Set([actor.id]), at)
+    || actor.x === at.x && actor.z === at.z && !!equippedWeapon(world, actor);
+}
+/** A downed outsider the actor may capture. */
+function draftedTarget346(world: World, targetId: number): Pawn | undefined {
+  const target = world.pawns.find(pawn => pawn.id === targetId);
+  return target && canCapturePatient(target) ? target : undefined;
+}
+/** The options of Core's drafted ordinary providers among the worker's menu. */
+export function draftedOption346(option: OrderOption, targetId: number | undefined): boolean {
+  return targetId === undefined ? option.consumePileId !== undefined || option.equipmentItemId !== undefined : option.capturePatientId === targetId;
+}
 
 /** Call on interaction cancellation, page dismissal and map/world replacement.
  * A late query can never reopen a cancelled native context. */
@@ -112,20 +139,57 @@ export async function nativeOrderPage(
   if (!Number.isInteger(at.x) || !Number.isInteger(at.z) || at.x < 0 || at.z < 0 || at.x >= world.width || at.z >= world.height) { message('Ordres', 'Cette case est hors de la carte.'); return; }
   const selected = world.pawns.filter(pawn => selection.has(pawn.id) && isColonist(pawn) && !pawn.prisoner);
   const tactical = selected.some(pawn => pawn.draft);
+  // Schema 346: one selected drafted colonist keeps Core's drafted float menu
+  // options (Equip, Wear, DropEquipment, Ingest, CapturePawn: Drafted = true,
+  // Multiselect = false) beside its drafted goto and attacks.
+  const actor346 = draftedOrdinaryActor346(world, ids, selected);
   const service = world.structures.some(structure => (isAncientCasket256(structure) || structure.kind === 'cryptosleep-casket' || structure.kind === 'ship-cryptosleep-casket' || [290, 291, 292, 293,294,295,296,297,298,299,300,301,302].includes(world.schemaVersion) && structure.kind === 'firefoam-popper') && footprintContains(structure, at) && (targetId === undefined || targetId === structure.id))
-    || contextConsumesFood(world, selection, at, targetId)
+    || !actor346 && contextConsumesFood(world, selection, at, targetId)
     || targetId === undefined && world.structures.some(structure => structure.kind === 'mini-turret' && structure.x === at.x && structure.z === at.z);
+  const orderRow = (option: OrderOption, pawnId: number, cell: Cell = at): NativeRow => {
+    const direct = option.openCasketId !== undefined || option.consumePileId !== undefined;
+    const label = option.enabled && !direct ? `${queue ? 'Mettre en file :' : 'Prioriser :'} ${option.label}` : option.label;
+    return commandRow(`order-${optionKey(option)}`, label, option.enabled, option.reason, async () => {
+      const queued = shift();
+      if (queued && option.openCasketId !== undefined) throw new Error('Ouvrir est un ordre direct ; relâchez Maj.');
+      if (queued && option.consumePileId !== undefined) throw new Error('Consommer est un ordre direct ; relâchez Maj.');
+      const fresh = (await client.orderOptions(pawnId, cell.x, cell.z, queued)).find(candidate => optionKey(candidate) === optionKey(option));
+      if (!read()) return;
+      if (!fresh?.enabled) throw new Error(fresh?.reason ?? 'Ce travail ou cet objet n’est plus disponible sur cette case.');
+      return optionCommand(fresh, pawnId, queued);
+    }, option.arrestPatientId !== undefined ? 'Tentative d’arrestation demandée ; l’acceptation sera vérifiée au contact.' : 'Ordre accepté.', option.warnings?.join(' · '));
+  };
+  /** The worker's own option query, kept to the drafted providers. */
+  const draftedRows346 = async (actorId: number, self: boolean, cell: Cell = at): Promise<NativeRow[] | undefined> => {
+    const options = await client.orderOptions(actorId, cell.x, cell.z, queue);
+    if (!read()) return;
+    return options.filter(option => draftedOption346(option, self ? undefined : targetId)).map(option => orderRow(option, actorId, cell));
+  };
 
   if (tactical && !service) {
     const tacticalIds = new Set(selected.map(pawn => pawn.id));
-    if (targetId === undefined) {
+    const cell346 = !!actor346 && (targetId === undefined || targetId === actor346.id) && draftedCellContext346(world, actor346, at);
+    if (targetId === undefined || cell346) {
       const pawns = tacticalPawns(world, tacticalIds);
-      if (!pawns.length) { message('Ordre tactique', 'Mobilisez un colon libre et capable de se déplacer.'); return; }
-      await run(live => {
+      const move = (live: World): Command => {
         const eligible = tacticalPawns(live, tacticalIds);
         if (!eligible.length) throw new Error('Mobilisez un colon libre et capable de se déplacer.');
         return {type: 'draft-move', pawnIds: eligible.map(pawn => pawn.id), target: at, queue: shift()};
-      }, `${queue ? 'Déplacement en file' : 'Déplacement'} demandé vers ${at.x}, ${at.z}.`);
+      };
+      const moved = `${queue ? 'Déplacement en file' : 'Déplacement'} demandé vers ${at.x}, ${at.z}.`;
+      if (cell346) {
+        message(`${actor346!.name} · case ${at.x}, ${at.z}`, 'Vérification des accès…');
+        try {
+          const rows = await draftedRows346(actor346!.id, true); if (!rows) return;
+          const reason = pawns.length ? undefined : 'Mobilisez un colon libre et capable de se déplacer.';
+          rows.push(commandRow('drafted-goto', 'Aller ici', !reason, reason, move, moved),
+            {id: 'orders-hint', label: 'Un colon mobilisé exécute cet ordre puis reste mobilisé et attend sur place.'});
+          present({id: 'native-orders', title: `${actor346!.name} · case ${at.x}, ${at.z}`, rows});
+        } catch (error) { fail(error); }
+        return;
+      }
+      if (!pawns.length) { message('Ordre tactique', 'Mobilisez un colon libre et capable de se déplacer.'); return; }
+      await run(move, moved);
       return;
     }
     const policy = tacticalAttackPolicy(world, tacticalIds, targetId, queue), tending = tacticalTendingPolicy(world, tacticalIds, targetId, queue), rescue = tacticalRescuePolicy(world, tacticalIds, targetId, queue);
@@ -158,6 +222,11 @@ export async function nativeOrderPage(
       }, `${option.kind === 'shoot' ? 'Tir' : 'Mêlée'} demandé sur ${policy.target}.`));
     }
     if (queue) rows.push({id: 'tactical-queue-note', label: 'Seuls les déplacements ont une file d’ordres tactiques.'});
+    const captive346 = actor346 ? draftedTarget346(world, targetId) : undefined;
+    if (actor346 && captive346) {
+      try { const extra = await draftedRows346(actor346.id, false, {x: captive346.x, z: captive346.z}); if (!extra) return; rows.unshift(...extra); }
+      catch (error) { fail(error); return; }
+    }
     present({id: 'native-orders', title: `${policy.target} · case ${at.x}, ${at.z}`, rows});
     return;
   }
@@ -207,19 +276,7 @@ export async function nativeOrderPage(
       rows.push(commandRow(`cryptosleep-${JSON.stringify(option.command)}`, option.label, option.enabled, option.reason, currentWorld => prepare(currentWorld), 'Ordre de cryptosommeil accepté.'));
     }
 
-    for (const option of options) {
-      const direct = option.openCasketId !== undefined || option.consumePileId !== undefined;
-      const label = option.enabled && !direct ? `${queue ? 'Mettre en file :' : 'Prioriser :'} ${option.label}` : option.label;
-      rows.push(commandRow(`order-${optionKey(option)}`, label, option.enabled, option.reason, async () => {
-        const queued = shift();
-        if (queued && option.openCasketId !== undefined) throw new Error('Ouvrir est un ordre direct ; relâchez Maj.');
-        if (queued && option.consumePileId !== undefined) throw new Error('Consommer est un ordre direct ; relâchez Maj.');
-        const fresh = (await client.orderOptions(pawn.id, at.x, at.z, queued)).find(candidate => optionKey(candidate) === optionKey(option));
-        if (!read()) return;
-        if (!fresh?.enabled) throw new Error(fresh?.reason ?? 'Ce travail ou cet objet n’est plus disponible sur cette case.');
-        return optionCommand(fresh, pawn.id, queued);
-      }, option.arrestPatientId !== undefined ? 'Tentative d’arrestation demandée ; l’acceptation sera vérifiée au contact.' : 'Ordre accepté.', option.warnings?.join(' · ')));
-    }
+    for (const option of options) rows.push(orderRow(option, pawn.id));
     const fire = live.fires?.items.find(candidate => { const position = firePosition(live, candidate); return position?.x === at.x && position.z === at.z; });
     if (fire) rows.push(commandRow(`fire-${fire.id}`, 'Prioriser : éteindre le feu', true, undefined, currentWorld => {
       const currentFire = currentWorld.fires?.items.find(candidate => candidate.id === fire.id), position = currentFire && firePosition(currentWorld, currentFire);

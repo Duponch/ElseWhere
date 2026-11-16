@@ -17,6 +17,8 @@ import {appearanceOf} from '../sim/pawn-appearance';
 import {apparelAppearance} from '../render/character-apparel';
 import {humanLimbVisualMask} from '../render/human-anatomy-presentation';
 import {portraitDataUrl, portraitExpressionOf} from '../ui/pawn-portrait';
+import {colonistBarState346, type ColonistBarState346} from '../ui/colonist-bar-state-346';
+import {colonistBarStateLabel346, drawColonistBarState346} from './native-colonist-bar-346';
 import {knownBuilding256, knownNutrition256, knownPile256, knownPosition256, knownStockCounts256} from '../ui/exploration-readers-256';
 import type {StatusAlert} from '../ui/status-alerts';
 import type {NativePage, NativeRow} from './native-contract';
@@ -107,6 +109,8 @@ interface PortraitCard {
   loaded: boolean;
   appearanceKey: string;
   signature: string;
+  /** Core colonist bar mood-risk tint and activity icons. */
+  bar?: ColonistBarState346;
 }
 const PORTRAITS_PER_PAGE = 6;
 const FONT = '"Comic Sans MS", "Chalkboard SE", Georgia, serif';
@@ -592,8 +596,9 @@ export class NativeHudCards {
         image.onerror = () => { if (entry.image === image) entry.loaded = false; };
         image.src = portraitDataUrl(appearance, look, weapons.get(pawn.id), expression, limbMask);
       }
-      entry.piece.userData.tooltip = `${pawn.name} · ${pawn.state} · Moral ${entry.mood}% · Nourriture ${rounded(pawn.hunger)}% · Repos ${rounded(pawn.rest)}%`;
-      const signature = JSON.stringify([entry.name, entry.mood, entry.selected, appearanceKey]);
+      entry.bar = colonistBarState346(world, pawn);
+      entry.piece.userData.tooltip = `${pawn.name} · ${pawn.state} · Moral ${entry.mood}% · Nourriture ${rounded(pawn.hunger)}% · Repos ${rounded(pawn.rest)}%${colonistBarStateLabel346(entry.bar)}`;
+      const signature = JSON.stringify([entry.name, entry.mood, entry.selected, appearanceKey, entry.bar]);
       if (entry.signature !== signature) { entry.signature = signature;if(entry.piece.userData.active!==entry.selected){entry.piece.userData.active=entry.selected;this.activePoses.add(entry.piece);} entry.piece.redraw(undefined, entry.selected ? PALETTE.ochre : PALETTE.kraftBase); }
     });
     this.previousButton.visible = this.nextButton.visible = this.colonists.length > this.portraitCapacity;
@@ -611,6 +616,7 @@ export class NativeHudCards {
     drawHandRect(ctx,6,6,58,54,col.selected?'#d8e4c4':'#b2c4ab','#261e18',1.2,rng);
     if(col.loaded&&col.image)ctx.drawImage(col.image,6,6,58,54);
     else {drawHandBlob(ctx,35,48,15,col.shirt,'#261e18',1,rng);drawHandBlob(ctx,35,26,11,col.skin,'#261e18',1,rng);}
+    if(col.bar)drawColonistBarState346(ctx,col.bar);
     drawHandRect(ctx,5,63,60,15,PALETTE.creamPaper,PALETTE.inkDark,.8,rng);
     ctx.fillStyle=PALETTE.inkDark;ctx.font=`bold 12px ${FONT}`;ctx.textAlign='center';fitText(ctx,col.name,35,75,57);
     drawHandRect(ctx,10,81,50,5,'#423328',null,0,rng);

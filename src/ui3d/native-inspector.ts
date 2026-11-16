@@ -25,6 +25,8 @@ import { isApparelCountRecipe278, newApparelCountFilter278 } from '../sim/appare
 import { isSchema278OrLater } from '../sim/schema-compatibility-257';
 import { groundMaxStacks } from '../sim/shelf-storage';
 import { stockpileZoneId } from '../sim/stockpile-zones';
+import { buildCopy346 } from './native-build-copy-346';
+import { selectionDraftCommand, selectionFireAtWillCommand, selectionStopCommand } from '../ui/drafting-controls';
 import { isColonist, isCarePatient } from '../sim/affiliation';
 import { biologicalYears, chronologicalYears } from '../sim/human-age';
 import { appearanceOf } from '../sim/pawn-appearance';
@@ -230,6 +232,12 @@ function anatomyPage(world: World, pawn: Pawn): NativePage {
   return { id: `inspect-anatomy-${pawn.id}`, title: `${pawn.name} · Anatomie`, rows, layout: 'inspector', actions: [control('anatomy-back', 'Retour', () => { subpage = undefined; })] };
 }
 
+/** The selected colonists, in selection order, when this dossier belongs to
+ * the selection; otherwise this pawn alone. */
+function selectionGroup(world: World, pawn: Pawn): Pawn[] {
+  if (!latest.selectedPawnIds.includes(pawn.id)) return [pawn];
+  return latest.selectedPawnIds.flatMap(id => { const person = world.pawns.find(candidate => candidate.id === id); return person && isColonist(person) && !person.prisoner ? [person] : []; });
+}
 function pawnPage(world: World, pawn: Pawn): NativePage {
   const colonist = isColonist(pawn) && !pawn.prisoner, alive = pawn.state !== 'dead';
   if (!pawn.prisoner && activeTab === 'prisoner') activeTab = 'bio';
@@ -366,9 +374,12 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   }
   if (activeTab === 'health') { const index = rows.findIndex(entry => entry.id === 'health-tabs'); if (index > 1) { const [navigation] = rows.splice(index, 1); rows.splice(1, 0, navigation!); } }
   const actions: NativeControl[] = [];
-  if (colonist && alive) actions.push(command('draft-pawn', pawn.draft ? 'Démobiliser' : 'Mobiliser', { type: 'draft', pawnIds: [pawn.id], enabled: !pawn.draft }, pawn.state === 'downed'),
+  // Core merges these gizmos over the whole selection (Command_Toggle), see
+  // selectionDraftCommand: the shown state is the merged one.
+  const group = selectionGroup(world, pawn), draft = selectionDraftCommand(group), stop = selectionStopCommand(group), fire = selectionFireAtWillCommand(group);
+  if (colonist && alive) actions.push(command('draft-pawn', draft && draft.type === 'draft' && !draft.enabled ? 'Démobiliser' : 'Mobiliser', draft ?? { type: 'draft', pawnIds: [pawn.id], enabled: !pawn.draft }, !draft),
     command('clear-orders', 'Effacer les ordres', { type: 'clear-orders', pawnId: pawn.id }), control('manage-work', 'Travail', () => owner.panel('work')));
-  if (pawn.draft && colonist && alive) actions.push(command('draft-stop', 'Stop', { type: 'draft-stop', pawnIds: [pawn.id] }), command('fire-at-will', pawn.draft.holdFire ? 'Feu à volonté' : 'Cesser le feu', { type: 'fire-at-will', pawnIds: [pawn.id], enabled: !!pawn.draft.holdFire }));
+  if (colonist && alive && stop && fire) actions.push(command('draft-stop', 'Stop', stop), command('fire-at-will', fire.type === 'fire-at-will' && fire.enabled ? 'Feu à volonté' : 'Cesser le feu', fire));
   const result: NativePage & { portrait?: { url: string; label: string } } = { id: `inspect-pawn-${pawn.id}-${activeTab}`, title: pawn.name, subtitle:activeTab==='bio'||activeTab==='gear'?tabs.find(([tab]) => tab === activeTab)![1]:undefined, rows, actions, layout: 'inspector' };
   // All tabs belong to the same cardboard dossier, rather than seven windows
   // with different bounds. The pixel layout handles the viewport reduction.
@@ -539,6 +550,9 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
   if (structure && subpage?.structureId === structure.id && subpage.kind === 'bills') return billPage(world, structure);
   if (subpage?.kind === 'storage') { const storage = storagePage(world, subpage.structureId, subpage.stockpileId); if (storage) return storage; subpage = undefined; }
   const actions = mapObjectActions(world, selected).map(action => action.command ? command(`object-action-${action.id}`, action.label, action.command) : control(`object-action-${action.id}`, action.label, () => action.placementPileId === undefined ? undefined : owner.replant?.(action.placementPileId), !owner.replant));
+  // Core BuildCopyCommandUtility: "Copier" selects the same construction and material.
+  const copy = structure ? buildCopy346(world, structure) : undefined;
+  if (copy) actions.push(control('object-action-copy', 'Copier', () => { owner.tool(copy.tool); if (copy.material) owner.material(copy.material); }, false, false, 'Choisir la même construction et le même matériau dans l’Architecte.'));
   rows.push(row('object-id', 'Identité', String(selected.id)));
   const wallProject=world.jobs.find(job=>job.wallDoor296?.plan&&(selected.kind==='structure'&&job.deconstruction?.structureId===selected.id||selected.kind==='job'&&(job.id===selected.id||job.wallDoor296.plan.id===selected.id)));
   if(wallProject?.wallDoor296?.plan&&owner.selectObject){

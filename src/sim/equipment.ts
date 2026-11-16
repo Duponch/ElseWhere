@@ -15,6 +15,7 @@ import { adjacent,blockedCells,reachableCells,routeToJob,type Reachability } fro
 import { planCommandDrops,releaseWork } from './work-release.ts';
 import { clearQueuedOrders } from './player-orders.ts';
 import { dropIncapacitatedEquipment } from './equipment-state.ts';
+import { releaseDraftForOrder346 } from './drafted-orders-346.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell,CommandResult,MaterialPile,Pawn,World } from './types.ts';
 
@@ -68,7 +69,7 @@ export function applyEquipment(world:World,command:EquipmentCommand):CommandResu
   const path=(command.action==='equip'||command.action==='wear')&&pile!.owner.type==='ground'?routeToJob(world,pile!.owner,reachableCells(world,pawn,blockedCells(world),new Set()),true):[];
   if(!path)return fail('Aucun chemin praticable vers cet objet.');
   const drops=planCommandDrops(world,command);if(!drops||!releaseWork(world,pawn,drops))return fail('Pas de place pour déposer la cargaison.');
-  clearQueuedOrders(world,pawn);delete pawn.priorityWork;
+  clearQueuedOrders(world,pawn);delete pawn.priorityWork;releaseDraftForOrder346(world,pawn);
   if(command.action==='equip')delete pile!.weapon!.forbidden;
   if(command.action==='wear')delete pile!.apparel!.forbidden;
   const duration=command.action==='wear'||command.action==='remove'?apparelDuration(world,pawn,pile!,command.action):undefined;

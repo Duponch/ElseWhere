@@ -24,12 +24,15 @@ import { planCommandDrops,releaseWork } from './work-release.ts';
 import type { NeedContext } from './needs.ts';
 import type { BedSlot,Cell,CommandResult,Pawn,World } from './types.ts';
 import { structureById } from './structure-navigation.ts';
+import { draftedOrdersActive346 } from './drafted-orders-346.ts';
 
 export interface RescueProposal {patientId:number;bedId:number;path:Cell[];bedSlot?:BedSlot}
 
 /** The existing explicit mandate owns this mobilized service; no additional
- * saved flag, capture/arrest/release authority or automatic work is introduced. */
-export const isDraftedRescue=(world:World,actor:Pawn):boolean=>world.schemaVersion>=237&&isColonist(actor)&&!actor.prisoner&&!!actor.draft&&actor.orders.active==='rescue'&&!!actor.rescue&&!actor.rescue.capture&&!actor.rescue.arrest&&!actor.rescue.release;
+ * saved flag, arrest/release authority or automatic work is introduced. From
+ * schema 346 the same mandate covers a drafted capture (Core
+ * FloatMenuOptionProvider_CapturePawn, Drafted = true). */
+export const isDraftedRescue=(world:World,actor:Pawn):boolean=>world.schemaVersion>=237&&isColonist(actor)&&!actor.prisoner&&!!actor.draft&&actor.orders.active==='rescue'&&!!actor.rescue&&(!actor.rescue.capture||draftedOrdersActive346(world.schemaVersion))&&!actor.rescue.arrest&&!actor.rescue.release;
 
 /** Read-only admission is shared by the menu, proposal and command. Cancelling
  * an accepted attack must never erase a strike or post-shot recovery. */

@@ -7,16 +7,38 @@ export const draftLabel=(p:Pawn):string=>p.need?.kind==='eat'&&p.need.forced?(p.
 /** UI selection policy. The worker remains the authority when health changes. */
 export const draftablePawns=(pawns:readonly Pawn[]):Pawn[]=>pawns.filter(isLocallyControllableColonist);
 export const draftedPawns=(pawns:readonly Pawn[]):Pawn[]=>draftablePawns(pawns).filter(p=>!!p.draft);
-export function toggleDraft(pawns:Pawn[],send:(c:Command)=>void):void {
+/** Core merges the Draft gizmos of a selection (Command_Toggle,
+ * groupKeyIgnoreContent). GizmoGridDrawer shows a non-disabled gizmo, and
+ * with activateIfAmbiguous (the default) an inactive one when there is one; a
+ * click also toggles every grouped gizmo in that same state
+ * (InheritInteractionsFrom). So a mixed selection is drafted entirely and
+ * only a fully drafted one is undrafted. Downed pawns keep a disabled gizmo
+ * and are left out; a pawn in a mental state has none. */
+export function selectionDraftCommand(pawns:readonly Pawn[]):Command|undefined {
   const eligible=draftablePawns(pawns);
-  if(eligible.length)send({type:'draft',pawnIds:eligible.map(p=>p.id),enabled:!eligible.every(p=>p.draft)});
+  return eligible.length?{type:'draft',pawnIds:eligible.map(p=>p.id),enabled:!eligible.every(p=>p.draft)}:undefined;
+}
+/** Same merge for Fire at will (shown on drafted pawns only): any pawn
+ * holding fire makes the click turn fire at will on. */
+export function selectionFireAtWillCommand(pawns:readonly Pawn[]):Command|undefined {
+  const drafted=draftedPawns(pawns);
+  return drafted.length?{type:'fire-at-will',pawnIds:drafted.map(p=>p.id),enabled:drafted.some(p=>p.draft!.holdFire)}:undefined;
+}
+/** Stop every drafted pawn of the selection. */
+export function selectionStopCommand(pawns:readonly Pawn[]):Command|undefined {
+  const drafted=draftedPawns(pawns);
+  return drafted.length?{type:'draft-stop',pawnIds:drafted.map(p=>p.id)}:undefined;
+}
+export function toggleDraft(pawns:Pawn[],send:(c:Command)=>void):void {
+  const command=selectionDraftCommand(pawns);
+  if(command)send(command);
 }
 export function createDraftControls(parent:HTMLElement,current:()=>Pawn[],send:(c:Command)=>void):void {
   const box=document.createElement('div');box.id='draft-controls';
   box.innerHTML='<button id="toggle-draft" class="secondary-action">Mobiliser · R</button><button id="stop-draft" class="secondary-action" hidden>Arrêter l’ordre</button><button id="fire-at-will" class="secondary-action" hidden>Tirer à volonté</button><label id="inspector-hostility-label" hidden>Réaction hostile <select id="inspector-hostility"><option value="flee">Fuir</option><option value="attack">Attaquer</option><option value="ignore">Ignorer</option></select></label><p id="draft-help" class="muted"></p>';
   box.querySelector<HTMLButtonElement>('#toggle-draft')!.onclick=()=>toggleDraft(current(),send);
-  box.querySelector<HTMLButtonElement>('#stop-draft')!.onclick=()=>{const pawns=draftedPawns(current());if(pawns.length)send({type:'draft-stop',pawnIds:pawns.map(p=>p.id)});};
-  box.querySelector<HTMLButtonElement>('#fire-at-will')!.onclick=()=>{const pawns=draftedPawns(current());if(pawns.length)send({type:'fire-at-will',pawnIds:pawns.map(p=>p.id),enabled:pawns.some(p=>p.draft?.holdFire)});};
+  box.querySelector<HTMLButtonElement>('#stop-draft')!.onclick=()=>{const command=selectionStopCommand(current());if(command)send(command);};
+  box.querySelector<HTMLButtonElement>('#fire-at-will')!.onclick=()=>{const command=selectionFireAtWillCommand(current());if(command)send(command);};
   box.querySelector<HTMLSelectElement>('#inspector-hostility')!.onchange=e=>{const selected=draftablePawns(current()),p=selected.length===1?selected[0]:undefined;if(p)send({type:'hostility-response',pawnId:p.id,response:(e.target as HTMLSelectElement).value as 'flee'|'attack'|'ignore'});};
   parent.prepend(box);
 }

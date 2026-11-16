@@ -14,6 +14,7 @@ import {isDraftedRescue} from './rescue.ts';
 import {effectiveCore297,effectiveLocal297} from './core-phase-297.ts';
 import {startTravel} from './movement.ts';
 import {processDraft} from './drafting.ts';
+import {isDraftedEquipment346} from './drafted-orders-346.ts';
 import {blockedCells,canStep} from './pathfinding.ts';
 import {CIVIL_TRANSIT_BLOCKERS} from './travel.ts';
 import {captureStructureNavigation} from './structure-navigation.ts';
@@ -78,7 +79,7 @@ export function createCoreMovement297(world:World){
     // Clinical/task invalidation stays authoritative. A stale path is never
     // extended after an impact, command, retirement or ownership transfer.
     if(pawn.state!=='moving'&&!pawn.draft)continue;
-    const tactical=!!pawn.draft&&!isForcedConsuming(pawn)&&!isDraftedTending(pawn)&&!isDraftedRescue(world,pawn);
+    const tactical=!!pawn.draft&&!isForcedConsuming(pawn)&&!isDraftedTending(pawn)&&!isDraftedRescue(world,pawn)&&!isDraftedEquipment346(world,pawn);
     const target=pawn.draft?.target,tacticalActive=tactical&&(pawn.draft!.queue.length>0||!!target&&(target.x!==pawn.x||target.z!==pawn.z)||before>0);
     if(!pawn.path.length&&!tacticalActive)continue;
     if(medicallyStopped(pawn)||isStunned(pawn,core)||carrierOf(world,pawn.id))continue;
