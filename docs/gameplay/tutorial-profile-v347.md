@@ -1,6 +1,6 @@
 # Partie tutoriel : profil, règles et contenu imposé — schéma 347
 
-Schéma 347. Premier des deux lots du tutoriel de RimWorld 1.6 (« Apprendre à jouer ») : ce lot livre ce que les 37 leçons demandent au jeu. Les leçons elles-mêmes, le verrouillage des actions et les indications à l'écran viendront au lot suivant. L'audit de l'accueil du nouveau joueur (section 1 et lot 7 proposé) décrit le tutoriel du jeu de base.
+Schéma 347. Premier des deux lots du tutoriel de RimWorld 1.6 (« Apprendre à jouer ») : ce lot livre ce que les 37 leçons demandent au jeu. Les leçons elles-mêmes, le verrouillage des actions et les indications à l'écran sont venues au lot suivant : [les 37 leçons, schéma 349](tutorial-lessons-v349.md). L'audit de l'accueil du nouveau joueur (section 1 et lot 7 proposé) décrit le tutoriel du jeu de base.
 
 Sources : définitions Core (`Storytellers.xml`, `Difficulties.xml`, `Scenarios_Classic.xml`, `Tutor/Instructions.xml`, `PawnKinds_Pirate.xml`, `Buildings_Natural.xml`) et code décompilé (MainMenuDrawer.InitLearnToPlay, TutorSystem, TutorialState, Lesson_Instruction, Instruction_MineSteel, Instruction_DownRaider, TutorUtility.FindUsableRect, StorytellerUI, Storyteller.Notify_DefChanged, PawnGroupKindWorker_Normal, Pawn_HealthTracker et les vérifications de `TutorSystem.TutorialMode` citées plus bas). Aucun code ni texte n'en est repris.
 

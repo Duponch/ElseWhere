@@ -118,6 +118,8 @@ Faits relevés dans le code décompilé (`LessonAutoActivator`, `LearningReadout
 - **Démonstrations.** Elles reprennent les gestes du jeu de base quand ils existent ; sinon la commande équivalente : opération demandée (en plus de l’onglet Santé), page de réglages d’une réserve, page Factures d’un poste. Deux notions propres à Elsewhere, **Couchages** (priorité 38) et **Recherche** (21), reprennent les gestes du parcours et du tutoriel du jeu de base qui n’ont pas de concept.
 - **Écriture.** Les connaissances sont écrites aussitôt pour un geste marquant, au plus toutes les 30 s pour l’oubli et les petits gestes, et à la fermeture de la page.
 
+- **Pendant le tutoriel** (schéma 349, [les 37 leçons](tutorial-lessons-v349.md)) : comme le Tuteur du jeu de base (`disableAdaptiveTraining`, `TutorSystem.AdaptiveTrainingEnabled`), l'assistant se tait : aucune notion montrée ni ouverte, le minuteur de repos ne court pas ; les démonstrations comptent toujours, et les leçons de notion remettent la leur à zéro à leur départ (`Instruction_LearnConcept`). À la fin du tutoriel, le minuteur repart de zéro (`LessonAutoActivator.Notify_TutorialEnding`).
+
 ## Coûts
 
 - Une minuterie de 250 ms. Le monde n’est lu que si un nouvel instantané a été adopté depuis le dernier relevé, et chaque famille d’objets (raids, personnes, bâtiments, piles, animaux) seulement si l’une de ses notions reste à apprendre. Assistant désactivé ou tout appris : aucune lecture du monde.

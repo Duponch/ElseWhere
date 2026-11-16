@@ -101,7 +101,7 @@ Les correspondances sont dans `src/ui/learning-concepts.ts` (champ `highlightTag
 
 ## Limites
 
-- Le tutoriel n’existe pas encore : le contour de rectangle n’est utilisé par aucune partie, sans flèche ni étiquette.
+- Le contour de rectangle et la surbrillance servent désormais aux [37 leçons du tutoriel](tutorial-lessons-v349.md) (schéma 349) : nouvelles étiquettes `next-page`, `reorder-pawn`, `randomize-pawn`, `material:<construction>`, `growing-plant` et `choose-storyteller`. Toujours sans flèche ni étiquette sur la carte.
 - Les étiquettes du jeu de base sans commande équivalente ne sont pas reprises (`ManualPriorities-Off`, `Messages`, `GrowingZoneSetPlant`, `AddBill`, `StoragePriority`, boutons de page et de création des colons, etc.), comme les notions correspondantes.
 - Une commande est jugée recouverte par son centre : une commande à moitié sous une page garde ou perd son cadre selon ce centre.
 - Le tableau Faune et les colonnes d’Assignations encadrent chaque ligne visible (un cadre par colon ou par animal).
