@@ -12,6 +12,16 @@ Un clic sur une **carte de sauvegarde** charge directement cette partie en pause
 
 Avec une fenêtre de jeu ouverte, utilisez le bouton droit maintenu pour tourner la caméra, le bouton central pour la déplacer et la molette pour zoomer, en commençant sur le terrain libre. Le contexte Ordres reste ouvert. Un clic gauche extérieur ferme la fenêtre. Le curseur en mode ordre associe une petite flèche de carton beige au dessin de l’action choisie ; **Échap** revient à la sélection.
 
+## Ordres de tous les jours — schéma 346
+
+Avec plusieurs colons sélectionnés, **Mobiliser**, **Stop** et **Tir à volonté** de l'inspecteur agissent sur toute la sélection, comme **R** : une sélection mixte est mobilisée entière, une sélection déjà mobilisée est démobilisée. Le dossier affiché reste celui du premier colon.
+
+Sélectionnez un seul colon **mobilisé** et faites un clic droit sur une arme, un vêtement ou un aliment : choisissez **Équiper**, **Porter**, **Consommer** ou **Aller ici**. Clic droit sur le colon lui-même : **Déposer** son arme. Clic droit sur une personne hors colonie à terre : **Capturer** (il faut un lit de prison libre dans une pièce fermée). Le colon fait la tâche puis reste mobilisé et attend sur place. Une case vide garde le déplacement immédiat.
+
+Dans l'inspecteur d'un bâtiment, **Copier** choisit la même construction et le même matériau dans l'Architecte ; posez-la ensuite comme d'habitude.
+
+Dans la barre des colons, un portrait teinté d'or, d'orange ou de rouge signale un risque de crise mineure, majeure ou extrême. Les petites icônes en bas à gauche indiquent : prépare une caravane, crise (« ! »), repos médical, dort, fuit, attaque, inoccupé (à partir du deuxième jour), en feu ; survolez le portrait pour lire leur nom. [Portée et limites](everyday-orders-v346.md).
+
 ## Lire les alertes de droite
 
 Les alertes apparaissent après les dix premières secondes de jeu, comme dans RimWorld. Elles sont triées : **critiques** en rouge qui pulse (incendie dans la zone de foyer, colon à secourir, hypothermie grave, risque de crise majeure, urgence médicale), puis **hautes** en ocre (colon à soigner, couchages ou nourriture insuffisants, geôlier nécessaire, corps sans sépulture, défenses), puis **moyennes**. Une nouvelle alerte haute ou critique glisse et sonne ; une critique affiche aussi un avis en haut de l’écran.
@@ -421,7 +431,7 @@ Dans **Nouvelle partie**, choisissez une case **Toundra** et lisez sa températu
 
 ## Consommer un aliment choisi — V346
 
-Sélectionnez un seul colon, faites un clic droit sur une pile alimentaire au sol, en réserve ou sur une étagère, puis choisissez **Consommer**. Les piles d’une étagère restent des choix distincts. L’ordre remplace l’activité actuelle, sans mise en file ; relâchez Maj. Il exige un accès réel et une portion disponible.
+Sélectionnez un seul colon, faites un clic droit sur une pile alimentaire au sol, en réserve ou sur une étagère, puis choisissez **Consommer**. Un colon mobilisé voit aussi **Aller ici** dans ce menu (schéma 346). Les piles d’une étagère restent des choix distincts. L’ordre remplace l’activité actuelle, sans mise en file ; relâchez Maj. Il exige un accès réel et une portion disponible.
 
 Le colon prend sa portion et mange avant de recevoir la nutrition. Un civil cherche sa place de repas habituelle ; un colon mobilisé reste mobilisé et mange au contact. Le régime et les risques sont affichés : cet ordre direct peut consommer un aliment exclu du régime, mais le choix automatique continue de le respecter. Arrêter l’ordre ou démobiliser interrompt le repas et conserve l’aliment non mangé. Manipulation et capacité à manger sont requises ; corps et inventaires alimentaires généraux ne sont pas proposés. La bière V441 utilise l’ordre **Boire** et les politiques décrites en tête de ce guide, qualifiés localement et publiés en V441. [Portée et contrôles V346](consuming-v346.md).
 
