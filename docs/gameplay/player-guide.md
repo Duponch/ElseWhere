@@ -485,8 +485,10 @@ La projection d’une cible peut se trouver derrière un panneau : déplacez la
 caméra ou dégagez la vue avant de cliquer. Une création ou une recharge de grande
 carte peut demander du temps ; attendez son résultat visible. Si elle est
 refusée, lisez le message et conservez un export valide pour reprendre.
-Les choix grisés, le tutoriel, les autres scénarios et la victoire restent
-indisponibles dans le périmètre actuel. Les limites de campagne sont dans
+Les choix grisés, les autres scénarios et la victoire restent
+indisponibles dans le périmètre actuel. **Tutoriel** lance une partie
+d’apprentissage sans incident ([V347](tutorial-profile-v347.md)) ; ses leçons
+pas à pas ne sont pas encore livrées. Les limites de campagne sont dans
 les [critères de préparation](early-access-readiness.md).
 
 ## Surveiller le risque d’humeur — V339
@@ -554,8 +556,8 @@ de continuer. Il n'y a pas de page récapitulative supplémentaire.
 
 Le climat local et les profils choisis restent dans la sauvegarde. Le départ
 commence en pause avec trois capsules : **Reprendre** fait avancer leur arrivée
-et leur ouverture réelle. Le tutoriel et les autres scénarios restent
-indisponibles. La [note V333](new-game-preparation-v333.md) précise les adaptations
+et leur ouverture réelle. Les autres scénarios restent indisponibles ; le
+tutoriel n’a encore que son profil de partie ([V347](tutorial-profile-v347.md)). La [note V333](new-game-preparation-v333.md) précise les adaptations
 du choix de départ ; [V335](starting-arrival-v335.md) décrit l’arrivée.
 
 ## Régler les ombres et toutes les animations — V331
