@@ -24,6 +24,7 @@ import { advanceAnimalHealth,animalBody,commitAnimalImpact,delayAnimalImpact } f
 import type { World } from './types.ts';
 import { cancelAnimalPredation } from './wildlife-predation.ts';
 import { mechaAssessment,commitMechanoidImpact } from './mechanoid-health.ts';
+import { isManhunterRevengeSchema348,rollManhunterOnHarm348 } from './animal-manhunter-revenge-348.ts';
 import { delayMechanoidImpact,mechanoidProtection } from './mechanoid-impact.ts';
 
 /** The same anatomical transaction serves both directions of interspecies
@@ -70,7 +71,11 @@ export function strikeLivingTarget(w:World,attacker:LivingTarget,target:LivingTa
     const impact=resolveUnarmoredMelee(input,{damage,kind:tool.kind},random,isMechanoidTarget(target)?mechanoidProtection(category,tool.penetration,random,target.mechKind):natural?naturalArmorProtection321(natural,category,tool.penetration,random):protection?.protect,w.schemaVersion>=324);
     if(w.schemaVersion>=256&&tool.kind==='toxic-bite'&&!isMechanoidTarget(target)){applyToxicBite256(impact.record,impact.totalDamageDealt,isAnimalTarget(target)?animalBodySize(target):1,toxicResistance256(target),random,!!options.huntingForFood);reconcileMedicalDeath(impact.record);}
     protection?.commit();injured=impact.layers.length>0;stun=impact.stun;
-    if(isAnimalTarget(target))commitAnimalImpact(w,target,impact.record,randomState,core,combatTargetKey(attacker));
+    if(isAnimalTarget(target)){
+      commitAnimalImpact(w,target,impact.record,randomState,core,combatTargetKey(attacker));
+      // Schema 348, Notify_DamageTaken: a landed blow (even deflected) may enrage a wild animal.
+      if(isManhunterRevengeSchema348(w.schemaVersion))rollManhunterOnHarm348(w,target,combatTargetKey(attacker),randomState,core);
+    }
     else if(isMechanoidTarget(target)){if(!commitMechanoidImpact(w,target,impact.record,randomState,core))throw new Error('Mechanical melee transaction refused');}
     else target.health=impact.record;
   }

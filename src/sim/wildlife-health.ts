@@ -32,6 +32,7 @@ import { cancelAnimalPredation } from './wildlife-predation.ts';
 import { recoverAnimalManhunter } from './animal-manhunter.ts';
 import { animalCarrier } from './animal-rest-state.ts';
 import {applyAnimalThermal466,type AnimalThermalOpportunity466} from './animal-thermal-v466.ts';
+import {isManhunterRevengeSchema348,rollManhunterOnHarm348} from './animal-manhunter-revenge-348.ts';
 
 const HEALTHY_ANIMALS=new Map<ReturnType<typeof animalBodyModel>,ReturnType<typeof assessBody>>();
 export const animalBody=(a:WildAnimal)=>{
@@ -88,7 +89,7 @@ export function scareAnimal(w:World,a:WildAnimal,danger:Cell,core:number):void {
 }
 /** Real projectile producer. Commit localized injuries, death roll and PRNG
  * together; no global animal hit-point counter or resource creation. */
-export function damageAnimalWithBullet(w:World,a:WildAnimal,hit:UnarmoredBullet,core=isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveCore297(w):w.tick*10,danger?:Cell,instigatorId?:number):void {
+export function damageAnimalWithBullet(w:World,a:WildAnimal,hit:UnarmoredBullet,core=isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveCore297(w):w.tick*10,danger?:Cell,instigatorId?:number,launcherKey348?:string):void {
   const model=animalBodyModel(a.species,a.ageTicks,a.growthTracker?.value);validateUnarmoredBullet(hit,model);
   if(!Number.isSafeInteger(core)||(isCorePhysicalSchema297(Number(w.schemaVersion))?core!==effectiveCore297(w):core<Math.max(0,(w.tick-1)*10)||core>w.tick*10))throw new Error('Invalid animal impact time');
   if(w.schemaVersion<77||!w.wildlife?.animals.includes(a))throw new Error('Invalid animal impact owner');
@@ -101,6 +102,9 @@ export function damageAnimalWithBullet(w:World,a:WildAnimal,hit:UnarmoredBullet,
   if(!impact.selected)return;
   const preyId=a.predation?.targetId;
   commitAnimalImpact(w,a,impact.record,random,core,instigatorId===undefined?undefined:combatTargetKeyForHive256(w,instigatorId));
+  // Schema 348, Pawn_MindState.Notify_DamageTaken: the revenge draw precedes
+  // the flight below, which an enraged animal no longer takes.
+  if(isManhunterRevengeSchema348(w.schemaVersion)){const draw={rng:w.rng};rollManhunterOnHarm348(w,a,launcherKey348??(instigatorId===undefined?undefined:combatTargetKeyForHive256(w,instigatorId)),draw,core);w.rng=draw.rng;}
   // A predator's own prey is not a third-party ranged interruption. Without
   // an identified instigator, preserve the hunt rather than invent ownership.
   if(danger&&(preyId===undefined||instigatorId!==undefined&&instigatorId!==preyId))scareAnimal(w,a,danger,core);

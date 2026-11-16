@@ -33,15 +33,19 @@ export function recoverAnimalManhunter(w:World,a:WildAnimal):void {
     if(shooting||melee){p.path=[];p.planCooldown=0;if(p.state!=='dead'&&p.state!=='downed')p.state=(p.motion?.end??0)>w.tick?'moving':'idle';}
   }
 }
-export function startAnimalManhunter(w:World,a:WildAnimal,core=isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveCore297(w):w.tick*10,permanent261=false):boolean {
+/** revenge348 (schema 348, animal-manhunter-revenge-348.ts): the harm or
+ * failed-tame rage of Core is a mental state that a melee retaliation job does
+ * not prevent, and it leaves the Tame designation in place. */
+export function startAnimalManhunter(w:World,a:WildAnimal,core=isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveCore297(w):w.tick*10,permanent261=false,revenge348=false):boolean {
   if(permanent261&&(Number(w.schemaVersion)!==261&&(Number(w.schemaVersion)!==262&&!isSchema263OrLater(Number(w.schemaVersion)))))return false;
-  if(w.schemaVersion<183||!w.wildlife?.animals.includes(a)||a.domestic||a.manhunter||a.retaliation||a.state==='dead'||a.state==='downed'
+  if(revenge348&&Number(w.schemaVersion)<348)return false;
+  if(w.schemaVersion<183||!w.wildlife?.animals.includes(a)||a.domestic||a.manhunter||!revenge348&&a.retaliation||a.state==='dead'||a.state==='downed'
     ||!Number.isSafeInteger(core)||(isCorePhysicalSchema297(Number(w.schemaVersion))?core!==effectiveCore297(w):core<0||core>w.tick*10)||animalBody(a).capacities.moving<=0
     ||!actualAnimalMeleeProfile256(a).some(t=>!a.health||(t.sourceParts??[t.sourcePart]).some(part=>!partMissing(a.health!,part))))return false;
   if(a.health)cancelToxicVomit256(a.health);
   delete a.confusion;if(a.wander)delete a.wander.job;
   a.manhunter={...permanent261?{permanent261:true as const}:{},startedAtCore:core,rng:(w.seed^Math.imul(a.id,0x9e3779b1)^core^0x73b914f5)>>>0||1,zeroRestTicks:0};
-  delete a.animalThermalRefuge288;delete a.meal;delete a.predation;delete a.exiting;delete a.mating;delete a.flee;delete a.threat;delete a.retaliation;delete a.taming;delete a.sleepUntilCore;
+  delete a.animalThermalRefuge288;delete a.meal;delete a.predation;delete a.exiting;delete a.mating;delete a.flee;delete a.threat;delete a.retaliation;if(!revenge348)delete a.taming;delete a.sleepUntilCore;
   a.path=[];a.state=(a.motion?.end??0)>w.tick?'moving':'idle';a.nextDecision=w.tick;return true;
 }
 export function animalManhunterTarget(w:World,a:WildAnimal){

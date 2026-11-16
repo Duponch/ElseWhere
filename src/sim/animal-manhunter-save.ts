@@ -29,7 +29,8 @@ function validDoorStrike(w:BoundaryWorld,version:number,a:WildAnimal,coreNow297?
   return ![w.pawns,w.jobs,w.piles,w.resources,w.wildlife?.animals??[]].some(items=>items.some(i=>i.id===s.targetId))
     &&!w.packed.some(p=>p.building.id===s.targetId);
 }
-/** Closed sparse shape, with no navigation or medical mutation at transport. */
+/** Closed sparse shape, with no navigation or medical mutation at transport.
+ * From schema 348 a harm or failed-tame rage keeps the Tame designation. */
 export function validAnimalManhunter(w:BoundaryWorld,version:number,a:WildAnimal,coreNow297?:number):boolean {
   const core=isCorePhysicalSchema297(version)?validationCore297(version,w.tick,coreNow297):w.tick*10;if(isCorePhysicalSchema297(version)&&!Number.isSafeInteger(core))return false;
   if(!validDoorStrike(w,version,a,coreNow297)||!validPermanentManhunter261(a,version))return false;
@@ -37,7 +38,7 @@ export function validAnimalManhunter(w:BoundaryWorld,version:number,a:WildAnimal
   if(version<183||!object(m)||!keys(m,['startedAtCore','rng','zeroRestTicks','exhausted','targetId','door',...((version===261||(Number(version)===262||isSchema263OrLater(Number(version))))?['permanent261']:[])])
     ||!int(m.startedAtCore,0,core)||!int(m.rng,1,0xffffffff)
     ||!int(m.zeroRestTicks,0,core-m.startedAtCore+150)||m.zeroRestTicks%150!==0
-    ||a.domestic||a.meal||a.predation||a.exiting||a.flee||a.threat||a.retaliation||a.mating||a.taming
+    ||a.domestic||a.meal||a.predation||a.exiting||a.flee||a.threat||a.retaliation||a.mating||a.taming&&Number(version)<348
     ||!['idle','moving','sleeping',...(m.permanent261?['downed']:[])].includes(a.state))return false;
   if(m.exhausted!==undefined&&(m.exhausted!==true||m.zeroRestTicks<=1000||a.rest>=.0001||a.path.length||m.targetId!==undefined||m.door!==undefined))return false;
   if(m.targetId!==undefined&&(!int(m.targetId,1,w.nextId-1)||!w.pawns.some(p=>p.id===m.targetId)&&!w.raids?.departed.some(p=>p.pawnId===m.targetId)&&!(m.permanent261&&((w.wildlife?.animals??[]).some(a=>a.id===m.targetId)||(w.mechanoids??[]).some(a=>a.id===m.targetId)||w.piles.some(p=>p.kind==='corpse'&&p.id===m.targetId)))))return false;

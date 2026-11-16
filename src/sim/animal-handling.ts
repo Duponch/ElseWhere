@@ -4,6 +4,7 @@ import {isSchema287OrLater} from './schema-compatibility-257.ts';
 // Scaria remains a real illness even after actual ClearMind.
 
 import {tameHiveInsect256} from './cave-hive-lifecycle-256.ts';
+import {rollManhunterOnTameFail348} from './animal-manhunter-revenge-348.ts';
 import {startingPetFourNoTamenessDecay256} from './starting-pet-four-tameness-256.ts';
 import {animalHandlingSkill256,tameWildnessFactor256,tameWildnessFactor315,trainWildnessFactor315,animalHandlingFood256,PEN_ANIMALS_256} from './animal-domestic-v256.ts';
 import {isAnimalSpecies256} from './animal-core-v256.ts';
@@ -211,7 +212,11 @@ function finish(w:World,p:Pawn,a:WildAnimal,task:AnimalHandlingTask,ctx:NeedCont
   if(task.kind==='tame') {
     if(success){adoptAsColonyAnimal(w,a);
       ctx.event(`${p.name} a apprivoisé ${animalSpecies(a.species).label} ${a.id}.`);
-    } else ctx.event(`${p.name} n’a pas réussi à apprivoiser ${animalSpecies(a.species).label} ${a.id}.`);
+    } else {
+      ctx.event(`${p.name} n’a pas réussi à apprivoiser ${animalSpecies(a.species).label} ${a.id}.`);
+      // Schema 348: a failed attempt may enrage the wild animal (Core recruit attempt).
+      rollManhunterOnTameFail348(w,a,p);
+    }
   } else if(a.domestic) {
     if(success)a.domestic.tameness=Math.min(MAX_TAMENESS,a.domestic.tameness+1);
     ctx.event(`${p.name} ${success?'a entretenu':'n’a pas amélioré'} la familiarité de ${animalSpecies(a.species).label} ${a.id}.`);

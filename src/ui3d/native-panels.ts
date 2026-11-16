@@ -29,6 +29,7 @@ import {animalActivity} from '../ui/animal-activity';
 import {animalLifeStage,animalNutritionMax,gestationTicks} from '../sim/animal-life';
 import {animalBody} from '../sim/wildlife-health';
 import {canTameSpecies} from '../sim/animal-handling';
+import {isManhunterRevengeSchema348,manhunterOnDamageChance348,manhunterOnTameFailChance348} from '../sim/animal-manhunter-revenge-348';
 import {slaughterRefusal} from '../sim/animal-slaughter';
 import {readAnimalTraining282,trainingRefusal282} from '../sim/animal-training-282';
 import {MEDICAL_CARE,type MedicalCare} from '../sim/medicine-rules';
@@ -320,7 +321,7 @@ function animalFact(id:string,label:string,hint=label):NativeControl{return butt
 function animalTableToolbar(kind:AnimalTableKind,world:World,total:number,shown:number):NativeRow[] {
  const view=animalTableView(kind),refresh=()=>back();
  const filters=kind==='animals'?[['all','Tous'],['female','Femelles'],['male','Mâles'],['young','Jeunes'],['slaughter','Abattage demandé'],['haul','Transport demandé'],['ready','Produit prêt']]:[['all','Tous'],['female','Femelles'],['male','Mâles'],['hunt','Chasse désignée'],['tame','Apprivoisement demandé']];
- const sorts=[['name','Nom'],['species','Espèce'],['age','Âge'],['sex','Sexe'],['activity','Activité'],...(kind==='animals'?[['area','Zone / enclos'],['product','Produit']]:[['position','Position']])];
+ const sorts=[['name','Nom'],['species','Espèce'],['age','Âge'],['sex','Sexe'],['activity','Activité'],...(kind==='animals'?[['area','Zone / enclos'],['product','Produit']]:[['position','Position'],...(isManhunterRevengeSchema348(world.schemaVersion)?[['harm-rage','Rage si blessé'],['tame-rage','Rage si raté']]:[])])];
  const select=(suffix:string,label:string,value:string,choices:string[][],write:(value:string)=>void):NativeControl=>animalTableButton(`${kind}-${suffix}`,`${label} : ${choices.find(([key])=>key===value)?.[1]??value}`,()=>{}, {select:{value,options:choices.map(([value,label])=>({value:value!,label:label!})),onChange:animalTableGuard((value:string)=>{if(!choices.some(([key])=>key===value))return;write(value);refresh();})}});
  return [
   {id:`${kind}-search`,label:'Rechercher',region:'navigation',compact:true,presentation:'plain',input:{value:view.search,placeholder:'Nom, espèce ou activité…',maxLength:160,onCommit:animalTableGuard((value:string)=>{view.search=value;refresh();})}},
@@ -338,7 +339,7 @@ function filteredTableAnimals(kind:AnimalTableKind,world:World,animals:TableAnim
  });
  const textKeys=new Map<TableAnimal,string>();
  const text=(animal:TableAnimal)=>{let value=textKeys.get(animal);if(value===undefined){value=view.sort==='species'?animalSpecies(animal.species).label:view.sort==='sex'?animal.sex:view.sort==='activity'?activity(animal):view.sort==='area'?animalAreaLabel(world,animal):name(animal);textKeys.set(animal,value);}return value;};
- return filtered.sort((a,b)=>{const compared=view.sort==='age'?a.ageTicks-b.ageTicks:view.sort==='product'?productFullness(a)-productFullness(b):view.sort==='position'?a.z-b.z||a.x-b.x:animalTableCollator.compare(text(a),text(b));return (view.descending?-compared:compared)||a.id-b.id;});
+ return filtered.sort((a,b)=>{const compared=view.sort==='age'?a.ageTicks-b.ageTicks:view.sort==='product'?productFullness(a)-productFullness(b):view.sort==='position'?a.z-b.z||a.x-b.x:view.sort==='harm-rage'?manhunterOnDamageChance348(world,a)-manhunterOnDamageChance348(world,b):view.sort==='tame-rage'?manhunterOnTameFailChance348(a)-manhunterOnTameFailChance348(b):animalTableCollator.compare(text(a),text(b));return (view.descending?-compared:compared)||a.id-b.id;});
 }
 function animalQuotaOverview():void {
  const world=currentWorld(),rows:NativeRow[]=[{id:'quotas-headings',label:'Espèce',value:'Total',compact:true,columns:['Adultes ♂','Adultes ♀','Jeunes ♂','Jeunes ♀','Gestantes','Limite','Modifier'].map(label=>({label}))}];
@@ -372,18 +373,30 @@ function wildlifePanel(state:NativeUiState,world:World):NativePage {
  const all=world.wildlife?.animals.filter(animal=>!animal.domestic&&knownPosition256(world,animal))??[],animals=filteredTableAnimals('wildlife',world,all);
  const rows:NativeRow[]=[...animalTableToolbar('wildlife',world,all.length,animals.length)];
  if(!world.wildlife)rows.push({...row('wildlife-enable','Partie historique',undefined,'Introduire la faune adopte le circuit existant.',[animalTableButton('enable-wildlife','Introduire la faune',()=>send({type:'enable-wildlife'}))]),region:'navigation',presentation:'plain'});
- rows.push({id:'wildlife-headings',label:'Animal',value:'Activité',region:'catalogue',compact:true,columns:['Sexe','Position','Chasse','Apprivoiser','Repérer','Tirer','Mêlée'].map(label=>({label}))});
+ // Schema 348: Core's ManhunterOnDamageChance and ManhunterOnTameFailChance
+ // columns, beside Hunt and Tame, now that the simulation draws both chances.
+ const revenge=isManhunterRevengeSchema348(world.schemaVersion);
+ rows.push({id:'wildlife-headings',label:'Animal',value:'Activité',region:'catalogue',compact:true,columns:['Sexe','Position','Chasse',...(revenge?['Rage si blessé']:[]),'Apprivoiser',...(revenge?['Rage si raté']:[]),'Repérer','Tirer','Mêlée'].map(label=>({label}))});
  for(const animal of animals){
   const id=animal.id,hunted=world.hunting?.targets.includes(id)??false,drafted=state.selectedPawnIds.length>0&&state.selectedPawnIds.every(id=>world.pawns.some(pawn=>pawn.id===id&&isColonist(pawn)&&!pawn.prisoner&&pawn.draft&&pawn.state!=='dead'&&pawn.state!=='downed'));
   const combat=(type:'shoot'|'melee')=>{const current=host?.readState?.()??latest!,fresh=current.world!;tableAnimal('wildlife',id);if(!current.selectedPawnIds.length||!current.selectedPawnIds.every(id=>fresh.pawns.some(pawn=>pawn.id===id&&isColonist(pawn)&&!pawn.prisoner&&pawn.draft&&pawn.state!=='dead'&&pawn.state!=='downed')))return;return send({type,pawnIds:[...current.selectedPawnIds],targetId:id});};
   const controls=[animalFact(`wildlife-${id}-sex`,animal.sex==='female'?'Femelle':'Mâle'),animalFact(`wildlife-${id}-position`,`${animal.x}, ${animal.z}`),
    animalTableButton(`wildlife-${id}-hunt`,hunted?'Annuler la chasse':'Désigner pour chasse',()=>{tableAnimal('wildlife',id);return send({type:'hunt',animalId:id,enabled:!currentWorld().hunting?.targets.includes(id)});},{glyph:hunted?'allow':'forbid',active:hunted,disabled:animal.state==='dead'}),
+   ...(revenge?[revengeFact(`wildlife-${id}-harm-rage`,manhunterOnDamageChance348(world,animal),'blessé')]:[]),
    canTameSpecies(animal.species)?animalTableButton(`wildlife-${id}-tame`,animal.taming?.designated?'Annuler l’apprivoisement':'Demander l’apprivoisement',()=>{const current=tableAnimal('wildlife',id);return send({type:'tame',animalId:id,enabled:!current.taming?.designated});},{glyph:animal.taming?.designated?'allow':'forbid',active:!!animal.taming?.designated,disabled:animal.state==='dead'}):animalFact(`wildlife-${id}-tame-unavailable`,'—'),
+   ...(revenge?[revengeFact(`wildlife-${id}-tame-rage`,manhunterOnTameFailChance348(animal),'raté')]:[]),
    animalTableButton(`wildlife-${id}-focus`,'Repérer',()=>{tableAnimal('wildlife',id);host?.selectPawn(id);}),animalTableButton(`wildlife-${id}-shoot`,'Tirer',()=>combat('shoot'),{disabled:!drafted||animal.state==='dead'}),animalTableButton(`wildlife-${id}-melee`,'Mêlée',()=>combat('melee'),{disabled:!drafted||animal.state==='dead'})];
   rows.push({id:`wildlife-${id}`,label:actualAnimalName256(animal)??`${animalSpecies(animal.species).label} ${id}`,value:animalActivity(world,animal),region:'catalogue',compact:true,presentation:'plain',controls});
  }
  if(world.wildlife&&!animals.length)rows.push({id:'wildlife-empty',label:all.length?'Aucun animal ne correspond à la recherche et au filtre.':'Aucun animal sauvage connu.',region:'catalogue',presentation:'plain'});
- return {id:'wildlife',title:`Faune · ${animals.length} / ${all.length}`,subtitle:'Les ordres de combat utilisent les colons mobilisés sélectionnés.',layout:'table',contentKey:JSON.stringify([animalTableKey(latest!),animalTableView('wildlife')]),rows,width:1280,onClose:()=>void host?.panel(null)};
+ return {id:'wildlife',title:`Faune · ${animals.length} / ${all.length}`,subtitle:'Les ordres de combat utilisent les colons mobilisés sélectionnés.',layout:'table',contentKey:JSON.stringify([animalTableKey(latest!),animalTableView('wildlife')]),rows,width:revenge?1480:1280,onClose:()=>void host?.panel(null)};
+}
+/** A Core percentage cell ('—' for zero) with the rule that uses it. */
+function revengeFact(id:string,chance:number,cause:'blessé'|'raté'):NativeControl {
+ const label=chance>0?`${Math.round(chance*100)} %`:'—';
+ return animalFact(id,label,cause==='blessé'
+  ?`Chance de rage quand on le blesse : ${label} (espèce × difficulté). Elle est tirée à chaque coup reçu, triplée puis réduite par la discrétion de chasse de l’agresseur (compétences Tir et Animaux).`
+  :`Chance de rage quand un apprivoisement échoue : ${label}.`);
 }
 type NarrativeSource=World|NonNullable<NativeUiState['campaign']>;
 const narrativeView={identity:'',historySearch:'',historyAll:false,questHistory:false,tradeChoices:new Map<number,number>()};

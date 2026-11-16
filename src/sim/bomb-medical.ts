@@ -8,6 +8,7 @@ import { BOMB_AMOUNT,BOMB_AP } from './bomb-state.ts';
 import { createMedicalRecord } from './injury-state.ts';
 import { healthRandom,reconcilePawnHealth,updatePawnHealth } from './health.ts';
 import { advanceAnimalHealth,commitAnimalImpact,delayAnimalImpact,scareAnimal } from './wildlife-health.ts';
+import { isManhunterRevengeSchema348,rollManhunterOnHarm348 } from './animal-manhunter-revenge-348.ts';
 import { applyBulletStagger } from './stagger.ts';
 import { disturbanceEvents,isLying } from './disturbance.ts';
 import type { Cell,Pawn,World } from './types.ts';
@@ -36,6 +37,8 @@ export function damageAnimalWithBomb(w:World,a:WildAnimal,core:number,center:Cel
   const random={rng:w.rng},record=a.health??createAnimalMedicalRecord256(w,a);
   const impact=resolveBombImpact(record,{damage:amount},()=>healthRandom(random));
   commitAnimalImpact(w,a,impact.record,random,core,instigator);
+  // Schema 348: the explosion's instigator may enrage the animal before its flight.
+  if(isManhunterRevengeSchema348(w.schemaVersion)){const draw={rng:w.rng};rollManhunterOnHarm348(w,a,instigator,draw,core);w.rng=draw.rng;}
   if(impact.layers.some(l=>l.severity>0)){scareAnimal(w,a,center,core);delayAnimalImpact(a,core);}
   return impact;
 }
