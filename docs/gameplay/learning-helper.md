@@ -132,6 +132,6 @@ Faits relevés dans le code décompilé (`LessonAutoActivator`, `LearningReadout
 
 ## Limites
 
-- Ni la liste complète avec recherche du jeu de base (« tout afficher »), ni la mise en évidence des commandes concernées, ni le tutoriel ne sont faits.
+- Ni la liste complète avec recherche du jeu de base (« tout afficher »), ni le tutoriel ne sont faits. La mise en évidence des commandes concernées est décrite dans [Surbrillance des commandes](native-highlight.md).
 - Aucune vérification visuelle dans le navigateur ; les parcours natifs Playwright n’ont pas été rejoués.
 - Un texte de notion qui décrit une règle doit être revu quand cette règle change.
