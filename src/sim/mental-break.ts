@@ -20,6 +20,8 @@ import { aggressiveCrisisAdmission,planAggressiveCrisis,type AggressiveCrisisAdm
 import { cancelMelee } from './melee-state.ts';
 import { cancelShooting } from './shooting-state.ts';
 import type { AggressiveCrisisKind,MentalCrisis } from './mental-state.ts';
+import {isMoodPool350} from './mood-pool-350.ts';
+import {crisisCanEndEarly350,crisisKeptAsleep350,drawFirstInsultTarget350,isMoodPoolCrisis350,maintainInsultingSpree350,minorPoolOptions350,newMoodPoolCrisis350,ownRoomSpace350,processInsultingSpree350,psychoticWanderAdmitted350,type MoodPoolAdmission350,type MoodPoolCrisisKind350} from './mental-breaks-350.ts';
 import type { SearchBudget } from './work-planner.ts';
 import type { Pawn,World } from './types.ts';
 
@@ -83,11 +85,13 @@ export function updateMentalBreak(world:World,pawn:Pawn,budget?:SearchBudget):vo
     else {const admission=alcoholBingeAdmission265(world,pawn,budget);if(admission!==null){delete alcohol.bingeRequestedAt;if(admission){startAlcoholBinge265(world,pawn,budget,true);m=pawn.mental;}}}
   }
   if(m?.crisis) {
-    if(pawn.state==='downed'||moodFrozen(pawn)){finishMentalBreak(world,pawn);return;}
+    // Schema 350: Wander_Psychotic has no recoverFromSleep.
+    if(pawn.state==='downed'||moodFrozen(pawn)&&!crisisKeptAsleep350(pawn)){finishMentalBreak(world,pawn);return;}
+    if(isMoodPoolCrisis350(m.crisis.kind)&&!maintainInsultingSpree350(world,pawn,budget))return;
     if((world.tick+pawn.id)%3===0) {
       m.crisis.age+=30;
       const rules=MENTAL_CRISIS_CATALOG[m.crisis.kind];
-      if(m.crisis.age>=rules.maxCore||m.crisis.age>=rules.minCore&&healthRandom(world)<30/(rules.recoveryMtb*60000)) {
+      if(m.crisis.age>=rules.maxCore||m.crisis.age>=rules.minCore&&crisisCanEndEarly350(m.crisis)&&healthRandom(world)<30/(rules.recoveryMtb*60000)) {
         finishMentalBreak(world,pawn);
         // Recovery ends the crisis job as well. A carried meal stays physical;
         // interruption may retain it until the active edge/ground permits drop.
@@ -111,6 +115,7 @@ export function updateMentalBreak(world:World,pawn:Pawn,budget?:SearchBudget):vo
     }
     return;
   }
+  if(isMoodPool350(world.schemaVersion)){updateMoodPoolBreak350(world,pawn,level,budget);return;}
   // Availability is resolved before randomness. A deferred search is not an
   // empty catalogue and must not silently downgrade a major/extreme crisis.
   let options:{kind:MentalCrisisKind;weight:number;admission?:AggressiveCrisisAdmission}[]=[];
@@ -129,14 +134,51 @@ export function updateMentalBreak(world:World,pawn:Pawn,budget?:SearchBudget):vo
   const chosen=options.find(c=>(roll-=c.weight)<0)??options.at(-1)!;
   if(chosen.kind==='sad-wander'||chosen.kind==='food-binge')startMinorBreak(world,pawn,chosen.kind);
   else if(chosen.kind==='drug-binge')startAlcoholBinge265(world,pawn,budget,true);
-  else startAggressiveBreak(world,pawn,chosen.kind,chosen.admission);
+  else startAggressiveBreak(world,pawn,chosen.kind as AggressiveCrisisKind,chosen.admission);
+}
+/** Schema 350: the same decision with Core's complete mood pool, each
+ * intensity in the MentalBreakDef order (mental-breaks-350). */
+function updateMoodPoolBreak350(world:World,pawn:Pawn,level:number,budget?:SearchBudget):void {
+  type Option={kind:MentalCrisisKind;weight:number;admission?:AggressiveCrisisAdmission;pool?:MoodPoolAdmission350};
+  let options:Option[]=[];
+  for(let intensity=level;intensity>=0;intensity--) {
+    if(intensity===0){const minor=minorPoolOptions350(world,pawn,budget);if(minor===null)return;options=minor.map(o=>({kind:o.kind,weight:o.weight,...o.admission?{pool:o.admission}:{}}));}
+    else if(intensity===1){
+      if(isSchema265OrLater(world.schemaVersion)&&!pawn.prisoner){const admission=alcoholBingeAdmission265(world,pawn,budget);if(admission===null)return;if(admission)options.push({kind:'drug-binge',weight:1});}
+      if(psychoticWanderAdmitted350(pawn))options.push({kind:'psychotic-wander',weight:MENTAL_CRISIS_CATALOG['psychotic-wander'].weight});
+      const admission=aggressiveCrisisAdmission(world,pawn,'tantrum',budget);if(admission===null)return;
+      if(admission)options.push({kind:'tantrum',admission,weight:MENTAL_CRISIS_CATALOG.tantrum.weight});
+    }else for(const kind of ['berserk','murderous-rage'] as const){
+      const admission=aggressiveCrisisAdmission(world,pawn,kind,budget);if(admission===null)return;
+      if(admission)options.push({kind,admission,weight:MENTAL_CRISIS_CATALOG[kind].weight*(kind==='murderous-rage'?murderousRageWeight(admission.population):1)});
+    }
+    if(options.length)break;
+  }
+  if(!options.length||healthRandom(world)>=150/(BREAK_MTB_DAYS[Math.max(0,level)]!*60000))return;
+  let roll=healthRandom(world)*options.reduce((sum,c)=>sum+c.weight,0);
+  const chosen=options.find(c=>(roll-=c.weight)<0)??options.at(-1)!;
+  if(chosen.kind==='sad-wander'||chosen.kind==='food-binge')startMinorBreak(world,pawn,chosen.kind);
+  else if(chosen.kind==='drug-binge')startAlcoholBinge265(world,pawn,budget,true);
+  else if(isMoodPoolCrisis350(chosen.kind))startMoodPoolBreak350(world,pawn,chosen.kind,chosen.pool);
+  else startAggressiveBreak(world,pawn,chosen.kind as AggressiveCrisisKind,chosen.admission);
+}
+/** A schema 350 break: the reason is drawn at commit, a spree's first target
+ * right after it, both on the mental stream. */
+export function startMoodPoolBreak350(world:World,pawn:Pawn,kind:MoodPoolCrisisKind350,admission?:MoodPoolAdmission350):boolean {
+  if(!isMoodPool350(world.schemaVersion)||pawn.state==='downed'||moodFrozen(pawn)||pawn.mental?.crisis)return false;
+  if(kind!=='psychotic-wander'&&(!isColonist(pawn)||pawn.prisoner))return false;
+  if(kind==='wander-own-room'&&!admission?.root||(kind==='insulting-spree'||kind==='targeted-insulting-spree')&&!admission?.candidates?.length)return false;
+  const crisis=newMoodPoolCrisis350(world,kind,admission);
+  if(!commitBreak(world,pawn,crisis))return false;
+  if(admission?.candidates)drawFirstInsultTarget350(world,pawn,crisis,admission.candidates);
+  return true;
 }
 
 export function processMentalBreak(world:World,pawn:Pawn,context:NeedContext,candidatesReach:()=>Reachability|null):void {
   const crisis=pawn.mental?.crisis;if(!crisis)return;
   if(crisis.kind==='confused-wander'){processHumanConfusedWander256(world,pawn,context,candidatesReach);return;}
   collapseFromExhaustion(world,pawn,context);
-  if(moodFrozen(pawn)){finishMentalBreak(world,pawn);return;}
+  if(moodFrozen(pawn)&&!crisisKeptAsleep350(pawn)){finishMentalBreak(world,pawn);return;}
   retryInterruptedCargo(world,pawn);
   // Retained emergency cargo never doubles as an inventory. Walking may free a
   // legal drop; ordinary needs resume after the real deposit.
@@ -148,11 +190,14 @@ export function processMentalBreak(world:World,pawn:Pawn,context:NeedContext,can
     return;
   }
   if(crisis.kind==='drug-binge'&&!pawn.interruptedCargo&&processAutomaticAlcohol265(world,pawn,context)){crisis.target=null;return;}
+  // Schema 350: a spree goes to insult its target; without one it wanders.
+  if(isMoodPoolCrisis350(crisis.kind)&&!pawn.interruptedCargo&&processInsultingSpree350(world,pawn,context,candidatesReach))return;
   if(crisis.target) {
     if(!canStandAt(world,crisis.target)||reservedServiceCells(world,pawn.id).has(crisis.target.z*world.width+crisis.target.x)) {
       crisis.target=null;pawn.path=[];pawn.state='idle';crisis.waitUntil=world.tick+1;return;
     }
-    if(pawn.x===crisis.target.x&&pawn.z===crisis.target.z){crisis.target=null;pawn.path=[];pawn.state='idle';crisis.waitUntil=world.tick+(125+Math.floor(healthRandom(world)*76))/10;return;}
+    // JobGiver_WanderOwnRoom waits 300 to 600 ticks, the other wanders 125 to 200.
+    if(pawn.x===crisis.target.x&&pawn.z===crisis.target.z){crisis.target=null;pawn.path=[];pawn.state='idle';crisis.waitUntil=world.tick+(crisis.kind==='wander-own-room'?30+Math.floor(healthRandom(world)*31):(125+Math.floor(healthRandom(world)*76))/10);return;}
     context.move(crisis.target,true);
     if(pawn.state==='idle'&&!pawn.path.length){crisis.target=null;crisis.waitUntil=world.tick+20;}
     return;
@@ -163,8 +208,10 @@ export function processMentalBreak(world:World,pawn:Pawn,context:NeedContext,can
   // synchronous search, bounded local candidates, no per-frame navigation.
   const reach=candidatesReach();if(!reach)return;
   const reserved=reservedServiceCells(world,pawn.id),candidates=[];
-  for(let z=Math.max(0,pawn.z-7);z<=Math.min(world.height-1,pawn.z+7);z++)for(let x=Math.max(0,pawn.x-7);x<=Math.min(world.width-1,pawn.x+7);x++) {
-    if((x-pawn.x)**2+(z-pawn.z)**2>49||x===pawn.x&&z===pawn.z||reserved.has(z*world.width+x)||!canStandAt(world,{x,z}))continue;
+  // Schema 350: hiding in one's room wanders around the bed, inside its room.
+  const center=crisis.kind==='wander-own-room'?crisis.root:pawn,inRoom=crisis.kind==='wander-own-room'?ownRoomSpace350(world,crisis.root):undefined;
+  for(let z=Math.max(0,center.z-7);z<=Math.min(world.height-1,center.z+7);z++)for(let x=Math.max(0,center.x-7);x<=Math.min(world.width-1,center.x+7);x++) {
+    if((x-center.x)**2+(z-center.z)**2>49||x===pawn.x&&z===pawn.z||reserved.has(z*world.width+x)||!canStandAt(world,{x,z})||inRoom&&!inRoom(x,z))continue;
     if(hasReachableCell(reach,z*world.width+x))candidates.push({x,z});
   }
   if(!candidates.length){crisis.waitUntil=world.tick+20;return;}

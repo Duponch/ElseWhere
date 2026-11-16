@@ -4,7 +4,7 @@ import { PresentationChanges } from '../src/bridge/presentation-changes.ts';
 import { applyCommand, stepWorld } from '../src/sim/engine.ts';
 import { addGroundMaterial } from '../src/sim/materials.ts';
 import { startBerserk, startFoodBinge, startMurderousRage, startSadWander, startTantrum } from '../src/sim/mental-break.ts';
-import { finishMentalBreak } from '../src/sim/mental-state.ts';
+import { finishMentalBreak,isAggressiveMentalCrisis } from '../src/sim/mental-state.ts';
 import { deserializeWorld, serializeWorld, validateWorld } from '../src/sim/serialization.ts';
 import { SCHEMA_VERSION, type Pawn, type World } from '../src/sim/types.ts';
 import { visitorGroupDanger } from '../src/sim/visitors.ts';
@@ -100,7 +100,7 @@ test('active material, resource and job identities cannot be forged into an aggr
     const jobId=source.jobs.at(-1)!.id;expect(starters[kind](source,pawn)).toBe(true);expect(validateWorld(source)).toEqual([]);
     for(const id of [pileId,tree.id,jobId]){
       const bad=structuredClone(source),crisis=bad.pawns[0]!.mental!.crisis!;
-      if(crisis.kind==='sad-wander'||crisis.kind==='food-binge'||crisis.kind==='drug-binge'||crisis.kind==='confused-wander')throw new Error('Missing aggressive crisis.');
+      if(!isAggressiveMentalCrisis(crisis))throw new Error('Missing aggressive crisis.');
       crisis.targetId=id;
       // Keep the coupled clocks valid so identity, rather than shape, rejects it.
       if(crisis.kind==='berserk')crisis.jobUntilCore=bad.tick*10+600;

@@ -1,3 +1,4 @@
+import {processNuzzle350} from './nuzzle-350.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import { volcanicAnimalDensityFactor310 } from './volcanic-winter-state-310.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -429,6 +430,8 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
     if((medicalRest?a.food>=nutrition*.45:a.confusion?a.rest<.15:a.rest<.3||night&&a.rest<.75)&&!a.sleepUntilCore&&n.free(a)&&insideArea(a)) {notifyDuckFlightJob256(world,a,'other',()=>wildlifeRandom(s));a.state='sleeping';continue;}
     if(!a.confusion&&searches<1&&beginAnimalEggLay256(world,a,goals=>{if(searches>=1)return null;searches++;return n.route(a,goals);})){notifyDuckFlightJob256(world,a,'other',()=>wildlifeRandom(s));continue;}
     if(processHiveWander256(world,a,n,()=>{if(searches>=1)return false;searches++;return true;}))continue;
+    // Schema 350: a tame animal may go and nuzzle a colonist (before hauling, as in Core).
+    if(!medicalRest&&!a.haul&&!a.confusion&&processNuzzle350(world,a,{policy:readArea(a),takeSearch:takeHaulSearch,route:goals=>n.route(a,goals),random:()=>wildlifeRandom(s)}))continue;
     if(!medicalRest&&animalHaulAvailable282(world,a,night)&&hauling.start(a,n,takeHaulSearch))continue;
     const falloutWander=toxicFalloutActive294(world)?processAnimalFalloutShelter294(world,a,{nav:n,canSearch:()=>searches<1,takeSearch:takeHaulSearch,startJob:()=>notifyDuckFlightJob256(world,a,'GotoWander',()=>wildlifeRandom(s)),move:()=>{moveAnimal(world,a,n.step,body.capacities.moving,n.geometry);}}):0;
     if(falloutWander===1)continue;

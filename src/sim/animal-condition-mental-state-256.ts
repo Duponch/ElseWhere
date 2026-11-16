@@ -1,3 +1,4 @@
+import {isMoodPool350,validAnimalNuzzle350} from './mood-pool-memories-350.ts';
 import type {WildAnimal} from './wildlife-state.ts';
 /** Schema 304: the longest idle wander wait a save may hold (2 x 240 ticks
  * plus the 15-tick hash window, animal-idle-wander-304.ts). */
@@ -7,6 +8,8 @@ export interface AnimalWanderState256 {
  /** Pawn_MindState ctor's CLR default. Reset's true is a different event. */
  nextMoveOrderIsWait:boolean;
  job?:{kind:'wait';untilCore:number}|{kind:'goto';destination:{x:number;z:number}};
+ /** Schema 350: the nuzzle node's last check and the current nuzzle target (nuzzle-350). */
+ nuzzle350?:import('./mood-pool-memories-350.ts').AnimalNuzzle350;
 }
 export interface AnimalConfusion256 {revision:1;ageCore:number}
 export type ActualAnimalMind256=WildAnimal&{wander?:AnimalWanderState256;confusion?:AnimalConfusion256};
@@ -29,7 +32,7 @@ export function validAnimalMindFields256(value:Record<string,unknown>,version:nu
  if(version<256||!Object.hasOwn(value,'growthTracker'))return false;
  if(Object.hasOwn(value,'wander')){
   if(!data(value,'wander')||!object(value.wander))return false;const w=value.wander;
-  if(!exact(w,['revision','nextMoveOrderIsWait','job'])||!data(w,'revision')||!data(w,'nextMoveOrderIsWait')||w.revision!==1||typeof w.nextMoveOrderIsWait!=='boolean')return false;
+  if(!exact(w,['revision','nextMoveOrderIsWait','job',...isMoodPool350(version)?['nuzzle350']:[]])||!validAnimalNuzzle350(w.nuzzle350,version,clock)||!data(w,'revision')||!data(w,'nextMoveOrderIsWait')||w.revision!==1||typeof w.nextMoveOrderIsWait!=='boolean')return false;
   if(Object.hasOwn(w,'job')){
    if(!local)return false;
    if(!object(w.job))return false;const j=w.job;if(!data(j,'kind'))return false;

@@ -1,3 +1,4 @@
+import {rescuedMe350} from './mood-pool-350.ts';
 import {preparePartyRelease292} from './party-release-292.ts';
 import {commitMedicalGuest259} from './world-affiliation-259.ts';
 import {cancelToxicVomit256} from './toxic-buildup-256.ts';
@@ -172,5 +173,7 @@ export function processRescue(world:World,actor:Pawn,context:NeedContext):void {
   // mobile captive chooses medical rest, sleep or food on its next turn.
   if(patient.state==='downed')patient.need={kind:'sleep',phase:'sleep',bedId:bed.id,target:{x:target.x,z:target.z}};
   else {patient.need=null;patient.state='idle';patient.planCooldown=0;patient.needCooldown=0;}
+  // Schema 350: the rescued person remembers its rescuer (RescuedMe).
+  if(!task.capture)rescuedMe350(world,patient,actor);
   context.event(task.capture?`${actor.name} a capturé ${patient.name} et l’a installé dans un lit de prison${bed.medical?' médical':''}.`:`${actor.name} a installé ${patient.name} dans un lit${bed.medical?' médical':''}.`);
 }

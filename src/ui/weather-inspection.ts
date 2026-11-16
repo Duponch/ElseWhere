@@ -2,13 +2,14 @@ import { activeColdSnap, coldSnapOffset } from '../sim/cold-snap';
 import {volcanicTemperatureOffset310,volcanicWinterActive310} from '../sim/volcanic-winter-state-310';
 import { activeEclipse } from '../sim/eclipse';
 import {toxicFalloutActive294} from '../sim/toxic-fallout-state-294';
+import {psychicActive350,psychicConditionText350} from '../sim/psychic-state-350';
 import { TICKS_PER_DAY, type World } from '../sim/types';
 import { personNotificationTarget,NotificationFocusCycle,type NotificationTarget,type FocusNotification } from './notification-focus';
 import { createNotificationLetterDetails } from './notification-letter';
 
 type WeatherWorld = Pick<World, 'tick' | 'miscIncidents'> & {schemaVersion?:number};
 export interface WeatherConditionInspection {
-  kind: 'cold-snap' | 'eclipse' | 'toxic-fallout' | 'volcanic-winter';
+  kind: 'cold-snap' | 'eclipse' | 'toxic-fallout' | 'volcanic-winter' | 'psychic';
   title: string;
   summary: string;
   body: string;
@@ -47,11 +48,14 @@ export function weatherConditionInspection(world: WeatherWorld): WeatherConditio
       summary:`Hiver volcanique · ${offset} °C · reste ${remainingTime(Math.ceil(volcanic.endCore/10)-world.tick)}`,
       body:`Des cendres voilent le ciel : la température extérieure baisse de ${offset} °C, les journées sont plus sombres, les cultures et les panneaux solaires produisent moins, la faune se raréfie et personne ne se détend en plein air. Prévoyez des réserves de nourriture et du chauffage.`});
   }
+  // Schema 350: psychic drone or soothe, shown like the other map conditions.
+  const psychic=psychicActive350(world);
+  if(psychic){const text=psychicConditionText350(psychic);conditions.push({kind:'psychic',title:text.title,summary:`${text.title} · reste ${remainingTime(Math.ceil(psychic.endCore/10)-world.tick)}`,body:text.body});}
   return conditions;
 }
 
 export function weatherConditionLabel(world: WeatherWorld): string {
-  return [activeColdSnap(world) ? 'Vague de froid' : '', activeEclipse(world) ? 'Éclipse' : '',toxicFalloutActive294(world)?'Retombées toxiques':'',volcanicWinterActive310(world)?'Hiver volcanique':''].filter(Boolean).join(' · ');
+  return [activeColdSnap(world) ? 'Vague de froid' : '', activeEclipse(world) ? 'Éclipse' : '',toxicFalloutActive294(world)?'Retombées toxiques':'',volcanicWinterActive310(world)?'Hiver volcanique':'',psychicActive350(world)?.kind==='drone'?'Bourdonnement psychique':psychicActive350(world)?'Apaisement psychique':''].filter(Boolean).join(' · ');
 }
 
 /** Informational letters reuse the existing alerts; they issue no commands. */

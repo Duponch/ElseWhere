@@ -7,7 +7,7 @@ import { RELATIONSHIP_OPINION,type RelationshipViewKind } from './relationship-s
 import { expireRomanceMemories,romanceOpinionCauses,type RomanceOpinionKind } from './romance-memories.ts';
 import {coupleOpinionOffset285,COUPLE_MEMORY_DURATION_285} from './couple-memories-285.ts';
 
-export type SocialKind='chitchat'|'deep-talk'|'rapport'|'kind-words'|'slight'|'insult'|'fight-cathartic'|'fight-angering'|'recruited-me'|'crashed-together';
+export type SocialKind='chitchat'|'deep-talk'|'rapport'|'kind-words'|'slight'|'insult'|'fight-cathartic'|'fight-angering'|'recruited-me'|'crashed-together'|'rescued-me';
 export type SocialInteractionKind=SocialKind|'romance-attempt'|'breakup';
 export interface SocialMemory { otherId:number;kind:SocialKind;at:number;offset:number;suspendedTicks?:number }
 export interface SocialState {
@@ -17,14 +17,16 @@ export interface SocialState {
   fight?:{opponentId:number;startedAt:number};
   memories:SocialMemory[];
 }
-export const SOCIAL_LABELS:Readonly<Record<SocialInteractionKind,string>>=Object.freeze({'chitchat':'Bavardage','deep-talk':'Discussion approfondie',rapport:'Rapprochement','kind-words':'Mots gentils',slight:'Vexation',insult:'Insulte','fight-cathartic':'Bagarre cathartique','fight-angering':'Bagarre rageante','recruited-me':'M’a recruté','crashed-together':'Naufragés ensemble','romance-attempt':'Tentative amoureuse',breakup:'Rupture'});
+export const SOCIAL_LABELS:Readonly<Record<SocialInteractionKind,string>>=Object.freeze({'chitchat':'Bavardage','deep-talk':'Discussion approfondie',rapport:'Rapprochement','kind-words':'Mots gentils',slight:'Vexation',insult:'Insulte','fight-cathartic':'Bagarre cathartique','fight-angering':'Bagarre rageante','recruited-me':'M’a recruté','crashed-together':'Naufragés ensemble','rescued-me':'M’a secouru','romance-attempt':'Tentative amoureuse',breakup:'Rupture'});
 export const DEEP_TALK_DURATION=20*TICKS_PER_DAY;
 /** Core ThoughtDef RecruitedMe (schema 319): 120 days. */
 export const RECRUITED_ME_DURATION=120*TICKS_PER_DAY;
 export const RECRUITED_ME_OPINION=20;
 /** Core ThoughtDef CrashedTogether (schema 343): +25, 20 days, one per person. */
 export const CRASHED_TOGETHER_OPINION=25;
-export const socialMemoryDuration=(kind:SocialKind):number=>kind==='recruited-me'?RECRUITED_ME_DURATION:DEEP_TALK_DURATION;
+/** Core ThoughtDef RescuedMe (schema 350): +15, 30 days, three per rescuer, ×0.9. */
+export const RESCUED_ME_OPINION=15,RESCUED_ME_DURATION=30*TICKS_PER_DAY;
+export const socialMemoryDuration=(kind:SocialKind):number=>kind==='recruited-me'?RECRUITED_ME_DURATION:kind==='rescued-me'?RESCUED_ME_DURATION:DEEP_TALK_DURATION;
 export const INSULT_MOOD_DURATION=2*TICKS_PER_DAY;
 
 /** Independent stream: social rolls never perturb mining, medicine or raids. */
@@ -63,11 +65,11 @@ const relationLabels:Readonly<Record<RelationshipViewKind,string>>={parent:'Pare
 export function opinionCauses(pawn:Pawn,otherId:number,tick:number,world?:World):OpinionCause[] {
   tick=memoryReadTick271(pawn,tick);
   const memories=pawn.social?.memories.filter(m=>m.otherId===otherId&&memoryOffset(m,tick)!==0)??[];
-  const causes:OpinionCause[]=(['chitchat','deep-talk','rapport','kind-words','slight','insult','fight-cathartic','fight-angering','recruited-me','crashed-together'] as const).flatMap(kind=>{
+  const causes:OpinionCause[]=(['chitchat','deep-talk','rapport','kind-words','slight','insult','fight-cathartic','fight-angering','recruited-me','crashed-together','rescued-me'] as const).flatMap(kind=>{
     const group=memories.filter(m=>m.kind===kind).sort((a,b)=>b.at-a.at);if(!group.length)return [];
-    const value=roundOpinion(group.reduce((s,m,i)=>s+memoryOffset(m,tick)*((kind==='deep-talk'||kind==='kind-words'||kind==='slight'||kind==='insult'||kind==='fight-cathartic'||kind==='fight-angering') ? .9**i : 1),0));
+    const value=roundOpinion(group.reduce((s,m,i)=>s+memoryOffset(m,tick)*((kind==='deep-talk'||kind==='kind-words'||kind==='slight'||kind==='insult'||kind==='fight-cathartic'||kind==='fight-angering'||kind==='rescued-me') ? .9**i : 1),0));
     const nextChange=kind==='chitchat'?memoryExpiry271(group[0]!,group[0]!.at+(Math.floor((memoryAge271(group[0]!,group[0]!.at,tick))/TICKS_PER_DAY)+1)*TICKS_PER_DAY):Math.min(...group.map(m=>memoryExpiry271(m,m.at+socialMemoryDuration(kind))));
-    return [{kind,count:group.length,value,nextChange,label:SOCIAL_LABELS[kind],description:kind==='crashed-together'?'Arrivés ensemble dans les capsules de survie ; l’effet s’estompe pendant les derniers 30 % des vingt jours.':'Souvenir dirigé d’un échange social réel.'}];
+    return [{kind,count:group.length,value,nextChange,label:SOCIAL_LABELS[kind],description:kind==='crashed-together'?'Arrivés ensemble dans les capsules de survie ; l’effet s’estompe pendant les derniers 30 % des vingt jours.':kind==='rescued-me'?'M’a porté jusqu’à un lit quand j’étais à terre ; l’effet s’estompe pendant les derniers 30 % des trente jours.':'Souvenir dirigé d’un échange social réel.'}];
   });
   if(world&&world.schemaVersion>=195&&world.relationships?.links.length)for(const kind of relationshipIndex(world).kinds(pawn.id,otherId)){
     causes.push({kind:`relation-${kind}`,count:1,value:RELATIONSHIP_OPINION[kind],nextChange:Infinity,label:relationLabels[kind],description:'Lien personnel connu ; son effet n’est pas une conversation expirante.'});
@@ -114,10 +116,10 @@ export function expireSocialMemories(pawn:Pawn,tick:number):void {
 export function addSocialMemory(state:SocialState,otherId:number,kind:SocialKind,tick:number,impact:number):void {
   const same=state.memories.filter(m=>m.kind===kind&&m.otherId===otherId);
   if(kind==='chitchat'&&same.length){same[0]!.offset+=.66*impact;return;}
-  if(kind!=='chitchat'&&same.length>=(kind==='recruited-me'?1:kind==='rapport'?50:kind==='fight-cathartic'||kind==='fight-angering'?5:10))state.memories.splice(state.memories.indexOf(same.reduce((a,b)=>a.at<=b.at?a:b)),1);
+  if(kind!=='chitchat'&&same.length>=(kind==='recruited-me'?1:kind==='rescued-me'?3:kind==='rapport'?50:kind==='fight-cathartic'||kind==='fight-angering'?5:10))state.memories.splice(state.memories.indexOf(same.reduce((a,b)=>a.at<=b.at?a:b)),1);
   const all=state.memories.filter(m=>m.kind===kind);
   if(all.length>=300)state.memories.splice(state.memories.indexOf(all.reduce((a,b)=>a.at<=b.at?a:b)),1);
-  state.memories.push({otherId,kind,at:tick,offset:(kind==='chitchat'?.66:kind==='rapport'?2:kind==='kind-words'?15:kind==='slight'?-5:kind==='insult'?-15:kind==='fight-cathartic'?38:kind==='fight-angering'?-22:15)*(kind==='recruited-me'?0:impact)+(kind==='recruited-me'?RECRUITED_ME_OPINION:0)});
+  state.memories.push({otherId,kind,at:tick,offset:(kind==='chitchat'?.66:kind==='rapport'?2:kind==='kind-words'?15:kind==='slight'?-5:kind==='insult'?-15:kind==='fight-cathartic'?38:kind==='fight-angering'?-22:15)*(kind==='recruited-me'||kind==='rescued-me'?0:impact)+(kind==='recruited-me'?RECRUITED_ME_OPINION:kind==='rescued-me'?RESCUED_ME_OPINION:0)});
 }
 
 /** Called once when an actual social fight ends, including before its first

@@ -15,6 +15,10 @@ const descriptions:Readonly<Record<MentalCrisisKind,string>>={
   tantrum:'Refuse les ordres et s’en prend aux bâtiments accessibles.',
   berserk:'Refuse les ordres et devient hostile à tous. Ne poursuit pas une victime à terre.',
   'murderous-rage':'Refuse les ordres et cherche à tuer sa cible, même à terre.',
+  'psychotic-wander':'erre sans but pendant plusieurs jours et refuse les ordres. Cherche encore nourriture et sommeil en cas de besoin extrême ; dormir ne met pas fin à la crise.',
+  'wander-own-room':'se cache dans sa chambre, autour de son lit, et refuse les ordres. Cherche encore nourriture et sommeil en cas de besoin extrême.',
+  'insulting-spree':'erre dans la colonie et va insulter les personnes proches, une insulte toutes les deux minutes au plus. Refuse les ordres sans devenir violent.',
+  'targeted-insulting-spree':'suit une seule personne pour l’insulter, sans devenir violent. Refuse les ordres ; la crise peut cesser après une première insulte.',
 };
 export interface MentalTargetView {type:'pawn'|'animal'|'structure';id:number;cell:Cell;label:string}
 export interface MentalCrisisView {

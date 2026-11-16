@@ -1,3 +1,4 @@
+import {noteBondedAnimalDeaths350} from './mood-pool-memories-350.ts';
 import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {applyTutorialCommand347,isTutorialCommand347} from './tutorial-347.ts';
 import {advanceTutorialDownRaider349,applyTutorialLessonCommand349,isTutorialLessonCommand349} from './tutorial-lessons-349.ts';
@@ -1700,6 +1701,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     advanceLocalMechFirefoam290(world,firefoamLocalMechs290);advanceFirefoamWaves290(world);
     for(const pawn of world.pawns)if(pawn.firefoamTask290)reconcileFirefoamManual290(world,pawn);
     finishToxicFallout294(world);
+    noteBondedAnimalDeaths350(world);
   }
 }
 import { updatePawnHealth,reconcilePawnHealth } from './health.ts';

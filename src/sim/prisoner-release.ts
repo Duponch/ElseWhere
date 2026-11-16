@@ -13,6 +13,7 @@ import { clearQueuedOrders } from './player-orders.ts';
 import { capturePrisonTopology,prisonRoom } from './prison-space.ts';
 import { carrierOf,rescueClaim,syncPatient,type RescueTask } from './rescue-state.ts';
 import { workPriority } from './work-types.ts';
+import { releasedHealthyPrisoner350 } from './mood-pool-350.ts';
 import { planCommandDrops,releaseWork } from './work-release.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell,Pawn,World } from './types.ts';
@@ -117,6 +118,8 @@ export function processPrisonerRelease(world:World,actor:Pawn,context:NeedContex
     context.event(`${actor.name} a libéré ${patient.name}, qui retrouve sa liberté dans la colonie.`);
   }else{
     patient.prisoner!.releasedAt=world.tick;patient.prisoner!.escape={...exit};
+    // Schema 350: JobDriver_ReleasePrisoner's ReleasedHealthyPrisoner thoughts.
+    releasedHealthyPrisoner350(world,patient);
     context.event(`${actor.name} a libéré ${patient.name}, qui rejoint la sortie de la carte.`);
   }
 }

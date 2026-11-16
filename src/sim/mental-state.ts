@@ -9,7 +9,16 @@ export type AggressiveCrisis=
   | (CrisisBase&{kind:'tantrum';targetId:number|null;targetSinceCore:number;attempted:boolean;nextTargetCore:number})
   | (CrisisBase&{kind:'berserk';targetId:number|null;jobUntilCore:number|null})
   | (CrisisBase&{kind:'murderous-rage';targetId:number;nextCheckCore:number});
-export type MentalCrisis=(CrisisBase&{kind:'confused-wander'})|(CrisisBase&{kind:'sad-wander'})|(CrisisBase&{kind:'food-binge'})|(CrisisBase&{kind:'drug-binge'})|AggressiveCrisis;
+/** Schema 350 (mental-breaks-350): psychotic wander, hiding in one's room
+ * around its bed's cell, and the two insulting sprees. */
+export type MoodPoolCrisis350=
+  | (CrisisBase&{kind:'psychotic-wander'})
+  | (CrisisBase&{kind:'wander-own-room';root:Cell})
+  | (CrisisBase&{kind:'insulting-spree';insultTargetId:number|null;insulted:boolean;lastInsultCore:number|null;foundCore:number|null})
+  | (CrisisBase&{kind:'targeted-insulting-spree';insultTargetId:number;insulted:boolean;lastInsultCore:number|null});
+export type MentalCrisis=(CrisisBase&{kind:'confused-wander'})|(CrisisBase&{kind:'sad-wander'})|(CrisisBase&{kind:'food-binge'})|(CrisisBase&{kind:'drug-binge'})|AggressiveCrisis|MoodPoolCrisis350;
+/** Tantrum, berserk and murderous rage: the crises that target by violence. */
+export const isAggressiveMentalCrisis=(c:MentalCrisis):c is AggressiveCrisis=>c.kind==='tantrum'||c.kind==='berserk'||c.kind==='murderous-rage';
 
 export interface MentalState {
   wander?:HumanConditionWander256;

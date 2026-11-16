@@ -4,6 +4,8 @@ import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import type { World } from './types.ts';
 import { isColonist } from './affiliation.ts';
 import { MENTAL_CRISIS_CATALOG } from './mental-catalog.ts';
+import { isAggressiveMentalCrisis } from './mental-state.ts';
+import { isMoodPool350,isMoodPoolCrisis350 } from './mood-pool-memories-350.ts';
 import { structureMaxHp } from './thing-damage-rules.ts';
 
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -17,12 +19,19 @@ export function validMentalShape(value:unknown,version:number,tick:number,width:
   if(!object(c)||typeof c.kind!=='string'||!Object.hasOwn(MENTAL_CRISIS_CATALOG,c.kind)||c.kind==='food-binge'&&version<150||!['sad-wander','food-binge'].includes(c.kind)&&version<192)return false;
   if(c.kind==='confused-wander'&&(version<256||!Object.hasOwn(value,'wander')))return false;
   if(c.kind==='drug-binge'&&!isSchema265OrLater(version))return false;
+  if(isMoodPoolCrisis350(c.kind)&&!isMoodPool350(version))return false;
   const rules=MENTAL_CRISIS_CATALOG[c.kind as keyof typeof MENTAL_CRISIS_CATALOG];
-  if(!integer(c.age,0,rules.maxCore+(c.kind==='murderous-rage'?19:-1))||c.age%30!==0||typeof c.waitUntil!=='number'||!Number.isFinite(c.waitUntil)||c.waitUntil<0||c.waitUntil>tick+20.1||!(c.target===null||object(c.target)&&keys(c.target,['x','z'])&&integer(c.target.x,0,width-1)&&integer(c.target.z,0,height-1)))return false;
+  if(!integer(c.age,0,rules.maxCore+(c.kind==='murderous-rage'?19:-1))||c.age%30!==0||typeof c.waitUntil!=='number'||!Number.isFinite(c.waitUntil)||c.waitUntil<0||c.waitUntil>tick+(c.kind==='wander-own-room'?60:20.1)||!(c.target===null||object(c.target)&&keys(c.target,['x','z'])&&integer(c.target.x,0,width-1)&&integer(c.target.z,0,height-1)))return false;
   const base=['kind','age','target','waitUntil'];
   if(c.kind==='tantrum')return keys(c,[...base,'targetId','targetSinceCore','attempted','nextTargetCore'])&&(c.targetId===null||integer(c.targetId,1))&&integer(c.targetSinceCore,0,tick*10)&&typeof c.attempted==='boolean'&&integer(c.nextTargetCore,0,tick*10+500);
   if(c.kind==='berserk')return keys(c,[...base,'targetId','jobUntilCore'])&&(c.targetId===null||integer(c.targetId,1))&&(c.jobUntilCore===null||integer(c.jobUntilCore,0,tick*10+900))&&(c.targetId===null)===(c.jobUntilCore===null);
   if(c.kind==='murderous-rage')return keys(c,[...base,'targetId','nextCheckCore'])&&integer(c.targetId,1)&&integer(c.nextCheckCore,0,tick*10+120);
+  // Schema 350: the own room's bed cell; a spree's target and its two Core clocks.
+  if(c.kind==='wander-own-room')return keys(c,[...base,'root'])&&object(c.root)&&keys(c.root,['x','z'])&&integer(c.root.x,0,width-1)&&integer(c.root.z,0,height-1);
+  const core=(v:unknown)=>v===null||integer(v,0,tick*10);
+  if(c.kind==='insulting-spree')return keys(c,[...base,'insultTargetId','insulted','lastInsultCore','foundCore'])&&(c.insultTargetId===null||integer(c.insultTargetId,1))&&typeof c.insulted==='boolean'&&core(c.lastInsultCore)&&core(c.foundCore)
+    &&(c.insultTargetId!==null||c.insulted===false&&c.foundCore===null);
+  if(c.kind==='targeted-insulting-spree')return keys(c,[...base,'insultTargetId','insulted','lastInsultCore'])&&integer(c.insultTargetId,1)&&typeof c.insulted==='boolean'&&core(c.lastInsultCore);
   return keys(c,base);
 }
 export function validMeleeThreatShape(value:unknown,version:number,tick:number,coreNow297?:number):boolean {
@@ -37,7 +46,10 @@ export function validateMental(world:World,version:number):string[] {
     const m=p.mental;if(m===undefined)continue;
     if(!isColonist(p)&&!(version>=256&&m.wander&&(!m.crisis||m.crisis.kind==='confused-wander'))||!validMentalShape(m,version,world.tick,world.width,world.height)){errors.push('Invalid mental state.');continue;}
     const c=m.crisis;if(!c)continue;
-    const aggressive=c.kind!=='sad-wander'&&c.kind!=='food-binge'&&c.kind!=='confused-wander'&&c.kind!=='drug-binge';
+    const aggressive=isAggressiveMentalCrisis(c);
+    // Schema 350: the own room and the sprees are colonists' breaks; a spree's target is a person.
+    if((c.kind==='wander-own-room'||c.kind==='insulting-spree'||c.kind==='targeted-insulting-spree')&&(p.prisoner&&!isColonist(p)||p.visitor||p.podRescue||p.raid))errors.push('Invalid mood break owner.');
+    if((c.kind==='insulting-spree'||c.kind==='targeted-insulting-spree')&&c.insultTargetId!==null&&(c.insultTargetId===p.id||!world.pawns.some(t=>t.id===c.insultTargetId)))errors.push('Invalid insult target.');
     if(c.kind==='drug-binge'&&(p.prisoner||p.visitor||p.podRescue||p.raid))errors.push('Invalid alcohol binge owner.');
     if(aggressive&&(p.prisoner||p.visitor||p.podRescue||p.raid))errors.push('Invalid aggressive crisis owner.');
     if('targetId' in c&&c.targetId!==null) {

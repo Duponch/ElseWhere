@@ -1,3 +1,4 @@
+import {noteBondedAnimalDeaths350} from './mood-pool-memories-350.ts';
 import {toxicCorpseRot256} from './toxic-victim-256.ts';
 import {planAnimalBodyRetirement256} from './animal-body-retirement-256.ts';
 import {retainedCorpseDamage256,type RetainedCorpseDamage256} from './retained-corpse-damage-256.ts';
@@ -86,6 +87,8 @@ export function pickUpRetainedCorpse(w:World,p:Pawn,id:number):MaterialPile|null
  * never teleported to a distant free tile or discarded to satisfy pile limits. */
 export function advanceCorpses(w:World,layout?:ThermalLayout):void {
   if(w.schemaVersion<79||!w.wildlife?.animals.some(a=>a.state==='dead'))return;
+  // Schema 350: a bonded animal's death is mourned before its body leaves the list.
+  noteBondedAnimalDeaths350(w);
   const view=new TemperatureView(w,layout),removed=new Set<number>();
   for(const a of w.wildlife.animals) {
     if(a.state!=='dead'||!a.health?.death)continue;

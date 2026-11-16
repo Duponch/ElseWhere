@@ -94,6 +94,10 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
   const counted=(key:string,pawns:Pawn[],text:(count:number)=>string,tab?:StatusAlert['tab'])=>{if(pawns.length)add(key,text(pawns.length),people(world,pawns),{panel:'history'},tab);};
   counted('sad-wander',living.filter(p=>p.mental?.crisis?.kind==='sad-wander'),n=>`${n} colon(s) en errance triste`,'needs');
   counted('food-binge',living.filter(p=>p.mental?.crisis?.kind==='food-binge'),n=>`${n} colon(s) en frénésie alimentaire`,'needs');
+  // Schema 350: the other mood breaks of the Core pool.
+  counted('psychotic-wander',living.filter(p=>p.mental?.crisis?.kind==='psychotic-wander'),n=>`${n} colon(s) en errance psychotique`,'needs');
+  counted('wander-own-room',living.filter(p=>p.mental?.crisis?.kind==='wander-own-room'),n=>`${n} colon(s) retranché(s) dans sa chambre`,'needs');
+  counted('insulting-spree',living.filter(p=>p.mental?.crisis?.kind==='insulting-spree'||p.mental?.crisis?.kind==='targeted-insulting-spree'),n=>`${n} colon(s) en série d’insultes`,'needs');
   for(const pawn of living.filter(p=>p.mental?.crisis&&['tantrum','berserk','murderous-rage'].includes(p.mental.crisis.kind))){
     const crisis=mentalCrisisView(world,pawn,s=>buildingLabels[s.kind])!;
     add(`mental:${pawn.id}`,`${pawn.name} · ${crisis.label}${crisis.target&&knownPosition256(world,crisis.target.cell)?` · cible : ${crisis.target.label}${crisis.target.type==='structure'?` (${crisis.target.cell.x}, ${crisis.target.cell.z})`:''}`:''}`,people(world,[pawn]),undefined,'needs');

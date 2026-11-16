@@ -14,6 +14,8 @@ import { eligibleShortCircuit,resolveSelectedShortCircuit,type ShortCircuitCalen
 import { eligibleCropBlight,resolveSelectedCropBlight,type CropBlightCalendar } from './crop-blight-incident.ts';
 import {eligibleToxicFallout294,resolveSelectedToxicFallout294} from './toxic-fallout-incident-294.ts';
 import type {ToxicFalloutCalendar294} from './toxic-fallout-state-294.ts';
+import {advancePsychic350,eligiblePsychic350,resolveSelectedPsychic350} from './psychic-emanation-350.ts';
+import {isMoodPool350} from './mood-pool-memories-350.ts';
 import {homeRecentFactor341,recordHomeIncident341,type HomeRecentIncident341} from './recent-incidents-341.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 
@@ -68,6 +70,9 @@ export interface CassandraMiscCalendar {
   volcanicWinters310?:number;lastVolcanicWinterStart310?:number;volcanicWinter310?:import('./volcanic-winter-state-310.ts').VolcanicWinter310;
   /** Schema 341: the home map's last incidents, newest first (recent-incidents-341). */
   recent341?:string[];
+  /** Schema 350: psychic drone and soothe counts, last starts (local ticks) and the active condition. */
+  psychicDrones350?:number;psychicSoothes350?:number;lastPsychicDrone350?:number;lastPsychicSoothe350?:number;
+  psychic350?:import('./psychic-state-350.ts').PsychicEmanation350;
 }
 
 function random(state:CassandraMiscCalendar):number {
@@ -144,13 +149,15 @@ export function resolveSelectedEclipse(world:World,state:CassandraMiscCalendar=w
  * whether its incident really fired. */
 export function miscLotteryRows329(world:World,state:CassandraMiscCalendar):MiscRow329[] {
   const draw=()=>random(state),seed=()=>Math.floor(random(state)*0x100000000)||1;
+  // Schema 350: the psychic drone and soothe have their Core rules and effect.
+  const psychic=isMoodPool350(world.schemaVersion);
   return [
     {id:'heat-wave',weight:MISC_HEAT_WEIGHT,population:null,eligible:()=>eligibleMiscHeatwave(world,state),resolve:()=>resolveSelectedHeatwave(world,state)},
     {id:'flashstorm',weight:MISC_FLASHSTORM_WEIGHT,population:null,eligible:()=>eligibleFlashstorm(world),resolve:()=>resolveSelectedFlashstorm(world,seed())},
     {id:'refugee-pod',weight:1.5,population:0,resolve:()=>resolveSelectedPodRescue(world,seed())},
     {id:'cold-snap',weight:MISC_COLD_WEIGHT,population:null,eligible:()=>!!state.weather&&eligibleColdSnap(world),resolve:()=>resolveSelectedColdSnap(world,state)},
     {id:'resource-pod',weight:1,population:null,resolve:()=>resolveSelectedResourcePod305(world,seed())},
-    {id:'psychic-soothe',weight:1,population:null},
+    psychic?{id:'psychic-soothe',weight:1,population:null,eligible:()=>eligiblePsychic350(world,'soothe',state),resolve:()=>resolveSelectedPsychic350(world,'soothe',draw,state)}:{id:'psychic-soothe',weight:1,population:null},
     {id:'self-tame',weight:1,population:null,resolve:()=>resolveSelectedSelfTame305(world,draw)},
     {id:'ambrosia-sprout',weight:1,population:null},
     {id:'farm-animals',weight:.4,population:null,resolve:()=>resolveSelectedFarmAnimals305(world,seed())},
@@ -160,7 +167,7 @@ export function miscLotteryRows329(world:World,state:CassandraMiscCalendar):Misc
     {id:'meteorite',weight:.5,population:null},
     {id:'herd-migration',weight:1,population:null},
     {id:'wild-man',weight:1,population:0},
-    {id:'psychic-drone',weight:1,population:null},
+    psychic?{id:'psychic-drone',weight:1,population:null,eligible:()=>eligiblePsychic350(world,'drone',state),resolve:()=>resolveSelectedPsychic350(world,'drone',draw,state)}:{id:'psychic-drone',weight:1,population:null},
     {id:'toxic-fallout',weight:MISC_TOXIC_FALLOUT_WEIGHT,population:null,eligible:()=>eligibleToxicFallout294(world),resolve:()=>resolveSelectedToxicFallout294(world,seed())},
     {id:'volcanic-winter',weight:.08,population:null,eligible:()=>eligibleVolcanicWinter310(world),resolve:()=>resolveSelectedVolcanicWinter310(world,draw)},
     {id:'short-circuit',weight:MISC_SHORT_CIRCUIT_WEIGHT,population:null,eligible:()=>eligibleShortCircuit(world),resolve:()=>resolveSelectedShortCircuit(world,seed())},
@@ -236,6 +243,7 @@ export function advanceMiscIncidents(world:World):void {
   }
   advanceResourcePod305(world);
   advanceVolcanicWinter310(world);
+  advancePsychic350(world);
   if(homeIncidentsBlocked261(world))return;
   if(!state.introDone&&world.tick>=MISC_INTRO_TICK){
     state.introDone=true;

@@ -11,6 +11,7 @@ import {thermalMoodThoughts460} from './thermal-mood-v460.ts';
 import {bondedAnimalThoughts343,darknessThought343,isFirstDays343} from './first-days-343.ts';
 import {isMoodBasics345,roomSizeThought345} from './room-size-need-345.ts';
 import {passionateWorkThought345} from './passionate-work-345.ts';
+import {hospitalPatientThought350,isMoodPool350,opinionOfLoverThought350,psychicDroneThought350} from './mood-pool-350.ts';
 import {toxicFalloutActive294} from './toxic-fallout-state-294.ts';
 import {carrierOf} from './rescue-state.ts';
 import {isRoofed} from './roof-rules.ts';
@@ -102,6 +103,8 @@ export interface PersonalMoodContext {
   bondedAnimals343?:readonly MoodThought[];
   /** Schema 345: DoingPassionateWork, from the active skill of the current work on the pawn's map. */
   passionateWork345?:MoodThought;
+  /** Schema 350: psychic drone or soothe, hospital room and lover opinion, read on the pawn's map. */
+  moodPool350?:readonly MoodThought[];
 }
 /** Held position differs deliberately from the spawned-only dose pass. Rescue,
  * captive and casket-service carriers resolve through their existing owner.
@@ -128,7 +131,8 @@ export function moodThoughts(world:World,pawn:Pawn,topology?:RelationshipTopolog
       ?{ambientTemperature460:readTemperature?readTemperature():temperatureAt(world,pawn)}:{}),
     environment:{comfort:pawn.comfort,beauty:pawn.beauty},housing:relationshipHousingThought(world,pawn,topology),deathSituation:colonistUnburiedThought(world,pawn),toxicFallout294:localToxicFalloutThought294(world,pawn),aurora305:localAuroraThought305(world,pawn),
     ...isFirstDays343(world.schemaVersion)?{bondedAnimals343:bondedAnimalThoughts343(world,pawn)}:{},
-    ...isMoodBasics345(world.schemaVersion)?{passionateWork345:passionateWorkThought345(world,pawn)}:{}});
+    ...isMoodBasics345(world.schemaVersion)?{passionateWork345:passionateWorkThought345(world,pawn)}:{},
+    ...isMoodPool350(world.schemaVersion)?{moodPool350:[psychicDroneThought350(world,pawn),hospitalPatientThought350(world,pawn),opinionOfLoverThought350(world,pawn)].filter((t):t is MoodThought=>!!t)}:{}});
 }
 export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly MoodThought[] {
   if((pawn.cryptosleepHeldAt271!==undefined||pawn.shipCryptosleepHeldAt277!==undefined))c={...c,tick:memoryReadTick271(pawn,c.tick)};
@@ -148,6 +152,7 @@ export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly M
   // Schema 345: passionate work and the room size need (NeedRoomSize), neither valid while despawned.
   if(c.passionateWork345&&!c.despawned313)thoughts.push(c.passionateWork345);
   if(isMoodBasics345(c.schemaVersion)&&!c.despawned313){const room=roomSizeThought345(pawn);if(room)thoughts.push(room);}
+  if(c.moodPool350)thoughts.push(...c.moodPool350);
   if(readingActive295(pawn)&&pawn.skills.intellectual?.passion)thoughts.push(readingPassion295[pawn.skills.intellectual.passion-1]!);
   if(pawn.familyBereavement)thoughts.push(...familyBereavementThoughtsAt(pawn,c.tick,c.relationPeople??c.people));
   if(pawn.romanceMemories)thoughts.push(...romanceMoodThoughtsAt(pawn,c.tick,c.relationPeople??c.people));

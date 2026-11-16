@@ -1,6 +1,8 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {HOME_RECENT_INCIDENTS_341,isRecentIncidents341,validRecentIncidents341} from './recent-incidents-341.ts';
 import {validVolcanicWinter310} from './volcanic-winter-state-310.ts';
+import {validPsychic350} from './psychic-state-350.ts';
+import {isMoodPool350} from './mood-pool-memories-350.ts';
 import {tempMapModern261,tempMapAdoptedAtCore261} from './temp-map-incidents-261.ts';
 import { MISC_CHECK_INTERVAL,MISC_FIRST_CHECK,MISC_HEAT_COOLDOWN,MISC_INTRO_TICK } from './cassandra-misc.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
@@ -42,7 +44,7 @@ export function validMiscIncidents(value:unknown,version:number,world:Pick<World
   const toxic=object(value)?Object.getOwnPropertyDescriptor(value,'toxicFallout'):undefined;
   if(object(value)&&'toxicFallout'in value&&((version!==294&&(version!==295&&(version!==296&&!isCorePhysicalSchema297(version))))||!toxic||toxic.enumerable!==true||!Object.hasOwn(toxic,'value')||toxic.value===undefined))return false;
   if(version<169||!world.gameProfile||!object(value)||
-    !keys(value,['profile','adoptedAt','rng','nextCheck','introDone','checks','opportunities','heatwaves','lastHeatwaveStart','active',...version>=200?['weather']:[],...version>=201?['shortCircuits']:[],...version>=205?['cropBlights']:[],...(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))?['toxicFallout']:[],...version>=305?['resourcePods305','resourcePod305']:[],...version>=310?['volcanicWinters310','lastVolcanicWinterStart310','volcanicWinter310']:[],...isRecentIncidents341(version)?['recent341']:[]])||
+    !keys(value,['profile','adoptedAt','rng','nextCheck','introDone','checks','opportunities','heatwaves','lastHeatwaveStart','active',...version>=200?['weather']:[],...version>=201?['shortCircuits']:[],...version>=205?['cropBlights']:[],...(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))?['toxicFallout']:[],...version>=305?['resourcePods305','resourcePod305']:[],...version>=310?['volcanicWinters310','lastVolcanicWinterStart310','volcanicWinter310']:[],...isRecentIncidents341(version)?['recent341']:[],...isMoodPool350(version)?['psychicDrones350','psychicSoothes350','lastPsychicDrone350','lastPsychicSoothe350','psychic350']:[]])||
     value.profile!=='cassandra-misc-v1'||!integer(value.adoptedAt,0,world.tick)||!integer(value.rng,1,0xffffffff)||
     !integer(value.nextCheck,MISC_FIRST_CHECK)||value.nextCheck%MISC_CHECK_INTERVAL!==0||
     value.nextCheck!==Math.max(MISC_FIRST_CHECK,(Math.floor(scheduleTick/MISC_CHECK_INTERVAL)+1)*MISC_CHECK_INTERVAL)||
@@ -75,8 +77,8 @@ export function validMiscIncidents(value:unknown,version:number,world:Pick<World
   return validWeatherIncidents(value.weather,version,world,calendar)&&validShortCircuits(value.shortCircuits,version,world,calendar)
     &&validCropBlightCalendar(value.cropBlights,version,world,calendar)
     &&validToxicFalloutCalendar294(toxic?.value,version,world as World,calendar)
-    &&(value.cropBlights===undefined&&toxic===undefined||calendar.heatwaves+(calendar.weather?.coldSnaps??0)+(calendar.weather?.eclipses??0)+(calendar.shortCircuits?.count??0)+(calendar.cropBlights?.count??0)+(calendar.toxicFallout?.count??0)+(calendar.resourcePods305??0)+(calendar.volcanicWinters310??0)<=calendar.opportunities)
-    &&validResourcePods305(value,world.tick)&&validVolcanicWinters310(value,world.tick)
+    &&(value.cropBlights===undefined&&toxic===undefined||calendar.heatwaves+(calendar.weather?.coldSnaps??0)+(calendar.weather?.eclipses??0)+(calendar.shortCircuits?.count??0)+(calendar.cropBlights?.count??0)+(calendar.toxicFallout?.count??0)+(calendar.resourcePods305??0)+(calendar.volcanicWinters310??0)+(calendar.psychicDrones350??0)+(calendar.psychicSoothes350??0)<=calendar.opportunities)
+    &&validResourcePods305(value,world.tick)&&validVolcanicWinters310(value,world.tick)&&validPsychic350(value,version,world.tick)
     &&validRecentIncidents341(value.recent341,version,HOME_RECENT_INCIDENTS_341);
 }
 
