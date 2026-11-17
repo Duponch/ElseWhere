@@ -28,13 +28,13 @@ Les lots sont rangés par note, puis par coût.
 - Pas d'assistant, pas de conseils ; le bouton « Tutoriel » est désactivé.
 
 **Lots, dans l'ordre :**
-1. **(A)** Fiche de conseils visible en partie après l'ouverture des capsules, bouton et touche d'aide sur l'écran de jeu, guide du joueur corrigé. *En cours.*
-2. **(A)** Conseils de chargement en français, écrits pour les vraies commandes d'Elsewhere. *En cours.*
+1. **(A)** Fiche de conseils visible en partie après l'ouverture des capsules, bouton et touche d'aide sur l'écran de jeu, guide du joueur corrigé. *Fait le 16 novembre.*
+2. **(A)** Conseils de chargement en français, écrits pour les vraies commandes d'Elsewhere. *Fait le 16 novembre.*
 3. **(A)** Moteur de l'assistant d'apprentissage avec les règles du jeu de base, option et remise à zéro, reprise des 4 gestes.
 4. **(A puis B)** Environ 45 notions françaises pour les fonctions qui existent, déclenchées par les vrais événements de la partie.
 5. **(A)** Surbrillance des vraies commandes de l'interface native, pour que notions et tutoriel montrent où cliquer.
 6. **(B)** Prérequis du tutoriel : profil de partie « tutoriel » et ses règles, raid d'un seul pillard, passage au conteur choisi à la fin.
-7. **(B)** Le tutoriel en 37 étapes adaptées à Elsewhere, et le bouton « Tutoriel » activé.
+7. **(B)** Le tutoriel en 37 étapes adaptées à Elsewhere, et le bouton « Tutoriel » activé. *Fait : profil et contenu au schéma 347, leçons au schéma 349.*
 8. **(B/C)** Avertissements ponctuels et fiche d'information des bâtiments, des personnes et des plantes.
 
 ## 2. Alertes et lettres
@@ -59,7 +59,7 @@ Les lots sont rangés par note, puis par coût.
   - **(B)** épuisement, médicaments, vêtements usés, ennui, batteries, enclos, vêtements chauds.
 
 **Lots :**
-1. **(A)** Lignes corrigées, incendie rétabli, alertes précoces manquantes, gravités et présentation du jeu de base. *En cours.*
+1. **(A)** Lignes corrigées, incendie rétabli, alertes précoces manquantes, gravités et présentation du jeu de base. *Fait le 16 novembre.*
 2. **(B)** Alertes des besoins et de la santé.
 3. **(B)** Alertes des enclos et des vêtements chauds.
 4. **(B)** Lettres : classes, sons, pause, pile et archives de 200.
@@ -99,12 +99,12 @@ Les 51 recherches d'Elsewhere ont les coûts et les bureaux du jeu de base.
 - **Contenu précoce :** chapeau de cow-boy, billard, poker, armoire à outils, tapis, pièges improvisés, devilstrand.
 
 **Lots, dans l'ordre :**
-1. **(A)** Début d'une partie « Atterrissage » (pensées, opinions, animal, recherche de départ, objets de départ interdits si le jeu de base le fait), pensées de sommeil et de temps. *En cours, schéma 343.*
-2. **(A)** Onglet Travail comme le jeu de base.
-3. **(A)** Travail passionné et besoin d'espace.
-4. **(B)** Sélection et ordres du quotidien : mobiliser la sélection, bouton « Copier », clic droit d'un colon mobilisé, barre des colons.
-5. **(B)** Réserve d'humeur complète : crises manquantes, confort aux établis, onde psychique et apaisement, petites pensées.
-6. **(B)** Dépouiller.
+1. **(A)** Début d'une partie « Atterrissage » (pensées, opinions, animal, recherche de départ, objets de départ interdits si le jeu de base le fait), pensées de sommeil et de temps. *Fait le 16 novembre, schéma 343.*
+2. **(A)** Onglet Travail comme le jeu de base. *Fait, schéma 344.*
+3. **(A)** Travail passionné et besoin d'espace. *Fait, schéma 345.*
+4. **(B)** Sélection et ordres du quotidien : mobiliser la sélection, bouton « Copier », clic droit d'un colon mobilisé, barre des colons. *Fait, schéma 346.*
+5. **(B)** Réserve d'humeur complète : crises manquantes, confort aux établis, onde psychique et apaisement, petites pensées. *Fait, schéma 350.*
+6. **(B)** Dépouiller. *Fait, schéma 351 ; restent le filtre « vêtements de mort » des tenues et l'option « compter les vêtements souillés » des factures.*
 7. **(B)** Contenu précoce : œufs et gelée en cuisine, chapeau, jeux, armoire à outils, tapis, pièges.
 
 ## 4. En parallèle
@@ -125,7 +125,7 @@ Les 51 recherches d'Elsewhere ont les coûts et les bureaux du jeu de base.
 
 1. **Vague 1, faite le 16 novembre :** alertes A ; aide visible en partie et conseils de chargement ; premiers jours et pensées du quotidien (schéma 343).
 2. **Vague 2, faite le 16 novembre :** moteur et notions de l'assistant d'apprentissage ; onglet Travail (344) ; travail passionné et besoin d'espace (345) ; sélection et ordres du quotidien (346) ; la surbrillance des commandes, prévue en vague 3, est faite aussi.
-3. **Vague 3, en cours :** prérequis du tutoriel (fait le 16 novembre, schéma 347) puis tutoriel en 37 étapes ; lettres ; réserve d'humeur ; dépouiller ; alertes B ; animal qui devient enragé quand on le blesse ou qu'un apprivoisement échoue (fait le 16 novembre, schéma 348).
+3. **Vague 3, en cours :** prérequis du tutoriel (fait le 16 novembre, schéma 347) puis tutoriel en 37 étapes (fait le 17 novembre, schéma 349) ; lettres ; réserve d'humeur (faite le 17 novembre, schéma 350) ; dépouiller (fait le 17 novembre, schéma 351) ; alertes B ; animal qui devient enragé quand on le blesse ou qu'un apprivoisement échoue (fait le 16 novembre, schéma 348).
 4. **Vague 4 :** contenu précoce, puis les manques C.
 
 Les lots déjà engagés plus tôt (conteur, commerce, armes) ne sont pas repris pour l'instant ; leurs restes figurent dans le [bilan du 15](bilan-20261115.md).
