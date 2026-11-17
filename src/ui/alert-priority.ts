@@ -30,11 +30,7 @@ const STATUS_PRIORITY:Readonly<Record<string,CoreAlertPriority>>=Object.freeze({
   downed:'critical',                // Alert_ColonistNeedsRescuing
   hypothermia:'critical',           // Alert_Hypothermia
   'mood-risk-high':'critical',      // Alert_MajorOrExtremeBreakRisk
-  'infection-critical':'critical',  // Alert_LifeThreateningHediff
-  'flu-critical':'critical',
-  'malaria-critical':'critical',
-  'plague-critical':'critical',
-  'sleeping-sickness-critical':'critical',
+  'life-threatening':'critical',    // Alert_LifeThreateningHediff
   // High Core alerts.
   'colonist-unburied':'high',       // Alert_ColonistLeftUnburied
   'need-warden':'high',             // Alert_NeedWarden
@@ -44,11 +40,18 @@ const STATUS_PRIORITY:Readonly<Record<string,CoreAlertPriority>>=Object.freeze({
   malnutrition:'high',              // Alert_StarvationColonists
   'colonist-needs-tend':'high',     // Alert_ColonistNeedsTend
   'need-defenses':'high',           // Alert_NeedDefenses
+  exhaustion:'high',                // Alert_Exhaustion
+  'low-medicine':'high',            // Alert_LowMedicine
+  'need-warm-clothes':'high',       // Alert_NeedWarmClothes
   // Elsewhere rows describing a present danger.
   bleeding:'high','colonist-availability':'high','prison-break':'high','mechanical-threat':'high',
   manhunter:'high',mental:'high','turret-wick':'high','casket-wick':'high',
   // Medium Core alerts and Elsewhere information rows.
   idle:'medium','research-project':'medium','need-meal-source':'medium','need-joy-sources':'medium',
+  // Lot B Medium Core alerts: Alert_TatteredApparel, Alert_Boredom,
+  // Alert_NeedBatteries, the four pen alerts and Alert_StarvationAnimals.
+  'tattered-apparel':'medium',boredom:'medium','need-batteries':'medium','animal-pen-needed':'medium',
+  'animal-pen-not-enclosed':'medium','predator-in-pen':'medium','penned-animal-hungry':'medium','starvation-animals':'medium',
   blight:'medium',hungry:'medium',infection:'medium',flu:'medium',malaria:'medium',plague:'medium','sleeping-sickness':'medium',
   'sad-wander':'medium','food-binge':'medium',party:'medium','pending-jobs':'medium','no-stockpile':'medium',
   'disabled-construction':'medium','interrupted-cargo':'medium','food-policy-blocked':'medium',

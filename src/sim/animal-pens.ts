@@ -51,6 +51,13 @@ export function invalidateAnimalPens(world:World):void { caches.delete(world); }
 
 const penSignatureInput=(s:Structure):boolean=>isShipPartKind276(s.kind)||s.kind==='geothermal-generator'||s.kind==='wall'||s.kind==='cooler'||s.kind==='vent'||s.kind==='fence'||passage(s)||s.kind==='pen-marker';
 const holdOpen=(s:Structure):number=>s.door?.holdOpen&&s.door.open?1:0;
+/** Read-only inputs of the regions besides terrain (each barrier, passage
+ * and marker, by id and cell) and the held-open state that opens a passage. A
+ * reader of successive published Worlds (the alert list) compares them to
+ * reuse the regions instead of flooding the map again. */
+export {penSignatureInput as isPenRegionInput,holdOpen as penHoldOpen};
+/** Whether the pen flood stops at this cell's terrain (rock or water). */
+export const penTerrainBlocked=(world:Pick<World,'tiles'>,i:number):boolean=>!terrainPassable(world as World,i);
 /* The signature reads only immutable facts (id, kind, position) of the
  * structures selected by penSignatureInput (a kind-only predicate) plus each
  * one's door hold state, so the selected list is cached per membership token

@@ -19,6 +19,7 @@ import type {Pawn,World} from '../sim/types';
 import {coreDaysPassed,isPlayerHomeMap} from './alert-priority';
 import {knownBuilding256,knownPile256,knownPosition256} from './exploration-readers-256';
 import {actorNotificationTarget,cellNotificationTarget,objectNotificationTarget,personNotificationTarget,type NotificationTarget} from './notification-focus';
+import type {AlertCensus} from './alert-census';
 import type {StatusAlert} from './status-alerts';
 
 /** Readers for the Core alerts of the right-hand list. Each one reads the same
@@ -184,20 +185,20 @@ export function readNeedColonistBeds(world:World,free:readonly Pawn[]):StatusAle
 /** Alert_LowFood (High) after 150 000 Core ticks: fresh human-edible nutrition
  * kept in storage below 4 per free colonist on the home map. */
 export const LOW_FOOD_START_TICK=15_000;
-export function storedHumanNutrition(world:World):number {
+export function storedHumanNutrition(world:World,census?:AlertCensus):number {
   // One pass over the storage cells, then one over the piles (no lookup per pile).
-  let total=0,stored:Set<number>|undefined;
+  let total=0,stored:ReadonlySet<number>|undefined;
   for(const pile of world.piles){
     if(pile.owner.type!=='ground'||pile.kind!=='food'||pile.item==='hay'||pile.quantity<=0||!ITEM_DEFINITIONS[pile.item].nutrition)continue;
-    stored??=new Set(storageCells(world).map(cell=>cell.z*world.width+cell.x));
+    stored??=census?census.storedCells():new Set(storageCells(world).map(cell=>cell.z*world.width+cell.x));
     if(!stored.has(pile.owner.z*world.width+pile.owner.x)||!knownPile256(world,pile)||ticksUntilRot(pile,world.tick)<=0)continue;
     total+=nutritionOf(pile)/100;
   }
   return total;
 }
-export function readLowFood(world:World,free:readonly Pawn[]):StatusAlert|undefined {
+export function readLowFood(world:World,free:readonly Pawn[],census?:AlertCensus):StatusAlert|undefined {
   if(world.tick<LOW_FOOD_START_TICK||!isPlayerHomeMap(world)||!free.length)return;
-  const stored=storedHumanNutrition(world);if(stored>=4*free.length)return;
+  const stored=storedHumanNutrition(world,census);if(stored>=4*free.length)return;
   const eaters=free.length+world.pawns.filter(p=>p.prisoner&&p.state!=='dead'&&!p.health?.death).length;
   return {key:'food-reserves',text:'Réserves de nourriture faibles',targets:[],context:{panel:'assign'},explanation:
     `Nourriture fraîche en stock : ${stored.toLocaleString('fr-FR',{maximumFractionDigits:1})} de nutrition pour ${eaters} personne${eaters>1?'s':''}, soit environ ${Math.floor(stored/Math.max(1,eaters))} jour${Math.floor(stored/Math.max(1,eaters))>1?'s':''}. Cultivez, chassez ou cueillez, puis rangez la nourriture dans une réserve.`};
@@ -228,7 +229,7 @@ export function readNeedDefenses(world:World,free:readonly Pawn[]):StatusAlert|u
  * fewer than the current expectations require. Core counts kinds needing no
  * thing (contemplation, social) plus buildings and unfogged recreational items;
  * only the kinds Elsewhere actually offers are counted. */
-const JOY_KIND_LABELS=[['solitary','contemplation'],['social','sociale'],['dexterity','adresse (fer à cheval)'],['cerebral','réflexion (échecs)'],['television','télévision'],['chemical','chimique (bière)'],['reading','lecture']] as const;
+export const JOY_KIND_LABELS=[['solitary','contemplation'],['social','sociale'],['dexterity','adresse (fer à cheval)'],['cerebral','réflexion (échecs)'],['television','télévision'],['chemical','chimique (bière)'],['reading','lecture']] as const;
 export function joyKindsOnMap(world:World):Set<string> {
   const kinds=new Set<string>(['solitary','social']);
   for(const s of world.structures){
@@ -240,9 +241,9 @@ export function joyKindsOnMap(world:World):Set<string> {
   }
   return kinds;
 }
-export function readNeedJoySources(world:World,free:readonly Pawn[]):StatusAlert|undefined {
+export function readNeedJoySources(world:World,free:readonly Pawn[],joyKinds:()=>ReadonlySet<string>=()=>joyKindsOnMap(world)):StatusAlert|undefined {
   if(!world.economy||!free.length||!isPlayerHomeMap(world))return;
-  const expectation=expectationForWealth(world.economy.wealth.knownTotal),available=joyKindsOnMap(world);
+  const expectation=expectationForWealth(world.economy.wealth.knownTotal),available=joyKinds();
   if(available.size>=expectation.joyKindsNeeded)return;
   const have=JOY_KIND_LABELS.filter(([kind])=>available.has(kind)).map(([,label])=>label),missing=JOY_KIND_LABELS.filter(([kind])=>!available.has(kind)).map(([,label])=>label);
   return {key:'need-joy-sources',text:'Sources de loisirs insuffisantes',targets:[],context:{panel:'architect',category:'recreation'},explanation:

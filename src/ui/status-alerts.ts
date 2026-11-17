@@ -5,14 +5,14 @@ import {mapDisplayName} from './map-registry-adapter';
 import {alertManhunter} from '../sim/status-alert-rules';
 import { isColonist,activeThreat } from '../sim/affiliation';
 import { storageCells } from '../sim/shelf-storage';
-import {freeColonistsSpawned,readColonistsNeedRescue,readColonistsNeedTend,readCropBlight,readFireInHomeArea,readIdleColonists,readLowFood,readNeedColonistBeds,readNeedDefenses,readNeedJoySources,readNeedMealSource,readNeedWarden,readSeriousHypothermia,readUnburiedColonists} from './core-colony-alerts';
+import {freeColonistsSpawned,joyKindsOnMap,readColonistsNeedRescue,readColonistsNeedTend,readCropBlight,readFireInHomeArea,readIdleColonists,readLowFood,readNeedColonistBeds,readNeedDefenses,readNeedJoySources,readNeedMealSource,readNeedWarden,readSeriousHypothermia,readUnburiedColonists} from './core-colony-alerts';
+import {AlertCensus} from './alert-census';
+import {readBoredom,readExhaustion,readLifeThreatening,readLowMedicine,readNeedBatteries,readNeedWarmClothes,readTatteredApparel} from './core-needs-alerts';
+import {readAnimalPenAlerts,readStarvationAnimals} from './core-animal-alerts';
 import type {CoreAlertPriority} from './alert-priority';
 import { constructionRecipe } from '../sim/construction-materials';
 import { firePosition } from '../sim/fire-rules';
-import { FLU_UNIT,fluStage } from '../sim/flu-rules';
-import { IMMUNE_DISEASE_UNIT,immuneDiseaseStage } from '../sim/immune-diseases-rules';
 import { IMMUNE_DISEASE_KINDS } from '../sim/immune-diseases-types';
-import { INFECTION_UNIT,infectionStage } from '../sim/infection-rules';
 import { medicalBleed } from '../sim/injury-state';
 
 import {captureFoodReadability,type FoodReadability} from '../sim/food-readability';
@@ -87,6 +87,8 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
   }
   const add=(key:string,text:string,targets:NotificationTarget[],context?:NotificationContext,tab?:StatusAlert['tab'])=>rows.push({key,text,targets,...context?{context}:{},...tab?{tab}:{}});
   const free=freeColonistsSpawned(world),core=(row:StatusAlert|undefined)=>{if(row)rows.push(row);};
+  // Alerts lot B: per-reading aggregates shared by the readers (storage, worn apparel, recreation kinds).
+  const census=new AlertCensus(world);let joy:ReadonlySet<string>|undefined;const joyKinds=()=>joy??=joyKindsOnMap(world);
   core(readFireInHomeArea(world));
   const party=partyView292(world);
   if(party&&knownPosition256(world,party.site))add('party',`Fête · ${party.members.length} participant(s) · ${party.remaining}`,
@@ -116,22 +118,25 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
   if(enraged.length)add('manhunter',`${enraged.length} ${enraged.length>1?'animaux':'animal'} en rage`,actors(enraged));
   counted('malnutrition',living.filter(p=>(p.health?.malnutrition??0)>0),n=>`${n} colon(s) en malnutrition`,'health');
   core(readSeriousHypothermia(world,free));
+  // Alert_LifeThreateningHediff: one Critical row for colonists and prisoners
+  // (blood loss, malnutrition, temperature, infections, diseases, heart).
+  core(readLifeThreatening(world));
   const infected=living.filter(p=>!!p.health?.infections?.cases.length);
-  counted('infection-critical',infected.filter(p=>p.health!.infections!.immunity<INFECTION_UNIT&&p.health!.infections!.cases.some(c=>['extreme','critical'].includes(infectionStage(c.severity)))),n=>`Urgence médicale : ${n} colon(s) avec une infection grave`,'health');
   counted('infection',infected,n=>`${n} colon(s) avec une infection · consulter Santé`,'health');
   const flu=living.filter(p=>!!p.health?.flu?.severity);
-  counted('flu-critical',flu.filter(p=>p.health!.flu!.immunity<FLU_UNIT&&fluStage(p.health!.flu!.severity)==='extreme'),n=>`Urgence médicale : ${n} colon(s) avec une grippe extrême`,'health');
   counted('flu',flu,n=>`${n} colon(s) grippé(s) · consulter Santé`,'health');
   for(const kind of IMMUNE_DISEASE_KINDS){
     const cases=living.filter(p=>!!p.health?.immuneDiseases?.[kind]?.severity),label=kind==='malaria'?'paludisme':kind==='plague'?'peste':'la maladie du sommeil';
-    counted(`${kind}-critical`,cases.filter(p=>{const d=p.health!.immuneDiseases![kind]!;return d.immunity<IMMUNE_DISEASE_UNIT&&['extreme','critical'].includes(immuneDiseaseStage(kind,d.severity));}),n=>`Urgence médicale : ${n} colon(s) avec ${label} grave`,'health');
     counted(kind,cases,n=>`${n} colon(s) avec ${label} · consulter Santé`,'health');
   }
   core(readColonistsNeedRescue(world,free));
   counted('bleeding',living.filter(p=>p.health&&medicalBleed(p.health)>=.1),n=>`${n} colon(s) saignent`,'health');
   core(readColonistsNeedTend(world,free));
   core(readUnburiedColonists(world,free));
-  core(readLowFood(world,free));
+  core(readExhaustion(world,free));
+  core(readNeedWarmClothes(world,free,census));
+  core(readLowFood(world,free,census));
+  core(readLowMedicine(world,free,census));
   if(food.blockedPawnIds.length){
     const ids=new Set(food.blockedPawnIds),names=world.pawns.filter(p=>ids.has(p.id)).map(p=>p.name);
     rows.push({key:'food-policy-blocked',text:`Régime alimentaire à vérifier · ${food.blockedPawnIds.length} colon(s)`,targets:[],context:{panel:'assign'},tooltip:{title:'Aucun type autorisé parmi les piles évaluées',body:`Personnes concernées : ${names.join(', ')}. Les piles fraîches au sol et leur propre portion portée ne contiennent aucun type autorisé par le régime. Accès, réservations, partage et autonomie non évalués. Les repas déjà engagés sont conservés.`}});
@@ -150,7 +155,12 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
   core(readNeedWarden(world,free));
   core(readNeedMealSource(world,free));
   core(readNeedDefenses(world,free));
-  core(readNeedJoySources(world,free));
+  core(readNeedJoySources(world,free,joyKinds));
+  core(readBoredom(world,free,joyKinds));
+  core(readTatteredApparel(world,free,census));
+  core(readNeedBatteries(world));
+  rows.push(...readAnimalPenAlerts(world,free));
+  core(readStarvationAnimals(world));
   core(readCropBlight(world));
   return rows;
 }
