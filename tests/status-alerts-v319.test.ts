@@ -19,22 +19,24 @@ test('V319 hypothermia is actionable at the Core serious threshold, ordered by i
   expect(row.text).toBe('2 colons en hypothermie grave');expect(row.targets).toEqual([a!,b!].sort((p,q)=>p.id-q.id).map(p=>actorNotificationTarget(p.id)));expect(row.tab).toBe('health');
   w.pawns.reverse();expect(readStatusAlerts(w).find(r=>r.key==='hypothermia')!.targets).toEqual(row.targets);
 });
+// Alerts lot B (Core Alert_LifeThreateningHediff): the urgent rows of every
+// disease are one Critical 'life-threatening' row, at the same thresholds.
 test.each(['flu','malaria','plague'] as const)('V319 %s keeps urgent and ordinary alerts distinct and points to the real patient',kind=>{
   const w=createWorld(319,32,32),p=w.pawns[0]!;p.health=createMedicalRecord(w.tick);
   const disease={bornAt:w.tick,severity:950000000,immunity:0,luck:1000000};if(kind==='flu')p.health.flu=disease;else p.health.immuneDiseases={[kind]:disease};
-  const rows=readStatusAlerts(w);for(const key of [kind,`${kind}-critical`])expect(rows.find(r=>r.key===key)).toMatchObject({targets:[actorNotificationTarget(p.id)],tab:'health'});
-  disease.immunity=1000000000;expect(readStatusAlerts(w).some(r=>r.key===`${kind}-critical`)).toBe(false);expect(readStatusAlerts(w).some(r=>r.key===kind)).toBe(true);
+  const rows=readStatusAlerts(w);for(const key of [kind,'life-threatening'])expect(rows.find(r=>r.key===key)).toMatchObject({targets:[actorNotificationTarget(p.id)],tab:'health'});
+  disease.immunity=1000000000;expect(readStatusAlerts(w).some(r=>r.key==='life-threatening')).toBe(false);expect(readStatusAlerts(w).some(r=>r.key===kind)).toBe(true);
 });
 test('V319 malaria urgency preserves its distinct 91% threshold',()=>{
   const w=createWorld(319,32,32),p=w.pawns[0]!;p.health=createMedicalRecord(w.tick);
   const disease={bornAt:w.tick,severity:909999999,immunity:0,luck:1000000};p.health.immuneDiseases={malaria:disease};
-  expect(readStatusAlerts(w).some(row=>row.key==='malaria-critical')).toBe(false);
-  disease.severity=910000000;expect(readStatusAlerts(w).find(row=>row.key==='malaria-critical')?.targets).toEqual([actorNotificationTarget(p.id)]);
+  expect(readStatusAlerts(w).some(row=>row.key==='life-threatening')).toBe(false);
+  disease.severity=910000000;expect(readStatusAlerts(w).find(row=>row.key==='life-threatening')?.targets).toEqual([actorNotificationTarget(p.id)]);
 });
 test('V319 severe infection exposes its own patients rather than every colonist',()=>{
   const w=createWorld(319,32,32),p=w.pawns[0]!,q=w.pawns[1]!;p.health=createMedicalRecord(w.tick);q.health=createMedicalRecord(w.tick);
   p.health.infections={nextId:2,immunity:0,cases:[{id:1,part:'torso',bornAt:w.tick,severity:870000000,luck:1000000}]};q.health.malnutrition=1;
-  const rows=readStatusAlerts(w);expect(rows.find(r=>r.key==='infection-critical')!.targets).toEqual([actorNotificationTarget(p.id)]);expect(rows.find(r=>r.key==='malnutrition')!.targets).toEqual([actorNotificationTarget(q.id)]);
+  const rows=readStatusAlerts(w);expect(rows.find(r=>r.key==='life-threatening')!.targets).toEqual([actorNotificationTarget(p.id)]);expect(rows.find(r=>r.key==='malnutrition')!.targets).toEqual([actorNotificationTarget(q.id)]);
 });
 test('V319 food, missing beds, storage and disabled work open explicit management contexts',()=>{
   // Core Alert_LowFood only starts after 150 000 Core ticks (15 000 local).
