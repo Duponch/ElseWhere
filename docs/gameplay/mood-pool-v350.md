@@ -67,6 +67,7 @@ Une personne qui marche fait du bruit en moyenne une case sur douze. Un colon en
 - Le genre d'un humain est celui de son apparence dessinée : c'est le seul qu'Elsewhere connaisse.
 - Le bruit de pas n'a pas de compteur sauvegardé : la douzième case est tirée de l'identité du marcheur et du tick ; une porte, ouverte ou fermée, arrête le bruit.
 - La vérification horaire des câlins se fait quand l'animal est libre et disponible ; son dernier essai et sa cible sont gardés dans l'état d'esprit de l'animal (`nuzzle350`).
+- Les personnes à insulter sont toutes celles qui sont à moins de 40 cases, sans recherche de chemin à chaque décision (le jeu de base parcourt les régions sans test de chemin) ; une cible injoignable est remplacée quand le colon ne trouve pas de chemin jusqu'à elle.
 - Pendant une série d'insultes, aucune bagarre ne part : Elsewhere ne lance pas de bagarre avec une personne en crise. La retraite dans sa chambre se fait au pas (le jeu de base flâne).
 - « M'a secouru » est donné à chaque sauvetage d'un colon ; le jeu de base ne le redonne qu'après une nouvelle blessure infligée par un ennemi.
 - « Prisonnier libéré » ne lit ni la température de la région ni les maladies mortelles, et touche les personnes de la carte ; il n'est pas retiré si le prisonnier est repris.

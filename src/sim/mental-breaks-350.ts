@@ -6,9 +6,7 @@ import {sharedLightEnvironmentCache} from './light-environment.ts';
 import {pawnBody} from './health-rules.ts';
 import {healthRandom} from './health.ts';
 import {carrierOf} from './rescue-state.ts';
-import {candidateAccess} from './candidate-access.ts';
-import {captureMeleePlaces} from './melee-space.ts';
-import {blockedCells,hasReachableCell,routeToCell,type Reachability} from './pathfinding.ts';
+import {routeToCell,type Reachability} from './pathfinding.ts';
 import {canSocialize,goodSocialPosition,prisonerCanSocialize325} from './social.ts';
 import {addSocialMemory,expireSocialMemories,socialImpact,socialSeed} from './social-state.ts';
 import {finishMentalBreak,type MentalCrisis} from './mental-state.ts';
@@ -56,14 +54,13 @@ export function insultRecipient350(w:World,bully:Pawn,t:Pawn,allowPrisoners:bool
  if(isColonist(t))return !t.visitor&&canSocialize(w,t,false);
  return allowPrisoners&&!!t.prisoner&&prisonerCanSocialize325(w,t,false);
 }
-/** GetInsultCandidatesFor: one bounded reachability read. Null defers. */
-export function insultCandidates350(w:World,bully:Pawn,allowPrisoners:boolean,budget?:SearchBudget):Pawn[]|null {
- const near=w.pawns.filter(t=>insultRecipient350(w,bully,t,allowPrisoners));
- if(!near.length)return [];
- if(budget&&!budget.remaining)return null;
- if(budget)budget.remaining--;
- const reach=candidateAccess(w,bully,blockedCells(w),new Set(),true),places=captureMeleePlaces(w,bully);
- return near.filter(t=>places(t).some(c=>hasReachableCell(reach,c.z*w.width+c.x)));
+/** GetInsultCandidatesFor gathers its candidates without a path test
+ * (skipReachabilityCheck), through the regions within 40 cells. Adaptation:
+ * every candidate within 40 cells counts, with no map search per decision; an
+ * unreachable one is replaced when the bully fails to find a path to it. The
+ * budget is kept for callers; this read never defers (never null). */
+export function insultCandidates350(w:World,bully:Pawn,allowPrisoners:boolean,_budget?:SearchBudget):Pawn[]|null {
+ return w.pawns.filter(t=>insultRecipient350(w,bully,t,allowPrisoners));
 }
 export interface MoodPoolAdmission350 {root?:Cell;candidates?:Pawn[]}
 /** The schema 350 options of one intensity, in the Core def order, before any
