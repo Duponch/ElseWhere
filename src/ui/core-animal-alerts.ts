@@ -46,16 +46,21 @@ export function readPenViews(world:World):PenView[] {
     &&memo.width===world.width&&memo.height===world.height&&memo.tiles===world.tiles&&memo.passages.every((s,i)=>penHoldOpen(s)===memo.holds[i]))
     return memo.markers.map(marker=>({marker,region:memo.regions.get(marker.id)}));
   // One pass: markers, passages and region inputs, compared with the memo's.
-  const markers:Structure[]=[],passages:Structure[]=[],holds:number[]=[],facts:number[]=[],previous=memo?.facts;let same=!!previous;
+  // While they match, the memo's facts are kept and nothing is copied.
+  const markers:Structure[]=[],passages:Structure[]=[],holds:number[]=[],previous=memo?.facts;
+  let facts:number[]|undefined=previous?undefined:[],k=0;
   for(const s of source){
     if(!isPenRegionInput(s))continue;
     if(s.kind==='pen-marker')markers.push(s);
-    const hold=penHoldOpen(s),k=facts.length;
+    const hold=penHoldOpen(s);
     if(s.door){passages.push(s);holds.push(hold);}
-    facts.push(s.id,s.x,s.z,hold);
-    if(same&&(previous![k]!==s.id||previous![k+1]!==s.x||previous![k+2]!==s.z||previous![k+3]!==hold))same=false;
+    if(!facts&&(previous![k]!==s.id||previous![k+1]!==s.x||previous![k+2]!==s.z||previous![k+3]!==hold))facts=previous!.slice(0,k);
+    if(facts)facts.push(s.id,s.x,s.z,hold);
+    k+=4;
   }
-  const reuse=!!memo&&same&&previous!.length===facts.length&&memo.width===world.width&&memo.height===world.height&&sameTerrain(memo.tiles,world);
+  const same=!facts&&previous!.length===k;
+  facts??=same?previous!:previous!.slice(0,k);
+  const reuse=!!memo&&same&&memo.width===world.width&&memo.height===world.height&&sameTerrain(memo.tiles,world);
   const regions=reuse?memo!.regions:new Map(markers.map(m=>[m.id,penRegion(world,m.id)]));
   penMemo={facts,structures:source,count:source.length,first:source[0],last:source[source.length-1],passages,holds,markers,tiles:world.tiles,width:world.width,height:world.height,regions};
   return markers.map(marker=>({marker,region:regions.get(marker.id)}));
