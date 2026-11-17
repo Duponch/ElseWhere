@@ -31,7 +31,10 @@ const energyReport=JSON.parse(readFileSync('artifacts/energy-colony-v85.json','u
 const loadFixture=()=>deserializeWorld(fixtureBytes.toString('utf8'));
 interface Ledger {consumed:number;harvested:number;cooked:number;steelMined:number;componentsMined:number;medicineConsumed:number;meals:Record<number,number>;mealsByStation:Record<string,number>;
   /** Resource pods (schema 305) deliver goods from outside the colony. */
-  podSteel?:number;podComponents?:number;podFood?:number}
+  podSteel?:number;podComponents?:number;podFood?:number;
+  /** Food a handler feeds an animal while taming, training or maintaining it
+   * (Core feeds it at each lesson step): eaten with no meal event. */
+  handlingFed?:number}
 interface Checkpoint { woodLedger:WoodLedger;repairLedger:RepairLedger;
   protocol:'prison-v86';fixtureHash:string;world:string;player:PrisonPlayerState;ledger:Ledger;
   initial:{wood:number;food:number;animalEaten:number;steel:number;component:number;medicine:number};
@@ -110,7 +113,7 @@ function runPrisonJourney(stopTick?:number):void {
     expect(validateWorld(w),c).toEqual([]);expect(survivorPlan(w,true).anchor,c).toEqual(player.campAnchor);
     expect(conservedWood(w,woodLedger),c).toBeCloseTo(initial.wood,7);
     expect(metalAccount(w,'steel'),c).toBe(initial.steel+ledger.steelMined+(ledger.podSteel??0));expect(metalAccount(w,'component')+repairLedger.spent,c).toBe(initial.component+ledger.componentsMined+(ledger.podComponents??0));
-    expect(foodAccount(w)+captiveMealInTransit(w)+ledger.consumed+9*ledger.cooked+(w.wildlife?.eatenItems??0)-initial.animalEaten,c).toBe(initial.food+ledger.harvested+(ledger.podFood??0));
+    expect(foodAccount(w)+captiveMealInTransit(w)+ledger.consumed+9*ledger.cooked+(ledger.handlingFed??0)+(w.wildlife?.eatenItems??0)-initial.animalEaten,c).toBe(initial.food+ledger.harvested+(ledger.podFood??0));
     expect(player.initialColonists.every(id=>w.pawns.some(p=>p.id===id&&isColonist(p)&&p.state!=='dead')),c).toBe(true);
   };
   const continuation=()=>{
@@ -132,8 +135,12 @@ function runPrisonJourney(stopTick?:number):void {
     const beforeMilestones=Object.keys(player.milestones).join(','),stations=new Map(w.pawns.flatMap(p=>{const station=w.structures.find(s=>s.id===p.cooking?.stationId);return station?[[p.name,station.kind] as const]:[];}));
     const names=new Map(w.pawns.map(p=>[p.name,p.id])),tenders=new Map(w.pawns.filter(p=>p.tend).map(p=>[p.name,p.tend!.patientId]));
     const mines=w.jobs.filter(j=>j.kind==='mine').flatMap(j=>{const tile=w.tiles[j.z*w.width+j.x]!;return tile.ore?[{cell:j.z*w.width+j.x,ore:tile.ore}]:[];});
+    const handling=new Map(w.pawns.flatMap(p=>p.animalHandling?[[p.id,{animalId:p.animalHandling.animalId,quantity:p.animalHandling.quantity}] as const]:[]));
     const medicineBefore=medicines(w);trackMaintenanceStep(w,repairLedger,()=>trackWoodStep(w,woodLedger,()=>stepWorld(w)));
     ledger.medicineConsumed+=Math.max(0,medicineBefore-medicines(w));
+    // A handling step that fed the animal lowers the carried quantity of a task
+    // that goes on; an interrupted task drops its food back on the map instead.
+    for(const [id,before] of handling){const task=w.pawns.find(p=>p.id===id)?.animalHandling;if(task&&task.animalId===before.animalId&&task.quantity<before.quantity)ledger.handlingFed=(ledger.handlingFed??0)+before.quantity-task.quantity;}
     for(const target of mines)if(w.tiles[target.cell]!.terrain!=='rock'){if(target.ore==='steel')ledger.steelMined+=40;else if(target.ore==='machinery')ledger.componentsMined+=2;}
     for(const e of w.events.filter(e=>e.tick===w.tick)){
       const eaten=e.message.match(/a mangé une portion \((\d+) ×/),person=[...names].find(([name])=>e.message.startsWith(`${name} `)),id=person?.[1];
