@@ -12,8 +12,8 @@ import {
 describe('Architect generated icon atlases', () => {
   it('keeps marker cell addresses while every UI tool has its own complete image', () => {
     const rendered = toolDefinitions.map(tool => tool.id);
-    expect(rendered).toHaveLength(123);
-    expect(new Set(rendered).size).toBe(123);
+    expect(rendered).toHaveLength(124);
+    expect(new Set(rendered).size).toBe(124);
     expect(rendered).toContain('spike-trap');
     expect(rendered).toContain('double-bed');
     expect(rendered).toContain('mini-turret');
