@@ -9,7 +9,7 @@ export type NativeActionIconKind=OriginalIcon|'wall'|'floor'|'floor-remove'|'bri
 const families:Readonly<Record<string,NativeActionIconKind>>={
   architecte:'architecte',architect:'architecte',travail:'travail',work:'travail',planning:'planning',schedule:'planning',assignations:'assignations',assign:'assignations',animaux:'animaux',animals:'animaux',faune:'faune',wildlife:'faune',recherches:'recherches',research:'recherches',quetes:'quetes',quests:'quetes',monde:'monde',world:'monde',historique:'historique',history:'historique',factions:'factions',menu:'menu',ordres:'ordres',orders:'ordres',zones:'zones',
   structure:'wall',floors:'floor',furniture:'chair',temperature:'thermometer',recreation:'horseshoe',production:'workbench',power:'power',ship:'rocket',
-  allow:'check',forbid:'cancel',
+  allow:'check',forbid:'cancel',strip:'shirt',
   select:'information',mine:'mine','haul-chunks':'haul',haul:'haul',chop:'axe',harvest:'harvest',cut:'scissors',uninstall:'uninstall',deconstruct:'deconstruct',cancel:'cancel',
   wall:'wall',door:'door',autodoor:'door','mini-turret':'gun',sandbags:'wall',fence:'fence','fence-gate':'fence','pen-marker':'flag','spike-trap':'sword','firefoam-popper':'foam',
   'build-bridge':'bridge','remove-bridge':'bridge-remove','smooth-floor':'floor','remove-floor':'floor-remove','wood-planks':'floor',

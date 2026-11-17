@@ -70,6 +70,7 @@ export function validExpeditionOrigin(value:unknown,w:Pick<World,'tick'|'planet'
 // partition decision. A future field is not accepted because World ignores it.
 export const LOCAL_FIELDS=new Set([
   'corePathBudget297',
+  'strip351',
   'party292',
   'firefoam290',
   'shipReactorThreats275',

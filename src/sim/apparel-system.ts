@@ -1,3 +1,4 @@
+import {isStrip351} from './strip-state-351.ts';
 import { storageAt,storageCellAccepts } from './shelf-storage.ts';
 import { isColonist } from './affiliation.ts';
 import { allowedAreaAllows,captureAllowedArea } from './allowed-area-state.ts';
@@ -76,7 +77,7 @@ export function considerApparelPolicy(world:World,pawn:Pawn,search:()=>Reachabil
     burning:world.fires?.items.some(f=>groundFire(f)&&p.owner.type==='ground'&&f.x===p.owner.x&&f.z===p.owner.z),
   }));
   const range=comfortableTemperature(world,pawn),temperature=new TemperatureView(world,thermalLayout(world)).at(world,pawn);
-  const choice=chooseApparelReplacement(policy,worn,candidates,temperature<range.min?'cold':'neutral');pawn.nextApparelCheckAt=world.tick+nextInterval(world,pawn);
+  const choice=chooseApparelReplacement(policy,worn,candidates,temperature<range.min?'cold':'neutral',undefined,isStrip351(world.schemaVersion)&&!pawn.traits?.includes('bloodlust'));pawn.nextApparelCheckAt=world.tick+nextInterval(world,pawn);
   if(!choice)return false;
   return beginAutomaticEquipment(world,pawn,choice.action==='remove'?choice.wornId:choice.candidateId,choice.action,reach);
 }

@@ -8,6 +8,7 @@ import type {OrderOption} from '../sim/player-orders';
 import {isColonist} from '../sim/affiliation';
 import {footprintContains} from '../sim/definitions';
 import {isAncientCasket256} from '../sim/ancient-casket-state-256';
+import {stripTargetsAt351} from '../sim/strip-351';
 import {firePosition} from '../sim/fire-rules';
 import {queryFirefoamUseReason290} from '../sim/firefoam-manual-290';
 import {shipCasketOptions277} from '../ui/ship-casket-controls-277';
@@ -39,17 +40,18 @@ function draftedOrdinaryActor346(world: World, ids: readonly number[], selected:
  * plain drafted move stays immediate. */
 function draftedCellContext346(world: World, actor: Pawn, at: Cell): boolean {
   return groundPilesAt(world, at).some(pile => pile.kind === 'weapon' || pile.kind === 'apparel')
+    || stripTargetsAt351(world, at).some(target => target.pawn !== actor)
     || contextConsumesFood(world, new Set([actor.id]), at)
     || actor.x === at.x && actor.z === at.z && !!equippedWeapon(world, actor);
 }
 /** A downed outsider the actor may capture. */
 function draftedTarget346(world: World, targetId: number): Pawn | undefined {
   const target = world.pawns.find(pawn => pawn.id === targetId);
-  return target && canCapturePatient(target) ? target : undefined;
+  return target && (canCapturePatient(target) || stripTargetsAt351(world, target).some(strippable => strippable.pawn === target)) ? target : undefined;
 }
 /** The options of Core's drafted ordinary providers among the worker's menu. */
 export function draftedOption346(option: OrderOption, targetId: number | undefined): boolean {
-  return targetId === undefined ? option.consumePileId !== undefined || option.equipmentItemId !== undefined : option.capturePatientId === targetId;
+  return targetId === undefined ? option.consumePileId !== undefined || option.equipmentItemId !== undefined || option.stripTargetId !== undefined : option.capturePatientId === targetId || option.stripTargetId === targetId;
 }
 
 /** Call on interaction cancellation, page dismissal and map/world replacement.
@@ -58,10 +60,11 @@ export function cancelNativeOrderPage(): void { revision++; }
 
 const errorText = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const sameIds = (left: readonly number[], right: readonly number[]): boolean => left.length === right.length && [...left].sort((a, b) => a - b).every((id, index) => id === [...right].sort((a, b) => a - b)[index]);
-const optionKey = (option: OrderOption): string => JSON.stringify([option.jobId, option.openCasketId, option.consumePileId, option.arrestPatientId, option.capturePatientId, option.equipmentItemId, option.equipmentAction, option.feedPatientId, option.tendPatientId, option.rescuePatientId, option.cookStationId, option.haulTarget]);
+const optionKey = (option: OrderOption): string => JSON.stringify([option.jobId, option.openCasketId, option.stripTargetId, option.consumePileId, option.arrestPatientId, option.capturePatientId, option.equipmentItemId, option.equipmentAction, option.feedPatientId, option.tendPatientId, option.rescuePatientId, option.cookStationId, option.haulTarget]);
 
 function optionCommand(option: OrderOption, pawnId: number, queue: boolean): Command {
   if (option.openCasketId !== undefined) return {type: 'order-open-casket', pawnId, casketId: option.openCasketId};
+  if (option.stripTargetId !== undefined) return {type: 'order-strip', pawnId, targetId: option.stripTargetId};
   if (option.consumePileId !== undefined) return {type: 'order-consume', pawnId, pileId: option.consumePileId, queue: false};
   if (option.arrestPatientId !== undefined) return {type: 'order-arrest', pawnId, patientId: option.arrestPatientId, queue: false};
   if (option.capturePatientId !== undefined) return {type: 'order-capture', pawnId, patientId: option.capturePatientId, queue};

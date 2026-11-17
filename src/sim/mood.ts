@@ -22,7 +22,8 @@ import { malnutritionStage } from './malnutrition.ts';
 import { expireRoomMemoriesAt,roomMoodThoughtsAt } from './room-experience.ts';
 import { TRAITS } from './traits.ts';
 import { colonistMoodOffset } from './game-profile.ts';
-import { APPAREL,apparelInsulation } from './apparel-rules.ts';
+import { APPAREL,apparelInsulation,type ApparelItem } from './apparel-rules.ts';
+import { deadMansApparelThought351,isStrip351 } from './strip-state-351.ts';
 import { pawnBody } from './health-rules.ts';
 import { medicalPain } from './injury-state.ts';
 import { insultMoodMemories,kindWordsMoodMemories } from './social-state.ts';
@@ -166,12 +167,15 @@ export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly M
   for(const t of [pawn.hunger<=0?starvation[Math.max(0,malnutritionStage(pawn.health?.malnutrition)-1)]:hunger[hungerStage(pawn.hunger)],v313&&c.despawned313?undefined:fatigue[restStage(pawn.rest)],c.environment?comforts[comfortStage(c.environment.comfort)]:undefined,c.environment?beauty[(v313?beautyStage313:beautyStage)(c.environment.beauty)]:undefined,pawn.prisoner?undefined:leisure[joyStage(pawn.recreation.level)],pains[painStage(pawn.health?medicalPain(pawn.health):0)]])if(t)thoughts.push(t);
   if((pawn.health?.toxicBuildup?.severity??0)>=Math.fround(.04)||cryptosleepSick256(pawn.health?.cryptosleepSickness)||(pawn.health?.flu?.severity??0)>0||(pawn.health?.immuneDiseases?.malaria?.severity??0)>0||(pawn.health?.immuneDiseases?.plague?.severity??0)>0||v313&&!!pawn.health?.infections?.cases.length||(pawn.health?.immuneDiseases?.['sleeping-sickness']?.severity??0)>0||!!pawn.health?.parasites306||!!pawn.health?.mechanites307)thoughts.push(sick);
   const ambientTemperature460=pawn.cryptosleepHeldAt271===undefined&&pawn.shipCryptosleepHeldAt277===undefined?c.ambientTemperature460:undefined;
-  let condition=1,minComfortable460=16,maxComfortable460=26;
+  let condition=1,minComfortable460=16,maxComfortable460=26,tainted351=0,taintedItem351:ApparelItem|undefined;
   for(const pile of c.items)if(pile.owner.type==='apparel'&&pile.owner.pawnId===pawn.id){
+    if(pile.apparel?.corpseWear284===true){tainted351++;taintedItem351??=pile.item as ApparelItem;}
     condition=Math.min(condition,pile.apparel!.hitPoints/APPAREL[pile.item as keyof typeof APPAREL].hitPoints);
     if(ambientTemperature460!==undefined){const insulation=apparelInsulation(pile);minComfortable460-=insulation.cold;maxComfortable460+=insulation.heat;}
   }
   if(condition<.5)thoughts.push(apparel[condition<.2?1:0]!);
+  // Schema 351: DeadMansApparel, nullified by Bloodlust, valid while despawned.
+  if(tainted351&&isStrip351(c.schemaVersion)&&!pawn.traits?.includes('bloodlust')){const dead=deadMansApparelThought351(tainted351,taintedItem351!);if(dead)thoughts.push(dead);}
   if(ambientTemperature460!==undefined)thoughts.push(...thermalMoodThoughts460(ambientTemperature460,{min:minComfortable460,max:maxComfortable460}));
   for(const m of pawn.memories)if(memoryExpiry271(m,m.expiresAt)>c.tick)thoughts.push({id:m.kind,label:memoryLabels[m.kind],offset:memoryOffsets[m.kind],kind:'memory',description:'Souvenir du dernier repas concerné ; une nouvelle occurrence renouvelle sa durée sans cumul.',expiresAt:memoryExpiry271(m,m.expiresAt)});
   const denied=pawn.deniedJoining?.filter(t=>t>c.tick)??[];

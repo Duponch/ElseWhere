@@ -36,7 +36,7 @@ export function idleWaitExpiry300(task:Extract<IdleWander300,{kind:'wait'}>,id:n
  return core>=task.startedAtCore+task.expiryIntervalCore&&Math.abs((((core|0)+idleHashOffset300(id))|0)%task.expiryIntervalCore)<delta;
 }
 export function idleOtherActivity300(p:Pawn):boolean {
- return allowedAreaOtherActivity(p)||!!(p.medicalSleep||p.draft||p.mental?.crisis||p.allowedAreaReturn||p.brewing||p.coupleTask285||p.factionComms298||p.shipCasketTask277||p.firefoamTask290||p.prisoner||p.visitor||p.raid||p.podRescue);
+ return allowedAreaOtherActivity(p)||!!(p.medicalSleep||p.draft||p.mental?.crisis||p.allowedAreaReturn||p.brewing||p.coupleTask285||p.factionComms298||p.shipCasketTask277||p.firefoamTask290||p.strip351||p.prisoner||p.visitor||p.raid||p.podRescue);
 }
 /** O(1) physical-owner gate, usable by the existing per-pawn Core pass. */
 export function idleMotionAllowed300(w:World,p:Pawn):boolean {

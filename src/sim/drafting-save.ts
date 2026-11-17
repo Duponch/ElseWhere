@@ -1,4 +1,5 @@
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
+import {isDraftedStrip351} from './strip-state-351.ts';
 import { hasForcedConsumeMarker,validForcedConsumePawnShape } from './consume-save.ts';
 import { DRAFT_QUEUE_LIMIT,sameCell } from './drafting-rules.ts';
 import type { World } from './types.ts';
@@ -25,6 +26,8 @@ export function validateDrafting(world:World,onlyPawnIds?:ReadonlySet<number>):s
     // Schema 346: an ordered equip, wear or drop of a drafted colonist (the
     // equipment validator checks the task itself).
     const equipping=isDraftedEquipment346(world,p);
+    // Schema 351: an ordered Strip of a drafted colonist (strip-351.ts checks the job).
+    const stripping=isDraftedStrip351(world,p);
     const invalidEquipping=equipping&&(d.target!==null||d.queue.length>0||p.orders.queue.length>0||p.priorityWork!==undefined
       ||p.need!==null||p.melee||p.shooting||p.bombRefuge||p.heatRefuge||p.tactics||p.flee||p.burning
       ||p.transitExit||p.interruptedCargo);
@@ -43,11 +46,11 @@ export function validateDrafting(world:World,onlyPawnIds?:ReadonlySet<number>):s
     // Stun acquired after admission pauses the existing mandate and captured
     // edge. Its ordinary shape/clock are still checked before this validator;
     // only new orders apply the stun refusal in rescueReason.
-    if(invalidShipCasket||invalidService||invalidClinical||invalidRescue||invalidEquipping||p.state==='dead'||p.state==='downed'||p.jobId!==null||p.haul&&!service||p.cooking||p.equipmentTask&&!equipping||p.ward||p.feed||p.tend&&!clinical||p.rescue&&!rescuing||p.recreation.task||p.orders.active!==null&&!service&&!clinical&&!consuming&&!rescuing&&!equipping||p.orders.queue.length&&!service&&!clinical&&!consuming&&!rescuing||p.priorityWork&&!service&&!clinical&&!consuming&&!rescuing||p.need&&!sleep&&!consuming||sleep&&(d.target||d.queue.length)||p.state==='sleeping'&&!sleep||p.path.length&&p.state!=='moving'||!['idle','moving','sleeping',...(service||clinical||shipCasket||equipping?['working']:[]),...(consuming?['eating']:[])].includes(p.state))errors.push('Invalid drafted activity.');
+    if(invalidShipCasket||invalidService||invalidClinical||invalidRescue||invalidEquipping||p.state==='dead'||p.state==='downed'||p.jobId!==null||p.haul&&!service||p.cooking||p.equipmentTask&&!equipping||p.ward||p.feed||p.tend&&!clinical||p.rescue&&!rescuing||p.recreation.task||p.orders.active!==null&&!service&&!clinical&&!consuming&&!rescuing&&!equipping||p.orders.queue.length&&!service&&!clinical&&!consuming&&!rescuing||p.priorityWork&&!service&&!clinical&&!consuming&&!rescuing||p.need&&!sleep&&!consuming||sleep&&(d.target||d.queue.length)||p.state==='sleeping'&&!sleep||p.path.length&&p.state!=='moving'||!['idle','moving','sleeping',...(service||clinical||shipCasket||equipping||stripping?['working']:[]),...(consuming?['eating']:[])].includes(p.state))errors.push('Invalid drafted activity.');
     if(clinical&&p.path.length&&!sameCell(p.path.at(-1)!,p.tend!.spot))errors.push('Drafted tending path does not reach its contact cell.');
     if(d.target){const key=d.target.z*world.width+d.target.x;if(claims.has(key))errors.push('Conflicting tactical destination.');claims.add(key);}
-    if(p.path.length&&!p.melee?.order&&!p.transitExit&&!service&&!refuge&&!clinical&&!consuming&&!rescuing&&!shipCasket&&!equipping&&(!d.target||!sameCell(p.path.at(-1)!,d.target)))errors.push('Tactical path does not reach its destination.');
-    if(!d.target&&!p.melee?.order&&p.state==='moving'&&!p.transitExit&&!service&&!refuge&&!clinical&&!consuming&&!rescuing&&!shipCasket&&!equipping&&p.moveCooldown===0)errors.push('Tactical movement lacks a destination.');
+    if(p.path.length&&!p.melee?.order&&!p.transitExit&&!service&&!refuge&&!clinical&&!consuming&&!rescuing&&!shipCasket&&!equipping&&!stripping&&(!d.target||!sameCell(p.path.at(-1)!,d.target)))errors.push('Tactical path does not reach its destination.');
+    if(!d.target&&!p.melee?.order&&p.state==='moving'&&!p.transitExit&&!service&&!refuge&&!clinical&&!consuming&&!rescuing&&!shipCasket&&!equipping&&!stripping&&p.moveCooldown===0)errors.push('Tactical movement lacks a destination.');
   }
   return errors;
 }

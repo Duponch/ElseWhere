@@ -1,4 +1,5 @@
 import {isShipComputerSensorsKind298} from '../sim/ship-computer-sensors-content-298';
+import { stripInspectorAction351 } from '../sim/strip-351';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {readingRefusal295} from '../sim/reading-runtime-295';
 import type { NativeControl, NativePage, NativeRow, NativeUiActions, NativeUiState } from './native-contract';
@@ -379,6 +380,8 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   const group = selectionGroup(world, pawn), draft = selectionDraftCommand(group), stop = selectionStopCommand(group), fire = selectionFireAtWillCommand(group);
   if (colonist && alive) actions.push(command('draft-pawn', draft && draft.type === 'draft' && !draft.enabled ? 'Démobiliser' : 'Mobiliser', draft ?? { type: 'draft', pawnIds: [pawn.id], enabled: !pawn.draft }, !draft),
     command('clear-orders', 'Effacer les ordres', { type: 'clear-orders', pawnId: pawn.id }), control('manage-work', 'Travail', () => owner.panel('work')));
+  // Schema 351: Designator_Strip is a reverse designator of the selected pawn or corpse.
+  const strip351 = stripInspectorAction351(world, pawn.id); if (strip351) actions.push(command('strip-designate', strip351.label, strip351.command));
   if (colonist && alive && stop && fire) actions.push(command('draft-stop', 'Stop', stop), command('fire-at-will', fire.type === 'fire-at-will' && fire.enabled ? 'Feu à volonté' : 'Cesser le feu', fire));
   const result: NativePage & { portrait?: { url: string; label: string } } = { id: `inspect-pawn-${pawn.id}-${activeTab}`, title: pawn.name, subtitle:activeTab==='bio'||activeTab==='gear'?tabs.find(([tab]) => tab === activeTab)![1]:undefined, rows, actions, layout: 'inspector' };
   // All tabs belong to the same cardboard dossier, rather than seven windows

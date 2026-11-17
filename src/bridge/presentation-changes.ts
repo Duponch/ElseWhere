@@ -47,12 +47,14 @@ export class PresentationChanges {
         // Busy clocks decrease continuously; only real admissions, phase/focus
         // changes and suspension boundaries request an immediate publication.
         m.ranged?.order,m.ranged?.stance?[m.ranged.stance.phase,m.ranged.stance.targetKey,m.ranged.stance.startedAtCore]:undefined]),
+      world.strip351,
       world.pawns.map(p=>[p.id,p.state,p.burning?.phase,p.firefighting?.phase,p.firefighting?.fireId,p.raid?.exiting,p.mental?.crisis?.kind,p.mental?.crisis?.target,
         p.mental?.crisis&&'targetId' in p.mental.crisis?p.mental.crisis.targetId:undefined,
         p.mental?.crisis?.kind==='tantrum'?p.mental.crisis.attempted:undefined,
         p.meleeThreat,p.bombRefuge,p.bedId,p.social?.last,p.romanceMemories,p.familyBereavement,p.deathThoughts,
         isSchema285OrLater(world.schemaVersion)&&p.coupleTask285?[p.coupleTask285.otherId,p.coupleTask285.bedId,p.coupleTask285.slot,p.bedSlot,p.coupleTask285.enteredAtCore,p.coupleTask285.endsAtCore]:undefined,
         p.firefoamTask290?[p.firefoamTask290.structureId,p.firefoamTask290.phase]:undefined,!!p.health?.coveredInFirefoam290,
+        p.strip351?[p.strip351.targetId,p.strip351.phase]:undefined,
         p.jobId,p.faction,p.worldAffiliation259,p.prisonerHistory259?.capturedAt,p.prisoner?.capturedAt,p.prisoner?.mode,p.prisoner?.lastChatTick,p.prisoner?.escape,p.ward?.kind,p.ward?.patientId,p.ward?.phase,p.hostilityResponse,p.draft?.holdFire,p.tactics?.targetId,p.tactics?.post,p.flee,p.melee,p.stun,
         // Human Busy clocks pay every Core. Publish real orders/phases and
         // stun boundaries, leaving continuous watermarks to periodic snapshots.

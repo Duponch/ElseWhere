@@ -39,7 +39,7 @@ export function validReadingWorld295(world:World):boolean {
    }else if(book.owner.type!=='pawn'||book.owner.pawnId!==pawn.id)return false;
    if(task.phase==='travel') {if(pawn.state!=='moving')return false;}
    else if(pawn.state!==(task.stage==='read'?'recreating':'idle')||pawn.path.length>0||task.stage==='read'&&pawn.moveCooldown>0||pawn.x!==task.target.x||pawn.z!==task.target.z)return false;
-   if(pawn.jobId!==null||pawn.haul||pawn.need||pawn.cooking||pawn.research||pawn.tend||pawn.rescue||pawn.feed||pawn.equipmentTask||pawn.surgery||pawn.brewing||pawn.firefoamTask290||pawn.coupleTask285)return false;
+   if(pawn.jobId!==null||pawn.haul||pawn.need||pawn.cooking||pawn.research||pawn.tend||pawn.rescue||pawn.feed||pawn.equipmentTask||pawn.surgery||pawn.brewing||pawn.firefoamTask290||pawn.strip351||pawn.coupleTask285)return false;
    if(task.seatId!==undefined){
     const seat=world.structures.find(s=>s.id===task.seatId&&isDiningSeat(s.kind));
     if(!seat||seats.has(seat.id)||seat.x!==task.target.x||seat.z!==task.target.z)return false;seats.add(seat.id);

@@ -2,6 +2,7 @@ import {isSchema256Or257} from '../sim/schema-compatibility-257.ts';
 import {materialAllowedForPlayer256} from '../sim/material-permission-256';
 import {roadPropCanClaim256,roadPropCanDeconstruct256} from '../sim/local-road-prop-ownership-256';
 import { footprintCells } from '../sim/definitions';
+import { stripInspectorAction351 } from '../sim/strip-351';
 import { choppable, harvestable, isPlant } from '../sim/plants';
 import { sharesConstructionLayer } from '../sim/power-grid';
 import { extractTreeReason,isMinifiedTree,isPlantDesignationJob } from '../sim/tree-transfer';
@@ -11,7 +12,7 @@ import type { Cell, Command, Job, MaterialPile, Resource, Structure, World } fro
 import { mapObjectCells, type MapObjectSelection } from './map-object-selection';
 import { mapObjectGroupCells } from './map-object-group-selection';
 
-export type MapObjectActionId = 'material-permission' | 'claim' | 'mine' | 'chop' | 'harvest' | 'cut' | 'haul-chunks' | 'deconstruct' | 'cancel' | 'extract' | 'replant';
+export type MapObjectActionId = 'strip' | 'material-permission' | 'claim' | 'mine' | 'chop' | 'harvest' | 'cut' | 'haul-chunks' | 'deconstruct' | 'cancel' | 'extract' | 'replant';
 export interface MapObjectAction { id: MapObjectActionId; label: string; command?: Command; placementPileId?:number }
 export interface MapObjectGroupAction { id: MapObjectActionId; label: string; commands: Command[] }
 const same = (a: Cell, b: Cell) => a.x === b.x && a.z === b.z;
@@ -64,6 +65,8 @@ function actionsFor(world: World, selected: MapObjectSelection, cells: readonly 
   } else if (selected.kind === 'pile') {
     const pile = lookups?.piles ? lookups.piles.get(selected.id) : world.piles.find(pile => pile.id === selected.id);
     if(isSchema256Or257(world.schemaVersion)&&pile&&pile.owner.type==='ground'&&!pile.apparel&&!pile.weapon&&!Object.hasOwn(pile,'eggForbidden')){const forbidden=!materialAllowedForPlayer256(pile);actions.push({id:'material-permission',label:forbidden?'Autoriser':'Interdire',command:{type:'material-forbid',pileId:pile.id,forbidden:!forbidden}});}
+    const strip351 = pile?.humanCorpse ? stripInspectorAction351(world, pile.humanCorpse.pawnId) : undefined;
+    if (strip351) actions.push({ id: 'strip', label: strip351.label, command: strip351.command });
     if (pile?.kind === 'chunk' && pile.owner.type === 'ground' && !pile.haulRequested) {
       actions.push({ id: 'haul-chunks', label: 'Transporter',
         command: { type: 'area', action: 'haul-chunks', from: { x: cell.x, z: cell.z }, to: { x: cell.x, z: cell.z } } });

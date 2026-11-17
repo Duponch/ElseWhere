@@ -1,6 +1,6 @@
 {
   "style": "adult-hand-20261107",
-  "icons": 708,
+  "icons": 709,
   "ids": [
     "advanced-fabrication",
     "air-conditioning",
@@ -686,6 +686,7 @@
     "stonecutter",
     "stonecutting",
     "stool",
+    "strip",
     "sun",
     "sun-lamp",
     "table",

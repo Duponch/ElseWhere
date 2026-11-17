@@ -246,6 +246,8 @@ export class OrderMenu {
           if(option.consumePileId!==undefined&&(queue||event.shiftKey)){this.report('Consommer est un ordre direct ; relâchez Maj.',true);return;}
           this.close();void this.client.command(option.openCasketId!==undefined
             ? {type:'order-open-casket',pawnId:pawn.id,casketId:option.openCasketId}
+            : option.stripTargetId!==undefined
+            ? {type:'order-strip',pawnId:pawn.id,targetId:option.stripTargetId}
             : option.consumePileId!==undefined
             ? {type:'order-consume',pawnId:pawn.id,pileId:option.consumePileId,queue:false}
             : option.arrestPatientId!==undefined

@@ -15,7 +15,7 @@ const aliases:Readonly<Record<string,string>>={
  structure:'wall',floors:'floor',furniture:'chair',temperature:'thermometer',recreation:'horseshoes',production:'workbench',ship:'rocket',
  pointer:'select',clock:'planning',people:'assignations',leaf:'growing',layers:'zones',eye:'eye',chop:'axe',cut:'scissors','haul-chunks':'haul','build-roof':'roof','ignore-roof':'roof-ignore','snow-clear':'snow',
  'remove-growing':'growing-remove','remove-stockpile':'stockpile-remove','remove-home':'home-remove','remove-roof':'roof-remove','remove-snow-clear':'snow-remove','remove-floor':'floor-remove','build-bridge':'bridge','remove-bridge':'bridge-remove',
- 'extract-tree':'extract','replant-tree':'replant',allow:'check',forbid:'forbid',close:'cancel',delete:'cancel',remove:'cancel',settings:'settings',options:'settings',resume:'play',start:'play',info:'information',
+ 'extract-tree':'extract','replant-tree':'replant',allow:'check',forbid:'forbid',strip:'shirt',close:'cancel',delete:'cancel',remove:'cancel',settings:'settings',options:'settings',resume:'play',start:'play',info:'information',
  'dining-chair':'chair','standing-lamp':'lamp','tube-television':'television','chess-table':'chess','power-conduit':'wire','wind-turbine':'wind','solar-generator':'solar','pen-marker':'pen',
  'ship-cryptosleep-casket':'ship-casket','cryptosleep-casket':'casket','art-bench':'art-workbench','tailor-bench':'tailor','electric-tailor-bench':'electric-tailor','research-bench':'research-desk','hi-tech-research-bench':'hi-tech-desk',
  'fueled-stove':'wood-stove','electric-stove':'electric-stove','butcher-table':'butcher','butcher-spot':'butcher-spot','crafting-spot':'crafting','machining-table':'machining','fabrication-bench':'fabrication',

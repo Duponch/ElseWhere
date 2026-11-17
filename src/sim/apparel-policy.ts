@@ -78,15 +78,20 @@ export function apparelHitPointsUtility(percent:number):number {
   const [[x,y],[x2,y2]]=segment;return y+(y2-y)*(p-x)/(x2-x);
 }
 const qualityUtility=(quality:WeaponQuality)=>[.55,.75,1,1.16,1.32,1.5,1.8][qualities.indexOf(quality)]!;
-export function apparelPolicyScore(garment:ApparelPolicyGarment,need:ApparelTemperatureNeed='neutral'):number {
+/** `tainted351`: schema 351, the wearer can get DeadMansApparel. Core
+ * JobGiver_OptimizeApparel then scores worn-by-corpse apparel score − 0.5,
+ * times 0.1 when still positive. */
+export function apparelPolicyScore(garment:ApparelPolicyGarment,need:ApparelTemperatureNeed='neutral',tainted351=false):number {
   const d=APPAREL[garment.item],hp=apparelHitPointsUtility(garment.apparel.hitPoints/d.hitPoints),protection=d.ratings.sharp*.45+d.ratings.blunt*.25+d.ratings.heat*.1;
   const thermal=need==='cold'?d.coldInsulation*.02:need==='heat'?d.heatInsulation*.02:0;
-  return (1+protection+thermal)*qualityUtility(garment.apparel.quality)*hp;
+  const score=(1+protection+thermal)*qualityUtility(garment.apparel.quality)*hp;
+  if(!tainted351||garment.apparel.corpseWear284!==true)return score;
+  const lowered=score-.5;return lowered>0?lowered*.1:lowered;
 }
 
 /** Chooses one deterministic action. Stable ids resolve equal scores; callers
  * reserve and execute the returned action transactionally in the world. */
-export function chooseApparelReplacement(policy:ApparelPolicy,worn:readonly ApparelPolicyGarment[],candidates:readonly ApparelPolicyCandidate[],need:ApparelTemperatureNeed='neutral',minimumGain=.05):ApparelReplacementChoice|null {
+export function chooseApparelReplacement(policy:ApparelPolicy,worn:readonly ApparelPolicyGarment[],candidates:readonly ApparelPolicyCandidate[],need:ApparelTemperatureNeed='neutral',minimumGain=.05,tainted351=false):ApparelReplacementChoice|null {
   if(!validApparelPolicy(policy)||!Number.isFinite(minimumGain)||minimumGain<0)throw new RangeError('Invalid apparel replacement request');
   const all=[...worn,...candidates],ids=new Set<number>();for(const g of all){
     const definition=APPAREL[g.item],material=g.apparel.material??definition?.material;
@@ -100,7 +105,7 @@ export function chooseApparelReplacement(policy:ApparelPolicy,worn:readonly Appa
     if(!candidate.stored||!candidate.reachable||candidate.reserved||candidate.burning||candidate.apparel.forbidden||!apparelPolicyAllows(policy,candidate))continue;
     const conflicts=worn.filter(g=>!apparelCompatible(APPAREL[g.item].coverage,APPAREL[candidate.item].coverage));
     if(conflicts.some(g=>g.apparel.forced))continue;
-    const score=apparelPolicyScore(candidate,need),gain=score-conflicts.reduce((n,g)=>n+apparelPolicyScore(g,need),0);
+    const score=apparelPolicyScore(candidate,need,tainted351),gain=score-conflicts.reduce((n,g)=>n+apparelPolicyScore(g,need,tainted351),0);
     if(gain>=minimumGain)choices.push({candidateId:candidate.id,replaceIds:conflicts.map(g=>g.id).sort((a,b)=>a-b),gain,score});
   }
   choices.sort((a,b)=>b.gain-a.gain||b.score-a.score||a.candidateId-b.candidateId);

@@ -55,7 +55,7 @@ export function partyCapable292(world:World,p:Pawn,body:BodyAssessment=pawnBody(
 export function partyBusy292(p:Pawn,ownParty=false):boolean {
  return p.jobId!==null||!!(p.need||p.haul||p.cooking||p.hunting||p.research||p.burial||p.cleaning||p.openCasket||p.trade
   ||p.firefighting||p.ward||p.equipmentTask||p.feed||p.tend||p.surgery||p.rescue||p.animalCare||p.animalFeed||p.animalRescue
-  ||p.animalHandling||p.cryptosleepTask||p.shipCasketTask277||p.firefoamTask290||p.deepWork||p.orbitalTrade||p.brewing
+  ||p.animalHandling||p.cryptosleepTask||p.shipCasketTask277||p.firefoamTask290||p.strip351||p.deepWork||p.orbitalTrade||p.brewing
   ||p.coupleTask285||p.interruptedCargo||p.transitExit||p.allowedAreaReturn||p.equipmentDropPending||p.priorityWork)
   ||p.orders.active!==null||p.orders.queue.length>0||!!p.recreation.task&&!(ownParty&&p.recreation.task.activity==='party');
 }
