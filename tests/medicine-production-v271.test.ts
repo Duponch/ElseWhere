@@ -37,7 +37,8 @@ const count=(w:World,item:string)=>w.piles.reduce((n,p)=>n+(p.item===item?p.quan
 test('one non-electric laboratory recipe has exact medical, chemical and textile quotas',()=>{
   expect(PRODUCTION_RECIPES['make-medicine']).toMatchObject({station:'drug-lab',work:'craft',units:5,workTicks:70,outputUnits:1});
   const w=medicineProductionCamp(),lab=w.structures[0]!;
-  expect(stationRecipes(lab)).toEqual(['make-medicine']);expect(productionStationUsable(lab)).toBe(true);
+  // Schema 337: the drug lab also makes penoxycyline (single and bulk), as in Core.
+  expect(stationRecipes(lab)).toEqual(['make-medicine','make-penoxycyline','make-penoxycyline-bulk']);expect(productionStationUsable(lab)).toBe(true);
   expect(stationAccepts({kind:'machining-table'},'make-medicine')).toBe(false);
   expect(validMedicineIngredients('make-medicine',[{item:'herbal-medicine',quantity:1},{item:'neutroamine',quantity:1},{item:'cloth',quantity:1},{item:'cloth',quantity:2}])).toBe(true);
   for(const parts of [[{item:'cloth',quantity:5}],[{item:'medicine',quantity:1},{item:'neutroamine',quantity:1},{item:'cloth',quantity:3}],[{item:'herbal-medicine',quantity:1},{item:'neutroamine',quantity:2},{item:'cloth',quantity:2}],[{item:'herbal-medicine',quantity:1},{item:'neutroamine',quantity:1},{item:'cloth',quantity:2.5}]])expect(validMedicineIngredients('make-medicine',parts)).toBe(false);
