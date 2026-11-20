@@ -7,10 +7,15 @@ import {chunkParts} from './chunk-presentation';
 import {weaponVisual} from './weapon-shape';
 import type {Placement} from './primitives';
 
+/** Schema 353: a carried cowboy or bowler hat (or its workpiece) shows the
+ * cloth tuque's cargo model; on the ground it keeps its own shape and colour.
+ * The resident cargo geometry gains no vertex and every older item keeps its
+ * cargo kind (new kinds would also reach the tree cargo kinds at 600). */
+const sharedHatCargo353=(id:string):ItemId|undefined=>id.endsWith('-cowboy-hat')||id.endsWith('-bowler-hat')?'cloth-tuque':undefined;
 /** Explicit visual order, independent of save IDs and insertion order. */
-export const ITEM_VISUAL_IDS:readonly ItemId[]=Object.freeze((Object.keys(ITEM_DEFINITIONS) as ItemId[]).filter(id=>!id.endsWith('-corpse')).sort());
+export const ITEM_VISUAL_IDS:readonly ItemId[]=Object.freeze((Object.keys(ITEM_DEFINITIONS) as ItemId[]).filter(id=>!id.endsWith('-corpse')&&(sharedHatCargo353(id)??id)===id).sort());
 const cargoKinds=new Map(ITEM_VISUAL_IDS.map((item,ordinal)=>[item,200+ordinal] as const));
-export const itemCargoKind=(item:ItemId):number=>item==='minified-tree'?treeCargoKind():cargoKinds.get(item)??0;
+export const itemCargoKind=(item:ItemId):number=>item==='minified-tree'?treeCargoKind():cargoKinds.get(sharedHatCargo353(item)??item)??0;
 
 /** Local ground assembly, centred on X/Z; never owns mutable gameplay state. */
 export function itemGeometry(item:ItemId,quantity:number=ITEM_DEFINITIONS[item].stackLimit,anchor?:{x:number;z:number},tree?:TreeVisualTraits):Placement[] {
@@ -84,9 +89,9 @@ export function itemGeometry(item:ItemId,quantity:number=ITEM_DEFINITIONS[item].
     add('item-helmet',0,.15,0,.39,.30,.37,color);add('item-disc',0,.04,.01,.46,.025,.40,color);box(0,.18,.13,.025,.18,.10,0xb6bba7);
   }else if(definition.kind==='apparel'||/^unfinished-(shirt|pants|tribalwear|duster|parka|tuque|flak|recon|cowboy-hat|bowler-hat)/.test(item)){
     if(item.endsWith('tuque')){add('item-helmet',0,.15,0,.36,.27,.34);add('item-disc',0,.045,0,.41,.07,.38);return centreItemParts(parts);}
-    // Schema 353: a creased crown and a wide brim; a round crown and a narrow one.
-    if(item.endsWith('cowboy-hat')){add('item-helmet',0,.15,0,.30,.22,.27);add('item-disc',0,.06,0,.32,.03,.29,0x3a3530);add('item-disc',0,.035,0,.66,.035,.56);return centreItemParts(parts);}
-    if(item.endsWith('bowler-hat')){add('item-helmet',0,.16,0,.33,.27,.33);add('item-disc',0,.05,0,.44,.035,.42,0x3a3530);add('item-disc',0,.035,0,.48,.03,.46);return centreItemParts(parts);}
+    // Schema 353: a low crown on a wide brim; a tall round crown on a narrow one.
+    if(item.endsWith('cowboy-hat')){add('item-helmet',0,.15,0,.30,.20,.27);add('item-disc',0,.035,0,.66,.035,.56);return centreItemParts(parts);}
+    if(item.endsWith('bowler-hat')){add('item-helmet',0,.17,0,.33,.29,.33);add('item-disc',0,.035,0,.47,.03,.45);return centreItemParts(parts);}
     const recon=item.endsWith('recon-armor'),pants=item.endsWith('pants'),helmet=item.endsWith('helmet'),coat=item.endsWith('duster')||item.endsWith('parka'),vest=item.endsWith('vest')||item.endsWith('tribalwear');
     add(helmet?'item-helmet':pants?'item-pants':coat?'item-coat':vest?'item-vest':'item-shirt',0,helmet?.15:.055,0,helmet?.38:.65,helmet?.30:.085,helmet?.38:coat?.78:.66,color);
     if(recon){for(const side of [-1,1]){box(side*.18,.15,.06,.20,.09,.35,0x536a74);box(side*.29,.10,-.20,.16,.12,.19);}box(0,.15,-.16,.18,.07,.18,0xc0d0ce);}
