@@ -75,3 +75,4 @@ Avant le schéma 353, une sauvegarde ne peut contenir ni chapeau, ni son ouvrage
 - les caractéristiques, la valeur, la masse, la vente par les visiteurs et la politique des chapeaux ;
 - un vrai tailleur qui coud un chapeau de cowboy porté ensuite par un colon (impact social × 1,1), avec reprise exacte ;
 - les refus avant le schéma 353 et la migration 352 → 353 sans rien donner.
+- le modèle porté (pièces ajoutées au personnage commun seulement une fois un chapeau porté), l'apparence, les portraits et les modèles au sol et transporté.
