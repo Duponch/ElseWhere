@@ -21,7 +21,7 @@ export const GAMEPLAY_TIPS:readonly string[]=Object.freeze([
   'Maj ajoute un travail compatible à la file d’un colon au lieu de remplacer ce qu’il fait.',
   'Les boutons sous l’horloge coupent les murs, montrent les toits, masquent le feuillage ou les zones et recentrent la vue sur la colonie.',
   'Un clic sur une alerte, à droite, ouvre son détail et permet de repérer la personne ou le lieu concerné.',
-  'Dans les Options, la pause automatique peut s’arrêter à toutes les menaces, aux seules menaces majeures, ou jamais.',
+  'Dans les Options, la pause automatique peut s’arrêter à chaque lettre, à toutes les menaces, aux seules menaces majeures, ou jamais.',
   // Premiers jours
   'Une nouvelle colonie commence en pause : Reprendre fait atterrir les capsules et libère les trois survivants.',
   'Du bois et de l’acier sont dispersés au sol dès l’arrivée : une réserve les regroupe à l’abri.',

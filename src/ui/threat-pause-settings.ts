@@ -2,9 +2,9 @@ import type {ThreatPauseMode} from '../bridge/urgent-threats';
 export type {ThreatPauseMode} from '../bridge/urgent-threats';
 export const THREAT_PAUSE_PREFERENCE_KEY='lisiere.presentation.threat-pause.v1';
 export const THREAT_PAUSE_CHOICES:readonly {value:ThreatPauseMode;label:string}[]=[
- {value:'never',label:'Jamais'},{value:'major',label:'Menaces majeures'},{value:'any-threat',label:'Toutes menaces'},
+ {value:'never',label:'Jamais'},{value:'major',label:'Menaces majeures'},{value:'any-threat',label:'Toutes menaces'},{value:'any-letter',label:'Toutes lettres'},
 ];
-export const threatPauseMode=(value:unknown):ThreatPauseMode=>value==='never'||value==='any-threat'?value:'major';
+export const threatPauseMode=(value:unknown):ThreatPauseMode=>value==='never'||value==='any-threat'||value==='any-letter'?value:'major';
 export function readThreatPausePreference(read:()=>string|null):ThreatPauseMode {try{return threatPauseMode(read());}catch{return 'major';}}
 /** A local preference becomes active only after the worker confirms it. Storage
  * failure cannot roll back a mode already accepted by the worker. */

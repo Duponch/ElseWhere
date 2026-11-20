@@ -1,4 +1,5 @@
 import { TICKS_PER_DAY,type World } from './types.ts';
+import {journalLetter352} from './letter-producers-352.ts';
 export interface HeatwaveCalendar {profile:'camp-heat-v1';rng:number;nextAt:number;serial:number;active?:{start:number;end:number};lastEnd?:number}
 const random=(s:HeatwaveCalendar)=>{let n=s.rng;n^=n<<13;n^=n>>>17;n^=n<<5;s.rng=n>>>0;return s.rng/0x100000000;};
 const log=(w:World,message:string)=>{w.events.push({tick:w.tick,type:'need',message});if(w.events.length>80)w.events.splice(0,w.events.length-80);};
@@ -23,4 +24,5 @@ export function advanceHeatwaves(w:World):void {
   const start=w.tick,end=start+Math.floor((1.5+2*random(s))*TICKS_PER_DAY);
   s.active={start,end};s.serial++;s.nextAt=end+Math.floor((30+10*random(s))*TICKS_PER_DAY);
   log(w,'Canicule : préparez une pièce fermée et refroidie, du bois et des vêtements adaptés. Surveillez les coups de chaleur.');
+  journalLetter352(w,'threat-small','Canicule');
 }

@@ -656,7 +656,8 @@ function runCoreTask297(now:number):void {
  if(result.core!==effectiveCore297(world))throw Error('Engine returned an uncommitted Core watermark');
  batch.simulationMs+=performance.now()-started;batch.completed++;batch.remaining--;stepMs=batch.simulationMs/batch.completed*10;
  for(const row of result.maps){const effects=row.observerEffects297;if(!effects||typeof effects.threatsChanged!=='boolean'||typeof effects.audioChanged!=='boolean'||typeof row.requiresHardFull297!=='boolean'||!Array.isArray(row.strikeAudio297)||!Array.isArray(row.shotAudio297))throw Error('Missing causal Core observer receipt');}
- const threatsChanged=result.localTickCompleted||result.maps.some(row=>row.observerEffects297.threatsChanged);
+ // Schema 352: a letter written during any Core phase is read at once (O(1)).
+ const threatsChanged=result.localTickCompleted||result.maps.some(row=>row.observerEffects297.threatsChanged)||urgentThreats.lettersChanged(world);
  const encounter=pendingCaravan261(world),entry=pendingWorldEntry263(world),threatPaused=threatsChanged&&urgentThreats.capture(world,threatPauseMode),paused=!!encounter||!!entry||threatPaused;
  if(threatPaused){speed=0;resetSimulationClock(now);}if(encounter)holdEncounterPause261(now);if(entry)holdWorldEntry263(now);
  presentationScope297=true;presentationMemo297=undefined;physicalMemo297=undefined;

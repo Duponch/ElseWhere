@@ -1,4 +1,5 @@
 import {mechRaidGroups261,multiRaid261} from './mechanical-raid-groups-261.ts';
+import {journalLetter352,actors352} from './letter-producers-352.ts';
 import {tempMapModern261,tempMapRecord261} from './temp-map-incidents-261.ts';
 import {findTempAmbushEntry261,tempAmbushCells261} from './temp-map-entry-261.ts';
 import {draftForeignRoster261} from './caravan-foreign-roster-261.ts';
@@ -45,7 +46,7 @@ export function admitTempMapAssault261(w:World,points:number,random:{rng:number}
  if(!s.extraActive261){s.extraActive261=[];s.extraResults261??=s.last?[structuredClone(s.last)]:[];}
  s.extraActive261.push(group);s.serial=id;w.raids=s;
  w.pawns.push(...roster.people);w.piles.push(...roster.items);root.nextId=roster.nextId;
- w.events.push({tick:w.tick,type:'command',message:'Une nouvelle embuscade arrive au bord de cette carte.'});if(w.events.length>80)w.events.shift();return true;
+ w.events.push({tick:w.tick,type:'command',message:'Une nouvelle embuscade arrive au bord de cette carte.'});if(w.events.length>80)w.events.shift();journalLetter352(w,'threat-big','Embuscade',actors352(group.members));return true;
 }
 export function admitTempMapManhunters261(w:World,points:number,random:{rng:number}):boolean {
  const site=tempMapRecord261(w),root=registeredCampaign(w);if(!tempMapModern261(w)||!site||site.tile===null||!w.wildlife)return false;
@@ -56,7 +57,7 @@ export function admitTempMapManhunters261(w:World,points:number,random:{rng:numb
  if([...w.wildlife.animals,...roster.animals].some(a=>a.species==='cobra'&&a.state!=='dead')&&cobraCohortReason256(w.pawns,[...w.wildlife.animals,...roster.animals]))return false;
  const cells=tempAmbushCells261(w,entry,roster.animals.length,random),drafts=roster.animals.map((a,i)=>{Object.assign(a,cells[i]!);return prepareManhunterSpawn261(w,a);});if(drafts.some(a=>!a))return false;
  for(let i=0;i<roster.animals.length;i++){Object.assign(roster.animals[i]!,drafts[i]!);w.wildlife.animals.push(roster.animals[i]!);}root.nextId=roster.nextId;
- w.events.push({tick:w.tick,type:'command',message:'Une meute atteinte de scaria arrive sur cette carte.'});if(w.events.length>80)w.events.shift();return true;
+ w.events.push({tick:w.tick,type:'command',message:'Une meute atteinte de scaria arrive sur cette carte.'});if(w.events.length>80)w.events.shift();journalLetter352(w,'threat-big','Meute enragée',actors352(roster.animals.map(a=>a.id)));return true;
 }
 /** Existing actual groups continue even when their old home agenda is dormant. */
 export function advanceTempMapRaids261(w:World):void {

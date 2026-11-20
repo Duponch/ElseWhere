@@ -138,6 +138,8 @@ export interface NativeUiState {
 }
 export interface NativeUiActions {
   command:(command:Command)=>Promise<unknown>;
+  /** Opens an archived letter (History, schema 352). */
+  openLetter352?:(id:number)=>void;
   panel:(panel:Panel)=>void|Promise<unknown>;
   category:(category:ArchitectCategory)=>void;
   tool:(tool:Tool)=>void;

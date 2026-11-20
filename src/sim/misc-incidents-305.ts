@@ -1,4 +1,5 @@
 import {schemaAtLeast} from './schema-range.ts';
+import {journalLetter352,actors352} from './letter-producers-352.ts';
 import {naturalLight,seasonalNaturalLight} from './environment.ts';
 import {climateTick,siteClimateDefinition,seasonTemperature} from './site-climate.ts';
 import {outdoorTemperature} from './temperature.ts';
@@ -63,6 +64,7 @@ export function resolveSelectedAurora305(world:World,random:()=>number):boolean 
   const duration=roundEven(AURORA_MIN_DURATION_CORE305+(AURORA_MAX_DURATION_CORE305-AURORA_MIN_DURATION_CORE305)*random());
   state.aurora={start,endCore:start*10+duration};state.lastAuroraStart=start;state.auroras=(state.auroras??0)+1;
   emit(world,'Aurore : de grands voiles colorés ondulent dans le ciel nocturne. Ceux qui sont dehors, à découvert, en profitent.');
+  journalLetter352(world,'positive','Aurore');
   return true;
 }
 /** Called with the World calendar, after the step's power and mood reads. */
@@ -111,6 +113,7 @@ export function resolveSelectedSelfTame305(world:World,random:()=>number):boolea
   const animal=candidates[Math.min(candidates.length-1,Math.floor(random()*candidates.length))]!;
   adoptAsColonyAnimal(world,animal);
   emit(world,`Un animal sauvage s’est attaché à la colonie : ${animalLabel305(animal)} ${animal.id} vous suit désormais.`);
+  journalLetter352(world,'positive','Animal apprivoisé',actors352([animal.id]));
   return true;
 }
 const animalLabel305=(a:Pick<WildAnimal,'species'>)=>animalSpecies(a.species).label;
@@ -154,5 +157,6 @@ export function resolveSelectedFarmAnimals305(world:World,seed:number):boolean {
   world.nextId=nextId;
   for(const a of made){world.wildlife.animals.push(a);adoptAsColonyAnimal(world,a);}
   emit(world,`Des animaux de ferme arrivent d’eux-mêmes : ${count} ${animalLabel305(made[0]!)} rejoignent la colonie.`);
+  journalLetter352(world,'positive','Animaux de ferme',actors352(made.map(a=>a.id)));
   return true;
 }

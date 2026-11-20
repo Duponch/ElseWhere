@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {journalLetter352} from './letter-producers-352.ts';
 import {homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
 import {TICKS_PER_DAY,type World} from './types.ts';
 import {TOXIC_FALLOUT_FIRST_DAY294,TOXIC_FALLOUT_COOLDOWN_DAYS294,TOXIC_FALLOUT_MIN_CORE294,TOXIC_FALLOUT_MAX_CORE294,toxicFalloutCellsPerCore294} from './toxic-fallout-state-294.ts';
@@ -35,6 +36,7 @@ export function resolveSelectedToxicFallout294(world:World,seed:number):boolean 
   state.active={startCore,endCore:startCore+duration,rng,cursor:((startCore%area)*visits)%area};
   state.lastStart=world.tick;state.count++;
   emit(world,'Retombées toxiques : mettez les habitants et les animaux à l’abri sous un toit. Les cultures et les objets laissés dehors sont exposés. Surveillez la toxicité dans Santé.');
+  journalLetter352(world,'threat-small','Retombées toxiques');
   return true;
 }
 /** Run after the local step's real clinical/environmental owners. End is

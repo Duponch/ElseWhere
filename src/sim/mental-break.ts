@@ -1,4 +1,5 @@
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
+import {mentalBreakLetter352} from './letter-producers-352.ts';
 import {tutorialMode347} from './game-profile.ts';
 import {processHumanConfusedWander256,recoverHumanConfusion256} from './human-condition-mind-256.ts';
 import {alcoholBingeAdmission265,processAutomaticAlcohol265} from './alcohol-ingestion-265.ts';
@@ -44,6 +45,7 @@ function commitBreak(world:World,pawn:Pawn,crisis:MentalCrisis,rng=world.rng):bo
   pawn.needCooldown=0;pawn.planCooldown=0;
   world.events.push({tick:world.tick,type:'need',message:`${pawn.name} commence ${crisis.kind==='food-binge'?'une frénésie alimentaire':crisis.kind==='sad-wander'?'une errance triste':`une ${mentalCrisisLabel(crisis.kind).toLowerCase()}`}.${reason?` Dernière cause : ${reason}.`:''}`});
   if(world.events.length>80)world.events.splice(0,world.events.length-80);
+  mentalBreakLetter352(world,pawn,crisis.kind);
   return true;
 }
 function startMinorBreak(world:World,pawn:Pawn,kind:'sad-wander'|'food-binge'):boolean {

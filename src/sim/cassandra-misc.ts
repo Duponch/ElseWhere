@@ -1,4 +1,5 @@
 import {drawIntroMiscIncident329,drawMiscIncident329,type MiscRow329} from './misc-lottery-329.ts';
+import {journalLetter352} from './letter-producers-352.ts';
 import {storytellerIncidents347} from './game-profile.ts';
 import {resolveSelectedResourcePod305,advanceResourcePod305} from './resource-pods-305.ts';
 import {advanceVolcanicWinter310,eligibleVolcanicWinter310,resolveSelectedVolcanicWinter310} from './volcanic-winter-310.ts';
@@ -118,6 +119,7 @@ export function resolveSelectedHeatwave(world:World,state:CassandraMiscCalendar=
   const end=start+Math.floor((1.5+2*random(state))*TICKS_PER_DAY);
   state.active={start,end};state.lastHeatwaveStart=start;state.heatwaves++;
   emit(world,'Canicule : préparez une pièce fermée et refroidie, du bois et des vêtements adaptés. Surveillez les coups de chaleur.');
+  journalLetter352(world,'threat-small','Canicule');
   return true;
 }
 
@@ -126,7 +128,7 @@ export function resolveSelectedColdSnap(world:World,state:CassandraMiscCalendar=
   const start=world.tick,end=start+Math.floor((1.5+2*random(state))*TICKS_PER_DAY);
   if(!Number.isSafeInteger(end))return false;
   weather.coldSnap={start,end};weather.lastColdSnapStart=start;weather.coldSnaps++;
-  emit(world,'Vague de froid : protégez les cultures, chauffez les pièces et équipez les habitants de vêtements isolants.');return true;
+  emit(world,'Vague de froid : protégez les cultures, chauffez les pièces et équipez les habitants de vêtements isolants.');journalLetter352(world,'threat-small','Vague de froid');return true;
 }
 
 export function eligibleEclipse(world:World,state:CassandraMiscCalendar=world.miscIncidents!):boolean {
@@ -141,7 +143,7 @@ export function resolveSelectedEclipse(world:World,state:CassandraMiscCalendar=w
   if(!Number.isSafeInteger(end))return false;
   checkpointEclipseGrowth(world);
   weather.eclipse={start,end};weather.lastEclipseStart=start;weather.eclipses++;
-  emit(world,'Éclipse : la lumière naturelle et la production solaire diminuent. Préservez vos réserves et l’éclairage des cultures.');return true;
+  emit(world,'Éclipse : la lumière naturelle et la production solaire diminuent. Préservez vos réserves et l’éclairage des cultures.');journalLetter352(world,'negative','Éclipse');return true;
 }
 
 /** Schema 329: the Core Misc lottery, see misc-lottery-329.ts. The eclipse

@@ -1,4 +1,5 @@
 import {isPenoxycyline337} from './penoxycyline-337.ts';
+import {deathLetter352} from './letter-producers-352.ts';
 import {deathOnDownedChance320,deathOnDownedEligible320} from './population-intent-320.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {stopCapturedTravel297} from './movement.ts';
@@ -73,6 +74,7 @@ export function reconcilePawnHealth(world:World,pawn:Pawn,body=pawnBody(pawn),ex
         delete pawn.surgeryRequest;notifyPawnDeath(world,pawn);notifyBillWorkerUnavailable283(world,pawn.id);
       }
       announce(world,status==='dead'?`${pawn.name} est décédé.`:`${pawn.name} est à terre.`);
+      if(status==='dead')deathLetter352(world,pawn);
     }
     dropIncapacitatedEquipment(world,pawn);return;
   }

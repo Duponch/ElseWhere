@@ -1,4 +1,5 @@
 import {resolveSelectedEclipse} from './cassandra-misc.ts';
+import {journalLetter352} from './letter-producers-352.ts';
 import {storytellerIncidents347} from './game-profile.ts';
 import {isMiscIncidents305,resolveSelectedAurora305,advanceAurora305} from './misc-incidents-305.ts';
 import {recordWorldIncident341,worldRecentFactor341,type WorldRecentIncident341} from './recent-incidents-341.ts';
@@ -47,6 +48,7 @@ export function resolveSelectedSolarFlare(world:World):boolean {
   const endCore=start*10+duration;
   state.flares++;state.lastStart=start;state.lastEndCore=endCore;state.active={start,endCore};
   emit(world,'Éruption solaire : les appareils électriques s’arrêtent progressivement. Les batteries ne peuvent pas les alimenter.');
+  journalLetter352(world,'negative','Éruption solaire');
   return true;
 }
 /** PowerNet reads each exact reference boundary, including the expiration tick. */

@@ -1,4 +1,5 @@
 import { captureStandability } from './furniture-travel.ts';
+import {journalLetter352,cell352} from './letter-producers-352.ts';
 import { isRoofed } from './roof-rules.ts';
 import { TICKS_PER_DAY,type Cell,type World } from './types.ts';
 
@@ -74,6 +75,7 @@ export function resolveSelectedFlashstorm(world:World,seed:number):boolean {
   state.active={start,end,endCore,center,radius,lastCoreTick:start*10,nextStrikeCore:start*10,strikes:0};
   world.flashstorm=state;
   emit(world,'Orage de foudre : protégez le foyer et préparez les équipes d’extinction.');
+  journalLetter352(world,'threat-small','Orage de foudre',[cell352(center)]);
   return true;
 }
 

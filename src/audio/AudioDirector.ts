@@ -275,7 +275,8 @@ export class AudioDirector {
 
   /** A decoded interface sound can play during pause or from the title menu.
    * The caller's gesture unlocks audio separately; an unavailable asset is silent. */
-  playInterface(kind: 'ui.click' | 'ui.reject' | 'ui.panel' | 'ui.threat' | 'ui.colonist-death'): void {
+  /** `pitch` scales the playback rate (letter classes sharing one clip). */
+  playInterface(kind: 'ui.click' | 'ui.reject' | 'ui.panel' | 'ui.threat' | 'ui.colonist-death', pitch = 1): void {
     const context = this.context;
     const event = this.manifest?.events[kind];
     if (this.disposed || this.muted || this.hidden || this.volume === 0 ||
@@ -303,7 +304,7 @@ export class AudioDirector {
       const source = context.createBufferSource();
       source.buffer = this.buffers.get(variant.src)!;
       const variation = cueVariation(`${kind}:${this.playedOneShots}`, kind);
-      source.playbackRate.value = variation.playbackRate;
+      source.playbackRate.value = variation.playbackRate * (Number.isFinite(pitch) && pitch > 0 ? pitch : 1);
       const gain = context.createGain();
       gain.gain.value = Math.min(8, event.gain * variant.gain * variation.gain);
       source.connect(gain);

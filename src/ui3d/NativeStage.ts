@@ -746,7 +746,10 @@ export class NativeStage {
     if(piece?.userData.nativeStatic||piece?.userData.nativeDisabled)piece=null;
     if(piece===this.hovered)return;
     const mesh=piece?.userData.interactiveMeshes?.[0];
-    this.hoverPreview.set(mesh?this.hits.get(mesh)?.control?.onHover:undefined);
+    // A HUD card without a page control may carry its own view-only preview
+    // (the letter stack highlights the letter's targets).
+    const own=piece?.userData.onHover;
+    this.hoverPreview.set(mesh?this.hits.get(mesh)?.control?.onHover??(typeof own==='function'?own as (hovered:boolean)=>void:undefined):undefined);
     if(this.hovered){this.hovered.userData.hoverTarget=0;this.moving.add(this.hovered);}
     this.hovered=piece;this.hoverPose=undefined;
     if(piece){

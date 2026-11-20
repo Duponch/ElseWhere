@@ -1,4 +1,5 @@
 import {homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
+import {journalLetter352} from './letter-producers-352.ts';
 import {checkpointPlantGrowth} from './plant-lighting.ts';
 import {TICKS_PER_DAY,type World} from './types.ts';
 import {isVolcanicWinter310,VOLCANIC_WINTER_FIRST_DAY310,VOLCANIC_WINTER_MAX_CORE310,VOLCANIC_WINTER_MIN_CORE310,VOLCANIC_WINTER_REFIRE_DAYS310} from './volcanic-winter-state-310.ts';
@@ -25,6 +26,7 @@ export function resolveSelectedVolcanicWinter310(world:World,random:()=>number):
   const startCore=world.tick*10;
   state.volcanicWinter310={startCore,endCore:startCore+duration};state.lastVolcanicWinterStart310=world.tick;state.volcanicWinters310=(state.volcanicWinters310??0)+1;
   emit(world,`Hiver volcanique : une éruption lointaine voile le ciel de cendres pendant ${(duration/60000).toFixed(1)} jours. Il fera plus froid et plus sombre, les cultures pousseront moins vite et la faune se raréfiera.`);
+  journalLetter352(world,'threat-small','Hiver volcanique');
   return true;
 }
 /** Ends the condition when due; called with the Misc calendar each tick. */

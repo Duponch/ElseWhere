@@ -1,4 +1,5 @@
 import {recordHomeIncident341} from './recent-incidents-341.ts';
+import {journalLetter352,actors352} from './letter-producers-352.ts';
 import {storytellerIncidents347} from './game-profile.ts';
 import {homeAnimalThreatPoints329} from './animal-threat-points-329.ts';
 import {homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
@@ -82,6 +83,7 @@ export function resolveSelectedSmallAnimal(world:World,state:CassandraSmallCalen
   state.incidents++;state.lastIncidentTick=world.tick;recordHomeIncident341(world,'animal-insanity-single');
   world.events.push({tick:world.tick,type:'need',message:`Un ${ANIMAL_SPECIES[animal.species].label} sauvage est en rage : fuyez, abritez-vous derrière une porte fermée ou défendez les personnes exposées.`});
   if(world.events.length>80)world.events.splice(0,world.events.length-80);
+  journalLetter352(world,'threat-small','Animal enragé',actors352([animal.id]));
   return true;
 }
 

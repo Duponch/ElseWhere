@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {sendLetter352} from './letters-352.ts';
 import {isSchema284OrLater} from './schema-compatibility-257.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {registeredMap} from './world-map-context.ts';
@@ -30,11 +31,13 @@ export function advanceWorldSites263(root:CampaignState):void {
  const selected=advanceWorldQuestCalendar263(calendar,core,{acceptAtHit329:Number(root.schemaVersion)>=329,points,progress:people.length+wealth*.0001,adjustedPopulation:people.length,hasFreeColonist:people.length>0,hasHomeMap:!!home,tradeRequests284:isSchema284OrLater(root.schemaVersion)&&!!root.tradeRequests284&&core>root.tradeRequests284.adoptedAtCore,peaceTalks293:(Number(root.schemaVersion)===293||(Number(root.schemaVersion)===294||(Number(root.schemaVersion)===295||(Number(root.schemaVersion)===296||isCorePhysicalSchema297(Number(root.schemaVersion))))))});
  if(selected==='peace-talks'){
   const offer=preparePeaceTalksBirth293(root);if(!offer.ok)return;offer.commit();notifyPeaceTalksBorn293(calendar);
-  root.worldGroups.events.push({tick:root.tick,type:'command',message:'Une faction propose des pourparlers. Consultez Quêtes et envoyez une caravane au lieu indiqué.'});if(root.worldGroups.events.length>80)root.worldGroups.events.splice(0,root.worldGroups.events.length-80);return;
+  root.worldGroups.events.push({tick:root.tick,type:'command',message:'Une faction propose des pourparlers. Consultez Quêtes et envoyez une caravane au lieu indiqué.'});if(root.worldGroups.events.length>80)root.worldGroups.events.splice(0,root.worldGroups.events.length-80);
+  sendLetter352(root as World,{cls:'new-quest',title:'Pourparlers diplomatiques',text:'Une faction vous invite à des pourparlers. Envoyez une caravane menée par un bon négociateur au lieu indiqué avant l’échéance : l’issue peut améliorer ou ruiner vos relations. Le dossier est dans Quêtes.'});return;
  }
  if(selected==='trade-request'){
   const offer=prepareTradeRequestBirth284(root);if(!offer.ok)return;offer.commit();notifyTradeRequestBorn284(calendar);
-  logTradeRequest284(root,`Une demande commerciale de ${offer.request.settlementName} est disponible dans Quêtes.`);return;
+  logTradeRequest284(root,`Une demande commerciale de ${offer.request.settlementName} est disponible dans Quêtes.`);
+  sendLetter352(root as World,{cls:'new-quest',title:`Demande commerciale : ${offer.request.settlementName}`,text:`${offer.request.settlementName} cherche des marchandises et promet une récompense. Le dossier, la quantité et le délai sont dans Quêtes.`});return;
  }
  if(selected!=='item-stash')return;
  const birth=prepareItemStashBirth263(root,points);if(!birth.ok)return;birth.commit();notifyItemStashBorn263(calendar);

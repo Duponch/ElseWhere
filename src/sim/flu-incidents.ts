@@ -1,4 +1,5 @@
 import { isPenoxycyline337,penoxycylineImmuneTo337 } from './penoxycyline-337.ts';
+import {journalLetter352,actors352} from './letter-producers-352.ts';
 import {storytellerIncidents347} from './game-profile.ts';
 import {BIOME_DISEASE_FACTS_256,biomeDiseaseChoice256} from './biome-disease-facts-256.ts';
 import { isPlayerPatient } from './affiliation.ts';
@@ -91,7 +92,7 @@ export function resolveFluIncident(world:World,state:FluIncidentCalendar=world.f
   const requested=Math.max(1,min+Math.floor(random(state)*(max-min+1)));
   // A partial Fisher-Yates shuffle samples without favoring a pawn's stable
   // world-array position. The entire O(n) operation occurs only on an incident.
-  let acquired=0;const names:string[]=[];
+  let acquired=0;const names:string[]=[],ids352:number[]=[];
   for(let index=0;index<Math.min(requested,candidates.length);index++){
     const swap=index+Math.floor(random(state)*(candidates.length-index));
     [candidates[index],candidates[swap]]=[candidates[swap]!,candidates[index]!];
@@ -106,11 +107,12 @@ export function resolveFluIncident(world:World,state:FluIncidentCalendar=world.f
     const luck=800_000+Math.floor(random(state)*400_001);
     if(!acquireFlu(record,luck))continue;
     reconcilePawnHealth(world,pawn);
-    acquired++;names.push(pawn.name);
+    acquired++;names.push(pawn.name);ids352.push(pawn.id);
   }
   if(acquired){
     state.episodes++;state.cases+=acquired;
     emit(world,`Grippe : ${names.join(', ')} ${acquired===1?'est malade':'sont malades'}. Consultez Santé, organisez les soins et le repos au lit.`);
+    journalLetter352(world,'negative','Grippe',actors352(ids352));
   }
   return acquired;
 }
@@ -132,7 +134,7 @@ export function resolveImmuneDiseaseIncident(world:World,kind:ImmuneDiseaseKind,
   const candidates=fluCandidates(world);if(!candidates.length)return 0;
   const min=coreRound(candidates.length*.2),max=coreRound(candidates.length*.5);
   const requested=Math.min(99_999,Math.max(1,min+Math.floor(random(state)*(max-min+1))));
-  let acquired=0;const names:string[]=[],blocked:string[]=[];
+  let acquired=0;const names:string[]=[],ids352:number[]=[],blocked:string[]=[];
   for(let index=0;index<Math.min(requested,candidates.length);index++){
     const swap=index+Math.floor(random(state)*(candidates.length-index));
     [candidates[index],candidates[swap]]=[candidates[swap]!,candidates[index]!];
@@ -147,11 +149,12 @@ export function resolveImmuneDiseaseIncident(world:World,kind:ImmuneDiseaseKind,
     if(pawn.state==='dead')continue;
     const record=pawn.health??=createMedicalRecord(world.tick),luck=800_000+Math.floor(random(state)*400_001);
     if(!acquireImmuneDisease(record,kind,luck))continue;
-    reconcilePawnHealth(world,pawn);acquired++;names.push(pawn.name);
+    reconcilePawnHealth(world,pawn);acquired++;names.push(pawn.name);ids352.push(pawn.id);
   }
   if(acquired){
     state.episodes++;state.cases+=acquired;
     emit(world,`${kind==='malaria'?'Paludisme':kind==='plague'?'Peste':'Maladie du sommeil'} : ${names.join(', ')} ${acquired===1?'est malade':'sont malades'}. Consultez Santé, organisez les soins et le repos au lit.`);
+    journalLetter352(world,'negative',kind==='malaria'?'Paludisme':kind==='plague'?'Peste':'Maladie du sommeil',actors352(ids352));
   }
   // Core adds the protected victims to the letter (LetterDisease_Blocked).
   if(blocked.length)emit(world,`${kind==='malaria'?'Paludisme':kind==='plague'?'Peste':'Maladie du sommeil'} bloqué par la pénoxycyline : ${blocked.join(', ')}.`);
@@ -171,7 +174,7 @@ export function resolveParasiteIncident306(world:World,kind:ParasiteKind306,
   if(!candidates.length)return 0;
   const min=coreRound(all.length*.2),max=coreRound(all.length*.5);
   const requested=Math.min(99_999,Math.max(1,min+Math.floor(random(state)*(max-min+1))));
-  let acquired=0;const names:string[]=[];
+  let acquired=0;const names:string[]=[],ids352:number[]=[];
   for(let index=0;index<Math.min(requested,candidates.length);index++){
     const swap=index+Math.floor(random(state)*(candidates.length-index));
     [candidates[index],candidates[swap]]=[candidates[swap]!,candidates[index]!];
@@ -180,11 +183,12 @@ export function resolveParasiteIncident306(world:World,kind:ParasiteKind306,
     if(pawn.state==='dead')continue;
     const record=pawn.health??=createMedicalRecord(world.tick);
     if(!acquireParasite306(record,kind))continue;
-    reconcilePawnHealth(world,pawn);acquired++;names.push(pawn.name);
+    reconcilePawnHealth(world,pawn);acquired++;names.push(pawn.name);ids352.push(pawn.id);
   }
   if(acquired){
     state.episodes++;state.cases+=acquired;
     emit(world,`${PARASITE_LABELS306[kind]} : ${names.join(', ')} ${acquired===1?'est atteint':'sont atteints'}. Consultez Santé : des soins répétés en viennent à bout.`);
+    journalLetter352(world,'negative',PARASITE_LABELS306[kind],actors352(ids352));
   }
   return acquired;
 }
@@ -200,7 +204,7 @@ export function resolveMechaniteIncident307(world:World,kind:MechaniteKind307,
   const candidates=all.filter(p=>!p.health?.mechanites307?.[kind]);if(!candidates.length)return 0;
   const min=coreRound(all.length*.2),max=coreRound(all.length*.5);
   const requested=Math.min(99_999,Math.max(1,min+Math.floor(random(state)*(max-min+1))));
-  let acquired=0;const names:string[]=[];
+  let acquired=0;const names:string[]=[],ids352:number[]=[];
   for(let index=0;index<Math.min(requested,candidates.length);index++){
     const swap=index+Math.floor(random(state)*(candidates.length-index));
     [candidates[index],candidates[swap]]=[candidates[swap]!,candidates[index]!];
@@ -209,11 +213,12 @@ export function resolveMechaniteIncident307(world:World,kind:MechaniteKind307,
     if(pawn.state==='dead')continue;
     const record=pawn.health??=createMedicalRecord(world.tick);
     if(!acquireMechanite307(record,kind,random(state)))continue;
-    reconcilePawnHealth(world,pawn);acquired++;names.push(pawn.name);
+    reconcilePawnHealth(world,pawn);acquired++;names.push(pawn.name);ids352.push(pawn.id);
   }
   if(acquired){
     state.episodes++;state.cases+=acquired;
     emit(world,`${MECHANITE_LABELS307[kind]} : ${names.join(', ')} ${acquired===1?'est atteint':'sont atteints'}. Elles disparaissent seules en 15 à 30 jours ; des soins freinent leur progression.`);
+    journalLetter352(world,'negative',MECHANITE_LABELS307[kind],actors352(ids352));
   }
   return acquired;
 }

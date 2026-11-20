@@ -1,4 +1,5 @@
 import {isMoodPool350} from './mood-pool-memories-350.ts';
+import {journalLetter352} from './letter-producers-352.ts';
 import {pawnGender350} from './mood-pool-350.ts';
 import {PSYCHIC_DURATION_DAYS_350,PSYCHIC_GENDER_LABEL_350 as GENDER_LABEL,PSYCHIC_LEVEL_LABEL_350 as LEVEL_LABEL,type PsychicKind350,type PsychicLevel350} from './psychic-state-350.ts';
 export {psychicActive350,psychicConditionText350,validPsychic350,type PsychicEmanation350,type PsychicKind350} from './psychic-state-350.ts';
@@ -49,6 +50,7 @@ export function resolveSelectedPsychic350(w:World,kind:PsychicKind350,draw:()=>n
  emit(w,kind==='drone'
   ?`Bourdonnement psychique ${LEVEL_LABEL[level]} : une émission lointaine tourmente les ${GENDER_LABEL[gender]} de la carte pendant ${length} jours. Leur humeur va nettement baisser.`
   :`Apaisement psychique : une émission lointaine calme les ${GENDER_LABEL[gender]} de la carte pendant ${length} jours. Leur humeur va nettement monter.`);
+ journalLetter352(w,kind==='drone'?'negative':'positive',kind==='drone'?'Bourdonnement psychique':'Apaisement psychique');
  return true;
 }
 /** Ends the condition when due; called with the Misc calendar each tick. */

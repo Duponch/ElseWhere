@@ -1,4 +1,5 @@
 import {recordHomeIncident341} from './recent-incidents-341.ts';
+import {journalLetter352} from './letter-producers-352.ts';
 import {storytellerIncidents347} from './game-profile.ts';
 import { isColonist } from './affiliation.ts';
 import { isPowerActive } from './power-rules.ts';
@@ -33,7 +34,7 @@ export function createOrbitalShip(w:World,kind:OrbitalKind):OrbitalShip|undefine
   const piles=orbitalStock(draft,ship,rng);
   if(w.piles.length+piles.length>32768||!Number.isSafeInteger(draft.nextId))return;
   w.nextId=draft.nextId;state.rng=rng.rng;state.ships.push(ship);w.piles.push(...piles);
-  if(ship.announced)emit(w,`${ship.name} est en orbite pour 4000 ticks.`);return ship;
+  if(ship.announced){emit(w,`${ship.name} est en orbite pour 4000 ticks.`);journalLetter352(w,'positive','Vaisseau marchand');}return ship;
 }
 function stop(w:World,p:Pawn):void {if(!releaseWork(w,p))interruptWork(w,p);delete p.orbitalTrade;p.path=[];p.planCooldown=0;if(!['dead','downed','sleeping'].includes(p.state))p.state=(p.motion?.end??0)>w.tick?'moving':'idle';}
 export function reconcileOrbitalTrade(w:World,p:Pawn):boolean {
@@ -62,7 +63,7 @@ export function advanceOrbital(w:World):void {
   if(leaving.size){for(const ship of state.ships)if(leaving.has(ship.id)&&ship.announced)emit(w,`${ship.name} quitte définitivement l’orbite.`);
     state.ships=state.ships.filter(s=>!leaving.has(s.id));w.piles=w.piles.filter(p=>p.owner.type!=='orbital-ship'||!leaving.has(p.owner.shipId));
     for(const p of w.pawns)if(p.orbitalTrade&&leaving.has(p.orbitalTrade.shipId))stop(w,p);}
-  if(filteredStructures(w,'comms-consoles',s=>s.kind==='comms-console').some(s=>isPowerActive(s)))for(const ship of state.ships)if(!ship.announced){ship.announced=true;emit(w,`${ship.name} est détecté en orbite.`);}
+  if(filteredStructures(w,'comms-consoles',s=>s.kind==='comms-console').some(s=>isPowerActive(s)))for(const ship of state.ships)if(!ship.announced){ship.announced=true;emit(w,`${ship.name} est détecté en orbite.`);journalLetter352(w,'positive','Vaisseau marchand');}
   for(const delivery of [...state.pending])if(w.tick>=delivery.openAt){
     // Exclude this capsule from occupancy only; every other delivery retains its cell.
     const check={...w,orbital:{...state,pending:state.pending.filter(p=>p!==delivery)}};

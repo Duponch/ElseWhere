@@ -1,4 +1,5 @@
 import {recordHomeIncident341} from './recent-incidents-341.ts';
+import {journalLetter352,actors352} from './letter-producers-352.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isBlowbackSchema340,isGunKind340} from './blowback-340.ts';
 import {gunKindWeapon342} from './guns-342.ts';
@@ -130,6 +131,8 @@ function arrive(w:World,kind:VisitorKind,intro=false,exotic=false):boolean {
   w.nextId=nextId;w.pawns.push(...pawns);w.piles.push(...piles);if(!exotic)s.rng=random.rng;s.serial=id;
   s.groups.push({id,kind,members:pawns.map(p=>p.id),entry:arrival.entry,spot:arrival.spot,phase:'arriving',startedAt:w.tick,arrivedAt:null,durationCore,hostile:false});
   log(w,kind==='traveler'?`${pawns.length} passant(s) traverse(nt) la région.`:exotic?'Un négociant exotique approche de la colonie avec ses marchandises.':`${pawns.length} visiteur(s) approche(nt) de la colonie${merchant>=0?' ; un marchand porte quelques marchandises':''}.`);
+  // Core: VisitorGroup and TravelerGroup are NeutralEvent letters.
+  journalLetter352(w,exotic?'positive':'neutral',kind==='traveler'?'Voyageurs':exotic?'Négociant exotique':'Visiteurs',actors352(pawns.map(p=>p.id)));
   return true;
 }
 /** Tick controller: calendar opportunities are consumed even if blocked;
@@ -220,6 +223,8 @@ export function arriveTraderCaravan332(w:World):boolean {
   const caravan={traderKind:kind,factionId:source.factionId};
   s.groups.push({id,kind:'visitor',members:pawns.map(p=>p.id),entry:arrival.entry,spot:arrival.spot,phase:'arriving',startedAt:w.tick,arrivedAt:null,durationCore,hostile:false,caravan332:caravan});
   log(w,`Caravane commerciale : ${caravanLabel332(w,caravan)} approche avec ${count} personne(s). Elle vend ses marchandises et achète aussi.`);
+  // Core IncidentWorker_TraderCaravanArrival: a PositiveEvent letter.
+  journalLetter352(w,'positive','Caravane marchande',actors352(pawns.map(p=>p.id)));
   return true;
 }
 /** Trade lists: the merchant's name, plus its caravan kind and faction. */

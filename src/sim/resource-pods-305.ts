@@ -1,4 +1,5 @@
 import {schemaAtLeast} from './schema-range.ts';
+import {journalLetter352,cell352} from './letter-producers-352.ts';
 import {TRADE_CATALOGUE} from './trade-catalogue.ts';
 import {ITEM_DEFINITIONS,type ItemId} from './items.ts';
 import {freshRot} from './food-preservation.ts';
@@ -76,6 +77,7 @@ export function resolveSelectedResourcePod305(world:World,seed:number):boolean {
   state.resourcePod305={start:world.tick,landAt:world.tick+RESOURCE_POD_FALL_TICKS305,openAt:world.tick+RESOURCE_POD_FALL_TICKS305+RESOURCE_POD_OPEN_TICKS305,cell,seed:seed>>>0||1};
   state.resourcePods305=(state.resourcePods305??0)+1;
   emit(world,'Des capsules de fret tombent du ciel : leur cargaison sera récupérable après l’ouverture.');
+  journalLetter352(world,'positive','Capsules de fret',[cell352(cell)]);
   return true;
 }
 /** Opens the pods when due; a cell made unusable keeps the pod closed. */

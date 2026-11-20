@@ -341,6 +341,7 @@ import { search, searchCandidates, destinationValid, planWork, type SearchBudget
 import { regionMapFor } from './regions.ts';
 import { disablesWork, storedPriority, workPriority,workType,withWorkTabMode344 } from './work-types.ts';
 import {simpleWorkTab344,applyWorkTabMode344,priorityColumnRefusal344,priorityColumnChanges344} from './work-tab-344.ts';
+import {applyLetterCommand352,isLetterCommand352} from './letters-352.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
 import { releaseAssignments, planCommandDrops, commitDrop, releaseWork, type DropPlan } from './work-release.ts';
 import {prepareLinkedStorageCommand286} from './linked-storage-plan-286.ts';
@@ -689,6 +690,9 @@ export function applyCommand(world: World, command: Command,caravans?:import('./
  return withWorkTabMode344(simpleWorkTab344(campaignAuthority(world)),()=>applyCommandInMode(world,command,caravans));
 }
 function applyCommandInMode(world: World, command: Command,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256): CommandResult {
+ // Schema 352: open, dismiss and pin letters. Only the campaign's letters
+ // change; no Core cache, task or clock is touched.
+ if(isLetterCommand352(command))return applyLetterCommand352(world,command);
  if(isCorePhysicalSchema297(Number(world.schemaVersion)))invalidateCoreCampaign297(campaignAuthority(world),'command');
  const tradeType=command&&typeof command==='object'?Object.getOwnPropertyDescriptor(command,'type'):undefined;
  if(tradeType&&'value'in tradeType&&typeof tradeType.value==='string'&&tradeType.value.startsWith('trade-request-'))return applyTradeRequestCommand284(world,command);
@@ -729,6 +733,7 @@ function applyLocalCommand(world: World, command: LocalCommand): CommandResult {
   // Campaign setting only (Core MainTabWindow_Work marks the work-giver order
   // dirty): no task, priority or reconciliation changes.
   if(command.type==='work-tab-mode')return applyWorkTabMode344(campaignAuthority(world),command);
+  if(isLetterCommand352(command))return applyLetterCommand352(world,command);
   const result=stripCancel351(world,command,applyCommandInternal(world,command));
   if(command.type==='firefoam-auto-rebuild')return result;
   if(command.type==='bill-pause-policy'||command.type==='bill-pause-resume')return result;
@@ -773,7 +778,7 @@ function setWorkPriority(world:World,pawn:Pawn,work:WorkType,value:number,drops:
   if (value === 0 && ((job && workType(job) === work && pawn.orders.active===null) || (pawn.haul && pawn.orders.active!=='haul' && work === haulingWork(pawn.haul.destination)) || (pawn.cooking && pawn.orders.active!=='cook' && disablesWork(world,pawn,work,taskWork(pawn.cooking))))) releaseWork(world, pawn,drops);
   pawn.planCooldown = 0;
 }
-function applyCommandInternal(world: World, command: Exclude<LocalCommand,import('./world-map-state.ts').WorldMapCommand|{type:'apparel-policy-update'|'apparel-policy-copy'|'apparel-policy-rename'|'egg-forbid'|'material-forbid'|'read-book-295'|'reading-policy-295'|'work-tab-mode'}>): CommandResult {
+function applyCommandInternal(world: World, command: Exclude<LocalCommand,import('./world-map-state.ts').WorldMapCommand|{type:'apparel-policy-update'|'apparel-policy-copy'|'apparel-policy-rename'|'egg-forbid'|'material-forbid'|'read-book-295'|'reading-policy-295'|'work-tab-mode'}|import('./letters-352.ts').LetterCommand352>): CommandResult {
   // Schema 347: the tutorial's forced content and its storyteller handover.
   if(isTutorialCommand347(command))return applyTutorialCommand347(world,command);
   // Schema 349: the chain of the tutorial lessons.

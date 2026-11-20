@@ -1,4 +1,5 @@
 import {homeAnimalThreatPoints329} from './animal-threat-points-329.ts';
+import {journalLetter352,cell352} from './letter-producers-352.ts';
 import { freeColonist } from './colony-economy.ts';
 import { cropBlightable,infectCrop } from './plant-blight.ts';
 import { RoomTopologyCache } from './room-topology.ts';
@@ -68,5 +69,6 @@ export function resolveSelectedCropBlight(world:World,seed:number):boolean {
   const state=world.miscIncidents!.cropBlights!;state.count++;state.lastStart=world.tick;
   world.events.push({tick:world.tick,type:'need',message:`Fléau des cultures : ${infected} plante${infected===1?'':'s'} touchée${infected===1?'':'s'}. La croissance et la récolte sont bloquées ; coupez les plantes malades pour limiter la propagation, y compris dans les bacs hydroponiques.`});
   if(world.events.length>80)world.events.splice(0,world.events.length-80);
+  journalLetter352(world,'negative','Fléau des cultures',[cell352(root)]);
   return true;
 }

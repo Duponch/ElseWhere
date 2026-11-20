@@ -4,12 +4,15 @@ import {registeredMaps,registeredMapId} from '../sim/world-map-context';
 import type { World } from '../sim/types';
 import type { SecondaryMap } from '../sim/secondary-site-state';
 import { alertManhunter } from '../sim/status-alert-rules';
+import { campaignLetters352, isLetter352, isSchema352OrLater, letterPauses352 } from '../sim/letters-352';
 
-export type ThreatPauseMode = 'never' | 'major' | 'any-threat';
+/** Core AutomaticPauseMode: Never, MajorThreat, AnyThreat, AnyLetter. */
+export type ThreatPauseMode = 'never' | 'major' | 'any-threat' | 'any-letter';
 export interface ThreatPauseToken { generation: number; pauseRevision: number }
 export interface ThreatSpeedOptions { explicit: true; token: ThreatPauseToken }
 export type ThreatSite = 'home' | 'secondary';
-export type ThreatKind = 'raid' | 'mechanoid' | 'manhunter' | 'ancient-shrine' | 'camp-detected';
+/** 'letter' (schema 352): new letters arrived in the campaign stack. */
+export type ThreatKind = 'raid' | 'mechanoid' | 'manhunter' | 'ancient-shrine' | 'camp-detected' | 'letter';
 export interface UrgentThreatRow {
   mapId?:number;tile?:number|null;site: ThreatSite; kind: ThreatKind; totalArrivals: number; lastTick: number;
   lastCount: number; actorId?: number;
@@ -21,7 +24,7 @@ export interface UrgentThreatArrival extends UrgentThreatRow { delta: number }
 export interface UrgentThreatReceipt extends ThreatPauseToken {
   serial: number; paused: boolean; tick: number; rows: UrgentThreatArrival[];
 }
-export const validThreatPauseMode = (v: unknown): v is ThreatPauseMode => v === 'never' || v === 'major' || v === 'any-threat';
+export const validThreatPauseMode = (v: unknown): v is ThreatPauseMode => v === 'never' || v === 'major' || v === 'any-threat' || v === 'any-letter';
 const slot = (r: Pick<UrgentThreatRow, 'site' | 'kind' | 'mapId' | 'tile'>) => (r.mapId!==undefined?'tile:'+String(r.tile):r.site) + ':' + r.kind;
 const integer = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
 function record(v: unknown): v is Record<string, unknown> {
@@ -45,7 +48,7 @@ export function validUrgentThreatSnapshot(v: unknown, tick: unknown, speed: unkn
     if (!d || !('value' in d)) return false;
     const r = d.value;
     if (!record(r) || !keys(r, ['site','kind','totalArrivals','lastTick','lastCount'], ['actorId','mapId','tile'])
-      || !['home','secondary'].includes(r.site as string) || !['raid','mechanoid','manhunter','ancient-shrine','camp-detected'].includes(r.kind as string)
+      || !['home','secondary'].includes(r.site as string) || !['raid','mechanoid','manhunter','ancient-shrine','camp-detected','letter'].includes(r.kind as string)
       || Object.hasOwn(r,'mapId')!==Object.hasOwn(r,'tile')||r.mapId!==undefined&&(!integer(r.mapId)||r.tile!==null&&(!integer(r.tile)||maxTiles!==undefined&&r.tile>=maxTiles))
       || !integer(r.totalArrivals) || r.totalArrivals < 1 || !integer(r.lastTick) || r.lastTick > tick
       || !integer(r.lastCount) || r.lastCount < 1 || (Object.hasOwn(r, 'actorId') && (!integer(r.actorId) || r.actorId < 1))) return false;
@@ -61,10 +64,16 @@ interface MapBaseline { map: LocalMap; raids: Map<string,{kind: 'raid'|'mechanoi
 export class UrgentThreatObserver {
   private maps = new Map<ThreatSite|number, MapBaseline>();
   private state: UrgentThreatSnapshot = { generation: 0, serial: 0, pauseRevision: 0, urgentHeld: false, rows: [] };
+  /** Next letter id already seen (schema 352): a load or a new game adopts its
+   * current stack silently, nothing pauses retroactively. */
+  private letterNext = 1;
   bootstrap(world: CampaignState): void {
     this.state = { generation: this.state.generation + 1, serial: 0, pauseRevision: 0, urgentHeld: false, rows: [] };
     this.maps.clear(); this.prepareMaps(world);
+    this.letterNext = campaignLetters352(world as World)?.next ?? 1;
   }
+  /** O(1): a producer wrote a letter since the last capture. */
+  lettersChanged(world: CampaignState): boolean { return (campaignLetters352(world as World)?.next ?? 1) !== this.letterNext; }
   private owners(world: CampaignState): [ThreatSite|number,LocalMap,(number|null)?,boolean?][] {
     if(world.worldMaps)return registeredMaps(world).map(map=>[registeredMapId(map)!,map,world.worldMaps!.sites.find(s=>s.id===registeredMapId(map))!.tile,!!world.worldMaps!.sites.find(s=>s.id===registeredMapId(map))!.campPressure?.alert]);
     return [['home', world as World], ...(world as World).secondarySite ? [['secondary', (world as World).secondarySite!.map] as [ThreatSite, SecondaryMap]] : []];
@@ -94,15 +103,31 @@ export class UrgentThreatObserver {
       if(typeof site==='number')row.mapId=site;row.totalArrivals++; row.lastTick = world.tick; row.lastCount = count;
       if (actorId !== undefined) row.actorId = actorId; else delete row.actorId;
       this.state.serial++;
-      pause ||= mode === 'any-threat' || (mode === 'major' && kind !== 'manhunter');
+      pause ||= kind === 'letter' ? letterPause : mode === 'any-threat' || mode === 'any-letter' || (mode === 'major' && kind !== 'manhunter');
     };
+    // Schema 352: letters replace the threat page. Each class pauses as in
+    // Core LetterStack.ReceiveLetter (preference >= the letter's pause mode).
+    const letters = isSchema352OrLater(Number(world.schemaVersion));
+    let letterPause = false;
+    if (letters) {
+      const state = campaignLetters352(world as World), next = state?.next ?? 1;
+      if (next !== this.letterNext) {
+        let count = 0;
+        for (const entry of state?.archive ?? []) if (entry.id >= this.letterNext && isLetter352(entry)) { count++; letterPause ||= letterPauses352(entry.cls, mode); }
+        this.letterNext = next;
+        if (count) arrive('home', undefined, 'letter', count);
+      }
+    }
     for (const [site, map,tile,detected] of this.owners(world)) {
       const before = this.maps.get(site);
       if (!before || typeof site!=='number'&&before.map!==map) throw new Error('Threat observer map was not bootstrapped before step.');
-      const after = this.read(map,detected);if(after.detected&&!before.detected)arrive(site,tile,'camp-detected',1);
-      for(const [key,raid] of after.raids)if(before.raids.get(key)?.startedAt!==raid.startedAt)arrive(site,tile,raid.kind,Math.max(1,raid.count),raid.actorId);
-      for (const a of map.wildlife?.animals ?? []) if (alertManhunter(a) && before.animals.get(a.id) !== a.manhunter!.startedAtCore) arrive(site,tile, 'manhunter', 1, a.id);
-      for(const warning of map.ancientShrineWarnings?.pairs??[])if(warning.letter&&!before.warnings.has(warning.triggerId+':'+warning.letter.tick))arrive(site,tile,'ancient-shrine',1,warning.letter.pawnId);
+      const after = this.read(map,detected);
+      if (!letters) {
+        if(after.detected&&!before.detected)arrive(site,tile,'camp-detected',1);
+        for(const [key,raid] of after.raids)if(before.raids.get(key)?.startedAt!==raid.startedAt)arrive(site,tile,raid.kind,Math.max(1,raid.count),raid.actorId);
+        for (const a of map.wildlife?.animals ?? []) if (alertManhunter(a) && before.animals.get(a.id) !== a.manhunter!.startedAtCore) arrive(site,tile, 'manhunter', 1, a.id);
+        for(const warning of map.ancientShrineWarnings?.pairs??[])if(warning.letter&&!before.warnings.has(warning.triggerId+':'+warning.letter.tick))arrive(site,tile,'ancient-shrine',1,warning.letter.pawnId);
+      }
       this.maps.set(site, after);
     }
     if (pause) { this.state.pauseRevision++; this.state.urgentHeld = true; }

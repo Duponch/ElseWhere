@@ -1,4 +1,5 @@
 import { storedPriority } from '../sim/work-types.ts';
+import {LETTER_CLASSES_352,isSchema352OrLater} from '../sim/letters-352';
 import {storytellerIncidents347,tutorialMode347} from '../sim/game-profile';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {READING_POLICIES_295,effectiveReadingPolicy295} from '../sim/reading-state-295';
@@ -399,14 +400,14 @@ function revengeFact(id:string,chance:number,cause:'blessé'|'raté'):NativeCont
   :`Chance de rage quand un apprivoisement échoue : ${label}.`);
 }
 type NarrativeSource=World|NonNullable<NativeUiState['campaign']>;
-const narrativeView={identity:'',historySearch:'',historyAll:false,questHistory:false,tradeChoices:new Map<number,number>()};
+const narrativeView={identity:'',historySearch:'',historyAll:false,historyPinnedOnly:false,questHistory:false,tradeChoices:new Map<number,number>()};
 function narrativeIdentity(state:NativeUiState):string {
  const world=state.world,campaign=state.campaign;
  return world?['local',state.epoch,registeredMapId(world),world.seed,world.width,world.height].join(':'):campaign?['campaign',state.epoch,campaign.campaignSeed,campaign.activeMapId].join(':'):'none';
 }
 function syncNarrativeView(state:NativeUiState):void {
  const identity=narrativeIdentity(state);if(identity===narrativeView.identity)return;
- narrativeView.identity=identity;narrativeView.historySearch='';narrativeView.historyAll=false;narrativeView.questHistory=false;narrativeView.tradeChoices.clear();
+ narrativeView.identity=identity;narrativeView.historySearch='';narrativeView.historyAll=false;narrativeView.historyPinnedOnly=false;narrativeView.questHistory=false;narrativeView.tradeChoices.clear();
 }
 /** View navigation and retained buttons borrow the current scope, never a captured World. */
 function narrativeGuard<T extends unknown[]>(action:(state:NativeUiState,...args:T)=>void|Promise<unknown>):(...args:T)=>void|Promise<unknown> {
@@ -446,6 +447,26 @@ function freshTradeRequest(state:NativeUiState,id:number):{source:NarrativeSourc
  const source=state.world??state.campaign,request=source?.tradeRequests284?.entries.find(request=>request.id===id);return source&&request?{source,request}:undefined;
 }
 const tradeRewardText=(option:TradeRequest284['options'][number]):string=>[...option.original.map(p=>String(p.quantity)+' '+ITEM_DEFINITIONS[p.item].label+(p.quality?' ('+QUALITY_LABELS[p.quality]+')':'')),option.goodwill?'Relations +'+option.goodwill:''].filter(Boolean).join(' · ');
+/** Core MainTabWindow_History, Messages tab (schema 352): the archived
+ * letters and pinned journal lines, newest first. Pinning keeps an entry
+ * beyond the 200 most recent unpinned ones (Archive.MaxNonPinnedArchivables). */
+function letterArchiveRows(source:NarrativeSource):NativeRow[] {
+ const state=source.letters352,archive=state?.archive??[],pinned=new Set(state?.pinned??[]),stacked=new Set(state?.stack??[]);
+ const kept=narrativeView.historyPinnedOnly?archive.filter(entry=>pinned.has(entry.id)):archive;
+ const ordered=[...kept].reverse(),shown=narrativeView.historyAll?ordered:ordered.slice(0,30);
+ const rows:NativeRow[]=[narrativeHeading('history-letters-heading','Lettres archivées'),
+  narrativeFact('history-letters-count','Archive',`${archive.length} entrée${archive.length===1?'':'s'} · ${pinned.size} épinglée${pinned.size===1?'':'s'}`,
+   'Les 200 entrées non épinglées les plus récentes sont gardées ; une lettre encore dans la pile n’est jamais retirée.')];
+ for(const entry of shown){
+  const letter='cls'in entry,pin=pinned.has(entry.id);
+  const controls=[...letter?[narrativeButton(`archive-open-${entry.id}`,'Ouvrir',()=>host?.openLetter352?.(entry.id))]:[],
+   narrativeButton(`archive-pin-${entry.id}`,pin?'Désépingler':'Épingler',async()=>{await host?.command({type:'archive-pin',id:entry.id,pinned:!pin});back();},{active:pin,hint:pin?'Retirer l’épingle : l’entrée pourra quitter l’archive avec le temps.':'Garder cette entrée dans l’archive.'})];
+  rows.push({...narrativeFact(`archive-${entry.id}`,'Jour '+(1+Math.floor(entry.tick/TICKS_PER_DAY)),letter?entry.title:entry.message,
+   letter?LETTER_CLASSES_352[entry.cls].label+(stacked.has(entry.id)?' · dans la pile':''):'Ligne du journal épinglée'),labelWidth:72,controls});
+ }
+ if(!shown.length)rows.push(narrativeFact('history-letters-empty',narrativeView.historyPinnedOnly?'Aucune entrée épinglée.':'Aucune lettre reçue.'));
+ return rows;
+}
 function historyPanel(state:NativeUiState):NativePage {
  syncNarrativeView(state);
  const source=state.world??state.campaign,rows:NativeRow[]=[];
@@ -460,15 +481,23 @@ function historyPanel(state:NativeUiState):NativePage {
     narrativeFact('economy-sample','Dernier relevé','Jour '+(1+Math.floor(economy.sampledAt/TICKS_PER_DAY)),'Montants du dernier relevé. Les attentes sont provisoires si des valeurs manquent.'));
   }else rows.push({...row('economy-adopt','Patrimoine',undefined,'Cette partie conserve ses règles historiques. Activer le suivi part des biens présents, sans inventer les relevés passés.',[narrativeButton('economy-enable','Activer le suivi économique',current=>{if(current.world&&!current.world.economy)return send({type:'adopt-economy'});})]),presentation:'plain'});
  }
+ const letters352=!!source&&isSchema352OrLater(source.schemaVersion);
+ if(letters352)rows.push(...letterArchiveRows(source!));
+ // Journal lines already copied into the archive by a pin.
+ const archived=letters352?source!.letters352:undefined,pinnedLines=new Set<string>();
+ for(const entry of archived?.archive??[])if(!('cls'in entry)&&archived!.pinned.includes(entry.id))pinnedLines.add(`${entry.tick}|${entry.journal}|${entry.message}`);
  const events=source?.events??[],needle=narrativeView.historySearch.trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr'),matches:number[]=[];
  for(let i=events.length-1;i>=0;i--)if(!needle||events[i]!.message.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr').includes(needle))matches.push(i);
  const shown=narrativeView.historyAll?matches:matches.slice(0,30);
  rows.push(narrativeHeading('history-journal-heading','Journal de la colonie'),
   {id:'history-search',label:'Rechercher',presentation:'plain',compact:true,input:{value:narrativeView.historySearch,placeholder:'Texte d’un événement…',maxLength:160,onCommit:narrativeGuard((_current,value:string)=>{narrativeView.historySearch=value;back();})}},
   narrativeFact('history-count','Événements',shown.length+' / '+matches.length+(needle?' correspondants':'')+' · '+events.length+' au total'));
- for(const index of shown){const event=events[index]!;rows.push({...narrativeFact('event-'+index,'Jour '+(1+Math.floor(event.tick/TICKS_PER_DAY)),event.message),labelWidth:72});}
+ for(const index of shown){const event=events[index]!,pinned=pinnedLines.has(`${event.tick}|${event.type}|${event.message}`);
+  rows.push({...narrativeFact('event-'+index,'Jour '+(1+Math.floor(event.tick/TICKS_PER_DAY)),event.message),labelWidth:72,
+   ...letters352?{controls:[narrativeButton(`event-pin-${index}`,pinned?'Épinglée':'Épingler',async()=>{await host?.command({type:'journal-pin',tick:event.tick,journal:event.type,message:event.message});back();},{disabled:pinned,hint:'Copier cette ligne dans l’archive des lettres, où elle reste.'})]}:{}});}
  if(!shown.length)rows.push(narrativeFact('history-empty',events.length?'Aucun événement ne correspond à la recherche.':'Aucun événement consigné.'));
- return {id:'history',title:'Historique',contentKey:JSON.stringify([narrativeIdentity(state),narrativeView.historySearch,narrativeView.historyAll]),rows,width:720,actions:[
+ return {id:'history',title:'Historique',contentKey:JSON.stringify([narrativeIdentity(state),narrativeView.historySearch,narrativeView.historyAll,narrativeView.historyPinnedOnly]),rows,width:720,actions:[
+  ...letters352?[narrativeButton('history-pinned-only',narrativeView.historyPinnedOnly?'Toute l’archive':'Épinglées seulement',()=>{narrativeView.historyPinnedOnly=!narrativeView.historyPinnedOnly;back();})]:[],
   narrativeButton('history-range',narrativeView.historyAll?'30 derniers événements':'Tout le journal',()=>{narrativeView.historyAll=!narrativeView.historyAll;back();},{hint:'Le journal complet reste conservé. Cette commande change uniquement son affichage.'}),
  ],onClose:()=>void host?.panel(null)};
 }

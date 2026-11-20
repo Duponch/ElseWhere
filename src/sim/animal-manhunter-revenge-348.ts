@@ -1,4 +1,5 @@
 import {isAnimalSpecies256,animalCore256} from './animal-core-v256.ts';
+import {journalLetter352,actors352,cell352} from './letter-producers-352.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {animalSpecies,type AnimalSpeciesId} from './animal-species.ts';
@@ -117,6 +118,8 @@ function startRevenge348(w:World,a:WildAnimal,random:{rng:number},core:number,no
   const pack=joined?` ${joined===1?'Un congénère proche le rejoint':`${joined} congénères proches le rejoignent`}.`:'';
   w.events.push({tick:w.tick,type:'need',message:`Vengeance : ${notice(`${animalSpecies(a.species).label} ${a.id}`)} est pris de rage et s’en prend désormais aux humains.${pack}`});
   if(w.events.length>80)w.events.splice(0,w.events.length-80);
+  // Core StartManhunterBecauseOfPawnAction: ThreatSmall alone, ThreatBig with a pack.
+  journalLetter352(w,joined?'threat-big':'threat-small','Vengeance animale',joined?[cell352(a)]:actors352([a.id]));
   return true;
 }
 /** Pawn_MindState.Notify_DamageTaken after an external-violence impact on a

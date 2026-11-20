@@ -22,6 +22,8 @@ import {buildNativeArrivals} from './ui3d/native-arrivals';
 import type {NativeDomainAlert} from './ui3d/native-domain-alerts';
 import {buildNativeInspector,setNativeInspectorTab} from './ui3d/native-inspector';
 import {NativeHudCards} from './ui3d/native-hud';
+import {NativeLetterStack} from './ui3d/native-letter-stack';
+import {LETTER_CLASSES_352,type Letter352,type LetterClass352} from './sim/letters-352';
 import type {NativeHudViewAction} from './ui3d/native-hud';
 import {NATIVE_DOCK_PREFERENCE_KEY,parseNativeDockPreferences,NATIVE_UI_SCALE_PREFERENCE_KEY,parseNativeUiScale,normalizeNativeUiScale,type NativeDockPreferences} from './ui3d/native-preferences';
 import {GRAPHICS_STYLE_PREFERENCE_KEY,parseGraphicsStylePreferences,normalizeGraphicsStylePreferences,type GraphicsStylePreferences} from './ui3d/native-preferences';
@@ -309,6 +311,7 @@ if(nativeMode)installNativeCardboardCursors(document.documentElement);
 let nativeUi:NativeStage|undefined;
 let nativeShipTerminal298:ReturnType<typeof createNativeShipTerminal298>|undefined;
 let nativeHud:NativeHudCards|undefined;
+let nativeLetters:NativeLetterStack|undefined;
 let nativeCustomPage:NativePage|undefined;
 /** Main-thread steps of the last launch with their time; diagnostics only. */
 const launchTimeline:{stage:string;at:number}[]=[];
@@ -990,7 +993,7 @@ const session = new GameSession(client, saveRepository, prepareWorld, () => {
 },()=>{queueMicrotask(()=>snapshotHud.request(true));});
 const frontHost = document.createElement('div'); document.querySelector('#app')!.append(frontHost);
 if(nativeMode){
-  nativeUi=new NativeStage({onTools:kind=>{if(nativeToolPalette===kind||tutorialAllows({tag:'MainTab-Architect-Open'})){const opening=nativeToolPalette!==kind;showNativeToolPalette(kind);if(opening)tutorialNotify('MainTab-Architect-Open');}},onViewport:(w,h,k,bottom,left)=>{nativeViewport={width:w,height:h,unitsPerPixel:k,bottom:bottom??96,left};applyNativeHudViewport();},onWindowLayout:bounds=>nativeHud?.setWindowBounds(bounds)??false,onPointer:updateNativeDockPointer,onAnimate:dt=>{const hud=nativeHud?.animate(dt)??false;return (nativeTutorialCard?.animate()??false)||hud;},countdownFrame298:{canFeed:nativeShipFrameEligible298,canPresent:nativeShipCurtainEligible298,feed:delta=>{client.feedShipFrame298(delta);nativeShipTerminal298?.frame(delta);}},onPanel:id=>{
+  nativeUi=new NativeStage({onTools:kind=>{if(nativeToolPalette===kind||tutorialAllows({tag:'MainTab-Architect-Open'})){const opening=nativeToolPalette!==kind;showNativeToolPalette(kind);if(opening)tutorialNotify('MainTab-Architect-Open');}},onViewport:(w,h,k,bottom,left)=>{nativeViewport={width:w,height:h,unitsPerPixel:k,bottom:bottom??96,left};applyNativeHudViewport();},onWindowLayout:bounds=>nativeHud?.setWindowBounds(bounds)??false,onPointer:updateNativeDockPointer,onAnimate:dt=>{const hud=nativeHud?.animate(dt)??false,letters=nativeLetters?.animate(dt)??false;return (nativeTutorialCard?.animate()??false)||hud||letters;},countdownFrame298:{canFeed:nativeShipFrameEligible298,canPresent:nativeShipCurtainEligible298,feed:delta=>{client.feedShipFrame298(delta);nativeShipTerminal298?.frame(delta);}},onPanel:id=>{
     nativeCustomPage=undefined;nativeToolPalette=undefined;
     if(id==='factions'){if(!tutorialAllows({tag:'MainTab-Factions-Open'}))return;nativeCustomPage=buildNativeFactions(readNativeState(),nativeActions());nativeUi!.showPage(nativeCustomPage);tutorialNotify('MainTab-Factions-Open');return;}
     void attempt(()=>switchPanel(currentPanel===id?null:id));
@@ -1028,7 +1031,10 @@ if(nativeMode){
     alertStarted:started=>{if(started.priority==='critical'){audio.playInterface('ui.threat');nativeUi?.showNotice(`Alerte critique : ${started.text}`);}else if(started.bell)audio.playInterface('ui.panel');},
     showPage:page=>{nativeCustomPage=page;nativeUi!.showPage(page);}});
   nativeUi.setUiScale(nativeUiScale);
-  const viewport=nativeUi.getViewportMetrics();nativeHud.setViewport(viewport.width,viewport.height,viewport.unitsPerPixel,viewport.bottomDockHeight??96,viewport.leftHudBottom);nativeHud.setNotificationsAutoHide(nativeDockPreferences.notifications);nativeHud.setRightDockOpen(nativeRightDockOpen);nativeUi.setAutoHideBottom(nativeDockPreferences.bottom);
+  // Schema 352: the Core letter stack, above the time board.
+  nativeLetters=new NativeLetterStack(nativeUi.art,nativeHud.letterLayer,{open:openNativeLetter,openBundle:openNativeLetterBundle,hover:highlightLetterTargets,
+    dismiss:letter=>{void attempt(async()=>{await nativeActions().command({type:'letter-dismiss',id:letter.id});});}});
+  const viewport=nativeUi.getViewportMetrics();nativeHud.setLetterReserve(nativeLetters.setViewport(viewport.height));nativeHud.setViewport(viewport.width,viewport.height,viewport.unitsPerPixel,viewport.bottomDockHeight??96,viewport.leftHudBottom);nativeHud.setNotificationsAutoHide(nativeDockPreferences.notifications);nativeHud.setRightDockOpen(nativeRightDockOpen);nativeUi.setAutoHideBottom(nativeDockPreferences.bottom);
   const guidance=createNativeGuidance(nativeUi.art,nativeUi.anchors,{session:guidanceSession,learning:()=>firstGesturesLearning,world:()=>snapshot,
     blocked:()=>frontMenu.isOpen()||replacingWorld||!!launchProgress,sections:world=>readFirstDayGuide(world,confirmedFoodReadability()),now:()=>performance.now(),
     openHelp,guide:action=>{void attempt(()=>performNativeGuideAction(action));},invalidate:()=>nativeUi?.invalidate(),
@@ -1062,6 +1068,7 @@ function applyNativeHudViewport():void {
   nativeGuidance?.setViewport(v.width,v.height,v.unitsPerPixel,v.left);
   nativeTutorialCard?.setViewport(v.width,v.height,v.unitsPerPixel);
   appliedGuidanceReserve=nativeGuidance?.reservedHeight??0;
+  if(nativeLetters)nativeHud?.setLetterReserve(nativeLetters.setViewport(v.height));
   nativeHud?.setViewport(v.width,v.height,v.unitsPerPixel,v.bottom,v.left-appliedGuidanceReserve);
 }
 function syncNativeGuidance(force=false):void {nativeGuidanceSync?.(force);}
@@ -1254,6 +1261,7 @@ function readNativeState():NativeUiState {
 }
 function nativeActions():NativeUiActions {
   return {
+    openLetter352:id=>{const entry=snapshot?.letters352?.archive.find(e=>e.id===id);if(entry&&'cls'in entry)openNativeLetter(entry);},
     command:async command=>{
       if(replacingWorld||simulationStopped||graphicsFault||waitingRequests.size)throw Error('L’état courant ne permet pas encore cette commande.');
       const campaign=/^(group-|map-|caravan-)/.test(command.type);
@@ -1292,6 +1300,7 @@ function refreshNativeUi():void {
   nativeUi.setTextEntities(nativeTextEntitiesFor(snapshot,campaignOnly));
   nativeUi.setWorldVisible(!!snapshot&&!!renderer);nativeHud?.setVisible(!!snapshot&&!frontMenu.isOpen());
   if(snapshot){nativeHud?.setSelection([...selection.ids]);nativeHud?.update(snapshot,currentSpeed,renderer?.stats.fps??0);}
+  syncNativeLetters();
   nativeGuidance?.setHudVisible(!!snapshot&&!frontMenu.isOpen()&&!launchProgress);syncNativeGuidance();
   nativeHud?.setViewState({walls:wallCutaway?'coupés':'hauts',roofs:nativeRoofsVisible,foliage:foliageVisible,zones:nativeZonesVisible,camera:nativePerspective?'perspective':'iso'});
   if(launchProgress){paintLaunch();return;}
@@ -2396,6 +2405,84 @@ function focusNotification(target:NotificationTarget):void {
   }else {clearSelection();setPanel(null);}
   renderer?.focusCell(target.cell);
 }
+
+/* Schema 352: the Core letters (src/sim/letters-352.ts). */
+/** One arrival sound per batch, the most urgent class (Core LetterArrive_*
+ * SoundDefs play one at a time). The existing interface clips stand for them:
+ * threats share the threat clip, the other classes the panel clip at another
+ * pitch. A death letter adds nothing to the colonist death cue. */
+const LETTER_SOUND_ORDER:readonly LetterClass352[]=['threat-big','threat-small','negative','new-quest','positive','neutral'];
+function playLetterArrival(letters:readonly Letter352[]):void {
+  if(!soundEnabled||!letters.length)return;
+  const cls=LETTER_SOUND_ORDER.find(c=>letters.some(l=>l.cls===c));if(!cls)return;
+  if(cls==='threat-big')audio.playInterface('ui.threat');
+  else if(cls==='threat-small')audio.playInterface('ui.threat',1.18);
+  else audio.playInterface('ui.panel',cls==='negative'?.82:cls==='neutral'?1:1.22);
+}
+function syncNativeLetters():void {
+  if(!nativeLetters)return;
+  const world=snapshot&&!frontMenu.isOpen()?snapshot:undefined;
+  const before=nativeLetters.revision,arrived=nativeLetters.update(world,`${session.generation}:${world?.seed??''}`);
+  nativeHud?.setLetterReserve(nativeLetters.reservedPx);
+  playLetterArrival(arrived);
+  if(nativeLetters.revision!==before)nativeUi?.invalidate();
+}
+function letterActorCell(id:number):{x:number;z:number}|undefined {
+  const world=snapshot;if(!world)return;
+  return world.pawns.find(p=>p.id===id)??world.wildlife?.animals.find(a=>a.id===id)??world.mechanoids?.find(m=>m.id===id);
+}
+const letterActiveMap=():number|undefined=>snapshot?.campaignMap?.revision===2?snapshot.campaignMap.activeMapId:undefined;
+const letterOnOtherMap=(letter:Letter352):boolean=>letter.mapId!==undefined&&letterActiveMap()!==undefined&&letter.mapId!==letterActiveMap();
+/** Core LetterStack.LetterStackUpdate: the hovered letter highlights its look
+ * targets (here the map outline around the first one, on the shown map). */
+let letterOutlineShown=false;
+function highlightLetterTargets(letter:Letter352|null):void {
+  const target=letter?.targets[0],cell=!letter||!target||letterOnOtherMap(letter)?undefined:target.kind==='cell'?target:letterActorCell(target.id);
+  if(!cell||!snapshot){if(letterOutlineShown){letterOutlineShown=false;tutorialOutlineKey='';syncTutorialLesson();}return;}
+  const x=Math.max(0,cell.x-1),z=Math.max(0,cell.z-1);
+  renderer?.setMapOutline({x,z,width:Math.min(3,snapshot.width-x),height:Math.min(3,snapshot.height-z)});letterOutlineShown=true;
+}
+/** Core ChoiceLetter.Option_JumpToLocation target: the first look target. */
+async function jumpToLetter(letter:Letter352):Promise<void> {
+  const target=letter.targets[0];if(!target)return;
+  if(letterOnOtherMap(letter)){
+    const reason=await viewUrgentThreat({mapId:letter.mapId!,...target.kind==='actor'?{actorId:target.id}:{}});
+    if(reason)throw Error(reason);
+    if(target.kind==='cell')renderer?.focusCell({x:target.x,z:target.z});
+    return;
+  }
+  if(target.kind==='actor'){if(!letterActorCell(target.id))throw Error('La cible de cette lettre n’est plus sur la carte.');focusNotification({key:`actor:${target.id}`,kind:'actor',id:target.id});}
+  else focusNotification({key:`cell:${target.x}:${target.z}`,kind:'cell',cell:{x:target.x,z:target.z}});
+}
+/** Core Letter.OpenLetter: the text, "Voir" (jump, then remove the letter)
+ * and "Fermer" (Core Option_Close removes it from the stack too). Closing the
+ * page any other way keeps the letter in the stack. Opening marks it read. */
+function openNativeLetter(letter:Letter352):void {
+  if(!nativeUi)return;
+  if(!letter.read)void attempt(async()=>{await nativeActions().command({type:'letter-open',id:letter.id});});
+  const def=LETTER_CLASSES_352[letter.cls],prior=nativeCustomPage?.id.startsWith('native-letter')?undefined:nativeCustomPage,id=`native-letter-${letter.id}`;
+  const close=()=>{if(nativeCustomPage?.id!==id)return;nativeCustomPage=prior;if(frontMenu.isOpen())frontMenu.showHome(session.hasWorld);else if(prior)nativeUi?.showPage(prior);else refreshNativeUi();};
+  const stacked=()=>!!snapshot?.letters352?.stack.includes(letter.id);
+  const remove=async()=>{if(stacked())await nativeActions().command({type:'letter-dismiss',id:letter.id});};
+  nativeCustomPage={id,title:letter.title,subtitle:`${def.label} · jour ${1+Math.floor(letter.tick/TICKS_PER_DAY)}`,color:def.color,layout:'dialog',width:560,
+    rows:[{id:'letter-text',label:letterOnOtherMap(letter)?'Sur une autre carte':'Lettre',detail:letter.text,presentation:'plain'}],
+    actions:[
+      ...letter.targets.length?[{id:'letter-jump',label:'Voir',hint:'Aller à la cible et retirer la lettre de la pile.',onActivate:async()=>{await jumpToLetter(letter);await remove();close();}}]:[],
+      {id:'letter-close',label:'Fermer',hint:'Retirer la lettre de la pile. Elle reste dans l’Historique.',onActivate:async()=>{await remove();close();}},
+    ],onClose:close};
+  nativeUi.showPage(nativeCustomPage);
+}
+/** Core BundleLetter.OpenLetter: the list of the folded letters. */
+function openNativeLetterBundle(letters:readonly Letter352[]):void {
+  if(!nativeUi)return;
+  const prior=nativeCustomPage,id='native-letter-bundle';
+  const close=()=>{if(nativeCustomPage?.id!==id)return;nativeCustomPage=prior;refreshNativeUi();};
+  nativeCustomPage={id,title:`${letters.length} lettres de plus`,subtitle:'Les plus anciennes lettres de la pile.',layout:'dialog',width:560,
+    rows:[...letters].reverse().map(letter=>({id:`bundle-letter-${letter.id}`,label:letter.title,value:LETTER_CLASSES_352[letter.cls].label,presentation:'plain' as const,
+      controls:[{id:`bundle-open-${letter.id}`,label:'Ouvrir',onActivate:()=>{nativeCustomPage=prior;openNativeLetter(letter);}}]})),
+    actions:[{id:'letter-bundle-close',label:'Fermer',onActivate:close}],onClose:close};
+  nativeUi.showPage(nativeCustomPage);
+}
 let campaignFocusBusy=false,campaignPresentationEpoch=0;
 async function viewUrgentThreat(target:UrgentThreatTarget):Promise<string|undefined> {
  deferredResumeGuard.cancel();menuResumeSpeed=undefined;
@@ -2424,6 +2511,9 @@ async function viewUrgentThreat(target:UrgentThreatTarget):Promise<string|undefi
 const urgentThreatUI=createUrgentThreatFeedback(el('alerts'),{view:viewUrgentThreat,mapName:id=>{const state=campaignState(),map=state?campaignUIFacts(state)?.maps.find(map=>map.id===id):undefined;return map?mapDisplayName(map):`Carte ${id}`;}});
 function receiveMainUrgentThreats(receipt:UrgentThreatReceipt):void {
  if(receipt.paused){deferredResumeGuard.confirm(true);menuResumeSpeed=undefined;}
+ // Schema 352: letters replace the threat page; the stack plays their sound.
+ receipt={...receipt,rows:receipt.rows.filter(row=>row.kind!=='letter')};
+ if(!receipt.rows.length)return;
  if(nativeUi&&receipt.rows.length){
   const prior=nativeCustomPage,id=`native-threat-${receipt.generation}-${receipt.serial}`;
   const close=()=>{if(nativeCustomPage?.id!==id)return;nativeCustomPage=prior;if(frontMenu.isOpen())frontMenu.showHome(session.hasWorld);else refreshNativeUi();};
@@ -3049,6 +3139,7 @@ const metricsInterval = setInterval(() => {
   },error=>notify(`Autosauvegarde échouée : ${error instanceof Error?error.message:String(error)}. Les autres copies sont conservées ; vous pouvez exporter la partie.`,true));
   if (!renderer) return;
   if(nativeHud&&snapshot)nativeHud.update(snapshot,currentSpeed,renderer.stats.fps);
+  syncNativeLetters();
   el('fps-counter').textContent = renderer.stats.fps > 0 ? `${Math.round(renderer.stats.fps)} FPS` : '— FPS';
   if (!el('metrics').hidden) {
     const sound = audio.diagnostics;

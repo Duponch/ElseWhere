@@ -1,4 +1,5 @@
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
+import {sendLetter352} from './letters-352.ts';
 import {createBattlefieldPressureHumanRaid261} from './caravan-pressure-261.ts';
 import type {CampaignState} from './world-map-state.ts';
 import type {World} from './types.ts';
@@ -24,7 +25,9 @@ export function advanceCampPressure260(input:CampaignState):void {
  for(const site of root.worldMaps.sites.slice().sort((a,b)=>a.id-b.id)){
   const p=site.campPressure;if(!p)continue;
   const map=registeredMap(root,site.id);if(!(site.kind==='camp'||(Number(root.schemaVersion)===261||(Number(root.schemaVersion)===262||isSchema263OrLater(Number(root.schemaVersion))))&&site.kind==='battlefield')||!map){delete site.campPressure;continue;}
-  if(p.notifyAtCore!==null&&core>=p.notifyAtCore){p.notifyAtCore=null;p.alert=true;notice(root,map,`Camp ${site.id} · détecté. Première tentative d’attaque dans ${Math.max(0,p.raidAtCore-core)/60000} jour(s).`);}
+  if(p.notifyAtCore!==null&&core>=p.notifyAtCore){p.notifyAtCore=null;p.alert=true;notice(root,map,`Camp ${site.id} · détecté. Première tentative d’attaque dans ${Math.max(0,p.raidAtCore-core)/60000} jour(s).`);
+   // Core TimedDetectionRaids: a ThreatBig letter.
+   sendLetter352(map,{cls:'threat-big',title:'Camp détecté',text:`Des ennemis ont repéré ce camp. Une première attaque est attendue dans ${Math.max(0,p.raidAtCore-core)/60000} jour(s) : partez avant, ou préparez la défense.`});}
   if(core>=p.raidAtCore){
    // Real timer attempt spends its draw BEFORE producer failure/success, like Core.
    if(!Number.isSafeInteger(core+60000)||!Number.isSafeInteger(p.raidsSent+1))continue;

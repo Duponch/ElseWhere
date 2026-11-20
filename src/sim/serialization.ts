@@ -1,5 +1,6 @@
 import {validPopulationGain320} from './population-intent-320.ts';
 import {validSimpleWorkTab344} from './work-tab-344.ts';
+import {validLetters352} from './letters-352.ts';
 import {isFinishFrameSchema301} from './wall-frame-kind-301.ts';
 import { rescaleStructureDamage311 } from './thing-damage-rules.ts';
 import {validFrameOwners301} from './finish-frame-save-301.ts';
@@ -394,6 +395,7 @@ function validateCampaignSchema(input:unknown,version:Parameters<typeof validate
     if(!validCoreMoveHistoricalTransport297(input,version))return ['Invalid or future captured Core movement.'];
     if(record(input)&&!validPopulationGain320(input.populationGainCore320,Number(version),Number(input.tick)))return ['Invalid or future population adaptation.'];
     if(record(input)&&!validSimpleWorkTab344(input,Number(version)))return ['Invalid or future Work tab mode.'];
+    if(record(input)&&!validLetters352(input,Number(version)))return ['Invalid or future letters, letter stack or archive.'];
     if(!validWallDoorHistoricalTransport296(input,version))return ['Invalid or future wall-door successor data.'];
     if(!validNovelHistoricalTransport295(input,version))return ['Invalid or future Novel, reading task or policy.'];
     if(!validToxicFalloutHistoricalTransport294(input,version))return ['Invalid or future ToxicFallout data.'];

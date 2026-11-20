@@ -1,4 +1,5 @@
 import {shipCasketTerminalParticipant277} from './ship-casket-notifications-277.ts';
+import {journalLetter352,actors352} from './letter-producers-352.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
 import {isConcurrentRaids341} from './concurrent-raids-341.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
@@ -65,6 +66,7 @@ function adoptMechanoidRaid(w:World,composition:MechanoidRaidComposition,random:
   w.events.push({tick:w.tick,type:'command',message:composition.roster.every(k=>k==='scyther')?`${count} Scyther(s) arrivent et se préparent à attaquer. Leur défense est déjà active.`:
     `${count} mécanoïdes (${composition.roster.map(k=>mechanoidDefinition(k).label).join(', ')}) arrivent et se préparent à attaquer. Leur défense est déjà active.`});
   if(w.events.length>80)w.events.splice(0,w.events.length-80);
+  journalLetter352(w,'threat-big','Raid de mécanoïdes',actors352(group.members));
   return group;
 }
 /** concurrent341: schema 341 raid arriving while a raid slot is taken. */

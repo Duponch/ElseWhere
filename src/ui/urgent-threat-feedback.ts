@@ -3,6 +3,7 @@ import './urgent-threat-feedback.css';
 export type UrgentThreatTarget=Pick<UrgentThreatArrival,'actorId'>&({mapId:number}|{site:'home'|'secondary'});
 export function urgentThreatLabel(row:UrgentThreatArrival,mapName?:(mapId:number)=>string):string {
  const site=typeof row.mapId==='number'?(mapName?.(row.mapId)??(row.mapId===0?'Foyer':`Carte ${row.mapId}`)):row.site==='home'?'Foyer':'Second site',kind=row.kind==='raid'?'Raid humain':row.kind==='mechanoid'?'Raid mécanique':'Animal en rage';
+ if(row.kind==='letter')return `${row.lastCount} nouvelle(s) lettre(s) · consulter la pile en bas à droite.`;
  if(row.kind==='camp-detected')return `${site} · Camp détecté · Des tentatives d’attaque mécanique suivront ; consulter ce Camp pour l’échéance.`;
  if(row.kind==='ancient-shrine')return `${site} · Danger ancien · Une structure ancienne peut abriter une menace. ${row.delta} nouvel(aux) avertissement(s)`;
  return `${site} · ${kind} · ${row.lastCount} ${row.kind==='manhunter'?'animal(aux)':'assaillant(s)'} · ${row.delta} nouvelle(s) arrivée(s)`;

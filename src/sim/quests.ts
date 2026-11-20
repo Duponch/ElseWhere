@@ -1,4 +1,5 @@
 import {notePopulationGain320} from './population-intent-320.ts';
+import {journalLetter352} from './letter-producers-352.ts';
 import {storytellerIncidents347} from './game-profile.ts';
 import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import { civilianAdmissionFits,civilianAwayCounts } from './civilian-away.ts';
@@ -107,4 +108,5 @@ export function advanceQuests(w:World):void {
   const relationship=chooseOfferedRelationship(plans,random);if(relationship)q.relationship=relationship;
   s.rng=random.rng;s.serial=q.id;s.entries.push(q);s.nextCheck=w.tick+8*TICKS_PER_DAY;
   log(w,`${q.name} demande asile : un bandit armé d'un couteau le poursuit. Décidez dans Quêtes.`);
+  journalLetter352(w,'new-quest',`Demande d’asile : ${q.name}`);
 }

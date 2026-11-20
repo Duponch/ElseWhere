@@ -1,4 +1,5 @@
 import { startShortCircuitDischarge } from './bomb-system.ts';
+import {journalLetter352,cell352} from './letter-producers-352.ts';
 import { FireContent } from './fire-content.ts';
 import { startFire } from './fire.ts';
 import { ensureFireState } from './fire-rules.ts';
@@ -89,5 +90,5 @@ export function resolveSelectedShortCircuit(world:World,seed:number):boolean {
     const ignited=cells.length>0&&startFire(world,center,.1+random()*1.65);
     report={at:world.tick,conduitId:conduit.id,center,energyWd:0,flameRadius:0,outcome:'fire',ignited};
   }
-  state.count++;state.lastStart=world.tick;state.last=report;announce(world,report);return true;
+  state.count++;state.lastStart=world.tick;state.last=report;announce(world,report);journalLetter352(world,'negative','Court-circuit',[cell352(report.center)]);return true;
 }

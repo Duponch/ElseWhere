@@ -170,6 +170,9 @@ export class NativeHudCards {
   private readonly resourcesGroup = new THREE.Group();
   private readonly alertsGroup = new THREE.Group();
   private readonly timeGroup = new THREE.Group();
+  /** Core letter stack (schema 352), above the time board and below the alerts. */
+  readonly letterLayer = new THREE.Group();
+  private letterReservePx = 0;
   private readonly fpsGroup = new THREE.Group();
   private readonly ownedPieces = new Set<CardboardPiece>();
   private readonly rail: THREE.Mesh;
@@ -240,6 +243,7 @@ export class NativeHudCards {
     anchors.topLeft.add(this.resourcesGroup);
     anchors.topRight.add(this.alertsGroup,this.fpsGroup,this.alertHandleGroup);
     anchors.bottomRight.add(this.timeGroup);
+    this.timeGroup.add(this.letterLayer);
 
     this.rail = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.035, 0.025), new THREE.MeshStandardMaterial({color: 0x7c5c3e, roughness: 0.98}));
     this.rail.position.set(0, -0.08, -0.01);
@@ -435,6 +439,9 @@ export class NativeHudCards {
     this.timeGroup.visible=this.shown&&!!this.world&&visible;
     return changed;
   }
+
+  /** Height the letter stack takes from the bottom of the alert column. */
+  setLetterReserve(px:number):void {if(px===this.letterReservePx)return;this.letterReservePx=px;this.refreshAlerts();}
 
   setViewState(state:Partial<NativeHudViewState>):void {
     this.viewState={...this.viewState,...state};
@@ -727,7 +734,7 @@ export class NativeHudCards {
 
   private refreshAlerts():void {
     const maxWidth=Math.min(300,Math.max(80,this.viewportWidth*.36),this.cornerWidth());
-    const availableHeight=Math.max(58,this.viewportHeight-16-this.timeGroup.position.y/this.timeGroup.scale.x*100-252);
+    const availableHeight=Math.max(58,this.viewportHeight-16-this.timeGroup.position.y/this.timeGroup.scale.x*100-252-this.letterReservePx);
     const previous=new Map(this.alertCards.map(card=>[card.key,card]));
     this.alertCards=[];
     const ctx=this.allAlertsButton.userData.ctx;ctx.font=`bold 13px ${FONT}`;

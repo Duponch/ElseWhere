@@ -1,4 +1,5 @@
 import {scariaRotChance347} from './game-profile.ts';
+import {animalDeathLetter352} from './letter-producers-352.ts';
 import {naturalArmor321,naturalArmorProtection321} from './natural-armor-321.ts';
 import {animalBodySize} from './animal-life.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -58,6 +59,7 @@ export function reconcileAnimalHealth(w:World,a:WildAnimal):void {
     a.state=status;a.path=[];delete a.exitFlight;delete a.meal;delete a.flee;delete a.threat;delete a.retaliation;delete a.strike;delete a.stun;delete a.exiting;delete a.eggLay;delete a.predation;if(!a.manhunter?.permanent261||status==='dead')delete a.manhunter;
     // Keep a captured edge. Presentation finishes its continuous falling path.
     if(changed){w.events.push({tick:w.tick,type:'need',message:`${animalSpecies(a.species).label} ${a.id} ${status==='dead'?'est mort':'est à terre'}.`});if(w.events.length>80)w.events.splice(0,w.events.length-80);}
+    if(changed&&status==='dead')animalDeathLetter352(w,a,animalSpecies(a.species).label);
   } else if(a.state==='downed'){a.state='idle';a.nextDecision=w.tick;}
 }
 export function advanceAnimalHealth(w:World,a:WildAnimal,thermal?:AnimalThermalOpportunity466):void {

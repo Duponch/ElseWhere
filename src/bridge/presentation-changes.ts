@@ -48,6 +48,8 @@ export class PresentationChanges {
         // changes and suspension boundaries request an immediate publication.
         m.ranged?.order,m.ranged?.stance?[m.ranged.stance.phase,m.ranged.stance.targetKey,m.ranged.stance.startedAtCore]:undefined]),
       world.strip351,
+      // Schema 352: a new letter is shown (and sounds) at its own tick.
+      world.letters352?.next,
       world.pawns.map(p=>[p.id,p.state,p.burning?.phase,p.firefighting?.phase,p.firefighting?.fireId,p.raid?.exiting,p.mental?.crisis?.kind,p.mental?.crisis?.target,
         p.mental?.crisis&&'targetId' in p.mental.crisis?p.mental.crisis.targetId:undefined,
         p.mental?.crisis?.kind==='tantrum'?p.mental.crisis.attempted:undefined,

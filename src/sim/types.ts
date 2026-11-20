@@ -322,6 +322,9 @@ export interface World {
   /** Core PlaySettings.useWorkPriorities off (schema 344): the simple Work tab.
    * Campaign-wide; absent means manual priorities. See work-tab-344.ts. */
   simpleWorkTab344?: true;
+  /** Core letters, their stack and the archive with its pins (schema 352).
+   * Campaign-wide; absent means an empty stack. See letters-352.ts. */
+  letters352?: import('./letters-352.ts').Letters352;
   /** Strip designations (schema 351, see strip-state-351.ts); absent when none. */
   strip351?: import('./strip-state-351.ts').StripDesignation351[];
   /** V1–V4 continuations retain their former nutrition economy explicitly. */
@@ -423,6 +426,7 @@ export type Command = import('./strip-state-351.ts').StripCommand351 | import('.
   | {type:'research-project';project:import('./research.ts').ResearchProject|null}
   | { type: 'priority'; pawnId: number; work: WorkType; value: number }
   | import('./work-tab-344.ts').WorkTabCommand344
+  | import('./letters-352.ts').LetterCommand352
   | import('./tutorial-347.ts').TutorialCommand347;
 export type RefusalCode = 'invalid-command' | 'out-of-bounds' | 'occupied' | 'incompatible-resource' | 'missing-target' | 'invalid-priority' | 'invalid-storage';
 export interface CommandResult { ok: boolean; reason?: string; code?: RefusalCode; affected?: number; skipped?: number }

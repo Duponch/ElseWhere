@@ -1,4 +1,5 @@
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
+import {journalLetter352,actors352,cell352} from './letter-producers-352.ts';
 import {isConcurrentRaids341} from './concurrent-raids-341.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259,bornFactionForDef259} from './world-affiliation-259.ts';
@@ -141,6 +142,8 @@ export function createRaidGroup(w:World,options:RaidSpawnOptions):RaidGroup|null
   if(independent||concurrent){s.extraActive261??=[];s.extraResults261??=s.last?[structuredClone(s.last)]:[];s.extraActive261.push(group);if(concurrent)s.nextCheck=null;}else{s.nextCheck=null;s.active=group;}
   const label=chosen?` (${w.worldFactions!.factions.find(f=>f.id===chosen.factionId)!.name})`:'';
   w.events.push({tick:w.tick,type:'command',message:arrival?raidArrivalMessage333(arrival,label,group.members.length,!!group.stage330):group.stage330?`Raid${label} : ${count} assaillant(s) arrive(nt) au bord de la carte et se regroupe(nt) avant d’attaquer. Préparez la défense.`:`Raid${label} : ${count} assaillant(s) arrive(nt) au bord de la carte et attaque(nt) immédiatement. Mobilisez la défense.`});if(w.events.length>80)w.events.splice(0,w.events.length-80);
+  // Core IncidentWorker_RaidEnemy: a ThreatBig letter (schema 352).
+  journalLetter352(w,'threat-big',`Raid${label}`,arrival?.pods?arrival.pods.map(pod=>cell352(pod.cell)):actors352(group.members));
   return group;
 }
 /** Raiders are born into a world faction from schema 259. */

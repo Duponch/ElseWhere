@@ -1,4 +1,6 @@
 import {notePopulationGain320} from './population-intent-320.ts';
+import {actors352} from './letter-producers-352.ts';
+import {sendLetter352} from './letters-352.ts';
 import {assignPileOwner} from './pile-index.ts';
 import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import {commitJoinedPlayer259} from './world-affiliation-259.ts';
@@ -123,6 +125,8 @@ function finishConversation(world:World,actor:Pawn,p:Pawn,context:NeedContext):b
     // Core DoRecruit: the new colonist remembers who recruited them (319).
     if(world.schemaVersion>=319){const state=p.social??={rng:socialSeed(world.seed,p.id),memories:[]};expireSocialMemories(p,world.tick);addSocialMemory(state,actor.id,'recruited-me',world.tick,1);}
     clearQueuedOrders(world,p);context.event(`${p.name} rejoint la colonie après les conversations avec ${actor.name}.`);
+    // Core InteractionWorker_RecruitAttempt.DoRecruit: a PositiveEvent letter.
+    sendLetter352(world,{cls:'positive',title:`Recrutement : ${p.name}`,text:`${actor.name} a convaincu ${p.name} de rejoindre la colonie. Sa cellule est libérée : donnez-lui un lit, des vêtements et des priorités de travail.`,targets:actors352([p.id])});
   }
   return true;
 }

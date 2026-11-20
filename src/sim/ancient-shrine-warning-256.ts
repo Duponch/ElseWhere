@@ -1,4 +1,6 @@
 import {isSchema256Or257} from './schema-compatibility-257.ts';
+import {actors352} from './letter-producers-352.ts';
+import {sendLetter352} from './letters-352.ts';
 import {isColonist} from './affiliation.ts';
 import {foggedCell256,explorationEnabled256} from './exploration-state-256.ts';
 import {groupCoreTicks256,groupPawnInterval256} from './group-core-cadence-256.ts';
@@ -35,6 +37,6 @@ export function advanceAncientShrineWarnings256(w:World):void {
   let subject:World['pawns'][number]|undefined;
   for(let z=pair.rect.minZ;z<=pair.rect.maxZ&&!subject;z++)for(let x=pair.rect.minX;x<=pair.rect.maxX&&!subject;x++)subject=byCell.get(z*w.width+x)?.[0];
   if(!subject)continue;pair.triggerAlive=false;
-  if(pair.actionAlive){pair.actionAlive=false;pair.letter={tick:w.tick,pawnId:subject.id};w.events.push({tick:w.tick,type:'command',message:`Danger ancien : ${subject.name} approche d’un bâtiment ancien qui pourrait abriter une menace.`});if(w.events.length>80)w.events.splice(0,w.events.length-80);}
+  if(pair.actionAlive){pair.actionAlive=false;pair.letter={tick:w.tick,pawnId:subject.id};sendLetter352(w,{cls:'threat-big',title:'Danger ancien',text:`${subject.name} approche d’un bâtiment ancien scellé. Ces ruines abritent souvent des menaces endormies : mécanoïdes, insectes ou pièges. N’y entrez qu’armé et prêt à vous battre.`,targets:actors352([subject.id])});w.events.push({tick:w.tick,type:'command',message:`Danger ancien : ${subject.name} approche d’un bâtiment ancien qui pourrait abriter une menace.`});if(w.events.length>80)w.events.splice(0,w.events.length-80);}
  }
 }
