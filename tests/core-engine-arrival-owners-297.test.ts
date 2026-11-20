@@ -6,7 +6,7 @@ import {effectiveCore297} from '../src/sim/core-phase-297.ts';
 import {reconcilePawnHealth} from '../src/sim/health.ts';
 import {recordFilthMovement} from '../src/sim/filth.ts';
 import {applyBulletStagger} from '../src/sim/stagger.ts';
-import {applyMeleeStun} from '../src/sim/stun.ts';
+import {applyMeleeStun,meleeStunCore318} from '../src/sim/stun.ts';
 import {carrierOf} from '../src/sim/rescue-state.ts';
 import {validateWorld} from '../src/sim/serialization.ts';
 import {BLOOD_UNIT} from '../src/sim/injury-rules.ts';
@@ -47,9 +47,12 @@ test('a real carried mirror does not spend a second walker feet/RNG operation wh
 
 test('an otherwise idle human expires stun/stagger on the exact Core before current validation, without a combat owner or macro tick',()=>{
  const w=quiet(),p=w.pawns[0]!;
- applyMeleeStun(w,p,0);applyBulletStagger(w,p,0,1);
- expect(p.stun?.untilCore).toBe(45);expect(p.stagger?.untilCore).toBe(95);
- until(w,()=>effectiveCore297(w)===44);expect(p.stun).toBeDefined();step(w);expect(w.phaseCore297).toBe(5);expect(p.stun).toBeUndefined();
- until(w,()=>effectiveCore297(w)===94);expect(p.stagger).toBeDefined();step(w);expect(w.phaseCore297).toBe(5);expect(p.stagger).toBeUndefined();
+ // Schema 318: the Core Blunt stun lasts 120 Core ticks (45 before). It starts
+ // on Core 5 so that both expiries stay off the macro boundary (phase 5).
+ applyBulletStagger(w,p,0,1);until(w,()=>effectiveCore297(w)===5);applyMeleeStun(w,p,5);
+ const stunEnd=5+meleeStunCore318(w.schemaVersion);
+ expect(p.stun?.untilCore).toBe(stunEnd);expect(p.stagger?.untilCore).toBe(95);
+ until(w,()=>effectiveCore297(w)===94);expect(p.stagger).toBeDefined();step(w);expect(w.phaseCore297).toBe(5);expect(p.stagger).toBeUndefined();expect(p.stun).toBeDefined();
+ until(w,()=>effectiveCore297(w)===stunEnd-1);expect(p.stun).toBeDefined();step(w);expect(w.phaseCore297).toBe(5);expect(p.stun).toBeUndefined();
  expect(p.shooting).toBeUndefined();expect(p.melee).toBeUndefined();expect(validateWorld(w)).toEqual([]);
 });

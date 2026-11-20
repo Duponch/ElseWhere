@@ -2,7 +2,7 @@ import {expect,test} from 'vitest';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
 import {applyCommand,advanceWorldCore297} from '../src/sim/engine.ts';
 import {effectiveCore297,effectiveLocal297} from '../src/sim/core-phase-297.ts';
-import {applyMeleeStun} from '../src/sim/stun.ts';
+import {applyMeleeStun,meleeStunCore318} from '../src/sim/stun.ts';
 import {serializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import type {Pawn,World} from '../src/sim/types.ts';
 
@@ -35,7 +35,9 @@ test('a new command owns a zero-progress edge at the already played Core; sixty 
 
 test('a stun before any paid progress still permits the native no-progress reset after wall-free Core time has elapsed',()=>{
  const {w,p}=scene(),origin={x:3,z:5};
- applyMeleeStun(w,p,0);expect(p.motion?.stuns).toMatchObject([{start:0,end:4.5}]);
+ // Schema 318: the Core Blunt stun lasts 120 Core ticks (45 before).
+ const stunCore=meleeStunCore318(w.schemaVersion);
+ applyMeleeStun(w,p,0);expect(p.motion?.stuns).toMatchObject([{start:0,end:stunCore/10}]);
  step(w);expect(effectiveCore297(w)).toBe(1);expect(p.motion!.start).toBeLessThan(effectiveLocal297(w));
  const stun=structuredClone(p.stun),rng=w.rng;turn(w,p);
  // The real first Core was entirely inside the halt interval. Source remains A;
@@ -43,7 +45,7 @@ test('a stun before any paid progress still permits the native no-progress reset
  expect({x:p.x,z:p.z}).toEqual(origin);expect(p.motion).toBeUndefined();expect(p.moveCooldown).toBe(0);
  expect(p.path[0]).toEqual({x:3,z:6});expect(p.draft?.target).toEqual({x:3,z:9});expect(p.stun).toEqual(stun);expect(w.rng).toBe(rng);
  expect(validateWorld(w)).toEqual([]);expect(()=>serializeWorld(w)).not.toThrow();
- through(w,45);expect(p.motion?.from).toEqual(origin);expect(p.motion?.to).toEqual({x:3,z:6});
+ through(w,stunCore);expect(p.motion?.from).toEqual(origin);expect(p.motion?.to).toEqual({x:3,z:6});
 });
 
 test('a stun after one genuinely paid Core does not turn an ordinary reclick into StopDead',()=>{
