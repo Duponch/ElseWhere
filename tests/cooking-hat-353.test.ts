@@ -18,6 +18,12 @@ import {validTuqueCatalogueTransport} from '../src/sim/tuque-catalogue-save.ts';
 import {generateVisitorStock,visitorClothingFamily} from '../src/sim/trade-stock.ts';
 import {socialImpact,wornSocialImpactOffset353} from '../src/sim/social-state.ts';
 import {fixtureFoodStation} from './scenarios/food-workstations.ts';
+import {pawnGeometry} from '../src/render/pawn-geometry.ts';
+import {COWBOY_HAT_DYE353,BOWLER_HAT_DYE353} from '../src/render/origami/human-geometry.ts';
+import {apparelAppearance} from '../src/render/character-apparel.ts';
+import {itemGeometry,itemCargoKind} from '../src/render/item-presentation.ts';
+import {portraitDataUrl} from '../src/ui/pawn-portrait.ts';
+import {appearanceOf} from '../src/sim/pawn-appearance.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
 import {asOldSchema} from './scenarios/old-schema.ts';
 import {SCHEMA_VERSION,type MaterialPile,type Structure,type World} from '../src/sim/types.ts';
@@ -213,4 +219,24 @@ test('before schema 353 eggs, insect jelly and hats are refused; migration 352 -
   expect(serializeWorld(deserializeWorld(asOldSchema(plain,352)))).toBe(serializeWorld(deserializeWorld(asOldSchema(plain,352))));
   const reloaded=deserializeWorld(asOldSchema(plain,352));
   expect(reloaded.apparelPolicies!.some(policy=>policy.allowedItems.some(i=>(HAT_ITEMS353 as readonly string[]).includes(i)))).toBe(false);
+});
+
+test('the worn hats join the human rig only once worn, with their own worn codes, colour and ground model',()=>{
+  const plain=pawnGeometry(),rig=pawnGeometry(false,false,false,false,true);
+  try{
+    // An ordinary rig keeps its exact count; the hat parts sit on the head bone.
+    const dye=rig.getAttribute('dye'),bone=rig.getAttribute('boneId'),y=rig.getAttribute('position');let cowboy=0,bowler=0,low=Infinity;
+    for(let i=0;i<dye.count;i++){const d=dye.getX(i);if(d!==COWBOY_HAT_DYE353&&d!==BOWLER_HAT_DYE353)continue;if(d===COWBOY_HAT_DYE353)cowboy++;else bowler++;expect(bone.getX(i)).toBe(1);low=Math.min(low,y.getY(i));}
+    expect(cowboy).toBeGreaterThan(0);expect(bowler).toBeGreaterThan(0);expect(rig.getAttribute('position').count).toBe(plain.getAttribute('position').count+cowboy+bowler);
+    expect(low).toBeGreaterThan(1.3);
+  }finally{plain.dispose();rig.dispose();}
+  const worn=(item:keyof typeof APPAREL):MaterialPile=>({id:9,kind:'apparel',item,quantity:1,owner:{type:'apparel',pawnId:1},apparel:newApparelState(item)});
+  const cowboy=apparelAppearance([worn('bluefur-cowboy-hat')]),bowler=apparelAppearance([worn('bluefur-bowler-hat')]),bare=apparelAppearance([]);
+  expect(cowboy).toMatchObject({hat353:1,hatColor353:APPAREL['bluefur-cowboy-hat'].color,helmet:false,tuque:0});
+  expect(bowler).toMatchObject({hat353:2,hatColor353:APPAREL['bluefur-bowler-hat'].color});expect(bare.hat353).toBe(0);
+  const w=deconstructionCamp(1,32),face=appearanceOf(w.pawns[0]!,w.seed),svg=(look:typeof bare)=>decodeURIComponent(portraitDataUrl(face,look).split(',')[1]!);
+  expect(new Set([svg(bare),svg(cowboy),svg(bowler)]).size).toBe(3);
+  // On the ground: crown and brim in the material colour; carried: the cloth tuque's cargo model.
+  expect(itemGeometry('bluefur-cowboy-hat').map(p=>[p.shape,p.color])).toEqual([['item-helmet',APPAREL['bluefur-cowboy-hat'].color],['item-disc',APPAREL['bluefur-cowboy-hat'].color]]);
+  expect(itemCargoKind('bluefur-cowboy-hat')).toBe(itemCargoKind('cloth-tuque'));expect(itemCargoKind('unfinished-bowler-hat')).toBe(itemCargoKind('cloth-tuque'));
 });
