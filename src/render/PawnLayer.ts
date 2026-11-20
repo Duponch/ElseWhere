@@ -5,6 +5,7 @@ import type {CoreActorScene297,CoreHumanPose297} from '../bridge/core-phase-proj
 import {PawnTweener297} from './PawnTweener297';
 import {ActorPlayback435} from './ActorPlayback435';
 import {isSmithingApparel267} from '../sim/smithing-apparel-267';
+import {isHatItem353} from '../sim/apparel-definitions';
 import {groupHumanCarryPairs257} from '../sim/group-human-admission-257.ts';
 import {arrivalRotationYaw256} from '../sim/arrival-rotation-256';
 import {actorExplorationMaterial256} from './ExplorationMask256';
@@ -67,7 +68,7 @@ import { Fn, If, attribute, cos, float, instanceIndex, mix, positionLocal, sin, 
 import { TICKS_PER_SECOND,type MaterialPile,type Pawn,type World,type Job } from '../sim/types';
 import {origamiWorkTool} from './origami/work-tools';
 import {encodeOrigamiEquipment,origamiWeaponVisualSignal,origamiEquipmentPositionNode,ORIGAMI_EQUIPMENT_HAND,ORIGAMI_EQUIPMENT_BELT,ORIGAMI_EQUIPMENT_SLING} from './origami/equipment-pose';
-import {ORIGAMI_HUMAN_BIND,ORIGAMI_DUSTER_DYE,ORIGAMI_PARKA_DYE,ORIGAMI_RECON_ARMOR_DYE,humanReferencePaintProfiles} from './origami/human-geometry';
+import {ORIGAMI_HUMAN_BIND,ORIGAMI_DUSTER_DYE,ORIGAMI_PARKA_DYE,ORIGAMI_RECON_ARMOR_DYE,COWBOY_HAT_DYE353,BOWLER_HAT_DYE353,humanReferencePaintProfiles} from './origami/human-geometry';
 import {APPAREL} from '../sim/apparel-rules';
 import { adjacentTable } from '../sim/dining';
 import { CARRY_CAPACITY, footprintCells } from '../sim/definitions';
@@ -263,6 +264,8 @@ export class PawnLayer {
   private maceGeometry=false;
   private longswordGeometry=false;
   private spearGeometry=false;
+  /** Schema 353: cowboy and bowler hat parts, added once a hat is worn. */
+  private hatGeometry353=false;
   private readonly retiredPawnGeometries:THREE.BufferGeometry[]=[];
   private readonly surfaceTexture = createStylizedSurfaceTexture();
   private plainMaterial: THREE.MeshStandardNodeMaterial | null = null;
@@ -384,7 +387,7 @@ export class PawnLayer {
     if(this.wearEffect){const material=this.wearEffect.material,fresh=context.createWearMaterial(source.positionNode,attribute('origamiPaintUv','vec2'));try{material.colorNode=fresh.colorNode;material.opacityNode=fresh.opacityNode;material.normalNode=fresh.normalNode;material.positionNode=fresh.positionNode;}finally{fresh.dispose();}material.needsUpdate=true;context.refreshEdgeObject(this.wearEffect,'wear');return;}
     let geometry:THREE.InstancedBufferGeometry|undefined,material:THREE.MeshStandardNodeMaterial|undefined,effect:THREE.Mesh<THREE.InstancedBufferGeometry,THREE.MeshStandardNodeMaterial>|undefined,releaseGeometry:(()=>void)|undefined,releaseObject:(()=>void)|undefined,attached=false;
     try{
-      geometry=createHumanWearGeometry({smithing:this.smithingGeometry,mace:this.maceGeometry,longsword:this.longswordGeometry,spear:this.spearGeometry});material=context.createWearMaterial(source.positionNode,attribute('origamiPaintUv','vec2'));this.configure?.(actorExplorationMaterial256(material));material.maskNode=source.maskNode;material.maskShadowNode=source.maskShadowNode;
+      geometry=createHumanWearGeometry({smithing:this.smithingGeometry,mace:this.maceGeometry,longsword:this.longswordGeometry,spear:this.spearGeometry,...this.hatGeometry353?{hats353:true}:{}});material=context.createWearMaterial(source.positionNode,attribute('origamiPaintUv','vec2'));this.configure?.(actorExplorationMaterial256(material));material.maskNode=source.maskNode;material.maskShadowNode=source.maskShadowNode;
       effect=new THREE.Mesh(geometry,material);effect.name='Colonists — optional physical paint wear';effect.frustumCulled=false;effect.castShadow=false;effect.receiveShadow=true;effect.userData.origamiTexturesEnabled=this.texturesEnabled;
       releaseGeometry=context.trackWearGeometry(geometry);releaseObject=context.trackEdgeObject(effect,'wear');const freeGeometry=releaseGeometry,freeObject=releaseObject;this.releaseWearEffect=()=>{try{freeObject();}finally{freeGeometry();}};this.wearEffect=effect;this.wearModelKey=this.humanModel?.key;this.group.add(effect);this.installBodyPartUnions();this.syncBodyInstances();attached=true;
     }finally{if(!attached){releaseObject?.();releaseGeometry?.();effect?.removeFromParent();geometry?.dispose();material?.dispose();this.wearEffect=undefined;this.releaseWearEffect=undefined;this.wearModelKey=undefined;}}
@@ -392,7 +395,7 @@ export class PawnLayer {
   /** Canonical model records are borrowed, with no second CPU/GPU mirror.
    * The prepared owner has a stable runtime binding across equipment models. */
   private createHumanGeometry():THREE.InstancedBufferGeometry{
-    const model=this.humanModels.get({smithing:this.smithingGeometry,mace:this.maceGeometry,longsword:this.longswordGeometry,spear:this.spearGeometry}),changed=model!==this.humanModel;this.humanModel=model;this.humanCanonicalTables.add(model.strokes);
+    const model=this.humanModels.get({smithing:this.smithingGeometry,mace:this.maceGeometry,longsword:this.longswordGeometry,spear:this.spearGeometry,...this.hatGeometry353?{hats353:true}:{}}),changed=model!==this.humanModel;this.humanModel=model;this.humanCanonicalTables.add(model.strokes);
     if(!this.humanStroke){const owner=this;let closed=false;this.humanStroke={get faceCount(){return owner.humanModel!.strokes.faceCount;},get edgeCount(){return owner.humanModel!.strokes.edgeCount;},get maxEdgesPerFace(){return owner.humanModel!.strokes.maxEdgesPerFace;},get values(){return owner.humanModel!.strokes.values;},get buffer(){return owner.humanModel!.strokes.buffer;},get node(){return owner.humanModel!.strokes.node;},get cpuBytes(){return owner.humanModel!.strokes.cpuBytes;},assertCurrent(){if(closed)throw Error('Human canonical facade retired');owner.humanModel!.assertCurrent();},dispose(){closed=true;}};}
     if(changed)this.graphics?.preparedStrokes.refresh(this.humanStroke);
     return model.createGeometry();
@@ -454,9 +457,9 @@ export class PawnLayer {
    * Shared actor/cargo/fire trajectories and material graphs retain identity.
    * Keep retired geometries until teardown: Three's disposal also frees
    * shared attributes recorded by its previous RenderObject. */
-  private extendResidentGeometry(smithing:boolean,mace:boolean,longsword:boolean,spear:boolean):void {
-    if(this.smithingGeometry===smithing&&this.maceGeometry===mace&&this.longswordGeometry===longsword&&this.spearGeometry===spear)return;
-    this.smithingGeometry=smithing;this.maceGeometry=mace;this.longswordGeometry=longsword;this.spearGeometry=spear;
+  private extendResidentGeometry(smithing:boolean,mace:boolean,longsword:boolean,spear:boolean,hats353=this.hatGeometry353):void {
+    if(this.smithingGeometry===smithing&&this.maceGeometry===mace&&this.longswordGeometry===longsword&&this.spearGeometry===spear&&this.hatGeometry353===hats353)return;
+    this.smithingGeometry=smithing;this.maceGeometry=mace;this.longswordGeometry=longsword;this.spearGeometry=spear;this.hatGeometry353=hats353;
     if(!this.pawnMesh)return;
     const previous=this.pawnMesh.geometry as THREE.InstancedBufferGeometry,next=this.createHumanGeometry();
     for(const [name,attribute]of Object.entries(previous.attributes))if(attribute instanceof THREE.InstancedBufferAttribute
@@ -726,6 +729,9 @@ export class PawnLayer {
       If(pawnDyeNode(this.referenceRig).equal(this.referenceRig?ORIGAMI_RECON_ARMOR_DYE:RECON_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(5)),()=>{animated.assign(vec3(0));});
       If(pawnDyeNode(this.referenceRig).equal(RECON_HELMET_DYE).and(recon.not()),()=>{animated.assign(vec3(0));});
       If(pawnDyeNode(this.referenceRig).equal(TUQUE_DYE).and(tuque.not()),()=>{animated.assign(vec3(0));});
+      // Schema 353: cowboy hat worn code 12, bowler hat 14 (vest bit kept).
+      If(pawnDyeNode(this.referenceRig).equal(COWBOY_HAT_DYE353).and(wornFlags.lessThan(11.5).or(wornFlags.greaterThan(13.5))),()=>{animated.assign(vec3(0));});
+      If(pawnDyeNode(this.referenceRig).equal(BOWLER_HAT_DYE353).and(wornFlags.lessThan(13.5).or(wornFlags.greaterThan(15.5))),()=>{animated.assign(vec3(0));});
       If(pawnDyeNode(this.referenceRig).equal(PARKA_HOOD_DYE).and(attribute('aEquipment','vec4').y.notEqual(4).or(helmet)),()=>{animated.assign(vec3(0));});
       // One face variant is visible at a time. The pause-controlled scene
       // clock also freezes blinks and sleep poses when the game is paused.
@@ -1052,6 +1058,8 @@ export class PawnLayer {
       If(dye.equal(this.referenceRig?ORIGAMI_RECON_ARMOR_DYE:RECON_ARMOR_DYE).and(attribute('aEquipment','vec4').y.notEqual(5)),()=>{animated.assign(vec3(0));});
       If(dye.equal(RECON_HELMET_DYE).and(recon.not()),()=>{animated.assign(vec3(0));});
       If(dye.equal(TUQUE_DYE).and(tuque.not()),()=>{animated.assign(vec3(0));});
+      If(dye.equal(COWBOY_HAT_DYE353).and(worn.lessThan(11.5).or(worn.greaterThan(13.5))),()=>{animated.assign(vec3(0));});
+      If(dye.equal(BOWLER_HAT_DYE353).and(worn.lessThan(13.5).or(worn.greaterThan(15.5))),()=>{animated.assign(vec3(0));});
       If(dye.equal(PARKA_HOOD_DYE).and(equipment.y.notEqual(4).or(helmet)),()=>{animated.assign(vec3(0));});
       const face=motion.z.equal(POSE_DEAD).select(float(PAWN_EYE_CROSS),motion.z.equal(POSE_SLEEP).or(this.animationCache.cell(3).y.greaterThan(.5)).select(float(PAWN_EYE_CLOSED),float(PAWN_EYE_OPEN)));
       If(dye.greaterThanEqual(PAWN_EYE_OPEN).and(dye.lessThanEqual(PAWN_EYE_CROSS)).and(dye.notEqual(face)),()=>{animated.assign(vec3(0));});
@@ -1184,12 +1192,13 @@ export class PawnLayer {
     const apparel=apparelProjection(world);
     const gears=equipmentProjection(world);
     if(this.referenceRig)this.equippedVisualItems=new Map([...gears].map(([id,piece])=>[id,piece.item]));
-    let smithing=this.smithingGeometry,mace=this.maceGeometry,longsword=this.longswordGeometry,spear=this.spearGeometry;
+    let smithing=this.smithingGeometry,mace=this.maceGeometry,longsword=this.longswordGeometry,spear=this.spearGeometry,hats353=this.hatGeometry353;
     if(!smithing)for(const pieces of apparel.values())if(pieces.some(p=>isSmithingApparel267(p.item))){smithing=true;break;}
     if(!mace)for(const piece of gears.values())if(isMaceItem269(piece.item)){mace=true;break;}
     if(!longsword)for(const piece of gears.values())if(isLongswordItem270(piece.item)){longsword=true;break;}
     if(!spear)for(const piece of gears.values())if(isSpearItem272(piece.item)){spear=true;break;}
-    this.extendResidentGeometry(smithing,mace,longsword,spear);
+    if(!hats353)for(const pieces of apparel.values())if(pieces.some(p=>isHatItem353(p.item))){hats353=true;break;}
+    this.extendResidentGeometry(smithing,mace,longsword,spear,hats353);
     if (!this.pawnMesh) this.createPawnMesh(Math.max(1,world.pawns.length));
     else if(this.pawnMesh.geometry.getAttribute('aFrom').count<world.pawns.length){this.clearBodyPartUnions();growPawnBuffers([this.pawnMesh,this.cargoMesh!,this.selectionMesh!,this.fireMesh!,this.partialCargoMesh!],world.pawns.length,(geometry,mesh)=>{if(mesh===this.pawnMesh||mesh===this.cargoMesh||mesh===this.partialCargoMesh)this.retiredPawnGeometries.push(geometry);else geometry.dispose();});this.installBodyPartUnions();this.syncBodyInstances();}
     const geometry = this.pawnMesh!.geometry as THREE.InstancedBufferGeometry;
@@ -1312,12 +1321,12 @@ export class PawnLayer {
       if(pawn.state==='dead')scratchColor.setHex(0x73756c);
       tint.setXYZ(index, scratchColor.r, scratchColor.g, scratchColor.b);
       if(this.graphics){
-        const hat=look.simpleHelmet?(SIMPLE_HELMET_COLORS267[look.simpleHelmetMaterial-1]??0x8c5832):look.reconHelmet?APPAREL['recon-helmet'].color:look.helmet?(look.plasteelHelmet?0xa0b2b5:APPAREL['flak-helmet'].color):look.tuque===2?0xb3c0ba:look.tuque===1?APPAREL['cloth-tuque'].color:0x8c5832;
+        const hat=look.simpleHelmet?(SIMPLE_HELMET_COLORS267[look.simpleHelmetMaterial-1]??0x8c5832):look.reconHelmet?APPAREL['recon-helmet'].color:look.helmet?(look.plasteelHelmet?0xa0b2b5:APPAREL['flak-helmet'].color):look.tuque===2?0xb3c0ba:look.tuque===1?APPAREL['cloth-tuque'].color:look.hatColor353??0x8c5832;
         const vestCode=(look.vestTintCode??0)-1,vest=vestCode<0?APPAREL['flak-vest'].color:scratchVestColor.setRGB(Math.floor(vestCode/1024)/31,Math.floor(vestCode/32)%32/31,vestCode%32/31).getHex();
         const row=this.graphics.registerHumanAppearance({skin:identity.skinColor,hair:identity.hairColor,shirt:scratchColor.getHex(),outerwear:scratchColor.getHex(),pants:ORIGAMI_PANTS_COLORS[look.pants]??ORIGAMI_PANTS_COLORS[0],hat,vest,reconArmor:APPAREL['recon-armor'].color,plate:scratchColor.getHex()});
         shape.setW(index,variant[3]+row*32);
       }
-      equipment.setXYZW(index,equipmentCode,look.silhouette,(look.vest?1:0)+(look.simpleHelmet?10:look.reconHelmet?4:look.helmet?2:look.tuque===2?8:look.tuque===1?6:0)+(look.vestTintCode??0)/65536,look.pants+(look.simpleHelmet?look.simpleHelmetMaterial/16:look.plasteelHelmet?.5:0));
+      equipment.setXYZW(index,equipmentCode,look.silhouette,(look.vest?1:0)+(look.simpleHelmet?10:look.reconHelmet?4:look.helmet?2:look.tuque===2?8:look.tuque===1?6:look.hat353===1?12:look.hat353===2?14:0)+(look.vestTintCode??0)/65536,look.pants+(look.simpleHelmet?look.simpleHelmetMaterial/16:look.plasteelHelmet?.5:0));
       this.refreshOrigamiEquipmentSignal(pawn,index);
       atlasChanged=this.bodyAtlasAppearanceChanged(pawn.id,index,geometry)||atlasChanged;allRigid=this.observeBodyAtlasPose(pawn.id,index,geometry)&&allRigid;
       const load = carried.get(pawn.id);
@@ -1613,7 +1622,7 @@ export class PawnLayer {
     if(this.humanStroke)this.graphics?.preparedStrokes.release(this.humanStroke,terminalGeometries);for(const table of this.humanCanonicalTables)attachFaceStrokeGpuRetirement(table,terminalGeometries);this.humanCanonicalTables.clear();this.refreshHumanBodySurface=undefined;this.humanBodyBakeOptions=undefined;this.humanPastelFromSample=undefined;
     this.cargoModel.attachGpuRetirement(terminalGeometries);
     clearGroup(this.group);
-    for(const retired of this.retiredPawnGeometries)retired.dispose();this.retiredPawnGeometries.length=0;this.smithingGeometry=false;this.maceGeometry=false;this.longswordGeometry=false;this.spearGeometry=false;
+    for(const retired of this.retiredPawnGeometries)retired.dispose();this.retiredPawnGeometries.length=0;this.smithingGeometry=false;this.maceGeometry=false;this.longswordGeometry=false;this.spearGeometry=false;this.hatGeometry353=false;
     this.plainMaterial?.dispose();
     this.texturedMaterial?.dispose();
     this.nativePlainMaterial?.dispose();

@@ -18,6 +18,9 @@ export const ORIGAMI_HUMAN_BIND:Readonly<Record<keyof typeof HUMAN_REFERENCE_BIN
 export const ORIGAMI_DUSTER_DYE=-40;
 export const ORIGAMI_PARKA_DYE=-41;
 export const ORIGAMI_RECON_ARMOR_DYE=-42;
+/** Schema 353 hats, parts of the rig only once a hat is worn (worn codes 12, 14). */
+export const COWBOY_HAT_DYE353=-43;
+export const BOWLER_HAT_DYE353=-44;
 
 /** Registration is metadata only; rasterization is owned by the renderer. */
 export function humanReferencePaintProfiles():Readonly<Record<keyof typeof P,number>> {
@@ -56,7 +59,7 @@ function appearanceParts():OrigamiHumanPart[] {
 }
 
 /** Resident genuine apparel, not the source demo's role/loadout presets. */
-export function origamiHumanParts(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false):OrigamiHumanPart[] {
+export function origamiHumanParts(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false,includeHats353=false):OrigamiHumanPart[] {
   const parts=[...buildOrigamiHumanReference(),...appearanceParts()];
   const hip:HumanPoint=[0,.56,0],head:HumanPoint=[0,1.22,0];
   const add=(id:string,geometry:THREE.BufferGeometry,at:HumanPoint,bone:number,pivot:HumanPoint,dye:number,profile:HumanPaintProfile,color=0xffffff,roll?:number)=>parts.push({id,geometry,at,bone,pivot,dye,profile,color,roll});
@@ -109,6 +112,16 @@ export function origamiHumanParts(includeSmithing=false,includeMace=false,includ
     prism('apparel-simple-helmet',[.08,.14,.44,.44,.26],[0,1.67,0],1,head,-12,P.steel);
     box('apparel-simple-rim',[.47,.035,.45],[0,1.55,.01],1,head,-12,P.steel);
   }
+  if(includeHats353){
+    // Cowboy hat: a tapered crown and a wide brim; bowler: a fuller crown and a
+    // narrow brim. Both take the hat pigment, with a dark band.
+    prism('apparel-cowboy-crown',[.30,.30,.42,.42,.22],[0,1.71,-.01],1,head,COWBOY_HAT_DYE353,P.hat,0x9b6a3c);
+    box('apparel-cowboy-band',[.43,.04,.43],[0,1.625,-.01],1,head,COWBOY_HAT_DYE353,P.charcoal,0x2f2a26);
+    box('apparel-cowboy-brim',[.74,.025,.66],[0,1.59,-.01],1,head,COWBOY_HAT_DYE353,P.hat,0x9b6a3c);
+    prism('apparel-bowler-crown',[.34,.34,.43,.43,.22],[0,1.72,-.01],1,head,BOWLER_HAT_DYE353,P.hat,0x3d3832);
+    box('apparel-bowler-band',[.44,.035,.44],[0,1.625,-.01],1,head,BOWLER_HAT_DYE353,P.charcoal,0x2f2a26);
+    box('apparel-bowler-brim',[.53,.025,.51],[0,1.595,-.01],1,head,BOWLER_HAT_DYE353,P.hat,0x3d3832);
+  }
   // Keep the actual resident weapon geometry in its original game bind units:
   // its shaders use these dimensions when aiming, slinging or striking.
   for(const variant of RESIDENT_WEAPON_VISUALS269)if((variant.item!=='mace-family'||includeMace)&&(variant.item!=='longsword-family'||includeLongsword)&&(variant.item!=='spear-family'||includeSpear))for(const [i,part]of variant.parts.entries()){
@@ -133,11 +146,11 @@ export function origamiHumanParts(includeSmithing=false,includeMace=false,includ
 /** includeWear defaults true for independent canonical/component callers.
  * This factory retains no module-level geometry cache: every returned body,
  * line and optional wear companion belongs to its adopting renderer. */
-export function origamiHumanGeometry(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false,includeWear=true,includeContours=true):THREE.InstancedBufferGeometry {
+export function origamiHumanGeometry(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false,includeWear=true,includeContours=true,includeHats353=false):THREE.InstancedBufferGeometry {
   if(includeWear&&!includeContours)throw Error('Physical human wear requires its contour preparation');
   const registered=humanReferencePaintProfiles(),profileIds=Object.keys(P).map(name=>registered[name as keyof typeof P]);
   const data:number[]=[],lineData:number[]=[],wearData:number[]=[],wearBase:number[]=[],wearExpand:number[]=[],ranges:{id:string;start:number;count:number;bone:number;dye:number;profile:number}[]=[],lineRanges:{id:string;start:number;count:number}[]=[],wearRanges:{id:string;start:number;count:number}[]=[];
-  const parts=origamiHumanParts(includeSmithing,includeMace,includeLongsword,includeSpear),scale=HUMAN_REFERENCE_SCALE;
+  const parts=origamiHumanParts(includeSmithing,includeMace,includeLongsword,includeSpear,includeHats353),scale=HUMAN_REFERENCE_SCALE;
   const append=(target:number[],source:THREE.BufferGeometry,part:OrigamiHumanPart,base?:number[],expand?:number[])=>{
     const position=source.getAttribute('position'),normal=source.getAttribute('normal'),uv=source.getAttribute('uv'),tint=new THREE.Color(part.color),c=Math.cos(part.roll??0),s=Math.sin(part.roll??0);
     const authoredBase=source.userData.basePosArray as Float32Array|undefined,authoredExpand=source.userData.expandDirArray as Float32Array|undefined;

@@ -26,7 +26,8 @@ const FIXED:Readonly<Partial<Record<ItemId,number>>>=Object.freeze({
   'flak-vest':4000,'flak-helmet':1200,'flak-pants':4000,'plasteel-flak-helmet':1200,'recon-helmet':1000,'recon-armor':9000,uranium:1000,
 });
 // Core Mass: BasicShirt 0.25 kg, Jacket 1.7 kg (schema 312).
-const TEXTILE=Object.freeze({tribalwear:500,shirt:300,pants:500,duster:2000,parka:2000,tuque:70,tshirt:250,jacket:1700});
+// Core Mass: CowboyHat and BowlerHat 0.14 kg (schema 353).
+const TEXTILE=Object.freeze({tribalwear:500,shirt:300,pants:500,duster:2000,parka:2000,tuque:70,tshirt:250,jacket:1700,'cowboy-hat':140,'bowler-hat':140});
 
 /** The delivered shirt is Core's CollarShirt, not the lighter BasicShirt.
  * Quality, HP and the seven represented stuffs do not alter these masses. */

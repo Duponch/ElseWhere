@@ -4,7 +4,7 @@ import {APPAREL} from './apparel-definitions.ts';
 import {tradeCatalogueEntry} from './trade-catalogue.ts';
 import {curve320} from './population-intent-320.ts';
 import {WORLD_FACTION_DEFINITIONS_256,type WorldFactionDef256} from './world-faction-catalog.ts';
-import {integer,random,select,traderQuality,visitorClothingStuff314,VISITOR_CLOTHING_FAMILIES314,VISITOR_CLOTHING_POOL,
+import {integer,random,select,traderQuality,visitorClothingStuff314,visitorClothingFamily,VISITOR_CLOTHING_POOL,
   VISITOR_RANGED_ITEMS322,VISITOR_RANGED_ITEMS326,VISITOR_RANGED_ITEMS340,VISITOR_RANGED_ITEMS342,VISITOR_RANGED_POOL,VISITOR_SHORT_BOW_INDEX316,type VisitorStockPlan} from './trade-stock.ts';
 import type {WeaponQuality,WeaponItem} from './equipment-rules.ts';
 import type {ApparelItem} from './apparel-definitions.ts';
@@ -212,7 +212,7 @@ export function generateCaravanStock332(seed:number,pawnId:number,nextId:number,
         const quality=traderQuality(state),item=rangedItem(VISITOR_RANGED_POOL.indexOf(candidate),version);
         if(item)add(item,1,quality);
       }else{
-        const roll=random(state),quality=traderQuality(state),family=VISITOR_CLOTHING_FAMILIES314[VISITOR_CLOTHING_POOL.indexOf(candidate)];
+        const roll=random(state),quality=traderQuality(state),family=visitorClothingFamily(VISITOR_CLOTHING_POOL.indexOf(candidate),version);
         const material=family?visitorClothingStuff314(roll,family==='tuque'):undefined;
         if(family&&material)add(`${material}-${family}` as ItemId,1,quality);
       }

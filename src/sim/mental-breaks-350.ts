@@ -8,7 +8,7 @@ import {healthRandom} from './health.ts';
 import {carrierOf} from './rescue-state.ts';
 import {routeToCell,type Reachability} from './pathfinding.ts';
 import {canSocialize,goodSocialPosition,prisonerCanSocialize325} from './social.ts';
-import {addSocialMemory,expireSocialMemories,socialImpact,socialSeed} from './social-state.ts';
+import {addSocialMemory,expireSocialMemories,socialImpact,socialSeed,wornSocialImpactOffset353} from './social-state.ts';
 import {finishMentalBreak,type MentalCrisis} from './mental-state.ts';
 import type {NeedContext} from './needs.ts';
 import type {SearchBudget} from './work-planner.ts';
@@ -178,7 +178,7 @@ export function processInsultingSpree350(w:World,p:Pawn,context:NeedContext,cand
 function spreeInsult350(w:World,a:Pawn,b:Pawn):void {
  const sa=a.social??={rng:socialSeed(w.seed,a.id),memories:[]},sb=b.social??={rng:socialSeed(w.seed,b.id),memories:[]};
  expireSocialMemories(a,w.tick);expireSocialMemories(b,w.tick);
- addSocialMemory(sb,a.id,'insult',w.tick,socialImpact(a));
+ addSocialMemory(sb,a.id,'insult',w.tick,socialImpact(a,wornSocialImpactOffset353(w,a.id)));
  sa.last={otherId:b.id,kind:'insult',tick:w.tick,initiated:true};sb.last={otherId:a.id,kind:'insult',tick:w.tick,initiated:false};delete sa.wants;
  emit(w,`${a.name} insulte ${b.name} pendant sa crise.`);
 }

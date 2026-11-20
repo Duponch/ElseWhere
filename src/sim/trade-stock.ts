@@ -46,6 +46,11 @@ export const VISITOR_SHIRT_CLOTH_CHANCE=1.4/3.875;
  * represents (by pool index), all made of Fabric or Leathery stuff, the tuque
  * of Fabric only. */
 export const VISITOR_CLOTHING_FAMILIES314:Readonly<Record<number,'tuque'|'parka'|'pants'|'tshirt'|'shirt'|'duster'|'jacket'>>=Object.freeze({3:'tuque',12:'parka',13:'pants',14:'tshirt',15:'shirt',16:'duster',17:'jacket'});
+/** Schema 353: pool entries 0 (Apparel_CowboyHat, value 25 x 2 + 1800 x 0.0036
+ * = 56.48) and 1 (Apparel_BowlerHat, 46.48), Fabric or Leathery, BasicClothing. */
+export const VISITOR_CLOTHING_FAMILIES353:Readonly<Record<number,'cowboy-hat'|'bowler-hat'>>=Object.freeze({0:'cowboy-hat',1:'bowler-hat'});
+/** The represented family of a clothing pool entry, by schema (same draws). */
+export const visitorClothingFamily=(index:number,version:number)=>VISITOR_CLOTHING_FAMILIES314[index]??(version>=353?VISITOR_CLOTHING_FAMILIES353[index]:undefined);
 /** Core stuff commonality of every Fabric and Leathery stuff, cloth first so
  * that a roll which gave a cloth shirt before 314 still does. A material this
  * game does not represent (null) keeps its share and yields no garment. */
@@ -115,7 +120,7 @@ export function generateVisitorStock(seed:number,pawnId:number,nextId:number,tic
   if(integer(state,0,1)){
     const candidate=select(state,VISITOR_CLOTHING_POOL),roll=random(state),cloth=roll<VISITOR_SHIRT_CLOTH_CHANCE,quality=traderQuality(state);
     // Schema 314: every represented family and stuff (same random draws).
-    const family=version>=314?VISITOR_CLOTHING_FAMILIES314[VISITOR_CLOTHING_POOL.indexOf(candidate)]:undefined;
+    const family=version>=314?visitorClothingFamily(VISITOR_CLOTHING_POOL.indexOf(candidate),version):undefined;
     if(family){const material=visitorClothingStuff314(roll,family==='tuque');if(material)add(`${material}-${family}` as ItemId,1,quality);}
     else if(candidate.item&&cloth)add(candidate.item,1,quality);
   }

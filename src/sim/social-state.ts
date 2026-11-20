@@ -1,6 +1,8 @@
 import {memoryExpiry271,memoryAge271,memoryReadTick271} from './suspended-memory-271.ts';
 import { TICKS_PER_DAY,type Pawn,type World } from './types.ts';
 import { pawnBody } from './health-rules.ts';
+import {APPAREL,HAT_SOCIAL_IMPACT353,type ApparelItem} from './apparel-definitions.ts';
+import {wornPiles} from './pile-index.ts';
 import { effectiveSkillLevel } from './work-types.ts';
 import { relationshipIndex } from './relationship-runtime.ts';
 import { RELATIONSHIP_OPINION,type RelationshipViewKind } from './relationship-state.ts';
@@ -34,9 +36,19 @@ export function socialRandom(state:{rng:number}):number {
   let n=state.rng;n^=n<<13;n^=n>>>17;n^=n<<5;state.rng=n>>>0;return state.rng/4294967296;
 }
 export function socialSeed(seed:number,id:number):number {return (Math.imul(seed^0x6a09e667,1664525)^Math.imul(id,1013904223))>>>0||1;}
-export function socialImpact(pawn:Pawn):number {
+/** Core SocialImpact: base 1 plus the worn gear's equippedStatOffsets, times
+ * the Social skill factor and the talking/hearing capacity factors, min 0.2.
+ * With no gear offset this is exactly the older formula. */
+export function socialImpact(pawn:Pawn,gearOffset=0):number {
   const c=pawnBody(pawn).capacities;
-  return Math.max(.2,(.82+.0275*effectiveSkillLevel(pawn,'social',pawn.skills.social?.level??0))*(.1+.9*Math.min(1,c.talking/.95))*(.7+.3*Math.min(1,c.hearing/.95)));
+  return Math.max(.2,(1+gearOffset)*(.82+.0275*effectiveSkillLevel(pawn,'social',pawn.skills.social?.level??0))*(.1+.9*Math.min(1,c.talking/.95))*(.7+.3*Math.min(1,c.hearing/.95)));
+}
+/** Schema 353: the worn cowboy (+0.10) and bowler (+0.15) hats' SocialImpact offsets. */
+export function wornSocialImpactOffset353(world:World,pawnId:number):number {
+  if(world.schemaVersion<353)return 0;
+  let offset=0;
+  for(const pile of wornPiles(world,pawnId)){const family=APPAREL[pile.item as ApparelItem]?.family;if(family==='cowboy-hat'||family==='bowler-hat')offset+=HAT_SOCIAL_IMPACT353[family];}
+  return offset;
 }
 /** Stable symmetric affinity; adult ages are not yet modeled (age offset 0).
  * Same asymmetric normal family as Core, independent seed/PRNG, not identical pairs. */

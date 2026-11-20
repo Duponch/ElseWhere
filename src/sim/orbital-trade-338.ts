@@ -3,7 +3,7 @@ import {isSmithingApparel267} from './smithing-apparel-267.ts';
 import {ticksUntilRot} from './food-preservation.ts';
 import {tradeCatalogueEntry} from './trade-catalogue.ts';
 import {ALL_CLOTHING,BASIC_CLOTHING} from './trader-caravans-332.ts';
-import {integer,random,select,traderQuality,visitorClothingStuff314,VISITOR_CLOTHING_FAMILIES314,VISITOR_CLOTHING_POOL} from './trade-stock.ts';
+import {integer,random,select,traderQuality,visitorClothingStuff314,visitorClothingFamily,VISITOR_CLOTHING_POOL} from './trade-stock.ts';
 import type {WeaponQuality} from './equipment-rules.ts';
 import type {ItemId} from './items.ts';
 import type {OrbitalKind} from './orbital-state.ts';
@@ -53,12 +53,12 @@ export const orbitalMayHold338=(kind:OrbitalKind,item:ItemId):boolean=>orbitalWi
  * Clothing (3~5): the schema 332 caravan draw per garment (def by value
  * weight, stuff, quality). Unrepresented defs and stuffs keep their weight
  * and yield nothing. Same xorshift stream as the rest of the ship's stock. */
-export function orbitalClothing338(state:{rng:number}):{item:ItemId;quality:WeaponQuality}[] {
+export function orbitalClothing338(state:{rng:number},version=338):{item:ItemId;quality:WeaponQuality}[] {
  const out:{item:ItemId;quality:WeaponQuality}[]=[];
  for(const [indices,min,max] of [[BASIC_CLOTHING,7,15],[ALL_CLOTHING,3,5]] as const){
   const pool=indices.map(i=>VISITOR_CLOTHING_POOL[i]!),count=integer(state,min,max);
   for(let i=0;i<count;i++){
-   const candidate=select(state,pool),roll=random(state),quality=traderQuality(state),family=VISITOR_CLOTHING_FAMILIES314[VISITOR_CLOTHING_POOL.indexOf(candidate)];
+   const candidate=select(state,pool),roll=random(state),quality=traderQuality(state),family=visitorClothingFamily(VISITOR_CLOTHING_POOL.indexOf(candidate),version);
    const material=family?visitorClothingStuff314(roll,family==='tuque'):undefined;
    if(family&&material)out.push({item:`${material}-${family}` as ItemId,quality});
   }

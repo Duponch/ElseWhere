@@ -1,5 +1,5 @@
 import {PROSTHETIC_ITEM_DEFINITIONS_273} from './prosthetic-content-273.ts';
-import { GARMENT_ITEM_DEFINITIONS312 } from './apparel-definitions.ts';
+import { GARMENT_ITEM_DEFINITIONS312,HAT_ITEM_DEFINITIONS353 } from './apparel-definitions.ts';
 import {SPEAR_ITEM_DEFINITIONS_272} from './spear-content-272.ts';
 import {SHORT_BOW_COLOR_316} from './short-bow-316.ts';
 import {BOW_FACTS_326} from './bows-326.ts';
@@ -153,6 +153,10 @@ export const ITEM_DEFINITIONS = Object.freeze({
   'carnivore-lavish-meal': Object.freeze({ label: 'Plat carnivore gastronomique', kind: 'food', stackLimit: 10, nutrition: 100, maxIngest: 1, color: 0xd09b91 }),
   'survival-meal': Object.freeze({ label: 'Repas de survie', kind: 'food', stackLimit: 10, nutrition: 90, maxIngest: 1, color: 0xc7b96b }),
   'legacy-portion': Object.freeze({ label: 'Portion historique', kind: 'food', stackLimit: 75, nutrition: 35, maxIngest: 1, color: 0xba745a }),
+  // Schema 353: Core cowboy and bowler hats in every tailoring material.
+  ...HAT_ITEM_DEFINITIONS353,
+  'unfinished-cowboy-hat':Object.freeze({label:'Chapeau de cowboy inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0xd8c8a2}),
+  'unfinished-bowler-hat':Object.freeze({label:'Chapeau melon inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0xd8c8a2}),
 } as const);
 export type ItemId = keyof typeof ITEM_DEFINITIONS;
 /** These raw foods cause the shared raw-meal thought, independently of policy. */

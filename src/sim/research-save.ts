@@ -296,7 +296,8 @@ export function validateResearch(world:World,version:number):string[]{
   if(version>=187&&!hospitalBedUnlocked(world)&&electricalContent.some(s=>s.kind==='hospital-bed'||'furniture' in s&&(s.furniture as {kind?:string}|undefined)?.kind==='hospital-bed'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='hospital-bed'))errors.push('Locked hospital bed.');
   if(version>=188&&!packagedSurvivalMealsUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>b.recipe==='cook-survival-meal'))||world.pawns.some(p=>p.cooking?.recipe==='cook-survival-meal'||(p.orders?.queue??[]).some(o=>typeof o==='object'&&o!==null&&'cooking' in o&&o.cooking.recipe==='cook-survival-meal'))))errors.push('Locked packaged survival production.');
   // Tuque (245), T-shirt and jacket (312) are Complex clothing recipes.
-  const complexClothing=(recipe:unknown)=>recipe==='tuque'||recipe==='tshirt'||recipe==='jacket';
+  // Cowboy and bowler hats (353) too.
+  const complexClothing=(recipe:unknown)=>recipe==='tuque'||recipe==='tshirt'||recipe==='jacket'||recipe==='cowboy-hat'||recipe==='bowler-hat';
   if(version>=245&&!clothingUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>complexClothing(b.recipe)))
     ||world.piles.some(p=>complexClothing(p.unfinished?.recipe))||world.pawns.some(p=>complexClothing(p.cooking?.recipe)||(p.orders?.queue??[]).some(o=>typeof o==='object'&&o!==null&&'cooking' in o&&complexClothing(o.cooking.recipe)))))errors.push('Locked tuque production.');
   // Obtained weapons need no research; only the local fabrication chain does.

@@ -24,7 +24,7 @@ import type { RoomTopology } from './room-topology.ts';
 import { PRISON_RAPPORTS,PRISON_RAPPORT_TICKS,prisonerChatReady,prisonerResistanceReduction,recordPrisonerChat,type WardTask,type WardFoodTask } from './prisoner-state.ts';
 import { carrierOf } from './rescue-state.ts';
 import { learnSkill,XP_SCALE } from './skills.ts';
-import { addSocialMemory,expireSocialMemories,socialImpact,socialSeed } from './social-state.ts';
+import { addSocialMemory,expireSocialMemories,socialImpact,socialSeed,wornSocialImpactOffset353 } from './social-state.ts';
 import { clearQueuedOrders } from './player-orders.ts';
 import { releaseWork } from './work-release.ts';
 import type { NeedContext } from './needs.ts';
@@ -102,7 +102,7 @@ export function reconcileWarden(world:World):void {
   }
 }
 function rapport(world:World,actor:Pawn,p:Pawn):void {
-  const impact=socialImpact(actor);expireSocialMemories(p,world.tick);
+  const impact=socialImpact(actor,wornSocialImpactOffset353(world,actor.id));expireSocialMemories(p,world.tick);
   p.social??={rng:socialSeed(world.seed,p.id),memories:[]};addSocialMemory(p.social,actor.id,'rapport',world.tick,impact);
   actor.skills.social??={level:0,xp:0,dailyXp:0,passion:0};learnSkill(actor.skills.social,45*XP_SCALE,actor);
 }

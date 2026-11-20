@@ -1,3 +1,4 @@
+import {cookingUnitValue353} from './cooking-ingredients-353.ts';
 import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {idleWanderTask300} from './idle-wander-300.ts';
 import { clearingDuration } from './gathering.ts';
@@ -143,8 +144,8 @@ export function queryPawnStatus(world: World, pawn: Pawn, foodReadability?:FoodR
     if(task.phase==='work')return {code:'cooking',reason:`${task.recipe==='cremate-corpse'?'Incinère une dépouille':task.recipe==='smelt-weapon'?'Fond une arme':task.recipe==='make-medicine'?'Fabrique un médicament':task.recipe==='small-sculpture'||task.recipe==='large-sculpture'?'Sculpte une œuvre':task.recipe==='butcher-creature'?'Dépèce une créature':task.recipe==='shirt'?'Confectionne une chemise':task.recipe==='tribalwear'?'Confectionne une tenue tribale':task.recipe==='stone-blocks'?'Taille des blocs de pierre':taskRecipe(task)==='simple-meal'?'Prépare un repas simple':`Production : ${recipe.label.toLowerCase()}`} (${Math.floor(task.progress/productionTaskTotal(world,task)*100)} %).`};
     if(task.phase==='output')return {code:'cooking-output',reason:task.storageId===null?'Porte le produit fabriqué vers un dépôt au sol.':'Porte le produit fabriqué vers sa réserve.'};
     if(task.ingredients.some(i=>i.item==='unfinished-tribalwear'||i.item==='unfinished-shirt'))return {code:'gathering-ingredients',reason:'Reprend son ouvrage inachevé au poste.'};
-    const placed=task.ingredients.filter(i=>i.stage==='placed').reduce((n,i)=>n+i.quantity,0);
-    return {code:'gathering-ingredients',reason:placed===recipe.units?'Ingrédients rassemblés ; rejoint sa place au poste.':`Rassemble les ingrédients (${placed}/${recipe.units} déposés au poste).`};
+    const placed=task.ingredients.filter(i=>i.stage==='placed').reduce((n,i)=>n+i.quantity*cookingUnitValue353(i.item),0);
+    return {code:'gathering-ingredients',reason:placed>=recipe.units?'Ingrédients rassemblés ; rejoint sa place au poste.':`Rassemble les ingrédients (${placed}/${recipe.units} déposés au poste).`};
   }
   if(pawn.haul?.destination.type==='fuel') {
     const task=pawn.haul;

@@ -5,13 +5,14 @@ import {origamiHumanGeometry} from '../origami/human-geometry';
 import {indexExactStaticVertices} from '../origami/static-index';
 import {compileFaceStrokeTable,type FaceStrokeTable} from '../surfaces/FaceStrokeTable';
 
-export interface HumanModelFeatures {readonly smithing:boolean;readonly mace:boolean;readonly longsword:boolean;readonly spear:boolean}
+/** hats353: the schema 353 cowboy and bowler hats, added once one is worn. */
+export interface HumanModelFeatures {readonly smithing:boolean;readonly mace:boolean;readonly longsword:boolean;readonly spear:boolean;readonly hats353?:boolean}
 export interface HumanModel {readonly key:string;readonly strokes:FaceStrokeTable;readonly cpuBytes:number;createGeometry():THREE.InstancedBufferGeometry;assertCurrent():void}
 
 /** Optional physical wear is an effect of the existing bind model. No cache
  * survives wear0, and no style identity participates in its preparation. */
 export function createHumanWearGeometry(features:HumanModelFeatures):THREE.InstancedBufferGeometry{
- const source=origamiHumanGeometry(features.smithing,features.mace,features.longsword,features.spear,true,true),wear=source.userData.origamiWear as THREE.InstancedBufferGeometry|undefined;
+ const source=origamiHumanGeometry(features.smithing,features.mace,features.longsword,features.spear,true,true,!!features.hats353),wear=source.userData.origamiWear as THREE.InstancedBufferGeometry|undefined;
  try{
   if(!wear)throw Error('Actual human physical-wear source missing');
   const count=wear.getAttribute('position').count,values=new Float32Array(count*18),packed=new THREE.InterleavedBuffer(values,18),result=new THREE.InstancedBufferGeometry();
@@ -24,8 +25,8 @@ export class HumanModels {
  private readonly entries=new Map<string,HumanModel>();private readonly owned:THREE.BufferGeometry[]=[];private readonly strokes:FaceStrokeTable[]=[];private bytes=0;private closed=false;
  constructor(private readonly maxCpuBytes=64*1024*1024){if(!Number.isSafeInteger(maxCpuBytes)||maxCpuBytes<1)throw Error('Explicit shared-human model budget required');}
  get(features:HumanModelFeatures):HumanModel{
-  if(this.closed)throw Error('Shared human model library retired');const key=JSON.stringify(['shared-human-model-v1',features.smithing,features.mace,features.longsword,features.spear]),cached=this.entries.get(key);if(cached)return cached;
-  const source=origamiHumanGeometry(features.smithing,features.mace,features.longsword,features.spear,false,false);let strokes:FaceStrokeTable|undefined,geometry:THREE.InstancedBufferGeometry|undefined,delivered=false;
+  if(this.closed)throw Error('Shared human model library retired');const key=JSON.stringify(['shared-human-model-v1',features.smithing,features.mace,features.longsword,features.spear,...features.hats353?['hats353']:[]]),cached=this.entries.get(key);if(cached)return cached;
+  const source=origamiHumanGeometry(features.smithing,features.mace,features.longsword,features.spear,false,false,!!features.hats353);let strokes:FaceStrokeTable|undefined,geometry:THREE.InstancedBufferGeometry|undefined,delivered=false;
   try{
    indexExactStaticVertices(source);strokes=compileFaceStrokeTable(source,{maxCpuBytes:32*1024*1024,maxTriangles:10000,uvAttribute:'uv'});
    const count=strokes.sourceVertex.length,data=new Float32Array(count*18),packed=new THREE.InterleavedBuffer(data,18);geometry=new THREE.InstancedBufferGeometry();

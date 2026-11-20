@@ -57,7 +57,7 @@ const recipeSkills:Readonly<Record<ProductionRecipe,ProductionRecipeSkill283|nul
  'smash-mechanoid':'crafting',
  'shred-mechanoid':'crafting',
  'butcher-creature':'cooking',
- shirt:'crafting',tshirt:'crafting',jacket:'crafting',
+ shirt:'crafting',tshirt:'crafting',jacket:'crafting','cowboy-hat':'crafting','bowler-hat':'crafting',
  tribalwear:'crafting',
  pants:'crafting',
  duster:'crafting',

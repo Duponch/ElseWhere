@@ -1,4 +1,6 @@
 import {isGunRecipe342} from './guns-342.ts';
+import {cookingDefaultAllowed353,isCookingAnimalProduct353} from './cooking-ingredients-353.ts';
+import {isHatItem353} from './apparel-definitions.ts';
 import {isPenoxycyline337,isPenoxycylineRecipe337} from './penoxycyline-337.ts';
 import {isSchema289OrLater} from './schema-compatibility-257.ts';
 import {isSchema273OrLater,isSchema278OrLater,isSchema283OrLater} from './schema-compatibility-257.ts';
@@ -36,8 +38,8 @@ import { SCHEMA_VERSION,type Cell,type Structure,type World } from './types.ts';
 export const COOK_TICKS=60; // 300 reference work / 10 local ticks × campfire factor 2.
 export const INGREDIENT_UNITS=10; // 0.5 nutrition for the supported raw ingredients.
 export function newCookingBill(id:number,recipe:ProductionRecipe='simple-meal',version:number=SCHEMA_VERSION):CookingBill {
-  const inputs=PRODUCTION_RECIPES[recipe].inputs.filter(i=>(isSchema272OrLater(version)||!isSpearItem272(i))&&(version>=270||!isLongswordItem270(i))&&(version>=269||!isMaceItem269(i))&&(version>=267||!isSmithingProduct267(i))&&(version>=256||!isFutureEcologyItem256(i))&&(version>=197||!V219_ITEM_IDS.some(future=>future===i))&&(version>=308||!isTailoring(recipe)||!isTextileMaterial308(i)));
-  return {id,recipe,mode:'times',target:1,suspended:false,filters:Object.fromEntries(inputs.map(i=>[i,isCremationRecipe(recipe)?i==='human-corpse':isSmithingRecipe267(recipe)?smithingInitialMaterial267(i as import('./smithing-content-267.ts').SmithingMaterial267,recipe):(recipe==='smelt-slag'||!isSmeltingRecipe(recipe))&&!isBurnApparelRecipe(recipe)&&(recipe!=='chemfuel-from-organics'||(BIOFUEL_INITIAL_ORGANICS as readonly string[]).includes(i))])),radius:999,destination:isCremationRecipe(recipe)||isBurnApparelRecipe(recipe)?'drop':'stockpile',
+  const inputs=PRODUCTION_RECIPES[recipe].inputs.filter(i=>(isSchema272OrLater(version)||!isSpearItem272(i))&&(version>=270||!isLongswordItem270(i))&&(version>=269||!isMaceItem269(i))&&(version>=267||!isSmithingProduct267(i))&&(version>=256||!isFutureEcologyItem256(i))&&(version>=197||!V219_ITEM_IDS.some(future=>future===i))&&(version>=308||!isTailoring(recipe)||!isTextileMaterial308(i))&&(version>=353||!isCookingAnimalProduct353(i)&&!isHatItem353(i)));
+  return {id,recipe,mode:'times',target:1,suspended:false,filters:Object.fromEntries(inputs.map(i=>[i,isCremationRecipe(recipe)?i==='human-corpse':isSmithingRecipe267(recipe)?smithingInitialMaterial267(i as import('./smithing-content-267.ts').SmithingMaterial267,recipe):(recipe==='smelt-slag'||!isSmeltingRecipe(recipe))&&!isBurnApparelRecipe(recipe)&&(recipe!=='chemfuel-from-organics'||(BIOFUEL_INITIAL_ORGANICS as readonly string[]).includes(i))&&cookingDefaultAllowed353(i)])),radius:999,destination:isCremationRecipe(recipe)||isBurnApparelRecipe(recipe)?'drop':'stockpile',
     ...(recipe==='smelt-weapon'||recipe==='smelt-apparel'||isBurnApparelRecipe(recipe))?{smeltFilter:{hpMin:0,hpMax:100,qualityMin:'awful',qualityMax:'legendary'}}:{},
     ...isCremationRecipe(recipe)?{cremationFilter:{colonists:true,strangers:true,fresh:true,rotting:true,desiccated:true}}:{},
     ...(isSchema278OrLater(version)&&isApparelCountRecipe278(recipe)?{apparelCount:newApparelCountFilter278()}:{})};
@@ -58,6 +60,7 @@ export function validBillSettings(value:unknown,recipe:ProductionRecipe='simple-
   if(recipe==='make-recon-armor'&&version<241)return false;
   if(recipe==='tuque'&&version<245)return false;
   if((recipe==='tshirt'||recipe==='jacket')&&version<312)return false;
+  if((recipe==='cowboy-hat'||recipe==='bowler-hat')&&version<353)return false;
   if(recipe==='make-emp-launcher'&&version<208)return false;
   if(recipe==='make-pump-shotgun'&&version<322)return false;
   if((recipe==='make-autopistol'||recipe==='make-machine-pistol')&&version<340)return false;
@@ -80,10 +83,10 @@ export function validBillSettings(value:unknown,recipe:ProductionRecipe='simple-
   return Object.keys(v).every(k=>['id','recipe','mode','target','suspended','filters','radius','destination',...smelting?['smeltFilter']:[],...cremation?['cremationFilter']:[],...apparelCount?['apparelCount']:[],...worker?['worker']:[],...reservePause?['reservePause']:[]].includes(k))
     &&(smelting||cremation?['times','forever']:['times','until','forever']).includes(v.mode)&&Number.isSafeInteger(v.target)&&v.target>=0&&v.target<=9999
     &&typeof v.suspended==='boolean'&&!!v.filters&&typeof v.filters==='object'&&!Array.isArray(v.filters)
-    &&Object.keys(v.filters).every(i=>(PRODUCTION_RECIPES[recipe].inputs as readonly string[]).includes(i)&&(isSchema272OrLater(version)||!isSpearItem272(i))&&(isSchema269OrLater(version)||!isMaceItem269(i))&&(isSchema270OrLater(version)||!isLongswordItem270(i))&&(version>=267||!isSmithingProduct267(i))&&(version>=265||i!=='hops')&&(version>=256||!isFutureEcologyItem256(i))&&(version>=197||!V219_ITEM_IDS.some(future=>future===i))&&(version>=308||!isTailoring(recipe)||!isTextileMaterial308(i)))
+    &&Object.keys(v.filters).every(i=>(PRODUCTION_RECIPES[recipe].inputs as readonly string[]).includes(i)&&(isSchema272OrLater(version)||!isSpearItem272(i))&&(isSchema269OrLater(version)||!isMaceItem269(i))&&(isSchema270OrLater(version)||!isLongswordItem270(i))&&(version>=267||!isSmithingProduct267(i))&&(version>=265||i!=='hops')&&(version>=256||!isFutureEcologyItem256(i))&&(version>=197||!V219_ITEM_IDS.some(future=>future===i))&&(version>=308||!isTailoring(recipe)||!isTextileMaterial308(i))&&(version>=353||!isCookingAnimalProduct353(i)&&!isHatItem353(i)))
     // Old carcass filters stay absent after migration and therefore reject new
     // sources. Only a new bill or explicit settings can opt into those inputs.
-    &&PRODUCTION_RECIPES[recipe].inputs.every(i=>typeof v.filters[i]==='boolean'||(isSmithingProduct267(i)||isMaceItem269(i)||isLongswordItem270(i)||isSpearItem272(i)||i==='hops'&&recipe!=='brew-wort'||isFutureEcologyItem256(i)||V219_ITEM_IDS.some(future=>future===i)||isTailoring(recipe)&&isTextileMaterial308(i)||(['milk','muffalo-wool'].includes(i)?version<120:['hare-meat','potato','corn',...V91_ITEM_IDS,...V190_ITEM_IDS].includes(i)))&&v.filters[i]===undefined)
+    &&PRODUCTION_RECIPES[recipe].inputs.every(i=>typeof v.filters[i]==='boolean'||(isSmithingProduct267(i)||isMaceItem269(i)||isLongswordItem270(i)||isSpearItem272(i)||i==='hops'&&recipe!=='brew-wort'||isFutureEcologyItem256(i)||V219_ITEM_IDS.some(future=>future===i)||isTailoring(recipe)&&isTextileMaterial308(i)||isCookingAnimalProduct353(i)||isHatItem353(i)||(['milk','muffalo-wool'].includes(i)?version<120:['hare-meat','potato','corn',...V91_ITEM_IDS,...V190_ITEM_IDS].includes(i)))&&v.filters[i]===undefined)
     &&Number.isFinite(v.radius)&&v.radius>=0&&v.radius<=999&&(cremation||isBurnApparelRecipe(recipe)?v.destination==='drop':['stockpile','drop'].includes(v.destination));
 }
 /** Reference resource counter includes stored items and current task cargo.

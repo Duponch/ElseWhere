@@ -1,5 +1,5 @@
 import { apparelCompatible } from './armor.ts';
-import {GARMENT_ITEMS312,isGarmentItem312} from './apparel-definitions.ts';
+import {GARMENT_ITEMS312,isGarmentItem312,HAT_ITEMS353,isHatItem353} from './apparel-definitions.ts';
 import {CORE_STARTING_APPAREL_256,isCoreStartingApparel256} from './starting-gear-256.ts';
 import { APPAREL, isApparelFamily, APPAREL_MATERIALS, APPAREL_MATERIAL_DEFINITIONS, type ApparelFamily, type ApparelItem, type ApparelMaterial, type ApparelState } from './apparel-rules.ts';
 import { WEAPON_QUALITIES, type WeaponQuality } from './equipment-rules.ts';
@@ -49,15 +49,15 @@ export interface ApparelPolicyRegistry {apparelPolicies:ApparelPolicy[];nextAppa
 const clonePolicy=(policy:ApparelPolicy):ApparelPolicy=>({...policy,allowedItems:[...policy.allowedItems],allowedMaterials:[...policy.allowedMaterials]});
 // The pre-V90 migration requests the old catalogue via includeWool=false.
 // It must not acquire later V141 headgear before its own strict validation.
-export const createDefaultApparelPolicyRegistry=(includeWool=true,includeHelmet=includeWool,includePredators=true,includeTuque=includeHelmet,includeCoreStartingGear=false,includeSmithing=false,includeTextiles308=true,includeGarments312=includeTextiles308):ApparelPolicyRegistry=>({apparelPolicies:[DEFAULT_APPAREL_POLICY,TEXTILE_APPAREL_POLICY].map(policy=>{
+export const createDefaultApparelPolicyRegistry=(includeWool=true,includeHelmet=includeWool,includePredators=true,includeTuque=includeHelmet,includeCoreStartingGear=false,includeSmithing=false,includeTextiles308=true,includeGarments312=includeTextiles308,includeHats353=includeGarments312):ApparelPolicyRegistry=>({apparelPolicies:[DEFAULT_APPAREL_POLICY,TEXTILE_APPAREL_POLICY].map(policy=>{
   const copy=clonePolicy(policy);
-  return {...copy,allowedItems:[...copy.allowedItems.filter(item=>(includeTuque||APPAREL[item].family!=='tuque')&&(includePredators||APPAREL[item].material!=='foxfur')&&(includeWool||APPAREL[item].material!=='muffalo-wool')&&(includeHelmet||item!=='flak-helmet'&&item!=='recon-helmet'&&item!=='recon-armor')&&!isTextileApparelItem308(item)&&!isGarmentItem312(item)),...includeCoreStartingGear?CORE_STARTING_APPAREL_256:[],...includeSmithing?SMITHING_APPAREL_ITEMS267:[],...includeTextiles308?TEXTILE_APPAREL_ITEMS308:[],...includeGarments312?GARMENT_ITEMS312:[]],
+  return {...copy,allowedItems:[...copy.allowedItems.filter(item=>(includeTuque||APPAREL[item].family!=='tuque')&&(includePredators||APPAREL[item].material!=='foxfur')&&(includeWool||APPAREL[item].material!=='muffalo-wool')&&(includeHelmet||item!=='flak-helmet'&&item!=='recon-helmet'&&item!=='recon-armor')&&!isTextileApparelItem308(item)&&!isGarmentItem312(item)&&!isHatItem353(item)),...includeCoreStartingGear?CORE_STARTING_APPAREL_256:[],...includeSmithing?SMITHING_APPAREL_ITEMS267:[],...includeTextiles308?TEXTILE_APPAREL_ITEMS308:[],...includeGarments312?GARMENT_ITEMS312:[],...includeHats353?HAT_ITEMS353:[]],
     allowedMaterials:[...copy.allowedMaterials.filter(material=>(includeWool||material!=='muffalo-wool')&&(includePredators||material!=='foxfur')&&!isTextileMaterial308(material)),...includeSmithing?ARMOR_STUFFS267:[],...includeTextiles308?TEXTILE_MATERIALS308:[]]};
 }),nextApparelPolicyId:3});
 
 export function validApparelPolicy(policy:ApparelPolicy,version=Number.MAX_SAFE_INTEGER):boolean {
   return !!policy&&Number.isSafeInteger(policy.id)&&policy.id>0&&typeof policy.label==='string'&&policy.label.length>0
-    &&Array.isArray(policy.allowedItems)&&new Set(policy.allowedItems).size===policy.allowedItems.length&&policy.allowedItems.every(i=>Object.hasOwn(APPAREL,i)&&(version>=267||!isSmithingApparel267(i))&&(version>=308||!isTextileApparelItem308(i))&&(version>=312||!isGarmentItem312(i)))
+    &&Array.isArray(policy.allowedItems)&&new Set(policy.allowedItems).size===policy.allowedItems.length&&policy.allowedItems.every(i=>Object.hasOwn(APPAREL,i)&&(version>=267||!isSmithingApparel267(i))&&(version>=308||!isTextileApparelItem308(i))&&(version>=312||!isGarmentItem312(i))&&(version>=353||!isHatItem353(i)))
     &&Array.isArray(policy.allowedMaterials)&&new Set(policy.allowedMaterials).size===policy.allowedMaterials.length&&policy.allowedMaterials.every(m=>APPAREL_POLICY_MATERIALS267.includes(m)&&(version>=267||!(ARMOR_STUFFS267 as readonly string[]).includes(m))&&(version>=308||!isTextileMaterial308(m)))
     &&qualities.includes(policy.minQuality)&&qualities.includes(policy.maxQuality)&&qualities.indexOf(policy.minQuality)<=qualities.indexOf(policy.maxQuality)
     &&Number.isFinite(policy.minHitPointsPercent)&&Number.isFinite(policy.maxHitPointsPercent)&&policy.minHitPointsPercent>=0&&policy.maxHitPointsPercent<=1&&policy.minHitPointsPercent<=policy.maxHitPointsPercent;

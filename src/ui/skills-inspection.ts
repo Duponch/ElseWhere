@@ -7,7 +7,7 @@ import { miningSkill,miningWorkSpeed,miningYield } from '../sim/mining-skills';
 import { cookingSkill,cookingSpeed,butcherySpeed,butcheryEfficiency } from '../sim/cooking-statistics';
 import { constructionSpeed, learningFactor, XP_SCALE, xpRequired } from '../sim/skills.ts';
 import { medicalTendSpeed,medicalTendQuality } from '../sim/care-rules.ts';
-import { socialImpact } from '../sim/social-state';
+import { socialImpact,wornSocialImpactOffset353 } from '../sim/social-state';
 import { biologicalYears,chronologicalYears } from '../sim/human-age.ts';
 import type { Pawn } from '../sim/types.ts';
 import { SKILL_PASSION_LABELS,setCompactSkillPassion,setSkillPassion } from './skill-passion';
@@ -111,7 +111,7 @@ export function updateSkillsInspection(panel:HTMLElement,pawn:Pawn,world?:World)
   const social=pawn.skills.social??{level:0,xp:0,dailyXp:0,passion:0 as const};
   setSkillPassion(panel.querySelector<HTMLElement>('[data-skill="social"]')!,`Social ${social.level}/20`,social.passion);
   const socialProgress=panel.querySelector<HTMLProgressElement>('[data-social-xp]')!;socialProgress.value=Math.max(0,social.xp/xpRequired(social.level));socialProgress.setAttribute('aria-label','Expérience sociale');
-  panel.querySelector<HTMLElement>('[data-skill-detail="social"]')!.textContent=`${(social.xp/XP_SCALE).toFixed(1)} XP · Impact ${Math.round(socialImpact(pawn)*100)} % · Apprentissage ${Math.round(learningFactor(social,pawn)*100)} %`;
+  panel.querySelector<HTMLElement>('[data-skill-detail="social"]')!.textContent=`${(social.xp/XP_SCALE).toFixed(1)} XP · Impact ${Math.round(socialImpact(pawn,world?wornSocialImpactOffset353(world,pawn.id):0)*100)} % · Apprentissage ${Math.round(learningFactor(social,pawn)*100)} %`;
   const m=pawn.skills.medicine;
   setSkillPassion(panel.querySelector<HTMLElement>('[data-skill="medicine"]')!,`Médecine ${m.level}/20`,m.passion);
   const mp=panel.querySelector<HTMLProgressElement>('[data-medicine-xp]')!;mp.value=Math.max(0,m.xp/xpRequired(m.level));mp.setAttribute('aria-label','Expérience de médecine');

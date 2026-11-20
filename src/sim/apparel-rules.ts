@@ -1,6 +1,6 @@
 import {isSchema284OrLater} from './schema-compatibility-257.ts';
 import {pileIndex,pileIndexMismatch,verifyPileIndex} from './pile-index.ts';
-import {APPAREL,APPAREL_MATERIALS,APPAREL_FAMILIES,type ApparelMaterial,type ApparelFamily,type ApparelItem,type ApparelDefinition} from './apparel-definitions.ts';
+import {APPAREL,APPAREL_MATERIALS,APPAREL_FAMILIES,HAT_FAMILIES353,type ApparelMaterial,type ApparelFamily,type ApparelItem,type ApparelDefinition} from './apparel-definitions.ts';
 import {FABRIC_TEXTILES308,type FabricTextile308} from './textile-apparel-308.ts';
 export * from './apparel-definitions.ts';
 import {apparelCompatible,type ArmorPiece} from './armor.ts';
@@ -27,6 +27,7 @@ export interface ApparelState {
 const familyItems=(family:Exclude<ApparelFamily,'tuque'>)=>Object.freeze(Object.fromEntries(APPAREL_MATERIALS.map(material=>[material,`${material}-${family}`]))) as Readonly<Record<ApparelMaterial,ApparelItem>>;
 const ITEM_BY_FAMILY: Readonly<Record<Exclude<ApparelFamily,'tuque'>, Readonly<Record<ApparelMaterial, ApparelItem>>>> = Object.freeze({
   tribalwear:familyItems('tribalwear'),shirt:familyItems('shirt'),pants:familyItems('pants'),duster:familyItems('duster'),parka:familyItems('parka'),tshirt:familyItems('tshirt'),jacket:familyItems('jacket'),
+  'cowboy-hat':familyItems('cowboy-hat'),'bowler-hat':familyItems('bowler-hat'),
 });
 export function apparelItemFor(family:ApparelFamily,material:ApparelMaterial):ApparelItem {
   if(family==='tuque'){
@@ -38,7 +39,7 @@ export function apparelItemFor(family:ApparelFamily,material:ApparelMaterial):Ap
   return ITEM_BY_FAMILY[family][material];
 }
 export const isApparelMaterial=(value:unknown):value is ApparelMaterial=>typeof value==='string'&&APPAREL_MATERIALS.includes(value as ApparelMaterial);
-export const isApparelFamily=(value:unknown):value is ApparelFamily=>value==='tuque'||APPAREL_FAMILIES.some(family=>family===value);
+export const isApparelFamily=(value:unknown):value is ApparelFamily=>value==='tuque'||APPAREL_FAMILIES.some(family=>family===value)||HAT_FAMILIES353.some(family=>family===value);
 export const isApparelItem=(item:ItemId):item is ApparelItem=>Object.hasOwn(APPAREL,item);
 export const apparelDefinition=(pile:MaterialPile):ApparelDefinition=>APPAREL[pile.item as ApparelItem];
 export const apparelMaterial=(pile:Pick<MaterialPile,'item'|'apparel'>):ApparelMaterial|undefined=>pile.apparel?.material??APPAREL[pile.item as ApparelItem]?.material;

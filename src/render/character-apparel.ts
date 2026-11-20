@@ -1,5 +1,5 @@
 import {packStartingApparelTint256,startingApparelTintHex256} from '../sim/starting-apparel-color-256';
-import {GARMENT_ITEMS312,type GarmentItem312} from '../sim/apparel-definitions';
+import {GARMENT_ITEMS312,HAT_ITEMS353,type GarmentItem312,type HatItem353} from '../sim/apparel-definitions';
 import { APPAREL,apparelLabel,type ApparelItem } from '../sim/apparel-rules';
 import {isSmithingApparel267} from '../sim/smithing-apparel-267';
 import {itemCargoKind} from './item-presentation';
@@ -17,6 +17,7 @@ export function apparelProjection(world:World):ReadonlyMap<number,readonly Mater
 export function apparelAppearance(pieces:readonly MaterialPile[]=[]) {
   const family=(name:string)=>pieces.find(p=>APPAREL[p.item as ApparelItem]?.family===name);
   const tuque=family('tuque'),vest=pieces.find(p=>p.item==='flak-vest');
+  const hat=family('cowboy-hat')??family('bowler-hat');
   const shirt=family('shirt')??family('tshirt'),tribal=family('tribalwear'),pants=pieces.find(p=>p.item==='flak-pants')??family('pants'),outer=family('duster')??family('parka')??family('jacket');
   const plate=pieces.find(p=>isSmithingApparel267(p.item)&&p.item.endsWith('-plate-armor'));
   const simple=pieces.find(p=>isSmithingApparel267(p.item)&&p.item.endsWith('-simple-helmet'));
@@ -27,6 +28,8 @@ export function apparelAppearance(pieces:readonly MaterialPile[]=[]) {
     simpleHelmetMaterial:simple?SIMPLE_HELMET_ITEMS267.indexOf(simple.item as typeof SIMPLE_HELMET_ITEMS267[number])+1:0,
     plasteelHelmet:pieces.some(p=>p.item==='plasteel-flak-helmet'),
     reconHelmet:pieces.some(p=>p.item==='recon-helmet'),tuque:tuque?(tuque.item==='cloth-tuque'?1:2):0,
+    // Schema 353: cowboy hat 1, bowler hat 2, in its material's colour.
+    hat353:hat?(APPAREL[hat.item as ApparelItem].family==='cowboy-hat'?1:2):0,hatColor353:hat?APPAREL[hat.item as ApparelItem].color:undefined,
     silhouette:plate?6:recon?5:outer?(definition!.family==='parka'||definition!.family==='jacket'?4:3):tribal?2:shirt?1:0,
     pants:pants?(pants.item==='flak-pants'?(pants.apparel?.birthColor?(pants.apparel.birthColor.r===Math.fround(.62)?9:10):8):(['cloth','light-leather','plainleather','bluefur','camelhide','muffalo-wool','foxfur'].indexOf(legacyPantsMaterial308(APPAREL[pants.item as ApparelItem].material??'cloth'))+1)):0,
     ...(vest?.apparel?.birthColor&&!outer?{vestTintCode:packStartingApparelTint256(vest.apparel.birthColor),vestTintColor:startingApparelTintHex256(vest.apparel.birthColor)}:{}),
@@ -39,6 +42,7 @@ export const SIMPLE_HELMET_COLORS267=Object.freeze(SIMPLE_HELMET_ITEMS267.map(it
 export const APPAREL_CARGO:Readonly<Record<ApparelItem,number>>=Object.freeze({
   ...Object.fromEntries(TEXTILE_APPAREL_ITEMS308.map(item=>[item,itemCargoKind(item)])) as Record<TextileApparelItem308,number>,
   ...Object.fromEntries(GARMENT_ITEMS312.map(item=>[item,itemCargoKind(item)])) as Record<GarmentItem312,number>,
+  ...Object.fromEntries(HAT_ITEMS353.map(item=>[item,itemCargoKind(item)])) as Record<HatItem353,number>,
   'wood-plate-armor':itemCargoKind('wood-plate-armor'),'steel-plate-armor':itemCargoKind('steel-plate-armor'),
   'plasteel-plate-armor':itemCargoKind('plasteel-plate-armor'),'uranium-plate-armor':itemCargoKind('uranium-plate-armor'),
   'silver-plate-armor':itemCargoKind('silver-plate-armor'),'gold-plate-armor':itemCargoKind('gold-plate-armor'),
@@ -75,6 +79,9 @@ export const APPAREL_CARGO:Readonly<Record<ApparelItem,number>>=Object.freeze({
 export function foldedApparel(item:ApparelItem) {
   const color=APPAREL[item].color;
   if(item.endsWith('-tuque'))return [{size:[.34,.18,.33],center:[0,.045,0],color},{size:[.40,.06,.37],center:[0,-.045,0],color}];
+  // Schema 353: a creased crown on a wide brim, or a round crown on a narrow one.
+  if(item.endsWith('-cowboy-hat'))return [{size:[.28,.16,.26],center:[0,.06,0],color},{size:[.60,.03,.52],center:[0,-.035,0],color}];
+  if(item.endsWith('-bowler-hat'))return [{size:[.30,.19,.30],center:[0,.07,0],color},{size:[.42,.03,.40],center:[0,-.035,0],color}];
   if(item==='flak-helmet'||item==='plasteel-flak-helmet')return [{size:[.34,.14,.33],center:[0,.04,0],color},
     {size:[.42,.035,.36],center:[0,-.01,.03],color:0x424e51}];
   if(item==='recon-armor')return [{size:[.46,.16,.58],center:[0,0,0],color},{size:[.30,.04,.32],center:[0,.1,0],color:0x536a74}];

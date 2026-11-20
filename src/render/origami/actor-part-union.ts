@@ -7,6 +7,8 @@ const weaponByDye=new Map<number,number>(RESIDENT_WEAPON_VISUALS269.map(weapon=>
 const humanDyes=Object.freeze([...new Set([
  ...Array.from({length:15},(_,i)=>100+i),...Array.from({length:5},(_,i)=>200+i),
  -3,-40,-41,-2,-7,-11,-12,-42,-8,-10,-6,...weaponByDye.keys(),-30,-31,-32,
+ // Schema 353 hats, appended: earlier gate bits keep their index.
+ -43,-44,
 ])]);
 const dyeIndex=new Map(humanDyes.map((dye,index)=>[dye,index]));
 if(humanDyes.length>64)throw new Error('Actor union gate word requires an explicit layout extension');
@@ -33,6 +35,8 @@ function humanVisible(dye:number,stage:number,hair:number,beard:number,weapon:nu
   case -42:return outfit===5;
   case -8:return recon;
   case -10:return tuque;
+  case -43:return worn>11.5&&worn<13.5;
+  case -44:return worn>13.5&&worn<15.5;
   case -6:return outfit===4&&!helmet;
   case -30:case -31:case -32:return dye===activity&&Math.abs(cargo)<=.5;
   default:return true;

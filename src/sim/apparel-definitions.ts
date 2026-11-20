@@ -11,7 +11,10 @@ export type ApparelMaterial = typeof APPAREL_MATERIALS[number];
 export const GARMENT_FAMILIES312 = ['tshirt', 'jacket'] as const;
 export type GarmentFamily312 = typeof GARMENT_FAMILIES312[number];
 export const APPAREL_FAMILIES = ['tribalwear', 'shirt', 'pants', 'duster', 'parka', ...GARMENT_FAMILIES312] as const;
-export type ApparelFamily = typeof APPAREL_FAMILIES[number] | 'tuque';
+/** Schema 353: Core Apparel_CowboyHat and Apparel_BowlerHat, Fabric or Leathery. */
+export const HAT_FAMILIES353 = ['cowboy-hat', 'bowler-hat'] as const;
+export type HatFamily353 = typeof HAT_FAMILIES353[number];
+export type ApparelFamily = typeof APPAREL_FAMILIES[number] | 'tuque' | HatFamily353;
 
 export interface ApparelMaterialDefinition {
   readonly label: string;
@@ -52,6 +55,11 @@ export const APPAREL_FAMILY_DEFINITIONS: Readonly<Record<ApparelFamily, ApparelF
   // Shoulders, Arms. EquipDelay 1.5 s = 90 Core ticks.
   tshirt: Object.freeze({label:'T-shirt',hitPoints:100,equipTicks:9,coverage:apparelCoverage(['skin'],['torso','shoulders']),armorFactor:.2,coldFactor:.22,heatFactor:.1}),
   jacket: Object.freeze({label:'Blouson',hitPoints:160,equipTicks:9,coverage:apparelCoverage(['shell'],['torso','neck','shoulders','arms']),armorFactor:.3,coldFactor:.8,heatFactor:.3}),
+  // Schema 353, Core CowboyHat: 80 HP, UpperHead, Overhead, armor x0.2, cold
+  // x0.10, heat x0.50; BowlerHat inherits it with heat x0.40. EquipDelay 0.8 s
+  // (48 Core ticks) is quantized like the tuque's.
+  'cowboy-hat':Object.freeze({label:'Chapeau de cowboy',hitPoints:80,equipTicks:5,coverage:apparelCoverage(['headgear'],['upper-head']),armorFactor:.2,coldFactor:.1,heatFactor:.5}),
+  'bowler-hat':Object.freeze({label:'Chapeau melon',hitPoints:80,equipTicks:5,coverage:apparelCoverage(['headgear'],['upper-head']),armorFactor:.2,coldFactor:.1,heatFactor:.4}),
 });
 
 export interface ApparelDefinition {
@@ -83,6 +91,13 @@ const textileDefinition = (family: ApparelFamily, material: ApparelMaterial): Ap
 export type GarmentItem312=`${ApparelMaterial}-${GarmentFamily312}`;
 export const GARMENT_ITEMS312:readonly GarmentItem312[]=Object.freeze(APPAREL_MATERIALS.flatMap(m=>GARMENT_FAMILIES312.map(f=>`${m}-${f}` as GarmentItem312)));
 export const isGarmentItem312=(value:unknown):value is GarmentItem312=>typeof value==='string'&&(GARMENT_ITEMS312 as readonly string[]).includes(value);
+/** Every material's cowboy and bowler hat (schema 353), in catalogue order. */
+export type HatItem353=`${ApparelMaterial}-${HatFamily353}`;
+export const HAT_ITEMS353:readonly HatItem353[]=Object.freeze(APPAREL_MATERIALS.flatMap(m=>HAT_FAMILIES353.map(f=>`${m}-${f}` as HatItem353)));
+const HAT_SET353=new Set<unknown>(HAT_ITEMS353);
+export const isHatItem353=(value:unknown):value is HatItem353=>HAT_SET353.has(value);
+/** Core SocialImpact offsets while worn: cowboy +0.10, bowler +0.15. */
+export const HAT_SOCIAL_IMPACT353:Readonly<Record<HatFamily353,number>>=Object.freeze({'cowboy-hat':.1,'bowler-hat':.15});
 export type ApparelItem=`${ApparelMaterial}-${Exclude<ApparelFamily,'tuque'>}`|'cloth-tuque'|'muffalo-wool-tuque'|TextileApparelItem308|'flak-vest'|'flak-helmet'|'recon-helmet'|'recon-armor'|'flak-pants'|'plasteel-flak-helmet'|SmithingApparel267;
 /** Existing cloth ids stay canonical so old saves and reservations retain identity. */
 export const APPAREL:Readonly<Record<ApparelItem,ApparelDefinition>> = Object.freeze({
@@ -136,6 +151,10 @@ export const APPAREL:Readonly<Record<ApparelItem,ApparelDefinition>> = Object.fr
   'recon-helmet': Object.freeze({label:'Casque de reconnaissance',hitPoints:120,equipTicks:12,color:0x879da4,coverage:apparelCoverage(['headgear'],['full-head']),ratings:Object.freeze({sharp:.92,blunt:.4,heat:.46}),moveOffset:0,coldInsulation:4,heatInsulation:2}),
   ...Object.fromEntries(TEXTILE_APPAREL_ITEMS308.map(item=>{const i=item.lastIndexOf('-');return [item,textileDefinition(item.slice(i+1) as ApparelFamily,item.slice(0,i) as ApparelMaterial)];})) as Record<TextileApparelItem308,ApparelDefinition>,
   ...Object.fromEntries(GARMENT_ITEMS312.map(item=>{const i=item.lastIndexOf('-');return [item,textileDefinition(item.slice(i+1) as ApparelFamily,item.slice(0,i) as ApparelMaterial)];})) as Record<GarmentItem312,ApparelDefinition>,
+  // The family is the two-word suffix: split on the material, not the last dash.
+  ...Object.fromEntries(HAT_ITEMS353.map(item=>{const family=HAT_FAMILIES353.find(f=>item.endsWith(`-${f}`))!;return [item,textileDefinition(family,item.slice(0,-family.length-1) as ApparelMaterial)];})) as Record<HatItem353,ApparelDefinition>,
 });
 type GarmentItemDefinition312={readonly label:string;readonly kind:'apparel';readonly stackLimit:1;readonly nutrition:0;readonly maxIngest:0;readonly color:number};
 export const GARMENT_ITEM_DEFINITIONS312=Object.freeze(Object.fromEntries(GARMENT_ITEMS312.map(item=>[item,Object.freeze({label:APPAREL[item].label,kind:'apparel' as const,stackLimit:1 as const,nutrition:0 as const,maxIngest:0 as const,color:APPAREL[item].color})]))) as Readonly<Record<GarmentItem312,GarmentItemDefinition312>>;
+type HatItemDefinition353={readonly label:string;readonly kind:'apparel';readonly stackLimit:1;readonly nutrition:0;readonly maxIngest:0;readonly color:number};
+export const HAT_ITEM_DEFINITIONS353=Object.freeze(Object.fromEntries(HAT_ITEMS353.map(item=>[item,Object.freeze({label:APPAREL[item].label,kind:'apparel' as const,stackLimit:1 as const,nutrition:0 as const,maxIngest:0 as const,color:APPAREL[item].color})]))) as Readonly<Record<HatItem353,HatItemDefinition353>>;

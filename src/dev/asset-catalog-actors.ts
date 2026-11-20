@@ -63,6 +63,7 @@ function clothingPreview(id:ApparelItem,index:number):HumanPreview {
   else if(family==='parka')result.silhouette=4;
   else if(family==='pants')result.pants=Math.max(1,['cloth','light-leather','plainleather','bluefur','camelhide','muffalo-wool','foxfur'].indexOf(definition.material??'cloth')+1);
   else if(family==='tuque'){result.flags=id==='muffalo-wool-tuque'?8:6;result.hat=id==='muffalo-wool-tuque'?0xb3c0ba:definition.color;}
+  else if(family==='cowboy-hat'||family==='bowler-hat'){result.flags=family==='cowboy-hat'?12:14;result.hat=definition.color;}
   else if(id==='flak-vest')result.flags=1;
   else if(id==='flak-pants')result.pants=8;
   else if(id==='recon-armor')result.silhouette=5;
@@ -99,7 +100,7 @@ function palette(context:GraphicsStyleContext,row:HumanPreview):void {
  * The Native original graph is the only displayed/compiled body variant. */
 function pawnSection(context:GraphicsStyleContext,id:string,label:string,rows:HumanPreview[]):{section:CatalogSection;dispose():void} {
   const layer=withGraphicsStyle(context,()=>new PawnLayer(undefined,detail()));
-  for(const name of ['smithingGeometry','maceGeometry','longswordGeometry','spearGeometry'])Reflect.set(layer,name,true);
+  for(const name of ['smithingGeometry','maceGeometry','longswordGeometry','spearGeometry','hatGeometry353'])Reflect.set(layer,name,true);
   invoke(layer,'createPawnMesh',rows.length);Reflect.set(layer,'nativeBody',true);invoke(layer,'selectBodyMaterial');
   const body=Reflect.get(layer,'pawnMesh') as THREE.Mesh<THREE.InstancedBufferGeometry>,geometry=body.geometry;
   const companions=[Reflect.get(layer,'wearEffect')];

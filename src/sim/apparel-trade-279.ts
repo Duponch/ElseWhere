@@ -23,6 +23,8 @@ const recipes:Readonly<Record<ApparelFamily,Readonly<{units:number;workCore:numb
  parka:Object.freeze({units:80,workCore:8000}),tuque:Object.freeze({units:20,workCore:1200}),
  // Schema 312: Core BasicShirt and Jacket.
  tshirt:Object.freeze({units:40,workCore:1600}),jacket:Object.freeze({units:70,workCore:7000}),
+ // Schema 353: Core CowboyHat 25 stuff and BowlerHat 20, both WorkToMake 1800.
+ 'cowboy-hat':Object.freeze({units:25,workCore:1800}),'bowler-hat':Object.freeze({units:20,workCore:1800}),
 });
 export const APPAREL_TRADE_ITEMS_279:readonly OrdinaryApparelItem279[]=Object.freeze(
  (Object.keys(APPAREL) as ApparelItem[]).filter((item):item is OrdinaryApparelItem279=>!!APPAREL[item].family&&!!APPAREL[item].material),

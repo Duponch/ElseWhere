@@ -82,7 +82,7 @@ export function createStartingPawnsConfiguration(options:StartingPawnsConfigurat
   }
   function apparel():ReturnType<typeof apparelAppearance> {
     // Crashlanded materialization equips this actual item on every selected person.
-    return {shirt:showClothes,tribal:false,vest:false,helmet:false,plateArmor:false,simpleHelmet:false,simpleHelmetColor:undefined,simpleHelmetMaterial:0,plasteelHelmet:false,reconHelmet:false,tuque:0,silhouette:showClothes?1:0,pants:0,
+    return {shirt:showClothes,tribal:false,vest:false,helmet:false,plateArmor:false,simpleHelmet:false,simpleHelmetColor:undefined,simpleHelmetMaterial:0,plasteelHelmet:false,reconHelmet:false,tuque:0,hat353:0,hatColor353:undefined,silhouette:showClothes?1:0,pants:0,
       color:showClothes?APPAREL['cloth-shirt'].color:undefined,signature:showClothes?'cloth-shirt':'',description:showClothes?'Chemise en tissu':'Vêtements masqués pour le portrait'};
   }
   function portrait(pawn:Pawn,size:number):HTMLImageElement {

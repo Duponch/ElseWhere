@@ -28,9 +28,9 @@ export const WORK_SICKLE_DYE = -32;
  * There is no per-pawn AnimationMixer, bone Object3D tree or CPU bone update.
  * This deliberately small prototype rig is not yet the future glTF atlas importer.
  */
-export function pawnGeometry(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false): THREE.InstancedBufferGeometry {
+export function pawnGeometry(includeSmithing=false,includeMace=false,includeLongsword=false,includeSpear=false,includeHats353=false): THREE.InstancedBufferGeometry {
   // Bind anatomy has no texture-style context or companion render owner.
-  return origamiHumanGeometry(includeSmithing,includeMace,includeLongsword,includeSpear,false,false);
+  return origamiHumanGeometry(includeSmithing,includeMace,includeLongsword,includeSpear,false,false,includeHats353);
 }
 
 /** Cargo is a second instanced batch sharing the pawn pose attributes. Its

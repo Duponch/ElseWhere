@@ -1,5 +1,5 @@
 import {GUNS_ITEMS_342,isGun342,isGunRecipe342} from './guns-342.ts';
-import {GARMENT_ITEMS312} from './apparel-definitions.ts';
+import {GARMENT_ITEMS312,HAT_ITEMS353} from './apparel-definitions.ts';
 /** Tuques are prospective in V384: old saves cannot hide a new item, recipe,
  * permission or ledger in either map, an archive or a transfer container. */
 const TUQUE_ITEMS=new Set(['cloth-tuque','muffalo-wool-tuque','unfinished-tuque']);
@@ -87,9 +87,28 @@ function validGuns342(value:unknown):boolean {
   };
   return visit(value);
 }
+/** Schema 353 cowboy and bowler hats: items, workpieces, recipes, policy
+ * entries and storage or trade keys. */
+const HATS_353=new Set<string>([...HAT_ITEMS353,'unfinished-cowboy-hat','unfinished-bowler-hat']);
+function validHats353(value:unknown):boolean {
+  const visit=(v:unknown):boolean=>{
+    if(Array.isArray(v))return v.every(visit);
+    if(!v||typeof v!=='object')return true;
+    for(const [key,child] of Object.entries(v)){
+      if(key==='item'&&typeof child==='string'&&HATS_353.has(child)||key==='recipe'&&(child==='cowboy-hat'||child==='bowler-hat'))return false;
+      if(key==='allowedItems'&&Array.isArray(child)&&child.some(i=>HATS_353.has(String(i))))return false;
+      if(['items','filters','bought','sold'].includes(key)&&child&&typeof child==='object'&&Object.keys(child).some(i=>HATS_353.has(i)))return false;
+      if(!visit(child))return false;
+    }
+    return true;
+  };
+  return visit(value);
+}
 /** Schema 316 short bow: item, workpiece, recipe and its projectiles/stances. */
 const BOW_316=new Set<string>(['short-bow','unfinished-bow']);
 export function validTuqueCatalogueTransport(value:unknown,version:number):boolean {
+  if(version>=353)return true;
+  if(!validHats353(value))return false;
   if(version>=342)return true;
   if(!validGuns342(value))return false;
   if(version>=340)return true;
@@ -124,7 +143,7 @@ const TUQUE_DOMAINS=['piles','pawns','structures','jobs','packed','stockpiles','
   'group','groupLosses','commercialTrip','civilianPost','visitors','raids','trade','orbital',
   'prisonDepartures','arrivals','startingArrival','podRescues','scout','quests','destroyed','deconstructed'] as const;
 export function validTuqueCatalogueDomains(value:unknown,version:number):boolean {
-  if(version>=342||!value||typeof value!=='object'||Array.isArray(value))return true;
+  if(version>=353||!value||typeof value!=='object'||Array.isArray(value))return true;
   const world=value as Record<string,unknown>;
   return TUQUE_DOMAINS.every(key=>validTuqueCatalogueTransport(world[key],version));
 }

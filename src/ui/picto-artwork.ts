@@ -88,7 +88,7 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
   unfinished=id.startsWith('unfinished-');if(unfinished){id=id.slice(11);if(id==='gun')id='revolver';if(id==='prosthetic')id='prosthetic-arm';if(id==='component')id='component';if(id==='bow')id='unfinished-bow';}
   if(/-meat$/.test(id))id='meat';else if(/-corpse$/.test(id)){animal(d,id,color);d.line([[44,6],[55,17]],2.2,P.red);d.line([[44,17],[55,6]],2.2,P.red);id='drawn';}
   else if(/-egg(?:-(?:un)?fertilized)?$/.test(id)||id==='egg')id='egg';
-  else if(/-(tshirt|shirt|jacket|tribalwear|parka|pants|duster|tuque|plate-armor|simple-helmet|flak-helmet)$/.test(id))id=id.match(/-(tshirt|shirt|jacket|tribalwear|parka|pants|duster|tuque|plate-armor|simple-helmet|flak-helmet)$/)![1]!;
+  else if(/-(tshirt|shirt|jacket|tribalwear|parka|pants|duster|tuque|cowboy-hat|bowler-hat|plate-armor|simple-helmet|flak-helmet)$/.test(id))id=id.match(/-(tshirt|shirt|jacket|tribalwear|parka|pants|duster|tuque|cowboy-hat|bowler-hat|plate-armor|simple-helmet|flak-helmet)$/)![1]!;
   else if(/-wool$/.test(id))id='wool';else if(/leather|fur|camelhide/.test(id))id='leather';
   else if(/-blocks$/.test(id))id='blocks';else if(/-chunk$/.test(id))id='chunk';
   else if(/meal/.test(id))id='meal';else if(/longsword$/.test(id))id='longsword';else if(/spear$/.test(id))id='spear';else if(/mace$/.test(id))id='mace';
@@ -265,6 +265,10 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  case 'jacket':d.path('M 23 11 L 15 15 L 5 29 L 15 36 L 21 28 L 20 54 L 45 54 L 44 28 L 49 36 L 59 29 L 49 15 L 41 11 Q 32 20 23 11 Z',color);d.path('M 24 12 L 30 24 M 40 12 L 34 24',null,1.6,P.paper);d.line([[32,24],[32,53]],1.4);break;
  case 'shirt':case 'tribalwear':case 'parka':case 'duster':d.path(`M 23 11 L 15 15 L 5 29 L 15 36 L 21 28 L 20 ${id==='duster'?58:52} L 45 ${id==='duster'?58:52} L 44 28 L 49 36 L 59 29 L 49 15 L 41 11 Q 32 20 23 11 Z`,color);d.path('M 25 13 Q 32 24 39 13',null,1.3,P.paper);if(id==='parka'){d.path('M 21 14 Q 17 2 32 3 Q 47 2 44 15',null,5,P.paper);}if(id==='duster'||id==='parka')d.line([[32,22],[32,51]],1.3);break;
  case 'pants':d.shape([[17,10],[47,10],[50,55],[34,55],[31,31],[28,55],[13,55]],color);d.line([[18,18],[46,18]],1.3,P.paper);d.line([[32,13],[32,23]],1.2);break;
+ // Schema 353: a creased crown on a brim curled up at the sides; a round
+ // crown on a narrow brim. Both have a dark band.
+ case 'cowboy-hat':d.path('M 3 39 Q 9 47 32 47 Q 55 47 61 39 Q 58 33 50 37 Q 32 42 14 37 Q 6 33 3 39 Z',color);d.path('M 17 39 L 20 18 Q 26 12 32 18 Q 38 12 44 18 L 47 39 Q 32 43 17 39 Z',color);d.path('M 18 33 Q 32 37 46 33',null,3,P.ink);d.path('M 26 15 Q 32 22 38 15',null,1.1,P.paper);break;
+ case 'bowler-hat':d.ellipse(32,44,25,6,color);d.path('M 15 43 Q 13 13 32 12 Q 51 13 49 43 Q 32 47 15 43 Z',color);d.path('M 15 37 Q 32 41 49 37',null,3,P.ink);d.path('M 22 20 Q 26 15 32 15',null,1.1,P.paper);break;
  case 'tuque':d.path('M 14 40 Q 11 13 32 12 Q 53 13 51 40 Z',color);d.rect(10,39,45,13,color);for(const x of[19,29,39,48])d.line([[x,42],[x,49]],1.1,P.paper);d.ellipse(32,8,5,5,color);break;
  case 'flak-vest':case 'plate-armor':case 'recon-armor':case 'shield':d.path('M 22 10 L 15 15 L 10 33 L 19 36 L 18 54 L 46 54 L 45 36 L 54 33 L 49 15 L 42 10 Q 32 22 22 10 Z',id==='shield'?P.blue:color);d.line([[23,27],[41,27]],2,P.paper);d.line([[23,35],[41,35]],2,P.paper);d.line([[32,23],[32,49]],1.4);break;
  case 'flak-helmet':case 'recon-helmet':case 'simple-helmet':d.path('M 10 36 Q 11 10 32 10 Q 54 12 54 38 L 49 41 L 45 50 L 36 50 L 36 36 Z',color);d.line([[11,37],[45,36]],3,P.paper);if(id==='recon-helmet')d.rect(35,28,22,10,P.blue);break;

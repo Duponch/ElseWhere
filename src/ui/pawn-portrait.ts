@@ -5,7 +5,7 @@ import type { apparelAppearance } from '../render/character-apparel';
 import type { PawnAppearance } from '../sim/pawn-appearance';
 import type { Pawn } from '../sim/types';
 import { weaponVisual,RESIDENT_WEAPON_VISUALS269 } from '../render/weapon-shape';
-import {HUMAN_REFERENCE_SCALE,ORIGAMI_DUSTER_DYE,ORIGAMI_PARKA_DYE,ORIGAMI_RECON_ARMOR_DYE} from '../render/origami/human-geometry';
+import {HUMAN_REFERENCE_SCALE,ORIGAMI_DUSTER_DYE,ORIGAMI_PARKA_DYE,ORIGAMI_RECON_ARMOR_DYE,COWBOY_HAT_DYE353,BOWLER_HAT_DYE353} from '../render/origami/human-geometry';
 import {origamiEquipmentPoint,ORIGAMI_EQUIPMENT_HAND,ORIGAMI_EQUIPMENT_BELT,ORIGAMI_EQUIPMENT_SLING,ORIGAMI_WEAPON_BIND} from '../render/origami/equipment-pose';
 import { humanBoneAbsent } from '../render/human-anatomy-presentation';
 import { anestheticStage } from '../sim/anesthetic';
@@ -33,7 +33,7 @@ let sourceFaces: Face[] | undefined;
 // changing a 3D hair, beard, head or garment part changes the portrait too.
 function faces(): readonly Face[] {
   if (sourceFaces) return sourceFaces;
-  const geometry = pawnGeometry(true,true,true,true);
+  const geometry = pawnGeometry(true,true,true,true,true);
   const pos = geometry.getAttribute('position');
   const color = geometry.getAttribute('color'), bone = geometry.getAttribute('boneId'), dye = geometry.getAttribute('dye');
   const result: Face[] = [];
@@ -65,13 +65,15 @@ function visible(face: Face, variant: readonly [number, number, number, number],
   if (dye === PAWN_EYE_CLOSED) return !look.reconHelmet && expression==='sleep';
   if (dye === PAWN_EYE_CROSS) return !look.reconHelmet && expression==='dead';
   if (dye >= 200) return !look.reconHelmet && !!(variant[3] & (1 << (dye - 200)));
-  if (dye >= 100) return !look.helmet && !look.tuque && !!(variant[2] & (1 << (dye - 100)));
+  if (dye >= 100) return !look.helmet && !look.tuque && !look.hat353 && !!(variant[2] & (1 << (dye - 100)));
   if (dye === -2) return look.vest;
   if (dye === -3) return look.silhouette === 2;
   if (dye === ORIGAMI_DUSTER_DYE) return look.silhouette === 3;
   if (dye === ORIGAMI_PARKA_DYE) return look.silhouette === 4;
-  if (dye === -6) return look.silhouette === 4 && !look.helmet && !look.tuque;
+  if (dye === -6) return look.silhouette === 4 && !look.helmet && !look.tuque && !look.hat353;
   if (dye === TUQUE_DYE) return !!look.tuque;
+  if (dye === COWBOY_HAT_DYE353) return look.hat353 === 1;
+  if (dye === BOWLER_HAT_DYE353) return look.hat353 === 2;
   if (dye === FLAK_HELMET_DYE) return look.helmet && !look.reconHelmet && !look.simpleHelmet;
   if (dye === PLATE_ARMOR_DYE) return look.plateArmor;
   if (dye === SIMPLE_HELMET_DYE) return look.simpleHelmet;
@@ -88,6 +90,7 @@ function colorOf(face: Face, appearance: PawnAppearance, look: ApparelLook): num
   if(face.dye===-2&&look.vestTintColor!==undefined)return look.vestTintColor;
   if(face.dye===FLAK_HELMET_DYE&&look.plasteelHelmet)return 0xa0b2b5;
   if (face.dye === TUQUE_DYE) return look.tuque===2?0xb3c0ba:0xd8c8a2;
+  if ((face.dye === COWBOY_HAT_DYE353 || face.dye === BOWLER_HAT_DYE353) && face.color !== 0x2f2a26) return look.hatColor353 ?? face.color;
   if (face.dye === ORIGAMI_RECON_ARMOR_DYE) return face.color;
   if (face.dye >= 100) return appearance.hairColor;
   if (face.dye === 2 || look.silhouette === 2 && (face.bone === 2 || face.bone === 3)) return appearance.skinColor;
@@ -169,7 +172,7 @@ function makeSvg(appearance: PawnAppearance, look: ApparelLook, weaponItem: stri
 export function portraitDataUrl(appearance: PawnAppearance, look: ApparelLook, weaponItem?: string, expression:PortraitExpression='awake',limbMask=0): string {
   const key = [appearance.version, appearance.sex, appearance.bodyType, appearance.headType,
     appearance.hair, appearance.beard, appearance.skinColor, appearance.hairColor,
-    look.signature, look.color ?? '', look.vest, look.helmet, look.reconHelmet,look.tuque, look.silhouette, look.pants, weaponVisual(weaponItem)?.item ?? '',expression,limbMask].join('|');
+    look.signature, look.color ?? '', look.vest, look.helmet, look.reconHelmet,look.tuque,look.hat353,look.hatColor353??'', look.silhouette, look.pants, weaponVisual(weaponItem)?.item ?? '',expression,limbMask].join('|');
   const cached = cache.get(key);
   if (cached) return cached;
   const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(makeSvg(appearance, look, weaponItem, expression,limbMask))}`;

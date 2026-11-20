@@ -50,7 +50,7 @@ export function orbitalStock(w:World,ship:OrbitalShip,state:Pick<OrbitalState,'r
   // Schema 338, after the novel as in Core: bulk BasicClothing/Clothing
   // garments, exotic TechHediff parts (unrepresented defs keep their weight).
   if(w.schemaVersion>=338){
-    for(const {item,quality} of ship.kind==='bulk'?orbitalClothing338(state):[])
+    for(const {item,quality} of ship.kind==='bulk'?orbitalClothing338(state,w.schemaVersion):[])
       result.push({id:w.nextId++,item,kind:'apparel',quantity:1,owner:{type:'orbital-ship',shipId:ship.id},apparel:{quality,hitPoints:tradeCatalogueEntry(item)!.maxHitPoints,material:APPAREL[item as ApparelItem].material,corpseWear284:false}});
     for(const item of ship.kind==='exotic'?orbitalTechHediff338(state):[])
       result.push({id:w.nextId++,item,kind:ITEM_DEFINITIONS[item].kind,quantity:1,owner:{type:'orbital-ship',shipId:ship.id}});
