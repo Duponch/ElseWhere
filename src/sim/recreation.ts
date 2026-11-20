@@ -9,9 +9,11 @@ import {readingSourceAllowed295} from './reading-space-295.ts';
 import {interruptWork} from './interrupted-cargo.ts';
 import { allowedAreaAllows,captureAllowedArea } from './allowed-area-state.ts';
 import { assignmentAt } from './schedule.ts';
-import { gainRecreation, RECREATION_GAIN, RECREATION_DURATION, VISIT_SICK_DURATION, recreationKind, recreationRandom, type RecreationActivity, type RecreationTask } from './recreation-rules.ts';
-import { adjacentToTable, availableChessTables, availablePins, availableTelevisions, captureRecreationResources, chessCells, horseshoeCells, isGatherSpot, nearVisitPatient, recreationSiteValid, recreationSpace, visitablePatient, visitPatient, visitChanceScore325,type RecreationSpace } from './recreation-space.ts';
+import { gainRecreation, RECREATION_GAIN, RECREATION_DURATION, VISIT_SICK_DURATION, recreationKind, recreationRandom, type OrdinaryRecreationTask, type RecreationActivity, type RecreationTask } from './recreation-rules.ts';
+import { adjacentToTable, availableChessTables, availablePins, availableTelevisions, captureRecreationResources, chessCells, horseshoeCells, isGatherSpot, nearVisitPatient, recreationSiteValid, recreationSpace, standableRecreationCell, visitablePatient, visitPatient, visitChanceScore325,type RecreationSpace } from './recreation-space.ts';
 import { opinionOf } from './social-state.ts';
+import {isJoyTableActivity354,isJoyTablesSchema354,JOY_TABLE_BY_ACTIVITY_354} from './joy-tables-354.ts';
+import {availableJoyTables354,billiardsGameOver354,billiardsShotOver354,joyTableActiveTick354,joyTableCandidates354,joyTableCapable354,nextBilliardsCell354} from './joy-table-recreation-354.ts';
 /** Core FindRandomSickPawn (schema 325): one patient drawn by opinion and
  * distance. An unreachable patient makes this visit fail rather than move on
  * to another one (adaptation: Core leaves unreachable patients out first). */
@@ -37,7 +39,7 @@ import { cellIndex, routeToCell } from './pathfinding.ts';
 import type { NeedContext } from './needs.ts';
 import type { Pawn, World } from './types.ts';
 
-const labels: Record<RecreationActivity,string> = {horseshoes: 'jouer aux fers à cheval', skygaze: 'observer le ciel', chess:'jouer aux échecs','social-relax':'se détendre ensemble','visit-sick':'rendre visite à un malade','watch-television':'regarder la télévision',party:'participer à la fête',read:'lire un roman'};
+const labels: Record<RecreationActivity,string> = {horseshoes: 'jouer aux fers à cheval', skygaze: 'observer le ciel', chess:'jouer aux échecs','social-relax':'se détendre ensemble','visit-sick':'rendre visite à un malade','watch-television':'regarder la télévision',party:'participer à la fête',read:'lire un roman',hoopstone:JOY_TABLE_BY_ACTIVITY_354.hoopstone.activityLabel,billiards:JOY_TABLE_BY_ACTIVITY_354.billiards.activityLabel,'game-of-ur':JOY_TABLE_BY_ACTIVITY_354['game-of-ur'].activityLabel,poker:JOY_TABLE_BY_ACTIVITY_354.poker.activityLabel};
 const urgentDoctorCall=(world:World,pawn:Pawn):boolean=>urgentWorkEnabled(pawn,'doctor',world)&&world.pawns.some(p=>p!==pawn&&allowedAreaAllows(world,pawn,p)&&lyingPatient(p)&&urgentTreatment(p));
 /** Search shares the existing bounded navigation budget. No gain in transit,
  * no worker/cargo preemption just because the timetable recommends recreation. */
@@ -55,16 +57,23 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
     if (assignment==='work' || urgentMedicalTask(pawn,world) || urgentDoctorCall(world,pawn)
       || joy.task.activity==='visit-sick'&&world.pawns.some(p=>p.id===joy.task!.patientId&&urgentTreatment(p))
       || joy.task.activity==='chess'&&pawnBody(pawn).capacities.manipulation<=0
+      || isJoyTableActivity354(joy.task.activity)&&!joyTableCapable354(pawn,joy.task.activity)
       || joy.task.activity==='watch-television'&&(world.schemaVersion<190||!isColonist(pawn)||!!pawn.prisoner||!!pawn.visitor||pawnBody(pawn).capacities.sight<=0)
       || (joy.task.activity==='social-relax'||joy.task.activity==='visit-sick')&&!canSocialize(world,pawn,true)
       || !allowedAreaRecreationAllowed(world,pawn,joy.task)||!recreationSiteValid(world,joy.task,undefined,context.recreationTopology)) { context.release(); return false; }
     const task=joy.task;
     if (task.phase==='travel') {
+      // Schema 354: the billiards game clock (joyDuration since the game
+      // started) keeps running while the player walks to the next shot.
+      const between=task.activity==='billiards'&&task.since354!==undefined;
+      if(between&&billiardsGameOver354(world,task)){context.event(`${pawn.name} termine son loisir : ${labels[task.activity]}.`);context.release();return true;}
       if(pawn.x!==task.target.x||pawn.z!==task.target.z) {context.move(task.target,true);return true;}
       task.phase='active';pawn.path=[];pawn.state='recreating';
-      context.event(`${pawn.name} commence à ${labels[task.activity]}.`);
+      if(!between)context.event(`${pawn.name} commence à ${labels[task.activity]}.`);
+      if(task.activity==='billiards')task.since354??=world.tick;
     }
-    pawn.state='recreating';gainRecreation(joy,recreationKind(task.activity),RECREATION_GAIN*(task.activity==='watch-television'?TELEVISION_GAIN_FACTOR:1));
+    const joyTable=isJoyTableActivity354(task.activity);
+    pawn.state='recreating';gainRecreation(joy,recreationKind(task.activity),RECREATION_GAIN*(task.activity==='watch-television'?TELEVISION_GAIN_FACTOR:joyTable?joyTableActiveTick354(world,pawn,task as OrdinaryRecreationTask):1));
     if(task.activity==='visit-sick') {
       const patient=visitPatient(world,task.patientId!,false);
       if(!patient){context.release();return false;}
@@ -82,8 +91,18 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
       learnSkill(pawn.skills.intellectual,20,pawn); // Core 0.002 XP per tick, ten Core ticks per local tick.
     }
     task.elapsed++;
+    if(task.activity==='billiards'){
+      task.shot354=(task.shot354??0)+1;
+      // Every shot ends with the recreation room memory (TryGainRecRoomThought).
+      if(billiardsShotOver354(task)&&joy.level<=99.99&&!billiardsGameOver354(world,task)){
+        rememberRoomUse(world,pawn,'recreation');
+        const next=nextBilliardsCell354(world,pawn,task as OrdinaryRecreationTask,context,cell=>standableRecreationCell(world,cell),reservedServiceCells(world,pawn.id),()=>recreationRandom(world));
+        if(next==='none'){context.event(`${pawn.name} termine son loisir : ${labels[task.activity]}.`);context.release();return true;}
+        if(next!=='pending'){task.target=next.target;task.shot354=0;task.phase='travel';pawn.path=next.path;pawn.planCooldown=0;if(next.path.length)pawn.state='moving';else task.phase='active';}
+      }
+    }
     const full=task.activity==='visit-sick'&&world.schemaVersion>=319?joy.level>99.99&&(visitPatient(world,task.patientId!,false)?.recreation.level??100)>99.99:joy.level>99.99;
-    if(full||task.elapsed>=(task.activity==='visit-sick'?VISIT_SICK_DURATION:RECREATION_DURATION)) {
+    if(full||(task.activity==='billiards'?billiardsGameOver354(world,task):task.elapsed>=(task.activity==='visit-sick'?VISIT_SICK_DURATION:RECREATION_DURATION))) {
       context.event(`${pawn.name} termine son loisir : ${labels[task.activity]}.`);
       context.release();
     }
@@ -112,8 +131,18 @@ export function offerRecreation300(world:World,pawn:Pawn,context:NeedContext,aft
   const gathers=socialCapable?world.structures.filter(s=>isGatherSpot(s)&&s.gatherSpot!==false&& (s.kind!=='campfire'||!!s.fuel?.ticks&&s.power?.switchOn!==false)):[];
   const claimedPatients=new Set(world.pawns.flatMap(p=>p.recreation.task?.activity==='visit-sick'&&p.id!==pawn.id?[p.recreation.task.patientId!]:[]));
   const patients=socialCapable?world.pawns.filter(p=>p.id!==pawn.id&&!claimedPatients.has(p.id)&&visitablePatient(world,p)):[];
-  for(const activity of ['skygaze','horseshoes','chess','social-relax','visit-sick','watch-television'] as const) {
+  // Schema 354: JoyGiverDef order puts Play_Hoopstone, Play_Billiards and
+  // Play_GameOfUr after horseshoes, Play_Poker after chess. A giver without a
+  // building adds no choice, so the draws of a colony without one are unchanged.
+  const joyTables354=isJoyTablesSchema354(world.schemaVersion)?availableJoyTables354(world,pawn.id):undefined;
+  for(const activity of joyTables354?['skygaze','horseshoes','hoopstone','billiards','game-of-ur','chess','poker','social-relax','visit-sick','watch-television'] as const:['skygaze','horseshoes','chess','social-relax','visit-sick','watch-television'] as const) {
     if(activity==='watch-television'&&!televisions.length)continue;
+    if(isJoyTableActivity354(activity)){
+      const kind=recreationKind(activity);
+      if(!joy.bored[kind]&&joyTables354?.get(activity)?.length&&joyTableCapable354(pawn,activity))
+        choices.push({activity,weight:JOY_TABLE_BY_ACTIVITY_354[activity].baseChance*Math.max(.001,(1-(joy.tolerance[kind]??0)/100)**5)});
+      continue;
+    }
     const kind=recreationKind(activity);
     if(!joy.bored[kind]&&(activity!=='horseshoes'||(pins??=availablePins(world,pawn.id)).length)&&(activity!=='chess'||(chessTables??=availableChessTables(world,pawn.id)).length&&pawnBody(pawn).capacities.manipulation>0)
       &&(activity!=='social-relax'||gathers.length)&&(activity!=='visit-sick'||patients.length))
@@ -142,6 +171,9 @@ export function offerRecreation300(world:World,pawn:Pawn,context:NeedContext,aft
         const seat=seats.get(cellIndex(world,target.x,target.z));
         if(seat&&!reserved.has(cellIndex(world,target.x,target.z)))candidates.push({activity,buildingId:table.id,seatId:seat.id,target,phase:'travel',elapsed:0});
       }
+    } else if(isJoyTableActivity354(activity)) {
+      const decision=readSpace();
+      candidates.push(...joyTableCandidates354(world,activity,joyTables354?.get(activity)??[],{tables:decision.joyTables354??new Map(),seats:decision.seats,objects:decision.objects,standable:cell=>standableRecreationCell(world,cell,decision)},reserved,horseshoeCells));
     } else if(activity==='watch-television') {
       const seats=readSpace().seats;
       for(const tv of televisions)for(const target of televisionWatchCells(tv)) {
@@ -190,7 +222,7 @@ export function offerRecreation300(world:World,pawn:Pawn,context:NeedContext,aft
     if(!reach)return 'pending';
     const reachable=valid.flatMap(task=>{const path=routeToCell(world,task.target,reach);return path?[{task,path}]:[];});
     if(!reachable.length)continue;
-    let preferred=(activity==='social-relax'||activity==='visit-sick')&&reachable.some(r=>r.task.seatId!==undefined)?reachable.filter(r=>r.task.seatId!==undefined):reachable;
+    let preferred=(activity==='social-relax'||activity==='visit-sick'||activity==='game-of-ur')&&reachable.some(r=>r.task.seatId!==undefined)?reachable.filter(r=>r.task.seatId!==undefined):reachable;
     if(activity==='watch-television') {
       const facingReachable=reachable.filter(r=>facing.includes(r.task));
       if(facingReachable.length)preferred=facingReachable;

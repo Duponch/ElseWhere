@@ -54,7 +54,7 @@ const BUILDINGS:Readonly<Record<string,readonly [number,number,boolean]>>={
   'hydroponics-basin':[180,.5,true],
   'mini-turret':[100,.7,true],
   'ancient-road-barrier':[500,0,true],'ancient-road-lamp':[300,0,true],
-  'tube-television':[100,1,true],sandbags:[300,0,true],fence:[100,1,false],'fence-gate':[120,1,false],'pen-marker':[80,1,false],wall:[300,1,false],door:[160,1,false],autodoor:[160,1,false],bed:[140,1,true],'hospital-bed':[150,1,true],table:[75,1,true],stool:[75,1,true],horseshoes:[75,1,true],'chess-table':[100,1,true],
+  'tube-television':[100,1,true],sandbags:[300,0,true],fence:[100,1,false],'fence-gate':[120,1,false],'pen-marker':[80,1,false],wall:[300,1,false],door:[160,1,false],autodoor:[160,1,false],bed:[140,1,true],'hospital-bed':[150,1,true],table:[75,1,true],stool:[75,1,true],horseshoes:[75,1,true],'chess-table':[100,1,true],'hoopstone-ring':[100,1,true],'billiards-table':[250,1,true],'game-of-ur-board':[90,1,true],'poker-table':[250,1,true],
   'torch-lamp':[75,0,false],campfire:[80,0,false],'passive-cooler':[80,1,false],stonecutter:[180,1,true],'butcher-table':[180,1,true],
   'fueled-stove':[180,1,true],'electric-stove':[180,1,true],'tailor-bench':[180,1,true],'research-bench':[250,1,true],
   'machining-table':[180,1,true],
@@ -65,7 +65,7 @@ const BUILDINGS:Readonly<Record<string,readonly [number,number,boolean]>>={
   'power-conduit':[80,.7,false],'power-switch':[120,.5,false],'solar-generator':[300,.7,true],heater:[100,.5,true],'wind-turbine':[150,.5,true],
 };
 const STUFF_HP:Readonly<Record<string,number>>={wood:.65,steel:1,jade:.5,'granite-blocks':1.7,'limestone-blocks':1.55,'marble-blocks':1.2,'sandstone-blocks':1.4,'slate-blocks':1.3};
-const STUFF_BUILDINGS=new Set(['shelf','small-shelf','spike-trap','electric-crematorium','double-bed','drug-lab','fence','fence-gate','pen-marker','wall','door','autodoor','bedroll','bed','hospital-bed','table','table-square','table-long','stool','dining-chair','end-table','dresser','flower-pot','horseshoes','chess-table','stonecutter','butcher-table','fueled-stove','electric-stove','tailor-bench','electric-tailor-bench','research-bench','art-bench','small-sculpture','large-sculpture']);
+const STUFF_BUILDINGS=new Set(['shelf','small-shelf','spike-trap','electric-crematorium','double-bed','drug-lab','fence','fence-gate','pen-marker','wall','door','autodoor','bedroll','bed','hospital-bed','table','table-square','table-long','stool','dining-chair','end-table','dresser','flower-pot','horseshoes','chess-table','hoopstone-ring','billiards-table','game-of-ur-board','poker-table','stonecutter','butcher-table','fueled-stove','electric-stove','tailor-bench','electric-tailor-bench','research-bench','art-bench','small-sculpture','large-sculpture']);
 /** Schema 311: Core MaxHitPoints of eight buildings whose table value was
  * wrong before (Fence, FenceGate, PenMarker, Table2x4c, DiningChair,
  * EndTable, Dresser, PlantPot). Older schemas keep validating with theirs. */

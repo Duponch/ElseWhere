@@ -285,7 +285,7 @@ export function validateResearch(world:World,version:number):string[]{
   if(!hydroponicsUnlocked(world)&&electricalContent.some(s=>s.kind==='hydroponics-basin'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='hydroponics-basin'))errors.push('Locked hydroponics basin.');
   if(!batteriesUnlocked(world)&&electricalContent.some(s=>s.kind==='battery'))errors.push('Locked battery.');
   if(!solarPowerUnlocked(world)&&electricalContent.some(s=>s.kind==='solar-generator'))errors.push('Locked solar generator.');
-  if(version>=90&&!complexFurnitureUnlocked(world)&&electricalContent.some(s=>['dining-chair','armchair','end-table','dresser',...(version>=244?['vent']:[]),...(version>=122?['chess-table']:[])].includes(s.kind)))errors.push('Locked complex furniture.');
+  if(version>=90&&!complexFurnitureUnlocked(world)&&electricalContent.some(s=>['dining-chair','armchair','end-table','dresser',...(version>=244?['vent']:[]),...(version>=122?['chess-table']:[]),...(version>=354?['billiards-table','poker-table']:[])].includes(s.kind)))errors.push('Locked complex furniture.');
   if(!machiningUnlocked(world)&&electricalContent.some(s=>s.kind==='machining-table'))errors.push('Locked machining table.');
   if(version>=123&&!microelectronicsUnlocked(world)&&electricalContent.some(s=>s.kind==='hi-tech-research-bench'))errors.push('Locked hi-tech research bench.');
   if(version>=123&&!multiAnalyzerUnlocked(world)&&electricalContent.some(s=>s.kind==='multi-analyzer'))errors.push('Locked multi-analyzer.');

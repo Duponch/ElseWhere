@@ -12,12 +12,13 @@ import {
 describe('Architect generated icon atlases', () => {
   it('keeps marker cell addresses while every UI tool has its own complete image', () => {
     const rendered = toolDefinitions.map(tool => tool.id);
-    expect(rendered).toHaveLength(124);
-    expect(new Set(rendered).size).toBe(124);
+    expect(rendered).toHaveLength(128);
+    expect(new Set(rendered).size).toBe(128);
     expect(rendered).toContain('spike-trap');
     expect(rendered).toContain('double-bed');
     expect(rendered).toContain('mini-turret');
     expect(rendered).toContain('tube-television');
+    for(const id of ['hoopstone-ring','billiards-table','game-of-ur-board','poker-table'])expect(rendered).toContain(id);
     expect(rendered).toContain('sandbags');
     expect(rendered).toContain('sun-lamp');
     expect(ARCHITECT_ICON_ORDER).toEqual(expect.arrayContaining(rendered));

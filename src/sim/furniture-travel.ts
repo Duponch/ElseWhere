@@ -31,6 +31,9 @@ export function terrainTravelDelay(world:World,index:number):number {
 /** Current Core wiki path costs, converted by the local day/tick ratio (10).
  * Repeat suppression is shared by all qualifying furniture, not by instance. */
 export const FURNITURE_TRAVEL:Readonly<Record<StructureKind,Readonly<{delay:number;stand:boolean;repeat:boolean}>>>=Object.freeze({
+  // Schema 354, Buildings_Joy pathCost: hoopstone 14 (Standable), Game of Ur 14, billiards and poker 42.
+  'hoopstone-ring':{delay:1.4,stand:true,repeat:false},'game-of-ur-board':{delay:1.4,stand:false,repeat:true},
+  'billiards-table':{delay:4.2,stand:false,repeat:true},'poker-table':{delay:4.2,stand:false,repeat:true},
   'ship-cryptosleep-casket':{delay:4.2,stand:false,repeat:true},
   'ship-computer':{delay:0,stand:false,repeat:false},'ship-sensors':{delay:0,stand:false,repeat:false},
   'ship-beam':{delay:0,stand:false,repeat:false},'ship-engine':{delay:0,stand:false,repeat:false},

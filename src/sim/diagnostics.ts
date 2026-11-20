@@ -133,7 +133,7 @@ export function queryPawnStatus(world: World, pawn: Pawn, foodReadability?:FoodR
     if(task.activity==='party')return {code:'recreation',reason:task.phase==='travel'?'Se rend à la fête.':'Participe à la fête.'};
     if(task.activity==='visit-sick')return {code:'recreation',reason:task.phase==='travel'?`Se rend au chevet de ${patient?.name??'un patient'}.`:`Rend visite à ${patient?.name??'un patient'} (${Math.round(pawn.recreation.level)} % de loisirs).`};
     if(task.activity==='social-relax')return {code:'recreation',reason:task.phase==='travel'?'Rejoint un point de rencontre.':`Se détend au point de rencontre (${Math.round(pawn.recreation.level)} % de loisirs).`};
-    const activity=task.activity==='horseshoes'?'jouer aux fers à cheval':task.activity==='chess'?'jouer aux échecs':task.activity==='watch-television'?'regarder la télévision':'observer le ciel';
+    const activity=task.activity==='horseshoes'?'jouer aux fers à cheval':task.activity==='chess'?'jouer aux échecs':task.activity==='hoopstone'?'lancer des pierres dans l’anneau':task.activity==='billiards'?'jouer au billard':task.activity==='game-of-ur'?'jouer au jeu royal d’Ur':task.activity==='poker'?'jouer au poker':task.activity==='watch-television'?'regarder la télévision':'observer le ciel';
     return {code:'recreation',reason:task.phase==='travel'?`Rejoint une place pour ${activity}.`:`Prend le temps de ${activity} (${Math.round(pawn.recreation.level)} %).`};
   }
   if(pawn.heatRefuge)return {code:'thermal-refuge',reason:pawn.state==='moving'?'Rejoint un refuge à température confortable.':'Attend dans un refuge thermique pour récupérer.'};

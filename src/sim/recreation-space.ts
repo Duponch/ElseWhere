@@ -1,4 +1,6 @@
 import { isBedKind } from './bed-kinds.ts';
+import {isJoyTableActivity354,isJoyTableKind354,isJoyTablesSchema354} from './joy-tables-354.ts';
+import {joyTableSiteValid354} from './joy-table-recreation-354.ts';
 import {volcanicWinterActive310} from './volcanic-winter-state-310.ts';
 import {readingTaskSiteValid295} from './reading-space-295.ts';
 import {partyTaskSiteValid292} from './party-space-292.ts';
@@ -23,6 +25,8 @@ export interface RecreationSpace {
   pins: Map<number, Structure>; games: Map<number, Structure>; seats: Map<number, Structure>;
   gathers: Map<number, Structure>; patients?: Map<number,Pawn>;
   televisions?:Map<number,Structure>; roomTopology:()=>RoomTopology;
+  /** Schema 354 joy buildings by id. */
+  joyTables354?:Map<number,Structure>;
 }
 export function recreationSpace(world: World, resourceTargets?: readonly Cell[], includePatients=false,readTopology?:()=>RoomTopology): RecreationSpace {
   let topology:RoomTopology|undefined;
@@ -31,6 +35,7 @@ export function recreationSpace(world: World, resourceTargets?: readonly Cell[],
     if(s.kind==='horseshoes')index.pins.set(s.id,s);
     if(s.kind==='chess-table')index.games.set(s.id,s);
     if(world.schemaVersion>=190&&s.kind==='tube-television'){index.televisions??=new Map();index.televisions.set(s.id,s);}
+    if(isJoyTableKind354(s.kind)&&isJoyTablesSchema354(world.schemaVersion)){index.joyTables354??=new Map();index.joyTables354.set(s.id,s);}
     if(isGatherSpot(s)&&gatherActive(s))index.gathers.set(s.id,s);
     if(isDiningSeat(s.kind))index.seats.set(s.z*world.width+s.x,s);
     for(const c of footprintCells(s))index.objects.add(c.z*world.width+c.x);
@@ -121,6 +126,12 @@ export function recreationSiteValid(world: World, task: RecreationTask, space?: 
     return world.schemaVersion>=190&&!!tv&&tvActive(tv)&&!!seat&&seat.id===task.seatId&&seat.x===task.target.x&&seat.z===task.target.z
       &&isTelevisionCell(tv,seat)&&!deconstructionReserved(world,tv.id)&&!deconstructionReserved(world,seat.id)
       &&clearThrow(world,tv,seat,space)&&televisionSameRoom(world,tv,seat,space?.roomTopology??readTopology);
+  }
+  if(isJoyTableActivity354(task.activity)){
+    const table=space?space.joyTables354?.get(task.buildingId!):world.structures.find(s=>s.id===task.buildingId);
+    const seat=task.seatId===undefined?undefined:space?space.seats.get(task.target.z*world.width+task.target.x):world.structures.find(s=>s.id===task.seatId&&isDiningSeat(s.kind));
+    const objectAt=(cell:Cell)=>space?space.objects.has(cell.z*world.width+cell.x):world.structures.some(s=>footprintContains(s,cell))||world.jobs.some(j=>footprintContains(j,cell));
+    return joyTableSiteValid354(world,task,table,seat,objectAt,(pin,cell)=>clearThrow(world,pin,cell,space),isHorseshoeCell);
   }
   if(task.activity==='chess') {
     const table=space?space.games.get(task.buildingId!):world.structures.find(s=>s.id===task.buildingId&&s.kind==='chess-table');

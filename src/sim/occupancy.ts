@@ -106,6 +106,12 @@ export const OCCUPANCY = Object.freeze({
   campfire: Object.freeze({clearItems:true,items:false,zones:true,store:false}),
   horseshoes: Object.freeze({clearItems:false,items:true,zones:true,store:true}),
   'chess-table': Object.freeze({clearItems:false,items:true,zones:false,store:false}),
+  // Schema 354: the hoopstone ring stands like the horseshoes pin; the three
+  // tables pass through like the chess table (canOverlapZones false for billiards and poker).
+  'hoopstone-ring': Object.freeze({clearItems:false,items:true,zones:true,store:true}),
+  'billiards-table': Object.freeze({clearItems:false,items:true,zones:false,store:false}),
+  'game-of-ur-board': Object.freeze({clearItems:false,items:true,zones:false,store:false}),
+  'poker-table': Object.freeze({clearItems:false,items:true,zones:false,store:false}),
 });
 export const occupancyOf=(kind:JobKind|StructureKind)=>kind in OCCUPANCY?OCCUPANCY[kind as StructureKind]:undefined;
 export const clearsGroundItems=(world:World,kind:JobKind|StructureKind)=>world.schemaVersion<21||occupancyOf(kind)?.clearItems!==false;

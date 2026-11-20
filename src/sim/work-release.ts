@@ -214,7 +214,7 @@ export function releaseAssignments(world:World,pawn:Pawn,despawning=false,ownerL
     for(const animal of world.wildlife?.animals??[])if(ids.has(animal.id)){animal.path=[];animal.nextDecision=world.tick+1;}
   }
   finishRoomRest(world,pawn);
-  if((pawn.recreation.task?.activity==='horseshoes'||pawn.recreation.task?.activity==='chess'||pawn.recreation.task?.activity==='watch-television')&&pawn.recreation.task.phase==='active'&&pawn.recreation.task.elapsed>0)rememberRoomUse(world,pawn,'recreation');
+  if((pawn.recreation.task?.activity==='horseshoes'||pawn.recreation.task?.activity==='chess'||pawn.recreation.task?.activity==='watch-television'||pawn.recreation.task?.activity==='hoopstone'||pawn.recreation.task?.activity==='billiards'||pawn.recreation.task?.activity==='game-of-ur'||pawn.recreation.task?.activity==='poker')&&pawn.recreation.task.phase==='active'&&pawn.recreation.task.elapsed>0)rememberRoomUse(world,pawn,'recreation');
   if(pawn.recreation.task?.activity==='read'&&pawn.recreation.task.stage==='read'&&pawn.recreation.task.elapsed>0)rememberRoomUse(world,pawn,'recreation');
   cancelAutomaticCombat(pawn);cancelHunting(pawn);
   if(!despawning&&pawn.need?.kind==='sleep'&&pawn.need.medical&&pawn.health&&!pawn.health.death&&medicalCivilTick271(pawn.health)<world.tick)updatePawnHealth(world,pawn);

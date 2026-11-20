@@ -18,6 +18,7 @@ const PACKS:Readonly<Partial<Record<PackedFurniture['building']['kind'],number>>
  'tailor-bench':20000,'electric-tailor-bench':20000,bedroll:2500,bed:30000,'double-bed':50000,
  'hospital-bed':35000,table:5000,'table-square':10000,'table-long':20000,stool:3000,'dining-chair':5000,
  armchair:35000,'end-table':5000,dresser:15000,'flower-pot':2000,horseshoes:3000,'chess-table':5000,
+ 'hoopstone-ring':4000,'billiards-table':60000,'game-of-ur-board':2000,'poker-table':30000,
  stonecutter:20000,'standing-lamp':4000,'sun-lamp':4500,
 });
 /** The original inner building supplies mass. No wrapper/quality/HP multiplier. */

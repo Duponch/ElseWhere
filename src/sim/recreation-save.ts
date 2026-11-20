@@ -6,6 +6,8 @@ import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import { initialRecreation, RECREATION_DURATION, RECREATION_KINDS, VISIT_SICK_DURATION } from './recreation-rules.ts';
 import { adjacentToTable, isChessCell, isGatherSpot, isHorseshoeCell } from './recreation-space.ts';
 import { isDiningSeat } from './dining.ts';
+import { footprintCells } from './definitions.ts';
+import { inJoyTableRing354,isJoyTableActivity354,JOY_TABLE_ACTIVITIES_354,JOY_TABLE_BY_ACTIVITY_354,joyTableCardinalCell354,joyTableRequiresChair354 } from './joy-tables-354.ts';
 import { validTelevisionTasks } from './television-save.ts';
 import type { World } from './types.ts';
 
@@ -68,16 +70,20 @@ export function validateRecreation(world: World, version: number): string[] {
       }
       continue;
     }
-    if(!record(task)||Object.keys(task).some(k=>!['activity','target','buildingId','seatId','patientId','phase','elapsed','partyStartedAtCore'].includes(k))
-      ||!['skygaze','horseshoes',...(version>=122?['chess']:[]),...(version>=124?['social-relax','visit-sick']:[]),...(version>=190?['watch-television']:[]),...((version===292||(version===293||version===294||(version===295||(version===296||isCorePhysicalSchema297(version)))))?['party']:[])].includes(task.activity as string)||!['travel','active'].includes(task.phase as string)
+    if(!record(task)||Object.keys(task).some(k=>!['activity','target','buildingId','seatId','patientId','phase','elapsed','partyStartedAtCore',...(version>=354&&task.activity==='billiards'?['shot354','since354']:[])].includes(k))
+      ||!['skygaze','horseshoes',...(version>=122?['chess']:[]),...(version>=124?['social-relax','visit-sick']:[]),...(version>=190?['watch-television']:[]),...(version>=354?JOY_TABLE_ACTIVITIES_354:[]),...((version===292||(version===293||version===294||(version===295||(version===296||isCorePhysicalSchema297(version)))))?['party']:[])].includes(task.activity as string)||!['travel','active'].includes(task.phase as string)
       ||!Number.isInteger(task.elapsed)||(task.elapsed as number)<0||(task.elapsed as number)>=(task.activity==='party'?1502:task.activity==='visit-sick'?VISIT_SICK_DURATION:RECREATION_DURATION)
       ||!record(task.target)||!Number.isInteger(task.target.x)||!Number.isInteger(task.target.z)
       ||(task.target.x as number)<0||(task.target.z as number)<0||(task.target.x as number)>=world.width||(task.target.z as number)>=world.height) {errors.push('Invalid recreation activity.');continue;}
     if(!validPartyTask292(task,version,world.tick,world.width,world.height))errors.push('Invalid or future Party token.');
     if(pawn.jobId!==null||pawn.haul||pawn.cooking||pawn.need)errors.push('Recreation conflicts with another task.');
-    if(task.seatId!==undefined&&(version<122||!['chess','social-relax','visit-sick',...(version>=190?['watch-television']:[])].includes(task.activity as string)||!Number.isSafeInteger(task.seatId)||Number(task.seatId)<1))errors.push('Invalid recreation seat.');
+    if(task.seatId!==undefined&&(version<122||!['chess','social-relax','visit-sick',...(version>=190?['watch-television']:[]),...(version>=354?['game-of-ur','poker']:[])].includes(task.activity as string)||!Number.isSafeInteger(task.seatId)||Number(task.seatId)<1))errors.push('Invalid recreation seat.');
     if(task.patientId!==undefined&&(version<124||task.activity!=='visit-sick'||!Number.isSafeInteger(task.patientId)||Number(task.patientId)<1))errors.push('Invalid recreation patient.');
-    if(task.phase==='travel'?(pawn.state!=='moving'||task.elapsed!==0):(pawn.state!=='recreating'||pawn.path.length>0||pawn.moveCooldown>0||pawn.x!==task.target.x||pawn.z!==task.target.z))errors.push('Invalid recreation phase or position.');
+    // Schema 354: a billiards player walking to the next shot keeps the game clock.
+    const billiardsWalk=version>=354&&task.activity==='billiards'&&task.phase==='travel'&&task.since354!==undefined;
+    if(version>=354&&task.activity==='billiards'&&(!Number.isInteger(task.shot354)||Number(task.shot354)<0||Number(task.shot354)>=RECREATION_DURATION||task.phase==='travel'&&task.shot354!==0
+      ||(task.phase==='active'||Number(task.elapsed)>0)!==(task.since354!==undefined)||task.since354!==undefined&&(!Number.isSafeInteger(task.since354)||Number(task.since354)<0||Number(task.since354)>world.tick)))errors.push('Invalid billiards shot.');
+    if(task.phase==='travel'?(pawn.state!=='moving'||task.elapsed!==0&&!billiardsWalk):(pawn.state!=='recreating'||pawn.path.length>0||pawn.moveCooldown>0||pawn.x!==task.target.x||pawn.z!==task.target.z))errors.push('Invalid recreation phase or position.');
     if(task.activity==='party'){if(task.buildingId!==null||task.seatId!==undefined||task.patientId!==undefined)errors.push('Party cannot claim furniture or patient.');}
     else if(task.activity==='skygaze') {if(task.buildingId!==null||task.seatId!==undefined)errors.push('Skygazing cannot claim a building.');}
     else if(task.activity==='chess') {
@@ -85,6 +91,15 @@ export function validateRecreation(world: World, version: number): string[] {
       const seat=world.structures.find(s=>s.id===task.seatId&&(s.kind==='stool'||s.kind==='dining-chair'||s.kind==='armchair'));
       if(!table||!seat||seat.x!==(task.target as {x:number}).x||seat.z!==(task.target as {z:number}).z||!isChessCell(table,seat))errors.push('Invalid chess source or seat.');
       else {const count=(users.get(table.id)??0)+1;users.set(table.id,count);if(count>2)errors.push('Too many chess participants.');if(claimedChessSeats.has(seat.id))errors.push('Duplicate chess seat.');claimedChessSeats.add(seat.id);}
+    } else if(version>=354&&isJoyTableActivity354(task.activity)) {
+      // Schema 354 joy buildings: right kind, place and participant count.
+      const facts=JOY_TABLE_BY_ACTIVITY_354[task.activity],table=world.structures.find(s=>s.id===task.buildingId&&s.kind===facts.kind),target=task.target as {x:number;z:number};
+      const seat=task.seatId===undefined?undefined:world.structures.find(s=>s.id===task.seatId&&isDiningSeat(s.kind));
+      const place=!table?false:task.activity==='hoopstone'?isHorseshoeCell(table,target)&&task.seatId===undefined
+        :task.activity==='billiards'?inJoyTableRing354(footprintCells(table),target)&&task.seatId===undefined
+        :joyTableCardinalCell354(footprintCells(table),target)&&(task.seatId===undefined?!joyTableRequiresChair354(task.activity):!!seat&&seat.x===target.x&&seat.z===target.z);
+      if(!table||!place)errors.push('Invalid joy building source or place.');
+      else {const count=(users.get(table.id)??0)+1;users.set(table.id,count);if(count>facts.maxParticipants)errors.push('Too many joy building participants.');}
     } else if(task.activity==='watch-television') {
       // Durable TV identities and shared places are checked once below.
     } else if(task.activity==='social-relax') {

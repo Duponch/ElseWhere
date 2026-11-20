@@ -229,11 +229,11 @@ export function readNeedDefenses(world:World,free:readonly Pawn[]):StatusAlert|u
  * fewer than the current expectations require. Core counts kinds needing no
  * thing (contemplation, social) plus buildings and unfogged recreational items;
  * only the kinds Elsewhere actually offers are counted. */
-export const JOY_KIND_LABELS=[['solitary','contemplation'],['social','sociale'],['dexterity','adresse (fer à cheval)'],['cerebral','réflexion (échecs)'],['television','télévision'],['chemical','chimique (bière)'],['reading','lecture']] as const;
+export const JOY_KIND_LABELS=[['solitary','contemplation'],['social','sociale'],['dexterity','adresse (fers à cheval, billard)'],['cerebral','réflexion (échecs, poker)'],['television','télévision'],['chemical','chimique (bière)'],['reading','lecture']] as const;
 export function joyKindsOnMap(world:World):Set<string> {
   const kinds=new Set<string>(['solitary','social']);
   for(const s of world.structures){
-    if(s.kind==='horseshoes')kinds.add('dexterity');else if(s.kind==='chess-table')kinds.add('cerebral');else if(s.kind==='tube-television')kinds.add('television');
+    if(s.kind==='horseshoes'||s.kind==='hoopstone-ring'||s.kind==='billiards-table')kinds.add('dexterity');else if(s.kind==='chess-table'||s.kind==='poker-table'||s.kind==='game-of-ur-board')kinds.add('cerebral');else if(s.kind==='tube-television')kinds.add('television');
   }
   for(const pile of world.piles){
     if(pile.owner.type!=='ground'||pile.quantity<=0||(pile.kind!=='beer'&&pile.kind!=='book')||!knownPile256(world,pile))continue;

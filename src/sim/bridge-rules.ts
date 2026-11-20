@@ -61,6 +61,8 @@ export const BUILDING_SUPPORT:Readonly<Record<StructureKind,'Light'|'Medium'|'He
   'campfire':'Light',
   'horseshoes':'Light',
   'chess-table':'Light',
+  'hoopstone-ring':'Light','game-of-ur-board':'Light','poker-table':'Light',
+  'billiards-table':'Medium',
   'tube-television':'Light',
   'spike-trap':'Light',
   'sandbags':'Light',

@@ -37,17 +37,19 @@ interface BuildingValueDef {
   readonly component: number;
   readonly advancedComponent: number;
   readonly aiCore?:number;
+  /** Cloth of a fixed costList (schema 354 billiards and poker tables). */
+  readonly cloth?:number;
   /** Neutral Core WorkToBuild, or WorkToMake for a sculpture, before stuff. */
   readonly work: number;
   readonly quality: boolean;
   readonly passability: Passability;
 }
 const def = (stuff: number, work: number, passability: Passability,
-  fixed: Readonly<{uranium?:number; wood?: number; steel?: number; plasteel?: number; gold?: number; component?: number; 'advanced-component'?: number;'ai-core'?:number}> = {},
+  fixed: Readonly<{uranium?:number; wood?: number; steel?: number; plasteel?: number; gold?: number; component?: number; 'advanced-component'?: number;'ai-core'?:number;cloth?:number}> = {},
   quality = false): BuildingValueDef => Object.freeze({
     stuff, work, passability, quality,
     wood: fixed.wood ?? 0, steel: fixed.steel ?? 0, plasteel: fixed.plasteel ?? 0, gold: fixed.gold ?? 0,
-    uranium:fixed.uranium??0,component: fixed.component ?? 0, advancedComponent: fixed['advanced-component'] ?? 0,...fixed['ai-core']?{aiCore:fixed['ai-core']}:{},
+    uranium:fixed.uranium??0,component: fixed.component ?? 0, advancedComponent: fixed['advanced-component'] ?? 0,...fixed['ai-core']?{aiCore:fixed['ai-core']}:{},...fixed.cloth?{cloth:fixed.cloth}:{},
   });
 
 /** Resolved Core building Defs. An explicit zero prevents a new kind from
@@ -144,6 +146,11 @@ const BUILDINGS: Readonly<Record<StructureKind, BuildingValueDef>> = Object.free
   campfire: def(0, 200, 'pass-through', {wood:20}),
   horseshoes: def(10, 100, 'standable'),
   'chess-table': def(70, 8000, 'pass-through', {}, true),
+  // Schema 354 joy buildings, Buildings_Joy.xml.
+  'hoopstone-ring': def(20, 100, 'standable'),
+  'billiards-table': def(80, 12000, 'pass-through', {wood:30,cloth:80}, true),
+  'game-of-ur-board': def(35, 6000, 'pass-through', {}, true),
+  'poker-table': def(50, 10000, 'pass-through', {wood:25,cloth:50}, true),
   stonecutter: def(75, 2000, 'pass-through', {steel:30}),
 });
 
@@ -174,6 +181,7 @@ export function structureRoomMarketValue(structure: Structure): number {
   const stuffValue = d.stuff * (material ? MATERIAL_VALUE[material] : UNKNOWN_STUFF_VALUE);
   let fixedValue = d.wood * MATERIAL_VALUE.wood + d.steel * MATERIAL_VALUE.steel + d.plasteel * 9 + d.uranium * 6 + d.gold * 10 + d.component * 32 + d.advancedComponent * 200;
   if(d.aiCore)fixedValue+=d.aiCore*AI_CORE_CONTENT_298.baseMarketValue;
+  if(d.cloth)fixedValue+=d.cloth*MATERIAL_VALUE.cloth;
   const work = isSculptureKind(structure.kind)&&isSculptureMaterial(material)
     ? sculptureWorkToMakeCore(structure.kind,material)
     : d.work * (factors?.workFactor ?? 1) + (factors?.workOffset ?? 0);

@@ -72,7 +72,7 @@ export function prepareReformDeparture260(w:World,input:ReformDepartureInput260)
   d.x=origin.x;d.z=origin.z;delete d.motion;d.path=[];d.moveCooldown=0;
   if((Number(w.schemaVersion)===261||(Number(w.schemaVersion)===262||isSchema263OrLater(Number(w.schemaVersion))))){delete d.draft;del(p,'draft');}
   releaseAllowedAreaReturn(d);finishRoomRest(w,d);
-  const task=d.recreation.task;if((task?.activity==='horseshoes'||task?.activity==='chess'||task?.activity==='watch-television')&&task.phase==='active'&&task.elapsed>0)rememberRoomUse(w,d,'recreation');
+  const task=d.recreation.task;if((task?.activity==='horseshoes'||task?.activity==='chess'||task?.activity==='watch-television'||task?.activity==='hoopstone'||task?.activity==='billiards'||task?.activity==='game-of-ur'||task?.activity==='poker')&&task.phase==='active'&&task.elapsed>0)rememberRoomUse(w,d,'recreation');
   cancelAutomaticCombat(d);cancelHunting(d);clearReleasedPawnAssignments259(d);
   for(const key of deleted)del(p,key);
   for(const key of ['jobId','haul','cooking','need','state','planCooldown','needCooldown'] as const)put(p,key,d[key]);

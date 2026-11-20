@@ -5,8 +5,11 @@ import type {ReadingTask295} from './reading-state-295.ts';
 
 export const RECREATION_KINDS = ['solitary', 'dexterity', 'cerebral', 'social', 'television'] as const;
 export type RecreationKind = typeof RECREATION_KINDS[number] | 'chemical' | 'reading';
-export type RecreationActivity = 'skygaze' | 'horseshoes' | 'chess' | 'social-relax' | 'visit-sick' | 'watch-television' | 'party' | 'read';
-export interface OrdinaryRecreationTask { activity: Exclude<RecreationActivity,'read'>; target: Cell; buildingId: number | null; seatId?: number; patientId?: number; partyStartedAtCore?:number; phase: 'travel' | 'active'; elapsed: number }
+export type RecreationActivity = 'skygaze' | 'horseshoes' | 'chess' | 'social-relax' | 'visit-sick' | 'watch-television' | 'party' | 'read' | import('./joy-tables-354.ts').JoyTableActivity354;
+export interface OrdinaryRecreationTask { activity: Exclude<RecreationActivity,'read'>; target: Cell; buildingId: number | null; seatId?: number; patientId?: number; partyStartedAtCore?:number; phase: 'travel' | 'active'; elapsed: number;
+  /** Schema 354 billiards only: local ticks of the current shot (JobDriver_PlayBilliards ShotDuration)
+   * and the tick the game began, its clock running through the walks between shots. */
+  shot354?: number; since354?: number }
 export type RecreationTask=OrdinaryRecreationTask|ReadingTask295;
 export interface RecreationNeed { level: number; tolerance: Record<typeof RECREATION_KINDS[number], number>&{chemical?:number;reading?:number}; bored: Record<typeof RECREATION_KINDS[number], boolean>&{chemical?:boolean;reading?:boolean}; task: RecreationTask | null }
 export const RECREATION_DURATION = 400;
@@ -14,7 +17,7 @@ export const VISIT_SICK_DURATION = 150;
 export const RECREATION_GAIN = 36 * 24 / TICKS_PER_DAY;
 // Extremely low expectations. Wealth-derived expectations await the economy.
 export const TOLERANCE_FALL = 18 / TICKS_PER_DAY;
-export const recreationKind = (activity: RecreationActivity): Exclude<RecreationKind,'chemical'> => activity==='read'?'reading':activity === 'horseshoes' ? 'dexterity' : activity === 'chess' ? 'cerebral' : activity === 'watch-television' ? 'television' : activity === 'social-relax'||activity === 'visit-sick'||activity==='party' ? 'social' : 'solitary';
+export const recreationKind = (activity: RecreationActivity): Exclude<RecreationKind,'chemical'> => activity==='read'?'reading':activity === 'horseshoes'||activity==='hoopstone'||activity==='billiards' ? 'dexterity' : activity === 'chess'||activity==='game-of-ur'||activity==='poker' ? 'cerebral' : activity === 'watch-television' ? 'television' : activity === 'social-relax'||activity === 'visit-sick'||activity==='party' ? 'social' : 'solitary';
 export const initialRecreation = (level = 55): RecreationNeed => ({level, tolerance: {solitary: 0, dexterity: 0, cerebral: 0, social: 0, television:0}, bored: {solitary: false, dexterity: false, cerebral: false, social: false, television:false}, task: null});
 
 export function updateRecreation(pawn: Pawn,body?:import('./body-capacities.ts').BodyAssessment,toleranceFall=TOLERANCE_FALL,elapsedLocal=1): void {

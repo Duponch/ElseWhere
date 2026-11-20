@@ -4,6 +4,11 @@
 import type {StructureKind} from './types.ts';
 export interface StartThingPhysics256 {readonly defId:string;readonly passability:0|1|2;readonly edifice:boolean;readonly door:boolean;readonly fence:boolean;readonly fullFill:boolean}
 export const START_STRUCTURE_PHYSICS_256={
+ // Schema 354 joy buildings (Buildings_Joy.xml): HoopstoneRing Standable, the three others PassThroughOnly.
+ 'hoopstone-ring':{defId:'HoopstoneRing',passability:0,edifice:true,door:false,fence:false,fullFill:false},
+ 'billiards-table':{defId:'BilliardsTable',passability:1,edifice:true,door:false,fence:false,fullFill:false},
+ 'game-of-ur-board':{defId:'GameOfUrBoard',passability:1,edifice:true,door:false,fence:false,fullFill:false},
+ 'poker-table':{defId:'PokerTable',passability:1,edifice:true,door:false,fence:false,fullFill:false},
  // V290 local edifice ownership; native PassThroughOnly and fill .25.
  'firefoam-popper':{defId:'FirefoamPopper',passability:1,edifice:true,door:false,fence:false,fullFill:false},
  'ship-cryptosleep-casket':{defId:'Ship_CryptosleepCasket',passability:1,edifice:true,door:false,fence:false,fullFill:false},

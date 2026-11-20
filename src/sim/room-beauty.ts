@@ -1,3 +1,4 @@
+import {isJoyTableKind354,JOY_TABLES_354} from './joy-tables-354.ts';
 import {isShipCasketKind277,SHIP_CASKET_CONTENT_277} from './ship-casket-content-277.ts';
 import {SCHEMA_VERSION} from './types.ts';
 import {hasSmoothedStoneSubstrate281,SMOOTHED_STONE_FACTS_281} from './smooth-floor-terrain-281.ts';
@@ -70,6 +71,11 @@ export function structureBeauty(structure:BeautyStructure,version:number=SCHEMA_
   if(structure.kind==='tube-television')return 0;
   if(structure.kind==='sandbags'||structure.kind==='ancient-road-barrier')return -10;
   if(structure.kind==='ancient-road-lamp')return 0;
+  if(isJoyTableKind354(structure.kind)){
+    // Schema 354: Beauty 0 (2 for the Game of Ur board), stuff factor and offset, quality factor when the def has CompQuality.
+    const f=JOY_TABLES_354[structure.kind],m=isFurnitureMaterial(structure.material)?FURNITURE_MATERIALS[structure.material]:undefined;
+    return coreBeauty311(f.beauty,furnitureBeautyFactor311(structure.material,version),m?.beautyOffset??0,f.quality?QUALITY_BEAUTY[furnitureQuality(structure.quality)]:1);
+  }
   if(isHabitatFurnitureKind(structure.kind))return furnitureBeauty(structure,version);
   if(isSculptureKind(structure.kind))return sculptureBeauty(structure,version);
   const material=isFurnitureMaterial(structure.material)?FURNITURE_MATERIALS[structure.material]:undefined;

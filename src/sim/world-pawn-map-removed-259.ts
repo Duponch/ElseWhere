@@ -62,7 +62,7 @@ function cleanHumanDraft(map:World,p:Pawn,area:ReturnType<typeof prepareRemovedM
  if(draft.health){cancelCryptosleepVomit256(draft.health);cancelToxicVomit256(draft.health);}
  if(area?.next)draft.mapAreas=structuredClone(area.next);
  releaseAllowedAreaReturn(draft);finishRoomRest(map,draft);
- const task=draft.recreation.task;if((task?.activity==='horseshoes'||task?.activity==='chess'||task?.activity==='watch-television')&&task.phase==='active'&&task.elapsed>0)rememberRoomUse(map,draft,'recreation');
+ const task=draft.recreation.task;if((task?.activity==='horseshoes'||task?.activity==='chess'||task?.activity==='watch-television'||task?.activity==='hoopstone'||task?.activity==='billiards'||task?.activity==='game-of-ur'||task?.activity==='poker')&&task.phase==='active'&&task.elapsed>0)rememberRoomUse(map,draft,'recreation');
  cancelAutomaticCombat(draft);cancelHunting(draft);draft.orders.queue=[];clearReleasedPawnAssignments259(draft);cleanMapRemovedHumanRecord259(draft,map.tick);unclaimDetachedActorBed256(draft);return draft;
 }
 /** Actual259 MapRemoved, including a final home. Historical missing actor or

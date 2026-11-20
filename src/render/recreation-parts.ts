@@ -3,6 +3,7 @@ import { buildingMaterialColor } from './building-material-color';
 import type { Placement } from './primitives';
 import { WORLD_SCALE } from '../world/scale';
 import { tvActive } from '../sim/television-recreation';
+import { joyTableParts354 } from './joy-table-parts354';
 
 const BOARD_STEP=.078;
 const BOARD_TOP=WORLD_SCALE.tableHeight+.025;
@@ -33,6 +34,7 @@ export function televisionParts(world:World):Placement[] {
 /** All details join the resident furniture batch when structure content changes. */
 export function recreationParts(world: World): Placement[] {
   const parts: Placement[]=televisionParts(world);
+  parts.push(...joyTableParts354(world.structures));
   for(const pin of world.structures)if(pin.kind==='chess-table') {
     const {x,z}=pin,color=buildingMaterialColor(pin.material,0xa98559);
     parts.push({targetId:pin.id,x,z,y:WORLD_SCALE.tableHeight-.035,sx:.84,sy:.07,sz:.84,color},

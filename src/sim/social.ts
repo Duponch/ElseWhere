@@ -156,7 +156,8 @@ export function advanceSocial(world:World):void {
     const prior=p.social,last=prior?.last?.tick??-1000,pending=!!prior?.wants;
     if(pending?(world.tick*10+p.id)%91>=10:(world.tick+p.id)%6!==0||world.tick<=last+32)continue;
     const s=stateFor(world,p);
-    const intensive=p.recreation.task?.activity==='social-relax'&&p.recreation.task.phase==='active'&&p.state==='recreating';
+    // Schema 354: the billiards shot toil has RandomSocialMode.SuperActive, as social relaxing.
+    const intensive=(p.recreation.task?.activity==='social-relax'||p.recreation.task?.activity==='billiards')&&p.recreation.task.phase==='active'&&p.state==='recreating';
     if(!pending&&socialRandom(s)>=60/(p.draft?22000:intensive?550:6600))continue;
     if(world.tick-last<12)continue;
     const candidates=world.pawns.filter(q=>q!==p&&distanceSquared(p,q)<=36&&sameSocialCircle325(p,q)&&socialMember(world,q,false,carried));
