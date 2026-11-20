@@ -2,6 +2,7 @@ import {expect,test} from 'vitest';
 import {applyCommand,deserializeWorld,serializeWorld,stepWorld,validateWorld} from '../src/sim/index.ts';
 import {ANIMAL_MEAT_ITEMS} from '../src/sim/biome-items.ts';
 import {KIBBLE_INPUTS,KIBBLE_GROUP_UNITS,kibbleIngredientGroup,kibbleOutputUnits,validKibbleIngredients} from '../src/sim/fodder-recipes.ts';
+import {cookingDefaultAllowed353} from '../src/sim/cooking-ingredients-353.ts';
 import {PRODUCTION_RECIPES,PRODUCTION_WORK_SCALE,fineMealIngredientGroup,isRecipeProduct,recipeProduct,stationAccepts} from '../src/sim/production-recipes.ts';
 import {billWanted,countedProducts,newCookingBill,validBillSettings} from '../src/sim/cooking-bills.ts';
 import {queryCookingBillStatus} from '../src/sim/cooking-diagnostics.ts';
@@ -94,8 +95,11 @@ test('same-category substitutions, over/under quotas, invalid units and prepared
 test('creation has schema227 and no research, power, or skill prerequisite; all new inputs are explicit bill filters',()=>{
   const {w,s}=scene(),p=w.pawns[0]!,bill=s.bills![0]!;p.skills.cooking!.level=0;
   expect(productionResearchUnlocked(w,RECIPE)).toBe(true);expect(productionWorkerQualified(p,RECIPE)).toBe(true);
-  expect(validBillSettings(bill,RECIPE,227)).toBe(true);expect(validBillSettings(bill,RECIPE,226)).toBe(false);
-  expect(KIBBLE_INPUTS.every(i=>bill.filters[i]===true)).toBe(true);
+  // Schema 353 adds eggs and insect jelly: the historical checks use a 352 bill's filters.
+  const historical={...bill,filters:newCookingBill(bill.id,RECIPE,352).filters};
+  expect(validBillSettings(historical,RECIPE,227)).toBe(true);expect(validBillSettings(historical,RECIPE,226)).toBe(false);
+  // Core defaultIngredientFilter: fertilized eggs and insect jelly start refused.
+  expect(KIBBLE_INPUTS.every(i=>bill.filters[i]===cookingDefaultAllowed353(i))).toBe(true);
   const old={...w,schemaVersion:226 as World['schemaVersion']},before=JSON.stringify(old);
   expect(productionResearchUnlocked(old,RECIPE)).toBe(false);
   expect(applyCommand(old,{type:'bill-add',structureId:s.id,recipe:RECIPE}).ok).toBe(false);expect(JSON.stringify(old)).toBe(before);

@@ -32,7 +32,7 @@ test('five garment families have cloth and light-leather identities, stats and b
   expect(PRODUCTION_RECIPES.parka).toMatchObject({units:80,workTicks:800});
   expect(()=>recipeProduct('shirt',[{item:'cloth'},{item:'light-leather'}])).toThrow('one material');
   expect(stationRecipe({kind:'electric-tailor-bench'})).toBe('shirt');
-  expect(stationRecipes({kind:'electric-tailor-bench'})).toEqual(['shirt','pants','duster','parka','tribalwear','tuque','tshirt','jacket']);
+  expect(stationRecipes({kind:'electric-tailor-bench'})).toEqual(['shirt','pants','duster','parka','tribalwear','tuque','tshirt','jacket','cowboy-hat','bowler-hat']);
 });
 
 test('daily wear and randomized policy cadence replay from explicit independent streams',()=>{

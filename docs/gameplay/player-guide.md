@@ -48,6 +48,12 @@ Après le jour 60, une éruption lointaine peut voiler le ciel pendant une à si
 
 En forêt tropicale ou dans un marécage tropical, la **maladie du sommeil** peut toucher une partie de la colonie. Elle avance lentement, mais affaiblit fortement la conscience aux stades avancés et peut tuer. Gardez les malades au lit et faites-les soigner : un soin la ralentit pendant 35 heures, le temps que l'immunité se forme.
 
+## Cuisiner les œufs, porter un chapeau — V353
+
+Les **œufs** et la **gelée d'insecte** se cuisinent comme le lait : dans les repas simples, raffinés, gastronomiques et de survie, ils comptent comme protéines ; dans les plats végétariens, avec les végétaux ; ils font aussi des **croquettes**. Un œuf nourrit autant que cinq ou dix unités de riz : deux œufs de canard font un repas simple. Une nouvelle facture accepte les œufs non fécondés ; cochez les **œufs fécondés** ou la **gelée** dans ses ingrédients si vous voulez les cuisiner. Une facture créée avant cette version ne les prend qu'une fois cochés.
+
+Après **Vêtements complexes**, l'établi de tailleur coud le **chapeau de cowboy** (25 tissus ou cuirs) et le **chapeau melon** (20). Ils protègent du chaud plus que du froid et rendent les échanges de celui qui les porte plus marquants (+10 % et +15 % d'impact social). Un seul couvre-chef à la fois. Les visiteurs en vendent aussi. [Règles et limites](cooking-hat-v353.md).
+
 ## Coudre dans tous les cuirs et laines — V308
 
 Tous les cuirs et toutes les laines que donnent vos animaux se cousent désormais à l'établi de tailleur : tenue tribale, chemise, pantalon, cache-poussière et parka, ainsi que la tuque pour les laines. Les fourrures de chinchilla et de cochon d'Inde ou la laine de mégapareux tiennent très chaud ; les cuirs d'ours, de rhinocéros ou la fourrure épaisse protègent mieux des coups ; le cuir d'éléphant et celui de rhinocéros sont très solides. Les factures déjà créées n'utilisent les nouvelles matières que si vous les cochez dans leur filtre.

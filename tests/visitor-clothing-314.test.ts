@@ -6,7 +6,7 @@ import {tradeRefusal} from '../src/sim/trade-prices.ts';
 import {validTradeInventoryCustody} from '../src/sim/trade-save.ts';
 import {serializeWorld,deserializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import {visitorTradeFixture} from './scenarios/visitors.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedFrom352,asOldSchema} from './scenarios/old-schema.ts';
 import {SCHEMA_VERSION} from '../src/sim/types.ts';
 import type {ItemId} from '../src/sim/items.ts';
 
@@ -60,5 +60,5 @@ test('a real visitor trader holding a new garment stays valid through the save',
 test('a schema 313 save migrates to 314 by its number only',()=>{
   const f=fixture();
   const current=serializeWorld(f.world);
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,313)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,313)))).toBe(asMigratedFrom352(current));
 });

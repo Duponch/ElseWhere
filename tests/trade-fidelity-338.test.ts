@@ -25,7 +25,7 @@ import {defaultWorldGenerationSettings} from '../src/sim/world-generation-settin
 import {WorldGenerationRandom} from '../src/sim/world-generation-random.ts';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedFrom352,asOldSchema} from './scenarios/old-schema.ts';
 import type {SettlementTile} from '../src/sim/world-settlement-placement.ts';
 import type {ItemId} from '../src/sim/items.ts';
 import type {NeedContext} from '../src/sim/needs.ts';
@@ -327,7 +327,7 @@ test('a drafted negotiator sells garments and raw resources to a bulk ship and b
 
 test('337 saves migrate by number only; 338 content is refused under the old number',()=>{
   const w=deconstructionCamp(2,32),current=serializeWorld(w);
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,337)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,337)))).toBe(asMigratedFrom352(current));
   // A bulk ship of 338 holds chemfuel and garments that a 337 ship could not.
   const f=orbitalFixture('bulk'),json=serializeWorld(f.w);
   expect(()=>deserializeWorld(asOldSchema(json,337))).toThrow();

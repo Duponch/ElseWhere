@@ -73,7 +73,8 @@ test('policy shape rejects unknown, hidden, inherited, accessor and noninteger f
 });
 
 test('closed schema guards preserve absent/history admission and reject prospective settings on historical or future worlds',()=>{
- const f=camp(),withPolicy={...f.bill,worker:policy(f.other!.id,20,20)};
+ // Schema 353 meal bills also filter eggs and insect jelly: the historical checks use a 352 bill's filters.
+ const f=camp(),withPolicy={...f.bill,filters:newCookingBill(f.bill.id,f.bill.recipe,352).filters,worker:policy(f.other!.id,20,20)};
  expect(validBillSettings(withPolicy,withPolicy.recipe,283)).toBe(true);expect(validBillSettings(withPolicy,withPolicy.recipe,282)).toBe(false);
  for(const version of [285,SCHEMA_VERSION]){
   f.world.schemaVersion=version as World['schemaVersion'];const before=JSON.stringify(f.world);

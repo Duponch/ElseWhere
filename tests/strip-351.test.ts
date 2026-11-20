@@ -19,7 +19,7 @@ import {mapObjectActions} from '../src/ui/map-object-actions';
 import type {NativePage,NativeUiActions,NativeUiState} from '../src/ui3d/native-contract';
 import {medicalCamp,controlledInjury} from './scenarios/health';
 import {prisonerUiFixture} from './scenarios/prison-camp';
-import {asOldSchema} from './scenarios/old-schema';
+import {asMigratedFrom352,asOldSchema} from './scenarios/old-schema';
 
 vi.mock('../src/ui/pawn-portrait', () => ({portraitDataUrl:()=>'data:image/svg+xml,%3Csvg/%3E',portraitExpressionOf:()=>'awake'}));
 
@@ -259,7 +259,8 @@ test('right-click order, drafted or not, inspector gizmos on the pawn and the co
 test('below 351 nothing changes: commands refused, no option, no thought; migration 350 → 351 by number only',()=>{
  const {w,hauler,target}=camp();controlledInjury(w,target,'heart',15000);
  const raw=serializeWorld(w),migrated=deserializeWorld(asOldSchema(raw,350));
- expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);expect(serializeWorld(migrated)).toBe(raw);
+ // Schema 353: a new game's policies also allow the hats, which an old save lacks.
+ expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);expect(serializeWorld(migrated)).toBe(asMigratedFrom352(raw));
  // A 350 save holding a designation or a strip job is refused.
  ok(w,{type:'strip-designate',targetId:target.id,enabled:true});
  expect(()=>deserializeWorld(asOldSchema(serializeWorld(w),350))).toThrow();

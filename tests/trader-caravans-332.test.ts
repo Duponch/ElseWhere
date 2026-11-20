@@ -17,7 +17,7 @@ import {defaultWorldGenerationSettings} from '../src/sim/world-generation-settin
 import {WorldGenerationRandom} from '../src/sim/world-generation-random.ts';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedFrom352,asOldSchema} from './scenarios/old-schema.ts';
 import type {SettlementTile} from '../src/sim/world-settlement-placement.ts';
 import {SCHEMA_VERSION,TICKS_PER_DAY,type MaterialPile,type World} from '../src/sim/types.ts';
 
@@ -208,7 +208,7 @@ test('331 saves adopt the caravan agenda by number only; older schemas never dra
   const w=deconstructionCamp(2,32);clock(w,20*DAY);enableVisitors(w);
   const current=serializeWorld(w),agenda=calendar(w).caravan332!;
   expect(agenda.pending.every(t=>t>w.tick&&t>=5*DAY)).toBe(true);
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,331)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,331)))).toBe(asMigratedFrom352(current));
   // A 331 save cannot hold the agenda.
   const raw=JSON.parse(current) as {schemaVersion:number};raw.schemaVersion=331;
   expect(()=>deserializeWorld(JSON.stringify(raw))).toThrow();

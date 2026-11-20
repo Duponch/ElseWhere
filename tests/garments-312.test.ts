@@ -12,7 +12,7 @@ import {APPAREL_TRADE_279} from '../src/sim/apparel-trade-279.ts';
 import {createDefaultApparelPolicyRegistry,extendApparelPolicies312,validApparelPolicy} from '../src/sim/apparel-policy.ts';
 import {validTuqueCatalogueTransport} from '../src/sim/tuque-catalogue-save.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedFrom352,asOldSchema} from './scenarios/old-schema.ts';
 import {SCHEMA_VERSION,type Command,type MaterialPile,type Structure,type World} from '../src/sim/types.ts';
 
 const accept=(w:World,c:Command)=>expect(applyCommand(w,c),JSON.stringify(c)).toMatchObject({ok:true});
@@ -85,5 +85,5 @@ test('migration 311 -> 312: allowed shirts bring their T-shirts and allowed dust
   extendApparelPolicies312(policies);
   expect(policies[0]!.allowedItems).toEqual(['cloth-shirt','wolf-leather-duster','cloth-tshirt','wolf-leather-jacket']);
   const {w}=workshop(),current=serializeWorld(w);
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,311)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,311)))).toBe(asMigratedFrom352(current));
 });

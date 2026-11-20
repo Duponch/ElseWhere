@@ -22,7 +22,7 @@ import {animalHaulingCamp459} from './scenarios/animal-hauling-v459.ts';
 import {newBuildingFuel} from '../src/sim/fuel.ts';
 import {addGroundMaterial} from '../src/sim/materials.ts';
 import {createScenarioWorld} from '../src/sim/new-game.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asMigratedFrom352,asOldSchema} from './scenarios/old-schema.ts';
 import {SCHEMA_VERSION,TICKS_PER_DAY,type Pawn,type World} from '../src/sim/types.ts';
 
 vi.mock('../src/ui/pawn-portrait', () => ({portraitDataUrl:()=>'data:image/svg+xml,%3Csvg/%3E',portraitExpressionOf:()=>'awake'}));
@@ -266,7 +266,8 @@ test('saves keep the new states strictly; nothing changes below 350; a 349 save 
  // A 349 save holding these is refused; a clean 349 save migrates by number only.
  const future=JSON.parse(text);future.schemaVersion=349;expect(()=>deserializeWorld(JSON.stringify(future))).toThrow();
  const clean=camp(),migrated=deserializeWorld(asOldSchema(serializeWorld(clean),349));
- expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);expect(serializeWorld(migrated)).toBe(serializeWorld(clean));
+ // Schema 353: a new game's policies also allow the hats, which an old save lacks.
+ expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);expect(serializeWorld(migrated)).toBe(asMigratedFrom352(serializeWorld(clean)));
  expect(migrated.pawns.some(x=>x.roomMemories||x.social?.memories.some(m=>m.kind==='rescued-me'))).toBe(false);
  // Below 350 the same world gives none of these thoughts, draws or memories.
  const old=camp(349),[op]=old.pawns as [Pawn];expect(isMoodPool350(old.schemaVersion)).toBe(false);
