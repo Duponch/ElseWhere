@@ -456,6 +456,14 @@ L’[audit du 13 septembre](../research/environment-review.md) confirme que les 
 
 ## Petit catalogue et statut des ajouts
 
+### Ajouts V355 — armoire à outils et tapis
+
+| Registre / identifiant local | Acquisition et usage physique | Limites |
+| --- | --- | --- |
+| Structure `tool-cabinet` | Armoire à outils Core : 200 acier, travail 1 800, Construction 4, Mobilier complexe, 2 × 1 orientable, 100 PV, 20 kg, désinstallable. Liée aux établis qui la listent (artisanat, boucherie, sculpture, tailleur ×2, forges ×2, usinage, taille de pierre, drogues, fabrication) à 8 cases au plus en 3D et en vue : +0,06 au facteur de vitesse de travail, deux au plus par établi. [Détails](cabinet-carpet-v355.md). | Rangée en Production (pas de catégorie Divers) ; une porte compte toujours fermée ; pas d'aperçu des liens à la pose. |
+| Sols `carpet-*` (63) et `burned-carpet` | Tapis Core d'une couleur de bâtiment : 7 tissus/case, travail 800, beauté +2, nettoyage ×2, inflammabilité 0,32 ; retrait avec remboursement aléatoire de la moitié ; brûlé : tapis brûlé, beauté −6. | Rendu en aplat de la couleur Core ; ni tapis fins, ni pipette de couleur. |
+| Projet `carpet-making` | Fabrication de tapis : 800 points, médiévale, sans prérequis ni bureau particulier. | Rien n'est offert aux anciennes parties. |
+
 ### Ajouts V336 — préparation des contrôles de première nuit
 
 | Registre / identifiant local | Acquisition et usage physique | Limites |

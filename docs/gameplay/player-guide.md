@@ -22,6 +22,12 @@ Dans l'inspecteur d'un bâtiment, **Copier** choisit la même construction et le
 
 Dans la barre des colons, un portrait teinté d'or, d'orange ou de rouge signale un risque de crise mineure, majeure ou extrême. Les petites icônes en bas à gauche indiquent : prépare une caravane, crise (« ! »), repos médical, dort, fuit, attaque, inoccupé (à partir du deuxième jour), en feu ; survolez le portrait pour lire leur nom. [Portée et limites](everyday-orders-v346.md).
 
+## Armoire à outils et tapis — V355
+
+Dans **Architecte > Production**, l'**armoire à outils** (200 acier, Construction 4, après Mobilier complexe, acquis au départ) se pose avec **Q/E** comme une commode. Placez-la à moins de 8 cases d'un établi et en vue de lui : sans mur, porte ni roche entre les deux. Chaque armoire liée ajoute **+6 %** de vitesse de travail aux factures de cet établi, deux armoires au plus par établi ; une seule armoire peut servir plusieurs établis. Sélectionnez l'établi ou l'armoire pour voir les liens tracés au sol ; l'inspection de l'établi les liste. Les cuisinières, la brasserie, la fonderie et les bureaux de recherche n'en profitent pas.
+
+Après la recherche **Fabrication de tapis** (800 points, tout bureau), **Architecte > Sols** propose une tuile **Tapis** : choisissez sa couleur parmi les 63 teintes dans la ligne **Couleur**, puis tracez comme pour un autre sol. Chaque case coûte 7 tissus et donne +2 de beauté à la pièce, mais se nettoie deux fois plus lentement et brûle facilement.
+
 ## Lire les lettres — V352
 
 Un événement important (raid, meute enragée, crise d'un colon, maladie, condition météo, visiteurs, marchands, capsules, décès, recrutement, offre de quête…) dépose une **lettre** en bas à droite, au-dessus de l'horloge, avec un son. Sa couleur dit sa gravité : **rouge** menace majeure, **orangé** menace, **jaune** mauvaise nouvelle ou décès, **gris** simple événement, **bleu** bonne nouvelle ou nouvelle quête. Les menaces non lues rebondissent de temps en temps et les lettres non lues clignotent.

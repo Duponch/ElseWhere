@@ -12,8 +12,9 @@ import {
 describe('Architect generated icon atlases', () => {
   it('keeps marker cell addresses while every UI tool has its own complete image', () => {
     const rendered = toolDefinitions.map(tool => tool.id);
-    expect(rendered).toHaveLength(128);
-    expect(new Set(rendered).size).toBe(128);
+    // Schema 354 adds the four joy tables; schema 355 the tool cabinet and the 63 Core carpet colours.
+    expect(rendered).toHaveLength(192);
+    expect(new Set(rendered).size).toBe(192);
     expect(rendered).toContain('spike-trap');
     expect(rendered).toContain('double-bed');
     expect(rendered).toContain('mini-turret');
