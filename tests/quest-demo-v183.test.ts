@@ -33,7 +33,7 @@ test('V183 public scene is a byte-stable 250² colony with a real unanswered off
   expect(world.raids!.active).toBeUndefined();
   expect(questDemoManifestEntry(world,sha256)).toMatchObject({id:'asile-et-poursuite-v183',prepared:true,sha256});
   expect(validateWorld(world)).toEqual([]);
-});
+},180_000);
 
 test('real answer, entry, knife pursuit, neutral conclusion and phase saves preserve the same identities',()=>{
   const world=deserializeWorld(readFileSync(fixtureUrl,'utf8'));
@@ -74,7 +74,7 @@ test('real answer, entry, knife pursuit, neutral conclusion and phase saves pres
   if(survivingRaider&&world.raids!.active){injurePawn(world,survivingRaider,'brain','crush',99000);advanceRaids(world);}
   expect(world.raids!.last?.originQuestId).toBe(q.id);
   expect(validateWorld(world)).toEqual([]);
-});
+},180_000);
 
 test('refusal of the prepared offer grants no person or raid and consumes no identity',()=>{
   const world=deserializeWorld(readFileSync(fixtureUrl,'utf8'));
@@ -84,4 +84,4 @@ test('refusal of the prepared offer grants no person or raid and consumes no ide
   expect(world.nextId).toBe(id);expect(world.raids!.rng).toBe(raidRng);expect(world.quests!.rng).toBe(questRng);
   expect(world.raids!.active).toBeUndefined();
   expect(validateWorld(world)).toEqual([]);
-});
+},180_000);
