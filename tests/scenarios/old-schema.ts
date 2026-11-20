@@ -18,7 +18,8 @@ const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bond
  * priorities); schema 345: the room size need; schema 349: the tutorial
  * lessons' record (a 347/348 tutorial had none); schema 350: the mood pool
  * memories, RescuedMe opinions, the psychic drone/soothe calendar and the
- * animals' nuzzle check (a break of a 350 kind is kept, and refused). */
+ * animals' nuzzle check (a break of a 350 kind is kept, and refused);
+ * schema 352: the campaign's letters, stack, archive and pins. */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -65,6 +66,8 @@ export const asMigratedCurrent=(current:string):string=>serializeWorld(deseriali
 /** Same as asOldSchema on a parsed save or an in-memory world (mutated). */
 export function stripFutureContent(value:unknown,version:number):void {
   if(version<344&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).simpleWorkTab344;
+  // Schema 352: the campaign's letters, their stack and archive.
+  if(version<352&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).letters352;
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
   if(version<350)strip(value,version);

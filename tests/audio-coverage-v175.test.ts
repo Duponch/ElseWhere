@@ -11,6 +11,7 @@ import { powerFixture, fixturePower } from './scenarios/power.ts';
 import type { Cell, World } from '../src/sim/types.ts';
 import { animalCombatCamp } from './scenarios/animal-combat.ts';
 import { startAnimalManhunter } from '../src/sim/animal-manhunter.ts';
+import { sendLetter352 } from '../src/sim/letters-352.ts';
 
 test('a real manhunter start uses one global receipt without local duplicate and reload remains silent',()=>{
   const world=animalCombatCamp(),animal=world.wildlife!.animals[0]!,recorder=new AudioCueRecorder();
@@ -20,8 +21,13 @@ test('a real manhunter start uses one global receipt without local duplicate and
   recorder.capture(world);
   const cues=recorder.drain().filter(cue=>cue.kind==='ui.threat');
   expect(cues).toHaveLength(0); // Global worker receipt is the sole threat channel.
+  // Schema 352: letters replace the former threat kinds. A bare manhunter
+  // start sends no letter (Core notifies a wild animal's own mental state
+  // to nobody), so no receipt; its producers' letters are the only source.
+  expect(observer.capture(world,'any-threat')).toBe(false);expect(delivery.commit(observer.snapshot(),world.tick)).toBeUndefined();
+  sendLetter352(world,{cls:'threat-small',title:'Animal enragé',text:'',targets:[{kind:'actor',id:animal.id}]});
   expect(observer.capture(world,'any-threat')).toBe(true);
-  expect(delivery.commit(observer.snapshot(),world.tick)).toMatchObject({paused:true,rows:[{kind:'manhunter',actorId:animal.id,delta:1}]});
+  expect(delivery.commit(observer.snapshot(),world.tick)).toMatchObject({paused:true,rows:[{kind:'letter',delta:1}]});
   expect(observer.capture(world,'any-threat')).toBe(false);expect(delivery.commit(observer.snapshot(),world.tick)).toBeUndefined();
   recorder.capture(world);expect(recorder.drain()).toEqual([]);
   const resumed=deserializeWorld(serializeWorld(world));

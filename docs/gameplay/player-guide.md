@@ -22,6 +22,14 @@ Dans l'inspecteur d'un bâtiment, **Copier** choisit la même construction et le
 
 Dans la barre des colons, un portrait teinté d'or, d'orange ou de rouge signale un risque de crise mineure, majeure ou extrême. Les petites icônes en bas à gauche indiquent : prépare une caravane, crise (« ! »), repos médical, dort, fuit, attaque, inoccupé (à partir du deuxième jour), en feu ; survolez le portrait pour lire leur nom. [Portée et limites](everyday-orders-v346.md).
 
+## Lire les lettres — V352
+
+Un événement important (raid, meute enragée, crise d'un colon, maladie, condition météo, visiteurs, marchands, capsules, décès, recrutement, offre de quête…) dépose une **lettre** en bas à droite, au-dessus de l'horloge, avec un son. Sa couleur dit sa gravité : **rouge** menace majeure, **orangé** menace, **jaune** mauvaise nouvelle ou décès, **gris** simple événement, **bleu** bonne nouvelle ou nouvelle quête. Les menaces non lues rebondissent de temps en temps et les lettres non lues clignotent.
+
+Survolez une lettre pour lire son texte : sa cible est encadrée sur la carte. **Clic gauche** l'ouvre : **Voir** vous y emmène et retire la lettre, **Fermer** la retire ; fermer la page autrement la garde. **Clic droit** la retire directement. Quand elles sont trop nombreuses, les plus anciennes sont regroupées dans une lettre « N de plus… » qui en donne la liste. Toutes restent dans **Historique**, où vous pouvez les rouvrir et **épingler** celles (ou les lignes du journal) à garder : l'archive conserve les 200 dernières entrées non épinglées.
+
+Dans **Options**, la **pause automatique** s'arrête : jamais, aux menaces majeures (défaut), à toutes les menaces, ou à chaque lettre. [Règles et limites](letters-v352.md).
+
 ## Lire les alertes de droite
 
 Les alertes apparaissent après les dix premières secondes de jeu, comme dans RimWorld. Elles sont triées : **critiques** en rouge qui pulse (incendie dans la zone de foyer, colon à secourir, hypothermie grave, risque de crise majeure, personne en danger de mort, prisonniers compris), puis **hautes** en ocre (colon à soigner, couchages, nourriture ou médicaments insuffisants, colon épuisé, vêtements chauds nécessaires, geôlier nécessaire, corps sans sépulture, défenses), puis **moyennes** (dont vêtements abîmés, ennui, batteries, enclos et animaux affamés). Une nouvelle alerte haute ou critique glisse et sonne ; une critique affiche aussi un avis en haut de l’écran.
@@ -329,6 +337,8 @@ Les nouveaux sites boréaux peuvent contenir de l’**Eau peu profonde** : le su
 Retirer le pont exige de libérer ses constructions dépendantes, rend6bois et révèle la même eau. Une eau infranchissable existante ne devient pas traversable ou compatible avec ce pont. Les anciennes cartes restent telles quelles ; aucun étang n’est ajouté aux Aulnes. [Règles et limites](shallow-water-v403.md).
 
 ## Choisir la pause sur nouvelle menace — V402
+
+Depuis V352, les menaces arrivent par lettre (voir « Lire les lettres ») et le réglage gagne **Toutes lettres** ; l'avertissement décrit ci-dessous est remplacé par les lettres.
 
 Dans **Options** à l’accueil ou **Menu** en jeu, choisissez **Jamais**, **Menaces majeures** (défaut) ou **Toutes menaces**. Le choix confirmé vaut pour le foyer et le second site. Jamais garde l’avertissement et son signal ; les raids humains/mécaniques ordinaires sont majeurs. Toutes menaces ajoute la rage animale individuelle. Les autres alertes ne déclenchent pas automatiquement cette pause.
 
