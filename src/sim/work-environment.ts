@@ -34,13 +34,19 @@ export class WorkEnvironment extends LightEnvironment {
   room(cell:Cell):WorkRoom|undefined {
     const space=this.topology.at(cell.x,cell.z);return space?.kind==='space'?this.rooms.get(space.id):undefined;
   }
-  /** `glowIgnored`: the worker is blind, its work speed ignores darkness (schema 301). */
-  production(station:Structure,worker:Cell,glowIgnored=false):ProductionFactors {
+  /** `glowIgnored`: the worker is blind, its work speed ignores darkness (schema 301).
+   * `facilityOffset` (schema 355): linked tool cabinets' WorkTableWorkSpeedFactor
+   * offset, added to the bench's base before the unpowered StatPart. */
+  production(station:Structure,worker:Cell,glowIgnored=false,facilityOffset=0):ProductionFactors {
     const room=this.room(station.kind==='electric-crematorium'?cookingSpot(station):station),light=this.lightAt(worker),lighting=glowIgnored?1:lightWorkFactor(light);
     const outdoors=room?.psychologicallyOutdoors ? .8 : 1;
     const requiredRole=station.kind==='drug-lab'?'laboratory':isStove(station.kind)?'kitchen':station.kind==='fueled-smithy'||station.kind==='electric-smithy'||station.kind==='brewery'||station.kind==='electric-crematorium'||station.kind==='electric-smelter'||station.kind==='biofuel-refinery'||station.kind==='machining-table'||station.kind==='fabrication-bench'||station.kind==='art-bench'||station.kind==='stonecutter'||station.kind==='tailor-bench'||station.kind==='electric-tailor-bench'?'workshop':undefined;
     const roomRole=requiredRole&&!(this.rules301&&station.kind==='electric-crematorium')&&room&&!room.psychologicallyOutdoors&&room.role!==requiredRole ? .8 : 1;
     const base=station.kind==='campfire'||station.kind==='crafting-spot'||station.kind==='tailor-bench'||station.kind==='electric-tailor-bench'&&!station.power?.on ? .5 : 1;
+    if(facilityOffset>0){
+      const coreBase=station.kind==='campfire'||station.kind==='crafting-spot'||station.kind==='tailor-bench' ? .5 : 1,unpowered=station.kind==='electric-tailor-bench'&&!station.power?.on ? .5 : 1,boosted=(coreBase+facilityOffset)*unpowered;
+      return {light,lighting,outdoors,roomRole,station:boosted,total:lighting*outdoors*roomRole*boosted};
+    }
     return {light,lighting,outdoors,roomRole,station:base,total:lighting*outdoors*roomRole*base};
   }
 }

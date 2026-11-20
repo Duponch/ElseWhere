@@ -1,4 +1,5 @@
 import { storedPriority } from '../sim/work-types.ts';
+import {CARPET_FLOORS_355,carpetColor355,isCarpetFloor355} from '../sim/carpet-355';
 import {LETTER_CLASSES_352,isSchema352OrLater} from '../sim/letters-352';
 import {storytellerIncidents347,tutorialMode347} from '../sim/game-profile';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
@@ -126,7 +127,9 @@ function nativeToolControl(tool:(typeof toolDefinitions)[number],state:NativeUiS
 }
 function architect(state:NativeUiState,actions:NativeUiActions,world:World):NativePage {
  const category=state.category==='orders'||state.category==='zones'?'structure':state.category;
- const tools=toolDefinitions.filter(tool=>tool.category===category&&architectToolAvailable(world,tool.id));
+ // Schema 355: one carpet tile (Core's Floor_Carpet dropdown); its colour is chosen below.
+ const carpetShown=isCarpetFloor355(state.tool)?state.tool:CARPET_FLOORS_355[0];
+ const tools=toolDefinitions.filter(tool=>tool.category===category&&architectToolAvailable(world,tool.id)&&(!isCarpetFloor355(tool.id)||tool.id===carpetShown));
  if(category==='production')tools.sort((a,b)=>{const ai=productionToolOrder.indexOf(a.id),bi=productionToolOrder.indexOf(b.id);return (ai<0?productionToolOrder.length:ai)-(bi<0?productionToolOrder.length:bi);});
  const selected=tools.find(tool=>tool.id===state.tool),materials=selected?constructionMaterials(selected.id):[];
  const rows:NativeRow[]=[
@@ -136,6 +139,7 @@ function architect(state:NativeUiState,actions:NativeUiActions,world:World):Nati
  if(selected){
   rows.push({...row('architect-selected',selected.title,undefined,selected.hint),region:'details',emphasis:'heading'});
   if(materials.length>1)rows.push({...row('architect-material','Matériau',undefined,undefined,[button(`tool-${selected.id}-material`,ITEM_DEFINITIONS[state.constructionMaterial].label,()=>{}, {hint:'Matériau de la construction sélectionnée',select:{value:state.constructionMaterial,options:materials.map(material=>({value:material,label:ITEM_DEFINITIONS[material].label})),onChange:value=>{const material=materials.find(item=>item===value);if(material)actions.material(material);}}})]),region:'details',compact:true});
+  if(isCarpetFloor355(selected.id))rows.push({...row('architect-carpet-color','Couleur',undefined,undefined,[button(`tool-${selected.id}-color`,carpetColor355(selected.id).label,()=>{},{hint:'Couleur du tapis : les 63 teintes du jeu de base',select:{value:selected.id,options:CARPET_FLOORS_355.map(id=>({value:id,label:carpetColor355(id).label})),onChange:value=>{if(isCarpetFloor355(value))actions.tool(value);}}})]),region:'details',compact:true});
   if(selected.id==='ship-computer'||selected.id==='ship-sensors')rows.push({...row('architect-rotation','Orientation','Fixe','Édifice 2 × 2 fixe, sans rotation.'),region:'details',compact:true});
   else rows.push({...row('architect-rotation','Orientation',`${state.orientation*90}°`,'Q / E tourne les constructions orientables.',[button('rotate-left','↶',()=>actions.rotate(-1),{hint:'Tourner à gauche · Q'}),button('rotate-right','↷',()=>actions.rotate(1),{hint:'Tourner à droite · E'})]),region:'details',compact:true});
  }else rows.push({...row('architect-instruction','Choisir une construction',undefined,'Choisissez une carte du catalogue, puis désignez son emplacement sur le terrain. Q / E tourne les constructions orientables.'),region:'details'});

@@ -46,6 +46,7 @@ export const FURNITURE_TRAVEL:Readonly<Record<StructureKind,Readonly<{delay:numb
   column:{delay:0,stand:false,repeat:true},urn:{delay:3,stand:false,repeat:true},'stele-large':{delay:5,stand:false,repeat:true},'stele-grand':{delay:5,stand:false,repeat:true},sarcophagus:{delay:4.2,stand:false,repeat:true},
   shelf:{delay:5,stand:false,repeat:true},'small-shelf':{delay:5,stand:false,repeat:true},
   'firefoam-popper':{delay:3,stand:false,repeat:true},
+  'tool-cabinet':{delay:4.2,stand:false,repeat:true},
   'spike-trap':{delay:0,stand:true,repeat:false},
   'double-bed':{delay:4.2,stand:false,repeat:true},
   'electric-crematorium':{delay:0,stand:false,repeat:false},

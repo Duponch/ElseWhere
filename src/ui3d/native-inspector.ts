@@ -84,6 +84,7 @@ import { RECREATION_KINDS, recreationMood } from '../sim/recreation-rules';
 import { corpseStage } from '../sim/corpses';
 import { powerInspection } from '../ui/power-inspection';
 import { brewingInspection265 } from '../ui/brewing-inspection-265';
+import { toolCabinetInspection355 } from '../ui/tool-cabinet-inspection-355';
 import { productKind, productFullness } from '../sim/animal-products';
 import { queryPawnStatus, queryJobStatus } from '../sim/diagnostics';
 import { specificWorkActivity } from '../ui/work-activity';
@@ -586,6 +587,7 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
     if (use && (structure.kind === 'heater' || structure.kind === 'cooler')) rows.push({ id: 'climate-target', label: 'Température de consigne', value: String(structure.heater?.target ?? structure.cooler?.target), controls: ([-10, -1, 1, 10, null] as const).map(offset => command(`climate-${offset}`, offset === null ? 'Réinitialiser' : signed(offset), structure.kind === 'heater' ? { type: 'heater-adjust', structureId: structure.id, offset } : { type: 'cooler-adjust', structureId: structure.id, offset })) });
     const power = powerInspection(world, structure); if (power) rows.push(row('power-details', 'Énergie et fonctionnement', undefined, power));
     const brewing = brewingInspection265(world, structure); if (brewing) rows.push(row('brewing-details', 'Brassage et fermentation', undefined, brewing));
+    const facilities = toolCabinetInspection355(world, structure); if (facilities) rows.push(row('tool-cabinet-links', structure.kind === 'tool-cabinet' ? 'Établis liés' : 'Installations liées', undefined, facilities));
     if (structure.battery) rows.push(meterRow('battery-energy', 'Énergie stockée', batteryWattDays(structure.battery), BATTERY_CAPACITY / BATTERY_ENERGY_SCALE, undefined, `${batteryWattDays(structure.battery).toFixed(2)} W·j`));
     if (structure.fuel) rows.push(meterRow('fuel-reserve', 'Combustible', structure.fuel.ticks, fuelLimit(structure.kind), 'Réserve réelle ; le remplissage exige les objets, l’accès et le travail disponibles.'));
     if (structure.breakdown) rows.push(row('breakdown', 'En panne', `Depuis ${((world.tick - structure.breakdown.brokenAt) / 250).toFixed(1)} h`, 'Remplacement réel d’un composant et travail de construction requis.'));

@@ -49,6 +49,8 @@ import { SceneResourceIndex, readSceneResourceFrame, type SceneResourceFrame } f
 import { ProjectileLayer } from './ProjectileLayer';
 import { EnvironmentLighting } from './EnvironmentLighting';
 import { RangeOutlineLayer } from './RangeOutlineLayer';
+import { FacilityLinkLayer } from './FacilityLinkLayer';
+import { isToolCabinetBench355,toolCabinetLinkSegments355 } from '../sim/tool-cabinet-355';
 import { MapOutlineLayer,type MapOutlineRect } from './MapOutlineLayer';
 import { PresentationQueue } from './PresentationQueue';
 import { MOTION_HISTORY_TICKS } from '../bridge/motion-tracks';
@@ -723,6 +725,7 @@ export class SceneRenderCore {
   protected textureDimensionLimit = Infinity;
   protected readonly areaPreview=new AreaPreviewLayer();
   protected readonly turretRange=new RangeOutlineLayer();
+  protected readonly facilityLinks=new FacilityLinkLayer();
   protected readonly mapOutline=new MapOutlineLayer();
   protected readonly constructionPreview=new ConstructionPreviewLayer();
   protected areaIndex: AreaIndex | undefined;
@@ -885,7 +888,7 @@ export class SceneRenderCore {
     this.landscape.add(this.plants.group,this.overview.group,this.terrainGroup,this.resourceGroup,this.rocks.group);
     this.scene.add(this.mechanoids.group);
     this.scene.add(this.geysers.group);
-    this.scene.add(this.deepResources.mesh,this.areaPreview.mesh,this.turretRange.mesh,this.mapOutline.mesh,this.orderRockPreview.mesh,this.landscape,this.pileGroup,this.hygiene.group,this.wind.group,this.wildlife.mesh,this.wildlife.flames,this.animalCargo.group,this.ropes.mesh,this.fires.mesh,this.projectiles.mesh,this.roofs.surface,this.roofs.areas,this.doors.group,this.walls.group,this.crops.group, this.growing.group, this.allowedAreaLayer.group, this.structureGroup, this.jobGroup, this.designations.mesh, this.storageGroup, this.pawns.group,this.clouds.mesh,this.precipitation.mesh);
+    this.scene.add(this.deepResources.mesh,this.areaPreview.mesh,this.turretRange.mesh,this.facilityLinks.mesh,this.mapOutline.mesh,this.orderRockPreview.mesh,this.landscape,this.pileGroup,this.hygiene.group,this.wind.group,this.wildlife.mesh,this.wildlife.flames,this.animalCargo.group,this.ropes.mesh,this.fires.mesh,this.projectiles.mesh,this.roofs.surface,this.roofs.areas,this.doors.group,this.walls.group,this.crops.group, this.growing.group, this.allowedAreaLayer.group, this.structureGroup, this.jobGroup, this.designations.mesh, this.storageGroup, this.pawns.group,this.clouds.mesh,this.precipitation.mesh);
     if (groundGrassEnabled) {
       this.grass = this.createGrass();
       this.grass.setTerrainPaint(this.terrainPaintTexture);
@@ -1594,7 +1597,7 @@ export class SceneRenderCore {
     const restoreBoxes=this.boxes.prepareEmptyShadows();
     const restoreSnow=this.snowSurface.prepareForCompile();
     const restoreArea=this.areaPreview.prepareForCompile();
-    const restoreTurretRange=this.turretRange.prepareForCompile();
+    const restoreTurretRange=this.turretRange.prepareForCompile(),restoreFacilityLinks=this.facilityLinks.prepareForCompile();
     const restoreMapOutline=this.mapOutline?.prepareForCompile()??(()=>{});
     const restoreHints=this.recreationHints.prepareForCompile();
     const restoreOrderRock=this.orderRockPreview.prepareForCompile();
@@ -1644,7 +1647,7 @@ export class SceneRenderCore {
       for (const [object, value] of culling) object.frustumCulled = value;
       restoreMechanoids();
       restoreWind();restorePawnFires();restorePawnCargo();restoreWildlife();restoreAnimalCargo();restoreRopes();restoreFeedback();restoreActionVfx();restoreBrawlCloud();restoreStructureVfx();restoreRoofs();restoreDoors();restoreWalls();restoreCrops();restorePlants();restoreGrass();restoreDesignations();restoreFilth();restoreClouds();restorePrecipitation();
-      restoreSnow();restoreBoxes();restoreArea();restoreTurretRange();restoreMapOutline();restoreHints();restoreOrderRock();restoreConstruction();restoreDeep();
+      restoreSnow();restoreBoxes();restoreArea();restoreTurretRange();restoreFacilityLinks();restoreMapOutline();restoreHints();restoreOrderRock();restoreConstruction();restoreDeep();
       restoreOverview();
       restoreLabels?.();
       restorePodRescue();restoreOrbitalDelivery();
@@ -1689,7 +1692,7 @@ export class SceneRenderCore {
 
   setSelectedPawns(ids:ReadonlySet<number>):void {this.selectedPawns=new Set(ids);this.pawns.setSelected(ids);this.wildlife.setSelected(ids);this.mechanoids.setSelected(ids);if(this.world&&this.pawns.feedbackSource)this.actionFeedback.update(this.world,this.selectedPawns,this.pawns.feedbackSource,!!this.confirmedIntents);this.confirmedPathDirty=!!this.confirmedIntents;}
   setSelectedObject(selected:MapObjectSelection|undefined):void {this.setSelectedObjects(selected?[selected]:[]);}
-  setSelectedObjects(selected:readonly MapObjectSelection[]):void {this.selectedObjects=selected.map(s=>({...s}));this.selectedObject=this.selectedObjects[0];this.updateSelectedObject();this.updateGrowingZones(false);this.updateTurretPreview();this.updateDeepResources();}
+  setSelectedObjects(selected:readonly MapObjectSelection[]):void {this.selectedObjects=selected.map(s=>({...s}));this.selectedObject=this.selectedObjects[0];this.updateSelectedObject();this.updateGrowingZones(false);this.updateTurretPreview();this.updateFacilityLinks();this.updateDeepResources();}
   protected updateDeepResources():void {
     if(this.world&&this.deepResources.update(this.world,{selectedId:this.tool==='select'&&this.selectedObject?.kind==='structure'?this.selectedObject.id:undefined,placement:this.tool==='install'?this.furniturePlacement?.kind:this.tool}))this.invalidatePausedShadow();
     this.refreshGroundOverlays();
@@ -1707,6 +1710,13 @@ export class SceneRenderCore {
     if(inputs.every((value,index)=>value===this.groundOverlayInputs[index]))return;this.groundOverlayInputs=inputs;
     this.surfaceTint.setOverlays(world.width,world.height,
       [...roof,...hints],[...turret,...deep,...this.constructionPreview.surfaces,...selection]);
+  }
+  /** Schema 355: Core draws the facility links of a selected cabinet or bench. */
+  protected updateFacilityLinks():void {
+    const world=this.world,selected=this.selectedObject;
+    const structure=this.tool==='select'&&selected?.kind==='structure'&&world?world.structures.find(s=>s.id===selected.id&&(s.kind==='tool-cabinet'||isToolCabinetBench355(s.kind))):undefined;
+    if(this.areaDrag||!world||!structure){this.facilityLinks.hide();return;}
+    this.facilityLinks.update(toolCabinetLinkSegments355(world,structure));
   }
   protected updateTurretPreview():void {
     const world=this.world,selected=this.selectedObject;
@@ -2320,7 +2330,7 @@ export class SceneRenderCore {
       this.recreationHints.hide();this.turretRange.hide();this.clearOrderTargets();this.constructionPreview.hide();this.hover.visible=false;
       this.hostPort.title(this.tool==='mine'?'Miner cette zone':UNDISCOVERED_CELL_LABEL_256);return;
     }
-    this.updateTurretPreview();
+    this.updateTurretPreview();this.updateFacilityLinks();
     const cell = this.hoverCell;
     this.recreationHints.update(this.world, cell && (this.tool==='horseshoes'||this.tool==='install'&&this.furniturePlacement?.kind==='horseshoes'||this.tool==='select'&&this.world?.structures.some(s=>s.kind==='horseshoes'&&s.x===cell.x&&s.z===cell.z)) ? cell : undefined,this.tool==='select');
     const television=this.tool==='select'?this.world?.structures.find(s=>s.kind==='tube-television'&&cell&&footprintCells(s).some(c=>c.x===cell.x&&c.z===cell.z)):undefined;
@@ -2417,6 +2427,7 @@ export class SceneRenderCore {
     if (this.hostPort.selectionReady() && this.rig && this.hover) this.cancelDesignation();
     this.areaPreview.dispose();
     this.turretRange.dispose();
+    this.facilityLinks.dispose();
     this.mapOutline?.dispose();
     this.recreationHints.dispose();
     this.orderRockPreview.dispose();

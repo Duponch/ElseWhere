@@ -7,6 +7,7 @@ import type { Cell, JobKind, StructureKind, World } from './types.ts';
 export const OCCUPANCY = Object.freeze({
   // Local coexistence policy for a traversable device, independent of standability.
   'firefoam-popper':Object.freeze({clearItems:false,items:true,zones:false,store:false}),
+  'tool-cabinet':Object.freeze({clearItems:true,items:false,zones:false,store:false}),
   'smooth-floor':Object.freeze({clearItems:false,items:true,zones:true,store:true}),
   'ship-cryptosleep-casket':Object.freeze({clearItems:true,items:false,zones:false,store:false}),
   'ship-beam':Object.freeze({clearItems:true,items:false,zones:false,store:false}),'ship-engine':Object.freeze({clearItems:true,items:false,zones:false,store:false}),

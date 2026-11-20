@@ -23,6 +23,7 @@ import { floraDefinition } from './biome-flora.ts';
 /** Only shipped definitions. Missing/non-HP things are deliberately not fuels. */
 const BUILDINGS:Readonly<Record<string,readonly [number,number,boolean]>>={
   'firefoam-popper':[50,1,false],
+  'tool-cabinet':[100,.5,true],
   'ship-cryptosleep-casket':[SHIP_CASKET_CONTENT_277.maxHitPoints,SHIP_CASKET_CONTENT_277.flammability,SHIP_CASKET_CONTENT_277.leavesResourcesWhenKilled],
   'ship-beam':[SHIP_BEAM_CONTENT_276.maxHitPoints,SHIP_BEAM_CONTENT_276.flammability,SHIP_BEAM_CONTENT_276.leavesResourcesWhenKilled],
   'ship-engine':[SHIP_ENGINE_CONTENT_276.maxHitPoints,SHIP_ENGINE_CONTENT_276.flammability,SHIP_ENGINE_CONTENT_276.leavesResourcesWhenKilled],

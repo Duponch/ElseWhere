@@ -16,6 +16,7 @@ export function validateConstructionMaterials(world:World|Pick<World,'tick'>,ver
   const errors:string[]=[];
   for(const entity of packedRecords?packedRecords.map(p=>p.building):[...local!.jobs,...local!.structures,...(local!.packed??[]).map(p=>p.building)]) {
     if(entity.kind==='torch-lamp'&&(version<249||entity.material!=='wood'||entity.orientation!==0||entity.footprint!=='standard'))errors.push('Torch lamp requires V249, wood and fixed orientation.');
+    if(entity.kind==='tool-cabinet'&&(version<355||entity.material!=='steel'||entity.footprint!=='standard'))errors.push('Tool cabinet requires V355, steel and its standard footprint.');
     if(entity.kind==='vitals-monitor'&&(version<211||entity.material!=='steel'||entity.footprint!=='standard'))errors.push('Vitals monitor requires V211 and steel.');
     if(entity.kind==='drug-lab'&&(version<206||!validConstructionMaterial(entity.kind,entity.material,version)||entity.footprint!=='standard'))errors.push('Drug lab requires V206, wood or steel and its standard footprint.');
     if(entity.kind==='hydroponics-basin'&&(version<203||entity.material!=='steel'||entity.footprint!=='standard'))errors.push('Hydroponics basin requires V203 and steel.');

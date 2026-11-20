@@ -7,8 +7,11 @@ import type { Placement } from './primitives';
 import { FLOOR_SURFACE_Y } from './surface-height';
 import { bridgePartsForCell } from './bridge-parts';
 import {isRoadFloor256} from '../sim/road-ground-256';
+import {CARPET_FLOORS_355,carpetColor355,type CarpetFloor355} from '../sim/carpet-355';
 
-const floorColors:Record<FloorKind,number>={'ancient-tile':0x8a9d9a,'ancient-concrete':0x99968b,'broken-asphalt':0x606766,'granite-flagstone':0x918c85,'limestone-flagstone':0xb5aa85,'marble-flagstone':0xc4c0b5,'sandstone-flagstone':0xb18a64,'slate-flagstone':0x626970,'wood-planks':0x98714a,'burned-wood':0x302c28,'granite-tile':0x918c85,'limestone-tile':0xb5aa85,'marble-tile':0xc4c0b5,'sandstone-tile':0xb18a64,'slate-tile':0x626970,'steel-tile':0x83989a,'sterile-tile':0xd4e0dc};
+const floorColors:Record<FloorKind,number>={'ancient-tile':0x8a9d9a,'ancient-concrete':0x99968b,'broken-asphalt':0x606766,'granite-flagstone':0x918c85,'limestone-flagstone':0xb5aa85,'marble-flagstone':0xc4c0b5,'sandstone-flagstone':0xb18a64,'slate-flagstone':0x626970,'wood-planks':0x98714a,'burned-wood':0x302c28,'granite-tile':0x918c85,'limestone-tile':0xb5aa85,'marble-tile':0xc4c0b5,'sandstone-tile':0xb18a64,'slate-tile':0x626970,'steel-tile':0x83989a,'sterile-tile':0xd4e0dc,
+  // Schema 355 carpets: the Core Structure ColorDef of each, then the burned carpet.
+  ...Object.fromEntries(CARPET_FLOORS_355.map(id=>[id,carpetColor355(id).color])) as Record<CarpetFloor355,number>,'burned-carpet':0x3a2d2b};
 
 /** Every tile owns exactly its cell. The authored plank joints meet rather
  * than exposing the natural terrain through deliberately undersized boxes. */

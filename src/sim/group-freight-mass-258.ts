@@ -25,6 +25,7 @@ const PACKS:Readonly<Partial<Record<PackedFurniture['building']['kind'],number>>
 export function groupPackedMassGrams258(pack:PackedFurniture,version:number):number|undefined {
  if(pack.building.kind==='firefoam-popper')return (version===290||(version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))))))?10000:undefined;
  if(pack.building.kind==='fueled-smithy'||pack.building.kind==='electric-smithy')return version>=267?20000:undefined;
+ if(pack.building.kind==='tool-cabinet')return version>=355?20000:undefined;
  if(pack.building.kind==='brewery'||pack.building.kind==='fermenting-barrel')return version>=265?(pack.building.kind==='brewery'?20000:10000):undefined;
  return version>=258?PACKS[pack.building.kind]:version>=256&&pack.building.kind==='bedroll'?2500:undefined;
 }

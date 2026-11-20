@@ -1,4 +1,5 @@
 import {ITEM_DEFINITIONS} from '../sim/items';
+import {isCarpetFloor355,carpetColor355} from '../sim/carpet-355';
 
 /** One original drawing per semantic symbol, shared by Canvas, SVG and atlases.
  * Coordinates are authored, not randomly displaced at paint time. Slightly
@@ -29,7 +30,8 @@ const aliases:Readonly<Record<string,string>>={
 };
 export function pictoSemanticId(id:string):string {
  let key=id;
- for(const prefix of ['tool-','category-','map-dock:','tab:','menu-','page:','research-node-'])if(key.startsWith(prefix)){key=key.slice(prefix.length).replace(/-select$/,'');break;}
+ // Schema 355: the tool cabinet's own id begins like a tool control id.
+ for(const prefix of ['tool-','category-','map-dock:','tab:','menu-','page:','research-node-'])if(key.startsWith(prefix)&&key!=='tool-cabinet'){key=key.slice(prefix.length).replace(/-select$/,'');break;}
  return key;
 }
 class Drawing {
@@ -96,6 +98,15 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  if(/^(resource|crop)-/.test(id))id=id.replace(/^(resource|crop)-/,'plant:');
  const remove=id.endsWith('-remove');if(remove)id=id.slice(0,-7);
  const material=Object.keys(stoneColors).find(stone=>id.startsWith(stone+'-'));
+ // Schema 355: one rug per Core carpet colour, its fringes on the two short edges.
+ if(id==='carpet-making'||isCarpetFloor355(id)){
+  const fill=isCarpetFloor355(id)?'#'+carpetColor355(id).color.toString(16).padStart(6,'0'):P.red;
+  d.shape([[7,29],[31,14],[57,28],[33,45]],fill);d.shape([[7,29],[33,45],[57,28],[57,35],[33,52],[7,36]],fill);d.line([[33,45],[33,52]],1.3);
+  d.shape([[15,29],[31,19],[49,28],[33,39]],null,true,1.2,P.paper);
+  for(const t of[.2,.4,.6,.8]){d.line([[7+24*t,29-15*t],[3+24*t,27-15*t]],1.2);d.line([[33+24*t,45-17*t],[37+24*t,47-17*t]],1.2);}
+  if(id==='carpet-making'){d.line([[44,8],[56,20]],2.2,P.wood);d.ellipse(42,7,3,3,P.paper,1.4);}
+  id='drawn';
+ }
  if(/-(tile|flagstone)$/.test(id)||id==='floor'||id==='planks'||id==='smooth'){
   const fill=material?stoneColors[material]!:id==='planks'?P.wood:P.stone;
   d.shape([[7,29],[31,14],[57,28],[33,45]],fill);d.shape([[7,29],[33,45],[57,28],[57,35],[33,52],[7,36]],fill);d.line([[33,45],[33,52]],1.3);
@@ -167,6 +178,7 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  case 'spike-trap':d.rect(7,41,49,10,P.wood);for(const x of[12,27,42])d.shape([[x,41],[x+6,12],[x+12,41]],P.silver);break;
  case 'mini-turret':d.rect(15,49,35,6,P.stone);d.shape([[25,49],[25,34],[39,34],[42,49]],P.stone);d.rect(17,24,28,12,P.sage);d.rect(42,24,17,6,P.darkBlue);d.ellipse(25,30,3,3,P.ochre);d.line([[27,24],[23,17]],2);break;
  case 'bed':case 'double-bed':case 'hospital-bed':case 'sleeping-spot':case 'animal-sleeping-spot':case 'bedroll':bed(d,id);break;
+ case 'tool-cabinet':d.rect(9,16,46,40,P.green);d.line([[32,16],[32,56]],1.8);d.line([[28,30],[28,40]],2.4,P.paper);d.line([[36,30],[36,40]],2.4,P.paper);d.line([[9,49],[55,49]],1.4);d.line([[13,56],[13,60]],3);d.line([[51,56],[51,60]],3);d.path('M 18 12 L 30 4 M 30 4 Q 35 2 36 7 Q 33 10 30 8',null,2.2,P.stone);d.rect(38,8,14,6,P.wood);d.line([[45,8],[45,4]],2.2,P.stone);break;
  case 'vitals-monitor':d.rect(8,11,47,34,P.stone);d.rect(12,15,39,24,P.darkBlue);d.line([[16,29],[24,29],[28,22],[32,34],[37,25],[46,25]],1.8,P.sage);d.line([[31,45],[31,55],[19,55],[43,55]],2.5);break;
  case 'table':case 'table-square':case 'table-long':case 'end-table':{const x=id==='table-square'?17:id==='end-table'?16:8,w=id==='table-long'?48:id==='table-square'?30:id==='end-table'?32:42,h=id==='table-square'?29:21;d.rect(x,17,w,h,P.wood);d.line([[x+4,17+h],[x+4,57]],3);d.line([[x+w-4,17+h],[x+w-4,57]],3);d.line([[x+4,23],[x+w-4,23]],1,P.paper);break;}
  case 'chair':d.rect(18,9,29,26,P.wood);d.rect(13,35,39,8,P.ochre);d.line([[18,43],[16,57]],3);d.line([[46,43],[49,57]],3);d.line([[24,14],[24,29]],1.4);d.line([[40,14],[40,29]],1.4);break;

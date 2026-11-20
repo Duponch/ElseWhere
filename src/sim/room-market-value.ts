@@ -1,3 +1,4 @@
+import {CARPET_FLOORS_355,type CarpetFloor355} from './carpet-355.ts';
 import {SHIP_COMPUTER_CONTENT_298,SHIP_SENSORS_CONTENT_298} from './ship-computer-sensors-content-298.ts';
 import {AI_CORE_CONTENT_298} from './ai-core-content-298.ts';
 import {SHIP_CASKET_CONTENT_277} from './ship-casket-content-277.ts';
@@ -57,6 +58,7 @@ const def = (stuff: number, work: number, passability: Passability,
  * abstract-stuff estimate rather than receiving a fabricated material. */
 const BUILDINGS: Readonly<Record<StructureKind, BuildingValueDef>> = Object.freeze({
  'firefoam-popper':def(0,1500,'pass-through',{steel:75,component:1}),
+ 'tool-cabinet':def(0,1800,'pass-through',{steel:200}),
  'ship-cryptosleep-casket':def(0,SHIP_CASKET_CONTENT_277.coreWork,'pass-through',Object.fromEntries(SHIP_CASKET_CONTENT_277.ingredients.map(c=>[c.item,c.quantity]))),
  'ship-computer':def(0,SHIP_COMPUTER_CONTENT_298.coreWork,'impassable',Object.fromEntries(SHIP_COMPUTER_CONTENT_298.ingredients.map(c=>[c.item,c.quantity]))),
  'ship-sensors':def(0,SHIP_SENSORS_CONTENT_298.coreWork,'impassable',Object.fromEntries(SHIP_SENSORS_CONTENT_298.ingredients.map(c=>[c.item,c.quantity]))),
@@ -220,6 +222,9 @@ const FLOOR_VALUE: Readonly<Record<FloorKind, number>> = Object.freeze({
   'steel-tile': 7 * MATERIAL_VALUE.steel + 800 * VALUE_PER_WORK,
   'sterile-tile': 3 * MATERIAL_VALUE.steel + 12 + 1600 * VALUE_PER_WORK,
   'burned-wood': 0,
+  // Schema 355 carpets: 7 cloth + WorkToBuild 800; the burned carpet has no value.
+  ...Object.fromEntries(CARPET_FLOORS_355.map(id=>[id,7*MATERIAL_VALUE.cloth+800*VALUE_PER_WORK])) as Record<CarpetFloor355,number>,
+  'burned-carpet': 0,
 });
 export function floorRoomMarketValue(tile: Tile): number {
   if(tile.bridge)return 12*MATERIAL_VALUE.wood+1500*VALUE_PER_WORK;
