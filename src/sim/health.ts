@@ -1,3 +1,4 @@
+import {superImmune361} from './traits.ts';
 import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {deathLetter352} from './letter-producers-352.ts';
 import {deathOnDownedChance320,deathOnDownedEligible320} from './population-intent-320.ts';
@@ -115,7 +116,7 @@ export function updatePawnHealth(world:World,pawn:Pawn,retainTravellingCargo=fal
     const conditionFrontier=humanConditionMedicalFrontier256(pawn,record,world.tick,medicalDraw,{kind:'map',world},actualPawn);
     advanceMedical(record,medicalElapsedTicks271(record,world.tick),{civilTick:world.tick,phase:pawn.id%60,alcoholOwner:{id:pawn.id,spawned:!carrierOf(world,pawn.id),awake:pawn.state!=='sleeping'&&!pawn.medicalSleep&&!pawn.stun,inMentalState:!!pawn.mental?.crisis},toxicOwner:{id:pawn.id,spawned:!carrierOf(world,pawn.id),awake:pawn.state!=='sleeping'&&!pawn.medicalSleep&&!pawn.stun},...(fallout?{toxicFallout294:fallout}:{}),cryptosleepSicknessSpawned:!carrierOf(world,pawn.id),posture:bed?'bed':resting?'ground':'standing',starving:pawn.hunger<=0,malnutritionRate:world.schemaVersion>=84?malnutritionRate(pawn.id):undefined,infectionChanceFactor:playerInfectionFactor(world,pawn),
       hunger:pawn.hunger,rest:pawn.rest,restingBonus:!!bed||resting&&pawn.state!=='downed'||sky,infectionSeed:(world.seed^Math.imul(pawn.id,0x9e3779b1))>>>0,
-      ageImmunityFactor:humanAgeImmunityFactor(pawn.age),...(bed?{bedHealPerDay:bedHealPerDay(bed),bedImmunityFactor:bedImmunityFactor(bed,world)}:{})},medicalDraw,conditionFrontier);
+      ageImmunityFactor:humanAgeImmunityFactor(pawn.age),...superImmune361(pawn),...(bed?{bedHealPerDay:bedHealPerDay(bed),bedImmunityFactor:bedImmunityFactor(bed,world)}:{})},medicalDraw,conditionFrontier);
     if(actualPawn){
       if(world.tick!==actualTick||world.rng!==actualRng||world.pawns!==actualActors||!world.pawns.includes(actualPawn)||actualPawn.health!==actualRecord||JSON.stringify(actualPawn)!==actorBefore)throw Error('Stale actual toxic clinical owner');
       commitToxicDeath256(record,medicalDraw);

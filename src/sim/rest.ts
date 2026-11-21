@@ -1,3 +1,4 @@
+import {restRateFactor361} from './traits.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
 import {groupHumanPendingPassenger259} from './group-human-admission-257.ts';
 import { isBedKind } from './bed-kinds.ts';
@@ -44,7 +45,7 @@ export function updateRest(world: World, pawn: Pawn): void {
       if(s.kind==='sleeping-spot')return (pawn.motion?.end??0)<=world.tick&&s.x===pawn.x&&s.z===pawn.z&&need.target.x===s.x&&need.target.z===s.z;
       return s.kind!=='hospital-bed'||s.x===pawn.x&&s.z===pawn.z&&need.target.x===s.x&&need.target.z===s.z;
     }):undefined;
-    if(pawn.medicalSleep)pawn.rest=Math.min(100,pawn.rest+(bed&&bed.kind!=='sleeping-spot'?BED_REST_PER_TICK*(bed.kind==='bedroll'||bed.kind==='hospital-bed'||bed.kind==='double-bed'?bedRestEffectiveness(bed):(bed.material?BUILDING_MATERIALS[bed.material].restFactor:1)):GROUND_REST_PER_TICK));
+    if(pawn.medicalSleep)pawn.rest=Math.min(100,pawn.rest+(bed&&bed.kind!=='sleeping-spot'?BED_REST_PER_TICK*(bed.kind==='bedroll'||bed.kind==='hospital-bed'||bed.kind==='double-bed'?bedRestEffectiveness(bed):(bed.material?BUILDING_MATERIALS[bed.material].restFactor:1)):GROUND_REST_PER_TICK)*restRateFactor361(pawn));
     else pawn.rest=depletedHumanRest(pawn.rest,world.restRules==='legacy',parasiteRestFactor306(pawn.health));
     return;
   }

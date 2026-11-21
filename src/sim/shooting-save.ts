@@ -1,3 +1,4 @@
+import {aimedWarmup361,aimingFactorOf361} from './shooting-traits-361.ts';
 import {isGun342} from './guns-342.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297,effectiveLocal297,validationCore297} from './core-phase-297.ts';
@@ -16,7 +17,8 @@ import type { Cell,World } from './types.ts';
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const integer=(v:unknown,min:number,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
 const keys=(v:Record<string,unknown>,allowed:string[])=>Object.keys(v).every(k=>allowed.includes(k));
-export function validShootingShape(value:unknown,version:number,tick:number,coreNow297?:number):boolean {
+/** `aimingFactor` (schema 361): the shooter's Core AimingDelayFactor, from its traits. */
+export function validShootingShape(value:unknown,version:number,tick:number,coreNow297?:number,aimingFactor=1):boolean {
  const physicalCoreNow297=validationCore297(version,tick,coreNow297);if(isCorePhysicalSchema297(version)&&!Number.isSafeInteger(physicalCoreNow297))return false;
   if(value===undefined)return true;
   if(version<56||!record(value)||!keys(value,['order','stance'])||value.order===null&&value.stance===null)return false;
@@ -33,7 +35,8 @@ export function validShootingShape(value:unknown,version:number,tick:number,core
   // Schema 340: a burst's gap stance lasts ticksBetweenBurstShots + 1.
   const burst=s.phase==='cooldown'&&Object.hasOwn(s,'burst')?s.burst:undefined;
   if(burst!==undefined&&!validBurst340(burst,s,emp?.burst,physicalCoreNow297))return false;
-  const duration=burst!==undefined?burstGapStanceTicks340(emp!.burst!):emp?(s.phase==='aim'?emp.warmupCoreTicks:emp.cooldownCoreTicks):s.phase==='aim'?(s.weaponItem?102:18):(s.weaponItem?90:96);
+  const base=burst!==undefined?burstGapStanceTicks340(emp!.burst!):emp?(s.phase==='aim'?emp.warmupCoreTicks:emp.cooldownCoreTicks):s.phase==='aim'?(s.weaponItem?102:18):(s.weaponItem?90:96);
+  const duration=s.phase==='aim'&&burst===undefined?aimedWarmup361(base,aimingFactor):base;
   if(version<198||!Object.hasOwn(s,'clock')&&s.clock===undefined)return s.endsAtCore-s.startedAtCore===duration;
   const c=s.clock;
   if(!Object.hasOwn(s,'clock')||!record(c)||Reflect.ownKeys(c).length!==2||!Object.hasOwn(c,'lastAdvancedAtCore')||!Object.hasOwn(c,'pausedCore')
@@ -83,7 +86,7 @@ function historicalTargetKind(w:World,id:number):'pawn'|'animal'|'mech'|undefine
 export function validateShooting(world:World,version:number=world.schemaVersion,registeredIds?:NumericMembershipLookup):string[] {
   const errors:string[]=[];
   for(const p of world.pawns)if(p.shooting!==undefined) {
-    if(!validShootingShape(p.shooting,version,world.tick,isCorePhysicalSchema297(version)?effectiveCore297(world):undefined)||!validShootingLeanOwner(p,world,version)||!validStunShape(p.stun,version,world.tick,version>=318?120:45,isCorePhysicalSchema297(version)?effectiveCore297(world):undefined)){errors.push('Invalid shooting state for schema.');continue;}
+    if(!validShootingShape(p.shooting,version,world.tick,isCorePhysicalSchema297(version)?effectiveCore297(world):undefined,aimingFactorOf361(p.traits,version))||!validShootingLeanOwner(p,world,version)||!validStunShape(p.stun,version,world.tick,version>=318?120:45,isCorePhysicalSchema297(version)?effectiveCore297(world):undefined)){errors.push('Invalid shooting state for schema.');continue;}
     const {order,stance}=p.shooting;
     const suspended=version>=198&&stance?.phase==='aim'&&!!p.stun&&effectiveCore297(world)<p.stun.untilCore;
     if(order){const weapon=equippedWeapon(world,p);if(!weapon||!isRangedWeaponItem(weapon.item)||order.hunt&&weapon.item==='emp-launcher'||stance?.phase==='aim'&&(stance.weaponItem??'revolver')!==weapon.item)errors.push('Invalid ranged weapon/aim profile.');}

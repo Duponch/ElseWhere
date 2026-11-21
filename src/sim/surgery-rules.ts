@@ -1,3 +1,4 @@
+import {workSpeedGlobal361} from './traits.ts';
 import { isColonist } from './affiliation.ts';
 import type { WeaponQuality } from './equipment-rules.ts';
 import { pawnBody } from './health-rules.ts';
@@ -54,7 +55,7 @@ export function surgeryRemoveRequestReason273(patient:Pawn,part:unknown,kind:unk
 /** Actual Glow, not the already transformed tending-light factor. */
 export function medicalSurgerySpeed(doctor:Pawn,glow:number):number {
   const c=pawnBody(doctor).capacities;
-  return Math.max(.1,(.4+.06*doctor.skills.medicine.level)*c.manipulation*(.3+.7*Math.min(1,c.sight))*curve(glow,[[0,.8],[.3,1]])*workSpeedInspirationFactor360(doctor));
+  return Math.max(.1,(.4+.06*doctor.skills.medicine.level)*c.manipulation*(.3+.7*Math.min(1,c.sight))*curve(glow,[[0,.8],[.3,1]])*workSpeedInspirationFactor360(doctor)*workSpeedGlobal361(doctor));
 }
 const DOCTOR_CHANCE=[.1,.2,.3,.4,.5,.6,.7,.75,.8,.85,.9,.92,.94,.96,.98,1,1.02,1.04,1.06,1.08,1.1] as const;
 export function medicalSurgeryDoctorChance(doctor:Pawn):number {

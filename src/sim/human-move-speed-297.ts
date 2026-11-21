@@ -1,3 +1,4 @@
+import {moveSpeedFactor361} from './traits.ts';
 import {sharedLightEnvironmentCache,type LightReader} from './light-environment.ts';
 import {pawnBody} from './health-rules.ts';
 import {apparelMoveFactor} from './apparel-rules.ts';
@@ -18,6 +19,8 @@ export function invalidateHumanMoveSpeed297(_w:World):void {}
 export function humanMoveSpeedFactor297(w:World,p:Pawn,read?:LightReader):number {
  const cache=read?undefined:sharedLightEnvironmentCache(w);
  let factor=(glowIgnoredByBlindPawn(w,p)?1:read?(typeof read.speedAt==='function'?read.speedAt(p):(read()??cache!.read(w)).speedAt(p)):cache!.speedAt(w,p))*pawnBody(p).capacities.moving*apparelMoveFactor(w,p)*weatherMoveFactor(w,p);
+ // Schema 361: Core MoveSpeed 4.6 plus the SpeedOffset trait (exactly 1 without).
+ factor*=moveSpeedFactor361(p);
  if(inRestraints301(w,p))factor*=.35;
  // Schema 360: a go frenzy multiplies MoveSpeed (exactly 1 otherwise).
  factor*=moveSpeedInspirationFactor360(p);

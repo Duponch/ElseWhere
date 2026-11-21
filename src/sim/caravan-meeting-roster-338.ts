@@ -1,3 +1,4 @@
+import {giveBornTraits361} from './trait-generation-361.ts';
 import {startingPawn} from './starting-pawns.ts';
 import {isBlowbackSchema340,isGunKind340} from './blowback-340.ts';
 import {gunKindWeapon342} from './guns-342.ts';
@@ -37,7 +38,7 @@ export function draftCaravanMeetingRoster338(w:World,factionId:number,random:{rn
   delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;
   for(const value of Object.values(p.skills))if(typeof value==='object'){value.level=0;value.passion=0;}
   for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;
-  generatePawnBackground(p,w.seed,!!guard,!guard);
+  generatePawnBackground(p,w.seed,!!guard,!guard);giveBornTraits361(w,p);
   people.push(p);
   items.push({id:nextId++,kind:'apparel',item:apparel,quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState(apparel,undefined,w.schemaVersion)});
   // Schema 340: Gun-tagged Core kinds draw their gun, as in visitors.ts.

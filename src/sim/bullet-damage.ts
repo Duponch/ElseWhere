@@ -1,3 +1,4 @@
+import {toughDamage361} from './traits.ts';
 import { apparelProtection } from './apparel-protection.ts';
 import { resolveUnarmoredBullet,validateUnarmoredBullet,type UnarmoredBullet,type BulletImpactResult } from './bullet-impact.ts';
 import { createMedicalRecord } from './injury-state.ts';
@@ -18,7 +19,9 @@ export function damageUnarmoredPawnWithBullet(world:World,pawn:Pawn,hit:Unarmore
   // The local PRNG is committed with the record; a failed resolver cannot
   // consume the world's random stream or leave half an anatomical impact.
   const protection=apparelProtection(world,pawn,'sharp',penetration,()=>healthRandom(randomState));
-  const impact=resolveUnarmoredBullet(pawn.health??createMedicalRecord(world.tick),hit,()=>healthRandom(randomState),protection.protect);
+  // Schema 361: Tough (IncomingDamageFactor 0.5) scales the damage, never the armor draws.
+  const tough=toughDamage361(pawn,hit.damage);
+  const impact=resolveUnarmoredBullet(pawn.health??createMedicalRecord(world.tick),tough===hit.damage?hit:{...hit,damage:tough},()=>healthRandom(randomState),protection.protect);
   if(!impact.selected)return impact;
   protection.commit();world.rng=randomState.rng;pawn.health=impact.record;reconcilePawnHealth(world,pawn,undefined,true);
   return impact;

@@ -1,3 +1,4 @@
+import {workSpeedGlobal361} from './traits.ts';
 import {releaseAnimalThermalRefuge288} from './animal-thermal-refuge-288.ts';
 import {animalProductDefinition256} from './animal-products-v256.ts';
 import {isAnimalSpecies256} from './animal-core-v256.ts';
@@ -92,7 +93,7 @@ export function processProduct(world:World,pawn:Pawn,task:ProductTask,ctx:NeedCo
   const def=animalProductDefinition(animal)!;
   const body=pawnBody(pawn).capacities;
   const level=pawn.skills.animals?.level??0,sight=Math.min(1,body.sight);
-  const rate=Math.max(.1,(.04+.12*level)*body.manipulation*(.5+.5*sight)*workSpeedInspirationFactor360(pawn));
+  const rate=Math.max(.1,(.04+.12*level)*body.manipulation*(.5+.5*sight)*workSpeedInspirationFactor360(pawn)*workSpeedGlobal361(pawn));
   if(task.progress+rate<def.work){task.progress+=rate;return;}
   const plan=planGroundPlacement(world,def.quantity,pawn,def.item);
   const identities=plan?.reduce((n,part)=>n+materialIdentityCount(world,part.quantity,{type:'ground',...part.cell},def.item),0)??0;

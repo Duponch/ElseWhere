@@ -1,3 +1,4 @@
+import {workSpeedGlobal361} from './traits.ts';
 import {isSchema281OrLater} from './schema-compatibility-257.ts';
 import {smoothFloorSourceStone281,SMOOTHED_STONE_TERRAIN_281} from './smooth-floor-terrain-281.ts';
 import {foggedCell256} from './exploration-state-256.ts';
@@ -61,7 +62,7 @@ export function canTouchSmoothFloor281(w:World,actor:Cell,target:Cell,geometry?:
  * Local fixed-point work adapts Core float work rather than claiming bit parity. */
 export function smoothingSpeed281(p:Pawn,glow:number,body?:BodyAssessment):number {
   const c=(body??pawnBody(p)).capacities,light=c.sight===0?1:.8+.2*Math.max(0,Math.min(1,glow/.3));
-  return Math.max(.1,light*constructionSpeed(p)*c.manipulation*(.7+.3*Math.min(1,c.sight))*workSpeedInspirationFactor360(p));
+  return Math.max(.1,light*constructionSpeed(p)*c.manipulation*(.7+.3*Math.min(1,c.sight))*workSpeedInspirationFactor360(p)*workSpeedGlobal361(p));
 }
 
 /** The active Job owns fractional progress; a real release resets it. The

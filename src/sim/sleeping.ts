@@ -1,3 +1,4 @@
+import {restRateFactor361} from './traits.ts';
 import {targetBuildingPlayerUse263} from './world-target-building-263.ts';
 import {claimLocalActorBed256,captureActorBeds256,actualBedOwners256,localBedClaimAvailable256,globalCivilBedShare256} from './actor-bed-local-256.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
@@ -123,7 +124,7 @@ function continueSleepingAfterServices300(world:World,pawn:Pawn,context:NeedCont
     if (task.phase === 'travel') context.event(`${pawn.name} s’allonge ${bed ? 'dans son lit' : 'au sol'}.`);
     task.phase = 'sleep'; pawn.path = []; pawn.state = 'sleeping'; pawn.collapsePending = false; pawn.restZeroTicks = 0;
     advanceRoomRest(world,pawn);
-    pawn.rest = Math.min(100, pawn.rest + (bed&&bed.kind!=='sleeping-spot' ? BED_REST_PER_TICK * (bed.kind==='bedroll'||bed.kind==='hospital-bed'||bed.kind==='double-bed'?bedRestEffectiveness(bed):BUILDING_MATERIALS[bed.material??'wood'].restFactor) : GROUND_REST_PER_TICK));
+    pawn.rest = Math.min(100, pawn.rest + (bed&&bed.kind!=='sleeping-spot' ? BED_REST_PER_TICK * (bed.kind==='bedroll'||bed.kind==='hospital-bed'||bed.kind==='double-bed'?bedRestEffectiveness(bed):BUILDING_MATERIALS[bed.material??'wood'].restFactor) : GROUND_REST_PER_TICK)*restRateFactor361(pawn));
     if (pawn.rest >= 100) { finishRoomRest(world,pawn);pawn.need = null; pawn.state = 'idle'; pawn.planCooldown = 0; pawn.needCooldown = 0; }
     return true;
   }

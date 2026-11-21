@@ -1,3 +1,4 @@
+import {workSpeedGlobal361} from './traits.ts';
 import {isColonist} from './affiliation.ts';
 import {medicalWorkRefusal} from './health-rules.ts';
 import {backgroundWorkRefusal} from './colonist-backgrounds.ts';
@@ -54,7 +55,7 @@ export function processSnowClearing(w:World,p:Pawn,t:CleaningTask,context:NeedCo
  }
  p.path=[];p.state='working';t.phase='clean';
  // Deliberate adaptation: true 50*current depth work, not Core's nullable zero.
- t.progress+=10*biofuelProductionSpeed(p);
+ t.progress+=10*biofuelProductionSpeed(p)*workSpeedGlobal361(p);
  if(t.progress>=50*snowDepthAt(w,i)){setSnowDepth(w,i,0);release();w.events.push({tick:w.tick,type:'job',message:`${p.name} a déneigé une case.`});if(w.events.length>80)w.events.splice(0,w.events.length-80);}
  return true;
 }

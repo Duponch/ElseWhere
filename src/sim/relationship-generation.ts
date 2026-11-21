@@ -1,3 +1,4 @@
+import {isTraitsSchema361} from './traits.ts';
 import { arrivalRandom } from './arrival-state.ts';
 import { factionOf,isColonist } from './affiliation.ts';
 import { HUMAN_YEAR_TICKS,validHumanAge,type HumanAge } from './human-age.ts';
@@ -91,11 +92,14 @@ export function initializeCampRelationships(w:World):void {
  * but its endpoints are candidate identities, not future Thing allocations.
  * Sorting identities makes reorder alone preserve the advertised couple. No
  * relatives, off-map people or links to candidates left behind are invented. */
-export function generateStartingCandidateRelationships(seed:number,people:readonly Pick<Pawn,'id'|'age'>[]):RelationshipState {
+export function generateStartingCandidateRelationships(seed:number,people:readonly (Pick<Pawn,'id'|'age'>&Partial<Pick<Pawn,'traits'|'appearance'>>)[],version=0):RelationshipState {
   const adults=people.filter(p=>p.age&&p.age.biologicalTicks>=18*HUMAN_YEAR_TICKS).slice().sort((a,b)=>a.id-b.id);
   const plans:{link:RelationshipLink;weight:number}[]=[];
   for(let i=0;i<adults.length;i++)for(let j=i+1;j<adults.length;j++){
     const a=adults[i]!,b=adults[j]!;
+    // Schema 361: Core LovePartnerRelationGenerationChance, the earlier
+    // person as `other`: same sex only with a gay other, never otherwise.
+    if(isTraitsSchema361(version)&&a.appearance&&b.appearance&&(a.appearance.sex===b.appearance.sex)!==!!a.traits?.includes('gay'))continue;
     const aAge=a.age!.biologicalTicks/HUMAN_YEAR_TICKS,bAge=b.age!.biologicalTicks/HUMAN_YEAR_TICKS,gap=Math.abs(aAge-bAge);
     if(gap>40)continue;
     const weight=Math.min(1,(aAge-14)/13)*Math.min(1,(bAge-14)/13)*Math.max(.001,1-.999*gap/20);

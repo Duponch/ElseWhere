@@ -1,3 +1,4 @@
+import {giveBornTraits361} from './trait-generation-361.ts';
 import {assignPileOwner} from './pile-index.ts';
 import { newTactics } from './tactics-state.ts';
 import { startingPawn } from './starting-pawns.ts';
@@ -25,6 +26,7 @@ export function setupEncounter(world:World):void {
   if(!site)throw new Error('Aucun emplacement accessible pour la sentinelle sur cette graine.');
   const enemy=startingPawn(world.nextId++,'Sentinelle',site.x,site.z,0,55,world.seed,world.tick,world.schemaVersion);enemy.faction='outlaws';enemy.tactics=newTactics();
   if(world.schemaVersion>=191)generatePawnBackground(enemy,world.seed,true);
+  giveBornTraits361(world,enemy,true);
   world.pawns.push(enemy);
   world.piles.push({id:world.nextId++,kind:'weapon',item:'revolver',quantity:1,owner:{type:'equipment',pawnId:enemy.id},weapon:newWeaponState()});
   const weapon=world.piles.find(p=>p.item==='revolver'&&p.owner.type==='ground');

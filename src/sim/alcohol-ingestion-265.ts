@@ -57,6 +57,8 @@ export function alcoholChoice265(world:World,pawn:Pawn):AlcoholReason265|undefin
  const e=drugPolicyFor265(world,pawn).beer;
  if(pawn.mental?.crisis?.kind==='drug-binge')return 'binge';
  if(e.allowedForAddiction&&pawn.health?.alcohol?.addiction&&(pawn.health.alcohol.addiction.need<=Math.fround(.1)))return 'addiction';
+ // Schema 361: a teetotaler never takes a drug by policy, for joy or to carry (Core CanTakeDrug).
+ if(pawn.traits?.includes('teetotaler'))return;
  if(scheduledAlcoholDue265(world.tick,pawn,e))return 'scheduled';
  const assignment=assignmentAt(world,pawn);
  if(e.allowedForJoy&&!pawn.recreation.bored.chemical&&idleForJoy(pawn)&&world.tick>=500&&pawn.hunger>20&&assignment!=='work'&&assignment!=='sleep'&&pawn.recreation.level<(assignment==='anything'?35:95))return 'joy';

@@ -1,3 +1,4 @@
+import {giveBornTraits361} from './trait-generation-361.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 /** Prospective, explicitly adapted NPC population. This is the same authored
  * person/health/equipment pipeline as existing visitors and raids, NOT a native
@@ -56,6 +57,7 @@ export function prepareFunctionalAncientHuman256(input:{id:number;nextId:number;
  // old display alias is never converted into authority on an existing Pawn.
  if(input.birth259){const b=input.birth259,expected=kind==='ancient-hostile'?'AncientsHostile':'Ancients',instance=b.factions.factions.find(f=>f.id===b.factionId);if(!instance||instance.def!==expected||!bindBornHumanFaction259({schemaVersion:259,worldFactions:b.factions},p,b.factionId))throw Error('Actual ancient birth faction instance refused');}
  generatePawnBackground(p,seed,!slave);
+ giveBornTraits361({schemaVersion:input.version??256,seed},p,p.faction==='outlaws',seed);
  // These neutral/hostile outsiders do not acquire a colony policy/task.
  delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;
  const items:AncientHeldPile256[]=[];let next=input.nextId;

@@ -15,7 +15,8 @@ export type ProjectileProfileId='revolver'|'bolt-action-rifle'|'emp-launcher'|'s
  * current/historical source decisions in research/ranged-statistics-reference. */
 const shootingCurve:readonly (readonly [number,number])[]=[[-20,.70],[-10,.80],[-6,.83],[-4,.85],[-2,.87],[0,.89],[2,.93],[4,.94],[6,.95],[8,.96],[10,.97],[12,.975],[14,.98],[16,.98333],[18,.98666],[20,.99],[22,.9925],[26,.995],[30,.9965],[40,.998],[60,.999]];
 function finiteNonnegative(value:number):void {if(!Number.isFinite(value)||value<0)throw new RangeError('Invalid ranged stat input');}
-/** `offset` (schema 360): a shoot frenzy's ShootingAccuracyPawn +8, before the curve. */
+/** `offset`: the sum of ShootingAccuracyPawn offsets, before the curve (a shoot
+ * frenzy's +8 from schema 360, trait offsets from schema 361). */
 export function shootingAccuracy(level:number,sight:number,manipulation:number,offset=0):{score:number;perCell:number} {
   if(!Number.isInteger(level)||level<0||level>20)throw new RangeError('Invalid shooting level');
   finiteNonnegative(sight);finiteNonnegative(manipulation);

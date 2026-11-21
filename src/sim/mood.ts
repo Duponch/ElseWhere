@@ -21,7 +21,8 @@ import { COLONY_EXPECTATIONS,type ColonyExpectation } from './expectations.ts';
 import { colonyExpectation } from './colony-economy.ts';
 import { malnutritionStage } from './malnutrition.ts';
 import { expireRoomMemoriesAt,roomMoodThoughtsAt } from './room-experience.ts';
-import { TRAITS } from './traits.ts';
+import { TRAITS,isTraitsSchema361 } from './traits.ts';
+import { traitMapThoughts361,traitMoodThoughts361,type TraitMapThoughts361 } from './trait-thoughts-361.ts';
 import { colonistMoodOffset } from './game-profile.ts';
 import { APPAREL,apparelInsulation,type ApparelItem } from './apparel-rules.ts';
 import { deadMansApparelThought351,isStrip351 } from './strip-state-351.ts';
@@ -109,6 +110,8 @@ export interface PersonalMoodContext {
   moodPool350?:readonly MoodThought[];
   /** Schema 359: NeedOutdoors, from the pawn's outdoors level, read on its map (not valid while despawned). */
   outdoors359?:MoodThought;
+  /** Schema 361: the map-only trait thoughts of a trait holder (night owl, bedroom, weapon). */
+  traits361?:TraitMapThoughts361;
 }
 /** Held position differs deliberately from the spawned-only dose pass. Rescue,
  * captive and casket-service carriers resolve through their existing owner.
@@ -137,7 +140,8 @@ export function moodThoughts(world:World,pawn:Pawn,topology?:RelationshipTopolog
     ...isFirstDays343(world.schemaVersion)?{bondedAnimals343:bondedAnimalThoughts343(world,pawn)}:{},
     ...isMoodBasics345(world.schemaVersion)?{passionateWork345:passionateWorkThought345(world,pawn)}:{},
     ...isOutdoors359(world.schemaVersion)?{outdoors359:outdoorsThought359(world,pawn)}:{},
-    ...isMoodPool350(world.schemaVersion)?{moodPool350:[psychicDroneThought350(world,pawn),hospitalPatientThought350(world,pawn),opinionOfLoverThought350(world,pawn)].filter((t):t is MoodThought=>!!t)}:{}});
+    ...isMoodPool350(world.schemaVersion)?{moodPool350:[psychicDroneThought350(world,pawn),hospitalPatientThought350(world,pawn),opinionOfLoverThought350(world,pawn)].filter((t):t is MoodThought=>!!t)}:{},
+    ...pawn.traits&&isTraitsSchema361(world.schemaVersion)?{traits361:traitMapThoughts361(world,pawn)}:{}});
 }
 export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly MoodThought[] {
   if((pawn.cryptosleepHeldAt271!==undefined||pawn.shipCryptosleepHeldAt277!==undefined))c={...c,tick:memoryReadTick271(pawn,c.tick)};
@@ -195,6 +199,8 @@ export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly M
   }
   const catharsis=pawn.mental?.catharsis.filter(t=>t>c.tick)??[];
   if(catharsis.length)thoughts.push({id:'catharsis',label:`Catharsis ×${catharsis.length}`,offset:40*(1-.75**catharsis.length)/.25,kind:'memory',description:'Soulagement après crise ; chaque occurrence dure trois jours, au plus cinq, effet décroissant.',expiresAt:catharsis[0]});
+  // Schema 361: trait nullifications and trait thoughts.
+  if(pawn.traits&&isTraitsSchema361(c.schemaVersion))return traitMoodThoughts361(pawn,thoughts,{items:c.items,...c.traits361?{map361:c.traits361}:{},...c.despawned313?{despawned:true}:{}});
   return thoughts;
 }
 export function moodTarget(thoughts:readonly MoodThought[]):number {

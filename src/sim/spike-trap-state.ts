@@ -1,3 +1,4 @@
+import {trapSpringFactor361} from './traits.ts';
 import type { LivingTarget,LivingTargetKey } from './combat-target.ts';
 import type { Cell,Structure,World } from './types.ts';
 import { structuresOfKind } from './structure-navigation.ts';
@@ -26,6 +27,11 @@ export function spikeTrapKnowsOf(_world:World,actor:LivingTarget):boolean {
 /** Building_Trap.SpringChance; from 357 the IED traps scale the wild animal
  * knower chance by trapPeacefulWildAnimalsSpringChanceFactor 0.25. */
 export function spikeTrapSpringChance(world:World,actor:LivingTarget,kind:Structure['kind']='spike-trap'):number {
+  const chance=spikeTrapSpringChanceBase(world,actor,kind);
+  // Schema 361: x PawnTrapSpringChance (Nimble 0.1), after the knower factor.
+  return 'species' in actor||'mechKind' in actor?chance:chance*trapSpringFactor361(actor);
+}
+function spikeTrapSpringChanceBase(world:World,actor:LivingTarget,kind:Structure['kind']):number {
   if(!spikeTrapKnowsOf(world,actor))return 1;
   if('species' in actor)return actor.domestic ? .005 : isIedTrapKind357(kind)?.2*IED_COMMON_357.peacefulWildAnimalFactor:.2;
   if('mechKind' in actor)return 1;

@@ -1,3 +1,4 @@
+import {aimingFactorOf361} from './shooting-traits-361.ts';
 import {validFramePawn301} from './finish-frame-save-301.ts';
 import {validHumanIngestionPawn299} from './human-ingestion-save-299.ts';
 import {validIdleWanderPawn300} from './idle-wander-save-300.ts';
@@ -165,7 +166,7 @@ function pawnRecordShape(item:Record<string,unknown>,world:PawnRecordContext,ver
   if(version<192&&Object.hasOwn(item,'meleeThreat')||!validMeleeThreatShape(item.meleeThreat,version,validationTick,coreNow297))errors.push('Invalid melee threat for schema.');
   if(!validStagger(item.stagger,version,validationTick,coreNow297))errors.push('Invalid stagger state for schema.');
   if(!validMeleeShape(item.melee,version,validationTick,coreNow297)||!validStunShape(item.stun,version,validationTick,version>=318?120:45,coreNow297))errors.push('Invalid melee or stun shape for schema.');
-  if(!validShootingShape(item.shooting,version,validationTick,coreNow297)||!validShootingLeanOwner(item,world,version))errors.push('Invalid shooting state for schema.');
+  if(!validShootingShape(item.shooting,version,validationTick,coreNow297,aimingFactorOf361(item.traits,version))||!validShootingLeanOwner(item,world,version))errors.push('Invalid shooting state for schema.');
   if(!validDraftShape(item.draft,version,input as unknown as World))errors.push('Invalid draft state for schema.');
   if(!validEquipmentShape(item,version))errors.push('Invalid equipment state for schema.');
   if(item.feed!==undefined&&!validFeedShape(item.feed,version,input as unknown as World))errors.push('Invalid feeding task shape.');

@@ -121,7 +121,9 @@ export function exchangeSocial(world:World,a:Pawn,b:Pawn,kind:SocialInteractionK
     addSocialMemory(sb,a.id,kind,world.tick,impactA);
     if(canStartSocialFight(world,a,b)&&socialRandom(sb)<socialFightChance(world,b,a,kind))startSocialFight(world,a,b);
   }else{
-    addSocialMemory(sa,b.id,kind,world.tick,impactB);addSocialMemory(sb,a.id,kind,world.tick,impactA);
+    // Schema 361: Chitchat and DeepTalk are nullified by Psychopath (no opinion memory).
+    const unfelt=(p:Pawn)=>(kind==='chitchat'||kind==='deep-talk')&&!!p.traits?.includes('psychopath');
+    if(!unfelt(a))addSocialMemory(sa,b.id,kind,world.tick,impactB);if(!unfelt(b))addSocialMemory(sb,a.id,kind,world.tick,impactA);
     if(kind==='chitchat'||kind==='deep-talk'){
       a.skills.social??={level:0,xp:0,dailyXp:0,passion:0};learnSkill(a.skills.social,(kind==='chitchat'?4:10)*1000,a);
     }

@@ -90,6 +90,8 @@ export interface MedicalContext {
   infectionChanceFactor?:number;
   /** Core StatPart_Age for immunity, supplied by the human owner. */
   ageImmunityFactor?:number;
+  /** Schema 361: the ImmunityGainSpeed trait offset (Super-immune: 1.3). */
+  traitImmunityFactor361?:number;
   /** Actual human bed definition; absence preserves the historical bed rate. */
   bedHealPerDay?:0|4|10;
   bedImmunityFactor?:1|1.05|1.07|1.11|1.13;

@@ -1,3 +1,4 @@
+import {giveBornTraits361} from './trait-generation-361.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259,bornFactionForDef259} from './world-affiliation-259.ts';
 import { releaseAllowedAreaReturn } from './allowed-area-state.ts';
@@ -73,6 +74,7 @@ function openPod(w:World,pending:PodRescuePending):boolean {
   // starting skills and the ordinary background gains, whichever their origin.
   if(pending.origin===undefined)for(const skill of Object.values(p.skills))if(typeof skill==='object'){skill.level=0;skill.passion=0;}
   if(w.schemaVersion>=191)generatePawnBackground(p,pending.seed);
+  giveBornTraits361(w,p,false,pending.seed);
   for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;
   p.health??=createMedicalRecord(w.tick);
   // Local adult injury profile: real recoverable pain shock, no imposed state

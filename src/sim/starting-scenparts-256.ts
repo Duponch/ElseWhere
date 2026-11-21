@@ -91,7 +91,7 @@ export function applyStartingScenParts256(world:World,input:{start850:number;sta
  world.research={project:null,points:CLOTHING_RESEARCH_COST,completedAt:0,airConditioning:{points:AIR_CONDITIONING_COST,completedAt:0},stonecutting:{points:STONECUTTING_RESEARCH_COST,completedAt:0},complexFurniture:{points:COMPLEX_FURNITURE_RESEARCH_COST,completedAt:0}};
  world.gameProfile=crashlandedProfile();world.scenario={id:'crashlanded',revision:ARRIVING_CRASHLANDED_REVISION,landing:plan.landing};
  enableCassandraRaids(world);adoptFluIncidents(world);adoptMiscIncidents(world);enableVisitors(world,true);
- const preview=previewStartingParty(party.seed,party.selected),allocated=new Map(party.selected.map((candidate,index)=>[candidate.serial,pawnIds[index]!]));
+ const preview=previewStartingParty(party.seed,party.selected,world.schemaVersion),allocated=new Map(party.selected.map((candidate,index)=>[candidate.serial,pawnIds[index]!]));
  const links=preview.relationships.links.map(link=>{const a=allocated.get(link.aId)!,b=allocated.get(link.bId)!;return {...link,aId:Math.min(a,b),bId:Math.max(a,b)};});
  if(!replaceRelationshipLinks(world,[...world.relationships?.links??[],...links]))throw Error('Chosen starting relationships conflict with the actual existing people');
  // Do not initializeCamp* on unrelated NPCs; chosen candidates already own

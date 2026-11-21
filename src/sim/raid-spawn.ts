@@ -1,3 +1,4 @@
+import {giveBornTraits361} from './trait-generation-361.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
 import {journalLetter352,actors352,cell352} from './letter-producers-352.ts';
 import {isConcurrentRaids341} from './concurrent-raids-341.ts';
@@ -155,6 +156,7 @@ export function makeRaider(w:World,o:{groupId:number;index:number;pawnId:number;
   let next=o.nextId;
   const p=startingPawn(o.pawnId,`Assaillant ${o.groupId}.${o.index+1}`,o.cell.x,o.cell.z,0,55,w.seed,w.tick,w.schemaVersion);p.faction='outlaws';if(raiderFactionEra(w)&&w.worldFactions&&!bindBornHumanFaction259(w,p,o.factionId!))return null;p.raid={group:o.groupId,exiting:o.exiting,goal:null,...w.schemaVersion>=334&&o.kind?{kind334:o.kind}:{}};p.skills.shooting.level=4;p.skills.melee.level=4;p.foodPolicyId=w.foodPolicies[0]!.id;
   if(w.schemaVersion>=191)generatePawnBackground(p,w.seed,true);
+  giveBornTraits361(w,p,true);
   // Schema 331: tribal raiders wear tribal wear (Core Neolithic apparel tag).
   const apparel=o.tribe?'cloth-tribalwear':'cloth-shirt',piles:MaterialPile[]=[];
   piles.push({id:next++,kind:'apparel',item:apparel,quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState(apparel,undefined,w.schemaVersion)});

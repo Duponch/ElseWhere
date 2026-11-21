@@ -1,3 +1,4 @@
+import {restRateFactor361} from './traits.ts';
 import type {Pawn} from './types.ts';
 import type {AwayGroup} from './group-capture.ts';
 import {groupPawnInterval256} from './group-core-cadence-256.ts';
@@ -51,7 +52,7 @@ export function advanceGroupNeedMeters256(group:AwayGroup,c:GroupNeedMetersConte
   const nextHunger=depletedHumanHunger(p,c.legacyFood);
   p.hunger=Math.max(0,p.hunger-(p.hunger-nextHunger)*15);
   const effectiveness=c.restMarks.effectiveness(p.id,c.coreTick,p);
-  p.rest=effectiveness===undefined?Math.max(0,p.rest-(p.rest-depletedHumanRest(p.rest,c.legacyRest,parasiteRestFactor306(p.health)))*15):Math.min(100,p.rest+BED_REST_PER_TICK*effectiveness*15);
+  p.rest=effectiveness===undefined?Math.max(0,p.rest-(p.rest-depletedHumanRest(p.rest,c.legacyRest,parasiteRestFactor306(p.health)))*15):Math.min(100,p.rest+BED_REST_PER_TICK*effectiveness*15*restRateFactor361(p));
   updateRecreation(p,pawnBody(p),c.joyToleranceFall*15,15);
   if(c.outdoors359)advanceCaravanOutdoors359(p);
  }

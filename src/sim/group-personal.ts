@@ -1,3 +1,4 @@
+import {superImmune361} from './traits.ts';
 import {medicalCivilTick271,medicalElapsedTicks271} from './suspended-human-clock-271.ts';
 import {isSchema263OrLater,isSchema282OrLater} from '../sim/schema-compatibility-257.ts';
 import {cancelAlcoholSpatial265} from './alcohol-state-265.ts';
@@ -65,7 +66,7 @@ export function advanceGroupPersonal(group:ActiveGroup,c:GroupPersonalContext):G
       advanceMedical(p.health,medicalElapsedTicks271(p.health,c.tick),{civilTick:c.tick,phase:p.id%60,alcoholOwner:{id:p.id,spawned:false,awake:p.state!=='sleeping',inMentalState:!!p.mental?.crisis},toxicOwner:{id:p.id,spawned:false,awake:p.state!=='sleeping'},cryptosleepSicknessSpawned:false,posture:c.resting?'ground':'standing',starving:p.hunger<=0,
         malnutritionRate:malnutritionRate(p.id),infectionChanceFactor:c.infectionChanceFactor,hunger:p.hunger,rest:p.rest,
         restingBonus:c.resting&&p.state!=='downed',infectionSeed:((c.seedFor?.(p)??c.seed)^Math.imul(p.id,0x9e3779b1))>>>0,
-        ageImmunityFactor:humanAgeImmunityFactor(p.age),...c.deferNeedMeters256?c.clinicalRestFor256?.(p):{}},c.random,conditionFrontier);conditionFrontier?.commit();
+        ageImmunityFactor:humanAgeImmunityFactor(p.age),...superImmune361(p),...c.deferNeedMeters256?c.clinicalRestFor256?.(p):{}},c.random,conditionFrontier);conditionFrontier?.commit();
       for(const infection of p.health.infections?.cases??[])if(infection.id>=firstInfection)c.notice(p,`${p.name} souffre d’une infection.`);
     }
     if(c.schemaVersion===259||c.schemaVersion===260||(c.schemaVersion===261||(Number(c.schemaVersion)===262||isSchema263OrLater(Number(c.schemaVersion)))))advanceOffmapThermal259(p,group.items,c.tick*10,c.ambientTemperature259!,()=>createMedicalRecord(c.tick));

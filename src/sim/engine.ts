@@ -1,3 +1,5 @@
+import {advanceSicklyDisease361} from './sickly-disease-361.ts';
+import {workSpeedGlobal361} from './traits.ts';
 import {toolCabinetWorkSpeedOffset355} from './tool-cabinet-355.ts';
 import {noteBondedAnimalDeaths350} from './mood-pool-memories-350.ts';
 import {isPenoxycyline337} from './penoxycyline-337.ts';
@@ -1289,7 +1291,11 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     const getLight=()=>{if(!light){light=readPlantLight(world);lightKey=plantLightSourcesKey(world);}return light;};
     // Darkness factor of a pawn's work speed (a blind pawn ignores it, schema 301).
     // Schema 360: a work frenzy multiplies WorkSpeedGlobal, of which this is the darkness part.
-    const workGlow=(p:Pawn)=>(glowIgnoredByBlindPawn(world,p)?1:getLight().speedAt(p))*workSpeedInspirationFactor360(p);
+    // Core WorkSpeedGlobal (a work frenzy from 360, traits from 361) scales
+    // every work speed this glow feeds (exactly 1 without either). Deep work
+    // takes the bare glow: the scanner's ResearchSpeed has no WorkSpeedGlobal
+    // factor, the drill applies it itself (DeepDrillingSpeed).
+    const rawGlow=(p:Pawn)=>glowIgnoredByBlindPawn(world,p)?1:getLight().speedAt(p),workGlow=(p:Pawn)=>rawGlow(p)*workSpeedInspirationFactor360(p)*workSpeedGlobal361(p);
     advanceHumanAges(world);
     sampleColonyEconomy(world);
     advanceArrivals(world);advanceHeatwaves(world);advanceMiscIncidents(world);advanceSmallIncidents(world);advanceVisitors(world);advancePodRescues(world);advanceFluIncidents(world);
@@ -1398,7 +1404,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(pawn.health)bleedFilth(world,pawn,medicalBleed(pawn.health),pawn.state==='downed'||pawn.state==='sleeping');
       tickSkills(world,pawn);
       updateNeeds(world, pawn,body,getFurnitureSight,()=>getLight().topology,readAir460);
-      updateMentalBreak(world,pawn,budget);reconcileAncientCasketOpening256(world,pawn);reconcileFirefoamManual290(world,pawn);reconcileCryptosleepTask271(world,pawn);reconcileShipCasketTask277(world,pawn);
+      updateMentalBreak(world,pawn,budget);if(pawn.traits?.includes('sickly'))advanceSicklyDisease361(world,pawn);reconcileAncientCasketOpening256(world,pawn);reconcileFirefoamManual290(world,pawn);reconcileCryptosleepTask271(world,pawn);reconcileShipCasketTask277(world,pawn);
       reconcilePartyPawn292(world,pawn,body);reconcileCouple285(world,pawn,body);
       if(prisonBreakActive(pawn)&&(pawn.mental?.crisis||pawn.state==='downed'||pawn.need))endPrisonBreak(world,pawn);
       if(pawn.mental?.crisis){
@@ -1565,7 +1571,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(pawn.burial){processBurial(world,pawn,needsContext);continue;}
       if(processCleaning(world,pawn,needsContext))continue;
       if(pawn.brewing){processBarrelExtraction265(world,pawn,needsContext.move,()=>wakePlanners(world));continue;}
-      if(pawn.deepWork){processDeepWork(world,pawn,needsContext,()=>workGlow(pawn));continue;}
+      if(pawn.deepWork){processDeepWork(world,pawn,needsContext,()=>rawGlow(pawn));continue;}
       if(pawn.research){processResearch(world,pawn,needsContext.move,s=>researchRate(pawn,s,getEnvironment(),new TemperatureView(world,thermal).at(world,s),world),message=>event(world,'job',message));continue;}
       if(pawn.ward){processWarden(world,pawn,needsContext);continue;}
       if(pawn.feed){processFeeding(world,pawn,needsContext);continue;}
@@ -1574,7 +1580,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(pawn.rescue){processRescue(world,pawn,needsContext);continue;}
       if (pawn.haul) { const refueling=pawn.haul.destination.type==='fuel';processHaul(world, pawn, (target, allow) => moveToward(world, pawn, target, allow, getBlocked, budget,false,getLight), () => {wakePlanners(world);if(refueling)invalidateEnvironment();});continue; }
       if(pawn.cooking) {const priorProduct=pawn.cooking.productId,priorPhase=pawn.cooking.phase;processCooking(world,pawn,{
-        workRate:(station,worker)=>workSpeedInspirationFactor360(worker)*getEnvironment().production(station,worker,glowIgnoredByBlindPawn(world,worker),toolCabinetWorkSpeedOffset355(world,station)).total*((isFoodWorkstation(station.kind)||station.kind==='butcher-spot'||station.kind==='crafting-spot'||station.kind==='tailor-bench'||station.kind==='electric-tailor-bench'||station.kind==='machining-table'||station.kind==='art-bench'||station.kind==='drug-lab'||station.kind==='fueled-smithy'||station.kind==='electric-smithy'||station.kind==='brewery'||station.kind==='biofuel-refinery'||station.kind==='electric-crematorium'||station.kind==='electric-smelter')?tailoringTemperatureFactor(new TemperatureView(world,thermal).at(world,station.kind==='electric-crematorium'?pawn.cooking!.spot:station)):1)*(taskWork(pawn.cooking!)==='cook'||isMechSalvageRecipe(pawn.cooking!.recipe)||pawn.cooking!.recipe==='make-medicine'||isBiofuelRecipe(pawn.cooking!.recipe)||pawn.cooking!.recipe==='burn-apparel'||pawn.cooking!.recipe==='smelt-weapon'||pawn.cooking!.recipe==='smelt-apparel'||isSmithingRecipe267(pawn.cooking!.recipe)||pawn.cooking!.recipe==='cremate-corpse'?1:physicalWorkFactor(pawn,'craft',body)),
+        workRate:(station,worker)=>workSpeedInspirationFactor360(worker)*getEnvironment().production(station,worker,glowIgnoredByBlindPawn(world,worker),toolCabinetWorkSpeedOffset355(world,station)).total*(pawn.cooking!.recipe==='butcher-creature'?1:workSpeedGlobal361(worker))*((isFoodWorkstation(station.kind)||station.kind==='butcher-spot'||station.kind==='crafting-spot'||station.kind==='tailor-bench'||station.kind==='electric-tailor-bench'||station.kind==='machining-table'||station.kind==='art-bench'||station.kind==='drug-lab'||station.kind==='fueled-smithy'||station.kind==='electric-smithy'||station.kind==='brewery'||station.kind==='biofuel-refinery'||station.kind==='electric-crematorium'||station.kind==='electric-smelter')?tailoringTemperatureFactor(new TemperatureView(world,thermal).at(world,station.kind==='electric-crematorium'?pawn.cooking!.spot:station)):1)*(taskWork(pawn.cooking!)==='cook'||isMechSalvageRecipe(pawn.cooking!.recipe)||pawn.cooking!.recipe==='make-medicine'||isBiofuelRecipe(pawn.cooking!.recipe)||pawn.cooking!.recipe==='burn-apparel'||pawn.cooking!.recipe==='smelt-weapon'||pawn.cooking!.recipe==='smelt-apparel'||isSmithingRecipe267(pawn.cooking!.recipe)||pawn.cooking!.recipe==='cremate-corpse'?1:physicalWorkFactor(pawn,'craft',body)),
         candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),
         search:goals=>search(world,pawn,getBlocked(),occupied,budget,goals),
         move:(target,exact)=>moveToward(world,pawn,target,true,getBlocked,budget,exact,getLight),
@@ -1742,7 +1748,7 @@ function woodWallOwner301(world:World):ReturnType<typeof createWoodWallCore301> 
  let light:LightEnvironment|undefined;
  const owner=createWoodWallCore301(world,{
   rate:p=>rateForPawn301(world,p),
-  light:p=>(glowIgnoredByBlindPawn(world,p)?1:(light??=readPlantLight(world)).speedAt(p))*workSpeedInspirationFactor360(p),
+  light:p=>((glowIgnoredByBlindPawn(world,p)?1:(light??=readPlantLight(world)).speedAt(p))*workSpeedInspirationFactor360(p))*workSpeedGlobal361(p),
   complete:(p,j)=>{completeJob(world,p,j);return !world.jobs.includes(j);},
   release:p=>releaseWork(world,p),
   event:message=>event(world,'job',message),

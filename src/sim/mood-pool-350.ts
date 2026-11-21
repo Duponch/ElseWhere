@@ -1,3 +1,4 @@
+import {psychicSensitivity361} from './traits.ts';
 import {isColonist} from './affiliation.ts';
 import {isBedKind} from './bed-kinds.ts';
 import {captureRoomQuality} from './room-quality.ts';
@@ -36,8 +37,9 @@ export const pawnGender350=(p:Pawn,w?:Pick<World,'schemaVersion'|'seed'>):'male'
 export function psychicDroneThought350(w:World,p:Pawn):MoodThought|undefined {
  const c=w.miscIncidents?.psychic350,now=w.tick*10;
  if(!isMoodPool350(w.schemaVersion)||!c||now<c.startCore||now>=c.endCore||!w.pawns.includes(p)||p.cryptosleepHeldAt271!==undefined||p.shipCryptosleepHeldAt277!==undefined||pawnGender350(p,w)!==c.gender)return;
- const stage=PSYCHIC_STAGES_350[c.level];
- return {id:`psychic-${c.level}`,label:stage.label,offset:stage.offset,kind:'situation',description:c.level==='soothe'
+ const stage=PSYCHIC_STAGES_350[c.level],sensitivity=psychicSensitivity361(p);
+ // Schema 361: effectMultiplyingStat PsychicSensitivity (traits), exactly 1 without.
+ return {id:`psychic-${c.level}`,label:stage.label,offset:sensitivity===1?stage.offset:stage.offset*sensitivity,kind:'situation',description:c.level==='soothe'
   ?'Une émission psychique lointaine apaise les esprits de ce genre sur cette carte, tant qu’elle dure.'
   :'Une émission psychique lointaine pousse les esprits de ce genre vers la folie sur cette carte, tant qu’elle dure.'};
 }

@@ -1,3 +1,6 @@
+import {factionOf} from './affiliation.ts';
+import {isTraitsSchema361} from './traits.ts';
+import {pawnById361,traitOpinionCauses361} from './trait-opinions-361.ts';
 import {memoryExpiry271,memoryAge271,memoryReadTick271} from './suspended-memory-271.ts';
 import { TICKS_PER_DAY,type Pawn,type World } from './types.ts';
 import { pawnBody } from './health-rules.ts';
@@ -71,7 +74,7 @@ export function memoryOffset(memory:SocialMemory,tick:number):number {
 }
 function roundPositiveOpinion(n:number):number {const lo=Math.floor(n);return n<=0?0:Math.max(1,n-lo===.5?lo+lo%2:Math.round(n));}
 function roundOpinion(n:number):number {return n<0?-roundPositiveOpinion(-n):roundPositiveOpinion(n);}
-export type OpinionCauseKind=SocialKind|`relation-${RelationshipViewKind}`|`romance-${RomanceOpinionKind}`|'couple-intimacy';
+export type OpinionCauseKind=SocialKind|`relation-${RelationshipViewKind}`|`romance-${RomanceOpinionKind}`|'couple-intimacy'|`trait-${string}`;
 export interface OpinionCause {kind:OpinionCauseKind;count:number;value:number;nextChange:number;label:string;description:string}
 const relationLabels:Readonly<Record<RelationshipViewKind,string>>={parent:'Parent',child:'Enfant',sibling:'Fratrie',lover:'Partenaire',spouse:'Conjoint','ex-lover':'Ancien partenaire','ex-spouse':'Ancien conjoint'};
 export function opinionCauses(pawn:Pawn,otherId:number,tick:number,world?:World):OpinionCause[] {
@@ -87,6 +90,8 @@ export function opinionCauses(pawn:Pawn,otherId:number,tick:number,world?:World)
     causes.push({kind:`relation-${kind}`,count:1,value:RELATIONSHIP_OPINION[kind],nextChange:Infinity,label:relationLabels[kind],description:'Lien personnel connu ; son effet n’est pas une conversation expirante.'});
   }
   for(const cause of romanceOpinionCauses(pawn,otherId,tick))causes.push({...cause,kind:`romance-${cause.kind}`,value:roundOpinion(cause.value)});
+  // Schema 361: the trait situational opinions, between people who know each other.
+  if(world&&isTraitsSchema361(world.schemaVersion)){const other=pawnById361(world,otherId);if(other)causes.push(...traitOpinionCauses361(world,pawn,other,factionOf(pawn)===factionOf(other)||causes.length>0));}
   if(pawn.coupleMemories285){
     const value=coupleOpinionOffset285(pawn,otherId,tick);
     if(value>0){

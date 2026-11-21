@@ -1,3 +1,4 @@
+import {toughDamage361} from './traits.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {medicalCivilTick271} from './suspended-human-clock-271.ts';
@@ -61,7 +62,7 @@ export function planSpikeTrapImpact(world:World,key:LivingTargetKey,material:Con
       const random={rng:draft.rng},draw=()=>healthRandom(random);
       const clothes=!isAnimalTarget(actor)&&!isMechanoidTarget(actor)?seriesApparelProtection(draft,actor,penetration,draw):undefined;
       const protect=isMechanoidTarget(actor)?mechanoidProtection('sharp',penetration,draw,actor.mechKind):clothes?.protect;
-      const impact=resolveUnarmoredMelee(actor.health,{damage,kind:'stab'},draw,protect,draft.schemaVersion>=324);
+      const impact=resolveUnarmoredMelee(actor.health,{damage:toughDamage361(actor,damage),kind:'stab'},draw,protect,draft.schemaVersion>=324);
       draft.rng=random.rng;
       clothes?.commit();
       // Releasing an equipment task can also release a carried patient whose

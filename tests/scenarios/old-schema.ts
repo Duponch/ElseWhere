@@ -1,3 +1,4 @@
+import {LEGACY_TRAIT_IDS} from '../../src/sim/traits.ts';
 import {isTextileApparelItem308,isTextileMaterial308} from '../../src/sim/textile-apparel-308.ts';
 import {isGarmentItem312,isHatItem353} from '../../src/sim/apparel-definitions.ts';
 import {isCookingAnimalProduct353} from '../../src/sim/cooking-ingredients-353.ts';
@@ -26,7 +27,9 @@ const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bond
  * the cowboy and bowler hats in apparel policies and bill filters, and the
  * eggs and insect jelly in bill filters; schema 358: the devilstrand garments
  * and material in apparel policies and the devilstrand key of bill filters;
- * schema 359: the outdoors need. */
+ * schema 359: the outdoors need;
+ * schema 361: the trait ids of the Core trait set (a person keeps only the
+ * nine older ids, and none at all if it held no older one). */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -38,7 +41,11 @@ function strip(value:unknown,version:number):void {
   if(!value||typeof value!=='object')return;
   const o=value as Record<string,unknown>;
   // Schema 360: a pawn's active inspiration.
-  if(version<360&&Object.hasOwn(o,'inspiration360'))delete o.inspiration360;
+  if(version<360&&Object.hasOwn(o,'inspiration360'))delete o.inspiration360;  // Schema 361: the Core trait set; an older save holds only the nine old ids.
+  if(version<361&&Array.isArray(o.traits)&&o.traits.every(id=>typeof id==='string')){
+    const kept=(o.traits as string[]).filter(id=>(LEGACY_TRAIT_IDS as readonly string[]).includes(id));
+    if(kept.length)o.traits=kept;else delete o.traits;
+  }
   if(version<358){
     if(Array.isArray(o.allowedItems)&&Array.isArray(o.allowedMaterials)){o.allowedItems=(o.allowedItems as unknown[]).filter(i=>!isDevilstrandItem358(i));o.allowedMaterials=(o.allowedMaterials as unknown[]).filter(m=>m!=='devilstrand');}
     if(typeof o.recipe==='string'&&o.filters&&typeof o.filters==='object'&&!Array.isArray(o.filters))for(const k of Object.keys(o.filters))if(isDevilstrandItem358(k))delete (o.filters as Record<string,unknown>)[k];
@@ -96,7 +103,7 @@ export function stripFutureContent(value:unknown,version:number):void {
   if(version<352&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).letters352;
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
-  if(version<360)strip(value,version);
+  if(version<361)strip(value,version);
 }
 
 /** The reference for a number-only migration step from `version`: the same

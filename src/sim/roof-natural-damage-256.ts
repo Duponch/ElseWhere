@@ -1,3 +1,4 @@
+import {incomingDamageFactor361} from './traits.ts';
 import {landedStartingPods256,damageStartingPod256} from './starting-pod-damage-256.ts';
 import {damageRoofMineable256} from './roof-mineable-damage-256.ts';
 import {damageFrameFromRoof256,frameCovers256} from './roof-frame-256.ts';
@@ -48,10 +49,10 @@ function targets(world:World,index:number):Target[]{
  return out.reverse();
 }
 /** No direct death flag: localized real anatomy owns death, armor and scars. */
-function hitRecord(record:MedicalRecord,amount:number,random:()=>number,thick:boolean,protect?:(part:BodyPartId,amount:number)=>{amount:number}):boolean {
+function hitRecord(record:MedicalRecord,amount:number,random:()=>number,thick:boolean,protect?:(part:BodyPartId,amount:number)=>{amount:number},tough=1):boolean {
  const model=medicalModel(record),brain=model.parts.find(p=>(p.id==='brain'||p.id.endsWith('-brain'))&&!partMissing(record,p.id));
  const part=thick?brain?.id??selectBulletPart(record,random,'top','outside'):selectBulletPart(record,random,'top','outside');
- if(!part)return false;let severity=(protect?.(part,amount).amount??amount)*HP_UNIT;
+ if(!part)return false;let severity=(protect?.(part,amount).amount??amount)*HP_UNIT;if(tough!==1)severity=Math.round(severity*tough);
  const hp=remainingPartHealth(record,part);
  if(!thick&&severity>=hp){const excess=(severity-hp)/(model.byId[part].hp*HP_UNIT),chance=Math.max(0,Math.min(1,(excess-.4)/.6));if(random()>=chance)severity=Math.max(0,hp-HP_UNIT);}
  const traits=medicalPartInjuryRule(record,part);
@@ -64,7 +65,7 @@ function hitHuman(world:World,pawn:Pawn,amount:number,thick:boolean):boolean {
  if(pawn.state!=='dead'){
   if(!pawn.health||pawn.health.tick<world.tick)updatePawnHealth(world,pawn,true);
   if(!pawn.health?.death){const record=structuredClone(pawn.health??createMedicalRecord(world.tick)),random={rng:world.rng},draw=()=>healthRandom(random),wasLying=isLying(pawn);
-   const armor=thick?undefined:seriesApparelProtection(world,pawn,0,draw,'blunt'),changed=hitRecord(record,amount,draw,thick,armor?.protect);
+   const armor=thick?undefined:seriesApparelProtection(world,pawn,0,draw,'blunt'),changed=hitRecord(record,amount,draw,thick,armor?.protect,incomingDamageFactor361(pawn));
    armor?.commit();world.rng=random.rng;pawn.health=record;reconcilePawnHealth(world,pawn,undefined,true,true);
    if(changed)disturbanceEvents(world).damage(pawn,world.tick*10,wasLying);
   }

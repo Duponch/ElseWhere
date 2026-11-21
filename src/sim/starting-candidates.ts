@@ -2,13 +2,14 @@ import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {constructHumanConditionMind256} from './human-condition-mind-256.ts';
 import { assignBackground,generateBackground } from './background-generation.ts';
 import { BACKGROUND_SKILL_IDS,backgroundSkillRefusal,backgroundWorkRefusal,violentWorkRefusal } from './colonist-backgrounds.ts';
-import { crashlandedHumanAge } from './human-age.ts';
+import { HUMAN_YEAR_TICKS,crashlandedHumanAge } from './human-age.ts';
 import { generateStartingCandidateRelationships } from './relationship-generation.ts';
 import type { RelationshipState } from './relationship-state.ts';
 import type { PawnSkills,SkillRecord } from './skills.ts';
 import { startingPawn } from './starting-pawns.ts';
-import { TRAITS,type TraitId } from './traits.ts';
-import type { Pawn,WorkType } from './types.ts';
+import { LEGACY_TRAIT_IDS,TRAITS,isTraitsSchema361,type TraitId } from './traits.ts';
+import { applyTraitSkillGains361,drawCoreTraits361,traitForbidsPassion361 } from './trait-generation-361.ts';
+import { SCHEMA_VERSION,type Pawn,type WorkType } from './types.ts';
 
 export const STARTING_CANDIDATE_COUNT=8;
 export const STARTING_PARTY_COUNT=3;
@@ -123,12 +124,13 @@ function hash(seed:number,serial:number,generation:number,salt:number):number {
   return (n^(n>>>16))>>>0;
 }
 const NAMES=['Ada','Noé','Mina','Iris','Sacha','Léonie','Tao','Émile','Alma','Nils','Salomé','Basile','Rose','Marin','Lou','Camille','Jules','Léna','Maël','Inès','Alex','Charlie','Lucie','Simon','Ari','Éloïse','Robin','Gaël','Ambre','Eden','Milo','Soline'] as const;
-const TRAIT_IDS=Object.keys(TRAITS) as TraitId[];
+/** The pre-361 draw ranks exactly the nine historical ids, in key order. */
+const TRAIT_IDS=LEGACY_TRAIT_IDS;
 
 /** Original bounded distributions over implemented content, not Core's full
  * pawn generator. Every skill has a real record; background gains apply once.
  * The trait subset has no imposed biography traits or skill modifiers. */
-export function previewStartingCandidate(seed:number,descriptor:StartingCandidateDescriptor):Pawn {
+export function previewStartingCandidate(seed:number,descriptor:StartingCandidateDescriptor,version:number=SCHEMA_VERSION):Pawn {
   requireSeed(seed);requireDescriptor(descriptor);
   const identity=descriptor.serial,birthSeed=hash(seed,identity,descriptor.generation,0x333b17),draw=(salt:number)=>hash(seed,identity,descriptor.generation,salt)/0x100000000;
   const originalName=NAMES[Math.floor(draw(0x333a11)*NAMES.length)]!;
@@ -143,9 +145,14 @@ export function previewStartingCandidate(seed:number,descriptor:StartingCandidat
   });
   pawn.skills=skills;
   assignBackground(pawn,generateBackground(birthSeed,identity,pawn.age));
+  // Schema 361: Core order, traits before skills and passions (their skill
+  // gains change the levels the passion ranking reads; Brawler forbids a
+  // shooting passion). New salts only; every pre-361 draw is unchanged.
+  const core361=isTraitsSchema361(version)?drawCoreTraits361({draw:salt=>draw(salt),sex:pawn.appearance?.sex??'none',ageYears:pawn.age.biologicalTicks/HUMAN_YEAR_TICKS,background:pawn.background!}):undefined;
+  if(core361)applyTraitSkillGains361(pawn.skills,core361);
   // A finite weighted passion budget rewards stronger available skills. This
   // is a local distribution, not a claim to reproduce Core's Gaussian budget.
-  const eligible=BACKGROUND_SKILL_IDS.filter(skill=>!backgroundSkillRefusal(pawn,skill))
+  const eligible=BACKGROUND_SKILL_IDS.filter(skill=>!backgroundSkillRefusal(pawn,skill)&&!(core361&&traitForbidsPassion361(core361,skill)))
     .map((skill,index)=>({skill,rank:pawn.skills[skill]!.level+draw(0x333610+index)*3}))
     .sort((a,b)=>b.rank-a.rank||BACKGROUND_SKILL_IDS.indexOf(a.skill)-BACKGROUND_SKILL_IDS.indexOf(b.skill));
   let budget=3+Math.floor(draw(0x33360f)*4);
@@ -154,6 +161,7 @@ export function previewStartingCandidate(seed:number,descriptor:StartingCandidat
     const major=budget>=2&&draw(0x333650+index)<.4;
     record.passion=major?2:1;budget-=major?2:1;
   }
+  if(core361){if(core361.length)pawn.traits=core361;return pawn;}
   const traits:TraitId[]=[],groups=new Set<string>(),count=draw(0x333700)<.35?3:2;
   const choices=TRAIT_IDS.map((id,index)=>({id,rank:draw(0x333710+index)})).sort((a,b)=>a.rank-b.rank||a.id.localeCompare(b.id));
   for(const {id} of choices){
@@ -168,15 +176,15 @@ export function previewStartingCandidate(seed:number,descriptor:StartingCandidat
  * records and needs are freshly owned and identical to the advertised person. */
 export function materializeStartingCandidate(seed:number,descriptor:StartingCandidateDescriptor,id:number,x:number,z:number,version=255):Pawn {
   if(!Number.isSafeInteger(id)||id<=0||!Number.isInteger(x)||!Number.isInteger(z)||x<0||z<0)throw new Error('Placement du candidat invalide.');
-  const pawn=previewStartingCandidate(seed,descriptor);
+  const pawn=previewStartingCandidate(seed,descriptor,version);
   pawn.id=id;pawn.x=x;pawn.z=z;if(isSchema256Or257(version))constructHumanConditionMind256(pawn,version);
   return pawn;
 }
-export function previewStartingParty(seed:number,selected:readonly StartingCandidateDescriptor[]):StartingPartyPreview {
+export function previewStartingParty(seed:number,selected:readonly StartingCandidateDescriptor[],version:number=SCHEMA_VERSION):StartingPartyPreview {
   requireSeed(seed);
   if(!validSelection(selected))throw new Error('Trois candidats distincts doivent être choisis.');
-  const pawns=selected.map(d=>previewStartingCandidate(seed,d));
-  return {pawns,relationships:generateStartingCandidateRelationships(seed,pawns)};
+  const pawns=selected.map(d=>previewStartingCandidate(seed,d,version));
+  return {pawns,relationships:generateStartingCandidateRelationships(seed,pawns,version)};
 }
 /** True delivered incapacities only. The nine current traits have no work
  * disable tags; their mood, learning and social effects are not incapacities.

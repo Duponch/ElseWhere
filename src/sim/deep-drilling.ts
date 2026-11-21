@@ -1,3 +1,5 @@
+import {workSpeedGlobal361} from './traits.ts';
+import {workSpeedInspirationFactor360} from './inspirations-360.ts';
 import { deepWorkReason,deepWorkSpot,deepResearchSpeed,type DeepWorkTask,type DeepDrillState } from './deep-drilling-rules.ts';
 import { allowedAreaAllows,captureAllowedArea } from './allowed-area-state.ts';
 import { DEEP_RESOURCES,deepSeed,deepRandom,deepResourceAt,nextDeepResource,deepRockItem,discoverDeepDeposit } from './deep-resources.ts';
@@ -39,7 +41,7 @@ export function deepWorkInProgress(world:World,structureId:number):boolean {
 function drillTick(world:World,pawn:Pawn,s:Structure,light:number):boolean {
   const policy=captureAllowedArea(world,pawn);
   const source=s.deepDrill??{progress:0,yieldPct:0,rng:deepSeed(world.seed,s.id^0x280d111)},draft:DeepDrillState={...source};
-  const rate=Math.fround(miningWorkSpeed(pawn,undefined,light)),yieldFactor=Math.fround(miningYield(pawn));
+  const rate=Math.fround(miningWorkSpeed(pawn,undefined,light*workSpeedInspirationFactor360(pawn)*workSpeedGlobal361(pawn))),yieldFactor=Math.fround(miningYield(pawn));
   for(let sub=0;sub<10;sub++){
     draft.progress=Math.fround(draft.progress+rate);
     draft.yieldPct=Math.fround(draft.yieldPct+Math.fround(Math.fround(rate*yieldFactor)/10000));

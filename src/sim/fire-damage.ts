@@ -1,3 +1,4 @@
+import {incomingDamageFactor361} from './traits.ts';
 import {planAnimalDeathExplosion256,isExplosiveAnimal256,requireAnimalDeathCapacity256} from './animal-death-explosion-v256.ts';
 import {createAnimalMedicalRecord256} from './animal-clinical-age-v256.ts';
 import { apparelProtection,type ImpactProtection } from './apparel-protection.ts';
@@ -16,10 +17,10 @@ import { createMechaMedicalRecord,commitMechanoidImpact } from './mechanoid-heal
 import { mechanoidProtection } from './mechanoid-impact.ts';
 import type { Mechanoid } from './mechanoid-state.ts';
 
-function localizedBurn(record:MedicalRecord,amount:number,random:()=>number,protect?:ImpactProtection):boolean {
+function localizedBurn(record:MedicalRecord,amount:number,random:()=>number,protect?:ImpactProtection,tough=1):boolean {
   const part=selectBulletPart(record,random,undefined,'outside');if(!part)return false;
   const damage=protect?.(part,amount).amount??amount;if(!damage)return false;
-  const model=medicalModel(record),hp=remainingPartHealth(record,part);let severity=damage*HP_UNIT;
+  const model=medicalModel(record),hp=remainingPartHealth(record,part);let severity=tough===1?damage*HP_UNIT:Math.round(damage*tough*HP_UNIT);
   if(part!=='torso'&&severity>=hp&&random()>=Math.min(1,(severity-hp)/(model.byId[part].hp*HP_UNIT*.7)))severity=Math.max(0,hp-HP_UNIT);
   if(severity)addResolvedInjury(record,part,'burn',severity,random);return true;
 }
@@ -39,7 +40,7 @@ export function burnPawn(world:World,pawn:Pawn,amount:number):boolean {
   const state=ensureFireState(world),random=()=>fireRandom(state);
   const record=structuredClone(pawn.health??createMedicalRecord(world.tick));
   const worn=world.piles.filter(p=>p.owner.type==='apparel'&&p.owner.pawnId===pawn.id).map(p=>({id:p.id,item:p.item,quantity:p.quantity}));
-  const guard=apparelProtection(world,pawn,'heat',0,random),penetrated=localizedBurn(record,amount,random,guard.protect);guard.commit();
+  const guard=apparelProtection(world,pawn,'heat',0,random),penetrated=localizedBurn(record,amount,random,guard.protect,incomingDamageFactor361(pawn));guard.commit();
   for(const p of worn)if(!world.piles.some(i=>i.id===p.id))state.ledger.items[p.item]=(state.ledger.items[p.item]??0)+p.quantity;
   pawn.health=record;reconcilePawnHealth(world,pawn,undefined,true);
   const apparel=world.piles.filter(p=>p.owner.type==='apparel'&&p.owner.pawnId===pawn.id);

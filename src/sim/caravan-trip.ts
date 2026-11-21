@@ -1,3 +1,4 @@
+import {hungerRateFactor361} from './traits.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {offMapIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
 import {medicalElapsedTicks271} from './suspended-human-clock-271.ts';
@@ -180,7 +181,7 @@ export function advanceScoutTrip(w:World):void {
   }
   if(s.phase==='travelling'&&w.tick>s.departedAt&&w.tick<=s.returnAt){
     const p=s.pawn;
-    p.hunger=Math.max(0,p.hunger-(w.foodRules==='legacy'?.015:HUNGER_PER_TICK*adultHungerFactor(p.hunger))*malnutritionModifiers(p.health?.malnutrition).hungerFactor);
+    p.hunger=Math.max(0,p.hunger-(w.foodRules==='legacy'?.015:HUNGER_PER_TICK*adultHungerFactor(p.hunger))*malnutritionModifiers(p.health?.malnutrition).hungerFactor*hungerRateFactor361(p));
     updateRest(w,p);
     if(p.needCooldown>0)p.needCooldown--;
     consumeTrailFood(w,s);

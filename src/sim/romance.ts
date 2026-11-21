@@ -1,3 +1,5 @@
+import {isTraitsSchema361} from './traits.ts';
+import {romanceTraitFactor361} from './trait-opinions-361.ts';
 import { isColonist } from './affiliation.ts';
 import {tutorialMode347} from './game-profile.ts';
 import { HUMAN_YEAR_TICKS } from './human-age.ts';
@@ -13,10 +15,11 @@ const inverseLerp=(a:number,b:number,n:number)=>Math.max(0,Math.min(1,(n-a)/(b-a
 const years=(p:Pawn)=>p.age?p.age.biologicalTicks/HUMAN_YEAR_TICKS:30;
 const adults=(w:World,a:Pawn,b:Pawn)=>w.schemaVersion>=195&&a!==b&&w.pawns.includes(a)&&w.pawns.includes(b)
   &&isColonist(a)&&isColonist(b)&&!a.prisoner&&!b.prisoner&&!a.visitor&&!b.visitor&&a.state!=='dead'&&b.state!=='dead'&&years(a)>=18&&years(b)>=18;
-const secondary=(w:World,a:Pawn,b:Pawn)=>romanceAgeFactor(years(a),years(b))*knownRomanceChanceFactor(relationshipIndex(w),a.id,b.id);
+// Schema 361: sexuality and the other's beauty (Core SecondaryLovinChanceFactor).
+const secondary=(w:World,a:Pawn,b:Pawn)=>{const base=romanceAgeFactor(years(a),years(b))*knownRomanceChanceFactor(relationshipIndex(w),a.id,b.id);return isTraitsSchema361(w.schemaVersion)?base*romanceTraitFactor361(w,a,b):base;};
 
 /** Selection happens only after the existing social presence/LOS admission.
- * Orientation and beauty are neutral until actual profiles exist. */
+ * Orientation and beauty count from schema 361 (Core traits); before, neutral. */
 export function romanceSelectionWeight(world:World,a:Pawn,b:Pawn,people?:RelationshipPeople):number {
   // Schema 347: InteractionWorker_RomanceAttempt weighs 0 in the tutorial.
   if(tutorialMode347(world))return 0;

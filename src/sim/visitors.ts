@@ -1,3 +1,4 @@
+import {giveBornTraits361} from './trait-generation-361.ts';
 import {recordHomeIncident341} from './recent-incidents-341.ts';
 import {journalLetter352,actors352} from './letter-producers-352.ts';
 import {assignPileOwner} from './pile-index.ts';
@@ -117,6 +118,7 @@ function arrive(w:World,kind:VisitorKind,intro=false,exotic=false):boolean {
     delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;
     for(const value of Object.values(p.skills))if(typeof value==='object'){value.level=0;value.passion=0;}
     if(w.schemaVersion>=191)generatePawnBackground(p,w.seed,profiles[i]==='Garde',i===merchant);
+    giveBornTraits361(w,p);
     for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;
     p.visitor={group:id,role:kind==='traveler'?'traveler':i===merchant?'trader':'visitor',...exotic&&i===merchant?{merchantKind:'exotic' as const}:{},phase:'arriving',goal:{...arrival.parking[i]!},personalFoodIds:[]};
     piles.push({id:nextId++,kind:'apparel',item:'cloth-shirt',quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState('cloth-shirt',undefined,w.schemaVersion)});
@@ -203,7 +205,7 @@ export function arriveTraderCaravan332(w:World):boolean {
     p.faction='outlanders';if(w.worldFactions&&(source.factionId===null||!bindBornHumanFaction259(w,p,source.factionId)))return false;p.foodPolicyId=w.foodPolicies[0]!.id;
     delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;
     for(const value of Object.values(p.skills))if(typeof value==='object'){value.level=0;value.passion=0;}
-    generatePawnBackground(p,w.seed,!!guard,!guard);
+    generatePawnBackground(p,w.seed,!!guard,!guard);giveBornTraits361(w,p);
     for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;
     p.visitor={group:id,role:guard?'visitor':'trader',phase:'arriving',goal:{...arrival.parking[i]!},personalFoodIds:[]};
     piles.push({id:nextId++,kind:'apparel',item:apparel,quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState(apparel,undefined,w.schemaVersion)});

@@ -1,3 +1,4 @@
+import {incomingDamageFactor361} from './traits.ts';
 import {medicalModel} from './body-model.ts';
 import { apparelProtection } from './apparel-protection.ts';
 import { disturbanceEvents,isLying } from './disturbance.ts';
@@ -23,6 +24,7 @@ export function damageFromRoofCollapse(world:World,cells:ReadonlySet<number>):vo
     for(const candidate of parts){roll-=candidate.weight;if(roll<0){part=candidate.part;break;}}
     const protection=apparelProtection(world,pawn,'blunt',0,()=>healthRandom(randomState));
     amount=(protection.protect?.(part.id,amount/HP_UNIT).amount??amount/HP_UNIT)*HP_UNIT;
+    {const tough=incomingDamageFactor361(pawn);if(tough!==1)amount=Math.round(amount*tough);}
     const hp=remainingPartHealth(health,part.id);
     if(amount>=hp) {
       const excess=(amount-hp)/(medicalModel(health).byId[part.id].hp*HP_UNIT),chance=Math.max(0,Math.min(1,(excess-.4)/.6));

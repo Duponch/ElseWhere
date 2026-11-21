@@ -1,3 +1,5 @@
+import {isTraitsSchema361} from './traits.ts';
+import {romanceTraitFactor361} from './trait-opinions-361.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
 import {actualBedOwners256,captureActorBeds256} from './actor-bed-local-256.ts';
 import {bedSlotCell,pawnBedSlot} from './bed-slots.ts';
@@ -57,7 +59,7 @@ export function tryCoupleOpportunity285(world:World,pawn:Pawn,body?:BodyAssessme
  const firstBody=body??pawnBody(pawn),otherBody=pawnBody(other);
  const person=(p:Pawn,q:Pawn,age:number,qAge:number,b:BodyAssessment)=>({ageYears:age,pain:p.health?medicalPain(p.health):0,
   consciousness:b.capacities.consciousness,opinion:opinionOf(p,q.id,world.tick,world),
-  attraction:romanceAgeFactor(age,qAge)*knownRomanceChanceFactor(index,p.id,q.id)});
+  attraction:romanceAgeFactor(age,qAge)*knownRomanceChanceFactor(index,p.id,q.id)*(isTraitsSchema361(world.schemaVersion)?romanceTraitFactor361(world,p,q):1)});
  const mtb=coupleMtbHours285(person(pawn,other,aAge,bAge,firstBody),person(other,pawn,bAge,aAge,otherBody));
  if(mtb===undefined||mtb<=0||!Number.isFinite(mtb)||coupleOpportunityRoll285(world.seed,pawn.id,now)>=coupleHourlyChance285(mtb))return false;
  // Giver checks follow the positive opportunity; neither cooldown nor an

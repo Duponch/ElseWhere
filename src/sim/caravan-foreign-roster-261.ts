@@ -1,3 +1,4 @@
+import {giveBornTraits361} from './trait-generation-361.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {chooseRaidComposition} from './raids.ts';
 import {RAID_ROLE_OPTIONS} from './raid-spawn.ts';
@@ -38,7 +39,7 @@ export function draftForeignRoster261(w:World,kind:'combat'|'trader',factionId:n
   p.foodPolicyId=w.foodPolicies[0]!.id;
   if(kind==='combat'){p.skills.shooting.level=4;p.skills.melee.level=4;}
   else {delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;for(const value of Object.values(p.skills))if(typeof value==='object'){value.level=0;value.passion=0;}for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;}
-  generatePawnBackground(p,w.seed,role.guard,trader);
+  generatePawnBackground(p,w.seed,role.guard,trader);giveBornTraits361(w,p,p.faction==='outlaws');
   people.push(p);items.push({id:nextId++,kind:'apparel',item:'cloth-shirt',quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState('cloth-shirt',undefined,w.schemaVersion)});
   if(role.weapon)items.push({id:nextId++,kind:'weapon',item:role.weapon,quantity:1,owner:{type:'equipment',pawnId:p.id},weapon:newWeaponState(role.weapon)});
   if(trader){const stock=generateVisitorStock(random.rng,p.id,nextId,w.tick,w.schemaVersion);items.push(...stock.piles);nextId=stock.nextId;random.rng=stock.rng;}

@@ -1,3 +1,5 @@
+import {aimedWarmup361} from './shooting-traits-361.ts';
+import {aimingDelayFactor361,shootingAccuracyOffset361} from './traits.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import { huntingPermission } from './hunting-state.ts';
@@ -57,7 +59,7 @@ function startAim(world:World,pawn:Pawn,core:number,queries:Queries):void {
   if(isStunned(pawn,core)||pawn.melee?.strike||(pawn.motion?.end??0)*CORE_TICKS_PER_LOCAL>core)return;
   const plan=shotPlan(world,pawn,order.targetId,queries);
   if('reason' in plan||plan.weapon.id!==order.weaponId){cancelShooting(pawn);return;}
-  pawn.shooting!.stance={phase:'aim',startedAtCore:core,endsAtCore:core+plan.profile.warmupCoreTicks,targetStartedDowned:plan.target.state==='downed',...plan.weapon.item!=='revolver'?{weaponItem:plan.weapon.item as ShootingWeaponItem}:{},
+  pawn.shooting!.stance={phase:'aim',startedAtCore:core,endsAtCore:core+aimedWarmup361(plan.profile.warmupCoreTicks,aimingDelayFactor361(pawn)),targetStartedDowned:plan.target.state==='downed',...plan.weapon.item!=='revolver'?{weaponItem:plan.weapon.item as ShootingWeaponItem}:{},
     ...world.schemaVersion>=198?{clock:{lastAdvancedAtCore:core,pausedCore:0}}:{},
     ...world.schemaVersion>=238&&(plan.line.from.x!==pawn.x||plan.line.from.z!==pawn.z)?{lean:{x:plan.line.from.x-pawn.x,z:plan.line.from.z-pawn.z}}:{}};
   pawn.state='idle';
@@ -156,7 +158,7 @@ type ShotPlan=Extract<ReturnType<typeof shotPlan>,{weapon:unknown}>;
 function emitShot(world:World,pawn:Pawn,core:number,queries:Queries,plan:Pick<ShotPlan,'target'|'weapon'|'profile'|'line'>,lean:Cell|undefined):void {
   const {target,weapon,profile,line}=plan,standing=!['sleeping','resting','downed'].includes(target.state),body=queries.body(pawn).capacities;
   const cover=shotCover(queries.grid(),pawn,target,combatTargetKey(target));
-  const aim=shotAim({distance:line.distance,pawnAccuracy:shootingAccuracy(pawn.skills.shooting.level,body.sight,body.manipulation,shootingAccuracyInspirationOffset360(pawn)).perCell,weaponAccuracy:profile.accuracy,targetSize:combatTargetSize(target,world.schemaVersion),standing,weather:weatherShotFactor(world,pawn,target),blindSmoke:false},cover.passChance);
+  const aim=shotAim({distance:line.distance,pawnAccuracy:shootingAccuracy(pawn.skills.shooting.level,body.sight,body.manipulation,shootingAccuracyInspirationOffset360(pawn)+shootingAccuracyOffset361(pawn)).perCell,weaponAccuracy:profile.accuracy,targetSize:combatTargetSize(target,world.schemaVersion),standing,weather:weatherShotFactor(world,pawn,target),blindSmoke:false},cover.passChance);
   const random={rng:world.rng};
   const origin={x:pawn.x+.5+(lean?.x??0)*.5,z:pawn.z+.5+(lean?.z??0)*.5};
   const emissionInput:BulletEmissionInput={grid:queries.grid(),line,origin,launcherKey:`pawn:${pawn.id}`,equipmentKey:`pile:${weapon.id}`,target:{key:combatTargetKey(target),cell:target,full:false,canBenefitFromCover:true},aim,cover,profile,canHitOtherPawns:true,preventFriendlyFire:false,coverAnchor:key=>queries.targets().anchor(key)};

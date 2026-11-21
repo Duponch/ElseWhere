@@ -1,3 +1,5 @@
+import {toughDamage361} from './traits.ts';
+import {meleeDodgeOffset361,meleeHitOffset361} from './traits.ts';
 import {naturalArmor321,naturalArmorProtection321} from './natural-armor-321.ts';
 import {meleeStunCore318} from './stun.ts';
 import {combatTargetKey} from './combat-target.ts';
@@ -38,10 +40,10 @@ export function strikeLivingTarget(w:World,attacker:LivingTarget,target:LivingTa
   if(isPawnTarget(attacker)&&!immobile)learnSkill(attacker.skills.melee,200*(tool.cooldownCore/60)*XP_SCALE,attacker);
   const body=(actor:LivingTarget)=>isAnimalTarget(actor)?animalBody(actor):isMechanoidTarget(actor)?mechaAssessment(actor):pawnBody(actor);
   const ac=body(attacker).capacities,dc=body(target).capacities;
-  const accuracy=isMechanoidTarget(attacker)?mechaMeleeHitChance(ac.sight,ac.manipulation):meleeHitChance(isAnimalTarget(attacker)?4:effectiveSkillLevel(attacker,'melee',attacker.skills.melee.level),ac.sight,ac.manipulation);
+  const accuracy=isMechanoidTarget(attacker)?mechaMeleeHitChance(ac.sight,ac.manipulation):meleeHitChance(isAnimalTarget(attacker)?4:effectiveSkillLevel(attacker,'melee',attacker.skills.melee.level)+meleeHitOffset361(attacker),ac.sight,ac.manipulation);
   const hit=immobile||options.surprise||random()<accuracy;
   const dodge=hit&&!immobile&&!options.surprise&&(!isPawnTarget(target)||!target.shooting?.stance)
-    &&(!isMechanoidTarget(target)||!target.ranged?.stance)&&random()<meleeDodgeChance(isPawnTarget(target)?effectiveSkillLevel(target,'melee',target.skills.melee.level):0,dc.moving,dc.sight);
+    &&(!isMechanoidTarget(target)||!target.ranged?.stance)&&random()<meleeDodgeChance(isPawnTarget(target)?effectiveSkillLevel(target,'melee',target.skills.melee.level)+meleeDodgeOffset361(target):0,dc.moving,dc.sight);
   const outcome=!hit?'miss':dodge?'dodge':'hit';
   const strike={targetId:target.id,atCore:core,untilCore:core+tool.cooldownCore,tool:tool.id,outcome} as const;
   if(animalAttacker){attacker.strike=strike;delete attacker.retaliation;}else attacker.melee!.strike=strike;
@@ -68,7 +70,7 @@ export function strikeLivingTarget(w:World,attacker:LivingTarget,target:LivingTa
     const record=target.health??(isAnimalTarget(target)?createAnimalMedicalRecord256(w,target):{...createMedicalRecord(w.tick),...(isMechanoidTarget(target)?{body:target.mechKind}:{})});
     const input=isMechanoidTarget(target)?{...structuredClone(record),tick:w.tick}:record;
     const natural=isAnimalTarget(target)&&w.schemaVersion>=321?naturalArmor321(target):undefined;
-    const impact=resolveUnarmoredMelee(input,{damage,kind:tool.kind},random,isMechanoidTarget(target)?mechanoidProtection(category,tool.penetration,random,target.mechKind):natural?naturalArmorProtection321(natural,category,tool.penetration,random):protection?.protect,w.schemaVersion>=324);
+    const impact=resolveUnarmoredMelee(input,{damage:isPawnTarget(target)?toughDamage361(target,damage):damage,kind:tool.kind},random,isMechanoidTarget(target)?mechanoidProtection(category,tool.penetration,random,target.mechKind):natural?naturalArmorProtection321(natural,category,tool.penetration,random):protection?.protect,w.schemaVersion>=324);
     if(w.schemaVersion>=256&&tool.kind==='toxic-bite'&&!isMechanoidTarget(target)){applyToxicBite256(impact.record,impact.totalDamageDealt,isAnimalTarget(target)?animalBodySize(target):1,toxicResistance256(target),random,!!options.huntingForFood);reconcileMedicalDeath(impact.record);}
     protection?.commit();injured=impact.layers.length>0;stun=impact.stun;
     if(isAnimalTarget(target)){

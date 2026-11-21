@@ -51,7 +51,7 @@ export function immunityGainSpeed(record:MedicalRecord,context:MedicalContext,fi
   const hunger=context.hunger??(context.starving?0:100),rest=context.rest??100;
   const urgentHunger=record.body?18:12; // FoodLevelPercentageWantEat × .4.
   return (.5+.5*filtration)*(hunger<=0?.7:hunger<urgentHunger?.9:1)*(rest<1?.8:rest<14?.92:rest<28?.96:1)*
-    (context.posture==='bed'?(context.bedImmunityFactor??1.07):1)*(context.restingBonus?1.1:1)*(context.ageImmunityFactor??1);
+    (context.posture==='bed'?(context.bedImmunityFactor??1.07):1)*(context.restingBonus?1.1:1)*(context.ageImmunityFactor??1)*(context.traitImmunityFactor361??1);
 }
 export function infectionImmunityPerDay(record:MedicalRecord,context:MedicalContext,filtration=1):number {
   const first=record.infections?.cases[0];

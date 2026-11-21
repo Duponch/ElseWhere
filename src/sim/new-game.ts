@@ -149,7 +149,7 @@ export function createScenarioWorld(seed:number,size:number,id:ScenarioId=DEFAUL
   }else if(natural)adoptEnvironment(world);
   if(id==='crashlanded'){enableVisitors(world,true);adoptColonyEconomy(world);}
   if(startingParty){
-    const preview=previewStartingParty(startingParty.seed,startingParty.selected);
+    const preview=previewStartingParty(startingParty.seed,startingParty.selected,world.schemaVersion);
     const allocated=new Map(startingParty.selected.map((candidate,index)=>[candidate.serial,world.pawns[index]!.id]));
     const links=preview.relationships.links.map(link=>{
       const a=allocated.get(link.aId)!,b=allocated.get(link.bId)!;

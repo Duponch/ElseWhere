@@ -1,3 +1,4 @@
+import {toughDamage361} from './traits.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {requireAnimalDeathCapacity256} from './animal-death-explosion-v256.ts';
@@ -23,7 +24,7 @@ export function damagePawnWithBomb(w:World,p:Pawn,core:number,amount=BOMB_AMOUNT
   if(p.state==='dead')return null;
   const lying=isLying(p);updatePawnHealth(w,p);if(p.health?.death)return null;
   const random={rng:w.rng},guard=fragmentedApparelProtection(w,p,BOMB_AP,()=>healthRandom(random));
-  const impact=resolveBombImpact(p.health??createMedicalRecord(w.tick),{damage:amount},()=>healthRandom(random),guard.protect);
+  const impact=resolveBombImpact(p.health??createMedicalRecord(w.tick),{damage:toughDamage361(p,amount)},()=>healthRandom(random),guard.protect);
   guard.commit();w.rng=random.rng;p.health=impact.record;reconcilePawnHealth(w,p,undefined,true);
   if(impact.layers.some(l=>l.severity>0)){if(!impact.record.death)applyBulletStagger(w,p,core,1);disturbanceEvents(w).damage(p,core,lying);}
   return impact;

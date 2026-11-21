@@ -1,3 +1,4 @@
+import {hungerRateFactor361,restRateFactor361} from './traits.ts';
 /** Shared numerical rates; local needs/rest retain their original wrappers. */
 import { adultHungerFactor } from './items.ts';
 import { malnutritionModifiers } from './malnutrition.ts';
@@ -9,7 +10,7 @@ export const BED_REST_PER_TICK=100/(TICKS_PER_DAY*10.5/24);
 export const GROUND_REST_PER_TICK=BED_REST_PER_TICK*.8;
 export const restFallFactor=(rest:number):number=>rest>=28?1:rest>=14?.7:rest>=1?.3:.6;
 export function depletedHumanHunger(p:Pawn,legacy:boolean):number {
-  return Math.max(0,p.hunger-(legacy?.015:HUNGER_PER_TICK*adultHungerFactor(p.hunger))*malnutritionModifiers(p.health?.malnutrition).hungerFactor*parasiteHungerFactor306(p.health));
+  return Math.max(0,p.hunger-(legacy?.015:HUNGER_PER_TICK*adultHungerFactor(p.hunger))*malnutritionModifiers(p.health?.malnutrition).hungerFactor*parasiteHungerFactor306(p.health)*hungerRateFactor361(p));
 }
 /** factor: muscle parasites double the fall (schema 306). */
 export function depletedHumanRest(rest:number,legacy:boolean,factor=1):number {
@@ -18,5 +19,5 @@ export function depletedHumanRest(rest:number,legacy:boolean,factor=1):number {
 /** One application: never fall and gain in the same interval. Stationary/no
  * delivered bed uses the existing local ground .8 adaptation, not an old bedId. */
 export function groupRestAfterInterval(p:Pawn,resting:boolean,legacy:boolean):number {
-  return resting?Math.min(100,p.rest+GROUND_REST_PER_TICK):depletedHumanRest(p.rest,legacy,parasiteRestFactor306(p.health));
+  return resting?Math.min(100,p.rest+GROUND_REST_PER_TICK*restRateFactor361(p)):depletedHumanRest(p.rest,legacy,parasiteRestFactor306(p.health));
 }

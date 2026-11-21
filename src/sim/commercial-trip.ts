@@ -1,3 +1,4 @@
+import {hungerRateFactor361} from './traits.ts';
 import {offMapIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
 import {medicalElapsedTicks271} from './suspended-human-clock-271.ts';
 import {rememberMapAreaDeparture,prepareSameMapAreaReturn,commitMapAreaEntry} from './pawn-map-areas.ts';
@@ -115,7 +116,7 @@ export function advanceCommercialTrip(w:World):void {
     advanceHumanAge(w,s.pawn);tickSkills(w,s.pawn);expireSocialMemories(s.pawn,w.tick);expireMealMemories(w,s.pawn);
     if(s.pawn.health){const h=s.pawn.health;if(h.civilTick271===undefined)h.tick=w.tick;else{h.tick+=medicalElapsedTicks271(h,w.tick);h.civilTick271=w.tick;}}
     if(s.phase!=='awaiting-entry'){
-      s.pawn.hunger=Math.max(0,s.pawn.hunger-(w.foodRules==='legacy'?.015:HUNGER_PER_TICK*adultHungerFactor(s.pawn.hunger)));
+      s.pawn.hunger=Math.max(0,s.pawn.hunger-(w.foodRules==='legacy'?.015:HUNGER_PER_TICK*adultHungerFactor(s.pawn.hunger))*hungerRateFactor361(s.pawn));
       updateRest(w,s.pawn);if(s.pawn.needCooldown>0)s.pawn.needCooldown--;consumeRation(w,s);
     }
   }

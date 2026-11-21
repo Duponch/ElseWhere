@@ -1,3 +1,4 @@
+import {giveBornTraits361} from './trait-generation-361.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {mechRaidGroup261} from './mechanical-raid-groups-261.ts';
 import {tempMapModern261} from './temp-map-incidents-261.ts';
@@ -153,7 +154,7 @@ export function admitTempMapTraveler261(w:World,points:number,random:{rng:number
   p.faction='outlanders';p.worldAffiliation259={revision:1,factionId,hostFactionId:null,guestStatus:'Guest'};p.foodPolicyId=w.foodPolicies[0]!.id;
   delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;
   for(const value of Object.values(p.skills))if(typeof value==='object'){value.level=0;value.passion=0;}
-  generatePawnBackground(p,w.seed,profiles[i]==='Garde',false);
+  generatePawnBackground(p,w.seed,profiles[i]==='Garde',false);giveBornTraits361(w,p);
   for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;
   p.visitor={group:id,role:'traveler',phase:'arriving',goal:{...spot},personalFoodIds:[]};
   piles.push({id:nextId++,kind:'apparel',item:'cloth-shirt',quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState('cloth-shirt',undefined,w.schemaVersion)});

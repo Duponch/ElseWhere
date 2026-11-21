@@ -1,3 +1,4 @@
+import {drugBingeWeight361,onlyAllowedMinorBreaks361,traitForbidsDrugBinge361,traitMentalStateRoll361} from './trait-mental-361.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import {mentalBreakLetter352} from './letter-producers-352.ts';
 import {tutorialMode347} from './game-profile.ts';
@@ -5,7 +6,7 @@ import {processHumanConfusedWander256,recoverHumanConfusion256} from './human-co
 import {alcoholBingeAdmission265,processAutomaticAlcohol265} from './alcohol-ingestion-265.ts';
 import { expireMentalCatharsisAt } from './mental-state.ts';
 import { BREAK_MTB_DAYS,finishMentalBreak,mentalState } from './mental-state.ts';
-import { breakThresholds,minorBreakThreshold } from './traits.ts';
+import { TRAITS,breakThresholds,minorBreakThreshold } from './traits.ts';
 import { moodFrozen,moodThoughts } from './mood.ts';
 import { healthRandom } from './health.ts';
 import { interruptDraftWork } from './drafting.ts';
@@ -30,15 +31,20 @@ import type { Pawn,World } from './types.ts';
  * BreakCanOccur and MentalStateHandler.TryStartMentalState refuse every
  * pawn of the player's faction (a prisoner is not of it). */
 export const tutorialSparesMind347=(world:World,pawn:Pawn):boolean=>tutorialMode347(world)&&isColonist(pawn)&&!pawn.prisoner;
-function commitBreak(world:World,pawn:Pawn,crisis:MentalCrisis,rng=world.rng):boolean {
+function commitBreak(world:World,pawn:Pawn,crisis:MentalCrisis,rng=world.rng,traitReason?:string):boolean {
   if(tutorialSparesMind347(world,pawn))return false;
-  const thoughts=moodThoughts(world,pawn).filter(t=>t.offset<0);
-  const strongest=Math.min(0,...thoughts.map(t=>t.offset));
-  const candidates=thoughts.filter(t=>t.offset<=strongest*.5);
-  const stream={rng};
-  let roll=healthRandom(stream)*candidates.reduce((s,t)=>s-t.offset,0);
-  const reason=candidates.find(t=>(roll+=t.offset)<0)?.label;
-  world.rng=stream.rng;
+  let reason=traitReason;
+  // A trait-given state (schema 361) names its trait, as Core's
+  // MentalStateReason_Trait: no thought is drawn for it.
+  if(reason===undefined){
+    const thoughts=moodThoughts(world,pawn).filter(t=>t.offset<0);
+    const strongest=Math.min(0,...thoughts.map(t=>t.offset));
+    const candidates=thoughts.filter(t=>t.offset<=strongest*.5);
+    const stream={rng};
+    let roll=healthRandom(stream)*candidates.reduce((s,t)=>s-t.offset,0);
+    reason=candidates.find(t=>(roll+=t.offset)<0)?.label;
+    world.rng=stream.rng;
+  }
   delete pawn.draft;cancelShooting(pawn);cancelMelee(pawn);delete pawn.flee;
   interruptDraftWork(world,pawn);
   mentalState(pawn).crisis=crisis;
@@ -48,9 +54,9 @@ function commitBreak(world:World,pawn:Pawn,crisis:MentalCrisis,rng=world.rng):bo
   mentalBreakLetter352(world,pawn,crisis.kind);
   return true;
 }
-function startMinorBreak(world:World,pawn:Pawn,kind:'sad-wander'|'food-binge'):boolean {
+function startMinorBreak(world:World,pawn:Pawn,kind:'sad-wander'|'food-binge',traitReason?:string):boolean {
   if(!isColonist(pawn)||kind==='food-binge'&&pawn.prisoner||pawn.state==='downed'||moodFrozen(pawn)||pawn.mental?.crisis)return false;
-  return commitBreak(world,pawn,{kind,age:0,target:null,waitUntil:world.tick});
+  return commitBreak(world,pawn,{kind,age:0,target:null,waitUntil:world.tick},world.rng,traitReason);
 }
 export const startSadWander=(world:World,pawn:Pawn):boolean=>startMinorBreak(world,pawn,'sad-wander');
 export const startFoodBinge=(world:World,pawn:Pawn):boolean=>startMinorBreak(world,pawn,'food-binge');
@@ -72,6 +78,20 @@ export const startMurderousRage=(world:World,pawn:Pawn):boolean=>startAggressive
 /** Counters/cooldown are saved; the schedule derives only from tick and ID.
  * No random calls on healthy ordinary actors. */
 export function updateMentalBreak(world:World,pawn:Pawn,budget?:SearchBudget):void {
+  const hadCrisis=!!pawn.mental?.crisis;
+  updateMoodMentalBreak(world,pawn,budget);
+  // Core MentalBreakerTickInterval: the trait state givers run on the same
+  // 150-tick check when no mood break started (schema 361 traits only).
+  if(!hadCrisis&&!pawn.mental?.crisis&&pawn.traits?.includes('gourmand'))gourmandRandomBinge361(world,pawn);
+}
+/** Gourmand randomMentalState Binging_Food, MTB 50 days at any mood
+ * (randomMentalStateMtbDaysMoodCurve (0,50)), drawn on a private channel. */
+function gourmandRandomBinge361(world:World,pawn:Pawn):void {
+  if((world.tick+pawn.id)%15!==0||pawn.state==='dead'||!isColonist(pawn)||tutorialSparesMind347(world,pawn))return;
+  if(traitMentalStateRoll361(world.seed,pawn.id,world.tick)>=150/(50*60000))return;
+  startMinorBreak(world,pawn,'food-binge',TRAITS.gourmand.label);
+}
+function updateMoodMentalBreak(world:World,pawn:Pawn,budget?:SearchBudget):void {
   let m=pawn.mental;
   expireMentalCatharsisAt(pawn,world.tick);
   if(pawn.state==='dead'){if(m?.crisis)finishMentalBreak(world,pawn,false);return;}
@@ -144,9 +164,9 @@ function updateMoodPoolBreak350(world:World,pawn:Pawn,level:number,budget?:Searc
   type Option={kind:MentalCrisisKind;weight:number;admission?:AggressiveCrisisAdmission;pool?:MoodPoolAdmission350};
   let options:Option[]=[];
   for(let intensity=level;intensity>=0;intensity--) {
-    if(intensity===0){const minor=minorPoolOptions350(world,pawn,budget);if(minor===null)return;options=minor.map(o=>({kind:o.kind,weight:o.weight,...o.admission?{pool:o.admission}:{}}));}
+    if(intensity===0){const minor=minorPoolOptions350(world,pawn,budget);if(minor===null)return;options=onlyAllowedMinorBreaks361(pawn,minor.map(o=>({kind:o.kind,weight:o.weight,...o.admission?{pool:o.admission}:{}})));}
     else if(intensity===1){
-      if(isSchema265OrLater(world.schemaVersion)&&!pawn.prisoner){const admission=alcoholBingeAdmission265(world,pawn,budget);if(admission===null)return;if(admission)options.push({kind:'drug-binge',weight:1});}
+      if(isSchema265OrLater(world.schemaVersion)&&!pawn.prisoner&&!traitForbidsDrugBinge361(pawn)){const admission=alcoholBingeAdmission265(world,pawn,budget);if(admission===null)return;if(admission)options.push({kind:'drug-binge',weight:drugBingeWeight361(pawn)});}
       if(psychoticWanderAdmitted350(pawn))options.push({kind:'psychotic-wander',weight:MENTAL_CRISIS_CATALOG['psychotic-wander'].weight});
       const admission=aggressiveCrisisAdmission(world,pawn,'tantrum',budget);if(admission===null)return;
       if(admission)options.push({kind:'tantrum',admission,weight:MENTAL_CRISIS_CATALOG.tantrum.weight});

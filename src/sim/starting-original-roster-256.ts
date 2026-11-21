@@ -43,7 +43,7 @@ export function constructDeliveredStartingOriginalRoster256(request:StartingOrig
  const ordered=request.roster.map(d=>bySerial.get(d.serial)!),selected=ordered.slice(0,3),reserves=ordered.slice(3),allocated=new Map(ordered.map(e=>[e.serial,e.pawn.id]));
  // Read only the existing originals' ages; this helper accepts identity/age
  // data and does not construct another Pawn. Preserve advertised chooser graph.
- const previewLinks=generateStartingCandidateRelationships(request.seed,selected.map(e=>({id:e.serial,age:e.pawn.age}))).links;
+ const previewLinks=generateStartingCandidateRelationships(request.seed,selected.map(e=>({id:e.serial,age:e.pawn.age,...e.pawn.traits?{traits:e.pawn.traits}:{},...e.pawn.appearance?{appearance:e.pawn.appearance}:{}})),version).links;
  const additions=previewLinks.map(link=>{const a=allocated.get(link.aId)!,b=allocated.get(link.bId)!;return {...link,aId:Math.min(a,b),bId:Math.max(a,b)};});
  const relationships:RelationshipState={links:[...(input.relationships?.links??[]),...additions].sort(relationshipLinkCompare)},people=new Map(input.knownPeople);
  for(const e of ordered){if(people.has(e.pawn.id))throw Error('Original starter also has an existing human owner');people.set(e.pawn.id,{id:e.pawn.id,name:e.pawn.name,status:'away'});}

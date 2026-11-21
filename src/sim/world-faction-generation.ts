@@ -1,3 +1,4 @@
+import {giveBornTraits361} from './trait-generation-361.ts';
 import {WorldGenerationRandom} from './world-generation-random.ts';
 import {constructCoreNoExpansionIdeoIds256,constructFactionNoExpansionIdeo256,validFactionNoExpansionIdeos256} from './world-faction-no-expansion-ideo-256.ts';
 import {validWorldFactionSelection,type ConfigurableWorldFaction} from './world-generation-settings.ts';
@@ -43,6 +44,7 @@ function originalLeader(faction:WorldFactionInstance256,id:number,tick:number,r:
  const name=people[r.integer(0,people.length)]+' '+roots[r.integer(0,roots.length)];
  const seed=r.integerValue(),index=r.integer(0,3),pawn=startingPawn(id,name,0,0,index,.65,seed>>>0,tick,version);
  pawn.faction=d.permanentEnemy||d.naturalEnemy?'outlaws':'outlanders';
+ giveBornTraits361({schemaVersion:version,seed:seed>>>0},pawn,pawn.faction==='outlaws',seed>>>0);
  if(version>=259)pawn.worldAffiliation259={revision:1,factionId:faction.id,hostFactionId:null,guestStatus:'Guest'};
  // Role is a source reference, not a promise of Core loadout/biography. The
  // current real person constructor supplies age/health/skills/appearance.
