@@ -18,6 +18,7 @@ import { animalNutritionMax } from './animal-life.ts';
 import type { AnimalHandlingTask, DomesticCommand } from './domestic-state.ts';
 import { ingestFoodRisk } from './food-hygiene.ts';
 import { healthRandom } from './health.ts';
+import { useInspiration360 } from './inspirations-360.ts';
 import { cancelHunting } from './hunting-state.ts';
 import { medicalWorkRefusal, pawnBody } from './health-rules.ts';
 import { ITEM_DEFINITIONS, type ItemId } from './items.ts';
@@ -207,7 +208,9 @@ function finish(w:World,p:Pawn,a:WildAnimal,task:AnimalHandlingTask,ctx:NeedCont
   const skill=p.skills.animals;
   if(skill)learnSkill(skill,task.kind==='tame'?90_000:70_000,p);
   const v=w.schemaVersion;
-  const success=healthRandom(w)<(v>=315?(task.kind==='tame'?tameChance(p,v)*tameWildnessFactor315(a.species):trainChance(p,v)*trainWildnessFactor315(a.species))
+  // Schema 360: an Inspired_Taming handler spends it and succeeds without a
+  // draw (Core: chance 1, Rand.Chance(1) draws nothing).
+  const success=task.kind==='tame'&&useInspiration360(w,p,'taming')||healthRandom(w)<(v>=315?(task.kind==='tame'?tameChance(p,v)*tameWildnessFactor315(a.species):trainChance(p,v)*trainWildnessFactor315(a.species))
     :task.kind==='tame'?tameChance(p,v)*tameWildnessFactor256(a.species):trainChance(p,v));
   if(task.kind==='tame') {
     if(success){adoptAsColonyAnimal(w,a);

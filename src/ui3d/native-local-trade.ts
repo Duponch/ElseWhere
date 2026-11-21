@@ -8,6 +8,7 @@ import { negotiatorRefusal, tradingAtContact } from '../sim/trade-contact';
 import { tradeGoods, quoteTrade } from '../sim/trade-goods';
 import { orbitalAtContact, orbitalTradeGoods, orbitalTradeReason, quoteOrbitalTrade } from '../sim/orbital-rules';
 import { tradeImprovement } from '../sim/trade-negotiator';
+import { tradePriceInspirationOffset360 } from '../sim/inspirations-360';
 import { ITEM_DEFINITIONS } from '../sim/items';
 import { weaponLabel,QUALITY_LABELS } from '../sim/equipment-rules';
 import { apparelDefinition, apparelLabel } from '../sim/apparel-rules';
@@ -159,7 +160,7 @@ export function createNativeLocalTrade(options: NativeLocalTradeOptions) {
       if (!world.visitors) return 'Cette partie conserve son calendrier historique. Vous pouvez autoriser les prochaines visites.';
       if (!world.pawns.some(person => person.id === peerId && visitorMayTrade(world, person))) return 'Aucun marchand disponible. Les visiteurs ne commercent pas tous.';
       if (!pawn) return 'Aucun négociateur disponible.';
-      if (pawn.trade?.traderId === peerId) return ready(world) ? `Au contact · avantage du négociateur ${(tradeImprovement(pawn) * 100).toFixed(1)} %` : 'Le négociateur rejoint le marchand.';
+      if (pawn.trade?.traderId === peerId) return ready(world) ? `Au contact · avantage du négociateur ${(tradeImprovement(pawn, tradePriceInspirationOffset360(pawn)) * 100).toFixed(1)} %` : 'Le négociateur rejoint le marchand.';
       return negotiatorRefusal(pawn, world.schemaVersion) ?? 'Rejoindre reprend le temps si nécessaire. La partie se met en pause au contact.';
     }
     if (!world.orbital) return 'Le calendrier orbital sera adopté par les événements futurs.';
@@ -167,7 +168,7 @@ export function createNativeLocalTrade(options: NativeLocalTradeOptions) {
     if (!ship) return 'Aucun vaisseau détecté. Alimenter une console permet de découvrir les vaisseaux encore en orbite.';
     if (!console) return 'Construisez une console de communication et une balise, puis alimentez-les.';
     if (!pawn) return 'Aucun négociateur disponible.';
-    return ready(world) ? `Au contact · avantage du négociateur ${(tradeImprovement(pawn) * 100).toFixed(1)} %` : pawn.orbitalTrade?.shipId === peerId ? 'Le négociateur rejoint la console.' : orbitalTradeReason(world, pawn, ship, console) ?? 'Rejoindre reprend le temps. La partie se met en pause au contact.';
+    return ready(world) ? `Au contact · avantage du négociateur ${(tradeImprovement(pawn, tradePriceInspirationOffset360(pawn)) * 100).toFixed(1)} %` : pawn.orbitalTrade?.shipId === peerId ? 'Le négociateur rejoint la console.' : orbitalTradeReason(world, pawn, ship, console) ?? 'Rejoindre reprend le temps. La partie se met en pause au contact.';
   }
   function contactReason(world: World): string | undefined {
     const pawn = selectedPawn(world); if (!pawn) return 'Choisissez un négociateur.';

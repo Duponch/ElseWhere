@@ -3,6 +3,7 @@ import {assignPileOwner} from './pile-index.ts';
 import {validProstheticIngredients273} from './machining.ts';
 import {isProstheticRecipe273} from './prosthetic-content-273.ts';
 import {beginProstheticWork273} from './prosthetic-work-273.ts';
+import {useInspiration360} from './inspirations-360.ts';
 import {isSmithingWeaponRecipe267,smithingRecipeAvailable267,isSmithingRecipe267,smithingMaterialFromIngredients267,smithingProduct267,smithingWorkTotal267} from './smithing-content-267.ts';
 import {beginSmithingWork267} from './smithing-work-267.ts';
 import {brewingSpeed265,validWortIngredients265} from './brewing-content-265.ts';
@@ -208,8 +209,8 @@ export function processCooking(world:World,pawn:Pawn,context:ProductionContext):
   const rice=task.ingredients.filter(i=>i.item==='rice').reduce((n,i)=>n+i.quantity,0),item=smith?smithingProduct267(smith.smithingWork!.recipe,smith.smithingWork!.material):recipeProduct(taskRecipe(task),task.ingredients,material);
   const potato=task.ingredients.filter(i=>i.item==='potato').reduce((n,i)=>n+i.quantity,0),corn=task.ingredients.filter(i=>i.item==='corn').reduce((n,i)=>n+i.quantity,0);
   if(isTailoring(task.recipe)&&!Number.isSafeInteger((world.tailoring?.completed??0)+1))return;
-  const random={rng:world.rng},apparel=smithing&&!isSmithingWeaponRecipe267(task.recipe)||isTailoring(task.recipe)||isFlakRecipe(task.recipe)?{...newApparelState(item as ApparelItem,material,world.schemaVersion),quality:craftingQuality(craftingSkill(pawn).level,()=>healthRandom(random))}:undefined;
-  const weapon=isGunRecipe(task.recipe)||isSmithingWeaponRecipe267(task.recipe)?{...newWeaponState(item as WeaponItem),quality:craftingQuality(craftingSkill(pawn).level,()=>healthRandom(random))}:undefined;
+  const random={rng:world.rng},apparel=smithing&&!isSmithingWeaponRecipe267(task.recipe)||isTailoring(task.recipe)||isFlakRecipe(task.recipe)?{...newApparelState(item as ApparelItem,material,world.schemaVersion),quality:craftingQuality(craftingSkill(pawn).level,()=>healthRandom(random),useInspiration360(world,pawn,'creativity'))}:undefined;
+  const weapon=isGunRecipe(task.recipe)||isSmithingWeaponRecipe267(task.recipe)?{...newWeaponState(item as WeaponItem),quality:craftingQuality(craftingSkill(pawn).level,()=>healthRandom(random),useInspiration360(world,pawn,'creativity'))}:undefined;
   const foodPoison=world.schemaVersion>=89&&culinary&&!kibble&&!brewing?foodPoisonFromRecipe(roomCleanliness(world,pawn),(pawn.skills.cooking?.level??0),()=>healthRandom(random)):undefined;
   const medicineSkill=medicine?completedMedicineSkill(pawn,task.workTicks??0):undefined;
   // All preconditions succeeded. Consume once, create once, then store physically.

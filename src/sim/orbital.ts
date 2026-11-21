@@ -1,5 +1,6 @@
 import {recordHomeIncident341} from './recent-incidents-341.ts';
 import {journalLetter352} from './letter-producers-352.ts';
+import {useInspiration360} from './inspirations-360.ts';
 import {storytellerIncidents347} from './game-profile.ts';
 import { isColonist } from './affiliation.ts';
 import { isPowerActive } from './power-rules.ts';
@@ -112,5 +113,7 @@ export function applyOrbitalTrade(w:World,c:OrbitalCommand):CommandResult {
   w.piles=draft.piles;w.nextId=draft.nextId;w.trade=ledger;
   if(cell)state.pending.push({id:deliveryId,shipId:q.ship.id,negotiatorId:q.p.id,cell,createdAt:w.tick,landAt:w.tick+ORBITAL_FALL_TICKS,openAt:w.tick+ORBITAL_FALL_TICKS+ORBITAL_OPEN_TICKS});
   refreshStock(w);delete q.p.orbitalTrade;q.p.path=[];q.p.state='idle';q.p.planCooldown=0;
-  emit(w,`${q.p.name} a conclu un échange avec ${q.ship.name} (${q.paid>=0?q.paid+' argent payé':-q.paid+' argent reçu'}).`);return {ok:true};
+  emit(w,`${q.p.name} a conclu un échange avec ${q.ship.name} (${q.paid>=0?q.paid+' argent payé':-q.paid+' argent reçu'}).`);
+  // Schema 360: TradeDeal.TryExecute ends an Inspired_Trade once a deal is done.
+  useInspiration360(w,q.p,'trade');return {ok:true};
 }

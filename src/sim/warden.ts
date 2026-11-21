@@ -1,6 +1,7 @@
 import {notePopulationGain320} from './population-intent-320.ts';
 import {actors352} from './letter-producers-352.ts';
 import {sendLetter352} from './letters-352.ts';
+import {inspirationKind360,useInspiration360} from './inspirations-360.ts';
 import {assignPileOwner} from './pile-index.ts';
 import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import {commitJoinedPlayer259} from './world-affiliation-259.ts';
@@ -108,11 +109,14 @@ function rapport(world:World,actor:Pawn,p:Pawn):void {
 }
 function finishConversation(world:World,actor:Pawn,p:Pawn,context:NeedContext):boolean {
   const prisoner=p.prisoner;if(!prisoner||!prisonerChatReady(world,p))return false;
+  // Schema 360: an Inspired_Recruitment warden skips the resistance when the
+  // prisoner is set to recruit (Core: reduce-resistance-only keeps it).
+  const inspired360=prisoner.mode==='recruit'&&inspirationKind360(actor)==='recruitment';
   // A joining person must first release any physical engagement conservatively.
-  if(prisoner.resistance<=0&&prisoner.mode==='recruit'&&!releaseWork(world,p))return false;
+  if((prisoner.resistance<=0||inspired360)&&prisoner.mode==='recruit'&&!releaseWork(world,p))return false;
   recordPrisonerChat(world,p);
   actor.skills.social??={level:0,xp:0,dailyXp:0,passion:0};learnSkill(actor.skills.social,230*XP_SCALE,actor);
-  if(prisoner.resistance>0){
+  if(prisoner.resistance>0&&!inspired360){
     const reduction=Math.min(prisoner.resistance,prisonerResistanceReduction(world,actor,p));prisoner.resistance=Math.max(0,prisoner.resistance-reduction);
     context.event(`${actor.name} réduit la résistance de ${p.name} de ${reduction.toFixed(2)} (${prisoner.resistance.toFixed(2)} restante).`);
   }else if(prisoner.mode==='recruit'){
@@ -125,6 +129,7 @@ function finishConversation(world:World,actor:Pawn,p:Pawn,context:NeedContext):b
     // Core DoRecruit: the new colonist remembers who recruited them (319).
     if(world.schemaVersion>=319){const state=p.social??={rng:socialSeed(world.seed,p.id),memories:[]};expireSocialMemories(p,world.tick);addSocialMemory(state,actor.id,'recruited-me',world.tick,1);}
     clearQueuedOrders(world,p);context.event(`${p.name} rejoint la colonie après les conversations avec ${actor.name}.`);
+    if(inspired360)useInspiration360(world,actor,'recruitment');
     // Core InteractionWorker_RecruitAttempt.DoRecruit: a PositiveEvent letter.
     sendLetter352(world,{cls:'positive',title:`Recrutement : ${p.name}`,text:`${actor.name} a convaincu ${p.name} de rejoindre la colonie. Sa cellule est libérée : donnez-lui un lit, des vêtements et des priorités de travail.`,targets:actors352([p.id])});
   }

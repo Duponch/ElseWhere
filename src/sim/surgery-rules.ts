@@ -4,6 +4,7 @@ import { pawnBody } from './health-rules.ts';
 import { biologicalYears } from './human-age.ts';
 import { partMissing } from './injury-state.ts';
 import { curve } from './melee-statistics.ts';
+import { SURGERY_INSPIRATION_FACTOR_360,workSpeedInspirationFactor360 } from './inspirations-360.ts';
 import { MEDICINES,type MedicineItem } from './medicine-rules.ts';
 import { XP_SCALE } from './skills.ts';
 import { SURGICAL_LIMBS,isSurgicalLimb } from './surgery-anatomy.ts';
@@ -53,7 +54,7 @@ export function surgeryRemoveRequestReason273(patient:Pawn,part:unknown,kind:unk
 /** Actual Glow, not the already transformed tending-light factor. */
 export function medicalSurgerySpeed(doctor:Pawn,glow:number):number {
   const c=pawnBody(doctor).capacities;
-  return Math.max(.1,(.4+.06*doctor.skills.medicine.level)*c.manipulation*(.3+.7*Math.min(1,c.sight))*curve(glow,[[0,.8],[.3,1]]));
+  return Math.max(.1,(.4+.06*doctor.skills.medicine.level)*c.manipulation*(.3+.7*Math.min(1,c.sight))*curve(glow,[[0,.8],[.3,1]])*workSpeedInspirationFactor360(doctor));
 }
 const DOCTOR_CHANCE=[.1,.2,.3,.4,.5,.6,.7,.75,.8,.85,.9,.92,.94,.96,.98,1,1.02,1.04,1.06,1.08,1.1] as const;
 export function medicalSurgeryDoctorChance(doctor:Pawn):number {
@@ -68,6 +69,8 @@ export interface SurgeryChanceInput {
   bedSurgeryFactor?:number;
   /** RemoveBodyPart has 1.2; wooden implantation keeps the Core base 1. */
   recipeFactor?:1|1.2;
+  /** Schema 360: the surgeon spends an Inspired_Surgery on this operation. */
+  inspired?:boolean;
 }
 /** Caller supplies the physically used bed and current captures. No topology
  * search, ownership mutation, chance draw or XP in this statistic. */
@@ -75,5 +78,5 @@ export function surgerySuccessChance(input:SurgeryChanceInput):number {
   const bed=(input.bedSurgeryFactor??1)*BED_QUALITY[input.bedQuality??'normal']*curve(input.patientGlow,[[0,.75],[.5,1]])*(input.outdoors?.85:1);
   const room=input.roomCleanliness===null?.6:curve(input.roomCleanliness,[[-5,.6],[0,1],[1,1.1],[5,1.15]]);
   const medicine=curve(MEDICINES[input.medicine].potency,[[0,.7],[1,1],[2,1.3]]);
-  return Math.max(0,Math.min(.98,medicalSurgeryDoctorChance(input.doctor)*bed*room*medicine*(input.recipeFactor??1.2)));
+  return Math.max(0,Math.min(.98,medicalSurgeryDoctorChance(input.doctor)*bed*room*medicine*(input.recipeFactor??1.2)*(input.inspired?SURGERY_INSPIRATION_FACTOR_360:1)));
 }

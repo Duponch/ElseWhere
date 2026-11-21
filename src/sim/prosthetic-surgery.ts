@@ -5,6 +5,7 @@ import { allowedAreaReason } from './allowed-area-state.ts';
 import { workPriority } from './work-types.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
 import { surgeryRequestReason,medicalSurgerySpeed,surgerySuccessChance,surgeryBaseXp } from './surgery-rules.ts';
+import { useInspiration360 } from './inspirations-360.ts';
 import { ARTIFICIAL_PARTS,installArtificialPart } from './artificial-parts.ts';
 import {artificialPartAvailable273} from './artificial-parts-rules.ts';
 import {isProstheticItem273} from './prosthetic-content-273.ts';
@@ -99,7 +100,7 @@ export function processImplantSurgery(w:World,d:Pawn,context:NeedContext,doctorG
   if(isProstheticItem273(task.implant))consumeImplantIngredients(w,task);
   const bed=structureById(w,task.bedId)!;
   const capture=captureCleanliness(w);
-  const chance=surgerySuccessChance({doctor:d,medicine:task.consumedMedicine,bedQuality:bed.quality,bedSurgeryFactor:bedSurgeryFactor(bed,w),recipeFactor:1,patientGlow:patientGlow(bed),roomCleanliness:capture.cleanliness(bed),outdoors:surgeryOutdoors(w,bed,capture)});
+  const chance=surgerySuccessChance({doctor:d,medicine:task.consumedMedicine,bedQuality:bed.quality,bedSurgeryFactor:bedSurgeryFactor(bed,w),recipeFactor:1,patientGlow:patientGlow(bed),roomCleanliness:capture.cleanliness(bed),outdoors:surgeryOutdoors(w,bed,capture),inspired:useInspiration360(w,d,'surgery')});
   const outcome=resolveSurgeryOutcome(p.health!,task.part,chance,()=>healthRandom(w),{allowMissingPart:true});
   p.health=outcome.record;
   const success=outcome.kind==='success'&&installArtificialPart(p.health,task.part,task.implant);

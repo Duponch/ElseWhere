@@ -50,6 +50,8 @@ export function prepareSuspendedHumanResume271(pawn:Pawn,heldAt:number,targetCiv
   }
  }
  if(age&&delta)add(age,'chronologicalTicks',delta);
+ // Schema 360: a suspended pawn is not ticked, so its inspiration does not age.
+ const inspiration360=pawn.inspiration360;if(inspiration360){links.push(()=>pawn.inspiration360===inspiration360);if(delta)add(inspiration360,'until',delta);}
  const attack=pawn.lastAttack,disturbance=pawn.disturbance;
  if(attack){const at=attack.atCore,other=attack.targetId;links.push(()=>pawn.lastAttack===attack&&attack.atCore===at&&attack.targetId===other);const old=attack.suspendedTicks??0;if(delta){if(!Number.isSafeInteger(old+delta))throw Error('Suspended attack memory clock exhausted');put(attack,'suspendedTicks',old+delta);}}
  if(disturbance){links.push(()=>pawn.disturbance===disturbance);if(deltaCore297){add(disturbance,'sleepUntilCore',deltaCore297);add(disturbance,'lieUntilCore',deltaCore297);}}

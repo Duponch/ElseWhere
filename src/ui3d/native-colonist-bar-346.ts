@@ -5,7 +5,7 @@ import {PALETTE} from './prototype-art';
 const FONT = '"Comic Sans MS", "Chalkboard SE", Georgia, serif';
 const barRiskLabels = {none: '', minor: 'Risque de crise mineure', major: 'Risque de crise majeure', extreme: 'Risque de crise extrême'} as const;
 const barRiskColors = {minor: '#e0b43a', major: '#e0862e', extreme: '#d4433a'} as const;
-const barIconPictos: Partial<Record<ColonistBarState346['icons'][number]['kind'], string>> = {'forming-caravan': 'monde', 'medical-rest': 'hospital-bed', sleeping: 'moon', fleeing: 'back', attacking: 'target', idle: 'hourglass', burning: 'flame'};
+const barIconPictos: Partial<Record<ColonistBarState346['icons'][number]['kind'], string>> = {'forming-caravan': 'monde', 'medical-rest': 'hospital-bed', sleeping: 'moon', fleeing: 'back', attacking: 'target', idle: 'hourglass', burning: 'flame', inspired: 'sun'};
 /** Core DrawColonist/DrawIcons in the 70 × 96 card: threshold fill (10 % minor,
  * 15 % otherwise), inner edge for major/extreme and the bottom gradient over
  * the portrait, then the activity icons along its lower left edge. */

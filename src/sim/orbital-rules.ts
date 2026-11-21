@@ -8,6 +8,7 @@ import { canStandAt } from './furniture-travel.ts';
 import { reservedServiceCells } from './service-reservations.ts';
 import { carrierOf } from './rescue-state.ts';
 import { negotiatorRefusal,tradeImprovement } from './trade-negotiator.ts';
+import { tradePriceInspirationOffset360 } from './inspirations-360.ts';
 import { tradeCatalogueEntry } from './trade-catalogue.ts';
 import { roundTradeSilver,tradeUnitPrice } from './trade-prices.ts';
 import { ticksUntilRot } from './food-preservation.ts';
@@ -74,7 +75,7 @@ export function orbitalItemRefusal(pile:MaterialPile,side:'buy'|'sell',w:World,s
   if(!orbitalNovelCatalogue295(w.schemaVersion,ship.kind,pile.item)&&!orbitalBeerCatalogue265(w.schemaVersion,ship.kind,pile.item)&&!ORBITAL_STOCK[ship.kind].some(([item])=>item===pile.item)&&!(side==='sell'&&ship.kind==='bulk'&&ORBITAL_BULK_EXTRAS.has(pile.item)))return 'Ce profil orbital ne commerce pas cette catégorie.';
 }
 export function orbitalTradeGoods(w:World,p:Pawn,ship:OrbitalShip):{goods:TradeGood[];silver:MaterialPile[];merchantSilver:MaterialPile[]} {
-  const covered=orbitalCoverage(w),improvement=tradeImprovement(p),goods:TradeGood[]=[],silver:MaterialPile[]=[],merchantSilver:MaterialPile[]=[];
+  const covered=orbitalCoverage(w),improvement=tradeImprovement(p,tradePriceInspirationOffset360(p)),goods:TradeGood[]=[],silver:MaterialPile[]=[],merchantSilver:MaterialPile[]=[];
   for(const pile of w.piles){const o=pile.owner,held=o.type==='orbital-ship'&&o.shipId===ship.id,ground=o.type==='ground'&&covered.has(o.z*w.width+o.x);if(!held&&!ground)continue;
     const available=held?pile.quantity:Math.max(0,pile.quantity-reservedSource(w,pile.id));if(!available)continue;
     if(pile.item==='silver'){(held?merchantSilver:silver).push({...pile,quantity:available});continue;}

@@ -106,7 +106,7 @@ import { eggSpeciesForItem256 } from '../sim/animal-egg-content-v256';
 import { eggAllowedForPlayer256 } from '../sim/animal-egg-permission-v256';
 import { LightEnvironmentCache } from '../sim/light-environment';
 import { isMoodBasics345, roomSizeAdmitted345, roomSizeLevel345 } from '../sim/room-size-need-345';
-import { isOutdoors359, outdoorsLevel359, outdoorsNeedApplies359 } from '../sim/outdoors-need-359';
+import { isOutdoors359, outdoorsLevel359, outdoorsNeedApplies359 } from '../sim/outdoors-need-359';import { inspirationInspectLine360 } from '../sim/inspirations-360';
 
 type Tab = 'journal' | 'gear' | 'social' | 'bio' | 'needs' | 'health' | 'prisoner';
 const tabs: readonly [Tab, string][] = [['journal', 'Journal'], ['gear', 'Matériel'], ['social', 'Social'], ['bio', 'Bio'], ['needs', 'Besoins'], ['health', 'Santé'], ['prisoner', 'Prisonnier']];
@@ -247,6 +247,9 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   const rows: NativeRow[] = [{ id: 'pawn-tabs', label: '', region:'navigation', compact: true, controls: tabs.filter(([tab]) => tab !== 'prisoner' || pawn.prisoner).map(([tab, label]) => control(`pawn-tab-${tab}`, label, () => { activeTab = tab; }, false, activeTab === tab, tabHints[tab])) },
     row('pawn-identity', `${appearanceOf(pawn, world.seed).sex === 'female' ? 'Femme' : 'Homme'} · ${pawn.prisoner ? 'Prisonnier' : colonist ? 'Colon' : pawn.visitor ? 'Visiteur' : pawn.podRescue ? 'Naufragé' : 'Hors-la-loi'}`, pawn.age ? `${biologicalYears(pawn.age)} ans (${chronologicalYears(pawn.age)} chronologiques)` : undefined),
     row('pawn-action', 'Activité', owner.pawnActivity?.(pawn.id) || coupleActivity285(world, pawn)?.label || specificWorkActivity(world, pawn) || queryPawnStatus(world, pawn).reason, `${pawn.x}, ${pawn.z}`)];
+  // Schema 360: Core Pawn.GetInspectString shows the inspiration and its time
+  // left; the Needs tab shows it under the mood bar instead.
+  const inspiration360 = inspirationInspectLine360(world, pawn); if (inspiration360 && activeTab !== 'needs') rows.push(row('pawn-inspiration', inspiration360.label, inspiration360.value, inspiration360.hint));
   if(colonist&&alive)rows.push(choices('pawn-hostility','Réaction hostile',pawn.hostilityResponse??'flee',['flee','ignore','attack'] as const,response=>send({type:'hostility-response',pawnId:pawn.id,response}),response=>({flee:'Fuir',ignore:'Ignorer',attack:'Attaquer'})[response]),
     row('pawn-orders','Ordres',`${pawn.orders.active!==null?'Travail imposé · ':''}${pawn.orders.queue.length} en file${pawn.priorityWork?` · Case ${pawn.priorityWork.cell.x}, ${pawn.priorityWork.cell.z}`:''}`));
   if (activeTab === 'bio') {
@@ -297,6 +300,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
     const thoughts = moodThoughts(world, pawn), thresholds = breakThresholds(pawn);
     rows.push(alive ? meterRow('need-mood', 'Humeur', pawn.mood, 100, `L’humeur évolue progressivement vers la somme des pensées. Les repères indiquent les seuils de risque de crise mentale. Actuelle : ${pawn.mood.toFixed(1)} %. Cible : ${moodTarget(thoughts).toFixed(1)} %. ${thresholds.map((value, index) => `${['Risque mineur', 'Risque majeur', 'Risque extrême'][index]} : ${value.toFixed(1)} %`).join(' · ')}.`, `${Math.round(pawn.mood)} %`) : row('need-mood', 'Humeur', '—'));
 
+    if (inspiration360) rows.push(row('mood-inspiration', inspiration360.label, inspiration360.value, inspiration360.hint));
     const crisis = alive && mentalCrisisView(world, pawn, structure => buildingLabels[structure.kind]);
     if (crisis) rows.push(row('mood-crisis', crisis.label, crisis.activity, `${crisis.description}${crisis.target ? ` Cible : ${crisis.target.label} (${crisis.target.cell.x}, ${crisis.target.cell.z}).` : ''} Les événements confirmés sont conservés dans le journal.`));
     thoughts.filter(thought => thought.offset !== 0).sort((a, b) => b.offset - a.offset).forEach(thought => rows.push(row(`thought-${thought.id}`, thought.label, signed(thought.offset), `${thought.description}${thought.expiresAt !== undefined ? ` · encore ${Math.ceil((thought.expiresAt - world.tick) / 250)} h` : ''} · Effet sur l’humeur : ${signed(thought.offset)}`)));

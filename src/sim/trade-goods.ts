@@ -1,5 +1,6 @@
 import { storageCells } from './shelf-storage.ts';
 import { tradeImprovement } from './trade-negotiator.ts';
+import { tradePriceInspirationOffset360 } from './inspirations-360.ts';
 export { tradeImprovement } from './trade-negotiator.ts';
 import { reservedSource } from './materials.ts';
 import { adjacent,blockedCells,reachableCells,routeToJob } from './pathfinding.ts';
@@ -16,7 +17,7 @@ export interface TradeGood { pile:MaterialPile; side:'buy'|'sell'; available:num
 export interface PackedTradeGood { packed:PackedFurniture; side:'buy'|'sell'; available:1; unitPrice:number }
 
 export function tradeGoods(w:World,p:Pawn,t:Pawn):{goods:TradeGood[];artGoods:PackedTradeGood[];silver:MaterialPile[];merchantSilver:MaterialPile[]} {
-  const improvement=tradeImprovement(p),goods:TradeGood[]=[],artGoods:PackedTradeGood[]=[],silver:MaterialPile[]=[],merchantSilver:MaterialPile[]=[];
+  const improvement=tradeImprovement(p,tradePriceInspirationOffset360(p)),goods:TradeGood[]=[],artGoods:PackedTradeGood[]=[],silver:MaterialPile[]=[],merchantSilver:MaterialPile[]=[];
   const home=new Set(w.home??[]),zones=new Set(storageCells(w).map(z=>z.z*w.width+z.x));
   let reach:ReturnType<typeof reachableCells>|undefined;
   // Schema 332: a caravan trader deals in its own Core kind's goods.

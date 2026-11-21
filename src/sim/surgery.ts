@@ -7,6 +7,7 @@ import { allowedAreaReason } from './allowed-area-state.ts';
 import { workPriority } from './work-types.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
 import { surgeryRequestReason,medicalSurgerySpeed,surgerySuccessChance,surgeryBaseXp,SURGERY_WORK } from './surgery-rules.ts';
+import { useInspiration360 } from './inspirations-360.ts';
 import { amputateSurgicalLimb } from './surgery-anatomy.ts';
 import { resolveSurgeryOutcome } from './surgery-outcomes.ts';
 import { administerAnesthetic,canAdministerAnesthetic } from './anesthetic.ts';
@@ -129,7 +130,7 @@ export function processSurgery(world:World,doctor:Pawn,context:NeedContext,docto
   learnSkill(doctor.skills.medicine,surgeryBaseXp(task.workCore),doctor);
   const bed=structureById(world,task.bedId)!;
   const capture=captureCleanliness(world);
-  const chance=surgerySuccessChance({doctor,medicine:task.consumedMedicine!,bedQuality:bed.quality,bedSurgeryFactor:bedSurgeryFactor(bed,world),patientGlow:patientGlow(bed),roomCleanliness:capture.cleanliness(bed),outdoors:surgeryOutdoors(world,bed,capture)});
+  const chance=surgerySuccessChance({doctor,medicine:task.consumedMedicine!,bedQuality:bed.quality,bedSurgeryFactor:bedSurgeryFactor(bed,world),patientGlow:patientGlow(bed),roomCleanliness:capture.cleanliness(bed),outdoors:surgeryOutdoors(world,bed,capture),inspired:useInspiration360(world,doctor,'surgery')});
   const outcome=resolveSurgeryOutcome(patient.health!,task.part,chance,()=>healthRandom(world));
   patient.health=outcome.record;
   if(outcome.kind==='success'){if(task.removeArtificial273){if(!removeArtificialPart273(patient.health,task.part,task.removeArtificial273))throw Error('Actual artificial root changed during removal');commitArtificialRestitution273(world,restitution);}else amputateSurgicalLimb(patient.health,task.part);}

@@ -1,6 +1,7 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import { huntingPermission } from './hunting-state.ts';
+import { shootingAccuracyInspirationOffset360 } from './inspirations-360.ts';
 import { violentWorkRefusal } from './colonist-backgrounds.ts';
 import { weatherShotFactor } from './weather-exposure.ts';
 import { friendlyFireFactor } from './game-profile.ts';
@@ -155,7 +156,7 @@ type ShotPlan=Extract<ReturnType<typeof shotPlan>,{weapon:unknown}>;
 function emitShot(world:World,pawn:Pawn,core:number,queries:Queries,plan:Pick<ShotPlan,'target'|'weapon'|'profile'|'line'>,lean:Cell|undefined):void {
   const {target,weapon,profile,line}=plan,standing=!['sleeping','resting','downed'].includes(target.state),body=queries.body(pawn).capacities;
   const cover=shotCover(queries.grid(),pawn,target,combatTargetKey(target));
-  const aim=shotAim({distance:line.distance,pawnAccuracy:shootingAccuracy(pawn.skills.shooting.level,body.sight,body.manipulation).perCell,weaponAccuracy:profile.accuracy,targetSize:combatTargetSize(target,world.schemaVersion),standing,weather:weatherShotFactor(world,pawn,target),blindSmoke:false},cover.passChance);
+  const aim=shotAim({distance:line.distance,pawnAccuracy:shootingAccuracy(pawn.skills.shooting.level,body.sight,body.manipulation,shootingAccuracyInspirationOffset360(pawn)).perCell,weaponAccuracy:profile.accuracy,targetSize:combatTargetSize(target,world.schemaVersion),standing,weather:weatherShotFactor(world,pawn,target),blindSmoke:false},cover.passChance);
   const random={rng:world.rng};
   const origin={x:pawn.x+.5+(lean?.x??0)*.5,z:pawn.z+.5+(lean?.z??0)*.5};
   const emissionInput:BulletEmissionInput={grid:queries.grid(),line,origin,launcherKey:`pawn:${pawn.id}`,equipmentKey:`pile:${weapon.id}`,target:{key:combatTargetKey(target),cell:target,full:false,canBenefitFromCover:true},aim,cover,profile,canHitOtherPawns:true,preventFriendlyFire:false,coverAnchor:key=>queries.targets().anchor(key)};

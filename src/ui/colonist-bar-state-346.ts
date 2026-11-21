@@ -1,13 +1,14 @@
 import { isAggressiveCrisis } from '../sim/aggressive-crisis';
 import { groupOnMapMember } from '../sim/group-state';
 import { idleWanderTask300 } from '../sim/idle-wander-300';
+import { inspirationKind360,inspirationLabel360 } from '../sim/inspirations-360';
 import { mentalCrisisLabel } from '../sim/mental-presentation';
 import { breakThresholds } from '../sim/traits';
 import { TICKS_PER_DAY,type Pawn,type World } from '../sim/types';
 
 /** Core MoodThreshold, from MoodThresholdExtensions.CurrentMoodThresholdFor. */
 export type MoodThreshold346='none'|'minor'|'major'|'extreme';
-export type ColonistBarIcon346='forming-caravan'|'mental-aggro'|'mental'|'medical-rest'|'sleeping'|'fleeing'|'attacking'|'idle'|'burning';
+export type ColonistBarIcon346='forming-caravan'|'mental-aggro'|'mental'|'medical-rest'|'sleeping'|'fleeing'|'attacking'|'idle'|'burning'|'inspired';
 export interface ColonistBarState346 {
   threshold:MoodThreshold346;
   /** Core draws the tint, the edge and the mood gradient only for a living,
@@ -27,8 +28,8 @@ export function colonistMoodThreshold346(pawn:Pawn):MoodThreshold346 {
 /** Core ColonistBarColonistDrawer.DrawIcons, in its order: forming caravan;
  * then aggressive mental state, other mental state, medical bed rest, or else
  * asleep, fleeing, attacking or idle (from the first whole day); then burning.
- * Inspiration, slave, ideoligion role and extra faction icons have no
- * Elsewhere owner. Read only: no RNG, no write. */
+ * then inspired (schema 360). Slave, ideoligion role and extra faction icons
+ * have no Elsewhere owner. Read only: no RNG, no write. */
 export function colonistBarState346(world:World,pawn:Pawn):ColonistBarState346 {
   const dead=pawn.state==='dead'||!!pawn.health?.death,downed=pawn.state==='downed';
   const threshold=dead?'none':colonistMoodThreshold346(pawn);
@@ -45,5 +46,6 @@ export function colonistBarState346(world:World,pawn:Pawn):ColonistBarState346 {
   else if(!pawn.hunting&&(!!pawn.melee?.order||!!pawn.melee?.strike||!!pawn.shooting?.order||!!pawn.shooting?.stance))icons.push({kind:'attacking',label:'Attaque'});
   else if(!downed&&!!idleWanderTask300(pawn)&&Math.floor(world.tick/TICKS_PER_DAY)>=1)icons.push({kind:'idle',label:'Inoccupé'});
   if(pawn.burning)icons.push({kind:'burning',label:'En feu'});
+  const inspiration360=inspirationKind360(pawn);if(inspiration360)icons.push({kind:'inspired',label:inspirationLabel360(inspiration360)});
   return {threshold,tint:!downed&&threshold!=='none',icons};
 }

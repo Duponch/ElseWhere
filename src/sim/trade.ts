@@ -1,4 +1,5 @@
 import {assignPileOwner} from './pile-index.ts';
+import {useInspiration360} from './inspirations-360.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
 import { copyPileCondition } from './pile-condition.ts';
 import { groundCapacity,nearbyGround } from './ground-placement.ts';
@@ -90,5 +91,7 @@ export function applyTrade(w:World,c:TradeCommand):CommandResult {
   delete q.p.trade;q.p.path=[];q.p.state='idle';q.p.planCooldown=0;
   w.events.push({tick:w.tick,type:'command',message:`${q.p.name} a conclu un échange avec ${q.t.name} (${q.paid>=0?q.paid+' argent payé':-q.paid+' argent reçu'}).`});if(w.events.length>80)w.events.shift();
   if(goodwill){w.events.push({tick:w.tick,type:'command',message:applyTradeGoodwill338(goodwill)});if(w.events.length>80)w.events.shift();}
+  // Schema 360: TradeDeal.TryExecute ends an Inspired_Trade once a deal is done.
+  useInspiration360(w,q.p,'trade');
   return {ok:true};
 }

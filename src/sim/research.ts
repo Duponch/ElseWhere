@@ -38,6 +38,7 @@ import { cookingSpot } from './cooking-bills.ts';
 import { researchFacilityDistance,researchFacilityLinked } from './research-facilities.ts';
 import { CleanlinessCapture } from './filth-room.ts';
 import { glowIgnoredByBlindPawn } from './glow-rules-301.ts';
+import { workSpeedInspirationFactor360 } from './inspirations-360.ts';
 import { isPowerActive } from './power-rules.ts';
 import { reservedServiceCells } from './service-reservations.ts';
 import { deconstructionReserved } from './deconstruction-rules.ts';
@@ -304,7 +305,7 @@ export function benchSpeedFactor(world:World,station:Structure,environment:WorkE
 }
 export function researchRate(pawn:Pawn,station:Structure,environment:WorkEnvironment,temperature:number,world:World):number {
   const c=pawnBody(pawn).capacities,skill=intellectualSkill(pawn);
-  const personal=Math.max(.1,(.08+.115*skill.level)*(.5+.5*Math.min(1.1,c.manipulation))*(.5+.5*Math.min(1.1,c.sight))*(glowIgnoredByBlindPawn(world,pawn)?1:environment.speedAt(pawn)));
+  const personal=Math.max(.1,(.08+.115*skill.level)*(.5+.5*Math.min(1.1,c.manipulation))*(.5+.5*Math.min(1.1,c.sight))*(glowIgnoredByBlindPawn(world,pawn)?1:environment.speedAt(pawn))*workSpeedInspirationFactor360(pawn));
   const bench=Math.max(.25,benchSpeedFactor(world,station,environment)*tailoringTemperatureFactor(temperature));
   // Core ResearchPerformed x researchSpeedFactor (1.2 at the tutorial's Easy).
   const difficulty=researchSpeedFactor347(world);

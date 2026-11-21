@@ -1,6 +1,7 @@
 import { artisticSkill, artWorkTotal, isArtRecipe } from './art-rules.ts';
 import { craftingQuality } from './crafting-quality.ts';
 import { healthRandom } from './health.ts';
+import { useInspiration360 } from './inspirations-360.ts';
 import type { ProductionContext } from './production-output.ts';
 import type { CookingTask } from './cooking-types.ts';
 import type { Pawn, Structure, World } from './types.ts';
@@ -22,7 +23,7 @@ export function completeArtProduction(world: World,pawn: Pawn,task: CookingTask,
   const bill = station?.bills?.find(b => b.id === task.billId && b.recipe === task.recipe);
   if (!station || !bill || bill.suspended) return false;
   const random = {rng:world.rng};
-  const quality = craftingQuality(artisticSkill(pawn).level,() => healthRandom(random));
+  const quality = craftingQuality(artisticSkill(pawn).level,() => healthRandom(random),useInspiration360(world,pawn,'creativity'));
   const building: Structure = {id:world.nextId,kind:work.recipe,x:task.spot.x,z:task.spot.z,
     orientation:0,footprint:'standard',material:work.material,quality,art:{authorId:pawn.id,createdAt:world.tick}};
   world.piles = world.piles.filter(p => p !== workpiece);

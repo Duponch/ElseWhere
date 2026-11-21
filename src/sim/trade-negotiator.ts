@@ -22,9 +22,11 @@ export function negotiatorRefusal(p:Pawn,version:number=0,channel:NegotiatorChan
   if(!current){if(c.talking<=0||c.hearing<=0)return 'Le négociateur doit pouvoir parler et entendre.';}
   else if(channel==='comms'&&c.talking<=0)return 'Le négociateur doit pouvoir parler pour utiliser la console.';
 }
-export function tradeImprovement(p:Pawn):number {
+/** `offset` (schema 360): an inspired trade's TradePriceImprovement +0.18,
+ * added before the stat's 0.395 cap. */
+export function tradeImprovement(p:Pawn,offset=0):number {
   const c=pawnBody(p).capacities;
-  return Math.min(.395,Math.max(0,.015*effectiveSkillLevel(p,'social',p.skills.social?.level??0)*(.1+.9*Math.min(1,c.talking/.95))*(.1+.9*Math.min(1,c.hearing/.8))));
+  return Math.min(.395,Math.max(0,.015*effectiveSkillLevel(p,'social',p.skills.social?.level??0)*(.1+.9*Math.min(1,c.talking/.95))*(.1+.9*Math.min(1,c.hearing/.8))+offset));
 }
 
 /** V193 corpus: active adult owner, conscious, non-down/non-crisis, Social capable,
