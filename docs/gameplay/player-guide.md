@@ -588,8 +588,10 @@ de continuer. Il n'y a pas de page récapitulative supplémentaire.
 
 Le climat local et les profils choisis restent dans la sauvegarde. Le départ
 commence en pause avec trois capsules : **Reprendre** fait avancer leur arrivée
-et leur ouverture réelle. Les autres scénarios restent indisponibles ; le
-tutoriel n’a encore que son profil de partie ([V347](tutorial-profile-v347.md)). La [note V333](new-game-preparation-v333.md) précise les adaptations
+et leur ouverture réelle. Les autres scénarios restent indisponibles. Le
+tutoriel ([V347](tutorial-profile-v347.md), leçons [V349](tutorial-lessons-v349.md))
+ne propose que des colons capables de se battre et démarre en vitesse normale,
+comme dans le jeu de base. La [note V333](new-game-preparation-v333.md) précise les adaptations
 du choix de départ ; [V335](starting-arrival-v335.md) décrit l’arrivée.
 
 ## Régler les ombres et toutes les animations — V331

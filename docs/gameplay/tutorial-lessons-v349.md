@@ -123,6 +123,6 @@ Comme `TutorSystem.AllowAction`, seulement pendant le tutoriel et seulement tant
 
 ## Limites
 
-- Aucune vérification dans le navigateur n'a été faite pour ce lot : la carte, le voile, les contours et la surbrillance sont vérifiés par les tests du moteur et le typage, pas par une capture.
+- Vérifié dans le navigateur le 21 novembre, jusqu'à la zone de stockage et la leçon suivante ; six défauts trouvés ce jour-là et corrigés (taille de la carte de leçon, scénario refusé par le client, colons incapables de se battre, départ en pause, carte « Conseils » affichée, bouton de l'accueil) : voir le [bilan du 21 novembre](../development/bilan-20261121.md#4-vérification-visuelle). Les leçons suivantes n'ont été vues que par les tests du moteur.
 - Les étiquettes et flèches sur la carte du jeu de base ne sont pas reprises.
 - L'assistant d'apprentissage reste suspendu pour un tutoriel créé à 349 jusqu'à sa fin ; un tutoriel 347/348 n'a pas de leçons.
