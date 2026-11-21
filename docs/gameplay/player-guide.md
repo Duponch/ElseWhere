@@ -32,6 +32,7 @@ Dans **Architecte → Meubles** :
 - **Applique murale** : 15 acier, 30 W. Tournez-la (Q / E) vers un mur ou une paroi rocheuse : la case devant elle doit être ce mur. Un plan de mur suffit pour poser l'applique, mais elle ne se termine qu'une fois le mur construit. Raccordée au réseau comme la lampe sur pied, elle éclaire 11 cases autour d'elle.
 
 Les deux couchages doubles sont réservés au couchage civil (ni usage médical, ni prison), comme le lit double. Le sac double ne sert pas encore en caravane.
+
 ## Exécuter un prisonnier, relâcher un animal — V364
 
 Dans l'onglet **Prisonnier**, le mode **Exécuter** charge un geôlier de tuer le captif. Il faut un colon libre avec **Geôlier** activé et capable de violence ; sinon le journal le signale et rien ne se passe. Le geôlier rejoint le prisonnier, même endormi ou à terre, et l'exécute d'une entaille au cou : le corps reste sur place, avec du sang à nettoyer. Les autres colons en sont attristés (« Prisonnier exécuté », −5 pendant 6 jours), sauf les psychopathes, sanguinaires et cannibales ; un bourreau sanguinaire en est ravi. Revenir à un autre mode avant l'arrivée du geôlier annule l'exécution.
