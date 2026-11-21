@@ -29,7 +29,8 @@ const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bond
  * and material in apparel policies and the devilstrand key of bill filters;
  * schema 359: the outdoors need;
  * schema 361: the trait ids of the Core trait set (a person keeps only the
- * nine older ids, and none at all if it held no older one). */
+ * nine older ids, and none at all if it held no older one; faction leaders
+ * and departed visitors keep none). */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -46,6 +47,8 @@ function strip(value:unknown,version:number):void {
     const kept=(o.traits as string[]).filter(id=>(LEGACY_TRAIT_IDS as readonly string[]).includes(id));
     if(kept.length)o.traits=kept;else delete o.traits;
   }
+  // Faction leaders and departed visitors held no traits at all before 361.
+  if(version<361&&o.pawn&&typeof o.pawn==='object'&&(Object.hasOwn(o,'factionId')&&Object.hasOwn(o,'clock')||Object.hasOwn(o,'group')&&Object.hasOwn(o,'tick')&&Object.hasOwn(o,'items')))delete (o.pawn as Record<string,unknown>).traits;
   if(version<358){
     if(Array.isArray(o.allowedItems)&&Array.isArray(o.allowedMaterials)){o.allowedItems=(o.allowedItems as unknown[]).filter(i=>!isDevilstrandItem358(i));o.allowedMaterials=(o.allowedMaterials as unknown[]).filter(m=>m!=='devilstrand');}
     if(typeof o.recipe==='string'&&o.filters&&typeof o.filters==='object'&&!Array.isArray(o.filters))for(const k of Object.keys(o.filters))if(isDevilstrandItem358(k))delete (o.filters as Record<string,unknown>)[k];
