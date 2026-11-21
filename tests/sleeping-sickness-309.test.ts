@@ -1,5 +1,5 @@
 import {expect,test} from 'vitest';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asNumberOnly,asOldSchema} from './scenarios/old-schema.ts';
 import {medicalCamp} from './scenarios/health.ts';
 import {createMedicalRecord,medicalPain,reconcileMedicalDeath} from '../src/sim/injury-state.ts';
 import {advanceMedical} from '../src/sim/injury-evolution.ts';
@@ -65,5 +65,5 @@ test('the disease incident reaches 20 to 50 % of the colonists, only from schema
 test('a schema 308 save migrates to 309 by its number only',()=>{
   const w=medicalCamp(2),current=serializeWorld(w);
   const old=asOldSchema(current,308);
-  expect(serializeWorld(deserializeWorld(old))).toBe(current);
+  expect(serializeWorld(deserializeWorld(old))).toBe(asNumberOnly(current,308));
 });
