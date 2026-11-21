@@ -18,6 +18,9 @@ function camp(count=3):World {
     p.x=12+n;p.z=12;delete p.background;p.age={biologicalTicks:30*HUMAN_YEAR_TICKS,chronologicalTicks:1000*HUMAN_YEAR_TICKS};
     p.social={rng:1,memories:[]};delete p.romanceMemories;
     p.priorities.basic=0;
+    // From schema 361 romance follows Core sexuality: bisexual people keep the
+    // encounters of this fixture independent of their drawn sexes.
+    p.traits=[...(p.traits??[]),'bisexual'];
   }
   return w;
 }

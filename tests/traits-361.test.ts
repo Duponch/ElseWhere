@@ -11,6 +11,7 @@ import {startingPawn} from '../src/sim/starting-pawns.ts';
 import {violentWorkRefusal} from '../src/sim/colonist-backgrounds.ts';
 import {moodThoughts,moodTarget} from '../src/sim/mood.ts';
 import {opinionCauses,opinionOf} from '../src/sim/social-state.ts';
+import {exchangeSocial} from '../src/sim/social.ts';
 import {calendarTick} from '../src/sim/calendar.ts';
 import {hourOfDay} from '../src/sim/schedule.ts';
 import {HUMAN_YEAR_TICKS} from '../src/sim/human-age.ts';
@@ -154,6 +155,12 @@ describe('effects through real ticks',()=>{
     expect(opinionCauses(b,c.id,w.tick,w).some(x=>x.kind==='trait-man')).toBe(false);
     for(let i=0;i<20;i++)stepWorld(w);
     expect(opinionOf(b,a.id,w.tick,w)).toBeLessThanOrEqual(-5);
+  });
+  test('a psychopath keeps no chitchat opinion; the other person does',()=>{
+    const w=camp(2),[a,b]=w.pawns as [Pawn,Pawn];a.traits=['psychopath'];w.tick=100;
+    expect(exchangeSocial(w,a,b,'chitchat')).toBe(true);
+    expect(a.social?.memories.some(m=>m.kind==='chitchat')??false).toBe(false);
+    expect(b.social!.memories.some(m=>m.kind==='chitchat'&&m.otherId===a.id)).toBe(true);
   });
   test('mental pool rules: gourmand minor breaks, teetotaler and chemical interest',()=>{
     const p={traits:['gourmand']} as unknown as Pawn,opts=[{kind:'food-binge',weight:.8},{kind:'sad-wander',weight:.5}];

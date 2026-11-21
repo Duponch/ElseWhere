@@ -174,10 +174,11 @@ export function previewStartingCandidate(seed:number,descriptor:StartingCandidat
 
 /** Only these allocation-dependent fields change. All birth data, nested
  * records and needs are freshly owned and identical to the advertised person. */
-export function materializeStartingCandidate(seed:number,descriptor:StartingCandidateDescriptor,id:number,x:number,z:number,version=255):Pawn {
+export function materializeStartingCandidate(seed:number,descriptor:StartingCandidateDescriptor,id:number,x:number,z:number,version?:number):Pawn {
   if(!Number.isSafeInteger(id)||id<=0||!Number.isInteger(x)||!Number.isInteger(z)||x<0||z<0)throw new Error('Placement du candidat invalide.');
-  const pawn=previewStartingCandidate(seed,descriptor,version);
-  pawn.id=id;pawn.x=x;pawn.z=z;if(isSchema256Or257(version))constructHumanConditionMind256(pawn,version);
+  // Without a version: the current traits of the preview, and no 256 mind (the historical default 255).
+  const pawn=previewStartingCandidate(seed,descriptor,version??SCHEMA_VERSION);
+  pawn.id=id;pawn.x=x;pawn.z=z;if(version!==undefined&&isSchema256Or257(version))constructHumanConditionMind256(pawn,version);
   return pawn;
 }
 export function previewStartingParty(seed:number,selected:readonly StartingCandidateDescriptor[],version:number=SCHEMA_VERSION):StartingPartyPreview {

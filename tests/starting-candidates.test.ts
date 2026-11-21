@@ -8,8 +8,8 @@ import { validSkills } from '../src/sim/skills-save.ts';
 import { createStartingCandidateRoster,materializeStartingCandidate,previewStartingCandidate,previewStartingParty,rerollStartingCandidate,rerollStartingCandidateForRoster,startingPartyFromRoster,startingPartyMissingWork,STARTING_REQUIRED_WORK,
   validStartingCandidateDescriptor,validStartingCandidateName,validStartingParty,type StartingCandidateDescriptor,type StartingParty } from '../src/sim/starting-candidates.ts';
 import { startingTraits } from '../src/sim/traits.ts';
-import { validTraits } from '../src/sim/traits.ts';
-import type { Pawn } from '../src/sim/types.ts';
+import { TRAITS,validTraits } from '../src/sim/traits.ts';
+import { SCHEMA_VERSION,type Pawn } from '../src/sim/types.ts';
 
 const personal=(pawn:Pawn)=>{const {id:_id,x:_x,z:_z,...profile}=pawn;return profile;};
 const party=(seed=333)=>startingPartyFromRoster(seed,createStartingCandidateRoster(seed));
@@ -53,16 +53,18 @@ test('prospective profiles have all twelve skills, compatible biographies and pa
   for(let index=0;index<64;index++){
     const seed=Math.imul(index+1,0x9e3779b1)>>>0,pawn=previewStartingCandidate(seed,{serial:index%8+1,generation:Math.floor(index/8)});
     expect(validHumanAge(pawn.age,229)).toBe(true);expect(validBackground(pawn.background,229,pawn.age)).toBe(true);
-    expect(validSkills(pawn.skills,0,229)).toBe(true);expect(validTraits(pawn.traits,229)).toBe(true);
+    expect(validSkills(pawn.skills,0,229)).toBe(true);expect(validTraits(pawn.traits,SCHEMA_VERSION)).toBe(true);
     expect(validatePawnAppearance(pawn.appearance)).toEqual([]);
     expect(Object.keys(pawn.skills).sort()).toEqual([...BACKGROUND_SKILL_IDS,'lastResetTick'].sort());
     if(pawn.age!.biologicalTicks<BACKGROUND_ADULT_MIN_TICKS)expect(pawn.background!.adulthood).toBeUndefined();
     const gains=backgroundGains(pawn.background!);
     for(const skill of BACKGROUND_SKILL_IDS){
       const record=pawn.skills[skill]!;
-      // The local 0..4 baseline has exactly one application of the story gain.
-      expect(record.level-(gains[skill]??0)).toBeGreaterThanOrEqual(0);
-      expect(record.level-(gains[skill]??0)).toBeLessThanOrEqual(4);
+      // The local 0..4 baseline has exactly one application of the story gain,
+      // then (schema 361) one of the Core trait gains, each clamped to 0..20.
+      const clamp=(n:number)=>Math.min(20,Math.max(0,n)),trait=(pawn.traits??[]).reduce((n,id)=>n+(TRAITS[id].skillGains?.[skill]??0),0);
+      expect(record.level).toBeGreaterThanOrEqual(clamp(clamp(gains[skill]??0)+trait));
+      expect(record.level).toBeLessThanOrEqual(clamp(clamp(4+(gains[skill]??0))+trait));
       expect(record.xp).toBe(0);expect(record.dailyXp).toBe(0);
       if(backgroundSkillRefusal(pawn,skill))expect(record.passion).toBe(0);
     }
