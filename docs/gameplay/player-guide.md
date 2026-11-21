@@ -22,6 +22,17 @@ Dans l'inspecteur d'un bâtiment, **Copier** choisit la même construction et le
 
 Dans la barre des colons, un portrait teinté d'or, d'orange ou de rouge signale un risque de crise mineure, majeure ou extrême. Les petites icônes en bas à gauche indiquent : prépare une caravane, crise (« ! »), repos médical, dort, fuit, attaque, inoccupé (à partir du deuxième jour), en feu, inspiré (un petit soleil, V360) ; survolez le portrait pour lire leur nom. [Portée et limites](everyday-orders-v346.md).
 
+## Grande table, couchages doubles et applique murale — V363
+
+Dans **Architecte → Meubles** :
+
+- **Table 3 × 3** : 100 bois, métal ou pierre, sans recherche. Elle ne se tourne pas et se centre sur la case visée. Posez des tabourets, chaises ou fauteuils contre ses bords : vos colons y mangent assis, sans la pensée « mangé sans table ». Comme les autres tables, c'est un point de rencontre (case à décocher dans son inspection) et elle fait d'une pièce une salle à manger.
+- **Couchage au sol double** : gratuit et posé tout de suite, 2 × 2, Q / E pour tourner. Deux places à attribuer dans son inspection (Place 1, Place 2). On y dort comme par terre : confort faible et pensée « dormi par terre ».
+- **Sac de couchage double** : 85 tissu ou cuir, 2 × 2, Q / E pour tourner. Deux places, un peu moins reposant qu'un lit (95 %).
+- **Applique murale** : 15 acier, 30 W. Tournez-la (Q / E) vers un mur ou une paroi rocheuse : la case devant elle doit être ce mur. Un plan de mur suffit pour poser l'applique, mais elle ne se termine qu'une fois le mur construit. Raccordée au réseau comme la lampe sur pied, elle éclaire 11 cases autour d'elle.
+
+Les deux couchages doubles sont réservés au couchage civil (ni usage médical, ni prison), comme le lit double. Le sac double ne sert pas encore en caravane.
+
 ## Profiter d'une inspiration — V360
 
 Un colon **heureux** (humeur d'au moins 50 %, et d'autant plus souvent que son humeur est haute : en moyenne tous les 10 jours à 100 %) peut être **inspiré**. Une lettre bleue l'annonce. Une **frénésie** dure 8 jours : travail 80 % plus rapide, déplacement 40 % plus rapide ou tir bien plus précis. Une inspiration **ciblée** attend son occasion pendant 8 jours au plus : **commerce** (meilleurs prix au prochain échange avec un marchand ou un vaisseau), **recrutement** (le prochain prisonnier en mode « recruter » rejoint la colonie malgré sa résistance), **apprivoisement** (réussite certaine), **chirurgie** (chances doublées, jusqu'à 98 %) ou **créativité** (prochaine œuvre, arme, vêtement ou meuble deux niveaux de qualité au-dessus). Profitez-en : mettez le colon sur la bonne tâche avant la fin. Le type dépend de ses passions. L'inspection et l'onglet **Besoins** (sous l'humeur) affichent l'inspiration et le temps restant ; un petit soleil marque sa vignette. [Règles et limites](inspirations-v360.md).

@@ -456,6 +456,15 @@ L’[audit du 13 septembre](../research/environment-review.md) confirme que les 
 
 ## Petit catalogue et statut des ajouts
 
+### Ajouts V363 — grande table, couchages doubles et applique murale
+
+| Registre / identifiant local | Acquisition et usage physique | Limites |
+| --- | --- | --- |
+| Structure `table-large` | Table 3×3 Core (`Table3x3c`) : 100 matière dure, travail 3 300, 175 PV, beauté 2, qualité, 22 kg ; surface de repas, point de rencontre, salle à manger (12), désinstallable. | Ne se tourne pas (comme le jeu de base) ; plan dessiné par la boîte générique. |
+| Structure `double-sleeping-spot` | Couchage au sol double Core (`DoubleSleepingSpot`) : gratuit, posé à l'instant, 2×2, deux places civiles, confort 0,4, repos 0,8. | Ni médical ni prison ; ne compte pas pour le rôle de chambre (comme le couchage simple). |
+| Structure `double-bedroll` | Sac de couchage double Core (`BedrollDouble`) : 85 tissu ou cuir, travail 1 100, 100 PV, qualité, confort 0,68, repos 0,95, immunité ×1,05, 4,5 kg, deux places civiles, désinstallable. | Pas encore utilisé par les caravanes ; paquet générique une fois emballé. |
+| Structure `wall-lamp` | Applique murale Core (`WallLamp`) : 15 acier, travail 330, 35 PV, 2 kg, 30 W, lumière rayon 11, interrupteur ; fixée à un mur ou à une paroi rocheuse devant elle, orientable. | Occupe sa case seule ; reste en place si son mur disparaît (le jeu de base l'emballe). |
+
 ### Ajouts V357 — pièges EEI
 
 | Registre / identifiant local | Acquisition et usage physique | Limites |
