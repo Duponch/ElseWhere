@@ -63,7 +63,7 @@ Les lots sont rangés par note, puis par coût.
 2. **(B)** Alertes des besoins et de la santé. *Fait le 17 novembre (interface).*
 3. **(B)** Alertes des enclos et des vêtements chauds. *Fait le 17 novembre (interface).*
 4. **(B)** Lettres : classes, sons, pause, pile et archives de 200. *Fait, schéma 352 ; restent un son propre à chaque classe, les messages en haut à gauche et les lettres à choix.*
-5. **(C)** Alertes occasionnelles : trémie, opération en attente, médecin ou mineur manquant, caravane immobile, fin de quête.
+5. **(C)** Alertes occasionnelles : trémie, opération en attente, médecin ou mineur manquant, caravane immobile, fin de quête. *Fait le 21 novembre (interface), avec les raccourcis des onglets.*
 
 ## 3. Fonctions de base
 
@@ -106,6 +106,7 @@ Les 51 recherches d'Elsewhere ont les coûts et les bureaux du jeu de base.
 5. **(B)** Réserve d'humeur complète : crises manquantes, confort aux établis, onde psychique et apaisement, petites pensées. *Fait, schéma 350.*
 6. **(B)** Dépouiller. *Fait, schéma 351 ; restent le filtre « vêtements de mort » des tenues et l'option « compter les vêtements souillés » des factures.*
 7. **(B)** Contenu précoce : œufs et gelée en cuisine, chapeau, jeux, armoire à outils, tapis, pièges. *Fait le 21 novembre : cuisine et chapeaux (353), tables de jeu (354), armoire et tapis (355), pièges explosifs (357), soie du diable (358).*
+8. **(B)** Besoin de plein air, inspirations et traits du jeu de base, restés hors de la réserve d'humeur. *Fait le 21 novembre : plein air (359), inspirations (360), 39 traits sur 43 (361) ; liaison des trois (Troglodyte, Artiste torturé, inspirations interdites par trait) en cours, 362.*
 
 ## 4. En parallèle
 
@@ -127,6 +128,6 @@ Les 51 recherches d'Elsewhere ont les coûts et les bureaux du jeu de base.
 2. **Vague 2, faite le 16 novembre :** moteur et notions de l'assistant d'apprentissage ; onglet Travail (344) ; travail passionné et besoin d'espace (345) ; sélection et ordres du quotidien (346) ; la surbrillance des commandes, prévue en vague 3, est faite aussi.
 3. **Vague 3, faite :** prérequis du tutoriel (fait le 16 novembre, schéma 347) puis tutoriel en 37 étapes (fait le 17 novembre, schéma 349) ; lettres (faites le 17 novembre, schéma 352) ; réserve d'humeur (faite le 17 novembre, schéma 350) ; dépouiller (fait le 17 novembre, schéma 351) ; alertes B (faites le 17 novembre, interface) ; animal qui devient enragé quand on le blesse ou qu'un apprivoisement échoue (fait le 16 novembre, schéma 348).
 4. **Vague 4 :** contenu précoce (fait le 21 novembre, schémas 353 à 358), puis les manques C.
-5. **Vague 5, engagée le 21 novembre :** d'abord les trois manques B de l'humeur qui n'avaient pas été livrés avec la réserve d'humeur (besoin d'extérieur, inspirations, traits du jeu de base), puis les manques C, en commençant par les alertes occasionnelles et les raccourcis des onglets. Viendront ensuite les manques C les moins coûteux de l'audit : table 3 × 3, couchages doubles, applique murale, natte de paille, art qui divertit, copier-coller des factures, relâcher un animal, exécuter un prisonnier, lisser les murs, plans.
+5. **Vague 5, engagée le 21 novembre (faits le soir même : alertes occasionnelles et raccourcis, plein air 359, inspirations 360, traits 361 ; liaison des traits en cours, 362) :** d'abord les trois manques B de l'humeur qui n'avaient pas été livrés avec la réserve d'humeur (besoin d'extérieur, inspirations, traits du jeu de base), puis les manques C, en commençant par les alertes occasionnelles et les raccourcis des onglets. Viendront ensuite les manques C les moins coûteux de l'audit : table 3 × 3, couchages doubles, applique murale, natte de paille, art qui divertit, copier-coller des factures, relâcher un animal, exécuter un prisonnier, lisser les murs, plans.
 
 Les lots déjà engagés plus tôt (conteur, commerce, armes) ne sont pas repris pour l'instant ; leurs restes figurent dans le [bilan du 15](bilan-20261115.md).
