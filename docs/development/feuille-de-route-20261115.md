@@ -105,7 +105,7 @@ Les 51 recherches d'Elsewhere ont les coûts et les bureaux du jeu de base.
 4. **(B)** Sélection et ordres du quotidien : mobiliser la sélection, bouton « Copier », clic droit d'un colon mobilisé, barre des colons. *Fait, schéma 346.*
 5. **(B)** Réserve d'humeur complète : crises manquantes, confort aux établis, onde psychique et apaisement, petites pensées. *Fait, schéma 350.*
 6. **(B)** Dépouiller. *Fait, schéma 351 ; restent le filtre « vêtements de mort » des tenues et l'option « compter les vêtements souillés » des factures.*
-7. **(B)** Contenu précoce : œufs et gelée en cuisine, chapeau, jeux, armoire à outils, tapis, pièges. *En cours : cuisine et chapeaux (353), tables de jeu (354), armoire et tapis (355) faits le 21 novembre ; restent les pièges explosifs et le tissu diabolique.*
+7. **(B)** Contenu précoce : œufs et gelée en cuisine, chapeau, jeux, armoire à outils, tapis, pièges. *Fait le 21 novembre : cuisine et chapeaux (353), tables de jeu (354), armoire et tapis (355), pièges explosifs (357), soie du diable (358).*
 
 ## 4. En parallèle
 
@@ -126,6 +126,6 @@ Les 51 recherches d'Elsewhere ont les coûts et les bureaux du jeu de base.
 1. **Vague 1, faite le 16 novembre :** alertes A ; aide visible en partie et conseils de chargement ; premiers jours et pensées du quotidien (schéma 343).
 2. **Vague 2, faite le 16 novembre :** moteur et notions de l'assistant d'apprentissage ; onglet Travail (344) ; travail passionné et besoin d'espace (345) ; sélection et ordres du quotidien (346) ; la surbrillance des commandes, prévue en vague 3, est faite aussi.
 3. **Vague 3, faite :** prérequis du tutoriel (fait le 16 novembre, schéma 347) puis tutoriel en 37 étapes (fait le 17 novembre, schéma 349) ; lettres (faites le 17 novembre, schéma 352) ; réserve d'humeur (faite le 17 novembre, schéma 350) ; dépouiller (fait le 17 novembre, schéma 351) ; alertes B (faites le 17 novembre, interface) ; animal qui devient enragé quand on le blesse ou qu'un apprivoisement échoue (fait le 16 novembre, schéma 348).
-4. **Vague 4, en cours :** contenu précoce (cuisine et chapeaux, tables de jeu, armoire et tapis faits le 21 novembre, schémas 353 à 355 ; restent les pièges explosifs et le tissu diabolique), puis les manques C.
+4. **Vague 4 :** contenu précoce (fait le 21 novembre, schémas 353 à 358), puis les manques C.
 
 Les lots déjà engagés plus tôt (conteur, commerce, armes) ne sont pas repris pour l'instant ; leurs restes figurent dans le [bilan du 15](bilan-20261115.md).
