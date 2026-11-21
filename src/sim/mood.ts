@@ -21,7 +21,7 @@ import { COLONY_EXPECTATIONS,type ColonyExpectation } from './expectations.ts';
 import { colonyExpectation } from './colony-economy.ts';
 import { malnutritionStage } from './malnutrition.ts';
 import { expireRoomMemoriesAt,roomMoodThoughtsAt } from './room-experience.ts';
-import { TRAITS,isTraitsSchema361 } from './traits.ts';
+import { TRAITS,holdsCoreTrait361,isTraitsSchema361 } from './traits.ts';
 import { traitMapThoughts361,traitMoodThoughts361,type TraitMapThoughts361 } from './trait-thoughts-361.ts';
 import { colonistMoodOffset } from './game-profile.ts';
 import { APPAREL,apparelInsulation,type ApparelItem } from './apparel-rules.ts';
@@ -141,7 +141,7 @@ export function moodThoughts(world:World,pawn:Pawn,topology?:RelationshipTopolog
     ...isMoodBasics345(world.schemaVersion)?{passionateWork345:passionateWorkThought345(world,pawn)}:{},
     ...isOutdoors359(world.schemaVersion)?{outdoors359:outdoorsThought359(world,pawn)}:{},
     ...isMoodPool350(world.schemaVersion)?{moodPool350:[psychicDroneThought350(world,pawn),hospitalPatientThought350(world,pawn),opinionOfLoverThought350(world,pawn)].filter((t):t is MoodThought=>!!t)}:{},
-    ...pawn.traits&&isTraitsSchema361(world.schemaVersion)?{traits361:traitMapThoughts361(world,pawn)}:{}});
+    ...isTraitsSchema361(world.schemaVersion)&&holdsCoreTrait361(pawn)?{traits361:traitMapThoughts361(world,pawn)}:{}});
 }
 export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly MoodThought[] {
   if((pawn.cryptosleepHeldAt271!==undefined||pawn.shipCryptosleepHeldAt277!==undefined))c={...c,tick:memoryReadTick271(pawn,c.tick)};
@@ -200,7 +200,7 @@ export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly M
   const catharsis=pawn.mental?.catharsis.filter(t=>t>c.tick)??[];
   if(catharsis.length)thoughts.push({id:'catharsis',label:`Catharsis ×${catharsis.length}`,offset:40*(1-.75**catharsis.length)/.25,kind:'memory',description:'Soulagement après crise ; chaque occurrence dure trois jours, au plus cinq, effet décroissant.',expiresAt:catharsis[0]});
   // Schema 361: trait nullifications and trait thoughts.
-  if(pawn.traits&&isTraitsSchema361(c.schemaVersion))return traitMoodThoughts361(pawn,thoughts,{items:c.items,...c.traits361?{map361:c.traits361}:{},...c.despawned313?{despawned:true}:{}});
+  if(isTraitsSchema361(c.schemaVersion)&&holdsCoreTrait361(pawn))return traitMoodThoughts361(pawn,thoughts,{items:c.items,...c.traits361?{map361:c.traits361}:{},...c.despawned313?{despawned:true}:{}});
   return thoughts;
 }
 export function moodTarget(thoughts:readonly MoodThought[]):number {

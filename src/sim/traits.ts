@@ -105,6 +105,8 @@ export type TraitBearer=Pick<Pawn,'traits'>;
 export const LEGACY_TRAIT_IDS:readonly TraitId[]=Object.freeze(['optimist','pessimist','steadfast','nervous','fast-learner','slow-learner','kind','abrasive','bloodlust']);
 export const isTraitsSchema361=(version:unknown):boolean=>typeof version==='number'&&Number.isSafeInteger(version)&&version>=361;
 export const hasTrait=(pawn:TraitBearer|undefined,id:TraitId):boolean=>!!pawn?.traits?.includes(id);
+/** Holds a trait of the 361 set (the nine older ones give no 361 thought). */
+export const holdsCoreTrait361=(pawn:TraitBearer):boolean=>!!pawn.traits?.some(id=>TRAITS[id].since!==undefined);
 
 /** Core TraitDef data used by generation and conflicts, for every Core def
  * (implemented or not: the sexuality draw sums all commonalities). */
