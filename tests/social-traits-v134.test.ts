@@ -80,7 +80,8 @@ test('kind words keep ten memories per speaker, decay, and reject forged old-sch
 
 test('future arrival offers expose one authored social trait without changing existing offers or the world RNG',()=>{
   const world=medicalCamp(2),before=world.rng;enableArrivals(world);
-  world.tick=world.arrivals!.nextCheck;advanceArrivals(world);
+  // The authored calendar is the rule below schema 361 (Core traits from 361).
+  world.tick=world.arrivals!.nextCheck;Object.assign(world,{schemaVersion:360});advanceArrivals(world);Object.assign(world,{schemaVersion:SCHEMA_VERSION});
   const offer=world.arrivals!.pending!;
   expect(offer.traits).toEqual(arrivalTraits(offer.profile,offer.id));
   expect(offer.traits).toHaveLength(3);

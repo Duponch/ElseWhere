@@ -4,6 +4,7 @@ import { expect,test } from 'vitest';
 import { createWorld,applyCommand,stepWorld,serializeWorld,deserializeWorld,validateWorld } from '../src/sim/index';
 import { TRAITS,validTraits,startingTraits,arrivalTraits,initializeCampTraits,breakThresholds,globalLearningFactor } from '../src/sim/traits';
 import { initialSkills,learnSkill,learningFactor,tickSkills } from '../src/sim/skills';
+import { offeredTraits361 } from '../src/sim/trait-generation-361';
 import { moodTarget,moodThoughts,updateMood } from '../src/sim/mood';
 import { updateMentalBreak } from '../src/sim/mental-break';
 import { enableArrivals,advanceArrivals } from '../src/sim/arrivals';
@@ -77,7 +78,7 @@ test('traits reach every active skill through real construction, repairs, treatm
 test('strict neutral migration, conflicts/duplicates/unknowns, mutable copies and snapshots retain the exact personality',()=>{
   const w=createWorld(42);initializeCampTraits(w);expect(w.pawns.map(p=>p.traits)).toEqual([['optimist','fast-learner'],['steadfast','slow-learner'],['pessimist','nervous']]);
   expect(w.pawns[0]!.traits).not.toBe(startingTraits(0));expect(Object.isFrozen(TRAITS.optimist)).toBe(true);
-  for(const traits of [null,[],['optimist','pessimist'],['steadfast','nervous'],['fast-learner','slow-learner'],['optimist','optimist'],['__proto__'],['constructor'],['sanguine'],['optimist',42]]){const bad=structuredClone(w) as any;bad.pawns[0].traits=traits;expect(()=>deserializeWorld(JSON.stringify(bad))).toThrow(/traits/);}
+  for(const traits of [null,[],['optimist','pessimist'],['steadfast','nervous'],['fast-learner','slow-learner'],['optimist','optimist'],['__proto__'],['constructor'],['pyromaniac'],['optimist',42]]){const bad=structuredClone(w) as any;bad.pawns[0].traits=traits;expect(()=>deserializeWorld(JSON.stringify(bad))).toThrow(/traits/);}
   expect(validTraits(['optimist','steadfast','fast-learner'],69)).toBe(true);
   const old=structuredClone(w) as any;(old.schemaVersion=68,withoutResearch(old));for(const p of old.pawns){delete p.traits;delete p.background;}
   const migrated=deserializeWorld(JSON.stringify(old));expect(migrated).toEqual(withMigratedResearch({...old,schemaVersion:SCHEMA_VERSION}));expect(migrated.pawns.every(p=>p.traits===undefined)).toBe(true);
@@ -87,7 +88,8 @@ test('strict neutral migration, conflicts/duplicates/unknowns, mutable copies an
 
 test('arrival traits are announced, persist in the letter, transfer once and leave old pending offers neutral',()=>{
   const w=createWorld(42);enableArrivals(w);w.tick=w.arrivals!.nextCheck;advanceArrivals(w);const offer=w.arrivals!.pending!;
-  expect(offer.traits).toEqual(arrivalTraits(offer.profile,offer.id));const saved=serializeWorld(w),copy=deserializeWorld(saved);
+  // Schema 361: the offer announces Core traits drawn for the offered identity.
+  expect(offer.traits).toEqual(offeredTraits361(w.seed,offer.id,offer.age,offer.background));const saved=serializeWorld(w),copy=deserializeWorld(saved);
   for(const world of [w,copy])expect(applyCommand(world,{type:'answer-arrival',offerId:offer.id,accept:true}).ok).toBe(true);
   expect(copy).toEqual(w);expect(w.pawns.at(-1)!.traits).toEqual(offer.traits);expect(w.pawns.at(-1)!.traits).not.toBe(offer.traits);replay(w);
   const old=JSON.parse(saved);(old.schemaVersion=68,withoutResearch(old));
