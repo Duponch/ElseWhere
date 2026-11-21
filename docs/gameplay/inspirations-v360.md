@@ -45,7 +45,7 @@ Sources : RimWorld 1.6.4871, définitions `Defs/InspirationDefs/Inspirations.xml
 
 ## Ce qui reste
 
-- **Traits.** Les traits du jeu de base qui interdisent un type (bagarreur : frénésie de tir ; lambin : frénésie de mouvement) ou qui en donnent un après une crise (artiste torturé : créativité, 50 %) arrivent avec le lot des traits (361) ; leur branchement se fait dans `inspirationCanOccur360` et à la fin d'une crise.
+- **Traits** (faits en [V362](trait-links-v362.md)). Les traits du jeu de base qui interdisent un type (bagarreur : frénésie de tir ; lambin : frénésie de mouvement) ou qui en donnent un après une crise (artiste torturé : créativité, 50 %) arrivent avec le lot des traits (361) ; leur branchement se fait dans `inspirationCanOccur360` et à la fin d'une crise.
 - **Caravanes.** Un colon en caravane garde son inspiration et sa date de fin, mais n'en reçoit pas de nouvelle tant qu'il voyage, et le commerce avec une caravane rencontrée ou un comptoir de colonie n'utilise ni ne consomme le commerce inspiré ; la vitesse de la caravane ignore la frénésie de mouvement.
 - **Autres sources.** Les inspirations données par un discours, un rituel, le psilocap ou une capacité psychique viennent des extensions, hors du périmètre du jeu de base.
 - **Messages temporaires** du jeu de base pour la fin d'une inspiration.

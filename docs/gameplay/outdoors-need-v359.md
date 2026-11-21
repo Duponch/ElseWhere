@@ -47,7 +47,7 @@ Sur une carte temporaire (camp, site), les colons sont sur cette carte : les toi
 
 ## Adaptations et limites
 
-- **Trait Souterrain** : le jeu de base désactive ce besoin pour un colon Souterrain (Undergrounder). Ce trait n'existe pas encore dans Elsewhere. Une seule fonction, `outdoorsNeedApplies359` dans `src/sim/outdoors-need-359.ts`, dit si une personne a le besoin : le futur trait devra la rendre fausse, et le besoin sera alors retiré au passage suivant, comme Pawn_NeedsTracker.RemoveNeed.
+- **Trait Souterrain** (fait en [V362](trait-links-v362.md)) : le jeu de base désactive ce besoin pour un colon Souterrain (Undergrounder). Ce trait n'existe pas encore dans Elsewhere. Une seule fonction, `outdoorsNeedApplies359` dans `src/sim/outdoors-need-359.ts`, dit si une personne a le besoin : le futur trait devra la rendre fausse, et le besoin sera alors retiré au passage suivant, comme Pawn_NeedsTracker.RemoveNeed.
 - **Invités** : le jeu de base donne aussi le besoin aux invités hébergés par la colonie ; Elsewhere le réserve aux colons et aux prisonniers, comme le besoin d'espace (V345).
 - **Caravanes historiques** : une caravane sans état de voyage moderne (sauvegardes antérieures au schéma 256) garde le besoin figé jusqu'au retour.
 - **Pièces** : Elsewhere lit les pièces de la température, recalculées au début de chaque tick et après chaque ordre ; une pièce dont les murs changent au milieu d'un tick est lue au tick suivant.

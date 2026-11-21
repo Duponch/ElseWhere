@@ -68,6 +68,8 @@ Les pensées liées à la carte (oiseau de nuit, chambres) disparaissent en cara
 
 ## Laissés de côté
 
+Souterrain, Artiste torturé et Douillet ont été ajoutés au schéma 362, avec les règles d'inspiration des traits : voir [V362](trait-links-v362.md). Pyromane reste de côté.
+
 - **Pyromane** : sa seule crise extrême et sa crise spontanée (`FireStartingSpree`) n'existent pas ; le donner avec son seul refus de lutter contre le feu en ferait un trait presque inoffensif.
 - **Douillet** (`Wimp`, seuil de choc de douleur 0,3) : le seuil est lu partout depuis le seul dossier médical, y compris dans une dizaine de validations de sauvegarde ; il faudrait d'abord porter ce seuil dans le dossier.
 - **Souterrain** : le besoin d'extérieur est construit en parallèle par le lot 359 et n'existe pas ici.
