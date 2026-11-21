@@ -25,7 +25,8 @@ const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bond
  * schema 352: the campaign's letters, stack, archive and pins; schema 353:
  * the cowboy and bowler hats in apparel policies and bill filters, and the
  * eggs and insect jelly in bill filters; schema 358: the devilstrand garments
- * and material in apparel policies and the devilstrand key of bill filters. */
+ * and material in apparel policies and the devilstrand key of bill filters;
+ * schema 359: the outdoors need. */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -60,6 +61,8 @@ function strip(value:unknown,version:number):void {
     if(o.revision===1&&typeof o.nextMoveOrderIsWait==='boolean')delete o.nuzzle350;
     if(o.profile==='cassandra-misc-v1')for(const k of ['psychicDrones350','psychicSoothes350','lastPsychicDrone350','lastPsychicSoothe350','psychic350'])delete o[k];
   }
+  // Schema 359: the outdoors need of colonists and prisoners.
+  if(version<359&&Object.hasOwn(o,'outdoors359'))delete o.outdoors359;
   // Schema 345: the room size need of colonists and prisoners.
   if(version<345&&Object.hasOwn(o,'roomSize345'))delete o.roomSize345;
   if(version<343){
@@ -91,7 +94,7 @@ export function stripFutureContent(value:unknown,version:number):void {
   if(version<352&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).letters352;
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
-  if(version<358)strip(value,version);
+  if(version<359)strip(value,version);
 }
 
 /** The reference for a number-only migration step from `version`: the same

@@ -5,6 +5,7 @@ import {depletedHumanHunger,depletedHumanRest,BED_REST_PER_TICK} from './human-n
 import {parasiteRestFactor306} from './parasites-306.ts';
 import {pawnBody} from './health-rules.ts';
 import {updateRecreation} from './recreation-rules.ts';
+import {advanceCaravanOutdoors359} from './outdoors-need-359.ts';
 /** Historical schemas keep their original runtime marks. From266 the actual
  * actor retains the last real service so load cannot change its next needs150.
  * Neither representation owns a second cadence or grants an immediate gain. */
@@ -38,6 +39,8 @@ export class GroupRestMarks256 {
 }
 export interface GroupNeedMetersContext256 {
  coreTick:number;legacyFood:boolean;legacyRest:boolean;joyToleranceFall:number;restMarks:GroupRestMarks256;
+ /** Schema 359: Need_Outdoors runs in the same interval, after Joy (NeedDef order). */
+ outdoors359?:boolean;
 }
 /** WorldPawns-side meter phase, BEFORE MotionRuntime.stepCore at this same
  * Core tick. Needs150 is not delta gain from the caravan interval callback.
@@ -50,5 +53,6 @@ export function advanceGroupNeedMeters256(group:AwayGroup,c:GroupNeedMetersConte
   const effectiveness=c.restMarks.effectiveness(p.id,c.coreTick,p);
   p.rest=effectiveness===undefined?Math.max(0,p.rest-(p.rest-depletedHumanRest(p.rest,c.legacyRest,parasiteRestFactor306(p.health)))*15):Math.min(100,p.rest+BED_REST_PER_TICK*effectiveness*15);
   updateRecreation(p,pawnBody(p),c.joyToleranceFall*15,15);
+  if(c.outdoors359)advanceCaravanOutdoors359(p);
  }
 }

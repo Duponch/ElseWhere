@@ -1,5 +1,6 @@
 import {isFinishFrameSchema301} from './wall-frame-kind-301.ts';
 import {isMoodBasics345} from './room-size-need-345.ts';
+import {isOutdoors359} from './outdoors-need-359.ts';
 import {hasPartyMemoryField292} from './party-memories-292.ts';
 import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {validCouplePawnContext285} from './couple-save-285.ts';
@@ -157,7 +158,7 @@ function validateGroupOwners(world:World,version:number,planet:PlanetState,refer
   // must still resolve those IDs in the current, separately numbered registries.
   function person(v:unknown,clock:number,dead:boolean,origin?:GroupMemberOrigin,admission:import('./group-state.ts').GroupAdmission257|undefined=object(group)?group.admission as import('./group-state.ts').GroupAdmission257|undefined:undefined):v is Pawn {
     const personWorld=groupPersonValidationView(world,origin);
-    if(!object(v)||!keys(v,REQUIRED_PAWN,[...PASSIVE_PAWN,...isMoodBasics345(version)?['roomSize345']:[],...isFinishFrameSchema301(Number(version))?['jobTickDelta301']:[],...isSchema299OrLater(version)?['lastIngestAtCore299']:[],...isSchema271OrLater(version)?['hiveDefeatSuspendedTicks271']:[],...version>=266?['caravanRest']:[],...version>=265?['drugPolicyId']:[],...(version===259||version===260||(version===261||(Number(version)===262||isSchema263OrLater(Number(version)))))?['worldAffiliation259','prisonerHistory259',...admission?.revision===2?['prisoner']:[]]:[],...version>=256?['mapAreas','caravanCarrySick','mapBed','arrivalRotation','hiveDefeats','nativeHuman']:[]])||!thing(v.id)||ownerIds.has(v.id)||localById.has(v.id)
+    if(!object(v)||!keys(v,REQUIRED_PAWN,[...PASSIVE_PAWN,...isMoodBasics345(version)?['roomSize345']:[],...isOutdoors359(version)?['outdoors359']:[],...isFinishFrameSchema301(Number(version))?['jobTickDelta301']:[],...isSchema299OrLater(version)?['lastIngestAtCore299']:[],...isSchema271OrLater(version)?['hiveDefeatSuspendedTicks271']:[],...version>=266?['caravanRest']:[],...version>=265?['drugPolicyId']:[],...(version===259||version===260||(version===261||(Number(version)===262||isSchema263OrLater(Number(version)))))?['worldAffiliation259','prisonerHistory259',...admission?.revision===2?['prisoner']:[]]:[],...version>=256?['mapAreas','caravanCarrySick','mapBed','arrivalRotation','hiveDefeats','nativeHuman']:[]])||!thing(v.id)||ownerIds.has(v.id)||localById.has(v.id)
       ||!int(v.x,0,personWorld.width-1)||!int(v.z,0,personWorld.height-1))return false;
     if(!oneOf(v.state,['idle','resting','downed',...(dead?['dead']:[])])||dead!==(v.state==='dead')
       ||v.jobId!==null||v.haul!==null||v.cooking!==null||v.need!==null||v.bedId!==null||v.moveCooldown!==0||v.planCooldown!==0

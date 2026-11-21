@@ -106,6 +106,7 @@ import { eggSpeciesForItem256 } from '../sim/animal-egg-content-v256';
 import { eggAllowedForPlayer256 } from '../sim/animal-egg-permission-v256';
 import { LightEnvironmentCache } from '../sim/light-environment';
 import { isMoodBasics345, roomSizeAdmitted345, roomSizeLevel345 } from '../sim/room-size-need-345';
+import { isOutdoors359, outdoorsLevel359, outdoorsNeedApplies359 } from '../sim/outdoors-need-359';
 
 type Tab = 'journal' | 'gear' | 'social' | 'bio' | 'needs' | 'health' | 'prisoner';
 const tabs: readonly [Tab, string][] = [['journal', 'Journal'], ['gear', 'Matériel'], ['social', 'Social'], ['bio', 'Bio'], ['needs', 'Besoins'], ['health', 'Santé'], ['prisoner', 'Prisonnier']];
@@ -278,6 +279,11 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   } else if (activeTab === 'needs') {
     rows.push(heading('needs', 'Besoins'));
     for (const [key, label] of [['hunger', 'Nourriture'], ['rest', 'Sommeil'], ['beauty', 'Beauté'], ['comfort', 'Confort']] as const) rows.push(alive ? meterRow(`need-${key}`, label, pawn[key], 100, `${needHelp[key]} Repères de la jauge : ${NEED_THRESHOLDS[key].map(value => `${value} %`).join(' · ')}.`, `${Math.round(pawn[key])} %`) : row(`need-${key}`, label, '—', 'Décédé · Dossier arrêté au décès.'));
+    // Schema 359: Core's outdoors need (colonists and prisoners), stepped at each need interval.
+    if (isOutdoors359(world.schemaVersion) && outdoorsNeedApplies359(pawn)) {
+      const air = outdoorsLevel359(pawn) * 100;
+      rows.push(alive ? meterRow('need-outdoors', 'Plein air', air, 100, `Le besoin de voir le ciel. À l’intérieur, il baisse de 32 points par jour sous un toit construit ou de roche mince, sans descendre sous 20 %, et de 45 points par jour sous la roche épaisse d’une montagne, jusqu’à 0. Dehors à ciel ouvert, il se remplit en trois heures ; dehors sous un toit, en une journée (sous la roche épaisse, il baisse de 40 points par jour jusqu’à 20 %) ; sur une case sans toit d’une pièce fermée, en moins de cinq heures. Une pièce qui touche le bord de la carte, ou dont au moins un quart du sol est sans toit, compte comme l’extérieur. Au lit, éveillé, la baisse est cinq fois plus lente ; pendant le sommeil, le besoin reste figé. En caravane, il se remplit comme à ciel ouvert. À 80 % ou moins : envie de prendre l’air (−1) ; à 60 % ou moins : enfermé à l’intérieur (−3) ; à 40 % ou moins : syndrome de la cabane (−5) ; sous 20 % : prisonnier sous terre (−7) ; à 5 % ou moins : enseveli sous terre (−9). Les prisonniers ont ce besoin, sans ces pensées. Repères de la jauge : 5 · 20 · 40 · 60 · 80 %.`, `${Math.round(air)} %`) : row('need-outdoors', 'Plein air', '—', 'Décédé · Dossier arrêté au décès.'));
+    }
     // Schema 345: Core's room size need (colonists and prisoners), sampled at each need interval.
     if (isMoodBasics345(world.schemaVersion) && roomSizeAdmitted345(pawn)) {
       const space = roomSizeLevel345(pawn) * 100;

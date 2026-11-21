@@ -22,6 +22,12 @@ Dans l'inspecteur d'un bâtiment, **Copier** choisit la même construction et le
 
 Dans la barre des colons, un portrait teinté d'or, d'orange ou de rouge signale un risque de crise mineure, majeure ou extrême. Les petites icônes en bas à gauche indiquent : prépare une caravane, crise (« ! »), repos médical, dort, fuit, attaque, inoccupé (à partir du deuxième jour), en feu ; survolez le portrait pour lire leur nom. [Portée et limites](everyday-orders-v346.md).
 
+## Sortir prendre l'air — V359
+
+Sélectionnez un colon et ouvrez **Besoins** : la jauge **Plein air** baisse quand il reste à l'intérieur et remonte quand il sort. Sous un toit construit, elle descend d'environ un tiers par jour mais s'arrête à 20 % ; sous la roche épaisse d'une montagne, elle descend jusqu'à 0. Dehors à ciel ouvert, trois heures suffisent à la remplir. Une pièce dont au moins un quart du sol est sans toit, ou qui touche le bord de la carte, compte comme l'extérieur.
+
+En dessous de 80 %, le colon a des pensées de plus en plus lourdes : envie de prendre l'air (−1), enfermé à l'intérieur (−3), syndrome de la cabane (−5), puis, seulement sous une montagne, prisonnier sous terre (−7) et enseveli sous terre (−9). Une base creusée dans la roche demande donc des sorties régulières : un travail aux champs, observer le ciel ou une cour sans toit suffisent. Les prisonniers ont la jauge, sans ces pensées ; en caravane, elle remonte comme dehors. [Règles et limites](outdoors-need-v359.md).
+
 ## Cultiver la soie du diable — V358
 
 Recherchez **Soie du diable** (800 points, tout bureau, sans prérequis). Dans une zone de culture en pleine terre, la culture **Soie du diable** devient alors proposée ; elle ne pousse pas en hydroponie. Il faut un cultivateur de niveau **Culture 10** pour semer. Le champignon pousse très lentement (22,5 jours de croissance, plus de 40 jours de jeu avec les nuits) mais accepte une terre pauvre (fertilité 50 %) et la rouille des cultures ne le touche jamais. Chaque plant mûr donne jusqu'à 6 soies du diable.

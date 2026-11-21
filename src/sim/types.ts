@@ -104,6 +104,8 @@ export interface Pawn extends Cell { /** Schema 351: the Strip job (strip-state-
   roomMemories?:import('./room-experience.ts').RoomMemory[];
   /** Schema 345: Core Need_RoomSize of a colonist or prisoner; absent is the initial level 0.5. */
   roomSize345?:import('./room-size-need-345.ts').RoomSizeNeed345;
+  /** Schema 359: Core Need_Outdoors level (0 to 1, single precision) of a colonist or prisoner; absent is the initial level 1. */
+  outdoors359?:number;
   body?:import('./human-corpses.ts').HumanBodyState;
   burial?:import('./burial.ts').BurialTask;
   cleaning?:import('./cleaning.ts').CleaningTask;
