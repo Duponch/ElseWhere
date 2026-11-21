@@ -9,6 +9,7 @@ import {freeColonistsSpawned,joyKindsOnMap,readColonistsNeedRescue,readColonists
 import {AlertCensus} from './alert-census';
 import {readBoredom,readExhaustion,readLifeThreatening,readLowMedicine,readNeedBatteries,readNeedWarmClothes,readTatteredApparel} from './core-needs-alerts';
 import {readAnimalPenAlerts,readStarvationAnimals} from './core-animal-alerts';
+import {readAwaitingMedicalOperation,readCaravanIdle,readImmobileCaravan,readNeedDoctor,readNeedMiner,readNeedResearchBench,readPasteDispenserNeedsHopper} from './core-occasional-alerts';
 import type {CoreAlertPriority} from './alert-priority';
 import { constructionRecipe } from '../sim/construction-materials';
 import { firePosition } from '../sim/fire-rules';
@@ -162,6 +163,15 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
   rows.push(...readAnimalPenAlerts(world,free));
   core(readStarvationAnimals(world));
   core(readCropBlight(world));
+  // Alerts lot C: occasional Core alerts (caravan, doctor, miner, dispenser,
+  // operation, research bench).
+  core(readImmobileCaravan(world));
+  core(readNeedDoctor(world,free));
+  core(readNeedMiner(world,free));
+  core(readPasteDispenserNeedsHopper(world));
+  core(readAwaitingMedicalOperation(world));
+  core(readNeedResearchBench(world));
+  core(readCaravanIdle(world));
   return rows;
 }
 

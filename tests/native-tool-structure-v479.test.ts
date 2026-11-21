@@ -101,7 +101,7 @@ describe('native Ordres and Zones keep their independent icon trays',()=>{
  it('retains every ordinary order, shortcut hint, active state and tool callback',async()=>{
   const f=fixture();f.state.tool='mine';const palette=buildNativeToolPalette(f.state,f.actions,'orders');
   expect(f.controls(palette).map(control=>control.id)).toEqual(['mine','haul-chunks','chop','harvest','cut','uninstall','deconstruct','cancel'].map(id=>`tool-${id}-select`));
-  const mine=f.control(palette,'tool-mine-select');expect(mine.active).toBe(true);expect(mine.hint).toContain('Miner · M');
+  const mine=f.control(palette,'tool-mine-select');expect(mine.active).toBe(true);expect(mine.hint).toContain('Miner · L'); // Core Designator_Mine key Misc10 in the Orders palette (alerts lot C)
   await mine.onActivate();expect(f.actions.tool).toHaveBeenCalledWith('mine');
   palette.onClose!();expect(f.actions.closePage).toHaveBeenCalledOnce();expect(f.actions.panel).toHaveBeenCalledWith(null);
   expect(f.actions.command).not.toHaveBeenCalled();

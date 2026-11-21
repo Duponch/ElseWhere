@@ -15,6 +15,7 @@ import {nativeHelpPage} from './ui3d/native-help';
 import {createNativeGuidance,type NativeGuidanceCard} from './ui3d/native-guidance-card';
 import {loadingTips} from './ui3d/native-tips';
 import {createGuidanceCardSession,isHelpShortcut,startingArrivalPending} from './ui/guidance-card';
+import {globalHotkeyTool,mainTabHotkey,paletteHotkeyTool} from './ui/main-tab-hotkeys';
 import {createNativeSaveManager} from './ui3d/native-saves';
 import {createNativeLocalTrade} from './ui3d/native-local-trade';
 import {createNativeFactionComms298} from './ui3d/native-faction-comms-298';
@@ -2822,6 +2823,8 @@ window.addEventListener('keyup',event=>{
 window.addEventListener('blur',()=>{altInspectorHeld=false;updateMapCellDetails(true);});
 document.addEventListener('keydown', event => {
   if(event.defaultPrevented || frontMenu.isOpen() || !campaignState() || replacingWorld || graphicsFault || simulationStopped || waitingRequests.size>0)return;
+  // Core main-tab keys F1–F9: during a game they never reach the browser (F5 would reload the page).
+  if(event.key!=='Tab'&&mainTabHotkey(event.key))event.preventDefault();
   if(document.getElementById('orbital-dialog') instanceof HTMLDialogElement&&(document.getElementById('orbital-dialog') as HTMLDialogElement).open&&(event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();void attempt(save);return;}
   if (document.querySelector('dialog[open]')) return;
   if(event.key==='F8'){event.preventDefault();worldTab='maps';setPanel(currentPanel==='world'?null:'world');return;}
@@ -2832,16 +2835,18 @@ document.addEventListener('keydown', event => {
   if (event.target instanceof HTMLElement && (event.target.matches('input, select, textarea') || event.target.isContentEditable)) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); void attempt(save); return; }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
+  // Core designator keys of the open Orders or Zones palette come first (H is Harvest there, not Help).
+  const paletteTool=snapshot?paletteHotkeyTool(nativeToolPalette,event.key):undefined;
+  if(paletteTool){event.preventDefault();setTool(paletteTool);return;}
   if (isHelpShortcut(event)) { event.preventDefault(); if (!event.repeat) openHelp(); return; }
   if (event.code === 'Space') { event.preventDefault();const token=client.getThreatPauseToken(),speed=currentSpeed===0?lastSpeed:0;learningRuntime?.speed(speed,true);void attempt(() => changeSpeed(speed,token)); return; }
   if (event.key === 'Escape') { event.preventDefault(); if(shootingControls.active){shootingControls.cancel();renderState();return;} if (orderMenu.close() || renderer?.cancelDesignation()) return; void attempt(() => switchPanel(null)); clearSelection(); return; }
-  if (event.key === 'Tab' || event.key === 'F1' || event.key === 'F2' || event.key === 'F3') { event.preventDefault(); const panel = event.key === 'Tab' ? 'architect' : event.key === 'F1' ? 'work' : event.key === 'F2' ? 'schedule' : 'assign'; setPanel(currentPanel === panel ? null : panel); return; }
+  const tab = mainTabHotkey(event.key); if (tab) { event.preventDefault(); setPanel(currentPanel === tab ? null : tab); return; }
   const speeds: Record<string, number> = { '1': 1, '2': 3, '3': 6 };
   if (event.key in speeds) { const token=client.getThreatPauseToken(),speed=speeds[event.key];learningRuntime?.speed(speed);void attempt(() => changeSpeed(speed,token)); return; }
   if(event.key.toLowerCase()==='r'&&selection.ids.size){event.preventDefault();if(!event.repeat)toggleDraft(snapshot?.pawns.filter(p=>selection.ids.has(p.id)&&isColonist(p)&&!p.prisoner)??[],c=>void attempt(async()=>{await client.command(c);renderState();}));return;}
   if(!snapshot)return;
-  const shortcuts: Record<string, Tool> = { m:'mine', c: 'chop', r: 'harvest', b: 'wall', l: 'bed', x: 'cancel' };
-  const key = event.key.toLowerCase(); if (key in shortcuts) setTool(shortcuts[key]);
+  const key = event.key.toLowerCase(), shortcut = globalHotkeyTool(key); if (shortcut) setTool(shortcut);
   else if (rotatableTools.has(currentTool) && (key === 'q' || key === 'e')) { event.preventDefault(); rotatePlacement(key === 'q' ? -1 : 1); }
   else if (key === 's') { event.preventDefault(); setTool('stockpile'); }
 });

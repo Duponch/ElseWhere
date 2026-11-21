@@ -19,6 +19,7 @@ import {peaceTalksFacts293} from '../ui/peace-talks-293';
 import {raidNotificationTargets} from '../ui/raids';
 import {startingArrivalPresentation} from '../ui/starting-arrival';
 import {knownNotificationTarget256, cellNotificationTarget, personNotificationTarget, actorNotificationTarget, type NotificationTarget} from '../ui/notification-focus';
+import {coreAlertsStarted, type CoreAlertPriority} from '../ui/alert-priority';
 
 export type NativeDomainAlertAction =
   | {kind: 'arrivals'; offerId: number}
@@ -37,6 +38,8 @@ export interface NativeDomainAlert {
   severity: 'info' | 'warning' | 'danger';
   targets: NotificationTarget[];
   action: NativeDomainAlertAction;
+  /** Explicit Core priority of a true alert carried as a domain row (Alert_QuestExpiresSoon). */
+  priority?: CoreAlertPriority;
 }
 
 /** How long a resolved incident report (assault, condition end) stays listed. */
@@ -83,14 +86,16 @@ export function readNativeDomainAlerts(world: World, speed?: number): NativeDoma
       {kind: 'arrivals', offerId: offer.id});
   }
 
+  // Alerts lot C: an offer waiting for an answer is no lasting row any more.
+  // As in Core, it arrives as a NewQuest letter, stays in Quests, and only its
+  // last day raises Alert_QuestExpiresSoon (readQuestExpiresSoon below).
+  // An accepted asylum quest keeps its row: the pursuit it announces is coming.
+  const questExpiring = readQuestExpiresSoon(world);
+  if (questExpiring) rows.push(questExpiring);
   if (world.gameProfile && world.raids?.profile === 'cassandra-raids-v1') for (const quest of world.quests?.entries ?? []) {
-    if (quest.status !== 'offered' && quest.status !== 'accepted') continue;
-    const offered = quest.status === 'offered';
+    if (quest.status !== 'accepted') continue;
     let body: string;
-    if (offered) {
-      const skills = quest.background ? previewBackgroundSkills(quest.profile, quest.background) : startingSkills(quest.profile);
-      body = `${quest.name} demande asile avant la fin de l’offre. Profil : ${backgroundSkillSummary(skills, quest)}. En l’accueillant, vous recevez ce colon et sa chemise ; un bandit au couteau le poursuit. Aucun butin n’est promis. Répondez sous ${timeLeft(quest.expiresAt - world.tick)}. Si vous acceptez, arrivée prévue dans ${timeLeft(quest.joinDelay)} et poursuite dans ${timeLeft(quest.raidDelay)} après votre réponse. Une bordure bloquée peut retarder ces entrées. Refuser ou laisser expirer n’a pas de pénalité.`;
-    } else if (quest.raidGroupId !== undefined) {
+    if (quest.raidGroupId !== undefined) {
       body = `${quest.name} a rejoint la colonie ; le bandit est apparu. La demande sera conclue dans ${timeLeft((quest.raidAt ?? world.tick) + 60 - world.tick)}. Le combat peut continuer après sa conclusion, sans victoire déclarée par la quête.`;
     } else if (quest.arrivedAt !== undefined) {
       const due = Math.max((quest.acceptedAt ?? world.tick) + quest.raidDelay, quest.arrivedAt + quest.raidDelay - quest.joinDelay);
@@ -99,18 +104,11 @@ export function readNativeDomainAlerts(world: World, speed?: number): NativeDoma
       const due = (quest.acceptedAt ?? world.tick) + quest.joinDelay;
       body = `${quest.name} a été accueilli ; son arrivée reste attendue. ${world.tick < due ? `Arrivée prévue dans ${timeLeft(due - world.tick)}. Préparez nourriture et couchage.` : 'Une bordure libre manque encore pour son arrivée. L’asile reste engagé.'}`;
     }
-    if (!offered) body += ' Préparez la nourriture, un couchage et la défense. La poursuite annoncée ne peut plus être annulée.';
-    add(`quest:${quest.id}`, offered ? `Quête : ${quest.name} demande asile` : `Quête : poursuite de ${quest.name}`, 'Demandes d’asile', body,
-      {kind: 'quests', questId: quest.id}, offered ? 'info' : 'warning', quest.pawnId === undefined ? [] : people([quest.pawnId]));
+    body += ' Préparez la nourriture, un couchage et la défense. La poursuite annoncée ne peut plus être annulée.';
+    add(`quest:${quest.id}`, `Quête : poursuite de ${quest.name}`, 'Demandes d’asile', body,
+      {kind: 'quests', questId: quest.id}, 'warning', quest.pawnId === undefined ? [] : people([quest.pawnId]));
   }
 
-  for (const request of world.tradeRequests284?.entries ?? []) {
-    if (request.status !== 'offered' || request.dismissed || world.tick * 10 >= request.offerExpiresAtCore) continue;
-    const content = tradeRequestContent284(request.family), destination = world.worldFactions?.settlements.find(settlement => settlement.id === request.settlementId);
-    const name = destination?.name ?? request.settlementName, text = `Demande commerciale : ${request.quantity} ${content?.label ?? 'biens demandés'} pour ${name}`;
-    add(`trade-request:${request.id}`, text, 'Demandes commerciales',
-      `Accepter sous ${timeLeft((request.offerExpiresAtCore - world.tick * 10) / 10)}. Après acceptation : ${timeLeft(request.durationCore / 10)} pour livrer. Livrez les biens dans les inventaires de la caravane : frais, de qualité normale ou meilleure si applicable, et vêtements non souillés. La récompense suit la livraison complète. Masquer l’offre ne la refuse pas et n’arrête pas son délai.`, {kind: 'quests', requestId: request.id});
-  }
   if ((Number(world.schemaVersion)===293||(Number(world.schemaVersion)===294||(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))))) for (const site of world.worldSites263?.entries ?? []) {
     if (site.kind !== 'peace-talks') continue;
     const facts = peaceTalksFacts293(world, site);
@@ -186,4 +184,44 @@ export function readNativeDomainAlerts(world: World, speed?: number): NativeDoma
       {kind: 'orbital', shipId: ships[0]!.id});
   }
   return rows;
+}
+
+/** Core Alert_QuestExpiresSoon.TicksToAlert: one Core day before the offer ends. */
+export const QUEST_EXPIRES_SOON_CORE_TICKS = 60_000;
+/** Alert_QuestExpiresSoon (High): the not yet accepted, not dismissed offer
+ * whose acceptance ends soonest, within the last Core day (strictly between 0
+ * and 60 000 Core ticks left). Core keeps the first of its display order
+ * (newest offer first) on a tie. One row whatever the offer, so a change of
+ * offer is not a new alert; the click opens Quests. Asylum requests and trade
+ * requests are the Elsewhere offers that need an answer (peace talks are
+ * accepted on arrival, as Core's autoAccept quest). Alerts start after 600
+ * Core ticks, like every alert. Pure, no mutation. */
+export function readQuestExpiresSoon(world: World): NativeDomainAlert | undefined {
+  if (!coreAlertsStarted(world)) return undefined;
+  type Offer = {leftCore: number; appearedCore: number; name: string; body: string; action: NativeDomainAlertAction};
+  let best: Offer | undefined;
+  const consider = (offer: Offer): void => {
+    if (!best || offer.leftCore < best.leftCore || offer.leftCore === best.leftCore && offer.appearedCore > best.appearedCore) best = offer;
+  };
+  const soon = (left: number): boolean => left > 0 && left < QUEST_EXPIRES_SOON_CORE_TICKS;
+  if (world.gameProfile && world.raids?.profile === 'cassandra-raids-v1') for (const quest of world.quests?.entries ?? []) {
+    const left = (quest.expiresAt - world.tick) * 10;
+    if (quest.status !== 'offered' || !soon(left)) continue;
+    const skills = quest.background ? previewBackgroundSkills(quest.profile, quest.background) : startingSkills(quest.profile);
+    consider({leftCore: left, appearedCore: quest.offeredAt * 10, name: `Demande d’asile de ${quest.name}`, action: {kind: 'quests', questId: quest.id},
+      body: `${quest.name} demande asile. Profil : ${backgroundSkillSummary(skills, quest)}. En l’accueillant, vous recevez ce colon et sa chemise ; un bandit au couteau le poursuit. Aucun butin n’est promis. Si vous acceptez, arrivée prévue dans ${timeLeft(quest.joinDelay)} et poursuite dans ${timeLeft(quest.raidDelay)} après votre réponse. Une bordure bloquée peut retarder ces entrées. Refuser ou laisser expirer n’a pas de pénalité.`});
+  }
+  for (const request of world.tradeRequests284?.entries ?? []) {
+    const left = request.offerExpiresAtCore - world.tick * 10;
+    if (request.status !== 'offered' || request.dismissed || !soon(left)) continue;
+    const content = tradeRequestContent284(request.family), destination = world.worldFactions?.settlements.find(settlement => settlement.id === request.settlementId);
+    const name = destination?.name ?? request.settlementName;
+    consider({leftCore: left, appearedCore: request.offeredAtCore, name: `Demande commerciale de ${name}`, action: {kind: 'quests', requestId: request.id},
+      body: `${name} demande ${request.quantity} ${content?.label ?? 'biens demandés'}. Après acceptation : ${timeLeft(request.durationCore / 10)} pour livrer, dans les inventaires d’une caravane : biens frais, de qualité normale ou meilleure si applicable, et vêtements non souillés. La récompense suit la livraison complète.`});
+  }
+  const offer = best as Offer | undefined;
+  if (!offer) return undefined;
+  const left = timeLeft(offer.leftCore / 10), title = 'Offre bientôt expirée';
+  const body = `« ${offer.name} » attend votre réponse et expire dans ${left}. ${offer.body} Ouvrez Quêtes pour l’accepter ou la laisser passer.`;
+  return {key: 'domain:quest-expires-soon', text: `Offre expirant dans ${left}`, title, body, tooltip: {title, body}, severity: 'warning', priority: 'high', action: offer.action, targets: []};
 }

@@ -57,6 +57,11 @@ const STATUS_PRIORITY:Readonly<Record<string,CoreAlertPriority>>=Object.freeze({
   'disabled-construction':'medium','interrupted-cargo':'medium','food-policy-blocked':'medium',
   'availability-local':'medium','availability-away':'medium','availability-suspended':'medium','availability-death':'medium',
   'camp-pressure':'medium',
+  // Alerts lot C (occasional Core alerts): Alert_ImmobileCaravan (Critical),
+  // Alert_NeedDoctor, Alert_NeedMiner, Alert_PasteDispenserNeedsHopper (High),
+  // Alert_AwaitingMedicalOperation, Alert_NeedResearchBench, Alert_CaravanIdle (Medium).
+  'immobile-caravan':'critical','need-doctor':'high','need-miner':'high','paste-dispenser-hopper':'high',
+  'awaiting-operation':'medium','need-research-bench':'medium','caravan-idle':'medium',
 });
 const DANGEROUS_INCIDENTS=new Set(['raid','mechanoid','manhunter','downed']);
 
