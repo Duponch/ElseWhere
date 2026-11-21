@@ -32,7 +32,9 @@ import { isColonist, isCarePatient } from '../sim/affiliation';
 import { biologicalYears, chronologicalYears } from '../sim/human-age';
 import { appearanceOf } from '../sim/pawn-appearance';
 import { BACKGROUND_SKILL_IDS, backgroundSkillRefusal } from '../sim/colonist-backgrounds';
-import { TRAITS, breakThresholds, globalLearningFactor } from '../sim/traits';
+import { TRAITS, breakThresholds, globalLearningFactor, moveSpeedFactor361, workSpeedGlobal361 } from '../sim/traits';
+/** Schema 361: the general work and walking speeds of the traits, when they differ. */
+const traitProfile361 = (pawn: Pawn): string => `${workSpeedGlobal361(pawn) !== 1 ? ` Vitesse de travail générale ${Math.round(workSpeedGlobal361(pawn) * 100)} %.` : ''}${moveSpeedFactor361(pawn) !== 1 ? ` Marche de base ${(4.6 * moveSpeedFactor361(pawn)).toFixed(1).replace('.', ',')} cases par seconde.` : ''}`;
 import { MENTAL_CRISIS_CATALOG } from '../sim/mental-catalog';
 import { mentalCrisisView } from '../sim/mental-presentation';
 import { NEED_THRESHOLDS } from '../ui/need-gauge';
@@ -260,7 +262,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
     rows.push(heading('bio-traits', 'Traits'));
     if (!pawn.traits?.length) rows.push(row('traits-empty', 'Aucun trait'));
     for (const trait of pawn.traits ?? []) rows.push(row(`trait-${trait}`, TRAITS[trait].label, undefined, TRAITS[trait].description));
-    rows.push(row('trait-effects', 'Effets du profil', `Apprentissage ${pct(globalLearningFactor(pawn))}`, `Apprentissage général ${pct(globalLearningFactor(pawn))}. Risque de crise sous ${breakThresholds(pawn).map(value => Number(value.toFixed(2))).join(' / ')} % d’humeur (mineur / majeur / extrême). Le risque ne déclenche pas une crise immédiatement. Crises disponibles : ${Object.values(MENTAL_CRISIS_CATALOG).map(crisis => crisis.label.toLocaleLowerCase('fr-FR')).join(', ')}.`));
+    rows.push(row('trait-effects', 'Effets du profil', `Apprentissage ${pct(globalLearningFactor(pawn))}`, `Apprentissage général ${pct(globalLearningFactor(pawn))}. Risque de crise sous ${breakThresholds(pawn).map(value => Number(value.toFixed(2))).join(' / ')} % d’humeur (mineur / majeur / extrême). Le risque ne déclenche pas une crise immédiatement.${traitProfile361(pawn)} Crises disponibles : ${Object.values(MENTAL_CRISIS_CATALOG).map(crisis => crisis.label.toLocaleLowerCase('fr-FR')).join(', ')}.`));
     rows.push(heading('bio-links', 'Liens connus'));
     const people = captureRelationshipPeople(world), relations = relationshipIndex(world); let linked = false;
     for (const person of people.values()) { const kinds = relations.kinds(pawn.id, person.id); if (person.id === pawn.id || !kinds.length) continue; linked = true; const links = kinds.map(kind => relationLabels[kind] ?? kind).join(' · '), status = ({ present: 'Présent', away: 'En voyage', departed: 'Absent', dead: 'Décédé' })[person.status]; rows.push(row(`bio-relation-${person.id}`, person.name, `${links} · ${status}`, `Ces liens proviennent du dossier enregistré. L’absence ne signifie pas un décès. Le portrait, le nom et une opinion ne créent aucun lien. Lien : ${links}. Situation : ${status}.`)); }

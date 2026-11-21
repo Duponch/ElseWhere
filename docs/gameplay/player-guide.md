@@ -32,6 +32,10 @@ Sélectionnez un colon et ouvrez **Besoins** : la jauge **Plein air** baisse qua
 
 En dessous de 80 %, le colon a des pensées de plus en plus lourdes : envie de prendre l'air (−1), enfermé à l'intérieur (−3), syndrome de la cabane (−5), puis, seulement sous une montagne, prisonnier sous terre (−7) et enseveli sous terre (−9). Une base creusée dans la roche demande donc des sorties régulières : un travail aux champs, observer le ciel ou une cour sans toit suffisent. Les prisonniers ont la jauge, sans ces pensées ; en caravane, elle remonte comme dehors. [Règles et limites](outdoors-need-v359.md).
 
+## Lire les traits de ses colons — V361
+
+Dans **Bio**, survolez chaque trait : la description dit ce qu'il fait vraiment. Un colon a de 1 à 3 traits, parfois une orientation en plus. Les plus visibles au début : **Bourreau de travail**, **Travailleur**, **Paresseux** et **Indolent** changent la vitesse de presque tous les travaux ; **Coureur**, **Marcheur rapide** et **Lambin** la marche ; **Volonté de fer**, **Résolu**, **Nerveux**, **Instable**, **Névrosé** et **Trop intelligent** le seuil de crise (lisible dans **Besoins**). **Oiseau de nuit** : faites-le travailler la nuit dans **Planning**. **Avide**, **Jaloux** et **Ascète** réagissent à leur chambre, **Nudiste** à ses vêtements, **Bagarreur** à une arme à distance. **Gourmand** a faim plus vite et peut se goinfrer sans raison ; **Abstinent** ne boit jamais de bière. **Joli**, **Laid**, **Voix agaçante**, **Misandre** ou **Misogyne** pèsent sur les opinions, visibles dans **Social**. [Liste complète et limites](traits-v361.md).
+
 ## Cultiver la soie du diable — V358
 
 Recherchez **Soie du diable** (800 points, tout bureau, sans prérequis). Dans une zone de culture en pleine terre, la culture **Soie du diable** devient alors proposée ; elle ne pousse pas en hydroponie. Il faut un cultivateur de niveau **Culture 10** pour semer. Le champignon pousse très lentement (22,5 jours de croissance, plus de 40 jours de jeu avec les nuits) mais accepte une terre pauvre (fertilité 50 %) et la rouille des cultures ne le touche jamais. Chaque plant mûr donne jusqu'à 6 soies du diable.
