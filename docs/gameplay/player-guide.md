@@ -22,6 +22,12 @@ Dans l'inspecteur d'un bâtiment, **Copier** choisit la même construction et le
 
 Dans la barre des colons, un portrait teinté d'or, d'orange ou de rouge signale un risque de crise mineure, majeure ou extrême. Les petites icônes en bas à gauche indiquent : prépare une caravane, crise (« ! »), repos médical, dort, fuit, attaque, inoccupé (à partir du deuxième jour), en feu ; survolez le portrait pour lire leur nom. [Portée et limites](everyday-orders-v346.md).
 
+## Cultiver la soie du diable — V358
+
+Recherchez **Soie du diable** (800 points, tout bureau, sans prérequis). Dans une zone de culture en pleine terre, la culture **Soie du diable** devient alors proposée ; elle ne pousse pas en hydroponie. Il faut un cultivateur de niveau **Culture 10** pour semer. Le champignon pousse très lentement (22,5 jours de croissance, plus de 40 jours de jeu avec les nuits) mais accepte une terre pauvre (fertilité 50 %) et la rouille des cultures ne le touche jamais. Chaque plant mûr donne jusqu'à 6 soies du diable.
+
+La soie du diable se coud comme le tissu dans tous les vêtements de tissu, tuque et chapeaux compris, et dans le sac de couchage. Elle est plus solide (×1,3), isole bien (froid 20, chaud 24), protège très bien de la chaleur et brûle trois fois moins qu'un vêtement en tissu. Elle vaut 5,5 l'unité. Dans une partie commencée avant cette version, cochez la soie du diable dans vos politiques de tenue et vos factures existantes pour l'utiliser. [Règles et limites](devilstrand-v358.md).
+
 ## Pièges EEI — V357
 
 Après la recherche **EEI** (500 points, tout bureau), **Architecte > Structure** propose le **piège EEI explosif** et le **piège EEI incendiaire**, à côté du piège à pointes. Chacun demande **deux obus** de son type, que vous achetez aux caravanes de **fournisseur militaire** (ou au marchand d'esclaves) ; rangez-les dans une zone qui accepte la catégorie **Obus de mortier**. Comme pour le piège à pointes, aucun autre piège ne peut être voisin, même en diagonale. Un pillard qui marche dessus allume la mèche : un quart de seconde plus tard, l'explosion (rayon 3,9) blesse ou brûle tout ce qui se trouve autour, colons compris, et l'incendiaire met le feu. Vos colons connaissent le piège et le contournent ; s'ils marchent dessus malgré tout, ils le déclenchent une fois sur 200. Une balle, un incendie ou l'explosion d'un autre piège le font aussi sauter : tenez-les loin des réserves et des murs en bois. Dans l'inspecteur, **Reconstruire automatiquement** pose un nouveau plan après l'explosion, qui attend deux nouveaux obus.

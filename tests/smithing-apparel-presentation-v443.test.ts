@@ -1,4 +1,5 @@
 import {isHatItem353} from '../src/sim/apparel-definitions';
+import {isDevilstrandApparel358} from '../src/sim/devilstrand-358.ts';
 import {expect,test} from 'vitest';
 import {createWorld} from '../src/sim/engine';
 import {APPAREL,newApparelState} from '../src/sim/apparel-rules';
@@ -21,7 +22,7 @@ test('all eleven worn armor variants keep material pigment and distinct original
   expect(APPAREL_CARGO[item]).toBe(itemCargoKind(item));expect(APPAREL_CARGO[item]).toBeGreaterThanOrEqual(200);
  }
  expect(APPAREL_CARGO['flak-helmet']).toBe(59);expect(APPAREL_CARGO['recon-helmet']).toBe(72);expect(APPAREL_CARGO['recon-armor']).toBe(81);expect(APPAREL_CARGO['cloth-tuque']).toBe(82);expect(APPAREL_CARGO['muffalo-wool-tuque']).toBe(83);
- const distinct=Object.entries(APPAREL_CARGO).filter(([item])=>!isHatItem353(item));expect(new Set(distinct.map(([,kind])=>kind)).size).toBe(distinct.length); // 353 hats carry the cloth tuque's model
+ const distinct=Object.entries(APPAREL_CARGO).filter(([item])=>!isHatItem353(item)&&!isDevilstrandApparel358(item));expect(new Set(distinct.map(([,kind])=>kind)).size).toBe(distinct.length); // 353 hats carry the cloth tuque's model, 358 devilstrand garments the cloth garment's
 });
 
 test('plate limbs and open simple helmet share the existing rigid bones, finite normals and index buffer',()=>{

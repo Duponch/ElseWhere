@@ -25,8 +25,9 @@ const building=(id:number,material:Structure['material']='cloth'):Structure=>({i
 function until(w:World,done:()=>boolean,limit=1600){for(let n=0;n<limit&&!done();n++)stepWorld(w);expect(done(),JSON.stringify({tick:w.tick,jobs:w.jobs,packed:w.packed})).toBe(true);expect(validateWorld(w)).toEqual([]);}
 
 test('all22 real soft materials have paid40-unit recipes and their distinct HP/fire factors; old furniture admission stays literal',()=>{
- expect(FURNITURE_TRAVEL.bedroll).toEqual({delay:1.4,stand:true,repeat:true});expect(BEDROLL_MATERIALS_256).toHaveLength(22);expect(constructionMaterials('bedroll')).toEqual(BEDROLL_MATERIALS_256);
- for(const material of BEDROLL_MATERIALS_256){const b=building(5,material),factor=BEDROLL_TEXTILES_256[material];expect(validConstructionMaterial('bedroll',material,256)).toBe(true);expect(validConstructionMaterial('bedroll',material,255)).toBe(false);expect(constructionRecipe(b)).toMatchObject({ingredients:[{item:material,quantity:40}],work:60,coreWork:600});expect(structureMaxHp(b)).toBe(Math.round(75*factor.hitPointsFactor));expect(structureFlammability(b)).toBe(factor.flammabilityFactor);}
+ expect(FURNITURE_TRAVEL.bedroll).toEqual({delay:1.4,stand:true,repeat:true});// Schema 358 adds devilstrand, admitted from 358 only.
+ expect(BEDROLL_MATERIALS_256).toHaveLength(23);expect(BEDROLL_MATERIALS_256.at(-1)).toBe('devilstrand');expect(constructionMaterials('bedroll')).toEqual(BEDROLL_MATERIALS_256);
+ for(const material of BEDROLL_MATERIALS_256){const b=building(5,material),factor=BEDROLL_TEXTILES_256[material];const since=material==='devilstrand'?358:256;expect(validConstructionMaterial('bedroll',material,since)).toBe(true);expect(validConstructionMaterial('bedroll',material,since-1)).toBe(false);expect(constructionRecipe(b)).toMatchObject({ingredients:[{item:material,quantity:40}],work:60,coreWork:600});expect(structureMaxHp(b)).toBe(Math.round(75*factor.hitPointsFactor));expect(structureFlammability(b)).toBe(factor.flammabilityFactor);}
  expect(validConstructionMaterial('armchair','rhinoceros-leather',255)).toBe(false);const b=building(5);expect(bedComfort(b)).toBe(.68);expect(bedRestEffectiveness(b)).toBe(.95);expect(bedImmunityFactor(b)).toBe(1.05);expect(bedHealPerDay(b)).toBe(4);
 });
 

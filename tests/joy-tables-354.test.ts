@@ -17,7 +17,7 @@ import { architectToolAvailable } from '../src/ui/architect-availability';
 import {
   JOY_TABLES_354, JOY_TABLE_KINDS_354, joyTableGainFactor354, joyTableRing354, joyTableTechAllows354, type JoyTableKind354,
 } from '../src/sim/joy-tables-354';
-import { asOldSchema } from './scenarios/old-schema';
+import { asOldSchema,asMigratedFrom357 } from './scenarios/old-schema';
 import { initializeDeclaredFixtureTick297 } from './scenarios/initial-core-clock-v492';
 import { enclosedRoom } from './scenarios/cleanliness';
 import { SCHEMA_VERSION, type Pawn, type Structure, type World } from '../src/sim/types';
@@ -272,7 +272,8 @@ describe('schema 354 joy tables: Core 1.6 billiards, poker, hoopstone ring and G
   // Migration 353 -> 354: number only.
   const current=serializeWorld(now),migrated=deserializeWorld(asOldSchema(current,353));
   expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
-  expect(strip(migrated)).toBe(strip(now));
+  // A new game's policies and tailoring bills also allow devilstrand (schema 358).
+  expect(serializeWorld(migrated)).toBe(asMigratedFrom357(current));
   // A 353 save holding a joy building, or a joy activity, is refused.
   const withTable=open();place(withTable,'billiards-table',20,20,{quality:'normal'});
   expect(()=>deserializeWorld(asOldSchema(serializeWorld(withTable),353))).toThrow();

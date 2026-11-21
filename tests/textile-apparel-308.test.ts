@@ -27,7 +27,8 @@ function workshop(){
 const garment=(item:keyof typeof APPAREL,id=1):MaterialPile=>({id,kind:'apparel',item,quantity:1,owner:{type:'ground',x:1,z:1},apparel:newApparelState(item)});
 
 test('every Core leather and wool is a tailoring material with its Core stuff powers',()=>{
-  expect(APPAREL_MATERIALS).toHaveLength(22);
+  // 7 historical + 15 from 308, then devilstrand (schema 358).
+  expect(APPAREL_MATERIALS).toHaveLength(23);
   expect(TEXTILE_APPAREL_ITEMS308).toHaveLength(15*5+3);
   for(const item of TEXTILE_APPAREL_ITEMS308){expect(APPAREL[item]).toBeDefined();expect(ITEM_DEFINITIONS[item].kind).toBe('apparel');}
   // Bear leather parka: cold 20 x 2, sharp 1.12 x 0.2, 180 HP x 1.3.
@@ -42,7 +43,7 @@ test('every Core leather and wool is a tailoring material with its Core stuff po
   // The tuque takes fabric only.
   for(const m of FABRIC_TEXTILES308)expect(tailoringMaterialAllowed('tuque',m)).toBe(true);
   expect(tailoringMaterialAllowed('tuque','wolf-leather')).toBe(false);expect(()=>apparelItemFor('tuque','wolf-leather')).toThrow(RangeError);
-  expect(PRODUCTION_RECIPES.tuque.inputs).toEqual(['cloth','muffalo-wool','alpaca-wool','bison-wool','megasloth-wool']);
+  expect(PRODUCTION_RECIPES.tuque.inputs).toEqual(['cloth','muffalo-wool','alpaca-wool','bison-wool','megasloth-wool','devilstrand']);
 });
 
 test('market value follows the Core cost: stuff count times stuff value plus work',()=>{

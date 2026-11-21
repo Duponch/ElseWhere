@@ -1,6 +1,7 @@
 import {isTextileApparelItem308,isTextileMaterial308} from '../../src/sim/textile-apparel-308.ts';
 import {isGarmentItem312,isHatItem353} from '../../src/sim/apparel-definitions.ts';
 import {isCookingAnimalProduct353} from '../../src/sim/cooking-ingredients-353.ts';
+import {isDevilstrandItem358} from '../../src/sim/devilstrand-358.ts';
 import {deserializeWorld,serializeWorld} from '../../src/sim/serialization.ts';
 const FIRST_DAYS_KINDS_343=['slept-in-cold','slept-in-heat','slept-outside','slept-on-ground','soaking-wet','darkness'];
 const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bonded-animal-died','bonded-animal-lost'];
@@ -22,7 +23,8 @@ const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bond
  * animals' nuzzle check (a break of a 350 kind is kept, and refused);
  * schema 352: the campaign's letters, stack, archive and pins; schema 353:
  * the cowboy and bowler hats in apparel policies and bill filters, and the
- * eggs and insect jelly in bill filters. */
+ * eggs and insect jelly in bill filters; schema 358: the devilstrand garments
+ * and material in apparel policies and the devilstrand key of bill filters. */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -33,6 +35,10 @@ function strip(value:unknown,version:number):void {
   if(Array.isArray(value)){for(const v of value)strip(v,version);return;}
   if(!value||typeof value!=='object')return;
   const o=value as Record<string,unknown>;
+  if(version<358){
+    if(Array.isArray(o.allowedItems)&&Array.isArray(o.allowedMaterials)){o.allowedItems=(o.allowedItems as unknown[]).filter(i=>!isDevilstrandItem358(i));o.allowedMaterials=(o.allowedMaterials as unknown[]).filter(m=>m!=='devilstrand');}
+    if(typeof o.recipe==='string'&&o.filters&&typeof o.filters==='object'&&!Array.isArray(o.filters))for(const k of Object.keys(o.filters))if(isDevilstrandItem358(k))delete (o.filters as Record<string,unknown>)[k];
+  }
   if(version<353){
     if(Array.isArray(o.allowedItems)&&Array.isArray(o.allowedMaterials))o.allowedItems=(o.allowedItems as unknown[]).filter(i=>!isHatItem353(i));
     if(typeof o.recipe==='string'&&o.filters&&typeof o.filters==='object'&&!Array.isArray(o.filters))for(const k of Object.keys(o.filters))if(isCookingAnimalProduct353(k)||isHatItem353(k))delete (o.filters as Record<string,unknown>)[k];
@@ -74,6 +80,9 @@ export const asMigratedCurrent=(current:string):string=>serializeWorld(deseriali
  * apparel policies also allow the schema 353 hats, which an older save cannot
  * hold and the number-only migration does not add. */
 export const asMigratedFrom352=(current:string):string=>serializeWorld(deserializeWorld(asOldSchema(current,352)));
+/** Same for a pre-358 save: a new game's policies and tailoring bills also
+ * allow devilstrand, which the number-only migration does not add. */
+export const asMigratedFrom357=(current:string):string=>serializeWorld(deserializeWorld(asOldSchema(current,357)));
 /** Same as asOldSchema on a parsed save or an in-memory world (mutated). */
 export function stripFutureContent(value:unknown,version:number):void {
   if(version<344&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).simpleWorkTab344;
@@ -81,5 +90,5 @@ export function stripFutureContent(value:unknown,version:number):void {
   if(version<352&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).letters352;
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
-  if(version<353)strip(value,version);
+  if(version<358)strip(value,version);
 }

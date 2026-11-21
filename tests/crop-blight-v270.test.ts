@@ -22,7 +22,8 @@ function job(w:World,p:Resource,kind:Job['kind']='harvest'):Job {
 
 test('only explicitly grown cultivated crops admit blight; flora, sprouts and old schemas stay neutral',()=>{
   const w=healrootCamp(32);
-  for(const kind of CROP_KINDS){const p=crop(w,8,w.resources.length+5,kind,.0001);expect(cropBlightable(w,p)).toBe(true);}
+  // Core Plant_Devilstrand (schema 358) is neverBlightable.
+  for(const kind of CROP_KINDS){const p=crop(w,8,w.resources.length+5,kind,.0001);expect(cropBlightable(w,p)).toBe(kind!=='devilstrand');}
   const p=crop(w);p.growth=0;expect(cropBlightable(w,p)).toBe(false);
   delete p.growth;expect(cropBlightable(w,p)).toBe(false);
   p.growth=.4;p.species='healroot-wild';expect(cropBlightable(w,p)).toBe(false);delete p.species;

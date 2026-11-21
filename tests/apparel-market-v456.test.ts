@@ -3,8 +3,10 @@ import {GARMENT_ITEMS312,isGarmentItem312,HAT_ITEMS353,isHatItem353} from '../sr
 import {APPAREL_TRADE_ITEMS_279,APPAREL_TRADE_279,APPAREL_TRADE_MATERIAL_VALUES_279,isOrdinaryApparel279,isNewApparelTrade279,type OrdinaryApparelItem279} from '../src/sim/apparel-trade-279.ts';
 import {APPAREL,LEGACY_APPAREL_MATERIALS308 as APPAREL_MATERIALS,type ApparelMaterial,type ApparelFamily} from '../src/sim/apparel-definitions.ts';
 import {isTextileApparelItem308,TEXTILE_APPAREL_ITEMS308} from '../src/sim/textile-apparel-308.ts';
-// V456 covers the 37 historical products; schema 308 adds 78 more, schema 312 the 44 T-shirts and jackets and schema 353 the 44 cowboy and bowler hats.
-const V456_ITEMS=APPAREL_TRADE_ITEMS_279.filter(item=>!isTextileApparelItem308(item)&&!isGarmentItem312(item)&&!isHatItem353(item));
+import {isDevilstrandApparel358,DEVILSTRAND_APPAREL_ITEMS_358} from '../src/sim/devilstrand-358.ts';
+// V456 covers the 37 historical products; schema 308 adds 78 more, schema 312 the 44 T-shirts and jackets, schema 353 the 44 cowboy and bowler hats
+// and schema 358 the devilstrand garments (their T-shirt, jacket and hats are counted with 312 and 353).
+const V456_ITEMS=APPAREL_TRADE_ITEMS_279.filter(item=>!isTextileApparelItem308(item)&&!isGarmentItem312(item)&&!isHatItem353(item)&&!isDevilstrandApparel358(item));
 import {PRODUCTION_RECIPES,tailoringMaterialAllowed} from '../src/sim/production-recipes.ts';
 import {tradeCatalogueEntry} from '../src/sim/trade-catalogue.ts';
 import {pileMarketValue,tradeRefusal,tradeUnitPrice} from '../src/sim/trade-prices.ts';
@@ -24,7 +26,7 @@ const person=(id:number,faction:Pawn['faction']='colony'):Pawn=>({id,faction,sta
 describe('V456 ordinary apparel catalogue, value and channel boundaries',()=>{
  test('the immutable catalogue contains exactly the37 existing ordinary products and no armor or invented material',()=>{
   expect(V456_ITEMS).toHaveLength(37);
-  expect(APPAREL_TRADE_ITEMS_279).toHaveLength(37+TEXTILE_APPAREL_ITEMS308.length+GARMENT_ITEMS312.length+HAT_ITEMS353.length);
+  expect(APPAREL_TRADE_ITEMS_279).toHaveLength(37+TEXTILE_APPAREL_ITEMS308.length+GARMENT_ITEMS312.length+HAT_ITEMS353.length+DEVILSTRAND_APPAREL_ITEMS_358.length-4);
   expect(new Set(V456_ITEMS).size).toBe(37);
   expect(V456_ITEMS.filter(isNewApparelTrade279)).toHaveLength(35);
   expect(Object.isFrozen(APPAREL_TRADE_ITEMS_279)&&Object.isFrozen(APPAREL_TRADE_279)&&Object.isFrozen(APPAREL_TRADE_MATERIAL_VALUES_279)).toBe(true);

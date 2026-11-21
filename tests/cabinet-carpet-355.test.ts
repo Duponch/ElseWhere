@@ -21,7 +21,7 @@ import {architectToolAvailable} from '../src/ui/architect-availability.ts';
 import {newPowerState} from '../src/sim/power-rules.ts';
 import {deconstructionCamp,fixtureBuilding} from './scenarios/deconstruction.ts';
 import {newDoorState} from '../src/sim/door-rules.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asMigratedFrom357} from './scenarios/old-schema.ts';
 import {SCHEMA_VERSION,type Command,type Structure,type World} from '../src/sim/types.ts';
 
 const accept=(w:World,c:Command)=>{const r=applyCommand(w,c);expect(r,JSON.stringify(c)+JSON.stringify(r)).toMatchObject({ok:true});};
@@ -242,8 +242,9 @@ test('at schema 354 the cabinet, carpets and CarpetMaking are refused; nothing l
 test('a schema 354 save migrates to 355 by its number only, without cabinet, carpet or research',()=>{
   const {w}=workshop();const current=serializeWorld(w);
   const migrated=deserializeWorld(asOldSchema(current,354));
-  expect(serializeWorld(migrated)).toBe(current);expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
+  // A new game's policies and tailoring bills also allow devilstrand (schema 358).
+  expect(serializeWorld(migrated)).toBe(asMigratedFrom357(current));expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
   expect(migrated.research?.carpetMaking).toBeUndefined();expect(migrated.structures.some(s=>s.kind==='tool-cabinet')).toBe(false);
   const room=roomCamp();const roomSave=serializeWorld(room);
-  expect(serializeWorld(deserializeWorld(asOldSchema(roomSave,354)))).toBe(roomSave);
+  expect(serializeWorld(deserializeWorld(asOldSchema(roomSave,354)))).toBe(asMigratedFrom357(roomSave));
 });

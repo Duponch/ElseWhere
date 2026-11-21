@@ -135,7 +135,8 @@ test('kibble from eggs; insect jelly and fertilized eggs only once the bill allo
 });
 
 test('the cowboy and bowler hats have their Core stats, recipes, values and layer in every material',()=>{
-  expect(HAT_ITEMS353).toHaveLength(22*2);
+  // Every tailoring material, devilstrand (schema 358) included.
+  expect(HAT_ITEMS353).toHaveLength(23*2);
   for(const item of HAT_ITEMS353){expect(ITEM_DEFINITIONS[item].kind).toBe('apparel');expect(APPAREL[item].coverage).toEqual(APPAREL['cloth-tuque'].coverage);}
   expect(PRODUCTION_RECIPES['cowboy-hat']).toMatchObject({units:25,workTicks:180,station:'tailor-bench'});
   expect(PRODUCTION_RECIPES['bowler-hat']).toMatchObject({units:20,workTicks:180,station:'tailor-bench'});

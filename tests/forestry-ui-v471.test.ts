@@ -37,20 +37,22 @@ function render(world:World,zone:GrowingZone){
   return {root,sent,select:root.field('growing-plant')};
 }
 
+// Schema 358: devilstrand is listed only once its research is complete.
+const GROUND_CROPS=CROP_KINDS.filter(kind=>kind!=='devilstrand');
 test('forest choices follow potential biome flora even when no tree is physically present',()=>{
   const cases=[['temperate-forest',['oak','poplar']],['boreal-forest',['poplar','pine','birch']],['tropical-rainforest',['bamboo','cecropia','palm','teak']],['desert',['saguaro','drago']],['ice-sheet',[]]] as const;
   for(const [biome,trees] of cases){const {world,zone}=fixture(biome);expect(world.resources).toEqual([]);const before=JSON.stringify(world);
-    expect(growingCultureChoices(zone,world),biome).toEqual([...CROP_KINDS,...trees]);expect(JSON.stringify(world)).toBe(before);
+    expect(growingCultureChoices(zone,world),biome).toEqual([...GROUND_CROPS,...trees]);expect(JSON.stringify(world)).toBe(before);
   }
 });
 
 test('unresearched, historical, unknown-biome and context-free controls retain the existing crops',()=>{
   const {world,zone}=fixture('temperate-forest',false);
-  expect(growingCultureChoices(zone,world)).toEqual(CROP_KINDS);
-  world.research!.treeSowing291={points:TREE_SOWING_COST_291};expect(growingCultureChoices(zone,world)).toEqual(CROP_KINDS);
-  world.research!.treeSowing291.completedAt=world.tick;world.schemaVersion=290 as World['schemaVersion'];expect(growingCultureChoices(zone,world)).toEqual(CROP_KINDS);
-  world.schemaVersion=291 as World['schemaVersion'];delete world.site;expect(growingCultureChoices(zone,world)).toEqual(CROP_KINDS);
-  expect(growingCultureChoices(zone)).toEqual(CROP_KINDS);
+  expect(growingCultureChoices(zone,world)).toEqual(GROUND_CROPS);
+  world.research!.treeSowing291={points:TREE_SOWING_COST_291};expect(growingCultureChoices(zone,world)).toEqual(GROUND_CROPS);
+  world.research!.treeSowing291.completedAt=world.tick;world.schemaVersion=290 as World['schemaVersion'];expect(growingCultureChoices(zone,world)).toEqual(GROUND_CROPS);
+  world.schemaVersion=291 as World['schemaVersion'];delete world.site;expect(growingCultureChoices(zone,world)).toEqual(GROUND_CROPS);
+  expect(growingCultureChoices(zone)).toEqual(GROUND_CROPS);
 });
 
 test('hydroponic choices never offer trees, including after research in a forest biome',()=>{
@@ -63,7 +65,7 @@ test('hydroponic choices never offer trees, including after research in a forest
 test('an absent capable planter does not hide researched choices or fabricate completed sowing',()=>{
   const {world,zone}=fixture();world.pawns=[];
   const {root,select}=render(world,zone);
-  expect(select.children.filter((n):n is ForestryNode=>n instanceof ForestryNode).map(n=>n.value)).toEqual([...CROP_KINDS,'oak','poplar']);
+  expect(select.children.filter((n):n is ForestryNode=>n instanceof ForestryNode).map(n=>n.value)).toEqual([...GROUND_CROPS,'oak','poplar']);
   expect(root.textContent).toContain('compétence du cultivateur');expect(world.resources).toEqual([]);expect(world.jobs).toEqual([]);
 });
 

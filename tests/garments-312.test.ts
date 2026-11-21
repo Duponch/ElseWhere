@@ -30,7 +30,8 @@ const garment=(item:keyof typeof APPAREL,id=1):MaterialPile=>({id,kind:'apparel'
 
 test('the T-shirt and the jacket have their Core stats, recipes and layers in every material',()=>{
   expect(APPAREL_FAMILIES).toEqual(['tribalwear','shirt','pants','duster','parka','tshirt','jacket']);
-  expect(GARMENT_ITEMS312).toHaveLength(22*2);
+  // Every tailoring material, devilstrand (schema 358) included.
+  expect(GARMENT_ITEMS312).toHaveLength(23*2);
   for(const item of GARMENT_ITEMS312){expect(ITEM_DEFINITIONS[item].kind).toBe('apparel');expect(APPAREL[item]).toBeDefined();}
   expect(PRODUCTION_RECIPES.tshirt).toMatchObject({units:40,workTicks:160,station:'tailor-bench'});
   expect(PRODUCTION_RECIPES.jacket).toMatchObject({units:70,workTicks:700,station:'tailor-bench'});
