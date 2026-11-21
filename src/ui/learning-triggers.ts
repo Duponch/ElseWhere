@@ -20,7 +20,7 @@ export interface LearningDemonstration {concept:string;amount:KnowledgeAmount;fr
  * they exist in Elsewhere. */
 export const BILL_STATIONS:ReadonlySet<StructureKind>=new Set<StructureKind>(['crafting-spot','butcher-spot','butcher-table','fueled-stove','electric-stove','fueled-smithy','electric-smithy',
   'tailor-bench','electric-tailor-bench','stonecutter','brewery','drug-lab','electric-smelter','biofuel-refinery','fabrication-bench','electric-crematorium','art-bench','machining-table','campfire']);
-const BED_KINDS:ReadonlySet<string>=new Set(['sleeping-spot','bedroll','bed','double-bed','hospital-bed']);
+const BED_KINDS:ReadonlySet<string>=new Set(['sleeping-spot','bedroll','bed','double-bed','hospital-bed','double-bedroll','double-sleeping-spot']);
 
 /** A compact digest of one confirmed snapshot; a field is absent when every
  * concept it serves is already learned (or the helper is off). */

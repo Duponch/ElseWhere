@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {targetBuildingPlayerUse263} from './world-target-building-263.ts';
 import type { BedSlot,Cell,Pawn,Structure,World } from './types.ts';
 import {actualBedOwners256,captureActorBeds256,globalCivilBedShare256} from './actor-bed-local-256.ts';
@@ -5,12 +6,12 @@ import {registeredCampaign} from './world-map-context.ts';
 export type { BedSlot } from './types.ts';
 
 const directions:readonly Cell[]=[{x:0,z:1},{x:1,z:0},{x:0,z:-1},{x:-1,z:0}];
-const bedKind=(bed:Structure)=>bed.kind==='sleeping-spot'||bed.kind==='bedroll'||bed.kind==='bed'||bed.kind==='hospital-bed'||bed.kind==='double-bed';
+const bedKind=(bed:Structure)=>bed.kind==='sleeping-spot'||bed.kind==='bedroll'||bed.kind==='bed'||bed.kind==='hospital-bed'||isDoubleBedKind(bed.kind);
 const civil=(pawn:Pawn)=> (pawn.faction??'colony')==='colony'&&!pawn.prisoner&&!pawn.visitor&&!pawn.raid&&!pawn.podRescue&&pawn.state!=='dead';
 const same=(a:Cell,b:Cell)=>a.x===b.x&&a.z===b.z;
 
 /** The anchor is head0. A durable slot never follows the rank of its owner. */
-export const bedSlotsCount=(bed:Structure):1|2=>bed.kind==='double-bed'?2:1;
+export const bedSlotsCount=(bed:Structure):1|2=>isDoubleBedKind(bed.kind)?2:1;
 export function bedSlotCell(bed:Structure,slot:BedSlot):Cell|undefined {
   if(!bedKind(bed)||(slot!==0&&slot!==1)||slot>=bedSlotsCount(bed))return;
   const orientation=bed.orientation??0;
@@ -25,7 +26,7 @@ export function bedSlotBodyCenter(bed:Structure,slot:BedSlot):Cell|undefined {
 }
 export function pawnBedSlot(pawn:Pick<Pawn,'bedId'|'bedSlot'>,bed:Structure):BedSlot|undefined {
   if(pawn.bedId!==bed.id||!bedKind(bed))return;
-  if(bed.kind!=='double-bed')return pawn.bedSlot===undefined?0:undefined;
+  if(!isDoubleBedKind(bed.kind))return pawn.bedSlot===undefined?0:undefined;
   return pawn.bedSlot===0||pawn.bedSlot===1?pawn.bedSlot:undefined;
 }
 /** The beneficiary, not the carrier, owns a rescue reservation. A person's
@@ -38,14 +39,14 @@ export function bedSlotClaimed(world:World,bed:Structure,slot:BedSlot,exceptPawn
       if(pawn.need?.kind==='sleep'&&pawn.need.bedId===bed.id&&same(pawn.need.target,head))return true;
     }
     const rescue=pawn.rescue;
-    if(rescue&&rescue.patientId!==exceptPawnId&&rescue.bedId===bed.id&&(bed.kind==='double-bed'?rescue.bedSlot===slot:slot===0))return true;
+    if(rescue&&rescue.patientId!==exceptPawnId&&rescue.bedId===bed.id&&(isDoubleBedKind(bed.kind)?rescue.bedSlot===slot:slot===0))return true;
   }
-  return world.schemaVersion>=256&&!bed.medical&&actualBedOwners256(captureActorBeds256(registeredCampaign(world)),bed.id,bed.kind==='double-bed'?slot:undefined).some(p=>p.id!==exceptPawnId&&p.state!=='dead'&&!p.health?.death);
+  return world.schemaVersion>=256&&!bed.medical&&actualBedOwners256(captureActorBeds256(registeredCampaign(world)),bed.id,isDoubleBedKind(bed.kind)?slot:undefined).some(p=>p.id!==exceptPawnId&&p.state!=='dead'&&!p.health?.death);
 }
 /** Manual assignments do not require a relationship. This rule is only the
  * admission of a new owner by a sleep/patient provider into a shared bed. */
 export function civilBedShareAllowed(world:World,bed:Structure,pawn:Pawn):boolean {
-  if(bed.kind!=='double-bed'||bed.medical||bed.prisoner||!civil(pawn)||!world.pawns.some(p=>p.id===pawn.id))return false;
+  if(!isDoubleBedKind(bed.kind)||bed.medical||bed.prisoner||!civil(pawn)||!world.pawns.some(p=>p.id===pawn.id))return false;
   if(pawnBedSlot(pawn,bed)!==undefined)return true;
   if(world.schemaVersion>=256)return globalCivilBedShare256(world,bed,pawn);
   const owners=world.pawns.filter(p=>p.bedId===bed.id&&p.state!=='dead');
@@ -58,7 +59,7 @@ export function civilBedShareAllowed(world:World,bed:Structure,pawn:Pawn):boolea
 export function bedSlotForPatient(world:World,bed:Structure,patient:Pawn,carrierId:number):BedSlot|undefined {
   if(!bedKind(bed))return;
   if(world.jobs.some(job=>(job.deconstruction?.structureId??job.furniture?.structureId)===bed.id&&job.reservedBy!==null&&job.reservedBy!==carrierId))return;
-  if(bed.kind==='double-bed'){
+  if(isDoubleBedKind(bed.kind)){
     if(!civilBedShareAllowed(world,bed,patient)||patient.surgeryRequest)return;
     const owned=pawnBedSlot(patient,bed);
     if(owned!==undefined)return bedSlotClaimed(world,bed,owned,patient.id)?undefined:owned;
@@ -72,6 +73,6 @@ export function bedAssignmentReason(world:World,bed:Structure,pawn:Pawn|null,slo
   if(!targetBuildingPlayerUse263(world,bed))return 'Ce lit appartient à une autre faction.';
   if(!bedKind(bed)||!bedSlotCell(bed,slot))return 'Place de lit invalide.';
   if(bed.medical||bed.prisoner)return 'Ce lit ne permet pas une affectation civile.';
-  if(bed.kind==='double-bed'&&pawn&&(!civil(pawn)||!world.pawns.some(p=>p.id===pawn.id)))return 'Cette place nécessite un colon libre présent.';
+  if(isDoubleBedKind(bed.kind)&&pawn&&(!civil(pawn)||!world.pawns.some(p=>p.id===pawn.id)))return 'Cette place nécessite un colon libre présent.';
   if(pawn?.state==='dead')return 'Ce colon est décédé.';
 }

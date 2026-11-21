@@ -1,3 +1,4 @@
+import {isDoubleBedKind,isGroundSleepingSpotKind} from './bed-kinds.ts';
 import {restRateFactor361} from './traits.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
 import {groupHumanPendingPassenger259} from './group-human-admission-257.ts';
@@ -38,14 +39,14 @@ export function updateRest(world: World, pawn: Pawn): void {
     else if(!pawn.medicalSleep&&pawn.rest<75&&pawn.hunger>0&&!fallingAsleepBlocked(world,pawn)&&!groupHumanPendingPassenger259(world,pawn.id))pawn.medicalSleep=true;
     const need=pawn.need,bed=pawn.moveCooldown===0&&need?.kind==='sleep'&&need.phase==='sleep'&&need.bedId!==null?world.structures.find(s=>{
       if(s.id!==need.bedId||!isBedKind(s.kind))return false;
-      if(s.kind==='double-bed'){
+      if(isDoubleBedKind(s.kind)){
         const slot=pawnBedSlot(pawn,s),cell=slot===undefined?undefined:bedSlotCell(s,slot);
         return !!cell&&!s.medical&&!s.prisoner&&(pawn.motion?.end??0)<=world.tick&&cell.x===pawn.x&&cell.z===pawn.z&&need.target.x===cell.x&&need.target.z===cell.z;
       }
       if(s.kind==='sleeping-spot')return (pawn.motion?.end??0)<=world.tick&&s.x===pawn.x&&s.z===pawn.z&&need.target.x===s.x&&need.target.z===s.z;
       return s.kind!=='hospital-bed'||s.x===pawn.x&&s.z===pawn.z&&need.target.x===s.x&&need.target.z===s.z;
     }):undefined;
-    if(pawn.medicalSleep)pawn.rest=Math.min(100,pawn.rest+(bed&&bed.kind!=='sleeping-spot'?BED_REST_PER_TICK*(bed.kind==='bedroll'||bed.kind==='hospital-bed'||bed.kind==='double-bed'?bedRestEffectiveness(bed):(bed.material?BUILDING_MATERIALS[bed.material].restFactor:1)):GROUND_REST_PER_TICK)*restRateFactor361(pawn));
+    if(pawn.medicalSleep)pawn.rest=Math.min(100,pawn.rest+(bed&&!isGroundSleepingSpotKind(bed.kind)?BED_REST_PER_TICK*(bed.kind==='bedroll'||bed.kind==='hospital-bed'||isDoubleBedKind(bed.kind)?bedRestEffectiveness(bed):(bed.material?BUILDING_MATERIALS[bed.material].restFactor:1)):GROUND_REST_PER_TICK)*restRateFactor361(pawn));
     else pawn.rest=depletedHumanRest(pawn.rest,world.restRules==='legacy',parasiteRestFactor306(pawn.health));
     return;
   }

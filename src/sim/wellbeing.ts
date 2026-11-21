@@ -1,3 +1,4 @@
+import {isDoubleBedKind,isBedrollKind,isGroundSleepingSpotKind} from './bed-kinds.ts';
 import { isBedKind } from './bed-kinds.ts';
 import { bedSlotCell,pawnBedSlot } from './bed-slots.ts';
 import {coupleBed285} from './couple-bed-285.ts';
@@ -56,7 +57,7 @@ export function updateWellbeing(world: World, pawn: Pawn,body?:BodyAssessment,re
   if (need?.kind === 'sleep' && need.bedId !== null && (pawn.state === 'sleeping'||need.phase==='sleep'&&pawn.moveCooldown===0&&(pawn.state==='resting'||pawn.state==='downed'))) {
     const bed=world.structures.find(item=>{
       if(item.id!==need.bedId||!isBedKind(item.kind))return false;
-      if(item.kind==='double-bed'){
+      if(isDoubleBedKind(item.kind)){
         const slot=pawnBedSlot(pawn,item),cell=slot===undefined?undefined:bedSlotCell(item,slot);
         return !!cell&&!item.medical&&!item.prisoner&&need.phase==='sleep'&&pawn.moveCooldown===0&&(pawn.motion?.end??0)<=world.tick
           &&cell.x===pawn.x&&cell.z===pawn.z&&need.target.x===cell.x&&need.target.z===cell.z;
@@ -64,7 +65,7 @@ export function updateWellbeing(world: World, pawn: Pawn,body?:BodyAssessment,re
       if(item.kind==='sleeping-spot')return need.phase==='sleep'&&pawn.moveCooldown===0&&(pawn.motion?.end??0)<=world.tick&&item.x===pawn.x&&item.z===pawn.z&&need.target.x===item.x&&need.target.z===item.z;
       return item.x===pawn.x&&item.z===pawn.z&&(item.kind!=='hospital-bed'||need.phase==='sleep'&&pawn.moveCooldown===0&&need.target.x===item.x&&need.target.z===item.z);
     });
-    if(bed&&(pawn.state==='sleeping'||bed.kind==='bedroll'||bed.kind==='hospital-bed'||bed.kind==='sleeping-spot')) {
+    if(bed&&(pawn.state==='sleeping'||isBedrollKind(bed.kind)||bed.kind==='hospital-bed'||isGroundSleepingSpotKind(bed.kind))) {
       ceiling=comfortForStructure(furnitureWorld,bed)*100;
     }
   }

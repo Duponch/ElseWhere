@@ -104,4 +104,9 @@ export const START_STRUCTURE_PHYSICS_256={
  "horseshoes":{"defId":"HorseshoesPin","passability":0,"edifice":true,"door":false,"fence":false,"fullFill":false},
  "chess-table":{"defId":"ChessTable","passability":1,"edifice":true,"door":false,"fence":false,"fullFill":false},
  "stonecutter":{"defId":"TableStonecutter","passability":1,"edifice":true,"door":false,"fence":false,"fullFill":false},
+ // Schema 363 (Buildings_Furniture.xml): Table3x3c PassThroughOnly; BedrollDouble, DoubleSleepingSpot and WallLamp Standable, WallLamp no edifice.
+ "table-large":{"defId":"Table3x3c","passability":1,"edifice":true,"door":false,"fence":false,"fullFill":false},
+ "double-bedroll":{"defId":"BedrollDouble","passability":0,"edifice":true,"door":false,"fence":false,"fullFill":false},
+ "double-sleeping-spot":{"defId":"DoubleSleepingSpot","passability":0,"edifice":true,"door":false,"fence":false,"fullFill":false},
+ "wall-lamp":{"defId":"WallLamp","passability":0,"edifice":false,"door":false,"fence":false,"fullFill":false},
 } as const satisfies Readonly<Record<StructureKind,StartThingPhysics256>>;

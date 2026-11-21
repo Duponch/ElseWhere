@@ -41,6 +41,8 @@ export const BUILDING_SUPPORT:Readonly<Record<StructureKind,'Light'|'Medium'|'He
   'table':'Light',
   'table-square':'Light',
   'table-long':'Light',
+  // Schema 363: TableBase/BedrollDouble Light (FurnitureBase), DoubleSleepingSpot Light, WallLamp none (on a wall): Light.
+  'table-large':'Light','double-bedroll':'Light','double-sleeping-spot':'Light','wall-lamp':'Light',
   'stool':'Light',
   'dining-chair':'Light',
   'armchair':'Light',

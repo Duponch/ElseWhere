@@ -142,6 +142,11 @@ const BUILDINGS: Readonly<Record<StructureKind, BuildingValueDef>> = Object.free
   'hospital-bed': def(40, 2800, 'pass-through', {steel:80,component:5}, true),
   table: def(28, 750, 'pass-through', {}, true),
   'table-square': def(50, 1500, 'pass-through', {}, true),
+  // Schema 363: Table3x3c, BedrollDouble, DoubleSleepingSpot and WallLamp (Buildings_Furniture.xml).
+  'table-large': def(100, 3300, 'pass-through', {}, true),
+  'double-bedroll':def(85,1100,'standable',{},true),
+  'double-sleeping-spot':def(0,0,'standable'),
+  'wall-lamp': def(0, 330, 'standable', {steel:15}),
   'table-long': def(95, 3000, 'pass-through', {}, true),
   stool: def(25, 450, 'standable', {}, true),
   'dining-chair': def(45, 8000, 'standable', {}, true),

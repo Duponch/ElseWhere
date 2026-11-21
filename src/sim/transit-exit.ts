@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import { canStandAt, captureStandability } from './furniture-travel.ts';
 import { footprintCells } from './definitions.ts';
 import { canStep, routeToCell, routeCost } from './pathfinding.ts';
@@ -20,7 +21,7 @@ export function leaveTransitCell(world:World,pawn:Pawn,getBlocked:NavigationGrid
   if(world.schemaVersion<22)return false;
   if(pawn.rescue){
     const subject=pawn.rescue.phase==='carry'?structureById(world,pawn.rescue!.bedId):world.pawns.find(p=>p.id===pawn.rescue!.patientId);
-    const target=subject&&'kind' in subject&&subject.kind==='double-bed'&&pawn.rescue.bedSlot!==undefined?bedSlotCell(subject,pawn.rescue.bedSlot):subject;
+    const target=subject&&'kind' in subject&&isDoubleBedKind(subject.kind)&&pawn.rescue.bedSlot!==undefined?bedSlotCell(subject,pawn.rescue.bedSlot):subject;
     if(target?.x===pawn.x&&target.z===pawn.z){delete pawn.transitExit;return false;}
   }
   if(canStandAt(world,pawn,budget.structureGeometry?.())){
@@ -28,7 +29,7 @@ export function leaveTransitCell(world:World,pawn:Pawn,getBlocked:NavigationGrid
     delete pawn.transitExit;return false;
   }
   if(!pawn.draft&&!pawn.need&&wantsSleep(world,pawn)&&world.structures.some(s=>{
-    const slot=s.kind==='double-bed'?pawnBedSlot(pawn,s):undefined;
+    const slot=isDoubleBedKind(s.kind)?pawnBedSlot(pawn,s):undefined;
     const target=slot!==undefined?bedSlotCell(s,slot):s;
     return s.id===pawn.bedId&&target?.x===pawn.x&&target.z===pawn.z;
   }))return false;

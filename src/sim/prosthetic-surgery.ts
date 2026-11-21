@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {markPileWrite} from './pile-index.ts';
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
@@ -53,7 +54,7 @@ export function implantSurgeryReason(w:World,d:Pawn,p:Pawn|undefined,accepted=fa
   if(task?.consumedMedicine&&!medicineAllowed(p,task.consumedMedicine))return 'Le plafond médical du patient interdit ce médicament.';
   if(!lyingPatient(p)||carrierOf(w,p.id))return 'Le patient doit être installé dans un lit.';
   const bed=currentMedicalBed(w,p,false);
-  if(bed?.kind==='double-bed')return 'L’opération exige un lit simple : le lit double reste un couchage civil.';
+  if(isDoubleBedKind(bed?.kind))return 'L’opération exige un lit simple : le lit double reste un couchage civil.';
   if(!bed||!rescueBedAvailable(w,bed,p,d.id)||p.x!==bed.x||p.z!==bed.z||task&&task.bedId!==bed.id)return 'Le lit du patient n’est plus disponible.';
   if(patientClaimed(w,p.id,d))return 'Le patient est déjà pris en charge.';
   if(task&&(!(bedServicePlace339(w,p,task.spot)||(Math.abs(task.spot.x-bed.x)+Math.abs(task.spot.z-bed.z)===1&&canStandAt(w,task.spot)))||reservedServiceCells(w,d.id).has(task.spot.z*w.width+task.spot.x)))return 'Le chevet n’est plus disponible.';

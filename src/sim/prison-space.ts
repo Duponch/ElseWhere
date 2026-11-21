@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import { isBedKind } from './bed-kinds.ts';
 import { footprintCells } from './definitions.ts';
 import { isColonist } from './affiliation.ts';
@@ -58,7 +59,7 @@ export function prisonRoom(world:World,cell:Cell,topology?:RoomTopology):RoomSpa
   return markedRoom(world,cell,topology??capturePrisonTopology(world));
 }
 export function prisonBedValid(world:World,bed:Structure,topology?:RoomTopology):boolean {
-  if(bed.kind==='double-bed')return false;
+  if(isDoubleBedKind(bed.kind))return false;
   const present=world.structures.find(s=>s.id===bed.id&&isBedKind(s.kind)&&s.prisoner);
   if(!present)return false;
   const map=topology??capturePrisonTopology(world),room=markedRoom(world,present,map);

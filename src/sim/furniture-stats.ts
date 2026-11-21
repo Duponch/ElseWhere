@@ -4,7 +4,7 @@ import { isBedKind } from './bed-kinds.ts';
 import { WEAPON_QUALITIES,type WeaponQuality } from './equipment-rules.ts';
 
 /** Core 1.6.4871 names adapted to the stable ids proposed for V90. */
-export const HABITAT_FURNITURE_KINDS=['shelf','small-shelf','double-bed','bedroll','bed','hospital-bed','table','stool','dining-chair','armchair','end-table','dresser','table-square','table-long','flower-pot','chess-table'] as const;
+export const HABITAT_FURNITURE_KINDS=['shelf','small-shelf','double-bed','bedroll','bed','hospital-bed','table','stool','dining-chair','armchair','end-table','dresser','table-square','table-long','flower-pot','chess-table','table-large','double-bedroll'] as const;
 export type HabitatFurnitureKind=typeof HABITAT_FURNITURE_KINDS[number];
 export type FurnitureQuality=WeaponQuality;
 export const FURNITURE_QUALITIES=WEAPON_QUALITIES;
@@ -51,6 +51,9 @@ export const FURNITURE_DEFINITIONS:Readonly<Record<HabitatFurnitureKind,Furnitur
   'table-square':definition({label:'Table 2×2',width:2,depth:2,stuff:50,categories:hard,coreWork:1500,constructionSkill:0,research:null,maxHitPoints:100,beauty:1,seats:8,quality:true}),
   'table-long':definition({label:'Table 2×4',width:2,depth:4,stuff:95,categories:hard,coreWork:3000,constructionSkill:0,research:null,maxHitPoints:150,beauty:2,seats:12,quality:true}),
   'flower-pot':definition({label:'Pot de fleurs',width:1,depth:1,stuff:20,categories:hard,coreWork:250,constructionSkill:0,research:null,maxHitPoints:75,beauty:0,quality:true}),
+  // Schema 363 (the kinds themselves only exist from 363): Table3x3c and BedrollDouble.
+  'table-large':definition({label:'Table 3×3',width:3,depth:3,stuff:100,categories:hard,coreWork:3300,constructionSkill:0,research:null,maxHitPoints:175,beauty:2,seats:12,quality:true}),
+  'double-bedroll':definition({label:'Sac de couchage double',width:2,depth:2,stuff:85,categories:['fabric','leathery'],coreWork:1100,constructionSkill:0,research:null,maxHitPoints:100,beauty:0,comfort:.68,restEffectiveness:.95,quality:true}),
   'chess-table':definition({label:'Table d’échecs',width:1,depth:1,stuff:70,categories:hard,coreWork:8000,constructionSkill:0,research:'complex-furniture',maxHitPoints:100,beauty:4,quality:true}),
 });
 
@@ -186,13 +189,13 @@ export interface BedFacilities {endTable?:boolean;dresser?:boolean}
 export const bedFacilityOffset=(facilities:BedFacilities={}):number=>(facilities.endTable?.05:0)+(facilities.dresser?.05:0);
 export function bedComfort(value:FurnitureLike,facilities:BedFacilities={}):number {
   if(!isBedKind(value.kind))return 0;
-  if(value.kind==='sleeping-spot')return .4;
+  if(value.kind==='sleeping-spot'||value.kind==='double-sleeping-spot')return .4;
   return ((FURNITURE_DEFINITIONS[value.kind].comfort??0)+bedFacilityOffset(facilities))*QUALITY_COMFORT[furnitureQuality(value.quality)];
 }
 export const comfortNeedCeiling=(comfort:number):number=>Math.max(0,Math.min(1,comfort));
 export function bedRestEffectiveness(value:FurnitureLike):number {
   if(!isBedKind(value.kind))return 0;
-  if(value.kind==='sleeping-spot')return .8;
+  if(value.kind==='sleeping-spot'||value.kind==='double-sleeping-spot')return .8;
   const materialFactor=isFurnitureMaterial(value.material)?FURNITURE_MATERIALS[value.material].restFactor:1;
   return (FURNITURE_DEFINITIONS[value.kind].restEffectiveness??1)*materialFactor*QUALITY_REST[furnitureQuality(value.quality)];
 }
@@ -223,7 +226,7 @@ function localCells(structure:FurnitureStructureLike):readonly FurnitureCell[] {
  * The optional cellsOf callback lets the central footprint owner override the
  * local V90 fallback without importing engine types here. */
 export function comfortForStructure(world:FurnitureWorldLike,structure:FurnitureStructureLike):number {
-  if(structure.kind==='sleeping-spot')return .4;
+  if(structure.kind==='sleeping-spot'||structure.kind==='double-sleeping-spot')return .4;
   if(!isBedKind(structure.kind))return seatComfort(structure);
   const cellsOf=world.cellsOf??localCells,bedCells=cellsOf(structure),head=bedCells[0]??structure;
   const visible=(facilityCells:readonly FurnitureCell[])=>!world.lineOfSight||bedCells.some(b=>facilityCells.some(f=>world.lineOfSight!(b,f)));

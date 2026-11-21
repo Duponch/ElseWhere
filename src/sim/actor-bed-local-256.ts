@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {captureShipCasketAnimals277} from './ship-casket-state-277.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {targetBuildingPlayerUse263} from './world-target-building-263.ts';
@@ -168,7 +169,7 @@ export function otherActorOwnsBed256(w:World,b:Structure,a:BedActor256,
  * predicate, not permission to add an unrelated second owner. */
 export function globalCivilBedShare256(w:World,b:Structure,p:Pawn,
  capture?:ActualActorBeds256):boolean {
- if(w.schemaVersion<256||b.kind!=='double-bed')return true;
+ if(w.schemaVersion<256||!isDoubleBedKind(b.kind))return true;
  if(p.bedId===b.id&&(p.bedSlot===0||p.bedSlot===1)&&w.pawns.includes(p))return true;
  const c=capture??captureActorBeds256(registeredCampaign(w)),owners=actualBedOwners256(c,b.id).filter(owner=>owner.state!=='dead'&&!owner.health?.death);
  if(owners.includes(p))return true;
@@ -183,7 +184,7 @@ export function localBedClaimAvailable256(w:World,b:Structure,p:BedActor256,
  if(w.schemaVersion<256||b.medical)return true;
  // A validated continuing local alias already owns this actual place. A true
  // later attribution clears it atomically, including historical aliases.
- if(localId(p)===b.id&&(b.kind!=='double-bed'||localSlot(p)===slot)&&w.structures.includes(b)&&
+ if(localId(p)===b.id&&(!isDoubleBedKind(b.kind)||localSlot(p)===slot)&&w.structures.includes(b)&&
     (isAnimal(p)?w.wildlife?.animals.includes(p):w.pawns.includes(p)))return true;
  const c=capture??captureActorBeds256(registeredCampaign(w));
  return !otherActorOwnsBed256(w,b,p,slot,c)&&

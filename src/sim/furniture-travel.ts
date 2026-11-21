@@ -108,7 +108,7 @@ export const FURNITURE_TRAVEL:Readonly<Record<StructureKind,Readonly<{delay:numb
   'fence-gate':{delay:0,stand:true,repeat:false},
   'pen-marker':{delay:0,stand:true,repeat:false},
   stonecutter:{delay:5,stand:false,repeat:true},
-  wall:{delay:0,stand:false,repeat:false},table:{delay:4.2,stand:false,repeat:true},'table-square':{delay:4.2,stand:false,repeat:true},'table-long':{delay:4.2,stand:false,repeat:true},'chess-table':{delay:3,stand:false,repeat:true},
+  wall:{delay:0,stand:false,repeat:false},table:{delay:4.2,stand:false,repeat:true},'table-square':{delay:4.2,stand:false,repeat:true},'table-long':{delay:4.2,stand:false,repeat:true},'table-large':{delay:4.2,stand:false,repeat:true},'double-bedroll':{delay:1.4,stand:true,repeat:true},'double-sleeping-spot':{delay:0,stand:true,repeat:false},'wall-lamp':{delay:0,stand:true,repeat:false},'chess-table':{delay:3,stand:false,repeat:true},
   bedroll:{delay:1.4,stand:true,repeat:true},
   bed:{delay:4.2,stand:false,repeat:true},
   'hospital-bed':{delay:4.2,stand:false,repeat:true},campfire:{delay:4.2,stand:false,repeat:true},

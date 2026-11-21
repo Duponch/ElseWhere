@@ -78,7 +78,7 @@ function actionsFor(world: World, selected: MapObjectSelection, cells: readonly 
     const structure = lookups?.structures ? lookups.structures.get(selected.id) : world.structures.find(structure => structure.id === selected.id);
     if(structure&&roadPropCanClaim256(world,structure))actions.push({id:'claim',label:'Revendiquer',command:{type:'claim-road-prop',structureId:structure.id}});
     if (structure && roadPropCanDeconstruct256(world,structure)&&!world.jobs.some(job => job.furniture?.structureId === structure.id) && !blocked(structure.kind, cells, true)) {
-      actions.push({ id: 'deconstruct', label: structure.kind==='sleeping-spot'?'Retirer l’emplacement':'Déconstruire',
+      actions.push({ id: 'deconstruct', label: structure.kind==='sleeping-spot'||structure.kind==='double-sleeping-spot'?'Retirer l’emplacement':'Déconstruire',
         command: { type: 'designate', kind: 'deconstruct', targetId: structure.id, x: structure.x, z: structure.z } });
     }
     ownsJob = job => job.deconstruction?.structureId === selected.id&&job.wallDoor296?.manual!==false || job.furniture?.structureId === selected.id || job.flick?.structureId === selected.id;

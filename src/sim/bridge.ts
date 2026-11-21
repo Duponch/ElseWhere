@@ -82,7 +82,7 @@ function commitDestroyed(w:World,c:Cell,cause:'fire'|'bomb'):boolean {
   // also keeps automatic trap reconstruction from creating an unsupported plan.
   revealWetGround(w,c);
   for(const s of buildings(w,c))if(w.structures.includes(s)){
-    if(s.kind==='sleeping-spot'){if(!removeHumanSleepingSpot(w,s).ok)return false;}
+    if(s.kind==='sleeping-spot'||s.kind==='double-sleeping-spot'){if(!removeHumanSleepingSpot(w,s).ok)return false;}
     else if(s.kind==='animal-sleeping-spot')removeAnimalSpot(w,s);
     else if(s.kind==='crafting-spot'||s.kind==='butcher-spot'){
       const drops=planPawnDrops(w,new Set(w.pawns.filter(p=>p.cooking?.stationId===s.id&&!hasTravellingCargo(w,p)).map(p=>p.id)));if(!drops)return false;

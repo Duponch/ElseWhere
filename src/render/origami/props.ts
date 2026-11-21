@@ -12,7 +12,7 @@ import type { Placement } from '../primitives';
  */
 export const ORIGAMI_FURNITURE_KINDS: ReadonlySet<Structure['kind']> = new Set([
   'bed', 'solar-generator', 'wood-generator', 'heater', 'table', 'stool',
-  'table-square', 'table-long', 'shelf', 'small-shelf',
+  'table-square', 'table-long', 'table-large', 'shelf', 'small-shelf',
 ]);
 
 const edge = 0x796044, wood = 0xa78154, cream = 0xe9dcc0;
@@ -64,10 +64,10 @@ export function origamiFurnitureParts(world: World): Placement[] {
         for(const dz of [-.43,.43])add(dx, .74, dz, .085, 1.48, .025, trim);
       }
       // Storage is accessible from either long side; no rear closing board.
-    } else if (s.kind === 'table' || s.kind === 'stool' || s.kind === 'table-square' || s.kind === 'table-long') {
+    } else if (s.kind === 'table' || s.kind === 'stool' || s.kind === 'table-square' || s.kind === 'table-long' || s.kind === 'table-large') {
       const stool = s.kind === 'stool';
-      const width = stool ? WORLD_SCALE.stoolWidth : s.kind === 'table-square' ? 1.70 : s.kind === 'table-long' ? 1.92 : WORLD_SCALE.tableWidth;
-      const length = stool ? WORLD_SCALE.stoolWidth : s.kind === 'table-square' ? 1.70 : s.kind === 'table-long' ? 3.92 : WORLD_SCALE.tableLength;
+      const width = stool ? WORLD_SCALE.stoolWidth : s.kind === 'table-square' ? 1.70 : s.kind === 'table-long' ? 1.92 : s.kind === 'table-large' ? 2.90 : WORLD_SCALE.tableWidth;
+      const length = stool ? WORLD_SCALE.stoolWidth : s.kind === 'table-square' ? 1.70 : s.kind === 'table-long' ? 3.92 : s.kind === 'table-large' ? 2.90 : WORLD_SCALE.tableLength;
       const height = stool ? WORLD_SCALE.stoolHeight : WORLD_SCALE.tableHeight;
       add(0, height - .045, 0, width, .09, length, body);
       add(0, height - .1, 0, width + .025, .028, length + .025, trim);

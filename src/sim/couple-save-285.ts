@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {SCHEMA_VERSION} from './types.ts';
 import {validPartyMemoryField292} from './party-memories-292.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
@@ -121,7 +122,7 @@ export function validCouplePawnContext285(p:Pawn,c:CouplePawnContext285):boolean
  const reciprocal=other.coupleTask285;
  if(!reciprocal||reciprocal.otherId!==p.id||reciprocal.initiatorId!==task.initiatorId||reciprocal.bedId!==task.bedId
   ||reciprocal.slot===task.slot||reciprocal.enteredAtCore!==task.enteredAtCore||reciprocal.endsAtCore!==task.endsAtCore)return false;
- if(!bed||bed.kind!=='double-bed'||bed.medical||bed.prisoner||p.bedId!==bed.id||other.bedId!==bed.id||p.bedSlot!==task.slot||other.bedSlot!==reciprocal.slot)return false;
+ if(!bed||!isDoubleBedKind(bed.kind)||bed.medical||bed.prisoner||p.bedId!==bed.id||other.bedId!==bed.id||p.bedSlot!==task.slot||other.bedSlot!==reciprocal.slot)return false;
  const a=bedSlotCell(bed,task.slot),b=bedSlotCell(bed,reciprocal.slot);
  return !!a&&!!b&&p.x===a.x&&p.z===a.z&&other.x===b.x&&other.z===b.z;
 }

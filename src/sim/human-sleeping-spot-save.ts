@@ -1,3 +1,4 @@
+import {isFurnitureCSchema363} from './furniture-c-363.ts';
 import { footprintCells } from './definitions.ts';
 import { sharesConstructionLayer } from './power-grid.ts';
 import { isConstruction } from './construction-rules.ts';
@@ -11,6 +12,10 @@ import type { Cell,Structure,World } from './types.ts';
 import type { OwnedGeometryReuseWitness } from './owned-validation-geometry.ts';
 
 const SPOT='sleeping-spot';
+/** Schema 363: the double sleeping spot is the same kind of placed ground
+ * emplacement; its two slots belong to the double-bed domain (double-bed-save). */
+const DOUBLE_SPOT='double-sleeping-spot';
+const groundSpot=(k:unknown):boolean=>k===SPOT||k===DOUBLE_SPOT;
 const same=(a:Cell,b:Cell)=>a.x===b.x&&a.z===b.z;
 const integer=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -33,14 +38,14 @@ const fields=(v:Record<string,unknown>,required:readonly string[],optional:reado
   &&Object.keys(v).every(k=>required.includes(k)||optional.includes(k));
 
 export function validHumanSleepingSpotShape(v:unknown,version:number,w:Pick<World,'width'|'height'|'nextId'>):v is Structure {
-  if(!dataRecord(v)||v.kind!==SPOT||version<232||!fields(v,['id','kind','x','z','orientation','footprint'],['medical','prisoner'])
+  if(!dataRecord(v)||!(v.kind===SPOT||v.kind===DOUBLE_SPOT&&isFurnitureCSchema363(version))||version<232||!fields(v,['id','kind','x','z','orientation','footprint'],['medical','prisoner'])
     ||!integer(v.id,1,w.nextId-1)||!integer(v.x,0,w.width-1)||!integer(v.z,0,w.height-1)||!integer(v.orientation,0,3)
     ||v.footprint!=='standard'||Object.hasOwn(v,'medical')&&v.medical!==true||Object.hasOwn(v,'prisoner')&&v.prisoner!==true)return false;
   return footprintCells(v as unknown as Structure).every(c=>integer(c.x,0,w.width-1)&&integer(c.z,0,w.height-1));
 }
 /** Descriptor-safe admission before the existing sparse structure reader. */
 export function validHumanSleepingSpotStructureEntry(v:unknown,version:number,w:Pick<World,'width'|'height'|'nextId'>):boolean {
-  return dataRecord(v)&&(v.kind!==SPOT||validHumanSleepingSpotShape(v,version,w));
+  return dataRecord(v)&&(!groundSpot(v.kind)||validHumanSleepingSpotShape(v,version,w));
 }
 
 /** A floor designation is only a placed Structure. In particular old migrations
@@ -54,10 +59,10 @@ function validProvenance(raw:unknown,version:number,structures?:StructureProvena
       if(value===undefined)return true;if(!dataArray(value))return false;
       return value.every(v=>{
         if(!dataRecord(v))return false;
-        if(v.kind===SPOT&&( !placed||!validHumanSleepingSpotShape(v,version,raw as unknown as World)))return false;
-        if(v.item===SPOT)return false;
+        if(groundSpot(v.kind)&&( !placed||!validHumanSleepingSpotShape(v,version,raw as unknown as World)))return false;
+        if(groundSpot(v.item))return false;
         for(const key of ['building','furniture','deconstruction','flick','repair','fixBreakdown'])if(v[key]!==undefined){
-          if(!dataRecord(v[key])||v[key].kind===SPOT||v[key].item===SPOT)return false;
+          if(!dataRecord(v[key])||groundSpot(v[key].kind)||groundSpot(v[key].item))return false;
         }
         return true;
       });
@@ -98,10 +103,11 @@ export function validHumanSleepingSpotProvenance(raw:unknown,version:number):boo
 function validTransport(w:World,version:number,structures?:StructureProvenanceReader):boolean {
   try {
     if(!validProvenance(w,version,structures))return false;
-    const spots=w.structures.filter(s=>s.kind===SPOT);if(!spots.length)return true;
+    const grounds=w.structures.filter(s=>groundSpot(s.kind));if(!grounds.length)return true;
+    const spots=grounds.filter(s=>s.kind===SPOT);
     const byId=new Map(spots.map(s=>[s.id,s]));if(byId.size!==spots.length)return false;
     const occupied=new Set<number>();
-    for(const spot of spots)for(const c of footprintCells(spot)){
+    for(const spot of grounds)for(const c of footprintCells(spot)){
       const key=c.z*w.width+c.x;if(occupied.has(key))return false;occupied.add(key);
       if(!w.tiles[key]||['water','rock'].includes(w.tiles[key]!.terrain)||w.resources.some(r=>same(c,r)&&['rock','tree'].includes(r.kind))
         ||w.structures.some(s=>s!==spot&&sharesConstructionLayer(s.kind,spot.kind)&&footprintCells(s).some(d=>same(c,d)))

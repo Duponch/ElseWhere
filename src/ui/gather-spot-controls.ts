@@ -1,6 +1,6 @@
 import type { Structure } from '../sim/types';
 
-const gatherSpotKinds = new Set<Structure['kind']>(['table', 'table-square', 'table-long', 'campfire']);
+const gatherSpotKinds = new Set<Structure['kind']>(['table', 'table-square', 'table-long', 'table-large', 'campfire']);
 
 export function gatherSpotControls(panel: HTMLElement, send: (structureId: number, enabled: boolean) => Promise<void>): void {
   const button = document.createElement('button');

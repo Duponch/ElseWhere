@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {foodBingeDue299,selfFoodPermission299} from './human-ingestion-clock299.ts';
@@ -208,7 +209,7 @@ export function collapseFromExhaustion(world:World,pawn:Pawn,context:Pick<NeedCo
     // The physical bed is real; declaring this cell a floor is an invalid save.
     const bed=world.structures.find(b=>{
       if(b.id!==pawn.bedId||!isBedKind(b.kind))return false;
-      if(b.kind==='double-bed'){
+      if(isDoubleBedKind(b.kind)){
         const slot=pawnBedSlot(pawn,b),head=slot!==undefined?bedSlotCell(b,slot):undefined;
         return !!head&&head.x===pawn.x&&head.z===pawn.z&&bedAssignmentReason(world,b,pawn,slot!)===undefined&&!bedSlotClaimed(world,b,slot!,pawn.id);
       }

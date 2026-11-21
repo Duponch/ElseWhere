@@ -1,3 +1,4 @@
+import {WALL_LAMP_GLOW_363} from './wall-lamp-363.ts';
 import {caveLightSources256} from './cave-flora-256.ts';
 import { isPowerActive } from './power-rules.ts';
 import { SUN_LAMP_RADIUS,SUN_LAMP_OVERLIGHT_RADIUS,sunLampActive } from './sun-lamp.ts';
@@ -8,7 +9,7 @@ export interface LightSource {cell:number;radius:number;red:number;green:number;
 
 /** Core 1.6.4871 glower channels. Warm sources share a red maximum, allowing
  * the scalar fast path; the powered machining table is blue-dominant. */
-const memberKinds=new Set<Structure['kind']>(['glow-pod','torch-lamp','campfire','electric-crematorium','electric-smelter','wood-generator','chemfuel-generator','standing-lamp','sun-lamp','machining-table']);
+const memberKinds=new Set<Structure['kind']>(['glow-pod','torch-lamp','campfire','electric-crematorium','electric-smelter','wood-generator','chemfuel-generator','standing-lamp','wall-lamp','sun-lamp','machining-table']);
 export const isStructureLightMember=(kind:Structure['kind']):boolean=>memberKinds.has(kind);
 /** Same predicates and stable source ordering, with already selected members. */
 function structureLightSources(world:World,members:readonly Structure[]):LightSource[] {
@@ -22,6 +23,7 @@ function structureLightSources(world:World,members:readonly Structure[]):LightSo
     if(s.kind==='wood-generator'&&isPowerActive(s))return [{cell,radius:6,red:217,green:112,blue:33}];
     if(s.kind==='chemfuel-generator'&&isPowerActive(s))return [{cell,radius:6,red:80,green:112,blue:180}];
     if(s.kind==='standing-lamp'&&isPowerActive(s))return [{cell,radius:12,red:214,green:148,blue:94}];
+    if(s.kind==='wall-lamp'&&isPowerActive(s))return [{cell,...WALL_LAMP_GLOW_363}];
     if(s.kind==='sun-lamp'&&sunLampActive(world,s))return [{cell,radius:SUN_LAMP_RADIUS,red:370,green:370,blue:370,overlightRadius:SUN_LAMP_OVERLIGHT_RADIUS}];
     if(s.kind==='machining-table'&&isPowerActive(s))return [{cell,radius:5,red:73,green:123,blue:138}];
     return [];

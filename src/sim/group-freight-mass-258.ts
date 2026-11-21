@@ -16,7 +16,7 @@ const PACKS:Readonly<Partial<Record<PackedFurniture['building']['kind'],number>>
  'small-sculpture':3000,'large-sculpture':7000,'machining-table':20000,heater:6000,battery:20000,
  'fueled-stove':20000,'electric-stove':20000,'butcher-table':20000,'research-bench':20000,
  'tailor-bench':20000,'electric-tailor-bench':20000,bedroll:2500,bed:30000,'double-bed':50000,
- 'hospital-bed':35000,table:5000,'table-square':10000,'table-long':20000,stool:3000,'dining-chair':5000,
+ 'hospital-bed':35000,table:5000,'table-square':10000,'table-long':20000,'table-large':22000,'double-bedroll':4500,'wall-lamp':2000,stool:3000,'dining-chair':5000,
  armchair:35000,'end-table':5000,dresser:15000,'flower-pot':2000,horseshoes:3000,'chess-table':5000,
  'hoopstone-ring':4000,'billiards-table':60000,'game-of-ur-board':2000,'poker-table':30000,
  stonecutter:20000,'standing-lamp':4000,'sun-lamp':4500,

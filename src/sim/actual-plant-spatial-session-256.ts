@@ -18,7 +18,7 @@ import {createPreparedSpatialWildPlantSpawner256,type PreparedPlantPopulation256
 
 const f=Math.fround;
 const BLOCKED=1,FULL=2,COVER=4,BLOCKS_PLANT=8,DOOR=16,FENCE=32;
-const ZERO_FILL_EDIFICES:ReadonlySet<StructureKind>=new Set(['power-switch','spike-trap','ied-high-explosive','ied-incendiary','grave','bedroll','sleeping-spot','animal-sleeping-spot','crafting-spot','butcher-spot','horseshoes','hoopstone-ring']);
+const ZERO_FILL_EDIFICES:ReadonlySet<StructureKind>=new Set(['power-switch','spike-trap','ied-high-explosive','ied-incendiary','grave','bedroll','double-bedroll','sleeping-spot','double-sleeping-spot','animal-sleeping-spot','crafting-spot','butcher-spot','horseshoes','hoopstone-ring']);
 interface SpatialCell256 extends PlantSpawnerCell256 {readonly regionType:number;readonly walkableNoDoor:boolean}
 type Header256=Omit<PlantSpatialSpawnerInput256,'existing'|'spatial'>;
 

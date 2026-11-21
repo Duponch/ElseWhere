@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {isTraitsSchema361} from './traits.ts';
 import {romanceTraitFactor361} from './trait-opinions-361.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
@@ -30,7 +31,7 @@ function lyingSleep(world:World,pawn:Pawn,bed?:Structure):Structure|undefined {
  if(task?.kind!=='sleep'||task.phase!=='sleep'||task.bedId===null||pawn.moveCooldown!==0||(pawn.motion?.end??0)>world.tick
   ||!['sleeping','resting','downed'].includes(pawn.state))return;
  bed??=structureById(world,task.bedId);
- if(!bed||bed.kind!=='double-bed'||task.bedId!==bed.id||bed.medical||bed.prisoner)return;
+ if(!bed||!isDoubleBedKind(bed.kind)||task.bedId!==bed.id||bed.medical||bed.prisoner)return;
  const slot=pawnBedSlot(pawn,bed),cell=slot===undefined?undefined:bedSlotCell(bed,slot);
  return cell&&pawn.x===cell.x&&pawn.z===cell.z&&task.target.x===cell.x&&task.target.z===cell.z?bed:undefined;
 }

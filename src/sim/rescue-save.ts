@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import { medicalWorkRefusal } from './health-rules.ts';
 import { isColonist } from './affiliation.ts';
 import { captureReason } from './capture.ts';
@@ -38,7 +39,7 @@ export function validateRescues(world:World,onlyArrestDomain=false,onlyBedIds?:R
     const t=actor.rescue,patient=world.pawns.find(p=>p.id===t.patientId),bed=world.structures.find(b=>b.id===t.bedId);
     if(onlyPatientIds&&!onlyPatientIds.has(t.patientId))continue;
     if(onlyBedIds&&!onlyBedIds.has(t.bedId))continue;
-    const bedKey=bed?.kind==='double-bed'?`${t.bedId}:${t.bedSlot}`:String(t.bedId);
+    const bedKey=isDoubleBedKind(bed?.kind)?`${t.bedId}:${t.bedSlot}`:String(t.bedId);
     const prospective=Object.hasOwn(t,'arrest')||!!(t.release&&patient&&isColonist(patient));
     if(onlyArrestDomain&&!prospective)continue;
     if(prospective&&!validRescueShape(t,world.schemaVersion)){errors.push('Invalid rescue shape.');continue;}

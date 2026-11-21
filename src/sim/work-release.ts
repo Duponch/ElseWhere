@@ -61,7 +61,7 @@ function priorityZeroReleases(world:World,pawnId:number,work:WorkType,pawns:Set<
 /** Plan only ownership released by this command, before any command mutation.
  * Store the selected cells so a later greedy search cannot invalidate the plan. */
 export function planCommandDrops(world:World,command:Command|import('./cave-glowpod-minification-256.ts').NaturalInstallPlan256):DropPlan|null {
-  if(command.type==='designate'&&(command.kind==='sleeping-spot'||command.kind==='animal-sleeping-spot'))return new Map();
+  if(command.type==='designate'&&(command.kind==='sleeping-spot'||command.kind==='double-sleeping-spot'||command.kind==='animal-sleeping-spot'))return new Map();
   const jobs=new Set<number>(),zones=new Set<number>(),pawns=new Set<number>();
   let retiringGrowingActors:Set<number>|undefined;
   if(command.type==='order-enter-ship-casket'||command.type==='order-carry-ship-casket'||command.type==='order-enter-cryptosleep'||command.type==='order-carry-cryptosleep'||command.type==='order-open-cryptosleep'||command.type==='order-bury'||command.type==='clean-room'||command.type==='order-faction-comms'||command.type==='order-orbital-trade'||command.type==='order-trade'||command.type==='order-extinguish'||command.type==='order-capture'||command.type==='order-arrest'||command.type==='order-equipment'||command.type==='order-feed'||command.type==='order-tend'||command.type==='order-drafted-tend'||command.type==='order-consume'||command.type==='order-animal-rescue'||command.type==='order-rescue'||command.type==='order-job'||command.type==='order-cook'||command.type==='order-haul'||command.type==='clear-orders') {
@@ -129,7 +129,7 @@ export function planCommandDrops(world:World,command:Command|import('./cave-glow
     const selection=command.type==='area'?queryArea(world,command):null;const cells=selection?.ok?new Set(selection.cells):null;
     const spots=new Set(world.structures.filter(s=>(s.kind==='crafting-spot'||s.kind==='butcher-spot')&&(cells?cells.has(s.z*world.width+s.x):command.type==='designate'&&same(s,command))).map(s=>s.id));
     for(const p of world.pawns)if(p.cooking&&spots.has(p.cooking.stationId))pawns.add(p.id);
-    const humanSpots=new Set(world.structures.filter(s=>s.kind==='sleeping-spot'&&(cells?footprintCells(s).some(c=>cells.has(c.z*world.width+c.x)):command.type==='designate'&&(command.targetId===undefined||command.targetId===s.id)&&footprintCells(s).some(c=>same(c,command)))).map(s=>s.id));
+    const humanSpots=new Set(world.structures.filter(s=>(s.kind==='sleeping-spot'||s.kind==='double-sleeping-spot')&&(cells?footprintCells(s).some(c=>cells.has(c.z*world.width+c.x)):command.type==='designate'&&(command.targetId===undefined||command.targetId===s.id)&&footprintCells(s).some(c=>same(c,command)))).map(s=>s.id));
     for(const p of humanSleepingSpotActors(world,humanSpots))pawns.add(p.id);
   }
   // Zone retirement must not put a held object down at the logical end of

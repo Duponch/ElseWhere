@@ -1,3 +1,5 @@
+import {isFurnitureCSchema363} from './furniture-c-363.ts';
+import {isGroundSleepingSpotKind} from './bed-kinds.ts';
 import {isWetTerrain} from './shallow-water.ts';
 import {prepareBedOwnershipTransition256} from './actor-bed-transition-256.ts';
 import {hasTravellingCargo,interruptWork} from './interrupted-cargo.ts';
@@ -10,7 +12,7 @@ import type { Cell,CommandResult,DesignateCommand,Structure,World } from './type
 const same=(a:Cell,b:Cell)=>a.x===b.x&&a.z===b.z;
 /** A free, human, single floor emplacement. Ground possessions and zones stay. */
 export function canPlaceHumanSleepingSpot(world:World,c:DesignateCommand):CommandResult {
-  if(world.schemaVersion<232||c.kind!=='sleeping-spot'||c.material!==undefined||c.floor!==undefined||c.targetId!==undefined
+  if(world.schemaVersion<232||c.kind!=='sleeping-spot'&&!(c.kind==='double-sleeping-spot'&&isFurnitureCSchema363(world.schemaVersion))||c.material!==undefined||c.floor!==undefined||c.targetId!==undefined
     ||c.orientation!==undefined&&(!Number.isInteger(c.orientation)||c.orientation<0||c.orientation>3))
     return {ok:false,code:'invalid-command',reason:'Couchage au sol sans matériau, orientation 0–3.'};
   const cells=footprintCells({...c,orientation:c.orientation??0,footprint:'standard'});
@@ -28,13 +30,13 @@ export function canPlaceHumanSleepingSpot(world:World,c:DesignateCommand):Comman
 }
 export function placeHumanSleepingSpot(world:World,c:DesignateCommand):CommandResult {
   const result=canPlaceHumanSleepingSpot(world,c);if(!result.ok)return result;
-  world.structures.push({id:world.nextId++,kind:'sleeping-spot',x:c.x,z:c.z,orientation:c.orientation??0,footprint:'standard'});
+  world.structures.push({id:world.nextId++,kind:c.kind==='double-sleeping-spot'?'double-sleeping-spot':'sleeping-spot',x:c.x,z:c.z,orientation:c.orientation??0,footprint:'standard'});
   for(const p of world.pawns)p.planCooldown=0;
   return {ok:true};
 }
 /** All interruptions share one preflight; no partial removal can lose cargo. */
 export function removeHumanSleepingSpot(world:World,spot:Structure,planned?:DropPlan):CommandResult {
-  if(spot.kind!=='sleeping-spot'||!world.structures.includes(spot))return {ok:false,code:'missing-target',reason:'Couchage au sol introuvable.'};
+  if(!isGroundSleepingSpotKind(spot.kind)||!world.structures.includes(spot))return {ok:false,code:'missing-target',reason:'Couchage au sol introuvable.'};
   const actors=humanSleepingSpotActors(world,new Set([spot.id]));
   const drops=planned??planPawnDrops(world,new Set(actors.filter(p=>!hasTravellingCargo(world,p)).map(p=>p.id)));
   if(!drops)return {ok:false,code:'occupied',reason:'Pas de place pour conserver les objets portés.'};

@@ -1,3 +1,4 @@
+import {isDoubleBedKind,isGroundSleepingSpotKind} from '../sim/bed-kinds';
 import { isColonist } from '../sim/affiliation';
 import { isBedKind } from '../sim/bed-kinds.ts';
 import { footprintCells } from '../sim/definitions.ts';
@@ -9,11 +10,11 @@ export function bedControls(panel:HTMLElement,world:()=>World|undefined,cell:()=
   const owner=document.createElement('select');owner.id='bed-owner';owner.setAttribute('aria-label','Propriétaire du lit');owner.append(new Option('Non attribué',''));
   for(const p of world()?.pawns??[])if(isColonist(p)&&p.state!=='dead')owner.append(new Option(p.name,String(p.id)));
   const bed=()=>world()?.structures.find(s=>isBedKind(s.kind)&&footprintCells(s).some(c=>c.x===cell()?.x&&c.z===cell()?.z));
-  owner.onchange=()=>{const b=bed();if(b)send({type:'assign-bed',bedId:b.id,pawnId:owner.value?Number(owner.value):null,...b.kind==='double-bed'?{slot:0 as const}:{}});};
+  owner.onchange=()=>{const b=bed();if(b)send({type:'assign-bed',bedId:b.id,pawnId:owner.value?Number(owner.value):null,...isDoubleBedKind(b.kind)?{slot:0 as const}:{}});};
   ownerLabel.append(owner);
   const secondLabel=document.createElement('label');secondLabel.textContent='Place 2 ';
   const second=document.createElement('select');second.id='bed-owner-second';second.setAttribute('aria-label','Propriétaire de la place 2');
-  second.onchange=()=>{const b=bed();if(b?.kind==='double-bed')send({type:'assign-bed',bedId:b.id,slot:1,pawnId:second.value?Number(second.value):null});};secondLabel.append(second);secondLabel.hidden=true;
+  second.onchange=()=>{const b=bed();if(isDoubleBedKind(b?.kind))send({type:'assign-bed',bedId:b.id,slot:1,pawnId:second.value?Number(second.value):null});};secondLabel.append(second);secondLabel.hidden=true;
   const label=document.createElement('label');const medical=document.createElement('input');medical.type='checkbox';medical.id='bed-medical';medical.setAttribute('aria-label','Usage médical');
   medical.onchange=()=>{const b=bed();if(b)send({type:'medical-bed',bedId:b.id,enabled:medical.checked});};
   const prisonLabel=document.createElement('label'),prison=document.createElement('input');prison.type='checkbox';prison.id='bed-prisoner';prison.setAttribute('aria-label','Pour prisonniers');
@@ -26,8 +27,8 @@ export function updateBedControls(panel:HTMLElement,world:World,structure:Struct
   const root=panel.querySelector<HTMLElement>('#cell-bed');if(!root)return;
   root.hidden=!structure||!isBedKind(structure.kind);if(!structure||!isBedKind(structure.kind))return;
   const owner=root.querySelector<HTMLSelectElement>('#bed-owner')!;
-  const double=structure.kind==='double-bed',second=root.querySelector<HTMLSelectElement>('#bed-owner-second')!;
-  const ground=structure.kind==='sleeping-spot';
+  const double=isDoubleBedKind(structure.kind),second=root.querySelector<HTMLSelectElement>('#bed-owner-second')!;
+  const ground=isGroundSleepingSpotKind(structure.kind);
   owner.parentElement!.firstChild!.textContent=double?'Place 1 ':ground?'Propriétaire de l’emplacement ':'Propriétaire du lit ';
   owner.setAttribute('aria-label',double?'Propriétaire de la place 1':ground?'Propriétaire de l’emplacement':'Propriétaire du lit');second.parentElement!.hidden=!double;
   owner.disabled=!!structure.medical||!!structure.prisoner;

@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import type {Pawn,Structure} from './types.ts';
 import type {WildAnimal} from './wildlife-state.ts';
 import type {PackedFurniture} from './furniture-rules.ts';
@@ -8,7 +9,7 @@ export type BedActor256=(Pawn|WildAnimal)&{mapBed?:ActorMapBed256};
 const animal=(a:BedActor256):a is WildAnimal&{mapBed?:ActorMapBed256}=>'species'in a;
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype&&Reflect.ownKeys(v).every(k=>typeof k==='string'&&Object.hasOwn(Object.getOwnPropertyDescriptor(v,k)!,'value'));
 const integer=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
-function reference(b:Structure,mapId:number|null):ActualBedReference256|undefined {return b.kind==='animal-sleeping-spot'?{id:b.id,mapId,animal:true,slots:1}:isBedKind(b.kind)?{id:b.id,mapId,animal:false,slots:b.kind==='double-bed'?2:1}:undefined;}
+function reference(b:Structure,mapId:number|null):ActualBedReference256|undefined {return b.kind==='animal-sleeping-spot'?{id:b.id,mapId,animal:true,slots:1}:isBedKind(b.kind)?{id:b.id,mapId,animal:false,slots:isDoubleBedKind(b.kind)?2:1}:undefined;}
 /** Only real originals supplied by the enclosing physical-owner capture.
  * A packed bed is the same original, with no spawned Map. */
 export function actualBedReferences256(mapId:number,structures:readonly Structure[],packed:readonly PackedFurniture[]):ActualBedReference256[] {

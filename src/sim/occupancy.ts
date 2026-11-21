@@ -99,6 +99,12 @@ export const OCCUPANCY = Object.freeze({
   table: Object.freeze({clearItems:false,items:true,zones:false,store:false}),
   'table-square':Object.freeze({clearItems:false,items:true,zones:false,store:false}),
   'table-long':Object.freeze({clearItems:false,items:true,zones:false,store:false}),
+  // Schema 363: the 3×3 table like the other tables; the double bedroll like the bedroll, the double
+  // sleeping spot like the sleeping spot; the standable wall lamp keeps items and zones like a lamp.
+  'table-large':Object.freeze({clearItems:false,items:true,zones:false,store:false}),
+  'double-bedroll':Object.freeze({clearItems:true,items:false,zones:false,store:false}),
+  'double-sleeping-spot':Object.freeze({clearItems:false,items:true,zones:true,store:true}),
+  'wall-lamp':Object.freeze({clearItems:false,items:true,zones:true,store:true}),
   stool: Object.freeze({clearItems:false,items:true,zones:true,store:true}),
   'dining-chair':Object.freeze({clearItems:false,items:true,zones:true,store:true}),
   armchair:Object.freeze({clearItems:false,items:true,zones:true,store:true}),

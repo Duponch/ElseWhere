@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {factionCommsTask298} from './faction-comms-state-298.ts';
 import {firefoamManualServiceCell290} from './firefoam-manual-290.ts';
 import {isShipCasket277} from './ship-casket-state-277.ts';
@@ -14,7 +15,7 @@ import { structureById } from './structure-navigation.ts';
  * occupancy: a passer-by can cross any of these cells without claiming its use.
  * Sleeping/collapsing on the floor does not acquire furniture or a work spot. */
 export function serviceCell(pawn: Pawn,world?:Pick<World,'structures'>): Cell | null {
-  if(pawn.coupleTask285&&world){const bed=world.structures.find(s=>s.id===pawn.coupleTask285!.bedId&&s.kind==='double-bed');if(bed)return bedSlotCell(bed,pawn.coupleTask285.slot)??null;}
+  if(pawn.coupleTask285&&world){const bed=world.structures.find(s=>s.id===pawn.coupleTask285!.bedId&&isDoubleBedKind(s.kind));if(bed)return bedSlotCell(bed,pawn.coupleTask285.slot)??null;}
   if(pawn.shipCasketTask277&&world){const c=structureById(world,pawn.shipCasketTask277!.casketId);if(c&&isShipCasket277(c))return shipCasketInteraction277(c,c.orientation);}
   if(pawn.cryptosleepTask&&world){const c=structureById(world,pawn.cryptosleepTask!.casketId);if(c&&isPlayerCasket271(c))return cryptosleepInteraction271(c);}
   if(pawn.firefoamTask290&&world)return firefoamManualServiceCell290(pawn,world);
@@ -50,7 +51,7 @@ export function reservedServiceCells(world: World, exceptPawn?: number): Set<num
     if(pawn.feed?.paste&&(pawn.feed.phase==='pickup'||pawn.feed.phase==='collect'))reserved.add(pawn.feed.spot.z*world.width+pawn.feed.spot.x);
   }
   for(const pawn of world.pawns)if(pawn.id!==exceptPawn&&pawn.animalRescue){const spot=structureById(world,pawn.animalRescue!.spotId);if(spot)reserved.add(spot.z*world.width+spot.x);}
-  for(const pawn of world.pawns)if(pawn.id!==exceptPawn&&pawn.rescue){const bed=structureById(world,pawn.rescue!.bedId);const target=bed?.kind==='double-bed'&&pawn.rescue.bedSlot!==undefined?bedSlotCell(bed,pawn.rescue.bedSlot):bed;if(target)reserved.add(target.z*world.width+target.x);}
+  for(const pawn of world.pawns)if(pawn.id!==exceptPawn&&pawn.rescue){const bed=structureById(world,pawn.rescue!.bedId);const target=isDoubleBedKind(bed?.kind)&&pawn.rescue.bedSlot!==undefined?bedSlotCell(bed,pawn.rescue.bedSlot):bed;if(target)reserved.add(target.z*world.width+target.x);}
   for(const pawn of world.pawns)for(const order of pawn.orders?.queue??[])if(isCookingOrder(order))reserved.add(order.cooking.spot.z*world.width+order.cooking.spot.x);
   return reserved;
 }

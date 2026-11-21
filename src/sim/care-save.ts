@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {medicalCivilTick271} from './suspended-human-clock-271.ts';
 import { tendingReason,tendingPlaceValid } from './tending.ts';
 import { draftedTendingReason,draftedTendingPlaceValid } from './drafted-tending.ts';
@@ -92,7 +93,7 @@ export function validDraftedTendingTransport(world:World):boolean {
       const spot=serviceCell(actor,world);if(spot)claim(spots,spot.z*world.width+spot.x,actor.id);
       if(actor.rescue){
         beds??=new Map(world.structures.map(b=>[b.id,b]));
-        const bed=beds.get(actor.rescue.bedId),target=bed?.kind==='double-bed'&&actor.rescue.bedSlot!==undefined?bedSlotCell(bed,actor.rescue.bedSlot):bed;
+        const bed=beds.get(actor.rescue.bedId),target=isDoubleBedKind(bed?.kind)&&actor.rescue.bedSlot!==undefined?bedSlotCell(bed,actor.rescue.bedSlot):bed;
         if(target)claim(spots,target.z*world.width+target.x,actor.id);
       }
     }

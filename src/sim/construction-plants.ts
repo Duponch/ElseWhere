@@ -85,7 +85,7 @@ export function constructionPlantBlocks(job:Job,resource:Resource):boolean {
  * these explicit no-wipe kinds have SupportsPlants or conduit fill0/non-edifice.
  * Validate this catalog before adding future structures. */
 const KEEP_PLANTS:ReadonlySet<StructureKind>=new Set([
-  'power-conduit','sleeping-spot','animal-sleeping-spot','crafting-spot','butcher-spot',
+  'power-conduit','sleeping-spot','double-sleeping-spot','animal-sleeping-spot','crafting-spot','butcher-spot',
   'hydroponics-basin','flower-pot',
 ]);
 export const constructionFinalWipesPlants=(kind:JobKind|StructureKind):boolean=>

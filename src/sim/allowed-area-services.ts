@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {isPlayerCasket271,cryptosleepInteraction271} from './cryptosleep-state-271.ts';
 import { captureAllowedArea,allowedAreaAllows,type AllowedAreaPolicy } from './allowed-area-state.ts';
 import { bedSlotCell } from './bed-slots.ts';
@@ -70,7 +71,7 @@ export function allowedAreaServicesAllowed(world:World,pawn:Pawn):boolean {
   const rescue=pawn.rescue;
   if(rescue&&!rescue.release){
     const bed=structureById(world,rescue.bedId);
-    if(bed?.kind==='double-bed'?!cell(rescue.bedSlot===undefined?undefined:bedSlotCell(bed,rescue.bedSlot)):!building(rescue.bedId))return false;
+    if(isDoubleBedKind(bed?.kind)?!cell(rescue.bedSlot===undefined?undefined:bedSlotCell(bed,rescue.bedSlot)):!building(rescue.bedId))return false;
     if(!rescue.arrest&&!rescue.capture&&rescue.phase==='approach'&&pawn.orders.active!=='rescue'&&!patient(rescue.patientId))return false;
   }
   const ward=pawn.ward;

@@ -1,3 +1,4 @@
+import {isGroundSleepingSpotKind} from './bed-kinds.ts';
 import {temperatureAt} from './temperature.ts';
 import {sharedLightEnvironmentCache} from './light-environment.ts';
 import {HUMAN_COMFY_MAX_343,HUMAN_COMFY_MIN_343,type SleepMemoryKind343} from './first-days-memories-343.ts';
@@ -22,7 +23,7 @@ export function sleepMemoryKinds343(w:World,p:Pawn,bed:Structure|undefined):Slee
  if(temperature<HUMAN_COMFY_MIN_343)kinds.push('slept-in-cold');
  if(temperature>HUMAN_COMFY_MAX_343)kinds.push('slept-in-heat');
  if(psychologicallyOutdoors(w,p))kinds.push('slept-outside');
- if(!bed||bed.kind==='sleeping-spot')kinds.push('slept-on-ground');
+ if(!bed||isGroundSleepingSpotKind(bed.kind))kinds.push('slept-on-ground');
  return kinds;
 }
 

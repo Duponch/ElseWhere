@@ -8,7 +8,7 @@ import { isRoomDoor } from './door-rules.ts';
 import { structureById } from './structure-navigation.ts';
 
 const SIDE:readonly Cell[]=[{x:0,z:1},{x:1,z:0},{x:0,z:-1},{x:-1,z:0}];
-const BED_KINDS=new Set(['sleeping-spot','bedroll','bed','hospital-bed','double-bed']);
+const BED_KINDS=new Set(['sleeping-spot','bedroll','bed','hospital-bed','double-bed','double-bedroll','double-sleeping-spot']);
 /** Schema 336 (Core Building_Bed.FindPreferredInteractionCell, which
  * JobDriver_TendPatient uses for a patient in bed): the cells a doctor may
  * tend from, in Core order relative to the patient's sleeping slot. For a

@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {rescuedMe350} from './mood-pool-350.ts';
 import {preparePartyRelease292} from './party-release-292.ts';
 import {commitMedicalGuest259} from './world-affiliation-259.ts';
@@ -88,11 +89,11 @@ export function rescueProposal(world:World,actor:Pawn,patient:Pawn,reach:Reachab
 }
 export function startRescue(world:World,actor:Pawn,proposal:RescueProposal,forced=false,capture=false):void {
   const bed=structureById(world,proposal.bedId)!,patient=world.pawns.find(p=>p.id===proposal.patientId)!;
-  if(bed.kind==='double-bed'&&(capture||proposal.bedSlot===undefined||!rescueBedAvailable(world,bed,patient,actor.id,false,proposal.bedSlot)))return;
+  if(isDoubleBedKind(bed.kind)&&(capture||proposal.bedSlot===undefined||!rescueBedAvailable(world,bed,patient,actor.id,false,proposal.bedSlot)))return;
   // The accepted rescue itself reserves a new visitor's destination. Do not
   // leave an ordinary bed owner behind if the order is cancelled before pickup.
-  if(!bed.medical&&!capture&&(!isRescuableVisitor(patient)||isAdmittedVisitorGuest(patient)))claimLocalActorBed256(world,patient,bed,bed.kind==='double-bed'?proposal.bedSlot:undefined);
-  actor.rescue={patientId:proposal.patientId,bedId:proposal.bedId,phase:'approach',...(bed.kind==='double-bed'?{bedSlot:proposal.bedSlot}:{}),...(capture?{capture:true as const}:{})};
+  if(!bed.medical&&!capture&&(!isRescuableVisitor(patient)||isAdmittedVisitorGuest(patient)))claimLocalActorBed256(world,patient,bed,isDoubleBedKind(bed.kind)?proposal.bedSlot:undefined);
+  actor.rescue={patientId:proposal.patientId,bedId:proposal.bedId,phase:'approach',...(isDoubleBedKind(bed.kind)?{bedSlot:proposal.bedSlot}:{}),...(capture?{capture:true as const}:{})};
   actor.path=proposal.path;actor.state='moving';actor.planCooldown=0;
   if(forced)actor.orders.active='rescue';
 }
@@ -122,7 +123,7 @@ export function reconcileRescues(world:World):void {
     if(actor.rescue.arrest){reconcileArrest(world,actor);continue;}
     const task=actor.rescue,patient=world.pawns.find(p=>p.id===task.patientId),bed=structureById(world,task.bedId);
     if(!patient||!task.capture&&actor.orders.active!=='rescue'&&backgroundWorkRefusal(actor,patient.prisoner?'warden':'doctor')||(task.capture?!!captureReason(world,actor,patient,true):!wantsRescue(patient,actor.orders.active==='rescue')||!!visitorRescueRefusal(world,patient,actor.orders.active==='rescue'))||!bed
-      ||bed.kind==='double-bed'&&(task.bedSlot===undefined||patient.bedId!==bed.id||patient.bedSlot!==task.bedSlot)
+      ||isDoubleBedKind(bed.kind)&&(task.bedSlot===undefined||patient.bedId!==bed.id||patient.bedSlot!==task.bedSlot)
       ||!rescueBedAvailable(world,bed,patient,actor.id,!!task.capture,task.bedSlot)||medicalWorkRefusal(actor))releaseWork(world,actor);
   }
 }
@@ -136,15 +137,15 @@ export function processRescue(world:World,actor:Pawn,context:NeedContext):void {
   // regardless of which actor was processed first in this tick.
   if(patient&&patient.health&&!patient.health.death&&patient.health.tick<world.tick)updatePawnHealth(world,patient);
   if(!patient||!task.capture&&actor.orders.active!=='rescue'&&backgroundWorkRefusal(actor,patient.prisoner?'warden':'doctor')||(task.capture?!!captureReason(world,actor,patient,true):!wantsRescue(patient,actor.orders.active==='rescue')||!!visitorRescueRefusal(world,patient,actor.orders.active==='rescue'))||!bed
-    ||bed.kind==='double-bed'&&(task.bedSlot===undefined||patient.bedId!==bed.id||patient.bedSlot!==task.bedSlot)
+    ||isDoubleBedKind(bed.kind)&&(task.bedSlot===undefined||patient.bedId!==bed.id||patient.bedSlot!==task.bedSlot)
     ||!rescueBedAvailable(world,bed,patient,actor.id,!!task.capture,task.bedSlot)){releaseWork(world,actor);return;}
-  const target=bed.kind==='double-bed'&&task.bedSlot!==undefined?bedSlotCell(bed,task.bedSlot):bed;
+  const target=isDoubleBedKind(bed.kind)&&task.bedSlot!==undefined?bedSlotCell(bed,task.bedSlot):bed;
   if(!target){releaseWork(world,actor);return;}
-  if(bed.kind==='double-bed'&&(actor.moveCooldown>0||(actor.motion?.end??0)>world.tick))return;
+  if(isDoubleBedKind(bed.kind)&&(actor.moveCooldown>0||(actor.motion?.end??0)>world.tick))return;
   actor.state='moving';
   if(task.phase==='approach'){
     if(actor.x!==patient.x||actor.z!==patient.z){context.move(patient,true);return;}
-    if(patient.moveCooldown>0||bed.kind==='double-bed'&&(patient.motion?.end??0)>world.tick)return;
+    if(patient.moveCooldown>0||isDoubleBedKind(bed.kind)&&(patient.motion?.end??0)>world.tick)return;
     // Membership must leave before actual pickup changes this person's holder.
     preparePartyRelease292(world,new Set([patient.id]),{finish:world.party292?.active?.organizerId===patient.id}).commit();
     patient.need=null;delete patient.medicalSleep;patient.path=[];
@@ -159,7 +160,7 @@ export function processRescue(world:World,actor:Pawn,context:NeedContext):void {
     context.event(`${actor.name} prend ${patient.name} pour le porter vers un lit.`);
   }
   if(actor.x!==target.x||actor.z!==target.z){context.move(target,true);syncPatient(world,actor);return;}
-  if(bed.kind==='double-bed')syncPatient(world,actor);
+  if(isDoubleBedKind(bed.kind))syncPatient(world,actor);
   if(task.capture&&!completeCapture(world,patient))return;
   // Historical capsule admission remains at deposit; visitor admission above
   // follows its separate pickup timing and never fabricates a capsule record.
@@ -167,7 +168,7 @@ export function processRescue(world:World,actor:Pawn,context:NeedContext):void {
   // The mover has completed the captured edge before entering this processor.
   delete actor.rescue;actor.orders.active=null;actor.path=[];actor.state='idle';actor.planCooldown=0;
   patient.motion=null;patient.moveCooldown=0;
-  if(!bed.medical)claimLocalActorBed256(world,patient,bed,bed.kind==='double-bed'?task.bedSlot:undefined);
+  if(!bed.medical)claimLocalActorBed256(world,patient,bed,isDoubleBedKind(bed.kind)?task.bedSlot:undefined);
   // Admission may finish after a captive recovers during transport. Only a
   // still-downed patient is installed in the lying service immediately; a
   // mobile captive chooses medical rest, sleep or food on its next turn.

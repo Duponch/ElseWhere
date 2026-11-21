@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {superImmune361} from './traits.ts';
 import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {deathLetter352} from './letter-producers-352.ts';
@@ -70,7 +71,7 @@ export function reconcilePawnHealth(world:World,pawn:Pawn,body=pawnBody(pawn),ex
       pawn.collapsePending=false;pawn.restZeroTicks=0;pawn.state=status;
         if(status==='dead'){
           if(world.schemaVersion>=256){delete pawn.mapBed;pawn.bedId=null;delete pawn.bedSlot;}
-        if(world.structures.some(b=>b.id===pawn.bedId&&(b.kind==='double-bed'||b.kind==='sleeping-spot'))||(world.packed??[]).some(pack=>pack.building.id===pawn.bedId&&pack.building.kind==='double-bed')){pawn.bedId=null;delete pawn.bedSlot;}
+        if(world.structures.some(b=>b.id===pawn.bedId&&(isDoubleBedKind(b.kind)||b.kind==='sleeping-spot'))||(world.packed??[]).some(pack=>pack.building.id===pawn.bedId&&isDoubleBedKind(pack.building.kind))){pawn.bedId=null;delete pawn.bedSlot;}
         markCorpseWornApparel284(world.piles,pawn,world.schemaVersion);
         delete pawn.surgeryRequest;notifyPawnDeath(world,pawn);notifyBillWorkerUnavailable283(world,pawn.id);
       }

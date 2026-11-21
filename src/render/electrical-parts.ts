@@ -84,6 +84,14 @@ export function electricalParts(world:World,cutaway=false,subjects:readonly Stru
         {targetId:s.id,x:s.x,z:s.z,y:WORLD_SCALE.lampHeight+.08,sx:.9,sy:.16,sz:.72,color:0xabb9a2},
         {targetId:s.id,x:s.x,z:s.z,y:WORLD_SCALE.lampHeight+.18,sx:.74,sy:.05,sz:.56,color:0x7d9085});
       for(const z of [-.2,.2])out.push({targetId:s.id,x:s.x,z:s.z+z,y:WORLD_SCALE.lampHeight-.015,sx:.76,sy:.055,sz:.12,color:on?0xf3f1cc:0x879287});
+    } else if(s.kind==='wall-lamp') {
+      // Schema 363: a plate on the supporting wall face (0.9 cell towards it in
+      // Core), a short arm and a warm shade; the light itself is the shared field.
+      const d=[[0,1],[1,0],[0,-1],[-1,0]][s.orientation??0]!,ry=(s.orientation??0)*Math.PI/2,h=WORLD_SCALE.lampHeight+.35;
+      out.push({targetId:s.id,x:s.x+d[0]!*.47,z:s.z+d[1]!*.47,y:h,sx:.26,sy:.34,sz:.05,color:0x5f6f6c,ry},
+        {targetId:s.id,x:s.x+d[0]!*.36,z:s.z+d[1]!*.36,y:h+.02,sx:.06,sy:.06,sz:.2,color:0x758580,ry},
+        {targetId:s.id,x:s.x+d[0]!*.24,z:s.z+d[1]!*.24,y:h-.05,sx:.3,sy:.2,sz:.3,color:on?0xffdfa0:0x8a8d7e,ry},
+        {targetId:s.id,x:s.x+d[0]!*.24,z:s.z+d[1]!*.24,y:h+.07,sx:.36,sy:.05,sz:.36,color:0x5f6f6c,ry});
     } else if(s.kind==='standing-lamp') {
       out.push({targetId:s.id,x:s.x,z:s.z,y:.05,sx:.44,sy:.1,sz:.44,color:0x5f6f6c},
         {targetId:s.id,x:s.x,z:s.z,y:WORLD_SCALE.lampHeight/2,sx:.08,sy:WORLD_SCALE.lampHeight,sz:.08,color:0x758580},

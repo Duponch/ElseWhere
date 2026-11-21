@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
 import {memoryExpiry271,validSuspendedMemory271,memoryReadTick271} from './suspended-memory-271.ts';
 import { isBedKind } from './bed-kinds.ts';
@@ -50,7 +51,7 @@ function applyBedroomMemory(w:World,p:Pawn):void {
   if(!task||task.bedId===null||task.bedId!==p.bedId)return;
   const bed=w.structures.find(s=>s.id===task.bedId&&isBedKind(s.kind));
   if(!bed||bed.medical||bed.prisoner)return;
-  if(bed.kind==='double-bed'){
+  if(isDoubleBedKind(bed.kind)){
     const slot=pawnBedSlot(p,bed),cell=slot===undefined?undefined:bedSlotCell(bed,slot);
     const target='target'in task?task.target:cell;
     if(!cell||!target||p.x!==cell.x||p.z!==cell.z||target.x!==cell.x||target.z!==cell.z||(p.motion?.end??0)>w.tick)return;

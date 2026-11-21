@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {medicalCivilTick271} from './suspended-human-clock-271.ts';
 import { hasVisitorMedicalGuestMarker,validVisitorMedicalDeparture,validVisitorShape } from './visitor-save.ts';
 import { validRescueShape,validateRescues } from './rescue-save.ts';
@@ -39,12 +40,12 @@ export function validVisitorMedicalTransport(w:World):boolean {
       if(!patients.has(id)&&(p.bedId!==null||p.need?.kind==='sleep'&&p.need.bedId!==null))return false;
       if(p.bedId!==null){
         const bed=w.structures.find(b=>b.id===p.bedId&&isBedKind(b.kind));
-        if(!bed||bed.medical||bed.prisoner||bed.kind==='double-bed'||w.pawns.some(other=>other.id!==id&&other.bedId===bed.id))return false;
+        if(!bed||bed.medical||bed.prisoner||isDoubleBedKind(bed.kind)||w.pawns.some(other=>other.id!==id&&other.bedId===bed.id))return false;
       }
       const need=p.need;
       if(need?.kind==='sleep'&&need.bedId!==null){
         const bed=w.structures.find(b=>b.id===need.bedId&&isBedKind(b.kind));
-        if(!bed||bed.prisoner||bed.kind==='double-bed'||!bed.medical&&p.bedId!==bed.id
+        if(!bed||bed.prisoner||isDoubleBedKind(bed.kind)||!bed.medical&&p.bedId!==bed.id
           ||need.target.x!==bed.x||need.target.z!==bed.z
           ||w.pawns.some(other=>other.id!==id&&other.need?.kind==='sleep'&&other.need.bedId===bed.id))return false;
         if(need.phase==='sleep'?(p.state!=='downed'&&p.state!=='sleeping'&&p.state!=='resting'

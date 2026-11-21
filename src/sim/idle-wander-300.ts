@@ -71,7 +71,7 @@ export function idleDestinationReserved300(w:World,pawn:Pawn,cell:Cell):boolean 
 // BuildingProperties.ai_chillDestination defaults TRUE. These delivered ids
 // inherit explicit FALSE Core definitions/parents from the targeted XML read;
 // normal beds, tables, chairs and workstations must not be collapsed to walls.
-const NO_CHILL300:ReadonlySet<string>=new Set(['sleeping-spot','animal-sleeping-spot','moisture-pump','grave','sarcophagus','cryptosleep-casket','ancient-cryptosleep-casket','door','autodoor','fence','fence-gate','marriage-spot','party-spot','caravan-packing-spot','pen-marker','power-conduit','power-switch','geothermal-generator','watermill-generator','crafting-spot','butcher-spot','sandbags','barricade','spike-trap']);
+const NO_CHILL300:ReadonlySet<string>=new Set(['sleeping-spot','double-sleeping-spot','animal-sleeping-spot','moisture-pump','grave','sarcophagus','cryptosleep-casket','ancient-cryptosleep-casket','door','autodoor','fence','fence-gate','marriage-spot','party-spot','caravan-packing-spot','pen-marker','power-conduit','power-switch','geothermal-generator','watermill-generator','crafting-spot','butcher-spot','sandbags','barricade','spike-trap']);
 export const idleChillBuilding300=(kind:string):boolean=>kind==='wall'||!NO_CHILL300.has(kind);
 
 /** One quota-granted root decision; source arrays retain their actual order.

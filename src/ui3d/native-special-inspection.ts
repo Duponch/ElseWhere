@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from '../sim/bed-kinds';
 import { IED_COMMON_357,IED_TRAPS_357,iedsUnlocked357,isIedTrapKind357 } from '../sim/ied-traps-357';
 import { toolCabinetWorkSpeedOffset355 } from '../sim/tool-cabinet-355';
 import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
@@ -190,7 +191,7 @@ function bedPolicyRows(world: World, bed: Structure, scope: Scope): NativeRow[] 
     return [toggle('animal-spot-medical', 'Couchage animal médical', !!bed.medical, async enabled => { assertScope(scope); await send({ type: 'animal-spot-medical', spotId: bed.id, enabled }); }), row('animal-spot-occupant', 'Occupation', occupant ? `${animalSpecies(occupant.species).label} ${occupant.id}` : carrier ? `Secours en cours · ${carrier.name}` : claimant ? `Attribué à ${animalSpecies(claimant.species).label} ${claimant.id}` : 'Disponible')];
   }
   if (!isBedKind(bed.kind)) return [];
-  const double = bed.kind === 'double-bed', rows: NativeRow[] = [];
+  const double = isDoubleBedKind(bed.kind), rows: NativeRow[] = [];
   if (!double) rows.push(toggle('special-medical-bed', 'Usage médical', !!bed.medical, async enabled => { assertScope(scope); await send({ type: 'medical-bed', bedId: bed.id, enabled }); }), toggle('special-prison-bed', 'Réservé aux prisonniers', !!bed.prisoner, async enabled => { assertScope(scope); await send({ type: 'prison-bed', bedId: bed.id, enabled }); }));
   else rows.push(row('double-bed-civil', 'Deux places civiles indépendantes', undefined, 'Usage médical et prisonniers indisponibles. Une attribution automatique dans le lit d’un autre colon est réservée à son partenaire.'));
   if (!bed.prisoner) for (const slot of double ? [0, 1] as const : [undefined]) {

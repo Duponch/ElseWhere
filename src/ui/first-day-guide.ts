@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from '../sim/bed-kinds';
 import { isColonist } from '../sim/affiliation';
 import { isBedKind } from '../sim/bed-kinds';
 import { bedAssignmentReason,bedSlotCell,bedSlotClaimed,bedSlotsCount,civilBedShareAllowed,pawnBedSlot } from '../sim/bed-slots';
@@ -28,7 +29,7 @@ export interface FirstDayGuideCallbacks {onAction:(action:FirstDayGuideAction)=>
 
 const civil=(p:Pawn)=>isColonist(p)&&!p.prisoner&&!p.visitor&&!p.raid&&!p.podRescue&&p.state!=='dead'&&!p.health?.death;
 const foodCrop=(kind:string)=>kind==='rice'||kind==='potato'||kind==='corn';
-const aliveBuilding=(s:Structure)=>s.kind==='sleeping-spot'||(s.damage??0)<structureMaxHp(s);
+const aliveBuilding=(s:Structure)=>s.kind==='sleeping-spot'||s.kind==='double-sleeping-spot'||(s.damage??0)<structureMaxHp(s);
 const retiring=(w:World,s:Structure)=>w.jobs.some(j=>j.deconstruction?.structureId===s.id||j.furniture?.structureId===s.id&&j.kind==='uninstall');
 const localPile=(ids:ReadonlySet<number>,p:MaterialPile)=>p.quantity>0&&(p.owner.type==='ground'||p.owner.type==='pawn'&&ids.has(p.owner.pawnId));
 
@@ -37,13 +38,13 @@ const localPile=(ids:ReadonlySet<number>,p:MaterialPile)=>p.quantity>0&&(p.owner
 function civilianPlaces(world:World,people:readonly Pawn[]):number {
   const slots=world.structures.filter(s=>isBedKind(s.kind)&&!s.medical&&!s.prisoner&&aliveBuilding(s)&&!retiring(world,s))
     .flatMap(bed=>{
-      const unownedDouble=bed.kind==='double-bed'&&!world.pawns.some(p=>p.state!=='dead'&&p.bedId===bed.id);
+      const unownedDouble=isDoubleBedKind(bed.kind)&&!world.pawns.some(p=>p.state!=='dead'&&p.bedId===bed.id);
       return Array.from({length:unownedDouble?1:bedSlotsCount(bed)},(_,slot)=>({bed,slot:slot as BedSlot}));
     });
   const options=people.map(p=>slots.flatMap(({bed,slot},index)=>{
     const owned=pawnBedSlot(p,bed);
     if(bedAssignmentReason(world,bed,p,slot)||bedSlotClaimed(world,bed,slot,p.id))return [];
-    if(bed.kind==='double-bed'&&(!civilBedShareAllowed(world,bed,p)||owned!==undefined&&owned!==slot))return [];
+    if(isDoubleBedKind(bed.kind)&&(!civilBedShareAllowed(world,bed,p)||owned!==undefined&&owned!==slot))return [];
     const cell=bedSlotCell(bed,slot);
     return cell&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height?[index]:[];
   }));

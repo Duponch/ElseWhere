@@ -136,7 +136,7 @@ function previewTargets(world: World, action: AreaAction, cells: readonly number
     // Area deconstruction targets each whole building once, even when only a
     // non-anchor footprint cell intersects the rectangle. Work spots disappear
     // immediately on release and never create a deconstruction Job.
-    for (const structure of world.structures) if (structure.kind !== 'sleeping-spot' && structure.kind !== 'animal-sleeping-spot' && structure.kind !== 'crafting-spot' && structure.kind !== 'butcher-spot'
+    for (const structure of world.structures) if (structure.kind !== 'sleeping-spot' && structure.kind !== 'double-sleeping-spot' && structure.kind !== 'animal-sleeping-spot' && structure.kind !== 'crafting-spot' && structure.kind !== 'butcher-spot'
       && !occupied.has(structure.z * world.width + structure.x)
       && footprintCells(structure).some(cell => selected.has(cell.z * world.width + cell.x))) {
       targets.push({ kind: action, x: structure.x, z: structure.z });

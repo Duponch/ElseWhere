@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297,effectiveLocal297,validationCore297} from './core-phase-297.ts';
 import {validCapturedCoreMove297} from './core-move-save-297.ts';
@@ -97,7 +98,7 @@ export function validAlcoholConsumeTransport265(w:World,knownConsumers?:readonly
   if(p.feed?.paste&&(p.feed.phase==='pickup'||p.feed.phase==='collect'))claim(p.feed.spot,p.id);
   for(const o of p.orders.queue)if(isCookingOrder(o))claim(o.cooking.spot,p.id);
   for(const t of [p.tend,p.feed,p.ward,p.surgery,p.rescue])if(t)patients.add(t.patientId);
-  if(p.rescue){const bed=buildings.get(p.rescue.bedId),target=bed?.kind==='double-bed'&&p.rescue.bedSlot!==undefined?bedSlotCell(bed,p.rescue.bedSlot):bed;if(target)claim(target,p.id);}
+  if(p.rescue){const bed=buildings.get(p.rescue.bedId),target=isDoubleBedKind(bed?.kind)&&p.rescue.bedSlot!==undefined?bedSlotCell(bed,p.rescue.bedSlot):bed;if(target)claim(target,p.id);}
   if(p.animalRescue){const target=buildings.get(p.animalRescue.spotId);if(target)claim(target,p.id);}
  }
  const reserved=reservedSourcesByPile(w),standable=captureStandability(w);

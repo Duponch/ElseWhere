@@ -1,3 +1,4 @@
+import {isGroundSleepingSpotKind} from './bed-kinds.ts';
 import { isColonist } from './affiliation.ts';
 import { APPAREL,type ApparelItem } from './apparel-rules.ts';
 import { isBedKind } from './bed-kinds.ts';
@@ -87,7 +88,7 @@ export function traitMapThoughts361(world:World,pawn:Pawn):TraitMapThoughts361 {
 export function ownedRoom361(world:World,pawn:Pawn,capture:RoomQualityCapture=captureRoomQuality(world)):{id:number;stage:number;impressiveness:number}|undefined {
   if(pawn.bedId===null||pawn.bedId===undefined)return;
   const bed=world.structures.find(s=>s.id===pawn.bedId&&isBedKind(s.kind));
-  if(!bed||bed.medical||bed.prisoner||bed.kind==='sleeping-spot')return;
+  if(!bed||bed.medical||bed.prisoner||isGroundSleepingSpotKind(bed.kind))return;
   const room=capture.room({x:bed.x,z:bed.z});
   return room&&room.beds===1?room:undefined;
 }

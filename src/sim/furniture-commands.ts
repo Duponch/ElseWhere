@@ -23,7 +23,7 @@ export function installCommand(world:World,command:Extract<Command,{type:'instal
   if(pack?.owner.type==='inventory')return fail('Cette œuvre appartient à un marchand.');
   if(pack?.owner.type==='pawn')return fail('Ce meuble est porté par un colon.');
   if(!Number.isInteger(command.orientation)||command.orientation<0||command.orientation>3)return fail('Orientation invalide.');
-  if(['glow-pod','spike-trap','ied-high-explosive','ied-incendiary','sun-lamp','standing-lamp','small-sculpture','large-sculpture'].includes(source.kind)&&command.orientation!==0)return fail('Cette lampe ne pivote pas.');
+  if(['glow-pod','spike-trap','ied-high-explosive','ied-incendiary','sun-lamp','standing-lamp','table-large','small-sculpture','large-sculpture'].includes(source.kind)&&command.orientation!==0)return fail('Cette lampe ne pivote pas.');
   if(!Number.isSafeInteger(world.nextId+1))return fail('Limite des identités atteinte.');
   // This internal placement is derived only from the actual minifiable
   // original above. No natural kind is added to DesignateCommand/Architecte.

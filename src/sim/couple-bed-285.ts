@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from './bed-kinds.ts';
 import {isSchema285OrLater} from './schema-compatibility-257.ts';
 import {bedSlotCell,pawnBedSlot} from './bed-slots.ts';
 import {footprintCells} from './definitions.ts';
@@ -21,7 +22,7 @@ export function coupleBed285(world:CoupleBedWorld285,pawn:CoupleBedPawn285):Stru
  const task=pawn.coupleTask285;
  if(!isSchema285OrLater(world.schemaVersion)||!task||pawn.state==='dead'||pawn.moveCooldown!==0||(pawn.motion?.end??0)>world.tick)return;
  const bed=structureById(world,task.bedId);
- if(!bed||bed.kind!=='double-bed'||bed.medical||bed.prisoner||pawnBedSlot(pawn,bed)!==task.slot)return;
+ if(!bed||!isDoubleBedKind(bed.kind)||bed.medical||bed.prisoner||pawnBedSlot(pawn,bed)!==task.slot)return;
  const cell=bedSlotCell(bed,task.slot);
  return cell&&pawn.x===cell.x&&pawn.z===cell.z?bed:undefined;
 }

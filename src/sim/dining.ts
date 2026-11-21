@@ -15,7 +15,7 @@ const neighbors = (cell: Cell): Cell[] => [
   { x: cell.x, z: cell.z - 1 }, { x: cell.x + 1, z: cell.z },
   { x: cell.x, z: cell.z + 1 }, { x: cell.x - 1, z: cell.z },
 ];
-export const isDiningTable=(kind:unknown):boolean=>kind==='table'||kind==='table-square'||kind==='table-long';
+export const isDiningTable=(kind:unknown):boolean=>kind==='table'||kind==='table-square'||kind==='table-long'||kind==='table-large';
 export const isDiningSeat=(kind:unknown):boolean=>kind==='stool'||kind==='dining-chair'||kind==='armchair';
 
 /** Any cardinal eating surface works; a stool's orientation is not a rule. */

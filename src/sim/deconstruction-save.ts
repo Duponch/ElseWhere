@@ -32,7 +32,7 @@ export function validateDeconstruction(world: World, version: number, shapesOnly
     const d = j.deconstruction;
     if (j.kind !== 'deconstruct') { if (d !== undefined) errors.push('Unexpected deconstruction target.'); continue; }
     if (!d || typeof d !== 'object' || Array.isArray(d) || !Number.isSafeInteger(d.structureId)
-      || version<256&&(isLocalRoadProp256(d.kind)||d.kind==='ship-chunk') || version<224&&d.kind==='double-bed' || !Object.hasOwn(STRUCTURE_DEFINITIONS, d.kind) || !validConstructionMaterial(d.kind,d.material,version) || d.material!==undefined&&version<30 || Object.keys(d).some(k => !['structureId', 'kind',...(version>=30?['material']:[])].includes(k))) {
+      || version<256&&(isLocalRoadProp256(d.kind)||d.kind==='ship-chunk') || version<224&&d.kind==='double-bed' || version<363&&(d.kind==='table-large'||d.kind==='double-bedroll'||d.kind==='wall-lamp'||d.kind==='double-sleeping-spot') || !Object.hasOwn(STRUCTURE_DEFINITIONS, d.kind) || !validConstructionMaterial(d.kind,d.material,version) || d.material!==undefined&&version<30 || Object.keys(d).some(k => !['structureId', 'kind',...(version>=30?['material']:[])].includes(k))) {
       errors.push('Invalid deconstruction target.'); continue;
     }
     const s = deconstructionTarget(world, j);

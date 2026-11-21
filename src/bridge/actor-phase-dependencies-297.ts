@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from '../sim/bed-kinds.ts';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {structureById} from '../sim/structure-navigation.ts';
 import type {World,Pawn,Job,MaterialPile,Resource,Structure} from '../sim/types';
@@ -151,7 +152,7 @@ export function captureActorPhaseDependencies297(world:World,held?:ActorPhaseDep
    [p.body?.pileId,p.body?.lostAt,body?owner(body.owner):undefined],
    [contact.workPose,contact.contactPose,contact.reach.x,contact.reach.z,contact.yaw],
    [animationPose(p,contact.workPose,small,seated,!!couple),workActivity(p),seated],
-   [structure(bed),slot,bed?.kind==='double-bed'&&slot!==undefined?cell(bedSlotBodyCenter(bed,slot)):undefined,!!couple],
+   [structure(bed),slot,isDoubleBedKind(bed?.kind)&&slot!==undefined?cell(bedSlotBodyCenter(bed,slot)):undefined,!!couple],
    dining?[dining.id,cell(dining.cell),p.need?.kind==='eat'?p.need.dining?.seatId:undefined]:null,
    recreation?[recreation.activity,recreation.activity==='read'?recreation.stage:undefined,recreation.phase,recreation.seatId,recreation.buildingId,recreation.patientId,structure(leisure),cell(patient)]:null,
    paste?[paste.dispenserId,cell(paste.spot)]:null,

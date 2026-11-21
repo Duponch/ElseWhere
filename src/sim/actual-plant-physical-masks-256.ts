@@ -11,7 +11,7 @@ import type {PlantPhysicalMasks256} from './wild-plant-runtime-map-256.ts';
  * All have Building.isEdifice=true despite zero fill, except PowerConduit.
  * SupportsPlants is separate: it never erases the spawner's earlier edifice
  * refusal (including SleepingSpot). Future zero-fill kinds must close facts. */
-const ZERO_FILL_EDIFICES:ReadonlySet<StructureKind>=new Set(['power-switch','spike-trap','ied-high-explosive','ied-incendiary','grave','bedroll','sleeping-spot','animal-sleeping-spot','crafting-spot','butcher-spot','horseshoes','hoopstone-ring']);
+const ZERO_FILL_EDIFICES:ReadonlySet<StructureKind>=new Set(['power-switch','spike-trap','ied-high-explosive','ied-incendiary','grave','bedroll','double-bedroll','sleeping-spot','double-sleeping-spot','animal-sleeping-spot','crafting-spot','butcher-spot','horseshoes','hoopstone-ring']);
 /** Fresh rare-capture data only; this function does not install an index,
  * mutate a World or classify furniture standability as normal walkability. */
 export function actualPlantPhysicalMasks256(world:World):PlantPhysicalMasks256 {

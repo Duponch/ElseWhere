@@ -1,3 +1,4 @@
+import {isDoubleBedKind} from '../sim/bed-kinds.ts';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {POSE_SLEEP,POSE_DEAD,POSE_FIGHT_READY,READING_ACTIVITY295,seatedOnFurniture,workActivity,animationPose,humanCorpseVisualStage,humanWorkContact297} from '../bridge/actor-phase-dependencies-297';
 export {humanCorpseVisualStage} from '../bridge/actor-phase-dependencies-297';
@@ -1267,10 +1268,10 @@ export class PawnLayer {
       if(retainedOffset){px+=retainedOffset.x;pz+=retainedOffset.z;py+=retainedOffset.y;}
       if(hiddenBody)py=-1000;
       if (bed&&!body&&!hiddenBody) {
-        const slot=pawnBedSlot(pawn,bed),center=bed.kind==='double-bed'&&slot!==undefined?bedSlotBodyCenter(bed,slot):undefined;
+        const slot=pawnBedSlot(pawn,bed),center=isDoubleBedKind(bed.kind)&&slot!==undefined?bedSlotBodyCenter(bed,slot):undefined;
         if(center){px=center.x;pz=center.z;}
         else {const cells = footprintCells(bed), last = cells[cells.length - 1]!;px = (bed.x + last.x) / 2;pz = (bed.z + last.z) / 2;}
-        py = bed.kind==='sleeping-spot'?0:bed.kind==='bedroll'?BEDROLL_SURFACE_HEIGHT:WORLD_SCALE.bedSurfaceHeight;
+        py = bed.kind==='sleeping-spot'||bed.kind==='double-sleeping-spot'?0:bed.kind==='bedroll'||bed.kind==='double-bedroll'?BEDROLL_SURFACE_HEIGHT:WORLD_SCALE.bedSurfaceHeight;
         const target = bed.orientation * Math.PI / 2;
         yaw = from.w + Math.atan2(Math.sin(target - from.w), Math.cos(target - from.w));
       }

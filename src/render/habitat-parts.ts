@@ -77,6 +77,12 @@ export function habitatParts(world: World): Placement[] {
         table(parts, structure, x, z, ry, 1.92, 3.92, body, trim);
         break;
       }
+      case 'table-large': {
+        // Schema 363: the 3×3 table, a square top with a fifth central leg.
+        table(parts, structure, x, z, ry, 2.90, 2.90, body, trim);
+        add(0, (WORLD_SCALE.tableHeight - 0.09) / 2, 0, 0.16, WORLD_SCALE.tableHeight - 0.09, 0.16, trim);
+        break;
+      }
       case 'flower-pot': {
         add(0, 0.20, 0, 0.48, 0.40, 0.48, body);
         add(0, 0.43, 0, 0.42, 0.10, 0.42, 0x3b3023);
@@ -94,7 +100,7 @@ export function habitatParts(world: World): Placement[] {
 
 const HABITAT_KINDS = new Set([
   'shelf','small-shelf',
-  'dining-chair', 'armchair', 'end-table', 'dresser', 'table-square', 'table-long', 'flower-pot',
+  'dining-chair', 'armchair', 'end-table', 'dresser', 'table-square', 'table-long', 'table-large', 'flower-pot',
 ]);
 
 function footprintCenter(structure: Structure): { x: number; z: number } {
@@ -195,6 +201,11 @@ export function habitatPartsForStructure(structure: Structure): Placement[] {
     }
     case 'table-long': {
       table(parts, structure, x, z, ry, 1.92, 3.92, body, trim);
+      break;
+    }
+    case 'table-large': {
+      table(parts, structure, x, z, ry, 2.90, 2.90, body, trim);
+      add(0, (WORLD_SCALE.tableHeight - 0.09) / 2, 0, 0.16, WORLD_SCALE.tableHeight - 0.09, 0.16, trim);
       break;
     }
     case 'flower-pot': {
