@@ -15,6 +15,9 @@ import {exchangeSocial} from '../src/sim/social.ts';
 import {calendarTick} from '../src/sim/calendar.ts';
 import {hourOfDay} from '../src/sim/schedule.ts';
 import {HUMAN_YEAR_TICKS} from '../src/sim/human-age.ts';
+import {updateMentalBreak} from '../src/sim/mental-break.ts';
+import {traitMentalStateRoll361} from '../src/sim/trait-mental-361.ts';
+import {advanceSicklyDisease361} from '../src/sim/sickly-disease-361.ts';
 
 vi.mock('../src/ui/pawn-portrait', () => ({portraitDataUrl:()=>'data:image/svg+xml,%3Csvg/%3E',portraitExpressionOf:()=>'awake'}));
 
@@ -172,6 +175,22 @@ describe('effects through real ticks',()=>{
   });
 });
 
+describe('trait mental states and diseases at their Core cadence',()=>{
+  test('a gourmand binges on food at a happy mood when its 50-day draw fires (150-tick check)',()=>{
+    const w=camp(),p=w.pawns[0]!;p.traits=['gourmand'];p.mood=90;
+    let t=15-p.id%15;while(traitMentalStateRoll361(w.seed,p.id,t)>=150/(50*60000))t+=15;
+    w.tick=t;updateMentalBreak(w,p);
+    expect(p.mental?.crisis?.kind).toBe('food-binge');
+    // Without the trait the same check gives nothing at this mood.
+    const v=camp(),q=v.pawns[0]!;q.mood=90;v.tick=t;updateMentalBreak(v,q);expect(q.mental?.crisis).toBeUndefined();
+  });
+  test('a sickly person catches a regional disease by itself (Core MTB 30 days, 60-tick checks)',()=>{
+    const w=camp(),p=w.pawns[0]!;p.traits=['sickly'];let fired=0;
+    for(let t=6-p.id%6;t<6*60000&&!fired;t+=6){w.tick=t;advanceSicklyDisease361(w,p);if(p.health?.flu||p.health?.immuneDiseases||p.health?.parasites306||p.health?.mechanites307)fired=t;}
+    expect(fired).toBeGreaterThan(0);
+    expect(w.events.some(e=>e.message.includes('de santé fragile'))).toBe(true);
+  });
+});
 describe('saves',()=>{
   const traited=():World=>{
     const w=camp(3),[a,b,c]=w.pawns as [Pawn,Pawn,Pawn];
