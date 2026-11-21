@@ -2024,7 +2024,7 @@ function actionLabel(pawn: Pawn, carriedPatients: ReadonlySet<number>) {
   if(pawn.ward||pawn.prisoner||pawn.feed||pawn.tend||pawn.surgery||pawn.state==='resting'||pawn.rescue||carriedPatients.has(pawn.id))return queryPawnStatus(snapshot!,pawn,confirmedFoodReadability()).reason;
   if(pawn.state==='downed'||pawn.state==='dead')return stateLabels[pawn.state];
   if(pawn.interruptedCargo)return pawn.state==='sleeping'?'Se repose · cargaison à déposer':'Cargaison à déposer · sol proche encombré';
-  if(pawn.animalHandling)return ({tame:'Apprivoisement',maintain:'Entretien de la familiarité',train:'Dressage animal',lead:'Conduit un animal vers son enclos',milk:'Trait un dromadaire',shear:'Tond un mufalo',slaughter:'Abattage domestique'})[pawn.animalHandling.kind];
+  if(pawn.animalHandling)return ({tame:'Apprivoisement',maintain:'Entretien de la familiarité',train:'Dressage animal',lead:'Conduit un animal vers son enclos',milk:'Trait un dromadaire',shear:'Tond un mufalo',slaughter:'Abattage domestique',release:pawn.animalHandling.phase==='carry'?'Porte un animal hors de la colonie':'Relâche un animal dans la nature'})[pawn.animalHandling.kind];
   if(pawn.animalRescue)return pawn.animalRescue.phase==='carry'?'Porte un animal vers un couchage':'Secourt un animal';
   if(pawn.animalCare)return 'Soins vétérinaires';
   if(pawn.animalFeed)return 'Alimentation assistée animale';

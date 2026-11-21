@@ -9,7 +9,7 @@ import { IMPRESSION_LABELS,ROOM_MEMORY_DURATION,ROOM_MEMORY_OFFSETS } from './ro
 import { healthRandom } from './health.ts';
 import {FIRST_DAYS_MEMORIES_343,SLEEP_MEMORY_KINDS_343,isFirstDays343,isFirstDaysMemory343,setFirstDaysMemory343,type FirstDaysMemoryKind343} from './first-days-memories-343.ts';
 import {sleepMemoryKinds343} from './first-days-sleep-343.ts';
-import {MOOD_POOL_MEMORIES_350,isMoodPool350,isMoodPoolMemory350,moodPoolMemoryThoughts350,type MoodPoolMemoryKind350} from './mood-pool-memories-350.ts';
+import {MOOD_POOL_MEMORIES_350,isMoodPool350,isMoodPoolMemory350,moodPoolKindInVersion,moodPoolMemoryThoughts350,type MoodPoolMemoryKind350} from './mood-pool-memories-350.ts';
 import type { MoodThought } from './mood.ts';
 import type { Pawn,World } from './types.ts';
 
@@ -101,11 +101,12 @@ export function validRoomExperience(p:Record<string,unknown>,version:number,tick
   if(version<103)return memories===undefined&&rest===undefined;
   if(memories!==undefined){
     const v343=isFirstDays343(version),v350=isMoodPool350(version);
-    if(!Array.isArray(memories)||!memories.length||memories.length>(v350?3+6+21:v343?3+6:3))return false;
+    if(!Array.isArray(memories)||!memories.length||memories.length>(v350?3+6+21+(version>=364?5:0):v343?3+6:3))return false;
     const kinds=new Set<string>(),pool=new Map<string,number>(),others=new Set<string>();let bedroom=false;
     for(const m of memories){
       if(!record(m)||typeof m.kind!=='string')return false;
       // Schema 350: several entries of one mood pool kind, up to its stack.
+      if(v350&&isMoodPoolMemory350(m.kind)&&!moodPoolKindInVersion(m.kind,version))return false;
       const pooled=v350&&isMoodPoolMemory350(m.kind),def=pooled?MOOD_POOL_MEMORIES_350[m.kind as MoodPoolMemoryKind350]:undefined;
       if(def){
        const count=(pool.get(m.kind)??0)+1;pool.set(m.kind,count);

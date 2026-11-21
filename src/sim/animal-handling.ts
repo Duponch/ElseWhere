@@ -1,3 +1,4 @@
+import {processReleaseWild364,releaseWildHolding364,type ReleaseWildTask364} from './execute-release-364.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {releaseAnimalThermalRefuge288} from './animal-thermal-refuge-288.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
@@ -93,6 +94,7 @@ export function animalHandlingHolding(w:World,id:number):boolean {
   if(!w.pawns.some(p=>p.animalHandling?.animalId===id))return false;
   const a=w.wildlife?.animals.find(a=>a.id===id);
   if(a&&w.pawns.some(p=>slaughterHolding(w,p,a)))return true;
+  if(a&&w.schemaVersion>=364&&w.pawns.some(p=>releaseWildHolding364(w,p,a)))return true;
   if(!a||!animalAvailable(a)||(a.motion?.end??0)>w.tick)return false;
   return w.pawns.some(p=>p.animalHandling?.animalId===id&&p.animalHandling.kind!=='lead'&&p.animalHandling.kind!=='slaughter'&&p.animalHandling.phase==='interact'
     &&allowedAreaAllows(w,p,a)&&p.moveCooldown===0&&adjacent(p,a)
@@ -232,6 +234,7 @@ export function processHandling(w:World,p:Pawn,ctx:HandlingContext):void {
   const task=p.animalHandling;if(!task)return;
   if(task.kind==='train'){processAnimalTraining282(w,p,task as AnimalTrainingTask282,ctx);return;}
   if(task.kind==='slaughter'){processSlaughter(w,p,task as SlaughterTask,ctx);return;}
+  if(task.kind==='release'){processReleaseWild364(w,p,task as ReleaseWildTask364,ctx);return;}
   if(w.wildlife?.animals.some(a=>a.manhunter&&leadingClaimIds(task).includes(a.id))){interruptWork(w,p);return;}
   if(task.kind==='lead'){if(task.markerId===undefined){interruptWork(w,p);return;}processLeading(w,p,task as LeadingTask,ctx);return;}
   if(task.kind==='milk'||task.kind==='shear'){processProduct(w,p,task as ProductTask,ctx);return;}

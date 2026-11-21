@@ -3,13 +3,13 @@ import { prisonBreakActive } from '../sim/prison-break-state.ts';
 import { prisonBreakMtbDays } from '../sim/prison-break.ts';
 import { isColonist } from '../sim/affiliation';
 
-const MODES={maintain:'Soins et nourriture',reduce:'Réduire la résistance',recruit:'Recruter',release:'Libérer'} as const;
+const MODES={maintain:'Soins et nourriture',reduce:'Réduire la résistance',recruit:'Recruter',release:'Libérer',execute:'Exécuter'} as const;
 
 type ReleasePatient=Pick<Pawn,'id'|'state'|'prisoner'|'faction'>;
 type ReleaseWarden=Pick<Pawn,'id'|'name'|'rescue'>;
 const detainedColonist=(world:{schemaVersion?:number},pawn:Pick<Pawn,'faction'|'prisoner'>):boolean=>(world.schemaVersion??0)>=213&&isColonist(pawn)&&!!pawn.prisoner;
 export function prisonerInteractionModes(world:{schemaVersion?:number},pawn:Pick<Pawn,'faction'|'prisoner'>):(keyof typeof MODES)[] {
-  return detainedColonist(world,pawn)?['maintain','release']:['maintain','reduce','recruit','release'];
+  return detainedColonist(world,pawn)?['maintain','release']:['maintain','reduce','recruit','release',...((world.schemaVersion??0)>=364?['execute' as const]:[])];
 }
 
 /** Describe the physical release without promising recovery or a departure date. */

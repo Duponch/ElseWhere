@@ -28,7 +28,9 @@ export function validateStartingPetLinks256(animal:WildAnimal,version:number,act
  if(!validStartingPetHeader256(animal,version))return false;
  const p=data(animal,'startingPet')?.value as StartingPetState256|undefined;
  if(!p)return true;
- return !!animal.domestic&&(p.bondedPawnId===undefined||!!actualHuman(p.bondedPawnId))&&(p.masterId===undefined||!!actualHuman(p.masterId));
+ // Schema 364: a starter released to the wild keeps its name, bond and
+ // master as Core data (SetFaction(null) clears no relation).
+ return (!!animal.domestic||version>=364)&&(p.bondedPawnId===undefined||!!actualHuman(p.bondedPawnId))&&(p.masterId===undefined||!!actualHuman(p.masterId));
 }
 export function actualAnimalName256(animal:WildAnimal):string|undefined {
  const d=data(animal,'startingPet');return d&&validStartingPetHeader256(animal,256)?(d.value as StartingPetState256).name:undefined;

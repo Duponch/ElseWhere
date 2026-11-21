@@ -1,3 +1,4 @@
+import {executionTaskValid364,executionWanted364,processExecution364} from './execute-release-364.ts';
 import {notePopulationGain320} from './population-intent-320.ts';
 import {actors352} from './letter-producers-352.ts';
 import {sendLetter352} from './letters-352.ts';
@@ -57,7 +58,8 @@ function foodEligible(world:World,p:Pawn,enclosure:()=>RoomTopology):boolean {
 }
 export function wardenWanted(world:World,actor:Pawn):boolean {
   let map:RoomTopology|undefined;const enclosure=()=>map??=capturePrisonTopology(world);
-  return actorReady(actor)&&world.pawns.some(p=>p!==actor&&allowedAreaAllows(world,actor,p)&&secure(p)&&!patientClaimed(world,p.id,actor)&&(chatEligible(world,actor,p)||!medicalWorkRefusal(actor)&&foodEligible(world,p,enclosure)));
+  return actorReady(actor)&&world.pawns.some(p=>p!==actor&&allowedAreaAllows(world,actor,p)&&secure(p)&&!patientClaimed(world,p.id,actor)&&(chatEligible(world,actor,p)||!medicalWorkRefusal(actor)&&foodEligible(world,p,enclosure)))
+    ||executionWanted364(world,actor);
 }
 function foodSpot(world:World,actor:Pawn,patient:Pawn,item:World['piles'][number]['item'],quantity:number,reach:Reachability,map:RoomTopology):Cell|undefined {
   const room=prisonRoom(world,patient,map);if(!room)return;
@@ -99,7 +101,7 @@ function foodTaskValid(world:World,actor:Pawn,patient:Pawn,t:WardFoodTask):boole
 export function reconcileWarden(world:World):void {
   for(const actor of world.pawns)if(actor.ward){const t=actor.ward,p=world.pawns.find(p=>p.id===t.patientId);
     if(!allowedAreaServicesAllowed(world,actor)){interruptWork(world,actor);continue;}
-    if(!actorReady(actor)||!p||patientClaimed(world,p.id,actor)||(t.kind==='food'?!foodTaskValid(world,actor,p,t):t.phase==='closing'?p.state==='dead':!chatEligible(world,actor,p)))interruptWork(world,actor);
+    if(!actorReady(actor)||!p||patientClaimed(world,p.id,actor)||(t.kind==='execute'?!executionTaskValid364(world,actor,p):t.kind==='food'?!foodTaskValid(world,actor,p,t):t.phase==='closing'?p.state==='dead':!chatEligible(world,actor,p)))interruptWork(world,actor);
   }
 }
 function rapport(world:World,actor:Pawn,p:Pawn):void {
@@ -139,6 +141,7 @@ export function processWarden(world:World,actor:Pawn,context:NeedContext):void {
   if(!allowedAreaServicesAllowed(world,actor)){interruptWork(world,actor);return;}
   const t=actor.ward;if(!t)return;const p=world.pawns.find(p=>p.id===t.patientId);
   if(!p||!actorReady(actor)||patientClaimed(world,p.id,actor)){interruptWork(world,actor);return;}
+  if(t.kind==='execute'){processExecution364(world,actor,t,context);return;}
   if(t.kind==='food'){
     if(!foodTaskValid(world,actor,p,t)){interruptWork(world,actor);return;}
     const pile=world.piles.find(i=>i.id===(t.phase==='pickup'?t.sourcePileId:t.carryPileId))!;

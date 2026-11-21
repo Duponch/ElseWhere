@@ -1335,7 +1335,7 @@ export class PawnLayer {
       const handoff=this.handoffs.active.get(pawn.id);
       const mainHandoff=handoff?.partial?undefined:handoff;
       const [kind,size]=cargoAppearance(mainHandoff?.direction==='drop'?mainHandoff.pile:load);
-      cargo.setXYZW(index,pawn.rescue?.phase==='carry'||this.groupHumanCarrierIds.has(pawn.id)||pawn.animalRescue?.phase==='carry'||load?.humanCorpse?-1:packed?4:kind,packed?1:size,
+      cargo.setXYZW(index,pawn.rescue?.phase==='carry'||this.groupHumanCarrierIds.has(pawn.id)||pawn.animalRescue?.phase==='carry'||pawn.animalHandling?.kind==='release'&&pawn.animalHandling.phase==='carry'||load?.humanCorpse?-1:packed?4:kind,packed?1:size,
         mainHandoff?localTimeSeconds(mainHandoff.start,this.carryOrigin):0,
         mainHandoff?(mainHandoff.direction==='pickup'?1:-1)*localTimeSeconds(mainHandoff.end,this.carryOrigin):0);
       if(mainHandoff){

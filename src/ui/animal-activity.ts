@@ -9,6 +9,10 @@ export function animalActivity(world:World,animal:WildAnimal,quotaTargets?:Reado
   if(animal.state==='dead')return labels[animal.state];
   const rescuer=world.pawns.find(p=>p.animalRescue?.animalId===animal.id);
   if(rescuer)return `${rescuer.animalRescue!.phase==='carry'?'Porté vers un couchage':'Secours en approche'} · ${rescuer.name}`;
+  if(animal.domestic?.release364){
+    const handler=world.pawns.find(p=>p.animalHandling?.kind==='release'&&p.animalHandling.animalId===animal.id);
+    return handler?`${handler.animalHandling!.phase==='carry'?'Porté hors de la colonie':handler.animalHandling!.phase==='interact'?'Remise en liberté':'Soigneur en approche'} · ${handler.name}`:'Désigné pour être relâché';
+  }
   const automatic=!!animal.domestic&&(quotaTargets??autoSlaughterTargets(world)).has(animal.id);
   if(animal.domestic?.slaughter||automatic){
     const worker=world.pawns.find(p=>p.animalHandling?.kind==='slaughter'&&p.animalHandling.animalId===animal.id);

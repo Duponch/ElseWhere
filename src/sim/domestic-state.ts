@@ -8,6 +8,8 @@ export interface DomesticAnimal {
   bedId?:number;
   /** V309 prospective, explicit player intent; absence preserves the herd. */
   slaughter?:true;
+  /** Schema 364: ReleaseAnimalToWild designation, never with slaughter. */
+  release364?:true;
   since:number;
   care:MedicalCare;
   tameness:number;
@@ -21,11 +23,11 @@ export interface DomesticAnimal {
 export interface TamingDesignation { designated:boolean; lastAttempt?:number }
 export interface AnimalHandlingTask {
   animalId:number;
-  kind:'tame'|'maintain'|'train'|'lead'|'milk'|'shear'|'slaughter';
+  kind:'tame'|'maintain'|'train'|'lead'|'milk'|'shear'|'slaughter'|'release';
   sourcePileId:number;
   carryPileId:number|null;
   quantity:number;
-  phase:'pickup'|'approach'|'interact'|'lead'|'gather';
+  phase:'pickup'|'approach'|'interact'|'lead'|'gather'|'carry';
   step:number;
   progress:number;
   /** V282 only: the two admitted physical feed portions and actual skill. */
@@ -41,6 +43,8 @@ export interface AnimalHandlingTask {
   ropees?:number[];
   /** A second animal reserved while the handler physically walks to it. */
   gatherId?:number;
+  /** Schema 364 release: the outside cell the animal is carried to. */
+  drop364?:Cell;
 }
 export interface AnimalCareTask {
   animalId:number;
@@ -55,5 +59,6 @@ export type DomesticCommand =
   | {type:'order-animal-rescue';pawnId:number;animalId:number}
   | {type:'animal-spot-medical';spotId:number;enabled:boolean}
   | {type:'slaughter';animalId:number;enabled:boolean}
+  | {type:'release-wild';animalId:number;enabled:boolean}
   | {type:'tame';animalId:number;enabled:boolean}
   | {type:'animal-care-policy';animalId:number;care:MedicalCare};

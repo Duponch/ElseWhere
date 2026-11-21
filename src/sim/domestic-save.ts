@@ -1,3 +1,4 @@
+import {validReleaseDesignation364,validReleaseWildTask364} from './execute-release-364.ts';
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
 import {startingPetFourNoTamenessDecay256} from './starting-pet-four-tameness-256.ts';
 import {isAnimalSpecies256} from './animal-core-v256.ts';
@@ -31,11 +32,12 @@ const productReadyForVersion=(a:WildAnimal,version:number)=>!!a.domestic&&!!prod
 
 function validDomesticOwner(w:Pick<World,'tick'|'nextId'>&Partial<Pick<World,'structures'>>,a:WildAnimal,version:number):boolean {
   const d:unknown=a.domestic;
-  return (!isAnimalSpecies256(a.species)||version>=256)&&version>=106&&(a.species==='hare'||version>=256&&isAnimalSpecies256(a.species)||version>=119&&livestock(a))&&obj(d)&&keys(d,['since','care','tameness','nextDecay'],version>=120?['lastTraining','penMarkerId','productFullness',...(version>=220?['slaughter']:[]),...(version>=221?['bedId']:[])]:version>=119?['lastTraining','penMarkerId']:['lastTraining'])
+  return (!isAnimalSpecies256(a.species)||version>=256)&&version>=106&&(a.species==='hare'||version>=256&&isAnimalSpecies256(a.species)||version>=119&&livestock(a))&&obj(d)&&keys(d,['since','care','tameness','nextDecay'],version>=120?['lastTraining','penMarkerId','productFullness',...(version>=220?['slaughter']:[]),...(version>=221?['bedId']:[]),...(version>=364?['release364']:[])]:version>=119?['lastTraining','penMarkerId']:['lastTraining'])
     &&int(d.since,0,w.tick)&&typeof d.care==='string'&&Object.hasOwn(MEDICAL_CARE,d.care)&&int(d.tameness,1,5)
     &&int(d.nextDecay,0,w.tick+45000)&&(d.lastTraining===undefined||int(d.lastTraining,d.since,w.tick))
     &&(version>=120?(productForVersion(a,version)?finite(d.productFullness,0,1):d.productFullness===undefined):d.productFullness===undefined)
     &&(!Object.hasOwn(d,'slaughter')||version>=220&&d.slaughter===true)
+    &&validReleaseDesignation364(d,version)
     &&(!Object.hasOwn(d,'bedId')||version>=221&&int(d.bedId,1,w.nextId-1)&&!!w.structures?.some(s=>s.id===d.bedId&&s.kind==='animal-sleeping-spot'&&!s.medical))
     &&(d.penMarkerId===undefined||version>=119&&livestock(a)&&int(d.penMarkerId,1,w.nextId-1)&&!!w.structures?.find(s=>s.id===d.penMarkerId&&s.kind==='pen-marker'&&s.pen?.accepted.includes(a.species)));
 }
@@ -154,9 +156,10 @@ export function validateDomesticAnimals(w:World,version:number):string[] {
     const base=(t:Record<string,unknown>)=>int(t.animalId,1,w.nextId-1)&&w.wildlife?.animals.some(a=>a.id===t.animalId&&(a.species==='hare'||version>=119&&canTameSpecies(a.species)));
     const lead=obj(h)&&h.kind==='lead';
     const slaughter=obj(h)&&h.kind==='slaughter';
+    const release=obj(h)&&h.kind==='release';
     const product=obj(h)&&(h.kind==='milk'||h.kind==='shear');
     const training=obj(h)&&h.kind==='train';
-    if(h!==undefined&&!(training?validAnimalTrainingService282(w,p,version):slaughter?validSlaughterTask(w,p,version):lead
+    if(h!==undefined&&!(training?validAnimalTrainingService282(w,p,version):slaughter?validSlaughterTask(w,p,version):release?validReleaseWildTask364(w,p,version):lead
       ?version>=119&&keys(h,['animalId','kind','markerId','phase','sourcePileId','carryPileId','quantity','step','progress'],version>=135?['ropees','gatherId']:[])&&base(h)&&int(h.markerId,1,w.nextId-1)&&['approach','lead',...(version>=135?['gather']:[])].includes(String(h.phase))
         &&h.sourcePileId===0&&h.carryPileId===null&&h.quantity===0&&h.step===0&&h.progress===0
         &&(h.ropees===undefined||version>=135&&Array.isArray(h.ropees)&&h.ropees.length>=1&&h.ropees.length<=MAX_ROPEES
@@ -185,6 +188,7 @@ export function validateDomesticAnimals(w:World,version:number):string[] {
       const t=p.animalHandling;
       if(t.kind==='train')continue;
       if(t.kind==='slaughter')continue;
+      if(t.kind==='release')continue;
       if(t.kind==='lead'){
         const region=t.markerId===undefined?undefined:penRegion(w,t.markerId);
         if(!a.domestic||!livestock(a)||!region||!region.closed||!region.accessible||a.domestic.penMarkerId!==t.markerId

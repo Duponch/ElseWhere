@@ -29,6 +29,7 @@ import { firefightingTargets,firefightingProposal,startFirefighting } from './fi
 import { prisonFoodChecker } from './prison-food.ts';
 import { huntingWanted,huntingProposal } from './hunting.ts';
 import { wardenWanted,wardenProposal,startWarden } from './warden.ts';
+import { executionProposal364,releaseWildProposal364,releaseWildWanted364 } from './execute-release-364.ts';
 import {releaseReady,releaseProposal,startPrisonerRelease} from './prisoner-release.ts';
 import { benchSpeedFactor, researchWanted,researchProposal } from './research.ts';
 import { feedingProposal,startFeeding } from './feeding.ts';
@@ -180,7 +181,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     if(c.surgery||c.family==='surgery')return 'DoBillsMedicalHumanOperation';
     if(c.rescue||c.family==='rescue')return world.pawns.find(p=>p.id===c.id)?.prisoner?'TakePrisonerToBed':'DoctorRescue';
     if(c.prisonerRelease){const basic=workPriority(pawn,'basic'),warden=workPriority(pawn,'warden');return basic>0&&(warden===0||basic<=warden)?'BasicReleasePrisoner':'ReleasePrisoner';}
-    if(c.ward)return c.ward.task.kind==='food'?'DeliverFoodToPrisoner':'ChatWithPrisoner';
+    if(c.ward)return c.ward.task.kind==='food'?'DeliverFoodToPrisoner':c.ward.task.kind==='execute'?'DoExecution':'ChatWithPrisoner';
     if(c.brewing)return 'TakeBeerOutOfFermentingBarrel';
     if(c.strip351)return 'Strip';
     if(c.animalRescue)return 'DoctorRescue';
@@ -188,7 +189,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     if(c.animalFeed)return 'DoctorFeedAnimals';
     if(c.animalLeading)return 'TakeToPen';
     if(c.animalProduct)return c.animalProduct.task.kind==='milk'?'Milk':'Shear';
-    if(c.animalHandling){const kind=c.animalHandling.task.kind;return kind==='slaughter'?'Slaughter':kind==='tame'?'Tame':kind==='lead'?'TakeToPen':kind==='milk'?'Milk':kind==='shear'?'Shear':'Train';}
+    if(c.animalHandling){const kind=c.animalHandling.task.kind;return kind==='slaughter'?'Slaughter':kind==='release'?'ReleaseToWild':kind==='tame'?'Tame':kind==='lead'?'TakeToPen':kind==='milk'?'Milk':kind==='shear'?'Shear':'Train';}
     if(c.hunting)return 'HunterHunt';
     if(c.research)return 'Research';
     if(c.deepWork)return world.structures.find(s=>s.id===c.id)?.kind==='deep-drill'?'Drill':'GroundPenetratingScan';
@@ -237,7 +238,8 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
   // Each fact is computed only when a check or a family needs it: with the
   // giver order, most families are never reached.
   const animalRescuing=once(()=>animalRescueWanted(world,pawn));
-  const slaughtering=once(()=>slaughterWanted(world,pawn)),handling=once(()=>slaughtering()||handlingWanted(world,pawn)),leading=once(()=>leadingWanted(world,pawn)),gathering=once(()=>productWanted(world,pawn)),vet=once(()=>animalCareWanted(world,pawn)),vetFeed=once(()=>animalFeedingWanted(world,pawn));
+  const releasingWild=once(()=>world.schemaVersion>=364&&releaseWildWanted364(world,pawn));
+  const slaughtering=once(()=>slaughterWanted(world,pawn)),handling=once(()=>slaughtering()||releasingWild()||handlingWanted(world,pawn)),leading=once(()=>leadingWanted(world,pawn)),gathering=once(()=>productWanted(world,pawn)),vet=once(()=>animalCareWanted(world,pawn)),vetFeed=once(()=>animalFeedingWanted(world,pawn));
   const cleaning=once(()=>cleaningWanted(world,pawn)),burying=once(()=>workPriority(pawn,'haul')>0&&world.structures.some(s=>isBurialContainer256(s.kind,world.schemaVersion)&&s.grave?.corpseId===undefined)&&world.pawns.some(p=>p.state==='dead'&&!burialReason(world,pawn,p)));
   const fightingFire=once(()=>firefightingTargets(world,pawn).length>0);
   let looseWort:boolean|undefined;
@@ -356,6 +358,10 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
   }});
   families.push({givers:[['DeliverFoodToPrisoner'],['ChatWithPrisoner']],run:()=>{
   if(warding()&&reachableBy('DeliverFoodToPrisoner')){const proposal=wardenProposal(world,pawn,reachable,rim?targetSearch:undefined);if(proposal){const candidate:Candidate={ward:proposal,priority:workPriority(pawn,'warden'),rank:-2,distance:Math.abs(pawn.x-proposal.task.spot.x)+Math.abs(pawn.z-proposal.task.spot.z),id:proposal.task.patientId,target:proposal.task.spot};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  }});
+  // Schema 364: WorkGiver_Warden_DoExecution (Warden, priority 110).
+  if(world.schemaVersion>=364)families.push({givers:[['DoExecution']],run:()=>{
+  if(warding()&&reachableBy('DoExecution')){const proposal=executionProposal364(world,pawn,reachable,rim?targetSearch:undefined);if(proposal){const candidate:Candidate={ward:proposal,priority:workPriority(pawn,'warden'),rank:-2.5,distance:Math.abs(pawn.x-proposal.task.spot.x)+Math.abs(pawn.z-proposal.task.spot.z),id:proposal.task.patientId,target:proposal.task.spot};if(!best||cmp(candidate,best)<0)best=candidate;}}
   }});
   families.push({givers:[['FightFires']],run:()=>{
   if(fightingFire()){const proposal=firefightingProposal(world,pawn,reachable);if(proposal){const candidate:Candidate={firefighting:proposal,priority:workPriority(pawn,'firefight'),rank:-7,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.fireId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
@@ -662,6 +668,10 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
   }});
   families.push({givers:[['Slaughter']],run:()=>{
   if(slaughtering()&&reachableBy('Slaughter')){const proposal=slaughterProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalHandling:proposal,priority:workPriority(pawn,'handle'),rank:-4,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
+  }});
+  // Schema 364: WorkGiver_ReleaseAnimalsToWild (Handling, priority 100).
+  if(world.schemaVersion>=364)families.push({givers:[['ReleaseToWild']],run:()=>{
+  if(releasingWild()&&reachableBy('ReleaseToWild')){const proposal=releaseWildProposal364(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalHandling:proposal,priority:workPriority(pawn,'handle'),rank:-4,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}
   }});
   families.push({givers:[['Slaughter'],['Tame'],['Train'],['TakeToPen'],['Milk'],['Shear']],run:()=>{
   if(handling()&&reachableBy('Slaughter')){const proposal=handlingProposal(world,pawn,reachable!);if(proposal){const candidate:Candidate={animalHandling:proposal,priority:workPriority(pawn,'handle'),rank:-.25,distance:Math.abs(pawn.x-proposal.target.x)+Math.abs(pawn.z-proposal.target.z),id:proposal.task.animalId,target:proposal.target};if(!best||cmp(candidate,best)<0)best=candidate;}}

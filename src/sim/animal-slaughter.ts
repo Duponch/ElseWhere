@@ -1,3 +1,4 @@
+import {clearReleaseForSlaughter364} from './execute-release-364.ts';
 import {releaseAnimalThermalRefuge288} from './animal-thermal-refuge-288.ts';
 import {planAnimalDeathExplosion256,isExplosiveAnimal256} from './animal-death-explosion-v256.ts';
 import {animalExecutionPart256} from './animal-execution-v256.ts';
@@ -82,7 +83,7 @@ export function designateSlaughter(world:World,command:Extract<DomesticCommand,{
   if(!command.enabled){
     delete animal!.domestic!.slaughter;
     if(!slaughterIntent(world,animal!))for(const pawn of world.pawns)if(pawn.animalHandling?.kind==='slaughter'&&pawn.animalHandling.animalId===animal!.id)interruptWork(world,pawn);
-  } else animal!.domestic!.slaughter=true;
+  } else {animal!.domestic!.slaughter=true;if(world.schemaVersion>=364)clearReleaseForSlaughter364(world,animal!);}
   for(const pawn of world.pawns)pawn.planCooldown=0;
   return {ok:true};
 }

@@ -1,6 +1,6 @@
 import {memoryExpiry271,validSuspendedMemory271} from './suspended-memory-271.ts';
 import {captureHumanOwners,type HumanOwnershipCapture} from './human-owners.ts';
-import {DEATH_THOUGHT_RULES} from './death-thoughts-rules.ts';
+import {DEATH_THOUGHT_KINDS_364,DEATH_THOUGHT_RULES} from './death-thoughts-rules.ts';
 import type {DeathThoughtKind,DeathThoughtMemory} from './death-thoughts-state.ts';
 import type {World} from './types.ts';
 
@@ -11,12 +11,12 @@ const integer=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof 
  * affiliation or surviving corpse Thing. A dead observer freezes its memories. */
 export function validDeathThoughtsShape(value:unknown,version:number,tick:number,frozen=false,civilTick=tick):value is DeathThoughtMemory[]|undefined {
   if(value===undefined)return true;
-  if(version<209||!integer(tick)||!Array.isArray(value)||!value.length||value.length>25
+  if(version<209||!integer(tick)||!Array.isArray(value)||!value.length||value.length>(version>=364?35:25)
     ||Object.keys(value).length!==value.length||Object.keys(value).some((key,index)=>key!==String(index)))return false;
   const seen=new Set<string>(),counts=new Map<DeathThoughtKind,number>();
   for(const memory of value){
     if(!object(memory)||Reflect.ownKeys(memory).length!==(Object.hasOwn(memory,'suspendedTicks')?4:3)||Object.keys(memory).some(k=>!['kind','otherId','at','suspendedTicks'].includes(k))||!validSuspendedMemory271(memory,version,tick,Number(memory.at))
-      ||typeof memory.kind!=='string'||!Object.hasOwn(DEATH_THOUGHT_RULES,memory.kind)||!integer(memory.otherId,1)||!integer(memory.at,0,civilTick))return false;
+      ||typeof memory.kind!=='string'||!Object.hasOwn(DEATH_THOUGHT_RULES,memory.kind)||version<364&&DEATH_THOUGHT_KINDS_364.includes(memory.kind as DeathThoughtKind)||!integer(memory.otherId,1)||!integer(memory.at,0,civilTick))return false;
     const kind=memory.kind as DeathThoughtKind,rule=DEATH_THOUGHT_RULES[kind],key=`${kind}:${memory.otherId}`;
     const count=(counts.get(kind)??0)+1;
     if(seen.has(key)||count>rule.limit||!frozen&&memoryExpiry271(memory,memory.at+rule.duration)<=Math.max(tick,memory.at))return false;

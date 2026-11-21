@@ -1,3 +1,4 @@
+import {validExecutionWardShape364} from './execute-release-364.ts';
 import {isResistanceKind334,resistanceBounds334} from './prisoner-resistance-334.ts';
 import {isSchema272OrLater} from './schema-compatibility-257.ts';
 import {isSpearItem272} from './spear-content-272.ts';
@@ -61,7 +62,7 @@ export function validPrisonBreakBindings(w:World,version:number):boolean {
 export function validPrisonerStateRecord259(s:unknown,version:number,w:World,detached=false):boolean {
   if(!object(s)||!keys(s,['capturedAt','initialResistance','resistance','mode','lastChatTick','chatDay','chatCount','rng','escape',...(version>=202?['releasedAt']:[]),...(version>=204?['breakout']:[]),...(version>=334?['kind334']:[])])
     ||!integer(s.capturedAt,0,w.tick)||s.kind334!==undefined&&!isResistanceKind334(s.kind334)||!integer(s.initialResistance,...resistanceBounds334(s.kind334))||typeof s.resistance!=='number'||!Number.isFinite(s.resistance)||s.resistance<0||s.resistance>s.initialResistance
-    ||typeof s.mode!=='string'||!['maintain','reduce','recruit',...(version>=202?['release']:[])].includes(s.mode)||!integer(s.rng,1,0xffffffff)||!integer(s.chatDay,0,prisonDay(w))||(!detached&&s.chatDay!==prisonDay(w))||!integer(s.chatCount,0,2)
+    ||typeof s.mode!=='string'||!['maintain','reduce','recruit',...(version>=202?['release']:[]),...(version>=364?['execute']:[])].includes(s.mode)||!integer(s.rng,1,0xffffffff)||!integer(s.chatDay,0,prisonDay(w))||(!detached&&s.chatDay!==prisonDay(w))||!integer(s.chatCount,0,2)
     ||s.lastChatTick!==undefined&&!integer(s.lastChatTick,s.capturedAt,w.tick)||s.chatCount>0&&s.lastChatTick===undefined
     ||s.escape!==undefined&&(!cell(s.escape,w)||!edge(s.escape,w))
     ||s.releasedAt!==undefined&&(!integer(s.releasedAt,s.capturedAt,w.tick)||s.mode!=='release'||s.lastChatTick!==undefined&&Number(s.lastChatTick)>s.releasedAt)
@@ -88,6 +89,7 @@ export function validPrisonerPawnShape(p:Record<string,unknown>,version:number,w
   if(colony&&object(r)&&(Number(r.recruitedAt)>Number(s.capturedAt)||r.raidGroup!==undefined&&(!w.raids||Number(r.raidGroup)>w.raids.serial)))return false;
   const t=p.ward;if(t===undefined)return true;
   if(!object(t)||!integer(t.patientId,1,w.nextId-1)||!cell(t.spot,w))return false;
+  if(t.kind==='execute')return validExecutionWardShape364(t,version,w);
   if(t.kind==='food')return keys(t,['kind','patientId','sourcePileId','carryPileId','quantity','spot','phase'])&&integer(t.sourcePileId,1,w.nextId-1)&&integer(t.quantity,1,75)
     &&(t.phase==='pickup'?t.carryPileId===null:t.phase==='deliver'&&integer(t.carryPileId,1,w.nextId-1));
   return t.kind==='chat'&&keys(t,['kind','patientId','spot','phase','progress','rapports'])&&typeof t.phase==='string'&&['approach','rapport','closing'].includes(t.phase)&&integer(t.progress,0,PRISON_RAPPORT_TICKS-1)
@@ -144,7 +146,7 @@ export function validatePrisoners(w:World,version:number,ids:Set<number>):string
     for(const bedId of beds)if(bedId!==null){const bed=[...w.structures,...w.packed.map(p=>p.building)].find(b=>b.id===bedId&&isBedKind(b.kind)&&(version>=187||b.kind==='bed'));if(bed&&!!bed.prisoner!==!!p.prisoner)errors.push('Bed role disagrees with its occupant.');}
     const t=p.ward;if(!t)continue;const patient=w.pawns.find(q=>q.id===t.patientId);
     if(!isColonist(p)||p.prisoner||p.priorities.warden===0||medicalWorkRefusal(p)||p.mental?.crisis||p.draft||p.interruptedCargo||p.orders.active!==null||p.jobId!==null||p.need||p.haul||p.cooking||p.rescue||p.tend||p.feed||p.recreation.task||p.equipmentTask||p.deepWork||p.research||p.hunting)errors.push('Warden task conflicts with actor activity.');
-    if(!patient||patient===p||patient.state==='dead'||patientClaimed(w,t.patientId,p)||w.pawns.some(a=>a.rescue?.patientId===t.patientId)||t.kind==='chat'&&patient.prisoner?.mode==='release'
+    if(!patient||patient===p||patient.state==='dead'||patientClaimed(w,t.patientId,p)||w.pawns.some(a=>a.rescue?.patientId===t.patientId)||t.kind==='chat'&&patient.prisoner?.mode==='release'||t.kind==='execute'&&(patient.prisoner?.mode!=='execute'||isColonist(patient))
       ||(t.kind==='chat'&&t.phase==='closing'?!(patient.prisoner||patient.recruitment):!patient.prisoner||!!patient.prisoner.escape))errors.push('Invalid or duplicate warden patient.');
     if(t.kind==='food'){
       const food=w.piles.find(i=>i.id===(t.phase==='pickup'?t.sourcePileId:t.carryPileId));

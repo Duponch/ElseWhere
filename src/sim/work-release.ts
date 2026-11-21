@@ -17,7 +17,7 @@ import { leadRopees } from './animal-leading.ts';
 import { finishRoomRest,rememberRoomUse } from './room-experience.ts';
 import { feedingWork } from './feeding-rules.ts';
 import { cancelAutomaticCombat } from './automatic-combat-state.ts';
-import {releaseAnimalRescue} from './animal-rest-state.ts';
+import {releaseAnimalRescue,syncCarriedAnimals} from './animal-rest-state.ts';
 import { releaseRescue,releaseCryptosleepCarry271 } from './rescue-state.ts';
 import { updatePawnHealth } from './health.ts';
 import { isRoofJob } from './roof-rules.ts';
@@ -209,6 +209,11 @@ export function releaseAssignments(world:World,pawn:Pawn,despawning=false,ownerL
   if(isSchema285OrLater(world.schemaVersion)&&pawn.coupleTask285)prepareCoupleRelease285(world,new Set([pawn.id])).commit();
   releaseAllowedAreaReturn(pawn);
   releaseAnimalRescue(world,pawn);
+  // Schema 364: an interrupted release carry drops the animal where it is.
+  if(pawn.animalHandling?.kind==='release'&&pawn.animalHandling.phase==='carry'){
+    syncCarriedAnimals(world,pawn);const id=pawn.animalHandling.animalId;
+    const animal=world.wildlife?.animals.find(a=>a.id===id);if(animal){animal.path=[];animal.nextDecision=world.tick;}
+  }
   if(pawn.animalHandling?.kind==='lead'){
     const ids=new Set(leadRopees(pawn.animalHandling));
     for(const animal of world.wildlife?.animals??[])if(ids.has(animal.id)){animal.path=[];animal.nextDecision=world.tick+1;}

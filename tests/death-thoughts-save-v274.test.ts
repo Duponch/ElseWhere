@@ -3,7 +3,7 @@ import {SnapshotDecoder,SnapshotEncoder} from '../src/bridge/snapshots.ts';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import {SCHEMA_VERSION,type World} from '../src/sim/types.ts';
 import {validDeathThoughtsShape,validDeathThoughtsPawnShape,validDeathThoughtsTransport} from '../src/sim/death-thoughts-save.ts';
-import {DEATH_THOUGHT_RULES} from '../src/sim/death-thoughts-rules.ts';
+import {DEATH_THOUGHT_KINDS_364,DEATH_THOUGHT_RULES} from '../src/sim/death-thoughts-rules.ts';
 import type {DeathThoughtKind,DeathThoughtMemory} from '../src/sim/death-thoughts-state.ts';
 import {exitVisitor} from '../src/sim/visitors.ts';
 import {visitorTradeFixture} from './scenarios/visitors.ts';
@@ -34,7 +34,8 @@ test('perceived memories roundtrip independently of affiliation, traits and the 
 
 test('all seven kinds have exact per-kind caps and distinct targets, without merging identities',()=>{
   const all:DeathThoughtMemory[]=[];
-  for(const kind of Object.keys(DEATH_THOUGHT_RULES) as DeathThoughtKind[]){
+  // The two schema 364 kinds (execution) are refused below 364.
+  for(const kind of (Object.keys(DEATH_THOUGHT_RULES) as DeathThoughtKind[]).filter(kind=>!DEATH_THOUGHT_KINDS_364.includes(kind))){
     const rule=DEATH_THOUGHT_RULES[kind],rows=Array.from({length:rule.limit},(_,i)=>({kind,otherId:i+1,at:3000}));
     expect(validDeathThoughtsShape(rows,209,3000)).toBe(true);
     expect(validDeathThoughtsShape([...rows,{kind,otherId:100,at:3000}],209,3000)).toBe(false);
@@ -43,6 +44,12 @@ test('all seven kinds have exact per-kind caps and distinct targets, without mer
   }
   expect(all).toHaveLength(25);expect(validDeathThoughtsShape(all,209,3000)).toBe(true);
   expect(validDeathThoughtsShape([...all,all[0]],209,3000)).toBe(false);
+  for(const kind of DEATH_THOUGHT_KINDS_364){
+    const rows=Array.from({length:DEATH_THOUGHT_RULES[kind].limit},(_,i)=>({kind,otherId:i+1,at:3000}));
+    expect(validDeathThoughtsShape(rows,363,3000)).toBe(false);expect(validDeathThoughtsShape(rows,364,3000)).toBe(true);
+    all.push(...rows);
+  }
+  expect(all).toHaveLength(35);expect(validDeathThoughtsShape(all,364,3000)).toBe(true);
 });
 
 test('raw shapes reject missing, extra, nonfinite, sparse and future-schema death memory fields',()=>{

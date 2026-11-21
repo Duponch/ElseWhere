@@ -38,6 +38,9 @@ export const animalCarrier=(w:World,id:number):Pawn|undefined=>{
     if(c&&c.action==='carry'&&(c.phase==='carry'||c.phase==='closing')&&c.patient?.kind==='animal'&&c.patient.id===id)return p;
     const r=p.animalRescue;
     if(!rescuer&&r&&r.animalId===id&&r.phase==='carry')rescuer=p;
+    // Schema 364: a handler carrying an animal out to release it.
+    const h=p.animalHandling;
+    if(!rescuer&&h&&h.kind==='release'&&h.phase==='carry'&&h.animalId===id)rescuer=p;
   }
   return rescuer??(w.schemaVersion>=256?groupAnimalCarrier256(w,id):undefined);
 };
@@ -56,8 +59,9 @@ export function syncCarriedAnimals(w:World,carrier?:Pawn):void {
   if(w.schemaVersion>=256){if(carrier)syncGroupCarriedAnimals256(w,carrier);else syncAllGroupCarriedAnimals256(w);}
   for(const p of carrier?[carrier]:w.pawns){
     syncShipCasketPassenger277(w,p);
-    if(p.animalRescue?.phase!=='carry')continue;
-    const a=w.wildlife?.animals.find(a=>a.id===p.animalRescue!.animalId);if(!a)continue;
+    const carried=p.animalRescue?.phase==='carry'?p.animalRescue.animalId:p.animalHandling?.kind==='release'&&p.animalHandling.phase==='carry'?p.animalHandling.animalId:undefined;
+    if(carried===undefined)continue;
+    const a=w.wildlife?.animals.find(a=>a.id===carried);if(!a)continue;
     a.x=p.x;a.z=p.z;a.path=[];
     if(p.motion)a.motion={...p.motion,from:{...p.motion.from},to:{...p.motion.to},
       ...(p.motion.stagger?{stagger:p.motion.stagger.map(s=>({...s}))}:{}),...(p.motion.stuns?{stuns:p.motion.stuns.map(s=>({...s}))}:{})};

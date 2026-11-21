@@ -6,7 +6,7 @@ import { TICKS_PER_DAY,type Cell,type Pawn,type World } from './types.ts';
 import type { PrisonBreakState } from './prison-break-state.ts';
 import { isResistanceKind334,resistanceBounds334 } from './prisoner-resistance-334.ts';
 
-export type PrisonerMode='maintain'|'reduce'|'recruit'|'release';
+export type PrisonerMode='maintain'|'reduce'|'recruit'|'release'|'execute';
 export interface PrisonerState {
   capturedAt:number;initialResistance:number;resistance:number;mode:PrisonerMode;
   lastChatTick?:number;chatDay:number;chatCount:number;rng:number;escape?:Cell;releasedAt?:number;breakout?:PrisonBreakState;
@@ -15,7 +15,9 @@ export interface PrisonerState {
 }
 export interface WardFoodTask {kind:'food';patientId:number;sourcePileId:number;carryPileId:number|null;quantity:number;spot:Cell;phase:'pickup'|'deliver'}
 export interface WardChatTask {kind:'chat';patientId:number;spot:Cell;phase:'approach'|'rapport'|'closing';progress:number;rapports:number}
-export type WardTask=WardFoodTask|WardChatTask;
+/** Schema 364: the warden walks to the prisoner, then executes them at once. */
+export interface WardExecuteTask364 {kind:'execute';patientId:number;spot:Cell;phase:'approach'}
+export type WardTask=WardFoodTask|WardChatTask|WardExecuteTask364;
 export const PRISON_CHAT_INTERVAL=1000,PRISON_RAPPORT_TICKS=35,PRISON_RAPPORTS=5;
 export const isPrisoner=(p:Pick<Pawn,'prisoner'>):boolean=>!!p.prisoner;
 export const prisonDay=(world:World):number=>Math.floor(calendarTick(world)/TICKS_PER_DAY);
@@ -32,7 +34,7 @@ export function createPrisonerState(world:World,pawn:Pawn):PrisonerState {
   return {capturedAt:world.tick,initialResistance,resistance:initialResistance,mode:'maintain',chatDay:prisonDay(world),chatCount:0,rng:state.rng,...kind?{kind334:kind}:{}};
 }
 export function prisonerChatReady(world:World,pawn:Pawn):boolean {
-  const p=pawn.prisoner;if(!p||p.breakout?.active||p.escape||p.mode==='maintain'||p.mode==='release'||p.mode==='reduce'&&p.resistance<=0)return false;
+  const p=pawn.prisoner;if(!p||p.breakout?.active||p.escape||p.mode==='maintain'||p.mode==='release'||p.mode==='execute'||p.mode==='reduce'&&p.resistance<=0)return false;
   return (p.lastChatTick===undefined||world.tick-p.lastChatTick>PRISON_CHAT_INTERVAL)&&(p.chatDay!==prisonDay(world)||p.chatCount<2);
 }
 export function recordPrisonerChat(world:World,pawn:Pawn):void {

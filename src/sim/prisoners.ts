@@ -1,4 +1,5 @@
 import {isDoubleBedKind} from './bed-kinds.ts';
+import {noteExecutionMode364} from './execute-release-364.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {captureActorBeds256,forgetLocalActorBed256,forgetLocalBedOwners256} from './actor-bed-local-256.ts';
 import {registeredCampaign} from './world-map-context.ts';
@@ -54,7 +55,7 @@ export function applyPrisonBed(world:World,command:{bedId:number;enabled:boolean
 }
 export function applyPrisonerMode(world:World,command:{patientId:number;mode:PrisonerMode}):CommandResult {
   const p=world.pawns.find(p=>p.id===command.patientId);
-  if(!p?.prisoner||p.state==='dead'||!['maintain','reduce','recruit',...world.schemaVersion>=202?['release']:[]].includes(command.mode))return fail('Prisonnier ou mode de conversation invalide.');
+  if(!p?.prisoner||p.state==='dead'||!['maintain','reduce','recruit',...world.schemaVersion>=202?['release']:[],...world.schemaVersion>=364?['execute']:[]].includes(command.mode))return fail('Prisonnier ou mode de conversation invalide.');
   if(world.schemaVersion>=213&&isColonist(p)&&command.mode!=='maintain'&&command.mode!=='release')return fail('Ce colon appartient déjà à la colonie : maintien ou libération uniquement.');
   if(p.prisoner.mode===command.mode)return {ok:true};
   if(prisonBreakActive(p))return fail('Il faut réprimer la révolte avant de changer cette consigne.');
@@ -62,10 +63,11 @@ export function applyPrisonerMode(world:World,command:{patientId:number;mode:Pri
   p.prisoner.mode=command.mode;
   // Already completed interaction effects/closing time are kept; no rollback.
   for(const actor of world.pawns){
-    if(actor.ward?.patientId===p.id&&(command.mode==='release'||actor.ward.kind==='chat'&&actor.ward.phase!=='closing')
+    if(actor.ward?.patientId===p.id&&(command.mode==='release'||actor.ward.kind==='chat'&&actor.ward.phase!=='closing'||actor.ward.kind==='execute')
       ||actor.rescue?.release&&actor.rescue.patientId===p.id)interruptWork(world,actor);
     actor.planCooldown=0;
   }
+  if(command.mode==='execute')noteExecutionMode364(world,p);
   return {ok:true};
 }
 /** Joining air spaces propagates the role to supported prison beds. Civil

@@ -101,6 +101,8 @@ import { animalBodyModel } from '../sim/body-model';
 import { actualAnimalName256 } from '../sim/starting-pet-state-256';
 import { tameRefusal, handlingSkill } from '../sim/animal-handling';
 import { slaughterRefusal } from '../sim/animal-slaughter';
+import { isExecuteRelease364 } from '../sim/execute-release-364';
+import type { PrisonerMode } from '../sim/prisoner-state';
 import { readAnimalTraining282, trainingRefusal282, ANIMAL_TRAINING_LABELS_282 } from '../sim/animal-training-282';
 import { supportsAnimalAreas287, currentAnimalAreaChoice287 } from '../sim/animal-area-policy-287';
 import { animalRescueReason } from '../sim/animal-rescue';
@@ -386,7 +388,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
     if (!entries) rows.push(row('empty-journal', 'Aucun événement personnel de cette catégorie dans le journal disponible.'));
   } else if (pawn.prisoner) {
     rows.push(meterRow('prisoner-resistance', 'Résistance', pawn.prisoner.resistance, pawn.prisoner.initialResistance, 'La résistance actuelle reste distincte du mode de détention choisi et de la décision de recrutement.', `${pawn.prisoner.resistance.toFixed(1)} / ${pawn.prisoner.initialResistance}`), row('captured-at', 'Capture', `Pas ${pawn.prisoner.capturedAt}`),
-      choices('prisoner-mode', 'Mode de détention', pawn.prisoner.mode, ['maintain', 'reduce', 'recruit', 'release'] as const, mode => send({ type: 'prisoner-mode', patientId: pawn.id, mode }), mode => ({ maintain: 'Maintenir', reduce: 'Réduire la résistance', recruit: 'Recruter', release: 'Libérer' })[mode], !alive),
+      choices<PrisonerMode>('prisoner-mode', 'Mode de détention', pawn.prisoner.mode, isExecuteRelease364(world.schemaVersion) && !isColonist(pawn) ? ['maintain', 'reduce', 'recruit', 'release', 'execute'] : ['maintain', 'reduce', 'recruit', 'release'], mode => send({ type: 'prisoner-mode', patientId: pawn.id, mode }), mode => ({ maintain: 'Maintenir', reduce: 'Réduire la résistance', recruit: 'Recruter', release: 'Libérer', execute: 'Exécuter' })[mode], !alive),
       choices('prisoner-food', 'Régime alimentaire', pawn.foodPolicyId, world.foodPolicies.map(policy => policy.id), policyId => send({ type: 'food-policy-assign', pawnId: pawn.id, policyId }), id => world.foodPolicies.find(policy => policy.id === id)?.name ?? String(id), !alive));
     if (pawn.prisoner.breakout?.active) rows.push(row('prison-break-active', 'Évasion en cours', `Initiateur : ${world.pawns.find(person => person.id === pawn.prisoner?.breakout?.active?.initiatorId)?.name ?? 'Personne absente'}`, `Commencée il y a ${((world.tick - pawn.prisoner.breakout.active.startedAt) / 250).toFixed(1)} h`));
     else if (pawn.prisoner.breakout?.lastAt !== undefined) rows.push(row('prison-break-last', 'Dernière évasion consignée', `Il y a ${((world.tick - pawn.prisoner.breakout.lastAt) / 6000).toFixed(1)} jours`));
@@ -713,7 +715,8 @@ function animalPage(world: World, animalId: number): NativePage | null {
       }) });
   }
   const tame = tameRefusal(world, animal), slaughter = slaughterRefusal(world, animal), hunted = world.hunting?.targets.includes(animalId) ?? false;
-  const actions: NativeControl[] = animal.domestic ? [command('animal-slaughter', animal.domestic.slaughter ? 'Annuler l’abattage' : 'Abattre', { type: 'slaughter', animalId, enabled: !animal.domestic.slaughter }, dead || !!slaughter, !!animal.domestic.slaughter, slaughter)] : [command('animal-hunt', hunted ? 'Annuler la chasse' : 'Chasser', { type: 'hunt', animalId, enabled: !hunted }, dead, hunted), command('animal-tame', animal.taming?.designated ? 'Annuler l’apprivoisement' : 'Apprivoiser', { type: 'tame', animalId, enabled: !animal.taming?.designated }, dead || !animal.taming?.designated && !!tame, !!animal.taming?.designated, tame ?? `Animaux ${handlingSkill(animal.species)} minimum`)];
+  const actions: NativeControl[] = animal.domestic ? [command('animal-slaughter', animal.domestic.slaughter ? 'Annuler l’abattage' : 'Abattre', { type: 'slaughter', animalId, enabled: !animal.domestic.slaughter }, dead || !!slaughter, !!animal.domestic.slaughter, slaughter),
+    ...(isExecuteRelease364(world.schemaVersion) ? [command('animal-release-wild', animal.domestic.release364 ? 'Annuler la remise en liberté' : 'Relâcher dans la nature', { type: 'release-wild', animalId, enabled: !animal.domestic.release364 }, dead, !!animal.domestic.release364, 'Un soigneur emmène l’animal dehors puis le relâche : il redevient sauvage et quitte la colonie.')] : [])] : [command('animal-hunt', hunted ? 'Annuler la chasse' : 'Chasser', { type: 'hunt', animalId, enabled: !hunted }, dead, hunted), command('animal-tame', animal.taming?.designated ? 'Annuler l’apprivoisement' : 'Apprivoiser', { type: 'tame', animalId, enabled: !animal.taming?.designated }, dead || !animal.taming?.designated && !!tame, !!animal.taming?.designated, tame ?? `Animaux ${handlingSkill(animal.species)} minimum`)];
   return { id: `inspect-animal-${animalId}`, title: actualAnimalName256(animal) ?? `${species.label} ${animalId}`, rows, actions, layout: 'inspector' };
 }
 function mechPage(world: World, actorId: number): NativePage | null {

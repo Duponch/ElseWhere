@@ -1,6 +1,7 @@
 import {isFurnitureCKind363,isFurnitureCSchema363,FURNITURE_C_JOB_KINDS_363} from './furniture-c-363.ts';
 import {wallLampPlacementRefusal363,wallLampSupported363} from './wall-lamp-363.ts';
 import {isDoubleBedKind,isGroundSleepingSpotKind} from './bed-kinds.ts';
+import {designateReleaseWild364} from './execute-release-364.ts';
 import {advanceSicklyDisease361} from './sickly-disease-361.ts';
 import {workSpeedGlobal361} from './traits.ts';
 import {toolCabinetWorkSpeedOffset355} from './tool-cabinet-355.ts';
@@ -920,6 +921,7 @@ function applyCommandInternal(world: World, command: Exclude<LocalCommand,import
   if(command.type==='tame')return applyTaming(world,command);
   if(command.type==='animal-training')return setAnimalTrainingWanted282(world,command.animalId,command.skill,command.wanted);
   if(command.type==='slaughter')return designateSlaughter(world,command);
+  if(command.type==='release-wild')return designateReleaseWild364(world,command);
   if(command.type==='auto-slaughter-policy'){
     const result=setAutoSlaughterPolicy(world,command);
     if(result.ok)reconcileDomesticWork(world);
