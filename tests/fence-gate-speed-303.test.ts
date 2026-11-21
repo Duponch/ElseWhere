@@ -1,5 +1,5 @@
 import {expect,test} from 'vitest';
-import {stripFutureContent} from './scenarios/old-schema.ts';
+import {stripFutureContent,numberOnlyWorld} from './scenarios/old-schema.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
 import {builtDoorState,doorMotionTicks,doorOpenness,fenceGateOpenTicks303,manualDoorOpenTicks,newDoorState} from '../src/sim/door-rules.ts';
 import {readyDoorEntry} from '../src/sim/doors.ts';
@@ -47,7 +47,7 @@ test('a gate of an older save takes the gate speed at its next opening, without 
   const old=deconstructionCamp(1),idle={id:old.nextId++,kind:'fence-gate',material:'steel',x:20,z:20,orientation:0,footprint:'standard',door:newDoorState(old.tick)} as Structure;
   old.structures.push(idle);const json=JSON.parse(serializeWorld(old));json.schemaVersion=302;stripFutureContent(json,302);
   const migrated=deserializeWorld(JSON.stringify(json));
-  expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);expect(migrated).toEqual(old);
+  expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);expect(migrated).toEqual(numberOnlyWorld(json));
   expect(migrated.structures.find(s=>s.id===idle.id)!.door!.duration).toBeUndefined();
 });
 

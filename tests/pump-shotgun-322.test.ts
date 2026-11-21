@@ -11,7 +11,7 @@ import {validTuqueCatalogueTransport} from '../src/sim/tuque-catalogue-save.ts';
 import {validWeaponShape} from '../src/sim/equipment-save.ts';
 import {addMaterial} from '../src/sim/materials.ts';
 import {firingCamp} from './scenarios/shooting.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asNumberOnly} from './scenarios/old-schema.ts';
 import type {Command,World} from '../src/sim/types.ts';
 
 const accept=(w:World,c:Command)=>{const r=applyCommand(w,c);expect(r,JSON.stringify(c)+JSON.stringify(r)).toMatchObject({ok:true});};
@@ -63,5 +63,5 @@ test('before schema 322 the shotgun, its recipe and shells are refused',()=>{
 
 test('a schema 321 save migrates to 322 by its number only',()=>{
   const current=serializeWorld(firingCamp());
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,321)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,321)))).toBe(asNumberOnly(current,321));
 });

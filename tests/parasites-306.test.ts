@@ -1,5 +1,5 @@
 import {expect,test} from 'vitest';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asNumberOnly} from './scenarios/old-schema.ts';
 import {medicineCamp} from './scenarios/medicine.ts';
 import {medicalCamp} from './scenarios/health.ts';
 import {createMedicalRecord,medicalPain} from '../src/sim/injury-state.ts';
@@ -120,5 +120,5 @@ test('save: parasites round-trip at 306, are refused at 305, and a 305 save migr
   delete p.health.parasites306;const current=serializeWorld(w);
   expect(current.startsWith(`{"schemaVersion":${SCHEMA_VERSION},`)).toBe(true);
   const old=asOldSchema(current,305);
-  expect(serializeWorld(deserializeWorld(old))).toBe(current);
+  expect(serializeWorld(deserializeWorld(old))).toBe(asNumberOnly(current,305));
 });

@@ -19,7 +19,7 @@ import {PENOXYCYLINE_DECREMENTS_337,PENOXYCYLINE_FACTS_337,DEFAULT_PENOXYCYLINE_
   penoxycylineActive337,penoxycylineImmuneTo337,scheduledPenoxycylineDue337,validPenoxycylineState337} from '../src/sim/penoxycyline-337.ts';
 import {medicalCamp} from './scenarios/health.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asNumberOnly} from './scenarios/old-schema.ts';
 import {SCHEMA_VERSION,type Command,type Structure,type World} from '../src/sim/types.ts';
 import type {NeedContext} from '../src/sim/needs.ts';
 import {SnapshotEncoder,SnapshotDecoder} from '../src/bridge/snapshots.ts';
@@ -239,9 +239,9 @@ test('before schema 337 the item, its kind, recipes, research, policy entry and 
 test('a schema 336 save migrates to 337 by its number only, without any dose, research or entry',()=>{
   const camp=medicalCamp(),current=serializeWorld(camp);
   const migrated=deserializeWorld(asOldSchema(current,336));
-  expect(serializeWorld(migrated)).toBe(current);
+  expect(serializeWorld(migrated)).toBe(asNumberOnly(current,336));
   expect(migrated.drugPolicies!.every(p=>!Object.hasOwn(p,'penoxycyline337'))).toBe(true);
   expect(migrated.pawns.every(p=>!p.health?.penoxycyline337)).toBe(true);
   const {w}=lab();learned(w,false);const labSave=serializeWorld(w);
-  expect(serializeWorld(deserializeWorld(asOldSchema(labSave,336)))).toBe(labSave);
+  expect(serializeWorld(deserializeWorld(asOldSchema(labSave,336)))).toBe(asNumberOnly(labSave,336));
 });

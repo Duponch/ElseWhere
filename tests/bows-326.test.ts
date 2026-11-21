@@ -24,7 +24,7 @@ import {effectiveCore297} from '../src/sim/core-phase-297.ts';
 import {addGroundMaterial,addMaterial} from '../src/sim/materials.ts';
 import {firingCamp} from './scenarios/shooting.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asNumberOnly} from './scenarios/old-schema.ts';
 import {SCHEMA_VERSION,type Command,type Structure,type World} from '../src/sim/types.ts';
 
 const accept=(w:World,c:Command)=>{const r=applyCommand(w,c);expect(r,JSON.stringify(c)+JSON.stringify(r)).toMatchObject({ok:true});};
@@ -232,7 +232,7 @@ test('before schema 326 the bows, their recipes, arrows, stances and research ar
 
 test('a schema 325 save migrates to 326 by its number only',()=>{
   const current=serializeWorld(firingCamp());
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,325)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,325)))).toBe(asNumberOnly(current,325));
   const {w}=workshop();const workshopSave=serializeWorld(w);
-  expect(serializeWorld(deserializeWorld(asOldSchema(workshopSave,325)))).toBe(workshopSave);
+  expect(serializeWorld(deserializeWorld(asOldSchema(workshopSave,325)))).toBe(asNumberOnly(workshopSave,325));
 });

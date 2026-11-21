@@ -1,5 +1,5 @@
 import {expect,test} from 'vitest';
-import {stripFutureContent} from './scenarios/old-schema.ts';
+import {stripFutureContent,numberOnlyWorld} from './scenarios/old-schema.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
 import {newDoorState} from '../src/sim/door-rules.ts';
 import {startTravel} from '../src/sim/movement.ts';
@@ -58,5 +58,5 @@ test('a schema 302 save migrates by number only; its captured steps keep their c
   const {w,p}=airlock('second');expect(startTravel(w,p,{x:17,z:16})).toBe(true);
   const old=JSON.parse(serializeWorld(w));old.schemaVersion=302;stripFutureContent(old,302);
   const migrated=deserializeWorld(JSON.stringify(old));
-  expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);expect(migrated).toEqual(w);
+  expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);expect(migrated).toEqual(numberOnlyWorld(old));
 });

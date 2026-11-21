@@ -3,6 +3,7 @@ import {isGarmentItem312,isHatItem353} from '../../src/sim/apparel-definitions.t
 import {isCookingAnimalProduct353} from '../../src/sim/cooking-ingredients-353.ts';
 import {isDevilstrandItem358} from '../../src/sim/devilstrand-358.ts';
 import {deserializeWorld,serializeWorld} from '../../src/sim/serialization.ts';
+import type {World} from '../../src/sim/types.ts';
 const FIRST_DAYS_KINDS_343=['slept-in-cold','slept-in-heat','slept-outside','slept-on-ground','soaking-wet','darkness'];
 const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bonded-animal-died','bonded-animal-lost'];
 
@@ -91,4 +92,19 @@ export function stripFutureContent(value:unknown,version:number):void {
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
   if(version<358)strip(value,version);
+}
+
+/** The reference for a number-only migration step from `version`: the same
+ * content saved one schema later, then migrated like the old one. Comparing a
+ * migrated `version` save with it checks that the step `version`→`version+1`
+ * changes only the number, while later steps (308 and 312 extend apparel
+ * policies, for example) apply to both alike. Comparing with `current` itself
+ * no longer works: a new game holds more than an old save gains by migration
+ * (352 letters, 353 hats and 358 devilstrand in new apparel policies). */
+export function asNumberOnly(current:string,version:number):string {
+  return serializeWorld(deserializeWorld(asOldSchema(current,version+1)));
+}
+/** The same reference for a parsed old save already relabelled and stripped. */
+export function numberOnlyWorld(old:Record<string,unknown>):World {
+  return deserializeWorld(JSON.stringify({...old,schemaVersion:Number(old.schemaVersion)+1}));
 }

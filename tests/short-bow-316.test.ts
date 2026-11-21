@@ -15,7 +15,7 @@ import {validWeaponShape} from '../src/sim/equipment-save.ts';
 import {addGroundMaterial,addMaterial} from '../src/sim/materials.ts';
 import {firingCamp} from './scenarios/shooting.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asNumberOnly} from './scenarios/old-schema.ts';
 import type {Command,Structure,World} from '../src/sim/types.ts';
 
 const accept=(w:World,c:Command)=>{const r=applyCommand(w,c);expect(r,JSON.stringify(c)+JSON.stringify(r)).toMatchObject({ok:true});};
@@ -116,5 +116,5 @@ test('before schema 316 the bow, its workpiece, recipe and arrows are refused',(
 
 test('a schema 315 save migrates to 316 by its number only',()=>{
   const current=serializeWorld(firingCamp());
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,315)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,315)))).toBe(asNumberOnly(current,315));
 });

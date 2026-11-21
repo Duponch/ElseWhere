@@ -24,7 +24,7 @@ import {effectiveCore297} from '../src/sim/core-phase-297.ts';
 import {addMaterial} from '../src/sim/materials.ts';
 import {assignPileOwner} from '../src/sim/pile-index.ts';
 import {firingCamp} from './scenarios/shooting.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asNumberOnly} from './scenarios/old-schema.ts';
 import {advanceUntil} from './scenarios/machining-v101.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
 import {newPowerState} from '../src/sim/power-rules.ts';
@@ -350,9 +350,9 @@ test('before schema 342 the guns, their recipes, bullets, stances and research a
 
 test('a schema 341 save migrates to 342 by its number only',()=>{
   const current=serializeWorld(firingCamp());
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,341)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,341)))).toBe(asNumberOnly(current,341));
   const {world}=workshop(true);const save=serializeWorld(world);
-  expect(serializeWorld(deserializeWorld(asOldSchema(save,341)))).toBe(save);
+  expect(serializeWorld(deserializeWorld(asOldSchema(save,341)))).toBe(asNumberOnly(save,341));
   // Migrated research keeps BlowbackOperation, nothing granted.
   const migrated=deserializeWorld(asOldSchema(save,341));
   expect(migrated.research!.gasOperation).toBeUndefined();expect(researchUnlocked(migrated,'gas-operation')).toBe(false);

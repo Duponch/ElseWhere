@@ -1,6 +1,6 @@
 import {expect,test} from 'vitest';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asNumberOnly} from './scenarios/old-schema.ts';
 import {crashlandedProfile} from '../src/sim/game-profile.ts';
 import {adoptColonyEconomy} from '../src/sim/colony-economy.ts';
 import {adoptFluIncidents,FLU_CHECK_INTERVAL,FLU_FIRST_CHECK} from '../src/sim/flu-incidents.ts';
@@ -224,7 +224,7 @@ test('saves refuse a forged arrival; older schemas never draw one and migrate by
   }
   // A 332 save without raid moves to 333 by its number only.
   const quiet=serializeWorld(deconstructionCamp(3,32));
-  expect(serializeWorld(deserializeWorld(asOldSchema(quiet,332)))).toBe(quiet);
+  expect(serializeWorld(deserializeWorld(asOldSchema(quiet,332)))).toBe(asNumberOnly(quiet,332));
 });
 
 test('the introductory and quest-sized raids always walk in',()=>{

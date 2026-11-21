@@ -22,6 +22,7 @@ import {prisonerUiFixture} from './scenarios/prison-camp';
 import {fixtureBuilding} from './scenarios/deconstruction';
 import {asOldSchema} from './scenarios/old-schema';
 import {SnapshotDecoder,SnapshotEncoder} from '../src/bridge/snapshots';
+import {asNumberOnly} from './scenarios/old-schema.ts';
 
 vi.mock('../src/ui/pawn-portrait', () => ({portraitDataUrl:()=>'data:image/svg+xml,%3Csvg/%3E',portraitExpressionOf:()=>'awake'}));
 
@@ -287,7 +288,7 @@ test('migration 345 → 346 by number only; a 345 save holding a drafted ordered
  const raw=serializeWorld(w),old=asOldSchema(raw,345);
  const migrated=deserializeWorld(old);
  expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
- expect(serializeWorld(migrated)).toBe(raw);
+ expect(serializeWorld(migrated)).toBe(asNumberOnly(raw,345));
  // The drafted equip state does not exist at 345: strict validation refuses it.
  ok(w,{type:'order-equipment',pawnId:p.id,itemId:gun.id,action:'equip',queue:false});stepWorld(w);valid(w);
  expect(p.equipmentTask).toBeDefined();

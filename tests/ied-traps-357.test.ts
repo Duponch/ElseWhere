@@ -24,7 +24,7 @@ import {architectToolAvailable} from '../src/ui/architect-availability.ts';
 import {legacyHumanAge} from '../src/sim/human-age.ts';
 import {medicalCamp} from './scenarios/health.ts';
 import {deconstructionCamp,fixtureBuilding} from './scenarios/deconstruction.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asNumberOnly} from './scenarios/old-schema.ts';
 import {SCHEMA_VERSION,type Command,type Pawn,type Structure,type World} from '../src/sim/types.ts';
 
 const accept=(w:World,c:Command)=>{const r=applyCommand(w,c);expect(r,JSON.stringify(c)+JSON.stringify(r)).toMatchObject({ok:true});};
@@ -215,6 +215,6 @@ test('at schema 356 the traps, shells and research are refused; a 356 save migra
   // Migration: an IED-free current save, relabelled 356, loads unchanged.
   const plain=deconstructionCamp(2,32),current=serializeWorld(plain);
   const migrated=deserializeWorld(asOldSchema(current,356));
-  expect(serializeWorld(migrated)).toBe(current);expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
+  expect(serializeWorld(migrated)).toBe(asNumberOnly(current,356));expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
   expect(migrated.research?.ieds).toBeUndefined();expect(migrated.structures.some(s=>s.kind==='ied-high-explosive'||s.kind==='ied-incendiary')).toBe(false);
 });

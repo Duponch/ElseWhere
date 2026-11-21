@@ -22,7 +22,7 @@ import {effectiveCore297} from '../src/sim/core-phase-297.ts';
 import {applyMeleeStun} from '../src/sim/stun.ts';
 import {addMaterial} from '../src/sim/materials.ts';
 import {firingCamp} from './scenarios/shooting.ts';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asNumberOnly} from './scenarios/old-schema.ts';
 import {advanceUntil} from './scenarios/machining-v101.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
 import {newPowerState} from '../src/sim/power-rules.ts';
@@ -341,7 +341,7 @@ test('before schema 340 the guns, their recipes, bullets, stances, bursts and re
 
 test('a schema 339 save migrates to 340 by its number only',()=>{
   const current=serializeWorld(firingCamp());
-  expect(serializeWorld(deserializeWorld(asOldSchema(current,339)))).toBe(current);
+  expect(serializeWorld(deserializeWorld(asOldSchema(current,339)))).toBe(asNumberOnly(current,339));
   const {world}=workshop();const save=serializeWorld(world);
-  expect(serializeWorld(deserializeWorld(asOldSchema(save,339)))).toBe(save);
+  expect(serializeWorld(deserializeWorld(asOldSchema(save,339)))).toBe(asNumberOnly(save,339));
 });

@@ -1,5 +1,5 @@
 import {expect,test} from 'vitest';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asNumberOnly} from './scenarios/old-schema.ts';
 import {medicineCamp} from './scenarios/medicine.ts';
 import {medicalCamp} from './scenarios/health.ts';
 import {createMedicalRecord,medicalPain} from '../src/sim/injury-state.ts';
@@ -114,7 +114,7 @@ test('save: mechanites round-trip at 307, are refused at 306, and a 306 save mig
   expect(check(bad,SCHEMA_VERSION)).not.toBeNull();
   delete p.health.mechanites307;const current=serializeWorld(w);
   const old=asOldSchema(current,306);
-  expect(serializeWorld(deserializeWorld(old))).toBe(current);
+  expect(serializeWorld(deserializeWorld(old))).toBe(asNumberOnly(current,306));
 });
 
 test('fibrous mechanites make a walking doctor faster than 100 %, and the save accepts it from 307',()=>{

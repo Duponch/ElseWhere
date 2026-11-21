@@ -1,5 +1,5 @@
 import {expect,test} from 'vitest';
-import {asOldSchema} from './scenarios/old-schema.ts';
+import {asOldSchema,asNumberOnly} from './scenarios/old-schema.ts';
 import {createWorld} from '../src/sim/engine.ts';
 import {crashlandedProfile} from '../src/sim/game-profile.ts';
 import {adoptWorldIncidents,advanceWorldIncidents,WORLD_FIRST_CHECK} from '../src/sim/cassandra-world.ts';
@@ -94,7 +94,7 @@ test('a schema 304 save migrates to 305 by its number only',()=>{
   const w=colony(24,false);const current=serializeWorld(w);
   expect(current.startsWith(`{"schemaVersion":${SCHEMA_VERSION},`)).toBe(true);
   const old=asOldSchema(current,304);
-  expect(serializeWorld(deserializeWorld(old))).toBe(current);
+  expect(serializeWorld(deserializeWorld(old))).toBe(asNumberOnly(current,304));
 });
 
 test('resource pods: one sellable kind worth 150 to 600 silver in stacks of 20 to 40, seven at most',()=>{
