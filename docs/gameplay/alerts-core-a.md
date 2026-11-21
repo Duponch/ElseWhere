@@ -69,4 +69,4 @@ Les jours sont des jours écoulés depuis le début de la partie (`GenDate.DaysP
 
 ## Reste à faire
 
-Faits au [lot B](alerts-core-b.md) : épuisement, médicaments, vêtements abîmés, ennui, batteries, menaces vitales élargies (perte de sang, prisonniers), vêtements chauds, enclos et animaux affamés. Restent les alertes occasionnelles (médecin, mineur, distributeur sans trémie, caravane immobilisée) et un vrai canal de lettres pour les événements non menaçants.
+Faits au [lot B](alerts-core-b.md) : épuisement, médicaments, vêtements abîmés, ennui, batteries, menaces vitales élargies (perte de sang, prisonniers), vêtements chauds, enclos et animaux affamés. Restent les alertes occasionnelles (médecin, mineur, distributeur sans trémie, caravane immobilisée) et un vrai canal de lettres pour les événements non menaçants. Les alertes occasionnelles sont faites au [lot C](alerts-core-c.md), les lettres au [schéma 352](letters-v352.md).

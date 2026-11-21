@@ -48,9 +48,9 @@ Dans **Options**, la **pause automatique** s'arrête : jamais, aux menaces majeu
 
 ## Lire les alertes de droite
 
-Les alertes apparaissent après les dix premières secondes de jeu, comme dans RimWorld. Elles sont triées : **critiques** en rouge qui pulse (incendie dans la zone de foyer, colon à secourir, hypothermie grave, risque de crise majeure, personne en danger de mort, prisonniers compris), puis **hautes** en ocre (colon à soigner, couchages, nourriture ou médicaments insuffisants, colon épuisé, vêtements chauds nécessaires, geôlier nécessaire, corps sans sépulture, défenses), puis **moyennes** (dont vêtements abîmés, ennui, batteries, enclos et animaux affamés). Une nouvelle alerte haute ou critique glisse et sonne ; une critique affiche aussi un avis en haut de l’écran.
+Les alertes apparaissent après les dix premières secondes de jeu, comme dans RimWorld. Elles sont triées : **critiques** en rouge qui pulse (incendie dans la zone de foyer, colon à secourir, hypothermie grave, risque de crise majeure, personne en danger de mort, prisonniers compris, caravane surchargée), puis **hautes** en ocre (colon à soigner, couchages, nourriture ou médicaments insuffisants, colon épuisé, vêtements chauds nécessaires, geôlier nécessaire, corps sans sépulture, défenses, médecin ou mineur nécessaire, distributeur de pâte sans trémie, offre qui expire dans moins d’un jour), puis **moyennes** (dont vêtements abîmés, ennui, batteries, enclos et animaux affamés, patient qui attend son opération, bureau de recherche manquant pour le projet choisi, caravane inactive). Une offre de quête arrive par une lettre et reste dans **Quêtes** ; elle ne devient une alerte que pendant son dernier jour. Une nouvelle alerte haute ou critique glisse et sonne ; une critique affiche aussi un avis en haut de l’écran.
 
-Survolez une carte pour lire l’explication et les noms concernés. **Clic gauche** : la caméra va sur le cas suivant et le sélectionne ; **clic droit** : le précédent. Une alerte sans cas à montrer ouvre le réglage utile, par exemple Architecte pour des lits ou Travail pour un geôlier. Si la colonne déborde, faites défiler à la molette ou avec ▲ ▼ ; « tout voir » ouvre la liste complète. Certaines alertes ne valent que pour une période : colons inoccupés à partir du premier jour, source de repas à partir du deuxième, défenses du deuxième au cinquième jour, nourriture et médicaments après deux jours et demi, couchages pendant les trente premiers jours. [Règles et limites](alerts-core-a.md), [besoins, santé, animaux et vêtements](alerts-core-b.md).
+Survolez une carte pour lire l’explication et les noms concernés. **Clic gauche** : la caméra va sur le cas suivant et le sélectionne ; **clic droit** : le précédent. Une alerte sans cas à montrer ouvre le réglage utile, par exemple Architecte pour des lits ou Travail pour un geôlier. Si la colonne déborde, faites défiler à la molette ou avec ▲ ▼ ; « tout voir » ouvre la liste complète. Certaines alertes ne valent que pour une période : colons inoccupés à partir du premier jour, source de repas à partir du deuxième, défenses du deuxième au cinquième jour, nourriture et médicaments après deux jours et demi, couchages pendant les trente premiers jours. [Règles et limites](alerts-core-a.md), [besoins, santé, animaux et vêtements](alerts-core-b.md), [alertes occasionnelles et raccourcis](alerts-core-c.md).
 
 ## T-shirt et blouson — V312
 
@@ -1625,10 +1625,12 @@ La convention 3D est de 1 m par case, 1,75 m pour un humain et 2,80 m pour un mu
 | Flèches | Déplacement de caméra ; utiliser les flèches lorsque les lettres servent aux outils |
 | Espace | Pause/reprise |
 | 1 / 2 / 3 | Vitesses 1× / 3× / 6× |
-| C / R / B / L / X | Abattre / récolter / mur / lit / annuler ; avec un colon sélectionné, R bascule Mobiliser |
+| C / X / M / R / B / L | Annuler / déconstruire / miner / récolter / mur / lit ; avec un colon sélectionné, R bascule Mobiliser |
 | S | Désigner une réserve |
+| Lettre d’un outil, palette Ordres ou Zones ouverte | Choisir cet outil, comme dans RimWorld : B abattre, H récolter, Y couper, L miner ; B réserve, H culture, N foyer… (la lettre est affichée sur l’outil) |
 | Q / E avec un meuble orientable | Tourner le meuble |
-| Tab / F1 | Ouvrir ou fermer Architecte / Travail |
+| Tab / F1 / F2 / F3 | Ouvrir ou fermer Architecte / Travail / Planning / Assignations |
+| F4 / F5 / F6 / F7 / F8 / F9 | Animaux / Faune / Recherche / Quêtes / Monde / Historique |
 | Échap | Annuler le rectangle en cours ; sinon fermer le panneau et revenir à l'inspection |
 | Ctrl+S | Sauvegarder |
 
