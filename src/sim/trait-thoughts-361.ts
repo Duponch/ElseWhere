@@ -7,6 +7,7 @@ import { equippedWeapon,isRangedWeaponItem } from './equipment-rules.ts';
 import { captureRoomQuality,type RoomQualityCapture } from './room-quality.ts';
 import { hourOfDay } from './schedule.ts';
 import { artificialPartCount361 } from './traits.ts';
+import { undergrounderThoughts362 } from './indoors-need-362.ts';
 import type { MaterialPile,Pawn,World } from './types.ts';
 
 /** Schema 361: the Core trait thoughts (Thoughts_Situation_Traits) and the
@@ -22,6 +23,7 @@ const PSYCHOPATH_NULLIFIED=[/^death-witnessed-(ally|outsider|family)-death$/,/^d
   /^friend-died-/,/^lost-colonist-lost-/,/^lost-friend-lost-/,/^mood350-(nuzzled|released-prisoner|bonded-animal-died|bonded-animal-lost)$/,
   /^(not-)?bonded-animal-master$/,/^denied-joining$/];
 const CANNIBAL_NULLIFIED=[/^death-observed-corpse$/];
+/** EnvironmentDark nullifyingTraits: NightOwl and (schema 362) Undergrounder. */
 const NIGHT_OWL_NULLIFIED=[/^environment-dark$/];
 const ASCETIC_NULLIFIED=[/^ate-without-table$/];
 const PAIN_IDS=['minor-pain','serious-pain','intense-pain','extreme-pain'];
@@ -30,7 +32,7 @@ const MASOCHIST=[situation('masochist-minor-pain','Masochiste : douleur légère
 const nullified=(pawn:Pawn,id:string):boolean=>{
   const t=pawn.traits!;
   return t.includes('psychopath')&&PSYCHOPATH_NULLIFIED.some(r=>r.test(id))||t.includes('cannibal')&&CANNIBAL_NULLIFIED.some(r=>r.test(id))
-    ||t.includes('night-owl')&&NIGHT_OWL_NULLIFIED.some(r=>r.test(id))||t.includes('ascetic')&&ASCETIC_NULLIFIED.some(r=>r.test(id));
+    ||(t.includes('night-owl')||t.includes('undergrounder'))&&NIGHT_OWL_NULLIFIED.some(r=>r.test(id))||t.includes('ascetic')&&ASCETIC_NULLIFIED.some(r=>r.test(id));
 };
 
 /** ThoughtWorker_NudistNude: nude unless an apparel covers the torso or the legs. */
@@ -75,6 +77,8 @@ export function traitMapThoughts361(world:World,pawn:Pawn):TraitMapThoughts361 {
       if(best)thoughts.push(situation('jealous',`Jaloux de la chambre de ${best.name}`,-8,'Un autre colon a une chambre nettement plus impressionnante que la sienne.'));
     }
   }
+  // Schema 362: the undergrounder's indoors need and trait thoughts (indoors-need-362).
+  if(t.includes('undergrounder'))thoughts.push(...undergrounderThoughts362(world,pawn));
   const weapon=t.includes('brawler')?equippedWeapon(world,pawn):undefined;
   return {thoughts,rangedWeapon:!!weapon&&isRangedWeaponItem(weapon.item)};
 }

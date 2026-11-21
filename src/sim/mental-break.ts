@@ -1,4 +1,5 @@
 import {drugBingeWeight361,onlyAllowedMinorBreaks361,traitForbidsDrugBinge361,traitMentalStateRoll361} from './trait-mental-361.ts';
+import {markCrisisNotMood362} from './trait-links-362.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import {mentalBreakLetter352} from './letter-producers-352.ts';
 import {tutorialMode347} from './game-profile.ts';
@@ -89,7 +90,8 @@ export function updateMentalBreak(world:World,pawn:Pawn,budget?:SearchBudget):vo
 function gourmandRandomBinge361(world:World,pawn:Pawn):void {
   if((world.tick+pawn.id)%15!==0||pawn.state==='dead'||!isColonist(pawn)||tutorialSparesMind347(world,pawn))return;
   if(traitMentalStateRoll361(world.seed,pawn.id,world.tick)>=150/(50*60000))return;
-  startMinorBreak(world,pawn,'food-binge',TRAITS.gourmand.label);
+  // Schema 362: TraitMentalStateGiver starts it with causedByMood false.
+  if(startMinorBreak(world,pawn,'food-binge',TRAITS.gourmand.label))markCrisisNotMood362(world.schemaVersion,pawn);
 }
 function updateMoodMentalBreak(world:World,pawn:Pawn,budget?:SearchBudget):void {
   let m=pawn.mental;
@@ -104,7 +106,7 @@ function updateMoodMentalBreak(world:World,pawn:Pawn,budget?:SearchBudget):void 
   const alcohol=pawn.health?.alcohol;
   if(alcohol?.bingeRequestedAt!==undefined){
     if(alcohol.bingeRequestedAt<(world.tick-1)*10||pawn.mental?.crisis||moodFrozen(pawn)||pawn.state==='downed')delete alcohol.bingeRequestedAt;
-    else {const admission=alcoholBingeAdmission265(world,pawn,budget);if(admission!==null){delete alcohol.bingeRequestedAt;if(admission){startAlcoholBinge265(world,pawn,budget,true);m=pawn.mental;}}}
+    else {const admission=alcoholBingeAdmission265(world,pawn,budget);if(admission!==null){delete alcohol.bingeRequestedAt;if(admission){if(startAlcoholBinge265(world,pawn,budget,true))markCrisisNotMood362(world.schemaVersion,pawn);m=pawn.mental;}}}
   }
   if(m?.crisis) {
     // Schema 350: Wander_Psychotic has no recoverFromSleep.

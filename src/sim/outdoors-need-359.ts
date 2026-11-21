@@ -27,9 +27,9 @@ export const outdoorsLevel359=(p:Pick<Pawn,'outdoors359'>):number=>p.outdoors359
 /** NeedDef Outdoors: colonistAndPrisonersOnly, humanlike (Elsewhere's people
  * are all humanlike adults: Core's Child|Adult stage filter keeps them all).
  * The one hook for a trait that disables the need: Core's Undergrounder
- * (TraitDef disablesNeeds Outdoors) must make this false once the trait
- * exists; the step then removes the field, like Pawn_NeedsTracker.RemoveNeed. */
-export const outdoorsNeedApplies359=(p:Pawn):boolean=>!!p.prisoner||isColonist(p)&&!p.visitor;
+ * (TraitDef disablesNeeds Outdoors, schema 362) makes this false; the step
+ * then removes the field, like Pawn_NeedsTracker.RemoveNeed. */
+export const outdoorsNeedApplies359=(p:Pawn):boolean=>(!!p.prisoner||isColonist(p)&&!p.visitor)&&!p.traits?.includes('undergrounder');
 
 /** Need_Outdoors.CurCategory, strict and inclusive bounds as in Core. */
 export type OutdoorsCategory359='free'|'need-fresh-air'|'cabin-fever-light'|'cabin-fever-severe'|'trapped'|'entombed';
@@ -50,7 +50,7 @@ const THIN_FLOOR=f(.2),IN_BED=f(.2),PER_INTERVAL=f(.0025);
  * (temperature-save validates it), so one range test and a binary search per
  * room answer for a cell. Outside every such room, the cell uses the outdoor
  * temperature. */
-function keepsOwnAir(world:Pick<World,'thermal'>,index:number):boolean {
+export function keepsOwnAir359(world:Pick<World,'thermal'>,index:number):boolean {
   const regions=world.thermal?.regions;if(!regions)return false;
   for(const {cells} of regions){
     if(index<cells[0]!||index>cells[cells.length-1]!)continue;
@@ -68,7 +68,7 @@ function keepsOwnAir(world:Pick<World,'thermal'>,index:number):boolean {
 export function outdoorsPlace359(world:World,pawn:Pawn):OutdoorsPlace359 {
   if(carrierOf(world,pawn.id))return 'outdoors-open';
   const at=pawn.motion&&pawn.motion.end>world.tick?pawn.motion.from:pawn,index=at.z*world.width+at.x;
-  const roof=roofKindAt(world,index),side=keepsOwnAir(world,index)?'indoors':'outdoors';
+  const roof=roofKindAt(world,index),side=keepsOwnAir359(world,index)?'indoors':'outdoors';
   return `${side}-${roof===undefined?'open':roof==='natural-thick'?'thick':'thin'}`;
 }
 

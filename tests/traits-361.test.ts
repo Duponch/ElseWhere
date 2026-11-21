@@ -22,7 +22,8 @@ import {advanceSicklyDisease361} from '../src/sim/sickly-disease-361.ts';
 vi.mock('../src/ui/pawn-portrait', () => ({portraitDataUrl:()=>'data:image/svg+xml,%3Csvg/%3E',portraitExpressionOf:()=>'awake'}));
 
 const regular=(t:readonly TraitId[])=>t.filter(id=>!CORE_TRAIT_DEFS[TRAITS[id].def].sexuality);
-const DRAWABLE=CORE_TRAIT_DEF_NAMES.filter(d=>CORE_TRAIT_DEFS[d].degrees.length>0);
+// A birth without a schema draws the 361 set (schema 362 adds three defs: trait-links-362).
+const DRAWABLE=CORE_TRAIT_DEF_NAMES.filter(d=>CORE_TRAIT_DEFS[d].degrees.some(id=>(TRAITS[id].since??0)<=361));
 
 describe('generation (Core PawnGenerator.GenerateTraits)',()=>{
   test('count 1 to 3, the sexuality draw, and first-draw frequencies by commonality',()=>{
@@ -69,7 +70,8 @@ describe('generation (Core PawnGenerator.GenerateTraits)',()=>{
         if(p.traits?.includes('brawler'))expect(p.skills.shooting.passion).toBe(0);
       }
     }
-    const all=Array.from({length:400},(_,i)=>previewStartingCandidate(i+1,{serial:1+i%8,generation:0}));
+    // At 361 itself (from 362 a candidate may also hold a 362 degree: trait-links-362).
+    const all=Array.from({length:400},(_,i)=>previewStartingCandidate(i+1,{serial:1+i%8,generation:0},361));
     expect(all.some(p=>p.traits?.some(id=>TRAITS[id].since===361))).toBe(true);
     expect(all.every(p=>validTraits(p.traits,361))).toBe(true);
   });

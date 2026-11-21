@@ -2,8 +2,12 @@ import type {HumanConditionWander256} from './human-condition-mind-256.ts';
 import type { Cell,Pawn,World } from './types.ts';
 import { mentalCrisisLabel } from './mental-catalog.ts';
 import { cancelMelee } from './melee-state.ts';
+import { torturedArtistRecovery362 } from './tortured-artist-362.ts';
 
-interface CrisisBase { age:number;target:Cell|null;waitUntil:number }
+interface CrisisBase { age:number;target:Cell|null;waitUntil:number;
+  /** Schema 362: not caused by mood (a trait's random state, an addiction's
+   * binge): no catharsis and no trait inspiration at its end (Core causedByMood). */
+  notMood362?:true }
 export type AggressiveCrisisKind='tantrum'|'berserk'|'murderous-rage';
 export type AggressiveCrisis=
   | (CrisisBase&{kind:'tantrum';targetId:number|null;targetSinceCore:number;attempted:boolean;nextTargetCore:number})
@@ -50,12 +54,18 @@ export function finishMentalBreak(world:World,pawn:Pawn,reward=true):void {
   const kind=m.crisis.kind;
   if(kind==='confused-wander'){delete m.crisis;pawn.path=[];pawn.planCooldown=0;pawn.needCooldown=0;if(!['dead','downed','sleeping'].includes(pawn.state))pawn.state=pawn.moveCooldown>0||(pawn.motion?.end??0)>world.tick?'moving':'idle';return;}
   if(pawn.melee?.order?.auto==='mental')cancelMelee(pawn);
+  const moodCaused=!m.crisis.notMood362;
   delete m.crisis;pawn.path=[];if(!pawn.need&&pawn.state!=='downed'&&pawn.state!=='dead')pawn.state='idle';pawn.planCooldown=0;pawn.needCooldown=0;
   m.cooldown=1500;
   if(reward) {
-    m.catharsis=m.catharsis.filter(t=>t>world.tick);
-    if(m.catharsis.length===5)m.catharsis.shift();
-    m.catharsis.push(world.tick+CATHARSIS_DURATION);
+    // Core RecoverFromState: the recovery thought, then the traits' notice,
+    // both for a mood-caused state only (every crisis before 362).
+    if(moodCaused){
+      m.catharsis=m.catharsis.filter(t=>t>world.tick);
+      if(m.catharsis.length===5)m.catharsis.shift();
+      m.catharsis.push(world.tick+CATHARSIS_DURATION);
+      torturedArtistRecovery362(world,pawn);
+    }
     world.events.push({tick:world.tick,type:'need',message:kind==='food-binge'?`${pawn.name} cesse sa frénésie alimentaire.`:kind==='sad-wander'?`${pawn.name} sort de son errance triste.`:`${pawn.name} retrouve son calme (${mentalCrisisLabel(kind).toLowerCase()}).`});
     if(world.events.length>80)world.events.splice(0,world.events.length-80);
   }

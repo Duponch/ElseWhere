@@ -17,6 +17,8 @@ export interface Injury {
 }
 export interface MissingPart {part:BodyPartId;bornAt:number;tended?:true;nonFresh?:true}
 export interface MedicalRecord {
+  /** Schema 362: the person is a Wimp (PainShockThreshold 0.3 instead of 0.8), set at birth (trait-links-362). */
+  wimp362?:true;
   /** Only a real V290 Extinguish victim acquires this active-time component. */
   coveredInFirefoam290?:import('./firefoam-actor-state-290.ts').CoveredInFirefoam290;
   /** Schema271: actual civil frontier. tick and condition deadlines remain

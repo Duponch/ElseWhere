@@ -1,8 +1,10 @@
 import { CORE_TRAIT_DEFS,CORE_TRAIT_DEF_NAMES,TRAITS,isTraitsSchema361,traitDefCommonality,traitDefsConflict,type CoreTraitDefName,type TraitId } from './traits.ts';
-import { BACKGROUND_SKILL_IDS,backgroundTagRefusal,type BackgroundSkillId,type ColonistBackground } from './colonist-backgrounds.ts';
+import { BACKGROUND_SKILL_IDS,backgroundSkillRefusal,backgroundTagRefusal,type BackgroundSkillId,type ColonistBackground } from './colonist-backgrounds.ts';
 import { HUMAN_YEAR_TICKS } from './human-age.ts';
 import type { SkillRecord } from './skills.ts';
 import type { Pawn } from './types.ts';
+import { traitForcedPassions362 } from './trait-links-362.ts';
+import { bornWimpRecord362 } from './wimp-record-362.ts';
 
 /** Schema 361: Core PawnGenerator.GenerateTraits for a newly born human,
  * with no pawn-kind or backstory forced/disallowed traits (Elsewhere's own
@@ -21,8 +23,10 @@ import type { Pawn } from './types.ts';
  * - a sexuality trait is then drawn if none was: no trait with the summed
  *   commonality of every other def not held, against Gay 0.3, Bisexual 0.2
  *   and Asexual 0.2 (Biotech's age gate does not apply in Core).
- * Defs left out of this game (Pyromaniac, Wimp, Undergrounder, Tortured
- * artist) are never drawn: the others share their weight. */
+ * Defs left out of this game are never drawn: the others share their
+ * weight. Schema 362 adds Undergrounder, Tortured artist and Wimp (only
+ * Pyromaniac remains left out); a birth of an older schema keeps the 361 set,
+ * so its draws stay identical. */
 export interface TraitBirth361 {
   /** Uniform [0,1) for a salt, private to this birth. */
   draw:(salt:number)=>number;
@@ -30,6 +34,8 @@ export interface TraitBirth361 {
   ageYears:number;
   background?:ColonistBackground;
   hostile?:boolean;
+  /** The schema of the birth (default 361): it decides which degrees exist. */
+  schema?:number;
 }
 const GROWTH_MOMENT_AGES=[7,10,13] as const;
 const SALT_COUNT=0x3610001,SALT_SEXUALITY=0x3610002,SALT_DEF=0x3611000,SALT_DEGREE=0x3618000;
@@ -42,17 +48,24 @@ function weightedDef(defs:readonly CoreTraitDefName[],weight:(def:CoreTraitDefNa
   for(const def of defs){const w=weight(def);if(w<=0)continue;left-=w;if(left<0)return def;}
   return defs.findLast(def=>weight(def)>0);
 }
-const DRAWABLE=CORE_TRAIT_DEF_NAMES.filter(def=>CORE_TRAIT_DEFS[def].degrees.length>0);
+/** The degrees a birth of `schema` may receive (361: the 361 set; 362 adds three defs). */
+const degreesAt=(def:CoreTraitDefName,schema:number):readonly TraitId[]=>CORE_TRAIT_DEFS[def].degrees.filter(id=>(TRAITS[id].since??0)<=schema);
+const drawableAt=(schema:number)=>Object.freeze(CORE_TRAIT_DEF_NAMES.filter(def=>degreesAt(def,schema).length>0));
+const DRAWABLE=drawableAt(361),DRAWABLE_362=drawableAt(362);
 function drawOne(birth:TraitBirth361,held:readonly TraitId[],slot:number):TraitId|undefined {
-  const heldDefs=held.map(id=>TRAITS[id].def);
+  const heldDefs=held.map(id=>TRAITS[id].def),schema=birth.schema??361,drawable=schema>=362?DRAWABLE_362:DRAWABLE;
   for(let attempt=0;attempt<ATTEMPTS;attempt++){
-    const def=weightedDef(DRAWABLE,d=>traitDefCommonality(d,birth.sex),birth.draw(SALT_DEF+slot*0x800+attempt));
+    const def=weightedDef(drawable,d=>traitDefCommonality(d,birth.sex),birth.draw(SALT_DEF+slot*0x800+attempt));
     if(!def||heldDefs.includes(def))continue;
     const data=CORE_TRAIT_DEFS[def];
     if(birth.hostile&&!data.allowOnHostileSpawn)continue;
     if(heldDefs.some(o=>traitDefsConflict(o,def)))continue;
     if(birth.background&&data.requiredWorkTags.some(tag=>backgroundTagRefusal({background:birth.background},tag)!==undefined))continue;
-    const id=data.degrees[Math.min(data.degrees.length-1,Math.floor(birth.draw(SALT_DEGREE+slot*0x800+attempt)*data.degrees.length))]!;
+    // Schema 362, TraitDef.forcedPassions: a trait forcing a passion for a
+    // skill the person cannot use is refused (Tortured artist: Art).
+    if(birth.background&&def==='TorturedArtist'&&backgroundSkillRefusal({background:birth.background},'artistic')!==undefined)continue;
+    const degrees=degreesAt(def,schema);
+    const id=degrees[Math.min(degrees.length-1,Math.floor(birth.draw(SALT_DEGREE+slot*0x800+attempt)*degrees.length))]!;
     if(BREAK_BASE+TRAITS[id].breakOffset>MAX_BREAK_THRESHOLD)continue;
     return id;
   }
@@ -99,20 +112,22 @@ const ageYears=(pawn:Pick<Pawn,'age'>):number=>pawn.age?pawn.age.biologicalTicks
 /** Give a newly born human its Core traits (schema 361). Called once, after
  * the background (its work tags decide what may be drawn). Authored or
  * already held traits are kept. */
-export function giveBornTraits361(w:{readonly schemaVersion:number;readonly seed:number},pawn:Pawn,hostile=false,seed=w.seed):void {
+export function giveBornTraits361(w:{readonly schemaVersion:number;readonly seed:number;readonly tick?:number},pawn:Pawn,hostile=false,seed=w.seed):void {
   if(!isTraitsSchema361(w.schemaVersion)||pawn.traits!==undefined)return;
-  const traits=drawCoreTraits361({draw:traitBirthDraw361(seed,pawn.id),sex:pawn.appearance?.sex??'none',ageYears:ageYears(pawn),...pawn.background?{background:pawn.background}:{},hostile});
+  const traits=drawCoreTraits361({draw:traitBirthDraw361(seed,pawn.id),sex:pawn.appearance?.sex??'none',ageYears:ageYears(pawn),...pawn.background?{background:pawn.background}:{},hostile,...w.schemaVersion>=362?{schema:w.schemaVersion}:{}});
   if(!traits.length)return;
-  pawn.traits=traits;bornTraitEffects361(pawn);
+  pawn.traits=traits;bornTraitEffects361(pawn,w.tick??0);
 }
 /** The birth effects of the traits a new person holds: skill gains, and no
  * passion a trait forbids. */
-export function bornTraitEffects361(pawn:Pawn):void {
+export function bornTraitEffects361(pawn:Pawn,tick=0):void {
   const traits=pawn.traits??[];applyTraitSkillGains361(pawn.skills,traits);
   for(const skill of BACKGROUND_SKILL_IDS){const r=(pawn.skills as unknown as Partial<Record<BackgroundSkillId,SkillRecord>>)[skill];if(r?.passion&&traitForbidsPassion361(traits,skill))r.passion=0;}
+  // Schema 362 traits only (none exists in an older world).
+  traitForcedPassions362(pawn);bornWimpRecord362(pawn,tick);
 }
 /** An arrival offer is shown before the person (and its sex) exists. */
-export function offeredTraits361(seed:number,identity:number,age:Pawn['age'],background:ColonistBackground|undefined):TraitId[]|undefined {
-  const traits=drawCoreTraits361({draw:traitBirthDraw361(seed^0x361a77,identity),sex:'none',ageYears:ageYears({age}),...background?{background}:{}});
+export function offeredTraits361(seed:number,identity:number,age:Pawn['age'],background:ColonistBackground|undefined,schema=361):TraitId[]|undefined {
+  const traits=drawCoreTraits361({draw:traitBirthDraw361(seed^0x361a77,identity),sex:'none',ageYears:ageYears({age}),...background?{background}:{},...schema>=362?{schema}:{}});
   return traits.length?traits:undefined;
 }

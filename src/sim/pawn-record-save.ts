@@ -37,6 +37,8 @@ import { validRoomExperience } from './room-experience.ts';
 import { validRoomSizeField345 } from './room-size-need-345.ts';
 import { validOutdoorsField359 } from './outdoors-need-359.ts';
 import { validInspirationField360 } from './inspirations-360.ts';
+import { validIndoorsField362 } from './indoors-need-362.ts';
+import { wimpRecordMatches362 } from './trait-links-362.ts';
 import { validHumanBodyShape,validHumanCorpseShape,validGraveShape,validBurialTaskShape,validateBurials } from './burial-save.ts';
 import { validVisitorShape,validateVisitors } from './visitor-save.ts';
 import { validTradeShape,validateTrade } from './trade-save.ts';
@@ -138,6 +140,8 @@ function pawnRecordShape(item:Record<string,unknown>,world:PawnRecordContext,ver
   if(!validRoomSizeField345(item,version))errors.push('Invalid or future room size need.');
   if(!validOutdoorsField359(item,version))errors.push('Invalid or future outdoors need.');
   if(!validInspirationField360(item,version,validationTick))errors.push('Invalid or future inspiration.');
+  if(!validIndoorsField362(item,version))errors.push('Invalid or future indoors need.');
+  if(!wimpRecordMatches362(item))errors.push('Invalid wimp pain threshold for traits.');
   if(version>=90?(typeof item.beauty!=='number'||!Number.isFinite(item.beauty)||item.beauty<0||item.beauty>100):item.beauty!==undefined)errors.push('Invalid or future beauty need.');
   for(const field of ['apparelPolicyId','apparelAutomation','nextApparelCheckAt'])if(version<90&&item[field]!==undefined)errors.push('Legacy pawn contains apparel policy state.');
   if(!validPrisonerPawnShape(item,version,input as unknown as World,detached))errors.push('Invalid prisoner, warden or recruitment shape for schema.');

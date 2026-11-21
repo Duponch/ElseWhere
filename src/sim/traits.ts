@@ -12,7 +12,7 @@ export interface TraitDefinition {
   /** MentalBreakThreshold offset, in mood points (Core 0.09 = 9). */
   readonly breakOffset:number;
   readonly description:string;
-  readonly since?:361;
+  readonly since?:361|362;
   /** Core TraitDef (defName) and degree; a spectrum keeps one degree per def. */
   readonly def:CoreTraitDefName;readonly degree:number;
   readonly workSpeed?:number;readonly moveSpeed?:number;
@@ -32,6 +32,8 @@ export type CoreTraitDefName='SpeedOffset'|'DrugDesire'|'NaturalMood'|'Nerves'|'
 const t=(def:CoreTraitDefName,degree:number,label:string,description:string,effects:Partial<Omit<TraitDefinition,'def'|'degree'|'label'|'description'>>={}):TraitDefinition=>
   Object.freeze({group:def,mood:0,learning:0,breakOffset:0,...effects,def,degree,label,description,...effects.skillGains?{skillGains:Object.freeze({...effects.skillGains})}:{}});
 const n=(def:CoreTraitDefName,degree:number,label:string,description:string,effects:Partial<Omit<TraitDefinition,'def'|'degree'|'label'|'description'|'since'>>={}):TraitDefinition=>t(def,degree,label,description,{...effects,since:361});
+/** Schema 362: the traits that link the outdoors need, inspirations and pain (trait-links-362). */
+const n362=(def:CoreTraitDefName,degree:number,label:string,description:string,effects:Partial<Omit<TraitDefinition,'def'|'degree'|'label'|'description'|'since'>>={}):TraitDefinition=>t(def,degree,label,description,{...effects,since:362});
 
 /** The first nine keys keep their historical order: the pre-361 starting
  * candidate draw ranks exactly these. */
@@ -98,6 +100,10 @@ export const TRAITS = Object.freeze({
   tough:n('Tough',0,'Coriace','Subit moitié moins de dégâts des coups, balles, pièges, explosions, flammes et éboulements.',{incomingDamageFactor:.5}),
   gourmand:n('Gourmand',0,'Gourmand','Faim 50 % plus rapide. Ses crises mineures sont toujours des frénésies alimentaires, qui peuvent aussi survenir sans raison (une fois tous les 50 jours en moyenne). Cuisine +4 à la naissance.',{hungerFactor:1.5,skillGains:{cooking:4}}),
   'quick-sleeper':n('QuickSleeper',0,'Petit dormeur','Récupère son repos 50 % plus vite en dormant.',{restRate:.5}),
+  // Schema 362 (trait-links-362).
+  undergrounder:n362('Undergrounder',0,'Souterrain','N’a aucun besoin de plein air et l’obscurité ne le gêne pas. A besoin d’intérieur : dehors, il s’en lasse et en souffre (−1 à −8). Éveillé : +3 à l’intérieur sous un toit construit, +4 sous la roche, −3 dehors.'),
+  'tortured-artist':n362('TorturedArtist',0,'Artiste torturé','Humeur −8 en permanence. Quand il se remet d’une crise causée par son humeur, une chance sur deux de recevoir une créativité inspirée. Toujours une passion pour l’art.',{mood:-8}),
+  wimp:n362('Wimp',0,'Douillet','La moindre douleur le terrasse : il s’effondre dès 30 % de douleur au lieu de 80 %.'),
 });
 export type TraitId=keyof typeof TRAITS;
 export type TraitBearer=Pick<Pawn,'traits'>;
@@ -150,21 +156,18 @@ export const CORE_TRAIT_DEFS:Readonly<Record<CoreTraitDefName,CoreTraitDefData>>
   CreepyBreathing:d(.5,['creepy-breathing']),
   // Left out (doc): its fire-starting spree mental state does not exist yet.
   Pyromaniac:d(.8,[],{requiredWorkTags:[]}),
-  // Left out (doc): the pain shock threshold is read from medical records alone.
-  Wimp:d(1,[],{conflicts:['Brawler','Masochist'],allowOnHostileSpawn:false}),
+  Wimp:d(1,['wimp'],{conflicts:['Brawler','Masochist'],allowOnHostileSpawn:false}),
   Nimble:d(1,['nimble']),
   FastLearner:d(1,['fast-learner'],{exclusionTags:['SlowFastLearner']}),
   SlowLearner:d(1,['slow-learner'],{exclusionTags:['SlowFastLearner'],conflicts:['TooSmart']}),
-  // Left out (doc): the outdoors/indoors needs belong to lot 359.
-  Undergrounder:d(.2,[]),
+  Undergrounder:d(.2,['undergrounder']),
   Transhumanist:d(.9,['body-modder'],{conflicts:['BodyPurist']}),
   BodyPurist:d(.7,['body-purist'],{conflicts:['Transhumanist']}),
   DislikesMen:d(.3,['misandrist'],{commonalityFemale:1.7}),
   DislikesWomen:d(1.7,['misogynist'],{commonalityFemale:.3}),
   GreatMemory:d(1.1,['great-memory']),
   Tough:d(1.1,['tough'],{exclusionTags:['Toughness']}),
-  // Left out (doc): inspirations belong to lot 360.
-  TorturedArtist:d(.6,[]),
+  TorturedArtist:d(.6,['tortured-artist']),
   Gourmand:d(1,['gourmand'],{conflicts:['Ascetic']}),
   QuickSleeper:d(1,['quick-sleeper']),
 });
@@ -234,7 +237,7 @@ export const toughDamage361=(target:unknown,amount:number):number=>{
 export function validTraits(value:unknown,version:number):boolean {
   if(value===undefined)return true; // Neutral legacy/person with no authored traits.
   if(version<69||!Array.isArray(value)||value.length<1)return false;
-  if(isTraitsSchema361(version))return validCoreTraits361(value);
+  if(isTraitsSchema361(version))return validCoreTraits361(value,version);
   if(value.length>3)return false;
   const groups=new Set<string>();
   for(const id of value){if(typeof id!=='string'||!Object.hasOwn(TRAITS,id)||TRAITS[id as TraitId].since!==undefined||version<134&&(id==='kind'||id==='abrasive'||id==='bloodlust'))return false;const group=TRAITS[id as TraitId].group;if(groups.has(group))return false;groups.add(group);}
@@ -242,11 +245,12 @@ export function validTraits(value:unknown,version:number):boolean {
 }
 /** From 361: known ids, one degree per Core def, no Core conflict, at most
  * three traits plus one sexuality (Core's count range and its separate draw). */
-function validCoreTraits361(value:unknown[]):boolean {
+function validCoreTraits361(value:unknown[],version:number):boolean {
   if(value.length>4)return false;
   const defs:CoreTraitDefName[]=[];let regular=0;
   for(const id of value){
-    if(typeof id!=='string'||!Object.hasOwn(TRAITS,id))return false;
+    // A degree of a later schema (362) is refused in an older save.
+    if(typeof id!=='string'||!Object.hasOwn(TRAITS,id)||(TRAITS[id as TraitId].since??0)>version)return false;
     const def=TRAITS[id as TraitId].def;
     if(defs.some(o=>o===def||traitDefsConflict(o,def)))return false;
     defs.push(def);if(!CORE_TRAIT_DEFS[def].sexuality)regular++;

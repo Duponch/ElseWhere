@@ -108,6 +108,8 @@ export interface Pawn extends Cell { /** Schema 351: the Strip job (strip-state-
   outdoors359?:number;
   /** Schema 360: Core InspirationHandler.curState, the active inspiration (inspirations-360.ts). */
   inspiration360?:import('./inspirations-360.ts').Inspiration360;
+  /** Schema 362: Core Need_Indoors level (0 to 1, single precision) of an undergrounder colonist or prisoner; absent is the initial level 1. */
+  indoors362?:number;
   body?:import('./human-corpses.ts').HumanBodyState;
   burial?:import('./burial.ts').BurialTask;
   cleaning?:import('./cleaning.ts').CleaningTask;

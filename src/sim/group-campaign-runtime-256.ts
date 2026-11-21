@@ -1,5 +1,6 @@
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {isOutdoors359} from './outdoors-need-359.ts';
+import {isTraitLinks362} from './trait-links-362.ts';
 import {prepareGroupReform260,type GroupReformCommand260} from './group-reform-260.ts';
 import {advanceGroupAnimalPersonal256,advanceGroupAnimalMeters256,advanceLegacyAnimalInterval256} from './group-animal-runtime-256.ts';
 import {recalculateGroupCarried256} from './group-caravan-carry-256.ts';
@@ -97,7 +98,7 @@ export class GroupCampaignRuntime256 {
    for(const row of root.worldGroups!.groups)if(row.localMapId===null&&'members'in row.state&&row.state.departedAt<root.tick)advanceGroupAnimalMeters256(row.state,coreTick,this.restMarks);
    for(const row of root.worldGroups!.groups.slice())if(row.localMapId===null&&'members'in row.state&&row.state.travel&&row.state.departedAt<root.tick)withWorldGroup(root,row.state.id,w=>{
     const g=w.group as AwayGroup,expectation=colonyExpectation(w,g.members[0]!);
-    advanceGroupNeedMeters256(g,{coreTick,legacyFood:w.foodRules==='legacy',legacyRest:w.restRules==='legacy',joyToleranceFall:(expectation?.joyToleranceDropPerDay??.18)*100/6000,restMarks:this.restMarks,...isOutdoors359(w.schemaVersion)?{outdoors359:true}:{}});
+    advanceGroupNeedMeters256(g,{coreTick,legacyFood:w.foodRules==='legacy',legacyRest:w.restRules==='legacy',joyToleranceFall:(expectation?.joyToleranceDropPerDay??.18)*100/6000,restMarks:this.restMarks,...isOutdoors359(w.schemaVersion)?{outdoors359:true}:{},...isTraitLinks362(w.schemaVersion)?{indoors362:true}:{}});
    });
    this.motion.stepCore(coreTick,{owners:()=>this.owners(root,coreTick),beforeTween:(id,deltaCore)=>{
     const row=root.worldGroups!.groups.find(r=>r.state.id===id);if(!row||!('members'in row.state)||!row.state.travel)return;

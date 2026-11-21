@@ -1,3 +1,4 @@
+import { painShockThreshold362 } from '../sim/trait-links-362';
 import {firefoamProtectionText290} from './firefoam-inspection-290.ts';
 import {isSchema273OrLater,isSchema280OrLater} from '../sim/schema-compatibility-257.ts';
 import {artificialPartIngredient273} from '../sim/artificial-parts-rules';
@@ -382,7 +383,7 @@ export function updateHealthInspection(panel:HTMLElement,pawn:Pawn,world?:World)
   }));}
   for(const [index,row] of rows.entries()){
     const key=CAPACITY_LABELS.find(([,label])=>label===row.label)?.[0];
-    const tooltip=key?healthCapacityTooltip(pawn,key):{title:'Douleur',body:'La douleur provient des lésions, des parties fraîchement perdues et de certaines affections. L’anesthésie atténue la douleur ; une douleur totale d’au moins 80 % provoque une incapacité.',rows:[{label:'Douleur actuelle',value:row.value},{label:'Facteur anesthésique',value:`× ${anestheticModifiers(health?.anesthetic).painFactor.toFixed(2)}`}]};
+    const tooltip=key?healthCapacityTooltip(pawn,key):{title:'Douleur',body:`La douleur provient des lésions, des parties fraîchement perdues et de certaines affections. L’anesthésie atténue la douleur ; une douleur totale d’au moins ${Math.round((health?painShockThreshold362(health):.8)*100)} % provoque une incapacité${health?.wimp362?' (douillet)':''}.`,rows:[{label:'Douleur actuelle',value:row.value},{label:'Facteur anesthésique',value:`× ${anestheticModifiers(health?.anesthetic).painFactor.toFixed(2)}`}]};
     setTooltip(capacities.children[index*2] as HTMLElement,tooltip);setTooltip(capacities.children[index*2+1] as HTMLElement,tooltip);
   }
   const injuries=details.querySelector<HTMLElement>('[data-health="injuries"]')!,injuryRows=clinicalRows(pawn),injurySignature=JSON.stringify([injuryRows,health?.bloodLoss]);

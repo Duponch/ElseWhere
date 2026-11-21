@@ -36,7 +36,7 @@ export function advanceArrivals(world:World):void {
   const name=ARRIVAL_NAMES[Math.floor(arrivalRandom(random)*ARRIVAL_NAMES.length)]!;
   const relationship=chooseOfferedRelationship(plans,random);
   // Schema 361: Core traits, drawn privately for the offered identity.
-  const traits=isTraitsSchema361(world.schemaVersion)?offeredTraits361(world.seed,id,background?.age,background?.background):arrivalTraits(profile,id);
+  const traits=isTraitsSchema361(world.schemaVersion)?offeredTraits361(world.seed,id,background?.age,background?.background,world.schemaVersion):arrivalTraits(profile,id);
   s.pending={id,openedAt:world.tick,expiresAt:world.tick+TICKS_PER_DAY,name,profile,...traits?{traits}:{},...background,...relationship?{relationship}:{}};
   s.serial=id;s.nextCheck=nextCheck;s.rng=random.rng;
   log(world,`${name} demande à rejoindre la colonie. Répondez dans la journée.`);
@@ -60,7 +60,7 @@ export function applyArrival(world:World,command:ArrivalCommand):CommandResult {
   if((Number(world.schemaVersion)===259||Number(world.schemaVersion)===260||(Number(world.schemaVersion)===261||(Number(world.schemaVersion)===262||isSchema263OrLater(Number(world.schemaVersion)))))&&world.worldFactions&&!bindBornHumanFaction259(world,pawn,world.worldFactions.playerFactionId))return refuse('L’instance de faction réelle manque pour cette arrivée.');
   assignOfferedBackground(pawn,o,world.seed,world.tick);
   if(o.traits)pawn.traits=[...o.traits];
-  if(o.traits&&isTraitsSchema361(world.schemaVersion))bornTraitEffects361(pawn);
+  if(o.traits&&isTraitsSchema361(world.schemaVersion))bornTraitEffects361(pawn,world.tick);
   if(initializesWorkLikeCore302(world.schemaVersion))enableAndInitializeWork(pawn);
   pawn.hunger=75;pawn.rest=80;pawn.foodPolicyId=world.foodPolicies[0]!.id;
   // Clothing crosses the map boundary with its owner; it is an external input,

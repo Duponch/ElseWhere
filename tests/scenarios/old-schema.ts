@@ -6,6 +6,7 @@ import {isDevilstrandItem358} from '../../src/sim/devilstrand-358.ts';
 import {deserializeWorld,serializeWorld} from '../../src/sim/serialization.ts';
 import type {World} from '../../src/sim/types.ts';
 const FIRST_DAYS_KINDS_343=['slept-in-cold','slept-in-heat','slept-outside','slept-on-ground','soaking-wet','darkness'];
+const TRAIT_LINK_IDS_362:readonly string[]=['undergrounder','tortured-artist','wimp'];
 const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bonded-animal-died','bonded-animal-lost'];
 
 /** A current save relabelled as an older schema must first drop the content
@@ -30,7 +31,9 @@ const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bond
  * schema 359: the outdoors need;
  * schema 361: the trait ids of the Core trait set (a person keeps only the
  * nine older ids, and none at all if it held no older one; faction leaders
- * and departed visitors keep none). */
+ * and departed visitors keep none); schema 362: the Undergrounder, Tortured
+ * artist and Wimp degrees, the indoors need, the wimp's record marker and
+ * the not-mood marker of a crisis. */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -42,7 +45,17 @@ function strip(value:unknown,version:number):void {
   if(!value||typeof value!=='object')return;
   const o=value as Record<string,unknown>;
   // Schema 360: a pawn's active inspiration.
-  if(version<360&&Object.hasOwn(o,'inspiration360'))delete o.inspiration360;  // Schema 361: the Core trait set; an older save holds only the nine old ids.
+  if(version<360&&Object.hasOwn(o,'inspiration360'))delete o.inspiration360;
+  // Schema 362: the three new trait degrees and what they hold.
+  if(version<362){
+    if(Array.isArray(o.traits)&&o.traits.every(id=>typeof id==='string')&&o.traits.some(id=>TRAIT_LINK_IDS_362.includes(id as string))){
+      const kept=(o.traits as string[]).filter(id=>!TRAIT_LINK_IDS_362.includes(id));
+      if(kept.length)o.traits=kept;else delete o.traits;
+    }
+    if(Object.hasOwn(o,'indoors362'))delete o.indoors362;
+    if(Object.hasOwn(o,'wimp362'))delete o.wimp362;
+    if(Object.hasOwn(o,'notMood362'))delete o.notMood362;
+  }  // Schema 361: the Core trait set; an older save holds only the nine old ids.
   if(version<361&&Array.isArray(o.traits)&&o.traits.every(id=>typeof id==='string')){
     const kept=(o.traits as string[]).filter(id=>(LEGACY_TRAIT_IDS as readonly string[]).includes(id));
     if(kept.length)o.traits=kept;else delete o.traits;
@@ -106,7 +119,7 @@ export function stripFutureContent(value:unknown,version:number):void {
   if(version<352&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).letters352;
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
-  if(version<361)strip(value,version);
+  if(version<362)strip(value,version);
 }
 
 /** The reference for a number-only migration step from `version`: the same

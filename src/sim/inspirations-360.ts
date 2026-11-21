@@ -7,7 +7,8 @@ import {HUMAN_YEAR_TICKS} from './human-age.ts';
 import {inspirationStream360} from './inspiration-stream-360.ts';
 import {sendLetter352} from './letters-352.ts';
 import type {BodyAssessment} from './body-capacities.ts';
-import {TICKS_PER_DAY,type Pawn,type World,type WorkType} from './types.ts';
+import {SCHEMA_VERSION,TICKS_PER_DAY,type Pawn,type World,type WorkType} from './types.ts';
+import {traitDisallowsInspiration362} from './trait-links-362.ts';
 
 /* Inspirations of Core RimWorld 1.6 (schema 360).
  *
@@ -135,8 +136,9 @@ const ageYears=(p:Pawn):number=>p.age?p.age.biologicalTicks/HUMAN_YEAR_TICKS:Num
 /** Core Pawn.IsColonist: the player's faction, not a prisoner or a guest. */
 export const inspirationColonist360=(p:Pawn):boolean=>isColonist(p)&&!p.prisoner&&!p.visitor&&!p.raid&&!p.podRescue;
 
-/** Core InspirationWorker.InspirationCanOccur for one def. */
-export function inspirationCanOccur360(p:Pawn,kind:InspirationKind360,body:BodyAssessment=pawnBody(p)):boolean {
+/** Core InspirationWorker.InspirationCanOccur for one def. `version`: the
+ * schema of the pawn's game (the trait rule applies from 362; current by default). */
+export function inspirationCanOccur360(p:Pawn,kind:InspirationKind360,body:BodyAssessment=pawnBody(p),version:number=SCHEMA_VERSION):boolean {
   const d=BY_KIND.get(kind)!;
   if(!inspirationColonist360(p)||!d.allowedOnDowned&&p.state==='downed')return false;
   if(d.statSkill&&backgroundSkillRefusal(p,d.statSkill))return false;
@@ -145,6 +147,8 @@ export function inspirationCanOccur360(p:Pawn,kind:InspirationKind360,body:BodyA
   if(d.work&&d.work.some(work=>backgroundWorkRefusal(p,work)))return false;
   if(d.anyWork&&!d.anyWork.some(work=>!backgroundWorkRefusal(p,work)))return false;
   if(d.capacities&&!d.capacities.every(capacity=>capable(body,capacity)))return false;
+  // Schema 362: TraitDegreeData.disallowedInspirations.
+  if(traitDisallowsInspiration362(p,kind,version))return false;
   return ageYears(p)>=d.minAge;
 }
 /** Core InspirationWorker.CommonalityFor: base 1 times the best passion factor. */
@@ -156,10 +160,10 @@ export function inspirationCommonality360(p:Pawn,kind:InspirationKind360):number
 /** Core GetRandomAvailableInspirationDef: the filtered defs are an enumerable,
  * so RandomElementByWeightWithFallback keeps the first admitted def without a
  * draw, then for each later one draws Range(0, total + weight) >= total. */
-export function randomAvailableInspiration360(p:Pawn,random:()=>number,body:BodyAssessment=pawnBody(p)):InspirationKind360|undefined {
+export function randomAvailableInspiration360(p:Pawn,random:()=>number,body:BodyAssessment=pawnBody(p),version:number=SCHEMA_VERSION):InspirationKind360|undefined {
   let chosen:InspirationKind360|undefined,total=0;
   for(const d of INSPIRATIONS_360){
-    if(!inspirationCanOccur360(p,d.kind,body))continue;
+    if(!inspirationCanOccur360(p,d.kind,body,version))continue;
     const weight=inspirationCommonality360(p,d.kind);
     if(total===0){if(weight>0){chosen=d.kind;total=weight;}continue;}
     if(random()*(total+weight)>=total)chosen=d.kind;
@@ -186,7 +190,7 @@ export function mtbEventOccurs360(mtb:number,unit:number,check:number,random:()=
 /** Core InspirationHandler.TryStartInspiration then Inspiration.PostStart:
  * the begin letter (PositiveEvent), the reason first. */
 export function startInspiration360(world:World,pawn:Pawn,kind:InspirationKind360,reason=`Grâce à son excellente humeur, ${pawn.name} trouve l’inspiration !`):boolean {
-  if(!isInspirations360(world.schemaVersion)||pawn.inspiration360||!inspirationCanOccur360(pawn,kind))return false;
+  if(!isInspirations360(world.schemaVersion)||pawn.inspiration360||!inspirationCanOccur360(pawn,kind,pawnBody(pawn),world.schemaVersion))return false;
   if(!Number.isSafeInteger(world.tick+INSPIRATION_DURATION_360))return false;
   pawn.inspiration360={kind,start:world.tick,until:world.tick+INSPIRATION_DURATION_360};
   const d=BY_KIND.get(kind)!;
@@ -211,7 +215,7 @@ export function tickInspiration360(world:World,pawn:Pawn,body?:BodyAssessment):v
   if(mtb===undefined)return;
   const random=inspirationStream360(world.seed,pawn.id,world.tick);
   if(!mtbEventOccurs360(mtb,60000,INSPIRATION_CHECK_CORE_TICKS_360,random))return;
-  const kind=randomAvailableInspiration360(pawn,random,bodyNow);
+  const kind=randomAvailableInspiration360(pawn,random,bodyNow,world.schemaVersion);
   if(kind)startInspiration360(world,pawn,kind);
 }
 

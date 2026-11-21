@@ -9,6 +9,8 @@ import type { PawnSkills,SkillRecord } from './skills.ts';
 import { startingPawn } from './starting-pawns.ts';
 import { LEGACY_TRAIT_IDS,TRAITS,isTraitsSchema361,type TraitId } from './traits.ts';
 import { applyTraitSkillGains361,drawCoreTraits361,traitForbidsPassion361 } from './trait-generation-361.ts';
+import { traitForcedPassions362 } from './trait-links-362.ts';
+import { bornWimpRecord362 } from './wimp-record-362.ts';
 import { SCHEMA_VERSION,type Pawn,type WorkType } from './types.ts';
 
 export const STARTING_CANDIDATE_COUNT=8;
@@ -148,7 +150,7 @@ export function previewStartingCandidate(seed:number,descriptor:StartingCandidat
   // Schema 361: Core order, traits before skills and passions (their skill
   // gains change the levels the passion ranking reads; Brawler forbids a
   // shooting passion). New salts only; every pre-361 draw is unchanged.
-  const core361=isTraitsSchema361(version)?drawCoreTraits361({draw:salt=>draw(salt),sex:pawn.appearance?.sex??'none',ageYears:pawn.age.biologicalTicks/HUMAN_YEAR_TICKS,background:pawn.background!}):undefined;
+  const core361=isTraitsSchema361(version)?drawCoreTraits361({draw:salt=>draw(salt),sex:pawn.appearance?.sex??'none',ageYears:pawn.age.biologicalTicks/HUMAN_YEAR_TICKS,background:pawn.background!,...version>=362?{schema:version}:{}}):undefined;
   if(core361)applyTraitSkillGains361(pawn.skills,core361);
   // A finite weighted passion budget rewards stronger available skills. This
   // is a local distribution, not a claim to reproduce Core's Gaussian budget.
@@ -161,7 +163,13 @@ export function previewStartingCandidate(seed:number,descriptor:StartingCandidat
     const major=budget>=2&&draw(0x333650+index)<.4;
     record.passion=major?2:1;budget-=major?2:1;
   }
-  if(core361){if(core361.length)pawn.traits=core361;return pawn;}
+  if(core361){
+    if(core361.length)pawn.traits=core361;
+    // Schema 362: a tortured artist's forced Art passion (after the local
+    // budget, no draw) and a wimp's pain shock threshold on its record.
+    traitForcedPassions362(pawn);bornWimpRecord362(pawn,0);
+    return pawn;
+  }
   const traits:TraitId[]=[],groups=new Set<string>(),count=draw(0x333700)<.35?3:2;
   const choices=TRAIT_IDS.map((id,index)=>({id,rank:draw(0x333710+index)})).sort((a,b)=>a.rank-b.rank||a.id.localeCompare(b.id));
   for(const {id} of choices){

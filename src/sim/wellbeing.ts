@@ -5,6 +5,8 @@ import { updateMood,expireMealMemories } from './mood.ts';
 import {isFirstDays343,sampleDarkness343} from './first-days-343.ts';
 import {advanceRoomSize345,isMoodBasics345} from './room-size-need-345.ts';
 import {advanceOutdoors359,isOutdoors359} from './outdoors-need-359.ts';
+import {advanceIndoors362} from './indoors-need-362.ts';
+import {isTraitLinks362} from './trait-links-362.ts';
 import {benchSeatComfort350} from './mood-pool-350.ts';
 import { rememberRoomUse } from './room-experience.ts';
 import { schemaAtLeast } from './schema-range.ts';
@@ -86,6 +88,8 @@ export function updateWellbeing(world: World, pawn: Pawn,body?:BodyAssessment,re
   if(isFirstDays343(world.schemaVersion))sampleDarkness343(world,pawn,body);
   // Schema 359: Need_Outdoors, after Need_Mood and before Need_RoomSize (NeedDef order).
   if(isOutdoors359(world.schemaVersion))advanceOutdoors359(world,pawn,body);
+  // Schema 362: Need_Indoors of an undergrounder, after Need_Outdoors (NeedDef order).
+  if(isTraitLinks362(world.schemaVersion))advanceIndoors362(world,pawn,body);
   // Schema 345: Need_RoomSize steps after Need_Mood in the same interval (NeedDef order).
   if(isMoodBasics345(world.schemaVersion))advanceRoomSize345(world,pawn,body,topology);
 }

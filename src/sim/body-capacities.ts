@@ -12,6 +12,8 @@ export interface BodyAssessmentInput {
    * capacity products, although their natural body parts remain missing. */
   readonly artificialParts?:readonly {readonly part:BodyPartId;readonly efficiency:number}[];
   readonly pain:number;
+  /** Schema 362: Core PainShockThreshold when it is not the base 0.8 (a Wimp's 0.3). */
+  readonly painShockThreshold?:number;
   readonly partEfficiencyOffsets?:readonly {readonly part:BodyPartId;readonly offset:number}[];
   readonly hearingOffset?:number;
   readonly bloodPumpingOffset?:number;
@@ -117,7 +119,7 @@ function calculate(input:BodyAssessmentInput,model=HUMAN_MODEL):BodyAssessment {
     talking:human&&canBeAwake?round((part('jaw')*part('neck')*part('tongue')*consciousness+(input.talkingOffset??0))*(input.talkingFactor??1)):0,
     eating:canBeAwake?round(Math.max(.1,(human?part('jaw'):1)*part('neck')*(human?(.5+.5*part('tongue')):1)*consciousness*(input.eatingFactor??1))):0,
     breathing,bloodPumping,bloodFiltration,digestion});
-  return Object.freeze({capacities,canBeAwake,movingCapable:moving>.15,painShock:input.pain>=.8,
+  return Object.freeze({capacities,canBeAwake,movingCapable:moving>.15,painShock:input.pain>=(input.painShockThreshold??.8),
     vitalFailure:part('torso')<=.0001||[consciousness,breathing,bloodPumping,bloodFiltration,digestion].some(value=>value<=0)});
 }
 /** Mechanical tags still feed the common capacity workers. The hidden neck

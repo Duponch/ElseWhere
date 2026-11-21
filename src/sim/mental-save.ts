@@ -7,6 +7,7 @@ import { MENTAL_CRISIS_CATALOG } from './mental-catalog.ts';
 import { isAggressiveMentalCrisis } from './mental-state.ts';
 import { isMoodPool350,isMoodPoolCrisis350 } from './mood-pool-memories-350.ts';
 import { structureMaxHp } from './thing-damage-rules.ts';
+import { isTraitLinks362 } from './trait-links-362.ts';
 
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const integer=(v:unknown,lo:number,hi=Number.MAX_SAFE_INTEGER):v is number=>Number.isSafeInteger(v)&&Number(v)>=lo&&Number(v)<=hi;
@@ -22,7 +23,9 @@ export function validMentalShape(value:unknown,version:number,tick:number,width:
   if(isMoodPoolCrisis350(c.kind)&&!isMoodPool350(version))return false;
   const rules=MENTAL_CRISIS_CATALOG[c.kind as keyof typeof MENTAL_CRISIS_CATALOG];
   if(!integer(c.age,0,rules.maxCore+(c.kind==='murderous-rage'?19:-1))||c.age%30!==0||typeof c.waitUntil!=='number'||!Number.isFinite(c.waitUntil)||c.waitUntil<0||c.waitUntil>tick+(c.kind==='wander-own-room'?60:20.1)||!(c.target===null||object(c.target)&&keys(c.target,['x','z'])&&integer(c.target.x,0,width-1)&&integer(c.target.z,0,height-1)))return false;
-  const base=['kind','age','target','waitUntil'];
+  // Schema 362: a crisis not caused by mood carries `notMood362: true`.
+  if(Object.hasOwn(c,'notMood362')&&(!isTraitLinks362(version)||c.notMood362!==true||c.kind==='confused-wander'))return false;
+  const base=['kind','age','target','waitUntil',...isTraitLinks362(version)?['notMood362']:[]];
   if(c.kind==='tantrum')return keys(c,[...base,'targetId','targetSinceCore','attempted','nextTargetCore'])&&(c.targetId===null||integer(c.targetId,1))&&integer(c.targetSinceCore,0,tick*10)&&typeof c.attempted==='boolean'&&integer(c.nextTargetCore,0,tick*10+500);
   if(c.kind==='berserk')return keys(c,[...base,'targetId','jobUntilCore'])&&(c.targetId===null||integer(c.targetId,1))&&(c.jobUntilCore===null||integer(c.jobUntilCore,0,tick*10+900))&&(c.targetId===null)===(c.jobUntilCore===null);
   if(c.kind==='murderous-rage')return keys(c,[...base,'targetId','nextCheckCore'])&&integer(c.targetId,1)&&integer(c.nextCheckCore,0,tick*10+120);
