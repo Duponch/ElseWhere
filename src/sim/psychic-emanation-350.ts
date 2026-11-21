@@ -39,7 +39,7 @@ export function resolveSelectedPsychic350(w:World,kind:PsychicKind350,draw:()=>n
  const days=f(f(min)+f(f(max-min)*f(draw()))),core=f(days*f(60000)),lower=Math.floor(core);
  const duration=core-lower===.5?lower+lower%2:Math.round(core);
  const colonists=w.pawns.filter(p=>freePresentColonist(w,p));
- const gender=pawnGender350(colonists[Math.min(colonists.length-1,Math.floor(draw()*colonists.length))]!);
+ const gender=pawnGender350(colonists[Math.min(colonists.length-1,Math.floor(draw()*colonists.length))]!,w);
  let level:PsychicLevel350='soothe';
  if(kind==='drone'){const points=cropBlightIncidentPoints(w);level=points<800?'low':points<2000?'moderate':'high';}
  const startCore=w.tick*10;

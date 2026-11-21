@@ -11,6 +11,7 @@ import {gainMoodPoolMemory350,isMoodPool350} from './mood-pool-memories-350.ts';
 export {MOOD_POOL_SCHEMA_350,MOOD_POOL_MEMORIES_350,noteBondedAnimalDeaths350,gainMoodPoolMemory350,isMoodPool350,isMoodPoolMemory350,moodPoolMemoryThoughts350,type MoodPoolMemoryKind350} from './mood-pool-memories-350.ts';
 import type {PsychicLevel350} from './psychic-state-350.ts';
 import type {Pawn,Structure,World} from './types.ts';
+import {appearanceOf} from './pawn-appearance.ts';
 
 /* Schema 350: the rest of the mood pool an ordinary colony meets in its first
  * seasons, read from the RimWorld 1.6 Core defs (ThoughtDefs,
@@ -27,10 +28,14 @@ export const PSYCHIC_STAGES_350:Readonly<Record<PsychicLevel350,{readonly label:
  extreme:Object.freeze({label:'Bourdonnement psychique extrême',offset:-40}),
 });
 /** Elsewhere's humans carry their gender only in their drawn appearance. */
-export const pawnGender350=(p:Pawn):'male'|'female'|'none'=>p.appearance?.sex??'none';
+/** Every Core human has a gender. A pawn saved before appearances existed
+ * has none on record; from schema 356 it takes the gender the game shows for
+ * it (appearanceOf, deterministic from seed, id and name). Before 356 such a
+ * pawn counted as genderless, so a drone drawn on one hit every such pawn. */
+export const pawnGender350=(p:Pawn,w?:Pick<World,'schemaVersion'|'seed'>):'male'|'female'|'none'=>p.appearance?.sex??(w&&Number(w.schemaVersion)>=356?appearanceOf(p,w.seed).sex:'none');
 export function psychicDroneThought350(w:World,p:Pawn):MoodThought|undefined {
  const c=w.miscIncidents?.psychic350,now=w.tick*10;
- if(!isMoodPool350(w.schemaVersion)||!c||now<c.startCore||now>=c.endCore||!w.pawns.includes(p)||p.cryptosleepHeldAt271!==undefined||p.shipCryptosleepHeldAt277!==undefined||pawnGender350(p)!==c.gender)return;
+ if(!isMoodPool350(w.schemaVersion)||!c||now<c.startCore||now>=c.endCore||!w.pawns.includes(p)||p.cryptosleepHeldAt271!==undefined||p.shipCryptosleepHeldAt277!==undefined||pawnGender350(p,w)!==c.gender)return;
  const stage=PSYCHIC_STAGES_350[c.level];
  return {id:`psychic-${c.level}`,label:stage.label,offset:stage.offset,kind:'situation',description:c.level==='soothe'
   ?'Une émission psychique lointaine apaise les esprits de ce genre sur cette carte, tant qu’elle dure.'
