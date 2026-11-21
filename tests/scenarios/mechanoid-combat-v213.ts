@@ -15,6 +15,11 @@ export function mechanoidCombatCamp(){
   // the prepared spatial inventory, then let the real first tick adopt clocks.
   w.resources=[];w.piles=[];w.jobs=[];w.structures=[];w.stockpiles=[];w.growingZones=[];
   w.tiles=w.tiles.map(()=>({terrain:'grass'}));delete w.wildlife;w.pawns=w.pawns.slice(0,2);
+  // Schema 343: the landing gives CrashedTogether opinions and a NewColony
+  // memory to every starter; drop the ones that name the pawn removed here.
+  const kept=new Set(w.pawns.map(p=>p.id));
+  for(const p of w.pawns)if(p.social?.memories)p.social.memories=p.social.memories.filter(m=>kept.has(m.otherId));
+  if(w.worldGroups?.lostMemories)w.worldGroups.lostMemories=w.worldGroups.lostMemories.filter(m=>kept.has(m.receiverId)&&(m.otherId===null||kept.has(m.otherId)));
   for(const p of w.pawns){p.hunger=100;p.rest=100;p.recreation.level=100;p.bedId=null;p.schedule.fill('work');
     for(const kind of Object.keys(p.priorities) as (keyof typeof p.priorities)[])p.priorities[kind]=0;}
   Object.assign(w.pawns[0]!,{x:48,z:48,hostilityResponse:'ignore'});
