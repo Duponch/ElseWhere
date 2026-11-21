@@ -495,7 +495,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
         const name=value.trim();if(!validStartingCandidateName(name))throw Error('Le nom doit contenir 1 à 80 caractères, sans caractères de contrôle.');
         roster=roster.map(candidate=>candidate.serial===descriptor.serial?{...candidate,nameOverride:name}:candidate);
       },'text',80);
-      identity.controls=[{...control(`reroll-${descriptor.serial}`,'↻',()=>{if(live(descriptor.serial,descriptor.generation)){roster=rerollStartingCandidateForRoster(teamSeed,roster,descriptor.serial);if(tutorial)options.tutorialLessons?.notify('RandomizePawn');}}),hint:'Renouveler ce candidat : les sept autres profils et leur ordre sont conservés.'}];
+      identity.controls=[{...control(`reroll-${descriptor.serial}`,'↻',()=>{if(live(descriptor.serial,descriptor.generation)){roster=rerollStartingCandidateForRoster(teamSeed,roster,descriptor.serial,{capableOfViolence:tutorial});if(tutorial)options.tutorialLessons?.notify('RandomizePawn');}}),hint:'Renouveler ce candidat : les sept autres profils et leur ordre sont conservés.'}];
       rows.push({...identity,region:'details',dense:true,compact:true},{id:'candidate-age',region:'details',dense:true,compact:true,label:'Âge bio. / chrono.',value:pawn.age?`${biologicalYears(pawn.age)} / ${chronologicalYears(pawn.age)} ans`:'Non renseigné'});
       rows.push(details({id:'candidate-actions',label:'',controls:[
         {...control(`promote-${descriptor.serial}`,selected?'Laisser sur place':'Choisir pour le départ',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)<3?3:2);}),hint:selected?'Place ce profil après les trois personnes choisies ; le candidat suivant rejoint le départ.':'Place ce profil en troisième position ; la dernière personne choisie passe dans les réserves.'},
@@ -603,7 +603,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     if (page === 'pawns') return renderPawns();
     if (page === 'home') return { id: '', title: 'ELSEWHERE', subtitle: 'Trois vies. Un nouveau foyer. À vous d’écrire la suite.', rows: [
       ...(hasGame ? [{ id: 'resume', label: 'Colonie en pause', controls: [control('resume', 'Reprendre la colonie', () => run(options.onResume, 'Reprise de la colonie…'))] }] : []),
-      { id: 'home-tutorial', label: 'Apprendre à jouer', detail: 'Une partie guidée, sans incident ni menace jusqu’au choix du narrateur.', controls: [control('tutorial', 'Tutoriel', showTutorial)] },
+      { id: 'home-tutorial', label: 'Apprendre à jouer', controls: [control('tutorial', 'Tutoriel', showTutorial)] },
       { id: 'home-new', label: 'Nouvelle partie', controls: [control('new-game', 'Nouvelle partie', showCreation)] },
       { id: 'home-load', label: 'Vos colonies', controls: [control('load-game', 'Charger une partie', () => navigate('load'))] },
       { id: 'home-options', label: 'Préférences locales', controls: [control('options', 'Options', () => navigate('options'))] },
@@ -648,7 +648,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     tutorial = learn; difficultyChosen = reloadChosen = learn; invalidateDraft();
     let seed = ''; try { seed = randomSiteSeed(); teamSeed = Number(randomSiteSeed()); } catch { teamSeed = 0; }
     parameters = { seed, settings: defaultWorldGenerationSettings(), size: 250, season: 'auto' };
-    roster = createStartingCandidateRoster(teamSeed); inspected = roster[0]!.serial; navigate(learn ? 'world' : 'scenario');
+    roster = createStartingCandidateRoster(teamSeed, { capableOfViolence: learn }); inspected = roster[0]!.serial; navigate(learn ? 'world' : 'scenario');
   }
   function hide(): void { if(open)tutorialPages(page,undefined); generation++; flow?.cancel(); confirmation = undefined; notice = undefined; open = false; if (!pending) busy = false; show(null); }
   return {

@@ -49,6 +49,9 @@ export interface TutorialEngineOptions349 {
   changed?():void;
   /** The tutorial ended (endTutorial): LessonAutoActivator.Notify_TutorialEnding. */
   ended?():void;
+  /** GameStartDialogClosed: the first map lesson begins. Core's new game runs at
+   * normal speed from there (only a development quick start pauses on load). */
+  started?():void;
 }
 export interface TutorialCardView349 {
   lesson:TutorialLessonId349;
@@ -324,7 +327,7 @@ export function createTutorialEngine349(options:TutorialEngineOptions349){
       const w=options.world(),data=gameRecord();
       if(!w||!data||ended||!options.playing())return;
       // GameStartDialogClosed: Elsewhere's start has no dialog; the first map lesson begins when the map is shown.
-      if(!started&&data.active===undefined&&local===undefined&&pending===undefined){started=true;notify('GameStartDialogClosed');return;}
+      if(!started&&data.active===undefined&&local===undefined&&pending===undefined){started=true;notify('GameStartDialogClosed');options.started?.();return;}
       const def=activeDef(),own=lessonData();
       if(!def||!own)return;
       // Adaptation: a lesson whose rectangle the game could not place (no usable

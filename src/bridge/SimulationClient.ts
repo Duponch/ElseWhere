@@ -411,7 +411,7 @@ export class SimulationClient {
   async generateWorldDraft256(input:WorldCreationRequest256,context:{signal:AbortSignal;onProgress:(progress:WorldCreationProgress256)=>void}):Promise<WorldCreationPreview256> {
     if(context.signal.aborted)throw new DOMException('Préparation annulée.','AbortError');
     if(this.hasCampPreparation)throw new SimulationRequestError('La préparation de la carte locale attend encore sa décision.','refused');
-    if(!input||!validWorldGenerationSettings(input.settings)||typeof input.seed!=='string'||!sameDraftPlayer256(input.player,input.player)||input.player.scenario!=='crashlanded'||input.player.playerDef!=='PlayerColony')throw Error('Paramètres de création invalides.');
+    if(!input||!validWorldGenerationSettings(input.settings)||typeof input.seed!=='string'||!sameDraftPlayer256(input.player,input.player)||input.player.scenario!=='crashlanded'&&input.player.scenario!=='tutorial'||input.player.playerDef!=='PlayerColony')throw Error('Paramètres de création invalides.');
     if([...this.pending.values()].some(p=>p.type==='init'||p.type==='load'||p.type==='world-draft-start'))throw Error('Un remplacement attend encore sa décision.');
     // A previous fatal worker may be retired before a NEW generation only.
     // Its already-delivered fault is not emitted again into this menu flow.

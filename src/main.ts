@@ -1037,7 +1037,9 @@ if(nativeMode){
     dismiss:letter=>{void attempt(async()=>{await nativeActions().command({type:'letter-dismiss',id:letter.id});});}});
   const viewport=nativeUi.getViewportMetrics();nativeHud.setLetterReserve(nativeLetters.setViewport(viewport.height));nativeHud.setViewport(viewport.width,viewport.height,viewport.unitsPerPixel,viewport.bottomDockHeight??96,viewport.leftHudBottom);nativeHud.setNotificationsAutoHide(nativeDockPreferences.notifications);nativeHud.setRightDockOpen(nativeRightDockOpen);nativeUi.setAutoHideBottom(nativeDockPreferences.bottom);
   const guidance=createNativeGuidance(nativeUi.art,nativeUi.anchors,{session:guidanceSession,learning:()=>firstGesturesLearning,world:()=>snapshot,
-    blocked:()=>frontMenu.isOpen()||replacingWorld||!!launchProgress,sections:world=>readFirstDayGuide(world,confirmedFoodReadability()),now:()=>performance.now(),
+    // Core TutorialMode: adaptive training is off and the readout stays empty; the
+    // card and its first steps wait until the tutorial ends.
+    blocked:()=>frontMenu.isOpen()||replacingWorld||!!launchProgress||!!tutorialLessons?.active,sections:world=>readFirstDayGuide(world,confirmedFoodReadability()),now:()=>performance.now(),
     openHelp,guide:action=>{void attempt(()=>performNativeGuideAction(action));},invalidate:()=>nativeUi?.invalidate(),
     concepts:()=>learningRuntime?.helper.shown??[],markConcept:id=>learningRuntime?.helper.markLearned(id),
     afterSync:()=>{if(nativeGuidance&&nativeGuidance.reservedHeight!==appliedGuidanceReserve)applyNativeHudViewport();syncNativeHighlights();}});
@@ -1067,7 +1069,9 @@ async function performNativeGuideAction(action:import('./ui/first-day-guide').Fi
 function applyNativeHudViewport():void {
   const v=nativeViewport;if(!v)return;
   nativeGuidance?.setViewport(v.width,v.height,v.unitsPerPixel,v.left);
-  nativeTutorialCard?.setViewport(v.width,v.height,v.unitsPerPixel);
+  // The card hangs straight from the HUD root, outside the scaled anchors: it
+  // needs the real world size of a pixel, not the anchors' logical 0.01.
+  nativeTutorialCard?.setViewport(v.width,v.height,nativeUi?.hudUnitsPerPixel()??v.unitsPerPixel);
   appliedGuidanceReserve=nativeGuidance?.reservedHeight??0;
   if(nativeLetters)nativeHud?.setLetterReserve(nativeLetters.setViewport(v.height));
   nativeHud?.setViewport(v.width,v.height,v.unitsPerPixel,v.bottom,v.left-appliedGuidanceReserve);
@@ -2575,6 +2579,9 @@ tutorialLessons=createTutorialEngine349({
   changed:()=>syncTutorialLesson(),
   // LessonAutoActivator.Notify_TutorialEnding: the learning helper starts again from now.
   ended:()=>{learningRuntime?.helper.setSuspended(false);learningRuntime?.helper.tutorialEnded();syncNativeGuidance(true);},
+  // Core: a new game runs at normal speed once the map is shown; Elsewhere's other
+  // starts wait paused, but the first lesson (moving the view) needs the pods open.
+  started:()=>{if(currentSpeed===0)void attempt(()=>changeSpeed(1));},
 });
 setInterval(()=>{
   const engine=tutorialLessons;

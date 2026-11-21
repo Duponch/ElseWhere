@@ -109,3 +109,13 @@ test('worker reply cannot silently replace the325 request with a legacy250 size'
  const f=await prepared(),site={generation:f.preview.generation,key:f.preview.key,tile:1,size:325 as const,season:'winter' as const},promise=f.client.confirmWorldDraftSite256(site),sent=f.worker.requests.at(-1)!;
  f.worker.deliver({type:'reply',id:mockRequestId298(sent),ok:true,data:JSON.stringify({...site,size:250,ticket:'wrong-size',player:f.input.player})});await expect(promise).rejects.toThrow('périmée');expect(f.worker.requests.some(r=>r.type==='world-draft-start')).toBe(false);f.client.dispose();
 });
+test('the tutorial scenario reaches the Worker like Atterrissage forcé, another one is refused before sending',async()=>{
+ // Found on screen on 21 November 2026: the client refused « tutorial » that the Worker accepts (schema 349).
+ const f=fixture();f.input.player={...f.input.player,scenario:'tutorial'};
+ const promise=f.client.generateWorldDraft256(f.input,{signal:f.controller.signal,onProgress:f.progress}),request=f.worker.requests.at(-1)!;
+ if(request.type!=='world-draft-generate')throw Error('No generate request');
+ expect(request.request.player.scenario).toBe('tutorial');deliverPreview(f.worker,request);await promise;f.client.dispose();
+ const g=fixture();g.input.player={...g.input.player,scenario:'lost-tribe'};
+ await expect(g.client.generateWorldDraft256(g.input,{signal:g.controller.signal,onProgress:g.progress})).rejects.toThrow('Paramètres de création invalides.');
+ expect(g.worker.requests.some(r=>r.type==='world-draft-generate')).toBe(false);g.client.dispose();
+});

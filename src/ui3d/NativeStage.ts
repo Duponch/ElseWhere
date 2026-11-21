@@ -305,6 +305,10 @@ export class NativeStage {
   setPanel(id:string|null):void{
     this.management.forEach((piece,index)=>{const active=PANEL_IDS[index]===id;if(piece.userData.active!==active){piece.setActive(active);this.moving.add(piece);}});this.invalidate();
   }
+  /** World units per CSS pixel at the HUD plane, for a piece added straight to
+   * `hudRoot` (the anchors and pages carry this scale themselves through uiScale,
+   * so they work in the logical 0.01 unit of getViewportMetrics). */
+  hudUnitsPerPixel():number{return this.visH/this.height;}
   getViewportMetrics(){const orders=this.toolsDock.children[0] as CardboardPiece|undefined;return {width:this.width,height:this.height,unitsPerPixel:.01,scale:this.displayScale,bottomDockHeight:this.bottomDockHeight,leftHudBottom:Math.max(40,this.height-8-(orders?orders.userData.basePos.y*100+23:this.bottomDockHeight)-12)};}
   private notifyViewport():void{
     const v=this.getViewportMetrics(),signature=JSON.stringify([v.width,v.height,v.bottomDockHeight,v.leftHudBottom]);if(signature===this.viewportSignature)return;this.viewportSignature=signature;

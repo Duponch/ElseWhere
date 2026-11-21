@@ -1,7 +1,7 @@
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {constructHumanConditionMind256} from './human-condition-mind-256.ts';
 import { assignBackground,generateBackground } from './background-generation.ts';
-import { BACKGROUND_SKILL_IDS,backgroundSkillRefusal,backgroundWorkRefusal } from './colonist-backgrounds.ts';
+import { BACKGROUND_SKILL_IDS,backgroundSkillRefusal,backgroundWorkRefusal,violentWorkRefusal } from './colonist-backgrounds.ts';
 import { crashlandedHumanAge } from './human-age.ts';
 import { generateStartingCandidateRelationships } from './relationship-generation.ts';
 import type { RelationshipState } from './relationship-state.ts';
@@ -67,13 +67,23 @@ function requireDescriptor(descriptor:StartingCandidateDescriptor):void {
   if(!validStartingCandidateDescriptor(descriptor))throw new Error('Le candidat de départ est invalide.');
 }
 
-export function createStartingCandidateRoster(seed:number):StartingCandidateDescriptor[] {
+/** Core StartingPawnUtility.DefaultStartingPawnRequest: in the tutorial every
+ * starting or optional pawn is generated with mustBeCapableOfViolence. */
+export interface StartingCandidateRules {capableOfViolence?:boolean}
+/** PawnGenerator's own retry: a person who refuses violent work is not born;
+ * the next generation of the same entry is tried instead (bounded). */
+function admitted(seed:number,descriptor:StartingCandidateDescriptor,rules:StartingCandidateRules):StartingCandidateDescriptor {
+  let current=descriptor;
+  for(let attempt=0;rules.capableOfViolence&&attempt<100&&violentWorkRefusal(previewStartingCandidate(seed,current))!==undefined;attempt++)current=rerollStartingCandidate(current);
+  return current;
+}
+export function createStartingCandidateRoster(seed:number,rules:StartingCandidateRules={}):StartingCandidateDescriptor[] {
   requireSeed(seed);
-  const roster=Array.from({length:STARTING_CANDIDATE_COUNT},(_,i)=>({serial:i+1,generation:0}));
+  const roster=Array.from({length:STARTING_CANDIDATE_COUNT},(_,i)=>admitted(seed,{serial:i+1,generation:0},rules));
   // The first birth plus at most twenty whole-team renewals mirrors Core's
   // bounded starter-generation check. Reserves are not repeatedly regenerated.
   for(let attempt=0;attempt<20&&startingPartyMissingWork(seed,roster.slice(0,STARTING_PARTY_COUNT)).length;attempt++){
-    for(let index=0;index<STARTING_PARTY_COUNT;index++)roster[index]=rerollStartingCandidate(roster[index]!);
+    for(let index=0;index<STARTING_PARTY_COUNT;index++)roster[index]=admitted(seed,rerollStartingCandidate(roster[index]!),rules);
   }
   return roster;
 }
@@ -88,13 +98,13 @@ export function rerollStartingCandidate(descriptor:StartingCandidateDescriptor):
  * with at most twenty more attempts to cover the selected team. Renewing a
  * reserve cannot repair a missing selected skill, but remains equally bounded.
  * The rest of the roster and every caller-owned descriptor stay untouched. */
-export function rerollStartingCandidateForRoster(seed:number,roster:readonly StartingCandidateDescriptor[],serial:number):StartingCandidateDescriptor[] {
+export function rerollStartingCandidateForRoster(seed:number,roster:readonly StartingCandidateDescriptor[],serial:number,rules:StartingCandidateRules={}):StartingCandidateDescriptor[] {
   requireSeed(seed);
   if(!validDescriptors(roster,STARTING_CANDIDATE_COUNT))throw new Error('La liste doit contenir huit candidats distincts.');
   const result=roster.map(d=>({...d})),index=result.findIndex(d=>d.serial===serial);
   if(index<0)throw new Error('Le candidat à renouveler est absent de la liste.');
   for(let attempt=0;attempt<21;attempt++){
-    result[index]=rerollStartingCandidate(result[index]!);
+    result[index]=admitted(seed,rerollStartingCandidate(result[index]!),rules);
     if(!startingPartyMissingWork(seed,result.slice(0,STARTING_PARTY_COUNT)).length)break;
   }
   return result;

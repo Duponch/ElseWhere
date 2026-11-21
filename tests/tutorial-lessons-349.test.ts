@@ -451,6 +451,21 @@ describe('a normal game',()=>{
  },300000);
 });
 
+describe('the start of a tutorial game',()=>{
+ it('asks once for normal speed when the first lesson begins, never on a game reloaded later (Core runs a new game)',async()=>{
+  // Found on screen on 21 November 2026: Elsewhere starts paused, so the pods
+  // stayed shut and the first lesson (moving the view) could not progress.
+  const w=copy(tutorialGame);let started=0;
+  const e=createTutorialEngine349({world:()=>w,epoch:()=>1,playing:()=>true,send:async()=>({ok:true}),now:()=>0,started:()=>{started++;}});
+  for(let i=0;i<4;i++){e.tick();await flush();}
+  expect(started).toBe(1);expect(e.lesson).toBe('MapCameraDolly');
+  const later=copy(tutorialGame);tutorialLessons349(later)!.active='MakeStockpile';let again=0;
+  const reloaded=createTutorialEngine349({world:()=>later,epoch:()=>1,playing:()=>true,send:async()=>({ok:true}),now:()=>0,started:()=>{again++;}});
+  for(let i=0;i<4;i++){reloaded.tick();await flush();}
+  expect(again).toBe(0);expect(reloaded.lesson).not.toBe('MapCameraDolly');
+ });
+});
+
 describe('the learning helper during the tutorial',()=>{
  it('is suspended (no notion shown or opened) and restarts its relax timer at the end',()=>{
   const h=createLearningHelper({concepts:LEARNING_CONCEPTS,read:()=>null,write:()=>true});
