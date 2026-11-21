@@ -1,3 +1,4 @@
+import {IED_COMMON_357,isIedSchema357,isIedTrapKind357,startIedWick357} from './ied-traps-357.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {notifyShipRootDestruction298} from './ship-root-destruction-proof-298.ts';
 import {effectiveCore297} from './core-phase-297.ts';
@@ -156,7 +157,9 @@ export function damageStructure(world:World,s:Structure,amount:number,cause:Stru
   const packed=world.packed.find(p=>p.building===s),installed=world.structures.includes(s),max=structureMaxHp(s);
   if(!max&&cause!=='roof-thick'||!positive(amount)||!installed&&!packed)return false;
   if(external&&(!Number.isFinite(external.rawAmount)||external.rawAmount<0||!Number.isSafeInteger(external.core)||(isCorePhysicalSchema297(Number(world.schemaVersion))?external.core!==effectiveCore297(world):external.core<Math.max(0,(world.tick-1)*10)||external.core>world.tick*10)))return false;
-  const core=external?.core??(isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveCore297(world):world.tick*10),explosive=world.schemaVersion>=193&&installed&&s.kind==='mini-turret'&&!!s.turret&&miniTurretExplosive(s.id);
+  // Schema 357: an installed IED trap carries Core CompExplosive (never 'never explode').
+  const ied=isIedSchema357(world.schemaVersion)&&installed&&isIedTrapKind357(s.kind);
+  const core=external?.core??(isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveCore297(world):world.tick*10),explosive=ied||world.schemaVersion>=193&&installed&&s.kind==='mini-turret'&&!!s.turret&&miniTurretExplosive(s.id);
   const detonates=explosive&&(external?.detonate|| (external?.rawAmount??amount)>=max-(s.damage??0));
   const foam=(Number(world.schemaVersion)===290||(Number(world.schemaVersion)===291||(Number(world.schemaVersion)===292||(Number(world.schemaVersion)===293||(Number(world.schemaVersion)===294||Number(world.schemaVersion)===295||Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion)))))))&&installed&&s.kind==='firefoam-popper'&&!!s.firefoam290;
   const foamDetonates=foam&&(external?.firefoamDetonate290|| (external?.rawAmount??amount)>=max-(s.damage??0));
@@ -164,7 +167,10 @@ export function damageStructure(world:World,s:Structure,amount:number,cause:Stru
   if(foam&&(!Number.isSafeInteger(core+150)||foamDetonates&&(world.firefoam290?.waves.length??0)>=world.width*world.height))return false;
   if(explosive&&!Number.isSafeInteger(core+240)||detonates&&(!Number.isSafeInteger(core+5)||world.bombWaves&&world.bombWaves.length>=world.width*world.height))return false;
   const damage=emits?max:(s.damage??0)+amount;
-  if(damage<max){s.damage=damage;if(cause!=='fire')world.rng=rng;if(explosive&&max-damage<=Math.round(max*.2))startTurretWick(world,s,core,external?.instigatorKey);if(foam&&cause==='fire')startFirefoamWick290(world,s,core);return true;}
+  if(damage<max){s.damage=damage;if(cause!=='fire')world.rng=rng;
+    // IED: startWickOnDamageTaken Bullet/Arrow, then the 20 % hit-point threshold.
+    if(ied){if(cause==='bullet'||max-damage<=IED_COMMON_357.startWickHitPoints)startIedWick357(s,core,external?.instigatorKey);}
+    else if(explosive&&max-damage<=Math.round(max*.2))startTurretWick(world,s,core,external?.instigatorKey);if(foam&&cause==='fire')startFirefoamWick290(world,s,core);return true;}
   const bedOwnership=prepareBedOwnershipTransition256(world,s,'destroy');
   const fogRemoval=prepareRemovedFogStructure256(world,s);
   const owner=packed?.owner,origin=owner?.type==='ground'?owner:owner?.type==='pawn'||owner?.type==='inventory'?world.pawns.find(p=>p.id===owner.pawnId)??s:s;
@@ -242,7 +248,7 @@ export function damageStructure(world:World,s:Structure,amount:number,cause:Stru
   if(world.fires)world.fires.batteryWicks=world.fires.batteryWicks.filter(w=>w.structureId!==s.id);
   if(s.kind==='hydroponics-basin')removeHydroponicPlants(world,s);
   detachMissingBills(world);detachMissingFlakBills(world);detachMissingGunBills(world);detachMissingArtBills(world);detachMissingComponentBills(world);detachMissingProstheticBills273(world);reconcilePower(world);if(installed)reconcileRoofSupport(world,false,s);refreshStock(world);
-  if(installed&&s.kind==='spike-trap')rebuildSpikeTrap(world,s);
+  if(installed&&(s.kind==='spike-trap'||ied))rebuildSpikeTrap(world,s);
   if(foam)rebuildFirefoamPopper290(world,s);
   if(waveId!==undefined){if(foamDetonates)registerFirefoamWave290(world,s,waveId,core);else registerBombWave(world,s,waveId,core,external?.instigatorKey??s.turret?.wick?.instigatorKey);}
   for(const p of world.pawns)if(p.firefoamTask290?.structureId===s.id)reconcileFirefoamManual290(world,p);

@@ -33,6 +33,7 @@ export const OCCUPANCY = Object.freeze({
   shelf:Object.freeze({clearItems:true,items:true,zones:false,store:true}),
   'small-shelf':Object.freeze({clearItems:true,items:true,zones:false,store:true}),
   'spike-trap':Object.freeze({clearItems:false,items:true,zones:true,store:true}),
+  'ied-high-explosive':Object.freeze({clearItems:false,items:true,zones:true,store:true}),'ied-incendiary':Object.freeze({clearItems:false,items:true,zones:true,store:true}),
   'electric-crematorium':Object.freeze({clearItems:false,items:true,zones:false,store:false}),
   'electric-smelter':Object.freeze({clearItems:false,items:true,zones:false,store:false}),
   'biofuel-refinery':Object.freeze({clearItems:false,items:true,zones:false,store:false}),

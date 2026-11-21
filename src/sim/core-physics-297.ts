@@ -1,3 +1,4 @@
+import {isIedSchema357} from './ied-traps-357.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {detectFirefoam290,advanceFirefoamWick290} from './firefoam-290.ts';
 import {mechRaidGroups261} from './mechanical-raid-groups-261.ts';
@@ -49,7 +50,9 @@ export function createCorePhysics297(world:World) {
     // Shared kind index (array order kept); the live fields are filtered here.
     const poppers=structuresOfKind(world,'firefoam-popper').filter(s=>s.firefoam290),turrets=structuresOfKind(world,'mini-turret').filter(s=>s.turret);
     const caskets=filteredStructures(world,'core-wick-caskets',isWickCasket).filter(s=>s.casketWick);
-    return {turrets,owners:[...shooters.map(pawn=>({id:pawn.id,pawn})),...[...turrets,...caskets,...poppers].map(structure=>({id:structure.id,structure}))].sort((a,b)=>a.id-b.id)};
+    // Schema 357: an IED trap owns a Core slot only while its wick burns.
+    const ieds=isIedSchema357(world.schemaVersion)?[...structuresOfKind(world,'ied-high-explosive'),...structuresOfKind(world,'ied-incendiary')].filter(s=>s.iedWick357):[];
+    return {turrets,owners:[...shooters.map(pawn=>({id:pawn.id,pawn})),...[...turrets,...caskets,...poppers,...ieds].map(structure=>({id:structure.id,structure}))].sort((a,b)=>a.id-b.id)};
   };
   let captured:ReturnType<typeof captureOwners>|undefined;
   let batch:ReturnType<typeof combatShotBatch>|undefined,physical:Uint8Array|undefined;

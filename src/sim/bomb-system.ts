@@ -1,3 +1,4 @@
+import { isIedTrapKind357 } from './ied-traps-357.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {notifySiteAmbushExplosion263} from './world-site-ambush-state-263.ts';
@@ -72,7 +73,7 @@ export function applyStructureExternalDamage(w:World,s:Structure,rawAmount:numbe
 }
 /** Called in the source's global-ID owner slot. No recursive wave draining. */
 export function advanceBombWick(w:World,s:Structure,core:number):boolean {
-  const wick=actualBombWick256(s);if(!wick||!w.structures.includes(s)||wick.endCore>core)return false;
+  const wick=actualBombWick256(s)??(isIedTrapKind357(s.kind)?s.iedWick357:undefined);if(!wick||!w.structures.includes(s)||wick.endCore>core)return false;
   if(!damageStructure(w,s,structureMaxHp(s)-(s.damage??0),'bomb',w.rng,{core,rawAmount:0,detonate:true,...wick.instigatorKey?{instigatorKey:wick.instigatorKey}:{}}))throw new RangeError('Cannot commit Bomb detonation');
   return true;
 }
@@ -112,10 +113,10 @@ export function advanceBombWave(w:World,wave:MiniTurretBombWave,core:number,read
       }
       wave.nextCell++;continue;
     }
-    if(wave.shortCircuit?.damage==='flame'||wave.animalDeath||wave.casketExplosion) {
+    if(wave.shortCircuit?.damage==='flame'||wave.animalDeath||wave.casketExplosion||wave.ied357?.damage==='flame') {
       const ignored=new Set(wave.casketExplosion?.ignoredThingKeys??[]);
       const allowed=new Set(snapshot.filter(t=>altitude(t.key)>=full&&!ignored.has(t.key)).map(t=>t.key.startsWith('packed:')?`structure:${idOf(t.key)}`:t.key));
-      if(applyFlameWaveCell(w,cell,core,affected,allowed,wave.casketExplosion?wave.instigatorKey:undefined))invalidate();
+      if(applyFlameWaveCell(w,cell,core,affected,allowed,wave.casketExplosion||wave.ied357?wave.instigatorKey:undefined))invalidate();
       wave.nextCell++;continue;
     }
     const fireIds=(w.fires?.items??[]).filter(f=>{const p=firePosition(w,f);return p?.x===cell.x&&p.z===cell.z;}).map(f=>f.id);

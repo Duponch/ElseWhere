@@ -18,6 +18,7 @@ import {isSmithingApparel267,smithingApparelStuff267,ARMOR_STUFF_DEFINITIONS267}
 import { weaponMaxHitPoints } from './equipment-rules.ts';
 import type { ItemId } from './items.ts';
 import type { MaterialPile,Resource,Structure } from './types.ts';
+import {isIedSchema357,isShellItem357,SHELL_FACTS_357} from './ied-traps-357.ts';
 import { floraDefinition } from './biome-flora.ts';
 
 /** Only shipped definitions. Missing/non-HP things are deliberately not fuels. */
@@ -37,6 +38,8 @@ const BUILDINGS:Readonly<Record<string,readonly [number,number,boolean]>>={
   'cryptosleep-casket':[250,.5,false],
   shelf:[100,1,true],'small-shelf':[50,1,true],
   'spike-trap':[40,1,true],
+  // Schema 357 TrapIEDBase: 40 HP, Flammability 1, leaveResourcesWhenKilled false.
+  'ied-high-explosive':[40,1,false],'ied-incendiary':[40,1,false],
   'electric-crematorium':[300,1,true],
   bedroll:[75,1,true],
   'double-bed':[200,1,true],
@@ -78,7 +81,7 @@ export const structureFlammability=(s:Pick<Structure,'kind'|'material'>)=>isAnci
 export const structureLeavesResources=(s:Pick<Structure,'kind'>)=>isAncientMonumentKind256(s.kind)|| (BUILDINGS[s.kind]?.[2]??false);
 export const resourceMaxHp=(r:Pick<Resource,'kind'|'species'>)=>floraDefinition(r)?.hitPoints??(r.kind==='healroot'?60:r.kind==='tree'?200:r.kind==='berries'?120:r.kind==='corn'?150:r.kind==='rock'?0:85);
 export const resourceFlammability=(r:Pick<Resource,'kind'|'species'>)=>floraDefinition(r)?.flammability??(r.kind==='rock'?0:r.kind==='tree'?.8:r.kind==='haygrass'?1.3:1);
-export function pileMaxHp(p:Pick<MaterialPile,'kind'|'item'>,version=p.item==='ai-core'?298:p.item==='novel'?295:isProstheticItem273(p.item)?273:isSmithingApparel267(p.item)?267:193):number {
+export function pileMaxHp(p:Pick<MaterialPile,'kind'|'item'>,version=isShellItem357(p.item)?357:p.item==='ai-core'?298:p.item==='novel'?295:isProstheticItem273(p.item)?273:isSmithingApparel267(p.item)?267:193):number {
   if(p.item==='ai-core')return isSchema298OrLater(version)&&p.kind==='ai-core'?AI_CORE_CONTENT_298.maxHitPoints:0;
   if(p.item==='novel')return (version===295||(version===296||isCorePhysicalSchema297(version)))&&p.kind==='book'?NOVEL_MAX_HIT_POINTS_295:0;
   if(isProstheticItem273(p.item))return isSchema273OrLater(version)&&p.kind==='prosthesis'?50:0;
@@ -86,6 +89,7 @@ export function pileMaxHp(p:Pick<MaterialPile,'kind'|'item'>,version=p.item==='a
   if(version<256&&(p.item==='flak-pants'||p.item==='plasteel-flak-helmet'))return 0;
   if(p.item==='slag-steel-chunk')return version>=256?300:0;
   if(p.item==='hops'||p.item==='wort'||p.item==='beer')return version>=265?(p.item==='beer'?50:60):0;
+  if(isShellItem357(p.item))return isIedSchema357(version)&&p.kind==='shell'?SHELL_FACTS_357.maxHitPoints:0;
   if(p.item==='raw-fungus')return version>=256?60:0;
   if(isAnimalItem256(p.item))return version>=256?(ANIMAL_ITEM_HP_256 as Readonly<Record<string,number>>)[p.item]??(p.kind==='corpse'?100:0):0;
   if(version>=256&&p.item==='steel')return 100;
@@ -107,6 +111,7 @@ export function pileFlammability(p:Pick<MaterialPile,'kind'|'item'>):number {
   if(isSmithingApparel267(p.item))return ARMOR_STUFF_DEFINITIONS267[smithingApparelStuff267(p.item)].flammability;
   if(isAnimalItem256(p.item))return (ANIMAL_ITEM_FLAMMABILITY_256 as Readonly<Record<string,number>>)[p.item]??(p.kind==='corpse'?.7:0);
   if(p.item==='hops')return 1;if(p.item==='wort')return .2;if(p.item==='beer')return .5;
+  if(isShellItem357(p.item))return SHELL_FACTS_357.flammability;
   if(p.kind==='plant')return .8;
   if(p.item==='recon-armor')return .4;
   if(p.item==='plasteel-flak-helmet')return 0;

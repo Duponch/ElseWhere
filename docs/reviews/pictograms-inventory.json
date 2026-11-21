@@ -1,6 +1,6 @@
 {
   "style": "adult-hand-20261107",
-  "icons": 824,
+  "icons": 829,
   "ids": [
     "advanced-fabrication",
     "air-conditioning",
@@ -179,6 +179,9 @@
     "hourglass",
     "hydroponics",
     "hydroponics-basin",
+    "ied-high-explosive",
+    "ied-incendiary",
+    "ieds",
     "ignore-roof",
     "information",
     "item-advanced-component",
@@ -566,6 +569,8 @@
     "item-sandstone-blocks",
     "item-sandstone-chunk",
     "item-scyther-corpse",
+    "item-shell-high-explosive",
+    "item-shell-incendiary",
     "item-short-bow",
     "item-silver",
     "item-silver-longsword",

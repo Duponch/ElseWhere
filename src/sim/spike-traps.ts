@@ -13,6 +13,8 @@ import {carrierOf} from './rescue-state.ts';
 import {animalCarrier} from './animal-rest-state.ts';
 import type {CommandResult,Structure,World} from './types.ts';
 import { structuresOfKind } from './structure-navigation.ts';
+import { iedsUnlocked357,isIedTrapKind357,isTrapKind357 } from './ied-traps-357.ts';
+import { trySpringIedTrap357 } from './ied-trap-spring-357.ts';
 
 const actors=(w:World):LivingTarget[]=>[...w.pawns,...w.wildlife?.animals??[],...w.mechanoids??[]];
 const present=(w:World,a:LivingTarget)=>a.state!=='dead'&&!a.health?.death&&('species'in a?!animalCarrier(w,a.id):'mechKind'in a||!carrierOf(w,a.id));
@@ -25,7 +27,9 @@ export function reconcileSpikeTrapContacts(w:World,atCore=isCorePhysicalSchema29
   s.spikeTrap!.touching=s.spikeTrap!.touching.filter(key=>keys.has(key));}
 }
 export function applySpikeTrapSwitch(w:World,command:{structureId:number;on:boolean}):CommandResult {
- const s=w.structures.find(s=>s.id===command.structureId&&s.kind==='spike-trap');
+ const s=w.structures.find(s=>s.id===command.structureId&&isTrapKind357(s.kind));
+ // Core CanSetAutoRearm: a buildable def whose research is finished.
+ if(s&&isIedTrapKind357(s.kind)&&!iedsUnlocked357(w))return {ok:false,code:'invalid-command',reason:'Recherchez EEI pour régler la reconstruction de ce piège.'};
  if(w.schemaVersion<226||!s?.spikeTrap||typeof command.on!=='boolean'||!Number.isSafeInteger(command.structureId))return {ok:false,code:'invalid-command',reason:'Piège ou réglage de reconstruction invalide.'};
  s.spikeTrap.autoRebuild=command.on;return {ok:true};
 }
@@ -37,6 +41,7 @@ function structuralLoss(w:World,s:Structure,base:World['destroyed']):World['dest
 /** A single consumed Thing, with no salvage/FireLedger/XP. All fallible health
  * and loss plans are complete before RNG, target, jobs or structure are edited. */
 export function trySpringSpikeTrap(w:World,s:Structure,key:LivingTargetKey,atCore:number):boolean {
+ if(isIedTrapKind357(s.kind))return trySpringIedTrap357(w,s,key,atCore);
  const actor=combatTargetByKey(w,key),state=s.spikeTrap;
  if(!state||s.kind!=='spike-trap'||!w.structures.includes(s)||!actor||!present(w,actor)||state.touching.includes(key))return false;
  const c=spikeTrapPhysicalCell(actor,atCore);if(c.x!==s.x||c.z!==s.z)return false;

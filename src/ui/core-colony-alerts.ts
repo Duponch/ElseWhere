@@ -215,7 +215,7 @@ export function readNeedMealSource(world:World,free:readonly Pawn[]):StatusAlert
 }
 
 /** Alert_NeedDefenses (High) during days 2 to 5: no turret, trap or sandbags. */
-export const DEFENSE_KINDS:ReadonlySet<string>=new Set(['mini-turret','spike-trap','sandbags']);
+export const DEFENSE_KINDS:ReadonlySet<string>=new Set(['mini-turret','spike-trap','ied-high-explosive','ied-incendiary','sandbags']);
 export function readNeedDefenses(world:World,free:readonly Pawn[]):StatusAlert|undefined {
   const days=coreDaysPassed(world);
   if(days<2||days>5||!isPlayerHomeMap(world))return;

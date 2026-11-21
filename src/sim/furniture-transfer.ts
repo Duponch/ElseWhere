@@ -1,3 +1,4 @@
+import {isIedTrapKind357} from './ied-traps-357.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {initializeFirefoamPopper290} from './firefoam-290.ts';
 import {pauseGlowPod256,resumeGlowPod256} from './cave-glowpod-minification-256.ts';
@@ -59,6 +60,8 @@ function detach(world:World,job:Job,owner:PackedFurniture['owner']):PackedFurnit
   const bedOwnership=prepareBedOwnershipTransition256(world,building,'pack');
   world.structures=world.structures.filter(s=>s!==building);
   if(building.spikeTrap)building.spikeTrap.touching=[];
+  // CompExplosive.PostDeSpawn stops a burning wick.
+  delete building.iedWick357;
   if(building.firefoam290)delete building.firefoam290.wick;
   for(const p of world.pawns)if(p.need?.kind==='eat'&&p.need.dining?.tableId===building.id)p.need.dining.tableId=null;
   if(building.power){building.power.parentId=null;building.power.on=false;}
@@ -101,7 +104,7 @@ export function advanceFurniture(world:World,pawn:Pawn,job:Job,move:(target:Cell
     if(!retirement||retirement.actors.has(pawn.id)||!linked.ok||!linked.current()||!commitConstructionPlantRetirement(world,retirement))return false;
     adoptLinkedShelfInstallWrites286(linked);
     Object.assign(pack.building,{x:job.x,z:job.z,orientation:job.orientation});resumeGlowPod256(world,pack.building);
-    if(pack.building.kind==='spike-trap')pack.building.spikeTrap=initialSpikeTrapState(world,pack.building);
+    if(pack.building.kind==='spike-trap'||isIedTrapKind357(pack.building.kind))pack.building.spikeTrap=initialSpikeTrapState(world,pack.building);
     if(pack.building.kind==='firefoam-popper')initializeFirefoamPopper290(world,pack.building);
     world.packed=world.packed.filter(p=>p!==pack);world.structures.push(pack.building);clearSnowForStructure(world,pack.building);normalizeBillWorkersAtInstall283(world,pack.building);
     bedOwnership?.commit();

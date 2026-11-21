@@ -5,12 +5,14 @@ import {BOW_RESEARCH_326} from '../sim/bows-326';
 import {BLOWBACK_RESEARCH_340} from '../sim/blowback-340';
 import {GUNS_RESEARCH_342} from '../sim/guns-342';
 import {CARPET_RESEARCH_355} from '../sim/carpet-355';
+import {IED_RESEARCH_357} from '../sim/ied-traps-357';
 import {SHIP_ENGINE_RESEARCH_COST276} from '../sim/research';
 import {LONG_RANGE_MINERAL_SCANNER_RESEARCH_298,SHIP_COMPUTER_RESEARCH_298,SHIP_SENSORS_RESEARCH_298} from '../sim/victory-research-content-298';
 
 /** Shared delivered catalogue; importing it does not construct the research UI. */
 export type ProjectNode = { id: ResearchProject; prefix: string; title: string; cost: number; detail: string; progress: (w: World) => ResearchProgress | undefined; x: number; y: number };
 export const researchProjects: readonly ProjectNode[] = [
+  {id:'ieds',prefix:'ieds',title:IED_RESEARCH_357.label,cost:IED_RESEARCH_357.points,detail:'Recherche industrielle, après Électricité (acquise au départ), à tout bureau de recherche. Pièges EEI explosif et incendiaire (catégorie Structure) : deux obus de mortier chacun, Construction 3, 40 PV. Ils explosent au contact d’un intrus ou sous une balle, dans un rayon de 3,9 cases ; les obus s’achètent aux caravanes de fournisseurs militaires.',progress:w=>w.research?.ieds,x:624,y:1222},
   {id:'carpet-making',prefix:'carpet-making',title:CARPET_RESEARCH_355.label,cost:CARPET_RESEARCH_355.points,detail:'Recherche médiévale, sans prérequis, à tout bureau de recherche. Tapis dans 63 couleurs (catégorie Sols) : 7 tissus par case, Construction sans niveau minimal ; beauté +2, nettoyage deux fois plus long, inflammable.',progress:w=>w.research?.carpetMaking,x:24,y:1222},
   {id:'gas-operation',prefix:'gas-operation',title:GUNS_RESEARCH_342['gas-operation'].label,cost:GUNS_RESEARCH_342['gas-operation'].points,detail:'Recherche industrielle, après Culasse non calée, au bureau de recherche simple. À la table d’usinage : fusil à chaîne (70 acier, 5 composants, Artisanat 6), rafale de 3 décharges de 18 dégâts, portée 12,9 ; mitraillette lourde (75 acier, 4 composants, Artisanat 5), rafale de 3 balles de 12 dégâts, portée 22,9 ; fusil-mitrailleur (75 acier, 5 composants, Artisanat 6), rafale de 6 balles de 12 dégâts, portée 25,9.',progress:w=>w.research?.gasOperation,x:624,y:1356},
   {id:'precision-rifling',prefix:'precision-rifling',title:GUNS_RESEARCH_342['precision-rifling'].label,cost:GUNS_RESEARCH_342['precision-rifling'].points,detail:'Recherche industrielle, après Emprunt de gaz et Microélectronique, au bureau de recherche avancé alimenté. À la table d’usinage : fusil d’assaut (60 acier, 7 composants, Artisanat 6), rafale de 3 balles de 11 dégâts, portée 30,9 ; fusil de précision (60 acier, 8 composants, Artisanat 7), une balle de 25 dégâts après 3,5 s de visée, portée 44,9.',progress:w=>w.research?.precisionRifling,x:824,y:1356},

@@ -1,3 +1,4 @@
+import {isIedTrapKind357} from '../sim/ied-traps-357';
 import {fermentationStatusKey265,fermentationStatusParts265} from './brewing-parts265';
 import {GEOTHERMAL_VENT_264,geothermalSteam264,harvestedGeyserIds264} from './geothermal-parts264';
 import {knownSpawnedThing256} from '../sim/exploration-visibility-256';
@@ -177,7 +178,7 @@ export class StructureVfxLayer {
     let doorAxes=preparedDoorAxes;
     for(const s of subjects){
       const on=s.kind==='geothermal-generator'?powerWatts(s,world)>0:isPowerActive(s),work=working.has(s.id);
-      const wick=actualBombWick256(s);if(wick)tokens.push(`${s.id}:turret-wick:${wick.startedAtCore}`);
+      const wick=actualBombWick256(s)??(isIedTrapKind357(s.kind)?s.iedWick357:undefined);if(wick)tokens.push(`${s.id}:turret-wick:${wick.startedAtCore}`);
       const foamWick=s.kind==='firefoam-popper'?s.firefoam290?.wick:undefined;if(foamWick)tokens.push(`${s.id}:firefoam-wick:${foamWick.startedAtCore}:${foamWick.endCore}`);
       if(s.kind==='autodoor'){
         doorAxes??=doorOrientations(world);
@@ -225,8 +226,8 @@ export class StructureVfxLayer {
     for(const p of world.projectiles??[])if(p.weaponItem==='mini-turret-gun'&&Math.ceil(p.emittedAtCore/10)===world.tick)tokens.push(`turret-shot:${p.id}`);
     for(const wave of world.bombWaves??[])if(Math.ceil(wave.startedAtCore/10)===world.tick){
       if(wave.emp){tokens.push(`emp-flash:${wave.id}`);continue;}
-      const radius=wave.animalDeath||wave.casketExplosion?bombWaveRadius(wave):wave.shortCircuit?.radius;
-      const flame=!!wave.animalDeath||!!wave.casketExplosion||wave.shortCircuit?.damage==='flame';
+      const radius=wave.animalDeath||wave.casketExplosion||wave.ied357?bombWaveRadius(wave):wave.shortCircuit?.radius;
+      const flame=!!wave.animalDeath||!!wave.casketExplosion||wave.shortCircuit?.damage==='flame'||wave.ied357?.damage==='flame';
       tokens.push(radius===undefined?`bomb-flash:${wave.id}`:`bomb-flash:${wave.id}:${radius}:${flame}`);
     }
     for(const fire of world.fires?.items??[])if(fire.attachedPawnId===undefined&&fire.attachedAnimalId===undefined)tokens.push(`${fire.id}:ground-fire:${fire.x}:${fire.z}:${fire.size}`);
@@ -253,9 +254,9 @@ export class StructureVfxLayer {
     let doorAxes:ReadonlyMap<number,0|1>|undefined;
     for(const s of world.structures){
       const on=s.kind==='geothermal-generator'?powerWatts(s,world)>0:isPowerActive(s),work=working.has(s.id);
-      const wick=actualBombWick256(s);if(wick){
+      const wick=actualBombWick256(s)??(isIedTrapKind357(s.kind)?s.iedWick357:undefined);if(wick){
         tokens.push(`${s.id}:turret-wick:${wick.startedAtCore}`);
-        const y=s.kind==='ancient-cryptosleep-casket'?.94:1.43;
+        const y=s.kind==='ancient-cryptosleep-casket'?.94:isIedTrapKind357(s.kind)?.48:1.43;
         glow.push({x:s.x,y,z:s.z-.09,sx:.12,sy:.045,sz:.25,ry:0,color:0xf0a176},
           {x:s.x,y,z:s.z+.15,sx:.12,sy:.045,sz:.08,ry:0,color:0xffd19a});
       }
@@ -380,8 +381,8 @@ export class StructureVfxLayer {
     }
     for(const wave of world.bombWaves??[])if(Math.ceil(wave.startedAtCore/10)===world.tick){
       if(wave.emp){tokens.push(`emp-flash:${wave.id}`);glow.push({x:wave.center.x,y:.68,z:wave.center.z,sx:1.5,sy:.45,sz:1.5,ry:0,color:0x8cefff});continue;}
-      const radius=wave.animalDeath||wave.casketExplosion?bombWaveRadius(wave):wave.shortCircuit?.radius,scale=radius===undefined?1:Math.max(.5,Math.min(3,radius/3.9));
-      const flame=!!wave.animalDeath||!!wave.casketExplosion||wave.shortCircuit?.damage==='flame';
+      const radius=wave.animalDeath||wave.casketExplosion||wave.ied357?bombWaveRadius(wave):wave.shortCircuit?.radius,scale=radius===undefined?1:Math.max(.5,Math.min(3,radius/3.9));
+      const flame=!!wave.animalDeath||!!wave.casketExplosion||wave.shortCircuit?.damage==='flame'||wave.ied357?.damage==='flame';
       tokens.push(radius===undefined?`bomb-flash:${wave.id}`:`bomb-flash:${wave.id}:${radius}:${flame}`);glow.push({x:wave.center.x,y:.68,z:wave.center.z,sx:.95*scale,sy:1.1*scale,sz:.95*scale,ry:0,color:flame?0xffb35b:0xffe7b4});
     }
     for(const fire of world.fires?.items??[])if(fire.attachedPawnId===undefined&&fire.attachedAnimalId===undefined){

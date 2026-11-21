@@ -1,6 +1,7 @@
 import type { LivingTarget,LivingTargetKey } from './combat-target.ts';
 import type { Cell,Structure,World } from './types.ts';
 import { structuresOfKind } from './structure-navigation.ts';
+import { IED_COMMON_357,isIedTrapKind357,isTrapKind357,trapStructures357 } from './ied-traps-357.ts';
 
 export interface SpikeTrapState { autoRebuild:boolean; touching:LivingTargetKey[] }
 export const SPIKE_TRAP_SEARCH_COST=Math.round(800/30*1000);
@@ -22,9 +23,11 @@ export function spikeTrapKnowsOf(_world:World,actor:LivingTarget):boolean {
   if('species' in actor)return !!actor.domestic||!actor.manhunter;
   return actor.faction!=='outlaws'||actor.prisoner?.releasedAt!==undefined;
 }
-export function spikeTrapSpringChance(world:World,actor:LivingTarget):number {
+/** Building_Trap.SpringChance; from 357 the IED traps scale the wild animal
+ * knower chance by trapPeacefulWildAnimalsSpringChanceFactor 0.25. */
+export function spikeTrapSpringChance(world:World,actor:LivingTarget,kind:Structure['kind']='spike-trap'):number {
   if(!spikeTrapKnowsOf(world,actor))return 1;
-  if('species' in actor)return actor.domestic ? .005 : .2;
+  if('species' in actor)return actor.domestic ? .005 : isIedTrapKind357(kind)?.2*IED_COMMON_357.peacefulWildAnimalFactor:.2;
   if('mechKind' in actor)return 1;
   return !actor.faction||actor.faction==='colony' ? .005 : 0;
 }
@@ -43,7 +46,7 @@ export const spikeTrapTargetKey=(actor:LivingTarget):LivingTargetKey=>`${'specie
 export function captureSpikeTrapContacts(world:World,atCore:number):{traps:ReadonlyMap<number,Structure>;actors:ReadonlyMap<number,readonly LivingTarget[]>} {
   const traps=new Map<number,Structure>(),actors=new Map<number,LivingTarget[]>();
   if(world.schemaVersion<226)return {traps,actors};
-  for(const s of structuresOfKind(world,'spike-trap'))if(s.spikeTrap)traps.set(s.z*world.width+s.x,s);
+  for(const s of trapStructures357(world,kind=>structuresOfKind(world,kind)))if(s.spikeTrap)traps.set(s.z*world.width+s.x,s);
   if(!traps.size)return {traps,actors};
   const carriedPawns=new Set<number>(),carriedAnimals=new Set<number>();
   for(const p of world.pawns){if(p.rescue?.phase==='carry')carriedPawns.add(p.rescue.patientId);if(p.animalRescue?.phase==='carry')carriedAnimals.add(p.animalRescue.animalId);}
@@ -63,6 +66,6 @@ export function captureSpikeTrapContacts(world:World,atCore:number):{traps:Reado
  * diagonal neighbours. The ignored identity is only the original object. */
 export function spikeTrapPlacementAllowed(world:World,cell:Cell,ignoredId?:number):boolean {
   const adjacent=(c:Cell)=>Math.abs(c.x-cell.x)<=1&&Math.abs(c.z-cell.z)<=1;
-  return !world.structures.some(s=>s.id!==ignoredId&&s.kind==='spike-trap'&&adjacent(s))
-    &&!world.jobs.some(j=>j.id!==ignoredId&&(j.kind==='spike-trap'||j.kind==='install'&&j.furniture?.kind==='spike-trap')&&adjacent(j));
+  return !world.structures.some(s=>s.id!==ignoredId&&isTrapKind357(s.kind)&&adjacent(s))
+    &&!world.jobs.some(j=>j.id!==ignoredId&&(isTrapKind357(j.kind)||j.kind==='install'&&isTrapKind357(j.furniture?.kind))&&adjacent(j));
 }

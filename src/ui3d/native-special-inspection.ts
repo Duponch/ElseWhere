@@ -1,3 +1,4 @@
+import { IED_COMMON_357,IED_TRAPS_357,iedsUnlocked357,isIedTrapKind357 } from '../sim/ied-traps-357';
 import { toolCabinetWorkSpeedOffset355 } from '../sim/tool-cabinet-355';
 import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
 import type { NativeControl, NativePage, NativeRow, NativeUiActions, NativeUiState } from './native-contract';
@@ -335,6 +336,12 @@ export function nativeSpecialRows(state: NativeUiState, nativeActions: NativeUiA
     const region=penRegion(world,structure.id);
     rows.push(row('pen-region','Enclos',!region?'Région indisponible':!region.closed?'Périmètre ouvert':!region.accessible?`Fermé · ${region.cells.size} cases · portillon accessible requis`:`Fermé et accessible · ${region.cells.size} cases`));
     for(const species of ['deer','gazelle','muffalo','dromedary'] as const) rows.push(toggle(`pen-species-${species}`,animalSpecies(species).label,!!structure.pen?.accepted.includes(species),async accepted=>{assertScope(scope);await send({type:'pen-species',markerId:structure.id,species,accepted});}));
+  }
+  if (isIedTrapKind357(structure.kind)) {
+    const facts=IED_TRAPS_357[structure.kind],wick=structure.iedWick357;
+    rows.push(row('ied-trap-effect','Explosion',`${facts.damage==='bomb'?'Bombe (50 dégâts)':'Flammes et incendie'} · rayon ${IED_COMMON_357.radius.toLocaleString('fr-FR')} cases`,'Se déclenche au contact d’un intrus ou sous une balle ; 0,5 % par entrée pour un colon. Détruit par l’explosion, sans récupération.'));
+    if(wick)rows.push(row('ied-trap-wick','Mèche','Allumée · explosion imminente'));
+    if(iedsUnlocked357(world))rows.push(toggle('spike-trap-auto-rebuild','Reconstruire automatiquement le piège',!!structure.spikeTrap?.autoRebuild,async on=>{assertScope(scope);await send({type:'spike-trap-auto-rebuild',structureId:structure.id,on});}),row('ied-trap-rebuild-cost','Après explosion',`Nouveau plan, livraison de ${IED_COMMON_357.shellCount} ${facts.shell==='shell-incendiary'?'obus incendiaires':'obus explosifs'} et construction complète.`));
   }
   if (structure.kind === 'spike-trap') rows.push(toggle('spike-trap-auto-rebuild','Reconstruire automatiquement le piège',!!structure.spikeTrap?.autoRebuild,async on=>{assertScope(scope);await send({type:'spike-trap-auto-rebuild',structureId:structure.id,on});}),row('spike-trap-rebuild-cost','Après déclenchement','Nouveau plan, livraison de 45 matériaux et construction complète.','Les alliés conservent un risque d’accident.'));
   rows.push(...bedPolicyRows(world, structure, scope));

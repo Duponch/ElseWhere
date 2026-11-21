@@ -1,4 +1,5 @@
 import {PROSTHETIC_ITEM_DEFINITIONS_273} from './prosthetic-content-273.ts';
+import {SHELL_ITEM_DEFINITIONS_357} from './ied-traps-357.ts';
 import { GARMENT_ITEM_DEFINITIONS312,HAT_ITEM_DEFINITIONS353 } from './apparel-definitions.ts';
 import {SPEAR_ITEM_DEFINITIONS_272} from './spear-content-272.ts';
 import {SHORT_BOW_COLOR_316} from './short-bow-316.ts';
@@ -27,6 +28,7 @@ export type MechCorpseItem=typeof MECH_CORPSE_ITEMS[number];
 export const ITEM_DEFINITIONS = Object.freeze({
   'ai-core':Object.freeze({label:'Cœur d’IA',kind:'ai-core',stackLimit:1,nutrition:0,maxIngest:0,color:0x8ba3a5}),
   novel:Object.freeze({label:'Roman',kind:'book',stackLimit:1,nutrition:0,maxIngest:0,color:0x7e9f8b}),
+  ...SHELL_ITEM_DEFINITIONS_357,
   ...PROSTHETIC_ITEM_DEFINITIONS_273,
   'unfinished-prosthetic':Object.freeze({label:'Prothèse inachevée',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0x9da9a1}),
   ...SMITHING_APPAREL_ITEM_DEFINITIONS267,

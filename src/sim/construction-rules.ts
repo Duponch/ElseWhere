@@ -1,3 +1,4 @@
+import {isTrapKind357} from './ied-traps-357.ts';
 import {shipComputerSensorsPlacementRefusal298} from './ship-computer-sensors-placement-298.ts';
 import {isShipComputerSensorsKind298} from './ship-computer-sensors-content-298.ts';
 import {isShipCasketKind277} from './ship-casket-content-277.ts';
@@ -187,7 +188,7 @@ export function constructionSiteFree(world: World, job: Job, workerId?: number, 
   if(isShipPartKind276(job.kind)&&shipPartPlacementRefusal276(world,{...job,kind:job.kind},job.id))return false;
   if(job.kind==='geothermal-generator'&&geothermalPlacementRefusal264(world,job,job.id))return false;
   if(obstacle.plant||obstacle.pile||obstacle.pack||job.kind!=='build-bridge'&&!marshSupportsFootprint(world,footprintCells(job),job.kind==='install'?{kind:job.furniture?.kind??'install',material:world.packed.find(p=>p.building.id===job.furniture?.structureId)?.building.material??structureById(world,job.furniture?.structureId)?.material}:job))return false;
-  if((job.furniture?.kind??job.kind)==='spike-trap'&&!spikeTrapPlacementAllowed(
+  if(isTrapKind357(job.furniture?.kind??job.kind)&&!spikeTrapPlacementAllowed(
     {...world,jobs:world.jobs.filter(j=>j!==job)},job,job.furniture?.structureId))return false;
   const cells=footprintCells(job);
   // A shelf may retain ordinary floor items, but cannot acquire an engaged
@@ -195,7 +196,7 @@ export function constructionSiteFree(world: World, job: Job, workerId?: number, 
   if(isShelfKind(job.furniture?.kind??job.kind)&&world.pawns.some(p=>
     [...(p.cooking&&p.cooking.phase!=='interrupted'?p.cooking.ingredients:[]),...(p.surgery?.ingredients??[])]
       .some(i=>cells.some(c=>c.x===i.cell.x&&c.z===i.cell.z))))return false;
-  if((job.furniture?.kind??job.kind)==='spike-trap'&&world.mechanoids?.some(a=>a.state!=='dead'&&cells.some(c=>{const m=a.motion;return a.x===c.x&&a.z===c.z||!!m&&m.end>world.tick&&c.x>=Math.min(m.from.x,m.to.x)&&c.x<=Math.max(m.from.x,m.to.x)&&c.z>=Math.min(m.from.z,m.to.z)&&c.z<=Math.max(m.from.z,m.to.z);})))return false;
+  if(isTrapKind357(job.furniture?.kind??job.kind)&&world.mechanoids?.some(a=>a.state!=='dead'&&cells.some(c=>{const m=a.motion;return a.x===c.x&&a.z===c.z||!!m&&m.end>world.tick&&c.x>=Math.min(m.from.x,m.to.x)&&c.x<=Math.max(m.from.x,m.to.x)&&c.z>=Math.min(m.from.z,m.to.z)&&c.z<=Math.max(m.from.z,m.to.z);})))return false;
   if(job.kind==='ground-scanner'&&cells.some(c=>isRoofed(world,c.z*world.width+c.x)))return false;
   if(occupancy)return !occupancy.animalOn(cells)&&!occupancy.pawnOn(cells,workerId);
   if(world.wildlife?.animals.some(a=>cells.some(c=>{

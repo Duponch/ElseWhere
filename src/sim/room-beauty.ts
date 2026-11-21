@@ -1,5 +1,6 @@
 import {isJoyTableKind354,JOY_TABLES_354} from './joy-tables-354.ts';import {CARPET_FLOORS_355,CARPET_FACTS_355,BURNED_CARPET_FACTS_355,type CarpetFloor355} from './carpet-355.ts';
 import {isShipCasketKind277,SHIP_CASKET_CONTENT_277} from './ship-casket-content-277.ts';
+import {isIedTrapKind357,IED_COMMON_357} from './ied-traps-357.ts';
 import {SCHEMA_VERSION} from './types.ts';
 import {hasSmoothedStoneSubstrate281,SMOOTHED_STONE_FACTS_281} from './smooth-floor-terrain-281.ts';
 import {isShipPartKind276} from './ship-part-content-276.ts';
@@ -69,6 +70,7 @@ export function structureBeauty(structure:BeautyStructure,version:number=SCHEMA_
   if(structure.kind==='ground-scanner')return -8;
   // Fixed electronics are not stuffed furniture; steel is ingredient provenance.
   if(structure.kind==='spike-trap')return -18;
+  if(isIedTrapKind357(structure.kind))return IED_COMMON_357.beauty;
   if(structure.kind==='mini-turret')return -20;
   if(structure.kind==='tube-television')return 0;
   // Schema 355 ToolCabinet: no Beauty stat and steel is a fixed cost, not its stuff.

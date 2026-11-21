@@ -11,6 +11,7 @@ import {groundFire} from './fire-rules.ts';
 import {isPassageDoor} from './door-rules.ts';
 import {filteredStructures,structuresOfKind} from './structure-navigation.ts';
 import {spikeTrapKnowsOf} from './spike-trap-state.ts';
+import {isTrapKind357} from './ied-traps-357.ts';
 import {reservedServiceCells} from './service-reservations.ts';
 import {idleHashOffset300,idleChillBuilding300} from './idle-wander-300.ts';
 import {targetBuildingPlayerUse263} from './world-target-building-263.ts';
@@ -256,7 +257,7 @@ export function chooseAnimalWanderDestination304(w:World,a:ActualAnimalMind256,r
  // through admitted regions only: no path search per candidate.
  const graph=regionGraph(w,nav),own=regionAt(w,graph,a),local=!!own&&own===regionAt(w,graph,root),admittedRegions=new Set(regions);
  const doors=graph.cache.portals,fire=new Set((w.fires?.items??[]).filter(groundFire).map(f=>f.z*w.width+f.x));
- const knownTraps=new Set(reader.knowsTraps?filteredStructures(w,'spike-traps',s=>s.kind==='spike-trap').filter(s=>!!s.spikeTrap).map(s=>s.z*w.width+s.x):[]),reserved=reservedCells(w,nav);
+ const knownTraps=new Set(reader.knowsTraps?filteredStructures(w,'spike-traps',s=>isTrapKind357(s.kind)).filter(s=>!!s.spikeTrap).map(s=>s.z*w.width+s.x):[]),reserved=reservedCells(w,nav);
  // CanReach(c, maxDanger): the destination no more dangerous than allowed,
  // and no deadly region crossed unless the animal stands in one.
  const reachable=(c:Cell,maxDanger:number)=>{

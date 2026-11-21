@@ -3,6 +3,7 @@ import {ITEM_DEFINITIONS,type ItemId} from './items.ts';
 import {APPAREL} from './apparel-definitions.ts';
 import {tradeCatalogueEntry} from './trade-catalogue.ts';
 import {curve320} from './population-intent-320.ts';
+import {isIedSchema357,mortarShellStock357,SHELL_ITEMS_357} from './ied-traps-357.ts';
 import {WORLD_FACTION_DEFINITIONS_256,type WorldFactionDef256} from './world-faction-catalog.ts';
 import {integer,random,select,traderQuality,visitorClothingStuff314,visitorClothingFamily,VISITOR_CLOTHING_POOL,
   VISITOR_RANGED_ITEMS322,VISITOR_RANGED_ITEMS326,VISITOR_RANGED_ITEMS340,VISITOR_RANGED_ITEMS342,VISITOR_RANGED_POOL,VISITOR_SHORT_BOW_INDEX316,type VisitorStockPlan} from './trade-stock.ts';
@@ -30,7 +31,9 @@ export interface TraderCaravan332 {traderKind:CaravanTraderKind332;factionId:num
  * weight and simply yield nothing). Category, Tag, techprint, slave, animal,
  * book and barrel generators have no represented item and are left out. */
 type StockGenerator332={kind:'single';item:ItemId;min:number;max:number}|{kind:'price';item:ItemId;min:number;max:number}
-  |{kind:'ranged';count:number;pool:readonly number[]}|{kind:'clothing';count:number;pool:readonly number[]};
+  |{kind:'ranged';count:number;pool:readonly number[]}|{kind:'clothing';count:number;pool:readonly number[]}
+  /** Schema 357: StockGenerator_Tag MortarShell (thingDefCountRange, countRange). */
+  |{kind:'mortar-shells';defs:readonly [number,number];count:readonly [number,number]};
 interface CaravanKindDefinition332 {core:string;family:CaravanFamily332;label:string;slaver:boolean;stock:readonly StockGenerator332[]}
 const single=(item:ItemId,min:number,max:number):StockGenerator332=>({kind:'single',item,min,max});
 const ALL_RANGED=Object.freeze(VISITOR_RANGED_POOL.map((_,i)=>i));
@@ -50,11 +53,11 @@ export const CARAVAN_TRADER_KINDS_332:Readonly<Record<CaravanTraderKind332,Carav
     single('silver',750,1200),single('component',30,40),single('advanced-component',-10,2),single('steel',250,400),single('cloth',250,400),
     single('neutroamine',70,160),{kind:'price',item:'beer',min:-100,max:100},{kind:'clothing',count:7,pool:BASIC_CLOTHING},{kind:'clothing',count:3,pool:ALL_CLOTHING}]},
   'outlander-combat':{core:'Caravan_Outlander_CombatSupplier',family:'outlander',label:'fournisseur militaire',slaver:false,stock:[
-    single('silver',750,1200),single('medicine',10,20),{kind:'ranged',count:5,pool:ALL_RANGED}]},
+    single('silver',750,1200),single('medicine',10,20),{kind:'ranged',count:5,pool:ALL_RANGED},{kind:'mortar-shells',defs:[1,2],count:[3,15]}]},
   'outlander-exotic':{core:'Caravan_Outlander_Exotic',family:'outlander',label:'marchand d’objets exotiques',slaver:false,stock:[
     single('silver',750,1200),single('component',6,20),single('advanced-component',1,4),single('plasteel',50,150),single('gold',40,80),single('glitterworld-medicine',2,8)]},
   'outlander-slaver':{core:'Caravan_Outlander_PirateMerchant',family:'outlander',label:'marchand d’esclaves',slaver:true,stock:[
-    single('silver',750,1200),single('medicine',2,5)]},
+    single('silver',750,1200),single('medicine',2,5),{kind:'mortar-shells',defs:[-1,2],count:[1,10]}]},
   'tribe-bulk':{core:'Caravan_Neolithic_BulkGoods',family:'tribe',label:'marchand en gros',slaver:false,stock:[
     single('silver',750,1200),single('wood',100,350),single('cloth',100,350),single('pemmican',250,300),single('herbal-medicine',0,10),
     {kind:'clothing',count:7,pool:NEOLITHIC_BASIC_CLOTHING},{kind:'clothing',count:3,pool:NEOLITHIC_CLOTHING}]},
@@ -205,6 +208,10 @@ export function generateCaravanStock332(seed:number,pawnId:number,nextId:number,
   for(const g of CARAVAN_TRADER_KINDS_332[kind].stock){
     if(g.kind==='single'){const n=integer(state,g.min,g.max);if(n>0)add(g.item,n);continue;}
     if(g.kind==='price'){const n=roundToInt((g.min+(g.max-g.min)*random(state))/tradeCatalogueEntry(g.item)!.baseMarketValue);if(n>0)add(g.item,n);continue;}
+    // Schema 357: the shells draw on a sub-stream forked from this point, so
+    // the caravan's later wares, guards and RNG continue exactly as before.
+    if(g.kind==='mortar-shells'){if(isIedSchema357(version)){const fork={rng:((state.rng^0x5e115357)>>>0)||1};
+      for(const s of mortarShellStock357({integer:(min,max)=>integer(fork,min,max),random:()=>random(fork)},g.defs,g.count))add(s.item,s.quantity);}continue;}
     const pool=(g.kind==='ranged'?g.pool.map(i=>VISITOR_RANGED_POOL[i]!):g.pool.map(i=>VISITOR_CLOTHING_POOL[i]!));
     for(let i=0;i<g.count;i++){
       const candidate=select(state,pool);
@@ -229,6 +236,7 @@ export function caravanDealsIn332(kind:CaravanTraderKind332):ReadonlySet<ItemId>
   for(const g of CARAVAN_TRADER_KINDS_332[kind].stock){
     if(g.kind==='single'||g.kind==='price')items.add(g.item);
     else if(g.kind==='ranged')for(const i of g.pool){const item=rangedItem(i);if(item)items.add(item);}
+    else if(g.kind==='mortar-shells')for(const item of SHELL_ITEMS_357)items.add(item);
   }
   set=Object.freeze(items) as ReadonlySet<ItemId>;DEALS.set(kind,set);return set;
 }

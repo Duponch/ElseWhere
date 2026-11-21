@@ -66,6 +66,7 @@ export const BUILDING_SUPPORT:Readonly<Record<StructureKind,'Light'|'Medium'|'He
   'billiards-table':'Medium',
   'tube-television':'Light',
   'spike-trap':'Light',
+  'ied-high-explosive':'Light','ied-incendiary':'Light',
   'sandbags':'Light',
   'small-sculpture':'Light',
   'large-sculpture':'Light',

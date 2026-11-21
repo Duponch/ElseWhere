@@ -1,4 +1,5 @@
 import {CARPET_FLOORS_355,type CarpetFloor355} from './carpet-355.ts';
+import {SHELL_FACTS_357} from './ied-traps-357.ts';
 import {SHIP_COMPUTER_CONTENT_298,SHIP_SENSORS_CONTENT_298} from './ship-computer-sensors-content-298.ts';
 import {AI_CORE_CONTENT_298} from './ai-core-content-298.ts';
 import {SHIP_CASKET_CONTENT_277} from './ship-casket-content-277.ts';
@@ -40,17 +41,19 @@ interface BuildingValueDef {
   readonly aiCore?:number;
   /** Cloth of a fixed costList (schema 354 billiards and poker tables). */
   readonly cloth?:number;
+  /** Mortar shells of a fixed costList (schema 357 IED traps). */
+  readonly shells?:number;
   /** Neutral Core WorkToBuild, or WorkToMake for a sculpture, before stuff. */
   readonly work: number;
   readonly quality: boolean;
   readonly passability: Passability;
 }
 const def = (stuff: number, work: number, passability: Passability,
-  fixed: Readonly<{uranium?:number; wood?: number; steel?: number; plasteel?: number; gold?: number; component?: number; 'advanced-component'?: number;'ai-core'?:number;cloth?:number}> = {},
+  fixed: Readonly<{uranium?:number; wood?: number; steel?: number; plasteel?: number; gold?: number; component?: number; 'advanced-component'?: number;'ai-core'?:number;cloth?:number;shells?:number}> = {},
   quality = false): BuildingValueDef => Object.freeze({
     stuff, work, passability, quality,
     wood: fixed.wood ?? 0, steel: fixed.steel ?? 0, plasteel: fixed.plasteel ?? 0, gold: fixed.gold ?? 0,
-    uranium:fixed.uranium??0,component: fixed.component ?? 0, advancedComponent: fixed['advanced-component'] ?? 0,...fixed['ai-core']?{aiCore:fixed['ai-core']}:{},...fixed.cloth?{cloth:fixed.cloth}:{},
+    uranium:fixed.uranium??0,component: fixed.component ?? 0, advancedComponent: fixed['advanced-component'] ?? 0,...fixed['ai-core']?{aiCore:fixed['ai-core']}:{},...fixed.cloth?{cloth:fixed.cloth}:{},...fixed.shells?{shells:fixed.shells}:{},
   });
 
 /** Resolved Core building Defs. An explicit zero prevents a new kind from
@@ -59,6 +62,7 @@ const def = (stuff: number, work: number, passability: Passability,
 const BUILDINGS: Readonly<Record<StructureKind, BuildingValueDef>> = Object.freeze({
  'firefoam-popper':def(0,1500,'pass-through',{steel:75,component:1}),
  'tool-cabinet':def(0,1800,'pass-through',{steel:200}),
+ 'ied-high-explosive':def(0,1400,'standable',{shells:2}),'ied-incendiary':def(0,1400,'standable',{shells:2}),
  'ship-cryptosleep-casket':def(0,SHIP_CASKET_CONTENT_277.coreWork,'pass-through',Object.fromEntries(SHIP_CASKET_CONTENT_277.ingredients.map(c=>[c.item,c.quantity]))),
  'ship-computer':def(0,SHIP_COMPUTER_CONTENT_298.coreWork,'impassable',Object.fromEntries(SHIP_COMPUTER_CONTENT_298.ingredients.map(c=>[c.item,c.quantity]))),
  'ship-sensors':def(0,SHIP_SENSORS_CONTENT_298.coreWork,'impassable',Object.fromEntries(SHIP_SENSORS_CONTENT_298.ingredients.map(c=>[c.item,c.quantity]))),
@@ -184,6 +188,7 @@ export function structureRoomMarketValue(structure: Structure): number {
   let fixedValue = d.wood * MATERIAL_VALUE.wood + d.steel * MATERIAL_VALUE.steel + d.plasteel * 9 + d.uranium * 6 + d.gold * 10 + d.component * 32 + d.advancedComponent * 200;
   if(d.aiCore)fixedValue+=d.aiCore*AI_CORE_CONTENT_298.baseMarketValue;
   if(d.cloth)fixedValue+=d.cloth*MATERIAL_VALUE.cloth;
+  if(d.shells)fixedValue+=d.shells*SHELL_FACTS_357.marketValue;
   const work = isSculptureKind(structure.kind)&&isSculptureMaterial(material)
     ? sculptureWorkToMakeCore(structure.kind,material)
     : d.work * (factors?.workFactor ?? 1) + (factors?.workOffset ?? 0);

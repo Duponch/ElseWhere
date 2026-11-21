@@ -11,7 +11,7 @@ import type {Placement} from './primitives';
  * cloth tuque's cargo model; on the ground it keeps its own shape and colour.
  * The resident cargo geometry gains no vertex and every older item keeps its
  * cargo kind (new kinds would also reach the tree cargo kinds at 600). */
-const sharedHatCargo353=(id:string):ItemId|undefined=>id.endsWith('-cowboy-hat')||id.endsWith('-bowler-hat')?'cloth-tuque':undefined;
+const sharedHatCargo353=(id:string):ItemId|undefined=>id.endsWith('-cowboy-hat')||id.endsWith('-bowler-hat')?'cloth-tuque':id==='shell-incendiary'?'shell-high-explosive':undefined;
 /** Explicit visual order, independent of save IDs and insertion order. */
 export const ITEM_VISUAL_IDS:readonly ItemId[]=Object.freeze((Object.keys(ITEM_DEFINITIONS) as ItemId[]).filter(id=>!id.endsWith('-corpse')&&(sharedHatCargo353(id)??id)===id).sort());
 const cargoKinds=new Map(ITEM_VISUAL_IDS.map((item,ordinal)=>[item,200+ordinal] as const));
@@ -46,6 +46,15 @@ export function itemGeometry(item:ItemId,quantity:number=ITEM_DEFINITIONS[item].
       add('item-disc',x,.16,z,.16,.30,.16,0x7c6847);add('item-disc',x,.35,z,.075,.13,.075,0x8c8055);
       add('item-disc',x,.43,z,.09,.025,.09,0xc6c8a9);box(x,.17,z+.082,.11,.12,.012,0xe4d6a6);
     }
+  }else if(item==='shell-high-explosive'||item==='shell-incendiary'){
+    // Schema 357: up to four loose upright shells (body and fuze); a larger
+    // stack is one closed ammunition crate, also the carried model. The
+    // incendiary borrows the explosive cargo model (as the hats do), so the
+    // resident cargo geometry grows by a single box within its vertex budget.
+    if(quantity<5)for(let i=0;i<quantity;i++){
+      const x=quantity===1?0:(i%2-.5)*.2,z=quantity<3?0:(Math.floor(i/2)-.5)*.2;
+      add('item-disc',x,.15,z,.15,.30,.15,color);add('item-disc',x,.34,z,.08,.08,.08,0x9a9d96);
+    }else box(0,.15,0,.52,.30,.36,color);
   }else if(item==='wort'){
     add('item-disc',0,.16,0,.43,.28,.43,0xa1aa8b);add('item-disc',0,.32,0,.45,.045,.45,0x6e8477);
     box(0,.355,0,.18,.05,.07,0xd1c6a0);box(0,.16,.215,.20,.12,.015,0xc4aa6c);

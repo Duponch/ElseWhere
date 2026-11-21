@@ -9,6 +9,7 @@ import {TemperatureView,thermalLayout} from './temperature.ts';
 import {groundFire} from './fire-rules.ts';
 import {isPassageDoor} from './door-rules.ts';
 import {spikeTrapKnowsOf} from './spike-trap-state.ts';
+import {isTrapKind357} from './ied-traps-357.ts';
 import {reservedServiceCells} from './service-reservations.ts';
 import type {animalNavigation} from './wildlife-navigation.ts';
 import type {InitialAnimalRandom256} from './initial-animal-age-256.ts';
@@ -55,7 +56,7 @@ function near(w:World,root:Cell,radius:number,accept:(c:Cell)=>boolean,random:In
  * physical search shared by every ticket/fallback, not one flood per draw. */
 export function chooseClinicalWanderDestination256(w:World,a:Cell,nav:Nav,reach:AnimalWanderReachability256,random:InitialAnimalRandom256,reader:{comfy:{minimum:number;maximum:number};water:boolean;knowsTraps:boolean;delayCore(cell:Cell):number;destinationAllowed(cell:Cell):boolean}):Cell {
  const regions=liveAnimalWanderRegions256(w,a,nav),total=regions.reduce((n,r)=>n+r.cells.length,0),doors=new Set(w.structures.filter(s=>isPassageDoor(s.kind)).map(s=>s.z*w.width+s.x)),fire=new Set((w.fires?.items??[]).filter(groundFire).map(f=>f.z*w.width+f.x));
- const knownTraps=new Set(reader.knowsTraps?w.structures.filter(s=>s.kind==='spike-trap'&&!!s.spikeTrap).map(s=>s.z*w.width+s.x):[]),reserved=reservedServiceCells(w),temperature=new TemperatureView(w,thermalLayout(w)),range=reader.comfy;
+ const knownTraps=new Set(reader.knowsTraps?w.structures.filter(s=>isTrapKind357(s.kind)&&!!s.spikeTrap).map(s=>s.z*w.width+s.x):[]),reserved=reservedServiceCells(w),temperature=new TemperatureView(w,thermalLayout(w)),range=reader.comfy;
  if(!range)throw Error('Confused original has no actual native thermal profile');
  const danger=(c:Cell)=>{const t=temperature.at(w,c);return t>=range.minimum-10&&t<=range.maximum+10?0:t>=range.minimum-90&&t<=range.maximum+90?1:2;};
  const inside=(c:Cell)=>c.x>=0&&c.z>=0&&c.x<w.width&&c.z<w.height;

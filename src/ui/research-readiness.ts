@@ -38,7 +38,7 @@ export interface ResearchReadiness {
 }
 /** The explicit version gates in selectResearch, without invoking a command. */
 const minimumSchema:Partial<Record<ResearchProject,number>>={
-  'penoxycyline-production':337,'carpet-making':355,
+  'penoxycyline-production':337,'carpet-making':355,ieds:357,
   'gas-operation':342,'precision-rifling':342,'blowback-operation':340,'recurve-bow':326,greatbow:326,
   'long-range-mineral-scanner':298,'ship-computer':298,'ship-sensors':298,
   'tree-sowing':291,'ship-cryptosleep':277,'ship-engine':276,

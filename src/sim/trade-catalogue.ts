@@ -49,6 +49,8 @@ export const TRADE_CATALOGUE:Readonly<Partial<Record<ItemId,TradeCatalogueEntry>
   silver:value(1,true),wood:value(1.2),steel:value(1.9),gold:value(10),uranium:value(6),plasteel:value(9),cloth:value(1.5,true),'light-leather':value(1.9),'muffalo-wool':value(2.7),component:value(32,true),'advanced-component':value(200),
   'herbal-medicine':value(10),medicine:value(18,true),'glitterworld-medicine':value(50),
   chemfuel:value(2.3,false,{playerCanBuy:false,playerCanSell:false}),neutroamine:value(6),
+  // Schema 357 ShellBase: MarketValue 55, 60 HP, healthAffectsPrice default.
+  'shell-high-explosive':value(55,false,{healthAffectsPrice:true,maxHitPoints:60}),'shell-incendiary':value(55,false,{healthAffectsPrice:true,maxHitPoints:60}),
   hay:value(.6,false,{playerCanBuy:false,playerCanSell:false}),kibble:value(1.1,false,{playerCanBuy:false,playerCanSell:false}),
   berries:value(1.2),rice:value(1.1),potato:value(1.1),corn:value(1.1),'hare-meat':value(2),'red-fox-meat':value(2),foxfur:value(3.5),
   'nutrient-paste-meal':value(10,false,{playerCanSell:false}),

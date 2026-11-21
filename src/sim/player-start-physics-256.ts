@@ -31,6 +31,8 @@ export const START_STRUCTURE_PHYSICS_256={
  "shelf":{"defId":"Shelf","passability":1,"edifice":true,"door":false,"fence":false,"fullFill":false},
  "small-shelf":{"defId":"ShelfSmall","passability":1,"edifice":true,"door":false,"fence":false,"fullFill":false},
  "spike-trap":{"defId":"TrapSpike","passability":0,"edifice":true,"door":false,"fence":false,"fullFill":false},
+ "ied-high-explosive":{"defId":"TrapIED_HighExplosive","passability":0,"edifice":true,"door":false,"fence":false,"fullFill":false},
+ "ied-incendiary":{"defId":"TrapIED_Incendiary","passability":0,"edifice":true,"door":false,"fence":false,"fullFill":false},
  "electric-crematorium":{"defId":"ElectricCrematorium","passability":2,"edifice":true,"door":false,"fence":false,"fullFill":true},
  "double-bed":{"defId":"DoubleBed","passability":1,"edifice":true,"door":false,"fence":false,"fullFill":false},
  "electric-smelter":{"defId":"ElectricSmelter","passability":1,"edifice":true,"door":false,"fence":false,"fullFill":false},

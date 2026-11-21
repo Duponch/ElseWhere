@@ -25,13 +25,14 @@ const BUILD_RESEARCH:Readonly<Partial<Record<Tool,ResearchProject>>>=Object.free
   'machining-table':'machining','hi-tech-research-bench':'microelectronics',
   'multi-analyzer':'multi-analyzer','fabrication-bench':'fabrication',
   'tool-cabinet':'complex-furniture',
+  'ied-high-explosive':'ieds','ied-incendiary':'ieds',
 });
 
 /** Existing command/material compatibility boundaries. These describe the
  * format, never the colony's stock, selected material, workers or terrain. */
 const MIN_SCHEMA:Readonly<Partial<Record<Tool,number>>>=Object.freeze({
   allow:256,forbid:256,strip:351,
-  'hoopstone-ring':354,'billiards-table':354,'game-of-ur-board':354,'poker-table':354,'tool-cabinet':355,
+  'hoopstone-ring':354,'billiards-table':354,'game-of-ur-board':354,'poker-table':354,'tool-cabinet':355,'ied-high-explosive':357,'ied-incendiary':357,
   'ship-computer':298,'ship-sensors':298,
   'ship-cryptosleep-casket':277,'ship-beam':276,'ship-engine':276,
   'ship-reactor':275,'cryptosleep-casket':271,'fueled-smithy':267,'electric-smithy':267,brewery:265,'fermenting-barrel':265,'geothermal-generator':264,bedroll:256,'torch-lamp':249,'build-bridge':247,'remove-bridge':247,vent:244,'sleeping-spot':232,shelf:229,'small-shelf':229,'spike-trap':226,

@@ -12,6 +12,7 @@ import { footprintCells, footprintContains } from './definitions.ts';
 import { frameAt, frameCosts, FRAME_TRAVEL_DELAY } from './construction-costs.ts';
 import { LayeredMap,LayeredSet,overlayNavigationCosts,type NavigationCostLookup } from './navigation-costs.ts';
 import { FLOOR_DEFINITIONS } from './flooring.ts';
+import { isTrapKind357 } from './ied-traps-357.ts';
 import { spikeTrapKnowsOf,spikeTrapNavigationActor,SPIKE_TRAP_SEARCH_COST,SPIKE_TRAP_WALK_DELAY } from './spike-trap-state.ts';
 import type { Cell, StructureKind, World } from './types.ts';
 import { captureStructureNavigation,filteredStructures,type StructureNavigationGeometry } from './structure-navigation.ts';
@@ -48,6 +49,7 @@ export const FURNITURE_TRAVEL:Readonly<Record<StructureKind,Readonly<{delay:numb
   'firefoam-popper':{delay:3,stand:false,repeat:true},
   'tool-cabinet':{delay:4.2,stand:false,repeat:true},
   'spike-trap':{delay:0,stand:true,repeat:false},
+  'ied-high-explosive':{delay:0,stand:true,repeat:false},'ied-incendiary':{delay:0,stand:true,repeat:false},
   'double-bed':{delay:4.2,stand:false,repeat:true},
   'electric-crematorium':{delay:0,stand:false,repeat:false},
   'electric-smelter':{delay:5,stand:false,repeat:true},
@@ -186,12 +188,12 @@ export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:Du
   if(geometry){
     for(const s of geometry.at(to)){
       if(s.kind!=='power-conduit')target=s.kind;
-      if(s.kind==='spike-trap'&&s.spikeTrap&&s.x===to.x&&s.z===to.z)trap=true;
+      if(isTrapKind357(s.kind)&&s.spikeTrap&&s.x===to.x&&s.z===to.z)trap=true;
     }
     previousRepeats=geometry.at(from).some(s=>FURNITURE_TRAVEL[s.kind].repeat);
   }else for(const s of world.structures) {
     if(s.kind!=='power-conduit'&&footprintContains(s,to))target=s.kind;
-    if(s.kind==='spike-trap'&&s.spikeTrap&&s.x===to.x&&s.z===to.z)trap=true;
+    if(isTrapKind357(s.kind)&&s.spikeTrap&&s.x===to.x&&s.z===to.z)trap=true;
     if(footprintContains(s,from)&&FURNITURE_TRAVEL[s.kind].repeat)previousRepeats=true;
   }
   let objectDelay=target?FURNITURE_TRAVEL[target].delay:frameAt(world,to)?FRAME_TRAVEL_DELAY:0;
@@ -289,7 +291,7 @@ function structureTravelBase(geometry:StructureNavigationGeometry):StructureTrav
   let base=structureTravelBases.get(geometry);if(base)return base;
   const costs=new Map<number,number>(),repeaters=new Set<number>(),stops=new Set<number>(),traps:StructureTravelBase['traps'][number][]=[];
   for(const entry of geometry.entries){
-    const p=FURNITURE_TRAVEL[entry.structure.kind];if(entry.structure.kind==='spike-trap')traps.push(entry);
+    const p=FURNITURE_TRAVEL[entry.structure.kind];if(isTrapKind357(entry.structure.kind))traps.push(entry);
     for(const i of entry.cells){if(p.delay)costs.set(i,Math.round(p.delay/3*1000));if(p.repeat)repeaters.add(i);if(!p.stand)stops.add(i);}
   }
   let costMaximum=-Infinity;for(const value of costs.values())if(value>costMaximum)costMaximum=value;
@@ -304,7 +306,7 @@ export function knownSpikeTrapCosts(world:World,geometry?:StructureNavigationGeo
   geometry??=captureStructureNavigation(world);
   const structureBase=geometry?structureTravelBase(geometry):undefined;
   if(structureBase){for(const {structure,cells} of structureBase.traps)if(structure.spikeTrap)for(const i of cells)traps.set(i,SPIKE_TRAP_SEARCH_COST);}
-  else for(const s of world.structures)if(s.kind==='spike-trap'&&s.spikeTrap)for(const c of footprintCells(s))traps.set(c.z*world.width+c.x,SPIKE_TRAP_SEARCH_COST);
+  else for(const s of world.structures)if(isTrapKind357(s.kind)&&s.spikeTrap)for(const c of footprintCells(s))traps.set(c.z*world.width+c.x,SPIKE_TRAP_SEARCH_COST);
   return traps;
 }
 /** Captured once per synchronous search. The terrain layer is shared only on an
@@ -322,7 +324,7 @@ export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTe
   if(version>=22) {
     const add=(s:World['structures'][number],i:number)=>{
       const p=FURNITURE_TRAVEL[s.kind];
-      if(knows&&s.kind==='spike-trap'&&s.spikeTrap)traps.set(i,SPIKE_TRAP_SEARCH_COST);
+      if(knows&&isTrapKind357(s.kind)&&s.spikeTrap)traps.set(i,SPIKE_TRAP_SEARCH_COST);
       if(p.delay)costs.set(i,Math.round(p.delay/3*1000));
       if(p.repeat)repeaters.add(i);if(!p.stand)stops.add(i);
     };
