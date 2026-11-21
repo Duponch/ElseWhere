@@ -456,6 +456,14 @@ L’[audit du 13 septembre](../research/environment-review.md) confirme que les 
 
 ## Petit catalogue et statut des ajouts
 
+### Ajouts V357 — pièges EEI
+
+| Registre / identifiant local | Acquisition et usage physique | Limites |
+| --- | --- | --- |
+| Structures `ied-high-explosive`, `ied-incendiary` | Pièges EEI Core : deux obus de leur type, travail 1 400, Construction 3, 40 PV, 2 kg, inflammabilité 1, beauté −4, aucun piège voisin, désinstallables. Mèche de 15 ticks au déclenchement (pillard : toujours ; colon : 0,5 %), à la balle ou sous 8 PV ; explosion Bomb ou Flame de rayon 3,9 ; détruits sans récupération, reconstruction payée si activée. [Détails](ied-traps-v357.md). | Pas de fuite des colons devant la mèche ; pas de marque de souffle. |
+| Objets `shell-high-explosive`, `shell-incendiary` | Obus de mortier Core : 60 PV, valeur 55, 1,25 kg, piles de 25, détérioration 1,5 ; catégorie « Obus de mortier » ; vendus et rachetés par le fournisseur militaire (1–2 sortes, 3–15) et le marchand d'esclaves (−1–2 sortes, 1–10). | Pas de fabrication (Mortiers absents) ; une pile endommagée n'explose pas encore. |
+| Projet `ieds` | EEI : 500 points, industrielle, après Électricité (acquise au départ), tout bureau. | Rien n'est offert aux anciennes parties. |
+
 ### Ajouts V355 — armoire à outils et tapis
 
 | Registre / identifiant local | Acquisition et usage physique | Limites |
