@@ -2,7 +2,7 @@ import {plantGrowth} from '../sim/plants';
 import type {Resource,World} from '../sim/types';
 
 /** Shared literal presentation values. No geometry, DOM or Three dependency. */
-export const RESIDENT_CROP_KINDS=['rice','potato','corn','cotton','haygrass','hops'] as const;
+export const RESIDENT_CROP_KINDS=['rice','potato','corn','cotton','haygrass','hops','devilstrand'] as const;
 export type ResidentCropKind=typeof RESIDENT_CROP_KINDS[number];
 export const isResidentCrop=(r:Pick<Resource,'kind'>):boolean=>(RESIDENT_CROP_KINDS as readonly string[]).includes(r.kind);
 export const isMedicinalPlant=(r:Pick<Resource,'kind'|'species'>):boolean=>r.kind==='healroot'||r.species==='healroot-wild';

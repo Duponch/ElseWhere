@@ -183,7 +183,7 @@ export function validConstructionMaterial(kind:unknown,material:unknown,version:
   if(isCaveHiveKind256(kind))return version>=256&&material===undefined;
   if(isLocalRoadProp256(kind))return version>=256&&material===undefined;
   if(material==='jade')return version>=256&&(kind==='small-sculpture'||kind==='large-sculpture'||isHabitatFurnitureKind(kind)&&materialAllowed(kind,material))&&recipes.has(`${kind}:${material}`);
-  if(kind==='bedroll')return version>=256&&materialAllowed('bedroll',material);
+  if(kind==='bedroll')return version>=256&&(material!=='devilstrand'||version>=358)&&materialAllowed('bedroll',material);
   if(kind==='torch-lamp')return version>=249&&material==='wood';
   if(kind==='shelf'||kind==='small-shelf')return version>=229&&materialAllowed(kind,material);
   if(kind==='double-bed')return version>=224&&materialAllowed('double-bed',material);

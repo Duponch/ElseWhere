@@ -5,7 +5,7 @@ export const TICKS_PER_SECOND = 6;
 export const TICKS_PER_DAY = 6000;
 
 export type Terrain = import('./local-terrain-definitions-256.ts').NaturalTerrainId256 | 'smoothed-stone' | 'packed-dirt' | 'water-shallow' | 'marsh' | 'grass' | 'soil' | 'water' | 'rock' | 'rough-stone' | 'rich-soil' | 'gravel';
-export type ResourceKind = 'hops' | 'wild-plant' | 'potato' | 'corn' | 'tree' | 'berries' | 'rock' | 'rice' | 'cotton' | 'healroot' | 'haygrass';
+export type ResourceKind = 'devilstrand' | 'hops' | 'wild-plant' | 'potato' | 'corn' | 'tree' | 'berries' | 'rock' | 'rice' | 'cotton' | 'healroot' | 'haygrass';
 export type MaterialKind = 'shell' | 'drug' | 'ai-core' | 'book' | 'prosthesis' | 'wort' | 'beer' | 'jade' | 'plant' | 'chemfuel' | 'neutroamine' | 'mech-corpse' | 'silver' | 'corpse' | 'wood' | 'food' | 'chunk' | 'steel' | 'gold' | 'uranium' | 'plasteel' | 'advanced-component' | 'blocks' | 'component' | 'medicine' | 'weapon' | 'apparel' | 'textile' | 'unfinished';
 export type BedSlot = 0 | 1;
 export type LocalRoadProp256 = import('./local-road-data-256.ts').LocalRoadProp256;

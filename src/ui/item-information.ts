@@ -64,6 +64,13 @@ export function itemInformation(pile:MaterialPile,world?:World):ObjectInformatio
     add('Prothèse','Efficacité',`${Math.round(rule.efficiency*100)} %`,'Fonction du membre installé avant les autres effets sur les capacités du patient.');
     add('Fabrication','Recette','40 acier + 4 composants','Recherche Prothèses après Usinage ; atelier d’usinage alimenté, Artisanat 5. Sans qualité.');
   }
+  // Schema 358: Core DevilstrandCloth stuff powers and factors.
+  if(pile.item==='devilstrand'){
+    add('Couture','Usage','Tissu','Accepté par tous les vêtements de tissu (tuques et chapeaux compris) et par le sac de couchage. Valeur 5,5 par unité.');
+    add('Couture','Protection','Tranchant ×1,40 · contondant ×0,36 · chaleur ×3,00','Multipliée par le facteur d’armure de chaque vêtement.');
+    add('Couture','Isolation','Froid 20 · chaud 24','Multipliée par les facteurs d’isolation de chaque vêtement.');
+    add('Couture','Facteurs','Solidité ×1,3 · inflammabilité ×0,4 · beauté ×3,2','Appliqués à ce qui est fait de soie du diable.');
+  }
   if(pile.item==='hops')add('Brassage','Usage','Ingrédient végétal','25 houblons donnent 5 moûts à la brasserie. Le houblon n’est pas proposé comme repas aux personnes ni comme provision de voyage.');
   if(pile.item==='wort'){
     add('Brassage','Usage','Moût à fermenter','Transport apporte physiquement le moût dans un tonneau entre 1 et 30 °C. Le moût ne se boit pas.');
@@ -126,5 +133,5 @@ export function itemInformation(pile:MaterialPile,world?:World):ObjectInformatio
     add('Isolation','Chaleur',`${insulation.heat.toFixed(1)} °C`,'Isolation de cette pièce après facteur de qualité.');
     add('Vêtement','Parties couvertes',apparel.coverage.parts.map(part=>BODY_PARTS[part].label).join(', '),'Parties anatomiques couvertes par cette pièce. La couverture participe au calcul de protection au contact.');
   }
-  return {title:isMinifiedTree(pile)&&pile.plantPack.pendingExpiry?'Arbre mort · restes en attente':isApparelItem(pile.item)&&pile.apparel?apparelLabel(pile):definition.label,description:pile.item==='hops'?'Houblon récolté destiné au brassage.':pile.item==='wort'?'Moût préparé à la brasserie ; la fermentation en tonneau produit la bière.':pile.item==='beer'?'Bière fermentée, stockable et échangeable. Sa consommation a des effets sur la santé.':isMinifiedTree(pile)&&pile.plantPack.pendingExpiry?'Arbre mort ; tous ses restes sont conservés jusqu’à leur dépôt.':definition.kind==='food'?'Aliment physique pouvant être consommé selon le régime alimentaire.':definition.kind==='apparel'?'Vêtement physique qui peut être porté, retiré et stocké.':definition.kind==='weapon'?'Arme physique qui peut être équipée, déposée et stockée.':'Objet physique de la colonie.',rows};
+  return {title:isMinifiedTree(pile)&&pile.plantPack.pendingExpiry?'Arbre mort · restes en attente':isApparelItem(pile.item)&&pile.apparel?apparelLabel(pile):definition.label,description:pile.item==='devilstrand'?'Tissu filé à partir des microfibres du champignon soie du diable : très solide, bon isolant, et remarquablement protecteur contre le feu.':pile.item==='hops'?'Houblon récolté destiné au brassage.':pile.item==='wort'?'Moût préparé à la brasserie ; la fermentation en tonneau produit la bière.':pile.item==='beer'?'Bière fermentée, stockable et échangeable. Sa consommation a des effets sur la santé.':isMinifiedTree(pile)&&pile.plantPack.pendingExpiry?'Arbre mort ; tous ses restes sont conservés jusqu’à leur dépôt.':definition.kind==='food'?'Aliment physique pouvant être consommé selon le régime alimentaire.':definition.kind==='apparel'?'Vêtement physique qui peut être porté, retiré et stocké.':definition.kind==='weapon'?'Arme physique qui peut être équipée, déposée et stockée.':'Objet physique de la colonie.',rows};
 }

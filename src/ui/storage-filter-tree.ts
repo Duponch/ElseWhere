@@ -33,9 +33,10 @@ export const STORAGE_FILTER_TREE:readonly StorageFilterNode[]=[
     branch('brewing-products','Brassage',leaves(id=>id==='wort'||id==='beer')),
     branch('brewing-plants','Matières végétales',leaves(id=>id==='hops')),
     branch('textiles','Textiles',[
-      branch('leathers','Cuirs',leaves((id,k)=>k==='textile'&&id!=='cloth'&&id!=='muffalo-wool')),
+      branch('leathers','Cuirs',leaves((id,k)=>k==='textile'&&id!=='cloth'&&id!=='muffalo-wool'&&id!=='devilstrand')),
       branch('wools','Laines',leaves(id=>id==='muffalo-wool')),
-      ...leaves(id=>id==='cloth'),
+      // Schema 358: devilstrand is a fabric, next to cloth.
+      ...leaves(id=>id==='cloth'||id==='devilstrand'),
     ]),
     ...leaves((_id,k)=>k==='component'||k==='advanced-component'||k==='chemfuel'||k==='neutroamine'),
   ]),

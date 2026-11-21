@@ -12,9 +12,12 @@ import { isCropKind, type CropKind } from './crops.ts';
 import { FLORA_DEFINITIONS } from './biome-flora.ts';
 import { resourceMaxHp } from './thing-damage-rules.ts';
 import { hydroponicFertility } from './hydroponics.ts';
+import { DEVILSTRAND_PLANT_358 } from './devilstrand-358.ts';
 
 export const PLANT_DEFINITIONS = Object.freeze({
   hops:{label:'Houblon',growDays:5,minFertility:.7,sensitivity:.7,afterHarvest:0,yield:8},
+  // Schema 358: Core Plant_Devilstrand (growDays 22.5, fertilityMin 0.5, sensitivity 1, yield 6).
+  devilstrand:{label:DEVILSTRAND_PLANT_358.label,growDays:DEVILSTRAND_PLANT_358.growDays,minFertility:DEVILSTRAND_PLANT_358.fertilityMin,sensitivity:DEVILSTRAND_PLANT_358.fertilitySensitivity,afterHarvest:0,yield:DEVILSTRAND_PLANT_358.harvestYield},
   haygrass: { label: 'Herbe à foin', growDays: 7, minFertility: .7, sensitivity: .6, afterHarvest: 0, yield: 18 },
   healroot: { label: 'Racine médicinale', growDays: 7, minFertility: .7, sensitivity: 1, afterHarvest: 0, yield: 1 },
   cotton: { label: 'Coton', growDays: 8, minFertility: .7, sensitivity: 1, afterHarvest: 0, yield: 10 },
@@ -26,7 +29,7 @@ export const PLANT_DEFINITIONS = Object.freeze({
 export const isPlant = (plant: Resource): boolean => plant.species!==undefined || plant.kind === 'berries' || isCropKind(plant.kind);
 export const isCrop = (plant: Pick<Resource,'kind'>): plant is Pick<Resource,'kind'>&{kind:CropKind} => isCropKind(plant.kind);
 export const harvestProductLabel = (plant:Resource):string => plant.species?FLORA_DEFINITIONS[plant.species].product==='wood'?'bois':FLORA_DEFINITIONS[plant.species].product==='agave-fruit'?'agave':FLORA_DEFINITIONS[plant.species].product==='berries'?'baies':FLORA_DEFINITIONS[plant.species].product==='herbal-medicine'?'dose de médicament à base de plantes':FLORA_DEFINITIONS[plant.species].label:
-  plant.kind==='tree'?'bois':plant.kind==='hops'?'houblon':plant.kind==='haygrass'?'foin':plant.kind==='healroot'?'dose de médicament à base de plantes':plant.kind==='cotton'?'tissu':plant.kind==='rice'?'riz':plant.kind==='potato'?'pommes de terre':plant.kind==='corn'?'maïs':'baies';
+  plant.kind==='tree'?'bois':plant.kind==='hops'?'houblon':plant.kind==='devilstrand'?'soie du diable':plant.kind==='haygrass'?'foin':plant.kind==='healroot'?'dose de médicament à base de plantes':plant.kind==='cotton'?'tissu':plant.kind==='rice'?'riz':plant.kind==='potato'?'pommes de terre':plant.kind==='corn'?'maïs':'baies';
 
 export const BERRY_GROW_DAYS = 6;
 export const HARVEST_MIN_GROWTH = .65;

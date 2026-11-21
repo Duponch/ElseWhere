@@ -92,6 +92,8 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
   else if(/-egg(?:-(?:un)?fertilized)?$/.test(id)||id==='egg')id='egg';
   else if(/-(tshirt|shirt|jacket|tribalwear|parka|pants|duster|tuque|cowboy-hat|bowler-hat|plate-armor|simple-helmet|flak-helmet)$/.test(id))id=id.match(/-(tshirt|shirt|jacket|tribalwear|parka|pants|duster|tuque|cowboy-hat|bowler-hat|plate-armor|simple-helmet|flak-helmet)$/)![1]!;
   else if(/-wool$/.test(id))id='wool';else if(/leather|fur|camelhide/.test(id))id='leather';
+  // Schema 358: the devilstrand fabric is a folded bolt like cloth, in its red.
+  else if(id==='devilstrand')id='cloth';
   else if(/-blocks$/.test(id))id='blocks';else if(/-chunk$/.test(id))id='chunk';
   else if(/^shell-/.test(id))id='shell';
   else if(/meal/.test(id))id='meal';else if(/longsword$/.test(id))id='longsword';else if(/spear$/.test(id))id='spear';else if(/mace$/.test(id))id='mace';
@@ -99,6 +101,13 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  if(/^(resource|crop)-/.test(id))id=id.replace(/^(resource|crop)-/,'plant:');
  const remove=id.endsWith('-remove');if(remove)id=id.slice(0,-7);
  const material=Object.keys(stoneColors).find(stone=>id.startsWith(stone+'-'));
+ // Schema 358: devilstrand research and crop, three red mushrooms whose wide
+ // caps are joined by pale silk threads.
+ if(id==='devilstrand'||id==='plant:devilstrand'){
+  for(const [x,y,h,r] of [[18,40,14,10],[44,38,16,11],[31,30,22,13]] as const){d.rect(x-3,y,6,h,P.paper);d.path(`M ${x-r} ${y+1} Q ${x} ${y-r-4} ${x+r} ${y+1} Z`,'#b43c3c');}
+  d.path('M 10 41 Q 24 47 31 31 Q 38 45 55 39',null,1.1,P.paper);d.path('M 6 56 Q 32 51 58 56',null,1.4);
+  id='drawn';
+ }
  // Schema 355: one rug per Core carpet colour, its fringes on the two short edges.
  if(id==='carpet-making'||isCarpetFloor355(id)){
   const fill=isCarpetFloor355(id)?'#'+carpetColor355(id).color.toString(16).padStart(6,'0'):P.red;

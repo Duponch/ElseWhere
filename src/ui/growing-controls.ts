@@ -3,8 +3,10 @@ import { CROP_KINDS, type CropKind } from '../sim/crops';
 import {FLORA_DEFINITIONS} from '../sim/biome-flora';
 import {forestNativeSpecies291,forestSowingChoices291,growingPlantLabel291,isForestrySpecies291,treeSowingUnlocked291,type GrowingPlant291} from '../sim/forestry-content-291';
 import {isSchema291OrLater} from '../sim/schema-compatibility-257.ts';
+import {devilstrandUnlocked358} from '../sim/devilstrand-358.ts';
 
 const CULTURE_HELP:Record<CropKind,string>={
+  devilstrand:'Champignon modifié qui tisse une soie robuste. Culture 10 pour semer ; pleine terre seulement, sans hydroponie. Un plant mûr donne jusqu’à 6 soies du diable, selon le récolteur. Cycle très long : 22,5 jours de croissance pondérée, fertilité minimale 50 %, sensibilité à la fertilité de 100 % ; la lumière, le froid et la nuit allongent la durée réelle. Jamais touché par la rouille des cultures. Semis 40 ticks, récolte 20 ticks nominaux. Disponible après la recherche Soie du diable.',
   hops:'Culture 3 pour semer ; sol et hydroponie. Un plant mûr peut donner 8 houblons. Cinq jours de croissance pondérée et sensibilité à la fertilité de 70 % ; la lumière, le froid et la nuit modifient la durée réelle. Le houblon se conserve 30 jours à température ambiante. La recherche Brassage de bière débloque la brasserie et le tonneau, sans conditionner le semis du houblon.',
   haygrass:'Le foin mûr donne jusqu’à 18 unités. Sept jours de croissance pondérée, sensibilité à la fertilité de 60 %. Sol uniquement, sans hydroponie. Semis 17 ticks et récolte 20 ticks nominaux ; la durée et le rendement dépendent du récolteur et du milieu. Le foin nourrit les herbivores et entre dans les croquettes, mais ne se mange pas par les humains. Conservation : 60 jours à température ambiante.',
   rice:'Le riz mûr donne 6 unités. Cycle court, sensible à la fertilité : utile pour les premières récoltes.',
@@ -19,8 +21,11 @@ export const growingCultureHelp=(kind:GrowingPlant291,_world?:World):string=>{
   const def=FLORA_DEFINITIONS[kind];
   return `Culture 6 pour commencer le semis ; recherche Semis d’arbres et essence indigène du biome. Sol sans toit, hors hydroponie. Travail nominal de semis : 400 ticks, modulé par le colon. ${def.growDays} jours de croissance pondérée ; la nuit, le sol et le climat modifient la durée réelle. À maturité, jusqu’à ${def.yield} bois avant effets du récolteur. Les huit cases voisines imposent l’espacement ; les plantes encore voulues par leur propre zone sont conservées. La coupe automatique attend la maturité, puis le semis peut recommencer. Le plant apparaît à la finition du semis, comme les autres cultures locales.`;
 };
+/** Schema 358: devilstrand is listed once its research is complete (Core
+ * Command_SetPlantToGrow.IsPlantAvailable), on the ground only. */
+const cropChoices=(world?:World):readonly CropKind[]=>CROP_KINDS.filter(kind=>kind!=='devilstrand'||!!world&&devilstrandUnlocked358(world));
 export const growingCultureChoices=(zone:Pick<GrowingZone,'basinId'>,world?:World):readonly GrowingPlant291[]=>
-  zone.basinId===undefined?[...CROP_KINDS,...(world?forestSowingChoices291(world):[])]:CROP_KINDS.filter(kind=>kind!=='corn'&&kind!=='haygrass');
+  zone.basinId===undefined?[...cropChoices(world),...(world?forestSowingChoices291(world):[])]:CROP_KINDS.filter(kind=>kind!=='corn'&&kind!=='haygrass'&&kind!=='devilstrand');
 
 export function growingControls(zone: GrowingZone, send: (command: Command) => void,world?:World): HTMLElement {
   const panel = document.createElement('div'); panel.className = 'storage-settings';

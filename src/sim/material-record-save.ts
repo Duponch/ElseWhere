@@ -1,4 +1,5 @@
 import {isGun342} from './guns-342.ts';
+import {isDevilstrandItem358} from './devilstrand-358.ts';
 import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -69,6 +70,7 @@ export function validatePileRecordShape(item:Record<string,unknown>,world:Pick<W
  if(version<267&&(isSmithingProduct267(item.item)||isSmithingWorkpiece267(item.item)||Object.hasOwn(item,'smithingWork')))return ['Future smithing item.'];
  if(!validSmithingWorkShape267(item,version))errors.push('Invalid smithing work.');
  if(version<265&&['hops','wort','beer'].includes(String(item.item)))return ['Future brewing item.'];
+ if(version<358&&isDevilstrandItem358(item.item))return ['Future devilstrand item.'];
  if(!isPenoxycyline337(version)&&(item.item==='penoxycyline'||item.kind==='drug'))return ['Future penoxycyline item.'];
  if(!validMaterialPermission256(item,version))return ['Invalid or future ordinary Thing permission.'];
  if(!validEggPile256(item as unknown as import('./types.ts').MaterialPile,version,heldDuckInventoryClock256(world,item,version,validationTick),world.nextId))errors.push('Invalid or future egg state.');

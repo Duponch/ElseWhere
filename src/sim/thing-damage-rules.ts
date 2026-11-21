@@ -1,4 +1,5 @@
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
+import {isDevilstrandApparel358} from './devilstrand-358.ts';
 import { SCHEMA_VERSION } from './types.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {AI_CORE_CONTENT_298} from './ai-core-content-298.ts';
@@ -81,7 +82,7 @@ export const structureFlammability=(s:Pick<Structure,'kind'|'material'>)=>isAnci
 export const structureLeavesResources=(s:Pick<Structure,'kind'>)=>isAncientMonumentKind256(s.kind)|| (BUILDINGS[s.kind]?.[2]??false);
 export const resourceMaxHp=(r:Pick<Resource,'kind'|'species'>)=>floraDefinition(r)?.hitPoints??(r.kind==='healroot'?60:r.kind==='tree'?200:r.kind==='berries'?120:r.kind==='corn'?150:r.kind==='rock'?0:85);
 export const resourceFlammability=(r:Pick<Resource,'kind'|'species'>)=>floraDefinition(r)?.flammability??(r.kind==='rock'?0:r.kind==='tree'?.8:r.kind==='haygrass'?1.3:1);
-export function pileMaxHp(p:Pick<MaterialPile,'kind'|'item'>,version=isShellItem357(p.item)?357:p.item==='ai-core'?298:p.item==='novel'?295:isProstheticItem273(p.item)?273:isSmithingApparel267(p.item)?267:193):number {
+export function pileMaxHp(p:Pick<MaterialPile,'kind'|'item'>,version=isShellItem357(p.item)?357:p.item==='devilstrand'?358:p.item==='ai-core'?298:p.item==='novel'?295:isProstheticItem273(p.item)?273:isSmithingApparel267(p.item)?267:193):number {
   if(p.item==='ai-core')return isSchema298OrLater(version)&&p.kind==='ai-core'?AI_CORE_CONTENT_298.maxHitPoints:0;
   if(p.item==='novel')return (version===295||(version===296||isCorePhysicalSchema297(version)))&&p.kind==='book'?NOVEL_MAX_HIT_POINTS_295:0;
   if(isProstheticItem273(p.item))return isSchema273OrLater(version)&&p.kind==='prosthesis'?50:0;
@@ -89,7 +90,8 @@ export function pileMaxHp(p:Pick<MaterialPile,'kind'|'item'>,version=isShellItem
   if(version<256&&(p.item==='flak-pants'||p.item==='plasteel-flak-helmet'))return 0;
   if(p.item==='slag-steel-chunk')return version>=256?300:0;
   if(p.item==='hops'||p.item==='wort'||p.item==='beer')return version>=265?(p.item==='beer'?50:60):0;
-  if(isShellItem357(p.item))return isIedSchema357(version)&&p.kind==='shell'?SHELL_FACTS_357.maxHitPoints:0;
+  if(isShellItem357(p.item))return isIedSchema357(version)&&p.kind==='shell'?SHELL_FACTS_357.maxHitPoints:0;  // Schema 358: Core DevilstrandCloth MaxHitPoints 100.
+  if(p.item==='devilstrand')return version>=358&&p.kind==='textile'?100:0;
   if(p.item==='raw-fungus')return version>=256?60:0;
   if(isAnimalItem256(p.item))return version>=256?(ANIMAL_ITEM_HP_256 as Readonly<Record<string,number>>)[p.item]??(p.kind==='corpse'?100:0):0;
   if(version>=256&&p.item==='steel')return 100;
@@ -111,7 +113,8 @@ export function pileFlammability(p:Pick<MaterialPile,'kind'|'item'>):number {
   if(isSmithingApparel267(p.item))return ARMOR_STUFF_DEFINITIONS267[smithingApparelStuff267(p.item)].flammability;
   if(isAnimalItem256(p.item))return (ANIMAL_ITEM_FLAMMABILITY_256 as Readonly<Record<string,number>>)[p.item]??(p.kind==='corpse'?.7:0);
   if(p.item==='hops')return 1;if(p.item==='wort')return .2;if(p.item==='beer')return .5;
-  if(isShellItem357(p.item))return SHELL_FACTS_357.flammability;
+  if(isShellItem357(p.item))return SHELL_FACTS_357.flammability;  // Schema 358: DevilstrandCloth 0.4; a devilstrand garment is apparel 1.0 x stuff factor 0.4.
+  if(p.item==='devilstrand'||isDevilstrandApparel358(p.item))return .4;
   if(p.kind==='plant')return .8;
   if(p.item==='recon-armor')return .4;
   if(p.item==='plasteel-flak-helmet')return 0;

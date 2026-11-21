@@ -46,6 +46,7 @@ export const CONFIRMED_PLANT_SELECTION_FLAGS_4871={
   healroot:{def:'Plant_Healroot',selectable:true,neverMultiSelect:true},
   haygrass:{def:'Plant_Haygrass',selectable:true,neverMultiSelect:true},
   hops:{def:'Plant_Hops',selectable:true,neverMultiSelect:true},
+  devilstrand:{def:'Plant_Devilstrand',selectable:true,neverMultiSelect:true},
 } as const;
 
 /** No concrete def, age or growth is invented for historical identities.

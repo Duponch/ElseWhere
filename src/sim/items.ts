@@ -1,6 +1,7 @@
 import {PROSTHETIC_ITEM_DEFINITIONS_273} from './prosthetic-content-273.ts';
 import {SHELL_ITEM_DEFINITIONS_357} from './ied-traps-357.ts';
-import { GARMENT_ITEM_DEFINITIONS312,HAT_ITEM_DEFINITIONS353 } from './apparel-definitions.ts';
+import { GARMENT_ITEM_DEFINITIONS312,HAT_ITEM_DEFINITIONS353,DEVILSTRAND_APPAREL_ITEM_DEFINITIONS358 } from './apparel-definitions.ts';
+import { DEVILSTRAND_FABRIC_358 } from './devilstrand-358.ts';
 import {SPEAR_ITEM_DEFINITIONS_272} from './spear-content-272.ts';
 import {SHORT_BOW_COLOR_316} from './short-bow-316.ts';
 import {BOW_FACTS_326} from './bows-326.ts';
@@ -157,6 +158,9 @@ export const ITEM_DEFINITIONS = Object.freeze({
   'legacy-portion': Object.freeze({ label: 'Portion historique', kind: 'food', stackLimit: 75, nutrition: 35, maxIngest: 1, color: 0xba745a }),
   // Schema 353: Core cowboy and bowler hats in every tailoring material.
   ...HAT_ITEM_DEFINITIONS353,
+  // Schema 358: Core DevilstrandCloth (Textiles, stack 75) and its garments.
+  devilstrand:Object.freeze({label:DEVILSTRAND_FABRIC_358.label,kind:'textile',stackLimit:DEVILSTRAND_FABRIC_358.stackLimit,nutrition:0,maxIngest:0,color:DEVILSTRAND_FABRIC_358.color}),
+  ...DEVILSTRAND_APPAREL_ITEM_DEFINITIONS358,
   'unfinished-cowboy-hat':Object.freeze({label:'Chapeau de cowboy inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0xd8c8a2}),
   'unfinished-bowler-hat':Object.freeze({label:'Chapeau melon inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0xd8c8a2}),
 } as const);

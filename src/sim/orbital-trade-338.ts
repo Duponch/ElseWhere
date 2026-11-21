@@ -35,7 +35,9 @@ const set=(items:readonly ItemId[]):ReadonlySet<ItemId>=>Object.freeze(new Set(i
 const BULK_338=set(['silver','component','advanced-component','steel','wood','plasteel','cloth','medicine','gold','neutroamine','chemfuel','beer','novel',
  'uranium','hops','light-leather','muffalo-wool','foxfur','berries','rice','potato','corn','hare-meat','red-fox-meat',
  'survival-meal','simple-meal','fine-meal','vegetarian-fine-meal','carnivore-fine-meal','lavish-meal','vegetarian-lavish-meal','carnivore-lavish-meal','nutrient-paste-meal',
- 'kibble','pemmican']);
+ 'kibble','pemmican',
+ // Schema 358: Core DevilstrandCloth is in the Textiles category this trader handles.
+ 'devilstrand']);
 const EXOTIC_338=set(['silver','component','advanced-component','gold','plasteel','glitterworld-medicine','neutroamine','beer','novel','prosthetic-arm','prosthetic-leg','ai-core']);
 const EXPENSIVE_SIMPLE_338=set(['component','advanced-component','gold','ai-core','novel','prosthetic-arm','prosthetic-leg','survival-meal']);
 /** Core tradeability All; the shared catalogue keeps them closed elsewhere. */
@@ -59,7 +61,7 @@ export function orbitalClothing338(state:{rng:number},version=338):{item:ItemId;
   const pool=indices.map(i=>VISITOR_CLOTHING_POOL[i]!),count=integer(state,min,max);
   for(let i=0;i<count;i++){
    const candidate=select(state,pool),roll=random(state),quality=traderQuality(state),family=visitorClothingFamily(VISITOR_CLOTHING_POOL.indexOf(candidate),version);
-   const material=family?visitorClothingStuff314(roll,family==='tuque'):undefined;
+   const material=family?visitorClothingStuff314(roll,family==='tuque',version):undefined;
    if(family&&material)out.push({item:`${material}-${family}` as ItemId,quality});
   }
  }

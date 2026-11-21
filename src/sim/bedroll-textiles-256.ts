@@ -24,6 +24,8 @@ export const BEDROLL_TEXTILES_256=Object.freeze({
  "alpaca-wool":Object.freeze({category:"fabric" as const,"workFactor":1,"workOffset":0,"hitPointsFactor":1,"flammabilityFactor":1.7,"beautyFactor":1.5,"beautyOffset":0,"restFactor":1}),
  "bison-wool":Object.freeze({category:"fabric" as const,"workFactor":1,"workOffset":0,"hitPointsFactor":1,"flammabilityFactor":1.7,"beautyFactor":1.5,"beautyOffset":0,"restFactor":1}),
  "megasloth-wool":Object.freeze({category:"fabric" as const,"workFactor":1,"workOffset":0,"hitPointsFactor":1,"flammabilityFactor":1.7,"beautyFactor":1.5,"beautyOffset":0,"restFactor":1}),
+ // Schema 358 (construction gates it): Core DevilstrandCloth statFactors MaxHitPoints 1.3, Flammability 0.4, Beauty 3.2.
+ "devilstrand":Object.freeze({category:"fabric" as const,"workFactor":1,"workOffset":0,"hitPointsFactor":1.3,"flammabilityFactor":0.4,"beautyFactor":3.2,"beautyOffset":0,"restFactor":1}),
 });
 export type BedrollTextile256=keyof typeof BEDROLL_TEXTILES_256;
 export const BEDROLL_MATERIALS_256=Object.freeze(Object.keys(BEDROLL_TEXTILES_256) as BedrollTextile256[]);
@@ -54,4 +56,5 @@ export const BEDROLL_TEXTILE_MARKET_VALUES_256=Object.freeze({
  "alpaca-wool":3.8,
  "bison-wool":2.7,
  "megasloth-wool":2.7,
+ "devilstrand":5.5,
 });

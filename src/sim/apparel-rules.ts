@@ -34,6 +34,8 @@ export function apparelItemFor(family:ApparelFamily,material:ApparelMaterial):Ap
     if(material==='cloth')return 'cloth-tuque';
     if(material==='muffalo-wool')return 'muffalo-wool-tuque';
     if((FABRIC_TEXTILES308 as readonly string[]).includes(material))return `${material as FabricTextile308}-tuque`;
+    // Schema 358: devilstrand is a Fabric.
+    if(material==='devilstrand')return 'devilstrand-tuque';
     throw new RangeError('Tuque requires a fabric');
   }
   return ITEM_BY_FAMILY[family][material];

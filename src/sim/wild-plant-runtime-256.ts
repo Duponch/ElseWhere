@@ -85,7 +85,7 @@ export function plantRegrowthMtb256(days:number,random:()=>number):boolean {
 const contexts=new WeakMap<World,{width:number;height:number;worldSeed:number;tileHash:number;order:Uint32Array;regions:PlantRegionCache256}>();
 function context(world:World,worldSeed:number,tileHash:number){let c=contexts.get(world);if(!c||c.width!==world.width||c.height!==world.height||c.worldSeed!==worldSeed||c.tileHash!==tileHash){c={width:world.width,height:world.height,worldSeed,tileHash,order:plantCellOrder256(world.width*world.height,worldSeed,tileHash).cells,regions:new PlantRegionCache256()};contexts.set(world,c);}return c;}
 const speciesDefs=new Map<string,string>(Object.entries(FACTS).map(([def,row])=>[row.species,def]));
-const crops:Readonly<Record<string,string>>={rice:'Plant_Rice',potato:'Plant_Potato',corn:'Plant_Corn',cotton:'Plant_Cotton',healroot:'Plant_Healroot',haygrass:'Plant_Haygrass'};
+const crops:Readonly<Record<string,string>>={rice:'Plant_Rice',potato:'Plant_Potato',corn:'Plant_Corn',cotton:'Plant_Cotton',healroot:'Plant_Healroot',haygrass:'Plant_Haygrass',devilstrand:'Plant_Devilstrand'};
 export function runtimePlantDef256(resource:Resource):string|undefined {return resource.species===undefined?crops[resource.kind]:speciesDefs.get(resource.species);}
 /** Exact subset of the actual spawner's early rejection (see pick()). */
 function actualSpawnerRejects256(world:World,cell:number,density:number):boolean {

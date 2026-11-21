@@ -45,6 +45,13 @@ export function cropGeometry(kind:ResidentCropKind):THREE.BufferGeometry {
       if(part.index===null)return part;
       const expanded=part.toNonIndexed();part.dispose();return expanded;
     });
+  } else if(kind==='devilstrand') {
+    // Schema 358: a clump of three red mushrooms on pale stems; the silk net
+    // is suggested by their flat, wide caps. Authored once, crop material.
+    parts=[];
+    for(const [x,z,h,r] of [[-.18,-.06,.42,.24],[.17,-.1,.32,.2],[.02,.18,.5,.26]] as const){
+      parts.push(new THREE.CylinderGeometry(.045,.06,h,5).translate(x,h/2,z),new THREE.ConeGeometry(r,.16,6).translate(x,h+.04,z));
+    }
   } else if(kind==='haygrass') {
     // Blade bends are authored once in the resident mesh. Ordinary snapshots
     // still transform one whole plant, never individual stems or seed heads.
@@ -98,6 +105,7 @@ class CropBatch {
     if(kind==='cotton')this.ripe.setHex(0xf0ead7);
     if(kind==='potato')this.ripe.setHex(0x83964a);
     if(kind==='hops'){this.green.setHex(0x72966a);this.ripe.setHex(0xaabd78);}
+    if(kind==='devilstrand'){this.green.setHex(0x8f6f6a);this.ripe.setHex(0xb43c3c);}
     if(kind==='haygrass'){this.green.setHex(0x80934e);this.ripe.setHex(0xc6b56b);}
     this.geometry=sharedGeometry??cropGeometry(kind);this.ownsGeometry=!sharedGeometry;
     this.residentBounds=new CropResidentBounds(this.geometry);
@@ -159,7 +167,7 @@ class CropBatch {
     }
     // One plant per map cell is a proven upper bound. Historical batches reserve
     // on loading; haygrass reserves when its first real plant creates the batch.
-    const required = Math.max(crops.length, reset && this.kind!=='hops' ? world.width * world.height : 0);
+    const required = Math.max(crops.length, reset && this.kind!=='hops'&&this.kind!=='devilstrand' ? world.width * world.height : 0);
     if (required > this.mesh.instanceMatrix.count) {
       const old = this.mesh, mesh = this.createMesh(2 ** Math.ceil(Math.log2(required)));
       mesh.instanceMatrix.array.set(old.instanceMatrix.array); mesh.instanceColor!.array.set(old.instanceColor!.array);
@@ -214,7 +222,7 @@ class CropBatch {
       const slot=this.slots.get(id)!;this.transform.scale.setScalar(0);this.transform.updateMatrix();this.mesh.setMatrixAt(slot,this.transform.matrix);
       firstMatrix=Math.min(firstMatrix,slot);lastMatrix=Math.max(lastMatrix,slot);this.forgetPreparedVariant(slot);this.slots.delete(id);this.captures.delete(id);this.insertionOrder.delete(id);this.liveSlots.delete(slot);this.free.push(slot);this.residentBounds.remove(slot);boundsChanged=true;
     }
-    const required=Math.max(cropCount,reset&&this.kind!=='hops'?world.width*world.height:0),resized=required>this.mesh.instanceMatrix.count;
+    const required=Math.max(cropCount,reset&&this.kind!=='hops'&&this.kind!=='devilstrand'?world.width*world.height:0),resized=required>this.mesh.instanceMatrix.count;
     if(resized){const old=this.mesh,mesh=this.createMesh(2**Math.ceil(Math.log2(required)));mesh.instanceMatrix.array.set(old.instanceMatrix.array);mesh.instanceColor!.array.set(old.instanceColor!.array);mesh.count=old.count;this.group.remove(old);this.views?.detach(old);old.dispose();this.mesh=mesh;this.group.add(mesh);}
     let visibleCount=this.mesh.count;
     // Producer changes are already sorted by CURRENT source ordinal.
@@ -251,7 +259,7 @@ class CropBatch {
       firstMatrix=Math.min(firstMatrix,slot);lastMatrix=Math.max(lastMatrix,slot);
       this.forgetPreparedVariant(slot);this.slots.delete(id);this.captures.delete(id);this.free.push(slot);
     }
-    const required=Math.max(crops.length,reset&&this.kind!=='hops'?world.width*world.height:0),resized=required>this.mesh.instanceMatrix.count;
+    const required=Math.max(crops.length,reset&&this.kind!=='hops'&&this.kind!=='devilstrand'?world.width*world.height:0),resized=required>this.mesh.instanceMatrix.count;
     if(resized){
       const old=this.mesh,mesh=this.createMesh(2**Math.ceil(Math.log2(required)));
       mesh.instanceMatrix.array.set(old.instanceMatrix.array);mesh.instanceColor!.array.set(old.instanceColor!.array);
@@ -296,12 +304,13 @@ class CropBatch {
 }
 
 /** Historical shapes and the small hops batch are prewarmed even empty.
- * Haygrass becomes resident only when present. CPU work is on snapshots; old crop geometry is retained. */
+ * Haygrass and devilstrand (schema 358) become resident only when present. CPU work is on snapshots; old crop geometry is retained. */
 export class CropLayer {
   readonly group=new THREE.Group();
   private readonly graphicsStyle=currentGraphicsStyle();
   private readonly batches:CropBatch[];
   private haygrassBatch:CropBatch|undefined;
+  private devilstrandBatch:CropBatch|undefined;
   private texturesEnabled=true;
   private readonly surfaceModels:NaturalSurfaceModels|undefined;
   private readonly sharedTextured:THREE.NodeMaterial|undefined;
@@ -334,7 +343,7 @@ export class CropLayer {
       }
     }
     if([this.plainMaterial,this.texturedMaterial,this.sharedTextured].every(material=>!material||material instanceof THREE.NodeMaterial))this.views=new CropInstanceViews();
-    this.batches=RESIDENT_CROP_KINDS.filter(kind=>kind!=='haygrass').map(kind=>this.createBatch(kind));
+    this.batches=RESIDENT_CROP_KINDS.filter(kind=>kind!=='haygrass'&&kind!=='devilstrand').map(kind=>this.createBatch(kind));
   }
   private createBatch(kind:ResidentCropKind):CropBatch{return new CropBatch(this.group,kind,this.texturesEnabled?(this.sharedTextured??this.texturedMaterial):this.plainMaterial,this.graphicsStyle,this.surfaceModels?.geometries[RESIDENT_CROP_KINDS.indexOf(kind)],this.preparedVariants.get(kind),this.views);}
   private syncSurfaceLighting():void{if(this.sharedTextured&&this.texturedMaterial instanceof THREE.NodeMaterial)for(const material of[this.sharedTextured,this.sourceTextured])if(material){material.outputNode=this.texturedMaterial.outputNode;material.maskNode=this.texturedMaterial.maskNode;material.maskShadowNode=this.texturedMaterial.maskShadowNode;}this.views?.sync();}
@@ -349,7 +358,9 @@ export class CropLayer {
     if(prepared){
       if(!prepared.changed)return;let created:CropBatch|undefined;
       if(!this.haygrassBatch&&this.prepared.count('haygrass')){created=this.haygrassBatch=this.createBatch('haygrass');this.batches.push(created);}
-      for(const batch of this.batches)batch.updatePrepared(world,reset||batch===created,this.prepared.changes,this.prepared.count(batch.kind),this.prepared.last(batch.kind));return;
+      let createdDevilstrand:CropBatch|undefined;
+      if(!this.devilstrandBatch&&this.prepared.count('devilstrand')){createdDevilstrand=this.devilstrandBatch=this.createBatch('devilstrand');this.batches.push(createdDevilstrand);}
+      for(const batch of this.batches)batch.updatePrepared(world,reset||batch===created||batch===createdDevilstrand,this.prepared.changes,this.prepared.count(batch.kind),this.prepared.last(batch.kind));return;
     }
     this.prepared.clear();
     const crops=this.partition.read(world,reset,immutableSnapshot);
@@ -361,7 +372,9 @@ export class CropLayer {
       created=this.haygrassBatch=this.createBatch('haygrass');
       this.batches.push(created);
     }
-    for(const batch of this.batches)batch.update(world,reset||batch===created,crops[batch.kind],hydroponicCells,readGrowth);
+    let createdDevilstrand:CropBatch|undefined;
+    if(!this.devilstrandBatch&&crops.devilstrand.length){createdDevilstrand=this.devilstrandBatch=this.createBatch('devilstrand');this.batches.push(createdDevilstrand);}
+    for(const batch of this.batches)batch.update(world,reset||batch===created||batch===createdDevilstrand,crops[batch.kind],hydroponicCells,readGrowth);
   }
   dispose():void {this.preparedSurface?.attachGpuRetirement(this.surfaceModels?.geometries??[]);this.preparedSurface?.dispose();this.prepared.clear();for(const batch of this.batches)batch.dispose();this.views?.dispose();if(this.sourceTextured)this.sourceTextured.dispose();else this.sharedTextured?.dispose();this.surfaceModels?.dispose();this.ownedPastel?.dispose();}
 }

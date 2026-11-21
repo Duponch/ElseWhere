@@ -13,6 +13,8 @@ const FLORA_WORK:Readonly<Record<PlantSpecies,number>>=Object.freeze({
 });
 const LEGACY_WORK:Readonly<Record<string,number>>=Object.freeze({
   tree:800,berries:250,rice:200,potato:200,corn:200,cotton:200,haygrass:200,healroot:400,
+  // Schema 358: Plant_Devilstrand keeps the PlantBaseNonEdible harvestWork 200.
+  devilstrand:200,
 });
 export const plantHarvestWorkCore=(resource:Pick<Resource,'kind'|'species'>):number=>
   resource.species===undefined?LEGACY_WORK[resource.kind]??Infinity:FLORA_WORK[resource.species]??Infinity;

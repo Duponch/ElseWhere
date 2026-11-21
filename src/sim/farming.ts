@@ -129,6 +129,8 @@ export function jobDuration(world: World, job: Job, capturedResource?:Resource|n
   if(job.flowerPotId!==undefined&&job.kind==='sow')return 54;
   if(job.kind==='sow'&&job.growingZoneId!==undefined&&zoneCells(world).byId.get(job.growingZoneId)?.plant==='haygrass')return 17;
   if(job.kind==='sow'&&job.growingZoneId!==undefined&&zoneCells(world).byId.get(job.growingZoneId)?.plant==='healroot')return 80;
+  // Schema 358: Core Plant_Devilstrand sowWork 400 (only sown from 358).
+  if(job.kind==='sow'&&job.growingZoneId!==undefined&&zoneCells(world).byId.get(job.growingZoneId)?.plant==='devilstrand')return growingPlantSowTicks291('devilstrand');
   if(world.schemaVersion>=291&&job.kind==='sow'&&job.growingZoneId!==undefined){const plant=zoneCells(world).byId.get(job.growingZoneId)?.plant;if(plant&&isForestrySpecies291(plant))return growingPlantSowTicks291(plant);}
   if(job.kind==='build-bridge'||job.kind==='remove-bridge'||job.kind==='lay-floor'||job.kind==='remove-floor'||job.kind==='grave')return constructionRecipe(job).work;
   if(job.kind==='mine'&&job.pickTicks!==undefined)return job.pickTicks/10;

@@ -34,7 +34,7 @@ function plantPassability(resource:Resource):0|1 {
  if(resource.kind==='rock')throw Error('Unresolved historical Resource.rock has no actual Core ThingDef');
  if(resource.species!==undefined){const value=plants.get(resource.species);if(value===undefined)throw Error('Unresolved actual plant passability');return value;}
  // Actual cultivated species have unambiguous existing owner identities.
- if(resource.kind==='rice'||resource.kind==='potato'||resource.kind==='corn'||resource.kind==='cotton'||resource.kind==='healroot'||resource.kind==='haygrass'||resource.kind==='hops')return 0;
+ if(resource.kind==='rice'||resource.kind==='potato'||resource.kind==='corn'||resource.kind==='cotton'||resource.kind==='healroot'||resource.kind==='haygrass'||resource.kind==='hops'||resource.kind==='devilstrand')return 0;
  throw Error('Actual wild plant is missing its species; no tree/berry substitution');
 }
 const structures=new Map<string,StartThingPhysics256>(Object.entries(START_STRUCTURE_PHYSICS_256));

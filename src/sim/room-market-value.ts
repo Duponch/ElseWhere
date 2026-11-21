@@ -244,7 +244,7 @@ export function floorRoomMarketValue(tile: Tile): number {
  * flower pot likewise adds beauty but zero value beyond the pot. */
 const RESOURCE_VALUE: Readonly<Record<ResourceKind, 0>> = Object.freeze({
   'wild-plant': 0, potato: 0, corn: 0, tree: 0, berries: 0,
-  rock: 0, rice: 0, cotton: 0, healroot: 0, haygrass: 0, hops:0,
+  rock: 0, rice: 0, cotton: 0, healroot: 0, haygrass: 0, hops:0, devilstrand:0,
 });
 export function resourceRoomMarketValue(resource: Resource): number {
   const value = RESOURCE_VALUE[resource.kind];

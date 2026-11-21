@@ -209,7 +209,8 @@ export const PRODUCTION_RECIPES = Object.freeze({
   tribalwear:Object.freeze({label:'Tenue tribale',station:'crafting-spot',work:'craft',inputs:APPAREL_MATERIALS as readonly ProductionIngredient[],units:60,workTicks:180,outputUnits:1}),
   pants:Object.freeze({label:'Pantalon',station:'tailor-bench',work:'craft',inputs:APPAREL_MATERIALS as readonly ProductionIngredient[],units:40,workTicks:160,outputUnits:1}),
   duster:Object.freeze({label:'Cache-poussière',station:'tailor-bench',work:'craft',inputs:APPAREL_MATERIALS as readonly ProductionIngredient[],units:80,workTicks:1000,outputUnits:1}),
-  tuque:Object.freeze({label:'Tuque',station:'tailor-bench',work:'craft',inputs:['cloth','muffalo-wool',...FABRIC_TEXTILES308] as readonly ProductionIngredient[],units:20,workTicks:120,outputUnits:1}),
+  // Schema 358 appends devilstrand, a Fabric (cooking-bills gates it on the schema).
+  tuque:Object.freeze({label:'Tuque',station:'tailor-bench',work:'craft',inputs:['cloth','muffalo-wool',...FABRIC_TEXTILES308,'devilstrand'] as readonly ProductionIngredient[],units:20,workTicks:120,outputUnits:1}),
   parka:Object.freeze({label:'Parka',station:'tailor-bench',work:'craft',inputs:APPAREL_MATERIALS as readonly ProductionIngredient[],units:80,workTicks:800,outputUnits:1}),
   // Schema 312: Core BasicShirt 40 stuff / 1600 work, Jacket 70 / 7000.
   tshirt:Object.freeze({label:'T-shirt',station:'tailor-bench',work:'craft',inputs:APPAREL_MATERIALS as readonly ProductionIngredient[],units:40,workTicks:160,outputUnits:1}),

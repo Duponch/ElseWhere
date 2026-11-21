@@ -220,7 +220,7 @@ export function generateCaravanStock332(seed:number,pawnId:number,nextId:number,
         if(item)add(item,1,quality);
       }else{
         const roll=random(state),quality=traderQuality(state),family=visitorClothingFamily(VISITOR_CLOTHING_POOL.indexOf(candidate),version);
-        const material=family?visitorClothingStuff314(roll,family==='tuque'):undefined;
+        const material=family?visitorClothingStuff314(roll,family==='tuque',version):undefined;
         if(family&&material)add(`${material}-${family}` as ItemId,1,quality);
       }
     }

@@ -11,7 +11,7 @@ import {isSchema290OrLater,isSchema291OrLater} from '../sim/schema-compatibility
 import {isBowResearch326,isBowSchema326} from '../sim/bows-326.ts';
 import {isBlowbackResearch340,isBlowbackSchema340} from '../sim/blowback-340.ts';
 import {isCarpetResearch355,isCarpetSchema355} from '../sim/carpet-355.ts';
-import {isIedResearch357,isIedSchema357} from '../sim/ied-traps-357.ts';
+import {isIedResearch357,isIedSchema357} from '../sim/ied-traps-357.ts';import {isDevilstrandResearch358,isDevilstrandSchema358} from '../sim/devilstrand-358.ts';
 import {isGunsResearch342,isGunsSchema342} from '../sim/guns-342.ts';
 export {researchProjects} from './research-projects';
 export interface ResearchPanelActions {onOpenWork?:()=>void;onOpenProduction?:()=>void}
@@ -52,7 +52,7 @@ export function updateResearchPanel(root: HTMLElement, world: World, send: (comm
   if(isBowResearch326(root.dataset.selectedResearch)&&!isBowSchema326(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
   if(isBlowbackResearch340(root.dataset.selectedResearch)&&!isBlowbackSchema340(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
   if(isCarpetResearch355(root.dataset.selectedResearch)&&!isCarpetSchema355(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
-  if(isIedResearch357(root.dataset.selectedResearch)&&!isIedSchema357(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
+  if(isIedResearch357(root.dataset.selectedResearch)&&!isIedSchema357(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';  if(isDevilstrandResearch358(root.dataset.selectedResearch)&&!isDevilstrandSchema358(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
   if(isGunsResearch342(root.dataset.selectedResearch)&&!isGunsSchema342(world.schemaVersion))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
   if(!projectById.has(root.dataset.selectedResearch as ResearchProject))root.dataset.selectedResearch=world.research?.project??'complex-clothing';
   const readiness=readResearchReadiness(world,root.dataset.selectedResearch as ResearchProject,stations);
@@ -98,6 +98,7 @@ export function updateResearchPanel(root: HTMLElement, world: World, send: (comm
     if(isBlowbackResearch340(project.id)){const node=root.querySelector<HTMLElement>(`[data-research-node="${project.id}"]`)!;node.hidden=!isBlowbackSchema340(world.schemaVersion);if(node.hidden)continue;}
     if(isIedResearch357(project.id)){const node=root.querySelector<HTMLElement>(`[data-research-node="${project.id}"]`)!;node.hidden=!isIedSchema357(world.schemaVersion);if(node.hidden)continue;}
     if(isCarpetResearch355(project.id)){const node=root.querySelector<HTMLElement>(`[data-research-node="${project.id}"]`)!;node.hidden=!isCarpetSchema355(world.schemaVersion);if(node.hidden)continue;}
+    if(isDevilstrandResearch358(project.id)){const node=root.querySelector<HTMLElement>(`[data-research-node="${project.id}"]`)!;node.hidden=!isDevilstrandSchema358(world.schemaVersion);if(node.hidden)continue;}
     if(isBowResearch326(project.id)){const node=root.querySelector<HTMLElement>(`[data-research-node="${project.id}"]`)!;node.hidden=!isBowSchema326(world.schemaVersion);if(node.hidden)continue;}
     const done=researchUnlocked(world,project.id),active=world.research?.project===project.id,progress=project.progress(world),points=(progress?.points??0)/RESEARCH_SCALE,missing=researchPrerequisite(world,project.id);
     root.querySelector<HTMLProgressElement>(`[data-${project.prefix}-progress]`)!.value=points;

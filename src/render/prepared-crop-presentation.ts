@@ -4,7 +4,7 @@ import {readSceneResourceFrame,type SceneResourceFrame} from './scene-resource-i
 import type {World,Resource} from '../sim/types';
 
 export interface PreparedCropChange {readonly resource:Resource|undefined;readonly appearance?:PreparedCropObservation}
-const emptyOrder=():Record<ResidentCropKind,number[]>=>({rice:[],potato:[],corn:[],cotton:[],haygrass:[],hops:[]});
+const emptyOrder=():Record<ResidentCropKind,number[]>=>({rice:[],potato:[],corn:[],cotton:[],haygrass:[],hops:[],devilstrand:[]});
 
 /** Renderer-owned numerical membership only. Current Resource references are
  * resolved through the already adopted SceneResourceIndex, never an extra

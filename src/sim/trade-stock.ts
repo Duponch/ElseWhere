@@ -62,11 +62,13 @@ const CLOTHING_STUFF314:readonly (readonly [string|null,number,boolean])[]=Objec
   ['light-leather',.25,false],['bird-leather',.1,false],['chinchilla-fur',.025,false],['foxfur',.075,false],['lizard-leather',.075,false],
   ['elephant-leather',.025,false],['heavy-fur',.025,false],['rhinoceros-leather',.025,false],[null,.0025,false],[null,.075,false],
 ] as const);
-/** The stuff of a bought-in garment, from one roll in [0,1), by Core commonality. */
-export function visitorClothingStuff314(roll:number,fabricOnly:boolean):string|undefined {
+/** The stuff of a bought-in garment, from one roll in [0,1), by Core commonality.
+ * Schema 358: the third row, Core DevilstrandCloth (0.20), yields devilstrand
+ * (same roll and weights; before 358 it yields nothing). */
+export function visitorClothingStuff314(roll:number,fabricOnly:boolean,version=0):string|undefined {
   const rows=CLOTHING_STUFF314.filter(r=>!fabricOnly||r[2]);
   let ticket=roll*rows.reduce((n,r)=>n+r[1],0);
-  for(const [material,weight] of rows){ticket-=weight;if(ticket<0)return material??undefined;}
+  for(const row of rows){const [material,weight]=row;ticket-=weight;if(ticket<0)return material??(row===CLOTHING_STUFF314[2]&&version>=358?'devilstrand':undefined);}
   return undefined;
 }
 export function visitorSelectionWeight(value:number):number {
@@ -121,7 +123,7 @@ export function generateVisitorStock(seed:number,pawnId:number,nextId:number,tic
     const candidate=select(state,VISITOR_CLOTHING_POOL),roll=random(state),cloth=roll<VISITOR_SHIRT_CLOTH_CHANCE,quality=traderQuality(state);
     // Schema 314: every represented family and stuff (same random draws).
     const family=version>=314?visitorClothingFamily(VISITOR_CLOTHING_POOL.indexOf(candidate),version):undefined;
-    if(family){const material=visitorClothingStuff314(roll,family==='tuque');if(material)add(`${material}-${family}` as ItemId,1,quality);}
+    if(family){const material=visitorClothingStuff314(roll,family==='tuque',version);if(material)add(`${material}-${family}` as ItemId,1,quality);}
     else if(candidate.item&&cloth)add(candidate.item,1,quality);
   }
   return {piles,nextId,rng:state.rng};

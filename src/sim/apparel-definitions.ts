@@ -2,9 +2,10 @@
 import {apparelCoverage,type ApparelCoverage,type ArmorRatings} from './armor.ts';
 import {SMITHING_APPAREL_DEFINITIONS267,type SmithingApparel267,type ArmorStuff267} from './smithing-apparel-267.ts';
 import {TEXTILE_MATERIALS308,TEXTILE_MATERIAL_FACTS308,TEXTILE_APPAREL_ITEMS308,type TextileApparelItem308,type TextileMaterial308} from './textile-apparel-308.ts';
-/** The seven historical materials, then (schema 308) every other Core leather and wool. */
+import {DEVILSTRAND_FABRIC_358} from './devilstrand-358.ts';
+/** The seven historical materials, then (schema 308) every other Core leather and wool, then (schema 358) devilstrand. */
 export const LEGACY_APPAREL_MATERIALS308 = ['cloth', 'light-leather', 'plainleather', 'bluefur', 'camelhide', 'muffalo-wool', 'foxfur'] as const;
-export const APPAREL_MATERIALS = [...LEGACY_APPAREL_MATERIALS308, ...TEXTILE_MATERIALS308] as const;
+export const APPAREL_MATERIALS = [...LEGACY_APPAREL_MATERIALS308, ...TEXTILE_MATERIALS308, 'devilstrand'] as const;
 export type ApparelMaterial = typeof APPAREL_MATERIALS[number];
 /** Historical families admit every existing material. Tuques are a limited family. */
 /** Schema 312: Core Apparel_BasicShirt (T-shirt) and Apparel_Jacket. */
@@ -32,6 +33,8 @@ export const APPAREL_MATERIAL_DEFINITIONS: Readonly<Record<ApparelMaterial, Appa
   'muffalo-wool':Object.freeze({label:'laine de mufalo',color:0xb3c0ba,armor:Object.freeze({sharp:.36,blunt:0,heat:1.1}),coldInsulation:28,heatInsulation:12}),
   foxfur:Object.freeze({label:'fourrure de renard',color:0xb26422,armor:Object.freeze({sharp:.81,blunt:.21,heat:1.5}),coldInsulation:20,heatInsulation:16}),
   ...Object.fromEntries(TEXTILE_MATERIALS308.map(m=>{const f=TEXTILE_MATERIAL_FACTS308[m];return [m,Object.freeze({label:f.label,color:f.color,armor:f.armor,coldInsulation:f.coldInsulation,heatInsulation:f.heatInsulation})];})) as Record<TextileMaterial308,ApparelMaterialDefinition>,
+  // Schema 358: Core DevilstrandCloth stuff powers and colour.
+  devilstrand:Object.freeze({label:'soie du diable',color:DEVILSTRAND_FABRIC_358.color,armor:DEVILSTRAND_FABRIC_358.armor,coldInsulation:DEVILSTRAND_FABRIC_358.coldInsulation,heatInsulation:DEVILSTRAND_FABRIC_358.heatInsulation}),
 });
 
 interface ApparelFamilyDefinition {
@@ -81,12 +84,18 @@ const textileDefinition = (family: ApparelFamily, material: ApparelMaterial): Ap
   const garment=APPAREL_FAMILY_DEFINITIONS[family],stuff=APPAREL_MATERIAL_DEFINITIONS[material];
   return Object.freeze({
     label:`${garment.label} en ${stuff.label}`,
-    hitPoints:Math.round(garment.hitPoints*((TEXTILE_MATERIALS308 as readonly string[]).includes(material)?TEXTILE_MATERIAL_FACTS308[material as TextileMaterial308].hitPointsFactor:['plainleather','bluefur','camelhide'].includes(material)?1.3:1)),equipTicks:garment.equipTicks,color:stuff.color,coverage:garment.coverage,
+    hitPoints:Math.round(garment.hitPoints*((TEXTILE_MATERIALS308 as readonly string[]).includes(material)?TEXTILE_MATERIAL_FACTS308[material as TextileMaterial308].hitPointsFactor:material==='devilstrand'?DEVILSTRAND_FABRIC_358.stuffFactors.maxHitPoints:['plainleather','bluefur','camelhide'].includes(material)?1.3:1)),equipTicks:garment.equipTicks,color:stuff.color,coverage:garment.coverage,
     ratings:Object.freeze({sharp:stuff.armor.sharp*garment.armorFactor,blunt:stuff.armor.blunt*garment.armorFactor,heat:stuff.armor.heat*garment.armorFactor}),
     moveOffset:0,family,material,coldInsulation:stuff.coldInsulation*garment.coldFactor,heatInsulation:stuff.heatInsulation*garment.heatFactor,
   });
 };
 
+/** Schema 358: the devilstrand tribal wear, shirt, pants, duster, parka and
+ * tuque (Fabric, so the tuque too); its T-shirt, jacket and hats come below
+ * with every other material's. */
+export const DEVILSTRAND_BASE_APPAREL_358=['devilstrand-tribalwear','devilstrand-shirt','devilstrand-pants','devilstrand-duster','devilstrand-parka','devilstrand-tuque'] as const;
+export type DevilstrandBaseApparel358=typeof DEVILSTRAND_BASE_APPAREL_358[number];
+type DevilstrandItemDefinition358={readonly label:string;readonly kind:'apparel';readonly stackLimit:1;readonly nutrition:0;readonly maxIngest:0;readonly color:number};
 /** Every material's T-shirt and jacket (schema 312), in catalogue order. */
 export type GarmentItem312=`${ApparelMaterial}-${GarmentFamily312}`;
 export const GARMENT_ITEMS312:readonly GarmentItem312[]=Object.freeze(APPAREL_MATERIALS.flatMap(m=>GARMENT_FAMILIES312.map(f=>`${m}-${f}` as GarmentItem312)));
@@ -98,7 +107,7 @@ const HAT_SET353=new Set<unknown>(HAT_ITEMS353);
 export const isHatItem353=(value:unknown):value is HatItem353=>HAT_SET353.has(value);
 /** Core SocialImpact offsets while worn: cowboy +0.10, bowler +0.15. */
 export const HAT_SOCIAL_IMPACT353:Readonly<Record<HatFamily353,number>>=Object.freeze({'cowboy-hat':.1,'bowler-hat':.15});
-export type ApparelItem=`${ApparelMaterial}-${Exclude<ApparelFamily,'tuque'>}`|'cloth-tuque'|'muffalo-wool-tuque'|TextileApparelItem308|'flak-vest'|'flak-helmet'|'recon-helmet'|'recon-armor'|'flak-pants'|'plasteel-flak-helmet'|SmithingApparel267;
+export type ApparelItem=`${ApparelMaterial}-${Exclude<ApparelFamily,'tuque'>}`|'cloth-tuque'|'muffalo-wool-tuque'|TextileApparelItem308|DevilstrandBaseApparel358|'flak-vest'|'flak-helmet'|'recon-helmet'|'recon-armor'|'flak-pants'|'plasteel-flak-helmet'|SmithingApparel267;
 /** Existing cloth ids stay canonical so old saves and reservations retain identity. */
 export const APPAREL:Readonly<Record<ApparelItem,ApparelDefinition>> = Object.freeze({
   ...SMITHING_APPAREL_DEFINITIONS267,
@@ -153,8 +162,11 @@ export const APPAREL:Readonly<Record<ApparelItem,ApparelDefinition>> = Object.fr
   ...Object.fromEntries(GARMENT_ITEMS312.map(item=>{const i=item.lastIndexOf('-');return [item,textileDefinition(item.slice(i+1) as ApparelFamily,item.slice(0,i) as ApparelMaterial)];})) as Record<GarmentItem312,ApparelDefinition>,
   // The family is the two-word suffix: split on the material, not the last dash.
   ...Object.fromEntries(HAT_ITEMS353.map(item=>{const family=HAT_FAMILIES353.find(f=>item.endsWith(`-${f}`))!;return [item,textileDefinition(family,item.slice(0,-family.length-1) as ApparelMaterial)];})) as Record<HatItem353,ApparelDefinition>,
+  // Schema 358: the devilstrand garments of the families listed per material.
+  ...Object.fromEntries(DEVILSTRAND_BASE_APPAREL_358.map(item=>[item,textileDefinition(item.slice(12) as ApparelFamily,'devilstrand')])) as Record<DevilstrandBaseApparel358,ApparelDefinition>,
 });
 type GarmentItemDefinition312={readonly label:string;readonly kind:'apparel';readonly stackLimit:1;readonly nutrition:0;readonly maxIngest:0;readonly color:number};
 export const GARMENT_ITEM_DEFINITIONS312=Object.freeze(Object.fromEntries(GARMENT_ITEMS312.map(item=>[item,Object.freeze({label:APPAREL[item].label,kind:'apparel' as const,stackLimit:1 as const,nutrition:0 as const,maxIngest:0 as const,color:APPAREL[item].color})]))) as Readonly<Record<GarmentItem312,GarmentItemDefinition312>>;
 type HatItemDefinition353={readonly label:string;readonly kind:'apparel';readonly stackLimit:1;readonly nutrition:0;readonly maxIngest:0;readonly color:number};
 export const HAT_ITEM_DEFINITIONS353=Object.freeze(Object.fromEntries(HAT_ITEMS353.map(item=>[item,Object.freeze({label:APPAREL[item].label,kind:'apparel' as const,stackLimit:1 as const,nutrition:0 as const,maxIngest:0 as const,color:APPAREL[item].color})]))) as Readonly<Record<HatItem353,HatItemDefinition353>>;
+export const DEVILSTRAND_APPAREL_ITEM_DEFINITIONS358=Object.freeze(Object.fromEntries(DEVILSTRAND_BASE_APPAREL_358.map(item=>[item,Object.freeze({label:APPAREL[item].label,kind:'apparel' as const,stackLimit:1 as const,nutrition:0 as const,maxIngest:0 as const,color:APPAREL[item].color})]))) as Readonly<Record<DevilstrandBaseApparel358,DevilstrandItemDefinition358>>;

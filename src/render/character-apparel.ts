@@ -1,5 +1,5 @@
 import {packStartingApparelTint256,startingApparelTintHex256} from '../sim/starting-apparel-color-256';
-import {GARMENT_ITEMS312,HAT_ITEMS353,type GarmentItem312,type HatItem353} from '../sim/apparel-definitions';
+import {GARMENT_ITEMS312,HAT_ITEMS353,DEVILSTRAND_BASE_APPAREL_358,type GarmentItem312,type HatItem353,type DevilstrandBaseApparel358} from '../sim/apparel-definitions';
 import { APPAREL,apparelLabel,type ApparelItem } from '../sim/apparel-rules';
 import {isSmithingApparel267} from '../sim/smithing-apparel-267';
 import {itemCargoKind} from './item-presentation';
@@ -43,6 +43,7 @@ export const APPAREL_CARGO:Readonly<Record<ApparelItem,number>>=Object.freeze({
   ...Object.fromEntries(TEXTILE_APPAREL_ITEMS308.map(item=>[item,itemCargoKind(item)])) as Record<TextileApparelItem308,number>,
   ...Object.fromEntries(GARMENT_ITEMS312.map(item=>[item,itemCargoKind(item)])) as Record<GarmentItem312,number>,
   ...Object.fromEntries(HAT_ITEMS353.map(item=>[item,itemCargoKind(item)])) as Record<HatItem353,number>,
+  ...Object.fromEntries(DEVILSTRAND_BASE_APPAREL_358.map(item=>[item,itemCargoKind(item)])) as Record<DevilstrandBaseApparel358,number>,
   'wood-plate-armor':itemCargoKind('wood-plate-armor'),'steel-plate-armor':itemCargoKind('steel-plate-armor'),
   'plasteel-plate-armor':itemCargoKind('plasteel-plate-armor'),'uranium-plate-armor':itemCargoKind('uranium-plate-armor'),
   'silver-plate-armor':itemCargoKind('silver-plate-armor'),'gold-plate-armor':itemCargoKind('gold-plate-armor'),
@@ -99,5 +100,7 @@ const PANTS_COLOUR_FALLBACK308:Readonly<Record<string,string>>=Object.freeze({
   'dog-leather':'camelhide','bear-leather':'plainleather','bird-leather':'bluefur','chinchilla-fur':'muffalo-wool','elephant-leather':'muffalo-wool',
   'guinea-pig-fur':'foxfur','heavy-fur':'camelhide','lizard-leather':'plainleather','panthera-fur':'bluefur','pig-leather':'light-leather',
   'rhinoceros-leather':'muffalo-wool','wolf-leather':'bluefur','alpaca-wool':'camelhide','bison-wool':'plainleather','megasloth-wool':'camelhide',
+  // Schema 358: devilstrand red (180,60,60) is nearest the fox fur pants colour.
+  devilstrand:'foxfur',
 });
 export const legacyPantsMaterial308=(material:string):string=>PANTS_COLOUR_FALLBACK308[material]??material;

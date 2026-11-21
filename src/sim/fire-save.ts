@@ -14,7 +14,7 @@ const cell=(w:World,c:unknown,strict=true):c is {x:number;z:number}=>object(c)&&
 /** Sparse loss keys have their own schema gate, even when no plant remains. */
 export function validFireResourceLosses(value:unknown,version:number):boolean {
   return object(value)&&Object.entries(value).every(([kind,count])=>
-    (['tree','berries','rice','potato','corn','cotton'].includes(kind)||version>=91&&kind==='wild-plant'||version>=182&&kind==='healroot'||version>=227&&kind==='haygrass'||version>=265&&kind==='hops')&&int(count,1));
+    (['tree','berries','rice','potato','corn','cotton'].includes(kind)||version>=91&&kind==='wild-plant'||version>=182&&kind==='healroot'||version>=227&&kind==='haygrass'||version>=265&&kind==='hops'||version>=358&&kind==='devilstrand')&&int(count,1));
 }
 export function validBurningReaction(w:World,v:unknown,version:number):v is BurningReaction {
   return version>=87&&object(v)&&keys(v,['phase','remainingCore','target'])&&['panic','extinguish'].includes(String(v.phase))&&int(v.remainingCore,0,v.phase==='extinguish'?150:10)&&(v.target===undefined||v.phase==='panic'&&cell(w,v.target));

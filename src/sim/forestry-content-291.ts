@@ -5,6 +5,7 @@ import {isCropKindInVersion,type CropKind} from './crops.ts';
 import {localBiomeRules256,PROSPECTIVE_BIOME_PLANT_BINDINGS_256} from './local-biome-rules-v256.ts';
 import {PLANT_DEFINITIONS} from './plants.ts';
 import type {World} from './types.ts';
+import {DEVILSTRAND_PLANT_358,DEVILSTRAND_SOW_TICKS_358} from './devilstrand-358.ts';
 
 export const FORESTRY_SPECIES_291=['oak','poplar','pine','birch','saguaro','drago','bamboo','cecropia','cypress','maple','palm','teak','willow'] as const;
 export type ForestrySpecies291=typeof FORESTRY_SPECIES_291[number];
@@ -24,5 +25,5 @@ export const forestSowingChoices291=(world:Pick<World,'schemaVersion'|'site'|'re
 export const growingPlantLabel291=(plant:GrowingPlant291):string=>isForestrySpecies291(plant)?FLORA_DEFINITIONS[plant].label:PLANT_DEFINITIONS[plant].label;
 export const growingPlantMinFertility291=(plant:GrowingPlant291):number=>isForestrySpecies291(plant)?FLORA_DEFINITIONS[plant].minFertility:PLANT_DEFINITIONS[plant].minFertility;
 /** Local work units: ten Core ticks each; speed/light remain runtime inputs. */
-export const growingPlantSowTicks291=(plant:GrowingPlant291):number=>isForestrySpecies291(plant)?400:plant==='healroot'?80:17;
-export const growingPlantSowSkill291=(plant:GrowingPlant291):number=>isForestrySpecies291(plant)?6:plant==='healroot'?8:plant==='hops'?3:0;
+export const growingPlantSowTicks291=(plant:GrowingPlant291):number=>isForestrySpecies291(plant)?400:plant==='healroot'?80:plant==='devilstrand'?DEVILSTRAND_SOW_TICKS_358:17;
+export const growingPlantSowSkill291=(plant:GrowingPlant291):number=>isForestrySpecies291(plant)?6:plant==='healroot'?8:plant==='hops'?3:plant==='devilstrand'?DEVILSTRAND_PLANT_358.sowMinSkill:0;

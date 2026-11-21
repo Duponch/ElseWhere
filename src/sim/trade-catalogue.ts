@@ -43,6 +43,8 @@ export const TRADE_CATALOGUE:Readonly<Partial<Record<ItemId,TradeCatalogueEntry>
     const p=APPAREL_TRADE_279[item];
     return [item,gear(p.baseMarketValue,p.maxHitPoints,true,false,{playerCanBuy:p.playerCanBuy})];
   })),
+  // Schema 358: Core DevilstrandCloth MarketValue 5.5 (Textiles, no visitor stock generator).
+  devilstrand:value(5.5,false),
   hops:value(1.3,false),wort:value(2.5,false,{playerCanBuy:false,playerCanSell:false}),beer:value(12,false,{maxHitPoints:50}),
   pemmican:value(1.4),
   jade:value(5,false,{playerCanBuy:false,playerCanSell:false}),

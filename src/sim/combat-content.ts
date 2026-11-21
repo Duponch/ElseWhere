@@ -14,7 +14,7 @@ export const STRUCTURE_SHOT_FILL:Readonly<Record<StructureKind,number>>=Object.f
   'hoopstone-ring':0,'billiards-table':.4,'game-of-ur-board':.2,'poker-table':.4,
 });
 export const RESOURCE_SHOT_FILL:Readonly<Record<ResourceKind,number>>=Object.freeze({
-  hops:0,tree:.25,berries:.2,'wild-plant':0,rice:0,potato:0,corn:0,cotton:0,healroot:0,haygrass:0,
+  hops:0,devilstrand:0,tree:.25,berries:.2,'wild-plant':0,rice:0,potato:0,corn:0,cotton:0,healroot:0,haygrass:0,
   // These small decorative pebbles are not the haulable Core chunks. Their
   // replacement by actual chunks is deferred; don't create invisible cover.
   rock:0,

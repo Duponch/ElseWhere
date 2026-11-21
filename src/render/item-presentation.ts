@@ -11,7 +11,15 @@ import type {Placement} from './primitives';
  * cloth tuque's cargo model; on the ground it keeps its own shape and colour.
  * The resident cargo geometry gains no vertex and every older item keeps its
  * cargo kind (new kinds would also reach the tree cargo kinds at 600). */
-const sharedHatCargo353=(id:string):ItemId|undefined=>id.endsWith('-cowboy-hat')||id.endsWith('-bowler-hat')?'cloth-tuque':id==='shell-incendiary'?'shell-high-explosive':undefined;
+const sharedHatCargo353=(id:string):ItemId|undefined=>id.endsWith('-cowboy-hat')||id.endsWith('-bowler-hat')?'cloth-tuque':id==='shell-incendiary'?'shell-high-explosive':sharedDevilstrandCargo358(id);
+/** Schema 358: carried devilstrand and its garments show the cloth bolt and the
+ * cloth garment of the same family (hats above: the cloth tuque). The resident
+ * cargo geometry has 72 vertices of headroom, too few for new models, and every
+ * older item keeps its cargo kind. On the ground they keep their own colour. */
+function sharedDevilstrandCargo358(id:string):ItemId|undefined {
+  if(id==='devilstrand')return 'cloth';
+  return id.startsWith('devilstrand-')?`cloth-${id.slice(12)}` as ItemId:undefined;
+}
 /** Explicit visual order, independent of save IDs and insertion order. */
 export const ITEM_VISUAL_IDS:readonly ItemId[]=Object.freeze((Object.keys(ITEM_DEFINITIONS) as ItemId[]).filter(id=>!id.endsWith('-corpse')&&(sharedHatCargo353(id)??id)===id).sort());
 const cargoKinds=new Map(ITEM_VISUAL_IDS.map((item,ordinal)=>[item,200+ordinal] as const));
@@ -110,7 +118,7 @@ export function itemGeometry(item:ItemId,quantity:number=ITEM_DEFINITIONS[item].
     if(item.endsWith('recon-helmet')){box(0,.16,.18,.30,.065,.05,0x344a57);for(const side of [-1,1])box(side*.17,.08,.10,.06,.15,.16,0x657d84);}
     else if(helmet)add('item-disc',0,.04,.01,.45,.025,.39,0x424e51);
   }else if(definition.kind==='textile'){
-    if(item==='cloth'){box(0,.045,.04,.48,.065,.36);add('item-log',0,.13,-.12,.49,.19,.19);}
+    if(item==='cloth'||item==='devilstrand'){box(0,.045,.04,.48,.065,.36);add('item-log',0,.13,-.12,.49,.19,.19);}
     else if(item.includes('wool')){round(-.13,.1,0,.25,.20,.25);round(.13,.1,0,.25,.20,.25);round(0,.22,0,.25,.20,.25);}
     else {add('item-leaf',0,.04,0,.58,.065,.65);add('item-leaf',.04,.095,.02,.50,.045,.56,color,.24);}
   }else if(item==='herbal-medicine'){

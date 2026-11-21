@@ -18,7 +18,8 @@ const safeClock=(world:World):boolean=>Number.isSafeInteger(world.tick)&&world.t
 /** Explicit cultivated growth distinguishes the five sown crops from flora.
  * Callers discovering candidates already walk the world's resource list. */
 export function cropBlightable(world:World,plant:Resource):boolean {
-  return world.schemaVersion>=205&&isCrop(plant)&&plant.species===undefined&&!plant.blight&&
+  // Core Plant_Devilstrand is neverBlightable (it exists only from schema 358).
+  return world.schemaVersion>=205&&isCrop(plant)&&plant.kind!=='devilstrand'&&plant.species===undefined&&!plant.blight&&
     plant.growth!==undefined&&plant.growth>=.0001;
 }
 

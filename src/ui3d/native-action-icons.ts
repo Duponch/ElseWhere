@@ -23,6 +23,8 @@ const families:Readonly<Record<string,NativeActionIconKind>>={
   'ai-core':'chip','ship-computer':'computer','ship-sensors':'sensors','long-range-mineral-scanner':'radar',
   'ship-cryptosleep-casket':'casket','ship-beam':'rocket','ship-reactor':'reactor','ship-engine':'rocket',
   'tool-cabinet':'workbench','gas-operation':'gun','precision-rifling':'gun','blowback-operation':'gun','recurve-bow':'gun',greatbow:'gun',
+  // Schema 358: the Devilstrand research unlocks a crop.
+  devilstrand:'growing',
   ieds:'gun','tree-sowing':'faune',firefoam:'foam','ship-cryptosleep':'casket','ship-basics':'rocket',prosthetics:'limb',cryptosleep:'casket','long-blades':'sword',brewing:'barrel','geothermal-power':'power','biofuel-refining':'drop','nutrient-paste':'pot','deep-drilling':'drill','sterile-materials':'floor','drug-production':'recherches','penoxycyline-production':'recherches','medicine-production':'cross',hydroponics:'growing','gun-turrets':'gun','complex-furniture':'chair',stonecutting:'mine',smithing:'anvil',machining:'workbench',gunsmithing:'gun','complex-clothing':'shirt',pemmican:'food','packaged-survival-meals':'food',autodoors:'door','plate-armor':'shield','flak-armor':'shield',batteries:'battery','solar-power':'solar','air-conditioning':'thermometer',microelectronics:'chip',fabrication:'workbench','advanced-fabrication':'chip','recon-armor':'shield',
   'cryptosleep-casket':'casket',
   settings:'travail',options:'travail',save:'save',load:'load',export:'export',resume:'play',start:'play',pause:'pause',close:'cancel',back:'back',copy:'copy',paste:'paste',delete:'cancel',remove:'cancel',plus:'plus',minus:'minus',check:'check',information:'information',info:'information',

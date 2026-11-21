@@ -198,6 +198,7 @@ import { batteriesUnlocked,solarPowerUnlocked,complexFurnitureUnlocked } from '.
 import {isJoyTableKind354,isJoyTablesSchema354,JOY_TABLE_KINDS_354,JOY_TABLES_354} from './joy-tables-354.ts';
 import {joyTablePlacementRefusal354} from './joy-table-placement-354.ts';
 import {forestNativeSpecies291,isForestrySpecies291,isGrowingPlantInVersion291,treeSowingUnlocked291} from './forestry-content-291.ts';
+import {devilstrandUnlocked358} from './devilstrand-358.ts';
 import { isFoodWorkstation } from './food-workstations.ts';
 import { designateHunt,processHunting } from './hunting.ts';
 import { cancelHunting } from './hunting-state.ts';
@@ -1010,6 +1011,7 @@ function applyCommandInternal(world: World, command: Exclude<LocalCommand,import
     const zone = world.growingZones.find(z => z.id === command.zoneId);
     if (!zone || typeof command.allowSow !== 'boolean' || typeof command.allowCut !== 'boolean' || command.plant!==undefined&&!isGrowingPlantInVersion291(command.plant,world.schemaVersion)) return refusal('invalid-command', 'Zone ou réglages de culture invalides.');
     if(zone.basinId!==undefined&&!hydroponicCropAllowed(command.plant??zone.plant))return refusal('invalid-command','Cette plante ne peut pas être cultivée en hydroponie.');
+    if(command.plant==='devilstrand'&&command.plant!==zone.plant&&!devilstrandUnlocked358(world))return refusal('invalid-command','Terminez la recherche Soie du diable avant de choisir cette culture.');
     if(command.plant!==undefined&&command.plant!==zone.plant&&isForestrySpecies291(command.plant)){
       if(!treeSowingUnlocked291(world))return refusal('invalid-command','Terminez la recherche Semis d’arbres avant de choisir cette essence.');
       if(!forestNativeSpecies291(world).includes(command.plant))return refusal('invalid-command','Cette essence ne fait pas partie de la flore sauvage de ce biome.');

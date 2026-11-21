@@ -122,6 +122,7 @@ import {validVentTransport} from './vent.ts';
 import {tundraHistoricalFieldsAbsent,validTundraTransport} from './tundra-save.ts';
 import {validateMarshTransport,validMarshTile} from './marsh.ts';
 import {validTuqueCatalogueTransport,validTuqueCatalogueDomains} from './tuque-catalogue-save.ts';
+import {validDevilstrandTransport358} from './devilstrand-358.ts';
 import {validReconCatalogueTransport} from './recon-catalogue-save.ts';
 import {isConstructionLightPlant,constructionFinalWipesPlants} from './construction-plants.ts';
 import {validateTreeTransport,registerTreeThingIds,validTreeJobShape,validPlantTargetShape} from './tree-transfer-save.ts';
@@ -588,10 +589,10 @@ function validateSchema(raw: unknown, version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 1
       } else if (key === 'resources') {
         if (!validPlantThermalFactor(item,version)) errors.push('Invalid plant thermal factor.');
         if (!validStoneIdentity(item.stone, item.kind, version)) errors.push('Invalid resource stone identity.');
-        if (!oneOf(item.kind, ['tree', 'berries', 'rock', ...(version >= 8 ? ['rice'] : []), ...(version>=71?['cotton']:[]),...(version>=84?['potato','corn']:[]),...(version>=91?['wild-plant']:[]),...(version>=182?['healroot']:[]),...(version>=227?['haygrass']:[]),...(version>=265?['hops']:[])]) || !integer(item.amount, version>=91&&item.kind==='wild-plant'?0:1, item.kind==='healroot'?1:1000000)) errors.push('Invalid resource.');
+        if (!oneOf(item.kind, ['tree', 'berries', 'rock', ...(version >= 8 ? ['rice'] : []), ...(version>=71?['cotton']:[]),...(version>=84?['potato','corn']:[]),...(version>=91?['wild-plant']:[]),...(version>=182?['healroot']:[]),...(version>=227?['haygrass']:[]),...(version>=265?['hops']:[]),...(version>=358?['devilstrand']:[])]) || !integer(item.amount, version>=91&&item.kind==='wild-plant'?0:1, item.kind==='healroot'?1:1000000)) errors.push('Invalid resource.');
         if(!validPlantGrowthLight(item as unknown as Resource,version,input.tick as number))errors.push('Invalid plant light interval.');
         if (item.growth !== undefined || item.growthTick !== undefined) {
-          if (version < 7 || !(item.kind === 'berries' || (version >= 8 && item.kind === 'rice') || (version>=71&&item.kind==='cotton') || (version>=84&&(item.kind==='potato'||item.kind==='corn')) || (version>=182&&item.kind==='healroot') || (version>=227&&item.kind==='haygrass') || (version>=265&&item.kind==='hops') || (version>=91&&item.species!==undefined&&(item.kind==='tree'||item.kind==='wild-plant'))) || typeof item.growth !== 'number' || !Number.isFinite(item.growth) || item.growth < 0 || item.growth > 1 || !integer(item.growthTick, 0, input.tick as number)) errors.push('Invalid plant growth checkpoint.');
+          if (version < 7 || !(item.kind === 'berries' || (version >= 8 && item.kind === 'rice') || (version>=71&&item.kind==='cotton') || (version>=84&&(item.kind==='potato'||item.kind==='corn')) || (version>=182&&item.kind==='healroot') || (version>=227&&item.kind==='haygrass') || (version>=265&&item.kind==='hops') || (version>=358&&item.kind==='devilstrand') || (version>=91&&item.species!==undefined&&(item.kind==='tree'||item.kind==='wild-plant'))) || typeof item.growth !== 'number' || !Number.isFinite(item.growth) || item.growth < 0 || item.growth > 1 || !integer(item.growthTick, 0, input.tick as number)) errors.push('Invalid plant growth checkpoint.');
         }
         if(version<91&&item.species!==undefined||version<167&&item.species==='healroot-wild')errors.push('Future flora species in older save.');
       } else if (key === 'structures' || key === 'jobs') {
@@ -1068,6 +1069,7 @@ function deserializeCampaignObserved(serialized: string): CampaignState {
   if(record(input)&&Number.isInteger(input.schemaVersion)&&!validTorchHistoricalTransport(input,Number(input.schemaVersion)))throw new Error('Invalid historical save: Future torch lamp content.');
   if(record(input)&&Number.isInteger(input.schemaVersion)&&!validPemmicanHistoricalTransport(input,Number(input.schemaVersion)))throw new Error('Invalid historical save: Future pemmican catalogue content.');
   if(record(input)&&Number.isInteger(input.schemaVersion)&&!validTuqueCatalogueTransport(input,Number(input.schemaVersion)))throw new Error('Invalid historical save: Future tuque catalogue content.');
+  if(record(input)&&Number.isInteger(input.schemaVersion)&&!validDevilstrandTransport358(input,Number(input.schemaVersion)))throw new Error('Invalid historical save: Future devilstrand content.');
   if(record(input)&&Number.isInteger(input.schemaVersion)&&!validReconCatalogueTransport(input,Number(input.schemaVersion)))throw new Error('Invalid historical save: Future recon catalogue content.');
   if(record(input)&&Number.isInteger(input.schemaVersion)&&Number(input.schemaVersion)<240
     &&(Object.hasOwn(input,'secondarySite')||Object.hasOwn(input,'expeditionSite')))throw new Error('Historical save contains future second-site fields.');
