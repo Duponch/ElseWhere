@@ -238,7 +238,8 @@ test('nothing changes below 359: no need, no thought, the same draws',()=>{
  const a=camp(358),b=camp(359);
  stepWorld(a,900);stepWorld(b,900);
  expect(b.pawns.every(p=>p.outdoors359===undefined)).toBe(true);
- a.schemaVersion=SCHEMA_VERSION;expect(serializeWorld(a)).toBe(serializeWorld(b));
+ // Later schemas only save the current number: relabel both after the run.
+ a.schemaVersion=SCHEMA_VERSION;b.schemaVersion=SCHEMA_VERSION;expect(serializeWorld(a)).toBe(serializeWorld(b));
 });
 
 test('migration 358 → 359 by number only: every pawn starts at Core\'s initial level 1, nothing retroactive',()=>{

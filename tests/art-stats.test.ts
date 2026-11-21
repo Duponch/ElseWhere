@@ -61,7 +61,9 @@ describe('sculptures et atelier Core 1.6.4871',()=>{
 
   it('applique matière puis qualité et l’arrondi Core seulement au-delà de 100 beauté',()=>{
     expect(sculptureBeauty(building('small-sculpture','wood','awful'))).toBe(-5);
-    expect(sculptureBeauty(building('small-sculpture','marble-blocks'))).toBe(68.5);
+    // Schema 311: Core FinalizeValue rounds Beauty to an integer (midpoint to even), 68.5 → 68.
+    expect(sculptureBeauty(building('small-sculpture','marble-blocks'))).toBe(68);
+    expect(sculptureBeauty(building('small-sculpture','marble-blocks'),310)).toBe(68.5);
     expect(sculptureBeauty(building('small-sculpture','sandstone-blocks'))).toBeCloseTo(55,8);
     expect(sculptureBeauty(building('large-sculpture','marble-blocks'))).toBe(135);
     expect(sculptureBeauty(building('large-sculpture','marble-blocks','good'))).toBe(270);
@@ -73,7 +75,7 @@ describe('sculptures et atelier Core 1.6.4871',()=>{
   it('compte une sculpture posée une seule fois dans la carte dérivée',()=>{
     const sculpture=building('small-sculpture','marble-blocks');
     const map=new BeautyMapCache().read({width:2,height:1,tiles:[{terrain:'soil'},{terrain:'soil'}],structures:[sculpture]});
-    expect(map.thingsAtIndex(0)).toBe(68.5);
+    expect(map.thingsAtIndex(0)).toBe(68);
     expect(map.thingsAtIndex(1)).toBe(0);
   });
 
