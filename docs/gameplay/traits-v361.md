@@ -21,7 +21,7 @@ Les quatre définitions non livrées (voir plus bas) ne sont jamais tirées : le
 
 **Couples de départ.** Comme `LovePartnerRelationGenerationChance`, un couple de même sexe n'est tiré que si le premier des deux est homosexuel, et jamais un couple de sexes différents dont le premier l'est.
 
-**Ce qui ne change pas.** Les personnes existantes gardent leurs traits. Les colonies d'apprentissage et les scènes préparées gardent leurs traits écrits à la main. En dessous du schéma 361, chaque tirage reste identique au bit près (vérifié sur 160 candidats et 48 groupes de départ contre le code du schéma 358). Migration 360 → 361 par le seul numéro : aucun trait n'est donné après coup.
+**Ce qui ne change pas.** Les personnes existantes gardent leurs traits. Le camp écrit à la main d'une partie sans choix des colons (Ada, Noé, Mina) et les scènes préparées gardent leurs traits d'auteur. En dessous du schéma 361, chaque tirage reste identique au bit près (vérifié sur 160 candidats et 48 groupes de départ contre le code du schéma 358). Migration 360 → 361 par le seul numéro : aucun trait n'est donné après coup. Conséquence voulue : dans une colonie migrée, une personne sans trait d'orientation suit la règle du jeu de base (attirée par l'autre sexe) ; un couple de même sexe déjà formé reste uni, et ses moments intimes gardent le plancher de 0,1 de `GetLovinMtbHours`.
 
 ## Effets livrés
 
