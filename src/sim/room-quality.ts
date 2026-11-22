@@ -10,6 +10,7 @@ import { isRoofed } from './roof-rules.ts';
 import { RoomTopologyCache,type RoomTopology } from './room-topology.ts';
 import { roomImpressiveness,impressionStage } from './room-impressiveness.ts';
 import { structureRoomMarketValue,floorRoomMarketValue,structureRoomStandable } from './room-market-value.ts';
+import { smoothedWallBeauty367,smoothedWallMarketValue367 } from './smooth-wall-367.ts';
 import type { Cell,World } from './types.ts';
 
 export interface RoomQuality {
@@ -55,6 +56,9 @@ export class RoomQualityCapture {
       const dirt=s.kind==='electric-crematorium'?-20:s.kind==='fueled-smithy'||s.kind==='electric-smithy'?-3:s.kind==='machining-table'?-2:s.kind==='butcher-table'?-15:s.kind==='stonecutter'||s.kind==='art-bench'?-5:0;
       if(dirt&&footprint.some(c=>containsClean(index(c))||s.kind==='electric-crematorium'&&cardinal.some(([dx,dz])=>cells.has(index({x:c.x+dx,z:c.z+dz})))))totalClean+=dirt;
     }
+    // Schema 367: a smoothed wall is a player building at the room's border
+    // (RoomStatWorker_Wealth / _Beauty, ContainedAndAdjacentThings).
+    for(const i of adjacent){const tile=w.tiles[i]!;if(tile.smoothedWall367){wealth+=smoothedWallMarketValue367(tile);totalBeauty+=smoothedWallBeauty367(tile);}}
     // Trees are pass-through, not standable, even though their market value
     // is zero. Wild herbs/crops and minified furniture do not reduce space.
     for(const r of w.resources)if(r.kind==='tree')cannotStand.add(index(r));

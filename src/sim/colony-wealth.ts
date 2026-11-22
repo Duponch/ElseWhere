@@ -1,6 +1,7 @@
 import {captureShipCasketHumans277,captureShipCasketAnimals277} from './ship-casket-state-277.ts';
 import {APPAREL_TRADE_MATERIAL_VALUES_279} from './apparel-trade-279.ts';
 import {hasSmoothedStoneSubstrate281} from './smooth-floor-terrain-281.ts';
+import {smoothedWallMarketValue367} from './smooth-wall-367.ts';
 import {animalHaulContents282} from './animal-haul-contents-282.ts';
 import { factionOf } from './affiliation.ts';
 import { floorRoomMarketValue, structureRoomMarketValue } from './room-market-value.ts';
@@ -133,6 +134,8 @@ export function colonyWealth(world: World): ColonyWealth {
     // that fog boundary. A room's physical terrain value remains independent.
     if(tile.fogged&&(fog327||!tile.floor&&!tile.bridge&&hasSmoothedStoneSubstrate281(tile)))continue;
     floors += floorRoomMarketValue(tile);
+    // Schema 367: a smoothed wall is an artificial player building (MarketValue 7).
+    if(tile.smoothedWall367)structures+=smoothedWallMarketValue367(tile);
   }
   // Pawn MarketValue needs age/life stage, all Core capacities, full skill set,
   // beauty and hediff price offsets. Those facts are absent from this save.

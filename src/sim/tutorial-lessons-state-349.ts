@@ -72,7 +72,7 @@ export function doorCells349(r:TutorialRect349):Cell[] {
 
 /** Construction blueprints and frames of the player (Core ThingRequestGroup
  * Blueprint and BuildingFrame); the other jobs are designations. */
-const DESIGNATIONS=new Set(['smooth-floor','remove-bridge','extract-tree','remove-floor','flick','repair','fix-breakdown','build-roof','remove-roof','mine','chop','harvest','cut','sow','deconstruct','uninstall','install','replant-tree']);
+const DESIGNATIONS=new Set(['smooth-wall','smooth-floor','remove-bridge','extract-tree','remove-floor','flick','repair','fix-breakdown','build-roof','remove-roof','mine','chop','harvest','cut','sow','deconstruct','uninstall','install','replant-tree']);
 export const isConstructionJob349=(j:Pick<Job,'kind'>):boolean=>!DESIGNATIONS.has(j.kind);
 /** Core TutorUtility.BuildingOrBlueprintOrFrameCenterExists. */
 export function thingCenterAt349(w:Pick<World,'structures'|'jobs'>,c:Cell,kind:string):boolean {

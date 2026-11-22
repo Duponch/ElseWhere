@@ -3,6 +3,7 @@ import {isShipCasketKind277,SHIP_CASKET_CONTENT_277} from './ship-casket-content
 import {isIedTrapKind357,IED_COMMON_357} from './ied-traps-357.ts';
 import {SCHEMA_VERSION} from './types.ts';
 import {hasSmoothedStoneSubstrate281,SMOOTHED_STONE_FACTS_281} from './smooth-floor-terrain-281.ts';
+import {smoothedWallBeauty367} from './smooth-wall-367.ts';
 import {isShipPartKind276} from './ship-part-content-276.ts';
 import {isAncientMonumentKind256,ANCIENT_MONUMENT_DEFS_256} from './ancient-monument-props-256.ts';
 import { coreBeauty311,furnitureBeautyFactor311,QUALITY_BEAUTY,furnitureQuality} from './furniture-stats.ts';
@@ -10,7 +11,7 @@ import { furnitureBeauty,isFurnitureMaterial,isHabitatFurnitureKind,isSculptureK
 import type { RoomTopology } from './room-topology.ts';
 
 export interface BeautyCell {x:number;z:number}
-export interface BeautyTile {terrain:string;floor?:string;collapsedRock?:{terrain:string}}
+export interface BeautyTile {terrain:string;floor?:string;collapsedRock?:{terrain:string};stone?:string;smoothedWall367?:true}
 export interface BeautyStructure extends BeautyCell,FurnitureLike {id?:number;baseBeauty?:number;beautyCell?:BeautyCell}
 export interface BeautyFilth extends BeautyCell {kind:string}
 /** One physical ground object/stack. Quantity never multiplies Beauty. */
@@ -134,6 +135,8 @@ export class BeautyMapCache {
     for(let i=0;i<size;i++){
       const tile=input.tiles[i]!,value=floorBeauty(tile,false);inside[i]=value;
       outside[i]=!tile.floor&&(tile.terrain==='grass'||tile.terrain==='soil'||tile.terrain==='rich-soil'||tile.terrain==='gravel')?0:value;
+      // Schema 367: a smoothed wall is a full-fill building at its cell.
+      if(tile.smoothedWall367){const wall=smoothedWallBeauty367(tile as Parameters<typeof smoothedWallBeauty367>[0]);thingsIn[i]=wall;thingsOut[i]=wall;}
     }
     const index=(cell:BeautyCell)=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<input.width&&cell.z<input.height?cell.z*input.width+cell.x:-1;
     for(const structure of input.structures){const i=index(structure.beautyCell??structure);if(i<0)continue;const value=structureBeauty(structure,input.version);thingsIn[i]+=value;thingsOut[i]+=value;}

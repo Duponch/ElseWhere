@@ -63,6 +63,7 @@ import { fixBreakdownWanted } from './breakdowns.ts';
 import { CARRY_CAPACITY, footprintCells, JOB_WOOD_COST } from './definitions.ts';
 import { deliveredStock, groundQuantity, reservedDestination, reservedSource, reservedSourcesByPile } from './materials.ts';
 import {smoothFloorReason281,canTouchSmoothFloor281} from './smooth-floor-281.ts';
+import {smoothWallReason367} from './smooth-wall-367.ts';
 import { cellIndex, workNeighbours, inBounds, canStopAt, hasReachableCell, reachableCells, routeToJob, routeToCell, interactionGoals } from './pathfinding.ts';
 import type { Reachability } from './pathfinding.ts';
 import { structureById,type StructureNavigationGeometry,structuresOfKind} from './structure-navigation.ts';
@@ -147,7 +148,7 @@ export function canReach(world: World, target: Cell & { kind?: JobKind|import('.
   const cells = target.kind ? footprintCells(target as Job) : [target];
   if ((allowTarget||target.kind==='smooth-floor') && canStopAt(world,target,reachable) && hasReachableCell(reachable,cellIndex(world, target.x, target.z))) return true;
   for (const cell of cells) for (const next of workNeighbours(cell,target.kind,woodWallTouch301(world,target))) {
-    if (canStopAt(world,next,reachable) && !cells.some(own => sameCell(own, next)) && (target.kind!=='smooth-floor'||canTouchSmoothFloor281(world,next,target,geometry)) && hasReachableCell(reachable,cellIndex(world, next.x, next.z))) return true;
+    if (canStopAt(world,next,reachable) && !cells.some(own => sameCell(own, next)) && (target.kind!=='smooth-floor'&&target.kind!=='smooth-wall'||canTouchSmoothFloor281(world,next,target,geometry)) && hasReachableCell(reachable,cellIndex(world, next.x, next.z))) return true;
   }
   return false;
 }
@@ -277,7 +278,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
   // Rankings do not depend on flood order. Try the top ready job directly;
   // a failed targeted search has explored the full component and is reusable.
   // Logistics with a higher priority still uses the ordinary complete planner.
-  const ready = world.jobs.filter(job => (job.kind!=='mine'||!explorationEnabled256(world)||world.tiles[cellIndex(world,job.x,job.z)]?.terrain==='rock')&&(job.kind!=='smooth-floor'||!smoothFloorReason281(world,job,job.id,budget.structureGeometry?.()))&&allows(ancientRepairTarget256(world,job))&&(!job.tree||!treeJobReason(world,job,pawn))&&!isConstruction(job) && job.reservedBy === null && !clearingCells.has(cellIndex(world,job.x,job.z)) && workPriority(pawn,workType(job)) > 0
+  const ready = world.jobs.filter(job => (job.kind!=='mine'||!explorationEnabled256(world)||world.tiles[cellIndex(world,job.x,job.z)]?.terrain==='rock')&&(job.kind!=='smooth-floor'||!smoothFloorReason281(world,job,job.id,budget.structureGeometry?.()))&&(job.kind!=='smooth-wall'||!smoothWallReason367(world,job,job.id))&&allows(ancientRepairTarget256(world,job))&&(!job.tree||!treeJobReason(world,job,pawn))&&!isConstruction(job) && job.reservedBy === null && !clearingCells.has(cellIndex(world,job.x,job.z)) && workPriority(pawn,workType(job)) > 0
     &&(job.kind!=='fix-breakdown'||fixBreakdownWanted(world,job)&&deliveredMaterial(world,job,'component')===1)
     && sowingJobAllowed(world,pawn,job) && (job.kind!=='sow'||!packedAt(world,job)) && job.escrow.wood >= JOB_WOOD_COST[job.kind] && (isSchema299OrLater(Number(world.schemaVersion)) || pawn.hunger > 20 || job.kind === 'harvest') && (job.kind!=='deconstruct'||deconstructionAvailable(world,job,pawn.id)) && (!job.furniture||furnitureReady(world,job,pawn)&&allows(furnitureWorkTarget(world,job))))
     .map(job => ({ job, target: treeWorkTarget(world,job)??ancientRepairTarget256(world,job), id: job.id, priority: workPriority(pawn,workType(job)), rank: job.kind==='fix-breakdown'?-3:job.kind==='flick'?-2.5:job.kind==='uninstall' ? -2 : job.kind==='deconstruct' ? job.wallDoor296?.plan?2:3 : workType(job) === 'gather' ? 0 : 1, distance: Math.abs(job.x-pawn.x)+Math.abs(job.z-pawn.z) }))
@@ -288,7 +289,7 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     && (first.priority<constructionHaulPriority(pawn)||!world.jobs.some(isConstruction))) {
     const source = first.job.kind === 'sow' ? world.piles.find(p => p.owner.type === 'ground' && sameCell(p.owner, first.job)) : undefined;
     if (!source || reservedSource(world, source.id) === 0) {
-      const goals=interactionGoals(world,[treeWorkTarget(world,first.job)??ancientRepairTarget256(world,first.job)],first.job.kind==='smooth-floor'?'smooth-floor':undefined,budget.structureGeometry?.());
+      const goals=interactionGoals(world,[treeWorkTarget(world,first.job)??ancientRepairTarget256(world,first.job)],first.job.kind==='smooth-floor'||first.job.kind==='smooth-wall'?first.job.kind:undefined,budget.structureGeometry?.());
       if (!source&&first.job.kind!=='smooth-floor') for (const cell of [treeWorkTarget(world,first.job)??ancientRepairTarget256(world,first.job)]) goals.delete(cellIndex(world,cell.x,cell.z));
       reachable=search(world,pawn,blocked,occupied,budget,goals);
       if (!reachable) return;
@@ -405,11 +406,12 @@ export function planWork(world: World, pawn: Pawn, getBlocked: NavigationGrid, o
     best={...candidate,rescue:proposal};
   }
   }});
-  families.push({givers:[['BuildRoofs'],['ConstructFinishFrames'],['ConstructRemoveFloors'],['ConstructRemoveFoundations'],['ConstructSmoothFloors'],['Deconstruct'],['DeconstructForBlueprint'],['ExtractTree'],['FixBrokenDownBuilding'],['Flick'],['GrowerHarvest'],['GrowerSow'],['Mine'],['PlantsCut'],['RemoveRoofs'],['Repair'],['Replant'],['Uninstall']],run:()=>{
+  families.push({givers:[['BuildRoofs'],['ConstructFinishFrames'],['ConstructRemoveFloors'],['ConstructRemoveFoundations'],['ConstructSmoothFloors'],['ConstructSmoothWalls'],['Deconstruct'],['DeconstructForBlueprint'],['ExtractTree'],['FixBrokenDownBuilding'],['Flick'],['GrowerHarvest'],['GrowerSow'],['Mine'],['PlantsCut'],['RemoveRoofs'],['Repair'],['Replant'],['Uninstall']],run:()=>{
   for (const job of world.jobs) {
     if(!allows(ancientRepairTarget256(world,job))||isConstruction(job)||job.tree&&treeJobReason(world,job,pawn))continue;
     if(job.kind==='mine'&&explorationEnabled256(world)&&world.tiles[cellIndex(world,job.x,job.z)]?.terrain!=='rock')continue;
     if(job.kind==='smooth-floor'&&smoothFloorReason281(world,job,job.id,budget.structureGeometry?.()))continue;
+    if(job.kind==='smooth-wall'&&smoothWallReason367(world,job,job.id))continue;
     const work = workType(job);
     if (job.reservedBy !== null || clearingCells.has(cellIndex(world,job.x,job.z)) || workPriority(pawn,work) === 0 || (delivered.get(`${job.id}:wood`) ?? 0) < JOB_WOOD_COST[job.kind] || (!isSchema299OrLater(Number(world.schemaVersion)) && pawn.hunger <= 20 && job.kind !== 'harvest')) continue;
     if(job.kind==='fix-breakdown'&&(!fixBreakdownWanted(world,job)||(delivered.get(`${job.id}:component`)??0)!==1))continue;

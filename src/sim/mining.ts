@@ -13,6 +13,7 @@ import { invalidateAnimalPens } from './animal-pens.ts';
 import { learnMining, miningWorkSpeed, miningYield } from './mining-skills.ts';
 import type { BodyAssessment } from './body-capacities.ts';
 import { medicallyStopped } from './health-rules.ts';
+import { revertEnclosedSmoothedWalls367 } from './smooth-wall-367.ts';
 
 /** Returns true after excavation. Rock damage belongs to the tile, pick cadence
  * to the reserved job. Preview the RNG/drop before committing the final hit. */
@@ -62,6 +63,8 @@ export function advanceMining(world:World,pawn:Pawn,job:Job,lightFactor:()=>numb
     if(groundCapacity({...world,tiles},job,item)<quantity)return nextStroke();
   }
   const removed=prepareRemovedFogMineable256(world,i);
+  // Schema 367: a mined smoothed wall reverts its enclosed smoothed neighbours first.
+  revertEnclosedSmoothedWalls367(world,i);
   world.tiles[i]=floor;markTerrainCellChanged(world.tiles,i);world.rng=rng;invalidateAnimalPens(world);
   if(quantity)addMaterial(world,kind,quantity,{type:'ground',x:job.x,z:job.z},item);
   commitRemovedFogBlocker256(world,removed,job.id);

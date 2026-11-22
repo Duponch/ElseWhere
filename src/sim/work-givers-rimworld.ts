@@ -183,6 +183,7 @@ export function jobWorkGiver(job:Pick<Job,'kind'|'growingZoneId'|'flowerPotId'|'
     case 'remove-floor':return 'ConstructRemoveFloors';
     case 'remove-bridge':return 'ConstructRemoveFoundations';
     case 'smooth-floor':return 'ConstructSmoothFloors';
+    case 'smooth-wall':return 'ConstructSmoothWalls';
     case 'mine':return 'Mine';
     case 'extract-tree':return 'ExtractTree';
     case 'replant-tree':return 'Replant';

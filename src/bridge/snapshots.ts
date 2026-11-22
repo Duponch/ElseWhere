@@ -22,6 +22,7 @@ import {validBillPauseHistoricalTransport289,validBillPauseWorld289} from '../si
 import {validAnimalThermalRefugeHistoricalTransport288,validAnimalThermalRefugeWorld288} from '../sim/animal-thermal-refuge-save-288.ts';
 import {validAnimalAreaHistoricalTransport287,validAnimalAreaWorld287} from '../sim/animal-area-save-287.ts';
 import {validSmoothFloorsHistoricalTransport281,validSmoothFloorTile281,validSmoothFloorWorld281} from '../sim/smooth-floor-save-281.ts';
+import {validSmoothWallsHistoricalTransport367,validSmoothWallTile367,validSmoothWallWorld367} from '../sim/smooth-wall-save-367.ts';
 import {validAnimalTrainingHistoricalTransport282} from '../sim/animal-training-historical-282.ts';
 import {validAnimalTrainingWorld282} from '../sim/animal-training-world-282.ts';
 import {validPrisonerSurgeryHistoricalTransport280,validPrisonerSurgeryWorld280,hasPrisonerSurgery280} from '../sim/prisoner-surgery-save-280.ts';
@@ -1219,6 +1220,7 @@ export class SnapshotDecoder {
     if(!validWorldPawnsEnvelope256(packet.world,packet.world.schemaVersion,effectiveCore297(packet.world),packet.world.nextId))return resync('Invalid or future WorldPawns header.');
     if(!validAnimalTrainingHistoricalTransport282(packet,packet.world.schemaVersion))return resync('Future animal training or hauling.');
     if(!validSmoothFloorsHistoricalTransport281(packet,packet.world.schemaVersion))return resync('Future natural stone smoothing.');
+    if(!validSmoothWallsHistoricalTransport367(packet,packet.world.schemaVersion))return resync('Future natural wall smoothing.');
     if(!validPrisonerSurgeryHistoricalTransport280(packet,packet.world.schemaVersion))return resync('Future captive surgery.');
     if(!validApparelTradeHistoricalTransport279(packet,packet.world.schemaVersion))return resync('Future ordinary apparel inventory or trade.');
     if(!validApparelReservesHistoricalTransport278(packet,packet.world.schemaVersion))return resync('Future apparel reserve settings.');
@@ -1392,14 +1394,16 @@ export class SnapshotDecoder {
       let tiles = previous.tiles;
       if (message.tiles?.length) {
         const touched = new Set<number>();
-        if(message.tiles.some(tile=>!Array.isArray(tile)||Reflect.ownKeys(tile).some(k=>k!=='length'&&(typeof k!=='string'||!/^\d+$/.test(k)||Number(k)>=tile.length||(!Object.hasOwn(Object.getOwnPropertyDescriptor(tile,k)!,'value')||Object.getOwnPropertyDescriptor(tile,k)!.enumerable!==true)))||Array.from({length:tile.length},(_,i)=>i).some(i=>!Object.hasOwn(tile,i))||tile.length>(message.world.schemaVersion>=256?12:message.world.schemaVersion>=247?9:message.world.schemaVersion>=239?8:message.world.schemaVersion>=186?7:6)))return resync('Future snow/terrain tuple.');
+        if(message.tiles.some(tile=>!Array.isArray(tile)||Reflect.ownKeys(tile).some(k=>k!=='length'&&(typeof k!=='string'||!/^\d+$/.test(k)||Number(k)>=tile.length||(!Object.hasOwn(Object.getOwnPropertyDescriptor(tile,k)!,'value')||Object.getOwnPropertyDescriptor(tile,k)!.enumerable!==true)))||Array.from({length:tile.length},(_,i)=>i).some(i=>!Object.hasOwn(tile,i))||tile.length>(message.world.schemaVersion>=367?13:message.world.schemaVersion>=256?12:message.world.schemaVersion>=247?9:message.world.schemaVersion>=239?8:message.world.schemaVersion>=186?7:6)))return resync('Future snow/terrain tuple.');
         if(message.world.schemaVersion<186&&message.tiles.some(tile=>tile.length>6))return resync('Rendement minier futur dans ce delta.');
         for (const tuple of message.tiles) {
-          const [index, terrain, stone, miningDamage, ore, floor, miningYield, snowDepth, bridge, collapsedRock,fogged,mineable]=tuple;
+          const [index, terrain, stone, miningDamage, ore, floor, miningYield, snowDepth, bridge, collapsedRock,fogged,mineable,smoothedWall367]=tuple;
+          if(tuple.length===13&&smoothedWall367!==true)return resync('Empty smoothed wall tuple.');
           if(tuple.length===10&&collapsedRock===undefined)return resync('Empty collapsed rock tuple.');
           if(tuple.length===11&&fogged===undefined)return resync('Empty exploration tuple.');
           if(tuple.length===12&&mineable===undefined)return resync('Empty Mineable tuple.');
-          const candidate={terrain,...stone===undefined?{}:{stone},...miningDamage===undefined?{}:{miningDamage},...ore===undefined?{}:{ore},...miningYield===undefined?{}:{miningYield},...floor===undefined?{}:{floor},...snowDepth===undefined?{}:{snowDepth},...bridge===undefined?{}:{bridge},...collapsedRock===undefined?{}:{collapsedRock},...fogged===undefined?{}:{fogged},...mineable===undefined?{}:{mineable}};
+          const candidate={terrain,...stone===undefined?{}:{stone},...miningDamage===undefined?{}:{miningDamage},...ore===undefined?{}:{ore},...miningYield===undefined?{}:{miningYield},...floor===undefined?{}:{floor},...snowDepth===undefined?{}:{snowDepth},...bridge===undefined?{}:{bridge},...collapsedRock===undefined?{}:{collapsedRock},...fogged===undefined?{}:{fogged},...mineable===undefined?{}:{mineable},...smoothedWall367===undefined?{}:{smoothedWall367}};
+          if(!validSmoothWallTile367(candidate,message.world.schemaVersion))return resync('Invalid or future smoothed wall.');
           if(!validMineableTile256(candidate,message.world.schemaVersion,message.world.site?.revision===3,message.world.nextId))return resync('Invalid or future Mineable owner.');
           if(!validExplorationTile256(candidate,message.world.schemaVersion,Object.hasOwn(message.world,'exploration')))return resync('Invalid or future fog cell.');
           if(!validCollapsedRock256(candidate,message.world.schemaVersion,message.world.nextId,v=>admittedRoofTerrain256(v,message.world.schemaVersion)))return resync('Invalid or future collapsed rock.');
@@ -1408,7 +1412,7 @@ export class SnapshotDecoder {
           touched.add(index);
         }
         tiles = tiles.slice();
-        for (const [index, terrain, stone, miningDamage, ore, floor, miningYield, snowDepth, bridge, collapsedRock,fogged,mineable] of message.tiles) tiles[index] = {terrain,...stone===undefined?{}:{stone},...miningDamage===undefined?{}:{miningDamage},...ore===undefined?{}:{ore},...floor===undefined?{}:{floor},...miningYield===undefined?{}:{miningYield},...snowDepth===undefined?{}:{snowDepth},...bridge===undefined?{}:{bridge},...collapsedRock===undefined?{}:{collapsedRock:{id:collapsedRock.id,terrain:collapsedRock.terrain}},...fogged===undefined?{}:{fogged},...mineable===undefined?{}:{mineable:{id:mineable.id,def:mineable.def,terrain:mineable.terrain}}};
+        for (const [index, terrain, stone, miningDamage, ore, floor, miningYield, snowDepth, bridge, collapsedRock,fogged,mineable,smoothedWall367] of message.tiles) tiles[index] = {terrain,...stone===undefined?{}:{stone},...miningDamage===undefined?{}:{miningDamage},...ore===undefined?{}:{ore},...floor===undefined?{}:{floor},...miningYield===undefined?{}:{miningYield},...snowDepth===undefined?{}:{snowDepth},...bridge===undefined?{}:{bridge},...collapsedRock===undefined?{}:{collapsedRock:{id:collapsedRock.id,terrain:collapsedRock.terrain}},...fogged===undefined?{}:{fogged},...mineable===undefined?{}:{mineable:{id:mineable.id,def:mineable.def,terrain:mineable.terrain}},...smoothedWall367===undefined?{}:{smoothedWall367}};
         changedTileIndices = [...touched];
       }
       let resources = previous.resources;
@@ -1828,6 +1832,8 @@ export class SnapshotDecoder {
     if(validateAncientOpeningOwners256(next).length)return resync('Ouverture de capsule ancienne ou propriétaire incohérent.');
     if(message.kind==='checkpoint'&&next.tiles.some(t=>!validSmoothFloorTile281(t,next.schemaVersion)))return resync('Terrain lissé invalide.');
     if(!validSmoothFloorWorld281(next,message.epoch===this.epoch?this.current:undefined))return resync('Ordre ou auteur du lissage incohérent.');
+    if(message.kind==='checkpoint'&&next.tiles.some(t=>!validSmoothWallTile367(t,next.schemaVersion)))return resync('Mur lissé invalide.');
+    if(!validSmoothWallWorld367(next,message.epoch===this.epoch?this.current:undefined))return resync('Ordre ou auteur du lissage de mur incohérent.');
     if(!validPrisonerSurgeryWorld280(next))return resync('Demande ou service chirurgical du captif incohérent.');
     if(!hasPrisonerSurgery280(next)&&next.pawns.some(p=>p.surgery?.implant!==undefined||p.surgeryRequest?.implant!==undefined)
       &&validateSurgeries(next,next.schemaVersion).length)return resync('Prothèse demandée ou ingrédients chirurgicaux incohérents.');

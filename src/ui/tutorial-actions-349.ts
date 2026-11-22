@@ -19,7 +19,7 @@ const DESIGNATORS:Readonly<Record<string,string>>=Object.freeze({
   allow:'Unforbid',forbid:'Forbid',mine:'Mine',chop:'PlantsHarvestWood',harvest:'PlantsHarvest',cut:'PlantsCut',
   home:'AreaHomeExpand','remove-home':'AreaHomeClear','build-roof':'AreaBuildRoofExpand','remove-roof':'AreaNoRoofExpand','ignore-roof':'AreaBuildRoofClear',
   cancel:'Cancel',deconstruct:'Deconstruct',uninstall:'Uninstall','haul-chunks':'Haul','snow-clear':'AreaSnowClear','remove-snow-clear':'AreaSnowClearClear',
-  'smooth-floor':'SmoothSurface','extract-tree':'ExtractTree','allowed-expand':'AreaAllowedExpand','allowed-shrink':'AreaAllowedClear',
+  'smooth-floor':'SmoothSurface','smooth-wall':'SmoothWalls','smooth-surface':'SmoothSurface','extract-tree':'ExtractTree','allowed-expand':'AreaAllowedExpand','allowed-shrink':'AreaAllowedClear',
 });
 /** Core building materials (stuff) of the lessons. */
 const STUFF:Readonly<Record<string,string>>=Object.freeze({wood:'WoodLog',steel:'Steel'});

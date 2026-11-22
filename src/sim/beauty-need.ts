@@ -3,6 +3,7 @@ import { BeautyMap,BeautyMapCache,RoomBeautyCapture,floorBeauty,filthBeauty,grou
 import type { RoomTopology } from './room-topology.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 import { isShelfKind,shelfStorageCells } from './shelf-storage.ts';
+import { smoothedWallBeauty367 } from './smooth-wall-367.ts';
 
 export const BEAUTY_NEED_INTERVAL=20;
 const RISE_PER_HOUR=32,FALL_PER_HOUR=8;
@@ -39,6 +40,8 @@ export function beautyMapAt(world:World,perceivers:readonly BeautyCell[]):Beauty
   for(let i=0;i<size;i++)if(needed[i]){
     const tile=tiles[i]!,value=floorBeauty(tile,false);inside[i]=value;
     outside[i]=!tile.floor&&(tile.terrain==='grass'||tile.terrain==='soil'||tile.terrain==='rich-soil'||tile.terrain==='gravel')?0:value;
+    // Schema 367: same smoothed wall contribution as BeautyMapCache.read.
+    if(tile.smoothedWall367){const wall=smoothedWallBeauty367(tile);thingsIn[i]=wall;thingsOut[i]=wall;}
   }
   const index=(cell:BeautyCell)=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<width&&cell.z<height?cell.z*width+cell.x:-1;
   for(const structure of world.structures as readonly BeautyStructure[]){const i=index(structure.beautyCell??structure);if(i<0||!needed[i])continue;const value=structureBeauty(structure,version);thingsIn[i]+=value;thingsOut[i]+=value;}

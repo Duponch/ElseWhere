@@ -71,7 +71,7 @@ export function animalAreaHumanPhaseMutable287(world:World,affected:readonly Paw
   del(job,'pickTicks');
   const tree=j.tree===undefined?undefined:fields(j.tree),repair=j.repair===undefined?undefined:fields(j.repair);
   if(j.tree!==undefined&&!tree||j.repair!==undefined&&!repair)return false;
-  const reset=tree?.kind==='replant'||typeof j.kind==='string'&&['smooth-floor','remove-bridge','remove-floor','flick','repair','fix-breakdown','mine','sow','deconstruct','build-roof','remove-roof'].includes(j.kind)||!!j.furniture;
+  const reset=tree?.kind==='replant'||typeof j.kind==='string'&&['smooth-wall','smooth-floor','remove-bridge','remove-floor','flick','repair','fix-breakdown','mine','sow','deconstruct','build-roof','remove-roof'].includes(j.kind)||!!j.furniture;
   if(tree?.kind==='replant'){set(j.tree as object,'phase');set(j.tree as object,'carryPileId');set(j.tree as object,'workCore');del(j.tree as object,'durationCore');}
   if(repair)del(j.repair as object,'warmed');
   if(reset){set(job,'progress');del(job,'workRemainder');}

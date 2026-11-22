@@ -15,10 +15,11 @@ export const mainTabHotkey=(key:string):Exclude<Panel,null>|undefined=>Object.ha
  * is open (KeyBindings.xml and each Designator's hotKey): Designator_Cancel C,
  * Designator_Deconstruct X, Mine Misc10 (L), PlantsHarvestWood Misc1 (B),
  * PlantsCut Misc3 (Y), PlantsHarvest Misc2 (H), Haul Misc12 (P), Forbid
- * Command_ItemForbid (F), Unforbid Misc6 (U). Hunt (O), Slaughter (M), Tame and
- * Claim (N) have no Orders tool in Elsewhere. */
+ * Command_ItemForbid (F), Unforbid Misc6 (U), SmoothSurface Misc5 (J, schema
+ * 367). Hunt (O), Slaughter (M), Tame and Claim (N) have no Orders tool in
+ * Elsewhere. */
 export const ORDERS_PALETTE_HOTKEYS:Readonly<Record<string,Tool>>=Object.freeze({
-  c:'cancel',x:'deconstruct',l:'mine',b:'chop',y:'cut',h:'harvest',p:'haul-chunks',f:'forbid',u:'allow',
+  c:'cancel',x:'deconstruct',l:'mine',b:'chop',y:'cut',h:'harvest',p:'haul-chunks',f:'forbid',u:'allow',j:'smooth-surface',
 });
 /** Core designator hot keys of the Zone category: Cancel C, Deconstruct X,
  * ZoneAddStockpile_Resources Misc1 (B), ZoneAdd_Growing Misc2 (H),

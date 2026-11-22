@@ -20,6 +20,7 @@ import {validBillPauseHistoricalTransport289,validBillPauseWorld289} from '../si
 import {validAnimalThermalRefugeHistoricalTransport288,validAnimalThermalRefugeWorld288} from '../sim/animal-thermal-refuge-save-288.ts';
 import {validAnimalAreaHistoricalTransport287,validAnimalAreaWorld287} from '../sim/animal-area-save-287.ts';
 import {validSmoothFloorsHistoricalTransport281,validSmoothFloorTile281,validSmoothFloorWorld281} from '../sim/smooth-floor-save-281';
+import {validSmoothWallsHistoricalTransport367,validSmoothWallTile367,validSmoothWallWorld367} from '../sim/smooth-wall-save-367';
 import {validAnimalTrainingHistoricalTransport282} from '../sim/animal-training-historical-282';
 import {validAnimalTrainingWorld282} from '../sim/animal-training-world-282';
 import {validPrisonerSurgeryHistoricalTransport280,validPrisonerSurgeryWorld280} from '../sim/prisoner-surgery-save-280';
@@ -201,14 +202,15 @@ function tileChanges(previous:Tile[],raw:unknown):{tiles:Tile[];indices:number[]
  if(!dense(raw))return;
  const touched=new Set<number>(),changes:{index:number;tile:Tile}[]=[];
  for(const tuple of raw){
-  if(!dense(tuple)||tuple.length<2||tuple.length>12)return;
-  const [index,terrain,stone,miningDamage,ore,floor,miningYield,snowDepth,bridge,collapsedRock,fogged,mineable]=tuple;
+  if(!dense(tuple)||tuple.length<2||tuple.length>13)return;
+  const [index,terrain,stone,miningDamage,ore,floor,miningYield,snowDepth,bridge,collapsedRock,fogged,mineable,smoothedWall367]=tuple;
+  if(tuple.length===13&&smoothedWall367!==true)return;
   if(!integer(index,0,previous.length-1)||touched.has(index)||typeof terrain!=='string'
    ||collapsedRock!==undefined&&!record(collapsedRock)||mineable!==undefined&&!record(mineable))return;
   const tile={terrain,...stone===undefined?{}:{stone},...miningDamage===undefined?{}:{miningDamage},...ore===undefined?{}:{ore},
    ...floor===undefined?{}:{floor},...miningYield===undefined?{}:{miningYield},...snowDepth===undefined?{}:{snowDepth},
    ...bridge===undefined?{}:{bridge},...collapsedRock===undefined?{}:{collapsedRock:{id:collapsedRock.id,terrain:collapsedRock.terrain}},
-   ...fogged===undefined?{}:{fogged},...mineable===undefined?{}:{mineable:{id:mineable.id,def:mineable.def,terrain:mineable.terrain}}} as Tile;
+   ...fogged===undefined?{}:{fogged},...mineable===undefined?{}:{mineable:{id:mineable.id,def:mineable.def,terrain:mineable.terrain}},...smoothedWall367===undefined?{}:{smoothedWall367:true as const}} as Tile;
   touched.add(index);changes.push({index,tile});
  }
  if(!changes.length)return {tiles:previous,indices:[]};
@@ -219,6 +221,7 @@ function localShape(raw:unknown,checkpoint:boolean,sparseStructures:boolean,reus
  if(!record(raw))return 'World data record';
  if(!integer(raw.schemaVersion,1,SCHEMA_VERSION))return 'schemaVersion';
  if(!validSmoothFloorsHistoricalTransport281(raw,raw.schemaVersion))return 'future natural stone smoothing';
+ if(!validSmoothWallsHistoricalTransport367(raw,raw.schemaVersion))return 'future natural wall smoothing';
  if(!validPrisonerSurgeryHistoricalTransport280(raw,raw.schemaVersion))return 'future captive surgery';
  if(!validApparelTradeHistoricalTransport279(raw,raw.schemaVersion))return 'future ordinary apparel inventory or trade';
  if(!validApparelReservesHistoricalTransport278(raw,raw.schemaVersion))return 'future apparel reserve settings';
@@ -398,6 +401,8 @@ export class ResidentPresentationAssembler {
   if(!validAnimalTrainingHistoricalTransport282(packet,next.schemaVersion)||!validAnimalTrainingWorld282(next))return fail('Invalid resident animal training or hauling');
   if(!validSmoothFloorsHistoricalTransport281(packet,next.schemaVersion)||!validSmoothFloorWorld281(next,packet.epoch===this.epoch?previous:undefined))return fail('Invalid resident natural stone smoothing');
   if((checkpoint?next.tiles.some(t=>!validSmoothFloorTile281(t,next.schemaVersion)):tileIndices.some(i=>!validSmoothFloorTile281(next.tiles[i]!,next.schemaVersion))))return fail('Invalid resident smoothed terrain');
+  if(!validSmoothWallsHistoricalTransport367(packet,next.schemaVersion)||!validSmoothWallWorld367(next,packet.epoch===this.epoch?previous:undefined))return fail('Invalid resident natural wall smoothing');
+  if((checkpoint?next.tiles.some(t=>!validSmoothWallTile367(t,next.schemaVersion)):tileIndices.some(i=>!validSmoothWallTile367(next.tiles[i]!,next.schemaVersion))))return fail('Invalid resident smoothed wall');
   if(!validPrisonerSurgeryHistoricalTransport280(packet,next.schemaVersion)||!validPrisonerSurgeryWorld280(next))return fail('Invalid resident captive surgery');
   if(next.structures.some(s=>!validApparelReservesBuilding278(s,next.schemaVersion))||next.packed.some(p=>!validApparelReservesBuilding278(p.building,next.schemaVersion)))return fail('Invalid resident apparel reserve settings');
   if(!validApparelTradeHistoricalTransport279(packet,next.schemaVersion)||!validApparelTradeWorld279(next))return fail('Invalid resident ordinary apparel custody');

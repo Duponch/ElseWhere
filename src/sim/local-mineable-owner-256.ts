@@ -22,7 +22,7 @@ export function actualMineableDef256(tile:Pick<Tile,'stone'|'ore'>):MineableDef2
 export function removedMineableTile256(tile:MineableTile256,expectedId:number):Tile|undefined {
  const owner=tile.mineable;if(tile.terrain!=='rock'||tile.collapsedRock||!owner||!Number.isSafeInteger(owner.id)||owner.id<1||owner.id!==expectedId||!isStoneKind(tile.stone)||!Object.hasOwn(NATURAL_TERRAIN_DEFINITIONS_256,owner.terrain)||owner.def!==actualMineableDef256(tile))return undefined;
  const next:MineableTile256={...tile,terrain:owner.terrain};
- delete next.mineable;delete next.ore;delete next.miningDamage;delete next.miningYield;
+ delete next.mineable;delete next.ore;delete next.miningDamage;delete next.miningYield;delete next.smoothedWall367;
  if(owner.terrain!=='rough-stone')delete next.stone;
  return next;
 }

@@ -210,7 +210,7 @@ export class RockLayer {
       const tile=world.tiles[i]!;
       const fogged=foggedCell256(world,i);
       const rock=tile.terrain==='rock'?(fogged?1:tile.ore?tile.ore==='machinery'?9:tile.ore==='gold'?10:tile.ore==='plasteel'?11:tile.ore==='uranium'?12:tile.ore==='jade'?13:8:tile.stone?2+STONE_KINDS.indexOf(tile.stone):1):0;
-      const state=rock+(rock&&fogged?16:0);
+      const state=rock+(rock&&fogged?16:0)+(rock&&tile.smoothedWall367?32:0);
       if(state!==this.rockMask[i]) {changed.push(i);this.rockMask[i]=state;}
       if(rock&&!this.slots.has(i))this.slots.set(i,{slot:this.slots.size,indices:[]});
     }

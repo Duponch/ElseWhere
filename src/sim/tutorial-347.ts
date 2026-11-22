@@ -68,7 +68,7 @@ export const tutorialRectCenter347=(r:TutorialRect347):Cell=>({x:r.minX+Math.flo
 
 /** Construction blueprints and frames occupy their cells (Core Blueprint);
  * the other jobs are designations, which do not. */
-const DESIGNATIONS=new Set(['smooth-floor','remove-bridge','extract-tree','remove-floor','flick','repair','fix-breakdown','build-roof','remove-roof','mine','chop','harvest','cut','sow','deconstruct','uninstall']);
+const DESIGNATIONS=new Set(['smooth-wall','smooth-floor','remove-bridge','extract-tree','remove-floor','flick','repair','fix-breakdown','build-roof','remove-roof','mine','chop','harvest','cut','sow','deconstruct','uninstall']);
 const isBlueprint=(j:Job):boolean=>!DESIGNATIONS.has(j.kind);
 
 /** Core TutorUtility.FindUsableRect: a width x height rect drawn around the

@@ -27,7 +27,7 @@ function jobSkill(job:Job):BackgroundSkillId|undefined {
     case 'mine':return 'mining';
     case 'chop':case 'harvest':case 'cut':case 'sow':case 'extract-tree':return 'plants';
     case 'flick':case 'replant-tree':return undefined;
-    case 'repair':case 'fix-breakdown':case 'smooth-floor':return 'construction';
+    case 'repair':case 'fix-breakdown':case 'smooth-floor':case 'smooth-wall':return 'construction';
   }
   return usesConstructionSkill(job)?'construction':undefined;
 }

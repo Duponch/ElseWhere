@@ -17,7 +17,7 @@ import { captureStructureNavigation,type StructureNavigationGeometry } from './s
 export const cellIndex = (world: World, x: number, z: number): number => z * world.width + x;
 export const inBounds = (world: World, x: number, z: number): boolean =>
   Number.isInteger(x) && Number.isInteger(z) && x >= 0 && z >= 0 && x < world.width && z < world.height;
-export const workNeighbours=(cell:Cell,kind?:string,diagonal=false):Cell[]=>[[0,-1],[1,0],[0,1],[-1,0],...(diagonal||kind==='mine'||kind==='smooth-floor'?[[-1,-1],[1,-1],[1,1],[-1,1]]:[])].map(([dx,dz])=>({x:cell.x+dx!,z:cell.z+dz!}));
+export const workNeighbours=(cell:Cell,kind?:string,diagonal=false):Cell[]=>[[0,-1],[1,0],[0,1],[-1,0],...(diagonal||kind==='mine'||kind==='smooth-floor'||kind==='smooth-wall'?[[-1,-1],[1,-1],[1,1],[-1,1]]:[])].map(([dx,dz])=>({x:cell.x+dx!,z:cell.z+dz!}));
 export const adjacent = (a: Cell, b: Cell): boolean => Math.abs(a.x - b.x) + Math.abs(a.z - b.z) === 1;
 
 /** Only finished solids block V16 transit. Completion checks active actors/edges. */
@@ -142,7 +142,7 @@ export function reachableCells(world: World, start: Cell, blocked: Uint8Array, o
 
 export function routeToJob(world: World, target: Cell & { kind?: string; orientation?: 0 | 1 | 2 | 3; footprint?: 'standard' | 'legacy-single' }, reachable: Reachability, allowTarget = false,geometry?:StructureNavigationGeometry): Cell[] | null {
   const cells = target.kind ? footprintCells(target as Job) : [target];
-  const candidates: Cell[] = cells.flatMap(cell => workNeighbours(cell,target.kind,woodWallTouch301(world,target))).filter(cell => (allowTarget || !cells.some(occupied => occupied.x === cell.x && occupied.z === cell.z))&&canStopAt(world,cell,reachable)&&(target.kind!=='smooth-floor'||canTouchSmoothFloor281(world,cell,target,geometry)));
+  const candidates: Cell[] = cells.flatMap(cell => workNeighbours(cell,target.kind,woodWallTouch301(world,target))).filter(cell => (allowTarget || !cells.some(occupied => occupied.x === cell.x && occupied.z === cell.z))&&canStopAt(world,cell,reachable)&&(target.kind!=='smooth-floor'&&target.kind!=='smooth-wall'||canTouchSmoothFloor281(world,cell,target,geometry)));
   if ((allowTarget||target.kind==='smooth-floor')&&canStopAt(world,target,reachable)) candidates.unshift({ x: target.x, z: target.z });
   const goals=new Set(candidates.filter(c=>inBounds(world,c.x,c.z)).map(c=>cellIndex(world,c.x,c.z)).filter(i=>hasReachableCell(reachable,i)));
   if(!goals.size)return null;
@@ -179,7 +179,7 @@ export function interactionGoals(world: World, cells: Cell[], kind?:string,geome
     if (cell.x > 0) goals.add(index - 1);
   }
   const wallTouch=!!touchTarget&&woodWallTouch301(world,touchTarget);
-  if(kind==='mine'||kind==='smooth-floor'||wallTouch)for(const c of cells)for(const n of workNeighbours(c,kind,wallTouch))if(inBounds(world,n.x,n.z))goals.add(cellIndex(world,n.x,n.z));
-  for(const i of goals)if(!canStandAt(world,{x:i%world.width,z:Math.floor(i/world.width)},geometry)||kind==='smooth-floor'&&!cells.some(c=>canTouchSmoothFloor281(world,{x:i%world.width,z:Math.floor(i/world.width)},c,geometry)))goals.delete(i);
+  if(kind==='mine'||kind==='smooth-floor'||kind==='smooth-wall'||wallTouch)for(const c of cells)for(const n of workNeighbours(c,kind,wallTouch))if(inBounds(world,n.x,n.z))goals.add(cellIndex(world,n.x,n.z));
+  for(const i of goals)if(!canStandAt(world,{x:i%world.width,z:Math.floor(i/world.width)},geometry)||(kind==='smooth-floor'||kind==='smooth-wall')&&!cells.some(c=>canTouchSmoothFloor281(world,{x:i%world.width,z:Math.floor(i/world.width)},c,geometry)))goals.delete(i);
   return goals;
 }

@@ -126,6 +126,21 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
   if(id==='carpet-making'){d.line([[44,8],[56,20]],2.2,P.wood);d.ellipse(42,7,3,3,P.paper,1.4);}
   id='drawn';
  }
+ // Schema 367: a natural rock wall whose front is polished flat, under the
+ // polishing block of the floor tool; the surface tool adds the floor slab.
+ if(id==='smooth-wall'||id==='smooth-surface'){
+  const polished='#cfd3cc';
+  if(id==='smooth-wall'){
+   d.shape([[8,54],[8,24],[16,14],[30,11],[46,13],[56,24],[56,54]],P.stone);d.rect(14,26,36,26,polished);
+   d.line([[19,33],[27,33]],1.2,P.paper);d.line([[33,43],[43,43]],1.2,P.paper);
+   d.rect(36,5,18,7,P.blue);d.line([[45,5],[51,1]],3,P.wood);
+  }else{
+   d.shape([[22,46],[41,36],[60,46],[41,56]],P.stone);d.line([[31,46],[41,41]],1.2,P.paper);
+   d.shape([[4,48],[4,20],[11,12],[24,11],[30,19],[30,48]],P.stone);d.rect(8,23,18,23,polished);d.line([[11,30],[19,30]],1.2,P.paper);
+   d.rect(36,14,18,7,P.blue);d.line([[45,14],[51,8]],3,P.wood);
+  }
+  id='drawn';
+ }
  if(/-(tile|flagstone)$/.test(id)||id==='floor'||id==='planks'||id==='smooth'){
   const fill=material?stoneColors[material]!:id==='planks'?P.wood:P.stone;
   d.shape([[7,29],[31,14],[57,28],[33,45]],fill);d.shape([[7,29],[33,45],[57,28],[57,35],[33,52],[7,36]],fill);d.line([[33,45],[33,52]],1.3);

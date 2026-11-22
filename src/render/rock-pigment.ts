@@ -28,7 +28,10 @@ export function rockCornerPigment(world:World,gx:number,gz:number):readonly [num
     const weight=(1+(dx*2+1)*pushX)*(1+(dz*2+1)*pushZ);
     // Test fog before consulting ore/stone: all occupied contributors keep
     // their original weight, with fog participating as its own dark matter.
-    color.setHex(foggedCell256(world,index)?ROCK_FOG_PIGMENT:tile.ore?ORE_DEFINITIONS[tile.ore].color:stoneColor(tile.stone));
+    const fogged=foggedCell256(world,index);
+    color.setHex(fogged?ROCK_FOG_PIGMENT:tile.ore?ORE_DEFINITIONS[tile.ore].color:stoneColor(tile.stone));
+    // Schema 367: the same stone, polished a little lighter.
+    if(tile.smoothedWall367&&!fogged)color.setRGB(Math.min(1,color.r*1.12),Math.min(1,color.g*1.12),Math.min(1,color.b*1.12));
     r+=color.r*weight;g+=color.g*weight;b+=color.b*weight;total+=weight;
   }
   if(!total)return [0,0,0];

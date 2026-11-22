@@ -20,7 +20,7 @@ const CHOP_ICON_HEIGHT_FRACTION = .72;
 export const DESIGNATION_ICON_KINDS = ['mine', 'chop', 'harvest', 'cut', 'extract-tree', 'replant-tree'] as const;
 export type DesignationIconKind = typeof DESIGNATION_ICON_KINDS[number];
 const ICON_INDEX: Readonly<Record<DesignationIconKind, number>> = { mine: 0, chop: 1, harvest: 2, cut: 3, 'extract-tree':80, 'replant-tree':81 };
-const EXTRA_ICON_KINDS = ['smooth-floor','haul-chunks', 'deconstruct', 'uninstall', 'remove-floor', 'build-roof', 'remove-roof'] as const;
+const EXTRA_ICON_KINDS = ['smooth-floor','smooth-wall','haul-chunks', 'deconstruct', 'uninstall', 'remove-floor', 'build-roof', 'remove-roof'] as const;
 type MarkerKind = DesignationIconKind | typeof EXTRA_ICON_KINDS[number];
 type MarkerTarget = { kind: MarkerKind; x: number; z: number };
 // Includes removal/roof pictograms without changing the historical predicate
@@ -28,7 +28,8 @@ type MarkerTarget = { kind: MarkerKind; x: number; z: number };
 export const hasDesignationPictogram = (kind: string): kind is MarkerKind => isIconDesignationKind(kind)
   || (EXTRA_ICON_KINDS as readonly string[]).includes(kind);
 function iconIndex(kind: MarkerKind): number {
-  if(kind==='smooth-floor')return 82;
+  // Core draws SmoothFloor and SmoothWall with the same SmoothSurface mark.
+  if(kind==='smooth-floor'||kind==='smooth-wall')return 82;
   if (isIconDesignationKind(kind)) return ICON_INDEX[kind];
   const cell = ARCHITECT_ICON_MAPPING[kind]!;
   return 20 + cell.atlas * 30 + cell.row * 6 + cell.column;
@@ -78,7 +79,7 @@ function instancesForTargets(world: World, targets: readonly MarkerTarget[]): De
     const treeHeight=tree?.species?floraTreeHeight(tree)*floraSize(world,tree)
       :tree?WORLD_SCALE.treeMinHeight+noise(tree.x,tree.z,77)*(WORLD_SCALE.treeMaxHeight-WORLD_SCALE.treeMinHeight)
       :(WORLD_SCALE.treeMinHeight+WORLD_SCALE.treeMaxHeight)/2;
-    const y=job.kind==='chop'||job.kind==='extract-tree'?treeHeight*CHOP_ICON_HEIGHT_FRACTION:job.kind==='mine'?3.2
+    const y=job.kind==='chop'||job.kind==='extract-tree'?treeHeight*CHOP_ICON_HEIGHT_FRACTION:job.kind==='mine'||job.kind==='smooth-wall'?3.2
       :job.kind==='build-roof'||job.kind==='remove-roof'?WORLD_SCALE.wallHeight+.12:1.08;
     return { x: job.x, y, z: job.z, icon: iconIndex(job.kind) };
   });
@@ -125,6 +126,9 @@ export function designationIconInstances(world: World): DesignationIconInstance[
  * This presentation helper does not repeat or replace simulation eligibility.
  * Bounds and duplicates are rejected before converting linear cell indices. */
 function previewTargets(world: World, action: AreaAction, cells: readonly number[], committed?: readonly MarkerTarget[]): MarkerTarget[] {
+  // Schema 367: the surface tool marks a wall or a floor per cell.
+  if(action==='smooth-surface')return cells.filter(cell=>Number.isSafeInteger(cell)&&cell>=0&&cell<world.width*world.height)
+    .map(cell=>({kind:world.tiles[cell]!.terrain==='rock'?'smooth-wall' as const:'smooth-floor' as const,x:cell%world.width,z:Math.floor(cell/world.width)}));
   if (!hasDesignationPictogram(action)) return [];
   // Roof and ground intentions may coexist. Deduplicate only the same action;
   // legacy plant/mining targets still exclude each other's occupied cells.
@@ -179,7 +183,7 @@ function fallbackAtlas(atlas?: 0 | 1): THREE.DataTexture {
     line(2, 5, 2, 9, 12, 2); line(2, 8, 12, 13, 9, 2); line(2, 13, 9, 12, 6);
     line(3, 4, 3, 12, 12); line(3, 12, 3, 4, 12); line(3, 3, 2, 5, 4, 2); line(3, 11, 2, 13, 4, 2);
   } else for (const kind of EXTRA_ICON_KINDS) {
-    if(kind==='smooth-floor')continue;
+    if(kind==='smooth-floor'||kind==='smooth-wall')continue;
     const cell = ARCHITECT_ICON_MAPPING[kind]!;
     if (cell.atlas !== atlas) continue;
     const icon = cell.row * 6 + cell.column;

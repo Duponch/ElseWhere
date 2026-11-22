@@ -69,6 +69,7 @@ export function architectToolAvailable(world:World,tool:Tool):boolean {
   if(tool==='firefoam-popper'&&!isSchema290OrLater(world.schemaVersion))return false;
   if(isJoyTableKind354(tool)&&!joyTableTechAllows354(tool,world))return false;
   if(tool==='smooth-floor'&&!isSchema281OrLater(world.schemaVersion))return false;
+  if((tool==='smooth-wall'||tool==='smooth-surface')&&world.schemaVersion<367)return false;
   if(tool==='ship-cryptosleep-casket'&&!isSchema277OrLater(world.schemaVersion))return false;
   if(isShipAddedKind276(tool)&&!isSchema276OrLater(world.schemaVersion))return false;
   if((tool==='snow-clear'||tool==='remove-snow-clear')&&!world.snow)return false;

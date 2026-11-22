@@ -56,7 +56,7 @@ function readJobMarkerParts(jobs:readonly Job[],cutaway:boolean,physical?:World,
         continue;
       }
       // Tree intentions use their actual-source billboard, never a building cube.
-      if(isIconDesignationKind(job.kind)||job.kind==='smooth-floor'||job.kind === 'sow')continue;
+      if(isIconDesignationKind(job.kind)||job.kind==='smooth-floor'||job.kind==='smooth-wall'||job.kind === 'sow')continue;
       if(job.kind==='deconstruct'||job.kind==='uninstall') {
         if(job.wallDoor296?.manual===false)continue;
         const targetKind=(job.deconstruction??job.furniture)!.kind;

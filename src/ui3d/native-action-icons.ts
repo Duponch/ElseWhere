@@ -12,7 +12,7 @@ const families:Readonly<Record<string,NativeActionIconKind>>={
   allow:'check',forbid:'cancel',strip:'shirt',
   select:'information',mine:'mine','haul-chunks':'haul',haul:'haul',chop:'axe',harvest:'harvest',cut:'scissors',uninstall:'uninstall',deconstruct:'deconstruct',cancel:'cancel',
   wall:'wall',door:'door',autodoor:'door','mini-turret':'gun',sandbags:'wall',fence:'fence','fence-gate':'fence','pen-marker':'flag','spike-trap':'sword','ied-high-explosive':'gun','ied-incendiary':'flame','firefoam-popper':'foam',
-  'build-bridge':'bridge','remove-bridge':'bridge-remove','smooth-floor':'floor','remove-floor':'floor-remove','wood-planks':'floor',
+  'build-bridge':'bridge','remove-bridge':'bridge-remove','smooth-floor':'floor','smooth-wall':'wall','smooth-surface':'floor','remove-floor':'floor-remove','wood-planks':'floor',
   'animal-sleeping-spot':'animal-bed','sleeping-spot':'bed',bedroll:'bed',bed:'bed','double-bed':'bed','hospital-bed':'medical-bed','vitals-monitor':'cross',
   table:'table','table-square':'table','table-long':'table','table-large':'table','double-bedroll':'bed','double-sleeping-spot':'bed','wall-lamp':'lamp','dining-chair':'chair',armchair:'chair',couch:'chair','end-table':'table',dresser:'shelf',shelf:'shelf','small-shelf':'shelf',stool:'chair',grave:'grave','flower-pot':'growing',
   horseshoes:'horseshoe','chess-table':'chess','hoopstone-ring':'horseshoe','billiards-table':'table','game-of-ur-board':'chess','poker-table':'table','tube-television':'television','torch-lamp':'flame',vent:'thermometer',heater:'thermometer',cooler:'thermometer','passive-cooler':'thermometer',campfire:'flame','standing-lamp':'lamp','sun-lamp':'lamp',

@@ -12,6 +12,7 @@ import {healthRandom} from './health.ts';
 import {invalidateAnimalPens} from './animal-pens.ts';
 import {interruptWork} from './interrupted-cargo.ts';
 import {reconcileRoofSupport} from './roofing.ts';
+import {revertEnclosedSmoothedWalls367} from './smooth-wall-367.ts';
 import type {World,Tile} from './types.ts';
 
 export function damageRoofMineable256(world:World,index:number,original:Tile,amount:number,thick:boolean):boolean {
@@ -27,7 +28,8 @@ export function damageRoofMineable256(world:World,index:number,original:Tile,amo
  const removed=prepareRemovedFogMineable256(world,index);
  if(marker){world.tiles[index]=excavatedCollapsedRock256(original);markTerrainCellChanged(world.tiles,index);}
  else{
-  const floor:Tile=original.mineable?minedFloor(original):{...original,...minedFloor(original)};delete floor.ore;delete floor.miningDamage;delete floor.miningYield;delete floor.mineable;
+  revertEnclosedSmoothedWalls367(world,index);
+  const floor:Tile=original.mineable?minedFloor(original):{...original,...minedFloor(original)};delete floor.ore;delete floor.miningDamage;delete floor.miningYield;delete floor.mineable;delete floor.smoothedWall367;
   world.tiles[index]=floor;markTerrainCellChanged(world.tiles,index);
   const chance=ore?1:CHUNK_CHANCE,roll=healthRandom(world);
   if(roll<=chance){

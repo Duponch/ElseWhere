@@ -53,6 +53,7 @@ export function validateConstructionMaterials(world:World|Pick<World,'tick'>,ver
   }
   for(const job of local!.jobs)for(const [item,quantity] of delivered.get(job.id)??[]) {
     if(job.kind==='smooth-floor'){errors.push('Natural floor smoothing cannot receive construction materials.');continue;}
+    if(job.kind==='smooth-wall'){errors.push('Natural wall smoothing cannot receive construction materials.');continue;}
     if(quantity>(constructionRecipe(job).ingredients.find(c=>c.item===item)?.quantity??0))errors.push('Unrequested or excess construction material.');
     if(job.construction==='blueprint')errors.push('Blueprint already contains construction materials.');
   }
