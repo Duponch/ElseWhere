@@ -37,12 +37,12 @@ Liste des retours de l'utilisateur après ses parties du 22 novembre, à traiter
 
 ## F. Son
 
-19. **Page des sons complète** : lister tous les sons et musiques du jeu (pas seulement les nouveaux), avec un réglage manuel du volume de chacun et un enregistrement de ces réglages.
+19. **Page des sons complète** : lister tous les sons et musiques du jeu (pas seulement les nouveaux), avec un réglage manuel du volume de chacun et un enregistrement de ces réglages. — **Fait le 22 novembre** : la page montre les 87 sons (239 prises) et les 10 musiques par famille, avec gain et niveau mesuré ; un curseur par son, par prise et par musique ; « Enregistrer » écrit `public/assets/audio/gain-offsets.json`, appliqué par le jeu au chargement ([note](audio-coverage-20261122.md#réglages-manuels-page-des-sons)).
 20. **Couverture sonore du jeu lui-même** : les nouveaux sons visent surtout l'interface et les alertes ; il manque énormément de sons de jeu (actions, travaux, animaux, environnement…).
 
 ## G. Pages développeur
 
-21. **Une section « Développeur » dans les Options** avec un lien vers chaque page développeur (modèles, sons, lore, pictogrammes, navigation, animations, règles…), tenue à jour au fil du projet.
+21. **Une section « Développeur » dans les Options** avec un lien vers chaque page développeur (modèles, sons, lore, pictogrammes, navigation, animations, règles…), tenue à jour au fil du projet. — **Fait le 22 novembre** : Options → Développeur ouvre chaque page dans un nouvel onglet ; une seule liste (`src/ui/developer-pages.ts`) sert aussi les builds local et publié ([note](developer-pages.md)).
 22. **Page des règles du jeu** : toutes les règles, boucles de jeu et calculs, organisés, accessibles et aussi exhaustifs que possible, pour que le moteur n'ait plus de secret.
 
 ## Ordre retenu au départ

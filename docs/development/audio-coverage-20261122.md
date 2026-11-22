@@ -128,9 +128,27 @@ Les sons d'interface restent sous la cible du monde parce qu'ils ne sont pas att
 
 ## Écouter
 
-- **Page de revue** : lancer le serveur de développement (`npm run dev`) puis ouvrir `/sounds-review.html`. Toutes les prises du manifeste, avec leur gain et le facteur de mix du jeu ; « Seulement les nouveaux » (coché par défaut) isole ces 32 sons, chacun avec la phrase qui dit où l'entendre en partie, et « Écouter toutes les prises visibles » les enchaîne.
+- **Page des sons** (Options → Développeur → Sons et musiques, ou `/sounds-review.html`) : depuis le soir du 22 novembre, elle montre **tous** les sons et musiques du jeu ; « Nouveaux du 22 nov. » isole ces 32 sons, chacun avec la phrase qui dit où l'entendre en partie, et « Écouter toutes les prises visibles » les enchaîne. Détail plus bas, « Réglages manuels ».
 - **En partie**, à écouter d'abord : les cinq lettres (un raid, une crise, une inspiration), les deux cloches d'alerte, puis les gestes fréquents (ouvrir un onglet, choisir un outil, désigner, poser un plan, changer de vitesse, mobiliser). Ce sont les sons qu'on entend le plus souvent : un timbre agaçant s'y remarque vite.
 - Pour retirer une prise jugée mauvaise : supprimer son entrée dans `public/assets/audio/manifest.json` (le jeu choisit parmi les prises restantes).
+
+## Réglages manuels (page des sons)
+
+Point 19 du [chantier des retours](chantier-retours-20261122.md), soir du 22 novembre ; présentation seulement, schéma 376 inchangé. La page est l'une des [pages développeur](developer-pages.md).
+
+**Ce qu'elle montre.** Les sons sont lus dans le manifeste par le lecteur du jeu lui-même (`parseAudioManifest`) : **87 sons** (86 du manifeste et l'explosion, qui reprend les prises de `weapon.impact-barrier`) et **239 prises**, rangés en sept familles (lettres et alertes, interface, travaux, bâtiments et machines, combat, douleur et mort, météo et ambiance), chacun avec la phrase qui dit où on l'entend, son gain, sa portée ou « interface », « boucle » le cas échéant. Les **10 musiques** viennent de `MUSIC_TRACKS`, par ambiance (jour, nuit, tension). Données : [`src/audio/sound-catalogue.ts`](../../src/audio/sound-catalogue.ts) ; page : [`src/dev/sounds-review.ts`](../../src/dev/sounds-review.ts).
+
+**Niveaux.** Quand un calibrage a mesuré le fichier, la page affiche son RMS, sa crête, sa sonie K pondérée si elle est connue, et le niveau avec son gain ; sources, dans l'ordre : `pcm-balance-20261122.json`, `pcm-balance-v175.json`, `pcm-balance-v196.json`, `processing-log.json` (146 prises et 7 musiques). Pour les autres, la page mesure la prise à sa première écoute (RMS des fenêtres de 10 ms au-dessus de −50 dBFS et crête, comme les scripts), marquée « mesuré ici ». Chaque prise est jouée au gain du jeu : `min(8, gain du son × gain de la prise)` (une boucle : `min(2, gain du son) × gain de la prise`), puis le mélange des effets × le curseur de volume de la page ; sans la petite variation aléatoire de chaque lecture, et sans l'atténuation de la distance pour les sons de la carte. Une musique est jouée comme par le lecteur du jeu : `min(1, volume × 0,36 × gain du titre)`.
+
+**Réglage.** Un curseur par son (« Tout le son »), un par prise et un par musique, de −30 à +12 dB par pas de 0,5 dB ; en relâchant le curseur, la prise (ou la dernière écoutée) rejoue au nouveau niveau, et un son en cours change de niveau pendant qu'on glisse. « Réinitialiser » remet un son et ses prises (ou un titre) à 0 dB ; « Tout réinitialiser » remet tout. « Seulement les réglés » filtre les sons modifiés.
+
+**Enregistrement : un fichier dans le dépôt.** Les réglages vont dans [`public/assets/audio/gain-offsets.json`](../../public/assets/audio/gain-offsets.json) : décibels par son (`events`), par prise (`variants`, clé = chemin du fichier) et par titre (`music`), clés triées, zéros omis. Choix retenu, le plus simple qui compte vraiment en jeu :
+
+- sur le serveur de développement, « Enregistrer » envoie le réglage à un point d'accès réservé à ce serveur ([`scripts/vite-dev-audio-gain-offsets.ts`](../../scripts/vite-dev-audio-gain-offsets.ts), `apply: 'serve'`) qui écrit **ce seul fichier**, après le lecteur strict (format, clés, bornes), et refuse une requête d'un autre site. Le projet n'avait pas encore de tel point d'accès ; sans lui, l'utilisateur aurait dû déplacer à la main un fichier téléchargé à chaque essai ;
+- ailleurs (version publiée, aperçu du build), le même bouton télécharge `gain-offsets.json`, à placer dans `public/assets/audio/` ; « Télécharger le réglage » le fait à tout moment ;
+- le fichier est dans `public/` et non importé par le code : l'écrire ne recharge pas une partie ouverte dans un autre onglet.
+
+**Application en jeu.** `src/main.ts` lit le fichier une fois au chargement (`loadGainOffsets`, sans cache) et le donne à `AudioDirector.setGainOffsets` et `MusicDirector.setGainOffsets`. Le lecteur des effets multiplie gain du son et gain de prise sous les plafonds du manifeste (8, ou 2 pour une boucle) en gardant le manifeste lu intact (`applyManifestGainOffsets`) ; la musique multiplie le gain du titre et le volume de l'élément reste au plus 1. Un fichier absent, illisible ou hors format ne règle rien ; une valeur hors bornes est ramenée dans [−30, +12] dB. Coût : sans réglage, `applyManifestGainOffsets` rend le manifeste tel quel (0,3 µs) ; avec 21 réglages, 52 µs une fois au chargement (la lecture du manifeste en prend 56) ; aucun parcours par image ni nœud audio ajouté.
 
 ## Vérification
 
