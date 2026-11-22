@@ -237,7 +237,7 @@ test('373 → 374 changes the number only; below 374 a tame hen ignores an egg b
  const {w}=camp();
  // A new world's « Tenue entretenue » refuses tainted apparel from 374 on, a
  // creation default a 373 save cannot hold: leave it out of this comparison.
- for(const policy of w.apparelPolicies)delete (policy as {taintedAllowed374?:false}).taintedAllowed374;
+ for(const policy of w.apparelPolicies!)delete (policy as {taintedAllowed374?:false}).taintedAllowed374;
  const plain=serializeWorld(w);
  expect(serializeWorld(deserializeWorld(asOldSchema(plain,373)))).toBe(asNumberOnly(plain,373));
  expect(deserializeWorld(asOldSchema(plain,373)).schemaVersion).toBe(SCHEMA_VERSION);
