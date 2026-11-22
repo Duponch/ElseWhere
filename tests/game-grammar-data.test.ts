@@ -123,7 +123,7 @@ function handMadeCore() {
   {name:'LanguageInfo.xml',text:'<LanguageInfo><languageWorkerClass>LanguageWorker_French</languageWorkerClass></LanguageInfo>'},
   {name:'DefInjected/'},{name:'DefInjected/RulePackDef/'},
   {name:'DefInjected/RulePackDef/Namers.xml',text:'﻿'+INJECTED},
-  {name:'DefInjected/FactionDefs/F.xml',text:'<LanguageData><FixedTest.fixedName>Nom fixe</FixedTest.fixedName><InjectedFixed.fixedName>Ruche zol</InjectedFixed.fixedName></LanguageData>'},
+  {name:'DefInjected/FactionDefs/F.xml',text:'<LanguageData><FixedTest.fixedName>Nom fixe</FixedTest.fixedName><InjectedFixed.fixedName>Nid zol</InjectedFixed.fixedName></LanguageData>'},
   {name:'Strings/Words/Nouns/Things.txt',text:'// commentaire\r\nbrume\r\n  galet  \r\n\r\nrive // fin\n'},
  ]);
  return memoryGameFolder([
@@ -164,7 +164,7 @@ describe('grammar loader on a hand-made game',()=>{
    OverrideTest:{factionNameMaker:'NamerTest',settlementNameMaker:'NamerTest',fixedName:null},
    FixedTest:{factionNameMaker:null,settlementNameMaker:null,fixedName:'Nom fixe'},
    // An injected fixed name applies even without an English one.
-   InjectedFixed:{factionNameMaker:'NamerTest',settlementNameMaker:null,fixedName:'Ruche zol'},
+   InjectedFixed:{factionNameMaker:'NamerTest',settlementNameMaker:null,fixedName:'Nid zol'},
   });
  });
  it('in English nothing is injected and the word lists are English',()=>{

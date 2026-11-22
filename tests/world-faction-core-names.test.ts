@@ -40,7 +40,7 @@ const drawn:CoreFactionNaming={factionNameMaker:'NamerFactionZol',settlementName
 const fixed=(name:string):CoreFactionNaming=>({factionNameMaker:null,settlementNameMaker:null,fixedName:name});
 const names:CoreFactionNames={grammar,factions:new Map<string,CoreFactionNaming>([
  ...['OutlanderCivil','OutlanderRough','TribeCivil','TribeRough','TribeSavage','Pirate'].map(d=>[d,drawn] as const),
- ['Mechanoid',fixed('ruche zol')],['Insect',fixed('Zols')],['Ancients',fixed('Anciens zol')],['AncientsHostile',fixed('Anciens vex')],
+ ['Mechanoid',fixed('nid zol')],['Insect',fixed('Zols')],['Ancients',fixed('Anciens zol')],['AncientsHostile',fixed('Anciens vex')],
 ])};
 
 describe('step 500 with the game\'s name data',()=>{
@@ -58,7 +58,7 @@ describe('step 500 with the game\'s name data',()=>{
   expect([r.draft.settlements[0]!.tile,r.draft.settlements[0]!.name]).toEqual([tile,settlement]);
   expect(starts[0]).toBe(ref.state.counter);
   // Fixed names draw nothing; every name comes from the packs.
-  expect(r.draft.factions.slice(6).map(f=>f.name)).toEqual(['ruche zol','Zols','Anciens zol','Anciens vex']);
+  expect(r.draft.factions.slice(6).map(f=>f.name)).toEqual(['nid zol','Zols','Anciens zol','Anciens vex']);
   for(const f of r.draft.factions.slice(0,6))expect(f.name).toMatch(/^(Le )?(Kru|Vex|Plo|Le)( (kru|vex|plo))?$/);
   for(const s of r.draft.settlements)expect(s.name).toMatch(/^(Mib|Dor|Tal)(ville|mont)( \d+)?$/);
   expect(new Set(r.draft.settlements.map(s=>s.name)).size).toBe(r.draft.settlements.length);
