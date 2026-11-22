@@ -37,6 +37,7 @@ Liste des retours de l'utilisateur après ses parties du 22 novembre, à traiter
 
 ## E. Animaux en enclos
 
+18 bis. **Animaux qui traversent les clôtures** (signalé le 22 novembre sur la partie « Yes » importée) : des canards sortent de l'enclos en passant les barrières comme si elles n'existaient pas. Vérifier la règle (ce que les clôtures bloquent dans RimWorld) et l'import (clôtures, portillons, enclos), puis le ramassage à la corde des animaux sortis pour les ramener à l'enclos.
 18. **Mener les animaux à l'enclos** : les colons semblent avoir du mal à amener les animaux tenus à la corde ; comparer avec RimWorld (confirmer ou infirmer). La corde traverse les murs (le colon d'un côté, l'animal derrière le mur) : à corriger.
 
 ## F. Son
