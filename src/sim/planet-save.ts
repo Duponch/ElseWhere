@@ -1,5 +1,5 @@
 import {canPlaceWorldSettlement} from './world-settlement-placement.ts';
-import {validGeographicPlanetHeader256,planetGeography256} from './planet-geography-256.ts';
+import {validGeographicPlanetHeader256,planetGeography256,geographyGeometryAllowed256} from './planet-geography-256.ts';
 import {planetFactionTargets256} from './planet-faction-targets-256.ts';
 import {worldBiomeCanSettle} from './world-biome-properties.ts';
 /** Strict immutable geography guard; no generation dependency or adoption. */
@@ -138,6 +138,7 @@ export function validateGeographicPlanet256(value:unknown,realWorld:PlanetValida
  if(!integer(version,256,Number.MAX_SAFE_INTEGER))return ['Future or invalid geographic planet validation version.'];
  if(!validGeographicPlanetHeader256(value)||!integer(realWorld.tick,0,Number.MAX_SAFE_INTEGER)||value.adoptedAt>realWorld.tick)return ['Invalid geographic planet header.'];
  let geography:import('./world-geography-owner-256.ts').CampaignGeography256;try{geography=planetGeography256(value);}catch{return ['Geographic planet requires complete boundary hydration.'];}
+ if(!geographyGeometryAllowed256(geography.definition,version))return ['Future planet geometry revision in a historical schema.'];
  const tiles=geography.surface.tiles,home=tiles[value.homeTile];if(!home||!worldBiomeCanSettle(home.biome)||home.hilliness==='impassable')return ['Invalid geographic starting tile.'];
  const targets=planetFactionTargets256(realWorld.worldFactions,tiles);if(!targets)return ['Geographic planet lacks its real faction settlement authority.'];
  if(!canPlaceWorldSettlement(tiles,value.homeTile,{settlementTiles:targets.occupied}))return ['Geographic starting tile overlaps a foreign settlement admission.'];

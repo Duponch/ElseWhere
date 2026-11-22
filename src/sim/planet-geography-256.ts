@@ -1,6 +1,16 @@
 import type {PlanetState,GeographicPlanetState} from './planet-state.ts';
 import {ownedCampaignGeography256,restoreCampaignGeography256,isCampaignGeography256,type CampaignGeography256} from './world-geography-owner-256.ts';
 import type {WorldSurfaceTile} from './world-surface-geography.ts';
+import {CORE_PLANET_GEOMETRY_SCHEMA} from './world-surface-storage.ts';
+/** Geometry revision 2 is a schema 376 field: an older save holding it is
+ * refused before any mesh is built. */
+export function geographyGeometryAllowed256(geography:unknown,version:number):boolean {
+ if(!geography||typeof geography!=='object')return true;
+ const surface=Object.getOwnPropertyDescriptor(geography,'surface')?.value;
+ if(!surface||typeof surface!=='object')return true;
+ const revision=Object.getOwnPropertyDescriptor(surface,'geometryRevision');
+ return !revision||!Object.hasOwn(revision,'value')||revision.value!==2||version>=CORE_PLANET_GEOMETRY_SCHEMA;
+}
 export const GEOGRAPHIC_PLANET_KEYS_256=['revision','adoptedAt','generationSeed','geography','homeTile','civilianTile','nextGroupId'] as const;
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)&&[Object.prototype,null].includes(Object.getPrototypeOf(v))&&Reflect.ownKeys(v).every(k=>typeof k==='string'&&Object.hasOwn(Object.getOwnPropertyDescriptor(v,k)!,'value'));
 const int=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
@@ -25,6 +35,7 @@ export function planetTile(p:PlanetState,id:number):PlanetRuntimeTile|undefined 
  * climate, faction, road, river or PRNG stage is rerun here. */
 export function preparePlanetHydration256(value:unknown,version:number):{planet:GeographicPlanetState;owner:CampaignGeography256} {
  if(!int(version,256)||!validGeographicPlanetHeader256(value))throw Error('Invalid prospective planet header');
+ if(!geographyGeometryAllowed256(value.geography,version))throw Error('Future planet geometry revision in a historical save');
  const known=ownedCampaignGeography256(value.geography),owner=known??restoreCampaignGeography256(value.geography);
  if(owner.surface.generationSeed!==value.generationSeed)throw Error('Planet/geography generation seed disagreement');
  const count=owner.surface.tiles.length;if(value.homeTile>=count||value.civilianTile!==null&&value.civilianTile>=count)throw Error('Planet index outside actual geography');

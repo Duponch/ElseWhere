@@ -22,9 +22,12 @@ const f=Math.fround;
 const roundedDraw=(value:number,r:WorldGenerationRandom)=>Math.trunc(value)+(r.value()<f(value-Math.trunc(value))?1:0);
 /** Advancing this iterator is confined to the generation worker. A cancelled
  * iterator is discarded; resuming/yielding never consumes a random draw. */
-export function* generateGeographicWorldDraft256(input:{seed:string;settings:WorldGenerationSettings;tick:number;nextThingId:number;playerDef:'PlayerColony'|'PlayerTribe';playerName:string}):Generator<GeographicDraftProgress,GeographicWorldDraft256,void> {
- if(typeof input.seed!=='string'||!validWorldGenerationSettings(input.settings)||!Number.isSafeInteger(input.tick)||input.tick<0||!Number.isSafeInteger(input.nextThingId)||input.nextThingId<1)throw Error('Invalid geographic world draft');
- const settings={...input.settings,factions:[...input.settings.factions]},key=worldGenerationKey(input.seed,settings),physical=generateWorldPhysicalSurface(input.seed,worldClimateSettings(settings));
+/** `terrain`: 'core' (default from schema 376) generates the surface with the
+ * game's terrain step and mesh (geometry revision 2); 'historical' keeps the
+ * earlier generator. The later stages are the same in both cases. */
+export function* generateGeographicWorldDraft256(input:{seed:string;settings:WorldGenerationSettings;tick:number;nextThingId:number;playerDef:'PlayerColony'|'PlayerTribe';playerName:string;terrain?:'core'|'historical'}):Generator<GeographicDraftProgress,GeographicWorldDraft256,void> {
+ if(typeof input.seed!=='string'||!validWorldGenerationSettings(input.settings)||input.terrain!==undefined&&input.terrain!=='core'&&input.terrain!=='historical'||!Number.isSafeInteger(input.tick)||input.tick<0||!Number.isSafeInteger(input.nextThingId)||input.nextThingId<1)throw Error('Invalid geographic world draft');
+ const settings={...input.settings,factions:[...input.settings.factions]},key=worldGenerationKey(input.seed,settings),physical=generateWorldPhysicalSurface(input.seed,worldClimateSettings(settings),input.terrain==='historical'?undefined:{core:true});
  let next=physical.next();while(!next.done){yield next.value;next=physical.next();}const surface=next.value,tiles=surface.tiles,roads:WorldRoadLink[][]=tiles.map(()=>[]),rootSeed=surface.generationSeed;
  const difficulties=captureWorldSurfaceDifficulties(tiles,settings.temperature,0),ancient=new WorldGenerationRandom(combineWorldSeed(rootSeed,976238715)),anchors:number[]=[];
  const count=roundedDraw(f(f(tiles.length/100000)*ancient.float(10,20)),ancient);

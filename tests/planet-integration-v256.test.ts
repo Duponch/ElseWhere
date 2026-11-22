@@ -13,11 +13,12 @@ import {generatePlanet} from '../src/sim/planet-generation.ts';
 import type {GeographicPlanetState,PlanetValidationWorld} from '../src/sim/planet-state.ts';
 import {PlanetGeographyTransportEncoder256,PlanetGeographyTransportDecoder256} from '../src/bridge/planet-geography-transport-256.ts';
 let draft:GeographicWorldDraft256,owner:CampaignGeography256,planet:GeographicPlanetState,metadata:PlanetValidationWorld;
-/** One actual original30% draft, shared by these domain oracles. No local map,
+/** One actual original30% draft (historical terrain, geometry revision 1: these
+ * oracles validate it at schema 256), shared by these domain oracles. No local map,
  * campaign ticks, browser, benchmark, healing or multiple-colony run. ROOT
  * may reuse its acquired draft fixture at this single preparation boundary. */
 beforeAll(()=>{
- const iterator=generateGeographicWorldDraft256({seed:'Elsewhere',settings:defaultWorldGenerationSettings(),tick:0,nextThingId:1,playerDef:'PlayerColony',playerName:'Colonie'});let next=iterator.next();while(!next.done)next=iterator.next();draft=next.value;owner=captureGeneratedGeography256(draft);
+ const iterator=generateGeographicWorldDraft256({seed:'Elsewhere',settings:defaultWorldGenerationSettings(),tick:0,nextThingId:1,playerDef:'PlayerColony',playerName:'Colonie',terrain:'historical'});let next=iterator.next();while(!next.done)next=iterator.next();draft=next.value;owner=captureGeneratedGeography256(draft);
  const targets=planetFactionTargets256(draft.factions,owner.surface.tiles);if(!targets)throw Error('Invalid actual faction geography');const home=owner.surface.tiles.find(t=>canPlaceWorldSettlement(owner.surface.tiles,t.id,{settlementTiles:targets.occupied}));if(!home)throw Error('Actual draft has no admissible prepared starting tile');
  planet=createGeographicPlanet256({geography:owner,factions:draft.factions,homeTile:home.id,adoptedAt:0,nextGroupId:1});metadata={schemaVersion:256,tick:0,planet,worldFactions:draft.factions};
 },120000);

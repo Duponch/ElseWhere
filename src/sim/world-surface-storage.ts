@@ -14,8 +14,12 @@ const RIVERS:readonly WorldRiverId[]=['huge-river','large-river','river','creek'
 const ROADS:readonly WorldRoadId[]=['dirt-path','dirt-road','stone-road','ancient-asphalt-road','ancient-asphalt-highway'];
 /** Sparse rows [tileId, neighbourId, definitionId, ...] preserve each tile's
  * actual link order. A single unordered edge list would lose that authority. */
+/** First schema whose saves may hold geometry revision 2 (the game's mesh
+ * precision and terrain step, `world-terrain-core.ts`). */
+export const CORE_PLANET_GEOMETRY_SCHEMA=376;
 export interface StoredWorldSurface {
- revision:3;geometryRevision:1;floatEncoding:'ieee754-bits';seedText:string;generationSeed:number;settings:WorldClimateSettings;
+ /** 1: historical mesh. 2: the game's mesh precision (schema 376 and later). */
+ revision:3;geometryRevision:1|2;floatEncoding:'ieee754-bits';seedText:string;generationSeed:number;settings:WorldClimateSettings;
  biome:number[];relief:number[];elevation:number[];temperature:number[];rainfall:number[];swampiness:number[];riverDistance:number[];
  rivers:number[][];roads:number[][];
 }
@@ -43,7 +47,7 @@ function rows<T extends {neighbour:number}>(links:readonly (readonly T[])[],defi
 }
 export function storeWorldSurface(surface:WorldPhysicalSurface,roads:readonly (readonly WorldRoadLink[])[]):StoredWorldSurface {
  if(roads.length!==surface.tiles.length)throw Error('World road columns have a different surface');
- return {revision:3,geometryRevision:1,floatEncoding:'ieee754-bits',seedText:surface.seedText,generationSeed:surface.generationSeed,settings:{...surface.settings},
+ return {revision:3,geometryRevision:surface.geometryRevision??1,floatEncoding:'ieee754-bits',seedText:surface.seedText,generationSeed:surface.generationSeed,settings:{...surface.settings},
   biome:surface.tiles.map(t=>BIOMES.indexOf(t.biome)),relief:surface.tiles.map(t=>RELIEF.indexOf(t.hilliness)),
   elevation:floatColumn(surface.tiles,t=>t.elevation),temperature:floatColumn(surface.tiles,t=>t.meanTemperature),rainfall:floatColumn(surface.tiles,t=>t.rainfall),swampiness:floatColumn(surface.tiles,t=>t.swampiness),riverDistance:surface.tiles.map(t=>t.riverDistance),
   rivers:rows(surface.tiles.map(t=>t.rivers),link=>RIVERS.indexOf(link.river)),roads:rows(roads,link=>ROADS.indexOf(link.road))};
@@ -53,7 +57,7 @@ export function storeWorldSurface(surface:WorldPhysicalSurface,roads:readonly (r
  * finite float32, and may exceed1 because the generator can produce them. */
 export function validStoredWorldSurface(value:unknown):value is StoredWorldSurface {
  if(!record(value,['revision','geometryRevision','floatEncoding','seedText','generationSeed','settings','biome','relief','elevation','temperature','rainfall','swampiness','riverDistance','rivers','roads']))return false;
- if(value.revision!==3||value.geometryRevision!==1||value.floatEncoding!=='ieee754-bits'||typeof value.seedText!=='string'||!integer(value.generationSeed,0xffffffff)||value.generationSeed!==(stableWorldSeedHash(value.seedText)>>>0))return false;
+ if(value.revision!==3||value.geometryRevision!==1&&value.geometryRevision!==2||value.floatEncoding!=='ieee754-bits'||typeof value.seedText!=='string'||!integer(value.generationSeed,0xffffffff)||value.generationSeed!==(stableWorldSeedHash(value.seedText)>>>0))return false;
  if(!record(value.settings,['coverage','rainfall','temperature','population'])||!validateWorldClimateSettings(value.settings))return false;
  if(!dense(value.biome)||value.biome.length<12||value.biome.length>590492)return false;
  const count=value.biome.length;
@@ -80,7 +84,7 @@ export function restoreWorldSurface(value:unknown):RestoredWorldSurface {
  * or a structured copy of such columns (enumerable data only, so the copy is
  * accepted too): the column walk is not repeated on the copy. */
 export function restoreValidatedWorldSurface(value:StoredWorldSurface):RestoredWorldSurface {
- const geometry=cropSurfaceCells(generateCoveredSurfaceMesh(value.settings.coverage),value.settings.coverage,surfaceVisibilityAxis(value.settings.coverage));
+ const mono=value.geometryRevision===2,geometry=cropSurfaceCells(generateCoveredSurfaceMesh(value.settings.coverage,10,mono),value.settings.coverage,surfaceVisibilityAxis(value.settings.coverage),mono);
  if(geometry.length!==value.biome.length)throw Error('Surface coverage/column count mismatch');
  const elevation=readFloatColumn(value.elevation),temperature=readFloatColumn(value.temperature),rainfall=readFloatColumn(value.rainfall),swampiness=readFloatColumn(value.swampiness);
  const tiles:WorldSurfaceTile[]=geometry.map((cell,id)=>({id,center:cell.center,corners:cell.corners,neighbours:cell.neighbours,biome:BIOMES[value.biome[id]!]!,hilliness:RELIEF[value.relief[id]!]!,elevation:elevation[id]!,meanTemperature:temperature[id]!,rainfall:rainfall[id]!,swampiness:swampiness[id]!,rivers:[],riverDistance:value.riverDistance[id]!}));
@@ -89,5 +93,5 @@ export function restoreValidatedWorldSurface(value:StoredWorldSurface):RestoredW
  for(const row of value.roads){const tile=tiles[row[0]!]!;for(let i=1;i<row.length;i+=2){if(!tile.neighbours.includes(row[i]!))throw Error('Road edge leaves surface topology');roads[tile.id]!.push({neighbour:row[i]!,road:ROADS[row[i+1]!]!});}}
  for(const tile of tiles){for(const link of tile.rivers)if(!Object.hasOwn(WORLD_RIVERS,link.river)||!tiles[link.neighbour]!.rivers.some(back=>back.neighbour===tile.id&&back.river===link.river))throw Error('Non-reciprocal stored river');
   for(const link of roads[tile.id]!)if(!Object.hasOwn(WORLD_ROADS,link.road)||!roads[link.neighbour]!.some(back=>back.neighbour===tile.id&&back.road===link.road))throw Error('Non-reciprocal stored road');}
- return {surface:{revision:3,radius:100,seedText:value.seedText,generationSeed:value.generationSeed,settings:{...value.settings},tiles},roads};
+ return {surface:{revision:3,radius:100,seedText:value.seedText,generationSeed:value.generationSeed,settings:{...value.settings},tiles,...mono?{geometryRevision:2 as const}:{}},roads};
 }

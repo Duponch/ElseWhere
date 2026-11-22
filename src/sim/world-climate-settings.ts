@@ -35,6 +35,12 @@ export function evaluateClimateCurve(points:readonly CurvePoint[],value:number):
  }
  throw Error('Invalid climate curve order');
 }
+/** The game's curve for a non-normal setting (`GetRainfallCurve`,
+ * `GetTemperatureCurve`), or null for Normal, which applies none. */
+export function worldClimateCurvePoints(kind:'temperature'|'rainfall',setting:ClimateSetting):readonly CurvePoint[]|null {
+ if(!isClimateSetting(setting))throw Error('Invalid world climate setting');
+ const curve=CURVES[kind][setting];return curve==='identity'?null:curve;
+}
 export function remapWorldClimate(kind:'temperature'|'rainfall',setting:ClimateSetting,value:number):number {
  if(!isClimateSetting(setting)||!Number.isFinite(value))throw Error('Invalid world climate setting');
  // Normal is identity, including outside other curves' endpoint range.

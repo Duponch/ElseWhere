@@ -31,7 +31,7 @@ export function rebuildPlanet(save:RwsSave,notes:ImportNotes):PlanetImport|undef
  if(!world||!grid){notes.lost('world','Grille du monde absente de la sauvegarde.');return undefined;}
  const coverage=world.coverage??0.3,settings={coverage:Math.round(coverage*100)/100,rainfall:worldScale(world.rainfall),temperature:worldScale(world.temperature),population:worldScale(world.population),factions:[]} as unknown as WorldGenerationSettings;
  if(!validateWorldClimateSettings({coverage:settings.coverage,rainfall:settings.rainfall,temperature:settings.temperature,population:settings.population})){notes.lost('world',`Réglages du monde non pris en charge (couverture ${coverage}).`);return undefined;}
- const cells=cropSurfaceCells(generateCoveredSurfaceMesh(settings.coverage),settings.coverage,surfaceVisibilityAxis(settings.coverage));
+ const cells=cropSurfaceCells(generateCoveredSurfaceMesh(settings.coverage,10,true),settings.coverage,surfaceVisibilityAxis(settings.coverage),true);
  if(cells.length!==grid.tiles){notes.lost('world',`Le maillage d’Elsewhere a ${cells.length} cases pour cette couverture, la sauvegarde ${grid.tiles} : planète régénérée à partir de la graine.`);return undefined;}
  const biomeNames=shortHashTable(Object.keys(BIOME_MAP));
  const tiles:WorldSurfaceTile[]=new Array(cells.length);let unknownBiome=0;
@@ -60,7 +60,7 @@ export function rebuildPlanet(save:RwsSave,notes:ImportNotes):PlanetImport|undef
  notes.mapped('world',`${rivers} tronçons de rivière et ${roadCount} tronçons de route repris.`);
  if(badLinks)notes.lost('world',`${badLinks} tronçons de rivière ou de route illisibles.`);
  const seedText=world.seed??'',surface:WorldPhysicalSurface={revision:3,radius:WORLD_SURFACE_RADIUS,seedText,generationSeed:stableWorldSeedHash(seedText)>>>0,
-  settings:{coverage:settings.coverage,rainfall:settings.rainfall,temperature:settings.temperature,population:settings.population},tiles};
+  settings:{coverage:settings.coverage,rainfall:settings.rainfall,temperature:settings.temperature,population:settings.population},tiles,geometryRevision:2};
  // Modifiers: mountain, river and coast follow the tile; caves come from the save.
  const mutatorNames=shortHashTable(Object.keys(MUTATOR_MAP)),caves=new Set<number>(),dropped=new Map<string,number>();
  for(const m of grid.mutators){const name=mutatorNames.get(m.def),map=lookup(MUTATOR_MAP,name);if(map&&!isDropped(map)&&map.to===2)caves.add(m.tile);else if(name&&map&&isDropped(map))dropped.set(name,(dropped.get(name)??0)+1);}
