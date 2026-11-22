@@ -20,6 +20,7 @@ La liste tient en un seul endroit, [`src/ui/developer-pages.ts`](../../src/ui/de
 | Sons et musiques | `sounds-review.html` | oui | Tous les sons et musiques du jeu, à écouter et à régler un par un ; voir [la couverture audio](audio-coverage-20261122.md#réglages-manuels-page-des-sons). |
 | Textes de l'univers | `lore.html` | oui | Les textes d'Elsewhere par catégorie et la comparaison avec le jeu installé ; voir [l'univers](lore.md). |
 | Pictogrammes | `pictograms-review.html` | oui | La collection des pictogrammes (interface, objets, recherches). |
+| Règles du jeu | `rules.html` | oui | Toutes les règles par domaine, leurs nombres lus dans le code et leur source ; voir [la page des règles](rules-page.md). |
 | Laboratoire de navigation | `navigation.html` | non | Essais de recherche de chemin sur la carte graphique, comparés à un calcul de référence. |
 
 **Pourquoi ces choix de publication.** Une page publiée ne montre que du contenu propre à Elsewhere (modèles, sons, textes, pictogrammes) et marche sans le serveur de développement : elle sert à l'utilisateur, qui joue sur la version publiée. Les sons et les pictogrammes rejoignent donc les modèles et l'univers, déjà publiés. Sur la version publiée, la page des sons ne peut pas écrire dans le dépôt : « Enregistrer » y télécharge le fichier de réglages. Le laboratoire de navigation reste local : c'est un banc d'essai du moteur, pas une page de référence. Sur Cloudflare, une page absente renvoie le jeu lui-même : la liste des Options ne doit donc jamais montrer une page non publiée, ce que `developerPagesForMode('pages')` garantit.
@@ -32,7 +33,7 @@ Avant ce lot, `pictograms-review.html` et `sounds-review.html` n'étaient servie
 2. Ajouter une ligne à `DEVELOPER_PAGES` : identifiant, fichier, titre et description en français, `published` selon la règle ci-dessus.
 3. C'est tout : les Options et les deux builds la prennent. Le [test](../../tests/developer-pages-sounds.test.ts) refuse une page `.html` de la racine absente de la liste, une entrée sans fichier, et vérifie les entrées des builds local et publié.
 
-Les pages prévues par le chantier (animations, règles du jeu) s'ajouteront ainsi.
+La page des règles du jeu s'est ajoutée ainsi ; celle des animations, prévue par le chantier, suivra le même chemin.
 
 ## Vérification
 

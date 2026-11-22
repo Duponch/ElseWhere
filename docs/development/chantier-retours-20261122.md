@@ -48,7 +48,7 @@ Liste des retours de l'utilisateur après ses parties du 22 novembre, à traiter
 ## G. Pages développeur
 
 21. **Une section « Développeur » dans les Options** avec un lien vers chaque page développeur (modèles, sons, lore, pictogrammes, navigation, animations, règles…), tenue à jour au fil du projet. — **Fait le 22 novembre** : Options → Développeur ouvre chaque page dans un nouvel onglet ; une seule liste (`src/ui/developer-pages.ts`) sert aussi les builds local et publié ([note](developer-pages.md)).
-22. **Page des règles du jeu** : toutes les règles, boucles de jeu et calculs, organisés, accessibles et aussi exhaustifs que possible, pour que le moteur n'ait plus de secret.
+22. **Page des règles du jeu** : toutes les règles, boucles de jeu et calculs, organisés, accessibles et aussi exhaustifs que possible, pour que le moteur n'ait plus de secret. — **Fait le 22 novembre** : `rules.html` (Options → Développeur, publiée) décrit 93 règles en 20 domaines, avec 240 nombres et 75 tableaux lus dans le code, la source de chaque nombre et l'écart éventuel avec le jeu de base ; un test refuse un nombre écrit à la main ou un fragment de code disparu. Domaines partiels et parties pas encore décrites listés dans la page ([note](rules-page.md)).
 
 ## Ordre retenu au départ
 

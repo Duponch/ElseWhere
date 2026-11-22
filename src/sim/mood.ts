@@ -63,6 +63,8 @@ const expectationThoughts=new Map(COLONY_EXPECTATIONS.map(e=>[e.id,situation(`ex
 const camp=situation('camp-expectations','Attentes extrêmement basses',30,'Profil fixe de ce camp, partagé avec les loisirs ; ne varie pas encore avec la richesse.');
 const memoryLabels={'ate-kibble':'A mangé des croquettes','ate-nutrient-paste':'A mangé de la pâte nutritive','ate-without-table':'Mangé sans table','ate-raw-food':'Mangé cru','ate-fine-meal':'A mangé un bon repas','ate-lavish-meal':'A mangé un repas gastronomique'} as const;
 const memoryOffsets={'ate-kibble':-12,'ate-nutrient-paste':-4,'ate-without-table':-3,'ate-raw-food':-7,'ate-fine-meal':5,'ate-lavish-meal':12} as const;
+/** Read-only view of the thoughts above for the rules page (docs/development/rules-page.md). */
+export const MOOD_THOUGHTS_FOR_RULES=Object.freeze({hunger,starvation,fatigue,comforts,beauty,leisure,pains,sick,apparel,memoryLabels,memoryOffsets});
 
 const hungerStage=(value:number)=>value<=0?2:value<12?1:value<24?0:-1;
 const restStage=(value:number)=>value<1?2:value<14?1:value<28?0:-1;

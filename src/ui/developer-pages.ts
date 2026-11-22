@@ -22,6 +22,8 @@ export const DEVELOPER_PAGES: readonly DeveloperPage[] = [
     description: 'Les textes d’Elsewhere par catégorie (histoires, traits, factions, noms) et la comparaison avec le jeu installé.', published: true },
   { id: 'pictograms', file: 'pictograms-review.html', title: 'Pictogrammes',
     description: 'La collection des pictogrammes de l’interface, des objets et des recherches.', published: true },
+  { id: 'rules', file: 'rules.html', title: 'Règles du jeu',
+    description: 'Toutes les règles, boucles et calculs du jeu par domaine, avec leurs nombres lus dans le code et leur source.', published: true },
   { id: 'navigation', file: 'navigation.html', title: 'Laboratoire de navigation',
     description: 'Essais de recherche de chemin sur la carte graphique, comparés à un calcul de référence. Outil de développement seulement.', published: false },
 ];
