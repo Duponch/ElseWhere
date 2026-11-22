@@ -49,7 +49,7 @@ Chaque table associe un nom de définition du jeu (identifiant utilisé comme cl
 
 ## 4. Histoires
 
-Les histoires d'Elsewhere sont des textes originaux. Chaque histoire du jeu devient l'histoire d'Elsewhere aux **effets mécaniques les plus proches** : somme des écarts de gains de compétences, plus 6 par étiquette de travail refusée d'un côté et pas de l'autre ; la paire enfance + âge adulte doit rester admise (un âge adulte qui exige la violence ne suit pas une enfance pacifiste) ; l'âge adulte n'est donné qu'à partir de 20 ans. Les niveaux de compétences importés restent exactement ceux de la sauvegarde (l'histoire n'y ajoute rien). Aucun titre ni description du jeu n'est repris ; le rapport donne chaque paire et son écart.
+Depuis le schéma 370, Elsewhere contient les 166 histoires mélangeables du jeu de base sous leur propre identifiant (titres et récits écrits en français pour Elsewhere, voir [V370](../gameplay/backstories-v370.md)). Une histoire de la sauvegarde qui en fait partie est donc **reprise telle quelle**, avec ses gains de compétences, ses travaux refusés et ses traits liés. Une histoire « solide » d'un personnage nommé, absente du catalogue, devient l'histoire mélangeable du même moment de la vie aux **effets mécaniques les plus proches** : somme des écarts de gains de compétences, plus 6 par étiquette de travail refusée d'un côté et pas de l'autre, les deux côtés lus dans la même table des effets du jeu ; un âge adulte choisi n'exige jamais un travail que l'enfance refuse ; une paire reprise telle quelle n'est jamais modifiée. L'âge adulte n'est donné qu'à partir de 20 ans. Les niveaux de compétences importés restent exactement ceux de la sauvegarde (l'histoire n'y ajoute rien), mais un travail que l'histoire refuse dans le jeu de base passe à la priorité 0. Aucun titre ni description du jeu n'est repris ; le rapport donne chaque histoire et, pour une histoire rabattue, son écart.
 
 ## 5. Conversion
 
@@ -77,13 +77,13 @@ Comptes par famille (rapport `tmp/rws-import/Yes-rapport.md`, éléments par dé
 | Armes | 33 | 32 | 25 | 7 | 1 |
 | Personnes | 14 | 12 | 12 | 0 | 2 |
 | Traits | 25 | 25 | 25 | 0 | 0 |
-| Histoires | 24 | 23 | 0 | 23 | 1 |
+| Histoires | 24 | 23 | 14 | 9 | 1 |
 | Santé des colons | — | 13 | 8 | 5 | 1 |
 | Animaux | 150 | 149 | 124 | 25 | 15 |
 | Zones et aires | 28 | 25 | 14 | 11 | 2 |
 | Recherche | 55 | 44 | 44 | 0 | 11 |
 
-Principales adaptations : 138 conduits enterrés deviennent des conduits ordinaires ; 16 barricades deviennent des sacs de sable ; matières refusées par Elsewhere pour certains bâtiments remplacées par la matière par défaut (sacs de sable en laine, fauteuil en laine) ; lit royal → lit double ; 9 cochons → sangliers, 16 chèvres → bouquetins (et leur viande) ; griffures → coupures ; 23 histoires vers les 14 histoires d'Elsewhere (écart de 4 à 23) ; sept champs à semis désactivé perdent les cases couvertes d'herbes sauvages (Elsewhere y lancerait une récolte impossible) ; obéissance, maître et lien de deux animaux liés repris, nom des autres.
+Principales adaptations : 138 conduits enterrés deviennent des conduits ordinaires ; 16 barricades deviennent des sacs de sable ; matières refusées par Elsewhere pour certains bâtiments remplacées par la matière par défaut (sacs de sable en laine, fauteuil en laine) ; lit royal → lit double ; 9 cochons → sangliers, 16 chèvres → bouquetins (et leur viande) ; griffures → coupures ; 9 histoires de personnages nommés vers l'histoire du jeu de base la plus proche (écart de 4 à 25 ; les 14 autres sont reprises telles quelles) ; sept champs à semis désactivé perdent les cases couvertes d'herbes sauvages (Elsewhere y lancerait une récolte impossible) ; obéissance, maître et lien de deux animaux liés repris, nom des autres.
 
 Principales pertes : souches et arbres brûlés (388), ambroisie (20), fleurs en pot (13) ; urnes, colonnes et stèles anciennes (42), lampes murales au-dessus d'un meuble (15), tourelles autres que la mini-tourelle (9), geysers et générateurs géothermiques (8) ; 15 cadavres, 8 meubles emballés, bioniques et drogues ; ceintures bouclier, masques et voiles (22) ; 2 mécanoïdes ; un thrumbo ; 14 gestations ; santé des animaux ; 11 projets de recherche sans équivalent (dont Électricité, acquise d'office).
 

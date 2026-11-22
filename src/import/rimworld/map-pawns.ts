@@ -4,7 +4,8 @@ import {exact,adapt,drop,type DefMapping} from './mapping.ts';
 import {TRAITS,type TraitId} from '../../sim/traits.ts';
 import {CORE_ANIMAL_IDS_256} from '../../sim/animal-core-data-v256.ts';
 import type {AnimalSpeciesId} from '../../sim/animal-species.ts';
-import {CHILDHOODS,ADULTHOODS,BACKGROUND_SKILL_IDS,type ChildhoodId,type AdulthoodId,type BackgroundWorkTag,type BackgroundSkillId} from '../../sim/colonist-backgrounds.ts';
+import {BACKGROUND_SKILL_IDS,type ChildhoodId,type AdulthoodId,type BackgroundWorkTag,type BackgroundSkillId} from '../../sim/colonist-backgrounds.ts';
+import {CORE_BACKSTORY_LIST_370,isCoreBackstoryId370,type CoreBackstory370} from '../../sim/core-backstories-370.ts';
 import {CORE_BACKSTORY_EFFECTS,CORE_HUMAN_BODY_PARTS} from './core-tables.ts';
 import type {WorkType} from '../../sim/types.ts';
 import type {BodyPartId} from '../../sim/body-definition.ts';
@@ -74,25 +75,40 @@ function effectDistance(a:CoreBackstoryEffect,b:{gains:Readonly<Partial<Record<B
  return d;
 }
 export interface BackstoryChoice {childhood:ChildhoodId;adulthood?:AdulthoodId;childhoodDistance:number;adulthoodDistance?:number}
-/** Closest Elsewhere pair for a colonist's two backstories, keeping the
- * pair valid (an adulthood that requires a tag the childhood disables is
- * not allowed). Unknown backstories count as neutral (no gain, no refusal). */
+const CORE_CHILDHOODS=CORE_BACKSTORY_LIST_370.filter(story=>story.slot==='childhood');
+const CORE_ADULTHOODS=CORE_BACKSTORY_LIST_370.filter(story=>story.slot==='adulthood');
+/** A save's backstory that is one of Core's shuffled ones in that slot. */
+function shuffled(def:string|undefined,slot:'childhood'|'adulthood'):CoreBackstory370|undefined {
+ if(!isCoreBackstoryId370(def))return undefined;
+ const story=CORE_BACKSTORY_LIST_370.find(entry=>entry.id===def);return story?.slot===slot?story:undefined;
+}
+/** Schema 370: Elsewhere holds Core's shuffled backstories under their own
+ * defName, so a shuffled backstory of the save is kept as it is (distance 0).
+ * A solid backstory (a named character's, not in the catalogue) becomes the
+ * shuffled one of the same slot with the closest mechanical effects. A chosen
+ * adulthood never requires a work tag that the childhood disables; a pair
+ * kept from the save is never changed. Both sides are read through the same
+ * table of the game's effects. Unknown backstories count as neutral. */
 export function closestBackgrounds(childDef:string|undefined,adultDef:string|undefined,allowAdult:boolean):BackstoryChoice {
  const neutral:CoreBackstoryEffect={slot:'childhood',gains:{},disables:[]};
  const child=(childDef&&coreBackstoryEffect(childDef))||neutral,adult=adultDef?coreBackstoryEffect(adultDef)??{...neutral,slot:'adulthood' as const}:undefined;
+ const keptChild=shuffled(childDef,'childhood'),keptAdult=allowAdult?shuffled(adultDef,'adulthood'):undefined;
+ const childCandidates=keptChild?[keptChild]:CORE_CHILDHOODS;
  let best:BackstoryChoice|undefined,bestScore=Infinity;
- for(const c of Object.keys(CHILDHOODS) as ChildhoodId[]){
-  const cd=effectDistance(child,CHILDHOODS[c]);
-  if(!adult||!allowAdult){if(cd<bestScore){bestScore=cd;best={childhood:c,childhoodDistance:cd};}continue;}
-  for(const a of Object.keys(ADULTHOODS) as AdulthoodId[]){
-   if(ADULTHOODS[a].requires.some(t=>CHILDHOODS[c].disables.includes(t)))continue;
-   const ad=effectDistance(adult,ADULTHOODS[a]),score=cd+ad;
-   if(score<bestScore){bestScore=score;best={childhood:c,adulthood:a,childhoodDistance:cd,adulthoodDistance:ad};}
+ for(const c of childCandidates){
+  const cd=keptChild?0:effectDistance(child,coreBackstoryEffect(c.id)??c);
+  if(!adult||!allowAdult){if(cd<bestScore){bestScore=cd;best={childhood:c.id as ChildhoodId,childhoodDistance:cd};}continue;}
+  for(const a of keptAdult?[keptAdult]:CORE_ADULTHOODS){
+   if(!keptAdult&&a.requires.some(t=>c.disables.includes(t)))continue;
+   const ad=keptAdult?0:effectDistance(adult,coreBackstoryEffect(a.id)??a),score=cd+ad;
+   if(score<bestScore){bestScore=score;best={childhood:c.id as ChildhoodId,adulthood:a.id as AdulthoodId,childhoodDistance:cd,adulthoodDistance:ad};}
   }
  }
  return best!;
 }
-export const BACKSTORY_NOTE='Histoires : chaque histoire du jeu devient l’histoire d’Elsewhere aux effets les plus proches (compétences gagnées, travaux refusés) ; aucun titre ni texte n’est repris.';
+/** True when the save's backstory is kept under its own defName. */
+export const keptBackstory=(def:string|undefined,chosen:string|undefined):boolean=>def!==undefined&&def===chosen;
+export const BACKSTORY_NOTE='Histoires : une histoire du jeu de base est reprise telle quelle (même identifiant, titre et récit d’Elsewhere en français) ; l’histoire d’un personnage nommé devient l’histoire du jeu de base aux effets les plus proches (compétences gagnées, travaux refusés) ; aucun titre ni texte du jeu n’est repris.';
 
 // ---- Health ---------------------------------------------------------------------
 /** Human body parts in save order → Elsewhere part. */

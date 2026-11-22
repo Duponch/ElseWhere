@@ -9,11 +9,11 @@ import {TERRAIN_MAP,ROOF_MAP,ROCK_MAP,COMPRESSED_CHUNKS} from './map-terrain.ts'
 import {PLANT_MAP,DEAD_PLANT_MAP,zonePlant} from './map-plants.ts';
 import {BUILDING_MAP} from './map-buildings.ts';
 import {ITEM_MAP,APPAREL_MAP,WEAPON_MAP,STUFF_MAP} from './map-items.ts';
-import {ANIMAL_MAP,TRAIT_MAP,traitKey,closestBackgrounds,INJURY_MAP,ADDED_PART_MAP,NON_COLONIST_NOTE,OTHER_HEDIFF_NOTE,CORE_WORK_TYPES} from './map-pawns.ts';
+import {ANIMAL_MAP,TRAIT_MAP,traitKey,closestBackgrounds,keptBackstory,INJURY_MAP,ADDED_PART_MAP,NON_COLONIST_NOTE,OTHER_HEDIFF_NOTE,CORE_WORK_TYPES} from './map-pawns.ts';
 import {RESEARCH_MAP,ZONE_MAP,AREA_MAP} from './map-colony.ts';
 import {BIOME_MAP,RIVER_MAP,ROAD_MAP,MUTATOR_MAP,FACTION_MAP} from './map-world.ts';
 import {shortHashTable} from './short-hash.ts';
-import {CHILDHOODS,ADULTHOODS} from '../../sim/colonist-backgrounds.ts';
+import {childhoodDefinition,adulthoodDefinition} from '../../sim/colonist-backgrounds.ts';
 
 export interface RwsAnalysis {
  save:RwsSave;notes:ImportNotes;compatible:boolean;refusals:string[];
@@ -103,8 +103,8 @@ function analyzePawn(notes:ImportNotes,node:import('./xml.ts').XmlNode,race:stri
  for(const tr of listItems(node,'story/traits/allTraits')){const def=text(tr,'def')??'',degree=num(tr,'degree');tally(notes,'traits',degree?`${def} (${degree})`:def,lookup(TRAIT_MAP,traitKey(def,degree)));}
  const child_=text(node,'story/childhood'),adult=text(node,'story/adulthood'),age=(num(node,'ageTracker/ageBiologicalTicks')??0)/10;
  const choice=closestBackgrounds(child_,adult,age>=20*360000);
- if(child_)notes.def('backstories',child_,'adapted',choice.childhood,`« ${CHILDHOODS[choice.childhood].label} » (écart ${choice.childhoodDistance}).`);
- if(adult)notes.def('backstories',adult,choice.adulthood?'adapted':'dropped',choice.adulthood,choice.adulthood?`« ${ADULTHOODS[choice.adulthood].label} » (écart ${choice.adulthoodDistance}).`:'Âge adulte non admis.');
+ if(child_)notes.def('backstories',child_,keptBackstory(child_,choice.childhood)?'exact':'adapted',choice.childhood,keptBackstory(child_,choice.childhood)?`« ${childhoodDefinition(choice.childhood).label} ».`:`« ${childhoodDefinition(choice.childhood).label} » (écart ${choice.childhoodDistance}).`);
+ if(adult)notes.def('backstories',adult,!choice.adulthood?'dropped':keptBackstory(adult,choice.adulthood)?'exact':'adapted',choice.adulthood,!choice.adulthood?'Âge adulte non admis.':keptBackstory(adult,choice.adulthood)?`« ${adulthoodDefinition(choice.adulthood).label} ».`:`« ${adulthoodDefinition(choice.adulthood).label} » (écart ${choice.adulthoodDistance}).`);
  notes.def('skills','Niveaux, expérience et passions (12 compétences)','exact','compétences');
  const vals=listItems(at(node,'workSettings/priorities'),'vals').length;
  notes.def('skills','Priorités de travail',vals===CORE_WORK_TYPES.length?'exact':'dropped',vals===CORE_WORK_TYPES.length?'priorités':undefined,vals===CORE_WORK_TYPES.length?undefined:'Absentes.');

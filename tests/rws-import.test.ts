@@ -10,6 +10,7 @@ import {analyzeRwsSave} from '../src/import/rimworld/analyze.ts';
 import {convertRwsSave} from '../src/import/rimworld/convert.ts';
 import {frenchReport} from '../src/import/rimworld/report-fr.ts';
 import {closestBackgrounds,coreBackstoryEffect,HUMAN_PART_MAP} from '../src/import/rimworld/map-pawns.ts';
+import {CORE_BACKSTORIES_370,isCoreBackstoryId370} from '../src/sim/core-backstories-370.ts';
 import {TERRAIN_MAP,ROCK_MAP,ROOF_MAP} from '../src/import/rimworld/map-terrain.ts';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import {stepWorld} from '../src/sim/engine.ts';
@@ -55,13 +56,21 @@ describe('RimWorld save reader',()=>{
 });
 
 describe('Mapping tables',()=>{
- it('maps backstories to the Elsewhere story with the closest mechanical effects',()=>{
+ it('keeps Core’s shuffled backstories under their own defName',()=>{
   expect(coreBackstoryEffect('AccursedChild88')).toMatchObject({slot:'childhood',gains:{construction:-1,intellectual:5,medicine:4}});
-  const choice=closestBackgrounds('CaveChild30','Hunter74',true);
-  expect(choice).toMatchObject({childhood:'workshop-child',adulthood:'mercenary'});
-  // A pacifist childhood never pairs with an adulthood that requires violence.
-  const pacifist=closestBackgrounds('AccursedChild88','StarKnight5',true);
-  expect(pacifist.adulthood==='mercenary'&&pacifist.childhood==='quiet-child').toBe(false);
+  expect(closestBackgrounds('CaveChild30','Hunter74',true)).toEqual({childhood:'CaveChild30',adulthood:'Hunter74',childhoodDistance:0,adulthoodDistance:0});
+  // Below twenty only the childhood is kept.
+  expect(closestBackgrounds('CaveChild30','Hunter74',false)).toEqual({childhood:'CaveChild30',childhoodDistance:0});
+ });
+ it('maps a named character’s backstory to the closest shuffled one of its slot',()=>{
+  const solid=closestBackgrounds('AccursedChild88','StarKnight5',true);
+  expect(isCoreBackstoryId370(solid.childhood)&&CORE_BACKSTORIES_370[solid.childhood].slot).toBe('childhood');
+  expect(isCoreBackstoryId370(solid.adulthood)&&CORE_BACKSTORIES_370[solid.adulthood].slot).toBe('adulthood');
+  expect(solid.childhoodDistance).toBeGreaterThan(0);expect(solid.adulthoodDistance).toBeGreaterThan(0);
+  // A chosen adulthood never requires a tag the (pacifist) childhood disables.
+  const pacifist=closestBackgrounds('ConventChild16','StarKnight5',true);
+  expect(pacifist.childhood).toBe('ConventChild16');
+  expect(CORE_BACKSTORIES_370[pacifist.adulthood as 'Hunter74'].requires).not.toContain('violent');
  });
  it('numbers human body parts in the game’s save order',()=>{
   expect(HUMAN_PART_MAP[0]).toBe('torso');expect(HUMAN_PART_MAP[29]).toBe('left-pinky');expect(HUMAN_PART_MAP[46]).toBe('left-leg');expect(HUMAN_PART_MAP[58]).toBe('right-foot');
@@ -103,17 +112,17 @@ describe('Conversion of the small colony',()=>{
   expect(footprintCells(bed).map(c=>`${c.x},${c.z}`).sort()).toEqual(['4,4','4,5']);
   expect(w.structures.find(s=>s.kind==='table')).toMatchObject({quality:'normal'});
  });
- it('imports colonists with identity, traits, closest backstories, skills, priorities, health and gear',()=>{
+ it('imports colonists with identity, traits, Core backstories, skills, priorities, health and gear',()=>{
   expect(w.pawns).toHaveLength(2);
   const alma=w.pawns.find(p=>p.name.startsWith('Alma'))!,bruno=w.pawns.find(p=>p.name.startsWith('Bruno'))!;
   expect(alma.name).toBe('Alma « Fourmi » Rivière');expect(bruno.name).toBe('Bruno Sable');
   expect(alma.appearance).toMatchObject({sex:'female',bodyType:'Thin',headType:'Female_AverageWide',hair:'Flowy'});
   expect(alma.age?.biologicalTicks).toBe(10_800_000);
   expect(alma.traits).toEqual(['kind','jogger']);expect(bruno.traits).toEqual(['brawler','nervous']);
-  const choice=closestBackgrounds('MedicalAssistant12','Gardener99',true);
-  expect(alma.background).toEqual({childhood:choice.childhood,adulthood:choice.adulthood});
+  expect(alma.background).toEqual({childhood:'MedicalAssistant12',adulthood:'Gardener99'});
   expect(alma.skills.plants).toMatchObject({level:12,passion:2});expect(alma.skills.medicine).toMatchObject({level:8,passion:1,xp:120500});
-  expect(alma.priorities).toMatchObject({firefight:1,patient:1,doctor:2,bedrest:3,basic:3,grow:1,haul:3,clean:3});
+  // MedicalAssistant12 disables Firefighting in Core: the save's priority 1 cannot be kept.
+  expect(alma.priorities).toMatchObject({firefight:0,patient:1,doctor:2,bedrest:3,basic:3,grow:1,haul:3,clean:3});
   expect(alma.bedId).toBe(w.structures.find(s=>s.kind==='bed')!.id);
   expect(alma.health?.injuries).toEqual([expect.objectContaining({part:'torso',kind:'cut',severity:3000,scar:{threshold:3000,pain:1}})]);
   expect(alma.health?.missing).toEqual([expect.objectContaining({part:'left-pinky'})]);

@@ -5,12 +5,12 @@ import type {Pawn,BedSlot,MaterialKind} from '../../sim/types.ts';
 import {readThing,referencedThingId,type RwsThing} from './rws-save.ts';
 import {items as listItems,text,num,at,child,type XmlNode} from './xml.ts';
 import {isDropped,lookup,mappingStatus} from './mapping.ts';
-import {ANIMAL_MAP,TRAIT_MAP,traitKey,SKILL_MAP,PASSION_MAP,CORE_WORK_TYPES,WORK_MAP,closestBackgrounds,HUMAN_PART_MAP,INJURY_MAP,ADDED_PART_MAP,NON_COLONIST_NOTE,OTHER_HEDIFF_NOTE} from './map-pawns.ts';
+import {ANIMAL_MAP,TRAIT_MAP,traitKey,SKILL_MAP,PASSION_MAP,CORE_WORK_TYPES,WORK_MAP,closestBackgrounds,keptBackstory,HUMAN_PART_MAP,INJURY_MAP,ADDED_PART_MAP,NON_COLONIST_NOTE,OTHER_HEDIFF_NOTE} from './map-pawns.ts';
 import {ITEM_MAP,APPAREL_MAP,WEAPON_MAP} from './map-items.ts';
 import {placeGear,type ImportContext} from './convert.ts';
 import {startingPawn} from '../../sim/starting-pawns.ts';
 import {validTraits,type TraitId} from '../../sim/traits.ts';
-import {CHILDHOODS,ADULTHOODS,BACKGROUND_ADULT_MIN_TICKS,backgroundWorkRefusal} from '../../sim/colonist-backgrounds.ts';
+import {childhoodDefinition,adulthoodDefinition,BACKGROUND_ADULT_MIN_TICKS,backgroundWorkRefusal} from '../../sim/colonist-backgrounds.ts';
 import {xpRequired} from '../../sim/skills.ts';
 import {createMedicalRecord} from '../../sim/injury-state.ts';
 import {installArtificialPart} from '../../sim/artificial-parts.ts';
@@ -130,8 +130,8 @@ function importColonist(ctx:ImportContext,t:RwsThing,index:number):Pawn|undefine
  const childDef=text(node,'story/childhood'),adultDef=text(node,'story/adulthood');
  const choice=closestBackgrounds(childDef,adultDef,biological>=BACKGROUND_ADULT_MIN_TICKS);
  p.background={childhood:choice.childhood,...choice.adulthood?{adulthood:choice.adulthood}:{}};
- if(childDef)notes.def('backstories',childDef,'adapted',choice.childhood,`Effets les plus proches (écart ${choice.childhoodDistance}) : « ${CHILDHOODS[choice.childhood].label} ».`);
- if(adultDef)notes.def('backstories',adultDef,choice.adulthood?'adapted':'dropped',choice.adulthood,choice.adulthood?`Effets les plus proches (écart ${choice.adulthoodDistance}) : « ${ADULTHOODS[choice.adulthood].label} ».`:'Âge adulte non admis ici : seule l’enfance est reprise.');
+ if(childDef)notes.def('backstories',childDef,keptBackstory(childDef,choice.childhood)?'exact':'adapted',choice.childhood,keptBackstory(childDef,choice.childhood)?`Reprise telle quelle : « ${childhoodDefinition(choice.childhood).label} ».`:`Effets les plus proches (écart ${choice.childhoodDistance}) : « ${childhoodDefinition(choice.childhood).label} ».`);
+ if(adultDef)notes.def('backstories',adultDef,!choice.adulthood?'dropped':keptBackstory(adultDef,choice.adulthood)?'exact':'adapted',choice.adulthood,!choice.adulthood?'Âge adulte non admis ici : seule l’enfance est reprise.':keptBackstory(adultDef,choice.adulthood)?`Reprise telle quelle : « ${adulthoodDefinition(choice.adulthood).label} ».`:`Effets les plus proches (écart ${choice.adulthoodDistance}) : « ${adulthoodDefinition(choice.adulthood).label} ».`);
  // Skills and passions, exact levels.
  const lastReset=Math.max(-1,Math.min(w.tick,p.skills.lastResetTick));
  for(const s of listItems(node,'skills/skills')){
