@@ -22,6 +22,12 @@ function entry(world:World):SurfaceReads|undefined {
   if(!application)return;
   let value=application.get(world);if(!value){const prepared=retained?.(world);value=prepared?{cells:prepared.cells,identities:prepared.identities}:{};application.set(world,value);}return value;
 }
+/** Seat top of a chair model (habitat-parts), moved forward from the backrest
+ * (local -z at orientation zero) along the chair's own rotation. */
+function seatSurface(s:Structure,y:number,forward:number):PileSurface {
+  const angle=(s.orientation??0)*Math.PI/2;
+  return {x:Math.sin(angle)*forward,y,z:Math.cos(angle)*forward,scale:.55,scaleHeight:true};
+}
 /** Presentation only. Built per snapshot, never per frame/pile; no extra mesh. */
 export function pileSurfaces(world:World):ReadonlyMap<number,PileSurface> {
   const cached=entry(world);if(cached?.cells)return cached.cells;
@@ -47,6 +53,13 @@ export function pileSurfaces(world:World):ReadonlyMap<number,PileSurface> {
     }
     const surface=(isFoodWorkstation(s.kind)||s.kind==='machining-table'||s.kind==='hi-tech-research-bench'||s.kind==='fabrication-bench'||s.kind==='multi-analyzer'||s.kind==='stonecutter'||s.kind==='drug-lab'||s.kind==='art-bench'||s.kind==='research-bench'||s.kind==='tailor-bench')?{x:0,y:WORLD_SCALE.stonecutterHeight,z:0,scale:.65}:s.kind==='table'?{x:0,y:WORLD_SCALE.tableHeight,z:0,scale:.8}
       :s.kind==='stool'?{x:0,y:WORLD_SCALE.stoolHeight,z:0,scale:.5}
+      // Core lets an item lie on a Standable seat (DiningChair, Armchair, Couch:
+      // no blocking passability, ordinary drop spot) and draws it above the
+      // seat (Item altitude over Building). The pile sits on the seat in front
+      // of the backrest instead of crossing the chair from the floor.
+      :s.kind==='dining-chair'?seatSurface(s,WORLD_SCALE.stoolHeight+.08,.03)
+      :s.kind==='armchair'?seatSurface(s,.44,.08):s.kind==='couch'?seatSurface(s,.51,.08)
+      :s.kind==='end-table'?{x:0,y:WORLD_SCALE.tableHeight,z:0,scale:.6,scaleHeight:true}
       :s.kind==='hopper'?{x:0,y:.14,z:0,scale:.72}:s.kind==='horseshoes'?{x:-.18,y:0,z:.15,scale:.6}:undefined;
     if(surface)for(const c of footprintCells(s))surfaces.set(c.z*world.width+c.x,surface);
   }

@@ -18,17 +18,17 @@ Liste des retours de l'utilisateur après ses parties du 22 novembre, à traiter
 
 ## C. Modèles et affichage
 
-9. **Bébés animaux trop petits** pour certaines espèces : taille minimale.
-10. **Couleur du muffalo** : vérifier celle de RimWorld (il n'est pas brun foncé) et corriger en Pastel et en Gouache.
-11. **Buissons** : remettre le modèle d'avant la refonte Gouache/Origami (proche des fragments).
-12. **Fragment de calcaire posé sur une chaise** : à corriger.
+9. **Bébés animaux trop petits** pour certaines espèces : taille minimale. *Fait le 22 novembre : chaque stade est dessiné à la `drawSize` du jeu (veau de muffalo à la moitié de l’adulte, plus jamais au cinquième) ; voir la [note du lot 3](retours-20261122-lot3.md).*
+10. **Couleur du muffalo** : vérifier celle de RimWorld (il n'est pas brun foncé) et corriger en Pastel et en Gouache. *Fait le 22 novembre : pelage gris bleuté pâle tiré de la texture du jeu, dans les deux styles ; écarts relevés sur d’autres espèces listés dans la [note du lot 3](retours-20261122-lot3.md).*
+11. **Buissons** : remettre le modèle d'avant la refonte Gouache/Origami (proche des fragments). *Fait le 22 novembre : buisson bas à facettes rétabli dans les deux styles ; voir la [note du lot 3](retours-20261122-lot3.md).*
+12. **Fragment de calcaire posé sur une chaise** : à corriger. *Fait le 22 novembre : le jeu autorise un objet sur une chaise et le dessine au-dessus ; l’objet est maintenant posé sur l’assise au lieu de la traverser ; voir la [note du lot 3](retours-20261122-lot3.md).*
 13. **Chantiers lancés** : afficher la forme fantôme de l'objet (la même que sur le curseur avant de le placer) au lieu de cubes à traits, et ne plus colorer ses cases en bleu.
 
 ## D. Sélection et interface
 
-14. **Sélection plus robuste** : on ne peut pas sélectionner une applique murale (le clic prend le mur).
+14. **Sélection plus robuste** : on ne peut pas sélectionner une applique murale (le clic prend le mur). *Fait le 22 novembre : applique trouvée sur son mur et visée sur sa face, ordre et cycle de clics du jeu, l’inspecteur ne bloque plus les clics dans la carte ; voir la [note du lot 3](retours-20261122-lot3.md).*
 15. **Clic sur le modèle** : pouvoir sélectionner un objet, une personne ou un animal en cliquant sur son modèle 3D, pas seulement sur sa case, si c'est possible sans coût notable.
-16. **Noms dans la barre des colons** : RimWorld n'affiche que le surnom sous l'avatar (« LeSombre »), pas le nom complet (« Umbre « LeSombre » Nighthawk »).
+16. **Noms dans la barre des colons** : RimWorld n'affiche que le surnom sous l'avatar (« LeSombre »), pas le nom complet (« Umbre « LeSombre » Nighthawk »). *Fait le 22 novembre : surnom sous le portrait, nom complet dans l’info-bulle ; voir la [note du lot 3](retours-20261122-lot3.md).*
 17. **Grand chantier des interfaces** : réorganiser HUD, fenêtres et mises en page pour être fidèle à RimWorld (dispositions, nombre d'éléments par zone, longueur des défilements, accessibilité, ergonomie, tailles des fenêtres), à partir de sources visuelles du vrai jeu. L'utilisateur signale l'outil « pbakaus/impeccable » pour Claude Code, à examiner.
 
 ## E. Animaux en enclos

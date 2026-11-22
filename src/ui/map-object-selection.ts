@@ -1,10 +1,11 @@
 import {geyserAt256,geyserOwnedId256,geyserCells256} from '../sim/local-geyser-state-256';
 import {knownPosition256} from './exploration-readers-256';
-import { footprintCells } from '../sim/definitions';
+import { footprintCells,footprintContains } from '../sim/definitions';
 import type { Cell, Resource, World } from '../sim/types';
 import { stockpileZoneCells } from '../sim/stockpile-zones';
 import { selectedMapJob296 } from './wall-door-selection-296';
 import { planAt369,planById369 } from '../sim/plans-369';
+import { wallLampWallCell363 } from '../sim/furniture-c-363';
 
 /** Core's incidental foliage remains a hover readout, not a selectable Thing. */
 export const mapResourceSelectable=(resource:Resource):boolean=>!['grass','tall-grass','brambles','moss','astragalus','chokevine','dandelion','low-shrub'].includes(resource.species??'');
@@ -12,9 +13,28 @@ export const mapResourceSelectable=(resource:Resource):boolean=>!['grass','tall-
 /** Terrain and constructed floors are readouts, never selection targets. */
 export type MapObjectSelection = { kind:'geyser'|'packed'|'pile'|'structure'|'resource'|'rock'|'job'|'growing'|'stockpile'|'plan'; id:number };
 
+/** Core Building_Storage (shelves and the hopper): Selector.SelectUnderMouse
+ * sorts them before everything else on the clicked cell. */
+const STORAGE_KINDS:ReadonlySet<string>=new Set(['shelf','small-shelf','hopper']);
+/** Core AltitudeLayer of the structures that are not ordinary Buildings
+ * (GenUI sorts the things of a cell by drawing altitude, highest first). */
+function structureAltitude(kind:string):number {
+  return kind==='wall-lamp'?17:kind==='power-conduit'?5:kind==='door'||kind==='autodoor'?14:15;
+}
+/** Wall attachments (Core building.isAttachment, Placeworker_AttachedToWall)
+ * stand on a free cell but are drawn on the wall in front of them, so a click
+ * on the wall cell also finds them, above the wall itself. */
+export function wallAttachmentsDrawnAt(world:World,cell:Cell):World['structures'] {
+  const found:World['structures']=[];
+  for(const s of world.structures)if(s.kind==='wall-lamp'){const wall=wallLampWallCell363(s);if(wall.x===cell.x&&wall.z===cell.z)found.push(s);}
+  return found;
+}
+
 export function mapObjectsAt(world:World,cell:Cell):MapObjectSelection[] {
   const same=(other:Cell)=>other.x===cell.x&&other.z===cell.z;
-  const inFootprint=(object:World['structures'][number]|World['jobs'][number])=>footprintCells(object).some(same);
+  // The point query gives footprintCells' verdict without building every
+  // structure's cell list (hover readout and clicks on large colonies).
+  const inFootprint=(object:World['structures'][number]|World['jobs'][number])=>footprintContains(object,cell);
   const geyser=geyserAt256(world,cell);
   const harvested=geyser&&world.structures.some(s=>s.kind==='geothermal-generator'&&s.geothermal?.geyserId===geyser.id&&s.x+2===geyser.x&&s.z+2===geyser.z);
   const jobs:MapObjectSelection[]=[];
@@ -22,11 +42,15 @@ export function mapObjectsAt(world:World,cell:Cell):MapObjectSelection[] {
     if(job.wallDoor296?.manual!==false)jobs.push({kind:'job',id:job.id});
     if(job.wallDoor296?.plan)jobs.push({kind:'job',id:job.wallDoor296.plan.id});
   }
+  const here=world.structures.filter(inFootprint),attached=wallAttachmentsDrawnAt(world,cell).filter(s=>!here.includes(s));
+  // Stable sort: equal altitudes keep their world order.
+  const buildings=[...here,...attached].filter(s=>!STORAGE_KINDS.has(s.kind)).map((s,i)=>({s,i})).sort((a,b)=>structureAltitude(b.s.kind)-structureAltitude(a.s.kind)||a.i-b.i).map(({s})=>s);
   return [
+    ...here.filter(s=>STORAGE_KINDS.has(s.kind)).map(s=>({kind:'structure' as const,id:s.id})),
     ...(geyser&&!harvested?[{kind:'geyser' as const,id:geyser.id}]:[]),
     ...world.packed.filter(p=>p.owner.type==='ground'&&same(p.owner)).map(p=>({kind:'packed' as const,id:p.building.id})),
     ...world.piles.filter(p=>p.owner.type==='ground'&&same(p.owner)).map(p=>({kind:'pile' as const,id:p.id})),
-    ...world.structures.filter(inFootprint).sort((a,b)=>Number(a.kind==='power-conduit')-Number(b.kind==='power-conduit')).map(s=>({kind:'structure' as const,id:s.id})),
+    ...buildings.map(s=>({kind:'structure' as const,id:s.id})),
     ...(geyser&&harvested?[{kind:'geyser' as const,id:geyser.id}]:[]),
     ...world.resources.filter(r=>same(r)&&mapResourceSelectable(r)).map(r=>({kind:'resource' as const,id:r.id})),
     ...(world.tiles[cell.z*world.width+cell.x]?.terrain==='rock'?[{kind:'rock' as const,id:cell.z*world.width+cell.x}]:[]),

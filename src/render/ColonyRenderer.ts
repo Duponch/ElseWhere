@@ -101,16 +101,16 @@ export class ColonyRenderer extends SceneRenderCore {
       pawns:()=>this.screenPawns(),select:gesture=>this.onSelection(gesture),
       selected:()=>this.selectedPawns,
       canInspect:event=>{
-        const c=this.pick(event),w=this.world;if(!c||!w)return false;
+        const c=this.objectCell(event),w=this.world;if(!c||!w)return false;
         return mapObjectsAt(w,c).length>0;
       },
       preferObjectCycle:event=>{
-        const cell=this.pick(event),world=this.world,selected=this.selectedObject;
+        const cell=this.objectCell(event),world=this.world,selected=this.selectedObject;
         if(!cell||!world||!selected)return false;
         const objects=mapObjectsAt(world,cell),index=objects.findIndex(object=>sameMapObject(object,selected));
         return index>=0&&(index<objects.length-1||hitActors(this.screenPawns(),event.clientX,event.clientY).length===0);
       },
-      inspect:event=>{const cell=this.pick(event);if(cell)this.onPick(cell.x,cell.z);else this.onSelection({ids:[],additive:false,toggle:false});},
+      inspect:event=>{const cell=this.objectCell(event);if(cell)this.onPick(cell.x,cell.z);else this.onSelection({ids:[],additive:false,toggle:false});},
       inspectGroup:event=>{
         const world=this.world,cell=this.pickAt(event.clientX,event.clientY);if(!world||!cell)return false;
         // The two ordinary clicks may have cycled the inspector. Resolve the
@@ -147,6 +147,8 @@ export class ColonyRenderer extends SceneRenderCore {
     }catch(error){try{this.dispose();}catch{}throw error;}
   }
   private pick(event:PointerEvent,clamp=false):Cell|null{return this.pickAt(event.clientX,event.clientY,clamp);}
+  /** Cell whose things a selection click lists: a drawn wall lamp first, else the ground cell. */
+  private objectCell(event:PointerEvent):Cell|null{return this.wallAttachmentCellAt(event.clientX,event.clientY)??this.pick(event);}
   private readonly onVisibility=():void=>this.visibilityChanged();
   /** DOM methods are consumed only by the owned port; no guard writer here. */
   selectionReady():boolean{return !!this.selectionInput;}

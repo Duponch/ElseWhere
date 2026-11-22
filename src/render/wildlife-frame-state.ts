@@ -1,18 +1,20 @@
-import {bodySizeAtAge} from '../sim/animal-life';
-import {animalSpecies,type AnimalSpeciesId} from '../sim/animal-species';
+import type {AnimalSpeciesId} from '../sim/animal-species';
+import {animalStageDrawScale} from './animal-stage-scale';
 
 type Primitive=number|string|boolean|undefined;
 type Stream={getX(i:number):number;getY(i:number):number;getZ(i:number):number;getW(i:number):number};
 type Shape={species:AnimalSpeciesId;ageTicks:number;growthTracker?:{value:number}};
 
-/** Renderer-local derived scale. All mutable inputs are reread on every call;
- * object identity alone never certifies a live/corpse record. */
+/** Renderer-local derived scale: the drawn size of the animal's life stage
+ * against its adult (Core drawSize per stage, see animal-stage-scale). All
+ * mutable inputs are reread on every call; object identity alone never
+ * certifies a live/corpse record. */
 export class WildlifeBodyScale {
  private readonly records=new WeakMap<Shape,{species:AnimalSpeciesId;age:number;growth:number|undefined;scale:number}>();
  read(owner:Shape):number {
   const species=owner.species,age=owner.ageTicks,growth=owner.growthTracker?.value,previous=this.records.get(owner);
   if(previous&&previous.species===species&&previous.age===age&&previous.growth===growth)return previous.scale;
-  const scale=bodySizeAtAge(species,age,growth)/animalSpecies(species).bodySize;
+  const scale=animalStageDrawScale(species,age,growth);
   this.records.set(owner,{species,age,growth,scale});return scale;
  }
 }

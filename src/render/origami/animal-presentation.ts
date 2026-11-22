@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
 import {buildOrigamiAnimalReference,type OrigamiAnimalReference} from './animal-reference';
 import {normalizeCutoutPaintUvs} from './face-paint-uv';
+import {bestiaryPaintProfile} from './reference-profiles';
+import {BESTIARY_PAINT_DESCRIPTORS} from './bestiary-paint-descriptors';
 
 type Part=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
 type Point=readonly [number,number,number];
@@ -11,9 +13,35 @@ interface Ring {point:Point;width:number;depth?:number;tangent?:Point}
  * All adjustments happen once before the existing actor batch is compiled. */
 export function buildOrigamiAnimalPresentation(kind:OrigamiAnimalReference):THREE.Group {
  const root=buildOrigamiAnimalReference(kind);
- if(kind==='dog')correctDog(root);else if(kind==='elephant')correctElephant(root);else if(kind==='hare')correctHare(root);
- root.userData.presentationCorrections=kind==='dog'?['single-ear','no-collar','ochre-rear']:kind==='elephant'?['continuous-trunk','continuous-tusks','attached-ear-hinges']:kind==='hare'?['inset-pink-ear-face']:[];
+ if(kind==='dog')correctDog(root);else if(kind==='elephant')correctElephant(root);else if(kind==='hare')correctHare(root);else if(kind==='buffalo')correctMuffaloCoat(root);
+ root.userData.presentationCorrections=kind==='dog'?['single-ear','no-collar','ochre-rear']:kind==='elephant'?['continuous-trunk','continuous-tusks','attached-ear-hinges']:kind==='hare'?['inset-pink-ear-face']:kind==='buffalo'?['muffalo-blue-grey-coat']:[];
  root.updateMatrixWorld(true);return root;
+}
+/** RimWorld's muffalo is a pale blue-grey woolly beast, not a dark brown
+ * buffalo: its Core texture (Muffalo_east/_south, untinted) averages about
+ * #8e9fa4 under the outline, with pale blue-grey wool (#90b0b0 to #b0d0d0)
+ * and a slightly lighter head; its wool (WoolMuffalo) is (179,192,186) and
+ * its leather (Leather_Bluefur) (152,170,174). The buffalo source keeps its
+ * shape, horns, eyes and hooves; only its dark coat pigment is replaced.
+ * Pastel reads the vertex colour below; Gouache reads the resident silver
+ * wool pigment of the bestiary (the chinchilla's, a cool pale grey painted
+ * with wavy strokes), so no new paint layer is baked. */
+const MUFFALO_COAT_COLOR='#97a9ac';
+const MUFFALO_COAT_PIGMENT='matChinchillaSilver';
+let muffaloCoat:THREE.MeshBasicMaterial|undefined;
+function muffaloCoatMaterial():THREE.MeshBasicMaterial {
+ if(muffaloCoat)return muffaloCoat;
+ const descriptor=BESTIARY_PAINT_DESCRIPTORS.find(d=>d.sourceKey===MUFFALO_COAT_PIGMENT);
+ if(!descriptor)throw Error('Missing resident muffalo coat pigment');
+ const material=new THREE.MeshBasicMaterial({color:MUFFALO_COAT_COLOR});
+ material.userData.referencePaintKey=descriptor.key;material.userData.referencePaintConfig=descriptor.config;
+ material.userData.referencePaintIndex=bestiaryPaintProfile(MUFFALO_COAT_PIGMENT);
+ muffaloCoat=material;return material;
+}
+function correctMuffaloCoat(root:THREE.Group):void {
+ const coat=muffaloCoatMaterial();
+ root.traverse(object=>{if(object instanceof THREE.Mesh&&(object as Part).material.userData.referencePaintKey==='matBuffaloDark')(object as Part).material=coat;});
+ root.userData.primaryMaterial=coat;
 }
 function parts(root:THREE.Object3D,name:string):Part[]{const found:Part[]=[];root.traverse(object=>{if(object instanceof THREE.Mesh&&object.name===name)found.push(object as Part);});return found;}
 function replace(part:Part,geometry:THREE.BufferGeometry):void {part.geometry.dispose();part.geometry=geometry;}

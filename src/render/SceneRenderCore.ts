@@ -113,6 +113,7 @@ import type { AreaIndex } from '../sim/designation';
 import { WORLD_SCALE } from '../world/scale';
 import type { CameraMode } from './CameraRig';
 import { cameraClipNear } from './camera-clip';
+import { wallLampWallCell363 } from '../sim/furniture-c-363';
 import { DayNightLayer } from './DayNightLayer';
 import { RecreationHints } from './RecreationHints';
 import { PlantClusterLayer } from './PlantClusterLayer';
@@ -1812,6 +1813,26 @@ export class SceneRenderCore {
     this.objectSelection.geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));old.dispose();
     this.objectTintSurfaces=surfaces;
     } finally {this.refreshGroundOverlays();}
+  }
+
+  /** Wall attachments are drawn high on the wall face, far from the floor cell
+   * the ground ray meets under them. Evaluated on a click only: a click on the
+   * drawn lamp resolves to the wall cell it hangs on, where the selection list
+   * offers the lamp first, then the wall (Core altitude order). */
+  wallAttachmentCellAt(clientX:number,clientY:number):Cell|null {
+    const world=this.world;if(!world)return null;
+    const rect=this.hostPort.surfaceRect(),center=new THREE.Vector3(),edge=new THREE.Vector3(),side=new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld,0);
+    let best:Cell|null=null,bestDepth=Infinity;
+    for(const s of world.structures){
+      if(s.kind!=='wall-lamp'||!knownPosition256(world,s))continue;
+      const wall=wallLampWallCell363(s),dx=wall.x-s.x,dz=wall.z-s.z,y=WORLD_SCALE.lampHeight+.35;
+      center.set(s.x+dx*.33,y,s.z+dz*.33).project(this.camera);
+      if(center.z<cameraClipNear(this.camera)||center.z>1||Math.abs(center.x)>1||Math.abs(center.y)>1)continue;
+      edge.set(s.x+dx*.33,y,s.z+dz*.33).addScaledVector(side,.3).project(this.camera);
+      const px=rect.left+(center.x+1)*rect.width/2,py=rect.top+(1-center.y)*rect.height/2,radius=Math.max(6,Math.abs(edge.x-center.x)*rect.width/2);
+      if(Math.hypot(clientX-px,clientY-py)<=radius&&center.z<bestDepth){best=wall;bestDepth=center.z;}
+    }
+    return best;
   }
 
   /** Project lightweight actor proxies only for pointer gestures, using the

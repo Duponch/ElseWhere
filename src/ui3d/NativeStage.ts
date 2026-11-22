@@ -797,7 +797,12 @@ export class NativeStage {
     // Actual UI hits and release-over-UI cancellation retain their ordinary rules.
     const paletteWorldPress=event.button===0&&event.isPrimary&&!!box&&!hit&&!inside&&this.worldVisible&&!this.frontVisible&&!this.editor&&!this.dropdown&&!this.page?.modal
       &&this.page?.layout==='palette'&&(this.page.palette==='orders'||this.page.palette==='zones');
-    const outside=!paletteWorldPress&&event.button===0&&this.page&&this.page.closable!==false&&!this.belongsToPage(hit)&&(!inside||!!hit)?this.page.id:undefined;
+    // The selection inspector is Core's non-modal inspect pane: a left click in
+    // the map selects (or cycles, or clears) through the renderer, which then
+    // replaces or closes the inspector, instead of only closing it.
+    const inspectorWorldPress=event.button===0&&event.isPrimary&&!!box&&!hit&&!inside&&this.worldVisible&&!this.frontVisible&&!this.editor&&!this.dropdown&&!this.page?.modal
+      &&this.page?.layout==='inspector';
+    const outside=!paletteWorldPress&&!inspectorWorldPress&&event.button===0&&this.page&&this.page.closable!==false&&!this.belongsToPage(hit)&&(!inside||!!hit)?this.page.id:undefined;
     if(outside&&(!hit||hit.piece.userData.nativeStatic||hit.control?.disabled||this.dropdown&&!this.dropdown.pieces.includes(hit.piece))){
       this.dismissPage();this.dismissedPointer=event.pointerId;this.swallow(event);return;
     }

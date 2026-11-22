@@ -9,7 +9,12 @@ type BatchInput={geometry:THREE.BufferGeometry;items:Placement[]};
 type DecoratedPart=OrigamiFloraReferencePart&{lines:THREE.BufferGeometry|null;wear:THREE.BufferGeometry|null};
 type CanopyGroup={key:string;center:THREE.Vector3;width:number;depth:number};
 type Recipe={parts:DecoratedPart[];height:number;canopies:Map<DecoratedPart,CanopyGroup>};
-const references:Readonly<Record<string,OrigamiFloraReference>>={poplar:'poplar',oak:'oak',pine:'pine',saguaro:'cactus',bush:'bush','berry-bush':'bush'};
+/** Bushes and berry bushes are not mapped (user's request of 22 November):
+ * they keep the low-poly shrub drawn before the Gouache/Origami redesign
+ * (flora-presentation, the faceted 'bush' surface model, like the rock
+ * fragments) in both styles, painted through the shared surface pipeline.
+ * The 'bush' reference recipe itself is unchanged and still callable. */
+const references:Readonly<Record<string,OrigamiFloraReference>>={poplar:'poplar',oak:'oak',pine:'pine',saguaro:'cactus'};
 function variation(seed:number,id:number,salt:number):number {
   let word=Math.imul(seed^salt,374761393)^Math.imul(id,668265263);
   word=Math.imul(word^word>>>13,1274126177);

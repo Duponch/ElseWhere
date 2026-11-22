@@ -19,6 +19,7 @@ import {apparelAppearance} from '../render/character-apparel';
 import {humanLimbVisualMask} from '../render/human-anatomy-presentation';
 import {portraitDataUrl, portraitExpressionOf} from '../ui/pawn-portrait';
 import {colonistBarState346, type ColonistBarState346} from '../ui/colonist-bar-state-346';
+import {pawnShortName} from '../ui/pawn-short-name';
 import {colonistBarStateLabel346, drawColonistBarState346} from './native-colonist-bar-346';
 import {knownBuilding256, knownNutrition256, knownPile256, knownPosition256, knownStockCounts256} from '../ui/exploration-readers-256';
 import type {StatusAlert} from '../ui/status-alerts';
@@ -574,7 +575,7 @@ export class NativeHudCards {
       this.portraits = []; this.portraitIds = ids;
       shown.forEach((pawn, localIdx) => {
         const idx = start + localIdx;
-        const entry = {pawnId: pawn.id, index: idx, name: pawn.name, mood: rounded(pawn.mood), skin: '#f2cfb1', shirt: PALETTE.sageMountain, sleeping: false, selected: this.selectedIds.has(pawn.id), loaded: false, appearanceKey: '', signature: ''} as PortraitCard;
+        const entry = {pawnId: pawn.id, index: idx, name: pawnShortName(pawn.name), mood: rounded(pawn.mood), skin: '#f2cfb1', shirt: PALETTE.sageMountain, sleeping: false, selected: this.selectedIds.has(pawn.id), loaded: false, appearanceKey: '', signature: ''} as PortraitCard;
         entry.piece = this.makePiece({w: .70, h: .96, depth: .046, bgColor: entry.selected ? PALETTE.ochre : PALETTE.kraftBase, bevel: .038, hasBorder:false,surface:'panel',seed: idx * 41 + 105, interactive: true,
           drawFn: (ctx, w, h, rng) => this.drawColonist(entry, ctx, w, h, rng),
           onClick: () => { if (!this.world?.pawns.some(p => p.id === entry.pawnId && isColonist(p))) return; this.setSelection([entry.pawnId]); this.actions.selectPawn(entry.pawnId); }});
@@ -595,7 +596,7 @@ export class NativeHudCards {
     }
     this.portraits.forEach((entry, idx) => {
       const pawn = shown[idx]!, appearance = appearanceOf(pawn, world.seed), look = apparelAppearance(apparel.get(pawn.id)), expression = portraitExpressionOf(pawn), limbMask = humanLimbVisualMask(pawn);
-      entry.name = pawn.name; entry.mood = rounded(pawn.mood); entry.selected = this.selectedIds.has(pawn.id); entry.sleeping = expression !== 'awake'; entry.skin = hex(appearance.skinColor); entry.shirt = look.color === undefined ? PALETTE.sageMountain : hex(look.color);
+      entry.name = pawnShortName(pawn.name); entry.mood = rounded(pawn.mood); entry.selected = this.selectedIds.has(pawn.id); entry.sleeping = expression !== 'awake'; entry.skin = hex(appearance.skinColor); entry.shirt = look.color === undefined ? PALETTE.sageMountain : hex(look.color);
       const appearanceKey = JSON.stringify([appearance, look.signature, expression, limbMask, weapons.get(pawn.id)]);
       if (entry.appearanceKey !== appearanceKey) {
         entry.appearanceKey = appearanceKey; entry.loaded = false;
