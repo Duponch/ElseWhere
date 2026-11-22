@@ -4,6 +4,7 @@ import { selectContinuousSources, type ContinuousSource, type ContinuousEventInf
 import { cueHash, cueVariation, selectOneShots } from './selection';
 import { interfaceBurstRule, isWorldInterfaceCue, MAX_INTERFACE_VOICES, type InterfaceCueKind } from './interface-cues';
 import { applyManifestGainOffsets, emptyGainOffsets, type GainOffsets } from './gain-offsets';
+import { fallbackCue } from './game-sounds';
 
 export type { AudioCue } from './scheduler';
 export type { InterfaceCueKind } from './interface-cues';
@@ -30,14 +31,23 @@ const CLUSTERED_KINDS = new Set([
   'haul.pickup', 'haul.drop', 'farming.sow', 'farming.harvest', 'eating.work',
   'cleaning.work', 'medical.tend', 'maintenance.work', 'deconstruction.work', 'firefighting.beat',
   'weapon.impact-ground', 'weapon.impact-barrier', 'weapon.impact-flesh',
-  'building.complete', 'woodcutting.fell',
+  'building.complete', 'woodcutting.fell', 'farming.harvest-finish', 'medical.surgery',
 ]);
+/** Groups of the game sounds of 22 November: a busy colony layers at most this
+ * many of them at once (grazing herds, many calls, several meals). */
+const GROUP_VOICES: Readonly<Record<string, number>> = { 'animal-eat': 2, 'animal-voice': 3, eating: 2, 'haul-drop': 3, construction: 3, crafting: 3 };
 function clusterGroup(kind: string): string | null {
   // An opening and closing door share one nearby acoustic patch.
   if (kind === 'door.open' || kind === 'door.close' || kind === 'autodoor.open' || kind === 'autodoor.close'
     || kind === 'fencegate.move') return 'door';
   if (kind.startsWith('animal.hurt.') || kind.startsWith('animal.death.')) return 'animal';
   if (kind.startsWith('human.hurt.')) return 'human-pain';
+  if (kind.startsWith('animal.call.') || kind.startsWith('animal.angry.')) return 'animal-voice';
+  if (kind.startsWith('animal.eat.')) return 'animal-eat';
+  if (kind.startsWith('eating.')) return 'eating';
+  if (kind === 'haul.drop' || kind.startsWith('haul.drop-')) return 'haul-drop';
+  if (kind.startsWith('construction.')) return 'construction';
+  if (kind.startsWith('crafting.')) return 'crafting';
   return CLUSTERED_KINDS.has(kind) ? kind : null;
 }
 const NO_DECODED_MP3_ERROR = 'Aucun MP3 du manifeste audio n’a pu être décodé.';
@@ -117,6 +127,9 @@ export class AudioDirector {
   private muted = false;
   private paused = false;
   private hidden = false;
+  /** Simulation speed shown to the player: Core plays idle animal calls at a
+   * quarter of their volume at the highest speed (IdleCallVolumeFactor). */
+  private speed = 1;
   private lastPose = '';
   private lastGain = -1;
   private playedOneShots = 0;
@@ -226,8 +239,9 @@ export class AudioDirector {
   }
 
   /** Called once per presented frame, including frames with no new snapshot. */
-  update(state: { presentedTick: number; paused: boolean; hidden: boolean }): void {
+  update(state: { presentedTick: number; paused: boolean; hidden: boolean; speed?: number }): void {
     if (this.disposed) return;
+    if (state.speed !== undefined && Number.isFinite(state.speed)) this.speed = state.speed;
     const wasInactive = this.paused || this.hidden || this.muted;
     this.paused = state.paused;
     this.setHidden(state.hidden);
@@ -243,9 +257,22 @@ export class AudioDirector {
     for (const cue of due) if (isWorldInterfaceCue(cue.kind)) this.playInterface(cue.kind as InterfaceCueKind);
     if (state.paused) return;
     if (state.hidden || this.muted || !this.manifest || this.context?.state !== 'running') return;
-    const ready = due.filter(cue => !isWorldInterfaceCue(cue.kind) &&
-      this.manifest?.events[cue.kind]?.variants.some(variant => this.buffers.get(variant.src)));
+    const ready: AudioCue[] = [];
+    for (const cue of due) {
+      if (isWorldInterfaceCue(cue.kind)) continue;
+      const playable = this.playableCue(cue);
+      if (playable) ready.push(playable);
+    }
     for (const cue of selectOneShots(ready, this.manifest.events, this.camera, MAX_ONE_SHOTS_PER_FRAME)) this.playCue(cue);
+  }
+
+  /** The cue itself, or the cue it refines when the manifest has no decoded
+   * take for it (a specific drop, bench or weapon falls back on the plain one). */
+  private playableCue(cue: AudioCue): AudioCue | undefined {
+    const decoded = (kind: string) => this.manifest?.events[kind]?.variants.some(variant => this.buffers.get(variant.src));
+    if (decoded(cue.kind)) return cue;
+    const fallback = fallbackCue(cue.kind);
+    return fallback && decoded(fallback) ? { ...cue, kind: fallback as AudioCue['kind'] } : undefined;
   }
 
   setVolume(volume: number): void {
@@ -606,10 +633,11 @@ export class AudioDirector {
     if (group) {
       // Repeated work or doors at one patch should not layer recordings.
       // The set is bounded by MAX_VOICES and checked only for due contacts.
+      const cap = GROUP_VOICES[group] ?? MAX_CLUSTER_VOICES;
       let active = 0;
       for (const voice of this.voices) {
         if (clusterGroup(voice.kind) !== group) continue;
-        if (++active >= MAX_CLUSTER_VOICES) return;
+        if (++active >= cap) return;
         if (voice.x !== undefined && voice.z !== undefined &&
           Math.hypot(cue.x - voice.x, cue.z - voice.z) < CLUSTER_RADIUS) return;
       }
@@ -634,7 +662,8 @@ export class AudioDirector {
     try {
       const source = context.createBufferSource(); source.buffer = buffer;
       const variation = cueVariation(cue.id, cue.kind);
-      source.playbackRate.value = variation.playbackRate;
+      const pitch = Number.isFinite(cue.pitch) ? Math.max(0.25, Math.min(4, cue.pitch!)) : 1;
+      source.playbackRate.value = variation.playbackRate * pitch;
       const panner = event.spatial ? context.createPanner() : null;
       if (panner) {
         panner.panningModel = 'equalpower';
@@ -648,7 +677,8 @@ export class AudioDirector {
       }
       const gain = context.createGain();
       const intensity = Number.isFinite(cue.intensity) ? Math.max(0, Math.min(2, cue.intensity!)) : 1;
-      gain.gain.value = Math.min(8, event.gain * variant.gain * intensity * variation.gain);
+      const idleCall = cue.kind.startsWith('animal.call.') && this.speed >= 6 ? 0.25 : 1;
+      gain.gain.value = Math.min(8, event.gain * variant.gain * intensity * idleCall * variation.gain);
       if (panner) { source.connect(panner); panner.connect(gain); }
       else source.connect(gain);
       gain.connect(master);

@@ -86,7 +86,8 @@ test('haul sounds follow carried identity across pickup and release, without rep
   pawn.haul = null;
   world.piles.find(pile => pile.id === carryId)!.owner = { type: 'ground', x: pawn.x, z: pawn.z };
   recorder.capture(world);
-  expect(recorder.drain()).toMatchObject([{ kind: 'haul.drop', x: pawn.x, z: pawn.z }]);
+  // Core Wood_Drop of the carried wood (game sounds of 22 November 2026).
+  expect(recorder.drain()).toMatchObject([{ kind: 'haul.drop-wood', x: pawn.x, z: pawn.z }]);
   recorder.capture(world);
   expect(recorder.drain()).toEqual([]);
 });
@@ -403,10 +404,11 @@ test.each([
   ['cook-carnivore-lavish-meal-bulk', 'fueled-stove', 'cooking.work'],
   ['vegetarian-lavish-meal', 'fueled-stove', 'cooking.work'],
   ['butcher-creature', 'butcher-table', 'butchering.work'],
-  ['stone-blocks', 'stonecutter', 'crafting.work'],
-  ['make-revolver', 'machining-table', 'crafting.work'],
-  ['make-component', 'fabrication-bench', 'crafting.work'],
-  ['small-sculpture', 'art-bench', 'crafting.work'],
+  // Core RecipeDef.soundWorking (game sounds of 22 November 2026).
+  ['stone-blocks', 'stonecutter', 'crafting.stonecut'],
+  ['make-revolver', 'machining-table', 'crafting.smith'],
+  ['make-component', 'fabrication-bench', 'crafting.machining'],
+  ['small-sculpture', 'art-bench', 'crafting.sculpt'],
   ['shirt', 'tailor-bench', 'tailoring.work'],
   ['tribalwear', 'crafting-spot', 'tailoring.work'],
 ] as const)('captures %s production progress at %s as %s', (recipe, stationKind, kind) => {
@@ -480,7 +482,7 @@ test.each([
   ['chop', 'woodcutting.hit', 2, 5],
   ['wall', 'construction.hit', 2, 5],
   ['simple-meal', 'cooking.work', 5, 11],
-  ['stone-blocks', 'crafting.work', 5, 11],
+  ['stone-blocks', 'crafting.stonecut', 5, 11],
   ['shirt', 'tailoring.work', 5, 11],
   ['butcher-creature', 'butchering.work', 5, 11],
   ['research', 'research.work', 5, 11],

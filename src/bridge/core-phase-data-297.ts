@@ -1,5 +1,6 @@
 import {isCapturedCoreData297} from './native-message-capture';
 import {ANIMAL_SPECIES_IDS} from '../sim/animal-species';
+import {GAME_SOUND_CUE_KINDS} from '../audio/game-sounds';
 import type {World,Pawn} from '../sim/types';
 import {registeredMapId,selectedRegisteredMap} from '../sim/world-map-context';
 import {campaignAuthority,secondaryContext,selectedMap} from '../sim/secondary-site-context';
@@ -109,11 +110,11 @@ export function validCoreTrace297(v:unknown,a:CorePhaseAnchor297,toCore:number):
 }
 const coreAudioKinds297=new Set(['mining.hit','woodcutting.hit','construction.hit','cooking.work','crafting.work','tailoring.work','butchering.work','research.work','weapon.gunshot','weapon.melee','weapon.impact-ground','weapon.impact-barrier','weapon.impact-flesh','weapon.explosion','door.open','door.close','haul.pickup','haul.drop','farming.sow','farming.harvest','eating.work','cleaning.work','medical.tend','maintenance.work','firefighting.beat','power.switch-on','power.switch-off','deconstruction.work','building.deconstructed','autodoor.open','autodoor.close','weather.thunder','ui.threat','ui.colonist-death','ui.colonist-downed','ui.research-complete','fencegate.move','building.complete','woodcutting.fell','ui.click','ui.reject','ui.panel']);
 const audioAnimalSpecies297=new Set<string>(ANIMAL_SPECIES_IDS.filter(s=>s!=='snow-hare'));
-function audioKind297(value:string):boolean {if(coreAudioKinds297.has(value)||/^human\.hurt\.(male|female)$/.test(value))return true;const match=/^animal\.(hurt|death)\.([a-z][a-z-]{0,63})$/.exec(value);return !!match&&audioAnimalSpecies297.has(match[2]!)&&!(match[1]==='death'&&match[2]==='red-fox');}
+function audioKind297(value:string):boolean {if(coreAudioKinds297.has(value)||GAME_SOUND_CUE_KINDS.has(value)||/^human\.hurt\.(male|female)$/.test(value))return true;const match=/^animal\.(hurt|death)\.([a-z][a-z-]{0,63})$/.exec(value);return !!match&&audioAnimalSpecies297.has(match[2]!)&&!(match[1]==='death'&&match[2]==='red-fox');}
 /** Eligibility only; it neither consumes cues nor grants Native admission. */
 export function validCoreAudioCues297(cues:unknown,fromCore:number,toCore:number):boolean {
  if(!coreInteger297(fromCore)||!coreInteger297(toCore,fromCore))return false;
- return !(!arr297(cues)||cues.length>128||!cues.every(c=>rec297(c)&&exact(c,['id','tick','kind','x','z',...own(c,'intensity')?['intensity']:[]])&&typeof c.id==='string'&&c.id.length>0&&c.id.length<=256&&typeof c.kind==='string'&&audioKind297(c.kind)&&finite(c.tick,fromCore/10,toCore/10)&&finite(c.x)&&finite(c.z)&&(!own(c,'intensity')||finite(c.intensity,0,16))));
+ return !(!arr297(cues)||cues.length>128||!cues.every(c=>rec297(c)&&exact(c,['id','tick','kind','x','z',...own(c,'intensity')?['intensity']:[],...own(c,'pitch')?['pitch']:[]])&&typeof c.id==='string'&&c.id.length>0&&c.id.length<=256&&typeof c.kind==='string'&&audioKind297(c.kind)&&finite(c.tick,fromCore/10,toCore/10)&&finite(c.x)&&finite(c.z)&&(!own(c,'intensity')||finite(c.intensity,0,16))&&(!own(c,'pitch')||finite(c.pitch,.25,4))));
 }
 /** Strict representation validator. Native source, predecessor and rendering
  * authority are checked separately by the private lane owner. */

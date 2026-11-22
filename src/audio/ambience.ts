@@ -2,6 +2,12 @@ import { listenerPose, type AudioCamera } from './spatial.ts';
 import type { Resource, World } from '../sim/types.ts';
 import { plantGrowth } from '../sim/plants.ts';
 import { plantLeafless } from '../sim/plant-life.ts';
+import { TICKS_PER_DAY } from '../sim/types.ts';
+import { calendarTick } from '../sim/calendar.ts';
+import { outdoorTemperature } from '../sim/temperature.ts';
+import type { WeatherKind } from '../sim/weather-definitions.ts';
+import { biomeHasNightInsects, nightInsectsGain } from './game-sounds.ts';
+import type { ContinuousSource } from './continuous.ts';
 
 /** Global weather follows the map camera but softens as the listener rises. */
 export function ambientCameraGain(camera: AudioCamera): number {
@@ -94,4 +100,26 @@ export class FoliageAmbience {
     }
     return 1 - Math.exp(-canopy / 24);
   }
+}
+
+/** Core WeatherDef.ambientSounds: Ambient_Wind_Clear for clear, fog (its own
+ * fog wind in Core) and gentle snow; Ambient_Wind_Storm for thunderstorms and
+ * hard snow. Rain keeps its own loop. */
+const STORM_WEATHER: ReadonlySet<WeatherKind> = new Set(['dry-thunderstorm', 'rainy-thunderstorm', 'snow-hard']);
+const CLEAR_WIND_WEATHER: ReadonlySet<WeatherKind> = new Set(['clear', 'fog', 'snow-gentle', 'foggy-rain']);
+
+/** The biome and weather beds of the game sounds of 22 November: night insects
+ * (Core Ambient_NightInsects_Standard, by hour and outdoor temperature) and the
+ * weather's wind bed. Built with the other loops on a snapshot or a camera move,
+ * never per image; each is one non-spatial voice. */
+export function gameAmbienceSources(world: World, focus: { x: number; z: number }, weather: WeatherKind, cameraGain: number): ContinuousSource[] {
+  const sources: ContinuousSource[] = [];
+  if (biomeHasNightInsects(world.site?.biome)) {
+    const hour = 24 * (calendarTick(world) % TICKS_PER_DAY) / TICKS_PER_DAY;
+    const insects = nightInsectsGain(hour, outdoorTemperature(world)) * cameraGain;
+    if (insects > .02) sources.push({ id: 'ambient:night-insects', kind: 'ambient.night-insects', x: focus.x, z: focus.z, gain: insects });
+  }
+  const bed = STORM_WEATHER.has(weather) ? 'weather.wind-storm' : CLEAR_WIND_WEATHER.has(weather) ? 'weather.wind-clear' : undefined;
+  if (bed) sources.push({ id: `ambient:${bed}`, kind: bed, x: focus.x, z: focus.z, gain: cameraGain });
+  return sources;
 }

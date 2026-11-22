@@ -271,8 +271,8 @@ import { alertCue, clockCue, commandCue, letterCue, nativeActivationCue, tutoria
 import { MusicDirector, type MusicMood } from './audio/MusicDirector';
 import { loadGainOffsets } from './audio/gain-offsets';
 import { developerPagesForMode } from './ui/developer-pages';
-import { ambientCameraGain, FoliageAmbience } from './audio/ambience';
-import { createNearbyFireCollector, createNearbyMachineCollector, runningMachineAudioSource } from './audio/continuous';
+import { ambientCameraGain, FoliageAmbience, gameAmbienceSources } from './audio/ambience';
+import { createNearbyFireCollector, createNearbyMachineCollector, MACHINE_LOOP_STRUCTURES, runningMachineAudioSource } from './audio/continuous';
 import { listenerPose, type AudioCamera } from './audio/spatial';
 import { ColonyRenderer } from './render/ColonyRenderer';
 import { SceneStructurePreparation } from './render/SceneStructurePreparation';
@@ -548,7 +548,7 @@ function syncAudioSources(world: World,camera=lastAudioCamera): void {
   for(const structure of world.structures){
     if(structure.kind==='campfire'&&structure.fuel?.ticks)
       nearby.add(`campfire:${structure.id}`,structure.x,structure.z,.48);
-    if(structure.kind==='wood-generator'||structure.kind==='wind-turbine'){
+    if(MACHINE_LOOP_STRUCTURES.has(structure.kind)){
       const machine=runningMachineAudioSource(structure);
       if(machine)machinery.add(machine.id,machine.kind,machine.x,machine.z,machine.gain);
     }
@@ -563,6 +563,7 @@ function syncAudioSources(world: World,camera=lastAudioCamera): void {
   const wind=Math.max(0,Math.min(1,windIntensity(world)/2));
   const rustle=wind*weatherCameraGain*foliageAmbience.gain(focus.x,focus.z);
   if(rustle>.001)sources.push({id:'weather:wind',kind:'weather.wind',x:focus.x,z:focus.z,gain:rustle});
+  sources.push(...gameAmbienceSources(world,focus,weather,weatherCameraGain));
   audio.setContinuousSources(sources);
 }
 let lastColonyHistorySignature='';
@@ -3105,7 +3106,7 @@ async function prepareWorldView(): Promise<void> {
         (Math.hypot(pose.x-lastAudioSourceFocus.x,pose.z-lastAudioSourceFocus.z)>=4 ||
           !Number.isFinite(lastAudioSourceHeight) || Math.abs(pose.y-lastAudioSourceHeight)>=2))
         syncAudioSources(snapshot,view.camera);
-      audio.update({ presentedTick: view.tick, paused: view.paused || frontMenu.isOpen() || replacingWorld, hidden: document.hidden });
+      audio.update({ presentedTick: view.tick, paused: view.paused || frontMenu.isOpen() || replacingWorld, hidden: document.hidden, speed: currentSpeed });
     };
     renderer.onSelection=gesture=>{if(shootingControls.active){const targetId=gesture.ids[0];if(targetId!==undefined){const type=shootingControls.mode!;shootingControls.cancel();void attempt(async()=>{await client.command({type,pawnIds:selectedColonyIds(),targetId});renderState();});}return;}selectPawns(gesture);};
     renderer.onObjectSelection=selectObjects;

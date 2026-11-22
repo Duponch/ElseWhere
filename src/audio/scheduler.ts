@@ -6,6 +6,8 @@ export interface AudioCue {
   x: number;
   z: number;
   intensity?: number;
+  /** Playback-rate factor (a young animal's voice, a lower great bow). */
+  pitch?: number;
 }
 
 const MAX_PENDING = 256;

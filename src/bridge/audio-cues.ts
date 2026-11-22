@@ -10,11 +10,33 @@ import type { AnimalSpeciesId } from '../sim/animal-species.ts';
 import { actualPowerSwitch, canFlickPower } from '../sim/power-flick.ts';
 import { appearanceOf } from '../sim/pawn-appearance.ts';
 import { anestheticModifiers } from '../sim/anesthetic.ts';
+import { ITEM_DEFINITIONS } from '../sim/items.ts';
+import { equippedWeapon } from '../sim/equipment-rules.ts';
+import { adultAgeTicks, juvenileAgeTicks } from '../sim/animal-life.ts';
+import { trackedAnimalLifeStage256 } from '../sim/animal-growth-runtime-256.ts';
+import { resourceAt } from '../sim/farming.ts';
+import {
+  animalCallInterval, animalEatCue, animalStrikeCallDelay, animalVoiceCue, bigBashAnimal, constructionCue, dropCue,
+  ingestCue, meleeCue, productionCue, shotCue, type AnimalVoiceVerb, type GameSoundCueKind,
+} from '../audio/game-sounds.ts';
 
 type AnimalVoiceSpecies = Exclude<AnimalSpeciesId, 'snow-hare'>;
 type AnimalDeathVoiceSpecies = Exclude<AnimalVoiceSpecies, 'red-fox'>;
-const animalVoiceSpecies = (species:AnimalSpeciesId):AnimalVoiceSpecies =>
-  species === 'snow-hare' ? 'hare' : species;
+type WildAnimal = NonNullable<World['wildlife']>['animals'][number];
+const itemKind = (item: string): string | undefined =>
+  (ITEM_DEFINITIONS as Readonly<Record<string, { kind: string }>>)[item]?.kind;
+/** 0 baby, 1 juvenile, 2 adult: the persisted growth when present, else the Core stage ages. */
+function animalStage(animal: Pick<WildAnimal, 'species' | 'ageTicks'> & { growthTracker?: { value: number } }): 0 | 1 | 2 {
+  const growth = animal.growthTracker?.value;
+  if (growth !== undefined) return Math.max(0, Math.min(2, trackedAnimalLifeStage256(animal.species, { value: growth }).index)) as 0 | 1 | 2;
+  return animal.ageTicks >= adultAgeTicks(animal.species) ? 2 : animal.ageTicks >= juvenileAgeTicks(animal.species) ? 1 : 0;
+}
+/** Core Pawn_CallTracker.PawnAggressive: mental hostility, an engaged target
+ * within 360 ticks, or a melee attack job. */
+function animalAggressive(animal: WildAnimal, core: number): boolean {
+  return !!animal.manhunter || !!animal.predation || (animal.retaliation?.untilCore ?? -1) > core
+    || (animal.strike !== undefined && core - animal.strike.atCore <= 360);
+}
 
 export type AudioCueKind = 'mining.hit' | 'woodcutting.hit' | 'construction.hit'
   | 'cooking.work' | 'crafting.work' | 'tailoring.work' | 'butchering.work' | 'research.work'
@@ -28,7 +50,7 @@ export type AudioCueKind = 'mining.hit' | 'woodcutting.hit' | 'construction.hit'
   | `human.hurt.${'male'|'female'}`
   | `animal.hurt.${AnimalVoiceSpecies}` | `animal.death.${AnimalDeathVoiceSpecies}`
   | 'ui.threat' | 'ui.colonist-death' | 'ui.colonist-downed' | 'ui.research-complete'
-  | 'ui.click' | 'ui.reject' | 'ui.panel';
+  | 'ui.click' | 'ui.reject' | 'ui.panel' | GameSoundCueKind;
 /** Interface alerts kept through a full queue (they are rare and severe). */
 const SEVERE_CUES: ReadonlySet<string> = new Set(['ui.threat', 'ui.colonist-death', 'ui.colonist-downed']);
 
@@ -56,6 +78,8 @@ export interface AudioCue {
   x: number;
   z: number;
   intensity?: number;
+  /** Playback-rate factor (Core voxPitch of a young animal, a lower great bow). */
+  pitch?: number;
 }
 
 const MAX_CUES_PER_TICK = 32;
@@ -64,10 +88,17 @@ const MAX_PENDING_CUES = 128;
 const WORK_CUE_INTERVAL_TICKS = [2, 3, 4, 5] as const;
 const STATION_CUE_INTERVAL_TICKS = [5, 6, 7, 8, 9, 10, 11] as const;
 const EATING_CUE_INTERVAL_TICKS = [4, 5, 6, 7] as const;
+// Grazing is a sustained chew in Core (Toils_Ingest.ChewIngestible); a whole
+// herd must stay a soft background, so its contacts are sparser.
+const ANIMAL_EATING_CUE_INTERVAL_TICKS = [6, 7, 8, 9, 10] as const;
 
 type WorkObservation = { key: string; progress: number; nextCueTick: number; cueCount: number };
 type HaulObservation = { sourcePileId: number; phase: 'pickup' | 'deliver'; carryPileId: number | null;
-  x: number; z: number; whole: boolean };
+  x: number; z: number; whole: boolean; drop?: AudioCueKind };
+/** Life, injuries and the presentation-only call clock of one animal. */
+type AnimalObservation = ActorDamageObservation & { nextCall: number; calls: number; strikeCore: number | undefined };
+/** A worked harvest or cut of a plant, with its growth when last seen. */
+type HarvestObservation = { x: number; z: number; resourceId?: number };
 type DeconstructionObservation = { structureId: number; progress: number; reservedBy: number | null;
   x: number; z: number };
 /** A worked construction or tree-chopping job, followed until it disappears. */
@@ -106,7 +137,10 @@ export class AudioCueRecorder {
   private doors = new Map<number, boolean>();
   private hauls = new Map<number, HaulObservation>();
   private pawnStates = new Map<number, ActorDamageObservation>();
-  private animalStates = new Map<number, ActorDamageObservation>();
+  private animalStates = new Map<number, AnimalObservation>();
+  private harvestJobs = new Map<number, HarvestObservation>();
+  /** The food a pawn is ingesting, resolved once per meal. */
+  private ingestion = new Map<number, { key: string; kind: AudioCueKind }>();
   private firefighting = new Map<number, { fireId: number; cooldownCore: number }>();
   private fireIds = new Set<number>();
   private switches = new Map<number, boolean>();
@@ -123,6 +157,8 @@ export class AudioCueRecorder {
   reset(): void {
     this.constructionJobs.clear();
     this.chopJobs.clear();
+    this.harvestJobs.clear();
+    this.ingestion.clear();
     this.researchDone = 0;
     this.nextId = 0;
     this.publicationGeneration297++;
@@ -159,17 +195,50 @@ export class AudioCueRecorder {
       if(world.tick!==this.tick){this.tick=world.tick;this.tickCount=0;}
       for(const event of strikes){
         if(event.atCore!==core||!Number.isSafeInteger(event.actorId)||event.actorId<1||event.actorId>=world.nextId||!Number.isFinite(event.x)||!Number.isFinite(event.z)||!['human','animal','mechanical'].includes(event.kind))throw Error('Invalid causal strike audio');
-        if(this.initialized&&this.melee.get(event.actorId)!==event.atCore){const id=event.kind==='mechanical'?`melee:${event.actorId}:${event.atCore}`:`melee:${event.atCore}:${event.actorId}`;this.add({id,tick:world.tick,kind:'weapon.melee',x:event.x,z:event.z});}
+        if(this.initialized&&this.melee.get(event.actorId)!==event.atCore){const id=event.kind==='mechanical'?`melee:${event.actorId}:${event.atCore}`:`melee:${event.atCore}:${event.actorId}`;this.add({id,tick:world.tick,kind:this.meleeKind(world,event.actorId,event.kind,event.atCore),x:event.x,z:event.z});}
         this.melee.set(event.actorId,event.atCore);
       }
       for(const event of shots){
         if(event.atCore!==core||!Number.isSafeInteger(event.projectileId)||event.projectileId<1||event.projectileId>=world.nextId||!Number.isFinite(event.x)||!Number.isFinite(event.z)||event.pawnId!==undefined&&(!Number.isSafeInteger(event.pawnId)||event.pawnId<1||event.pawnId>=world.nextId))throw Error('Invalid causal shot audio');
         const fresh=!this.projectiles.has(event.projectileId),freshPawn=event.pawnId===undefined||this.shooting.get(event.pawnId)!==event.atCore;
-        if(this.initialized&&fresh&&freshPawn)this.add({id:event.pawnId===undefined?`shot:${event.projectileId}`:`shot:${event.pawnId}:${event.atCore}`,tick:world.tick,kind:'weapon.gunshot',x:event.x,z:event.z});
+        if(this.initialized&&fresh&&freshPawn)this.add({id:event.pawnId===undefined?`shot:${event.projectileId}`:`shot:${event.pawnId}:${event.atCore}`,tick:world.tick,...this.shotKind(world,event.projectileId,event.pawnId),x:event.x,z:event.z});
         this.projectiles.add(event.projectileId);if(event.pawnId!==undefined)this.shooting.set(event.pawnId,event.atCore);
       }
       this.capture(world);
     }finally{this.coreCapture297=undefined;}
+  }
+  /** Core Verb_MeleeAttack sound of a strike, read on the striker when its
+   * strike of that Core is still there; otherwise the plain blow. Only read on
+   * a new strike, never per tick. */
+  private meleeKind(world: World, actorId: number, actor: 'human' | 'animal' | 'mechanical', atCore: number): AudioCueKind {
+    if (actor === 'human') {
+      const pawn = world.pawns.find(candidate => candidate.id === actorId);
+      const strike = pawn?.melee?.strike;
+      if (!pawn || !strike || strike.atCore !== atCore) return 'weapon.melee';
+      const weapon = equippedWeapon(world, pawn);
+      return meleeCue('human', strike.outcome, strike.tool, weapon && { item: weapon.item, kind: itemKind(weapon.item) }, false) as AudioCueKind;
+    }
+    if (actor === 'animal') {
+      const animal = world.wildlife?.animals.find(candidate => candidate.id === actorId);
+      const strike = animal?.strike;
+      if (!animal) return 'weapon.melee';
+      return meleeCue('animal', strike?.atCore === atCore ? strike.outcome : undefined, undefined, undefined, bigBashAnimal(animal.species)) as AudioCueKind;
+    }
+    const mechanoid = world.mechanoids?.find(candidate => candidate.id === actorId);
+    const strike = mechanoid?.melee?.strike;
+    return meleeCue('mechanical', strike?.atCore === atCore ? strike.outcome : undefined, undefined, undefined, false) as AudioCueKind;
+  }
+  /** Core Verb soundCast of the weapon that fired: the projectile's weapon, or
+   * the shooter's equipped weapon when the projectile is already gone. */
+  private shotKind(world: World, projectileId: number | undefined, pawnId: number | undefined): { kind: AudioCueKind; pitch?: number } {
+    let item: string | undefined = projectileId === undefined ? undefined
+      : world.projectiles?.find(projectile => projectile.id === projectileId)?.weaponItem;
+    if (item === undefined && pawnId !== undefined) {
+      const pawn = world.pawns.find(candidate => candidate.id === pawnId);
+      item = pawn ? equippedWeapon(world, pawn)?.item : undefined;
+    }
+    const cue = shotCue(item);
+    return { kind: cue.kind as AudioCueKind, ...(cue.pitch !== undefined ? { pitch: cue.pitch } : {}) };
   }
   capture(world: World): void {
     if (world.tick !== this.tick) { this.tick = world.tick; this.tickCount = 0; }
@@ -189,7 +258,7 @@ export class AudioCueRecorder {
     const doors = new Map<number, boolean>();
     const hauls = new Map<number, HaulObservation>();
     const pawnStates = new Map<number, ActorDamageObservation>();
-    const animalStates = new Map<number, ActorDamageObservation>();
+    const animalStates = new Map<number, AnimalObservation>();
     const firefighting = new Map<number, { fireId: number; cooldownCore: number }>();
     const fireIds = new Set((world.fires?.items ?? []).map(fire => fire.id));
     const switches = new Map<number, boolean>();
@@ -198,6 +267,10 @@ export class AudioCueRecorder {
     const jobs = new Map<number, World['jobs'][number]>();
     const constructionJobs = new Map<number, FinishObservation>();
     const chopJobs = new Map<number, FinishObservation>();
+    const harvestJobs = new Map<number, HarvestObservation>();
+    const ingestion = new Map<number, { key: string; kind: AudioCueKind }>();
+    // Read only when a pawn starts carrying or eating a pile (no index built).
+    const pileItem = (id: number): string | undefined => world.piles.find(pile => pile.id === id)?.item;
     for (const job of world.jobs) {
       jobs.set(job.id, job);
       // A job is followed once it has been worked: completion needs contact
@@ -206,6 +279,8 @@ export class AudioCueRecorder {
         if (job.kind === 'chop') chopJobs.set(job.id, { x: job.x, z: job.z,
           ...(job.plantTarget ? { resourceId: job.plantTarget.resourceId } : {}) });
         else if (isConstruction(job)) constructionJobs.set(job.id, { x: job.x, z: job.z });
+        else if (job.kind === 'harvest' || job.kind === 'cut') harvestJobs.set(job.id, { x: job.x, z: job.z,
+          ...(job.plantTarget ? { resourceId: job.plantTarget.resourceId } : {}) });
       }
       // Pending work cannot finish between two captures: both actions need at
       // least two contacted ticks. Follow targets from the first work tick.
@@ -283,8 +358,15 @@ export class AudioCueRecorder {
       const previousHaul = previousHauls.get(pawn.id);
       const haul = pawn.haul;
       if (haul) {
+        // Core ThingDef.soundDrop of the carried thing, resolved once per carried pile.
+        const drop: AudioCueKind | undefined = haul.carryPileId === null ? undefined
+          : previousHaul?.carryPileId === haul.carryPileId && previousHaul.drop ? previousHaul.drop
+            : haul.whole === true ? 'haul.drop' : (() => {
+              const item = pileItem(haul.carryPileId!);
+              return (item ? dropCue(item, itemKind(item)) : 'haul.drop') as AudioCueKind;
+            })();
         hauls.set(pawn.id, { sourcePileId: haul.sourcePileId, phase: haul.phase,
-          carryPileId: haul.carryPileId, x: pawn.x, z: pawn.z, whole: haul.whole === true });
+          carryPileId: haul.carryPileId, x: pawn.x, z: pawn.z, whole: haul.whole === true, ...(drop ? { drop } : {}) });
         if (this.initialized && previousHaul?.sourcePileId === haul.sourcePileId
           && previousHaul.phase === 'pickup' && haul.phase === 'deliver'
           && haul.carryPileId !== null) {
@@ -300,7 +382,7 @@ export class AudioCueRecorder {
           : world.piles.some(pile => pile.id === previousHaul.carryPileId
             && pile.owner.type === 'pawn' && pile.owner.pawnId === pawn.id);
         if (!stillCarried) this.add({ id: `haul.drop:${world.tick}:${pawn.id}:${previousHaul.carryPileId}`,
-          tick: world.tick, kind: 'haul.drop', x: pawn.x, z: pawn.z });
+          tick: world.tick, kind: previousHaul.drop ?? 'haul.drop', x: pawn.x, z: pawn.z });
       }
       const job = pawn.jobId === null ? undefined : jobs.get(pawn.jobId);
       if(pawn.haul?.destination.type==='turret'&&pawn.haul.serviceProgress!==undefined){
@@ -317,7 +399,9 @@ export class AudioCueRecorder {
           : job.kind === 'sow' ? 'farming.sow'
           : job.kind === 'harvest' || job.kind === 'cut' ? 'farming.harvest'
             : job.kind === 'deconstruct' ? 'deconstruction.work'
-              : job.kind === 'repair' || job.kind === 'fix-breakdown' ? 'maintenance.work' : 'construction.hit';
+              : job.kind === 'repair' || job.kind === 'fix-breakdown' ? 'maintenance.work'
+                // Core Frame.ConstructionEffect: wood, metal or dirt by the stuff or the def.
+                : constructionCue(job) as AudioCueKind;
         recordWork(pawn.id, `job:${job.id}`, job.progress * WORK_FRACTIONS + (job.workRemainder ?? 0), kind,
           job.x, job.z, pawn.state === 'working', WORK_CUE_INTERVAL_TICKS);
       } else if (pawn.cleaning) {
@@ -328,22 +412,33 @@ export class AudioCueRecorder {
         const task = pawn.surgery;
         // Actual contacted time drives cadence; dynamic surgical speed must
         // not turn a faster progress multiplier into a faster sound loop.
-        recordWork(pawn.id, `surgery:${task.patientId}:${task.part}`, task.workCore, 'medical.tend',
+        // Core Recipe_Surgery (Interact_Tend stays for tending).
+        recordWork(pawn.id, `surgery:${task.patientId}:${task.part}`, task.workCore, 'medical.surgery',
           pawn.x, pawn.z, task.phase === 'work' && pawn.state === 'working', STATION_CUE_INTERVAL_TICKS);
       } else if (pawn.tend) {
         const task = pawn.tend;
         recordWork(pawn.id, `tend:${task.patientId}`, task.progress, 'medical.tend',
           pawn.x, pawn.z, task.phase === 'tend' && pawn.state === 'working', STATION_CUE_INTERVAL_TICKS);
       } else if (pawn.need?.kind === 'eat' && pawn.need.phase === 'ingest') {
-        recordWork(pawn.id, `eat:${pawn.need.sourcePileId}:${pawn.need.carryPileId}`,
-          pawn.need.progress * WORK_FRACTIONS + (pawn.need.workRemainder ?? 0), 'eating.work',
+        // Core ingestible.ingestSound of the food, resolved once per meal.
+        const key = `eat:${pawn.need.sourcePileId}:${pawn.need.carryPileId}`, known = this.ingestion.get(pawn.id);
+        let kind: AudioCueKind = 'eating.work';
+        if (known?.key === key) kind = known.kind;
+        else {
+          const item = pawn.need.carryPileId === null ? undefined : pileItem(pawn.need.carryPileId);
+          if (item) kind = ingestCue(item, itemKind(item)) as AudioCueKind;
+        }
+        ingestion.set(pawn.id, { key, kind });
+        recordWork(pawn.id, key, pawn.need.progress * WORK_FRACTIONS + (pawn.need.workRemainder ?? 0), kind,
           pawn.x, pawn.z, pawn.state === 'eating', EATING_CUE_INTERVAL_TICKS);
       } else if (pawn.cooking) {
         const task = pawn.cooking, station = stationFor(task.stationId), recipe = taskRecipe(task);
         if (station && stationAccepts(station, recipe)) {
           const kind: AudioCueKind = recipe === 'cook-survival-meal' || recipe === 'simple-meal' || recipe === 'cook-simple-meal-bulk' || recipe === 'fine-meal' || recipe === 'cook-fine-meal-bulk' || recipe === 'vegetarian-fine-meal' || recipe === 'cook-vegetarian-fine-meal-bulk' || recipe === 'carnivore-fine-meal' || recipe === 'cook-carnivore-fine-meal-bulk' || recipe === 'lavish-meal' || recipe === 'cook-lavish-meal-bulk' || recipe === 'vegetarian-lavish-meal' || recipe === 'cook-vegetarian-lavish-meal-bulk' || recipe === 'cook-carnivore-lavish-meal' || recipe === 'cook-carnivore-lavish-meal-bulk' ? 'cooking.work'
             : recipe === 'butcher-creature' ? 'butchering.work'
-              : isTailoring(recipe) ? 'tailoring.work' : 'crafting.work';
+              : isTailoring(recipe) ? 'tailoring.work'
+                // Core RecipeDef.soundWorking of the bench (smithing, stonecutting…).
+                : (productionCue(recipe) ?? 'crafting.work') as AudioCueKind;
           recordWork(pawn.id, `production:${station.id}:${task.billId}:${recipe}`, task.progress, kind,
             station.x, station.z, task.phase === 'work' && pawn.state === 'working', STATION_CUE_INTERVAL_TICKS);
         }
@@ -358,7 +453,7 @@ export class AudioCueRecorder {
         melee.set(pawn.id, strike.atCore);
         if (this.initialized && previousMelee.get(pawn.id) !== strike.atCore)
           this.add({ id: `melee:${strike.atCore}:${pawn.id}`, tick: world.tick,
-            kind: 'weapon.melee', x: pawn.x, z: pawn.z });
+            kind: this.meleeKind(world, pawn.id, 'human', strike.atCore), x: pawn.x, z: pawn.z });
       }
       const stance = pawn.shooting?.stance;
       if (stance?.phase === 'cooldown') {
@@ -368,7 +463,7 @@ export class AudioCueRecorder {
         if (this.initialized && previousShooting.get(pawn.id) !== stance.startedAtCore
           && (pawn.lastAttack === undefined || pawn.lastAttack.atCore === stance.startedAtCore)) {
           this.add({ id: `shot:${pawn.id}:${stance.startedAtCore}`, tick: world.tick,
-            kind: 'weapon.gunshot', x: pawn.x + .5, z: pawn.z + .5 });
+            ...this.shotKind(world, undefined, pawn.id), x: pawn.x + .5, z: pawn.z + .5 });
         }
       }
     }
@@ -388,7 +483,7 @@ export class AudioCueRecorder {
       const launcher = projectile.flight.launcherKey;
       const shotKey = launcher?.startsWith('pawn:') ? `${launcher.slice(5)}:${projectile.emittedAtCore}` : undefined;
       if (this.initialized && !previousProjectiles.has(projectile.id) && (!shotKey || !emittedShots.has(shotKey)))
-        this.add({ id: `shot:${projectile.id}`, tick: world.tick, kind: 'weapon.gunshot',
+        this.add({ id: `shot:${projectile.id}`, tick: world.tick, ...this.shotKind(world, projectile.id, undefined),
           x: projectile.flight.origin.x, z: projectile.flight.origin.z });
     }
     const bombWaves=new Set<number>();
@@ -400,7 +495,7 @@ export class AudioCueRecorder {
       if(!strike)continue;
       melee.set(actor.id,strike.atCore);
       if(this.initialized&&previousMelee.get(actor.id)!==strike.atCore)
-        this.add({id:`melee:${actor.id}:${strike.atCore}`,tick:world.tick,kind:'weapon.melee',x:actor.x+.5,z:actor.z+.5});
+        this.add({id:`melee:${actor.id}:${strike.atCore}`,tick:world.tick,kind:this.meleeKind(world,actor.id,'mechanical',strike.atCore),x:actor.x+.5,z:actor.z+.5});
     }
     for (const structure of world.structures) {
       if (finishedSites && structure.id >= this.nextId) {
@@ -449,25 +544,58 @@ export class AudioCueRecorder {
           this.add({ id: `building.deconstructed:${jobId}:${previous.structureId}`,
             tick: world.tick, kind: 'building.deconstructed', x: previous.x, z: previous.z });
     }
+    const core = this.coreCapture297 ?? world.tick * 10;
+    const voiced = (voice: { kind: string; pitch: number; volume: number }) =>
+      ({ kind: voice.kind as AudioCueKind, ...(voice.pitch !== 1 ? { pitch: voice.pitch } : {}),
+        ...(voice.volume !== 1 ? { intensity: voice.volume } : {}) });
     for (const animal of world.wildlife?.animals ?? []) {
-
+      const previous = this.animalStates.get(animal.id);
       if(animal.strike){
         melee.set(animal.id,animal.strike.atCore);
         if(this.initialized&&previousMelee.get(animal.id)!==animal.strike.atCore)
-          this.add({id:`melee:${animal.strike.atCore}:${animal.id}`,tick:world.tick,kind:'weapon.melee',x:animal.x,z:animal.z});
+          this.add({id:`melee:${animal.strike.atCore}:${animal.id}`,tick:world.tick,kind:this.meleeKind(world,animal.id,'animal',animal.strike.atCore),x:animal.x,z:animal.z});
       }
       const nextInjuryId = animal.health?.nextInjuryId ?? 1;
-      animalStates.set(animal.id, { state: animal.state, nextInjuryId });
-      const previous = this.animalStates.get(animal.id);
-      if (!this.initialized || !previous) continue;
-      const voiceSpecies=animalVoiceSpecies(animal.species);
-      if (animal.state === 'dead' && previous.state !== 'dead' && voiceSpecies !== 'red-fox')
-        this.add({ id: `animal.death:${world.tick}:${animal.id}`, tick: world.tick,
-          kind: `animal.death.${voiceSpecies}`, x: animal.x, z: animal.z });
-      else if (animal.state !== 'dead' && previous.state !== 'dead' && !animal.health?.death
-        && nextInjuryId > previous.nextInjuryId)
-        this.add({ id: `animal.hurt:${animal.id}:${nextInjuryId}`, tick: world.tick,
-          kind: `animal.hurt.${voiceSpecies}`, x: animal.x, z: animal.z });
+      // Core Pawn_CallTracker, as a presentation clock (a hash, never the
+      // simulation's random state): the first call one interval after the
+      // animal is first seen, then one interval per call, a quarter of it while
+      // aggressive; a fresh strike brings half of the calls forward.
+      let calls = previous?.calls ?? 0;
+      let nextCall = previous?.nextCall ?? world.tick + animalCallInterval(animal.id, calls, false);
+      const strikeCore = animal.strike?.atCore;
+      if (strikeCore !== undefined && previous && strikeCore !== previous.strikeCore) {
+        const delay = animalStrikeCallDelay(animal.id, strikeCore);
+        if (delay !== undefined) nextCall = Math.min(nextCall, world.tick + delay);
+      }
+      if (this.initialized && previous) {
+        // Core soundDeath / soundWounded of the nearest life stage with a voice.
+        if (animal.state === 'dead' && previous.state !== 'dead') {
+          const voice = animalVoiceCue(animal.species, animalStage(animal), 'death');
+          if (voice) this.add({ id: `animal.death:${world.tick}:${animal.id}`, tick: world.tick, ...voiced(voice), x: animal.x, z: animal.z });
+        } else if (animal.state !== 'dead' && previous.state !== 'dead' && !animal.health?.death
+          && nextInjuryId > previous.nextInjuryId) {
+          const voice = animalVoiceCue(animal.species, animalStage(animal), 'hurt');
+          if (voice) this.add({ id: `animal.hurt:${animal.id}:${nextInjuryId}`, tick: world.tick, ...voiced(voice), x: animal.x, z: animal.z });
+        }
+      }
+      if (world.tick >= nextCall) {
+        const aggressive = animalAggressive(animal, core);
+        // Core TryDoCall: spawned, awake, not downed, not under fog.
+        const cell = Math.floor(animal.z) * world.width + Math.floor(animal.x);
+        if (this.initialized && previous && animal.state !== 'dead' && animal.state !== 'downed' && animal.state !== 'sleeping'
+          && animal.shipCryptosleepHeldAt277 === undefined && world.tiles[cell]?.fogged !== true) {
+          const verb: AnimalVoiceVerb = aggressive ? 'angry' : 'call';
+          const voice = animalVoiceCue(animal.species, animalStage(animal), verb);
+          if (voice) this.add({ id: `animal.${verb}:${animal.id}:${calls}`, tick: world.tick, ...voiced(voice), x: animal.x, z: animal.z });
+        }
+        calls++;
+        nextCall = world.tick + animalCallInterval(animal.id, calls, aggressive);
+      }
+      // Core RaceProperties.soundEating while the animal chews its meal.
+      if (animal.state === 'eating' && animal.meal)
+        recordWork(animal.id, `animal-eat:${animal.meal.kind}:${animal.meal.id}`, animal.meal.progress,
+          animalEatCue(animal.species) as AudioCueKind, animal.x, animal.z, true, ANIMAL_EATING_CUE_INTERVAL_TICKS);
+      animalStates.set(animal.id, { state: animal.state, nextInjuryId, nextCall, calls, strikeCore });
     }
     // Ordinary deaths become a physical corpse pile before the worker publishes
     // its snapshot. Observe that exact identity once, without scanning all piles
@@ -479,13 +607,14 @@ export class AudioCueRecorder {
       if (missing.size) for (const pile of world.piles) {
         const corpse = pile.corpse;
         if (!corpse || !missing.has(corpse.animalId) || !corpse.health.death) continue;
-        const voiceSpecies=animalVoiceSpecies(corpse.species);if(voiceSpecies==='red-fox')continue;
+        const voice = animalVoiceCue(corpse.species, animalStage(corpse), 'death');
+        if (!voice) continue;
         const owner = pile.owner;
         const position = owner.type === 'ground' ? owner
           : owner.type === 'pawn' ? world.pawns.find(pawn => pawn.id === owner.pawnId) : undefined;
         if (!position) continue;
         this.add({ id: `animal.death:${world.tick}:${corpse.animalId}`, tick: world.tick,
-          kind: `animal.death.${voiceSpecies}`, x: position.x, z: position.z });
+          ...voiced(voice), x: position.x, z: position.z });
       }
     }
     const lightningCount = world.weather?.lightningCount ?? 0;
@@ -504,6 +633,19 @@ export class AudioCueRecorder {
       const burning = (world.fires?.items ?? []).some(fire => fire.x === site.x && fire.z === site.z);
       if (!standing && !burning) this.add({ id: `woodcutting.fell:${jobId}`, tick: world.tick,
         kind: 'woodcutting.fell', x: site.x + .5, z: site.z + .5 });
+    }
+    // Core JobDriver_PlantWork plays the plant's soundHarvestFinish when a
+    // harvest or a cut completes: the plant is gone, or its growth fell back.
+    // A cancelled job leaves the grown plant. The plant is read through the
+    // simulation's own cached cell map, only for a disappeared worked job.
+    if (this.initialized) for (const [jobId, site] of this.harvestJobs) {
+      if (harvestJobs.has(jobId)) continue;
+      const plant = resourceAt(world, site.z * world.width + site.x);
+      const same = plant !== undefined && (site.resourceId === undefined || plant.id === site.resourceId);
+      const burning = (world.fires?.items ?? []).some(fire => fire.x === site.x && fire.z === site.z);
+      if (!burning && (!same || (plant.growth ?? 1) < 0.5))
+        this.add({ id: `farming.harvest-finish:${jobId}`, tick: world.tick, kind: 'farming.harvest-finish',
+          x: site.x + .5, z: site.z + .5 });
     }
     // Core ResearchManager.FinishProject opens its completion dialog
     // (CommsWindow_Open); the count only grows when a project completes.
@@ -530,6 +672,8 @@ export class AudioCueRecorder {
     this.lightningCount = lightningCount;
     this.constructionJobs = constructionJobs;
     this.chopJobs = chopJobs;
+    this.harvestJobs = harvestJobs;
+    this.ingestion = ingestion;
     this.researchDone = researchDone;
     this.nextId = world.nextId;
     this.initialized = true;

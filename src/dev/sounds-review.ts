@@ -14,6 +14,7 @@ import {
   parseGainOffsets, serializeGainOffsets, type GainOffsets,
 } from '../audio/gain-offsets';
 import pcm20261122 from '../../scripts/audio/pcm-balance-20261122.json';
+import pcmG1122 from '../../scripts/audio/pcm-balance-g1122.json';
 import pcmV175 from '../../scripts/audio/pcm-balance-v175.json';
 import pcmV196 from '../../scripts/audio/pcm-balance-v196.json';
 import processing from '../../scripts/audio/processing-log.json';
@@ -47,7 +48,7 @@ try {
   statusLine.textContent = `Le manifeste audio n’a pas pu être lu : ${error instanceof Error ? error.message : String(error)}`;
   throw error;
 }
-const measures = calibrationIndex({ pcm20261122, pcmV175, pcmV196, processing });
+const measures = calibrationIndex({ pcm20261122, pcmG1122, pcmV175, pcmV196, processing });
 const catalogue = buildSoundCatalogue(manifest, MUSIC_TRACKS, measures);
 
 /** Working offsets (what the sliders show) and the last saved text. */

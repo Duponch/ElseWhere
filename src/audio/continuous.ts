@@ -12,9 +12,18 @@ export interface ContinuousSource {
 
 export interface ContinuousEventInfo { maxDistance: number; spatial: boolean; loop: boolean }
 
+export type MachineLoopKind='machine.wood-generator'|'machine.wind-turbine'|'machine.chemfuel-generator'|'machine.geothermal';
+/** Structures with a running loop: Core WoodFiredGenerator_Ambience and
+ * ChemfuelFiredGenerator_Ambience (soundAmbientProducingPower), WindTurbine_Ambience,
+ * GeothermalPlant_Ambience (CompProperties_AmbientSound, disabledOnUnpowered). */
+export const MACHINE_LOOP_STRUCTURES:ReadonlySet<string>=new Set(['wood-generator','wind-turbine','chemfuel-generator','geothermal-generator']);
 export function runningMachineAudioSource(structure:Structure):
-  (ContinuousSource&{kind:'machine.wood-generator'|'machine.wind-turbine';gain:number})|undefined {
+  (ContinuousSource&{kind:MachineLoopKind;gain:number})|undefined {
   if (!isPowerActive(structure)) return;
+  if (structure.kind === 'chemfuel-generator')
+    return {id:`chemfuel-generator:${structure.id}`,kind:'machine.chemfuel-generator',x:structure.x,z:structure.z,gain:.55};
+  if (structure.kind === 'geothermal-generator')
+    return {id:`geothermal:${structure.id}`,kind:'machine.geothermal',x:structure.x+3,z:structure.z+3,gain:.6};
   if (structure.kind === 'wood-generator')
     return {id:`wood-generator:${structure.id}`,kind:'machine.wood-generator',x:structure.x,z:structure.z,gain:.55};
   if (structure.kind === 'wind-turbine' && (structure.wind?.cachedWatts??0)>0)
@@ -44,7 +53,7 @@ export function createNearbyFireCollector(focus:{x:number;z:number},limit=12,rad
 export function createNearbyMachineCollector(focus:{x:number;z:number},limit=8,radius=48) {
   const nearby:(ContinuousSource&{gain:number;distance:number})[]=[];
   return {
-    add(id:string,kind:'machine.wood-generator'|'machine.wind-turbine',x:number,z:number,gain:number):void {
+    add(id:string,kind:MachineLoopKind,x:number,z:number,gain:number):void {
       const distance=(x-focus.x)**2+(z-focus.z)**2;
       if(distance>radius*radius)return;
       const source={id,kind,x,z,gain,distance};

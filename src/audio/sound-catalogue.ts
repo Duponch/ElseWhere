@@ -118,9 +118,54 @@ const HINTS: Record<string, string> = {
   'human.hurt.female': 'Cri de douleur d’une femme blessée.',
 };
 
+/** Game sounds of 22 November: where each one is heard. */
+const GAME_HINTS: Record<string, string> = {
+  'haul.drop-wood': 'Déposer du bois.', 'haul.drop-metal': 'Déposer de l’acier, du plastacier ou de l’uranium.',
+  'haul.drop-silver': 'Déposer de l’argent ou de l’or.', 'haul.drop-stone': 'Déposer des blocs de pierre.',
+  'haul.drop-chunk': 'Déposer un fragment de roche ou du jade.', 'haul.drop-slag': 'Déposer un fragment de scories.',
+  'haul.drop-grain': 'Déposer du riz ou du maïs.', 'haul.drop-corpse': 'Déposer un cadavre.',
+  'construction.metal': 'Construire en métal ou en pierre, ou un bâtiment sans matériau.',
+  'construction.dirt': 'Poser un sol (dalles, pavage, béton, tapis, paille), creuser une tombe.',
+  'crafting.smith': 'Forger : armes de mêlée, armures, armes à feu, prothèses.',
+  'crafting.machining': 'Usiner : composants, armures de reconnaissance et pare-éclats.',
+  'crafting.stonecut': 'Tailler des blocs de pierre.', 'crafting.smelt': 'Fondre au four électrique.',
+  'crafting.brew': 'Brasser le moût.', 'crafting.drug': 'Préparer un médicament au laboratoire.',
+  'crafting.sculpt': 'Sculpter à l’établi d’art.', 'crafting.bow': 'Fabriquer un arc.',
+  'crafting.cremate': 'Incinérer, brûler des vêtements, raffiner du carburant.',
+  'crafting.mech': 'Démonter ou broyer un mécanoïde.', 'medical.surgery': 'Opérer un patient.',
+  'farming.harvest-finish': 'Une plante est récoltée ou coupée.',
+  'eating.vegetable': 'Manger un légume cru, des baies, du maïs, des croquettes.',
+  'eating.meat': 'Manger de la viande crue ou un œuf.', 'eating.drink': 'Boire une bière.',
+  'eating.pill': 'Prendre un médicament en pilule.',
+  'weapon.shot-pistol': 'Tir de revolver ou de pistolet.', 'weapon.shot-rifle': 'Tir de fusil à verrou ou de fusil d’assaut.',
+  'weapon.shot-sniper': 'Tir de fusil de précision.', 'weapon.shot-shotgun': 'Tir de fusil à pompe ou de fusil à chaîne.',
+  'weapon.shot-auto': 'Tir de pistolet-mitrailleur ou de mitrailleuse légère.',
+  'weapon.shot-bow': 'Tir à l’arc (plus grave pour le grand arc).', 'weapon.shot-launcher': 'Tir du lanceur EMP.',
+  'weapon.shot-charge': 'Tir du lancier mécanoïde.', 'weapon.shot-needle': 'Tir du piquier mécanoïde.',
+  'weapon.melee-sharp': 'Coup d’une lame en métal (épée, lance, couteau).', 'weapon.melee-blunt': 'Coup de masse en métal.',
+  'weapon.melee-wood': 'Coup d’une arme en bois.', 'weapon.melee-scratch': 'Griffure ou morsure d’un petit animal.',
+  'weapon.melee-bash': 'Charge d’un grand animal.', 'weapon.melee-mech': 'Coup de lame d’un mécanoïde.',
+  'weapon.melee-miss': 'Coup manqué ou esquivé.',
+  'ambient.night-insects': 'Boucle des insectes de nuit (biomes tempérés, boréaux, toundra, broussailles), par temps doux.',
+  'weather.wind-clear': 'Boucle de vent léger par temps clair, brouillard ou neige légère.',
+  'weather.wind-storm': 'Boucle de vent d’orage ou de tempête de neige.',
+  'machine.chemfuel-generator': 'Boucle d’un générateur à carburant allumé.',
+  'machine.geothermal': 'Boucle d’une centrale géothermique allumée.',
+};
+const VOICE_FAMILY_LABELS: Record<string, string> = {
+  canine: 'chiens et loups', feline: 'chats', 'big-cat': 'grands félins', bear: 'ours', bovine: 'muffalos, yaks, bisons et boomalopes',
+  cervid: 'cerfs, gazelles, bouquetins, élans, alpagas et caribous', equine: 'chevaux, ânes et dromadaires',
+  pachyderm: 'éléphants, rhinocéros et mégaparesseux', boar: 'sangliers', rodent: 'lièvres et rongeurs', bird: 'canards',
+  chick: 'poussins (petits des oiseaux)', reptile: 'reptiles', insect: 'insectes géants', primate: 'singes',
+  herbivore: 'herbivores', 'predator-large': 'grands prédateurs', 'predator-small': 'petits carnivores',
+};
+const VOICE_VERBS: Record<string, string> = { call: 'Cri spontané', angry: 'Cri agressif', hurt: 'Cri de douleur', death: 'Cri de mort', eat: 'Repas' };
+
 export function soundHint(kind: string): string {
-  const known = HINTS[kind];
+  const known = HINTS[kind] ?? GAME_HINTS[kind];
   if (known) return known;
+  const family = /^animal\.(call|angry|hurt|death|eat)\.(.+)$/.exec(kind);
+  if (family && VOICE_FAMILY_LABELS[family[2]!]) return `${VOICE_VERBS[family[1]!]} des animaux : ${VOICE_FAMILY_LABELS[family[2]!]}.`;
   const animal = /^animal\.(hurt|death)\.(.+)$/.exec(kind);
   if (animal) return `${animal[1] === 'hurt' ? 'Cri de douleur' : 'Cri de mort'} d’un animal : voix « ${animal[2]} », partagée par les espèces proches.`;
   return '';
@@ -165,13 +210,15 @@ const records = (value: unknown, key: string): Record<string, unknown>[] => {
 
 /** File name → measured level, from the calibration logs (first source wins:
  * the most recent pass measured the published file itself). */
-export function calibrationIndex(sources: { pcm20261122?: unknown; pcmV175?: unknown; pcmV196?: unknown; processing?: unknown }): Map<string, LevelMeasure> {
+export function calibrationIndex(sources: { pcm20261122?: unknown; pcmG1122?: unknown; pcmV175?: unknown; pcmV196?: unknown; processing?: unknown }): Map<string, LevelMeasure> {
   const index = new Map<string, LevelMeasure>();
   const add = (file: unknown, measure: LevelMeasure): void => {
     if (typeof file === 'string' && !index.has(file) && (measure.rmsDbfs !== undefined || measure.peakDbfs !== undefined)) index.set(file, measure);
   };
   for (const item of records(sources.pcm20261122, 'files'))
     add(item.file, { rmsDbfs: num(item.rmsDbfs), peakDbfs: num(item.peakDbfs), lufs: num(item.loudnessLufsUngated), source: 'calibrage du 22 novembre' });
+  for (const item of records(sources.pcmG1122, 'files'))
+    add(item.file, { rmsDbfs: num(item.rmsDbfs), peakDbfs: num(item.peakDbfs), lufs: num(item.loudnessLufsUngated), source: 'calibrage des sons du jeu' });
   for (const item of records(sources.pcmV175, 'files'))
     add(item.file, { rmsDbfs: num(item.rmsDbfs), peakDbfs: num(item.peakDbfs), source: 'calibrage V175' });
   for (const item of records(sources.pcmV196, 'files'))
@@ -193,7 +240,7 @@ export function buildSoundCatalogue(manifest: AudioManifest, tracks: readonly Mu
       kind, family: soundFamily(kind), hint: soundHint(kind), gain: event.gain, loop: event.loop, spatial: event.spatial,
       maxDistance: event.maxDistance,
       takes: event.variants.map(variant => ({ src: variant.src, file: fileOf(variant.src), gain: variant.gain, measure: measures.get(fileOf(variant.src)) })),
-      fresh: event.variants.some(variant => variant.src.includes('-c1122-')),
+      fresh: event.variants.some(variant => variant.src.includes('-c1122-') || variant.src.includes('-g1122-')),
     };
     takes += entry.takes.length;
     measuredTakes += entry.takes.filter(take => take.measure).length;

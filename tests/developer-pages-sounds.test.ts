@@ -96,7 +96,7 @@ describe('developer pages hub', () => {
 
 describe('sounds page data', () => {
   const measures = calibrationIndex({
-    pcm20261122: json('scripts/audio/pcm-balance-20261122.json'), pcmV175: json('scripts/audio/pcm-balance-v175.json'),
+    pcm20261122: json('scripts/audio/pcm-balance-20261122.json'), pcmG1122: json('scripts/audio/pcm-balance-g1122.json'), pcmV175: json('scripts/audio/pcm-balance-v175.json'),
     pcmV196: json('scripts/audio/pcm-balance-v196.json'), processing: json('scripts/audio/processing-log.json'),
   });
   const parsed = parseAudioManifest(rawManifest);
@@ -114,7 +114,10 @@ describe('sounds page data', () => {
     expect(catalogue.families.some(family => family.id === 'other')).toBe(false);
     for (const entry of entries) expect(entry.hint, entry.kind).not.toBe('');
     for (const entry of entries) for (const take of entry.takes) expect(existsSync(resolve(repo, 'public', take.src.slice(1))), take.src).toBe(true);
-    expect(entries.filter(entry => entry.fresh)).toHaveLength(32);
+    // The 32 sounds of the coverage pass, then the published game sounds of the same feedback (point 20).
+    const game = entries.filter(entry => entry.takes.some(take => take.src.includes('-g1122-')));
+    expect(entries.filter(entry => entry.fresh)).toHaveLength(32 + game.length);
+    for (const entry of game) for (const take of entry.takes) expect(take.measure?.source, take.file).toBe('calibrage des sons du jeu');
   });
 
   it('lists every music title with its gain, and the calibrated loudness where it is known', () => {

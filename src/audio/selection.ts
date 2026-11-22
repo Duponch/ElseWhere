@@ -19,7 +19,8 @@ const WORK_KINDS = new Set([
 /** Presentation-only variation; never consumes the simulation PRNG. */
 export function cueVariation(id: string, kind?: string): { playbackRate: number; gain: number } {
   const hash = cueHash(id);
-  const work = kind !== undefined && WORK_KINDS.has(kind);
+  // Repeated foley of the game sounds of 22 November varies like the work hits.
+  const work = kind !== undefined && (WORK_KINDS.has(kind) || /^(crafting|construction|eating|animal\.eat)\.|^haul\.drop-/.test(kind));
   const pitchSpread = work ? 0.06 : 0.03;
   const gainSpreadDb = work ? 1.5 : 1;
   const playbackRate = 1 - pitchSpread + (hash & 0xffff) / 0xffff * (2 * pitchSpread);
@@ -29,8 +30,8 @@ export function cueVariation(id: string, kind?: string): { playbackRate: number;
 
 function priority(kind: string): number {
   if (kind === 'ui.threat' || kind === 'ui.colonist-death') return -1;
-  if (kind === 'weapon.gunshot') return 0;
-  if (kind === 'weapon.melee' || kind.startsWith('weapon.impact-')
+  if (kind === 'weapon.gunshot' || kind.startsWith('weapon.shot-') || kind === 'weapon.explosion') return 0;
+  if (kind === 'weapon.melee' || kind.startsWith('weapon.melee-') || kind.startsWith('weapon.impact-')
     || kind.startsWith('human.hurt.') || kind.startsWith('animal.hurt.')
     || kind === 'weather.thunder' || kind.startsWith('animal.death.')) return 1;
   return 2;
