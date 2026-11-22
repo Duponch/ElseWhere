@@ -33,10 +33,12 @@ describe('native work and schedule retain their direct confirmed interactions', 
   it('shows the twenty named columns and cycles every priority with left and right clicks', async () => {
     const f = fixture(), pawn = f.world.pawns[0]!, beforeOthers = f.world.pawns.slice(1).map(pawn => ({ ...pawn.priorities }));
     expect(f.page.layout).toBe('table');
-    expect(f.page.rows[0]!.columns?.map(column => column.hint)).toEqual(workColumns.map(column => column.label));
+    // The twenty work columns, then the copy/paste column of the Core Work table (bill clipboard lot).
+    expect(f.page.rows[0]!.columns?.slice(0, 20).map(column => column.hint)).toEqual(workColumns.map(column => column.label));
+    expect(f.page.rows[0]!.columns?.slice(20).map(column => column.label)).toEqual(['Copier', 'Coller']);
     expect(f.page.rows[0]!.columns?.every(column => column.label.length > 0 && column.label.length <= 7)).toBe(true);
     const worker = f.page.rows.find(row => row.id === `worker-${pawn.id}`)!;
-    expect(worker.controls).toHaveLength(20); expect(worker.value).toBe(`Activité confirmée ${pawn.id}`);
+    expect(worker.controls).toHaveLength(22); expect(worker.value).toBe(`Activité confirmée ${pawn.id}`);
     const cell = f.control(`work-${pawn.id}-build`);
     expect(cell.select).toBeUndefined(); expect(typeof cell.onSecondary).toBe('function');
     expect(cell.caption).toContain(String(pawn.skills.construction.level));

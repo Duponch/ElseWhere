@@ -62,6 +62,7 @@ import {biologicalYears,chronologicalYears} from '../sim/human-age';
 import {backgroundInspectionRows,backgroundSkillSummary,BACKGROUND_SKILL_LABELS} from '../ui/background-inspection';
 import {isSchema344OrLater,simpleWorkTab344,shownWorkPriority344,nextCellPriority344,nextWorkSort344,sortWorkRows344,relevantSkills344,relevantSkillAverage344,relevantPassion344,veryBadSkill344,type WorkClick344,type WorkSort344} from '../sim/work-tab-344';
 import {offeredRelationshipText} from '../ui/relationship-inspection';
+import {copyWorkPriorities,hasWorkPriorityClipboard,pasteWorkPriorities,workPriorityPastePlan} from '../ui/work-priority-clipboard';
 import type {JoinerQuest} from '../sim/quest-state';
 import type {TradeRequest284} from '../sim/trade-request-state-284';
 
@@ -231,6 +232,13 @@ function workHeader(work:WorkType,label:string,full:string,simple:boolean):{labe
   simple?'Maj + clic gauche : cocher toute la colonne · Maj + clic droit : tout décocher.':'Maj + clic gauche : toute la colonne un cran plus haut · Maj + clic droit : un cran plus bas.'].filter(Boolean).join('\n');
  return {label:label+sorted,hint:full,control:colonistTableControl(`work-column-${work}`,full,act('primary'),{hint,onSecondary:act('secondary')})};
 }
+/** Core Work tab copy/paste column (PawnColumnWorker_CopyPasteWorkPriorities): the copy stays in the interface. */
+const workClipboardHeaders=[{label:'Copier',hint:'Copier les priorités de travail d’un colon'},{label:'Coller',hint:'Coller les priorités copiées ; un travail impossible pour ce colon garde sa valeur'}];
+function workClipboardCells(pawn:Pawn):NativeControl[] {
+ const works=workColumns.map(c=>c.id),dead=pawn.state==='dead';
+ return [colonistTableControl(`work-copy-${pawn.id}`,'Copier',()=>{copyWorkPriorities(colonistTablePawn(pawn.id,'work'),works,simpleWorkTab344(currentWorld()));redraw();},{disabled:dead,hint:`Copier les priorités de travail de ${pawn.name}. Un travail qu’il ne peut pas faire est copié désactivé.`}),
+  colonistTableControl(`work-paste-${pawn.id}`,'Coller',()=>{const current=colonistTablePawn(pawn.id,'work');if(!hasWorkPriorityClipboard())return;return pasteWorkPriorities(send,current.id,workPriorityPastePlan(currentWorld(),current,works));},{disabled:dead||!hasWorkPriorityClipboard(),hint:`Coller les priorités copiées chez ${pawn.name}. Un travail qu’il ne peut pas faire garde sa valeur.`})];
+}
 function workPanel(world:World):NativePage {
  const {all,shown,search}=colonistTableRows('work',world),simple=simpleWorkTab344(world),pawns=sortWorkRows344(shown,workSort);
  const manualToggle=colonistTableControl('work-manual-priorities','Priorités manuelles',()=>send({type:'work-tab-mode',manual:simpleWorkTab344(currentWorld())}),{active:!simple,
@@ -238,9 +246,9 @@ function workPanel(world:World):NativePage {
  return {id:'work',title:'Travail',layout:'table',tableProfile:'colonists',contentKey:`work:${colonistTableKey(latest!)}:${search}`,
   subtitle:simple?'Cases à cocher : un travail coché est fait, dans l’ordre naturel des travaux. Le transport livre aussi les chantiers.':'Priorités manuelles : 1 est fait en premier, 4 en dernier, vide désactivé. Le transport livre aussi les chantiers.',
   width:1480,...(isSchema344OrLater(world.schemaVersion)?{actions:[manualToggle]}:{}),rows:[
-  {id:'work-headings',label:'Colon',value:'Activité',compact:true,columns:workColumns.map(c=>workHeader(c.id,compactWorkLabels[c.id],c.label,simple))},
+  {id:'work-headings',label:'Colon',value:'Activité',compact:true,columns:[...workColumns.map(c=>workHeader(c.id,compactWorkLabels[c.id],c.label,simple)),...workClipboardHeaders]},
   colonistTableToolbar('work',search,pawns.length,all.length),
-  ...pawns.map(pawn=>({...row(`worker-${pawn.id}`,pawn.name,host?.pawnActivity?.(pawn.id)??queryPawnStatus(world,pawn).reason,pawn.traits?.map(id=>TRAITS[id].label).join(' · ')??'Aucun trait attribué',workColumns.map(({id,label})=>workCell(pawn,id,label,simple))),compact:true})),
+  ...pawns.map(pawn=>({...row(`worker-${pawn.id}`,pawn.name,host?.pawnActivity?.(pawn.id)??queryPawnStatus(world,pawn).reason,pawn.traits?.map(id=>TRAITS[id].label).join(' · ')??'Aucun trait attribué',[...workColumns.map(({id,label})=>workCell(pawn,id,label,simple)),...workClipboardCells(pawn)]),compact:true})),
  ],onClose:()=>void host?.panel(null)};
 }
 const assignmentColors:Record<ScheduleAssignment,string>={anything:'#e9d2a9',work:'#dfb7a4',sleep:'#c2d5e0',recreation:'#c9dfc1'};

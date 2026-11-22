@@ -22,6 +22,7 @@ import { STRUCTURE_DEFINITIONS } from '../sim/definitions';
 import { stationRecipes, PRODUCTION_RECIPES } from '../sim/production-recipes';
 import { supportsBillReservePause289 } from '../sim/bill-pause-rules-289';
 import { productionRecipeSkill283, readBillWorkerPolicy283 } from '../sim/bill-worker-rules-283';
+import { BILL_STACK_MAX_COUNT, billClipboard, billPasteRefusal, copyBillToClipboard, pasteBillFromClipboard } from '../ui/bill-clipboard';
 import { isApparelCountRecipe278, newApparelCountFilter278 } from '../sim/apparel-count-278';
 import { isSchema278OrLater } from '../sim/schema-compatibility-257';
 import { groundMaxStacks } from '../sim/shelf-storage';
@@ -423,14 +424,28 @@ function settingsOf(bill: CookingBill): BillSettings {
   const { id: _id, recipe: _recipe, worker: _worker, reservePause: _pause, ...settings } = bill;
   return structuredClone(settings);
 }
+/** Bill clipboard (Core BillUtility.Clipboard), kept in the interface only. */
+function billCopyControl(structureId: number, billId: number): NativeControl {
+  return control(`bill-copy-${billId}`, 'Copier', () => {
+    const bill = latest.world?.structures.find(s => s.id === structureId)?.bills?.find(b => b.id === billId);
+    if (!bill) throw Error('Cette facture n’existe plus.');
+    copyBillToClipboard(bill, latest.epoch); feedback = `Facture copiée : ${PRODUCTION_RECIPES[bill.recipe].label}. Collez-la depuis les factures de tout poste qui fait cette recette.`;
+  }, false, false, 'Copier cette facture avec ses réglages appliqués (pas les modifications en cours).');
+}
+function billPasteRows(world: World, structure: Structure): NativeRow[] {
+  const copy = billClipboard(latest.epoch); if (!copy) return [];
+  const label = PRODUCTION_RECIPES[copy.recipe].label, refusal = billPasteRefusal(world, structure, copy);
+  return [{ id: 'bill-paste', label: 'Facture copiée', value: label, controls: [control('bill-paste', 'Coller', async () => { feedback = await pasteBillFromClipboard({ send, readWorld: () => (owner.readState?.() ?? latest).world }, structure.id, latest.epoch); }, !!refusal, false, refusal ?? `Ajouter à ce poste une facture « ${label} » avec tous les réglages copiés.`)] }];
+}
 function billPage(world: World, structure: Structure): NativePage {
   const rows: NativeRow[] = [];
-  for (const recipe of stationRecipes(structure)) { const rule = PRODUCTION_RECIPES[recipe]; rows.push({ id: `add-${recipe}`, label: rule.label, detail: `Travail de recette ${rule.workTicks} pas locaux nominaux · Ingrédients autorisés : ${rule.inputs.map(item => ITEM_DEFINITIONS[item].label).join(', ')}`, controls: [command(`add-bill-${recipe}`, 'Ajouter', { type: 'bill-add', structureId: structure.id, recipe })] }); }
+  rows.push(...billPasteRows(world, structure)); const full = (structure.bills?.length ?? 0) >= BILL_STACK_MAX_COUNT;
+  for (const recipe of stationRecipes(structure)) { const rule = PRODUCTION_RECIPES[recipe]; rows.push({ id: `add-${recipe}`, label: rule.label, detail: `Travail de recette ${rule.workTicks} pas locaux nominaux · Ingrédients autorisés : ${rule.inputs.map(item => ITEM_DEFINITIONS[item].label).join(', ')}`, controls: [command(`add-bill-${recipe}`, 'Ajouter', { type: 'bill-add', structureId: structure.id, recipe }, full, false, full ? `${BILL_STACK_MAX_COUNT} factures au plus par poste.` : undefined)] }); }
   for (const bill of structure.bills ?? []) {
     const key = `${structure.id}:${bill.id}`; let draft = billDrafts.get(key);
     if (!draft) { draft = settingsOf(bill); billDrafts.set(key, draft); }
     const edit = (mutate: (settings: BillSettings) => void) => { mutate(draft!); };
-    rows.push(row(`bill-${bill.id}`, `Facture ${bill.id} · ${PRODUCTION_RECIPES[bill.recipe].label}`, `${bill.suspended ? 'Suspendue' : 'Active'}${bill.reservePause?.paused ? ' · Pause de réserve acquise' : ''}`),
+    rows.push({ ...row(`bill-${bill.id}`, `Facture ${bill.id} · ${PRODUCTION_RECIPES[bill.recipe].label}`, `${bill.suspended ? 'Suspendue' : 'Active'}${bill.reservePause?.paused ? ' · Pause de réserve acquise' : ''}`), controls: [billCopyControl(structure.id, bill.id)] },
       choices(`bill-mode-${bill.id}`, 'Répéter', draft.mode, ['smelt-weapon', 'smelt-apparel', 'cremate-corpse', 'burn-apparel'].includes(bill.recipe) ? ['times', 'forever'] as const : ['times', 'until', 'forever'] as const, mode => edit(settings => { settings.mode = mode; }), mode => ({ times: 'Faire X fois', until: 'Jusqu’à X en réserve', forever: 'Sans limite' })[mode]),
       numberRow(`bill-target-${bill.id}`, 'Quantité X', draft.target, 0, 9999, target => edit(settings => { settings.target = target; })),
       booleanRow(`bill-suspended-${bill.id}`, 'Suspendre', draft.suspended, suspended => edit(settings => { settings.suspended = suspended; })),
