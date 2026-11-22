@@ -359,6 +359,7 @@ import {simpleWorkTab344,applyWorkTabMode344,priorityColumnRefusal344,priorityCo
 import {applyLetterCommand352,isLetterCommand352} from './letters-352.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
 import { releaseAssignments, planCommandDrops, commitDrop, releaseWork, type DropPlan } from './work-release.ts';
+import { withdrawSowingUnderNewPlants371 } from './wild-plant-sow-371.ts';
 import {prepareLinkedStorageCommand286} from './linked-storage-plan-286.ts';
 import {prepareLinkedStorageLogistics286} from './linked-storage-logistics-286.ts';
 import { validDiningPlace } from './dining.ts';
@@ -1355,7 +1356,9 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     advanceBreakdowns(world);
     expireFood(world);
     advanceDeterioration(world,thermal);
+    const nextIdBeforePlants371=world.nextId;
     thermal=advanceSurfaceTemperature(world,thermal,getLight);
+    withdrawSowingUnderNewPlants371(world,nextIdBeforePlants371,pawn=>{releaseWork(world,pawn);});
     advanceFermentation265(world,thermal);
     if(burnFuel(world))light=undefined; // Empty torches cannot light later work in this same tick.
     const trapContacts=isCorePhysicalSchema297(Number(world.schemaVersion))?undefined:spikeTrapWindow(world);
