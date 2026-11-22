@@ -436,6 +436,7 @@ Contrats récents : [corrections visuelles et sonores V185](development/visual-a
 | Rechercher une règle Core | [Adoption du corpus](research/reference-adoption.md), puis recherche du domaine |
 | Examiner le contenu | [Catalogue](gameplay/content-catalogue.md) et [matrice des 25 domaines](gameplay/systems-matrix.md) |
 | Comprendre une adaptation | [Décisions de gameplay](gameplay/decisions.md), [architecture](development/architecture.md) |
+| Lire ou personnaliser l’univers (histoires, noms, factions, lieux) | [Univers d’Elsewhere](development/lore.md) et la page `/lore.html` |
 
 ## Organisation
 
