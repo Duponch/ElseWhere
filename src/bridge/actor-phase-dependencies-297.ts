@@ -209,7 +209,8 @@ export function captureActorPhaseDependencies297(world:World,held?:ActorPhaseDep
 /* Plain loops, no callback per element (this runs over every dependency row
  * of every phase). Same result as every(): an index missing from x (a hole)
  * is skipped, as every() skips it. */
-const equalDependencyValue297=(x:unknown,y:unknown):boolean=>{
+/** Exact own-data value equality (key order aside), as the dependency capture keeps an equal old copy. */
+export const equalDependencyValue297=(x:unknown,y:unknown):boolean=>{
  if(Object.is(x,y))return true;if(x===null||y===null||typeof x!=='object'||typeof y!=='object')return false;
  if(Array.isArray(x)){
   if(!Array.isArray(y)||x.length!==y.length)return false;

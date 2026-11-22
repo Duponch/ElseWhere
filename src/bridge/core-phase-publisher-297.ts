@@ -1,6 +1,6 @@
 import type {AudioCue} from './audio-cues';
 import {peekTerrainJournalCursor,type TerrainJournalCursor} from '../sim/terrain-mutation-journal';
-import {captureActorPhaseDependencies297,patchableDependencyChanges297,samePilePresentation297,humanWorkContact297,type ActorPhaseDependencies297} from './actor-phase-dependencies-297';
+import {captureActorPhaseDependencies297,equalDependencyValue297,patchableDependencyChanges297,samePilePresentation297,humanWorkContact297,type ActorPhaseDependencies297} from './actor-phase-dependencies-297';
 import type {World,Pawn,MaterialPile} from '../sim/types';
 import type {WildAnimal} from '../sim/wildlife-state';
 import type {Mechanoid} from '../sim/mechanoid-state';
@@ -249,7 +249,11 @@ export class CorePhasePublisher297 {
    retained.set(p.id,frozenDataCopy297({id:p.id,emittedAtCore:p.emittedAtCore,endCore:p.arrival?p.advancedAtCore:p.emittedAtCore+total,durationCore,delayCore:total-durationCore,from:{x:f.origin.x,z:f.origin.z},to:{x:f.destination.x,z:f.destination.z},emp:p.weaponItem==='emp-launcher'}));}
   for(const[id,t]of retained)if(t.endCore<core-640)retained.delete(id);
   const dependencies=actorMode297==='frontier'?captureActorPhaseDependencies297(world,this.pendingDependencies297??this.state?.dependencies):undefined;
-  const piles=actorMode297==='frontier'?new Map(world.piles.map(p=>[p.id,frozenDataCopy297(p) as Readonly<MaterialPile>])):undefined;
+  // The pile baseline only feeds comparisons (capturePiles297): a pile equal
+  // to its copy in the current baseline keeps that frozen copy instead of
+  // being copied again (as the dependency capture keeps an equal old copy).
+  const priorPiles=this.pileBaseline297;
+  const piles=actorMode297==='frontier'?new Map(world.piles.map(p=>{const old=priorPiles?.get(p.id);return [p.id,old!==undefined&&equalDependencyValue297(old,p)?old:frozenDataCopy297(p) as Readonly<MaterialPile>];})):undefined;
   // Runtime invokes this AFTER its actual snapshots.encode completed. The
   // closed codec alone enrolls tiles. A read-only peek can never repair them.
   const capturedTerrain=actorMode297==='frontier'?peekTerrainJournalCursor(world.tiles):undefined,terrainCursor=capturedTerrain&&Object.freeze(capturedTerrain);
