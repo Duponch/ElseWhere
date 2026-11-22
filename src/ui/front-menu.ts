@@ -28,6 +28,7 @@ import { renderPerformanceLayout, bindRenderPerformanceControls } from './render
 import { DEFAULT_SHADOW_SETTINGS, type ShadowSettings } from '../render/shadow-settings';
 import { DEFAULT_ANIMATION_SETTINGS, type AnimationSettings } from '../render/animation-settings';
 import {normalizeGraphicsStylePreferences,ORIGAMI_STYLE_CONTROLS,origamiStyleDisplayScale,formatOrigamiStyleValue,type OrigamiStyleControl,type GraphicsStylePreferences} from '../ui3d/native-preferences';
+import {developerPageUrl,type DeveloperPage} from './developer-pages';
 
 export interface FrontMenuDraft {
   seed: number;
@@ -69,6 +70,9 @@ export interface FrontMenuOptions {
   /** « Textes de RimWorld » : the player's installed RimWorld texts shown in
    * place of Elsewhere's (src/lore/rimworld-texts.ts). */
   rimWorldTexts?:import('../lore/rimworld-texts').RimWorldTextsController;
+  /** Options → « Développeur »: the developer pages this build serves
+   * (src/ui/developer-pages.ts, developerPagesForMode). */
+  developerPages?:readonly DeveloperPage[];
   getAutosaveMinutes?:()=>number;
   onAutosaveMinutesChange?:(minutes:number)=>boolean;
   onExport?:()=>Promise<void>;
@@ -629,6 +633,18 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
     musicVolumeSetting.append(musicVolumeText, musicVolumeSlider);
     audioCard.append(musicVolumeSetting);
     content.append(audioCard);
+    if (options.developerPages?.length) {
+      // Options → « Développeur »: the developer pages of this build (src/ui/developer-pages.ts).
+      const developerCard = element('section', 'front-card front-options front-developer');
+      developerCard.append(element('h2', '', 'Développeur'), element('p', 'front-small', 'Pages de contrôle du projet. Chacune s’ouvre dans un nouvel onglet, sans quitter la partie.'));
+      for (const page of options.developerPages) {
+        const entry = element('p', 'front-relief'), link = element('a', '', page.title);
+        link.href = developerPageUrl(page); link.target = '_blank'; link.rel = 'noopener';
+        entry.append(link, element('span', 'front-small', ` — ${page.description}`));
+        developerCard.append(entry);
+      }
+      content.append(developerCard);
+    }
     footer.append(action('Retour', () => navigate('home'), 'front-back'));
   }
 

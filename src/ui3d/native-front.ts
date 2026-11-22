@@ -42,6 +42,7 @@ import { NATIVE_UI_SCALE_LIMITS,normalizeGraphicsStylePreferences,ORIGAMI_STYLE_
 import {presentNativeFront} from './native-front-presentation';
 import {tutorialBiomeTag349} from '../ui/tutorial-actions-349';
 import {rimWorldReportFileName,type RimWorldImportJob} from '../ui/rimworld-import';
+import {developerPageUrl} from '../ui/developer-pages';
 import type {RwsImportProgress,RwsImportOutcome,RwsFamilyCount,RwsFamilyDetail,RwsImportFacts,RwsPlanetMode} from '../import/rimworld/import-job';
 
 type Page = 'home' | 'scenario' | 'story' | 'world' | 'site' | 'pawns' | 'load' | 'tests' | 'options' | 'rimworld';
@@ -75,7 +76,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   let selectedTile: number | null = null, eligible: number[] = [], siteOffset = 0;
   let tests: TestColony[] | undefined;
   const testCatalogue={search:'',selected:undefined as string|undefined};
-  const optionSections=[{id:'game',label:'Jeu'},{id:'interface',label:'Interface'},{id:'graphics',label:'Graphismes'},{id:'lighting',label:'Éclairage'},{id:'audio',label:'Audio'},{id:'rimworld-texts',label:'Textes de RimWorld'}] as const;
+  const optionSections=[{id:'game',label:'Jeu'},{id:'interface',label:'Interface'},{id:'graphics',label:'Graphismes'},{id:'lighting',label:'Éclairage'},{id:'audio',label:'Audio'},{id:'rimworld-texts',label:'Textes de RimWorld'},{id:'developer',label:'Développeur'}] as const;
   let optionSection:typeof optionSections[number]['id']='game';
   let graphicsPreferenceGeneration=0;
   let loadSearch='',selectedLoadKey:string|undefined;
@@ -333,9 +334,10 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       { id: 'test-sound', label: 'Essayer le son', controls: [control('test-sound', 'Essayer', async () => { if (await run(options.onTestSound, 'Chargement du son d’essai…')) status = 'Son d’essai lancé.'; })] },
       toggle('music', 'Musique', options.getMusicEnabled(), value => preference(options.onMusicEnabledChange(value))),
       range('music-volume', 'Volume de la musique', Math.round(options.getMusicVolume() * 100), 0, 100, 1, value => preference(options.onMusicVolumeChange(value / 100)), false, ' %'));
-    rows.push(...rimWorldTextRows());
+    rows.push(...rimWorldTextRows(),...developerRows());
     const sectionOf=(id:string):typeof optionSections[number]['id']=>{
       if(id.startsWith('rimworld-texts'))return 'rimworld-texts';
+      if(id.startsWith('developer-'))return 'developer';
       if(['autosave','threat','settlements','learning-helper','learning-helper-reset'].includes(id))return 'game';
       if(['ui-scale','auto-hide-bottom','auto-hide-notifications','designation','item-label','font'].includes(id))return 'interface';
       if(id.startsWith('light-'))return 'lighting';
@@ -343,11 +345,23 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       return 'graphics';
     };
     const category=optionSections.find(section=>section.id===optionSection)!;
-    // « Textes de RimWorld » only where the page has its controller.
-    const catalogue:NativeRow[]=optionSections.filter(section=>section.id!=='rimworld-texts'||options.rimWorldTexts).map(section=>({id:`option-section-${section.id}`,label:'',region:'catalogue',controls:[control(`option-section-${section.id}`,section.label,()=>{optionSection=section.id;},false,optionSection===section.id)]}));
+    // « Textes de RimWorld » only where the page has its controller, « Développeur » where pages are listed.
+    const catalogue:NativeRow[]=optionSections.filter(section=>(section.id!=='rimworld-texts'||options.rimWorldTexts)&&(section.id!=='developer'||options.developerPages?.length)).map(section=>({id:`option-section-${section.id}`,label:'',region:'catalogue',controls:[control(`option-section-${section.id}`,section.label,()=>{optionSection=section.id;},false,optionSection===section.id)]}));
     const details:NativeRow[]=[{id:'option-section-title',label:category.label,emphasis:'heading',region:'details'},
       ...rows.filter(row=>sectionOf(row.id)===optionSection).map(row=>({...row,region:'details' as const,column:undefined}))];
     return { id:'',title:'Options',rows:[...catalogue,...details],width:900,height:760,layout:'setup',setupCatalogueWidth:180,contentKey:`options-${optionSection}`,actions:navigation() };
+  }
+
+  /** Options → « Développeur »: one row per developer page of this build
+   * (src/ui/developer-pages.ts), each opened in a new tab. */
+  function developerRows(): NativeRow[] {
+    const pages = options.developerPages;
+    if (!pages?.length) return [];
+    return [
+      { id: 'developer-about', label: 'Pages de contrôle du projet. Chacune s’ouvre dans un nouvel onglet, sans quitter la partie.' },
+      ...pages.map(page => ({ id: `developer-page-${page.id}`, label: page.title, detail: page.description,
+        controls: [control(`developer-open-${page.id}`, 'Ouvrir', () => { window.open(developerPageUrl(page), '_blank', 'noopener'); }, false, false, true)] })),
+    ];
   }
 
   /** Options → « Textes de RimWorld »: the folder of the player's RimWorld,

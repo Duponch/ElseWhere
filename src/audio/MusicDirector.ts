@@ -1,4 +1,6 @@
 /** Long music is streamed by the browser, outside the decoded SFX pool. */
+import { emptyGainOffsets, musicTrackGain, type GainOffsets } from './gain-offsets';
+
 export type MusicMood = 'day' | 'night' | 'tension';
 
 export interface MusicTrack {
@@ -43,6 +45,11 @@ export function chooseMusicTrack(mood: MusicMood, previousId: string | null,
 
 interface Playback { track: MusicTrack; audio: HTMLAudioElement }
 const MUSIC_GAIN = 0.36;
+/** Element volume of a title: slider × music mix × its balance × the sounds
+ * page offset, at most 1 (an HTMLMediaElement refuses a louder volume). */
+export function musicLevel(volume: number, track: MusicTrack, offsets: GainOffsets): number {
+  return Math.min(1, volume * MUSIC_GAIN * musicTrackGain(track, offsets));
+}
 const FADE_MS = 3600;
 const TENSION_RELEASE_MS = 8000;
 const RETRY_MS = 15000;
@@ -73,6 +80,7 @@ export class MusicDirector {
   private loadTimer: ReturnType<typeof setTimeout> | null = null;
   private fadeStart = 0;
   private oldFadeBase = 1;
+  private gainOffsets: GainOffsets = emptyGainOffsets();
 
   constructor(private readonly tracks: readonly MusicTrack[] = MUSIC_TRACKS,
     private readonly createAudio: () => HTMLAudioElement = () => new Audio()) {}
@@ -152,6 +160,13 @@ export class MusicDirector {
     else if (this.started) this.unlock();
   }
 
+  /** Gain offsets of the sounds page, read once at load; a title playing
+   * takes its new level at once. */
+  setGainOffsets(offsets: GainOffsets): void {
+    this.gainOffsets = offsets;
+    if (this.active || this.retiring) this.updateVolumes();
+  }
+
   get diagnostics(): { state: string; track: string | null } {
     return {
       state: !this.enabled ? 'coupée' : this.hidden ? 'masquée' : this.active?.audio.paused ? 'en pause'
@@ -172,7 +187,7 @@ export class MusicDirector {
     this.active = this.retiring = null;
   }
 
-  private levelFor(track: MusicTrack): number { return this.volume * MUSIC_GAIN * track.gain; }
+  private levelFor(track: MusicTrack): number { return musicLevel(this.volume, track, this.gainOffsets); }
 
   private startSelected(): void {
     if (this.pending || this.disposed || !this.started || !this.enabled || this.hidden || this.volume === 0) return;

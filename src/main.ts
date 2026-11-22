@@ -269,6 +269,8 @@ import type { AudioCue } from './bridge/audio-cues';
 import { AudioDirector } from './audio/AudioDirector';
 import { alertCue, clockCue, commandCue, letterCue, nativeActivationCue, tutorialLessonCue } from './audio/interface-cues';
 import { MusicDirector, type MusicMood } from './audio/MusicDirector';
+import { loadGainOffsets } from './audio/gain-offsets';
+import { developerPagesForMode } from './ui/developer-pages';
 import { ambientCameraGain, FoliageAmbience } from './audio/ambience';
 import { createNearbyFireCollector, createNearbyMachineCollector, runningMachineAudioSource } from './audio/continuous';
 import { listenerPose, type AudioCamera } from './audio/spatial';
@@ -495,6 +497,8 @@ const client = (() => {
 })();
 const audio = new AudioDirector();
 const music = new MusicDirector();
+// Gain offsets of the sounds page (public/assets/audio/gain-offsets.json), applied once at load.
+void loadGainOffsets().then(offsets => { audio.setGainOffsets(offsets); music.setGainOffsets(offsets); });
 let snapshot: World | undefined;
 let campaignOnly:CampaignSummary|undefined;
 const caravanEncounterDialog261=new CaravanEncounterDialog261(c=>client.command(c));
@@ -1152,6 +1156,7 @@ const worldCreationBackend256:WorldCreationCallbacks256={
 const rimWorldTexts=browserRimWorldTexts(()=>new Worker(new URL('./lore/game-lore.worker.ts',import.meta.url),{type:'module'}));
 const frontOptions:FrontMenuOptions = {
   rimWorldTexts,
+  developerPages:developerPagesForMode(import.meta.env.MODE),
   // Schema 349: the tutorial's first five lessons, on the creation pages.
   tutorialLessons:{begin:()=>{tutorialLessons?.beginCreation();syncTutorialLesson();},end:()=>{tutorialLessons?.endCreation();syncTutorialLesson();},
     notify:tag=>{tutorialLessons?.notify(tag);syncTutorialLesson();},allow:tag=>tutorialLessons?.allow({tag})},

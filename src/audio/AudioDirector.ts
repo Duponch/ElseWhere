@@ -3,6 +3,7 @@ import { audibleRange, listenerPose, sourceDistance, SPATIAL_REF_DISTANCE, SPATI
 import { selectContinuousSources, type ContinuousSource, type ContinuousEventInfo } from './continuous';
 import { cueHash, cueVariation, selectOneShots } from './selection';
 import { interfaceBurstRule, isWorldInterfaceCue, MAX_INTERFACE_VOICES, type InterfaceCueKind } from './interface-cues';
+import { applyManifestGainOffsets, emptyGainOffsets, type GainOffsets } from './gain-offsets';
 
 export type { AudioCue } from './scheduler';
 export type { InterfaceCueKind } from './interface-cues';
@@ -18,6 +19,8 @@ const MAX_ONE_SHOTS_PER_FRAME = 12;
 const DEFAULT_RANGE = 24;
 // Leave headroom for overlapping work, combat and weather at the default slider level.
 const MIX_GAIN = 0.55 * 0.75;
+/** The effects mix factor (also used by the sounds page to play at the game level). */
+export const SFX_MIX_GAIN = MIX_GAIN;
 const PREVIEW_KIND = 'mining.hit';
 const MAX_CLUSTER_VOICES = 3;
 const CLUSTER_RADIUS = 5;
@@ -92,6 +95,9 @@ export class AudioDirector {
   private master: GainNode | null = null;
   private interfaceOutput: GainNode | null = null;
   private manifest: AudioManifest | null = null;
+  /** The manifest as read, before the sounds page's gain offsets. */
+  private parsedManifest: AudioManifest | null = null;
+  private gainOffsets: GainOffsets = emptyGainOffsets();
   private readonly buffers = new Map<string, AudioBuffer | null>();
   private readonly voices = new Set<Voice>();
   private readonly continuous = new Map<string, Voice>();
@@ -197,6 +203,20 @@ export class AudioDirector {
   }
 
   ingestCues(cues: readonly AudioCue[]): void { if (!this.disposed) this.scheduler.ingest(cues); }
+
+  /** Gain offsets of the sounds page (public/assets/audio/gain-offsets.json),
+   * read once at load. They multiply the manifest gains from the next sound;
+   * a sound already playing keeps its level. */
+  setGainOffsets(offsets: GainOffsets): void {
+    if (this.disposed) return;
+    this.gainOffsets = offsets;
+    if (this.parsedManifest) this.manifest = applyManifestGainOffsets(this.parsedManifest, offsets);
+  }
+
+  private adoptManifest(parsed: AudioManifest): void {
+    this.parsedManifest = parsed;
+    this.manifest = applyManifestGainOffsets(parsed, this.gainOffsets);
+  }
 
   /** Replaces the current list on snapshot adoption; no world scan on RAF. */
   setContinuousSources(sources: readonly ContinuousSource[]): void {
@@ -430,6 +450,7 @@ export class AudioDirector {
     this.reset();
     this.buffers.clear();
     this.manifest = null;
+    this.parsedManifest = null;
     this.previewOutput?.disconnect();
     this.previewOutput = null;
     this.master?.disconnect();
@@ -445,7 +466,7 @@ export class AudioDirector {
     if (!context) return;
     const manifest = await this.readManifest('no-cache');
     if (this.disposed) return;
-    this.manifest = manifest;
+    this.adoptManifest(manifest);
     const paths = [...new Set(Object.values(manifest.events).flatMap(event => event.variants.map(variant => variant.src)))];
     let next = 0;
     // Activate the mix as soon as one decoded asset is usable. A slow or
@@ -476,7 +497,7 @@ export class AudioDirector {
     if (!preview || preview.loop || !preview.variants.length)
       throw new Error('Le son d’essai est absent du manifeste audio.');
     if (this.disposed) return;
-    this.manifest = fresh;
+    this.adoptManifest(fresh);
   }
 
   private async fetchBuffer(src: string, cache: RequestCache): Promise<AudioBuffer | null> {
