@@ -1,12 +1,12 @@
 import type {NativeControl,NativePage,NativeRow} from './native-contract';
 
-export type NativeFrontScreen='home'|'scenario'|'story'|'world'|'site'|'pawns'|'load'|'tests'|'options';
+export type NativeFrontScreen='home'|'scenario'|'story'|'world'|'site'|'pawns'|'load'|'tests'|'options'|'rimworld';
 interface FrontPresentation {
   button:(id:string,label:string,action:()=>unknown,disabled?:boolean,active?:boolean)=>NativeControl;
   field:(id:string,label:string,value:string,commit:(value:string)=>unknown,kind?:'text'|'number',maxLength?:number)=>NativeRow;
   tests:{selected?:string;search:string};
 }
-const dimensions:Record<NativeFrontScreen,number>={home:480,scenario:1100,story:1100,world:1100,site:1260,pawns:1260,load:900,tests:1100,options:900};
+const dimensions:Record<NativeFrontScreen,number>={home:480,scenario:1100,story:1100,world:1100,site:1260,pawns:1260,load:900,tests:1100,options:900,rimworld:1000};
 const normalize=(text:string)=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr');
 /** Presentation only. The original guarded controls keep their callbacks;
  * selection, search and grouping never stand in for a generation/load ACK. */

@@ -42,8 +42,10 @@ import { nativeClinicalConditionRows } from './native-special-inspection';
 import { NATIVE_UI_SCALE_LIMITS,normalizeGraphicsStylePreferences,ORIGAMI_STYLE_CONTROLS,origamiStyleDisplayScale,formatOrigamiStyleValue,type GraphicsStylePreferences } from './native-preferences';
 import {presentNativeFront} from './native-front-presentation';
 import {tutorialBiomeTag349} from '../ui/tutorial-actions-349';
+import {rimWorldReportFileName,type RimWorldImportJob} from '../ui/rimworld-import';
+import type {RwsImportProgress,RwsImportOutcome,RwsFamilyCount,RwsFamilyDetail,RwsImportFacts,RwsPlanetMode} from '../import/rimworld/import-job';
 
-type Page = 'home' | 'scenario' | 'story' | 'world' | 'site' | 'pawns' | 'load' | 'tests' | 'options';
+type Page = 'home' | 'scenario' | 'story' | 'world' | 'site' | 'pawns' | 'load' | 'tests' | 'options' | 'rimworld';
 const names: Record<string, string> = {
   OutlanderCivil: 'Union civile', OutlanderRough: 'Union hostile', TribeCivil: 'Tribu paisible', TribeRough: 'Tribu hostile', TribeSavage: 'Tribu farouche', Pirate: 'Pirates', Mechanoid: 'Mécanoïdes', Insect: 'Insectes',
   shooting: 'Tir', melee: 'Mêlée', construction: 'Construction', mining: 'Minage', cooking: 'Cuisine', plants: 'Plantes', animals: 'Animaux', crafting: 'Artisanat', artistic: 'Artistique', medicine: 'Médecine', social: 'Social', intellectual: 'Intellectuel',
@@ -81,6 +83,10 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   let confirmation: { message: string; accept: () => void | Promise<unknown>; title?: string; acceptLabel?: string } | undefined;
   let notice: { title: string; text: string } | undefined;
   let tipTicker: ReturnType<typeof setInterval> | undefined, shownTip: string | undefined;
+  /** RimWorld save import (page 'rimworld'). The converted save is kept here
+   * only until « Jouer cette colonie », « Annuler » or leaving the page. */
+  let rimworld: { key: number; fileName: string; fileSize: number; job?: RimWorldImportJob; progress?: RwsImportProgress; result?: RwsImportOutcome; view: string } | undefined;
+  let rimworldKey = 0;
 
   /** Gameplay tips during world creation's long steps only (planet, site,
    * colony map), as on the reference loading screens; the tip moves on with
@@ -124,7 +130,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     result.onClose = () => { if (!busy && !pending) back(); };
     show(presentNativeFront(result,page,{button:control,field:input,tests:testCatalogue}));
   }
-  function navigate(next: Page): void { const previous=open?page:undefined;externalPage=false;page = next; open = true; error = ''; status = '';statusMeter=undefined; confirmation = undefined; notice = undefined; tutorialPages(previous,next); paint(); }
+  function navigate(next: Page): void { if (next !== 'rimworld') discardRimWorld(); const previous=open?page:undefined;externalPage=false;page = next; open = true; error = ''; status = '';statusMeter=undefined; confirmation = undefined; notice = undefined; tutorialPages(previous,next); paint(); }
   /** Core Page.DoNext/DoBack (PageClosed) and Page.PostOpen (PageStart-<page>)
    * of the three creation pages, while the tutorial is being prepared. */
   const CORE_PAGES:Partial<Record<Page,string>>={world:'CreateWorldParams',site:'SelectStartingSite',pawns:'ConfigureStartingPawns'};
@@ -192,7 +198,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   function back(): void {
     if (page === 'home') { if (hasGame) void run(options.onResume, 'Reprise de la colonie…'); return; }
     if (page === 'site') { flow?.cancel(); selectedTile = null; navigate('world'); }
-    else navigate(({ pawns: 'site', world: tutorial ? 'home' : 'story', story: 'scenario', tests: 'load' } as Partial<Record<Page, Page>>)[page] ?? 'home');
+    else navigate(({ pawns: 'site', world: tutorial ? 'home' : 'story', story: 'scenario', tests: 'load', rimworld: 'load' } as Partial<Record<Page, Page>>)[page] ?? 'home');
   }
   const navigation = (next?: NativeControl): NativeControl[] => [control('front-back', 'Retour', back), ...(next ? [next] : [])];
   function invalidateDraft(): void { generation++; flow?.cancel(); selectedTile = null; eligible = []; }
@@ -556,6 +562,132 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     picker.addEventListener('change', selected, { once: true }); picker.addEventListener('cancel', cleanup, { once: true });
     try { document.body.append(picker); picker.click(); } catch (cause) { cleanup(); throw cause; }
   }
+  // ---- « Importer une sauvegarde RimWorld » (step 3 of the importer) ----
+  // The conversion runs in its own Worker (src/ui/rimworld-import.ts); this
+  // page only shows its progress and outcome. « Jouer cette colonie » hands
+  // the converted Elsewhere save to the ordinary load path.
+  function pickRimWorldSave(): void {
+    // Same browser-owned hidden picker as « Importer un fichier ».
+    const picker = document.createElement('input'); picker.type = 'file'; picker.accept = '.rws'; picker.hidden = true;
+    const cleanup = () => { picker.removeEventListener('change', selected); picker.removeEventListener('cancel', cleanup); picker.remove(); };
+    const selected = () => { try { const file = picker.files?.[0]; if (file) beginRimWorldImport(file); } finally { cleanup(); } };
+    picker.addEventListener('change', selected, { once: true }); picker.addEventListener('cancel', cleanup, { once: true });
+    try { document.body.append(picker); picker.click(); } catch (cause) { cleanup(); throw cause; }
+  }
+  /** Stops a running conversion and drops the converted save, if any. */
+  function discardRimWorld(): void { const state = rimworld; rimworld = undefined; state?.job?.cancel(); }
+  function beginRimWorldImport(file: File): void {
+    const start = options.startRimWorldImport;
+    if (busy || pending || !start) return;
+    discardRimWorld();
+    const state: NonNullable<typeof rimworld> = { key: ++rimworldKey, fileName: typeof file.name === 'string' && file.name ? file.name : 'sauvegarde.rws', fileSize: file.size, view: 'summary' };
+    rimworld = state; navigate('rimworld');
+    let job: RimWorldImportJob;
+    try { job = start(file, progress => { if (rimworld !== state) return; state.progress = progress; paint(); }); }
+    catch (cause) { state.result = { status: 'failed', fileName: state.fileName, message: errorMessage(cause) }; paint(); return; }
+    state.job = job;
+    void job.done.then(result => {
+      if (rimworld !== state) return;
+      state.job = undefined;
+      if (result.status !== 'cancelled') state.result = result;
+      paint();
+    });
+  }
+  function playRimWorld(): Promise<boolean> {
+    const state = rimworld, result = state?.result, adopt = options.onLoadConverted;
+    if (!state || result?.status !== 'converted' || !adopt) throw Error('La colonie convertie n’est plus disponible. Importez de nouveau la sauvegarde.');
+    return run(async () => { await adopt(result.save); if (rimworld === state) rimworld = undefined; }, 'Chargement de la colonie importée…');
+  }
+  function downloadRimWorldReport(): void {
+    const result = rimworld?.result;
+    if (!result?.report) throw Error('Aucun rapport à télécharger.');
+    const url = URL.createObjectURL(new Blob([result.report], { type: 'text/markdown;charset=utf-8' }));
+    const link = document.createElement('a'); link.href = url; link.download = rimWorldReportFileName(result.fileName);
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  const RIMWORLD_STATUS = { exact: 'repris', adapted: 'adapté', dropped: 'perdu', unknown: 'inconnu' } as const;
+  const RIMWORLD_MESSAGE = { mapped: 'repris', adapted: 'adapté', lost: 'perdu' } as const;
+  const RIMWORLD_DIFFICULTY: Readonly<Record<string, string>> = { Peaceful: 'Pacifique', Easy: 'Bâtisseur de communauté', Medium: 'Récit d’aventure', Rough: 'Lutte pour la survie', Hard: 'De sang et de poussière', Extreme: 'Perdre est amusant' };
+  const RIMWORLD_PLANET: Readonly<Record<RwsPlanetMode, string>> = { save: 'Reconstruite case par case depuis la sauvegarde, colonie sur sa case', seed: 'Régénérée par Elsewhere depuis la même graine, colonie sur une case du même biome', none: 'Carte seule, sans planète' };
+  const fileSize = (bytes: number) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024)).toLocaleString('fr-FR')} Ko` : `${(bytes / 1024 / 1024).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mo`;
+  /** French count: singular for 0 and 1. */
+  const counted = (n: number, singular: string, plural: string) => `${n} ${n > 1 ? plural : singular}`;
+  const familyTally = (count: RwsFamilyCount) => `${count.exact} repris · ${counted(count.adapted, 'adapté', 'adaptés')} · ${counted(count.dropped + count.unknown, 'perdu', 'perdus')}`;
+  function rimworldFacts(facts: RwsImportFacts): NativeRow[] {
+    const fact = (id: string, label: string, value: string): NativeRow => ({ id: `rimworld-fact-${id}`, label, value, region: 'details', dense: true });
+    const storyteller = [facts.storyteller === 'Tutor' ? 'Tuteur' : facts.storyteller, facts.difficulty ? RIMWORLD_DIFFICULTY[facts.difficulty] ?? facts.difficulty : undefined].filter(Boolean).join(' · ');
+    return [
+      fact('game', 'Partie RimWorld', `version ${facts.version || 'inconnue'} · ${counted(facts.days, 'jour', 'jours')} de jeu`),
+      ...(storyteller || facts.scenario ? [fact('story', 'Conteur et scénario', [storyteller, facts.scenario ? `« ${facts.scenario} »` : ''].filter(Boolean).join(' · '))] : []),
+      fact('map', 'Carte', `${facts.mapSize ?? 'aucune'} · ${counted(facts.colonists, 'colon', 'colons')} · ${counted(facts.pawns, 'être vivant', 'êtres vivants')}`),
+      fact('world', 'Monde', [facts.worldSeed !== undefined ? `graine « ${facts.worldSeed} »` : '', facts.coverage !== undefined ? `couverture ${Math.round(facts.coverage * 100)} %` : '', counted(facts.factions, 'faction', 'factions')].filter(Boolean).join(' · ')),
+      ...(facts.mods.length ? [fact('mods', 'Modules', facts.mods.join(', '))] : []),
+    ];
+  }
+  function rimworldSummary(result: Extract<RwsImportOutcome, { status: 'converted' }>, file: NativeRow): NativeRow[] {
+    return [
+      { id: 'rimworld-colony', label: result.facts.playerFaction ? `Colonie « ${result.facts.playerFaction} »` : 'Colonie convertie', emphasis: 'heading', region: 'details' }, file,
+      ...rimworldFacts(result.facts),
+      { id: 'rimworld-planet', label: 'Planète', value: RIMWORLD_PLANET[result.planetMode], region: 'details', dense: true },
+      { id: 'rimworld-population', label: 'Dans Elsewhere', value: `${counted(result.colonists, 'colon', 'colons')} · ${counted(result.animals, 'animal', 'animaux')} de la colonie`, region: 'details', dense: true },
+      { id: 'rimworld-families-heading', label: 'Bilan par famille', emphasis: 'heading', region: 'details' },
+      ...result.families.map((count): NativeRow => ({ id: `rimworld-family-${count.family}`, label: count.label, value: familyTally(count), region: 'details', dense: true })),
+      { id: 'rimworld-families-help', label: 'Chaque élément est compté par définition du jeu : une case de terrain, un objet, un trait… Choisissez une famille à gauche pour son détail.', emphasis: 'muted', region: 'details' },
+      ...(result.losses.length ? [{ id: 'rimworld-losses-heading', label: 'Principales pertes', emphasis: 'heading' as const, region: 'details' as const },
+        ...result.losses.map((loss, index): NativeRow => ({ id: `rimworld-loss-${index}`, label: `${loss.count}`, labelWidth: 56, value: loss.note ?? loss.def, hint: `${loss.label} · ${loss.def}`, region: 'details', dense: true }))] : []),
+      { id: 'rimworld-keep', label: 'Ce qui sera gardé', detail: '« Jouer cette colonie » ouvre la colonie convertie en pause, comme une sauvegarde chargée ; la colonie ouverte, s’il y en a une, reste dans « Colonie précédente ». La sauvegarde automatique et vos copies s’appliquent ensuite. Le fichier RimWorld n’est pas conservé ; le rapport complet se télécharge.', region: 'details' },
+    ];
+  }
+  function rimworldFamily(detail: RwsFamilyDetail, count: RwsFamilyCount | undefined): NativeRow[] {
+    return [
+      { id: 'rimworld-detail-heading', label: detail.label, ...(count ? { value: familyTally(count) } : {}), emphasis: 'heading', region: 'details' },
+      ...(count && (count.before !== undefined || count.after !== undefined) ? [{ id: 'rimworld-detail-counts', label: 'Dans la sauvegarde · créés dans Elsewhere', value: `${count.before ?? '—'} · ${count.after ?? '—'}`, region: 'details' as const, dense: true }] : []),
+      ...detail.messages.map((message, index): NativeRow => ({ id: `rimworld-message-${index}`, label: message.text, value: RIMWORLD_MESSAGE[message.kind], region: 'details' })),
+      ...detail.rows.map((row, index): NativeRow => {
+        const explanation = [row.to !== undefined ? `Dans Elsewhere : ${row.to}` : '', row.note ?? ''].filter(Boolean).join(' — ');
+        return { id: `rimworld-def-${index}`, label: row.def, value: `${row.count} · ${RIMWORLD_STATUS[row.status]}`, ...(explanation ? { detail: explanation } : {}), region: 'details', dense: true };
+      }),
+    ];
+  }
+  function renderRimWorld(): NativePage {
+    const state = rimworld, title = 'Importer une sauvegarde RimWorld';
+    if (!state) return { id: '', title, rows: [{ id: 'rimworld-none', label: 'Aucune sauvegarde RimWorld en cours d’import.', region: 'details' }], actions: navigation() };
+    const file: NativeRow = { id: 'rimworld-file', label: 'Fichier', value: `${state.fileName} · ${fileSize(state.fileSize)}`, region: 'details', dense: true };
+    const result = state.result, other = control('rimworld-other', 'Choisir un autre fichier', pickRimWorldSave);
+    const report = control('rimworld-report', 'Télécharger le rapport', downloadRimWorldReport);
+    if (!result) {
+      const progress = state.progress ?? { stage: 'read', label: 'Lecture de la sauvegarde', fraction: 0 };
+      return { id: '', title, subtitle: 'La conversion se fait à côté du jeu ; vous pouvez l’annuler à tout moment.', contentKey: `rimworld-${state.key}-running`, rows: [
+        { id: 'rimworld-progress', region: 'navigation', label: `${progress.label}…`, meter: { value: progress.fraction, max: 1, label: `${Math.floor(progress.fraction * 100)} %`, color: '#63885d' } },
+        { id: 'rimworld-running', label: 'Conversion en cours', emphasis: 'heading', region: 'details' }, file,
+        { id: 'rimworld-running-help', label: 'Que se passe-t-il ?', detail: 'La sauvegarde est lue puis convertie en colonie Elsewhere : planète, carte, bâtiments, plantes, colons, animaux, objets, zones et recherche. Sur une grande colonie, cela prend de quinze secondes à une minute. Rien n’est enregistré avant « Jouer cette colonie » ; Annuler ou Échap arrête tout.', region: 'details' },
+      ], actions: [control('rimworld-cancel', 'Annuler l’import', () => navigate('load'))] };
+    }
+    if (result.status === 'refused') return { id: '', title, subtitle: 'Cette sauvegarde ne peut pas être importée.', contentKey: `rimworld-${state.key}-refused`, rows: [
+      { id: 'rimworld-refused', label: 'Sauvegarde refusée', emphasis: 'heading', region: 'details' }, file,
+      ...result.reasons.map((reason, index): NativeRow => ({ id: `rimworld-refusal-${index}`, label: reason, region: 'details' })),
+      ...rimworldFacts(result.facts),
+      { id: 'rimworld-accepted', label: 'Ce que l’import accepte', detail: 'Une sauvegarde de RimWorld 1.6 avec le jeu de base seul (sans extension ni mod) et une carte de colonie. Votre colonie actuelle et vos sauvegardes sont conservées.', region: 'details' },
+    ], actions: [...navigation(), report, other] };
+    if (result.status === 'failed') return { id: '', title, subtitle: 'La conversion n’a pas abouti.', contentKey: `rimworld-${state.key}-failed`, rows: [
+      { id: 'rimworld-failed', label: 'Import impossible', emphasis: 'heading', region: 'details' }, file,
+      { id: 'rimworld-failure', label: result.message, region: 'details' },
+      ...(result.facts ? rimworldFacts(result.facts) : []),
+      { id: 'rimworld-failed-kept', label: 'Votre colonie actuelle et vos sauvegardes sont conservées.', emphasis: 'muted', region: 'details' },
+    ], actions: [...navigation(), ...(result.report ? [report] : []), other] };
+    const counts = new Map(result.families.map(count => [count.family as string, count]));
+    if (state.view !== 'summary' && !result.details.some(detail => detail.family === state.view)) state.view = 'summary';
+    const views = [{ id: 'summary', label: 'Résumé' }, ...result.details.map(detail => ({ id: detail.family as string, label: detail.label }))];
+    const catalogue = views.map((view): NativeRow => {
+      const count = counts.get(view.id);
+      return { id: `rimworld-view-${view.id}`, label: '', region: 'catalogue', controls: [{ ...control(`rimworld-view-${view.id}`, view.label, () => { if (rimworld === state) state.view = view.id; }, false, state.view === view.id), ...(count ? { hint: `${view.label} : ${familyTally(count)}` } : {}) }] };
+    });
+    const detail = result.details.find(entry => entry.family === state.view);
+    return { id: '', title, subtitle: 'Conversion réussie : lisez le bilan, puis jouez la colonie ou annulez.', setupCatalogueWidth: 240, contentKey: `rimworld-${state.key}-${state.view}`,
+      rows: [...catalogue, ...(detail ? rimworldFamily(detail, counts.get(detail.family)) : rimworldSummary(result, file))],
+      actions: [control('rimworld-cancel', 'Annuler', () => navigate('load')), report, control('rimworld-play', 'Jouer cette colonie', playRimWorld)] };
+  }
   function downloadTest(save: TestColony): void {
     // Browser download service, as in the original catalogue. This unattached
     // link supplies no visible control/layout and also works without the File
@@ -599,11 +731,13 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     },!!selected.load.disabled):control('load-selected','Charger',()=>{},true);
     return{id:'',title:'Charger une partie',subtitle:'Sélectionner une copie affiche ses informations ; Charger ouvre la colonie en pause.',rows,width:900,height:760,layout:'setup',setupCatalogueWidth:300,contentKey:`load-${loadSearch}`,
       actions:[...navigation(),control('test-colonies','Colonies de test',loadTestCatalogue),control('import','Importer un fichier',importFile),
+        ...(options.startRimWorldImport&&options.onLoadConverted?[{...control('import-rimworld','Importer une sauvegarde RimWorld',pickRimWorldSave),maxWidth:300,hint:'Convertit une sauvegarde RimWorld 1.6 (.rws, jeu de base seul) en colonie Elsewhere. Rien n’est enregistré avant « Jouer cette colonie ».'}]:[]),
         ...(hasGame&&options.onExport?[control('export','Exporter la partie actuelle',()=>run(options.onExport!,'Préparation du fichier de la partie actuelle…'))]:[]),load]};
   }
 
   function renderPage(): NativePage {
     if (page === 'options') return renderOptions();
+    if (page === 'rimworld') return renderRimWorld();
     if (page === 'world') return renderWorld();
     if (page === 'site') return renderSite();
     if (page === 'pawns') return renderPawns();
@@ -656,7 +790,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     parameters = { seed, settings: defaultWorldGenerationSettings(), size: 250, season: 'auto' };
     roster = createStartingCandidateRoster(teamSeed, { capableOfViolence: learn }); inspected = roster[0]!.serial; navigate(learn ? 'world' : 'scenario');
   }
-  function hide(): void { if(open)tutorialPages(page,undefined); generation++; flow?.cancel(); confirmation = undefined; notice = undefined; open = false; if (!pending) busy = false; show(null); }
+  function hide(): void { discardRimWorld(); if(open)tutorialPages(page,undefined); generation++; flow?.cancel(); confirmation = undefined; notice = undefined; open = false; if (!pending) busy = false; show(null); }
   return {
     showHome(nextHasGame = hasGame) { if (busy || pending) return; hasGame = nextHasGame; navigate('home'); },
     setHasGame(next) { hasGame = next; if (page === 'home') paint(); },

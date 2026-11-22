@@ -21,6 +21,7 @@ import { createStartingCandidateRoster,startingPartyFromRoster,startingPartyMiss
 import { BACKGROUND_WORK_LABELS } from '../sim/colonist-backgrounds';
 import type {StartingWorld} from '../sim/starting-world';
 import { testColonyUrl, type TestColony } from './test-colonies';
+import type { RimWorldImportStarter } from './rimworld-import';
 import './front-menu.css';
 import {FRONT_MENU_BACKGROUND_URL} from './front-menu-background';
 import { renderPerformanceLayout, bindRenderPerformanceControls } from './render-performance-controls';
@@ -110,6 +111,11 @@ export interface FrontMenuOptions {
   getTestColonies: () => Promise<TestColony[]>;
   onLoadTest: (save: TestColony) => Promise<void>;
   onImport: (file: File) => Promise<void>;
+  /** « Importer une sauvegarde RimWorld » (native front only): converts a
+   * .rws file off the main thread (src/ui/rimworld-import.ts). */
+  startRimWorldImport?: RimWorldImportStarter;
+  /** Adopts the converted Elsewhere save exactly like loading a save file. */
+  onLoadConverted?: (save: string) => Promise<void>;
 }
 
 export interface FrontMenu {

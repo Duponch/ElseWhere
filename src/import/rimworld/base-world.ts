@@ -25,30 +25,39 @@ import {createWorld,stepWorld} from '../../sim/engine.ts';
 export interface BaseWorld {world:World;planetMode:'save'|'seed'|'none';planet?:PlanetImport}
 const drain=<Y,T>(it:Generator<Y,T,void>):T=>{let s=it.next();while(!s.done)s=it.next();return s.value;};
 
-function colonyOn(draft:GeographicWorldDraft256,tile:number,size:GeographicCreationSize262,seed:number):World {
+/** Advance within the colony stage, 0..1: the generator's own steps, then the pods. */
+type ColonyAdvance=(part:number)=>void;
+function colonyOn(draft:GeographicWorldDraft256,tile:number,size:GeographicCreationSize262,seed:number,advance:ColonyAdvance=()=>{}):World {
  const geography=captureGeneratedGeography256(draft),roster=createStartingCandidateRoster(seed);
- const w=drain(createGeographicNewGame256({draft,geography,tile,size,scenario:'crashlanded',startingParty:startingOriginalRequestFromRoster256(seed,roster)},{shrines750:ACTUAL_SHRINES_750_256}));
+ advance(.1);
+ const generation=createGeographicNewGame256({draft,geography,tile,size,scenario:'crashlanded',startingParty:startingOriginalRequestFromRoster256(seed,roster)},{shrines750:ACTUAL_SHRINES_750_256});
+ let step=generation.next();
+ while(!step.done){const {completed,total}=step.value;if(total>0)advance(.1+.8*Math.min(1,completed/total));step=generation.next();}
+ const w=step.value;advance(.92);
  // The starting pods open after a few ticks; the import replaces their people afterwards.
  for(let i=0;i<600&&(w.startingArrival as {phase?:string}|undefined)?.phase!=='opened';i++)stepWorld(w);
  return w;
 }
 
-export function createBaseWorld(save:RwsSave,notes:ImportNotes,options:{planet:boolean}):BaseWorld {
+export function createBaseWorld(save:RwsSave,notes:ImportNotes,options:{planet:boolean;onStage?:(stage:'planet'|'colony',part?:number)=>void}):BaseWorld {
+ const stage=options.onStage??(()=>{}),advance:ColonyAdvance=part=>stage('colony',part);
  const map=save.maps[0]!,seed=(stableWorldSeedHash(save.world?.seed??'')>>>0)||1;
  if(options.planet){
   const size=map.width;
   if(map.width!==map.height||!validGeographicCreationSize262(size))notes.lost('world',`Carte de ${map.width}×${map.height} : Elsewhere crée les colonies géographiques en carré de 200 à 325 cases ; la carte est importée sans planète.`);
   else{
+   stage('planet');
    const planet=rebuildPlanet(save,notes);
    if(planet)try{
-    const w=colonyOn(planet.draft,planet.homeTile,size,seed);
+    stage('colony');
+    const w=colonyOn(planet.draft,planet.homeTile,size,seed,advance);
     notes.mapped('world',`Colonie placée sur la même case de la planète (${planet.homeTile}).`);
     return {world:w,planetMode:'save',planet};
    }catch(error){notes.lost('world',`Création de la colonie sur la planète de la sauvegarde refusée (${error instanceof Error?error.message.slice(0,200):String(error)}).`);}
    // Fallback: Elsewhere's own planet from the same seed and coverage.
    try{
     const seeded=seedPlanet(save,notes);
-    if(seeded){const w=colonyOn(seeded.draft,seeded.tile,size,seed);notes.adapted('world',`Planète régénérée par Elsewhere depuis la graine « ${save.world?.seed??''} » : relief, biomes, rivières, routes et factions diffèrent de la partie ; colonie sur la case ${seeded.tile} (${seeded.biome}).`);return {world:w,planetMode:'seed'};}
+    if(seeded){stage('colony');const w=colonyOn(seeded.draft,seeded.tile,size,seed,advance);notes.adapted('world',`Planète régénérée par Elsewhere depuis la graine « ${save.world?.seed??''} » : relief, biomes, rivières, routes et factions diffèrent de la partie ; colonie sur la case ${seeded.tile} (${seeded.biome}).`);return {world:w,planetMode:'seed'};}
    }catch(error){notes.lost('world',`Planète régénérée refusée (${error instanceof Error?error.message.slice(0,200):String(error)}).`);}
   }
  }

@@ -53,7 +53,12 @@ import {createGeographicSiteClimate256,climateDate} from '../../sim/site-climate
 export interface ConvertOptions {
  /** Rebuild the save's planet and place the colony on its tile (default true). */
  planet?:boolean;
+ /** Called at the start of each conversion stage (progress display); the long
+  * colony stage also reports its advance (`part`, 0..1). */
+ onStage?:(stage:RwsConvertStage,part?:number)=>void;
 }
+/** Conversion stages, in order; `planet` and `colony` only with a planet. */
+export type RwsConvertStage='planet'|'colony'|'terrain'|'buildings'|'plants'|'people'|'items'|'zones'|'research'|'finish';
 export interface RwsConversion {world:World;notes:ImportNotes;planetMode:'save'|'seed'|'none';thingIds:Map<string,number>}
 
 export class ImportContext {
@@ -71,19 +76,20 @@ export function convertRwsSave(save:RwsSave,options:ConvertOptions={}):RwsConver
  if(!compatibility.ok)throw Error(compatibility.reasons.join(' '));
  const notes=new ImportNotes(),map=save.maps[0]!;
  if(save.maps.length>1)notes.lost('world',`${save.maps.length-1} cartes supplémentaires (camps, sites) : seule la carte de la colonie est importée.`);
- const base=createBaseWorld(save,notes,{planet:options.planet??true}),w=base.world;
+ const stage=options.onStage??(()=>{});
+ const base=createBaseWorld(save,notes,{planet:options.planet??true,onStage:stage}),w=base.world;
  const ctx=new ImportContext(save,map,w,notes,base.planetMode!=='none');
  clearLocalContent(ctx);
- importTerrain(ctx);
- importBuildings(ctx);
- importPlants(ctx);
- importPeople(ctx);
+ stage('terrain');importTerrain(ctx);
+ stage('buildings');importBuildings(ctx);
+ stage('plants');importPlants(ctx);
+ stage('people');importPeople(ctx);
  assignSculptureAuthors(ctx);
- importGroundItems(ctx);
- importZones(ctx);
- importResearch(ctx);
+ stage('items');importGroundItems(ctx);
+ stage('zones');importZones(ctx);
+ stage('research');importResearch(ctx);
  importCalendar(ctx);
- finalize(ctx);
+ stage('finish');finalize(ctx);
  return {world:w,notes,planetMode:base.planetMode,thingIds:ctx.thingIds};
 }
 

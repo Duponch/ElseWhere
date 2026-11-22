@@ -111,6 +111,7 @@ import { BrowserSaveRepository } from './ui/save-repository';
 import { AutosaveScheduler, AUTOSAVE_PREFERENCE_KEY, autosaveMinutes } from './ui/autosave';
 import { createSaveManager } from './ui/save-manager';
 import { fetchTestColonies, readSaveFile, readTestColony } from './ui/test-colonies';
+import { startRimWorldImport } from './ui/rimworld-import';
 import { createFrontMenu,type FrontMenuOptions } from './ui/front-menu';
 import { bindRenderPerformanceControls } from './ui/render-performance-controls';
 import { DEFAULT_SHADOW_SETTINGS, SHADOW_PREFERENCE_KEY, parseShadowSettings, type ShadowSettings } from './render/shadow-settings';
@@ -1204,6 +1205,9 @@ const frontOptions:FrontMenuOptions = {
   getTestColonies: fetchTestColonies,
   onLoadTest: async save => replaceColony(() => session.loadExternal(() => readTestColony(save))),
   onImport: async file => replaceColony(() => session.loadExternal(() => readSaveFile(file))),
+  // RimWorld save import: converted in its own Worker, then adopted like an imported save file.
+  startRimWorldImport: (file, onProgress) => startRimWorldImport(file, onProgress, () => new Worker(new URL('./import/rimworld/import.worker.ts', import.meta.url), { type: 'module' })),
+  onLoadConverted: async save => replaceColony(() => session.loadExternal(async () => save)),
   onResume: async () => {
     if (simulationStopped || waitingRequests.size > 0) throw new Error('Chargez une colonie validée pour reprendre.');
     await prepareWorld();

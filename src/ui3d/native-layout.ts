@@ -96,7 +96,7 @@ function naturalWidth(control:NativeControl,measure:TextMeasure,style:NativeCont
   if(style==='navigation')return 96;
   if(style==='tab')return Math.max(68,Math.min(128,measure(control.label,NATIVE_UI.body,true)+22));
   if(!control.select&&!control.caption&&/^[↶↷×+−-]$/u.test(control.label))return 32;
-  return Math.max(68,Math.min(240,measure(control.label,NATIVE_UI.body,true)+24+(control.icon?24:0)+(control.select?16:0)));
+  return Math.max(68,Math.min(control.maxWidth??240,measure(control.label,NATIVE_UI.body,true)+24+(control.icon?24:0)+(control.select?16:0)));
 }
 /** Text actions use intrinsic width. Only named matrices and tile grids fill cells. */
 export function flowNativeControls(controls:readonly NativeControl[],rect:NativeRect,measure:TextMeasure,style:NativeControlStyle='button',tileColumnLimit?:number):{controls:NativeControlBox[];height:number}{

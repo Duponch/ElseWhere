@@ -34,6 +34,9 @@ export interface NativeControl {
   /** Wrapped secondary information on a full-row painted card. */
   description?:string;
   presentation?:NativeControlStyle;
+  /** Widest intrinsic width of a text button, CSS pixels (default 240), for a
+   * long label that must stay whole. Layout only. */
+  maxWidth?:number;
   /** Drawn mark in place of the label text (the label stays the accessible name). */
   mark?:'check';
   /** Highlight tag (Core UIHighlighter): the control pulses while a shown
