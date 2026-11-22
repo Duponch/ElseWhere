@@ -13,6 +13,8 @@ import {generateForeignWorldFactions256,completeWorldFactionRegistry256} from '.
 import type {WorldFactionRegistry256} from './world-faction-state.ts';
 import type {WorldRoadLink} from './world-roads.ts';
 import {generateCoreWorldMutators256} from './world-local-mutators-256.ts';
+import {generateCoreAncientSites,generateCoreAncientRoads} from './world-ancient-core.ts';
+import {captureCoreMovementDifficulties} from './world-core-movement.ts';
 export interface GeographicWorldDraft256 {
  revision:1;key:string;surface:WorldPhysicalSurface;roads:WorldRoadLink[][];
  settings:WorldGenerationSettings;factions:WorldFactionRegistry256;nextThingId:number;mutators:number[];
@@ -29,10 +31,18 @@ export function* generateGeographicWorldDraft256(input:{seed:string;settings:Wor
  if(typeof input.seed!=='string'||!validWorldGenerationSettings(input.settings)||input.terrain!==undefined&&input.terrain!=='core'&&input.terrain!=='historical'||!Number.isSafeInteger(input.tick)||input.tick<0||!Number.isSafeInteger(input.nextThingId)||input.nextThingId<1)throw Error('Invalid geographic world draft');
  const settings={...input.settings,factions:[...input.settings.factions]},key=worldGenerationKey(input.seed,settings),physical=generateWorldPhysicalSurface(input.seed,worldClimateSettings(settings),input.terrain==='historical'?undefined:{core:true});
  let next=physical.next();while(!next.done){yield next.value;next=physical.next();}const surface=next.value,tiles=surface.tiles,roads:WorldRoadLink[][]=tiles.map(()=>[]),rootSeed=surface.generationSeed;
- const difficulties=captureWorldSurfaceDifficulties(tiles,settings.temperature,0),ancient=new WorldGenerationRandom(combineWorldSeed(rootSeed,976238715)),anchors:number[]=[];
- const count=roundedDraw(f(f(tiles.length/100000)*ancient.float(10,20)),ancient);
- for(let i=0;i<count;i++){const choice=pickWorldSettlementTile(tiles,ancient,{settlementTiles:new Set()});if(!choice.found)throw Error('No admissible ancient-road anchor');anchors.push(choice.tile);yield {phase:'ancient-sites',completed:i+1,total:count};}
- yield* generateAncientWorldRoads(tiles,difficulties,anchors,roads);
+ const difficulties=captureWorldSurfaceDifficulties(tiles,settings.temperature,0);
+ if(input.terrain==='historical'){
+  const ancient=new WorldGenerationRandom(combineWorldSeed(rootSeed,976238715)),anchors:number[]=[];
+  const count=roundedDraw(f(f(tiles.length/100000)*ancient.float(10,20)),ancient);
+  for(let i=0;i<count;i++){const choice=pickWorldSettlementTile(tiles,ancient,{settlementTiles:new Set()});if(!choice.found)throw Error('No admissible ancient-road anchor');anchors.push(choice.tile);yield {phase:'ancient-sites',completed:i+1,total:count};}
+  yield* generateAncientWorldRoads(tiles,difficulties,anchors,roads);
+ } else {
+  // The game's steps 300 and 400 (`world-ancient-core.ts`), path costs
+  // at tick 0 computed as the game computes them.
+  const sites=yield* generateCoreAncientSites(tiles,rootSeed);
+  yield* generateCoreAncientRoads(tiles,captureCoreMovementDifficulties(tiles,settings.temperature,0),sites,roads);
+ }
  yield {phase:'foreign-factions',completed:0,total:settings.factions.length};
  const foreign=generateForeignWorldFactions256({version:SCHEMA_VERSION,tick:input.tick,tiles,selection:settings.factions,population:settings.population,nextFactionId:1,nextSettlementId:1,nextThingId:input.nextThingId,random:new WorldGenerationRandom(combineWorldSeed(rootSeed,777998381))});
  if(!foreign.ok)throw Error(foreign.reason);

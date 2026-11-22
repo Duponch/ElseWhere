@@ -1,12 +1,17 @@
 // The planet comparison tool (scripts/planet-parity.ts). The quantization
-// and the report are checked on a hand-made fixture; the comparison with a
+// and the reports are checked on hand-made fixtures; the comparison with a
 // real save is opt-in: PLANET_PARITY_SAVE=path/to/save.rws (several paths
-// separated by ';'). Saves are only read.
+// separated by ';'): terrain step, lakes, rivers and ancient roads must be
+// identical. Saves are only read.
 import {describe,expect,it} from 'vitest';
 import {existsSync,readFileSync} from 'node:fs';
-import {surfaceColumns,comparePlanetColumns,formatPlanetParity,roundHalfEven,saveColumns,savePlanetSettings,biomeConfusionTable,type PlanetColumns} from '../src/import/rimworld/planet-parity';
-import {readRwsSave} from '../src/import/rimworld/rws-save';
+import {surfaceColumns,comparePlanetColumns,formatPlanetParity,roundHalfEven,saveColumns,savePlanetSettings,biomeConfusionTable,compareAncientRoads,saveFactionSelection,type PlanetColumns} from '../src/import/rimworld/planet-parity';
+import {readRwsSave,type RwsSave} from '../src/import/rimworld/rws-save';
+import {shortHashTable} from '../src/import/rimworld/short-hash';
+import {ROAD_MAP} from '../src/import/rimworld/map-world';
 import {generateWorldPhysicalSurface} from '../src/sim/world-surface-geography';
+import {generateGeographicWorldDraft256} from '../src/sim/world-geographic-draft';
+import type {WorldRoadLink} from '../src/sim/world-roads';
 import type {WorldSurfaceTile} from '../src/sim/world-surface-geography';
 const f=Math.fround;
 function tile(id:number,o:Partial<WorldSurfaceTile>):WorldSurfaceTile {
@@ -38,6 +43,14 @@ describe('saved quantization',()=>{
   const text=formatPlanetParity(report);
   expect(text).toContain('toutes les colonnes exactes : 2');expect(biomeConfusionTable(report)).toContain('TemperateForest');
  });
+ it('compares the ancient roads alone, link by link and by type',()=>{
+  // Save links are (origin, index in the origin's neighbours, road short hash).
+  const hash=new Map([...shortHashTable(Object.keys(ROAD_MAP))].map(([h,name])=>[name,h]));
+  const neighbours=[[1,2],[0,2],[0,1,3],[2]];
+  const save={world:{grid:{roads:[{origin:0,neighbourIndex:0,def:hash.get('AncientAsphaltRoad')!},{origin:1,neighbourIndex:1,def:hash.get('AncientAsphaltHighway')!},{origin:2,neighbourIndex:2,def:hash.get('DirtPath')!}]}}} as unknown as RwsSave;
+  const roads:WorldRoadLink[][]=[[{neighbour:1,road:'ancient-asphalt-road'}],[{neighbour:0,road:'ancient-asphalt-road'},{neighbour:2,road:'ancient-asphalt-road'}],[{neighbour:1,road:'ancient-asphalt-road'},{neighbour:3,road:'dirt-road'}],[{neighbour:2,road:'dirt-road'}]];
+  expect(compareAncientRoads(save,t=>neighbours[t]!,roads)).toEqual({saveLinks:2,generatedLinks:2,sameLink:2,sameLinkAndRoad:1});
+ });
 });
 
 const saves=(process.env.PLANET_PARITY_SAVE??'').split(';').map(s=>s.trim()).filter(s=>s&&existsSync(s));
@@ -49,5 +62,16 @@ describe.skipIf(!saves.length)('real RimWorld saves (opt-in)',()=>{
   const report=comparePlanetColumns(saveColumns(grid,t=>surface.tiles[t]!.neighbours),surfaceColumns(surface.tiles));
   expect(report.allFieldsExact).toBe(grid.tiles);
   expect(report.rivers).toMatchObject({sameLinkAndRiver:report.rivers!.saveLinks,generatedLinks:report.rivers!.saveLinks,riverDistanceExact:grid.tiles});
+ },600_000);
+ for(const path of saves)it(`the game's ancient sites and roads match ${path}`,()=>{
+  // Ordinary roads come later with a lower priority: they never replace an
+  // ancient link, so the save's ancient links are exactly step 400's.
+  const save=readRwsSave(readFileSync(path,'utf8')),p=savePlanetSettings(save),factions=saveFactionSelection(p.factions);
+  expect(factions).not.toBeNull();
+  const it=generateGeographicWorldDraft256({seed:p.seed,settings:{...p.settings,factions:factions!},tick:0,nextThingId:1,playerDef:'PlayerColony',playerName:'Comparaison'});
+  let n=it.next();while(!n.done)n=it.next();const draft=n.value;
+  const report=compareAncientRoads(save,t=>draft.surface.tiles[t]!.neighbours,draft.roads);
+  expect(report.saveLinks).toBeGreaterThan(0);
+  expect(report).toEqual({saveLinks:report.saveLinks,generatedLinks:report.saveLinks,sameLink:report.saveLinks,sameLinkAndRoad:report.saveLinks});
  },600_000);
 });

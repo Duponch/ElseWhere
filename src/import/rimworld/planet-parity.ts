@@ -194,15 +194,40 @@ export function biomeConfusionTable(report:PlanetParityReport):string {
  * caves) against the save's. */
 export interface WorldObjectParity {
  roads:{saveLinks:number;generatedLinks:number;sameLink:number;sameLinkAndRoad:number};
+ /** Ancient asphalt roads and highways only (step 400): later steps never
+  * replace them (lower priority), so the save's ancient links are exactly
+  * that step's output. */
+ ancientRoads:{saveLinks:number;generatedLinks:number;sameLink:number;sameLinkAndRoad:number};
  settlements:{save:number;generated:number;sameTile:number;sameTileAndFaction:number};
  caves:{save:number;generated:number;same:number};
 }
 const CORE_ROAD_BY_ELSEWHERE=new Map<string,string>(Object.entries(ROAD_MAP).flatMap(([core,m])=>isDropped(m)?[]:[[m.to as string,core] as [string,string]]));
-export function compareWorldObjects(save:RwsSave,neighbours:(tile:number)=>readonly number[],roads:readonly (readonly WorldRoadLink[])[],registry:WorldFactionRegistry256,mutators:readonly number[]):WorldObjectParity {
- const grid=save.world?.grid;if(!grid)throw Error('Sauvegarde sans grille du monde.');
+type RoadLinkParity={saveLinks:number;generatedLinks:number;sameLink:number;sameLinkAndRoad:number};
+/** Road links of the save and of a generated world, keyed by tile pair,
+ * valued by Core road definition name. */
+function roadLinkMaps(grid:RwsWorldGrid,neighbours:(tile:number)=>readonly number[],roads:readonly (readonly WorldRoadLink[])[]):{saveRoads:Map<string,string>;generatedRoads:Map<string,string>} {
  const roadNames=shortHashTable(Object.keys(ROAD_MAP)),saveRoads=new Map<string,string>(),generatedRoads=new Map<string,string>();
  for(const link of grid.roads){const to=neighbours(link.origin)[link.neighbourIndex];if(to!==undefined)saveRoads.set(linkKey(link.origin,to),roadNames.get(link.def)??'?');}
  roads.forEach((links,from)=>{for(const link of links)generatedRoads.set(linkKey(from,link.neighbour),CORE_ROAD_BY_ELSEWHERE.get(link.road)??'?');});
+ return {saveRoads,generatedRoads};
+}
+const isAncientRoad=(def:string|undefined)=>def==='AncientAsphaltRoad'||def==='AncientAsphaltHighway';
+function ancientRoadParity(saveRoads:ReadonlyMap<string,string>,generatedRoads:ReadonlyMap<string,string>):RoadLinkParity {
+ let saveLinks=0,generatedLinks=0,sameLink=0,sameLinkAndRoad=0;
+ for(const def of generatedRoads.values())if(isAncientRoad(def))generatedLinks++;
+ for(const [k,def] of saveRoads){if(!isAncientRoad(def))continue;saveLinks++;const g=generatedRoads.get(k);if(isAncientRoad(g)){sameLink++;if(g===def)sameLinkAndRoad++;}}
+ return {saveLinks,generatedLinks,sameLink,sameLinkAndRoad};
+}
+/** Ancient roads and highways (step 400) of the save against generated road
+ * links: links of either ancient type, then of the same type. */
+export function compareAncientRoads(save:RwsSave,neighbours:(tile:number)=>readonly number[],roads:readonly (readonly WorldRoadLink[])[]):RoadLinkParity {
+ const grid=save.world?.grid;if(!grid)throw Error('Sauvegarde sans grille du monde.');
+ const {saveRoads,generatedRoads}=roadLinkMaps(grid,neighbours,roads);
+ return ancientRoadParity(saveRoads,generatedRoads);
+}
+export function compareWorldObjects(save:RwsSave,neighbours:(tile:number)=>readonly number[],roads:readonly (readonly WorldRoadLink[])[],registry:WorldFactionRegistry256,mutators:readonly number[]):WorldObjectParity {
+ const grid=save.world?.grid;if(!grid)throw Error('Sauvegarde sans grille du monde.');
+ const {saveRoads,generatedRoads}=roadLinkMaps(grid,neighbours,roads);
  let sameLink=0,sameRoad=0;for(const [k,def] of saveRoads){const g=generatedRoads.get(k);if(g!==undefined){sameLink++;if(g===def)sameRoad++;}}
  const factionDef=new Map(save.factions.map(fa=>[fa.loadId,fa.def]));
  const saveSettlements=new Map<number,string>();
@@ -214,11 +239,13 @@ export function compareWorldObjects(save:RwsSave,neighbours:(tile:number)=>reado
  for(const m of grid.mutators)if(mutatorNames.get(m.def)==='Caves')saveCaves.add(m.tile);
  let generatedCaves=0,sameCaves=0;mutators.forEach((code,tile)=>{if(code&2){generatedCaves++;if(saveCaves.has(tile))sameCaves++;}});
  return {roads:{saveLinks:saveRoads.size,generatedLinks:generatedRoads.size,sameLink,sameLinkAndRoad:sameRoad},
+  ancientRoads:ancientRoadParity(saveRoads,generatedRoads),
   settlements:{save:saveSettlements.size,generated:registry.settlements.length,sameTile,sameTileAndFaction:sameFaction},
   caves:{save:saveCaves.size,generated:generatedCaves,same:sameCaves}};
 }
 export function formatWorldObjectParity(p:WorldObjectParity):string {
- return [`routes : ${p.roads.saveLinks} tronçons dans la sauvegarde, ${p.roads.generatedLinks} générés ; même tronçon ${p.roads.sameLink} (${pct(p.roads.sameLink,p.roads.saveLinks)}), même route ${p.roads.sameLinkAndRoad}`,
+ return [`routes anciennes : ${p.ancientRoads.saveLinks} tronçons dans la sauvegarde, ${p.ancientRoads.generatedLinks} générés ; même tronçon ${p.ancientRoads.sameLink} (${pct(p.ancientRoads.sameLink,p.ancientRoads.saveLinks)}), même type ${p.ancientRoads.sameLinkAndRoad}`,
+  `routes : ${p.roads.saveLinks} tronçons dans la sauvegarde, ${p.roads.generatedLinks} générés ; même tronçon ${p.roads.sameLink} (${pct(p.roads.sameLink,p.roads.saveLinks)}), même route ${p.roads.sameLinkAndRoad}`,
   `colonies étrangères : ${p.settlements.save} dans la sauvegarde, ${p.settlements.generated} générées ; même case ${p.settlements.sameTile} (${pct(p.settlements.sameTile,p.settlements.save)}), même faction ${p.settlements.sameTileAndFaction}`,
   `grottes : ${p.caves.save} dans la sauvegarde, ${p.caves.generated} générées ; mêmes cases ${p.caves.same} (${pct(p.caves.same,p.caves.save)})`].join('\n');
 }

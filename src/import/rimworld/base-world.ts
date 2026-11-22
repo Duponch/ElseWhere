@@ -57,7 +57,7 @@ export function createBaseWorld(save:RwsSave,notes:ImportNotes,options:{planet:b
    // Fallback: Elsewhere's own planet from the same seed and coverage.
    try{
     const seeded=seedPlanet(save,notes);
-    if(seeded){stage('colony');const w=colonyOn(seeded.draft,seeded.tile,size,seed,advance);notes.adapted('world',`Planète régénérée par Elsewhere depuis la graine « ${save.world?.seed??''} » : relief, biomes, rivières, routes et factions diffèrent de la partie ; colonie sur la case ${seeded.tile} (${seeded.biome}).`);return {world:w,planetMode:'seed'};}
+    if(seeded){stage('colony');const w=colonyOn(seeded.draft,seeded.tile,size,seed,advance);notes.adapted('world',`Planète régénérée par Elsewhere depuis la graine « ${save.world?.seed??''} » : relief, biomes, rivières et routes anciennes générés comme le jeu 1.6 ; factions, colonies étrangères et autres routes diffèrent de la partie ; colonie sur la case ${seeded.tile} (${seeded.biome}).`);return {world:w,planetMode:'seed'};}
    }catch(error){notes.lost('world',`Planète régénérée refusée (${error instanceof Error?error.message.slice(0,200):String(error)}).`);}
   }
  }
