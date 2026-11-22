@@ -31,7 +31,10 @@ export function pawnBedSlot(pawn:Pick<Pawn,'bedId'|'bedSlot'>,bed:Structure):Bed
 }
 /** The beneficiary, not the carrier, owns a rescue reservation. A person's
  * durable assignment, sleeping need and rescue are the same logical claim. */
-export function bedSlotClaimed(world:World,bed:Structure,slot:BedSlot,exceptPawnId?:number):boolean {
+/** `actorBeds`, when given, returns captureActorBeds256(registeredCampaign(world))
+ * for this unchanged World: a reader asking about many slots of one World
+ * captures the campaign's beds once instead of once per question. */
+export function bedSlotClaimed(world:World,bed:Structure,slot:BedSlot,exceptPawnId?:number,actorBeds?:()=>ReturnType<typeof captureActorBeds256>):boolean {
   const head=bedSlotCell(bed,slot);if(!head)return true;
   for(const pawn of world.pawns){
     if(pawn.id!==exceptPawnId&&pawn.state!=='dead'){
@@ -41,7 +44,7 @@ export function bedSlotClaimed(world:World,bed:Structure,slot:BedSlot,exceptPawn
     const rescue=pawn.rescue;
     if(rescue&&rescue.patientId!==exceptPawnId&&rescue.bedId===bed.id&&(isDoubleBedKind(bed.kind)?rescue.bedSlot===slot:slot===0))return true;
   }
-  return world.schemaVersion>=256&&!bed.medical&&actualBedOwners256(captureActorBeds256(registeredCampaign(world)),bed.id,isDoubleBedKind(bed.kind)?slot:undefined).some(p=>p.id!==exceptPawnId&&p.state!=='dead'&&!p.health?.death);
+  return world.schemaVersion>=256&&!bed.medical&&actualBedOwners256(actorBeds?actorBeds():captureActorBeds256(registeredCampaign(world)),bed.id,isDoubleBedKind(bed.kind)?slot:undefined).some(p=>p.id!==exceptPawnId&&p.state!=='dead'&&!p.health?.death);
 }
 /** Manual assignments do not require a relationship. This rule is only the
  * admission of a new owner by a sleep/patient provider into a shared bed. */

@@ -2,6 +2,8 @@ import {isDoubleBedKind} from '../sim/bed-kinds';
 import { isColonist } from '../sim/affiliation';
 import { isBedKind } from '../sim/bed-kinds';
 import { bedAssignmentReason,bedSlotCell,bedSlotClaimed,bedSlotsCount,civilBedShareAllowed,pawnBedSlot } from '../sim/bed-slots';
+import { captureActorBeds256 } from '../sim/actor-bed-local-256';
+import { registeredCampaign } from '../sim/world-map-context';
 import {captureFoodReadability,type FoodReadability} from '../sim/food-readability';
 import { ITEM_DEFINITIONS } from '../sim/items';
 import { ticksUntilRot } from '../sim/food-preservation';
@@ -41,9 +43,13 @@ function civilianPlaces(world:World,people:readonly Pawn[]):number {
       const unownedDouble=isDoubleBedKind(bed.kind)&&!world.pawns.some(p=>p.state!=='dead'&&p.bedId===bed.id);
       return Array.from({length:unownedDouble?1:bedSlotsCount(bed)},(_,slot)=>({bed,slot:slot as BedSlot}));
     });
+  // One capture of the campaign's beds for all the questions below (the same
+  // World is read throughout), instead of one per person and place.
+  let beds:ReturnType<typeof captureActorBeds256>|undefined;
+  const actorBeds=()=>beds??=captureActorBeds256(registeredCampaign(world));
   const options=people.map(p=>slots.flatMap(({bed,slot},index)=>{
     const owned=pawnBedSlot(p,bed);
-    if(bedAssignmentReason(world,bed,p,slot)||bedSlotClaimed(world,bed,slot,p.id))return [];
+    if(bedAssignmentReason(world,bed,p,slot)||bedSlotClaimed(world,bed,slot,p.id,actorBeds))return [];
     if(isDoubleBedKind(bed.kind)&&(!civilBedShareAllowed(world,bed,p)||owned!==undefined&&owned!==slot))return [];
     const cell=bedSlotCell(bed,slot);
     return cell&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height?[index]:[];

@@ -6,7 +6,10 @@ import { newShelfStorage } from '../src/sim/shelf-storage';
 import { structureMaxHp } from '../src/sim/thing-damage-rules';
 import { addMaterial } from '../src/sim/materials';
 import { deconstructionCamp,fixtureBuilding } from './scenarios/deconstruction';
-import type { Job,World } from '../src/sim/types';
+import type { BedSlot,Job,World } from '../src/sim/types';
+import { bedSlotClaimed,bedSlotsCount } from '../src/sim/bed-slots';
+import { captureActorBeds256 } from '../src/sim/actor-bed-local-256';
+import { registeredCampaign } from '../src/sim/world-map-context';
 
 const camp=()=>{const w=deconstructionCamp(3);w.stockpiles=[];w.growingZones=[];return w;};
 const row=(w:World,id:FirstDayGuideId)=>readFirstDayGuide(w).find(s=>s.id===id)!;
@@ -188,4 +191,17 @@ test('a current local research task supplies guide readiness without inventing c
  const spot=cookingSpot(bench);Object.assign(p,{x:spot.x,z:spot.z,state:'working',path:[],motion:null,moveCooldown:0,research:{stationId:bench.id,spot,worked:0}});
  const before=structuredClone(w);expect(row(w,'research')).toMatchObject({status:'ready'});expect(row(w,'research').detail).toContain('1 chercheur(s) au travail');expect(w).toEqual(before);expect(w.research!.points).toBe(0);expect(w.research!.completedAt).toBeUndefined();
  p.faction='outlanders';expect(row(w,'research').status).toBe('started');expect(row(w,'research').detail).toContain('0 chercheur(s) au travail');
+});
+test('a shared bed capture answers every place exactly as one capture per question',()=>{
+  // The guide reads many places of one World; it now captures the campaign's
+  // beds once. Each answer must equal the per-question capture.
+  const w=camp(),single=fixtureBuilding(w,'bed',7,7),double=fixtureBuilding(w,'double-bed',9,7),medical=fixtureBuilding(w,'bed',12,7),[a,b,c]=w.pawns;
+  Object.assign(medical,{medical:true});
+  a!.bedId=double.id;a!.bedSlot=1;b!.bedId=single.id;c!.bedId=medical.id;
+  let captures=0;const shared=()=>{captures++;return captureActorBeds256(registeredCampaign(w));};
+  for(const bed of [single,double,medical])for(let slot=0;slot<bedSlotsCount(bed);slot++)for(const pawn of [a,b,c,undefined]){
+    expect(bedSlotClaimed(w,bed,slot as BedSlot,pawn?.id,shared)).toBe(bedSlotClaimed(w,bed,slot as BedSlot,pawn?.id));
+  }
+  expect(captures).toBeGreaterThan(0);
+  expect(row(w,'beds').detail).toBe('2 place(s) civile(s) compatibles pour 3 colon(s).');
 });
