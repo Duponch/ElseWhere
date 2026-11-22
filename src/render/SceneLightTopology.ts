@@ -37,7 +37,11 @@ export class SceneLightTopology {
       }
     }else{
       this.barriers=world.structures.map(s=>barrier(s,world.width));
-      this.rocks=Uint8Array.from(world.tiles,t=>t.terrain==='rock'?1:0);
+      // A plain loop: Uint8Array.from with a mapping function walks the tiles
+      // through the iterator protocol (about 4 ms on a 325x325 map).
+      const tiles=world.tiles,rocks=new Uint8Array(tiles.length);
+      for(let i=0;i<tiles.length;i++)if(tiles[i]!.terrain==='rock')rocks[i]=1;
+      this.rocks=rocks;
     }
     if(changed)this.topology=this.cold.read(world);
     this.previous=world;
