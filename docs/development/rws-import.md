@@ -11,7 +11,7 @@ La sauvegarde du joueur n'est que lue : jamais modifiée, déplacée ni copiée 
 ## 1. Utilisation
 
 ```
-node --experimental-transform-types scripts/import-rws.ts <sauvegarde.rws> tmp/rws-import/<nom>.json [--ticks 300] [--no-planet]
+npx tsx scripts/import-rws.ts <sauvegarde.rws> tmp/rws-import/<nom>.json [--ticks 300] [--no-planet]
 ```
 
 Le script écrit la partie Elsewhere (`<nom>.json`, à charger comme une sauvegarde) et le rapport `<nom>-rapport.md` à côté. Il refuse clairement une sauvegarde d'une autre version que 1.6, avec une extension (Royalty, Ideology, Biotech, Anomaly, Odyssey) ou un mod, ou sans carte de colonie ; le rapport dit pourquoi.
@@ -105,7 +105,7 @@ Principales pertes : souches et arbres brûlés (388), ambroisie (20), fleurs en
 ## 8. Ce qui reste
 
 - **Vrai client** : vérifié le 22 novembre avec la petite colonie des tests seulement (serveur Vite de développement, panneau de navigateur en 1280 × 800, son et musique coupés ; le fichier est donné au sélecteur par un script, la boîte de dialogue du système n'étant pas pilotable) : le vrai Worker d'import convertit le fichier, le résumé et le détail d'une famille s'affichent, « Jouer cette colonie » passe par l'écran « Chargement de la colonie » et la colonie tourne (deux colons, provisions) ; une variante « Biotech » affiche son refus, Échap revient à « Charger une partie ». La version construite contient le Worker d'import dans son propre fichier (`import.worker-….js`, 5,2 Mo), chargé seulement à l'import. Une vraie sauvegarde de 16 Mo n'a été convertie que dans Node (test optionnel, 14 s) : la durée dans un Worker du navigateur et le pic de mémoire (texte XML, arbre lu, monde et texte converti, environ quatre à cinq fois la taille du fichier) restent à mesurer.
-- Le détail par famille montre les identifiants Elsewhere bruts (« simple-meal », « wall ») dans « Dans Elsewhere », comme le rapport : leurs noms français restent à brancher famille par famille.
+- « Dans Elsewhere » donne le nom français de la cible pour les objets, vêtements, armes, bâtiments, plantes, animaux, traits, terrains et recherches (`src/import/rimworld/labels-fr.ts`, qui lit les tables de noms du jeu) ; les autres familles (zones, toits, santé) gardent leur texte. Le script passe par `npx tsx`, car ces tables utilisent des imports sans extension.
 - L'import n'est proposé que dans l'interface native (pas dans l'ancienne interface HTML de développement).
 - Non repris dans cette étape : prisonniers, visiteurs et ennemis présents, mécanoïdes ; cadavres, saletés, chantiers et plans, meubles emballés, ouvrages inachevés ; souvenirs, pensées, relations sociales, emplois du temps, politiques (tenues, nourriture, drogues), factures des établis ; dressage autre que l'obéissance d'un animal lié ; santé des animaux ; maladies, dépendances et implants ; neige au sol ; aires autorisées personnalisées ; sites et objets du monde autres que les colonies.
 - Le repli sur une planète régénérée depuis la graine n'a été exercé qu'en forçant l'absence de grille du monde : il n'arrive pas sur les sauvegardes du jeu de base à 30 % de couverture. Les couvertures 50 % et 100 % n'ont pas été vérifiées sur une vraie sauvegarde.

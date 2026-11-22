@@ -10,6 +10,7 @@ import {analyzeRwsSave,type RwsAnalysis} from './analyze.ts';
 import {convertRwsSave,type RwsConvertStage} from './convert.ts';
 import {frenchReport} from './report-fr.ts';
 import {FAMILIES,FAMILY_LABELS,type DefTally,type Family,type ImportNotes,type Message} from './notes.ts';
+import {elsewhereTargetLabel} from './labels-fr.ts';
 import {validateWorld,serializeCampaignUnchecked,deserializeCampaign} from '../../sim/serialization.ts';
 
 /** Largest .rws accepted: a long Core colony is 15 to 40 MB. */
@@ -46,7 +47,8 @@ export function importProgress(stage:RwsImportStage,part=0):RwsImportProgress {
 }
 
 export interface RwsFamilyCount {readonly family:Family;readonly label:string;readonly before?:number;readonly after?:number;readonly exact:number;readonly adapted:number;readonly dropped:number;readonly unknown:number}
-export interface RwsFamilyDetail {readonly family:Family;readonly label:string;readonly messages:readonly Message[];readonly rows:readonly DefTally[]}
+/** `toLabel` is the French name of the Elsewhere target (`to` keeps its id). */
+export interface RwsFamilyDetail {readonly family:Family;readonly label:string;readonly messages:readonly Message[];readonly rows:readonly (DefTally&{readonly toLabel?:string})[]}
 export interface RwsLoss {readonly family:Family;readonly label:string;readonly def:string;readonly count:number;readonly note?:string}
 export type RwsImportFacts=RwsAnalysis['summary'];
 export type RwsPlanetMode='save'|'seed'|'none';
@@ -81,7 +83,7 @@ export function familyCounts(notes:ImportNotes):RwsFamilyCount[] {
 export function familyDetails(notes:ImportNotes):RwsFamilyDetail[] {
  const out:RwsFamilyDetail[]=[];
  for(const family of FAMILIES){
-  const rows=[...(notes.tallies.get(family)?.values()??[])].sort((a,b)=>b.count-a.count||a.def.localeCompare(b.def)).map(row=>({...row}));
+  const rows=[...(notes.tallies.get(family)?.values()??[])].sort((a,b)=>b.count-a.count||a.def.localeCompare(b.def)).map(row=>({...row,...row.to!==undefined?{toLabel:elsewhereTargetLabel(family,row.to)}:{}}));
   const messages=notes.messages.filter(m=>m.family===family).map(m=>({...m}));
   if(rows.length||messages.length)out.push({family,label:FAMILY_LABELS[family],messages,rows});
  }

@@ -11,6 +11,7 @@ import {convertRwsSave} from '../src/import/rimworld/convert.ts';
 import {frenchReport} from '../src/import/rimworld/report-fr.ts';
 import {closestBackgrounds,coreBackstoryEffect,HUMAN_PART_MAP} from '../src/import/rimworld/map-pawns.ts';
 import {CORE_BACKSTORIES_370,isCoreBackstoryId370} from '../src/sim/core-backstories-370.ts';
+import {elsewhereTargetLabel} from '../src/import/rimworld/labels-fr.ts';
 import {TERRAIN_MAP,ROCK_MAP,ROOF_MAP} from '../src/import/rimworld/map-terrain.ts';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization.ts';
 import {stepWorld} from '../src/sim/engine.ts';
@@ -71,6 +72,17 @@ describe('Mapping tables',()=>{
   const pacifist=closestBackgrounds('ConventChild16','StarKnight5',true);
   expect(pacifist.childhood).toBe('ConventChild16');
   expect(CORE_BACKSTORIES_370[pacifist.adulthood as 'Hunter74'].requires).not.toContain('violent');
+ });
+ it('names Elsewhere targets in French in the report, keeping a detail',()=>{
+  expect(elsewhereTargetLabel('buildings','wall')).toBe('Mur');
+  expect(elsewhereTargetLabel('items','simple-meal')).not.toBe('simple-meal');
+  expect(elsewhereTargetLabel('terrain','soil-natural')).toBe('Terre fertile');
+  expect(elsewhereTargetLabel('traits','jogger')).not.toBe('jogger');
+  expect(elsewhereTargetLabel('animals','muffalo')).toBe('Mufalo');
+  expect(elsewhereTargetLabel('terrain','rough-stone (marble)').endsWith(' (marble)')).toBe(true);
+  // An unknown id, or a family without a name table, is shown as it is.
+  expect(elsewhereTargetLabel('items','not-an-item')).toBe('not-an-item');
+  expect(elsewhereTargetLabel('zones','zone de stockage')).toBe('zone de stockage');
  });
  it('numbers human body parts in the game’s save order',()=>{
   expect(HUMAN_PART_MAP[0]).toBe('torso');expect(HUMAN_PART_MAP[29]).toBe('left-pinky');expect(HUMAN_PART_MAP[46]).toBe('left-leg');expect(HUMAN_PART_MAP[58]).toBe('right-foot');

@@ -645,7 +645,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       ...(count && (count.before !== undefined || count.after !== undefined) ? [{ id: 'rimworld-detail-counts', label: 'Dans la sauvegarde · créés dans Elsewhere', value: `${count.before ?? '—'} · ${count.after ?? '—'}`, region: 'details' as const, dense: true }] : []),
       ...detail.messages.map((message, index): NativeRow => ({ id: `rimworld-message-${index}`, label: message.text, value: RIMWORLD_MESSAGE[message.kind], region: 'details' })),
       ...detail.rows.map((row, index): NativeRow => {
-        const explanation = [row.to !== undefined ? `Dans Elsewhere : ${row.to}` : '', row.note ?? ''].filter(Boolean).join(' — ');
+        const explanation = [row.to !== undefined ? `Dans Elsewhere : ${row.toLabel ?? row.to}` : '', row.note ?? ''].filter(Boolean).join(' — ');
         return { id: `rimworld-def-${index}`, label: row.def, value: `${row.count} · ${RIMWORLD_STATUS[row.status]}`, ...(explanation ? { detail: explanation } : {}), region: 'details', dense: true };
       }),
     ];

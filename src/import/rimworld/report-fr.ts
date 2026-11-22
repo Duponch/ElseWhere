@@ -1,5 +1,6 @@
 /** French Markdown report of an analysis and/or a conversion. */
 import {FAMILIES,FAMILY_LABELS,type ImportNotes,type DefTally} from './notes.ts';
+import {elsewhereTargetLabel} from './labels-fr.ts';
 import type {RwsAnalysis} from './analyze.ts';
 
 const STATUS_LABEL={exact:'repris',adapted:'adapté',dropped:'perdu',unknown:'inconnu'} as const;
@@ -27,7 +28,7 @@ function familyDetails(notes:ImportNotes):string[] {
   if(messages.length)out.push('');
   if(rows.length){
    out.push('| Définition du jeu | Nombre | Statut | Dans Elsewhere | Explication |','|---|---:|---|---|---|');
-   for(const r of mergeRows(rows))out.push(`| ${esc(r.def)} | ${r.count} | ${STATUS_LABEL[r.status]} | ${esc(r.to??'—')} | ${esc(r.note??'')} |`);
+   for(const r of mergeRows(rows))out.push(`| ${esc(r.def)} | ${r.count} | ${STATUS_LABEL[r.status]} | ${esc(r.to===undefined?'—':elsewhereTargetLabel(f,r.to))} | ${esc(r.note??'')} |`);
    out.push('');
   }
  }

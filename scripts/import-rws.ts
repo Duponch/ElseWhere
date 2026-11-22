@@ -1,5 +1,5 @@
 /** Imports a RimWorld 1.6 save (.rws, Core only) into an Elsewhere save.
- * node --experimental-transform-types scripts/import-rws.ts <file.rws> <out.json> [--ticks 300] [--no-planet] [--report path.md]
+ * npx tsx scripts/import-rws.ts <file.rws> <out.json> [--ticks 300] [--no-planet] [--report path.md]
  * The source save is only read. The output is the user's game: keep it under
  * tmp/, never in the repository. */
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
