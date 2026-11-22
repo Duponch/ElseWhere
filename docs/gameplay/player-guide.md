@@ -12,6 +12,12 @@ Un clic sur une **carte de sauvegarde** charge directement cette partie en pause
 
 Avec une fenêtre de jeu ouverte, utilisez le bouton droit maintenu pour tourner la caméra, le bouton central pour la déplacer et la molette pour zoomer, en commençant sur le terrain libre. Le contexte Ordres reste ouvert. Un clic gauche extérieur ferme la fenêtre. Le curseur en mode ordre associe une petite flèche de carton beige au dessin de l’action choisie ; **Échap** revient à la sélection.
 
+## Copier une facture ou des priorités
+
+Dans la fenêtre **Factures** d'un poste, **Copier** sur la ligne d'une facture retient ses réglages appliqués. Ouvrez ensuite les factures de n'importe quel poste qui fait cette recette, même d'un autre type (établi de tailleur et établi électrique) : **Coller**, en tête de la fenêtre, ajoute une nouvelle facture identique. Le bouton reste grisé, avec la raison au survol, sur un poste qui ne fait pas la recette ou qui a déjà 15 factures ; à 15, **Ajouter** se grise aussi.
+
+Dans **Travail**, **Copier** au bout de la ligne d'un colon retient ses priorités ; **Coller** sur un autre colon les reprend toutes, sauf les travaux qu'il ne peut pas faire, qui gardent leur valeur. Le presse-papiers n'est pas enregistré : il se perd au rechargement de la page, et la facture copiée s'oublie en changeant de partie. [Règles et limites](bill-clipboard.md).
+
 ## Ordres de tous les jours — schéma 346
 
 Avec plusieurs colons sélectionnés, **Mobiliser**, **Stop** et **Tir à volonté** de l'inspecteur agissent sur toute la sélection, comme **R** : une sélection mixte est mobilisée entière, une sélection déjà mobilisée est démobilisée. Le dossier affiché reste celui du premier colon.
