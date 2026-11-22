@@ -67,10 +67,10 @@ function readFactionDef(node:XmlNode):RawFactionDef {
  return {name:node.attrs?.Name??null,parent:node.attrs?.ParentName??null,abstract:node.attrs?.Abstract?.toLowerCase()==='true',defName:xmlText(node,'defName')??null,fields};
 }
 
-interface Injection {readonly path:string;readonly value:string|null;readonly list:string[]|null}
+export interface DefInjection {readonly path:string;readonly value:string|null;readonly list:string[]|null}
 /** `DefInjectionPackage.AddDataFromFile`. Returns the injections in file order;
  * a duplicated whole-list key stops the file, as the game's exception does. */
-function readInjections(source:string,file:string,into:Map<string,Injection>,problems:string[]):void {
+export function readInjections(source:string,file:string,into:Map<string,DefInjection>,problems:string[]):void {
  let root:XmlNode;
  try{root=parseXml(source);}catch(error){problems.push(`${file} : ${(error as Error).message}`);return;}
  const processedPath=(p:string)=>p.includes('[')||p.includes(']')?p.replace(/]/g,'').replace(/\[/g,'.'):p;
@@ -109,13 +109,13 @@ function readStringFiles(language:GameLanguageFolder):Map<string,string[]> {
  }
  return files;
 }
-function languageWorkerOf(language:GameLanguageFolder):string {
+export function languageWorkerOf(language:GameLanguageFolder):string {
  const bytes=language.folder.read('LanguageInfo.xml');if(!bytes)return 'LanguageWorker_Default';
  try{return xmlText(parseXml(gameText(bytes)),'languageWorkerClass')??'LanguageWorker_Default';}catch{return 'LanguageWorker_Default';}
 }
 /** Def-injected folders of a type: « RulePackDef », or the plural folder the
  * game also accepts (« RulePackDefs »). */
-function injectedFiles(language:GameLanguageFolder,type:string):string[] {
+export function injectedFiles(language:GameLanguageFolder,type:string):string[] {
  return language.folder.folders('DefInjected').filter(n=>n===type||n.length>3&&n.slice(0,-1)===type).flatMap(n=>language.folder.files(`DefInjected/${n}`)).filter(p=>p.toLowerCase().endsWith('.xml'));
 }
 
@@ -153,7 +153,7 @@ export function loadGameGrammar(core:GameFolder,languageName:string,options:{res
   }
  }
  // 2. Injections of the active language (their translated copies).
- const injections=new Map<string,Injection>(),factionInjections=new Map<string,Injection>();
+ const injections=new Map<string,DefInjection>(),factionInjections=new Map<string,DefInjection>();
  for(const path of injectedFiles(active,'RulePackDef')){const bytes=active.folder.read(path);if(bytes)readInjections(gameText(bytes),path,injections,problems);}
  for(const path of injectedFiles(active,'FactionDef')){const bytes=active.folder.read(path);if(bytes)readInjections(gameText(bytes),path,factionInjections,problems);}
  const translated=new Map<string,{strings:string[];files:string[]}>(),injectedPacks=new Set<string>();
