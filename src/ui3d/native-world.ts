@@ -2,6 +2,7 @@ import type {NativeUiState,NativeUiActions,NativePage,NativeRow,NativeControl} f
 import type {World,Pawn,Command,MaterialPile} from '../sim/types';
 import {TICKS_PER_DAY} from '../sim/types';
 import {BIOME_LABELS,HILLINESS_LABELS} from '../sim/site';
+import {factionDescription,factionLeaderTitle,factionTypeLabel as loreFactionTypeLabel} from '../lore/lore-text';
 import type {CampaignGroupSummary,WorldGroupRecord} from '../sim/world-map-state';
 import type {GroupPanelSnapshot,GroupPanelFacts,GroupDraft} from '../ui/group-panel';
 import type {GroupFormationPreview,GroupMassView} from '../sim/group-panel-state';
@@ -479,7 +480,8 @@ type NativeFactionRegistry=NonNullable<CampaignUIState['worldFactions']>;
 type NativeFaction=NativeFactionRegistry['factions'][number];
 type NativeFactionSort='name'|'relation'|'settlements';
 const factionBrowser={identity:'',search:'',sort:'name' as NativeFactionSort};
-const factionTypeLabel=(def:NativeFaction['def']):string=>({PlayerColony:'Colonie',PlayerTribe:'Tribu du joueur',OutlanderCivil:'Union civile',OutlanderRough:'Union hostile',TribeCivil:'Tribu paisible',TribeRough:'Tribu hostile',TribeSavage:'Tribu farouche',Pirate:'Pirates',Mechanoid:'Mécanoïdes',Insect:'Insectes',Ancients:'Anciens',AncientsHostile:'Anciens hostiles'} as const)[def];
+// The installed RimWorld's faction names when loaded (Options), else Elsewhere's.
+const factionTypeLabel=(def:NativeFaction['def']):string=>loreFactionTypeLabel(def,({PlayerColony:'Colonie',PlayerTribe:'Tribu du joueur',OutlanderCivil:'Union civile',OutlanderRough:'Union hostile',TribeCivil:'Tribu paisible',TribeRough:'Tribu hostile',TribeSavage:'Tribu farouche',Pirate:'Pirates',Mechanoid:'Mécanoïdes',Insect:'Insectes',Ancients:'Anciens',AncientsHostile:'Anciens hostiles'} as const)[def]);
 const factionSearchText=(text:string)=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr');
 function factionBrowserIdentity(next:NativeUiState):string {
  const input=next.world??next.campaign;if(!input)return 'none';const campaign=campaignUIFacts(input);
@@ -500,9 +502,9 @@ function factionDossier(next:NativeUiState,callbacks:NativeUiActions,id:number):
  const relation=factionRelationFact(registry,faction),leader=registry.leaders.find(value=>value.factionId===id),settlements=registry.settlements.filter(value=>value.factionId===id);
  const back=factionBrowserGuard(next,callbacks,fresh=>show(buildNativeFactions(fresh,callbacks)));
  const rows:NativeRow[]=[
-  {...r('faction-detail-type','Type',factionTypeLabel(faction.def),faction.def),presentation:'plain',compact:true},
+  {...r('faction-detail-type','Type',factionTypeLabel(faction.def),factionDescription(faction.def)??faction.def),presentation:'plain',compact:true},
   {...r('faction-detail-relation','Relations',relation.label),presentation:'plain',compact:true},
-  {...r('faction-detail-leader','Dirigeant',leader?.pawn.name??'Non enregistré'),presentation:'plain',compact:true},
+  {...r('faction-detail-leader',factionLeaderTitle(faction.def,'Dirigeant',(leader?.pawn as {appearance?:{sex:'male'|'female'}}|undefined)?.appearance?.sex),leader?.pawn.name??'Non enregistré'),presentation:'plain',compact:true},
   {...r('faction-detail-status','État',faction.lifecycle259?.defeated?'Vaincue':faction.lifecycle259?.temporary?'Temporaire':faction.lifecycle259?'Persistante':'Non enregistré'),presentation:'plain',compact:true},
   {id:'faction-detail-settlements',label:'Établissements · '+settlements.length,emphasis:'heading',presentation:'plain',compact:true},
  ];
@@ -542,7 +544,7 @@ export function buildNativeFactions(next:NativeUiState,callbacks:NativeUiActions
  for(const value of visible){
   const faction=value.faction,open=factionBrowserGuard(next,callbacks,fresh=>factionDossier(fresh,callbacks,faction.id));
   const facts=[factionTypeLabel(faction.def),value.relation.label,value.leader??'Non enregistré',String(value.settlements.length),faction.lifecycle259?.defeated?'Vaincue':faction.lifecycle259?.temporary?'Temporaire':faction.lifecycle259?'Persistante':'Non enregistré','Ouvrir'];
-  rows.push({id:'faction-'+faction.id,label:faction.name,compact:true,controls:facts.map((label,index)=>b('faction-'+faction.id+'-field-'+index,label,open,{hint:index===0?faction.def:'Ouvrir le dossier de '+faction.name}))});
+  rows.push({id:'faction-'+faction.id,label:faction.name,compact:true,controls:facts.map((label,index)=>b('faction-'+faction.id+'-field-'+index,label,open,{hint:index===0?factionDescription(faction.def)??faction.def:'Ouvrir le dossier de '+faction.name}))});
  }
  if(!visible.length)rows.push({id:'factions-search-empty',label:'Aucune faction ne correspond à la recherche.',presentation:'plain',compact:true});
  return{id:'factions',title:'Factions',contentKey:JSON.stringify([identity,factionBrowser.search,factionBrowser.sort]),layout:'table',tableProfile:'factions',width:1280,rows,actions:[b('factions-back','Retour',close)],onClose:close};

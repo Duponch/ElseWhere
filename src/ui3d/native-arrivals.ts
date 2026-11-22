@@ -5,7 +5,7 @@ import {adulthoodDefinition,childhoodDefinition,BACKGROUND_SKILL_IDS,BACKGROUND_
 import {previewBackgroundSkills} from '../sim/background-generation';
 import {arrivalOfferSkills372} from '../sim/arrivals';
 import {startingSkills} from '../sim/skills';
-import {TRAITS} from '../sim/traits';
+import {storyDescription,storyTitle,traitLabel,traitTooltip} from '../lore/lore-text';
 import {biologicalYears,chronologicalYears} from '../sim/human-age';
 import {captureRelationshipPeople} from '../sim/relationship-namespace';
 
@@ -40,13 +40,16 @@ function offerRows(world:World,offer:ArrivalOffer):NativeRow[]{
   row('arrival-time','Temps restant',`${Math.max(0,Math.ceil((offer.expiresAt-world.tick)*24/TICKS_PER_DAY))} h`,world.tick>=offer.expiresAt?'Cette demande a expiré. Une réponse ne sera plus admise.':'La demande reste ouverte pendant que la simulation avance.'),
  ];
  if(offer.age)rows.push(row('arrival-age','Âge biologique / chronologique',`${biologicalYears(offer.age)} / ${chronologicalYears(offer.age)} ans`));
- for(const id of offer.traits??[])rows.push(row(`arrival-trait-${id}`,TRAITS[id].label,undefined,TRAITS[id].description));
+ // The offer records no sex yet: the game's texts take their neutral forms.
+ for(const id of offer.traits??[])rows.push(row(`arrival-trait-${id}`,traitLabel(id),undefined,traitTooltip(id,{name:offer.name})));
  if(!offer.traits?.length)rows.push(row('arrival-traits-empty','Traits','Aucun trait attribué'));
  if(offer.background){
-  const stories=[{phase:'Enfance',definition:childhoodDefinition(offer.background.childhood)},...offer.background.adulthood?[{phase:'Adulte',definition:adulthoodDefinition(offer.background.adulthood)}]:[]];
-  for(const [index,{phase,definition}]of stories.entries()){
+  const background=offer.background,person={name:offer.name,title:storyTitle(background.adulthood?'adulthood':'childhood',background.adulthood??background.childhood)};
+  const stories=[{phase:'Enfance',slot:'childhood' as const,id:background.childhood as string,definition:childhoodDefinition(background.childhood)},
+   ...background.adulthood?[{phase:'Adulte',slot:'adulthood' as const,id:background.adulthood as string,definition:adulthoodDefinition(background.adulthood)}]:[]];
+  for(const [index,{phase,slot,id,definition}]of stories.entries()){
    const gains=BACKGROUND_SKILL_IDS.filter(skill=>definition.gains[skill]!==undefined).map(skill=>`${skillLabels[skill]} +${definition.gains[skill]}`).join(' · ');
-   rows.push(row(`arrival-background-${index}`,`${phase} · ${definition.label}`,undefined,definition.description),row(`arrival-background-effects-${index}`,'Effets du passé',`Gains prévus : ${gains||'Aucun'}`,`Interdictions : ${definition.disables.map(tag=>tagLabels[tag]).join(' · ')||'Aucune'}. Ces gains sont déjà inclus dans les compétences prévues ; ils ne seront pas appliqués une seconde fois.`));
+   rows.push(row(`arrival-background-${index}`,`${phase} · ${storyTitle(slot,id)}`,undefined,storyDescription(slot,id,person)),row(`arrival-background-effects-${index}`,'Effets du passé',`Gains prévus : ${gains||'Aucun'}`,`Interdictions : ${definition.disables.map(tag=>tagLabels[tag]).join(' · ')||'Aucune'}. Ces gains sont déjà inclus dans les compétences prévues ; ils ne seront pas appliqués une seconde fois.`));
   }
  }else rows.push(row('arrival-background-unknown','Passé','Non renseigné'));
  for(const skill of BACKGROUND_SKILL_IDS){const record=skills[skill],reason=backgroundSkillRefusal(offer,skill);rows.push(row(`arrival-skill-${skill}`,skillLabels[skill],reason?`Indisponible · niveau prévu ${record?.level??0}`:`Niveau prévu ${record?.level??0}`,reason));}

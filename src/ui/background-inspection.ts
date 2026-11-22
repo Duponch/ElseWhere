@@ -1,8 +1,9 @@
 import {
   adulthoodDefinition, childhoodDefinition, BACKGROUND_SKILL_IDS, BACKGROUND_WORK_LABELS,
   backgroundSkillRefusal, backgroundWorkRefusal, violentWorkRefusal,
-  type BackgroundBearer, type BackgroundDefinition, type BackgroundSkillId,
+  type BackgroundBearer, type BackgroundSkillId,
 } from '../sim/colonist-backgrounds.ts';
+import { loreTextsRevision, storyDescription, storyTitle, type StorySlot } from '../lore/lore-text.ts';
 import type { Pawn, WorkType } from '../sim/types.ts';
 import { learningFactor, XP_SCALE, xpRequired, type PawnSkills, type SkillRecord } from '../sim/skills.ts';
 import type { TooltipContent } from './tooltip';
@@ -22,26 +23,30 @@ const tagLabels = {
   commoner:'Travail ordinaire', crafting:'Artisanat', cooking:'Cuisine', cleaning:'Nettoyage', hauling:'Transport',
   mining:'Minage', constructing:'Construction', shooting:'Tir', 'all-work':'Tout travail',
 } as const;
-/** Schema 370: a Core story's French title follows the person's sex (Core TitleFor). */
-export const storyTitle=(story:BackgroundDefinition,sex?:'male'|'female'):string=>
-  sex==='female'&&'labelFemale' in story&&typeof story.labelFemale==='string'?story.labelFemale:story.label;
 export interface BackgroundInspectionRow { phase:string; label:string; tooltip:TooltipContent }
 export interface BackgroundRestrictionRow { label:string; reason:string }
 
-function storyRow(phase:string, story:BackgroundDefinition, sex?:'male'|'female'):BackgroundInspectionRow {
+/** Title and text come from the lore lookup (src/lore/lore-text.ts): the
+ * installed RimWorld's when the player loaded it, Elsewhere's otherwise. Gains
+ * and refusals are rules and always Elsewhere's. */
+function storyRow(phase:string, slot:StorySlot, id:string, person:{name:string;sex?:'male'|'female';title?:string}):BackgroundInspectionRow {
+  const story=slot==='childhood'?childhoodDefinition(id as never):adulthoodDefinition(id as never);
   const gains=BACKGROUND_SKILL_IDS.filter(skill=>story.gains[skill]!==undefined)
     .map(skill=>`${BACKGROUND_SKILL_LABELS[skill]} +${story.gains[skill]}`).join(' · ');
-  const label=storyTitle(story,sex);
-  return {phase,label,tooltip:{title:`${phase} : ${label}`,body:story.description,
+  const label=storyTitle(slot,id,person.sex);
+  return {phase,label,tooltip:{title:`${phase} : ${label}`,body:storyDescription(slot,id,person),
     rows:[{label:'Gains à la création',value:gains||'Aucun'},
       {label:'Application',value:'Déjà intégrés au profil initial ; niveaux plafonnés à 20. Aucun gain au chargement.'},
       {label:'Interdictions',value:story.disables.map(tag=>tagLabels[tag]).join(' · ')||'Aucune'}]}};
 }
 /** Projection of recorded identifiers only: old people never acquire a story. */
-export function backgroundInspectionRows(pawn:BackgroundBearer&{appearance?:{sex:'male'|'female'}}):readonly BackgroundInspectionRow[] {
-  const background=pawn.background,sex=pawn.appearance?.sex;
-  return background?[storyRow('Enfance',childhoodDefinition(background.childhood),sex),
-    ...(background.adulthood?[storyRow('Adulte',adulthoodDefinition(background.adulthood),sex)]:[])]:[];
+export function backgroundInspectionRows(pawn:BackgroundBearer&{name?:string;appearance?:{sex:'male'|'female'}},shownSex?:'male'|'female'):readonly BackgroundInspectionRow[] {
+  // `shownSex`: the sex the caller shows for this person (stored appearance or its fallback).
+  const background=pawn.background,sex=shownSex??pawn.appearance?.sex;if(!background)return [];
+  // [PAWN_title] of the game's texts: the title of the latest story (Core Pawn_StoryTracker.Title).
+  const person={name:pawn.name??'',sex,title:storyTitle(background.adulthood?'adulthood':'childhood',background.adulthood??background.childhood,sex)};
+  return [storyRow('Enfance','childhood',background.childhood,person),
+    ...(background.adulthood?[storyRow('Adulte','adulthood',background.adulthood,person)]:[])];
 }
 export function backgroundRestrictionRows(pawn:BackgroundBearer):readonly BackgroundRestrictionRow[] {
   const rows:BackgroundRestrictionRow[]=[];
@@ -71,7 +76,7 @@ export function createBackgroundInspection(parent:HTMLElement):HTMLElement {
 }
 export function updateBackgroundInspection(parent:HTMLElement,pawn:BackgroundBearer):void {
   const section=parent.querySelector<HTMLElement>('.background-inspection');if(!section)return;
-  const signature=JSON.stringify(pawn.background??null);if(section.dataset.signature===signature)return;
+  const signature=JSON.stringify([pawn.background??null,(pawn as {name?:string}).name,loreTextsRevision()]);if(section.dataset.signature===signature)return;
   section.dataset.signature=signature;
   const rows=backgroundInspectionRows(pawn),restrictions=backgroundRestrictionRows(pawn);
   section.querySelector<HTMLElement>('[data-background-unknown]')!.hidden=rows.length>0;

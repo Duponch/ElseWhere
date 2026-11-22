@@ -20,7 +20,8 @@ import {plantSkill,plantWorkSpeed} from '../sim/plant-skills';
 import {cookingSkill,cookingSpeed,butcheryEfficiency} from '../sim/cooking-statistics';
 import {artisticSkill} from '../sim/art-rules';
 import {constructionSpeed,learningFactor} from '../sim/skills';
-import {TRAITS} from '../sim/traits';
+import {traitLabel} from '../lore/lore-text';
+import {appearanceOf} from '../sim/pawn-appearance';
 import {queryPawnStatus} from '../sim/diagnostics';
 import {calendarTick} from '../sim/calendar';
 import {hourOfDay,type ScheduleAssignment} from '../sim/schedule';
@@ -258,7 +259,7 @@ function workPanel(world:World):NativePage {
   width:1480,...(isSchema344OrLater(world.schemaVersion)?{actions:[manualToggle]}:{}),rows:[
   {id:'work-headings',label:'Colon',value:'Activité',compact:true,columns:[...workColumns.map(c=>workHeader(c.id,compactWorkLabels[c.id],c.label,simple)),...workClipboardHeaders]},
   colonistTableToolbar('work',search,pawns.length,all.length),
-  ...pawns.map(pawn=>({...row(`worker-${pawn.id}`,pawn.name,host?.pawnActivity?.(pawn.id)??queryPawnStatus(world,pawn).reason,pawn.traits?.map(id=>TRAITS[id].label).join(' · ')??'Aucun trait attribué',[...workColumns.map(({id,label})=>workCell(pawn,id,label,simple)),...workClipboardCells(pawn)]),compact:true})),
+  ...pawns.map(pawn=>({...row(`worker-${pawn.id}`,pawn.name,host?.pawnActivity?.(pawn.id)??queryPawnStatus(world,pawn).reason,pawn.traits?.map(id=>traitLabel(id,appearanceOf(pawn,world.seed).sex)).join(' · ')??'Aucun trait attribué',[...workColumns.map(({id,label})=>workCell(pawn,id,label,simple)),...workClipboardCells(pawn)]),compact:true})),
  ],onClose:()=>void host?.panel(null)};
 }
 const assignmentColors:Record<ScheduleAssignment,string>={anything:'#e9d2a9',work:'#dfb7a4',sleep:'#c2d5e0',recreation:'#c9dfc1'};

@@ -1,6 +1,6 @@
 <!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Elsewhere · Univers</title>
 <style>*{box-sizing:border-box}body{background:#eee6d6;color:#44392f;font:14px system-ui;margin:32px}h1{font:600 32px Georgia;margin:0 0 8px}h2{font:600 20px Georgia;margin:26px 0 10px}h3{font:600 16px Georgia;margin:0}p{color:#766653;max-width:900px;line-height:1.5}code{font-size:12px}
-input,button{font:inherit;padding:7px 11px;border:1px solid #c7b59a;background:#f9f3e6;border-radius:7px;color:inherit}button{cursor:pointer}button:hover{background:#efe3cc}
+input,button,select{font:inherit;padding:7px 11px;border:1px solid #c7b59a;background:#f9f3e6;border-radius:7px;color:inherit}button{cursor:pointer}button:hover{background:#efe3cc}
 .top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:18px 0}.top input{width:320px;max-width:100%}#stats{color:#766653;font-size:13px}
 .layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px;align-items:start}
 #categories{display:flex;flex-direction:column;gap:6px;position:sticky;top:16px}#categories button{display:flex;justify-content:space-between;gap:10px;text-align:left}#categories button[aria-pressed=true]{background:#637f61;border-color:#637f61;color:#fff}#categories .count{opacity:.8}#categories hr{width:100%;border:0;border-top:1px solid #c7b59a;margin:6px 0}
@@ -8,8 +8,9 @@ input,button{font:inherit;padding:7px 11px;border:1px solid #c7b59a;background:#
 .entry{background:#f9f3e6;border-radius:8px;padding:12px 14px;margin:8px 0}.entry .meta{color:#766653;font-size:12px;margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 14px}
 .entry dl{display:grid;grid-template-columns:150px minmax(0,1fr);gap:4px 12px;margin:8px 0 0}.entry dt{color:#766653}.entry dd{margin:0;line-height:1.45}
 .words{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.words span{background:#efe3cc;border-radius:10px;padding:2px 9px}.words.long span{border-radius:6px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}.side h4{margin:0 0 4px;font:600 13px system-ui;color:#637f61}.side dl{margin:0;grid-template-columns:110px minmax(0,1fr)}
 .note{font-size:12px;color:#766653;font-style:italic;margin-top:8px}.empty{color:#766653;font-style:italic}
-@media(max-width:760px){body{margin:16px}.layout{grid-template-columns:1fr}#categories{position:static;flex-direction:row;flex-wrap:wrap}#categories hr{display:none}.entry dl{grid-template-columns:1fr}}</style>
+@media(max-width:760px){body{margin:16px}.pair{grid-template-columns:1fr}.layout{grid-template-columns:1fr}#categories{position:static;flex-direction:row;flex-wrap:wrap}#categories hr{display:none}.entry dl{grid-template-columns:1fr}}</style>
 <h1>Elsewhere · Univers</h1>
 <p>Tout le récit d’Elsewhere, lu là où le jeu le définit : histoires des personnes, traits, factions, prénoms, lieux, lettres et noms des choses. Les règles (gains de compétences, travaux refusés, relations, poids des tirages…) n’y figurent pas : une histoire personnalisée remplacera ces textes par leur identifiant sans toucher au jeu. Page de contrôle seulement : elle ne charge aucun monde.</p>
 <div class="top"><input id="search" type="search" placeholder="Rechercher un nom, un texte, un identifiant…" aria-label="Rechercher dans l’univers"><button id="export">Exporter tout en JSON</button><span id="stats" role="status"></span></div>

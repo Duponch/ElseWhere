@@ -8,6 +8,8 @@ import {updateShipAssemblyInspection276} from './ui/ship-assembly-inspection-276
 import {NativeStage} from './ui3d/NativeStage';
 import {nativeTextEntitiesFor} from './ui3d/native-text-entities';
 import {createNativeFrontMenu} from './ui3d/native-front';
+import {browserRimWorldTexts} from './lore/rimworld-texts';
+import {onLoreTextsChange} from './lore/lore-text';
 import {buildNativePanel,buildNativeToolPalette,syncNativePanelState} from './ui3d/native-panels';
 import {buildNativeEncounter,buildNativeFactions,setNativeWorldTab,focusNativeCaravanTrade} from './ui3d/native-world';
 import {nativeOrderPage,cancelNativeOrderPage} from './ui3d/native-orders';
@@ -1144,7 +1146,12 @@ const worldCreationBackend256:WorldCreationCallbacks256={
  confirmSite:request=>client.confirmWorldDraftSite256(request),
  start:(ticket,party,context)=>session.createConfirmedDraft(()=>client.startWorldDraft256(ticket,party,context)),
 };
+// « Textes de RimWorld » (Options): the player's installed RimWorld texts, read
+// in their own Worker from the folder kept by this browser; Elsewhere's texts
+// stay shown until then and whenever the folder cannot be read.
+const rimWorldTexts=browserRimWorldTexts(()=>new Worker(new URL('./lore/game-lore.worker.ts',import.meta.url),{type:'module'}));
 const frontOptions:FrontMenuOptions = {
+  rimWorldTexts,
   // Schema 349: the tutorial's first five lessons, on the creation pages.
   tutorialLessons:{begin:()=>{tutorialLessons?.beginCreation();syncTutorialLesson();},end:()=>{tutorialLessons?.endCreation();syncTutorialLesson();},
     notify:tag=>{tutorialLessons?.notify(tag);syncTutorialLesson();},allow:tag=>tutorialLessons?.allow({tag})},
@@ -1345,6 +1352,8 @@ function refreshNativeUi():void {
   if(page&&!page.onClose)page.onClose=()=>setPanel(null);
   nativeUi.showPage(page);
 }
+onLoreTextsChange(()=>refreshNativeUi());
+void rimWorldTexts.restore();
 const initialRuntimeOptions=(async()=>{await attempt(()=>threatPausePreference.initialize());await attempt(()=>settlementPreference.initialize());})();
 async function pauseForMenu(): Promise<void> {
   renderer?.cancelDesignation(); orderMenu.close();

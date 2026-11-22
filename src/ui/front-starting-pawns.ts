@@ -4,7 +4,7 @@ import { appearanceOf } from '../sim/pawn-appearance';
 import { biologicalYears, chronologicalYears } from '../sim/human-age';
 import { BACKGROUND_SKILL_IDS, backgroundSkillRefusal, type BackgroundSkillId } from '../sim/colonist-backgrounds';
 import { APPAREL } from '../sim/apparel-rules';
-import { TRAITS } from '../sim/traits';
+import { traitLabel, traitTooltip } from '../lore/lore-text';
 import { learningFactor, XP_SCALE, xpRequired } from '../sim/skills';
 import { BODY_PARTS } from '../sim/body-definition';
 import { HP_UNIT, INJURY_RULES } from '../sim/injury-rules';
@@ -183,7 +183,7 @@ export function createStartingPawnsConfiguration(options:StartingPawnsConfigurat
     for(const story of stories){const row=node('p','front-candidate-story');row.tabIndex=0;row.append(node('span','',`${story.phase} : `),node('strong','',story.label));setTooltip(row,story.tooltip);biography.append(row);}
     if(!stories.length)empty(biography,'Passé non renseigné');
     heading(biography,'Traits');
-    for(const id of pawn.traits??[]){const trait=node('p','front-candidate-trait',TRAITS[id].label);trait.tabIndex=0;setTooltip(trait,{title:TRAITS[id].label,body:TRAITS[id].description});biography.append(trait);}
+    for(const id of pawn.traits??[]){const label=traitLabel(id,pawn.appearance?.sex),trait=node('p','front-candidate-trait',label);trait.tabIndex=0;setTooltip(trait,{title:label,body:traitTooltip(id,{name:pawn.name,sex:pawn.appearance?.sex})});biography.append(trait);}
     if(!pawn.traits?.length)empty(biography,'Aucun trait');
     heading(biography,'Incapable de');const restrictions=backgroundRestrictionRows(pawn);
     for(const restriction of restrictions){const row=node('p','front-candidate-restriction',restriction.label);row.tabIndex=0;setTooltip(row,{title:restriction.label,body:restriction.reason});biography.append(row);}

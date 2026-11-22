@@ -14,13 +14,12 @@ import {BIOME_LABELS,HILLINESS_LABELS} from '../sim/site';
 import {STONE_LABELS} from '../sim/geology';
 import { createStartingCandidateRoster, previewStartingCandidate, previewStartingParty, rerollStartingCandidateForRoster, validStartingCandidateName, startingPartyMissingWork, type StartingCandidateDescriptor } from '../sim/starting-candidates';
 import { startingOriginalRequestFromRoster256 } from '../sim/starting-original-request-256';
-import { BACKGROUND_SKILL_IDS, BACKGROUND_WORK_LABELS, childhoodDefinition, adulthoodDefinition, backgroundSkillRefusal, backgroundWorkRefusal, violentWorkRefusal } from '../sim/colonist-backgrounds';
-import { storyTitle } from '../ui/background-inspection';
+import { BACKGROUND_SKILL_IDS, BACKGROUND_WORK_LABELS, backgroundSkillRefusal, backgroundWorkRefusal, violentWorkRefusal } from '../sim/colonist-backgrounds';
+import { storyTitle, storyDescription, traitLabel, traitTooltip, itemTitle, biomeTitle, factionTypeLabel } from '../lore/lore-text';
 import { startingPossessions370 } from '../sim/starting-possessions-370';
 import { ITEM_DEFINITIONS } from '../sim/items';
 import { biologicalYears, chronologicalYears } from '../sim/human-age';
 import { captureRelationshipIndex, relationshipKinds } from '../sim/relationship-state';
-import { TRAITS } from '../sim/traits';
 import type { WorkType } from '../sim/types';
 import { DEFAULT_LIGHTING_SETTINGS, LIGHTING_CONTROLS, parseLightingSettings } from '../render/lighting-settings';
 import { DEFAULT_SHADOW_SETTINGS, SHADOW_FREQUENCY_OPTIONS, SHADOW_RESOLUTION_OPTIONS, parseShadowSettings } from '../render/shadow-settings';
@@ -76,7 +75,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   let selectedTile: number | null = null, eligible: number[] = [], siteOffset = 0;
   let tests: TestColony[] | undefined;
   const testCatalogue={search:'',selected:undefined as string|undefined};
-  const optionSections=[{id:'game',label:'Jeu'},{id:'interface',label:'Interface'},{id:'graphics',label:'Graphismes'},{id:'lighting',label:'Éclairage'},{id:'audio',label:'Audio'}] as const;
+  const optionSections=[{id:'game',label:'Jeu'},{id:'interface',label:'Interface'},{id:'graphics',label:'Graphismes'},{id:'lighting',label:'Éclairage'},{id:'audio',label:'Audio'},{id:'rimworld-texts',label:'Textes de RimWorld'}] as const;
   let optionSection:typeof optionSections[number]['id']='game';
   let graphicsPreferenceGeneration=0;
   let loadSearch='',selectedLoadKey:string|undefined;
@@ -87,6 +86,9 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
    * only until « Jouer cette colonie », « Annuler » or leaving the page. */
   let rimworld: { key: number; fileName: string; fileSize: number; job?: RimWorldImportJob; progress?: RwsImportProgress; result?: RwsImportOutcome; view: string } | undefined;
   let rimworldKey = 0;
+  // A change of the RimWorld texts (read, language, folder) repaints the open
+  // page: Options and the candidates' stories and traits.
+  options.rimWorldTexts?.subscribe(() => { if (open && !externalPage) paint(); });
 
   /** Gameplay tips during world creation's long steps only (planet, site,
    * colony map), as on the reference loading screens; the tip moves on with
@@ -331,7 +333,9 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       { id: 'test-sound', label: 'Essayer le son', controls: [control('test-sound', 'Essayer', async () => { if (await run(options.onTestSound, 'Chargement du son d’essai…')) status = 'Son d’essai lancé.'; })] },
       toggle('music', 'Musique', options.getMusicEnabled(), value => preference(options.onMusicEnabledChange(value))),
       range('music-volume', 'Volume de la musique', Math.round(options.getMusicVolume() * 100), 0, 100, 1, value => preference(options.onMusicVolumeChange(value / 100)), false, ' %'));
+    rows.push(...rimWorldTextRows());
     const sectionOf=(id:string):typeof optionSections[number]['id']=>{
+      if(id.startsWith('rimworld-texts'))return 'rimworld-texts';
       if(['autosave','threat','settlements','learning-helper','learning-helper-reset'].includes(id))return 'game';
       if(['ui-scale','auto-hide-bottom','auto-hide-notifications','designation','item-label','font'].includes(id))return 'interface';
       if(id.startsWith('light-'))return 'lighting';
@@ -339,16 +343,40 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       return 'graphics';
     };
     const category=optionSections.find(section=>section.id===optionSection)!;
-    const catalogue:NativeRow[]=optionSections.map(section=>({id:`option-section-${section.id}`,label:'',region:'catalogue',controls:[control(`option-section-${section.id}`,section.label,()=>{optionSection=section.id;},false,optionSection===section.id)]}));
+    // « Textes de RimWorld » only where the page has its controller.
+    const catalogue:NativeRow[]=optionSections.filter(section=>section.id!=='rimworld-texts'||options.rimWorldTexts).map(section=>({id:`option-section-${section.id}`,label:'',region:'catalogue',controls:[control(`option-section-${section.id}`,section.label,()=>{optionSection=section.id;},false,optionSection===section.id)]}));
     const details:NativeRow[]=[{id:'option-section-title',label:category.label,emphasis:'heading',region:'details'},
       ...rows.filter(row=>sectionOf(row.id)===optionSection).map(row=>({...row,region:'details' as const,column:undefined}))];
     return { id:'',title:'Options',rows:[...catalogue,...details],width:900,height:760,layout:'setup',setupCatalogueWidth:180,contentKey:`options-${optionSection}`,actions:navigation() };
   }
 
+  /** Options → « Textes de RimWorld »: the folder of the player's RimWorld,
+   * its language and what is shown. The picker and the permission request
+   * open inside the click (the controller calls them before any wait). */
+  function rimWorldTextRows(): NativeRow[] {
+    const texts = options.rimWorldTexts;
+    if (!texts) return [];
+    const state = texts.state(), reading = state.status === 'reading', unsupported = state.status === 'unsupported';
+    const status = { unsupported: 'Indisponible dans ce navigateur', none: 'Textes d’Elsewhere', permission: 'Autorisation à renouveler', denied: 'Lecture refusée', reading: 'Lecture…', loaded: 'Textes de RimWorld affichés', error: 'Textes d’Elsewhere' }[state.status];
+    const rows: NativeRow[] = [
+      { id: 'rimworld-texts-about', label: 'Si RimWorld est installé sur cet ordinateur, Elsewhere peut afficher ses propres textes (histoires, traits, factions, noms et descriptions des choses) à la place des siens. Les règles ne changent pas. Rien n’est copié ni envoyé : les textes sont lus dans votre dossier à chaque ouverture et gardés en mémoire seulement ; ce navigateur retient seulement le dossier choisi.' },
+      { id: 'rimworld-texts-status', label: 'État', value: status, hint: state.message },
+      { id: 'rimworld-texts-message', label: state.message },
+      { id: 'rimworld-texts-folder', label: 'Dossier de RimWorld', value: state.folder ?? 'Aucun', hint: 'Choisissez le dossier d’installation de RimWorld, celui qui contient « Data » (par exemple steamapps/common/RimWorld).', controls: [
+        control('rimworld-texts-choose', state.folder ? 'Changer de dossier…' : 'Choisir le dossier…', () => texts.choose(), unsupported || reading, false, true),
+        ...(state.folder ? [control('rimworld-texts-forget', 'Oublier ce dossier', () => texts.forget(), reading, false, true)] : []),
+      ] },
+    ];
+    if (state.status === 'permission') rows.push({ id: 'rimworld-texts-allow', label: 'Le navigateur demande de nouveau l’autorisation de lire ce dossier.', controls: [control('rimworld-texts-allow', 'Autoriser la lecture', () => texts.allow(), false, false, true)] });
+    if (state.languages.length && state.language) rows.push(choice('rimworld-texts-language', 'Langue des textes', state.language, state.languages, value => texts.setLanguage(value), String, reading));
+    if (state.status === 'loaded') rows.push({ id: 'rimworld-texts-count', label: 'Textes du jeu', value: String(state.loaded), hint: `${state.loaded} textes du jeu remplacent ceux d’Elsewhere ; ${state.missing} entrées sans définition dans le jeu gardent le texte d’Elsewhere${state.durationMs !== undefined ? ` · lecture en ${state.durationMs} ms` : ''}. La comparaison entrée par entrée est sur la page /lore.html, « Jeu installé ».` });
+    return rows;
+  }
+
   const nativeSiteView={scope:'',tab:'facts' as 'facts'|'places'|'factions'};
   const nativeSiteRiverNames={'huge-river':'Fleuve','large-river':'Grande rivière',river:'Rivière',creek:'Ruisseau'} as const;
   const nativeSiteRoadNames={'dirt-path':'Sentier','dirt-road':'Route en terre','stone-road':'Route pavée','ancient-asphalt-road':'Ancienne route asphaltée','ancient-asphalt-highway':'Ancienne autoroute'} as const;
-  const nativeSiteBiome=(biome:ReturnType<typeof describeWorldSite>['biome'])=>biome==='ocean'?'Océan':biome==='lake'?'Lac':BIOME_LABELS[biome];
+  const nativeSiteBiome=(biome:ReturnType<typeof describeWorldSite>['biome'])=>biome==='ocean'?'Océan':biome==='lake'?'Lac':biomeTitle(biome,BIOME_LABELS[biome]);
 
   function renderWorld(): NativePage {
     const update=(action:()=>void)=>{invalidateDraft();action();};
@@ -368,13 +396,13 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     rows.push(details({id:'world-factions-heading',label:'Factions installées',emphasis:'heading'}));
     parameters.settings.factions.forEach((def,index)=>{
       if(isIntrinsicWorldFaction(def))return;
-      rows.push(details({id:`faction-${index}`,label:names[def]??def,controls:[control(`remove-faction-${index}`,'Retirer',()=>update(()=>{parameters.settings.factions.splice(index,1);}))]}));
+      rows.push(details({id:`faction-${index}`,label:factionTypeLabel(def,names[def]??def),controls:[control(`remove-faction-${index}`,'Retirer',()=>update(()=>{parameters.settings.factions.splice(index,1);}))]}));
     });
     const humans=parameters.settings.factions.filter(def=>!isIntrinsicWorldFaction(def)&&def!=='Mechanoid'&&def!=='Insect').length;
     rows.push(details({id:'human-faction-count',label:`${humans} / 12 factions humaines`,detail:humans?undefined:'Vous avez retiré toutes les factions humaines.'}));
     const addControls=CONFIGURABLE_WORLD_FACTIONS.filter(def=>!isIntrinsicWorldFaction(def)).map(def=>{
       const hidden=def==='Mechanoid'||def==='Insect';
-      return control(`add-faction-${def}`,names[def]??def,()=>{
+      return control(`add-faction-${def}`,factionTypeLabel(def,names[def]??def),()=>{
         // Keep the same live maximum/uniqueness constraints as the displayed
         // availability, even if a control was retained across a repaint.
         const currentHumans=parameters.settings.factions.filter(value=>!isIntrinsicWorldFaction(value)&&value!=='Mechanoid'&&value!=='Insect').length;
@@ -482,7 +510,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     const rows: NativeRow[]=[{id:'party-help',region:'navigation',presentation:'plain',compact:true,label:'Choisir trois personnes',value:'Les trois premiers partent.',hint:'Sélectionnez un candidat dans la liste puis choisissez sa place dans le dossier. Monter et descendre conservent les huit profils et leur ordre relatif.'}];
     for(const [index,descriptor] of roster.entries()){
       if(index===0||index===3)rows.push({id:index===0?'party-selected-heading':'party-reserve-heading',region:'catalogue',presentation:'plain',compact:true,emphasis:'heading',label:index===0?'Au départ':'Laissés sur place'});
-      const pawn=profiles[index]!,story=pawn.background?storyTitle(pawn.background.adulthood?adulthoodDefinition(pawn.background.adulthood):childhoodDefinition(pawn.background.childhood),pawn.appearance?.sex):'Passé non renseigné';
+      const pawn=profiles[index]!,story=pawn.background?storyTitle(pawn.background.adulthood?'adulthood':'childhood',pawn.background.adulthood??pawn.background.childhood,appearanceOf(pawn,teamSeed).sex):'Passé non renseigné';
       rows.push({id:`candidate-${descriptor.serial}`,region:'catalogue',label:'',compact:true,controlStyle:'button',controls:[{
         ...control(`inspect-${descriptor.serial}`,pawn.name,()=>{if(live(descriptor.serial,descriptor.generation))inspected=descriptor.serial;},false,inspected===descriptor.serial),
         hint:[pawn.name,index<3?'Au départ':'Laissé sur place',story,pawn.age?`${biologicalYears(pawn.age)} ans biologiques · ${chronologicalYears(pawn.age)} ans chronologiques`:'Âge non renseigné'].join('\n'),
@@ -514,14 +542,16 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       rows.push(details({id:'candidate-clothing',label:'Tenue du portrait',controls:[control('candidate-clothing',showCandidateClothes?'Masquer les vêtements':'Montrer les vêtements',()=>{if(current())showCandidateClothes=!showCandidateClothes;},false,showCandidateClothes)]}));
       rows.push(heading('candidate-story-heading','Histoire'));
       if(pawn.background){
-        const childhood=childhoodDefinition(pawn.background.childhood);rows.push(details({id:'childhood',label:'Enfance',value:storyTitle(childhood,pawn.appearance?.sex),hint:childhood.description}));
-        if(pawn.background.adulthood){const adulthood=adulthoodDefinition(pawn.background.adulthood);rows.push(details({id:'adulthood',label:'Adulte',value:storyTitle(adulthood,pawn.appearance?.sex),hint:adulthood.description}));}
+        // Titles and texts: the installed RimWorld's when loaded (Options), else Elsewhere's.
+        const sex=appearanceOf(pawn,teamSeed).sex,background=pawn.background,person={name:pawn.name,sex,title:storyTitle(background.adulthood?'adulthood':'childhood',background.adulthood??background.childhood,sex)};
+        rows.push(details({id:'childhood',label:'Enfance',value:storyTitle('childhood',background.childhood,sex),hint:storyDescription('childhood',background.childhood,person)}));
+        if(background.adulthood)rows.push(details({id:'adulthood',label:'Adulte',value:storyTitle('adulthood',background.adulthood,sex),hint:storyDescription('adulthood',background.adulthood,person)}));
       }else rows.push(details({id:'candidate-story-none',label:'Passé non renseigné'}));
       // Schema 370: Core's starting possessions of this person (adulthood story, 25 %).
       const possessions=startingPossessions370(teamSeed,descriptor,pawn);
-      if(possessions.length){rows.push(heading('candidate-possessions','Possessions'));for(const own of possessions)rows.push(details({id:`candidate-possession-${own.item}`,label:ITEM_DEFINITIONS[own.item].label,value:`× ${own.quantity}`,hint:'Apportée par cette personne : déposée près du point d’arrivée avec les réserves.'}));}
+      if(possessions.length){rows.push(heading('candidate-possessions','Possessions'));for(const own of possessions)rows.push(details({id:`candidate-possession-${own.item}`,label:itemTitle(own.item,ITEM_DEFINITIONS[own.item].label),value:`× ${own.quantity}`,hint:'Apportée par cette personne : déposée près du point d’arrivée avec les réserves.'}));}
       rows.push(heading('candidate-traits','Traits'));
-      for(const id of pawn.traits??[])rows.push(details({id:`candidate-trait-${id}`,label:TRAITS[id].label,hint:TRAITS[id].description}));
+      for(const id of pawn.traits??[])rows.push(details({id:`candidate-trait-${id}`,label:traitLabel(id,appearanceOf(pawn,teamSeed).sex),hint:traitTooltip(id,{name:pawn.name,sex:appearanceOf(pawn,teamSeed).sex})}));
       if(!pawn.traits?.length)rows.push(details({id:'candidate-traits-none',label:'Aucun trait'}));
       rows.push(heading('candidate-work-heading','Incapable de'));
       let refused=0;

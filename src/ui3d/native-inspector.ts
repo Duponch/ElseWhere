@@ -14,6 +14,7 @@ import { selectedMapJob296 } from '../ui/wall-door-selection-296';
 import { constructionRecipe } from '../sim/construction-materials';
 import { mapCellDetails } from '../ui/map-cell-details';
 import { buildingLabels } from '../ui/building-labels';
+import { animalDescription, animalTitle, buildingDescription, buildingTitle, itemDescription, itemTitle, traitLabel, traitTooltip, wildPlantTitle } from '../lore/lore-text';
 import { plantInspection } from '../ui/plant-inspection';
 import { STORAGE_FILTER_TREE, storageTreeSelection, storageTreePermissions, storageNodeLeaves, STORAGE_LEAVES } from '../ui/storage-filter-tree';
 import {nativeStorageTreeRows} from './native-storage-editor';
@@ -261,12 +262,14 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
     row('pawn-orders','Ordres',`${pawn.orders.active!==null?'Travail imposé · ':''}${pawn.orders.queue.length} en file${pawn.priorityWork?` · Case ${pawn.priorityWork.cell.x}, ${pawn.priorityWork.cell.z}`:''}`));
   if (activeTab === 'bio') {
     rows.push(heading('bio-identity', 'Passé'));
-    const stories = backgroundInspectionRows(pawn);
+    // The sex shown on the identity row (stored appearance, else its stable fallback).
+    const sex = appearanceOf(pawn, world.seed).sex, stories = backgroundInspectionRows(pawn, sex);
     rows.push(...stories.map((story, index) => row(index ? 'adulthood' : 'childhood', story.phase, story.label, tooltipText(story.tooltip))));
     if (!stories.length) rows.push(row('background-unknown', 'Passé non renseigné'));
     rows.push(heading('bio-traits', 'Traits'));
     if (!pawn.traits?.length) rows.push(row('traits-empty', 'Aucun trait'));
-    for (const trait of pawn.traits ?? []) rows.push(row(`trait-${trait}`, TRAITS[trait].label, undefined, TRAITS[trait].description));
+    // Names and texts: the installed RimWorld's when loaded (Options), else Elsewhere's.
+    for (const trait of pawn.traits ?? []) rows.push(row(`trait-${trait}`, traitLabel(trait, sex), undefined, traitTooltip(trait, { name: pawn.name, sex })));
     rows.push(row('trait-effects', 'Effets du profil', `Apprentissage ${pct(globalLearningFactor(pawn))}`, `Apprentissage général ${pct(globalLearningFactor(pawn))}. Risque de crise sous ${breakThresholds(pawn).map(value => Number(value.toFixed(2))).join(' / ')} % d’humeur (mineur / majeur / extrême). Le risque ne déclenche pas une crise immédiatement.${traitProfile361(pawn)} Crises disponibles : ${Object.values(MENTAL_CRISIS_CATALOG).map(crisis => crisis.label.toLocaleLowerCase('fr-FR')).join(', ')}.`));
     rows.push(heading('bio-links', 'Liens connus'));
     const people = captureRelationshipPeople(world), relations = relationshipIndex(world); let linked = false;
@@ -575,11 +578,17 @@ function storagePage(world: World, structureId?: number, stockpileId?: number): 
 }
 function objectLabel(world: World, selected: MapObjectSelection): string {
   if(selected.kind==='job'){const job=selectedMapJob296(world,selected.id);if(job&&job.kind in buildingLabels)return `Plan · ${buildingLabels[job.kind as Structure['kind']]}`;}
-  if (selected.kind === 'structure' || selected.kind === 'packed') { const structure = world.structures.find(s => s.id === selected.id) ?? world.packed.find(p => p.building.id === selected.id)?.building; return structure ? buildingLabels[structure.kind] : 'Bâtiment absent'; }
-  if (selected.kind === 'pile') { const pile = world.piles.find(p => p.id === selected.id); return pile ? `${ITEM_DEFINITIONS[pile.item].label} × ${pile.quantity}` : 'Pile absente'; }
-  if (selected.kind === 'resource') { const resource = world.resources.find(r => r.id === selected.id); return resource ? resource.species ?? resource.kind : 'Ressource absente'; }
+  if (selected.kind === 'structure' || selected.kind === 'packed') { const structure = world.structures.find(s => s.id === selected.id) ?? world.packed.find(p => p.building.id === selected.id)?.building; return structure ? buildingTitle(structure.kind, buildingLabels[structure.kind]) : 'Bâtiment absent'; }
+  if (selected.kind === 'pile') { const pile = world.piles.find(p => p.id === selected.id); return pile ? `${itemTitle(pile.item, ITEM_DEFINITIONS[pile.item].label)} × ${pile.quantity}` : 'Pile absente'; }
+  if (selected.kind === 'resource') { const resource = world.resources.find(r => r.id === selected.id); return resource ? resource.species ? wildPlantTitle(resource.species, resource.species) : resource.kind : 'Ressource absente'; }
   if (selected.kind === 'plan') { const plan = planById369(world, selected.id); return plan ? planLabel369(plan) : 'Plan absent'; }
   return ({ growing: 'Zone de culture', stockpile: 'Zone de stockage', rock: 'Massif rocheux', geyser: 'Geyser', job: 'Ordre de travail' } as Record<string, string>)[selected.kind] ?? selected.kind;
+}
+/** The installed RimWorld's description of the thing, when loaded (Elsewhere has none of its own). */
+function objectDescription(world: World, selected: MapObjectSelection): string | undefined {
+  if (selected.kind === 'structure') { const structure = world.structures.find(s => s.id === selected.id); return structure ? buildingDescription(structure.kind) : undefined; }
+  if (selected.kind === 'pile') { const pile = world.piles.find(p => p.id === selected.id); return pile ? itemDescription(pile.item) : undefined; }
+  return undefined;
 }
 function objectPage(world: World, objects: readonly MapObjectSelection[]): NativePage {
   const selected = objects[0]!, rows: NativeRow[] = [];
@@ -716,7 +725,7 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
         row('job-materials','Matériaux de la porte',recipe.ingredients.map(cost=>`${cost.quantity} ${ITEM_DEFINITIONS[cost.item].label}`).join(' · '),'Aucun matériau de la future porte n’est encore livré.'));
     }else if(job){const diagnostic=queryJobStatus(world,job);rows.push(row('job-kind','Travail',job.kind in buildingLabels?buildingLabels[job.kind as Structure['kind']]:job.kind),row('job-state','État',job.status==='active'?'En cours':'En attente',diagnostic.reason),row('job-worker','Réservation',world.pawns.find(pawn=>pawn.id===job.reservedBy)?.name??'Aucune'),row('job-materials','Matériaux livrés',`${diagnostic.delivered} / ${diagnostic.required}`));}
   }
-  return { id: `inspect-${selected.kind}-${selected.id}`, title: objectLabel(world, selected), rows, actions, layout: 'inspector' };
+  return { id: `inspect-${selected.kind}-${selected.id}`, title: objectLabel(world, selected), subtitle: objectDescription(world, selected), rows, actions, layout: 'inspector' };
 }
 
 function animalPage(world: World, animalId: number): NativePage | null {
@@ -753,7 +762,7 @@ function animalPage(world: World, animalId: number): NativePage | null {
   const tame = tameRefusal(world, animal), slaughter = slaughterRefusal(world, animal), hunted = world.hunting?.targets.includes(animalId) ?? false;
   const actions: NativeControl[] = animal.domestic ? [command('animal-slaughter', animal.domestic.slaughter ? 'Annuler l’abattage' : 'Abattre', { type: 'slaughter', animalId, enabled: !animal.domestic.slaughter }, dead || !!slaughter, !!animal.domestic.slaughter, slaughter),
     ...(isExecuteRelease364(world.schemaVersion) ? [command('animal-release-wild', animal.domestic.release364 ? 'Annuler la remise en liberté' : 'Relâcher dans la nature', { type: 'release-wild', animalId, enabled: !animal.domestic.release364 }, dead, !!animal.domestic.release364, 'Un soigneur emmène l’animal dehors puis le relâche : il redevient sauvage et quitte la colonie.')] : [])] : [command('animal-hunt', hunted ? 'Annuler la chasse' : 'Chasser', { type: 'hunt', animalId, enabled: !hunted }, dead, hunted), command('animal-tame', animal.taming?.designated ? 'Annuler l’apprivoisement' : 'Apprivoiser', { type: 'tame', animalId, enabled: !animal.taming?.designated }, dead || !animal.taming?.designated && !!tame, !!animal.taming?.designated, tame ?? `Animaux ${handlingSkill(animal.species)} minimum`)];
-  return { id: `inspect-animal-${animalId}`, title: actualAnimalName256(animal) ?? `${species.label} ${animalId}`, rows, actions, layout: 'inspector' };
+  return { id: `inspect-animal-${animalId}`, title: actualAnimalName256(animal) ?? `${animalTitle(animal.species, species.label)} ${animalId}`, subtitle: animalDescription(animal.species), rows, actions, layout: 'inspector' };
 }
 function mechPage(world: World, actorId: number): NativePage | null {
   const actor = world.mechanoids?.find(actor => actor.id === actorId); if (!actor) return null;

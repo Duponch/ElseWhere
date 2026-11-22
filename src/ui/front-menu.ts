@@ -66,6 +66,9 @@ export interface FrontMenuOptions {
    * marked learned when returned; undefined once known. */
   learningNotice?:(id:'max-colonies')=>{title:string;text:string}|undefined;
   getThreatPauseMode?:()=>ThreatPauseMode;getThreatPausePending?:()=>boolean;onThreatPauseModeChange?:(mode:ThreatPauseMode)=>Promise<boolean>;
+  /** « Textes de RimWorld » : the player's installed RimWorld texts shown in
+   * place of Elsewhere's (src/lore/rimworld-texts.ts). */
+  rimWorldTexts?:import('../lore/rimworld-texts').RimWorldTextsController;
   getAutosaveMinutes?:()=>number;
   onAutosaveMinutesChange?:(minutes:number)=>boolean;
   onExport?:()=>Promise<void>;

@@ -1,5 +1,7 @@
 import {LORE_CATEGORIES,LORE_ENTRIES} from './lore-registry.ts';
-import {installedLoreSources} from './lore-installed.ts';
+import {browserRimWorldTexts,type RimWorldTextsState} from './rimworld-texts.ts';
+import {gameLoreTexts} from './lore-text.ts';
+import {gameLoreCoverage} from './game-lore-coverage.ts';
 import {buildLoreExport,filterLoreEntries,loreCategoryCounts,loreExportFileName,loreTextCount} from './lore-view.ts';
 import type {LoreCategoryId,LoreCategoryInfo,LoreEntry} from './lore-types.ts';
 
@@ -44,22 +46,60 @@ function renderCategory(category:LoreCategoryInfo,entries:readonly LoreEntry[]):
   }
   if(!own.length)content.append(el('p','Aucune entrée ne correspond à la recherche.','empty'));
 }
+// « Jeu installé »: the texts of the player's own RimWorld, read from the
+// folder this browser keeps (same controller as Options in the game), side by
+// side with Elsewhere's. Nothing read is stored or sent.
+const rimWorldTexts=browserRimWorldTexts(()=>new Worker(new URL('./game-lore.worker.ts',import.meta.url),{type:'module'}));
+rimWorldTexts.subscribe(()=>{if(view==='installed')render();});
+void rimWorldTexts.restore();
+const INSTALLED_FIELDS:readonly [keyof LoreEntry,string][]=[['title','Titre'],['shortTitle','Titre court'],['titleFemale','Au féminin'],['shortTitleFemale','Court, au féminin'],['description','Description']];
+function textColumn(heading:string,entry:LoreEntry|undefined):HTMLElement {
+  const column=el('div',undefined,'side');column.append(el('h4',heading));
+  if(!entry){column.append(el('p','Aucun texte.','empty'));return column;}
+  const list=el('dl');
+  for(const [field,label] of INSTALLED_FIELDS){const value=entry[field];if(typeof value==='string')list.append(el('dt',label),el('dd',value));}
+  column.append(list);return column;
+}
+function pairCard(own:LoreEntry|undefined,game:LoreEntry):HTMLElement {
+  const card=el('article',undefined,'entry');card.dataset.id=game.id;
+  card.append(el('h3',own?.title??game.title??game.key));
+  const meta=el('div',undefined,'meta');meta.append(el('code',game.id));if(game.reference)meta.append(el('span',game.reference));meta.append(el('span',game.source.file));card.append(meta);
+  const pair=el('div',undefined,'pair');pair.append(textColumn('Elsewhere',own),textColumn('Jeu installé',game));card.append(pair);
+  return card;
+}
+function installedControls(state:RimWorldTextsState):HTMLElement {
+  const box=el('div',undefined,'top');
+  const choose=el('button',state.folder?'Changer de dossier…':'Choisir le dossier de RimWorld…');choose.disabled=state.status==='unsupported'||state.status==='reading';choose.onclick=()=>void rimWorldTexts.choose();box.append(choose);
+  if(state.status==='permission'){const allow=el('button','Autoriser la lecture');allow.onclick=()=>void rimWorldTexts.allow();box.append(allow);}
+  if(state.folder){const forget=el('button','Oublier ce dossier');forget.onclick=()=>void rimWorldTexts.forget();box.append(forget);}
+  if(state.languages.length){
+    const select=el('select');select.setAttribute('aria-label','Langue des textes');select.disabled=state.status==='reading';
+    for(const language of state.languages){const option=el('option',language);option.value=language;option.selected=language===state.language;select.append(option);}
+    select.onchange=()=>void rimWorldTexts.setLanguage(select.value);box.append(select);
+  }
+  return box;
+}
 function renderInstalled():void {
+  const state=rimWorldTexts.state(),texts=gameLoreTexts();
   const box=el('section',undefined,'about');
   box.append(el('h2','Jeu installé'),
-    el('p','Cette partie montrera l’univers du RimWorld installé chez le joueur : histoires, noms, factions et descriptions lus à l’ouverture dans ses fichiers de définitions et de langue. Rien n’est copié dans le dépôt ni gardé dans une sauvegarde ; sans jeu installé, la partie reste vide.'),
-    el('p','Un lot à venir branchera ce lecteur. Il fournira une source (interface InstalledLoreSource de src/lore/lore-installed.ts) : un libellé et une fonction qui lit l’installation et rend des entrées de la même forme que celles d’Elsewhere, d’origine « installed », pour comparer les deux univers et partir de l’un ou de l’autre.'));
+    el('p','Les textes du RimWorld installé chez le joueur (histoires, traits, factions, noms et descriptions des choses), lus à l’ouverture dans ses fichiers de définitions et de langue, à côté de ceux d’Elsewhere. Rien n’est copié dans le dépôt, envoyé ni gardé dans une sauvegarde : ce navigateur retient seulement le dossier choisi, et le jeu montre ces textes à la place des siens quand ils sont lus (Options, « Textes de RimWorld »).'),
+    installedControls(state),el('p',state.message,'empty'));
   content.append(box);
-  const sources=installedLoreSources();
-  if(!sources.length){content.append(el('p','Aucun lecteur du jeu installé n’est encore branché.','empty'));return;}
-  for(const source of sources){
-    const button=el('button',`Lire : ${source.label}`),out=el('div');
-    button.onclick=async()=>{button.disabled=true;out.replaceChildren(el('p','Lecture…','empty'));
-      try{const entries=filterLoreEntries(await source.load(),{query:search.value});out.replaceChildren(...entries.map(entryCard));if(!entries.length)out.append(el('p','Aucune entrée.','empty'));}
-      catch(error){out.replaceChildren(el('p',`Lecture impossible : ${error instanceof Error?error.message:String(error)}`,'empty'));}
-      finally{button.disabled=false;}};
-    content.append(button,out);
+  if(!texts)return;
+  const own=new Map(LORE_ENTRIES.map(entry=>[entry.id,entry])),coverage=gameLoreCoverage(LORE_CATEGORIES,LORE_ENTRIES,texts.entries);
+  const report=el('section',undefined,'about');report.append(el('h2',`Correspondances · ${texts.label}`),el('p',`${coverage.matched} entrées sur ${coverage.total} ont un texte du jeu ; les autres gardent celui d’Elsewhere.`));
+  const list=el('ul');
+  for(const group of coverage.groups)list.append(el('li',`${group.label} : ${group.matched} / ${group.total}${group.reason?` — ${group.reason}`:''}`));
+  if(coverage.extra.length)list.append(el('li',`Sans entrée dans le registre d’Elsewhere : ${coverage.extra.length} (titres de chef de faction, milieux et bâtiments qu’Elsewhere ne nomme pas dans le registre).`));
+  report.append(list);content.append(report);
+  const query=search.value,matching=filterLoreEntries([...texts.entries.values()],{query});
+  for(const category of LORE_CATEGORIES){
+    const inCategory=matching.filter(entry=>entry.category===category.id);if(!inCategory.length)continue;
+    content.append(el('h2',`${category.label} (${inCategory.length})`));
+    for(const entry of inCategory)content.append(pairCard(own.get(entry.id),entry));
   }
+  if(!matching.length)content.append(el('p','Aucune entrée ne correspond à la recherche.','empty'));
 }
 function navButton(target:View,label:string,count?:number):HTMLButtonElement {
   const button=el('button');button.append(el('span',label));if(count!==undefined)button.append(el('span',String(count),'count'));
