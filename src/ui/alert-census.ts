@@ -1,6 +1,7 @@
 import {APPAREL,apparelInsulation,type ApparelItem} from '../sim/apparel-rules';
 import {isMedicine} from '../sim/medicine-rules';
 import {storageCells} from '../sim/shelf-storage';
+import {targetBuildingPlayerUse263} from '../sim/world-target-building-263';
 import type {World} from '../sim/types';
 import {knownPile256} from './exploration-readers-256';
 
@@ -14,6 +15,15 @@ export interface WornApparelSummary {
   readonly comfyMin:number;
 }
 
+/** Cell indices of Core's slot groups (map.haulDestinationManager), which
+ * ResourceCounter counts: stockpile zones, player shelves and the nutrient
+ * paste hoppers (Core Hopper is a Building_Storage with its own slot group). */
+export function coreSlotGroupCells(world:World):Set<number> {
+  const cells=new Set(storageCells(world).map(cell=>cell.z*world.width+cell.x));
+  for(const s of world.structures)if(s.kind==='hopper'&&targetBuildingPlayerUse263(world,s))cells.add(s.z*world.width+s.x);
+  return cells;
+}
+
 /** Shared per-reading aggregates of the alert readers. One pass over the
  * storage cells and at most one pass over the piles per question, built
  * lazily on the first reader that needs it and dropped with the reading.
@@ -24,10 +34,9 @@ export class AlertCensus {
   private worn?:ReadonlyMap<number,WornApparelSummary>;
   private medicine?:number;
   constructor(readonly world:World){}
-  /** Cell indices of the stockpile zones and player shelves (Core slot groups). */
+  /** Cell indices of the Core slot groups (coreSlotGroupCells). */
   storedCells():ReadonlySet<number> {
-    const w=this.world;
-    return this.stored??=new Set(storageCells(w).map(cell=>cell.z*w.width+cell.x));
+    return this.stored??=coreSlotGroupCells(this.world);
   }
   /** Core ResourceCounter Medicine group: medicine items kept in storage,
    * counted by item, on known cells. */

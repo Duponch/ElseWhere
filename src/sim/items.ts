@@ -163,6 +163,8 @@ export const ITEM_DEFINITIONS = Object.freeze({
   ...DEVILSTRAND_APPAREL_ITEM_DEFINITIONS358,
   'unfinished-cowboy-hat':Object.freeze({label:'Chapeau de cowboy inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0xd8c8a2}),
   'unfinished-bowler-hat':Object.freeze({label:'Chapeau melon inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0xd8c8a2}),
+  // Schema 375: workpiece of the Core flak pants recipe (flak-pants-375.ts).
+  'unfinished-flak-pants':Object.freeze({label:'Pantalon pare-balles inachevé',kind:'unfinished',stackLimit:1,nutrition:0,maxIngest:0,color:0x707070}),
 } as const);
 export type ItemId = keyof typeof ITEM_DEFINITIONS;
 /** These raw foods cause the shared raw-meal thought, independently of policy. */

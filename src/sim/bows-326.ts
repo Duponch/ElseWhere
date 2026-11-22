@@ -71,10 +71,5 @@ type ResearchView=Pick<World,'schemaVersion'|'research'>;
 export const bowResearchUnlocked326=(w:ResearchView,project:BowResearch326):boolean=>isBowSchema326(w.schemaVersion)&&w.research?.[BOW_RESEARCH_326[project].recordKey]?.completedAt!==undefined;
 export const recurveBowUnlocked326=(w:ResearchView):boolean=>bowResearchUnlocked326(w,'recurve-bow');
 export const greatbowUnlocked326=(w:ResearchView):boolean=>bowResearchUnlocked326(w,'greatbow');
-/** Label of the missing parent project, if any. */
-export const bowResearchPrerequisite326=(w:ResearchView,project:BowResearch326):string|undefined=>{
- const parent=BOW_RESEARCH_326[project].parent;
- return parent&&!bowResearchUnlocked326(w,parent)?BOW_RESEARCH_326[parent].label:undefined;
-};
 /** A bow recipe is unlocked by its own research project. */
 export const bowRecipeUnlocked326=(w:ResearchView,recipe:BowRecipe326):boolean=>bowResearchUnlocked326(w,bowRecipeFacts326(recipe).research);

@@ -1,5 +1,5 @@
 import type {World} from './types.ts';
-import {CORE_GUN_CANDIDATES_340,GUN_KIND_MONEY_340,blowbackUnlocked340,gunKindWeapon340,seededUnit340,type BlowbackRanged340,type GunKind340} from './blowback-340.ts';
+import {CORE_GUN_CANDIDATES_340,GUN_KIND_MONEY_340,gunKindWeapon340,seededUnit340,type BlowbackRanged340,type GunKind340} from './blowback-340.ts';
 /** Core 1.6 research GasOperation and PrecisionRifling with their five guns
  * (schema 342). Pure data and small helpers: it imports only blowback-340.ts,
  * which imports only types, so items, recipes, statistics and research can
@@ -91,13 +91,6 @@ export const GUNS_RESEARCH_342:Readonly<Record<GunsResearch342,GunsResearchFacts
 type ResearchView=Pick<World,'schemaVersion'|'research'>;
 export const gunsResearchUnlocked342=(w:ResearchView,project:GunsResearch342):boolean=>isGunsSchema342(w.schemaVersion)&&w.research?.[GUNS_RESEARCH_342[project].recordKey]?.completedAt!==undefined;
 export const gunRecipeUnlocked342=(w:ResearchView,recipe:GunRecipe342):boolean=>gunsResearchUnlocked342(w,GUNS_FACTS_342[gunProduct342(recipe)].research);
-/** Label of the first missing parent project, if any: GasOperation needs
- * BlowbackOperation; PrecisionRifling needs GasOperation and Microelectronics. */
-export function gunsResearchPrerequisite342(w:ResearchView,project:GunsResearch342):string|undefined {
- if(project==='gas-operation')return blowbackUnlocked340(w)?undefined:'Culasse non calée';
- if(!gunsResearchUnlocked342(w,'gas-operation'))return GUNS_RESEARCH_342['gas-operation'].label;
- return w.research?.microelectronics?.completedAt===undefined?'Microélectronique':undefined;
-}
 /** Record keys of the parents, completed before the child (save rule). */
 export const GUNS_RESEARCH_PARENTS_342:Readonly<Record<GunsResearch342,readonly ('blowbackOperation'|'gasOperation'|'microelectronics')[]>>=Object.freeze({
  'gas-operation':Object.freeze(['blowbackOperation'] as const),'precision-rifling':Object.freeze(['gasOperation','microelectronics'] as const),

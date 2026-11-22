@@ -49,6 +49,7 @@ const recipeSkills:Readonly<Record<ProductionRecipe,ProductionRecipeSkill283|nul
  'make-bolt-action-rifle':'crafting',
  'make-emp-launcher':'crafting',
  'make-flak-vest':'crafting',
+ 'make-flak-pants':'crafting',
  'make-flak-helmet':'crafting',
  'make-recon-armor':'crafting',
  'make-recon-helmet':'crafting',

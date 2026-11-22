@@ -8,7 +8,7 @@ export const isBillTaintedSchema374=(version:unknown):boolean=>typeof version===
 import type {ApparelCountFilter278,CookingBill} from './cooking-types.ts';
 import {SCHEMA_VERSION,type Cell,type Pawn,type World} from './types.ts';
 
-const RECIPES=['tribalwear','shirt','pants','duster','parka','tuque','tshirt','jacket','cowboy-hat','bowler-hat','make-flak-vest','make-flak-helmet','make-recon-helmet','make-recon-armor','make-plate-armor','make-simple-helmet'] as const;
+const RECIPES=['tribalwear','shirt','pants','duster','parka','tuque','tshirt','jacket','cowboy-hat','bowler-hat','make-flak-vest','make-flak-pants','make-flak-helmet','make-recon-helmet','make-recon-armor','make-plate-armor','make-simple-helmet'] as const;
 export type ApparelCountRecipe278=typeof RECIPES[number];
 export const isApparelCountRecipe278=(value:unknown):value is ApparelCountRecipe278=>typeof value==='string'&&(RECIPES as readonly string[]).includes(value);
 /** From schema 374 a new filter holds Core's includeTainted, false by default. */

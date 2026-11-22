@@ -1,4 +1,5 @@
 import { allowedAreaAllows,allowedAreaWorkAllowed } from './allowed-area-state.ts';
+import { isFlakPantsSchema375 } from './flak-pants-375.ts';
 import { ingredientPlaceFree } from './cooking-bills.ts';
 import { groundCapacity, planGroundPlacement } from './ground-placement.ts';
 import { healthRandom } from './health.ts';
@@ -9,7 +10,7 @@ import { releaseAssignments } from './work-release.ts';
 import type { Cell, CommandResult, MaterialPile, Pawn, World } from './types.ts';
 
 type FlakMaterial='cloth'|'steel'|'component'|'plasteel'|'advanced-component'|'uranium';
-const recipeMaterials=(recipe:FlakRecipe):readonly FlakMaterial[]=>recipe==='make-flak-vest'?['cloth','steel','component']:recipe==='make-flak-helmet'?['steel','component','plasteel']:recipe==='make-recon-armor'?['plasteel','advanced-component','uranium']:['plasteel','advanced-component'];
+const recipeMaterials=(recipe:FlakRecipe):readonly FlakMaterial[]=>recipe==='make-flak-vest'||recipe==='make-flak-pants'?['cloth','steel','component']:recipe==='make-flak-helmet'?['steel','component','plasteel']:recipe==='make-recon-armor'?['plasteel','advanced-component','uranium']:['plasteel','advanced-component'];
 const requirement=(recipe:FlakRecipe,item:FlakMaterial):number=>(flakRequirements(recipe) as unknown as Record<string,number>)[item]??0;
 export interface FlakWork {
   recipe:FlakRecipe;
@@ -89,9 +90,9 @@ export function detachMissingFlakBills(world:World):void {
 }
 
 export function validFlakWorkShape(p:Record<string,unknown>,version:number):boolean {
-  if(p.item!=='unfinished-flak-vest'&&p.item!=='unfinished-flak-helmet'&&p.item!=='unfinished-recon-helmet'&&p.item!=='unfinished-recon-armor')return p.flakWork===undefined;
+  if(p.item!=='unfinished-flak-vest'&&p.item!=='unfinished-flak-pants'&&p.item!=='unfinished-flak-helmet'&&p.item!=='unfinished-recon-helmet'&&p.item!=='unfinished-recon-armor')return p.flakWork===undefined;
   const work=p.flakWork,owner=p.owner;
-  if(version<109||p.kind!=='unfinished'||p.quantity!==1||!record(owner)||!['ground','pawn'].includes(String(owner.type))||!record(work)||!isFlakRecipe(work.recipe)||version<141&&work.recipe==='make-flak-helmet'||version<148&&work.recipe==='make-recon-helmet'||version<241&&work.recipe==='make-recon-armor'||p.item!==flakWorkpiece(work.recipe))return false;
+  if(version<109||p.kind!=='unfinished'||p.quantity!==1||!record(owner)||!['ground','pawn'].includes(String(owner.type))||!record(work)||!isFlakRecipe(work.recipe)||version<141&&work.recipe==='make-flak-helmet'||version<148&&work.recipe==='make-recon-helmet'||version<241&&work.recipe==='make-recon-armor'||!isFlakPantsSchema375(version)&&work.recipe==='make-flak-pants'||p.item!==flakWorkpiece(work.recipe))return false;
   if(Object.keys(work).some(k=>!['recipe','authorId','progress','parts','billId'].includes(k))||!integer(work.authorId,1)||!integer(work.progress,0,productionWorkTotal(work.recipe))||work.billId!==undefined&&!integer(work.billId,1)||!Array.isArray(work.parts)||work.parts.length<(work.recipe==='make-recon-helmet'?2:3)||work.parts.length>93)return false;
   const recipe=work.recipe as FlakRecipe;
   const totals:Record<FlakMaterial,number>={cloth:0,steel:0,component:0,plasteel:0,'advanced-component':0,uranium:0},needed=recipeMaterials(recipe);
@@ -105,7 +106,7 @@ export function validFlakWorkShape(p:Record<string,unknown>,version:number):bool
 export function validateFlakWorks(world:World,version:number):string[] {
   const errors:string[]=[],bound=new Set<number>();
   for(const pile of world.piles){
-    if(pile.item!=='unfinished-flak-vest'&&pile.item!=='unfinished-flak-helmet'&&pile.item!=='unfinished-recon-helmet'&&pile.item!=='unfinished-recon-armor'&&pile.flakWork===undefined)continue;
+    if(pile.item!=='unfinished-flak-vest'&&pile.item!=='unfinished-flak-pants'&&pile.item!=='unfinished-flak-helmet'&&pile.item!=='unfinished-recon-helmet'&&pile.item!=='unfinished-recon-armor'&&pile.flakWork===undefined)continue;
     if(!validFlakWorkShape(pile as unknown as Record<string,unknown>,version)){errors.push('Invalid unfinished flak armor.');continue;}
     const work=pile.flakWork!;
     if(!world.pawns.some(p=>p.id===work.authorId))errors.push('Missing unfinished flak vest author.');

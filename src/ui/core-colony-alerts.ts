@@ -6,20 +6,22 @@ import {expectationForWealth} from '../sim/expectations';
 import {firePosition} from '../sim/fire-rules';
 import {ticksUntilRot} from '../sim/food-preservation';
 import {comfortableTemperature} from '../sim/heat-rules';
+import {groupAmbientTemperature256} from '../sim/group-provision-age';
+import {offmapThermalRange259} from '../sim/offmap-thermal-259';
+import {worldCaravans} from './alert-caravans';
 import {currentMedicalBed} from '../sim/hospital-medical-stats';
 import {ITEM_DEFINITIONS,nutritionOf} from '../sim/items';
 import {MECHANITE_KINDS307} from '../sim/mechanites-307';
 import {inHome} from '../sim/repairs';
 import {wantsRescue} from '../sim/rescue';
 import {carrierOf} from '../sim/rescue-state';
-import {storageCells} from '../sim/shelf-storage';
 import {temperatureAt} from '../sim/temperature';
 import {workPriority} from '../sim/work-types';
 import type {Pawn,World} from '../sim/types';
 import {coreDaysPassed,isPlayerHomeMap} from './alert-priority';
 import {knownBuilding256,knownPile256,knownPosition256} from './exploration-readers-256';
 import {actorNotificationTarget,cellNotificationTarget,objectNotificationTarget,personNotificationTarget,type NotificationTarget} from './notification-focus';
-import type {AlertCensus} from './alert-census';
+import {coreSlotGroupCells,type AlertCensus} from './alert-census';
 import type {StatusAlert} from './status-alerts';
 
 /** Readers for the Core alerts of the right-hand list. Each one reads the same
@@ -119,15 +121,24 @@ export function readColonistsNeedTend(world:World,free:readonly Pawn[]):StatusAl
     `Blessure ou maladie à traiter : ${names(patients)}. Un médecin soigne le patient couché dans un lit ; activez Médecin dans Travail et préparez un lit médical.`};
 }
 
-/** Alert_Hypothermia (Critical): free colonist at serious hypothermia (stage 3,
- * severity ≥ 0.35) who is still outside the safe range (comfort ±10 °C). */
+/** Alert_Hypothermia (Critical): a free colonist on the map or in a caravan
+ * (PawnsFinder.AllMapsCaravansAndTravellingTransporters_AliveSpawned_FreeColonists_NoSuspended)
+ * whose Hypothermia hediff is at stage index 3 or more (serious, severity
+ * ≥ 0.35) and whose ambient temperature is outside the safe range
+ * (GenTemperature.SafeTemperatureRange: comfortable range, worn apparel
+ * included, widened by 10 °C on each side). A caravan's air is its tile's. */
 export const SERIOUS_HYPOTHERMIA=350_000_000;
+export const SAFE_TEMPERATURE_MARGIN=10;
+const outsideSafeRange=(air:number,range:{min:number;max:number})=>air<range.min-SAFE_TEMPERATURE_MARGIN||air>range.max+SAFE_TEMPERATURE_MARGIN;
 export function readSeriousHypothermia(world:World,free:readonly Pawn[]):StatusAlert|undefined {
-  const cold=free.filter(p=>{
-    if((p.health?.hypothermia??0)<SERIOUS_HYPOTHERMIA)return false;
-    const range=comfortableTemperature(world,p),air=temperatureAt(world,p);
-    return air<range.min-10||air>range.max+10;
-  });
+  const cold=free.filter(p=>(p.health?.hypothermia??0)>=SERIOUS_HYPOTHERMIA&&outsideSafeRange(temperatureAt(world,p),comfortableTemperature(world,p)));
+  for(const {group} of worldCaravans(world)){
+    const members=group.members.filter(p=>freeColonist(p)&&(p.health?.hypothermia??0)>=SERIOUS_HYPOTHERMIA);
+    if(!members.length)continue;
+    let air:number;
+    try{air=groupAmbientTemperature256(world,group);}catch{continue;}
+    for(const p of members){const range=offmapThermalRange259(p,group.items);if(typeof range!=='string'&&outsideSafeRange(air,range))cold.push(p);}
+  }
   if(!cold.length)return;
   const text=`${cold.length} colon${cold.length>1?'s':''} en hypothermie grave`;
   return {key:'hypothermia',text,targets:people(world,cold),context:{panel:'history'},tab:'health',explanation:
@@ -183,14 +194,23 @@ export function readNeedColonistBeds(world:World,free:readonly Pawn[]):StatusAle
 }
 
 /** Alert_LowFood (High) after 150 000 Core ticks: fresh human-edible nutrition
- * kept in storage below 4 per free colonist on the home map. */
+ * kept in storage below 4 per free colonist on the home map
+ * (NutritionThresholdPerColonist 4). */
 export const LOW_FOOD_START_TICK=15_000;
+export const LOW_FOOD_NUTRITION_PER_COLONIST=4;
+/** Core ResourceCounter.TotalHumanEdibleNutrition counts a ThingDef when it
+ * gives nutrition and its foodType meets FoodTypeFlags.OmnivoreHuman. The raw
+ * plants of RoughPlantBase (foodType Plant: hay and hops) are not human
+ * edible; beer is (DrugBase, nutrition 0.08, foodType Fluid, Processed,
+ * Liquor). Kibble, eggs, milk, insect jelly and meals are. */
+const CORE_PLANT_FOOD:ReadonlySet<string>=new Set(['hay','hops']);
+export const coreHumanEdibleItem=(item:string,kind:string):boolean=>kind==='food'&&!CORE_PLANT_FOOD.has(item)||item==='beer';
 export function storedHumanNutrition(world:World,census?:AlertCensus):number {
   // One pass over the storage cells, then one over the piles (no lookup per pile).
   let total=0,stored:ReadonlySet<number>|undefined;
   for(const pile of world.piles){
-    if(pile.owner.type!=='ground'||pile.kind!=='food'||pile.item==='hay'||pile.quantity<=0||!ITEM_DEFINITIONS[pile.item].nutrition)continue;
-    stored??=census?census.storedCells():new Set(storageCells(world).map(cell=>cell.z*world.width+cell.x));
+    if(pile.owner.type!=='ground'||!coreHumanEdibleItem(pile.item,pile.kind)||pile.quantity<=0||!ITEM_DEFINITIONS[pile.item].nutrition)continue;
+    stored??=census?census.storedCells():coreSlotGroupCells(world);
     if(!stored.has(pile.owner.z*world.width+pile.owner.x)||!knownPile256(world,pile)||ticksUntilRot(pile,world.tick)<=0)continue;
     total+=nutritionOf(pile)/100;
   }
@@ -198,10 +218,12 @@ export function storedHumanNutrition(world:World,census?:AlertCensus):number {
 }
 export function readLowFood(world:World,free:readonly Pawn[],census?:AlertCensus):StatusAlert|undefined {
   if(world.tick<LOW_FOOD_START_TICK||!isPlayerHomeMap(world)||!free.length)return;
-  const stored=storedHumanNutrition(world,census);if(stored>=4*free.length)return;
-  const eaters=free.length+world.pawns.filter(p=>p.prisoner&&p.state!=='dead'&&!p.health?.death).length;
+  const stored=storedHumanNutrition(world,census);if(stored>=LOW_FOOD_NUTRITION_PER_COLONIST*free.length)return;
+  // Core GetExplanation: free colonists plus the colony's prisoners, the
+  // nutrition shown with no decimal (F0) and the days rounded down.
+  const eaters=free.length+world.pawns.filter(p=>p.prisoner&&p.state!=='dead'&&!p.health?.death).length,days=Math.floor(stored/Math.max(1,eaters));
   return {key:'food-reserves',text:'Réserves de nourriture faibles',targets:[],context:{panel:'assign'},explanation:
-    `Nourriture fraîche en stock : ${stored.toLocaleString('fr-FR',{maximumFractionDigits:1})} de nutrition pour ${eaters} personne${eaters>1?'s':''}, soit environ ${Math.floor(stored/Math.max(1,eaters))} jour${Math.floor(stored/Math.max(1,eaters))>1?'s':''}. Cultivez, chassez ou cueillez, puis rangez la nourriture dans une réserve.`};
+    `Nourriture fraîche rangée : ${Math.round(stored).toLocaleString('fr-FR')} de nutrition pour ${eaters} personne${eaters>1?'s':''}, soit environ ${days} jour${days>1?'s':''}. Cultivez, chassez ou cueillez, puis rangez la nourriture dans une réserve ou une trémie.`};
 }
 
 /** Alert_NeedMealSource (Medium) from the second day: no campfire, stove or

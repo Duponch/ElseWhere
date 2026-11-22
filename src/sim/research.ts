@@ -1,11 +1,11 @@
 import {isSchema298OrLater,isSchema290OrLater} from './schema-compatibility-257.ts';
 import {researchSpeedFactor347} from './game-profile.ts';
 import {PENOXYCYLINE_FACTS_337,isPenoxycyline337} from './penoxycyline-337.ts';
-import {BOW_RESEARCH_326,isBowResearch326,isBowSchema326,bowResearchUnlocked326,bowResearchPrerequisite326} from './bows-326.ts';
+import {BOW_RESEARCH_326,isBowResearch326,isBowSchema326,bowResearchUnlocked326} from './bows-326.ts';
 export {recurveBowUnlocked326,greatbowUnlocked326} from './bows-326.ts';
-import {BLOWBACK_RESEARCH_340,isBlowbackResearch340,isBlowbackSchema340,blowbackUnlocked340,blowbackResearchPrerequisite340,gunTurretsPrerequisite340} from './blowback-340.ts';
+import {BLOWBACK_RESEARCH_340,isBlowbackResearch340,isBlowbackSchema340,blowbackUnlocked340} from './blowback-340.ts';
 export {blowbackUnlocked340} from './blowback-340.ts';
-import {GUNS_RESEARCH_342,isGunsResearch342,isGunsSchema342,gunsResearchUnlocked342,gunsResearchPrerequisite342} from './guns-342.ts';
+import {GUNS_RESEARCH_342,isGunsResearch342,isGunsSchema342,gunsResearchUnlocked342} from './guns-342.ts';
 export {gunsResearchUnlocked342} from './guns-342.ts';
 import {CARPET_RESEARCH_355,isCarpetResearch355,isCarpetSchema355,carpetMakingUnlocked355} from './carpet-355.ts';
 import {DEVILSTRAND_RESEARCH_358,isDevilstrandResearch358,isDevilstrandSchema358,devilstrandUnlocked358} from './devilstrand-358.ts';
@@ -14,12 +14,13 @@ export {carpetMakingUnlocked355} from './carpet-355.ts';
 import {IED_RESEARCH_357,isIedResearch357,isIedSchema357,iedsUnlocked357} from './ied-traps-357.ts';
 export {iedsUnlocked357} from './ied-traps-357.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
-import {VICTORY_RESEARCH_CONTENT_298,isVictoryResearchProject298,type VictoryResearchProject298} from './victory-research-content-298.ts';
+import {VICTORY_RESEARCH_CONTENT_298,isVictoryResearchProject298,isVictoryResearchSchema298,type VictoryResearchProject298} from './victory-research-content-298.ts';
+import {researchParentProjects,RESEARCH_PARENT_LABELS} from './research-prerequisites.ts';
 import {victoryResearchUnlocked298,victoryResearchPrerequisite298} from './victory-research-298.ts';
 import {TREE_SOWING_COST_291,treeSowingUnlocked291} from './forestry-content-291.ts';
 import {FIREFOAM_CONTENT_290,firefoamResearchUnlocked290} from './firefoam-content-290.ts';
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
-import {SHIP_CASKET_RESEARCH_277,shipCryptosleepUnlocked277,isShipCasketResearchProject277,shipCasketResearchPrerequisite277} from './ship-casket-research-277.ts';
+import {SHIP_CASKET_RESEARCH_277,shipCryptosleepUnlocked277,isShipCasketResearchProject277} from './ship-casket-research-277.ts';
 export {shipCryptosleepUnlocked277} from './ship-casket-research-277.ts';
 import {isSchema276OrLater} from './schema-compatibility-257.ts';
 import {SHIP_ENGINE_RESEARCH_276,shipEngineUnlocked276,isShipEngineResearchProject276} from './ship-engine-research-276.ts';
@@ -120,7 +121,14 @@ export const fabricationUnlocked=(w:Pick<World,'schemaVersion'|'research'>):bool
 export const advancedFabricationUnlocked=(w:Pick<World,'schemaVersion'|'research'>):boolean=>w.research?.advancedFabrication?.completedAt!==undefined;
 export const reconArmorUnlocked=(w:Pick<World,'schemaVersion'|'research'>):boolean=>w.research?.reconArmor?.completedAt!==undefined;
 export const autodoorsUnlocked=(w:Pick<World,'schemaVersion'|'research'>):boolean=>w.research?.autodoors?.completedAt!==undefined;
-export const researchPrerequisite=(w:World,project:ResearchProject):string|undefined=>isIedResearch357(project)?undefined:isDevilstrandResearch358(project)||isCarpetResearch355(project)?undefined:isGunsResearch342(project)?gunsResearchPrerequisite342(w,project):isBlowbackResearch340(project)?blowbackResearchPrerequisite340(w):project==='penoxycyline-production'?(drugProductionUnlocked(w)?undefined:'Production de drogues'):isBowResearch326(project)?bowResearchPrerequisite326(w,project):isVictoryResearchProject298(project)?victoryResearchPrerequisite298(w,project):project==='ship-cryptosleep'?shipCasketResearchPrerequisite277(w):project==='ship-basics'&&!advancedFabricationUnlocked(w)?'Fabrication avancée':(project==='ship-reactor'||project==='ship-engine')&&!shipBasicsUnlocked275(w)?'Construction de vaisseau':project==='prosthetics'&&!machiningUnlocked(w)?'Usinage':project==='cryptosleep'&&!multiAnalyzerUnlocked(w)?'Multi-analyseur':project==='long-blades'&&!smithingUnlocked(w)?'Forge':project==='deep-drilling'&&!microelectronicsUnlocked(w)?'Microélectronique':project==='ground-scanner'&&!deepDrillingUnlocked(w)?'Forage profond':project==='vitals-monitor'&&!hospitalBedUnlocked(w)?'Lit d’hôpital':project==='vitals-monitor'&&!multiAnalyzerUnlocked(w)?'Multi-analyseur':project==='medicine-production'&&!drugProductionUnlocked(w)?'Production de drogues':project==='medicine-production'&&!microelectronicsUnlocked(w)?'Microélectronique':project==='gun-turrets'?gunTurretsPrerequisite340(w):project==='tube-television'&&!complexFurnitureUnlocked(w)?'Mobilier complexe':project==='hospital-bed'&&!microelectronicsUnlocked(w)?'Microélectronique':project==='hospital-bed'&&!complexFurnitureUnlocked(w)?'Mobilier complexe':project==='machining'&&!smithingUnlocked(w)?'Forge':project==='gunsmithing'&&!machiningUnlocked(w)?'Usinage':project==='plate-armor'&&!smithingUnlocked(w)?'Forge':project==='plate-armor'&&!clothingUnlocked(w)?'Vêtements complexes':project==='flak-armor'&&!machiningUnlocked(w)?'Usinage':project==='flak-armor'&&!plateArmorUnlocked(w)?'Armure de plaques':project==='multi-analyzer'&&!microelectronicsUnlocked(w)?'Microélectronique':project==='multi-analyzer'&&!machiningUnlocked(w)?'Usinage':project==='fabrication'&&!multiAnalyzerUnlocked(w)?'Multi-analyseur':project==='advanced-fabrication'&&!fabricationUnlocked(w)?'Fabrication':project==='recon-armor'&&!fabricationUnlocked(w)?'Fabrication':project==='recon-armor'&&!clothingUnlocked(w)?'Vêtements complexes':undefined;
+/** Label of the first missing prerequisite (research-prerequisites.ts, the
+ * one table the research view also draws), or undefined. A victory project
+ * keeps its prospective-schema refusal before 298. */
+export const researchPrerequisite=(w:World,project:ResearchProject):string|undefined=>{
+  if(isVictoryResearchProject298(project)&&!isVictoryResearchSchema298(w.schemaVersion))return victoryResearchPrerequisite298(w,project);
+  for(const parent of researchParentProjects(project,w.schemaVersion))if(!researchUnlocked(w,parent))return RESEARCH_PARENT_LABELS[parent];
+  return undefined;
+};
 export type ResearchProject=VictoryResearchProject298|'ieds'|'devilstrand'|'carpet-making'|'gas-operation'|'precision-rifling'|'blowback-operation'|'penoxycyline-production'|'recurve-bow'|'greatbow'|'tree-sowing'|'firefoam'|'ship-cryptosleep'|'ship-engine'|'ship-basics'|'ship-reactor'|'prosthetics'|'cryptosleep'|'long-blades'|'brewing'|'geothermal-power'|'pemmican'|'biofuel-refining'|'nutrient-paste'|'deep-drilling'|'ground-scanner'|'sterile-materials'|'vitals-monitor'|'drug-production'|'medicine-production'|'hydroponics'|'gun-turrets'|'tube-television'|'packaged-survival-meals'|'hospital-bed'|'machining'|'gunsmithing'|'plate-armor'|'flak-armor'|'recon-armor'|'complex-clothing'|'complex-furniture'|'air-conditioning'|'batteries'|'solar-power'|'stonecutting'|'smithing'|'microelectronics'|'multi-analyzer'|'fabrication'|'advanced-fabrication'|'autodoors';
 export interface ResearchProgress {points:number;completedAt?:number}
 export interface ResearchState extends ResearchProgress {ieds?:ResearchProgress;devilstrand?:ResearchProgress;carpetMaking?:ResearchProgress;gasOperation?:ResearchProgress;precisionRifling?:ResearchProgress;blowbackOperation?:ResearchProgress;penoxycylineProduction?:ResearchProgress;recurveBow?:ResearchProgress;greatbow?:ResearchProgress;longRangeMineralScanner?:ResearchProgress;shipComputer?:ResearchProgress;shipSensors?:ResearchProgress;treeSowing291?:ResearchProgress;firefoam?:ResearchProgress;shipCryptosleep?:ResearchProgress;shipEngine?:ResearchProgress;shipBasics?:ResearchProgress;shipReactor?:ResearchProgress;prosthetics?:ResearchProgress;cryptosleep?:ResearchProgress;longBlades?:ResearchProgress;brewing?:ResearchProgress;geothermalPower?:ResearchProgress;pemmican?:ResearchProgress;biofuelRefining?:ResearchProgress;nutrientPaste?:ResearchProgress;deepDrilling?:ResearchProgress;groundScanner?:ResearchProgress;sterileMaterials?:ResearchProgress;vitalsMonitor?:ResearchProgress;drugProduction?:ResearchProgress;medicineProduction?:ResearchProgress;hydroponics?:ResearchProgress;gunTurrets?:ResearchProgress;tubeTelevision?:ResearchProgress;packagedSurvivalMeals?:ResearchProgress;hospitalBed?:ResearchProgress;machining?:ResearchProgress;gunsmithing?:ResearchProgress;plateArmor?:ResearchProgress;flakArmor?:ResearchProgress;reconArmor?:ResearchProgress;microelectronics?:ResearchProgress;multiAnalyzer?:ResearchProgress;fabrication?:ResearchProgress;advancedFabrication?:ResearchProgress;autodoors?:ResearchProgress;project:ResearchProject|null;complexFurniture?:ResearchProgress;airConditioning?:ResearchProgress;batteries?:ResearchProgress;solarPower?:ResearchProgress;stonecutting?:ResearchProgress;smithing?:ResearchProgress}

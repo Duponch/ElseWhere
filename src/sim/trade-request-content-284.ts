@@ -87,7 +87,9 @@ export const TRADE_REQUEST_CONTENT_284:readonly TradeRequestContent284[]=Object.
  entry('emp-launcher',['emp-launcher'],506.5,3.4,[recipe('make-emp-launcher',30000,[['steel'],['component']],['gunsmithing','microelectronics'])]),
  entry('flak-vest',['flak-vest'],223.4,4,[recipe('make-flak-vest',9000,[['cloth'],['steel'],['component']],['flakArmor'])]),
  entry('flak-helmet',['flak-helmet','plasteel-flak-helmet'],262.8,1.2,[recipe('make-flak-helmet',8000,[metals,['component'],['plasteel']],['flakArmor'])]),
- entry('flak-pants',['flak-pants'],223.4,4),
+ // Schema 375: Core Apparel_FlakPants becomes makeable; older schemas skip
+ // this recipe in trade-request-accessibility-284.ts.
+ entry('flak-pants',['flak-pants'],223.4,4,[recipe('make-flak-pants',9000,[['cloth'],['steel'],['component']],['flakArmor'])]),
  entry('recon-helmet',['recon-helmet'],526.7,1,[recipe('make-recon-helmet',15750,[['plasteel'],['advanced-component']],['reconArmor'])]),
  entry('recon-armor',['recon-armor'],1542,9,[recipe('make-recon-armor',45000,[['plasteel'],['advanced-component'],['uranium']],['reconArmor'])]),
  entry('prosthetic-arm',['prosthetic-arm'],258,5,[recipe('make-prosthetic-arm',15000,[['steel'],['component']],['prosthetics'])]),

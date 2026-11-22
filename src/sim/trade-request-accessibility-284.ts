@@ -1,4 +1,5 @@
 import {isSchema284OrLater} from './schema-compatibility-257.ts';
+import {isFlakPantsSchema375} from './flak-pants-375.ts';
 import {TRADE_REQUEST_CONTENT_284,tradeRequestFamilyForItem284,type TradeRequestFamily284} from './trade-request-content-284.ts';
 import {registeredMapForValidation,registeredMapId,hasLoadedRoot} from './world-map-context.ts';
 import {planetTile,planetTiles} from './planet-geography-256.ts';
@@ -136,6 +137,8 @@ export function captureTradeRequestAvailability284(root:CampaignState,home:World
   if(tableKinds.has(s.kind))continue;tableKinds.add(s.kind);
   const present=new Set(map.piles.filter(p=>p.owner.type==='ground'&&!foggedCell256(map,p.owner.z*map.width+p.owner.x)).map(p=>p.item));
   for(const e of TRADE_REQUEST_CONTENT_284)for(const r of e.recipes){
+   // The flak pants recipe exists from schema 375: older maps never count it.
+   if(r.recipe==='make-flak-pants'&&!isFlakPantsSchema375(Number(map.schemaVersion)))continue;
    if(!stationAccepts(s,r.recipe)||!r.research.every(key=>key==='completedAt'?map.research?.completedAt!==undefined:map.research?.[key]?.completedAt!==undefined)
     ||!r.ingredientGroups.every(g=>g.some(item=>present.has(item))))continue;
    const quantity=Math.floor(crafters*27000/r.workCore)*r.outputUnits;

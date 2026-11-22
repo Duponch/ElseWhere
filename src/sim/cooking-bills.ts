@@ -1,4 +1,5 @@
 import {isGunRecipe342} from './guns-342.ts';
+import {isFlakPantsSchema375} from './flak-pants-375.ts';
 import {cookingDefaultAllowed353,isCookingAnimalProduct353} from './cooking-ingredients-353.ts';
 import {isHatItem353} from './apparel-definitions.ts';
 import {isPenoxycyline337,isPenoxycylineRecipe337} from './penoxycyline-337.ts';
@@ -66,6 +67,7 @@ export function validBillSettings(value:unknown,recipe:ProductionRecipe='simple-
   if(recipe==='make-pump-shotgun'&&version<322)return false;
   if((recipe==='make-autopistol'||recipe==='make-machine-pistol')&&version<340)return false;
   if(isGunRecipe342(recipe)&&version<342)return false;
+  if(recipe==='make-flak-pants'&&!isFlakPantsSchema375(version))return false;
   if(!value||typeof value!=='object'||Array.isArray(value))return false;
   const v=value as BillSettings;
   const reservePause=Object.getOwnPropertyDescriptor(value,'reservePause');

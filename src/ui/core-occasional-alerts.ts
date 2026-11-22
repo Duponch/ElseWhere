@@ -9,6 +9,7 @@ import {needsHighTechBench} from '../sim/research';
 import {workPriority} from '../sim/work-types';
 import type {Pawn,Structure,World} from '../sim/types';
 import {isPlayerHomeMap} from './alert-priority';
+import {worldCaravans} from './alert-caravans';
 import {freeColonist} from './core-colony-alerts';
 import {knownBuilding256,knownPosition256} from './exploration-readers-256';
 import {objectNotificationTarget,personNotificationTarget,type NotificationTarget} from './notification-focus';
@@ -117,14 +118,6 @@ export function readNeedResearchBench(world:World):StatusAlert|undefined {
     `Le projet « ${label} » se recherche à ${advanced?'un bureau de recherche avancé':'un bureau de recherche'}, et la colonie n’en a pas. Construisez-en un (Architecte > Production) ou choisissez un autre projet dans Recherche.`};
 }
 
-/** The colony's caravans away on the world map (Core Caravan): every group of
- * the world registry that holds its members and is not inside a local map, or
- * the single group of a campaign from before the registry. Groups still being
- * formed or unloading on a map are not caravans yet or any more. */
-function worldCaravans(world:World):{group:AwayGroup;record?:NonNullable<World['worldGroups']>['groups'][number]}[] {
-  if(world.worldGroups)return world.worldGroups.groups.flatMap(record=>record.localMapId===null&&'members' in record.state?[{group:record.state,record}]:[]);
-  const g=world.group;return g&&'members' in g?[{group:g}]:[];
-}
 /** Core Caravan.MassUsage / MassCapacity, read with the same capture as the
  * march (captureGroupTravel): goods, packed furniture and pack animals. */
 function caravanMass(world:World,g:AwayGroup) {

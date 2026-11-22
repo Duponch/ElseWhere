@@ -80,7 +80,7 @@ const int=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):boolean=>Number.isSafeIn
 export function validUnfinishedShape(p:Record<string,unknown>,version:number):boolean {
   if(isSmithingWorkpiece267(p.item))return isSchema267OrLater(version)&&(p.item!=='unfinished-knife'||version===268||isSchema269OrLater(version))&&(p.item!=='unfinished-mace'||isSchema269OrLater(version))&&(p.item!=='unfinished-longsword'||isSchema270OrLater(version))&&(p.item!=='unfinished-spear'||isSchema272OrLater(version))&&(p.item!=='unfinished-bow'||version>=316)&&!Object.hasOwn(p,'unfinished');
   if(p.item==='unfinished-prosthetic')return isSchema273OrLater(version)&&!Object.hasOwn(p,'unfinished');
-  if(p.item==='unfinished-flak-vest'||p.item==='unfinished-flak-helmet'||p.item==='unfinished-recon-helmet'||p.item==='unfinished-recon-armor'||p.item==='unfinished-gun'||p.item==='unfinished-sculpture'||p.item==='unfinished-component')return p.unfinished===undefined;
+  if(p.item==='unfinished-flak-vest'||p.item==='unfinished-flak-pants'||p.item==='unfinished-flak-helmet'||p.item==='unfinished-recon-helmet'||p.item==='unfinished-recon-armor'||p.item==='unfinished-gun'||p.item==='unfinished-sculpture'||p.item==='unfinished-component')return p.unfinished===undefined;
   if(p.kind!=='unfinished')return p.unfinished===undefined;
   const u=p.unfinished;
   if(version<72||!record(p.owner)||!['ground','pawn'].includes(String(p.owner.type))||p.quantity!==1||!record(u)||!isTailoring(u.recipe)||u.recipe==='tuque'&&version<245||(u.recipe==='tshirt'||u.recipe==='jacket')&&version<312||(u.recipe==='cowboy-hat'||u.recipe==='bowler-hat')&&version<353)return false;

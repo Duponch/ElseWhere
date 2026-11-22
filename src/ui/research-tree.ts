@@ -1,49 +1,22 @@
 import type {ResearchProject} from '../sim/research';
 import {researchProjects,type ProjectNode} from './research-projects';
+import {RESEARCH_PARENT_LABELS,RESEARCH_PREREQUISITES,type ResearchParent} from '../sim/research-prerequisites';
 
 /** Existing research hierarchy and geometry, shared by the legacy reader and
- * native meshes. Importing this module does not construct a UI or read a World. */
-export const researchLinks:readonly (readonly [ResearchProject,ResearchProject])[]=[
-  ['recurve-bow','greatbow'],
-  ['microelectronics','long-range-mineral-scanner'],['machining','long-range-mineral-scanner'],
-  ['ship-basics','ship-computer'],['ship-basics','ship-sensors'],['long-range-mineral-scanner','ship-sensors'],
-  ['ship-basics','ship-cryptosleep'],['cryptosleep','ship-cryptosleep'],
-  ['advanced-fabrication','ship-basics'],['ship-basics','ship-reactor'],['ship-basics','ship-engine'],
-  ['machining','prosthetics'],['multi-analyzer','cryptosleep'],
-  ['microelectronics','deep-drilling'],['deep-drilling','ground-scanner'],
-  ['hospital-bed','vitals-monitor'],['multi-analyzer','vitals-monitor'],
-  ['drug-production','medicine-production'],['drug-production','penoxycyline-production'],['microelectronics','medicine-production'],
-  ['gunsmithing','blowback-operation'],['blowback-operation','gun-turrets'],['blowback-operation','gas-operation'],['gas-operation','precision-rifling'],['microelectronics','precision-rifling'],['complex-furniture','tube-television'],['smithing','long-blades'],
-  ['smithing','machining'],['machining','gunsmithing'],
-  ['smithing','plate-armor'],['complex-clothing','plate-armor'],
-  ['machining','flak-armor'],['plate-armor','flak-armor'],
-  ['microelectronics','multi-analyzer'],['machining','multi-analyzer'],['multi-analyzer','fabrication'],
-  ['fabrication','advanced-fabrication'],['fabrication','recon-armor'],['complex-clothing','recon-armor'],
-  ['microelectronics','hospital-bed'],['complex-furniture','hospital-bed'],
-];
+ * native meshes. Importing this module does not construct a UI or read a World.
+ * Links and prerequisite lists are read from the simulation's own table
+ * (research-prerequisites.ts), never copied: each node draws one link per
+ * enforced prerequisite project, Core's visible ones first then its hidden
+ * ones, and lists Electricity, known from the start, without a link. */
+const nodeIds=new Set<ResearchProject>(researchProjects.map(project=>project.id));
+const enforcedParents=(project:ResearchProject):ResearchParent[]=>{const p=RESEARCH_PREREQUISITES[project];return [...p.visible,...p.hidden];};
+export const researchLinks:readonly (readonly [ResearchProject,ResearchProject])[]=Object.freeze(researchProjects.flatMap(project=>
+  enforcedParents(project.id).filter((parent):parent is ResearchProject=>parent!=='electricity'&&nodeIds.has(parent)).map(parent=>Object.freeze([parent,project.id] as const))));
 export const RESEARCH_NODE_WIDTH=142,RESEARCH_NODE_HEIGHT=66,RESEARCH_GRAPH_WIDTH=850;
 export const RESEARCH_GRAPH_HEIGHT=Math.ceil(Math.max(740,...researchProjects.map(project=>22+(project.y-20)*.66+RESEARCH_NODE_HEIGHT+22)));
 export const researchNodePosition=(project:Pick<ProjectNode,'x'|'y'>)=>({x:20+(project.x-24)*.82,y:22+(project.y-20)*.66});
-export const researchPrerequisiteLabels:ReadonlyMap<ResearchProject,readonly string[]>=new Map<ResearchProject,string[]>([
-  ['recurve-bow',[]],['greatbow',['Arc recourbé']],['carpet-making',[]],['ieds',['Électricité (acquise au départ)']],['devilstrand',[]],
-  ['long-range-mineral-scanner',['Microélectronique','Usinage']],
-  ['ship-computer',['Construction de vaisseau']],['ship-sensors',['Construction de vaisseau','Scanner minéral longue portée']],
-  ['firefoam',['Électricité (acquise au départ)']],
-  ['ship-cryptosleep',['Construction de vaisseau','Cryptosommeil']],
-  ['ship-basics',['Fabrication avancée']],['ship-reactor',['Construction de vaisseau']],['ship-engine',['Construction de vaisseau']],
-  ['prosthetics',['Usinage']],['cryptosleep',['Multi-analyseur']],['long-blades',['Forge']],['brewing',[]],
-  ['geothermal-power',['Électricité (acquise au départ)']],['biofuel-refining',['Électricité (acquise au départ)']],
-  ['nutrient-paste',['Électricité (acquise au départ)']],['deep-drilling',['Microélectronique']],['ground-scanner',['Forage profond']],
-  ['sterile-materials',['Électricité (acquise au départ)']],['vitals-monitor',['Lit d’hôpital','Multi-analyseur']],
-  ['drug-production',[]],['penoxycyline-production',['Production de drogues']],['medicine-production',['Production de drogues','Microélectronique']],
-  ['hydroponics',['Électricité (acquise au départ)']],['blowback-operation',['Armurerie']],['gun-turrets',['Culasse non calée']],['gas-operation',['Culasse non calée']],['precision-rifling',['Emprunt de gaz','Microélectronique']],
-  ['tube-television',['Mobilier complexe','Électricité (acquise au départ)']],
-  ['machining',['Forge']],['gunsmithing',['Usinage']],['plate-armor',['Forge','Vêtements complexes']],['flak-armor',['Usinage','Armure de plaques']],
-  ['autodoors',['Électricité (acquise au départ)']],['microelectronics',['Électricité (acquise au départ)']],
-  ['multi-analyzer',['Microélectronique','Usinage']],['fabrication',['Multi-analyseur']],
-  ['advanced-fabrication',['Fabrication']],['recon-armor',['Fabrication','Vêtements complexes']],
-  ['hospital-bed',['Microélectronique','Mobilier complexe']],
-]);
+export const researchPrerequisiteLabels:ReadonlyMap<ResearchProject,readonly string[]>=new Map<ResearchProject,readonly string[]>(
+  researchProjects.map(project=>[project.id,Object.freeze(enforcedParents(project.id).map(parent=>RESEARCH_PARENT_LABELS[parent]))]));
 
 export interface ResearchTreePoint {readonly x:number;readonly y:number}
 type ResearchPathCommand={kind:'M'|'L';point:ResearchTreePoint}|{kind:'C';first:ResearchTreePoint;second:ResearchTreePoint;point:ResearchTreePoint};

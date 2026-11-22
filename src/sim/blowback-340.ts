@@ -73,13 +73,8 @@ export type BlowbackResearch340=typeof BLOWBACK_RESEARCH_340.project;
 export const isBlowbackResearch340=(v:unknown):v is BlowbackResearch340=>v==='blowback-operation';
 type ResearchView=Pick<World,'schemaVersion'|'research'>;
 export const blowbackUnlocked340=(w:ResearchView):boolean=>isBlowbackSchema340(w.schemaVersion)&&w.research?.blowbackOperation?.completedAt!==undefined;
-/** Label of the missing parent project, if any. */
-export const blowbackResearchPrerequisite340=(w:ResearchView):string|undefined=>w.research?.gunsmithing?.completedAt===undefined?BLOWBACK_RESEARCH_340.parentLabel:undefined;
-/** From 340, GunTurrets requires BlowbackOperation as in Core; before, the
- * delivered adaptation kept Gunsmithing. */
-export const gunTurretsPrerequisite340=(w:ResearchView):string|undefined=>isBlowbackSchema340(w.schemaVersion)
- ?(blowbackUnlocked340(w)?undefined:BLOWBACK_RESEARCH_340.label)
- :(w.research?.gunsmithing?.completedAt===undefined?'Armurerie':undefined);
+// Prerequisites (Gunsmithing; GunTurrets after BlowbackOperation from 340):
+// research-prerequisites.ts, the one table of the simulation and research view.
 
 /** Core PawnWeaponGenerator.TryGenerateWeaponFor for the kinds whose weapon
  * tags are exactly Gun: weaponMoney drawn uniformly, then every Gun-tagged

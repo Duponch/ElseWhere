@@ -14,7 +14,7 @@ export const GAMEPLAY_TIPS:readonly string[]=Object.freeze([
   'La molette règle le zoom, le bouton droit glissé fait tourner la caméra, le bouton central ou les flèches la déplacent.',
   'Maintenez Alt au-dessus d’une case pour lire son terrain, sa fertilité, sa lumière, sa température et son toit.',
   'Q et E tournent un meuble ou un plan orientable avant sa pose.',
-  'M, C, B, L, X et S choisissent directement Miner, Abattre, Mur, Lit, Annuler et Réserve.',
+  'C choisit Annuler et X Déconstruire, comme dans le jeu de base ; M, B, L et S choisissent directement Miner, Mur, Lit et Réserve.',
   'Avec des colons sélectionnés, R les mobilise ou les démobilise ; sans sélection, R choisit Récolter.',
   'Réserves, zones, abattage et récolte se tracent en rectangle : relâchez pour appliquer, Échap ou clic droit pour annuler le tracé.',
   'Avec un colon sélectionné, un clic droit sur une case liste les ordres réellement possibles à cet endroit.',

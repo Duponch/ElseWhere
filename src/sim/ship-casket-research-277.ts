@@ -16,7 +16,6 @@ export interface ShipCasketResearchView277 {
 }
 export const isShipCasketResearchProject277=(value:unknown):value is 'ship-cryptosleep'=>value==='ship-cryptosleep';
 export const shipCryptosleepUnlocked277=(w:ShipCasketResearchView277):boolean=>isSchema277OrLater(w.schemaVersion)&&w.research?.shipCryptosleep?.completedAt!==undefined;
-export const shipCasketResearchPrerequisite277=(w:ShipCasketResearchView277):string|undefined=>w.research?.shipBasics?.completedAt===undefined?'Construction de vaisseau':w.research?.cryptosleep?.completedAt===undefined?'Cryptosommeil':undefined;
 
 type Data=Record<string,unknown>;
 const plain=(v:unknown):v is Data=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype;
