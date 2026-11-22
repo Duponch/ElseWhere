@@ -17,7 +17,7 @@ export function pawnJournalRows(world: World, pawn: Pawn): JournalRow[] {
     const text = event.message;
     if (!named.test(text)) return [];
     const lower = text.toLocaleLowerCase('fr-FR');
-    const mental=event.type==='need'&&['errance triste','frénésie alimentaire','crise de destruction','fureur violente','colère meurtrière'].some(label=>lower.includes(label));
+    const mental=event.type==='need'&&['errance triste','frénésie alimentaire','crise de destruction','fureur violente','colère meurtrière','frénésie incendiaire'].some(label=>lower.includes(label));
     const kind: JournalRow['kind'] | undefined = mental?'mental':socialLabels.some(label => text.startsWith(`${label} entre `)) || ['a vexé', 'a insulté', 'bagarre'].some(word => lower.includes(word))
       ||event.type==='need'&&['deviennent partenaires','repousse l’avance de','se sépare de'].some(word=>lower.includes(word))
       ? 'social' : ['tir', 'touché', 'blessé', 'attaque', 'frappé', 'combat'].some(word => lower.includes(word)) ? 'combat' : undefined;
