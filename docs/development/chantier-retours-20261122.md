@@ -51,9 +51,25 @@ Liste des retours de l'utilisateur après ses parties du 22 novembre, à traiter
 21. **Une section « Développeur » dans les Options** avec un lien vers chaque page développeur (modèles, sons, lore, pictogrammes, navigation, animations, règles…), tenue à jour au fil du projet. — **Fait le 22 novembre** : Options → Développeur ouvre chaque page dans un nouvel onglet ; une seule liste (`src/ui/developer-pages.ts`) sert aussi les builds local et publié ([note](developer-pages.md)).
 22. **Page des règles du jeu** : toutes les règles, boucles de jeu et calculs, organisés, accessibles et aussi exhaustifs que possible, pour que le moteur n'ait plus de secret. — **Fait le 22 novembre** : `rules.html` (Options → Développeur, publiée) décrit 93 règles en 20 domaines, avec 240 nombres et 75 tableaux lus dans le code, la source de chaque nombre et l'écart éventuel avec le jeu de base ; un test refuse un nombre écrit à la main ou un fragment de code disparu. Domaines partiels et parties pas encore décrites listés dans la page ([note](rules-page.md)).
 
+## H. Interactions entre le joueur et l'interface (retours du 22 novembre au soir)
+
+L'utilisateur demande une passe générale, comparée au vrai RimWorld, sur toutes les subtilités d'interaction jamais vraiment prises en compte : sélections, ouverture et fermeture des fenêtres, ordre des actions, affichages. Les points ci-dessous sont des exemples, pas une liste fermée.
+
+23. **Massif rocheux sélectionné** : le panneau d'inspection ne dit pas de quelle roche il s'agit. Vérifier ce qu'affiche RimWorld et corriger.
+24. **Menu des ordres au clic droit** : colon sélectionné, clic droit sur un arbre, un animal, un objet… doit ouvrir le menu des ordres possibles comme RimWorld. Passe générale sur toutes les cibles.
+25. **Deuxième clic droit** : avec un menu d'ordres ouvert, un clic droit sur une autre cible n'ouvre pas son menu ; il faut aujourd'hui désélectionner puis resélectionner le colon. À corriger partout.
+26. **Jauge de travail du minage** : elle se remplit, se vide et se remplit plusieurs fois au lieu de finir avec le bloc. Comparer avec RimWorld et vérifier les autres travaux.
+27. **Info-bulles** : en jeu (pas en pause), elles disparaissent au bout de quelques secondes ; elles doivent rester.
+28. **Sélection au rectangle** : vérifier ce que RimWorld sélectionne (murs, plans, objets…) et aligner.
+29. **Clic droit sur le modèle** : le clic droit d'un ordre doit viser le modèle 3D comme le clic gauche, pas seulement la case.
+30. **Ordres en file** : vérifier si RimWorld permet d'enchaîner plusieurs ordres (touche maintenue) et les autres gestes de ce genre ; ajouter ce qui manque.
+31. **Mode développeur en jeu** : actions « magiques » pour tester les mécaniques (humeur à 100 %, sommeil à 100 % pour voir la cascade de conséquences…), extensible plus tard (mode divin).
+32. **Fiches et fenêtres identiques à RimWorld** (précise le point 17) : la fiche Bio de RimWorld tient sans défilement, avec des codes couleur, des encadrés sur les traits, des tailles de texte et des espacements précis ; celle d'Elsewhere défile et diffère. Refaire structure, organisation, mise en page, dimensions, densité, tailles de texte et espacements, sans changer la direction artistique, pour toutes les fenêtres ; une taille de texte se règle pour tout le jeu, pas fenêtre par fenêtre.
+
 ## Ordre retenu au départ
 
 - **Vague 1** : pages développeur et page des sons complète (19, 21) ; animations de fin de marche, lit, établi assis et corps à corps (1, 2, 3, 5) ; petites corrections visuelles et sélection (9, 10, 11, 12, 14, 16).
 - **Vague 2** : fantômes des chantiers et clic sur le modèle (13, 15) ; animaux en enclos (18) ; page des règles (22).
 - **Vague 3** : particules refaites (8) ; animations assises et animaux (4, 6, 7) ; couverture sonore du jeu (20).
 - **Vague 4** : grand chantier des interfaces (17).
+- **Ajout du soir** : interactions (23 à 30) et mode développeur (31) en parallèle de la vague 3 ; fiches et fenêtres (32) avec la vague 4, d'après les dimensions lues dans le code de RimWorld.
