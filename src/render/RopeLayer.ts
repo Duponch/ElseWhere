@@ -1,7 +1,8 @@
 import * as THREE from 'three/webgpu';
 import { Fn, attribute, float, mix, positionLocal, sin, uniform, vec3 } from 'three/tsl';
 import { localTimeSeconds } from '../bridge/clock-rate';
-import { penRegion } from '../sim/animal-pens';
+import type { PenRegion } from '../sim/animal-pens';
+import { readPenViews } from '../ui/core-animal-alerts';
 import { animalBodySize } from '../sim/animal-life';
 import { leadRopees } from '../sim/animal-leading';
 import type { Cell,Pawn,World } from '../sim/types';
@@ -78,14 +79,19 @@ export class RopeLayer {
   adopt(world:World,reset=false):void {
     this.world=world;
     const animals=new Map((world.wildlife?.animals??[]).map(a=>[a.id,a]));
-    const regions=new Map<number,ReturnType<typeof penRegion>>();
+    // Pen regions of this World, read through the alerts' reader: each
+    // published World is a new object, so the simulation's per-World cache
+    // would flood the whole map again at every complete publication. The
+    // reader reuses the regions while barriers and blocking terrain stay the
+    // same (same regions as penRegion; a marker absent from the map has none).
+    let regions:Map<number,PenRegion|undefined>|undefined;
     const next:Pair[]=[];
     for(const pawn of world.pawns){
       const task=pawn.animalHandling;
       if(task?.kind!=='lead'||task.phase==='approach')continue;
       const markerId=task.markerId;
       if(markerId===undefined)continue;
-      if(!regions.has(markerId))regions.set(markerId,penRegion(world,markerId));
+      regions??=new Map(readPenViews(world).map(view=>[view.marker.id,view.region]));
       const region=regions.get(markerId);
       for(const id of leadRopees(task)){
         const animal=animals.get(id);if(!animal||region?.cells.has(animal.z*world.width+animal.x))continue;
