@@ -4,7 +4,7 @@ import {fixtureBuilding} from './scenarios/deconstruction';
 import {HUMAN_YEAR_TICKS} from '../src/sim/human-age';
 import {bedSlotBodyCenter,bedSlotCell} from '../src/sim/bed-slots';
 import {addMaterial} from '../src/sim/materials';
-import {PawnLayer} from '../src/render/PawnLayer';
+import {PawnLayer,bedLyingOffset} from '../src/render/PawnLayer';
 import {WORLD_SCALE} from '../src/world/scale';
 import {portraitExpressionOf} from '../src/ui/pawn-portrait';
 import {coupleActivity285} from '../src/ui/couple-activity-285';
@@ -34,7 +34,7 @@ test.each([0,1,2,3]as const)('two awake rigs use their original bed slots, heigh
  try{
   layer.update(w,1,true);const g=layer.feedbackSource!;
   for(const[index,p,slot]of [[0,a,0],[1,b,1]]as const){
-   const center=bedSlotBodyCenter(bed,slot)!;
+   const body=bedSlotBodyCenter(bed,slot)!,shift=bedLyingOffset(bed,layer.lieHeadExtent),center={x:body.x+shift.x,z:body.z+shift.z};
    expect(g.getAttribute('aMotion').getZ(index)).toBe(1); // Existing reclining-awake rig, not sleep18.
    expect(g.getAttribute('aTo').getX(index)).toBeCloseTo(center.x,6);expect(g.getAttribute('aTo').getZ(index)).toBeCloseTo(center.z,6);
    expect(g.getAttribute('aTo').getY(index)).toBeCloseTo(WORLD_SCALE.bedSurfaceHeight,6);

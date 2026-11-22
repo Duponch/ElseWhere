@@ -122,7 +122,6 @@ import { DesignationIconLayer } from './DesignationIconLayer';
 import { LandscapeBatch } from './LandscapeBatch';
 import { ActionFeedbackLayer } from './ActionFeedbackLayer';
 import { ActionVfxLayer } from './ActionVfxLayer';
-import { BrawlCloudLayer } from './BrawlCloudLayer';
 import { StructureVfxLayer } from './StructureVfxLayer';
 import { MiniTurretLayer } from './MiniTurretLayer';
 import { miniTurretRadiusCells, MINI_TURRET_DISPLAY_RANGE, MINI_TURRET_DISPLAY_BOMB_RADIUS } from '../sim/mini-turret-presentation';
@@ -608,7 +607,6 @@ export class SceneRenderCore {
       }
       this.pawns.update(view,this.pawns.blend.value,false,poses);
       this.actionVfx.update(view,this.pawns.feedbackSource!);
-      this.brawlCloud.update(view,this.pawns.feedbackSource!);
       this.actionFeedback.update(view,this.selectedPawns,this.pawns.feedbackSource!,!!this.confirmedIntents);
     },this.applicationContext?.readSupports);
     else this.pawns.adoptPhase297(world,[...human],actors,changedIds);
@@ -647,7 +645,6 @@ export class SceneRenderCore {
   protected readonly pawns = new PawnLayer(this.environmentLighting.configure,this.animationDetail);
   protected readonly actionFeedback = new ActionFeedbackLayer(this.pawns);
   protected readonly actionVfx = new ActionVfxLayer(this.pawns,this.animationDetail);
-  protected readonly brawlCloud = new BrawlCloudLayer(this.pawns,this.animationDetail);
   protected readonly structureVfx = new StructureVfxLayer(this.animationDetail);
   protected readonly turretTops=new MiniTurretLayer(this.animationDetail);
   protected turretPreviewSignature='';
@@ -913,7 +910,7 @@ export class SceneRenderCore {
     selectionGeometry.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(9),3));
     this.objectSelection = new THREE.Mesh(selectionGeometry,new THREE.MeshBasicNodeMaterial({color:0xfff5d6,side:THREE.DoubleSide,depthTest:false,depthWrite:false,transparent:true,opacity:1,forceSinglePass:true}));
     this.objectSelection.visible=false;this.objectSelection.frustumCulled=false;this.objectSelection.renderOrder=GROUND_OVERLAY_RENDER_ORDER.selection;
-    this.scene.add(this.hover,this.constructionPreview.group,this.objectSelection,this.recreationHints.group,this.actionFeedback.group,this.actionVfx.group,this.brawlCloud.group,this.structureVfx.group,this.podRescue.group,this.orbitalDelivery.group,this.startingArrival.group,this.raidPods.group);
+    this.scene.add(this.hover,this.constructionPreview.group,this.objectSelection,this.recreationHints.group,this.actionFeedback.group,this.actionVfx.group,this.structureVfx.group,this.podRescue.group,this.orbitalDelivery.group,this.startingArrival.group,this.raidPods.group);
     } catch (error) {
       try { this.dispose(); } catch { /* Static create also closes the device. */ }
       throw error;
@@ -1183,7 +1180,6 @@ export class SceneRenderCore {
     this.pawns.blend.value = resetPoses||paused ? 1 : 0;
     this.pawns.update(world, resetPoses||paused ? 1 : oldBlend, resetPoses);
     this.actionVfx.update(world,this.pawns.feedbackSource!);
-    this.brawlCloud.update(world,this.pawns.feedbackSource!);
     if(prepared)this.structureVfx.adoptNative(world,newMap,prepared.axes,prepared.effects);
     else this.structureVfx.adopt(world,newMap);
     this.podRescue.adopt(world);this.orbitalDelivery.adopt(world);
@@ -1584,7 +1580,6 @@ export class SceneRenderCore {
     const restoreRopes=this.ropes.prepareForCompile();
     const restoreFeedback=this.actionFeedback.prepareForCompile();
     const restoreActionVfx=this.actionVfx.prepareForCompile();
-    const restoreBrawlCloud=this.brawlCloud.prepareForCompile();
     const restoreStructureVfx=this.structureVfx.prepareForCompile();
     const restoreWind=this.wind.prepareForCompile();
     const restoreRoofs=this.roofs.prepare();
@@ -1654,7 +1649,7 @@ export class SceneRenderCore {
       // restorers must therefore run last to recover their real runtime flag.
       for (const [object, value] of culling) object.frustumCulled = value;
       restoreMechanoids();
-      restoreWind();restorePawnFires();restorePawnCargo();restoreWildlife();restoreAnimalCargo();restoreRopes();restoreFeedback();restoreActionVfx();restoreBrawlCloud();restoreStructureVfx();restoreRoofs();restoreDoors();restoreWalls();restoreCrops();restorePlants();restoreGrass();restoreDesignations();restoreFilth();restoreClouds();restorePrecipitation();
+      restoreWind();restorePawnFires();restorePawnCargo();restoreWildlife();restoreAnimalCargo();restoreRopes();restoreFeedback();restoreActionVfx();restoreStructureVfx();restoreRoofs();restoreDoors();restoreWalls();restoreCrops();restorePlants();restoreGrass();restoreDesignations();restoreFilth();restoreClouds();restorePrecipitation();
       restoreSnow();restoreBoxes();restoreArea();restoreTurretRange();restoreFacilityLinks();restoreMapOutline();restoreHints();restoreOrderRock();restoreConstruction();restoreDeep();
       restoreOverview();
       restoreLabels?.();
@@ -2136,7 +2131,7 @@ export class SceneRenderCore {
     this.resources.presentChop(skyTick/TICKS_PER_SECOND);
     this.doors.present(skyTick);this.projectiles.present(skyTick);this.fires.present(skyTick);this.wind.present(skyTick);
     this.actionVfx.setView(this.camera);this.structureVfx.setView(this.camera,this.controls.target);
-    this.actionVfx.present(skyTick);this.brawlCloud.present(skyTick);this.structureVfx.present(skyTick);this.podRescue.present(skyTick);this.orbitalDelivery.present(skyTick);
+    this.actionVfx.present(skyTick);this.structureVfx.present(skyTick);this.podRescue.present(skyTick);this.orbitalDelivery.present(skyTick);
     if(this.startingArrival.present(skyTick,this.received?.world.tick??this.world?.tick??skyTick))this.invalidatePausedShadow();
     if(this.raidPods.present(skyTick,this.received?.world.tick??this.world?.tick??skyTick))this.invalidatePausedShadow();
     if(this.texturesEnabled)this.paintedWater.present(skyTick/TICKS_PER_SECOND);
@@ -2158,7 +2153,6 @@ export class SceneRenderCore {
     if(this.canBakeTrees&&this.graphicsStyle.surfacePreparation.hasDensityConsumers&&this.graphicsStyle.surfacePreparation.observeDensity(this.rig.mode,cellPixels*this.renderer.getPixelRatio()))this.invalidatePausedShadow();
     this.actionFeedback.setBarsDetailVisible(cellPixels>=18);
     this.actionVfx.setDetailVisible(true);
-    this.brawlCloud.setDetailVisible(true);
     this.ropes.setDetailVisible(true);
     this.designations.present(this.camera,this.viewportHeight,cellPixels);
     this.wildlife.presentDesignations(this.camera,this.viewportHeight,cellPixels);
@@ -2474,7 +2468,6 @@ export class SceneRenderCore {
     this.hygiene.dispose();
     this.actionFeedback.dispose();
     this.actionVfx.dispose();
-    this.brawlCloud.dispose();
     this.structureVfx.dispose();
     this.podRescue.dispose();this.orbitalDelivery.dispose();
     this.startingArrival.dispose();this.raidPods.dispose();

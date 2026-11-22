@@ -3,7 +3,6 @@ import * as THREE from 'three/webgpu';
 import {uniform} from 'three/tsl';
 import {AnimationDetail} from '../src/render/AnimationDetail';
 import {ActionVfxLayer} from '../src/render/ActionVfxLayer';
-import {BrawlCloudLayer} from '../src/render/BrawlCloudLayer';
 import type {World} from '../src/sim/types';
 
 /** DECLARED RENDERER PROJECTIONS ONLY. These minimal input records are not
@@ -39,21 +38,3 @@ test('original middle Action copies changed source poses with unchanged compact 
  }finally{layer.dispose();stream.dispose();}
 });
 
-test('middle Brawl keeps changed source poses synchronized with stable pair ownership and performs no unchanged or far upload',()=>{
- const world=projection(2),[a,b]=world.pawns;a!.social={rng:1,memories:[],fight:{opponentId:b!.id,startedAt:100}};b!.social={rng:2,memories:[],fight:{opponentId:a!.id,startedAt:100}};
- const raw=JSON.stringify(world),stream=source(2),detail=new AnimationDetail(),layer=new BrawlCloudLayer({travelTime:uniform(0),blend:uniform(1)},detail);
- const frame=(ms:number,pixels:number)=>{detail.beginFrame(ms,camera(pixels),100,100.12);layer.present(100.12);};
- try{
-  detail.beginFrame(0,camera(16),100,100);layer.update(world,stream);layer.present(100);
-  const meshes=layer.group.children as THREE.Mesh<THREE.InstancedBufferGeometry>[];expect(meshes).toHaveLength(7);const geometries=meshes.map(m=>m.geometry),counts=geometries.map(g=>g.instanceCount),hits=geometries.map(g=>components(g,'aHit',0));
-  expect(counts.every(n=>n>0)).toBe(true);move(stream);const input=rows(stream);frame(20,16);
-  for(const [index,g]of geometries.entries()){
-   expect(meshes[index]!.geometry).toBe(g);expect(g.instanceCount).toBe(counts[index]);expect(components(g,'aHit',0)).toEqual(hits[index]);
-   for(let row=0;row<g.instanceCount;row++)for(const [name,actor,field]of [['aAFrom',0,'aFrom'],['aATo',0,'aTo'],['aATravel',0,'aTravel'],['aBFrom',1,'aFrom'],['aBTo',1,'aTo'],['aBTravel',1,'aTravel']] as const)expect(components(g,name,row)).toEqual(components(stream,field,actor));
-  }
-  expect(rows(stream)).toEqual(input);expect(JSON.stringify(world)).toBe(raw);const versions=geometries.map(g=>version(g,'aAFrom'));
-  frame(40,16);expect(geometries.map(g=>version(g,'aAFrom'))).toEqual(versions);expect(geometries.map(g=>g.instanceCount)).toEqual(counts);
-  frame(60,5);expect(meshes.every(m=>!m.visible&&m.geometry.instanceCount===0)).toBe(true);expect(geometries.map(g=>version(g,'aAFrom'))).toEqual(versions);expect(rows(stream)).toEqual(input);
-  frame(80,50);expect(geometries.map(g=>g.instanceCount)).toEqual(counts);for(const g of geometries)expect(components(g,'aBTo',0)).toEqual(components(stream,'aTo',1));expect(JSON.stringify(world)).toBe(raw);
- }finally{layer.dispose();stream.dispose();}
-});

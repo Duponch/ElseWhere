@@ -4,7 +4,8 @@ import { WORLD_SCALE } from '../world/scale';
 import type { Structure,World } from '../sim/types';
 import type { Placement } from './primitives';
 
-/** One frame and mattress, two pillows aligned with the actual sleeping heads.
+/** One frame and mattress, two pillows aligned with the actual sleeping heads
+ * (the single bed's pillow position, where a lying head rests).
  * The finished object, construction ghost and UI portrait share this builder. */
 export function doubleBedPartsForStructure(bed:Structure):Placement[] {
   if(bed.kind!=='double-bed')return [];
@@ -18,7 +19,7 @@ export function doubleBedPartsForStructure(bed:Structure):Placement[] {
     {x:x-Math.sin(ry)*(length/2-.05),z:z-Math.cos(ry)*(length/2-.05),y:.35,sx:width,sy:.63,sz:.08,color,ry},
   ];
   for(const slot of [0,1] as const){const head=bedSlotCell(bed,slot)!;
-    parts.push({x:head.x+Math.sin(ry)*.13,z:head.z+Math.cos(ry)*.13,y:WORLD_SCALE.bedSurfaceHeight+.07,sx:.66,sy:.12,sz:.28,color:0xf3e8d0,ry});
+    parts.push({x:head.x-Math.sin(ry)*.127,z:head.z-Math.cos(ry)*.127,y:WORLD_SCALE.bedSurfaceHeight+.07,sx:.66,sy:.12,sz:.28,color:0xf3e8d0,ry});
   }
   return parts.map(p=>({...p,targetId:bed.id}));
 }

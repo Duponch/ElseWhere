@@ -7,7 +7,7 @@ import type {Structure,World} from '../src/sim/types';
 import {sleepingSpotPartsForStructure} from '../src/render/sleeping-spot-parts';
 import {constructionPreviewParts} from '../src/render/construction-preview-parts';
 import {designationPreviewIconInstances} from '../src/render/DesignationIconLayer';
-import {PawnLayer} from '../src/render/PawnLayer';
+import {PawnLayer,bedLyingOffset} from '../src/render/PawnLayer';
 import {clearGroup} from '../src/render/primitives';
 import {WORLD_SCALE} from '../src/world/scale';
 import {readFirstDayGuide} from '../src/ui/first-day-guide';
@@ -39,7 +39,7 @@ test.each([0,1,2,3] as const)('floor marks and ghost stay on the actual two-cell
   expect(preview.boxes.map(visual)).toEqual(parts.map(visual));expect(w).toEqual(before);
 });
 
-test.each([0,1,2,3] as const)('lying person remains at the real centre and ground height at orientation %i',orientation=>{
+test.each([0,1,2,3] as const)('lying person keeps the head at the real head end, at ground height, orientation %i',orientation=>{
   const w=deconstructionCamp(),s=spot(w,orientation),p=w.pawns[0]!,head=bedSlotCell(s,0)!,center=bedSlotBodyCenter(s,0)!;
   w.structures=[s];Object.assign(p,head);p.bedId=s.id;p.motion=null;
   p.need={kind:'sleep',phase:'sleep',bedId:s.id,target:head};
@@ -48,7 +48,8 @@ test.each([0,1,2,3] as const)('lying person remains at the real centre and groun
     for(const state of ['sleeping','resting','downed'] as const){
       p.state=state;const before=structuredClone(w);layer.update(w,1,true);
       const to=layer.feedbackSource!.getAttribute('aTo') as THREE.InstancedBufferAttribute;
-      expect(to.getX(0)).toBe(center.x);expect(to.getZ(0)).toBe(center.z);expect(to.getY(0)).toBe(0);
+      const shift=bedLyingOffset(s,layer.lieHeadExtent);
+      expect(to.getX(0)).toBeCloseTo(center.x+shift.x,5);expect(to.getZ(0)).toBeCloseTo(center.z+shift.z,5);expect(to.getY(0)).toBe(0);
       expect(Math.sin(to.getW(0))).toBeCloseTo(Math.sin(orientation*Math.PI/2),6);
       expect(Math.cos(to.getW(0))).toBeCloseTo(Math.cos(orientation*Math.PI/2),6);expect(w).toEqual(before);
     }

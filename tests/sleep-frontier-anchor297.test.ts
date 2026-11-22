@@ -13,7 +13,7 @@ import {TerrainJournalSnapshotEncoder} from '../src/bridge/terrain-journal-encod
 import {SnapshotDecoder} from '../src/bridge/snapshots';
 import {MotionRecorder} from '../src/bridge/motion-tracks';
 import type {CorePhaseTypedProjection297} from '../src/bridge/core-phase-projection-297';
-import {PawnLayer} from '../src/render/PawnLayer';
+import {PawnLayer,bedLyingOffset} from '../src/render/PawnLayer';
 import {MotionTimeline} from '../src/render/MotionTimeline';
 import {ownActorPlaybackWorld435} from '../src/render/ActorPlayback435';
 import {POSE_SLEEP} from '../src/bridge/actor-phase-dependencies-297';
@@ -32,7 +32,9 @@ test('a real calm macro frontier preserves an already sleeping original bed anch
  assert.ok(original);assert.equal(original.name,'Noé');assert.equal(original.state,'sleeping');
  assert.equal(original.need?.kind,'sleep');assert.equal(original.need?.kind==='sleep'&&original.need.bedId,bedId);
  const bed=world.structures.find(s=>s.id===bedId)!;assert.ok(bed);assert.equal(bed.kind,'bed');
- const center=bedSlotBodyCenter(bed,0)!;assert.ok(center);
+ const body=bedSlotBodyCenter(bed,0)!;assert.ok(body);
+ // The head rests at the bed's head end (22 November 2026): the root sits toward the foot.
+ const shift=bedLyingOffset(bed,new PawnLayer().lieHeadExtent),center={x:body.x+shift.x,z:body.z+shift.z};
  const startCore=effectiveCore297(world),publisher=new CorePhasePublisher297(),owner=new CorePhaseFrameOwner297();
  const encoder=new TerrainJournalSnapshotEncoder(),decoder=new SnapshotDecoder(),recorder=new MotionRecorder();
  const layer=new PawnLayer(),timeline=new MotionTimeline(),owned=new Set<CorePhaseTypedProjection297['world']>();

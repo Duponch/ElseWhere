@@ -61,26 +61,24 @@ async function inspect(page: Page) {
       return { resident, visible, instances };
     };
     const action = counts(view.actionVfx.group);
-    const brawl = counts(view.brawlCloud.group);
     const mesh = view.actionVfx.mesh;
     const source = view.pawns.feedbackSource;
     return {
       backend: view.backend,
       tick: view.world.tick,
       actorCount: view.world.pawns.length,
-      action, brawl,
+      action,
       actionCount: mesh?.geometry?.instanceCount ?? null,
       sharedPose: mesh?.geometry && source ? ['aFrom', 'aTo', 'aTravel'].every(name =>
         mesh.geometry.getAttribute(name) === source.getAttribute(name)) : null,
       actionClock: view.actionVfx.time?.value ?? null,
-      brawlClock: view.brawlCloud.time?.value ?? null,
       detail: view.rig.pixelsPerCell(view.host.clientHeight),
       overview: view.overview.group.visible,
     };
   });
 }
 
-test('V128: fight cloud and sleep Z stay batched, pause with the world and disappear at detail LOD', async ({ playwright }) => {
+test('V128: sleep Z stays batched, pauses with the world and disappears at detail LOD (the fight cloud was removed on 22 November 2026)', async ({ playwright }) => {
   test.setTimeout(120_000);
   const fightRaw = readFileSync(new URL('../../public/test-saves/v125/insulte-bagarre.json', import.meta.url), 'utf8');
   const scenes: { name: string; world: World; raw?: string; focus: { x: number; z: number } }[] = [
@@ -88,7 +86,7 @@ test('V128: fight cloud and sleep Z stay batched, pause with the world and disap
     { name: 'sleep', world: nightEncounter(), focus: { x: 6, z: 10 } },
   ];
   const browser = await playwright.chromium.launch({ channel: 'chromium', headless: false, args: [] });
-  const residentCounts: { action: number; brawl: number }[] = [];
+  const residentCounts: { action: number }[] = [];
   try {
     for (const scene of scenes) {
       const page = await browser.newPage({ baseURL: 'http://127.0.0.1:5173', viewport: { width: 1440, height: 1000 } });
@@ -99,16 +97,11 @@ test('V128: fight cloud and sleep Z stay batched, pause with the world and disap
         const close = await inspect(page);
         expect(close.backend).toBe('WebGPU');
         expect(close.detail).toBeGreaterThan(18);
-        residentCounts.push({ action: close.action.resident, brawl: close.brawl.resident });
+        residentCounts.push({ action: close.action.resident });
         expect(close.action.resident).toBeGreaterThan(0);
-        expect(close.brawl.resident).toBeGreaterThan(0);
-        if (scene.name === 'fight') {
-          expect(close.brawl.visible).toBeGreaterThan(0);
-          expect(close.brawl.instances).toBeGreaterThan(0);
-        } else {
+        if (scene.name !== 'fight') {
           expect(close.action.visible).toBeGreaterThan(0);
           expect(close.actionCount).toBeGreaterThan(0);
-          expect(close.brawl.instances).toBe(0);
         }
         if (close.sharedPose !== null) expect(close.sharedPose).toBe(true);
         await page.screenshot({ path: test.info().outputPath(`comic-v128-${scene.name}-close.png`) });
@@ -124,13 +117,11 @@ test('V128: fight cloud and sleep Z stay batched, pause with the world and disap
         const paused = await inspect(page);
         expect(paused.tick).toBe(close.tick);
         if (close.actionClock !== null) expect(paused.actionClock).toBe(close.actionClock);
-        if (close.brawlClock !== null) expect(paused.brawlClock).toBe(close.brawlClock);
 
         await setCamera(page, scene.focus.x, scene.focus.z, .45);
         const distant = await inspect(page);
         expect(distant.detail).toBeLessThan(18);
         expect(distant.action.visible).toBe(0);
-        expect(distant.brawl.visible).toBe(0);
         expect(distant.tick).toBe(close.tick);
         await page.screenshot({ path: test.info().outputPath(`comic-v128-${scene.name}-distant.png`) });
         expect(errors).toEqual([]);

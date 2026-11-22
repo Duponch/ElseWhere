@@ -8,7 +8,6 @@ import { FxAnimationCache } from '../src/render/FxAnimationCache';
 import { FireLayer,attachedFireMesh,presentAttachedFire } from '../src/render/FireLayer';
 import { ProjectileLayer } from '../src/render/ProjectileLayer';
 import { ActionVfxLayer } from '../src/render/ActionVfxLayer';
-import { BrawlCloudLayer } from '../src/render/BrawlCloudLayer';
 import { StructureVfxLayer } from '../src/render/StructureVfxLayer';
 import { WeatherPrecipitationLayer,precipitationHash,precipitationGlobalDetail,precipitationMapLayout } from '../src/render/WeatherPrecipitationLayer';
 
@@ -117,17 +116,6 @@ test('attached fire ignores a burning capacity tail after population shrink and 
     expect(geometry.instanceCount).toBe(2);expect(mesh.visible).toBe(true);expect([slots.getX(0),slots.getX(1)]).toEqual([0,2]);expect(geometry.getAttribute('aTo').getX(1)).toBe(10);expect(geometry.getAttribute('aFrom')).toBe(owned);expect(owned).not.toBe(stream.getAttribute('aFrom'));
     expect([fire.getX(0),fire.getX(1),fire.getX(2)]).toEqual([.25,0,.5]);
   }finally{geometry.dispose();(mesh.material as THREE.Material).dispose();stream.dispose();}
-});
-
-test('far brawl batches submit no pieces and a confirmed separation removes every medium batch',()=>{
-  const world=createWorld(333,32,32),a=world.pawns[0]!,b=world.pawns[1]!;b.x=a.x+1;b.z=a.z;
-  a.social={rng:1,memories:[],fight:{opponentId:b.id,startedAt:world.tick}};b.social={rng:2,memories:[],fight:{opponentId:a.id,startedAt:world.tick}};
-  const detail=new AnimationDetail(),stream=source(world.pawns.length),layer=new BrawlCloudLayer({travelTime:uniform(0),blend:uniform(1)},detail);
-  try{
-    detail.beginFrame(0,iso(5),100,100);layer.update(world,stream);layer.present(100);const meshes=layer.group.children as THREE.Mesh<THREE.InstancedBufferGeometry>[];expect(meshes).toHaveLength(7);expect(meshes.every(m=>m.geometry.instanceCount===0&&!m.visible)).toBe(true);
-    detail.beginFrame(1,iso(),100,100);layer.present(100);expect(meshes.every(m=>m.geometry.instanceCount>0&&m.visible)).toBe(true);
-    b.x=a.x+8;layer.update(world,stream);layer.present(100);expect(meshes.every(m=>m.geometry.instanceCount===0&&!m.visible)).toBe(true);
-  }finally{layer.dispose();stream.dispose();}
 });
 
 test('projectile history owns primitive endpoints and expiry is independent of medium publication cadence',()=>{

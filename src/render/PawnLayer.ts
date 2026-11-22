@@ -52,6 +52,7 @@ import { pawnPresentationPose } from './pawn-presentation';
 import { headingAt,turnToward,TURN_TICKS,type TurnHeading } from './turn-presentation';
 import { pawnWorkPose,pasteCollectionSource,workApproach,meleeApproach,WORK_POSE } from './work-presentation';
 import { GaitPhaseTracker,HUMAN_GAIT_RADIANS_PER_UNIT } from './gait-presentation';
+import { ARRIVAL_TAIL_END,ARRIVAL_TAIL_REPLAN,MeleeRecoilTracker,addMeleeLunge,arrivalTailPhase,arrivalTailTarget,capJolt } from './actor-motion-accents';
 import { constructionWorkTarget } from '../sim/construction-rules';
 import { pawnSelectionMesh } from './PawnSelectionLayer';
 import type { MotionTimeline } from './MotionTimeline';
@@ -66,7 +67,8 @@ import {createPreparedAffineStrokeNode} from './surfaces/AffineStrokeKernel';
 import {ActorAtlasOwner,actorPoseIsRigid} from './origami/baked/actors/ActorAtlasOwner';
 import {applySharedPaintSurface,type SharedPaintSurfaceOptions} from './surfaces/SharedPaintSurface';
 import { Fn, If, attribute, cos, float, instanceIndex, mix, positionLocal, sin, uniform, renderGroup,uv,vec2,vec3,vec4, varying } from 'three/tsl';
-import { TICKS_PER_SECOND,type MaterialPile,type Pawn,type World,type Job } from '../sim/types';
+import { TICKS_PER_SECOND,type MaterialPile,type Pawn,type World,type Job,type Structure } from '../sim/types';
+import { isDiningSeat,seatAt } from '../sim/dining';
 import {origamiWorkTool} from './origami/work-tools';
 import {encodeOrigamiEquipment,origamiWeaponVisualSignal,origamiEquipmentPositionNode,ORIGAMI_EQUIPMENT_HAND,ORIGAMI_EQUIPMENT_BELT,ORIGAMI_EQUIPMENT_SLING} from './origami/equipment-pose';
 import {ORIGAMI_HUMAN_BIND,ORIGAMI_DUSTER_DYE,ORIGAMI_PARKA_DYE,ORIGAMI_RECON_ARMOR_DYE,COWBOY_HAT_DYE353,BOWLER_HAT_DYE353,humanReferencePaintProfiles} from './origami/human-geometry';
@@ -118,6 +120,46 @@ function motionX(walking:boolean,transition:CrouchTransition|undefined,origin:nu
   if(!transition)return walking?1:0;
   const quarterTick=Math.round(transition.start*CROUCH_QUANTA)-origin*CROUCH_QUANTA+CROUCH_PADDING;
   return -1-quarterTick-Math.min(.999,Math.max(0,transition.from))-(walking?CROUCH_WALK_MARK:0);
+}
+/** Crown of an ordinary head with its hair in the resident human geometry
+ * (skin 1.37, hairstyles 1.33 to 1.51 model units). */
+export const LIE_HEAD_TOP=1.42;
+/** Distance from a sleeping slot's body centre to the inner end of its head
+ * (headboard, pillow or chalk mark): 0.82 cell on the two-cell beds, bedrolls
+ * and sleeping spots; 0.38 on the historical one-cell bed. */
+export function bedHeadEnd(bed:{footprint?:string}):number {return bed.footprint==='legacy-single'?.38:.82;}
+/** Offset of a lying root from its slot's body centre, toward the foot end,
+ * that puts the crown (`headExtent` from the root) at the bed's head end. */
+export function bedLyingOffset(bed:{orientation:number;footprint?:string},headExtent:number):{x:number;z:number} {
+  const along=headExtent-bedHeadEnd(bed),yaw=bed.orientation*Math.PI/2;
+  return {x:Math.sin(yaw)*along,z:Math.cos(yaw)*along};
+}
+const seatLists=new WeakMap<readonly Structure[],readonly Structure[]>();
+/** Core Toils_Recipe.DoRecipeWork and JobDriver_Research work from the
+ * bench's interaction cell; a sittable building there seats the pawn
+ * (PawnTweener sitting offset) and gives the comfort Elsewhere already
+ * grants (lot 350). Presentation only: the seat list is filtered once per
+ * structures array, and only for a pawn working on its spot. */
+export function benchSeated(world:World,pawn:Pawn):boolean {
+  if(pawn.state!=='working'||pawn.stun)return false;
+  const spot=pawn.cooking?.phase==='work'?pawn.cooking.spot:pawn.research?.spot;
+  if(!spot||spot.x!==pawn.x||spot.z!==pawn.z)return false;
+  let seats=seatLists.get(world.structures);
+  if(!seats){seats=world.structures.filter(s=>isDiningSeat(s.kind));seatLists.set(world.structures,seats);}
+  for(const seat of seats)if(seatAt(seat,pawn))return true;
+  return false;
+}
+/** A bench seat replaces only the ordinary working pose (not sleep, combat...). */
+function seatedWorkPose(pose:number,workPose:number,benchSeat:boolean):number {return benchSeat&&pose===workPose?3:pose;}
+/** Pose shown while an arrival tail walks the drawn body onto its confirmed
+ * root, or -1 when the keyed pose must apply at once. Sitting, lying, eating
+ * and working begin when the drawn body has arrived; a crouch keeps its own
+ * transition; combat, carried, stunned and dead bodies never walk on. */
+function arrivalTailPose(keyedPose:number,pawn:Pawn):number {
+  if(keyedPose===0||keyedPose===WORK_POSE.ground)return keyedPose;
+  if(keyedPose===1)return medicallyStopped(pawn)?-1:0;
+  if(keyedPose===2||keyedPose===3||keyedPose===4||keyedPose===5||keyedPose===10||keyedPose===POSE_SLEEP||keyedPose===WORK_POSE.mine||keyedPose===WORK_POSE.chop||keyedPose===WORK_POSE.build||keyedPose===WORK_POSE.craft)return 0;
+  return -1;
 }
 /** Decode the already published equipment scalar; no pile lookup in a frame. */
 function presentationActivity(pawn:Pawn,equipmentCode:number):number {
@@ -185,6 +227,9 @@ export class PawnLayer {
     const bind=ORIGAMI_HUMAN_BIND,legScale=(bind.hipY-bind.footY)/(.61-.11),armDelta=(bind.shoulderY-bind.handY)-(1.01-.62);
     return {hip:bind.hipY,foot:bind.footY,kneeSpan:bind.hipY-bind.kneeY,seatedHip:bind.hipY-.005,crouchHip:bind.hipY-.12*legScale,crouchZ:.075*legScale,kneelHip:bind.hipY-.13*legScale,lieCenter:bind.hipY+.04*legScale,gunY:bind.shoulderY+.01,gunZ:.45+armDelta,pistolY:bind.shoulderY-.02,pistolZ:.44+armDelta,weaponXScale:bind.shoulderX/.23};
   })();
+  /** Lying, the hip root is lieCenter from the feet and LIE_HEAD_TOP from the
+   * crown: this is the crown's distance from the root along the bed. */
+  readonly lieHeadExtent=(LIE_HEAD_TOP-this.humanBind.lieCenter)*PAWN_MODEL_SCALE;
   private workToolJobs=new Map<number,Job>();
   private equippedVisualItems=new Map<number,string>();
   private refreshOrigamiEquipmentSignal(pawn:Pawn,index:number):void {
@@ -1259,7 +1304,7 @@ export class PawnLayer {
       if(pawn.surgery?.phase==='work'){const p=pawnsById.get(pawn.surgery.patientId);if(p)yaw=Math.atan2(p.x-pawn.x,p.z-pawn.z);}
       const coupleBed=coupleBed285(world,pawn);
       const bed = coupleBed??((pawn.state === 'sleeping'||pawn.state==='resting'||pawn.state==='downed') && bedId !== null ? world.structures.find(item => item.id === bedId) : undefined);
-      const seated=seatedOnFurniture(pawn);
+      const benchSeat=benchSeated(world,pawn),seated=seatedOnFurniture(pawn)||benchSeat;
       let px = pawn.x, pz = pawn.z, py = seated||pawn.state==='eating'||pawn.state==='sleeping'||pawn.state==='resting'||medicallyStopped(pawn)?0:this.travelSurfaces.get(pawn.z*world.width+pawn.x)??0;
       const body=bodies.get(pawn.id);
       const hiddenBody=pawn.body?.lostAt!==undefined||pawn.body?.pileId!==undefined&&(!body||body.owner.type==='grave');
@@ -1273,6 +1318,9 @@ export class PawnLayer {
         else {const cells = footprintCells(bed), last = cells[cells.length - 1]!;px = (bed.x + last.x) / 2;pz = (bed.z + last.z) / 2;}
         py = bed.kind==='sleeping-spot'||bed.kind==='double-sleeping-spot'?0:bed.kind==='bedroll'||bed.kind==='double-bedroll'?BEDROLL_SURFACE_HEIGHT:WORLD_SCALE.bedSurfaceHeight;
         const target = bed.orientation * Math.PI / 2;
+        // The head rests at the pillow end of the slot (RimWorld draws a
+        // sleeper from its head cell); a body longer than the bed shows its feet.
+        const lying=bedLyingOffset(bed,this.lieHeadExtent);px+=lying.x;pz+=lying.z;
         yaw = from.w + Math.atan2(Math.sin(target - from.w), Math.cos(target - from.w));
       }
       const dining = pawn.state === 'eating' && pawn.need?.kind === 'eat' ? pawn.need.dining : null;
@@ -1286,7 +1334,8 @@ export class PawnLayer {
       // contact pose instead of arriving at the cell centre and sliding later.
       const contact297=humanWorkContact297(world,pawn,pawnsById,jobsById,yaw),patch297=poses297?.get(pawn.id);
       const {arriving,humanOpponent,pasteCollect}=contact297;
-      const workPose=patch297?patch297.workPose:contact297.workPose,reach=patch297?{x:patch297.reach.x,z:patch297.reach.z}:contact297.reach;
+      // Seated at a bench, the body stays on its seat; the arms reach the work.
+      const workPose=patch297?patch297.workPose:contact297.workPose,reach=benchSeat?{x:0,z:0}:patch297?{x:patch297.reach.x,z:patch297.reach.z}:contact297.reach;
       jobsById=contact297.jobsById;yaw=patch297?patch297.yaw??yaw:contact297.yaw;
       this.workOffsets.set(pawn.id,reach);
       if(newMap)this.approachTransitions.set(pawn.id,{fromX:reach.x,fromZ:reach.z,toX:reach.x,toZ:reach.z,start:world.tick,baseX:pawn.x,baseZ:pawn.z});
@@ -1311,7 +1360,7 @@ export class PawnLayer {
       this.workPoses.set(pawn.id,workPose);
       const smallMelee=!!pawn.melee?.strike&&(world.wildlife?.animals.some(animal=>animal.id===pawn.melee!.strike!.targetId&&animal.species==='hare')??false);
       const equipmentCode=weaponVisual(gears.get(pawn.id)?.item)?.equipment??0;
-      motion.setXYZW(index, pawn.state === 'moving'&&!pawn.stun&&!pasteCollect ? 1 : 0,this.activity(pawn,equipmentCode),animationPose(pawn,workPose,smallMelee,seated,!!coupleBed),pawn.melee?.strike ? coreTimeSeconds(pawn.melee.strike.atCore,Math.floor(world.tick/1024)*1024) : pawn.shooting?.stance?.phase==='cooldown'?coreTimeSeconds(pawn.shooting.stance.startedAtCore,Math.floor(world.tick/1024)*1024):pawn.id * 1.7);
+      motion.setXYZW(index, pawn.state === 'moving'&&!pawn.stun&&!pasteCollect ? 1 : 0,this.activity(pawn,equipmentCode),seatedWorkPose(animationPose(pawn,workPose,smallMelee,seated,!!coupleBed),workPose,benchSeat),pawn.melee?.strike ? coreTimeSeconds(pawn.melee.strike.atCore,Math.floor(world.tick/1024)*1024) : pawn.shooting?.stance?.phase==='cooldown'?coreTimeSeconds(pawn.shooting.stance.startedAtCore,Math.floor(world.tick/1024)*1024):pawn.id * 1.7);
       const identity=appearanceOf(pawn,world.seed),variant=appearanceShape(identity);
       blood.setX(index,bodyBloodWord(pawn.health));
       scratchColor.setHex(identity.skinColor);skin.setXYZ(index,scratchColor.r,scratchColor.g,scratchColor.b);
@@ -1397,18 +1446,31 @@ export class PawnLayer {
   private springMotionW297=new Float32Array(0);
   private springGaitPhase297=new Float32Array(0);
   private springValid297=new Uint8Array(0);
+  /** Keyed motion x/z (walking code and pose) behind the arrival tail. */
+  private springMotionX297=new Float32Array(0);
+  private springMotionZ297=new Float32Array(0);
+  /** Arrival tail per slot: flag, planned start phase/residual, target phase
+   * and the confirmed root it converges to (a moved root re-plans it). */
+  private springTail297=new Uint8Array(0);
+  private springTailPlan297=new Float32Array(0);
   private readonly springTarget297={x:0,y:0,z:0,yaw:0};
+  private readonly jolt={x:0,z:0};
+  private readonly meleeRecoil=new MeleeRecoilTracker();
+  private frameCore297=0;
   private ensureSpring297(count:number):void {
     if(count<=this.springCapacity297)return;const n=2**Math.ceil(Math.log2(Math.max(1,count)));
     const copy=(old:THREE.BufferAttribute)=>{const value=new THREE.BufferAttribute(new Float32Array(n*4),4);(value.array as Float32Array).set(old.array);return value;};
     this.springFrom297=copy(this.springFrom297);this.springTo297=copy(this.springTo297);this.springTravel297=copy(this.springTravel297);
     const w=new Float32Array(n),phase=new Float32Array(n),valid=new Uint8Array(n);w.set(this.springMotionW297);phase.set(this.springGaitPhase297);valid.set(this.springValid297);this.springMotionW297=w;this.springGaitPhase297=phase;this.springValid297=valid;this.springCapacity297=n;this.tweener297.ensure(n);
+    const x=new Float32Array(n),z=new Float32Array(n),tail=new Uint8Array(n),plan=new Float32Array(n*5);x.set(this.springMotionX297);z.set(this.springMotionZ297);tail.set(this.springTail297);plan.set(this.springTailPlan297);
+    this.springMotionX297=x;this.springMotionZ297=z;this.springTail297=tail;this.springTailPlan297=plan;
   }
   private captureSpring297(slot:number,from:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,to:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,travel:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,motion:THREE.BufferAttribute|THREE.InterleavedBufferAttribute):void {
     this.springFrom297.setXYZW(slot,from.getX(slot),from.getY(slot),from.getZ(slot),from.getW(slot));
     this.springTo297.setXYZW(slot,to.getX(slot),to.getY(slot),to.getZ(slot),to.getW(slot));
     this.springTravel297.setXYZW(slot,travel.getX(slot),travel.getY(slot),travel.getZ(slot),travel.getW(slot));
     this.springMotionW297[slot]=motion.getW(slot);this.springValid297[slot]=1;
+    this.springMotionX297[slot]=motion.getX(slot);this.springMotionZ297[slot]=motion.getZ(slot);
   }
   private springPose297(slot:number,pawn:Pawn,dt:number,speed:number,from:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,to:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,travel:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,motion:THREE.BufferAttribute|THREE.InterleavedBufferAttribute):boolean {
     const target=sampleActorRoot(this.springFrom297,this.springTo297,this.springTravel297,slot,this.travelTime.value,this.blend.value,this.springTarget297);
@@ -1416,17 +1478,54 @@ export class PawnLayer {
     // the tweened position; map and actor-slot resets clear its history.
     const explicitReset=pawn.body?.pileId!==undefined||pawn.body?.lostAt!==undefined;
     const pose=this.tweener297.advance(slot,pawn.id,target.x,target.y,target.z,dt,speed,explicitReset);
-    const walking=motion.getX(slot),stepping=walking<-.5?(-walking-1)>CROUCH_WALK_MARK:walking>.5;
+    const keyedX=this.springMotionX297[slot]!,keyedZ=this.springMotionZ297[slot]!;
+    const stepping=keyedX<-.5?(-keyedX-1)>CROUCH_WALK_MARK:keyedX>.5;
+    // Arrival tail: the drawn root is still converging after the confirmed
+    // edge ended. The legs keep stepping until it stops, on a neutral phase.
+    const residual=stepping||this.tweener297.fresh?0:Math.hypot(target.x-pose.x,target.z-pose.z);
+    const tailPose=residual>ARRIVAL_TAIL_END?arrivalTailPose(keyedZ,pawn):-1;
+    const plan=5*slot;
+    if(tailPose>=0&&(!this.springTail297[slot]||Math.hypot(this.springTailPlan297[plan+3]!-target.x,this.springTailPlan297[plan+4]!-target.z)>ARRIVAL_TAIL_REPLAN)){
+      // Planned from the pose before this frame's step: its displacement already moves the legs.
+      const phase0=this.springGaitPhase297[slot]!,residual0=Math.max(residual,Math.hypot(target.x-pose.x+this.tweener297.deltaX,target.z-pose.z+this.tweener297.deltaZ));
+      this.springTailPlan297[plan]=phase0;this.springTailPlan297[plan+1]=residual0;this.springTailPlan297[plan+2]=arrivalTailTarget(phase0,residual0,HUMAN_GAIT_RADIANS_PER_UNIT);
+      this.springTailPlan297[plan+3]=target.x;this.springTailPlan297[plan+4]=target.z;
+    }
     // Keep distance travelled on screen continuous across confirmed edges and Full adoption.
     let gaitPhase=this.tweener297.fresh?0:this.springGaitPhase297[slot]!;
-    if(stepping&&speed>0){gaitPhase+=Math.hypot(this.tweener297.deltaX,this.tweener297.deltaZ)*HUMAN_GAIT_RADIANS_PER_UNIT;if(gaitPhase>=Math.PI*2)gaitPhase%=Math.PI*2;}
+    if(tailPose>=0)gaitPhase=arrivalTailPhase(this.springTailPlan297[plan]!,this.springTailPlan297[plan+1]!,this.springTailPlan297[plan+2]!,residual);
+    else if(stepping&&speed>0){gaitPhase+=Math.hypot(this.tweener297.deltaX,this.tweener297.deltaZ)*HUMAN_GAIT_RADIANS_PER_UNIT;if(gaitPhase>=Math.PI*2)gaitPhase%=Math.PI*2;}
     this.springGaitPhase297[slot]=gaitPhase;
     // Float32 rounding at the turn boundary must not leave an out-of-range phase.
     if(this.springGaitPhase297[slot]!>=Math.PI*2)this.springGaitPhase297[slot]=0;
-    const phase=stepping?this.springGaitPhase297[slot]!:this.springMotionW297[slot]!;
-    const changed=from.getX(slot)!==pose.x||from.getY(slot)!==pose.y||from.getZ(slot)!==pose.z||to.getX(slot)!==pose.x||to.getY(slot)!==pose.y||to.getZ(slot)!==pose.z||from.getW(slot)!==Math.fround(target.yaw)||to.getW(slot)!==Math.fround(target.yaw)||motion.getW(slot)!==phase;
-    from.setXYZW(slot,pose.x,pose.y,pose.z,target.yaw);to.setXYZW(slot,pose.x,pose.y,pose.z,target.yaw);travel.setXYZW(slot,0,0,0,2);motion.setW(slot,phase);
-    const visual=this.visuals.get(pawn.id)!;visual.from.set(pose.x,pose.y,pose.z,target.yaw);visual.to.copy(visual.from);return changed;
+    const walking=stepping||tailPose>=0;
+    const phase=walking?this.springGaitPhase297[slot]!:this.springMotionW297[slot]!;
+    // Melee jolt on top of the tweened root (RimWorld DrawPos = tweened + jitter).
+    const jolt=this.jolt;jolt.x=0;jolt.z=0;
+    const struck=addMeleeLunge(pawn.melee?.strike,this.frameCore297,target.yaw,jolt),pushed=this.meleeRecoil.add(pawn.id,this.frameCore297,jolt);
+    if(struck||pushed)capJolt(jolt);
+    const x=Math.fround(pose.x+jolt.x),z=Math.fround(pose.z+jolt.z);
+    let changed=from.getX(slot)!==x||from.getY(slot)!==pose.y||from.getZ(slot)!==z||to.getX(slot)!==x||to.getY(slot)!==pose.y||to.getZ(slot)!==z||from.getW(slot)!==Math.fround(target.yaw)||to.getW(slot)!==Math.fround(target.yaw)||motion.getW(slot)!==phase;
+    from.setXYZW(slot,x,pose.y,z,target.yaw);to.setXYZW(slot,x,pose.y,z,target.yaw);travel.setXYZW(slot,0,0,0,2);motion.setW(slot,phase);
+    if(tailPose>=0){
+      const shownX=keyedX<-.5?keyedX-CROUCH_WALK_MARK:1;
+      if(motion.getX(slot)!==shownX||motion.getZ(slot)!==tailPose){motion.setX(slot,shownX);motion.setZ(slot,tailPose);changed=true;}
+      this.springTail297[slot]=1;
+    }else if(this.springTail297[slot]){
+      // The drawn body has arrived: the keyed pose (sitting, lying, working) begins.
+      motion.setX(slot,keyedX);motion.setZ(slot,keyedZ);this.springTail297[slot]=0;changed=true;
+    }
+    const visual=this.visuals.get(pawn.id)!;visual.from.set(x,pose.y,z,target.yaw);visual.to.copy(visual.from);return changed;
+  }
+
+  /** Registers each confirmed melee hit on a human once (attackers: humans,
+   * animals and mechanoids). Property reads only; a victim is resolved by
+   * its slot index when a new hit appears. */
+  private observeMeleeHits(world:World,humans:readonly Pawn[],animals:readonly {id:number;x:number;z:number;strike?:MeleeState['strike']}[]|undefined):void {
+    const victim=(id:number)=>{const slot=this.pawnIndices.get(id),pawn=slot===undefined?undefined:humans[slot];return pawn?.id===id?pawn:undefined;};
+    for(const pawn of humans){const strike=pawn.melee?.strike;if(strike)this.meleeRecoil.observe(pawn.id,strike,pawn.x,pawn.z,victim);}
+    if(animals)for(const animal of animals)if(animal.strike)this.meleeRecoil.observe(animal.id,animal.strike,animal.x,animal.z,victim);
+    for(const mech of world.mechanoids??[]){const strike=mech.melee?.strike;if(strike)this.meleeRecoil.observe(mech.id,strike,mech.x,mech.z,victim);}
   }
 
   /** CPU chooses a confirmed edge; translation, orientation and rig evaluation stay on GPU. */
@@ -1441,6 +1540,8 @@ export class PawnLayer {
     this.travelTime.value=localTimeSeconds(timeline.tick,origin);
     const playback=this.playback435.beginFrame(timeline);if(this.playback435.retrying)this.travelKeys.clear();
     const spring=isCorePhysicalSchema297(Number(world.schemaVersion));if(spring)this.ensureSpring297(humans.length);
+    this.frameCore297=timeline.tick*10;
+    if(spring)this.observeMeleeHits(world,humans,animals);
     let dirty=false,partUnionDirty=false,allRigidBefore=true,allRigidAfter=true;
     humans.forEach((pawn,i)=>{
       allRigidBefore=this.observeBodyAtlasPose(pawn.id,i,geometry)&&allRigidBefore;
@@ -1455,7 +1556,7 @@ export class PawnLayer {
       const stepping=onEdge&&!!segment&&active&&!medicallyStopped(pawn)&&(segment.fromFraction??0)!==(segment.toFraction??1)&&timeline.tick>=segment.start;
       const smallMelee=!!pawn.melee?.strike&&(animals?.some(animal=>animal.id===pawn.melee!.strike!.targetId&&animal.species==='hare')??false);
       const shownPose=onEdge?(medicallyStopped(pawn)?1:0)
-        :animationPose(pawn,this.workPoses.get(pawn.id)??0,smallMelee,seatedOnFurniture(pawn));
+        :seatedWorkPose(animationPose(pawn,this.workPoses.get(pawn.id)??0,smallMelee,seatedOnFurniture(pawn)),this.workPoses.get(pawn.id)??0,benchSeated(world,pawn));
       this.showPose(pawn.id,shownPose,timeline.tick);
       const key=`${origin}:${segment?.start}:${segment?.end}:${segment?.edgeStart}:${segment?.fromFraction}:${segment?.toFraction}:${active}:${!!segment&&timeline.tick>=segment.start}:${pawn.state}:${shownPose}:${pawn.path[0]?.x}:${pawn.path[0]?.z}:${pasteCollect?.dispenserId}`;
       if(this.travelKeys.get(pawn.id)===key){if(spring)dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;return;}
@@ -1559,6 +1660,8 @@ export class PawnLayer {
       const value=motion.getX(index);
       if(value>=-.5)continue;
       motion.setX(index,-value-1>=CROUCH_WALK_MARK?1:0);
+      // The keyed copy behind an arrival tail finishes its crouch too.
+      if(index<this.springCapacity297&&this.springMotionX297[index]!<-.5){const keyed=this.springMotionX297[index]!;this.springMotionX297[index]=-keyed-1>=CROUCH_WALK_MARK?1:0;}
       crouchFinished=true;
     }
     if(dirty){
@@ -1637,3 +1740,4 @@ export class PawnLayer {
 
 }
 import { medicallyStopped } from '../sim/health-rules';
+import type { MeleeState } from '../sim/melee-state';

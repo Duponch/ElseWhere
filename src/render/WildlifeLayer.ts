@@ -35,6 +35,7 @@ import { pawnSelectionMesh } from './PawnSelectionLayer';
 import { animalCoat,createAnimalCoatTexture } from './animal-surface-paint';
 import { ANIMAL_SPECIES_IDS } from '../sim/animal-species';
 import { GaitPhaseTracker,animalGaitRadiansPerUnit } from './gait-presentation';
+import { ARRIVAL_TAIL_END,ARRIVAL_TAIL_REPLAN,MeleeRecoilTracker,addMeleeLunge,arrivalTailPhase,arrivalTailTarget,capJolt } from './actor-motion-accents';
 import { bodyBloodPigment,bodyBloodWord } from './body-blood';
 import { corpseVisualMask } from './corpse-presentation';
 import { corpsePartAbsent } from '../sim/corpse-anatomy';
@@ -279,7 +280,16 @@ class SpeciesRig {
   private springActive297=new Uint8Array(0);
   private springGait297=new Float32Array(0);
   private springSeed297=new Float32Array(0);
+  /** Keyed moving/eating/posture behind the arrival tail, the tail flag and
+   * its plan (start phase, residual, target phase, confirmed root x/z). */
+  private springState297=new Float32Array(0);
+  private springTail297=new Uint8Array(0);
+  private springTailPlan297=new Float32Array(0);
   private readonly springTarget297={x:0,y:0,z:0,yaw:0};
+  private readonly jolt={x:0,z:0};
+  /** Shared by every species rig; owned and fed by the WildlifeLayer. */
+  meleeRecoil?:MeleeRecoilTracker;
+  private frameCore297=0;
   private readonly playback435=new ActorPlayback435<VisualAnimal>(animal=>animal.carrierId!==undefined||!!animal.corpsePile&&animal.corpsePile.owner.type!=='ground');
   playbackMetrics435(){return this.playback435.snapshot();}
   clearPlayback435():void{this.playback435.clear();}
@@ -467,14 +477,19 @@ class SpeciesRig {
     const valid=new Uint8Array(capacity),reset=new Uint8Array(capacity),active=new Uint8Array(capacity),gait=new Float32Array(capacity),seed=new Float32Array(capacity);
     valid.set(this.springValid297);reset.set(this.springReset297);active.set(this.springActive297);gait.set(this.springGait297);seed.set(this.springSeed297);
     this.springValid297=valid;this.springReset297=reset;this.springActive297=active;this.springGait297=gait;this.springSeed297=seed;this.springCapacity297=capacity;this.rootTweener297.ensure(count);
+    const keyed=new Float32Array(capacity*3),tail=new Uint8Array(capacity),plan=new Float32Array(capacity*5);keyed.set(this.springState297);tail.set(this.springTail297);plan.set(this.springTailPlan297);
+    this.springState297=keyed;this.springTail297=tail;this.springTailPlan297=plan;
   }
-  private resetSpring297():void {this.rootTweener297.reset();this.springValid297.fill(0);this.springReset297.fill(1);this.springActive297.fill(0);this.springGait297.fill(0);}
+  private resetSpring297():void {this.rootTweener297.reset();this.springValid297.fill(0);this.springReset297.fill(1);this.springActive297.fill(0);this.springGait297.fill(0);this.springTail297.fill(0);}
   private captureSpring297(slot:number,from:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,to:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,travel:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,state:THREE.BufferAttribute|THREE.InterleavedBufferAttribute):void {
     this.rawFrom297.setXYZW(slot,from.getX(slot),from.getY(slot),from.getZ(slot),from.getW(slot));
     this.rawTo297.setXYZW(slot,to.getX(slot),to.getY(slot),to.getZ(slot),to.getW(slot));
     this.rawTravel297.setXYZW(slot,travel.getX(slot),travel.getY(slot),travel.getZ(slot),travel.getW(slot));
     this.springSeed297[slot]=state.getW(slot);this.springValid297[slot]=1;this.springActive297[slot]=1;
+    this.springState297[3*slot]=state.getX(slot);this.springState297[3*slot+1]=state.getY(slot);this.springState297[3*slot+2]=state.getZ(slot);
   }
+  /** A confirmed hit pushed this settled animal: its drawn root moves again. */
+  wakeSpring297(id:number):void {const slot=this.phaseIndices297.get(id);if(slot!==undefined&&slot<this.springCapacity297&&this.springValid297[slot])this.springActive297[slot]=1;}
   /** The same confirmed-root recurrence as humans. Original edge primitives
    * remain resident; only the displayed streams change. Idle settled roots
    * skip this path, and carrier/corpse streams never enter it. */
@@ -482,15 +497,38 @@ class SpeciesRig {
     if(!this.springValid297[slot]||!this.springActive297[slot])return false;
     const target=sampleActorRoot(this.rawFrom297,this.rawTo297,this.rawTravel297,slot,this.travelTime.value,this.blend.value,this.springTarget297);
     const pose=this.rootTweener297.advance(slot,animal.id,target.x,target.y,target.z,dt,speed,this.springReset297[slot]===1);this.springReset297[slot]=0;
-    const stepping=state.getX(slot)>.5;let phase=this.rootTweener297.fresh?0:this.springGait297[slot]!;
-    if(stepping&&speed>0){phase+=Math.hypot(this.rootTweener297.deltaX,this.rootTweener297.deltaZ)*this.gaitRate;if(phase>=Math.PI*2)phase%=Math.PI*2;}
+    const keyed=3*slot,keyedMoving=this.springState297[keyed]!,keyedEating=this.springState297[keyed+1]!,keyedPosture=this.springState297[keyed+2]!;
+    const stepping=keyedMoving>.5;
+    // Arrival tail: standing, eating or lying down begins when the drawn body
+    // has arrived; an attack keeps its own clock and never walks on.
+    const residual=stepping||this.rootTweener297.fresh||keyedEating>1.5||keyedPosture>1.5?0:Math.hypot(target.x-pose.x,target.z-pose.z);
+    const tail=residual>ARRIVAL_TAIL_END,plan=5*slot;
+    if(tail&&(!this.springTail297[slot]||Math.hypot(this.springTailPlan297[plan+3]!-target.x,this.springTailPlan297[plan+4]!-target.z)>ARRIVAL_TAIL_REPLAN)){
+      const phase0=this.springGait297[slot]!,residual0=Math.max(residual,Math.hypot(target.x-pose.x+this.rootTweener297.deltaX,target.z-pose.z+this.rootTweener297.deltaZ));
+      this.springTailPlan297[plan]=phase0;this.springTailPlan297[plan+1]=residual0;this.springTailPlan297[plan+2]=arrivalTailTarget(phase0,residual0,this.gaitRate);
+      this.springTailPlan297[plan+3]=target.x;this.springTailPlan297[plan+4]=target.z;
+    }
+    let phase=this.rootTweener297.fresh?0:this.springGait297[slot]!;
+    if(tail)phase=arrivalTailPhase(this.springTailPlan297[plan]!,this.springTailPlan297[plan+1]!,this.springTailPlan297[plan+2]!,residual);
+    else if(stepping&&speed>0){phase+=Math.hypot(this.rootTweener297.deltaX,this.rootTweener297.deltaZ)*this.gaitRate;if(phase>=Math.PI*2)phase%=Math.PI*2;}
     this.springGait297[slot]=phase;if(this.springGait297[slot]!>=Math.PI*2)this.springGait297[slot]=0;
-    const shownPhase=stepping?this.springGait297[slot]!:this.springSeed297[slot]!,yaw=Math.fround(target.yaw);
-    const changed=from.getX(slot)!==pose.x||from.getY(slot)!==pose.y||from.getZ(slot)!==pose.z||to.getX(slot)!==pose.x||to.getY(slot)!==pose.y||to.getZ(slot)!==pose.z||from.getW(slot)!==yaw||to.getW(slot)!==yaw||travel.getX(slot)!==0||travel.getY(slot)!==0||travel.getZ(slot)!==0||travel.getW(slot)!==2||state.getW(slot)!==shownPhase;
-    from.setXYZW(slot,pose.x,pose.y,pose.z,yaw);to.setXYZW(slot,pose.x,pose.y,pose.z,yaw);travel.setXYZW(slot,0,0,0,2);state.setW(slot,shownPhase);
+    const shownPhase=stepping||tail?this.springGait297[slot]!:this.springSeed297[slot]!,yaw=Math.fround(target.yaw);
+    // Melee jolt on top of the tweened root, as for humans.
+    const jolt=this.jolt;jolt.x=0;jolt.z=0;
+    const struck=addMeleeLunge(animal.strike,this.frameCore297,target.yaw,jolt),pushed=!!this.meleeRecoil?.add(animal.id,this.frameCore297,jolt);
+    if(struck||pushed)capJolt(jolt);
+    const x=Math.fround(pose.x+jolt.x),z=Math.fround(pose.z+jolt.z);
+    let changed=from.getX(slot)!==x||from.getY(slot)!==pose.y||from.getZ(slot)!==z||to.getX(slot)!==x||to.getY(slot)!==pose.y||to.getZ(slot)!==z||from.getW(slot)!==yaw||to.getW(slot)!==yaw||travel.getX(slot)!==0||travel.getY(slot)!==0||travel.getZ(slot)!==0||travel.getW(slot)!==2||state.getW(slot)!==shownPhase;
+    from.setXYZW(slot,x,pose.y,z,yaw);to.setXYZW(slot,x,pose.y,z,yaw);travel.setXYZW(slot,0,0,0,2);state.setW(slot,shownPhase);
+    if(tail){
+      if(state.getX(slot)!==1||state.getY(slot)!==0||state.getZ(slot)!==0){state.setX(slot,1);state.setY(slot,0);state.setZ(slot,0);changed=true;}
+      this.springTail297[slot]=1;
+    }else if(this.springTail297[slot]){
+      state.setX(slot,keyedMoving);state.setY(slot,keyedEating);state.setZ(slot,keyedPosture);this.springTail297[slot]=0;changed=true;
+    }
     const timed=this.rawTravel297.getY(slot)>this.rawTravel297.getX(slot)&&this.travelTime.value<this.rawTravel297.getY(slot);
     // No epsilon snap: retain the recurrence's actual Float32 terminal pose.
-    if(!stepping&&speed>0&&dt>0&&!timed&&!changed)this.springActive297[slot]=0;
+    if(!stepping&&!tail&&!struck&&!pushed&&speed>0&&dt>0&&!timed&&!changed)this.springActive297[slot]=0;
     return changed;
   }
   updateClock(tick:number,pawns?:PawnLayer):void {
@@ -511,6 +549,7 @@ class SpeciesRig {
       const present=new Set(this.animals.map(a=>a.id));for(const id of this.headings.keys())if(!present.has(id)){this.headings.delete(id);this.gait.delete(id);}
     }
     const tick=timeline?.tick??world.tick,origin=Math.floor(tick/1024)*1024;
+    this.frameCore297=tick*10;
     this.animationCache.setOrigins(origin);
     const g=this.mesh.geometry as THREE.InstancedBufferGeometry,from=g.getAttribute('aFrom') as THREE.InstancedBufferAttribute,to=g.getAttribute('aTo') as THREE.InstancedBufferAttribute,times=g.getAttribute('aTravel') as THREE.InstancedBufferAttribute,state=g.getAttribute('aAnimal') as THREE.InstancedBufferAttribute,scale=g.getAttribute('aScale') as THREE.InstancedBufferAttribute;
     if(changed){
@@ -686,12 +725,25 @@ export class WildlifeLayer {
   private groups=new Map<string,VisualAnimal[]>();
   private burning:ReadonlyMap<number,number>=new Map();
   private selected:ReadonlySet<number>=new Set();
+  private readonly meleeRecoil=new MeleeRecoilTracker();
+  private readonly rigById=new Map<number,SpeciesRig>();
   constructor(configure?:(m:THREE.MeshStandardNodeMaterial)=>void,loadTexture?:SceneTextureLoader,animationDetail=new AnimationDetail()){
     const graphics=currentGraphicsStyle();this.graphicsContext=graphics??new GraphicsStyleContext();this.ownsGraphicsContext=!graphics;
     this.markerStyle=new AnimalSlaughterMarkerStyle(loadTexture);
     this.bodyPrograms=new WildlifeBodyPrograms(this.travelTime,animationDetail,configure,this.markerStyle);
     this.rigs=withGraphicsStyle(this.graphicsContext,()=>ANIMAL_SPECIES_IDS.map(species=>new SpeciesRig(this.travelTime,species,this.surfaceTextures[animalCoat(species)],this.markerStyle,animationDetail,configure,this.models,this.bodyPrograms)));
-    for(const rig of this.rigs){this.mesh.add(rig.mesh,rig.selection,rig.slaughter);this.flames.add(rig.flames);}
+    for(const rig of this.rigs){this.mesh.add(rig.mesh,rig.selection,rig.slaughter);this.flames.add(rig.flames);rig.meleeRecoil=this.meleeRecoil;}
+  }
+  /** Registers each confirmed melee hit on an animal once (attackers: humans,
+   * animals and mechanoids) and wakes the settled root it pushes. */
+  private observeMeleeHits(world:World,actorScene?:CoreActorScene297):void {
+    const humans=actorScene?.humans??world.pawns,animals=actorScene?.animals??world.wildlife?.animals??[];
+    let index:Map<number,{x:number;z:number}>|undefined;
+    const victim=(id:number)=>{if(!index){index=new Map();for(const a of animals)index.set(a.id,a);}return index.get(id);};
+    const woken=(id:number|undefined)=>{if(id!==undefined)this.rigById.get(id)?.wakeSpring297(id);};
+    for(const pawn of humans){const strike=pawn.melee?.strike;if(strike)woken(this.meleeRecoil.observe(pawn.id,strike,pawn.x,pawn.z,victim));}
+    for(const animal of animals)if(animal.strike)woken(this.meleeRecoil.observe(animal.id,animal.strike,animal.x,animal.z,victim));
+    for(const mech of world.mechanoids??[]){const strike=mech.melee?.strike;if(strike)woken(this.meleeRecoil.observe(mech.id,strike,mech.x,mech.z,victim));}
   }
   /** Read-only compatibility for historical evidence pages. This is an honest
    * diagnostic of the shared surface, never a species-atlas preparation API. */
@@ -718,6 +770,7 @@ export class WildlifeLayer {
       for(const rig of active)rig.setSelected(this.selected);
       const present=new Set(active);for(const rig of this.activeRigs)if(!present.has(rig))rig.deactivate();
       this.activeRigs=active;
+      this.rigById.clear();for(const rig of active)for(const animal of this.groups.get(rig.species)!)this.rigById.set(animal.id,rig);
       this.surfaces=furnitureSurfaces(world);this.pileSurface=pileSurfaces(world);this.pileIdentities=pileIdentitySurfaces(world);this.quotaTargets=autoSlaughterTargets(world);
       this.burning=new Map((world.fires?.items??[]).filter(f=>f.attachedAnimalId!==undefined).map(f=>[f.attachedAnimalId!,f.size]));
     }
@@ -726,6 +779,7 @@ export class WildlifeLayer {
     // These scalar writes preserve each resident graph's independent clocks,
     // including during compile preparation; only active rigs prepare actors.
     for(const rig of this.rigs)rig.updateClock(tick,pawns);
+    if(isCorePhysicalSchema297(Number(world.schemaVersion)))this.observeMeleeHits(world,actorScene);
     for(const rig of this.activeRigs)rig.update(world,this.groups.get(rig.species)!,this.burning,timeline,this.surfaces,this.pileSurface,reset,pawns,this.quotaTargets,this.pileIdentities,actorScene,dt297,speed297);
   }
   adoptPhase297(world:World,indices:readonly number[],actorScene?:CoreActorScene297,changedActorIds?:ReadonlySet<number>):void {

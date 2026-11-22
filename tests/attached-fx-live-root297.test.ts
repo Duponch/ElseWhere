@@ -5,7 +5,6 @@ import {createWorld} from '../src/sim/index';
 import {AnimationDetail} from '../src/render/AnimationDetail';
 import {FxAnimationCache} from '../src/render/FxAnimationCache';
 import {attachedFireMesh,presentAttachedFire} from '../src/render/FireLayer';
-import {BrawlCloudLayer} from '../src/render/BrawlCloudLayer';
 import {sampleActorRoot} from '../src/render/ActorAnimationCache';
 
 type Observed={mock:{calls:unknown[][];contexts:unknown[]}};
@@ -43,33 +42,3 @@ test('middle attached-fire compact anchor follows the moved burning source while
   }finally{observed.mockRestore();sets.mockRestore();handles.mockRestore();mesh.geometry.dispose();(mesh.material as THREE.Material).dispose();g.dispose();}
 });
 
-test('middle brawl compact pair anchors follow the moved source pair while all real affine effect palettes remain held',()=>{
-  // Renderer-only reciprocal pair from the existing brawl fixture pattern.
-  // JSON equality below is immutability, never Whole/Engine validity.
-  const world=createWorld(333,32,32),a=world.pawns[0]!,b=world.pawns[1]!;b.x=a.x+1;b.z=a.z;
-  a.social={rng:1,memories:[],fight:{opponentId:b.id,startedAt:world.tick}};b.social={rng:2,memories:[],fight:{opponentId:a.id,startedAt:world.tick}};
-  const raw=JSON.stringify(world),detail=new AnimationDetail(),view=camera(),g=source(world.pawns.length),clock={travelTime:uniform(0),blend:uniform(1)},layer=new BrawlCloudLayer(clock,detail);
-  world.pawns.forEach((pawn,row)=>setRoot(g,row,pawn.x,0,pawn.z));
-  const observed=vi.spyOn(FxAnimationCache.prototype,'sample'),sets=vi.spyOn(FxAnimationCache.prototype,'set'),handles=vi.spyOn(detail,'createHandle');
-  const clockTokens=()=>handles.mock.results.map(result=>{if(result.type!=='return')throw Error('Real handle creation failed');return {...result.value};});
-  try{
-    detail.beginFrame(0,view,720,0);layer.update(world,g);layer.present(0);
-    const geometries=[...new Set((layer.group.children as THREE.Mesh<THREE.InstancedBufferGeometry>[]).map(mesh=>mesh.geometry))],owners=caches(observed);
-    expect(geometries).toHaveLength(5);expect(owners).toHaveLength(5);expect(detail.classify(a.x,0,a.z)).toBe(1);
-    const held=owners.map(cache=>palette(cache,0)),heldWrites=writes(sets,owners),heldClocks=clockTokens(),sourceBefore=attributes(g);
-    expect(heldWrites).toBeGreaterThan(0);expect(geometries.every(geometry=>geometry.instanceCount>0)).toBe(true);expect(JSON.stringify(world)).toBe(raw);
-    const initial=geometries.map(geometry=>({a:anchor(geometry,'aA',0,0,1),b:anchor(geometry,'aB',0,0,1)}));
-    setRoot(g,0,a.x+1.25,.2,a.z-.5);setRoot(g,1,b.x+1.25,.2,b.z-.5);clock.travelTime.value=.04;const sourceMoved=attributes(g);
-    expect(sourceMoved).not.toEqual(sourceBefore);detail.beginFrame(40,view,720,.24);layer.present(.24);
-    for(let index=0;index<geometries.length;index++){
-      const geometry=geometries[index]!,pair=geometry.getAttribute('aHit'),slot=geometry.getAttribute('fxSlot');
-      const actualA=anchor(geometry,'aA',0,clock.travelTime.value,clock.blend.value),actualB=anchor(geometry,'aB',0,clock.travelTime.value,clock.blend.value);
-      // Both roots are consumed by pairCenter in the real graph; no copied
-      // affine/particle formula or interpreted final vertex is asserted.
-      expectXYZ(actualA,anchor(g,'a',pair.getZ(0),clock.travelTime.value,clock.blend.value));expectXYZ(actualB,anchor(g,'a',pair.getW(0),clock.travelTime.value,clock.blend.value));
-      expect(actualA.x).toBeGreaterThan(initial[index]!.a.x);expect(actualB.x).toBeGreaterThan(initial[index]!.b.x);expect(slot.getX(0)).toBe(0);
-    }
-    expect(owners.map(cache=>palette(cache,0))).toEqual(held);expect(writes(sets,owners)).toBe(heldWrites);expect(clockTokens()).toEqual(heldClocks);expect(layer.time.value).toBe(.24/6);expect(attributes(g)).toEqual(sourceMoved);expect(JSON.stringify(world)).toBe(raw);
-    detail.beginFrame(84,view,720,.504);clock.travelTime.value=.084;layer.present(.504);expect(writes(sets,owners)).toBeGreaterThan(heldWrites);expect(JSON.stringify(world)).toBe(raw);
-  }finally{observed.mockRestore();sets.mockRestore();handles.mockRestore();layer.dispose();g.dispose();}
-});

@@ -10,7 +10,7 @@ const base = process.env.COMIC_VFX_BENCH_URL ?? 'http://127.0.0.1:5173';
 const durationMs = Number(process.env.COMIC_VFX_BENCH_DURATION_MS ?? 1800);
 const report = {
   date: new Date().toISOString(), base, viewport: { width: 1440, height: 1000 },
-  protocol: 'Paused synthetic 64² scene with 100 visible actors: 20 reciprocal contact fights (40 actors), 30 sleepers, 30 idle. Fixed orthographic camera, native Chromium/WebGPU, A/B/A comic BrawlCloudLayer and ActionVfxLayer visible/hidden/visible. PawnLayer poses remain active in A and B. 45 RAF warmup frames then 1.8 s per arm. RAF interval is display paced; absolute frame CPU is JS/render submission, not GPU execution. No threshold or simulation claim.',
+  protocol: 'Paused synthetic 64² scene with 100 visible actors: 20 reciprocal contact fights (40 actors), 30 sleepers, 30 idle. Fixed orthographic camera, native Chromium/WebGPU, A/B/A ActionVfxLayer visible/hidden/visible (the comic brawl cloud was removed on 22 November 2026; melee now jolts the bodies in PawnLayer). PawnLayer poses remain active in A and B. 45 RAF warmup frames then 1.8 s per arm. RAF interval is display paced; absolute frame CPU is JS/render submission, not GPU execution. No threshold or simulation claim.',
   scene: null, adapter: null, runtime: null, phases: [], errors: [],
 };
 const statistics = values => {
@@ -95,7 +95,6 @@ ColonyRenderer.prototype.frame=function(now){
     const render = v.renderer.render.bind(v.renderer);
     v.renderer.render = function (scene, camera) {
       v.actionVfx.group.visible = b.enabled;
-      v.brawlCloud.group.visible = b.enabled;
       return render(scene, camera);
     };
     return { actors: 100, reciprocalPairs: 20, confirmedStrikes: 10, sleeping: 30, idle: 30 };
@@ -104,7 +103,6 @@ ColonyRenderer.prototype.frame=function(now){
   report.runtime = await page.evaluate(() => {
     const v = window.__comicVfxBench.view;
     const adapter = v.renderer.getContext()?.getConfiguration?.()?.device?.adapterInfo ?? {};
-    const brawlMeshes = v.brawlCloud.group.children.filter(child => child.isMesh);
     const visibleActorCenters = v.world.pawns.filter(p => {
       const point = v.camera.position.clone().set(p.x, 1.2, p.z).project(v.camera);
       return Math.abs(point.x) < .98 && Math.abs(point.y) < .98;
@@ -114,16 +112,11 @@ ColonyRenderer.prototype.frame=function(now){
       adapter: { vendor: adapter.vendor ?? 'unknown', architecture: adapter.architecture ?? 'unknown', description: adapter.description ?? '' },
       actionInstances: v.actionVfx.mesh.geometry.instanceCount,
       actionVisible: v.actionVfx.mesh.visible,
-      brawlResidentMeshes: brawlMeshes.length,
-      brawlInstances: brawlMeshes.map(mesh => mesh.geometry.instanceCount),
-      brawlVisibleMeshes: brawlMeshes.filter(mesh => mesh.visible).length,
       visibleActorCenters, detail: v.rig.pixelsPerCell(v.host.clientHeight), distant: v.overview.group.visible,
     };
   });
   assert.equal(report.runtime.backend, 'WebGPU');
   assert.ok(report.runtime.actionInstances > 0 && report.runtime.actionVisible);
-  assert.ok(report.runtime.brawlResidentMeshes > 0 && report.runtime.brawlVisibleMeshes > 0);
-  assert.ok(report.runtime.brawlInstances.some(count => count > 0));
   assert.equal(report.runtime.visibleActorCenters, 100, 'All actor centers must be in the viewport.');
   assert.ok(report.runtime.detail >= 18, 'Action VFX LOD must stay visible.');
   assert.equal(report.runtime.distant, false);
