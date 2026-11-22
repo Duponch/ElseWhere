@@ -1,5 +1,6 @@
 import {expect,test} from 'vitest';
 import {InstancedBufferAttribute,type Mesh,type InstancedBufferGeometry} from 'three/webgpu';
+import {animalStageDrawScale} from '../src/render/animal-stage-scale';
 import {WildlifeBodyScale,WildlifeFrameState} from '../src/render/wildlife-frame-state';
 import {WildlifeLayer} from '../src/render/WildlifeLayer';
 import {MotionTimeline} from '../src/render/MotionTimeline';
@@ -9,14 +10,15 @@ import {isAnimalSpecies256} from '../src/sim/animal-core-v256';
 import {localTimeSeconds} from '../src/bridge/clock-rate';
 import {animalCombatCamp} from './scenarios/animal-combat';
 
+// Since the 22 November feedback the drawn scale follows Core's life-stage drawSize (animal-stage-scale.ts).
 test('derived animal scale follows in-place species, age and growth writes without changing inputs',()=>{
  const cache=new WildlifeBodyScale(),owner={species:ANIMAL_SPECIES_IDS[0]! as (typeof ANIMAL_SPECIES_IDS)[number],ageTicks:0,growthTracker:undefined as {value:number}|undefined};
  for(const species of ANIMAL_SPECIES_IDS){owner.species=species;
   for(const age of [0,juvenileAgeTicks(species)-1,juvenileAgeTicks(species),adultAgeTicks(species)-1,adultAgeTicks(species)]){
-   owner.ageTicks=age;owner.growthTracker=undefined;const before=structuredClone(owner),expected=bodySizeAtAge(species,age)/animalSpecies(species).bodySize;
+   owner.ageTicks=age;owner.growthTracker=undefined;const before=structuredClone(owner),expected=animalStageDrawScale(species,age);
    expect(cache.read(owner)).toBe(expected);expect(cache.read(owner)).toBe(expected);expect(owner).toEqual(before);
   }
-  if(isAnimalSpecies256(species)){owner.growthTracker={value:0};for(const value of [0,.25,.75,1,.25]){owner.growthTracker.value=value;expect(cache.read(owner)).toBe(bodySizeAtAge(species,owner.ageTicks,value)/animalSpecies(species).bodySize);}}
+  if(isAnimalSpecies256(species)){owner.growthTracker={value:0};for(const value of [0,.25,.75,1,.25]){owner.growthTracker.value=value;expect(cache.read(owner)).toBe(animalStageDrawScale(species,owner.ageTicks,value));}}
  }
 });
 
