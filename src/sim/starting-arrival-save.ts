@@ -1,4 +1,4 @@
-import {isSchema256Or257} from './schema-compatibility-257.ts';
+import {isSchema256Or257,isSchema300OrLater} from './schema-compatibility-257.ts';
 import {validCoreStartingArrivalShape256,validateCoreStartingArrivalOwners256} from './starting-pod-save-256.ts';
 import {validCoreStartingArrivalTransition256} from './starting-pod-transition-256.ts';
 import {CORE_STARTING_ARRIVAL_PROFILE_256} from './starting-pod-state-256.ts';
@@ -80,8 +80,11 @@ const INITIAL_PAWN_KEYS=['id','name','x','z','appearance','age','health','medica
   'apparelPolicyId','apparelAutomation','nextApparelCheckAt','schedule','restZeroTicks','collapsePending','hunger','rest','mood',
   'comfort','beauty','memories','orders','jobId','haul','cooking','need','bedId','needCooldown','state','priorities','path',
   'moveCooldown','planCooldown','traits','background','faction'];
+/** From schema 256 every new human carries the clinical mind made by
+ * constructHumanConditionMind256 (its first move is a wait from schema 300),
+ * whatever the site generator; older or later fields are refused. */
 function freshPawn(p:Record<string,unknown>,world:World,version:number):boolean {
-  if(Object.keys(p).some(k=>!INITIAL_PAWN_KEYS.includes(k)&&!(k==='mental'&&isSchema256Or257(version)&&world.site?.revision===3&&world.climate?.revision===4&&world.planet?.revision===3)&&!(k==='social'&&version>=343&&crashedTogetherOnly343(p.social)))||!integer(p.id,1,world.nextId-1)||p.state!=='idle'
+  if(Object.keys(p).some(k=>!INITIAL_PAWN_KEYS.includes(k)&&!(k==='mental'&&isSchema256Or257(version))&&!(k==='social'&&version>=343&&crashedTogetherOnly343(p.social)))||!integer(p.id,1,world.nextId-1)||p.state!=='idle'
     ||p.faction!==undefined&&p.faction!=='colony'||p.jobId!==null||p.haul!==null||p.cooking!==null||p.need!==null||p.bedId!==null
     ||p.moveCooldown!==0||p.planCooldown!==0||p.needCooldown!==0||p.restZeroTicks!==0||p.collapsePending!==false
     ||!empty(p.path)||!empty(p.memories)||!object(p.orders)||!keys(p.orders,['active','queue'])||p.orders.active!==null||!empty(p.orders.queue)
@@ -90,7 +93,7 @@ function freshPawn(p:Record<string,unknown>,world:World,version:number):boolean 
     ||!world.apparelPolicies?.some(policy=>policy.id===p.apparelPolicyId)||!object(p.recreation))return false;
   if(Object.hasOwn(p,'mental')){
     const m=p.mental;
-    if(!isSchema256Or257(version)||world.site?.revision!==3||world.climate?.revision!==4||world.planet?.revision!==3||!object(m)||!keys(m,['below','cooldown','catharsis','wander'])||!Array.isArray(m.below)||m.below.length!==3||m.below.some(n=>n!==0)||m.cooldown!==0||!empty(m.catharsis)||!object(m.wander)||!keys(m.wander,['revision','nextMoveOrderIsWait'])||m.wander.revision!==1||m.wander.nextMoveOrderIsWait!==false)return false;
+    if(!isSchema256Or257(version)||!object(m)||!keys(m,['below','cooldown','catharsis','wander'])||!Array.isArray(m.below)||m.below.length!==3||m.below.some(n=>n!==0)||m.cooldown!==0||!empty(m.catharsis)||!object(m.wander)||!keys(m.wander,['revision','nextMoveOrderIsWait'])||m.wander.revision!==1||m.wander.nextMoveOrderIsWait!==isSchema300OrLater(version))return false;
   }
   const joy=p.recreation;
   if(!keys(joy,['level','tolerance','bored','task'])||joy.task!==null||joy.level!==55||!object(joy.tolerance)||!object(joy.bored))return false;
