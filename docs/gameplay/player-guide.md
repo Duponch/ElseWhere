@@ -45,6 +45,12 @@ Dans l'onglet **Prisonnier**, le mode **Exécuter** charge un geôlier de tuer l
 
 Sur la fiche d'un animal de la colonie, **Relâcher dans la nature** le rend à la vie sauvage. Un colon avec **Dressage** activé le rejoint, le porte dehors s'il est enfermé, attend un instant avec lui puis le laisse partir : l'animal quitte la colonie et ne sert plus. L'humain qui lui était lié en souffre (−5 pendant 15 jours). Cet ordre remplace un ordre d'abattage, et l'inverse. [Règles et limites](execute-release-v364.md).
 
+
+## Natte de paille et canapé — V365
+
+Dans **Architecte → Sols**, la **natte de paille** coûte 2 foins par case, sans recherche : c'est le sol le moins cher. Elle est un peu laide (beauté −1, mieux que la terre ou l'herbe en intérieur) mais retient très peu la saleté : la terre et les déchets apportés aux pieds n'y restent qu'une fois sur vingt (le sang et le vomi, si). Elle brûle très facilement et devient alors une natte brûlée, à retirer et reposer.
+
+Dans **Architecte → Meubles**, après **Mobilier complexe**, le **canapé** (200 tissu ou cuir, Construction 5, 2 × 1, Q / E pour tourner) offre deux places assises côte à côte : deux colons peuvent y manger devant une table, regarder la télévision ou jouer, avec un meilleur confort qu'un fauteuil.
 ## Profiter d'une inspiration — V360
 
 Un colon **heureux** (humeur d'au moins 50 %, et d'autant plus souvent que son humeur est haute : en moyenne tous les 10 jours à 100 %) peut être **inspiré**. Une lettre bleue l'annonce. Une **frénésie** dure 8 jours : travail 80 % plus rapide, déplacement 40 % plus rapide ou tir bien plus précis. Une inspiration **ciblée** attend son occasion pendant 8 jours au plus : **commerce** (meilleurs prix au prochain échange avec un marchand ou un vaisseau), **recrutement** (le prochain prisonnier en mode « recruter » rejoint la colonie malgré sa résistance), **apprivoisement** (réussite certaine), **chirurgie** (chances doublées, jusqu'à 98 %) ou **créativité** (prochaine œuvre, arme, vêtement ou meuble deux niveaux de qualité au-dessus). Profitez-en : mettez le colon sur la bonne tâche avant la fin. Le type dépend de ses passions. L'inspection et l'onglet **Besoins** (sous l'humeur) affichent l'inspiration et le temps restant ; un petit soleil marque sa vignette. [Règles et limites](inspirations-v360.md).

@@ -456,6 +456,13 @@ L’[audit du 13 septembre](../research/environment-review.md) confirme que les 
 
 ## Petit catalogue et statut des ajouts
 
+### Ajouts V365 — natte de paille et canapé
+
+| Registre / identifiant local | Acquisition et usage physique | Limites |
+| --- | --- | --- |
+| Sols `straw-matting` et `burned-straw-matting` | Natte de paille Core (`StrawMatting`) : 2 foins livrés au chantier, travail 120, sans recherche, beauté −1, propreté −0,1, coût de passage 1, inflammabilité 1,5, multiplicateur de saleté 0,05 ; retrait : 1 foin rendu ; brûlée : natte brûlée (beauté −6). | Pas de saleté animale distincte dans Elsewhere ; rendu en brins tressés sans texture. |
+| Structure `couch` | Canapé Core (`Couch`) : 200 tissu ou cuir, travail 20 000, Construction 5, Mobilier complexe, 2 × 1 orientable, 160 PV, beauté 8, confort 0,85, 70 kg, qualité, désinstallable ; deux places assises (repas, télévision, jeux, rencontre, lecture). | Rotation de pose choisie au lieu du sud par défaut ; non utilisé en caravane. |
+
 ### Ajouts V363 — grande table, couchages doubles et applique murale
 
 | Registre / identifiant local | Acquisition et usage physique | Limites |
