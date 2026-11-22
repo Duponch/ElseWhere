@@ -19,8 +19,8 @@ import {validatePawnHealthRecord} from '../../sim/health-save.ts';
 import {bornWimpRecord362} from '../../sim/wimp-record-362.ts';
 import {HAIR_STYLES} from '../../sim/pawn-appearance.ts';
 import {addMaterial} from '../../sim/materials.ts';
+import {validTradeInventoryCustody} from '../../sim/trade-save.ts';
 import {ITEM_DEFINITIONS} from '../../sim/items.ts';
-import {footprintCells} from '../../sim/definitions.ts';
 import type {WildAnimal} from '../../sim/wildlife-state.ts';
 import {adultAgeTicks,animalNutritionMax} from '../../sim/animal-life.ts';
 import {attachGeneratedAnimalGrowth256} from '../../sim/animal-growth-runtime-256.ts';
@@ -163,7 +163,10 @@ function importColonist(ctx:ImportContext,t:RwsThing,index:number):Pawn|undefine
   const thing=readThing(it);notes.countBefore('items');
   if(Object.hasOwn(APPAREL_MAP,thing.def)||Object.hasOwn(WEAPON_MAP,thing.def)){placeGear(ctx,thing,{type:'inventory',pawnId:p.id});continue;}
   const m=lookup(ITEM_MAP,thing.def);if(!m||isDropped(m)){notes.def('items',thing.def,m?'dropped':'unknown',undefined,m&&isDropped(m)?m.drop:'Objet inconnu.');continue;}
-  try{addMaterial(w,ITEM_DEFINITIONS[m.to].kind as MaterialKind,Math.min(thing.stack,ITEM_DEFINITIONS[m.to].stackLimit),{type:'inventory',pawnId:p.id},m.to);notes.countAfter('items');notes.def('items',`${thing.def} (inventaire)`,mappingStatus(m),m.to,'adapt' in m?m.adapt:undefined);}
+  const kind=ITEM_DEFINITIONS[m.to].kind as MaterialKind,quantity=Math.min(thing.stack,ITEM_DEFINITIONS[m.to].stackLimit),owner={type:'inventory' as const,pawnId:p.id};
+  // Elsewhere's own custody rule says what a person may carry.
+  if(!validTradeInventoryCustody(w,{id:0,kind,item:m.to,quantity,owner},w.schemaVersion)){notes.def('items',`${thing.def} (inventaire)`,'dropped',m.to,'Objet qu’Elsewhere ne laisse pas porter dans un inventaire.');continue;}
+  try{addMaterial(w,kind,quantity,owner,m.to);notes.countAfter('items');notes.def('items',`${thing.def} (inventaire)`,mappingStatus(m),m.to,'adapt' in m?m.adapt:undefined);}
   catch{notes.def('items',`${thing.def} (inventaire)`,'dropped',m.to,'Refusé dans l’inventaire par Elsewhere.');}
  }
  return p;
@@ -237,4 +240,3 @@ function importAnimal(ctx:ImportContext,t:RwsThing,species:WildAnimal['species']
  if(hediffs.length)notes.def('health',`${t.def} : santé`,'dropped',undefined,'Blessures et parties manquantes des animaux : non reprises dans cette étape.',hediffs.length);
  return a;
 }
-void footprintCells;

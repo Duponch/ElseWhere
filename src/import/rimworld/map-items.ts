@@ -56,7 +56,9 @@ const meats:Record<string,ItemId>={Hare:'hare-meat',Deer:'deer-meat',Muffalo:'mu
  Lynx:'lynx-meat',Megasloth:'megasloth-meat',Monkey:'monkey-meat',Panther:'panther-meat',Raccoon:'raccoon-meat',Rat:'rat-meat',Rhinoceros:'rhinoceros-meat',
  Squirrel:'squirrel-meat',Tortoise:'tortoise-meat',Turkey:'turkey-meat',Warg:'warg-meat',Pig:'pig-meat',Wolf_Timber:'timber-wolf-meat',Yak:'yak-meat'} as Record<string,ItemId>;
 for(const [race,id] of Object.entries(meats))items[`Meat_${race}`]=i(id);
-for(const race of ['Chicken','Cow','Goat','Sheep','Thrumbo','Alphabeaver','Human','Goose'])items[`Meat_${race}`]=ix(`Viande (${race}) : absente d’Elsewhere.`);
+for(const [race,id,label] of [['Goat','ibex-meat','bouquetin'],['Sheep','alpaca-meat','alpaga'],['Cow','yak-meat','yak'],['Chicken','turkey-meat','dinde'],['Goose','duck-meat','canard']] as const)
+ items[`Meat_${race}`]=ia(id,`Viande de cet animal : devient de la viande de ${label}, comme l’animal lui-même.`);
+for(const race of ['Thrumbo','Alphabeaver','Human'])items[`Meat_${race}`]=ix(`Viande (${race}) : absente d’Elsewhere.`);
 for(const bird of ['Cassowary','Cobra','Duck','Emu','Iguana','Ostrich','Tortoise','Turkey']){
  const id=bird.toLowerCase();
  items[`Egg${bird}Unfertilized`]=i(`${id}-egg-unfertilized` as ItemId);

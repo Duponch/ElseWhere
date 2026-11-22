@@ -2,7 +2,7 @@
  * schema, with no new field: what Elsewhere cannot hold is adapted or left
  * out, and every such case is counted in the notes. */
 import type {World,Structure,Cell,Tile,StockpileCell,GrowingZone,MaterialPile,Pawn,StructureKind,StorageFilters,MaterialKind} from '../../sim/types.ts';
-import {saveCompatibility,decodeDefGrid,readThing,referencedThingId,type RwsSave,type RwsThing,type RwsMap} from './rws-save.ts';
+import {saveCompatibility,decodeDefGrid,type RwsSave,type RwsThing,type RwsMap} from './rws-save.ts';
 import {items as listItems,text,num,at,child,type XmlNode} from './xml.ts';
 import {savedBytes} from './bytes.ts';
 import {ImportNotes} from './notes.ts';
@@ -40,20 +40,21 @@ import {createWildPlantResource256} from '../../sim/wild-plant-acquisition-v256.
 import {createPlantLife} from '../../sim/plant-life.ts';
 import {PLANT_DEFINITIONS} from '../../sim/plants.ts';
 import {FLORA_DEFINITIONS} from '../../sim/biome-flora.ts';
+import {conduitKeepsPlant} from '../../sim/power-construction.ts';
+import {isConstructionLightPlant,constructionFinalWipesPlants} from '../../sim/construction-plants.ts';
 import {addMaterial,addGroundMaterial,refreshStock,materialCanFit} from '../../sim/materials.ts';
 import {ITEM_DEFINITIONS,type ItemId} from '../../sim/items.ts';
 import {setMaterialForbidden256} from '../../sim/material-permission-256.ts';
 import {invalidateTerrainJournal} from '../../sim/terrain-mutation-journal.ts';
 import {projectProgress,readProjectProgress,researchCost,researchPrerequisite,RESEARCH_SCALE,type ResearchProject} from '../../sim/research.ts';
-import {shortHashTable} from './short-hash.ts';
-import {canStandAt} from '../../sim/furniture-travel.ts';
+import {terrainBridgeable256} from '../../sim/natural-terrain-runtime-256.ts';
 import {createGeographicSiteClimate256,climateDate} from '../../sim/site-climate.ts';
 
 export interface ConvertOptions {
  /** Rebuild the save's planet and place the colony on its tile (default true). */
  planet?:boolean;
 }
-export interface RwsConversion {world:World;notes:ImportNotes;planetMode:'save'|'none';thingIds:Map<string,number>}
+export interface RwsConversion {world:World;notes:ImportNotes;planetMode:'save'|'seed'|'none';thingIds:Map<string,number>}
 
 export class ImportContext {
  readonly thingIds=new Map<string,number>();
@@ -71,7 +72,7 @@ export function convertRwsSave(save:RwsSave,options:ConvertOptions={}):RwsConver
  const notes=new ImportNotes(),map=save.maps[0]!;
  if(save.maps.length>1)notes.lost('world',`${save.maps.length-1} cartes supplémentaires (camps, sites) : seule la carte de la colonie est importée.`);
  const base=createBaseWorld(save,notes,{planet:options.planet??true}),w=base.world;
- const ctx=new ImportContext(save,map,w,notes,base.planetMode==='save');
+ const ctx=new ImportContext(save,map,w,notes,base.planetMode!=='none');
  clearLocalContent(ctx);
  importTerrain(ctx);
  importBuildings(ctx);
@@ -90,7 +91,8 @@ export function convertRwsSave(save:RwsSave,options:ConvertOptions={}):RwsConver
 function clearLocalContent(ctx:ImportContext):void {
  const w=ctx.w,removed=new Set(w.pawns.map(p=>p.id));
  w.pawns=[];w.piles=[];w.resources=[];w.structures=[];w.jobs=[];w.stockpiles=[];w.growingZones=[];w.growingCursor=0;w.packed=[];
- if(w.wildlife)w.wildlife.animals=[];
+ // Generated animals, insect groups and flying ducks belong to the generated map.
+ if(w.wildlife){w.wildlife.animals=[];if(w.wildlife.hiveLords)w.wildlife.hiveLords=[];if(w.wildlife.flyers)w.wildlife.flyers=[];}
  if(w.relationships)w.relationships.links=w.relationships.links.filter(l=>!removed.has(l.aId)&&!removed.has(l.bId));
  if(w.worldGroups)w.worldGroups.lostMemories=w.worldGroups.lostMemories.filter(m=>!removed.has(m.receiverId));
  delete w.home;delete w.snowClearArea;delete w.allowedAreas;
@@ -121,7 +123,7 @@ function importTerrain(ctx:ImportContext):void {
   const topName=top.values[i],m=lookup(TERRAIN_MAP,topName);let tile:Tile;
   if(m&&!isDropped(m)&&(m.to.kind==='floor'||m.to.kind==='bridge')){
    const base=natural(under.values[i],i).tile;
-   if(m.to.kind==='floor'){tile={...base,floor:m.to.floor};floors++;}else{tile={...base,bridge:true};bridges++;}
+   if(m.to.kind==='floor'){tile={...base,floor:m.to.floor};floors++;}else if(terrainBridgeable256(base.terrain,w.schemaVersion)){tile={...base,bridge:true};bridges++;}else tile=base;
    if(isWaterTerrain(tile.terrain)&&m.to.kind==='floor'){delete tile.floor;}
   }else if(m&&!isDropped(m)){tile=natural(topName,i).tile;}
   else{tile=natural(under.values[i],i).tile;}
@@ -286,14 +288,22 @@ function assignSculptureAuthors(ctx:ImportContext):void {
 // ---- Plants -----------------------------------------------------------------------------
 function importPlants(ctx:ImportContext):void {
  const {map,w,notes}=ctx,taken=new Set<number>(),roofed=new Set([...w.roofing?.constructed??[],...w.roofing?.natural?.thin??[],...w.roofing?.natural?.thick??[]]);
- const structureCells=new Set(w.structures.flatMap(s=>s.kind==='flower-pot'||s.kind==='hydroponics-basin'?[]:footprintCells(s).map(c=>ctx.index(c))));
+ // Structures per cell: a plant is kept under one only where Elsewhere's own
+ // rules admit it (crops over conduits, light plants under furniture that
+ // keeps plants, sleeping spots, hydroponics basins).
+ const structuresAt=new Map<number,StructureKind[]>();
+ for(const s of w.structures)for(const c of footprintCells(s)){const i=ctx.index(c);(structuresAt.get(i)??structuresAt.set(i,[]).get(i)!).push(s.kind);}
+ const admitted=(kind:StructureKind,r:Pick<World['resources'][number],'kind'|'species'>)=>kind==='hydroponics-basin'&&!r.species||conduitKeepsPlant(kind,r.kind)||
+  kind!=='flower-pot'&&isConstructionLightPlant(r)&&!constructionFinalWipesPlants(kind)||kind==='animal-sleeping-spot'||kind==='sleeping-spot'&&r.kind!=='tree';
  for(const t of map.things){
   if(!t.pos)continue;
   if(Object.hasOwn(DEAD_PLANT_MAP,t.def)){notes.countBefore('plants');notes.def('plants',t.def,'dropped',undefined,(DEAD_PLANT_MAP[t.def] as {drop:string}).drop);continue;}
   if(t.cls!=='Plant')continue;notes.countBefore('plants');
   const m=lookup(PLANT_MAP,t.def);if(!m||isDropped(m)){notes.def('plants',t.def,m?'dropped':'unknown',undefined,m&&isDropped(m)?m.drop:'Plante inconnue.');continue;}
   const i=ctx.index(t.pos),tile=w.tiles[i]!,growth=Math.max(0,Math.min(1,num(t.node,'growth')??1));
-  if(taken.has(i)||structureCells.has(i)||tile.terrain==='rock'||tile.floor||isWaterTerrain(tile.terrain)){notes.def('plants',t.def,'dropped',undefined,'Case incompatible dans Elsewhere (sol construit, roche, eau ou bâtiment).');continue;}
+  const probe='wild' in m.to?{kind:FLORA_DEFINITIONS[m.to.wild].kind,species:m.to.wild}:{kind:m.to.crop};
+  const conflict=taken.has(i)?'une autre plante occupe déjà la case':(structuresAt.get(i)??[]).some(k=>!admitted(k,probe))?'un bâtiment occupe la case dans Elsewhere':tile.terrain==='rock'?'la case est de la roche':tile.floor?'la case a un sol construit':isWaterTerrain(tile.terrain)?'la case est de l’eau':undefined;
+  if(conflict){notes.def('plants',t.def,'dropped',undefined,`Case incompatible : ${conflict}.`);continue;}
   let r;
   if('wild' in m.to){
    const kind=m.to.wild;
@@ -433,7 +443,6 @@ function importZones(ctx:ImportContext):void {
    w.growingZones.push(zoneRow);notes.countAfter('zones');
    notes.def('zones',`${cls} (${text(zone,'plantDefToGrow')})`,plant.adapt||ok.length<cells.length?'adapted':'exact',`champ ${plant.to}`,[plant.adapt,ok.length<cells.length?`${cells.length-ok.length} cases non cultivables retirées.`:undefined].filter(Boolean).join(' ')||undefined);
   }
-  void label;
  }
  // Shelves keep their storage settings.
  for(const t of map.things){
@@ -449,7 +458,7 @@ function importZones(ctx:ImportContext):void {
   if(!deflated&&!plain){continue;}
   const bytes=savedBytes((deflated??plain)!.text,!!deflated),cells:number[]=[];
   for(let i=0;i<w.width*w.height;i++)if((bytes[i>>3]??0)>>(i&7)&1)cells.push(i);
-  if(m.to==='home'){w.home=cells;notes.def('zones',cls,'exact','zone domestique');}
+  if(m.to==='home'){if(cells.length)w.home=cells;notes.def('zones',cls,'exact',`zone domestique (${cells.length} cases)`);}
   else if(m.to==='snow-clear'){if(cells.length){w.snowClearArea=cells;notes.def('zones',cls,'exact','zone de déneigement');}}
   else notes.def('zones',`${cls} ${text(area,'label')??''}`.trim(),'dropped',undefined,'Aire autorisée personnalisée : non reprise dans cette étape.');
  }
@@ -507,5 +516,4 @@ function finalize(ctx:ImportContext):void {
  const w=ctx.w;
  refreshStock(w);reconcilePower(w);invalidateTerrainJournal(w.tiles);
  if(w.home)w.home=[...new Set(w.home)].sort((a,b)=>a-b);
- void canStandAt;void readThing;void referencedThingId;void shortHashTable;
 }

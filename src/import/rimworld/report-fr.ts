@@ -49,7 +49,7 @@ export function frenchReport(input:{title:string;analysis?:RwsAnalysis;conversio
  }
  if(input.checks){
   const c=input.checks;
-  out.push('## Résultat de la conversion','',`- Monde : ${c.planetMode==='save'?'planète reconstruite case par case depuis la sauvegarde, colonie sur la même case':'carte seule, sans planète'}.`,
+  out.push('## Résultat de la conversion','',`- Monde : ${c.planetMode==='save'?'planète reconstruite case par case depuis la sauvegarde, colonie sur la même case':c.planetMode==='seed'?'planète régénérée par Elsewhere depuis la même graine, colonie sur une case du même biome':'carte seule, sans planète'}.`,
    `- Validation du monde Elsewhere : ${c.valid?'réussie':'ÉCHEC — '+c.errors.slice(0,5).join(' ; ')}.`,
    `- Rechargement exact (sérialiser, relire, resérialiser) : ${c.roundTrip?'identique':'différent'}${c.bytes?` (${c.bytes} octets)`:''}.`,
    `- Simulation après import : ${c.ticksRun} ticks ${c.validAfterTicks?'sans erreur, monde toujours valide':'— ERREUR'}.`,
