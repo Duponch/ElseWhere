@@ -139,9 +139,10 @@ describe('effects',()=>{
       expect(drawCoreTraits361({draw:traitBirthDraw361(5,i+1),sex:'female',ageYears:30,background:{childhood:'Mute34',adulthood:'Scout59'},schema:370})).toContain('jogger');
       expect(drawCoreTraits361({draw:traitBirthDraw361(6,i+1),sex:'male',ageYears:30,background:{childhood:'SicklyChild55',adulthood:'CharityWorker36'},schema:370})).not.toContain('psychopath');
     }
-    // The same birth without a Core story is the 361 draw.
-    expect(drawCoreTraits361({draw:traitBirthDraw361(5,1),sex:'male',ageYears:30,background:{childhood:'quiet-child',adulthood:'medic'},schema:369}))
-      .toEqual(drawCoreTraits361({draw:traitBirthDraw361(5,1),sex:'male',ageYears:30,background:{childhood:'quiet-child',adulthood:'medic'},schema:362}));
+    // The same birth without a Core story is the draw of schema 369 (the
+    // trait set itself grew at 368 with Pyromaniac).
+    expect(drawCoreTraits361({draw:traitBirthDraw361(5,1),sex:'male',ageYears:30,background:{childhood:'quiet-child',adulthood:'medic'},schema:370}))
+      .toEqual(drawCoreTraits361({draw:traitBirthDraw361(5,1),sex:'male',ageYears:30,background:{childhood:'quiet-child',adulthood:'medic'},schema:369}));
   });
   test('disabled work: Work tab, planner priority and Bio “Incapable de”',()=>{
     const cook=findCandidate(p=>stories(p.background!).some(s=>s.disables.includes('cooking')));
@@ -204,7 +205,11 @@ describe('saves',()=>{
     expect(validBackground({childhood:'school-child',adulthood:'medic'},370,{biologicalTicks:ADULT,chronologicalTicks:ADULT})).toBe(true);
   });
   test('below 370 every candidate is the historical one (values of schema 366)',()=>{
-    const a=previewStartingCandidate(42,{serial:1,generation:0},369),b=previewStartingCandidate(9001,{serial:5,generation:0},369);
+    // Schema 368 added Pyromaniac to the trait draw, so the pinned values are
+    // those of 366; 369 changed nothing at birth, so 369 is 368's candidate.
+    for(const [seed,serial] of [[42,1],[9001,5],[333,2]] as const)
+      expect(previewStartingCandidate(seed,{serial,generation:0},369)).toEqual(previewStartingCandidate(seed,{serial,generation:0},368));
+    const a=previewStartingCandidate(42,{serial:1,generation:0},366),b=previewStartingCandidate(9001,{serial:5,generation:0},366);
     expect([a.background,a.traits,a.appearance!.bodyType,a.skills.construction.level,a.skills.shooting.level]).toEqual([{childhood:'settlement-child',adulthood:'hermit'},['greedy','teetotaler','fast-learner'],'Thin',4,2]);
     expect([b.background,b.traits,b.appearance!.bodyType,b.skills.construction.level,b.skills.shooting.level]).toEqual([{childhood:'school-child',adulthood:'hermit'},['lazy','optimist'],'Thin',4,3]);
     expect(isCoreBackstoryId370(previewStartingCandidate(42,{serial:1,generation:0}).background!.childhood)).toBe(true);
