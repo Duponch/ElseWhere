@@ -25,6 +25,8 @@ export interface NativeLocalTradeOptions {
   isCurrent: () => boolean;
   focusPawn: (id: number) => void;
   focusCell?: (cell: Cell) => void;
+  /** Presentation: the trade window opens (Core Dialog_Trade CommsWindow_Open). */
+  opened?: () => void;
 }
 interface Scope { epoch: number | undefined; seed: number; mapId: number | undefined }
 interface Good {
@@ -279,6 +281,7 @@ export function createNativeLocalTrade(options: NativeLocalTradeOptions) {
     if (state.busy || state.fault) throw Error(state.fault ?? 'Une opération est encore en cours.');
     mode = next; active = true; generation++; scope = { epoch: state.epoch, seed: world.seed, mapId: registeredMapId(world) };
     pawnId = peerId = undefined; consoleId = preferredConsole; readyKey = ''; error = ''; resetBasket(); syncChoices(world);
+    options.opened?.();
     // Establish the owned page before normal guarded renders may inspect it.
     options.show({ id: `${prefix}${mode}`, title: mode === 'visitors' ? 'Visiteurs et commerce' : 'Commerce orbital', modal: true, rows: [] });
     paint(); pauseAtContact();

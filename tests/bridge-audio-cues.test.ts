@@ -145,7 +145,7 @@ test('manual gates and autodoors use their own sounds on actual motion', () => {
   auto.door.open = true;
   recorder.capture(world);
   expect(recorder.drain()).toMatchObject([
-    { kind: 'door.open', x: gate.x, z: gate.z },
+    { kind: 'fencegate.move', x: gate.x, z: gate.z }, // Core Door_FenceGateManual (audio coverage 20261122).
     { kind: 'autodoor.open', x: auto.x, z: auto.z },
   ]);
 
@@ -154,7 +154,7 @@ test('manual gates and autodoors use their own sounds on actual motion', () => {
   auto.door.open = false;
   recorder.capture(world);
   expect(recorder.drain()).toMatchObject([
-    { kind: 'door.close', x: gate.x, z: gate.z },
+    { kind: 'fencegate.move', x: gate.x, z: gate.z },
     { kind: 'autodoor.close', x: auto.x, z: auto.z },
   ]);
 });

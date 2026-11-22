@@ -24,10 +24,26 @@ export type AudioCueKind = 'mining.hit' | 'woodcutting.hit' | 'construction.hit'
   | 'cleaning.work' | 'medical.tend' | 'maintenance.work' | 'firefighting.beat'
   | 'power.switch-on' | 'power.switch-off' | 'deconstruction.work' | 'building.deconstructed'
   | 'autodoor.open' | 'autodoor.close' | 'weather.thunder'
+  | 'fencegate.move' | 'building.complete' | 'woodcutting.fell'
   | `human.hurt.${'male'|'female'}`
   | `animal.hurt.${AnimalVoiceSpecies}` | `animal.death.${AnimalDeathVoiceSpecies}`
-  | 'ui.threat' | 'ui.colonist-death'
+  | 'ui.threat' | 'ui.colonist-death' | 'ui.colonist-downed' | 'ui.research-complete'
   | 'ui.click' | 'ui.reject' | 'ui.panel';
+/** Interface alerts kept through a full queue (they are rare and severe). */
+const SEVERE_CUES: ReadonlySet<string> = new Set(['ui.threat', 'ui.colonist-death', 'ui.colonist-downed']);
+
+/** Research projects finished so far: the root record and every project
+ * record carrying `completedAt` (a for…in walk, no allocation). */
+function completedResearch(world: World): number {
+  const state = world.research as unknown as Record<string, unknown> | undefined;
+  if (!state) return 0;
+  let count = state.completedAt !== undefined ? 1 : 0;
+  for (const key in state) {
+    const value = state[key];
+    if (value !== null && typeof value === 'object' && (value as { completedAt?: unknown }).completedAt !== undefined) count++;
+  }
+  return count;
+}
 /** Causal source facts, copied before later owners can clear an action. These
  * are Worker-internal observations, never a public/native grant. */
 export interface CoreStrikeAudio297 {readonly actorId:number;readonly atCore:number;readonly x:number;readonly z:number;readonly kind:'human'|'animal'|'mechanical'}
@@ -54,6 +70,8 @@ type HaulObservation = { sourcePileId: number; phase: 'pickup' | 'deliver'; carr
   x: number; z: number; whole: boolean };
 type DeconstructionObservation = { structureId: number; progress: number; reservedBy: number | null;
   x: number; z: number };
+/** A worked construction or tree-chopping job, followed until it disappears. */
+type FinishObservation = { x: number; z: number; resourceId?: number };
 /** The medical kernel allocates an injury identity for every committed nonzero
  * layer, including merged injuries and immediately lost parts. Healing, blood
  * loss and illness never advance it. Copy the number, never retain World data. */
@@ -97,8 +115,16 @@ export class AudioCueRecorder {
   private structures = new Set<number>();
   private deconstructionCount = 0;
   private lightningCount = 0;
+  private constructionJobs = new Map<number, FinishObservation>();
+  private chopJobs = new Map<number, FinishObservation>();
+  private researchDone = 0;
+  private nextId = 0;
 
   reset(): void {
+    this.constructionJobs.clear();
+    this.chopJobs.clear();
+    this.researchDone = 0;
+    this.nextId = 0;
     this.publicationGeneration297++;
     this.initialized = false;
     this.tick = -1;
@@ -170,8 +196,17 @@ export class AudioCueRecorder {
     const flickJobs = new Map<number, boolean>();
     const deconstructionJobs = new Map<number, DeconstructionObservation>();
     const jobs = new Map<number, World['jobs'][number]>();
+    const constructionJobs = new Map<number, FinishObservation>();
+    const chopJobs = new Map<number, FinishObservation>();
     for (const job of world.jobs) {
       jobs.set(job.id, job);
+      // A job is followed once it has been worked: completion needs contact
+      // work, a designation alone never sounds when it is cancelled.
+      if (job.reservedBy !== null && (job.progress > 0 || (job.workRemainder ?? 0) > 0) && !job.furniture) {
+        if (job.kind === 'chop') chopJobs.set(job.id, { x: job.x, z: job.z,
+          ...(job.plantTarget ? { resourceId: job.plantTarget.resourceId } : {}) });
+        else if (isConstruction(job)) constructionJobs.set(job.id, { x: job.x, z: job.z });
+      }
       // Pending work cannot finish between two captures: both actions need at
       // least two contacted ticks. Follow targets from the first work tick.
       if (job.kind === 'flick' && job.flick && job.progress > 0)
@@ -189,6 +224,12 @@ export class AudioCueRecorder {
     for (const id of this.flickJobs.keys()) watchedSwitches.add(id);
     for (const id of flickJobs.keys()) watchedSwitches.add(id);
     const structures = new Set<number>();
+    // Core Frame.CompleteConstruction plays Building_Complete at the site. A
+    // finished job leaves a structure with a fresh id (>= the previous
+    // nextId) on its cell; a cancelled one leaves none.
+    let finishedSites: Map<string, number> | undefined;
+    if (this.initialized) for (const [jobId, site] of this.constructionJobs)
+      if (!constructionJobs.has(jobId)) (finishedSites ??= new Map()).set(`${site.x},${site.z}`, jobId);
     // Shared id index: the first structure with this id, as world.structures.find.
     const stationFor = (id: number): World['structures'][number] | undefined => structureById(world, id);
 
@@ -232,6 +273,13 @@ export class AudioCueRecorder {
         && pawn.state === 'dead' && isColonist(pawn))
         this.add({ id: `ui.colonist-death:${world.tick}:${pawn.id}`, tick: world.tick,
           kind: 'ui.colonist-death', x: pawn.x, z: pawn.z });
+      // A colonist falling down (wounds, pain, illness). A surgical
+      // anaesthesia is a planned state and stays silent.
+      else if (this.initialized && previousPawnState !== undefined && previousPawnState.state !== 'dead'
+        && previousPawnState.state !== 'downed' && pawn.state === 'downed' && isColonist(pawn)
+        && !pawn.prisoner && !pawn.health?.anesthetic)
+        this.add({ id: `ui.colonist-downed:${world.tick}:${pawn.id}`, tick: world.tick,
+          kind: 'ui.colonist-downed', x: pawn.x, z: pawn.z });
       const previousHaul = previousHauls.get(pawn.id);
       const haul = pawn.haul;
       if (haul) {
@@ -355,6 +403,14 @@ export class AudioCueRecorder {
         this.add({id:`melee:${actor.id}:${strike.atCore}`,tick:world.tick,kind:'weapon.melee',x:actor.x+.5,z:actor.z+.5});
     }
     for (const structure of world.structures) {
+      if (finishedSites && structure.id >= this.nextId) {
+        const site = `${structure.x},${structure.z}`, jobId = finishedSites.get(site);
+        if (jobId !== undefined) {
+          finishedSites.delete(site);
+          this.add({ id: `building.complete:${jobId}`, tick: world.tick, kind: 'building.complete',
+            x: structure.x, z: structure.z });
+        }
+      }
       if (watchedTargets.size && watchedTargets.has(structure.id)) structures.add(structure.id);
       if (watchedSwitches.size && watchedSwitches.has(structure.id) && canFlickPower(structure)) {
         const on = actualPowerSwitch(structure);
@@ -371,9 +427,11 @@ export class AudioCueRecorder {
       doors.set(structure.id, open);
       const previous = previousDoors.get(structure.id);
       if (this.initialized && previous !== undefined && previous !== open) {
+        // Core Door_FenceGateManual: one gate sound for both movements.
         const kind = structure.kind === 'autodoor'
           ? open ? 'autodoor.open' : 'autodoor.close'
-          : open ? 'door.open' : 'door.close';
+          : structure.kind === 'fence-gate' ? 'fencegate.move'
+            : open ? 'door.open' : 'door.close';
         this.add({ id: `${kind}:${world.tick}:${structure.id}`, tick: world.tick,
           kind, x: structure.x, z: structure.z });
       }
@@ -435,6 +493,24 @@ export class AudioCueRecorder {
     if (this.initialized && lightningCount > this.lightningCount && lightning)
       this.add({ id: `weather.thunder:${lightning.coreTick}`, tick: world.tick,
         kind: 'weather.thunder', x: lightning.x, z: lightning.z });
+    // Core JobDriver_PlantWork plays Harvest_Tree_Finish when the tree falls.
+    // A worked chop job that disappeared with its tree gone felled it; a
+    // cancelled job leaves the tree and a burning cell is not a felling. The
+    // resource and fire lists are read only in that rare case.
+    if (this.initialized) for (const [jobId, site] of this.chopJobs) {
+      if (chopJobs.has(jobId)) continue;
+      const standing = world.resources.some(resource => site.resourceId !== undefined
+        ? resource.id === site.resourceId : resource.x === site.x && resource.z === site.z);
+      const burning = (world.fires?.items ?? []).some(fire => fire.x === site.x && fire.z === site.z);
+      if (!standing && !burning) this.add({ id: `woodcutting.fell:${jobId}`, tick: world.tick,
+        kind: 'woodcutting.fell', x: site.x + .5, z: site.z + .5 });
+    }
+    // Core ResearchManager.FinishProject opens its completion dialog
+    // (CommsWindow_Open); the count only grows when a project completes.
+    const researchDone = completedResearch(world);
+    if (this.initialized && researchDone > this.researchDone)
+      this.add({ id: `ui.research-complete:${world.tick}:${researchDone}`, tick: world.tick,
+        kind: 'ui.research-complete', x: 0, z: 0 });
     this.work = work;
     this.projectiles = projectiles;
     this.projectileArrivals = projectileArrivals;
@@ -452,6 +528,10 @@ export class AudioCueRecorder {
     this.structures = structures;
     this.deconstructionCount = world.deconstructed.count;
     this.lightningCount = lightningCount;
+    this.constructionJobs = constructionJobs;
+    this.chopJobs = chopJobs;
+    this.researchDone = researchDone;
+    this.nextId = world.nextId;
     this.initialized = true;
   }
 
@@ -481,11 +561,11 @@ export class AudioCueRecorder {
     if (this.tickCount >= MAX_CUES_PER_TICK || this.pending.length >= MAX_PENDING_CUES) {
       // Keep severe interface alerts even if many local contacts occur on the
       // same tick. Presentation may discard one background cue, never a command.
-      if (cue.kind !== 'ui.threat' && cue.kind !== 'ui.colonist-death') return;
+      if (!SEVERE_CUES.has(cue.kind)) return;
       const sameTickFull = this.tickCount >= MAX_CUES_PER_TICK;
       const displaced = this.pending.findIndex(candidate =>
         (!sameTickFull || Math.floor(candidate.tick) === this.tick)
-        && candidate.kind !== 'ui.threat' && candidate.kind !== 'ui.colonist-death');
+        && !SEVERE_CUES.has(candidate.kind));
       if (displaced < 0) return;
       if (Math.floor(this.pending[displaced]!.tick) === this.tick) this.tickCount--;
       this.pending.splice(displaced, 1);

@@ -24,7 +24,7 @@ import type {NativeDomainAlert} from './ui3d/native-domain-alerts';
 import {buildNativeInspector,setNativeInspectorTab} from './ui3d/native-inspector';
 import {NativeHudCards} from './ui3d/native-hud';
 import {NativeLetterStack} from './ui3d/native-letter-stack';
-import {LETTER_CLASSES_352,type Letter352,type LetterClass352} from './sim/letters-352';
+import {LETTER_CLASSES_352,type Letter352} from './sim/letters-352';
 import type {NativeHudViewAction} from './ui3d/native-hud';
 import {NATIVE_DOCK_PREFERENCE_KEY,parseNativeDockPreferences,NATIVE_UI_SCALE_PREFERENCE_KEY,parseNativeUiScale,normalizeNativeUiScale,type NativeDockPreferences} from './ui3d/native-preferences';
 import {GRAPHICS_STYLE_PREFERENCE_KEY,parseGraphicsStylePreferences,normalizeGraphicsStylePreferences,type GraphicsStylePreferences} from './ui3d/native-preferences';
@@ -263,6 +263,7 @@ import {MainFrameAdmissionFIFO} from './bridge/main-frame-admission-fifo';
 import {readResidentWorkerMessage} from './bridge/resident-protocol';
 import type { AudioCue } from './bridge/audio-cues';
 import { AudioDirector } from './audio/AudioDirector';
+import { alertCue, clockCue, commandCue, letterCue, nativeActivationCue, tutorialLessonCue } from './audio/interface-cues';
 import { MusicDirector, type MusicMood } from './audio/MusicDirector';
 import { ambientCameraGain, FoliageAmbience } from './audio/ambience';
 import { createNearbyFireCollector, createNearbyMachineCollector, runningMachineAudioSource } from './audio/continuous';
@@ -438,6 +439,7 @@ const client = (() => {
       if(tutorial?.gate){const refusal=tutorialLessons!.allow(tutorial.gate);if(refusal!==undefined)throw new Error(refusal||'Action indisponible pendant cette étape du tutoriel.');}
       const learning=firstGesturesLearning,given=snapshot,token=learning?.prepare(command,given);
       const result=await native.command(command);
+      {const cue=commandCue(command as {type:string}&Record<string,unknown>,result);if(cue)audio.playInterface(cue);}
       if(tutorial?.event)tutorialLessons?.notify(tutorial.event.tag);
       if(token)learning?.confirm(token,result);
       learningRuntime?.command(command,result,given);
@@ -1002,7 +1004,7 @@ if(nativeMode){
   },onEscape:()=>{cancelNativeOrderPage();nativeCustomPage=undefined;renderer?.cancelSelection();renderer?.cancelDesignation();if(frontMenu.isOpen())return;setPanel(null);clearSelection();},
     onHudInspectorDismiss:()=>{nativeHudHiddenInspectorKey=nativePawnInspectorKey();nativeCustomPage=undefined;nativeUi!.showPage(null);},onError:message=>notify(message,true),
     onGesture:()=>{unlockAudioFromGesture();music.unlock();},
-    onActivate:id=>audio.playInterface(id.startsWith('tab:')||id.includes('back')?'ui.panel':'ui.click'),
+    onActivate:id=>{const cue=nativeActivationCue(id,{panel:currentPanel,palette:nativeToolPalette});if(cue)audio.playInterface(cue,1,cue==='ui.click');},
     // Schema 349: the tutorial's intro absorbs every input; an inspector tab
     // is a gated action (InspectPaneUtility.InterfaceToggleTab).
     allowActivate:(id,control)=>{
@@ -1030,7 +1032,7 @@ if(nativeMode){
     context:context=>{nativeCustomPage=undefined;if(context.tool){setTool(context.tool);return;}if(context.worldTab)setNativeWorldTab(context.worldTab==='group'?'groups':'individual');void attempt(async()=>{await switchPanel(context.panel);if(context.category)setCategory(context.category);});},
     speed:value=>{learningRuntime?.speed(value);const token=client.getThreatPauseToken();void attempt(()=>changeSpeed(value,token));},view:applyNativeViewControl,
     // Core Notify_Started: bell for High/Critical, one critical notice (threat sound).
-    alertStarted:started=>{if(started.priority==='critical'){audio.playInterface('ui.threat');nativeUi?.showNotice(`Alerte critique : ${started.text}`);}else if(started.bell)audio.playInterface('ui.panel');},
+    alertStarted:started=>{const cue=alertCue(started);if(cue)audio.playInterface(cue);if(started.priority==='critical')nativeUi?.showNotice(`Alerte critique : ${started.text}`);},
     showPage:page=>{nativeCustomPage=page;nativeUi!.showPage(page);}});
   nativeUi.setUiScale(nativeUiScale);
   // Schema 352: the Core letter stack, above the time board.
@@ -1088,11 +1090,13 @@ function syncNativeHighlights():void {
   nativeUi?.setHighlightTags(lesson.length?[...new Set([...tags,...lesson])].sort():tags);
 }
 /** Card, highlights and map outline of the tutorial's active lesson. */
-let tutorialOutlineKey='';
+let tutorialOutlineKey='',tutorialSoundLesson:{epoch:number;lesson?:string}|undefined;
 function syncTutorialLesson():void {
   const engine=tutorialLessons;
   const shown=!!engine&&!replacingWorld&&!launchProgress&&(frontMenu.isOpen()?engine.inCreation:!!snapshot);
-  if(nativeTutorialCard?.update(shown?engine!.view():undefined,shown))nativeUi?.invalidate();
+  const view=shown?engine!.view():undefined;
+  if(shown){const previous=tutorialSoundLesson?.epoch===campaignPresentationEpoch?tutorialSoundLesson.lesson:undefined,cue=tutorialLessonCue(previous,view?.lesson);tutorialSoundLesson={epoch:campaignPresentationEpoch,...view?{lesson:view.lesson}:{}};if(cue&&nativeTutorialCard)audio.playInterface(cue);}
+  if(nativeTutorialCard?.update(view,shown))nativeUi?.invalidate();
   const outline=shown&&!frontMenu.isOpen()?engine!.outline():null,key=JSON.stringify(outline);
   if(key!==tutorialOutlineKey){tutorialOutlineKey=key;renderer?.setMapOutline(outline);}
   syncNativeHighlights();
@@ -1253,6 +1257,9 @@ function applyNativeViewControl(action:NativeHudViewAction):void {
   else if(action==='zones'){nativeZonesVisible=!nativeZonesVisible;renderer?.setZonesVisible(nativeZonesVisible);}
   else if(action==='camera'){nativePerspective=renderer?.toggleCameraMode()==='perspective';}
   else if(action==='home'){const pawn=snapshot?.pawns[0];if(pawn)renderer?.focusPawn(pawn.id);}
+  // Core Checkbox_TurnedOn/Off for the view toggles (the walls cut away = on).
+  const toggled=action==='walls'?wallCutaway:action==='roofs'?nativeRoofsVisible:action==='foliage'?foliageVisible:action==='zones'?nativeZonesVisible:undefined;
+  if(toggled!==undefined)audio.playInterface(toggled?'ui.toggle-on':'ui.toggle-off');
   refreshNativeUi();
 }
 function readNativeState():NativeUiState {
@@ -1604,7 +1611,7 @@ function setPanel(panel: Panel, preserveTool = false) {
 function applyTool(tool: Tool) {
   // Core Designator.ProcessInput: selecting a designator is a gated action;
   // leaving the tool is ClearDesignatorSelection.
-  if(tool!==currentTool&&tool!=='select'){const tag=tutorialToolTag349(tool);if(tag&&!tutorialAllows({tag}))return;}
+  if(tool!==currentTool&&tool!=='select'){const tag=tutorialToolTag349(tool);if(tag&&!tutorialAllows({tag}))return;audio.playInterface('ui.tool-select');}
   if(tool==='select'&&currentTool!=='select')queueMicrotask(()=>tutorialNotify('ClearDesignatorSelection'));
   if(nativeUi){
     zoneEditTarget=undefined;renderer?.setZoneTarget(undefined);allowedAreaEditId=undefined;renderer?.setAllowedAreaTarget(undefined);shootingControls.cancel();
@@ -1726,7 +1733,7 @@ function selectPawns(gesture:SelectionGesture,focus=false) {
   selection.apply(gesture,new Set([...snapshot.pawns.filter(p=>knownPosition256(snapshot!,p)).map(p=>p.id),...(snapshot.wildlife?.animals??[]).filter(a=>knownPosition256(snapshot!,a)).map(a=>a.id),...(snapshot.mechanoids??[]).filter(m=>knownPosition256(snapshot!,m)).map(m=>m.id)]));
   selectedPawn=selection.single;selectedCell=undefined;
   selectedObject=undefined;selectedObjects=[];renderer?.setSelectedObject(undefined);
-  renderer?.setSelectedPawns(selection.ids);
+  renderer?.setSelectedPawns(selection.ids);if(selection.ids.size)audio.playInterface('ui.select');
   setPanel(null);
   if(focus&&selectedPawn!==undefined)renderer?.focusPawn(selectedPawn);
   if(!nativeUi)rebuildInspector(); renderState();
@@ -1774,7 +1781,8 @@ function designateArea(action: AreaAction, from: Cell, to: Cell) {
     let response:string|undefined;
     try {response = await client.command(action==='allow'||action==='forbid'||action==='strip'?{type:'area',action,from,to}:{ type: 'area', action, from, to, ...(action==='lay-floor'&&isBuildableFloor(currentTool)?{floor:currentTool}:{}), ...(action === 'stockpile' ? readStorageSettings('stockpile') : {}),...(zoneEditTarget===undefined?{}:{targetZoneId:zoneEditTarget}) });}
     catch(error) {
-      if(error instanceof Error && error.message==='Aucune case compatible dans ce rectangle.')return;
+      // Core Designator.Finalize: Designate_Failed when nothing was designated.
+      if(error instanceof Error && error.message==='Aucune case compatible dans ce rectangle.'){audio.playInterface('ui.reject');return;}
       throw error;
     }
     const result = JSON.parse(response!) as { affected: number; skipped: number };
@@ -1796,6 +1804,7 @@ function selectObjects(objects:MapObjectSelection[],additive=false):void {
   selectedObjects=[...merged.values()].slice(0,MAX_MAP_OBJECT_SELECTION);
   selectedObject=selectedObjects[0];selectedCell=selectedObject?mapObjectGroupCells(snapshot,[selectedObject])[0]?.[0]:undefined;
   selection.clear();selectedPawn=undefined;renderer?.setSelectedPawns(selection.ids);renderer?.setSelectedObjects(selectedObjects);
+  if(selectedObjects.length)audio.playInterface('ui.select');
   setPanel(null);if(!nativeUi)rebuildInspector();renderState();
 }
 function objectGroupControls():void {
@@ -2417,16 +2426,11 @@ function focusNotification(target:NotificationTarget):void {
 
 /* Schema 352: the Core letters (src/sim/letters-352.ts). */
 /** One arrival sound per batch, the most urgent class (Core LetterArrive_*
- * SoundDefs play one at a time). The existing interface clips stand for them:
- * threats share the threat clip, the other classes the panel clip at another
- * pitch. A death letter adds nothing to the colonist death cue. */
-const LETTER_SOUND_ORDER:readonly LetterClass352[]=['threat-big','threat-small','negative','new-quest','positive','neutral'];
+ * SoundDefs play one at a time), each class its own cue (audio coverage of
+ * 22 November). A death letter adds nothing to the colonist death cue. */
 function playLetterArrival(letters:readonly Letter352[]):void {
   if(!soundEnabled||!letters.length)return;
-  const cls=LETTER_SOUND_ORDER.find(c=>letters.some(l=>l.cls===c));if(!cls)return;
-  if(cls==='threat-big')audio.playInterface('ui.threat');
-  else if(cls==='threat-small')audio.playInterface('ui.threat',1.18);
-  else audio.playInterface('ui.panel',cls==='negative'?.82:cls==='neutral'?1:1.22);
+  const cue=letterCue(letters.map(l=>l.cls));if(cue)audio.playInterface(cue);
 }
 function syncNativeLetters():void {
   if(!nativeLetters)return;
@@ -2632,7 +2636,7 @@ const nativeLocalTrade:ReturnType<typeof createNativeLocalTrade>|undefined=nativ
   readState:readNativeState,command:command=>{nativeTradeResumeRevision=deferredResumeGuard.capture();return client.command(command);},
   pause:()=>client.setSpeed(0),resume:async()=>{if(currentSpeed===0&&deferredResumeGuard.allows(nativeTradeResumeRevision))await client.setSpeed(1);},
   show:page=>{nativeCustomPage=page;nativeUi!.showPage(page);},close:()=>{nativeCustomPage=undefined;refreshNativeUi();},
-  isCurrent:()=>!!nativeLocalTrade?.ownsPage(nativeCustomPage?.id),focusPawn:id=>renderer?.focusPawn(id),focusCell:cell=>renderer?.focusCell(cell),
+  isCurrent:()=>!!nativeLocalTrade?.ownsPage(nativeCustomPage?.id),focusPawn:id=>renderer?.focusPawn(id),focusCell:cell=>renderer?.focusCell(cell),opened:()=>audio.playInterface('ui.trade-open'),
 }):undefined;
 let nativeFactionResumeRevision298=0;
 const nativeFactionComms298:ReturnType<typeof createNativeFactionComms298>|undefined=nativeUi?createNativeFactionComms298({
@@ -2710,7 +2714,7 @@ async function createWorld() {
     el('new-world-error').hidden=false;
   }
 }
-async function changeSpeed(speed: number,token?:ThreatPauseToken) { if (currentPanel==='menu'||graphicsFault||simulationStopped||waitingRequests.size>0) return; if (speed > 0) lastSpeed = speed; await client.setSpeed(speed,token?{explicit:true,token}:undefined); }
+async function changeSpeed(speed: number,token?:ThreatPauseToken) { if (currentPanel==='menu'||graphicsFault||simulationStopped||waitingRequests.size>0) return; if (speed > 0) lastSpeed = speed; if(token&&speed!==currentSpeed){const clock=clockCue(speed);audio.playInterface(clock.kind,clock.pitch);} await client.setSpeed(speed,token?{explicit:true,token}:undefined); }
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-tool]')) button.onclick = () => setTool(button.dataset.tool as Tool);
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-category]')) button.onclick = () => { setCategory(button.dataset.category as ArchitectCategory); applyTool('select'); };
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-panel]:not(:disabled)')) button.onclick = () => { const panel = button.dataset.panel as Panel; void attempt(() => switchPanel(currentPanel === panel ? null : panel)); };
@@ -2788,7 +2792,7 @@ audioGestureRoot.addEventListener('click', event => {
   const button = event.target instanceof Element ? event.target.closest('button') : null;
   if (!button || button.disabled || button.id === 'test-sound' || button.id === 'front-test-sound') return;
   const panelButton = button.matches('[data-panel], [data-guide-panel], [data-close-panel], .front-back, .front-next');
-  audio.playInterface(panelButton ? 'ui.panel' : 'ui.click');
+  audio.playInterface(panelButton ? 'ui.panel' : 'ui.click', 1, !panelButton);
 }, { capture: true });
 document.addEventListener('visibilitychange', () => { music.setHidden(document.hidden); audio.setHidden(document.hidden);if(document.hidden)renderer?.cancelGraphicsMeasurement('hidden'); });
 function setViewControlLabel(id:string,label:string):void {

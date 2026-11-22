@@ -11,7 +11,7 @@ export interface AudioCue {
 const MAX_PENDING = 256;
 const MAX_SEEN = 1024;
 const RETAIN_TICKS = 12;
-const isCritical = (kind: string): boolean => kind === 'ui.threat' || kind === 'ui.colonist-death';
+const isCritical = (kind: string): boolean => kind === 'ui.threat' || kind === 'ui.colonist-death' || kind === 'ui.colonist-downed';
 
 /** Presentation-only queue. The worker may publish the same cue more than once. */
 export class AudioCueScheduler {

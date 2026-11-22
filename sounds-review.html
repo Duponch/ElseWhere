@@ -1,0 +1,86 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Elsewhere · Revue des sons</title>
+<style>*{box-sizing:border-box}body{background:#eee6d6;color:#44392f;font:14px system-ui;margin:32px}h1{font:600 32px Georgia;margin:0 0 8px}h2{font:600 20px Georgia;margin:28px 0 10px}p{color:#766653;max-width:900px;line-height:1.5}nav{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:20px 0}input,select,button{font:inherit;padding:7px 11px;border:1px solid #c7b59a;background:#f9f3e6;border-radius:7px;color:inherit}button{cursor:pointer}button:hover{background:#efe3cc}.cue{display:grid;grid-template-columns:minmax(180px,260px) 1fr;gap:10px 16px;background:#f9f3e6;border-radius:8px;padding:12px 14px;margin:8px 0}.cue.new{box-shadow:inset 4px 0 0 #637f61}.name code{font-size:13px}.name small{display:block;color:#766653;margin-top:4px;line-height:1.35}.takes{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.badge{font-size:11px;background:#637f61;color:#fff;border-radius:10px;padding:1px 7px;margin-left:6px}.hidden{display:none}@media(max-width:640px){body{margin:16px}.cue{grid-template-columns:1fr}}</style>
+<h1>Elsewhere · Revue des sons</h1>
+<p>Toutes les prises publiées du manifeste audio, jouées avec leur gain (événement × prise) et le facteur de mix du jeu. Les sons marqués <span class="badge">22 nov.</span> viennent de la passe de couverture audio ; la ligne grise dit où les entendre en partie. Page de contrôle seulement : elle ne charge aucun monde.</p>
+<nav><label>Volume des effets <input id="volume" type="range" min="0" max="1" step="0.05" value="0.75"></label><label><input id="only-new" type="checkbox" checked> Seulement les nouveaux</label><input id="search" type="search" placeholder="Rechercher un son…" aria-label="Rechercher un son"><button id="all">Écouter toutes les prises visibles</button></nav>
+<div id="list"></div>
+<script type="module">
+const MIX = 0.55 * 0.75; // AudioDirector MIX_GAIN
+const where = {
+  'letter.threat-big': 'Lettre de grande menace : raid, camp repéré, danger ancien.',
+  'letter.threat-small': 'Lettre de petite menace : rage meurtrière ou berserk d’un colon.',
+  'letter.negative': 'Lettre négative : crise mentale, piège déclenché par un colon.',
+  'letter.neutral': 'Lettre neutre.',
+  'letter.positive': 'Lettre positive : inspiration, recrutement, nouvelle quête.',
+  'alert.high': 'Une alerte importante apparaît à droite (cloche, au plus une fois par demi-seconde).',
+  'alert.critical': 'Une alerte critique apparaît (double cloche).',
+  'ui.tab-open': 'Ouvrir un onglet du bas, la palette Ordres ou Zones.',
+  'ui.tab-close': 'Refermer cet onglet, Échap ou bouton Retour d’une page.',
+  'ui.toggle-on': 'Boutons de vue en bas à droite : murs coupés, toits, feuillage, zones activés.',
+  'ui.toggle-off': 'Les mêmes boutons désactivés.',
+  'ui.clock-pause': 'Mettre en pause (bouton ou Espace).',
+  'ui.clock-run': 'Vitesses ×1, ×3, ×6 (la même prise, plus aiguë à chaque vitesse).',
+  'ui.tool-select': 'Choisir un outil : ordre, zone ou plan de l’Architecte.',
+  'ui.designate': 'Désigner miner, abattre, récolter, déconstruire, chasser…',
+  'ui.designate-zone': 'Tracer une zone de stockage, de culture, une aire ou le domicile.',
+  'ui.designate-cancel': 'Annuler une désignation ou retirer une zone.',
+  'ui.place-building': 'Poser un plan de construction, un sol, un mur en ligne.',
+  'ui.draft-on': 'Mobiliser un colon.',
+  'ui.draft-off': 'Démobiliser.',
+  'ui.order': 'Ordre direct : déplacer un colon mobilisé, ordre du menu contextuel.',
+  'ui.select': 'Sélectionner un colon, un animal ou un objet.',
+  'ui.research-complete': 'Une recherche est terminée.',
+  'ui.colonist-downed': 'Un colon tombe à terre (blessure, douleur, maladie).',
+  'ui.trade-open': 'Ouvrir le commerce avec des visiteurs ou un vaisseau.',
+  'ui.trade-execute': 'Conclure l’échange.',
+  'tutorial.lesson-appear': 'Tutoriel : une carte de leçon apparaît.',
+  'tutorial.lesson-complete': 'Tutoriel : la leçon est réussie.',
+  'quest.accepted': 'Accepter une quête.',
+  'building.complete': 'Un ouvrage est achevé sur la carte (son spatialisé).',
+  'woodcutting.fell': 'Un arbre abattu tombe (son spatialisé).',
+  'fencegate.move': 'Un portail de clôture s’ouvre ou se ferme (son spatialisé).',
+};
+const manifest = await (await fetch('/assets/audio/manifest.json', { cache: 'no-store' })).json();
+let context, buffers = new Map();
+const volume = document.querySelector('#volume');
+async function play(src, gain) {
+  context ??= new AudioContext();
+  await context.resume();
+  let buffer = buffers.get(src);
+  if (!buffer) { buffer = await context.decodeAudioData(await (await fetch(src)).arrayBuffer()); buffers.set(src, buffer); }
+  const source = context.createBufferSource(), node = context.createGain();
+  source.buffer = buffer; node.gain.value = Math.min(8, gain * MIX * Number(volume.value));
+  source.connect(node).connect(context.destination); source.start();
+  return new Promise(done => { source.onended = done; });
+}
+const list = document.querySelector('#list');
+for (const [kind, event] of Object.entries(manifest.events).sort(([a], [b]) => a.localeCompare(b))) {
+  const fresh = event.variants.some(v => v.src.includes('-c1122-'));
+  const row = document.createElement('div'); row.className = 'cue' + (fresh ? ' new' : ''); row.dataset.kind = kind; row.dataset.fresh = String(fresh);
+  const name = document.createElement('div'); name.className = 'name';
+  const code = document.createElement('code'); code.textContent = kind; name.append(code);
+  if (fresh) { const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = '22 nov.'; name.append(badge); }
+  const note = document.createElement('small');
+  note.textContent = (where[kind] ?? '') + (event.loop ? ' Boucle.' : '') + (event.spatial === false ? ' Interface.' : ` Portée ${event.maxDistance ?? 24} cases.`);
+  name.append(note);
+  const takes = document.createElement('div'); takes.className = 'takes';
+  event.variants.forEach((variant, index) => {
+    const button = document.createElement('button');
+    button.textContent = `Prise ${index + 1}`; button.title = `${variant.src} · gain ${(event.gain * variant.gain).toFixed(3)}`;
+    button.setAttribute('aria-label', `${kind}, prise ${index + 1}`);
+    button.dataset.src = variant.src; button.dataset.gain = String(event.gain * variant.gain);
+    button.onclick = () => play(variant.src, event.gain * variant.gain);
+    takes.append(button);
+  });
+  row.append(name, takes); list.append(row);
+}
+function filter() {
+  const query = document.querySelector('#search').value.toLowerCase(), onlyNew = document.querySelector('#only-new').checked;
+  for (const row of list.children) row.classList.toggle('hidden', onlyNew && row.dataset.fresh !== 'true' || !row.textContent.toLowerCase().includes(query));
+}
+document.querySelector('#search').oninput = filter; document.querySelector('#only-new').onchange = filter; filter();
+document.querySelector('#all').onclick = async () => {
+  for (const button of list.querySelectorAll('.cue:not(.hidden) button')) { await play(button.dataset.src, Number(button.dataset.gain)); await new Promise(done => setTimeout(done, 250)); }
+};
+</script>
+</html>

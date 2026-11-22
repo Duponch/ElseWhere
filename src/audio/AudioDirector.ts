@@ -2,8 +2,10 @@ import { AudioCueScheduler, type AudioCue } from './scheduler';
 import { audibleRange, listenerPose, sourceDistance, SPATIAL_REF_DISTANCE, SPATIAL_ROLLOFF, type AudioCamera } from './spatial';
 import { selectContinuousSources, type ContinuousSource, type ContinuousEventInfo } from './continuous';
 import { cueHash, cueVariation, selectOneShots } from './selection';
+import { interfaceBurstRule, isWorldInterfaceCue, MAX_INTERFACE_VOICES, type InterfaceCueKind } from './interface-cues';
 
 export type { AudioCue } from './scheduler';
+export type { InterfaceCueKind } from './interface-cues';
 export type { AudioCamera } from './spatial';
 export type { ContinuousSource } from './continuous';
 
@@ -25,10 +27,12 @@ const CLUSTERED_KINDS = new Set([
   'haul.pickup', 'haul.drop', 'farming.sow', 'farming.harvest', 'eating.work',
   'cleaning.work', 'medical.tend', 'maintenance.work', 'deconstruction.work', 'firefighting.beat',
   'weapon.impact-ground', 'weapon.impact-barrier', 'weapon.impact-flesh',
+  'building.complete', 'woodcutting.fell',
 ]);
 function clusterGroup(kind: string): string | null {
   // An opening and closing door share one nearby acoustic patch.
-  if (kind === 'door.open' || kind === 'door.close' || kind === 'autodoor.open' || kind === 'autodoor.close') return 'door';
+  if (kind === 'door.open' || kind === 'door.close' || kind === 'autodoor.open' || kind === 'autodoor.close'
+    || kind === 'fencegate.move') return 'door';
   if (kind.startsWith('animal.hurt.') || kind.startsWith('animal.death.')) return 'animal';
   if (kind.startsWith('human.hurt.')) return 'human-pain';
   return CLUSTERED_KINDS.has(kind) ? kind : null;
@@ -77,7 +81,7 @@ export function parseAudioManifest(input: unknown): AudioManifest {
   return { version: 1, events };
 }
 
-interface Voice { source: AudioBufferSourceNode; gain: GainNode; panner: PannerNode | null; kind: string; variantGain: number; x?: number; z?: number }
+interface Voice { source: AudioBufferSourceNode; gain: GainNode; panner: PannerNode | null; kind: string; variantGain: number; x?: number; z?: number; interface?: boolean }
 
 /** Plays short world sounds on the confirmed presentation clock. No World state. */
 export class AudioDirector {
@@ -111,6 +115,11 @@ export class AudioDirector {
   private lastGain = -1;
   private playedOneShots = 0;
   private lastOneShotKind: string | null = null;
+  /** Audio-clock time of the last start of each interface cue (burst spacing). */
+  private readonly interfaceStarts = new Map<string, number>();
+  /** A generic click waits for the end of the current task: a specific cue
+   * requested by the same gesture (a tab, a toggle, a speed) replaces it. */
+  private pendingGeneric: { kind: InterfaceCueKind; pitch: number } | null = null;
 
   constructor(manifestUrl = '/assets/audio/manifest.json') { this.manifestUrl = manifestUrl; }
 
@@ -208,15 +217,14 @@ export class AudioDirector {
       for (const [id, voice] of this.continuous) this.fadeOutContinuous(id, voice);
     } else if (!inactive && wasInactive) this.reconcileContinuous();
     const due = this.scheduler.takeDue(state.presentedTick);
-    if (state.paused) {
-      // Important messages are interface sounds: an automatic pause must not
-      // defer a raid/death alert until the player resumes the simulation.
-      for (const cue of due) if (cue.kind === 'ui.threat' || cue.kind === 'ui.colonist-death')
-        this.playInterface(cue.kind);
-      return;
-    }
+    // Important messages are interface sounds: an automatic pause must not
+    // defer a raid/death alert until the player resumes the simulation. They
+    // share the interface output and its burst limits, paused or not.
+    for (const cue of due) if (isWorldInterfaceCue(cue.kind)) this.playInterface(cue.kind as InterfaceCueKind);
+    if (state.paused) return;
     if (state.hidden || this.muted || !this.manifest || this.context?.state !== 'running') return;
-    const ready = due.filter(cue => this.manifest?.events[cue.kind]?.variants.some(variant => this.buffers.get(variant.src)));
+    const ready = due.filter(cue => !isWorldInterfaceCue(cue.kind) &&
+      this.manifest?.events[cue.kind]?.variants.some(variant => this.buffers.get(variant.src)));
     for (const cue of selectOneShots(ready, this.manifest.events, this.camera, MAX_ONE_SHOTS_PER_FRAME)) this.playCue(cue);
   }
 
@@ -275,14 +283,42 @@ export class AudioDirector {
 
   /** A decoded interface sound can play during pause or from the title menu.
    * The caller's gesture unlocks audio separately; an unavailable asset is silent. */
-  /** `pitch` scales the playback rate (letter classes sharing one clip). */
-  playInterface(kind: 'ui.click' | 'ui.reject' | 'ui.panel' | 'ui.threat' | 'ui.colonist-death', pitch = 1): void {
+  /** `pitch` scales the playback rate (the clock takes at each speed).
+   * `generic`: a plain click from a control activation; it is deferred to the
+   * end of the current task and dropped if the gesture asks a specific cue. */
+  playInterface(kind: InterfaceCueKind, pitch = 1, generic = false): void {
+    if (generic) {
+      if (this.pendingGeneric) return;
+      this.pendingGeneric = { kind, pitch };
+      queueMicrotask(() => {
+        const pending = this.pendingGeneric;
+        this.pendingGeneric = null;
+        if (pending) this.startInterface(pending.kind, pending.pitch);
+      });
+      return;
+    }
+    this.pendingGeneric = null;
+    this.startInterface(kind, pitch);
+  }
+
+  /** Interface voices currently sounding, per cue (bounded by MAX_VOICES). */
+  private interfaceVoices(kind?: string): number {
+    let count = 0;
+    for (const voice of this.voices) if (voice.interface && (kind === undefined || voice.kind === kind)) count++;
+    return count;
+  }
+
+  private startInterface(kind: InterfaceCueKind, pitch: number): void {
     const context = this.context;
     const event = this.manifest?.events[kind];
     if (this.disposed || this.muted || this.hidden || this.volume === 0 ||
       !context || context.state !== 'running' || !event || event.loop || event.spatial || !event.gain) return;
     const available = event.variants.filter(variant => this.buffers.get(variant.src));
     if (!available.length) return;
+    // Burst limits: a wave of alerts or letters in one frame sounds once.
+    const rule = interfaceBurstRule(kind), now = context.currentTime, last = this.interfaceStarts.get(kind);
+    if (last !== undefined && rule.spacing > 0 && now - last < rule.spacing) return;
+    if (this.interfaceVoices(kind) >= rule.voices || this.interfaceVoices() >= MAX_INTERFACE_VOICES) return;
     let variantIndex = this.playedOneShots % available.length;
     if (available.length > 1 && available[variantIndex]!.src === this.lastPlayedVariantByKind.get(kind))
       variantIndex = (variantIndex + 1) % available.length;
@@ -311,11 +347,12 @@ export class AudioDirector {
       // This separate output follows the SFX slider and mute immediately,
       // while the world master remains silent during a simulation pause.
       gain.connect(this.interfaceOutput);
-      voice = { source, gain, panner: null, kind, variantGain: variant.gain };
+      voice = { source, gain, panner: null, kind, variantGain: variant.gain, interface: true };
       const playingVoice = voice;
       source.onended = () => this.releaseVoice(playingVoice);
       this.voices.add(voice);
       source.start();
+      this.interfaceStarts.set(kind, now);
       this.lastPlayedVariantByKind.set(kind, variant.src);
       this.playedOneShots++;
       this.lastOneShotKind = kind;
@@ -377,6 +414,8 @@ export class AudioDirector {
   reset(): void {
     this.scheduler.reset();
     this.lastPlayedVariantByKind.clear();
+    this.interfaceStarts.clear();
+    this.pendingGeneric = null;
     this.stopPreview();
     this.continuousSources = [];
     this.continuous.clear();
