@@ -67,7 +67,8 @@ describe('four real starting pets: native owners, food and identities',()=>{
 
  it.each(sourceRows)('%s uses the existing free-age constructor and retains its own growth clock',(def,id,_size,_health,life)=>{
   const {a,made,random,w}=prepared(def);
-  expect(random.calls).toEqual(['float','float','value','float','float','value','integer','float','float','value']);
+  // Need_Food then Need_Rest initial levels (two calls each), then the sex.
+  expect(random.calls).toEqual(['float','float','float','float','value','float','float','value','integer','float','float','value']);
   const age=Math.trunc(Math.fround(Math.fround(Math.fround(.05)*Math.fround(life))*3600000));
   expect(made.ageCoreTicks).toBe(age);expect(a.ageTicks*10+a.ageCoreRemainder).toBe(age);expect(made.ageSamples).toBe(1);
   expect(a.species).toBe(id);expect(a.growthTracker!.value).toBe(1);expect(a.growthTracker!.nextCheckCore).toBe(w.tick*10+240);

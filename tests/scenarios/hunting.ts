@@ -2,12 +2,16 @@ import { createWorld,applyCommand } from '../../src/sim/index';
 import { addMaterial,refreshStock } from '../../src/sim/materials';
 import { enableWildlife } from '../../src/sim/wildlife';
 import { legacyHumanAge } from '../../src/sim/human-age.ts';
+import { newCorePathBudget297 } from '../../src/sim/core-path-budget-297.ts';
 import type { Pawn,World } from '../../src/sim/types';
 
 /** Controlled real-shot fixture: a healthy armed hunter, a cook and live prey.
  * Injury, death, corpse and ingredients must all arise through gameplay. */
 export function huntingCamp(seed=81733):World {
-  const w=createWorld(seed,32,32);w.tick=2000;w.rng=seed;w.tiles=w.tiles.map(()=>({terrain:'grass'}));w.resources=[];w.jobs=[];w.structures=[];w.piles=[];w.stockpiles=[];w.growingZones=[];w.pawns=w.pawns.slice(0,2);
+  const w=createWorld(seed,32,32);w.tick=2000;
+  // The world is placed at tick 2000: its physical path budget belongs to that tick.
+  if(w.corePathBudget297)w.corePathBudget297=newCorePathBudget297(w.tick);
+  w.rng=seed;w.tiles=w.tiles.map(()=>({terrain:'grass'}));w.resources=[];w.jobs=[];w.structures=[];w.piles=[];w.stockpiles=[];w.growingZones=[];w.pawns=w.pawns.slice(0,2);
   // This controlled pre-injury arena starts with healthy workers; health
   // records created by later tests use the prepared tick explicitly.
   for(const pawn of w.pawns){pawn.age=legacyHumanAge();delete pawn.health;}
