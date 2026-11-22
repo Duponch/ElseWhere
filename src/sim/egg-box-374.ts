@@ -172,11 +172,14 @@ export function validateEggBoxes374(w:World,version:number):string[] {
   if(!Number.isSafeInteger(progress)||progress!<0||progress!>=EGG_BOX_EXTRACT_TICKS_374||t.phase!=='pickup'||t.carryPileId!==null||t.destination.type!=='stockpile'||t.whole||t.serviceProgress!==undefined||t.pickupCell!==undefined)errors.push('Invalid egg box extraction.');
   else if(!source||source.owner.type!=='egg-box374'||source.quantity<t.quantity)errors.push('Egg box extraction without its eggs.');
  }
- for(const p of w.pawns)if(p.haul?.phase==='pickup'&&!Object.hasOwn(p.haul,'eggBox374')&&w.piles.find(x=>x.id===p.haul!.sourcePileId)?.owner.type==='egg-box374')errors.push('Egg box eggs hauled without extraction.');
+ const heldIds=new Set(held.map(p=>p.id));
+ for(const p of w.pawns)if(p.haul?.phase==='pickup'&&!Object.hasOwn(p.haul,'eggBox374')&&heldIds.has(p.haul.sourcePileId))errors.push('Egg box eggs hauled without extraction.');
+ // The box may have been removed or reinstalled elsewhere since the choice:
+ // the hen then lays near its target cell (JobDriver_LayEgg's fallback).
  for(const a of w.wildlife?.animals??[]){
   const id=a.eggLay?.box374;if(id===undefined)continue;
   const box=w.structures.find(s=>s.id===id);
-  if(!Number.isSafeInteger(id)||id<1||id>=w.nextId||box&&box.kind!=='egg-box'||box&&(box.x!==a.eggLay!.target.x||box.z!==a.eggLay!.target.z))errors.push('Invalid egg box laying target.');
+  if(!Number.isSafeInteger(id)||id<1||id>=w.nextId||box&&box.kind!=='egg-box')errors.push('Invalid egg box laying target.');
  }
  return errors;
 }

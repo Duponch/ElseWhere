@@ -223,7 +223,9 @@ test('strict saves: egg box content, laying target and extraction are refused be
  expect(bad(raw=>{raw.piles.push({...raw.piles.find(p=>p.id===pile.id)!,id:raw.nextId++});})).toContain('Egg box holds several stacks.');
  expect(bad(raw=>{raw.structures=raw.structures.filter(s=>s.id!==b.id);})).toContain('Egg box content without its installed box.');
  expect(bad(raw=>{(raw.piles.find(p=>p.id===pile.id)! as {owner:unknown}).owner={type:'egg-box374',structureId:b.id,extra:1};})).not.toEqual([]);
- expect(bad(raw=>{raw.wildlife!.animals.find(a=>a.id===hen.id)!.eggLay={target:{x:3,z:3},progress:0,box374:b.id};raw.wildlife!.animals.find(a=>a.id===hen.id)!.eggLayer!.progress=1;})).toContain('Invalid egg box laying target.');
+ // A box moved since the choice is no error (she lays beside her target); a future id is.
+ expect(bad(raw=>{raw.wildlife!.animals.find(a=>a.id===hen.id)!.eggLay={target:{x:3,z:3},progress:0,box374:b.id};raw.wildlife!.animals.find(a=>a.id===hen.id)!.eggLayer!.progress=1;})).toEqual([]);
+ expect(bad(raw=>{raw.wildlife!.animals.find(a=>a.id===hen.id)!.eggLay={target:{x:3,z:3},progress:0,box374:raw.nextId};raw.wildlife!.animals.find(a=>a.id===hen.id)!.eggLayer!.progress=1;})).not.toEqual([]);
  expect(bad(raw=>{raw.pawns[0]!.haul={sourcePileId:pile.id,quantity:3,phase:'pickup',destination:{type:'stockpile',stockpileId:raw.stockpiles[0]!.id},carryPileId:null,eggBox374:12};})).toContain('Invalid egg box extraction.');
  expect(bad(raw=>{raw.pawns[0]!.haul={sourcePileId:pile.id,quantity:3,phase:'pickup',destination:{type:'stockpile',stockpileId:raw.stockpiles[0]!.id},carryPileId:null};})).toContain('Egg box eggs hauled without extraction.');
  // Before 374 the box itself is refused: the migration validates the 373 save first.
