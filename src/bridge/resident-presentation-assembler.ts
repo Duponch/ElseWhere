@@ -146,8 +146,12 @@ function patchCollection<T extends {id:number}>(previous:T[],oldSlots:Map<number
  }
  const touched=new Set<number>(),removed:{id:number;beforeOrdinal:number}[]=[];
  for(const id of patch.removed){if(!integer(id,1,nextId-1)||touched.has(id)||!oldSlots.has(id))return;touched.add(id);removed.push({id,beforeOrdinal:oldSlots.get(id)!});}
- const byId=sparse?undefined:new Map(previous.map(value=>[value.id,value]));
- for(const id of patch.removed)byId!.delete(id);
+ // A map by ID only for an explicit order. Without one, membership edits are
+ // rebuilt below from the previous array: the same values in the same order
+ // as the map's insertion order (survivors in place, then new IDs in upsert
+ // order), without a map of the whole collection at every publication.
+ const byId=sparse||!own(raw,'order')?undefined:new Map(previous.map(value=>[value.id,value]));
+ if(byId)for(const id of patch.removed)byId.delete(id);
  const writes=new Map<number,T>();
  const read=(id:number):T|undefined=>writes.get(id)??(byId?byId.get(id):previous[oldSlots.get(id)??-1]);
  const write=(value:T):void=>{writes.set(value.id,value);if(byId)byId.set(value.id,value);};
@@ -182,8 +186,13 @@ function patchCollection<T extends {id:number}>(previous:T[],oldSlots:Map<number
   const order=patch.order!;
   if(order.length!==byId!.size||new Set(order).size!==order.length||order.some(id=>!integer(id,1,nextId-1)||!byId!.has(id)))return;
   values=order.map(id=>byId!.get(id)!);
- }else if(byId)values=touched.size?[...byId.values()]:previous;
- else if(writes.size){values=previous.slice();for(const [id,value]of writes)values[oldSlots.get(id)!]=value;}
+ }else if(!sparse){
+  if(touched.size){
+   const gone=new Set(patch.removed);values=[];
+   for(const value of previous)if(!gone.has(value.id))values.push(writes.get(value.id)??value);
+   for(const value of patch.upserted)if(!oldSlots.has(value.id))values.push(writes.get(value.id)!);
+  }else values=previous;
+ }else if(writes.size){values=previous.slice();for(const [id,value]of writes)values[oldSlots.get(id)!]=value;}
  else values=previous;
  const nextSlots=sparse?oldSlots:slots(values),indices=sparse?[...touched].map(id=>nextSlots.get(id)!):undefined;
  // Without explicit order, Map deletion/insertion preserves survivors and

@@ -33,8 +33,8 @@ function same(a:unknown,b:unknown):boolean {
  if(!record(b)||Array.isArray(b))return false;const keys=Reflect.ownKeys(a),other=Reflect.ownKeys(b);
  return keys.length===other.length&&keys.every((k,i)=>k===other[i]&&same((a as Data)[k as string],b[k as string]));
 }
-function freezeCopied(v:unknown):unknown {const result=copy(v);const freeze=(x:unknown):void=>{if(x&&typeof x==='object'){for(const key of Object.keys(x))freeze((x as Data)[key]);Object.freeze(x);}};freeze(result);return result;}
-/** The checks of segment() before its copy test. */
+function deepFreeze(x:unknown):void {if(x&&typeof x==='object'){for(const key of Object.keys(x))deepFreeze((x as Data)[key]);Object.freeze(x);}}
+/** The checks of a segment before its copy test. */
 function segmentFields(v:unknown,version:number):v is PresentationSegment {
  if(!record(v)||Object.keys(v).some(k=>!['from','to','start','end','terrainDelay','speedFactor','stagger','stuns','animalFlight','snowEntryPending','edgeStart','fromFraction','toFraction',...(isCorePhysicalSchema297(version)?['coreMove297','coreMoveWalk297','stop297']:[])].includes(k)))return false;
  if(!validCapturedCoreMove297(v,version)||!validPresentationStop297(v,version))return false;
@@ -42,14 +42,16 @@ function segmentFields(v:unknown,version:number):v is PresentationSegment {
  if(typeof v.start!=='number'||!Number.isFinite(v.start)||typeof v.end!=='number'||!Number.isFinite(v.end)||v.end<v.start)return false;
  return true;
 }
-function segment(v:unknown,version:number):v is PresentationSegment {
- if(!segmentFields(v,version))return false;
- try{copy(v);return true;}catch{return false;}
-}
-/** A valid segment's copy, made once (segment() then copy() copied it twice). */
+/** A valid segment's copy, made once (checking it used to copy it a first time). */
 function copiedSegment(v:unknown,version:number):PresentationSegment|undefined {
  if(!segmentFields(v,version))return undefined;
  try{return copy(v) as PresentationSegment;}catch{return undefined;}
+}
+/** Every value's copiedSegment, or undefined when one is not a valid segment. */
+function copiedSegments(values:readonly unknown[],version:number):PresentationSegment[]|undefined {
+ const out:PresentationSegment[]=new Array(values.length);
+ for(let i=0;i<values.length;i++){const copied=copiedSegment(values[i],version);if(!copied)return undefined;out[i]=copied;}
+ return out;
 }
 interface Stamp {readonly owner:object;readonly generation:number}
 const certified=new WeakMap<object,Stamp>();
@@ -133,10 +135,14 @@ export class ResidentMotionFrameOwner {
    if(section.reset&&(section.removed.length||own(section,'order')))return;
    for(const id of section.removed){if(!integer(id,1)||touched.has(id)||!byId.has(id))return;touched.add(id);byId.delete(id);}
    for(const item of section.rows){
-    if(!record(item)||!exact(item,['id','drop','keep','append'])||!integer(item.id,1)||item.id>=packet.world.nextId||touched.has(item.id)||!integer(item.drop)||!integer(item.keep)||!dense(item.append)||!item.append.every(value=>segment(value,packet.world.schemaVersion)))return;
+    // Each appended segment is checked and copied once (the check used to
+    // make a first copy, then thrown away). A refusal still refuses all.
+    let appended:PresentationSegment[]|undefined;
+    if(!record(item)||!exact(item,['id','drop','keep','append'])||!integer(item.id,1)||item.id>=packet.world.nextId||touched.has(item.id)||!integer(item.drop)||!integer(item.keep)||!dense(item.append)||!(appended=copiedSegments(item.append,packet.world.schemaVersion)))return;
     touched.add(item.id);const prior=byId.get(item.id),held=prior?.segments??[];
     if(item.drop+item.keep>held.length||!prior&&(item.drop||item.keep))return;
-    const segments=held.slice(item.drop,item.drop+item.keep).concat(item.append.map(v=>freezeCopied(v) as PresentationSegment));
+    for(const value of appended)deepFreeze(value);
+    const segments=held.slice(item.drop,item.drop+item.keep).concat(appended);
     Object.freeze(segments);byId.set(item.id,Object.freeze({id:item.id,segments}));
    }
    if(own(section,'order')){const order=section.order as unknown[];if(order.length!==byId.size||new Set(order).size!==order.length||order.some(id=>!integer(id,1)||!byId.has(id)))return;tracks=order.map(id=>byId.get(id as number)!);}
