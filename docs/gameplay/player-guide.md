@@ -1979,6 +1979,8 @@ Un colon libre avec **Construction** rejoint une case qui touche le mur et le po
 
 La paroi lissée reste la même pierre et se mine comme la roche brute (même solidité, 25 % de chance de laisser un fragment) ; elle redevient brute si elle se retrouve entièrement enfermée quand on mine un mur lissé voisin. Elle compte pour la pièce qu'elle borde : beauté 1 (2 pour le marbre) et valeur 7, comptée aussi dans la richesse de la colonie. [Règles, adaptations et limites](smooth-walls-v367.md).
 
+Depuis le schéma 373, la roche brute compte elle aussi : chaque mur de granite, calcaire, grès ou ardoise brut qui borde une pièce lui retire 2 de beauté (le marbre 1) ; un filon ou des rochers effondrés ne comptent pas. Une chambre creusée dans la montagne est donc laide tant que ses murs ne sont pas lissés, et lisser un mur rapporte 3 à la pièce. Vos colons voient aussi les murs et les portes qui bordent la pièce où ils se trouvent (et, sur le seuil d'une porte, les deux pièces qu'elle sépare) : leur besoin de beauté en tient compte. Les parties chargées appliquent ces règles aussitôt. [Règles et limites](rock-beauty-v373.md).
+
 ## Reconnaître les roches
 
 Une nouvelle carte répartit les massifs et pierres voisines en régions de granite, calcaire, marbre, grès ou ardoise. Sélectionner leur case affiche le type. Un ancien massif peut afficher « type historique non défini » : le chargement préserve sa carte. Les massifs sont exploitables par le minage décrit ci-dessous. Les petites pierres décoratives ne sont pas encore transportables ; les blocs taillés au poste servent aux constructions admissibles décrites plus bas.
