@@ -39,6 +39,12 @@ Dans **Architecte → Meubles** :
 
 Les deux couchages doubles sont réservés au couchage civil (ni usage médical, ni prison), comme le lit double. Le sac double ne sert pas encore en caravane.
 
+## Admirer une œuvre d'art — V366
+
+Une sculpture n'est plus seulement belle : un colon libre qui s'ennuie peut s'arrêter pour la contempler. Il choisit de préférence les plus belles, marche jusqu'à une case voisine et la regarde un moment ; plus l'œuvre est belle et de bonne qualité, plus elle le divertit (une œuvre affreuse ne le divertit pas du tout). Cette contemplation appartient à la même famille de loisirs que l'observation du ciel : un colon lassé de l'une l'est aussi de l'autre, et une colonie qui ne peut plus sortir (pluie, froid, retombées toxiques) garde ainsi une contemplation à l'abri.
+
+Un seul colon regarde une œuvre à la fois. Placez les sculptures sous un toit : dehors, elles ne sont regardées que par beau temps et à une température agréable. Une sculpture hors de la zone autorisée d'un colon, ou posée dans la chambre ou le dortoir d'un autre, ne lui est pas proposée ; celle de sa propre chambre, si. Une pièce soignée laisse ensuite le souvenir de salle de loisirs. [Règles et limites](view-art-v366.md).
+
 ## Exécuter un prisonnier, relâcher un animal — V364
 
 Dans l'onglet **Prisonnier**, le mode **Exécuter** charge un geôlier de tuer le captif. Il faut un colon libre avec **Geôlier** activé et capable de violence ; sinon le journal le signale et rien ne se passe. Le geôlier rejoint le prisonnier, même endormi ou à terre, et l'exécute d'une entaille au cou : le corps reste sur place, avec du sang à nettoyer. Les autres colons en sont attristés (« Prisonnier exécuté », −5 pendant 6 jours), sauf les psychopathes, sanguinaires et cannibales ; un bourreau sanguinaire en est ravi. Revenir à un autre mode avant l'arrivée du geôlier annule l'exécution.

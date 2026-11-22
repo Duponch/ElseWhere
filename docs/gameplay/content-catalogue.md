@@ -463,6 +463,10 @@ L’[audit du 13 septembre](../research/environment-review.md) confirme que les 
 | Sols `straw-matting` et `burned-straw-matting` | Natte de paille Core (`StrawMatting`) : 2 foins livrés au chantier, travail 120, sans recherche, beauté −1, propreté −0,1, coût de passage 1, inflammabilité 1,5, multiplicateur de saleté 0,05 ; retrait : 1 foin rendu ; brûlée : natte brûlée (beauté −6). | Pas de saleté animale distincte dans Elsewhere ; rendu en brins tressés sans texture. |
 | Structure `couch` | Canapé Core (`Couch`) : 200 tissu ou cuir, travail 20 000, Construction 5, Mobilier complexe, 2 × 1 orientable, 160 PV, beauté 8, confort 0,85, 70 kg, qualité, désinstallable ; deux places assises (repas, télévision, jeux, rencontre, lecture). | Rotation de pose choisie au lieu du sud par défaut ; non utilisé en caravane. |
 
+### Usage ajouté V366 — contempler les sculptures
+
+Les deux sculptures existantes (`small-sculpture`, `large-sculpture`) deviennent un loisir : un colon qui s'ennuie les contemple (famille contemplation, chance de base 1), avec un gain proportionnel à la beauté de l'œuvre sur celle de son modèle (50 / 100) et à sa puissance de loisir selon la qualité (0,76 à 1,8). Aucun nouvel objet, aucune recette ni aucun bâtiment. [Règles et limites](view-art-v366.md).
+
 ### Ajouts V363 — grande table, couchages doubles et applique murale
 
 | Registre / identifiant local | Acquisition et usage physique | Limites |
