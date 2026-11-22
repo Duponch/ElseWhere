@@ -8,6 +8,7 @@ import {electricalParts} from '../src/render/electrical-parts';
 import {buildFurniture} from '../src/render/FurnitureLayer';
 import {constructionPreviewParts} from '../src/render/construction-preview-parts';
 import {buildJobMarkers} from '../src/render/JobLayer';
+import {ConstructionGhosts} from '../src/render/construction-ghosts';
 import {StructurePresentationSignature} from '../src/render/presentation-signatures';
 import {ConfirmedStructurePresentationSignature} from '../src/render/ConfirmedStructurePresentationSignature';
 import {captureWorldShotGrid} from '../src/sim/combat-world.ts';
@@ -75,11 +76,16 @@ test('confirmed phase alone changes the machinery and signatures; repeated prese
  expect(raw.read([running],'','')).not.toBe(c);expect(confirmed.readConfirmed([running],'','',[0])).toBe(raw.read([running],'',''));
 });
 
-test('the actual oriented42-cell plan marker, menu material, original icon and phase text expose the same reactor',()=>{
+test('the actual oriented42-cell plan ghost, menu material, original icon and phase text expose the same reactor',()=>{
  const {w,reactor}=fixture();w.structures=[];
  w.jobs=[{id:w.nextId++,kind:'ship-reactor',x:reactor.x,z:reactor.z,orientation:reactor.orientation,footprint:'standard',material:'steel',construction:'blueprint',status:'pending',reservedBy:null,progress:0,escrow:{wood:0,food:0}}];
- const captures=new Map<string,Placement[]>();buildJobMarkers(w,new THREE.Group(),false,{set:(_g:THREE.Group,name:string,value:Placement[])=>captures.set(name,value)} as unknown as BoxBatches);
- expect(captures.get('job-orders')).toHaveLength(42);expect(captures.get('job-plans')).toEqual([expect.objectContaining({x:20,z:19.5,y:1.55,sx:5.86,sy:3.10,sz:6.86,ry:Math.PI/2})]);
+ // 22 November: the placed reactor is the cursor's ghost model, rotated as placed; its 42 cells are not tinted.
+ const captures=new Map<string,Placement[]>(),ghosts=new ConstructionGhosts();buildJobMarkers(w,new THREE.Group(),false,{set:(_g:THREE.Group,name:string,value:Placement[])=>captures.set(name,value)} as unknown as BoxBatches,ghosts);
+ expect(captures.get('job-orders')).toEqual([]);expect(captures.has('job-plans')).toBe(false);
+ const sorted=(parts:readonly Placement[])=>parts.map(({key:_key,targetId:_id,...part})=>JSON.stringify(part)).sort();
+ expect(ghosts.allParts().length).toBeGreaterThan(0);
+ expect(sorted(ghosts.allParts())).toEqual(sorted(constructionPreviewParts(w,[{kind:'ship-reactor',x:reactor.x,z:reactor.z,orientation:reactor.orientation,material:'steel'}]).boxes));
+ expect(Math.max(...ghosts.allParts().map(p=>p.y+(p.sy??1)/2))).toBeCloseTo(3.10,1);ghosts.dispose();
  expect(placementMaterial('ship-reactor','wood')).toBe('steel');expect(toolDefinitions.find(t=>t.id==='ship-reactor')).toMatchObject({category:'ship',title:'Réacteur stellaire'});
  const icon=modelIconUrl('ship-reactor');expect(icon).toBe(ARCHITECT_ICON_URLS['ship-reactor']);expect(icon).toBe('/assets/ui/elsewhere/pictograms-20261107/ship-reactor.svg');expect(ARCHITECT_ICON_MAPPING['ship-reactor']).toEqual(ARCHITECT_ICON_MAPPING['geothermal-generator']);
  expect(shipReactorInspectionText275(w,reactor)).toContain('veille');expect(shipReactorInspectionText275(w,reactor)).toContain('1 000 W');

@@ -9,6 +9,8 @@ import { pileParts } from '../src/render/pile-parts';
 import { pileSurfaces } from '../src/render/pile-surfaces';
 import { buildFurniture } from '../src/render/FurnitureLayer';
 import { buildJobMarkers } from '../src/render/JobLayer';
+import { ConstructionGhosts } from '../src/render/construction-ghosts';
+import { constructionPreviewParts } from '../src/render/construction-preview-parts';
 import { PawnLayer } from '../src/render/PawnLayer';
 import { pawnWorkPose,WORK_POSE } from '../src/render/work-presentation';
 import type { BoxBatches } from '../src/render/BoxBatches';
@@ -54,7 +56,14 @@ test('ground fuel uses centred cans while carried fuel occupies its own existing
 
 test('construction marker covers refinery footprint and completed refining uses the common work pose',()=>{
   const {world,refinery}=fixture();world.structures=[];world.jobs=[{id:world.nextId++,kind:'biofuel-refinery',x:refinery.x,z:refinery.z,orientation:0,footprint:'standard',status:'pending',reservedBy:null,progress:0,escrow:{wood:0,food:0},material:'steel',construction:'blueprint'}];
-  const captures=new Map<string,Placement[]>();buildJobMarkers(world,new THREE.Group(),false,{set:(_g:THREE.Group,name:string,parts:Placement[])=>captures.set(name,parts)} as unknown as BoxBatches);
-  const blueprint=[...captures.values()].flat().find(p=>p.sx===2.86&&p.sz===1.86);expect(blueprint).toBeDefined();expect(blueprint!.x).toBe(refinery.x);expect(blueprint!.z).toBe(refinery.z+.5);
+  // 22 November: the placed refinery is its ghost (the cursor's model), not a box over its cells.
+  const captures=new Map<string,Placement[]>(),ghosts=new ConstructionGhosts(),job=world.jobs[0]!;
+  try{
+    buildJobMarkers(world,new THREE.Group(),false,{set:(_g:THREE.Group,name:string,parts:Placement[])=>captures.set(name,parts)} as unknown as BoxBatches,ghosts);
+    expect(captures.has('job-plans')).toBe(false);expect(captures.get('job-orders')).toEqual([]);
+    const cursor=constructionPreviewParts(world,[{kind:'biofuel-refinery',x:refinery.x,z:refinery.z,orientation:0,material:'steel'}]).boxes;
+    expect(ghosts.allParts().map(({key:_k,targetId:_t,...part})=>part)).toEqual(cursor.map(({key:_k,targetId:_t,...part})=>part));expect(ghosts.allParts().every(p=>p.key===job.id)).toBe(true);
+    const left=Math.min(...cursor.map(p=>p.x-(p.sx??1)/2)),right=Math.max(...cursor.map(p=>p.x+(p.sx??1)/2));expect((left+right)/2).toBeCloseTo(refinery.x,5);
+  }finally{ghosts.dispose();}
   const pawn=world.pawns[0]!;pawn.state='working';pawn.cooking={stationId:refinery.id,billId:1,recipe:'chemfuel-from-wood',phase:'work',spot:cookingSpot(refinery),actionCell:cookingSpot(refinery),ingredients:[],progress:10,productId:null,storageId:null};expect(pawnWorkPose(pawn,undefined,'biofuel-refinery')).toBe(WORK_POSE.craft);
 });

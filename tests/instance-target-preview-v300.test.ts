@@ -7,6 +7,7 @@ import { TimberCladdingLayer } from '../src/render/TimberCladdingLayer';
 import { WallLayer } from '../src/render/WallLayer';
 import { buildFurniture } from '../src/render/FurnitureLayer';
 import { buildJobMarkers } from '../src/render/JobLayer';
+import { ConstructionGhosts } from '../src/render/construction-ghosts';
 import { pileParts } from '../src/render/pile-parts';
 import type { Placement } from '../src/render/primitives';
 import { createWorld } from '../src/sim/engine';
@@ -124,10 +125,17 @@ test('finished local furniture and every visible construction contribution retai
     { id: 30, kind: 'wall', x: 2, z: 8, orientation: 0, footprint: 'standard', status: 'pending', reservedBy: null, progress: 0, escrow: { wood: 0, food: 0 } },
     { id: 31, kind: 'table', x: 5, z: 8, orientation: 0, footprint: 'standard', status: 'active', reservedBy: null, progress: 20, construction: 'frame', escrow: { wood: 0, food: 0 } },
   ];
-  const plans: Placement[] = [];
-  buildJobMarkers(world, new THREE.Group(), false, { set(_group: THREE.Group, _name: string, items: Placement[]) { plans.push(...items); } } as unknown as BoxBatches);
+  // 22 November: markers (frame corners and progress tiles) keep their job id;
+  // the ghosts keep it as their key, which the cancel preview tints.
+  const plans: Placement[] = [], ghosts = new ConstructionGhosts();
+  buildJobMarkers(world, new THREE.Group(), false, { set(_group: THREE.Group, _name: string, items: Placement[]) { plans.push(...items); } } as unknown as BoxBatches, ghosts);
   expect(plans.length).toBeGreaterThan(5);
-  expect(plans.every(part => part.targetId === 30 || part.targetId === 31)).toBe(true);
+  expect(plans.every(part => part.targetId === 31)).toBe(true);
+  const ghost = ghosts.allParts();expect(ghost.some(part => part.key === 30)).toBe(true);expect(ghost.some(part => part.key === 31)).toBe(true);
+  expect(ghost.every(part => part.key === 30 || part.key === 31)).toBe(true);
+  const ghostMesh = ghosts.layer.group.children[0] as BoxMesh, ghostColours = Array.from(ghostMesh.colorBuffer.array.slice(0, ghostMesh.activeCount * 3));
+  ghosts.setTargetPreview(new Set([31]));expect(Array.from(ghostMesh.colorBuffer.array.slice(0, ghostMesh.activeCount * 3))).not.toEqual(ghostColours);
+  ghosts.clearTargetPreview();expect(Array.from(ghostMesh.colorBuffer.array.slice(0, ghostMesh.activeCount * 3))).toEqual(ghostColours);ghosts.dispose();
 });
 
 test('door leaves and connected timber restore exact colours after movement, cutaway and replacement', () => {

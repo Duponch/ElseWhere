@@ -15,6 +15,7 @@ import {architectToolAvailable} from '../src/ui/architect-availability';
 import {ARCHITECT_ICON_URLS,ARCHITECT_ICON_MAPPING} from '../src/ui/architect-icons';
 import {placementMaterial} from '../src/ui/construction-controls';
 import {buildJobMarkers} from '../src/render/JobLayer';
+import {ConstructionGhosts} from '../src/render/construction-ghosts';
 import type {Job} from '../src/sim/types';
 
 test('V387 original continuous deck stays inside its cell and shares the floor support height',()=>{
@@ -62,9 +63,14 @@ test('V387 preview and terrain work stay in existing boxes; schema and icon admi
     expect(ARCHITECT_ICON_URLS[kind]).toContain('data:image/svg+xml');expect(ARCHITECT_ICON_MAPPING[kind]).toBeDefined();
     const job={id:55,kind,x:8,z:8,orientation:0,progress:0,status:'active',construction:'blueprint',footprint:'standard'} as Job;
     expect(pawnWorkPose({...pawn,state:'working'},job)).toBe(WORK_POSE.ground);
-    const batches=new Map<string,Placement[]>();buildJobMarkers({...w,jobs:[job]},new THREE.Group(),false,
-      {set(_g:THREE.Group,name:string,parts:Placement[]){batches.set(name,parts);}} as unknown as BoxBatches);
-    expect(batches.get('job-plans')![0]!.sy).toBe(.04);expect([...batches.keys()]).toEqual(['job-orders','job-plans','job-solids']);
+    // 22 November: a bridge to build is its ghost (the cursor's planks); a removal keeps its cross only.
+    const batches=new Map<string,Placement[]>(),ghosts=new ConstructionGhosts();
+    try{
+      buildJobMarkers({...w,jobs:[job]},new THREE.Group(),false,{set(_g:THREE.Group,name:string,parts:Placement[]){batches.set(name,parts);}} as unknown as BoxBatches,ghosts);
+      expect([...batches.keys()]).toEqual(['job-orders','job-solids']);
+      if(kind==='build-bridge'){expect(batches.get('job-orders')).toEqual([]);expect(ghosts.allParts()).toEqual(bridgePartsForCell(8,8).map(p=>({...p,key:55})));}
+      else{expect(batches.get('job-orders')).toHaveLength(1);expect(ghosts.allParts()).toEqual([]);expect(batches.get('job-solids')).toHaveLength(2);}
+    }finally{ghosts.dispose();}
   }
   expect(placementMaterial('build-bridge','steel')).toBeUndefined();
 });

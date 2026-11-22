@@ -5,6 +5,7 @@ import {validateWorld,serializeWorld} from '../src/sim/serialization';
 import {treeTransferScene,preparedTreeWrapper} from './scenarios/tree-transfer-v349';
 import {designationIconInstances,DesignationIconLayer,isIconDesignationKind,TREE_DESIGNATION_ATLAS_URL} from '../src/render/DesignationIconLayer';
 import {buildJobMarkers} from '../src/render/JobLayer';
+import {ConstructionGhosts} from '../src/render/construction-ghosts';
 import {floraSize,floraTreeHeight} from '../src/render/flora-presentation';
 import {noise} from '../src/render/StaticGeometry';
 import {WORLD_SCALE} from '../src/world/scale';
@@ -29,9 +30,10 @@ test('V349 actual replant location has its distinct sprout and neither tree inte
   expect(designationIconInstances(w)).toEqual([{x:20,y:1.08,z:14,icon:81}]);expect(isIconDesignationKind('replant-tree')).toBe(true);
   expect(applyCommand(w,{type:'designate',kind:'wall',x:8,z:7,material:'wood'})).toMatchObject({ok:true});expect(validateWorld(w)).toEqual([]);
   const before=serializeWorld(w),rows=new Map<string,Placement[]>(),sink={set(_group:Group,key:string,parts:Placement[]){rows.set(key,parts);}};
-  buildJobMarkers(w,new Group(),false,sink as unknown as BoxBatches);
-  const wallId=w.jobs.find(j=>j.kind==='wall')!.id;expect(rows.get('job-orders')).toHaveLength(1);expect(rows.get('job-plans')).toHaveLength(1);expect(rows.get('job-solids')).toEqual([]);
-  expect([...rows.values()].flat().every(p=>p.targetId===wallId)).toBe(true);expect(serializeWorld(w)).toBe(before);
+  // 22 November: the wall to build is its ghost only (no tinted cell, no plan box).
+  const ghosts=new ConstructionGhosts();buildJobMarkers(w,new Group(),false,sink as unknown as BoxBatches,ghosts);
+  const wallId=w.jobs.find(j=>j.kind==='wall')!.id;expect(rows.get('job-orders')).toEqual([]);expect(rows.has('job-plans')).toBe(false);expect(rows.get('job-solids')).toEqual([]);
+  expect(ghosts.allParts().length).toBeGreaterThan(0);expect(ghosts.allParts().every(p=>p.key===wallId)).toBe(true);expect(serializeWorld(w)).toBe(before);ghosts.dispose();
   const extraction=treeTransferScene('oak',.4);expect(applyCommand(extraction,{type:'extract-tree',resourceId:extraction.resources[0]!.id}).ok).toBe(true);
   rows.clear();buildJobMarkers(extraction,new Group(),false,sink as unknown as BoxBatches);expect([...rows.values()].flat()).toEqual([]);
 });

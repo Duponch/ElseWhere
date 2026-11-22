@@ -13,7 +13,7 @@ import {PawnSelectionInput,hitActors} from './PawnSelectionInput';
 import {isAreaAction} from '../sim/designation';
 import {isLineBuildKind} from '../sim/construction-line';
 import {STRUCTURE_DEFINITIONS} from '../sim/definitions';
-import {mapObjectsAt,sameMapObject} from '../ui/map-object-selection';
+import {mapObjectsAt,sameMapObject,type MapObjectSelection} from '../ui/map-object-selection';
 import {matchingMapObjects,mapObjectGroupTarget} from '../ui/map-object-group-selection';
 import {cameraClipNear} from './camera-clip';
 import {installMapWheelZoom} from '../ui/map-wheel';
@@ -56,7 +56,7 @@ export class ColonyRenderer extends SceneRenderCore {
     if(this.cameraOnlyPointer!==event.pointerId)return false;
     this.cameraOnlyPointer=undefined;this.pointerDown=null;return true;
   }
-  static async create(host: HTMLElement, onPick: (x: number, z: number) => void, groundGrassEnabled = true,graphics?:GraphicsStylePreferences): Promise<ColonyRenderer> {
+  static async create(host: HTMLElement, onPick: (x: number, z: number, preferred?: MapObjectSelection) => void, groundGrassEnabled = true,graphics?:GraphicsStylePreferences): Promise<ColonyRenderer> {
     const graphicsContext=new GraphicsStyleContext(graphics);
     const options = { antialias: true, alpha: false, powerPreference: 'high-performance' as const };
     // Ask for the adapter's own inter-stage ceiling (default device: 16), so no
@@ -90,7 +90,7 @@ export class ColonyRenderer extends SceneRenderCore {
     }
   }
 
-  protected constructor(private readonly host:HTMLElement,private readonly onPick:(x:number,z:number)=>void,
+  protected constructor(private readonly host:HTMLElement,private readonly onPick:(x:number,z:number,preferred?:MapObjectSelection)=>void,
     renderer:THREE.WebGPURenderer,grassEnabled:boolean,lifetime:RendererLifetime){
     const dom=createDomPort(host,renderer);
     super(renderer,grassEnabled,lifetime,dom.port);
@@ -101,22 +101,22 @@ export class ColonyRenderer extends SceneRenderCore {
       pawns:()=>this.screenPawns(),select:gesture=>this.onSelection(gesture),
       selected:()=>this.selectedPawns,
       canInspect:event=>{
-        const c=this.objectCell(event),w=this.world;if(!c||!w)return false;
+        const c=this.objectTarget(event)?.cell,w=this.world;if(!c||!w)return false;
         return mapObjectsAt(w,c).length>0;
       },
       preferObjectCycle:event=>{
-        const cell=this.objectCell(event),world=this.world,selected=this.selectedObject;
+        const cell=this.objectTarget(event)?.cell,world=this.world,selected=this.selectedObject;
         if(!cell||!world||!selected)return false;
         const objects=mapObjectsAt(world,cell),index=objects.findIndex(object=>sameMapObject(object,selected));
         return index>=0&&(index<objects.length-1||hitActors(this.screenPawns(),event.clientX,event.clientY).length===0);
       },
-      inspect:event=>{const cell=this.objectCell(event);if(cell)this.onPick(cell.x,cell.z);else this.onSelection({ids:[],additive:false,toggle:false});},
+      inspect:event=>{const target=this.objectTarget(event);if(target)this.onPick(target.cell.x,target.cell.z,target.preferred);else this.onSelection({ids:[],additive:false,toggle:false});},
       inspectGroup:event=>{
-        const world=this.world,cell=this.pickAt(event.clientX,event.clientY);if(!world||!cell)return false;
+        const world=this.world,hit=this.objectPickAt(event.clientX,event.clientY);if(!world||!hit)return false;
         // The two ordinary clicks may have cycled the inspector. Resolve the
         // physical hit again; the final cycling slot is not the double-click target.
         if(hitActors(this.screenPawns(),event.clientX,event.clientY).length)return false;
-        const target=mapObjectGroupTarget(world,mapObjectsAt(world,cell));if(!target)return false;
+        const target=mapObjectGroupTarget(world,[...(hit.preferred?[hit.preferred]:[]),...mapObjectsAt(world,hit.cell)]);if(!target)return false;
         this.camera.updateMatrixWorld();const point=new THREE.Vector3();
         const objects=matchingMapObjects(world,target,c=>{
           point.set(c.x,.1,c.z).project(this.camera);
@@ -147,8 +147,16 @@ export class ColonyRenderer extends SceneRenderCore {
     }catch(error){try{this.dispose();}catch{}throw error;}
   }
   private pick(event:PointerEvent,clamp=false):Cell|null{return this.pickAt(event.clientX,event.clientY,clamp);}
-  /** Cell whose things a selection click lists: a drawn wall lamp first, else the ground cell. */
-  private objectCell(event:PointerEvent):Cell|null{return this.wallAttachmentCellAt(event.clientX,event.clientY)??this.pick(event);}
+  /** Cell whose things a selection click lists: a drawn wall lamp first, then
+   * the model met first along the camera ray (with that thing to select
+   * first), else the ground cell. One pick per click event. */
+  private objectTarget(event:PointerEvent):{cell:Cell;preferred?:MapObjectSelection}|null{
+    if(this.lastObjectTarget?.event===event)return this.lastObjectTarget.target;
+    const lamp=this.wallAttachmentCellAt(event.clientX,event.clientY);
+    const target=lamp?{cell:lamp}:this.objectPickAt(event.clientX,event.clientY);
+    this.lastObjectTarget={event,target};return target;
+  }
+  private lastObjectTarget:{event:PointerEvent;target:{cell:Cell;preferred?:MapObjectSelection}|null}|undefined;
   private readonly onVisibility=():void=>this.visibilityChanged();
   /** DOM methods are consumed only by the owned port; no guard writer here. */
   selectionReady():boolean{return !!this.selectionInput;}

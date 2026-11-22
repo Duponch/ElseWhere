@@ -20,7 +20,8 @@ export const WALL_CAP_HEIGHT = .1;
 export const WALL_CHUNK_SIZE = 32;
 /** Timber is drawn as horizontal boards, masonry as coursed blocks. */
 export const WALL_FAMILY_MASONRY = 0, WALL_FAMILY_TIMBER = 1;
-const TIMBER_BODY = 0xad8455, TIMBER_CAP = 0xcfa36b, MASONRY_FALLBACK = 0xa6916e;
+const TIMBER_BODY = 0xad8455, TIMBER_CAP = 0xcfa36b;
+export const MASONRY_FALLBACK = 0xa6916e;
 /** A doorway lintel starts above the opening; masonry keeps its frame lintel. */
 export const timberLintelBottom = (): number => doorLeafTop(false);
 export const masonryLintelBottom = (): number => doorLeafTop(false) + .11;
@@ -54,7 +55,9 @@ export function wallBodyColor(code: number): number {
   const material = materialNames[wallCodeMaterial(code)] || undefined;
   return buildingMaterialColor(material as Structure['material'], MASONRY_FALLBACK) ?? MASONRY_FALLBACK;
 }
-export function wallCapColor(code: number): number { return code & 8 ? TIMBER_CAP : shade(wallBodyColor(code), 1.1); }
+export function wallCapColor(code: number): number { return code & 8 ? TIMBER_CAP : masonryCapColor(wallBodyColor(code)); }
+/** The lighter cap band of a masonry wall of this body colour. */
+export const masonryCapColor = (body: number): number => shade(body, 1.1);
 
 export interface WallGrid {
   readonly width: number; readonly height: number; readonly cutaway: boolean; readonly top: number;

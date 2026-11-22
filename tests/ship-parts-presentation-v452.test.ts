@@ -7,6 +7,7 @@ import {electricalParts} from '../src/render/electrical-parts';
 import {constructionPreviewParts} from '../src/render/construction-preview-parts';
 import {buildFurniture} from '../src/render/FurnitureLayer';
 import {buildJobMarkers} from '../src/render/JobLayer';
+import {ConstructionGhosts} from '../src/render/construction-ghosts';
 import {StructurePresentationSignature} from '../src/render/presentation-signatures';
 import {ConfirmedStructurePresentationSignature} from '../src/render/ConfirmedStructurePresentationSignature';
 import {modelIconUrl} from '../src/ui/pictograms';
@@ -58,18 +59,24 @@ test('hull rendering and signatures depend on pose, not the clock, inventory or 
  expect(raw.read(later.structures,'','')).not.toBe(a);expect(confirmed.readConfirmed(later.structures,'','',[0])).toBe(raw.read(later.structures,'',''));
  expect(shipHullParts276(later.structures[0]!)).not.toEqual(model);expect(beam).not.toHaveProperty('shipReactor275');
 });
-test('both12-cell paid-frame markers and original menu images retain the fixed material and historical UVs',()=>{
+test('both12-cell paid-frame ghosts and original menu images retain the fixed material and historical UVs',()=>{
  const {w,beam,engine}=fixture();w.structures=[];
  w.jobs=[beam,engine].map(s=>({id:s.id,kind:s.kind as 'ship-beam'|'ship-engine',x:s.x,z:s.z,orientation:s.orientation,footprint:'standard' as const,material:'steel' as const,construction:'frame' as const,status:'pending' as const,reservedBy:null,progress:0,escrow:{wood:0,food:0}}));
- const calls=new Map<string,Placement[]>();buildJobMarkers(w,new THREE.Group(),false,{set:(_g:THREE.Group,name:string,value:Placement[])=>calls.set(name,value)} as unknown as BoxBatches);
- expect(calls.get('job-orders')).toHaveLength(24);expect(calls.get('job-plans')).toHaveLength(2);expect(calls.get('job-solids')).toHaveLength(8);
+ // 22 November: each frame is the cursor's ghost of its part plus Core's four frame corners (two bars each); no tinted cell.
+ const calls=new Map<string,Placement[]>(),ghosts=new ConstructionGhosts();buildJobMarkers(w,new THREE.Group(),false,{set:(_g:THREE.Group,name:string,value:Placement[])=>calls.set(name,value)} as unknown as BoxBatches,ghosts);
+ expect(calls.get('job-orders')).toEqual([]);expect(calls.has('job-plans')).toBe(false);expect(calls.get('job-solids')).toHaveLength(16);
+ const sorted=(parts:readonly Placement[])=>parts.map(({key:_key,targetId:_id,...part})=>JSON.stringify(part)).sort();
  for(const s of [beam,engine]){
   if(s.kind!=='ship-beam'&&s.kind!=='ship-engine')throw Error('Hull fixture');
-  const rect=shipPartRect276({...s,kind:s.kind}),model=SHIP_HULL_MODEL_BOUNDS_276[s.kind];
-  expect(calls.get('job-plans')!.find(p=>p.targetId===s.id)).toMatchObject({x:rect.x+(rect.width-1)/2,z:rect.z+(rect.depth-1)/2,sx:model.width,sy:model.height,sz:model.depth});
+  const rect=shipPartRect276({...s,kind:s.kind}),model=SHIP_HULL_MODEL_BOUNDS_276[s.kind],ghost=ghosts.allParts().filter(p=>p.key===s.id);
+  expect(ghost.length).toBeGreaterThan(0);
+  expect(sorted(ghost)).toEqual(sorted(constructionPreviewParts(w,[{kind:s.kind,x:s.x,z:s.z,orientation:s.orientation,material:'steel'}]).boxes));
+  expect(Math.max(...ghost.map(p=>p.y+(p.sy??1)/2))).toBeLessThanOrEqual(model.height+.01);
+  expect(calls.get('job-solids')!.filter(p=>p.targetId===s.id).every(p=>p.x>=rect.x-.5&&p.x<=rect.x+rect.width-.5&&p.z>=rect.z-.5&&p.z<=rect.z+rect.depth-.5)).toBe(true);
   expect(placementMaterial(s.kind,'wood')).toBe('steel');expect(toolDefinitions.find(t=>t.id===s.kind)).toMatchObject({category:'ship'});
   const icon=modelIconUrl(s.kind);expect(icon).toBe(ARCHITECT_ICON_URLS[s.kind]);expect(icon).toBe(`/assets/ui/elsewhere/pictograms-20261107/${s.kind}.svg`);
  }
  expect(modelIconUrl('ship-beam')).not.toBe(modelIconUrl('ship-engine'));expect(modelIconUrl('ship-engine')).not.toBe(modelIconUrl('ship-reactor'));
  expect(ARCHITECT_ICON_MAPPING['ship-beam']).toEqual(ARCHITECT_ICON_MAPPING.wall);expect(ARCHITECT_ICON_MAPPING['ship-engine']).toEqual(ARCHITECT_ICON_MAPPING['solar-generator']);
+ ghosts.dispose();
 });

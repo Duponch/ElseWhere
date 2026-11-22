@@ -8,6 +8,7 @@ import {electricalParts} from '../src/render/electrical-parts';
 import {constructionPreviewParts} from '../src/render/construction-preview-parts';
 import {StructureVfxLayer} from '../src/render/StructureVfxLayer';
 import {buildJobMarkers} from '../src/render/JobLayer';
+import {ConstructionGhosts} from '../src/render/construction-ghosts';
 import type {BoxBatches} from '../src/render/BoxBatches';
 import type {Placement} from '../src/render/primitives';
 import {researchProjects} from '../src/ui/research-projects';
@@ -48,11 +49,18 @@ test('research node, costs, menu icon and fixed material expose the complete gen
  expect(ARCHITECT_ICON_URLS['geothermal-generator']).toBe(modelIconUrl('geothermal-generator'));expect(ARCHITECT_ICON_MAPPING['geothermal-generator']).toBeDefined();
 });
 
-test('blueprint uses the full footprint and correct machine height',()=>{
+test('blueprint ghost uses the full footprint and correct machine height',()=>{
  const {world,generator}=fixture();world.structures=[];
  world.jobs=[{id:world.nextId++,kind:'geothermal-generator',x:generator.x,z:generator.z,orientation:0,footprint:'standard',status:'pending',reservedBy:null,progress:0,escrow:{wood:0,food:0},material:'steel',construction:'blueprint'}];
- const captures=new Map<string,Placement[]>();buildJobMarkers(world,new THREE.Group(),false,{set:(_g:THREE.Group,name:string,parts:Placement[])=>captures.set(name,parts)} as unknown as BoxBatches);
- expect(captures.get('job-plans')).toEqual([expect.objectContaining({x:12.5,z:12.5,y:1.35,sx:5.88,sy:2.70,sz:5.88})]);
+ // 22 November: the placed generator is the cursor's ghost model, not a box.
+ const captures=new Map<string,Placement[]>(),ghosts=new ConstructionGhosts();
+ try{
+  buildJobMarkers(world,new THREE.Group(),false,{set:(_g:THREE.Group,name:string,parts:Placement[])=>captures.set(name,parts)} as unknown as BoxBatches,ghosts);
+  expect(captures.has('job-plans')).toBe(false);expect(captures.get('job-orders')).toEqual([]);
+  const parts=ghosts.allParts(),lo=(f:(p:Placement)=>number)=>Math.min(...parts.map(f)),hi=(f:(p:Placement)=>number)=>Math.max(...parts.map(f));
+  expect((lo(p=>p.x-(p.sx??1)/2)+hi(p=>p.x+(p.sx??1)/2))/2).toBeCloseTo(12.5,1);expect((lo(p=>p.z-(p.sz??1)/2)+hi(p=>p.z+(p.sz??1)/2))/2).toBeCloseTo(12.5,1);
+  expect(hi(p=>p.y+(p.sy??1)/2)).toBeCloseTo(2.7,1);
+ }finally{ghosts.dispose();}
 });
 
 test('confirmed geothermal steam replaces natural steam, survives outages, and freezes with the presented tick',()=>{

@@ -14,6 +14,8 @@ import { doorLeafParts } from './door-parts';
 import { miniTurretTopPartsForStructure } from './mini-turret-parts';
 import type { Placement } from './primitives';
 import { windBladeParts } from './wind-blade-parts';
+import { buildingMaterialColor } from './building-material-color';
+import { MASONRY_FALLBACK, masonryCapColor, WALL_CAP_HEIGHT } from './wall-network';
 
 export { createTimberGeometry } from './TimberCladdingLayer';
 
@@ -26,6 +28,8 @@ export interface ConstructionPreviewSpec {
   floor?: FloorKind;
   /** An installation retains its authored material, footprint and contents. */
   furniture?: Structure | null;
+  /** A placed construction keeps the footprint of its job (legacy beds). */
+  footprint?: Structure['footprint'];
 }
 
 export type ConstructionPreviewPlacement = Placement & { rx?: number; rz?: number; tint?: number };
@@ -48,10 +52,16 @@ function virtualStructure(spec: ConstructionPreviewSpec, id: number): Structure 
     ...spec.furniture,
     id, kind, x: spec.x, z: spec.z,
     orientation: spec.orientation ?? spec.furniture?.orientation ?? 0,
-    footprint: spec.furniture?.footprint ?? 'standard',
+    footprint: spec.furniture?.footprint ?? spec.footprint ?? 'standard',
     // The current construction selector must not recolour a packed object.
-    material: spec.furniture ? spec.furniture.material : spec.material ?? constructionMaterials(kind)[0],
+    material: spec.furniture ? spec.furniture.material : spec.material ?? defaultMaterial(kind),
   };
+}
+/** First allowed material of a kind (static catalogue), read once per kind. */
+const defaultMaterials = new Map<StructureKind, ConstructionMaterial | undefined>();
+function defaultMaterial(kind: StructureKind): ConstructionMaterial | undefined {
+  if (!defaultMaterials.has(kind)) defaultMaterials.set(kind, constructionMaterials(kind)[0]);
+  return defaultMaterials.get(kind);
 }
 
 /** Read the actual authored builders through their set port. The small subject
@@ -121,7 +131,7 @@ export function constructionPreviewParts(world: World, specs: readonly Construct
     if (spec.kind === 'build-roof') continue;
     const structure = virtuals.get(spec)!;
     const linear = lineModels.get(structure.id);
-    const parts: Placement[] = linear ? [...linear] : [...captureFurniture([structure]), ...doorLeafParts(contextWorld, cutaway, [structure])];
+    const parts: Placement[] = linear ? [...linear, ...masonryWallParts(structure, cutaway)] : [...captureFurniture([structure]), ...doorLeafParts(contextWorld, cutaway, [structure])];
     if (structure.kind === 'mini-turret') parts.push(...miniTurretTopPartsForStructure(structure));
     if (structure.kind === 'wind-turbine') result.rotatedBoxes.push(...windBladeParts(structure).map(part => ({ ...part, key })));
     result.boxes.push(...parts.map(part => ({ ...part, key })));
@@ -142,6 +152,83 @@ export function constructionPreviewParts(world: World, specs: readonly Construct
     }
   }
   return result;
+}
+
+/** Ghosts of placed constructions: the same builders and context as the
+ * placement cursor, but one capture for every subject instead of one per spec,
+ * so a few hundred blueprints cost one furniture pass. `specs` are drawn;
+ * `context` (all placed constructions, `specs` included) are the neighbours
+ * they link to. A ghost's identity derives from its key (the job id), so its
+ * model never depends on the other ghosts' order. Parts carry the key of their
+ * owner when it is known (target tint); floors sit just above a floor already
+ * laid so the translucent ghost never fights it for depth. */
+export function constructionGhostParts(world: World, specs: readonly ConstructionPreviewSpec[], cutaway = false, reach = GHOST_CONTEXT_REACH,
+  context: readonly ConstructionPreviewSpec[] = specs): ConstructionPreviewParts {
+  const result: ConstructionPreviewParts = { boxes: [], timberWalls: [], timberEaves: [], rotatedBoxes: [] };
+  if (!specs.length) return result;
+  const drawn = new Set(specs), subjects: Structure[] = [], virtuals: Structure[] = [], owners = new Map<number, number>(), cells = new Map<string, number>();
+  const all = [...context, ...specs.filter(spec => !context.includes(spec))];
+  for (let index = 0; index < all.length; index++) {
+    const spec = all[index]!, key = spec.key ?? index;
+    if (spec.kind === 'build-bridge' || spec.kind === 'remove-bridge' || spec.kind === 'lay-floor' || spec.kind === 'build-roof') {
+      if (!drawn.has(spec)) continue;
+      if (spec.kind === 'lay-floor') {
+        if (!isFloorKind(spec.floor)) throw new Error('Construction floor model requires a floor kind');
+        result.boxes.push(...floorPartsForKind(spec.floor, spec.x, spec.z).map(part => ({ ...part, y: part.y + GHOST_FLOOR_LIFT, key })));
+      } else if (spec.kind !== 'build-roof') result.boxes.push(...bridgePartsForCell(spec.x, spec.z).map(part => ({ ...part, key })));
+      continue;
+    }
+    const structure = virtualStructure(spec, -1 - key);
+    virtuals.push(structure);
+    if (drawn.has(spec)) { subjects.push(structure); owners.set(structure.id, key); cells.set(`${structure.x}:${structure.z}`, key); }
+  }
+  if (!subjects.length) return result;
+  const moving = new Set(all.flatMap(spec => spec.furniture ? [spec.furniture.id] : []));
+  const near = ghostNeighbourhood(world, subjects, reach);
+  const contextWorld: World = { ...world, structures: [...world.structures.filter(s => !moving.has(s.id) && near(s)), ...virtuals.filter(near)] };
+  const owner = (part: Placement): number | undefined => {
+    const id = part.targetId ?? part.key;
+    return (id !== undefined ? owners.get(id) : undefined) ?? cells.get(`${Math.round(part.x)}:${Math.round(part.z)}`);
+  };
+  const timber = timberCladdingParts(contextWorld, cutaway, subjects);
+  result.timberWalls = timber.walls.map(part => ({ ...part, key: owner(part) }));
+  result.timberEaves = timber.eaves.map(part => ({ ...part, key: owner(part) }));
+  const authored = new Map<string, Placement[]>();
+  const sink: Pick<BoxBatches, 'set'> = { set(_group, name, parts) {
+    if ((name !== 'furniture' && name !== 'sandbags') || authored.has(name)) throw new Error('Unexpected construction furniture batch');
+    authored.set(name, parts);
+  } };
+  buildFurniture({ ...contextWorld, structures: subjects, packed: [] }, new THREE.Group(), cutaway, sink as BoxBatches, contextWorld);
+  const parts = [...authored.get('furniture') ?? [], ...authored.get('sandbags') ?? [], ...doorLeafParts(contextWorld, cutaway, subjects), ...subjects.flatMap(s => masonryWallParts(s, cutaway))];
+  for (const structure of subjects) if (structure.kind === 'mini-turret') parts.push(...miniTurretTopPartsForStructure(structure));
+  result.boxes.push(...parts.map(part => ({ ...part, key: owner(part) })));
+  for (const structure of subjects) if (structure.kind === 'wind-turbine')
+    result.rotatedBoxes.push(...windBladeParts(structure).map(part => ({ ...part, key: owners.get(structure.id) })));
+  return result;
+}
+/** A wall of stone blocks or steel: WallLayer draws every wall, the timber
+ * trim only covers wooden ones, so the ghost of any other wall is the block
+ * WallLayer draws for it, body and lighter cap in its material colour. */
+function masonryWallParts(structure: Structure, cutaway: boolean): Placement[] {
+  if (structure.kind !== 'wall' || structure.material === 'wood') return [];
+  const body = buildingMaterialColor(structure.material, MASONRY_FALLBACK) ?? MASONRY_FALLBACK, cap = masonryCapColor(body);
+  const top = cutaway ? WORLD_SCALE.wallCutawayHeight : WORLD_SCALE.wallHeight, rest = top - WALL_CAP_HEIGHT;
+  return [{ targetId: structure.id, x: structure.x, z: structure.z, y: rest / 2, sx: 1, sy: rest, sz: 1, color: body },
+    { targetId: structure.id, x: structure.x, z: structure.z, y: rest + WALL_CAP_HEIGHT / 2, sx: 1, sy: WALL_CAP_HEIGHT, sz: 1, color: cap }];
+}
+/** Above a laid floor (FLOOR_SURFACE_Y) and below every furniture base. */
+export const GHOST_FLOOR_LIFT = .012;
+/** The models read only their close neighbours (linked walls and fences,
+ * timber trim, door axes, conduits): the buildings anchored within this many
+ * cells of a ghost. Large maps then cost what the ghosts cost, not the map. */
+export const GHOST_CONTEXT_REACH = 6;
+function ghostNeighbourhood(world: World, subjects: readonly Structure[], reach: number): (s: Structure) => boolean {
+  if (reach >= Math.max(world.width, world.height)) return () => true;
+  const mask = new Uint8Array(world.width * world.height);
+  for (const s of subjects)
+    for (let z = Math.max(0, s.z - reach); z <= Math.min(world.height - 1, s.z + reach); z++)
+      mask.fill(1, z * world.width + Math.max(0, s.x - reach), z * world.width + Math.min(world.width - 1, s.x + reach) + 1);
+  return s => s.x >= 0 && s.z >= 0 && s.x < world.width && s.z < world.height && mask[s.z * world.width + s.x] === 1;
 }
 
 /** Flat form for callers which group instances by geometry themselves. */

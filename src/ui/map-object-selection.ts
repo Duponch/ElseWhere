@@ -106,3 +106,14 @@ export function nextMapObject(world:World,cell:Cell,current:MapObjectSelection|u
   const index=objects.findIndex(object=>sameMapObject(object,current));
   return objects[(index+1)%objects.length];
 }
+
+/** A selection click on `cell`. `preferred` is the thing whose drawn model
+ * the click met over another cell (a tree crown, the face of a wall): it is
+ * selected first; once a thing of that cell is selected, the following clicks
+ * cycle through the cell in Core's order (`current` is the selection made on
+ * this same cell, if any). */
+export function clickedMapObject(world:World,cell:Cell,current:MapObjectSelection|undefined,preferred?:MapObjectSelection):MapObjectSelection|undefined {
+  const objects=mapObjectsAt(world,cell);
+  if(current&&objects.some(object=>sameMapObject(object,current)))return nextMapObject(world,cell,current);
+  return preferred&&mapObjectExists(world,preferred)?preferred:objects[0];
+}

@@ -5,6 +5,7 @@ import type {Command,World} from '../src/sim/types';
 import {BoxBatches} from '../src/render/BoxBatches';
 import type {BoxMesh} from '../src/render/BoxMesh';
 import {ConfirmedJobMarkers} from '../src/render/JobLayer';
+import {ConstructionGhosts} from '../src/render/construction-ghosts';
 import {SceneRenderCore} from '../src/render/SceneRenderCore';
 import {createClosedMainMapIntentReader} from '../src/render/closed-main-map-intents';
 import type {ConfirmedIntentFields} from '../src/render/confirmed-intent-fields';
@@ -37,19 +38,21 @@ function mesh(group:THREE.Group,key:string):BoxMesh {
   const value=group.getObjectByName(key);if(!value)throw Error(`Missing resident batch ${key}`);return value as BoxMesh;
 }
 function presentation(){
-  const boxes=new BoxBatches(),group=new THREE.Group(),markers=new ConfirmedJobMarkers(),writes=vi.spyOn(boxes,'set');
+  const boxes=new BoxBatches(),group=new THREE.Group(),markers=new ConfirmedJobMarkers(),writes=vi.spyOn(boxes,'set'),ghosts=new ConstructionGhosts();
   const parts=(key:string)=>writes.mock.calls.filter(call=>call[1]===key).at(-1)?.[2]??[];
+  // 22 November: the future door's frame around the wall is drawn in the ghost layer.
+  const plans=()=>ghosts.allParts(),plan=()=>ghosts.layer.group.children[0] as BoxMesh;
   const render=(physical:World,intentions:World=physical)=>{
     const beforePhysical=structuredClone(physical),beforeIntentions=structuredClone(intentions);
-    markers.updatePhysical(physical,false);markers.updateIntentions(intentions.jobs,false,physical);markers.present(group,boxes);
+    markers.updatePhysical(physical,false);markers.updateIntentions(intentions.jobs,false,physical);markers.present(group,boxes,ghosts);
     expect(physical).toEqual(beforePhysical);expect(intentions).toEqual(beforeIntentions);
   };
-  return {boxes,group,markers,parts,render,dispose(){writes.mockRestore();boxes.dispose();}};
+  return {boxes,group,markers,parts,plans,plan,ghosts,render,dispose(){writes.mockRestore();boxes.dispose();ghosts.dispose();}};
 }
 function sceneBridge(physical:World){
   const view=presentation(),reader=createClosedMainMapIntentReader();
   const scene=Object.assign(Object.create(SceneRenderCore.prototype) as Record<string,unknown>,{
-    confirmedIntents:reader.admit!(physical),confirmedJobMarkers:view.markers,jobGroup:view.group,wallCutaway:false,boxes:view.boxes,
+    confirmedIntents:reader.admit!(physical),confirmedJobMarkers:view.markers,jobGroup:view.group,wallCutaway:false,boxes:view.boxes,constructionGhosts:view.ghosts,
   }) as unknown as {confirmedIntents:ConfirmedIntentFields;buildJobs(world:World):void};
   return {...view,reader,scene};
 }
@@ -59,16 +62,16 @@ test('the unpaid future door is visible around its paid standing wall and owns t
   try{
     view.render(f.world);
     expect(f.world.structures.find(s=>s.id===f.ids.wallId)?.kind).toBe('wall');
-    expect(view.group.children.map(child=>child.name)).toEqual(['job-orders','job-plans','job-solids']);
-    expect(view.parts('job-plans')).toHaveLength(3);
-    expect(view.parts('job-plans').every(p=>p.targetId===planId)).toBe(true);
-    expect(view.parts('job-plans').some(p=>p.x<f.cells.wall.x)).toBe(true);
-    expect(view.parts('job-plans').some(p=>p.x>f.cells.wall.x)).toBe(true);
-    expect(view.parts('job-plans').every(p=>(p.sy??0)>0)).toBe(true);
+    expect(view.group.children.map(child=>child.name)).toEqual(['job-orders','job-solids']);
+    expect(view.plans()).toHaveLength(3);
+    expect(view.plans().every(p=>p.key===planId)).toBe(true);
+    expect(view.plans().some(p=>p.x<f.cells.wall.x)).toBe(true);
+    expect(view.plans().some(p=>p.x>f.cells.wall.x)).toBe(true);
+    expect(view.plans().every(p=>(p.sy??0)>0)).toBe(true);
     expect(view.parts('job-orders')).toEqual([]);expect(view.parts('job-solids')).toEqual([]);
-    const resident=mesh(view.group,'job-plans'),geometry=resident.geometry,material=resident.material;
+    const resident=view.plan(),geometry=resident.geometry,material=resident.material;
     view.render(f.world);view.render(f.world);
-    expect(mesh(view.group,'job-plans')).toBe(resident);expect(resident.geometry).toBe(geometry);expect(resident.material).toBe(material);
+    expect(view.plan()).toBe(resident);expect(resident.geometry).toBe(geometry);expect(resident.material).toBe(material);
     expect(resident.activeCount).toBe(3);expect(job.escrow).toEqual({wood:0,food:0});expect(f.world).toEqual(before);
   }finally{view.dispose();}
 });
@@ -76,16 +79,16 @@ test('the unpaid future door is visible around its paid standing wall and owns t
 test('manual promotion adds a separate wall mark without changing the prospective target or supplying a construction frame',()=>{
   const f=fixture(),{job,planId}=planDoorOverWall483(f),view=presentation();
   try{
-    view.render(f.world);const resident=mesh(view.group,'job-plans'),geometry=resident.geometry,material=resident.material;
+    view.render(f.world);const resident=view.plan(),geometry=resident.geometry,material=resident.material;
     command(f.world,{type:'designate',kind:'deconstruct',targetId:f.ids.wallId,...f.cells.wall});view.render(f.world);
     expect(f.world.jobs).toHaveLength(1);expect(job.wallDoor296?.manual).toBe(true);
-    expect(view.parts('job-plans').map(p=>p.targetId)).toEqual([planId,planId,planId]);
+    expect(view.plans().map(p=>p.key)).toEqual([planId,planId,planId]);
     expect(view.parts('job-orders')).toEqual([]); // Deconstruction already has its own designation pictogram.
     expect(view.parts('job-solids')).toHaveLength(2);expect(view.parts('job-solids').every(p=>p.targetId===job.id)).toBe(true);
     expect(resident.geometry).toBe(geometry);expect(resident.material).toBe(material);
     command(f.world,{type:'cancel-job',jobId:job.id});view.render(f.world);
     expect(view.parts('job-orders')).toEqual([]);expect(view.parts('job-solids')).toEqual([]);
-    expect(view.parts('job-plans').map(p=>p.targetId)).toEqual([planId,planId,planId]);
+    expect(view.plans().map(p=>p.key)).toEqual([planId,planId,planId]);
   }finally{view.dispose();}
 });
 
@@ -94,7 +97,7 @@ test('confirmed cancellation of the prospective ID remains visible when the olde
   command(f.world,{type:'designate',kind:'deconstruct',...f.cells.wall});
   const physical=structuredClone(f.world),future=structuredClone(f.world),view=sceneBridge(physical),before=structuredClone(physical);
   try{
-    view.scene.buildJobs(physical);const resident=mesh(view.group,'job-plans'),geometry=resident.geometry,material=resident.material;
+    view.scene.buildJobs(physical);const resident=view.plan(),geometry=resident.geometry,material=resident.material;
     expect(resident.activeCount).toBe(3);
     command(future,{type:'cancel-job',jobId:planId});view.scene.confirmedIntents=view.reader.admit!(future);
     view.scene.buildJobs(physical);view.scene.buildJobs(physical);
@@ -111,10 +114,11 @@ test('confirmed whole-cell cancellation hides both marks while captured implicit
   command(f.world,{type:'designate',kind:'deconstruct',...f.cells.wall});
   const physical=structuredClone(f.world),future=structuredClone(f.world),view=sceneBridge(physical),before=structuredClone(physical);
   try{
-    view.scene.buildJobs(physical);expect(mesh(view.group,'job-plans').activeCount).toBe(3);
+    view.scene.buildJobs(physical);expect(view.plan().activeCount).toBe(3);
     command(future,{type:'cancel',...f.cells.wall});expect(future.jobs[0]?.wallDoor296).toEqual({manual:false,fromBlueprint:true});
     view.scene.confirmedIntents=view.reader.admit!(future);view.scene.buildJobs(physical);view.scene.buildJobs(physical);
-    for(const key of ['job-plans','job-orders','job-solids'])expect(mesh(view.group,key).activeCount).toBe(0);
+    for(const key of ['job-orders','job-solids'])expect(mesh(view.group,key).activeCount).toBe(0);
+    expect(view.plan().activeCount).toBe(0);
     expect(future.pawns.find(p=>p.id===f.ids.builderId)?.jobId).toBe(job.id);
     expect(mapObjectExists(future,{kind:'job',id:job.id})).toBe(false);expect(mapObjectExists(future,{kind:'job',id:planId})).toBe(false);
     expect(physical).toEqual(before);

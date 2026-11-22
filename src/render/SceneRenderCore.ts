@@ -24,6 +24,9 @@ import { AreaPreviewLayer } from './AreaPreviewLayer';
 import {OrderTargetIndex} from './order-target-index';
 import {OrderTargetPreviewLayer} from './OrderTargetPreviewLayer';
 import { ConstructionPreviewLayer } from './ConstructionPreviewLayer';
+import { ConstructionGhosts } from './construction-ghosts';
+import { modelPickTarget, pickMapModel } from './map-model-pick';
+import { bodyScreenProxy, humanScreenProxy } from './actor-screen-proxy';
 import {EMPTY_GROUND_OVERLAYS,GROUND_OVERLAY_RENDER_ORDER,groundOverlayPlacements,groundOverlayRect,setGroundOverlayRenderOrder,type GroundOverlayRect} from './ground-overlay-surfaces';
 import type { ConstructionPreviewSpec } from './construction-preview-parts';
 import { HygieneLayer } from './HygieneLayer';
@@ -730,6 +733,8 @@ export class SceneRenderCore {
   protected readonly facilityLinks=new FacilityLinkLayer();
   protected readonly mapOutline=new MapOutlineLayer();
   protected readonly constructionPreview=new ConstructionPreviewLayer();
+  /** Ghosts of the placed constructions (blueprints and frames). */
+  protected readonly constructionGhosts=new ConstructionGhosts();
   protected areaIndex: AreaIndex | undefined;
   protected orderTargetIndex: OrderTargetIndex | undefined;
   protected readonly orderRockPreview=new OrderTargetPreviewLayer();
@@ -910,7 +915,7 @@ export class SceneRenderCore {
     selectionGeometry.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(9),3));
     this.objectSelection = new THREE.Mesh(selectionGeometry,new THREE.MeshBasicNodeMaterial({color:0xfff5d6,side:THREE.DoubleSide,depthTest:false,depthWrite:false,transparent:true,opacity:1,forceSinglePass:true}));
     this.objectSelection.visible=false;this.objectSelection.frustumCulled=false;this.objectSelection.renderOrder=GROUND_OVERLAY_RENDER_ORDER.selection;
-    this.scene.add(this.hover,this.constructionPreview.group,this.objectSelection,this.recreationHints.group,this.actionFeedback.group,this.actionVfx.group,this.structureVfx.group,this.podRescue.group,this.orbitalDelivery.group,this.startingArrival.group,this.raidPods.group);
+    this.scene.add(this.hover,this.constructionPreview.group,this.constructionGhosts.group,this.objectSelection,this.recreationHints.group,this.actionFeedback.group,this.actionVfx.group,this.structureVfx.group,this.podRescue.group,this.orbitalDelivery.group,this.startingArrival.group,this.raidPods.group);
     } catch (error) {
       try { this.dispose(); } catch { /* Static create also closes the device. */ }
       throw error;
@@ -989,7 +994,7 @@ export class SceneRenderCore {
     this.invalidatePausedShadow(reset);
     if(reset){
       this.pendingCore297.length=0;this.latestCoreInput297=undefined;this.appliedCoreAnchor297=undefined;this.appliedCore297=-Infinity;this.actorScene297=undefined;
-      this.presentation.clear();this.confirmedJobMarkers.clear();this.confirmedJobsSource=undefined;
+      this.presentation.clear();this.confirmedJobMarkers.clear();this.constructionGhosts.clear();this.confirmedJobsSource=undefined;
       this.presentedIntentFields=undefined;this.confirmedSurfaceDirty=true;this.confirmedPathDirty=true;
     }
     if(this.confirmedIntentReader?.admit){
@@ -1604,7 +1609,7 @@ export class SceneRenderCore {
     const restoreMapOutline=this.mapOutline?.prepareForCompile()??(()=>{});
     const restoreHints=this.recreationHints.prepareForCompile();
     const restoreOrderRock=this.orderRockPreview.prepareForCompile();
-    const restoreConstruction=this.constructionPreview.prepareForCompile();
+    const restoreConstruction=this.constructionPreview.prepareForCompile(),restoreGhosts=this.constructionGhosts.prepareForCompile();
     const restoreDeep=this.deepResources.prepareForCompile();
     let restorePawnCargo=()=>{};
     const preparePawnCargo=()=>{restorePawnCargo();restorePawnCargo=this.pawns.prepareCargoForCompile();};
@@ -1650,7 +1655,7 @@ export class SceneRenderCore {
       for (const [object, value] of culling) object.frustumCulled = value;
       restoreMechanoids();
       restoreWind();restorePawnFires();restorePawnCargo();restoreWildlife();restoreAnimalCargo();restoreRopes();restoreFeedback();restoreActionVfx();restoreStructureVfx();restoreRoofs();restoreDoors();restoreWalls();restoreCrops();restorePlants();restoreGrass();restoreDesignations();restoreFilth();restoreClouds();restorePrecipitation();
-      restoreSnow();restoreBoxes();restoreArea();restoreTurretRange();restoreFacilityLinks();restoreMapOutline();restoreHints();restoreOrderRock();restoreConstruction();restoreDeep();
+      restoreSnow();restoreBoxes();restoreArea();restoreTurretRange();restoreFacilityLinks();restoreMapOutline();restoreHints();restoreOrderRock();restoreConstruction();restoreGhosts();restoreDeep();
       restoreOverview();
       restoreLabels?.();
       restorePodRescue();restoreOrbitalDelivery();
@@ -1830,6 +1835,17 @@ export class SceneRenderCore {
     return best;
   }
 
+  /** The cell and thing a selection click at this point aims at: a model
+   * drawn over another cell (tree crown, wall face, side of a pile or of a
+   * ghost) is met first along the camera ray; otherwise the ground cell, whose
+   * things keep Core's order. Evaluated on clicks only. */
+  objectPickAt(clientX:number,clientY:number):{cell:Cell;preferred?:MapObjectSelection}|null {
+    const world=this.world;if(!world)return null;
+    const ground=this.pickAt(clientX,clientY),ray=this.raycaster.ray;
+    return modelPickTarget(ground,pickMapModel(world,{ox:ray.origin.x,oy:ray.origin.y,oz:ray.origin.z,dx:ray.direction.x,dy:ray.direction.y,dz:ray.direction.z},
+      {cutaway:this.wallCutaway,jobs:this.confirmedIntents?.jobs??world.jobs}));
+  }
+
   /** Project lightweight actor proxies only for pointer gestures, using the
    * same confirmed edge as the GPU. Canopies don't prevent selecting a colon. */
   screenPawns():ScreenPawn[] {
@@ -1847,28 +1863,20 @@ export class SceneRenderCore {
       position.y=travelHeight(visual.from.y,visual.to.y,distance);
       const held=this.pawns.presentedPose(id);
       if(held)position.set(held.x,held.y,held.z);
-      const center=position.clone().add(new THREE.Vector3(0,.75,0)).project(this.camera);
-      if(center.z < cameraClipNear(this.camera)||center.z>1||Math.abs(center.x)>1||Math.abs(center.y)>1)continue;
-      const head=position.clone().add(new THREE.Vector3(0,1.75,0)).project(this.camera);
-      result.push({id,x:rect.left+(center.x+1)*rect.width/2,y:rect.top+(1-center.y)*rect.height/2,
-        radius:Math.max(5,Math.abs(head.y-center.y)*rect.height/2),depth:center.z,group:actors.get(id)?.state==='dead'?'corpse:human':`human:${actors.get(id)?.faction??'colony'}:${!!actors.get(id)?.prisoner}`,category:actors.get(id)?.state==='dead'?3:(actors.get(id)?.faction??'colony')==='colony'&&!actors.get(id)?.prisoner?0:1});
+      const proxy=humanScreenProxy(this.camera,rect,position.x,position.y,position.z);if(!proxy)continue;
+      result.push({id,...proxy,group:actors.get(id)?.state==='dead'?'corpse:human':`human:${actors.get(id)?.faction??'colony'}:${!!actors.get(id)?.prisoner}`,category:actors.get(id)?.state==='dead'?3:(actors.get(id)?.faction??'colony')==='colony'&&!actors.get(id)?.prisoner?0:1});
     }
     const animals=new Map((this.actorScene297?.animals??this.world?.wildlife?.animals)?.map(a=>[a.id,a]));
-    const center=new THREE.Vector3(),edge=new THREE.Vector3(),side=new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld,0);
     this.wildlife.forEachPose((id,species,x,y,z,height,radius)=>{
       if(!this.world||!knownPosition256(this.world,{x:Math.floor(x+.5),z:Math.floor(z+.5)}))return;
-      center.set(x,y+height*.5,z).project(this.camera);
-      if(center.z< cameraClipNear(this.camera)||center.z>1||Math.abs(center.x)>1||Math.abs(center.y)>1)return;
-      edge.set(x,y+height*.5,z).addScaledVector(side,Math.max(height*.5,radius)).project(this.camera);
+      const proxy=bodyScreenProxy(this.camera,rect,x,y,z,height,radius);if(!proxy)return;
       const animal=animals.get(id);
-      result.push({id,x:rect.left+(center.x+1)*rect.width/2,y:rect.top+(1-center.y)*rect.height/2,radius:Math.max(6,Math.abs(edge.x-center.x)*rect.width/2),depth:center.z,group:`${animal?.state==='dead'?'corpse':'animal'}:${species}:${animal?.domestic?'colony':'wild'}`,category:animal?.state==='dead'?3:2});
+      result.push({id,...proxy,group:`${animal?.state==='dead'?'corpse':'animal'}:${species}:${animal?.domestic?'colony':'wild'}`,category:animal?.state==='dead'?3:2});
     });
     this.mechanoids.forEachPose((id,x,y,z,height,radius,dead,kind)=>{
       if(!this.world||!knownPosition256(this.world,{x:Math.floor(x+.5),z:Math.floor(z+.5)}))return;
-      center.set(x,y+height*.5,z).project(this.camera);
-      if(center.z<cameraClipNear(this.camera)||center.z>1||Math.abs(center.x)>1||Math.abs(center.y)>1)return;
-      edge.set(x,y+height*.5,z).addScaledVector(side,Math.max(height*.5,radius)).project(this.camera);
-      result.push({id,x:rect.left+(center.x+1)*rect.width/2,y:rect.top+(1-center.y)*rect.height/2,radius:Math.max(6,Math.abs(edge.x-center.x)*rect.width/2),depth:center.z,group:dead?`corpse:mech:${kind}`:`mech:${kind}`,category:dead?3:1});
+      const proxy=bodyScreenProxy(this.camera,rect,x,y,z,height,radius);if(!proxy)return;
+      result.push({id,...proxy,group:dead?`corpse:mech:${kind}`:`mech:${kind}`,category:dead?3:1});
     });
     return result;
   }
@@ -1932,11 +1940,11 @@ export class SceneRenderCore {
     else this.doors.update(world,this.wallCutaway);this.walls.update(world,this.wallCutaway);this.furniturePresentation.update(world,this.structureGroup,this.wallCutaway,this.boxes,this.structureSignature.flowerChanges(),this.immutableWorlds.has(world),kinds);this.structureSignature.ackFurnitureBuild(); }
 
   protected buildJobs(world: World): void {
-    if(!this.confirmedIntents){buildJobMarkers(world,this.jobGroup,this.wallCutaway,this.boxes);return;}
+    if(!this.confirmedIntents){buildJobMarkers(world,this.jobGroup,this.wallCutaway,this.boxes,this.constructionGhosts);return;}
     this.confirmedJobMarkers.updatePhysical(world,this.wallCutaway);
     this.confirmedJobMarkers.updateIntentions(this.confirmedIntents.jobs,this.wallCutaway,world);
     this.confirmedJobsSource=this.confirmedIntents.jobs;
-    this.confirmedJobMarkers.present(this.jobGroup,this.boxes);
+    this.confirmedJobMarkers.present(this.jobGroup,this.boxes,this.constructionGhosts);
   }
 
   /** Runs in the existing RAF, never gated by the actor playhead or 200 ms.
@@ -1947,7 +1955,7 @@ export class SceneRenderCore {
     const first=!previous,surface=this.confirmedSurfaceDirty,known=(cell:number)=>knownCell256(world,cell);
     if(this.confirmedJobsSource!==intents.jobs||surface){
       this.confirmedJobMarkers.updateIntentions(intents.jobs,this.wallCutaway,world);
-      this.confirmedJobMarkers.present(this.jobGroup,this.boxes);this.confirmedJobsSource=intents.jobs;
+      this.confirmedJobMarkers.present(this.jobGroup,this.boxes,this.constructionGhosts);this.confirmedJobsSource=intents.jobs;
     }
     let zonesChanged=false;
     if(first||surface||previous.stockpiles!==intents.stockpiles||previous.home!==intents.home||previous.snowClearArea!==intents.snowClearArea){
@@ -2261,7 +2269,7 @@ export class SceneRenderCore {
   protected refreshAreaPointer():void {}
   private clearOrderTargets():void {
     this.resources.clearTargetPreview();this.crops.clearTargetPreview();this.plants.clearTargetPreview();
-    this.boxes.clearTargetPreview();this.doors.clearTargetPreview();this.walls.clearTargetPreview();
+    this.boxes.clearTargetPreview();this.constructionGhosts.clearTargetPreview();this.doors.clearTargetPreview();this.walls.clearTargetPreview();
     this.wind.clearTargetPreview();this.orderRockPreview.hide();
   }
   private updateOrderTargets(world:World,action:AreaAction,cells:readonly number[]):void {
@@ -2270,7 +2278,7 @@ export class SceneRenderCore {
     const targets=this.orderTargetIndex.select(action,cells.filter(i=>knownCell256(world,i)));
     this.resources.setTargetPreview(targets.resources);this.crops.setTargetPreview(targets.resources);this.plants.setTargetPreview(targets.resources);
     this.boxes.setTargetPreview(this.structureGroup,targets.structures);
-    this.boxes.setTargetPreview(this.jobGroup,targets.jobs);
+    this.boxes.setTargetPreview(this.jobGroup,targets.jobs);this.constructionGhosts.setTargetPreview(targets.jobs);
     for(const {group}of this.pileChunks.values())this.boxes.setTargetPreview(group,targets.chunks);
     this.doors.setTargetPreview(targets.structures);this.walls.setTargetPreview(targets.structures);this.wind.setTargetPreview(targets.structures);
     this.orderRockPreview.updateRock(world,[...targets.rocks]);
@@ -2454,7 +2462,7 @@ export class SceneRenderCore {
     this.mapOutline?.dispose();
     this.recreationHints.dispose();
     this.orderRockPreview.dispose();
-    this.constructionPreview.dispose();
+    this.constructionPreview.dispose();this.constructionGhosts.dispose();
     this.disposed = true;
     this.renderer.setAnimationLoop(null);
     this.hostPort.disconnectResize();

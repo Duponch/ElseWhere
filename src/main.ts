@@ -234,7 +234,7 @@ import './ui/cell-inspector.css';
 import './ui/inspection-dossiers.css';
 import './ui/journal-inspection.css';
 import { presentCellDescription, type CellHealth } from './ui/cell-inspector';
-import { mapObjectExists,nextMapObject,type MapObjectSelection } from './ui/map-object-selection';
+import { clickedMapObject,mapObjectExists,type MapObjectSelection } from './ui/map-object-selection';
 import { DEFAULT_PLAN_COLOR_369,planById369,planLabel369,type PlanColor369 } from './sim/plans-369';
 import {mapObjectGroupCells,MAX_MAP_OBJECT_SELECTION} from './ui/map-object-group-selection';
 import {mapObjectActions,mapObjectGroupActions} from './ui/map-object-actions';
@@ -1763,7 +1763,7 @@ function selectPawns(gesture:SelectionGesture,focus=false) {
   if(focus&&selectedPawn!==undefined)renderer?.focusPawn(selectedPawn);
   if(!nativeUi)rebuildInspector(); renderState();
 }
-function pickCell(x: number, z: number) {
+function pickCell(x: number, z: number, preferred?: MapObjectSelection) {
   if (!snapshot || replacingWorld || frontMenu.isOpen()) return;
   if(shootingControls.active){
     if(!knownPosition256(snapshot,{x,z})){shootingControls.cancel();renderState();return;}
@@ -1791,7 +1791,8 @@ function pickCell(x: number, z: number) {
     });
     return;
   }
-  const cell={x,z},object=nextMapObject(snapshot,cell,selectedCell?.x===x&&selectedCell.z===z?selectedObject:undefined);
+  // A click on a model drawn over another cell selects that thing first.
+  const cell={x,z},object=clickedMapObject(snapshot,cell,selectedCell?.x===x&&selectedCell.z===z?selectedObject:undefined,preferred);
   if(!object){clearSelection();return;}
   selection.clear();renderer?.setSelectedPawns(selection.ids);
   selectedPawn = undefined; selectedCell = cell;selectedObject=object;selectedObjects=[object];renderer?.setSelectedObject(object);
