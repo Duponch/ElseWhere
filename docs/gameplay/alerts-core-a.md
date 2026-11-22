@@ -54,7 +54,7 @@ Les jours sont des jours écoulés depuis le début de la partie (`GenDate.DaysP
 - **Avis critique.** Il utilise l'avis existant en haut de l'écran, sans clic vers le cas : aller au cas se fait par la carte d'alerte.
 - **Survol.** Les noms sont listés dans l'infobulle ; les cas ne sont pas surlignés sur la carte.
 - **Premier clic droit** : il va au dernier cas (le jeu de base, par un détail d'indice, va à l'avant-dernier).
-- **Hypothermie et voyages.** Seuls les colons présents sur la carte sont lus ; ceux d'une caravane ne sont pas comptés.
+- **Hypothermie et voyages.** Depuis la [vague 8](conformity-w8.md), les colons d'une caravane sont lus avec la température de leur case ; ceux d'une autre carte ne le sont pas.
 - **Loisirs.** Seuls les types qu'Elsewhere propose sont comptés : contemplation et vie sociale (toujours), fer à cheval, échecs, télévision, bière au sol, livre au sol. Les loisirs du jeu de base absents ici (gourmandise, culture, télescope) ne sont pas comptés. Une partie sans profil de richesse n'a pas cette alerte.
 - **Soins.** Un colon dont les soins sont réglés sur « aucun » n'est pas signalé (le jeu de base l'inclut).
 - **Défenses.** Elsewhere n'a pas de barricade ; tourelle, piège à pointes et sacs de sable comptent.

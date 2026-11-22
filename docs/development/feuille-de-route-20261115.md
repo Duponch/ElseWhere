@@ -116,10 +116,10 @@ Les 51 recherches d'Elsewhere ont les coûts et les bureaux du jeu de base.
   - Chaque lot mesure le chemin qu'il touche.
 - **Conformité.** Les audits ont aussi relevé des écarts sur des règles déjà présentes, à vérifier puis corriger au fil des lots :
   - les objets de départ ne sont pas interdits ;
-  - les liens de l'arbre de recherche sont une copie manuelle des prérequis de la simulation, qui peut dériver ;
-  - le pantalon pare-éclats ne se fabrique pas ;
-  - des raccourcis diffèrent du jeu de base (C, X) ;
-  - les seuils d'hypothermie et de nourriture faible de l'alerte ne sont pas ceux du jeu de base.
+  - ~~les liens de l'arbre de recherche sont une copie manuelle des prérequis de la simulation, qui peut dériver~~ : lus dans la table de la simulation (vague 8, [conformité](../gameplay/conformity-w8.md)) ;
+  - ~~le pantalon pare-éclats ne se fabrique pas~~ : fabriqué à l'atelier d'usinage (vague 8, schéma 375) ;
+  - ~~des raccourcis diffèrent du jeu de base (C, X)~~ : déjà alignés par les alertes C, dernier conseil corrigé (vague 8) ;
+  - ~~les seuils d'hypothermie et de nourriture faible de l'alerte ne sont pas ceux du jeu de base~~ : seuils déjà alignés par les alertes A ; nutrition comptée (houblon, bière, trémies) et caravanes corrigées (vague 8).
 - **Campagnes.** « Atterrissage » et « prison » sont relancées après chaque série de lots qui touche leurs systèmes.
 
 ## 5. Ordre retenu

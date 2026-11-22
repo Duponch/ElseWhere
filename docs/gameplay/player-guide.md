@@ -30,6 +30,10 @@ Dans **Travail**, **Copier** au bout de la ligne d'un colon retient ses priorit�
 
 Dans **Assignations → Tenues**, chaque politique règle **Vêtements de mort** (autorisés par défaut) : interdits, ils ne sont plus enfilés et un colon qui en porte un l'enlève. Sur une facture de vêtement « jusqu'à X en réserve », **Compter les vêtements de mort** est décochée par défaut : un vêtement pris sur un mort ne remplit pas la réserve. [Règles et adaptations V374](egg-box-v374.md).
 
+## Fabriquer un pantalon pare-balles — V375
+
+Après la recherche **Armure pare-balles** (Usinage puis Armure de plaques), ajoutez à un **atelier d'usinage** alimenté la facture **Pantalon pare-balles**, juste après le gilet : 30 tissus, 60 aciers et 1 composant, un colon d'Artisanat 4 au moins. L'ouvrage inachevé garde son auteur et sa progression ; le pantalon fini protège les jambes (couches peau et intermédiaire) et ralentit un peu la marche, comme celui des départs classiques. [Règles et limites](conformity-w8.md).
+
 ## Ordres de tous les jours — schéma 346
 
 Avec plusieurs colons sélectionnés, **Mobiliser**, **Stop** et **Tir à volonté** de l'inspecteur agissent sur toute la sélection, comme **R** : une sélection mixte est mobilisée entière, une sélection déjà mobilisée est démobilisée. Le dossier affiché reste celui du premier colon.
@@ -121,7 +125,7 @@ Les alertes apparaissent après les dix premières secondes de jeu, comme dans R
 
 **À l'oreille.** Chaque gravité de lettre a son propre son (grande menace, menace, mauvaise nouvelle, simple événement, bonne nouvelle). Une alerte haute fait tinter une petite cloche, une critique une double cloche ; plusieurs alertes à la fois ne sonnent qu'une fois. Un colon qui tombe à terre, une recherche terminée, un ouvrage achevé et un arbre qui tombe s'entendent aussi, comme vos gestes : onglets, choix d'un outil, désignations, plans, zones, vitesses et pause, mobilisation, ordres et sélection. Tous suivent le réglage **Effets** des Options. [Liste et limites](../development/audio-coverage-20261122.md).
 
-Survolez une carte pour lire l’explication et les noms concernés. **Clic gauche** : la caméra va sur le cas suivant et le sélectionne ; **clic droit** : le précédent. Une alerte sans cas à montrer ouvre le réglage utile, par exemple Architecte pour des lits ou Travail pour un geôlier. Si la colonne déborde, faites défiler à la molette ou avec ▲ ▼ ; « tout voir » ouvre la liste complète. Certaines alertes ne valent que pour une période : colons inoccupés à partir du premier jour, source de repas à partir du deuxième, défenses du deuxième au cinquième jour, nourriture et médicaments après deux jours et demi, couchages pendant les trente premiers jours. [Règles et limites](alerts-core-a.md), [besoins, santé, animaux et vêtements](alerts-core-b.md), [alertes occasionnelles et raccourcis](alerts-core-c.md).
+Survolez une carte pour lire l’explication et les noms concernés. **Clic gauche** : la caméra va sur le cas suivant et le sélectionne ; **clic droit** : le précédent. Une alerte sans cas à montrer ouvre le réglage utile, par exemple Architecte pour des lits ou Travail pour un geôlier. Si la colonne déborde, faites défiler à la molette ou avec ▲ ▼ ; « tout voir » ouvre la liste complète. Certaines alertes ne valent que pour une période : colons inoccupés à partir du premier jour, source de repas à partir du deuxième, défenses du deuxième au cinquième jour, nourriture et médicaments après deux jours et demi, couchages pendant les trente premiers jours. La nourriture comptée est celle qu'un humain peut manger, rangée dans une réserve, une étagère ou une trémie (ni foin ni houblon, mais la bière) ; l'hypothermie grave compte aussi les colons en caravane ([vague 8](conformity-w8.md)). [Règles et limites](alerts-core-a.md), [besoins, santé, animaux et vêtements](alerts-core-b.md), [alertes occasionnelles et raccourcis](alerts-core-c.md).
 
 ## T-shirt et blouson — V312
 

@@ -456,6 +456,12 @@ L’[audit du 13 septembre](../research/environment-review.md) confirme que les 
 
 ## Petit catalogue et statut des ajouts
 
+### Recette ajoutée V375 — pantalon pare-balles
+
+| Registre / identifiant local | Acquisition et usage physique | Limites |
+| --- | --- | --- |
+| Recette `make-flak-pants`, ouvrage `unfinished-flak-pants` | Pantalon pare-balles Core (`Apparel_FlakPants`) fabriqué à l'atelier d'usinage après Armure pare-balles : 30 tissus, 60 aciers, 1 composant, Artisanat 4, travail 9 000 ; ouvrage physique avec auteur et progression, qualité tirée à la fin. Le pantalon `flak-pants` existait déjà (départs classiques). | Ouvrage propre au pantalon (le jeu de base le partage avec le gilet) ; pas de couleur tirée. [Conformité, vague 8](conformity-w8.md). |
+
 ### Ajouts V365 — natte de paille et canapé
 
 | Registre / identifiant local | Acquisition et usage physique | Limites |
