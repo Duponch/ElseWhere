@@ -17,6 +17,7 @@ import { animalBody } from './wildlife-health.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 import { animalServiceIds } from './animal-rest-state.ts';
 import { structureById,structuresOfKind } from './structure-navigation.ts';
+import { isLeadSchema377,processLeading377 } from './animal-leading-377.ts';
 
 export type LeadingTask=AnimalHandlingTask & {kind:'lead';markerId:number};
 /** Core 1.6.4871 JobDriver_RopeToDestination constants. */
@@ -117,7 +118,8 @@ function followRopees(world:World,pawn:Pawn,task:LeadingTask,activeId:number|nul
   }
   return allNear;
 }
-export function processLeading(world:World,pawn:Pawn,task:LeadingTask,ctx:NeedContext):void {
+export function processLeading(world:World,pawn:Pawn,task:LeadingTask,ctx:NeedContext & {blocked?():Uint8Array}):void {
+  if(isLeadSchema377(world.schemaVersion)&&ctx.blocked){processLeading377(world,pawn,task,ctx as Parameters<typeof processLeading377>[3],{ropeable,usable,handler,claimedIds});return;}
   if(!allowedAreaServicesAllowed(world,pawn)){interruptWork(world,pawn);return;}
   const animal=world.wildlife?.animals.find(a=>a.id===task.animalId);
   if(!animal||!ropeable(animal)||!handler(pawn)||leadRopees(task).some(id=>!world.wildlife?.animals.some(a=>a.id===id&&ropeable(a)))) {interruptWork(world,pawn);return;}

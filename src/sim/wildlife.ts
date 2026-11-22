@@ -1,3 +1,4 @@
+import {advanceRopes377,isLeadSchema377} from './animal-leading-377.ts';
 import {processNuzzle350} from './nuzzle-350.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import { volcanicAnimalDensityFactor310 } from './volcanic-winter-state-310.ts';
@@ -23,7 +24,7 @@ import {isAnimalIdleWanderSchema304,processAnimalIdleWander304} from './animal-i
 import {animalClinicalRandom256} from './animal-condition-medical-frontier-256.ts';
 import {finishArrivalFacing256} from './arrival-rotation-256.ts';
 import {attachGeneratedAnimalGrowth256} from './animal-growth-runtime-256.ts';
-import {processGroupAnimalOnMap256,groupAnimalPreparation} from './group-animal-formation-256.ts';
+import {processGroupAnimalOnMap256,groupAnimalPreparation,groupAnimalPreparationIds256} from './group-animal-formation-256.ts';
 import {hitSkyfallerRoof256} from './roofing.ts';
 import {advanceDuckFlyers256,commitDuckFlyExits256,holdNewDuckArrival256,beginDuckFlyExit256,duckPhysicalOwnerCount256,type DuckFlyerServices256} from './duck-flyer-runtime-256.ts';
 import {selectDuckFlyerArrival256} from './duck-flyer-selection-256.ts';
@@ -194,6 +195,8 @@ export function reconcileWildlife(world:World,resourcesById?:ReadonlyMap<number,
   }
 }
 export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices256={hitRoof:hitSkyfallerRoof256}):void {
+  // Schema 377: roped animals follow their handler whatever its own turn.
+  if(isLeadSchema377(world.schemaVersion))advanceRopes377(world);
   const s=world.wildlife;if(!s)return;advanceGeographicRenewal262(world,(species,cell,nextDecision,flyIn)=>addAnimal(world,s,species,cell,nextDecision,flyIn));advancePopulation(world,s);advanceAnimalLife(world);advanceEggLayers256(world);if(!s.animals.length){advanceDuckFlyers256(world,duckFlyerServices);return;}
   const animalAir=createAnimalAirReader466(world),readThermal466=createAnimalThermalPass466(world,animalAir);
   // A meal can remain active for many ticks. Capture its plant identity once
@@ -214,7 +217,8 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
   let searches=0;
   const hauling=createAnimalHaulingPass282(world,readArea),takeHaulSearch=()=>{if(searches>=1)return false;searches++;return true;};
   const structureNavigation=structureNavigationReader(world);
-  const getNav=createAnimalNavigationReader(world,()=>structureNavigation.read(),readArea);
+  let grouped377:Set<number>|undefined;
+  const getNav=createAnimalNavigationReader(world,()=>structureNavigation.read(),readArea,undefined,a=>(grouped377??=groupAnimalPreparationIds256(world)).has(a.id));
   let physical:Uint8Array|undefined,shot:ReturnType<typeof captureWorldShotGrid>|undefined;
   const getPhysical=()=>physical??=blockedCells(world,true,structureNavigation.read()),getShot=()=>shot??=captureWorldShotGrid(world);
   const hour=Math.floor(calendarTick(world)%6000/250),night=hour<7||hour>=22;
@@ -473,7 +477,9 @@ export function animalPathContinuationAllowed297(world:World,a:WildAnimal,core:n
  const body=animalBody(a);if(!body.movingCapable||!body.canBeAwake||body.painShock||body.vitalFailure)return false;
  if(!a.burning&&!a.flee&&!a.retaliation&&siteAmbushWaiting263(world,a.id,'animal'))return false;
  const danger=!!(a.burning||a.flee||a.threat||a.retaliation||a.strike&&a.strike.untilCore>core||a.manhunter);
- if(!danger&&!a.confusion&&(c.led.has(a.id)||c.matingFemales.has(a.id)))return false;
+ // Schema 377: a roped animal walks its own route behind its handler (FollowRoper).
+ const roped377=c.led.has(a.id)&&isLeadSchema377(world.schemaVersion);
+ if(!danger&&!a.confusion&&(c.led.has(a.id)&&!roped377||c.matingFemales.has(a.id)))return false;
  if(!danger&&c.services.has(a.id)&&((!!a.taming?.designated||!!a.domestic)&&animalHandlingHolding(world,a.id)
   ||!!a.domestic&&(animalCareInProgress(world,a)||animalFeedingInProgress(world,a))))return false;
  const group=groupAnimalPreparation(world,a.id);
@@ -485,7 +491,7 @@ export function animalPathContinuationAllowed297(world:World,a:WildAnimal,core:n
  if(a.haul&&a.haul.phase!=='holding'&&!animalHaulAvailable282(world,a,c.night))return false;
  // Specialized routes were admitted before the generic pen fallback. Keep
  // this separation: allowed-area costs are not a strict corridor wall.
- const special=!!(group||a.burning||a.flee||a.threat||a.retaliation||a.manhunter||a.predation||a.exiting||a.animalRest||a.eggLay||a.confusion||a.hiveJob||a.animalAreaReturn287||a.animalThermalRefuge288||a.haul&&a.haul.phase!=='holding');
+ const special=!!(roped377||group||a.burning||a.flee||a.threat||a.retaliation||a.manhunter||a.predation||a.exiting||a.animalRest||a.eggLay||a.confusion||a.hiveJob||a.animalAreaReturn287||a.animalThermalRefuge288||a.haul&&a.haul.phase!=='holding');
  if(!special){if(animalFalloutNextStepBlocked294(world,a))return false;const pen=grazingPen(world,a),next=a.path[0]!;if(pen&&!pen.has(next.z*world.width+next.x))return false;}
  return true;
 }

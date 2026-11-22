@@ -43,6 +43,15 @@ export interface AnimalHandlingTask {
   ropees?:number[];
   /** A second animal reserved while the handler physically walks to it. */
   gatherId?:number;
+  /** Schema 377 (Core Toils_Rope.RopePawn): Core tick at which the 30-tick
+   * roping of the last attached animal ends; the next search runs once then. */
+  ropeUntil377?:number;
+  /** Schema 377 (Core Pawn_PathFollower): Core tick until which the handler
+   * waits because a rope is stretched beyond its length. */
+  ropeWait377?:number;
+  /** Schema 377: the handler's last cells on its current path, oldest first
+   * (at most 5), read for the followers' marching order. */
+  trail377?:Cell[];
   /** Schema 364 release: the outside cell the animal is carried to. */
   drop364?:Cell;
 }

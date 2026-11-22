@@ -20,6 +20,11 @@ export function groupAnimalPreparation(w:World,id:number):{group:PreparingGroup;
  for(const row of localWorldGroups(w)){const g=row.state;if(!('manifest'in g))continue;const line=g.animalPreparation?.lines.find(l=>l.animalId===id);if(line)return {group:g,line};}
  const g=w.group;if(g&&'manifest'in g){const line=g.animalPreparation?.lines.find(l=>l.animalId===id);if(line)return {group:g,line};}return;
 }
+/** Ids of every animal on a preparation line (the same lines as groupAnimalPreparation), read once per pass. */
+export function groupAnimalPreparationIds256(w:World):Set<number> {
+ const ids=new Set<number>(),add=(g:unknown)=>{if(g&&typeof g==='object'&&'manifest' in g)for(const l of (g as PreparingGroup).animalPreparation?.lines??[])ids.add(l.animalId);};
+ for(const row of localWorldGroups(w))add(row.state);add(w.group);return ids;
+}
 /** Active services/captured edges are never erased to obtain an eligible animal. */
 function animalFormationReason256(w:World,a:WildAnimal,preparing:boolean,ordinaryAdmission=false):string|undefined {
  if(w.schemaVersion<256||!w.wildlife?.animals.includes(a)||!a.domestic||a.state==='dead'||a.health?.death)return 'Animal domestique vivant et présent requis.';

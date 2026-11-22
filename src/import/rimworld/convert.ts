@@ -25,7 +25,7 @@ import {isFueledBuilding,newBuildingFuel,fuelLimit} from '../../sim/fuel.ts';
 import {stationRecipes} from '../../sim/production-recipes.ts';
 import {newShelfStorage} from '../../sim/shelf-storage.ts';
 import {initialGrave} from '../../sim/burial.ts';
-import {penAnimalsForVersion} from '../../sim/animal-pens.ts';
+import {PEN_ANIMALS,animalPenAt,invalidateAnimalPens,penAnimalsForVersion} from '../../sim/animal-pens.ts';
 import {createFlowerPotState} from '../../sim/flower-pot.ts';
 import {newVentState} from '../../sim/vent.ts';
 import {initialSpikeTrapState} from '../../sim/spike-trap-state.ts';
@@ -528,4 +528,18 @@ function finalize(ctx:ImportContext):void {
  const w=ctx.w;
  refreshStock(w);reconcilePower(w);invalidateTerrainJournal(w.tiles);
  if(w.home)w.home=[...new Set(w.home)].sort((a,b)=>a-b);
+ assignImportedPens(w);
+}
+/** RimWorld saves no pen assignment: a roamer standing in an enclosed pen
+ * belongs to it (AnimalPenUtility.GetCurrentPenOf). Elsewhere keeps that
+ * membership in domestic.penMarkerId, which holds the animal inside its pen;
+ * without it an imported herd walked out whenever the gate opened. */
+export function assignImportedPens(w:World):void {
+ invalidateAnimalPens(w);
+ for(const a of w.wildlife?.animals??[]){
+  if(!a.domestic||a.domestic.penMarkerId!==undefined||!PEN_ANIMALS.includes(a.species))continue;
+  const pen=animalPenAt(w,a.x,a.z);if(!pen?.closed)continue;
+  const marker=w.structures.find(s=>s.id===pen.markerId);
+  if(marker?.pen?.accepted.includes(a.species))a.domestic.penMarkerId=pen.markerId;
+ }
 }

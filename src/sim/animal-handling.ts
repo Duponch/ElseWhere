@@ -228,7 +228,7 @@ function finish(w:World,p:Pawn,a:WildAnimal,task:AnimalHandlingTask,ctx:NeedCont
   }
   if(!releaseWork(w,p))interruptWork(w,p);
 }
-interface HandlingContext extends NeedContext { candidates():Reachability|null; blocked():Uint8Array }
+interface HandlingContext extends NeedContext { candidates():Reachability|null; blocked():Uint8Array; searchWith?(grid:Uint8Array,goals:ReadonlySet<number>):Reachability|null }
 export function processHandling(w:World,p:Pawn,ctx:HandlingContext):void {
   if(!allowedAreaServicesAllowed(w,p)){interruptWork(w,p);return;}
   const task=p.animalHandling;if(!task)return;

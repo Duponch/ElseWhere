@@ -1612,7 +1612,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       }
       if(pawn.firefighting&&processFirefighting(world,pawn,needsContext))continue;
       if(pawn.animalRescue){processAnimalRescue(world,pawn,needsContext);continue;}
-      if(pawn.animalHandling){processHandling(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked});continue;}
+      if(pawn.animalHandling){processHandling(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked,searchWith:(grid,goals)=>search(world,pawn,grid,occupied,budget,goals)});continue;}
       if(pawn.animalFeed){processAnimalFeeding(world,pawn,needsContext);continue;}
       if(pawn.animalCare){processAnimalCare(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked},()=>workGlow(pawn));continue;}
       if(pawn.hunting){processHunting(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked});continue;}

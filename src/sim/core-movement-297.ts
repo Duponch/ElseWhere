@@ -13,6 +13,7 @@ import {isDraftedTending} from './drafted-tending.ts';
 import {isDraftedRescue} from './rescue.ts';
 import {effectiveCore297,effectiveLocal297} from './core-phase-297.ts';
 import {startTravel} from './movement.ts';
+import {roperHeld377} from './animal-leading-377.ts';
 import {processDraft} from './drafting.ts';
 import {isDraftedEquipment346} from './drafted-orders-346.ts';
 import {blockedCells,canStep} from './pathfinding.ts';
@@ -89,6 +90,7 @@ export function createCoreMovement297(world:World){
     // test of a diagonal step without scanning every structure, as for transit exits.
     // startTravel is admitted: the stun/medical/carrier tests above and canStep's
     // actorStepAllowed(world, pawn, next) were just answered, nothing changed since.
+    else if(roperHeld377(world,pawn,core))continue;
     else {const next=pawn.path[0];if(next&&canStep(world,pawn,next,grid(),CIVIL_TRANSIT_BLOCKERS,captureStructureNavigation(world))&&startTravel(world,pawn,next,readLight,undefined,false,true))pawn.path.shift();}
     if(m!==pawn.motion||x!==pawn.x||z!==pawn.z){if(!changed.includes(pawn.id))changed.push(pawn.id);touchPassengers(pawn);changedCells=true;}
    }

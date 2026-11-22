@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { Fn, attribute, float, mix, positionLocal, sin, uniform, vec3 } from 'three/tsl';
+import { Fn, attribute, float, floor, min, mix, positionLocal, sin, uniform, vec3 } from 'three/tsl';
 import { localTimeSeconds } from '../bridge/clock-rate';
 import type { PenRegion } from '../sim/animal-pens';
 import { readPenViews } from '../ui/core-animal-alerts';
@@ -11,16 +11,33 @@ import type { MotionTimeline } from './MotionTimeline';
 import type { PawnLayer } from './PawnLayer';
 import type { WildlifeLayer } from './WildlifeLayer';
 
-type Pair={pawn:Pawn;animal:WildAnimal;height:number};
-const STRIDE=17;
+const MAX_BENDS=4;
+/** Bend points of one cord: the handler's own trail cells between it and the
+ * animal (schema 377), nearest the handler first, at most four. The animal
+ * follows that trail, so a cord drawn through it wraps a door or a corner
+ * instead of crossing the wall; an empty trail keeps a straight cord. */
+export function ropeBends(trail:readonly Cell[]|undefined,animal:Cell):Cell[] {
+  if(!trail?.length)return [];
+  let nearest=0,best=Infinity;
+  for(let i=0;i<trail.length;i++){const c=trail[i]!,d=(c.x-animal.x)**2+(c.z-animal.z)**2;if(d<=best){best=d;nearest=i;}}
+  const from=best===0?nearest+1:nearest;
+  return trail.slice(from).reverse().slice(0,MAX_BENDS);
+}
+type Pair={pawn:Pawn;animal:WildAnimal;height:number;bends:Cell[]};
+const STRIDE=26;
 const OFFSETS=[['aRoperFrom',3,0],['aRoperTo',3,3],['aRoperTime',2,6],
-  ['aAnimalFrom',3,8],['aAnimalTo',3,11],['aAnimalTime',2,14],['aRopeHeight',1,16]] as const;
+  ['aAnimalFrom',3,8],['aAnimalTo',3,11],['aAnimalTime',2,14],['aRopeHeight',1,16],
+  ['aBends01',4,17],['aBends23',4,21],['aBendCount',1,25]] as const;
+/** Two columns per straight piece, up to five pieces (four bends). */
+const COLUMNS=2*(MAX_BENDS+1);
 
 function ribbonGeometry(capacity:number):THREE.InstancedBufferGeometry {
-  // Two crossed ribbons form a slim 3D cord. Each is bent into two segments
-  // so its middle sags; all ropes still share one draw and one vertex stream.
+  // Two crossed ribbons form a slim 3D cord. Each piece between two bend
+  // points has a middle column so it sags; unused pieces collapse onto the
+  // animal. All ropes still share one draw and one vertex stream.
   const vertices:number[]=[];
-  for(const crossed of [0,1])for(const [from,to] of [[0,.5],[.5,1]]){
+  for(const crossed of [0,1])for(let from=0;from<COLUMNS;from++){
+    const to=from+1;
     for(const [t,side] of [[from,-1],[from,1],[to,-1],[to,-1],[from,1],[to,1]])
       vertices.push(t!,side!,crossed);
   }
@@ -65,11 +82,17 @@ export class RopeLayer {
       const aa=at.y.greaterThan(at.x).select(this.time.sub(at.x).div(at.y.sub(at.x).max(.0001)).clamp(0,1),float(1));
       const roper=mix(attribute('aRoperFrom','vec3'),attribute('aRoperTo','vec3'),ra);
       const animal=mix(attribute('aAnimalFrom','vec3'),attribute('aAnimalTo','vec3'),aa);
-      const t=positionLocal.x,delta=animal.sub(roper),distance=delta.xz.length().max(.0001);
+      const b01=attribute('aBends01','vec4'),b23=attribute('aBends23','vec4'),count=attribute('aBendCount','float');
+      const p1=count.greaterThan(.5).select(vec3(b01.x,0,b01.y),animal),p2=count.greaterThan(1.5).select(vec3(b01.z,0,b01.w),animal);
+      const p3=count.greaterThan(2.5).select(vec3(b23.x,0,b23.y),animal),p4=count.greaterThan(3.5).select(vec3(b23.z,0,b23.w),animal);
+      const column=positionLocal.x,piece=min(floor(column.mul(.5)),float(MAX_BENDS)),u=column.mul(.5).sub(piece);
+      const pick=(i:typeof piece)=>i.lessThan(.5).select(roper,i.lessThan(1.5).select(p1,i.lessThan(2.5).select(p2,i.lessThan(3.5).select(p3,i.lessThan(4.5).select(p4,animal)))));
+      const a=pick(piece),b=pick(piece.add(1)),delta=b.sub(a),distance=delta.xz.length().max(.0001);
+      const t=piece.add(u).div(count.add(1)).min(1);
       const side=positionLocal.y.mul(.018),crossed=positionLocal.z.greaterThan(.5);
       const right=vec3(delta.z.div(distance),0,delta.x.negate().div(distance));
-      const sag=sin(t.mul(Math.PI)).mul(.14);
-      return roper.add(delta.mul(t)).add(vec3(0,mix(float(1.04),attribute('aRopeHeight','float'),t).sub(sag),0))
+      const sag=sin(u.mul(Math.PI)).mul(distance.mul(.05).min(.14));
+      return a.add(delta.mul(u)).add(vec3(0,mix(float(1.04),attribute('aRopeHeight','float'),t).sub(sag),0))
         .add(crossed.select(vec3(0,side,0),right.mul(side)));
     })();
     this.mesh=new THREE.Mesh(ribbonGeometry(this.capacity),material);
@@ -95,7 +118,7 @@ export class RopeLayer {
       const region=regions.get(markerId);
       for(const id of leadRopees(task)){
         const animal=animals.get(id);if(!animal||region?.cells.has(animal.z*world.width+animal.x))continue;
-        next.push({pawn,animal,height:Math.max(.36,.58*animalBodySize(animal))});
+        next.push({pawn,animal,height:Math.max(.36,.58*animalBodySize(animal)),bends:ropeBends(task.trail377,animal)});
       }
     }
     if(next.length>this.capacity){
@@ -113,15 +136,16 @@ export class RopeLayer {
     this.time.value=localTimeSeconds(tick,origin);
     const stream=(this.mesh.geometry.getAttribute('aRoperFrom') as THREE.InterleavedBufferAttribute).data as THREE.InstancedInterleavedBuffer;
     let dirty=false;
-    this.pairs.forEach(({pawn,animal,height},i)=>{
+    this.pairs.forEach(({pawn,animal,height,bends},i)=>{
       const heldPawn=pawns?.presentedPose(pawn.id),heldAnimal=wildlife?.presentedPose(animal.id);
       const p=heldPawn?{from:heldPawn,to:heldPawn,start:0,end:0}:presented(pawn,pawn.motion,timeline?.segment(pawn.id),tick);
       const a=heldAnimal?{from:heldAnimal,to:heldAnimal,start:0,end:0}:presented(animal,animal.motion,timeline?.segment(animal.id),tick);
-      const signature=`${heldPawn&&heldAnimal?0:origin}:${p.start}:${p.end}:${p.from.x}:${p.from.z}:${p.to.x}:${p.to.z}:${heldPawn?.y??0}:${a.start}:${a.end}:${a.from.x}:${a.from.z}:${a.to.x}:${a.to.z}:${heldAnimal?.y??0}:${height}`;
+      const signature=`${heldPawn&&heldAnimal?0:origin}:${p.start}:${p.end}:${p.from.x}:${p.from.z}:${p.to.x}:${p.to.z}:${heldPawn?.y??0}:${a.start}:${a.end}:${a.from.x}:${a.from.z}:${a.to.x}:${a.to.z}:${heldAnimal?.y??0}:${height}:${bends.map(c=>c.x+','+c.z).join(';')}`;
       if(this.keys[i]===signature)return;this.keys[i]=signature;dirty=true;this.stats.uploads++;
       const offset=i*STRIDE,array=stream.array as Float32Array;
       array.set([p.from.x,heldPawn?.y??0,p.from.z,p.to.x,heldPawn?.y??0,p.to.z,localTimeSeconds(p.start,origin),localTimeSeconds(p.end,origin),
-        a.from.x,heldAnimal?.y??0,a.from.z,a.to.x,heldAnimal?.y??0,a.to.z,localTimeSeconds(a.start,origin),localTimeSeconds(a.end,origin),height],offset);
+        a.from.x,heldAnimal?.y??0,a.from.z,a.to.x,heldAnimal?.y??0,a.to.z,localTimeSeconds(a.start,origin),localTimeSeconds(a.end,origin),height,
+        bends[0]?.x??0,bends[0]?.z??0,bends[1]?.x??0,bends[1]?.z??0,bends[2]?.x??0,bends[2]?.z??0,bends[3]?.x??0,bends[3]?.z??0,bends.length],offset);
     });
     if(dirty)stream.needsUpdate=true;
   }

@@ -3,6 +3,8 @@ import {createAnimalNavigationReader,moveAnimal} from './wildlife-navigation.ts'
 import {captureAnimalPathGuards297,animalPathContinuationAllowed297} from './wildlife.ts';
 import {animalCarrier} from './animal-rest-state.ts';
 import {animalBody} from './wildlife-health.ts';
+import {isLeadSchema377} from './animal-leading-377.ts';
+import {groupAnimalPreparationIds256} from './group-animal-formation-256.ts';
 import {animalBodySize} from './animal-life.ts';
 import {finishSnowStep} from './snow-surface.ts';
 import {recordShipCasketFilthMovement277} from './filth.ts';
@@ -13,12 +15,12 @@ import type {World} from './types.ts';
  * search quotas, flight jobs and decision RNG retain their macro owners. */
 export function createAnimalCoreMovement297(world:World){
  let population:WildAnimal[]|undefined,active:WildAnimal[]|undefined;
- let guards:ReturnType<typeof captureAnimalPathGuards297>|undefined;
+ let guards:ReturnType<typeof captureAnimalPathGuards297>|undefined,grouped377:Set<number>|undefined;
  let navigation:ReturnType<typeof createAnimalNavigationReader>|undefined;
  let lastArrivalCore=effectiveCore297(world),pendingFull=false,pendingSurface=false,pendingCells=false;
  const pendingActors=new Set<number>();
  const rows=()=>{
-  if(population!==world.wildlife?.animals){population=world.wildlife?.animals;active=undefined;guards=undefined;navigation=undefined;}
+  if(population!==world.wildlife?.animals){population=world.wildlife?.animals;active=undefined;guards=undefined;navigation=undefined;grouped377=undefined;}
   return active??=(population??[]).filter(a=>a.path.length>0||!!a.motion&&Math.ceil(a.motion.end*10)>lastArrivalCore||!!a.stun&&a.stun.untilCore>lastArrivalCore||!!a.strike&&a.strike.untilCore>lastArrivalCore);
  };
  const expire=(a:WildAnimal,core:number)=>{
@@ -27,7 +29,7 @@ export function createAnimalCoreMovement297(world:World){
   if(a.stun&&a.stun.untilCore<=core){delete a.stun;pendingActors.add(a.id);}
   if(a.strike&&a.strike.untilCore<=core&&a.strike.atCore<a.strike.untilCore){delete a.strike;pendingActors.add(a.id);}
  };
- const invalidate=()=>{active=undefined;guards=undefined;navigation=undefined;};
+ const invalidate=()=>{active=undefined;guards=undefined;navigation=undefined;grouped377=undefined;};
  const arrivals=()=>{
   const core=effectiveCore297(world);
   if(core===lastArrivalCore)return;
@@ -61,13 +63,13 @@ export function createAnimalCoreMovement297(world:World){
     if(!a.path.length||a.motion&&a.motion.end>now)continue;
     guards??=captureAnimalPathGuards297(world);
     if(!animalPathContinuationAllowed297(world,a,core,guards))continue;
-    navigation??=createAnimalNavigationReader(world,undefined,undefined,()=>effectiveLocal297(world));
+    navigation??=createAnimalNavigationReader(world,undefined,undefined,()=>effectiveLocal297(world),a=>!!guards?.led.has(a.id)&&isLeadSchema377(world.schemaVersion)||(grouped377??=groupAnimalPreparationIds256(world)).has(a.id));
     const nav=navigation(a),haul=!!a.haul&&a.haul.phase!=='holding';
     // Door operation stays with the macro hauling owner. A finished opening
     // may be used, but no inventory/permission/opening is acquired here.
     if(haul&&!nav.haulStep(a,a.path[0]!))continue;
     const motion=a.motion,x=a.x,z=a.z,pathLength=a.path.length;
-    moveAnimal(world,a,haul?(from,to)=>nav.haulStep(a,to):nav.step,animalBody(a).capacities.moving,nav.geometry);
+    moveAnimal(world,a,haul?(from,to)=>nav.haulStep(a,to):nav.step,animalBody(a).capacities.moving,nav.geometry,guards.led.has(a.id)&&isLeadSchema377(world.schemaVersion));
     if(a.motion!==motion||a.x!==x||a.z!==z||a.path.length!==pathLength){pendingActors.add(a.id);pendingCells=true;}
    }
    const result={actorsChanged:[...pendingActors],changedCells:pendingCells,requiresFull:pendingFull,deferredChange297:pendingSurface};

@@ -38,7 +38,8 @@ const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bond
  * fire-starting spree is kept, and refused). Schema 376: the game's planet
  * geometry (revision 2) is kept, and refused: site climates depend on its
  * tile centres, so a geographic game meant to be relabelled as an older
- * schema is generated with `terrain: 'historical'`. */
+ * schema is generated with `terrain: 'historical'`. Schema 377: the timers
+ * and the trail of a lead task (the task itself is kept). */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -54,6 +55,8 @@ function strip(value:unknown,version:number):void {
     if(Array.isArray(o.allowedItems)&&Object.hasOwn(o,'taintedAllowed374'))delete o.taintedAllowed374;
     if(typeof o.includeEquipped==='boolean'&&Object.hasOwn(o,'includeTainted374'))delete o.includeTainted374;
   }
+  // Schema 377: the leading timers and the handler's trail of a lead task.
+  if(version<377&&o.kind==='lead'&&Object.hasOwn(o,'markerId')){delete o.ropeUntil377;delete o.ropeWait377;delete o.trail377;}
   // Schema 360: a pawn's active inspiration.
   if(version<360&&Object.hasOwn(o,'inspiration360'))delete o.inspiration360;
   // Schema 368: the Pyromaniac degree.
@@ -136,7 +139,7 @@ export function stripFutureContent(value:unknown,version:number):void {
   if(version<352&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).letters352;
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
-  if(version<374)strip(value,version);
+  if(version<377)strip(value,version);
 }
 
 /** The reference for a number-only migration step from `version`: the same

@@ -1,3 +1,4 @@
+import {ROPE_STRETCH_WAIT377,ROPE_WORK_TICKS377,TRAIL_CELLS377} from './animal-leading-377.ts';
 import {validReleaseDesignation364,validReleaseWildTask364} from './execute-release-364.ts';
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
 import {startingPetFourNoTamenessDecay256} from './starting-pet-four-tameness-256.ts';
@@ -27,6 +28,15 @@ const obj=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Ar
 const int=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>Number.isSafeInteger(v)&&Number(v)>=min&&Number(v)<=max;
 const finite=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max;
 const keys=(v:Record<string,unknown>,required:string[],optional:string[]=[])=>required.every(k=>Object.hasOwn(v,k))&&Object.keys(v).every(k=>required.includes(k)||optional.includes(k));
+/** Schema 377 leading timers and the handler's trail (animal-leading-377):
+ * a timer belongs to a rope already held, never longer than its Core wait. */
+const validLead377=(w:World,h:Record<string,unknown>):boolean=>{
+  const core=w.tick*10+(Number.isSafeInteger(w.phaseCore297)?Number(w.phaseCore297):0),held=Array.isArray(h.ropees)&&h.ropees.length>0;
+  return (h.ropeUntil377===undefined||held&&h.phase==='lead'&&int(h.ropeUntil377,0,core+ROPE_WORK_TICKS377))
+    &&(h.ropeWait377===undefined||held&&int(h.ropeWait377,0,core+ROPE_STRETCH_WAIT377))
+    &&(h.trail377===undefined||Array.isArray(h.trail377)&&h.trail377.length<=TRAIL_CELLS377
+      &&h.trail377.every(c=>obj(c)&&keys(c,['x','z'])&&int(c.x,0,w.width-1)&&int(c.z,0,w.height-1)));
+};
 const productForVersion=(a:WildAnimal,version:number)=>version>=121?productKind(a):a.species==='muffalo'?'shear':a.species==='dromedary'&&a.sex==='female'?'milk':undefined;
 const productReadyForVersion=(a:WildAnimal,version:number)=>!!a.domestic&&!!productForVersion(a,version)&&(a.domestic.productFullness??0)>=1;
 
@@ -160,7 +170,8 @@ export function validateDomesticAnimals(w:World,version:number):string[] {
     const product=obj(h)&&(h.kind==='milk'||h.kind==='shear');
     const training=obj(h)&&h.kind==='train';
     if(h!==undefined&&!(training?validAnimalTrainingService282(w,p,version):slaughter?validSlaughterTask(w,p,version):release?validReleaseWildTask364(w,p,version):lead
-      ?version>=119&&keys(h,['animalId','kind','markerId','phase','sourcePileId','carryPileId','quantity','step','progress'],version>=135?['ropees','gatherId']:[])&&base(h)&&int(h.markerId,1,w.nextId-1)&&['approach','lead',...(version>=135?['gather']:[])].includes(String(h.phase))
+      ?version>=119&&keys(h,['animalId','kind','markerId','phase','sourcePileId','carryPileId','quantity','step','progress'],version>=135?['ropees','gatherId',...(version>=377?['ropeUntil377','ropeWait377','trail377']:[])]:[])&&base(h)
+        &&validLead377(w,h)&&int(h.markerId,1,w.nextId-1)&&['approach','lead',...(version>=135?['gather']:[])].includes(String(h.phase))
         &&h.sourcePileId===0&&h.carryPileId===null&&h.quantity===0&&h.step===0&&h.progress===0
         &&(h.ropees===undefined||version>=135&&Array.isArray(h.ropees)&&h.ropees.length>=1&&h.ropees.length<=MAX_ROPEES
           &&h.ropees.every(id=>int(id,1,w.nextId-1))&&new Set(h.ropees).size===h.ropees.length&&h.ropees.includes(Number(h.animalId))
