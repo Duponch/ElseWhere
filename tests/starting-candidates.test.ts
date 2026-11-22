@@ -1,5 +1,5 @@
 import { expect,test } from 'vitest';
-import { BACKGROUND_ADULT_MIN_TICKS,BACKGROUND_SKILL_IDS,backgroundGains,backgroundSkillRefusal,validBackground } from '../src/sim/colonist-backgrounds.ts';
+import { BACKGROUND_ADULT_MIN_TICKS,BACKGROUND_SKILL_IDS,backgroundGains,backgroundSkillRefusal,backgroundWorkRefusal,validBackground } from '../src/sim/colonist-backgrounds.ts';
 import { validHumanAge } from '../src/sim/human-age.ts';
 import { createScenarioWorld } from '../src/sim/new-game.ts';
 import { validatePawnAppearance } from '../src/sim/pawn-appearance.ts';
@@ -52,7 +52,7 @@ test('prospective profiles have all twelve skills, compatible biographies and pa
   const stories=new Set<string>(),traits=new Set<string>(),ages=new Set<number>();
   for(let index=0;index<64;index++){
     const seed=Math.imul(index+1,0x9e3779b1)>>>0,pawn=previewStartingCandidate(seed,{serial:index%8+1,generation:Math.floor(index/8)});
-    expect(validHumanAge(pawn.age,229)).toBe(true);expect(validBackground(pawn.background,229,pawn.age)).toBe(true);
+    expect(validHumanAge(pawn.age,229)).toBe(true);expect(validBackground(pawn.background,SCHEMA_VERSION,pawn.age)).toBe(true);
     expect(validSkills(pawn.skills,0,229)).toBe(true);expect(validTraits(pawn.traits,SCHEMA_VERSION)).toBe(true);
     expect(validatePawnAppearance(pawn.appearance)).toEqual([]);
     expect(Object.keys(pawn.skills).sort()).toEqual([...BACKGROUND_SKILL_IDS,'lastResetTick'].sort());
@@ -169,7 +169,9 @@ function manualUncoveredRoster(seed:number):StartingCandidateDescriptor[] {
     let found=false;
     for(let generation=0;generation<4096;generation++){
       const descriptor={serial:index+1,generation},pawn=previewStartingCandidate(seed,descriptor);
-      if(pawn.background!.childhood==='sheltered-child'&&pawn.background!.adulthood==='merchant'){
+      // Schema 370: Core stories; three people who all refuse firefighting
+      // (a pyromaniac or a medical assistant childhood) leave the team uncovered.
+      if(backgroundWorkRefusal(pawn,'firefight')!==undefined){
         roster[index]=descriptor;found=true;break;
       }
     }
@@ -192,7 +194,8 @@ test('the nine installed required work types exclude doctor and initial generati
 
 test('a manually selected incapacitated team reports actual work gaps without changing its advertised snapshot or preventing start',()=>{
   const seed=333,roster=manualUncoveredRoster(seed),selected=startingPartyFromRoster(seed,roster),before=previewStartingParty(seed,selected.selected);
-  expect(startingPartyMissingWork(seed,selected.selected)).toEqual(['firefight','build','grow','mine','gather','craft']);
+  expect(startingPartyMissingWork(seed,selected.selected)).toEqual(STARTING_REQUIRED_WORK.filter(work=>before.pawns.every(p=>backgroundWorkRefusal(p,work)!==undefined)));
+  expect(startingPartyMissingWork(seed,selected.selected)).toContain('firefight');
   expect(previewStartingParty(seed,selected.selected)).toEqual(before);
   const world=createScenarioWorld(42,32,'crashlanded',undefined,selected);
   expect(world.pawns.map(personal)).toEqual(before.pawns.map(personal));

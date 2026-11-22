@@ -1,4 +1,5 @@
 import {LEGACY_TRAIT_IDS} from '../../src/sim/traits.ts';
+import {isCoreBackstoryId370} from '../../src/sim/core-backstories-370.ts';
 import {isTextileApparelItem308,isTextileMaterial308} from '../../src/sim/textile-apparel-308.ts';
 import {isGarmentItem312,isHatItem353} from '../../src/sim/apparel-definitions.ts';
 import {isCookingAnimalProduct353} from '../../src/sim/cooking-ingredients-353.ts';
@@ -92,6 +93,8 @@ function strip(value:unknown,version:number):void {
     if(o.revision===1&&typeof o.nextMoveOrderIsWait==='boolean')delete o.nuzzle350;
     if(o.profile==='cassandra-misc-v1')for(const k of ['psychicDrones350','psychicSoothes350','lastPsychicDrone350','lastPsychicSoothe350','psychic350'])delete o[k];
   }
+  // Schema 370: a Core backstory pair (an older person keeps no recorded past).
+  if(version<370&&o.background&&typeof o.background==='object'&&isCoreBackstoryId370((o.background as Record<string,unknown>).childhood))delete o.background;
   // Schema 359: the outdoors need of colonists and prisoners.
   if(version<359&&Object.hasOwn(o,'outdoors359'))delete o.outdoors359;
   // Schema 345: the room size need of colonists and prisoners.
@@ -125,7 +128,7 @@ export function stripFutureContent(value:unknown,version:number):void {
   if(version<352&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).letters352;
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
-  if(version<368)strip(value,version);
+  if(version<370)strip(value,version);
 }
 
 /** The reference for a number-only migration step from `version`: the same

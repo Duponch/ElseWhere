@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ADULTHOODS, CHILDHOODS } from '../../src/sim/colonist-backgrounds.ts';
+import { adulthoodDefinition, childhoodDefinition } from '../../src/sim/colonist-backgrounds.ts';
 import { previewBackgroundSkills } from '../../src/sim/background-generation.ts';
 import { serializeWorld, validateWorld } from '../../src/sim/serialization.ts';
 import { backgroundNativeFixture } from '../helpers/backgrounds-v210.ts';
@@ -34,8 +34,8 @@ test('native biographies: exact offer, literal text, keyboard explanations, refu
     const letter=page.locator('#arrival-letter');await letter.focus();await page.keyboard.press('Enter');
     const dialog=page.locator('#arrival-dialog');await expect(dialog).toBeVisible();await expect(dialog).toContainText(offer.name);
     await expect(dialog.locator('i')).toHaveCount(0);
-    await expect(dialog.locator('[data-background-stories]')).toContainText(CHILDHOODS[offer.background!.childhood].label);
-    if(offer.background!.adulthood)await expect(dialog.locator('[data-background-stories]')).toContainText(ADULTHOODS[offer.background!.adulthood].label);
+    await expect(dialog.locator('[data-background-stories]')).toContainText(childhoodDefinition(offer.background!.childhood).label);
+    if(offer.background!.adulthood)await expect(dialog.locator('[data-background-stories]')).toContainText(adulthoodDefinition(offer.background!.adulthood).label);
     const preview=previewBackgroundSkills(offer.profile,offer.background!);
     const story=dialog.locator('[data-background-stories] li').first();await story.focus();await expect(story).toBeFocused();
     await expect(page.locator('#game-tooltip')).toBeVisible();await expect(page.locator('#game-tooltip')).toContainText('Gains à la création');
