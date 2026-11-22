@@ -14,6 +14,8 @@ import { adjacentToTable, availableChessTables, availablePins, availableTelevisi
 import { opinionOf } from './social-state.ts';
 import {isJoyTableActivity354,isJoyTablesSchema354,JOY_TABLE_BY_ACTIVITY_354} from './joy-tables-354.ts';
 import {availableJoyTables354,billiardsGameOver354,billiardsShotOver354,joyTableActiveTick354,joyTableCandidates354,joyTableCapable354,nextBilliardsCell354} from './joy-table-recreation-354.ts';
+import {chooseViewArt366,isViewArtSchema366,VIEW_ART_BASE_CHANCE_366,viewArtCandidates366,viewArtCapable366,viewArtGainFactor366} from './view-art-366.ts';
+import {structureById} from './structure-navigation.ts';
 /** Core FindRandomSickPawn (schema 325): one patient drawn by opinion and
  * distance. An unreachable patient makes this visit fail rather than move on
  * to another one (adaptation: Core leaves unreachable patients out first). */
@@ -39,7 +41,7 @@ import { cellIndex, routeToCell } from './pathfinding.ts';
 import type { NeedContext } from './needs.ts';
 import type { Pawn, World } from './types.ts';
 
-const labels: Record<RecreationActivity,string> = {horseshoes: 'jouer aux fers à cheval', skygaze: 'observer le ciel', chess:'jouer aux échecs','social-relax':'se détendre ensemble','visit-sick':'rendre visite à un malade','watch-television':'regarder la télévision',party:'participer à la fête',read:'lire un roman',hoopstone:JOY_TABLE_BY_ACTIVITY_354.hoopstone.activityLabel,billiards:JOY_TABLE_BY_ACTIVITY_354.billiards.activityLabel,'game-of-ur':JOY_TABLE_BY_ACTIVITY_354['game-of-ur'].activityLabel,poker:JOY_TABLE_BY_ACTIVITY_354.poker.activityLabel};
+const labels: Record<RecreationActivity,string> = {horseshoes: 'jouer aux fers à cheval', skygaze: 'observer le ciel', chess:'jouer aux échecs','social-relax':'se détendre ensemble','visit-sick':'rendre visite à un malade','watch-television':'regarder la télévision',party:'participer à la fête',read:'lire un roman',hoopstone:JOY_TABLE_BY_ACTIVITY_354.hoopstone.activityLabel,billiards:JOY_TABLE_BY_ACTIVITY_354.billiards.activityLabel,'game-of-ur':JOY_TABLE_BY_ACTIVITY_354['game-of-ur'].activityLabel,poker:JOY_TABLE_BY_ACTIVITY_354.poker.activityLabel,'view-art':'admirer une œuvre d’art'};
 const urgentDoctorCall=(world:World,pawn:Pawn):boolean=>urgentWorkEnabled(pawn,'doctor',world)&&world.pawns.some(p=>p!==pawn&&allowedAreaAllows(world,pawn,p)&&lyingPatient(p)&&urgentTreatment(p));
 /** Search shares the existing bounded navigation budget. No gain in transit,
  * no worker/cargo preemption just because the timetable recommends recreation. */
@@ -73,7 +75,7 @@ export function processRecreation(world: World, pawn: Pawn, context: NeedContext
       if(task.activity==='billiards')task.since354??=world.tick;
     }
     const joyTable=isJoyTableActivity354(task.activity);
-    pawn.state='recreating';gainRecreation(joy,recreationKind(task.activity),RECREATION_GAIN*(task.activity==='watch-television'?TELEVISION_GAIN_FACTOR:joyTable?joyTableActiveTick354(world,pawn,task as OrdinaryRecreationTask):1));
+    pawn.state='recreating';gainRecreation(joy,recreationKind(task.activity),RECREATION_GAIN*(task.activity==='watch-television'?TELEVISION_GAIN_FACTOR:joyTable?joyTableActiveTick354(world,pawn,task as OrdinaryRecreationTask):task.activity==='view-art'?viewArtGainFactor366(world,structureById(world,task.buildingId)):1));
     if(task.activity==='visit-sick') {
       const patient=visitPatient(world,task.patientId!,false);
       if(!patient){context.release();return false;}
@@ -135,7 +137,15 @@ export function offerRecreation300(world:World,pawn:Pawn,context:NeedContext,aft
   // Play_GameOfUr after horseshoes, Play_Poker after chess. A giver without a
   // building adds no choice, so the draws of a colony without one are unchanged.
   const joyTables354=isJoyTablesSchema354(world.schemaVersion)?availableJoyTables354(world,pawn.id):undefined;
-  for(const activity of joyTables354?['skygaze','horseshoes','hoopstone','billiards','game-of-ur','chess','poker','social-relax','visit-sick','watch-television'] as const:['skygaze','horseshoes','chess','social-relax','visit-sick','watch-television'] as const) {
+  // Schema 366: ViewArt follows Skygaze in JoyGiverDef order. Without a
+  // viewable sculpture it adds no choice, so the draws are unchanged.
+  let viewArt366:ReturnType<typeof viewArtCandidates366>;
+  if(isViewArtSchema366(world.schemaVersion)&&!joy.bored.solitary&&viewArtCapable366(pawn)){const policy=captureAllowedArea(world,pawn);viewArt366=viewArtCandidates366(world,pawn,cell=>allowedAreaAllows(world,pawn,cell,policy));}
+  for(const activity of joyTables354?['skygaze','view-art','horseshoes','hoopstone','billiards','game-of-ur','chess','poker','social-relax','visit-sick','watch-television'] as const:['skygaze','view-art','horseshoes','chess','social-relax','visit-sick','watch-television'] as const) {
+    if(activity==='view-art'){
+      if(viewArt366?.length)choices.push({activity,weight:VIEW_ART_BASE_CHANCE_366*Math.max(.001,(1-(joy.tolerance.solitary??0)/100)**5)});
+      continue;
+    }
     if(activity==='watch-television'&&!televisions.length)continue;
     if(isJoyTableActivity354(activity)){
       const kind=recreationKind(activity);
@@ -160,6 +170,13 @@ export function offerRecreation300(world:World,pawn:Pawn,context:NeedContext,aft
     const {activity}=choices.splice(index,1)[0]!;
     if(activity==='read'){
       const selected=selectAutomaticReading295(world,pawn,context);if(selected!=='unavailable')return selected?(joy.task?'admitted':'pending'):'unavailable';continue;
+    }
+    if(activity==='view-art'){
+      const decision=readSpace();
+      const chosen=chooseViewArt366(world,viewArt366??[],{standable:cell=>standableRecreationCell(world,cell,decision),reserved,search:goals=>context.search(goals),random:()=>recreationRandom(world)});
+      if(chosen==='pending')return 'pending';
+      if(!chosen)continue;
+      joy.task=chosen.task;pawn.path=chosen.path;pawn.state='moving';pawn.planCooldown=0;return 'admitted';
     }
     const candidates: RecreationTask[]=[];
     if(activity==='horseshoes') {

@@ -77,6 +77,11 @@ export function updateWellbeing(world: World, pawn: Pawn,body?:BodyAssessment,re
     const seat=world.structures.find(s=>s.id===pawn.recreation.task!.seatId&&isDiningSeat(s.kind)&&seatAt(s,pawn));
     if(seat)ceiling=comfortForStructure(furnitureWorld,seat)*100;
   }
+  // Schema 366: JobDriver_ViewArt GainComfortFromCellIfPossible, a seat under the standing viewer.
+  if(pawn.state==='recreating'&&pawn.recreation.task?.activity==='view-art'&&pawn.recreation.task.phase==='active'&&pawn.moveCooldown===0){
+    const seat=filteredStructures(world,'dining-seats',isDiningSeatStructure).find(s=>s.x===pawn.x&&s.z===pawn.z);
+    if(seat)ceiling=comfortForStructure(furnitureWorld,seat)*100;
+  }
   // Furniture can exceed 100%; the occupied need remains normalized for every
   // source. Keep lower ceilings unchanged, including their exact arithmetic.
   ceiling=Math.max(0,Math.min(100,ceiling));

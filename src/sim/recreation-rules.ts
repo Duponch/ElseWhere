@@ -5,7 +5,9 @@ import type {ReadingTask295} from './reading-state-295.ts';
 
 export const RECREATION_KINDS = ['solitary', 'dexterity', 'cerebral', 'social', 'television'] as const;
 export type RecreationKind = typeof RECREATION_KINDS[number] | 'chemical' | 'reading';
-export type RecreationActivity = 'skygaze' | 'horseshoes' | 'chess' | 'social-relax' | 'visit-sick' | 'watch-television' | 'party' | 'read' | import('./joy-tables-354.ts').JoyTableActivity354;
+export type RecreationActivity = 'skygaze' | 'horseshoes' | 'chess' | 'social-relax' | 'visit-sick' | 'watch-television' | 'party' | 'read' | import('./joy-tables-354.ts').JoyTableActivity354
+  /** Schema 366: JoyGiver_ViewArt, Meditative (the solitary kind). */
+  | 'view-art';
 export interface OrdinaryRecreationTask { activity: Exclude<RecreationActivity,'read'>; target: Cell; buildingId: number | null; seatId?: number; patientId?: number; partyStartedAtCore?:number; phase: 'travel' | 'active'; elapsed: number;
   /** Schema 354 billiards only: local ticks of the current shot (JobDriver_PlayBilliards ShotDuration)
    * and the tick the game began, its clock running through the walks between shots. */

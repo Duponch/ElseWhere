@@ -1,6 +1,8 @@
 import { isBedKind } from './bed-kinds.ts';
 import {isJoyTableActivity354,isJoyTableKind354,isJoyTablesSchema354} from './joy-tables-354.ts';
 import {joyTableSiteValid354} from './joy-table-recreation-354.ts';
+import {viewArtSiteValid366} from './view-art-366.ts';
+import {structureById} from './structure-navigation.ts';
 import {volcanicWinterActive310} from './volcanic-winter-state-310.ts';
 import {readingTaskSiteValid295} from './reading-space-295.ts';
 import {partyTaskSiteValid292} from './party-space-292.ts';
@@ -121,6 +123,7 @@ export function recreationSiteValid(world: World, task: RecreationTask, space?: 
   if(task.activity==='party')return partyTaskSiteValid292(world,task,space?.roomTopology()??readTopology?.(),space?.standable);
   if(task.activity==='skygaze'&&isRoofed(world,roofIndex(world,task.target)))return false;
   if (!standableRecreationCell(world,task.target,space)) return false;
+  if(task.activity==='view-art')return viewArtSiteValid366(world,task,structureById(world,task.buildingId));
   if(task.activity==='watch-television') {
     const tv=space?space.televisions?.get(task.buildingId!):world.structures.find(s=>s.id===task.buildingId&&s.kind==='tube-television');
     const seat=space?space.seats.get(task.target.z*world.width+task.target.x):world.structures.find(s=>s.id===task.seatId&&isDiningSeat(s.kind));

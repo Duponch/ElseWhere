@@ -229,7 +229,7 @@ export function readNeedDefenses(world:World,free:readonly Pawn[]):StatusAlert|u
  * fewer than the current expectations require. Core counts kinds needing no
  * thing (contemplation, social) plus buildings and unfogged recreational items;
  * only the kinds Elsewhere actually offers are counted. */
-export const JOY_KIND_LABELS=[['solitary','contemplation'],['social','sociale'],['dexterity','adresse (fers à cheval, billard)'],['cerebral','réflexion (échecs, poker)'],['television','télévision'],['chemical','chimique (bière)'],['reading','lecture']] as const;
+export const JOY_KIND_LABELS=[['solitary','contemplation (ciel, œuvres d’art)'],['social','sociale'],['dexterity','adresse (fers à cheval, billard)'],['cerebral','réflexion (échecs, poker)'],['television','télévision'],['chemical','chimique (bière)'],['reading','lecture']] as const;
 export function joyKindsOnMap(world:World):Set<string> {
   const kinds=new Set<string>(['solitary','social']);
   for(const s of world.structures){

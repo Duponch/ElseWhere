@@ -105,7 +105,7 @@ export function animalAreaHumanPhaseMutable287(world:World,affected:readonly Paw
   if(f.state!=='dead'&&f.state!=='downed')set(pawn,'state');
   set(f.orders as object,'active');set(f.recreation as object,'task');
   const rest=need?.roomRest===undefined?undefined:fields(need.roomRest),leisure=recreation.task==null?undefined:fields(recreation.task);
-  if(need?.kind==='sleep'&&need.phase==='sleep'&&rest?.applied||leisure&&typeof leisure.activity==='string'&&['horseshoes','chess','watch-television','hoopstone','billiards','game-of-ur','poker'].includes(leisure.activity)&&leisure.phase==='active'&&typeof leisure.elapsed==='number'&&leisure.elapsed>0){set(pawn,'roomMemories');del(pawn,'roomMemories');}
+  if(need?.kind==='sleep'&&need.phase==='sleep'&&rest?.applied||leisure&&typeof leisure.activity==='string'&&['horseshoes','chess','watch-television','hoopstone','billiards','game-of-ur','poker','view-art'].includes(leisure.activity)&&leisure.phase==='active'&&typeof leisure.elapsed==='number'&&leisure.elapsed>0){set(pawn,'roomMemories');del(pawn,'roomMemories');}
   const shooting=f.shooting===undefined?undefined:fields(f.shooting),melee=f.melee===undefined?undefined:fields(f.melee);
   const shootingOrder=shooting?.order==null?undefined:fields(shooting.order),meleeOrder=melee?.order==null?undefined:fields(melee.order);
   if(shootingOrder?.auto||shootingOrder?.hunt){const stance=shooting?.stance==null?undefined:fields(shooting.stance);if(stance?.phase==='cooldown')set(f.shooting as object,'order');else del(pawn,'shooting');}
