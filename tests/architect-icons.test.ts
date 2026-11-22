@@ -13,8 +13,9 @@ describe('Architect generated icon atlases', () => {
   it('keeps marker cell addresses while every UI tool has its own complete image', () => {
     const rendered = toolDefinitions.map(tool => tool.id);
     // Schema 354 adds the four joy tables; schema 355 the tool cabinet and the 63 Core carpet colours; schema 357 the two IED traps; schema 363 the 3×3 table, the double sleeping spot, the double bedroll and the wall lamp; schema 365 the couch and straw matting.
-    expect(rendered).toHaveLength(200);
-    expect(new Set(rendered).size).toBe(200);
+    // Schema 367 adds the wall smoothing tools (Orders and Structure).
+    expect(rendered).toHaveLength(202);
+    expect(new Set(rendered).size).toBe(202);
     expect(rendered).toContain('spike-trap');
     expect(rendered).toContain('double-bed');
     expect(rendered).toContain('mini-turret');

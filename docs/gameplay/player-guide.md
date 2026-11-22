@@ -1955,6 +1955,14 @@ Le travail dégage la neige présente ; la transformation retire les salissures 
 
 Un ancien sol rugueux sans identité de roche reste conservé et ne reçoit pas un type inventé au chargement. L’ancien terrain rugueux géographique à supplément2 reste inchangé ; lissage livré et anciens sols n’acquièrent pas une provenance fictive. [Portée, préparations, adaptations et contrôles](smooth-floors-v458.md).
 
+## Lisser un mur de roche — V367
+
+Ouvrez **Architecte → Ordres → Lisser** (touche **J** quand la palette Ordres est ouverte) et cliquez ou tracez un rectangle : chaque mur de roche naturelle découvert est désigné pour être poli, et chaque sol rocheux brut de la zone pour être lissé. **Architecte → Structure → Lisser les murs** ne désigne que les murs. Seuls le granite, le calcaire, le marbre, le grès et l'ardoise se lissent : un filon de minerai, des rochers effondrés ou un mur construit sont refusés, comme les dix cases du bord de la carte. Désigner le lissage d'un mur retire son ordre de minage, et inversement.
+
+Un colon libre avec **Construction** rejoint une case qui touche le mur et le polit : le travail est long (6 500 du jeu de base, environ 380 ticks pour un bâtisseur de niveau 8 bien éclairé), sans matériau ni recherche, et lui apprend la Construction. Un abandon recommence le travail au début. Un angle rentrant qu'aucun colon ne peut toucher se lisse tout seul dès que ses deux côtés le sont.
+
+La paroi lissée reste la même pierre et se mine comme la roche brute (même solidité, 25 % de chance de laisser un fragment) ; elle redevient brute si elle se retrouve entièrement enfermée quand on mine un mur lissé voisin. Elle compte pour la pièce qu'elle borde : beauté 1 (2 pour le marbre) et valeur 7, comptée aussi dans la richesse de la colonie. [Règles, adaptations et limites](smooth-walls-v367.md).
+
 ## Reconnaître les roches
 
 Une nouvelle carte répartit les massifs et pierres voisines en régions de granite, calcaire, marbre, grès ou ardoise. Sélectionner leur case affiche le type. Un ancien massif peut afficher « type historique non défini » : le chargement préserve sa carte. Les massifs sont exploitables par le minage décrit ci-dessous. Les petites pierres décoratives ne sont pas encore transportables ; les blocs taillés au poste servent aux constructions admissibles décrites plus bas.
