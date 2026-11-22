@@ -5,10 +5,14 @@ Liste des retours de l'utilisateur après ses parties du 22 novembre, à traiter
 ## A. Animations et poses
 
 1. **Fin de marche qui glisse.** Un colon ou un animal arrête son animation de marche juste avant d'arriver et finit les derniers centimètres en glissant. Le même défaut semble toucher les autres animations : à corriger partout.
+   **Fait le 22 novembre** : les jambes marchent jusqu'à ce que le corps dessiné arrive et se posent pieds joints ; s'asseoir, se coucher, manger et travailler attendent l'arrivée du corps ; colons et animaux ([note](retours-animations-20261122.md)).
 2. **Tête qui dépasse du lit.** Un colon couché doit garder la tête sur le lit ; si le lit est trop court, ce sont les pieds qui dépassent.
+   **Fait le 22 novembre** : tête au chevet pour toutes les couchettes et orientations, comme `PawnRenderer.GetBodyPos` ([note](retours-animations-20261122.md)).
 3. **Travailler assis.** Un colon à un établi ne s'assoit pas sur le tabouret placé devant. Vérifier dans RimWorld s'il s'assoit et ce que cela change (confort, vitesse), puis confirmer ou corriger.
+   **Fait le 22 novembre** : RimWorld assoit le colon sur un siège de la case de travail et lui donne du confort, sans effet sur la vitesse ; règle d'Elsewhere déjà conforme (lot 350), pose assise ajoutée ([note](retours-animations-20261122.md)).
 4. **Animations assises et autres.** Un colon assis reste immobile, les bras le long du corps : il doit être animé de façon réaliste. Beaucoup d'autres animations manquent ou sont trop simples ; les enrichir en général.
 5. **Corps à corps.** Supprimer l'effet de nuage de bande dessinée avec étoiles. Refaire l'attaque comme dans RimWorld : un coup en avant de tout le corps, comme un coup de boule, en plus de l'animation du corps ; pareil pour les animaux. Une bagarre doit se voir facilement.
+   **Fait le 22 novembre** : nuage retiré ; coup en avant de tout le corps (0,35 case) et recul de la victime touchée (0,17), comme `Notify_MeleeAttackOn` et `JitterHandler`, pour les humains et les animaux ([note](retours-animations-20261122.md)).
 6. **Animaux.** Ajouter des animations (attente, idle et autres ; aujourd'hui surtout marche, course et manger, à confirmer). Améliorer les modèles bâclés ou trop semblables entre espèces, en volume et en dessin (Pastel et Gouache).
 7. **Page des animations.** Une page développeur qui montre toutes les animations existantes, à côté de la page des modèles.
 

@@ -1,13 +1,16 @@
 // Measurement tool (not product code). Frame CPU of the human and animal actor
 // layers on Les Forges (80 colonists, 241 animals), on the same path as the
 // client's frame: PawnLayer.updateTravel, WildlifeLayer.update and both
-// presentAnimations, plus the per-publication PawnLayer.update; when the
-// historical BrawlCloudLayer file exists it is driven as SceneRenderCore did
-// (update per publication, present per frame), so a before/after comparison
-// includes its removal. Each frame commits one real Core tick (x1 at 60 Hz);
-// the simulation step itself is not timed.
-// Usage: npx tsx scripts/actor-accents-bench.ts [frames=1200] [rounds=5]
-import {readFileSync,existsSync} from 'node:fs';
+// presentAnimations, plus the per-publication PawnLayer.update. A former
+// layer (the historical BrawlCloudLayer) can be driven as SceneRenderCore did
+// (update per publication, present per frame) by an entry module that sets
+// globalThis.__actorBenchBrawl before importing this one, so a before/after
+// comparison includes its removal. Each frame commits one real Core tick
+// (x1 at 60 Hz); the simulation step itself is not timed.
+// Usage: bundle with esbuild (no --keep-names), then node <bundle> [frames=1200] [rounds=5]:
+//   npx esbuild scripts/actor-accents-bench.ts --bundle --platform=node --format=esm --outfile=tmp/actor-accents-bench.mjs
+import {readFileSync} from 'node:fs';
+import {gunzipSync} from 'node:zlib';
 import {deserializeWorld} from '../src/sim/serialization';
 import {advanceWorldCore297} from '../src/sim/engine';
 import {effectiveCore297} from '../src/sim/core-phase-297';
@@ -17,10 +20,10 @@ import {MotionTimeline} from '../src/render/MotionTimeline';
 import type {TravelSegment} from '../src/render/MotionTimeline';
 
 const frames=Number(process.argv[2]??1200),rounds=Number(process.argv[3]??5);
-const world=deserializeWorld(readFileSync('public/test-saves/v432/les-forges-crash-test.json','utf8'));
+const text=(()=>{const t=readFileSync('public/test-saves/v432/les-forges-crash-test.json','utf8'),raw=JSON.parse(t);return raw.format==='lisiere-save'?gunzipSync(Buffer.from(raw.payload,'base64')).toString('utf8'):t;})();
+const world=deserializeWorld(text);
 type Brawl={update(world:unknown,source:unknown):void;present(tick:number):void;dispose():void};
-const brawlPath=new URL('../src/render/BrawlCloudLayer.ts',import.meta.url);
-const BrawlCloud=existsSync(brawlPath)?(await import(brawlPath.href) as {BrawlCloudLayer:new(clock:unknown,detail?:unknown)=>Brawl}).BrawlCloudLayer:undefined;
+const BrawlCloud=(globalThis as {__actorBenchBrawl?:new(clock:unknown,detail?:unknown)=>Brawl}).__actorBenchBrawl;
 const pawns=new PawnLayer(),wild=new WildlifeLayer(),timeline=new MotionTimeline();
 const brawl=BrawlCloud?new BrawlCloud(pawns):undefined;
 const tracks=timeline.tracks as Map<number,TravelSegment[]>;
