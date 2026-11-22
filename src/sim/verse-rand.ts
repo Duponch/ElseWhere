@@ -152,16 +152,7 @@ export class VerseRand {
  /** `GenCollection.TryRandomElementByWeight` on a list, including the game's
   * second pass when the first one runs out by rounding. */
  tryRandomElementByWeight<T>(list:readonly T[],weight:(item:T)=>number):{found:true;value:T}|{found:false} {
-  let total=0;for(const item of list)total=f(total+Math.max(0,f(weight(item))));
-  if(list.length===1&&total>0)return {found:true,value:list[0]!};
-  if(total===0)return {found:false};
-  total=f(total*this.value);
-  for(const item of list){const w=f(weight(item));if(w<=0)continue;total=f(total-w);if(total<=0)return {found:true,value:item};}
-  let at=0,result:T|undefined,sum=0;
-  for(;sum===0&&at<list.length;at++){result=list[at];sum=Math.max(0,f(weight(result!)));}
-  if(sum===0)return {found:false};
-  for(;at<list.length;at++){const item=list[at]!,w=Math.max(0,f(weight(item)));if(this.rangeFloat(0,f(sum+w))>=sum)result=item;sum=f(sum+w);}
-  return {found:true,value:result!};
+  return tryRandomElementByWeight(this,list,weight);
  }
  /** `Rand.MTBEventOccurs`. */
  mtbEventOccurs(mtb:number,mtbUnit:number,ticksSinceLastCheck:number):boolean {
@@ -172,6 +163,23 @@ export class VerseRand {
   if(chance<1e-4){while(chance<1e-4){chance*=8;gate/=8;}if(this.value>gate)return false;}
   return this.value<chance;
  }
+}
+/** The draws `GenCollection.TryRandomElementByWeight` takes from `Verse.Rand`. */
+export interface VerseWeightedRandom {readonly value:number;rangeFloat(minInclusive:number,maxInclusive:number):number}
+/** `GenCollection.TryRandomElementByWeight` on a list, including the game's
+ * second pass when the first one runs out by rounding, on any generator that
+ * draws like `Verse.Rand`. */
+export function tryRandomElementByWeight<T>(random:VerseWeightedRandom,list:readonly T[],weight:(item:T)=>number):{found:true;value:T}|{found:false} {
+ let total=0;for(const item of list)total=f(total+Math.max(0,f(weight(item))));
+ if(list.length===1&&total>0)return {found:true,value:list[0]!};
+ if(total===0)return {found:false};
+ total=f(total*random.value);
+ for(const item of list){const w=f(weight(item));if(w<=0)continue;total=f(total-w);if(total<=0)return {found:true,value:item};}
+ let at=0,result:T|undefined,sum=0;
+ for(;sum===0&&at<list.length;at++){result=list[at];sum=Math.max(0,f(weight(result!)));}
+ if(sum===0)return {found:false};
+ for(;at<list.length;at++){const item=list[at]!,w=Math.max(0,f(weight(item)));if(random.rangeFloat(0,f(sum+w))>=sum)result=item;sum=f(sum+w);}
+ return {found:true,value:result!};
 }
 function gaussianFactor(a:number,b:number):number {
  // Mathf.Sqrt(-2f * Mathf.Log(a)) * Mathf.Sin(2π_f * b): each Mathf call takes
