@@ -11,7 +11,7 @@ La sauvegarde du joueur n'est que lue : jamais modifiée, déplacée ni copiée 
 ## 1. Utilisation
 
 ```
-npx tsx scripts/import-rws.ts <sauvegarde.rws> tmp/rws-import/<nom>.json [--ticks 300] [--no-planet]
+npx tsx scripts/import-rws.ts <sauvegarde.rws> tmp/rws-import/<nom>.json [--ticks 300] [--no-planet] [--langue French [--jeu <dossier du jeu>]]
 ```
 
 Le script écrit la partie Elsewhere (`<nom>.json`, à charger comme une sauvegarde) et le rapport `<nom>-rapport.md` à côté. Il refuse clairement une sauvegarde d'une autre version que 1.6, avec une extension (Royalty, Ideology, Biotech, Anomaly, Odyssey) ou un mod, ou sans carte de colonie ; le rapport dit pourquoi.
@@ -57,6 +57,10 @@ Depuis le schéma 370, Elsewhere contient les 166 histoires mélangeables du jeu
 2. **Carte locale.** Le contenu généré par l'usine (personnes de départ, plantes, roches, ruines, animaux) est retiré, puis remplacé : terrain, roches, toits, brouillard ; bâtiments (murs et portes d'abord, lampes murales en dernier) ; plantes ; colons et animaux ; objets au sol ; zones, aires, filtres d'étagères ; recherche ; date.
 3. **Date.** L'ancre du calendrier est choisie pour que la date affichée soit celle de la sauvegarde. Le compteur interne de la partie repart de la création : les horloges d'Elsewhere ne sont pas décalées de 12 millions de ticks.
 4. **Contrôle.** `validateWorld` doit être vide, la sauvegarde doit se relire à l'identique, puis le monde avance ; il est revalidé toutes les 60 ticks.
+
+### Noms du jeu installé (`--langue`)
+
+Depuis le lot 3 de [même planète, même graine](planet-parity.md#2-bis-données-du-jeu-lues-à-lexécution-lot-3), le script peut lire les données du jeu installé (`--jeu`, sinon `RIMWORLD_DIR`, sinon le dossier Steam par défaut) dans la langue de la partie (`--langue French` pour une partie en français). Elles ne servent qu'au repli par la graine : les factions et les colonies de la planète régénérée sont alors nommées par la grammaire du jeu, et la première faction, la case et le nom de sa première colonie sont ceux de la partie (la suite diffère dès le premier chef) ; la note d'import le dit. Quand la planète est recopiée case par case, les noms viennent de la sauvegarde, comme avant. Rien de ce qui est lu dans le jeu n'est écrit, ni dans la partie convertie au-delà des noms tirés, ni dans le rapport. L'import dans le navigateur ne lit pas le jeu : il garde les noms d'Elsewhere en cas de repli.
 
 ## 6. Résultat mesuré sur `Yes.rws`
 
