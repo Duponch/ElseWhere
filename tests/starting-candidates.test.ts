@@ -1,6 +1,7 @@
 import { expect,test } from 'vitest';
-import { BACKGROUND_ADULT_MIN_TICKS,BACKGROUND_SKILL_IDS,backgroundGains,backgroundSkillRefusal,backgroundWorkRefusal,validBackground } from '../src/sim/colonist-backgrounds.ts';
-import { validHumanAge } from '../src/sim/human-age.ts';
+import { BACKGROUND_ADULT_MIN_TICKS,BACKGROUND_SKILL_IDS,adulthoodDefinition,backgroundSkillRefusal,backgroundWorkRefusal,childhoodDefinition,validBackground } from '../src/sim/colonist-backgrounds.ts';
+import { biologicalYears,validHumanAge } from '../src/sim/human-age.ts';
+import { AGE_SKILL_MAX_FACTOR_CURVE_372,LEVEL_FINAL_ADJUSTMENT_CURVE_372,evaluateCurve372,roundToInt372 } from '../src/sim/skill-generation-372.ts';
 import { createScenarioWorld } from '../src/sim/new-game.ts';
 import { validatePawnAppearance } from '../src/sim/pawn-appearance.ts';
 import { deserializeWorld,serializeWorld,validateWorld } from '../src/sim/serialization.ts';
@@ -57,14 +58,21 @@ test('prospective profiles have all twelve skills, compatible biographies and pa
     expect(validatePawnAppearance(pawn.appearance)).toEqual([]);
     expect(Object.keys(pawn.skills).sort()).toEqual([...BACKGROUND_SKILL_IDS,'lastResetTick'].sort());
     if(pawn.age!.biologicalTicks<BACKGROUND_ADULT_MIN_TICKS)expect(pawn.background!.adulthood).toBeUndefined();
-    const gains=backgroundGains(pawn.background!);
+    const told=[childhoodDefinition(pawn.background!.childhood),...pawn.background!.adulthood?[adulthoodDefinition(pawn.background!.adulthood)]:[]];
+    const ageFactor=Math.max(1,evaluateCurve372(AGE_SKILL_MAX_FACTOR_CURVE_372,biologicalYears(pawn.age!)));
     for(const skill of BACKGROUND_SKILL_IDS){
       const record=pawn.skills[skill]!;
-      // The local 0..4 baseline has exactly one application of the story gain,
-      // then (schema 361) one of the Core trait gains, each clamped to 0..20.
-      const clamp=(n:number)=>Math.min(20,Math.max(0,n)),trait=(pawn.traits??[]).reduce((n,id)=>n+(TRAITS[id].skillGains?.[skill]??0),0);
-      expect(record.level).toBeGreaterThanOrEqual(clamp(clamp(gains[skill]??0)+trait));
-      expect(record.level).toBeLessThanOrEqual(clamp(clamp(4+(gains[skill]??0))+trait));
+      // Schema 372, Core FinalLevelOfSkill: (base + each story gain × 1..1.4 +
+      // trait gains) × the age factor, the final curve, rounded and clamped.
+      // It is multilinear in the base, each story factor and the age factor,
+      // so its bounds are reached on their end points.
+      const trait=(pawn.traits??[]).reduce((n,id)=>n+(TRAITS[id].skillGains?.[skill]??0),0);
+      const gains=told.map(st=>st.gains[skill]).filter((g):g is number=>g!==undefined);
+      let corners=[0,skill==='animals'?15:4];
+      for(const g of gains)corners=corners.flatMap(c=>[c+g,c+g*1.4]);
+      const levels=corners.flatMap(c=>[1,ageFactor].map(v=>Math.min(20,Math.max(0,roundToInt372(evaluateCurve372(LEVEL_FINAL_ADJUSTMENT_CURVE_372,(c+trait)*v))))));
+      expect(record.level).toBeGreaterThanOrEqual(Math.min(...levels));
+      expect(record.level).toBeLessThanOrEqual(Math.max(...levels));
       expect(record.xp).toBe(0);expect(record.dailyXp).toBe(0);
       if(backgroundSkillRefusal(pawn,skill))expect(record.passion).toBe(0);
     }

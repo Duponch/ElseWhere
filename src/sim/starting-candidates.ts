@@ -1,6 +1,7 @@
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {constructHumanConditionMind256} from './human-condition-mind-256.ts';
-import { assignBackground,generateBackground } from './background-generation.ts';
+import { assignBackground,assignBornBackground,generateBackground } from './background-generation.ts';
+import { giveCoreSkills372,isSkills372,skillStream372 } from './skill-generation-372.ts';
 import { FACTION_BACKSTORY_FILTERS_370,backstoryStream370,drawCoreBackground370,isBackstories370 } from './core-backstory-draw-370.ts';
 import { BACKGROUND_SKILL_IDS,backgroundSkillRefusal,backgroundWorkRefusal,violentWorkRefusal } from './colonist-backgrounds.ts';
 import { HUMAN_YEAR_TICKS,crashlandedHumanAge } from './human-age.ts';
@@ -132,7 +133,8 @@ const TRAIT_IDS=LEGACY_TRAIT_IDS;
 
 /** Original bounded distributions over implemented content, not Core's full
  * pawn generator. Every skill has a real record; background gains apply once.
- * The trait subset has no imposed biography traits or skill modifiers. */
+ * The trait subset has no imposed biography traits or skill modifiers.
+ * Schema 372: the skills and passions are Core's (skill-generation-372.ts). */
 export function previewStartingCandidate(seed:number,descriptor:StartingCandidateDescriptor,version:number=SCHEMA_VERSION):Pawn {
   requireSeed(seed);requireDescriptor(descriptor);
   const identity=descriptor.serial,birthSeed=hash(seed,identity,descriptor.generation,0x333b17),draw=(salt:number)=>hash(seed,identity,descriptor.generation,salt)/0x100000000;
@@ -142,19 +144,33 @@ export function previewStartingCandidate(seed:number,descriptor:StartingCandidat
   // hash so a rename cannot create a different person on final materialization.
   if(descriptor.nameOverride!==undefined)pawn.name=descriptor.nameOverride;
   pawn.age=crashlandedHumanAge(birthSeed,identity,pawn.age!);
+  // Schema 372: Core's GenerateSkills replaces the local birth levels below
+  // (their private draws are then simply not read).
+  const core372=isSkills372(version);
   const skills={lastResetTick:-1} as PawnSkills;
   BACKGROUND_SKILL_IDS.forEach((skill,index)=>{
-    skills[skill]={level:Math.floor(draw(0x333510+index)*5),xp:0,dailyXp:0,passion:0};
+    skills[skill]={level:core372?0:Math.floor(draw(0x333510+index)*5),xp:0,dailyXp:0,passion:0};
   });
   pawn.skills=skills;
   // Schema 370: Core's draw for a Colonist of the player colony (Offworld);
   // the tutorial's violence rule is the whole-candidate retry of admitted().
-  assignBackground(pawn,isBackstories370(version)?drawCoreBackground370(backstoryStream370(birthSeed,identity),pawn.age.biologicalTicks,FACTION_BACKSTORY_FILTERS_370.PlayerColony!)
-    :generateBackground(birthSeed,identity,pawn.age));
+  // From 372 the background adds no gain (Core's skills read it).
+  const background=isBackstories370(version)?drawCoreBackground370(backstoryStream370(birthSeed,identity),pawn.age.biologicalTicks,FACTION_BACKSTORY_FILTERS_370.PlayerColony!)
+    :generateBackground(birthSeed,identity,pawn.age);
+  if(core372)assignBornBackground(version,pawn,background);else assignBackground(pawn,background);
   // Schema 361: Core order, traits before skills and passions (their skill
   // gains change the levels the passion ranking reads; Brawler forbids a
   // shooting passion). New salts only; every pre-361 draw is unchanged.
   const core361=isTraitsSchema361(version)?drawCoreTraits361({draw:salt=>draw(salt),sex:pawn.appearance?.sex??'none',ageYears:pawn.age.biologicalTicks/HUMAN_YEAR_TICKS,background:pawn.background!,...version>=362?{schema:version}:{}}):undefined;
+  if(core372&&core361){
+    // Schema 372: Core's GenerateSkills (levels with the backstory and trait
+    // gains, then the passions, forced and conflicting ones included) on the
+    // candidate's private skill stream; a rerolled candidate has a new one.
+    if(core361.length)pawn.traits=core361;
+    giveCoreSkills372(pawn,skillStream372(birthSeed,identity));
+    bornWimpRecord362(pawn,0);
+    return pawn;
+  }
   if(core361)applyTraitSkillGains361(pawn.skills,core361);
   // A finite weighted passion budget rewards stronger available skills. This
   // is a local distribution, not a claim to reproduce Core's Gaussian budget.

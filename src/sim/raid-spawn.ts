@@ -156,8 +156,10 @@ export function makeRaider(w:World,o:{groupId:number;index:number;pawnId:number;
   let next=o.nextId;
   const p=startingPawn(o.pawnId,`Assaillant ${o.groupId}.${o.index+1}`,o.cell.x,o.cell.z,0,55,w.seed,w.tick,w.schemaVersion);p.faction='outlaws';if(raiderFactionEra(w)&&w.worldFactions&&!bindBornHumanFaction259(w,p,o.factionId!))return null;p.raid={group:o.groupId,exiting:o.exiting,goal:null,...w.schemaVersion>=334&&o.kind?{kind334:o.kind}:{}};p.skills.shooting.level=4;p.skills.melee.level=4;p.foodPolicyId=w.foodPolicies[0]!.id;
   // Schema 370: Core's draw for the raider's kind and faction (a Combat group: violence required).
-  if(w.schemaVersion>=191)generateBornBackground(w,p,w.seed,true,false,{...o.kind?{kind:isRaidKind331(o.kind)?RAID_KINDS_331[o.kind].core:o.kind.charAt(0).toUpperCase()+o.kind.slice(1)}:{},violent:true,fallbackFaction:o.tribe?'TribeRough':'Pirate'});
-  giveBornTraits361(w,p,true);
+  const coreKind=o.kind?isRaidKind331(o.kind)?RAID_KINDS_331[o.kind].core:o.kind.charAt(0).toUpperCase()+o.kind.slice(1):undefined;
+  if(w.schemaVersion>=191)generateBornBackground(w,p,w.seed,true,false,{...coreKind!==undefined?{kind:coreKind}:{},violent:true,fallbackFaction:o.tribe?'TribeRough':'Pirate'});
+  // Schema 372: Core's skills read the kind's skill range (Mercenary_Gunner).
+  giveBornTraits361(w,p,true,w.seed,coreKind);
   // Schema 331: tribal raiders wear tribal wear (Core Neolithic apparel tag).
   const apparel=o.tribe?'cloth-tribalwear':'cloth-shirt',piles:MaterialPile[]=[];
   piles.push({id:next++,kind:'apparel',item:apparel,quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState(apparel,undefined,w.schemaVersion)});

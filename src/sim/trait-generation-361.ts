@@ -6,6 +6,7 @@ import type { Pawn } from './types.ts';
 import { traitForcedPassions362 } from './trait-links-362.ts';
 import { bornWimpRecord362 } from './wimp-record-362.ts';
 import { coreBackstoryDisallows370,coreBackstoryForcedTraits370 } from './core-backstory-traits-370.ts';
+import { coreSkillBirth372,giveCoreSkills372,skillStream372 } from './skill-generation-372.ts';
 
 /** Schema 361: Core PawnGenerator.GenerateTraits for a newly born human,
  * with no pawn-kind or backstory forced/disallowed traits (Elsewhere's own
@@ -117,8 +118,20 @@ export const traitBirthDraw361=(seed:number,identity:number)=>(salt:number):numb
 const ageYears=(pawn:Pick<Pawn,'age'>):number=>pawn.age?pawn.age.biologicalTicks/HUMAN_YEAR_TICKS:30;
 /** Give a newly born human its Core traits (schema 361). Called once, after
  * the background (its work tags decide what may be drawn). Authored or
- * already held traits are kept. */
-export function giveBornTraits361(w:{readonly schemaVersion:number;readonly seed:number;readonly tick?:number},pawn:Pawn,hostile=false,seed=w.seed):void {
+ * already held traits are kept. From schema 372 a person with Core
+ * backstories then gets Core's skills and passions (skill-generation-372.ts):
+ * `kind` is its Core PawnKindDef, for a kind's skill range. */
+export function giveBornTraits361(w:{readonly schemaVersion:number;readonly seed:number;readonly tick?:number},pawn:Pawn,hostile=false,seed=w.seed,kind?:string):void {
+  if(coreSkillBirth372(w.schemaVersion,pawn.background)){
+    // Core's order: GenerateTraits, then GenerateSkills (which applies the
+    // traits' skill gains and passions); only the wimp record stays here.
+    if(pawn.traits===undefined){
+      const traits=drawCoreTraits361({draw:traitBirthDraw361(seed,pawn.id),sex:pawn.appearance?.sex??'none',ageYears:ageYears(pawn),background:pawn.background!,hostile,schema:w.schemaVersion});
+      if(traits.length){pawn.traits=traits;bornWimpRecord362(pawn,w.tick??0);}
+    }
+    giveCoreSkills372(pawn,skillStream372(seed,pawn.id),kind);
+    return;
+  }
   if(!isTraitsSchema361(w.schemaVersion)||pawn.traits!==undefined)return;
   const traits=drawCoreTraits361({draw:traitBirthDraw361(seed,pawn.id),sex:pawn.appearance?.sex??'none',ageYears:ageYears(pawn),...pawn.background?{background:pawn.background}:{},hostile,...w.schemaVersion>=362?{schema:w.schemaVersion}:{}});
   if(!traits.length)return;

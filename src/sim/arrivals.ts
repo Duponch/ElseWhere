@@ -4,6 +4,10 @@ import {bindBornHumanFaction259} from './world-affiliation-259.ts';
 import { arrivalTraits,isTraitsSchema361 } from './traits.ts';
 import { bornTraitEffects361,offeredTraits361 } from './trait-generation-361.ts';
 import { offeredBornBackground,assignOfferedBackground } from './background-generation.ts';
+import { coreSkillBirth372,coreSkillRecords372,giveCoreSkills372,skillStream372 } from './skill-generation-372.ts';
+import { bornWimpRecord362 } from './wimp-record-362.ts';
+import { biologicalYears } from './human-age.ts';
+import type { PawnSkills } from './skills.ts';
 import { relationshipOfferCandidates,chooseOfferedRelationship,prepareRelationshipAdmission } from './relationship-generation.ts';
 import { ARRIVAL_NAMES,arrivalRandom,type ArrivalCommand } from './arrival-state.ts';
 import { arrivalEntry } from './arrival-entry.ts';
@@ -59,9 +63,12 @@ export function applyArrival(world:World,command:ArrivalCommand):CommandResult {
   const entry=arrivalEntry(world,s!.rng);if(!entry)return refuse('Aucune entrée libre et accessible depuis la colonie. La demande reste ouverte.');
   const pawn=startingPawn(world.nextId,o.name,entry.x,entry.z,o.profile,55,world.seed,world.tick,world.schemaVersion);
   if((Number(world.schemaVersion)===259||Number(world.schemaVersion)===260||(Number(world.schemaVersion)===261||(Number(world.schemaVersion)===262||isSchema263OrLater(Number(world.schemaVersion)))))&&world.worldFactions&&!bindBornHumanFaction259(world,pawn,world.worldFactions.playerFactionId))return refuse('L’instance de faction réelle manque pour cette arrivée.');
-  assignOfferedBackground(pawn,o,world.seed,world.tick);
+  assignOfferedBackground(pawn,o,world.seed,world.tick,world.schemaVersion);
   if(o.traits)pawn.traits=[...o.traits];
-  if(o.traits&&isTraitsSchema361(world.schemaVersion))bornTraitEffects361(pawn,world.tick);
+  // Schema 372: Core's skills and passions of the offered person (Core
+  // backstories), on the offer's own identity, so the letter can show them.
+  if(coreSkillBirth372(world.schemaVersion,pawn.background)){bornWimpRecord362(pawn,world.tick);giveCoreSkills372(pawn,arrivalSkillStream372(world.seed,o.id));}
+  else if(o.traits&&isTraitsSchema361(world.schemaVersion))bornTraitEffects361(pawn,world.tick);
   if(initializesWorkLikeCore302(world.schemaVersion))enableAndInitializeWork(pawn);
   pawn.hunger=75;pawn.rest=80;pawn.foodPolicyId=world.foodPolicies[0]!.id;
   // Clothing crosses the map boundary with its owner; it is an external input,
@@ -76,3 +83,13 @@ export function applyArrival(world:World,command:ArrivalCommand):CommandResult {
   return {ok:true};
 }
 import { civilianAdmissionFits } from './civilian-away.ts';
+
+/** Schema 372: the private skill stream of an arrival offer (its identity). */
+const arrivalSkillStream372=(seed:number,offerId:number)=>skillStream372((seed^0x210a771)>>>0,offerId);
+/** Schema 372: the levels and passions an arrival offer will have at
+ * acceptance; undefined when the offer is not a Core birth of this
+ * schema (the letter keeps its historical preview). */
+export function arrivalOfferSkills372(world:Pick<World,'schemaVersion'|'seed'>,offer:{id:number;age?:import('./human-age.ts').HumanAge;background?:import('./colonist-backgrounds.ts').ColonistBackground;traits?:readonly import('./traits.ts').TraitId[]}):PawnSkills|undefined {
+  if(!offer.background||!offer.age||!coreSkillBirth372(world.schemaVersion,offer.background))return undefined;
+  return coreSkillRecords372({draw:arrivalSkillStream372(world.seed,offer.id),ageYears:biologicalYears(offer.age),background:offer.background,traits:offer.traits??[]},-1);
+}

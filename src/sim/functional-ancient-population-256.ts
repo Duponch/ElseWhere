@@ -57,7 +57,7 @@ export function prepareFunctionalAncientHuman256(input:{id:number;nextId:number;
  // old display alias is never converted into authority on an existing Pawn.
  if(input.birth259){const b=input.birth259,expected=kind==='ancient-hostile'?'AncientsHostile':'Ancients',instance=b.factions.factions.find(f=>f.id===b.factionId);if(!instance||instance.def!==expected||!bindBornHumanFaction259({schemaVersion:259,worldFactions:b.factions},p,b.factionId))throw Error('Actual ancient birth faction instance refused');}
  generateBornBackground({schemaVersion:input.version??256,worldFactions:input.birth259?.factions},p,seed,!slave,false,{kind:slave?'Slave':'AncientSoldier',fallbackFaction:kind==='ancient-hostile'?'AncientsHostile':'Ancients'});
- giveBornTraits361({schemaVersion:input.version??256,seed},p,p.faction==='outlaws',seed);
+ giveBornTraits361({schemaVersion:input.version??256,seed},p,p.faction==='outlaws',seed,slave?'Slave':'AncientSoldier');
  // These neutral/hostile outsiders do not acquire a colony policy/task.
  delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;
  const items:AncientHeldPile256[]=[];let next=input.nextId;

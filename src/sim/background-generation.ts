@@ -3,6 +3,7 @@ import { CORE_KIND_BACKSTORY_370,applyCoreBackstoryBody370,backstoryFiltersFor37
 import { initialHumanAge, initialHumanAilments, type HumanAge } from './human-age.ts';
 import { createMedicalRecord } from './injury-state.ts';
 import { startingSkills, type PawnSkills } from './skills.ts';
+import { coreSkillBirth372 } from './skill-generation-372.ts';
 export { validOfferedBackground } from './background-save.ts';
 import type { Pawn,World } from './types.ts';
 
@@ -40,6 +41,15 @@ export function assignBackground(pawn:Pawn,background:ColonistBackground):void {
   // Schema 370 (only a Core adulthood exists there): its body type.
   applyCoreBackstoryBody370(pawn);
 }
+/** A birth's background. From schema 372 a Core background adds no skill
+ * gain: Core's GenerateSkills reads it once the traits are drawn
+ * (giveBornTraits361, skill-generation-372.ts). Below, `assignBackground`. */
+export function assignBornBackground(version:number,pawn:Pawn,background:ColonistBackground):void {
+  if(!coreSkillBirth372(version,background)){assignBackground(pawn,background);return;}
+  if(pawn.background!==undefined)return;
+  pawn.background={...background};
+  applyCoreBackstoryBody370(pawn);
+}
 export function generatePawnBackground(pawn:Pawn,seed:number,fighter=false,negotiator=false):void {
   if(!pawn.age||pawn.background!==undefined)return;
   assignBackground(pawn,generateBackground(seed,pawn.id,pawn.age,fighter,negotiator));
@@ -54,7 +64,7 @@ export function generateBornBackground(w:{readonly schemaVersion:number;readonly
   if(!pawn.age||pawn.background!==undefined)return;
   const draw=backstoryStream370(seed,pawn.id),faction=birthFactionDef370(w,draw,core.faction,pawnFactionDef370(w,pawn)??core.fallbackFaction);
   const kind=core.kind!==undefined&&Object.hasOwn(CORE_KIND_BACKSTORY_370,core.kind)?CORE_KIND_BACKSTORY_370[core.kind]:undefined;
-  assignBackground(pawn,drawAdmittedCoreBackground370(draw,pawn.age.biologicalTicks,backstoryFiltersFor370(core.kind,faction),{violent:core.violent??fighter,...kind?.requiredWorkTags?{requiredWorkTags:kind.requiredWorkTags}:{}}));
+  assignBornBackground(w.schemaVersion,pawn,drawAdmittedCoreBackground370(draw,pawn.age.biologicalTicks,backstoryFiltersFor370(core.kind,faction),{violent:core.violent??fighter,...kind?.requiredWorkTags?{requiredWorkTags:kind.requiredWorkTags}:{}}));
 }
 /** The three authored starters cover the physical economy and at least two
  * defenders. Their established traits/passions remain a scenario adaptation. */
@@ -83,7 +93,9 @@ export function offeredBornBackground(w:{readonly schemaVersion:number;readonly 
   const kind=core.kind!==undefined&&Object.hasOwn(CORE_KIND_BACKSTORY_370,core.kind)?CORE_KIND_BACKSTORY_370[core.kind]:undefined;
   return {age,background:drawAdmittedCoreBackground370(draw,age.biologicalTicks,backstoryFiltersFor370(core.kind,faction),{violent:core.violent??false,...kind?.requiredWorkTags?{requiredWorkTags:kind.requiredWorkTags}:{}})};
 }
-export function assignOfferedBackground(pawn:Pawn,offer:OfferedBackground,seed:number,currentTick:number):void {
+/** `version`: the schema of the birth (from 372 a Core background adds no
+ * gain, see assignBornBackground); without it, the historical rule. */
+export function assignOfferedBackground(pawn:Pawn,offer:OfferedBackground,seed:number,currentTick:number,version?:number):void {
   if(pawn.background!==undefined||!offer.background||!offer.age)return;
   pawn.age={...offer.age};
   // startingPawn's allocation-time age is replaced only for this new person.
@@ -91,5 +103,5 @@ export function assignOfferedBackground(pawn:Pawn,offer:OfferedBackground,seed:n
   if(pawn.health)delete pawn.health.ageAilments;
   const ailments=initialHumanAilments(seed,pawn.id,pawn.age);
   if(ailments.length){pawn.health??=createMedicalRecord(currentTick);pawn.health.ageAilments=ailments;}
-  assignBackground(pawn,offer.background);
+  if(version===undefined)assignBackground(pawn,offer.background);else assignBornBackground(version,pawn,offer.background);
 }
