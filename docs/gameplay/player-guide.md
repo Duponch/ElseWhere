@@ -954,6 +954,8 @@ Une personne créée avant vingt ans peut avoir seulement son enfance ; son anni
 
 Le tableau **Travail** grise les métiers interdits et en explique la cause. Leur priorité reste mémorisée ; un ordre direct ne permet pas de forcer un métier que la personne refuse. Une compétence signalée **Indisponible** n'apprend pas et n'oublie pas, même si son ancien niveau est conservé. Choisissez un autre colon capable pour ce travail.
 
+Depuis le schéma 370, une personne née dans votre monde reçoit l'une des 166 histoires du jeu de base, tirée selon sa faction : les colons de départ viennent d'autres mondes (policier, chef cuisinier, mineur sous contrat…), les tribus, pirates et gens de l'extérieur ont les leurs. Une histoire peut imposer un trait (l'assassin est psychopathe), en interdire un, changer la silhouette et, pour un colon de départ, lui faire apporter quelques objets (une chance sur quatre, deux au plus) : le dossier du candidat les liste sous **Possessions**, et ils attendent près du point d'arrivée. [Histoires, tirage et limites](backstories-v370.md).
+
 Une nouvelle demande d'accueil ou d'asile montre le profil avant votre décision. Vérifiez que la personne complète les métiers de votre groupe et préparez nourriture et couchage. Son passé restera celui annoncé après son arrivée et après rechargement.
 
 Certains portages appartiennent à un autre travail : un bâtisseur peut livrer son chantier, un cuisinier ravitailler sa facture. Secourir ou capturer directement une personne dépend des conditions physiques de cet ordre. Les soins reçus, le repos et le déplacement mobilisé restent disponibles ; une personne pacifiste ne combat pas.
