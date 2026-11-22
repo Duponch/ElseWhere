@@ -3,6 +3,7 @@ import {TICKS_PER_DAY,type Command,type WorkType,type World} from '../sim/types'
 import type {ArrivalOffer} from '../sim/arrival-state';
 import {adulthoodDefinition,childhoodDefinition,BACKGROUND_SKILL_IDS,BACKGROUND_WORK_LABELS,backgroundSkillRefusal,backgroundWorkRefusal,violentWorkRefusal,type BackgroundSkillId} from '../sim/colonist-backgrounds';
 import {previewBackgroundSkills} from '../sim/background-generation';
+import {arrivalOfferSkills372} from '../sim/arrivals';
 import {startingSkills} from '../sim/skills';
 import {TRAITS} from '../sim/traits';
 import {biologicalYears,chronologicalYears} from '../sim/human-age';
@@ -31,7 +32,8 @@ function blocked(state:NativeUiState,actions:NativeUiActions):string|undefined {
 /** The original letter's recorded offer only. This never constructs a Pawn,
  * grants a relationship, predicts medical health or edits simulation owners. */
 function offerRows(world:World,offer:ArrivalOffer):NativeRow[]{
- const skills=offer.background?previewBackgroundSkills(offer.profile,offer.background):startingSkills(offer.profile);
+ // Schema 372: the skills the accepted person will really have.
+ const skills=arrivalOfferSkills372(world,offer)??(offer.background?previewBackgroundSkills(offer.profile,offer.background):startingSkills(offer.profile));
  const rows:NativeRow[]=[
   row('arrival-offer',`${offer.name} souhaite rejoindre la colonie`,undefined,'Ce voyageur cherche un nouveau foyer. Prévoyez sa nourriture, son couchage et son travail.'),
   row('arrival-refusal-effect','Conséquence d’un refus','Les colons seront attristés pendant six jours.','Différer ne constitue pas un refus ; sans réponse, la demande expire.'),

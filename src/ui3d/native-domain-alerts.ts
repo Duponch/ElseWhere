@@ -6,6 +6,7 @@ import {raidGroups261} from '../sim/temp-map-raids-261';
 import {mechRaidGroups261} from '../sim/mechanical-raid-groups-261';
 import {mechanoidDefinition, type MechanoidKind} from '../sim/mechanoid-definition';
 import {previewBackgroundSkills} from '../sim/background-generation';
+import {arrivalOfferSkills372} from '../sim/arrivals';
 import {startingSkills} from '../sim/skills';
 import {biologicalYears, chronologicalYears} from '../sim/human-age';
 import {visitorMayTrade} from '../sim/visitors';
@@ -78,7 +79,8 @@ export function readNativeDomainAlerts(world: World, speed?: number): NativeDoma
 
   const offer = world.arrivals?.pending;
   if (offer) {
-    const skills = offer.background ? previewBackgroundSkills(offer.profile, offer.background) : startingSkills(offer.profile);
+    // Schema 372: the skills the accepted person will really have.
+    const skills = arrivalOfferSkills372(world, offer) ?? (offer.background ? previewBackgroundSkills(offer.profile, offer.background) : startingSkills(offer.profile));
     const age = offer.age ? ` Âge : ${biologicalYears(offer.age)} ans${chronologicalYears(offer.age) === biologicalYears(offer.age) ? '' : ` (${chronologicalYears(offer.age)} chronologiques)`}.` : '';
     const relationship = offer.relationship ? ` ${offeredRelationshipText(world, offer.relationship)}` : '';
     add(`arrival:${offer.id}`, `${offer.name} · demande d’accueil`, `${offer.name} souhaite rejoindre la colonie`,

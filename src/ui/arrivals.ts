@@ -2,6 +2,7 @@ import type { Command,World } from '../sim/types';
 import { TICKS_PER_DAY } from '../sim/types';
 import { traitSummary } from './traits-inspection';
 import { previewBackgroundSkills } from '../sim/background-generation';
+import { arrivalOfferSkills372 } from '../sim/arrivals';
 import { startingSkills } from '../sim/skills';
 import { biologicalYears, chronologicalYears } from '../sim/human-age';
 import { backgroundSkillSummary, createBackgroundInspection, updateBackgroundInspection } from './background-inspection';
@@ -35,7 +36,8 @@ export function createArrivalUI(send:(command:Command)=>Promise<unknown>):{updat
     // Keep the interactive node attached across status refreshes (keyboard focus).
     const alerts=document.getElementById('alerts')!;if(letter.parentElement!==alerts)alerts.prepend(letter);
     title.textContent=`${offer.name} souhaite rejoindre la colonie`;
-    const skills=offer.background?previewBackgroundSkills(offer.profile,offer.background):startingSkills(offer.profile);
+    // Schema 372: the skills the accepted person will really have.
+    const skills=arrivalOfferSkills372(world,offer)??(offer.background?previewBackgroundSkills(offer.profile,offer.background):startingSkills(offer.profile));
     body.textContent=`Ce voyageur cherche un nouveau foyer. Profil : ${backgroundSkillSummary(skills,offer)}. Traits : ${traitSummary(offer)}. En l’accueillant, prévoyez sa nourriture, son couchage et son travail. Un refus attristera les colons pendant six jours.`;
     age.hidden=!offer.age;age.textContent=offer.age?`Âge : ${biologicalYears(offer.age)} ans${chronologicalYears(offer.age)===biologicalYears(offer.age)?'':` (${chronologicalYears(offer.age)} chronologiques)`}`:'';
     updateBackgroundInspection(profile,offer);
