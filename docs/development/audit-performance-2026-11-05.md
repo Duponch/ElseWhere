@@ -1160,6 +1160,7 @@ Les autres rôles de pièce relus (atelier 27 par établi, cuisine 28 par cuisin
 | `scripts/perf-worker-run.ts` | Worker de production à une vitesse donnée : ticks tenus, publications par seconde et tailles, `FULL_REASONS=1` pour les causes de publication complète |
 | `scripts/publication-replay-record.ts`, `publication-replay-compare.mjs` | Enregistrement de tous les messages du Worker sous une horloge simulée, puis comparaison de deux versions du code : identique ou premier message différent |
 | `scripts/perf-client-profile.mjs` | Client réel (Chromium, WebGPU) : images/s, percentiles, longues tâches, profils en pause, ×1 et ×6 |
+| `scripts/perf-client-publication.mjs`, `-config`, `-summary` | Client réel, image par image : coût au fil principal de chaque publication complète (tâche du message avec la désérialisation, admission, application aux couches de rendu), images longues, HUD ; médianes de passages alternés |
 | `scripts/perf-chunk-bench.mjs` | Reconstruction forcée de tous les chunks de végétation, avec empreinte de la géométrie |
 | `scripts/perf-profile-classify.mjs` | Longues tâches d’un profil, totalisées par cause |
 | `scripts/perf-profile-summary.mjs`, `-callers`, `-callees`, `-lines`, `-longtasks` | Lecture des profils |
