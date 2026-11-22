@@ -6,7 +6,7 @@ import {reservedSource} from './materials.ts';
 import {reservedServiceCells} from './service-reservations.ts';
 import {captureStandability,canStandAt} from './furniture-travel.ts';
 import {deconstructionReserved} from './deconstruction-rules.ts';
-import {isDiningSeat,isDiningTable,adjacentTable} from './dining.ts';
+import {isDiningSeat,isDiningTable,adjacentTable,seatAt,seatCells} from './dining.ts';
 import {targetBuildingPlayerUse263} from './world-target-building-263.ts';
 import {footprintCells} from './definitions.ts';
 import {storageCells,storageAt} from './shelf-storage.ts';
@@ -61,7 +61,7 @@ export function readingTaskSiteValid295(world:World,task:ReadingTask295):boolean
  if(task.stage==='return')return task.phase==='active'||!!storageAt(world,task.target);
  if(!canStandAt(world,task.target))return false;
  if(task.stage==='pickup')return true;
- if(task.seatId!==undefined&&!world.structures.some(s=>s.id===task.seatId&&same(s,task.target)&&isDiningSeat(s.kind)&&targetBuildingPlayerUse263(world,s)&&!deconstructionReserved(world,s.id)))return false;
+ if(task.seatId!==undefined&&!world.structures.some(s=>s.id===task.seatId&&seatAt(s,task.target)&&isDiningSeat(s.kind)&&targetBuildingPlayerUse263(world,s)&&!deconstructionReserved(world,s.id)))return false;
  return task.buildingId===null||adjacentTable(world,task.target)?.id===task.buildingId;
 }
 export interface ReadingPlace295 {target:Cell;buildingId:number|null;seatId?:number;path:Cell[]}
@@ -70,8 +70,9 @@ export interface ReadingPlace295 {target:Cell;buildingId:number|null;seatId?:num
 export function chooseReadingPlace295(world:World,pawn:Pawn,context:NeedContext):ReadingPlace295|null {
  const standable=captureStandability(world),reserved=reservedServiceCells(world,pawn.id),fires=fireCells(world),key=(c:Cell)=>cellIndex(world,c.x,c.z);
  const valid=(c:Cell)=>inBounds(world,c.x,c.z)&&standable(c)&&allowedAreaAllows(world,pawn,c)&&!reserved.has(key(c))&&!fires.has(key(c));
- const seats=world.structures.filter(s=>isDiningSeat(s.kind)&&targetBuildingPlayerUse263(world,s)&&!deconstructionReserved(world,s.id,pawn.id)&&distance(pawn,s)<=32**2&&valid(s))
-  .map(s=>({target:{x:s.x,z:s.z},seatId:s.id,buildingId:adjacentTable(world,s)?.id??null}));
+ // Schema 365: a couch offers each of its two cells as a seat.
+ const seats=world.structures.flatMap(s=>!isDiningSeat(s.kind)||!targetBuildingPlayerUse263(world,s)||deconstructionReserved(world,s.id,pawn.id)?[]:seatCells(s).filter(c=>distance(pawn,c)<=32**2&&valid(c))
+  .map(c=>({target:{x:c.x,z:c.z},seatId:s.id,buildingId:adjacentTable(world,c)?.id??null})));
  const surfaces:Omit<ReadingPlace295,'path'>[]=[];
  for(const s of world.structures)if(isDiningTable(s.kind)&&targetBuildingPlayerUse263(world,s)&&!deconstructionReserved(world,s.id,pawn.id)&&distance(pawn,s)<=32**2)
   for(const cell of footprintCells(s))for(const target of around(cell).slice(1))if(valid(target))surfaces.push({target,buildingId:s.id});

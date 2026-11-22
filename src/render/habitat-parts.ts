@@ -51,6 +51,16 @@ export function habitatParts(world: World): Placement[] {
         add(0, 0.69, -0.31, 0.76, 0.50, 0.12, trim);
         break;
       }
+      case 'couch': {
+        // Schema 365: the two-seat couch, two cushions on one frame (local X is its long side).
+        const seat = 0.37;
+        add(0, seat, 0.03, 1.78, 0.14, 0.78, trim);
+        for (const dx of [-0.45, 0.45]) add(dx, 0.47, 0.06, 0.84, 0.08, 0.66);
+        for (const dx of [-0.91, 0.91]) add(dx, 0.53, 0.04, 0.15, 0.36, 0.72);
+        for (const dx of [-0.82, 0.82]) for (const dz of [-0.28, 0.28]) add(dx, seat / 2, dz, 0.10, seat, 0.10, trim);
+        add(0, 0.69, -0.31, 1.76, 0.50, 0.12, trim);
+        break;
+      }
       case 'end-table': {
         const height = WORLD_SCALE.tableHeight - 0.05;
         add(0, height, 0, 0.76, 0.10, 0.76);
@@ -100,7 +110,7 @@ export function habitatParts(world: World): Placement[] {
 
 const HABITAT_KINDS = new Set([
   'shelf','small-shelf',
-  'dining-chair', 'armchair', 'end-table', 'dresser', 'table-square', 'table-long', 'table-large', 'flower-pot',
+  'dining-chair', 'armchair', 'couch', 'end-table', 'dresser', 'table-square', 'table-long', 'table-large', 'flower-pot',
 ]);
 
 function footprintCenter(structure: Structure): { x: number; z: number } {
@@ -175,6 +185,15 @@ export function habitatPartsForStructure(structure: Structure): Placement[] {
       for (const dx of [-0.31, 0.31]) add(dx, 0.53, 0.04, 0.15, 0.36, 0.72);
       for (const dx of [-0.29, 0.29]) for (const dz of [-0.28, 0.28]) add(dx, seat / 2, dz, 0.10, seat, 0.10, trim);
       add(0, 0.69, -0.31, 0.76, 0.50, 0.12, trim);
+      break;
+    }
+    case 'couch': {
+      const seat = 0.37;
+      add(0, seat, 0.03, 1.78, 0.14, 0.78, trim);
+      for (const dx of [-0.45, 0.45]) add(dx, 0.47, 0.06, 0.84, 0.08, 0.66);
+      for (const dx of [-0.91, 0.91]) add(dx, 0.53, 0.04, 0.15, 0.36, 0.72);
+      for (const dx of [-0.82, 0.82]) for (const dz of [-0.28, 0.28]) add(dx, seat / 2, dz, 0.10, seat, 0.10, trim);
+      add(0, 0.69, -0.31, 1.76, 0.50, 0.12, trim);
       break;
     }
     case 'end-table': {

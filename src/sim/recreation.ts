@@ -186,7 +186,7 @@ export function offerRecreation300(world:World,pawn:Pawn,context:NeedContext,aft
         if(spot.kind!=='campfire') {
           const around=new Set<number>();
           for(const part of footprintCells(spot))for(const [dx,dz] of [[0,-1],[1,0],[0,1],[-1,0]])around.add(cellIndex(world,part.x+dx!,part.z+dz!));
-          for(const key of around){const seat=seats.get(key);if(seat&&!reserved.has(key)&&adjacentToTable(spot,seat))candidates.push({activity,buildingId:spot.id,seatId:seat.id,target:{x:seat.x,z:seat.z},phase:'travel',elapsed:0});}
+          for(const key of around){const seat=seats.get(key);if(!seat)continue;const at=seat.kind==='couch'?{x:key%world.width,z:Math.floor(key/world.width)}:{x:seat.x,z:seat.z};if(!reserved.has(key)&&adjacentToTable(spot,at))candidates.push({activity,buildingId:spot.id,seatId:seat.id,target:at,phase:'travel',elapsed:0});}
         } else for(let dz=-3;dz<=3;dz++)for(let dx=-3;dx<=3;dx++)if(dx*dx+dz*dz>0&&dx*dx+dz*dz<=15){
           const target={x:spot.x+dx,z:spot.z+dz},key=cellIndex(world,target.x,target.z),seat=seats.get(key);
           if(!reserved.has(key))candidates.push({activity,buildingId:spot.id,...(seat?{seatId:seat.id}:{}),target,phase:'travel',elapsed:0});

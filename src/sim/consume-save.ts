@@ -15,7 +15,7 @@ import { FOOD_ITEMS } from './food-policy.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
 import { MAX_STACK,footprintCells } from './definitions.ts';
 import { captureStandability } from './furniture-travel.ts';
-import { isDiningSeat,isDiningTable } from './dining.ts';
+import { isDiningSeat,isDiningTable,seatAt } from './dining.ts';
 import { serviceCell } from './service-reservations.ts';
 import { bedSlotCell } from './bed-slots.ts';
 import { isCookingOrder } from './order-types.ts';
@@ -159,7 +159,7 @@ export function validForcedConsumeTransport(world:World,knownConsumers?:readonly
         const place=task.dining;
         if(place){
           if(!standable(place.target)||!inArea(pawn,place.target)||!free(place.target,pawn.id))return false;
-          if(place.seatId!==null){const seat=beds.get(place.seatId);if(!seat||!isDiningSeat(seat.kind)||!same(seat,place.target)||place.tableId===null&&task.alcoholReason!=='ordered')return false;}
+          if(place.seatId!==null){const seat=beds.get(place.seatId);if(!seat||!isDiningSeat(seat.kind)||!seatAt(seat,place.target)||place.tableId===null&&task.alcoholReason!=='ordered')return false;}
           if(place.tableId!==null){const table=beds.get(place.tableId);if(!table||!isDiningTable(table.kind)||!footprintCells(table).some(c=>distance(c,place.target)===1))return false;}
           if(pawn.path.length&&!same(pawn.path.at(-1)!,place.target)||!pawn.path.length&&!same(pawn,place.target))return false;
           if(task.phase==='ingest'&&(moving||pawn.path.length||!same(pawn,place.target)))return false;

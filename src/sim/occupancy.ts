@@ -108,6 +108,7 @@ export const OCCUPANCY = Object.freeze({
   stool: Object.freeze({clearItems:false,items:true,zones:true,store:true}),
   'dining-chair':Object.freeze({clearItems:false,items:true,zones:true,store:true}),
   armchair:Object.freeze({clearItems:false,items:true,zones:true,store:true}),
+  couch:Object.freeze({clearItems:false,items:true,zones:true,store:true}),
   'end-table':Object.freeze({clearItems:false,items:true,zones:false,store:false}),
   dresser:Object.freeze({clearItems:true,items:false,zones:false,store:false}),
   'flower-pot':Object.freeze({clearItems:true,items:false,zones:false,store:false}),

@@ -9,7 +9,8 @@ import { deconstructionReserved } from './deconstruction-rules.ts';
 import { canStandAt, captureStandability } from './furniture-travel.ts';
 import { isRoofed, roofIndex } from './roof-rules.ts';
 import { footprintCells, footprintContains } from './definitions.ts';
-import { isDiningSeat, isDiningTable } from './dining.ts';
+import { isDiningSeat, isDiningTable, seatAt } from './dining.ts';
+import { couchCells365 } from './straw-couch-365.ts';
 import { canSocialize } from './social.ts';
 import { inBounds } from './pathfinding.ts';
 import { isRoomDoor } from './door-rules.ts';
@@ -37,7 +38,7 @@ export function recreationSpace(world: World, resourceTargets?: readonly Cell[],
     if(world.schemaVersion>=190&&s.kind==='tube-television'){index.televisions??=new Map();index.televisions.set(s.id,s);}
     if(isJoyTableKind354(s.kind)&&isJoyTablesSchema354(world.schemaVersion)){index.joyTables354??=new Map();index.joyTables354.set(s.id,s);}
     if(isGatherSpot(s)&&gatherActive(s))index.gathers.set(s.id,s);
-    if(isDiningSeat(s.kind))index.seats.set(s.z*world.width+s.x,s);
+    if(isDiningSeat(s.kind)){if(s.kind==='couch'){for(const c of couchCells365(s))index.seats.set(c.z*world.width+c.x,s);}else index.seats.set(s.z*world.width+s.x,s);}
     for(const c of footprintCells(s))index.objects.add(c.z*world.width+c.x);
   }
   for(const job of world.jobs)index.objects.add(job.z*world.width+job.x);
@@ -123,9 +124,9 @@ export function recreationSiteValid(world: World, task: RecreationTask, space?: 
   if(task.activity==='watch-television') {
     const tv=space?space.televisions?.get(task.buildingId!):world.structures.find(s=>s.id===task.buildingId&&s.kind==='tube-television');
     const seat=space?space.seats.get(task.target.z*world.width+task.target.x):world.structures.find(s=>s.id===task.seatId&&isDiningSeat(s.kind));
-    return world.schemaVersion>=190&&!!tv&&tvActive(tv)&&!!seat&&seat.id===task.seatId&&seat.x===task.target.x&&seat.z===task.target.z
-      &&isTelevisionCell(tv,seat)&&!deconstructionReserved(world,tv.id)&&!deconstructionReserved(world,seat.id)
-      &&clearThrow(world,tv,seat,space)&&televisionSameRoom(world,tv,seat,space?.roomTopology??readTopology);
+    return world.schemaVersion>=190&&!!tv&&tvActive(tv)&&!!seat&&seat.id===task.seatId&&seatAt(seat,task.target)
+      &&isTelevisionCell(tv,task.target)&&!deconstructionReserved(world,tv.id)&&!deconstructionReserved(world,seat.id)
+      &&clearThrow(world,tv,task.target,space)&&televisionSameRoom(world,tv,task.target,space?.roomTopology??readTopology);
   }
   if(isJoyTableActivity354(task.activity)){
     const table=space?space.joyTables354?.get(task.buildingId!):world.structures.find(s=>s.id===task.buildingId);
@@ -135,24 +136,24 @@ export function recreationSiteValid(world: World, task: RecreationTask, space?: 
   }
   if(task.activity==='chess') {
     const table=space?space.games.get(task.buildingId!):world.structures.find(s=>s.id===task.buildingId&&s.kind==='chess-table');
-    const seat=space?space.seats.get(task.target.z*world.width+task.target.x):world.structures.find(s=>s.id===task.seatId&&(s.kind==='stool'||s.kind==='dining-chair'||s.kind==='armchair'));
-    return !!table&&!!seat&&seat.id===task.seatId&&seat.x===task.target.x&&seat.z===task.target.z&&isChessCell(table,seat)
+    const seat=space?space.seats.get(task.target.z*world.width+task.target.x):world.structures.find(s=>s.id===task.seatId&&(s.kind==='stool'||s.kind==='dining-chair'||s.kind==='armchair'||s.kind==='couch'));
+    return !!table&&!!seat&&seat.id===task.seatId&&seatAt(seat,task.target)&&isChessCell(table,task.target)
       &&!deconstructionReserved(world,table.id)&&!deconstructionReserved(world,seat.id);
   }
   if(task.activity==='social-relax') {
     const spot=space?space.gathers.get(task.buildingId!):world.structures.find(s=>s.id===task.buildingId&&isGatherSpot(s)&&gatherActive(s));
     if(!spot||!isGatherSpot(spot)||!gatherActive(spot)||deconstructionReserved(world,spot.id))return false;
     const seat=task.seatId===undefined?undefined:space?space.seats.get(task.target.z*world.width+task.target.x):world.structures.find(s=>s.id===task.seatId&&isDiningSeat(s.kind));
-    if(spot.kind!=='campfire')return !!seat&&seat.id===task.seatId&&seat.x===task.target.x&&seat.z===task.target.z&&adjacentToTable(spot,task.target)&&!deconstructionReserved(world,seat.id);
+    if(spot.kind!=='campfire')return !!seat&&seat.id===task.seatId&&seatAt(seat,task.target)&&adjacentToTable(spot,task.target)&&!deconstructionReserved(world,seat.id);
     if((spot.x-task.target.x)**2+(spot.z-task.target.z)**2>15||!clearThrow(world,spot,task.target,space))return false;
-    return seat?seat.id===task.seatId&&seat.x===task.target.x&&seat.z===task.target.z&&!deconstructionReserved(world,seat.id)
+    return seat?seat.id===task.seatId&&seatAt(seat,task.target)&&!deconstructionReserved(world,seat.id)
       :task.seatId===undefined&&!(space?space.objects.has(task.target.z*world.width+task.target.x):world.structures.some(s=>footprintContains(s,task.target))||world.jobs.some(j=>footprintContains(j,task.target)));
   }
   if(task.activity==='visit-sick') {
     const patient=space?.patients?space.patients.get(task.patientId!):visitPatient(world,task.patientId!,false);
     if(!patient||!nearVisitPatient(patient,task.target)||!clearThrow(world,patient,task.target,space))return false;
     const seat=task.seatId===undefined?undefined:space?space.seats.get(task.target.z*world.width+task.target.x):world.structures.find(s=>s.id===task.seatId&&isDiningSeat(s.kind));
-    return seat?seat.id===task.seatId&&seat.x===task.target.x&&seat.z===task.target.z&&!deconstructionReserved(world,seat.id)
+    return seat?seat.id===task.seatId&&seatAt(seat,task.target)&&!deconstructionReserved(world,seat.id)
       :task.seatId===undefined&&!(space?space.objects.has(task.target.z*world.width+task.target.x):world.structures.some(s=>footprintContains(s,task.target))||world.jobs.some(j=>footprintContains(j,task.target)));
   }
   if(task.activity==='skygaze'&&space?.resources)return !space.objects.has(task.target.z*world.width+task.target.x)&&!space.resources.has(task.target.z*world.width+task.target.x);

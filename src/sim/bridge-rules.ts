@@ -45,7 +45,7 @@ export const BUILDING_SUPPORT:Readonly<Record<StructureKind,'Light'|'Medium'|'He
   'table-large':'Light','double-bedroll':'Light','double-sleeping-spot':'Light','wall-lamp':'Light',
   'stool':'Light',
   'dining-chair':'Light',
-  'armchair':'Light',
+  'armchair':'Light','couch':'Light',
   'shelf':'Light',
   'small-shelf':'Light',
   'end-table':'Light',

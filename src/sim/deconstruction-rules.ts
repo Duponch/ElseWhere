@@ -8,7 +8,7 @@ import { promoteWallDoorManual296 } from './wall-door-runtime-296.ts';
 
 export interface DeconstructionTarget { structureId: number; kind: Structure['kind']; material?:ConstructionMaterial }
 /** Lost construction wood and retired fuel history are distinct ledger terms. */
-export interface DeconstructionLedger { lostGold298?:number; lostAiCores298?:number; lostPlasteel275?:number; lostAdvancedComponents271?:number; lostWort?:number; lostBeer?:number; count: number; lostWood: number; fuelTicks: number; lostSteel?:number; lostSilver?:number; lostUranium?:number; lostComponents?:number; lostBlocks?:Partial<Record<import('./building-materials.ts').BlockMaterial,number>>; lostTextiles?:Partial<Record<import('./building-materials.ts').UpholsteryMaterial,number>> }
+export interface DeconstructionLedger { lostHay365?:number; lostGold298?:number; lostAiCores298?:number; lostPlasteel275?:number; lostAdvancedComponents271?:number; lostWort?:number; lostBeer?:number; count: number; lostWood: number; fuelTicks: number; lostSteel?:number; lostSilver?:number; lostUranium?:number; lostComponents?:number; lostBlocks?:Partial<Record<import('./building-materials.ts').BlockMaterial,number>>; lostTextiles?:Partial<Record<import('./building-materials.ts').UpholsteryMaterial,number>> }
 export const deconstructionAt = (world: World, cell: Cell & {targetId?:number}) => world.structures.find(s => (cell.targetId===undefined||s.id===cell.targetId)&&footprintContains(s, cell));
 export const deconstructionTarget = (world: World, job: Job) => world.structures.find(s => s.id === job.deconstruction?.structureId);
 export function deconstructionReserved(world: World, id: number, exceptPawn?: number): boolean {

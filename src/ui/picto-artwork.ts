@@ -110,6 +110,13 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
   d.path('M 10 41 Q 24 47 31 31 Q 38 45 55 39',null,1.1,P.paper);d.path('M 6 56 Q 32 51 58 56',null,1.4);
   id='drawn';
  }
+ // Schema 365: straw matting, a woven mat of hay.
+ if(id==='straw-matting'){
+  const fill='#d2b465';
+  d.shape([[7,29],[31,14],[57,28],[33,45]],fill);d.shape([[7,29],[33,45],[57,28],[57,35],[33,52],[7,36]],fill);d.line([[33,45],[33,52]],1.3);
+  for(const t of[.25,.5,.75]){d.line([[7+24*t,29-15*t],[33+24*t,45-17*t]],1.1,P.wood);d.line([[7+26*t,29+16*t],[31+26*t,14+14*t]],1.1,P.wood);}
+  id='drawn';
+ }
  // Schema 355: one rug per Core carpet colour, its fringes on the two short edges.
  if(id==='carpet-making'||isCarpetFloor355(id)){
   const fill=isCarpetFloor355(id)?'#'+carpetColor355(id).color.toString(16).padStart(6,'0'):P.red;
@@ -195,6 +202,7 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  case 'table-large':d.rect(9,11,46,38,P.wood);for(const x of[24,40])d.line([[x,12],[x,48]],1,P.paper);for(const y of[24,36])d.line([[10,y],[54,y]],1,P.paper);for(const x of[13,51])d.line([[x,49],[x,58]],3);d.line([[32,49],[32,56]],2.5);break;
  case 'table':case 'table-square':case 'table-long':case 'end-table':{const x=id==='table-square'?17:id==='end-table'?16:8,w=id==='table-long'?48:id==='table-square'?30:id==='end-table'?32:42,h=id==='table-square'?29:21;d.rect(x,17,w,h,P.wood);d.line([[x+4,17+h],[x+4,57]],3);d.line([[x+w-4,17+h],[x+w-4,57]],3);d.line([[x+4,23],[x+w-4,23]],1,P.paper);break;}
  case 'chair':d.rect(18,9,29,26,P.wood);d.rect(13,35,39,8,P.ochre);d.line([[18,43],[16,57]],3);d.line([[46,43],[49,57]],3);d.line([[24,14],[24,29]],1.4);d.line([[40,14],[40,29]],1.4);break;
+ case 'couch':d.path('M 9 38 L 9 20 Q 10 13 17 13 L 47 13 Q 54 13 55 20 L 55 38 Z',P.sage);d.rect(8,34,48,15,P.sage);d.line([[32,35],[32,48]],1.4);d.rect(3,28,9,23,P.green);d.rect(52,28,9,23,P.green);d.line([[10,52],[9,57]],3);d.line([[54,52],[55,57]],3);d.line([[32,49],[32,56]],2.5);break;
  case 'armchair':d.path('M 16 40 L 16 18 Q 17 10 25 11 L 43 11 Q 50 12 49 19 L 49 41 Z',P.sage);d.rect(12,35,41,16,P.sage);d.rect(7,28,10,23,P.green);d.rect(48,28,10,23,P.green);d.line([[17,52],[16,57]],3);d.line([[49,52],[50,57]],3);break;
  case 'stool':d.ellipse(32,26,21,9,P.wood);d.line([[17,32],[14,55]],3);d.line([[47,32],[50,55]],3);d.line([[32,35],[32,54]],2.5);break;
  case 'shelf':case 'small-shelf':case 'dresser':d.rect(12,8,40,48,P.wood);for(const y of[23,39])d.line([[14,y],[50,y]],2);if(id==='dresser'){for(const y of[16,31,47])d.line([[28,y],[36,y]],2,P.paper);}else{d.rect(17,12,9,10,P.sage);d.rect(31,10,14,12,P.ochre);if(id==='shelf'){d.rect(18,29,15,9,P.blue);d.rect(36,26,10,12,P.paper);}d.rect(18,45,26,9,P.paper);}break;

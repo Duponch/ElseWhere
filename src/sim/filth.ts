@@ -8,6 +8,7 @@ import { isRoofed } from './roof-rules.ts';
 import { isGrowingTerrain } from './soil.ts';
 import { captureCleanliness } from './filth-room.ts';
 import { ensureFilth,filthRandom,filthCheckPeriod,FILTH_DEFINITIONS,type FilthKind,type FilthRecord } from './filth-rules.ts';
+import {STRAW_MATTING_365,filthHonoursMultiplier365,isStrawCouchSchema365} from './straw-couch-365.ts';
 import type { Cell,Pawn,World } from './types.ts';
 export type { FilthKind,FilthRecord,FilthState,FilthFeet } from './filth-rules.ts';
 export { FILTH_KINDS,FILTH_DEFINITIONS } from './filth-rules.ts';
@@ -29,10 +30,20 @@ function accepted(w:World,c:Cell,kind:FilthKind,spontaneous=false):boolean {
   if(isRoofed(w,c.z*w.width+c.x))return true;
   const room=captureCleanliness(w).room(c);return !!room&&room.cells.size-room.covered<Math.ceil(room.cells.size*.25);
 }
+/** Schema 365, Core FilthMaker.CanMakeFilth: a new filth on straw matting
+ * (FilthMultiplier 0.05) is refused when Rand.Value exceeds the multiplier,
+ * before any acceptance check; thickening an existing filth draws nothing.
+ * The draw uses the filth stream and only happens on straw matting, which
+ * exists only from 365. */
+function strawMattingRefuses365(w:World,c:Cell,kind:FilthKind):boolean {
+  if(w.tiles[c.z*w.width+c.x]!.floor!=='straw-matting'||!isStrawCouchSchema365(w.schemaVersion)||!filthHonoursMultiplier365(kind))return false;
+  return filthRandom(ensureFilth(w))>STRAW_MATTING_365.filthMultiplier;
+}
 function put(w:World,c:Cell,kind:FilthKind,spontaneous=false):boolean {
   if(!filthWalkable(w,c))return false;
   const found=w.filth?.items.find(f=>same(f,c)&&f.kind===kind);
   if(found){if(found.thickness>=5)return false;found.thickness++;found.grownCore=isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveCore297(w):w.tick*10;return true;}
+  if(strawMattingRefuses365(w,c,kind))return false;
   if(!accepted(w,c,kind,spontaneous)||!Number.isSafeInteger(w.nextId+1)||(w.filth?.items.length??0)>=w.width*w.height*(w.schemaVersion>=290?10:w.schemaVersion>=256?9:6))return false;
   const state=ensureFilth(w),d=FILTH_DEFINITIONS[kind],period=filthCheckPeriod(w),now=isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveCore297(w):w.tick*10;
   // A cell's phase is stable; adding another trace never rerolls rain chronology.

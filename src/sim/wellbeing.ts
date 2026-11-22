@@ -17,7 +17,7 @@ import type { BodyAssessment } from './body-capacities.ts';
 import { TICKS_PER_DAY } from './types.ts';
 import type { Pawn,Structure, World } from './types.ts';
 import { comfortForStructure,type FurnitureWorldLike } from './furniture-stats.ts';
-import { isDiningSeat } from './dining.ts';
+import { isDiningSeat,seatAt } from './dining.ts';
 import { filteredStructures } from './structure-navigation.ts';
 const isDiningSeatStructure=(s:Structure):boolean=>isDiningSeat(s.kind);
 import { footprintCells,footprintContains } from './definitions.ts';
@@ -69,12 +69,12 @@ export function updateWellbeing(world: World, pawn: Pawn,body?:BodyAssessment,re
       ceiling=comfortForStructure(furnitureWorld,bed)*100;
     }
   }
-  if (pawn.state === 'eating' && need?.kind === 'eat' && need.dining?.seatId !== null && need.dining) {const seat=world.structures.find(item => item.id === need.dining!.seatId && isDiningSeat(item.kind) && item.x === pawn.x && item.z === pawn.z);if(seat)ceiling=comfortForStructure(furnitureWorld,seat)*100;}
-  if(pawn.research && pawn.state==='working' && pawn.x===pawn.research.spot.x && pawn.z===pawn.research.spot.z){const seat=filteredStructures(world,'dining-seats',isDiningSeatStructure).find(s=>s.x===pawn.x&&s.z===pawn.z);if(seat)ceiling=comfortForStructure(furnitureWorld,seat)*100;}
+  if (pawn.state === 'eating' && need?.kind === 'eat' && need.dining?.seatId !== null && need.dining) {const seat=world.structures.find(item => item.id === need.dining!.seatId && isDiningSeat(item.kind) && seatAt(item,pawn));if(seat)ceiling=comfortForStructure(furnitureWorld,seat)*100;}
+  if(pawn.research && pawn.state==='working' && pawn.x===pawn.research.spot.x && pawn.z===pawn.research.spot.z){const seat=filteredStructures(world,'dining-seats',isDiningSeatStructure).find(s=>seatAt(s,pawn));if(seat)ceiling=comfortForStructure(furnitureWorld,seat)*100;}
   // Schema 350: a chair on the work cell of a production bench (Toils_Recipe).
   if(pawn.cooking){const seat350=benchSeatComfort350(world,pawn,furnitureWorld);if(seat350!==undefined)ceiling=seat350;}
   if(pawn.state==='recreating'&&(pawn.recreation.task?.activity==='chess'||pawn.recreation.task?.activity==='poker'||pawn.recreation.task?.activity==='game-of-ur'||pawn.recreation.task?.activity==='watch-television'&&pawn.x===pawn.recreation.task.target.x&&pawn.z===pawn.recreation.task.target.z&&pawn.moveCooldown===0)&&pawn.recreation.task.phase==='active'){
-    const seat=world.structures.find(s=>s.id===pawn.recreation.task!.seatId&&isDiningSeat(s.kind)&&s.x===pawn.x&&s.z===pawn.z);
+    const seat=world.structures.find(s=>s.id===pawn.recreation.task!.seatId&&isDiningSeat(s.kind)&&seatAt(s,pawn));
     if(seat)ceiling=comfortForStructure(furnitureWorld,seat)*100;
   }
   // Furniture can exceed 100%; the occupied need remains normalized for every

@@ -151,6 +151,8 @@ const BUILDINGS: Readonly<Record<StructureKind, BuildingValueDef>> = Object.free
   stool: def(25, 450, 'standable', {}, true),
   'dining-chair': def(45, 8000, 'standable', {}, true),
   armchair: def(110, 14000, 'standable', {}, true),
+  // Schema 365 Couch: 200 Fabric/Leathery stuff, WorkToBuild 20000.
+  couch: def(200, 20000, 'standable', {}, true),
   'end-table': def(30, 1000, 'pass-through', {}, true),
   dresser: def(50, 2000, 'pass-through', {}, true),
   'flower-pot': def(20, 250, 'pass-through', {}, true),
@@ -235,6 +237,9 @@ const FLOOR_VALUE: Readonly<Record<FloorKind, number>> = Object.freeze({
   // Schema 355 carpets: 7 cloth + WorkToBuild 800; the burned carpet has no value.
   ...Object.fromEntries(CARPET_FLOORS_355.map(id=>[id,7*MATERIAL_VALUE.cloth+800*VALUE_PER_WORK])) as Record<CarpetFloor355,number>,
   'burned-carpet': 0,
+  // Schema 365 straw matting: 2 hay (MarketValue 0.6) + WorkToBuild 120; burned, no value.
+  'straw-matting': 2 * .6 + 120 * VALUE_PER_WORK,
+  'burned-straw-matting': 0,
 });
 export function floorRoomMarketValue(tile: Tile): number {
   if(tile.bridge)return 12*MATERIAL_VALUE.wood+1500*VALUE_PER_WORK;

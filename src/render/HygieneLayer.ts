@@ -11,7 +11,9 @@ import {CARPET_FLOORS_355,carpetColor355,type CarpetFloor355} from '../sim/carpe
 
 const floorColors:Record<FloorKind,number>={'ancient-tile':0x8a9d9a,'ancient-concrete':0x99968b,'broken-asphalt':0x606766,'granite-flagstone':0x918c85,'limestone-flagstone':0xb5aa85,'marble-flagstone':0xc4c0b5,'sandstone-flagstone':0xb18a64,'slate-flagstone':0x626970,'wood-planks':0x98714a,'burned-wood':0x302c28,'granite-tile':0x918c85,'limestone-tile':0xb5aa85,'marble-tile':0xc4c0b5,'sandstone-tile':0xb18a64,'slate-tile':0x626970,'steel-tile':0x83989a,'sterile-tile':0xd4e0dc,
   // Schema 355 carpets: the Core Structure ColorDef of each, then the burned carpet.
-  ...Object.fromEntries(CARPET_FLOORS_355.map(id=>[id,carpetColor355(id).color])) as Record<CarpetFloor355,number>,'burned-carpet':0x3a2d2b};
+  ...Object.fromEntries(CARPET_FLOORS_355.map(id=>[id,carpetColor355(id).color])) as Record<CarpetFloor355,number>,'burned-carpet':0x3a2d2b,
+  // Schema 365 straw matting (hay colour) and its burned floor.
+  'straw-matting':0xc8ae62,'burned-straw-matting':0x3f3326};
 
 /** Every tile owns exactly its cell. The authored plank joints meet rather
  * than exposing the natural terrain through deliberately undersized boxes. */
@@ -22,6 +24,10 @@ export function floorPartsForKind(floor:FloorKind,x:number,z:number):Placement[]
   if(floor==='ancient-tile')return [-1,1].flatMap(dx=>[-1,1].map(dz=>({x:x+dx*.25,z:z+dz*.25,y:FLOOR_SURFACE_Y-.019,sx:.5,sy:.038,sz:.5,color:dx===dz?color:0x9caaa2})));
   if(floor==='ancient-concrete')return [{x,z,y:FLOOR_SURFACE_Y-.019,sx:1,sy:.038,sz:1,color:(Math.imul(x,17)+Math.imul(z,31))%5===0?0xa39f92:color}];
   if(floor==='wood-planks'||floor==='burned-wood')return Array.from({length:3},(_,plank)=>({x:x+(plank-1)/3,z,y:FLOOR_SURFACE_Y-.038/2,sx:1/3,sy:.038,sz:1,color}));
+  // Woven straw: four strips per cell whose light/dark order flips from cell
+  // to cell, a checker of hay. The strips meet at the cell edges like planks.
+  if(floor==='straw-matting'||floor==='burned-straw-matting'){const shade=floor==='straw-matting'?0xb3974f:0x332a20,flip=(x+z)&1;
+    return Array.from({length:4},(_,strip)=>({x:x+(strip-1.5)/4,z,y:FLOOR_SURFACE_Y-.038/2,sx:1/4,sy:.038,sz:1,color:(strip+flip)%2?shade:color}));}
   if(isRoadFloor256(floor)&&floor!=='broken-asphalt')return [
     {x:x-.25,z:z-.25,y:FLOOR_SURFACE_Y-.019,sx:.48,sy:.038,sz:.48,color},
     {x:x+.25,z:z-.25,y:FLOOR_SURFACE_Y-.019,sx:.48,sy:.038,sz:.48,color},

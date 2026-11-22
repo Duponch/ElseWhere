@@ -5,7 +5,7 @@ import {validReadingWorld295} from './book-transport-295.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import { initialRecreation, RECREATION_DURATION, RECREATION_KINDS, VISIT_SICK_DURATION } from './recreation-rules.ts';
 import { adjacentToTable, isChessCell, isGatherSpot, isHorseshoeCell } from './recreation-space.ts';
-import { isDiningSeat } from './dining.ts';
+import { isDiningSeat,seatAt } from './dining.ts';
 import { footprintCells } from './definitions.ts';
 import { inJoyTableRing354,isJoyTableActivity354,JOY_TABLE_ACTIVITIES_354,JOY_TABLE_BY_ACTIVITY_354,joyTableCardinalCell354,joyTableRequiresChair354 } from './joy-tables-354.ts';
 import { validTelevisionTasks } from './television-save.ts';
@@ -88,16 +88,18 @@ export function validateRecreation(world: World, version: number): string[] {
     else if(task.activity==='skygaze') {if(task.buildingId!==null||task.seatId!==undefined)errors.push('Skygazing cannot claim a building.');}
     else if(task.activity==='chess') {
       const table=world.structures.find(s=>s.id===task.buildingId&&s.kind==='chess-table');
-      const seat=world.structures.find(s=>s.id===task.seatId&&(s.kind==='stool'||s.kind==='dining-chair'||s.kind==='armchair'));
-      if(!table||!seat||seat.x!==(task.target as {x:number}).x||seat.z!==(task.target as {z:number}).z||!isChessCell(table,seat))errors.push('Invalid chess source or seat.');
-      else {const count=(users.get(table.id)??0)+1;users.set(table.id,count);if(count>2)errors.push('Too many chess participants.');if(claimedChessSeats.has(seat.id))errors.push('Duplicate chess seat.');claimedChessSeats.add(seat.id);}
+      const seat=world.structures.find(s=>s.id===task.seatId&&(s.kind==='stool'||s.kind==='dining-chair'||s.kind==='armchair'||s.kind==='couch'));
+      // A couch (schema 365) seats one player per cell; an older seat is its anchor.
+      const seatKey=seat?.kind==='couch'?-1-(Number(task.target.z)*world.width+Number(task.target.x)):seat?.id;
+      if(!table||!seat||!seatAt(seat,task.target as {x:number;z:number})||!isChessCell(table,task.target as {x:number;z:number}))errors.push('Invalid chess source or seat.');
+      else {const count=(users.get(table.id)??0)+1;users.set(table.id,count);if(count>2)errors.push('Too many chess participants.');if(claimedChessSeats.has(seatKey!))errors.push('Duplicate chess seat.');claimedChessSeats.add(seatKey!);}
     } else if(version>=354&&isJoyTableActivity354(task.activity)) {
       // Schema 354 joy buildings: right kind, place and participant count.
       const facts=JOY_TABLE_BY_ACTIVITY_354[task.activity],table=world.structures.find(s=>s.id===task.buildingId&&s.kind===facts.kind),target=task.target as {x:number;z:number};
       const seat=task.seatId===undefined?undefined:world.structures.find(s=>s.id===task.seatId&&isDiningSeat(s.kind));
       const place=!table?false:task.activity==='hoopstone'?isHorseshoeCell(table,target)&&task.seatId===undefined
         :task.activity==='billiards'?inJoyTableRing354(footprintCells(table),target)&&task.seatId===undefined
-        :joyTableCardinalCell354(footprintCells(table),target)&&(task.seatId===undefined?!joyTableRequiresChair354(task.activity):!!seat&&seat.x===target.x&&seat.z===target.z);
+        :joyTableCardinalCell354(footprintCells(table),target)&&(task.seatId===undefined?!joyTableRequiresChair354(task.activity):!!seat&&seatAt(seat,target));
       if(!table||!place)errors.push('Invalid joy building source or place.');
       else {const count=(users.get(table.id)??0)+1;users.set(table.id,count);if(count>facts.maxParticipants)errors.push('Too many joy building participants.');}
     } else if(task.activity==='watch-television') {
@@ -111,8 +113,8 @@ export function validateRecreation(world: World, version: number): string[] {
       if(!spot)errors.push('Invalid gathering source.');
       else if(spot.kind==='campfire') {
         if((spot.x-Number(task.target.x))**2+(spot.z-Number(task.target.z))**2>15
-          ||(task.seatId!==undefined&&(!seat||seat.x!==task.target.x||seat.z!==task.target.z)))errors.push('Invalid campfire place.');
-      } else if(!seat||seat.x!==task.target.x||seat.z!==task.target.z||!adjacentToTable(spot,task.target as {x:number;z:number}))errors.push('Invalid gathering seat.');
+          ||(task.seatId!==undefined&&(!seat||!seatAt(seat,task.target as {x:number;z:number}))))errors.push('Invalid campfire place.');
+      } else if(!seat||!seatAt(seat,task.target as {x:number;z:number})||!adjacentToTable(spot,task.target as {x:number;z:number}))errors.push('Invalid gathering seat.');
     } else if(task.activity==='visit-sick') {
       if(task.buildingId!==null)errors.push('Visit cannot claim a building.');
       // Bed rest can end after the visitor has acted this tick. Preserve the
@@ -120,7 +122,7 @@ export function validateRecreation(world: World, version: number): string[] {
       const patient=world.pawns.find(p=>p.id===task.patientId);
       const seat=world.structures.find(s=>s.id===task.seatId&&isDiningSeat(s.kind));
       if(!patient||patient.id===pawn.id
-        ||task.seatId!==undefined&&(!seat||seat.x!==task.target.x||seat.z!==task.target.z))errors.push('Invalid sick visit.');
+        ||task.seatId!==undefined&&(!seat||!seatAt(seat,task.target as {x:number;z:number})))errors.push('Invalid sick visit.');
       if(claimedPatients.has(Number(task.patientId)))errors.push('Duplicate sick visit.');
       claimedPatients.add(Number(task.patientId));
     } else {

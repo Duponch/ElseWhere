@@ -17,7 +17,7 @@ const PACKS:Readonly<Partial<Record<PackedFurniture['building']['kind'],number>>
  'fueled-stove':20000,'electric-stove':20000,'butcher-table':20000,'research-bench':20000,
  'tailor-bench':20000,'electric-tailor-bench':20000,bedroll:2500,bed:30000,'double-bed':50000,
  'hospital-bed':35000,table:5000,'table-square':10000,'table-long':20000,'table-large':22000,'double-bedroll':4500,'wall-lamp':2000,stool:3000,'dining-chair':5000,
- armchair:35000,'end-table':5000,dresser:15000,'flower-pot':2000,horseshoes:3000,'chess-table':5000,
+ armchair:35000,couch:70000,'end-table':5000,dresser:15000,'flower-pot':2000,horseshoes:3000,'chess-table':5000,
  'hoopstone-ring':4000,'billiards-table':60000,'game-of-ur-board':2000,'poker-table':30000,
  stonecutter:20000,'standing-lamp':4000,'sun-lamp':4500,
 });
@@ -26,6 +26,8 @@ export function groupPackedMassGrams258(pack:PackedFurniture,version:number):num
  if(pack.building.kind==='firefoam-popper')return (version===290||(version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))))))?10000:undefined;
  if(pack.building.kind==='fueled-smithy'||pack.building.kind==='electric-smithy')return version>=267?20000:undefined;
  if(pack.building.kind==='tool-cabinet')return version>=355?20000:undefined;
+ // Schema 365 Couch Mass 70.
+ if(pack.building.kind==='couch')return version>=365?70000:undefined;
  // Schema 357 TrapIEDBase Mass 2.
  if(pack.building.kind==='ied-high-explosive'||pack.building.kind==='ied-incendiary')return version>=357?2000:undefined;
  if(pack.building.kind==='brewery'||pack.building.kind==='fermenting-barrel')return version>=265?(pack.building.kind==='brewery'?20000:10000):undefined;

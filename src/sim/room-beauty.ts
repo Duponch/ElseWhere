@@ -1,4 +1,4 @@
-import {isJoyTableKind354,JOY_TABLES_354} from './joy-tables-354.ts';import {CARPET_FLOORS_355,CARPET_FACTS_355,BURNED_CARPET_FACTS_355,type CarpetFloor355} from './carpet-355.ts';
+import {isJoyTableKind354,JOY_TABLES_354} from './joy-tables-354.ts';import {STRAW_MATTING_365,BURNED_STRAW_MATTING_365} from './straw-couch-365.ts';import {CARPET_FLOORS_355,CARPET_FACTS_355,BURNED_CARPET_FACTS_355,type CarpetFloor355} from './carpet-355.ts';
 import {isShipCasketKind277,SHIP_CASKET_CONTENT_277} from './ship-casket-content-277.ts';
 import {isIedTrapKind357,IED_COMMON_357} from './ied-traps-357.ts';
 import {SCHEMA_VERSION} from './types.ts';
@@ -30,6 +30,8 @@ export const FLOOR_BEAUTY=Object.freeze({
   'wood-planks':0,'granite-tile':1,'limestone-tile':1,'marble-tile':1,'sandstone-tile':1,'slate-tile':1,'steel-tile':0,'sterile-tile':-1,'burned-wood':-6,
   // Schema 355: every Core carpet colour Beauty 2, BurnedCarpet -6.
   ...Object.fromEntries(CARPET_FLOORS_355.map(id=>[id,CARPET_FACTS_355.beauty])) as Record<CarpetFloor355,2>,'burned-carpet':BURNED_CARPET_FACTS_355.beauty,
+  // Schema 365: StrawMatting Beauty -1, BurnedStrawMatting -6.
+  'straw-matting':STRAW_MATTING_365.beauty,'burned-straw-matting':BURNED_STRAW_MATTING_365.beauty,
 } as const);
 export const FILTH_BEAUTY=Object.freeze({firefoam:-25,slime:-25,dirt:-15,trash:-15,blood:-30,ash:-10,vomit:-40,'corpse-bile':-50,'rock-rubble':-15,'building-rubble':-15} as const);
 export type BeautyBand='hideous'|'ugly'|'neutral'|'pretty'|'beautiful'|'very-beautiful'|'extremely-beautiful'|'unbelievably-beautiful';

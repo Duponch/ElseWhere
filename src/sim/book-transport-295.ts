@@ -1,6 +1,6 @@
 import {SCHEMA_VERSION} from './types.ts';
 import {validNovelPile295,validReadingPawnFields295,validReadingTask295} from './book-save-295.ts';
-import {isDiningSeat,isDiningTable} from './dining.ts';
+import {isDiningSeat,seatAt,isDiningTable} from './dining.ts';
 import {adjacentToTable} from './recreation-space.ts';
 import {animalContentsOwner256} from './animal-local-contents-256.ts';
 import type {World} from './types.ts';
@@ -42,7 +42,7 @@ export function validReadingWorld295(world:World):boolean {
    if(pawn.jobId!==null||pawn.haul||pawn.need||pawn.cooking||pawn.research||pawn.tend||pawn.rescue||pawn.feed||pawn.equipmentTask||pawn.surgery||pawn.brewing||pawn.firefoamTask290||pawn.strip351||pawn.coupleTask285)return false;
    if(task.seatId!==undefined){
     const seat=world.structures.find(s=>s.id===task.seatId&&isDiningSeat(s.kind));
-    if(!seat||seats.has(seat.id)||seat.x!==task.target.x||seat.z!==task.target.z)return false;seats.add(seat.id);
+    const seatCell=task.target.z*world.width+task.target.x;if(!seat||seats.has(seatCell)||!seatAt(seat,task.target))return false;seats.add(seatCell);
    }
    if(task.buildingId!==null&&!world.structures.some(s=>s.id===task.buildingId&&isDiningTable(s.kind)&&adjacentToTable(s,task.target)))return false;
   }

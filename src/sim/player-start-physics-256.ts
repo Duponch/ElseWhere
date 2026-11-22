@@ -97,6 +97,7 @@ export const START_STRUCTURE_PHYSICS_256={
  "stool":{"defId":"Stool","passability":0,"edifice":true,"door":false,"fence":false,"fullFill":false},
  "dining-chair":{"defId":"DiningChair","passability":0,"edifice":true,"door":false,"fence":false,"fullFill":false},
  "armchair":{"defId":"Armchair","passability":0,"edifice":true,"door":false,"fence":false,"fullFill":false},
+ "couch":{"defId":"Couch","passability":0,"edifice":true,"door":false,"fence":false,"fullFill":false},
  "end-table":{"defId":"EndTable","passability":1,"edifice":true,"door":false,"fence":false,"fullFill":false},
  "dresser":{"defId":"Dresser","passability":1,"edifice":true,"door":false,"fence":false,"fullFill":false},
  "flower-pot":{"defId":"PlantPot","passability":1,"edifice":true,"door":false,"fence":false,"fullFill":false},

@@ -13,14 +13,15 @@ import { groundCapacity,planGroundPlacement } from './ground-placement.ts';
 import { footprintContains } from './definitions.ts';
 import { researchUnlocked } from './research.ts';
 import {CARPET_FLOORS_355,CARPET_FACTS_355,isCarpetFloor355,carpetLabel355,isCarpetSchema355,type CarpetFloor355} from './carpet-355.ts';
+import {STRAW_MATTING_365,isStrawCouchSchema365} from './straw-couch-365.ts';
 import { removeFilth } from './filth.ts';
 import { isFloorLightPlant } from './construction-plants.ts';
 import {planConstructionPlantRetirement,commitConstructionPlantRetirement} from './plant-retirement.ts';
 import type { Cell,CommandResult,DesignateCommand,Job,World } from './types.ts';
 
-export const FLOOR_KINDS=['wood-planks','granite-tile','limestone-tile','marble-tile','sandstone-tile','slate-tile','steel-tile','sterile-tile',...ROAD_FLAGSTONES_256,...CARPET_FLOORS_355] as const;
+export const FLOOR_KINDS=['wood-planks','granite-tile','limestone-tile','marble-tile','sandstone-tile','slate-tile','steel-tile','sterile-tile',...ROAD_FLAGSTONES_256,...CARPET_FLOORS_355,'straw-matting'] as const;
 export type BuildableFloorKind=typeof FLOOR_KINDS[number];
-export type FloorKind=BuildableFloorKind|'burned-wood'|'burned-carpet'|RoadFloor256|AncientGeneratedFloor256;
+export type FloorKind=BuildableFloorKind|'burned-wood'|'burned-carpet'|'burned-straw-matting'|RoadFloor256|AncientGeneratedFloor256;
 export interface FloorDefinition {label:string;item:ItemId|null;quantity:number;salvage?:number;ingredients?:ConstructionRecipe['ingredients'];coreWork:number;cleanliness:number;cleaningTime:number;flammability:number;pathCost:number;skill:number;research:'stonecutting'|'smithing'|'sterile-materials'|'carpet-making'|null}
 const stone=(label:string,item:BlockMaterial):FloorDefinition=>({label,item,quantity:4,coreWork:1100,cleanliness:0,cleaningTime:.8,flammability:0,pathCost:0,skill:3,research:'stonecutting'});
 const flagstone=(label:string,item:BlockMaterial):FloorDefinition=>({label,item,quantity:4,salvage:0,coreWork:500,cleanliness:0,cleaningTime:.8,flammability:0,pathCost:0,skill:0,research:null});
@@ -39,10 +40,13 @@ export const FLOOR_DEFINITIONS:Readonly<Record<FloorKind,FloorDefinition>>=Objec
   // Schema 355 Core carpets (one TerrainDef per Structure colour) and their burned floor.
   ...Object.fromEntries(CARPET_FLOORS_355.map(id=>[id,{label:carpetLabel355(id),item:'cloth',quantity:CARPET_FACTS_355.cloth,coreWork:CARPET_FACTS_355.coreWork,cleanliness:CARPET_FACTS_355.cleanliness,cleaningTime:CARPET_FACTS_355.cleaningTime,flammability:CARPET_FACTS_355.flammability,pathCost:0,skill:CARPET_FACTS_355.skill,research:'carpet-making'} satisfies FloorDefinition])) as Record<CarpetFloor355,FloorDefinition>,
   'burned-carpet':{label:'Tapis brûlé',item:null,quantity:0,coreWork:0,cleanliness:0,cleaningTime:1,flammability:0,pathCost:1,skill:0,research:null},
+  // Schema 365 Core StrawMatting (2 hay, no research) and BurnedStrawMatting.
+  'straw-matting':{label:STRAW_MATTING_365.label,item:'hay',quantity:STRAW_MATTING_365.hay,coreWork:STRAW_MATTING_365.coreWork,cleanliness:STRAW_MATTING_365.cleanliness,cleaningTime:1,flammability:STRAW_MATTING_365.flammability,pathCost:STRAW_MATTING_365.pathCost,skill:0,research:null},
+  'burned-straw-matting':{label:'Natte de paille brûlée',item:null,quantity:0,coreWork:0,cleanliness:0,cleaningTime:1,flammability:0,pathCost:1,skill:0,research:null},
 });
 export const isFloorKind=(v:unknown):v is FloorKind=>typeof v==='string'&&Object.hasOwn(FLOOR_DEFINITIONS,v);
-export const isBuildableFloor=(v:unknown):v is BuildableFloorKind=>isFloorKind(v)&&v!=='burned-wood'&&v!=='burned-carpet'&&v!=='broken-asphalt'&&!isAncientGeneratedFloor256(v);
-export const floorAvailable=(v:unknown,version:number):v is FloorKind=>isFloorKind(v)&&(!(isRoadFloor256(v)||isAncientGeneratedFloor256(v))||version>=256)&&(!(isCarpetFloor355(v)||v==='burned-carpet')||isCarpetSchema355(version));
+export const isBuildableFloor=(v:unknown):v is BuildableFloorKind=>isFloorKind(v)&&v!=='burned-wood'&&v!=='burned-carpet'&&v!=='burned-straw-matting'&&v!=='broken-asphalt'&&!isAncientGeneratedFloor256(v);
+export const floorAvailable=(v:unknown,version:number):v is FloorKind=>isFloorKind(v)&&(!(isRoadFloor256(v)||isAncientGeneratedFloor256(v))||version>=256)&&(!(isCarpetFloor355(v)||v==='burned-carpet')||isCarpetSchema355(version))&&(!(v==='straw-matting'||v==='burned-straw-matting')||isStrawCouchSchema365(version));
 export function flooringRecipe(floor:FloorKind|undefined,remove=false):ConstructionRecipe {
   const d=floor&&FLOOR_DEFINITIONS[floor];return {ingredients:!remove&&d?.item?d.ingredients??[{item:d.item,quantity:d.quantity}]:[],work:remove?200/10:(d?.coreWork??0)/10,coreWork:remove?200:d?.coreWork??0};
 }
@@ -74,7 +78,7 @@ export function canDesignateFloor(w:World,c:DesignateCommand):CommandResult {
  * not remove the job: the central finish transaction owns activity cleanup. */
 export function finishFloor(w:World,job:Job):boolean {
   if(geyserBlocksPlantOrFloor256(w,job))return false;
-  if(job.kind!=='lay-floor'||!isBuildableFloor(job.floor)||job.floor==='sterile-tile'&&w.schemaVersion<211||isCarpetFloor355(job.floor)&&!isCarpetSchema355(w.schemaVersion))return false;
+  if(job.kind!=='lay-floor'||!isBuildableFloor(job.floor)||job.floor==='sterile-tile'&&w.schemaVersion<211||isCarpetFloor355(job.floor)&&!isCarpetSchema355(w.schemaVersion)||job.floor==='straw-matting'&&!isStrawCouchSchema365(w.schemaVersion))return false;
   const tile=w.tiles[job.z*w.width+job.x];if(!tile||tile.floor||!terrainSupportsFloor256(tile,w)||w.resources.some(r=>r.x===job.x&&r.z===job.z&&!isFloorLightPlant(r)))return false;
   const recipe=flooringRecipe(job.floor),piles=w.piles.filter(p=>p.owner.type==='job'&&p.owner.jobId===job.id);
   if(piles.some(p=>!recipe.ingredients.some(c=>c.item===p.item))||recipe.ingredients.some(c=>piles.filter(p=>p.item===c.item).reduce((n,p)=>n+p.quantity,0)!==c.quantity))return false;
@@ -99,13 +103,14 @@ export function removeFloor(w:World,job:Job):boolean {
   if(!drops)return false;
   for(const drop of drops)if(d.item){const owner={type:'ground' as const,...drop.cell},kind=ITEM_DEFINITIONS[d.item].kind;if(!materialCanFit(view,kind,drop.quantity,owner,d.item))return false;addMaterial(view,kind,drop.quantity,owner,d.item);}
   const lost=d.quantity-quantity,ledger=w.deconstructed;
-  const previous=d.item==='wood'?ledger.lostWood:d.item==='steel'?ledger.lostSteel??0:d.item&&isBlockMaterial(d.item)?ledger.lostBlocks?.[d.item]??0:d.item==='cloth'?ledger.lostTextiles?.cloth??0:0;
+  const previous=d.item==='wood'?ledger.lostWood:d.item==='steel'?ledger.lostSteel??0:d.item&&isBlockMaterial(d.item)?ledger.lostBlocks?.[d.item]??0:d.item==='cloth'?ledger.lostTextiles?.cloth??0:d.item==='hay'?ledger.lostHay365??0:0;
   if(!Number.isSafeInteger(ledger.count+1)||!Number.isSafeInteger(previous+lost))return false;
   for(const drop of drops)if(d.item)addMaterial(w,ITEM_DEFINITIONS[d.item].kind,drop.quantity,{type:'ground',...drop.cell},d.item);
   w.rng=rng;delete tile.floor;markTerrainCellChanged(w.tiles,job.z*w.width+job.x);refreshDuckWaterCell256(w,job);ledger.count++;
   if(d.item==='wood')ledger.lostWood+=lost;else if(d.item==='steel')ledger.lostSteel=(ledger.lostSteel??0)+lost;
   else if(d.item&&isBlockMaterial(d.item)){ledger.lostBlocks??={};ledger.lostBlocks[d.item]=(ledger.lostBlocks[d.item]??0)+lost;}
   else if(d.item==='cloth'&&lost>0){ledger.lostTextiles??={};ledger.lostTextiles.cloth=(ledger.lostTextiles.cloth??0)+lost;}
+  else if(d.item==='hay'&&lost>0)ledger.lostHay365=(ledger.lostHay365??0)+lost;
   for(const f of [...w.filth?.items??[]])if(f.x===job.x&&f.z===job.z)removeFilth(w,f);
   refreshStock(w);return true;
 }
@@ -142,6 +147,11 @@ function removeSterileFloor(w:World,job:Job):boolean {
  * Schema 355: a carpet becomes BurnedCarpet, its seven cloth lost. */
 export function burnFloor(w:World,c:Cell):boolean {
   const carpet=w.tiles[c.z*w.width+c.x]?.floor;
+  // Schema 365: straw matting becomes BurnedStrawMatting, its two hay lost.
+  if(carpet==='straw-matting'){
+    const tile=w.tiles[c.z*w.width+c.x]!;if(!isStrawCouchSchema365(w.schemaVersion)||!w.fires||!Number.isSafeInteger((w.fires.ledger.items.hay??0)+STRAW_MATTING_365.hay))return false;
+    tile.floor='burned-straw-matting';markTerrainCellChanged(w.tiles,c.z*w.width+c.x);refreshDuckWaterCell256(w,c);w.fires.ledger.items.hay=(w.fires.ledger.items.hay??0)+STRAW_MATTING_365.hay;return true;
+  }
   if(isCarpetFloor355(carpet)){
     const tile=w.tiles[c.z*w.width+c.x]!;if(!isCarpetSchema355(w.schemaVersion)||!w.fires||!Number.isSafeInteger((w.fires.ledger.items.cloth??0)+CARPET_FACTS_355.cloth))return false;
     tile.floor='burned-carpet';markTerrainCellChanged(w.tiles,c.z*w.width+c.x);refreshDuckWaterCell256(w,c);w.fires.ledger.items.cloth=(w.fires.ledger.items.cloth??0)+CARPET_FACTS_355.cloth;return true;

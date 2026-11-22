@@ -1,5 +1,5 @@
 import { COMPLEX_FURNITURE_RESEARCH_COST,TUBE_TELEVISION_RESEARCH_COST } from './research.ts';
-import { isDiningSeat } from './dining.ts';
+import { isDiningSeat,seatAt } from './dining.ts';
 import { isTelevisionCell,TELEVISION_MAX_PARTICIPANTS } from './television-recreation.ts';
 import { RECREATION_DURATION } from './recreation-rules.ts';
 import type { Pawn,Structure,World } from './types.ts';
@@ -75,9 +75,10 @@ export function validTelevisionTasks(w:World):boolean {
       ||p.research||p.hunting||p.feed||p.tend||p.surgery||p.rescue||p.burial||p.cleaning||p.animalHandling||p.animalCare||p.equipmentTask
       ||p.orders.active!==null)return false;
     const tv=w.structures.find(s=>s.id===task.buildingId&&s.kind==='tube-television'),seat=w.structures.find(s=>s.id===task.seatId&&isDiningSeat(s.kind));
-    if(!tv||!seat||seat.x!==task.target.x||seat.z!==task.target.z||!isTelevisionCell(tv,seat)||seats.has(seat.id))return false;
+    const seatKey=seat?.kind==='couch'?-1-(Number(task.target.z)*w.width+Number(task.target.x)):seat?.id;
+    if(!tv||!seat||!seatAt(seat,task.target as {x:number;z:number})||!isTelevisionCell(tv,task.target as {x:number;z:number})||seats.has(seatKey!))return false;
     if(task.phase==='travel'?(p.state!=='moving'||task.elapsed!==0):(p.state!=='recreating'||p.path.length>0||p.moveCooldown>0||p.x!==task.target.x||p.z!==task.target.z))return false;
-    seats.add(seat.id);const count=(users.get(tv.id)??0)+1;if(count>TELEVISION_MAX_PARTICIPANTS)return false;users.set(tv.id,count);
+    seats.add(seatKey!);const count=(users.get(tv.id)??0)+1;if(count>TELEVISION_MAX_PARTICIPANTS)return false;users.set(tv.id,count);
   }
   return true;
 }

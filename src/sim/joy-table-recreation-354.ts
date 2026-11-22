@@ -1,6 +1,6 @@
 import { deconstructionReserved } from './deconstruction-rules.ts';
 import { footprintCells } from './definitions.ts';
-import { isDiningSeat } from './dining.ts';
+import { isDiningSeat,seatAt } from './dining.ts';
 import { pawnBody } from './health-rules.ts';
 import {
   BILLIARDS_SHOT_TICKS_354, inJoyTableRing354, isJoyTableActivity354, isJoyTableKind354, isJoyTablesSchema354,
@@ -95,7 +95,7 @@ export function joyTableSiteValid354(world:World,task:OrdinaryRecreationTask,tab
   // keeps playing while the table stands (EndOnDespawnedOrNull).
   if(activity==='billiards')return task.seatId===undefined&&inJoyTableRing354(cells,task.target);
   if(!joyTableCardinalCell354(cells,task.target))return false;
-  if(task.seatId!==undefined)return !!seat&&seat.id===task.seatId&&isDiningSeat(seat.kind)&&seat.x===task.target.x&&seat.z===task.target.z&&!deconstructionReserved(world,seat.id);
+  if(task.seatId!==undefined)return !!seat&&seat.id===task.seatId&&isDiningSeat(seat.kind)&&seatAt(seat,task.target)&&!deconstructionReserved(world,seat.id);
   return !joyTableRequiresChair354(activity)&&!objectAt(task.target);
 }
 

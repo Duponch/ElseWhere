@@ -6,7 +6,7 @@ import {addSocialMemory,expireSocialMemories,opinionOf,socialSeed} from './socia
 import {medicalBleed} from './injury-state.ts';
 import {footprintCells} from './definitions.ts';
 import {comfortForStructure,type FurnitureWorldLike} from './furniture-stats.ts';
-import {isDiningSeat} from './dining.ts';
+import {isDiningSeat,seatAt} from './dining.ts';
 import type {MoodThought} from './mood.ts';
 import {gainMoodPoolMemory350,isMoodPool350} from './mood-pool-memories-350.ts';
 export {MOOD_POOL_SCHEMA_350,MOOD_POOL_MEMORIES_350,noteBondedAnimalDeaths350,gainMoodPoolMemory350,isMoodPool350,isMoodPoolMemory350,moodPoolMemoryThoughts350,type MoodPoolMemoryKind350} from './mood-pool-memories-350.ts';
@@ -120,6 +120,6 @@ export function rescuedMe350(w:World,patient:Pawn,rescuer:Pawn):void {
 export function benchSeatComfort350(w:World,p:Pawn,furniture:FurnitureWorldLike):number|undefined {
  const task=p.cooking;
  if(!isMoodPool350(w.schemaVersion)||!task||task.phase!=='work'||p.state!=='working'||p.x!==task.spot.x||p.z!==task.spot.z||p.moveCooldown>0)return;
- const seat=w.structures.find(s=>isDiningSeat(s.kind)&&s.x===p.x&&s.z===p.z);
+ const seat=w.structures.find(s=>isDiningSeat(s.kind)&&seatAt(s,p));
  return seat?comfortForStructure(furniture,seat)*100:undefined;
 }

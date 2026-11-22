@@ -4,7 +4,7 @@ import { isBedKind } from './bed-kinds.ts';
 import { WEAPON_QUALITIES,type WeaponQuality } from './equipment-rules.ts';
 
 /** Core 1.6.4871 names adapted to the stable ids proposed for V90. */
-export const HABITAT_FURNITURE_KINDS=['shelf','small-shelf','double-bed','bedroll','bed','hospital-bed','table','stool','dining-chair','armchair','end-table','dresser','table-square','table-long','flower-pot','chess-table','table-large','double-bedroll'] as const;
+export const HABITAT_FURNITURE_KINDS=['shelf','small-shelf','double-bed','bedroll','bed','hospital-bed','table','stool','dining-chair','armchair','end-table','dresser','table-square','table-long','flower-pot','chess-table','table-large','double-bedroll','couch'] as const;
 export type HabitatFurnitureKind=typeof HABITAT_FURNITURE_KINDS[number];
 export type FurnitureQuality=WeaponQuality;
 export const FURNITURE_QUALITIES=WEAPON_QUALITIES;
@@ -54,6 +54,8 @@ export const FURNITURE_DEFINITIONS:Readonly<Record<HabitatFurnitureKind,Furnitur
   // Schema 363 (the kinds themselves only exist from 363): Table3x3c and BedrollDouble.
   'table-large':definition({label:'Table 3×3',width:3,depth:3,stuff:100,categories:hard,coreWork:3300,constructionSkill:0,research:null,maxHitPoints:175,beauty:2,seats:12,quality:true}),
   'double-bedroll':definition({label:'Sac de couchage double',width:2,depth:2,stuff:85,categories:['fabric','leathery'],coreWork:1100,constructionSkill:0,research:null,maxHitPoints:100,beauty:0,comfort:.68,restEffectiveness:.95,quality:true}),
+  // Schema 365 (the kind only exists from 365): Couch, two seats.
+  couch:definition({label:'Canapé',width:2,depth:1,stuff:200,categories:['fabric','leathery'],coreWork:20000,constructionSkill:5,research:'complex-furniture',maxHitPoints:160,beauty:8,comfort:.85,seats:2,quality:true}),
   'chess-table':definition({label:'Table d’échecs',width:1,depth:1,stuff:70,categories:hard,coreWork:8000,constructionSkill:0,research:'complex-furniture',maxHitPoints:100,beauty:4,quality:true}),
 });
 
