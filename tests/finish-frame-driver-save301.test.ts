@@ -1,5 +1,5 @@
 import {describe,expect,test} from 'vitest';
-import {stripFutureContent} from './scenarios/old-schema.ts';
+import {asNumberOnly,stripFutureContent} from './scenarios/old-schema.ts';
 import {createWorld,serializeWorld,deserializeWorld} from '../src/sim/index.ts';
 import {validFramePawn301,validFrameProjection301,validFrameWorkJob301} from '../src/sim/finish-frame-save-301.ts';
 import type {Job} from '../src/sim/types.ts';
@@ -66,8 +66,9 @@ describe('FinishFrame301 persisted Driver phases',()=>{
   const w=createWorld(42,32,32);
   const legacy=JSON.parse(JSON.stringify(w));
   legacy.schemaVersion=300;stripFutureContent(legacy,300);
-  // The 308 migration gives the stripped policies back their new garments.
-  const expected={...JSON.parse(JSON.stringify(w)),schemaVersion:366};
+  // Compare with the same save brought to 301 and migrated (asNumberOnly):
+  // later steps (garments at 308, hats at 353) extend policies in both alike.
+  const expected=JSON.parse(asNumberOnly(serializeWorld(w),300));
   const loaded=deserializeWorld(JSON.stringify(legacy));
   expect(JSON.parse(serializeWorld(loaded))).toEqual(expected);
   for(const p of loaded.pawns)for(const key of ['jobTickDelta301','frameToil301','postureUntilCore301'])
