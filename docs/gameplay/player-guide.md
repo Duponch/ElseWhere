@@ -12,6 +12,12 @@ Un clic sur une **carte de sauvegarde** charge directement cette partie en pause
 
 Avec une fenêtre de jeu ouverte, utilisez le bouton droit maintenu pour tourner la caméra, le bouton central pour la déplacer et la molette pour zoomer, en commençant sur le terrain libre. Le contexte Ordres reste ouvert. Un clic gauche extérieur ferme la fenêtre. Le curseur en mode ordre associe une petite flèche de carton beige au dessin de l’action choisie ; **Échap** revient à la sélection.
 
+## Importer une sauvegarde RimWorld
+
+Dans **Charger une partie**, **Importer une sauvegarde RimWorld** permet de choisir une sauvegarde de RimWorld 1.6 (fichier `.rws`, jeu de base seul : sans extension ni mod). Sous Windows, les sauvegardes du jeu se trouvent dans `AppData\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios\Saves`. La conversion se fait à côté du jeu : la barre montre l'étape en cours et **Annuler l'import** (ou Échap) l'arrête à tout moment. Une grande colonie demande de quinze secondes à une minute.
+
+Une sauvegarde refusée affiche la raison (autre version, extension, mod, pas de carte). Sinon, la page résume la colonie et, pour chaque famille (terrain, bâtiments, objets, colons, animaux…), ce qui est **repris** tel quel, **adapté** à Elsewhere ou **perdu**, avec les plus grosses pertes. Choisissez une famille à gauche pour lire son détail ; **Télécharger le rapport** enregistre le rapport complet. **Jouer cette colonie** ouvre la colonie en pause, comme une sauvegarde chargée : la colonie ouverte reste dans « Colonie précédente », puis la sauvegarde automatique et vos copies fonctionnent comme d'habitude. **Annuler** abandonne la conversion ; le fichier RimWorld n'est jamais modifié ni conservé. [Ce qui est repris et ce qui manque](../development/rws-import.md).
+
 ## Copier une facture ou des priorités
 
 Dans la fenêtre **Factures** d'un poste, **Copier** sur la ligne d'une facture retient ses réglages appliqués. Ouvrez ensuite les factures de n'importe quel poste qui fait cette recette, même d'un autre type (établi de tailleur et établi électrique) : **Coller**, en tête de la fenêtre, ajoute une nouvelle facture identique. Le bouton reste grisé, avec la raison au survol, sur un poste qui ne fait pas la recette ou qui a déjà 15 factures ; à 15, **Ajouter** se grise aussi.
