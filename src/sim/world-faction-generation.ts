@@ -7,6 +7,7 @@ import type {ClimateSetting} from './world-climate-settings.ts';
 import {startingPawn} from './starting-pawns.ts';
 import {WORLD_FACTION_DEFINITIONS_256,initialWorldGoodwill256,worldRelationKind256,type WorldFactionDef256} from './world-faction-catalog.ts';
 import type {WorldFactionRegistry256,WorldForeignFactionDraft256,WorldFactionInstance256,WorldFactionLeader256} from './world-faction-state.ts';
+import {coreFactionName,coreSettlementName,type CoreFactionNames} from './world-faction-core-names.ts';
 const f=Math.fround;
 const int=(n:number,min=0)=>Number.isSafeInteger(n)&&n>=min;
 const roots=['Aube','Cime','Brume','Rive','Sillon','Orbe','Roseau','Argile'] as const;
@@ -54,6 +55,13 @@ export interface WorldForeignFactionGenerationInput256 {
  version:number;tick:number;tiles:readonly SettlementTile[];selection:readonly ConfigurableWorldFaction[];population:ClimateSetting;
  nextFactionId:number;nextSettlementId:number;nextThingId:number;
  random:WorldGenerationRandom;admission?:Omit<SettlementAdmission,'settlementTiles'>&{settlementTiles?:ReadonlySet<number>};
+ /** The game's name data (read from an installed game by the tools): faction
+  * and settlement names drawn as the game draws them. Absent: Elsewhere's
+  * names and draws, unchanged. */
+ names?:CoreFactionNames;
+ /** Observer of the stream (tools): called right before a faction's leader
+  * is drawn, with the step's generator state at that point. */
+ onLeaderStart?:(faction:Readonly<WorldFactionInstance256>,index:number,state:Readonly<{seed:number;counter:number}>)=>void;
 }
 export type WorldForeignFactionGenerationResult256={ok:true;draft:WorldForeignFactionDraft256;nextThingId:number}|{ok:false;reason:string};
 export type WorldFactionCompletionResult256={ok:true;registry:WorldFactionRegistry256}|{ok:false;reason:string};
@@ -69,8 +77,8 @@ export function generateForeignWorldFactions256(input:WorldForeignFactionGenerat
  const occupied=new Set(input.admission?.settlementTiles),admission:SettlementAdmission={...input.admission,settlementTiles:occupied};
  const addSettlement=(faction:WorldFactionInstance256,tile:number)=>{
   if(!int(registry.nextSettlementId+1,1))return false;
-  const id=registry.nextSettlementId++,used=new Set(registry.settlements.map(s=>s.name));
-  registry.settlements.push({id,factionId:faction.id,tile,name:originalName(r,used,true,id),postId:null});occupied.add(tile);return true;
+  const id=registry.nextSettlementId++,name=input.names?coreSettlementName(input.names,faction.def,registry.settlements.map(s=>s.name),r):originalName(r,new Set(registry.settlements.map(s=>s.name)),true,id);
+  registry.settlements.push({id,factionId:faction.id,tile,name,postId:null});occupied.add(tile);return true;
  };
  for(const def of input.selection){
   if(!int(registry.nextFactionId+1,1))return {ok:false,reason:'Faction identity exhausted'};
@@ -78,12 +86,13 @@ export function generateForeignWorldFactions256(input:WorldForeignFactionGenerat
   const d=WORLD_FACTION_DEFINITIONS_256[def];
   // Actual Core initialization precedes faction names. Seeds/IDs remain owned.
   const noExpansionIdeo=constructFactionNoExpansionIdeo256(def,registry.noExpansionIdeoIds!,r);
-  const faction:WorldFactionInstance256={...input.version>=259?{lifecycle259:{revision:1 as const,defeated:false,temporary:false}}:{},id,def,hidden:d.hidden,name:factionName(def,id,r,registry.factions),randomKey,colorFromSpectrum,leaderOwnerId:null,...noExpansionIdeo?{noExpansionIdeo}:{}};
+  const faction:WorldFactionInstance256={...input.version>=259?{lifecycle259:{revision:1 as const,defeated:false,temporary:false}}:{},id,def,hidden:d.hidden,name:input.names?coreFactionName(input.names,def,registry.factions.filter(p=>!p.hidden).map(p=>p.name),r):factionName(def,id,r,registry.factions),randomKey,colorFromSpectrum,leaderOwnerId:null,...noExpansionIdeo?{noExpansionIdeo}:{}};
   for(const other of registry.factions){const goodwill=initialWorldGoodwill256(def,other.def);
    registry.relations.push({aId:Math.min(id,other.id),bId:Math.max(id,other.id),goodwill,kind:worldRelationKind256(goodwill)});}
   if(!faction.hidden){const choice=pickWorldSettlementTile(input.tiles,r,admission);
    if(!choice.found||!addSettlement(faction,choice.tile))return {ok:false,reason:'No admissible initial settlement'};}
   if(d.leaderKinds.length){if(!int(nextThingId+1,1))return {ok:false,reason:'Person identity exhausted'};
+   input.onLeaderStart?.(faction,registry.factions.length,r.state);
    const owner=originalLeader(faction,nextThingId,input.tick,r,input.version);if(!owner)return {ok:false,reason:'Leader producer missing'};
    nextThingId++;faction.leaderOwnerId=owner.pawn.id;registry.leaders.push(owner);}
   registry.factions.push(faction);

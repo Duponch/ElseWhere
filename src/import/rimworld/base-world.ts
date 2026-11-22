@@ -17,6 +17,7 @@ import {defaultWorldGenerationSettings,validWorldGenerationSettings,type WorldGe
 import {canPlaceWorldSettlement} from '../../sim/world-settlement-placement.ts';
 import {ACTUAL_SHRINES_750_256} from '../../sim/ancient-temple-orchestration-256.ts';
 import {createStartingCandidateRoster} from '../../sim/starting-candidates.ts';
+import type {CoreFactionNames} from '../../sim/world-faction-core-names.ts';
 import {startingOriginalRequestFromRoster256} from '../../sim/starting-original-request-256.ts';
 import {validGeographicCreationSize262,type GeographicCreationSize262} from '../../sim/geographic-creation-options-262.ts';
 import {stableWorldSeedHash} from '../../sim/world-climate-settings.ts';
@@ -39,7 +40,7 @@ function colonyOn(draft:GeographicWorldDraft256,tile:number,size:GeographicCreat
  return w;
 }
 
-export function createBaseWorld(save:RwsSave,notes:ImportNotes,options:{planet:boolean;onStage?:(stage:'planet'|'colony',part?:number)=>void}):BaseWorld {
+export function createBaseWorld(save:RwsSave,notes:ImportNotes,options:{planet:boolean;onStage?:(stage:'planet'|'colony',part?:number)=>void;names?:CoreFactionNames}):BaseWorld {
  const stage=options.onStage??(()=>{}),advance:ColonyAdvance=part=>stage('colony',part);
  const map=save.maps[0]!,seed=(stableWorldSeedHash(save.world?.seed??'')>>>0)||1;
  if(options.planet){
@@ -56,8 +57,11 @@ export function createBaseWorld(save:RwsSave,notes:ImportNotes,options:{planet:b
    }catch(error){notes.lost('world',`Création de la colonie sur la planète de la sauvegarde refusée (${error instanceof Error?error.message.slice(0,200):String(error)}).`);}
    // Fallback: Elsewhere's own planet from the same seed and coverage.
    try{
-    const seeded=seedPlanet(save,notes);
-    if(seeded){stage('colony');const w=colonyOn(seeded.draft,seeded.tile,size,seed,advance);notes.adapted('world',`Planète régénérée par Elsewhere depuis la graine « ${save.world?.seed??''} » : relief, biomes, rivières et routes anciennes générés comme le jeu 1.6 ; factions, colonies étrangères et autres routes diffèrent de la partie ; colonie sur la case ${seeded.tile} (${seeded.biome}).`);return {world:w,planetMode:'seed'};}
+    const seeded=seedPlanet(save,notes,options.names);
+    if(seeded){stage('colony');const w=colonyOn(seeded.draft,seeded.tile,size,seed,advance);
+     const rest=options.names?'noms des factions et des colonies tirés avec les données du jeu installé : la première faction et sa première colonie (case et nom) sont celles de la partie, la suite diffère dès le premier chef, comme les autres routes'
+      :'factions, colonies étrangères et autres routes diffèrent de la partie';
+     notes.adapted('world',`Planète régénérée par Elsewhere depuis la graine « ${save.world?.seed??''} » : relief, biomes, rivières et routes anciennes générés comme le jeu 1.6 ; ${rest} ; colonie sur la case ${seeded.tile} (${seeded.biome}).`);return {world:w,planetMode:'seed'};}
    }catch(error){notes.lost('world',`Planète régénérée refusée (${error instanceof Error?error.message.slice(0,200):String(error)}).`);}
   }
  }
@@ -68,12 +72,12 @@ export function createBaseWorld(save:RwsSave,notes:ImportNotes,options:{planet:b
 
 /** Planet from the save's seed and settings; colony on the first admissible
  * tile of the save colony's biome (or any admissible tile). */
-function seedPlanet(save:RwsSave,notes:ImportNotes):{draft:GeographicWorldDraft256;tile:number;biome:string}|undefined {
+function seedPlanet(save:RwsSave,notes:ImportNotes,names?:CoreFactionNames):{draft:GeographicWorldDraft256;tile:number;biome:string}|undefined {
  const world=save.world;if(!world)return undefined;
  const settings={...defaultWorldGenerationSettings(),coverage:Math.round((world.coverage??.3)*100)/100,rainfall:worldScale(world.rainfall),temperature:worldScale(world.temperature),population:worldScale(world.population)} as WorldGenerationSettings;
  if(!validWorldGenerationSettings(settings)){notes.lost('world','Réglages du monde non pris en charge pour régénérer la planète.');return undefined;}
  const player=save.factions.find(f=>f.loadId===save.playerFaction);
- const draft=drain(generateGeographicWorldDraft256({seed:world.seed??'',settings,tick:0,nextThingId:1,playerDef:'PlayerColony',playerName:(player?.name??'Colonie importée').slice(0,80)||'Colonie importée'}));
+ const draft=drain(generateGeographicWorldDraft256({seed:world.seed??'',settings,tick:0,nextThingId:1,playerDef:'PlayerColony',playerName:(player?.name??'Colonie importée').slice(0,80)||'Colonie importée',...names?{names}:{}}));
  const home=save.worldObjects.find(o=>`WorldObject_${o.id}`===save.maps[0]?.parent);
  const biomeName=home&&world.grid?shortHashTable(Object.keys(BIOME_MAP)).get(world.grid.biome[home.tile]!):undefined;
  const wanted=biomeName&&BIOME_MAP[biomeName]&&!('drop' in BIOME_MAP[biomeName]!)?(BIOME_MAP[biomeName] as {to:string}).to:undefined;

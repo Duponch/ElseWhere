@@ -254,3 +254,46 @@ export function saveFactionSelection(factions:readonly string[]):ConfigurableWor
  const known=['OutlanderCivil','OutlanderRough','TribeCivil','TribeRough','TribeSavage','Pirate','Mechanoid','Insect','Ancients','AncientsHostile'];
  return factions.every(x=>known.includes(x))?[...factions] as ConfigurableWorldFaction[]:null;
 }
+
+/** Step 500 with the game's names (lot 3): faction names by creation order,
+ * the first faction's first settlement, settlements by tile and name. */
+export interface FactionNameParity {
+ /** Non-player factions compared by creation order; fixed names (no draw)
+  * counted apart. */
+ factions:{compared:number;sameName:number;fixedNames:number;sameDrawnName:number};
+ /** The first faction and the settlement it creates before its leader (the
+  * save's settlement of that faction with the smallest identifier). */
+ first:{sameName:boolean;settlementInSave:boolean;sameTile:boolean;sameTileAndName:boolean}|null;
+ settlements:{save:number;generated:number;sameTile:number;sameTileAndName:number};
+ /** Step-500 stream position (count of draws already taken) when the first
+  * faction's leader starts; null when no leader was drawn. */
+ leaderStart:number|null;
+}
+export function compareFactionNames(save:RwsSave,registry:WorldFactionRegistry256,fixedNameDefs:ReadonlySet<string>,leaderStart:number|null):FactionNameParity {
+ const saveFactions=save.factions.filter(fa=>fa.loadId!==save.playerFaction),generated=registry.factions.filter(fa=>fa.id!==registry.playerFactionId);
+ const compared=Math.min(saveFactions.length,generated.length);let sameName=0,fixedNames=0,sameDrawnName=0;
+ for(let i=0;i<compared;i++){const fixed=fixedNameDefs.has(generated[i]!.def);if(fixed)fixedNames++;if(saveFactions[i]!.name===generated[i]!.name){sameName++;if(!fixed)sameDrawnName++;}}
+ const saveSettlements=new Map<number,string|undefined>();
+ for(const o of save.worldObjects)if(o.cls==='Settlement'&&o.faction&&o.faction!==save.playerFaction)saveSettlements.set(o.tile,o.name);
+ let sameTile=0,sameTileAndName=0;
+ for(const s of registry.settlements)if(saveSettlements.has(s.tile)){sameTile++;if(saveSettlements.get(s.tile)===s.name)sameTileAndName++;}
+ let first:FactionNameParity['first']=null;
+ if(compared>0){
+  const f0=saveFactions[0]!,g0=generated[0]!;
+  const saved=save.worldObjects.filter(o=>o.cls==='Settlement'&&o.faction===f0.loadId).sort((a,b)=>Number(a.id)-Number(b.id))[0];
+  const made=registry.settlements.find(s=>s.factionId===g0.id);
+  const sameTile=!!saved&&!!made&&saved.tile===made.tile;
+  first={sameName:f0.name===g0.name,settlementInSave:!!saved,sameTile,sameTileAndName:sameTile&&saved!.name===made!.name};
+ }
+ return {factions:{compared,sameName,fixedNames,sameDrawnName},first,settlements:{save:saveSettlements.size,generated:registry.settlements.length,sameTile,sameTileAndName},leaderStart};
+}
+const yes=(v:boolean)=>v?'oui':'non';
+/** Numbers and yes/no only: no name is printed. */
+export function formatFactionNameParity(p:FactionNameParity,language:string):string {
+ const lines=[`factions (noms du jeu, langue ${language}) :`];
+ if(p.first)lines.push(`  première faction : même nom ${yes(p.first.sameName)} ; sa première colonie : ${p.first.settlementInSave?`même case ${yes(p.first.sameTile)}, même case et même nom ${yes(p.first.sameTileAndName)}`:'absente de la sauvegarde'}`);
+ lines.push(`  noms de faction identiques : ${p.factions.sameName} / ${p.factions.compared} (dont ${p.factions.fixedNames} noms fixes ; noms tirés identiques ${p.factions.sameDrawnName} / ${p.factions.compared-p.factions.fixedNames})`);
+ lines.push(`  colonies étrangères : ${p.settlements.save} dans la sauvegarde, ${p.settlements.generated} générées ; même case ${p.settlements.sameTile}, même case et même nom ${p.settlements.sameTileAndName}`);
+ if(p.leaderStart!==null)lines.push(`  premier chef : commence au tirage ${p.leaderStart+1} du flux de l'étape 500 (${p.leaderStart} tirages déjà pris) — choix du genre de chef, puis PawnGenerator, non porté : la suite quitte le flux du jeu`);
+ return lines.join('\n');
+}

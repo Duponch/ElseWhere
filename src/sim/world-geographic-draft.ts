@@ -9,7 +9,8 @@ import {worldClimateSettings,validWorldGenerationSettings,worldGenerationKey,typ
 import {pickWorldSettlementTile} from './world-settlement-placement.ts';
 import {captureWorldSurfaceDifficulties} from './world-surface-movement.ts';
 import {generateAncientWorldRoads,selectOrdinaryRoadEndpoints,generateOrdinaryWorldRoads} from './world-road-generation.ts';
-import {generateForeignWorldFactions256,completeWorldFactionRegistry256} from './world-faction-generation.ts';
+import {generateForeignWorldFactions256,completeWorldFactionRegistry256,type WorldForeignFactionGenerationInput256} from './world-faction-generation.ts';
+import type {CoreFactionNames} from './world-faction-core-names.ts';
 import type {WorldFactionRegistry256} from './world-faction-state.ts';
 import type {WorldRoadLink} from './world-roads.ts';
 import {generateCoreWorldMutators256} from './world-local-mutators-256.ts';
@@ -27,7 +28,11 @@ const roundedDraw=(value:number,r:WorldGenerationRandom)=>Math.trunc(value)+(r.v
 /** `terrain`: 'core' (default from schema 376) generates the surface with the
  * game's terrain step and mesh (geometry revision 2); 'historical' keeps the
  * earlier generator. The later stages are the same in both cases. */
-export function* generateGeographicWorldDraft256(input:{seed:string;settings:WorldGenerationSettings;tick:number;nextThingId:number;playerDef:'PlayerColony'|'PlayerTribe';playerName:string;terrain?:'core'|'historical'}):Generator<GeographicDraftProgress,GeographicWorldDraft256,void> {
+/** `names`: the game's name data (read by the tools from an installed game,
+ * never stored): faction and settlement names as the game draws them
+ * (`world-faction-core-names.ts`). Absent: Elsewhere's names, unchanged.
+ * `onLeaderStart` observes the step-500 stream before each leader (tools). */
+export function* generateGeographicWorldDraft256(input:{seed:string;settings:WorldGenerationSettings;tick:number;nextThingId:number;playerDef:'PlayerColony'|'PlayerTribe';playerName:string;terrain?:'core'|'historical';names?:CoreFactionNames;onLeaderStart?:WorldForeignFactionGenerationInput256['onLeaderStart']}):Generator<GeographicDraftProgress,GeographicWorldDraft256,void> {
  if(typeof input.seed!=='string'||!validWorldGenerationSettings(input.settings)||input.terrain!==undefined&&input.terrain!=='core'&&input.terrain!=='historical'||!Number.isSafeInteger(input.tick)||input.tick<0||!Number.isSafeInteger(input.nextThingId)||input.nextThingId<1)throw Error('Invalid geographic world draft');
  const settings={...input.settings,factions:[...input.settings.factions]},key=worldGenerationKey(input.seed,settings),physical=generateWorldPhysicalSurface(input.seed,worldClimateSettings(settings),input.terrain==='historical'?undefined:{core:true});
  let next=physical.next();while(!next.done){yield next.value;next=physical.next();}const surface=next.value,tiles=surface.tiles,roads:WorldRoadLink[][]=tiles.map(()=>[]),rootSeed=surface.generationSeed;
@@ -44,7 +49,7 @@ export function* generateGeographicWorldDraft256(input:{seed:string;settings:Wor
   yield* generateCoreAncientRoads(tiles,captureCoreMovementDifficulties(tiles,settings.temperature,0),sites,roads);
  }
  yield {phase:'foreign-factions',completed:0,total:settings.factions.length};
- const foreign=generateForeignWorldFactions256({version:SCHEMA_VERSION,tick:input.tick,tiles,selection:settings.factions,population:settings.population,nextFactionId:1,nextSettlementId:1,nextThingId:input.nextThingId,random:new WorldGenerationRandom(combineWorldSeed(rootSeed,777998381))});
+ const foreign=generateForeignWorldFactions256({version:SCHEMA_VERSION,tick:input.tick,tiles,selection:settings.factions,population:settings.population,nextFactionId:1,nextSettlementId:1,nextThingId:input.nextThingId,random:new WorldGenerationRandom(combineWorldSeed(rootSeed,777998381)),...input.names?{names:input.names}:{},...input.onLeaderStart?{onLeaderStart:input.onLeaderStart}:{}});
  if(!foreign.ok)throw Error(foreign.reason);
  yield {phase:'foreign-factions',completed:settings.factions.length,total:settings.factions.length};
  const occupied=new Set(foreign.draft.settlements.map(s=>s.tile));

@@ -50,12 +50,18 @@ import {projectProgress,readProjectProgress,researchCost,researchPrerequisite,RE
 import {terrainBridgeable256} from '../../sim/natural-terrain-runtime-256.ts';
 import {createGeographicSiteClimate256,climateDate} from '../../sim/site-climate.ts';
 
+import type {CoreFactionNames} from '../../sim/world-faction-core-names.ts';
+
 export interface ConvertOptions {
  /** Rebuild the save's planet and place the colony on its tile (default true). */
  planet?:boolean;
  /** Called at the start of each conversion stage (progress display); the long
   * colony stage also reports its advance (`part`, 0..1). */
  onStage?:(stage:RwsConvertStage,part?:number)=>void;
+ /** The game's name data (read by a Node tool from an installed game, never
+  * stored): when the planet must be regenerated from the seed, its factions
+  * and settlements are named as the game names them. */
+ names?:CoreFactionNames;
 }
 /** Conversion stages, in order; `planet` and `colony` only with a planet. */
 export type RwsConvertStage='planet'|'colony'|'terrain'|'buildings'|'plants'|'people'|'items'|'zones'|'research'|'finish';
@@ -77,7 +83,7 @@ export function convertRwsSave(save:RwsSave,options:ConvertOptions={}):RwsConver
  const notes=new ImportNotes(),map=save.maps[0]!;
  if(save.maps.length>1)notes.lost('world',`${save.maps.length-1} cartes supplémentaires (camps, sites) : seule la carte de la colonie est importée.`);
  const stage=options.onStage??(()=>{});
- const base=createBaseWorld(save,notes,{planet:options.planet??true,onStage:stage}),w=base.world;
+ const base=createBaseWorld(save,notes,{planet:options.planet??true,onStage:stage,...options.names?{names:options.names}:{}}),w=base.world;
  const ctx=new ImportContext(save,map,w,notes,base.planetMode!=='none');
  clearLocalContent(ctx);
  stage('terrain');importTerrain(ctx);

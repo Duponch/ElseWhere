@@ -3,6 +3,11 @@
 // real save is opt-in: PLANET_PARITY_SAVE=path/to/save.rws (several paths
 // separated by ';'): terrain step, lakes, rivers and ancient roads must be
 // identical. Saves are only read.
+// Lot 3 (names): the installed game is read when RIMWORLD_DIR is set or saves
+// are given (folder RIMWORLD_DIR, else the default Steam folder; language
+// RIMWORLD_LANGUAGE, else French, the language of the user's saves): the
+// first faction's name, its first settlement's tile and name must be the
+// save's. Nothing read from the game or the saves is stored.
 import {describe,expect,it} from 'vitest';
 import {existsSync,readFileSync} from 'node:fs';
 import {surfaceColumns,comparePlanetColumns,formatPlanetParity,roundHalfEven,saveColumns,savePlanetSettings,biomeConfusionTable,compareAncientRoads,saveFactionSelection,type PlanetColumns} from '../src/import/rimworld/planet-parity';
@@ -13,6 +18,12 @@ import {generateWorldPhysicalSurface} from '../src/sim/world-surface-geography';
 import {generateGeographicWorldDraft256} from '../src/sim/world-geographic-draft';
 import type {WorldRoadLink} from '../src/sim/world-roads';
 import type {WorldSurfaceTile} from '../src/sim/world-surface-geography';
+import {compareFactionNames,formatFactionNameParity} from '../src/import/rimworld/planet-parity';
+import {rimworldCoreFolder,rimworldResourcesBytes,DEFAULT_RIMWORLD_DIR} from '../src/import/rimworld/game-files-node';
+import {loadGameGrammar,nameFilesReachable} from '../src/import/rimworld/game-grammar';
+import {generateFactionName,generateSettlementName} from '../src/sim/verse-name-generator';
+import {VerseRand} from '../src/sim/verse-rand';
+import type {WorldFactionRegistry256} from '../src/sim/world-faction-state';
 const f=Math.fround;
 function tile(id:number,o:Partial<WorldSurfaceTile>):WorldSurfaceTile {
  return {id,center:[0,0,-100],corners:[],neighbours:[],biome:'temperate-forest',hilliness:'flat',elevation:10,meanTemperature:10,rainfall:800,swampiness:0,rivers:[],riverDistance:0,...o};
@@ -73,5 +84,47 @@ describe.skipIf(!saves.length)('real RimWorld saves (opt-in)',()=>{
   const report=compareAncientRoads(save,t=>draft.surface.tiles[t]!.neighbours,draft.roads);
   expect(report.saveLinks).toBeGreaterThan(0);
   expect(report).toEqual({saveLinks:report.saveLinks,generatedLinks:report.saveLinks,sameLink:report.saveLinks,sameLinkAndRoad:report.saveLinks});
+ },600_000);
+});
+
+describe('faction names report',()=>{
+ it("compares faction names by creation order and the first faction's first settlement, numbers only",()=>{
+  const save={playerFaction:'Faction_9',factions:[{loadId:'Faction_0',def:'OutlanderCivil',name:'Zol Kru'},{loadId:'Faction_1',def:'Insect',name:'Vexes'},{loadId:'Faction_2',def:'Pirate',name:'Les plo'},{loadId:'Faction_9',def:'PlayerColony',name:'Nous'}],
+   worldObjects:[{id:'7',tile:40,cls:'Settlement',faction:'Faction_0',name:'Later'},{id:'0',tile:12,cls:'Settlement',faction:'Faction_0',name:'Mibville'},{id:'1',tile:13,cls:'Settlement',faction:'Faction_2',name:'Dor'},{id:'2',tile:50,cls:'Settlement',faction:'Faction_9',name:'Home'}]} as unknown as RwsSave;
+  const registry={playerFactionId:4,factions:[{id:1,def:'OutlanderCivil',name:'Zol Kru'},{id:2,def:'Insect',name:'Vexes'},{id:3,def:'Pirate',name:'Les mib'},{id:4,def:'PlayerColony',name:'Nous'}],
+   settlements:[{id:1,factionId:1,tile:12,name:'Mibville'},{id:2,factionId:3,tile:13,name:'Tal'},{id:3,factionId:3,tile:99,name:'Dor'}]} as unknown as WorldFactionRegistry256;
+  const report=compareFactionNames(save,registry,new Set(['Insect']),309);
+  expect(report).toEqual({factions:{compared:3,sameName:2,fixedNames:1,sameDrawnName:1},first:{sameName:true,settlementInSave:true,sameTile:true,sameTileAndName:true},settlements:{save:3,generated:3,sameTile:2,sameTileAndName:1},leaderStart:309});
+  const text=formatFactionNameParity(report,'Testish');
+  expect(text).toContain('première faction : même nom oui');expect(text).toContain('tirage 310');
+  for(const word of ['Zol','Mibville','Vexes','Dor'])expect(text).not.toContain(word);
+ });
+});
+
+const gameDir=process.env.RIMWORLD_DIR??DEFAULT_RIMWORLD_DIR,gameLanguage=process.env.RIMWORLD_LANGUAGE??'French';
+const gameCore=existsSync(gameDir)?rimworldCoreFolder(gameDir):undefined;
+describe.skipIf(!gameCore||process.env.RIMWORLD_DIR===undefined&&!saves.length)("the installed game's grammar (opt-in)",()=>{
+ it("loads the language and draws outlander faction and settlement names with the game's own rules",()=>{
+  const g=loadGameGrammar(gameCore!,gameLanguage,{resources:rimworldResourcesBytes(gameDir)});
+  expect(g.counts.rulePacks).toBeGreaterThan(100);expect(g.counts.activeStringFiles).toBeGreaterThan(0);
+  const random=new VerseRand(12345);
+  for(let i=0;i<40;i++){
+   expect(generateFactionName(g.grammar,g.factions.get('OutlanderCivil')!.factionNameMaker!,[],random)).toMatch(/\S/);
+   expect(generateSettlementName(g.grammar,g.factions.get('OutlanderCivil')!.settlementNameMaker!,[],random)).toMatch(/\S/);
+  }
+  expect(nameFilesReachable(g.grammar,'NamerFactionOutlander').length).toBeGreaterThan(0);
+ },60_000);
+});
+describe.skipIf(!gameCore||!saves.length)("the game's names on real saves (opt-in)",()=>{
+ const game=gameCore?loadGameGrammar(gameCore,gameLanguage,{resources:rimworldResourcesBytes(gameDir)}):undefined;
+ for(const path of saves)it(`the first faction's name and first settlement match ${path}`,()=>{
+  const save=readRwsSave(readFileSync(path,'utf8')),p=savePlanetSettings(save),factions=saveFactionSelection(p.factions)!;
+  let leaderStart:number|null=null;
+  const it=generateGeographicWorldDraft256({seed:p.seed,settings:{...p.settings,factions},tick:0,nextThingId:1,playerDef:'PlayerColony',playerName:'Comparaison',names:game!,onLeaderStart:(_f,i,state)=>{if(i===0)leaderStart=state.counter;}});
+  let n=it.next();while(!n.done)n=it.next();
+  const fixed=new Set([...game!.factions].filter(([,x])=>x.fixedName!==null).map(([d])=>d));
+  const report=compareFactionNames(save,n.value.factions,fixed,leaderStart);
+  expect(report.first).toEqual({sameName:true,settlementInSave:true,sameTile:true,sameTileAndName:true});
+  expect(report.leaderStart).toBeGreaterThan(0);
  },600_000);
 });
