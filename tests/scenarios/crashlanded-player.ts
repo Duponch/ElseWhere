@@ -18,6 +18,7 @@ import { treatmentTarget, urgentTreatment } from '../../src/sim/care-rules.ts';
 import { medicalBleed } from '../../src/sim/injury-state.ts';
 import { medicalWorkRefusal } from '../../src/sim/health-rules.ts';
 import { needsAssistedFeeding } from '../../src/sim/feeding-rules.ts';
+import { draftedTendingProposal,draftedTendingReason } from '../../src/sim/drafted-tending.ts';
 import { wantsRescue } from '../../src/sim/rescue.ts';
 import { isForcedConsuming } from '../../src/sim/consuming.ts';
 import { shotPlan,shootingQueries } from '../../src/sim/shooting.ts';
@@ -152,7 +153,7 @@ function groundWeaponFetch(w:World,people:readonly Colonist[],threats:readonly C
 }
 
 /** While colonists shelter from a threat, the player still sends one
- * of them, drafted, to bring in a downed colonist, or to eat when hungry, if
+ * of them, drafted, to bring in a downed colonist, to tend a bleeding one, or to eat when hungry, if
  * every threat is at least 10 cells from the patient or the food: RimWorld's
  * drafted pawns neither eat nor rescue on their own. */
 /** Cooked meals first, then the survival rations kept for emergencies and
@@ -165,6 +166,18 @@ function shelterCareDecisions(w:World,sheltered:readonly Colonist[],threats:read
     if(out.some(d=>'pawnId' in d.command&&d.command.pawnId===doctor.id))continue;
     const rescue=queryOrderOptions(w,doctor.id,patient).find(o=>o.enabled&&o.rescuePatientId===patient.id);
     if(rescue){out.push({reason:'La menace s’est éloignée du blessé : le ramener sur un lit de l’abri.',command:{type:'order-rescue',pawnId:doctor.id,patientId:patient.id,queue:false}});break;}
+  }
+  // A colonist who bleeds in the shelter is tended there at once by a
+  // sheltered doctor, still drafted (RimWorld lets a drafted pawn tend), when
+  // every threat is at least 10 cells away: waiting for the end of the fight
+  // can let the patient bleed out.
+  const bleeding=w.pawns.filter(p=>isColonist(p)&&p.state!=='dead'&&!carrierOf(w,p.id)&&urgentTreatment(p)&&farFrom(threats,p,10))
+    .sort((a,b)=>(b.health?medicalBleed(b.health):0)-(a.health?medicalBleed(a.health):0)||a.id-b.id);
+  for(const patient of bleeding)for(const doctor of free){
+    if(doctor===patient||doctor.tend||out.some(d=>'pawnId' in d.command&&d.command.pawnId===doctor.id))continue;
+    // The drafted order is the one the native menu offers a drafted doctor.
+    if(draftedTendingReason(w,doctor,patient)||!draftedTendingProposal(w,doctor,patient,reachableCells(w,doctor,blockedCells(w),new Set())))continue;
+    out.push({reason:'Le blessé saigne dans l’abri et la menace est loin : le faire soigner sur place, toujours mobilisé.',command:{type:'order-drafted-tend',pawnId:doctor.id,patientId:patient.id,queue:false}});break;
   }
   for(const p of meals?free:[]){
     if(p.hunger>=25||out.some(d=>'pawnId' in d.command&&d.command.pawnId===p.id))continue;
