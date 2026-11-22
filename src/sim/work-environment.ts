@@ -6,6 +6,7 @@ import { cookingSpot } from './cooking-bills.ts';
 import { LightEnvironment, LightEnvironmentCache, lightSpeedFactor } from './light-environment.ts';
 import { type RoomSpace,type RoomTopology } from './room-topology.ts';
 import { schemaAtLeast } from './schema-range.ts';
+import { registerWorkEnvironmentCache } from './work-environment-registry.ts';
 import { peekStructureMembershipToken } from './structure-navigation.ts';
 import type { Cell, Structure, World } from './types.ts';
 
@@ -94,3 +95,4 @@ export class WorkEnvironmentCache {
     return new WorkEnvironment(light,rooms,rules301);
   }
 }
+registerWorkEnvironmentCache(WorkEnvironmentCache);

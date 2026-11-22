@@ -16,7 +16,8 @@ import { outdoorTemperature } from './temperature.ts';
 import { toxicFalloutActive294 } from './toxic-fallout-state-294.ts';
 import { volcanicWinterActive310 } from './volcanic-winter-state-310.ts';
 import { weatherRainRate } from './weather.ts';
-import { WorkEnvironmentCache, type WorkEnvironment } from './work-environment.ts';
+import type { WorkEnvironment, WorkEnvironmentCache } from './work-environment.ts';
+import { newWorkEnvironmentCache } from './work-environment-registry.ts';
 import type { Cell, Pawn, Structure, World } from './types.ts';
 
 /* RimWorld 1.6.4871, schema 366: the ViewArt joy giver (JoyGivers.xml:
@@ -37,7 +38,7 @@ export const viewArtCapable366=(pawn:Pawn):boolean=>pawnBody(pawn).capacities.si
 
 const environments=new WeakMap<World,WorkEnvironmentCache>();
 function environment(world:World):WorkEnvironment {
-  let cache=environments.get(world);if(!cache){cache=new WorkEnvironmentCache(sharedLightEnvironmentCache(world));environments.set(world,cache);}
+  let cache=environments.get(world);if(!cache){cache=newWorkEnvironmentCache(sharedLightEnvironmentCache(world));environments.set(world,cache);}
   return cache.read(world);
 }
 /** Thing.Faction == Faction.OfPlayer: a structure without a faction field is the colony's own. */
