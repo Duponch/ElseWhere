@@ -10,7 +10,7 @@ export function createBillReserveCountReader289(world:World):(bill:CookingBill)=
   const counts=new Map<string,number>();
   return bill=>{
     const f=bill.apparelCount;
-    const key=bill.recipe+(f?`|${f.hpMin}|${f.hpMax}|${f.qualityMin}|${f.qualityMax}|${f.includeEquipped}`:'|legacy');
+    const key=bill.recipe+(f?`|${f.hpMin}|${f.hpMax}|${f.qualityMin}|${f.qualityMax}|${f.includeEquipped}|${f.includeTainted374}`:'|legacy');
     const previous=counts.get(key);if(previous!==undefined)return previous;
     const count=countedProducts(world,bill);counts.set(key,count);return count;
   };

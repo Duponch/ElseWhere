@@ -21,7 +21,7 @@ export function validApparelReservesBuilding278(value:unknown,version:number):bo
   if(bill===null||typeof bill!=='object'||!('apparelCount'in bill))continue;
   const field=Object.getOwnPropertyDescriptor(bill,'apparelCount'),recipe=Object.getOwnPropertyDescriptor(bill,'recipe');
   if(!isSchema278OrLater(version)||!plain(bill)||!field?.enumerable||!Object.hasOwn(field,'value')
-    ||!recipe?.enumerable||!Object.hasOwn(recipe,'value')||!isApparelCountRecipe278(recipe.value)||!validApparelCountFilter278(field.value))return false;
+    ||!recipe?.enumerable||!Object.hasOwn(recipe,'value')||!isApparelCountRecipe278(recipe.value)||!validApparelCountFilter278(field.value,version))return false;
  }
  return true;
 }

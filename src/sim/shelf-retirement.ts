@@ -1,3 +1,4 @@
+import {dropEggBoxContent374} from './egg-box-374.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {hasTravellingCargo,interruptWork} from './interrupted-cargo.ts';
 import {interruptAnimalStorage282} from './animal-hauling-282.ts';
@@ -15,6 +16,14 @@ export function planShelfRemoval(world:World,s:Structure):ShelfRemovalPlan|null 
   const view:World={...world,structures:world.structures.filter(b=>b.id!==s.id),
     piles:world.piles.map(p=>({...p,owner:{...p.owner}})),packed:world.packed.map(p=>({...p,owner:{...p.owner}}))};
   const drops:DropPlan=new Map(),cells=new Set(s.shelf?.cells??[]),carriers=new Set<number>();
+  // Schema 374: a removed egg box drops its eggs near its cell (CompThingContainer.PostDeSpawn).
+  if(s.kind==='egg-box'&&world.structures.includes(s)){
+    const dropped=dropEggBoxContent374(view,s);if(dropped===null)return null;
+    if(dropped!==undefined){const pile=view.piles.find(p=>p.id===dropped)!;if(pile.owner.type==='ground')drops.set(dropped,{x:pile.owner.x,z:pile.owner.z});
+      // The extraction job fails with its box; nothing is carried yet.
+      for(const p of world.pawns)if(p.haul?.phase==='pickup'&&p.haul.sourcePileId===dropped)carriers.add(p.id);}
+    return {view,drops,cells,carriers};
+  }
   if(!s.shelf||!world.structures.includes(s))return {view,drops,cells,carriers};
   const footprint=new Set(footprintCells(s).map(c=>c.z*world.width+c.x)),kept=new Set<number>();
   for(const p of view.piles.filter(p=>p.owner.type==='ground'&&footprint.has(p.owner.z*world.width+p.owner.x)).sort((a,b)=>a.id-b.id)){

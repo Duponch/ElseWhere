@@ -26,6 +26,7 @@ export function groupPackedMassGrams258(pack:PackedFurniture,version:number):num
  if(pack.building.kind==='firefoam-popper')return (version===290||(version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))))))?10000:undefined;
  if(pack.building.kind==='fueled-smithy'||pack.building.kind==='electric-smithy')return version>=267?20000:undefined;
  if(pack.building.kind==='tool-cabinet')return version>=355?20000:undefined;
+ if(pack.building.kind==='egg-box')return version>=374?3000:undefined;
  // Schema 365 Couch Mass 70.
  if(pack.building.kind==='couch')return version>=365?70000:undefined;
  // Schema 357 TrapIEDBase Mass 2.

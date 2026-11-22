@@ -8,6 +8,8 @@ export interface ApparelPolicyUpdateCommand {
   allowedItems:readonly ApparelItem[];allowedMaterials:readonly ApparelPolicyMaterial[];
   minQuality:WeaponQuality;maxQuality:WeaponQuality;
   minHitPointsPercent:number;maxHitPointsPercent:number;
+  /** Schema 374: "allow tainted apparel"; absent keeps the policy's setting. */
+  allowTainted374?:boolean;
 }
 const FIELDS=['type','policyId','allowedItems','allowedMaterials','minQuality','maxQuality','minHitPointsPercent','maxHitPointsPercent'];
 const fail=():CommandResult=>({ok:false,code:'invalid-command',reason:'Filtres de tenue invalides ou politique inconnue.'});
@@ -23,18 +25,21 @@ const same=(a:readonly string[],b:readonly string[])=>a.length===b.length&&a.eve
  * Commit only copied filters, preserving identity, label and every owner/task. */
 export function applyApparelPolicyUpdate(world:World,command:ApparelPolicyUpdateCommand):CommandResult {
   try{
-    if(world.schemaVersion!==SCHEMA_VERSION||!command||typeof command!=='object'||Reflect.ownKeys(command).length!==FIELDS.length
-      ||!FIELDS.every(key=>Object.hasOwn(command,key)))return fail();
+    const tainted=!!command&&typeof command==='object'&&Object.hasOwn(command,'allowTainted374');
+    if(world.schemaVersion!==SCHEMA_VERSION||!command||typeof command!=='object'||Reflect.ownKeys(command).length!==FIELDS.length+(tainted?1:0)
+      ||!FIELDS.every(key=>Object.hasOwn(command,key))||tainted&&(world.schemaVersion<374||typeof command.allowTainted374!=='boolean'))return fail();
     const {type,policyId,allowedItems,allowedMaterials,minQuality,maxQuality,minHitPointsPercent,maxHitPointsPercent}=command;
     if(type!=='apparel-policy-update'||!Number.isSafeInteger(policyId)||policyId<=0)return fail();
     const registry=world.apparelPolicies,index=registry?.findIndex(policy=>policy.id===policyId)??-1;
     if(!registry||index<0||!denseStrings(allowedItems,Object.keys(APPAREL).length)||!denseStrings(allowedMaterials,APPAREL_POLICY_MATERIALS267.length))return fail();
     const previous=registry[index]!;
-    const next:ApparelPolicy={...previous,allowedItems:[...allowedItems],allowedMaterials:[...allowedMaterials],minQuality,maxQuality,minHitPointsPercent,maxHitPointsPercent};
+    const {taintedAllowed374:_,...rest}=previous,refuse=tainted?command.allowTainted374===false:previous.taintedAllowed374===false;
+    const next:ApparelPolicy={...rest,allowedItems:[...allowedItems],allowedMaterials:[...allowedMaterials],minQuality,maxQuality,minHitPointsPercent,maxHitPointsPercent,...refuse?{taintedAllowed374:false as const}:{}};
     if(!validApparelPolicy(next,world.schemaVersion))return fail();
     if(same(previous.allowedItems,next.allowedItems)&&same(previous.allowedMaterials,next.allowedMaterials)
       &&previous.minQuality===minQuality&&previous.maxQuality===maxQuality
-      &&previous.minHitPointsPercent===minHitPointsPercent&&previous.maxHitPointsPercent===maxHitPointsPercent)return {ok:true};
+      &&previous.minHitPointsPercent===minHitPointsPercent&&previous.maxHitPointsPercent===maxHitPointsPercent
+      &&(previous.taintedAllowed374===false)===refuse)return {ok:true};
     world.apparelPolicies=registry.map((policy,i)=>i===index?next:policy);
     return {ok:true};
   }catch{return fail();}
@@ -80,7 +85,8 @@ export function applyApparelPolicyName(world:World,command:ApparelPolicyNameComm
     // Whitelist confirmed filters: identity/name and any future metadata are
     // never copied from an editor draft, pawn, equipment task or source object.
     const copy:ApparelPolicy={id:nextId,label,allowedItems:[...source.allowedItems],allowedMaterials:[...source.allowedMaterials],
-      minQuality:source.minQuality,maxQuality:source.maxQuality,minHitPointsPercent:source.minHitPointsPercent,maxHitPointsPercent:source.maxHitPointsPercent};
+      minQuality:source.minQuality,maxQuality:source.maxQuality,minHitPointsPercent:source.minHitPointsPercent,maxHitPointsPercent:source.maxHitPointsPercent,
+      ...source.taintedAllowed374===false?{taintedAllowed374:false as const}:{}};
     const updated=[...registry,copy],nextCounter=nextId+1;
     world.apparelPolicies=updated;world.nextApparelPolicyId=nextCounter;
     return {ok:true};

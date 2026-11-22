@@ -24,7 +24,7 @@ import { stationRecipes, PRODUCTION_RECIPES } from '../sim/production-recipes';
 import { supportsBillReservePause289 } from '../sim/bill-pause-rules-289';
 import { productionRecipeSkill283, readBillWorkerPolicy283 } from '../sim/bill-worker-rules-283';
 import { BILL_STACK_MAX_COUNT, billClipboard, billPasteRefusal, copyBillToClipboard, pasteBillFromClipboard } from '../ui/bill-clipboard';
-import { isApparelCountRecipe278, newApparelCountFilter278 } from '../sim/apparel-count-278';
+import { isApparelCountRecipe278, isBillTaintedSchema374, newApparelCountFilter278 } from '../sim/apparel-count-278';
 import { isSchema278OrLater } from '../sim/schema-compatibility-257';
 import { groundMaxStacks } from '../sim/shelf-storage';
 import { stockpileZoneId } from '../sim/stockpile-zones';
@@ -88,6 +88,7 @@ import { RECREATION_KINDS, recreationMood } from '../sim/recreation-rules';
 import { corpseStage } from '../sim/corpses';
 import { powerInspection } from '../ui/power-inspection';
 import { brewingInspection265 } from '../ui/brewing-inspection-265';
+import { eggBoxInspection374Text } from '../ui/egg-box-inspection-374';
 import { toolCabinetInspection355 } from '../ui/tool-cabinet-inspection-355';
 import { productKind, productFullness } from '../sim/animal-products';
 import { queryPawnStatus, queryJobStatus } from '../sim/diagnostics';
@@ -462,10 +463,12 @@ function billPage(world: World, structure: Structure): NativePage {
     if (draft.cremationFilter) for (const [field, label] of [['colonists', 'Colons'], ['strangers', 'Étrangers'], ['fresh', 'Corps frais'], ['rotting', 'Corps pourris'], ['desiccated', 'Corps desséchés']] as const) rows.push(booleanRow(`cremate-${bill.id}-${field}`, label, draft.cremationFilter[field], value => { draft!.cremationFilter![field] = value; }));
     if (isSchema278OrLater(world.schemaVersion) && isApparelCountRecipe278(bill.recipe)) {
       const filter = draft.apparelCount;
-      rows.push(booleanRow(`apparel-reserve-${bill.id}`, 'Filtrer la réserve de vêtements', !!filter, enabled => { if (enabled) draft!.apparelCount = newApparelCountFilter278(); else delete draft!.apparelCount; }));
+      rows.push(booleanRow(`apparel-reserve-${bill.id}`, 'Filtrer la réserve de vêtements', !!filter, enabled => { if (enabled) draft!.apparelCount = newApparelCountFilter278(world.schemaVersion); else delete draft!.apparelCount; }));
       if (filter) rows.push(numberRow(`reserve-hp-min-${bill.id}`, 'Réserve · état minimum (%)', filter.hpMin, 0, filter.hpMax, value => { filter.hpMin = value; }), numberRow(`reserve-hp-max-${bill.id}`, 'Réserve · état maximum (%)', filter.hpMax, filter.hpMin, 100, value => { filter.hpMax = value; }),
         choices(`reserve-quality-min-${bill.id}`, 'Réserve · qualité minimum', filter.qualityMin, WEAPON_QUALITIES.filter(value => WEAPON_QUALITIES.indexOf(value) <= WEAPON_QUALITIES.indexOf(filter.qualityMax)), value => { filter.qualityMin = value; }),
         choices(`reserve-quality-max-${bill.id}`, 'Réserve · qualité maximum', filter.qualityMax, WEAPON_QUALITIES.filter(value => WEAPON_QUALITIES.indexOf(value) >= WEAPON_QUALITIES.indexOf(filter.qualityMin)), value => { filter.qualityMax = value; }), booleanRow(`reserve-equipped-${bill.id}`, 'Inclure les vêtements portés et en inventaire personnel', filter.includeEquipped, value => { filter.includeEquipped = value; }));
+      // Schema 374: Core's "include tainted" (Dialog_BillConfig), off by default.
+      if (filter && isBillTaintedSchema374(world.schemaVersion)) rows.push(booleanRow(`reserve-tainted-${bill.id}`, 'Compter les vêtements de mort', filter.includeTainted374 !== false, value => { filter.includeTainted374 = value; }));
     }
     const worker = readBillWorkerPolicy283(bill), skill = productionRecipeSkill283(bill.recipe);
     rows.push(row(`worker-skill-${bill.id}`, 'Compétence de production', skill ? skillLabels[skill]! : 'Aucune compétence de recette'), numberRow(`worker-min-${bill.id}`, 'Travailleur · compétence minimum', worker.skillMin, 0, worker.skillMax, skillMin => send({ type: 'bill-worker-policy', structureId: structure.id, billId: bill.id, policy: { ...worker, skillMin } })), numberRow(`worker-max-${bill.id}`, 'Travailleur · compétence maximum', worker.skillMax, worker.skillMin, 20, skillMax => send({ type: 'bill-worker-policy', structureId: structure.id, billId: bill.id, policy: { ...worker, skillMax } })));
@@ -623,6 +626,7 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
     if (use && (structure.kind === 'heater' || structure.kind === 'cooler')) rows.push({ id: 'climate-target', label: 'Température de consigne', value: String(structure.heater?.target ?? structure.cooler?.target), controls: ([-10, -1, 1, 10, null] as const).map(offset => command(`climate-${offset}`, offset === null ? 'Réinitialiser' : signed(offset), structure.kind === 'heater' ? { type: 'heater-adjust', structureId: structure.id, offset } : { type: 'cooler-adjust', structureId: structure.id, offset })) });
     const power = powerInspection(world, structure); if (power) rows.push(row('power-details', 'Énergie et fonctionnement', undefined, power));
     const brewing = brewingInspection265(world, structure); if (brewing) rows.push(row('brewing-details', 'Brassage et fermentation', undefined, brewing));
+    const eggBox = eggBoxInspection374Text(world, structure); if (eggBox) rows.push(row('egg-box-content', 'Boîte à œufs', undefined, eggBox));
     const facilities = toolCabinetInspection355(world, structure); if (facilities) rows.push(row('tool-cabinet-links', structure.kind === 'tool-cabinet' ? 'Établis liés' : 'Installations liées', undefined, facilities));
     if (structure.battery) rows.push(meterRow('battery-energy', 'Énergie stockée', batteryWattDays(structure.battery), BATTERY_CAPACITY / BATTERY_ENERGY_SCALE, undefined, `${batteryWattDays(structure.battery).toFixed(2)} W·j`));
     if (structure.fuel) rows.push(meterRow('fuel-reserve', 'Combustible', structure.fuel.ticks, fuelLimit(structure.kind), 'Réserve réelle ; le remplissage exige les objets, l’accès et le travail disponibles.'));

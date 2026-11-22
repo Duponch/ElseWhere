@@ -69,6 +69,7 @@ export const toolDefinitions: { id: Tool; title: string; hint: string; key: stri
   { id: 'bed', title: 'Lit', hint: 'empreinte 1 × 2 · Q / E pour tourner', key: 'L', category: 'furniture' },
   { id:'double-bed',title:'Lit double',hint:'2 × 2 · deux places civiles · recherche Mobilier complexe · Q / E pour tourner',key:'',category:'furniture' },
   { id: 'hospital-bed', title: 'Lit d’hôpital', hint: '1 × 2 · Construction 8 · recherche Lit d’hôpital · usage médical initial · Q / E pour tourner', key: '', category: 'furniture' },
+  {id:'egg-box',title:'Boîte à œufs',hint:'1 × 1 · 20 bois ou acier · travail 2 000 (bois ×0,7) · 50 PV · sans recherche · les animaux de la colonie y pondent jusqu’à 25 œufs ; les porteurs la vident à partir de 20 vers une réserve · protège les œufs de l’usure, pas de la température',key:'',category:'furniture'},
   {id:'vitals-monitor',title:'Moniteur vital',hint:'1 × 1 · 50 acier + 3 composants · Construction 8 · recherche Moniteur vital · 80 W · à côté d’un lit d’hôpital : soins +7 points, immunité +2 points, chirurgie +0,05 · plusieurs lits possibles, sans cumul',key:'',category:'furniture'},
   { id: 'table', title: 'Table', hint: '1 × 2 · placer des tabourets contre le bord · Q / E pour tourner', key: '', category: 'furniture' },
   { id:'table-square',title:'Table carrée',hint:'2 × 2 · 50 matériaux · Q / E pour tourner',key:'',category:'furniture'},

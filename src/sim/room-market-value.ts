@@ -62,6 +62,7 @@ const def = (stuff: number, work: number, passability: Passability,
 const BUILDINGS: Readonly<Record<StructureKind, BuildingValueDef>> = Object.freeze({
  'firefoam-popper':def(0,1500,'pass-through',{steel:75,component:1}),
  'tool-cabinet':def(0,1800,'pass-through',{steel:200}),
+ 'egg-box':def(20,2000,'standable'),
  'ied-high-explosive':def(0,1400,'standable',{shells:2}),'ied-incendiary':def(0,1400,'standable',{shells:2}),
  'ship-cryptosleep-casket':def(0,SHIP_CASKET_CONTENT_277.coreWork,'pass-through',Object.fromEntries(SHIP_CASKET_CONTENT_277.ingredients.map(c=>[c.item,c.quantity]))),
  'ship-computer':def(0,SHIP_COMPUTER_CONTENT_298.coreWork,'impassable',Object.fromEntries(SHIP_COMPUTER_CONTENT_298.ingredients.map(c=>[c.item,c.quantity]))),

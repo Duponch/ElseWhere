@@ -1,6 +1,6 @@
 {
   "style": "adult-hand-20261107",
-  "icons": 851,
+  "icons": 852,
   "ids": [
     "advanced-fabrication",
     "air-conditioning",
@@ -130,6 +130,7 @@
     "drug-production",
     "dry-storm",
     "eclipse",
+    "egg-box",
     "electric-crematorium",
     "electric-smelter",
     "electric-smithy",

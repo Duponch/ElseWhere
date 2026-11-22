@@ -1,3 +1,4 @@
+import {processEggBoxExtraction374} from './egg-box-374.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
 import {finishBarrelFill265} from './fermentation-runtime-265.ts';
@@ -28,6 +29,8 @@ export function processHaul(world: World, pawn: Pawn, move: (target: Cell, allow
   if(task.whole){processFurnitureHaul(world,pawn,move,wake);return;}
   if (!destinationValid(world, pawn)) { releaseWork(world, pawn); return; }
   if (task.phase === 'pickup') {
+    // Schema 374: EmptyEggBox extracts the held eggs before the ordinary pickup.
+    if(task.eggBox374!==undefined){processEggBoxExtraction374(world,pawn,task,move);return;}
     const source = world.piles.find(item => item.id === task.sourcePileId);
     if (!source || !eggAllowedForPlayer256(source)||source.owner.type !== 'ground' || source.quantity < task.quantity) { releaseWork(world, pawn); return; }
     if (!nearby(pawn, source.owner)) { move(source.owner, true); return; }

@@ -21,6 +21,10 @@ export interface ApparelPolicy {
   readonly maxQuality:WeaponQuality;
   readonly minHitPointsPercent:number;
   readonly maxHitPointsPercent:number;
+  /** Schema 374: Core SpecialThingFilterDef AllowDeadmansApparel ("allow
+   * tainted apparel", allowedByDefault): absent when allowed, false when the
+   * policy refuses apparel worn by someone who died in it. */
+  readonly taintedAllowed374?:false;
 }
 /** Small integration boundary: callers project world piles into these values. */
 export interface ApparelPolicyGarment {
@@ -61,12 +65,15 @@ export function validApparelPolicy(policy:ApparelPolicy,version=Number.MAX_SAFE_
     &&Array.isArray(policy.allowedItems)&&new Set(policy.allowedItems).size===policy.allowedItems.length&&policy.allowedItems.every(i=>Object.hasOwn(APPAREL,i)&&(version>=267||!isSmithingApparel267(i))&&(version>=308||!isTextileApparelItem308(i))&&(version>=312||!isGarmentItem312(i))&&(version>=353||!isHatItem353(i))&&(version>=358||!isDevilstrandApparel358(i)))
     &&Array.isArray(policy.allowedMaterials)&&new Set(policy.allowedMaterials).size===policy.allowedMaterials.length&&policy.allowedMaterials.every(m=>APPAREL_POLICY_MATERIALS267.includes(m)&&(version>=267||!(ARMOR_STUFFS267 as readonly string[]).includes(m))&&(version>=308||!isTextileMaterial308(m))&&(version>=358||m!=='devilstrand'))
     &&qualities.includes(policy.minQuality)&&qualities.includes(policy.maxQuality)&&qualities.indexOf(policy.minQuality)<=qualities.indexOf(policy.maxQuality)
-    &&Number.isFinite(policy.minHitPointsPercent)&&Number.isFinite(policy.maxHitPointsPercent)&&policy.minHitPointsPercent>=0&&policy.maxHitPointsPercent<=1&&policy.minHitPointsPercent<=policy.maxHitPointsPercent;
+    &&Number.isFinite(policy.minHitPointsPercent)&&Number.isFinite(policy.maxHitPointsPercent)&&policy.minHitPointsPercent>=0&&policy.maxHitPointsPercent<=1&&policy.minHitPointsPercent<=policy.maxHitPointsPercent
+    &&(!Object.hasOwn(policy,'taintedAllowed374')||version>=374&&policy.taintedAllowed374===false);
 }
 export function apparelPolicyAllows(policy:ApparelPolicy,garment:ApparelPolicyGarment):boolean {
   if(!validApparelPolicy(policy)||!garment||!Object.hasOwn(APPAREL,garment.item))return false;
   const definition=APPAREL[garment.item],quality=qualities.indexOf(garment.apparel.quality),percent=garment.apparel.hitPoints/definition.hitPoints;
   const material=definition.stuff??garment.apparel.material??definition.material;
+  // Schema 374: SpecialThingFilterWorker_DeadmansApparel matches apparel WornByCorpse.
+  if(policy.taintedAllowed374===false&&garment.apparel.corpseWear284===true)return false;
   return policy.allowedItems.includes(garment.item)&&(material===undefined||policy.allowedMaterials.includes(material))
     &&quality>=qualities.indexOf(policy.minQuality)&&quality<=qualities.indexOf(policy.maxQuality)&&percent>=policy.minHitPointsPercent&&percent<=policy.maxHitPointsPercent;
 }

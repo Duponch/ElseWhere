@@ -46,6 +46,11 @@ function strip(value:unknown,version:number):void {
   if(Array.isArray(value)){for(const v of value)strip(v,version);return;}
   if(!value||typeof value!=='object')return;
   const o=value as Record<string,unknown>;
+  // Schema 374: the tainted apparel filter of a policy and the tainted option of a bill's apparel count.
+  if(version<374){
+    if(Array.isArray(o.allowedItems)&&Object.hasOwn(o,'taintedAllowed374'))delete o.taintedAllowed374;
+    if(typeof o.includeEquipped==='boolean'&&Object.hasOwn(o,'includeTainted374'))delete o.includeTainted374;
+  }
   // Schema 360: a pawn's active inspiration.
   if(version<360&&Object.hasOwn(o,'inspiration360'))delete o.inspiration360;
   // Schema 368: the Pyromaniac degree.
@@ -128,7 +133,7 @@ export function stripFutureContent(value:unknown,version:number):void {
   if(version<352&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).letters352;
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
-  if(version<370)strip(value,version);
+  if(version<374)strip(value,version);
 }
 
 /** The reference for a number-only migration step from `version`: the same

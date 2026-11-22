@@ -1,3 +1,4 @@
+import {isEggBoxSchema374} from './egg-box-state-374.ts';
 import {isGun342} from './guns-342.ts';
 import {isDevilstrandItem358} from './devilstrand-358.ts';
 import {isPenoxycyline337} from './penoxycyline-337.ts';
@@ -127,6 +128,7 @@ else {
       : version>=231&&owner.type==='starting-pod' ? !integer(owner.podId,1,world.nextId-1)||Object.keys(owner).some(key=>!['type','podId'].includes(key))
       : version>=216&&owner.type==='orbital-ship' ? !integer(owner.shipId,1,world.nextId-1)||Object.keys(owner).some(key=>!['type','shipId'].includes(key))
       : version>=216&&owner.type==='orbital-cargo' ? !integer(owner.deliveryId,1,world.nextId-1)||Object.keys(owner).some(key=>!['type','deliveryId'].includes(key))
+      : isEggBoxSchema374(version)&&owner.type==='egg-box374' ? !integer(owner.structureId,1)||Object.keys(owner).length!==2||Object.keys(owner).some(key=>!['type','structureId'].includes(key))
       : version>=89&&owner.type==='grave' ? !integer(owner.graveId,1)||Object.keys(owner).some(key=>!['type','graveId'].includes(key)) : owner.type === 'job' ? !integer(owner.jobId, 1) || Object.keys(owner).some(key => !['type', 'jobId'].includes(key)) : true) errors.push('Invalid material owner.');
 }
  return errors;

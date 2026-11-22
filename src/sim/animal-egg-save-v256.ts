@@ -1,3 +1,4 @@
+import {isEggBoxSchema374} from './egg-box-state-374.ts';
 import {animalMechanicalReadiness256} from './animal-readiness-v256.ts';
 import {ANIMAL_EGG_CONTENT_256,isEggSpecies256,eggSpeciesForItem256} from './animal-egg-content-v256.ts';
 import {animalLifeStageData256} from './animal-core-v256.ts';
@@ -22,7 +23,7 @@ export function validAnimalEggState256(a:WildAnimal,version:number,w:{width:numb
  const def=ANIMAL_EGG_CONTENT_256[a.species],layer:unknown=a.eggLayer,job:unknown=a.eggLay;
  if(!obj(layer)||!keys(layer,['progress','fertilizations'],['fatherId'])||!finite(layer.progress,0,1)||!int(layer.fertilizations,0,def.fertilizationMaximum)||(layer.fatherId===undefined?layer.fertilizations>0:!int(layer.fatherId,1,w.nextId-1)||layer.fatherId===a.id))return false;
  if(job===undefined)return true;
- return obj(job)&&keys(job,['target','progress'])&&obj(job.target)&&keys(job.target,['x','z'])&&int(job.target.x,0,w.width-1)&&int(job.target.z,0,w.height-1)&&int(job.progress,0,49)
+ return obj(job)&&keys(job,['target','progress'],isEggBoxSchema374(version)?['box374']:[])&&(job.box374===undefined||int(job.box374,1,w.nextId-1))&&obj(job.target)&&keys(job.target,['x','z'])&&int(job.target.x,0,w.width-1)&&int(job.target.z,0,w.height-1)&&int(job.progress,0,49)
   &&layer.progress>=1&&animalLifeStageData256(a.species,a.ageTicks,a.growthTracker?.value).milkable&&(!def.femaleOnly||a.sex==='female')&&!['dead','downed'].includes(a.state)
   &&(job.progress===0||a.x===job.target.x&&a.z===job.target.z&&!a.path.length&&(a.motion?.end??0)<=w.tick);
 }

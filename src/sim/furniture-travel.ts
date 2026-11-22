@@ -48,6 +48,8 @@ export const FURNITURE_TRAVEL:Readonly<Record<StructureKind,Readonly<{delay:numb
   shelf:{delay:5,stand:false,repeat:true},'small-shelf':{delay:5,stand:false,repeat:true},
   'firefoam-popper':{delay:3,stand:false,repeat:true},
   'tool-cabinet':{delay:4.2,stand:false,repeat:true},
+  // Schema 374 EggBox: Standable, pathCost 10, pathCostIgnoreRepeat default.
+  'egg-box':{delay:1,stand:true,repeat:true},
   'spike-trap':{delay:0,stand:true,repeat:false},
   'ied-high-explosive':{delay:0,stand:true,repeat:false},'ied-incendiary':{delay:0,stand:true,repeat:false},
   'double-bed':{delay:4.2,stand:false,repeat:true},

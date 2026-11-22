@@ -17,6 +17,10 @@ export interface ApparelCountFilter278 {
   hpMin:number;hpMax:number;
   qualityMin:WeaponQuality;qualityMax:WeaponQuality;
   includeEquipped:boolean;
+  /** Schema 374: Core Bill_Production.includeTainted. Absent on an older
+   * filter (its historical count includes the apparel of the dead); a filter
+   * made from 374 holds it, false by default as in Core. */
+  includeTainted374?:boolean;
 }
 
 export type RawIngredient = 'raw-fungus' | 'rice' | 'berries' | 'agave-fruit' | typeof ANIMAL_MEAT_ITEMS[number] | 'potato' | 'corn';

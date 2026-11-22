@@ -36,7 +36,9 @@ test('only the twelve current apparel recipes create a neutral prospective count
   expect(Object.hasOwn(old,'apparelCount')).toBe(false);expect(Object.hasOwn(future,'apparelCount')).toBe(false);
   expect(current.apparelCount).toEqual({hpMin:0,hpMax:100,qualityMin:'awful',qualityMax:'legendary',includeEquipped:false});
   expect(validBillSettings(current,recipe,278)).toBe(true);expect(validBillSettings(current,recipe,279)).toBe(true);expect(validBillSettings(current,recipe,SCHEMA_VERSION)).toBe(true);
-  expect(newCookingBill(3,recipe,279).apparelCount).toEqual(current.apparelCount);expect(newCookingBill(3,recipe,SCHEMA_VERSION).apparelCount).toEqual(current.apparelCount);
+  expect(newCookingBill(3,recipe,279).apparelCount).toEqual(current.apparelCount);
+  // Schema 374: a new filter also holds Core's includeTainted, false by default.
+  expect(newCookingBill(3,recipe,SCHEMA_VERSION).apparelCount).toEqual({...current.apparelCount,includeTainted374:false});
   expect(validBillSettings(current,recipe,277)).toBe(false);expect(validBillSettings(current,recipe,SCHEMA_VERSION+1)).toBe(false);
   const other=newCookingBill(4,recipe,278);expect(other.apparelCount).not.toBe(current.apparelCount);
  }

@@ -18,7 +18,8 @@ export interface WildAnimal extends Cell { shipCryptosleepHeldAt277?:number; fil
   exitFlight?:import('./duck-flyer-state-256.ts').DuckExitFlight256;
   flight?:import('./duck-flight-state-256.ts').DuckFlight256;
   eggLayer?:import('./animal-egg-state-v256.ts').AnimalEggLayer256;
-  eggLay?:{target:Cell;progress:number};
+  /** `box374`: schema 374, the egg box laid into (JobGiver_LayEgg.GetBestEggBox). */
+  eggLay?:{target:Cell;progress:number;box374?:number};
   animalRest?:import('./animal-rest-state.ts').AnimalRestTask;
   domestic?:import('./domestic-state.ts').DomesticAnimal;
   /** Prospective acquired skills on this same original, including wild returns. */

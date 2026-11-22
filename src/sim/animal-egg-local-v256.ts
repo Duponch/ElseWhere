@@ -11,7 +11,10 @@ import {animalGrowthFactor,animalNutritionMax} from './animal-life.ts';
 import {animalNavigation} from './wildlife-navigation.ts';
 import {animalCarrier} from './animal-rest-state.ts';
 import {MAX_WILDLIFE,wildlifeRandom,type WildAnimal} from './wildlife-state.ts';
-import {addMaterial,materialCanFit,pileCell,refreshStock} from './materials.ts';
+import {addGroundMaterial,addMaterial,materialCanFit,pileCell,refreshStock} from './materials.ts';
+import {planGroundPlacement} from './ground-placement.ts';
+import {isEggBoxSchema374} from './egg-box-state-374.ts';
+import {addEggsToBox374,eggBoxAccepts374,eggBoxLayChoice374,installedEggBox374} from './egg-box-374.ts';
 import {freshRot} from './food-preservation.ts';
 import {TemperatureView} from './temperature.ts';
 import type {ThermalLayout} from './thermal-topology.ts';
@@ -34,11 +37,18 @@ export function advanceEggLayers256(world:World):void {
 }
 export const canLayAnimalEgg256=(world:World,a:WildAnimal):boolean=>world.schemaVersion>=256&&isEggSpecies256(a.species)&&animalMechanicalReadiness256(a.species).ok&&!!a.eggLayer&&a.eggLayer.progress>=1&&active(a)&&!animalCarrier(world,a.id);
 /** Select once when this real job starts; one existing frontier and room cache.
- * Egg boxes are not implemented. The original bounded local wander below is
- * an explicit presentation/gameplay adaptation, not a copied Core selector. */
-export function beginAnimalEggLay256(world:World,a:WildAnimal,route:(goals:Cell[])=>Cell[]|null|undefined):boolean {
+ * From schema 374 an animal of the player first looks for an egg box
+ * (JobGiver_LayEgg.GetBestEggBox, egg-box-374.ts) with its own ranked route.
+ * The original bounded local wander below is an explicit presentation/gameplay
+ * adaptation, not a copied Core selector. */
+export function beginAnimalEggLay256(world:World,a:WildAnimal,route:(goals:Cell[])=>Cell[]|null|undefined,boxRoute?:(goals:Cell[],rank:(c:Cell)=>number)=>Cell[]|null|undefined):boolean {
  if(!canLayAnimalEgg256(world,a)||a.path.length||(a.motion?.end??0)>world.tick)return false;
  const species=a.species as EggSpecies256,def=ANIMAL_EGG_CONTENT_256[species],item=a.eggLayer!.fertilizations?def.fertilizedItem:def.unfertilizedItem;
+ if(boxRoute&&isEggBoxSchema374(world.schemaVersion)&&a.domestic){
+  const choice=eggBoxLayChoice374(world,a,item,grazingPen(world,a));
+  const boxPath=choice?boxRoute(choice.goals,choice.rank):undefined,end=boxPath?boxPath.at(-1)??a:undefined,boxId=end&&choice!.boxAt(end);
+  if(boxPath&&end&&boxId!==undefined){a.path=boxPath;a.eggLay={target:{x:end.x,z:end.z},progress:0,box374:boxId};a.state=boxPath.length?'moving':'idle';return true;}
+ }
  let cache=roomCaches.get(world);if(!cache){cache=new RoomTopologyCache();roomCaches.set(world,cache);}
  const rooms=cache.read(world),own=rooms.at(a.x,a.z);
  const eggs=world.piles.filter(p=>p.item===item&&p.owner.type==='ground'&&(p.owner.x-a.x)**2+(p.owner.z-a.z)**2<=900&&(!own||own.kind!=='space'||rooms.at(p.owner.x,p.owner.z)===own));
@@ -71,6 +81,21 @@ export function processAnimalEggLay256(world:World,a:WildAnimal,move:()=>void):b
  // Draws remain private until all placement/identity preconditions succeed.
  const randomOwner={...world.wildlife!},quantity=drawEggQuantity256(species,()=>wildlifeRandom(randomOwner));
  const condition:Pick<MaterialPile,'egg'|'eggForbidden'>={...(!a.domestic?{eggForbidden:true as const}:{}),...(fertilized?{egg:{progress:0,temperatureDamage:0,motherId:a.id,fatherId:layer.fatherId,faction:a.domestic?'player' as const:'wild' as const,atTick:world.tick}}:{})};
+ if(job.box374!==undefined&&isEggBoxSchema374(world.schemaVersion)){
+  // JobDriver_LayEgg: into the box when it is still there and accepts the
+  // egg, else placed near the animal (GenPlace.TryPlaceThing, Near).
+  const box=installedEggBox374(world,job.box374);
+  if(box&&box.x===a.x&&box.z===a.z&&eggBoxAccepts374(world,box.id,item)){
+   if(!Number.isSafeInteger(world.nextId+1))return true;
+   addEggsToBox374(world,box,item,quantity,condition.egg);
+  }else{
+   const plan=planGroundPlacement(world,quantity,{x:a.x,z:a.z},item);
+   if(!plan||world.piles.length+plan.length>32768||!Number.isSafeInteger(world.nextId+plan.length))return true;
+   addGroundMaterial(world,'food',quantity,{x:a.x,z:a.z},item,condition);
+  }
+  world.wildlife!.rng=randomOwner.rng;layer.progress=0;if(fertilized)layer.fertilizations=Math.max(0,layer.fertilizations-quantity);
+  delete a.eggLay;a.nextDecision=world.tick+1;return true;
+ }
  if(!materialCanFit(world,'food',quantity,{type:'ground',x:a.x,z:a.z},item,{id:0,kind:'food',item,quantity,owner:{type:'ground',x:a.x,z:a.z},...condition}))return true;
  addMaterial(world,'food',quantity,{type:'ground',x:a.x,z:a.z},item,condition);
  world.wildlife!.rng=randomOwner.rng;layer.progress=0;if(fertilized)layer.fertilizations=Math.max(0,layer.fertilizations-quantity);

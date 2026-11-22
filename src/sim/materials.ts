@@ -40,6 +40,8 @@ export function pileCell(world: World, pile: MaterialPile): Cell | null {
   if (owner.type === 'ground') return { x: owner.x, z: owner.z };
   if (owner.type === 'pawn'||owner.type==='equipment'||owner.type==='apparel'||owner.type==='inventory'){const pawn=world.pawns.find(p=>p.id===owner.pawnId);return pawn?pawnContentsLocation(world,pawn)?.cell??null:owner.type==='inventory'?animalContentsLocation256(world,owner.pawnId)?.cell??null:null;}
   if(owner.type==='grave'||owner.type==='orbital-ship'||owner.type==='orbital-cargo'||owner.type==='starting-pod'||owner.type==='world-site263'||owner.type==='trade-request284')return null;
+  // Schema 374: an installed egg box holds its eggs at its own cell (PositionHeld).
+  if(owner.type==='egg-box374'){const box=world.structures.find(b=>b.id===owner.structureId&&b.kind==='egg-box');return box?{x:box.x,z:box.z}:null;}
   return world.jobs.find(job => job.id === owner.jobId) ?? null;
 }
 export function deliveredStock(world: World, jobId: number): Stock {
@@ -65,6 +67,7 @@ const sameOwner = (a: MaterialOwner, b: MaterialOwner): boolean => a.type === b.
     : (a.type==='pawn'||a.type==='equipment'||a.type==='apparel'||a.type==='inventory')&&(b.type==='pawn'||b.type==='equipment'||b.type==='apparel'||b.type==='inventory') ? a.pawnId === b.pawnId
       : a.type==='orbital-ship'&&b.type==='orbital-ship'?a.shipId===b.shipId
       : a.type==='orbital-cargo'&&b.type==='orbital-cargo'?a.deliveryId===b.deliveryId
+      : a.type==='egg-box374'&&b.type==='egg-box374'?a.structureId===b.structureId
       : a.type === 'job' && b.type === 'job' && a.jobId === b.jobId);
 
 /** Number of new physical identities after filling every compatible stack. */

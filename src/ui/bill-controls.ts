@@ -129,7 +129,9 @@ export function billControls(station:Structure,send:(command:Command)=>void,read
       const error=document.createElement('p');error.dataset.apparelReserveError=String(bill.id);error.setAttribute('role','status');reserve.append(error);
       const draft=document.createElement('p');draft.dataset.billDraft=String(bill.id);draft.className='muted';draft.textContent='Modifications non appliquées.';reserve.append(draft);
       cancelReserve=document.createElement('button');cancelReserve.type='button';cancelReserve.dataset.cancelBillDraft=String(bill.id);cancelReserve.textContent='Annuler les modifications';
-      const value=():ApparelCountFilter278=>({hpMin:Number(field('reserveHpMin').value),hpMax:Number(field('reserveHpMax').value),qualityMin:field('reserveQualityMin').value as WeaponQuality,qualityMax:field('reserveQualityMax').value as WeaponQuality,includeEquipped:(field('reserveIncludeEquipped') as HTMLInputElement).checked});
+      const value=():ApparelCountFilter278=>({hpMin:Number(field('reserveHpMin').value),hpMax:Number(field('reserveHpMax').value),qualityMin:field('reserveQualityMin').value as WeaponQuality,qualityMax:field('reserveQualityMax').value as WeaponQuality,includeEquipped:(field('reserveIncludeEquipped') as HTMLInputElement).checked,
+        // Schema 374: this older panel keeps the confirmed tainted option (Core default on a new filter).
+        ...((t:ApparelCountFilter278)=>Object.hasOwn(t,'includeTainted374')?{includeTainted374:t.includeTainted374}:{})(confirmed.apparelCount??newApparelCountFilter278())});
       const valid=()=>field('reserveHpMin').value.trim()!==''&&field('reserveHpMax').value.trim()!==''&&validApparelCountFilter278(value());
       refreshReserve=()=>{
         reserve.hidden=!available;enable.hidden=active;enable.disabled=!available;group.hidden=!active;

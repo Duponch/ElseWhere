@@ -26,6 +26,8 @@ import { floraDefinition } from './biome-flora.ts';
 const BUILDINGS:Readonly<Record<string,readonly [number,number,boolean]>>={
   'firefoam-popper':[50,1,false],
   'tool-cabinet':[100,.5,true],
+  // Schema 374 EggBox: 50 HP (stuff factor), Flammability 1, BuildingBase leaves resources.
+  'egg-box':[50,1,true],
   'ship-cryptosleep-casket':[SHIP_CASKET_CONTENT_277.maxHitPoints,SHIP_CASKET_CONTENT_277.flammability,SHIP_CASKET_CONTENT_277.leavesResourcesWhenKilled],
   'ship-beam':[SHIP_BEAM_CONTENT_276.maxHitPoints,SHIP_BEAM_CONTENT_276.flammability,SHIP_BEAM_CONTENT_276.leavesResourcesWhenKilled],
   'ship-engine':[SHIP_ENGINE_CONTENT_276.maxHitPoints,SHIP_ENGINE_CONTENT_276.flammability,SHIP_ENGINE_CONTENT_276.leavesResourcesWhenKilled],
@@ -70,7 +72,7 @@ const BUILDINGS:Readonly<Record<string,readonly [number,number,boolean]>>={
   'power-conduit':[80,.7,false],'power-switch':[120,.5,false],'solar-generator':[300,.7,true],heater:[100,.5,true],'wind-turbine':[150,.5,true],
 };
 const STUFF_HP:Readonly<Record<string,number>>={wood:.65,steel:1,jade:.5,'granite-blocks':1.7,'limestone-blocks':1.55,'marble-blocks':1.2,'sandstone-blocks':1.4,'slate-blocks':1.3};
-const STUFF_BUILDINGS=new Set(['shelf','small-shelf','spike-trap','electric-crematorium','double-bed','drug-lab','fence','fence-gate','pen-marker','wall','door','autodoor','bedroll','bed','hospital-bed','table','table-square','table-long','table-large','double-bedroll','stool','dining-chair','end-table','dresser','flower-pot','horseshoes','chess-table','hoopstone-ring','billiards-table','game-of-ur-board','poker-table','stonecutter','butcher-table','fueled-stove','electric-stove','tailor-bench','electric-tailor-bench','research-bench','art-bench','small-sculpture','large-sculpture']);
+const STUFF_BUILDINGS=new Set(['egg-box','shelf','small-shelf','spike-trap','electric-crematorium','double-bed','drug-lab','fence','fence-gate','pen-marker','wall','door','autodoor','bedroll','bed','hospital-bed','table','table-square','table-long','table-large','double-bedroll','stool','dining-chair','end-table','dresser','flower-pot','horseshoes','chess-table','hoopstone-ring','billiards-table','game-of-ur-board','poker-table','stonecutter','butcher-table','fueled-stove','electric-stove','tailor-bench','electric-tailor-bench','research-bench','art-bench','small-sculpture','large-sculpture']);
 /** Schema 311: Core MaxHitPoints of eight buildings whose table value was
  * wrong before (Fence, FenceGate, PenMarker, Table2x4c, DiningChair,
  * EndTable, Dresser, PlantPot). Older schemas keep validating with theirs. */
