@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<savegame>
+	<meta><gameVersion>1.6.4633 rev1261</gameVersion><modIds><li>ludeon.rimworld</li></modIds><modSteamIds><li>0</li></modSteamIds><modNames><li>Core</li></modNames></meta>
+	<game>
+		<tickManager><ticksGame>360000</ticksGame><gameStartAbsTick>17500</gameStartAbsTick><startingYear>5500</startingYear></tickManager>
+		<scenario><name>Petite colonie</name></scenario>
+		<playSettings><useWorkPriorities>True</useWorkPriorities></playSettings>
+		<storyteller><def>Cassandra</def><difficulty>Medium</difficulty></storyteller>
+		<researchManager><currentProj>Stonecutting</currentProj><progress><keys><li>ComplexFurniture</li><li>Stonecutting</li><li>PassiveCooler</li><li>Electricity</li></keys><values><li>300</li><li>150</li><li>400</li><li>0</li></values></progress></researchManager>
+		<world>
+			<info><name>Monde d’essai</name><planetCoverage>0.05</planetCoverage><seedString>essai</seedString><overallRainfall>Normal</overallRainfall><overallTemperature>Normal</overallTemperature></info>
+			<factionManager><allFactions>
+				<li><def>Pirate</def><name>Les Pillards</name><relations><li><other>Faction_1</other><goodwill>-100</goodwill><kind>Hostile</kind></li></relations></li>
+				<li><loadID>1</loadID><def>PlayerColony</def><name>Les Essais</name><relations><li><other>Faction_0</other><goodwill>-100</goodwill><kind>Hostile</kind></li></relations></li>
+			</allFactions></factionManager>
+			<worldObjects><worldObjects><li Class="Settlement"><def>Settlement</def><tile>5,0</tile><ID>1</ID><faction>Faction_1</faction><nameInt>Le Camp</nameInt></li></worldObjects></worldObjects>
+		</world>
+		<maps><li>
+			<mapInfo><size>(20, 1, 20)</size><parent>WorldObject_1</parent></mapInfo>
+			<fogGrid><fogGridDeflate>Y2AgETQAAA==</fogGridDeflate></fogGrid>
+			<roofGrid><roofsDeflate>Y2AYSMArAoNDW90oGK4AAA==</roofsDeflate></roofGrid>
+			<terrainGrid><topGridDeflate>8/zn+W9hGyYsboBAGN+TJurcnGBwoNWhQ9LUEYYDpW6rDnFwsPrj3jsIHCh1AA==</topGridDeflate><underGrid>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoYahhqGGoYahhgAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAKGGoYahhqGGoYYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAChhqGGoYahhqGGAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAoYahhqGGoYahhgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKGGoYahhqGGoYYAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</underGrid></terrainGrid>
+			<zoneManager><allZones>
+				<li Class="Zone_Stockpile"><ID>1</ID><label>Réserve</label><cells><li>(10, 0, 10)</li><li>(10, 0, 11)</li><li>(11, 0, 10)</li><li>(11, 0, 11)</li><li>(12, 0, 10)</li><li>(12, 0, 11)</li></cells><settings><priority>Important</priority><filter><allowedDefs><li>Steel</li><li>WoodLog</li><li>MealSimple</li></allowedDefs></filter></settings></li>
+				<li Class="Zone_Growing"><ID>2</ID><label>Champ</label><cells><li>(13, 0, 2)</li><li>(14, 0, 2)</li><li>(13, 0, 3)</li><li>(14, 0, 3)</li></cells><plantDefToGrow>Plant_Potato</plantDefToGrow><allowSow>True</allowSow></li>
+			</allZones></zoneManager>
+			<areaManager><areas><li Class="Area_Home"><ID>0</ID><innerGrid><mapSizeX>20</mapSizeX><mapSizeZ>20</mapSizeZ><arrDeflate>Y2B4UM/wjx0bwYAdAAA=</arrDeflate></innerGrid></li><li Class="Area_BuildRoof"><ID>1</ID></li></areas></areaManager>
+			<compressedThingMapDeflate>Y2AYBaNg8IIQCwikpro5WcSbBwA=</compressedThingMapDeflate>
+			<things><thing Class="Building"><def>Wall</def><id>Wall100</id><map>0</map><pos>(2, 0, 2)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall101</id><map>0</map><pos>(3, 0, 2)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall102</id><map>0</map><pos>(4, 0, 2)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall103</id><map>0</map><pos>(6, 0, 2)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall104</id><map>0</map><pos>(7, 0, 2)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall105</id><map>0</map><pos>(8, 0, 2)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall106</id><map>0</map><pos>(2, 0, 3)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall107</id><map>0</map><pos>(8, 0, 3)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall108</id><map>0</map><pos>(2, 0, 4)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall109</id><map>0</map><pos>(8, 0, 4)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall110</id><map>0</map><pos>(2, 0, 5)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall111</id><map>0</map><pos>(8, 0, 5)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall112</id><map>0</map><pos>(2, 0, 6)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall113</id><map>0</map><pos>(8, 0, 6)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall114</id><map>0</map><pos>(2, 0, 7)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall115</id><map>0</map><pos>(8, 0, 7)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall116</id><map>0</map><pos>(2, 0, 8)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall117</id><map>0</map><pos>(3, 0, 8)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall118</id><map>0</map><pos>(4, 0, 8)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall119</id><map>0</map><pos>(5, 0, 8)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall120</id><map>0</map><pos>(6, 0, 8)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall121</id><map>0</map><pos>(7, 0, 8)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building"><def>Wall</def><id>Wall122</id><map>0</map><pos>(8, 0, 8)</pos><health>300</health><stuff>BlocksGranite</stuff></thing>
+<thing Class="Building_Door"><def>Door</def><id>Door123</id><map>0</map><pos>(5, 0, 2)</pos><health>120</health><stuff>WoodLog</stuff></thing>
+<thing Class="Building_Bed"><def>Bed</def><id>Bed124</id><map>0</map><pos>(4, 0, 5)</pos><rot>2</rot><health>91</health><stuff>WoodLog</stuff><faction>Faction_1</faction><assignedPawns><li>Thing_Human1</li></assignedPawns><quality>Good</quality></thing>
+<thing Class="Building"><def>Table1x2c</def><id>Table1x2c125</id><map>0</map><pos>(6, 0, 4)</pos><stuff>WoodLog</stuff><quality>Normal</quality></thing>
+<thing Class="Building"><def>Telescope</def><id>Telescope126</id><map>0</map><pos>(6, 0, 6)</pos></thing>
+<thing Class="ThingWithComps"><def>Steel</def><id>Steel127</id><map>0</map><pos>(10, 0, 10)</pos><stackCount>50</stackCount></thing>
+<thing Class="ThingWithComps"><def>WoodLog</def><id>WoodLog128</id><map>0</map><pos>(11, 0, 10)</pos><stackCount>30</stackCount></thing>
+<thing Class="ThingWithComps"><def>MealSimple</def><id>MealSimple129</id><map>0</map><pos>(10, 0, 11)</pos><stackCount>5</stackCount><forbidden>True</forbidden></thing>
+<thing Class="ThingWithComps"><def>Luciferium</def><id>Luciferium130</id><map>0</map><pos>(11, 0, 11)</pos><stackCount>2</stackCount></thing>
+<thing Class="Apparel"><def>Apparel_Parka</def><id>Apparel_Parka131</id><map>0</map><pos>(12, 0, 10)</pos><stackCount>1</stackCount><stuff>Leather_Plain</stuff><health>90</health><quality>Excellent</quality></thing>
+<thing Class="Plant"><def>Plant_TreeOak</def><id>Plant_TreeOak132</id><map>0</map><pos>(14, 0, 14)</pos><growth>0.8</growth></thing>
+<thing Class="Plant"><def>Plant_Grass</def><id>Plant_Grass133</id><map>0</map><pos>(13, 0, 14)</pos><growth>0.5</growth></thing>
+<thing Class="Plant"><def>Plant_Potato</def><id>Plant_Potato134</id><map>0</map><pos>(13, 0, 2)</pos><growth>0.4</growth></thing>
+<thing Class="Plant"><def>Plant_Potato</def><id>Plant_Potato135</id><map>0</map><pos>(14, 0, 2)</pos><growth>0.4</growth></thing>
+<thing Class="Plant"><def>Plant_Potato</def><id>Plant_Potato136</id><map>0</map><pos>(13, 0, 3)</pos><growth>0.4</growth></thing>
+<thing Class="Plant"><def>Plant_Ambrosia</def><id>Plant_Ambrosia137</id><map>0</map><pos>(15, 0, 8)</pos><growth>1</growth></thing>
+<thing Class="Pawn"><def>Human</def><id>Human1</id><map>0</map><pos>(4, 0, 4)</pos><kindDef>Colonist</kindDef><faction>Faction_1</faction><gender>Female</gender><name Class="NameTriple"><first>Alma</first><nick>Fourmi</nick><last>Rivière</last></name>
+<ageTracker><ageBiologicalTicks>108000000</ageBiologicalTicks><birthAbsTicks>-110000000</birthAbsTicks></ageTracker>
+<story><bodyType>Thin</bodyType><hairDef>Flowy</hairDef><hairColor>RGBA(0.5, 0.25, 0.1, 1.000)</hairColor><headType>Female_AverageWide</headType><childhood>MedicalAssistant12</childhood><adulthood>Gardener99</adulthood>
+<traits><allTraits><li><def>Kind</def></li><li><def>SpeedOffset</def><degree>2</degree></li><li><def>Pyromaniac</def></li></allTraits></traits></story>
+<skills><skills><li><def>Shooting</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Melee</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Construction</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Mining</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Cooking</def><level>6</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Plants</def><level>12</level><xpSinceLastLevel>120.5</xpSinceLastLevel><passion>Major</passion></li><li><def>Animals</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Crafting</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Artistic</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Medicine</def><level>8</level><xpSinceLastLevel>120.5</xpSinceLastLevel><passion>Minor</passion></li><li><def>Social</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Intellectual</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li></skills><lastXpSinceMidnightResetTimestamp>350000</lastXpSinceMidnightResetTimestamp></skills>
+<workSettings><priorities><vals><li>1</li><li>1</li><li>2</li><li>3</li><li>3</li><li>0</li><li>0</li><li>2</li><li>0</li><li>3</li><li>1</li><li>0</li><li>2</li><li>0</li><li>0</li><li>0</li><li>0</li><li>3</li><li>3</li><li>0</li></vals></priorities></workSettings>
+<healthTracker><hediffSet><hediffs>
+<li Class="Hediff_Injury"><def>Scratch</def><severity>3</severity><part><body>Human</body><index>0</index></part><isPermanent>True</isPermanent><painCategory>LowPain</painCategory></li>
+<li Class="Hediff_MissingPart"><def>MissingBodyPart</def><part><body>Human</body><index>29</index></part></li>
+<li Class="HediffWithComps"><def>Flu</def><severity>0.2</severity></li>
+</hediffs></hediffSet></healthTracker>
+<apparel><wornApparel><innerList><li><def>Apparel_CollarShirt</def><id>Apparel_CollarShirt300</id><health>70</health><stuff>Cloth</stuff><quality>Good</quality></li><li><def>Apparel_ShieldBelt</def><id>Apparel_ShieldBelt301</id></li></innerList></wornApparel></apparel>
+<equipment><equipment><innerList><li><def>Gun_Revolver</def><id>Gun_Revolver302</id><health>80</health><quality>Masterwork</quality></li></innerList></equipment></equipment>
+<inventory><innerContainer><innerList><li Class="ThingWithComps"><def>MealSimple</def><id>MealSimple303</id><stackCount>2</stackCount></li></innerList></innerContainer></inventory>
+<needs><needs><li Class="Need_Food"><def>Food</def><curLevel>0.7</curLevel></li><li Class="Need_Mood"><def>Mood</def><curLevel>0.65</curLevel></li></needs></needs>
+<guest><hostFaction>null</hostFaction></guest></thing>
+<thing Class="Pawn"><def>Human</def><id>Human2</id><map>0</map><pos>(6, 0, 5)</pos><kindDef>Colonist</kindDef><faction>Faction_1</faction><gender>Male</gender><name Class="NameTriple"><first>Bruno</first><nick>Bruno</nick><last>Sable</last></name>
+<ageTracker><ageBiologicalTicks>90000000</ageBiologicalTicks><birthAbsTicks>-90000000</birthAbsTicks></ageTracker>
+<story><bodyType>Hulk</bodyType><hairDef>Mohawk</hairDef><headType>Male_NarrowPointy</headType><childhood>CaveChild30</childhood><adulthood>Hunter74</adulthood>
+<traits><allTraits><li><def>Brawler</def></li><li><def>Nerves</def><degree>-1</degree></li></allTraits></traits></story>
+<skills><skills><li><def>Shooting</def><level>10</level><xpSinceLastLevel>120.5</xpSinceLastLevel><passion>Major</passion></li><li><def>Melee</def><level>9</level><xpSinceLastLevel>120.5</xpSinceLastLevel><passion>Minor</passion></li><li><def>Construction</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Mining</def><level>11</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Cooking</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Plants</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Animals</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Crafting</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Artistic</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Medicine</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Social</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li><li><def>Intellectual</def><level>2</level><xpSinceLastLevel>120.5</xpSinceLastLevel></li></skills><lastXpSinceMidnightResetTimestamp>350000</lastXpSinceMidnightResetTimestamp></skills>
+<workSettings><priorities><vals><li>1</li><li>1</li><li>0</li><li>3</li><li>3</li><li>0</li><li>0</li><li>0</li><li>1</li><li>2</li><li>0</li><li>1</li><li>0</li><li>0</li><li>0</li><li>0</li><li>0</li><li>3</li><li>3</li><li>0</li></vals></priorities></workSettings>
+<healthTracker><hediffSet><hediffs>
+<li Class="Hediff_AddedPart"><def>PegLeg</def><part><body>Human</body><index>46</index></part></li>
+<li Class="Hediff_MissingPart"><def>MissingBodyPart</def><part><body>Human</body><index>47</index></part></li>
+<li Class="Hediff_Injury"><def>Cut</def><severity>2</severity><part><body>Human</body><index>25</index></part></li>
+</hediffs></hediffSet></healthTracker>
+<apparel><wornApparel><innerList><li><def>Apparel_Pants</def><id>Apparel_Pants304</id><stuff>WoolSheep</stuff></li></innerList></wornApparel></apparel>
+<equipment><equipment><innerList><li><def>MeleeWeapon_LongSword</def><id>MeleeWeapon_LongSword305</id><stuff>Steel</stuff><quality>Normal</quality></li></innerList></equipment></equipment>
+<guest><hostFaction>null</hostFaction></guest></thing>
+<thing Class="Pawn"><def>Husky</def><id>Husky1</id><map>0</map><pos>(10, 0, 6)</pos><kindDef>Husky</kindDef><gender>Female</gender><faction>Faction_1</faction>
+<name Class="NameSingle"><name>Neige</name></name><ageTracker><ageBiologicalTicks>15000000</ageBiologicalTicks></ageTracker>
+<training><learned><vals><li>True</li><li>False</li><li>False</li><li>False</li><li>True</li></vals></learned></training>
+<playerSettings><master>Thing_Human2</master></playerSettings><social><directRelations><li><def>Bond</def><otherPawn>Thing_Human2</otherPawn></li></directRelations></social></thing>
+<thing Class="Pawn"><def>Hare</def><id>Hare1</id><map>0</map><pos>(15, 0, 4)</pos><kindDef>Hare</kindDef><gender>Male</gender><ageTracker><ageBiologicalTicks>6000000</ageBiologicalTicks></ageTracker></thing>
+<thing Class="Pawn"><def>Thrumbo</def><id>Thrumbo1</id><map>0</map><pos>(9, 0, 15)</pos><kindDef>Thrumbo</kindDef><gender>Male</gender></thing></things>
+		</li></maps>
+	</game>
+</savegame>
