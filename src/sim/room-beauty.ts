@@ -3,15 +3,15 @@ import {isShipCasketKind277,SHIP_CASKET_CONTENT_277} from './ship-casket-content
 import {isIedTrapKind357,IED_COMMON_357} from './ied-traps-357.ts';
 import {SCHEMA_VERSION} from './types.ts';
 import {hasSmoothedStoneSubstrate281,SMOOTHED_STONE_FACTS_281} from './smooth-floor-terrain-281.ts';
-import {smoothedWallBeauty367} from './smooth-wall-367.ts';
+import {naturalWallBeauty373,isRockBeautySchema373} from './rock-beauty-373.ts';
 import {isShipPartKind276} from './ship-part-content-276.ts';
 import {isAncientMonumentKind256,ANCIENT_MONUMENT_DEFS_256} from './ancient-monument-props-256.ts';
 import { coreBeauty311,furnitureBeautyFactor311,QUALITY_BEAUTY,furnitureQuality} from './furniture-stats.ts';
 import { furnitureBeauty,isFurnitureMaterial,isHabitatFurnitureKind,isSculptureKind,sculptureBeauty,FURNITURE_MATERIALS,type FurnitureLike } from './furniture-stats.ts';
-import type { RoomTopology } from './room-topology.ts';
+import type { RoomSpace,RoomTopology } from './room-topology.ts';
 
 export interface BeautyCell {x:number;z:number}
-export interface BeautyTile {terrain:string;floor?:string;collapsedRock?:{terrain:string};stone?:string;smoothedWall367?:true}
+export interface BeautyTile {terrain:string;floor?:string;collapsedRock?:{terrain:string};stone?:string;ore?:string;smoothedWall367?:true}
 export interface BeautyStructure extends BeautyCell,FurnitureLike {id?:number;baseBeauty?:number;beautyCell?:BeautyCell}
 export interface BeautyFilth extends BeautyCell {kind:string}
 /** One physical ground object/stack. Quantity never multiplies Beauty. */
@@ -101,10 +101,12 @@ export const weightedBeautySize=(cells:number):number=>cells<40?20+cells/2:cells
  * beauty includes boundary things, never the terrain underneath the wall. */
 export class BeautyMap {
   readonly width:number;readonly height:number;
+  /** Schema whose Beauty rules built this map (current when absent). */
+  readonly version:number|undefined;
   private readonly terrainInside:Float64Array;private readonly terrainOutside:Float64Array;
   private readonly thingsInside:Float64Array;private readonly thingsOutside:Float64Array;
-  constructor(width:number,height:number,terrainInside:Float64Array,terrainOutside:Float64Array,thingsInside:Float64Array,thingsOutside:Float64Array){
-    this.width=width;this.height=height;this.terrainInside=terrainInside;this.terrainOutside=terrainOutside;this.thingsInside=thingsInside;this.thingsOutside=thingsOutside;
+  constructor(width:number,height:number,terrainInside:Float64Array,terrainOutside:Float64Array,thingsInside:Float64Array,thingsOutside:Float64Array,version?:number){
+    this.width=width;this.height=height;this.terrainInside=terrainInside;this.terrainOutside=terrainOutside;this.thingsInside=thingsInside;this.thingsOutside=thingsOutside;this.version=version;
   }
   indexAt(x:number,z:number):number {return Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<this.width&&z<this.height?z*this.width+x:-1;}
   index(cell:BeautyCell):number {return Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<this.width&&cell.z<this.height?cell.z*this.width+cell.x:-1;}
@@ -132,18 +134,20 @@ export class BeautyMapCache {
     if(!changed&&!this.dirty)return this.map!;
     if(!Number.isInteger(input.width)||!Number.isInteger(input.height)||input.width<1||input.height<1||input.tiles.length!==input.width*input.height)throw new RangeError('Invalid beauty map dimensions.');
     const size=input.width*input.height,inside=new Float64Array(size),outside=new Float64Array(size),thingsIn=new Float64Array(size),thingsOut=new Float64Array(size);
+    const rules=input.version??SCHEMA_VERSION;
     for(let i=0;i<size;i++){
       const tile=input.tiles[i]!,value=floorBeauty(tile,false);inside[i]=value;
       outside[i]=!tile.floor&&(tile.terrain==='grass'||tile.terrain==='soil'||tile.terrain==='rich-soil'||tile.terrain==='gravel')?0:value;
-      // Schema 367: a smoothed wall is a full-fill building at its cell.
-      if(tile.smoothedWall367){const wall=smoothedWallBeauty367(tile as Parameters<typeof smoothedWallBeauty367>[0]);thingsIn[i]=wall;thingsOut[i]=wall;}
+      // Schema 367: a smoothed wall is a full-fill building at its cell;
+      // schema 373: a rough natural rock too (UglyRockBase Beauty).
+      if(tile.terrain==='rock'){const wall=naturalWallBeauty373(tile,rules);if(wall!==0){thingsIn[i]=wall;thingsOut[i]=wall;}}
     }
     const index=(cell:BeautyCell)=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<input.width&&cell.z<input.height?cell.z*input.width+cell.x:-1;
     for(const structure of input.structures){const i=index(structure.beautyCell??structure);if(i<0)continue;const value=structureBeauty(structure,input.version);thingsIn[i]+=value;thingsOut[i]+=value;}
     for(const filth of input.filth??[]){const i=index(filth);if(i<0)continue;thingsIn[i]+=filthBeauty(filth,false);thingsOut[i]+=filthBeauty(filth,true);}
     for(const object of input.objects??[]){const i=index(object);if(i<0)continue;const value=groundObjectBeauty(object);thingsIn[i]+=value;thingsOut[i]+=value;}
     this.width=input.width;this.height=input.height;this.tiles=input.tiles;this.structures=input.structures;this.filth=input.filth;this.objects=input.objects;this.version=input.version;
-    this.map=new BeautyMap(input.width,input.height,inside,outside,thingsIn,thingsOut);this.dirty=false;this.invalidated.clear();this.rebuilds++;return this.map;
+    this.map=new BeautyMap(input.width,input.height,inside,outside,thingsIn,thingsOut,input.version);this.dirty=false;this.invalidated.clear();this.rebuilds++;return this.map;
   }
 }
 
@@ -171,8 +175,10 @@ export function markDefaultPerceptionCells(width:number,height:number,cell:Beaut
  * Each enclosed room floods once and is then retained by its topology id. */
 export class RoomBeautyCapture {
   readonly map:BeautyMap;readonly topology:RoomTopology;
+  /** Fog of the captured map (schema 373 perception skips fogged cells). */
+  private readonly fogged:((index:number)=>boolean)|undefined;
   private rooms=new Map<number,BeautyRoom>();
-  constructor(map:BeautyMap,topology:RoomTopology){this.map=map;this.topology=topology;}
+  constructor(map:BeautyMap,topology:RoomTopology,fogged?:(index:number)=>boolean){this.map=map;this.topology=topology;this.fogged=fogged;}
   room(cell:BeautyCell):BeautyRoom|null {
     const space=this.topology.at(cell.x,cell.z);if(!space||space.kind!=='space'||space.touchesMapEdge)return null;
     const cached=this.rooms.get(space.id);if(cached)return cached;
@@ -191,6 +197,7 @@ export class RoomBeautyCapture {
    * is injected so the central line-of-sight owner remains authoritative. */
   perceived(cell:BeautyCell,visible?:((from:BeautyCell,to:BeautyCell)=>boolean),radius=DEFAULT_PERCEPTION_RADIUS):number {
     if(this.map.index(cell)<0||!Number.isFinite(radius)||radius<0)return 0;
+    if(isRockBeautySchema373(this.map.version??SCHEMA_VERSION))return this.perceived373(cell,visible,radius);
     const origin=this.topology.at(cell.x,cell.z);
     if(visible===undefined&&radius===DEFAULT_PERCEPTION_RADIUS){
       let total=0,count=0;
@@ -207,6 +214,52 @@ export class RoomBeautyCapture {
       if(dx*dx+dz*dz>squared)continue;const target={x:cell.x+dx,z:cell.z+dz};if(this.map.index(target)<0||visible&&!visible(cell,target))continue;
       const space=this.topology.at(target.x,target.z);if(space?.kind!=='space'||origin?.kind!=='space'||space.id!==origin.id)continue;
       const outdoors=space.touchesMapEdge;total+=this.map.at(target,outdoors);count++;
+    }
+    return count?total/count:0;
+  }
+  /** Schema 373, BeautyUtility.AverageBeautyPerceptible: the cells of the
+   * perception radius that are not fogged and either belong to a visible
+   * room or touch one of its cells (eight neighbours), so the walls and doors
+   * bordering the room count, each cell once, in the average. The visible
+   * rooms are the perceiver's room; from a doorway, the door and the rooms
+   * on its sides (the door region's neighbours). A solid or doorway cell
+   * counts its things, as in the room's bordering-things rule; a wall cell
+   * has no room and gives nothing to see from. */
+  private perceived373(cell:BeautyCell,visible:((from:BeautyCell,to:BeautyCell)=>boolean)|undefined,radius:number):number {
+    const map=this.map,topology=this.topology,width=map.width,height=map.height,originIndex=map.index(cell),origin=topology.labelAt(originIndex)!;
+    if(origin===-1)return 0;
+    const rooms:number[]=[],doors:number[]=[];
+    if(origin>0)rooms.push(origin);
+    else{
+      doors.push(originIndex);
+      for(const [dx,dz] of CARDINAL){
+        const x=cell.x+dx,z=cell.z+dz;if(x<0||z<0||x>=width||z>=height)continue;
+        const n=z*width+x,label=topology.labelAt(n)!;
+        if(label>0){if(!rooms.includes(label))rooms.push(label);}else if(label===-2)doors.push(n);
+      }
+    }
+    const seen=(index:number):boolean=>{const label=topology.labelAt(index)!;return label>0?rooms.includes(label):label===-2&&doors.includes(index);};
+    const fogged=this.fogged;let total=0,count=0;
+    const read=(x:number,z:number):void=>{
+      const index=map.indexAt(x,z);if(index<0||fogged?.(index))return;
+      if(!seen(index)){
+        let touches=false;
+        for(const [ax,az] of AROUND){const nx=x+ax,nz=z+az;if(nx>=0&&nz>=0&&nx<width&&nz<height&&seen(nz*width+nx)){touches=true;break;}}
+        if(!touches)return;
+      }
+      const label=topology.labelAt(index)!;
+      if(label>0)total+=map.atIndex(index,(topology.at(x,z) as RoomSpace).touchesMapEdge);
+      else total+=map.thingsAtIndex(index,false);
+      count++;
+    };
+    if(visible===undefined&&radius===DEFAULT_PERCEPTION_RADIUS){
+      for(let offset=0;offset<DEFAULT_PERCEPTION_OFFSETS.length;offset+=2)read(cell.x+DEFAULT_PERCEPTION_OFFSETS[offset]!,cell.z+DEFAULT_PERCEPTION_OFFSETS[offset+1]!);
+    }else{
+      const reach=Math.ceil(radius),squared=radius*radius;
+      for(let dz=-reach;dz<=reach;dz++)for(let dx=-reach;dx<=reach;dx++){
+        if(dx*dx+dz*dz>squared)continue;const target={x:cell.x+dx,z:cell.z+dz};if(map.index(target)<0||visible&&!visible(cell,target))continue;
+        read(target.x,target.z);
+      }
     }
     return count?total/count:0;
   }

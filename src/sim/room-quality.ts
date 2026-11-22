@@ -11,6 +11,7 @@ import { RoomTopologyCache,type RoomTopology } from './room-topology.ts';
 import { roomImpressiveness,impressionStage } from './room-impressiveness.ts';
 import { structureRoomMarketValue,floorRoomMarketValue,structureRoomStandable } from './room-market-value.ts';
 import { smoothedWallBeauty367,smoothedWallMarketValue367 } from './smooth-wall-367.ts';
+import { isRockBeautySchema373,roughRockBeauty373 } from './rock-beauty-373.ts';
 import type { Cell,World } from './types.ts';
 
 export interface RoomQuality {
@@ -57,8 +58,10 @@ export class RoomQualityCapture {
       if(dirt&&footprint.some(c=>containsClean(index(c))||s.kind==='electric-crematorium'&&cardinal.some(([dx,dz])=>cells.has(index({x:c.x+dx,z:c.z+dz})))))totalClean+=dirt;
     }
     // Schema 367: a smoothed wall is a player building at the room's border
-    // (RoomStatWorker_Wealth / _Beauty, ContainedAndAdjacentThings).
-    for(const i of adjacent){const tile=w.tiles[i]!;if(tile.smoothedWall367){wealth+=smoothedWallMarketValue367(tile);totalBeauty+=smoothedWallBeauty367(tile);}}
+    // (RoomStatWorker_Wealth / _Beauty, ContainedAndAdjacentThings); schema
+    // 373: a rough natural rock there counts its Beauty too (no MarketValue).
+    const rock373=isRockBeautySchema373(w.schemaVersion);
+    for(const i of adjacent){const tile=w.tiles[i]!;if(tile.smoothedWall367){wealth+=smoothedWallMarketValue367(tile);totalBeauty+=smoothedWallBeauty367(tile);}else if(rock373&&tile.terrain==='rock')totalBeauty+=roughRockBeauty373(tile,w.schemaVersion);}
     // Trees are pass-through, not standable, even though their market value
     // is zero. Wild herbs/crops and minified furniture do not reduce space.
     for(const r of w.resources)if(r.kind==='tree')cannotStand.add(index(r));

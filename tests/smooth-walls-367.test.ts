@@ -76,7 +76,8 @@ describe('V367 smoothing natural rock walls (Core SmoothWall)',()=>{
     // The same world without the flag isolates the wall from filth or moves.
     const raw=structuredClone(w);delete raw.tiles[index(face)]!.smoothedWall367;
     const room1=captureRoomQuality(w).room({x:15,z:15})!,room0=captureRoomQuality(raw).room({x:15,z:15})!;
-    expect(room1.total-room0.total).toBe(1);expect(room1.wealth-room0.wealth).toBe(7);expect(colonyWealth(w).structures-colonyWealth(raw).structures).toBe(7);
+    // Schema 373: the raw granite it replaced counts -2 (Core UglyRockBase), so the room gains 3; 1 under 372 (rock-beauty-373.test.ts).
+    expect(room1.total-room0.total).toBe(3);expect(room1.wealth-room0.wealth).toBe(7);expect(colonyWealth(w).structures-colonyWealth(raw).structures).toBe(7);
     expect(rockInspection(w.tiles[index(face)]!)).toMatchObject({title:'Paroi de granite lissée'});
     const copy=reload(w);expect(copy.tiles[index(face)]).toEqual(w.tiles[index(face)]);
     // Mining the smoothed wall: same HP (granite 900) and the same chunk draw as raw granite.

@@ -4,6 +4,8 @@ import { floorBeauty,structureBeauty,filthBeauty,type BeautyCell } from '../sim/
 import { daylilyBeauty } from '../sim/flower-pot';
 import { floorRoomMarketValue,structureRoomMarketValue,structureRoomStandable } from '../sim/room-market-value';
 import { footprintCells } from '../sim/definitions';
+import { naturalWallBeauty373 } from '../sim/rock-beauty-373';
+import { smoothedWallMarketValue367 } from '../sim/smooth-wall-367';
 import { isBedKind } from '../sim/bed-kinds';
 import { FLOOR_DEFINITIONS } from '../sim/flooring';
 import { FILTH_DEFINITIONS } from '../sim/filth-rules';
@@ -38,6 +40,9 @@ export class RoomBeautyInspection {
       values.push(floorRoomMarketValue(tile),floorBeauty(tile),tile.floor?FLOOR_DEFINITIONS[tile.floor].cleanliness:isGrowingTerrain(tile.terrain)?-1:0,
         tile.terrain==='water'||tile.terrain==='rock'?1:0,isRoofed(world,i)?1:0);
     }
+    // Bordering natural walls: smoothing one leaves the topology unchanged.
+    values.push('walls');
+    for(const i of adjacent){const tile=world.tiles[i]!;values.push(tile.terrain==='rock'?naturalWallBeauty373(tile,world.schemaVersion):0,smoothedWallMarketValue367(tile));}
     values.push('structures');
     for(const s of world.structures){
       const footprint=footprintCells(s),inside=footprint.some(c=>cells.has(index(c)));

@@ -3,7 +3,8 @@ import { BeautyMap,BeautyMapCache,RoomBeautyCapture,floorBeauty,filthBeauty,grou
 import type { RoomTopology } from './room-topology.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 import { isShelfKind,shelfStorageCells } from './shelf-storage.ts';
-import { smoothedWallBeauty367 } from './smooth-wall-367.ts';
+import { naturalWallBeauty373 } from './rock-beauty-373.ts';
+import { foggedCell256 } from './exploration-state-256.ts';
 
 export const BEAUTY_NEED_INTERVAL=20;
 const RISE_PER_HOUR=32,FALL_PER_HOUR=8;
@@ -22,8 +23,10 @@ export function worldBeautyInput(world:World):BeautyInput {
   return {width:world.width,height:world.height,tiles:world.tiles,structures:world.structures,filth:world.filth?.items,objects,version:Number(world.schemaVersion)};
 }
 export function captureWorldBeauty(world:World,topology:RoomTopology,cache=new BeautyMapCache()):RoomBeautyCapture {
-  return new RoomBeautyCapture(cache.read(worldBeautyInput(world)),topology);
+  return new RoomBeautyCapture(cache.read(worldBeautyInput(world)),topology,worldFog(world));
 }
+/** The fog the schema 373 perception skips (BeautyUtility: Fogged cells). */
+const worldFog=(world:World)=>(index:number)=>foggedCell256(world,index);
 
 /** The map `captureWorldBeauty` reads (BeautyMapCache.read of worldBeautyInput),
  * computed only at the cells the default perception of `perceivers` reads;
@@ -40,8 +43,8 @@ export function beautyMapAt(world:World,perceivers:readonly BeautyCell[]):Beauty
   for(let i=0;i<size;i++)if(needed[i]){
     const tile=tiles[i]!,value=floorBeauty(tile,false);inside[i]=value;
     outside[i]=!tile.floor&&(tile.terrain==='grass'||tile.terrain==='soil'||tile.terrain==='rich-soil'||tile.terrain==='gravel')?0:value;
-    // Schema 367: same smoothed wall contribution as BeautyMapCache.read.
-    if(tile.smoothedWall367){const wall=smoothedWallBeauty367(tile);thingsIn[i]=wall;thingsOut[i]=wall;}
+    // Schemas 367 and 373: same natural wall contribution as BeautyMapCache.read.
+    if(tile.terrain==='rock'){const wall=naturalWallBeauty373(tile,version);if(wall!==0){thingsIn[i]=wall;thingsOut[i]=wall;}}
   }
   const index=(cell:BeautyCell)=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<width&&cell.z<height?cell.z*width+cell.x:-1;
   for(const structure of world.structures as readonly BeautyStructure[]){const i=index(structure.beautyCell??structure);if(i<0||!needed[i])continue;const value=structureBeauty(structure,version);thingsIn[i]+=value;thingsOut[i]+=value;}
@@ -54,7 +57,7 @@ export function beautyMapAt(world:World,perceivers:readonly BeautyCell[]):Beauty
   }
   for(const p of world.packed)if(p.owner.type==='ground'){const i=index(p.owner);if(i<0||!needed[i])continue;const value=groundObjectBeauty({x:p.owner.x,z:p.owner.z,beauty:-4});thingsIn[i]+=value;thingsOut[i]+=value;}
   for(const s of world.structures)if(s.kind==='flower-pot'){const i=index(s);if(i<0||!needed[i])continue;const value=groundObjectBeauty({x:s.x,z:s.z,beauty:daylilyBeauty(s.flower?.plant)});thingsIn[i]+=value;thingsOut[i]+=value;}
-  return new BeautyMap(width,height,inside,outside,thingsIn,thingsOut);
+  return new BeautyMap(width,height,inside,outside,thingsIn,thingsOut,version);
 }
 
 /** Samples the physical surroundings on a fixed simulation cadence. One map is
@@ -63,7 +66,7 @@ export function beautyMapAt(world:World,perceivers:readonly BeautyCell[]):Beauty
 export function advanceBeautyNeeds(world:World,topology:RoomTopology):void {
   if(world.schemaVersion<90||world.tick%BEAUTY_NEED_INTERVAL)return;
   const pawns=world.pawns.filter(pawn=>!(pawn.state==='dead'||pawn.state==='sleeping'||pawn.medicalSleep));
-  const view=new RoomBeautyCapture(beautyMapAt(world,pawns),topology),step=BEAUTY_NEED_INTERVAL*24/TICKS_PER_DAY;
+  const view=new RoomBeautyCapture(beautyMapAt(world,pawns),topology,worldFog(world)),step=BEAUTY_NEED_INTERVAL*24/TICKS_PER_DAY;
   for(const pawn of pawns){
     const perceived=view.perceived(pawn),target=Math.max(0,Math.min(100,40+perceived*10));
     pawn.beauty=target>pawn.beauty?Math.min(target,pawn.beauty+RISE_PER_HOUR*step):Math.max(target,pawn.beauty-FALL_PER_HOUR*step);

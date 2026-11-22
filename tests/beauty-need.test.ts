@@ -11,9 +11,14 @@ import { RoomBeautyInspection } from '../src/ui/room-beauty-inspection';
 describe('besoin de beauté V90',()=>{
   it('échantillonne ensemble et laisse le sommeil figer le besoin',()=>{
     const w=createWorld(90,32,32);w.tick=BEAUTY_NEED_INTERVAL;
-    const pawn=w.pawns[0]!;pawn.beauty=40;w.piles=[];
+    // Schema 373: outdoors, the pawn also sees the faces of the nearby rough
+    // massif (Core BeautyUtility, -2 each): the target is now just under 40
+    // (about 39.6 with the chair), so the level starts at 39, below it.
+    const pawn=w.pawns[0]!;pawn.beauty=39;w.piles=[];
+    const bare=captureWorldBeauty(w,new RoomTopologyCache().read(w)).perceived(pawn);
     w.structures.push({id:w.nextId++,kind:'dining-chair',x:pawn.x,z:pawn.z+1,orientation:0,footprint:'standard',material:'wood',quality:'normal'});
-    advanceBeautyNeeds(w,new RoomTopologyCache().read(w));expect(pawn.beauty).toBeGreaterThan(40);
+    expect(captureWorldBeauty(w,new RoomTopologyCache().read(w)).perceived(pawn)).toBeGreaterThan(bare);
+    advanceBeautyNeeds(w,new RoomTopologyCache().read(w));expect(pawn.beauty).toBeGreaterThan(39);
     const value=pawn.beauty;pawn.state='sleeping';w.tick+=BEAUTY_NEED_INTERVAL;advanceBeautyNeeds(w,new RoomTopologyCache().read(w));expect(pawn.beauty).toBe(value);
   });
   it('partage les contributeurs physiques et les libellés avec l’inspection',()=>{

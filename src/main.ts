@@ -2329,7 +2329,7 @@ function renderState() {
       }
       const building = packed?.building ?? structure;
       if (building && building.kind!=='ship-cryptosleep-casket' && !isShipPartKind276(building.kind) && building.kind !== 'sleeping-spot' && building.kind !== 'double-sleeping-spot' && building.kind !== 'animal-sleeping-spot' && building.kind !== 'grave' && building.kind !== 'butcher-spot' && building.kind !== 'crafting-spot' && building.kind !== 'campfire' && building.kind !== 'passive-cooler') el('cell-title').textContent += ` · ${ITEM_DEFINITIONS[building.material ?? 'wood'].label}${building.material === undefined ? ' (ancien)' : ''}`;
-      const rock = selectedObject.kind==='rock'||resource?.kind==='rock'?rockInspection(world.tiles[z * world.width + x]!, resource):null;
+      const rock = selectedObject.kind==='rock'||resource?.kind==='rock'?rockInspection(world.tiles[z * world.width + x]!, resource, world.schemaVersion):null;
       if (rock) {
         el('cell-title').textContent = rock.title; cellDescription = rock.description;
         if(selectedObject.kind==='rock'){
