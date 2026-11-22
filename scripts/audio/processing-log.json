@@ -277,6 +277,3984 @@
         }
       },
       "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tab-open",
+      "sourceFilename": "ui-tab-open-c1122-take-1.mp3",
+      "sourceSha256": "5c91b0baae216a22b14b16c6cf7d8229a9751c20338dd4e05703220dba39e3af",
+      "filename": "ui-tab-open-c1122-take-1-cal.mp3",
+      "sha256": "a1023f69f61810bf03cc3bab444f46fb0ce45931be337e47651ecd3830a3728a",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.187,
+          "peakDbfs": -5.76,
+          "rmsDbfs": -26.55,
+          "loudnessLufsUngated": -23.54,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2547
+        },
+        "output": {
+          "durationSeconds": 0.225,
+          "activeSeconds": 0.185,
+          "peakDbfs": -6.93,
+          "rmsDbfs": -27.39,
+          "loudnessLufsUngated": -24.9,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2294,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.threat-big",
+      "sourceFilename": "letter-threat-big-c1122-take-1.mp3",
+      "sourceSha256": "d5460e58172094c06af5447adbfe50da2fbcd891b0953eea70ef4d9063564a23",
+      "filename": "letter-threat-big-c1122-take-1-cal.mp3",
+      "sha256": "471b009345d62090279ce61e1bb9dd65d3343bd5f42ca36ae32334fe2c545f24",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.48,
+          "activeSeconds": 0.721,
+          "peakDbfs": -14.48,
+          "rmsDbfs": -29.26,
+          "loudnessLufsUngated": -27.12,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 502
+        },
+        "output": {
+          "durationSeconds": 0.761,
+          "activeSeconds": 0.721,
+          "peakDbfs": -15.77,
+          "rmsDbfs": -29.81,
+          "loudnessLufsUngated": -27.67,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 474,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.threat-big",
+      "sourceFilename": "letter-threat-big-c1122-take-2.mp3",
+      "sourceSha256": "951c755cae879f7744649cee4f832ef9f63899e5aaa87bac2f780e9114440bfb",
+      "filename": "letter-threat-big-c1122-take-2-cal.mp3",
+      "sha256": "b9979a3c3935f2644843a19ced3ba7637d4aea2aa9818fe02c8df8c9ec184cc7",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.48,
+          "activeSeconds": 0.547,
+          "peakDbfs": -16.99,
+          "rmsDbfs": -33.5,
+          "loudnessLufsUngated": -31.3,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 552
+        },
+        "output": {
+          "durationSeconds": 0.587,
+          "activeSeconds": 0.546,
+          "peakDbfs": -17.46,
+          "rmsDbfs": -33.99,
+          "loudnessLufsUngated": -31.78,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 518,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.threat-big",
+      "sourceFilename": "letter-threat-big-c1122-take-3.mp3",
+      "sourceSha256": "b47cc114535cee66f63c92641d055308524bb748df9949a8258c5e71bb693607",
+      "filename": "letter-threat-big-c1122-take-3-cal.mp3",
+      "sha256": "1f29366945d79163287caae105e7efcff53bd43aafe69e4dcbaa4fd48ad701df",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.48,
+          "activeSeconds": 0.612,
+          "peakDbfs": -17.54,
+          "rmsDbfs": -34.61,
+          "loudnessLufsUngated": -32.44,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 548
+        },
+        "output": {
+          "durationSeconds": 0.652,
+          "activeSeconds": 0.597,
+          "peakDbfs": -19.2,
+          "rmsDbfs": -35.19,
+          "loudnessLufsUngated": -33.01,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 503,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.threat-small",
+      "sourceFilename": "letter-threat-small-c1122-take-1.mp3",
+      "sourceSha256": "f97e1e00d2f2283a79fd33a42934756f002a06f71c86d1f1728c78bf6fbad08e",
+      "filename": "letter-threat-small-c1122-take-1-cal.mp3",
+      "sha256": "2fd359ddf486a6086749c3da02bd443c62232e243ed9defb577dae19ed5be244",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.2,
+          "activeSeconds": 0.481,
+          "peakDbfs": -16.03,
+          "rmsDbfs": -32.51,
+          "loudnessLufsUngated": -30.33,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 544
+        },
+        "output": {
+          "durationSeconds": 0.521,
+          "activeSeconds": 0.473,
+          "peakDbfs": -16.51,
+          "rmsDbfs": -32.92,
+          "loudnessLufsUngated": -30.75,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 510,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.threat-small",
+      "sourceFilename": "letter-threat-small-c1122-take-2.mp3",
+      "sourceSha256": "cdc416ba8257a21a70428c963314679cdd242ea7c105a8e873cf60ba9e63d0db",
+      "filename": "letter-threat-small-c1122-take-2-cal.mp3",
+      "sha256": "7a386d846909cbbd8d53c9a97c671a1b0f58a82a770bfb4f06a2b2afe6303830",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.2,
+          "activeSeconds": 1.2,
+          "peakDbfs": -16.71,
+          "rmsDbfs": -34.93,
+          "loudnessLufsUngated": -32.77,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 481
+        },
+        "output": {
+          "durationSeconds": 1.2,
+          "activeSeconds": 0.727,
+          "peakDbfs": -18.59,
+          "rmsDbfs": -33.33,
+          "loudnessLufsUngated": -31.18,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 413,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.threat-small",
+      "sourceFilename": "letter-threat-small-c1122-take-3.mp3",
+      "sourceSha256": "86d485af7048a9cfdaee6e2a224dc3472a5a7880bf67f2bcea15ef321deef89d",
+      "filename": "letter-threat-small-c1122-take-3-cal.mp3",
+      "sha256": "bec0c747294c8370d431b69bf5e8be16dddf5599d11620dd9d1cd9c8da4a9239",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.2,
+          "activeSeconds": 1.197,
+          "peakDbfs": -6.15,
+          "rmsDbfs": -25.9,
+          "loudnessLufsUngated": -23.63,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 706
+        },
+        "output": {
+          "durationSeconds": 1.2,
+          "activeSeconds": 0.637,
+          "peakDbfs": -6.63,
+          "rmsDbfs": -23.71,
+          "loudnessLufsUngated": -21.44,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 500,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.negative",
+      "sourceFilename": "letter-negative-c1122-take-1.mp3",
+      "sourceSha256": "1406b2cbfa17f2dc5a84891ecceaa14097853c095db5aadebbd6b9ac91f3a4ee",
+      "filename": "letter-negative-c1122-take-1-cal.mp3",
+      "sha256": "c4c6516a6e029fcf5c7fa683fc2b03685e1553da89631f66c7d493071f0e02b6",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.859804; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 1.0,
+          "peakDbfs": -0.13,
+          "rmsDbfs": -21.91,
+          "loudnessLufsUngated": -17.66,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1909
+        },
+        "output": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.223,
+          "peakDbfs": -1.97,
+          "rmsDbfs": -17.61,
+          "loudnessLufsUngated": -13.32,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1723,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.negative",
+      "sourceFilename": "letter-negative-c1122-take-2.mp3",
+      "sourceSha256": "ad69a295a56077c56b906106b8f93d30edb2cf4b2b6e675e2cdcd41e09a89088",
+      "filename": "letter-negative-c1122-take-2-cal.mp3",
+      "sha256": "51a3b60fe35b4d2588700902023364d39cb6c0db6c8a98a08e33d965c3d1b048",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 1.0,
+          "peakDbfs": -12.61,
+          "rmsDbfs": -34.3,
+          "loudnessLufsUngated": -32.03,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1186
+        },
+        "output": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.336,
+          "peakDbfs": -16.7,
+          "rmsDbfs": -30.41,
+          "loudnessLufsUngated": -28.16,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 533,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.negative",
+      "sourceFilename": "letter-negative-c1122-take-3.mp3",
+      "sourceSha256": "8c0de3c44f3e878bdf746570f1c8e6356d8edd981fac9793a8441954e5549762",
+      "filename": "letter-negative-c1122-take-3-cal.mp3",
+      "sha256": "062df4b119be9cc41c82ea3151cc750170ce53fbc4fc1a66719de56fc303e893",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.984471; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.677,
+          "peakDbfs": -1.35,
+          "rmsDbfs": -13.56,
+          "loudnessLufsUngated": -11.32,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 502
+        },
+        "output": {
+          "durationSeconds": 0.72,
+          "activeSeconds": 0.677,
+          "peakDbfs": -1.93,
+          "rmsDbfs": -14.14,
+          "loudnessLufsUngated": -11.91,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 491,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.positive",
+      "sourceFilename": "letter-positive-c1122-take-1.mp3",
+      "sourceSha256": "ebcd51a9db23e43e7e22d19088ece8fef2e7664e34c5856af025ea8eeafb455f",
+      "filename": "letter-positive-c1122-take-1-cal.mp3",
+      "sha256": "286afbbed3fb2d405017e0bd438cdc5bb8be9353695d06293188793d9fbcf0c9",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.08,
+          "activeSeconds": 0.846,
+          "peakDbfs": -11.49,
+          "rmsDbfs": -30.16,
+          "loudnessLufsUngated": -26.94,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1936
+        },
+        "output": {
+          "durationSeconds": 0.886,
+          "activeSeconds": 0.839,
+          "peakDbfs": -12.01,
+          "rmsDbfs": -30.64,
+          "loudnessLufsUngated": -27.47,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1735,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.positive",
+      "sourceFilename": "letter-positive-c1122-take-2.mp3",
+      "sourceSha256": "e10a7191700a1f96d602b2ed4b9ad26307cdfb9bd7a956b7feb768842f2dde14",
+      "filename": "letter-positive-c1122-take-2-cal.mp3",
+      "sha256": "061862d59554aa2ccef548c22491f6c7011b3b0350acf97306d6c4db24f00ada",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.08,
+          "activeSeconds": 0.874,
+          "peakDbfs": -14.16,
+          "rmsDbfs": -33.64,
+          "loudnessLufsUngated": -30.15,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3588
+        },
+        "output": {
+          "durationSeconds": 0.914,
+          "activeSeconds": 0.857,
+          "peakDbfs": -15.33,
+          "rmsDbfs": -34.31,
+          "loudnessLufsUngated": -30.99,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2987,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.positive",
+      "sourceFilename": "letter-positive-c1122-take-3.mp3",
+      "sourceSha256": "e8d0997bebe28ae175cd3090c6fc6696a3f7e849484124ffa7a21b947add40cc",
+      "filename": "letter-positive-c1122-take-3-cal.mp3",
+      "sha256": "2ef765ea667c0e2ce26e17fb4b47d3177540e23dfef5a43c46991d9283995f83",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.08,
+          "activeSeconds": 1.08,
+          "peakDbfs": -11.94,
+          "rmsDbfs": -33.25,
+          "loudnessLufsUngated": -29.72,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2511
+        },
+        "output": {
+          "durationSeconds": 1.08,
+          "activeSeconds": 0.745,
+          "peakDbfs": -12.85,
+          "rmsDbfs": -32.33,
+          "loudnessLufsUngated": -28.96,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2384,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "alert.high",
+      "sourceFilename": "alert-high-c1122-take-1.mp3",
+      "sourceSha256": "5e94ae45056c08a685ef89d21e0e7cc1515fddf31a4184be65f3d81bb9e973a0",
+      "filename": "alert-high-c1122-take-1-cal.mp3",
+      "sha256": "014f21c0ce61cdcd96459087f511426509b6a3be217da020c0d83bc5d78ed416",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.373,
+          "peakDbfs": -25.88,
+          "rmsDbfs": -40.35,
+          "loudnessLufsUngated": -34.77,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4563
+        },
+        "output": {
+          "durationSeconds": 0.413,
+          "activeSeconds": 0.372,
+          "peakDbfs": -28.93,
+          "rmsDbfs": -41.9,
+          "loudnessLufsUngated": -36.52,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3932,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "alert.high",
+      "sourceFilename": "alert-high-c1122-take-2.mp3",
+      "sourceSha256": "630e54ec7466313e5b267838f5dec7337bd5d19adee44a2ef5c036efa161dff0",
+      "filename": "alert-high-c1122-take-2-cal.mp3",
+      "sha256": "ae4b26a92249ec426f6d98775f45c7cf6ef51568dfcdb6dab85e6f54ddcc2da3",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.6,
+          "peakDbfs": -7.76,
+          "rmsDbfs": -23.34,
+          "loudnessLufsUngated": -17.03,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7502
+        },
+        "output": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.289,
+          "peakDbfs": -14.56,
+          "rmsDbfs": -24.44,
+          "loudnessLufsUngated": -18.15,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7280,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "alert.high",
+      "sourceFilename": "alert-high-c1122-take-3.mp3",
+      "sourceSha256": "0fd2beaa57a7d5b50dc5c863288f1c9544543a6c3bd2bca519c2be8a3532b371",
+      "filename": "alert-high-c1122-take-3-cal.mp3",
+      "sha256": "8f5e2260ac237fd39d76b065bfa1958733f240b0abd6084047ee5a1521a32c80",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.6,
+          "peakDbfs": -7.19,
+          "rmsDbfs": -28.58,
+          "loudnessLufsUngated": -22.3,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7479
+        },
+        "output": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.238,
+          "peakDbfs": -12.58,
+          "rmsDbfs": -28.71,
+          "loudnessLufsUngated": -22.45,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7229,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "alert.critical",
+      "sourceFilename": "alert-critical-c1122-take-1.mp3",
+      "sourceSha256": "98be9fa5d01e847b6b13f0dc7f9099bc6e7557fa7e265ecb096565450715e878",
+      "filename": "alert-critical-c1122-take-1-cal.mp3",
+      "sha256": "46d43ce2941146db46f5e9435b4b18fce47f7f52412c0fa1dadf9f0bec2d5ff2",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.523,
+          "peakDbfs": -7.04,
+          "rmsDbfs": -24.88,
+          "loudnessLufsUngated": -18.65,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5729
+        },
+        "output": {
+          "durationSeconds": 0.566,
+          "activeSeconds": 0.51,
+          "peakDbfs": -9.67,
+          "rmsDbfs": -27.54,
+          "loudnessLufsUngated": -21.36,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5437,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "alert.critical",
+      "sourceFilename": "alert-critical-c1122-take-2.mp3",
+      "sourceSha256": "0b7db697cc19d9652a90648cb3258ee39aa91a217a7cbac6de3940ff88bd37be",
+      "filename": "alert-critical-c1122-take-2-cal.mp3",
+      "sha256": "051c59c9000a3ebfd7035dc0e29be67a74e5c5e9447e7647e6fe3d556c3246db",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.88,
+          "peakDbfs": -2.4,
+          "rmsDbfs": -22.39,
+          "loudnessLufsUngated": -16.17,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6870
+        },
+        "output": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.555,
+          "peakDbfs": -5.69,
+          "rmsDbfs": -23.32,
+          "loudnessLufsUngated": -17.15,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6628,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "alert.critical",
+      "sourceFilename": "alert-critical-c1122-take-3.mp3",
+      "sourceSha256": "f22b40838e47f9c89f2b0f4b4fc83dca39fd6fbcfb2daba274af195f1d1b32f5",
+      "filename": "alert-critical-c1122-take-3-cal.mp3",
+      "sha256": "c670a3b376051f014ba40eaf716f5665469aabfbac8df26deb127dc4c1bfdd7d",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.88,
+          "peakDbfs": -5.76,
+          "rmsDbfs": -19.81,
+          "loudnessLufsUngated": -13.53,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7597
+        },
+        "output": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.627,
+          "peakDbfs": -7.75,
+          "rmsDbfs": -21.94,
+          "loudnessLufsUngated": -15.69,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7268,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tab-open",
+      "sourceFilename": "ui-tab-open-c1122-take-2.mp3",
+      "sourceSha256": "b674329c4c45eaac95321986dde1fdcd1ec330a5daab425e1b5cf50df1963d1d",
+      "filename": "ui-tab-open-c1122-take-2-cal.mp3",
+      "sha256": "6bd3bf440141dfcca8307a3467781aa37fd2261a75582fcf2b8b9cb361c30be6",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": -14.36,
+          "rmsDbfs": -34.07,
+          "loudnessLufsUngated": -29.16,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4112
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.194,
+          "peakDbfs": -15.39,
+          "rmsDbfs": -31.37,
+          "loudnessLufsUngated": -26.75,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3215,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tab-open",
+      "sourceFilename": "ui-tab-open-c1122-take-3.mp3",
+      "sourceSha256": "69b5001eee6b3d756b153db1e5e0f3d996d46ee41df7d7282151eebe9b65b11f",
+      "filename": "ui-tab-open-c1122-take-3-cal.mp3",
+      "sha256": "9d1cc47d4631812ca7d91d6d254592a480958fbb5452ceb7153668b77cbef704",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.227,
+          "peakDbfs": -19.22,
+          "rmsDbfs": -35.02,
+          "loudnessLufsUngated": -30.01,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4765
+        },
+        "output": {
+          "durationSeconds": 0.265,
+          "activeSeconds": 0.225,
+          "peakDbfs": -20.15,
+          "rmsDbfs": -36.46,
+          "loudnessLufsUngated": -31.88,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4385,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tab-open",
+      "sourceFilename": "ui-tab-open-c1122-take-4.mp3",
+      "sourceSha256": "8dcbf99e5969aa4cbb1220918a364748fd21874c3160487cfd98052fa1d29131",
+      "filename": "ui-tab-open-c1122-take-4-cal.mp3",
+      "sha256": "3bef0d52f70d72cff64ce94615913b021c072028f1297a41476d117fca5c7223",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.203,
+          "peakDbfs": -6.32,
+          "rmsDbfs": -28.38,
+          "loudnessLufsUngated": -22.92,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5686
+        },
+        "output": {
+          "durationSeconds": 0.243,
+          "activeSeconds": 0.191,
+          "peakDbfs": -6.78,
+          "rmsDbfs": -29.51,
+          "loudnessLufsUngated": -24.26,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4990,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tab-close",
+      "sourceFilename": "ui-tab-close-c1122-take-1.mp3",
+      "sourceSha256": "76192b6e6773932606b45b525299d4e1f3ee5ca8b578eb441f701e903bdb6540",
+      "filename": "ui-tab-close-c1122-take-1-cal.mp3",
+      "sha256": "942a6eda611eade4dfb4b54ec8ae8a01eeb3972e899ce5445eced2848f42053b",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": -6.2,
+          "rmsDbfs": -27.13,
+          "loudnessLufsUngated": -25.75,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3182
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.152,
+          "peakDbfs": -8.27,
+          "rmsDbfs": -24.16,
+          "loudnessLufsUngated": -22.73,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1139,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tab-close",
+      "sourceFilename": "ui-tab-close-c1122-take-2.mp3",
+      "sourceSha256": "0420ba8589e23642d1da30bef48c0c43a73c2ce69b3b21be1df7f266c2d0467d",
+      "filename": "ui-tab-close-c1122-take-2-cal.mp3",
+      "sha256": "50cb74adbafee2c93806e3021c4b2fcab3d7db016827bf5223175575ec056a96",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": -4.83,
+          "rmsDbfs": -23.91,
+          "loudnessLufsUngated": -27.46,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1666
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.258,
+          "peakDbfs": -5.25,
+          "rmsDbfs": -22.06,
+          "loudnessLufsUngated": -25.8,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 535,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tab-close",
+      "sourceFilename": "ui-tab-close-c1122-take-3.mp3",
+      "sourceSha256": "bed91294b70b54dfa0753a4d0e54f0e644f708121d7abe7aa46b47953b61adda",
+      "filename": "ui-tab-close-c1122-take-3-cal.mp3",
+      "sha256": "e3bfa9cf61c97150e2093d56220cc81b5fb394793c4a5e5ba095f0653bfb9fee",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": -5.73,
+          "rmsDbfs": -26.64,
+          "loudnessLufsUngated": -27.19,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2034
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.177,
+          "peakDbfs": -6.19,
+          "rmsDbfs": -23.83,
+          "loudnessLufsUngated": -24.53,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 760,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tab-close",
+      "sourceFilename": "ui-tab-close-c1122-take-4.mp3",
+      "sourceSha256": "a0b93e07fffe329da23c4b70a6eb88d6a699d25e0a0b9c83d6c35601e68e8174",
+      "filename": "ui-tab-close-c1122-take-4-cal.mp3",
+      "sha256": "62afcac8fc6c206cbf9b45bab7a8aa6bc6a6e4052465693aa929077278daa643",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.305,
+          "peakDbfs": -1.57,
+          "rmsDbfs": -17.5,
+          "loudnessLufsUngated": -15.83,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 887
+        },
+        "output": {
+          "durationSeconds": 0.349,
+          "activeSeconds": 0.305,
+          "peakDbfs": -2.12,
+          "rmsDbfs": -17.94,
+          "loudnessLufsUngated": -16.28,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 783,
+          "trimStartSeconds": 0.005
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.toggle-on",
+      "sourceFilename": "ui-toggle-on-c1122-take-1.mp3",
+      "sourceSha256": "a0d016d801fb9ff863d4dfa6a0471fb0a018dacef21c16c4697ba83c28951fc7",
+      "filename": "ui-toggle-on-c1122-take-1-cal.mp3",
+      "sha256": "2fae9234938f22842b4c8c0956a46e7075fab99f714e9c4cfa31e6423d96f570",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.855147; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.253,
+          "peakDbfs": 1.42,
+          "rmsDbfs": -23.35,
+          "loudnessLufsUngated": -18.41,
+          "clippedPercent": 0.0071,
+          "spectralCentroidHz": 4558
+        },
+        "output": {
+          "durationSeconds": 0.291,
+          "activeSeconds": 0.25,
+          "peakDbfs": -1.49,
+          "rmsDbfs": -25.92,
+          "loudnessLufsUngated": -21.3,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4157,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.toggle-on",
+      "sourceFilename": "ui-toggle-on-c1122-take-2.mp3",
+      "sourceSha256": "5edf40b3f53608bb366561108aa59f76b120b02883944088d1f3c0e258b12f0b",
+      "filename": "ui-toggle-on-c1122-take-2-cal.mp3",
+      "sha256": "bdfb5b7f3f629b579663ae871d8614722cb418540ccb3c2be816af08160aa50a",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.855267; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.09,
+          "peakDbfs": 0.46,
+          "rmsDbfs": -17.48,
+          "loudnessLufsUngated": -13.2,
+          "clippedPercent": 0.0118,
+          "spectralCentroidHz": 4550
+        },
+        "output": {
+          "durationSeconds": 0.132,
+          "activeSeconds": 0.088,
+          "peakDbfs": -1.41,
+          "rmsDbfs": -19.71,
+          "loudnessLufsUngated": -15.84,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3989,
+          "trimStartSeconds": 0.093
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.toggle-on",
+      "sourceFilename": "ui-toggle-on-c1122-take-3.mp3",
+      "sourceSha256": "dbd5f1b32e47bb01c8d4701d8e3abfb9e45fb4a3a5fb4aac0b09660d2c55b1c8",
+      "filename": "ui-toggle-on-c1122-take-3-cal.mp3",
+      "sha256": "2284cb5157b48e9eec00531577b6541b8c9770699827368560b9fa2a52673140",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.861922; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.095,
+          "peakDbfs": -0.04,
+          "rmsDbfs": -18.91,
+          "loudnessLufsUngated": -14.72,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3870
+        },
+        "output": {
+          "durationSeconds": 0.133,
+          "activeSeconds": 0.089,
+          "peakDbfs": -1.73,
+          "rmsDbfs": -20.8,
+          "loudnessLufsUngated": -16.95,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3213,
+          "trimStartSeconds": 0.191
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.toggle-off",
+      "sourceFilename": "ui-toggle-off-c1122-take-1.mp3",
+      "sourceSha256": "6db1f7e3dd15398e19e8ddce25b62b05d14d009d9ab60172055df62e09c2ef44",
+      "filename": "ui-toggle-off-c1122-take-1-cal.mp3",
+      "sha256": "ae6f7f41b65924e608ee8b8052c33b5fd3b1ce18a31b84dd02c23ccaffcf0129",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.800913; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.078,
+          "peakDbfs": 1.57,
+          "rmsDbfs": -17.78,
+          "loudnessLufsUngated": -12.66,
+          "clippedPercent": 0.0213,
+          "spectralCentroidHz": 5799
+        },
+        "output": {
+          "durationSeconds": 0.12,
+          "activeSeconds": 0.076,
+          "peakDbfs": -1.79,
+          "rmsDbfs": -20.69,
+          "loudnessLufsUngated": -15.89,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5062,
+          "trimStartSeconds": 0.258
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.toggle-off",
+      "sourceFilename": "ui-toggle-off-c1122-take-2.mp3",
+      "sourceSha256": "c7bb48ff991c0b7c5639b437aa53bf05f38ef61575b8968e5244949e7f769e1f",
+      "filename": "ui-toggle-off-c1122-take-2-cal.mp3",
+      "sha256": "1c4c8fa4957c140555b28d2fc67ad10b16db49b022b49fac9fdaeddd2b33fda2",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.856473; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": 0.02,
+          "rmsDbfs": -25.45,
+          "loudnessLufsUngated": -20.85,
+          "clippedPercent": 0.0024,
+          "spectralCentroidHz": 4057
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.084,
+          "peakDbfs": -1.82,
+          "rmsDbfs": -19.91,
+          "loudnessLufsUngated": -15.43,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3491,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.toggle-off",
+      "sourceFilename": "ui-toggle-off-c1122-take-3.mp3",
+      "sourceSha256": "e4b93790c7509ab9f9ca86875cbe8196d5a07268c07856d2597ae51247033a6d",
+      "filename": "ui-toggle-off-c1122-take-3-cal.mp3",
+      "sha256": "b3175202a4cc0c493c9df4a7d06490c8ee660efdbeb66e19edef4a260799c09e",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.876347; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.202,
+          "peakDbfs": 0.19,
+          "rmsDbfs": -25.33,
+          "loudnessLufsUngated": -20.73,
+          "clippedPercent": 0.0024,
+          "spectralCentroidHz": 3088
+        },
+        "output": {
+          "durationSeconds": 0.246,
+          "activeSeconds": 0.188,
+          "peakDbfs": -2.22,
+          "rmsDbfs": -26.95,
+          "loudnessLufsUngated": -22.45,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2304,
+          "trimStartSeconds": 0.01
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.clock-pause",
+      "sourceFilename": "ui-clock-pause-c1122-take-1.mp3",
+      "sourceSha256": "01abc1a545f65058be9462d7f3aa8e040fa306c6cf75c8b8e958f6f898968251",
+      "filename": "ui-clock-pause-c1122-take-1-cal.mp3",
+      "sha256": "8faf693ca719888c50e7a89c48d2642153b3f00ca2361f89846e71f3bd3edfc4",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.376,
+          "peakDbfs": -5.58,
+          "rmsDbfs": -30.26,
+          "loudnessLufsUngated": -23.95,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9447
+        },
+        "output": {
+          "durationSeconds": 0.419,
+          "activeSeconds": 0.375,
+          "peakDbfs": -10.08,
+          "rmsDbfs": -34.33,
+          "loudnessLufsUngated": -28.03,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9128,
+          "trimStartSeconds": 0.022
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.clock-pause",
+      "sourceFilename": "ui-clock-pause-c1122-take-2.mp3",
+      "sourceSha256": "dcd3a6ae673a1ac7a1e2a86c15d65e8f88253e11386d312c097a597510a76b3b",
+      "filename": "ui-clock-pause-c1122-take-2-cal.mp3",
+      "sha256": "62eeea5e583cfef09cbca8bf23aea8045162badf19fad92db682551aecc3fdc2",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.322,
+          "peakDbfs": -7.59,
+          "rmsDbfs": -31.27,
+          "loudnessLufsUngated": -24.96,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9669
+        },
+        "output": {
+          "durationSeconds": 0.358,
+          "activeSeconds": 0.314,
+          "peakDbfs": -11.88,
+          "rmsDbfs": -35.34,
+          "loudnessLufsUngated": -29.04,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9329,
+          "trimStartSeconds": 0.025
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.clock-pause",
+      "sourceFilename": "ui-clock-pause-c1122-take-3.mp3",
+      "sourceSha256": "a7d4ccb6ef91b852135b17e5438843841f04f9a5fb8dfd3fd83fe5531c096d11",
+      "filename": "ui-clock-pause-c1122-take-3-cal.mp3",
+      "sha256": "2e170b8578bf9f68fe6ea7d615dcb328ff97c9c4181243ffcd29f937ed357758",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.31,
+          "peakDbfs": -6.53,
+          "rmsDbfs": -25.58,
+          "loudnessLufsUngated": -19.27,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8850
+        },
+        "output": {
+          "durationSeconds": 0.354,
+          "activeSeconds": 0.311,
+          "peakDbfs": -10.22,
+          "rmsDbfs": -29.72,
+          "loudnessLufsUngated": -23.42,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8511,
+          "trimStartSeconds": 0.004
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.clock-run",
+      "sourceFilename": "ui-clock-run-c1122-take-1.mp3",
+      "sourceSha256": "3599a1f37e65b05e3eb9dd19c30dc777fab2ea910e5bbe11661bcd4ad771cadb",
+      "filename": "ui-clock-run-c1122-take-1-cal.mp3",
+      "sha256": "1a1099e55294f5caf117383f67e981c9031e22ede7cebdcc11e7e09b74afb935",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.6,
+          "peakDbfs": -5.9,
+          "rmsDbfs": -26.15,
+          "loudnessLufsUngated": -19.85,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8766
+        },
+        "output": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.586,
+          "peakDbfs": -9.31,
+          "rmsDbfs": -30.15,
+          "loudnessLufsUngated": -23.88,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8374,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.clock-run",
+      "sourceFilename": "ui-clock-run-c1122-take-2.mp3",
+      "sourceSha256": "88094a70bd4244f874498265ad9bf1fea0ad10b7e418a404d2a5e79b79779681",
+      "filename": "ui-clock-run-c1122-take-2-cal.mp3",
+      "sha256": "29e0586e51b23a6574f569d34bda0fa78e43f610bd43236dc878e50d10fca147",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.464,
+          "peakDbfs": -3.58,
+          "rmsDbfs": -25.57,
+          "loudnessLufsUngated": -19.29,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9221
+        },
+        "output": {
+          "durationSeconds": 0.504,
+          "activeSeconds": 0.463,
+          "peakDbfs": -7.05,
+          "rmsDbfs": -29.33,
+          "loudnessLufsUngated": -23.09,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8835,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.clock-run",
+      "sourceFilename": "ui-clock-run-c1122-take-3.mp3",
+      "sourceSha256": "f1a04e8cc1d4f5c10764da72c69a5c354db1b46991e4ad8f063ef3f7e68d722a",
+      "filename": "ui-clock-run-c1122-take-3-cal.mp3",
+      "sha256": "09f8a1cacce0cfc5029b034ddcd55f47b33a66aa93c2638e986a4bad10f959b8",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.527,
+          "peakDbfs": -5.01,
+          "rmsDbfs": -29.76,
+          "loudnessLufsUngated": -23.45,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9543
+        },
+        "output": {
+          "durationSeconds": 0.566,
+          "activeSeconds": 0.527,
+          "peakDbfs": -8.7,
+          "rmsDbfs": -33.44,
+          "loudnessLufsUngated": -27.15,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9184,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tool-select",
+      "sourceFilename": "ui-tool-select-c1122-take-1.mp3",
+      "sourceSha256": "60de984827ca8b6f1b6400628cf0e93ba29cf0bf876799fbb8024571f3f32c6b",
+      "filename": "ui-tool-select-c1122-take-1-cal.mp3",
+      "sha256": "2bc53f3f0a78b42cdc89405ff4089c685c69c9e26905cc58e48403c41f8256b9",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.133,
+          "peakDbfs": -12.95,
+          "rmsDbfs": -32.3,
+          "loudnessLufsUngated": -26.13,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4586
+        },
+        "output": {
+          "durationSeconds": 0.151,
+          "activeSeconds": 0.106,
+          "peakDbfs": -14.38,
+          "rmsDbfs": -33.12,
+          "loudnessLufsUngated": -26.98,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4405,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tool-select",
+      "sourceFilename": "ui-tool-select-c1122-take-2.mp3",
+      "sourceSha256": "723df72edb574b3f85a98a1f8ce5fd3062029710dc850c68226d30f5c981d3c1",
+      "filename": "ui-tool-select-c1122-take-2-cal.mp3",
+      "sha256": "82d458a4890723536bc95328787df0cc5400d343a17ff2840acbc08f478d0aa1",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": -1.69,
+          "rmsDbfs": -24.34,
+          "loudnessLufsUngated": -18.39,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5929
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.104,
+          "peakDbfs": -3.99,
+          "rmsDbfs": -20.42,
+          "loudnessLufsUngated": -14.68,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5860,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tool-select",
+      "sourceFilename": "ui-tool-select-c1122-take-3.mp3",
+      "sourceSha256": "387bad671a46bb748261a4037147e7a4110da1c6c2f3afd35c358a89525e2a2f",
+      "filename": "ui-tool-select-c1122-take-3-cal.mp3",
+      "sha256": "f453399507f312913ca990f36593a036ce68b82f079a73eee7dcca63ce164344",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": 0.98,
+          "rmsDbfs": -28.85,
+          "loudnessLufsUngated": -22.61,
+          "clippedPercent": 0.0024,
+          "spectralCentroidHz": 4498
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.222,
+          "peakDbfs": -3.84,
+          "rmsDbfs": -29.28,
+          "loudnessLufsUngated": -23.05,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4537,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.tool-select",
+      "sourceFilename": "ui-tool-select-c1122-take-4.mp3",
+      "sourceSha256": "b42b922d4e7851481a3cead5054fe10abe380d6b460e4597b6656b3a2a016ed4",
+      "filename": "ui-tool-select-c1122-take-4-cal.mp3",
+      "sha256": "935cbe515898fb9b1422e87f00158bdfb3cf667577f7fdbae1ff04b414e5045a",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.169,
+          "peakDbfs": -4.11,
+          "rmsDbfs": -20.28,
+          "loudnessLufsUngated": -14.64,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5221
+        },
+        "output": {
+          "durationSeconds": 0.209,
+          "activeSeconds": 0.169,
+          "peakDbfs": -4.49,
+          "rmsDbfs": -21.4,
+          "loudnessLufsUngated": -15.79,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4744,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.designate",
+      "sourceFilename": "ui-designate-c1122-take-1.mp3",
+      "sourceSha256": "2c762c1a04d14eee5386362f3f7dc19c3eba035d7be737467cc173afd175b013",
+      "filename": "ui-designate-c1122-take-1-cal.mp3",
+      "sha256": "6633a58069c09d4d41332b335afb51a5f3fdc57882a34e9744fc8eb5b82bd029",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.424,
+          "peakDbfs": -17.52,
+          "rmsDbfs": -34.11,
+          "loudnessLufsUngated": -28.17,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7267
+        },
+        "output": {
+          "durationSeconds": 0.464,
+          "activeSeconds": 0.424,
+          "peakDbfs": -20.44,
+          "rmsDbfs": -36.98,
+          "loudnessLufsUngated": -31.35,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6871,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.designate",
+      "sourceFilename": "ui-designate-c1122-take-2.mp3",
+      "sourceSha256": "0cb6a35065ab9d1185d6be62911635d14f9d48fe272a2d62a6d8498220055fed",
+      "filename": "ui-designate-c1122-take-2-cal.mp3",
+      "sha256": "630477004b01fb6ee3b39927563a24d0c0aa577106e762344bc09f8b2577887d",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.41,
+          "peakDbfs": -19.29,
+          "rmsDbfs": -34.14,
+          "loudnessLufsUngated": -28.16,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7398
+        },
+        "output": {
+          "durationSeconds": 0.447,
+          "activeSeconds": 0.407,
+          "peakDbfs": -22.79,
+          "rmsDbfs": -37.08,
+          "loudnessLufsUngated": -31.4,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6960,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.designate",
+      "sourceFilename": "ui-designate-c1122-take-3.mp3",
+      "sourceSha256": "8cb3f6238551591283082045d2beeb9035991da089299bdd18c010a32d17917a",
+      "filename": "ui-designate-c1122-take-3-cal.mp3",
+      "sha256": "8dd5b98f37e444af144372c14c9fa123223d9e3bcb088c80667bde5f58a3d672",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.419,
+          "peakDbfs": -15.58,
+          "rmsDbfs": -32.55,
+          "loudnessLufsUngated": -26.6,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8104
+        },
+        "output": {
+          "durationSeconds": 0.458,
+          "activeSeconds": 0.418,
+          "peakDbfs": -19.51,
+          "rmsDbfs": -35.71,
+          "loudnessLufsUngated": -30.08,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7543,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.designate",
+      "sourceFilename": "ui-designate-c1122-take-4.mp3",
+      "sourceSha256": "9c7f0c424ddc965587f9bddd39c44ba9223802739f8b0cf789055cf37d48b559",
+      "filename": "ui-designate-c1122-take-4-cal.mp3",
+      "sha256": "a4787ba01e5c240cfd923b64e9d3bbee8bd68a8d033b45e1c95c6a9310c24b2b",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": -7.93,
+          "rmsDbfs": -24.68,
+          "loudnessLufsUngated": -18.44,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8980
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.422,
+          "peakDbfs": -12.41,
+          "rmsDbfs": -28.0,
+          "loudnessLufsUngated": -21.85,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8505,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.designate-zone",
+      "sourceFilename": "ui-designate-zone-c1122-take-1.mp3",
+      "sourceSha256": "3b1f07c04fdf6a3664f4aad18057e6067504a2396921d10bcc329758719240ef",
+      "filename": "ui-designate-zone-c1122-take-1-cal.mp3",
+      "sha256": "2bc16ca97e182c9c34f2d5781539a60e0d505df05457ad2218bb48ddb4b3ff90",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.534,
+          "peakDbfs": -9.3,
+          "rmsDbfs": -28.1,
+          "loudnessLufsUngated": -23.16,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4827
+        },
+        "output": {
+          "durationSeconds": 0.574,
+          "activeSeconds": 0.534,
+          "peakDbfs": -10.91,
+          "rmsDbfs": -29.29,
+          "loudnessLufsUngated": -24.67,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4242,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.designate-zone",
+      "sourceFilename": "ui-designate-zone-c1122-take-2.mp3",
+      "sourceSha256": "f67d5fa6bcf4f4a520503afd2ed9982ad732b02cbc71aa969ef03790ffbcb9ff",
+      "filename": "ui-designate-zone-c1122-take-2-cal.mp3",
+      "sha256": "859f1c3119f1e4a10ce52ddecd12e18f4a96deb5522fdac5f083bb979b83f79c",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.529,
+          "peakDbfs": -11.65,
+          "rmsDbfs": -28.51,
+          "loudnessLufsUngated": -23.23,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5064
+        },
+        "output": {
+          "durationSeconds": 0.568,
+          "activeSeconds": 0.525,
+          "peakDbfs": -14.38,
+          "rmsDbfs": -30.11,
+          "loudnessLufsUngated": -25.2,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4477,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.designate-zone",
+      "sourceFilename": "ui-designate-zone-c1122-take-3.mp3",
+      "sourceSha256": "57eaf481802b9e5c6812d619d1f1f49985b40de45a549051f37e7d8d7888b44c",
+      "filename": "ui-designate-zone-c1122-take-3-cal.mp3",
+      "sha256": "33042e59ec436ee4fc3a5f9c1c3538cd828c4a2bf419d41e857f8b5b28ca386f",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.539,
+          "peakDbfs": -16.44,
+          "rmsDbfs": -30.57,
+          "loudnessLufsUngated": -25.42,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5448
+        },
+        "output": {
+          "durationSeconds": 0.579,
+          "activeSeconds": 0.539,
+          "peakDbfs": -17.91,
+          "rmsDbfs": -31.87,
+          "loudnessLufsUngated": -27.02,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4827,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.designate-cancel",
+      "sourceFilename": "ui-designate-cancel-c1122-take-1.mp3",
+      "sourceSha256": "101745c71727b80aad9bab8d29acf398f29c114a582540e3fb0280850fff0a8b",
+      "filename": "ui-designate-cancel-c1122-take-1-cal.mp3",
+      "sha256": "6f621b5f66d1b04a707e212d66bb050edfaf9faecddae184d3b22a22b3d10c6e",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.426,
+          "peakDbfs": -22.8,
+          "rmsDbfs": -39.08,
+          "loudnessLufsUngated": -33.23,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7552
+        },
+        "output": {
+          "durationSeconds": 0.466,
+          "activeSeconds": 0.421,
+          "peakDbfs": -26.43,
+          "rmsDbfs": -41.96,
+          "loudnessLufsUngated": -36.49,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6988,
+          "trimStartSeconds": 0.008
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.designate-cancel",
+      "sourceFilename": "ui-designate-cancel-c1122-take-2.mp3",
+      "sourceSha256": "c95b8518875a28d57e6d80d7ba50b583900f753b39dfbf6035c2a772cefb0b59",
+      "filename": "ui-designate-cancel-c1122-take-2-cal.mp3",
+      "sha256": "f6a5fd2bb5c2d878808dbf652e792f511bd81c051240c0987053e2b6c80fcefb",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.415,
+          "peakDbfs": -13.39,
+          "rmsDbfs": -31.48,
+          "loudnessLufsUngated": -25.68,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6850
+        },
+        "output": {
+          "durationSeconds": 0.455,
+          "activeSeconds": 0.415,
+          "peakDbfs": -16.78,
+          "rmsDbfs": -34.09,
+          "loudnessLufsUngated": -28.66,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6335,
+          "trimStartSeconds": 0.001
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.designate-cancel",
+      "sourceFilename": "ui-designate-cancel-c1122-take-3.mp3",
+      "sourceSha256": "282125b7a926668c2e5636ffeca82a8512c5a177dea2a5be1a317692f9b87602",
+      "filename": "ui-designate-cancel-c1122-take-3-cal.mp3",
+      "sha256": "ebf683b61d368b761b1be792861f0a00c9801c9b281e82cf0f41c8ca69e9789c",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.432,
+          "peakDbfs": -22.67,
+          "rmsDbfs": -39.55,
+          "loudnessLufsUngated": -34.16,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7414
+        },
+        "output": {
+          "durationSeconds": 0.464,
+          "activeSeconds": 0.412,
+          "peakDbfs": -25.95,
+          "rmsDbfs": -41.65,
+          "loudnessLufsUngated": -36.94,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6746,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.place-building",
+      "sourceFilename": "ui-place-building-c1122-take-1.mp3",
+      "sourceSha256": "e3bdb03c5059f71720205d8fe13e2c763f4b47d9b25e6d6cb37193efbc3fe7d9",
+      "filename": "ui-place-building-c1122-take-1-cal.mp3",
+      "sha256": "245fdba79e19973220aeea2f8038b1e8242e07f9cbc4cb9190a08ba69937cb52",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.877377; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.21,
+          "peakDbfs": -0.42,
+          "rmsDbfs": -20.53,
+          "loudnessLufsUngated": -17.84,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 943
+        },
+        "output": {
+          "durationSeconds": 0.254,
+          "activeSeconds": 0.21,
+          "peakDbfs": -1.85,
+          "rmsDbfs": -22.1,
+          "loudnessLufsUngated": -19.41,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 925,
+          "trimStartSeconds": 0.001
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.place-building",
+      "sourceFilename": "ui-place-building-c1122-take-2.mp3",
+      "sourceSha256": "6d21e34a0fed55b60414568139f3a620c8779c2bac2aa1fe58787e1a902f36b0",
+      "filename": "ui-place-building-c1122-take-2-cal.mp3",
+      "sha256": "2558e2ef19997c12d3c953a4de4a407ff1b54db970f040be2985ba5519dd7924",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.878202; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.171,
+          "peakDbfs": -0.36,
+          "rmsDbfs": -19.95,
+          "loudnessLufsUngated": -17.48,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 952
+        },
+        "output": {
+          "durationSeconds": 0.211,
+          "activeSeconds": 0.17,
+          "peakDbfs": -1.87,
+          "rmsDbfs": -21.46,
+          "loudnessLufsUngated": -18.98,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 922,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.place-building",
+      "sourceFilename": "ui-place-building-c1122-take-3.mp3",
+      "sourceSha256": "a2892c87955a0e1828db4cf5e882aa4ccb8ddc4ec35b10bc8f0793ba1e52f359",
+      "filename": "ui-place-building-c1122-take-3-cal.mp3",
+      "sha256": "843f06801da5dbb8d4c16119932297d65341d64d16273afa81018bb4379275aa",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.875374; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.201,
+          "peakDbfs": -0.36,
+          "rmsDbfs": -22.18,
+          "loudnessLufsUngated": -19.38,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1122
+        },
+        "output": {
+          "durationSeconds": 0.241,
+          "activeSeconds": 0.2,
+          "peakDbfs": -1.97,
+          "rmsDbfs": -23.84,
+          "loudnessLufsUngated": -21.05,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1057,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.draft-on",
+      "sourceFilename": "ui-draft-on-c1122-take-1.mp3",
+      "sourceSha256": "badbc2fa2c14ae2d4c90fe0a5968d839da78fd7eafb93c109d0a17bb0c01a17d",
+      "filename": "ui-draft-on-c1122-take-1-cal.mp3",
+      "sha256": "1d7a839c78b33a61317197f813fa15d4074bcf9324732b563372afdaa325edeb",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.953581; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.592,
+          "peakDbfs": 0.78,
+          "rmsDbfs": -23.79,
+          "loudnessLufsUngated": -17.77,
+          "clippedPercent": 0.0033,
+          "spectralCentroidHz": 7827
+        },
+        "output": {
+          "durationSeconds": 0.631,
+          "activeSeconds": 0.591,
+          "peakDbfs": -2.02,
+          "rmsDbfs": -26.89,
+          "loudnessLufsUngated": -21.07,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7183,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.draft-on",
+      "sourceFilename": "ui-draft-on-c1122-take-2.mp3",
+      "sourceSha256": "ab2209b89a56e0a89ea6737dd76282e74eed40cc00d8707f3d9e098b3f61add5",
+      "filename": "ui-draft-on-c1122-take-2-cal.mp3",
+      "sha256": "67971f4b194e171a90a971a92cda8f98bd0aaa8df0cd72cdb7e5c613e4a83520",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.68,
+          "peakDbfs": -2.21,
+          "rmsDbfs": -25.93,
+          "loudnessLufsUngated": -19.89,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7363
+        },
+        "output": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.599,
+          "peakDbfs": -4.37,
+          "rmsDbfs": -27.67,
+          "loudnessLufsUngated": -21.77,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6828,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.draft-on",
+      "sourceFilename": "ui-draft-on-c1122-take-3.mp3",
+      "sourceSha256": "54ea33511b34baf120dbf8bda621d2522d18ff0ca48e1594e0f65d41a878b3b5",
+      "filename": "ui-draft-on-c1122-take-3-cal.mp3",
+      "sha256": "c9c3e4233116b75b0d1afb3f4cf7755b3c29460ddc7ed5623a2110af6e29ba06",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.498,
+          "peakDbfs": -0.47,
+          "rmsDbfs": -24.83,
+          "loudnessLufsUngated": -18.84,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7143
+        },
+        "output": {
+          "durationSeconds": 0.541,
+          "activeSeconds": 0.498,
+          "peakDbfs": -2.1,
+          "rmsDbfs": -27.14,
+          "loudnessLufsUngated": -21.32,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6402,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.draft-off",
+      "sourceFilename": "ui-draft-off-c1122-take-1.mp3",
+      "sourceSha256": "546db7849353bb1525de0138f434ff0f6f6af3f80155b98a7262c640a8123836",
+      "filename": "ui-draft-off-c1122-take-1-cal.mp3",
+      "sha256": "b71fdefdb60dcf24b38dd0459a4295a1a1d50ed9b4da044928833ed59736913f",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.834705; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.34,
+          "peakDbfs": -0.01,
+          "rmsDbfs": -14.94,
+          "loudnessLufsUngated": -12.5,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1625
+        },
+        "output": {
+          "durationSeconds": 0.38,
+          "activeSeconds": 0.329,
+          "peakDbfs": -1.84,
+          "rmsDbfs": -16.83,
+          "loudnessLufsUngated": -14.4,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1499,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.draft-off",
+      "sourceFilename": "ui-draft-off-c1122-take-2.mp3",
+      "sourceSha256": "e712a0e585f8f4e113e40c4ec9df1ec7827038ed78fad90b5331cd502102c84e",
+      "filename": "ui-draft-off-c1122-take-2-cal.mp3",
+      "sha256": "2492a6d40d14bde74996948021f8391d5121fd43e1a526c0d18a07619d4b4002",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.848369; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.387,
+          "peakDbfs": -0.11,
+          "rmsDbfs": -20.39,
+          "loudnessLufsUngated": -17.02,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2210
+        },
+        "output": {
+          "durationSeconds": 0.427,
+          "activeSeconds": 0.381,
+          "peakDbfs": -1.8,
+          "rmsDbfs": -22.26,
+          "loudnessLufsUngated": -18.93,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1989,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.draft-off",
+      "sourceFilename": "ui-draft-off-c1122-take-3.mp3",
+      "sourceSha256": "1a9063b3471de15450fbfbf1c743f31ca1001697652d4b0432814145cb125384",
+      "filename": "ui-draft-off-c1122-take-3-cal.mp3",
+      "sha256": "32b5b0d3e877e3cd3248ad060b0e118915b7931b8d1a7ce705f07cc9b34d1e6e",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.899695; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.259,
+          "peakDbfs": -0.55,
+          "rmsDbfs": -17.13,
+          "loudnessLufsUngated": -14.88,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1266
+        },
+        "output": {
+          "durationSeconds": 0.303,
+          "activeSeconds": 0.257,
+          "peakDbfs": -1.68,
+          "rmsDbfs": -18.38,
+          "loudnessLufsUngated": -16.13,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1104,
+          "trimStartSeconds": 0.053
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.order",
+      "sourceFilename": "ui-order-c1122-take-1.mp3",
+      "sourceSha256": "3ba9b7edb9fc46091613b0436a4cc2d400dc8687bc9fb16db728cba0acda2210",
+      "filename": "ui-order-c1122-take-1-cal.mp3",
+      "sha256": "21a94db7ed4aedeb4b9401506eb114e906e3aa85dbd69949ac49611233a3aafc",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": -0.53,
+          "rmsDbfs": -19.38,
+          "loudnessLufsUngated": -13.48,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6891
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.222,
+          "peakDbfs": -1.55,
+          "rmsDbfs": -17.91,
+          "loudnessLufsUngated": -12.14,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6251,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.order",
+      "sourceFilename": "ui-order-c1122-take-2.mp3",
+      "sourceSha256": "fe83b3a1df5f911d84d4d9623d569fd4fb561f179a8ddb105cbcdcf9512fd435",
+      "filename": "ui-order-c1122-take-2-cal.mp3",
+      "sha256": "ef66223ed9486c9d9f2f0cc76a8f67b538636b4b3d0dc2da8a2235aa344b6993",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": -3.36,
+          "rmsDbfs": -23.99,
+          "loudnessLufsUngated": -18.51,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5151
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.173,
+          "peakDbfs": -5.05,
+          "rmsDbfs": -21.24,
+          "loudnessLufsUngated": -16.02,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4803,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.order",
+      "sourceFilename": "ui-order-c1122-take-3.mp3",
+      "sourceSha256": "d07162a4f7cf64ff370c7c3be0a67840af6701d58d6f180edcb89ca7515a4420",
+      "filename": "ui-order-c1122-take-3-cal.mp3",
+      "sha256": "8363843f03cdafb43582052c784d504ec478a627144c0b36186ff7dfc0ae445a",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": -6.92,
+          "rmsDbfs": -22.76,
+          "loudnessLufsUngated": -16.6,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8210
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.392,
+          "peakDbfs": -10.81,
+          "rmsDbfs": -25.35,
+          "loudnessLufsUngated": -19.34,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7575,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.order",
+      "sourceFilename": "ui-order-c1122-take-4.mp3",
+      "sourceSha256": "f368e9fa5576a87fe74bf970deb1fb1696ead7a333a4e85a1b5cb73270048313",
+      "filename": "ui-order-c1122-take-4-cal.mp3",
+      "sha256": "79932de7d822a08b5841c0e42101cbd00a7a7ba4e346b2ed5a7f226edfbc38ec",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.48,
+          "peakDbfs": -4.71,
+          "rmsDbfs": -24.82,
+          "loudnessLufsUngated": -18.69,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6596
+        },
+        "output": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.18,
+          "peakDbfs": -6.94,
+          "rmsDbfs": -23.77,
+          "loudnessLufsUngated": -17.79,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6172,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.select",
+      "sourceFilename": "ui-select-c1122-take-1.mp3",
+      "sourceSha256": "0859f91eb04f93fb9f74eedf6361c68babff5295a092e41a941f2f4d90f682bf",
+      "filename": "ui-select-c1122-take-1-cal.mp3",
+      "sha256": "80207f4529ef27cd18dd7251be29f7ad5bfe92e6d9083b98295a1f787749926b",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.332,
+          "peakDbfs": -8.69,
+          "rmsDbfs": -31.08,
+          "loudnessLufsUngated": -24.77,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8198
+        },
+        "output": {
+          "durationSeconds": 0.37,
+          "activeSeconds": 0.329,
+          "peakDbfs": -13.52,
+          "rmsDbfs": -35.3,
+          "loudnessLufsUngated": -28.99,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8010,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.select",
+      "sourceFilename": "ui-select-c1122-take-2.mp3",
+      "sourceSha256": "96a4d31a4df0b37592d352cdfd4866fae3d52d314f7537789adf539dbf36f3ca",
+      "filename": "ui-select-c1122-take-2-cal.mp3",
+      "sha256": "ad541b52eebb1a047ca238dbba55a8ed015517862dedc6d7f3da49a6835acea0",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.343,
+          "peakDbfs": -10.16,
+          "rmsDbfs": -34.19,
+          "loudnessLufsUngated": -27.88,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8679
+        },
+        "output": {
+          "durationSeconds": 0.378,
+          "activeSeconds": 0.341,
+          "peakDbfs": -13.86,
+          "rmsDbfs": -38.21,
+          "loudnessLufsUngated": -31.91,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8413,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.select",
+      "sourceFilename": "ui-select-c1122-take-3.mp3",
+      "sourceSha256": "21c4884ca6d43635eddf71e32d9bb0c64196490ddd35fa01e8710a42ecd066e6",
+      "filename": "ui-select-c1122-take-3-cal.mp3",
+      "sha256": "38626b9d798feec798d279ee5aa786ba3dda2c9742d96396d58235f3d7ccc861",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.205,
+          "peakDbfs": -4.23,
+          "rmsDbfs": -26.97,
+          "loudnessLufsUngated": -20.67,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8356
+        },
+        "output": {
+          "durationSeconds": 0.244,
+          "activeSeconds": 0.2,
+          "peakDbfs": -8.07,
+          "rmsDbfs": -30.07,
+          "loudnessLufsUngated": -23.79,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 7849,
+          "trimStartSeconds": 0.002
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.select",
+      "sourceFilename": "ui-select-c1122-take-4.mp3",
+      "sourceSha256": "8454e9bbb0e98ebee6b139fbed2ed649b7967b57ccfc2beaac81480d9258e454",
+      "filename": "ui-select-c1122-take-4-cal.mp3",
+      "sha256": "ccad0eb418b4114406852892ef9e93b76fc43dfb2ae30e3d136d7058c0143244",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.48,
+          "activeSeconds": 0.367,
+          "peakDbfs": -7.36,
+          "rmsDbfs": -35.24,
+          "loudnessLufsUngated": -28.93,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9669
+        },
+        "output": {
+          "durationSeconds": 0.397,
+          "activeSeconds": 0.361,
+          "peakDbfs": -11.35,
+          "rmsDbfs": -39.1,
+          "loudnessLufsUngated": -32.8,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9465,
+          "trimStartSeconds": 0.026
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.research-complete",
+      "sourceFilename": "ui-research-complete-c1122-take-1.mp3",
+      "sourceSha256": "37b742e36a92f16adbb007ac1db52b7ea97e848c8b8aa040ceed332ff2d280d5",
+      "filename": "ui-research-complete-c1122-take-1-cal.mp3",
+      "sha256": "f2f976aa257fd79bc051127122cf33c76d92686ec7b52f605707239a0a92d618",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.852618; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.36,
+          "activeSeconds": 0.927,
+          "peakDbfs": -0.05,
+          "rmsDbfs": -21.54,
+          "loudnessLufsUngated": -16.87,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2840
+        },
+        "output": {
+          "durationSeconds": 0.968,
+          "activeSeconds": 0.91,
+          "peakDbfs": -1.69,
+          "rmsDbfs": -23.49,
+          "loudnessLufsUngated": -18.89,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2647,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.research-complete",
+      "sourceFilename": "ui-research-complete-c1122-take-2.mp3",
+      "sourceSha256": "5a1741447ace5d8f8427893063a74e30a16a1032f5815377aab8059edda803a3",
+      "filename": "ui-research-complete-c1122-take-2-cal.mp3",
+      "sha256": "d81f68a9b0fb07fa1e0619ed37acc8657e646ac2487228d2447712535a1fcc74",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.852186; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.36,
+          "activeSeconds": 0.871,
+          "peakDbfs": -0.04,
+          "rmsDbfs": -25.72,
+          "loudnessLufsUngated": -20.52,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3647
+        },
+        "output": {
+          "durationSeconds": 0.91,
+          "activeSeconds": 0.849,
+          "peakDbfs": -2.02,
+          "rmsDbfs": -27.7,
+          "loudnessLufsUngated": -22.56,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3243,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.research-complete",
+      "sourceFilename": "ui-research-complete-c1122-take-3.mp3",
+      "sourceSha256": "d3dec25ac276fcdca13cc54b5eaa08a7a8eab4c463e882a6103d9092841dd666",
+      "filename": "ui-research-complete-c1122-take-3-cal.mp3",
+      "sha256": "409e05cf6f3eb2651fd55f3985a4de7113920d0b53d6167f3a01dbf88cd518b8",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.846320; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.36,
+          "activeSeconds": 0.562,
+          "peakDbfs": -0.01,
+          "rmsDbfs": -18.41,
+          "loudnessLufsUngated": -13.88,
+          "clippedPercent": 0.0008,
+          "spectralCentroidHz": 3522
+        },
+        "output": {
+          "durationSeconds": 0.602,
+          "activeSeconds": 0.561,
+          "peakDbfs": -1.87,
+          "rmsDbfs": -20.52,
+          "loudnessLufsUngated": -16.11,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2995,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.colonist-downed",
+      "sourceFilename": "ui-colonist-downed-c1122-take-1.mp3",
+      "sourceSha256": "5a59670747e6f448e7c727e61204d49793e384eb5507d78911c53dcccbcb00b4",
+      "filename": "ui-colonist-downed-c1122-take-1-cal.mp3",
+      "sha256": "779b6d444feda42444b6e329881ba1de9253de87f8a5fa200339310fe6c5cf8c",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.880388; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.08,
+          "activeSeconds": 0.987,
+          "peakDbfs": -0.39,
+          "rmsDbfs": -15.23,
+          "loudnessLufsUngated": -17.51,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 158
+        },
+        "output": {
+          "durationSeconds": 1.027,
+          "activeSeconds": 0.951,
+          "peakDbfs": -1.91,
+          "rmsDbfs": -16.62,
+          "loudnessLufsUngated": -18.9,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 150,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.colonist-downed",
+      "sourceFilename": "ui-colonist-downed-c1122-take-2.mp3",
+      "sourceSha256": "bef30fefa96e7b10b0a050a0d99a9ffa82a09d9762a5128e23d9ef55fcd35833",
+      "filename": "ui-colonist-downed-c1122-take-2-cal.mp3",
+      "sha256": "37b44e140119701ed7b82d95117ae5b050ebf4befa0e2c1b4abbf3b112c024f6",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.849420; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.08,
+          "activeSeconds": 1.041,
+          "peakDbfs": 0.31,
+          "rmsDbfs": -13.96,
+          "loudnessLufsUngated": -13.66,
+          "clippedPercent": 0.001,
+          "spectralCentroidHz": 417
+        },
+        "output": {
+          "durationSeconds": 1.08,
+          "activeSeconds": 1.041,
+          "peakDbfs": -1.73,
+          "rmsDbfs": -15.84,
+          "loudnessLufsUngated": -15.57,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 382,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.colonist-downed",
+      "sourceFilename": "ui-colonist-downed-c1122-take-3.mp3",
+      "sourceSha256": "5e604e56c56274fd078e9ce4080b33d8b6b563e3005f914cf41284144d58b992",
+      "filename": "ui-colonist-downed-c1122-take-3-cal.mp3",
+      "sha256": "9140cb09788eab0f8db8f25668f0f236210b261dbb5cb0a8a680342ab462cee4",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.880950; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.08,
+          "activeSeconds": 1.08,
+          "peakDbfs": -0.39,
+          "rmsDbfs": -15.13,
+          "loudnessLufsUngated": -17.83,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 474
+        },
+        "output": {
+          "durationSeconds": 1.08,
+          "activeSeconds": 1.045,
+          "peakDbfs": -1.91,
+          "rmsDbfs": -16.54,
+          "loudnessLufsUngated": -19.25,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 410,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.trade-open",
+      "sourceFilename": "ui-trade-open-c1122-take-1.mp3",
+      "sourceSha256": "1abf4a5cc9fcc49ade0d2acd472e47bf6d4ec87709049e0e4277364024df4067",
+      "filename": "ui-trade-open-c1122-take-1-cal.mp3",
+      "sha256": "93d9f995e5bee7898a23e62d5edfa3c66af179a3e1262f50106de0c17116098a",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.860217; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.651,
+          "peakDbfs": -0.22,
+          "rmsDbfs": -26.46,
+          "loudnessLufsUngated": -23.69,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3220
+        },
+        "output": {
+          "durationSeconds": 0.695,
+          "activeSeconds": 0.629,
+          "peakDbfs": -1.94,
+          "rmsDbfs": -28.09,
+          "loudnessLufsUngated": -25.32,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3307,
+          "trimStartSeconds": 0.005
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.trade-open",
+      "sourceFilename": "ui-trade-open-c1122-take-2.mp3",
+      "sourceSha256": "aa07a7c577234da83a7464107ae8ea9e570985c922fa3072102169908e964ba3",
+      "filename": "ui-trade-open-c1122-take-2-cal.mp3",
+      "sha256": "54d18591d0469890b8479dfa06c81f75c20d3b6b2e2bac6a015c2982016e26b0",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.875668; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.578,
+          "peakDbfs": -0.35,
+          "rmsDbfs": -24.0,
+          "loudnessLufsUngated": -20.41,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1829
+        },
+        "output": {
+          "durationSeconds": 0.622,
+          "activeSeconds": 0.572,
+          "peakDbfs": -1.94,
+          "rmsDbfs": -25.67,
+          "loudnessLufsUngated": -22.1,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1712,
+          "trimStartSeconds": 0.008
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.trade-open",
+      "sourceFilename": "ui-trade-open-c1122-take-3.mp3",
+      "sourceSha256": "97c7ecf228abf91198fbbb9411febc57e156e20d0ae4cd6522c23d0a2ed05e00",
+      "filename": "ui-trade-open-c1122-take-3-cal.mp3",
+      "sha256": "303bd080fa112e2dcd1e6d1e0c0b35626f9fafcf492dd6e76ff25d6bcd886d18",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.859885; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.528,
+          "peakDbfs": -0.26,
+          "rmsDbfs": -21.01,
+          "loudnessLufsUngated": -19.28,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4782
+        },
+        "output": {
+          "durationSeconds": 0.571,
+          "activeSeconds": 0.521,
+          "peakDbfs": -1.91,
+          "rmsDbfs": -22.74,
+          "loudnessLufsUngated": -21.06,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4415,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.trade-execute",
+      "sourceFilename": "ui-trade-execute-c1122-take-1.mp3",
+      "sourceSha256": "2298ad20679f1c9617faee9d081f842ce3935c5aec9fcf0436492de87f355703",
+      "filename": "ui-trade-execute-c1122-take-1-cal.mp3",
+      "sha256": "10c9c3304ef11006dc346311d0d2c3f138b0063b786972b6d6ce7947fbc3b234",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.8,
+          "activeSeconds": 0.696,
+          "peakDbfs": -7.82,
+          "rmsDbfs": -29.31,
+          "loudnessLufsUngated": -23.0,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9951
+        },
+        "output": {
+          "durationSeconds": 0.739,
+          "activeSeconds": 0.695,
+          "peakDbfs": -10.05,
+          "rmsDbfs": -33.21,
+          "loudnessLufsUngated": -26.91,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9625,
+          "trimStartSeconds": 0.002
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.trade-execute",
+      "sourceFilename": "ui-trade-execute-c1122-take-2.mp3",
+      "sourceSha256": "c98b2a777c16387997c51071ef732fead43334d01d796ab4de369fde57eaba49",
+      "filename": "ui-trade-execute-c1122-take-2-cal.mp3",
+      "sha256": "18f74face9a1156e4ac81e880656baa4540480ed0eaecc4b72ca910ff4808541",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.8,
+          "activeSeconds": 0.55,
+          "peakDbfs": -10.23,
+          "rmsDbfs": -29.58,
+          "loudnessLufsUngated": -23.27,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9789
+        },
+        "output": {
+          "durationSeconds": 0.585,
+          "activeSeconds": 0.545,
+          "peakDbfs": -14.38,
+          "rmsDbfs": -33.72,
+          "loudnessLufsUngated": -27.42,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9560,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "ui.trade-execute",
+      "sourceFilename": "ui-trade-execute-c1122-take-3.mp3",
+      "sourceSha256": "4b0568e85153f8d3e03389dc25860193c60558378f924d82576524f8d4714800",
+      "filename": "ui-trade-execute-c1122-take-3-cal.mp3",
+      "sha256": "d59575260fee29ed1342478a14c4626ed5e9476b105b206d90d4018f60ec9f18",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.8,
+          "activeSeconds": 0.8,
+          "peakDbfs": -6.26,
+          "rmsDbfs": -25.62,
+          "loudnessLufsUngated": -19.31,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 10361
+        },
+        "output": {
+          "durationSeconds": 0.669,
+          "activeSeconds": 0.629,
+          "peakDbfs": -9.76,
+          "rmsDbfs": -28.82,
+          "loudnessLufsUngated": -22.51,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9786,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "tutorial.lesson-appear",
+      "sourceFilename": "tutorial-lesson-appear-c1122-take-1.mp3",
+      "sourceSha256": "62739ab73f8f89eb47881983cff2131c2d4b7af6e01ff55a4c73eecd50e8da2b",
+      "filename": "tutorial-lesson-appear-c1122-take-1-cal.mp3",
+      "sha256": "5ccb20a26fa0c88a42e5e2b0d2d7c766dc4885cc0ab36204e66798f43416b696",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.868631; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.36,
+          "peakDbfs": -0.35,
+          "rmsDbfs": -20.23,
+          "loudnessLufsUngated": -15.17,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3937
+        },
+        "output": {
+          "durationSeconds": 0.395,
+          "activeSeconds": 0.35,
+          "peakDbfs": -1.81,
+          "rmsDbfs": -22.05,
+          "loudnessLufsUngated": -17.06,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3708,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "tutorial.lesson-appear",
+      "sourceFilename": "tutorial-lesson-appear-c1122-take-2.mp3",
+      "sourceSha256": "c0b724234b5a0435e3fe51650c12de935781eda1a78c4b11abc3cd925bc8569b",
+      "filename": "tutorial-lesson-appear-c1122-take-2-cal.mp3",
+      "sha256": "61592467748fafbceb73336e3d04618afd70e72b4e2a55ae19717a541710f761",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.384,
+          "peakDbfs": -13.43,
+          "rmsDbfs": -36.66,
+          "loudnessLufsUngated": -31.72,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5652
+        },
+        "output": {
+          "durationSeconds": 0.424,
+          "activeSeconds": 0.383,
+          "peakDbfs": -14.04,
+          "rmsDbfs": -37.93,
+          "loudnessLufsUngated": -33.34,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5318,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "tutorial.lesson-appear",
+      "sourceFilename": "tutorial-lesson-appear-c1122-take-3.mp3",
+      "sourceSha256": "855c8a2e9cba8a6d9052c8c006a0ef16187c2650ba329c6e1bfda671ec8a5af0",
+      "filename": "tutorial-lesson-appear-c1122-take-3-cal.mp3",
+      "sha256": "8721e68c6599c83afc54a69f22bd81913b2b2ceec7a5acb9a2ff16d0f287eb14",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.484,
+          "peakDbfs": -3.03,
+          "rmsDbfs": -29.74,
+          "loudnessLufsUngated": -25.19,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5793
+        },
+        "output": {
+          "durationSeconds": 0.524,
+          "activeSeconds": 0.482,
+          "peakDbfs": -3.71,
+          "rmsDbfs": -30.45,
+          "loudnessLufsUngated": -26.01,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5304,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "tutorial.lesson-complete",
+      "sourceFilename": "tutorial-lesson-complete-c1122-take-1.mp3",
+      "sourceSha256": "c74336642f590e6269e23eea030cff5b526392ba1b79917fbfc43f1afbc13577",
+      "filename": "tutorial-lesson-complete-c1122-take-1-cal.mp3",
+      "sha256": "b641d6886f47e17a97deb369ef7a4ccf4a63e22c5ce1092e820dfb3c87a9588b",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.341,
+          "peakDbfs": -7.5,
+          "rmsDbfs": -28.93,
+          "loudnessLufsUngated": -22.63,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9324
+        },
+        "output": {
+          "durationSeconds": 0.381,
+          "activeSeconds": 0.214,
+          "peakDbfs": -11.31,
+          "rmsDbfs": -30.97,
+          "loudnessLufsUngated": -24.69,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9215,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "tutorial.lesson-complete",
+      "sourceFilename": "tutorial-lesson-complete-c1122-take-2.mp3",
+      "sourceSha256": "3098423b018e31cad662197246e9e578626b204a242293cc60574e9fc72868ba",
+      "filename": "tutorial-lesson-complete-c1122-take-2-cal.mp3",
+      "sha256": "bf73486f031ea86234c050bb7b56ebd212f754b97848471b0188812202c40fbb",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.503,
+          "peakDbfs": -2.69,
+          "rmsDbfs": -21.69,
+          "loudnessLufsUngated": -15.39,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9714
+        },
+        "output": {
+          "durationSeconds": 0.542,
+          "activeSeconds": 0.502,
+          "peakDbfs": -5.62,
+          "rmsDbfs": -25.75,
+          "loudnessLufsUngated": -19.48,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9470,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "tutorial.lesson-complete",
+      "sourceFilename": "tutorial-lesson-complete-c1122-take-3.mp3",
+      "sourceSha256": "5af21e43699e34b0b91dd90e8b6697ed9ac30dd33604414a3da86aec4e755505",
+      "filename": "tutorial-lesson-complete-c1122-take-3-cal.mp3",
+      "sha256": "191acbbd242bd55df5ec4b309bcaec01803515c0db64d9e24112f7be7477f805",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.296,
+          "peakDbfs": -4.01,
+          "rmsDbfs": -24.74,
+          "loudnessLufsUngated": -18.46,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 9250
+        },
+        "output": {
+          "durationSeconds": 0.338,
+          "activeSeconds": 0.295,
+          "peakDbfs": -8.75,
+          "rmsDbfs": -28.89,
+          "loudnessLufsUngated": -22.65,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 8857,
+          "trimStartSeconds": 0.001
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "building.complete",
+      "sourceFilename": "building-complete-c1122-take-1.mp3",
+      "sourceSha256": "2cecb21f19675b31f4203616c79898b7ce44e303b1bd143ef8fd962b166abd44",
+      "filename": "building-complete-c1122-take-1-cal.mp3",
+      "sha256": "5dd16945ee896cca6890dfeff1f5bd64aae1df66592a05288cd62f50938fa7ba",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.827409; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.786,
+          "peakDbfs": 0.15,
+          "rmsDbfs": -17.02,
+          "loudnessLufsUngated": -14.31,
+          "clippedPercent": 0.009,
+          "spectralCentroidHz": 2212
+        },
+        "output": {
+          "durationSeconds": 0.826,
+          "activeSeconds": 0.743,
+          "peakDbfs": -1.47,
+          "rmsDbfs": -18.89,
+          "loudnessLufsUngated": -16.18,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2159,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "building.complete",
+      "sourceFilename": "building-complete-c1122-take-2.mp3",
+      "sourceSha256": "3b3032e5c38411351fd6c7ef213482041ac061df4a25c0ca97d8e6d5afee2dc7",
+      "filename": "building-complete-c1122-take-2-cal.mp3",
+      "sha256": "91d0202a15b58b7db133e0ae667a1dfcf95c17fe6d56e7922bd6ae2fda72e5a5",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.785691; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.618,
+          "peakDbfs": 0.59,
+          "rmsDbfs": -17.47,
+          "loudnessLufsUngated": -14.54,
+          "clippedPercent": 0.0425,
+          "spectralCentroidHz": 2526
+        },
+        "output": {
+          "durationSeconds": 0.658,
+          "activeSeconds": 0.597,
+          "peakDbfs": -1.78,
+          "rmsDbfs": -19.92,
+          "loudnessLufsUngated": -16.97,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2665,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "building.complete",
+      "sourceFilename": "building-complete-c1122-take-3.mp3",
+      "sourceSha256": "ec4e89f64a95224b23343c0dd903c89e51383bf7d7eb365bf5d3ef542ac3034c",
+      "filename": "building-complete-c1122-take-3-cal.mp3",
+      "sha256": "fae09e944803675cba6c15cbcc5237808456f5d54516aa2a11cb217d174d1988",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.808737; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.438,
+          "peakDbfs": 0.34,
+          "rmsDbfs": -15.88,
+          "loudnessLufsUngated": -13.28,
+          "clippedPercent": 0.0206,
+          "spectralCentroidHz": 1413
+        },
+        "output": {
+          "durationSeconds": 0.482,
+          "activeSeconds": 0.435,
+          "peakDbfs": -1.79,
+          "rmsDbfs": -18.12,
+          "loudnessLufsUngated": -15.53,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1442,
+          "trimStartSeconds": 0.084
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "woodcutting.fell",
+      "sourceFilename": "woodcutting-fell-c1122-take-1.mp3",
+      "sourceSha256": "118f7b2926be57f58c226e106acf311f79e83ebc84f06b5f68cba226d07ee8e7",
+      "filename": "woodcutting-fell-c1122-take-1-cal.mp3",
+      "sha256": "33e04536eb94d49dca390532ac36f31ef353604582ecf5035bb2e30ebefa006a",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.718330; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.6,
+          "activeSeconds": 0.711,
+          "peakDbfs": 1.37,
+          "rmsDbfs": -18.57,
+          "loudnessLufsUngated": -15.59,
+          "clippedPercent": 0.0517,
+          "spectralCentroidHz": 5875
+        },
+        "output": {
+          "durationSeconds": 0.751,
+          "activeSeconds": 0.665,
+          "peakDbfs": -1.93,
+          "rmsDbfs": -21.53,
+          "loudnessLufsUngated": -18.56,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5803,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "woodcutting.fell",
+      "sourceFilename": "woodcutting-fell-c1122-take-2.mp3",
+      "sourceSha256": "c81bcfc2f70b0f8c8f6f328bfb2c9ae52efea6315be135bbc97470e50f6c1d40",
+      "filename": "woodcutting-fell-c1122-take-2-cal.mp3",
+      "sha256": "bde702d10012490920673fae51426621dc9c93ee0cdfb3bbb5c5d7889521085e",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.763434; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.6,
+          "activeSeconds": 1.34,
+          "peakDbfs": 0.84,
+          "rmsDbfs": -21.78,
+          "loudnessLufsUngated": -18.72,
+          "clippedPercent": 0.0361,
+          "spectralCentroidHz": 6365
+        },
+        "output": {
+          "durationSeconds": 1.382,
+          "activeSeconds": 1.336,
+          "peakDbfs": -1.41,
+          "rmsDbfs": -24.57,
+          "loudnessLufsUngated": -21.5,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 6160,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "woodcutting.fell",
+      "sourceFilename": "woodcutting-fell-c1122-take-3.mp3",
+      "sourceSha256": "c43fc2feddbdc2453b131e2293a3265aa1efa4ca6f292585dff598e337d626a9",
+      "filename": "woodcutting-fell-c1122-take-3-cal.mp3",
+      "sha256": "3926669898ca1a867c78b991da6354d5c6f64ff45a1f0807220d68fff4246f1e",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.721951; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.6,
+          "activeSeconds": 0.925,
+          "peakDbfs": 1.33,
+          "rmsDbfs": -22.05,
+          "loudnessLufsUngated": -18.58,
+          "clippedPercent": 0.0269,
+          "spectralCentroidHz": 6090
+        },
+        "output": {
+          "durationSeconds": 0.965,
+          "activeSeconds": 0.883,
+          "peakDbfs": -1.79,
+          "rmsDbfs": -25.01,
+          "loudnessLufsUngated": -21.55,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 5798,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "fencegate.move",
+      "sourceFilename": "fencegate-move-c1122-take-1.mp3",
+      "sourceSha256": "78a17fd28edd6d638c89ce0411b486aa49317ef7ac891d058830f8a8bbe0ba55",
+      "filename": "fencegate-move-c1122-take-1-cal.mp3",
+      "sha256": "4df0eebfb545f18feb9c316d20dd4116a077e21b0e4eaeb730261256dbea4caa",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.811079; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.56,
+          "peakDbfs": 0.32,
+          "rmsDbfs": -14.52,
+          "loudnessLufsUngated": -10.36,
+          "clippedPercent": 0.0117,
+          "spectralCentroidHz": 3206
+        },
+        "output": {
+          "durationSeconds": 0.6,
+          "activeSeconds": 0.531,
+          "peakDbfs": -1.89,
+          "rmsDbfs": -16.58,
+          "loudnessLufsUngated": -12.42,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 3456,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "fencegate.move",
+      "sourceFilename": "fencegate-move-c1122-take-2.mp3",
+      "sourceSha256": "be8cbb533b33001e6a647b8545ef08cd10c4ab619228de095ffaffe6ce596e47",
+      "filename": "fencegate-move-c1122-take-2-cal.mp3",
+      "sha256": "1d12facbf3a26cb424f4e5164e26d32af679bde4698f3ac48c6d0a40d3d84116",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.753750; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.577,
+          "peakDbfs": 0.96,
+          "rmsDbfs": -14.71,
+          "loudnessLufsUngated": -10.17,
+          "clippedPercent": 0.055,
+          "spectralCentroidHz": 4655
+        },
+        "output": {
+          "durationSeconds": 0.617,
+          "activeSeconds": 0.565,
+          "peakDbfs": -1.74,
+          "rmsDbfs": -17.55,
+          "loudnessLufsUngated": -12.99,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4660,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "fencegate.move",
+      "sourceFilename": "fencegate-move-c1122-take-3.mp3",
+      "sourceSha256": "431d90da9724d5d4ddabc94684cc1130978837dbc0585cbc8d578520556c47f8",
+      "filename": "fencegate-move-c1122-take-3-cal.mp3",
+      "sha256": "d2276cf8e2169bf7d30e54a1a961dc425ac8e04991c0af0bdde250b37b8de5ab",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.861237; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.68,
+          "activeSeconds": 0.614,
+          "peakDbfs": -0.2,
+          "rmsDbfs": -20.83,
+          "loudnessLufsUngated": -17.67,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2735
+        },
+        "output": {
+          "durationSeconds": 0.654,
+          "activeSeconds": 0.599,
+          "peakDbfs": -1.23,
+          "rmsDbfs": -22.41,
+          "loudnessLufsUngated": -19.2,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2853,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.neutral",
+      "sourceFilename": "letter-neutral-c1122-take-4.mp3",
+      "sourceSha256": "98bed97af4073712282692cf0c03e15c3a8cba59c73d14126ba08c96887a5689",
+      "filename": "letter-neutral-c1122-take-4-cal.mp3",
+      "sha256": "c845ce221cf70017425c4238dd8257c685dcd19d10959e6798905e4fd930c9db",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.838788; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.345,
+          "peakDbfs": -0.06,
+          "rmsDbfs": -19.77,
+          "loudnessLufsUngated": -17.05,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1445
+        },
+        "output": {
+          "durationSeconds": 0.389,
+          "activeSeconds": 0.342,
+          "peakDbfs": -1.83,
+          "rmsDbfs": -21.67,
+          "loudnessLufsUngated": -18.96,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1347,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "quest.accepted",
+      "sourceFilename": "quest-accepted-c1122-take-4.mp3",
+      "sourceSha256": "29e6b69f7d0da54bd8e47d5c6ca572d7e29a2087fbf6a1c9664d488605c8cd9c",
+      "filename": "quest-accepted-c1122-take-4-cal.mp3",
+      "sha256": "b5b207d02314f364778139f141db1e80fabd7c27a56117bafd49c7826dfa4d8f",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.812445; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.305,
+          "peakDbfs": 0.68,
+          "rmsDbfs": -17.73,
+          "loudnessLufsUngated": -14.61,
+          "clippedPercent": 0.0219,
+          "spectralCentroidHz": 3111
+        },
+        "output": {
+          "durationSeconds": 0.349,
+          "activeSeconds": 0.3,
+          "peakDbfs": -1.53,
+          "rmsDbfs": -19.99,
+          "loudnessLufsUngated": -16.97,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2665,
+          "trimStartSeconds": 0.024
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.neutral",
+      "sourceFilename": "letter-neutral-c1122-take-5.mp3",
+      "sourceSha256": "4669dac78c606fcc4dff610e9d724bf4c9e3e8000ffeeea6d048d1f2b42a4e16",
+      "filename": "letter-neutral-c1122-take-5-cal.mp3",
+      "sha256": "e71430a6ea969478a4b010cef9f5c42575fa194e08bae83f1fc95748270194ec",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.877517; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.317,
+          "peakDbfs": -0.38,
+          "rmsDbfs": -23.22,
+          "loudnessLufsUngated": -20.83,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 805
+        },
+        "output": {
+          "durationSeconds": 0.361,
+          "activeSeconds": 0.316,
+          "peakDbfs": -1.87,
+          "rmsDbfs": -24.76,
+          "loudnessLufsUngated": -22.37,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 781,
+          "trimStartSeconds": 0.003
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "quest.accepted",
+      "sourceFilename": "quest-accepted-c1122-take-5.mp3",
+      "sourceSha256": "68653a653e304d154111b14202308e064c686a8dc1ebe4b116a29f74362317aa",
+      "filename": "quest-accepted-c1122-take-5-cal.mp3",
+      "sha256": "3dfac4cc6df3149d2e0345ffd16302ad2777af205e1692d88131661cf71bf199",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.830924; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.88,
+          "peakDbfs": 0.0,
+          "rmsDbfs": -19.62,
+          "loudnessLufsUngated": -14.91,
+          "clippedPercent": 0.0013,
+          "spectralCentroidHz": 4555
+        },
+        "output": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.28,
+          "peakDbfs": -2.37,
+          "rmsDbfs": -17.09,
+          "loudnessLufsUngated": -12.37,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2095,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "letter.neutral",
+      "sourceFilename": "letter-neutral-c1122-take-6.mp3",
+      "sourceSha256": "c41e64d975e745464b67c00c92ac1625ab0e7ba363ad92270a11c770ffe35551",
+      "filename": "letter-neutral-c1122-take-6-cal.mp3",
+      "sha256": "7a42ab9d9029367b6968112621afd181add395488a86f1c0e8d848281acdfd97",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.871179; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.418,
+          "peakDbfs": -0.35,
+          "rmsDbfs": -21.75,
+          "loudnessLufsUngated": -19.32,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 951
+        },
+        "output": {
+          "durationSeconds": 0.462,
+          "activeSeconds": 0.416,
+          "peakDbfs": -1.85,
+          "rmsDbfs": -23.36,
+          "loudnessLufsUngated": -20.94,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 901,
+          "trimStartSeconds": 0.043
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "quest.accepted",
+      "sourceFilename": "quest-accepted-c1122-take-6.mp3",
+      "sourceSha256": "6de2521e19700297c7fd01a1b9591a0fc3d198a8a4811ab3462b3148e5c4b52d",
+      "filename": "quest-accepted-c1122-take-6-cal.mp3",
+      "sha256": "fd2fd7be778da59f34b8df5fd5350a90947e086fde91f3a65466b27a686111f8",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "high shelf -4 dB above 5000 Hz (Q 0.707); trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.801844; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.88,
+          "activeSeconds": 0.265,
+          "peakDbfs": 0.65,
+          "rmsDbfs": -21.16,
+          "loudnessLufsUngated": -16.62,
+          "clippedPercent": 0.009,
+          "spectralCentroidHz": 5108
+        },
+        "output": {
+          "durationSeconds": 0.305,
+          "activeSeconds": 0.243,
+          "peakDbfs": -1.24,
+          "rmsDbfs": -23.59,
+          "loudnessLufsUngated": -19.27,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 4387,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
     }
   ]
 }

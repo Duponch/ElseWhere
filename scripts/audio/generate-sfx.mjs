@@ -14,16 +14,29 @@ const manifestPath = resolve(repo, 'public/assets/audio/manifest.json');
 const sfxDir = resolve(repo, 'public/assets/audio/sfx');
 
 function usage() {
-  console.log('Usage: node scripts/audio/generate-sfx.mjs [--id mining.hit] [--generate | --publish]');
-  console.log('Without an action: read-only plan and manifest check. Generation is one ID per invocation.');
+  console.log('Usage: node scripts/audio/generate-sfx.mjs [--id mining.hit] [--take 2] [--generate | --publish]');
+  console.log('Without an action: read-only plan and manifest check. Generation is one ID (and one take) per invocation.');
+}
+
+/** A plan filename ending in `-take-1.mp3` names every take of the cue:
+ * take N replaces that suffix. Other filenames have a single take. */
+export function takeFilename(filename, take) {
+  if (take === 1) return filename;
+  if (!/-take-1\.mp3$/.test(filename)) throw new Error(`${filename} has no numbered takes`);
+  return filename.replace(/-take-1\.mp3$/, `-take-${take}.mp3`);
 }
 
 function parseArgs(args) {
   let id;
+  let take = 1;
   let generate = false;
   let publish = false;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--id' && !id) id = args[++i];
+    else if (args[i] === '--take') {
+      take = Number(args[++i]);
+      if (!Number.isInteger(take) || take < 1 || take > 9) throw new Error('--take expects an integer from 1 to 9');
+    }
     else if (args[i] === '--generate') generate = true;
     else if (args[i] === '--publish') publish = true;
     else if (args[i] === '--dry-run') continue;
@@ -32,7 +45,8 @@ function parseArgs(args) {
   }
   if (generate && publish) throw new Error('Choose --generate or --publish');
   if ((generate || publish) && !id) throw new Error('An action requires one --id');
-  return { id, generate, publish };
+  if (take !== 1 && !generate) throw new Error('--take only applies to --generate');
+  return { id, take, generate, publish };
 }
 
 export function assertPlan(plan) {
@@ -118,7 +132,7 @@ export async function assertPublishedCue(cueId, item, published, log) {
 }
 
 async function main() {
-  const { id, generate, publish } = parseArgs(process.argv.slice(2));
+  const { id, take, generate, publish } = parseArgs(process.argv.slice(2));
   const plan = JSON.parse(await readFile(planPath, 'utf8'));
   const log = JSON.parse(await readFile(logPath, 'utf8'));
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
@@ -139,9 +153,10 @@ async function main() {
   if (!generate && !publish) return;
   if (manifest.events[id]) throw new Error(`${id} already published; review it before generating a new variant`);
   const item = plan.events[id];
-  const destination = resolve(sfxDir, item.filename);
+  const filename = takeFilename(item.filename, take);
+  const destination = resolve(sfxDir, filename);
   const existing = await stat(destination).catch(() => null);
-  if (generate && existing) throw new Error(`${item.filename} already exists; audition or rename the candidate before regeneration`);
+  if (generate && existing) throw new Error(`${filename} already exists; audition or rename the candidate before regeneration`);
   if (publish) {
     if (!existing) throw new Error(`${item.filename} is missing; generate and audition it first`);
     const bytes = await readFile(destination);
@@ -183,7 +198,15 @@ async function main() {
     }),
     signal: AbortSignal.timeout(60_000),
   });
-  if (!response.ok) throw new Error(`ElevenLabs generation failed: HTTP ${response.status}`);
+  if (!response.ok) {
+    // The body may name the refusal (e.g. quota_exceeded); it never echoes the key.
+    const detail = (await response.text().catch(() => '')).slice(0, 300);
+    throw new Error(`ElevenLabs generation failed: HTTP ${response.status} ${detail}`);
+  }
+  // The API reports the billed cost of the request in this header when present.
+  const costHeader = response.headers.get('character-cost');
+  const billedCredits = costHeader !== null && Number.isFinite(Number(costHeader)) ? Number(costHeader) : undefined;
+  const requestId = response.headers.get('request-id') ?? undefined;
   const contentType = response.headers.get('content-type') ?? '';
   if (!/audio\/mpeg|audio\/mp3|application\/octet-stream/i.test(contentType)) throw new Error(`Unexpected response type: ${contentType}`);
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -196,9 +219,12 @@ async function main() {
     ...log,
     generations: [...log.generations, {
       id,
-      filename: item.filename,
+      filename,
+      ...(/-take-\d\.mp3$/.test(filename) ? { take } : {}),
       generatedAt: new Date().toISOString(),
       provider: 'ElevenLabs',
+      providerRoute: 'API /v1/sound-generation',
+      ...(requestId ? { requestId } : {}),
       modelId: plan.modelId,
       outputFormat: plan.outputFormat,
       prompt: item.prompt,
@@ -206,13 +232,15 @@ async function main() {
       promptInfluence: item.promptInfluence,
       loop: item.loop,
       sha256,
+      bytes: bytes.length,
+      ...(billedCredits !== undefined ? { billedCredits } : {}),
       estimatedCredits: [Math.ceil(item.durationSeconds * 20), Math.ceil(item.durationSeconds * 40)],
     }],
   };
   const tempLog = `${logPath}.tmp-${process.pid}`;
   await writeFile(tempLog, `${JSON.stringify(nextLog, null, 2)}\n`, { flag: 'wx' });
   await rename(tempLog, logPath);
-  console.log(`Generated candidate ${id}: ${bytes.length} bytes, SHA-256 ${sha256}`);
+  console.log(`Generated candidate ${id} (${filename}): ${bytes.length} bytes, SHA-256 ${sha256}, billed ${billedCredits ?? 'unreported'} credits`);
   console.log('Audition the candidate, then publish it with --id and --publish.');
 }
 

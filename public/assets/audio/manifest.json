@@ -741,6 +741,638 @@
       "maxDistance": 18,
       "loop": false,
       "spatial": true
+    },
+    "ui.tab-open": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-tab-open-c1122-take-1-cal.mp3",
+          "gain": 0.588
+        },
+        {
+          "src": "/assets/audio/sfx/ui-tab-open-c1122-take-2-cal.mp3",
+          "gain": 0.93
+        },
+        {
+          "src": "/assets/audio/sfx/ui-tab-open-c1122-take-3-cal.mp3",
+          "gain": 1.671
+        },
+        {
+          "src": "/assets/audio/sfx/ui-tab-open-c1122-take-4-cal.mp3",
+          "gain": 0.751
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "letter.threat-big": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/letter-threat-big-c1122-take-1-cal.mp3",
+          "gain": 1.382
+        },
+        {
+          "src": "/assets/audio/sfx/letter-threat-big-c1122-take-2-cal.mp3",
+          "gain": 2.236
+        },
+        {
+          "src": "/assets/audio/sfx/letter-threat-big-c1122-take-3-cal.mp3",
+          "gain": 2.567
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "letter.threat-small": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/letter-threat-small-c1122-take-1-cal.mp3",
+          "gain": 1.57
+        },
+        {
+          "src": "/assets/audio/sfx/letter-threat-small-c1122-take-2-cal.mp3",
+          "gain": 1.646
+        },
+        {
+          "src": "/assets/audio/sfx/letter-threat-small-c1122-take-3-cal.mp3",
+          "gain": 0.544
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "letter.negative": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/letter-negative-c1122-take-1-cal.mp3",
+          "gain": 0.269
+        },
+        {
+          "src": "/assets/audio/sfx/letter-negative-c1122-take-2-cal.mp3",
+          "gain": 1.176
+        },
+        {
+          "src": "/assets/audio/sfx/letter-negative-c1122-take-3-cal.mp3",
+          "gain": 0.181
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "letter.positive": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/letter-positive-c1122-take-1-cal.mp3",
+          "gain": 1.208
+        },
+        {
+          "src": "/assets/audio/sfx/letter-positive-c1122-take-2-cal.mp3",
+          "gain": 1.843
+        },
+        {
+          "src": "/assets/audio/sfx/letter-positive-c1122-take-3-cal.mp3",
+          "gain": 1.467
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "alert.high": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/alert-high-c1122-take-1-cal.mp3",
+          "gain": 4.416
+        },
+        {
+          "src": "/assets/audio/sfx/alert-high-c1122-take-2-cal.mp3",
+          "gain": 0.592
+        },
+        {
+          "src": "/assets/audio/sfx/alert-high-c1122-take-3-cal.mp3",
+          "gain": 0.967
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "alert.critical": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/alert-critical-c1122-take-1-cal.mp3",
+          "gain": 1.064
+        },
+        {
+          "src": "/assets/audio/sfx/alert-critical-c1122-take-2-cal.mp3",
+          "gain": 0.655
+        },
+        {
+          "src": "/assets/audio/sfx/alert-critical-c1122-take-3-cal.mp3",
+          "gain": 0.558
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.tab-close": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-tab-close-c1122-take-1-cal.mp3",
+          "gain": 0.406
+        },
+        {
+          "src": "/assets/audio/sfx/ui-tab-close-c1122-take-2-cal.mp3",
+          "gain": 0.318
+        },
+        {
+          "src": "/assets/audio/sfx/ui-tab-close-c1122-take-3-cal.mp3",
+          "gain": 0.39
+        },
+        {
+          "src": "/assets/audio/sfx/ui-tab-close-c1122-take-4-cal.mp3",
+          "gain": 0.198
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.toggle-on": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-toggle-on-c1122-take-1-cal.mp3",
+          "gain": 0.473
+        },
+        {
+          "src": "/assets/audio/sfx/ui-toggle-on-c1122-take-2-cal.mp3",
+          "gain": 0.243
+        },
+        {
+          "src": "/assets/audio/sfx/ui-toggle-on-c1122-take-3-cal.mp3",
+          "gain": 0.275
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.toggle-off": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-toggle-off-c1122-take-1-cal.mp3",
+          "gain": 0.272
+        },
+        {
+          "src": "/assets/audio/sfx/ui-toggle-off-c1122-take-2-cal.mp3",
+          "gain": 0.249
+        },
+        {
+          "src": "/assets/audio/sfx/ui-toggle-off-c1122-take-3-cal.mp3",
+          "gain": 0.514
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.clock-pause": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-clock-pause-c1122-take-1-cal.mp3",
+          "gain": 1.271
+        },
+        {
+          "src": "/assets/audio/sfx/ui-clock-pause-c1122-take-2-cal.mp3",
+          "gain": 1.469
+        },
+        {
+          "src": "/assets/audio/sfx/ui-clock-pause-c1122-take-3-cal.mp3",
+          "gain": 0.769
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.clock-run": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-clock-run-c1122-take-1-cal.mp3",
+          "gain": 0.808
+        },
+        {
+          "src": "/assets/audio/sfx/ui-clock-run-c1122-take-2-cal.mp3",
+          "gain": 0.735
+        },
+        {
+          "src": "/assets/audio/sfx/ui-clock-run-c1122-take-3-cal.mp3",
+          "gain": 1.084
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.tool-select": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-tool-select-c1122-take-1-cal.mp3",
+          "gain": 1.138
+        },
+        {
+          "src": "/assets/audio/sfx/ui-tool-select-c1122-take-2-cal.mp3",
+          "gain": 0.264
+        },
+        {
+          "src": "/assets/audio/sfx/ui-tool-select-c1122-take-3-cal.mp3",
+          "gain": 0.619
+        },
+        {
+          "src": "/assets/audio/sfx/ui-tool-select-c1122-take-4-cal.mp3",
+          "gain": 0.295
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.designate": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-designate-c1122-take-1-cal.mp3",
+          "gain": 1.774
+        },
+        {
+          "src": "/assets/audio/sfx/ui-designate-c1122-take-2-cal.mp3",
+          "gain": 1.795
+        },
+        {
+          "src": "/assets/audio/sfx/ui-designate-c1122-take-3-cal.mp3",
+          "gain": 1.533
+        },
+        {
+          "src": "/assets/audio/sfx/ui-designate-c1122-take-4-cal.mp3",
+          "gain": 0.631
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.designate-zone": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-designate-zone-c1122-take-1-cal.mp3",
+          "gain": 0.732
+        },
+        {
+          "src": "/assets/audio/sfx/ui-designate-zone-c1122-take-2-cal.mp3",
+          "gain": 0.804
+        },
+        {
+          "src": "/assets/audio/sfx/ui-designate-zone-c1122-take-3-cal.mp3",
+          "gain": 0.985
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.designate-cancel": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-designate-cancel-c1122-take-1-cal.mp3",
+          "gain": 3.148
+        },
+        {
+          "src": "/assets/audio/sfx/ui-designate-cancel-c1122-take-2-cal.mp3",
+          "gain": 1.272
+        },
+        {
+          "src": "/assets/audio/sfx/ui-designate-cancel-c1122-take-3-cal.mp3",
+          "gain": 3.037
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.place-building": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-place-building-c1122-take-1-cal.mp3",
+          "gain": 0.32
+        },
+        {
+          "src": "/assets/audio/sfx/ui-place-building-c1122-take-2-cal.mp3",
+          "gain": 0.297
+        },
+        {
+          "src": "/assets/audio/sfx/ui-place-building-c1122-take-3-cal.mp3",
+          "gain": 0.391
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.draft-on": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-draft-on-c1122-take-1-cal.mp3",
+          "gain": 0.502
+        },
+        {
+          "src": "/assets/audio/sfx/ui-draft-on-c1122-take-2-cal.mp3",
+          "gain": 0.607
+        },
+        {
+          "src": "/assets/audio/sfx/ui-draft-on-c1122-take-3-cal.mp3",
+          "gain": 0.507
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.draft-off": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-draft-off-c1122-take-1-cal.mp3",
+          "gain": 0.174
+        },
+        {
+          "src": "/assets/audio/sfx/ui-draft-off-c1122-take-2-cal.mp3",
+          "gain": 0.326
+        },
+        {
+          "src": "/assets/audio/sfx/ui-draft-off-c1122-take-3-cal.mp3",
+          "gain": 0.208
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.order": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-order-c1122-take-1-cal.mp3",
+          "gain": 0.197
+        },
+        {
+          "src": "/assets/audio/sfx/ui-order-c1122-take-2-cal.mp3",
+          "gain": 0.29
+        },
+        {
+          "src": "/assets/audio/sfx/ui-order-c1122-take-3-cal.mp3",
+          "gain": 0.465
+        },
+        {
+          "src": "/assets/audio/sfx/ui-order-c1122-take-4-cal.mp3",
+          "gain": 0.388
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.select": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-select-c1122-take-1-cal.mp3",
+          "gain": 1.462
+        },
+        {
+          "src": "/assets/audio/sfx/ui-select-c1122-take-2-cal.mp3",
+          "gain": 1.963
+        },
+        {
+          "src": "/assets/audio/sfx/ui-select-c1122-take-3-cal.mp3",
+          "gain": 0.801
+        },
+        {
+          "src": "/assets/audio/sfx/ui-select-c1122-take-4-cal.mp3",
+          "gain": 1.471
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.research-complete": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-research-complete-c1122-take-1-cal.mp3",
+          "gain": 0.53
+        },
+        {
+          "src": "/assets/audio/sfx/ui-research-complete-c1122-take-2-cal.mp3",
+          "gain": 0.564
+        },
+        {
+          "src": "/assets/audio/sfx/ui-research-complete-c1122-take-3-cal.mp3",
+          "gain": 0.377
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.colonist-downed": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-colonist-downed-c1122-take-1-cal.mp3",
+          "gain": 0.24
+        },
+        {
+          "src": "/assets/audio/sfx/ui-colonist-downed-c1122-take-2-cal.mp3",
+          "gain": 0.22
+        },
+        {
+          "src": "/assets/audio/sfx/ui-colonist-downed-c1122-take-3-cal.mp3",
+          "gain": 0.238
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.trade-open": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-trade-open-c1122-take-1-cal.mp3",
+          "gain": 0.558
+        },
+        {
+          "src": "/assets/audio/sfx/ui-trade-open-c1122-take-2-cal.mp3",
+          "gain": 0.558
+        },
+        {
+          "src": "/assets/audio/sfx/ui-trade-open-c1122-take-3-cal.mp3",
+          "gain": 0.486
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "ui.trade-execute": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ui-trade-execute-c1122-take-1-cal.mp3",
+          "gain": 1.421
+        },
+        {
+          "src": "/assets/audio/sfx/ui-trade-execute-c1122-take-2-cal.mp3",
+          "gain": 1.722
+        },
+        {
+          "src": "/assets/audio/sfx/ui-trade-execute-c1122-take-3-cal.mp3",
+          "gain": 0.979
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "tutorial.lesson-appear": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/tutorial-lesson-appear-c1122-take-1-cal.mp3",
+          "gain": 0.449
+        },
+        {
+          "src": "/assets/audio/sfx/tutorial-lesson-appear-c1122-take-2-cal.mp3",
+          "gain": 2.249
+        },
+        {
+          "src": "/assets/audio/sfx/tutorial-lesson-appear-c1122-take-3-cal.mp3",
+          "gain": 0.685
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "tutorial.lesson-complete": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/tutorial-lesson-complete-c1122-take-1-cal.mp3",
+          "gain": 1.255
+        },
+        {
+          "src": "/assets/audio/sfx/tutorial-lesson-complete-c1122-take-2-cal.mp3",
+          "gain": 0.688
+        },
+        {
+          "src": "/assets/audio/sfx/tutorial-lesson-complete-c1122-take-3-cal.mp3",
+          "gain": 0.987
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "building.complete": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/building-complete-c1122-take-1-cal.mp3",
+          "gain": 0.623
+        },
+        {
+          "src": "/assets/audio/sfx/building-complete-c1122-take-2-cal.mp3",
+          "gain": 0.701
+        },
+        {
+          "src": "/assets/audio/sfx/building-complete-c1122-take-3-cal.mp3",
+          "gain": 0.57
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "woodcutting.fell": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/woodcutting-fell-c1122-take-1-cal.mp3",
+          "gain": 0.788
+        },
+        {
+          "src": "/assets/audio/sfx/woodcutting-fell-c1122-take-2-cal.mp3",
+          "gain": 0.742
+        },
+        {
+          "src": "/assets/audio/sfx/woodcutting-fell-c1122-take-3-cal.mp3",
+          "gain": 0.775
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 26,
+      "loop": false
+    },
+    "fencegate.move": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/fencegate-move-c1122-take-1-cal.mp3",
+          "gain": 0.478
+        },
+        {
+          "src": "/assets/audio/sfx/fencegate-move-c1122-take-2-cal.mp3",
+          "gain": 0.534
+        },
+        {
+          "src": "/assets/audio/sfx/fencegate-move-c1122-take-3-cal.mp3",
+          "gain": 0.727
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "letter.neutral": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/letter-neutral-c1122-take-4-cal.mp3",
+          "gain": 0.43
+        },
+        {
+          "src": "/assets/audio/sfx/letter-neutral-c1122-take-5-cal.mp3",
+          "gain": 0.554
+        },
+        {
+          "src": "/assets/audio/sfx/letter-neutral-c1122-take-6-cal.mp3",
+          "gain": 0.522
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
+    },
+    "quest.accepted": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/quest-accepted-c1122-take-4-cal.mp3",
+          "gain": 0.354
+        },
+        {
+          "src": "/assets/audio/sfx/quest-accepted-c1122-take-5-cal.mp3",
+          "gain": 0.254
+        },
+        {
+          "src": "/assets/audio/sfx/quest-accepted-c1122-take-6-cal.mp3",
+          "gain": 0.515
+        }
+      ],
+      "gain": 1,
+      "loop": false,
+      "spatial": false
     }
   }
 }

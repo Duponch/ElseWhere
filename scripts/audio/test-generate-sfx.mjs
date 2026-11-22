@@ -4,7 +4,7 @@ import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { after, test } from 'node:test';
-import { assertPlan } from './generate-sfx.mjs';
+import { assertPlan, takeFilename } from './generate-sfx.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const script = join(repo, 'scripts/audio/generate-sfx.mjs');
@@ -25,6 +25,12 @@ test('accepts hyphenated cue segments and rejects unsafe IDs', () => {
     'machine.generator-', 'Machine.wood-generator', 'machine.wood_generator']) {
     assert.throws(() => assertPlan(plan(id)), /Invalid cue ID/);
   }
+});
+
+test('numbered takes derive their filename from the first take only', () => {
+  assert.equal(takeFilename('ui-tab-open-c1122-take-1.mp3', 1), 'ui-tab-open-c1122-take-1.mp3');
+  assert.equal(takeFilename('ui-tab-open-c1122-take-1.mp3', 3), 'ui-tab-open-c1122-take-3.mp3');
+  assert.throws(() => takeFilename('mining-pickaxe-ping-v2.mp3', 2), /no numbered takes/);
 });
 
 await mkdir(fixtureRoot, { recursive: true });

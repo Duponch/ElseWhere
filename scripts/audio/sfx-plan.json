@@ -497,6 +497,294 @@
       "loop": false,
       "gain": 1,
       "maxDistance": 18
+    },
+    "letter.threat-big": {
+      "filename": "letter-threat-big-c1122-take-1.mp3",
+      "prompt": "Urgent letter notification: three low warm wooden marimba strikes, the last one held, with a soft muffled drum thump underneath, tense and serious but not harsh. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 1.5,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "letter.threat-small": {
+      "filename": "letter-threat-small-c1122-take-1.mp3",
+      "prompt": "Warning letter notification: two low warm wooden mallet notes, the second slightly lower, gently urgent and clear. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 1.2,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "letter.negative": {
+      "filename": "letter-negative-c1122-take-1.mp3",
+      "prompt": "Concerned letter notification: one muted felt mallet note on a warm wooden bar with a slight downward bend, sober and gentle, not alarming. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "letter.neutral": {
+      "filename": "letter-neutral-c1122-take-1.mp3",
+      "prompt": "Neutral letter arrival: one clear soft round wooden knock on a desk followed by a short crisp paper envelope flap, calm, informative and clearly audible. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.9,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "letter.positive": {
+      "filename": "letter-positive-c1122-take-1.mp3",
+      "prompt": "Good news letter notification: two gentle ascending warm glockenspiel notes softened with felt, cheerful but quiet, no fanfare. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 1.1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "alert.high": {
+      "filename": "alert-high-c1122-take-1.mp3",
+      "prompt": "One tiny soft desk bell ding, small and warm, with a short gentle ring-out, a quiet call for attention. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.6,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "alert.critical": {
+      "filename": "alert-critical-c1122-take-1.mp3",
+      "prompt": "Two quick small brass bell dings close together, warm and clear, insistent but never harsh, no siren or electronic beep. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.9,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.tab-open": {
+      "filename": "ui-tab-open-c1122-take-1.mp3",
+      "prompt": "One soft cardboard tab flipping open with a light paper whoosh, a menu page opening. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.5,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.tab-close": {
+      "filename": "ui-tab-close-c1122-take-1.mp3",
+      "prompt": "One soft cardboard tab folding shut with a gentle muffled paper pat, a menu page closing. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.5,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.toggle-on": {
+      "filename": "ui-toggle-on-c1122-take-1.mp3",
+      "prompt": "One small wooden toggle switched on: a light rising double tick, crisp but soft checkbox feedback, no electronic beep. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.5,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.toggle-off": {
+      "filename": "ui-toggle-off-c1122-take-1.mp3",
+      "prompt": "One small wooden toggle switched off: a light falling double tick, soft and muted checkbox feedback, no electronic beep. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.5,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.clock-pause": {
+      "filename": "ui-clock-pause-c1122-take-1.mp3",
+      "prompt": "A small pocket watch being stopped: one soft mechanical clock click and a tiny damped spring, no ticking loop. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.5,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.clock-run": {
+      "filename": "ui-clock-run-c1122-take-1.mp3",
+      "prompt": "A small wind-up clock starting: two quick soft mechanical ticks and a tiny winding ratchet, no alarm or ticking loop. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.6,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.tool-select": {
+      "filename": "ui-tool-select-c1122-take-1.mp3",
+      "prompt": "One tiny wooden peg tick, very short and soft, like picking a tool from a wooden tray, subtle selection feedback. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.5,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.designate": {
+      "filename": "ui-designate-c1122-take-1.mp3",
+      "prompt": "One soft pencil mark on thick paper: a short quick scribble stroke, marking an order on a map. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.5,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.designate-zone": {
+      "filename": "ui-designate-zone-c1122-take-1.mp3",
+      "prompt": "A soft chalk line drawn on cardboard: one short smooth chalk stroke ending with a light tap, marking an area. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.6,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.designate-cancel": {
+      "filename": "ui-designate-cancel-c1122-take-1.mp3",
+      "prompt": "A soft pencil eraser rubbed quickly on paper, one short brushing stroke, removing a mark. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.5,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.place-building": {
+      "filename": "ui-place-building-c1122-take-1.mp3",
+      "prompt": "A small wooden block placed on a cardboard map: one soft hollow wood knock with a light paper rustle, placing a blueprint. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.6,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.draft-on": {
+      "filename": "ui-draft-on-c1122-take-1.mp3",
+      "prompt": "A colonist getting ready: a short leather strap tightened and a soft metal buckle clink, no gunshot or shout. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.7,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.draft-off": {
+      "filename": "ui-draft-off-c1122-take-1.mp3",
+      "prompt": "Gear being set down: a soft leather strap loosening and a muted buckle tap, relaxed. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.7,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.order": {
+      "filename": "ui-order-c1122-take-1.mp3",
+      "prompt": "One short soft double tap of a wooden marker on a map, a confident move order. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.5,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.select": {
+      "filename": "ui-select-c1122-take-1.mp3",
+      "prompt": "One very soft round wooden bead click, tiny and gentle selection feedback. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.5,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.research-complete": {
+      "filename": "ui-research-complete-c1122-take-1.mp3",
+      "prompt": "Discovery notification: a soft paper page turn followed by three gentle rising warm marimba notes, satisfying and quiet, no fanfare. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 1.4,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.colonist-downed": {
+      "filename": "ui-colonist-downed-c1122-take-1.mp3",
+      "prompt": "Worried health notification: one low soft felt mallet note on a warm wooden bar followed by a muted double heartbeat thump, concerned but restrained, no scream. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 1.1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.trade-open": {
+      "filename": "ui-trade-open-c1122-take-1.mp3",
+      "prompt": "A small trading ledger opening: a soft leather-bound book opening with a light paper flutter and one warm wooden counter tap, welcoming. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "ui.trade-execute": {
+      "filename": "ui-trade-execute-c1122-take-1.mp3",
+      "prompt": "A small handful of silver coins set down on a wooden counter: a soft clink of a few coins and a light leather pouch pat, satisfying, no cash register. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.8,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "tutorial.lesson-appear": {
+      "filename": "tutorial-lesson-appear-c1122-take-1.mp3",
+      "prompt": "A small paper note card slid onto a wooden desk with a soft paper whoosh and a gentle tap, an inviting hint. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.7,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "tutorial.lesson-complete": {
+      "filename": "tutorial-lesson-complete-c1122-take-1.mp3",
+      "prompt": "Small success cue: a soft pencil check mark tick followed by one gentle warm marimba note, encouraging and quiet, no fanfare. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "quest.accepted": {
+      "filename": "quest-accepted-c1122-take-1.mp3",
+      "prompt": "Quest accepted confirmation: one firm warm wooden stamp pressed on paper with a soft thump, then a gentle low wooden chime note, clearly audible and satisfying. Warm cozy pastel colony game, dry close tactile foley, quick onset and short clean decay. Single cue then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.9,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "spatial": false
+    },
+    "building.complete": {
+      "filename": "building-complete-c1122-take-1.mp3",
+      "prompt": "A small wooden structure just completed: a final soft hammer tap and a light settling creak of timber, satisfying, realistic close dry foley for a cozy colony game. Single cue then silence, no collapse, voice, music or ambience.",
+      "durationSeconds": 0.9,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "maxDistance": 20
+    },
+    "woodcutting.fell": {
+      "filename": "woodcutting-fell-c1122-take-1.mp3",
+      "prompt": "A small tree falling after being chopped with an axe: a short wood crack, a soft swish of leaves and a muffled thud on grass, natural realistic foley at moderate distance, restrained not dramatic. No chainsaw, voice, music or ambience.",
+      "durationSeconds": 1.6,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "maxDistance": 26
+    },
+    "fencegate.move": {
+      "filename": "fencegate-move-c1122-take-1.mp3",
+      "prompt": "A small wooden fence gate swinging on a rope hinge: a short light creak and a soft wooden knock against the post, close dry realistic foley for a cozy colony game. No footsteps, voice, music or ambience.",
+      "durationSeconds": 0.7,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "gain": 1,
+      "maxDistance": 14
     }
   }
 }
