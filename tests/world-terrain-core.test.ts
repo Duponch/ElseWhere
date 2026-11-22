@@ -8,7 +8,11 @@ import {createCoreTerrainStep,coreBiomeScore,CORE_TERRAIN_SEED_PART} from '../sr
 import {generateWorldPhysicalSurface,type WorldPhysicalSurface} from '../src/sim/world-surface-geography';
 import {storeWorldSurface,restoreWorldSurface,validStoredWorldSurface,CORE_PLANET_GEOMETRY_SCHEMA} from '../src/sim/world-surface-storage';
 import {cropSurfaceCells,generateCoveredSurfaceMesh,surfaceVisibilityAxis} from '../src/sim/world-surface-mesh';
-import {geographyGeometryAllowed256} from '../src/sim/planet-geography-256';
+import {geographyGeometryAllowed256,preparePlanetHydration256} from '../src/sim/planet-geography-256';
+import {createGeographicPlanet256} from '../src/sim/planet-factory-256';
+import {planetFactionTargets256} from '../src/sim/planet-faction-targets-256';
+import {canPlaceWorldSettlement} from '../src/sim/world-settlement-placement';
+import {validatePlanet} from '../src/sim/planet-save';
 import {generateGeographicWorldDraft256} from '../src/sim/world-geographic-draft';
 import {captureGeneratedGeography256,restoreCampaignGeography256} from '../src/sim/world-geography-owner-256';
 import {defaultWorldGenerationSettings} from '../src/sim/world-generation-settings';
@@ -92,6 +96,13 @@ describe('new games',()=>{
   const geography=captureGeneratedGeography256(draft);expect(geography.definition.surface.geometryRevision).toBe(2);
   const again=restoreCampaignGeography256(JSON.parse(JSON.stringify(geography.definition)));
   expect(again.surface.tiles[draft.surface.tiles.length-1]!.center).toEqual(draft.surface.tiles[draft.surface.tiles.length-1]!.center);
+  // A save older than 376 cannot hold it: refused before any mesh is built.
+  const targets=planetFactionTargets256(draft.factions,geography.surface.tiles)!,home=geography.surface.tiles.find(t=>canPlaceWorldSettlement(geography.surface.tiles,t.id,{settlementTiles:targets.occupied}))!;
+  const planet=createGeographicPlanet256({geography,factions:draft.factions,homeTile:home.id,adoptedAt:0,nextGroupId:1}),raw=JSON.parse(JSON.stringify(planet));
+  expect(()=>preparePlanetHydration256(raw,375)).toThrow(/geometry revision/);
+  expect(preparePlanetHydration256(raw,376).owner.definition.surface.geometryRevision).toBe(2);
+  const metadata={schemaVersion:376,tick:0,planet,worldFactions:draft.factions};
+  expect(validatePlanet(planet,metadata,376)).toEqual([]);expect(validatePlanet(planet,{...metadata,schemaVersion:375},375)).toContain('Future planet geometry revision in a historical schema.');
   expect(()=>drain(generateGeographicWorldDraft256({seed:'x',settings:defaultWorldGenerationSettings(),tick:0,nextThingId:1,playerDef:'PlayerColony',playerName:'C',terrain:'other' as never}))).toThrow();
  },120_000);
 });

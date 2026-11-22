@@ -35,7 +35,10 @@ const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bond
  * and departed visitors keep none); schema 362: the Undergrounder, Tortured
  * artist and Wimp degrees, the indoors need, the wimp's record marker and
  * the not-mood marker of a crisis; schema 368: the Pyromaniac degree (a
- * fire-starting spree is kept, and refused). */
+ * fire-starting spree is kept, and refused). Schema 376: the game's planet
+ * geometry (revision 2) is kept, and refused: site climates depend on its
+ * tile centres, so a geographic game meant to be relabelled as an older
+ * schema is generated with `terrain: 'historical'`. */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;

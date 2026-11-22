@@ -28,7 +28,7 @@ import {asOldSchema} from './scenarios/old-schema';
 const drain=<Y,T>(it:Generator<Y,T,void>):T=>{let step=it.next();while(!step.done)step=it.next();return step.value;};
 const ROSTER_SEED=259017;
 function newGame(tutorial:boolean):World {
- const draft=drain(generateGeographicWorldDraft256({seed:'Camp2274 preview 256 🌲',settings:{...defaultWorldGenerationSettings(),rainfall:4,temperature:2},tick:0,nextThingId:1,playerDef:'PlayerColony',playerName:'QA349'}));
+ const draft=drain(generateGeographicWorldDraft256({seed:'Camp2274 preview 256 🌲',settings:{...defaultWorldGenerationSettings(),rainfall:4,temperature:2},tick:0,nextThingId:1,playerDef:'PlayerColony',playerName:'QA349',terrain:'historical'})); // Historical terrain: these games are also relabelled as schema 348 saves.
  const geography=captureGeneratedGeography256(draft);
  const roster=createStartingCandidateRoster(ROSTER_SEED),able=roster.filter(d=>violentWorkRefusal(previewStartingCandidate(ROSTER_SEED,d))===undefined);
  const ordered=[...able.slice(0,3),...roster.filter(d=>!able.slice(0,3).includes(d))];

@@ -12,11 +12,11 @@ const BIOMES:readonly WorldBiome[]=['boreal-forest','tundra','cold-bog','ice-she
 const RELIEF:readonly WorldRelief[]=['flat','small-hills','large-hills','mountainous','impassable'];
 const RIVERS:readonly WorldRiverId[]=['huge-river','large-river','river','creek'];
 const ROADS:readonly WorldRoadId[]=['dirt-path','dirt-road','stone-road','ancient-asphalt-road','ancient-asphalt-highway'];
-/** Sparse rows [tileId, neighbourId, definitionId, ...] preserve each tile's
- * actual link order. A single unordered edge list would lose that authority. */
 /** First schema whose saves may hold geometry revision 2 (the game's mesh
  * precision and terrain step, `world-terrain-core.ts`). */
 export const CORE_PLANET_GEOMETRY_SCHEMA=376;
+/** Sparse rows [tileId, neighbourId, definitionId, ...] preserve each tile's
+ * actual link order. A single unordered edge list would lose that authority. */
 export interface StoredWorldSurface {
  /** 1: historical mesh. 2: the game's mesh precision (schema 376 and later). */
  revision:3;geometryRevision:1|2;floatEncoding:'ieee754-bits';seedText:string;generationSeed:number;settings:WorldClimateSettings;
