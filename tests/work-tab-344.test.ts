@@ -211,7 +211,8 @@ describe('older schemas and migration 343 → 344',()=>{
   expect(migrated.pawns.map(p=>p.priorities)).toEqual(w.pawns.map(p=>p.priorities));
   const simple=camp();ok(simple,{type:'work-tab-mode',manual:false});expect(simple.simpleWorkTab344).toBe(true);
   const old=deserializeWorld(asOldSchema(serializeWorld(simple),343));expect(Object.hasOwn(old,'simpleWorkTab344')).toBe(false);
-  const raw=JSON.parse(serializeWorld(simple));raw.schemaVersion=343;expect(()=>deserializeWorld(JSON.stringify(raw))).toThrow(/version343/);
+  // The same save brought down to 343 (later content stripped), then the 344 setting put back.
+  const raw=JSON.parse(asOldSchema(serializeWorld(simple),343));raw.simpleWorkTab344=true;expect(()=>deserializeWorld(JSON.stringify(raw))).toThrow(/version343/);
  });
  it('nothing reads the setting below 344',()=>{
   expect(simpleWorkTab344({schemaVersion:343,simpleWorkTab344:true})).toBe(false);
