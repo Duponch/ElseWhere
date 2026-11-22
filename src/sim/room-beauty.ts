@@ -155,6 +155,8 @@ export interface BeautyRoom {readonly id:number;readonly cells:ReadonlySet<numbe
 const CARDINAL=[[-1,0],[1,0],[0,-1],[0,1]] as const;
 const AROUND=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]] as const;
 const DEFAULT_PERCEPTION_RADIUS=8.9;
+/** CARDINAL and AROUND as flat offsets for the schema 373 perception loop. */
+const CARDINAL_OFFSETS=new Int8Array(CARDINAL.flat()),AROUND_OFFSETS=new Int8Array(AROUND.flat());
 const DEFAULT_PERCEPTION_OFFSETS=(()=>{
   const reach=Math.ceil(DEFAULT_PERCEPTION_RADIUS),squared=DEFAULT_PERCEPTION_RADIUS*DEFAULT_PERCEPTION_RADIUS,out:number[]=[];
   for(let dz=-reach;dz<=reach;dz++)for(let dx=-reach;dx<=reach;dx++)if(dx*dx+dz*dz<=squared)out.push(dx,dz);
@@ -228,32 +230,36 @@ export class RoomBeautyCapture {
   private perceived373(cell:BeautyCell,visible:((from:BeautyCell,to:BeautyCell)=>boolean)|undefined,radius:number):number {
     const map=this.map,topology=this.topology,width=map.width,height=map.height,originIndex=map.index(cell),origin=topology.labelAt(originIndex)!;
     if(origin===-1)return 0;
-    const rooms:number[]=[],doors:number[]=[];
-    if(origin>0)rooms.push(origin);
-    else{
+    // From a room: that room only (`single`). From a doorway: the door and
+    // the rooms and doors of its four sides.
+    const single=origin>0?origin:0,rooms:number[]=[],doors:number[]=[];
+    if(!single){
       doors.push(originIndex);
-      for(const [dx,dz] of CARDINAL){
-        const x=cell.x+dx,z=cell.z+dz;if(x<0||z<0||x>=width||z>=height)continue;
+      for(let k=0;k<8;k+=2){
+        const x=cell.x+CARDINAL_OFFSETS[k]!,z=cell.z+CARDINAL_OFFSETS[k+1]!;if(x<0||z<0||x>=width||z>=height)continue;
         const n=z*width+x,label=topology.labelAt(n)!;
         if(label>0){if(!rooms.includes(label))rooms.push(label);}else if(label===-2)doors.push(n);
       }
     }
-    const seen=(index:number):boolean=>{const label=topology.labelAt(index)!;return label>0?rooms.includes(label):label===-2&&doors.includes(index);};
-    const fogged=this.fogged;let total=0,count=0;
+    const seen=(index:number):boolean=>{const label=topology.labelAt(index)!;return single?label===single:label>0?rooms.includes(label):label===-2&&doors.includes(index);};
+    const singleEdge=single?(topology.at(cell.x,cell.z) as RoomSpace).touchesMapEdge:false,fogged=this.fogged;let total=0,count=0;
     const read=(x:number,z:number):void=>{
-      const index=map.indexAt(x,z);if(index<0||fogged?.(index))return;
+      const index=z*width+x;if(fogged!==undefined&&fogged(index))return;
       if(!seen(index)){
         let touches=false;
-        for(const [ax,az] of AROUND){const nx=x+ax,nz=z+az;if(nx>=0&&nz>=0&&nx<width&&nz<height&&seen(nz*width+nx)){touches=true;break;}}
+        for(let k=0;k<16;k+=2){const nx=x+AROUND_OFFSETS[k]!,nz=z+AROUND_OFFSETS[k+1]!;if(nx>=0&&nz>=0&&nx<width&&nz<height&&seen(nz*width+nx)){touches=true;break;}}
         if(!touches)return;
       }
       const label=topology.labelAt(index)!;
-      if(label>0)total+=map.atIndex(index,(topology.at(x,z) as RoomSpace).touchesMapEdge);
+      if(label>0)total+=map.atIndex(index,label===single?singleEdge:(topology.at(x,z) as RoomSpace).touchesMapEdge);
       else total+=map.thingsAtIndex(index,false);
       count++;
     };
     if(visible===undefined&&radius===DEFAULT_PERCEPTION_RADIUS){
-      for(let offset=0;offset<DEFAULT_PERCEPTION_OFFSETS.length;offset+=2)read(cell.x+DEFAULT_PERCEPTION_OFFSETS[offset]!,cell.z+DEFAULT_PERCEPTION_OFFSETS[offset+1]!);
+      for(let offset=0;offset<DEFAULT_PERCEPTION_OFFSETS.length;offset+=2){
+        const x=cell.x+DEFAULT_PERCEPTION_OFFSETS[offset]!,z=cell.z+DEFAULT_PERCEPTION_OFFSETS[offset+1]!;
+        if(x>=0&&z>=0&&x<width&&z<height)read(x,z);
+      }
     }else{
       const reach=Math.ceil(radius),squared=radius*radius;
       for(let dz=-reach;dz<=reach;dz++)for(let dx=-reach;dx<=reach;dx++){

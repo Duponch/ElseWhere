@@ -9,9 +9,11 @@ import {gunzipSync} from 'node:zlib';
 import {deserializeWorld} from '../src/sim/serialization';
 import {RoomTopologyCache} from '../src/sim/room-topology';
 import {RoomQualityCapture} from '../src/sim/room-quality';
-import {beautyMapAt,captureWorldBeauty} from '../src/sim/beauty-need';
+import * as need from '../src/sim/beauty-need';
+const {beautyMapAt,captureWorldBeauty}=need;
+// The need's own fog reader (absent before 373: the older capture ignores it).
+const fogOf=(w:World)=>(need as {worldFog?:(w:World)=>((i:number)=>boolean)|undefined}).worldFog?.(w);
 import {RoomBeautyCapture} from '../src/sim/room-beauty';
-import {foggedCell256} from '../src/sim/exploration-state-256';
 import type {World} from '../src/sim/types';
 
 const path=process.argv[2]??'public/test-saves/v432/les-forges-crash-test.json',runs=Number(process.argv[3]??200);
@@ -38,5 +40,7 @@ function time(label:string,read:(w:World)=>number){
 console.log(JSON.stringify({save:path,schema:base.schemaVersion,tick:base.tick,rooms:roots.length,pawns:pawns.length,runs}));
 time('room stats (RoomQualityCapture, every enclosed room)',w=>{const c=new RoomQualityCapture(w,topology);let s=0;for(const r of roots)s+=c.room(r)?.total??0;return s;});
 time('room beauty capture (full BeautyMapCache + every room)',w=>{const c=captureWorldBeauty(w,topology);let s=0;for(const r of roots)s+=c.room(r)?.total??0;return s;});
-time('beauty need pulse (partial map + perceived of every awake pawn)',w=>{const v=new RoomBeautyCapture(beautyMapAt(w,pawns),topology,i=>foggedCell256(w,i));let s=0;for(const p of pawns)s+=v.perceived(p);return s;});
+time('beauty need pulse (partial map + perceived of every awake pawn)',w=>{const v=new RoomBeautyCapture(beautyMapAt(w,pawns),topology,fogOf(w));let s=0;for(const p of pawns)s+=v.perceived(p);return s;});
+const views=new Map(([372,373] as const).map(v=>[worlds[v],new RoomBeautyCapture(beautyMapAt(worlds[v],pawns),topology,fogOf(worlds[v]))]));
+time('perceived only (every awake pawn, map already built)',w=>{const v=views.get(w)!;let s=0;for(const p of pawns)s+=v.perceived(p);return s;});
 console.log(JSON.stringify({sink:Number.isFinite(sink)}));

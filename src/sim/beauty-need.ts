@@ -4,7 +4,7 @@ import type { RoomTopology } from './room-topology.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 import { isShelfKind,shelfStorageCells } from './shelf-storage.ts';
 import { naturalWallBeauty373 } from './rock-beauty-373.ts';
-import { foggedCell256 } from './exploration-state-256.ts';
+import { explorationEnabled256 } from './exploration-state-256.ts';
 
 export const BEAUTY_NEED_INTERVAL=20;
 const RISE_PER_HOUR=32,FALL_PER_HOUR=8;
@@ -25,8 +25,12 @@ export function worldBeautyInput(world:World):BeautyInput {
 export function captureWorldBeauty(world:World,topology:RoomTopology,cache=new BeautyMapCache()):RoomBeautyCapture {
   return new RoomBeautyCapture(cache.read(worldBeautyInput(world)),topology,worldFog(world));
 }
-/** The fog the schema 373 perception skips (BeautyUtility: Fogged cells). */
-const worldFog=(world:World)=>(index:number)=>foggedCell256(world,index);
+/** The fog the schema 373 perception skips (BeautyUtility: Fogged cells):
+ * foggedCell256 with its map-wide test made once, none without exploration. */
+export function worldFog(world:World):((index:number)=>boolean)|undefined {
+  if(!explorationEnabled256(world))return undefined;
+  const tiles=world.tiles;return index=>tiles[index]?.fogged===true;
+}
 
 /** The map `captureWorldBeauty` reads (BeautyMapCache.read of worldBeautyInput),
  * computed only at the cells the default perception of `perceivers` reads;
