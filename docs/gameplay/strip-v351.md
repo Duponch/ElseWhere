@@ -66,8 +66,7 @@ Pour qui peut avoir la pensée, le choix automatique des vêtements (politique d
 
 ## Ce qui reste
 
-- Les politiques de tenue n'ont pas de filtre « vêtements de mort » (le jeu de base l'interdit par défaut dans ses tenues Ouvrier, Soldat, Nudiste et Astronaute, pas dans « Tout »).
-- L'option « compter les vêtements marqués » des factures de vêtements n'est pas ajoutée.
+- Le filtre « vêtements de mort » des politiques de tenue et l'option « compter les vêtements de mort » des factures sont ajoutés au [schéma 374](egg-box-v374.md).
 - Le dépouillement automatique avant découpe ou à la formation d'une caravane, le compteur « corps dépouillés » et le récit du jeu de base ne sont pas repris.
 
 ## Vérifications

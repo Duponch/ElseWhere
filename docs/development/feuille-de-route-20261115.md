@@ -104,7 +104,7 @@ Les 51 recherches d'Elsewhere ont les coûts et les bureaux du jeu de base.
 3. **(A)** Travail passionné et besoin d'espace. *Fait, schéma 345.*
 4. **(B)** Sélection et ordres du quotidien : mobiliser la sélection, bouton « Copier », clic droit d'un colon mobilisé, barre des colons. *Fait, schéma 346.*
 5. **(B)** Réserve d'humeur complète : crises manquantes, confort aux établis, onde psychique et apaisement, petites pensées. *Fait, schéma 350.*
-6. **(B)** Dépouiller. *Fait, schéma 351 ; restent le filtre « vêtements de mort » des tenues et l'option « compter les vêtements souillés » des factures.*
+6. **(B)** Dépouiller. *Fait, schéma 351 ; le filtre « vêtements de mort » des tenues et l'option des factures sont faits au schéma 374, avec la boîte à œufs.*
 7. **(B)** Contenu précoce : œufs et gelée en cuisine, chapeau, jeux, armoire à outils, tapis, pièges. *Fait le 21 novembre : cuisine et chapeaux (353), tables de jeu (354), armoire et tapis (355), pièges explosifs (357), soie du diable (358).*
 8. **(B)** Besoin de plein air, inspirations et traits du jeu de base, restés hors de la réserve d'humeur. *Fait le 21 novembre : plein air (359), inspirations (360), 39 traits sur 43 (361) ; liaison des trois (Troglodyte, Artiste torturé, Douillet, inspirations interdites par trait), 362. Reste le Pyromane.*
 

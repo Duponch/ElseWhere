@@ -24,6 +24,12 @@ Dans la fenêtre **Factures** d'un poste, **Copier** sur la ligne d'une facture 
 
 Dans **Travail**, **Copier** au bout de la ligne d'un colon retient ses priorités ; **Coller** sur un autre colon les reprend toutes, sauf les travaux qu'il ne peut pas faire, qui gardent leur valeur. Le presse-papiers n'est pas enregistré : il se perd au rechargement de la page, et la facture copiée s'oublie en changeant de partie. [Règles et limites](bill-clipboard.md).
 
+## Boîte à œufs et vêtements de mort — V374
+
+**Architecte → Mobilier → Boîte à œufs** (20 bois ou acier, sans recherche) : posez-la près de vos canards, dindes ou autres pondeuses. Un animal de la colonie prêt à pondre, à 30 cases au plus, va pondre dedans (la boîte la plus pleine d'abord) tant qu'elle tient moins de 25 œufs ; une boîte pleine ou introuvable le fait pondre au sol comme avant. Les œufs d'une boîte ne s'abîment pas en plein air mais pourrissent et incubent normalement ; un œuf fécondé éclot autour de la boîte. Dès 20 œufs, un colon chargé du Transport vide la boîte vers une réserve qui accepte les œufs ; sélectionnez la boîte pour voir son contenu. Les animaux sauvages pondent toujours au sol.
+
+Dans **Assignations → Tenues**, chaque politique règle **Vêtements de mort** (autorisés par défaut) : interdits, ils ne sont plus enfilés et un colon qui en porte un l'enlève. Sur une facture de vêtement « jusqu'à X en réserve », **Compter les vêtements de mort** est décochée par défaut : un vêtement pris sur un mort ne remplit pas la réserve. [Règles et adaptations V374](egg-box-v374.md).
+
 ## Ordres de tous les jours — schéma 346
 
 Avec plusieurs colons sélectionnés, **Mobiliser**, **Stop** et **Tir à volonté** de l'inspecteur agissent sur toute la sélection, comme **R** : une sélection mixte est mobilisée entière, une sélection déjà mobilisée est démobilisée. Le dossier affiché reste celui du premier colon.
