@@ -9,7 +9,7 @@ import type {Job} from '../src/sim/types.ts';
 // produced by gameplay. Only the final case exercises real neutral migration.
 function setup(){
  const w=createWorld(42,32,32),p=w.pawns[0]!;
- expect(Number(w.schemaVersion)).toBe(373);
+ expect(Number(w.schemaVersion)).toBe(374);
  p.jobId=null;p.haul=null;p.need=null;p.cooking=null;p.recreation.task=null;
  p.orders.active=null;p.orders.queue=[];p.path=[];p.moveCooldown=0;delete p.motion;
  return {w,p};
