@@ -128,6 +128,8 @@ function hash(seed:number,serial:number,generation:number,salt:number):number {
   return (n^(n>>>16))>>>0;
 }
 const NAMES=['Ada','Noé','Mina','Iris','Sacha','Léonie','Tao','Émile','Alma','Nils','Salomé','Basile','Rose','Marin','Lou','Camille','Jules','Léna','Maël','Inès','Alex','Charlie','Lucie','Simon','Ari','Éloïse','Robin','Gaël','Ambre','Eden','Milo','Soline'] as const;
+/** Read by the lore registry (src/lore); the list is unchanged. */
+export {NAMES as STARTING_CANDIDATE_NAMES};
 /** The pre-361 draw ranks exactly the nine historical ids, in key order. */
 const TRAIT_IDS=LEGACY_TRAIT_IDS;
 

@@ -38,6 +38,8 @@ const STORIES=[
  'Le gardien d’une gare presque déserte recueille les récits des rares voyageurs et reprend goût au départ.',
  'Deux sœurs échangent leurs souvenirs d’un été et cherchent ce qui les a éloignées sans vraiment les séparer.',
 ] as const;
+/** Read by the lore registry (src/lore); the lists are unchanged. */
+export {TITLE_START as NOVEL_TITLE_STARTS_295,TITLE_END as NOVEL_TITLE_ENDS_295,STORIES as NOVEL_STORIES_295};
 /** Only quality consumes the commercial stream (two draws, same bounded
  * Gaussian as visitor stock). Original fiction has an identity-local stream;
  * neither lookup nor copying regenerates the saved text. */

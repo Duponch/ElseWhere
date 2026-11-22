@@ -4,6 +4,8 @@ const f=Math.fround;
 // Original phonetic content. The bijection preserves word equality and pool
 // indices without shipping the native lexical assets. Never consumes Rand.
 const SYLLABLES=['ba','be','bi','bo','bu','ca','ce','ci','co','cu','da','de','di','do','du','fa','fe','fi','fo','fu','ga','ge','gi','go','gu','ka','ke','ki','ko','ku','la','le'] as const;
+/** Read by the lore registry (src/lore); the list is unchanged. */
+export {SYLLABLES as ANCIENT_NAME_SYLLABLES_256};
 export function originalAncientHumanWord256(id:number,wordCount:number):string {
  if(!Number.isInteger(id)||id<0||id>=wordCount||!Number.isInteger(wordCount)||wordCount<1||wordCount>1048576)throw Error('Unresolved actual native word equivalence');
  if(id===0)return '';

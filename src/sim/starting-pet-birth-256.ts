@@ -11,6 +11,8 @@ import type {World,Cell} from './types.ts';
 
 const first=['Aube','Bise','Cendre','Dune','Écume','Flocon','Galet','Mousse'] as const;
 const second=['claire','douce','fine','lune','nacre','pluie','ronde','vive'] as const;
+/** Read by the lore registry (src/lore); the lists are unchanged. */
+export {first as STARTING_PET_NAME_FIRST_256,second as STARTING_PET_NAME_SECOND_256};
 /** Original lexical model, deliberately declared as an adaptation. Actual
  * variable draws/retries are retained; no estimated Core grammar counter is
  * inserted and no proprietary names/rule text are copied. */
