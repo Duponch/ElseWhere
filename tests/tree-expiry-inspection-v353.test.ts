@@ -15,6 +15,6 @@ test('V353 dead pending tree inspection reports every captured rest and never of
 });
 test('V353 living tree keeps its exact existing inspection text and seven-day advice',()=>{
  const {w,pile}=preparedTreeWrapper(),before=structuredClone(pile);
- expect(minifiedTreeDescription(pile,w.tick)).toBe('Chene · Croissance : 80 % · À replanter sous 7 jour(s) · 150 kg');
+ expect(minifiedTreeDescription(pile,w.tick)).toBe('Chêne · Croissance : 80 % · À replanter sous 7 jour(s) · 150 kg');
  const info=itemInformation(pile);expect(info.title).toBe('Arbre déraciné');expect(info.rows).toContainEqual(expect.objectContaining({label:'Conservation',value:'7 jours après le déracinement'}));expect(pile).toEqual(before);expect(mapObjectActions(w,{kind:'pile',id:pile.id}).some(a=>a.id==='replant')).toBe(true);
 });
