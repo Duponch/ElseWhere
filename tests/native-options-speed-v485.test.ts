@@ -25,6 +25,8 @@ const waitingRequests=new Set(),speedRequests=[],panelChanges=[],cancelNativeOrd
 const nativeUi={setPanel:value=>panelChanges.push(value)},renderer={cancelDesignation:()=>{}},orderMenu={close:()=>{}},menuTransition=Promise.resolve(),campaignState=()=>snapshot;
 const session={hasWorld:true},deferredResumeGuard={held:dependencies.held,capture:()=>0,allows:()=>!dependencies.held};
 const client={setSpeed:async(speed,options)=>{currentSpeed=speed;speedRequests.push({speed,options});}},attempt=async action=>action();
+// The speed sound cue (audio coverage of 22 November) stays silent here.
+const clockCue=()=>({kind:'clock',pitch:1}),audio={playInterface:()=>{}};
 ${selected}
 const actualResume=${mainText.slice(resume.value.start,resume.value.end)};
 return {bind:menu=>{frontMenu=menu;},open:openNativeOptions,resume:actualResume,speed:changeSpeed,
