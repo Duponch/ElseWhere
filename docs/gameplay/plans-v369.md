@@ -1,0 +1,50 @@
+# Plans V369
+
+Le joueur n'avait aucun moyen de marquer la carte pour préparer une base : où mettre les chambres, l'atelier, les champs futurs. Le lot ajoute les **plans** du jeu de base, deux outils de la palette **Ordres** : **Planifier** (touche I) et **Retirer le plan** (touche K). Un plan est un simple repère coloré posé sur des cases ; il ne crée aucun travail et la simulation ne le lit jamais. Schéma 369 ; une partie 368 migre par le seul numéro, sans aucun plan.
+
+## Ce que fait le jeu
+
+- **Planifier** ouvre d'abord la grille des neuf couleurs du jeu de base (gris, rouge, orange, jaune, vert, cyan, bleu, violet, rose ; gris par défaut) ; choisir une couleur arme l'outil. On clique ou on trace un rectangle plein : toutes les cases du rectangle sont planifiées, quel que soit le terrain (roche, eau, brouillard compris).
+- Un nouveau tracé crée un plan nommé « Plan N », N étant le premier numéro libre. L'outil garde ensuite ce plan en main : les tracés suivants de la même couleur l'agrandissent, même à distance (le morceau détaché devient alors un plan à part qui garde le même nom, comme dans le jeu de base). Sans plan en main, un tracé qui recouvre un seul plan de sa couleur l'agrandit ; sinon il crée un nouveau plan, qui absorbe les plans de même couleur qu'il touche par une case autre que sa première.
+- Un clic sur une case d'un plan de la couleur de l'outil ne change rien : il prend ce plan en main (« Plan N choisi »).
+- Les cases tracées quittent leur ancien plan s'il est d'une autre couleur. Un plan coupé en deux morceaux devient deux plans de même couleur et de même nom ; le morceau qui contient la case la plus au sud-ouest garde l'identité du plan.
+- **Retirer le plan** ne prend que les cases planifiées, de toutes les couleurs ; les plans coupés se séparent de la même façon, un plan vidé disparaît.
+- Les plans sont dessinés sur le sol, à la couleur du plan avec l'opacité 0,4 du jeu de base, même quand les zones sont masquées ; un plan masqué ne l'est pas.
+- Avec l'outil Inspecter, un clic sur une case sélectionne dans l'ordre les objets, la zone puis le plan. L'inspection d'un plan montre sa taille, la surface planifiée totale de la carte (s'il y a plusieurs plans) et les commandes **Changer de couleur**, **Masquer le plan** / **Afficher le plan**, **Agrandir le plan** (arme Planifier sur ce plan et sa couleur), **Réduire le plan** (arme Retirer le plan) et **Supprimer le plan**. Le survol des cases ne cite pas les plans, comme le jeu de base.
+- Les plans sont propres à chaque carte et sont enregistrés avec elle.
+
+## Faits du jeu de base utilisés
+
+RimWorld 1.6, `Data/Core/Defs` et classes décompilées (faits seulement, aucun code copié).
+
+- `Misc/Designations/DesignationCategories.xml` : `Designator_Plan_Add` et `Designator_Plan_Remove` dans la catégorie Ordres. `Misc/Designations/Designations.xml` : la désignation `Plan` n'est gardée que pour la compatibilité ; 1.6 a remplacé les désignations par des objets `Plan` tenus par le `PlanManager` de la carte (`MapMeshFlagDefs` : `Plan`).
+- `ColorDefs/ColorDefs.xml` : couleurs de type `Planning` PlanGray (0,68 ; 0,68 ; 0,68 ; 0,4), PlanRed (0,9 ; 0,4 ; 0,4 ; 0,4), PlanOrange (0,9 ; 0,7 ; 0,4 ; 0,4), PlanYellow (0,9 ; 0,9 ; 0,4 ; 0,4), PlanGreen (0,4 ; 0,9 ; 0,4 ; 0,4), PlanCyan (0,4 ; 0,9 ; 0,9 ; 0,4), PlanBlue (0,2 ; 0,4 ; 0,9 ; 0,4), PlanPurple (0,6 ; 0,2 ; 0,9 ; 0,4), PlanPink (0,9 ; 0,4 ; 0,9 ; 0,4). `Designator_Plan_Add.Colors` les prend dans cet ordre ; la couleur par défaut est la première.
+- `Misc/KeyBindings/KeyBindings.xml` : `Misc9` = I (`Designator_Plan_Add`), `Misc8` = K (`Designator_Plan_Remove`), `Misc6` = U (agrandir, réduire), `Misc2` = H (masquer).
+- `DrawStyleCategoryDefs/DrawStyleCategories.xml` : `Plans` et `RemovePlans` héritent de `Default2D` (rectangle plein en premier, puis rectangle vide, ovales et lignes). `DrawStyle_FilledRectangle` : les cases de `CellRect.FromLimits`, rangée par rangée.
+- `Designator_Plan_Add` : `CanDesignateCell` = dans la carte et hors de la bande de 10 cases du bord (`GenGrid.NoBuildEdgeWidth`), sans test de brouillard ni de terrain ; `DesignateSingleCell` / `DesignateMultiCell` d'une seule case sur un plan de la même couleur : sélection du plan seulement ; `PlanCells` : plan sélectionné, sinon le plan unique de cette couleur parmi les cases tracées, sinon nouveau plan sur la première case ; fusion (`MergeIn`) des plans de même couleur voisins (quatre directions) d'une case tracée ; retrait des cases tracées de leurs autres plans ; `CheckContiguous` sur les plans touchés ; le plan obtenu devient la sélection.
+- `Designator_Plan_Remove` : `CanDesignateCell` = une case qui porte un plan ; `RemoveCell` puis `CheckContiguous`.
+- `Plan` : `ExposeData` (identifiant, nom, nom de base, masqué, couleur, cases) ; `RemoveCell` désinscrit un plan vide ; `CheckContiguous` remplit par voisinage à quatre directions depuis la première case et fait de chaque autre morceau un nouveau plan de la même couleur qui reprend le nom (et n'est pas masqué) ; `GetInspectString` : taille et surface planifiée totale quand la carte a plusieurs plans ; `GetGizmos` : masquer, agrandir (`Designator_Plan_Expand`, même couleur), réduire (`Designator_Plan_Shrink`), changer de couleur (puis `CheckContiguous`), supprimer, copier, copier la sélection.
+- `PlanManager` : un plan par case (`planGrid`), plans dans l'ordre d'inscription, `NewPlanName` : premier numéro de 1 à 1 000 qu'aucun plan n'utilise, sinon « Plan X ».
+- `Selector.SelectableObjectsAt` : objets, puis zone, puis plan. `MouseoverReadout` ne cite que la zone. `Designator_Cancel` ne touche pas les plans.
+- `SectionLayer_Plans` : couche `MetaOverlays` (au-dessus du brouillard et des bâtiments), un quadrilatère par case, à la couleur du plan ; un plan masqué n'est pas dessiné ; la couche ne dépend pas de l'affichage des zones.
+
+## Adaptations
+
+- **Pas de bande interdite au bord de la carte.** Le jeu de base refuse un plan à moins de 10 cases du bord, la bande où il interdit aussi de construire. Elsewhere laisse construire jusqu'au bord ; un plan servant à préparer une construction, il reste permis partout.
+- **Morceau qui garde le plan.** Le jeu de base garde le morceau qui contient la première case de la liste du plan, liste mélangée au hasard de l'interface ; Elsewhere garde ses cases triées et retient le morceau qui contient la plus petite case (la plus au sud, puis la plus à l'ouest). Les autres morceaux reçoivent de nouveaux identifiants dans l'ordre de leur première case, comme le parcours de la carte du jeu de base.
+- **Dessin sur le sol.** Les plans rejoignent la teinte au sol des zones (une case de texture par case, téléversée seulement quand les plans changent ; aucun maillage par case ni travail par image). Sur un massif rocheux ou sous un bâtiment, la teinte est cachée par le volume, alors que le jeu de base la dessine par-dessus ; elle réapparaît quand la roche est creusée.
+- **Plan en main.** La sélection du jeu de base devient le plan que l'outil tient (le retour de la commande l'indique) ; changer de couleur ou d'outil le relâche, comme le jeu de base désélectionne un plan d'une autre couleur. Après un tracé, le plan n'est pas ouvert dans l'inspecteur : l'outil reste actif.
+- **Grille de couleurs.** Le clic sur Planifier ouvre une page de neuf couleurs ; la touche I arme directement l'outil avec la dernière couleur choisie.
+- **Numéro des plans.** Seul le numéro du nom est enregistré (renommer n'existe pas encore) ; « Plan X » est gardé au-delà de 1 000.
+- **Identifiants.** Les identifiants des plans sont propres à la carte et repartent de 1 quand la carte n'a plus aucun plan.
+
+## Ce qui reste
+
+- Les autres formes de tracé (rectangle vide, ovales, lignes), le renommage, la copie et le collage de plans (`Designator_Plan_Copy`, copie de sélection), le menu « masquer toutes les zones et tous les plans » du clic droit, la sélection de plusieurs plans au cadre de sélection.
+- Les plans ne sont pas dessinés au-dessus des massifs rocheux ni des bâtiments (voir les adaptations).
+
+## Vérification
+
+`tests/plans-369.test.ts` (10 cas) : couleurs, couleur par défaut, opacité, touches et outils de la palette relus au jeu de base, outils absents avant 369 ; tracé d'un rectangle par la vraie commande (« Plan 1 »), clic sur son propre plan qui le prend en main sans rien changer, agrandissement par le plan en main et par recouvrement, plan en main d'une autre couleur ignoré ; tracé voisin sans plan en main qui fusionne seulement quand une case autre que la première touche le plan ; couleur qui prend des cases et coupe un plan, retrait d'une bande qui coupe trois plans en six avec les mêmes noms, retrait de tout puis « Plan 1 » de nouveau ; commandes de l'inspection (couleur, masquer, afficher, supprimer) et refus sans aucun changement ; 300 ticks réels avec et sans plans, sauvegarde et rechargement au milieu : simulation identique au bit près et plans intacts ; sauvegarde stricte (cases qui se chevauchent, plan en deux morceaux, couleur inconnue, champ en trop, compteur faux, liste vide, numéro hors bornes, case hors carte refusés), plans refusés dans une sauvegarde 368, commandes refusées avant 369, migration 368 → 369 par le seul numéro ; données de dessin (une case de teinte par case visible, couleur du plan, plan masqué absent, signature exacte, couche dessinée avec les zones masquées) ; sélection après les zones, absence au survol, inspection (nom, taille, surface totale, couleurs, commandes) ; palette native Ordres (lettres I et K, grille de couleurs, couleur choisie transmise, outil armé directement sans grille, outils absents avant 369).
+
+Voisins relancés (désignations, zones, sélection et actions des objets, inspection native, palette Ordres et ses touches, pictogrammes, icônes et curseurs d'Architecte, teinte au sol, intentions confirmées, sites secondaires) : seuls les échecs déjà connus restent. Typage complet passé. Non vérifié dans un navigateur : rendu de la teinte sur la carte, page des couleurs, touches I et K au clavier.

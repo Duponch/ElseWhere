@@ -39,6 +39,12 @@ Dans **Architecte → Meubles** :
 
 Les deux couchages doubles sont réservés au couchage civil (ni usage médical, ni prison), comme le lit double. Le sac double ne sert pas encore en caravane.
 
+## Planifier sa base — V369
+
+Dans la palette **Ordres**, **Planifier** (touche I) marque des cases d'une couleur pour préparer une base : cliquez l'outil, choisissez l'une des neuf couleurs, puis cliquez ou tracez un rectangle. Les cases prennent la couleur choisie sur le sol, même avec les zones masquées. Le plan tracé reste en main : les tracés suivants de la même couleur l'agrandissent ; un clic sur un plan de cette couleur le reprend en main. **Retirer le plan** (touche K) efface les cases planifiées de toutes les couleurs ; un plan coupé en deux devient deux plans du même nom.
+
+Un plan n'est qu'un repère : aucun colon ne travaille dessus et il ne gêne rien. Cliquez dessus avec Inspecter (après les objets et la zone de la case) pour voir sa taille, changer sa couleur, le masquer, l'agrandir, le réduire ou le supprimer. Les plans ne se voient pas encore au-dessus de la roche ni des bâtiments.
+
 ## Admirer une œuvre d'art — V366
 
 Une sculpture n'est plus seulement belle : un colon libre qui s'ennuie peut s'arrêter pour la contempler. Il choisit de préférence les plus belles, marche jusqu'à une case voisine et la regarde un moment ; plus l'œuvre est belle et de bonne qualité, plus elle le divertit (une œuvre affreuse ne le divertit pas du tout). Cette contemplation appartient à la même famille de loisirs que l'observation du ciel : un colon lassé de l'une l'est aussi de l'autre, et une colonie qui ne peut plus sortir (pluie, froid, retombées toxiques) garde ainsi une contemplation à l'abri.
