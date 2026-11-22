@@ -20,7 +20,13 @@ export type MoodPoolCrisis350=
   | (CrisisBase&{kind:'wander-own-room';root:Cell})
   | (CrisisBase&{kind:'insulting-spree';insultTargetId:number|null;insulted:boolean;lastInsultCore:number|null;foundCore:number|null})
   | (CrisisBase&{kind:'targeted-insulting-spree';insultTargetId:number;insulted:boolean;lastInsultCore:number|null});
-export type MentalCrisis=(CrisisBase&{kind:'confused-wander'})|(CrisisBase&{kind:'sad-wander'})|(CrisisBase&{kind:'food-binge'})|(CrisisBase&{kind:'drug-binge'})|AggressiveCrisis|MoodPoolCrisis350;
+/** Schema 368 (fire-spree-368): the fire-starting spree with its current
+ * job. An Ignite job holds `igniteId` (the thing to set on fire): the walk to
+ * touch it, then the warmup and cooldown stances, each ending at `stanceCore`
+ * (`cast` once the ignition was attempted). `waitNext` is Core's
+ * mindState.nextMoveOrderIsWait: the next job is a short wait. */
+export type FireSpreeCrisis368=CrisisBase&{kind:'fire-starting-spree';igniteId:number|null;stanceCore:number|null;cast:boolean;waitNext:boolean};
+export type MentalCrisis=(CrisisBase&{kind:'confused-wander'})|(CrisisBase&{kind:'sad-wander'})|(CrisisBase&{kind:'food-binge'})|(CrisisBase&{kind:'drug-binge'})|AggressiveCrisis|MoodPoolCrisis350|FireSpreeCrisis368;
 /** Tantrum, berserk and murderous rage: the crises that target by violence. */
 export const isAggressiveMentalCrisis=(c:MentalCrisis):c is AggressiveCrisis=>c.kind==='tantrum'||c.kind==='berserk'||c.kind==='murderous-rage';
 

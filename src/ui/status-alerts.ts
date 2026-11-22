@@ -101,7 +101,8 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
   counted('psychotic-wander',living.filter(p=>p.mental?.crisis?.kind==='psychotic-wander'),n=>`${n} colon(s) en errance psychotique`,'needs');
   counted('wander-own-room',living.filter(p=>p.mental?.crisis?.kind==='wander-own-room'),n=>`${n} colon(s) retranché(s) dans sa chambre`,'needs');
   counted('insulting-spree',living.filter(p=>p.mental?.crisis?.kind==='insulting-spree'||p.mental?.crisis?.kind==='targeted-insulting-spree'),n=>`${n} colon(s) en série d’insultes`,'needs');
-  for(const pawn of living.filter(p=>p.mental?.crisis&&['tantrum','berserk','murderous-rage'].includes(p.mental.crisis.kind))){
+  // Schema 368: a fire-starting spree is shown with its target, as the destructive crises.
+  for(const pawn of living.filter(p=>p.mental?.crisis&&['tantrum','berserk','murderous-rage','fire-starting-spree'].includes(p.mental.crisis.kind))){
     const crisis=mentalCrisisView(world,pawn,s=>buildingLabels[s.kind])!;
     add(`mental:${pawn.id}`,`${pawn.name} · ${crisis.label}${crisis.target&&knownPosition256(world,crisis.target.cell)?` · cible : ${crisis.target.label}${crisis.target.type==='structure'?` (${crisis.target.cell.x}, ${crisis.target.cell.z})`:''}`:''}`,people(world,[pawn]),undefined,'needs');
   }

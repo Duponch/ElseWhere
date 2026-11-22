@@ -24,9 +24,9 @@ import { bornWimpRecord362 } from './wimp-record-362.ts';
  *   commonality of every other def not held, against Gay 0.3, Bisexual 0.2
  *   and Asexual 0.2 (Biotech's age gate does not apply in Core).
  * Defs left out of this game are never drawn: the others share their
- * weight. Schema 362 adds Undergrounder, Tortured artist and Wimp (only
- * Pyromaniac remains left out); a birth of an older schema keeps the 361 set,
- * so its draws stay identical. */
+ * weight. Schema 362 adds Undergrounder, Tortured artist and Wimp, schema 368
+ * Pyromaniac (no requiredWorkTags, no conflict); a birth of an older schema
+ * keeps its own set, so its draws stay identical. */
 export interface TraitBirth361 {
   /** Uniform [0,1) for a salt, private to this birth. */
   draw:(salt:number)=>number;
@@ -48,12 +48,13 @@ function weightedDef(defs:readonly CoreTraitDefName[],weight:(def:CoreTraitDefNa
   for(const def of defs){const w=weight(def);if(w<=0)continue;left-=w;if(left<0)return def;}
   return defs.findLast(def=>weight(def)>0);
 }
-/** The degrees a birth of `schema` may receive (361: the 361 set; 362 adds three defs). */
+/** The degrees a birth of `schema` may receive (361: the 361 set; 362 adds
+ * three defs; 368 adds Pyromaniac). */
 const degreesAt=(def:CoreTraitDefName,schema:number):readonly TraitId[]=>CORE_TRAIT_DEFS[def].degrees.filter(id=>(TRAITS[id].since??0)<=schema);
 const drawableAt=(schema:number)=>Object.freeze(CORE_TRAIT_DEF_NAMES.filter(def=>degreesAt(def,schema).length>0));
-const DRAWABLE=drawableAt(361),DRAWABLE_362=drawableAt(362);
+const DRAWABLE=drawableAt(361),DRAWABLE_362=drawableAt(362),DRAWABLE_368=drawableAt(368);
 function drawOne(birth:TraitBirth361,held:readonly TraitId[],slot:number):TraitId|undefined {
-  const heldDefs=held.map(id=>TRAITS[id].def),schema=birth.schema??361,drawable=schema>=362?DRAWABLE_362:DRAWABLE;
+  const heldDefs=held.map(id=>TRAITS[id].def),schema=birth.schema??361,drawable=schema>=368?DRAWABLE_368:schema>=362?DRAWABLE_362:DRAWABLE;
   for(let attempt=0;attempt<ATTEMPTS;attempt++){
     const def=weightedDef(drawable,d=>traitDefCommonality(d,birth.sex),birth.draw(SALT_DEF+slot*0x800+attempt));
     if(!def||heldDefs.includes(def))continue;

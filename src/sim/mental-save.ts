@@ -8,6 +8,7 @@ import { isAggressiveMentalCrisis } from './mental-state.ts';
 import { isMoodPool350,isMoodPoolCrisis350 } from './mood-pool-memories-350.ts';
 import { structureMaxHp } from './thing-damage-rules.ts';
 import { isTraitLinks362 } from './trait-links-362.ts';
+import { ERRORED_PATHER_WAIT_LOCAL_368,IGNITE_STANCE_MAX_CORE_368,isPyromaniac368 } from './pyromaniac-368.ts';
 
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const integer=(v:unknown,lo:number,hi=Number.MAX_SAFE_INTEGER):v is number=>Number.isSafeInteger(v)&&Number(v)>=lo&&Number(v)<=hi;
@@ -21,8 +22,9 @@ export function validMentalShape(value:unknown,version:number,tick:number,width:
   if(c.kind==='confused-wander'&&(version<256||!Object.hasOwn(value,'wander')))return false;
   if(c.kind==='drug-binge'&&!isSchema265OrLater(version))return false;
   if(isMoodPoolCrisis350(c.kind)&&!isMoodPool350(version))return false;
+  if(c.kind==='fire-starting-spree'&&!isPyromaniac368(version))return false;
   const rules=MENTAL_CRISIS_CATALOG[c.kind as keyof typeof MENTAL_CRISIS_CATALOG];
-  if(!integer(c.age,0,rules.maxCore+(c.kind==='murderous-rage'?19:-1))||c.age%30!==0||typeof c.waitUntil!=='number'||!Number.isFinite(c.waitUntil)||c.waitUntil<0||c.waitUntil>tick+(c.kind==='wander-own-room'?60:20.1)||!(c.target===null||object(c.target)&&keys(c.target,['x','z'])&&integer(c.target.x,0,width-1)&&integer(c.target.z,0,height-1)))return false;
+  if(!integer(c.age,0,rules.maxCore+(c.kind==='murderous-rage'?19:-1))||c.age%30!==0||typeof c.waitUntil!=='number'||!Number.isFinite(c.waitUntil)||c.waitUntil<0||c.waitUntil>tick+(c.kind==='wander-own-room'?60:c.kind==='fire-starting-spree'?ERRORED_PATHER_WAIT_LOCAL_368:20.1)||!(c.target===null||object(c.target)&&keys(c.target,['x','z'])&&integer(c.target.x,0,width-1)&&integer(c.target.z,0,height-1)))return false;
   // Schema 362: a crisis not caused by mood carries `notMood362: true`.
   if(Object.hasOwn(c,'notMood362')&&(!isTraitLinks362(version)||c.notMood362!==true||c.kind==='confused-wander'))return false;
   const base=['kind','age','target','waitUntil',...isTraitLinks362(version)?['notMood362']:[]];
@@ -31,6 +33,11 @@ export function validMentalShape(value:unknown,version:number,tick:number,width:
   if(c.kind==='murderous-rage')return keys(c,[...base,'targetId','nextCheckCore'])&&integer(c.targetId,1)&&integer(c.nextCheckCore,0,tick*10+120);
   // Schema 350: the own room's bed cell; a spree's target and its two Core clocks.
   if(c.kind==='wander-own-room')return keys(c,[...base,'root'])&&object(c.root)&&keys(c.root,['x','z'])&&integer(c.root.x,0,width-1)&&integer(c.root.z,0,height-1);
+  // Schema 368: the spree's current Ignite job and nextMoveOrderIsWait; a
+  // stance only once the pawn touches its target, the cast within it.
+  if(c.kind==='fire-starting-spree')return keys(c,[...base,'igniteId','stanceCore','cast','waitNext'])&&(c.igniteId===null||integer(c.igniteId,1))
+    &&(c.stanceCore===null||integer(c.stanceCore,0,tick*10+IGNITE_STANCE_MAX_CORE_368))&&typeof c.cast==='boolean'&&typeof c.waitNext==='boolean'
+    &&(c.igniteId!==null||c.stanceCore===null)&&(c.stanceCore!==null||c.cast===false)&&(c.stanceCore===null||c.target===null);
   const core=(v:unknown)=>v===null||integer(v,0,tick*10);
   if(c.kind==='insulting-spree')return keys(c,[...base,'insultTargetId','insulted','lastInsultCore','foundCore'])&&(c.insultTargetId===null||integer(c.insultTargetId,1))&&typeof c.insulted==='boolean'&&core(c.lastInsultCore)&&core(c.foundCore)
     &&(c.insultTargetId!==null||c.insulted===false&&c.foundCore===null);
@@ -54,6 +61,12 @@ export function validateMental(world:World,version:number):string[] {
     if((c.kind==='wander-own-room'||c.kind==='insulting-spree'||c.kind==='targeted-insulting-spree')&&(p.prisoner&&!isColonist(p)||p.visitor||p.podRescue||p.raid))errors.push('Invalid mood break owner.');
     if((c.kind==='insulting-spree'||c.kind==='targeted-insulting-spree')&&c.insultTargetId!==null&&(c.insultTargetId===p.id||!world.pawns.some(t=>t.id===c.insultTargetId)))errors.push('Invalid insult target.');
     if(c.kind==='drug-binge'&&(p.prisoner||p.visitor||p.podRescue||p.raid))errors.push('Invalid alcohol binge owner.');
+    // Schema 368: a pyromaniac colonist's spree (colonistsOnly, prisonersCanDo false); its target is a thing.
+    if(c.kind==='fire-starting-spree'){
+      if(p.prisoner||p.visitor||p.podRescue||p.raid||!p.traits?.includes('pyromaniac'))errors.push('Invalid fire-starting spree owner.');
+      const id=c.igniteId;
+      if(id!==null&&(id>=world.nextId||id===p.id||world.pawns.some(t=>t.id===id)||world.wildlife?.animals.some(t=>t.id===id)||world.mechanoids?.some(t=>t.id===id)||world.jobs.some(t=>t.id===id)))errors.push('Invalid ignite target.');
+    }
     if(aggressive&&(p.prisoner||p.visitor||p.podRescue||p.raid))errors.push('Invalid aggressive crisis owner.');
     if('targetId' in c&&c.targetId!==null) {
       if(c.targetId>=world.nextId||c.targetId===p.id)errors.push('Invalid mental target identity.');

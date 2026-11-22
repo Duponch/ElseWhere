@@ -78,7 +78,7 @@ test('traits reach every active skill through real construction, repairs, treatm
 test('strict neutral migration, conflicts/duplicates/unknowns, mutable copies and snapshots retain the exact personality',()=>{
   const w=createWorld(42);initializeCampTraits(w);expect(w.pawns.map(p=>p.traits)).toEqual([['optimist','fast-learner'],['steadfast','slow-learner'],['pessimist','nervous']]);
   expect(w.pawns[0]!.traits).not.toBe(startingTraits(0));expect(Object.isFrozen(TRAITS.optimist)).toBe(true);
-  for(const traits of [null,[],['optimist','pessimist'],['steadfast','nervous'],['fast-learner','slow-learner'],['optimist','optimist'],['__proto__'],['constructor'],['pyromaniac'],['optimist',42]]){const bad=structuredClone(w) as any;bad.pawns[0].traits=traits;expect(()=>deserializeWorld(JSON.stringify(bad))).toThrow(/traits/);}
+  for(const traits of [null,[],['optimist','pessimist'],['steadfast','nervous'],['fast-learner','slow-learner'],['optimist','optimist'],['__proto__'],['constructor'],['pyromane'],['optimist',42]]){const bad=structuredClone(w) as any;bad.pawns[0].traits=traits;expect(()=>deserializeWorld(JSON.stringify(bad))).toThrow(/traits/);}
   expect(validTraits(['optimist','steadfast','fast-learner'],69)).toBe(true);
   const old=structuredClone(w) as any;(old.schemaVersion=68,withoutResearch(old));for(const p of old.pawns){delete p.traits;delete p.background;}
   const migrated=deserializeWorld(JSON.stringify(old));expect(migrated).toEqual(withMigratedResearch({...old,schemaVersion:SCHEMA_VERSION}));expect(migrated.pawns.every(p=>p.traits===undefined)).toBe(true);

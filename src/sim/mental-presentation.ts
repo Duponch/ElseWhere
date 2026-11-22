@@ -19,6 +19,7 @@ const descriptions:Readonly<Record<MentalCrisisKind,string>>={
   'wander-own-room':'se cache dans sa chambre, autour de son lit, et refuse les ordres. Cherche encore nourriture et sommeil en cas de besoin extrême.',
   'insulting-spree':'erre dans la colonie et va insulter les personnes proches, une insulte toutes les deux minutes au plus. Refuse les ordres sans devenir violent.',
   'targeted-insulting-spree':'suit une seule personne pour l’insulter, sans devenir violent. Refuse les ordres ; la crise peut cesser après une première insulte.',
+  'fire-starting-spree':'Refuse les ordres et erre en mettant le feu à ce qui brûle autour de lui : bâtiments, objets et plantes.',
 };
 export interface MentalTargetView {type:'pawn'|'animal'|'structure';id:number;cell:Cell;label:string}
 export interface MentalCrisisView {
@@ -43,10 +44,16 @@ export function mentalCrisisView(world:World,pawn:Pawn,structureLabel?:(structur
       if(animal)target={type:'animal',id:animal.id,cell:{x:animal.x,z:animal.z},label:`${animalSpecies(animal.species).label} ${animal.id}`};
     }
   }
+  // Schema 368: the thing the spree means to set on fire, when a building.
+  if(kind==='fire-starting-spree'&&crisis.igniteId!==null){
+    const structure=structureById(world,crisis.igniteId);
+    if(structure)target={type:'structure',id:structure.id,cell:{x:structure.x,z:structure.z},label:structureLabel?.(structure)??`Bâtiment ${structure.id}`};
+  }
   const aggressive=kind==='tantrum'||kind==='berserk'||kind==='murderous-rage';
-  const activity=!aggressive?'':pawn.interruptedCargo?'Cargaison conservée : attend un dépôt sûr.':pawn.melee?.strike?'Récupère après sa frappe.':pawn.path.length||pawn.moveCooldown>0?'Se déplace.':'';
+  const igniting=kind==='fire-starting-spree'?crisis.stanceCore!==null&&!crisis.cast?'Met le feu.':'':'';
+  const activity=igniting||(!aggressive?'':pawn.interruptedCargo?'Cargaison conservée : attend un dépôt sûr.':pawn.melee?.strike?'Récupère après sa frappe.':pawn.path.length||pawn.moveCooldown>0?'Se déplace.':'');
   if(target&&!knownCell256(world,target.cell.z*world.width+target.cell.x))target=undefined;
-  return {kind,label:mentalCrisisLabel(kind),symbol:aggressive?'!':'↝',description:descriptions[kind],activity,...target?{target}:{}};
+  return {kind,label:mentalCrisisLabel(kind),symbol:aggressive||kind==='fire-starting-spree'?'!':'↝',description:descriptions[kind],activity,...target?{target}:{}};
 }
 
 export function mentalCrisisStatus(world:World,pawn:Pawn):string {

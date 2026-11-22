@@ -1,4 +1,4 @@
-export type MentalCrisisKind='sad-wander'|'food-binge'|'drug-binge'|'tantrum'|'berserk'|'murderous-rage'|'psychotic-wander'|'wander-own-room'|'insulting-spree'|'targeted-insulting-spree';
+export type MentalCrisisKind='sad-wander'|'food-binge'|'drug-binge'|'tantrum'|'berserk'|'murderous-rage'|'psychotic-wander'|'wander-own-room'|'insulting-spree'|'targeted-insulting-spree'|'fire-starting-spree';
 export const MENTAL_CRISIS_CATALOG={
   'confused-wander':{label:'Errance confuse',intensity:0,weight:0,minCore:3500,maxCore:120000,recoveryMtb:.2},
   'sad-wander':{label:'Errance triste',intensity:0,weight:.5,minCore:40000,maxCore:60000,recoveryMtb:.166},
@@ -12,6 +12,8 @@ export const MENTAL_CRISIS_CATALOG={
   'wander-own-room':{label:'Retraite dans sa chambre',intensity:0,weight:.5,minCore:40000,maxCore:60000,recoveryMtb:.166},
   'insulting-spree':{label:'Série d’insultes',intensity:0,weight:.5,minCore:25000,maxCore:45000,recoveryMtb:.166},
   'targeted-insulting-spree':{label:'Série d’insultes ciblée',intensity:0,weight:.5,minCore:25000,maxCore:45000,recoveryMtb:.166},
+  // Schema 368 (MentalStates_Mood.xml FireStartingSpree, Pyromaniac only), see fire-spree-368.
+  'fire-starting-spree':{label:'Frénésie incendiaire',intensity:2,weight:1,minCore:6000,maxCore:10000,recoveryMtb:.033},
 } as const;
 export const mentalCrisisLabel=(kind:MentalCrisisKind|'confused-wander'):string=>MENTAL_CRISIS_CATALOG[kind].label;
 /** Core population curve; local population is living free colonists on this map. */

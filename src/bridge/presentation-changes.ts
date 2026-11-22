@@ -53,6 +53,7 @@ export class PresentationChanges {
       world.pawns.map(p=>[p.id,p.state,p.burning?.phase,p.firefighting?.phase,p.firefighting?.fireId,p.raid?.exiting,p.mental?.crisis?.kind,p.mental?.crisis?.target,
         p.mental?.crisis&&'targetId' in p.mental.crisis?p.mental.crisis.targetId:undefined,
         p.mental?.crisis?.kind==='tantrum'?p.mental.crisis.attempted:undefined,
+        p.mental?.crisis?.kind==='fire-starting-spree'?[p.mental.crisis.igniteId,p.mental.crisis.stanceCore!==null,p.mental.crisis.cast]:undefined,
         p.meleeThreat,p.bombRefuge,p.bedId,p.social?.last,p.romanceMemories,p.familyBereavement,p.deathThoughts,
         isSchema285OrLater(world.schemaVersion)&&p.coupleTask285?[p.coupleTask285.otherId,p.coupleTask285.bedId,p.coupleTask285.slot,p.bedSlot,p.coupleTask285.enteredAtCore,p.coupleTask285.endsAtCore]:undefined,
         p.firefoamTask290?[p.firefoamTask290.structureId,p.firefoamTask290.phase]:undefined,!!p.health?.coveredInFirefoam290,

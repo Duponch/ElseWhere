@@ -9,6 +9,7 @@ import { captureRoomQuality,type RoomQualityCapture } from './room-quality.ts';
 import { hourOfDay } from './schedule.ts';
 import { artificialPartCount361 } from './traits.ts';
 import { undergrounderThoughts362 } from './indoors-need-362.ts';
+import { pyromaniacNearFireThought368 } from './pyromaniac-thought-368.ts';
 import type { MaterialPile,Pawn,World } from './types.ts';
 
 /** Schema 361: the Core trait thoughts (Thoughts_Situation_Traits) and the
@@ -80,6 +81,8 @@ export function traitMapThoughts361(world:World,pawn:Pawn):TraitMapThoughts361 {
   }
   // Schema 362: the undergrounder's indoors need and trait thoughts (indoors-need-362).
   if(t.includes('undergrounder'))thoughts.push(...undergrounderThoughts362(world,pawn));
+  // Schema 368: PyromaniacNearFire, map only (pyromaniac-thought-368).
+  if(t.includes('pyromaniac')){const fire=pyromaniacNearFireThought368(world,pawn);if(fire)thoughts.push(fire);}
   const weapon=t.includes('brawler')?equippedWeapon(world,pawn):undefined;
   return {thoughts,rangedWeapon:!!weapon&&isRangedWeaponItem(weapon.item)};
 }

@@ -26,7 +26,8 @@ export function journalLetter352(world:World,cls:LetterClass352,title:string,tar
  * PawnUtility.ShouldSendNotificationAbout): colonists and their prisoners. */
 export function mentalBreakLetter352(world:World,pawn:Pawn,kind:MentalCrisisKind|'confused-wander'):void {
   if(!isSchema352OrLater(world.schemaVersion)||kind==='drug-binge'||!(isColonist(pawn)||pawn.prisoner))return;
-  journalLetter352(world,kind==='berserk'||kind==='murderous-rage'?'threat-small':'negative',`${mentalCrisisLabel(kind)} : ${pawn.name}`,actors352([pawn.id]));
+  // Schema 368: FireStartingSpree beginLetterDef ThreatSmall, as berserk.
+  journalLetter352(world,kind==='berserk'||kind==='murderous-rage'||kind==='fire-starting-spree'?'threat-small':'negative',`${mentalCrisisLabel(kind)} : ${pawn.name}`,actors352([pawn.id]));
 }
 
 /** Pawn_HealthTracker.NotifyPlayerOfKilled: a Death letter for a pawn of the

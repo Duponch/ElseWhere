@@ -12,7 +12,7 @@ export interface TraitDefinition {
   /** MentalBreakThreshold offset, in mood points (Core 0.09 = 9). */
   readonly breakOffset:number;
   readonly description:string;
-  readonly since?:361|362;
+  readonly since?:361|362|368;
   /** Core TraitDef (defName) and degree; a spectrum keeps one degree per def. */
   readonly def:CoreTraitDefName;readonly degree:number;
   readonly workSpeed?:number;readonly moveSpeed?:number;
@@ -23,6 +23,8 @@ export interface TraitDefinition {
   readonly trapSpringFactor?:number;
   readonly skillGains?:Readonly<Partial<Record<BackgroundSkillId,number>>>;
   readonly randomDiseaseMtbDays?:number;
+  /** Core TraitDef.disabledWorkTags (schema 368: Pyromaniac, Firefighting). */
+  readonly disabledWorkTags?:readonly BackgroundWorkTag[];
 }
 export type CoreTraitDefName='SpeedOffset'|'DrugDesire'|'NaturalMood'|'Nerves'|'Neurotic'|'Industriousness'|'PsychicSensitivity'|'ShootingAccuracy'|'Beauty'|'Immunity'
   |'Nudist'|'Bloodlust'|'Kind'|'Psychopath'|'Cannibal'|'Abrasive'|'TooSmart'|'Brawler'|'Masochist'|'NightOwl'|'Greedy'|'Jealous'|'Ascetic'|'Gay'|'Bisexual'|'Asexual'
@@ -34,6 +36,8 @@ const t=(def:CoreTraitDefName,degree:number,label:string,description:string,effe
 const n=(def:CoreTraitDefName,degree:number,label:string,description:string,effects:Partial<Omit<TraitDefinition,'def'|'degree'|'label'|'description'|'since'>>={}):TraitDefinition=>t(def,degree,label,description,{...effects,since:361});
 /** Schema 362: the traits that link the outdoors need, inspirations and pain (trait-links-362). */
 const n362=(def:CoreTraitDefName,degree:number,label:string,description:string,effects:Partial<Omit<TraitDefinition,'def'|'degree'|'label'|'description'|'since'>>={}):TraitDefinition=>t(def,degree,label,description,{...effects,since:362});
+/** Schema 368: Pyromaniac and its fire-starting spree (pyromaniac-368). */
+const n368=(def:CoreTraitDefName,degree:number,label:string,description:string,effects:Partial<Omit<TraitDefinition,'def'|'degree'|'label'|'description'|'since'>>={}):TraitDefinition=>t(def,degree,label,description,{...effects,since:368});
 
 /** The first nine keys keep their historical order: the pre-361 starting
  * candidate draw ranks exactly these. */
@@ -104,8 +108,12 @@ export const TRAITS = Object.freeze({
   undergrounder:n362('Undergrounder',0,'Souterrain','N’a aucun besoin de plein air et l’obscurité ne le gêne pas. A besoin d’intérieur : dehors, il s’en lasse et en souffre (−1 à −8). Éveillé : +3 à l’intérieur sous un toit construit, +4 sous la roche, −3 dehors.'),
   'tortured-artist':n362('TorturedArtist',0,'Artiste torturé','Humeur −8 en permanence. Quand il se remet d’une crise causée par son humeur, une chance sur deux de recevoir une créativité inspirée. Toujours une passion pour l’art.',{mood:-8}),
   wimp:n362('Wimp',0,'Douillet','La moindre douleur le terrasse : il s’effondre dès 30 % de douleur au lieu de 80 %.'),
+  // Schema 368 (pyromaniac-368).
+  pyromaniac:n368('Pyromaniac',0,'Pyromane','Adore le feu : refuse toujours d’éteindre un incendie. Ses crises extrêmes sont toujours des frénésies incendiaires, qui peuvent aussi survenir sans raison (une fois tous les 50 jours en moyenne). Humeur +2 par feu proche dans la même pièce (au plus +8).',{disabledWorkTags:Object.freeze(['firefighting'] as const)}),
 });
 export type TraitId=keyof typeof TRAITS;
+/** The degrees with Core disabledWorkTags (schema 368: Pyromaniac). */
+const WORK_DISABLING_TRAITS:ReadonlySet<string>=new Set((Object.keys(TRAITS) as TraitId[]).filter(id=>TRAITS[id].disabledWorkTags?.length));
 export type TraitBearer=Pick<Pawn,'traits'>;
 /** The nine pre-361 ids, in their historical key order. */
 export const LEGACY_TRAIT_IDS:readonly TraitId[]=Object.freeze(['optimist','pessimist','steadfast','nervous','fast-learner','slow-learner','kind','abrasive','bloodlust']);
@@ -154,8 +162,8 @@ export const CORE_TRAIT_DEFS:Readonly<Record<CoreTraitDefName,CoreTraitDefData>>
   Asexual:d(.2,['asexual'],{exclusionTags:['SexualOrientation'],sexuality:true}),
   AnnoyingVoice:d(.5,['annoying-voice']),
   CreepyBreathing:d(.5,['creepy-breathing']),
-  // Left out (doc): its fire-starting spree mental state does not exist yet.
-  Pyromaniac:d(.8,[],{requiredWorkTags:[]}),
+  // Schema 368: drawn only from 368 (its degree's `since`).
+  Pyromaniac:d(.8,['pyromaniac']),
   Wimp:d(1,['wimp'],{conflicts:['Brawler','Masochist'],allowOnHostileSpawn:false}),
   Nimble:d(1,['nimble']),
   FastLearner:d(1,['fast-learner'],{exclusionTags:['SlowFastLearner']}),
@@ -183,6 +191,17 @@ export function traitDefCommonality(def:CoreTraitDefName,sex:'male'|'female'|'no
 export function traitDefsConflict(a:CoreTraitDefName,b:CoreTraitDefName):boolean {
   const x=CORE_TRAIT_DEFS[a],y=CORE_TRAIT_DEFS[b];
   return x.conflicts.includes(b)||y.conflicts.includes(a)||x.exclusionTags.some(tag=>y.exclusionTags.includes(tag));
+}
+/** Core Pawn.CombinedDisabledWorkTags reads the traits' disabledWorkTags with
+ * the backstory's: the first held trait that disables `tag`. Only Pyromaniac
+ * (schema 368, Firefighting) has one, so no older save meets it. Tolerant of
+ * raw save data, as some readers run during validation. */
+export function traitDisablingWorkTag(pawn:{readonly traits?:readonly TraitId[]}|undefined,tag:BackgroundWorkTag):TraitId|undefined {
+  const traits=pawn?.traits;if(!Array.isArray(traits)||!traits.length)return undefined;
+  // In the pawn's trait order (Core's order); a hot reader: the few degrees
+  // with disabled work are listed once.
+  for(const id of traits)if(WORK_DISABLING_TRAITS.has(id)&&TRAITS[id as TraitId].disabledWorkTags!.includes(tag))return id as TraitId;
+  return undefined;
 }
 export const traitDegree=(pawn:TraitBearer|undefined,def:CoreTraitDefName):number|undefined=>{
   for(const id of pawn?.traits??[])if(TRAITS[id].def===def)return TRAITS[id].degree;

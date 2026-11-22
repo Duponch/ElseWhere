@@ -33,7 +33,8 @@ const MOOD_POOL_KINDS_350=['sleep-disturbed','nuzzled','released-prisoner','bond
  * nine older ids, and none at all if it held no older one; faction leaders
  * and departed visitors keep none); schema 362: the Undergrounder, Tortured
  * artist and Wimp degrees, the indoors need, the wimp's record marker and
- * the not-mood marker of a crisis. */
+ * the not-mood marker of a crisis; schema 368: the Pyromaniac degree (a
+ * fire-starting spree is kept, and refused). */
 export function asOldSchema(json:string,version:number):string {
   const raw=JSON.parse(json) as Record<string,unknown>;
   raw.schemaVersion=version;
@@ -46,6 +47,11 @@ function strip(value:unknown,version:number):void {
   const o=value as Record<string,unknown>;
   // Schema 360: a pawn's active inspiration.
   if(version<360&&Object.hasOwn(o,'inspiration360'))delete o.inspiration360;
+  // Schema 368: the Pyromaniac degree.
+  if(version<368&&Array.isArray(o.traits)&&o.traits.every(id=>typeof id==='string')&&o.traits.includes('pyromaniac')){
+    const kept=(o.traits as string[]).filter(id=>id!=='pyromaniac');
+    if(kept.length)o.traits=kept;else delete o.traits;
+  }
   // Schema 362: the three new trait degrees and what they hold.
   if(version<362){
     if(Array.isArray(o.traits)&&o.traits.every(id=>typeof id==='string')&&o.traits.some(id=>TRAIT_LINK_IDS_362.includes(id as string))){
@@ -119,7 +125,7 @@ export function stripFutureContent(value:unknown,version:number):void {
   if(version<352&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).letters352;
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
-  if(version<362)strip(value,version);
+  if(version<368)strip(value,version);
 }
 
 /** The reference for a number-only migration step from `version`: the same

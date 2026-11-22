@@ -101,8 +101,8 @@ test('Core data: three degrees from 362 with their commonalities and conflicts',
   expect(isTraitLinks362(361)).toBe(false);expect(isTraitLinks362(SCHEMA_VERSION)).toBe(true);
   expect([TRAITS.undergrounder,TRAITS['tortured-artist'],TRAITS.wimp].map(t=>[t.def,t.since])).toEqual([['Undergrounder',362],['TorturedArtist',362],['Wimp',362]]);
   expect(['Undergrounder','TorturedArtist','Wimp','Pyromaniac'].map(d=>CORE_TRAIT_DEFS[d as 'Wimp'].commonality)).toEqual([.2,.6,1,.8]);
-  // Pyromaniac stays out (doc): it is never drawn.
-  expect(CORE_TRAIT_DEFS.Pyromaniac.degrees).toEqual([]);
+  // Pyromaniac stays out at 362 (doc): it is never drawn (its degree exists from 368, pyromaniac-368).
+  expect(CORE_TRAIT_DEFS.Pyromaniac.degrees.filter(id=>(TRAITS[id].since??0)<=362)).toEqual([]);
   expect(traitDefsConflict('Wimp','Brawler')).toBe(true);expect(traitDefsConflict('Masochist','Wimp')).toBe(true);
   expect(CORE_TRAIT_DEFS.Wimp.allowOnHostileSpawn).toBe(false);
   // The tortured artist's permanent thought (MoodOffsetTorturedArtist −8).
@@ -112,7 +112,8 @@ test('Core data: three degrees from 362 with their commonalities and conflicts',
 });
 
 test('generation at 362 draws the new traits at Core\'s frequencies; 361 draws are unchanged; tutorial candidates still fight',()=>{
-  const drawable=CORE_TRAIT_DEF_NAMES.filter(d=>CORE_TRAIT_DEFS[d].degrees.length>0);
+  // The defs a 362 birth may draw (a later schema adds its own, read at that schema).
+  const drawable=CORE_TRAIT_DEF_NAMES.filter(d=>CORE_TRAIT_DEFS[d].degrees.some(id=>(TRAITS[id].since??0)<=362));
   expect(drawable).toEqual(expect.arrayContaining(['Undergrounder','TorturedArtist','Wimp']));
   const N=14000,first:Record<string,number>={};let hostileWimps=0;
   for(let i=0;i<N;i++){

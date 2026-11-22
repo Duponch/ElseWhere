@@ -25,6 +25,7 @@ import { cancelShooting } from './shooting-state.ts';
 import type { AggressiveCrisisKind,MentalCrisis } from './mental-state.ts';
 import {isMoodPool350} from './mood-pool-350.ts';
 import {crisisCanEndEarly350,crisisKeptAsleep350,drawFirstInsultTarget350,isMoodPoolCrisis350,maintainInsultingSpree350,minorPoolOptions350,newMoodPoolCrisis350,ownRoomSpace350,processInsultingSpree350,psychoticWanderAdmitted350,type MoodPoolAdmission350,type MoodPoolCrisisKind350} from './mental-breaks-350.ts';
+import {fireSpreeJobEnded368,isPyromaniac368,newFireSpreeCrisis368,processFireStartingSpree368,pyromaniacRandomSpreeDue368} from './fire-spree-368.ts';
 import type { SearchBudget } from './work-planner.ts';
 import type { Pawn,World } from './types.ts';
 
@@ -72,6 +73,19 @@ function startAggressiveBreak(world:World,pawn:Pawn,kind:AggressiveCrisisKind,ad
   const rng={value:world.rng},crisis=planAggressiveCrisis(world,pawn,kind,admission,rng);
   return commitBreak(world,pawn,crisis,rng.value);
 }
+/** Schema 368: FireStartingSpree BreakCanOccur (requiredTrait Pyromaniac)
+ * and MentalStateWorker.StateCanOccur (colonistsOnly, prisonersCanDo false,
+ * not downed), awake (TryStartMentalState), no other state. */
+export function fireSpreeCanOccur368(world:World,pawn:Pawn):boolean {
+  return isPyromaniac368(world.schemaVersion)&&!!pawn.traits?.includes('pyromaniac')&&isColonist(pawn)&&!pawn.prisoner&&!pawn.visitor
+    &&pawn.state!=='downed'&&pawn.state!=='dead'&&!moodFrozen(pawn)&&!pawn.mental?.crisis;
+}
+/** Start the spree: mood-caused (the reason drawn on the mental stream) or
+ * given by the trait (its label, no draw). */
+export function startFireStartingSpree368(world:World,pawn:Pawn,traitReason?:string):boolean {
+  if(!fireSpreeCanOccur368(world,pawn))return false;
+  return commitBreak(world,pawn,newFireSpreeCrisis368(world),world.rng,traitReason);
+}
 export const startTantrum=(world:World,pawn:Pawn):boolean=>startAggressiveBreak(world,pawn,'tantrum');
 export const startBerserk=(world:World,pawn:Pawn):boolean=>startAggressiveBreak(world,pawn,'berserk');
 export const startMurderousRage=(world:World,pawn:Pawn):boolean=>startAggressiveBreak(world,pawn,'murderous-rage');
@@ -82,16 +96,28 @@ export function updateMentalBreak(world:World,pawn:Pawn,budget?:SearchBudget):vo
   const hadCrisis=!!pawn.mental?.crisis;
   updateMoodMentalBreak(world,pawn,budget);
   // Core MentalBreakerTickInterval: the trait state givers run on the same
-  // 150-tick check when no mood break started (schema 361 traits only).
-  if(!hadCrisis&&!pawn.mental?.crisis&&pawn.traits?.includes('gourmand'))gourmandRandomBinge361(world,pawn);
+  // 150-tick check when no mood break started (schema 361 traits only), in
+  // the pawn's trait order until one gives a state (368: the pyromaniac).
+  if(!hadCrisis&&!pawn.mental?.crisis&&pawn.traits)for(const id of pawn.traits){
+    if(id==='gourmand'?gourmandRandomBinge361(world,pawn):id==='pyromaniac'&&pyromaniacRandomSpree368(world,pawn))break;
+  }
+}
+/** Pyromaniac randomMentalState FireStartingSpree (schema 368), MTB 50 days
+ * at any mood, on the pyromaniac's own stream; not caused by mood. */
+function pyromaniacRandomSpree368(world:World,pawn:Pawn):boolean {
+  if((world.tick+pawn.id)%15!==0||pawn.state==='dead'||!isColonist(pawn)||tutorialSparesMind347(world,pawn))return false;
+  if(!pyromaniacRandomSpreeDue368(world,pawn))return false;
+  if(!startFireStartingSpree368(world,pawn,TRAITS.pyromaniac.label))return false;
+  markCrisisNotMood362(world.schemaVersion,pawn);return true;
 }
 /** Gourmand randomMentalState Binging_Food, MTB 50 days at any mood
  * (randomMentalStateMtbDaysMoodCurve (0,50)), drawn on a private channel. */
-function gourmandRandomBinge361(world:World,pawn:Pawn):void {
-  if((world.tick+pawn.id)%15!==0||pawn.state==='dead'||!isColonist(pawn)||tutorialSparesMind347(world,pawn))return;
-  if(traitMentalStateRoll361(world.seed,pawn.id,world.tick)>=150/(50*60000))return;
+function gourmandRandomBinge361(world:World,pawn:Pawn):boolean {
+  if((world.tick+pawn.id)%15!==0||pawn.state==='dead'||!isColonist(pawn)||tutorialSparesMind347(world,pawn))return false;
+  if(traitMentalStateRoll361(world.seed,pawn.id,world.tick)>=150/(50*60000))return false;
   // Schema 362: TraitMentalStateGiver starts it with causedByMood false.
-  if(startMinorBreak(world,pawn,'food-binge',TRAITS.gourmand.label))markCrisisNotMood362(world.schemaVersion,pawn);
+  if(!startMinorBreak(world,pawn,'food-binge',TRAITS.gourmand.label))return false;
+  markCrisisNotMood362(world.schemaVersion,pawn);return true;
 }
 function updateMoodMentalBreak(world:World,pawn:Pawn,budget?:SearchBudget):void {
   let m=pawn.mental;
@@ -172,6 +198,10 @@ function updateMoodPoolBreak350(world:World,pawn:Pawn,level:number,budget?:Searc
       if(psychoticWanderAdmitted350(pawn))options.push({kind:'psychotic-wander',weight:MENTAL_CRISIS_CATALOG['psychotic-wander'].weight});
       const admission=aggressiveCrisisAdmission(world,pawn,'tantrum',budget);if(admission===null)return;
       if(admission)options.push({kind:'tantrum',admission,weight:MENTAL_CRISIS_CATALOG.tantrum.weight});
+    }else if(fireSpreeCanOccur368(world,pawn)){
+      // Schema 368: Pyromaniac theOnlyAllowedMentalBreaks FireStartingSpree,
+      // extreme: while it can occur, no other extreme break can.
+      options.push({kind:'fire-starting-spree',weight:MENTAL_CRISIS_CATALOG['fire-starting-spree'].weight});
     }else for(const kind of ['berserk','murderous-rage'] as const){
       const admission=aggressiveCrisisAdmission(world,pawn,kind,budget);if(admission===null)return;
       if(admission)options.push({kind,admission,weight:MENTAL_CRISIS_CATALOG[kind].weight*(kind==='murderous-rage'?murderousRageWeight(admission.population):1)});
@@ -184,6 +214,7 @@ function updateMoodPoolBreak350(world:World,pawn:Pawn,level:number,budget?:Searc
   if(chosen.kind==='sad-wander'||chosen.kind==='food-binge')startMinorBreak(world,pawn,chosen.kind);
   else if(chosen.kind==='drug-binge')startAlcoholBinge265(world,pawn,budget,true);
   else if(isMoodPoolCrisis350(chosen.kind))startMoodPoolBreak350(world,pawn,chosen.kind,chosen.pool);
+  else if(chosen.kind==='fire-starting-spree')startFireStartingSpree368(world,pawn);
   else startAggressiveBreak(world,pawn,chosen.kind as AggressiveCrisisKind,chosen.admission);
 }
 /** A schema 350 break: the reason is drawn at commit, a spree's first target
@@ -209,13 +240,16 @@ export function processMentalBreak(world:World,pawn:Pawn,context:NeedContext,can
   if(!pawn.interruptedCargo&&processNeeds(world,pawn,context)) {
     // A depleted search budget can defer a need without starting it. Keep the
     // current wander route/target together until a real need replaces them.
-    if(pawn.need)crisis.target=null;
+    if(pawn.need){crisis.target=null;fireSpreeJobEnded368(pawn);}
     if(moodFrozen(pawn))finishMentalBreak(world,pawn);
     return;
   }
   if(crisis.kind==='drug-binge'&&!pawn.interruptedCargo&&processAutomaticAlcohol265(world,pawn,context)){crisis.target=null;return;}
   // Schema 350: a spree goes to insult its target; without one it wanders.
   if(isMoodPoolCrisis350(crisis.kind)&&!pawn.interruptedCargo&&processInsultingSpree350(world,pawn,context,candidatesReach))return;
+  // Schema 368: the fire-starting spree's own jobs (fire-spree-368).
+  // With retained cargo it wanders as the others until a legal drop.
+  if(crisis.kind==='fire-starting-spree'){if(!pawn.interruptedCargo){processFireStartingSpree368(world,pawn,context,candidatesReach);return;}fireSpreeJobEnded368(pawn);}
   if(crisis.target) {
     if(!canStandAt(world,crisis.target)||reservedServiceCells(world,pawn.id).has(crisis.target.z*world.width+crisis.target.x)) {
       crisis.target=null;pawn.path=[];pawn.state='idle';crisis.waitUntil=world.tick+1;return;

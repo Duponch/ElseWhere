@@ -1,5 +1,6 @@
 import { TICKS_PER_DAY, type Pawn, type WorkType } from './types.ts';
 import type { HumanAge } from './human-age.ts';
+import { TRAITS,traitDisablingWorkTag } from './traits.ts';
 
 export type BackgroundWorkTag = 'manual-dumb' | 'manual-skilled' | 'caring' | 'social' | 'intellectual' | 'plant-work' | 'artistic' | 'animals' | 'hunting' | 'violent' | 'firefighting';
 export const BACKGROUND_SKILL_IDS = ['shooting','melee','construction','mining','cooking','plants','animals','crafting','artistic','medicine','social','intellectual'] as const;
@@ -38,7 +39,9 @@ export const ADULTHOODS = Object.freeze({
 export type ChildhoodId = keyof typeof CHILDHOODS;
 export type AdulthoodId = keyof typeof ADULTHOODS;
 export interface ColonistBackground { childhood:ChildhoodId; adulthood?:AdulthoodId }
-export type BackgroundBearer=Pick<Pawn,'background'>;
+/** Schema 368: the traits are read with the background (Core
+ * CombinedDisabledWorkTags reads backstories and traits alike). */
+export type BackgroundBearer=Pick<Pawn,'background'>&Partial<Pick<Pawn,'traits'>>;
 export const BACKGROUND_WORK_LABELS:Readonly<Record<WorkType,string>>=Object.freeze({handle:'Dressage',art:'Art',clean:'Nettoyage',firefight:'Incendie',warden:'Geôlier',basic:'Manutention',hunt:'Chasse',research:'Recherche',patient:'Patient',bedrest:'Repos au lit',doctor:'Médecin',mine:'Minage',gather:'Foresterie',build:'Construction',haul:'Transport',grow:'Culture',cook:'Cuisine',craft:'Artisanat',smith:'Forge',tailor:'Couture'});
 const WORK_TAGS:Readonly<Record<WorkType,readonly BackgroundWorkTag[]>>={
   handle:['animals'],art:['artistic'],clean:['manual-dumb'],firefight:['firefighting'],warden:['social'],basic:[],hunt:['hunting','violent'],research:['intellectual'],patient:[],bedrest:[],doctor:['caring'],mine:['manual-skilled'],gather:['manual-skilled','plant-work'],build:['manual-skilled'],haul:['manual-dumb'],grow:['manual-skilled','plant-work'],cook:['manual-skilled'],craft:['manual-skilled'],smith:['manual-skilled'],tailor:['manual-skilled'],
@@ -50,19 +53,24 @@ export function backgroundDefinitions(pawn:BackgroundBearer):readonly Background
   return b?[CHILDHOODS[b.childhood],...(b.adulthood?[ADULTHOODS[b.adulthood]]:[])]:[];
 }
 export function backgroundTagRefusal(pawn:BackgroundBearer,tag:BackgroundWorkTag):string|undefined {
-  const b=pawn.background;if(!b)return undefined;
-  const childhood=CHILDHOODS[b.childhood],adulthood=b.adulthood?ADULTHOODS[b.adulthood]:undefined;
-  const cause=childhood.disables.includes(tag)?childhood:adulthood?.disables.includes(tag)?adulthood:undefined;
-  return cause?`Incapacité liée au passé : ${cause.label}.`:undefined;
+  const b=pawn.background;
+  if(b){
+    const childhood=CHILDHOODS[b.childhood],adulthood=b.adulthood?ADULTHOODS[b.adulthood]:undefined;
+    const cause=childhood.disables.includes(tag)?childhood:adulthood?.disables.includes(tag)?adulthood:undefined;
+    if(cause)return `Incapacité liée au passé : ${cause.label}.`;
+  }
+  // Schema 368: a trait's disabledWorkTags (Pyromaniac: Firefighting).
+  const trait=traitDisablingWorkTag(pawn,tag);
+  return trait?`Incapacité liée au trait : ${TRAITS[trait].label}.`:undefined;
 }
 export function backgroundWorkRefusal(pawn:BackgroundBearer,work:WorkType):string|undefined {
-  if(!pawn.background)return undefined;
+  if(!pawn.background&&!pawn.traits)return undefined;
   for(const tag of WORK_TAGS[work]){const reason=backgroundTagRefusal(pawn,tag);if(reason)return `${BACKGROUND_WORK_LABELS[work]} impossible. ${reason}`;}
   return undefined;
 }
 export const violentWorkRefusal=(pawn:BackgroundBearer):string|undefined=>backgroundTagRefusal(pawn,'violent');
 export function backgroundSkillRefusal(pawn:BackgroundBearer,skill:BackgroundSkillId):string|undefined {
-  if(!pawn.background)return undefined;
+  if(!pawn.background&&!pawn.traits)return undefined;
   // Animals contributes to both Handling and Hunting in Core; one remaining
   // allowed work type keeps the skill usable even if Handling is forbidden.
   if(skill==='animals'&&(!backgroundWorkRefusal(pawn,'handle')||!backgroundWorkRefusal(pawn,'hunt')))return undefined;

@@ -3,7 +3,7 @@ import { PresentationChanges } from '../src/bridge/presentation-changes.ts';
 import { mentalCrisisLabel, MENTAL_CRISIS_CATALOG, type MentalCrisisKind } from '../src/sim/mental-catalog.ts';
 import { isMoodPoolCrisis350,type MoodPoolCrisisKind350 } from '../src/sim/mental-breaks-350.ts';
 import { mentalCrisisStatus, mentalCrisisView } from '../src/sim/mental-presentation.ts';
-import { startAlcoholBinge265, startBerserk, startFoodBinge, startMurderousRage, startSadWander, startTantrum } from '../src/sim/mental-break.ts';
+import { startAlcoholBinge265, startBerserk, startFireStartingSpree368, startFoodBinge, startMurderousRage, startSadWander, startTantrum } from '../src/sim/mental-break.ts';
 import {addMaterial} from '../src/sim/materials.ts';
 import { finishMentalBreak } from '../src/sim/mental-state.ts';
 import { queryOrderOptions } from '../src/sim/player-orders.ts';
@@ -17,6 +17,8 @@ import { animalCombatCamp } from './scenarios/animal-combat.ts';
 const starters:Record<Exclude<MentalCrisisKind,MoodPoolCrisisKind350>,(world:World,pawn:Pawn)=>boolean>={
   'sad-wander':startSadWander,'food-binge':startFoodBinge,tantrum:startTantrum,berserk:startBerserk,'murderous-rage':startMurderousRage,
   'drug-binge':(world,pawn)=>{addMaterial(world,'beer',1,{type:'ground',x:pawn.x+1,z:pawn.z},'beer');return startAlcoholBinge265(world,pawn);},
+  // Schema 368: only a pyromaniac starts it.
+  'fire-starting-spree':(world,pawn)=>{pawn.traits=['pyromaniac'];return startFireStartingSpree368(world,pawn);},
 };
 // The schema 350 breaks have their own presentation checks (mood-pool-350.test.ts).
 const kinds=(Object.keys(MENTAL_CRISIS_CATALOG) as MentalCrisisKind[]).filter((k):k is Exclude<MentalCrisisKind,MoodPoolCrisisKind350>=>!isMoodPoolCrisis350(k));
