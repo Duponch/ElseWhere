@@ -40,7 +40,7 @@ import {validShipReactorHistoricalTransport275} from '../sim/ship-reactor-save-2
  * and replacement boundaries remain strict. This reader checks transport shape,
  * order and patch references; it deliberately does not certify arbitrary Worlds.
  * Each accepted version is persistent: queued older render Worlds stay intact. */
-import {SCHEMA_VERSION,type World,type Resource,type Tile} from '../sim/types';
+import {SCHEMA_VERSION,type World,type Resource,type Tile,type MaterialPile} from '../sim/types';
 import {MAX_EXTENDED_MAP_SIZE} from '../sim/map-config';
 import type {CampaignSummary} from '../sim/world-map-state';
 import type {CampaignOnlyMessage} from './protocol';
@@ -51,7 +51,7 @@ import {freezeAdmittedNativeWorldPawnOrder256,captureNativeWorldPawnBirth256,sam
 import {captureFactionInitializations256,sameFactionInitializations256} from '../sim/world-faction-no-expansion-ideo-256';
 import {groupWorld} from '../sim/world-map-authority';
 import {SnapshotChangeJournal,StructureChangeJournal,ResourceStructureJournal,
- type ResourceStructureCandidate,type SnapshotMessage,type SnapshotAdoption} from './snapshots';
+ type ResourceStructureCandidate,type SnapshotMessage,type SnapshotAdoption,pileWithRot} from './snapshots';
 import {ResidentResourceBaseJournal} from './resident-resource-base-journal';
 import {canReuseResidentAuxiliaryStockpiles} from './resident-auxiliary-sections';
 import {validGiftHistoricalTransport274} from '../sim/diplomatic-gift-transport-274';
@@ -85,7 +85,7 @@ function projectionReferences(value:unknown,local:boolean):boolean {
  if(value.rootMapId!==null&&(!integer(value.rootMapId,0)||!maps.has(value.rootMapId)))return false;
  return value.selectedGroupId===null||integer(value.selectedGroupId,1)&&groups.has(value.selectedGroupId);
 }
-type Patch<T>={removed:number[];upserted:T[];order?:number[];growth?:Float64Array;life?:Float64Array};
+type Patch<T>={removed:number[];upserted:T[];order?:number[];growth?:Float64Array;life?:Float64Array;rotClock?:Float64Array};
 /** Complete check of a record rebuilt from a plant age tuple (see ResourceChanges.life). */
 type LifeCheck<T>=(value:T)=>boolean;
 const lifeTuples=(life:unknown,limit:number):life is Float64Array=>life instanceof Float64Array&&Object.getPrototypeOf(life)===Float64Array.prototype&&life.length%4===0&&life.length<=limit*4;
@@ -136,8 +136,8 @@ function patchSparseGrowth<T extends {id:number}>(previous:T[],oldSlots:Map<numb
 /** No private index points at a mutable producer object. Membership/order
  * changes rebuild only that collection; sparse edits keep its stable slots. */
 function patchCollection<T extends {id:number}>(previous:T[],oldSlots:Map<number,number>,raw:unknown,nextId:number,
- growthTick?:number,validLife?:LifeCheck<T>):Prepared<T>|undefined {
- if(!record(raw)||Object.keys(raw).some(key=>!['removed','upserted','order',...(growthTick===undefined?[]:['growth']),...(validLife?['life']:[])].includes(key))
+ growthTick?:number,validLife?:LifeCheck<T>,rotTick?:number):Prepared<T>|undefined {
+ if(!record(raw)||Object.keys(raw).some(key=>!['removed','upserted','order',...(growthTick===undefined?[]:['growth']),...(validLife?['life']:[]),...(rotTick===undefined?[]:['rotClock'])].includes(key))
   ||!own(raw,'removed')||!own(raw,'upserted')||!dense(raw.removed)||!identified(raw.upserted,nextId)
   ||own(raw,'order')&&!dense(raw.order))return;
  const patch=raw as unknown as Patch<T>,sparse=!patch.removed.length&&!own(raw,'order')&&patch.upserted.every(value=>oldSlots.has(value.id));
@@ -179,6 +179,18 @@ function patchCollection<T extends {id:number}>(previous:T[],oldSlots:Map<number
    const updated={...old,plantLife:{...old.plantLife,age:life[index+1]!,darkTicks:life[index+2]!,nextCheck:life[index+3]!}} as T;
    if(!validLife(updated))return;
    touched.add(id);write(updated);
+  }
+ }
+ if(own(raw,'rotClock')){
+  // Pile rot clock tuples (see PileChanges.rotClock): an existing pile, not
+  // otherwise written, rebuilt with its new clock.
+  const rot=patch.rotClock;
+  if(rotTick===undefined||!(rot instanceof Float64Array)||Object.getPrototypeOf(rot)!==Float64Array.prototype||rot.length%4||rot.length>previous.length*4)return;
+  for(let index=0;index<rot.length;index+=4){
+   const id=rot[index]!,progress=rot[index+1]!,atTick=rot[index+2]!,rate=rot[index+3]!,old=read(id) as (T&Partial<MaterialPile>)|undefined;
+   if(!integer(id,1,nextId-1)||!old||touched.has(id)||!Number.isFinite(progress)||progress<0||!integer(atTick,0,rotTick)
+    ||!Number.isNaN(rate)&&(!Number.isFinite(rate)||rate<0||rate>1))return;
+   touched.add(id);write(pileWithRot(old as unknown as MaterialPile,progress,atTick,rate) as unknown as T);
   }
  }
  let values:T[];
@@ -391,7 +403,7 @@ export class ResidentPresentationAssembler {
     resources=prepared.values;resourceSlots=prepared.slots;resourceIndices=prepared.indices;edge=prepared.edge;baseEdge=prepared.baseEdge;
    }
    if(own(packet,'piles')){
-    const prepared=patchCollection(piles,this.pileSlots,packet.piles,dynamic.nextId);if(!prepared)return fail('Invalid resident pile references');
+    const prepared=patchCollection(piles,this.pileSlots,packet.piles,dynamic.nextId,undefined,undefined,dynamic.tick);if(!prepared)return fail('Invalid resident pile references');
     piles=prepared.values;pileSlots=prepared.slots;
    }
    if(sparseStructures){

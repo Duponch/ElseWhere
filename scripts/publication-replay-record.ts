@@ -128,6 +128,32 @@ function expandResources(message: any): any {
   const { growth: _growth, life: _life, ...rest } = changes;
   return { ...message, publication: { ...publication, resources: { ...rest, upserted: [...touched.values()].sort((a, b) => a.id - b.id) } } };
 }
+// Pile rot clock tuples (`piles.rotClock`), rebuilt here independently of the
+// readers into the complete piles they stand for. Pile updates are then put
+// in one canonical form for every build: new piles keep their upsert order
+// (the receiver appends them in that order), updates of held piles follow,
+// sorted by id (their order does not change the receiver's array). A build
+// that sends a tuple and one that sends the whole pile compare equal exactly
+// when the pile rebuilt from the tuple is the pile the other build sent.
+const heldPiles = new Map<number, any>();
+function expandPiles(message: any): any {
+  if (message?.type !== 'resident-publication' || message.publication?.type !== 'snapshot') return message;
+  const publication = message.publication;
+  if (publication.kind === 'checkpoint') { heldPiles.clear(); for (const pile of publication.world.piles ?? []) heldPiles.set(pile.id, structuredClone(pile)); return message; }
+  const changes = publication.piles; if (!changes) return message;
+  const created: any[] = [], updated = new Map<number, any>();
+  for (const id of changes.removed) heldPiles.delete(id);
+  for (const pile of changes.upserted) (heldPiles.has(pile.id) ? updated.set(pile.id, structuredClone(pile)) : created.push(structuredClone(pile)));
+  const rot: Float64Array | undefined = changes.rotClock;
+  for (let i = 0; rot && i < rot.length; i += 4) {
+    const id = rot[i]!, old = heldPiles.get(id); if (!old || updated.has(id)) throw Error(`Rot tuple without a held pile ${id}`);
+    updated.set(id, { ...old, rot: Number.isNaN(rot[i + 3]!) ? { progress: rot[i + 1], atTick: rot[i + 2] } : { progress: rot[i + 1], atTick: rot[i + 2], rate: rot[i + 3] } });
+  }
+  for (const pile of created) heldPiles.set(pile.id, pile);
+  for (const [id, pile] of updated) heldPiles.set(id, pile);
+  const { rotClock: _rot, ...rest } = changes;
+  return { ...message, publication: { ...publication, piles: { ...rest, upserted: [...created, ...[...updated.values()].sort((a, b) => a.id - b.id)] } } };
+}
 const scope: any = {
   onmessage: null,
   postMessage(message: any) {
@@ -142,7 +168,7 @@ const scope: any = {
       return;
     }
     // RAW=1 records the messages as sent (path patches not rebuilt), to inspect the wire.
-    if (!process.env.RAW) message = expandResources(expandPaths(message));
+    if (!process.env.RAW) message = expandPiles(expandResources(expandPaths(message)));
     const tick = message?.publication?.world?.tick ?? message?.world?.tick ?? message?.summary?.tick;
     if (typeof tick === 'number') { lastTick = Math.max(lastTick, tick); if (firstTick < 0) firstTick = tick; }
     // A reply's save text is hashed apart; operation progress carries wall durations only in older builds.

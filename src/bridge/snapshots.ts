@@ -602,7 +602,12 @@ type StructurelessDynamicWorld = Omit<DynamicWorld, 'structures'> & { readonly s
  * nextCheck, for a plant whose record differs from the receiver's only by
  * those three numbers. Neither changes membership, order or a base field. */
 interface ResourceChanges { removed: number[]; upserted: Resource[]; order?: number[]; growth?:Float64Array; life?:Float64Array }
-interface PileChanges { removed: number[]; upserted: MaterialPile[]; order?: number[] }
+/** `rotClock` (opt-in producer): id, then the pile's rot clock progress, atTick
+ * and rate (NaN: absent), for a pile whose record differs from the receiver's
+ * only by its rot clock (re-anchored at every rate change of stored food). It
+ * changes no membership or order. Not named `rot`: the ToxicFallout transport
+ * reader reads every `rot` key as a rot clock record. */
+interface PileChanges { removed: number[]; upserted: MaterialPile[]; order?: number[]; rotClock?:Float64Array }
 export interface StructureChanges { removed: number[]; upserted: Structure[]; order?: number[] }
 interface SnapshotHeader { corePhase297?:import('./core-phase-projection-297').CoreFullPhaseMetadata297; explorationApproachers?:import('../sim/exploration-door-256.ts').ExplorationApproacher256[]; geography?:PlanetGeographyTransport256; urgentThreats?:import('./urgent-threats').UrgentThreatSnapshot; motion?:import('../bridge/motion-tracks.ts').PawnTrack[]; audioCues?:import('../bridge/audio-cues.ts').AudioCue[]; type: 'snapshot'; epoch: number; revision: number; stepMs: number; speed: number }
 function validMiningTransport(pawn:Pawn,version:number):boolean {
@@ -715,6 +720,19 @@ function equalPileValue(a:unknown,b:unknown):boolean {
     &&equalPileValue((a as Record<string,unknown>)[key],(b as Record<string,unknown>)[key]));
 }
 const copyPile=(pile:MaterialPile):MaterialPile=>structuredClone(pile);
+/** The pile a rot tuple stands for: `old` with its rot clock replaced by
+ * {progress, atTick} or {progress, atTick, rate} (rate NaN: absent). */
+export function pileWithRot(old:MaterialPile,progress:number,atTick:number,rate:number):MaterialPile {
+  return {...old,rot:Number.isNaN(rate)?{progress,atTick}:{progress,atTick,rate}};
+}
+/** True when `next` is exactly `previous` with only its rot clock replaced by
+ * what a rot tuple carries: same keys in the same order, every other value
+ * identical. The receiver then rebuilds `next` from the pile it holds. */
+function pileRotOnlyChange(previous:MaterialPile,next:MaterialPile):boolean {
+  const rot=next.rot;
+  if(!rot||typeof rot.progress!=='number'||typeof rot.atTick!=='number'||rot.rate!==undefined&&(typeof rot.rate!=='number'||Number.isNaN(rot.rate)))return false;
+  return equalPileValue(pileWithRot(previous,rot.progress,rot.atTick,rot.rate??NaN),next);
+}
 
 /** A transport array has no holes or enumerable side properties. */
 function denseArray(value:unknown):value is unknown[] {
@@ -916,6 +934,7 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
   private readonly structureDeltaRequested:boolean;
   private readonly minimumStructures:number;
   private readonly plantLifeDelta:boolean;
+  private readonly pileRotDelta:boolean;
   private structureDelta=false;
   private campaignOnly=false;
   private readonly geographicTransport=new PlanetGeographyTransportEncoder256();
@@ -931,12 +950,15 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
   campaignHeader(checkpoint=false):{epoch:number;revision:number} {if(!this.campaignOnly||checkpoint){this.epoch++;this.revision=0;}this.campaignOnly=true;this.source=undefined;this.riverWater=undefined;this.tiles=this.createTileCache();this.resources.clear();this.piles.clear();this.structures.clear();this.orderedResources=[];this.orderedPiles=[];this.orderedStructures=[];return {epoch:this.epoch,revision:++this.revision};}
   constructor(options:{structureDelta?:SparseStructures;minimumStructures?:number;
     /** Opt-in transport form: a plant whose age record alone advanced is sent as three numbers (`resources.life`). */
-    plantLifeDelta?:boolean} = {}) {
+    plantLifeDelta?:boolean;
+    /** Opt-in transport form: a pile whose rot clock alone changed is sent as three numbers (`piles.rotClock`). */
+    pileRotDelta?:boolean} = {}) {
     const minimum=options.minimumStructures??0;
     if(!Number.isSafeInteger(minimum)||minimum<0)throw new RangeError('minimumStructures must be a nonnegative safe integer.');
     this.structureDeltaRequested=options.structureDelta===true;
     this.minimumStructures=minimum;
     this.plantLifeDelta=options.plantLifeDelta===true;
+    this.pileRotDelta=options.pileRotDelta===true;
   }
 
   /** postMessage must follow synchronously: it owns cloning the returned dynamic state. */
@@ -1033,6 +1055,7 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
       if (nextOrder) this.orderedResources = nextOrder;
     }
     const pileUpserts:MaterialPile[]=[];
+    const rotValues:number[]=[],rotUpdates:MaterialPile[]=[];
     let nextPileOrder:MaterialPile[]|undefined=world.piles.length!==this.orderedPiles.length?[]:undefined;
     for(let index=0;index<world.piles.length;index++){
       const pile=world.piles[index]!,ordered=this.orderedPiles[index],sameSlot=ordered?.id===pile.id;
@@ -1040,14 +1063,20 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
       const previous=sameSlot?ordered:this.piles.get(pile.id);
       let cached=previous;
       if(!previous||!equalPileValue(previous,pile)){
-        const copy=copyPile(pile);pileUpserts.push(copy);cached=copy;
-        if(sameSlot)this.orderedPiles[index]=copy;
+        if(this.pileRotDelta&&previous!==undefined&&pileRotOnlyChange(previous,pile)){
+          // Stored food re-anchors its rot clock at every rate change: three
+          // numbers instead of the complete pile, rebuilt from the held one.
+          const rot=pile.rot!,rate=rot.rate??NaN;rotValues.push(pile.id,rot.progress,rot.atTick,rate);
+          cached=pileWithRot(previous,rot.progress,rot.atTick,rate);rotUpdates.push(cached);
+        }else{const copy=copyPile(pile);pileUpserts.push(copy);cached=copy;}
+        if(sameSlot)this.orderedPiles[index]=cached;
       }
       nextPileOrder?.push(cached!);
     }
     let pileChanges:PileChanges|undefined;
-    if(pileUpserts.length||nextPileOrder){
+    if(pileUpserts.length||rotUpdates.length||nextPileOrder){
       const removed:number[]=[];pileChanges={removed,upserted:pileUpserts};
+      if(rotValues.length)pileChanges.rotClock=new Float64Array(rotValues);
       if(nextPileOrder){
         const currentIds=new Set(world.piles.map(p=>p.id)),implicitOrder:number[]=[];
         for(const pile of this.orderedPiles){
@@ -1059,6 +1088,7 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
       }
       for(const id of removed)this.piles.delete(id);
       for(const pile of pileUpserts)this.piles.set(pile.id,pile);
+      for(const pile of rotUpdates)this.piles.set(pile.id,pile);
       if(nextPileOrder)this.orderedPiles=nextPileOrder;
     }
     const { tiles: _tiles, resources: _resources, piles: _piles, riverWater:_riverWater, ...dynamicWithoutRiver } = geographic.state;
@@ -1511,7 +1541,7 @@ export class SnapshotDecoder {
       }
       let piles=previous.piles;
       if(message.piles){
-        const {removed,upserted,order}=message.piles;
+        const {removed,upserted,order,rotClock:rot}=message.piles;
         if(!Array.isArray(removed)||!Array.isArray(upserted)||order!==undefined&&!Array.isArray(order))return resync('Delta de piles invalide.');
         const sparse=!removed.length&&!order&&upserted.every(p=>p&&this.pileSlots.has(p.id));
         const byId=sparse?undefined:new Map(piles.map(p=>[p.id,p]));
@@ -1524,6 +1554,17 @@ export class SnapshotDecoder {
           if(!validPile(pile,message.world,true)||touched.has(pile.id))return resync('Pile modifiée invalide.');
           touched.add(pile.id);
           if(byId)byId.set(pile.id,pile);else patches.set(pile.id,pile);
+        }
+        if(rot!==undefined){
+          if(!(rot instanceof Float64Array)||rot.length%4||rot.length>piles.length*4)return resync('Delta de pourriture invalide.');
+          for(let i=0;i<rot.length;i+=4){
+            const id=rot[i]!,old=byId?byId.get(id):piles[this.pileSlots.get(id)??-1];
+            if(!old||touched.has(id)||!Number.isSafeInteger(id))return resync('Delta de pourriture invalide.');
+            const updated=pileWithRot(old,rot[i+1]!,rot[i+2]!,rot[i+3]!);
+            if(!validPile(updated,message.world,true))return resync('Delta de pourriture invalide.');
+            touched.add(id);
+            if(byId)byId.set(id,updated);else patches.set(id,updated);
+          }
         }
         if(order){
           if(order.length!==byId!.size||new Set(order).size!==order.length||order.some(id=>!Number.isSafeInteger(id)||!byId!.has(id)))return resync('Ordre des piles invalide.');
