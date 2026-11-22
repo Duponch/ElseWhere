@@ -23,8 +23,9 @@ export function overlayWorldRoad(tiles:readonly Pick<WorldSurfaceTile,'neighbour
  left.push({neighbour:to,road});right.push({neighbour:from,road});
 }
 /** Four-ary integer heap. Equal priorities keep the existing parent or first
- * minimum child; no invented tile-ID or FIFO tie breaker. */
-class RoadQueue {
+ * minimum child; no invented tile-ID or FIFO tie breaker. This is the game's
+ * `NativePriorityQueue` (arity 4) with `IntMinComparer`. */
+export class RoadQueue {
  ids:number[]=[];costs:number[]=[];
  get size(){return this.ids.length;}
  push(id:number,priority:number):void {let at=this.size;this.ids.push(id);this.costs.push(priority);while(at){const parent=Math.floor((at-1)/4);if(this.costs[parent]!<=priority)break;this.ids[at]=this.ids[parent]!;this.costs[at]=this.costs[parent]!;at=parent;}this.ids[at]=id;this.costs[at]=priority;}
