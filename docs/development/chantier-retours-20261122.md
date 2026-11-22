@@ -1,0 +1,53 @@
+# Chantier des retours du 22 novembre 2026
+
+Liste des retours de l'utilisateur après ses parties du 22 novembre, à traiter au fil du travail, dans l'ordre jugé le meilleur, sans abandonner la [feuille de route](feuille-de-route-20261115.md) ni les [chantiers obligatoires](chantiers-obligatoires.md). **Règle commune : aucun coût supplémentaire notable en performances, et si possible un gain.** Chaque point est coché ici quand il est livré, avec le lien vers sa note.
+
+## A. Animations et poses
+
+1. **Fin de marche qui glisse.** Un colon ou un animal arrête son animation de marche juste avant d'arriver et finit les derniers centimètres en glissant. Le même défaut semble toucher les autres animations : à corriger partout.
+2. **Tête qui dépasse du lit.** Un colon couché doit garder la tête sur le lit ; si le lit est trop court, ce sont les pieds qui dépassent.
+3. **Travailler assis.** Un colon à un établi ne s'assoit pas sur le tabouret placé devant. Vérifier dans RimWorld s'il s'assoit et ce que cela change (confort, vitesse), puis confirmer ou corriger.
+4. **Animations assises et autres.** Un colon assis reste immobile, les bras le long du corps : il doit être animé de façon réaliste. Beaucoup d'autres animations manquent ou sont trop simples ; les enrichir en général.
+5. **Corps à corps.** Supprimer l'effet de nuage de bande dessinée avec étoiles. Refaire l'attaque comme dans RimWorld : un coup en avant de tout le corps, comme un coup de boule, en plus de l'animation du corps ; pareil pour les animaux. Une bagarre doit se voir facilement.
+6. **Animaux.** Ajouter des animations (attente, idle et autres ; aujourd'hui surtout marche, course et manger, à confirmer). Améliorer les modèles bâclés ou trop semblables entre espèces, en volume et en dessin (Pastel et Gouache).
+7. **Page des animations.** Une page développeur qui montre toutes les animations existantes, à côté de la page des modèles.
+
+## B. Effets visuels
+
+8. **Particules d'action à refaire de zéro.** Abattre, miner, cuisiner et toutes les actions : les particules actuelles sont laides, mal placées, mal animées et ressemblent à des SVG. Les refaire en vrais dessins cohérents avec la direction artistique, au niveau des mains ou de la zone de l'action, pour masquer l'absence de mains et d'animations fines, et en ajouter à toutes les actions qui n'en ont pas.
+
+## C. Modèles et affichage
+
+9. **Bébés animaux trop petits** pour certaines espèces : taille minimale.
+10. **Couleur du muffalo** : vérifier celle de RimWorld (il n'est pas brun foncé) et corriger en Pastel et en Gouache.
+11. **Buissons** : remettre le modèle d'avant la refonte Gouache/Origami (proche des fragments).
+12. **Fragment de calcaire posé sur une chaise** : à corriger.
+13. **Chantiers lancés** : afficher la forme fantôme de l'objet (la même que sur le curseur avant de le placer) au lieu de cubes à traits, et ne plus colorer ses cases en bleu.
+
+## D. Sélection et interface
+
+14. **Sélection plus robuste** : on ne peut pas sélectionner une applique murale (le clic prend le mur).
+15. **Clic sur le modèle** : pouvoir sélectionner un objet, une personne ou un animal en cliquant sur son modèle 3D, pas seulement sur sa case, si c'est possible sans coût notable.
+16. **Noms dans la barre des colons** : RimWorld n'affiche que le surnom sous l'avatar (« LeSombre »), pas le nom complet (« Umbre « LeSombre » Nighthawk »).
+17. **Grand chantier des interfaces** : réorganiser HUD, fenêtres et mises en page pour être fidèle à RimWorld (dispositions, nombre d'éléments par zone, longueur des défilements, accessibilité, ergonomie, tailles des fenêtres), à partir de sources visuelles du vrai jeu. L'utilisateur signale l'outil « pbakaus/impeccable » pour Claude Code, à examiner.
+
+## E. Animaux en enclos
+
+18. **Mener les animaux à l'enclos** : les colons semblent avoir du mal à amener les animaux tenus à la corde ; comparer avec RimWorld (confirmer ou infirmer). La corde traverse les murs (le colon d'un côté, l'animal derrière le mur) : à corriger.
+
+## F. Son
+
+19. **Page des sons complète** : lister tous les sons et musiques du jeu (pas seulement les nouveaux), avec un réglage manuel du volume de chacun et un enregistrement de ces réglages.
+20. **Couverture sonore du jeu lui-même** : les nouveaux sons visent surtout l'interface et les alertes ; il manque énormément de sons de jeu (actions, travaux, animaux, environnement…).
+
+## G. Pages développeur
+
+21. **Une section « Développeur » dans les Options** avec un lien vers chaque page développeur (modèles, sons, lore, pictogrammes, navigation, animations, règles…), tenue à jour au fil du projet.
+22. **Page des règles du jeu** : toutes les règles, boucles de jeu et calculs, organisés, accessibles et aussi exhaustifs que possible, pour que le moteur n'ait plus de secret.
+
+## Ordre retenu au départ
+
+- **Vague 1** : pages développeur et page des sons complète (19, 21) ; animations de fin de marche, lit, établi assis et corps à corps (1, 2, 3, 5) ; petites corrections visuelles et sélection (9, 10, 11, 12, 14, 16).
+- **Vague 2** : fantômes des chantiers et clic sur le modèle (13, 15) ; animaux en enclos (18) ; page des règles (22).
+- **Vague 3** : particules refaites (8) ; animations assises et animaux (4, 6, 7) ; couverture sonore du jeu (20).
+- **Vague 4** : grand chantier des interfaces (17).
