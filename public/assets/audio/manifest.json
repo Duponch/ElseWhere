@@ -1373,6 +1373,104 @@
       "gain": 1,
       "loop": false,
       "spatial": false
+    },
+    "animal.call.canine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-canine-g1122-take-1-cal.mp3",
+          "gain": 0.172
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-canine-g1122-take-2-cal.mp3",
+          "gain": 0.193
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-canine-g1122-take-3-cal.mp3",
+          "gain": 0.219
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 26,
+      "loop": false
+    },
+    "animal.angry.canine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-canine-g1122-take-1-cal.mp3",
+          "gain": 0.221
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-canine-g1122-take-2-cal.mp3",
+          "gain": 0.231
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 26,
+      "loop": false
+    },
+    "animal.hurt.canine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-canine-g1122-take-1-cal.mp3",
+          "gain": 0.274
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-canine-g1122-take-2-cal.mp3",
+          "gain": 0.219
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 26,
+      "loop": false
+    },
+    "animal.death.canine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-canine-g1122-take-1-cal.mp3",
+          "gain": 0.295
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-canine-g1122-take-2-cal.mp3",
+          "gain": 0.276
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 26,
+      "loop": false
+    },
+    "animal.call.feline": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-feline-g1122-take-1-cal.mp3",
+          "gain": 0.177
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-feline-g1122-take-2-cal.mp3",
+          "gain": 0.162
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-feline-g1122-take-3-cal.mp3",
+          "gain": 0.197
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "animal.death.bovine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-bovine-g1122-take-1-cal.mp3",
+          "gain": 0.096
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-bovine-g1122-take-2-cal.mp3",
+          "gain": 0.125
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 30,
+      "loop": false
     }
   }
 }

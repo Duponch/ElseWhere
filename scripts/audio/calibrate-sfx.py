@@ -13,6 +13,12 @@ Measures (decoded PCM, all samples): peak dBFS, RMS dBFS over the active span
 filters, no gating: most cues are shorter than one 400 ms gating block),
 spectral centroid. This is arithmetic balance, not a human listening proof.
 
+Game sounds (tag ``g1122``): a plan entry may name its ``calibrationFamily``
+(work foley, animal voices, grazing, combat, ambience and machine loops). A loop
+is published as generated (no trim, fade or re-encode, which would break its
+seam): it is only measured and given its gain. Calibrating a tag again replaces
+the manifest events of that tag, so new takes join the published ones.
+
 Usage:
   python scripts/audio/calibrate-sfx.py --tag c1122               # report only
   python scripts/audio/calibrate-sfx.py --tag c1122 --write \
@@ -49,6 +55,17 @@ FAMILIES = {
     "notify-strong": {"targetRmsDbfs": -27.0, "peakCeilingDbfs": -6.0},
     "notify": {"targetRmsDbfs": -29.0, "peakCeilingDbfs": -7.0},
     "ui": {"targetRmsDbfs": -32.0, "peakCeilingDbfs": -8.0},
+    # Game sounds of 22 November, set against the published families they join:
+    # everyday work foley sits with the V165 hits (-33 to -37 effective), the
+    # animal voices with the pain cries, grazing under both, shots and blows
+    # with the V175 impacts; loops with the rain, wind and generator loops.
+    "work": {"targetRmsDbfs": -32.0, "peakCeilingDbfs": -10.0},
+    "voice": {"targetRmsDbfs": -29.0, "peakCeilingDbfs": -8.0},
+    "graze": {"targetRmsDbfs": -35.0, "peakCeilingDbfs": -14.0},
+    "combat": {"targetRmsDbfs": -28.0, "peakCeilingDbfs": -6.0},
+    "ambience": {"targetRmsDbfs": -44.0, "peakCeilingDbfs": -18.0},
+    "ambience-soft": {"targetRmsDbfs": -48.0, "peakCeilingDbfs": -22.0},
+    "machine": {"targetRmsDbfs": -38.0, "peakCeilingDbfs": -16.0},
 }
 STRONG = {"letter.threat-big", "alert.critical"}
 NOTIFY_PREFIXES = ("letter.", "alert.", "tutorial.", "quest.")
@@ -193,6 +210,26 @@ def write_json(path: Path, data: object) -> None:
         file.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
+def remove_events(text: str, keys: list[str]) -> str:
+    """Removes the top-level event blocks written by append_events (four-space
+    key, closing brace at four spaces) so a tag can be calibrated again."""
+    for key in keys:
+        start = text.find("\n    " + json.dumps(key) + ": {")
+        if start < 0:
+            continue
+        end = text.find("\n    }", start)
+        if end < 0:
+            raise SystemExit(f"Unexpected manifest layout around {key}")
+        end += len("\n    }")
+        if text[end] == ",":
+            end += 1
+        elif text[start - 1] == ",":
+            start -= 1
+        text = text[:start] + text[end:]
+    json.loads(text)
+    return text
+
+
 def append_events(path: Path, events: dict) -> None:
     """Appends the new events at the end of the hand-formatted manifest without
     reformatting the existing entries. Refuses a manifest that already lists one."""
@@ -218,6 +255,8 @@ def main() -> None:
     parser.add_argument("--balance")
     parser.add_argument("--reject", default="")
     parser.add_argument("--reject-reason", default="discarded after measurement")
+    parser.add_argument("--replace", action="store_true", help="replace the manifest events of this tag")
+    parser.add_argument("--min-takes", type=int, default=1, help="publish only the events with at least this many takes")
     args = parser.parse_args()
     rejected = {name for name in args.reject.split(",") if name}
     plan = json.loads((REPO / "scripts/audio/sfx-plan.json").read_text(encoding="utf8"))
@@ -235,13 +274,21 @@ def main() -> None:
             continue
         item = plan["events"][cue]
         spatial = item.get("spatial", True) is not False
-        family = family_of(cue, spatial)
+        family = item.get("calibrationFamily") or family_of(cue, spatial)
         target = FAMILIES[family]
-        out = SFX / entry["filename"].replace(".mp3", "-cal.mp3")
-        source, output, processing = process(raw, out, warm=family != "world")
+        loop = item.get("loop") is True
+        if loop:
+            # Published as generated: a trim, fade or second encode would break the seam.
+            out = raw
+            decoded, rate = sf.read(raw, dtype="float64", always_2d=True)
+            source = output = measure(decoded, rate)
+            processing = None
+        else:
+            out = SFX / entry["filename"].replace(".mp3", "-cal.mp3")
+            source, output, processing = process(raw, out, warm=family not in ("world", "work", "voice", "graze", "combat"))
         gain = min(10 ** ((target["targetRmsDbfs"] - output["rmsDbfs"]) / 20),
                    10 ** ((target["peakCeilingDbfs"] - output["peakDbfs"]) / 20))
-        gain = float(min(8.0, max(0.05, round(gain, 3))))
+        gain = float(min(2.0 if loop else 8.0, max(0.01 if loop else 0.05, round(gain, 3))))
         row = {
             "id": cue, "family": family, **target, "file": out.name, "sourceFile": raw.name,
             "sha256": sha256(out), "bytes": out.stat().st_size,
@@ -260,6 +307,11 @@ def main() -> None:
               f"{'' if row['published'] else '  REJECTED'}")
         if not row["published"]:
             continue
+        if loop:
+            event = events.setdefault(cue, {"variants": [], "gain": 1, **({"maxDistance": item["maxDistance"]} if spatial else {}),
+                                             "loop": True, **({} if spatial else {"spatial": False})})
+            event["variants"].append({"src": f"/assets/audio/sfx/{out.name}", "gain": gain})
+            continue
         derivations.append({
             "id": cue, "sourceFilename": raw.name, "sourceSha256": entry["sha256"], "filename": out.name,
             "sha256": row["sha256"], "processing": json.loads(processing),
@@ -268,9 +320,25 @@ def main() -> None:
         event = events.setdefault(cue, {"variants": [], "gain": 1, **({"maxDistance": item["maxDistance"]} if spatial else {}),
                                          "loop": False, **({} if spatial else {"spatial": False})})
         event["variants"].append({"src": f"/assets/audio/sfx/{out.name}", "gain": gain})
+    # An event still short of takes waits (its raw takes stay measured and logged).
+    waiting = {cue for cue, event in events.items() if len(event["variants"]) < args.min_takes}
+    for cue in sorted(waiting):
+        print(f"{cue:26s} waits: {len(events[cue]['variants'])} take(s) < {args.min_takes}")
+    events = {cue: event for cue, event in events.items() if cue not in waiting}
+    derivations = [item for item in derivations if item["id"] not in waiting]
+    for row in rows:
+        if row["id"] in waiting:
+            row["published"] = False
     if not args.write:
         return
-    append_events(REPO / "public/assets/audio/manifest.json", events)
+    manifest_path = REPO / "public/assets/audio/manifest.json"
+    if args.replace:
+        text = manifest_path.read_text(encoding="utf8")
+        stale = [key for key, value in json.loads(text)["events"].items()
+                 if any(marker in variant["src"] for variant in value["variants"])]
+        with open(manifest_path, "w", encoding="utf8", newline="\n") as file:
+            file.write(remove_events(text, stale))
+    append_events(manifest_path, events)
     processing_path = REPO / "scripts/audio/processing-log.json"
     processing_log = json.loads(processing_path.read_text(encoding="utf8"))
     kept = [item for item in processing_log["derivations"] if marker not in item["filename"]]

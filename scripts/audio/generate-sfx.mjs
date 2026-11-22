@@ -63,6 +63,8 @@ export function assertPlan(plan) {
     if (item.spatial !== undefined && typeof item.spatial !== 'boolean') throw new Error(`Invalid spatial setting for ${id}`);
     if (!(item.gain > 0 && item.gain <= (item.loop ? 2 : 8))) throw new Error(`Invalid gain for ${id}`);
     if (item.spatial !== false && !(item.maxDistance > 0)) throw new Error(`Invalid maxDistance for ${id}`);
+    if (item.takes !== undefined && !(Number.isInteger(item.takes) && item.takes >= 1 && item.takes <= 9)) throw new Error(`Invalid takes for ${id}`);
+    if (item.calibrationFamily !== undefined && !/^[a-z]+(?:-[a-z]+)*$/.test(item.calibrationFamily)) throw new Error(`Invalid calibration family for ${id}`);
   }
 }
 

@@ -5566,6 +5566,363 @@
         18,
         36
       ]
+    },
+    {
+      "id": "animal.call.canine",
+      "filename": "animal-call-canine-g1122-take-1.mp3",
+      "take": 1,
+      "generatedAt": "2026-11-22T22:40:09.103Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "One friendly medium dog bark, a single warm woof with a short natural tail. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "71388b9c239d1e3c0591aab1a15145c66ac92c45cc49c657a3f722e369397881",
+      "bytes": 17179,
+      "billedCredits": 10,
+      "estimatedCredits": [
+        20,
+        40
+      ]
+    },
+    {
+      "id": "haul.drop-wood",
+      "filename": "haul-drop-wood-g1122-take-1.mp3",
+      "take": 1,
+      "generatedAt": "2026-11-22T22:40:11.172Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "A small stack of wooden logs set down on the ground: hollow woody clunks. Natural realistic close dry foley for a warm cozy colony game, gentle and tactile, quick onset and short clean decay. Single sound then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.7,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "7d23cd9d3317afcb3e9aab17966f1f90e1dc1e8e6e76ede0337a693abfb23d82",
+      "bytes": 12163,
+      "billedCredits": 7,
+      "estimatedCredits": [
+        14,
+        28
+      ]
+    },
+    {
+      "id": "weapon.shot-rifle",
+      "filename": "weapon-shot-rifle-g1122-take-1.mp3",
+      "take": 1,
+      "generatedAt": "2026-11-22T22:40:13.015Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "A single rifle shot: a firm crack with a short outdoor echo tail. Realistic restrained close foley for a warm colony game, readable but never harsh or piercing. Single sound then silence, no voice, music, ambience or long reverb.",
+      "durationSeconds": 0.9,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "ebc01aff809df5ddbc37bbbc29eddbf64c85baa00190b3be49dce4d0bbd9e3c3",
+      "bytes": 15089,
+      "billedCredits": 9,
+      "estimatedCredits": [
+        18,
+        36
+      ]
+    },
+    {
+      "id": "crafting.smith",
+      "filename": "crafting-smith-g1122-take-1.mp3",
+      "take": 1,
+      "generatedAt": "2026-11-22T22:40:15.705Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "A blacksmith hammer striking hot iron on an anvil: one warm ringing clink, not piercing. Natural realistic close dry foley for a warm cozy colony game, gentle and tactile, quick onset and short clean decay. Single sound then silence, no voice, music, ambience or reverb tail.",
+      "durationSeconds": 0.9,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "feb5083f12bcaa7dc6c21fdec66849615aa7e08bff87090a7acbbfdd25c75059",
+      "bytes": 15089,
+      "billedCredits": 9,
+      "estimatedCredits": [
+        18,
+        36
+      ]
+    },
+    {
+      "id": "animal.call.canine",
+      "filename": "animal-call-canine-g1122-take-2.mp3",
+      "take": 2,
+      "generatedAt": "2026-11-22T22:40:32.617Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "One friendly medium dog bark, a single warm woof with a short natural tail. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "367612162decdf3d8d42c9631aa255d2052b991aedd14ef7dcce0bae5c3c5662",
+      "bytes": 17179,
+      "billedCredits": 10,
+      "estimatedCredits": [
+        20,
+        40
+      ]
+    },
+    {
+      "id": "animal.call.canine",
+      "filename": "animal-call-canine-g1122-take-3.mp3",
+      "take": 3,
+      "generatedAt": "2026-11-22T22:40:34.224Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "One friendly medium dog bark, a single warm woof with a short natural tail. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "cf0a29600a58103be7b67855d3421dec3be8e05e47cec5181f9b74b675d130a2",
+      "bytes": 17179,
+      "billedCredits": 10,
+      "estimatedCredits": [
+        20,
+        40
+      ]
+    },
+    {
+      "id": "animal.angry.canine",
+      "filename": "animal-angry-canine-g1122-take-1.mp3",
+      "take": 1,
+      "generatedAt": "2026-11-22T22:40:36.234Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "One low threatening dog growl rising into a short snarl, a wolf-like warning. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "ff216a7affe0c7ec9abb325c70fe62d1ad151b9923a429e52d6aa0467a97f67e",
+      "bytes": 17179,
+      "billedCredits": 10,
+      "estimatedCredits": [
+        20,
+        40
+      ]
+    },
+    {
+      "id": "animal.angry.canine",
+      "filename": "animal-angry-canine-g1122-take-2.mp3",
+      "take": 2,
+      "generatedAt": "2026-11-22T22:40:37.801Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "One low threatening dog growl rising into a short snarl, a wolf-like warning. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "f07c7dde3020a580e0e88b9c16b72c7523a801088a889c173cb3ecad64403f5b",
+      "bytes": 17179,
+      "billedCredits": 10,
+      "estimatedCredits": [
+        20,
+        40
+      ]
+    },
+    {
+      "id": "animal.hurt.canine",
+      "filename": "animal-hurt-canine-g1122-take-1.mp3",
+      "take": 1,
+      "generatedAt": "2026-11-22T22:40:39.719Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "One short pained dog yelp, a whimpering cry after being hit. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 0.8,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "b3c86c85b0f08a04ba06c00e4c05487b870cb8faf9df38d23b2b3c70897267e0",
+      "bytes": 13835,
+      "billedCredits": 8,
+      "estimatedCredits": [
+        16,
+        32
+      ]
+    },
+    {
+      "id": "animal.hurt.canine",
+      "filename": "animal-hurt-canine-g1122-take-2.mp3",
+      "take": 2,
+      "generatedAt": "2026-11-22T22:40:41.173Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "One short pained dog yelp, a whimpering cry after being hit. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 0.8,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "81acb553daf04c52bea31d654ddc2a2dede29828d3cfe11532cd55e5595ea692",
+      "bytes": 13835,
+      "billedCredits": 8,
+      "estimatedCredits": [
+        16,
+        32
+      ]
+    },
+    {
+      "id": "animal.death.canine",
+      "filename": "animal-death-canine-g1122-take-1.mp3",
+      "take": 1,
+      "generatedAt": "2026-11-22T22:40:43.605Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "A dog’s weak final whimper fading into a soft last breath. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1.3,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "e67d80d59c397ebbcc47a46b3462cd5b28a3a3ce6dd068b261b14c0bbc3976f9",
+      "bytes": 21358,
+      "billedCredits": 13,
+      "estimatedCredits": [
+        26,
+        52
+      ]
+    },
+    {
+      "id": "animal.death.canine",
+      "filename": "animal-death-canine-g1122-take-2.mp3",
+      "take": 2,
+      "generatedAt": "2026-11-22T22:40:45.259Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "A dog’s weak final whimper fading into a soft last breath. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1.3,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "248b6c45fea125fa9ee6d3427c6af8042f93a170717916761b2dfbc3f18d6e9e",
+      "bytes": 21358,
+      "billedCredits": 13,
+      "estimatedCredits": [
+        26,
+        52
+      ]
+    },
+    {
+      "id": "animal.call.feline",
+      "filename": "animal-call-feline-g1122-take-1.mp3",
+      "take": 1,
+      "generatedAt": "2026-11-22T22:40:47.404Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "One soft house cat meow, gentle and curious. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "e4a8805fc6d36cb72a159d718db6be72e982b37e62ededa8a001c95e170b977d",
+      "bytes": 17179,
+      "billedCredits": 10,
+      "estimatedCredits": [
+        20,
+        40
+      ]
+    },
+    {
+      "id": "animal.call.feline",
+      "filename": "animal-call-feline-g1122-take-2.mp3",
+      "take": 2,
+      "generatedAt": "2026-11-22T22:40:49.408Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "One soft house cat meow, gentle and curious. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "f23cc06c52a7ae8883f505ff08d6e4db9f4d5f765d20e8291cedf687bcd41018",
+      "bytes": 17179,
+      "billedCredits": 10,
+      "estimatedCredits": [
+        20,
+        40
+      ]
+    },
+    {
+      "id": "animal.call.feline",
+      "filename": "animal-call-feline-g1122-take-3.mp3",
+      "take": 3,
+      "generatedAt": "2026-11-22T22:40:50.838Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "One soft house cat meow, gentle and curious. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "091447671eb3d087c60439009db4ba1f375b86cbc76984187f99c83cc4f4f582",
+      "bytes": 17179,
+      "billedCredits": 10,
+      "estimatedCredits": [
+        20,
+        40
+      ]
+    },
+    {
+      "id": "animal.death.bovine",
+      "filename": "animal-death-bovine-g1122-take-1.mp3",
+      "take": 1,
+      "generatedAt": "2026-11-22T22:41:09.014Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "A large cow-like animal’s long low dying moan fading out. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1.6,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "ae124071494d859366a6f3d11a8892fd9603f7a4013af910e804f74799db6929",
+      "bytes": 26792,
+      "billedCredits": 16,
+      "estimatedCredits": [
+        32,
+        64
+      ]
+    },
+    {
+      "id": "animal.death.bovine",
+      "filename": "animal-death-bovine-g1122-take-2.mp3",
+      "take": 2,
+      "generatedAt": "2026-11-22T22:41:10.483Z",
+      "provider": "ElevenLabs",
+      "providerRoute": "API /v1/sound-generation",
+      "modelId": "eleven_text_to_sound_v2",
+      "outputFormat": "mp3_44100_128",
+      "prompt": "A large cow-like animal’s long low dying moan fading out. Natural animal vocalization, close realistic field recording, warm, not harsh or cartoonish. Single call then silence, no human voice, music or ambience.",
+      "durationSeconds": 1.6,
+      "promptInfluence": 0.72,
+      "loop": false,
+      "sha256": "1d8963ab3793f258cbe078bccea41c7fb53a8eda4e4253459c33ac34893acb4d",
+      "bytes": 26792,
+      "billedCredits": 16,
+      "estimatedCredits": [
+        32,
+        64
+      ]
     }
   ]
 }

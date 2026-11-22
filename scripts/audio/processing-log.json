@@ -4255,6 +4255,552 @@
         }
       },
       "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.call.canine",
+      "sourceFilename": "animal-call-canine-g1122-take-1.mp3",
+      "sourceSha256": "71388b9c239d1e3c0591aab1a15145c66ac92c45cc49c657a3f722e369397881",
+      "filename": "animal-call-canine-g1122-take-1-cal.mp3",
+      "sha256": "1f9fe20e5c24a6c65164b50729b707f63e5a843e89883381b3fd8572b4602b37",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.809546; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.57,
+          "peakDbfs": 0.34,
+          "rmsDbfs": -11.95,
+          "loudnessLufsUngated": -9.21,
+          "clippedPercent": 0.0079,
+          "spectralCentroidHz": 1485
+        },
+        "output": {
+          "durationSeconds": 0.61,
+          "activeSeconds": 0.505,
+          "peakDbfs": -1.95,
+          "rmsDbfs": -13.7,
+          "loudnessLufsUngated": -10.95,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1510,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.call.canine",
+      "sourceFilename": "animal-call-canine-g1122-take-2.mp3",
+      "sourceSha256": "367612162decdf3d8d42c9631aa255d2052b991aedd14ef7dcce0bae5c3c5662",
+      "filename": "animal-call-canine-g1122-take-2-cal.mp3",
+      "sha256": "0ebda16df271c9267eec6c1defa851ce14b4cfdc003ae7e989f3d7d9f500b78a",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.844633; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.614,
+          "peakDbfs": -0.03,
+          "rmsDbfs": -12.87,
+          "loudnessLufsUngated": -10.17,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1471
+        },
+        "output": {
+          "durationSeconds": 0.654,
+          "activeSeconds": 0.603,
+          "peakDbfs": -1.65,
+          "rmsDbfs": -14.69,
+          "loudnessLufsUngated": -11.98,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1517,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.call.canine",
+      "sourceFilename": "animal-call-canine-g1122-take-3.mp3",
+      "sourceSha256": "cf0a29600a58103be7b67855d3421dec3be8e05e47cec5181f9b74b675d130a2",
+      "filename": "animal-call-canine-g1122-take-3-cal.mp3",
+      "sha256": "2dcfc1e3ad19f5df7d89f8d3da3cd4785e99584f9358519da6f67f14c8a5383d",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.769609; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 1.0,
+          "peakDbfs": 0.77,
+          "rmsDbfs": -15.89,
+          "loudnessLufsUngated": -13.14,
+          "clippedPercent": 0.0227,
+          "spectralCentroidHz": 1649
+        },
+        "output": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.509,
+          "peakDbfs": -2.13,
+          "rmsDbfs": -15.8,
+          "loudnessLufsUngated": -13.06,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1781,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.angry.canine",
+      "sourceFilename": "animal-angry-canine-g1122-take-1.mp3",
+      "sourceSha256": "ff216a7affe0c7ec9abb325c70fe62d1ad151b9923a429e52d6aa0467a97f67e",
+      "filename": "animal-angry-canine-g1122-take-1-cal.mp3",
+      "sha256": "8f27908cbb4049672f4dbbd07e601ff4f668a16ca6a194338e30a2a8f2427423",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.866963; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.928,
+          "peakDbfs": -0.26,
+          "rmsDbfs": -14.22,
+          "loudnessLufsUngated": -12.22,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1389
+        },
+        "output": {
+          "durationSeconds": 0.968,
+          "activeSeconds": 0.923,
+          "peakDbfs": -1.93,
+          "rmsDbfs": -15.88,
+          "loudnessLufsUngated": -13.88,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1398,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.angry.canine",
+      "sourceFilename": "animal-angry-canine-g1122-take-2.mp3",
+      "sourceSha256": "f07c7dde3020a580e0e88b9c16b72c7523a801088a889c173cb3ecad64403f5b",
+      "filename": "animal-angry-canine-g1122-take-2-cal.mp3",
+      "sha256": "d3ea5b44c2b69702f9de11c033d55c317f07ea9052d56dd6be8b0cb38fb994ce",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.845930; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.938,
+          "peakDbfs": -0.05,
+          "rmsDbfs": -14.44,
+          "loudnessLufsUngated": -12.47,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1740
+        },
+        "output": {
+          "durationSeconds": 0.978,
+          "activeSeconds": 0.929,
+          "peakDbfs": -1.74,
+          "rmsDbfs": -16.28,
+          "loudnessLufsUngated": -14.32,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1711,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.hurt.canine",
+      "sourceFilename": "animal-hurt-canine-g1122-take-1.mp3",
+      "sourceSha256": "b3c86c85b0f08a04ba06c00e4c05487b870cb8faf9df38d23b2b3c70897267e0",
+      "filename": "animal-hurt-canine-g1122-take-1-cal.mp3",
+      "sha256": "24bd8f1af15dc16524da14c42408fbba45dc60319f9f0bba50388a60fd786f86",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.872867; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.8,
+          "activeSeconds": 0.659,
+          "peakDbfs": -0.32,
+          "rmsDbfs": -16.21,
+          "loudnessLufsUngated": -13.52,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1586
+        },
+        "output": {
+          "durationSeconds": 0.699,
+          "activeSeconds": 0.654,
+          "peakDbfs": -1.88,
+          "rmsDbfs": -17.77,
+          "loudnessLufsUngated": -15.08,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1583,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.hurt.canine",
+      "sourceFilename": "animal-hurt-canine-g1122-take-2.mp3",
+      "sourceSha256": "81acb553daf04c52bea31d654ddc2a2dede29828d3cfe11532cd55e5595ea692",
+      "filename": "animal-hurt-canine-g1122-take-2-cal.mp3",
+      "sha256": "dac44047caf4be4d680c1973490238d8a5e062b05bb2a3822600227b5c0dcbf6",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.833063; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 0.8,
+          "activeSeconds": 0.643,
+          "peakDbfs": 0.09,
+          "rmsDbfs": -13.95,
+          "loudnessLufsUngated": -10.94,
+          "clippedPercent": 0.0028,
+          "spectralCentroidHz": 1753
+        },
+        "output": {
+          "durationSeconds": 0.687,
+          "activeSeconds": 0.615,
+          "peakDbfs": -1.46,
+          "rmsDbfs": -15.79,
+          "loudnessLufsUngated": -12.77,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1775,
+          "trimStartSeconds": 0.001
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.death.canine",
+      "sourceFilename": "animal-death-canine-g1122-take-1.mp3",
+      "sourceSha256": "e67d80d59c397ebbcc47a46b3462cd5b28a3a3ce6dd068b261b14c0bbc3976f9",
+      "filename": "animal-death-canine-g1122-take-1-cal.mp3",
+      "sha256": "0637fd0f83e025423604cde2487a7f55616118e57a37c3a988aea9e03f59f9d0",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.28,
+          "activeSeconds": 1.072,
+          "peakDbfs": -6.5,
+          "rmsDbfs": -17.95,
+          "loudnessLufsUngated": -15.58,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1387
+        },
+        "output": {
+          "durationSeconds": 1.112,
+          "activeSeconds": 1.072,
+          "peakDbfs": -6.96,
+          "rmsDbfs": -18.4,
+          "loudnessLufsUngated": -16.04,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1376,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.death.canine",
+      "sourceFilename": "animal-death-canine-g1122-take-2.mp3",
+      "sourceSha256": "248b6c45fea125fa9ee6d3427c6af8042f93a170717916761b2dfbc3f18d6e9e",
+      "filename": "animal-death-canine-g1122-take-2-cal.mp3",
+      "sha256": "6a13515cbca2656ab2afa6ddaa793cf8083752ac0331e39229a2a9b2bcfb04f5",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=1.000000; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.28,
+          "activeSeconds": 1.142,
+          "peakDbfs": -5.35,
+          "rmsDbfs": -17.39,
+          "loudnessLufsUngated": -14.98,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1526
+        },
+        "output": {
+          "durationSeconds": 1.182,
+          "activeSeconds": 1.139,
+          "peakDbfs": -5.79,
+          "rmsDbfs": -17.82,
+          "loudnessLufsUngated": -15.41,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1490,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.call.feline",
+      "sourceFilename": "animal-call-feline-g1122-take-1.mp3",
+      "sourceSha256": "e4a8805fc6d36cb72a159d718db6be72e982b37e62ededa8a001c95e170b977d",
+      "filename": "animal-call-feline-g1122-take-1-cal.mp3",
+      "sha256": "c1f3d15432e09c3136d4a0fa0c6847f6576085863137a0a524a9b538f4997c7d",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.924047; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.679,
+          "peakDbfs": -0.81,
+          "rmsDbfs": -12.84,
+          "loudnessLufsUngated": -8.27,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2332
+        },
+        "output": {
+          "durationSeconds": 0.719,
+          "activeSeconds": 0.678,
+          "peakDbfs": -1.96,
+          "rmsDbfs": -13.98,
+          "loudnessLufsUngated": -9.41,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2315,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.call.feline",
+      "sourceFilename": "animal-call-feline-g1122-take-2.mp3",
+      "sourceSha256": "f23cc06c52a7ae8883f505ff08d6e4db9f4d5f765d20e8291cedf687bcd41018",
+      "filename": "animal-call-feline-g1122-take-2-cal.mp3",
+      "sha256": "722f9373394c3c65fe67f2c59d2f2937abbf45d43a1b043d3a18f200b7e5d2de",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.818126; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 1.0,
+          "peakDbfs": 0.24,
+          "rmsDbfs": -11.56,
+          "loudnessLufsUngated": -6.84,
+          "clippedPercent": 0.0102,
+          "spectralCentroidHz": 2402
+        },
+        "output": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.88,
+          "peakDbfs": -1.69,
+          "rmsDbfs": -13.21,
+          "loudnessLufsUngated": -8.5,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2580,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.call.feline",
+      "sourceFilename": "animal-call-feline-g1122-take-3.mp3",
+      "sourceSha256": "091447671eb3d087c60439009db4ba1f375b86cbc76984187f99c83cc4f4f582",
+      "filename": "animal-call-feline-g1122-take-3-cal.mp3",
+      "sha256": "655e3c8ff041825d826c1b7a317014d6ecd0723e38e6fa0ed075980bb820061d",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.901909; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 1.0,
+          "peakDbfs": -0.6,
+          "rmsDbfs": -15.44,
+          "loudnessLufsUngated": -10.7,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2189
+        },
+        "output": {
+          "durationSeconds": 1.0,
+          "activeSeconds": 0.643,
+          "peakDbfs": -1.93,
+          "rmsDbfs": -14.91,
+          "loudnessLufsUngated": -10.18,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 2546,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.death.bovine",
+      "sourceFilename": "animal-death-bovine-g1122-take-1.mp3",
+      "sourceSha256": "ae124071494d859366a6f3d11a8892fd9603f7a4013af910e804f74799db6929",
+      "filename": "animal-death-bovine-g1122-take-1-cal.mp3",
+      "sha256": "69541a2873a0bd67edbfea642a045ad5bdc9ba63ceb17937a3a12fda47968359",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.871803; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.6,
+          "activeSeconds": 1.6,
+          "peakDbfs": -0.31,
+          "rmsDbfs": -7.22,
+          "loudnessLufsUngated": -5.04,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1015
+        },
+        "output": {
+          "durationSeconds": 1.6,
+          "activeSeconds": 1.532,
+          "peakDbfs": -1.91,
+          "rmsDbfs": -8.67,
+          "loudnessLufsUngated": -6.49,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1036,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
+    },
+    {
+      "id": "animal.death.bovine",
+      "sourceFilename": "animal-death-bovine-g1122-take-2.mp3",
+      "sourceSha256": "1d8963ab3793f258cbe078bccea41c7fb53a8eda4e4253459c33ac34893acb4d",
+      "filename": "animal-death-bovine-g1122-take-2-cal.mp3",
+      "sha256": "fd84c14f1a6dc4e5a2ef815246e7a0f7d6352f65c7252bdcdf8a0d69bfaf4fce",
+      "processing": {
+        "tool": "FFmpeg",
+        "version": "7.1 imageio-ffmpeg",
+        "filter": "trim to samples above -50 dBFS with 4 ms pre-roll and 40 ms tail; volume=0.881420; linear fade-in 3 ms; cosine fade-out 25 ms (NumPy, before encode)",
+        "encoder": "libmp3lame",
+        "bitrateKbps": 128,
+        "sampleRateHz": 44100,
+        "channels": 2,
+        "id3v2Version": 0
+      },
+      "decodedMeasurements": {
+        "source": {
+          "durationSeconds": 1.6,
+          "activeSeconds": 1.599,
+          "peakDbfs": -0.4,
+          "rmsDbfs": -9.69,
+          "loudnessLufsUngated": -7.48,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1063
+        },
+        "output": {
+          "durationSeconds": 1.6,
+          "activeSeconds": 1.489,
+          "peakDbfs": -1.95,
+          "rmsDbfs": -10.93,
+          "loudnessLufsUngated": -8.72,
+          "clippedPercent": 0.0,
+          "spectralCentroidHz": 1083,
+          "trimStartSeconds": 0.0
+        }
+      },
+      "listeningValidation": "pending"
     }
   ]
 }
