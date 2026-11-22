@@ -27,6 +27,8 @@ const aliases:Readonly<Record<string,string>>={
  sword:'longsword',gun:'revolver',cross:'medicine',shirt:'shirt',limb:'prosthetic-leg',paint:'palette',food:'meal',pot:'cooking-pot',drop:'chemfuel',flag:'factions',sensors:'ship-sensors',
  'rotate-left':'rotate-left','rotate-right':'rotate-right','clear-orders':'cancel','manage-work':'travail','toggle-draft':'shield',mobilize:'shield','target-shot':'target','target-melee':'longsword','fire-at-will':'revolver',
  ieds:'ied-high-explosive','tree-sowing':'resource-tree',firefoam:'foam','ship-cryptosleep':'ship-casket','ship-basics':'rocket',prosthetics:'prosthetic-leg',cryptosleep:'casket','long-blades':'longsword',brewing:'brewery','geothermal-power':'geothermal-generator','biofuel-refining':'refinery','nutrient-paste':'paste-dispenser','deep-drilling':'drill','sterile-materials':'sterile-tile','drug-production':'drug-lab','penoxycyline-production':'drug-lab','medicine-production':'medicine','gun-turrets':'mini-turret','complex-furniture':'chair',stonecutting:'stonecutter',smithing:'smithy',gunsmithing:'revolver','blowback-operation':'machine-pistol','gas-operation':'lmg','precision-rifling':'sniper-rifle','complex-clothing':'shirt','packaged-survival-meals':'meal',autodoors:'autodoor','flak-armor':'flak-vest',batteries:'battery','solar-power':'solar','air-conditioning':'cooler',microelectronics:'chip','advanced-fabrication':'fabrication','long-range-mineral-scanner':'radar',
+ // Schema 369: the plan tools (Designator_Plan_Add / Designator_Plan_Remove).
+ 'remove-plan':'plan-remove',
 };
 export function pictoSemanticId(id:string):string {
  let key=id;
@@ -245,6 +247,8 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  case 'wind':d.line([[32,27],[29,56],[36,56],[33,27]],2,P.stone);d.shape([[31,25],[27,6],[33,3],[35,25]],P.paper);d.shape([[34,27],[54,34],[53,40],[33,31]],P.paper);d.shape([[30,29],[13,43],[8,39],[28,26]],P.paper);d.ellipse(32,27,4,4,P.wood);break;
  case 'wood-generator':case 'chemfuel-generator':case 'geothermal-generator':d.rect(10,27,44,26,P.sage);d.rect(17,33,17,14,P.darkBlue);d.rect(41,16,8,12,P.stone);if(id==='wood-generator'){d.shape([[12,18],[17,12],[34,20],[29,26]],P.wood);d.line([[18,17],[29,22]],1,P.paper);}else if(id==='geothermal-generator'){d.path('M 17 23 Q 12 16 19 8 M 29 23 Q 23 15 31 7',null,2,P.blue);}else d.rect(12,9,19,18,P.red);bolt(d,42,40,.4);break;
  case 'growing':case 'hydroponics':sprout(d);if(id==='hydroponics'){d.shape([[8,43],[56,43],[51,56],[13,56]],P.blue);d.line([[16,48],[48,48]],1.4,P.paper);}else d.path('M 9 54 Q 32 51 55 54',null,2,P.wood);break;
+ // Schema 369: a pale blueprint sheet squared in chalk, a pencil on it.
+ case 'plan':d.shape([[9,14],[50,10],[55,50],[13,55]],P.blue);for(const [a,b] of [[[11,28],[52,24]],[[12,42],[54,38]],[[23,13],[27,54]],[[37,12],[41,53]]] as const)d.line([a,b],1.1,P.paper);d.shape([[38,46],[53,22],[58,25],[44,49],[37,53]],P.ochre);d.line([[37,53],[41,48]],1.6);break;
  case 'stockpile':d.shape([[9,24],[31,13],[55,24],[55,48],[33,58],[9,46]],P.ochre);d.line([[9,24],[33,35],[55,24]],1.7);d.line([[33,35],[33,58]],1.7);d.line([[21,19],[44,30]],2,P.paper);break;
  case 'roof':case 'roof-ignore':d.shape([[6,32],[31,10],[58,31],[52,38],[32,20],[12,39]],P.red);d.line([[17,35],[17,53]],2.5,P.wood);d.line([[48,35],[48,53]],2.5,P.wood);if(id==='roof-ignore')d.line([[23,48],[43,48]],3,P.ochre);break;
  case 'home':d.shape([[13,30],[32,13],[52,30],[51,55],[13,55]],P.paper);d.shape([[6,31],[31,9],[58,31],[53,36],[32,19],[11,37]],P.red);d.rect(27,37,12,18,P.wood);break;

@@ -17,9 +17,11 @@ export const mainTabHotkey=(key:string):Exclude<Panel,null>|undefined=>Object.ha
  * PlantsCut Misc3 (Y), PlantsHarvest Misc2 (H), Haul Misc12 (P), Forbid
  * Command_ItemForbid (F), Unforbid Misc6 (U), SmoothSurface Misc5 (J, schema
  * 367). Hunt (O), Slaughter (M), Tame and Claim (N) have no Orders tool in
- * Elsewhere. */
+ * Elsewhere. Schema 369: Designator_Plan_Add
+ * Misc9 (I) and Designator_Plan_Remove Misc8 (K). */
 export const ORDERS_PALETTE_HOTKEYS:Readonly<Record<string,Tool>>=Object.freeze({
   c:'cancel',x:'deconstruct',l:'mine',b:'chop',y:'cut',h:'harvest',p:'haul-chunks',f:'forbid',u:'allow',j:'smooth-surface',
+  i:'plan',k:'remove-plan',
 });
 /** Core designator hot keys of the Zone category: Cancel C, Deconstruct X,
  * ZoneAddStockpile_Resources Misc1 (B), ZoneAdd_Growing Misc2 (H),

@@ -1,6 +1,7 @@
 import { storedPriority } from '../sim/work-types.ts';
 import {CARPET_FLOORS_355,carpetColor355,isCarpetFloor355} from '../sim/carpet-355';
 import {LETTER_CLASSES_352,isSchema352OrLater} from '../sim/letters-352';
+import {DEFAULT_PLAN_COLOR_369,PLAN_COLORS_369,PLAN_COLOR_DEFS_369,planColorHex369} from '../sim/plans-369';
 import {storytellerIncidents347,tutorialMode347} from '../sim/game-profile';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {READING_POLICIES_295,effectiveReadingPolicy295} from '../sim/reading-state-295';
@@ -121,8 +122,17 @@ export function buildNativeToolPalette(state:NativeUiState,actions:NativeUiActio
  return {id:`map-tools-${kind}`,title:kind==='orders'?'Ordres':'Zones',layout:'palette',palette:kind,width:600,
   rows:[{id:`${kind}-tools`,label:'',region:'catalogue',controlStyle:'icon',controls}],onClose:()=>{actions.closePage?.();void actions.panel(null);}};
 }
+/** Schema 369: Core's Planifier opens its colour grid; a colour arms the tool. */
+function planColorPage369(state:NativeUiState,actions:NativeUiActions):void {
+ const current=state.planColor369??DEFAULT_PLAN_COLOR_369,reopen=()=>{if(latest&&host)open(buildNativeToolPalette(latest,host,'orders'));};
+ const page=detailPage('plan-colors-369','Couleur du plan',[
+  {id:'plan-colors',label:'Couleurs',compact:true,presentation:'plain',controls:PLAN_COLORS_369.map(color=>button(`plan-color-${color}`,PLAN_COLOR_DEFS_369[color].label,()=>actions.planColor369!(color),
+   {color:`#${planColorHex369(color).toString(16).padStart(6,'0')}`,caption:color===current?'Choisie':undefined,hint:`Planifier en ${PLAN_COLOR_DEFS_369[color].label.toLowerCase()}`}))},
+ ],[],reopen);
+ page.width=600;open(page);
+}
 function nativeToolControl(tool:(typeof toolDefinitions)[number],state:NativeUiState,actions:NativeUiActions):NativeControl {
- return button(`tool-${tool.id}-select`,tool.title,()=>actions.tool(tool.id),{
+ return button(`tool-${tool.id}-select`,tool.title,()=>tool.id==='plan'&&actions.planColor369?planColorPage369(state,actions):actions.tool(tool.id),{
   icon:tool.id,caption:tool.key||undefined,hint:`${tool.title}${tool.key?` · ${tool.key}`:''}\n${tool.hint}`,active:state.tool===tool.id,
  });
 }

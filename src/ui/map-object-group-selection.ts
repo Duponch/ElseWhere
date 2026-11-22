@@ -49,7 +49,7 @@ function targetIdentity(world:GeyserWorld256,target:MapObjectSelection):Identity
     case 'rock': {const tile=world.tiles[target.id];return tile?.terrain==='rock'?naturalDefinition(`mineable:${tile.ore??tile.stone??'legacy'}`):undefined;}
     case 'job': {const object=selectedMapJob296(world,target.id);return object?jobIdentity(object):undefined;}
     // Zones keep their own editing and selection pipeline.
-    case 'growing': case 'stockpile': return undefined;
+    case 'growing': case 'stockpile': case 'plan': return undefined;
   }
 }
 
@@ -153,6 +153,6 @@ export function mapObjectGroupCells(world:GeyserWorld256,selections:readonly Map
   if(packed)for(const object of world.packed)if(packed.has(object.building.id)&&object.owner.type==='ground')packed.set(object.building.id,[cellOf(object.owner)]);
   const rocks=indexes.get('rock');
   if(rocks)for(const id of rocks.keys())if(world.tiles[id]?.terrain==='rock')rocks.set(id,[{x:id%world.width,z:Math.floor(id/world.width)}]);
-  for(const selected of selections)if(selected.kind==='growing'||selected.kind==='stockpile')indexes.get(selected.kind)!.set(selected.id,mapObjectCells(world,selected));
+  for(const selected of selections)if(selected.kind==='growing'||selected.kind==='stockpile'||selected.kind==='plan')indexes.get(selected.kind)!.set(selected.id,mapObjectCells(world,selected));
   return selections.map(selected=>{const cells=indexes.get(selected.kind)!.get(selected.id)!;return cells.some(c=>knownPosition256(world,c))?cells.map(cellOf):[];});
 }

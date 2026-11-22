@@ -4,12 +4,13 @@ import { footprintCells } from '../sim/definitions';
 import type { Cell, Resource, World } from '../sim/types';
 import { stockpileZoneCells } from '../sim/stockpile-zones';
 import { selectedMapJob296 } from './wall-door-selection-296';
+import { planAt369,planById369 } from '../sim/plans-369';
 
 /** Core's incidental foliage remains a hover readout, not a selectable Thing. */
 export const mapResourceSelectable=(resource:Resource):boolean=>!['grass','tall-grass','brambles','moss','astragalus','chokevine','dandelion','low-shrub'].includes(resource.species??'');
 
 /** Terrain and constructed floors are readouts, never selection targets. */
-export type MapObjectSelection = { kind:'geyser'|'packed'|'pile'|'structure'|'resource'|'rock'|'job'|'growing'|'stockpile'; id:number };
+export type MapObjectSelection = { kind:'geyser'|'packed'|'pile'|'structure'|'resource'|'rock'|'job'|'growing'|'stockpile'|'plan'; id:number };
 
 export function mapObjectsAt(world:World,cell:Cell):MapObjectSelection[] {
   const same=(other:Cell)=>other.x===cell.x&&other.z===cell.z;
@@ -32,6 +33,8 @@ export function mapObjectsAt(world:World,cell:Cell):MapObjectSelection[] {
     ...jobs,
     ...world.growingZones.filter(z=>z.cells.includes(cell.z*world.width+cell.x)).map(z=>({kind:'growing' as const,id:z.id})),
     ...world.stockpiles.filter(same).map(s=>({kind:'stockpile' as const,id:s.id})),
+    // Schema 369: Core selects a plan after the things and the zone of a cell.
+    ...(planAt369(world,cell)?[{kind:'plan' as const,id:planAt369(world,cell)!.id}]:[]),
   ].filter(selected=>mapObjectExists(world,selected));
 }
 
@@ -46,6 +49,7 @@ function physicalMapObjectCells(world:World,selected:MapObjectSelection):Cell[] 
     case 'job': {const job=selectedMapJob296(world,selected.id);return job?footprintCells(job):[];}
     case 'growing': {const zone=world.growingZones.find(z=>z.id===selected.id);return zone?.cells.map(i=>({x:i%world.width,z:Math.floor(i/world.width)}))??[];}
     case 'stockpile': return stockpileZoneCells(world,selected.id);
+    case 'plan': return planById369(world,selected.id)?.cells.map(i=>({x:i%world.width,z:Math.floor(i/world.width)}))??[];
   }
 }
 
@@ -64,6 +68,7 @@ export function mapObjectExists(world:World,selected:MapObjectSelection):boolean
     case 'job':return !!selectedMapJob296(world,selected.id);
     case 'growing':return world.growingZones.some(z=>z.id===selected.id&&z.cells.length>0);
     case 'stockpile':return world.stockpiles.some(s=>s.id===selected.id);
+    case 'plan':return !!planById369(world,selected.id);
   }
 }
 

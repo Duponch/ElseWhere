@@ -74,6 +74,7 @@ import { CropLayer } from './CropLayer';
 import type { ScreenPawn, SelectionGesture } from './PawnSelectionInput';
 import { FireLayer } from './FireLayer';
 import { GrowingZoneLayer } from './GrowingZoneLayer';
+import { PLAN_TINT_OPACITY_369,planOverlayPlacements369,planOverlaySignature369 } from './plan-overlay-369';
 import { buildTerrain, copyTerrainPaintRect, createTerrainPaintTexture, patchTerrainPaintTexture, singleTerrainPaintPatchRect, syncTerrainPaintUvs, terrainPresentationType, TERRAIN_PAINT_PIXELS_PER_CELL, type TerrainPaintPatchRect } from './TerrainLayer';
 import { PaintedWater } from './PaintedWater';
 import { WeatherCloudLayer } from './WeatherCloudLayer';
@@ -703,6 +704,9 @@ export class SceneRenderCore {
   private groundOverlayInputs:readonly unknown[]=[];
   protected storageTintPlacements:readonly Placement[]=[];
   protected homeTintPlacements:readonly Placement[]=[];
+  /** Schema 369 plans (plan-overlay-369.ts) and their exact signature. */
+  protected planTintPlacements369:readonly Placement[]=[];
+  private planKey369='';
   protected zonesTintDirty=true;
   protected roofTintKey='';
   protected readonly hover: THREE.Mesh;
@@ -1160,6 +1164,8 @@ export class SceneRenderCore {
     const stockpileKey = residentStorage ? this.storageSignature.readResident(world,resetPoses) : this.storageSignature.read(world.stockpiles,resetPoses);
     const storageKey = `${homeKey};${stockpileKey};snow:${world.snowClearArea?.join(',')??''};surface:${!!world.snow}`;
     if (storageKey !== this.storageKey || newMap || groundChanged) { this.storageKey = storageKey; this.buildStorage(world); }
+    const planKey369=planOverlaySignature369(world);
+    if(planKey369!==this.planKey369||newMap){this.planKey369=planKey369;this.planTintPlacements369=planOverlayPlacements369(world);this.zonesTintDirty=true;}
     if (newMap || previousWorld?.resources !== world.resources || this.crops.hasPreparedFrameChange(world) || Math.floor((previousWorld?.tick ?? -1) / 25) !== Math.floor(world.tick / 25)) this.crops.update(world, newMap, this.immutableWorlds.has(world),resourceFrame);
     const zoneChanged=this.updateGrowingZones(newMap);
     if(this.allowedAreaLayer.updateIntents(world,this.confirmedIntents?this.confirmedIntents.allowedAreas:world.allowedAreas,this.allowedAreaTarget,newMap,this.confirmedIntents?i=>knownCell256(world,i):undefined))this.zonesTintDirty=true;
@@ -1467,7 +1473,8 @@ export class SceneRenderCore {
   private refreshZonesTint():void {
     const world=this.world;if(!world||!this.zonesTintDirty)return;this.zonesTintDirty=false;
     this.surfaceTint.setZones(world.width,world.height,[{placements:this.storageTintPlacements,opacity:ZONE_FILL_OPACITY},
-      {placements:this.growing.surfaces,opacity:ZONE_FILL_OPACITY},{placements:this.allowedAreaLayer.surfaces,opacity:ZONE_FILL_OPACITY},{placements:this.homeTintPlacements,opacity:.28}],this.zonesVisible);
+      {placements:this.growing.surfaces,opacity:ZONE_FILL_OPACITY},{placements:this.allowedAreaLayer.surfaces,opacity:ZONE_FILL_OPACITY},{placements:this.homeTintPlacements,opacity:.28},
+      {placements:this.planTintPlacements369,opacity:PLAN_TINT_OPACITY_369,always:true}],this.zonesVisible);
     this.refreshGroundOverlays();
   }
   setWallCutaway(enabled: boolean): void {
@@ -1765,11 +1772,12 @@ export class SceneRenderCore {
       this.objectSelection.geometry=new THREE.BufferGeometry();
       this.objectSelection.geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));old.dispose();return;
     }
-    const isZone=this.selectedObject?.kind==='growing'||this.selectedObject?.kind==='stockpile';
+    // Schema 369: a selected plan shows its edges like a zone, whatever the zone toggle.
+    const plan369=this.selectedObject?.kind==='plan',isZone=this.selectedObject?.kind==='growing'||this.selectedObject?.kind==='stockpile'||plan369;
     if(isZone)this.objectTintSurfaces=EMPTY_GROUND_OVERLAYS;
     const cells=this.world&&this.selectedObject?(this.selectedObject.kind==='stockpile'?stockpileZoneCells(this.world,this.selectedObject.id):mapObjectCells(this.world,this.selectedObject)):[];
-    if(this.world)this.surfaceTint.setSelection(this.world.width,this.world.height,isZone?cells.map(c=>c.z*this.world!.width+c.x):[],isZone&&this.zonesVisible);
-    if(isZone&&!this.zonesVisible){this.objectSelection.visible=false;this.objectSelectionSignature='';return;}
+    if(this.world)this.surfaceTint.setSelection(this.world.width,this.world.height,isZone?cells.map(c=>c.z*this.world!.width+c.x):[],isZone&&(this.zonesVisible||plan369));
+    if(isZone&&!this.zonesVisible&&!plan369){this.objectSelection.visible=false;this.objectSelectionSignature='';return;}
     if(!cells.length){this.objectTintSurfaces=EMPTY_GROUND_OVERLAYS;this.objectSelection.visible=false;this.objectSelectionSignature='';return;}
     let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity,shape=2166136261;
     for(const cell of cells){minX=Math.min(minX,cell.x);maxX=Math.max(maxX,cell.x);minZ=Math.min(minZ,cell.z);maxZ=Math.max(maxZ,cell.z);shape=Math.imul(shape^((cell.z*this.world!.width+cell.x)>>>0),16777619);}

@@ -175,6 +175,7 @@ import { advanceDeathThoughts } from './death-thoughts-perception.ts';
 import { applyBurial,processBurial,reconcileBurials,initialGrave } from './burial.ts';
 import { applyCleanRoom,processCleaning } from './cleaning.ts';
 import {editSnowArea} from './snow-clearing.ts';
+import {applyPlanArea369,applyPlanCommand369,isPlanCommand369} from './plans-369.ts';
 import {finishSnowSteps,clearSnowForStructure} from './snow-surface.ts';
 import { advanceFilth,recordFilthMovement,bleedFilth } from './filth.ts';
 import { weatherRainRate } from './weather.ts';
@@ -750,6 +751,9 @@ function observeAcceptedConsoleCommand298(world:World,command:Command):void {
 type LocalCommand=Exclude<Command,SecondarySiteCommand>;
 function applyLocalCommand(world: World, command: LocalCommand): CommandResult {
   if(command?.type==='designate'&&isShipComputerSensorsKind298(command.kind))command={...command,orientation:command.orientation??0,material:command.material??'steel'};
+  // Schema 369: plans are player marks only; no task, cache or clock is touched.
+  if(command?.type==='area'&&(command.action==='plan'||command.action==='remove-plan'))return applyPlanArea369(world,command);
+  if(isPlanCommand369(command))return applyPlanCommand369(world,command);
   if(command?.type==='read-book-295')return applyReadBook295(world,command.pawnId,command.bookId);
   if(command?.type==='reading-policy-295')return applyReadingPolicy295(world,command.pawnId,command.policyId);
   if(isSchema287OrLater(Number(world.schemaVersion))&&command?.type==='animal-area-assign')return applyAnimalAreaAssignmentCommand287(world,command);
@@ -813,6 +817,8 @@ function setWorkPriority(world:World,pawn:Pawn,work:WorkType,value:number,drops:
   pawn.planCooldown = 0;
 }
 function applyCommandInternal(world: World, command: Exclude<LocalCommand,import('./world-map-state.ts').WorldMapCommand|{type:'apparel-policy-update'|'apparel-policy-copy'|'apparel-policy-rename'|'egg-forbid'|'material-forbid'|'read-book-295'|'reading-policy-295'|'work-tab-mode'}|import('./letters-352.ts').LetterCommand352>): CommandResult {
+  // Schema 369: handled by applyLocalCommand; kept here for the command type.
+  if(command.type==='plan-369')return applyPlanCommand369(world,command);
   // Schema 347: the tutorial's forced content and its storyteller handover.
   if(isTutorialCommand347(command))return applyTutorialCommand347(world,command);
   // Schema 349: the chain of the tutorial lessons.

@@ -124,13 +124,15 @@ export class GroundSurfaceTint {
     const b=atlas.bounds;this.overlayBounds.value.set(b.minX,b.minZ,b.maxX,b.maxZ);this.overlayIndexSize.value.set(atlas.width,atlas.height);this.overlayRecordsSize.value.set(atlas.recordsWidth,atlas.recordsHeight);
     this.overlayActive.value=Number(b.maxX>=b.minX&&b.maxZ>=b.minZ);
   }
-  setZones(width:number,height:number,layers:readonly {placements:readonly Placement[];opacity:number}[],visible:boolean):void {
-    const key=`${width}:${height}:${visible}:`+(visible?layers.map(layer=>`${layer.opacity}:${layer.placements.map(p=>`${p.x},${p.z},${p.color??0xffffff}`).join(';')}`).join('|'):'');
+  /** `always` (schema 369 plans) keeps a layer when the zones are hidden. */
+  setZones(width:number,height:number,layers:readonly {placements:readonly Placement[];opacity:number;always?:boolean}[],visible:boolean):void {
+    const shown=(layer:{always?:boolean})=>visible||!!layer.always;
+    const key=`${width}:${height}:${visible}:`+layers.map(layer=>shown(layer)?`${layer.opacity}:${layer.placements.map(p=>`${p.x},${p.z},${p.color??0xffffff}`).join(';')}`:'').join('|');
     if(key===this.zoneKey)return;this.zoneKey=key;
     const resized=this.zones.image.width!==width||this.zones.image.height!==height;
     const data=new Float32Array(width*height*4);
     let present=false;
-    if(visible)for(const layer of layers)for(const p of layer.placements){
+    for(const layer of layers)if(shown(layer))for(const p of layer.placements){
       if(p.x<0||p.z<0||p.x>=width||p.z>=height)continue;
       const i=(p.z*width+p.x)*4,a=layer.opacity;color.setHex(p.color??0xffffff);
       data[i]=data[i]!*(1-a)+color.r*a;data[i+1]=data[i+1]!*(1-a)+color.g*a;data[i+2]=data[i+2]!*(1-a)+color.b*a;data[i+3]=data[i+3]!*(1-a)+a;present=true;

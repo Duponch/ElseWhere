@@ -232,6 +232,7 @@ import './ui/inspection-dossiers.css';
 import './ui/journal-inspection.css';
 import { presentCellDescription, type CellHealth } from './ui/cell-inspector';
 import { mapObjectExists,nextMapObject,type MapObjectSelection } from './ui/map-object-selection';
+import { DEFAULT_PLAN_COLOR_369,planById369,planLabel369,type PlanColor369 } from './sim/plans-369';
 import {mapObjectGroupCells,MAX_MAP_OBJECT_SELECTION} from './ui/map-object-group-selection';
 import {mapObjectActions,mapObjectGroupActions} from './ui/map-object-actions';
 import { MapHoverLightCache,mapHoverLines } from './ui/map-hover-readout';
@@ -343,6 +344,9 @@ let selectedLinkedStorage:ReturnType<typeof createLinkedStorageControls286>|unde
 let selectedStoragePending=0;
 let storageClipboard:StorageControlSettings|undefined;
 let zoneEditTarget:number|undefined;
+/** Schema 369: the Planifier colour and the plan it holds (Core's SelectedPlan). */
+let nativePlanColor369:PlanColor369=DEFAULT_PLAN_COLOR_369;
+let planTarget369:number|undefined;
 const legacyElements=new Map<string,HTMLElement>();
 const el = <T extends HTMLElement = HTMLElement>(id: string) => (document.getElementById(id)??legacyElements.get(id)) as T;
 const researchPanelActions:ResearchPanelActions={onOpenWork:()=>openResearchContext('work'),onOpenProduction:()=>openResearchContext('architect')};
@@ -1270,7 +1274,7 @@ function readNativeState():NativeUiState {
     selectedMechanoidId:selectedPawn!==undefined&&snapshot?.mechanoids?.some(actor=>actor.id===selectedPawn)?selectedPawn:undefined,
     speed:currentSpeed,hasGame:session.hasWorld,busy:session.busy||replacingWorld||waitingRequests.size>0,
     fault:simulationStopped?'La simulation s’est arrêtée. Rechargez une colonie validée.':graphicsFault?'Le rendu doit être rétabli.':undefined,
-    saves:saveStorageReady?session.saves():[]};
+    saves:saveStorageReady?session.saves():[],planColor369:nativePlanColor369};
 }
 function nativeActions():NativeUiActions {
   return {
@@ -1293,6 +1297,8 @@ function nativeActions():NativeUiActions {
     openVisitorTrade:()=>nativeLocalTrade?.openVisitors(),openOrbitalTrade:id=>openLearningOrbitalTrade(()=>nativeLocalTrade?.openOrbital(id)),openFactionComms298:id=>{void attempt(async()=>nativeFactionComms298?.open(id));},
     launchShip298:id=>nativeShipTerminal298?.openLaunch(id),
     resizeZone:(kind,id,shrink)=>{nativeCustomPage=undefined;editZone(kind,id,shrink);},
+    planColor369:color=>{nativePlanColor369=color;if(nativeToolPalette)nativeCustomPage=buildNativeToolPalette(readNativeState(),nativeActions(),nativeToolPalette);applyTool('plan');planTarget369=undefined;},
+    editPlan369:(planId,shrink)=>{const plan=snapshot?planById369(snapshot,planId):undefined;if(!plan)return;nativeCustomPage=undefined;setTool(shrink?'remove-plan':'plan');if(!shrink){nativePlanColor369=plan.color;planTarget369=planId;}refreshNativeUi();},
     paintAllowedArea:(id,enabled)=>{if(!snapshot?.allowedAreas?.some(area=>area.id===id))return;nativeCustomPage=undefined;setPanel(null);applyTool(enabled?'allowed-expand':'allowed-shrink');allowedAreaEditId=id;renderer?.setAllowedAreaTarget(id);},
     previewAllowedArea:id=>{
       if(id!==undefined&&!snapshot?.allowedAreas?.some(area=>area.id===id))return;
@@ -1613,6 +1619,7 @@ function applyTool(tool: Tool) {
   // leaving the tool is ClearDesignatorSelection.
   if(tool!==currentTool&&tool!=='select'){const tag=tutorialToolTag349(tool);if(tag&&!tutorialAllows({tag}))return;audio.playInterface('ui.tool-select');}
   if(tool==='select'&&currentTool!=='select')queueMicrotask(()=>tutorialNotify('ClearDesignatorSelection'));
+  planTarget369=undefined;
   if(nativeUi){
     zoneEditTarget=undefined;renderer?.setZoneTarget(undefined);allowedAreaEditId=undefined;renderer?.setAllowedAreaTarget(undefined);shootingControls.cancel();
     if(tool==='ship-cryptosleep-casket'&&currentTool!==tool){placementOrientation=2;renderer?.setPlacementRotation(placementOrientation);}
@@ -1748,6 +1755,7 @@ function pickCell(x: number, z: number) {
   if (currentTool !== 'select') {
     const tool = currentTool;
     if((tool==='allowed-expand'||tool==='allowed-shrink')&&allowedAreaEditId!==undefined){paintAllowedArea(allowedAreaEditId,tool==='allowed-expand',{x,z},{x,z});return;}
+    if(tool==='plan'||tool==='remove-plan'){designatePlans369(tool,{x,z},{x,z});return;}
     void attempt(() => {
       if(tool==='allow'||tool==='forbid'||tool==='strip')return client.command({type:'area',action:tool,from:{x,z},to:{x,z}});
       if(isBuildableFloor(tool))return client.command({type:'area',action:'lay-floor',floor:tool,from:{x,z},to:{x,z}});
@@ -1775,8 +1783,25 @@ function paintAllowedArea(id:number,enabled:boolean,from:Cell,to:Cell):void {
   if(!snapshot||replacingWorld||frontMenu.isOpen())return;
   void attempt(async()=>{await client.command({type:'allowed-area-paint',areaId:id,enabled,from,to});renderState();});
 }
+/** Schema 369: Planifier adds to the plan it holds (or to the one plan of its
+ * colour met), then holds the plan the Worker reports, as Core selects it; a
+ * click on a plan of its colour only picks that plan. */
+function designatePlans369(action:'plan'|'remove-plan',from:Cell,to:Cell):void {
+  if(!snapshot||replacingWorld||frontMenu.isOpen())return;
+  void attempt(async()=>{
+    let response:string|undefined;
+    try{response=await client.command(action==='plan'?{type:'area',action,from,to,planColor369:nativePlanColor369,...(planTarget369===undefined?{}:{targetPlanId369:planTarget369})}:{type:'area',action,from,to});}
+    catch(error){if(error instanceof Error&&error.message==='Aucune case compatible dans ce rectangle.')return;throw error;}
+    const result=JSON.parse(response!) as {affected:number;skipped:number;planId369?:number};
+    if(action==='plan'&&result.planId369!==undefined)planTarget369=result.planId369;
+    const held=result.planId369===undefined||!snapshot?undefined:planById369(snapshot,result.planId369);
+    if(result.affected===0){if(held)notify(`${planLabel369(held)} choisi : les prochains tracés de cette couleur l’agrandissent.`);return;}
+    notify(`${result.affected} case(s) ${action==='plan'?'planifiée(s)':'retirée(s) des plans'}.`);
+  });
+}
 function designateArea(action: AreaAction, from: Cell, to: Cell) {
   if (!snapshot || replacingWorld || frontMenu.isOpen()) return;
+  if(action==='plan'||action==='remove-plan'){designatePlans369(action,from,to);return;}
   void attempt(async () => {
     let response:string|undefined;
     try {response = await client.command(action==='allow'||action==='forbid'||action==='strip'?{type:'area',action,from,to}:{ type: 'area', action, from, to, ...(action==='lay-floor'&&isBuildableFloor(currentTool)?{floor:currentTool}:{}), ...(action === 'stockpile' ? readStorageSettings('stockpile') : {}),...(zoneEditTarget===undefined?{}:{targetZoneId:zoneEditTarget}) });}

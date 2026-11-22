@@ -71,6 +71,7 @@ export function validExpeditionOrigin(value:unknown,w:Pick<World,'tick'|'planet'
 export const LOCAL_FIELDS=new Set([
   'corePathBudget297',
   'strip351',
+  'plans369',
   'party292',
   'firefoam290',
   'shipReactorThreats275',

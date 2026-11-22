@@ -1,5 +1,6 @@
 import {isShipComputerSensorsKind298} from '../sim/ship-computer-sensors-content-298';
 import { stripInspectorAction351 } from '../sim/strip-351';
+import { PLAN_COLORS_369, PLAN_COLOR_DEFS_369, isPlanColor369, planById369, planLabel369, totalPlanArea369 } from '../sim/plans-369';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {readingRefusal295} from '../sim/reading-runtime-295';
 import type { NativeControl, NativePage, NativeRow, NativeUiActions, NativeUiState } from './native-contract';
@@ -574,6 +575,7 @@ function objectLabel(world: World, selected: MapObjectSelection): string {
   if (selected.kind === 'structure' || selected.kind === 'packed') { const structure = world.structures.find(s => s.id === selected.id) ?? world.packed.find(p => p.building.id === selected.id)?.building; return structure ? buildingLabels[structure.kind] : 'Bâtiment absent'; }
   if (selected.kind === 'pile') { const pile = world.piles.find(p => p.id === selected.id); return pile ? `${ITEM_DEFINITIONS[pile.item].label} × ${pile.quantity}` : 'Pile absente'; }
   if (selected.kind === 'resource') { const resource = world.resources.find(r => r.id === selected.id); return resource ? resource.species ?? resource.kind : 'Ressource absente'; }
+  if (selected.kind === 'plan') { const plan = planById369(world, selected.id); return plan ? planLabel369(plan) : 'Plan absent'; }
   return ({ growing: 'Zone de culture', stockpile: 'Zone de stockage', rock: 'Massif rocheux', geyser: 'Geyser', job: 'Ordre de travail' } as Record<string, string>)[selected.kind] ?? selected.kind;
 }
 function objectPage(world: World, objects: readonly MapObjectSelection[]): NativePage {
@@ -684,6 +686,21 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
     const zone = world.growingZones.find(zone => zone.id === selected.id); if (zone) rows.push(row('growing-size', 'Surface de culture', `${zone.cells.length} cases`), booleanRow('allow-sow', 'Autoriser les semis', zone.allowSow, allowSow => send({ type: 'growing-policy', zoneId: zone.id, allowSow, allowCut: zone.allowCut })), booleanRow('allow-cut', 'Couper les plantes indésirables', zone.allowCut, allowCut => send({ type: 'growing-policy', zoneId: zone.id, allowSow: zone.allowSow, allowCut })));
     if (owner.resizeZone) actions.push(control('growing-expand', 'Agrandir la zone', () => owner.resizeZone!('growing', selected.id, false)), control('growing-shrink', 'Réduire la zone', () => owner.resizeZone!('growing', selected.id, true)));
     actions.push(command('delete-growing', 'Supprimer la zone', { type: 'delete-zone', kind: 'growing', zoneId: selected.id }));
+  } else if (selected.kind === 'plan') {
+    // Schema 369: Plan.GetInspectString and the plan gizmos (hide, expand,
+    // shrink, change colour, delete). Copy and rename are not offered.
+    const plan = planById369(world, selected.id);
+    if (plan) {
+      rows.push(row('plan-size', 'Taille', `${plan.cells.length} case${plan.cells.length > 1 ? 's' : ''}`));
+      if ((world.plans369?.plans.length ?? 0) > 1) rows.push(row('plan-total', 'Surface planifiée totale', `${totalPlanArea369(world)} cases`));
+      const color = control('plan-color-select', 'Changer de couleur', () => undefined);
+      color.select = { value: plan.color, options: PLAN_COLORS_369.map(value => ({ value, label: PLAN_COLOR_DEFS_369[value].label })),
+        onChange: async value => { if (isPlanColor369(value) && value !== plan.color) await send({ type: 'plan-369', action: 'color', planId: plan.id, color: value }); } };
+      rows.push({ id: 'plan-color', label: 'Couleur', value: PLAN_COLOR_DEFS_369[plan.color].label, controls: [color] });
+      actions.push(command('plan-hide', plan.hidden ? 'Afficher le plan' : 'Masquer le plan', { type: 'plan-369', action: 'hide', planId: plan.id, hidden: !plan.hidden }));
+      if (owner.editPlan369) actions.push(control('plan-expand', 'Agrandir le plan', () => owner.editPlan369!(plan.id, false)), control('plan-shrink', 'Réduire le plan', () => owner.editPlan369!(plan.id, true)));
+      actions.push(command('plan-delete', 'Supprimer le plan', { type: 'plan-369', action: 'delete', planId: plan.id }));
+    }
   } else if (selected.kind === 'packed') { const packed = world.packed.find(p => p.building.id === selected.id); if (packed) { const building = packed.building, max = structureMaxHp(building); rows.push(row('packed-label', 'Meuble emballé', buildingLabels[building.kind]), meterRow('packed-health', 'Points de vie conservés', max - (building.damage ?? 0), max, undefined, `${max - (building.damage ?? 0)} / ${max}`), row('packed-material', 'Matériau', building.material ?? 'Matériau de construction enregistré'), row('packed-quality', 'Qualité', building.quality ?? 'Sans qualité')); if (owner.placeFurniture) actions.push(control('install-packed', 'Installer', () => owner.placeFurniture!(selected.id))); } }
   else if (selected.kind === 'job') {
     const parent=world.jobs.find(job=>job.wallDoor296?.plan?.id===selected.id),job=selectedMapJob296(world,selected.id);

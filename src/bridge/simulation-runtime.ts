@@ -572,7 +572,7 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
         if(result.ok&&previousTarget&&pendingWorldEntry263(world)?.pending===previousTarget)attemptedWorldEntry263.delete(previousTarget);
         if (!result.ok) { mutating = false; throw new Error(result.reason ?? 'Ordre refusé.'); }
         resumeNeutralEncounter261(previousEncounter);
-        if (result.affected !== undefined) data = JSON.stringify({ affected: result.affected, skipped: result.skipped });
+        if (result.affected !== undefined) data = JSON.stringify({ affected: result.affected, skipped: result.skipped, ...(result.planId369 !== undefined ? { planId369: result.planId369 } : {}) });
       } else if (request.type === 'save') {
         // A deferred check keeps the complete validation off the simulation thread.
         data = request.check==='deferred'?serializeCampaignUnchecked(world):serializeCampaign(world);

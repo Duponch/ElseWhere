@@ -135,6 +135,8 @@ export interface NativeUiState {
   busy:boolean;
   fault?:string;
   saves:readonly SavedColony[];
+  /** Schema 369: the colour of the Planifier tool. */
+  planColor369?:import('../sim/plans-369').PlanColor369;
 }
 export interface NativeUiActions {
   command:(command:Command)=>Promise<unknown>;
@@ -171,6 +173,11 @@ export interface NativeUiActions {
   /** Opens a scoped confirmation; the Worker retains launch authority. */
   launchShip298?:(computerId:number)=>void;
   resizeZone?:(kind:'stockpile'|'growing',id:number,shrink:boolean)=>void;
+  /** Schema 369: the plan tools. `planColor369` picks the Planifier colour
+   * (Core's colour grid); `editPlan369` arms Planifier on a plan (expand) or
+   * Retirer le plan (shrink), as the plan gizmos do. */
+  planColor369?:(color:import('../sim/plans-369').PlanColor369)=>void;
+  editPlan369?:(planId:number,shrink:boolean)=>void;
   paintAllowedArea?:(id:number,enabled:boolean)=>void;
   /** View only; undefined restores the active allowed-area paint target. */
   previewAllowedArea?:(id:number|undefined)=>void;

@@ -199,6 +199,7 @@ import { validGameProfile,validateGameProfile } from './game-profile-save.ts';
 import { validCorpseShape,validateCorpses } from './corpse-save.ts';
 import { validHuntingTask,validateHunting } from './hunting-save.ts';
 import { validateStrip351 } from './strip-351.ts';
+import { validatePlans369 } from './plans-369.ts';
 import { isStrip351 } from './strip-state-351.ts';
 import { validateWildlife } from './wildlife-save.ts';
 import { validateHeat } from './heat-save.ts';
@@ -721,6 +722,7 @@ function validateSchema(raw: unknown, version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 1
   errors.push(...validateCommercialBindings(commercialWorld,version,ids));
   if(errors.length)return errors;
   errors.push(...validateCorpses(world,version),...validateHunting(world,version),...validateStrip351(world,version));
+  errors.push(...validatePlans369(world,version));
   errors.push(...validateResearch(world,version));
   if(!validBiofuelTransport(commercialWorld,version))errors.push('Invalid biofuel content, original owner or fuel transport.');
   if(!validAllowedAreaTransport(commercialWorld,version))errors.push('Invalid or future allowed area, original assignment or return.');

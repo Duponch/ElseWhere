@@ -59,6 +59,8 @@ export function mapHoverLines(world:World,cell:Cell,lightLevel?:number):string[]
       case 'job': {const job=selectedMapJob296(world,selected.id);return job?[`Ordre · ${job.kind==='smooth-floor'?'Lisser le sol':job.kind==='smooth-wall'?'Lisser le mur':job.kind==='fix-breakdown'?'Remplacer le composant':world.jobs.some(j=>j.wallDoor296?.plan?.id===selected.id)?`Plan de ${buildingLabels[job.kind as keyof typeof buildingLabels]} · mur à démonter`:job.kind}`]:[];}
       case 'growing':return ['Zone de culture'];
       case 'stockpile':return ['Réserve'];
+      // Core's mouseover readout does not list plans.
+      case 'plan':return [];
     }
   });
   for(const mech of world.mechanoids??[])if(mech.x===cell.x&&mech.z===cell.z)objects.push(`${mechanoidDefinition(mech.mechKind).label} ${mech.id} · ${mech.state==='dead'?'neutralisé':mech.state==='downed'?'incapacité mécanique':'hostile'}`);

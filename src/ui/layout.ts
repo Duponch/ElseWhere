@@ -16,7 +16,7 @@ import { siteHudLayout } from './site-hud';
 
 const mapSizeLabels: Record<number, string> = { 32: 'terrain d’essai', 64: 'compacte', 128: 'compacte', 200: 'petite', 250: 'moyenne' };
 
-export type Tool = 'allow' | 'forbid' | 'strip' | 'snow-clear' | 'remove-snow-clear' | BuildableFloorKind | 'home' | 'remove-home' | 'ignore-roof' | 'haul-chunks' | 'select' | 'allowed-expand' | 'allowed-shrink' | Exclude<JobKind, 'sow'|'repair'|'fix-breakdown'|'flick'|'lay-floor'> | 'cancel' | 'stockpile' | 'remove-stockpile' | 'growing' | 'remove-growing' | 'smooth-surface';
+export type Tool = 'allow' | 'forbid' | 'strip' | 'snow-clear' | 'remove-snow-clear' | BuildableFloorKind | 'home' | 'remove-home' | 'ignore-roof' | 'haul-chunks' | 'select' | 'allowed-expand' | 'allowed-shrink' | Exclude<JobKind, 'sow'|'repair'|'fix-breakdown'|'flick'|'lay-floor'> | 'cancel' | 'stockpile' | 'remove-stockpile' | 'growing' | 'remove-growing' | 'smooth-surface' | 'plan' | 'remove-plan';
 export type Panel = 'quests' | 'world' | 'animals' | 'wildlife' | 'research' | 'architect' | 'work' | 'schedule' | 'assign' | 'history' | 'menu' | null;
 export type ArchitectCategory = 'orders' | 'zones' | 'structure' | 'floors' | 'furniture' | 'temperature' | 'recreation' | 'production' | 'power' | 'ship';
 /** Visible Core work order (naturalPriority), omitting Smithing and Tailoring
@@ -61,6 +61,8 @@ export const toolDefinitions: { id: Tool; title: string; hint: string; key: stri
   {id:'smooth-surface',title:'Lisser',hint:'Construction · polit un mur de roche naturelle découvert, sinon lisse le sol rocheux de la case · sans matériau ni recherche · remplace l’ordre de minage du mur',key:'J',category:'orders'},
   { id: 'deconstruct', title: 'Déconstruire', hint: 'Retirer un bâtiment par un travail de Construction. Environ la moitié des matériaux récupérée ; aucun remboursement pour le feu de camp.', key: 'X', category: 'orders' },
   { id: 'cancel', title: 'Annuler', hint: 'Cliquer ou tracer un rectangle pour retirer les ordres. Les matériaux restent sur place.', key: 'C', category: 'orders' },
+  { id: 'plan', title: 'Planifier', hint: 'Cliquer ou tracer un rectangle pour marquer des cases d’un plan de couleur, choisie en ouvrant l’outil. Un plan touché de la même couleur est agrandi. Simple repère : aucun travail n’est créé.', key: 'I', category: 'orders' },
+  { id: 'remove-plan', title: 'Retirer le plan', hint: 'Cliquer ou tracer un rectangle pour effacer les cases planifiées, quelle que soit leur couleur. Un plan coupé en deux devient deux plans.', key: 'K', category: 'orders' },
   { id:'door',title:'Porte',hint:'orientation automatique · ouverture au passage · choisir le matériau',key:'',category:'structure' },
   { id:'autodoor',title:'Porte automatique',hint:'Construction 6 · recherche Portes automatiques · 50 W · passage rapide sous courant, porte ordinaire sans courant',key:'',category:'structure' },
   { id: 'wall', title: 'Mur', hint: 'cliquer ou tracer une ligne droite · mur de 2,80 m · Échap annule le tracé', key: 'B', category: 'structure' },

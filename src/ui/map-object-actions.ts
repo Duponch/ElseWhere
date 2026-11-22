@@ -30,7 +30,7 @@ const cellKey = (cell: Cell) => `${cell.x}:${cell.z}`;
  * eligibility, ownership and conservative drops against its current World.
  * No generic engine import or whole-map area index is needed for this menu. */
 export function mapObjectActions(world: World, selected: MapObjectSelection): MapObjectAction[] {
-  if (selected.kind === 'growing' || selected.kind === 'stockpile') return [];
+  if (selected.kind === 'growing' || selected.kind === 'stockpile' || selected.kind === 'plan') return [];
   return actionsFor(world, selected, mapObjectCells(world, selected));
 }
 
