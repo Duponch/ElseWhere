@@ -5,7 +5,7 @@ import {storytellerIncidents347} from './game-profile.ts';
 import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import { civilianAdmissionFits,civilianAwayCounts } from './civilian-away.ts';
 import { isColonist } from './affiliation.ts';
-import { offeredBackground,assignOfferedBackground } from './background-generation.ts';
+import { offeredBornBackground,assignOfferedBackground } from './background-generation.ts';
 import { relationshipOfferCandidates,chooseOfferedRelationship,prepareRelationshipAdmission } from './relationship-generation.ts';
 import { arrivalEntry } from './arrival-entry.ts';
 import { ARRIVAL_NAMES,arrivalRandom } from './arrival-state.ts';
@@ -96,7 +96,8 @@ export function advanceQuests(w:World):void {
   if(s.entries.some(q=>q.status==='offered'||q.status==='accepted')||!questsSupported(w)||liveCount(w)===0||liveCount(w)>=12||!admission(w)||s.serial>=Number.MAX_SAFE_INTEGER||!Number.isSafeInteger(w.tick+8*TICKS_PER_DAY)||!arrivalEntry(w,s.rng)){
     s.nextCheck=w.tick+QUEST_RETRY_TICKS;return;
   }
-  const background=w.schemaVersion>=191?offeredBackground(w.seed^0x210a511,s.serial+1):undefined;
+  // Schema 370: the joiner is a SpaceRefugee without a faction (Core's quest).
+  const background=w.schemaVersion>=191?offeredBornBackground(w,w.seed^0x210a511,s.serial+1,{kind:'SpaceRefugee',faction:'random'}):undefined;
   const plans=background?relationshipOfferCandidates(w,background.age):[],random={rng:s.rng},q:JoinerQuest={id:s.serial+1,offeredAt:w.tick,expiresAt:w.tick+QUEST_OFFER_TICKS,
     name:ARRIVAL_NAMES[Math.floor(arrivalRandom(random)*ARRIVAL_NAMES.length)]!,profile:Math.floor(arrivalRandom(random)*3) as 0|1|2,
     joinDelay:60+Math.floor(arrivalRandom(random)*61),raidDelay:Math.round((1800+Math.floor(arrivalRandom(random)*601))/250)*25,status:'offered',...background};

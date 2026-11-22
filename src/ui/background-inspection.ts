@@ -1,5 +1,5 @@
 import {
-  ADULTHOODS, CHILDHOODS, BACKGROUND_SKILL_IDS, BACKGROUND_WORK_LABELS,
+  adulthoodDefinition, childhoodDefinition, BACKGROUND_SKILL_IDS, BACKGROUND_WORK_LABELS,
   backgroundSkillRefusal, backgroundWorkRefusal, violentWorkRefusal,
   type BackgroundBearer, type BackgroundDefinition, type BackgroundSkillId,
 } from '../sim/colonist-backgrounds.ts';
@@ -18,23 +18,30 @@ const tagLabels = {
   'manual-dumb':'Travail manuel simple', 'manual-skilled':'Travail manuel qualifié', caring:'Soins aux autres',
   social:'Travail social', intellectual:'Recherche', 'plant-work':'Travail des plantes', artistic:'Art',
   animals:'Dressage', hunting:'Chasse', violent:'Violence', firefighting:'Lutte contre les incendies',
+  // Schema 370: the other Core work tags.
+  commoner:'Travail ordinaire', crafting:'Artisanat', cooking:'Cuisine', cleaning:'Nettoyage', hauling:'Transport',
+  mining:'Minage', constructing:'Construction', shooting:'Tir', 'all-work':'Tout travail',
 } as const;
+/** Schema 370: a Core story's French title follows the person's sex (Core TitleFor). */
+export const storyTitle=(story:BackgroundDefinition,sex?:'male'|'female'):string=>
+  sex==='female'&&'labelFemale' in story&&typeof story.labelFemale==='string'?story.labelFemale:story.label;
 export interface BackgroundInspectionRow { phase:string; label:string; tooltip:TooltipContent }
 export interface BackgroundRestrictionRow { label:string; reason:string }
 
-function storyRow(phase:string, story:BackgroundDefinition):BackgroundInspectionRow {
+function storyRow(phase:string, story:BackgroundDefinition, sex?:'male'|'female'):BackgroundInspectionRow {
   const gains=BACKGROUND_SKILL_IDS.filter(skill=>story.gains[skill]!==undefined)
     .map(skill=>`${BACKGROUND_SKILL_LABELS[skill]} +${story.gains[skill]}`).join(' · ');
-  return {phase,label:story.label,tooltip:{title:`${phase} : ${story.label}`,body:story.description,
+  const label=storyTitle(story,sex);
+  return {phase,label,tooltip:{title:`${phase} : ${label}`,body:story.description,
     rows:[{label:'Gains à la création',value:gains||'Aucun'},
       {label:'Application',value:'Déjà intégrés au profil initial ; niveaux plafonnés à 20. Aucun gain au chargement.'},
       {label:'Interdictions',value:story.disables.map(tag=>tagLabels[tag]).join(' · ')||'Aucune'}]}};
 }
 /** Projection of recorded identifiers only: old people never acquire a story. */
-export function backgroundInspectionRows(pawn:BackgroundBearer):readonly BackgroundInspectionRow[] {
-  const background=pawn.background;
-  return background?[storyRow('Enfance',CHILDHOODS[background.childhood]),
-    ...(background.adulthood?[storyRow('Adulte',ADULTHOODS[background.adulthood])]:[])]:[];
+export function backgroundInspectionRows(pawn:BackgroundBearer&{appearance?:{sex:'male'|'female'}}):readonly BackgroundInspectionRow[] {
+  const background=pawn.background,sex=pawn.appearance?.sex;
+  return background?[storyRow('Enfance',childhoodDefinition(background.childhood),sex),
+    ...(background.adulthood?[storyRow('Adulte',adulthoodDefinition(background.adulthood),sex)]:[])]:[];
 }
 export function backgroundRestrictionRows(pawn:BackgroundBearer):readonly BackgroundRestrictionRow[] {
   const rows:BackgroundRestrictionRow[]=[];

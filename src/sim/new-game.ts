@@ -32,7 +32,9 @@ import { enableRaids } from './raids.ts';
 import { AIR_CONDITIONING_COST,CLOTHING_RESEARCH_COST,COMPLEX_FURNITURE_RESEARCH_COST,STONECUTTING_RESEARCH_COST } from './research.ts';
 import { DEFAULT_SCENARIO,isScenarioId,SCENARIOS,SCENARIO_REVISION,type ScenarioId } from './scenario-definitions.ts';
 import { startingPawn } from './starting-pawns.ts';
-import { materializeStartingCandidate,previewStartingParty,validStartingParty,type StartingParty } from './starting-candidates.ts';
+import { materializeStartingCandidate,previewStartingCandidate,previewStartingParty,validStartingParty,type StartingParty } from './starting-candidates.ts';
+import { isBackstories370 } from './core-backstory-draw-370.ts';
+import { startingPossessions370 } from './starting-possessions-370.ts';
 import { initializeCampBackgrounds } from './background-generation.ts';
 import { initializeCampRelationships } from './relationship-generation.ts';
 import { replaceRelationshipLinks } from './relationship-runtime.ts';
@@ -86,7 +88,11 @@ function landingSite(world:World,stacks=GROUND_STACKS):{landing:Cell;cells:Cell[
 function survivalStart(world:World,commerce=false,party?:StartingParty):{landing:Cell;pawnIds:number[];transportedPileIds:number[]} {
   const firstPile=world.piles.length,pawnIds:number[]=[];
   const supplies:readonly (readonly [ItemId,number])[]=commerce?[...SUPPLIES,['silver',800],['bolt-action-rifle',1],['plasteel-knife',1]]:SUPPLIES;
-  const stacks=supplies.reduce((n,[item,q])=>n+Math.ceil(q/ITEM_DEFINITIONS[item].stackLimit),0);
+  // Schema 370: the chosen colonists' Core possessions (starting-possessions-370.ts).
+  // Core puts them in the drop pods; here they lie with the stock left near the
+  // landing (like the wood and steel), so the capsule dotation is unchanged.
+  const possessions=party&&isBackstories370(world.schemaVersion)?party.selected.flatMap(d=>startingPossessions370(party.seed,d,previewStartingCandidate(party.seed,d,world.schemaVersion))):[];
+  const stacks=supplies.reduce((n,[item,q])=>n+Math.ceil(q/ITEM_DEFINITIONS[item].stackLimit),0)+possessions.reduce((n,p)=>n+Math.ceil(p.quantity/ITEM_DEFINITIONS[p.item].stackLimit),0);
   const {landing,cells}=landingSite(world,stacks);
   for(const [index,name] of ['Ada','Noé','Mina'].entries()) {
     const cell=cells[index]!,pawn=party?materializeStartingCandidate(party.seed,party.selected[index]!,world.nextId++,cell.x,cell.z,world.schemaVersion):startingPawn(world.nextId++,name,cell.x,cell.z,index,55,world.seed,0,world.schemaVersion);
@@ -104,8 +110,10 @@ function survivalStart(world:World,commerce=false,party?:StartingParty):{landing
       remaining-=moved;
     }
   }
+  const possessionPiles=world.piles.length;
+  for(const {item,quantity} of possessions)addMaterial(world,ITEM_DEFINITIONS[item].kind,quantity,{type:'ground',...cells[cursor++]!},item);
   world.research={project:null,points:CLOTHING_RESEARCH_COST,completedAt:0,airConditioning:{points:AIR_CONDITIONING_COST,completedAt:0}};
-  return {landing,pawnIds,transportedPileIds:world.piles.slice(firstPile).filter(p=>p.item!=='wood'&&p.item!=='steel').map(p=>p.id)};
+  return {landing,pawnIds,transportedPileIds:world.piles.slice(firstPile,possessionPiles).filter(p=>p.item!=='wood'&&p.item!=='steel').map(p=>p.id)};
 }
 
 /** The only application factory. Loading an existing save must not call this

@@ -14,7 +14,10 @@ import {BIOME_LABELS,HILLINESS_LABELS} from '../sim/site';
 import {STONE_LABELS} from '../sim/geology';
 import { createStartingCandidateRoster, previewStartingCandidate, previewStartingParty, rerollStartingCandidateForRoster, validStartingCandidateName, startingPartyMissingWork, type StartingCandidateDescriptor } from '../sim/starting-candidates';
 import { startingOriginalRequestFromRoster256 } from '../sim/starting-original-request-256';
-import { BACKGROUND_SKILL_IDS, BACKGROUND_WORK_LABELS, CHILDHOODS, ADULTHOODS, backgroundSkillRefusal, backgroundWorkRefusal, violentWorkRefusal } from '../sim/colonist-backgrounds';
+import { BACKGROUND_SKILL_IDS, BACKGROUND_WORK_LABELS, childhoodDefinition, adulthoodDefinition, backgroundSkillRefusal, backgroundWorkRefusal, violentWorkRefusal } from '../sim/colonist-backgrounds';
+import { storyTitle } from '../ui/background-inspection';
+import { startingPossessions370 } from '../sim/starting-possessions-370';
+import { ITEM_DEFINITIONS } from '../sim/items';
 import { biologicalYears, chronologicalYears } from '../sim/human-age';
 import { captureRelationshipIndex, relationshipKinds } from '../sim/relationship-state';
 import { TRAITS } from '../sim/traits';
@@ -473,7 +476,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     const rows: NativeRow[]=[{id:'party-help',region:'navigation',presentation:'plain',compact:true,label:'Choisir trois personnes',value:'Les trois premiers partent.',hint:'Sélectionnez un candidat dans la liste puis choisissez sa place dans le dossier. Monter et descendre conservent les huit profils et leur ordre relatif.'}];
     for(const [index,descriptor] of roster.entries()){
       if(index===0||index===3)rows.push({id:index===0?'party-selected-heading':'party-reserve-heading',region:'catalogue',presentation:'plain',compact:true,emphasis:'heading',label:index===0?'Au départ':'Laissés sur place'});
-      const pawn=profiles[index]!,story=pawn.background?(pawn.background.adulthood?ADULTHOODS[pawn.background.adulthood].label:CHILDHOODS[pawn.background.childhood].label):'Passé non renseigné';
+      const pawn=profiles[index]!,story=pawn.background?storyTitle(pawn.background.adulthood?adulthoodDefinition(pawn.background.adulthood):childhoodDefinition(pawn.background.childhood),pawn.appearance?.sex):'Passé non renseigné';
       rows.push({id:`candidate-${descriptor.serial}`,region:'catalogue',label:'',compact:true,controlStyle:'button',controls:[{
         ...control(`inspect-${descriptor.serial}`,pawn.name,()=>{if(live(descriptor.serial,descriptor.generation))inspected=descriptor.serial;},false,inspected===descriptor.serial),
         hint:[pawn.name,index<3?'Au départ':'Laissé sur place',story,pawn.age?`${biologicalYears(pawn.age)} ans biologiques · ${chronologicalYears(pawn.age)} ans chronologiques`:'Âge non renseigné'].join('\n'),
@@ -505,9 +508,12 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       rows.push(details({id:'candidate-clothing',label:'Tenue du portrait',controls:[control('candidate-clothing',showCandidateClothes?'Masquer les vêtements':'Montrer les vêtements',()=>{if(current())showCandidateClothes=!showCandidateClothes;},false,showCandidateClothes)]}));
       rows.push(heading('candidate-story-heading','Histoire'));
       if(pawn.background){
-        const childhood=CHILDHOODS[pawn.background.childhood];rows.push(details({id:'childhood',label:'Enfance',value:childhood.label,hint:childhood.description}));
-        if(pawn.background.adulthood){const adulthood=ADULTHOODS[pawn.background.adulthood];rows.push(details({id:'adulthood',label:'Adulte',value:adulthood.label,hint:adulthood.description}));}
+        const childhood=childhoodDefinition(pawn.background.childhood);rows.push(details({id:'childhood',label:'Enfance',value:storyTitle(childhood,pawn.appearance?.sex),hint:childhood.description}));
+        if(pawn.background.adulthood){const adulthood=adulthoodDefinition(pawn.background.adulthood);rows.push(details({id:'adulthood',label:'Adulte',value:storyTitle(adulthood,pawn.appearance?.sex),hint:adulthood.description}));}
       }else rows.push(details({id:'candidate-story-none',label:'Passé non renseigné'}));
+      // Schema 370: Core's starting possessions of this person (adulthood story, 25 %).
+      const possessions=startingPossessions370(teamSeed,descriptor,pawn);
+      if(possessions.length){rows.push(heading('candidate-possessions','Possessions'));for(const own of possessions)rows.push(details({id:`candidate-possession-${own.item}`,label:ITEM_DEFINITIONS[own.item].label,value:`× ${own.quantity}`,hint:'Apportée par cette personne : déposée près du point d’arrivée avec les réserves.'}));}
       rows.push(heading('candidate-traits','Traits'));
       for(const id of pawn.traits??[])rows.push(details({id:`candidate-trait-${id}`,label:TRAITS[id].label,hint:TRAITS[id].description}));
       if(!pawn.traits?.length)rows.push(details({id:'candidate-traits-none',label:'Aucun trait'}));

@@ -5,6 +5,7 @@ import type { SkillRecord } from './skills.ts';
 import type { Pawn } from './types.ts';
 import { traitForcedPassions362 } from './trait-links-362.ts';
 import { bornWimpRecord362 } from './wimp-record-362.ts';
+import { coreBackstoryDisallows370,coreBackstoryForcedTraits370 } from './core-backstory-traits-370.ts';
 
 /** Schema 361: Core PawnGenerator.GenerateTraits for a newly born human,
  * with no pawn-kind or backstory forced/disallowed traits (Elsewhere's own
@@ -67,13 +68,17 @@ function drawOne(birth:TraitBirth361,held:readonly TraitId[],slot:number):TraitI
     if(birth.background&&def==='TorturedArtist'&&backgroundSkillRefusal({background:birth.background},'artistic')!==undefined)continue;
     const degrees=degreesAt(def,schema);
     const id=degrees[Math.min(degrees.length-1,Math.floor(birth.draw(SALT_DEGREE+slot*0x800+attempt)*degrees.length))]!;
+    // Schema 370: a degree a Core backstory disallows (none below 370).
+    if(coreBackstoryDisallows370(birth.background,id))continue;
     if(BREAK_BASE+TRAITS[id].breakOffset>MAX_BREAK_THRESHOLD)continue;
     return id;
   }
   return undefined;
 }
 export function drawCoreTraits361(birth:TraitBirth361):TraitId[] {
-  const traits:TraitId[]=[];
+  // Schema 370: a Core backstory's forced traits come first and count toward
+  // the total (none below 370: only Core stories force traits).
+  const traits:TraitId[]=coreBackstoryForcedTraits370(birth.background,birth.schema??361);
   const count=1+Math.min(2,Math.floor(birth.draw(SALT_COUNT)*3));
   const moments=GROWTH_MOMENT_AGES.filter(age=>age<=Math.floor(birth.ageYears)).length;
   for(let slot=0;slot<moments&&traits.length<count;slot++){const id=drawOne(birth,traits,slot);if(id)traits.push(id);}

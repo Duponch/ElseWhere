@@ -1,8 +1,11 @@
 import { TICKS_PER_DAY, type Pawn, type WorkType } from './types.ts';
 import type { HumanAge } from './human-age.ts';
 import { TRAITS,traitDisablingWorkTag } from './traits.ts';
+import { CORE_BACKSTORIES_370,CORE_SKILL_EXTRA_TAGS_370,CORE_WORK_TYPE_TAGS_370,isCoreBackstoryId370,type CoreBackstoryId370 } from './core-backstories-370.ts';
 
-export type BackgroundWorkTag = 'manual-dumb' | 'manual-skilled' | 'caring' | 'social' | 'intellectual' | 'plant-work' | 'artistic' | 'animals' | 'hunting' | 'violent' | 'firefighting';
+export type BackgroundWorkTag = 'manual-dumb' | 'manual-skilled' | 'caring' | 'social' | 'intellectual' | 'plant-work' | 'artistic' | 'animals' | 'hunting' | 'violent' | 'firefighting'
+  /** Schema 370: the other Core WorkTags, only ever disabled by a Core backstory. */
+  | 'commoner' | 'crafting' | 'cooking' | 'cleaning' | 'hauling' | 'mining' | 'constructing' | 'shooting' | 'all-work';
 export const BACKGROUND_SKILL_IDS = ['shooting','melee','construction','mining','cooking','plants','animals','crafting','artistic','medicine','social','intellectual'] as const;
 export type BackgroundSkillId = typeof BACKGROUND_SKILL_IDS[number];
 export const BACKGROUND_ADULT_MIN_TICKS = 20 * 60 * TICKS_PER_DAY;
@@ -36,8 +39,13 @@ export const ADULTHOODS = Object.freeze({
   merchant:define('Négociant','A vécu du commerce et de la négociation, sans apprendre les métiers manuels qualifiés.',{social:5},['manual-skilled']),
   hermit:define('Éleveur solitaire','A vécu loin des centres habités, avec ses cultures et ses animaux. Refuse les tâches de négociation et de gestion des prisonniers.',{plants:3,animals:3},['social']),
 });
-export type ChildhoodId = keyof typeof CHILDHOODS;
-export type AdulthoodId = keyof typeof ADULTHOODS;
+export type ElsewhereChildhoodId = keyof typeof CHILDHOODS;
+export type ElsewhereAdulthoodId = keyof typeof ADULTHOODS;
+/** Schema 370 adds Core's backstories (core-backstories-370.ts), keyed by defName. */
+export type ChildhoodId = ElsewhereChildhoodId | CoreBackstoryId370;
+export type AdulthoodId = ElsewhereAdulthoodId | CoreBackstoryId370;
+export const childhoodDefinition=(id:ChildhoodId):BackgroundDefinition=>isCoreBackstoryId370(id)?CORE_BACKSTORIES_370[id]:CHILDHOODS[id];
+export const adulthoodDefinition=(id:AdulthoodId):BackgroundDefinition=>isCoreBackstoryId370(id)?CORE_BACKSTORIES_370[id]:ADULTHOODS[id];
 export interface ColonistBackground { childhood:ChildhoodId; adulthood?:AdulthoodId }
 /** Schema 368: the traits are read with the background (Core
  * CombinedDisabledWorkTags reads backstories and traits alike). */
@@ -46,16 +54,17 @@ export const BACKGROUND_WORK_LABELS:Readonly<Record<WorkType,string>>=Object.fre
 const WORK_TAGS:Readonly<Record<WorkType,readonly BackgroundWorkTag[]>>={
   handle:['animals'],art:['artistic'],clean:['manual-dumb'],firefight:['firefighting'],warden:['social'],basic:[],hunt:['hunting','violent'],research:['intellectual'],patient:[],bedrest:[],doctor:['caring'],mine:['manual-skilled'],gather:['manual-skilled','plant-work'],build:['manual-skilled'],haul:['manual-dumb'],grow:['manual-skilled','plant-work'],cook:['manual-skilled'],craft:['manual-skilled'],smith:['manual-skilled'],tailor:['manual-skilled'],
 };
+const CORE_EXTRA_WORK_TAGS=Object.fromEntries((Object.keys(WORK_TAGS) as WorkType[]).map(work=>[work,CORE_WORK_TYPE_TAGS_370[work].filter(tag=>!WORK_TAGS[work].includes(tag))])) as unknown as Readonly<Record<WorkType,readonly BackgroundWorkTag[]>>;
 const SKILL_TAGS:Readonly<Record<BackgroundSkillId,readonly BackgroundWorkTag[]>>={shooting:['violent'],melee:['violent'],construction:['manual-skilled'],mining:['manual-skilled'],cooking:['manual-skilled'],plants:['manual-skilled','plant-work'],animals:['animals'],crafting:['manual-skilled'],artistic:['artistic'],medicine:['caring'],social:['social'],intellectual:['intellectual']};
 
 export function backgroundDefinitions(pawn:BackgroundBearer):readonly BackgroundDefinition[] {
   const b=pawn.background;
-  return b?[CHILDHOODS[b.childhood],...(b.adulthood?[ADULTHOODS[b.adulthood]]:[])]:[];
+  return b?[childhoodDefinition(b.childhood),...(b.adulthood?[adulthoodDefinition(b.adulthood)]:[])]:[];
 }
 export function backgroundTagRefusal(pawn:BackgroundBearer,tag:BackgroundWorkTag):string|undefined {
   const b=pawn.background;
   if(b){
-    const childhood=CHILDHOODS[b.childhood],adulthood=b.adulthood?ADULTHOODS[b.adulthood]:undefined;
+    const childhood=childhoodDefinition(b.childhood),adulthood=b.adulthood?adulthoodDefinition(b.adulthood):undefined;
     const cause=childhood.disables.includes(tag)?childhood:adulthood?.disables.includes(tag)?adulthood:undefined;
     if(cause)return `Incapacité liée au passé : ${cause.label}.`;
   }
@@ -66,6 +75,8 @@ export function backgroundTagRefusal(pawn:BackgroundBearer,tag:BackgroundWorkTag
 export function backgroundWorkRefusal(pawn:BackgroundBearer,work:WorkType):string|undefined {
   if(!pawn.background&&!pawn.traits)return undefined;
   for(const tag of WORK_TAGS[work]){const reason=backgroundTagRefusal(pawn,tag);if(reason)return `${BACKGROUND_WORK_LABELS[work]} impossible. ${reason}`;}
+  // Schema 370: the rest of Core's tags of this work type (a Core story only).
+  if(isCoreBackstoryId370(pawn.background?.childhood))for(const tag of CORE_EXTRA_WORK_TAGS[work]){const reason=backgroundTagRefusal(pawn,tag);if(reason)return `${BACKGROUND_WORK_LABELS[work]} impossible. ${reason}`;}
   return undefined;
 }
 export const violentWorkRefusal=(pawn:BackgroundBearer):string|undefined=>backgroundTagRefusal(pawn,'violent');
@@ -75,6 +86,7 @@ export function backgroundSkillRefusal(pawn:BackgroundBearer,skill:BackgroundSki
   // allowed work type keeps the skill usable even if Handling is forbidden.
   if(skill==='animals'&&(!backgroundWorkRefusal(pawn,'handle')||!backgroundWorkRefusal(pawn,'hunt')))return undefined;
   for(const tag of SKILL_TAGS[skill]){const reason=backgroundTagRefusal(pawn,tag);if(reason)return reason;}
+  if(isCoreBackstoryId370(pawn.background?.childhood))for(const tag of CORE_SKILL_EXTRA_TAGS_370[skill]??[]){const reason=backgroundTagRefusal(pawn,tag);if(reason)return reason;}
   return undefined;
 }
 export function backgroundGains(background:ColonistBackground):Readonly<Partial<Record<BackgroundSkillId,number>>> {
@@ -88,8 +100,19 @@ export function validBackground(value:unknown,version:number,age?:HumanAge):bool
   if(value===undefined)return true;
   if(version<191||!value||typeof value!=='object'||Array.isArray(value)||!age)return false;
   const b=value as Record<string,unknown>;
-  if(!Object.hasOwn(b,'childhood')||Object.keys(b).some(k=>k!=='childhood'&&k!=='adulthood')||typeof b.childhood!=='string'||!Object.hasOwn(CHILDHOODS,b.childhood))return false;
+  if(!Object.hasOwn(b,'childhood')||Object.keys(b).some(k=>k!=='childhood'&&k!=='adulthood')||typeof b.childhood!=='string')return false;
+  if(isCoreBackstoryId370(b.childhood))return validCoreBackground370(b,version,age);
+  if(!Object.hasOwn(CHILDHOODS,b.childhood))return false;
   if(Object.hasOwn(b,'adulthood')&&(typeof b.adulthood!=='string'||!Object.hasOwn(ADULTHOODS,b.adulthood)||age!==undefined&&(!age||!Number.isSafeInteger(age.biologicalTicks)||age.biologicalTicks<BACKGROUND_ADULT_MIN_TICKS)))return false;
-  if(typeof b.adulthood==='string'&&ADULTHOODS[b.adulthood as AdulthoodId].requires.some(tag=>CHILDHOODS[b.childhood as ChildhoodId].disables.includes(tag)))return false;
+  if(typeof b.adulthood==='string'&&ADULTHOODS[b.adulthood as ElsewhereAdulthoodId].requires.some(tag=>CHILDHOODS[b.childhood as ElsewhereChildhoodId].disables.includes(tag)))return false;
   return true;
+}
+/** Schema 370: a Core childhood (Childhood slot) and, from twenty years, a
+ * Core adulthood (Adulthood slot); the two catalogues never mix. Core's own
+ * pairing rule is a draw rule, not a pawn invariant (its fallback and fixed
+ * kind stories may break it), so it is not required of a record. */
+function validCoreBackground370(b:Record<string,unknown>,version:number,age:HumanAge):boolean {
+  if(version<370||!isCoreBackstoryId370(b.childhood)||CORE_BACKSTORIES_370[b.childhood].slot!=='childhood')return false;
+  if(!Object.hasOwn(b,'adulthood'))return true;
+  return isCoreBackstoryId370(b.adulthood)&&CORE_BACKSTORIES_370[b.adulthood].slot==='adulthood'&&Number.isSafeInteger(age.biologicalTicks)&&age.biologicalTicks>=BACKGROUND_ADULT_MIN_TICKS;
 }

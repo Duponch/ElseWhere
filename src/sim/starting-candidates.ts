@@ -1,6 +1,7 @@
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {constructHumanConditionMind256} from './human-condition-mind-256.ts';
 import { assignBackground,generateBackground } from './background-generation.ts';
+import { FACTION_BACKSTORY_FILTERS_370,backstoryStream370,drawCoreBackground370,isBackstories370 } from './core-backstory-draw-370.ts';
 import { BACKGROUND_SKILL_IDS,backgroundSkillRefusal,backgroundWorkRefusal,violentWorkRefusal } from './colonist-backgrounds.ts';
 import { HUMAN_YEAR_TICKS,crashlandedHumanAge } from './human-age.ts';
 import { generateStartingCandidateRelationships } from './relationship-generation.ts';
@@ -146,7 +147,10 @@ export function previewStartingCandidate(seed:number,descriptor:StartingCandidat
     skills[skill]={level:Math.floor(draw(0x333510+index)*5),xp:0,dailyXp:0,passion:0};
   });
   pawn.skills=skills;
-  assignBackground(pawn,generateBackground(birthSeed,identity,pawn.age));
+  // Schema 370: Core's draw for a Colonist of the player colony (Offworld);
+  // the tutorial's violence rule is the whole-candidate retry of admitted().
+  assignBackground(pawn,isBackstories370(version)?drawCoreBackground370(backstoryStream370(birthSeed,identity),pawn.age.biologicalTicks,FACTION_BACKSTORY_FILTERS_370.PlayerColony!)
+    :generateBackground(birthSeed,identity,pawn.age));
   // Schema 361: Core order, traits before skills and passions (their skill
   // gains change the levels the passion ranking reads; Brawler forbids a
   // shooting passion). New salts only; every pre-361 draw is unchanged.

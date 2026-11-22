@@ -3,7 +3,7 @@ import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259} from './world-affiliation-259.ts';
 import { arrivalTraits,isTraitsSchema361 } from './traits.ts';
 import { bornTraitEffects361,offeredTraits361 } from './trait-generation-361.ts';
-import { offeredBackground,assignOfferedBackground } from './background-generation.ts';
+import { offeredBornBackground,assignOfferedBackground } from './background-generation.ts';
 import { relationshipOfferCandidates,chooseOfferedRelationship,prepareRelationshipAdmission } from './relationship-generation.ts';
 import { ARRIVAL_NAMES,arrivalRandom,type ArrivalCommand } from './arrival-state.ts';
 import { arrivalEntry } from './arrival-entry.ts';
@@ -30,7 +30,8 @@ export function advanceArrivals(world:World):void {
     ||!Number.isSafeInteger(s.serial+1)||!Number.isSafeInteger(world.tick+TICKS_PER_DAY)){
     s.nextCheck=nextCheck;s.rng=random.rng;return;
   }
-  const id=s.serial+1,background=world.schemaVersion>=191?offeredBackground(world.seed^0x210a771,id):undefined;
+  // Schema 370: Core's wanderer is a Villager without a faction.
+  const id=s.serial+1,background=world.schemaVersion>=191?offeredBornBackground(world,world.seed^0x210a771,id,{kind:'Villager',faction:'random'}):undefined;
   const plans=background?relationshipOfferCandidates(world,background.age):[];
   const profile=Math.floor(arrivalRandom(random)*3) as 0|1|2;
   const name=ARRIVAL_NAMES[Math.floor(arrivalRandom(random)*ARRIVAL_NAMES.length)]!;

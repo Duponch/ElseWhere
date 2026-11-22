@@ -1,4 +1,5 @@
-import { ADULTHOODS, BACKGROUND_ADULT_MIN_TICKS, BACKGROUND_SKILL_IDS, CHILDHOODS, backgroundGains, type ColonistBackground, type ChildhoodId, type AdulthoodId } from './colonist-backgrounds.ts';
+import { ADULTHOODS, BACKGROUND_ADULT_MIN_TICKS, BACKGROUND_SKILL_IDS, CHILDHOODS, backgroundGains, type ColonistBackground, type ElsewhereChildhoodId as ChildhoodId, type ElsewhereAdulthoodId as AdulthoodId } from './colonist-backgrounds.ts';
+import { CORE_KIND_BACKSTORY_370,applyCoreBackstoryBody370,backstoryFiltersFor370,backstoryStream370,birthFactionDef370,drawAdmittedCoreBackground370,isBackstories370,pawnFactionDef370,type CoreBirth370 } from './core-backstory-draw-370.ts';
 import { initialHumanAge, initialHumanAilments, type HumanAge } from './human-age.ts';
 import { createMedicalRecord } from './injury-state.ts';
 import { startingSkills, type PawnSkills } from './skills.ts';
@@ -36,10 +37,24 @@ export const previewBackgroundSkills=(profile:number,background:ColonistBackgrou
 export function assignBackground(pawn:Pawn,background:ColonistBackground):void {
   if(pawn.background!==undefined)return;
   pawn.background={...background};pawn.skills=skillsWithBackground(pawn.skills,background);
+  // Schema 370 (only a Core adulthood exists there): its body type.
+  applyCoreBackstoryBody370(pawn);
 }
 export function generatePawnBackground(pawn:Pawn,seed:number,fighter=false,negotiator=false):void {
   if(!pawn.age||pawn.background!==undefined)return;
   assignBackground(pawn,generateBackground(seed,pawn.id,pawn.age,fighter,negotiator));
+}
+/** A newborn NPC's background. From schema 370, Core's backstory draw
+ * (core-backstory-draw-370.ts) for the person's kind and faction (its bound
+ * world faction unless `core.faction` says otherwise), retried for violence
+ * (`core.violent`, else `fighter`) and the kind's required work tags; Core
+ * has no negotiator rule. Below 370, the historical Elsewhere draw. */
+export function generateBornBackground(w:{readonly schemaVersion:number;readonly worldFactions?:World['worldFactions']},pawn:Pawn,seed:number,fighter=false,negotiator=false,core:CoreBirth370={}):void {
+  if(!isBackstories370(w.schemaVersion)){generatePawnBackground(pawn,seed,fighter,negotiator);return;}
+  if(!pawn.age||pawn.background!==undefined)return;
+  const draw=backstoryStream370(seed,pawn.id),faction=birthFactionDef370(w,draw,core.faction,pawnFactionDef370(w,pawn)??core.fallbackFaction);
+  const kind=core.kind!==undefined&&Object.hasOwn(CORE_KIND_BACKSTORY_370,core.kind)?CORE_KIND_BACKSTORY_370[core.kind]:undefined;
+  assignBackground(pawn,drawAdmittedCoreBackground370(draw,pawn.age.biologicalTicks,backstoryFiltersFor370(core.kind,faction),{violent:core.violent??fighter,...kind?.requiredWorkTags?{requiredWorkTags:kind.requiredWorkTags}:{}}));
 }
 /** The three authored starters cover the physical economy and at least two
  * defenders. Their established traits/passions remain a scenario adaptation. */
@@ -57,6 +72,16 @@ export interface OfferedBackground {age?:HumanAge;background?:ColonistBackground
 export function offeredBackground(seed:number,identity:number):Required<OfferedBackground> {
   const age=initialHumanAge(seed,identity);
   return {age,background:generateBackground(seed,identity,age)};
+}
+/** Schema 370: the offer's Core backstories, drawn on the same identity (the
+ * same age as before). An offered joiner's faction is not the player's: its
+ * bio reads a random non-colony humanlike faction, as PawnGenerator does for
+ * a request without one. Below 370, `offeredBackground`. */
+export function offeredBornBackground(w:{readonly schemaVersion:number;readonly worldFactions?:World['worldFactions']},seed:number,identity:number,core:CoreBirth370):Required<OfferedBackground> {
+  if(!isBackstories370(w.schemaVersion))return offeredBackground(seed,identity);
+  const age=initialHumanAge(seed,identity),draw=backstoryStream370(seed,identity),faction=birthFactionDef370(w,draw,core.faction,undefined);
+  const kind=core.kind!==undefined&&Object.hasOwn(CORE_KIND_BACKSTORY_370,core.kind)?CORE_KIND_BACKSTORY_370[core.kind]:undefined;
+  return {age,background:drawAdmittedCoreBackground370(draw,age.biologicalTicks,backstoryFiltersFor370(core.kind,faction),{violent:core.violent??false,...kind?.requiredWorkTags?{requiredWorkTags:kind.requiredWorkTags}:{}})};
 }
 export function assignOfferedBackground(pawn:Pawn,offer:OfferedBackground,seed:number,currentTick:number):void {
   if(pawn.background!==undefined||!offer.background||!offer.age)return;

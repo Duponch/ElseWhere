@@ -29,7 +29,7 @@ import { freshRot } from './food-preservation.ts';
 import { carrierOf } from './rescue-state.ts';
 import { reservedServiceCells } from './service-reservations.ts';
 import { startingPawn } from './starting-pawns.ts';
-import { generatePawnBackground } from './background-generation.ts';
+import { generateBornBackground } from './background-generation.ts';
 import { generateExoticStock,generateVisitorStock } from './trade-stock.ts';
 import { visitorArrival,visitorAtEdge,visitorExit } from './visitor-navigation.ts';
 import { PLAN_INTERVAL } from './work-planner.ts';
@@ -117,7 +117,8 @@ function arrive(w:World,kind:VisitorKind,intro=false,exotic=false):boolean {
     p.faction='outlanders';if((Number(w.schemaVersion)===259||Number(w.schemaVersion)===260||(Number(w.schemaVersion)===261||(Number(w.schemaVersion)===262||isSchema263OrLater(Number(w.schemaVersion)))))&&w.worldFactions&&!bindBornHumanFaction259(w,p,factionId!))return false;p.foodPolicyId=w.foodPolicies[0]!.id;
     delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;
     for(const value of Object.values(p.skills))if(typeof value==='object'){value.level=0;value.passion=0;}
-    if(w.schemaVersion>=191)generatePawnBackground(p,w.seed,profiles[i]==='Garde',i===merchant);
+    // Schema 370: a Peaceful group (PawnGroupKindWorker_Normal) requires violence.
+    if(w.schemaVersion>=191)generateBornBackground(w,p,w.seed,profiles[i]==='Garde',i===merchant,{violent:!(exotic&&i===merchant),fallbackFaction:'OutlanderCivil'});
     giveBornTraits361(w,p);
     for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;
     p.visitor={group:id,role:kind==='traveler'?'traveler':i===merchant?'trader':'visitor',...exotic&&i===merchant?{merchantKind:'exotic' as const}:{},phase:'arriving',goal:{...arrival.parking[i]!},personalFoodIds:[]};
@@ -205,7 +206,8 @@ export function arriveTraderCaravan332(w:World):boolean {
     p.faction='outlanders';if(w.worldFactions&&(source.factionId===null||!bindBornHumanFaction259(w,p,source.factionId)))return false;p.foodPolicyId=w.foodPolicies[0]!.id;
     delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;
     for(const value of Object.values(p.skills))if(typeof value==='object'){value.level=0;value.passion=0;}
-    generatePawnBackground(p,w.seed,!!guard,!guard);giveBornTraits361(w,p);
+    // Schema 370: a Trader group: the guards need violence, the trader's kind its own filters.
+    generateBornBackground(w,p,w.seed,!!guard,!guard,{kind:guard?CARAVAN_GUARDS_332[guard].core:trader.core});giveBornTraits361(w,p);
     for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;
     p.visitor={group:id,role:guard?'visitor':'trader',phase:'arriving',goal:{...arrival.parking[i]!},personalFoodIds:[]};
     piles.push({id:nextId++,kind:'apparel',item:apparel,quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState(apparel,undefined,w.schemaVersion)});

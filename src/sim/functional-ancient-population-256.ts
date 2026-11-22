@@ -6,7 +6,7 @@ import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259} from './world-affiliation-259.ts';
 import type {WorldFactionRegistry256} from './world-faction-state.ts';
 import {startingPawn} from './starting-pawns.ts';
-import {generatePawnBackground} from './background-generation.ts';
+import {generateBornBackground} from './background-generation.ts';
 import {newApparelState} from './apparel-rules.ts';
 import {markCorpseWornApparel284} from './apparel-provenance-284.ts';
 import {newWeaponState} from './equipment-rules.ts';
@@ -56,7 +56,7 @@ export function prepareFunctionalAncientHuman256(input:{id:number;nextId:number;
  // Prospective creation only. The caller supplies its actual instance; the
  // old display alias is never converted into authority on an existing Pawn.
  if(input.birth259){const b=input.birth259,expected=kind==='ancient-hostile'?'AncientsHostile':'Ancients',instance=b.factions.factions.find(f=>f.id===b.factionId);if(!instance||instance.def!==expected||!bindBornHumanFaction259({schemaVersion:259,worldFactions:b.factions},p,b.factionId))throw Error('Actual ancient birth faction instance refused');}
- generatePawnBackground(p,seed,!slave);
+ generateBornBackground({schemaVersion:input.version??256,worldFactions:input.birth259?.factions},p,seed,!slave,false,{kind:slave?'Slave':'AncientSoldier',fallbackFaction:kind==='ancient-hostile'?'AncientsHostile':'Ancients'});
  giveBornTraits361({schemaVersion:input.version??256,seed},p,p.faction==='outlaws',seed);
  // These neutral/hostile outsiders do not acquire a colony policy/task.
  delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;

@@ -1,7 +1,7 @@
 import type {NativeControl,NativePage,NativeRow,NativeUiActions,NativeUiState} from './native-contract';
 import {TICKS_PER_DAY,type Command,type WorkType,type World} from '../sim/types';
 import type {ArrivalOffer} from '../sim/arrival-state';
-import {ADULTHOODS,CHILDHOODS,BACKGROUND_SKILL_IDS,BACKGROUND_WORK_LABELS,backgroundSkillRefusal,backgroundWorkRefusal,violentWorkRefusal,type BackgroundSkillId} from '../sim/colonist-backgrounds';
+import {adulthoodDefinition,childhoodDefinition,BACKGROUND_SKILL_IDS,BACKGROUND_WORK_LABELS,backgroundSkillRefusal,backgroundWorkRefusal,violentWorkRefusal,type BackgroundSkillId} from '../sim/colonist-backgrounds';
 import {previewBackgroundSkills} from '../sim/background-generation';
 import {startingSkills} from '../sim/skills';
 import {TRAITS} from '../sim/traits';
@@ -11,7 +11,8 @@ import {captureRelationshipPeople} from '../sim/relationship-namespace';
 type StateReader=()=>NativeUiState;
 const inFlight=new WeakSet<StateReader>();
 const skillLabels:Readonly<Record<BackgroundSkillId,string>>={shooting:'Tir',melee:'Mêlée',construction:'Construction',mining:'Minage',cooking:'Cuisine',plants:'Plantes',animals:'Animaux',crafting:'Artisanat',artistic:'Artistique',medicine:'Médecine',social:'Social',intellectual:'Intellectuel'};
-const tagLabels={ 'manual-dumb':'Travail manuel simple','manual-skilled':'Travail manuel qualifié',caring:'Soins aux autres',social:'Travail social',intellectual:'Recherche','plant-work':'Travail des plantes',artistic:'Art',animals:'Dressage',hunting:'Chasse',violent:'Violence',firefighting:'Lutte contre les incendies' } as const;
+const tagLabels={ 'manual-dumb':'Travail manuel simple','manual-skilled':'Travail manuel qualifié',caring:'Soins aux autres',social:'Travail social',intellectual:'Recherche','plant-work':'Travail des plantes',artistic:'Art',animals:'Dressage',hunting:'Chasse',violent:'Violence',firefighting:'Lutte contre les incendies',
+  commoner:'Travail ordinaire',crafting:'Artisanat',cooking:'Cuisine',cleaning:'Nettoyage',hauling:'Transport',mining:'Minage',constructing:'Construction',shooting:'Tir','all-work':'Tout travail' } as const;
 const relationshipLabels={parent:'Parent',child:'Enfant',sibling:'Fratrie'} as const;
 const statusLabels={present:'Présent',away:'En voyage',departed:'Absent',dead:'Décédé'} as const;
 const row=(id:string,label:string,value?:string,detail?:string,controls?:NativeControl[]):NativeRow=>({id,label,value,detail,controls});
@@ -40,7 +41,7 @@ function offerRows(world:World,offer:ArrivalOffer):NativeRow[]{
  for(const id of offer.traits??[])rows.push(row(`arrival-trait-${id}`,TRAITS[id].label,undefined,TRAITS[id].description));
  if(!offer.traits?.length)rows.push(row('arrival-traits-empty','Traits','Aucun trait attribué'));
  if(offer.background){
-  const stories=[{phase:'Enfance',definition:CHILDHOODS[offer.background.childhood]},...offer.background.adulthood?[{phase:'Adulte',definition:ADULTHOODS[offer.background.adulthood]}]:[]];
+  const stories=[{phase:'Enfance',definition:childhoodDefinition(offer.background.childhood)},...offer.background.adulthood?[{phase:'Adulte',definition:adulthoodDefinition(offer.background.adulthood)}]:[]];
   for(const [index,{phase,definition}]of stories.entries()){
    const gains=BACKGROUND_SKILL_IDS.filter(skill=>definition.gains[skill]!==undefined).map(skill=>`${skillLabels[skill]} +${definition.gains[skill]}`).join(' · ');
    rows.push(row(`arrival-background-${index}`,`${phase} · ${definition.label}`,undefined,definition.description),row(`arrival-background-effects-${index}`,'Effets du passé',`Gains prévus : ${gains||'Aucun'}`,`Interdictions : ${definition.disables.map(tag=>tagLabels[tag]).join(' · ')||'Aucune'}. Ces gains sont déjà inclus dans les compétences prévues ; ils ne seront pas appliqués une seconde fois.`));

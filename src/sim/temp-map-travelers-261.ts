@@ -22,7 +22,7 @@ import {isRoofed} from './roof-rules.ts';
 import {outdoorTemperature} from './temperature.ts';
 import {climateTick,siteClimateDefinition,geographicSeasonTemperature256,geographicLongitudeOffsetCore256,seasonTemperature} from './site-climate.ts';
 import {startingPawn} from './starting-pawns.ts';
-import {generatePawnBackground} from './background-generation.ts';
+import {generateBornBackground} from './background-generation.ts';
 import {newApparelState} from './apparel-rules.ts';
 import {freshRot} from './food-preservation.ts';
 import type {Cell,Pawn,MaterialPile,World} from './types.ts';
@@ -154,7 +154,7 @@ export function admitTempMapTraveler261(w:World,points:number,random:{rng:number
   p.faction='outlanders';p.worldAffiliation259={revision:1,factionId,hostFactionId:null,guestStatus:'Guest'};p.foodPolicyId=w.foodPolicies[0]!.id;
   delete p.apparelPolicyId;delete p.apparelAutomation;delete p.nextApparelCheckAt;
   for(const value of Object.values(p.skills))if(typeof value==='object'){value.level=0;value.passion=0;}
-  generatePawnBackground(p,w.seed,profiles[i]==='Garde',false);giveBornTraits361(w,p);
+  generateBornBackground(w,p,w.seed,profiles[i]==='Garde',false,{violent:true});giveBornTraits361(w,p);
   for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;
   p.visitor={group:id,role:'traveler',phase:'arriving',goal:{...spot},personalFoodIds:[]};
   piles.push({id:nextId++,kind:'apparel',item:'cloth-shirt',quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState('cloth-shirt',undefined,w.schemaVersion)});

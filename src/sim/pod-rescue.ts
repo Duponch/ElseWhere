@@ -17,7 +17,7 @@ import { isRoofed } from './roof-rules.ts';
 import { carrierOf } from './rescue-state.ts';
 import { cancelShooting } from './shooting-state.ts';
 import { startingPawn } from './starting-pawns.ts';
-import { generatePawnBackground } from './background-generation.ts';
+import { generateBornBackground } from './background-generation.ts';
 import { reconcilePodRescueJoining,selectPodRescueOrigin } from './pod-rescue-joining.ts';
 import { visitorAtEdge } from './visitor-navigation.ts';
 import { POD_RESCUE_FALL_TICKS,POD_RESCUE_OPEN_TICKS,POD_RESCUE_LIMIT,type PodRescuePending } from './pod-rescue-state.ts';
@@ -73,7 +73,9 @@ function openPod(w:World,pending:PodRescuePending):boolean {
   // Historical capsules keep their exact generation; new people retain their
   // starting skills and the ordinary background gains, whichever their origin.
   if(pending.origin===undefined)for(const skill of Object.values(p.skills))if(typeof skill==='object'){skill.level=0;skill.passion=0;}
-  if(w.schemaVersion>=191)generatePawnBackground(p,pending.seed);
+  // Schema 370: a SpaceRefugee; its bio reads its real faction, or a random
+  // non-colony humanlike one when it has none (PawnGenerator).
+  if(w.schemaVersion>=191)generateBornBackground(w,p,pending.seed,false,false,{kind:'SpaceRefugee',...pending.origin==='independent'?{}:{fallbackFaction:'OutlanderCivil'}});
   giveBornTraits361(w,p,false,pending.seed);
   for(const key of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])p.priorities[key]=0;
   p.health??=createMedicalRecord(w.tick);
