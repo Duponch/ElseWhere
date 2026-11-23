@@ -54,7 +54,16 @@ Animaux, mécanoïdes, bâtiments, plantes, objets au sol, zones, plans, chantie
 
 Chaque panneau se compose une fois par changement de la page (sélection, commande, bascule d’onglet) ; les lignes n’ont que des plans d’infobulle sans texture, les onglets utilisent le moteur de cartes du lot 2 (une carte peinte une fois, défilement par cran de molette) et les lignes de l’onglet Factures ou Stockage ne sont construites que quand l’onglet est ouvert. Aucune recherche ni allocation par image.
 
-Mesure dans le vrai client, voir plus bas.
+Mesure dans le vrai client, en alternance avant/après (Chromium sans affichage, rendu WebGL, 1440 × 900, « Les Forges » chargée, partie en pause, une chose sélectionnée et un onglet ouvert, souris qui se déplace sur le panneau ; moyenne du temps des rappels d’animation par image sur deux fenêtres de 6 s, 2 700 à 2 900 images chacune ; « avant » = `src` d’origin/main servi à côté) :
+
+| Sélection | Avant : moyenne par image | Après : moyenne par image |
+| --- | --- | --- |
+| Un animal de la colonie, onglet Santé ouvert | 1,74 / 1,70 ms puis 1,75 / 1,68 ms | 1,61 / 1,57 ms puis 1,51 / 1,46 ms |
+| Une cuisinière électrique, onglet Factures ouvert | 1,70 / 1,63 ms puis 1,69 / 1,65 ms | 1,59 / 1,48 ms puis 1,55 / 1,48 ms |
+
+Deux séries alternées (avant, après ; puis après, avant) : l’image coûte 7 à 10 % de moins avec le panneau et les cartes qu’avec l’ancien dossier, dans le bruit de la mesure ; aucun surcoût. (Deux premiers essais lancés en même temps que des tests ont été écartés.)
+
+Vu dans le client sur Les Forges : un chêne (jauge 200 / 200, lignes de croissance, vignettes Abattre, Couper, Déraciner), une lampe sur pied (50 / 50, « Allumée », « Demande 30 W », interrupteur marqué « Oui »), une cuisinière électrique (onglet Factures de 420 × 480 avec la liste « Ajouter une facture »), une zone de stockage (onglet Stockage de 300 × 480, sans jauge, vignettes Agrandir, Réduire, Supprimer), un chien de la colonie (jauges « En bonne santé » et « Sans restriction », lignes d’identité, d’activité et de maître, onglets Journal, Social, Dressage, Besoins, Santé ; Dressage à 300 de large avec ses deux apprentissages, Besoins à 225 avec Nourriture et Repos, Santé à 630 × 430 avec ses capacités) et un lièvre sauvage (onglets Journal, Social, Santé ; vignettes Chasser et Apprivoiser).
 
 ## Tests
 
