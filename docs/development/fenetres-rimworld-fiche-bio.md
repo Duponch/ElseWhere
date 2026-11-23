@@ -9,7 +9,7 @@ Vague 4, lot 1 du [chantier des retours du 22 novembre](chantier-retours-2026112
 - **Chaque onglet est une fenêtre à la taille du jeu**, posée sur les onglets depuis le bord gauche, avec sa croix de 18 en haut à droite : Bio 514 × 489, Besoins 580 × 520, Santé 630 × 430, Matériel 460 × 450, Social 540 × 510, Journal 630 × 510, Prisonnier 280 × 450. L’intérieur de Besoins, Santé, Matériel, Social et Journal reste celui d’avant (prochain lot), avec les nouvelles tailles de texte.
 - **Les commandes** (Mobiliser, Effacer les ordres, Travail, Dépouiller, Stop, Feu à volonté, Réaction hostile) sont des vignettes de 75 × 75 à droite du panneau, comme les gizmos du jeu, libellées en Petit.
 - **La fiche Bio** est celle de RimWorld, sans défilement : nom en Titre, « Homme, 37 ans (93) » avec l’âge détaillé au survol, la faction de la colonie en encadré cliquable (ouvre Factions), Enfance et Adulte avec leur histoire en encadré à x = 90, « Traits » et « Incapable de » en titres ocre avec un encadré par élément (ou « Aucun » grisé), et à droite les douze compétences en lignes de 230 × 24 au pas de 27 : nom, flamme de passion (une petite, deux grandes, peintes dans le style d’Elsewhere), barre sans fond ni cadre au dixième de remplissage par niveau et niveau en chiffre seul ; tiret grisé pour une compétence impossible. Survoler un encadré ou une compétence la surligne et donne son infobulle (histoire complète, effet du trait, cause d’une incapacité, expérience et apprentissage de la compétence).
-- **La même fiche** sert à la page des personnages de la nouvelle partie (mode création : pas de zone de nom, puisque le nom a son champ, et une pile du haut qui laisse la place du portrait).
+- **La même fiche** sert à la page des personnages de la nouvelle partie, en mode création comme dans `Page_ConfigureStartingPawns` : le champ du nom et le bouton de renouvellement (« Aléatoire » du jeu) dans la zone du nom, l’âge dans la pile du haut, qui laisse la place du portrait ; les boutons de place (Laisser sur place, ↑, ↓) et « Masquer les vêtements » passent sous la liste des candidats. La fiche entière se lit sans défilement ; santé, relations et possessions restent en dessous.
 
 ## Où sont passées les lignes de l’ancien dossier
 
@@ -55,22 +55,24 @@ Rien n’a été perdu ; chaque ligne est là où RimWorld la met :
 - **Tableaux** (Travail, Planning, Assignations, Animaux, Faune) : cellules de priorité 25 × 25, en-têtes de 50 aux étiquettes entières (les mots sont encore coupés, « Repo s »), lignes de 30, case « priorités manuelles », recherche locale à retirer.
 - **Barre des colons, alertes, lettres, heure et vitesse** (section 4 de la référence), **Architecte** (200 de large, deux colonnes de 32), **Recherche** (arbre de 140 × 50), **Quêtes et Historique** (1010 × 640), **Factions** (lignes de 80), **Menu** (450 × 390), dialogues, Options et pages de création (page de 1020 × 764).
 - **Barres de défilement** : 8 de large au lieu de 16 (les mises en page réservent 12).
+- **Clic sur une vitesse** : il masque encore le panneau d’un colon sélectionné (comportement V486 pensé pour l’ancien grand dossier) ; RimWorld le laisse ouvert. À revoir avec le lot des interactions.
+- **Résumé des compétences de l’équipe** (page des personnages) : encore en jauges avec cœurs de passion, pas encore celui du jeu.
 - **Interlignes** : les textes sur plusieurs lignes (infobulles, cartes, panneau) gardent un interligne de 17 à 18 ; RimWorld n’en fixe pas dans le code (police), à confirmer sur capture.
 
 ## Performance
 
 La fiche se compose une fois par changement (sélection, trait, compétence) dans la mise en page de la page, puis s’imprime sur le papier de la fenêtre ; les encadrés et compétences n’ont que des plans d’infobulle sans texture, le surlignage est un seul plan déplacé. Aucune recherche ni allocation par image.
 
-Mesure dans le vrai client (Chromium sans affichage, rendu WebGL, 1440 × 900, partie « Les Forges » chargée, Eden sélectionné, onglet Bio ouvert ; temps des rappels d’animation par image, 10 s par fenêtre ; « recompositions » = compteur cumulé de pages reconstruites) :
+Mesure dans le vrai client, en alternance avant/après (Chromium sans affichage, rendu WebGL, 1440 × 900, partie « Les Forges » chargée, Eden sélectionné, onglet Bio ouvert ; temps des rappels d’animation par image sur 10 s ; « avant » = `src` d’origin/main servi par le même serveur) :
 
-| Fenêtre | Avant (dossier Bio) : moyenne / médiane / p95 | Après (fiche Bio) : moyenne / médiane / p95 |
+| Passage | Pause : moyenne / médiane / p95 | ×1 : moyenne / médiane / p95 |
 | --- | --- | --- |
-| Pause, 1re | 5,6 / 5,3 / 8,0 ms | 8,1 / 8,0 / 9,9 ms |
-| ×1, 1re | 11,1 / 9,0 / 20,2 ms | 15,2 / 11,5 / 35,3 ms |
-| Pause, 2e | 8,2 / 7,9 / 10,7 ms | 7,9 / 7,7 / 10,6 ms |
-| ×1, 2e | 13,4 / 10,1 / 25,3 ms | 14,4 / 10,6 / 34,3 ms |
+| Avant 1 (dossier) | 8,24 / 8,1 / 10,5 ms | 16,37 / 11,7 / 38,7 ms |
+| Après 1 (fiche et panneau) | 7,18 / 7,1 / 8,9 ms | 15,62 / 11,9 / 37,1 ms |
+| Avant 2 | 8,03 / 7,8 / 10,8 ms | 15,03 / 11,2 / 36,9 ms |
+| Après 2 | 7,33 / 7,1 / 10,2 ms | 14,27 / 10,1 / 29,7 ms |
 
-Le nombre de pages reconstruites ne bouge pas pendant les mesures, avant comme après (la fiche n’est pas recomposée par image). Les écarts entre fenêtres d’une même version (5,6 puis 8,2 ms en pause avant) dépassent l’écart entre versions : ces relevés successifs ne montrent ni gain ni perte établis. Voir la mesure alternée ci-dessous.
+En pause, l’image coûte environ 0,9 ms de moins (−11 %) avec la fiche et le panneau qu’avec l’ancien dossier ; à ×1 l’écart (−5 % en moyenne) reste dans le bruit de la simulation. Le compteur de pages reconstruites ne bouge pas pendant les mesures : la fiche n’est pas recomposée par image.
 
 ## Tests
 
