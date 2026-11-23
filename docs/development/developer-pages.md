@@ -17,6 +17,7 @@ La liste tient en un seul endroit, [`src/ui/developer-pages.ts`](../../src/ui/de
 | Page | Fichier | Publiée | Contenu |
 | --- | --- | --- | --- |
 | Modèles et assets | `assets.html` | oui | L'atelier des modèles 3D (personnes, animaux, plantes, objets, bâtiments) dans les styles du jeu. |
+| Animations | `animations.html` | oui | Toutes les animations des personnes et des animaux, jouées par les rigs du jeu (corps ou espèce, action, vitesse), avec une description ; voir [la note](retours-20261122-vague3-animations.md#la-page-des-animations). |
 | Sons et musiques | `sounds-review.html` | oui | Tous les sons et musiques du jeu, à écouter et à régler un par un ; voir [la couverture audio](audio-coverage-20261122.md#réglages-manuels-page-des-sons). |
 | Textes de l'univers | `lore.html` | oui | Les textes d'Elsewhere par catégorie et la comparaison avec le jeu installé ; voir [l'univers](lore.md). |
 | Pictogrammes | `pictograms-review.html` | oui | La collection des pictogrammes (interface, objets, recherches). |
@@ -33,7 +34,7 @@ Avant ce lot, `pictograms-review.html` et `sounds-review.html` n'étaient servie
 2. Ajouter une ligne à `DEVELOPER_PAGES` : identifiant, fichier, titre et description en français, `published` selon la règle ci-dessus.
 3. C'est tout : les Options et les deux builds la prennent. Le [test](../../tests/developer-pages-sounds.test.ts) refuse une page `.html` de la racine absente de la liste, une entrée sans fichier, et vérifie les entrées des builds local et publié.
 
-La page des règles du jeu s'est ajoutée ainsi ; celle des animations, prévue par le chantier, suivra le même chemin.
+La page des règles du jeu s'est ajoutée ainsi, puis celle des animations.
 
 ## Vérification
 
