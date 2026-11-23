@@ -553,15 +553,17 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
         roster=roster.map(candidate=>candidate.serial===descriptor.serial?{...candidate,nameOverride:name}:candidate);
       },'text',80);
       identity.controls=[{...control(`reroll-${descriptor.serial}`,'↻',()=>{if(live(descriptor.serial,descriptor.generation)){roster=rerollStartingCandidateForRoster(teamSeed,roster,descriptor.serial,{capableOfViolence:tutorial});if(tutorial)options.tutorialLessons?.notify('RandomizePawn');}}),hint:'Renouveler ce candidat : les sept autres profils et leur ordre sont conservés.'}];
-      rows.push({...identity,region:'details',dense:true,compact:true},{id:'candidate-age',region:'details',dense:true,compact:true,label:'Âge bio. / chrono.',value:pawn.age?`${biologicalYears(pawn.age)} / ${chronologicalYears(pawn.age)} ans`:'Non renseigné'});
-      rows.push(details({id:'candidate-actions',label:'',controls:[
+      // The name field and Core's Randomize button sit in the card's name zone (below).
+      rows.push({id:'candidate-actions',region:'catalogue',label:'',compact:true,controls:[
         {...control(`promote-${descriptor.serial}`,selected?'Laisser sur place':'Choisir pour le départ',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)<3?3:2);}),hint:selected?'Place ce profil après les trois personnes choisies ; le candidat suivant rejoint le départ.':'Place ce profil en troisième position ; la dernière personne choisie passe dans les réserves.'},
         {...control(`up-${descriptor.serial}`,'↑',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)-1);},position===0),hint:'Monter ce candidat d’une place.'},
         {...control(`down-${descriptor.serial}`,'↓',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)+1);},position===roster.length-1),hint:'Descendre ce candidat d’une place.'},
-      ]}));
-      rows.push(details({id:'candidate-clothing',label:'Tenue du portrait',controls:[control('candidate-clothing',showCandidateClothes?'Masquer les vêtements':'Montrer les vêtements',()=>{if(current())showCandidateClothes=!showCandidateClothes;},false,showCandidateClothes)]}));
+        control('candidate-clothing',showCandidateClothes?'Masquer les vêtements':'Montrer les vêtements',()=>{if(current())showCandidateClothes=!showCandidateClothes;},false,showCandidateClothes),
+      ]});
+      // The portrait's clothing toggle joined the candidate's actions under the list.
       // The same Bio card as the « Bio » tab (Core DrawCharacterCard in creation
-      // mode): stories, traits, incapacities and skills; the name keeps its field.
+      // mode): the name field and the renewal button in its name zone, then
+      // stories, traits, incapacities and skills; the age is in its top stack.
       const sex=appearanceOf(pawn,teamSeed).sex,bio=pawn.age?biologicalYears(pawn.age):undefined,chrono=pawn.age?chronologicalYears(pawn.age):undefined;
       const stories:{phase:string;chip:{id:string;label:string;hint:string}}[]=[];
       if(pawn.background){
@@ -575,7 +577,8 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
         const record=pawn.skills[skill]??{level:0,xp:0,dailyXp:0,passion:0 as const},refusal=backgroundSkillRefusal(pawn,skill),passion=record.passion===2?'Forte passion':record.passion===1?'Passion':'Sans passion';
         return {id:`skill-${skill}`,label:names[skill]!,level:record.level,passion:record.passion,disabled:!!refusal,hint:[names[skill],refusal?`${refusal} · Niveau enregistré ${record.level} / 20`:undefined,passion,`${(record.xp/XP_SCALE).toFixed(1)} / ${xpRequired(record.level)/XP_SCALE} XP`,`Apprentissage ${Math.round(learningFactor(record,pawn)*100)} %`].filter(Boolean).join('\n')};
       });
-      rows.push({id:'candidate-bio',label:'',region:'details',bio:{creation:true,description:{label:`${sex==='female'?'Femme':'Homme'}${bio!==undefined?`, ${bio} ans${chrono!==bio?` (${chrono})`:''}`:''}`,hint:bio!==undefined?`Âge biologique : ${bio} ans. Âge chronologique : ${chrono} ans.`:'Âge non renseigné.'},
+      const renew=identity.controls.map(button=>({...button,icon:'rotate-right'}));
+      rows.push({id:'candidate-name',label:'',region:'details',input:identity.input,controls:renew,bio:{creation:true,name:'',buttons:renew,description:{label:`${sex==='female'?'Femme':'Homme'}${bio!==undefined?`, ${bio} ans${chrono!==bio?` (${chrono})`:''}`:''}`,hint:bio!==undefined?`Âge biologique : ${bio} ans. Âge chronologique : ${chrono} ans.`:'Âge non renseigné.'},
         stories,traits:(pawn.traits??[]).map(id=>({id:`candidate-trait-${id}`,label:traitLabel(id,sex),hint:traitTooltip(id,{name:pawn.name,sex})})),incapable,skills}});
       // Schema 370: Core's starting possessions of this person (adulthood story, 25 %).
       const possessions=startingPossessions370(teamSeed,descriptor,pawn);

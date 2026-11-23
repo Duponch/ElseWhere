@@ -1255,7 +1255,8 @@ export class NativeStage {
         piece.userData.nativeRegion=row.region;group.add(piece);
       }
       if(row.input){
-        const rightControls=controls.length?controls.length*28+6:0,inputW=Math.max(70,r.width-r.labelWidth-rightControls-8);
+        // In a Bio card the field fills the name zone, left of its buttons (x 395).
+        const rightControls=controls.length?controls.length*28+6:0,inputW=r.bio?(r.bio.buttons[0]?.rect.x??r.width)-16:Math.max(70,r.width-r.labelWidth-rightControls-8);
         const piece=this.pagePiece(row.id,{w:inputW*k,h:.25,uvPadding:1,textureWidth:Math.ceil(inputW*2),textureHeight:50,bgColor:'#fff9eb',seed:3007,depth:.018,interactive:true,
           drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/inputW,hp/25);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=this.font('small');ctx.fillText(row.input!.value||row.input!.placeholder||'',7,17,inputW-14);ctx.restore();}},JSON.stringify([row.input.value,row.input.placeholder,this.textFontRevision]),(r.x+r.labelWidth+8+inputW/2-box.width/2)*k,(box.height/2-top-15)*k,.08,undefined,row.input);
         group.add(piece);

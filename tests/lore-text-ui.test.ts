@@ -129,7 +129,7 @@ describe('candidate selection',()=>{
   const f=createPawnsUiHarness();await f.enterPawns();
   inventedGameTexts();
   await f.click(f.page!.rows.find(row=>/^candidate-\d+$/.test(row.id))!.controls![0]!.id);
-  const bio=f.page!.rows.find(row=>row.id==='candidate-bio')!.bio!,childhood=bio.stories.find(story=>story.chip.id==='childhood')?.chip,traits=bio.traits;
+  const bio=f.page!.rows.find(row=>row.id==='candidate-name')!.bio!,childhood=bio.stories.find(story=>story.chip.id==='childhood')?.chip,traits=bio.traits;
   expect(childhood?.label).toMatch(/^zorpe? /);expect(childhood?.hint).toMatch(/ zorpe (il|elle|iel) /);
   for(const trait of traits)expect(trait.label).toMatch(/^Zorpe? /);
  });
