@@ -39,6 +39,8 @@ export interface NativeControl {
   maxWidth?:number;
   /** Drawn mark in place of the label text (the label stays the accessible name). */
   mark?:'check';
+  /** Work box: passion of the relevant skills (1 minor, 2 major), a faint flame in the box. */
+  passion?:1|2;
   /** Highlight tag (Core UIHighlighter): the control pulses while a shown
    * notion or lesson names it. Existing controls also get one from their id
    * (src/ui/native-highlight-tags.ts). Presentation only. */

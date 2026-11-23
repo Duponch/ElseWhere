@@ -4,6 +4,7 @@ import {layoutNativeBioCard,NATIVE_BIO_SIZE,type NativeBioLayout} from './native
 import {layoutNativeTab} from './native-tab-layout';
 import {appliedScroll,type NativeTabCard} from './native-tab-card';
 import {gearPortraitRect} from './native-tab-gear';
+import {PAWN_TABLE,pawnTableSpec,type PawnTableKind,type PawnTableSpec} from './native-pawn-table';
 
 /** Design tokens in RimWorld interface points (see native-ui-scale.ts); neither
  * browser layout nor DPR changes the model. `body` and `small` are both the
@@ -50,14 +51,18 @@ export interface NativePageBox {
   /** Fixed column headings for the two long animal catalogues only. */
   tableHeader?:NativeRect;
   matrixColumnWeights?:readonly number[];
+  /** Exact pixel columns of a RimWorld pawn table (`native-pawn-table.ts`). */
+  matrixSpec?:PawnTableSpec;
 }
 export type TextMeasure=(text:string,size:number,bold?:boolean)=>number;
 /** The renderer uses the same vertical rule for ink, hints and controls. */
 export function nativeTableRowScroll(box:Pick<NativePageBox,'tableHeader'>,row:NativeRow,offset:number):number{return box.tableHeader&&row.columns?0:offset;}
 /** Shared geometry for matrix controls, painted headings and their hint planes.
  * The name and activity lanes have the same width in every row. */
-export function nativeMatrixColumns(row:Pick<NativeRow,'value'>,x:number,width:number,count:number,tail=!!row.value,weights?:readonly number[]):NativeRect[]{
+export function nativeMatrixColumns(row:Pick<NativeRow,'value'>,x:number,width:number,count:number,tail=!!row.value,weights?:readonly number[]|PawnTableSpec):NativeRect[]{
   if(count<=0)return [];
+  if(weights&&!Array.isArray(weights)){const spec=weights as PawnTableSpec;let at=x+spec.name;return Array.from({length:count},(_,index)=>{const w=spec.widths[index]??1,box={x:at,y:0,width:w,height:0};at+=w;return box;});}
+  weights=weights as readonly number[]|undefined;
   const left=x+104,available=Math.max(1,width-104-(tail?192:0)),gap=6,cell=Math.max(1,(available-gap*(count-1))/count);
   if(weights?.length!==count||weights.some(value=>!Number.isFinite(value)||value<=0))return Array.from({length:count},(_,index)=>({x:left+index*(cell+gap),y:0,width:cell,height:0}));
   const unit=Math.max(1,(available-gap*(count-1))/weights.reduce((sum,value)=>sum+value,0));let offset=0;
@@ -157,7 +162,7 @@ export function flowNativeControls(controls:readonly NativeControl[],rect:Native
   }
   return {controls:boxes,height:y-rect.y+lineHeight};
 }
-function rowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasure,table:boolean,tileColumnLimit?:number,matrixTail=!!row.value,matrixWeights?:readonly number[]):NativeRowBox {
+function rowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasure,table:boolean,tileColumnLimit?:number,matrixTail=!!row.value,matrixWeights?:readonly number[]|PawnTableSpec):NativeRowBox {
   if(row.tree)return storageTreeRowBox(row,x,top,width,measure);
   if(row.bio)return bioRowBox(row,x,top,measure);
   if(row.card)return cardRowBox(row,x,top,measure);
@@ -468,6 +473,7 @@ function inspectorPage(page:NativePage,viewport:{width:number;height:number},mea
 /** Animal catalogues pin their measured toolbar and headings above the list.
  * Other table layouts keep their existing geometry and scroll owners. */
 function animalTablePage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure):NativePageBox {
+  if((page.id==='animals'||page.id==='wildlife')&&page.rows.some(row=>row.columns))return pawnTablePage(page,viewport,measure,page.id);
   const pad=NATIVE_UI.padding,gap=4,header=page.subtitle?76:48,bottom=NATIVE_UI.bottom+10;
   const width=Math.min(Math.max(220,Math.min(requestedWidth(page,page.id==='animals'?1640:1280),viewport.width-32)),Math.max(1,viewport.width-24));
   const contentWidth=Math.max(1,width-pad*2-12),nameWidth=Math.min(104,Math.max(1,contentWidth-1));
@@ -505,9 +511,49 @@ function animalTablePage(page:NativePage,viewport:{width:number;height:number},m
       catalogue:{...body,x:pad+nameWidth,width:contentWidth-nameWidth,contentWidth:intrinsicWidth-nameWidth,contentHeight}},
     actions:actionFlow.controls.map(control=>({...control,y:height-header-footer+horizontalReserve+pad+control.y}))};
 }
+/** Work, Schedule and Assign as `PawnTable` lays them out: rows of 30, the work
+ * header of 50 with its label above a vertical line, 25 × 25 work boxes, column
+ * widths from the worker classes (`native-pawn-table.ts`), the window as wide as
+ * the optimal widths ask (up to the screen). */
+function pawnTablePage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure,kind:PawnTableKind):NativePageBox {
+ const pad=NATIVE_UI.padding,gap=0,header=page.subtitle?76:48,bottom=NATIVE_UI.bottom+10;
+ const heading=page.rows.find(row=>!!row.columns)!,labels=heading.columns!.map(column=>column.label.replace(/ [↑↓]$/,'')),tail=!!heading.value;
+ const screen=Math.max(300,viewport.width-24-pad*2-12);
+ const {spec,target}=pawnTableSpec(kind,labels,screen,word=>measure(word,NATIVE_TEXT.small,true),tail);
+ const width=Math.min(target+pad*2+12,Math.max(1,viewport.width-24)),contentWidth=Math.max(1,width-pad*2-12),nameWidth=Math.min(spec.name,Math.max(1,contentWidth-1));
+ const intrinsicWidth=Math.max(contentWidth,spec.total);
+ const columns=Math.max(0,...page.rows.map(row=>row.columns?.length??0));
+ const matrixRow=(row:NativeRow)=>!!row.columns||!!row.compact&&row.controls?.length===columns;
+ const actionFlow=flowNativeControls(page.actions??[],{x:pad,y:0,width:width-pad*2,height:0},measure),horizontalReserve=intrinsicWidth>contentWidth?12:0;
+ const footer=(page.actions?.length?actionFlow.height+pad*2:pad)+horizontalReserve,maxHeight=Math.min(page.height??900,Math.max(1,viewport.height-bottom-12));
+ const rows:NativeRowBox[]=[];let toolbarHeight=0;
+ for(const row of page.rows.filter(row=>row.region==='navigation')){const box=rowBox({...row,region:'details'},pad,toolbarHeight,contentWidth,measure,false);rows.push(box);toolbarHeight+=box.height+4;}
+ const headingY=header+toolbarHeight;let headingHeight=0;
+ for(const row of page.rows.filter(row=>!!row.columns)){const box=rowBox({...row,region:'catalogue'},pad,toolbarHeight+headingHeight,intrinsicWidth,measure,true,undefined,tail,spec);box.height=spec.headerHeight;rows.push(box);headingHeight+=box.height;}
+ const bodyY=headingY+headingHeight+gap;let contentHeight=0;
+ for(const row of page.rows.filter(row=>row.region!=='navigation'&&!row.columns)){
+  const matrix=matrixRow(row),x=pad+(matrix?0:nameWidth),rowWidth=matrix?intrinsicWidth:Math.max(1,contentWidth-nameWidth),top=bodyY-header+contentHeight;
+  const box=rowBox({...row,region:'catalogue'},x,top,rowWidth,measure,true,undefined,matrix?tail:undefined,matrix?spec:undefined);
+  if(matrix){
+   box.height=PAWN_TABLE.rowHeight;box.controlTop=2;box.controlHeight=PAWN_TABLE.rowHeight-4;
+   for(const control of box.controls){
+    if(/^work-\d+-/.test(control.control.id)){const size=PAWN_TABLE.workBox;control.x+=(control.width-size)/2;control.width=size;control.y=top+PAWN_TABLE.workBoxTop;control.height=size;}
+    else{control.y=top+2;control.height=box.controlHeight;}
+   }
+  }
+  rows.push(box);contentHeight+=box.height;
+ }
+ const height=Math.min(maxHeight,bodyY+Math.max(28,contentHeight)+footer),bodyHeight=Math.max(0,height-footer-bodyY);
+ const body={x:pad,y:bodyY,width:contentWidth,height:bodyHeight};
+ return {x:12,y:viewport.height-bottom-height,width,height,header,footer,body,contentHeight,rows,layout:'table',matrixSpec:spec,
+  tableHeader:{x:pad+nameWidth,y:headingY,width:contentWidth-nameWidth,height:headingHeight},
+  regions:{details:{x:pad,y:header,width:contentWidth,height:toolbarHeight,contentHeight:toolbarHeight},navigation:{...body,width:nameWidth,contentHeight},catalogue:{...body,x:pad+nameWidth,width:contentWidth-nameWidth,contentWidth:intrinsicWidth-nameWidth,contentHeight}},
+  actions:actionFlow.controls.map(control=>({...control,y:height-header-footer+horizontalReserve+pad+control.y}))};
+}
 /** The opt-in profile pins the roster toolbar and headings; other tables keep
  * their own layout. Equal work cells retain skill captions at a readable size. */
 function colonistTablePage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure):NativePageBox {
+ if(page.tableProfile==='colonists'&&(page.id==='work'||page.id==='schedule'||page.id==='assign'))return pawnTablePage(page,viewport,measure,page.id);
  const pad=NATIVE_UI.padding,gap=4,header=page.subtitle?76:48,bottom=NATIVE_UI.bottom+10;
  const width=Math.min(Math.max(220,Math.min(requestedWidth(page,1480),viewport.width-32)),Math.max(1,viewport.width-24));
  const contentWidth=Math.max(1,width-pad*2-12),nameWidth=Math.min(104,Math.max(1,contentWidth-1));

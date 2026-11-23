@@ -19,14 +19,14 @@ describe('fixed headings of the two animal catalogues',()=>{
       expect(box.tableHeader).toBeDefined();expect(toolbar).toHaveLength(2);
       expect(box.tableHeader!.y).toBeGreaterThanOrEqual(box.header+Math.max(...toolbar.map(row=>row.top+row.height)));
       expect(box.body.y).toBeGreaterThanOrEqual(box.tableHeader!.y+box.tableHeader!.height);
-      expect(box.contentHeight).toBeGreaterThan(box.body.height);expect(record.height).toBe(34);expect(record.controls.every(c=>c.height>=24)).toBe(true);
-      const short=layoutNativePage(page(id),{width:1280,height:480},false,measure);expect(short.body.height).toBeGreaterThanOrEqual(34);
+      expect(box.contentHeight).toBeGreaterThan(box.body.height);expect(record.height).toBe(30);expect(record.controls.every(c=>c.height>=24)).toBe(true);
+      const short=layoutNativePage(page(id),{width:1280,height:480},false,measure);expect(short.body.height).toBeGreaterThanOrEqual(30);
       for(const scroll of [79,200]){
         expect(box.header+heading.top-nativeTableRowScroll(box,heading.row,scroll)).toBe(box.tableHeader!.y);
         expect(box.header+record.top-nativeTableRowScroll(box,record.row,scroll)).toBe(box.body.y-scroll);
         expect(toolbar.every(row=>row.row.region==='details'&&box.regions.details!.contentHeight===box.regions.details!.height)).toBe(true);
       }
-      const columns=nativeMatrixColumns(heading.row,heading.x,heading.width,heading.row.columns!.length,heading.matrixTail,box.matrixColumnWeights);
+      const columns=nativeMatrixColumns(heading.row,heading.x,heading.width,heading.row.columns!.length,heading.matrixTail,box.matrixSpec??box.matrixColumnWeights);
       expect(record.controls.map(control=>control.x)).toEqual(columns.map(column=>column.x));
       expect(box.rows.every(row=>row.row.columns||row.row.region==='details'||box.header+row.top>=box.body.y)).toBe(true);
     }
@@ -35,11 +35,11 @@ describe('fixed headings of the two animal catalogues',()=>{
     for(const id of ['animals','wildlife'] as const){
       const box=layoutNativePage(page(id),{width:700,height:720},false,measure),heading=box.rows.find(row=>row.row.columns)!;
       expect(box.width).toBeLessThanOrEqual(700-24);
-      expect(heading.width).toBeGreaterThanOrEqual(id==='animals'?1140:1000);
+      expect(heading.width).toBeGreaterThanOrEqual(box.matrixSpec!.total);
       expect(box.regions.catalogue!.contentWidth).toBeGreaterThan(box.regions.catalogue!.width);
-      const cells=nativeMatrixColumns(heading.row,heading.x,heading.width,heading.row.columns!.length,heading.matrixTail,box.matrixColumnWeights);
+      const cells=nativeMatrixColumns(heading.row,heading.x,heading.width,heading.row.columns!.length,heading.matrixTail,box.matrixSpec??box.matrixColumnWeights);
       expect(cells.every(cell=>cell.width>=44)).toBe(true);
-      expect(box.regions.navigation!.x).toBe(box.body.x);expect(box.regions.navigation!.width).toBe(104);
+      expect(box.regions.navigation!.x).toBe(box.body.x);expect(box.regions.navigation!.width).toBe(box.matrixSpec!.name);
     }
     for(const id of ['work','assign','animals-quotas'] as const){
       const box=layoutNativePage(page(id),{width:1280,height:720},false,measure),heading=box.rows.find(row=>row.row.columns)!;

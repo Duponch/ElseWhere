@@ -61,12 +61,12 @@ describe('compact opt-in colonist management tables',()=>{
  it('pins toolbar, headings and names with readable compact cells and preserves tables without the profile',()=>{
   for(const kind of ['work','schedule','assign'] as const){
    const f=fixture(kind,55),box=layoutNativePage(f.page,{width:1280,height:720},false,measure),head=box.rows.find(r=>r.row.columns)!,record=box.rows.find(r=>/^(worker|schedule|assign)-\d+$/.test(r.row.id))!;
-   expect(box.tableHeader).toBeDefined();expect(box.regions.details!.contentHeight).toBe(box.regions.details!.height);expect(box.regions.navigation!.width).toBe(104);
+   expect(box.tableHeader).toBeDefined();expect(box.regions.details!.contentHeight).toBe(box.regions.details!.height);expect(box.regions.navigation!.width).toBe(box.matrixSpec!.name);
    expect(box.body.y).toBeGreaterThanOrEqual(box.tableHeader!.y+box.tableHeader!.height);expect(box.contentHeight).toBeGreaterThan(box.body.height);
-   expect(record.height).toBe(kind==='work'?44:34);expect(record.controls.every(c=>c.height>=24&&c.width>=24)).toBe(true);
-   const cells=nativeMatrixColumns(head.row,head.x,head.width,head.row.columns!.length,head.matrixTail,box.matrixColumnWeights);expect(record.controls.map(c=>c.x)).toEqual(cells.map(c=>c.x));
+   expect(record.height).toBe(30);expect(record.controls.every(c=>c.height>=24&&c.width>=24)).toBe(true);
+   const cells=nativeMatrixColumns(head.row,head.x,head.width,head.row.columns!.length,head.matrixTail,box.matrixSpec);expect(record.controls.map(c=>c.x)).toEqual(cells.map((c,i)=>kind==='work'&&i>=2?c.x+(c.width-25)/2:c.x));if(kind==='work'){expect(record.controls.slice(2).every(c=>c.width===25&&c.height===25)).toBe(true);expect(record.controls[2]!.y-record.top).toBe(2.5);}
    expect(box.header+head.top-nativeTableRowScroll(box,head.row,250)).toBe(box.tableHeader!.y);expect(box.header+record.top-nativeTableRowScroll(box,record.row,250)).toBe(box.body.y-250);
-   const narrow=layoutNativePage(f.page,{width:700,height:720},false,measure);expect(narrow.regions.catalogue!.contentWidth).toBeGreaterThan(narrow.regions.catalogue!.width);expect(narrow.regions.navigation!.width).toBe(104);
+   const narrow=layoutNativePage(f.page,{width:700,height:720},false,measure);expect(narrow.regions.catalogue!.contentWidth).toBeGreaterThanOrEqual(narrow.regions.catalogue!.width);expect(narrow.regions.navigation!.width).toBe(narrow.matrixSpec!.name);
    const old=layoutNativePage({...f.page,tableProfile:undefined},{width:1280,height:720},false,measure);expect(old.tableHeader).toBeUndefined();
   }
  });

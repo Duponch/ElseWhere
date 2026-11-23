@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import {PAWN_TABLE,workLabelDown} from './native-pawn-table';
 import {PrototypeCardboardArt,MANAGEMENT_BUTTONS,PALETTE,drawHandRect,drawMarkerLine,type CardboardPiece,type CardboardDraw,type CardboardPieceOptions} from './prototype-art';
 import {drawNativeActionIcon,drawNativeActionIconInBox} from './native-action-icons';
 import {applyNativeHudButtonPose} from './native-hud-art';
@@ -1238,7 +1239,7 @@ export class NativeStage {
         piece.userData.tooltip=hint;piece.userData.nativeStatic=true;(nameBand?this.regionGroups.navigation:group).add(piece);
       }
       if(row.columns){
-        const columns=nativeMatrixColumns(row,r.x,r.width,row.columns.length,r.matrixTail,box.matrixColumnWeights);
+        const columns=nativeMatrixColumns(row,r.x,r.width,row.columns.length,r.matrixTail,box.matrixSpec??box.matrixColumnWeights);
         // A header column with a control is interactive (Core work columns:
         // click sorts, Shift-click sets the column); others only carry a hint.
         row.columns.forEach((column,index)=>{const cell=columns[index]!,hint=column.control?.hint??column.hint??column.label,hintPiece=this.pagePiece(column.control?.id??'column:'+row.id+':'+index,{w:cell.width*k,h:r.height*k,paper:false,hitOnly:true,interactive:true,drawFn:()=>{}},hint,(cell.x-this.horizontalOffset(row.region)+cell.width/2-box.width/2)*k,(box.height/2-cy)*k,.04,column.control);if(!column.control)hintPiece.userData.nativeStatic=true;hintPiece.userData.tooltip=hint;group.add(hintPiece);});
@@ -1362,9 +1363,26 @@ export class NativeStage {
     const parts=box.inspectorParts;if(!parts)return inside({x:0,y:0,width:box.width,height:box.height});
     return inside(parts.sheet)||inside(parts.tabs)||inside(parts.summary)||box.actions.some(action=>inside({x:action.x,y:box.header+action.y,width:action.width,height:action.height}));
   }
+  /** PawnTable headings: the work label is written whole above a vertical line of
+   * 2 (every other label lowered by 20), the other headings wrap by words only. */
+  private drawPawnTableHeading(ctx:CanvasRenderingContext2D,r:NativeRowBox,top:number,labels:readonly string[],columns:readonly NativeRect[],work:boolean):void{
+    ctx.textAlign='center';ctx.font=this.font('small',true);
+    labels.forEach((label,index)=>{
+      const cell=columns[index]!,cx=cell.x+cell.width/2;
+      if(work&&index>=2){
+        const y=top+(workLabelDown(index-2)?PAWN_TABLE.workLabelShift:0);ctx.fillStyle=PALETTE.inkDark;ctx.fillText(label,cx,y+16);
+        ctx.fillStyle='rgba(58,44,29,.3)';const from=y+PAWN_TABLE.headerLine-3;ctx.fillRect(cx-1,from,2,top+r.height-from);return;
+      }
+      ctx.fillStyle=PALETTE.inkDark;
+      const lines=wrapNativeText(label,Math.max(1,cell.width-2),(value,size)=>this.measure(value,size,true),NATIVE_TEXT.small).slice(0,2);
+      lines.forEach((line,i)=>ctx.fillText(line,cx,top+r.height/2+4+(i-(lines.length-1)/2)*15,cell.width));
+    });
+    ctx.textAlign='left';
+  }
   private drawMatrixName(ctx:CanvasRenderingContext2D,r:NativeRowBox,top:number):void{
-    if(r.row.columns){ctx.fillStyle='#4d5c46';ctx.font=this.font('small',true);ctx.textAlign='left';ctx.fillText(r.row.label,r.x,top+28,98);}
-    else if(r.matrix)this.semanticText(ctx,r.row.label,r.x,top+r.height/2+4,98,NATIVE_UI.body,true);
+    const nameWidth=(this.pageBox?.matrixSpec?.name??104)-6;
+    if(r.row.columns){ctx.fillStyle='#4d5c46';ctx.font=this.font('small',true);ctx.textAlign='left';ctx.fillText(r.row.label,r.x,this.pageBox?.matrixSpec?top+r.height/2+4:top+28,nameWidth);}
+    else if(r.matrix)this.semanticText(ctx,r.row.label,r.x,top+r.height/2+4,nameWidth,NATIVE_UI.body,true);
   }
   private drawPageRow(ctx:CanvasRenderingContext2D,r:NativeRowBox,top:number,rng:()=>number,box:NativePageBox):void{
     const row=r.row,ink=PALETTE.inkDark,body=NATIVE_UI.body,line=NATIVE_UI.line;ctx.fillStyle=ink;ctx.textAlign='left';
@@ -1383,11 +1401,12 @@ export class NativeStage {
     }
     if(row.columns){
       if(!(box.layout==='table'&&box.regions.navigation&&row.region==='catalogue'))this.drawMatrixName(ctx,r,top);
-      const tail=r.matrixTail?192:0,columns=nativeMatrixColumns(row,r.x,r.width,row.columns.length,r.matrixTail,box.matrixColumnWeights);
+      const spec=box.matrixSpec,tail=spec?spec.tail:r.matrixTail?192:0,columns=nativeMatrixColumns(row,r.x,r.width,row.columns.length,r.matrixTail,spec??box.matrixColumnWeights);
+      if(spec){this.drawPawnTableHeading(ctx,r,top,row.columns.map(c=>c.label),columns,row.id==='work-headings');if(row.value)this.semanticText(ctx,row.value,r.x+r.width-tail+6,top+r.height/2+4,tail-10,NATIVE_TEXT.small);return;}
       row.columns.forEach((column,index)=>{const cell=columns[index]!,lines=nativeMatrixHeadingLines(column.label,cell.width-5,this.measure).slice(0,2);ctx.textAlign='center';ctx.font=this.font('small',true);lines.forEach((line,lineIndex)=>ctx.fillText(line,cell.x+cell.width/2,top+28+(lineIndex-(lines.length-1)/2)*15,cell.width-4));});
       if(row.value)this.semanticText(ctx,row.value,r.x+r.width-tail+6,top+28,tail-10,NATIVE_TEXT.small);return;
     }
-    if(r.matrix){if(!(box.layout==='table'&&box.regions.navigation&&row.region==='catalogue'))this.drawMatrixName(ctx,r,top);if(row.value){const lines=wrapNativeText(row.value,176,this.measure,NATIVE_TEXT.small);lines.slice(0,2).forEach((line,i)=>this.semanticText(ctx,line,r.x+r.width-180,top+18+i*17,176,NATIVE_TEXT.small));}return;}
+    if(r.matrix){if(!(box.layout==='table'&&box.regions.navigation&&row.region==='catalogue'))this.drawMatrixName(ctx,r,top);if(row.value&&box.matrixSpec){this.semanticText(ctx,row.value,r.x+r.width-box.matrixSpec.tail+6,top+r.height/2+4,box.matrixSpec.tail-10,NATIVE_TEXT.small);}else if(row.value){const lines=wrapNativeText(row.value,176,this.measure,NATIVE_TEXT.small);lines.slice(0,2).forEach((line,i)=>this.semanticText(ctx,line,r.x+r.width-180,top+18+i*17,176,NATIVE_TEXT.small));}return;}
     if(row.id==='pawn-tabs'||row.id==='health-tabs')return;
     if(row.meter){
       const meter=row.meter,labelWidth=Math.min(r.width*.45,138),barX=r.x+labelWidth,barW=Math.max(40,r.width-labelWidth-8),fraction=THREE.MathUtils.clamp(meter.value/(meter.max??1),0,1);
@@ -1464,7 +1483,7 @@ export class NativeStage {
         if(inset){drawHandRect(ctx,118,40,22,19,inset.disabled?PALETTE.kraftLight:PALETTE.sageMountain,ink,1,rng);drawNativeActionIcon(ctx,'play',129,49.5,6.5,inset.disabled?'#776c55':ink,PALETTE.creamPaper);}
       }else{
         const inlineIcon=!!control.icon&&cssH>=28;if(inlineIcon)icon(17,cssH/2,10);
-        const available=cssW-(control.select?24:12)-(inlineIcon?26:0),font:NativeTextRole=control.id==='page:close'||control.label.length<=1&&cssW<=48?'medium':'small';
+        const available=workCell?cssW-2:cssW-(control.select?24:12)-(inlineIcon?26:0),font:NativeTextRole=control.id==='page:close'||control.label.length<=1&&cssW<=48?'medium':'small';
         ctx.font=this.font(font,true);let label=control.label;
         if(cssH>=39&&!control.caption){const lines=wrapNativeText(label,available,this.measure,NATIVE_TEXT[font]).slice(0,2);lines.forEach((line,index)=>ctx.fillText(line,cssW/2+(inlineIcon?12:0)-(control.select?4:0),cssH/2+4+(index-(lines.length-1)/2)*15,available));}
         else{
@@ -1474,6 +1493,7 @@ export class NativeStage {
         if(control.mark==='check'){const cx=cssW/2,cy=control.caption&&workCell?cssH*.43-5:cssH/2;ctx.save();ctx.strokeStyle=ink;ctx.lineWidth=2.6;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(cx-6,cy);ctx.lineTo(cx-1.5,cy+5);ctx.lineTo(cx+7,cy-6);ctx.stroke();ctx.restore();}
         else ctx.fillText(label,cssW/2+(inlineIcon?12:0)-(control.select&&!workCell?4:0),control.caption?workCell?cssH*.43:14:cssH/2+4,available);
         }
+        if(workCell&&control.passion){ctx.save();ctx.globalAlpha=.4;ctx.font=this.font('tiny',true);ctx.fillStyle=ink;ctx.fillText('♨'.repeat(control.passion),cssW/2,cssH-3,cssW-2);ctx.restore();}
         if(control.caption){ctx.font=this.font(workCell?'small':'tiny',workCell);ctx.fillStyle=workCell?'#392b20':'#5b5b42';ctx.fillText(control.caption,cssW/2,cssH-5,cssW-6);}
       }
       if(control.select){const cy=workCell?10:cssH/2;ctx.fillStyle=PALETTE.inkDark;ctx.beginPath();ctx.moveTo(cssW-12,cy-2);ctx.lineTo(cssW-5,cy-2);ctx.lineTo(cssW-8.5,cy+3);ctx.closePath();ctx.fill();}
@@ -1481,7 +1501,7 @@ export class NativeStage {
       ctx.restore();
     };
     const piece=this.pagePiece(control.id,{w,h,depth:.046,bevel:.038,uvPadding:1,textureWidth:Math.max(32,Math.ceil(cssW*2)),textureHeight:Math.max(32,Math.ceil(cssH*2)),bgColor:control.glyph?PALETTE.creamPaper:control.disabled?PALETTE.kraftLight:control.active?PALETTE.ochre:control.color??PALETTE.sageMountain,seed:this.seed(control.id)%CONTROL_CUT_VARIANTS+1,sharedGeometry:true,interactive:true,drawFn:draw},
-      JSON.stringify([control.label,control.caption,control.description,control.icon,control.glyph,control.color,style,node,inset?.icon,!!inset?.disabled,!!control.active,!!control.disabled,!!control.select,this.textFontRevision,control.mark]),x,y,z,control);
+      JSON.stringify([control.label,control.caption,control.passion,control.description,control.icon,control.glyph,control.color,style,node,inset?.icon,!!inset?.disabled,!!control.active,!!control.disabled,!!control.select,this.textFontRevision,control.mark]),x,y,z,control);
     piece.userData.nativeStyle=style;piece.userData.active=!!control.active;
     piece.userData.nativeMapToolPose=this.page?.layout==='palette'&&style==='icon';piece.userData.nativeMapToolTitle=control.label;
     piece.userData.nativeToolbarPose=style==='tile'||style==='navigation'||style==='tab';this.setPose(piece,piece.userData.hoverVal);
