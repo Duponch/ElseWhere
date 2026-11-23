@@ -114,9 +114,5 @@ export const ANIMAL_ANIMATIONS:readonly AnimalAnimation[]=Object.freeze([
     description:'Couché sur le flanc, les yeux en croix.'},
 ]);
 
-/** Action particles (lot « particules », point 8). Hook: the particles
- * catalogue registers its list here when it lands; the page shows it. */
-export interface ActionParticleEntry {readonly id:string;readonly label:string;readonly description:string}
-const particleEntries:ActionParticleEntry[]=[];
-export function registerActionParticles(entries:readonly ActionParticleEntry[]):void {particleEntries.splice(0,particleEntries.length,...entries);}
-export function actionParticles():readonly ActionParticleEntry[]{return particleEntries;}
+/** The action particles (point 8) have their own catalogue,
+ * action-particle-catalogue.ts (ACTION_PARTICLES); the page lists it. */

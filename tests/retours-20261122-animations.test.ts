@@ -9,7 +9,8 @@ import {AnimationDetail} from '../src/render/AnimationDetail';
 import {samplePawnRig,sampleAnimalRig} from '../src/render/actor-animation-sampling';
 import {CPU_GESTURE_OPS,GestureNumber,gestureValue,humanGesture,animalGesture,animalIdleProfile,downedWiggleAngle,downedWigglePhase,downedWiggleOffset,humanGestureCode,
   HUMAN_GESTURE,ANIMAL_POSTURE_DOWNED,ANIMAL_APPENDAGE,GESTURE_SLOW_RATE,restingHumanChest,restingAnimalGesture,evaluateHumanGesture,evaluateAnimalGesture} from '../src/render/actor-idle-gestures';
-import {HUMAN_ANIMATIONS,ANIMAL_ANIMATIONS,actionParticles} from '../src/render/animation-catalogue';
+import {HUMAN_ANIMATIONS,ANIMAL_ANIMATIONS} from '../src/render/animation-catalogue';
+import {ACTION_PARTICLES,familyInfo} from '../src/render/action-particle-catalogue';
 import {commonAnimalPresentationGeometry} from '../src/render/origami/animal-geometry';
 import {SPECIES_COATS} from '../src/render/origami/species-coats';
 import {GAME_UNUSED_BESTIARY_SOURCE_KEYS} from '../src/render/origami/game-paint-residency';
@@ -73,7 +74,9 @@ test('every catalogue entry of a person is a pose the rig knows, with a descript
   }
   for(const a of ANIMAL_ANIMATIONS){expect(a.description.length).toBeGreaterThan(20);expect([0,1,ANIMAL_POSTURE_DOWNED,2]).toContain(a.posture);}
   expect(HUMAN_ANIMATIONS.filter(a=>a.pose===3).length).toBeGreaterThanOrEqual(8);
-  expect(actionParticles()).toEqual([]);
+  // The page lists the action particles of each body from their catalogue.
+  expect(ACTION_PARTICLES.some(x=>x.animal)&&ACTION_PARTICLES.some(x=>!x.animal)).toBe(true);
+  for(const x of ACTION_PARTICLES){expect(x.source.length).toBeGreaterThan(3);for(const c of x.channels)expect(familyInfo(c.family).label.length).toBeGreaterThan(2);}
   // The page is declared once with the other developer pages.
   expect(DEVELOPER_PAGES.find(page=>page.id==='animations')).toMatchObject({file:'animations.html',published:true});
 });

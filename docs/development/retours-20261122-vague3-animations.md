@@ -64,7 +64,7 @@ Les queues et les ailes d'oiseau deviennent des appendices : leurs pièces garde
 
 ## La page des animations
 
-`animations.html` (Options → Développeur, publiée) joue toutes les animations avec les rigs du jeu eux-mêmes, en écrivant leurs flux d'instance comme l'atelier des modèles : aucun monde, aucune simulation. On choisit le corps (une personne ou l'une des 53 espèces), l'action, la vitesse (pause, ×1, ×3, ×6) et la texture (Gouache, Pastel). Chaque entrée a une description et l'état du jeu qui la produit ([`animation-catalogue.ts`](../../src/render/animation-catalogue.ts)) : 34 animations de personnes, 7 d'animaux. Les postures assises ont un tabouret et une table simples aux hauteurs du jeu. Les particules d'action (lot parallèle) ont une entrée prête (`registerActionParticles`) : la page les listera quand leur catalogue sera livré.
+`animations.html` (Options → Développeur, publiée) joue toutes les animations avec les rigs du jeu eux-mêmes, en écrivant leurs flux d'instance comme l'atelier des modèles : aucun monde, aucune simulation. On choisit le corps (une personne ou l'une des 53 espèces), l'action, la vitesse (pause, ×1, ×3, ×6) et la texture (Gouache, Pastel). Chaque entrée a une description et l'état du jeu qui la produit ([`animation-catalogue.ts`](../../src/render/animation-catalogue.ts)) : 34 animations de personnes, 7 d'animaux. Les postures assises ont un tabouret et une table simples aux hauteurs du jeu. La page liste aussi les particules d'action du corps choisi, lues dans leur catalogue ([`action-particle-catalogue.ts`](../../src/render/action-particle-catalogue.ts), [lot des particules](action-particles-20261122.md)) : action, familles de particules, état qui les produit et effet du jeu de base suivi.
 
 ## Coût
 
@@ -84,10 +84,11 @@ Voisins (74 fichiers de rendu, d'acteurs et du bestiaire, 460 cas) : 403 réussi
 
 ## Vérification dans le vrai client
 
-Serveur Vite privé, son et musique coupés. **Page des animations** : toutes les actions des personnes jouées aux trois vitesses en Gouache et en Pastel (mains posées sur la table au repas et aux jeux, buste qui respire et tête qui suit l'écran ou l'interlocuteur, lecture, regard vers le ciel, alité et balancement à terre), puis les familles d'animaux (broutage, tête qui tourne, queue, ailes des oiseaux, respiration couchée, animal à terre) et les robes corrigées ; l'alpaga montrait d'abord des taches avec le pigment du lynx, remplacé par le fauve du couguar. **Jeu** : Les Forges chargées avec les nouveaux graphes, aucune erreur dans la console ; le panneau de navigateur, partagé avec d'autres travaux, tournait à environ 1 image par seconde, trop peu pour juger le mouvement dans la partie elle-même. Les rigs sont les mêmes que ceux de la page.
+Serveur Vite privé, son et musique coupés. **Page des animations** : toutes les actions des personnes jouées aux trois vitesses en Gouache et en Pastel (mains posées sur la table au repas et aux jeux, buste qui respire et tête qui suit l'écran ou l'interlocuteur, lecture, regard vers le ciel, alité et balancement à terre), puis les familles d'animaux (broutage, tête qui tourne, queue, ailes des oiseaux, respiration couchée, animal à terre) et les robes corrigées ; l'alpaga montrait d'abord des taches avec le pigment du lynx, remplacé par le fauve du couguar. **Jeu** : Les Forges chargées avec les nouveaux graphes, aucune erreur dans la console ; le panneau de navigateur, partagé avec d'autres travaux, tournait à environ 1 image par seconde, trop peu pour juger le mouvement dans la partie elle-même. Les rigs sont les mêmes que ceux de la page. Après reprise sur la branche principale (particules livrées), page rouverte : particules des personnes (abattage, coupe, récolte…) et des animaux (broutage, repas, sommeil) listées, aucune erreur.
 
 ## Reste à faire
 
 - Oreilles qui battent, poses de transport et de travail accroupi variées.
 - Tête des fêtards tournée vers un voisin précis (le jeu de base cherche le pion le plus proche) : ici la tête balaie.
 - Modèles les plus simples (reptiles, oiseaux) non retouchés ; repas posé sur la table plutôt que tenu.
+- Montrer les particules elles-mêmes sur la page (le modèle de référence `sampleActionParticle` du lot des particules le permet) ; elles y sont seulement listées.

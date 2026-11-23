@@ -7,7 +7,8 @@ import {PawnLayer} from '../render/PawnLayer';
 import {WildlifeLayer} from '../render/WildlifeLayer';
 import {AnimationDetail} from '../render/AnimationDetail';
 import {stageCatalogSharedSurfaces} from './asset-catalog-surface';
-import {HUMAN_ANIMATIONS,ANIMAL_ANIMATIONS,ANIMATION_GROUP_LABELS,actionParticles,type HumanAnimation,type AnimalAnimation} from '../render/animation-catalogue';
+import {HUMAN_ANIMATIONS,ANIMAL_ANIMATIONS,ANIMATION_GROUP_LABELS,type HumanAnimation,type AnimalAnimation} from '../render/animation-catalogue';
+import {ACTION_PARTICLES,familyInfo} from '../render/action-particle-catalogue';
 import {ANIMAL_SPECIES_IDS,ANIMAL_SPECIES} from '../sim/animal-species';
 import {itemCargoKind} from '../render/item-presentation';
 import {downedWigglePhase,animalIdleProfile,HUMAN_GESTURE} from '../render/actor-idle-gestures';
@@ -121,8 +122,13 @@ function describe():void {
     const f=document.createElement('p');f.className='catalog-subtle';f.textContent=`Famille : ${({quadruped:'quadrupède',canine:'canidé',feline:'félin',bird:'oiseau',insect:'insecte',snake:'serpent',turtle:'tortue',lizard:'lézard',primate:'primate'} as const)[profile.family]}${profile.graze?' · broute':''}${profile.peck?' · picore':''}${profile.tailAmplitude?' · queue':''}${profile.shake?' · s’ébroue':''}${profile.ruffle?' · ébouriffe ses ailes':''}.`;detailView.append(f);}
   listView.replaceChildren();const head=document.createElement('h2');head.className='catalog-section-heading';head.textContent=human?'Toutes les animations des personnes':'Toutes les animations des animaux';listView.append(head);
   for(const a of human?HUMAN_ANIMATIONS:ANIMAL_ANIMATIONS){const b=document.createElement('button');b.className='catalog-entry';b.setAttribute('aria-current',String(a.id===entry.id));b.title=a.description;const t=document.createElement('span');t.className='entry-name';t.textContent=a.label;b.append(t);b.onclick=()=>{actionSelect.value=a.id;select();};listView.append(b);}
-  const particles=actionParticles(),ph=document.createElement('h2');ph.className='catalog-section-heading';ph.textContent='Particules d’action';listView.append(ph);
-  const pp=document.createElement('p');pp.className='catalog-subtle';pp.style.padding='0 6px';pp.textContent=particles.length?particles.map(x=>`${x.label} : ${x.description}`).join('\n'):'Le catalogue des particules d’action sera listé ici quand il sera livré.';listView.append(pp);
+  // The action particles of this body (catalogue of point 8): what shows them and what they are made of.
+  const ph=document.createElement('h2');ph.className='catalog-section-heading';ph.textContent=human?'Particules d’action des personnes':'Particules d’action des animaux';listView.append(ph);
+  for(const x of ACTION_PARTICLES.filter(x=>!!x.animal===!human)){
+    const pp=document.createElement('p');pp.className='catalog-subtle';pp.style.padding='0 6px';
+    const families=[...new Set(x.channels.map(c=>familyInfo(c.family).label.toLowerCase()))].join(', ');
+    pp.textContent=`${x.label} — ${families}. ${x.source.charAt(0).toUpperCase()}${x.source.slice(1)}${x.core?` (jeu de base : ${x.core})`:''}.`;listView.append(pp);
+  }
 }
 function frame(focusY:number,distance:number):void {controls.target.set(0,focusY,0);const dir=camera.position.clone().sub(controls.target).normalize();camera.position.copy(controls.target).addScaledVector(dir,distance);controls.update();}
 function select():void {
