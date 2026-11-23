@@ -6,6 +6,7 @@ import {createBestiaryAdaptations,BESTIARY_ADAPTATION_MANIFEST,type BestiaryAdap
 import {BESTIARY_NEW_SPECIES,compileBestiaryAnimalBody,type CompiledBestiaryBody} from './bestiary-geometry';
 import type {BestiaryFactory,BestiaryGroup,RegisterMaterial} from './bestiary-types';
 import type {CompiledAnimalCargoBack} from './animal-cargo-back';
+import {applySpeciesCoat} from './species-coats';
 
 export interface OrigamiAnimalReferenceInfo {
  readonly kind:'existing-reference'|'new-reference'|'explicit-adaptation';
@@ -35,7 +36,9 @@ function sourceFactories():NonNullable<typeof factories>{
 export function buildBestiaryAnimal(species:string,presentation=true):BestiaryGroup|undefined {
  if(!information.has(species))return;
  const sources=sourceFactories(),reference=BESTIARY_NEW_SPECIES[species];
- return reference?(presentation?sources.presentation:sources.canonical).build(reference):sources.adapted.build(species);
+ const root=reference?(presentation?sources.presentation:sources.canonical).build(reference):sources.adapted.build(species);
+ if(presentation)applySpeciesCoat(species,root);
+ return root;
 }
 
 type CompiledBody=CompiledBestiaryBody;

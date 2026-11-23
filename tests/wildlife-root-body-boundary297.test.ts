@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {expect,test} from 'vitest';
 import * as THREE from 'three/webgpu';
 import {WildlifeLayer} from '../src/render/WildlifeLayer';
+import {ANIMAL_POSTURE_DOWNED} from '../src/render/actor-idle-gestures';
 import {MotionTimeline} from '../src/render/MotionTimeline';
 import {effectiveCore297} from '../src/sim/core-phase-297.ts';
 import {damageAnimalWithBullet} from '../src/sim/wildlife-health.ts';
@@ -38,7 +39,8 @@ test.each(['dead','downed'] as const)('a real clinical %s animal keeps falling/r
   const mesh=layer.mesh.children.find(c=>c.name.startsWith(`Wild ${animal.species} `)) as THREE.Mesh|undefined;
   if(!mesh)throw Error('Actual clinical species mesh absent');
   const slot=world.wildlife!.animals.filter(a=>a.species===animal.species).findIndex(a=>a.id===animal.id),g=mesh.geometry;
-  expect(g.getAttribute('aAnimal').getZ(slot)).toBe(kind==='dead'?2:1);
+  // A downed animal is posed 1.25 for Core's downed wiggle (actor-idle-gestures.ts).
+  expect(g.getAttribute('aAnimal').getZ(slot)).toBe(kind==='dead'?2:ANIMAL_POSTURE_DOWNED);
   // Free-root smoothing encodes equal displayed endpoints with marker2.
   // A clinical actor must retain the ordinary falling/rest marker0..1.
   expect(g.getAttribute('aTravel').getW(slot)).toBeLessThanOrEqual(1);

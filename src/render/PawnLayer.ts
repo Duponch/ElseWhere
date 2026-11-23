@@ -17,6 +17,8 @@ import { appearanceOf } from '../sim/pawn-appearance';
 import { AnimationDetail } from './AnimationDetail';
 import {ActorAnimationCache,sampleActorRoot} from './ActorAnimationCache';
 import {samplePawnRig} from './actor-animation-sampling';
+import {humanGesture,humanGestureCode,downedWigglePhase,HUMAN_GESTURE} from './actor-idle-gestures';
+import {TSL_GESTURE_OPS,gestureNode,tslNode,tslBool} from './actor-idle-gestures-tsl';
 import { bedSlotBodyCenter,pawnBedSlot } from '../sim/bed-slots';
 import {coupleBed285} from '../sim/couple-bed-285';
 import { corpseStage,CORPSE_ROT_TICKS,CORPSE_DESSICATION_TICKS } from '../sim/corpses';
@@ -176,8 +178,11 @@ function presentationActivity(pawn:Pawn,equipmentCode:number):number {
     const item=MACE_ITEMS_269[Math.round((equipmentCode-MACE_EQUIPMENT269)*8)-1];
     return item?maceStrikeActivity269(pawn.melee.strike.tool,item):0;
   }
-  return workActivity(pawn);
+  return workActivity(pawn)||humanGestureCode(pawn);
 }
+/** aMotion.w of a still person: its fixed gesture phase, or for a downed
+ * person the Core wiggle phase relative to the travel clock origin. */
+function idlePhase(pawn:Pawn,origin:number):number {return humanGestureCode(pawn)===HUMAN_GESTURE.downed?downedWigglePhase(pawn.id,origin):pawn.id*1.7;}
 function approachAt(transition:ApproachTransition,tick:number):{x:number;z:number} {
   const alpha=THREE.MathUtils.clamp((tick-transition.start)/APPROACH_TICKS,0,1);
   return {x:THREE.MathUtils.lerp(transition.fromX,transition.toX,alpha),z:THREE.MathUtils.lerp(transition.fromZ,transition.toZ,alpha)};
@@ -668,9 +673,22 @@ export class PawnLayer {
           .mul(bone.lessThan(5.5).select(float(.045),float(.025)));
         angle.assign(mix(angle,lowLeg,crouch));
       });
-      const local = pawnMorph(probe?.point??positionLocal,this.referenceRig,probeTraits).sub(pivot);
+      // Idle, seated, social, lying and downed gestures (actor-idle-gestures.ts):
+      // whole upper-body angles, a lean about the hip, a head turn about the neck.
+      const gesture=humanGesture(TSL_GESTURE_OPS,{code:gestureNode(motion.y),pose:gestureNode(motion.z),walking:gestureNode(walking),cargo:gestureNode(attribute('aCargo','vec4').x.abs()),
+        t:gestureNode(time),phase:gestureNode(motion.w),travelTime:gestureNode(this.travelTime)});
+      const lean=tslNode(gesture.lean),headYaw=tslNode(gesture.yaw);
+      If(tslBool(gesture.upper).and(crouch.lessThanEqual(0)).and(bone.lessThan(1.5)),()=>{angle.assign(bone.equal(0).select(tslNode(gesture.torso),tslNode(gesture.head)));});
+      If(tslBool(gesture.arms).and(crouch.lessThanEqual(0)).and(bone.greaterThan(1.5)).and(bone.lessThan(3.5)),()=>{angle.assign(bone.equal(2).select(tslNode(gesture.arm2),tslNode(gesture.arm3)));});
+      If(bone.equal(0),()=>{angle.addAssign(lean);});
+      const local = pawnMorph(probe?.point??positionLocal,this.referenceRig,probeTraits).sub(pivot).toVar();
+      If(bone.equal(1),()=>{const cy=cos(headYaw),sy=sin(headYaw),x=local.x.toVar();local.x.assign(x.mul(cy).add(local.z.mul(sy)));local.z.assign(local.z.mul(cy).sub(x.mul(sy)));});
       const c = cos(angle), s = sin(angle);
       const animated = vec3(local.x, local.y.mul(c).sub(local.z.mul(s)), local.y.mul(s).add(local.z.mul(c))).add(pivot).toVar();
+      If(bone.greaterThan(.5).and(bone.lessThan(3.5)),()=>{
+        const cl=cos(lean),sl=sin(lean),y=animated.y.sub(this.humanBind.hip).toVar(),z=animated.z.toVar();
+        animated.y.assign(y.mul(cl).sub(z.mul(sl)).add(this.humanBind.hip));animated.z.assign(y.mul(sl).add(z.mul(cl)));
+      });
       If(busy.and(bone.lessThan(3.5)),()=>{
         animated.y.addAssign(stroke.mul(.012));
       });
@@ -750,6 +768,8 @@ export class PawnLayer {
         }
         If(isWeapon.and(attribute('aEquipment','vec4').x.floor().notEqual(weapon.equipment)),()=>{animated.assign(vec3(0));});
       }
+      // Lying chest breathing: forward in bind space, upward once lying.
+      If(bone.lessThan(3.5),()=>{animated.z.addAssign(tslNode(gesture.chest).mul(bone.equal(0).select(float(1),bone.equal(1).select(float(.3),float(.6)))));});
       // Holstered equipment follows the same full-body transformation as the
       // torso when reclining, dying or being carried. Previously it was reset
       // to the standing hip after these poses and floated above the sleeper.
@@ -807,6 +827,9 @@ export class PawnLayer {
         If(dye.lessThan(0).or(dye.greaterThanEqual(100)),()=>{ animated.assign(vec3(0)); });
         animated.x.assign(animated.x.mul(.78));
       });
+      // Core PawnDownedWiggler: a downed body turns on the ground about its root.
+      const cw=cos(tslNode(gesture.wiggle)),sw=sin(tslNode(gesture.wiggle)),wx=animated.x.toVar();
+      animated.x.assign(wx.mul(cw).add(animated.z.mul(sw)));animated.z.assign(animated.z.mul(cw).sub(wx.mul(sw)));
       const cy = cos(pose.w), sy = sin(pose.w);
       return vec3(animated.x.mul(cy).add(animated.z.mul(sy)), animated.y, animated.z.mul(cy).sub(animated.x.mul(sy))).mul(PAWN_MODEL_SCALE).add(pose.xyz);
     })();
@@ -985,7 +1008,8 @@ export class PawnLayer {
       const height = float(WORLD_SCALE.carriedHeight).toVar();
       If(cached,()=>{height.assign(this.animationCache.cell(4).x);}).Else(()=>{
       If(attribute('aMotion','vec4').z.equal(1).or(attribute('aMotion','vec4').z.equal(POSE_SLEEP)).or(attribute('aMotion','vec4').z.equal(POSE_DEAD)),()=>{height.assign(.28);});
-      If(attribute('aMotion', 'vec4').z.greaterThan(1.5).and(attribute('aMotion','vec4').z.lessThan(3.5)), () => { height.assign(sin(this.time.mul(4).add(attribute('aMotion', 'vec4').w)).mul(0.08).add(1.32)); });
+      // A read book is held still (no bite bob), as the reading hands are.
+      If(attribute('aMotion', 'vec4').z.greaterThan(1.5).and(attribute('aMotion','vec4').z.lessThan(3.5)), () => { height.assign(sin(this.time.mul(4).add(attribute('aMotion', 'vec4').w)).mul(attribute('aMotion','vec4').y.equal(READING_ACTIVITY295).select(float(0),float(0.08))).add(1.32)); });
       If(attribute('aMotion', 'vec4').z.equal(3), () => { height.addAssign(WORLD_SCALE.stoolHeight - this.humanBind.seatedHip * PAWN_MODEL_SCALE); });
       If(attribute('aMotion','vec4').z.equal(6),()=>{height.assign(1.3);});
       });
@@ -1055,9 +1079,13 @@ export class PawnLayer {
       const bone=probe?float(probe.bone):pawnBoneNode(this.referenceRig),dye=pawnDyeNode(this.referenceRig),motion=vec4(0,this.animationCache.cell(4).z,this.animationCache.cell(4).y,0),probeTraits=probe?{bone,dye:float(2)}:undefined;
       const pose=pawnPresentationPose({travelTime:this.travelTime,blend:this.blend});
       const bindPivot=probe?probe.bone===3?vec3(ORIGAMI_HUMAN_BIND.shoulderX,ORIGAMI_HUMAN_BIND.shoulderY,0):vec3(0,ORIGAMI_HUMAN_BIND.hipY,0):attribute('bindPivot','vec3');
-      const pivot=pawnMorph(bindPivot,this.referenceRig,probeTraits),local=pawnMorph(probe?.point??positionLocal,this.referenceRig,probeTraits).sub(pivot);
+      const pivot=pawnMorph(bindPivot,this.referenceRig,probeTraits),local=pawnMorph(probe?.point??positionLocal,this.referenceRig,probeTraits).sub(pivot).toVar();
+      // Gesture cells (actor-idle-gestures.ts): 5 = lean cos/sin, head turn cos/sin; 6 = wiggle cos/sin, chest.
+      const gestureBody=this.animationCache.cell(5),gestureRest=this.animationCache.cell(6);
+      If(bone.equal(1),()=>{const x=local.x.toVar();local.x.assign(x.mul(gestureBody.z).add(local.z.mul(gestureBody.w)));local.z.assign(local.z.mul(gestureBody.z).sub(x.mul(gestureBody.w)));});
       const data=this.animationCache.cellAt(float(8).add(bone));
       const animated=vec3(local.x,local.y.mul(data.x).sub(local.z.mul(data.y)),local.y.mul(data.y).add(local.z.mul(data.x))).add(pivot).toVar();
+      If(bone.greaterThan(.5).and(bone.lessThan(3.5)),()=>{const y=animated.y.sub(this.humanBind.hip).toVar(),z=animated.z.toVar();animated.y.assign(y.mul(gestureBody.x).sub(z.mul(gestureBody.y)).add(this.humanBind.hip));animated.z.assign(y.mul(gestureBody.y).add(z.mul(gestureBody.x)));});
       animated.y.addAssign(data.z);animated.z.addAssign(data.w);
       const crouch=this.animationCache.cell(3).x;
       If(crouch.greaterThan(0),()=>{const upright=animated.toVar();
@@ -1091,6 +1119,7 @@ export class PawnLayer {
           If(shooting.and(isWeapon),()=>{animated.assign(vec3(across.add(.19*this.humanBind.weaponXScale),depth.add(this.humanBind.pistolY).add(recoil.mul(.035)),along.add(this.humanBind.pistolZ).sub(recoil.mul(.09))));});
           if(weapon.item==='plasteel-knife')If(motion.z.equal(8).or(motion.z.equal(WORK_POSE.groundMelee)).and(isWeapon),()=>{animated.assign(vec3(across.add(.23),depth.add(.83),along.add(.38).add(this.animationCache.cell(3).w.mul(.2))));});}
         If(isWeapon.and(attribute('aEquipment','vec4').x.floor().notEqual(weapon.equipment)),()=>{animated.assign(vec3(0));});}
+      If(bone.lessThan(3.5),()=>{animated.z.addAssign(gestureRest.z.mul(bone.equal(0).select(float(1),bone.equal(1).select(float(.3),float(.6)))));});
       If(motion.z.equal(1).or(motion.z.equal(5)).or(motion.z.equal(POSE_SLEEP)).or(motion.z.equal(POSE_DEAD)),()=>{const y=animated.y.toVar();animated.y.assign(animated.z.add(.19));animated.z.assign(float(this.humanBind.lieCenter).sub(y));});
       If(motion.z.equal(POSE_DEAD),()=>{animated.z.assign(animated.z.mul(.78));});
       If(motion.z.equal(6),()=>{const x=animated.x.toVar(),y=animated.y.toVar(),z=animated.z.toVar();animated.assign(vec3(float(this.humanBind.lieCenter).sub(y),z.add(.19+.95/PAWN_MODEL_SCALE),x.add(.3)));});
@@ -1117,6 +1146,7 @@ export class PawnLayer {
       If(helmet.and(dye.greaterThanEqual(100)).and(dye.lessThan(200)),()=>{animated.assign(vec3(0));});
       If(recon.and(dye.greaterThanEqual(200)),()=>{animated.assign(vec3(0));});
       If(attribute('aShape','vec4').x.div(10).floor().mod(10).greaterThan(1.5),()=>{If(dye.lessThan(0).or(dye.greaterThanEqual(100)),()=>{animated.assign(vec3(0));});animated.x.assign(animated.x.mul(.78));});
+      const wx=animated.x.toVar();animated.x.assign(wx.mul(gestureRest.x).add(animated.z.mul(gestureRest.y)));animated.z.assign(animated.z.mul(gestureRest.x).sub(wx.mul(gestureRest.y)));
       const yaw=this.animationCache.cell(1);return vec3(animated.x.mul(yaw.x).add(animated.z.mul(yaw.y)),animated.y,animated.z.mul(yaw.x).sub(animated.x.mul(yaw.y))).mul(PAWN_MODEL_SCALE).add(pose.xyz);
     })();
   }
@@ -1360,7 +1390,7 @@ export class PawnLayer {
       this.workPoses.set(pawn.id,workPose);
       const smallMelee=!!pawn.melee?.strike&&(world.wildlife?.animals.some(animal=>animal.id===pawn.melee!.strike!.targetId&&animal.species==='hare')??false);
       const equipmentCode=weaponVisual(gears.get(pawn.id)?.item)?.equipment??0;
-      motion.setXYZW(index, pawn.state === 'moving'&&!pawn.stun&&!pasteCollect ? 1 : 0,this.activity(pawn,equipmentCode),seatedWorkPose(animationPose(pawn,workPose,smallMelee,seated,!!coupleBed),workPose,benchSeat),pawn.melee?.strike ? coreTimeSeconds(pawn.melee.strike.atCore,Math.floor(world.tick/1024)*1024) : pawn.shooting?.stance?.phase==='cooldown'?coreTimeSeconds(pawn.shooting.stance.startedAtCore,Math.floor(world.tick/1024)*1024):pawn.id * 1.7);
+      motion.setXYZW(index, pawn.state === 'moving'&&!pawn.stun&&!pasteCollect ? 1 : 0,this.activity(pawn,equipmentCode),seatedWorkPose(animationPose(pawn,workPose,smallMelee,seated,!!coupleBed),workPose,benchSeat),pawn.melee?.strike ? coreTimeSeconds(pawn.melee.strike.atCore,Math.floor(world.tick/1024)*1024) : pawn.shooting?.stance?.phase==='cooldown'?coreTimeSeconds(pawn.shooting.stance.startedAtCore,Math.floor(world.tick/1024)*1024):idlePhase(pawn,this.travelOrigin));
       const identity=appearanceOf(pawn,world.seed),variant=appearanceShape(identity);
       blood.setX(index,bodyBloodWord(pawn.health));
       scratchColor.setHex(identity.skinColor);skin.setXYZ(index,scratchColor.r,scratchColor.g,scratchColor.b);
@@ -1644,7 +1674,7 @@ export class PawnLayer {
       if(!stepping){
         if(pawn.melee?.strike)motion.setW(i,coreTimeSeconds(pawn.melee.strike.atCore,origin));
         else if(pawn.shooting?.stance?.phase==='cooldown')motion.setW(i,coreTimeSeconds(pawn.shooting.stance.startedAtCore,origin));
-        else motion.setW(i,pawn.id*1.7);
+        else motion.setW(i,idlePhase(pawn,origin));
       }
       from.setXYZW(i,visual.from.x,visual.from.y,visual.from.z,visual.from.w);to.setXYZW(i,visual.to.x,visual.to.y,visual.to.z,visual.to.w);
       allRigidAfter=this.observeBodyAtlasPose(pawn.id,i,geometry)&&allRigidAfter;

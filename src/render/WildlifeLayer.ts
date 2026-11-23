@@ -3,7 +3,7 @@ import type {CoreActorScene297} from '../bridge/core-phase-projection-297';
 import {ActorPlayback435} from './ActorPlayback435';
 import {arrivalRotationYaw256} from '../sim/arrival-rotation-256';
 import {actorExplorationMaterial256} from './ExplorationMask256';
-import {isAnimalSpecies256} from '../sim/animal-core-v256';
+import {animalCore256,isAnimalSpecies256} from '../sim/animal-core-v256';
 import { attachedFireMesh,attachedFireShape,disposeAttachedFireCache,presentAttachedFire,setFireTexturesEnabled,sharedAttachedFireMaterial } from './FireLayer';
 import { AnimationDetail } from './AnimationDetail';
 import {ActorAnimationCache,ActorAnimationCacheNodes,sampleActorRoot} from './ActorAnimationCache';
@@ -11,6 +11,8 @@ import {ObjectResourceBinder} from './object-bound-nodes';
 import type {AffineStrokeOwner} from './surfaces/AffineStrokeOwner';
 import {PawnTweener297} from './PawnTweener297';
 import {sampleAnimalRig} from './actor-animation-sampling';
+import {ANIMAL_APPENDAGE,ANIMAL_POSTURE_DOWNED,animalGesture,animalIdleProfile,downedWigglePhase,type AnimalIdleProfile} from './actor-idle-gestures';
+import {TSL_GESTURE_OPS,gestureNode,tslNode} from './actor-idle-gestures-tsl';
 import * as THREE from 'three/webgpu';
 import {currentGraphicsStyle,withGraphicsStyle,GraphicsStyleContext} from './graphics-style';
 import {AnimalModels,ANIMAL_SURFACE_PROFILE_STRIDE,type AnimalModel} from './models/AnimalModels';
@@ -96,18 +98,30 @@ class WildlifeBodyProgram {
     const withBlood=(base:THREE.Node<'vec3'>)=>bodyBloodPigment(base,bloodBind.w,bloodScale,attribute('animalPart','vec4').w.lessThan(0).select(float(1),float(0)),attribute('aBiology','vec3').y,bloodBind);
     mat.vertexColors=false;mat.colorNode=withBlood(baseColor);
     mat.roughness=.88;mat.metalness=.02;
+    // Idle profile of the drawn species (actor-idle-gestures.ts).
+    const idleProfile={graze:binder.uniform(rig=>rig.idle.graze,first.idle.graze),peck:binder.uniform(rig=>rig.idle.peck,first.idle.peck),
+      tailAmplitude:binder.uniform(rig=>rig.idle.tailAmplitude,first.idle.tailAmplitude),tailRate:binder.uniform(rig=>rig.idle.tailRate,first.idle.tailRate),
+      shake:binder.uniform(rig=>rig.idle.shake,first.idle.shake),ruffle:binder.uniform(rig=>rig.idle.ruffle,first.idle.ruffle),look:binder.uniform(rig=>rig.idle.look,first.idle.look)};
     mat.positionNode=Fn(()=>{
       // Writes the drawn species' resources into this shared graph.
       binder.toStack();
       const cached=cache.cached().toVar();
       const pose=pawnPresentationPose(clock,instanceIndex,cached),state=attribute('aAnimal','vec4'),part=attribute('animalPart','vec4'),biology=attribute('aBiology','vec3'),bone=part.x,pivot=attribute('bindPivot','vec3');
+      const carrier=attribute('aCarrier','vec4'),mark=part.w;
       // The fallback is the complete original rig. Retained phases are CPU
       // coefficients, so no second threshold or phase preparation runs here.
       const time=presentationTime,decorativeSin=(phase:THREE.Node<'float'>)=>sin(phase);
       const angle=float(0).toVar();
       const phase=float(0).toVar();
+      // Idle gestures as cosine/sine pairs: head yaw, tail swing, wing lift,
+      // body shake (roll), Core's downed wiggle; breath swells a lying body.
+      const headC=float(1).toVar(),headS=float(0).toVar(),tailC=float(1).toVar(),tailS=float(0).toVar(),wingC=float(1).toVar(),wingS=float(0).toVar();
+      const rollC=float(1).toVar(),rollS=float(0).toVar(),wiggleC=float(1).toVar(),wiggleS=float(0).toVar(),breath=float(0).toVar();
       If(cached.not(),()=>{
       phase.assign(state.w.add(pose.xz.sub(attribute('aFrom','vec4').xz).length().mul(gaitRate)));
+      const g=animalGesture(TSL_GESTURE_OPS,{moving:gestureNode(state.x),eating:gestureNode(state.y),posture:gestureNode(state.z),seed:gestureNode(state.w),carried:gestureNode(carrier.x),
+        t:gestureNode(time),travelTime:gestureNode(travelTime),graze:gestureNode(idleProfile.graze),peck:gestureNode(idleProfile.peck),tailAmplitude:gestureNode(idleProfile.tailAmplitude),
+        tailRate:gestureNode(idleProfile.tailRate),shake:gestureNode(idleProfile.shake),ruffle:gestureNode(idleProfile.ruffle),look:gestureNode(idleProfile.look)});
       If(bone.equal(1),()=>{ angle.assign(decorativeSin(phase).mul(.5).mul(state.x)); });
       If(bone.equal(2),()=>{ angle.assign(decorativeSin(phase.add(Math.PI)).mul(.6).mul(state.x)); });
       If(bone.greaterThanEqual(3),()=>{
@@ -117,21 +131,43 @@ class WildlifeBodyProgram {
         If(state.x.lessThan(.5).and(state.y.lessThan(.5)).and(state.z.lessThan(.5)),()=>{
           angle.assign(decorativeSin(time.add(state.w)).mul(.03));
         });
+        angle.addAssign(tslNode(g.headPitch));
         // The outer shell bends continuously into the head. Existing detail
         // pieces use bone 3 (full angle); shell vertices encode 4 + weight.
         If(bone.greaterThanEqual(4),()=>{ angle.mulAssign(bone.sub(4)); });
       });
+      headC.assign(cos(tslNode(g.headYaw)));headS.assign(sin(tslNode(g.headYaw)));tailC.assign(cos(tslNode(g.tail)));tailS.assign(sin(tslNode(g.tail)));
+      wingC.assign(cos(tslNode(g.wing)));wingS.assign(sin(tslNode(g.wing)));rollC.assign(cos(tslNode(g.roll)));rollS.assign(sin(tslNode(g.roll)));
+      wiggleC.assign(cos(tslNode(g.wiggle)));wiggleS.assign(sin(tslNode(g.wiggle)));breath.assign(tslNode(g.breath));
       });
+      If(cached,()=>{const head=cache.cell(4),body=cache.cell(5),rest=cache.cell(6);headC.assign(head.x);headS.assign(head.y);tailC.assign(head.z);tailS.assign(head.w);
+        wingC.assign(body.x);wingS.assign(body.y);rollC.assign(body.z);rollS.assign(body.w);wiggleC.assign(rest.x);wiggleS.assign(rest.y);breath.assign(rest.z);});
       const c=float(0).toVar(),s=float(0).toVar();
       If(cached,()=>{const cachedIndex=float(0).toVar();bones.forEach((value,index)=>{If(bone.equal(value),()=>{cachedIndex.assign(index);});});const rotation=cache.cellAt(cachedIndex.add(8));c.assign(rotation.x);s.assign(rotation.y);}).Else(()=>{c.assign(cos(angle));s.assign(sin(angle));});
-      const p=positionLocal.sub(pivot);
-      const q=vec3(p.x,p.y.mul(c).sub(p.z.mul(s)),p.z.mul(c).add(p.y.mul(s))).add(pivot).toVar();
+      const p=positionLocal.sub(pivot).toVar();
       const n=normalLocal.toVar();
+      // Head turns about its pivot's vertical axis (shell vertices weighted);
+      // the tail about its root's vertical axis; each wing lifts about the
+      // forward axis at its root, outwards on its own side.
+      const turnY=(cosine:THREE.Node<'float'>,sine:THREE.Node<'float'>)=>{const x=p.x.toVar(),nx=n.x.toVar();p.x.assign(x.mul(cosine).add(p.z.mul(sine)));p.z.assign(p.z.mul(cosine).sub(x.mul(sine)));n.x.assign(nx.mul(cosine).add(n.z.mul(sine)));n.z.assign(n.z.mul(cosine).sub(nx.mul(sine)));};
+      If(bone.greaterThanEqual(3),()=>{const weight=bone.greaterThanEqual(4).select(bone.sub(4),float(1));turnY(mix(float(1),headC,weight),headS.mul(weight));});
+      If(bone.equal(0).and(mark.equal(ANIMAL_APPENDAGE.tail)),()=>{turnY(tailC,tailS);});
+      If(bone.equal(0).and(mark.lessThan(ANIMAL_APPENDAGE.tail-.5)),()=>{const side=pivot.x.greaterThanEqual(0).select(float(1),float(-1)),sine=wingS.mul(side),x=p.x.toVar(),nx=n.x.toVar();
+        p.x.assign(x.mul(wingC).sub(p.y.mul(sine)));p.y.assign(x.mul(sine).add(p.y.mul(wingC)));n.x.assign(nx.mul(wingC).sub(n.y.mul(sine)));n.y.assign(nx.mul(sine).add(n.y.mul(wingC)));});
+      const q=vec3(p.x,p.y.mul(c).sub(p.z.mul(s)),p.z.mul(c).add(p.y.mul(s))).add(pivot).toVar();
       const normal=vec3(n.x,n.y.mul(c).sub(n.z.mul(s)),n.z.mul(c).add(n.y.mul(s))).toVar();
+      // A short shake rolls the standing body about its long axis.
+      If(rollS.notEqual(0),()=>{const x=q.x.toVar(),y=q.y.sub(bodyCenter).toVar(),nx=normal.x.toVar();q.x.assign(x.mul(rollC).sub(y.mul(rollS)));q.y.assign(x.mul(rollS).add(y.mul(rollC)).add(bodyCenter));
+        normal.x.assign(nx.mul(rollC).sub(normal.y.mul(rollS)));normal.y.assign(nx.mul(rollS).add(normal.y.mul(rollC)));});
       If(state.z.greaterThan(.5),()=>{
+        // Breathing swells the lying trunk across its width (upward once rolled).
+        If(bone.equal(0),()=>{q.x.mulAssign(breath.add(1));});
         const x=q.x.toVar(),y=q.y.toVar(),nx=normal.x.toVar();
         q.x.assign(bodyCenter.sub(y));q.y.assign(x.add(restFloor));
         normal.x.assign(normal.y.negate());normal.y.assign(nx);
+        // Core PawnDownedWiggler: the downed body turns on the ground.
+        const wx=q.x.toVar(),wnx=normal.x.toVar();q.x.assign(wx.mul(wiggleC).add(q.z.mul(wiggleS)));q.z.assign(q.z.mul(wiggleC).sub(wx.mul(wiggleS)));
+        normal.x.assign(wnx.mul(wiggleC).add(normal.z.mul(wiggleS)));normal.z.assign(normal.z.mul(wiggleC).sub(wnx.mul(wiggleS)));
       });
       If(cached,()=>{q.y.addAssign(cache.cell(3).x);}).Else(()=>{q.y.addAssign(decorativeSin(phase).abs().mul(.08).mul(state.x));});
       If(state.x.lessThan(.5).and(state.y.lessThan(.5)).and(state.z.lessThan(.5)).and(bone.equal(0).or(bone.greaterThanEqual(3))),()=>{
@@ -143,7 +179,7 @@ class WildlifeBodyProgram {
       If(eye.greaterThanEqual(0).and(eye.notEqual(state.z.greaterThan(1.5).select(float(1),float(0)))),()=>{ q.assign(vec3(0)); });
       // Cargo uses the same confirmed carrier edge, pose and handoff as the
       // former proxy. Every owner still draws in this species' existing batch.
-      const carrier=attribute('aCarrier','vec4'),transfer=attribute('aCorpseHandoff','vec2');
+      const transfer=attribute('aCorpseHandoff','vec2');
       const from=attribute('aCorpseFrom','vec4'),to=attribute('aCorpseTo','vec4');
       const held=vec3(q.x,q.y.sub(.16),q.z).mul(biology.x).add(vec3(0,0,WORLD_SCALE.carriedForward)).toVar();
       If(carrier.x.greaterThan(.5),()=>{
@@ -296,6 +332,8 @@ class SpeciesRig {
   private headings=new Map<number,TurnHeading>();
   private readonly gait=new GaitPhaseTracker();
   readonly gaitRate:number;
+  /** Idle gestures of this species (actor-idle-gestures.ts), read by the shared body program. */
+  readonly idle:AnimalIdleProfile;
   /** Per-species values and resources read by the shared body program. */
   readonly bodyCenter:number;readonly restFloor:number;readonly bloodScale:number;readonly coatTexture:THREE.DataTexture;readonly slaughterHeight:number;
   private readonly strokeOwner:AffineStrokeOwner|undefined;
@@ -312,6 +350,7 @@ class SpeciesRig {
   constructor(readonly travelTime:WildlifeLayer['travelTime'],readonly species:string,surfaceTexture:THREE.DataTexture,style:AnimalSlaughterMarkerStyle,private readonly animationDetail:AnimationDetail,configure:((m:THREE.MeshStandardNodeMaterial)=>void)|undefined,models:AnimalModels,programs:WildlifeBodyPrograms) {
     this.animationCache=new ActorAnimationCache(animationDetail);
     this.gaitRate=animalGaitRadiansPerUnit(species);
+    this.idle=animalIdleProfile(species,isAnimalSpecies256(species)?animalCore256(species).race.body:undefined,isAnimalSpecies256(species)?String(animalCore256(species).race.foodType):undefined);
     const graphics=currentGraphicsStyle();if(!graphics)throw Error('Animal surfaces require their actual scene texture context');this.origamiGraphics=graphics;
     const model=models.get(species);this.sharedModel=model;const geometry=model.instantiate(isAnimalSpecies256(species)?16:MAX_WILDLIFE);
     geometry.userData.animationCache=this.animationCache;
@@ -662,8 +701,8 @@ class SpeciesRig {
       if(!stepping)this.gait.halt(a.id,tick,this.gaitRate);
       const resting=a.state==='downed'||!traveling&&a.state==='sleeping';
       state.setXYZW(i,stepping?1:0,!fallen&&!resting&&!traveling&&a.strike&&!a.stun?2:!traveling&&a.state==='eating'?1:0,
-        a.state==='dead'?2:resting?1:0,
-        gaitPhase??(a.strike?coreTimeSeconds(a.strike.atCore,origin):a.id%30));
+        a.state==='dead'?2:a.state==='downed'?ANIMAL_POSTURE_DOWNED:resting?1:0,
+        gaitPhase??(a.strike?coreTimeSeconds(a.strike.atCore,origin):a.state==='downed'?downedWigglePhase(a.id,origin):a.id%30));
       scale.setX(i,growth);
       if(springActor){this.captureSpring297(i,from,to,times,state);springDirty=this.springPose297(i,a,dt297,speed297,from,to,times,state)||springDirty;}
     });
@@ -694,13 +733,13 @@ class SpeciesRig {
       const state=g.getAttribute('aAnimal'),carrier=g.getAttribute('aCarrier'),handoff=g.getAttribute('aCorpseHandoff');
       // Standing idle animals breathe; eating and attacks have their own
       // confirmed analytic cycle. Rest/death without cargo is static.
-      const continuousMiddle=state.getZ(i)<.5||state.getX(i)>.5||state.getY(i)>.5||carrier.getX(i)>.5||Math.abs(handoff.getY(i))>.0001;
+      const continuousMiddle=state.getZ(i)<.5||state.getZ(i)===ANIMAL_POSTURE_DOWNED||state.getX(i)>.5||state.getY(i)>.5||carrier.getX(i)>.5||Math.abs(handoff.getY(i))>.0001;
       const due=owner!==undefined&&pawns?this.animationCache.shouldCaptureLinked(i,pawns.animationCache,owner):this.animationCache.shouldCapture(i,live.x,live.y,live.z,g.getAttribute('aScale').getX(i),continuousMiddle);
       if(!due)continue;
       const root=owner!==undefined&&pawns?.animationCache.readRoot(owner,this.linkedRoot)?this.linkedRoot:live;
       const time=owner===undefined?this.time.value:pawns?.animationCache.cpuClock(owner,'time')??this.time.value;
       const travelTime=owner===undefined?this.travelTime.value:pawns?.animationCache.cpuClock(owner,'travelTime')??this.travelTime.value;
-      this.animationCache.setRoot(i,root,time,travelTime,travelTime,this.blend.value);sampleAnimalRig(this.animationCache,i,g,root,time,travelTime,this.gaitRate,this.sampledBones);this.animationCache.publish(i);
+      this.animationCache.setRoot(i,root,time,travelTime,travelTime,this.blend.value);sampleAnimalRig(this.animationCache,i,g,root,time,travelTime,this.gaitRate,this.sampledBones,this.idle);this.animationCache.publish(i);
     }this.animationCache.flush();if(this.hasFireActors)presentAttachedFire(this.flames,g,this,this.animationDetail);
   }
 }

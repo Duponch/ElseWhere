@@ -138,7 +138,7 @@ describe('seven explicitly adapted bestiary species, actual product factories',(
     for(const geometry of [compiled.body,compiled.brush,compiled.wear]){
      const word=geometry.getAttribute('animalPart'),paint=geometry.getAttribute('animalPaint'),pivot=geometry.getAttribute('bindPivot');expect(word.itemSize).toBe(4);
      expect(word.count).toBeGreaterThan(0);for(let i=0;i<word.count;i++){
-      if(!masks.has(word.getY(i))||!bones.has(word.getX(i))||![-1,0,1].includes(word.getW(i)))throw Error(`${id}: compiled anatomy word changed at vertex ${i}`);
+      if(!masks.has(word.getY(i))||!bones.has(word.getX(i))||![-1,0,1,-2,-3,-4].includes(word.getW(i)))throw Error(`${id}: compiled anatomy word changed at vertex ${i}`);
       if(paint.getW(i)<43||paint.getW(i)>87||!Number.isInteger(paint.getW(i)))throw Error(`${id}: compiled paint left the admitted static source table`);
       if(![pivot.getX(i),pivot.getY(i),pivot.getZ(i)].every(Number.isFinite))throw Error(`${id}: non-finite compiled bind pivot`);
      }

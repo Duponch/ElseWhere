@@ -16,6 +16,8 @@ export interface DeveloperPage {
 export const DEVELOPER_PAGES: readonly DeveloperPage[] = [
   { id: 'assets', file: 'assets.html', title: 'Modèles et assets',
     description: 'L’atelier des modèles 3D : personnes, animaux, plantes, objets et bâtiments dans les styles du jeu.', published: true },
+  { id: 'animations', file: 'animations.html', title: 'Animations',
+    description: 'Toutes les animations des personnes et des animaux, jouées par les rigs du jeu : corps ou espèce, action, vitesse, avec une description de chacune.', published: true },
   { id: 'sounds', file: 'sounds-review.html', title: 'Sons et musiques',
     description: 'Tous les sons et musiques du jeu, à écouter prise par prise, avec un réglage du volume de chacun.', published: true },
   { id: 'lore', file: 'lore.html', title: 'Textes de l’univers',

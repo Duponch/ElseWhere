@@ -2,6 +2,9 @@ import type {BufferGeometry} from 'three/webgpu';
 import {ActorAnimationCache,type CachedActorPose} from './ActorAnimationCache';
 import {HUMAN_GAIT_RADIANS_PER_UNIT} from './gait-presentation';
 import {WORK_POSE} from './work-presentation';
+import {animalIdleProfile,evaluateAnimalGesture,evaluateHumanGesture,restingAnimalGesture,restingHumanChest,type AnimalIdleProfile,type ScalarAnimalGesture} from './actor-idle-gestures';
+
+const STILL_ANIMAL:Readonly<ScalarAnimalGesture>=Object.freeze({headPitch:0,headYaw:0,tail:0,wing:0,roll:0,breath:0,wiggle:0});
 import {TICKS_PER_SECOND} from '../sim/types';
 import {PAWN_MODEL_SCALE,WORLD_SCALE} from '../world/scale';
 
@@ -26,9 +29,18 @@ export function samplePawnRig(cache:ActorAnimationCache,slot:number,g:BufferGeom
   const recoil=pose===15?clamp(1-(travelTime-phase)/.30):0;
   cache.set(slot,3,crouch,Math.sin(time+phase*1.97)>.994?1:0,recoil,reach);
   let height=pose===1||pose===18||pose===19?.28:pose===6?1.3:WORLD_SCALE.carriedHeight;
-  if(pose>1.5&&pose<3.5)height=Math.sin(time*4+phase)*.08+1.32;
+  if(pose>1.5&&pose<3.5)height=Math.sin(time*4+phase)*(activity===14?0:.08)+1.32;
   if(pose===3)height+=WORLD_SCALE.stoolHeight-.605*PAWN_MODEL_SCALE;
   cache.set(slot,4,height,pose,activity);
+  // Sleepers and bodies (the static middle rigs resampled at middleHz) take a
+  // scalar shortcut; a far actor (under farPixels on screen, sampled once)
+  // keeps its plain pose: the gestures would not show at that size.
+  const resting=pose===18||pose===19||cache.level(slot)===2;
+  const gesture=resting?undefined:evaluateHumanGesture(activity,pose,walking,Math.abs(cargo.getX(slot)),time,phase,travelTime);
+  const upper=!!gesture&&gesture.upper!==0&&crouch<=0,arms=!!gesture&&gesture.arms!==0&&crouch<=0;
+  const lean=gesture?gesture.lean:0,headYaw=gesture?gesture.yaw:0,wiggle=gesture?gesture.wiggle:0;
+  cache.set(slot,5,Math.cos(lean),Math.sin(lean),Math.cos(headYaw),Math.sin(headYaw));
+  cache.set(slot,6,Math.cos(wiggle),Math.sin(wiggle),gesture?gesture.chest:restingHumanChest(pose,time,phase),0);
   for(let bone=0;bone<8;bone++){
     const sign=bone===3||bone===4||bone===6?-1:1;let angle=0;
     if(bone>1.5){
@@ -59,6 +71,9 @@ export function samplePawnRig(cache:ActorAnimationCache,slot:number,g:BufferGeom
       angle=lerp(angle,low,crouch);
     }
     if(crouch>0&&bone>3.5)angle=lerp(angle,Math.sin(time*8+phase+(bone===4||bone===6?0:Math.PI))*(bone<5.5?.045:.025),crouch);
+    if(upper&&bone<1.5)angle=bone===0?gesture!.torso:gesture!.head;
+    if(arms&&bone>1.5&&bone<3.5)angle=bone===2?gesture!.arm2:gesture!.arm3;
+    if(bone===0)angle+=lean;
     let y=0,z=0;if(busy&&bone<3.5)y+=stroke*.012;if(idle&&bone<3.5){y+=breath*.007;z+=breath*.004;}
     // Pre-crouch offsets and post-crouch brawl offsets occupy separate cells.
     cache.set(slot,8+bone,Math.cos(angle),Math.sin(angle),y,z);
@@ -68,9 +83,15 @@ export function samplePawnRig(cache:ActorAnimationCache,slot:number,g:BufferGeom
 
 /** Wildlife's fractional shell influences are finite values authored in its
  * geometry. They are each sampled once, rather than trig per shell vertex. */
-export function sampleAnimalRig(cache:ActorAnimationCache,slot:number,g:BufferGeometry,root:CachedActorPose,time:number,travelTime:number,rate:number,bones:readonly number[]):void {
+export function sampleAnimalRig(cache:ActorAnimationCache,slot:number,g:BufferGeometry,root:CachedActorPose,time:number,travelTime:number,rate:number,bones:readonly number[],profile:AnimalIdleProfile=animalIdleProfile('')):void {
   const state=g.getAttribute('aAnimal'),from=g.getAttribute('aFrom'),carrier=g.getAttribute('aCarrier');
   const moving=state.getX(slot),eating=state.getY(slot),posture=state.getZ(slot),seed=state.getW(slot);
+  // As for people: lying or dead still animals take the scalar shortcut, far ones keep their plain pose.
+  const gesture=cache.level(slot)===2?STILL_ANIMAL:restingAnimalGesture(moving,posture,seed,carrier.getX(slot),time,profile.tailAmplitude)??evaluateAnimalGesture(moving,eating,posture,seed,carrier.getX(slot),time,travelTime,profile);
+  const {headYaw,tail,wing,roll,wiggle}=gesture;
+  cache.set(slot,4,Math.cos(headYaw),Math.sin(headYaw),Math.cos(tail),Math.sin(tail));
+  cache.set(slot,5,Math.cos(wing),Math.sin(wing),Math.cos(roll),Math.sin(roll));
+  cache.set(slot,6,Math.cos(wiggle),Math.sin(wiggle),gesture.breath,0);
   const phase=seed+Math.hypot(root.x-from.getX(slot),root.z-from.getZ(slot))*rate;
   const pulse=Math.sin(phase),breath=Math.sin(time+seed);
   let height:number=WORLD_SCALE.carriedHeight;const carrierPose=carrier.getY(slot);
@@ -82,7 +103,7 @@ export function sampleAnimalRig(cache:ActorAnimationCache,slot:number,g:BufferGe
   for(let index=0;index<bones.length;index++){const bone=bones[index]!;
     let angle=0;if(bone===1)angle=pulse*.5*moving;else if(bone===2)angle=Math.sin(phase+Math.PI)*.6*moving;
     else if(bone>=3){angle=moving>.5?pulse*.06:eating>1?Math.sin(clamp((travelTime-seed)*10,0,Math.PI))*.9:eating*(Math.sin(time*5)*.12+.48);
-      if(moving<.5&&eating<.5&&posture<.5)angle=breath*.03;if(bone>=4)angle*=bone-4;}
+      if(moving<.5&&eating<.5&&posture<.5)angle=breath*.03;angle+=gesture.headPitch;if(bone>=4)angle*=bone-4;}
     cache.set(slot,8+index,Math.cos(angle),Math.sin(angle));
   }
 }

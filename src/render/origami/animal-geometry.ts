@@ -9,6 +9,9 @@ import {bodyBloodRegion} from '../body-blood-word-297';
 import {buildOrigamiAnimalReference,type OrigamiAnimalReference} from './animal-reference';
 import {buildOrigamiAnimalPresentation} from './animal-presentation';
 import {createReferenceEdgeGeometry} from './reference-edges';
+import {appendagePivot} from './bestiary-geometry';
+import {applySpeciesCoat} from './species-coats';
+import {ANIMAL_APPENDAGE} from '../actor-idle-gestures';
 import {BESTIARY_ANIMAL_SPECIES,bestiaryAnimalGeometry,bestiaryAnimalBodyCenter,bestiaryAnimalReferenceInfo,bestiaryAnimalCachedWearBytes,type OrigamiAnimalReferenceInfo} from './bestiary-registry';
 
 /** Existing clinical and gameplay identities select exact reference artwork.
@@ -157,6 +160,7 @@ function compileAnimal(species:string,presentation=false,includeWear=true):Compi
     return other;
   }
   const root=presentation?buildOrigamiAnimalPresentation(reference):buildOrigamiAnimalReference(reference);
+  if(presentation)applySpeciesCoat(species,root);
   root.updateMatrixWorld(true);
   const original=animalParts(species),trunk=original[0],referenceLength={fox:1.32,camel:1.42,hare:.68,dog:1.26,buffalo:1.735,gazelle:1.06,deer:1.32,elephant:1.78}[reference];
   // Scale from the existing adult trunk length, independently of age/health;
@@ -166,6 +170,10 @@ function compileAnimal(species:string,presentation=false,includeWear=true):Compi
   const data:number[]=[],paintUV:number[]=[],lineData:number[]=[],lineUV:number[]=[],wearData:number[]=[],wearUV:number[]=[],wearBase:number[]=[],wearDirections:number[]=[],point=new THREE.Vector3(),normal=new THREE.Vector3(),center=new THREE.Vector3(),matrix=new THREE.Matrix3();
   const legs=root.userData.legs as THREE.Object3D[],head=root.userData.headGroup as THREE.Object3D;
   const headPivot=convert(head.getWorldPosition(new THREE.Vector3()));
+  // Idle gestures: the tail turns about its root (actor-idle-gestures.ts).
+  const tailPoints:THREE.Vector3[]=[],tailGroup=root.userData.tailGroup as THREE.Object3D|undefined;
+  if(tailGroup)root.traverse(object=>{if(!(object instanceof THREE.Mesh)||!object.visible||!belongsTo(object,tailGroup)||legs.some(leg=>belongsTo(object,leg)))return;const p=(object as RefMesh).geometry.getAttribute('position');for(let i=0;i<p.count;i++)tailPoints.push(convert(new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(object.matrixWorld)));});
+  const tailPivot=tailPoints.length?appendagePivot(tailPoints,'tail'):undefined;
   let count=0;
   root.traverse(object=>{
     if(!(object instanceof THREE.Mesh)||!object.visible)return;
@@ -187,20 +195,21 @@ function compileAnimal(species:string,presentation=false,includeWear=true):Compi
       // The reference uses the same dark hoof boxes for fox/dog paws.
       if(['fox','dog'].includes(reference))owner=owner.replace('-hoof','-paw') as BodyPartId;
     }
-    const medical=nativeOwner(species,owner),bit=corpseVisualPartBit(medical,species),region=bodyBloodRegion(medical,true),isEye=owner.endsWith('-eye');
+    const tail=!!tailPivot&&bone===0&&!limb&&belongsTo(mesh,tailGroup);if(tail)pivot=tailPivot;
+    const medical=nativeOwner(species,owner),bit=corpseVisualPartBit(medical,species),region=bodyBloodRegion(medical,true),isEye=owner.endsWith('-eye'),mark=isEye?0:tail?ANIMAL_APPENDAGE.tail:-1;
     const color=mesh.material.color,profile=mesh.material.userData.referencePaintIndex as number;
     count++;
     if(!other)for(let i=0;i<p.count;i++){
       point.fromBufferAttribute(p,i).applyMatrix4(mesh.matrixWorld);convert(point);
       normal.fromBufferAttribute(n,i).applyNormalMatrix(matrix);normal.set(-normal.z,normal.y,normal.x);
-      data.push(point.x,point.y,point.z,normal.x,normal.y,normal.z,color.r,color.g,color.b,profile,bone,bit,region,isEye?0:-1,pivot.x,pivot.y,pivot.z);
+      data.push(point.x,point.y,point.z,normal.x,normal.y,normal.z,color.r,color.g,color.b,profile,bone,bit,region,mark,pivot.x,pivot.y,pivot.z);
       paintUV.push(uv.getX(i),uv.getY(i));
     }
     const edges=createReferenceEdgeGeometry(mesh.geometry,mesh.userData.referenceEdgeAngle as number,includeWear);
     const lp=edges.lines.getAttribute('position');
     if(!other)for(let i=0;i<lp.count;i++){
       point.fromBufferAttribute(lp,i).applyMatrix4(mesh.matrixWorld);convert(point);
-      lineData.push(point.x,point.y,point.z,0,1,0,color.r,color.g,color.b,profile,bone,bit,region,isEye?0:-1,pivot.x,pivot.y,pivot.z);lineUV.push(0,0);
+      lineData.push(point.x,point.y,point.z,0,1,0,color.r,color.g,color.b,profile,bone,bit,region,mark,pivot.x,pivot.y,pivot.z);lineUV.push(0,0);
     }
     if(edges.wear){
       const wn=edges.wear.getAttribute('normal'),wu=edges.wear.getAttribute('uv');
@@ -210,7 +219,7 @@ function compileAnimal(species:string,presentation=false,includeWear=true):Compi
         point.fromArray(base,i).applyMatrix4(mesh.matrixWorld);convert(point);
         direction.fromArray(directions,i).applyMatrix3(linear);direction.set(-direction.z*scale,direction.y*scale,direction.x*scale);
         normal.fromBufferAttribute(wn,i/3).applyNormalMatrix(matrix);normal.set(-normal.z,normal.y,normal.x);
-        wearData.push(point.x,point.y,point.z,normal.x,normal.y,normal.z,color.r,color.g,color.b,profile,bone,bit,region,isEye?0:-1,pivot.x,pivot.y,pivot.z);
+        wearData.push(point.x,point.y,point.z,normal.x,normal.y,normal.z,color.r,color.g,color.b,profile,bone,bit,region,mark,pivot.x,pivot.y,pivot.z);
         wearUV.push(wu.getX(i/3),wu.getY(i/3));wearBase.push(point.x,point.y,point.z);wearDirections.push(direction.x,direction.y,direction.z);
       }
     }

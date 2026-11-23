@@ -45,7 +45,8 @@ test('real protected deer keeps all source eye/clinical corners, shares one spec
     const [a,b]=leases,resource=a!.resource;expect(resource).toBe(b!.resource);expect(library.snapshot()).toMatchObject({ready:1,pending:0,leases:2});
     expect(reads.mock.calls.length).toBeGreaterThan(0);expect(new Set(reads.mock.calls.map(call=>call[0])).size).toBe(reads.mock.calls.length);
     expect(resource.sourceVertex.length).toBe(body.index!.count);expect(resource.triangleChart.length).toBe(body.index!.count/3);
-    const eye=resource.geometry.getAttribute('eyeMark');expect(new Set(Array.from({length:eye.count},(_,v)=>eye.getX(v)))).toEqual(new Set([-1,0,1]));
+    const eye=resource.geometry.getAttribute('eyeMark');// -2: the tail, tagged for its idle swing (actor-idle-gestures.ts).
+    expect(new Set(Array.from({length:eye.count},(_,v)=>eye.getX(v)))).toEqual(new Set([-1,0,1,-2]));
     // Every full-source corner participates, including the crossed-eye records
     // which the standalone living deer fixture intentionally leaves out.
     expect(resource.facts.bodyTriangles).toBe(body.index!.count/3);expect(resource.facts.stockRibbonTriangles).toBe(stock.index!.count/3);

@@ -76,6 +76,8 @@ export class ActorAnimationCache {
     this.set(slot,1,1,0,0,0);
   }
   reset():void {this.entries.length=0;this.values.fill(0);this.dirty=true;this.originalOnly=false;}
+  /** Detail level (0 near, 1 middle, 2 far) of the slot's current sample. */
+  level(slot:number):number {return this.entries[slot]?.handle.level??0;}
   /** Only classification runs on ordinary frames. Expensive pose evaluation
    * lives in writer, and never executes for the original near pipeline. */
   sample(slot:number,x:number,y:number,z:number,scale:number,writer:()=>void):boolean {

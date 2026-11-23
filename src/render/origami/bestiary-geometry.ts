@@ -12,6 +12,7 @@ import {createReferenceEdgeGeometry} from './reference-edges';
 import {createRigBrushGeometry} from './rig-brush';
 import {deriveAnimalCargoBack,cargoBackMetadata} from './animal-cargo-back';
 import type {BestiaryGroup,BestiaryMesh,BestiaryMaterial,Triple} from './bestiary-types';
+import {ANIMAL_APPENDAGE} from '../actor-idle-gestures';
 
 export const BESTIARY_NEW_SPECIES:Readonly<Record<string,string>>=Object.freeze({
  boomalope:'boomalope',boomrat:'boomrat',megasloth:'megasloth',megaspider:'megaspider',spelopede:'spelopede',warg:'warg',
@@ -100,7 +101,32 @@ export function describeBestiaryAnimal(species:string,root:BestiaryGroup):Bestia
   parts.push({mesh:object,visualRole:role,nativePart,nativeRecordIndex:clinical.index,maskBit,bloodRegion:bodyBloodRegion(nativePart,true),bone,pivot,
    eyeMark:/^(left|right)-eye$/.test(role)?0:-1,sourceLimbOrdinal:limb?sourceLimbs.indexOf(limb):null,clinicalProjection:owner.index===clinical.index?'exact':'native-ancestor'});
  });
- return{species,parts,scale,floor,bodyCenter:(torsoBounds.getCenter(new THREE.Vector3()).y-floor)*scale,referenceLength,nativeLimbCount:nativeLimbs.length,sourceLimbCount:sourceLimbs.length,torsoBounds};
+ return{species,parts:tagAppendages(parts,{scale,floor}),scale,floor,bodyCenter:(torsoBounds.getCenter(new THREE.Vector3()).y-floor)*scale,referenceLength,nativeLimbCount:nativeLimbs.length,sourceLimbCount:sourceLimbs.length,torsoBounds};
+}
+
+/** Idle gestures (actor-idle-gestures.ts): the torso-attached tail turns
+ * about its root and each bird wing lifts about its upper edge. One pivot per
+ * tail and per wing side, measured once on the converted source vertices;
+ * their parts keep bone 0 (the program's bone set is unchanged) and carry an
+ * appendage tag in the free eye-mark slot. */
+function tagAppendages(parts:NativeSourcePart[],plan:Pick<BestiaryCompilationPlan,'scale'|'floor'>):NativeSourcePart[] {
+ const groups=new Map<number,NativeSourcePart[]>();
+ for(const part of parts){if(part.bone!==0||part.sourceLimbOrdinal!==null||part.eyeMark!==-1)continue;
+  const tag=part.visualRole==='tail'?ANIMAL_APPENDAGE.tail:part.visualRole==='left-wing'?ANIMAL_APPENDAGE.leftWing:part.visualRole==='right-wing'?ANIMAL_APPENDAGE.rightWing:undefined;
+  if(tag!==undefined){const list=groups.get(tag)??[];list.push(part);groups.set(tag,list);}}
+ if(!groups.size)return parts;
+ const pivots=new Map<number,THREE.Vector3>();
+ for(const [tag,members] of groups){const points:THREE.Vector3[]=[];for(const part of members){const p=part.mesh.geometry.getAttribute('position');for(let i=0;i<p.count;i++)points.push(convertBestiaryPoint(new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(part.mesh.matrixWorld),plan));}
+  pivots.set(tag,appendagePivot(points,tag===ANIMAL_APPENDAGE.tail?'tail':'wing'));}
+ return parts.map(part=>{const tag=[...groups].find(([,members])=>members.includes(part))?.[0];return tag===undefined?part:{...part,eyeMark:tag,pivot:pivots.get(tag)!.clone()};});
+}
+/** Tail: the end nearest the body (largest z, the animal faces +z), at the
+ * middle of that end. Wing: its upper edge, at the middle of the wing. */
+export function appendagePivot(points:readonly THREE.Vector3[],kind:'tail'|'wing'):THREE.Vector3 {
+ const box=new THREE.Box3().setFromPoints([...points]);
+ if(kind==='wing'){const top=points.filter(p=>p.y>=box.max.y-(box.max.y-box.min.y)*.15);const x=top.reduce((sum,p)=>sum+p.x,0)/Math.max(1,top.length);return new THREE.Vector3(x,box.max.y,(box.min.z+box.max.z)/2);}
+ const near=points.filter(p=>p.z>=box.max.z-(box.max.z-box.min.z)*.2),y=near.reduce((sum,p)=>sum+p.y,0)/Math.max(1,near.length),x=near.reduce((sum,p)=>sum+p.x,0)/Math.max(1,near.length);
+ return new THREE.Vector3(x,y,box.max.z);
 }
 
 export type ProfileForBestiaryMaterial=(material:BestiaryMaterial)=>number;
