@@ -26,10 +26,10 @@ test('native wall inspection reaches its future plan and returns without changin
   const state:NativeUiState={world,epoch:483,panel:null,category:'orders',tool:'select',orientation:0,selectedPawnIds:[],selectedObjects:[{kind:'structure',id:f.ids.wallId}],constructionMaterial:'steel',creationStorage:{priority:3,filters:{wood:true,food:true}},speed:0,hasGame:true,busy:false,saves:[]};
   const actions:NativeUiActions={command:async()=>{throw Error('Inspection cannot send a simulation command');},panel:noop,category:noop,tool:noop,selectPawn:noop,speed:noop,rotate:noop,material:noop,creationStorage:noop,front:noop,save:noop,exportSave:noop,showPage:noop,refresh:noop,readState:()=>state,
     selectObject:target=>{state.selectedObjects=[target];},clearSelection:()=>{state.selectedObjects=[];}};
-  const find=(page:NativePage,id:string)=>page.rows.flatMap(row=>row.controls??[]).find(c=>c.id===id);
-  const wall=buildNativeInspector(state,actions)!;expect(wall.id).toBe('inspect-structure-'+f.ids.wallId);
+  const find=(page:NativePage,id:string)=>[...page.rows.flatMap(row=>row.controls??[]),...(page.actions??[])].find(c=>c.id===id);
+  const wall=buildNativeInspector(state,actions)!;expect(wall.id).toBe('inspect-structure-'+f.ids.wallId+'-pane');
   const choose=find(wall,'wall-door-inspect-job-'+planId);expect(choose).toBeDefined();choose!.onActivate!();
-  const plan=buildNativeInspector(state,actions)!;expect(plan.id).toBe('inspect-job-'+planId);expect(plan.actions?.some(c=>c.id==='object-action-cancel')).toBe(true);
+  const plan=buildNativeInspector(state,actions)!;expect(plan.id).toBe('inspect-job-'+planId+'-pane');expect(plan.actions?.some(c=>c.id==='object-action-cancel')).toBe(true);
   find(plan,'wall-door-inspect-structure-'+f.ids.wallId)!.onActivate!();expect(state.selectedObjects).toEqual([{kind:'structure',id:f.ids.wallId}]);expect(JSON.stringify(world)).toBe(before);
   buildNativeInspector(state,actions)!.onClose!();expect(state.selectedObjects).toEqual([]);expect(JSON.stringify(world)).toBe(before);
   command(world,{type:'cancel-job',jobId:planId});state.selectedObjects=[{kind:'structure',id:f.ids.wallId}];choose!.onActivate!();expect(state.selectedObjects).toEqual([{kind:'structure',id:f.ids.wallId}]);

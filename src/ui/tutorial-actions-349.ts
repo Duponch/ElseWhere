@@ -30,7 +30,7 @@ const MAIN_TABS:Readonly<Record<Exclude<Panel,null>,string>>=Object.freeze({
 /** Core inspector tabs (ITab tutorTag) of the native inspector controls. */
 const INSPECTOR_TABS:Readonly<Record<string,string>>=Object.freeze({
   'pawn-tab-bio':'Character','pawn-tab-needs':'Needs','pawn-tab-health':'Health','pawn-tab-gear':'Gear','pawn-tab-social':'Social','pawn-tab-journal':'Log','pawn-tab-prisoner':'Prisoner',
-  'station-bills':'Bills','shelf-policy':'Storage','stockpile-settings':'Storage',
+  'station-bills':'Bills','pane-tab-bills':'Bills','pane-tab-storage':'Storage','shelf-policy':'Storage','stockpile-settings':'Storage',
 });
 const pascal=(id:string)=>id.split(/[-_]/).filter(Boolean).map(part=>part[0]!.toUpperCase()+part.slice(1)).join('');
 /** The Core name of a building or designator of Elsewhere. */

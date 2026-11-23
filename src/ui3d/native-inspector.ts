@@ -1,3 +1,4 @@
+import {composeThingPane, objectPaneParts, lineOfRow, type PaneGauge, type PaneSpec, type PaneTab} from './native-thing-pane';
 import {isShipComputerSensorsKind298} from '../sim/ship-computer-sensors-content-298';
 import { stripInspectorAction351 } from '../sim/strip-351';
 import { PLAN_COLORS_369, PLAN_COLOR_DEFS_369, isPlanColor369, planById369, planLabel369, totalPlanArea369 } from '../sim/plans-369';
@@ -139,6 +140,12 @@ type Tab = 'journal' | 'gear' | 'social' | 'bio' | 'needs' | 'health' | 'prisone
 const tabs: readonly [Tab, string][] = [['journal', 'Journal'], ['gear', 'Matériel'], ['prisoner', 'Prisonnier'], ['social', 'Social'], ['bio', 'Bio'], ['needs', 'Besoins'], ['health', 'Santé']];
 /** `ITab.size` of each window; the Bio card is 480 × 455 inside 17 points. */
 const tabSizes: Record<Tab, { width: number; height: number; margin: number }> = { bio: { width: 514, height: 489, margin: 17 }, needs: { width: 580, height: 520, margin: 0 }, health: { width: 630, height: 430, margin: 0 }, gear: { width: 460, height: 450, margin: 0 }, social: { width: 540, height: 510, margin: 0 }, journal: { width: 630, height: 510, margin: 0 }, prisoner: { width: 280, height: 450, margin: 0 } };
+/** The tabs of things that are not people (`ITab_Bills`, `ITab_Storage`,
+ * `ITab_Pawn_Training`) and their `ITab.size`; the animals share the human ids
+ * of the health, needs, social and log tabs (the same classes in Core). */
+const THING_TAB_IDS: readonly string[] = ['bills', 'storage', 'training'];
+let paneSpec: PaneSpec | undefined;
+function currentPaneSpec(): PaneSpec | undefined { return paneSpec; }
 /** Planning's labels and colours (native-panels.ts), for the pane's gauge. */
 const scheduleLabels: Record<ScheduleAssignment, string> = { anything: 'Temps libre', work: 'Travail', sleep: 'Dormir', recreation: 'Loisir' };
 const scheduleColors: Record<ScheduleAssignment, string> = { anything: '#e9d2a9', work: '#dfb7a4', sleep: '#c2d5e0', recreation: '#c9dfc1' };
@@ -159,16 +166,16 @@ const pct = (value: number) => `${Math.round(value * 100)} %`;
 const signed = (value: number) => `${value > 0 ? '+' : ''}${Number(value.toFixed(1))}`;
 /** Core `MainTabWindow_Inspect.OpenTabType`: no tab open at first; a tab stays
  * open across selections while the new selection has it. */
-let activeTab: Tab | null = null, feedback = '', latest: NativeUiState, owner: NativeUiActions;
+let activeTab: string | null = null, feedback = '', latest: NativeUiState, owner: NativeUiActions;
 let healthPane: 'overview' | 'operations' = 'overview';
 /** Core `ITab_Pawn_Log`: « Tout » off, « Social » and « Combat » on at first. */
 const logFilter = { all: false, social: true, combat: true };
 let portraitClothed = true;
 export function setNativeInspectorTab(value:string):void {
   if(value==='none'){activeTab=null;subpage=undefined;resetCardScroll();return;}
-  if(!tabs.some(([tab])=>tab===value))return;activeTab=value as Tab;subpage=undefined;resetCardScroll();
+  if(!tabs.some(([tab])=>tab===value)&&!THING_TAB_IDS.includes(value))return;activeTab=value;subpage=undefined;resetCardScroll();
 }
-let selectionKey = '', subpage: { kind: 'bills' | 'storage' | 'item' | 'anatomy'; structureId?: number; stockpileId?: number; itemId?: number; pawnId?: number } | undefined;
+let selectionKey = '', subpage: { kind: 'bills' | 'storage' | 'item' | 'anatomy' | 'info'; structureId?: number; stockpileId?: number; itemId?: number; pawnId?: number } | undefined;
 const billDrafts = new Map<string, BillSettings>();
 const billWorkers = new Map<string, BillWorkerOptions283>();
 let storageClipboard: StorageSettings | undefined;
@@ -343,6 +350,8 @@ function overallArmor(pieces: readonly MaterialPile[]): Record<'sharp' | 'blunt'
 function pawnPage(world: World, pawn: Pawn): NativePage {
   const colonist = isColonist(pawn) && !pawn.prisoner, alive = pawn.state !== 'dead';
   if (!pawn.prisoner && activeTab === 'prisoner') activeTab = null;
+  // Core `OpenTabType` is a class: a tab this person does not have stays remembered but shows nothing.
+  const pawnTab: Tab | null = tabs.some(([tab]) => tab === activeTab) ? activeTab as Tab : null;
   const sex = appearanceOf(pawn, world.seed).sex, status = pawn.prisoner ? 'Prisonnier' : colonist ? 'Colon' : pawn.visitor ? 'Visiteur' : pawn.podRescue ? 'Naufragé' : 'Hors-la-loi';
   // Core InterfaceToggleTab: clicking the open tab closes it.
   const rows: NativeRow[] = [{ id: 'pawn-tabs', label: '', region:'navigation', compact: true, controls: tabs.filter(([tab]) => tab !== 'prisoner' || pawn.prisoner).map(([tab, label]) => control(`pawn-tab-${tab}`, label, () => { activeTab = activeTab === tab ? null : tab; resetCardScroll(); }, false, activeTab === tab, tabHints[tab])) }];
@@ -364,9 +373,9 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   // Schema 360: Core's Pawn.GetInspectString shows the inspiration and its time left.
   const inspiration360 = inspirationInspectLine360(world, pawn); if (inspiration360) rows.push({ ...row('pawn-inspiration', inspiration360.label, inspiration360.value, inspiration360.hint), inspectPane: true });
   if (colonist && alive) rows.push({ ...row('pawn-orders', 'Ordres', `${pawn.orders.active !== null ? 'Travail imposé · ' : ''}${pawn.orders.queue.length} en file${pawn.priorityWork ? ` · Case ${pawn.priorityWork.cell.x}, ${pawn.priorityWork.cell.z}` : ''}`), inspectPane: true });
-  if (activeTab === 'bio') {
+  if (pawnTab === 'bio') {
     rows.push({ id: 'bio-card', label: '', bio: bioCard(world, pawn, sex, colonist) });
-  } else if (activeTab === 'needs') {
+  } else if (pawnTab === 'needs') {
     const tab: NativeRow[] = [];
     tab.push(heading('needs', 'Besoins'));
     for (const [key, label] of [['hunger', 'Nourriture'], ['rest', 'Sommeil'], ['beauty', 'Beauté'], ['comfort', 'Confort']] as const) tab.push(alive ? meterRow(`need-${key}`, label, pawn[key], 100, `${needHelp[key]} Repères de la jauge : ${NEED_THRESHOLDS[key].map(value => `${value} %`).join(' · ')}.`, `${Math.round(pawn[key])} %`) : row(`need-${key}`, label, '—', 'Décédé · Dossier arrêté au décès.'));
@@ -401,7 +410,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
     const party = world.party292?.active, participation = party?.members.find(member => member.pawnId === pawn.id);
     if (party && (participation || party.organizerId === pawn.id)) tab.push(row('party-participation', party.organizerId === pawn.id ? 'Organise la fête collective' : 'Participe à la fête collective', `${((participation?.presentCore ?? 0) / 2500).toFixed(2)} h de présence réelle`, `Lieu ${party.site.x}, ${party.site.z}`));
     rows.push({ id: 'tab-card', label: '', card: needsSpec(world, pawn, alive, tab, thoughts, thresholds) });
-  } else if (activeTab === 'health') {
+  } else if (pawnTab === 'health') {
     const health = pawn.health, careful = isCarePatient(pawn) && alive;
     const operationsAvailable = careful && (colonist || !!pawn.prisoner && world.schemaVersion >= 280);
     if (!operationsAvailable) healthPane = 'overview';
@@ -450,7 +459,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
     }
     rows.push({ id: 'tab-card', label: '', card: { type: 'health', tab: healthPane, tabs: { overview: overviewTab, operations: operationsTab, operationsLabel: operationsTab?.label ?? 'Opérations' }, settings, pain: alive ? { ...pain, hint: painHint } : undefined, capacities, entries,
       bleed: bleedTotal > .01 ? { text: `Saignement : ${pct(bleedTotal)}/jour`, hint: 'Somme des plaies qui saignent encore. Le traitement des plaies arrête leur saignement ; la récupération du sang reste progressive.' } : undefined, operations, emptyText: '(Aucun problème de santé)' } });
-  } else if (activeTab === 'gear') {
+  } else if (pawnTab === 'gear') {
     const primary = equippedWeapon(world, pawn), comfortable = comfortableTemperature(world, pawn), canOrder = colonist && alive;
     const massOf = (pile: MaterialPile) => { const unit = physicalTravelUnitMass(pile, world.schemaVersion); return unit === undefined ? undefined : unit * pile.quantity; };
     const info = (id: number) => control(`item-information-${id}`, 'Informations', () => { subpage = { kind: 'item', itemId: id }; }, false, false, 'Informations sur cet objet');
@@ -480,7 +489,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
       armor: alive ? [{ id: 'sharp', label: 'Tranchant', value: pct(armor.sharp) }, { id: 'blunt', label: 'Contondant', value: pct(armor.blunt) }, { id: 'heat', label: 'Chaleur', value: pct(armor.heat) }] : undefined,
       sections: [{ id: 'equipment', label: 'Équipement', rows: equipment }, { id: 'apparel', label: 'Vêtements', rows: apparel }, { id: 'inventory', label: 'Inventaire', rows: inventory }], extras,
       portrait: { control: control('portrait-clothing', portraitClothed ? 'Vêtements visibles' : 'Vêtements masqués', () => { portraitClothed = !portraitClothed; }, false, portraitClothed, portraitClothed ? 'Masquer les vêtements dans le portrait' : 'Montrer les vêtements dans le portrait'), visible: portraitClothed }, maxHeight: 4000 } });
-  } else if (activeTab === 'social') {
+  } else if (pawnTab === 'social') {
     const people = captureRelationshipPeople(world), index = relationshipIndex(world), remembered = new Set([...pawn.social?.memories ?? [], ...pawn.romanceMemories ?? [], ...pawn.familyBereavement ?? []].map(memory => memory.otherId));
     const statusLabels = { present: 'Présent', away: 'En voyage', departed: 'Absent', dead: 'Décédé' } as const;
     const listed: (SocialRowSpec & { linked: boolean })[] = [];
@@ -504,7 +513,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
       interactions.push({ id: 'last', text, faded: world.tick - last.tick > 7500, hint: `Il y a ${((world.tick - last.tick) / 250).toFixed(1)} h` });
     }
     rows.push({ id: 'tab-card', label: '', card: { type: 'social', rows: listed.map(({ linked: _linked, ...entry }) => entry), interactions } });
-  } else if (activeTab === 'journal') {
+  } else if (pawnTab === 'journal') {
     const entries = personalEvents(world, pawn).filter(entry => entry.kind === 'social' ? logFilter.social : entry.kind === 'combat' ? logFilter.combat : logFilter.all).slice(0, 300);
     const lines: LogLineSpec[] = [];
     let previous: 'combat' | 'other' | undefined;
@@ -519,7 +528,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
     rows.push({ id: 'tab-card', label: '', card: { type: 'log', lines, emptyText: '(Aucune entrée récente)',
       toggles: [toggle('all', 'Tout', 60, 100, 'Afficher aussi les crises mentales et les autres entrées moins importantes.'), toggle('social', 'Social', 330, 105, 'Afficher les échanges sociaux.'), toggle('combat', 'Combat', 445, 115, 'Afficher les combats.')],
       copy: control('log-copy', 'Copier', () => { void navigator.clipboard?.writeText(lines.flatMap(line => line.kind === 'header' ? [`--    ${line.text}`] : line.kind === 'gap' ? [''] : [line.text]).join('\n')); }, false, false, 'Copier le journal affiché dans le presse-papiers.') } });
-  } else if (activeTab === 'prisoner' && pawn.prisoner) {
+  } else if (pawnTab === 'prisoner' && pawn.prisoner) {
     const prisoner = pawn.prisoner, lines: PrisonerLineSpec[] = [];
     if (prisoner.breakout?.active) lines.push({ id: 'break', label: 'Évasion en cours', value: `initiateur ${world.pawns.find(person => person.id === prisoner.breakout?.active?.initiatorId)?.name ?? 'personne absente'}`, hint: `Commencée il y a ${((world.tick - prisoner.breakout.active.startedAt) / 250).toFixed(1)} h` });
     else if (prisoner.breakout?.lastAt !== undefined) lines.push({ id: 'break', label: 'Dernière évasion consignée', value: `il y a ${((world.tick - prisoner.breakout.lastAt) / 6000).toFixed(1)} jours`, hint: 'Une évasion se prépare lorsque la colère ou l’humeur du prisonnier sont trop basses.' });
@@ -544,9 +553,9 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   if (colonist && alive && stop && fire) actions.push({ ...command('draft-stop', 'Stop', stop), icon: 'clear-orders' }, { ...command('fire-at-will', fire.type === 'fire-at-will' && fire.enabled ? 'Feu à volonté' : 'Cesser le feu', fire), icon: 'fire-at-will' });
   // Core's hostility response gizmo (also a column of Assignations).
   if (colonist && alive) { const hostility = choices('pawn-hostility', 'Réaction hostile', pawn.hostilityResponse ?? 'flee', ['flee', 'ignore', 'attack'] as const, response => send({ type: 'hostility-response', pawnId: pawn.id, response }), response => ({ flee: 'Fuir', ignore: 'Ignorer', attack: 'Attaquer' })[response]).controls![0]!; actions.push({ ...hostility, icon: 'target-melee', hint: `Réaction hostile : ${hostility.label}` }); }
-  if (activeTab) actions.push({ ...control('inspect-tab-close', 'Fermer l’onglet', () => { activeTab = null; }), hint: 'Fermer l’onglet' });
-  const result: NativePage & { portrait?: { url: string; label: string } } = { id: `inspect-pawn-${pawn.id}-${activeTab ?? 'pane'}`, title: pawn.name, rows, actions, layout: 'inspector' };
-  if (activeTab) result.inspectTab = { id: activeTab, ...tabSizes[activeTab] };
+  if (pawnTab) actions.push({ ...control('inspect-tab-close', 'Fermer l’onglet', () => { activeTab = null; }), hint: 'Fermer l’onglet' });
+  const result: NativePage & { portrait?: { url: string; label: string } } = { id: `inspect-pawn-${pawn.id}-${pawnTab ?? 'pane'}`, title: pawn.name, rows, actions, layout: 'inspector' };
+  if (pawnTab) result.inspectTab = { id: pawnTab, ...tabSizes[pawnTab] };
   result.portrait = { url: portraitDataUrl(appearanceOf(pawn, world.seed), apparelAppearance(portraitClothed ? wornApparel(world, pawn) : []), equippedWeapon(world, pawn)?.item, portraitExpressionOf(pawn), humanLimbVisualMask(pawn)), label: `Portrait de ${pawn.name}` };
   return result;
 }
@@ -571,7 +580,9 @@ function billPasteRows(world: World, structure: Structure): NativeRow[] {
 function billPage(world: World, structure: Structure): NativePage {
   const rows: NativeRow[] = [];
   rows.push(...billPasteRows(world, structure)); const full = (structure.bills?.length ?? 0) >= BILL_STACK_MAX_COUNT;
-  for (const recipe of stationRecipes(structure)) { const rule = PRODUCTION_RECIPES[recipe]; rows.push({ id: `add-${recipe}`, label: rule.label, detail: `Travail de recette ${rule.workTicks} pas locaux nominaux · Ingrédients autorisés : ${rule.inputs.map(item => ITEM_DEFINITIONS[item].label).join(', ')}`, controls: [command(`add-bill-${recipe}`, 'Ajouter', { type: 'bill-add', structureId: structure.id, recipe }, full, false, full ? `${BILL_STACK_MAX_COUNT} factures au plus par poste.` : undefined)] }); }
+  // ITab_Bills: one « add a bill » button that opens the list of recipes.
+  const recipeEntries = stationRecipes(structure).map(recipe => { const rule = PRODUCTION_RECIPES[recipe]; return command(`add-bill-${recipe}`, rule.label, { type: 'bill-add', structureId: structure.id, recipe }, full, false, full ? `${BILL_STACK_MAX_COUNT} factures au plus par poste.` : `${rule.label} · Travail de recette ${rule.workTicks} pas locaux nominaux · Ingrédients autorisés : ${rule.inputs.map(item => ITEM_DEFINITIONS[item].label).join(', ')}`); });
+  rows.push({ id: 'add-bill', label: '', controls: [selectOf('add-bill', 'Ajouter une facture', '', recipeEntries, full)] });
   for (const bill of structure.bills ?? []) {
     const key = `${structure.id}:${bill.id}`; let draft = billDrafts.get(key);
     if (!draft) { draft = settingsOf(bill); billDrafts.set(key, draft); }
@@ -735,8 +746,7 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
     return { id: 'inspect-object-group', title: `${same && base ? base : 'Divers'} ×${total}`, rows, actions };
   }
   const structure = selected.kind === 'structure' ? world.structures.find(s => s.id === selected.id) : undefined;
-  if (structure && subpage?.structureId === structure.id && subpage.kind === 'bills') return billPage(world, structure);
-  if (subpage?.kind === 'storage') { const storage = storagePage(world, subpage.structureId, subpage.stockpileId); if (storage) return storage; subpage = undefined; }
+  const paneTabs: PaneTab[] = []; paneSpec = { tabs: paneTabs };
   const actions = mapObjectActions(world, selected).map(action => action.command ? command(`object-action-${action.id}`, action.label, action.command) : control(`object-action-${action.id}`, action.label, () => action.placementPileId === undefined ? undefined : owner.replant?.(action.placementPileId), !owner.replant));
   // Core BuildCopyCommandUtility: "Copier" selects the same construction and material.
   const copy = structure ? buildCopy346(world, structure) : undefined;
@@ -756,8 +766,8 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
     if (structure.material) rows.push(row('structure-material', 'Matériau', structure.material));
     if (structure.quality) rows.push(row('structure-quality', 'Qualité', structure.quality));
     const definition = STRUCTURE_DEFINITIONS[structure.kind]; rows.push(row('structure-size', 'Encombrement', `${definition.width} × ${definition.depth} cases`), row('structure-movement', 'Passage', definition.blocksMovement ? 'Bloque le déplacement' : 'Ne bloque pas le déplacement'));
-    if (use && stationRecipes(structure).length) actions.push(control('station-bills', 'Factures', () => { subpage = { kind: 'bills', structureId: structure.id }; }));
-    if (use && structure.shelf) actions.push(control('shelf-policy', 'Stockage', () => { subpage = { kind: 'storage', structureId: structure.id }; }));
+    if (use && stationRecipes(structure).length) paneTabs.push({ id: 'bills', label: 'Factures', hint: 'Les factures de ce poste de travail (ITab_Bills).', width: 420, height: 480, margin: 10, rows: () => billPage(world, structure).rows });
+    if (use && structure.shelf) paneTabs.push({ id: 'storage', label: 'Stockage', hint: 'Les réglages de stockage de ce meuble (ITab_Storage).', width: 300, height: 480, margin: 10, rows: () => storagePage(world, structure.id)?.rows ?? [] });
     if (use && minifiable(structure.kind)) actions.push(command('uninstall', 'Désinstaller', { type: 'designate', kind: 'uninstall', x: structure.x, z: structure.z, targetId: structure.id }));
     if (use && minifiable(structure.kind) && owner.placeFurniture) actions.push(control('reinstall', 'Réinstaller', () => owner.placeFurniture!(structure.id)));
     if (use && structure.door) rows.push(booleanRow('door-hold', 'Maintenir ouverte', !!structure.door.holdOpen, value => send({ type: 'door-policy', structureId: structure.id, setting: 'holdOpen', value })), booleanRow('door-forbidden', 'Interdire le passage', !!structure.door.forbidden, value => send({ type: 'door-policy', structureId: structure.id, setting: 'forbidden', value })));
@@ -832,7 +842,7 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
       if (!cell) throw Error('Cette réserve n’est plus disponible.');
       return stockpileZoneId(cell);
     };
-    actions.push(control('stockpile-settings', 'Réglages du stockage', () => { subpage = { kind: 'storage', stockpileId: selected.id }; }));
+    paneTabs.push({ id: 'storage', label: 'Stockage', hint: 'Les réglages de cette zone de stockage (ITab_Storage).', width: 300, height: 480, margin: 10, rows: () => storagePage(world, undefined, selected.id)?.rows ?? [] });
     if (owner.resizeZone) actions.push(control('stockpile-expand', 'Agrandir la zone', () => owner.resizeZone!('stockpile', currentZoneId(), false)), control('stockpile-shrink', 'Réduire la zone', () => owner.resizeZone!('stockpile', currentZoneId(), true)));
     actions.push(control('delete-stockpile', 'Supprimer la zone', () => send({ type: 'delete-zone', kind: 'stockpile', zoneId: currentZoneId() })));
   }
@@ -890,7 +900,7 @@ function animalPage(world: World, animalId: number): NativePage | null {
   if (world.schemaVersion >= 221 && animal.domestic && animal.state === 'downed' && !animal.health?.death) {
     const workers = world.pawns.filter(isColonist);
     rows.push({ id: 'animal-rescue', label: 'Secourir cet animal', detail: workers.length ? 'Un médecin disponible rejoint cet animal puis le porte vers un couchage libre et accessible.' : 'Aucun colon présent.',
-      controls: workers.map(worker => {
+      controls: [selectOf('animal-rescue-select', 'Secourir cet animal', '', workers.map(worker => {
         const reason = animalRescueReason(world, worker, animal);
         return control(`animal-rescue-${worker.id}`, `Secourir · ${worker.name}`, () => {
           const fresh = latest.world, person = fresh?.pawns.find(person => person.id === worker.id), patient = fresh?.wildlife?.animals.find(patient => patient.id === animalId);
@@ -898,12 +908,76 @@ function animalPage(world: World, animalId: number): NativePage | null {
           const refusal = animalRescueReason(fresh, person, patient); if (refusal) throw Error(refusal);
           return send({ type: 'order-animal-rescue', pawnId: person.id, animalId: patient.id });
         }, !!reason, false, reason ?? 'Rejoindre l’animal puis le porter jusqu’à un couchage accessible.');
-      }) });
+      }), !workers.length)] });
   }
   const tame = tameRefusal(world, animal), slaughter = slaughterRefusal(world, animal), hunted = world.hunting?.targets.includes(animalId) ?? false;
   const actions: NativeControl[] = animal.domestic ? [command('animal-slaughter', animal.domestic.slaughter ? 'Annuler l’abattage' : 'Abattre', { type: 'slaughter', animalId, enabled: !animal.domestic.slaughter }, dead || !!slaughter, !!animal.domestic.slaughter, slaughter),
     ...(isExecuteRelease364(world.schemaVersion) ? [command('animal-release-wild', animal.domestic.release364 ? 'Annuler la remise en liberté' : 'Relâcher dans la nature', { type: 'release-wild', animalId, enabled: !animal.domestic.release364 }, dead, !!animal.domestic.release364, 'Un soigneur emmène l’animal dehors puis le relâche : il redevient sauvage et quitte la colonie.')] : [])] : [command('animal-hunt', hunted ? 'Annuler la chasse' : 'Chasser', { type: 'hunt', animalId, enabled: !hunted }, dead, hunted), command('animal-tame', animal.taming?.designated ? 'Annuler l’apprivoisement' : 'Apprivoiser', { type: 'tame', animalId, enabled: !animal.taming?.designated }, dead || !animal.taming?.designated && !!tame, !!animal.taming?.designated, tame ?? `Animaux ${handlingSkill(animal.species)} minimum`)];
+  paneSpec = animalPane(world, animal, rows, dead);
   return { id: `inspect-animal-${animalId}`, title: actualAnimalName256(animal) ?? `${animalTitle(animal.species, species.label)} ${animalId}`, subtitle: animalDescription(animal.species), rows, actions, layout: 'inspector' };
+}
+/** One chooser for several commands (a `FloatMenu` of a gizmo). */
+function selectOf(id: string, label: string, current: string, entries: readonly NativeControl[], disabled = false): NativeControl {
+  const chooser = control(id, label, () => undefined, disabled);
+  chooser.select = { value: current, options: entries.map(entry => ({ value: entry.id, label: entry.label, hint: entry.hint, disabled: entry.disabled })), onChange: async value => { await entries.find(entry => entry.id === value)?.onActivate(); } };
+  return chooser;
+}
+type WildAnimalView = NonNullable<World['wildlife']>['animals'][number];
+/** Core `InspectPaneFiller` and the `ITab`s of an animal (`Races_Animal_Base`
+ * inspectorTabs: health, needs, training, social, log; its needs tab is hidden
+ * for a wild animal, its training tab for one that is not the colony's). */
+function animalPane(world: World, animal: WildAnimalView, rows: NativeRow[], dead: boolean): PaneSpec {
+  const species = animalSpecies(animal.species), body = animalBody(animal), model = animalBodyModel(animal.species, animal.ageTicks, animal.growthTracker?.value), find = (id: string) => rows.find(entry => entry.id === id);
+  const health = animal.health, fill = health ? summaryHealthPercent(health) : 1;
+  const condition = dead ? 'Mort' : animal.state === 'downed' ? 'À terre' : health?.injuries.some(injury => injury.scar === undefined) ? 'Blessé' : 'En bonne santé';
+  const gauges: PaneGauge[] = [{ id: 'health', label: condition, fill, color: '#bdb39c', hint: `Santé générale ${pct(fill)} · ${condition}. Le détail est dans l’onglet Santé.` }];
+  const area = find('animal-area');
+  if (area?.controls?.length && !dead) gauges.push({ id: 'area', label: area.value ?? 'Zone', fill: 1, color: '#b9ad96', hint: 'Zone autorisée : cliquer pour la changer. Les zones se gèrent dans Assignations.', select: selectOf('animal-area-select', 'Zone autorisée', area.controls.find(entry => entry.label === area.value)?.id ?? '', area.controls).select });
+  const stage = { baby: 'petit', juvenile: 'jeune', adult: 'adulte' }[animalLifeStage(animal)];
+  const lines: { id: string; text: string; hint?: string }[] = [{ id: 'identity', text: `${animal.sex === 'female' ? 'Femelle' : 'Mâle'}, ${stage}${animal.domestic ? '' : ' sauvage'}, ${(animal.ageTicks / 6000).toFixed(1)} jours`, hint: species.label }];
+  const activity = find('animal-activity'); if (activity?.value) lines.push({ id: 'activity', text: activity.value });
+  for (const id of ['animal-master', 'animal-product']) { const entry = find(id); const text = entry && lineOfRow(entry); if (entry && text) lines.push({ id, text: entry.meter ? `${entry.label} : ${entry.value}` : text, hint: entry.hint }); }
+  const tabs: PaneTab[] = [], cardRows = (card: NativeRow['card']): (() => NativeRow[]) => () => [{ id: 'tab-card', label: '', card }];
+  // Journal (ITab_Pawn_Log): an animal keeps no personal log in Elsewhere.
+  const toggle = (id: 'all' | 'social' | 'combat', label: string, x: number, width: number, hint: string) => ({ id, label, x, width, on: logFilter[id], control: control(`log-toggle-${id}`, label, () => { logFilter[id] = !logFilter[id]; resetCardScroll(); }, false, logFilter[id], hint) });
+  tabs.push({ id: 'journal', label: 'Journal', hint: tabHints.journal, width: 630, height: 510, margin: 0, rows: cardRows({ type: 'log', lines: [], emptyText: '(Aucune entrée récente)', toggles: [toggle('all', 'Tout', 60, 100, 'Afficher aussi les entrées moins importantes.'), toggle('social', 'Social', 330, 105, 'Afficher les échanges sociaux.'), toggle('combat', 'Combat', 445, 115, 'Afficher les combats.')], copy: control('log-copy', 'Copier', () => undefined, false, false, 'Copier le journal affiché dans le presse-papiers.') }) });
+  // Social (ITab_Pawn_Social): the animal's parents and its master.
+  const social: SocialRowSpec[] = [];
+  const parentName = (id: number) => { const other = world.wildlife?.animals.find(entry => entry.id === id); return other ? actualAnimalName256(other) ?? `${animalTitle(other.species, animalSpecies(other.species).label)} ${id}` : `Animal ${id}`; };
+  const present = (id: number) => world.wildlife?.animals.some(entry => entry.id === id);
+  if (animal.parents) social.push({ id: `mother-${animal.parents.motherId}`, relations: 'Mère', name: parentName(animal.parents.motherId), situation: present(animal.parents.motherId) ? 'Présente' : 'Absente', hint: 'Mère de cet animal.' }, { id: `father-${animal.parents.fatherId}`, relations: 'Père', name: parentName(animal.parents.fatherId), situation: present(animal.parents.fatherId) ? 'Présent' : 'Absent', hint: 'Père de cet animal.' });
+  const masterId = animal.training?.masterId ?? animal.startingPet?.masterId, master = masterId === undefined ? undefined : world.pawns.find(pawn => pawn.id === masterId);
+  if (masterId !== undefined) social.push({ id: `master-${masterId}`, relations: 'Maître', name: master?.name ?? world.campaignPeople?.find(person => person.id === masterId)?.name ?? 'Personne hors carte', situation: master ? 'Présent' : 'Absent', hint: 'Le maître est la personne que cet animal suit et écoute.', select: master ? control(`select-person-${master.id}`, 'Inspecter', () => owner.selectPawn(master.id), false, false, `Sélectionner ${master.name}`) : undefined });
+  tabs.push({ id: 'social', label: 'Social', hint: tabHints.social, width: 540, height: 510, margin: 0, rows: cardRows({ type: 'social', rows: social, interactions: [] }) });
+  if (animal.domestic) {
+    const trainingRows = ['obedience', 'haul'].map(skill => find(`training-${skill}`)).filter((entry): entry is NativeRow => !!entry);
+    const trainingLines: { id: string; label: string; value?: string; hint: string }[] = [];
+    const tameness = find('animal-tameness'); if (tameness) trainingLines.push({ id: 'tameness', label: 'Familiarité', value: tameness.value, hint: 'Familiarité de cet animal avec la colonie, de 0 à 5.' });
+    if (masterId !== undefined) trainingLines.push({ id: 'master', label: 'Maître', value: master?.name ?? 'Personne hors carte', hint: 'Le maître est la personne que cet animal suit et écoute.' });
+    tabs.push({ id: 'training', label: 'Dressage', hint: 'Le dressage de l’animal (ITab_Pawn_Training).', width: 300, height: 220, margin: 0, rows: cardRows({ type: 'training', lines: trainingLines,
+      rows: trainingRows.map(entry => { const learned = /Acquis/.test(entry.value ?? ''), wanted = !!entry.controls?.[0]?.label.startsWith('Ne plus'); return { id: entry.id, label: entry.label, steps: (entry.value ?? '').replace(/ · Acquis/, ''), learned, wanted: wanted || learned, disabled: !!entry.controls?.[0]?.disabled, hint: [entry.label, entry.detail, entry.hint].filter(Boolean).join('\n\n'), control: entry.controls![0]! }; }) }) });
+    const level = animal.food / animalNutritionMax(animal), rest = animal.rest, sleeping = animal.state === 'sleeping';
+    tabs.push({ id: 'needs', label: 'Besoins', hint: tabHints.needs, width: 225, height: 140, margin: 0, rows: cardRows({ type: 'needs', thoughts: [], needs: [
+      { id: 'need-hunger', label: 'Nourriture', major: true, level: Math.max(0, Math.min(1, level)), thresholds: [.12, .24], arrow: dead ? 0 : -1, unavailable: dead, hint: `Nourriture : ${dead ? '—' : pct(level)}\n${needHelp.hunger} Nutrition quotidienne : ${animalFoodPerDay(animal).toFixed(3)}.` },
+      { id: 'need-rest', label: 'Repos', major: true, level: Math.max(0, Math.min(1, rest)), thresholds: [.14, .28], arrow: dead ? 0 : sleeping ? 1 : -1, unavailable: dead, hint: `Repos : ${dead ? '—' : pct(rest)}\n${needHelp.rest}` }] }) });
+  }
+  // Santé (ITab_Pawn_Health): capacities on the left, one entry per body part on the right.
+  const records = [...bodyRows(health, part => model.byId[part]?.label ?? part), ...rows.filter(entry => entry.id === 'pregnancy')];
+  const partLabel = (part: string) => (model.byId as Record<string, { label: string } | undefined>)[part]?.label ?? part;
+  const info = (key: string) => control(`anatomy-${key}`, 'Informations', () => { subpage = { kind: 'info' }; }, false, false, 'Toutes les caractéristiques de cet animal');
+  const entries = healthEntries(records, {
+    injury: id => { const injury = health?.injuries.find(entry => entry.id === id); return injury ? { part: injury.part, bleeding: injuryBleed(health!, injury) > 0, tended: injury.tended !== undefined } : undefined; },
+    missing: part => health?.missing.find(entry => entry.part === part), infectionPart: index => health?.infections?.cases[index]?.part,
+    part: part => ({ label: partLabel(part), hint: partLabel(part), ink: NATIVE_INK.text, info: info(part) }), whole: () => info('whole'),
+  });
+  const careControl = find('animal-care')?.controls?.[0], settings: HealthSettingSpec[] = careControl ? [{ id: 'care', label: 'Médicaments :', kind: 'select', value: careControl.label, control: careControl, hint: 'Détermine les soins que les soigneurs donnent à cet animal et la meilleure catégorie de médicament utilisée.' }] : [];
+  const pain = painLabel(health ? medicalPain(health) : 0), bleed = health ? health.injuries.reduce((sum, injury) => sum + injuryBleed(health, injury), 0) : 0;
+  tabs.push({ id: 'health', label: 'Santé', hint: tabHints.health, width: 630, height: 430, margin: 0, rows: cardRows({ type: 'health', tab: 'overview', tabs: { overview: control('health-overview', 'Vue d’ensemble', () => undefined, false, true, 'Capacités, lésions et politique de soins.'), operationsLabel: 'Opérations' }, settings,
+    pain: dead ? undefined : { ...pain, hint: `Niveau de douleur : ${pct(health ? medicalPain(health) : 0)}` }, capacities: dead ? [] : capacitySpecs(Object.entries(body.capacities), key => capacityLabels[key] ?? key, key => capacityHelp[key] ?? ''), entries,
+    bleed: bleed > .01 ? { text: `Saignement : ${pct(bleed)}/jour`, hint: 'Somme des plaies qui saignent encore.' } : undefined, emptyText: '(Aucun problème de santé)' }) });
+  const order = ['journal', 'social', 'training', 'needs', 'health'];
+  tabs.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  return { gauges, lines, tabs, consumed: ['animal-area', 'animal-care', 'training-obedience', 'training-haul'] };
 }
 function mechPage(world: World, actorId: number): NativePage | null {
   const actor = world.mechanoids?.find(actor => actor.id === actorId); if (!actor) return null;
@@ -914,6 +988,15 @@ function mechPage(world: World, actorId: number): NativePage | null {
   if (view.ranged) rows.push(row('mech-ranged-range', 'Portée du canon intrinsèque', `${view.ranged.range.toFixed(1)} cases`, 'La ligne de tir et les capacités réelles restent nécessaires. Ce canon ne devient pas un objet transportable.'), row('mech-ranged-phase', 'Phase du canon', view.ranged.phase === 'warmup' ? 'Préparation du tir' : view.ranged.phase === 'cooldown' ? 'Récupération après un essai' : 'Disponible', view.ranged.phase ? `${((view.ranged.remainingCore ?? 0) / 60).toFixed(2)} s restantes${view.ranged.suspended ? ' · Suspendue' : ''}` : undefined), row('mech-ranged-target', view.ranged.phase === 'cooldown' ? 'Cible du dernier essai' : 'Visée', view.ranged.target?.label ?? 'Aucune'));
   if (actor.emp) { const core = world.tick * 10; rows.push(row('mech-emp', 'EMP', actor.emp.stunUntilCore > core ? `Neutralisé encore ${((actor.emp.stunUntilCore - core) / 60).toFixed(1)} s` : 'Mobilité et attaques rétablies', actor.emp.adaptedUntilCore > core ? `Adapté encore ${((actor.emp.adaptedUntilCore - core) / 60).toFixed(1)} s · Un nouvel impact ne prolonge pas cet arrêt` : undefined)); }
   rows.push(...nativeClinicalConditionRows(actor.health));
+  // Core pane of a mechanoid: its health bar, its activity lines and the health and log tabs (not flesh: no social or needs tab).
+  const total = view.parts.reduce((sum, part) => sum + part.maximum, 0), left = view.parts.reduce((sum, part) => sum + (part.absent ? 0 : part.health), 0), fraction = total > 0 ? left / total : 1;
+  const mechLines = ['mech-action', 'mech-target', 'mech-ranged-phase', 'mech-emp'].flatMap(id => { const entry = rows.find(candidate => candidate.id === id); const text = entry && lineOfRow(entry); return entry && text ? [{ id, text, hint: entry.hint }] : []; });
+  const mechToggle = (id: 'all' | 'social' | 'combat', label: string, x: number, width: number, hint: string) => ({ id, label, x, width, on: logFilter[id], control: control(`log-toggle-${id}`, label, () => { logFilter[id] = !logFilter[id]; resetCardScroll(); }, false, logFilter[id], hint) });
+  const mechEntries = view.parts.filter(part => part.absent || part.injuries.length).map(part => ({ id: part.id, part: { label: part.label, ink: part.absent ? NATIVE_INK.red : NATIVE_INK.text, hint: `${part.label} : ${part.absent ? 'absente' : `${part.health.toFixed(2)} / ${part.maximum} PV`}` }, items: part.absent ? [{ id: `${part.id}-absent`, label: 'Absente', count: 1, ink: NATIVE_INK.red, bleeding: false, tended: false, hint: 'Partie détruite' }] : part.injuries.map((injury, index) => ({ id: `${part.id}-${index}`, label: `${injury.label} · −${injury.severity.toFixed(2)} PV`, count: 1, bleeding: false, tended: false, hint: `${injury.label} · −${injury.severity.toFixed(2)} PV` })) }));
+  paneSpec = { gauges: [{ id: 'health', label: `${Math.round(fraction * 100)} %`, fill: fraction, color: '#bdb39c', hint: `Intégrité : ${pct(fraction)}. Le détail est dans l’onglet Santé.` }],
+    lines: mechLines, consumed: [], tabs: [
+      { id: 'journal', label: 'Journal', hint: tabHints.journal, width: 630, height: 510, margin: 0, rows: () => [{ id: 'tab-card', label: '', card: { type: 'log', lines: [], emptyText: '(Aucune entrée récente)', toggles: [mechToggle('all', 'Tout', 60, 100, 'Afficher aussi les entrées moins importantes.'), mechToggle('social', 'Social', 330, 105, 'Afficher les échanges sociaux.'), mechToggle('combat', 'Combat', 445, 115, 'Afficher les combats.')], copy: control('log-copy', 'Copier', () => undefined, false, false, 'Copier le journal affiché dans le presse-papiers.') } }] },
+      { id: 'health', label: 'Santé', hint: tabHints.health, width: 630, height: 430, margin: 0, rows: () => [{ id: 'tab-card', label: '', card: { type: 'health', tab: 'overview', tabs: { overview: control('health-overview', 'Vue d’ensemble', () => undefined, false, true, 'Capacités et parties.'), operationsLabel: 'Opérations' }, settings: [], capacities: capacitySpecs(Object.entries(view.capacities), key => capacityLabels[key] ?? key, key => capacityHelp[key] ?? ''), entries: mechEntries, emptyText: '(Aucun problème de santé)' } }] }] };
   return { id: `inspect-mech-${actorId}`, title: view.label, rows, layout: 'inspector' };
 }
 
@@ -924,15 +1007,28 @@ function nativeInspectorSelectionKey(state:NativeUiState):string {
   return `${state.epoch??''}:${world?registeredMapId(world)??'':''}|${state.selectedPawnIds.join(',')}|${state.selectedAnimalId??''}|${state.selectedMechanoidId??''}|${selected.map(object=>`${object.kind}:${object.id}`).join(',')}|${state.selectedCell?.x},${state.selectedCell?.z}`;
 }
 
+/** The info card behind the (i) button (Core `Dialog_InfoCard`): every fact of
+ * the thing, in a page of its own. It closes with the selection. */
 export function buildNativeInspector(state: NativeUiState, actions: NativeUiActions): NativePage | null {
-  latest = state; owner = actions; const world = state.world; if (!world) return null;
+  if (subpage?.kind !== 'info') return buildPane(state, actions);
+  const before = selectionKey; subpage = undefined;
+  const page = buildPane(state, actions);
+  if (!page?.inspectInfo || selectionKey !== before || subpage) return page;
+  subpage = { kind: 'info' };
+  const closer = page.actions?.find(action => action.id === 'inspect-close');
+  const result: NativePage = { id: `${page.id}-info`, title: `${page.title} · Informations`, subtitle: page.subtitle, rows: page.inspectInfo.map(entry => ({ ...entry })), layout: 'inspector', onClose: page.onClose, textEntities: page.textEntities,
+    actions: [control('info-back', 'Retour', () => { subpage = undefined; }, false, false, 'Revenir à l’inspection'), ...(closer ? [closer] : [])] };
+  return result;
+}
+function buildPane(state: NativeUiState, actions: NativeUiActions): NativePage | null {
+  latest = state; owner = actions; paneSpec = undefined; const world = state.world; if (!world) return null;
   const selected = (state.selectedObjects ?? []).filter(object => mapObjectExists(world, object));
   const key = nativeInspectorSelectionKey(state);
   if (key !== selectionKey) { resetCardScroll(); subpage = undefined; billDrafts.clear(); billWorkers.clear(); storageNavigation = undefined; feedback = ''; selectionKey = key; }
-  let page: NativePage | null = null;
+  let page: NativePage | null = null, dialog = false;
   if (subpage?.kind === 'item') { page = itemPage(world, subpage.itemId!); if (!page) subpage = undefined; }
   else if (subpage?.kind === 'anatomy') { const pawn = world.pawns.find(pawn => pawn.id === subpage?.pawnId); if (pawn) page = anatomyPage(world, pawn); else subpage = undefined; }
-  if (page) { /* The explicit information page keeps this selected owner. */ }
+  if (page) { dialog = true; /* The explicit information page keeps this selected owner. */ }
   else if (state.selectedAnimalId !== undefined) page = animalPage(world, state.selectedAnimalId);
   else if (state.selectedMechanoidId !== undefined) page = mechPage(world, state.selectedMechanoidId);
   else if (state.selectedPawnIds.length) {
@@ -955,6 +1051,12 @@ export function buildNativeInspector(state: NativeUiState, actions: NativeUiActi
   } else if (!subpage && selected.length <= 1 && (!state.selectedPawnIds.length || activeTab === 'health' || activeTab === 'needs')) page.rows.push(...nativeSpecialRows(state, actions).map(entry => page!.columnRatio === undefined ? entry : activeTab==='health'?{...entry,label:entry.id==='special-environment'?'':entry.label,compact:true,column:1 as const}:{...entry,column:0 as const}));
   for (const entry of page.rows) { if (entry.detail) { entry.hint = [entry.hint, entry.detail].filter(Boolean).join(' · '); delete entry.detail; } if (entry.hint) for (const action of entry.controls ?? []) action.hint = [action.hint, entry.hint].filter(Boolean).join(' · '); }
   if (feedback) page.rows.unshift({...row('inspector-feedback', feedback), ...(page.layout === 'storage' ? {region:'details' as const, compact:true, presentation:'plain' as const} : {})});
+  // Anything but a person: Core's inspect pane, tabs and gizmos around the same dossier rows.
+  if (!dialog && !page.rows.some(entry => entry.id === 'pawn-tabs')) {
+    const parts = objectPaneParts(page.rows), current = currentPaneSpec();
+    page = composeThingPane({ page, spec: { gauges: current?.gauges ?? parts.gauges, lines: current?.lines ?? parts.lines, tabs: current?.tabs ?? [], consumed: current?.consumed }, activeTab, control,
+      toggleTab: id => { activeTab = activeTab === id ? null : id; resetCardScroll(); }, openInfo: () => { subpage = { kind: 'info' }; } });
+  }
   if (owner.clearSelection) {
     // Inspection repaint uses the host's custom page slot. Release that slot
     // as well as selection, without changing unrelated host close callbacks.

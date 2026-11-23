@@ -7,7 +7,7 @@ import {shelfControlOptions} from '../src/ui/shelf-inspection';
 import {STORAGE_FILTER_TREE,storageNodeLeaves,storageTreeSelection,storageTreePermissions,type StorageLeafId} from '../src/ui/storage-filter-tree';
 import type {NativeControl,NativePage,NativeRow,NativeUiActions,NativeUiState} from '../src/ui3d/native-contract';
 import {createNativeStorageEditor,nativeStorageTreeRows} from '../src/ui3d/native-storage-editor';
-import {buildNativeInspector} from '../src/ui3d/native-inspector';
+import {buildNativeInspector,setNativeInspectorTab} from '../src/ui3d/native-inspector';
 
 function findRow(page:NativePage,id:string):NativeRow {
   const found=page.rows.find(row=>row.id===id);expect(found,`Missing row ${id}`).toBeDefined();return found!;
@@ -41,8 +41,7 @@ async function storageFixture(kind:'stockpile'|'shelf'='stockpile',prepare?:(wor
   const actions:NativeUiActions={command:vi.fn(async command=>applyCommand(world,command)),readState:()=>state,panel:noop,category:noop,tool:noop,selectPawn:noop,
     speed:noop,rotate:noop,material:noop,creationStorage:noop,front:noop,save:noop,exportSave:noop,showPage:next=>{page=next;},refresh:noop};
   const rebuild=()=>{page=buildNativeInspector(state,actions)!;};
-  rebuild();
-  await findControl(page!,kind==='stockpile'?'stockpile-settings':'shelf-policy').onActivate();
+  setNativeInspectorTab('storage');rebuild();
   return {world,stockpile,shelf,state,actions,rebuild,get page(){return page;}};
 }
 
@@ -116,7 +115,7 @@ describe('compact native storage preserves permissions and local navigation',()=
     const corpses=STORAGE_FILTER_TREE.find(node=>node.id==='corpses')!,leaves=storageNodeLeaves(corpses);
     const allowed=leaves.filter(shelfControlOptions.fixedAllows!);
     const f=await storageFixture('shelf',(_world,shelf)=>Object.assign(shelf.shelf!.settings,storageTreePermissions(new Set([allowed[0]!]))));
-    expect(f.page.layout).toBe('storage');expect(f.page.actions?.some(action=>/appliquer/i.test(action.label))).toBe(false);
+    expect(f.page.inspectTab).toMatchObject({id:'storage',width:300,height:480});expect(f.page.actions?.some(action=>/appliquer/i.test(action.label))).toBe(false);
     expect(findRow(f.page,'storage-node-corpses').tree?.state).toBe('mixed');
     const click=findControl(f.page,'storage-node-corpses-permission');
     // A real confirmed policy update intervenes without refreshing the drawn page.
@@ -146,8 +145,7 @@ describe('compact native storage preserves permissions and local navigation',()=
     await findControl(f.page,'storage-node-foods-expand').onActivate();
     await findRow(f.page,'storage-search').input!.onCommit('riz');
     const stale=findControl(f.page,'storage-node-rice-permission');
-    f.world.structures.push(f.shelf);f.state.selectedObjects=[{kind:'structure',id:f.shelf.id}];f.rebuild();
-    await findControl(f.page,'shelf-policy').onActivate();
+    f.world.structures.push(f.shelf);f.state.selectedObjects=[{kind:'structure',id:f.shelf.id}];setNativeInspectorTab('storage');f.rebuild();
     expect(findRow(f.page,'storage-search').input!.value).toBe('');
     expect(findRow(f.page,'storage-node-foods').tree?.expanded).toBe(false);
     // Intended new contract: no command against the previous selection.
@@ -161,7 +159,7 @@ describe('compact native storage preserves permissions and local navigation',()=
     Object.assign(f.stockpile,{priority:5,capacity:12,quality:{min:'good',max:'excellent'},allowRotten:false});
     await findControl(f.page,'storage-copy').onActivate();
     f.stockpile.filters.wood=false;f.world.structures.push(f.shelf);
-    f.state.selectedObjects=[{kind:'structure',id:f.shelf.id}];f.rebuild();await findControl(f.page,'shelf-policy').onActivate();
+    f.state.selectedObjects=[{kind:'structure',id:f.shelf.id}];setNativeInspectorTab('storage');f.rebuild();
     const capacityBefore=structuredClone(f.shelf.shelf),physicalBefore=groundMaxStacks(f.world,f.shelf);
     await findControl(f.page,'storage-paste').onActivate();
     expect(f.shelf.shelf!.settings).toMatchObject({priority:5,capacity:capacityBefore!.settings.capacity,filters:{wood:true,food:true},quality:{min:'good',max:'excellent'},allowRotten:false});

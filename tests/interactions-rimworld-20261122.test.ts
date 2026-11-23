@@ -49,7 +49,9 @@ test('23: the selected natural rock is titled by its own stone, ore or smoothed 
   w.tiles[smooth]={terrain:'rock',stone:'slate',smoothedWall367:true};
   const page=inspect(w,[{kind:'rock',id:granite}]);
   expect(page.title).toBe('Granite');
-  expect(page.rows.find(row=>row.id==='rock-hp')).toMatchObject({label:'Points de vie',value:'740 / 900',meter:{value:740,max:900}});
+  expect(page.inspectInfo!.find(row=>row.id==='rock-hp')).toMatchObject({label:'Points de vie',value:'740 / 900',meter:{value:740,max:900}});
+  // Core InspectPaneFiller.DrawHealth: the bar of the pane, 93 × 16, label « current / max ».
+  expect(page.rows.find(row=>row.id==='pane-gauges')!.gauges![0]).toMatchObject({label:'740 / 900',fill:740/900});
   expect(inspect(w,[{kind:'rock',id:steel}]).title).toBe('Acier compacté');
   expect(inspect(w,[{kind:'rock',id:smooth}]).title).toBe('Paroi d’ardoise lissée');
   expect(rockThingLabel({terrain:'rock'})).toBe('Massif rocheux');

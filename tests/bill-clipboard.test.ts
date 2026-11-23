@@ -10,7 +10,7 @@ import type { CookingBill } from '../src/sim/cooking-types';
 import type { Command, Structure, World } from '../src/sim/types';
 import type { NativeControl, NativePage, NativeUiActions, NativeUiState } from '../src/ui3d/native-contract';
 import { deserializeWorld, serializeWorld } from '../src/sim/serialization';
-import { buildNativeInspector } from '../src/ui3d/native-inspector';
+import { buildNativeInspector, setNativeInspectorTab } from '../src/ui3d/native-inspector';
 import { buildNativePanel } from '../src/ui3d/native-panels';
 import { workColumns } from '../src/ui3d/native-catalog';
 import { BILL_STACK_MAX_COUNT, billClipboard, clearBillClipboard, pasteBillFromClipboard } from '../src/ui/bill-clipboard';
@@ -64,8 +64,8 @@ function billFixture(refuse?: (command: Command) => string | undefined) {
   /** Selects a bench and opens its bills, as the player does. */
   const openBills = async (station: Structure) => {
     state.selectedObjects = [{ kind: 'structure', id: station.id }];
+    setNativeInspectorTab('bills');
     page = buildNativeInspector(state, actions)!;
-    await control(page, 'station-bills').onActivate();
     return page;
   };
   const rebuild = () => { page = buildNativeInspector(state, actions)!; return page; };
@@ -132,7 +132,7 @@ describe('bill clipboard', () => {
     for (let n = 0; n < BILL_STACK_MAX_COUNT - 1; n++) ok(f.world, { type: 'bill-add', structureId: f.target.id, recipe: 'pants' });
     page = await f.openBills(f.target);
     expect(control(page, 'bill-paste').disabled).toBe(false);
-    expect(control(page, 'add-bill-pants').disabled).toBe(false);
+    expect(control(page, 'add-bill').select!.options.find(option => option.value === 'add-bill-pants')!.disabled).toBeFalsy();
     await control(page, 'bill-paste').onActivate();
     expect(f.target.bills).toHaveLength(BILL_STACK_MAX_COUNT);
     f.sent.length = 0;
@@ -140,7 +140,7 @@ describe('bill clipboard', () => {
     paste = control(page, 'bill-paste');
     expect(paste.disabled).toBe(true);
     expect(paste.hint).toContain('15 factures, le maximum par poste');
-    expect(control(page, 'add-bill-pants').disabled).toBe(true);
+    expect(control(page, 'add-bill').select!.options.find(option => option.value === 'add-bill-pants')!.disabled).toBe(true);
     await paste.onActivate();
     await expect(pasteBillFromClipboard({ send: f.actions.command, readWorld: () => f.world }, f.target.id, f.state.epoch)).rejects.toThrow('le maximum par poste');
     expect(f.sent).toEqual([]);

@@ -12,6 +12,8 @@ import { buildNativeInspector, setNativeInspectorTab } from '../src/ui3d/native-
 import { animalRescueCamp } from './helpers/animal-rescue-v310';
 
 let epoch = 476100;
+/** A fact of the info card behind the pane's (i) button, or a row left in the page. */
+const infoRow = (page: NativePage, id: string) => [...page.rows, ...(page.inspectInfo ?? [])].find(row => row.id === id);
 function inspector(world: World, selected: Partial<Pick<NativeUiState, 'selectedAnimalId' | 'selectedObjects' | 'selectedPawnIds'>>) {
   let page: NativePage;
   const state: NativeUiState = { world, epoch: ++epoch, panel: null, category: 'orders', tool: 'select', orientation: 0,
@@ -87,8 +89,8 @@ describe('native inspector restores real animal rescue and egg permissions', () 
 
   it('orders the selected doctor to approach the same animal without moving it remotely', async () => {
     const f = rescueFixture(), ui = inspector(f.world, { selectedAnimalId: f.animalId });
-    const before = { x: f.animal.x, z: f.animal.z }, button = ui.page.rows.find(row => row.id === 'animal-rescue')!.controls!.find(control => control.id === `animal-rescue-${f.doctorId}`)!;
-    expect(button.disabled).toBe(false); await button.onActivate();
+    const before = { x: f.animal.x, z: f.animal.z }, chooser = ui.page.actions!.find(control => control.id === 'animal-rescue-select')!.select!;
+    expect(chooser.options.find(option => option.value === `animal-rescue-${f.doctorId}`)!.disabled).toBeFalsy(); await chooser.onChange(`animal-rescue-${f.doctorId}`);
     expect(f.doctor.animalRescue).toMatchObject({ animalId: f.animalId, phase: 'approach', forced: true });
     expect({ x: f.animal.x, z: f.animal.z }).toEqual(before);
     expect(ui.actions.command).toHaveBeenCalledExactlyOnceWith({ type: 'order-animal-rescue', pawnId: f.doctorId, animalId: f.animalId });
@@ -96,10 +98,10 @@ describe('native inspector restores real animal rescue and egg permissions', () 
 
   it('rechecks veterinary permission before using a captured rescue choice', async () => {
     const f = rescueFixture(), ui = inspector(f.world, { selectedAnimalId: f.animalId });
-    const button = ui.page.rows.find(row => row.id === 'animal-rescue')!.controls!.find(control => control.id === `animal-rescue-${f.doctorId}`)!;
-    f.animal.domestic!.care = 'none'; await button.onActivate();
+    const chooser = ui.page.actions!.find(control => control.id === 'animal-rescue-select')!.select!;
+    f.animal.domestic!.care = 'none'; await chooser.onChange(`animal-rescue-${f.doctorId}`);
     expect(ui.actions.command).not.toHaveBeenCalled(); expect(f.doctor.animalRescue).toBeUndefined();
-    expect(ui.page.rows[0]!.label).toContain('désactivés');
+    expect(ui.page.rows.find(row => row.id === 'inspector-feedback')!.label).toContain('désactivés');
   });
 
   it('can authorize a wild egg then forbid it again using its existing permission field', async () => {
@@ -109,9 +111,9 @@ describe('native inspector restores real animal rescue and egg permissions', () 
     const ui = inspector(world, { selectedObjects: [{ kind: 'pile', id: egg.id }] });
     expect(ui.page.actions!.filter(control => /permission/.test(control.id))).toHaveLength(1);
     await ui.page.actions!.find(control => control.id === 'egg-permission')!.onActivate();
-    expect(egg.eggForbidden).toBeUndefined(); expect(ui.page.rows.find(row => row.id === 'egg-permission-state')!.value).toBe('Autorisé');
+    expect(egg.eggForbidden).toBeUndefined(); expect(infoRow(ui.page, 'egg-permission-state')!.value).toBe('Autorisé');
     await ui.page.actions!.find(control => control.id === 'egg-permission')!.onActivate();
-    expect(egg.eggForbidden).toBe(true); expect(ui.page.rows.find(row => row.id === 'egg-permission-state')!.value).toBe('Interdit');
+    expect(egg.eggForbidden).toBe(true); expect(infoRow(ui.page, 'egg-permission-state')!.value).toBe('Interdit');
     expect(ui.actions.command).toHaveBeenCalledTimes(2);
   });
 
@@ -132,7 +134,7 @@ describe('native inspector restores real animal rescue and egg permissions', () 
     const world = createWorld(476, 16, 16), table = { id: world.nextId++, kind: 'table' as const, x: 7, z: 8, orientation: 0 as const, footprint: 'standard' as const };
     world.structures.push(table); delete world.tiles[8 * world.width + 7]!.fogged;
     const ui = inspector(world, { selectedObjects: [{ kind: 'structure', id: table.id }] }), before = world.pawns.map(pawn => [pawn.id, pawn.x, pawn.z]);
-    await ui.page.rows.find(row => row.id === 'gather-spot')!.controls![0]!.onActivate();
+    await ui.page.actions!.find(control => control.id === 'gather-spot')!.onActivate();
     expect(world.structures.find(structure => structure.id === table.id)!.gatherSpot).toBe(false);
     expect(world.pawns.map(pawn => [pawn.id, pawn.x, pawn.z])).toEqual(before);
     expect(ui.actions.command).toHaveBeenCalledExactlyOnceWith({ type: 'gather-spot', structureId: table.id, enabled: false });

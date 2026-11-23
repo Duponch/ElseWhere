@@ -88,7 +88,7 @@ describe('remaining Zones journeys preserve real owners and commands',()=>{
     const f=fixture(),zone={id:f.world.nextId++,cells:[119,120,135],plant:'rice' as const,allowSow:true,allowCut:false};
     f.world.growingZones=[zone];f.state.selectedObjects=[{kind:'growing',id:zone.id}];
     f.show(buildNativeInspector(f.state,f.actions)!);
-    expect(f.page.rows.find(row=>row.id==='growing-size')?.value).toBe('3 cases');
+    expect([...f.page.rows,...(f.page.inspectInfo??[])].find(row=>row.id==='growing-size')?.value).toBe('3 cases');
     const select=control(f.page,'special-crop-select').select!;
     expect(select.value).toBe('rice');expect(select.options.find(option=>option.value==='potato')?.label).toBe('Pommes de terre');
     expect(select.options.some(option=>option.value==='corn')).toBe(true);
@@ -103,7 +103,7 @@ describe('remaining Zones journeys preserve real owners and commands',()=>{
     f.world.structures.push(basin);f.world.growingZones[0]!.basinId=basin.id;
     f.state.selectedObjects=[{kind:'structure',id:basin.id}];f.show(buildNativeInspector(f.state,f.actions)!);
     const hydro=control(f.page,'special-crop-select').select!;
-    expect(f.page.rows.find(row=>row.id==='special-crop-size')?.value).toBe('3 cases');
+    expect([...f.page.rows,...(f.page.inspectInfo??[])].find(row=>row.id==='special-crop-size')?.value).toBe('3 cases');
     expect(hydro.options.find(option=>option.value==='potato')?.label).toBe('Pommes de terre');
     expect(hydro.options.some(option=>option.value==='corn'||option.value==='haygrass')).toBe(false);
     await hydro.onChange('corn');expect(f.commands).toHaveBeenCalledTimes(1);

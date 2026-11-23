@@ -8,7 +8,7 @@ import { STORAGE_FILTER_TREE, storageNodeLeaves, storageTreeSelection } from '..
 import { shelfControlOptions } from '../src/ui/shelf-inspection';
 import type { Structure } from '../src/sim/types';
 import type { NativeControl, NativePage, NativeUiActions, NativeUiState } from '../src/ui3d/native-contract';
-import { buildNativeInspector } from '../src/ui3d/native-inspector';
+import { buildNativeInspector, setNativeInspectorTab } from '../src/ui3d/native-inspector';
 
 let epoch = 47600;
 function storageControl(page: NativePage, id: string): NativeControl {
@@ -39,8 +39,8 @@ async function fixture(kind: 'stockpile' | 'shelf' | 'tailor' = 'stockpile') {
     selectPawn: noop, speed: noop, rotate: noop, material: noop, creationStorage: noop, front: noop,
     save: noop, exportSave: noop, showPage: next => { page = next; }, refresh: noop, readState: () => state,
   };
+  setNativeInspectorTab(kind === 'tailor' ? 'bills' : 'storage');
   page = buildNativeInspector(state, actions)!;
-  await page.actions!.find(control => control.id === (kind === 'tailor' ? 'station-bills' : kind === 'shelf' ? 'shelf-policy' : 'stockpile-settings'))!.onActivate();
   return { world, state, stockpile, shelf, station, bill, actions, get page() { return page; } };
 }
 
@@ -134,7 +134,7 @@ describe('native storage controls match confirmed storage rules', () => {
     await storageControl(f.page, 'storage-priority').select!.onChange('4');
     expect(f.stockpile.priority).toBe(3);
     expect(storageControl(f.page, 'storage-priority').select!.value).toBe('3');
-    expect(f.page.rows[0]!.label).toBe('Stockage indisponible.');
+    expect(f.page.rows.find(row => row.id === 'inspector-feedback')!.label).toBe('Stockage indisponible.');
     vi.mocked(f.actions.command).mockResolvedValueOnce({ ok: false, reason: 'Stockage indisponible.' });
     expect(await f.page.rows.find(row => row.id === 'storage-capacity')!.input!.onCommit('100')).toBe(false);
     expect(f.stockpile.capacity).toBe(75);
@@ -156,7 +156,7 @@ describe('native storage controls match confirmed storage rules', () => {
     await maximum.onChange('excellent');
     expect(f.world.stockpiles[0]!.quality).toEqual({ min: 'good', max: 'excellent' });
     expect(f.actions.command).toHaveBeenLastCalledWith({ type: 'stockpile-policy', stockpileId: f.stockpile.id, settings: { quality: { min: 'good', max: 'excellent' } } });
-    expect(f.page.id).toBe(`inspect-storage-${f.stockpile.id}`);
+    expect(f.page.id).toBe(`inspect-stockpile-${f.stockpile.id}-storage`);
   });
 
   it('retains the captured map guard and the current busy guard for localized select changes', async () => {
@@ -166,8 +166,9 @@ describe('native storage controls match confirmed storage rules', () => {
     f.state.busy = false; f.state.epoch!++; await minimum.onChange('good');
     expect(f.actions.command).not.toHaveBeenCalled();
     expect(f.world.stockpiles[0]!.quality).toBeUndefined();
-    expect(f.page.rows.some(row => row.controls?.some(control => control.id === 'storage-quality-min'))).toBe(false);
-    expect(f.page.rows.some(row => row.id === 'object-id')).toBe(true);
+    // Core's open tab stays open across selections: the page is rebuilt with the refusal shown in the pane.
+    expect(f.page.inspectTab?.id).toBe('storage');
+    expect(f.page.inspectInfo?.some(row => row.id === 'object-id')).toBe(true);
   });
 
   it('edits a bill through its local repeat selector and keeps the confirmed bill unchanged until Apply', async () => {
@@ -190,8 +191,8 @@ describe('native storage controls match confirmed storage rules', () => {
     await f.page.rows.find(row => row.id === 'storage-copy-settings')!.controls!.find(control => control.id === 'storage-copy')!.onActivate();
     f.stockpile.filters.wood = false;
     f.world.structures.push(f.shelf); f.state.selectedObjects = [{ kind: 'structure', id: f.shelf.id }];
+    setNativeInspectorTab('storage');
     f.actions.showPage(buildNativeInspector(f.state, f.actions)!);
-    await f.page.actions!.find(control => control.id === 'shelf-policy')!.onActivate();
     await f.page.rows.find(row => row.id === 'storage-copy-settings')!.controls!.find(control => control.id === 'storage-paste')!.onActivate();
     expect(f.shelf.shelf!.settings).toMatchObject({ priority: 5, capacity: 500, filters: { wood: true, food: true }, quality: { min: 'good', max: 'excellent' }, allowRotten: false });
     expect(f.shelf.shelf!.settings.filters).not.toBe(f.stockpile.filters);

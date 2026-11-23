@@ -218,14 +218,14 @@ export function learningFromObservation(now:LearningObservation,before:LearningO
   if(frames>0){
     if(now.hoveredId?.startsWith('hud:alert:'))shown('alerts');
     const page=now.pageId??'';
-    if(page.startsWith('inspect-bills-'))shown('bills');
-    else if(page.startsWith('inspect-storage-'))shown('storage-tab');
+    if(page.startsWith('inspect-bills-')||/^inspect-(?!pawn-).+-bills$/.test(page))shown('bills');
+    else if(page.startsWith('inspect-storage-')||/^inspect-(?!pawn-).+-storage$/.test(page))shown('storage-tab');
     else if(/^inspect-pawn-\d+-prisoner$/.test(page))shown('prisoners');
     else if(/^inspect-pawn-\d+-health$/.test(page))shown('medical-operations');
     if(now.cameraDolly)out.demonstrations.push({concept:'camera-dolly',amount:'frame-interaction',frames});
     if(now.tileInspector)out.demonstrations.push({concept:'tile-inspector',amount:'tiny',frames});
   }
-  if(now.pageId?.startsWith('inspect-item-information-')&&now.pageId!==before?.pageId)out.demonstrations.push({concept:'info-card',amount:'total'});
+  if((now.pageId?.startsWith('inspect-item-information-')||/^inspect-.+-info$/.test(now.pageId??''))&&now.pageId!==before?.pageId)out.demonstrations.push({concept:'info-card',amount:'total'});
   if(now.panel==='history'&&before?.panel!=='history')out.demonstrations.push({concept:'history-tab',amount:'total'});
   // MainButtonWorker_ToggleWorld.Activate.
   if(now.panel==='world'&&before&&before.panel!=='world')out.opportunities.push({concept:'form-caravan',type:'important'});

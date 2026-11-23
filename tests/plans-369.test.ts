@@ -202,9 +202,9 @@ describe('schema 369: plans (Core 1.6 Designator_Plan_Add / Designator_Plan_Remo
    showPage:noop,refresh:noop,readState:()=>state,editPlan369:edit} as unknown as NativeUiActions;
   const page=buildNativeInspector(state,actions)!;
   expect(page.title).toBe('Plan 2');
-  expect(page.rows.find(r=>r.id==='plan-size')?.value).toBe('2 cases');
-  expect(page.rows.find(r=>r.id==='plan-total')?.value).toBe('3 cases');
-  const color=page.rows.find(r=>r.id==='plan-color')!.controls![0]!;
+  expect(page.inspectInfo!.find(r=>r.id==='plan-size')?.value).toBe('2 cases');
+  expect(page.inspectInfo!.find(r=>r.id==='plan-total')?.value).toBe('3 cases');
+  const color=page.actions!.find(a=>a.id==='plan-color-select')!;
   expect(color.select!.value).toBe('green');expect(color.select!.options.map(o=>o.label)).toEqual(['Gris','Rouge','Orange','Jaune','Vert','Cyan','Bleu','Violet','Rose']);
   expect(page.actions!.map(a=>a.id)).toEqual(expect.arrayContaining(['plan-hide','plan-expand','plan-shrink','plan-delete']));
   await page.actions!.find(a=>a.id==='plan-expand')!.onActivate();expect(edit).toHaveBeenCalledWith(2,false);

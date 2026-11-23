@@ -132,6 +132,8 @@ export interface NativePage {
   /** The open inspector tab's window (Core `ITab.size` and its inner margin);
    * absent when no tab is open: only the inspect pane and its tabs show. */
   inspectTab?:{id:string;width:number;height:number;margin:number};
+  /** The facts the pane does not show, for the info card behind the (i) button. */
+  inspectInfo?:readonly NativeRow[];
 }
 export interface NativeUiState {
   world?:World;

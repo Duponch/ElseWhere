@@ -401,7 +401,7 @@ export const NATIVE_INSPECT={tabWidth:72,tabHeight:30,paneHeight:165,paneInner:1
 function inspectorPage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure):NativePageBox {
   const I=NATIVE_INSPECT,tabsRow=page.rows.find(row=>row.id==='pawn-tabs')!,tabCount=tabsRow.controls?.length??0;
   const paneWidth=I.tabWidth*Math.max(6,tabCount),lower=I.tabHeight+I.paneHeight,bottom=NATIVE_UI.bottom+10;
-  const special=new Set(['inspect-close','inspect-tab-close']);
+  const special=new Set(['inspect-close','inspect-tab-close','inspect-info']);
   const gizmos=(page.actions??[]).filter(control=>!special.has(control.id));
   const gizmoLeft=paneWidth+I.gizmoStart,gizmoRoom=Math.max(I.gizmo,viewport.width-12-gizmoLeft-NATIVE_RIGHT_DOCK_WIDTH);
   const available=Math.max(1,viewport.height-bottom-12),tab=page.inspectTab;
@@ -442,11 +442,14 @@ function inspectorPage(page:NativePage,viewport:{width:number;height:number},mea
     return {control,style:'tile',x:gizmoLeft+column*(I.gizmo+I.gizmoGap),y:height-I.gizmoRowGap-I.gizmo-rowIndex*(I.gizmo+I.gizmoRowGap)-header,width:I.gizmo,height:I.gizmo};});
   const close=(control:NativeControl|undefined,rect:NativeRect)=>{if(control)actions.push({control:{...control,label:'×',hint:control.hint??'Fermer · Échap',color:control.color??'#d7ad91'},style:'button',x:rect.x+rect.width-NATIVE_WINDOW.closeMargin-NATIVE_WINDOW.close,y:rect.y+NATIVE_WINDOW.closeMargin-header,width:NATIVE_WINDOW.close,height:NATIVE_WINDOW.close});};
   close(page.actions?.find(control=>control.id==='inspect-close'),summary);
+  // The (i) button of `InspectPaneUtility` (Widgets.InfoCardButton), left of the close button.
+  const infoControl=page.actions?.find(control=>control.id==='inspect-info');
+  if(infoControl)actions.push({control:{...infoControl,hint:infoControl.hint??'Informations'},style:'button',x:summary.x+summary.width-NATIVE_WINDOW.closeMargin*2-NATIVE_WINDOW.close*2,y:summary.y+NATIVE_WINDOW.closeMargin-header,width:NATIVE_WINDOW.close,height:NATIVE_WINDOW.close});
   if(tab)close(page.actions?.find(control=>control.id==='inspect-tab-close'),sheet);
   // Pane content: rect contracted by 12, top raised by 4: name in Medium,
   // gauges at 26 + 3, inspect lines after 18 more (Small, wrapped).
   const inner={x:I.paneInner,y:summary.y+I.paneTop,width:paneWidth-I.paneInner*2,height:I.paneHeight-I.paneInner*2+10};
-  const name:NativeRect={x:inner.x,y:inner.y,width:inner.width-NATIVE_WINDOW.close-NATIVE_WINDOW.closeMargin,height:NATIVE_LINE.medium};
+  const name:NativeRect={x:inner.x,y:inner.y,width:inner.width-(NATIVE_WINDOW.close+NATIVE_WINDOW.closeMargin)*(infoControl?2:1),height:NATIVE_LINE.medium};
   const gauges:NonNullable<NativeInspectorParts['gauges']>=[],lines:NonNullable<NativeInspectorParts['lines']>=[];
   let lineTop=inner.y+26;
   for(const row of page.rows){

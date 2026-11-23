@@ -4,10 +4,11 @@ import {layoutHealthTab,type HealthSpec} from './native-tab-health';
 import {layoutGearTab,type GearSpec} from './native-tab-gear';
 import {layoutSocialTab,layoutLogTab,type SocialSpec,type LogSpec} from './native-tab-social';
 import {layoutPrisonerTab,type PrisonerSpec} from './native-tab-prisoner';
+import {layoutTrainingTab,type TrainingSpec} from './native-tab-training';
 
 /** The data of one inspector tab's card (see `native-tab-card.ts`): pure
  * values and controls, laid out once with the stage's text measure. */
-export type NativeTabSpec=NeedsSpec|HealthSpec|GearSpec|SocialSpec|LogSpec|PrisonerSpec;
+export type NativeTabSpec=NeedsSpec|HealthSpec|GearSpec|SocialSpec|LogSpec|PrisonerSpec|TrainingSpec;
 export function layoutNativeTab(spec:NativeTabSpec,measure:CardMeasure):NativeTabCard{
   switch(spec.type){
     case 'needs':return layoutNeedsTab(spec,measure);
@@ -16,5 +17,6 @@ export function layoutNativeTab(spec:NativeTabSpec,measure:CardMeasure):NativeTa
     case 'social':return layoutSocialTab(spec,measure);
     case 'log':return layoutLogTab(spec,measure);
     case 'prisoner':return layoutPrisonerTab(spec,measure);
+    case 'training':return layoutTrainingTab(spec,measure);
   }
 }

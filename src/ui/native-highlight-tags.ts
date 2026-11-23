@@ -16,7 +16,7 @@ const BY_ID:Readonly<Record<string,string>>=Object.freeze({
   'map-dock:orders':'tools:orders','map-dock:zones':'tools:zones',
   'hud:alerts:all':'alerts',
   'draft-pawn':'draft',
-  'station-bills':'inspector:bills','shelf-policy':'inspector:storage','stockpile-settings':'inspector:storage',
+  'station-bills':'inspector:bills','pane-tab-bills':'inspector:bills','pane-tab-storage':'inspector:storage','shelf-policy':'inspector:storage','stockpile-settings':'inspector:storage',
   'pawn-tab-needs':'inspector:needs','pawn-tab-prisoner':'inspector:prisoner',
   'train-obedience':'animal-training','train-haul':'animal-training',
   'object-action-material-permission':'forbid','equipment-permission':'forbid','egg-permission':'forbid',
