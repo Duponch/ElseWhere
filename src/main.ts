@@ -3240,7 +3240,7 @@ async function start() {
     get nativeUi(){return nativeUi?.diagnostics();},
     get renderStats(){return renderer?{...renderer.stats}:undefined;},get speed(){return currentSpeed;},
     get busy(){return session.busy||replacingWorld||graphicsRecovering;},
-    get audio() { return { loadedCount: audio.loadedCount, availableSounds: audio.availableSounds, music: music.diagnostics }; },
+    get audio() { return { loadedCount: audio.loadedCount, availableSounds: audio.availableSounds, decodedMemory: audio.decodedMemory, music: music.diagnostics }; },
     saveRepository,
     get incident() { return { simulationStopped, graphicsFault, waiting: waitingRequests.size }; },
     failGraphics: (message = 'Incident graphique de contrôle') => renderer?.reportFailure(message),

@@ -620,7 +620,7 @@ describe('continuous voice lifecycle', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
       if (url.endsWith('manifest.json')) {
         const events = Object.fromEntries(Array.from({ length: 13 }, (_, i) => [
-          i === 0 ? 'mining.hit' : `event:${i}`, { variants: [{ src: `/assets/audio/sfx/${i}.mp3` }] },
+          i === 0 ? 'mining.hit' : `ui.test-${i}`, { spatial: i === 0 ? undefined : false, variants: [{ src: `/assets/audio/sfx/${i}.mp3` }] },
         ]));
         return new Response(JSON.stringify({ version: 1, events }));
       }
@@ -696,7 +696,7 @@ describe('explicit sound preview and failed asset recovery', () => {
     let stalledSignal: AbortSignal | undefined;
     vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
       if (url.endsWith('manifest.json')) return new Response(JSON.stringify({ version: 1, events: {
-        ...manifest.events, 'cooking.work': { variants: [{ src: '/assets/audio/sfx/stalled.mp3' }] },
+        ...manifest.events, 'door.open': { variants: [{ src: '/assets/audio/sfx/stalled.mp3' }] },
       } }));
       if (url.endsWith('stalled.mp3')) {
         stalledSignal = options?.signal as AbortSignal;
@@ -778,7 +778,7 @@ describe('explicit sound preview and failed asset recovery', () => {
     let manifests = 0;
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
       if (url.endsWith('manifest.json')) return new Response(JSON.stringify({ version: 1, events: {
-        'cooking.work': { variants: [{ src: '/assets/audio/sfx/cooking.mp3' }] },
+        'door.open': { variants: [{ src: '/assets/audio/sfx/cooking.mp3' }] },
         ...(manifests++ ? manifest.events : {}),
       } }));
       if (url.endsWith('mining.mp3')) return new Promise<Response>(resolve => { complete = resolve; });
@@ -862,7 +862,7 @@ describe('explicit sound preview and failed asset recovery', () => {
         manifestReads++;
         expect(options?.cache).toBe(manifestReads === 1 ? 'no-cache' : 'no-store');
         return new Response(JSON.stringify({ version: 1, events: manifestReads === 1
-          ? { 'cooking.work': cooking } : { ...manifest.events, 'cooking.work': cooking } }));
+          ? { 'door.open': cooking } : { ...manifest.events, 'door.open': cooking } }));
       }
       return new Response(new Uint8Array([1]));
     });
@@ -884,7 +884,7 @@ describe('explicit sound preview and failed asset recovery', () => {
   it('reports a still incomplete fresh manifest without losing a loaded world sound', async () => {
     vi.stubGlobal('AudioContext', FakeContext);
     const incomplete = { version: 1, events: {
-      'cooking.work': { variants: [{ src: '/assets/audio/sfx/cooking.mp3' }] },
+      'door.open': { variants: [{ src: '/assets/audio/sfx/cooking.mp3' }] },
     } };
     let manifestReads = 0;
     const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
@@ -971,7 +971,7 @@ describe('explicit sound preview and failed asset recovery', () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith('manifest.json')) return new Response(JSON.stringify({ version: 1, events: {
         ...manifest.events,
-        'cooking.work': { variants: [{ src: '/assets/audio/sfx/cooking.mp3' }] },
+        'door.open': { variants: [{ src: '/assets/audio/sfx/cooking.mp3' }] },
       } }));
       attempts.set(url, (attempts.get(url) ?? 0) + 1);
       if (url.endsWith('cooking.mp3') && attempts.get(url) === 1) return new Response('', { status: 503 });

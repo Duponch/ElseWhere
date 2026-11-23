@@ -5,6 +5,7 @@ import { cueHash, cueVariation, selectOneShots } from './selection';
 import { interfaceBurstRule, isWorldInterfaceCue, MAX_INTERFACE_VOICES, type InterfaceCueKind } from './interface-cues';
 import { applyManifestGainOffsets, emptyGainOffsets, type GainOffsets } from './gain-offsets';
 import { fallbackCue } from './game-sounds';
+import { DECODED_BUDGET_BYTES, DecodedCache, warmKind } from './decoded-cache';
 
 export type { AudioCue } from './scheduler';
 export type { InterfaceCueKind } from './interface-cues';
@@ -51,6 +52,13 @@ function clusterGroup(kind: string): string | null {
   return CLUSTERED_KINDS.has(kind) ? kind : null;
 }
 const NO_DECODED_MP3_ERROR = 'Aucun MP3 du manifeste audio n’a pu être décodé.';
+/** A cold take is decoded off the frame (fetch and decodeAudioData are
+ * asynchronous). Its first cue waits for it, then plays late by the decoding
+ * time, or is dropped past this delay: a world contact after 0.25 s would no
+ * longer match its gesture; a letter or alert still informs after 1 s. */
+const COLD_WORLD_DELAY = 0.25;
+const COLD_INTERFACE_DELAY = 1;
+const MAX_COLD_PENDING = 16;
 
 function level(value: unknown, fallback: number, ceiling: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= ceiling ? value : fallback;
@@ -108,7 +116,15 @@ export class AudioDirector {
   /** The manifest as read, before the sounds page's gain offsets. */
   private parsedManifest: AudioManifest | null = null;
   private gainOffsets: GainOffsets = emptyGainOffsets();
-  private readonly buffers = new Map<string, AudioBuffer | null>();
+  /** Decoded takes: a pinned warm set, the rest decoded on demand under a
+   * byte budget, least recently used evicted first (never a sounding take). */
+  private readonly buffers: DecodedCache<AudioBuffer>;
+  /** Cues waiting for their cold take, with their audio-clock deadline. */
+  private coldCues: { cue: AudioCue; deadline: number }[] = [];
+  private coldInterface: { kind: InterfaceCueKind; pitch: number; deadline: number }[] = [];
+  private readonly requestedKinds = new Map<string, Promise<void>>();
+  /** Takes of the warm set (decoded at load, retried by an explicit preview). */
+  private readonly warmSrcs = new Set<string>();
   private readonly voices = new Set<Voice>();
   private readonly continuous = new Map<string, Voice>();
   private readonly lastPlayedVariantByKind = new Map<string, string>();
@@ -140,7 +156,13 @@ export class AudioDirector {
    * requested by the same gesture (a tab, a toggle, a speed) replaces it. */
   private pendingGeneric: { kind: InterfaceCueKind; pitch: number } | null = null;
 
-  constructor(manifestUrl = '/assets/audio/manifest.json') { this.manifestUrl = manifestUrl; }
+  constructor(manifestUrl = '/assets/audio/manifest.json', decodedBudget = DECODED_BUDGET_BYTES) {
+    this.manifestUrl = manifestUrl;
+    this.buffers = new DecodedCache<AudioBuffer>(decodedBudget, buffer => {
+      for (const voice of this.voices) if (voice.source.buffer === buffer) return true;
+      return this.previewSource?.buffer === buffer;
+    });
+  }
 
   /** Call directly from a trusted pointer/keyboard gesture before any await. */
   unlock(): Promise<void> {
@@ -255,24 +277,88 @@ export class AudioDirector {
     // defer a raid/death alert until the player resumes the simulation. They
     // share the interface output and its burst limits, paused or not.
     for (const cue of due) if (isWorldInterfaceCue(cue.kind)) this.playInterface(cue.kind as InterfaceCueKind);
-    if (state.paused) return;
-    if (state.hidden || this.muted || !this.manifest || this.context?.state !== 'running') return;
+    const now = this.context?.currentTime ?? 0;
+    if (this.coldInterface.length) {
+      // Interface cues whose cold take is now decoded play late; past their
+      // delay they are dropped (they also play during a pause).
+      const waiting = this.coldInterface;
+      this.coldInterface = [];
+      for (const entry of waiting) {
+        if (entry.deadline < now) continue;
+        if (this.hasDecoded(entry.kind)) this.startInterface(entry.kind, entry.pitch);
+        else this.coldInterface.push(entry);
+      }
+    }
+    if (state.paused) { this.coldCues = []; return; }
+    if (state.hidden || this.muted || !this.manifest || this.context?.state !== 'running') { this.coldCues = []; return; }
     const ready: AudioCue[] = [];
+    if (this.coldCues.length) {
+      const waiting = this.coldCues;
+      this.coldCues = [];
+      for (const entry of waiting) {
+        if (entry.deadline < now) continue;
+        if (this.hasDecoded(entry.cue.kind)) ready.push(entry.cue);
+        else this.coldCues.push(entry);
+      }
+    }
     for (const cue of due) {
       if (isWorldInterfaceCue(cue.kind)) continue;
-      const playable = this.playableCue(cue);
-      if (playable) ready.push(playable);
+      const kind = this.resolveKind(cue.kind);
+      if (!kind) continue;
+      const playable = kind === cue.kind ? cue : { ...cue, kind: kind as AudioCue['kind'] };
+      if (this.hasDecoded(kind)) ready.push(playable);
+      else this.deferCold(playable, now + COLD_WORLD_DELAY);
     }
     for (const cue of selectOneShots(ready, this.manifest.events, this.camera, MAX_ONE_SHOTS_PER_FRAME)) this.playCue(cue);
   }
 
-  /** The cue itself, or the cue it refines when the manifest has no decoded
-   * take for it (a specific drop, bench or weapon falls back on the plain one). */
-  private playableCue(cue: AudioCue): AudioCue | undefined {
-    const decoded = (kind: string) => this.manifest?.events[kind]?.variants.some(variant => this.buffers.get(variant.src));
-    if (decoded(cue.kind)) return cue;
-    const fallback = fallbackCue(cue.kind);
-    return fallback && decoded(fallback) ? { ...cue, kind: fallback as AudioCue['kind'] } : undefined;
+  /** The cue's own sound, or the one it refines when the manifest has no take
+   * for it (a specific drop, bench or weapon falls back on the plain one). */
+  private resolveKind(kind: string): string | undefined {
+    if (this.manifest?.events[kind]?.variants.length) return kind;
+    const fallback = fallbackCue(kind);
+    return fallback && this.manifest?.events[fallback]?.variants.length ? fallback : undefined;
+  }
+
+  private hasDecoded(kind: string): boolean {
+    const event = this.manifest?.events[kind];
+    if (!event) return false;
+    for (const variant of event.variants) if (this.buffers.get(variant.src)) return true;
+    return false;
+  }
+
+  /** The first cue of a cold sound waits for its takes (decoded off the frame). */
+  private deferCold(cue: AudioCue, deadline: number): void {
+    void this.requestKind(cue.kind);
+    if (this.coldCues.length >= MAX_COLD_PENDING) this.coldCues.shift();
+    this.coldCues.push({ cue, deadline });
+  }
+
+  /** Decodes every take of a sound not yet decoded, at most three at a time
+   * (fetchBuffer's queue). Never awaited by a frame. */
+  private requestKind(kind: string): Promise<void> {
+    const event = this.manifest?.events[kind];
+    if (!event || this.disposed) return Promise.resolve();
+    const missing = event.variants.map(variant => variant.src).filter(src => this.buffers.get(src) === undefined);
+    if (!missing.length) return Promise.resolve();
+    const existing = this.requestedKinds.get(kind);
+    if (existing) return existing;
+    const request = Promise.all(missing.map(src => this.fetchBuffer(src, 'force-cache').then(buffer => {
+      if (!this.disposed && this.buffers.get(src) === undefined) this.buffers.set(src, buffer);
+    }))).then(() => undefined).finally(() => { this.requestedKinds.delete(kind); });
+    this.requestedKinds.set(kind, request);
+    return request;
+  }
+
+  /** A sound playing with only some of its takes decoded (evicted, or warm
+   * with one pinned take) gets the others back while memory allows. */
+  private restoreVariety(kind: string, decoded: number, takes: number): void {
+    if (decoded < takes && this.buffers.bytes < this.buffers.budget * 0.75) void this.requestKind(kind);
+  }
+
+  /** Decodes these sounds now (a loading screen, a test); resolves when done. */
+  prefetch(kinds: readonly string[]): Promise<void> {
+    return Promise.all(kinds.map(kind => this.requestKind(kind))).then(() => undefined);
   }
 
   setVolume(volume: number): void {
@@ -306,10 +392,11 @@ export class AudioDirector {
     } else this.reconcileContinuous();
   }
 
-  get loadedCount(): number {
-    let count = 0;
-    for (const buffer of this.buffers.values()) if (buffer) count++;
-    return count;
+  get loadedCount(): number { return this.buffers.count; }
+
+  /** Bytes of decoded PCM held now, and the budget (decoded-cache.ts). */
+  get decodedMemory(): { bytes: number; budget: number; takes: number } {
+    return { bytes: this.buffers.bytes, budget: this.buffers.budget, takes: this.buffers.count };
   }
 
   get availableSounds(): number {
@@ -361,7 +448,13 @@ export class AudioDirector {
     if (this.disposed || this.muted || this.hidden || this.volume === 0 ||
       !context || context.state !== 'running' || !event || event.loop || event.spatial || !event.gain) return;
     const available = event.variants.filter(variant => this.buffers.get(variant.src));
-    if (!available.length) return;
+    if (!available.length) {
+      // A cold notification waits for its take (up to a second), once per sound.
+      void this.requestKind(kind);
+      if (!this.coldInterface.some(entry => entry.kind === kind) && this.coldInterface.length < MAX_COLD_PENDING)
+        this.coldInterface.push({ kind, pitch, deadline: context.currentTime + COLD_INTERFACE_DELAY });
+      return;
+    }
     // Burst limits: a wave of alerts or letters in one frame sounds once.
     const rule = interfaceBurstRule(kind), now = context.currentTime, last = this.interfaceStarts.get(kind);
     if (last !== undefined && rule.spacing > 0 && now - last < rule.spacing) return;
@@ -385,7 +478,8 @@ export class AudioDirector {
         this.interfaceOutput = output;
       }
       const source = context.createBufferSource();
-      source.buffer = this.buffers.get(variant.src)!;
+      source.buffer = this.buffers.use(variant.src)!;
+      this.restoreVariety(kind, available.length, event.variants.length);
       const variation = cueVariation(`${kind}:${this.playedOneShots}`, kind);
       source.playbackRate.value = variation.playbackRate * (Number.isFinite(pitch) && pitch > 0 ? pitch : 1);
       const gain = context.createGain();
@@ -430,7 +524,7 @@ export class AudioDirector {
       // Recover this explicit preview first; other unavailable sounds retry in
       // the background and cannot hold the audible confirmation behind them.
       const buffer = this.buffers.get(variant.src) ?? await this.fetchBuffer(variant.src, 'reload');
-      if (buffer && !this.disposed) this.buffers.set(variant.src, buffer);
+      if (buffer && !this.disposed) { this.buffers.pin(variant.src); this.buffers.set(variant.src, buffer); }
       void this.retryFailedAssets();
       if (!buffer) throw new Error(`Le MP3 d’essai ne peut pas être chargé ou décodé : ${variant.src}`);
       const context = this.context;
@@ -460,6 +554,8 @@ export class AudioDirector {
   /** Loading/new map must not inherit old queued or currently playing sounds. */
   reset(): void {
     this.scheduler.reset();
+    this.coldCues = [];
+    this.coldInterface = [];
     this.lastPlayedVariantByKind.clear();
     this.interfaceStarts.clear();
     this.pendingGeneric = null;
@@ -494,7 +590,16 @@ export class AudioDirector {
     const manifest = await this.readManifest('no-cache');
     if (this.disposed) return;
     this.adoptManifest(manifest);
-    const paths = [...new Set(Object.values(manifest.events).flatMap(event => event.variants.map(variant => variant.src)))];
+    // Only the warm set is decoded at load: gesture sounds must answer at
+    // once, and the most frequent foley would otherwise decode again after
+    // every eviction. The first take of each warm sound is pinned; its other
+    // takes are ordinary cache entries. Everything else decodes at its first need.
+    const warm = Object.entries(manifest.events).filter(([kind, event]) => warmKind(kind, event) || kind === PREVIEW_KIND);
+    for (const [, event] of warm) this.buffers.pin(event.variants[0]!.src);
+    // First takes first: every warm sound can answer before its variety arrives.
+    const paths = [...new Set([...warm.map(([, event]) => event.variants[0]!.src),
+      ...warm.flatMap(([, event]) => event.variants.map(variant => variant.src))])];
+    for (const src of paths) this.warmSrcs.add(src);
     let next = 0;
     // Activate the mix as soon as one decoded asset is usable. A slow or
     // unavailable unrelated MP3 must not hold every sound behind a batch.
@@ -576,8 +681,9 @@ export class AudioDirector {
 
   private async retryFailedAssets(): Promise<void> {
     if (!this.manifest) return;
+    // Only failed warm takes: the others are decoded again at their next need.
     const paths = [...new Set(Object.values(this.manifest.events).flatMap(event =>
-      event.variants.map(variant => variant.src)))].filter(src => !this.buffers.get(src));
+      event.variants.map(variant => variant.src)))].filter(src => this.warmSrcs.has(src) && !this.buffers.get(src));
     let next = 0;
     await Promise.all(Array.from({ length: Math.min(3, paths.length) }, async () => {
       while (next < paths.length && !this.disposed) {
@@ -651,7 +757,8 @@ export class AudioDirector {
     if (available.length > 1 && available[variantIndex]!.src === this.lastPlayedVariantByKind.get(cue.kind))
       variantIndex = (variantIndex + 1) % available.length;
     const variant = available[variantIndex]!;
-    const buffer = this.buffers.get(variant.src)!;
+    const buffer = this.buffers.use(variant.src)!;
+    this.restoreVariety(cue.kind, available.length, event.variants.length);
     if (this.voices.size >= MAX_VOICES) {
       const loops = new Set(this.continuous.values());
       const victim = [...this.voices].find(voice => !loops.has(voice));
@@ -732,9 +839,13 @@ export class AudioDirector {
         continue;
       }
       const available = event.variants.filter(variant => this.buffers.get(variant.src));
-      if (!available.length) continue;
+      if (!available.length) {
+        // A bed starts once its loop is decoded (off the frame): selection runs again then.
+        void this.requestKind(source.kind).then(() => { if (this.hasDecoded(source.kind)) this.reconcileContinuous(); });
+        continue;
+      }
       const variant = available[cueHash(source.id) % available.length]!;
-      const buffer = this.buffers.get(variant.src)!;
+      const buffer = this.buffers.use(variant.src)!;
       if (this.voices.size >= MAX_VOICES) {
         const victim = this.voices.values().next().value as Voice | undefined;
         if (victim) this.stopVoice(victim);

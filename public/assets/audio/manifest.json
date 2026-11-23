@@ -1393,6 +1393,59 @@
       "maxDistance": 26,
       "loop": false
     },
+    "haul.drop-wood": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/haul-drop-wood-g1122-take-1-cal.mp3",
+          "gain": 0.152
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-wood-g1122-take-2-cal.mp3",
+          "gain": 0.244
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-wood-g1122-take-3-cal.mp3",
+          "gain": 0.153
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "weapon.shot-rifle": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-shot-rifle-g1122-take-1-cal.mp3",
+          "gain": 0.291
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-rifle-g1122-take-2-cal.mp3",
+          "gain": 1.326
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-rifle-g1122-take-3-cal.mp3",
+          "gain": 4.566
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 36,
+      "loop": false
+    },
+    "crafting.smith": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/crafting-smith-g1122-take-1-cal.mp3",
+          "gain": 0.277
+        },
+        {
+          "src": "/assets/audio/sfx/crafting-smith-g1122-take-2-cal.mp3",
+          "gain": 0.358
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
     "animal.angry.canine": {
       "variants": [
         {
@@ -1471,6 +1524,1644 @@
       "gain": 1,
       "maxDistance": 30,
       "loop": false
+    },
+    "animal.angry.feline": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-feline-g1122-take-1-cal.mp3",
+          "gain": 0.14
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-feline-g1122-take-2-cal.mp3",
+          "gain": 0.207
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "animal.hurt.feline": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-feline-g1122-take-1-cal.mp3",
+          "gain": 0.139
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-feline-g1122-take-2-cal.mp3",
+          "gain": 0.13
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "animal.death.feline": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-feline-g1122-take-1-cal.mp3",
+          "gain": 0.191
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-feline-g1122-take-2-cal.mp3",
+          "gain": 0.25
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "animal.angry.big-cat": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-big-cat-g1122-take-1-cal.mp3",
+          "gain": 0.191
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-big-cat-g1122-take-2-cal.mp3",
+          "gain": 0.186
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 28,
+      "loop": false
+    },
+    "animal.hurt.big-cat": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-big-cat-g1122-take-1-cal.mp3",
+          "gain": 0.169
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-big-cat-g1122-take-2-cal.mp3",
+          "gain": 0.142
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 28,
+      "loop": false
+    },
+    "animal.death.big-cat": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-big-cat-g1122-take-1-cal.mp3",
+          "gain": 0.127
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-big-cat-g1122-take-2-cal.mp3",
+          "gain": 0.098
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 28,
+      "loop": false
+    },
+    "animal.call.bear": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-bear-g1122-take-1-cal.mp3",
+          "gain": 0.134
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-bear-g1122-take-2-cal.mp3",
+          "gain": 0.178
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-bear-g1122-take-3-cal.mp3",
+          "gain": 0.116
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 30,
+      "loop": false
+    },
+    "animal.angry.bear": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-bear-g1122-take-1-cal.mp3",
+          "gain": 0.21
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-bear-g1122-take-2-cal.mp3",
+          "gain": 0.131
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 30,
+      "loop": false
+    },
+    "animal.hurt.bear": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-bear-g1122-take-1-cal.mp3",
+          "gain": 0.108
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-bear-g1122-take-2-cal.mp3",
+          "gain": 0.092
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 30,
+      "loop": false
+    },
+    "animal.death.bear": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-bear-g1122-take-1-cal.mp3",
+          "gain": 0.136
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-bear-g1122-take-2-cal.mp3",
+          "gain": 0.132
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 30,
+      "loop": false
+    },
+    "animal.call.bovine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-bovine-g1122-take-1-cal.mp3",
+          "gain": 0.13
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-bovine-g1122-take-2-cal.mp3",
+          "gain": 0.101
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-bovine-g1122-take-3-cal.mp3",
+          "gain": 0.113
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 30,
+      "loop": false
+    },
+    "animal.angry.bovine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-bovine-g1122-take-1-cal.mp3",
+          "gain": 0.151
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-bovine-g1122-take-2-cal.mp3",
+          "gain": 0.141
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 30,
+      "loop": false
+    },
+    "animal.hurt.bovine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-bovine-g1122-take-1-cal.mp3",
+          "gain": 0.118
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-bovine-g1122-take-2-cal.mp3",
+          "gain": 0.097
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 30,
+      "loop": false
+    },
+    "animal.call.cervid": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-cervid-g1122-take-1-cal.mp3",
+          "gain": 0.179
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-cervid-g1122-take-2-cal.mp3",
+          "gain": 0.161
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-cervid-g1122-take-3-cal.mp3",
+          "gain": 0.324
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 26,
+      "loop": false
+    },
+    "animal.angry.cervid": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-cervid-g1122-take-1-cal.mp3",
+          "gain": 0.245
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-cervid-g1122-take-2-cal.mp3",
+          "gain": 0.305
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 26,
+      "loop": false
+    },
+    "animal.hurt.cervid": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-cervid-g1122-take-1-cal.mp3",
+          "gain": 0.272
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-cervid-g1122-take-2-cal.mp3",
+          "gain": 0.182
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 26,
+      "loop": false
+    },
+    "animal.death.cervid": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-cervid-g1122-take-1-cal.mp3",
+          "gain": 2.075
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-cervid-g1122-take-2-cal.mp3",
+          "gain": 0.457
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 26,
+      "loop": false
+    },
+    "animal.call.equine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-equine-g1122-take-1-cal.mp3",
+          "gain": 0.208
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-equine-g1122-take-2-cal.mp3",
+          "gain": 0.288
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-equine-g1122-take-3-cal.mp3",
+          "gain": 0.227
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 28,
+      "loop": false
+    },
+    "animal.angry.equine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-equine-g1122-take-1-cal.mp3",
+          "gain": 0.148
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-equine-g1122-take-2-cal.mp3",
+          "gain": 0.167
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 28,
+      "loop": false
+    },
+    "animal.hurt.equine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-equine-g1122-take-1-cal.mp3",
+          "gain": 0.185
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-equine-g1122-take-2-cal.mp3",
+          "gain": 0.171
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 28,
+      "loop": false
+    },
+    "animal.death.equine": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-equine-g1122-take-1-cal.mp3",
+          "gain": 0.177
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-equine-g1122-take-2-cal.mp3",
+          "gain": 0.195
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 28,
+      "loop": false
+    },
+    "animal.call.pachyderm": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-pachyderm-g1122-take-1-cal.mp3",
+          "gain": 0.788
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-pachyderm-g1122-take-2-cal.mp3",
+          "gain": 0.641
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-pachyderm-g1122-take-3-cal.mp3",
+          "gain": 0.158
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 32,
+      "loop": false
+    },
+    "animal.angry.pachyderm": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-pachyderm-g1122-take-1-cal.mp3",
+          "gain": 0.137
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-pachyderm-g1122-take-2-cal.mp3",
+          "gain": 0.137
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 32,
+      "loop": false
+    },
+    "animal.hurt.pachyderm": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-pachyderm-g1122-take-1-cal.mp3",
+          "gain": 0.149
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-pachyderm-g1122-take-2-cal.mp3",
+          "gain": 0.132
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 32,
+      "loop": false
+    },
+    "animal.death.pachyderm": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-pachyderm-g1122-take-1-cal.mp3",
+          "gain": 0.155
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-pachyderm-g1122-take-2-cal.mp3",
+          "gain": 0.159
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 32,
+      "loop": false
+    },
+    "animal.call.boar": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-boar-g1122-take-1-cal.mp3",
+          "gain": 0.184
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-boar-g1122-take-2-cal.mp3",
+          "gain": 0.221
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-boar-g1122-take-3-cal.mp3",
+          "gain": 0.176
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 22,
+      "loop": false
+    },
+    "animal.angry.boar": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-boar-g1122-take-1-cal.mp3",
+          "gain": 0.177
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-boar-g1122-take-2-cal.mp3",
+          "gain": 0.136
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 22,
+      "loop": false
+    },
+    "animal.hurt.boar": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-boar-g1122-take-1-cal.mp3",
+          "gain": 0.161
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-boar-g1122-take-2-cal.mp3",
+          "gain": 0.203
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 22,
+      "loop": false
+    },
+    "animal.death.boar": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-boar-g1122-take-1-cal.mp3",
+          "gain": 1.459
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-boar-g1122-take-2-cal.mp3",
+          "gain": 2.339
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 22,
+      "loop": false
+    },
+    "animal.call.rodent": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-rodent-g1122-take-1-cal.mp3",
+          "gain": 0.421
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-rodent-g1122-take-2-cal.mp3",
+          "gain": 0.365
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-rodent-g1122-take-3-cal.mp3",
+          "gain": 0.405
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 16,
+      "loop": false
+    },
+    "animal.angry.rodent": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-rodent-g1122-take-1-cal.mp3",
+          "gain": 0.592
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-rodent-g1122-take-2-cal.mp3",
+          "gain": 0.389
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 16,
+      "loop": false
+    },
+    "animal.hurt.rodent": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-rodent-g1122-take-1-cal.mp3",
+          "gain": 0.244
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-rodent-g1122-take-2-cal.mp3",
+          "gain": 0.206
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 16,
+      "loop": false
+    },
+    "animal.death.rodent": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-rodent-g1122-take-1-cal.mp3",
+          "gain": 0.63
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-rodent-g1122-take-2-cal.mp3",
+          "gain": 0.289
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 16,
+      "loop": false
+    },
+    "animal.call.bird": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-bird-g1122-take-1-cal.mp3",
+          "gain": 0.194
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-bird-g1122-take-2-cal.mp3",
+          "gain": 0.221
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-bird-g1122-take-3-cal.mp3",
+          "gain": 0.169
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "animal.angry.bird": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-bird-g1122-take-1-cal.mp3",
+          "gain": 0.146
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-bird-g1122-take-2-cal.mp3",
+          "gain": 0.223
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "animal.hurt.bird": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-bird-g1122-take-1-cal.mp3",
+          "gain": 0.272
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-bird-g1122-take-2-cal.mp3",
+          "gain": 0.24
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "animal.death.bird": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-bird-g1122-take-1-cal.mp3",
+          "gain": 0.195
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-bird-g1122-take-2-cal.mp3",
+          "gain": 0.21
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "animal.call.reptile": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-reptile-g1122-take-1-cal.mp3",
+          "gain": 0.39
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-reptile-g1122-take-2-cal.mp3",
+          "gain": 0.389
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-reptile-g1122-take-3-cal.mp3",
+          "gain": 0.822
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "animal.angry.reptile": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-reptile-g1122-take-1-cal.mp3",
+          "gain": 0.213
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-reptile-g1122-take-2-cal.mp3",
+          "gain": 0.24
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "animal.hurt.reptile": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-reptile-g1122-take-1-cal.mp3",
+          "gain": 0.359
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-reptile-g1122-take-2-cal.mp3",
+          "gain": 0.259
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "animal.death.reptile": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-reptile-g1122-take-1-cal.mp3",
+          "gain": 0.248
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-reptile-g1122-take-2-cal.mp3",
+          "gain": 0.203
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "animal.call.insect": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-insect-g1122-take-1-cal.mp3",
+          "gain": 0.505
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-insect-g1122-take-2-cal.mp3",
+          "gain": 0.655
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-insect-g1122-take-3-cal.mp3",
+          "gain": 0.535
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 24,
+      "loop": false
+    },
+    "animal.angry.insect": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-insect-g1122-take-1-cal.mp3",
+          "gain": 0.256
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-insect-g1122-take-2-cal.mp3",
+          "gain": 0.403
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 24,
+      "loop": false
+    },
+    "animal.hurt.insect": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-insect-g1122-take-1-cal.mp3",
+          "gain": 0.231
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-insect-g1122-take-2-cal.mp3",
+          "gain": 0.258
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 24,
+      "loop": false
+    },
+    "animal.death.insect": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-insect-g1122-take-1-cal.mp3",
+          "gain": 0.359
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-insect-g1122-take-2-cal.mp3",
+          "gain": 0.392
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 24,
+      "loop": false
+    },
+    "animal.call.primate": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-primate-g1122-take-1-cal.mp3",
+          "gain": 0.144
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-primate-g1122-take-2-cal.mp3",
+          "gain": 0.128
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-primate-g1122-take-3-cal.mp3",
+          "gain": 0.115
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 22,
+      "loop": false
+    },
+    "animal.angry.primate": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-angry-primate-g1122-take-1-cal.mp3",
+          "gain": 0.198
+        },
+        {
+          "src": "/assets/audio/sfx/animal-angry-primate-g1122-take-2-cal.mp3",
+          "gain": 0.247
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 22,
+      "loop": false
+    },
+    "animal.hurt.primate": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-hurt-primate-g1122-take-1-cal.mp3",
+          "gain": 0.204
+        },
+        {
+          "src": "/assets/audio/sfx/animal-hurt-primate-g1122-take-2-cal.mp3",
+          "gain": 0.145
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 22,
+      "loop": false
+    },
+    "animal.death.primate": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-death-primate-g1122-take-1-cal.mp3",
+          "gain": 0.177
+        },
+        {
+          "src": "/assets/audio/sfx/animal-death-primate-g1122-take-2-cal.mp3",
+          "gain": 0.218
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 22,
+      "loop": false
+    },
+    "animal.call.chick": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-call-chick-g1122-take-1-cal.mp3",
+          "gain": 0.311
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-chick-g1122-take-2-cal.mp3",
+          "gain": 0.357
+        },
+        {
+          "src": "/assets/audio/sfx/animal-call-chick-g1122-take-3-cal.mp3",
+          "gain": 0.367
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 16,
+      "loop": false
+    },
+    "animal.eat.herbivore": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-eat-herbivore-g1122-take-1-cal.mp3",
+          "gain": 0.413
+        },
+        {
+          "src": "/assets/audio/sfx/animal-eat-herbivore-g1122-take-2-cal.mp3",
+          "gain": 0.349
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 12,
+      "loop": false
+    },
+    "animal.eat.bird": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-eat-bird-g1122-take-1-cal.mp3",
+          "gain": 0.378
+        },
+        {
+          "src": "/assets/audio/sfx/animal-eat-bird-g1122-take-2-cal.mp3",
+          "gain": 0.452
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 12,
+      "loop": false
+    },
+    "animal.eat.predator-large": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-eat-predator-large-g1122-take-1-cal.mp3",
+          "gain": 0.29
+        },
+        {
+          "src": "/assets/audio/sfx/animal-eat-predator-large-g1122-take-2-cal.mp3",
+          "gain": 0.235
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 12,
+      "loop": false
+    },
+    "animal.eat.predator-small": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-eat-predator-small-g1122-take-1-cal.mp3",
+          "gain": 1.029
+        },
+        {
+          "src": "/assets/audio/sfx/animal-eat-predator-small-g1122-take-2-cal.mp3",
+          "gain": 0.906
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 12,
+      "loop": false
+    },
+    "animal.eat.rodent": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-eat-rodent-g1122-take-1-cal.mp3",
+          "gain": 0.477
+        },
+        {
+          "src": "/assets/audio/sfx/animal-eat-rodent-g1122-take-2-cal.mp3",
+          "gain": 0.442
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 12,
+      "loop": false
+    },
+    "animal.eat.reptile": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-eat-reptile-g1122-take-1-cal.mp3",
+          "gain": 0.788
+        },
+        {
+          "src": "/assets/audio/sfx/animal-eat-reptile-g1122-take-2-cal.mp3",
+          "gain": 1.262
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 12,
+      "loop": false
+    },
+    "animal.eat.insect": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/animal-eat-insect-g1122-take-1-cal.mp3",
+          "gain": 0.254
+        },
+        {
+          "src": "/assets/audio/sfx/animal-eat-insect-g1122-take-2-cal.mp3",
+          "gain": 0.677
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 12,
+      "loop": false
+    },
+    "eating.vegetable": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/eating-vegetable-g1122-take-1-cal.mp3",
+          "gain": 0.294
+        },
+        {
+          "src": "/assets/audio/sfx/eating-vegetable-g1122-take-2-cal.mp3",
+          "gain": 0.378
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "eating.meat": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/eating-meat-g1122-take-1-cal.mp3",
+          "gain": 0.418
+        },
+        {
+          "src": "/assets/audio/sfx/eating-meat-g1122-take-2-cal.mp3",
+          "gain": 0.414
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "eating.drink": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/eating-drink-g1122-take-1-cal.mp3",
+          "gain": 0.395
+        },
+        {
+          "src": "/assets/audio/sfx/eating-drink-g1122-take-2-cal.mp3",
+          "gain": 0.278
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "eating.pill": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/eating-pill-g1122-take-1-cal.mp3",
+          "gain": 1.481
+        },
+        {
+          "src": "/assets/audio/sfx/eating-pill-g1122-take-2-cal.mp3",
+          "gain": 1.11
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "haul.drop-metal": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/haul-drop-metal-g1122-take-1-cal.mp3",
+          "gain": 0.269
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-metal-g1122-take-2-cal.mp3",
+          "gain": 0.262
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-metal-g1122-take-3-cal.mp3",
+          "gain": 0.161
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "haul.drop-silver": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/haul-drop-silver-g1122-take-1-cal.mp3",
+          "gain": 0.658
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-silver-g1122-take-2-cal.mp3",
+          "gain": 0.522
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-silver-g1122-take-3-cal.mp3",
+          "gain": 0.377
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "haul.drop-stone": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/haul-drop-stone-g1122-take-1-cal.mp3",
+          "gain": 0.282
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-stone-g1122-take-2-cal.mp3",
+          "gain": 0.24
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-stone-g1122-take-3-cal.mp3",
+          "gain": 0.264
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "haul.drop-chunk": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/haul-drop-chunk-g1122-take-1-cal.mp3",
+          "gain": 0.396
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-chunk-g1122-take-2-cal.mp3",
+          "gain": 0.278
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-chunk-g1122-take-3-cal.mp3",
+          "gain": 0.33
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "haul.drop-slag": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/haul-drop-slag-g1122-take-1-cal.mp3",
+          "gain": 0.312
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-slag-g1122-take-2-cal.mp3",
+          "gain": 0.192
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-slag-g1122-take-3-cal.mp3",
+          "gain": 0.2
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "haul.drop-grain": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/haul-drop-grain-g1122-take-1-cal.mp3",
+          "gain": 1.791
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-grain-g1122-take-2-cal.mp3",
+          "gain": 1.531
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-grain-g1122-take-4-cal.mp3",
+          "gain": 0.83
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "haul.drop-corpse": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/haul-drop-corpse-g1122-take-1-cal.mp3",
+          "gain": 0.259
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-corpse-g1122-take-2-cal.mp3",
+          "gain": 0.151
+        },
+        {
+          "src": "/assets/audio/sfx/haul-drop-corpse-g1122-take-3-cal.mp3",
+          "gain": 0.142
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "construction.metal": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/construction-metal-g1122-take-1-cal.mp3",
+          "gain": 0.312
+        },
+        {
+          "src": "/assets/audio/sfx/construction-metal-g1122-take-2-cal.mp3",
+          "gain": 0.448
+        },
+        {
+          "src": "/assets/audio/sfx/construction-metal-g1122-take-3-cal.mp3",
+          "gain": 0.385
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 16,
+      "loop": false
+    },
+    "construction.dirt": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/construction-dirt-g1122-take-1-cal.mp3",
+          "gain": 1.183
+        },
+        {
+          "src": "/assets/audio/sfx/construction-dirt-g1122-take-2-cal.mp3",
+          "gain": 0.347
+        },
+        {
+          "src": "/assets/audio/sfx/construction-dirt-g1122-take-3-cal.mp3",
+          "gain": 0.259
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 16,
+      "loop": false
+    },
+    "crafting.machining": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/crafting-machining-g1122-take-1-cal.mp3",
+          "gain": 0.169
+        },
+        {
+          "src": "/assets/audio/sfx/crafting-machining-g1122-take-2-cal.mp3",
+          "gain": 0.112
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "crafting.stonecut": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/crafting-stonecut-g1122-take-2-cal.mp3",
+          "gain": 2.249
+        },
+        {
+          "src": "/assets/audio/sfx/crafting-stonecut-g1122-take-3-cal.mp3",
+          "gain": 0.217
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "crafting.smelt": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/crafting-smelt-g1122-take-1-cal.mp3",
+          "gain": 0.201
+        },
+        {
+          "src": "/assets/audio/sfx/crafting-smelt-g1122-take-2-cal.mp3",
+          "gain": 0.308
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "crafting.brew": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/crafting-brew-g1122-take-1-cal.mp3",
+          "gain": 0.791
+        },
+        {
+          "src": "/assets/audio/sfx/crafting-brew-g1122-take-2-cal.mp3",
+          "gain": 0.436
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "crafting.drug": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/crafting-drug-g1122-take-1-cal.mp3",
+          "gain": 0.501
+        },
+        {
+          "src": "/assets/audio/sfx/crafting-drug-g1122-take-2-cal.mp3",
+          "gain": 0.478
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "crafting.sculpt": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/crafting-sculpt-g1122-take-1-cal.mp3",
+          "gain": 0.268
+        },
+        {
+          "src": "/assets/audio/sfx/crafting-sculpt-g1122-take-2-cal.mp3",
+          "gain": 0.235
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "crafting.bow": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/crafting-bow-g1122-take-1-cal.mp3",
+          "gain": 0.226
+        },
+        {
+          "src": "/assets/audio/sfx/crafting-bow-g1122-take-2-cal.mp3",
+          "gain": 0.224
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "crafting.cremate": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/crafting-cremate-g1122-take-1-cal.mp3",
+          "gain": 0.512
+        },
+        {
+          "src": "/assets/audio/sfx/crafting-cremate-g1122-take-2-cal.mp3",
+          "gain": 0.175
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "crafting.mech": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/crafting-mech-g1122-take-1-cal.mp3",
+          "gain": 0.434
+        },
+        {
+          "src": "/assets/audio/sfx/crafting-mech-g1122-take-2-cal.mp3",
+          "gain": 0.401
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "medical.surgery": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/medical-surgery-g1122-take-1-cal.mp3",
+          "gain": 0.198
+        },
+        {
+          "src": "/assets/audio/sfx/medical-surgery-g1122-take-2-cal.mp3",
+          "gain": 0.122
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 14,
+      "loop": false
+    },
+    "farming.harvest-finish": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/farming-harvest-finish-g1122-take-1-cal.mp3",
+          "gain": 0.99
+        },
+        {
+          "src": "/assets/audio/sfx/farming-harvest-finish-g1122-take-2-cal.mp3",
+          "gain": 0.401
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 20,
+      "loop": false
+    },
+    "weapon.shot-pistol": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-shot-pistol-g1122-take-1-cal.mp3",
+          "gain": 1.916
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-pistol-g1122-take-2-cal.mp3",
+          "gain": 0.133
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-pistol-g1122-take-3-cal.mp3",
+          "gain": 1.116
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 36,
+      "loop": false
+    },
+    "weapon.shot-sniper": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-shot-sniper-g1122-take-1-cal.mp3",
+          "gain": 0.229
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-sniper-g1122-take-2-cal.mp3",
+          "gain": 0.237
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 36,
+      "loop": false
+    },
+    "weapon.shot-shotgun": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-shot-shotgun-g1122-take-1-cal.mp3",
+          "gain": 0.197
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-shotgun-g1122-take-2-cal.mp3",
+          "gain": 0.194
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-shotgun-g1122-take-3-cal.mp3",
+          "gain": 0.244
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 36,
+      "loop": false
+    },
+    "weapon.shot-auto": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-shot-auto-g1122-take-2-cal.mp3",
+          "gain": 0.332
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-auto-g1122-take-5-cal.mp3",
+          "gain": 0.226
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 36,
+      "loop": false
+    },
+    "weapon.shot-bow": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-shot-bow-g1122-take-1-cal.mp3",
+          "gain": 0.39
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-bow-g1122-take-2-cal.mp3",
+          "gain": 0.515
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-bow-g1122-take-3-cal.mp3",
+          "gain": 0.453
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 36,
+      "loop": false
+    },
+    "weapon.shot-launcher": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-shot-launcher-g1122-take-1-cal.mp3",
+          "gain": 0.182
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-launcher-g1122-take-2-cal.mp3",
+          "gain": 0.247
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 36,
+      "loop": false
+    },
+    "weapon.shot-charge": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-shot-charge-g1122-take-1-cal.mp3",
+          "gain": 0.328
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-charge-g1122-take-2-cal.mp3",
+          "gain": 0.249
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 36,
+      "loop": false
+    },
+    "weapon.shot-needle": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-shot-needle-g1122-take-2-cal.mp3",
+          "gain": 0.31
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-shot-needle-g1122-take-3-cal.mp3",
+          "gain": 0.417
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 36,
+      "loop": false
+    },
+    "weapon.melee-sharp": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-melee-sharp-g1122-take-1-cal.mp3",
+          "gain": 0.368
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-melee-sharp-g1122-take-2-cal.mp3",
+          "gain": 0.342
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-melee-sharp-g1122-take-3-cal.mp3",
+          "gain": 0.322
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "weapon.melee-blunt": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-melee-blunt-g1122-take-1-cal.mp3",
+          "gain": 0.266
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-melee-blunt-g1122-take-2-cal.mp3",
+          "gain": 0.414
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-melee-blunt-g1122-take-3-cal.mp3",
+          "gain": 0.318
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "weapon.melee-wood": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-melee-wood-g1122-take-1-cal.mp3",
+          "gain": 0.285
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-melee-wood-g1122-take-2-cal.mp3",
+          "gain": 1.59
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "weapon.melee-scratch": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-melee-scratch-g1122-take-1-cal.mp3",
+          "gain": 0.307
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-melee-scratch-g1122-take-2-cal.mp3",
+          "gain": 0.365
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "weapon.melee-bash": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-melee-bash-g1122-take-1-cal.mp3",
+          "gain": 0.216
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-melee-bash-g1122-take-2-cal.mp3",
+          "gain": 0.167
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "weapon.melee-mech": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-melee-mech-g1122-take-1-cal.mp3",
+          "gain": 0.19
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-melee-mech-g1122-take-2-cal.mp3",
+          "gain": 0.191
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "weapon.melee-miss": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-melee-miss-g1122-take-1-cal.mp3",
+          "gain": 0.187
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-melee-miss-g1122-take-2-cal.mp3",
+          "gain": 0.198
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-melee-miss-g1122-take-3-cal.mp3",
+          "gain": 0.266
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 18,
+      "loop": false
+    },
+    "weapon.explosion": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weapon-explosion-g1122-take-1-cal.mp3",
+          "gain": 0.405
+        },
+        {
+          "src": "/assets/audio/sfx/weapon-explosion-g1122-take-2-cal.mp3",
+          "gain": 0.507
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 30,
+      "loop": false
+    },
+    "ambient.night-insects": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/ambient-night-insects-g1122-take-1.mp3",
+          "gain": 0.089
+        },
+        {
+          "src": "/assets/audio/sfx/ambient-night-insects-g1122-take-2.mp3",
+          "gain": 0.039
+        }
+      ],
+      "gain": 1,
+      "loop": true,
+      "spatial": false
+    },
+    "weather.wind-clear": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weather-wind-clear-g1122-take-1.mp3",
+          "gain": 0.19
+        },
+        {
+          "src": "/assets/audio/sfx/weather-wind-clear-g1122-take-2.mp3",
+          "gain": 0.207
+        }
+      ],
+      "gain": 1,
+      "loop": true,
+      "spatial": false
+    },
+    "weather.wind-storm": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/weather-wind-storm-g1122-take-1.mp3",
+          "gain": 0.039
+        },
+        {
+          "src": "/assets/audio/sfx/weather-wind-storm-g1122-take-2.mp3",
+          "gain": 0.048
+        }
+      ],
+      "gain": 1,
+      "loop": true,
+      "spatial": false
+    },
+    "machine.chemfuel-generator": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/machine-chemfuel-generator-g1122-take-1.mp3",
+          "gain": 0.147
+        },
+        {
+          "src": "/assets/audio/sfx/machine-chemfuel-generator-g1122-take-2.mp3",
+          "gain": 0.104
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 24,
+      "loop": true
+    },
+    "machine.geothermal": {
+      "variants": [
+        {
+          "src": "/assets/audio/sfx/machine-geothermal-g1122-take-1.mp3",
+          "gain": 0.108
+        },
+        {
+          "src": "/assets/audio/sfx/machine-geothermal-g1122-take-2.mp3",
+          "gain": 0.092
+        }
+      ],
+      "gain": 1,
+      "maxDistance": 26,
+      "loop": true
     }
   }
 }

@@ -1591,7 +1591,7 @@
     },
     "haul.drop-grain": {
       "filename": "haul-drop-grain-g1122-take-1.mp3",
-      "takes": 3,
+      "takes": 4,
       "prompt": "A sack of grain set down: a soft grainy rustle and a muffled thump. Natural realistic close dry foley for a warm cozy colony game, gentle and tactile, quick onset and short clean decay. Single sound then silence, no voice, music, ambience or reverb tail.",
       "durationSeconds": 0.7,
       "promptInfluence": 0.72,
@@ -1657,7 +1657,7 @@
     },
     "crafting.stonecut": {
       "filename": "crafting-stonecut-g1122-take-1.mp3",
-      "takes": 2,
+      "takes": 3,
       "prompt": "Chiseling stone: one mallet-driven chisel strike chipping rock, dry stone flakes. Natural realistic close dry foley for a warm cozy colony game, gentle and tactile, quick onset and short clean decay. Single sound then silence, no voice, music, ambience or reverb tail.",
       "durationSeconds": 0.9,
       "promptInfluence": 0.72,
@@ -1811,7 +1811,7 @@
     },
     "weapon.shot-auto": {
       "filename": "weapon-shot-auto-g1122-take-1.mp3",
-      "takes": 3,
+      "takes": 5,
       "prompt": "One single shot of an automatic rifle or submachine gun: a quick dry tight crack, short tail. Realistic restrained close foley for a warm colony game, readable but never harsh or piercing. Single sound then silence, no voice, music, ambience or long reverb.",
       "durationSeconds": 0.7,
       "promptInfluence": 0.72,
@@ -1855,7 +1855,7 @@
     },
     "weapon.shot-needle": {
       "filename": "weapon-shot-needle-g1122-take-1.mp3",
-      "takes": 2,
+      "takes": 3,
       "prompt": "A needle gun shot: a sharp pneumatic hiss-snap of a dart launched. Realistic restrained close foley for a warm colony game, readable but never harsh or piercing. Single sound then silence, no voice, music, ambience or long reverb.",
       "durationSeconds": 0.7,
       "promptInfluence": 0.72,

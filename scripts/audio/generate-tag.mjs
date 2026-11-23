@@ -35,7 +35,10 @@ function missingTakes(plan, tagName, exists) {
 
 const plan = JSON.parse(readFileSync(resolve(here, 'sfx-plan.json'), 'utf8'));
 const sfx = resolve(here, '../../public/assets/audio/sfx');
-const queue = missingTakes(plan, tag, (file) => existsSync(resolve(sfx, file)));
+// A take already generated (kept, or rejected after measurement and removed)
+// is never generated again under the same name: raise `takes` for a retake.
+const logged = new Set(JSON.parse(readFileSync(resolve(here, 'generation-log.json'), 'utf8')).generations.map((entry) => entry.filename));
+const queue = missingTakes(plan, tag, (file) => logged.has(file) || existsSync(resolve(sfx, file)));
 const estimate = queue.reduce((sum, item) => sum + Math.ceil(item.seconds * 10), 0);
 console.log(`${tag}: ${queue.length} missing takes, about ${estimate} credits (10 per second requested); cap ${maxCredits}.`);
 if (dryRun) process.exit(0);

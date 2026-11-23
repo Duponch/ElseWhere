@@ -10,6 +10,7 @@ import {
 import { gameAmbienceSources } from '../src/audio/ambience';
 import { cueVariation } from '../src/audio/selection';
 import { runningMachineAudioSource } from '../src/audio/continuous';
+import { DecodedCache, warmKind } from '../src/audio/decoded-cache';
 import { AudioCueRecorder, type AudioCue } from '../src/bridge/audio-cues';
 import { validCoreAudioCues297 } from '../src/bridge/core-phase-data-297';
 import { ANIMAL_SPECIES_IDS } from '../src/sim/animal-species';
@@ -100,22 +101,24 @@ describe('Core sound tables', () => {
 });
 
 describe('published takes', () => {
-  it('plans every game cue and loop, and publishes complete take sets only', () => {
+  it('plans every game cue and loop, and publishes every take that passed its measurement', () => {
     const planned = new Map(GAME_PLAN);
+    const rejected = (JSON.parse(readFileSync(resolve(repo, 'scripts/audio/pcm-balance-g1122.json'), 'utf8')) as { rejectedTakes: { id: string }[] }).rejectedTakes;
     for (const kind of [...GAME_SOUND_CUE_KINDS, ...LOOPS]) {
       const item = planned.get(kind);
       expect(item, kind).toBeDefined();
       expect(item!.takes, kind).toBeGreaterThanOrEqual(2);
       const event = manifest.events[kind];
-      if (!event) continue; // Still waiting for its generation (see the note).
-      expect(event.variants, kind).toHaveLength(item!.takes!);
-      expect(event.loop, kind).toBe(LOOPS.includes(kind));
-      for (const variant of event.variants) {
+      expect(event, kind).toBeDefined();
+      expect(event!.variants.length, kind).toBeGreaterThanOrEqual(2);
+      expect(event!.variants, kind).toHaveLength(item!.takes! - rejected.filter(row => row.id === kind).length);
+      expect(event!.loop, kind).toBe(LOOPS.includes(kind));
+      for (const variant of event!.variants) {
         expect(variant.src, kind).toContain('-g1122-');
         expect(existsSync(resolve(repo, 'public', variant.src.slice(1))), variant.src).toBe(true);
       }
-      if (item!.spatial === false) expect(event.spatial, kind).toBe(false);
-      else expect(event.maxDistance, kind).toBe(item!.maxDistance);
+      if (item!.spatial === false) expect(event!.spatial, kind).toBe(false);
+      else expect(event!.maxDistance, kind).toBe(item!.maxDistance);
     }
   });
 
@@ -142,7 +145,9 @@ describe('published takes', () => {
       if (row.effectiveRmsDbfs < family.targetRmsDbfs - 0.5)
         expect(row.effectivePeakDbfs, row.file).toBeGreaterThanOrEqual(family.peakCeilingDbfs - 0.2);
       expect(row.effectivePeakDbfs, row.file).toBeLessThanOrEqual(family.peakCeilingDbfs + 0.05);
-      expect(row.clippedPercent, row.file).toBe(0);
+      // A loop is published as generated (a second encode would break its seam):
+      // a couple of overs may remain in its source, far under its gain.
+      expect(row.clippedPercent, row.file).toBeLessThanOrEqual(LOOPS.includes(row.id) ? 0.001 : 0);
       expect(published.get(row.file)?.kind, row.file).toBe(row.id);
       expect(published.get(row.file)!.gain).toBeCloseTo(row.variantGain, 6);
       const bytes = readFileSync(resolve(repo, 'public/assets/audio/sfx', row.file));
@@ -337,7 +342,8 @@ describe('director voice limits', () => {
     createGain() { const gain = Object.assign(new Node(), { gain: new Param() }); this.gains.push(gain); return gain; }
     createBufferSource() { const source = new Source(); this.sources.push(source); return source; }
     createPanner() { return Object.assign(new Node(), { positionX: new Param(), positionY: new Param(), positionZ: new Param() }); }
-    decodeAudioData(): Promise<object> { return Promise.resolve({ duration: 0.5 }); }
+    // 0.5 s of 48 kHz stereo: 192 000 bytes of decoded PCM per take.
+    decodeAudioData(): Promise<object> { return Promise.resolve({ duration: 0.5, length: 24_000, numberOfChannels: 2 }); }
     resume(): Promise<void> { this.state = 'running'; return Promise.resolve(); }
     close(): Promise<void> { this.state = 'closed'; return Promise.resolve(); }
   }
@@ -349,14 +355,22 @@ describe('director voice limits', () => {
       [kind, { variants: [{ src: `/assets/audio/sfx/test-${kind.replace(/\./g, '-')}.mp3`, gain: 1 }], gain: 1, maxDistance: 26, loop: false }])),
   } };
   delete (testManifest.events as Record<string, unknown>)['haul.drop-wood'];
-  async function director(): Promise<{ audio: AudioDirector; context: FakeContext }> {
+  const fetched = new Map<string, number>();
+  const warmPaths = new Set(Object.entries(testManifest.events).filter(([kind, event]) => warmKind(kind, event) || kind === 'mining.hit')
+    .flatMap(([, event]) => event.variants.map(variant => variant.src)));
+  async function director(budget?: number): Promise<{ audio: AudioDirector; context: FakeContext }> {
+    fetched.clear();
     vi.stubGlobal('AudioContext', FakeContext);
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('manifest.json')
-      ? new Response(JSON.stringify(testManifest)) : new Response(new Uint8Array([1]))));
-    const audio = new AudioDirector();
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.endsWith('manifest.json')) return new Response(JSON.stringify(testManifest));
+      fetched.set(url, (fetched.get(url) ?? 0) + 1);
+      return new Response(new Uint8Array([1]));
+    }));
+    const audio = budget === undefined ? new AudioDirector() : new AudioDirector(undefined, budget);
     await audio.unlock();
-    const paths = new Set(Object.values(testManifest.events).flatMap(event => event.variants.map(variant => variant.src))).size;
-    for (let i = 0; i < 4000 && audio.loadedCount < paths; i++) await new Promise(resolveTick => setTimeout(resolveTick, 0));
+    // The warm set finishes decoding in the background (a small budget may evict its unpinned takes).
+    for (let i = 0; i < 4000 && [...warmPaths].some(src => !fetched.has(src)); i++) await new Promise(resolveTick => setTimeout(resolveTick, 0));
+    for (let i = 0; i < 10; i++) await new Promise(resolveTick => setTimeout(resolveTick, 0));
     audio.updateCamera({ x: 16, y: 30, z: 16, targetX: 16, targetZ: 16, span: 32, mode: 'orthographic' });
     return { audio, context: FakeContext.latest };
   }
@@ -366,6 +380,7 @@ describe('director voice limits', () => {
 
   it('plays nothing muted, and caps a grazing herd, a chorus of calls and many meals', async () => {
     const { audio, context } = await director();
+    await audio.prefetch(['animal.call.cervid', 'animal.eat.herbivore']);
     audio.setMuted(true);
     audio.ingestCues(Array.from({ length: 10 }, (_, i) => cue('animal.call.cervid', i)));
     audio.update({ presentedTick: 1, paused: false, hidden: false });
@@ -387,8 +402,9 @@ describe('director voice limits', () => {
     audio.update({ presentedTick: 1, paused: false, hidden: false });
     const drop = started(context);
     expect(drop).toHaveLength(1);
-    expect(testManifest.events['haul.drop']!.variants.map(variant => variant.src)).toContain(
-      [...(audio as unknown as { buffers: Map<string, unknown> }).buffers.entries()].find(([, buffer]) => buffer === drop[0]!.buffer)?.[0]);
+    const cache = (audio as unknown as { buffers: DecodedCache<never> }).buffers;
+    expect(testManifest.events['haul.drop']!.variants.some(variant => cache.get(variant.src) === drop[0]!.buffer)).toBe(true);
+    await audio.prefetch(['animal.call.canine']);
     audio.ingestCues([cue('animal.call.canine', 2, { tick: 2, pitch: 1.6 })]);
     audio.update({ presentedTick: 2, paused: false, hidden: false, speed: 1 });
     const young = started(context).at(-1)!;
@@ -406,5 +422,82 @@ describe('director voice limits', () => {
     const variation = (i: number) => cueVariation(`animal.call.canine:${300 + i}`, 'animal.call.canine').gain;
     expect(fast / normal).toBeCloseTo(0.25 * variation(1) / variation(0), 6);
     audio.dispose();
+  });
+
+  it('decodes only the warm set at load, a cold take once at its first need, and plays its first cue late', async () => {
+    const { audio, context } = await director();
+    expect(audio.loadedCount).toBe(warmPaths.size);
+    expect([...fetched.keys()].every(src => warmPaths.has(src))).toBe(true);
+    const cold = testManifest.events['animal.call.cervid']!.variants[0]!.src;
+    expect(fetched.has(cold)).toBe(false);
+    // Cold: the first cues wait for the take instead of stalling the frame.
+    audio.ingestCues(Array.from({ length: 4 }, (_, i) => cue('animal.call.cervid', 400 + i, { tick: 5, x: 16 + i * 8, z: 16 })));
+    audio.update({ presentedTick: 5, paused: false, hidden: false });
+    expect(started(context)).toHaveLength(0);
+    for (let i = 0; i < 20; i++) await new Promise(resolveTick => setTimeout(resolveTick, 0));
+    context.currentTime += 1 / 60;
+    audio.update({ presentedTick: 5, paused: false, hidden: false });
+    expect(started(context).length).toBeGreaterThanOrEqual(1);
+    expect(started(context).length).toBeLessThanOrEqual(3);
+    expect(fetched.get(cold)).toBe(1);
+    // Warm now: the next cue plays in its own frame, without another decode.
+    for (const source of started(context)) source.onended?.();
+    const before = started(context).length;
+    audio.ingestCues([cue('animal.call.cervid', 500, { tick: 6, x: 16, z: 16 })]);
+    audio.update({ presentedTick: 6, paused: false, hidden: false });
+    expect(started(context).length - before).toBe(1);
+    expect(fetched.get(cold)).toBe(1);
+    // A cold cue whose take arrives after 0.25 s of audio clock is dropped.
+    const late = testManifest.events['animal.eat.herbivore']!.variants[0]!.src;
+    audio.ingestCues([cue('animal.eat.herbivore', 600, { tick: 7, x: 16, z: 16 })]);
+    audio.update({ presentedTick: 7, paused: false, hidden: false });
+    for (let i = 0; i < 20; i++) await new Promise(resolveTick => setTimeout(resolveTick, 0));
+    context.currentTime += 0.3;
+    const count = started(context).length;
+    audio.update({ presentedTick: 7, paused: false, hidden: false });
+    expect(started(context).length).toBe(count);
+    expect(fetched.get(late)).toBe(1);
+    audio.dispose();
+  });
+
+  it('never holds more decoded takes than its budget, keeping the warm takes and evicting the least recent', async () => {
+    const pinned = Object.entries(testManifest.events).filter(([kind, event]) => warmKind(kind, event) || kind === 'mining.hit').length * 192_000;
+    const budget = pinned + 2_000_000;
+    const { audio } = await director(budget);
+    const cold = Object.keys(testManifest.events).filter(kind => !warmKind(kind, testManifest.events[kind]!) && !testManifest.events[kind]!.loop).slice(0, 40);
+    expect(cold.length).toBeGreaterThan(20);
+    for (const kind of cold) {
+      await audio.prefetch([kind]);
+      expect(audio.decodedMemory.bytes, kind).toBeLessThanOrEqual(budget);
+    }
+    const cache = (audio as unknown as { buffers: DecodedCache<never> }).buffers;
+    for (const [kind, event] of Object.entries(testManifest.events)) if (warmKind(kind, event)) expect(cache.get(event.variants[0]!.src), kind).toBeTruthy();
+    expect(cache.get(testManifest.events[cold[0]!]!.variants[0]!.src)).toBeUndefined(); // evicted first
+    expect(cache.get(testManifest.events[cold.at(-1)!]!.variants[0]!.src)).toBeTruthy();
+    audio.dispose();
+  });
+});
+
+describe('decoded cache', () => {
+  const take = (seconds: number) => ({ length: seconds * 48_000, numberOfChannels: 2 });
+  it('evicts the least recently used, sounding takes last, never a pinned take, and stays within its budget', () => {
+    const playing = new Set<object>(), budget = 3 * 384_000;
+    const cache = new DecodedCache<ReturnType<typeof take>>(budget, buffer => playing.has(buffer));
+    const [a, b, c, d, e, f] = [take(1), take(1), take(1), take(1), take(1), take(1)];
+    cache.pin('a'); cache.set('a', a);
+    cache.set('b', b); cache.set('c', c);
+    expect(cache.bytes).toBe(budget);
+    cache.use('b'); playing.add(c);
+    cache.set('d', d); // c sounds, so the least recent free take goes: b
+    expect([cache.get('a'), cache.get('b'), cache.get('c'), cache.get('d')]).toEqual([a, undefined, c, d]);
+    playing.add(d);
+    cache.set('e', e); // everything free is pinned: the oldest sounding take goes (it keeps playing)
+    expect([cache.get('c'), cache.get('d'), cache.get('e')]).toEqual([undefined, d, e]);
+    cache.set('f', f);
+    expect(cache.bytes).toBeLessThanOrEqual(budget);
+    expect(cache.get('a')).toBe(a);
+    cache.set('x', null); // a failed decode costs nothing and is remembered
+    expect(cache.get('x')).toBeNull();
+    expect(cache.count).toBe(3);
   });
 });
