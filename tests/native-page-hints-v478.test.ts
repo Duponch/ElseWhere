@@ -96,7 +96,9 @@ describe('native page hint rebinding',()=>{
       f.stage.pageSignature=f.stage.pageInkSignature(before);f.stage.page=after;f.stage.hintOwner=column.piece;
       f.stage.rebuildPage();
       expect(row.piece.userData.tooltip).toBe('Après');expect(column.piece.userData.tooltip).toBe('Colonne actuelle');expect(action.piece.userData.tooltip).toBe('Action actuelle');
-      expect(f.clearHint).toHaveBeenCalledTimes(1);expect(f.stage.hintOwner).toBeNull();
+      // Since 23 November (item 27) a changed hint no longer clears the shown tooltip:
+      // it stays on its piece and only its text is refreshed (TooltipHandler re-reads the text).
+      expect(f.clearHint).not.toHaveBeenCalled();expect(f.stage.hintOwner).toBe(column.piece);
       action.control?.onActivate();expect(activate).toHaveBeenCalledTimes(1);
       for(const piece of f.pieces)expect(piece.redraw).not.toHaveBeenCalled();
     }finally{f.close();}
@@ -123,7 +125,7 @@ describe('native page hint rebinding',()=>{
       f.stage.dropdown={controlId:'action',pageId:next.id,pieces:[option.piece]};f.stage.hintOwner=option.piece;f.stage.page=next;
       f.stage.rebindPage(next);
       expect(owner.control).toBe(next.rows[0]!.controls![0]);expect(option.piece.userData.tooltip).toBe('Choix actuel');expect(option.control?.hint).toBe('Choix actuel');
-      expect(f.clearHint).toHaveBeenCalledTimes(1);expect(option.piece.redraw).not.toHaveBeenCalled();
+      expect(f.clearHint).not.toHaveBeenCalled();expect(f.stage.hintOwner).toBe(option.piece);expect(option.piece.redraw).not.toHaveBeenCalled();
       option.control?.onActivate();expect(onChange).toHaveBeenCalledWith('a');expect(f.closeDropdown).toHaveBeenCalledTimes(1);
     }finally{f.close();}
   });
