@@ -346,7 +346,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     };
     const category=optionSections.find(section=>section.id===optionSection)!;
     // « Textes de RimWorld » only where the page has its controller, « Développeur » where pages are listed.
-    const catalogue:NativeRow[]=optionSections.filter(section=>(section.id!=='rimworld-texts'||options.rimWorldTexts)&&(section.id!=='developer'||options.developerPages?.length)).map(section=>({id:`option-section-${section.id}`,label:'',region:'catalogue',controls:[control(`option-section-${section.id}`,section.label,()=>{optionSection=section.id;},false,optionSection===section.id)]}));
+    const catalogue:NativeRow[]=optionSections.filter(section=>(section.id!=='rimworld-texts'||options.rimWorldTexts)&&(section.id!=='developer'||options.developerPages?.length||options.developerMode)).map(section=>({id:`option-section-${section.id}`,label:'',region:'catalogue',controls:[control(`option-section-${section.id}`,section.label,()=>{optionSection=section.id;},false,optionSection===section.id)]}));
     const details:NativeRow[]=[{id:'option-section-title',label:category.label,emphasis:'heading',region:'details'},
       ...rows.filter(row=>sectionOf(row.id)===optionSection).map(row=>({...row,region:'details' as const,column:undefined}))];
     return { id:'',title:'Options',rows:[...catalogue,...details],width:900,height:760,layout:'setup',setupCatalogueWidth:180,contentKey:`options-${optionSection}`,actions:navigation() };
@@ -355,9 +355,15 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   /** Options → « Développeur »: one row per developer page of this build
    * (src/ui/developer-pages.ts), each opened in a new tab. */
   function developerRows(): NativeRow[] {
-    const pages = options.developerPages;
-    if (!pages?.length) return [];
+    const pages = options.developerPages ?? [];
+    const mode = options.developerMode;
+    const modeRows: NativeRow[] = mode ? [
+      { id: 'developer-mode-about', label: 'Mode développeur : une barre en haut de l’écran ouvre des actions magiques pour tester les mécaniques (régler un besoin ou l’humeur, soigner, poser un objet, lancer un incident, avancer le temps…) et un mode divin. Chaque action est un ordre ordinaire joué par la simulation. Ce choix reste dans ce navigateur, jamais dans une sauvegarde, et vaut « désactivé » par défaut.' },
+      toggle('developer-mode', 'Mode développeur', mode.enabled(), value => preference(mode.set(value))),
+    ] : [];
+    if (!pages.length) return modeRows;
     return [
+      ...modeRows,
       { id: 'developer-about', label: 'Pages de contrôle du projet. Chacune s’ouvre dans un nouvel onglet, sans quitter la partie.' },
       ...pages.map(page => ({ id: `developer-page-${page.id}`, label: page.title, detail: page.description,
         controls: [control(`developer-open-${page.id}`, 'Ouvrir', () => { window.open(developerPageUrl(page), '_blank', 'noopener'); }, false, false, true)] })),

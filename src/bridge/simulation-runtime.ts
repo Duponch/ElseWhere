@@ -54,6 +54,7 @@ import {WorkerTaskScheduler} from './worker-task-scheduler';
 import { PresentationChanges } from './presentation-changes';
 import { queryOrderOptions } from '../sim/player-orders';
 import {queryBillWorkerOptions283} from '../sim/bill-worker-owners-283';
+import { setDevSession,takeDevAdvance } from '../sim/dev-session';
 import { applyCommand, deserializeWorld, serializeWorld, stepWorld } from '../sim/index';
 import type { World } from '../sim/types';
 import type { Request, Response, SimulationFault } from './protocol';
@@ -478,6 +479,7 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
   if(ordinaryRequest298?.type==='command'&&newCampCommand256(ordinaryRequest298)){void handleCamp256(ordinaryRequest298);return;}
   let mutating = false;
   let adoptedReplacement = false;
+  let devAdvanced = false;
   try {
     if(request.type==='init'||request.type==='load')discardWorldDraft256();
     let data: string | undefined;
@@ -491,7 +493,10 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
       // transition, not its beginning. There is no Worker timer/deadline.
       mutating=true;const result=shipCountdown298.continueCredits(world,request);if(!result.ok){mutating=false;throw Error(result.reason);}resumeAfterShipCredits298(performance.now());data=JSON.stringify(result);
     }else if(request.type==='settlement-limit'){if(!validSettlementLimit(request.maxSettlements))throw Error('Plafond de colonies invalide.');maxSettlements=request.maxSettlements;if(world?.worldMaps)configureSettlementLimit(world,maxSettlements);
-    }else if (request.type === 'threat-pause-mode') {
+    } else if (request.type === 'dev-mode') {
+      if (typeof request.enabled !== 'boolean' || typeof request.god !== 'boolean') throw new Error('Réglage développeur invalide.');
+      setDevSession(request.enabled, request.god);
+    } else if (request.type === 'threat-pause-mode') {
       if (!validThreatPauseMode(request.mode)) throw new Error('Mode de pause invalide.');
       threatPauseMode = request.mode;
     } else if (request.type === 'init') {
@@ -571,6 +576,8 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
         if(result.ok&&retry)attemptedEncounter261.delete(retry);
         if(result.ok&&previousTarget&&pendingWorldEntry263(world)?.pending===previousTarget)attemptedWorldEntry263.delete(previousTarget);
         if (!result.ok) { mutating = false; throw new Error(result.reason ?? 'Ordre refusé.'); }
+        // Developer mode, advance time: the command only recorded the request; it is played here, after the acknowledgement point.
+        if(request.command.type==='dev-action'){const ticks=takeDevAdvance();if(ticks>0){playDevTicks(ticks);devAdvanced=true;}}
         resumeNeutralEncounter261(previousEncounter);
         if (result.affected !== undefined) data = JSON.stringify({ affected: result.affected, skipped: result.skipped, ...(result.planId369 !== undefined ? { planId369: result.planId369 } : {}) });
       } else if (request.type === 'save') {
@@ -578,7 +585,7 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
         data = request.check==='deferred'?serializeCampaignUnchecked(world):serializeCampaign(world);
       }
     }
-    const checkpoint = request.type === 'init' || request.type === 'load' || request.type === 'resync';
+    const checkpoint = request.type === 'init' || request.type === 'load' || request.type === 'resync' || devAdvanced;
     if(request.type==='load')send({type:'operation-progress',id:request.id,stage:'publish',completed:0,total:1});
     // An observer/encoder/publication failure must stop further mutation too.
     let publication: { epoch: number; revision: number } | undefined;
@@ -704,6 +711,20 @@ function runCoreTask297(now:number):void {
  }finally{presentationScope297=false;presentationMemo297=undefined;physicalMemo297=undefined;}
  if(paused){if(encounter)startEncounter261();if(entry)startWorldEntry263();return;}
  if(batch.remaining===0){coreBatch297=undefined;if(wakeDue)regularTasks.request();}else regularTasks.request();
+}
+/** Developer mode: plays the ticks of a time-advance action with the ordinary
+ * stepWorld, by chunks, stopping when a new threat pauses the game. The
+ * presentation memory (motions, phases, cues, clock) is reset as after a load. */
+function playDevTicks(ticks:number):void {
+  if(!world)return;
+  for(let left=ticks;left>0;){
+    const n=Math.min(left,250);
+    urgentThreats.prepareMaps(world);
+    stepWorld(world,n,undefined,caravans);left-=n;
+    if(urgentThreats.capture(world,threatPauseMode)){speed=0;break;}
+  }
+  motion.reset();phasePublisher297.reset();audioCues.reset();
+  resetSimulationClock(performance.now());
 }
 function runRegularTask():void {
   const now=performance.now();

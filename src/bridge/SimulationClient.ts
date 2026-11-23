@@ -472,6 +472,8 @@ export class SimulationClient {
     this.threatPauseMode = mode;
     return result;
   }
+  /** Developer mode: the Worker's session flags (never saved). */
+  async setDevMode(enabled: boolean, god: boolean): Promise<void> { await this.request({ type: 'dev-mode', enabled, god }); }
   async setMaxSettlements(value:SettlementLimit):Promise<void> {if(!validSettlementLimit(value))throw Error('Plafond de colonies invalide.');await this.request({type:'settlement-limit',maxSettlements:value});this.settlementMaximum=value;}
   /** The Worker writes the text; its complete validation runs off the
    * simulation thread (save-check.ts), with the in-Worker check as fallback. */

@@ -90,3 +90,12 @@ export function advanceWeather(w:World,inputs:WeatherInputs):void {
 }
 
 function worldWeatherSite256(w:World){return w.schemaVersion>=256&&w.site?.revision===3?w.site:undefined;}
+/** Developer mode only (dev-actions.ts): Core's WeatherManager.TransitionTo.
+ * The new weather fades in over the usual 4000 Core ticks and lasts as long as
+ * a drawn one (same duration draw as the ordinary transition). */
+export function forceWeather(w:World,kind:WeatherKind):void {
+  adoptWeather(w);
+  const s=w.weather!;
+  s.previous=s.current;s.current=kind;s.ageCore=0;
+  s.durationCore=WEATHER[kind].storm?15000+Math.floor(random(s)*25001):16000+Math.floor(random(s)*144001);
+}

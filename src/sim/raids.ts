@@ -183,3 +183,20 @@ export function exitRaider(w:World,p:Pawn):boolean {
   for(const q of w.pawns)if(q.shooting?.order?.targetId===p.id||q.melee?.order?.targetId===p.id||q.tactics?.targetId===p.id){stopRaidEngagement(q);if((q.motion?.end??0)<=w.tick&&q.state==='moving')q.state='idle';}
   log(w,p.prisoner?.releasedAt!==undefined?`${p.name} quitte librement la carte après sa libération, avec ses objets portés.`:p.prisoner?`${p.name} s'est échappé au bord de la carte avec ses objets portés.`:`${p.name} quitte la carte avec son équipement porté.`);return true;
 }
+/** Developer mode only (dev-actions.ts): a home raid right now with the given
+ * threat points, through the same functions as a due storyteller opportunity (the
+ * faction draw, the composition, the entry cells, the group). Nothing of the
+ * calendar is consumed or rescheduled. Only the storyteller's calendar draws
+ * such raids (the historical camp calendar has its own fixed groups). True when
+ * raiders really arrived. */
+export function startDevRaid(w:World,points:number):boolean {
+  const s=w.raids;if(!s||s.profile!=='cassandra-raids-v1'||!w.pawns.some(p=>isColonist(p)&&p.state!=='dead'))return false;
+  const before=w.pawns.length,random={rng:s.rng},beside=raidSlotTaken341(w);
+  if(w.schemaVersion>=331&&w.worldFactions){
+    startFactionRaid331(w,points,random,s.mechanoid?{rng:s.mechanoid.rng}:undefined,false,beside);
+  }else{
+    const composition=chooseRaidComposition(points,random),count=composition.roster.length,sites=raidEntries(w,s.rng,count);
+    if(sites)createRaidGroup(w,{count,sites,random,composition,recompose333:chooseRaidComposition,...beside?{concurrent341:true}:{}});
+  }
+  return w.pawns.length>before;
+}

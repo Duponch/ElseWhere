@@ -748,7 +748,8 @@ function applyCommandInMode(world: World, command: Command,caravans?:import('./g
 function observeAcceptedConsoleCommand298(world:World,command:Command):void {
  if(!isSchema298OrLater(Number(world.schemaVersion)))return;
  const owner=coreState297(world).contacts!;
- if('pawnId'in command&&typeof command.pawnId==='number'){const slot=world.pawns.findIndex(p=>p.id===command.pawnId);if(slot>=0)owner.observeCommandPawn(world.pawns[slot]!,slot,effectiveCore297(world));else owner.forgetActor(command.pawnId);}
+ const subject='pawnId'in command?command.pawnId:command.type==='dev-action'?command.targetId:undefined;
+ if(typeof subject==='number'){const slot=world.pawns.findIndex(p=>p.id===subject);if(slot>=0)owner.observeCommandPawn(world.pawns[slot]!,slot,effectiveCore297(world));else owner.forgetActor(subject);}
  owner.invalidateActive(effectiveCore297(world),'command');
 }
 type LocalCommand=Exclude<Command,SecondarySiteCommand>;
@@ -776,6 +777,8 @@ function applyLocalCommand(world: World, command: LocalCommand): CommandResult {
   if(command.type==='work-tab-mode')return applyWorkTabMode344(campaignAuthority(world),command);
   if(isLetterCommand352(command))return applyLetterCommand352(world,command);
   const result=stripCancel351(world,command,applyCommandInternal(world,command));
+  // Developer mode, god mode: choosing a research project completes it (Core's god mode makes research free).
+  if(result.ok&&command.type==='research-project'&&command.project&&devGodMode())finishCurrentResearch(world);
   if(command.type==='firefoam-auto-rebuild')return result;
   if(command.type==='bill-pause-policy'||command.type==='bill-pause-resume')return result;
   if(isSchema287OrLater(Number(world.schemaVersion))&&command.type==='area'&&(command.action==='home'||command.action==='remove-home'))return result;
@@ -911,6 +914,7 @@ function applyCommandInternal(world: World, command: Exclude<LocalCommand,import
   }
   if(command.type==='order-orbital-trade'||command.type==='cancel-orbital-trade'||command.type==='orbital-trade-execute')return applyOrbitalTrade(world,command);
   if(command.type==='enable-visitors'||command.type==='order-trade'||command.type==='cancel-trade'||command.type==='trade-execute')return applyTrade(world,command);
+  if(command.type==='dev-action')return applyDevAction(world,command);
   if(command.type==='enable-mech-raids')return enableMechanoidRaids(world)?{ok:true}:{ok:false,code:'invalid-command',reason:'Le calendrier Cassandra est requis pour les menaces mécaniques.'};
   if(command.type==='claim-road-prop')return claimRoadProp256(world,command);
   if(command.type==='enable-raids'){enableRaids(world);return {ok:true};}
@@ -1902,3 +1906,19 @@ function advanceWorldCore297InScope(world:CampaignState,diagnostics?:import('./w
  if(boundary)invalidateCoreCampaign297(root,'macro');
  return {core,localTickCompleted:boundary,maps:results};
 }
+
+import { applyDevAction,devConstructionJobAt,devHooks,finishCurrentResearch } from './dev-actions.ts';
+import { devGodMode } from './dev-session.ts';
+/** Developer mode: finish the construction at a cell through completeJob, by the
+ * worker who held it or else the nearest free colonist (who then stops). */
+devHooks.completeJob=(world,cell)=>{
+  const job=devConstructionJobAt(world,cell);
+  if(!job)return {ok:false,reason:'Aucun chantier sur cette case.'};
+  if(!constructionSupplied(world,job))return {ok:false,reason:'Les matériaux de ce chantier ne sont pas tous livrés.'};
+  const colonists=world.pawns.filter(p=>isColonist(p)&&p.state!=='dead'&&!p.prisoner);
+  const worker=colonists.find(p=>p.jobId===job.id)??colonists.sort((a,b)=>Math.abs(a.x-cell.x)+Math.abs(a.z-cell.z)-Math.abs(b.x-cell.x)-Math.abs(b.z-cell.z))[0];
+  if(!worker)return {ok:false,reason:'Aucun colon n’est disponible pour achever ce chantier.'};
+  if(worker.jobId!==job.id)releaseWork(world,worker);
+  completeJob(world,worker,job);
+  return world.jobs.includes(job)?{ok:false,reason:'Le chantier n’a pas pu être achevé (case occupée ou ouvrage refusé).'}:{ok:true,message:'Construction terminée.'};
+};

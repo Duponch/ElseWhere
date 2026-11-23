@@ -1,6 +1,7 @@
 import { globalLearningFactor } from './traits.ts';
 import { BACKGROUND_SKILL_IDS, backgroundSkillRefusal } from './colonist-backgrounds.ts';
 import { effectiveSkillLevel } from './work-types.ts';
+import { devGodMode } from './dev-session.ts';
 import { TICKS_PER_DAY, type Job, type Pawn, type World } from './types.ts';
 import { isConstruction } from './construction-rules.ts';
 import { constructionRecipe } from './construction-materials.ts';
@@ -59,6 +60,8 @@ export function usesConstructionSkill(job:Job):boolean {
 /** Called only at the physically reached, executable work phase. */
 export function constructionWorkRate(pawn:Pawn,job:Job,light:number,body?:import('./body-capacities.ts').BodyAssessment):number {
   if(!usesConstructionSkill(job))return light*physicalWorkFactor(pawn,'plant',body);
+  // Developer mode, god mode: construction work is instant (Core's god mode builds at once).
+  if(devGodMode()&&usesConstructionSkill(job))return 1e6;
   // Learning precedes the stat query, as in ConstructFinishFrame.
   if(job.kind==='deconstruct'||isConstruction(job)&&!job.furniture) {
     const recipe=job.kind==='deconstruct'&&job.deconstruction ? constructionRecipe(job.deconstruction) : constructionRecipe(job);

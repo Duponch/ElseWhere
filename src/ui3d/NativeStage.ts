@@ -168,6 +168,8 @@ export class NativeStage {
   private textFontFamily='"Comic Sans MS", Georgia, serif';
   private textFontRevision=0;
   private fontRequest=0;
+  private devBarGroup?:THREE.Group;
+  private devBarPieces:CardboardPiece[]=[];
   private notice:CardboardPiece|undefined;
   private noticeTimer:ReturnType<typeof setTimeout>|undefined;
   private globe:NativeGlobe|undefined;
@@ -289,12 +291,12 @@ export class NativeStage {
     if(this.worldVisible===visible)return;this.sceneRevision++;
     this.worldVisible=visible;this.standalone=!visible;
     this.updateOwnSurface();
-    this.anchors.bottomCenter.visible=!this.frontVisible;this.toolsDock.visible=visible&&!this.frontVisible;this.updateWorldReadoutVisibility();this.invalidate();
+    this.anchors.bottomCenter.visible=!this.frontVisible;this.toolsDock.visible=visible&&!this.frontVisible;this.updateDevBarVisibility();this.updateWorldReadoutVisibility();this.invalidate();
   }
   setFrontVisible(visible:boolean):void{
     if(this.frontVisible===visible)return;this.sceneRevision++;
     this.frontVisible=visible;this.frontBackdrop.setVisible(visible);if(visible)this.resetShipCurtain298(false);this.updateOwnSurface();
-    this.anchors.bottomCenter.visible=!visible;this.toolsDock.visible=this.worldVisible&&!visible;this.resize();this.rebuildPage(true);this.updateWorldReadoutVisibility();this.invalidate();
+    this.anchors.bottomCenter.visible=!visible;this.toolsDock.visible=this.worldVisible&&!visible;this.updateDevBarVisibility();this.resize();this.rebuildPage(true);this.updateWorldReadoutVisibility();this.invalidate();
   }
   private updateOwnSurface():void{
     this.resetCountdownFrame298();
@@ -433,6 +435,31 @@ export class NativeStage {
     piece.setBaseTransform(0,-1.0,.35);this.anchors.topCenter.add(piece);this.notice=piece;this.invalidate();
     this.noticeTimer=setTimeout(()=>{if(this.notice===piece){this.unregister(piece);this.notice=undefined;this.invalidate();}},error?8000:4000);
   }
+  /** Developer mode toolbar (Core's DebugWindowsOpener row at the top of the
+   * screen): a few cardboard buttons at the top centre, only over the map.
+   * Rebuilt when its buttons change; null removes it. Presentation only. */
+  setDevBar(buttons:readonly {id:string;label:string;hint:string;active?:boolean;onActivate:()=>void|Promise<unknown>}[]|null):void{
+    for(const piece of this.devBarPieces)this.unregister(piece);
+    this.devBarPieces=[];
+    if(!buttons?.length){if(this.devBarGroup)this.devBarGroup.visible=false;this.invalidate();return;}
+    if(!this.devBarGroup){this.devBarGroup=new THREE.Group();this.anchors.topCenter.add(this.devBarGroup);}
+    const height=26,gap=6,widths=buttons.map(button=>Math.ceil(this.measure(button.label,13,true))+24);
+    const total=widths.reduce((sum,width)=>sum+width,0)+gap*(buttons.length-1);
+    let left=-total/2;
+    buttons.forEach((button,index)=>{
+      const width=widths[index]!,w=width*.01,h=height*.01;
+      const piece=this.art.createPiece({w,h,seed:6101+index,uvPadding:1,textureWidth:width*2,textureHeight:height*2,bgColor:button.active?PALETTE.sageMountain:PALETTE.creamPaper,depth:.036,bevel:.03,interactive:true,tooltip:button.hint,
+        drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font(13,true);ctx.textAlign='center';ctx.fillText(button.label,width/2,height/2+5,width-12);ctx.restore();}});
+      piece.userData.nativeId=button.id;
+      // Just under the colonist bar, which owns the very top of the screen.
+      piece.setBaseTransform((left+width/2)*.01,-1.28,.2);
+      left+=width+gap;
+      this.devBarGroup!.add(piece);this.devBarPieces.push(piece);
+      this.register(piece,{id:button.id,label:button.label,hint:button.hint,onActivate:button.onActivate});
+    });
+    this.updateDevBarVisibility();this.sceneRevision++;this.invalidate();
+  }
+  private updateDevBarVisibility():void{if(this.devBarGroup)this.devBarGroup.visible=this.devBarPieces.length>0&&this.worldVisible&&!this.frontVisible;}
   setSelectionRectangle(bounds:{left:number;top:number;width:number;height:number}|null):void{
     this.sceneRevision++;
     this.selectionBox.visible=!!bounds;
@@ -832,7 +859,7 @@ export class NativeStage {
     if(hit.piece.userData.nativeStatic)return;
     if(hit.control?.disabled)return;
     if(hit.control?.paint){const paint=hit.control.paint;this.paintDrag={pointerId:event.pointerId,group:paint.group,indices:new Set([paint.index]),onPaint:paint.onPaint};hit.piece.userData.pressVal=.7;this.moving.add(hit.piece);this.invalidate();return;}
-    const id=hit.control?.id??String(hit.piece.userData.nativeId),switchesPage=id.startsWith('tab:')||id.startsWith('map-dock:');
+    const id=hit.control?.id??String(hit.piece.userData.nativeId),switchesPage=id.startsWith('tab:')||id.startsWith('map-dock:')||id.startsWith('dev-bar-');
     this.down={piece:hit.piece,controlId:hit.control?.id,outsidePage:switchesPage?undefined:outside,pageId:this.page?.id,layout:this.pageBox,pose:new NativeHitPose(hit.piece.userData.interactiveMeshes??[]),pointerId:event.pointerId,x:event.clientX,y:event.clientY};
     hit.piece.userData.pressVal=1;this.moving.add(hit.piece);this.invalidate();
   }

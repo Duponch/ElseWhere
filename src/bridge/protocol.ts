@@ -26,6 +26,8 @@ export type Request =
   | { id: number; type: 'bill-worker-options'; structureId:number; billId:number }
   | { id: number; type: 'speed'; speed: number; options?: ThreatSpeedOptions; pauseIntent?: {origin:number;at:number} }
   | { id: number; type: 'threat-pause-mode'; mode: ThreatPauseMode }
+  /** Developer-mode session flags (sim/dev-session.ts): never saved, never part of a World. */
+  | { id: number; type: 'dev-mode'; enabled: boolean; god: boolean }
   | { id: number; type:'settlement-limit';maxSettlements:SettlementLimit }
   /** check 'deferred': the text only; the client validates it off this thread (save-check.ts). */
   | { id: number; type: 'save'; check?: 'deferred' }

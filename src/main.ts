@@ -273,6 +273,9 @@ import { loadGainOffsets } from './audio/gain-offsets';
 import { developerPagesForMode } from './ui/developer-pages';
 import { ambientCameraGain, FoliageAmbience, gameAmbienceSources } from './audio/ambience';
 import { createNearbyFireCollector, createNearbyMachineCollector, MACHINE_LOOP_STRUCTURES, runningMachineAudioSource } from './audio/continuous';
+import { createDeveloperMode } from './ui/developer-mode';
+import { buildNativeDevPanel,devTargetId,DEV_PANEL_ID,type DevPanelHost,type DevPanelView } from './ui3d/native-dev-panel';
+import type { DevAction } from './sim/dev-actions';
 import { listenerPose, type AudioCamera } from './audio/spatial';
 import { ColonyRenderer } from './render/ColonyRenderer';
 import { SceneStructurePreparation } from './render/SceneStructurePreparation';
@@ -468,6 +471,7 @@ const client = (() => {
     billWorkerOptions: (...args: Parameters<SimulationClient['billWorkerOptions']>) => native.billWorkerOptions(...args),
     setSpeed: (...args: Parameters<SimulationClient['setSpeed']>) => native.setSpeed(...args),
     setThreatPauseMode: (mode:ThreatPauseMode) => native.setThreatPauseMode(mode),
+    setDevMode: (enabled:boolean,god:boolean) => native.setDevMode(enabled,god),
     setMaxSettlements:(value:SettlementLimit)=>native.setMaxSettlements(value),
     getThreatPauseToken: () => native.getThreatPauseToken(),
     save: () => native.save(),
@@ -1155,9 +1159,55 @@ const worldCreationBackend256:WorldCreationCallbacks256={
 // in their own Worker from the folder kept by this browser; Elsewhere's texts
 // stay shown until then and whenever the folder cannot be read.
 const rimWorldTexts=browserRimWorldTexts(()=>new Worker(new URL('./lore/game-lore.worker.ts',import.meta.url),{type:'module'}));
+// Developer mode (docs/development/developer-mode.md): a browser preference, off
+// by default, mirrored to the Worker as session flags (never in a save).
+const developerMode=createDeveloperMode((()=>{try{return localStorage;}catch{return undefined;}})(),(enabled,god)=>{void client.setDevMode(enabled,god).catch(()=>undefined);});
+let nativeDevPanelOpen=false;
+let devArmed:{action:DevAction;args:Record<string,string>}|undefined;
+const devView:DevPanelView={search:'',args:{},collapsed:new Set()};
+const devPanelHost:DevPanelHost={view:devView,god:()=>developerMode.god(),setGod:on=>developerMode.setGod(on),run:(action,args)=>runDevAction(action,args),armed:()=>devArmed,
+  cancelArmed:()=>{devArmed=undefined;},rebuild:()=>{if(nativeDevPanelOpen&&nativeUi){nativeCustomPage=buildNativeDevPanel(readNativeState(),devPanelHost);nativeUi.showPage(nativeCustomPage);}},close:()=>closeNativeDevPanel()};
+function closeNativeDevPanel():void {
+  devArmed=undefined;
+  if(nativeDevPanelOpen){nativeDevPanelOpen=false;if(nativeCustomPage?.id===DEV_PANEL_ID)nativeCustomPage=undefined;}
+  syncDevBar();refreshNativeUi();
+}
+function toggleNativeDevPanel():void {
+  if(!nativeUi||!snapshot||replacingWorld||!developerMode.enabled())return;
+  if(nativeDevPanelOpen){closeNativeDevPanel();return;}
+  setPanel(null,true);nativeToolPalette=undefined;nativeDevPanelOpen=true;
+  nativeCustomPage=buildNativeDevPanel(readNativeState(),devPanelHost);nativeUi.showPage(nativeCustomPage);syncDevBar();
+}
+function runDevAction(action:DevAction,args:Record<string,string>):void {
+  if(!developerMode.enabled())return;
+  if(action.target==='cell'){devArmed={action,args};notify('Cliquez une case de la carte pour appliquer « '+action.label+' » (Échap pour terminer).');devPanelHost.rebuild();return;}
+  const targetId=devTargetId(readNativeState(),action.target);
+  void attempt(async()=>{await client.command({type:'dev-action',action:action.id,...targetId!==undefined?{targetId}:{},args});notify('Mode développeur : '+action.label+'.');renderState();});
+}
+/** A map click while a map action is armed sends it with that cell (Core's ToolMap). */
+function applyArmedDevAction(x:number,z:number):boolean {
+  const armed=devArmed;if(!armed||!developerMode.enabled())return false;
+  void attempt(async()=>{await client.command({type:'dev-action',action:armed.action.id,cell:{x,z},args:armed.args});renderState();});
+  return true;
+}
+let devBarKey='';
+function syncDevBar():void {
+  if(!nativeUi)return;
+  const on=developerMode.enabled(),key=on?`${nativeDevPanelOpen}|${developerMode.god()}`:'';
+  if(key===devBarKey)return;devBarKey=key;
+  nativeUi.setDevBar(on?[
+    {id:'dev-bar-actions',label:'Actions',hint:'Mode développeur : liste des actions magiques (besoins, santé, objets, incidents…).',active:nativeDevPanelOpen,onActivate:()=>toggleNativeDevPanel()},
+    {id:'dev-bar-god',label:'Mode divin',hint:'Construction instantanée et recherche immédiate.',active:developerMode.god(),onActivate:()=>developerMode.setGod(!developerMode.god())},
+  ]:null);
+}
+developerMode.subscribe(()=>{
+  if(!developerMode.enabled()&&(nativeDevPanelOpen||devArmed))closeNativeDevPanel();
+  syncDevBar();devPanelHost.rebuild();
+});
 const frontOptions:FrontMenuOptions = {
   rimWorldTexts,
   developerPages:developerPagesForMode(import.meta.env.MODE),
+  developerMode:{enabled:()=>developerMode.enabled(),set:enabled=>developerMode.setEnabled(enabled)},
   // Schema 349: the tutorial's first five lessons, on the creation pages.
   tutorialLessons:{begin:()=>{tutorialLessons?.beginCreation();syncTutorialLesson();},end:()=>{tutorialLessons?.endCreation();syncTutorialLesson();},
     notify:tag=>{tutorialLessons?.notify(tag);syncTutorialLesson();},allow:tag=>tutorialLessons?.allow({tag})},
@@ -1347,6 +1397,8 @@ function refreshNativeUi():void {
   if(nativeShipTerminal298?.ownsPage(nativeCustomPage?.id))nativeCustomPage=undefined;
   syncNativePanelState(state,actions);
   if(nativeToolPalette&&nativeCustomPage?.id==='map-tools-'+nativeToolPalette)nativeCustomPage=buildNativeToolPalette(state,actions,nativeToolPalette);
+  if(nativeDevPanelOpen){if(nativeCustomPage?.id===DEV_PANEL_ID)nativeCustomPage=buildNativeDevPanel(state,devPanelHost);else{nativeDevPanelOpen=false;devArmed=undefined;}}
+  syncDevBar();
   nativeLocalTrade?.update();nativeFactionComms298?.update();
   const encounter=buildNativeEncounter(state,actions);
   if(encounter){
@@ -1766,6 +1818,7 @@ function selectPawns(gesture:SelectionGesture,focus=false) {
 }
 function pickCell(x: number, z: number, preferred?: MapObjectSelection) {
   if (!snapshot || replacingWorld || frontMenu.isOpen()) return;
+  if(applyArmedDevAction(x,z))return;
   if(shootingControls.active){
     if(!knownPosition256(snapshot,{x,z})){shootingControls.cancel();renderState();return;}
     const target=shootingControls.mode==='melee'?snapshot.structures.find(s=>isBarrier(s)&&s.x===x&&s.z===z):undefined;
@@ -3124,7 +3177,7 @@ async function prepareWorldView(): Promise<void> {
     };
     renderer.onArea = designateArea;
     renderer.onAllowedAreaPaint=(enabled,from,to)=>{if(allowedAreaEditId!==undefined)paintAllowedArea(allowedAreaEditId,enabled,from,to);};
-    renderer.onExitOrder=()=>{applyTool('select');setPanel(null);clearSelection();};
+    renderer.onExitOrder=()=>{if(devArmed){devArmed=undefined;devPanelHost.rebuild();return;}applyTool('select');setPanel(null);clearSelection();};
     renderer.onBuildLine = (kind, from, to, material) => {
       if (!snapshot || replacingWorld || frontMenu.isOpen()) return;
       void attempt(async () => {

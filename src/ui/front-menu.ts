@@ -73,6 +73,8 @@ export interface FrontMenuOptions {
   /** Options → « Développeur »: the developer pages this build serves
    * (src/ui/developer-pages.ts, developerPagesForMode). */
   developerPages?:readonly DeveloperPage[];
+  /** Options → « Développeur » → « Mode développeur » (src/ui/developer-mode.ts): a browser preference, off by default. */
+  developerMode?:{enabled:()=>boolean;set:(enabled:boolean)=>boolean};
   getAutosaveMinutes?:()=>number;
   onAutosaveMinutesChange?:(minutes:number)=>boolean;
   onExport?:()=>Promise<void>;
