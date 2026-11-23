@@ -234,6 +234,11 @@ export class NativeHudCards {
   private selectedIds = new Set<number>();
   private portraitIds = '';
   private barLayout?: BarLayout;
+  private barPiece?: CardboardPiece;
+  private barBox?: {left:number;top:number;width:number;height:number};
+  private barDirty=false;
+  private barDrawnAt=-Infinity;
+  private barTimer?: ReturnType<typeof setTimeout>;
   private allAlertsCount = 0;
   private weatherSignature = '';
   private weatherReadout = {clock: '—', date: '—', weather: '—', temperature: '—', condition: '', wind: '—'};
@@ -571,24 +576,29 @@ export class NativeHudCards {
     if (changed) {
       const bar = this.barLayout = colonistBarLayout(shown.map(() => 0), this.viewportWidth), scale = bar.scale;
       for (const entry of this.portraits) { if (entry.image) { entry.image.onload = null; entry.image.onerror = null; } this.dropPiece(entry.piece); }
-      this.portraits = []; this.portraitIds = ids;
+      if (this.barPiece) { this.dropPiece(this.barPiece); this.barPiece = undefined; }
+      this.portraits = []; this.portraitIds = ids; this.barDirty = true; this.barDrawnAt = -Infinity;
       const cardW = BAR_CARD_W * scale, cardH = BAR_CARD_H * scale;
       shown.forEach((pawn, idx) => {
         const loc = bar.locs[idx]!;
         const entry = {pawnId: pawn.id, index: idx, name: pawnShortName(pawn.name), mood: rounded(pawn.mood), skin: '#f2cfb1', shirt: PALETTE.sageMountain, sleeping: false, selected: this.selectedIds.has(pawn.id), loaded: false, appearanceKey: '', signature: ''} as PortraitCard;
-        entry.piece = this.makePiece({w: cardW / 100, h: cardH / 100, depth: .046 * Math.max(.4, scale), bgColor: entry.selected ? PALETTE.ochre : PALETTE.kraftBase, bevel: .038 * Math.max(.4, scale), hasBorder:false,surface:'panel',seed: idx * 41 + 105, interactive: true,
-          drawFn: (ctx, w, h, rng) => this.drawColonist(entry, ctx, w, h, rng),
+        // One hit-only plane per card (click, tooltip, highlight); the cards are
+        // painted together on the bar's single sheet below.
+        entry.piece = this.makePiece({w: cardW / 100, h: cardH / 100, hitOnly: true, interactive: true, drawFn: () => {},
           onClick: () => { if (!this.world?.pawns.some(p => p.id === entry.pawnId && isColonist(p))) return; this.setSelection([entry.pawnId]); this.actions.selectPawn(entry.pawnId); }});
-        if (scale > .6) {
-          const peg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.06), new THREE.MeshStandardMaterial({color: 0x9e7448, roughness: 0.96}));
-          peg.scale.setScalar(scale); peg.position.set(0, cardH / 200, .03); peg.rotation.z = idx % 2 === 0 ? 0.08 : -0.08; entry.piece.add(peg);
-        }
         entry.piece.userData.nativeId=`hud:pawn:${pawn.id}`;
-        entry.piece.userData.nativeToolbarPose=true;entry.piece.userData.nativeActivePose=0;
-        // The 48-wide cell sits in the middle of the card; the card's top is 3 scaled px above it.
-        entry.piece.setBaseTransform((loc.x + BAR_BASE * scale / 2 - this.viewportWidth / 2) / 100, -(loc.y - 3 * scale + cardH / 2) / 100, 0, idx%2===0?-.012:.012);
+        entry.piece.setBaseTransform((loc.x + BAR_BASE * scale / 2 - this.viewportWidth / 2) / 100, -(loc.y - 3 * scale + cardH / 2) / 100, .02, 0);
         this.colonistsGroup.add(entry.piece); this.portraits.push(entry);
       });
+      if (shown.length) {
+        const pad = 8, left = bar.left - pad, top = BAR_MARGIN_TOP - 3 * scale - 2, width = bar.right - bar.left + 2 * pad, height = Math.max(...bar.locs.map(loc => loc.y)) + (BAR_CARD_H - 3) * scale + 2 - top;
+        const k = Math.min(1.5, 4096 / Math.max(width, 1));
+        this.barBox = {left, top, width, height};
+        this.barPiece = this.makePiece({w: width / 100, h: height / 100, depth: .001, paper: false, hasBorder: false, seed: 4401, textureWidth: Math.round(width * k), textureHeight: Math.round(height * k),
+          drawFn: (ctx, w, h, rng) => this.drawBar(ctx, w, h, rng)});
+        this.barPiece.setBaseTransform((left + width / 2 - this.viewportWidth / 2) / 100, -(top + height / 2) / 100, 0, 0);
+        this.colonistsGroup.add(this.barPiece);
+      }
       this.rail.visible = shown.length > 0 && scale > .6;
       this.rail.scale.x = Math.max(.4, (bar.right - bar.left + 16) / 340);
       this.rail.position.x = ((bar.left + bar.right) / 2 - this.viewportWidth / 2) / 100;
@@ -608,15 +618,16 @@ export class NativeHudCards {
         entry.appearanceKey = appearanceKey; entry.loaded = false;
         if (entry.image) { entry.image.onload = null; entry.image.onerror = null; }
         const image = new Image(); entry.image = image;
-        image.onload = () => { if (!this.disposed && entry.image === image && this.ownedPieces.has(entry.piece)) { entry.loaded = true; entry.piece.redraw(); } };
+        image.onload = () => { if (!this.disposed && entry.image === image && this.ownedPieces.has(entry.piece)) { entry.loaded = true; this.barDirty = true; this.flushBar(); } };
         image.onerror = () => { if (entry.image === image) entry.loaded = false; };
         image.src = portraitDataUrl(appearance, look, weapons.get(pawn.id), expression, limbMask);
       }
       entry.bar = colonistBarState346(world, pawn);
       entry.piece.userData.tooltip = `${pawn.name} · ${pawn.state} · Moral ${entry.mood}% · Nourriture ${rounded(pawn.hunger)}% · Repos ${rounded(pawn.rest)}%${colonistBarStateLabel346(entry.bar)}`;
       const signature = JSON.stringify([entry.name, entry.mood, entry.selected, appearanceKey, entry.bar]);
-      if (entry.signature !== signature) { entry.signature = signature;if(entry.piece.userData.active!==entry.selected){entry.piece.userData.active=entry.selected;this.activePoses.add(entry.piece);} entry.piece.redraw(undefined, entry.selected ? PALETTE.ochre : PALETTE.kraftBase); }
+      if (entry.signature !== signature) { entry.signature = signature; this.barDirty = true; }
     });
+    this.flushBar();
     // The list of every colonist stays one click away at the bar's right end.
     const bar = this.barLayout;
     this.rosterButton.visible = shown.length > 1 && !!bar;
@@ -624,8 +635,26 @@ export class NativeHudCards {
     this.setVisible(this.shown);
   }
 
-  private drawColonist(col:PortraitCard,ctx:CanvasRenderingContext2D,w:number,h:number,rng:()=>number):void {
-    ctx.save();ctx.scale(w/70,h/96);
+  /** Repaints the whole bar sheet when a card changed, at most every 400 ms:
+   * never per frame. */
+  private flushBar():void {
+    if(!this.barDirty||!this.barPiece||this.disposed)return;
+    const wait=400-(this.clock()-this.barDrawnAt);
+    if(wait>0){if(this.barTimer===undefined)this.barTimer=setTimeout(()=>{this.barTimer=undefined;this.flushBar();},wait);return;}
+    this.barDirty=false;this.barDrawnAt=this.clock();this.barPiece.redraw();
+  }
+  private drawBar(ctx:CanvasRenderingContext2D,w:number,h:number,rng:()=>number):void {
+    const box=this.barBox,bar=this.barLayout;if(!box||!bar)return;
+    const k=w/box.width,s=bar.scale;
+    this.portraits.forEach((col,idx)=>{
+      const loc=bar.locs[idx];if(!loc)return;
+      ctx.save();ctx.scale(k,k);ctx.translate(loc.x-4.5*s-box.left,loc.y-3*s-box.top);ctx.scale(s*BAR_CARD_W/70,s*BAR_CARD_H/96);
+      this.drawColonist(col,ctx,rng);ctx.restore();
+    });
+  }
+  private drawColonist(col:PortraitCard,ctx:CanvasRenderingContext2D,rng:()=>number):void {
+    ctx.save();
+    drawHandRect(ctx,0,0,70,96,col.selected?PALETTE.ochre:PALETTE.kraftBase,'#261e18',1.4,rng);
     drawHandRect(ctx,6,6,58,54,col.selected?'#d8e4c4':'#b2c4ab','#261e18',1.2,rng);
     if(col.loaded&&col.image)ctx.drawImage(col.image,6,6,58,54);
     else {drawHandBlob(ctx,35,48,15,col.shirt,'#261e18',1,rng);drawHandBlob(ctx,35,26,11,col.skin,'#261e18',1,rng);}
@@ -907,7 +936,7 @@ export class NativeHudCards {
 
   dispose(): void {
     if (this.disposed) return;
-    this.disposed = true;
+    this.disposed = true;if(this.barTimer!==undefined)clearTimeout(this.barTimer);
     for (const entry of this.portraits) if (entry.image) { entry.image.onload = null; entry.image.onerror = null; }
     for(const image of this.resourceImages.values()){image.onload=null;image.onerror=null;}this.resourceImages.clear();
     for (const piece of this.ownedPieces) this.art.disposePiece(piece);
