@@ -50,12 +50,12 @@ Rien n’a été perdu ; chaque ligne est là où RimWorld la met :
 
 ## Fenêtres qui diffèrent encore de RimWorld (prochains lots)
 
-- **Intérieurs des onglets** : Besoins (`NeedsCardUtility` : colonne de 225, jauges ≤ 70, pensées au pas de 24), Santé (`HealthCardUtility` : capacités en texte, lésions en lignes de 23), Matériel (lignes de 28 avec icônes), Social (relations et dernière interaction), Journal, Prisonnier.
+- **Intérieurs des onglets** (faits au [deuxième lot](fenetres-rimworld-onglets.md), sauf les onglets d’animaux) : Besoins (`NeedsCardUtility` : colonne de 225, jauges ≤ 70, pensées au pas de 24), Santé (`HealthCardUtility` : capacités en texte, lésions en lignes de 23), Matériel (lignes de 28 avec icônes), Social (relations et dernière interaction), Journal, Prisonnier.
 - **Inspection des objets, animaux, mécanoïdes et cases** : encore l’ancien dossier ; ils doivent passer au même panneau de 432 × 165 avec leurs onglets (Factures 420 × 480, Stockage 300 × 480, Dressage…).
 - **Tableaux** (Travail, Planning, Assignations, Animaux, Faune) : cellules de priorité 25 × 25, en-têtes de 50 aux étiquettes entières (les mots sont encore coupés, « Repo s »), lignes de 30, case « priorités manuelles », recherche locale à retirer.
 - **Barre des colons, alertes, lettres, heure et vitesse** (section 4 de la référence), **Architecte** (200 de large, deux colonnes de 32), **Recherche** (arbre de 140 × 50), **Quêtes et Historique** (1010 × 640), **Factions** (lignes de 80), **Menu** (450 × 390), dialogues, Options et pages de création (page de 1020 × 764).
 - **Barres de défilement** : 8 de large au lieu de 16 (les mises en page réservent 12).
-- **Clic sur une vitesse** : il masque encore le panneau d’un colon sélectionné (comportement V486 pensé pour l’ancien grand dossier) ; RimWorld le laisse ouvert. À revoir avec le lot des interactions.
+- **Clic sur une vitesse** : corrigé au [deuxième lot](fenetres-rimworld-onglets.md) (le panneau reste ouvert, comme dans RimWorld).
 - **Résumé des compétences de l’équipe** (page des personnages) : encore en jauges avec cœurs de passion, pas encore celui du jeu.
 - **Interlignes** : les textes sur plusieurs lignes (infobulles, cartes, panneau) gardent un interligne de 17 à 18 ; RimWorld n’en fixe pas dans le code (police), à confirmer sur capture.
 

@@ -206,14 +206,15 @@ function needsPage(world:World,pawn:Pawn){
  setNativeInspectorTab('needs');return buildNativeInspector(state,actions)!;
 }
 
+const needsCard=(page:{rows:{id:string;card?:unknown}[]})=>page.rows.find(r=>r.id==='tab-card')!.card as import('../src/ui3d/native-tab-needs').NeedsSpec;
 test('the Needs tab shows the outdoors bar, its tooltip and the thought',()=>{
  const {w,inside,sky}=shelters();inside.outdoors359=f(.55);live(w,15);
- const page=needsPage(w,inside),row=page.rows.find(r=>r.id==='need-outdoors')!;
- expect(row).toMatchObject({label:'Plein air',value:`${Math.round(inside.outdoors359!*100)} %`});
- expect(row.meter).toMatchObject({max:100});
- expect(row.hint).toContain('à 60 % ou moins : enfermé à l’intérieur (−3)');
- expect(page.rows.find(r=>r.id==='thought-outdoors-trapped-indoors')).toMatchObject({label:'Enfermé à l’intérieur',value:'-3'});
- expect(needsPage(w,sky).rows.find(r=>r.id==='need-outdoors')).toMatchObject({value:'100 %'});
+ const spec=needsCard(needsPage(w,inside)),bar=spec.needs.find(n=>n.id==='need-outdoors')!;
+ expect(bar).toMatchObject({label:'Plein air',major:false});expect(Math.round(bar.level*100)).toBe(Math.round(inside.outdoors359!*100));
+ expect(bar.thresholds).toEqual([.05,.2,.4,.6,.8]);
+ expect(bar.hint).toContain('à 60 % ou moins : enfermé à l’intérieur (−3)');
+ expect(spec.thoughts.find(t=>t.label==='Enfermé à l’intérieur')).toMatchObject({offset:-3});
+ expect(Math.round(needsCard(needsPage(w,sky)).needs.find(n=>n.id==='need-outdoors')!.level*100)).toBe(100);
 });
 
 test('save and reload mid-decay, then the same continuation; malformed levels are refused',()=>{

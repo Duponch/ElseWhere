@@ -4,7 +4,7 @@ import { PLAN_COLORS_369, PLAN_COLOR_DEFS_369, isPlanColor369, planById369, plan
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {readingRefusal295} from '../sim/reading-runtime-295';
 import type { NativeControl, NativePage, NativeRow, NativeUiActions, NativeUiState } from './native-contract';
-import type { Command, Pawn, StorageSettings, Structure, World } from '../sim/types';
+import type { Command, MaterialPile, Pawn, StorageSettings, Structure, World } from '../sim/types';
 import type { MedicalRecord } from '../sim/injury-types';
 import type { CookingBill, BillSettings } from '../sim/cooking-types';
 import type { BillWorkerOptions283 } from '../sim/bill-worker-state-283';
@@ -61,6 +61,16 @@ import { MALNUTRITION_UNIT } from '../sim/malnutrition';
 import { summaryHealthPercent } from '../sim/threat-points';
 import { assignmentAt, type ScheduleAssignment } from '../sim/schedule';
 import type { NativeBioCard } from './native-bio-card';
+import { NATIVE_INK } from './native-ui-scale';
+import { resetCardScroll } from './native-tab-card';
+import { needsSpec, healthEntries, capacitySpecs, painLabel } from './native-inspector-tabs';
+import type { HealthSettingSpec, HealthOperationsSpec } from './native-tab-health';
+import type { GearRowSpec, GearSpec } from './native-tab-gear';
+import type { SocialRowSpec, InteractionSpec, LogLineSpec } from './native-tab-social';
+import type { PrisonerLineSpec } from './native-tab-prisoner';
+import { commercialMass } from '../sim/commercial-mass';
+import { physicalTravelUnitMass } from '../sim/tree-transfer-mass';
+import { BODY_COVERAGE } from '../sim/body-definition';
 import { HEAT_UNIT, comfortableTemperature, apparelInsulation } from '../sim/heat-rules';
 import { INFECTION_UNIT } from '../sim/infection-rules';
 import { wornApparel, apparelLabel, apparelDefinition, armorPiece } from '../sim/apparel-rules';
@@ -128,7 +138,7 @@ type Tab = 'journal' | 'gear' | 'social' | 'bio' | 'needs' | 'health' | 'prisone
 // Declared here left to right.
 const tabs: readonly [Tab, string][] = [['journal', 'Journal'], ['gear', 'Matériel'], ['prisoner', 'Prisonnier'], ['social', 'Social'], ['bio', 'Bio'], ['needs', 'Besoins'], ['health', 'Santé']];
 /** `ITab.size` of each window; the Bio card is 480 × 455 inside 17 points. */
-const tabSizes: Record<Tab, { width: number; height: number; margin: number }> = { bio: { width: 514, height: 489, margin: 17 }, needs: { width: 580, height: 520, margin: 18 }, health: { width: 630, height: 430, margin: 18 }, gear: { width: 460, height: 450, margin: 18 }, social: { width: 540, height: 510, margin: 18 }, journal: { width: 630, height: 510, margin: 18 }, prisoner: { width: 280, height: 450, margin: 18 } };
+const tabSizes: Record<Tab, { width: number; height: number; margin: number }> = { bio: { width: 514, height: 489, margin: 17 }, needs: { width: 580, height: 520, margin: 0 }, health: { width: 630, height: 430, margin: 0 }, gear: { width: 460, height: 450, margin: 0 }, social: { width: 540, height: 510, margin: 0 }, journal: { width: 630, height: 510, margin: 0 }, prisoner: { width: 280, height: 450, margin: 0 } };
 /** Planning's labels and colours (native-panels.ts), for the pane's gauge. */
 const scheduleLabels: Record<ScheduleAssignment, string> = { anything: 'Temps libre', work: 'Travail', sleep: 'Dormir', recreation: 'Loisir' };
 const scheduleColors: Record<ScheduleAssignment, string> = { anything: '#e9d2a9', work: '#dfb7a4', sleep: '#c2d5e0', recreation: '#c9dfc1' };
@@ -151,10 +161,12 @@ const signed = (value: number) => `${value > 0 ? '+' : ''}${Number(value.toFixed
  * open across selections while the new selection has it. */
 let activeTab: Tab | null = null, feedback = '', latest: NativeUiState, owner: NativeUiActions;
 let healthPane: 'overview' | 'operations' = 'overview';
-let journalFilter: 'all' | 'social' | 'combat' | 'mental' = 'all', portraitClothed = true;
+/** Core `ITab_Pawn_Log`: « Tout » off, « Social » and « Combat » on at first. */
+const logFilter = { all: false, social: true, combat: true };
+let portraitClothed = true;
 export function setNativeInspectorTab(value:string):void {
-  if(value==='none'){activeTab=null;subpage=undefined;return;}
-  if(!tabs.some(([tab])=>tab===value))return;activeTab=value as Tab;subpage=undefined;
+  if(value==='none'){activeTab=null;subpage=undefined;resetCardScroll();return;}
+  if(!tabs.some(([tab])=>tab===value))return;activeTab=value as Tab;subpage=undefined;resetCardScroll();
 }
 let selectionKey = '', subpage: { kind: 'bills' | 'storage' | 'item' | 'anatomy'; structureId?: number; stockpileId?: number; itemId?: number; pawnId?: number } | undefined;
 const billDrafts = new Map<string, BillSettings>();
@@ -286,7 +298,9 @@ function bioCard(world: World, pawn: Pawn, sex: 'male' | 'female', colonist: boo
   const bio = pawn.age ? biologicalYears(pawn.age) : undefined, chrono = pawn.age ? chronologicalYears(pawn.age) : undefined;
   const description = { label: `${sex === 'female' ? 'Femme' : 'Homme'}${bio !== undefined ? `, ${bio} ans${chrono !== bio ? ` (${chrono})` : ''}` : ''}`, hint: bio !== undefined ? `Âge biologique : ${bio} ans. Âge chronologique : ${chrono} ans.` : 'Âge non renseigné.' };
   const registry = world.worldFactions, own = colonist ? registry?.factions.find(faction => faction.id === registry.playerFactionId) : undefined;
-  const faction = own ? { id: 'bio-faction', label: own.name, hint: `Faction\n\n${pawn.name} appartient à ${own.name}, votre colonie.\n\nCliquer pour ouvrir les factions.`, onActivate: () => owner.openFactions?.() } : undefined;
+  // Core `pawn.Faction != null && !Faction.Hidden`: the colony's own faction is a chip too; a world saved before the faction registry shows it as « Colonie ».
+  const colonyName = own?.name ?? (colonist ? 'Colonie' : undefined);
+  const faction = colonyName ? { id: 'bio-faction', label: colonyName, hint: `Faction\n\n${pawn.name} appartient à ${colonyName}, votre colonie.\n\nCliquer pour ouvrir les factions.`, onActivate: () => owner.openFactions?.() } : undefined;
   const stories = backgroundInspectionRows(pawn, sex).map((story, index) => ({ phase: story.phase, chip: { id: index ? 'adulthood' : 'childhood', label: story.label, hint: tooltipText(story.tooltip) } }));
   const traits = (pawn.traits ?? []).map(trait => ({ id: `trait-${trait}`, label: traitLabel(trait, sex), hint: traitTooltip(trait, { name: pawn.name, sex }) }));
   const incapable = backgroundRestrictionRows(pawn).map((restriction, index) => ({ id: `refusal-${index}`, label: restriction.label, hint: restriction.reason }));
@@ -301,12 +315,37 @@ function bioCard(world: World, pawn: Pawn, sex: 'male' | 'female', colonist: boo
   });
   return { name: pawn.name, description, faction, stories, traits, traitsHint, incapable, skills };
 }
+/** The events of the journal that concern this person, most recent first,
+ * classified as the old journal did (social exchanges, fights, mental crises). */
+function personalEvents(world: World, pawn: Pawn): { index: number; event: World['events'][number]; kind: 'social' | 'combat' | 'mental' }[] {
+  const escaped = pawn.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), named = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu'), labels = Object.values(SOCIAL_LABELS);
+  const result: { index: number; event: World['events'][number]; kind: 'social' | 'combat' | 'mental' }[] = [];
+  for (const [index, event] of [...world.events].reverse().entries()) {
+    if (!named.test(event.message)) continue;
+    const lower = event.message.toLocaleLowerCase('fr-FR');
+    const mental = event.type === 'need' && ['errance triste', 'frénésie alimentaire', 'crise de destruction', 'fureur violente', 'colère meurtrière'].some(word => lower.includes(word));
+    const kind = mental ? 'mental' : labels.some(label => event.message.startsWith(`${label} entre `)) || ['a vexé', 'a insulté', 'bagarre'].some(word => lower.includes(word)) || event.type === 'need' && ['deviennent partenaires', 'repousse l’avance de', 'se sépare de'].some(word => lower.includes(word)) ? 'social' : ['tir', 'touché', 'blessé', 'attaque', 'frappé', 'combat'].some(word => lower.includes(word)) ? 'combat' : undefined;
+    if (kind) result.push({ index, event, kind });
+  }
+  return result;
+}
+/** Core `ITab_Pawn_Gear.TryDrawOverallArmor`: the worn pieces' ratings (halved
+ * and capped at 1) weighted by each part's coverage, doubled, at most 200 %. */
+function overallArmor(pieces: readonly MaterialPile[]): Record<'sharp' | 'blunt' | 'heat', number> {
+  const result = { sharp: 0, blunt: 0, heat: 0 }, armored = pieces.map(piece => armorPiece(piece));
+  for (const kind of ['sharp', 'blunt', 'heat'] as const) {
+    let sum = 0;
+    HUMAN_BODY.forEach((part, index) => { let through = 1; for (const piece of armored) if (piece.coverage.parts.includes(part.id)) through *= 1 - Math.min(1, Math.max(0, piece.ratings[kind] / 2)); sum += BODY_COVERAGE[index]! * (1 - through); });
+    result[kind] = Math.min(2, Math.max(0, sum * 2));
+  }
+  return result;
+}
 function pawnPage(world: World, pawn: Pawn): NativePage {
   const colonist = isColonist(pawn) && !pawn.prisoner, alive = pawn.state !== 'dead';
   if (!pawn.prisoner && activeTab === 'prisoner') activeTab = null;
   const sex = appearanceOf(pawn, world.seed).sex, status = pawn.prisoner ? 'Prisonnier' : colonist ? 'Colon' : pawn.visitor ? 'Visiteur' : pawn.podRescue ? 'Naufragé' : 'Hors-la-loi';
   // Core InterfaceToggleTab: clicking the open tab closes it.
-  const rows: NativeRow[] = [{ id: 'pawn-tabs', label: '', region:'navigation', compact: true, controls: tabs.filter(([tab]) => tab !== 'prisoner' || pawn.prisoner).map(([tab, label]) => control(`pawn-tab-${tab}`, label, () => { activeTab = activeTab === tab ? null : tab; }, false, activeTab === tab, tabHints[tab])) }];
+  const rows: NativeRow[] = [{ id: 'pawn-tabs', label: '', region:'navigation', compact: true, controls: tabs.filter(([tab]) => tab !== 'prisoner' || pawn.prisoner).map(([tab, label]) => control(`pawn-tab-${tab}`, label, () => { activeTab = activeTab === tab ? null : tab; resetCardScroll(); }, false, activeTab === tab, tabHints[tab])) }];
   // The inspect pane (Core InspectPaneFiller): health, mood, timetable and
   // allowed-area gauges, then the inspect lines.
   const thresholds = breakThresholds(pawn), crises = Object.values(MENTAL_CRISIS_CATALOG).map(crisis => crisis.label.toLocaleLowerCase('fr-FR')).join(', ');
@@ -328,89 +367,123 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   if (activeTab === 'bio') {
     rows.push({ id: 'bio-card', label: '', bio: bioCard(world, pawn, sex, colonist) });
   } else if (activeTab === 'needs') {
-    rows.push(heading('needs', 'Besoins'));
-    for (const [key, label] of [['hunger', 'Nourriture'], ['rest', 'Sommeil'], ['beauty', 'Beauté'], ['comfort', 'Confort']] as const) rows.push(alive ? meterRow(`need-${key}`, label, pawn[key], 100, `${needHelp[key]} Repères de la jauge : ${NEED_THRESHOLDS[key].map(value => `${value} %`).join(' · ')}.`, `${Math.round(pawn[key])} %`) : row(`need-${key}`, label, '—', 'Décédé · Dossier arrêté au décès.'));
+    const tab: NativeRow[] = [];
+    tab.push(heading('needs', 'Besoins'));
+    for (const [key, label] of [['hunger', 'Nourriture'], ['rest', 'Sommeil'], ['beauty', 'Beauté'], ['comfort', 'Confort']] as const) tab.push(alive ? meterRow(`need-${key}`, label, pawn[key], 100, `${needHelp[key]} Repères de la jauge : ${NEED_THRESHOLDS[key].map(value => `${value} %`).join(' · ')}.`, `${Math.round(pawn[key])} %`) : row(`need-${key}`, label, '—', 'Décédé · Dossier arrêté au décès.'));
     // Schema 359: Core's outdoors need (colonists and prisoners), stepped at each need interval.
     if (isOutdoors359(world.schemaVersion) && outdoorsNeedApplies359(pawn)) {
       const air = outdoorsLevel359(pawn) * 100;
-      rows.push(alive ? meterRow('need-outdoors', 'Plein air', air, 100, `Le besoin de voir le ciel. À l’intérieur, il baisse de 32 points par jour sous un toit construit ou de roche mince, sans descendre sous 20 %, et de 45 points par jour sous la roche épaisse d’une montagne, jusqu’à 0. Dehors à ciel ouvert, il se remplit en trois heures ; dehors sous un toit, en une journée (sous la roche épaisse, il baisse de 40 points par jour jusqu’à 20 %) ; sur une case sans toit d’une pièce fermée, en moins de cinq heures. Une pièce qui touche le bord de la carte, ou dont au moins un quart du sol est sans toit, compte comme l’extérieur. Au lit, éveillé, la baisse est cinq fois plus lente ; pendant le sommeil, le besoin reste figé. En caravane, il se remplit comme à ciel ouvert. À 80 % ou moins : envie de prendre l’air (−1) ; à 60 % ou moins : enfermé à l’intérieur (−3) ; à 40 % ou moins : syndrome de la cabane (−5) ; sous 20 % : prisonnier sous terre (−7) ; à 5 % ou moins : enseveli sous terre (−9). Les prisonniers ont ce besoin, sans ces pensées. Repères de la jauge : 5 · 20 · 40 · 60 · 80 %.`, `${Math.round(air)} %`) : row('need-outdoors', 'Plein air', '—', 'Décédé · Dossier arrêté au décès.'));
+      tab.push(alive ? meterRow('need-outdoors', 'Plein air', air, 100, `Le besoin de voir le ciel. À l’intérieur, il baisse de 32 points par jour sous un toit construit ou de roche mince, sans descendre sous 20 %, et de 45 points par jour sous la roche épaisse d’une montagne, jusqu’à 0. Dehors à ciel ouvert, il se remplit en trois heures ; dehors sous un toit, en une journée (sous la roche épaisse, il baisse de 40 points par jour jusqu’à 20 %) ; sur une case sans toit d’une pièce fermée, en moins de cinq heures. Une pièce qui touche le bord de la carte, ou dont au moins un quart du sol est sans toit, compte comme l’extérieur. Au lit, éveillé, la baisse est cinq fois plus lente ; pendant le sommeil, le besoin reste figé. En caravane, il se remplit comme à ciel ouvert. À 80 % ou moins : envie de prendre l’air (−1) ; à 60 % ou moins : enfermé à l’intérieur (−3) ; à 40 % ou moins : syndrome de la cabane (−5) ; sous 20 % : prisonnier sous terre (−7) ; à 5 % ou moins : enseveli sous terre (−9). Les prisonniers ont ce besoin, sans ces pensées. Repères de la jauge : 5 · 20 · 40 · 60 · 80 %.`, `${Math.round(air)} %`) : row('need-outdoors', 'Plein air', '—', 'Décédé · Dossier arrêté au décès.'));
     }
     // Schema 362: Core's indoors need of an undergrounder (colonists and prisoners).
     if (isTraitLinks362(world.schemaVersion) && indoorsNeedApplies362(pawn)) {
       const inside = indoorsLevel362(pawn) * 100;
-      rows.push(alive ? meterRow('need-indoors', 'Intérieur', inside, 100, `Le besoin d’un souterrain de se sentir à l’abri des murs et d’un toit. À l’intérieur, il se remplit en une demi-journée sous la roche épaisse et en une journée sous un toit construit ou de roche mince ; il ne bouge pas dans une pièce sans toit ni dehors sous la roche épaisse. Dehors, sans toit ou sous un toit mince, il baisse de 25 points par jour, comme en caravane. Pendant le sommeil, il reste figé. À 80 % ou moins : un peu trop dehors (−1) ; 60 % : trop longtemps dehors (−3) ; 40 % : dehors bien trop longtemps (−5) ; 20 % : perdu dans les grands espaces (−7) ; 5 % ou moins : écrasé par le ciel (−8). Les prisonniers ont ce besoin, sans ces pensées. Repères de la jauge : 5 · 20 · 40 · 60 · 80 %.`, `${Math.round(inside)} %`) : row('need-indoors', 'Intérieur', '—', 'Décédé · Dossier arrêté au décès.'));
+      tab.push(alive ? meterRow('need-indoors', 'Intérieur', inside, 100, `Le besoin d’un souterrain de se sentir à l’abri des murs et d’un toit. À l’intérieur, il se remplit en une demi-journée sous la roche épaisse et en une journée sous un toit construit ou de roche mince ; il ne bouge pas dans une pièce sans toit ni dehors sous la roche épaisse. Dehors, sans toit ou sous un toit mince, il baisse de 25 points par jour, comme en caravane. Pendant le sommeil, il reste figé. À 80 % ou moins : un peu trop dehors (−1) ; 60 % : trop longtemps dehors (−3) ; 40 % : dehors bien trop longtemps (−5) ; 20 % : perdu dans les grands espaces (−7) ; 5 % ou moins : écrasé par le ciel (−8). Les prisonniers ont ce besoin, sans ces pensées. Repères de la jauge : 5 · 20 · 40 · 60 · 80 %.`, `${Math.round(inside)} %`) : row('need-indoors', 'Intérieur', '—', 'Décédé · Dossier arrêté au décès.'));
     }
     // Schema 345: Core's room size need (colonists and prisoners), sampled at each need interval.
     if (isMoodBasics345(world.schemaVersion) && roomSizeAdmitted345(pawn)) {
       const space = roomSizeLevel345(pawn) * 100;
-      rows.push(alive ? meterRow('need-room-size', 'Espace', space, 100, `Surface de la pièce perçue autour de ce colon, dans un rayon d’environ huit cases ; dehors, le besoin remonte vers 100 %. Le niveau rejoint la valeur de la pièce actuelle à raison de 90 points par heure et reste figé pendant le sommeil. Dans une pièce intérieure, éveillé : sous 1 % intérieur confiné (−10), sous 30 % intérieur exigu (−5), à partir de 70 % intérieur spacieux (+5). Repères de la jauge : 1 · 30 · 70 %.`, `${Math.round(space)} %`) : row('need-room-size', 'Espace', '—', 'Décédé · Dossier arrêté au décès.'));
+      tab.push(alive ? meterRow('need-room-size', 'Espace', space, 100, `Surface de la pièce perçue autour de ce colon, dans un rayon d’environ huit cases ; dehors, le besoin remonte vers 100 %. Le niveau rejoint la valeur de la pièce actuelle à raison de 90 points par heure et reste figé pendant le sommeil. Dans une pièce intérieure, éveillé : sous 1 % intérieur confiné (−10), sous 30 % intérieur exigu (−5), à partir de 70 % intérieur spacieux (+5). Repères de la jauge : 1 · 30 · 70 %.`, `${Math.round(space)} %`) : row('need-room-size', 'Espace', '—', 'Décédé · Dossier arrêté au décès.'));
     }
-    rows.push(alive ? meterRow('recreation-level', 'Loisirs', pawn.recreation.level, 100, 'Sous 30 % : manque de loisirs ; sous 15 % : manque important ; sous 1 % : privation. À partir de 70 et 85 % : loisirs satisfaisants. Varier les activités évite la lassitude. Une famille lassante redevient intéressante sous 30 %. Repères de la jauge : 15 · 30 · 70 · 85 %.', `${pawn.recreation.level.toFixed(1)} %`) : row('recreation-level', 'Loisirs', '—'));
+    tab.push(alive ? meterRow('recreation-level', 'Loisirs', pawn.recreation.level, 100, 'Sous 30 % : manque de loisirs ; sous 15 % : manque important ; sous 1 % : privation. À partir de 70 et 85 % : loisirs satisfaisants. Varier les activités évite la lassitude. Une famille lassante redevient intéressante sous 30 %. Repères de la jauge : 15 · 30 · 70 · 85 %.', `${pawn.recreation.level.toFixed(1)} %`) : row('recreation-level', 'Loisirs', '—'));
     const recreationLabels = { reading:'Lecture', solitary: 'Détente solitaire', dexterity: 'Dextérité', cerebral: 'Jeux cérébraux', social: 'Loisirs sociaux', television: 'Télévision', chemical: 'Consommation de boissons' };
-    const pleasure = rows.find(entry => entry.id === 'recreation-level')!;
+    const pleasure = tab.find(entry => entry.id === 'recreation-level')!;
     pleasure.hint = (pleasure.hint ?? 'Décédé · Dossier arrêté au décès.') + ` La lassitude diminue de ${Math.round((colonyExpectation(world, pawn)?.joyToleranceDropPerDay ?? .18) * 100)} points par jour éveillé. Effet sur l’humeur : ${alive ? signed(recreationMood(pawn.recreation.level)) : '—'}. ` + [...RECREATION_KINDS, 'chemical' as const,...(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))?['reading' as const]:[]].filter(kind => kind==='reading'||pawn.recreation.tolerance[kind] !== undefined).map(kind => `${recreationLabels[kind]} : ${(pawn.recreation.tolerance[kind]??0).toFixed(1)} %${pawn.recreation.bored[kind] ? ' · lassé' : ''}`).join(' · ');
-    rows.push(heading('thoughts', 'Humeur et pensées'));
+    tab.push(heading('thoughts', 'Humeur et pensées'));
     const thoughts = moodThoughts(world, pawn), thresholds = breakThresholds(pawn);
-    rows.push(alive ? meterRow('need-mood', 'Humeur', pawn.mood, 100, `L’humeur évolue progressivement vers la somme des pensées. Les repères indiquent les seuils de risque de crise mentale. Actuelle : ${pawn.mood.toFixed(1)} %. Cible : ${moodTarget(thoughts).toFixed(1)} %. ${thresholds.map((value, index) => `${['Risque mineur', 'Risque majeur', 'Risque extrême'][index]} : ${value.toFixed(1)} %`).join(' · ')}.`, `${Math.round(pawn.mood)} %`) : row('need-mood', 'Humeur', '—'));
+    tab.push(alive ? meterRow('need-mood', 'Humeur', pawn.mood, 100, `L’humeur évolue progressivement vers la somme des pensées. Les repères indiquent les seuils de risque de crise mentale. Actuelle : ${pawn.mood.toFixed(1)} %. Cible : ${moodTarget(thoughts).toFixed(1)} %. ${thresholds.map((value, index) => `${['Risque mineur', 'Risque majeur', 'Risque extrême'][index]} : ${value.toFixed(1)} %`).join(' · ')}.`, `${Math.round(pawn.mood)} %`) : row('need-mood', 'Humeur', '—'));
 
-    if (inspiration360) rows.push(row('mood-inspiration', inspiration360.label, inspiration360.value, inspiration360.hint));
+    if (inspiration360) tab.push(row('mood-inspiration', inspiration360.label, inspiration360.value, inspiration360.hint));
     const crisis = alive && mentalCrisisView(world, pawn, structure => buildingLabels[structure.kind]);
-    if (crisis) rows.push(row('mood-crisis', crisis.label, crisis.activity, `${crisis.description}${crisis.target ? ` Cible : ${crisis.target.label} (${crisis.target.cell.x}, ${crisis.target.cell.z}).` : ''} Les événements confirmés sont conservés dans le journal.`));
-    thoughts.filter(thought => thought.offset !== 0).sort((a, b) => b.offset - a.offset).forEach(thought => rows.push(row(`thought-${thought.id}`, thought.label, signed(thought.offset), `${thought.description}${thought.expiresAt !== undefined ? ` · encore ${Math.ceil((thought.expiresAt - world.tick) / 250)} h` : ''} · Effet sur l’humeur : ${signed(thought.offset)}`)));
-    if (pawn.recreation.task) rows.push(row('recreation-task', 'Loisir engagé', ({ skygaze: 'Observer le ciel', horseshoes: 'Fer à cheval', chess: 'Échecs', 'social-relax': 'Détente sociale', 'visit-sick': 'Visite à un malade', 'watch-television': 'Télévision', party: 'Fête collective', read:'Lecture', hoopstone:'Lancer de pierres', billiards:'Billard', 'game-of-ur':'Jeu royal d’Ur', poker:'Poker', 'view-art':'Contemplation d’une œuvre d’art' })[pawn.recreation.task.activity], pawn.recreation.task.activity==='read'?queryPawnStatus(world,pawn).reason:pawn.recreation.task.phase === 'travel' ? 'Rejoint le lieu' : 'Sur place'));
+    if (crisis) tab.push(row('mood-crisis', crisis.label, crisis.activity, `${crisis.description}${crisis.target ? ` Cible : ${crisis.target.label} (${crisis.target.cell.x}, ${crisis.target.cell.z}).` : ''} Les événements confirmés sont conservés dans le journal.`));
+    thoughts.filter(thought => thought.offset !== 0).sort((a, b) => b.offset - a.offset).forEach(thought => tab.push(row(`thought-${thought.id}`, thought.label, signed(thought.offset), `${thought.description}${thought.expiresAt !== undefined ? ` · encore ${Math.ceil((thought.expiresAt - world.tick) / 250)} h` : ''} · Effet sur l’humeur : ${signed(thought.offset)}`)));
+    if (pawn.recreation.task) tab.push(row('recreation-task', 'Loisir engagé', ({ skygaze: 'Observer le ciel', horseshoes: 'Fer à cheval', chess: 'Échecs', 'social-relax': 'Détente sociale', 'visit-sick': 'Visite à un malade', 'watch-television': 'Télévision', party: 'Fête collective', read:'Lecture', hoopstone:'Lancer de pierres', billiards:'Billard', 'game-of-ur':'Jeu royal d’Ur', poker:'Poker', 'view-art':'Contemplation d’une œuvre d’art' })[pawn.recreation.task.activity], pawn.recreation.task.activity==='read'?queryPawnStatus(world,pawn).reason:pawn.recreation.task.phase === 'travel' ? 'Rejoint le lieu' : 'Sur place'));
     const party = world.party292?.active, participation = party?.members.find(member => member.pawnId === pawn.id);
-    if (party && (participation || party.organizerId === pawn.id)) rows.push(row('party-participation', party.organizerId === pawn.id ? 'Organise la fête collective' : 'Participe à la fête collective', `${((participation?.presentCore ?? 0) / 2500).toFixed(2)} h de présence réelle`, `Lieu ${party.site.x}, ${party.site.z}`));
+    if (party && (participation || party.organizerId === pawn.id)) tab.push(row('party-participation', party.organizerId === pawn.id ? 'Organise la fête collective' : 'Participe à la fête collective', `${((participation?.presentCore ?? 0) / 2500).toFixed(2)} h de présence réelle`, `Lieu ${party.site.x}, ${party.site.z}`));
+    rows.push({ id: 'tab-card', label: '', card: needsSpec(world, pawn, alive, tab, thoughts, thresholds) });
   } else if (activeTab === 'health') {
-    rows.push({ id: 'health-tabs', label: '', compact: true, controls: [control('health-overview', 'Vue d’ensemble', () => { healthPane = 'overview'; }, false, healthPane === 'overview', 'Capacités, lésions et politique de soins.'), control('health-operations', 'Opérations', () => { healthPane = 'operations'; }, false, healthPane === 'operations', 'Demandes, pose et retrait de prothèses ; risques et conditions opératoires.')] });
-    rows.push(heading('capacities', 'Capacités'));
-    if (alive) for (const [key, value] of Object.entries(pawnBody(pawn).capacities)) rows.push(meterRow(`capacity-${key}`, capacityLabels[key] ?? key, value, 1, tooltipText(healthCapacityTooltip(pawn, key as Parameters<typeof healthCapacityTooltip>[1]))));
-    rows.push(heading('conditions', 'Lésions et affections'));
-    rows.push(...bodyRows(pawn.health));
-    const health = pawn.health;
-    for (const injury of health?.injuries ?? []) { const entry = rows.find(entry => entry.id === `injury-${injury.id}`)!; entry.hint = `${entry.hint ?? ''} · ${tooltipText(healthPartTooltip(pawn, injury.part))} · Saignement ${pct(injuryBleed(health!, injury))}/jour.`; }
-    rows.push(row('clinical-status', 'État clinique', pawn.state === 'dead' ? 'Décédé · Dossier conservé' : pawn.state === 'downed' ? 'À terre' : health?.flu?.severity || health?.immuneDiseases?.malaria?.severity || health?.immuneDiseases?.plague?.severity || health?.immuneDiseases?.['sleeping-sickness']?.severity || health?.parasites306 || health?.mechanites307 || (health?.cryptosleepSickness?.remainingCore ?? 0) > 0 ? 'Malade' : 'Mobile', 'Les capacités actuelles ci-dessus comprennent les lésions, les parties perdues, la douleur et les affections réellement présentes.'), { id: 'anatomy', label: 'Dossier anatomique', controls: [control('anatomy', 'Parties et lésions détaillées', () => { subpage = { kind: 'anatomy', pawnId: pawn.id }; })] });
-    if (health?.infections?.cases.length) rows.push(row('infection-guidance', 'Infection', undefined, 'La gravité et l’immunité progressent séparément. Soins, qualité des médicaments et repos influencent leur évolution. Une amputation retire définitivement un membre directement infecté ; son résultat opératoire reste soumis aux règles cliniques.'));
-    if (pawn.surgeryRequest) rows.push(row('surgery-risk', 'Risques opératoires', undefined, 'Un lit, un médecin, l’accès au chevet et les médicaments autorisés restent nécessaires. Une opération peut échouer et blesser. Annuler ne restitue ni une dose déjà administrée ni l’état avant anesthésie.'));
-    if (isCarePatient(pawn) && alive) {
-      rows.push(choices('medical-care', 'Politique médicale', medicalCare(pawn), Object.keys(MEDICAL_CARE) as MedicalCare[], care => send({ type: 'medical-care', pawnId: pawn.id, care }), care => MEDICAL_CARE[care]),
-        choices('medical-food', 'Régime alimentaire', pawn.foodPolicyId, world.foodPolicies.map(policy => policy.id), policyId => send({ type: 'food-policy-assign', pawnId: pawn.id, policyId }), id => world.foodPolicies.find(policy => policy.id === id)?.name ?? String(id)));
-      rows.find(entry => entry.id === 'medical-care')!.hint = 'Détermine les soins autorisés et la meilleure catégorie de médicament que les médecins peuvent utiliser. Les doses sont consommées pendant les soins.';
-      rows.find(entry => entry.id === 'medical-food')!.hint = 'Choisir les aliments autorisés. Modifier un régime dans Assignations modifie tous ses utilisateurs. Le régime ne change pas les ingrédients de cuisine.';
-      if (colonist) rows.push(booleanRow('self-tend', 'Se soigner soi-même', !!pawn.selfTend, enabled => send({ type: 'self-tend-policy', pawnId: pawn.id, enabled })));
-      if (healthPane === 'operations' && (colonist || pawn.prisoner && world.schemaVersion >= 280)) {
-        rows.push(row('surgery-request', 'Opération demandée', healthSurgeryView(pawn, world).status));
-        if (pawn.surgeryRequest) rows.push({ id: 'surgery-cancel', label: 'Opération', controls: [command('surgery-cancel', 'Annuler', { type: 'surgery-cancel', pawnId: pawn.id }, false, false, 'Annule la demande en cours. Les ingrédients déjà consommés restent consommés et l’anesthésie continue à se dissiper.')] });
-        else {
-          for (const part of SURGICAL_LIMBS) { const reason = surgeryRequestReason(pawn, part, { version: world.schemaVersion }); rows.push({ id: `amputate-${part}`, label: `Amputer · ${BODY_PARTS[part].label}`, hint: `${reason ?? 'Retire définitivement ce membre directement infecté et ses parties dépendantes. Continuer les soins et attendre l’immunité reste possible.'} Préparation : lit, médecin et une dose autorisée. Risques : échec opératoire et lésions. Après annulation : anesthésie et dose déjà administrée conservées.`, controls: [command(`request-amputation-${part}`, 'Demander', { type: 'surgery-request', pawnId: pawn.id, part }, !!reason)] }); }
-          for (const [kind, rule] of Object.entries(ARTIFICIAL_PARTS) as [ArtificialPartKind, typeof ARTIFICIAL_PARTS[ArtificialPartKind]][]) if (artificialPartAvailable273(kind, world.schemaVersion)) for (const part of rule.sites) { const reason = surgeryInstallRequestReason(pawn, part, kind, { version: world.schemaVersion }); rows.push({ id: `implant-${kind}-${part}`, label: `${rule.label} · ${BODY_PARTS[part].label}`, value: `Efficacité ${pct(rule.efficiency)} · Médecine ${rule.medicineSkill}`, hint: `${reason ?? 'Pose cette prothèse à la place du membre ou de sa prothèse actuelle. La fonction reste partielle et l’opération peut échouer.'} Préparation : 1 ${ITEM_DEFINITIONS[artificialPartIngredient273(kind)].label.toLocaleLowerCase('fr-FR')} + 2 médicaments du même type autorisé · Médecine ${rule.medicineSkill} · efficacité ${pct(rule.efficiency)}. Patient installé au lit, chevet accessible et anesthésie. Risques : échec opératoire et lésions ; aucun résultat garanti.`, controls: [command(`request-${kind}-${part}`, 'Demander la pose', { type: 'surgery-install', pawnId: pawn.id, part, implant: kind }, !!reason)] }); }
-          for (const part of pawn.health?.artificialParts ?? []) { const reason = surgeryRemoveRequestReason273(pawn, part.part, part.kind, { version: world.schemaVersion }); rows.push({ id: `remove-prosthetic-${part.part}`, label: `${ARTIFICIAL_PARTS[part.kind].label} · ${BODY_PARTS[part.part].label}`, hint: reason ?? 'Une dose autorisée, un lit et un médecin. En cas de réussite, la même sorte de prothèse est récupérée au sol ; le membre redevient absent. Risque d’échec opératoire.', controls: [command(`remove-${part.part}`, 'Demander le retrait', { type: 'surgery-remove-prosthetic', pawnId: pawn.id, part: part.part }, !!reason)] }); }
-        }
-      }
+    const health = pawn.health, careful = isCarePatient(pawn) && alive;
+    const operationsAvailable = careful && (colonist || !!pawn.prisoner && world.schemaVersion >= 280);
+    if (!operationsAvailable) healthPane = 'overview';
+    const overviewTab = control('health-overview', 'Vue d’ensemble', () => { healthPane = 'overview'; resetCardScroll(); }, false, healthPane === 'overview', 'Capacités, lésions et politique de soins.');
+    const operationsTab = operationsAvailable ? control('health-operations', `Opérations${pawn.surgeryRequest ? ' (1)' : ''}`, () => { healthPane = 'operations'; resetCardScroll(); }, false, healthPane === 'operations', 'Demandes, pose et retrait de prothèses ; risques et conditions opératoires.') : undefined;
+    const records = bodyRows(health);
+    for (const injury of health?.injuries ?? []) { const entry = records.find(entry => entry.id === `injury-${injury.id}`); if (entry) entry.hint = `${entry.hint ?? ''} · ${tooltipText(healthPartTooltip(pawn, injury.part))} · Saignement ${pct(injuryBleed(health!, injury))}/jour.`; }
+    const clinical = pawn.state === 'dead' ? 'Décédé · Dossier conservé' : pawn.state === 'downed' ? 'À terre' : health?.flu?.severity || health?.immuneDiseases?.malaria?.severity || health?.immuneDiseases?.plague?.severity || health?.immuneDiseases?.['sleeping-sickness']?.severity || health?.parasites306 || health?.mechanites307 || (health?.cryptosleepSickness?.remainingCore ?? 0) > 0 ? 'Malade' : 'Mobile';
+    const settings: HealthSettingSpec[] = [];
+    if (careful) {
+      const food = choices('medical-food', 'Régime alimentaire', pawn.foodPolicyId, world.foodPolicies.map(policy => policy.id), policyId => send({ type: 'food-policy-assign', pawnId: pawn.id, policyId }), id => world.foodPolicies.find(policy => policy.id === id)?.name ?? String(id)).controls![0]!;
+      const care = choices('medical-care', 'Politique médicale', medicalCare(pawn), Object.keys(MEDICAL_CARE) as MedicalCare[], value => send({ type: 'medical-care', pawnId: pawn.id, care: value }), value => MEDICAL_CARE[value]).controls![0]!;
+      settings.push({ id: 'food', label: 'Aliments :', kind: 'select', value: food.label, control: food, hint: 'Choisir les aliments autorisés. Modifier un régime dans Assignations modifie tous ses utilisateurs. Le régime ne change pas les ingrédients de cuisine.' },
+        { id: 'care', label: 'Médicaments :', kind: 'select', value: care.label, control: care, hint: 'Détermine les soins autorisés et la meilleure catégorie de médicament que les médecins peuvent utiliser. Les doses sont consommées pendant les soins.' });
+      if (colonist) { const tend = booleanRow('self-tend', 'Se soigner soi-même', !!pawn.selfTend, enabled => send({ type: 'self-tend-policy', pawnId: pawn.id, enabled })).controls![0]!; settings.push({ id: 'self-tend', label: 'Auto-soins :', kind: 'check', on: !!pawn.selfTend, control: tend, hint: 'Un colon peut se soigner lui-même, moins bien qu’un médecin. Cocher pour l’autoriser.' }); }
     }
-    if (healthPane === 'operations') { const tabsRow = rows.find(entry => entry.id === 'health-tabs')!; const operationRows = rows.filter(entry => /^(surgery-|amputate-|implant-|remove-prosthetic-)/.test(entry.id) && (!entry.controls?.length || entry.controls.some(action => !action.disabled))); rows.splice(3, rows.length - 3, tabsRow, heading('operations', 'Opérations'), ...operationRows); if (!operationRows.length) rows.push(row('operations-unavailable', 'Aucune opération disponible pour ce patient.')); }
+    const pain = painLabel(health ? medicalPain(health) : 0);
+    const painRow = records.find(entry => entry.id === 'pain');
+    const painHint = [`Niveau de douleur : ${pct(health ? medicalPain(health) : 0)}`, painRow?.hint ?? '', `État clinique : ${clinical}. Les capacités actuelles ci-contre comprennent les lésions, les parties perdues, la douleur et les affections réellement présentes.`,
+      health?.infections?.cases.length ? 'Infection : la gravité et l’immunité progressent séparément. Soins, qualité des médicaments et repos influencent leur évolution. Une amputation retire définitivement un membre directement infecté ; son résultat opératoire reste soumis aux règles cliniques.' : '',
+      pawn.surgeryRequest ? 'Risques opératoires : un lit, un médecin, l’accès au chevet et les médicaments autorisés restent nécessaires. Une opération peut échouer et blesser. Annuler ne restitue ni une dose déjà administrée ni l’état avant anesthésie.' : ''].filter(Boolean).join('\n\n');
+    const capacities = alive ? capacitySpecs(Object.entries(pawnBody(pawn).capacities), key => capacityLabels[key] ?? key, key => tooltipText(healthCapacityTooltip(pawn, key as Parameters<typeof healthCapacityTooltip>[1]))) : [];
+    const anatomy = (key: string) => control(`anatomy-${key}`, 'Anatomie', () => { subpage = { kind: 'anatomy', pawnId: pawn.id }; }, false, false, 'Parties et lésions détaillées');
+    const entries = healthEntries(records, {
+      injury: id => { const injury = health?.injuries.find(entry => entry.id === id); return injury ? { part: injury.part, bleeding: injuryBleed(health!, injury) > 0, tended: injury.tended !== undefined } : undefined; },
+      missing: part => health?.missing.find(entry => entry.part === part),
+      infectionPart: index => health?.infections?.cases[index]?.part,
+      part: part => {
+        const id = part as BodyPartId, missing = !!health && partMissing(health, id), fraction = health && !missing ? remainingPartHealth(health, id) / HP_UNIT / BODY_PARTS[id].hp : 1;
+        return { label: BODY_PARTS[id].label, hint: tooltipText(healthPartTooltip(pawn, id)), ink: missing ? NATIVE_INK.red : fraction < .5 ? NATIVE_INK.painSevere : fraction < 1 - 1e-6 ? NATIVE_INK.painMedium : NATIVE_INK.text, info: anatomy(part) };
+      },
+      whole: () => anatomy('whole'),
+    });
+    const bleedTotal = health ? health.injuries.reduce((sum, injury) => sum + injuryBleed(health, injury), 0) : 0;
+    let operations: HealthOperationsSpec | undefined;
+    if (healthPane === 'operations' && operationsAvailable) {
+      const requests: { id: string; label: string; hint: string; control: NativeControl; reason: string | undefined }[] = [];
+      if (!pawn.surgeryRequest) {
+        for (const part of SURGICAL_LIMBS) { const reason = surgeryRequestReason(pawn, part, { version: world.schemaVersion }); requests.push({ id: `amputate-${part}`, label: `Amputer (${BODY_PARTS[part].label})`, reason, hint: `${reason ?? 'Retire définitivement ce membre directement infecté et ses parties dépendantes. Continuer les soins et attendre l’immunité reste possible.'} Préparation : lit, médecin et une dose autorisée. Risques : échec opératoire et lésions. Après annulation : anesthésie et dose déjà administrée conservées.`, control: command(`request-amputation-${part}`, 'Demander', { type: 'surgery-request', pawnId: pawn.id, part }, !!reason) }); }
+        for (const [kind, rule] of Object.entries(ARTIFICIAL_PARTS) as [ArtificialPartKind, typeof ARTIFICIAL_PARTS[ArtificialPartKind]][]) if (artificialPartAvailable273(kind, world.schemaVersion)) for (const part of rule.sites) { const reason = surgeryInstallRequestReason(pawn, part, kind, { version: world.schemaVersion }); requests.push({ id: `implant-${kind}-${part}`, label: `${rule.label} (${BODY_PARTS[part].label})`, reason, hint: `${reason ?? 'Pose cette prothèse à la place du membre ou de sa prothèse actuelle. La fonction reste partielle et l’opération peut échouer.'} Efficacité ${pct(rule.efficiency)} · Médecine ${rule.medicineSkill}. Préparation : 1 ${ITEM_DEFINITIONS[artificialPartIngredient273(kind)].label.toLocaleLowerCase('fr-FR')} + 2 médicaments du même type autorisé. Patient installé au lit, chevet accessible et anesthésie. Risques : échec opératoire et lésions ; aucun résultat garanti.`, control: command(`request-${kind}-${part}`, 'Demander la pose', { type: 'surgery-install', pawnId: pawn.id, part, implant: kind }, !!reason) }); }
+        for (const part of pawn.health?.artificialParts ?? []) { const reason = surgeryRemoveRequestReason273(pawn, part.part, part.kind, { version: world.schemaVersion }); requests.push({ id: `remove-prosthetic-${part.part}`, label: `Retirer ${ARTIFICIAL_PARTS[part.kind].label.toLocaleLowerCase('fr-FR')} (${BODY_PARTS[part.part].label})`, reason, hint: reason ?? 'Une dose autorisée, un lit et un médecin. En cas de réussite, la même sorte de prothèse est récupérée au sol ; le membre redevient absent. Risque d’échec opératoire.', control: command(`remove-${part.part}`, 'Demander le retrait', { type: 'surgery-remove-prosthetic', pawnId: pawn.id, part: part.part }, !!reason) }); }
+      }
+      const add: NativeControl | undefined = requests.length ? { ...control('surgery-add', 'Ajouter une opération…', () => undefined, false, false, 'Demander une opération : le médecin la fait au lit médical, avec les médicaments autorisés.'), select: { value: '', options: requests.map(request => ({ value: request.id, label: request.reason ? `${request.label} (${request.reason})` : request.label, hint: request.hint, disabled: !!request.control.disabled })), onChange: async value => { await requests.find(request => request.id === value)?.control.onActivate(); } } } : undefined;
+      operations = { note: 'Lit, médecin et médicaments autorisés requis.', empty: requests.length ? 'Aucune opération demandée.' : 'Aucune opération disponible pour ce patient.', add,
+        request: pawn.surgeryRequest ? { label: `Opération demandée : ${healthSurgeryView(pawn, world).status}`, hint: 'Un lit, un médecin, l’accès au chevet et les médicaments autorisés restent nécessaires. Une opération peut échouer et blesser.', cancel: command('surgery-cancel', 'Annuler', { type: 'surgery-cancel', pawnId: pawn.id }, false, false, 'Annule la demande en cours. Les ingrédients déjà consommés restent consommés et l’anesthésie continue à se dissiper.') } : undefined };
+    }
+    rows.push({ id: 'tab-card', label: '', card: { type: 'health', tab: healthPane, tabs: { overview: overviewTab, operations: operationsTab, operationsLabel: operationsTab?.label ?? 'Opérations' }, settings, pain: alive ? { ...pain, hint: painHint } : undefined, capacities, entries,
+      bleed: bleedTotal > .01 ? { text: `Saignement : ${pct(bleedTotal)}/jour`, hint: 'Somme des plaies qui saignent encore. Le traitement des plaies arrête leur saignement ; la récupération du sang reste progressive.' } : undefined, operations, emptyText: '(Aucun problème de santé)' } });
   } else if (activeTab === 'gear') {
-    rows.push({ id: 'portrait-clothing', label: '', compact:true, controls: [control('portrait-clothing', portraitClothed ? 'Vêtements visibles' : 'Vêtements masqués', () => { portraitClothed = !portraitClothed; }, false, portraitClothed, portraitClothed?'Masquer les vêtements dans le portrait':'Montrer les vêtements dans le portrait')] });
-    const primary = equippedWeapon(world, pawn), comfortable = comfortableTemperature(world, pawn);
-    rows.push(row('comfort-range', 'Températures confortables', `${comfortable.min.toFixed(1)} à ${comfortable.max.toFixed(1)} °C`, 'La plage combine les limites de la personne et l’isolation réelle de ses vêtements.'), { id: 'weapon', label: 'Arme principale', value: primary ? weaponLabel(primary) : 'Aucune', controls: primary ? [control('primary-information', 'Informations', () => { subpage = { kind: 'item', itemId: primary.id }; }), ...(colonist && alive ? [command('drop-primary', 'Déposer', { type: 'order-equipment', pawnId: pawn.id, itemId: primary.id, action: 'drop', queue: false })] : [])] : undefined });
-    rows.push(heading('gear-apparel', 'Vêtements'));
-    for (const piece of wornApparel(world, pawn)) { const definition = apparelDefinition(piece), rating = armorPiece(piece).ratings, insulation = apparelInsulation(piece); rows.push({ id: `apparel-${piece.id}`, label: apparelLabel(piece), value: `${piece.apparel!.hitPoints}/${definition.hitPoints} PV${piece.apparel!.forced ? ' · Port imposé' : ''}`, detail: `Tranchant ${pct(rating.sharp)} · Contondant ${pct(rating.blunt)} · Chaleur ${pct(rating.heat)} · Isolation froid ${insulation.cold.toFixed(1)} °C / chaleur ${insulation.heat.toFixed(1)} °C`, controls: [control(`apparel-information-${piece.id}`, 'Informations', () => { subpage = { kind: 'item', itemId: piece.id }; }), ...(colonist && alive ? [command(`remove-apparel-${piece.id}`, 'Retirer', { type: 'order-equipment', pawnId: pawn.id, itemId: piece.id, action: 'remove', queue: false })] : [])] }); }
-    rows.push(heading('gear-inventory', 'Inventaire et transport'));
-    for (const pile of world.piles.filter(pile => ['pawn', 'inventory'].includes(pile.owner.type) && 'pawnId' in pile.owner && pile.owner.pawnId === pawn.id)) rows.push({ ...row(`inventory-${pile.id}`, pile.book?.title??ITEM_DEFINITIONS[pile.item].label, `× ${pile.quantity}`), controls: [control(`inventory-information-${pile.id}`, 'Informations', () => { subpage = { kind: 'item', itemId: pile.id }; })] });
-    for (const packed of world.packed) if (packed.owner.type === 'pawn' && packed.owner.pawnId === pawn.id) rows.push(row(`packed-${packed.building.id}`, buildingLabels[packed.building.kind], 'Transporté'));
-    if (pawn.cryptosleepTask?.action === 'carry' && ['carry', 'closing'].includes(pawn.cryptosleepTask.phase)) rows.push(row('carried-cryptosleep-patient', 'Patient porté vers un caisson', world.pawns.find(patient => patient.id === pawn.cryptosleepTask?.patientId)?.name ?? 'Patient confirmé'));
-    if (pawn.shipCasketTask277?.action === 'carry' && ['carry', 'closing'].includes(pawn.shipCasketTask277.phase)) rows.push(row('carried-spatial-patient', 'Occupant porté vers un caisson spatial', pawn.shipCasketTask277.patient ? `${pawn.shipCasketTask277.patient.kind === 'human' ? 'Personne' : pawn.shipCasketTask277.patient.kind === 'animal' ? 'Animal' : 'Mécanoïde'} ${pawn.shipCasketTask277.patient.id}` : undefined));
-    if (pawn.rescue?.phase === 'carry') rows.push(row('carried-rescue', pawn.rescue.capture ? 'Personne capturée transportée' : 'Personne secourue transportée', world.pawns.find(patient => patient.id === pawn.rescue?.patientId)?.name));
-    if (pawn.animalRescue?.phase === 'carry') rows.push(row('carried-animal', 'Animal secouru transporté', String(pawn.animalRescue.animalId)));
-    if (pawn.droppedWeaponId !== undefined) rows.push({ id: 'lost-weapon', label: 'Arme perdue', value: String(pawn.droppedWeaponId), controls: colonist ? [command('forget-weapon', 'Oublier', { type: 'forget-weapon', pawnId: pawn.id })] : undefined });
-    if (colonist && alive) rows.push({ id: 'clear-forced', label: 'Tenue imposée', controls: [command('clear-forced-apparel', 'Effacer les obligations', { type: 'apparel-clear-forced', pawnId: pawn.id })] });
+    const primary = equippedWeapon(world, pawn), comfortable = comfortableTemperature(world, pawn), canOrder = colonist && alive;
+    const massOf = (pile: MaterialPile) => { const unit = physicalTravelUnitMass(pile, world.schemaVersion); return unit === undefined ? undefined : unit * pile.quantity; };
+    const info = (id: number) => control(`item-information-${id}`, 'Informations', () => { subpage = { kind: 'item', itemId: id }; }, false, false, 'Informations sur cet objet');
+    const equipment: GearRowSpec[] = primary ? [{ id: `weapon-${primary.id}`, label: weaponLabel(primary), grams: massOf(primary), hint: `Arme principale : ${weaponLabel(primary)}`, info: info(primary.id), drop: canOrder ? command('drop-primary', 'Déposer', { type: 'order-equipment', pawnId: pawn.id, itemId: primary.id, action: 'drop', queue: false }, false, false, 'Déposer cette arme') : undefined }] : [];
+    const pieces = wornApparel(world, pawn);
+    const apparel: GearRowSpec[] = pieces.map(piece => {
+      const definition = apparelDefinition(piece), rating = armorPiece(piece).ratings, insulation = apparelInsulation(piece), label = apparelLabel(piece);
+      return { id: `apparel-${piece.id}`, label: `${label}${piece.apparel!.forced ? ', imposé' : ''}`, grams: massOf(piece), info: info(piece.id),
+        hint: `${label}\n\n${piece.apparel!.hitPoints}/${definition.hitPoints} PV${piece.apparel!.forced ? ' · Port imposé' : ''}\nTranchant ${pct(rating.sharp)} · Contondant ${pct(rating.blunt)} · Chaleur ${pct(rating.heat)}\nIsolation froid ${insulation.cold.toFixed(1)} °C / chaleur ${insulation.heat.toFixed(1)} °C`,
+        drop: canOrder ? command(`remove-apparel-${piece.id}`, 'Retirer', { type: 'order-equipment', pawnId: pawn.id, itemId: piece.id, action: 'remove', queue: false }, false, false, 'Retirer ce vêtement') : undefined };
+    });
+    const inventory: GearRowSpec[] = world.piles.filter(pile => ['pawn', 'inventory'].includes(pile.owner.type) && 'pawnId' in pile.owner && pile.owner.pawnId === pawn.id).map(pile => ({ id: `inventory-${pile.id}`, label: `${pile.book?.title ?? ITEM_DEFINITIONS[pile.item].label}${pile.quantity > 1 ? ` ×${pile.quantity}` : ''}`, grams: massOf(pile), hint: `${pile.book?.title ?? ITEM_DEFINITIONS[pile.item].label} × ${pile.quantity}`, info: info(pile.id) }));
+    for (const packed of world.packed) if (packed.owner.type === 'pawn' && packed.owner.pawnId === pawn.id) inventory.push({ id: `packed-${packed.building.id}`, label: `${buildingLabels[packed.building.kind]} (transporté)`, hint: 'Meuble emballé transporté' });
+    const carried = (id: string, label: string, value: string | undefined) => inventory.push({ id, label: value ? `${label} : ${value}` : label, hint: label });
+    if (pawn.cryptosleepTask?.action === 'carry' && ['carry', 'closing'].includes(pawn.cryptosleepTask.phase)) carried('carried-cryptosleep-patient', 'Patient porté vers un caisson', world.pawns.find(patient => patient.id === pawn.cryptosleepTask?.patientId)?.name ?? 'Patient confirmé');
+    if (pawn.shipCasketTask277?.action === 'carry' && ['carry', 'closing'].includes(pawn.shipCasketTask277.phase)) carried('carried-spatial-patient', 'Occupant porté vers un caisson spatial', pawn.shipCasketTask277.patient ? `${pawn.shipCasketTask277.patient.kind === 'human' ? 'Personne' : pawn.shipCasketTask277.patient.kind === 'animal' ? 'Animal' : 'Mécanoïde'} ${pawn.shipCasketTask277.patient.id}` : undefined);
+    if (pawn.rescue?.phase === 'carry') carried('carried-rescue', pawn.rescue.capture ? 'Personne capturée transportée' : 'Personne secourue transportée', world.pawns.find(patient => patient.id === pawn.rescue?.patientId)?.name);
+    if (pawn.animalRescue?.phase === 'carry') carried('carried-animal', 'Animal secouru transporté', String(pawn.animalRescue.animalId));
+    const extras: GearSpec['extras'][number][] = [];
+    if (pawn.droppedWeaponId !== undefined) { if (colonist) extras.push({ id: 'lost-weapon', label: `Arme perdue (${pawn.droppedWeaponId})`, control: command('forget-weapon', 'Oublier', { type: 'forget-weapon', pawnId: pawn.id }), hint: 'Oublier cette arme perdue : le colon ne la cherchera plus.' }); else carried('lost-weapon', 'Arme perdue', String(pawn.droppedWeaponId)); }
+    if (colonist && alive) extras.push({ id: 'clear-forced', label: 'Tenue imposée', control: command('clear-forced-apparel', 'Effacer', { type: 'apparel-clear-forced', pawnId: pawn.id }), hint: 'Effacer les obligations de tenue : le colon choisit à nouveau ses vêtements.' });
+    const carriedMass = commercialMass(world, pawn), armor = overallArmor(pieces);
+    const kilograms = (grams: number) => String(Number((grams / 1000).toFixed(2)));
+    rows.push({ id: 'tab-card', label: '', card: { type: 'gear',
+      mass: carriedMass && alive ? { text: `Masse portée : ${kilograms(carriedMass.grams)} / ${kilograms(carriedMass.capacityGrams)} kg`, hint: 'Masse de l’équipement, des vêtements et de l’inventaire, contre la capacité de charge.' } : undefined,
+      comfort: alive ? { text: `Plage de température confortable : ${comfortable.min.toFixed(0)} ~ ${comfortable.max.toFixed(0)} °C`, hint: 'La plage combine les limites de la personne et l’isolation réelle de ses vêtements.' } : undefined,
+      armor: alive ? [{ id: 'sharp', label: 'Tranchant', value: pct(armor.sharp) }, { id: 'blunt', label: 'Contondant', value: pct(armor.blunt) }, { id: 'heat', label: 'Chaleur', value: pct(armor.heat) }] : undefined,
+      sections: [{ id: 'equipment', label: 'Équipement', rows: equipment }, { id: 'apparel', label: 'Vêtements', rows: apparel }, { id: 'inventory', label: 'Inventaire', rows: inventory }], extras,
+      portrait: { control: control('portrait-clothing', portraitClothed ? 'Vêtements visibles' : 'Vêtements masqués', () => { portraitClothed = !portraitClothed; }, false, portraitClothed, portraitClothed ? 'Masquer les vêtements dans le portrait' : 'Montrer les vêtements dans le portrait'), visible: portraitClothed }, maxHeight: 4000 } });
   } else if (activeTab === 'social') {
-    // The family and couple links (Core Social tab), moved from the old Bio dossier.
-    rows.push(heading('bio-links', 'Liens familiaux'));
-    { const people = captureRelationshipPeople(world), relations = relationshipIndex(world); let linked = false;
-      for (const person of people.values()) { const kinds = relations.kinds(pawn.id, person.id); if (person.id === pawn.id || !kinds.length) continue; linked = true; const links = kinds.map(kind => relationLabels[kind] ?? kind).join(' · '), status = ({ present: 'Présent', away: 'En voyage', departed: 'Absent', dead: 'Décédé' })[person.status]; rows.push(row(`bio-relation-${person.id}`, person.name, `${links} · ${status}`, `Ces liens proviennent du dossier enregistré. L’absence ne signifie pas un décès. Le portrait, le nom et une opinion ne créent aucun lien. Lien : ${links}. Situation : ${status}.`)); }
-      if (!linked) rows.push(row('bio-relations-empty', 'Aucun lien familial ou de couple renseigné.')); }
-    rows.push(heading('social-opinions', 'Relations'));
     const people = captureRelationshipPeople(world), index = relationshipIndex(world), remembered = new Set([...pawn.social?.memories ?? [], ...pawn.romanceMemories ?? [], ...pawn.familyBereavement ?? []].map(memory => memory.otherId));
+    const statusLabels = { present: 'Présent', away: 'En voyage', departed: 'Absent', dead: 'Décédé' } as const;
+    const listed: (SocialRowSpec & { linked: boolean })[] = [];
     for (const person of people.values()) {
       if (person.id === pawn.id) continue;
       const other = world.pawns.find(candidate => candidate.id === person.id), kinds = index.kinds(pawn.id, person.id);
@@ -418,33 +491,48 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
       const current = person.status === 'present' && other?.state !== 'dead';
       const causes = alive ? opinionCauses(pawn, person.id, world.tick, world).map(cause => `${cause.label}${cause.count > 1 ? ` ×${cause.count}` : ''} : ${signed(cause.value)}`).join(' · ') : 'Avis arrêté au décès.';
       const reciprocalCauses = current && other ? opinionCauses(other, pawn.id, world.tick, world).map(cause => `${cause.label}${cause.count > 1 ? ` ×${cause.count}` : ''} : ${signed(cause.value)}`).join(' · ') : 'Avis actuel indisponible : propriétaire absent ou décédé.';
-      rows.push({ id: `social-${person.id}`, label: `${person.name} · ${{ present: 'Présent', away: 'En voyage', departed: 'Absent', dead: 'Décédé' }[person.status]}`, value: `Avis ${alive ? signed(opinionOf(pawn, person.id, world.tick, world)) : '—'} · Réciproque ${current && other ? signed(opinionOf(other, pawn.id, world.tick, world)) : '—'}`, detail: `${kinds.map(kind => relationLabels[kind] ?? kind).join(' · ')}${kinds.length && causes ? ' · ' : ''}${causes}`, controls: other ? [control(`select-person-${person.id}`, 'Inspecter', () => owner.selectPawn(person.id))] : undefined }, row(`social-reciprocal-causes-${person.id}`, `Avis de ${person.name}`, undefined, reciprocalCauses));
+      const links = kinds.map(kind => relationLabels[kind] ?? kind).join(', ');
+      listed.push({ id: String(person.id), linked: kinds.length > 0, relations: links, name: person.name, mine: alive ? opinionOf(pawn, person.id, world.tick, world) : undefined, his: current && other ? opinionOf(other, pawn.id, world.tick, world) : undefined, situation: statusLabels[person.status],
+        hint: `${person.name} · ${statusLabels[person.status]}${links ? `\nLien : ${links}. Ces liens proviennent du dossier enregistré ; l’absence ne signifie pas un décès.` : ''}\n\nAvis de ${pawn.name} : ${causes || 'aucun motif'}\n\nAvis de ${person.name} : ${reciprocalCauses || 'aucun motif'}${other ? '\n\nCliquer pour sélectionner cette personne.' : ''}`,
+        select: other ? control(`select-person-${person.id}`, 'Inspecter', () => owner.selectPawn(person.id), false, false, `Sélectionner ${person.name}`) : undefined });
     }
-    if (pawn.social?.last) {
+    listed.sort((a, b) => Number(b.linked) - Number(a.linked) || (b.mine ?? 0) - (a.mine ?? 0) || Number(a.id) - Number(b.id));
+    const interactions: InteractionSpec[] = personalEvents(world, pawn).filter(entry => entry.kind === 'social').slice(0, 12).map(entry => ({ id: String(entry.index), text: entry.event.message, faded: world.tick - entry.event.tick > 7500, hint: `Il y a ${((world.tick - entry.event.tick) / 250).toFixed(1)} h` }));
+    if (!interactions.length && pawn.social?.last) {
       const last = pawn.social.last, name = people.get(last.otherId)?.name ?? 'une personne non renseignée';
       const text = last.kind === 'slight' ? `${last.initiated ? 'A vexé' : 'A été vexé par'} ${name}` : last.kind === 'insult' ? `${last.initiated ? 'A insulté' : 'A été insulté par'} ${name}` : last.kind === 'kind-words' ? `${last.initiated ? 'A adressé des mots gentils à' : 'A reçu des mots gentils de'} ${name}` : last.kind === 'romance-attempt' ? `${last.initiated ? 'A tenté un rapprochement amoureux avec' : 'A reçu une tentative de rapprochement amoureux de'} ${name}` : last.kind === 'breakup' ? `${last.initiated ? 'A rompu avec' : 'A subi une rupture avec'} ${name}` : `${SOCIAL_LABELS[last.kind]} ${last.initiated ? 'engagé' : 'reçu'} avec ${name}`;
-      rows.push(row('last-social', 'Dernier échange consigné', text, `Il y a ${((world.tick - last.tick) / 250).toFixed(1)} h`));
+      interactions.push({ id: 'last', text, faded: world.tick - last.tick > 7500, hint: `Il y a ${((world.tick - last.tick) / 250).toFixed(1)} h` });
     }
+    rows.push({ id: 'tab-card', label: '', card: { type: 'social', rows: listed.map(({ linked: _linked, ...entry }) => entry), interactions } });
   } else if (activeTab === 'journal') {
-    rows.push(choices('journal-filter', 'Événements', journalFilter, ['all', 'social', 'combat', 'mental'] as const, value => { journalFilter = value; }, value => ({ all: 'Tous', social: 'Social', combat: 'Combat', mental: 'Crises mentales' })[value]));
-    const escaped = pawn.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), named = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu'), labels = Object.values(SOCIAL_LABELS);
-    let entries = 0;
-    for (const [index, event] of [...world.events].reverse().entries()) {
-      if (!named.test(event.message)) continue;
-      const lower = event.message.toLocaleLowerCase('fr-FR');
-      const mental = event.type === 'need' && ['errance triste', 'frénésie alimentaire', 'crise de destruction', 'fureur violente', 'colère meurtrière'].some(word => lower.includes(word));
-      const kind = mental ? 'mental' : labels.some(label => event.message.startsWith(`${label} entre `)) || ['a vexé', 'a insulté', 'bagarre'].some(word => lower.includes(word)) || event.type === 'need' && ['deviennent partenaires', 'repousse l’avance de', 'se sépare de'].some(word => lower.includes(word)) ? 'social' : ['tir', 'touché', 'blessé', 'attaque', 'frappé', 'combat'].some(word => lower.includes(word)) ? 'combat' : undefined;
-      if (kind && (journalFilter === 'all' || journalFilter === kind)) { rows.push(row(`journal-${index}`, event.message, `${({ social: 'Social', combat: 'Combat', mental: 'Crise mentale' })[kind]} · Il y a ${((world.tick - event.tick) / 250).toFixed(1)} h`)); entries++; }
+    const entries = personalEvents(world, pawn).filter(entry => entry.kind === 'social' ? logFilter.social : entry.kind === 'combat' ? logFilter.combat : logFilter.all).slice(0, 300);
+    const lines: LogLineSpec[] = [];
+    let previous: 'combat' | 'other' | undefined;
+    for (const entry of entries) {
+      const combat = entry.kind === 'combat';
+      if (combat && previous !== 'combat') { if (previous) lines.push({ kind: 'gap', height: 20 }); lines.push({ kind: 'header', text: `Combat · il y a ${((world.tick - entry.event.tick) / 250).toFixed(0)} h` }); }
+      else if (!combat && previous === 'combat') lines.push({ kind: 'gap', height: 20 });
+      lines.push({ kind: 'entry', id: String(entry.index), text: entry.event.message, hint: `${({ social: 'Social', combat: 'Combat', mental: 'Crise mentale' })[entry.kind]} · Il y a ${((world.tick - entry.event.tick) / 250).toFixed(1)} h` });
+      previous = combat ? 'combat' : 'other';
     }
-    if (!entries) rows.push(row('empty-journal', 'Aucun événement personnel de cette catégorie dans le journal disponible.'));
+    const toggle = (id: 'all' | 'social' | 'combat', label: string, x: number, width: number, hint: string) => ({ id, label, x, width, on: logFilter[id], control: control(`log-toggle-${id}`, label, () => { logFilter[id] = !logFilter[id]; resetCardScroll(); }, false, logFilter[id], hint) });
+    rows.push({ id: 'tab-card', label: '', card: { type: 'log', lines, emptyText: '(Aucune entrée récente)',
+      toggles: [toggle('all', 'Tout', 60, 100, 'Afficher aussi les crises mentales et les autres entrées moins importantes.'), toggle('social', 'Social', 330, 105, 'Afficher les échanges sociaux.'), toggle('combat', 'Combat', 445, 115, 'Afficher les combats.')],
+      copy: control('log-copy', 'Copier', () => { void navigator.clipboard?.writeText(lines.flatMap(line => line.kind === 'header' ? [`--    ${line.text}`] : line.kind === 'gap' ? [''] : [line.text]).join('\n')); }, false, false, 'Copier le journal affiché dans le presse-papiers.') } });
   } else if (activeTab === 'prisoner' && pawn.prisoner) {
-    rows.push(meterRow('prisoner-resistance', 'Résistance', pawn.prisoner.resistance, pawn.prisoner.initialResistance, 'La résistance actuelle reste distincte du mode de détention choisi et de la décision de recrutement.', `${pawn.prisoner.resistance.toFixed(1)} / ${pawn.prisoner.initialResistance}`), row('captured-at', 'Capture', `Pas ${pawn.prisoner.capturedAt}`),
-      choices<PrisonerMode>('prisoner-mode', 'Mode de détention', pawn.prisoner.mode, isExecuteRelease364(world.schemaVersion) && !isColonist(pawn) ? ['maintain', 'reduce', 'recruit', 'release', 'execute'] : ['maintain', 'reduce', 'recruit', 'release'], mode => send({ type: 'prisoner-mode', patientId: pawn.id, mode }), mode => ({ maintain: 'Maintenir', reduce: 'Réduire la résistance', recruit: 'Recruter', release: 'Libérer', execute: 'Exécuter' })[mode], !alive),
-      choices('prisoner-food', 'Régime alimentaire', pawn.foodPolicyId, world.foodPolicies.map(policy => policy.id), policyId => send({ type: 'food-policy-assign', pawnId: pawn.id, policyId }), id => world.foodPolicies.find(policy => policy.id === id)?.name ?? String(id), !alive));
-    if (pawn.prisoner.breakout?.active) rows.push(row('prison-break-active', 'Évasion en cours', `Initiateur : ${world.pawns.find(person => person.id === pawn.prisoner?.breakout?.active?.initiatorId)?.name ?? 'Personne absente'}`, `Commencée il y a ${((world.tick - pawn.prisoner.breakout.active.startedAt) / 250).toFixed(1)} h`));
-    else if (pawn.prisoner.breakout?.lastAt !== undefined) rows.push(row('prison-break-last', 'Dernière évasion consignée', `Il y a ${((world.tick - pawn.prisoner.breakout.lastAt) / 6000).toFixed(1)} jours`));
+    const prisoner = pawn.prisoner, lines: PrisonerLineSpec[] = [];
+    if (prisoner.breakout?.active) lines.push({ id: 'break', label: 'Évasion en cours', value: `initiateur ${world.pawns.find(person => person.id === prisoner.breakout?.active?.initiatorId)?.name ?? 'personne absente'}`, hint: `Commencée il y a ${((world.tick - prisoner.breakout.active.startedAt) / 250).toFixed(1)} h` });
+    else if (prisoner.breakout?.lastAt !== undefined) lines.push({ id: 'break', label: 'Dernière évasion consignée', value: `il y a ${((world.tick - prisoner.breakout.lastAt) / 6000).toFixed(1)} jours`, hint: 'Une évasion se prépare lorsque la colère ou l’humeur du prisonnier sont trop basses.' });
+    lines.push({ id: 'resistance', label: 'Résistance au recrutement', value: prisoner.resistance.toFixed(1), hint: `La résistance actuelle (${prisoner.resistance.toFixed(1)} sur ${prisoner.initialResistance} au départ) reste distincte du mode de détention choisi et de la décision de recrutement.` },
+      { id: 'captured', label: 'Capture', value: `pas ${prisoner.capturedAt}`, hint: 'Pas de la simulation où cette personne a été capturée.' });
+    const care = isCarePatient(pawn) && alive ? choices('medical-care', 'Politique médicale', medicalCare(pawn), Object.keys(MEDICAL_CARE) as MedicalCare[], value => send({ type: 'medical-care', pawnId: pawn.id, care: value }), value => MEDICAL_CARE[value]).controls![0]! : undefined;
+    const modes: PrisonerMode[] = isExecuteRelease364(world.schemaVersion) && !isColonist(pawn) ? ['maintain', 'reduce', 'recruit', 'release', 'execute'] : ['maintain', 'reduce', 'recruit', 'release'];
+    const modeLabels = { maintain: 'Maintenir', reduce: 'Réduire la résistance', recruit: 'Recruter', release: 'Libérer', execute: 'Exécuter' } as const;
+    const modeHints = { maintain: 'Garder le prisonnier sans interaction particulière.', reduce: 'Les colons parlent au prisonnier pour réduire sa résistance au recrutement.', recruit: 'Tenter de recruter le prisonnier dans la colonie, une fois sa résistance tombée.', release: 'Le prisonnier sera escorté hors de la colonie puis libéré.', execute: 'Le prisonnier sera mis à mort.' } as const;
+    rows.push({ id: 'tab-card', label: '', card: { type: 'prisoner', lines,
+      medical: care ? { label: 'Médicaments autorisés :', value: care.label, control: care, hint: 'Détermine les soins autorisés et la meilleure catégorie de médicament que les médecins peuvent utiliser.' } : undefined,
+      modes: modes.map(mode => ({ id: mode, label: modeLabels[mode], selected: prisoner.mode === mode, hint: modeHints[mode], control: control(`prisoner-mode-${mode}`, modeLabels[mode], () => send({ type: 'prisoner-mode', patientId: pawn.id, mode }), !alive, prisoner.mode === mode, modeHints[mode]) })) } });
   }
-  if (activeTab === 'health') { const index = rows.findIndex(entry => entry.id === 'health-tabs'); if (index > 1) { const [navigation] = rows.splice(index, 1); rows.splice(1, 0, navigation!); } }
   const actions: NativeControl[] = [];
   // Core gizmos to the right of the pane (Command_Toggle merged over the
   // selection, see selectionDraftCommand: the shown state is the merged one).
@@ -459,14 +547,6 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   if (activeTab) actions.push({ ...control('inspect-tab-close', 'Fermer l’onglet', () => { activeTab = null; }), hint: 'Fermer l’onglet' });
   const result: NativePage & { portrait?: { url: string; label: string } } = { id: `inspect-pawn-${pawn.id}-${activeTab ?? 'pane'}`, title: pawn.name, rows, actions, layout: 'inspector' };
   if (activeTab) result.inspectTab = { id: activeTab, ...tabSizes[activeTab] };
-  if (activeTab === 'needs' || activeTab === 'health' && healthPane === 'overview') {
-    result.columnRatio = activeTab === 'needs' ? .38 : .375;
-    for (const entry of rows) {
-      if (entry.id === 'pawn-tabs' || entry.id === 'health-tabs' || entry.inspectPane) continue;
-      entry.column = activeTab === 'needs' ? /^(thought-|need-mood|mood-|break-thresholds|heading-thoughts)/.test(entry.id) ? 1 : 0 : /^(capacity-|heading-capacities|pain|blood|bleed)/.test(entry.id) ? 0 : 1;
-      if(activeTab==='health'){if(entry.meter&&entry.column===0)entry.dense=true;if(entry.id==='anatomy'){entry.label='';entry.compact=true;}}
-    }
-  }
   result.portrait = { url: portraitDataUrl(appearanceOf(pawn, world.seed), apparelAppearance(portraitClothed ? wornApparel(world, pawn) : []), equippedWeapon(world, pawn)?.item, portraitExpressionOf(pawn), humanLimbVisualMask(pawn)), label: `Portrait de ${pawn.name}` };
   return result;
 }
@@ -848,7 +928,7 @@ export function buildNativeInspector(state: NativeUiState, actions: NativeUiActi
   latest = state; owner = actions; const world = state.world; if (!world) return null;
   const selected = (state.selectedObjects ?? []).filter(object => mapObjectExists(world, object));
   const key = nativeInspectorSelectionKey(state);
-  if (key !== selectionKey) { subpage = undefined; billDrafts.clear(); billWorkers.clear(); storageNavigation = undefined; feedback = ''; selectionKey = key; }
+  if (key !== selectionKey) { resetCardScroll(); subpage = undefined; billDrafts.clear(); billWorkers.clear(); storageNavigation = undefined; feedback = ''; selectionKey = key; }
   let page: NativePage | null = null;
   if (subpage?.kind === 'item') { page = itemPage(world, subpage.itemId!); if (!page) subpage = undefined; }
   else if (subpage?.kind === 'anatomy') { const pawn = world.pawns.find(pawn => pawn.id === subpage?.pawnId); if (pawn) page = anatomyPage(world, pawn); else subpage = undefined; }
@@ -868,7 +948,11 @@ export function buildNativeInspector(state: NativeUiState, actions: NativeUiActi
   if (!page) return null;
   if (page.layout !== 'storage') page.layout = 'inspector';
   page.width ??= page.id.startsWith('inspect-bills-') || page.id.startsWith('inspect-storage-') ? 630 : 500; page.height ??= 430;
-  if (!subpage && selected.length <= 1 && (!state.selectedPawnIds.length || activeTab === 'health' || activeTab === 'needs')) page.rows.push(...nativeSpecialRows(state, actions).map(entry => page!.columnRatio === undefined ? entry : activeTab==='health'?{...entry,label:entry.id==='special-environment'?'':entry.label,compact:true,column:1 as const}:{...entry,column:0 as const}));
+  // The room-and-hygiene dossier of a person has no place in Core's Health or Needs
+  // tab (they are cards): it is a command tile beside the pane, like a gizmo.
+  if (!subpage && selected.length <= 1 && page.rows.some(entry => entry.id === 'tab-card') && (activeTab === 'health' || activeTab === 'needs')) {
+    for (const entry of nativeSpecialRows(state, actions)) for (const action of entry.controls ?? []) (page.actions ??= []).push({ ...action, hint: [action.hint, entry.hint].filter(Boolean).join(' · ') || undefined });
+  } else if (!subpage && selected.length <= 1 && (!state.selectedPawnIds.length || activeTab === 'health' || activeTab === 'needs')) page.rows.push(...nativeSpecialRows(state, actions).map(entry => page!.columnRatio === undefined ? entry : activeTab==='health'?{...entry,label:entry.id==='special-environment'?'':entry.label,compact:true,column:1 as const}:{...entry,column:0 as const}));
   for (const entry of page.rows) { if (entry.detail) { entry.hint = [entry.hint, entry.detail].filter(Boolean).join(' · '); delete entry.detail; } if (entry.hint) for (const action of entry.controls ?? []) action.hint = [action.hint, entry.hint].filter(Boolean).join(' · '); }
   if (feedback) page.rows.unshift({...row('inspector-feedback', feedback), ...(page.layout === 'storage' ? {region:'details' as const, compact:true, presentation:'plain' as const} : {})});
   if (owner.clearSelection) {

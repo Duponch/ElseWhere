@@ -81,6 +81,9 @@ export interface NativeRow {
   };
   /** The Bio card (Core `CharacterCardUtility`): one fixed 480 × 455 card. */
   bio?:import('./native-bio-card').NativeBioCard;
+  /** The inside of an inspector tab (Core `ITab_Pawn_*`): one fixed card, laid
+   * out once from this data (`native-tab-layout.ts`). */
+  card?:import('./native-tab-layout').NativeTabSpec;
   /** A line of the inspect pane (Core `InspectPaneUtility`, 432 × 165) rather
    * than of the open inspector tab. */
   inspectPane?:true;

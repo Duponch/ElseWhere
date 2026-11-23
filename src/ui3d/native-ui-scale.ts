@@ -30,22 +30,43 @@ export const NATIVE_CHIP={height:22,rowMargin:4,itemMargin:5,textPad:10,textInse
  * → a 10 % ink wash framed by a hand line, grey 0.5 « none » → faded ink). */
 export const NATIVE_INK={
   text:'#3a2c1d',
-  /** `ColoredText.TipSectionTitleColor` (0.9, 0.9, 0.3). */
-  sectionTitle:'#9a6a12',
+  /** `ColoredText.TipSectionTitleColor` (0.9, 0.9, 0.3): ochre ink, darkened so
+   * that it reads on the cream paper (every text role below keeps at least
+   * 4.5:1 there, WCAG AA; `tests/native-tab-cards.test.ts`). */
+  sectionTitle:'#5a3a00',
   /** `ColoredText.SubtleGrayColor` (0.6): help and secondary lines. */
-  subtle:'#7d6f5b',
+  subtle:'#54493a',
   /** Grey 0.5: the « Aucun » of an empty section. */
-  none:'#958a78',
+  none:'#5a5040',
   /** Grey at 50 % (`SkillUI.DisabledSkillColor`) and disabled labels. */
-  disabled:'#a99d89',
+  disabled:'#5f5545',
   /** Royal-title cause of an incapacity (0.67, 0.84, 0.9), unused in Core alone. */
-  royal:'#3f6f86',
+  royal:'#2c5a72',
   /** Thoughts and moods (green 0.1, 1, 0.1 / pink 0.8, 0.4, 0.4). */
-  positive:'#3f7d3a',
-  negative:'#a6463c',
+  positive:'#2a6326',
+  negative:'#963529',
   /** Pain: medium (0.9, 0.9, 0) and severe (0.9, 0.5, 0). */
-  painMedium:'#9b8a10',
-  painSevere:'#b0601c',
+  painMedium:'#625600',
+  painSevere:'#86470a',
+  /** Health colours (`HealthUtility.GoodConditionColor`, `ColorLibrary.RedReadable`)
+   * and the capacity estimates of `HealthCardUtility.efficiencyToColor`. */
+  good:'#2a6326',
+  red:'#963529',
+  enhanced:'#38468f',
+  /** The social tab's grey relation label (0.6) and opinion colours. */
+  relation:'#54493a',
+  /** `WidgetsWork` lines: separator labels (0.8 grey) and rules (0.3 grey). */
+  line:'rgba(82,58,31,.45)',
+  separator:'#54493a',
+  /** `Widgets.FillableBar`: frame, track and the teal fill (0.2, 0.8, 0.85),
+   * ticks, the instant marker and the change arrows (`Need.DrawOnGUI`). */
+  barFrame:'#3a2c1d',barBack:'#d9ccb0',barFill:'#52a09e',tickPassed:'#2a2018',tickAhead:'#8f8369',marker:'#3a2c1d',arrow:'#3a2c1d',
+  /** `Widgets.DrawMenuSection` and buttons. */
+  panelFill:'rgba(82,58,31,.06)',panelEdge:'rgba(82,58,31,.5)',buttonFill:'#eadcb9',buttonActive:'#d6c496',buttonEdge:'rgba(82,58,31,.7)',
+  /** Scroll bar track and thumb (`Widgets.BeginScrollView`). */
+  scrollTrack:'rgba(82,58,31,.14)',scrollThumb:'rgba(82,58,31,.5)',
+  /** Alternate row bands of lists (`TexUI.HighlightTex` at low alpha). */
+  rowAlt:'rgba(82,58,31,.07)',
   /** `StackElementBackground` (white 10 %) and its frame on paper. */
   chipFill:'rgba(82,58,31,.10)',
   chipEdge:'rgba(82,58,31,.42)',

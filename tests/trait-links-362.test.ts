@@ -192,9 +192,10 @@ test('an undergrounder keeps no outdoors need, gains its indoors need and the Co
   // In a caravan the need falls by 0.25 per day (not spawned: outdoors, no roof).
   const away=structuredClone(inside);away.indoors362=f(.7);advanceCaravanIndoors362(away);expect(away.indoors362).toBe(f(f(.7)+delta(-.25)));
   // The Needs tab shows the indoors bar instead of the outdoors one.
-  const page=needsPage(w,sky);
-  expect(page.rows.some(r=>r.id==='need-outdoors')).toBe(false);
-  expect(page.rows.find(r=>r.id==='need-indoors')).toMatchObject({label:'Intérieur',value:`${Math.round(sky.indoors362!*100)} %`});
+  const spec=needsPage(w,sky).rows.find(r=>r.id==='tab-card')!.card as import('../src/ui3d/native-tab-needs').NeedsSpec;
+  expect(spec.needs.some(n=>n.id==='need-outdoors')).toBe(false);
+  const indoors=spec.needs.find(n=>n.id==='need-indoors')!;
+  expect(indoors.label).toBe('Intérieur');expect(Math.round(indoors.level*100)).toBe(Math.round(sky.indoors362!*100));
   expect(validateWorld(w)).toEqual([]);
   // Strict reading: the field belongs to an undergrounder; an undergrounder never holds the outdoors need.
   const raw=JSON.parse(serializeWorld(w)) as {pawns:Record<string,unknown>[]};

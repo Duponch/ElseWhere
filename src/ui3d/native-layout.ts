@@ -1,6 +1,9 @@
 import type {NativeControl,NativeControlStyle,NativePage,NativeRow} from './native-contract';
 import {NATIVE_GAP,NATIVE_LINE,NATIVE_TEXT,NATIVE_WINDOW} from './native-ui-scale';
 import {layoutNativeBioCard,NATIVE_BIO_SIZE,type NativeBioLayout} from './native-bio-card';
+import {layoutNativeTab} from './native-tab-layout';
+import {appliedScroll,type NativeTabCard} from './native-tab-card';
+import {gearPortraitRect} from './native-tab-gear';
 
 /** Design tokens in RimWorld interface points (see native-ui-scale.ts); neither
  * browser layout nor DPR changes the model. `body` and `small` are both the
@@ -32,6 +35,8 @@ export interface NativeRowBox {
   labelLines:string[];valueLines:string[];matrix:boolean;controls:NativeControlBox[];
   /** Laid out Bio card, card points from (x, top). */
   bio?:NativeBioLayout;
+  /** Laid out inspector-tab card (needs, health, gear...), tab points from (x, top). */
+  card?:NativeTabCard;
 }
 export interface NativePageBox {
   x:number;y:number;width:number;height:number;header:number;footer:number;body:NativeRect;
@@ -155,6 +160,7 @@ export function flowNativeControls(controls:readonly NativeControl[],rect:Native
 function rowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasure,table:boolean,tileColumnLimit?:number,matrixTail=!!row.value,matrixWeights?:readonly number[]):NativeRowBox {
   if(row.tree)return storageTreeRowBox(row,x,top,width,measure);
   if(row.bio)return bioRowBox(row,x,top,measure);
+  if(row.card)return cardRowBox(row,x,top,measure);
   const matrix=!!row.compact&&!!row.controls?.length&&table;
   const isTabs=row.controlStyle==='tab'||row.id==='pawn-tabs'||row.id==='health-tabs';
   const rowControls=row.controls??[],onlyButtons=!row.label&&!row.value&&!row.detail||isTabs;
@@ -205,6 +211,18 @@ function bioRowBox(row:NativeRow,x:number,top:number,measure:TextMeasure):Native
   const controls=bio.buttons.map(({control,rect}):NativeControlBox=>({control,style:'icon',x:x+rect.x,y:top+rect.y,width:rect.width,height:rect.height}));
   return {row,x,top,width:NATIVE_BIO_SIZE.width,height:NATIVE_BIO_SIZE.height,labelWidth:0,controlTop:0,controlHeight:30,controlColumns:controls.length,detailLines:[],
     textWidth:NATIVE_BIO_SIZE.width,inlineActions:false,labelLines:[],valueLines:[],matrix:false,controls,bio};
+}
+/** One fixed inspector-tab card: its own rectangles, no flowing rows. */
+let cardMemo=new Map<object,NativeTabCard>();
+function cardLayoutOf(row:NativeRow,measure:TextMeasure):NativeTabCard {
+  let card=cardMemo.get(row.card!);
+  if(!card){card=layoutNativeTab(row.card!,(text,role,bold)=>measure(text,NATIVE_TEXT[role],!!bold));cardMemo.set(row.card!,card);}
+  return card;
+}
+function cardRowBox(row:NativeRow,x:number,top:number,measure:TextMeasure):NativeRowBox {
+  const card=cardLayoutOf(row,measure);
+  return {row,x,top,width:card.width,height:card.height,labelWidth:0,controlTop:0,controlHeight:30,controlColumns:0,detailLines:[],
+    textWidth:card.width,inlineActions:false,labelLines:[],valueLines:[],matrix:false,controls:[],card};
 }
 const requestedWidth=(page:NativePage,fallback:number)=>page.width?(page.width>20?page.width:page.width*100):fallback;
 /** Storage rows keep disclosure and permission as independent hit targets. */
@@ -387,19 +405,21 @@ function inspectorPage(page:NativePage,viewport:{width:number;height:number},mea
   const gizmos=(page.actions??[]).filter(control=>!special.has(control.id));
   const gizmoLeft=paneWidth+I.gizmoStart,gizmoRoom=Math.max(I.gizmo,viewport.width-12-gizmoLeft-NATIVE_RIGHT_DOCK_WIDTH);
   const available=Math.max(1,viewport.height-bottom-12),tab=page.inspectTab;
+  cardMemo=new Map();
+  const cardRow=tab?page.rows.find(row=>row.card&&!row.inspectPane):undefined,cardHeight=cardRow?cardLayoutOf(cardRow,measure).height:undefined;
   // Rows of gizmos upwards; on a short screen, longer rows rather than off-screen ones.
   const maxRows=Math.max(1,Math.floor(Math.max(available,lower)/(I.gizmo+I.gizmoRowGap)));
   const perRow=Math.max(1,Math.floor((gizmoRoom+I.gizmoGap)/(I.gizmo+I.gizmoGap)),Math.ceil(gizmos.length/maxRows)),gizmoRows=Math.ceil(gizmos.length/perRow);
   const gizmoHeight=gizmoRows?gizmoRows*(I.gizmo+I.gizmoRowGap):0;
   if(available<lower+40||viewport.width<paneWidth+24)return layoutNativePage({...page,layout:'dialog',inspectTab:undefined,rows:page.rows.map(row=>({...row,region:undefined,inspectPane:undefined}))},viewport,false,measure);
-  const sheetWidth=tab?Math.min(tab.width,viewport.width-24):0,sheetHeight=tab?Math.max(40,Math.min(tab.height,available-lower)):0;
+  const sheetWidth=tab?Math.min(tab.width,viewport.width-24):0,sheetHeight=tab?Math.max(40,Math.min(cardHeight??tab.height,available-lower)):0;
   const height=Math.max(sheetHeight+lower,gizmoHeight),width=Math.max(sheetWidth,paneWidth,gizmos.length?gizmoLeft+Math.min(gizmos.length,perRow)*(I.gizmo+I.gizmoGap)-I.gizmoGap:0);
   const sheet:NativeRect={x:0,y:height-lower-sheetHeight,width:sheetWidth,height:sheetHeight};
   const tabs:NativeRect={x:0,y:height-lower,width:paneWidth,height:I.tabHeight};
   const summary:NativeRect={x:0,y:height-I.paneHeight,width:paneWidth,height:I.paneHeight};
   const actionRect:NativeRect={x:gizmoLeft,y:height-gizmoHeight,width:Math.max(0,width-gizmoLeft),height:gizmoHeight};
   const margin=tab?.margin??NATIVE_UI.padding,header=sheet.y+margin;
-  const bio=page.rows.some(row=>row.bio&&!row.inspectPane),contentWidth=Math.max(1,sheetWidth-margin*2-(bio?0:12));
+  const bio=page.rows.some(row=>(row.bio||row.card)&&!row.inspectPane),contentWidth=Math.max(1,sheetWidth-margin*2-(bio?0:12));
   // The open tab's rows: the two-column flow of the generic tabs, or the card.
   const rows:NativeRowBox[]=[];let top=0,left=0,right=0,columns=false;
   for(const row of page.rows){
@@ -437,7 +457,8 @@ function inspectorPage(page:NativePage,viewport:{width:number;height:number},mea
     if(room<=0)break;const shown=wrapped.slice(0,room);
     lines.push({row,rect:{x:inner.x,y:lineTop,width:inner.width,height:shown.length*NATIVE_LEADING},lines:shown});lineTop+=shown.length*NATIVE_LEADING;
   }
-  const portraitRect=tab?.id==='gear'&&page.portrait?{x:sheetWidth-margin-92,y:sheet.y+margin,width:92,height:128}:undefined;
+  const gearCard=cardRow&&tab?.id==='gear'?cardLayoutOf(cardRow,measure):undefined,gearRegion=gearCard?.regions[0];
+  const portraitRect=gearCard&&gearRegion&&page.portrait?(appliedScroll(gearRegion)>0?undefined:(rect=>({x:sheet.x+rect.x,y:sheet.y+rect.y,width:rect.width,height:rect.height}))(gearPortraitRect(gearCard))):tab?.id==='gear'&&page.portrait?{x:sheetWidth-margin-92,y:sheet.y+margin,width:92,height:128}:undefined;
   return {x:12,y:viewport.height-bottom-height,width,height,header,footer:height-header-bodyHeight,body:{x:margin,y:header,width:contentWidth,height:bodyHeight},contentHeight,rows:[tabsBox,...rows],layout:'inspector',
     regions:{navigation:{...tabs,contentHeight:tabs.height}},actions,portraitRect,inspectorParts:{sheet,tabs,summary,actions:actionRect,name,gauges,lines}};
 }

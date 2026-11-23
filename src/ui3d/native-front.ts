@@ -578,7 +578,11 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
         return {id:`skill-${skill}`,label:names[skill]!,level:record.level,passion:record.passion,disabled:!!refusal,hint:[names[skill],refusal?`${refusal} · Niveau enregistré ${record.level} / 20`:undefined,passion,`${(record.xp/XP_SCALE).toFixed(1)} / ${xpRequired(record.level)/XP_SCALE} XP`,`Apprentissage ${Math.round(learningFactor(record,pawn)*100)} %`].filter(Boolean).join('\n')};
       });
       const renew=identity.controls.map(button=>({...button,icon:'rotate-right'}));
-      rows.push({id:'candidate-name',label:'',region:'details',input:identity.input,controls:renew,bio:{creation:true,name:'',buttons:renew,description:{label:`${sex==='female'?'Femme':'Homme'}${bio!==undefined?`, ${bio} ans${chrono!==bio?` (${chrono})`:''}`:''}`,hint:bio!==undefined?`Âge biologique : ${bio} ans. Âge chronologique : ${chrono} ans.`:'Âge non renseigné.'},
+      // Core DoTopStack: the person's faction (the player's colony, `Faction.OfPlayer`) is a chip here too.
+      const colonyName=options.getWorldCreationPlayer?.().playerName,faction=colonyName?{id:'candidate-faction',label:colonyName,hint:`Faction
+
+${pawn.name} appartient à ${colonyName}, votre colonie.`}:undefined;
+      rows.push({id:'candidate-name',label:'',region:'details',input:identity.input,controls:renew,bio:{creation:true,name:'',buttons:renew,faction,description:{label:`${sex==='female'?'Femme':'Homme'}${bio!==undefined?`, ${bio} ans${chrono!==bio?` (${chrono})`:''}`:''}`,hint:bio!==undefined?`Âge biologique : ${bio} ans. Âge chronologique : ${chrono} ans.`:'Âge non renseigné.'},
         stories,traits:(pawn.traits??[]).map(id=>({id:`candidate-trait-${id}`,label:traitLabel(id,sex),hint:traitTooltip(id,{name:pawn.name,sex})})),incapable,skills}});
       // Schema 370: Core's starting possessions of this person (adulthood story, 25 %).
       const possessions=startingPossessions370(teamSeed,descriptor,pawn);

@@ -191,11 +191,11 @@ describe('the inspect pane, its tabs and the Bio tab window', () => {
     expect(bio.description.hint).toContain('Âge chronologique');
     expect(bio.traitsHint).toContain('apprentissage général');
     expect(bio.skills.every(skill => /Expérience du niveau/.test(skill.hint) && /Apprentissage/.test(skill.hint))).toBe(true);
-    const social = inspector(world, 'social').page;
-    expect(social.rows.some(row => row.id === 'heading-bio-links')).toBe(true);
-    expect(social.rows.some(row => row.id.startsWith('bio-relation') || row.id === 'bio-relations-empty')).toBe(true);
+    // Family and couple links are the relations column of the Social card (second lot); the portrait toggle sits in the Gear card.
+    const social = inspector(world, 'social').page.rows.find(row => row.id === 'tab-card')!.card!;
+    expect(social.type).toBe('social');
     const gear = inspector(world, 'gear').page;
-    expect(gear.rows.find(row => row.id === 'portrait-clothing')!.controls![0]!.id).toBe('portrait-clothing');
+    expect((gear.rows.find(row => row.id === 'tab-card')!.card as { portrait: { control: { id: string } } }).portrait.control.id).toBe('portrait-clothing');
     expect(layoutNativePage(gear, viewport, false, measure).portraitRect).toMatchObject({ width: 92, height: 128 });
   });
 });

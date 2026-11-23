@@ -19,6 +19,7 @@ import {SHIP_FRAME_MAXIMUM_DELTA_298} from '../bridge/ship-countdown-wire-298';
 import {floatMenuVanishes,pressOutsideFloatMenu,mouseAttachedTipPosition,tipTextAction,TOOLTIP_DELAY_MS} from './native-float-menu';
 import {NATIVE_TEXT,NATIVE_INK,type NativeTextRole} from './native-ui-scale';
 import {paintNativeBioCard,nativeBioTargets} from './native-bio-card';
+import {paintNativeTabCard,nativeTabTargets,setCardScroll,cardScrollKey,cardScroll} from './native-tab-card';
 import {NATIVE_UI,NATIVE_LEADING,NATIVE_RIGHT_DOCK_WIDTH,layoutNativePage,nativeVisualWidth,nativeMatrixColumns,nativeMatrixHeadingLines,nativeTableRowScroll,wrapNativeText,nativeCardInk,type NativePageBox,type NativeRowBox,type NativeRect,type NativeRegion,type NativeRegionBox} from './native-layout';
 
 const HUD_DISTANCE=7.5;
@@ -896,7 +897,7 @@ export class NativeStage {
     if(hit.piece.userData.nativeStatic)return;
     if(hit.control?.disabled)return;
     if(hit.control?.paint){const paint=hit.control.paint;this.paintDrag={pointerId:event.pointerId,group:paint.group,indices:new Set([paint.index]),onPaint:paint.onPaint};hit.piece.userData.pressVal=.7;this.moving.add(hit.piece);this.invalidate();return;}
-    const id=hit.control?.id??String(hit.piece.userData.nativeId),switchesPage=id.startsWith('tab:')||id.startsWith('map-dock:')||id.startsWith('dev-bar-');
+    const id=hit.control?.id??String(hit.piece.userData.nativeId),switchesPage=id.startsWith('tab:')||id.startsWith('map-dock:')||id.startsWith('dev-bar-')||id.startsWith('hud:speed:');
     this.down={piece:hit.piece,controlId:hit.control?.id,outsidePage:switchesPage?undefined:outside,pageId:this.page?.id,layout:this.pageBox,pose:new NativeHitPose(hit.piece.userData.interactiveMeshes??[]),pointerId:event.pointerId,x:event.clientX,y:event.clientY};
     hit.piece.userData.pressVal=1;this.moving.add(hit.piece);this.invalidate();
   }
@@ -923,10 +924,9 @@ export class NativeStage {
     if(hit?.piece!==down.piece&&down.pageId===this.page?.id&&down.layout===this.pageBox&&this.acquiredHitLive(down.piece)&&!this.insetControls.has(down.piece)&&down.pose.intersects(this.raycaster))hit=this.hits.get(down.piece.userData.mesh)??{piece:down.piece};
     if(hit?.piece!==down.piece||hit?.control?.id!==down.controlId)return;
     const page=this.page,id=hit.control?.id??String(hit.piece.userData.nativeId??'');
-    const dismissInspector=!!(down.outsidePage&&page&&page.id===down.outsidePage&&!this.frontVisible&&!page.modal&&page.closable!==false
-      &&page.layout==='inspector'&&page.id.startsWith('inspect-pawn-')&&/^hud:speed:(0|1|3|6)$/.test(id)&&this.options.onHudInspectorDismiss);
-    if(down.outsidePage&&page?.id===down.outsidePage&&!dismissInspector)this.dismissPage();
-    this.activate(hit,dismissInspector,{shift:event.shiftKey});
+    // Core: the time controls never close the inspect pane (second lot of the windows: V486 hid it).
+    if(down.outsidePage&&page?.id===down.outsidePage)this.dismissPage();
+    this.activate(hit,false,{shift:event.shiftKey});
   }
   private belongsToPage(hit:Hit|undefined):boolean{if(!hit)return false;if(this.dropdown?.pieces.includes(hit.piece))return true;for(let parent:THREE.Object3D|null=hit.piece;parent;parent=parent.parent)if(parent===this.pageGroup)return true;return false;}
   private dismissPage():void{const page=this.page;if(!page||page.closable===false)return;this.activationSerial++;this.closeDropdown();this.clearHint();try{page.onClose?.();if(!this.frontVisible||!page.onClose)this.options.onEscape();}catch(error){this.options.onError(String(error));}}
@@ -1058,6 +1058,7 @@ export class NativeStage {
     if(hit||this.frontVisible||this.page?.modal){
       this.swallow(event);
       if(hit&&!this.pagePieces.includes(hit.piece)){if(typeof hit.piece.userData.onWheel==='function'&&event.deltaY){hit.piece.userData.onWheel(Math.sign(event.deltaY));this.invalidate();}return;}
+      if(hit&&this.wheelCardRegion(hit,event))return;
       if(this.maxScroll<=0)return;
       const delta=event.deltaMode===1?event.deltaY*16:event.deltaMode===2?event.deltaY*this.height:event.deltaY;
       const next=THREE.MathUtils.clamp(this.scroll+delta,0,this.maxScroll);
@@ -1154,7 +1155,7 @@ export class NativeStage {
     return [{...ink,controls:controls?.map(control=>this.controlInk(control)),columns:columns?.map(({hint:_columnHint,...column})=>column)},!!this.rowHint(row)];
   }
   private pageInkSignature(page:NativePage|null):string{
-    return page?JSON.stringify([page.id,page.floatMenu,page.contentKey,page.title,page.subtitle,page.width,page.height,page.layout,page.tableProfile,page.setupCatalogueWidth,page.setupAnchor,page.palette,page.research,page.columnRatio,page.portrait?.url,page.visual?.selected,page.visual?.markers,page.rows.map(row=>this.rowInk(row)),page.actions?.map(control=>this.controlInk(control)),page.closable,this.textFontRevision,this.textEntityRevision,this.frontVisible,this.width,this.height,this.displayScale,this.bottomDockHeight,this.scroll,this.regionOffsets,this.graphX,this.paletteX]):'';
+    return page?JSON.stringify([page.id,page.floatMenu,page.contentKey,page.title,page.subtitle,page.width,page.height,page.layout,page.tableProfile,page.setupCatalogueWidth,page.setupAnchor,page.palette,page.research,page.columnRatio,page.portrait?.url,page.visual?.selected,page.visual?.markers,page.rows.map(row=>this.rowInk(row)),page.actions?.map(control=>this.controlInk(control)),page.closable,this.textFontRevision,this.textEntityRevision,this.frontVisible,this.width,this.height,this.displayScale,this.bottomDockHeight,this.scroll,this.regionOffsets,this.graphX,this.paletteX,cardScrollKey()]):'';
   }
   private rebuildPage(force=false):void{
     const page=this.page;
@@ -1229,7 +1230,8 @@ export class NativeStage {
     for(const r of visible){
       const row=r.row,offset=this.rowOffset(row),group=box.tableHeader&&row.columns?this.tableHeaderContent:this.regionGroup(row.region),top=box.header+r.top-offset,cy=top+r.height/2;
       if(r.bio)this.bioTargets(r,box,cy-r.height/2,group);
-      const hint=row.bio?undefined:this.rowHint(row);
+      if(r.card)this.cardTargets(r,box,cy-r.height/2,group);
+      const hint=row.bio||row.card?undefined:this.rowHint(row);
       if(hint&&!row.graphNode){
         const nameBand=box.layout==='table'&&row.region==='catalogue'?box.regions.navigation:undefined,width=nameBand?.width??r.width,left=nameBand?.x??r.x-this.horizontalOffset(row.region);
         const piece=this.pagePiece('row-hint:'+row.id,{w:width*k,h:r.height*k,paper:false,hitOnly:true,interactive:true,drawFn:()=>{}},hint,(left+width/2-box.width/2)*k,(box.height/2-cy)*k,.025);
@@ -1321,6 +1323,30 @@ export class NativeStage {
       piece.userData.tooltip=target.hint;piece.userData.nativeHighlight=true;if(!control)piece.userData.nativeStatic=true;group.add(piece);
     }
   }
+  /** Hit planes over an inspector-tab card (Core's tooltips, the clickable
+   * rows and buttons, the scroll regions' wheel areas). */
+  private cardTargets(r:NativeRowBox,box:NativePageBox,rowTop:number,group:THREE.Object3D):void{
+    const k=.01;
+    for(const target of nativeTabTargets(r.card!)){
+      const x=r.x+target.x,y=rowTop+target.y,wheel=target.id.startsWith('region:');
+      const control:NativeControl|undefined=target.control;
+      const piece=this.pagePiece('card:'+target.id,{w:target.w*k,h:target.h*k,paper:false,hitOnly:true,interactive:true,drawFn:()=>{}},target.hint??'',(x+target.w/2-box.width/2)*k,(box.height/2-y-target.h/2)*k,wheel?.02:.03,control);
+      if(target.hint)piece.userData.tooltip=target.hint;
+      if(target.highlight)piece.userData.nativeHighlight=true;
+      if(target.region)piece.userData.cardRegion=target.region;
+      if(!control)piece.userData.nativeStatic=true;
+      group.add(piece);
+    }
+  }
+  /** Wheel over a card's scroll region: moves it, never the page. */
+  private wheelCardRegion(hit:Hit,event:WheelEvent):boolean{
+    const id=hit.piece.userData.cardRegion as string|undefined;if(!id)return false;
+    const card=this.pageBox?.rows.find(row=>row.card)?.card;if(!card)return false;
+    const unit=event.deltaMode===1?18:event.deltaMode===2?this.height:1,region=card.regions.find(entry=>entry.id===id);if(!region)return false;
+    const current=Math.min(cardScroll(id),Math.max(0,region.contentHeight-region.h));
+    if(setCardScroll(card,id,current+event.deltaY*unit)){this.hover(null);this.rebuildPage(true);this.invalidate();}
+    return true;
+  }
   private showRowHighlight(piece:CardboardPiece|null):void{
     const parent=piece?.parent;
     if(!piece||!parent){if(this.rowHighlight?.visible){this.rowHighlight.visible=false;this.invalidate();}return;}
@@ -1342,6 +1368,7 @@ export class NativeStage {
   }
   private drawPageRow(ctx:CanvasRenderingContext2D,r:NativeRowBox,top:number,rng:()=>number,box:NativePageBox):void{
     const row=r.row,ink=PALETTE.inkDark,body=NATIVE_UI.body,line=NATIVE_UI.line;ctx.fillStyle=ink;ctx.textAlign='left';
+    if(r.card&&row.card){paintNativeTabCard(ctx,r.card,r.x,top,{font:(role,bold)=>this.font(role,bold),measure:(text,role,bold)=>this.measure(text,NATIVE_TEXT[role],!!bold),rng});return;}
     if(r.bio&&row.bio){paintNativeBioCard(ctx,r.bio,row.bio,r.x,top,{font:(role,bold)=>this.font(role,bold),measure:(text,role,bold)=>this.measure(text,NATIVE_TEXT[role],!!bold),rng});return;}
     if(row.tree){
       const left=r.x+Math.max(0,row.tree.depth)*17+28;

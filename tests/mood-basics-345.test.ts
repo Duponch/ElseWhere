@@ -206,12 +206,14 @@ function needsPage(world:World,pawn:Pawn){
  setNativeInspectorTab('needs');return buildNativeInspector(state,actions)!;
 }
 
+const needsCard=(page:{rows:{id:string;card?:unknown}[]})=>page.rows.find(r=>r.id==='tab-card')!.card as import('../src/ui3d/native-tab-needs').NeedsSpec;
 test('the Needs tab shows the room size need and its thought',()=>{
  const {w,small}=rooms();stepWorld(w,75);
- const page=needsPage(w,small),row=page.rows.find(r=>r.id==='need-room-size')!;
- expect(row).toMatchObject({label:'Espace',value:`${Math.round(small.roomSize345!.level*100)} %`});
- expect(row.hint).toContain('sous 30 % intérieur exigu (−5)');
- expect(page.rows.find(r=>r.id==='thought-room-size-cramped')).toMatchObject({label:'Intérieur exigu',value:'-5'});
+ const spec=needsCard(needsPage(w,small));
+ // Core does not list the room size (showOnNeedList is false): its value and rule are in the mood bar's tooltip.
+ expect(spec.mood!.hint).toContain(`Espace : ${Math.round(small.roomSize345!.level*100)} %`);
+ expect(spec.mood!.hint).toContain('sous 30 % intérieur exigu (−5)');
+ expect(spec.thoughts.find(t=>t.label==='Intérieur exigu')).toMatchObject({offset:-5});
 });
 
 test('save and reload equality, then the same continuation',()=>{
