@@ -277,3 +277,6 @@ tests/work-environment.test.ts
 tests/worker-publication-v146.test.ts
 tests/world-map-campaign-phase-admission-v297.test.ts
 tests/world-map-campaign-phase-v297.test.ts
+# Retired on 23 November 2026: its helper pins the exact SHA-256 of src/main.ts from
+# 31 October (MainUI14), so the file has loaded no test since main.ts last changed.
+tests/main-terminal298.test.ts
