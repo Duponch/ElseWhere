@@ -159,40 +159,33 @@ Point 19 du [chantier des retours](chantier-retours-20261122.md), soir du 22 nov
 
 Point 20 du [chantier des retours](chantier-retours-20261122.md), 23 novembre ; présentation seulement, schéma 376 inchangé : aucun champ de sauvegarde, aucune règle, aucun tirage de simulation. Les sons partent d'événements confirmés que l'enregistreur du Worker (`src/bridge/audio-cues.ts`) lit déjà, ou d'horloges de présentation sans hasard de simulation. Les tables (Core → son d'Elsewhere) sont dans [`src/audio/game-sounds.ts`](../../src/audio/game-sounds.ts), avec les classes et définitions Core qu'elles réécrivent.
 
-**État : câblage complet, génération bloquée.** Les 111 sons prévus sont câblés aux vrais événements, mais la génération s'est arrêtée après 17 prises : la clé d'API « ElseWhere » a un **plafond propre de 1 000 crédits**, atteint (849 dépensés le 22 novembre, 179 ici), alors que le compte en a encore environ 26 000 et que la passe en autorisait 8 000. Seuls 6 sons ont toutes leurs prises (14 prises publiées) ; les autres attendent. **Rien ne se tait à cause de cette attente** : un son plus précis qui manque retombe sur celui qu'il précise (une chute de bois sur `haul.drop`, un tir de fusil sur `weapon.gunshot`…), et un son nouveau sans prise (cris, repas des animaux, boucles) reste muet comme avant.
+**État : complet.** Les 111 sons prévus sont câblés aux vrais événements et ont toutes leurs prises : **253 prises publiées**, générées et calibrées en deux passes (la première s'était arrêtée sur le plafond propre de 1 000 crédits de la clé « ElseWhere », relevé ensuite par l'utilisateur). Pour ne pas multiplier la mémoire par deux et demi, les prises ne sont plus toutes décodées au chargement : un jeu chaud est décodé d'avance, le reste à la demande sous un budget (voir « Décodage à la demande »). Reste à faire : l'écoute de l'utilisateur (timbre, confort, jointure des boucles), et les événements plus rares listés sous l'inventaire, encore muets.
 
-**Pour terminer** (après avoir relevé le plafond de la clé dans le tableau de bord ElevenLabs, ou avec une autre clé) :
-
-```
-node scripts/audio/generate-tag.mjs --tag g1122 --max-credits 8000
-python scripts/audio/calibrate-sfx.py --tag g1122 --min-takes 2 --replace --write --balance scripts/audio/pcm-balance-g1122.json
-```
-
-Le premier génère une à une les 237 prises manquantes (environ 3 130 crédits à 10 crédits par seconde demandée) et s'arrête au premier refus ; le second calibre toutes les prises du lot et remplace ses entrées du manifeste (relancé sans nouvelle prise, il redonne le même manifeste à l'octet). Puis `npx vitest run tests/audio-game-sounds-20261122.test.ts` vérifie le tout.
+Un son plus précis qui manquerait au manifeste retombe toujours sur celui qu'il précise (une chute de bois sur `haul.drop`, un tir de fusil sur `weapon.gunshot`…) ; avec toutes les prises publiées, ce repli ne sert plus qu'à une copie du jeu au manifeste incomplet.
 
 ### Inventaire, par fréquence d'écoute
 
-« Avant » : ce que jouait Elsewhere. « État » : publié (toutes les prises), en attente (repli entre parenthèses).
+« Avant » : ce que jouait Elsewhere. Tous les sons de la colonne « Après » sont publiés.
 
-| Rang | Moment | Core 1.6 | Avant | Après | État |
-| ---: | --- | --- | --- | --- | --- |
-| 1 | Cri spontané d'un animal éveillé (Les Forges : 241 animaux, environ un cri par animal et par minute de jeu) | `soundCall` des étapes de vie, `Pawn_CallTracker` | muet | `animal.call.<famille>`, 14 familles | chiens et chats publiés, 12 en attente (muet) |
-| 2 | Un animal broute ou mange | `RaceProperties.soundEating` (7 classes) | muet | `animal.eat.<classe>` | en attente (muet) |
-| 3 | Déposer un objet, selon la matière | `ThingDef.soundDrop` : `Wood_Drop`, `Metal_Drop`, `Silver_Drop`, `Stone_Drop`, `ChunkRock_Drop`, `ChunkSlag_Drop`, `Grain_Drop`, `Corpse_Drop` | `haul.drop` partout | `haul.drop-<matière>`, 8 | en attente (`haul.drop`) ; une prise de bois faite |
-| 4 | Construire, selon la matière | `Frame.ConstructionEffect` : `Interact_ConstructWood`, `…Metal`, `…Dirt` | `construction.hit` (marteau sur bois) partout | `construction.metal`, `construction.dirt` ; le bois garde `construction.hit` | en attente (`construction.hit`) |
-| 5 | Une plante récoltée ou coupée | `JobDriver_PlantWork` → `Harvest_Standard_Finish` | muet | `farming.harvest-finish` | en attente (muet) |
-| 6 | Travail à un établi | `RecipeDef.soundWorking` : `Recipe_Smith`, `…Machining`, `…MakeStoneBlocks`, `…Smelt`, `…Brewing`, `…Drug`, `…Sculpt`, `…MakeBow`, `…Cremate`, `…ButcherCorpseMechanoid` | `crafting.work` partout | `crafting.<établi>`, 10 | en attente (`crafting.work`) ; une prise de forge faite |
-| 7 | Manger, selon l'aliment | `ingestible.ingestSound` : `Meal_Eat`, `RawVegetable_Eat`, `RawMeat_Eat`, `Ingest_Beer`, `Ingest_Pill` | `eating.work` partout | `eating.vegetable`, `.meat`, `.drink`, `.pill` ; les repas gardent `eating.work` | en attente (`eating.work`) |
-| 8 | Insectes de la nuit | `BiomeDef.soundsAmbient` → `Ambient_NightInsects_Standard` | muet | boucle `ambient.night-insects` | en attente (muet) |
-| 9 | Vent par temps clair, d'orage ou de tempête de neige | `WeatherDef.ambientSounds` : `Ambient_Wind_Clear`, `Ambient_Wind_Storm` | seulement le bruissement du feuillage | boucles `weather.wind-clear`, `weather.wind-storm` | en attente (muet) |
-| 10 | Cri agressif (animal hostile, qui chasse, riposte ou vient de frapper) | `soundAngry` | muet | `animal.angry.<famille>` | chiens publiés |
-| 11 | Douleur et mort d'un animal | `soundWounded`, `soundDeath` | 5 espèces et la douleur du renard roux | 14 familles, les voix d'espèce gardées devant | douleur et mort des chiens, mort des bovins publiées |
-| 12 | Tir, selon l'arme | `Verb.soundCast` : `Shot_Revolver`, `Shot_AssaultRifle`, `Shot_SniperRifle`, `Shot_Shotgun`, `Shot_HeavySMG`, `Bow_*`, `Shot_IncendiaryLauncher`, `Shot_ChargeRifle`, `Shot_NeedleGun` | un seul `weapon.gunshot` (revolver), même pour les arcs | `weapon.shot-<groupe>`, 9 | en attente (`weapon.gunshot`) ; une prise de fusil faite |
-| 13 | Coup au corps à corps, selon l'arme, l'issue et le corps | `MeleeHit_Metal_Sharp/Blunt`, `MeleeHit_Wood`, `Pawn_Melee_SmallScratch/BigBash_HitPawn`, `Pawn_Melee_Mechanoid*`, `*_Miss`, `Pawn_MeleeDodge` | un seul `weapon.melee` | 7 sons (lame, masse, bois, griffe, charge, mécanoïde, coup manqué) ; les poings gardent `weapon.melee` | en attente (`weapon.melee`) |
-| 14 | Opérer | `Recipe_Surgery` | `medical.tend` | `medical.surgery` | en attente (`medical.tend`) |
-| 15 | Générateur à carburant, centrale géothermique | `ChemfuelFiredGenerator_Ambience`, `GeothermalPlant_Ambience` | muet | boucles `machine.chemfuel-generator`, `machine.geothermal` | en attente (muet) |
-| 16 | Explosion | `Explosion_Bomb` | prises de l'impact sur barrière | `weapon.explosion` | en attente (même réemploi) |
-| — | Dormir, marcher | aucun son Core | muet | muet (conforme) | — |
+| Rang | Moment | Core 1.6 | Avant | Après |
+| ---: | --- | --- | --- | --- |
+| 1 | Cri spontané d'un animal éveillé (Les Forges : 241 animaux, environ un cri par animal et par minute de jeu) | `soundCall` des étapes de vie, `Pawn_CallTracker` | muet | `animal.call.<famille>`, 14 familles et le poussin |
+| 2 | Un animal broute ou mange | `RaceProperties.soundEating` (7 classes) | muet | `animal.eat.<classe>` |
+| 3 | Déposer un objet, selon la matière | `ThingDef.soundDrop` : `Wood_Drop`, `Metal_Drop`, `Silver_Drop`, `Stone_Drop`, `ChunkRock_Drop`, `ChunkSlag_Drop`, `Grain_Drop`, `Corpse_Drop` | `haul.drop` partout | `haul.drop-<matière>`, 8 |
+| 4 | Construire, selon la matière | `Frame.ConstructionEffect` : `Interact_ConstructWood`, `…Metal`, `…Dirt` | `construction.hit` (marteau sur bois) partout | `construction.metal`, `construction.dirt` ; le bois garde `construction.hit` |
+| 5 | Une plante récoltée ou coupée | `JobDriver_PlantWork` → `Harvest_Standard_Finish` | muet | `farming.harvest-finish` |
+| 6 | Travail à un établi | `RecipeDef.soundWorking` : `Recipe_Smith`, `…Machining`, `…MakeStoneBlocks`, `…Smelt`, `…Brewing`, `…Drug`, `…Sculpt`, `…MakeBow`, `…Cremate`, `…ButcherCorpseMechanoid` | `crafting.work` partout | `crafting.<établi>`, 10 |
+| 7 | Manger, selon l'aliment | `ingestible.ingestSound` : `Meal_Eat`, `RawVegetable_Eat`, `RawMeat_Eat`, `Ingest_Beer`, `Ingest_Pill` | `eating.work` partout | `eating.vegetable`, `.meat`, `.drink`, `.pill` ; les repas gardent `eating.work` |
+| 8 | Insectes de la nuit | `BiomeDef.soundsAmbient` → `Ambient_NightInsects_Standard` | muet | boucle `ambient.night-insects` |
+| 9 | Vent par temps clair, d'orage ou de tempête de neige | `WeatherDef.ambientSounds` : `Ambient_Wind_Clear`, `Ambient_Wind_Storm` | seulement le bruissement du feuillage | boucles `weather.wind-clear`, `weather.wind-storm` |
+| 10 | Cri agressif (animal hostile, qui chasse, riposte ou vient de frapper) | `soundAngry` | muet | `animal.angry.<famille>` |
+| 11 | Douleur et mort d'un animal | `soundWounded`, `soundDeath` | 5 espèces et la douleur du renard roux | 14 familles, les voix d'espèce gardées devant |
+| 12 | Tir, selon l'arme | `Verb.soundCast` : `Shot_Revolver`, `Shot_AssaultRifle`, `Shot_SniperRifle`, `Shot_Shotgun`, `Shot_HeavySMG`, `Bow_*`, `Shot_IncendiaryLauncher`, `Shot_ChargeRifle`, `Shot_NeedleGun` | un seul `weapon.gunshot` (revolver), même pour les arcs | `weapon.shot-<groupe>`, 9 |
+| 13 | Coup au corps à corps, selon l'arme, l'issue et le corps | `MeleeHit_Metal_Sharp/Blunt`, `MeleeHit_Wood`, `Pawn_Melee_SmallScratch/BigBash_HitPawn`, `Pawn_Melee_Mechanoid*`, `*_Miss`, `Pawn_MeleeDodge` | un seul `weapon.melee` | 7 sons (lame, masse, bois, griffe, charge, mécanoïde, coup manqué) ; les poings gardent `weapon.melee` |
+| 14 | Opérer | `Recipe_Surgery` | `medical.tend` | `medical.surgery` |
+| 15 | Générateur à carburant, centrale géothermique | `ChemfuelFiredGenerator_Ambience`, `GeothermalPlant_Ambience` | muet | boucles `machine.chemfuel-generator`, `machine.geothermal` |
+| 16 | Explosion | `Explosion_Bomb` | prises de l'impact sur barrière | `weapon.explosion` |
+| — | Dormir, marcher | aucun son Core | muet | muet (conforme) |
 
 **Pas encore câblés**, par fréquence : coups sur un bâtiment (`Pawn_Melee_Punch_HitBuilding_*`), balles sur métal ou bois (`BulletImpact_Metal`, `…Wood`), bâtiment détruit (`BuildingDestroyed_*`), toit qui s'effondre (`Roof_Collapse`), capsules (`DropPod_Fall`, `…Impact`, `…Open`), piège déclenché (`TrapSpring`), jeux (`HorseshoeImpact`, `PlayBilliards`, `PokerChips`), geyser (`GeyserSpray`), scanner de sol, vent de brouillard et vent désolé des glaces (`Ambient_Wind_Fog`, `…Desolate`), insectes de jungle (le lot reprend les insectes standard dans les biomes tropicaux). L'eau n'a pas de son dans Core : pas de boucle ajoutée.
 
@@ -216,39 +209,84 @@ Une colonie chargée ne doit pas devenir du bruit. En plus des plafonds existant
 
 `calibrate-sfx.py` reçoit la famille de chaque son par le plan (`calibrationFamily`) ; les cibles sont posées contre les familles déjà publiées qu'elles rejoignent (mesures du manifeste : coups de travail V165 entre −33 et −37 dBFS efficaces, cris de douleur vers −25 à −35, impacts V175 vers −26 à −30, pluie et vent vers −41, générateur vers −38). Pas d'étagère sur ces sons (elle reste aux sons d'interface). Une boucle n'est ni coupée, ni fondue, ni réencodée (sa jointure casserait) : elle est seulement mesurée et reçoit son gain.
 
-| Famille | Cible RMS | Plafond de crête | Sons |
-| --- | ---: | ---: | --- |
-| `work` | −32 dBFS | −10 dBFS | chutes, construction, établis, chirurgie, récolte finie, repas des colons |
-| `voice` | −29 dBFS | −8 dBFS | cris, cris agressifs, douleur et mort des animaux |
-| `graze` | −35 dBFS | −14 dBFS | repas des animaux |
-| `combat` | −28 dBFS | −6 dBFS | tirs et coups |
-| `world` | −23 dBFS | −4 dBFS | explosion |
-| `ambience` / `ambience-soft` | −44 / −48 dBFS | −18 / −22 dBFS | insectes, vent d'orage / vent de temps clair |
-| `machine` | −38 dBFS | −16 dBFS | générateur à carburant, centrale géothermique |
+| Famille | Cible RMS | Plafond de crête | Sons | Prises | RMS efficace obtenu |
+| --- | ---: | ---: | --- | ---: | --- |
+| `work` | −32 dBFS | −10 dBFS | chutes, construction, établis, chirurgie, récolte finie, repas des colons | 62 | −32,0 à −37,2 |
+| `voice` | −29 dBFS | −8 dBFS | cris, cris agressifs, douleur et mort des animaux | 126 | −29,0 à −33,0 |
+| `graze` | −35 dBFS | −14 dBFS | repas des animaux | 14 | −35,0 à −43,4 |
+| `combat` | −28 dBFS | −6 dBFS | tirs et coups | 39 | −28,0 à −29,8 |
+| `world` | −23 dBFS | −4 dBFS | explosion | 2 | −23,0 |
+| `ambience` / `ambience-soft` | −44 / −48 dBFS | −18 / −22 dBFS | insectes, vent d'orage / vent de temps clair | 4 / 2 | −44,0 / −48,0 |
+| `machine` | −38 dBFS | −16 dBFS | générateur à carburant, centrale géothermique | 4 | −38,0 |
 
-Mesures dans [pcm-balance-g1122.json](../../scripts/audio/pcm-balance-g1122.json) : les 14 prises publiées sont toutes à −29 dBFS efficaces (crêtes de −13 à −22 dBFS), sans écrêtage. Les prises sont revenues chaudes (crêtes brutes jusqu'à +1,7 dBFS, ramenées à −1,5 avant encodage). Ce calcul ne prouve ni le confort ni le timbre : l'oreille tranche.
+Mesures dans [pcm-balance-g1122.json](../../scripts/audio/pcm-balance-g1122.json). Les prises sous leur cible sont celles qu'un pic bref aurait fait dépasser le plafond de crête (un coup sec, une mastication) : le plafond l'emporte, comme pour les lots précédents. Aucun écrêtage ; `check-sfx.py` passe sur les 253 fichiers publiés (aucun silence, aucun écrêtage). **Six prises refusées** après mesure, presque silencieuses (RMS actif −46 à −52 dBFS, crête −28 à −35) : la première de la taille de pierre, la première du fusil à aiguilles, la troisième chute de grain et trois prises du tir automatique ; chacune a été remplacée par une nouvelle prise (le plan de ces quatre sons a gagné autant de prises, et `generate-tag.mjs` ne régénère jamais sous le nom d'une prise refusée). Leurs fichiers sont retirés, leurs entrées gardées dans le journal et dans `rejectedTakes`. **Jointure des boucles** (écart entre le dernier et le premier échantillon, brut) : 0,002 à 0,05 pour la plupart, mais 0,21 sur la première prise de la centrale géothermique et 0,15 sur la deuxième des insectes ; après le gain de calibrage cela reste très faible, mais une jointure s'écoute. Ces calculs ne prouvent ni le confort ni le timbre : l'oreille tranche.
 
 ### Génération
 
-Plan : 111 sons, 254 prises (3 pour les cris, les chutes, la construction et la plupart des tirs, 2 pour le reste), 331 s demandées (environ 3 310 crédits). Prompts dans le style chaud et tactile du 22 novembre (« warm cozy colony game, gentle and tactile… not harsh or cartoonish… no retro synth ») ; les tirs « readable but never harsh or piercing ». Le premier prompt des tirs automatiques demandait une rafale de trois coups : corrigé avant toute génération en un seul coup, puisque Core joue le son à chaque balle.
+Plan : 111 sons, 254 prises au départ (3 pour les cris, les chutes, la construction et la plupart des tirs, 2 pour le reste), 259 après les remplacements des six prises refusées. Prompts dans le style chaud et tactile du 22 novembre (« warm cozy colony game, gentle and tactile… not harsh or cartoonish… no retro synth ») ; les tirs « readable but never harsh or piercing ». Le premier prompt des tirs automatiques demandait une rafale de trois coups : corrigé avant toute génération en un seul coup, puisque Core joue le son à chaque balle.
 
 | | Valeur |
 | --- | --- |
-| Prises générées | 17 (14 publiées, 3 premières prises en attente des suivantes : forge, chute de bois, fusil) |
-| Crédits facturés | **179** (10 crédits par seconde demandée, en-tête `character-cost`), sur un plafond de passe de 8 000 |
-| Arrêt | refus `quota_exceeded` de la clé (plafond 1 000) |
+| Prises générées | 259 : 253 publiées, 6 refusées |
+| Crédits facturés (journal, 10 crédits par seconde demandée, en-tête `character-cost`) | **3 349** pour ce lot : 179 à la première passe, 3 170 à la seconde, sous un plafond de passe de 8 000 |
+| Compteur de la clé pendant la seconde passe | 3 955 → 7 276 (+3 321) ; l'écart de 151 crédits avec le journal n'est pas expliqué (requête facturée sans prise rendue, ou autre usage de la clé) |
+| Total de la couverture audio des 22 et 23 novembre | **4 198** crédits au journal (849 pour l'interface et les alertes, 3 349 pour les sons du jeu) |
 
-`generate-tag.mjs` (nouveau) enchaîne les prises manquantes d'un lot en appelant `generate-sfx.mjs --generate` pour chacune, une par une (le journal est réécrit à chaque prise), et s'arrête au premier refus ou au plafond `--max-credits`. `generate-sfx.mjs --dry-run` vérifie chaque prise publiée contre son journal.
+Commandes, à relancer pour un lot futur :
+
+```
+node scripts/audio/generate-tag.mjs --tag g1122 --max-credits 8000
+python scripts/audio/calibrate-sfx.py --tag g1122 --min-takes 2 --replace --write --balance scripts/audio/pcm-balance-g1122.json
+```
+
+`generate-tag.mjs` enchaîne les prises manquantes d'un lot en appelant `generate-sfx.mjs --generate` pour chacune, une par une (le journal est réécrit à chaque prise), saute celles déjà journalisées (publiées ou refusées) et s'arrête au premier refus ou au plafond `--max-credits`. `calibrate-sfx.py` calibre toutes les prises du lot et remplace ses entrées du manifeste ; relancé sans nouvelle prise, il redonne le même manifeste à l'octet. `generate-sfx.mjs --dry-run` vérifie chaque prise publiée contre son journal.
+
+### Décodage à la demande
+
+Web Audio ne joue qu'une prise décodée : du PCM flottant, environ 384 Ko par seconde en stéréo à 48 kHz, vingt fois son MP3. Jusqu'ici le lecteur décodait **toutes** les prises au chargement audio : 81 Mo avant ce lot, **193 Mo** avec ses 253 prises. Désormais ([`src/audio/decoded-cache.ts`](../../src/audio/decoded-cache.ts)) :
+
+- **Jeu chaud, décodé au chargement** : tous les sons d'interface (gestes, lettres, alertes, tutoriel : les sons non spatiaux, hors tonnerre) et les contacts du monde les plus fréquents (minage, construction au marteau, prise et dépôt d'un objet, semis, récolte, repas, portes) ; 43 sons, 136 prises, **31,4 Mo**. La première prise de chacun est épinglée (9,8 Mo) et ne quitte jamais la mémoire : un geste de l'interface répond toujours dans son image.
+- **Tout le reste à son premier besoin** : la prise est téléchargée et décodée hors de l'image (`fetch` et `decodeAudioData` sont asynchrones, trois à la fois), puis gardée dans un cache borné.
+- **Budget de 32 Mio** (33,5 Mo). Il contient le jeu chaud entier, puis fait de la place à mesure que la partie en demande : seules les premières prises sont épinglées, il reste donc au moins 22 Mo pour les boucles qui sonnent ensemble (quatre lits de 3 à 4 Mo : insectes, vent, deux machines) et les contacts entendus récemment. Les 24 Mo évoqués au départ ne laisseraient presque rien aux sons du monde une fois les boucles et les prises épinglées en place : ils se décoderaient sans cesse.
+- **Éviction** : la prise la moins récemment jouée part d'abord ; jamais une prise épinglée ni celle qui vient d'être décodée ; une prise qui sonne ne part qu'en dernier recours, et continue alors de jouer (son nœud la tient jusqu'à la fin) avant d'être redécodée à son prochain besoin. Un son joué avec moins de prises décodées que prévu (seconde prise évincée) les récupère quand le cache est sous 75 % du budget.
+- **Premier déclenchement d'un son froid : retardé, jamais bloquant.** Le signal attend dans une file (16 au plus) et joue dès que sa prise est décodée, en retard du temps de décodage (une à quelques images) ; s'il n'est pas prêt après **0,25 s** d'horloge audio (un contact du monde ne correspondrait plus au geste) il est **abandonné** ; une lettre ou une alerte froide attend jusqu'à **1 s**. Une pause ou un onglet caché vide la file du monde. Une **boucle** est demandée quand son lit doit commencer, et démarre dès qu'elle est décodée.
+- **Échecs** : une prise chaude qui a échoué est retentée par l'essai du son (Options), les autres sont simplement redemandées à leur prochain besoin.
 
 ### Performances
 
-Le coût ajouté est dans l'enregistreur du Worker, appelé à chaque macro-tick. Banc dédié sur Les Forges (80 colons, 241 animaux, 1 778 tas, 21 122 plantes), ancien et nouvel enregistreur alternés sur le même monde pendant 400 ticks de vraie simulation (`tsx`, machine partagée) : par appel, **moyenne 1,48 → 1,60 ms** (+0,12 ms), **médiane 1,09 → 1,15 ms**, **p95 3,84 → 3,87 ms**, soit environ 0,2 % d'un macro-tick de Les Forges ; 2 348 → 2 729 signaux (231 cris d'animaux, 125 récoltes finies, 25 repas d'animaux de plus). Banc : `tmp/snd/recorder-bench.ts` (hors dépôt), l'ancien enregistreur copié depuis `HEAD` le temps de la mesure. Une première version construisait un index des 21 122 plantes à chaque récolte finie (+7 ms aux pics) ; elle lit maintenant la carte des cases déjà tenue par la simulation, et la recherche du tas porté ne construit plus d'index. Côté affichage : aucun parcours par image, aucun nœud audio permanent de plus (une voix par boucle, comme la pluie) ; la résolution d'un son manquant vers son repli ne se fait que pour les signaux dus. **Mémoire** : comme les autres, chaque prise est décodée au chargement audio en PCM flottant stéréo. Les 14 prises publiées ajoutent environ 4,9 Mo. **Les 254 prévues en ajouteraient environ 100 Mo** (environ 67 Mo de sons courts une fois coupés, 32 Mo pour les dix boucles de 8 à 10 s) : avant de terminer la génération, il vaut mieux décider entre ce coût, des boucles plus courtes, ou un chargement des prises à la demande (par famille ou au premier signal).
+**Enregistreur du Worker** (appelé à chaque macro-tick). Banc dédié sur Les Forges (80 colons, 241 animaux, 1 778 tas, 21 122 plantes), ancien et nouvel enregistreur alternés sur le même monde pendant 400 ticks de vraie simulation (`tsx`, machine partagée) : par appel, **moyenne 1,48 → 1,60 ms** (+0,12 ms), **médiane 1,09 → 1,15 ms**, **p95 3,84 → 3,87 ms**, soit environ 0,2 % d'un macro-tick de Les Forges ; 2 348 → 2 729 signaux (231 cris d'animaux, 125 récoltes finies, 25 repas d'animaux de plus). Une première version construisait un index des 21 122 plantes à chaque récolte finie (+7 ms aux pics) ; elle lit maintenant la carte des cases déjà tenue par la simulation, et la recherche du tas porté ne construit plus d'index.
+
+**Mémoire et lecteur, avant et après le décodage à la demande.** Banc : les signaux de 1 800 macro-ticks de vraie simulation de Les Forges (5 minutes à ×1, 12 092 signaux, avec les boucles que le client construit à chaque instantané) rejoués image par image (10 images par tick à 60 images/s) dans le vrai `AudioDirector`, avec un contexte audio factice qui « décode » chaque prise à sa durée réelle (48 kHz stéréo flottant). Deux passes alternées ; les deux versions jouent les mêmes 1 756 sons.
+
+| | Tout décodé (avant) | À la demande (après) |
+| --- | ---: | ---: |
+| PCM décodé au chargement | 193,2 Mo (488 prises) | **31,4 Mo** (136 prises) |
+| Après 5 minutes de Les Forges à ×1 | 193,2 Mo | **33,2 Mo** (97 prises) |
+| Maximum observé | 193,2 Mo | 33,55 Mo (le budget) |
+| `update()` par image, moyenne (deux passes) | 5,3 / 3,5 µs | 4,5 / 3,4 µs |
+| `update()` par image, p95 | 27,5 / 19,5 µs | 16,2 / 13,9 µs |
+| `update()` par image, maximum | 1,07 / 2,05 ms | 3,21 / 2,42 ms |
+
+Les maxima sont des images isolées (ramasse-miettes, compilation) dans les deux versions ; ils ne sont pas attribués. Aucun décodage ne se fait dans `update()` : il ne fait que demander la prise et regarder la file.
+
+**Vrai client** (Chrome du panneau intégré, serveur Vite de développement, effets activés à volume 0 et musique coupée, panneau masqué donc aucun chiffre d'images/s) : au menu, après le premier geste, **31 449 808 octets, 136 prises, 43 sons** (la valeur calculée) ; Les Forges chargée en pause, les lits de boucle démarrés : 33,44 Mo, 98 prises ; après 1 845 macro-ticks à ×1 (environ 5 minutes de jeu) : **33,47 Mo, 91 prises, 65 sons au moins en partie décodés**, jamais plus de 33,54 Mo aux relevés (budget 33,55 Mo). L'« avant » n'a pas été rejoué dans le client : il vaut par construction la somme de toutes les prises, 193 Mo.
+
+Côté affichage, pas d'autre coût : aucun parcours par image, une voix par boucle comme la pluie, la résolution d'un son vers son repli seulement pour les signaux dus.
 
 ### Écouter
 
 - **Page des sons** (Options → Développeur → Sons et musiques) : « Nouveaux du 22 nov. » montre aussi ces sons, chacun avec la phrase qui dit où l'entendre ; les cris, la douleur et la mort des animaux sont dans « Douleur et mort des humains et des animaux », chutes, établis et repas dans « Travaux », tirs et coups dans « Combat », insectes et vents dans « Météo et ambiance ».
-- **En partie** : approcher la caméra d'un chien ou d'un chat (un cri toutes les 33 à 67 s de jeu à ×1) ; un animal hostile aboie plus souvent et grogne. Les autres familles se feront entendre après la génération.
+- **En partie** : Les Forges fait entendre presque tout en quelques minutes (cris de 241 animaux, repas, chutes, établis, récoltes, insectes la nuit). Approcher la caméra d'un animal : un cri toutes les 33 à 67 s de jeu à ×1 ; un animal hostile crie quatre fois plus souvent, d'une voix agressive. Le premier contact d'un son rare peut arriver une image ou deux en retard (décodage), ou manquer s'il tarde plus de 0,25 s.
+
+### Ce qui reste
+
+- **Écoute de l'utilisateur** : timbre, confort, équilibre entre familles, et les deux jointures de boucle signalées au calibrage.
+- **Événements encore muets** : la liste « Pas encore câblés » de l'inventaire.
+- **Fondu des ambiances sous la musique** (`MusicPlayingFadeOut`) non repris.
+- **Premier tir d'un raid** : les tirs ne sont pas dans le jeu chaud ; le premier coup d'une arme pas encore entendue peut être en retard ou abandonné. Une amélioration possible : décoder les sons de combat à la lettre de raid.
 
 ### Vérification
 
-[Test ciblé](../../tests/audio-game-sounds-20261122.test.ts), 17 cas : chaque espèce, étape et verbe donne un son du lot, une voix publiée ou le silence de Core ; silences et hauteurs de Core ; le validateur des phases accepte chaque son du lot avec sa hauteur et refuse l'inconnu ; chaque son prévu a son plan, et un son publié a toutes ses prises, ses fichiers et sa portée ; chaque son qui en précise un autre garde un repli publié ; calibrage relu depuis le JSON (cible, plafond, empreintes, gains du manifeste) ; sur de vrais événements : cris aux intervalles de Core et jamais endormi, sous le brouillard ou au chargement, cris agressifs quatre fois plus fréquents avec la voix d'un petit, repas d'un animal, mur d'acier construit (son métal, chute d'acier, un seul ouvrage achevé), chutes par matière, repas par aliment, tirs par arme, coup manqué, charge d'un ours, récolte finie une fois et rien pour une annulation, boucles d'ambiance et de machine ; lecteur muet : rien ne joue ; troupeau, chœur de cris et repas bornés ; repli sur la chute ordinaire, voix de petit plus aiguë, cri spontané au quart du volume à ×6. Six anciens oracles de `bridge-audio-cues.test.ts` (quatre établis, la cadence de la taille de pierre, la chute de bois) attendaient le son générique : ils attendent désormais le son de Core. `developer-pages-sounds.test.ts` compte aussi les sons du jeu publiés parmi les « nouveaux » et lit leurs mesures dans `pcm-balance-g1122.json`.
+[Test ciblé](../../tests/audio-game-sounds-20261122.test.ts), 20 cas, tous verts : chaque espèce, étape et verbe donne un son du lot, une voix publiée ou le silence de Core ; silences et hauteurs de Core ; le validateur des phases accepte chaque son du lot avec sa hauteur et refuse l'inconnu ; chaque son prévu a son plan et toutes ses prises publiées (prises demandées moins prises refusées), ses fichiers et sa portée ; chaque son qui en précise un autre garde un repli publié ; calibrage relu depuis le JSON (cible, plafond, empreintes, gains du manifeste) ; sur de vrais événements : cris aux intervalles de Core et jamais endormi, sous le brouillard ou au chargement, cris agressifs quatre fois plus fréquents avec la voix d'un petit, repas d'un animal, mur d'acier construit (son métal, chute d'acier, un seul ouvrage achevé), chutes par matière, repas par aliment, tirs par arme, coup manqué, charge d'un ours, récolte finie une fois et rien pour une annulation, boucles d'ambiance et de machine ; lecteur muet : rien ne joue ; troupeau, chœur de cris et repas bornés ; repli sur la chute ordinaire, voix de petit plus aiguë, cri spontané au quart du volume à ×6 ; **décodage** : seul le jeu chaud est téléchargé au chargement, une prise froide n'est décodée qu'une fois, son premier signal joue en retard sans bloquer l'image et un signal trop tard est abandonné, le cache ne dépasse jamais son budget en gardant les prises épinglées et en évinçant la moins récente, et le cache seul (prises qui sonnent évincées en dernier, échec de décodage mémorisé sans coût).
+
+Six anciens oracles de `bridge-audio-cues.test.ts` (quatre établis, la cadence de la taille de pierre, la chute de bois) attendent désormais le son de Core. Dans `audio-v149.test.ts`, cinq cas qui utilisaient `cooking.work` (un son froid désormais) pour éprouver les prises bloquées et la reprise de l'essai utilisent `door.open`, du jeu chaud, et le cas des treize décodages concurrents utilise des sons d'interface : leurs intentions sont inchangées. `developer-pages-sounds.test.ts` compte aussi les sons du jeu publiés parmi les « nouveaux » et lit leurs mesures dans `pcm-balance-g1122.json`. Voisins audio relancés (15 fichiers) : 184 cas verts ; les 57 échecs restants sont tous dans la liste des échecs connus (`audio-pain-v196`, `actor-frontier-runtime-v492`, `audio-coverage-v175`, un de `bridge-audio-cues`), et `native-phase-capture297` refuse de se charger sur l'empreinte figée de `core-phase-data-297.ts`, déjà périmée sur `origin/main` avant ce lot.
