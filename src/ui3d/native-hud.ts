@@ -237,6 +237,8 @@ export class NativeHudCards {
   private barPiece?: CardboardPiece;
   private barBox?: {left:number;top:number;width:number;height:number};
   private barDirty=false;
+  private barSelection='';
+  private barScanAt=-Infinity;
   private barDrawnAt=-Infinity;
   private barTimer?: ReturnType<typeof setTimeout>;
   private allAlertsCount = 0;
@@ -345,7 +347,7 @@ export class NativeHudCards {
     this.refreshWeather(world);
   }
 
-  /** Core cadence: one full reading at most every 400 ms of real time; a newer
+  /** Core cadence: one full reading at most once a second of real time; a newer
    * snapshot in between is read by the next due animation frame. A new game, a
    * load or another map adopts its current alerts silently (no bell, as Core's
    * one-second grace after loading). Only High and Critical starts are signalled. */
@@ -592,7 +594,7 @@ export class NativeHudCards {
       });
       if (shown.length) {
         const pad = 8, left = bar.left - pad, top = BAR_MARGIN_TOP - 3 * scale - 2, width = bar.right - bar.left + 2 * pad, height = Math.max(...bar.locs.map(loc => loc.y)) + (BAR_CARD_H - 3) * scale + 2 - top;
-        const k = Math.min(1.5, 4096 / Math.max(width, 1));
+        const k = Math.min(1.25, 4096 / Math.max(width, 1));
         this.barBox = {left, top, width, height};
         this.barPiece = this.makePiece({w: width / 100, h: height / 100, depth: .001, paper: false, hasBorder: false, seed: 4401, textureWidth: Math.round(width * k), textureHeight: Math.round(height * k),
           drawFn: (ctx, w, h, rng) => this.drawBar(ctx, w, h, rng)});
@@ -604,6 +606,10 @@ export class NativeHudCards {
       this.rail.position.x = ((bar.left + bar.right) / 2 - this.viewportWidth / 2) / 100;
       this.rail.position.y = -(BAR_MARGIN_TOP - 3 * scale) / 100;
     }
+    // The sheet is read at most once a second (selection and layout changes at once): 80 portraits cost 80 appearance keys per read.
+    const selectionKey = [...this.selectedIds].join(), now = this.clock();
+    if (changed || selectionKey !== this.barSelection || now - this.barScanAt >= 1000) {
+    this.barSelection = selectionKey; this.barScanAt = now;
     const apparel = new Map<number, MaterialPile[]>(), weapons = new Map<number, string>();
     const idsOnPage = new Set(shown.map(p => p.id));
     for (const pile of world.piles) {
@@ -627,6 +633,7 @@ export class NativeHudCards {
       const signature = JSON.stringify([entry.name, entry.mood, entry.selected, appearanceKey, entry.bar]);
       if (entry.signature !== signature) { entry.signature = signature; this.barDirty = true; }
     });
+    }
     this.flushBar();
     // The list of every colonist stays one click away at the bar's right end.
     const bar = this.barLayout;
@@ -635,11 +642,11 @@ export class NativeHudCards {
     this.setVisible(this.shown);
   }
 
-  /** Repaints the whole bar sheet when a card changed, at most every 400 ms:
+  /** Repaints the whole bar sheet when a card changed, at most once a second:
    * never per frame. */
   private flushBar():void {
     if(!this.barDirty||!this.barPiece||this.disposed)return;
-    const wait=400-(this.clock()-this.barDrawnAt);
+    const wait=1000-(this.clock()-this.barDrawnAt);
     if(wait>0){if(this.barTimer===undefined)this.barTimer=setTimeout(()=>{this.barTimer=undefined;this.flushBar();},wait);return;}
     this.barDirty=false;this.barDrawnAt=this.clock();this.barPiece.redraw();
   }
