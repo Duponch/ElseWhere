@@ -245,11 +245,10 @@ describe('responsive retained HUD reservations · V485',()=>{
     const f=fixture();
     try{
       // Display-only roster count; no World or simulated person is introduced.
-      const display=f.hud as unknown as {colonists:unknown[];portraitCapacity:number};display.colonists=Array.from({length:8},()=>({}));
-      f.hud.setViewport(480,400,.01,96,200);
+      const display=f.hud as unknown as {barLayout:{left:number;locs:unknown[]}};
+      f.hud.setViewport(1000,800,.01,96,200);display.barLayout={left:200,locs:[{}]};
       f.resources([['wood',12],['steel',20],['gold',3],['silver',4],['marble-chunk',5]]);
-      expect(display.portraitCapacity).toBe(1);
-      const rosterLeft=480/2-(display.portraitCapacity*78+64)/2;
+      const rosterLeft=display.barLayout.left;
       const records:CardboardPiece[]=[];f.root.traverse(object=>{if(String(object.userData.nativeId??'').startsWith('hud:resource:'))records.push(object as CardboardPiece);});
       expect(records.length).toBeGreaterThan(1);
       for(const piece of records){

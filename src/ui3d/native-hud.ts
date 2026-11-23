@@ -26,6 +26,7 @@ import {knownBuilding256, knownNutrition256, knownPile256, knownPosition256, kno
 import type {StatusAlert} from '../ui/status-alerts';
 import type {NativePage, NativeRow} from './native-contract';
 import {NATIVE_RIGHT_DOCK_WIDTH} from './native-layout';
+import {ALERT_COLUMN_WIDTH,BAR_BASE,BAR_MARGIN_TOP,colonistBarLayout,colonistBarVisible,globalColumn,type BarLayout,type ColumnRect} from './native-hud-rimworld';
 import {NotificationFocusCycle,type NotificationTarget} from '../ui/notification-focus';
 import type {NativeDomainAlert} from './native-domain-alerts';
 import {weatherConditionLabel} from '../ui/weather-inspection';
@@ -115,7 +116,9 @@ interface PortraitCard {
   /** Core colonist bar mood-risk tint and activity icons. */
   bar?: ColonistBarState346;
 }
-const PORTRAITS_PER_PAGE = 6;
+const ROW_ICON = 22;
+/** The painted card around a 48 × 48 bar cell, at scale 1 (70 × 96 art ratio). */
+const BAR_CARD_W = 57, BAR_CARD_H = 78;
 const FONT = '"Comic Sans MS", "Chalkboard SE", Georgia, serif';
 const quadrums = ['avrimai', 'juillêt', 'septobre', 'décembary'] as const;
 const speeds = [
@@ -188,7 +191,6 @@ export class NativeHudCards {
   private readonly viewButtons=new Map<NativeHudViewAction,CardboardPiece>();
   private readonly alertHandle: CardboardPiece;
   private readonly alertHandleGroup=new THREE.Group();
-  private portraitCapacity=PORTRAITS_PER_PAGE;
   private viewportWidth=1440;
   private viewportHeight=1000;
   private baseTimeY=30;
@@ -199,12 +201,13 @@ export class NativeHudCards {
   private notificationsAutoHide=false;
   private rightDockOffset=3.16;
   private viewState:NativeHudViewState={walls:'hauts',roofs:false,foliage:true,zones:true,camera:'iso'};
+  private readonly column=globalColumn(6);
   private readonly weatherPiece: CardboardPiece;
+  private readonly weatherLabelPiece: CardboardPiece;
+  private readonly temperaturePiece: CardboardPiece;
   private weatherIconPiece:CardboardPiece;
   private weatherIconValue:NativeWeatherIcon='sun';
   private readonly fpsPiece: CardboardPiece;
-  private readonly previousButton: CardboardPiece;
-  private readonly nextButton: CardboardPiece;
   private readonly rosterButton: CardboardPiece;
   private readonly allAlertsButton: CardboardPiece;
   private readonly alertUpButton: CardboardPiece;
@@ -229,8 +232,8 @@ export class NativeHudCards {
   private food?: FoodReadability;
   private physicalNutrition = 0;
   private selectedIds = new Set<number>();
-  private page = 0;
   private portraitIds = '';
+  private barLayout?: BarLayout;
   private allAlertsCount = 0;
   private weatherSignature = '';
   private weatherReadout = {clock: '—', date: '—', weather: '—', temperature: '—', condition: '', wind: '—'};
@@ -251,47 +254,46 @@ export class NativeHudCards {
     this.rail.position.set(0, -0.08, -0.01);
     this.colonistsGroup.add(this.rail);
 
-    this.previousButton=this.smallButton('‹',810,()=>this.changePage(-1));
-    this.previousButton.userData.tooltip='Colons précédents';
-    this.previousButton.userData.nativeId='hud:colonists:previous';
-    this.nextButton=this.smallButton('›',833,()=>this.changePage(1));
-    this.nextButton.userData.tooltip='Colons suivants';
-    this.nextButton.userData.nativeId='hud:colonists:next';
     this.rosterButton=this.smallButton('≡',853,()=>this.showRoster());
     this.rosterButton.userData.tooltip='Liste complète des colons';
     this.rosterButton.userData.nativeId='hud:colonists:list';
-    this.colonistsGroup.add(this.previousButton,this.nextButton,this.rosterButton);
+    this.colonistsGroup.add(this.rosterButton);
     this.alertHandle=this.smallButton('‹',9281,()=>this.setRightDockOpen(!this.rightDockOpen));
     this.alertHandle.userData.nativeId='hud:alerts:handle';
     this.alertHandle.userData.tooltip='Afficher les notifications';
     this.alertHandleGroup.add(this.alertHandle);
     this.alertHandle.setBaseTransform(-.14,-.56,.1);
 
-    this.weatherPiece = this.makePiece({w: 2.48, h: .96, depth: 0.046, bgColor: PALETTE.creamPaper, bevel: 0.038, seed: 209, interactive: true,surface:'panel',
-      drawFn: (ctx, w, h, rng) => this.drawWeather(ctx, w, h, rng), onClick: () => this.showWeather()});
-    this.weatherPiece.userData.nativeId='hud:clock';
-    this.weatherPiece.setBaseTransform(-1.24, 2.04, 0, .006);
-    this.timeGroup.add(this.weatherPiece);
+    // Right column laid out as RimWorld's GlobalControls (sizes in logical px).
+    // Date, weather and temperature are lettering over the map in Core (text
+    // with a shadow, no board): clear pieces with cream outlined letters.
+    const column=this.column,at=(rect:ColumnRect)=>({x:-(rect.right+rect.width/2)/100,y:(rect.bottom+rect.height/2)/100});
+    const letterPiece=(rect:ColumnRect,seed:number,id:string,draw:(ctx:CanvasRenderingContext2D,w:number,h:number)=>void)=>{
+      const piece=this.makePiece({w:rect.width/100,h:rect.height/100,depth:.001,paper:false,hasBorder:false,seed,interactive:true,drawFn:(ctx,w,h)=>draw(ctx,w,h),onClick:()=>this.showWeather()});
+      piece.userData.nativeId=id;const pos=at(rect);piece.setBaseTransform(pos.x,pos.y,0,0);this.timeGroup.add(piece);return piece;
+    };
+    this.weatherPiece=letterPiece(column.date,209,'hud:clock',(ctx,w,h)=>this.drawDate(ctx,w,h));
+    this.weatherLabelPiece=letterPiece(column.weather,211,'hud:weather-label',(ctx,w,h)=>this.drawRowText(ctx,w,h,this.weatherReadout.condition||this.weatherReadout.weather,column.weather.width,30));
+    this.temperaturePiece=letterPiece(column.temperature,213,'hud:temperature',(ctx,w,h)=>this.drawRowText(ctx,w,h,this.weatherReadout.temperature,column.temperature.width,0));
     this.weatherIconPiece=this.createWeatherIcon(this.weatherIconValue);
-    const weatherTape = createMaskingTape(0.18, 0.05, -0.35);
-    weatherTape.position.set(.98, .43, .048);
-    this.weatherPiece.add(weatherTape);
 
     speeds.forEach((cfg, idx) => {
-      const piece = this.makePiece({w: .56, h: .42, depth: .046, bgColor: PALETTE.kraftBase, bevel: .038, hasBorder:false,seed: 310 + idx * 23, interactive: true, tooltip: cfg.title,
+      const rect=column.speed[idx]!;
+      const piece = this.makePiece({w: rect.width/100, h: rect.height/100, depth: .03, bgColor: PALETTE.kraftBase, bevel: .02, hasBorder:false,seed: 310 + idx * 23, interactive: true, tooltip: cfg.title,
         drawFn: (ctx, w, h, rng) => drawNativeSpeedIcon(ctx,w,h,cfg.speed,this.speedValue===cfg.speed,rng),
         onClick: () => { if (this.world) this.actions.speed(cfg.speed); }});
       piece.userData.nativeId=`hud:speed:${cfg.speed}`;
       piece.userData.nativeToolbarPose=true;piece.userData.nativeActivePose=0;
-      piece.setBaseTransform(-2.20+idx*.64,1.31,0,idx%2===0?-.012:.012);
+      const pos=at(rect);piece.setBaseTransform(pos.x,pos.y,0,0);
       this.timeGroup.add(piece); this.speedButtons.push(piece);
     });
 
     (['walls','roofs','foliage','zones','home','camera'] as const).forEach((action,index)=>{
-      const button=this.makePiece({w:.38,h:.4,depth:.028,bgColor:PALETTE.creamPaper,seed:9297+index*17,interactive:true,
+      const rect=column.view[index]!;
+      const button=this.makePiece({w:rect.width/100,h:rect.height/100,depth:.02,bgColor:PALETTE.creamPaper,bevel:.02,seed:9297+index*17,interactive:true,
         drawFn:(ctx,w,h,rng)=>this.drawViewControl(action,ctx,w,h,rng),onClick:()=>this.actions.view?.(action)});
       button.userData.nativeId=`hud:view:${action}`;
-      button.setBaseTransform(-2.29+index*.42,.81,0,index%2===0?-.012:.012);
+      const pos=at(rect);button.setBaseTransform(pos.x,pos.y,0,0);
       this.timeGroup.add(button);this.viewButtons.set(action,button);
     });
     this.setViewState(this.viewState);
@@ -328,7 +330,6 @@ export class NativeHudCards {
     this.world = world;
     if (!world) { this.alertSession=''; this.setVisible(false); return; }
     this.colonists = world.pawns.filter(p => isColonist(p) && !p.prisoner && p.state !== 'dead').sort((a, b) => a.id - b.id);
-    this.page = Math.max(0, Math.min(this.page, Math.ceil(this.colonists.length / this.portraitCapacity) - 1));
     this.food = captureFoodReadability(world, {pileVisible: pile => knownPile256(world, pile), structureVisible: structure => knownBuilding256(world, structure)});
     this.physicalNutrition = knownNutrition256(world);
     this.readResources(world);
@@ -399,11 +400,11 @@ export class NativeHudCards {
     const scale=100*unitsPerPixel;
     for(const group of [this.colonistsGroup,this.resourcesGroup,this.alertsGroup,this.timeGroup,this.fpsGroup,this.alertHandleGroup])group.scale.setScalar(scale);
     this.alertsGroup.position.x=this.rightDockOffset*scale;
-    const capacity=Math.max(1,Math.min(12,Math.floor((width-560)/78)));
-    if(capacity!==this.portraitCapacity){
-      this.portraitCapacity=capacity;this.page=0;this.portraitIds='';
-      if(this.world)this.refreshPortraits(this.world);
-    }
+    // The colonist bar follows ColonistBarDrawLocsFinder: the layout depends on
+    // the screen width only, and is hidden under 800 × 500 like the game's.
+    this.colonistsGroup.visible=this.shown&&!!this.world&&colonistBarVisible(width,height);
+    this.portraitIds='';
+    if(this.world)this.refreshPortraits(this.world);
     // The bottom shelf remains below the legacy-sized time and view controls.
     this.baseTimeY=30+Math.max(0,bottomDockHeight-96);
     this.layoutWindowDock();
@@ -414,7 +415,7 @@ export class NativeHudCards {
   /** Logical-pixel reservation for complete cards, including their hover tilt
    * and shadow. The window owner can reserve this lane before laying out a page.
    * No pointer/hover state participates in this layout decision. */
-  getWindowLayoutBudget(){return {rightReserve:NATIVE_RIGHT_DOCK_WIDTH,height:197,minimumTop:118,mode:this.windowDockMode,visible:this.windowDockVisible,shiftPx:this.timeGroup.position.y/this.timeGroup.scale.x*100-this.baseTimeY};}
+  getWindowLayoutBudget(){return {rightReserve:NATIVE_RIGHT_DOCK_WIDTH,height:this.column.height,minimumTop:118,mode:this.windowDockMode,visible:this.windowDockVisible,shiftPx:this.timeGroup.position.y/this.timeGroup.scale.x*100-this.baseTimeY};}
 
   /** A page may overlap a complete dock, never slice individual cards. Prefer
    * moving the whole assembly into the space above it. At a narrow accessibility
@@ -429,9 +430,9 @@ export class NativeHudCards {
 
   private layoutWindowDock():boolean {
     let y=this.baseTimeY,visible=true,mode:'normal'|'above-window'|'hidden-window-space'='normal';
-    const box=this.windowBounds,left=this.viewportWidth-NATIVE_RIGHT_DOCK_WIDTH,top=this.viewportHeight-y-268,bottom=this.viewportHeight-y-71;
+    const box=this.windowBounds,left=this.viewportWidth-NATIVE_RIGHT_DOCK_WIDTH,top=this.viewportHeight-y-this.column.height-4,bottom=this.viewportHeight-y-4;
     if(box&&box.x<this.viewportWidth&&box.x+box.width>left&&box.y<bottom&&box.y+box.height>top){
-      const raisedY=this.viewportHeight-box.y-61,raisedTop=this.viewportHeight-raisedY-268;
+      const raisedY=this.viewportHeight-box.y+6,raisedTop=this.viewportHeight-raisedY-this.column.height-4;
       if(this.viewportWidth>=720&&raisedTop>=118){y=Math.max(y,raisedY);mode='above-window';}
       else{visible=false;mode='hidden-window-space';}
     }
@@ -528,7 +529,7 @@ export class NativeHudCards {
 
   setVisible(visible: boolean): void {
     this.shown = visible;
-    this.colonistsGroup.visible = visible && !!this.world;
+    this.colonistsGroup.visible = visible && !!this.world && colonistBarVisible(this.viewportWidth, this.viewportHeight);
     this.resourcesGroup.visible = visible && !!this.world;
     this.alertsGroup.visible = visible && !!this.world && (this.rightDockOpen||this.rightDockOffset<3.16);
     this.timeGroup.visible = visible && !!this.world && this.windowDockVisible;
@@ -544,7 +545,7 @@ export class NativeHudCards {
     });
   }
   get stats(): {portraits: number; colonists: number; resourceTypes: number; alerts: number; page: number; pages: number} {
-    return {portraits: this.portraits.length, colonists: this.colonists.length, resourceTypes: this.resources.length, alerts: this.alerts.length, page: this.page + 1, pages: Math.max(1, Math.ceil(this.colonists.length / this.portraitCapacity))};
+    return {portraits: this.portraits.length, colonists: this.colonists.length, resourceTypes: this.resources.length, alerts: this.alerts.length, page: 1, pages: 1};
   }
 
   private makePiece(options: CardboardPieceOptions): CardboardPiece {
@@ -562,32 +563,36 @@ export class NativeHudCards {
     return this.makePiece({w: 0.34, h: 0.29, depth: 0.044, bgColor: PALETTE.kraftBase, bevel: 0.036, seed, interactive: true,
       drawFn: (ctx, w, h) => { ctx.font = `bold ${NATIVE_TEXT.medium*1.9}px ${FONT}`; ctx.fillStyle = PALETTE.inkDark; ctx.textAlign = 'center'; ctx.fillText(label, w / 2, h / 2 + 12); }, onClick});
   }
-  private changePage(delta: number): void {
-    const pages = Math.max(1, Math.ceil(this.colonists.length / this.portraitCapacity));
-    this.page = (this.page + delta + pages) % pages;
-    if (this.world) this.refreshPortraits(this.world);
-  }
-
   private refreshPortraits(world: World): void {
-    const start = this.page * this.portraitCapacity, shown = this.colonists.slice(start, start + this.portraitCapacity);
-    const ids = `${this.page}:${shown.map(p => p.id).join(',')}`, changed = ids !== this.portraitIds;
+    // Every colonist is on the bar (no pages): ColonistBarDrawLocsFinder scales the
+    // cells down and wraps them into rows until all fit, so no entry is hidden.
+    const shown = this.colonists;
+    const ids = `${this.viewportWidth}:${shown.map(p => p.id).join(',')}`, changed = ids !== this.portraitIds;
     if (changed) {
+      const bar = this.barLayout = colonistBarLayout(shown.map(() => 0), this.viewportWidth), scale = bar.scale;
       for (const entry of this.portraits) { if (entry.image) { entry.image.onload = null; entry.image.onerror = null; } this.dropPiece(entry.piece); }
       this.portraits = []; this.portraitIds = ids;
-      shown.forEach((pawn, localIdx) => {
-        const idx = start + localIdx;
+      const cardW = BAR_CARD_W * scale, cardH = BAR_CARD_H * scale;
+      shown.forEach((pawn, idx) => {
+        const loc = bar.locs[idx]!;
         const entry = {pawnId: pawn.id, index: idx, name: pawnShortName(pawn.name), mood: rounded(pawn.mood), skin: '#f2cfb1', shirt: PALETTE.sageMountain, sleeping: false, selected: this.selectedIds.has(pawn.id), loaded: false, appearanceKey: '', signature: ''} as PortraitCard;
-        entry.piece = this.makePiece({w: .70, h: .96, depth: .046, bgColor: entry.selected ? PALETTE.ochre : PALETTE.kraftBase, bevel: .038, hasBorder:false,surface:'panel',seed: idx * 41 + 105, interactive: true,
+        entry.piece = this.makePiece({w: cardW / 100, h: cardH / 100, depth: .046 * Math.max(.4, scale), bgColor: entry.selected ? PALETTE.ochre : PALETTE.kraftBase, bevel: .038 * Math.max(.4, scale), hasBorder:false,surface:'panel',seed: idx * 41 + 105, interactive: true,
           drawFn: (ctx, w, h, rng) => this.drawColonist(entry, ctx, w, h, rng),
           onClick: () => { if (!this.world?.pawns.some(p => p.id === entry.pawnId && isColonist(p))) return; this.setSelection([entry.pawnId]); this.actions.selectPawn(entry.pawnId); }});
-        const peg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.06), new THREE.MeshStandardMaterial({color: 0x9e7448, roughness: 0.96}));
-        peg.position.set(0,.47,.03); peg.rotation.z = idx % 2 === 0 ? 0.08 : -0.08; entry.piece.add(peg);
+        if (scale > .6) {
+          const peg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.06), new THREE.MeshStandardMaterial({color: 0x9e7448, roughness: 0.96}));
+          peg.scale.setScalar(scale); peg.position.set(0, cardH / 200, .03); peg.rotation.z = idx % 2 === 0 ? 0.08 : -0.08; entry.piece.add(peg);
+        }
         entry.piece.userData.nativeId=`hud:pawn:${pawn.id}`;
         entry.piece.userData.nativeToolbarPose=true;entry.piece.userData.nativeActivePose=0;
-        entry.piece.setBaseTransform((localIdx-(shown.length-1)/2)*.78,-.52,0,idx%2===0?-.012:.012);
+        // The 48-wide cell sits in the middle of the card; the card's top is 3 scaled px above it.
+        entry.piece.setBaseTransform((loc.x + BAR_BASE * scale / 2 - this.viewportWidth / 2) / 100, -(loc.y - 3 * scale + cardH / 2) / 100, 0, idx%2===0?-.012:.012);
         this.colonistsGroup.add(entry.piece); this.portraits.push(entry);
       });
-      this.rail.scale.x = Math.max(0.4, (shown.length-1)*.78+.4) / 3.4;
+      this.rail.visible = shown.length > 0 && scale > .6;
+      this.rail.scale.x = Math.max(.4, (bar.right - bar.left + 16) / 340);
+      this.rail.position.x = ((bar.left + bar.right) / 2 - this.viewportWidth / 2) / 100;
+      this.rail.position.y = -(BAR_MARGIN_TOP - 3 * scale) / 100;
     }
     const apparel = new Map<number, MaterialPile[]>(), weapons = new Map<number, string>();
     const idsOnPage = new Set(shown.map(p => p.id));
@@ -612,13 +617,10 @@ export class NativeHudCards {
       const signature = JSON.stringify([entry.name, entry.mood, entry.selected, appearanceKey, entry.bar]);
       if (entry.signature !== signature) { entry.signature = signature;if(entry.piece.userData.active!==entry.selected){entry.piece.userData.active=entry.selected;this.activePoses.add(entry.piece);} entry.piece.redraw(undefined, entry.selected ? PALETTE.ochre : PALETTE.kraftBase); }
     });
-    this.previousButton.visible = this.nextButton.visible = this.colonists.length > this.portraitCapacity;
-    this.rosterButton.visible=this.colonists.length>this.portraitCapacity;
-    const edge=shown.length*.78/2+.15;
-    this.previousButton.setBaseTransform(-edge,-.48,.02);
-    this.nextButton.setBaseTransform(edge,-.48,.02);
-    this.rosterButton.setBaseTransform(edge,-.82,.02);
-    this.nextButton.userData.tooltip=`Colons suivants · page ${this.page+1}/${Math.max(1,Math.ceil(this.colonists.length/this.portraitCapacity))}`;
+    // The list of every colonist stays one click away at the bar's right end.
+    const bar = this.barLayout;
+    this.rosterButton.visible = shown.length > 1 && !!bar;
+    if (bar) this.rosterButton.setBaseTransform((bar.right + 24 - this.viewportWidth / 2) / 100, -(BAR_MARGIN_TOP + 14) / 100, .02);
     this.setVisible(this.shown);
   }
 
@@ -654,8 +656,8 @@ export class NativeHudCards {
   }
 
   private cornerWidth():number{
-    const count=Math.max(1,Math.min(this.colonists.length,this.portraitCapacity)),roster=count*78+(this.colonists.length>this.portraitCapacity?64:0);
-    return Math.max(80,this.viewportWidth/2-roster/2-16);
+    const left=colonistBarVisible(this.viewportWidth,this.viewportHeight)&&this.barLayout?.locs.length?this.barLayout.left:this.viewportWidth/2;
+    return Math.max(80,left-16);
   }
   private refreshResources():void {
     const counts=new Map(this.resources.map(row=>[row.item,row.stock]));
@@ -735,8 +737,12 @@ export class NativeHudCards {
   }
 
   private refreshAlerts():void {
-    const maxWidth=Math.min(300,Math.max(80,this.viewportWidth*.36),this.cornerWidth());
-    const availableHeight=Math.max(58,this.viewportHeight-16-this.timeGroup.position.y/this.timeGroup.scale.x*100-252-this.letterReservePx);
+    // Core: a 154-wide column flush with the right edge, stacked upward so that
+    // it ends where the letters begin (LetterStack.LastTopY), which sit 10 above
+    // the global controls.
+    const maxWidth=Math.min(ALERT_COLUMN_WIDTH,Math.max(80,this.viewportWidth*.4));
+    const bottomPx=this.timeGroup.position.y/this.timeGroup.scale.x*100+this.column.lettersBase+this.letterReservePx;
+    const availableHeight=Math.max(58,this.viewportHeight-16-bottomPx);
     const previous=new Map(this.alertCards.map(card=>[card.key,card]));
     this.alertCards=[];
     const ctx=this.allAlertsButton.userData.ctx;ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;
@@ -754,7 +760,7 @@ export class NativeHudCards {
       const originalLines=wrapped[index]!,maxLines=Math.max(1,Math.floor((room-12)/17));
       const lines=originalLines.slice(0,maxLines);
       if(lines.length<originalLines.length)lines[lines.length-1]=`${lines.at(-1)??''}…`;
-      const width=Math.min(maxWidth,Math.max(82,...lines.map(line=>ctx.measureText(line).width+28)));
+      const width=maxWidth;
       const height=cardHeight(lines.length);
       const color=nativeHudAlertColor(alert),critical=!alert.domain&&coreAlertPriority(alert)==='critical',painted=critical?pulse:color;
       const seed=idx*29+53,signature=JSON.stringify([lines,color,critical]);
@@ -779,16 +785,19 @@ export class NativeHudCards {
       entry.piece.userData.nativeId=`hud:alert:${alert.key}`;
       entry.piece.userData.tooltip=alertHoverText(this.world,alert);
       entry.baseX=-width/200;entry.baseY=-y-height/200;entry.rotation=idx%2===0?-.005:.005;
-      this.placePiece(entry.piece,entry.baseX-(this.alertBounces.get(alert.key)?.position??0)/100,entry.baseY,.02,entry.rotation);
       this.alertCards.push(entry);y+=(height+6)/100;last=index;
     }
     for(const entry of previous.values())this.dropPiece(entry.piece);
     this.alertLastShown=last;
-    const overflow=this.alertScroll>0||last<total-1,arrows=overflow&&maxWidth>=240;
+    // Anchor the stack to the letters: the last card ends at the column's bottom.
+    const overflow=this.alertScroll>0||last<total-1,shift=Math.max(0,(this.viewportHeight-bottomPx-(y*100-6))/100);
+    for(const entry of this.alertCards){entry.baseY-=shift;this.placePiece(entry.piece,entry.baseX-(this.alertBounces.get(entry.key)?.position??0)/100,entry.baseY,.02,entry.rotation);}
+    const footerY=-(.32+shift)+.165;
+    const arrows=overflow&&maxWidth>=240;
     this.allAlertsButton.visible=overflow;
-    this.placePiece(this.allAlertsButton,-.73,-y-.125);
+    if(overflow)this.placePiece(this.allAlertsButton,-.73,footerY);
     this.alertUpButton.visible=arrows&&this.alertScroll>0;this.alertDownButton.visible=arrows&&last<total-1;
-    this.placePiece(this.alertUpButton,-2.06,-y-.125,.02);this.placePiece(this.alertDownButton,-1.68,-y-.125,.02);
+    if(arrows){this.placePiece(this.alertUpButton,-2.06,footerY,.02);this.placePiece(this.alertDownButton,-1.68,footerY,.02);}
     if(this.allAlertsCount!==this.alerts.length){this.allAlertsCount=this.alerts.length;this.allAlertsButton.redraw();}
     this.alertHandleGroup.visible=this.notificationsAutoHide&&this.shown&&!!this.world&&this.alerts.length>0;
   }
@@ -817,19 +826,29 @@ export class NativeHudCards {
     };
     const signature = [readout.clock, readout.date, readout.weather, readout.temperature, readout.condition].join('|');
     this.weatherReadout = readout;
-    if (signature !== this.weatherSignature) { this.weatherSignature = signature;this.weatherPiece.userData.tooltip=this.weatherIconPiece.userData.tooltip=`${readout.date} · ${readout.weather} · ${readout.temperature}${readout.condition ? ` · ${readout.condition}` : ''}`; this.weatherPiece.redraw(); }
+    if (signature !== this.weatherSignature) { this.weatherSignature = signature;const tip=`${readout.date} · ${readout.weather} · ${readout.temperature}${readout.condition ? ` · ${readout.condition}` : ''}`;for(const piece of [this.weatherPiece,this.weatherLabelPiece,this.temperaturePiece,this.weatherIconPiece])piece.userData.tooltip=tip;this.weatherPiece.redraw();this.weatherLabelPiece.redraw();this.temperaturePiece.redraw(); }
   }
   private createWeatherIcon(icon:NativeWeatherIcon):CardboardPiece {
-    const piece=this.makePiece({w:.62,h:.62,depth:.046,outline:nativeWeatherOutline(icon),bgColor:nativeWeatherColor(icon),bevel:.038,hasBorder:false,uvPadding:1.08,textureWidth:160,textureHeight:160,seed:224,interactive:true,
+    const rect=this.column.weather,size=ROW_ICON;
+    const piece=this.makePiece({w:size/100,h:size/100,depth:.02,outline:nativeWeatherOutline(icon),bgColor:nativeWeatherColor(icon),bevel:.02,hasBorder:false,uvPadding:1.08,textureWidth:96,textureHeight:96,seed:224,interactive:true,
       drawFn:(ctx,w,h,rng)=>drawNativeWeatherIcon(ctx,icon,w,h,rng),onClick:()=>this.showWeather()});
-    piece.userData.nativeId='hud:weather';piece.userData.weatherIcon=icon;piece.setBaseTransform(-2.05,2.04,.06,-.025);this.timeGroup.add(piece);return piece;
+    piece.userData.nativeId='hud:weather';piece.userData.weatherIcon=icon;piece.setBaseTransform(-(rect.right+rect.width-size/2-4)/100,(rect.bottom+rect.height/2)/100,.03,0);this.timeGroup.add(piece);return piece;
   }
-  private drawWeather(ctx:CanvasRenderingContext2D,w:number,h:number,rng:()=>number):void {
-    ctx.save();ctx.scale(w/248,h/96);
-    ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=`bold ${NATIVE_TEXT.medium}px ${FONT}`;fitText(ctx,this.weatherReadout.clock,78,34,158);
-    ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;fitText(ctx,this.weatherReadout.date,78,56,158);
-    ctx.font=`${NATIVE_TEXT.small}px ${FONT}`;fitText(ctx,`${this.weatherReadout.condition||this.weatherReadout.weather} · ${this.weatherReadout.temperature}`,78,77,158);ctx.restore();
+  /** Core DateReadout: time of day over the date, right-aligned, 7 in from the edge. */
+  private drawDate(ctx:CanvasRenderingContext2D,w:number,h:number):void {
+    ctx.save();ctx.scale(w/200,h/48);this.letters(ctx);
+    ctx.textAlign='right';ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;
+    ctx.strokeText(this.weatherReadout.clock,193,19);ctx.fillText(this.weatherReadout.clock,193,19);
+    ctx.font=`${NATIVE_TEXT.small}px ${FONT}`;ctx.strokeText(this.weatherReadout.date,193,41);ctx.fillText(this.weatherReadout.date,193,41);ctx.restore();
   }
+  /** One right-aligned line of the 26-high rows (weather, temperature); `inset` keeps the icon clear. */
+  private drawRowText(ctx:CanvasRenderingContext2D,w:number,h:number,text:string,width:number,inset:number):void {
+    ctx.save();ctx.scale(w/width,h/26);this.letters(ctx);ctx.textAlign='right';ctx.font=`${NATIVE_TEXT.small}px ${FONT}`;
+    let label=text;const room=width-7-inset;while(label.length>1&&ctx.measureText(label).width>room)label=label.slice(0,-1);if(label!==text)label=label.trimEnd()+'…';
+    ctx.strokeText(label,width-7,18);ctx.fillText(label,width-7,18);ctx.restore();
+  }
+  /** Cream letters with a dark outline, as the resource column. */
+  private letters(ctx:CanvasRenderingContext2D):void {ctx.strokeStyle='#19242b';ctx.lineWidth=3;ctx.lineJoin='round';ctx.fillStyle='#fff8e9';}
 
   private showRoster(): void {
     this.actions.showPage({id: 'hud-colonists', title: `${this.colonists.length} colons sur cette carte`, color: PALETTE.sageMountain,

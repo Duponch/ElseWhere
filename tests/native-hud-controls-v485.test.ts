@@ -30,10 +30,11 @@ afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});
 describe('native HUD bounds and severity · V485',()=>{
   it('keeps the cut weather drawing inside its common painted frame and preserves its details action',()=>{
     const f=fixture();try{
-      const frame=f.piece('hud:clock'),weather=f.piece('hud:weather'),bounds=(piece:CardboardPiece)=>({left:piece.position.x-piece.userData.w/2,right:piece.position.x+piece.userData.w/2,bottom:piece.position.y-piece.userData.h/2,top:piece.position.y+piece.userData.h/2});
+      // Core GlobalControls: the weather icon sits in the 26-high weather row, inside the 222 visible px.
+      const frame=f.piece('hud:weather-label'),weather=f.piece('hud:weather'),bounds=(piece:CardboardPiece)=>({left:piece.position.x-piece.userData.w/2,right:piece.position.x+piece.userData.w/2,bottom:piece.position.y-piece.userData.h/2,top:piece.position.y+piece.userData.h/2});
       const panel=bounds(frame),icon=bounds(weather);
-      expect(icon.left-panel.left).toBeGreaterThan(.1);expect(panel.right-icon.right).toBeGreaterThan(.1);
-      expect(icon.bottom-panel.bottom).toBeGreaterThan(.1);expect(panel.top-icon.top).toBeGreaterThan(.1);
+      expect(icon.left-panel.left).toBeGreaterThan(0);expect(panel.right-icon.right).toBeGreaterThan(.1);
+      expect(icon.bottom-panel.bottom).toBeGreaterThan(0);expect(panel.top-icon.top).toBeGreaterThan(0);
       weather.userData.onClick?.();expect(f.showPage.mock.lastCall?.[0].id).toBe('hud-site');expect(f.piece('hud:weather')).toBe(weather);
       expect(weather.userData.texture).toBeDefined();
     }finally{f.close();}
@@ -42,11 +43,19 @@ describe('native HUD bounds and severity · V485',()=>{
   it('aligns both command rows to the same edges while keeping a separate gap and direct actions',()=>{
     const f=fixture();try{
       const speeds=[0,1,3,6].map(speed=>f.piece(`hud:speed:${speed}`)),views=['walls','roofs','foliage','zones','home','camera'].map(action=>f.piece(`hud:view:${action}`));
-      const edges=(pieces:CardboardPiece[])=>[pieces[0]!.position.x-pieces[0]!.userData.w/2,pieces.at(-1)!.position.x+pieces.at(-1)!.userData.w/2];
-      expect(edges(speeds)[0]).toBeCloseTo(edges(views)[0]!);expect(edges(speeds)[1]).toBeCloseTo(edges(views)[1]!);
-      const board=f.piece('hud:clock');expect(edges(speeds)[0]).toBeCloseTo(board.position.x-board.userData.w/2);expect(edges(speeds)[1]).toBeCloseTo(board.position.x+board.userData.w/2);
-      const lowerSpeed=speeds[0]!.position.y-speeds[0]!.userData.h/2,upperView=views[0]!.position.y+views[0]!.userData.h/2;
-      expect(lowerSpeed-upperView).toBeCloseTo(.09);
+      // GlobalControlsUtility: speed buttons 32 × 24 in one strip, display
+      // buttons 24 × 24 five to a row (the sixth wraps upward), 4 between rows.
+      const px=(value:number)=>Math.round(value*100);
+      for(const speed of speeds){expect(px(speed.userData.w)).toBe(32);expect(px(speed.userData.h)).toBe(24);}
+      for(const view of views){expect(px(view.userData.w)).toBe(24);expect(px(view.userData.h)).toBe(24);}
+      expect(speeds.map(speed=>px(speed.position.x))).toEqual([-118,-86,-54,-22]);
+      expect(px(views[1]!.position.x-views[0]!.position.x)).toBe(-26);expect(px(views[5]!.position.x)).toBe(px(views[0]!.position.x));
+      expect(px(views[5]!.position.y-views[0]!.position.y)).toBe(26);
+      const lowerSpeed=speeds[0]!.position.y-speeds[0]!.userData.h/2,upperView=views[5]!.position.y+views[5]!.userData.h/2;
+      expect(px(lowerSpeed-upperView)).toBe(4);
+      const date=f.piece('hud:clock'),weather=f.piece('hud:weather-label'),temperature=f.piece('hud:temperature');
+      expect([px(date.userData.w),px(date.userData.h)]).toEqual([200,48]);expect(px(weather.userData.h)).toBe(26);expect(px(temperature.userData.h)).toBe(26);
+      expect(date.position.y).toBeLessThan(weather.position.y);expect(weather.position.y).toBeLessThan(temperature.position.y);expect(speeds[0]!.position.y).toBeLessThan(date.position.y);
       for(const button of views)button.userData.onClick?.();expect(f.view.mock.calls.map(call=>call[0])).toEqual(['walls','roofs','foliage','zones','home','camera']);
       const before=views.map(piece=>piece.position.toArray());f.hud.setViewport(720,450,.01);expect(views.map(piece=>piece.position.toArray())).toEqual(before);
     }finally{f.close();}
@@ -79,7 +88,7 @@ describe('native HUD bounds and severity · V485',()=>{
       f.hud.setViewport(1440,1000,.01,96,500);
       const weather=f.piece('hud:clock'),group=weather.parent!,initialY=group.position.y,texture=weather.userData.texture,revision=f.art.revision;
       const window={x:12,y:432,width:1180,height:476};expect(f.hud.setWindowBounds(window)).toBe(true);
-      const budget=f.hud.getWindowLayoutBudget(),top=1000-group.position.y*100-268;
+      const budget=f.hud.getWindowLayoutBudget(),top=1000-group.position.y*100-budget.height-4;
       expect(budget.mode).toBe('above-window');expect(budget.visible).toBe(true);expect(top).toBeGreaterThanOrEqual(budget.minimumTop);expect(top+budget.height).toBeLessThanOrEqual(window.y-10);
       expect(f.hud.setWindowBounds(window)).toBe(false);expect(weather.userData.texture).toBe(texture);expect(f.art.revision).toBe(revision);
       expect(f.hud.setWindowBounds(null)).toBe(true);expect(group.position.y).toBe(initialY);expect(f.hud.getWindowLayoutBudget()).toMatchObject({mode:'normal',visible:true,shiftPx:0});
