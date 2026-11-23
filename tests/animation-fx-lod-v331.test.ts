@@ -7,7 +7,6 @@ import { AnimationDetail } from '../src/render/AnimationDetail';
 import { FxAnimationCache } from '../src/render/FxAnimationCache';
 import { FireLayer,attachedFireMesh,presentAttachedFire } from '../src/render/FireLayer';
 import { ProjectileLayer } from '../src/render/ProjectileLayer';
-import { ActionVfxLayer } from '../src/render/ActionVfxLayer';
 import { StructureVfxLayer } from '../src/render/StructureVfxLayer';
 import { WeatherPrecipitationLayer,precipitationHash,precipitationGlobalDetail,precipitationMapLayout } from '../src/render/WeatherPrecipitationLayer';
 
@@ -49,24 +48,6 @@ test('far removes ground fire, precipitation and structural FX draws; complete d
     ensureFireState(world).items=[];fire.adopt(world);structures.adopt(world);fire.present(world.tick);structures.present(world.tick);weather.present({...input,rainRate:0});
     expect((fire.mesh.geometry as THREE.InstancedBufferGeometry).instanceCount).toBe(0);expect(structures.smoke.geometry.instanceCount).toBe(0);expect(weather.mesh.geometry.instanceCount).toBe(0);
   }finally{fire.dispose();structures.dispose();weather.dispose();}
-});
-
-test('medium action FX update original pose streams before deadlines, hold unchanged uploads on pause and retract immediately',()=>{
-  const world=createWorld(332,32,32);world.pawns.forEach(p=>{p.state='idle';});world.pawns[1]!.state='sleeping';
-  const stream=source(world.pawns.length),detail=new AnimationDetail(),camera=iso(),clock={travelTime:uniform(0),blend:uniform(1)},layer=new ActionVfxLayer(clock,detail);
-  try{
-    detail.beginFrame(0,camera,100,100);layer.setView(camera);layer.update(world,stream);layer.present(100);
-    const geometry=layer.mesh.geometry,slots=geometry.getAttribute('fxSlot');expect(geometry.instanceCount).toBe(1);expect(slots.getX(0)).toBe(1);
-    const attr=geometry.getAttribute('aTo') as THREE.InstancedBufferAttribute,version=attr.version,point=Array.from(attr.array);
-    (stream.getAttribute('aTo') as THREE.InstancedBufferAttribute).setX(1,10);(stream.getAttribute('aTo') as THREE.InstancedBufferAttribute).needsUpdate=true;
-    const sourceAfter=Array.from(stream.getAttribute('aTo').array);
-    detail.beginFrame(20,camera,100,101);layer.present(101);expect(attr.version).toBeGreaterThan(version);expect(Array.from(attr.array)).not.toEqual(point);
-    expect(attr.getX(0)).toBe(10);expect(slots.getX(0)).toBe(1);expect(geometry.instanceCount).toBe(1);expect(Array.from(stream.getAttribute('aTo').array)).toEqual(sourceAfter);
-    const movedVersion=attr.version,movedPoint=Array.from(attr.array);
-    detail.beginFrame(40,camera,100,101);layer.present(101);expect(attr.version).toBe(movedVersion);expect(Array.from(attr.array)).toEqual(movedPoint);expect(slots.getX(0)).toBe(1);
-    expect(layer.mesh.geometry).toBe(geometry);expect(geometry.getAttribute('aTo')).toBe(attr);expect(Array.from(stream.getAttribute('aTo').array)).toEqual(sourceAfter);
-    world.pawns[1]!.state='idle';layer.update(world,stream);layer.present(101);expect(geometry.instanceCount).toBe(0);expect(layer.mesh.visible).toBe(false);expect(Array.from(stream.getAttribute('aTo').array)).toEqual(sourceAfter);
-  }finally{layer.dispose();stream.dispose();}
 });
 
 test('attached flame compaction uses explicit pawn slots and leaves the shared actor source untouched',()=>{

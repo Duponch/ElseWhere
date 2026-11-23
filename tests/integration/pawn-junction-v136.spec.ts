@@ -74,7 +74,7 @@ test('V136: the same colon keeps connected shoulder and waist silhouettes standi
             view.camera.zoom = 9.5;
             view.camera.updateProjectionMatrix();
             view.controls.update();
-            view.actionVfx.group.visible = false;
+            view.actionParticles.group.visible = false;
             view.actionFeedback.group.visible = false;
             const notice = document.querySelector<HTMLElement>('#notice');
             if (notice) notice.style.display = 'none';
