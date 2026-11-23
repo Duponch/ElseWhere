@@ -33,15 +33,16 @@ describe('native work and schedule retain their direct confirmed interactions', 
   it('shows the twenty named columns and cycles every priority with left and right clicks', async () => {
     const f = fixture(), pawn = f.world.pawns[0]!, beforeOthers = f.world.pawns.slice(1).map(pawn => ({ ...pawn.priorities }));
     expect(f.page.layout).toBe('table');
-    // The twenty work columns, then the copy/paste column of the Core Work table (bill clipboard lot).
-    expect(f.page.rows[0]!.columns?.slice(0, 20).map(column => column.hint)).toEqual(workColumns.map(column => column.label));
-    expect(f.page.rows[0]!.columns?.slice(20).map(column => column.label)).toEqual(['Copier', 'Coller']);
-    expect(f.page.rows[0]!.columns?.every(column => column.label.length > 0 && column.label.length <= 7)).toBe(true);
+    // Since 23 November (windows lot 5) the copy/paste columns come first and the twenty
+    // work columns follow with whole labels, as in Core's Work table (PawnTableDef.Work).
+    expect(f.page.rows[0]!.columns?.slice(0, 2).map(column => column.label)).toEqual(['Copier', 'Coller']);
+    expect(f.page.rows[0]!.columns?.slice(2, 22).map(column => column.hint)).toEqual(workColumns.map(column => column.label));
+    expect(f.page.rows[0]!.columns?.every(column => column.label.length > 0)).toBe(true);
     const worker = f.page.rows.find(row => row.id === `worker-${pawn.id}`)!;
     expect(worker.controls).toHaveLength(22); expect(worker.value).toBe(`Activité confirmée ${pawn.id}`);
     const cell = f.control(`work-${pawn.id}-build`);
     expect(cell.select).toBeUndefined(); expect(typeof cell.onSecondary).toBe('function');
-    expect(cell.caption).toContain(String(pawn.skills.construction.level));
+    expect(cell.hint).toContain(String(pawn.skills.construction.level)); // the level is the box shade and the tooltip since windows lot 5
     expect(cell.hint).toContain('Construction'); expect(cell.hint).toContain('apprentissage');
     pawn.priorities.build = 0; f.rebuild();
     for (const priority of [4, 3, 2, 1, 0]) {
@@ -75,7 +76,8 @@ describe('native work and schedule retain their direct confirmed interactions', 
     ] as const) {
       const record = pawn.skills[skill]!, control = f.control(`work-${pawn.id}-${work}`);
       expect(worker.controls).toContain(control);
-      expect(control.caption).toBe(`${record.level}${' ♨'.repeat(record.passion)}`);
+      // The box shows the skill as its shade and the passion as a flame (WidgetsWork), no caption text.
+      expect(control.passion).toBe(record.passion ? Math.min(record.passion, 2) : undefined);
       expect(control.hint).toContain(`${label} ${record.level}/20`);
       expect(control.hint).toContain(passion);
       expect(control.hint).toContain('apprentissage');
@@ -119,7 +121,7 @@ describe('native work and schedule retain their direct confirmed interactions', 
     await f.control('brush-work').onActivate(); f.rebuild();
     const row = f.page.rows.find(row => row.id === `schedule-${pawn.id}`)!;
     expect(row.controls).toHaveLength(26);
-    const hours = row.controls!.slice(0, 24);
+    const hours = row.controls!.slice(2, 26); // copy and paste come first since windows lot 5
     expect(hours.map(control => control.paint!.index)).toEqual(Array.from({ length: 24 }, (_, hour) => hour));
     expect(new Set(hours.map(control => control.paint!.group))).toEqual(new Set([`schedule-${pawn.id}`]));
     await hours[6]!.paint!.onPaint([6, 7, 8, 9]);
