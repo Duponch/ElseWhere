@@ -31,22 +31,19 @@ function rescueFixture() {
 }
 
 describe('native inspector restores real animal rescue and egg permissions', () => {
-  it('projects all twelve real skill meters in the stable V480 Bio dossier', () => {
+  it('projects all twelve real skills in the Core Bio card (514 × 489 tab window)', () => {
     const world = createWorld(476, 16, 16), pawn = world.pawns[0]!;
     setNativeInspectorTab('bio');
-    const ui = inspector(world, { selectedPawnIds: [pawn.id] }), skills = ui.page.rows.filter(row => row.id.startsWith('skill-'));
-    expect(ui.page).toMatchObject({ layout: 'inspector', width: 700, height: 620, columnRatio: .48 });
+    const ui = inspector(world, { selectedPawnIds: [pawn.id] }), skills = ui.page.rows.find(row => row.id === 'bio-card')!.bio!.skills;
+    expect(ui.page).toMatchObject({ layout: 'inspector', inspectTab: { id: 'bio', width: 514, height: 489, margin: 17 } });
     expect(skills).toHaveLength(12);
-    expect(new Set(ui.page.rows.filter(row => row.id !== 'pawn-tabs').map(row => row.column))).toEqual(new Set([0, 1]));
-    for (const row of skills) {
-      const id = row.id.slice('skill-'.length) as BackgroundSkillId, record = pawn.skills[id];
-      expect(row.column).toBe(1);
-      expect(row.meter).toMatchObject({ value: backgroundSkillRefusal(pawn, id) ? 0 : record?.level ?? (id === 'mining' || id === 'plants' ? 8 : 0), max: 20, passion: record?.passion ?? 0 });
-      expect(row.meter!.secondary!.value).toBe(backgroundSkillRefusal(pawn, id) ? 0 : record?.xp ?? 0);
-      expect(row.meter!.secondary!.max).toBeGreaterThan(0);
-      expect(row.hint).toContain('Expérience du niveau');
-      expect(row.hint).toContain('Apprentissage');
-      expect(row.detail).toBeUndefined();
+    for (const skill of skills) {
+      const id = skill.id.slice('skill-'.length) as BackgroundSkillId, record = pawn.skills[id];
+      expect(skill).toMatchObject({ level: record?.level ?? (id === 'mining' || id === 'plants' ? 8 : 0), passion: record?.passion ?? 0, disabled: !!backgroundSkillRefusal(pawn, id) });
+      // The level's experience is in the tooltip (Core SkillUI), not a second gauge.
+      expect(skill.hint).toContain('Expérience du niveau');
+      expect(skill.hint).toContain(`${((record?.xp ?? 0) / 1000).toFixed(1)} / `);
+      expect(skill.hint).toContain('Apprentissage');
     }
     const tabs = ui.page.rows.find(row => row.id === 'pawn-tabs')!;
     expect(tabs.compact).toBe(true); expect(tabs.column).toBeUndefined();
@@ -59,7 +56,8 @@ describe('native inspector restores real animal rescue and egg permissions', () 
     const positions = world.pawns.map(person => [person.id, person.x, person.z]);
     setNativeInspectorTab('bio');
     const ui = inspector(world, { selectedPawnIds: [pawn.id] });
-    const select = () => ui.page.rows.find(row => row.id === 'pawn-hostility')!.controls![0]!.select!;
+    // Core's hostility response is a gizmo beside the inspect pane.
+    const select = () => ui.page.actions!.find(control => control.id === 'pawn-hostility')!.select!;
     expect(select().options).toEqual([{ value: 'flee', label: 'Fuir' }, { value: 'ignore', label: 'Ignorer' }, { value: 'attack', label: 'Attaquer' }]);
     await select().onChange('not-a-response');
     expect(ui.actions.command).not.toHaveBeenCalled();
@@ -79,12 +77,12 @@ describe('native inspector restores real animal rescue and egg permissions', () 
     const world = createWorld(476, 16, 16), pawn = world.pawns[0]!, response = pawn.hostilityResponse;
     setNativeInspectorTab('bio');
     const ui = inspector(world, { selectedPawnIds: [pawn.id] });
-    const select = ui.page.rows.find(row => row.id === 'pawn-hostility')!.controls![0]!.select!;
+    const select = ui.page.actions!.find(control => control.id === 'pawn-hostility')!.select!;
     ui.state.busy = true; await select.onChange('attack');
     expect(ui.actions.command).not.toHaveBeenCalled(); expect(pawn.hostilityResponse).toBe(response);
     ui.state.busy = false; ui.state.epoch!++; await select.onChange('attack');
     expect(ui.actions.command).not.toHaveBeenCalled(); expect(pawn.hostilityResponse).toBe(response);
-    expect(ui.page.rows.find(row=>row.id==='pawn-hostility')!.controls![0]!.select).not.toBe(select);
+    expect(ui.page.actions!.find(control=>control.id==='pawn-hostility')!.select).not.toBe(select);
   });
 
   it('orders the selected doctor to approach the same animal without moving it remotely', async () => {

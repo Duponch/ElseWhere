@@ -54,31 +54,35 @@ describe('cardboard UI proportions and record flow · V480',()=>{
     }
   });
 
-  it('keeps identical pawn sheet, tabs and footer bounds across all seven dossiers',()=>{
+  // Core inspect pane: the pane, its tabs and the gizmos never move with the
+  // open tab; each tab window has its own ITab size and scrolls its content.
+  it('keeps identical pane, tabs and gizmo bounds across all seven tab windows',()=>{
     const tabs:NativeRow={id:'pawn-tabs',label:'',region:'navigation',controls:['Journal','Matériel','Social','Bio','Besoins','Santé','Prisonnier'].map(label=>button(label))};
     const actions=['Mobiliser','Effacer les ordres','Travail','Fermer'].map(label=>button(label));
-    const boxes=['journal','gear','social','bio','needs','health','prisoner'].map((tab,index)=>layout({id:'inspect-pawn-8-'+tab,title:'Eden',subtitle:tab,portrait:{url:'data:,',label:'Eden'},layout:'inspector',width:400+index*20,height:400+index*15,rows:[tabs,...Array.from({length:index*12},(_,i)=>({id:'fact-'+i,label:'Fait du dossier '+i,detail:'Toutes les informations restent conservées dans leur section.'}))],actions}));
-    for(const box of boxes){
-      expect([box.width,box.height,box.header]).toEqual([760,660,40]);
-      expect(box.body.height).toBe(452);expect(box.inspectorParts).toEqual(boxes[0]!.inspectorParts);
-      for(const control of box.actions)inside(box.inspectorParts!.actions,{...control,y:control.y+box.header});
-      for(const control of box.rows[0]!.controls)inside(box.inspectorParts!.tabs,{...control,y:control.y+box.header});
+    const boxes=['journal','gear','social','bio','needs','health','prisoner'].map((tab,index)=>layout({id:'inspect-pawn-8-'+tab,title:'Eden',portrait:{url:'data:,',label:'Eden'},layout:'inspector',inspectTab:{id:tab,width:400+index*20,height:400+index*15,margin:18},rows:[tabs,...Array.from({length:index*12},(_,i)=>({id:'fact-'+i,label:'Fait du dossier '+i,detail:'Toutes les informations restent conservées dans leur section.'}))],
+      actions}));
+    boxes.forEach((box,index)=>{
+      const parts=box.inspectorParts!;
+      expect(parts.summary).toEqual({x:0,y:box.height-165,width:7*72,height:165});
+      expect(parts.tabs).toEqual({x:0,y:box.height-195,width:7*72,height:30});
+      expect(parts.sheet).toEqual({x:0,y:box.height-195-(400+index*15),width:400+index*20,height:400+index*15});
+      expect(box.y+box.height).toBe(boxes[0]!.y+boxes[0]!.height);
+      for(const control of box.actions)inside(parts.actions,{...control,y:control.y+box.header});
+      for(const control of box.rows[0]!.controls)inside(parts.tabs,{...control,y:control.y+box.header});
       expect(box.actions.map(c=>c.control)).toEqual(actions);
-    }
+    });
     expect(boxes.at(-1)!.contentHeight).toBeGreaterThan(boxes.at(-1)!.body.height);
   });
 
-  it('fits all twelve Bio bars at both qualified viewport sizes with the larger type scale',()=>{
+  it('fits the whole Bio card without scrolling at both qualified viewport sizes',()=>{
+    const skills=Array.from({length:12},(_,i)=>({id:'skill-'+i,label:'Compétence '+i,level:12,passion:0 as const,disabled:false,hint:''}));
     const rows:NativeRow[]=[{id:'pawn-tabs',label:'',controls:['Journal','Matériel','Social','Bio','Besoins','Santé'].map(label=>button(label))},
-      {id:'heading-bio-skills',label:'Compétences',emphasis:'heading',column:1},
-      ...Array.from({length:12},(_,i)=>({id:'skill-'+i,label:'Compétence '+i,column:1 as const,meter:{value:12,max:20,secondary:{value:50,max:100}}}))];
+      {id:'bio-card',label:'',bio:{name:'Ada',description:{label:'Femme, 30 ans',hint:''},stories:[],traits:[],incapable:[],skills}}];
     for(const viewport of[desktop,{width:960,height:800}]){
-      const box=layout({id:'inspect-pawn-bio',title:'Ada',layout:'inspector',portrait:{url:'data:,',label:'Ada'},rows},viewport),skills=box.rows.filter(r=>r.row.id.startsWith('skill-'));
-      expect(box.width).toBe(760);expect(box.height).toBe(660);
-      expect(skills).toHaveLength(12);expect(skills.every(r=>r.height===34&&r.top+r.height<=box.body.height)).toBe(true);
-      expect(skills.map(row=>row.row.id)).toEqual(Array.from({length:12},(_,i)=>'skill-'+i));
-      expect(skills.every(row=>row.row.meter?.secondary?.value===50&&row.row.meter?.max===20)).toBe(true);
-      expect(skills.at(-1)!.top+skills.at(-1)!.height).toBe(436);expect(NATIVE_UI.body).toBe(14);expect(NATIVE_UI.line).toBe(20);
+      const box=layout({id:'inspect-pawn-bio',title:'Ada',layout:'inspector',inspectTab:{id:'bio',width:514,height:489,margin:17},rows},viewport),card=box.rows.find(r=>r.row.id==='bio-card')!;
+      expect(box.inspectorParts!.sheet).toMatchObject({width:514,height:489});
+      expect(card.bio!.skills).toHaveLength(12);expect(card.top+card.height).toBeLessThanOrEqual(box.body.height);expect(box.contentHeight).toBe(455);
+      expect(card.bio!.skills.at(-1)!.row.y+24).toBeLessThanOrEqual(455);expect(NATIVE_UI.body).toBe(13);expect(NATIVE_UI.line).toBe(22);
     }
   });
 

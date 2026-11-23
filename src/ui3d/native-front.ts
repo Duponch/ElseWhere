@@ -560,28 +560,26 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
         {...control(`down-${descriptor.serial}`,'↓',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)+1);},position===roster.length-1),hint:'Descendre ce candidat d’une place.'},
       ]}));
       rows.push(details({id:'candidate-clothing',label:'Tenue du portrait',controls:[control('candidate-clothing',showCandidateClothes?'Masquer les vêtements':'Montrer les vêtements',()=>{if(current())showCandidateClothes=!showCandidateClothes;},false,showCandidateClothes)]}));
-      rows.push(heading('candidate-story-heading','Histoire'));
+      // The same Bio card as the « Bio » tab (Core DrawCharacterCard in creation
+      // mode): stories, traits, incapacities and skills; the name keeps its field.
+      const sex=appearanceOf(pawn,teamSeed).sex,bio=pawn.age?biologicalYears(pawn.age):undefined,chrono=pawn.age?chronologicalYears(pawn.age):undefined;
+      const stories:{phase:string;chip:{id:string;label:string;hint:string}}[]=[];
       if(pawn.background){
         // Titles and texts: the installed RimWorld's when loaded (Options), else Elsewhere's.
-        const sex=appearanceOf(pawn,teamSeed).sex,background=pawn.background,person={name:pawn.name,sex,title:storyTitle(background.adulthood?'adulthood':'childhood',background.adulthood??background.childhood,sex)};
-        rows.push(details({id:'childhood',label:'Enfance',value:storyTitle('childhood',background.childhood,sex),hint:storyDescription('childhood',background.childhood,person)}));
-        if(background.adulthood)rows.push(details({id:'adulthood',label:'Adulte',value:storyTitle('adulthood',background.adulthood,sex),hint:storyDescription('adulthood',background.adulthood,person)}));
-      }else rows.push(details({id:'candidate-story-none',label:'Passé non renseigné'}));
+        const background=pawn.background,person={name:pawn.name,sex,title:storyTitle(background.adulthood?'adulthood':'childhood',background.adulthood??background.childhood,sex)};
+        stories.push({phase:'Enfance',chip:{id:'childhood',label:storyTitle('childhood',background.childhood,sex),hint:storyDescription('childhood',background.childhood,person)}});
+        if(background.adulthood)stories.push({phase:'Adulte',chip:{id:'adulthood',label:storyTitle('adulthood',background.adulthood,sex),hint:storyDescription('adulthood',background.adulthood,person)}});
+      }
+      const incapable=(Object.keys(BACKGROUND_WORK_LABELS) as WorkType[]).flatMap(work=>{const refusal=backgroundWorkRefusal(pawn,work);return refusal?[{id:`refused-${work}`,label:BACKGROUND_WORK_LABELS[work],hint:refusal}]:[];});
+      const skills=BACKGROUND_SKILL_IDS.map(skill=>{
+        const record=pawn.skills[skill]??{level:0,xp:0,dailyXp:0,passion:0 as const},refusal=backgroundSkillRefusal(pawn,skill),passion=record.passion===2?'Forte passion':record.passion===1?'Passion':'Sans passion';
+        return {id:`skill-${skill}`,label:names[skill]!,level:record.level,passion:record.passion,disabled:!!refusal,hint:[names[skill],refusal?`${refusal} · Niveau enregistré ${record.level} / 20`:undefined,passion,`${(record.xp/XP_SCALE).toFixed(1)} / ${xpRequired(record.level)/XP_SCALE} XP`,`Apprentissage ${Math.round(learningFactor(record,pawn)*100)} %`].filter(Boolean).join('\n')};
+      });
+      rows.push({id:'candidate-bio',label:'',region:'details',bio:{creation:true,description:{label:`${sex==='female'?'Femme':'Homme'}${bio!==undefined?`, ${bio} ans${chrono!==bio?` (${chrono})`:''}`:''}`,hint:bio!==undefined?`Âge biologique : ${bio} ans. Âge chronologique : ${chrono} ans.`:'Âge non renseigné.'},
+        stories,traits:(pawn.traits??[]).map(id=>({id:`candidate-trait-${id}`,label:traitLabel(id,sex),hint:traitTooltip(id,{name:pawn.name,sex})})),incapable,skills}});
       // Schema 370: Core's starting possessions of this person (adulthood story, 25 %).
       const possessions=startingPossessions370(teamSeed,descriptor,pawn);
       if(possessions.length){rows.push(heading('candidate-possessions','Possessions'));for(const own of possessions)rows.push(details({id:`candidate-possession-${own.item}`,label:itemTitle(own.item,ITEM_DEFINITIONS[own.item].label),value:`× ${own.quantity}`,hint:'Apportée par cette personne : déposée près du point d’arrivée avec les réserves.'}));}
-      rows.push(heading('candidate-traits','Traits'));
-      for(const id of pawn.traits??[])rows.push(details({id:`candidate-trait-${id}`,label:traitLabel(id,appearanceOf(pawn,teamSeed).sex),hint:traitTooltip(id,{name:pawn.name,sex:appearanceOf(pawn,teamSeed).sex})}));
-      if(!pawn.traits?.length)rows.push(details({id:'candidate-traits-none',label:'Aucun trait'}));
-      rows.push(heading('candidate-work-heading','Incapable de'));
-      let refused=0;
-      for(const work of Object.keys(BACKGROUND_WORK_LABELS) as WorkType[]){const refusal=backgroundWorkRefusal(pawn,work);if(refusal){refused++;rows.push(details({id:`refused-${work}`,label:BACKGROUND_WORK_LABELS[work],hint:refusal}));}}
-      if(!refused)rows.push(details({id:'candidate-work-none',label:'Aucune incapacité enregistrée'}));
-      rows.push(heading('candidate-skills-heading','Compétences',1));
-      for(const skill of BACKGROUND_SKILL_IDS){
-        const record=pawn.skills[skill]??{level:0,xp:0,dailyXp:0,passion:0 as const},refusal=backgroundSkillRefusal(pawn,skill),passion=record.passion===2?'Forte passion':record.passion===1?'Passion':'Sans passion';
-        rows.push(details({id:`skill-${skill}`,label:names[skill]!,value:refusal?'Incapable':`${record.level} / 20`,meter:{value:refusal?0:record.level,max:20,passion:record.passion,label:refusal?'Incapable':`${record.level} / 20`},hint:[names[skill],refusal?`${refusal} · Niveau enregistré ${record.level} / 20`:undefined,passion,`${(record.xp/XP_SCALE).toFixed(1)} / ${xpRequired(record.level)/XP_SCALE} XP`,`Apprentissage ${Math.round(learningFactor(record,pawn)*100)} %`].filter(Boolean).join('\n')},1));
-      }
       const health=pawn.health;
       const conditions:NativeRow[]=[...(health?.injuries??[]).map(injury=>({id:`candidate-injury-${injury.id}`,label:BODY_PARTS[injury.part].label,value:`${injury.scar?.pain!==undefined?'Cicatrice':INJURY_RULES[injury.kind].label} · −${(injury.severity/HP_UNIT).toFixed(1)} PV`})),
         ...(health?.missing??[]).map(part=>({id:`candidate-missing-${part.part}`,label:BODY_PARTS[part.part].label,value:'Partie perdue'})),

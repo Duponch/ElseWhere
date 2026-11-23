@@ -1,4 +1,5 @@
 import {drawPicto} from '../ui/picto-artwork';
+import {NATIVE_TEXT} from './native-ui-scale';
 import {alertsDisabled347} from '../sim/game-profile';
 import * as THREE from 'three/webgpu';
 import type {MaterialPile, Pawn, World} from '../sim/types';
@@ -458,7 +459,7 @@ export class NativeHudCards {
     if(this.rightDockOpen===open)return;
     this.rightDockOpen=open;
     this.alertHandle.userData.tooltip=open?'Replier les notifications':'Afficher les notifications';
-    this.alertHandle.redraw((ctx,w,h)=>{ctx.font=`bold 38px ${FONT}`;ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';ctx.fillText(open?'›':'‹',w/2,h/2+12);});
+    this.alertHandle.redraw((ctx,w,h)=>{ctx.font=`bold ${NATIVE_TEXT.medium*1.9}px ${FONT}`;ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';ctx.fillText(open?'›':'‹',w/2,h/2+12);});
   }
   getRightDockOpen():boolean{return this.rightDockOpen;}
   setNotificationsAutoHide(enabled:boolean):void {
@@ -555,11 +556,11 @@ export class NativeHudCards {
     if(base.x!==x||base.y!==y||base.z!==z||piece.userData.baseRot.z!==rotation)piece.setBaseTransform(x,y,z,rotation);
   }
   private drawCaption(ctx: CanvasRenderingContext2D, w: number, h: number, label: string,width=w/2.8,height=h/2.8): void {
-    ctx.save();ctx.scale(w/width,h/height);ctx.font=`bold 13px ${FONT}`;ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';fitText(ctx,label,width/2,height/2+4,width-12);ctx.restore();
+    ctx.save();ctx.scale(w/width,h/height);ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';fitText(ctx,label,width/2,height/2+4,width-12);ctx.restore();
   }
   private smallButton(label: string, seed: number, onClick: () => void): CardboardPiece {
     return this.makePiece({w: 0.34, h: 0.29, depth: 0.044, bgColor: PALETTE.kraftBase, bevel: 0.036, seed, interactive: true,
-      drawFn: (ctx, w, h) => { ctx.font = `bold 38px ${FONT}`; ctx.fillStyle = PALETTE.inkDark; ctx.textAlign = 'center'; ctx.fillText(label, w / 2, h / 2 + 12); }, onClick});
+      drawFn: (ctx, w, h) => { ctx.font = `bold ${NATIVE_TEXT.medium*1.9}px ${FONT}`; ctx.fillStyle = PALETTE.inkDark; ctx.textAlign = 'center'; ctx.fillText(label, w / 2, h / 2 + 12); }, onClick});
   }
   private changePage(delta: number): void {
     const pages = Math.max(1, Math.ceil(this.colonists.length / this.portraitCapacity));
@@ -628,7 +629,7 @@ export class NativeHudCards {
     else {drawHandBlob(ctx,35,48,15,col.shirt,'#261e18',1,rng);drawHandBlob(ctx,35,26,11,col.skin,'#261e18',1,rng);}
     if(col.bar)drawColonistBarState346(ctx,col.bar);
     drawHandRect(ctx,5,63,60,15,PALETTE.creamPaper,PALETTE.inkDark,.8,rng);
-    ctx.fillStyle=PALETTE.inkDark;ctx.font=`bold 12px ${FONT}`;ctx.textAlign='center';fitText(ctx,col.name,35,75,57);
+    ctx.fillStyle=PALETTE.inkDark;ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.textAlign='center';fitText(ctx,col.name,35,75,57);
     drawHandRect(ctx,10,81,50,5,'#423328',null,0,rng);
     if(col.mood>0)drawHandRect(ctx,10,81,50*col.mood/100,5,col.mood>70?'#639452':'#d16b3b',null,0,rng);
     ctx.restore();
@@ -719,13 +720,13 @@ export class NativeHudCards {
     ctx.save();ctx.scale(w/screenWidth,h/28);ctx.strokeStyle='#19242b';ctx.lineWidth=3;ctx.lineJoin='round';
     const indent=Math.min(30,(res.level??0)*9),iconX=12+indent;
     if(res.branch){
-      ctx.font=`bold 15px ${FONT}`;ctx.fillStyle='#fff8e9';ctx.textAlign='center';const glyph=res.branch.open?'⌄':'›';ctx.strokeText(glyph,iconX,19);ctx.fillText(glyph,iconX,19);
+      ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.fillStyle='#fff8e9';ctx.textAlign='center';const glyph=res.branch.open?'⌄':'›';ctx.strokeText(glyph,iconX,19);ctx.fillText(glyph,iconX,19);
     }else{
       const image=res.item?this.resourceImages.get(res.item):undefined;
       if(image?.complete&&image.naturalWidth>0)ctx.drawImage(image,indent,2,24,24);
       else {drawPicto(ctx,res.item?'item-'+res.item:'stockpile',iconX,14,9);}
     }
-    ctx.font=`${res.branch?'bold ':''}13px ${FONT}`;ctx.textAlign='left';ctx.fillStyle='#fff8e9';
+    ctx.font=`${res.branch?'bold ':''}${NATIVE_TEXT.small}px ${FONT}`;ctx.textAlign='left';ctx.fillStyle='#fff8e9';
     const textX=29+indent,valueWidth=res.value?Math.min(68,ctx.measureText(res.value).width+7):0,labelWidth=Math.max(35,screenWidth-textX-valueWidth-8);
     let label=res.label;while(label.length>1&&ctx.measureText(label+(label!==res.label?'…':'')).width>labelWidth)label=label.slice(0,-1);if(label!==res.label)label=label.trimEnd()+'…';
     ctx.strokeText(label,textX,19);ctx.fillText(label,textX,19);
@@ -738,7 +739,7 @@ export class NativeHudCards {
     const availableHeight=Math.max(58,this.viewportHeight-16-this.timeGroup.position.y/this.timeGroup.scale.x*100-252-this.letterReservePx);
     const previous=new Map(this.alertCards.map(card=>[card.key,card]));
     this.alertCards=[];
-    const ctx=this.allAlertsButton.userData.ctx;ctx.font=`bold 13px ${FONT}`;
+    const ctx=this.allAlertsButton.userData.ctx;ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;
     // Core draws every active alert. Here the column ends above the time board:
     // what does not fit scrolls (wheel or arrows), the footer opens the list.
     const total=this.alerts.length,wrapped=this.alerts.map(alert=>inkLines(ctx,alert.text,maxWidth-28)),cardHeight=(lines:number)=>Math.max(28,lines*17+12);
@@ -764,7 +765,7 @@ export class NativeHudCards {
         live.piece=this.makePiece({w:width/100,h:height/100,depth:.046,bgColor:painted,bevel:.038,surface:'panel',seed,interactive:true,
           drawFn:(ctx,w,h,rng)=>{
             ctx.save();ctx.scale(w/live.width,h/live.height);drawHandRect(ctx,4,5,4,live.height-10,live.color===PALETTE.creamPaper?PALETTE.ochre:PALETTE.creamPaper,null,0,rng);
-            ctx.fillStyle=PALETTE.inkDark;ctx.font=`bold 13px ${FONT}`;ctx.textAlign='left';
+            ctx.fillStyle=PALETTE.inkDark;ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.textAlign='left';
             live.lines.forEach((line,index)=>ctx.fillText(line,14,19+index*17,live.width-24));ctx.restore();
           },onClick:()=>this.activateAlert(live.key,1)});
         live.piece.userData.onSecondary=()=>this.activateAlert(live.key,-1);
@@ -825,9 +826,9 @@ export class NativeHudCards {
   }
   private drawWeather(ctx:CanvasRenderingContext2D,w:number,h:number,rng:()=>number):void {
     ctx.save();ctx.scale(w/248,h/96);
-    ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=`bold 25px ${FONT}`;fitText(ctx,this.weatherReadout.clock,78,34,158);
-    ctx.font=`bold 13px ${FONT}`;fitText(ctx,this.weatherReadout.date,78,56,158);
-    ctx.font=`13px ${FONT}`;fitText(ctx,`${this.weatherReadout.condition||this.weatherReadout.weather} · ${this.weatherReadout.temperature}`,78,77,158);ctx.restore();
+    ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=`bold ${NATIVE_TEXT.medium}px ${FONT}`;fitText(ctx,this.weatherReadout.clock,78,34,158);
+    ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;fitText(ctx,this.weatherReadout.date,78,56,158);
+    ctx.font=`${NATIVE_TEXT.small}px ${FONT}`;fitText(ctx,`${this.weatherReadout.condition||this.weatherReadout.weather} · ${this.weatherReadout.temperature}`,78,77,158);ctx.restore();
   }
 
   private showRoster(): void {

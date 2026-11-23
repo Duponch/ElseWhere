@@ -69,9 +69,11 @@ describe('Bio and story tooltips',()=>{
   setNativeInspectorTab('bio');
   let page:NativePage|undefined;const current=state(world,{selectedPawnIds:[pawn.id]});
   page=buildNativeInspector(current,actions(world,()=>current,next=>{page=next;}))!;
-  expect(page.rows.find(row=>row.id==='childhood')?.value).toBe(rows[0]!.label);
-  expect(page.rows.find(row=>row.id==='trait-optimist')?.label).toBe(sex==='female'?'Zorpe optimist':'Zorp optimist');
-  expect(page.rows.find(row=>row.id==='trait-optimist')?.hint).toBe(`${pawn.name} zorpe ${form} optimist.\n\n${TRAITS.optimist.description}`);
+  // The Bio card's chips (Core CharacterCardUtility).
+  const bio=page.rows.find(row=>row.id==='bio-card')!.bio!,trait=bio.traits.find(chip=>chip.id==='trait-optimist');
+  expect(bio.stories.find(story=>story.chip.id==='childhood')?.chip.label).toBe(rows[0]!.label);
+  expect(trait?.label).toBe(sex==='female'?'Zorpe optimist':'Zorp optimist');
+  expect(trait?.hint).toBe(`${pawn.name} zorpe ${form} optimist.\n\n${TRAITS.optimist.description}`);
   expect(traitSummary({...pawn,appearance:{sex}})).toBe(sex==='female'?'Zorpe optimist · Zorpe kind':'Zorp optimist · Zorp kind');
  });
 });
@@ -127,8 +129,8 @@ describe('candidate selection',()=>{
   const f=createPawnsUiHarness();await f.enterPawns();
   inventedGameTexts();
   await f.click(f.page!.rows.find(row=>/^candidate-\d+$/.test(row.id))!.controls![0]!.id);
-  const childhood=f.page!.rows.find(row=>row.id==='childhood'),traits=f.page!.rows.filter(row=>row.id.startsWith('candidate-trait-'));
-  expect(childhood?.value).toMatch(/^zorpe? /);expect(childhood?.hint).toMatch(/ zorpe (il|elle|iel) /);
+  const bio=f.page!.rows.find(row=>row.id==='candidate-bio')!.bio!,childhood=bio.stories.find(story=>story.chip.id==='childhood')?.chip,traits=bio.traits;
+  expect(childhood?.label).toMatch(/^zorpe? /);expect(childhood?.hint).toMatch(/ zorpe (il|elle|iel) /);
   for(const trait of traits)expect(trait.label).toMatch(/^Zorpe? /);
  });
 });

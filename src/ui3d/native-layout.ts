@@ -1,20 +1,37 @@
 import type {NativeControl,NativeControlStyle,NativePage,NativeRow} from './native-contract';
+import {NATIVE_GAP,NATIVE_LINE,NATIVE_TEXT,NATIVE_WINDOW} from './native-ui-scale';
+import {layoutNativeBioCard,NATIVE_BIO_SIZE,type NativeBioLayout} from './native-bio-card';
 
-/** CSS-pixel design tokens; neither browser layout nor DPR changes the model. */
-export const NATIVE_UI={body:14,small:12,title:18,line:20,padding:18,gap:10,button:34,tab:34,scrollbar:10,bottom:82} as const;
+/** Design tokens in RimWorld interface points (see native-ui-scale.ts); neither
+ * browser layout nor DPR changes the model. `body` and `small` are both the
+ * game's Small text (RimWorld writes nearly everything in Small); `bottom` is
+ * Elsewhere's own bottom dock of cards, not a RimWorld size. */
+export const NATIVE_UI={body:NATIVE_TEXT.small,small:NATIVE_TEXT.small,title:NATIVE_TEXT.medium,line:NATIVE_LINE.small,padding:NATIVE_WINDOW.margin,gap:NATIVE_GAP.small,button:NATIVE_WINDOW.button,tab:NATIVE_WINDOW.tab,scrollbar:NATIVE_WINDOW.scrollbar,bottom:82} as const;
 export const NATIVE_RIGHT_DOCK_WIDTH=264;
+/** Distance between two wrapped lines of Small text (tooltips, cards, pane). */
+export const NATIVE_LEADING=18;
 export type NativeRegion='navigation'|'catalogue'|'details'|'graph';
 export interface NativeRect {x:number;y:number;width:number;height:number}
 /** Region y is absolute in the page. Row/control y remains relative to header. */
 export interface NativeRegionBox extends NativeRect {contentHeight:number;contentWidth?:number}
 export interface NativeControlBox extends NativeRect {control:NativeControl;style:NativeControlStyle}
-export interface NativeInspectorParts {sheet:NativeRect;tabs:NativeRect;summary:NativeRect;actions:NativeRect}
+/** Core inspect pane parts, in page-box points: the open tab's window (height 0
+ * when no tab is open), the 72 × 30 tab strip, the 432 × 165 pane (`summary`)
+ * with its name, gauges and lines, and the gizmo area to its right. */
+export interface NativeInspectorParts {
+  sheet:NativeRect;tabs:NativeRect;summary:NativeRect;actions:NativeRect;
+  name?:NativeRect;
+  gauges?:{rowId:string;gauge:NonNullable<NativeRow['gauges']>[number];rect:NativeRect}[];
+  lines?:{row:NativeRow;rect:NativeRect;lines:string[]}[];
+}
 export interface NativeRowBox {
   row:NativeRow;x:number;top:number;width:number;height:number;labelWidth:number;
   controlTop:number;controlHeight:number;controlColumns:number;detailLines:string[];
   /** Text lane stays clear of actions arranged beside the same record. */
   textWidth:number;inlineActions:boolean;matrixTail?:boolean;
   labelLines:string[];valueLines:string[];matrix:boolean;controls:NativeControlBox[];
+  /** Laid out Bio card, card points from (x, top). */
+  bio?:NativeBioLayout;
 }
 export interface NativePageBox {
   x:number;y:number;width:number;height:number;header:number;footer:number;body:NativeRect;
@@ -46,13 +63,13 @@ export function nativeMatrixColumns(row:Pick<NativeRow,'value'>,x:number,width:n
 export function nativeMatrixHeadingLines(text:string,width:number,measure:TextMeasure):string[]{
   const words:string[]=[];
   for(const word of text.split(/\s+/).filter(Boolean)){
-    let part='';for(const character of Array.from(word)){if(part&&measure(part+character,12,true)>width){words.push(part);part='';}part+=character;}if(part)words.push(part);
+    let part='';for(const character of Array.from(word)){if(part&&measure(part+character,NATIVE_TEXT.small,true)>width){words.push(part);part='';}part+=character;}if(part)words.push(part);
   }
-  return wrapNativeText(words.join(' '),width,(value,size)=>measure(value,size,true),12);
+  return wrapNativeText(words.join(' '),width,(value,size)=>measure(value,size,true),NATIVE_TEXT.small);
 }
 /** Share the globe/dossier split with its physical scene placement. */
 export function nativeVisualWidth(page:NativePage,width:number):number{return page.visual?Math.min(page.id==='world'?560:360,width*.48):0;}
-export function wrapNativeText(text:string,width:number,measure:TextMeasure,size=13):string[]{
+export function wrapNativeText(text:string,width:number,measure:TextMeasure,size:number=NATIVE_TEXT.small):string[]{
   const lines:string[]=[];
   for(const paragraph of text.split('\n')){
     let line='';
@@ -66,7 +83,7 @@ export function wrapNativeText(text:string,width:number,measure:TextMeasure,size
 }
 /** File names and seeds can be one long token. Card text wraps these without
  * compressing its glyphs; the complete string remains in its native tooltip. */
-export function wrapNativeCardText(text:string,width:number,measure:TextMeasure,size=13):string[]{
+export function wrapNativeCardText(text:string,width:number,measure:TextMeasure,size:number=NATIVE_TEXT.small):string[]{
   const parts:string[]=[];
   for(const paragraph of text.split('\n')){
     const words:string[]=[];
@@ -87,8 +104,8 @@ export function nativeCardInk(control:NativeControl,width:number,measure:TextMea
     if(full.length>2){const last=Array.from(visible[1]!);while(last.length&&measure(last.join('')+'…',size,bold)>inkWidth)last.pop();visible[1]=last.join('').trimEnd()+'…';}
     return visible;
   };
-  const title=lines(control.label,15,true),caption=lines(control.caption,13,false),description=lines(control.description,13,false);
-  const height=Math.max(76,28+title.length*20+(caption.length?caption.length*19+4:0)+(description.length?description.length*19+4:0));
+  const title=lines(control.label,NATIVE_TEXT.small,true),caption=lines(control.caption,NATIVE_TEXT.small,false),description=lines(control.description,NATIVE_TEXT.small,false);
+  const height=Math.max(76,28+title.length*NATIVE_LEADING+(caption.length?caption.length*NATIVE_LEADING+4:0)+(description.length?description.length*NATIVE_LEADING+4:0));
   return {title,caption,description,height,inkWidth};
 }
 function naturalWidth(control:NativeControl,measure:TextMeasure,style:NativeControlStyle):number {
@@ -137,6 +154,7 @@ export function flowNativeControls(controls:readonly NativeControl[],rect:Native
 }
 function rowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasure,table:boolean,tileColumnLimit?:number,matrixTail=!!row.value,matrixWeights?:readonly number[]):NativeRowBox {
   if(row.tree)return storageTreeRowBox(row,x,top,width,measure);
+  if(row.bio)return bioRowBox(row,x,top,measure);
   const matrix=!!row.compact&&!!row.controls?.length&&table;
   const isTabs=row.controlStyle==='tab'||row.id==='pawn-tabs'||row.id==='health-tabs';
   const rowControls=row.controls??[],onlyButtons=!row.label&&!row.value&&!row.detail||isTabs;
@@ -180,6 +198,13 @@ function rowBox(row:NativeRow,x:number,top:number,width:number,measure:TextMeasu
   if(detailLines.length&&!row.controls?.length)height+=detailLines.length*18+4;
   if(row.presentation==='record'&&!row.meter&&!isTabs&&!matrix)height+=8;
   return {row,x,top,width,height,labelWidth,controlTop,controlHeight,controlColumns,detailLines,labelLines,valueLines,matrix,controls,textWidth,inlineActions,matrixTail};
+}
+/** One fixed card: its own rectangles, its buttons as icon controls. */
+function bioRowBox(row:NativeRow,x:number,top:number,measure:TextMeasure):NativeRowBox {
+  const bio=layoutNativeBioCard(row.bio!,(text,role,bold)=>measure(text,NATIVE_TEXT[role],!!bold));
+  const controls=bio.buttons.map(({control,rect}):NativeControlBox=>({control,style:'icon',x:x+rect.x,y:top+rect.y,width:rect.width,height:rect.height}));
+  return {row,x,top,width:NATIVE_BIO_SIZE.width,height:NATIVE_BIO_SIZE.height,labelWidth:0,controlTop:0,controlHeight:30,controlColumns:controls.length,detailLines:[],
+    textWidth:NATIVE_BIO_SIZE.width,inlineActions:false,labelLines:[],valueLines:[],matrix:false,controls,bio};
 }
 const requestedWidth=(page:NativePage,fallback:number)=>page.width?(page.width>20?page.width:page.width*100):fallback;
 /** Storage rows keep disclosure and permission as independent hit targets. */
@@ -349,54 +374,72 @@ function structuredPage(page:NativePage,viewport:{width:number;height:number},me
   const primary=regions[layout==='architect'?'catalogue':'details']!;
   return {x:12,y:viewport.height-bottom-height,width,height,header,footer:pad,body:{x:primary.x,y:primary.y,width:primary.width,height:primary.height},contentHeight:primary.contentHeight,rows,layout,regions,actions:[]};
 }
-/** Keep the dossier above its tabs and the portrait/action strip below them. */
+/** Core inspect pane (`InspectPaneUtility`, `InspectPaneFiller`,
+ * `GizmoGridDrawer`): a pane 72 × max(6, tabs) wide and 165 high at the bottom
+ * left, its 72 × 30 tabs right-aligned on top of it, the open tab's window
+ * resting on the tabs from the left edge, and the 75 × 75 gizmos from the pane's
+ * right + 14, their bottom 14 above the pane's bottom, 5 apart. */
+export const NATIVE_INSPECT={tabWidth:72,tabHeight:30,paneHeight:165,paneInner:12,paneTop:8,gaugeWidth:93,gaugeHeight:16,gaugeGap:6,gizmo:75,gizmoGap:5,gizmoStart:14,gizmoRowGap:14} as const;
 function inspectorPage(page:NativePage,viewport:{width:number;height:number},measure:TextMeasure):NativePageBox {
-  // A dossier is one stable physical object. Changing tab changes its contents,
-  // never the paper, tabs or the portrait/action strip underneath it.
-  const width=Math.min(Math.max(220,Math.min(760,viewport.width-32)),Math.max(1,viewport.width-24)),pad=NATIVE_UI.padding,header=40;
-  const bodyX=pad,contentWidth=width-pad*2-12,tabsRow=page.rows.find(row=>row.id==='pawn-tabs')!;
-  const tabsBox=rowBox(tabsRow,bodyX,0,contentWidth,measure,false);
+  const I=NATIVE_INSPECT,tabsRow=page.rows.find(row=>row.id==='pawn-tabs')!,tabCount=tabsRow.controls?.length??0;
+  const paneWidth=I.tabWidth*Math.max(6,tabCount),lower=I.tabHeight+I.paneHeight,bottom=NATIVE_UI.bottom+10;
+  const special=new Set(['inspect-close','inspect-tab-close']);
+  const gizmos=(page.actions??[]).filter(control=>!special.has(control.id));
+  const gizmoLeft=paneWidth+I.gizmoStart,gizmoRoom=Math.max(I.gizmo,viewport.width-12-gizmoLeft-NATIVE_RIGHT_DOCK_WIDTH);
+  const available=Math.max(1,viewport.height-bottom-12),tab=page.inspectTab;
+  // Rows of gizmos upwards; on a short screen, longer rows rather than off-screen ones.
+  const maxRows=Math.max(1,Math.floor(Math.max(available,lower)/(I.gizmo+I.gizmoRowGap)));
+  const perRow=Math.max(1,Math.floor((gizmoRoom+I.gizmoGap)/(I.gizmo+I.gizmoGap)),Math.ceil(gizmos.length/maxRows)),gizmoRows=Math.ceil(gizmos.length/perRow);
+  const gizmoHeight=gizmoRows?gizmoRows*(I.gizmo+I.gizmoRowGap):0;
+  if(available<lower+40||viewport.width<paneWidth+24)return layoutNativePage({...page,layout:'dialog',inspectTab:undefined,rows:page.rows.map(row=>({...row,region:undefined,inspectPane:undefined}))},viewport,false,measure);
+  const sheetWidth=tab?Math.min(tab.width,viewport.width-24):0,sheetHeight=tab?Math.max(40,Math.min(tab.height,available-lower)):0;
+  const height=Math.max(sheetHeight+lower,gizmoHeight),width=Math.max(sheetWidth,paneWidth,gizmos.length?gizmoLeft+Math.min(gizmos.length,perRow)*(I.gizmo+I.gizmoGap)-I.gizmoGap:0);
+  const sheet:NativeRect={x:0,y:height-lower-sheetHeight,width:sheetWidth,height:sheetHeight};
+  const tabs:NativeRect={x:0,y:height-lower,width:paneWidth,height:I.tabHeight};
+  const summary:NativeRect={x:0,y:height-I.paneHeight,width:paneWidth,height:I.paneHeight};
+  const actionRect:NativeRect={x:gizmoLeft,y:height-gizmoHeight,width:Math.max(0,width-gizmoLeft),height:gizmoHeight};
+  const margin=tab?.margin??NATIVE_UI.padding,header=sheet.y+margin;
+  const bio=page.rows.some(row=>row.bio&&!row.inspectPane),contentWidth=Math.max(1,sheetWidth-margin*2-(bio?0:12));
+  // The open tab's rows: the two-column flow of the generic tabs, or the card.
   const rows:NativeRowBox[]=[];let top=0,left=0,right=0,columns=false;
   for(const row of page.rows){
-    if(row===tabsRow)continue;
+    if(row===tabsRow||row.inspectPane||!tab)continue;
     if(row.column!==undefined&&!columns){columns=true;left=right=top;}
     else if(row.column===undefined&&columns){columns=false;top=Math.max(left,right);}
     const ratio=page.columnRatio??.5,columnWidth=columns?(row.column===1?contentWidth*(1-ratio)-5:contentWidth*ratio-5):contentWidth;
-    const x=bodyX+(columns&&row.column===1?contentWidth*ratio+5:0),rowTop=columns?(row.column===1?right:left):top;
+    const x=margin+(columns&&row.column===1?contentWidth*ratio+5:0),rowTop=columns?(row.column===1?right:left):top;
     const box=rowBox(row,x,rowTop,columnWidth,measure,false);rows.push(box);
     if(columns){if(row.column===1)right+=box.height;else left+=box.height;}else top+=box.height;
   }
-  const contentHeight=Math.max(top,left,right),bottom=NATIVE_UI.bottom+10;
-  const stripWidth=width-pad*2,summaryWidth=Math.min(260,Math.max(118,stripWidth*.4));
-  const actionsX=pad+summaryWidth+12,actionsWidth=Math.max(64,width-pad-actionsX),actionColumns=(page.actions?.length??0)>4?3:2;
-  const cellWidth=Math.max(24,(actionsWidth-(actionColumns-1)*NATIVE_UI.gap)/actionColumns),actions:NativeControlBox[]=[];
-  for(const [index,control]of(page.actions??[]).entries()){
-    const style=control.presentation??'button',buttonWidth=Math.min(cellWidth,naturalWidth(control,measure,style));
-    const textWidth=Math.max(12,buttonWidth-24-(control.icon?24:0)-(control.select?16:0));
-    const height=wrapNativeText(control.label,textWidth,measure,NATIVE_UI.body).length>1?42:NATIVE_UI.button;
-    actions.push({control,style,x:actionsX+index%actionColumns*(cellWidth+NATIVE_UI.gap),y:13+Math.floor(index/actionColumns)*50,width:buttonWidth,height});
+  const contentHeight=Math.max(top,left,right),bodyHeight=Math.max(0,sheetHeight-margin*2);
+  // Tabs: 72 × 30 from the pane's right edge leftwards; declared left to right.
+  const tabsBox=rowBox({...tabsRow,region:'navigation'},0,tabs.y-header,paneWidth,measure,false);
+  tabsBox.controls=(tabsRow.controls??[]).map((control,index):NativeControlBox=>({control,style:'tab',x:paneWidth-I.tabWidth*(tabCount-index),y:tabs.y-header,width:I.tabWidth,height:I.tabHeight}));
+  tabsBox.x=0;tabsBox.width=paneWidth;tabsBox.height=I.tabHeight;tabsBox.top=tabs.y-header;tabsBox.controlTop=0;tabsBox.controlHeight=I.tabHeight;
+  // Gizmos, bottom row first; close buttons (18 with a margin of 4) at the
+  // pane's and the tab window's top right corners.
+  const actions:NativeControlBox[]=gizmos.map((control,index)=>{const rowIndex=Math.floor(index/perRow),column=index%perRow;
+    return {control,style:'tile',x:gizmoLeft+column*(I.gizmo+I.gizmoGap),y:height-I.gizmoRowGap-I.gizmo-rowIndex*(I.gizmo+I.gizmoRowGap)-header,width:I.gizmo,height:I.gizmo};});
+  const close=(control:NativeControl|undefined,rect:NativeRect)=>{if(control)actions.push({control:{...control,label:'×',hint:control.hint??'Fermer · Échap',color:control.color??'#d7ad91'},style:'button',x:rect.x+rect.width-NATIVE_WINDOW.closeMargin-NATIVE_WINDOW.close,y:rect.y+NATIVE_WINDOW.closeMargin-header,width:NATIVE_WINDOW.close,height:NATIVE_WINDOW.close});};
+  close(page.actions?.find(control=>control.id==='inspect-close'),summary);
+  if(tab)close(page.actions?.find(control=>control.id==='inspect-tab-close'),sheet);
+  // Pane content: rect contracted by 12, top raised by 4: name in Medium,
+  // gauges at 26 + 3, inspect lines after 18 more (Small, wrapped).
+  const inner={x:I.paneInner,y:summary.y+I.paneTop,width:paneWidth-I.paneInner*2,height:I.paneHeight-I.paneInner*2+10};
+  const name:NativeRect={x:inner.x,y:inner.y,width:inner.width-NATIVE_WINDOW.close-NATIVE_WINDOW.closeMargin,height:NATIVE_LINE.medium};
+  const gauges:NonNullable<NativeInspectorParts['gauges']>=[],lines:NonNullable<NativeInspectorParts['lines']>=[];
+  let lineTop=inner.y+26;
+  for(const row of page.rows){
+    if(!row.inspectPane)continue;
+    if(row.gauges){lineTop=inner.y+26+3;row.gauges.forEach((gauge,index)=>gauges.push({rowId:row.id,gauge,rect:{x:inner.x+index*(I.gaugeWidth+I.gaugeGap),y:lineTop,width:I.gaugeWidth,height:I.gaugeHeight}}));lineTop+=18;continue;}
+    const text=row.label&&row.value?`${row.label} : ${row.value}`:row.value??row.label;
+    const wrapped=wrapNativeText(text,inner.width,(value,size)=>measure(value,size,false),NATIVE_TEXT.small),room=Math.floor((inner.y+inner.height-lineTop)/NATIVE_LEADING);
+    if(room<=0)break;const shown=wrapped.slice(0,room);
+    lines.push({row,rect:{x:inner.x,y:lineTop,width:inner.width,height:shown.length*NATIVE_LEADING},lines:shown});lineTop+=shown.length*NATIVE_LEADING;
   }
-  const stripHeight=Math.max(118,Math.ceil(actions.length/actionColumns)*50+4);
-  const availableHeight=Math.max(1,viewport.height-bottom-12);
-  const minimumHeight=header+8+4+tabsBox.height+4+stripHeight+40;
-  if(availableHeight<minimumHeight){
-    // At a large accessibility scale, keep full-sized text and controls in one
-    // scrollable dossier rather than pushing its fixed strips off the screen.
-    return layoutNativePage({...page,layout:'dialog',rows:page.rows.map(row=>({...row,region:undefined}))},viewport,false,measure);
-  }
-  const height=Math.min(availableHeight,660);
-  const bodyHeight=Math.max(40,height-header-8-4-tabsBox.height-4-stripHeight);
-  const sheet:NativeRect={x:0,y:0,width,height:header+bodyHeight+8};
-  const tabs:NativeRect={x:pad,y:sheet.height+4,width:contentWidth,height:tabsBox.height};
-  const stripY=tabs.y+tabs.height+4;
-  const summary:NativeRect={x:pad,y:stripY,width:summaryWidth,height:stripHeight};
-  const actionRect:NativeRect={x:actionsX,y:stripY,width:actionsWidth,height:stripHeight};
-  const footer=height-header-bodyHeight;
-  const tabsTop=tabs.y-header;
-  if(tabsBox.row.region!=='navigation')tabsBox.row={...tabsRow,region:'navigation'};
-  tabsBox.top=tabsTop;tabsBox.controls=tabsBox.controls.map(control=>({...control,y:control.y+tabsTop}));
-  actions.forEach(control=>control.y+=stripY-header);
-  return {x:12,y:viewport.height-bottom-height,width,height,header,footer,body:{x:bodyX,y:header,width:contentWidth,height:bodyHeight},contentHeight,rows:[tabsBox,...rows],layout:'inspector',regions:{navigation:{...tabs,contentHeight:tabs.height}},actions,inspectorParts:{sheet,tabs,summary,actions:actionRect}};
+  const portraitRect=tab?.id==='gear'&&page.portrait?{x:sheetWidth-margin-92,y:sheet.y+margin,width:92,height:128}:undefined;
+  return {x:12,y:viewport.height-bottom-height,width,height,header,footer:height-header-bodyHeight,body:{x:margin,y:header,width:contentWidth,height:bodyHeight},contentHeight,rows:[tabsBox,...rows],layout:'inspector',
+    regions:{navigation:{...tabs,contentHeight:tabs.height}},actions,portraitRect,inspectorParts:{sheet,tabs,summary,actions:actionRect,name,gauges,lines}};
 }
 /** Animal catalogues pin their measured toolbar and headings above the list.
  * Other table layouts keep their existing geometry and scroll owners. */
@@ -637,7 +680,7 @@ export function layoutNativePage(page:NativePage,viewport:{width:number;height:n
   if(layout==='table'&&page.tableProfile==='factions'&&page.id==='factions'&&page.rows.some(row=>row.columns))return colonistTablePage(page,viewport,measure);
   if(layout==='table'&&(page.id==='animals'||page.id==='wildlife')&&page.rows.some(row=>row.columns))return animalTablePage(page,viewport,measure);
   if(layout==='architect'||layout==='research')return structuredPage(page,viewport,measure,layout);
-  if(layout==='inspector'&&page.portrait&&page.rows.some(row=>row.id==='pawn-tabs'))return inspectorPage(page,viewport,measure);
+  if(layout==='inspector'&&page.rows.some(row=>row.id==='pawn-tabs'))return inspectorPage(page,viewport,measure);
   if(layout==='palette'){
     const x=Math.min(128,Math.max(12,viewport.width-120)),available=Math.max(48,viewport.width-x-16);
     const count=page.rows.reduce((sum,row)=>sum+(row.controls?.length??0),0),gap=6;

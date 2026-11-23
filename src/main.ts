@@ -1348,6 +1348,7 @@ function readNativeState():NativeUiState {
 function nativeActions():NativeUiActions {
   return {
     openLetter352:id=>{const entry=snapshot?.letters352?.archive.find(e=>e.id===id);if(entry&&'cls'in entry)openNativeLetter(entry);},
+    openFactions:()=>{if(!tutorialAllows({tag:'MainTab-Factions-Open'}))return;nativeCustomPage=buildNativeFactions(readNativeState(),nativeActions());nativeUi?.showPage(nativeCustomPage);tutorialNotify('MainTab-Factions-Open');},
     command:async command=>{
       if(replacingWorld||simulationStopped||graphicsFault||waitingRequests.size)throw Error('L’état courant ne permet pas encore cette commande.');
       const campaign=/^(group-|map-|caravan-)/.test(command.type);

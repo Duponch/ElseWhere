@@ -17,7 +17,9 @@ import {NativeHighlightPass,type NativeHighlightCandidate,type NativeHighlightPi
 import {setNativeCursor} from '../ui/native-cardboard-cursors';
 import {SHIP_FRAME_MAXIMUM_DELTA_298} from '../bridge/ship-countdown-wire-298';
 import {floatMenuVanishes,pressOutsideFloatMenu,mouseAttachedTipPosition,tipTextAction,TOOLTIP_DELAY_MS} from './native-float-menu';
-import {NATIVE_UI,NATIVE_RIGHT_DOCK_WIDTH,layoutNativePage,nativeVisualWidth,nativeMatrixColumns,nativeMatrixHeadingLines,nativeTableRowScroll,wrapNativeText,nativeCardInk,type NativePageBox,type NativeRowBox,type NativeRect,type NativeRegion,type NativeRegionBox} from './native-layout';
+import {NATIVE_TEXT,NATIVE_INK,type NativeTextRole} from './native-ui-scale';
+import {paintNativeBioCard,nativeBioTargets} from './native-bio-card';
+import {NATIVE_UI,NATIVE_LEADING,NATIVE_RIGHT_DOCK_WIDTH,layoutNativePage,nativeVisualWidth,nativeMatrixColumns,nativeMatrixHeadingLines,nativeTableRowScroll,wrapNativeText,nativeCardInk,type NativePageBox,type NativeRowBox,type NativeRect,type NativeRegion,type NativeRegionBox} from './native-layout';
 
 const HUD_DISTANCE=7.5;
 const PANEL_IDS=['architect','work','schedule','assign','animals','wildlife','research','quests','world','history','factions','menu'] as const;
@@ -176,6 +178,9 @@ export class NativeStage {
   private globe:NativeGlobe|undefined;
   private globeDrag:{pointerId:number;x:number;y:number;startX:number;startY:number}|undefined;
   private readonly selectionBox=new THREE.Group();
+  /** Core `Widgets.DrawHighlight` under the mouse over a Bio chip or skill row:
+   * one shared plane moved to the hovered rectangle, never a repaint. */
+  private rowHighlight?:THREE.Mesh;
   private readonly selectionFill=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({color:0xf8e5ad,transparent:true,opacity:.09,depthTest:false,depthWrite:false}));
   private readonly selectionOutline=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(1,1)),new THREE.LineBasicMaterial({color:0xf8e5ad,transparent:true,opacity:.9,depthTest:false,depthWrite:false}));
   private readonly portraitImages=new Map<string,HTMLImageElement>();
@@ -222,7 +227,7 @@ export class NativeStage {
     this.anchors.bottomLeft.add(this.toolsDock);this.toolsDock.visible=false;
     for(const [index,kind]of (['orders','zones'] as const).entries()){
       const control:NativeControl={id:'map-dock:'+kind,label:kind==='orders'?'Ordres':'Zones',hint:kind==='orders'?'Ordres sur la carte':'Zones sur la carte',onActivate:()=>this.options.onTools?.(kind)};
-      const piece=this.art.createPiece({w:1.08,h:.46,depth:.046,bevel:.038,uvPadding:1,textureWidth:216,textureHeight:92,seed:381+index*5,bgColor:PALETTE.sageMountain,interactive:true,tooltip:control.hint,drawFn:(ctx,w,h,rng)=>{ctx.save();ctx.scale(w/108,h/46);/* Preserve the seeded label paint after removing the icon disk. */for(let point=0;point<14;point++)rng();drawNativeActionIconInBox(ctx,kind,7,7,30,32);drawHandRect(ctx,44,11,58,25,PALETTE.creamPaper,PALETTE.inkDark,1,rng);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';ctx.font=this.font(13,true);ctx.fillText(control.label,73,28,54);ctx.restore();}});
+      const piece=this.art.createPiece({w:1.08,h:.46,depth:.046,bevel:.038,uvPadding:1,textureWidth:216,textureHeight:92,seed:381+index*5,bgColor:PALETTE.sageMountain,interactive:true,tooltip:control.hint,drawFn:(ctx,w,h,rng)=>{ctx.save();ctx.scale(w/108,h/46);/* Preserve the seeded label paint after removing the icon disk. */for(let point=0;point<14;point++)rng();drawNativeActionIconInBox(ctx,kind,7,7,30,32);drawHandRect(ctx,44,11,58,25,PALETTE.creamPaper,PALETTE.inkDark,1,rng);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';ctx.font=this.font('small',true);ctx.fillText(control.label,73,28,54);ctx.restore();}});
       piece.userData.nativeId=control.id;piece.userData.nativeMapToolPose=true;piece.setBaseTransform(.54,index===0?1.63:1.09,.08);this.toolsDock.add(piece);this.register(piece,control);
     }
     // The reference's three lights, with the world key expressed in HUD-camera
@@ -326,8 +331,8 @@ export class NativeStage {
   hasOpenGamePage(modalOnly=false):boolean{return this.worldVisible&&!this.frontVisible&&!!this.page&&(!modalOnly||!!this.page.modal);}
   private cameraWorldPoint(x:number,y:number):boolean{
     if(!this.hasOpenGamePage()||this.dropdown||this.editor)return false;
-    const box=this.pageBox,lx=x/this.displayScale,ly=y/this.displayScale;
-    if(box&&lx>=box.x&&lx<=box.x+box.width&&ly>=box.y&&ly<=box.y+box.height)return false;
+    const lx=x/this.displayScale,ly=y/this.displayScale;
+    if(this.pageContains(lx,ly))return false;
     // Modal activation can filter HUD controls, but camera gestures must still
     // respect every physically visible UI surface.
     return !this.hit(x,y,true)&&this.globeHit(x,y)===null;
@@ -392,7 +397,10 @@ export class NativeStage {
     const regular=`400 20px ${JSON.stringify(name)}`,bold=`700 20px ${JSON.stringify(name)}`;
     if(!fonts.check(regular)||!fonts.check(bold))void Promise.all([fonts.load(regular,'Éléonore, cœur, œuf, ça, où, Noël.'),fonts.load(bold,'Éléonore, cœur, œuf, ça, où, Noël.')]).then(repaint).catch(()=>{});
   }
-  private font(size:number,bold=false):string{return `${bold?'bold ':''}${size}px ${this.textFontFamily}`;}
+  /** Every text is drawn in a role of the interface scale (native-ui-scale.ts);
+   * `scale` only follows a painted texture's own resolution or a glyph. */
+  private font(role:NativeTextRole,bold=false,scale=1):string{return this.fontPx(NATIVE_TEXT[role]*scale,bold);}
+  private fontPx(size:number,bold=false):string{return `${bold?'bold ':''}${size}px ${this.textFontFamily}`;}
   setWorldReadout(lines:readonly string[]|null):void{
     const next=lines?.filter(line=>line.trim().length)??[];
     if(JSON.stringify(next)!==JSON.stringify(this.worldReadoutLines)){this.worldReadoutLines=[...next];this.worldReadoutScroll=0;this.refreshWorldReadout();}
@@ -409,16 +417,16 @@ export class NativeStage {
     const left=15,lowLane=this.bottomLeftClearance-24,canUseCorner=lowLane>=180;
     const maxWidth=Math.max(80,Math.min(640,this.width-NATIVE_RIGHT_DOCK_WIDTH-16,canUseCorner?lowLane-11:Infinity));
     const bottom=canUseCorner?46:this.bottomDockHeight+8;this.readoutBottom=bottom;
-    const lines=this.worldReadoutLines.flatMap(line=>wrapNativeText(line,maxWidth,this.measure,14)),available=Math.max(42,this.height-bottom-180);
+    const lines=this.worldReadoutLines.flatMap(line=>wrapNativeText(line,maxWidth,this.measure,NATIVE_TEXT.small)),available=Math.max(42,this.height-bottom-180);
     const overflow=lines.length*19+4>available,count=overflow?Math.max(1,Math.floor((available-22)/19)):lines.length;
     this.worldReadoutMaxScroll=Math.max(0,lines.length-count);this.worldReadoutScroll=Math.min(this.worldReadoutScroll,this.worldReadoutMaxScroll);
-    const width=Math.min(maxWidth,Math.max(...lines.map(line=>this.measure(line,14)))+8),height=count*19+4+(overflow?18:0);
+    const width=Math.min(maxWidth,Math.max(...lines.map(line=>this.measure(line,NATIVE_TEXT.small)))+8),height=count*19+4+(overflow?18:0);
     this.readoutReserveHeight=Math.max(this.readoutReserveHeight,height);
     const top=this.height-8-bottom-height;
     const box=this.pageBox;
     this.readoutCanPlace=!box||box.layout==='palette'||top>=box.y+box.height+8||left+8+width<=box.x-8;
     const w=width*.01,h=height*.01,geometry=width+'|'+height+'|'+overflow,ink=JSON.stringify([lines,this.textFontRevision]);
-    const draw:CardboardDraw=(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.textAlign='left';ctx.font=this.font(14);ctx.lineJoin='round';ctx.strokeStyle='rgba(15,22,17,.95)';ctx.lineWidth=3;ctx.fillStyle='#fff9eb';lines.slice(this.worldReadoutScroll,this.worldReadoutScroll+count).forEach((line,i)=>{ctx.strokeText(line,3,16+i*19);ctx.fillText(line,3,16+i*19);});if(overflow){const text=`Molette : suite · ${this.worldReadoutScroll+1}–${Math.min(lines.length,this.worldReadoutScroll+count)}/${lines.length}`;ctx.font=this.font(11,true);ctx.fillStyle='#f4d589';ctx.strokeText(text,3,height-4);ctx.fillText(text,3,height-4);}ctx.restore();};
+    const draw:CardboardDraw=(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.textAlign='left';ctx.font=this.font('small');ctx.lineJoin='round';ctx.strokeStyle='rgba(15,22,17,.95)';ctx.lineWidth=3;ctx.fillStyle='#fff9eb';lines.slice(this.worldReadoutScroll,this.worldReadoutScroll+count).forEach((line,i)=>{ctx.strokeText(line,3,16+i*19);ctx.fillText(line,3,16+i*19);});if(overflow){const text=`Molette : suite · ${this.worldReadoutScroll+1}–${Math.min(lines.length,this.worldReadoutScroll+count)}/${lines.length}`;ctx.font=this.font('tiny',true);ctx.fillStyle='#f4d589';ctx.strokeText(text,3,height-4);ctx.fillText(text,3,height-4);}ctx.restore();};
     if(!this.worldReadout||this.worldReadoutGeometry!==geometry){
       if(this.worldReadout)this.unregister(this.worldReadout);
       this.worldReadout=this.art.createPiece({w,h,paper:false,interactive:overflow,textureWidth:Math.ceil(width*2),textureHeight:Math.ceil(height*2),drawFn:draw,seed:3751});
@@ -437,10 +445,10 @@ export class NativeStage {
   private setPointerOverUi(over:boolean):void{if(this.pointerOverUi!==over){this.pointerOverUi=over;this.updateWorldReadoutVisibility();}}
   showNotice(message:string,error=false):void{
     clearTimeout(this.noticeTimer);if(this.notice)this.unregister(this.notice);
-    const width=Math.min(this.width-32,460,Math.max(120,this.measure(message,13)+24)),lines=wrapNativeText(message,width-24,this.measure,13),height=lines.length*17+20;
+    const width=Math.min(this.width-32,460,Math.max(120,this.measure(message,NATIVE_TEXT.small)+24)),lines=wrapNativeText(message,width-24,this.measure,NATIVE_TEXT.small),height=lines.length*17+20;
     const w=width*.01,h=height*.01;
     const piece=this.art.createPiece({w,h,seed:1881,uvPadding:1,textureWidth:Math.ceil(width*2),textureHeight:Math.ceil(height*2),bgColor:error?'#e2b59a':PALETTE.creamPaper,depth:.046,bevel:.038,surface:'panel',
-      drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font(13);ctx.textAlign='left';lines.forEach((line,index)=>ctx.fillText(line,12,23+index*17,width-24));ctx.restore();}});
+      drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font('small');ctx.textAlign='left';lines.forEach((line,index)=>ctx.fillText(line,12,23+index*17,width-24));ctx.restore();}});
     piece.setBaseTransform(0,-1.0,.35);this.anchors.topCenter.add(piece);this.notice=piece;this.invalidate();
     this.noticeTimer=setTimeout(()=>{if(this.notice===piece){this.unregister(piece);this.notice=undefined;this.invalidate();}},error?8000:4000);
   }
@@ -458,7 +466,7 @@ export class NativeStage {
     buttons.forEach((button,index)=>{
       const width=widths[index]!,w=width*.01,h=height*.01;
       const piece=this.art.createPiece({w,h,seed:6101+index,uvPadding:1,textureWidth:width*2,textureHeight:height*2,bgColor:button.active?PALETTE.sageMountain:PALETTE.creamPaper,depth:.036,bevel:.03,interactive:true,tooltip:button.hint,
-        drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font(13,true);ctx.textAlign='center';ctx.fillText(button.label,width/2,height/2+5,width-12);ctx.restore();}});
+        drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font('small',true);ctx.textAlign='center';ctx.fillText(button.label,width/2,height/2+5,width-12);ctx.restore();}});
       piece.userData.nativeId=button.id;
       // Just under the colonist bar, which owns the very top of the screen.
       piece.setBaseTransform((left+width/2)*.01,-1.28,.2);
@@ -503,7 +511,7 @@ export class NativeStage {
     this.management.forEach((piece,index)=>{piece.visible=index>=first&&index<last;if(!piece.visible)return;const local=index-first,row=Math.floor(local/columns),count=Math.min(columns,last-first-row*columns);piece.setBaseTransform((local%columns-(count-1)/2)*.675,.325+row*.64,0,piece.userData.baseRot.z);this.setPose(piece,piece.userData.hoverVal);});
     if(paged&&!this.managementPrevious){
       const make=(direction:-1|1)=>{const control:NativeControl={id:direction<0?'dock:previous':'dock:next',label:direction<0?'‹':'›',hint:direction<0?'Boutons précédents':'Boutons suivants',onActivate:()=>{this.managementPage=(this.managementPage+direction+this.managementPages)%this.managementPages;this.hover(null);this.resize();this.refreshWorldReadout();this.invalidate();}};
-        const piece=this.art.createPiece({w:.32,h:.42,seed:direction<0?48411:48412,interactive:true,bgColor:PALETTE.kraftBase,tooltip:control.hint,drawFn:(ctx,w,h)=>{ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font(32,true);ctx.textAlign='center';ctx.fillText(control.label,w/2,h*.66);}});piece.userData.nativeId=control.id;this.register(piece,control);this.anchors.bottomCenter.add(piece);return piece;};
+        const piece=this.art.createPiece({w:.32,h:.42,seed:direction<0?48411:48412,interactive:true,bgColor:PALETTE.kraftBase,tooltip:control.hint,drawFn:(ctx,w,h)=>{ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font('medium',true,1.6);ctx.textAlign='center';ctx.fillText(control.label,w/2,h*.66);}});piece.userData.nativeId=control.id;this.register(piece,control);this.anchors.bottomCenter.add(piece);return piece;};
       this.managementPrevious=make(-1);this.managementNext=make(1);
     }
     for(const [piece,direction]of [[this.managementPrevious,-1],[this.managementNext,1]] as const)if(piece){piece.visible=paged;piece.setBaseTransform(direction*(columns*.675/2+.23),.325,.08);}
@@ -624,7 +632,7 @@ export class NativeStage {
     const list=this.dropdown;if(list&&!list.pieces.includes(piece as CardboardPiece)&&inside(list.box))return true;
     const page=this.page,box=this.pageBox;if(!page||!box)return false;
     for(let node:THREE.Object3D|null=piece;node;node=node.parent)if(node===this.pageGroup)return false;
-    return !!page.modal||inside(box);
+    return !!page.modal||this.pageContains(x,y);
   }
   /** No World or admission capability: this is only the existing RAF source. */
   private countdownDriver298():'game'|'standalone'|undefined{return this.frontVisible||this.standalone?'standalone':this.worldVisible?'game':undefined;}
@@ -766,9 +774,9 @@ export class NativeStage {
   private showMapToolLabel(owner:CardboardPiece):void {
     const title=String(owner.userData.nativeMapToolTitle??'');if(!title)return;
     if(this.mapToolLabelOwner===owner&&this.mapToolLabelTitle===title)return;
-    this.clearMapToolLabel();const width=Math.min(220,Math.max(54,this.measure(title,13,true)+20)),height=26;
+    this.clearMapToolLabel();const width=Math.min(220,Math.max(54,this.measure(title,NATIVE_TEXT.small,true)+20)),height=26;
     const label=this.art.createPiece({w:width*.01,h:height*.01,depth:.018,bevel:.012,uvPadding:1,textureWidth:Math.ceil(width*2),textureHeight:52,bgColor:PALETTE.creamPaper,seed:this.seed('map-tool-label:'+title),interactive:false,
-      drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.font=this.font(13,true);ctx.textAlign='center';ctx.fillStyle=PALETTE.inkDark;ctx.fillText(title,width/2,18,width-12);ctx.restore();}});
+      drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.font=this.font('small',true);ctx.textAlign='center';ctx.fillStyle=PALETTE.inkDark;ctx.fillText(title,width/2,18,width-12);ctx.restore();}});
     label.userData.nativeId='map-tool-hover-title';label.userData.nativeStatic=true;label.visible=false;
     (String(owner.userData.nativeId).startsWith('map-dock:')?this.toolsDock:this.pageGroup).add(label);
     this.mapToolLabel=label;this.mapToolLabelOwner=owner;this.mapToolLabelTitle=title;this.sceneRevision++;this.updateMapToolLabel();
@@ -784,6 +792,7 @@ export class NativeStage {
   }
 
   private hover(piece:CardboardPiece|null):void{
+    this.showRowHighlight(piece?.userData.nativeHighlight?piece:null);
     if(piece?.userData.nativeStatic||piece?.userData.nativeDisabled)piece=null;
     if(piece===this.hovered)return;
     const mesh=piece?.userData.interactiveMeshes?.[0];
@@ -847,7 +856,7 @@ export class NativeStage {
       this.gesture();setNativeCursor(document.documentElement,'grabbing');this.setPointerOverUi(true);this.globeDrag={pointerId:event.pointerId,x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY};this.swallow(event);return;
     }
     const hit=this.hit(event.clientX,event.clientY);
-    const box=this.pageBox,x=event.clientX/this.displayScale,y=event.clientY/this.displayScale,inside=!!box&&x>=box.x&&x<=box.x+box.width&&y>=box.y&&y<=box.y+box.height;
+    const box=this.pageBox,x=event.clientX/this.displayScale,y=event.clientY/this.displayScale,inside=this.pageContains(x,y);
     // Map tool palettes keep empty-world presses on the renderer's gesture path.
     // Actual UI hits and release-over-UI cancellation retain their ordinary rules.
     const paletteWorldPress=event.button===0&&event.isPrimary&&!!box&&!hit&&!inside&&this.worldVisible&&!this.frontVisible&&!this.editor&&!this.dropdown&&!this.page?.modal
@@ -971,7 +980,7 @@ export class NativeStage {
     const select=hit.control?.select;if(!select||!this.page)return;
     this.closeDropdown();const center=hit.piece.getWorldPosition(new THREE.Vector3()).project(this.camera),scale=hit.piece.getWorldScale(new THREE.Vector3());
     const x=(center.x+1)*this.width/2,y=(1-center.y)*this.height/2;
-    const width=Math.min(this.width-24,360,Math.max(100,hit.piece.userData.w*scale.x/this.visW*this.width,...select.options.map(option=>this.measure(option.label,13)+34)));
+    const width=Math.min(this.width-24,360,Math.max(100,hit.piece.userData.w*scale.x/this.visW*this.width,...select.options.map(option=>this.measure(option.label,NATIVE_TEXT.small)+34)));
     const height=Math.min(this.height-24,392,select.options.length*25+10),top=y+hit.piece.userData.h*scale.y/this.visH*this.height/2+4;
     this.dropdown={controlId:hit.control!.id,pageId:this.page.id,box:{x:THREE.MathUtils.clamp(x-width/2,12,this.width-width-12),y:top+height<=this.height-12?top:Math.max(12,y-height-16),width,height},offset:0,index:Math.max(0,select.options.findIndex(option=>option.value===select.value)),pieces:[]};
     this.rebuildDropdown();
@@ -986,7 +995,7 @@ export class NativeStage {
     const background=this.art.createPiece({w:box.width*.01,h:box.height*.01,uvPadding:1,bgColor:PALETTE.creamPaper,depth:.046,bevel:.038,surface:'panel',seed:938,interactive:true,drawFn:()=>{}});
     background.userData.nativeId='select-popup';background.userData.nativeStatic=true;this.register(background);place(background,box.x+box.width/2,box.y+box.height/2,1.6);
     select.options.slice(state.offset,state.offset+count).forEach((option,index)=>{
-      const actual=index+state.offset,selected=actual===state.index,piece=this.art.createPiece({w:(box.width-10)*.01,h:.235,uvPadding:1,paper:selected,textureWidth:Math.ceil((box.width-10)*2),textureHeight:47,bgColor:PALETTE.ochre,seed:949+actual,interactive:true,tooltip:option.hint??option.label,drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/(box.width-10),hp/23.5);ctx.textAlign='left';ctx.fillStyle=option.disabled?'#92816a':PALETTE.inkDark;ctx.font=this.font(13);ctx.fillText((option.value===select.value?'✓ ':'')+option.label,7,16,box.width-28);ctx.restore();}});
+      const actual=index+state.offset,selected=actual===state.index,piece=this.art.createPiece({w:(box.width-10)*.01,h:.235,uvPadding:1,paper:selected,textureWidth:Math.ceil((box.width-10)*2),textureHeight:47,bgColor:PALETTE.ochre,seed:949+actual,interactive:true,tooltip:option.hint??option.label,drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/(box.width-10),hp/23.5);ctx.textAlign='left';ctx.fillStyle=option.disabled?'#92816a':PALETTE.inkDark;ctx.font=this.font('small');ctx.fillText((option.value===select.value?'✓ ':'')+option.label,7,16,box.width-28);ctx.restore();}});
       const optionControl:NativeControl={id:'select-option:'+state.controlId+':'+option.value,label:option.label,disabled:option.disabled,hint:option.hint??option.label,onActivate:()=>this.selectDropdown(option.value)};
       piece.userData.nativeId=optionControl.id;this.register(piece,optionControl);place(piece,box.x+box.width/2,box.y+5+index*25+11.75,1.64);
     });
@@ -1055,7 +1064,7 @@ export class NativeStage {
       if(next!==this.scroll){this.scroll=next;this.hover(null);this.rebuildPage(true);this.invalidate();}
     }
   }
-  private measure=(text:string,size:number,bold=false):number=>{this.measureContext.font=this.font(size,bold);return this.measureContext.measureText(text).width;};
+  private measure=(text:string,size:number,bold=false):number=>{this.measureContext.font=this.fontPx(size,bold);return this.measureContext.measureText(text).width;};
   private primaryRegion():NativeRegion|undefined{if(this.pageBox?.layout==='setup')return this.pageBox.regions.catalogue?'catalogue':this.pageBox.regions.details?'details':this.pageBox.regions.graph?'graph':'navigation';return this.pageBox?.layout==='storage'||this.pageBox?.layout==='architect'||this.pageBox?.layout==='world'||this.pageBox?.layout==='table'&&this.pageBox.regions.catalogue?'catalogue':this.pageBox?.layout==='research'?'details':undefined;}
   private horizontalOffset(region?:NativeRegion):number{return region==='graph'?this.graphX:region==='catalogue'&&(this.pageBox?.layout==='palette'||this.pageBox?.layout==='table')?this.paletteX:0;}
   private setHorizontalOffset(region:NativeRegion|undefined,value:number):void{const rect=region?this.pageBox?.regions[region]:undefined,next=THREE.MathUtils.clamp(value,0,Math.max(0,(rect?.contentWidth??rect?.width??0)-(rect?.width??0)));if(region==='graph')this.graphX=next;else if(region==='catalogue'&&(this.pageBox?.layout==='palette'||this.pageBox?.layout==='table'))this.paletteX=next;}
@@ -1156,6 +1165,7 @@ export class NativeStage {
     this.textLexicon=createNativeTextLexicon(entities);
     const signature=this.pageInkSignature(page);
     if(!force&&signature===this.pageSignature){this.rebindPage(page);return;}
+    if(this.rowHighlight)this.rowHighlight.visible=false;
     const focused=this.pageControls.filter(hit=>!hit.control?.disabled)[this.focusIndex],focusedId=focused?focused.control?.id??String(focused.piece.userData.nativeId):undefined;
     this.pageSignature=signature;this.pagePieceIds=new Set();this.pagePieces.length=0;this.pageControls=[];this.pageBackdrop=undefined;
     if(this.globe&&this.globe.visible!==!!page?.visual){this.globe.visible=!!page?.visual;this.sceneRevision++;}
@@ -1185,23 +1195,28 @@ export class NativeStage {
       this.setRegionOffset(region,this.regionOffset(region));
     }
     const visible=box.rows.filter(r=>this.rowVisible(r)),sheet=box.inspectorParts?.sheet??{x:0,y:0,width:box.width,height:box.height};
-    if(box.layout!=='palette'){
-    const background=this.pagePiece('page:'+page.id,{w,h:sheet.height*k,cacheBackground:true,surface:'panel',uvPadding:1,bevel:.038,textureWidth:Math.ceil(box.width*2),textureHeight:Math.ceil(sheet.height*2),bgColor:'#f1e7cf',seed:2003,depth:.046,interactive:true,
+    // The inspect pane's open tab is its own window (no title, Core ITab);
+    // without an open tab there is no sheet at all.
+    const composite=!!box.inspectorParts;
+    if(box.layout!=='palette'&&sheet.height>0){
+    const background=this.pagePiece('page:'+page.id,{w:sheet.width*k,h:sheet.height*k,cacheBackground:true,surface:'panel',uvPadding:1,bevel:.038,textureWidth:Math.ceil(sheet.width*2),textureHeight:Math.ceil(sheet.height*2),bgColor:'#f1e7cf',seed:2003,depth:.046,interactive:true,
       drawFn:(ctx,wp,hp,rng)=>{
-        ctx.save();ctx.scale(wp/box.width,hp/sheet.height);ctx.textAlign='left';ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font(17,true);
-        const title=box.inspectorParts?page.rows.find(row=>row.id==='pawn-tabs')?.controls?.find(control=>control.active)?.label??page.title:page.title;
-        ctx.fillText(title,margin,27,box.width-margin*2-(page.portrait&&!box.inspectorParts&&!box.portraitRect?74:28));
-        drawMarkerLine(ctx,margin,35,Math.min(box.width-48,margin+this.measure(title,17,true)+22),35,'#b58b4a',1.3,rng);
-        if(page.subtitle&&!box.inspectorParts){ctx.font=this.font(13);ctx.fillStyle='#66583f';wrapNativeText(page.subtitle,box.width-margin*2-(page.portrait&&!box.portraitRect?62:0),this.measure,13).slice(0,2).forEach((line,index)=>ctx.fillText(line,margin,55+index*17));}
+        ctx.save();ctx.scale(wp/sheet.width,hp/sheet.height);ctx.translate(-sheet.x,-sheet.y);ctx.textAlign='left';ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font('medium');
+        if(!composite){
+        const title=page.title;
+        ctx.fillText(title,margin,27,box.width-margin*2-(page.portrait&&!box.portraitRect?74:28));
+        drawMarkerLine(ctx,margin,35,Math.min(box.width-48,margin+this.measure(title,NATIVE_TEXT.medium)+22),35,'#b58b4a',1.3,rng);
+        }
+        if(page.subtitle&&!box.inspectorParts){ctx.font=this.font('small');ctx.fillStyle='#66583f';wrapNativeText(page.subtitle,box.width-margin*2-(page.portrait&&!box.portraitRect?62:0),this.measure,NATIVE_TEXT.small).slice(0,2).forEach((line,index)=>ctx.fillText(line,margin,55+index*17));}
         for(const r of visible){if(r.row.graphNode)continue;const top=box.header+r.top-this.rowOffset(r.row),nameBand=this.rowNameViewport(r.row);
           if(nameBand){ctx.save();ctx.beginPath();ctx.rect(nameBand.x,nameBand.y,nameBand.width,nameBand.height);ctx.clip();this.drawMatrixName(ctx,r,top);ctx.restore();}
           const region=this.rowViewport(r.row);ctx.save();ctx.beginPath();ctx.rect(region.x,region.y,region.width,region.height);ctx.clip();ctx.translate(-this.horizontalOffset(r.row.region),0);this.drawPageRow(ctx,r,top,rng,box);ctx.restore();}
         this.drawResearchLinks(ctx,box,rng);
         if(box.layout==='architect'||box.layout==='research'){ctx.strokeStyle='rgba(82,62,39,.25)';ctx.lineWidth=1;for(const rect of Object.values(box.regions)){if(rect.x<=12)continue;ctx.beginPath();ctx.moveTo(rect.x-7,rect.y);ctx.lineTo(rect.x-7,rect.y+rect.height);ctx.stroke();}}
         ctx.restore();
-      }},signature,0,(box.height-sheet.height)*k/2,0);
+      }},signature,(sheet.x+sheet.width/2-box.width/2)*k,(box.height/2-sheet.y-sheet.height/2)*k,0);
     background.userData.nativeStatic=true;this.pageBackdrop=background;this.pageGroup.add(background);
-    if(page.closable!==false)this.control(this.closeControl(),w/2-.25,h/2-.23,.32,.32,.07);
+    if(page.closable!==false&&!composite)this.control(this.closeControl(),w/2-.25,h/2-.23,.32,.32,.07);
     }
     this.pageGroup.updateMatrixWorld(true);
     const local=(x:number,y:number)=>new THREE.Vector3((x-box.width/2)*k,(box.height/2-y)*k,0).applyMatrix4(this.pageGroup.matrixWorld);
@@ -1213,7 +1228,8 @@ export class NativeStage {
     clip(this.pageContent,box.layout==='table'?box.regions.catalogue??box.body:box.body);for(const [key,group]of Object.entries(this.regionGroups))clip(group,box.regions[key as NativeRegion]??box.body);
     for(const r of visible){
       const row=r.row,offset=this.rowOffset(row),group=box.tableHeader&&row.columns?this.tableHeaderContent:this.regionGroup(row.region),top=box.header+r.top-offset,cy=top+r.height/2;
-      const hint=this.rowHint(row);
+      if(r.bio)this.bioTargets(r,box,cy-r.height/2,group);
+      const hint=row.bio?undefined:this.rowHint(row);
       if(hint&&!row.graphNode){
         const nameBand=box.layout==='table'&&row.region==='catalogue'?box.regions.navigation:undefined,width=nameBand?.width??r.width,left=nameBand?.x??r.x-this.horizontalOffset(row.region);
         const piece=this.pagePiece('row-hint:'+row.id,{w:width*k,h:r.height*k,paper:false,hitOnly:true,interactive:true,drawFn:()=>{}},hint,(left+width/2-box.width/2)*k,(box.height/2-cy)*k,.025);
@@ -1241,7 +1257,7 @@ export class NativeStage {
       if(row.input){
         const rightControls=controls.length?controls.length*28+6:0,inputW=Math.max(70,r.width-r.labelWidth-rightControls-8);
         const piece=this.pagePiece(row.id,{w:inputW*k,h:.25,uvPadding:1,textureWidth:Math.ceil(inputW*2),textureHeight:50,bgColor:'#fff9eb',seed:3007,depth:.018,interactive:true,
-          drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/inputW,hp/25);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=this.font(13);ctx.fillText(row.input!.value||row.input!.placeholder||'',7,17,inputW-14);ctx.restore();}},JSON.stringify([row.input.value,row.input.placeholder,this.textFontRevision]),(r.x+r.labelWidth+8+inputW/2-box.width/2)*k,(box.height/2-top-15)*k,.08,undefined,row.input);
+          drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/inputW,hp/25);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=this.font('small');ctx.fillText(row.input!.value||row.input!.placeholder||'',7,17,inputW-14);ctx.restore();}},JSON.stringify([row.input.value,row.input.placeholder,this.textFontRevision]),(r.x+r.labelWidth+8+inputW/2-box.width/2)*k,(box.height/2-top-15)*k,.08,undefined,row.input);
         group.add(piece);
       }
     }
@@ -1255,18 +1271,11 @@ export class NativeStage {
       this.globe.scale.setScalar(Math.min(globeRect.width*.44,globeRect.height*.43)*k);
       this.globe.setSurface(page.visual.surface,page.visual.roads);this.globe.setSelected(page.visual.selected);this.globe.setMarkers((page.visual.markers??[]).map(marker=>({...marker,label:marker.label??('Case '+marker.tile)})));this.sceneRevision++;
     }
-    if(page.portrait){
-      const summary=box.inspectorParts?.summary;
-      if(summary){
-        const activity=page.rows.find(row=>row.id==='pawn-action')?.value??'',identity=page.rows.find(row=>row.id==='pawn-identity')?.value??'';
-        const stripWidth=box.width-summary.x*2,textTop=(summary.height-74)/2;
-        this.pagePiece('page:summary',{w:stripWidth*k,h:summary.height*k,uvPadding:1,depth:.046,bevel:.038,surface:'panel',bgColor:PALETTE.creamPaper,seed:2080,cacheBackground:true,textureWidth:Math.ceil(stripWidth*2),textureHeight:Math.ceil(summary.height*2),drawFn:(ctx,wp,hp)=>{
-          ctx.save();ctx.scale(wp/stripWidth,hp/summary.height);ctx.textAlign='left';ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font(15,true);ctx.fillText(page.title,94,textTop+15,summary.width-106);ctx.font=this.font(12.5);this.wrap(ctx,identity,94,textTop+35,summary.width-106,17,2);this.wrap(ctx,activity,94,textTop+69,summary.width-106,17,2);ctx.restore();
-        }},JSON.stringify([page.title,activity,identity,this.textFontRevision]),(summary.x+stripWidth/2-box.width/2)*k,(box.height/2-summary.y-summary.height/2)*k,.025);
-      }
+    if(box.inspectorParts)this.drawInspectPane(page,box);
+    if(page.portrait&&(!box.inspectorParts||box.portraitRect)){
       const source=page.portrait.url;let image=this.portraitImages.get(source);
       if(!image){image=new Image();this.portraitImages.set(source,image);image.onload=()=>{if(!this.closed&&this.page?.portrait?.url===source){this.rebuildPage(true);this.invalidate();}};image.src=source;}
-      if(image.complete&&image.naturalWidth){const portrait=image,rect=box.portraitRect;const piece=this.pagePiece('page:portrait',{w:rect?rect.width*k:summary ? .74 : .43,h:rect?rect.height*k:summary ? .82 : .47,depth:.018,bgColor:PALETTE.kraftBase,seed:2081,drawFn:(ctx,wp,hp)=>ctx.drawImage(portrait,0,0,wp,hp)},source,rect?(rect.x+rect.width/2-box.width/2)*k:summary?(summary.x+47-box.width/2)*k:w/2-.7,rect?(box.height/2-rect.y+this.regionOffset('details')-rect.height/2)*k:summary?(box.height/2-summary.y-summary.height/2)*k:h/2-.32,.07);if(rect)this.regionGroup('details').add(piece);}
+      if(image.complete&&image.naturalWidth){const portrait=image,rect=box.portraitRect;const piece=this.pagePiece('page:portrait',{w:rect?rect.width*k:.43,h:rect?rect.height*k:.47,depth:.018,bgColor:PALETTE.kraftBase,seed:2081,drawFn:(ctx,wp,hp)=>ctx.drawImage(portrait,0,0,wp,hp)},source,rect?(rect.x+rect.width/2-box.width/2)*k:w/2-.7,rect?(box.height/2-rect.y+this.regionOffset('details')-rect.height/2)*k:h/2-.32,.07);if(rect)this.regionGroup('details').add(piece);}
       if(this.portraitImages.size>24)for(const [url,old]of this.portraitImages){if(url===source)continue;old.onload=null;old.onerror=null;this.portraitImages.delete(url);if(this.portraitImages.size<=16)break;}
     }
     this.retirePagePieces();this.focusIndex=focusedId===undefined?-1:this.pageControls.filter(hit=>!hit.control?.disabled).findIndex(hit=>(hit.control?.id??String(hit.piece.userData.nativeId))===focusedId);
@@ -1274,16 +1283,69 @@ export class NativeStage {
     this.rebindPage(page);
     this.scene.updateMatrixWorld(true);
   }
+  /** Core inspect pane (`InspectPaneUtility`, `InspectPaneFiller`): the name
+   * in Medium, gauges of 93 × 16 with Tiny labels, then the inspect lines in
+   * Small. One paper piece repainted only when its ink changes; the gauges and
+   * lines carry hit planes (tooltip, or the allowed area's list). */
+  private drawInspectPane(page:NativePage,box:NativePageBox):void{
+    const parts=box.inspectorParts!,pane=parts.summary,k=.01;
+    const ink=JSON.stringify([page.title,parts.gauges?.map(({gauge})=>[gauge.label,Math.round(gauge.fill*200),gauge.color]),parts.lines?.map(line=>line.lines),this.textFontRevision]);
+    this.pagePiece('page:summary',{w:pane.width*k,h:pane.height*k,uvPadding:1,depth:.046,bevel:.038,surface:'panel',bgColor:PALETTE.creamPaper,seed:2080,cacheBackground:true,textureWidth:Math.ceil(pane.width*2),textureHeight:Math.ceil(pane.height*2),drawFn:(ctx,wp,hp,rng)=>{
+      ctx.save();ctx.scale(wp/pane.width,hp/pane.height);ctx.translate(-pane.x,-pane.y);ctx.textAlign='left';
+      if(parts.name){ctx.font=this.font('medium');ctx.fillStyle=NATIVE_INK.text;ctx.fillText(page.title,parts.name.x,parts.name.y+NATIVE_TEXT.medium,parts.name.width);}
+      for(const {gauge,rect} of parts.gauges??[]){
+        ctx.fillStyle=NATIVE_INK.gaugeBack;ctx.fillRect(rect.x,rect.y,rect.width,rect.height);
+        ctx.fillStyle=gauge.color;ctx.fillRect(rect.x,rect.y,rect.width*THREE.MathUtils.clamp(gauge.fill,0,1),rect.height);
+        drawHandRect(ctx,rect.x,rect.y,rect.width,rect.height,null,PALETTE.inkDark,.8,rng);
+        ctx.font=this.font('tiny');ctx.textAlign='center';ctx.fillStyle=NATIVE_INK.text;ctx.fillText(gauge.label,rect.x+rect.width/2,rect.y+rect.height/2+NATIVE_TEXT.tiny*.36,rect.width-4);ctx.textAlign='left';
+      }
+      for(const line of parts.lines??[])line.lines.forEach((text,index)=>this.semanticText(ctx,text,line.rect.x,line.rect.y+index*NATIVE_LEADING+NATIVE_TEXT.small,line.rect.width,NATIVE_TEXT.small));
+      ctx.restore();
+    }},ink,(pane.x+pane.width/2-box.width/2)*k,(box.height/2-pane.y-pane.height/2)*k,.025).userData.nativeStatic=true;
+    const target=(id:string,rect:NativeRect,hint:string,control?:NativeControl)=>{
+      const piece=this.pagePiece(id,{w:rect.width*k,h:rect.height*k,paper:false,hitOnly:true,interactive:true,drawFn:()=>{}},hint,(rect.x+rect.width/2-box.width/2)*k,(box.height/2-rect.y-rect.height/2)*k,.04,control);
+      piece.userData.tooltip=hint;if(!control)piece.userData.nativeStatic=true;
+    };
+    for(const {gauge,rect} of parts.gauges??[])target(gauge.select?'pane-gauge:'+gauge.id:'pane-gauge-hint:'+gauge.id,rect,gauge.hint,gauge.select?{id:'pane-gauge:'+gauge.id,label:gauge.label,hint:gauge.hint,select:gauge.select,onActivate:()=>{}}:undefined);
+    for(const line of parts.lines??[]){const hint=this.rowHint(line.row);if(hint)target('pane-line:'+line.row.id,line.rect,hint);}
+  }
+  /** Tooltip planes over the Bio card's chips and skill rows, and the faction
+   * chip's click (Core opens the Factions tab). */
+  private bioTargets(r:NativeRowBox,box:NativePageBox,rowTop:number,group:THREE.Object3D):void{
+    const k=.01;
+    for(const target of nativeBioTargets(r.bio!)){
+      const rect=target.rect,x=r.x+rect.x-this.horizontalOffset(r.row.region),y=rowTop+rect.y;
+      const control:NativeControl|undefined=target.onActivate?{id:'bio:'+target.id,label:target.id,hint:target.hint,onActivate:target.onActivate}:undefined;
+      const piece=this.pagePiece('bio:'+target.id,{w:rect.width*k,h:rect.height*k,paper:false,hitOnly:true,interactive:true,drawFn:()=>{}},target.hint,(x+rect.width/2-box.width/2)*k,(box.height/2-y-rect.height/2)*k,.03,control);
+      piece.userData.tooltip=target.hint;piece.userData.nativeHighlight=true;if(!control)piece.userData.nativeStatic=true;group.add(piece);
+    }
+  }
+  private showRowHighlight(piece:CardboardPiece|null):void{
+    const parent=piece?.parent;
+    if(!piece||!parent){if(this.rowHighlight?.visible){this.rowHighlight.visible=false;this.invalidate();}return;}
+    this.rowHighlight??=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({color:new THREE.Color(NATIVE_INK.highlightPlane),transparent:true,opacity:.16,depthWrite:false}));
+    const plane=this.rowHighlight;if(plane.parent!==parent)parent.add(plane);
+    plane.position.set(piece.position.x,piece.position.y,piece.position.z+.002);plane.scale.set(piece.userData.w,piece.userData.h,1);plane.visible=true;this.invalidate();
+  }
+  /** Inside a visible part of the page: the whole box, or only the inspect
+   * pane's actual pieces (open tab, tabs, pane, gizmos). */
+  private pageContains(x:number,y:number):boolean{
+    const box=this.pageBox;if(!box)return false;
+    const inside=(rect:NativeRect)=>x>=box.x+rect.x&&x<=box.x+rect.x+rect.width&&y>=box.y+rect.y&&y<=box.y+rect.y+rect.height;
+    const parts=box.inspectorParts;if(!parts)return inside({x:0,y:0,width:box.width,height:box.height});
+    return inside(parts.sheet)||inside(parts.tabs)||inside(parts.summary)||box.actions.some(action=>inside({x:action.x,y:box.header+action.y,width:action.width,height:action.height}));
+  }
   private drawMatrixName(ctx:CanvasRenderingContext2D,r:NativeRowBox,top:number):void{
-    if(r.row.columns){ctx.fillStyle='#4d5c46';ctx.font=this.font(13,true);ctx.textAlign='left';ctx.fillText(r.row.label,r.x,top+28,98);}
+    if(r.row.columns){ctx.fillStyle='#4d5c46';ctx.font=this.font('small',true);ctx.textAlign='left';ctx.fillText(r.row.label,r.x,top+28,98);}
     else if(r.matrix)this.semanticText(ctx,r.row.label,r.x,top+r.height/2+4,98,NATIVE_UI.body,true);
   }
   private drawPageRow(ctx:CanvasRenderingContext2D,r:NativeRowBox,top:number,rng:()=>number,box:NativePageBox):void{
     const row=r.row,ink=PALETTE.inkDark,body=NATIVE_UI.body,line=NATIVE_UI.line;ctx.fillStyle=ink;ctx.textAlign='left';
+    if(r.bio&&row.bio){paintNativeBioCard(ctx,r.bio,row.bio,r.x,top,{font:(role,bold)=>this.font(role,bold),measure:(text,role,bold)=>this.measure(text,NATIVE_TEXT[role],!!bold),rng});return;}
     if(row.tree){
       const left=r.x+Math.max(0,row.tree.depth)*17+28;
       ctx.fillStyle=row.controls?.every(control=>control.disabled)?'#7a705f':ink;
-      this.semanticText(ctx,r.labelLines[0]??row.label,left,top+18,r.labelWidth,14,row.tree.depth===0);
+      this.semanticText(ctx,r.labelLines[0]??row.label,left,top+18,r.labelWidth,NATIVE_TEXT.small,row.tree.depth===0);
       return;
     }
     const record=row.presentation==='record'||!!row.controls?.length&&!!row.label&&!row.meter&&!row.columns&&!r.matrix;
@@ -1294,25 +1356,25 @@ export class NativeStage {
     if(row.columns){
       if(!(box.layout==='table'&&box.regions.navigation&&row.region==='catalogue'))this.drawMatrixName(ctx,r,top);
       const tail=r.matrixTail?192:0,columns=nativeMatrixColumns(row,r.x,r.width,row.columns.length,r.matrixTail,box.matrixColumnWeights);
-      row.columns.forEach((column,index)=>{const cell=columns[index]!,lines=nativeMatrixHeadingLines(column.label,cell.width-5,this.measure).slice(0,2);ctx.textAlign='center';ctx.font=this.font(12,true);lines.forEach((line,lineIndex)=>ctx.fillText(line,cell.x+cell.width/2,top+28+(lineIndex-(lines.length-1)/2)*15,cell.width-4));});
-      if(row.value)this.semanticText(ctx,row.value,r.x+r.width-tail+6,top+28,tail-10,12);return;
+      row.columns.forEach((column,index)=>{const cell=columns[index]!,lines=nativeMatrixHeadingLines(column.label,cell.width-5,this.measure).slice(0,2);ctx.textAlign='center';ctx.font=this.font('small',true);lines.forEach((line,lineIndex)=>ctx.fillText(line,cell.x+cell.width/2,top+28+(lineIndex-(lines.length-1)/2)*15,cell.width-4));});
+      if(row.value)this.semanticText(ctx,row.value,r.x+r.width-tail+6,top+28,tail-10,NATIVE_TEXT.small);return;
     }
-    if(r.matrix){if(!(box.layout==='table'&&box.regions.navigation&&row.region==='catalogue'))this.drawMatrixName(ctx,r,top);if(row.value){const lines=wrapNativeText(row.value,176,this.measure,13);lines.slice(0,2).forEach((line,i)=>this.semanticText(ctx,line,r.x+r.width-180,top+18+i*17,176,13));}return;}
+    if(r.matrix){if(!(box.layout==='table'&&box.regions.navigation&&row.region==='catalogue'))this.drawMatrixName(ctx,r,top);if(row.value){const lines=wrapNativeText(row.value,176,this.measure,NATIVE_TEXT.small);lines.slice(0,2).forEach((line,i)=>this.semanticText(ctx,line,r.x+r.width-180,top+18+i*17,176,NATIVE_TEXT.small));}return;}
     if(row.id==='pawn-tabs'||row.id==='health-tabs')return;
     if(row.meter){
       const meter=row.meter,labelWidth=Math.min(r.width*.45,138),barX=r.x+labelWidth,barW=Math.max(40,r.width-labelWidth-8),fraction=THREE.MathUtils.clamp(meter.value/(meter.max??1),0,1);
       this.semanticText(ctx,row.label,r.x,top+18,labelWidth-5,body);
-      if(meter.passion){ctx.fillStyle='#b45c29';ctx.font=this.font(10,true);ctx.fillText('♥'.repeat(meter.passion),r.x+labelWidth-24,top+24);}
+      if(meter.passion){ctx.fillStyle='#b45c29';ctx.font=this.font('tiny',true);ctx.fillText('♥'.repeat(meter.passion),r.x+labelWidth-24,top+24);}
       drawHandRect(ctx,barX,top+6,barW,16,'#e5d4b2','#51402c',1,rng);
       if(fraction>0)drawHandRect(ctx,barX+.8,top+6.8,Math.max(.5,(barW-1.6)*fraction),14.4,meter.color??'#63885d',null,.5,rng);
-      ctx.fillStyle=ink;ctx.font=this.font(12,true);ctx.textAlign='center';ctx.strokeStyle='#f8edda';ctx.lineWidth=2;ctx.strokeText(meter.label??row.value??'',barX+barW/2,top+19,barW-4);ctx.fillText(meter.label??row.value??'',barX+barW/2,top+19,barW-4);ctx.textAlign='left';
+      ctx.fillStyle=ink;ctx.font=this.font('small',true);ctx.textAlign='center';ctx.strokeStyle='#f8edda';ctx.lineWidth=2;ctx.strokeText(meter.label??row.value??'',barX+barW/2,top+19,barW-4);ctx.fillText(meter.label??row.value??'',barX+barW/2,top+19,barW-4);ctx.textAlign='left';
       if(meter.secondary){const secondary=meter.secondary;ctx.fillStyle='#d2bea0';ctx.fillRect(barX,top+25,barW,4);ctx.fillStyle=secondary.color??'#987743';ctx.fillRect(barX,top+25,barW*THREE.MathUtils.clamp(secondary.value/(secondary.max??1),0,1),4);}
       return;
     }
     const baseline=top+(record?21:18),labelWidth=row.value||row.input?r.labelWidth-5:r.textWidth;
     if(row.label)r.labelLines.forEach((text,i)=>this.semanticText(ctx,text,r.x+3,baseline+i*line,labelWidth-3,body,row.emphasis==='heading'||row.presentation==='summary'||record&&!!row.value));
     if(row.value)r.valueLines.forEach((text,i)=>this.semanticText(ctx,text,r.x+r.labelWidth+6,baseline+i*line,r.textWidth-r.labelWidth-8,body));
-    if(r.detailLines.length){const y=baseline+Math.max(r.labelLines.length,r.valueLines.length,1)*line+2;r.detailLines.forEach((text,i)=>this.semanticText(ctx,text,r.x+3,y+i*18,r.textWidth-5,12));}
+    if(r.detailLines.length){const y=baseline+Math.max(r.labelLines.length,r.valueLines.length,1)*line+2;r.detailLines.forEach((text,i)=>this.semanticText(ctx,text,r.x+3,y+i*18,r.textWidth-5,NATIVE_TEXT.small));}
     if(row.emphasis==='heading'){ctx.strokeStyle='rgba(103,76,38,.35)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(r.x,top+r.height-4);ctx.lineTo(r.x+r.width,top+r.height-4);ctx.stroke();}
   }
   private semanticText(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,width:number,size:number,bold=false):void{
@@ -1320,7 +1382,7 @@ export class NativeStage {
     if(!spans){spans=tokenizeNativeText(text,this.textLexicon);if(this.semanticInk.size>=1024)this.semanticInk.delete(this.semanticInk.keys().next().value!);this.semanticInk.set(text,spans);}
     const measured=spans.reduce((sum,span)=>sum+this.measure(span.text,size,bold||NATIVE_TEXT_STYLES[span.kind].bold),0);
     ctx.save();ctx.textAlign='left';ctx.translate(x,y);ctx.scale(Math.min(1,width/Math.max(1,measured)),1);let offset=0;
-    for(const span of spans){const style=NATIVE_TEXT_STYLES[span.kind];ctx.font=this.font(size,bold||style.bold);ctx.fillStyle=style.color;ctx.fillText(span.text,offset,0);offset+=this.measure(span.text,size,bold||style.bold);}
+    for(const span of spans){const style=NATIVE_TEXT_STYLES[span.kind];ctx.font=this.fontPx(size,bold||style.bold);ctx.fillStyle=style.color;ctx.fillText(span.text,offset,0);offset+=this.measure(span.text,size,bold||style.bold);}
     ctx.restore();
   }
   private wrap(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,width:number,lineHeight:number,maxLines=20):number{
@@ -1353,37 +1415,38 @@ export class NativeStage {
         }
       }else if(style==='tile'||style==='navigation'){
         /* Preserve the seeded label paint after removing the icon disk. */for(let point=0;point<14;point++)rng();
-        const lines=wrapNativeText(control.label,cssW-13,this.measure,13).slice(0,2),bandHeight=lines.length>1?31:24,bandY=cssH-bandHeight-4;
+        // A 75-point gizmo labels in Tiny (Core Command), larger tiles in Small.
+        const labelRole:NativeTextRole=cssW<=80?'tiny':'small',lines=wrapNativeText(control.label,cssW-13,this.measure,NATIVE_TEXT[labelRole]).slice(0,2),bandHeight=lines.length>1?(labelRole==='tiny'?25:31):24,bandY=cssH-bandHeight-4;
         const iconTop=control.caption?21:9;
         drawNativeActionIconInBox(ctx,control.icon??control.id,9,iconTop,cssW-18,bandY-iconTop-8,ink);
-        ctx.save();ctx.translate(cssW/2,bandY+bandHeight/2);ctx.rotate(this.seed(control.id)%2?.024:-.024);drawHandRect(ctx,-cssW*.46,-bandHeight/2,cssW*.92,bandHeight,PALETTE.creamPaper,ink,1.1,rng);ctx.font=this.font(13,true);lines.forEach((line,index)=>ctx.fillText(line,0,4+(index-(lines.length-1)/2)*14,cssW-13));ctx.restore();
-        if(control.caption){ctx.font=this.font(10,true);ctx.textAlign='right';ctx.fillText(control.caption,cssW-7,14,cssW-12);}
+        ctx.save();ctx.translate(cssW/2,bandY+bandHeight/2);ctx.rotate(this.seed(control.id)%2?.024:-.024);drawHandRect(ctx,-cssW*.46,-bandHeight/2,cssW*.92,bandHeight,PALETTE.creamPaper,ink,1.1,rng);ctx.font=this.font(labelRole,true);lines.forEach((line,index)=>ctx.fillText(line,0,4+(index-(lines.length-1)/2)*(labelRole==='tiny'?11:14),cssW-13));ctx.restore();
+        if(control.caption){ctx.font=this.font('tiny',true);ctx.textAlign='right';ctx.fillText(control.caption,cssW-7,14,cssW-12);}
       }else if(style==='card'){
         ctx.textAlign='left';const cardInk=nativeCardInk(control,cssW,this.measure,!!inset);let baseline=30;
-        const paint=(lines:string[],size:number,bold:boolean)=>{ctx.font=this.font(size,bold);for(const line of lines){ctx.fillText(line,18,baseline);baseline+=bold?20:19;}};
-        paint(cardInk.title,15,true);if(cardInk.caption.length){baseline+=4;paint(cardInk.caption,13,false);}if(cardInk.description.length){baseline+=4;ctx.fillStyle='#625139';paint(cardInk.description,13,false);}
+        const paint=(lines:string[],bold:boolean)=>{ctx.font=this.font('small',bold);for(const line of lines){ctx.fillText(line,18,baseline);baseline+=NATIVE_LEADING;}};
+        paint(cardInk.title,true);if(cardInk.caption.length){baseline+=4;paint(cardInk.caption,false);}if(cardInk.description.length){baseline+=4;ctx.fillStyle='#625139';paint(cardInk.description,false);}
         if(inset){drawHandRect(ctx,cssW-54,14,38,38,PALETTE.creamPaper,ink,1.2,rng);drawNativeActionIcon(ctx,inset.icon??inset.id,cssW-35,33,12,inset.disabled?'#8b7b60':ink,PALETTE.creamPaper);}
       }else if(style==='icon'){
         drawNativeActionIconInBox(ctx,control.icon??(control.label==='▶'?'play':control.id),6,6,cssW-12,cssH-12,ink);
       }else if(style==='research'&&node){
-        icon(18,22,11);ctx.textAlign='left';ctx.font=this.font(12,true);wrapNativeText(control.label,cssW-42,this.measure,12).slice(0,2).forEach((line,index)=>ctx.fillText(line,36,19+index*15,cssW-42));
+        icon(18,22,11);ctx.textAlign='left';ctx.font=this.font('small',true);wrapNativeText(control.label,cssW-42,this.measure,NATIVE_TEXT.small).slice(0,2).forEach((line,index)=>ctx.fillText(line,36,19+index*15,cssW-42));
         const barWidth=cssW-38,filled=barWidth*THREE.MathUtils.clamp(node.points/Math.max(1,node.cost),0,1);
         drawHandRect(ctx,8,cssH-16,barWidth,9,'#ae9675',ink,1,rng);if(filled>0){ctx.fillStyle=node.state==='done'?'#8fa66c':node.state==='active'?'#d3a548':'#829baa';ctx.fillRect(9,cssH-15,Math.max(0,filled-2),7);}
-        ctx.fillStyle=ink;ctx.font=this.font(9,true);ctx.textAlign='center';ctx.fillText(`${Math.round(node.points)}/${node.cost}`,8+barWidth/2,cssH-8,barWidth-4);
+        ctx.fillStyle=ink;ctx.font=this.font('tiny',true);ctx.textAlign='center';ctx.fillText(`${Math.round(node.points)}/${node.cost}`,8+barWidth/2,cssH-8,barWidth-4);
         if(inset){drawHandRect(ctx,118,40,22,19,inset.disabled?PALETTE.kraftLight:PALETTE.sageMountain,ink,1,rng);drawNativeActionIcon(ctx,'play',129,49.5,6.5,inset.disabled?'#776c55':ink,PALETTE.creamPaper);}
       }else{
         const inlineIcon=!!control.icon&&cssH>=28;if(inlineIcon)icon(17,cssH/2,10);
-        const available=cssW-(control.select?24:12)-(inlineIcon?26:0),font=control.id==='page:close'?20:control.label.length<=1&&cssW<=48?17:14;
+        const available=cssW-(control.select?24:12)-(inlineIcon?26:0),font:NativeTextRole=control.id==='page:close'||control.label.length<=1&&cssW<=48?'medium':'small';
         ctx.font=this.font(font,true);let label=control.label;
-        if(cssH>=39&&!control.caption){const lines=wrapNativeText(label,available,this.measure,font).slice(0,2);lines.forEach((line,index)=>ctx.fillText(line,cssW/2+(inlineIcon?12:0)-(control.select?4:0),cssH/2+4+(index-(lines.length-1)/2)*15,available));}
+        if(cssH>=39&&!control.caption){const lines=wrapNativeText(label,available,this.measure,NATIVE_TEXT[font]).slice(0,2);lines.forEach((line,index)=>ctx.fillText(line,cssW/2+(inlineIcon?12:0)-(control.select?4:0),cssH/2+4+(index-(lines.length-1)/2)*15,available));}
         else{
-        while(label.length>1&&this.measure(label,font,true)>available)label=label.slice(0,-1);
+        while(label.length>1&&this.measure(label,NATIVE_TEXT[font],true)>available)label=label.slice(0,-1);
         if(label!==control.label)label=label.trimEnd()+'…';
-        if(workCell)ctx.font=this.font(17,true);
+        if(workCell)ctx.font=this.font('medium',true);
         if(control.mark==='check'){const cx=cssW/2,cy=control.caption&&workCell?cssH*.43-5:cssH/2;ctx.save();ctx.strokeStyle=ink;ctx.lineWidth=2.6;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(cx-6,cy);ctx.lineTo(cx-1.5,cy+5);ctx.lineTo(cx+7,cy-6);ctx.stroke();ctx.restore();}
         else ctx.fillText(label,cssW/2+(inlineIcon?12:0)-(control.select&&!workCell?4:0),control.caption?workCell?cssH*.43:14:cssH/2+4,available);
         }
-        if(control.caption){ctx.font=this.font(workCell?12:11,workCell);ctx.fillStyle=workCell?'#392b20':'#5b5b42';ctx.fillText(control.caption,cssW/2,cssH-5,cssW-6);}
+        if(control.caption){ctx.font=this.font(workCell?'small':'tiny',workCell);ctx.fillStyle=workCell?'#392b20':'#5b5b42';ctx.fillText(control.caption,cssW/2,cssH-5,cssW-6);}
       }
       if(control.select){const cy=workCell?10:cssH/2;ctx.fillStyle=PALETTE.inkDark;ctx.beginPath();ctx.moveTo(cssW-12,cy-2);ctx.lineTo(cssW-5,cy-2);ctx.lineTo(cssW-8.5,cy+3);ctx.closePath();ctx.fill();}
       if(control.active&&!control.glyph)drawMarkerLine(ctx,5,cssH-3,cssW-5,cssH-3,PALETTE.inkDark,1,rng);
@@ -1524,11 +1587,11 @@ export class NativeStage {
   private showHint():void{
     if(this.hintPiece){this.unregister(this.hintPiece);this.hintPiece=undefined;}
     const text=this.hintText;
-    const maxWidth=Math.min(420,this.width-24),raw=text.split('\n'),requested=Math.min(maxWidth,Math.max(70,...raw.map(line=>this.measure(line,13)))+20);
-    const lines=wrapNativeText(text,requested-20,this.measure,13),width=Math.min(maxWidth,Math.max(70,...lines.map(line=>this.measure(line,13)))+20),height=Math.min(this.height-20,lines.length*17+16);
+    const maxWidth=Math.min(420,this.width-24),raw=text.split('\n'),requested=Math.min(maxWidth,Math.max(70,...raw.map(line=>this.measure(line,NATIVE_TEXT.small)))+20);
+    const lines=wrapNativeText(text,requested-20,this.measure,NATIVE_TEXT.small),width=Math.min(maxWidth,Math.max(70,...lines.map(line=>this.measure(line,NATIVE_TEXT.small)))+20),height=Math.min(this.height-20,lines.length*17+16);
     const count=lines.length*17+16>height?Math.max(1,Math.floor((height-30)/17)):lines.length;this.hintMaxScroll=Math.max(0,lines.length-count);this.hintScroll=Math.min(this.hintScroll,this.hintMaxScroll);
     const z=2,factor=1-z/HUD_DISTANCE,piece=this.art.createPiece({w:width*.01,h:height*.01,depth:.046,bevel:.038,surface:'panel',uvPadding:1,textureWidth:Math.ceil(width*2),textureHeight:Math.ceil(height*2),seed:347,bgColor:PALETTE.creamPaper,
-      drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=this.font(13);const scrolling=this.hintMaxScroll>0;lines.slice(scrolling?this.hintScroll:0,scrolling?this.hintScroll+count:lines.length).forEach((line,i)=>ctx.fillText(line,10,20+i*17,width-20));if(scrolling){ctx.font=this.font(11);ctx.fillStyle='#6b5b45';ctx.fillText('Molette : suite',10,height-7);ctx.fillStyle='#78975c';ctx.fillRect(width-6,6+(height-12)*this.hintScroll/lines.length,3,Math.max(8,(height-12)*count/lines.length));}ctx.restore();}});
+      drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=this.font('small');const scrolling=this.hintMaxScroll>0;lines.slice(scrolling?this.hintScroll:0,scrolling?this.hintScroll+count:lines.length).forEach((line,i)=>ctx.fillText(line,10,20+i*17,width-20));if(scrolling){ctx.font=this.font('tiny');ctx.fillStyle='#6b5b45';ctx.fillText('Molette : suite',10,height-7);ctx.fillStyle='#78975c';ctx.fillRect(width-6,6+(height-12)*this.hintScroll/lines.length,3,Math.max(8,(height-12)*count/lines.length));}ctx.restore();}});
     piece.userData.nativeId='native-tooltip';piece.scale.setScalar(this.uiScale*factor);this.hudRoot.add(piece);this.hintPiece=piece;this.hintSize={width,height};
     this.placeHint(true);
   }
@@ -1566,7 +1629,7 @@ export class NativeStage {
     input.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
     document.body.append(input);input.focus({preventScroll:true});input.setSelectionRange(input.value.length,input.value.length);
     const repaint=()=>{if(this.editor!==input)return;this.editingValue=input.value;const target=this.editing?.piece;if(!target)return;
-      target.redraw((ctx,wp,hp)=>{const q=wp/(target.userData.w*100);ctx.font=this.font(13*q);ctx.textAlign='left';ctx.fillStyle=PALETTE.inkDark;
+      target.redraw((ctx,wp,hp)=>{const q=wp/(target.userData.w*100);ctx.font=this.font('small',false,q);ctx.textAlign='left';ctx.fillStyle=PALETTE.inkDark;
         const start=input.selectionStart,end=input.selectionEnd,offset=wp*.07,text=this.editingValue;
         const before=ctx.measureText(text.slice(0,start)).width,selected=ctx.measureText(text.slice(start,end)).width;
         const shift=Math.max(0,before-wp*.86);ctx.save();ctx.beginPath();ctx.rect(wp*.06,hp*.06,wp*.88,hp*.88);ctx.clip();

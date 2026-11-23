@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import {NATIVE_TEXT} from './native-ui-scale';
 import type {World} from '../sim/types';
 import {BUNDLE_LETTER_COLOR_352, LETTER_CLASSES_352, isSchema352OrLater, letterStackRows352, stackLetters352, type Letter352} from '../sim/letters-352';
 import {PALETTE, drawHandRect, type CardboardPiece, type PrototypeCardboardArt} from './prototype-art';
@@ -111,7 +112,7 @@ export class NativeLetterStack {
     if(this.measureContext===undefined)this.measureContext=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(4,4).getContext('2d'):null;
     const ctx=this.measureContext;
     if(!ctx)return text.length*7;
-    ctx.font=`bold 13px ${FONT}`;return ctx.measureText(text).width;
+    ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;return ctx.measureText(text).width;
   }
   private drawCard(ctx:CanvasRenderingContext2D,w:number,h:number,rng:()=>number,card:LetterCard,label:string):void {
     ctx.save();ctx.scale(w/card.width,h/LETTER_ROW_PX);
@@ -122,7 +123,7 @@ export class NativeLetterStack {
     ctx.fillStyle=card.letter?.read?'#e9e2d0':'#fff8e9';ctx.fillRect(ex,ey,ew,eh);
     ctx.strokeStyle=PALETTE.inkDark;ctx.lineWidth=1.4;ctx.strokeRect(ex,ey,ew,eh);
     ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex+ew/2,ey+eh*.6);ctx.lineTo(ex+ew,ey);ctx.stroke();
-    ctx.fillStyle=PALETTE.inkDark;ctx.font=`bold 13px ${FONT}`;ctx.textAlign='left';
+    ctx.fillStyle=PALETTE.inkDark;ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.textAlign='left';
     let text=label;while(text.length>1&&ctx.measureText(text).width>card.width-ICON_PX-12)text=text.slice(0,-2)+'…';
     ctx.fillText(text,8,20,card.width-ICON_PX-10);
     ctx.restore();

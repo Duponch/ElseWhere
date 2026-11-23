@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import type {NativePage,NativeRow} from '../src/ui3d/native-contract';
-import {layoutNativePage,type NativeRect} from '../src/ui3d/native-layout';
+import {layoutNativePage,NATIVE_UI,type NativeRect} from '../src/ui3d/native-layout';
 const measure=(text:string,size:number)=>text.length*size*.52;
 const control=(id:string,label=id)=>({id,label,onActivate:()=>{throw Error('Layout cannot activate navigation.');}});
 function page(count:number,globe:boolean):NativePage{return{id:'world',title:'Monde',subtitle:'Colonies, caravanes et lieux.',layout:'world',width:1120,height:740,
@@ -18,7 +18,7 @@ describe('World browser keeps navigation independently accessible',()=>{
     expect(small.regions.navigation).toEqual(long.regions.navigation);expect(long.rows.filter(r=>r.row.id.startsWith('map-'))).toHaveLength(45);
     const nav=long.regions.navigation!,last=long.rows.at(-1)!,offset=long.contentHeight-long.body.height;
     expect(nav.y+nav.height).toBeLessThan(long.body.y);expect(long.header+last.top+last.height-offset).toBeCloseTo(long.body.y+long.body.height,6);
-    for(const c of long.rows[0]!.controls)expect(c.height).toBe(34);
+    for(const c of long.rows[0]!.controls)expect(c.height).toBe(NATIVE_UI.tab);
   });
   it('retains a separate useful globe on desktop and narrow screens, with all controls and short-screen navigation reachable',()=>{
     for(const view of [{width:1280,height:720},{width:480,height:720},{width:480,height:360}]){

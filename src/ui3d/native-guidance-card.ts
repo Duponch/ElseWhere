@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import {NATIVE_TEXT} from './native-ui-scale';
 import {PALETTE,drawHandBlob,drawHandRect,type CardboardPiece,type CardboardPieceOptions,type PrototypeCardboardArt} from './prototype-art';
 import {wrapNativeText} from './native-layout';
 import {GUIDANCE_STATUS_LABELS,guidanceTabLabel,readGuidanceCard,readGuidanceConcepts,readGuidanceGesture,startingArrivalPending,type GuidanceCardConcept,type GuidanceCardMode,type GuidanceCardModel,type GuidanceCardSession} from '../ui/guidance-card';
@@ -164,17 +165,17 @@ export class NativeGuidanceCard {
       for(const line of this.wrap(text,inner,size,options.bold,options.max)){ink.push({kind:'text',text:line,x:PAD,y:y+size,size,bold:options.bold,color:options.color??PALETTE.inkDark,width:inner});y+=step;}
       return y;
     };
-    ink.push({kind:'text',text:'Conseils',x:PAD,y:20,size:15,bold:true,color:PALETTE.inkDark,width:inner-60});
+    ink.push({kind:'text',text:'Conseils',x:PAD,y:20,size:NATIVE_TEXT.small,bold:true,color:PALETTE.inkDark,width:inner-60});
     buttons.push({id:'hud:guidance:collapse',label:'–',hint:'Replier la carte de conseils',x:width-56,y:5,width:22,height:20,color:PALETTE.kraftLight,onClick:()=>this.actions.collapse()});
     buttons.push({id:'hud:guidance:close',label:'×',hint:'Fermer la carte de conseils · Aide la rouvre',x:width-30,y:5,width:22,height:20,color:PALETTE.kraftLight,onClick:()=>this.actions.close()});
     let y=30;
     if(concepts.length){
       // Learning helper notions (Core LearningReadout): title, text, Compris.
-      y=lines(`Notions à découvrir · ${concepts.length}`,y,13,{bold:true});
+      y=lines(`Notions à découvrir · ${concepts.length}`,y,NATIVE_TEXT.small,{bold:true});
       for(const concept of concepts){
         const top=y,id=concept.id;
-        y=lines(concept.title,y,12,{bold:true,max:2,color:PALETTE.pineDark});
-        if(level!=='minimal')y=lines(concept.text,y,12,{max:level==='full'?6:3});
+        y=lines(concept.title,y,NATIVE_TEXT.small,{bold:true,max:2,color:PALETTE.pineDark});
+        if(level!=='minimal')y=lines(concept.text,y,NATIVE_TEXT.small,{max:level==='full'?6:3});
         const progress=concept.knowledge>0&&concept.knowledge<1?`\nAcquis à ${Math.round(concept.knowledge*100)} %`:'';
         rows.push({id:`hud:guidance:concept:${id}`,hint:`${concept.title}\n${concept.text}${progress}`,y:top,height:Math.max(ROW,y-top),onClick:()=>{}});
         buttons.push({id:`hud:guidance:concept:${id}:learned`,label:'Compris',hint:'Je connais cette notion : elle ne sera plus proposée (Options → Réinitialiser l’assistant la remet).',
@@ -188,7 +189,7 @@ export class NativeGuidanceCard {
       y+=BUTTON+PAD+2;
       return {variant:'minimal',width,height:Math.ceil(y),ink,buttons,rows};
     }
-    y=lines(`Premiers gestes · ${gesture.learned}/${gesture.total}`,y,13,{bold:true});
+    y=lines(`Premiers gestes · ${gesture.learned}/${gesture.total}`,y,NATIVE_TEXT.small,{bold:true});
     const buttonRow=(entries:{id:string;label:string;hint:string;onClick:()=>void}[]):void=>{
       const gap=6,each=(inner-gap*(entries.length-1))/entries.length;
       entries.forEach((entry,index)=>buttons.push({...entry,x:PAD+index*(each+gap),y:y+3,width:each,height:BUTTON,color:index===0?PALETTE.ochre:PALETTE.creamPaper}));
@@ -196,30 +197,30 @@ export class NativeGuidanceCard {
     };
     if(gesture.state==='active'&&gesture.current){
       const current=gesture.current,action=current.action;
-      y=lines(`Geste ${current.position} sur ${gesture.total} : ${current.title}`,y,12,{bold:true,max:2});
-      y=lines(current.instruction,y,12,{max:compact?2:3});
+      y=lines(`Geste ${current.position} sur ${gesture.total} : ${current.title}`,y,NATIVE_TEXT.small,{bold:true,max:2});
+      y=lines(current.instruction,y,NATIVE_TEXT.small,{max:compact?2:3});
       buttonRow([{id:'hud:guidance:gesture-action',label:current.actionLabel,hint:current.instruction,onClick:()=>this.actions.guide({...action})},
         {id:'hud:guidance:gesture-declare',label:'Déjà connu',hint:'Je connais déjà ce geste · déclaration personnelle, aucune commande au jeu.',onClick:()=>this.actions.declareGesture()}]);
-    }else if(gesture.state==='complete')y=lines('Les quatre gestes sont repérés.',y,12,{color:PALETTE.pineDark});
+    }else if(gesture.state==='complete')y=lines('Les quatre gestes sont repérés.',y,NATIVE_TEXT.small,{color:PALETTE.pineDark});
     else{
-      y=lines(gesture.state==='paused'?'Parcours interrompu ; vos repères sont conservés.':'Quatre repères facultatifs pour bien démarrer.',y,12,{max:2});
+      y=lines(gesture.state==='paused'?'Parcours interrompu ; vos repères sont conservés.':'Quatre repères facultatifs pour bien démarrer.',y,NATIVE_TEXT.small,{max:2});
       const paused=gesture.state==='paused';
       buttonRow([{id:'hud:guidance:gesture-start',label:paused?'Reprendre':'Commencer',hint:`${paused?'Reprendre au prochain geste à découvrir':'Commencer le parcours des premiers gestes'} · les commandes habituelles restent disponibles.`,onClick:()=>this.actions.startGestures()}]);
     }
-    if(!gesture.saved)y=lines('Repères non enregistrés dans ce navigateur : ils seront perdus au rechargement.',y,11,{color:PALETTE.terracotta,max:2});
+    if(!gesture.saved)y=lines('Repères non enregistrés dans ce navigateur : ils seront perdus au rechargement.',y,NATIVE_TEXT.tiny,{color:PALETTE.terracotta,max:2});
     ink.push({kind:'rule',y:y+3});y+=8;
-    y=lines(`Préparations · ${ready}/${checks.length} disponibles`,y,13,{bold:true});
+    y=lines(`Préparations · ${ready}/${checks.length} disponibles`,y,NATIVE_TEXT.small,{bold:true});
     // Short column: only the first unfinished preparations; the notebook keeps them all.
     const unfinished=checks.filter(check=>check.status!=='ready'),listed=compact?unfinished.slice(0,COMPACT_CHECKS):checks;
-    if(!listed.length)y=lines(checks.length?'Toutes les préparations sont disponibles.':'Aucune carte locale active.',y,12,{color:PALETTE.pineDark});
+    if(!listed.length)y=lines(checks.length?'Toutes les préparations sont disponibles.':'Aucune carte locale active.',y,NATIVE_TEXT.small,{color:PALETTE.pineDark});
     for(const check of listed){
       ink.push({kind:'dot',x:PAD+6,y:y+ROW/2,color:STATUS_COLORS[check.status]});
-      ink.push({kind:'text',text:check.title,x:PAD+18,y:y+13,size:12,color:PALETTE.inkDark,width:inner-18});
+      ink.push({kind:'text',text:check.title,x:PAD+18,y:y+13,size:NATIVE_TEXT.small,color:PALETTE.inkDark,width:inner-18});
       const action=check.action;
       rows.push({id:`hud:guidance:check:${check.id}`,hint:`${check.title} · ${GUIDANCE_STATUS_LABELS[check.status]}\n${check.detail}\nClic : ${check.actionLabel}`,y,onClick:()=>this.actions.guide({...action})});
       y+=ROW;
     }
-    if(compact&&unfinished.length>listed.length)y=lines(`Et ${unfinished.length-listed.length} autre(s) dans le carnet.`,y,11,{color:PALETTE.kraftDark});
+    if(compact&&unfinished.length>listed.length)y=lines(`Et ${unfinished.length-listed.length} autre(s) dans le carnet.`,y,NATIVE_TEXT.tiny,{color:PALETTE.kraftDark});
     y+=4;
     buttons.push({id:'hud:guidance:help',label:'Carnet de survie (H)',hint:'Ouvrir l’aide : premiers gestes, commandes et conseils détaillés',x:PAD,y,width:inner,height:BUTTON,color:PALETTE.creamPaper,onClick:()=>this.actions.openHelp()});
     y+=BUTTON+PAD;
@@ -292,7 +293,7 @@ export class NativeGuidanceCard {
     ctx.restore();
   }
   private drawLabel(ctx:CanvasRenderingContext2D,wPx:number,hPx:number,label:string,width:number,height:number):void {
-    ctx.save();ctx.scale(wPx/width,hPx/height);ctx.font=`bold ${label.length<=2?16:12}px ${FONT}`;ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';
+    ctx.save();ctx.scale(wPx/width,hPx/height);ctx.font=`bold ${label.length<=2?NATIVE_TEXT.medium:NATIVE_TEXT.small}px ${FONT}`;ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';
     ctx.fillText(label,width/2,height/2+(label.length<=2?6:4),width-8);ctx.restore();
   }
   private piece(options:CardboardPieceOptions):CardboardPiece {const piece=this.art.createPiece(options);this.owned.add(piece);return piece;}

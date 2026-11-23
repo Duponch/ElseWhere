@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import type {NativeControl,NativePage,NativeRow} from '../src/ui3d/native-contract';
-import {layoutNativePage,type NativeRect,type TextMeasure} from '../src/ui3d/native-layout';
+import {layoutNativePage,NATIVE_UI,type NativeRect,type TextMeasure} from '../src/ui3d/native-layout';
 const measure:TextMeasure=(text,size)=>text.length*size*.51;
 const control=(id:string,label=id):NativeControl=>({id,label,onActivate:()=>{}});
 function inside(outer:NativeRect,inner:NativeRect){expect(inner.x).toBeGreaterThanOrEqual(outer.x-.01);expect(inner.y).toBeGreaterThanOrEqual(outer.y-.01);expect(inner.x+inner.width).toBeLessThanOrEqual(outer.x+outer.width+.01);expect(inner.y+inner.height).toBeLessThanOrEqual(outer.y+outer.height+.01);}
@@ -34,7 +34,7 @@ describe('measured natural heights of structured and storage windows',()=>{
   for(const region of Object.values(box.regions))inside({x:0,y:0,width:box.width,height:box.height},region!);
   expect(graph.contentHeight).toBeGreaterThanOrEqual(1200);expect(graph.contentHeight).toBeGreaterThan(graph.height);expect(navigation.contentHeight).toBeGreaterThan(navigation.height);expect(navigation.height).toBeGreaterThanOrEqual(34);
   const graphOffset=graph.contentHeight-graph.height;expect(graph.y+1200-graphOffset).toBeLessThanOrEqual(graph.y+graph.height);expect(graph.y+1200-graphOffset).toBeGreaterThanOrEqual(graph.y);
-  const tabOffset=navigation.contentHeight-navigation.height;expect(lastTab.height).toBe(34);expect(box.header+lastTab.y+lastTab.height-tabOffset).toBeCloseTo(navigation.y+navigation.height,6);expect(JSON.stringify(routes)).toBe(before);
+  const tabOffset=navigation.contentHeight-navigation.height;expect(lastTab.height).toBe(NATIVE_UI.tab);expect(box.header+lastTab.y+lastTab.height-tabOffset).toBeCloseTo(navigation.y+navigation.height,6);expect(JSON.stringify(routes)).toBe(before);
  });
  it('shrinks empty/three-row storage while keeping settings, footer and full tree accessible at many rows',()=>{
   const viewport={width:1280,height:720},zero=layoutNativePage(storage(0),viewport,false,measure),three=layoutNativePage(storage(3),viewport,false,measure),many=layoutNativePage(storage(80),viewport,false,measure);

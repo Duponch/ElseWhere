@@ -79,6 +79,14 @@ export interface NativeRow {
     value:string;placeholder?:string;maxLength?:number;kind?:'text'|'number';
     onCommit:(value:string)=>void|boolean|Promise<unknown>;
   };
+  /** The Bio card (Core `CharacterCardUtility`): one fixed 480 × 455 card. */
+  bio?:import('./native-bio-card').NativeBioCard;
+  /** A line of the inspect pane (Core `InspectPaneUtility`, 432 × 165) rather
+   * than of the open inspector tab. */
+  inspectPane?:true;
+  /** Inspect pane gauges (Core `InspectPaneFiller`: 93 × 16, 6 apart). A gauge
+   * with a select opens it on click (allowed area). */
+  gauges?:readonly {id:string;label:string;fill:number;color:string;hint:string;select?:NativeControl['select']}[];
 }
 export interface NativePage {
   textEntities?:readonly NativeTextEntity[];
@@ -118,6 +126,9 @@ export interface NativePage {
     onSelect:(tile:number)=>void;
   };
   portrait?:{url:string;label:string};
+  /** The open inspector tab's window (Core `ITab.size` and its inner margin);
+   * absent when no tab is open: only the inspect pane and its tabs show. */
+  inspectTab?:{id:string;width:number;height:number;margin:number};
 }
 export interface NativeUiState {
   world?:World;
@@ -177,6 +188,8 @@ export interface NativeUiActions {
   openVisitorTrade?:()=>void;
   openOrbitalTrade?:(consoleId?:number)=>void;
   openFactionComms298?:(consoleId?:number)=>void;
+  /** The Factions tab, as its bottom card opens it (the Bio card's faction chip). */
+  openFactions?:()=>void;
   /** Opens a scoped confirmation; the Worker retains launch authority. */
   launchShip298?:(computerId:number)=>void;
   resizeZone?:(kind:'stockpile'|'growing',id:number,shrink:boolean)=>void;

@@ -58,6 +58,9 @@ import type { ArtificialPartKind } from '../sim/artificial-parts-types';
 import { SURGICAL_LIMBS } from '../sim/surgery-anatomy';
 import { surgeryRequestReason, surgeryInstallRequestReason, surgeryRemoveRequestReason273 } from '../sim/surgery-rules';
 import { MALNUTRITION_UNIT } from '../sim/malnutrition';
+import { summaryHealthPercent } from '../sim/threat-points';
+import { assignmentAt, type ScheduleAssignment } from '../sim/schedule';
+import type { NativeBioCard } from './native-bio-card';
 import { HEAT_UNIT, comfortableTemperature, apparelInsulation } from '../sim/heat-rules';
 import { INFECTION_UNIT } from '../sim/infection-rules';
 import { wornApparel, apparelLabel, apparelDefinition, armorPiece } from '../sim/apparel-rules';
@@ -120,7 +123,15 @@ import { isMoodBasics345, roomSizeAdmitted345, roomSizeLevel345 } from '../sim/r
 import { isOutdoors359, outdoorsLevel359, outdoorsNeedApplies359 } from '../sim/outdoors-need-359';import { indoorsLevel362, indoorsNeedApplies362 } from '../sim/indoors-need-362';import { isTraitLinks362, painShockThreshold362 } from '../sim/trait-links-362';import { inspirationInspectLine360 } from '../sim/inspirations-360';
 
 type Tab = 'journal' | 'gear' | 'social' | 'bio' | 'needs' | 'health' | 'prisoner';
-const tabs: readonly [Tab, string][] = [['journal', 'Journal'], ['gear', 'Matériel'], ['social', 'Social'], ['bio', 'Bio'], ['needs', 'Besoins'], ['health', 'Santé'], ['prisoner', 'Prisonnier']];
+// Core's human tabs (Races_Humanlike `inspectorTabs`), drawn from the pane's
+// right edge leftwards: Health, Needs, Character, Social, Prisoner, Gear, Log.
+// Declared here left to right.
+const tabs: readonly [Tab, string][] = [['journal', 'Journal'], ['gear', 'Matériel'], ['prisoner', 'Prisonnier'], ['social', 'Social'], ['bio', 'Bio'], ['needs', 'Besoins'], ['health', 'Santé']];
+/** `ITab.size` of each window; the Bio card is 480 × 455 inside 17 points. */
+const tabSizes: Record<Tab, { width: number; height: number; margin: number }> = { bio: { width: 514, height: 489, margin: 17 }, needs: { width: 580, height: 520, margin: 18 }, health: { width: 630, height: 430, margin: 18 }, gear: { width: 460, height: 450, margin: 18 }, social: { width: 540, height: 510, margin: 18 }, journal: { width: 630, height: 510, margin: 18 }, prisoner: { width: 280, height: 450, margin: 18 } };
+/** Planning's labels and colours (native-panels.ts), for the pane's gauge. */
+const scheduleLabels: Record<ScheduleAssignment, string> = { anything: 'Temps libre', work: 'Travail', sleep: 'Dormir', recreation: 'Loisir' };
+const scheduleColors: Record<ScheduleAssignment, string> = { anything: '#e9d2a9', work: '#dfb7a4', sleep: '#c2d5e0', recreation: '#c9dfc1' };
 const skillLabels: Record<string, string> = { shooting: 'Tir', melee: 'Mêlée', construction: 'Construction', mining: 'Minage', cooking: 'Cuisine', plants: 'Plantes', animals: 'Animaux', crafting: 'Artisanat', artistic: 'Artistique', medicine: 'Médecine', social: 'Social', intellectual: 'Intellectuel' };
 const capacityLabels: Record<string, string> = { consciousness: 'Conscience', moving: 'Mouvement', manipulation: 'Manipulation', talking: 'Parole', eating: 'Alimentation', sight: 'Vue', hearing: 'Ouïe', breathing: 'Respiration', bloodFiltration: 'Filtrage du sang', bloodPumping: 'Pompage du sang', digestion: 'Digestion' };
 const capacityHelp: Record<string, string> = {
@@ -136,10 +147,13 @@ const capacityHelp: Record<string, string> = {
 const relationLabels: Record<string, string> = { parent: 'Parent', child: 'Enfant', sibling: 'Fratrie', lover: 'Partenaire', spouse: 'Conjoint', 'ex-lover': 'Ancien partenaire', 'ex-spouse': 'Ancien conjoint' };
 const pct = (value: number) => `${Math.round(value * 100)} %`;
 const signed = (value: number) => `${value > 0 ? '+' : ''}${Number(value.toFixed(1))}`;
-let activeTab: Tab = 'bio', feedback = '', latest: NativeUiState, owner: NativeUiActions;
+/** Core `MainTabWindow_Inspect.OpenTabType`: no tab open at first; a tab stays
+ * open across selections while the new selection has it. */
+let activeTab: Tab | null = null, feedback = '', latest: NativeUiState, owner: NativeUiActions;
 let healthPane: 'overview' | 'operations' = 'overview';
 let journalFilter: 'all' | 'social' | 'combat' | 'mental' = 'all', portraitClothed = true;
 export function setNativeInspectorTab(value:string):void {
+  if(value==='none'){activeTab=null;subpage=undefined;return;}
   if(!tabs.some(([tab])=>tab===value))return;activeTab=value as Tab;subpage=undefined;
 }
 let selectionKey = '', subpage: { kind: 'bills' | 'storage' | 'item' | 'anatomy'; structureId?: number; stockpileId?: number; itemId?: number; pawnId?: number } | undefined;
@@ -252,46 +266,67 @@ function selectionGroup(world: World, pawn: Pawn): Pawn[] {
   if (!latest.selectedPawnIds.includes(pawn.id)) return [pawn];
   return latest.selectedPawnIds.flatMap(id => { const person = world.pawns.find(candidate => candidate.id === id); return person && isColonist(person) && !person.prisoner ? [person] : []; });
 }
+/** Core `HealthUtility.GetGeneralConditionLabel` (short): the pane's health gauge. */
+function healthCondition(pawn: Pawn): string {
+  if (pawn.state === 'dead') return 'Mort';
+  if (pawn.state === 'downed') return 'À terre';
+  if (pawn.health?.injuries.some(injury => injury.scar === undefined)) return 'Blessé';
+  return 'En bonne santé';
+}
+/** Core `Need_Mood.MoodString`, with the person's own break thresholds. */
+function moodString(pawn: Pawn, thresholds: readonly [number, number, number]): string {
+  if (pawn.mental?.crisis) return 'Crise mentale';
+  const extreme = thresholds[2], minor = thresholds[0], mood = pawn.mood;
+  return mood < extreme ? 'Au bord de la crise' : mood < extreme + 5 ? 'Sur les nerfs' : mood < minor ? 'Stressé' : mood < 65 ? 'Neutre' : mood < 90 ? 'Content' : 'Heureux';
+}
+/** The Bio card of Core `CharacterCardUtility`: name, « genre, âge » and the
+ * faction chip, stories in chips at x 90, traits and incapacities in chips, the
+ * twelve skills. Every detail that is not drawn is in a tooltip (Core 2.5). */
+function bioCard(world: World, pawn: Pawn, sex: 'male' | 'female', colonist: boolean): NativeBioCard {
+  const bio = pawn.age ? biologicalYears(pawn.age) : undefined, chrono = pawn.age ? chronologicalYears(pawn.age) : undefined;
+  const description = { label: `${sex === 'female' ? 'Femme' : 'Homme'}${bio !== undefined ? `, ${bio} ans${chrono !== bio ? ` (${chrono})` : ''}` : ''}`, hint: bio !== undefined ? `Âge biologique : ${bio} ans. Âge chronologique : ${chrono} ans.` : 'Âge non renseigné.' };
+  const registry = world.worldFactions, own = colonist ? registry?.factions.find(faction => faction.id === registry.playerFactionId) : undefined;
+  const faction = own ? { id: 'bio-faction', label: own.name, hint: `Faction\n\n${pawn.name} appartient à ${own.name}, votre colonie.\n\nCliquer pour ouvrir les factions.`, onActivate: () => owner.openFactions?.() } : undefined;
+  const stories = backgroundInspectionRows(pawn, sex).map((story, index) => ({ phase: story.phase, chip: { id: index ? 'adulthood' : 'childhood', label: story.label, hint: tooltipText(story.tooltip) } }));
+  const traits = (pawn.traits ?? []).map(trait => ({ id: `trait-${trait}`, label: traitLabel(trait, sex), hint: traitTooltip(trait, { name: pawn.name, sex }) }));
+  const incapable = backgroundRestrictionRows(pawn).map((restriction, index) => ({ id: `refusal-${index}`, label: restriction.label, hint: restriction.reason }));
+  const traitsHint = `Effets du profil : apprentissage général ${pct(globalLearningFactor(pawn))}. Risque de crise sous ${breakThresholds(pawn).map(value => Number(value.toFixed(2))).join(' / ')} % d’humeur (mineur / majeur / extrême).${traitProfile361(pawn)}`;
+  const skills = BACKGROUND_SKILL_IDS.map(skill => {
+    const record = skill === 'mining' ? miningSkill(pawn) : skill === 'plants' ? plantSkill(pawn) : pawn.skills[skill] ?? { level: 0, xp: 0, dailyXp: 0, passion: 0 as const }, reason = backgroundSkillRefusal(pawn, skill);
+    const effects = skill === 'construction' ? `Vitesse ${pct(constructionSpeed(pawn))} avant lumière.` : skill === 'mining' ? `Vitesse ${pct(miningWorkSpeed(pawn))} avant lumière · Rendement minéral ${pct(miningYield(pawn))}, pondéré par les dégâts de chaque coup.` : skill === 'plants' ? `Travail ${pct(plantWorkSpeed(pawn))} avant lumière · Réussite ${pct(Math.min(1, plantHarvestYield(pawn)))} · Bonus de rendement ${pct(Math.max(0, plantHarvestYield(pawn) - 1))}. Les arbres ne subissent pas d’échec de récolte.` : skill === 'cooking' ? `Cuisine ${pct(cookingSpeed(pawn))} · Boucherie ${pct(butcherySpeed(pawn))} · Rendement de boucherie ${pct(butcheryEfficiency(pawn))}.` : skill === 'medicine' ? `Vitesse de soins ${pct(medicalTendSpeed(pawn))} avant lumière · Qualité de base ${pct(medicalTendQuality(pawn))}, puis médicament, lit et aléa.` : skill === 'social' ? `Impact social ${pct(socialImpact(pawn))}.` : skill === 'crafting' ? 'Influe sur la qualité de confection, sans accélérer la taille de pierre.' : skill === 'artistic' ? 'Détermine la qualité des sculptures, sans accélérer leur travail.' : skill === 'intellectual' ? 'Recherche et synthèse des médicaments.' : skill === 'animals' ? 'Apprivoisement, dressage et entretien ; les exigences dépendent de l’espèce et du travail.' : skill === 'shooting' ? 'Précision avec les armes à distance, après capacités et conditions du tir.' : 'Combat au contact, après capacités et conditions du combat.';
+    const passion = record.passion === 2 ? 'Passion brûlante' : record.passion === 1 ? 'Passion' : 'Sans passion';
+    const xp = `${(record.xp / XP_SCALE).toFixed(1)} / ${xpRequired(record.level) / XP_SCALE} XP`;
+    const hint = `${skillLabels[skill]} ${record.level}/20 · ${passion}. ${reason ? `${reason} Le niveau enregistré est conservé ; cette compétence n’apprend pas et n’oublie pas.` : effects} Expérience du niveau : ${xp} · ${pct(Math.max(0, record.xp / xpRequired(record.level)))} du niveau. Aujourd’hui ${(record.dailyXp / XP_SCALE).toFixed(1)} / 4 000 XP avant saturation. Apprentissage : ${reason ? 'Indisponible' : pct(learningFactor(record, pawn))}${record.dailyXp > 4000 * XP_SCALE ? ' (saturation quotidienne)' : ''}.`;
+    return { id: `skill-${skill}`, label: skillLabels[skill]!, level: record.level, passion: record.passion, disabled: !!reason, hint };
+  });
+  return { name: pawn.name, description, faction, stories, traits, traitsHint, incapable, skills };
+}
 function pawnPage(world: World, pawn: Pawn): NativePage {
   const colonist = isColonist(pawn) && !pawn.prisoner, alive = pawn.state !== 'dead';
-  if (!pawn.prisoner && activeTab === 'prisoner') activeTab = 'bio';
-  const rows: NativeRow[] = [{ id: 'pawn-tabs', label: '', region:'navigation', compact: true, controls: tabs.filter(([tab]) => tab !== 'prisoner' || pawn.prisoner).map(([tab, label]) => control(`pawn-tab-${tab}`, label, () => { activeTab = tab; }, false, activeTab === tab, tabHints[tab])) },
-    row('pawn-identity', `${appearanceOf(pawn, world.seed).sex === 'female' ? 'Femme' : 'Homme'} · ${pawn.prisoner ? 'Prisonnier' : colonist ? 'Colon' : pawn.visitor ? 'Visiteur' : pawn.podRescue ? 'Naufragé' : 'Hors-la-loi'}`, pawn.age ? `${biologicalYears(pawn.age)} ans (${chronologicalYears(pawn.age)} chronologiques)` : undefined),
-    row('pawn-action', 'Activité', owner.pawnActivity?.(pawn.id) || coupleActivity285(world, pawn)?.label || specificWorkActivity(world, pawn) || queryPawnStatus(world, pawn).reason, `${pawn.x}, ${pawn.z}`)];
-  // Schema 360: Core Pawn.GetInspectString shows the inspiration and its time
-  // left; the Needs tab shows it under the mood bar instead.
-  const inspiration360 = inspirationInspectLine360(world, pawn); if (inspiration360 && activeTab !== 'needs') rows.push(row('pawn-inspiration', inspiration360.label, inspiration360.value, inspiration360.hint));
-  if(colonist&&alive)rows.push(choices('pawn-hostility','Réaction hostile',pawn.hostilityResponse??'flee',['flee','ignore','attack'] as const,response=>send({type:'hostility-response',pawnId:pawn.id,response}),response=>({flee:'Fuir',ignore:'Ignorer',attack:'Attaquer'})[response]),
-    row('pawn-orders','Ordres',`${pawn.orders.active!==null?'Travail imposé · ':''}${pawn.orders.queue.length} en file${pawn.priorityWork?` · Case ${pawn.priorityWork.cell.x}, ${pawn.priorityWork.cell.z}`:''}`));
+  if (!pawn.prisoner && activeTab === 'prisoner') activeTab = null;
+  const sex = appearanceOf(pawn, world.seed).sex, status = pawn.prisoner ? 'Prisonnier' : colonist ? 'Colon' : pawn.visitor ? 'Visiteur' : pawn.podRescue ? 'Naufragé' : 'Hors-la-loi';
+  // Core InterfaceToggleTab: clicking the open tab closes it.
+  const rows: NativeRow[] = [{ id: 'pawn-tabs', label: '', region:'navigation', compact: true, controls: tabs.filter(([tab]) => tab !== 'prisoner' || pawn.prisoner).map(([tab, label]) => control(`pawn-tab-${tab}`, label, () => { activeTab = activeTab === tab ? null : tab; }, false, activeTab === tab, tabHints[tab])) }];
+  // The inspect pane (Core InspectPaneFiller): health, mood, timetable and
+  // allowed-area gauges, then the inspect lines.
+  const thresholds = breakThresholds(pawn), crises = Object.values(MENTAL_CRISIS_CATALOG).map(crisis => crisis.label.toLocaleLowerCase('fr-FR')).join(', ');
+  const moodTip = `Humeur ${Math.round(pawn.mood)} %. ${thresholds.map((value, index) => `${['Risque mineur', 'Risque majeur', 'Risque extrême'][index]} : ${value.toFixed(1)} %`).join(' · ')}. Le risque ne déclenche pas une crise immédiatement. Crises disponibles : ${crises}.`;
+  const gauges: NonNullable<NativeRow['gauges']>[number][] = [{ id: 'health', label: healthCondition(pawn), fill: pawn.health ? summaryHealthPercent(pawn.health) : 1, color: '#bdb39c', hint: `Santé générale ${pct(pawn.health ? summaryHealthPercent(pawn.health) : 1)} · ${healthCondition(pawn)}. Le détail est dans l’onglet Santé.` }];
+  if (alive) gauges.push({ id: 'mood', label: moodString(pawn, thresholds), fill: pawn.mood / 100, color: '#9fc4bc', hint: moodTip });
+  if (colonist && alive) {
+    const assignment = assignmentAt(world, pawn);
+    gauges.push({ id: 'schedule', label: scheduleLabels[assignment], fill: 1, color: scheduleColors[assignment], hint: `Planning de l’heure actuelle : ${scheduleLabels[assignment]}. Le Planning règle les 24 heures.` });
+    const area = world.allowedAreas?.find(entry => entry.id === pawn.allowedAreaId), areaChoice = choices('pawn-area', 'Zone autorisée', area?.id ?? -1, [-1, ...(world.allowedAreas ?? []).map(entry => entry.id)], areaId => send({ type: 'assign-allowed-area', pawnId: pawn.id, areaId: areaId < 0 ? null : areaId }), areaId => areaId < 0 ? 'Sans restriction' : world.allowedAreas?.find(entry => entry.id === areaId)?.label ?? 'Zone', !alive);
+    gauges.push({ id: 'area', label: areaChoice.value!, fill: 1, color: area ? `#${area.color.toString(16).padStart(6, '0')}` : '#b9ad96', hint: 'Zone autorisée : cliquer pour la changer. Les zones se gèrent dans Assignations.', select: areaChoice.controls![0]!.select });
+  }
+  rows.push({ id: 'pawn-gauges', label: '', inspectPane: true, gauges });
+  if (!colonist) rows.push({ ...row('pawn-status', '', status), inspectPane: true });
+  rows.push({ ...row('pawn-action', '', owner.pawnActivity?.(pawn.id) || coupleActivity285(world, pawn)?.label || specificWorkActivity(world, pawn) || queryPawnStatus(world, pawn).reason, `Activité · case ${pawn.x}, ${pawn.z}`), inspectPane: true });
+  // Schema 360: Core's Pawn.GetInspectString shows the inspiration and its time left.
+  const inspiration360 = inspirationInspectLine360(world, pawn); if (inspiration360) rows.push({ ...row('pawn-inspiration', inspiration360.label, inspiration360.value, inspiration360.hint), inspectPane: true });
+  if (colonist && alive) rows.push({ ...row('pawn-orders', 'Ordres', `${pawn.orders.active !== null ? 'Travail imposé · ' : ''}${pawn.orders.queue.length} en file${pawn.priorityWork ? ` · Case ${pawn.priorityWork.cell.x}, ${pawn.priorityWork.cell.z}` : ''}`), inspectPane: true });
   if (activeTab === 'bio') {
-    rows.push(heading('bio-identity', 'Passé'));
-    // The sex shown on the identity row (stored appearance, else its stable fallback).
-    const sex = appearanceOf(pawn, world.seed).sex, stories = backgroundInspectionRows(pawn, sex);
-    rows.push(...stories.map((story, index) => row(index ? 'adulthood' : 'childhood', story.phase, story.label, tooltipText(story.tooltip))));
-    if (!stories.length) rows.push(row('background-unknown', 'Passé non renseigné'));
-    rows.push(heading('bio-traits', 'Traits'));
-    if (!pawn.traits?.length) rows.push(row('traits-empty', 'Aucun trait'));
-    // Names and texts: the installed RimWorld's when loaded (Options), else Elsewhere's.
-    for (const trait of pawn.traits ?? []) rows.push(row(`trait-${trait}`, traitLabel(trait, sex), undefined, traitTooltip(trait, { name: pawn.name, sex })));
-    rows.push(row('trait-effects', 'Effets du profil', `Apprentissage ${pct(globalLearningFactor(pawn))}`, `Apprentissage général ${pct(globalLearningFactor(pawn))}. Risque de crise sous ${breakThresholds(pawn).map(value => Number(value.toFixed(2))).join(' / ')} % d’humeur (mineur / majeur / extrême). Le risque ne déclenche pas une crise immédiatement.${traitProfile361(pawn)} Crises disponibles : ${Object.values(MENTAL_CRISIS_CATALOG).map(crisis => crisis.label.toLocaleLowerCase('fr-FR')).join(', ')}.`));
-    rows.push(heading('bio-links', 'Liens connus'));
-    const people = captureRelationshipPeople(world), relations = relationshipIndex(world); let linked = false;
-    for (const person of people.values()) { const kinds = relations.kinds(pawn.id, person.id); if (person.id === pawn.id || !kinds.length) continue; linked = true; const links = kinds.map(kind => relationLabels[kind] ?? kind).join(' · '), status = ({ present: 'Présent', away: 'En voyage', departed: 'Absent', dead: 'Décédé' })[person.status]; rows.push(row(`bio-relation-${person.id}`, person.name, `${links} · ${status}`, `Ces liens proviennent du dossier enregistré. L’absence ne signifie pas un décès. Le portrait, le nom et une opinion ne créent aucun lien. Lien : ${links}. Situation : ${status}.`)); }
-    if (!linked) rows.push(row('bio-relations-empty', 'Aucun lien familial ou de couple renseigné.'));
-    rows.push(heading('bio-skills', 'Compétences'));
-    for (const skill of BACKGROUND_SKILL_IDS) {
-      const record = skill === 'mining' ? miningSkill(pawn) : skill === 'plants' ? plantSkill(pawn) : pawn.skills[skill] ?? { level: 0, xp: 0, dailyXp: 0, passion: 0 as const }, reason = backgroundSkillRefusal(pawn, skill);
-      const effects = skill === 'construction' ? `Vitesse ${pct(constructionSpeed(pawn))} avant lumière.` : skill === 'mining' ? `Vitesse ${pct(miningWorkSpeed(pawn))} avant lumière · Rendement minéral ${pct(miningYield(pawn))}, pondéré par les dégâts de chaque coup.` : skill === 'plants' ? `Travail ${pct(plantWorkSpeed(pawn))} avant lumière · Réussite ${pct(Math.min(1, plantHarvestYield(pawn)))} · Bonus de rendement ${pct(Math.max(0, plantHarvestYield(pawn) - 1))}. Les arbres ne subissent pas d’échec de récolte.` : skill === 'cooking' ? `Cuisine ${pct(cookingSpeed(pawn))} · Boucherie ${pct(butcherySpeed(pawn))} · Rendement de boucherie ${pct(butcheryEfficiency(pawn))}.` : skill === 'medicine' ? `Vitesse de soins ${pct(medicalTendSpeed(pawn))} avant lumière · Qualité de base ${pct(medicalTendQuality(pawn))}, puis médicament, lit et aléa.` : skill === 'social' ? `Impact social ${pct(socialImpact(pawn))}.` : skill === 'crafting' ? 'Influe sur la qualité de confection, sans accélérer la taille de pierre.' : skill === 'artistic' ? 'Détermine la qualité des sculptures, sans accélérer leur travail.' : skill === 'intellectual' ? 'Recherche et synthèse des médicaments.' : skill === 'animals' ? 'Apprivoisement, dressage et entretien ; les exigences dépendent de l’espèce et du travail.' : skill === 'shooting' ? 'Précision avec les armes à distance, après capacités et conditions du tir.' : 'Combat au contact, après capacités et conditions du combat.';
-      const passion = record.passion === 2 ? 'Passion brûlante' : record.passion === 1 ? 'Passion' : 'Sans passion';
-      const xp = `${(record.xp / XP_SCALE).toFixed(1)} / ${xpRequired(record.level) / XP_SCALE} XP`;
-      const hint = `${skillLabels[skill]} ${record.level}/20 · ${passion}. ${reason ? `${reason} Le niveau enregistré est conservé ; cette compétence n’apprend pas et n’oublie pas.` : effects} Expérience du niveau : ${xp} · ${pct(Math.max(0, record.xp / xpRequired(record.level)))} du niveau. Aujourd’hui ${(record.dailyXp / XP_SCALE).toFixed(1)} / 4 000 XP avant saturation. Apprentissage : ${reason ? 'Indisponible' : pct(learningFactor(record, pawn))}${record.dailyXp > 4000 * XP_SCALE ? ' (saturation quotidienne)' : ''}.`;
-      const skillRow = meterRow(`skill-${skill}`, skillLabels[skill]!, reason ? 0 : record.level, 20, hint, reason ? `${record.level}/20 · Indisponible` : `${record.level}/20`, reason ? '#888679' : '#557c55');
-      skillRow.emphasis = reason ? 'muted' : 'normal'; skillRow.meter!.passion = record.passion;
-      skillRow.meter!.secondary = { value: reason ? 0 : record.xp, max: xpRequired(record.level), label: xp, color: '#a26935' }; rows.push(skillRow);
-    }
-    rows.push({ id: 'portrait-clothing', label: '', compact:true, controls: [control('portrait-clothing', portraitClothed ? 'Vêtements visibles' : 'Vêtements masqués', () => { portraitClothed = !portraitClothed; }, false, portraitClothed, portraitClothed?'Masquer les vêtements dans le portrait':'Montrer les vêtements dans le portrait')] });
-    const restrictions = backgroundRestrictionRows(pawn); if (restrictions.length) rows.push(heading('bio-restrictions', 'Incapable de'));
-    restrictions.forEach((restriction, index) => rows.push(row(`refusal-${index}`, restriction.label, undefined, restriction.reason)));
+    rows.push({ id: 'bio-card', label: '', bio: bioCard(world, pawn, sex, colonist) });
   } else if (activeTab === 'needs') {
     rows.push(heading('needs', 'Besoins'));
     for (const [key, label] of [['hunger', 'Nourriture'], ['rest', 'Sommeil'], ['beauty', 'Beauté'], ['comfort', 'Confort']] as const) rows.push(alive ? meterRow(`need-${key}`, label, pawn[key], 100, `${needHelp[key]} Repères de la jauge : ${NEED_THRESHOLDS[key].map(value => `${value} %`).join(' · ')}.`, `${Math.round(pawn[key])} %`) : row(`need-${key}`, label, '—', 'Décédé · Dossier arrêté au décès.'));
@@ -354,6 +389,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
     }
     if (healthPane === 'operations') { const tabsRow = rows.find(entry => entry.id === 'health-tabs')!; const operationRows = rows.filter(entry => /^(surgery-|amputate-|implant-|remove-prosthetic-)/.test(entry.id) && (!entry.controls?.length || entry.controls.some(action => !action.disabled))); rows.splice(3, rows.length - 3, tabsRow, heading('operations', 'Opérations'), ...operationRows); if (!operationRows.length) rows.push(row('operations-unavailable', 'Aucune opération disponible pour ce patient.')); }
   } else if (activeTab === 'gear') {
+    rows.push({ id: 'portrait-clothing', label: '', compact:true, controls: [control('portrait-clothing', portraitClothed ? 'Vêtements visibles' : 'Vêtements masqués', () => { portraitClothed = !portraitClothed; }, false, portraitClothed, portraitClothed?'Masquer les vêtements dans le portrait':'Montrer les vêtements dans le portrait')] });
     const primary = equippedWeapon(world, pawn), comfortable = comfortableTemperature(world, pawn);
     rows.push(row('comfort-range', 'Températures confortables', `${comfortable.min.toFixed(1)} à ${comfortable.max.toFixed(1)} °C`, 'La plage combine les limites de la personne et l’isolation réelle de ses vêtements.'), { id: 'weapon', label: 'Arme principale', value: primary ? weaponLabel(primary) : 'Aucune', controls: primary ? [control('primary-information', 'Informations', () => { subpage = { kind: 'item', itemId: primary.id }; }), ...(colonist && alive ? [command('drop-primary', 'Déposer', { type: 'order-equipment', pawnId: pawn.id, itemId: primary.id, action: 'drop', queue: false })] : [])] : undefined });
     rows.push(heading('gear-apparel', 'Vêtements'));
@@ -368,6 +404,12 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
     if (pawn.droppedWeaponId !== undefined) rows.push({ id: 'lost-weapon', label: 'Arme perdue', value: String(pawn.droppedWeaponId), controls: colonist ? [command('forget-weapon', 'Oublier', { type: 'forget-weapon', pawnId: pawn.id })] : undefined });
     if (colonist && alive) rows.push({ id: 'clear-forced', label: 'Tenue imposée', controls: [command('clear-forced-apparel', 'Effacer les obligations', { type: 'apparel-clear-forced', pawnId: pawn.id })] });
   } else if (activeTab === 'social') {
+    // The family and couple links (Core Social tab), moved from the old Bio dossier.
+    rows.push(heading('bio-links', 'Liens familiaux'));
+    { const people = captureRelationshipPeople(world), relations = relationshipIndex(world); let linked = false;
+      for (const person of people.values()) { const kinds = relations.kinds(pawn.id, person.id); if (person.id === pawn.id || !kinds.length) continue; linked = true; const links = kinds.map(kind => relationLabels[kind] ?? kind).join(' · '), status = ({ present: 'Présent', away: 'En voyage', departed: 'Absent', dead: 'Décédé' })[person.status]; rows.push(row(`bio-relation-${person.id}`, person.name, `${links} · ${status}`, `Ces liens proviennent du dossier enregistré. L’absence ne signifie pas un décès. Le portrait, le nom et une opinion ne créent aucun lien. Lien : ${links}. Situation : ${status}.`)); }
+      if (!linked) rows.push(row('bio-relations-empty', 'Aucun lien familial ou de couple renseigné.')); }
+    rows.push(heading('social-opinions', 'Relations'));
     const people = captureRelationshipPeople(world), index = relationshipIndex(world), remembered = new Set([...pawn.social?.memories ?? [], ...pawn.romanceMemories ?? [], ...pawn.familyBereavement ?? []].map(memory => memory.otherId));
     for (const person of people.values()) {
       if (person.id === pawn.id) continue;
@@ -395,7 +437,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
       if (kind && (journalFilter === 'all' || journalFilter === kind)) { rows.push(row(`journal-${index}`, event.message, `${({ social: 'Social', combat: 'Combat', mental: 'Crise mentale' })[kind]} · Il y a ${((world.tick - event.tick) / 250).toFixed(1)} h`)); entries++; }
     }
     if (!entries) rows.push(row('empty-journal', 'Aucun événement personnel de cette catégorie dans le journal disponible.'));
-  } else if (pawn.prisoner) {
+  } else if (activeTab === 'prisoner' && pawn.prisoner) {
     rows.push(meterRow('prisoner-resistance', 'Résistance', pawn.prisoner.resistance, pawn.prisoner.initialResistance, 'La résistance actuelle reste distincte du mode de détention choisi et de la décision de recrutement.', `${pawn.prisoner.resistance.toFixed(1)} / ${pawn.prisoner.initialResistance}`), row('captured-at', 'Capture', `Pas ${pawn.prisoner.capturedAt}`),
       choices<PrisonerMode>('prisoner-mode', 'Mode de détention', pawn.prisoner.mode, isExecuteRelease364(world.schemaVersion) && !isColonist(pawn) ? ['maintain', 'reduce', 'recruit', 'release', 'execute'] : ['maintain', 'reduce', 'recruit', 'release'], mode => send({ type: 'prisoner-mode', patientId: pawn.id, mode }), mode => ({ maintain: 'Maintenir', reduce: 'Réduire la résistance', recruit: 'Recruter', release: 'Libérer', execute: 'Exécuter' })[mode], !alive),
       choices('prisoner-food', 'Régime alimentaire', pawn.foodPolicyId, world.foodPolicies.map(policy => policy.id), policyId => send({ type: 'food-policy-assign', pawnId: pawn.id, policyId }), id => world.foodPolicies.find(policy => policy.id === id)?.name ?? String(id), !alive));
@@ -404,23 +446,24 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   }
   if (activeTab === 'health') { const index = rows.findIndex(entry => entry.id === 'health-tabs'); if (index > 1) { const [navigation] = rows.splice(index, 1); rows.splice(1, 0, navigation!); } }
   const actions: NativeControl[] = [];
-  // Core merges these gizmos over the whole selection (Command_Toggle), see
-  // selectionDraftCommand: the shown state is the merged one.
+  // Core gizmos to the right of the pane (Command_Toggle merged over the
+  // selection, see selectionDraftCommand: the shown state is the merged one).
   const group = selectionGroup(world, pawn), draft = selectionDraftCommand(group), stop = selectionStopCommand(group), fire = selectionFireAtWillCommand(group);
-  if (colonist && alive) actions.push(command('draft-pawn', draft && draft.type === 'draft' && !draft.enabled ? 'Démobiliser' : 'Mobiliser', draft ?? { type: 'draft', pawnIds: [pawn.id], enabled: !pawn.draft }, !draft),
-    command('clear-orders', 'Effacer les ordres', { type: 'clear-orders', pawnId: pawn.id }), control('manage-work', 'Travail', () => owner.panel('work')));
+  if (colonist && alive) actions.push({ ...command('draft-pawn', draft && draft.type === 'draft' && !draft.enabled ? 'Démobiliser' : 'Mobiliser', draft ?? { type: 'draft', pawnIds: [pawn.id], enabled: !pawn.draft }, !draft), icon: 'mobilize' },
+    { ...command('clear-orders', 'Effacer les ordres', { type: 'clear-orders', pawnId: pawn.id }), icon: 'clear-orders' }, { ...control('manage-work', 'Travail', () => owner.panel('work')), icon: 'manage-work' });
   // Schema 351: Designator_Strip is a reverse designator of the selected pawn or corpse.
   const strip351 = stripInspectorAction351(world, pawn.id); if (strip351) actions.push(command('strip-designate', strip351.label, strip351.command));
-  if (colonist && alive && stop && fire) actions.push(command('draft-stop', 'Stop', stop), command('fire-at-will', fire.type === 'fire-at-will' && fire.enabled ? 'Feu à volonté' : 'Cesser le feu', fire));
-  const result: NativePage & { portrait?: { url: string; label: string } } = { id: `inspect-pawn-${pawn.id}-${activeTab}`, title: pawn.name, subtitle:activeTab==='bio'||activeTab==='gear'?tabs.find(([tab]) => tab === activeTab)![1]:undefined, rows, actions, layout: 'inspector' };
-  // All tabs belong to the same cardboard dossier, rather than seven windows
-  // with different bounds. The pixel layout handles the viewport reduction.
-  [result.width, result.height] = [760, 660];
-  if (activeTab === 'bio' || activeTab === 'needs' || activeTab === 'health' && healthPane === 'overview') {
-    result.columnRatio = activeTab === 'bio' ? .48 : activeTab === 'needs' ? .38 : .375;
+  if (colonist && alive && stop && fire) actions.push({ ...command('draft-stop', 'Stop', stop), icon: 'clear-orders' }, { ...command('fire-at-will', fire.type === 'fire-at-will' && fire.enabled ? 'Feu à volonté' : 'Cesser le feu', fire), icon: 'fire-at-will' });
+  // Core's hostility response gizmo (also a column of Assignations).
+  if (colonist && alive) { const hostility = choices('pawn-hostility', 'Réaction hostile', pawn.hostilityResponse ?? 'flee', ['flee', 'ignore', 'attack'] as const, response => send({ type: 'hostility-response', pawnId: pawn.id, response }), response => ({ flee: 'Fuir', ignore: 'Ignorer', attack: 'Attaquer' })[response]).controls![0]!; actions.push({ ...hostility, icon: 'target-melee', hint: `Réaction hostile : ${hostility.label}` }); }
+  if (activeTab) actions.push({ ...control('inspect-tab-close', 'Fermer l’onglet', () => { activeTab = null; }), hint: 'Fermer l’onglet' });
+  const result: NativePage & { portrait?: { url: string; label: string } } = { id: `inspect-pawn-${pawn.id}-${activeTab ?? 'pane'}`, title: pawn.name, rows, actions, layout: 'inspector' };
+  if (activeTab) result.inspectTab = { id: activeTab, ...tabSizes[activeTab] };
+  if (activeTab === 'needs' || activeTab === 'health' && healthPane === 'overview') {
+    result.columnRatio = activeTab === 'needs' ? .38 : .375;
     for (const entry of rows) {
-      if (entry.id === 'pawn-tabs' || entry.id === 'health-tabs') continue;
-      entry.column = activeTab === 'bio' ? /^(skill-|heading-bio-skills)/.test(entry.id) ? 1 : 0 : activeTab === 'needs' ? /^(thought-|need-mood|mood-|break-thresholds|heading-thoughts)/.test(entry.id) ? 1 : 0 : /^(capacity-|heading-capacities|pain|blood|bleed)/.test(entry.id) ? 0 : 1;
+      if (entry.id === 'pawn-tabs' || entry.id === 'health-tabs' || entry.inspectPane) continue;
+      entry.column = activeTab === 'needs' ? /^(thought-|need-mood|mood-|break-thresholds|heading-thoughts)/.test(entry.id) ? 1 : 0 : /^(capacity-|heading-capacities|pain|blood|bleed)/.test(entry.id) ? 0 : 1;
       if(activeTab==='health'){if(entry.meter&&entry.column===0)entry.dense=true;if(entry.id==='anatomy'){entry.label='';entry.compact=true;}}
     }
   }

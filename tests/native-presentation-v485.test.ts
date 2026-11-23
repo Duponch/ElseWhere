@@ -30,7 +30,8 @@ describe('native V485 presentation spacing',()=>{
   const make=(count:number):NativePage=>({id:'inspect-pawn',title:'Eden',layout:'inspector',portrait:{url:'data:,',label:'Eden'},rows:[{id:'pawn-tabs',label:'',controls:['Journal','Matériel','Social','Bio','Besoins','Santé'].map(button)},...Array.from({length:count},(_,i)=>({id:'fact-'+i,label:'Valeur '+i}))],actions:['Mobiliser','Effacer les ordres','Travail','Fermer'].map(button)});
   for(const viewport of[{width:1440,height:1000},{width:960,height:800}]){
    const boxes=[0,12,50].map(count=>layoutNativePage(make(count),viewport,false,measure));
-   for(const box of boxes){expect([box.width,box.height]).toEqual([760,660]);expect(box.inspectorParts?.summary.height).toBe(118);expect(box.inspectorParts).toEqual(boxes[0]!.inspectorParts);}
+   // Core's inspect pane keeps 432 × 165 whatever the inspected content.
+   for(const box of boxes){expect(box.inspectorParts?.summary).toMatchObject({width:432,height:165});expect(box.inspectorParts).toEqual(boxes[0]!.inspectorParts);expect([box.width,box.height]).toEqual([boxes[0]!.width,boxes[0]!.height]);}
   }
  });
 });

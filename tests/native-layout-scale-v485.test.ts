@@ -27,7 +27,7 @@ describe('native layout on logical viewports reduced by the chosen scale',()=>{
   });
   it('keeps a short dossier onscreen with all tabs and actions reachable by scrolling',()=>{
     const actions=['Mobiliser','Effacer les ordres','Travail','Fermer'].map(label=>button(label));
-    const page:NativePage={id:'inspect-pawn',title:'Eden',layout:'inspector',portrait:{url:'data:,',label:'Eden'},rows:[tabs,...records],actions};
+    const page:NativePage={id:'inspect-pawn',title:'Eden',layout:'inspector',portrait:{url:'data:,',label:'Eden'},inspectTab:{id:'bio',width:514,height:489,margin:17},rows:[tabs,...records],actions};
     for(const viewport of viewports){
       const box=layoutNativePage(page,viewport,false,measure);inside({x:0,y:0,...viewport},box);expect(box.body.height).toBeGreaterThan(0);
       expect(box.rows.filter(row=>row.row.id.startsWith('fact-'))).toHaveLength(records.length);
@@ -35,7 +35,7 @@ describe('native layout on logical viewports reduced by the chosen scale',()=>{
       for(const control of [...tabs.controls!,...actions])expect(controls).toContain(control.id);
       expect(box.contentHeight).toBeGreaterThan(box.body.height);
     }
-    expect(NATIVE_UI.body).toBe(14);expect(NATIVE_UI.button).toBe(34);
+    expect(NATIVE_UI.body).toBe(13);expect(NATIVE_UI.button).toBe(30);
   });
   it('moves an oversized footer into scrollable content instead of covering the body',()=>{
     const actions=Array.from({length:12},(_,i)=>button('action-'+i,'Longue action conservée '+i));
@@ -46,6 +46,6 @@ describe('native layout on logical viewports reduced by the chosen scale',()=>{
   });
   it('keeps full-size front-menu controls in a bounded scrollable options panel',()=>{
     const page:NativePage={id:'front-options',title:'Options',layout:'front',width:1040,height:720,rows:records,actions:[button('back','Retour')]};
-    for(const viewport of viewports){const box=layoutNativePage(page,viewport,true,measure);inside({x:0,y:0,...viewport},box);expect(box.body.height).toBeGreaterThan(0);expect(box.contentHeight).toBeGreaterThan(box.body.height);expect(box.actions[0]?.height).toBe(34);}
+    for(const viewport of viewports){const box=layoutNativePage(page,viewport,true,measure);inside({x:0,y:0,...viewport},box);expect(box.body.height).toBeGreaterThan(0);expect(box.contentHeight).toBeGreaterThan(box.body.height);expect(box.actions[0]?.height).toBe(NATIVE_UI.button);}
   });
 });

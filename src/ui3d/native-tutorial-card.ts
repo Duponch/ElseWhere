@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import {NATIVE_TEXT} from './native-ui-scale';
 import {PALETTE,drawHandRect,type CardboardPiece,type CardboardPieceOptions,type PrototypeCardboardArt} from './prototype-art';
 import {wrapNativeText} from './native-layout';
 import {TUTORIAL_INTRO_HOLD_349,TUTORIAL_INTRO_SLIDE_349,type TutorialCardView349} from '../ui/tutorial-engine-349';
@@ -10,7 +11,7 @@ import {TUTORIAL_INTRO_HOLD_349,TUTORIAL_INTRO_SLIDE_349,type TutorialCardView34
  * on a dark overlay, then slides to its corner. Presentation only. */
 const FONT='"Comic Sans MS", "Chalkboard SE", Georgia, serif';
 /** Core Lesson_Instruction: 310 px wide, 17 px margins, 10 px padding, 30 px bar. */
-const WIDTH=310,MARGIN=17,PAD=10,LINE=18,TEXT=13,BAR=30,BAR_GAP=17;
+const WIDTH=310,MARGIN=17,PAD=10,LINE=18,TEXT=NATIVE_TEXT.small,BAR=30,BAR_GAP=17;
 /** Below the help button of the top-right corner. */
 const TOP=44;
 /** In front of pages and drop-down lists (pages sit at 0.18, lists at 1.6). */

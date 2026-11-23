@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import type {NativeControl,NativePage,NativeRow} from '../src/ui3d/native-contract';
-import {flowNativeControls,layoutNativePage,type NativeRect,type TextMeasure} from '../src/ui3d/native-layout';
+import {flowNativeControls,layoutNativePage,NATIVE_UI,type NativeRect,type TextMeasure} from '../src/ui3d/native-layout';
 
 const measure:TextMeasure=(text,size)=>Array.from(text).reduce((width,letter)=>width+(/\s/.test(letter)?.3:/[ilI.,:;!]/.test(letter)?.3:.54)*size,0);
 const control=(id:string,label=id):NativeControl=>({id,label,onActivate:()=>{}});
@@ -16,7 +16,7 @@ describe('native UI structure retained with the revised V480 proportions',()=>{
   it('keeps ordinary actions at intrinsic width and wraps them without filling empty horizontal space',()=>{
     const actions=[control('first','Choisir'),control('second','Consulter le dossier'),control('third','Fermer')];
     const wide=flowNativeControls(actions,{x:10,y:20,width:1000,height:0},measure);
-    expect(wide.height).toBe(34);expect(wide.controls.every(button=>button.width>=68&&button.width<=240)).toBe(true);
+    expect(wide.height).toBe(NATIVE_UI.button);expect(wide.controls.every(button=>button.width>=68&&button.width<=240)).toBe(true);
     expect(wide.controls.at(-1)!.x+wide.controls.at(-1)!.width).toBeLessThan(600);
     const narrow=flowNativeControls(actions,{x:10,y:20,width:180,height:0},measure);
     expect(narrow.height).toBeGreaterThan(wide.height);expect(narrow.controls.map(button=>button.control)).toEqual(actions);
@@ -43,7 +43,7 @@ describe('native UI structure retained with the revised V480 proportions',()=>{
     expect(row.controls[0]!.x).toBeGreaterThan(row.x+row.labelWidth+70);
     expect(row.controls.at(-1)!.x+row.controls.at(-1)!.width).toBe(row.x+row.width);
     const arrows=flowNativeControls([control('left','↶'),control('right','↷')],{x:0,y:0,width:100,height:0},measure);
-    expect(arrows.height).toBe(34);expect(arrows.controls.map(button=>button.width)).toEqual([32,32]);
+    expect(arrows.height).toBe(NATIVE_UI.button);expect(arrows.controls.map(button=>button.width)).toEqual([32,32]);
   });
 
   it('restores independent Architecte navigation, catalogue and option regions',()=>{
