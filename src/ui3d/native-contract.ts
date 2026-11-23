@@ -95,6 +95,10 @@ export interface NativePage {
   onCancel?:()=>void;
   /** True for front screens/confirmations. Captures world input until closed. */
   modal?:boolean;
+  /** Core FloatMenu (CSS pixels of the opening click): drawn at the mouse,
+   * not modal; a press outside it closes it and is consumed, and it vanishes
+   * once the mouse is more than 95 px from it. Escape closes only it. */
+  floatMenu?:{x:number;y:number};
   closable?:boolean;
   width?:number;
   height?:number;

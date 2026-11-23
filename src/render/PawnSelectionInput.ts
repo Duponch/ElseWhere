@@ -20,6 +20,9 @@ interface Callbacks {
   select(gesture:SelectionGesture):void;
   inspect(event:PointerEvent):void;
   inspectGroup?(event:MouseEvent):boolean;
+  /** Core Selector.SelectInsideDragBox; false when the box selected nothing,
+   * which falls back to the click under the mouse (SelectUnderMouse). */
+  rectangleSelect?(x1:number,y1:number,x2:number,y2:number,shift:boolean):boolean;
   lock(locked:boolean):void;
   rectangle?:(bounds:{left:number;top:number;width:number;height:number}|null)=>void;
 }
@@ -53,10 +56,11 @@ export class PawnSelectionInput {
     const drag=this.drag;if(!drag||drag.id!==event.pointerId||event.button!==0)return false;
     const inside=document.elementFromPoint(event.clientX,event.clientY)===this.canvas;
     this.cancel();if(!inside)return true;
-    if(Math.hypot(event.clientX-drag.x,event.clientY-drag.y)>6) {
+    const dragged=Math.hypot(event.clientX-drag.x,event.clientY-drag.y)>6;
+    if(dragged&&!this.callbacks.rectangleSelect) {
       const ids=rectangleActors(this.callbacks.pawns(),drag.x,drag.y,event.clientX,event.clientY);
       this.callbacks.select({ids,additive:drag.shift,toggle:false});
-    } else {
+    } else if(!dragged||!this.callbacks.rectangleSelect!(drag.x,drag.y,event.clientX,event.clientY,drag.shift)) {
       const hits=this.hits(event.clientX,event.clientY),selected=this.callbacks.selected();
       if(!drag.shift&&this.callbacks.preferObjectCycle(event)){this.callbacks.inspect(event);return true;}
       // Cycle overlapping pawns and map objects on ordinary clicks. Shift

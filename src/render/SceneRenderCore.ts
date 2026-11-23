@@ -1876,7 +1876,9 @@ export class SceneRenderCore {
     this.mechanoids.forEachPose((id,x,y,z,height,radius,dead,kind)=>{
       if(!this.world||!knownPosition256(this.world,{x:Math.floor(x+.5),z:Math.floor(z+.5)}))return;
       const proxy=bodyScreenProxy(this.camera,rect,x,y,z,height,radius);if(!proxy)return;
-      result.push({id,...proxy,group:dead?`corpse:mech:${kind}`:`mech:${kind}`,category:dead?3:1});
+      // Core Selector IsHumanlike excludes mechanoids: they come with the
+      // animals in the IsPawn pass of a selection box.
+      result.push({id,...proxy,group:dead?`corpse:mech:${kind}`:`mech:${kind}`,category:dead?3:2});
     });
     return result;
   }

@@ -199,6 +199,8 @@ import { RoomInspection } from './ui/room-inspection';
 import { constructionControls, constructionDeliveryLabel, structureFootprintLabel,placementMaterial } from './ui/construction-controls';
 import { constructionRecipe } from './sim/construction-materials';
 import { rockInspection } from './ui/geology-inspection';
+import { hoverTemperatureText } from './ui/hover-temperature';
+import { cycledColonist } from './ui/colonist-cycle';
 import { doorControls, updateDoorControls } from './ui/door-controls';
 import { penControls, updatePenControls } from './ui/pen-controls';
 import {firefoamControls290,updateFirefoamControls290} from './ui/firefoam-controls-290';
@@ -234,7 +236,7 @@ import './ui/cell-inspector.css';
 import './ui/inspection-dossiers.css';
 import './ui/journal-inspection.css';
 import { presentCellDescription, type CellHealth } from './ui/cell-inspector';
-import { clickedMapObject,mapObjectExists,type MapObjectSelection } from './ui/map-object-selection';
+import { clickedMapObject,mapObjectExists,nextMapObject,type MapObjectSelection } from './ui/map-object-selection';
 import { DEFAULT_PLAN_COLOR_369,planById369,planLabel369,type PlanColor369 } from './sim/plans-369';
 import {mapObjectGroupCells,MAX_MAP_OBJECT_SELECTION} from './ui/map-object-group-selection';
 import {mapObjectActions,mapObjectGroupActions} from './ui/map-object-actions';
@@ -528,7 +530,7 @@ let selectedObjects:MapObjectSelection[]=[];
 const objectGroupReads=new WeakMap<HTMLElement,{world:World;selection:string}>();
 let hoveredCell:Cell|null=null;
 let hoverReadoutLayout:ReturnType<typeof installHoverReadoutLayout>|undefined;
-let lastHoverReadAt=0,lastHoverCopy='';
+let lastHoverReadAt=0,lastHoverCopy='',lastHoverTemperatureAt=0;
 let altInspectorHeld=false,lastAltReadAt=0,lastAltCopy='',mapPointerX=0,mapPointerY=0;
 const mapHoverLight=new MapHoverLightCache();
 let lastAudioSourceFocus={x:Infinity,z:Infinity};
@@ -1748,6 +1750,8 @@ function selectPawn(id: number) {
 function updateMapHover(force=false):void {
   if(nativeUi){
     const cell=hoveredCell;
+    // Core GlobalControls.TemperatureString follows the mouse cell, tabs open or not.
+    if(snapshot&&nativeHud){const now=performance.now();if(force||now-lastHoverTemperatureAt>=250){lastHoverTemperatureAt=now;nativeHud.setHoverTemperature(hoverTemperatureText(snapshot,cell));}}
     if(currentTool!=='select'||!snapshot||!cell||currentPanel!==null||frontMenu.isOpen()||replacingWorld){nativeUi.setWorldReadout(null);return;}
     if(altInspectorHeld){updateMapCellDetails(force);return;}
     const now=performance.now();if(!force&&now-lastHoverReadAt<250)return;lastHoverReadAt=now;
@@ -2947,6 +2951,21 @@ document.addEventListener('keydown', event => {
   const tab = mainTabHotkey(event.key); if (tab) { event.preventDefault(); setPanel(currentPanel === tab ? null : tab); return; }
   const speeds: Record<string, number> = { '1': 1, '2': 3, '3': 6 };
   if (event.key in speeds) { const token=client.getThreatPauseToken(),speed=speeds[event.key];learningRuntime?.speed(speed);void attempt(() => changeSpeed(speed,token)); return; }
+  // Core NextColonist (Period) / PreviousColonist (Comma):
+  // ThingSelectionUtility.SelectNext/PreviousColonist, colonist bar order,
+  // from the last (next) or first (previous) selected one, camera jump.
+  // Core SelectNextInCell (KeypadMultiply): InspectPaneUtility selects the
+  // next selectable object of the single selected thing's cell.
+  if(event.code==='NumpadMultiply'&&snapshot&&selectedObject&&selectedObjects.length<=1&&selectedCell){
+    event.preventDefault();const next=nextMapObject(snapshot,selectedCell,selectedObject);
+    if(next)selectObjects([next]);return;
+  }
+  if((event.key===','||event.key==='.')&&snapshot&&!event.repeat){
+    const colonists=snapshot.pawns.filter(p=>isColonist(p)&&!p.prisoner&&p.state!=='dead'&&knownPosition256(snapshot!,p)).map(p=>p.id).sort((a,b)=>a-b);
+    const target=cycledColonist(colonists,selection.ids,event.key==='.');
+    if(target!==undefined){event.preventDefault();selectPawn(target);}
+    return;
+  }
   if(event.key.toLowerCase()==='r'&&selection.ids.size){event.preventDefault();if(!event.repeat)toggleDraft(snapshot?.pawns.filter(p=>selection.ids.has(p.id)&&isColonist(p)&&!p.prisoner)??[],c=>void attempt(async()=>{await client.command(c);renderState();}));return;}
   if(!snapshot)return;
   const key = event.key.toLowerCase(), shortcut = globalHotkeyTool(key); if (shortcut) setTool(shortcut);

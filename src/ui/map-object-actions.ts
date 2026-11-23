@@ -3,6 +3,7 @@ import {materialAllowedForPlayer256} from '../sim/material-permission-256';
 import {roadPropCanClaim256,roadPropCanDeconstruct256} from '../sim/local-road-prop-ownership-256';
 import { footprintCells } from '../sim/definitions';
 import { stripInspectorAction351 } from '../sim/strip-351';
+import { smoothWallReason367 } from '../sim/smooth-wall-367';
 import { choppable, harvestable, isPlant } from '../sim/plants';
 import { sharesConstructionLayer } from '../sim/power-grid';
 import { extractTreeReason,isMinifiedTree,isPlantDesignationJob } from '../sim/tree-transfer';
@@ -12,7 +13,7 @@ import type { Cell, Command, Job, MaterialPile, Resource, Structure, World } fro
 import { mapObjectCells, type MapObjectSelection } from './map-object-selection';
 import { mapObjectGroupCells } from './map-object-group-selection';
 
-export type MapObjectActionId = 'strip' | 'material-permission' | 'claim' | 'mine' | 'chop' | 'harvest' | 'cut' | 'haul-chunks' | 'deconstruct' | 'cancel' | 'extract' | 'replant';
+export type MapObjectActionId = 'strip' | 'material-permission' | 'claim' | 'mine' | 'smooth-wall' |'chop' | 'harvest' | 'cut' | 'haul-chunks' | 'deconstruct' | 'cancel' | 'extract' | 'replant';
 export interface MapObjectAction { id: MapObjectActionId; label: string; command?: Command; placementPileId?:number }
 export interface MapObjectGroupAction { id: MapObjectActionId; label: string; commands: Command[] }
 const same = (a: Cell, b: Cell) => a.x === b.x && a.z === b.z;
@@ -53,7 +54,11 @@ function actionsFor(world: World, selected: MapObjectSelection, cells: readonly 
       ? lookups.resources.get(selected.id) : world.resources.find(resource => resource.id === selected.id) : undefined;
     if (selected.kind === 'rock' || resource?.kind === 'rock') {
       if (world.tiles[cell.z * world.width + cell.x]?.terrain === 'rock') designate('mine', 'Miner');
-      ownsJob = job => job.kind === 'mine'&&contains(job,cell);
+      // Core ReverseDesignatorDatabase: Designator_SmoothWalls is a gizmo of
+      // the selected natural rock wall, offered only where it may designate.
+      if (selected.kind === 'rock' && !smoothWallReason367(world, cell))
+        actions.push({ id: 'smooth-wall', label: 'Lisser le mur', command: { type: 'area', action: 'smooth-wall', from: { x: cell.x, z: cell.z }, to: { x: cell.x, z: cell.z } } });
+      ownsJob = job => (job.kind === 'mine' || job.kind === 'smooth-wall')&&contains(job,cell);
     } else if (resource && (lookups?.firstResources ? lookups.firstResources.get(cellKey(cell))
       : world.resources.find(resource => same(resource, cell)))?.id === selected.id) {
       if (choppable(world, resource)) designate('chop', 'Abattre');

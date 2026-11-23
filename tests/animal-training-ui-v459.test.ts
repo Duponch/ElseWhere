@@ -151,13 +151,13 @@ test('a real first lesson reports its captured feed work and final attempt after
  until(()=>ui.handler.animalHandling?.kind==='train'&&ui.handler.animalHandling.step===2&&ui.handler.animalHandling.progress>0);
  const task=ui.handler.animalHandling!,food=ui.world.piles.find(p=>p.id===task.carryPileId)!;
  expect(food.owner).toEqual({type:'pawn',pawnId:ui.handlerId});expect(task.feedDuration).toBeGreaterThan(task.progress);
- ui.update();const before=JSON.stringify(ui.world),bar=actionProgress(ui.world,ui.handler)!;
- expect(bar).toMatchObject({kind:'handling',completed:task.progress,total:task.feedDuration});expect(bar.fraction).toBe(task.progress/task.feedDuration!);
+ // Core JobDriver_InteractAnimal draws no progress bar (interactions note).
+ ui.update();const before=JSON.stringify(ui.world);expect(actionProgress(ui.world,ui.handler)).toBeUndefined();
  expect(element(ui.root,'[data-animal-training-status]').textContent).toContain('nourrit l’animal');expect(animalActivity(ui.world,ui.animal)).toContain('Reçoit sa nourriture');
  expect(JSON.stringify(ui.world)).toBe(before);
  until(()=>ui.handler.animalHandling?.finalStartedCore!==undefined);const final=ui.handler.animalHandling!;ui.update();
  expect(final).toMatchObject({step:5,quantity:0,carryPileId:null});expect(ui.world.piles.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===ui.handlerId)).toBe(false);
- expect(actionProgress(ui.world,ui.handler)).toMatchObject({kind:'handling',completed:final.progress,total:10});
+ expect(actionProgress(ui.world,ui.handler)).toBeUndefined();
  expect(element(ui.root,'[data-animal-training-status]').textContent).toContain('tentative effectuée');expect(animalActivity(ui.world,ui.animal)).toContain('Termine la tentative');
  expect(element(ui.root,'[data-animal-training-progress="obedience"]').textContent).toContain('1 / 3');
 });

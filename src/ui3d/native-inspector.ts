@@ -13,6 +13,9 @@ import { mapObjectsAt, mapObjectExists, type MapObjectSelection } from '../ui/ma
 import { selectedMapJob296 } from '../ui/wall-door-selection-296';
 import { constructionRecipe } from '../sim/construction-materials';
 import { mapCellDetails } from '../ui/map-cell-details';
+import { rockThingLabel } from '../ui/geology-inspection';
+import { floraDefinition } from '../sim/biome-flora';
+import { rockMaxHP } from '../sim/mining-rules';
 import { buildingLabels } from '../ui/building-labels';
 import { animalDescription, animalTitle, buildingDescription, buildingTitle, itemDescription, itemTitle, traitLabel, traitTooltip, wildPlantTitle } from '../lore/lore-text';
 import { plantInspection } from '../ui/plant-inspection';
@@ -580,8 +583,10 @@ function objectLabel(world: World, selected: MapObjectSelection): string {
   if(selected.kind==='job'){const job=selectedMapJob296(world,selected.id);if(job&&job.kind in buildingLabels)return `Plan · ${buildingLabels[job.kind as Structure['kind']]}`;}
   if (selected.kind === 'structure' || selected.kind === 'packed') { const structure = world.structures.find(s => s.id === selected.id) ?? world.packed.find(p => p.building.id === selected.id)?.building; return structure ? buildingTitle(structure.kind, buildingLabels[structure.kind]) : 'Bâtiment absent'; }
   if (selected.kind === 'pile') { const pile = world.piles.find(p => p.id === selected.id); return pile ? `${itemTitle(pile.item, ITEM_DEFINITIONS[pile.item].label)} × ${pile.quantity}` : 'Pile absente'; }
-  if (selected.kind === 'resource') { const resource = world.resources.find(r => r.id === selected.id); return resource ? resource.species ? wildPlantTitle(resource.species, resource.species) : resource.kind : 'Ressource absente'; }
+  if (selected.kind === 'resource') { const resource = world.resources.find(r => r.id === selected.id); return resource ? resource.species ? wildPlantTitle(resource.species, floraDefinition(resource)?.label ?? resource.species) : resource.kind : 'Ressource absente'; }
   if (selected.kind === 'plan') { const plan = planById369(world, selected.id); return plan ? planLabel369(plan) : 'Plan absent'; }
+  // Core InspectPaneUtility.AdjustedLabelFor: the rock Thing's LabelCap.
+  if (selected.kind === 'rock') { const tile = world.tiles[selected.id]; return tile?.terrain === 'rock' ? rockThingLabel(tile) : 'Massif rocheux'; }
   return ({ growing: 'Zone de culture', stockpile: 'Zone de stockage', rock: 'Massif rocheux', geyser: 'Geyser', job: 'Ordre de travail' } as Record<string, string>)[selected.kind] ?? selected.kind;
 }
 /** The installed RimWorld's description of the thing, when loaded (Elsewhere has none of its own). */
@@ -596,7 +601,15 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
     const counts = new Map<string, number>(); for (const object of objects) { const label = objectLabel(world, object); counts.set(label, (counts.get(label) ?? 0) + 1); }
     for (const [label, count] of counts) rows.push(row(`group-${rows.length}`, label, String(count)));
     const actions = mapObjectGroupActions(world, objects).map(action => control(`group-action-${action.id}`, `${action.label} (${action.commands.length})`, async () => { for (const value of action.commands) await send(value); }));
-    return { id: 'inspect-object-group', title: `${objects.length} objets sélectionnés`, rows, actions };
+    // Core InspectPaneUtility.AdjustedLabelFor: one definition label (items
+    // without their count) or « Divers », then « x » and the summed stack count.
+    let base: string | undefined, same = true, total = 0;
+    for (const object of objects) {
+      const pile = object.kind === 'pile' ? world.piles.find(p => p.id === object.id) : undefined;
+      const label = pile ? itemTitle(pile.item, ITEM_DEFINITIONS[pile.item].label) : objectLabel(world, object);
+      total += pile?.quantity ?? 1; if (base === undefined) base = label; else if (base !== label) same = false;
+    }
+    return { id: 'inspect-object-group', title: `${same && base ? base : 'Divers'} ×${total}`, rows, actions };
   }
   const structure = selected.kind === 'structure' ? world.structures.find(s => s.id === selected.id) : undefined;
   if (structure && subpage?.structureId === structure.id && subpage.kind === 'bills') return billPage(world, structure);
@@ -685,6 +698,11 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
       if (!latest.world?.resources.some(current => current.id === resource.id && current.blight)) throw Error('Ce plant n’est plus atteint.');
       return send({ type: 'cut-blighted-crops' });
     }));
+  } else if (selected.kind === 'rock') {
+    // Core InspectPaneFiller.DrawHealth: the HitPoints bar of the Mineable
+    // (Granite 900, compacted steel 1500…); Mineable adds no inspect string.
+    const tile = world.tiles[selected.id];
+    if (tile?.terrain === 'rock') { const max = rockMaxHP(tile), current = Math.max(0, max - (tile.miningDamage ?? 0)); rows.push(meterRow('rock-hp', 'Points de vie', current, max, undefined, `${current} / ${max}`)); }
   } else if (selected.kind === 'stockpile') {
     const currentZoneId = () => {
       const cell = latest.world?.stockpiles.find(cell => cell.id === selected.id);

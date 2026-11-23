@@ -28,7 +28,9 @@ test('a breakdown reads as a mechanical fault and switches off resident work eff
   expect(powerInspection(world,generator)).toContain('Panne mécanique');
   expect(powerInspection(world,generator)).toContain('1 composant ordinaire');
   expect(powerInspection(world,generator,true)).toBe(' · Panne mécanique.');
-  expect(mapHoverLines(world,generator)).toContain('Générateur à bois · Panne mécanique');
+  // Core MouseoverReadout lists the building by its label; the breakdown is
+  // told by the inspector (interactions note).
+  expect(mapHoverLines(world,generator)).toContain('Générateur à bois');
   const version=layer.glow.instanceMatrix.version;
   layer.present(world.tick+.5);layer.adopt(world);
   expect(layer.glow.instanceMatrix.version).toBe(version);

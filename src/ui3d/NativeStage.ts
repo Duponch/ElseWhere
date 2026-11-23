@@ -16,6 +16,7 @@ import {NativeHoverPreview} from './native-hover-preview';
 import {NativeHighlightPass,type NativeHighlightCandidate,type NativeHighlightPiece} from './native-highlight';
 import {setNativeCursor} from '../ui/native-cardboard-cursors';
 import {SHIP_FRAME_MAXIMUM_DELTA_298} from '../bridge/ship-countdown-wire-298';
+import {floatMenuVanishes,pressOutsideFloatMenu,mouseAttachedTipPosition,tipTextAction,TOOLTIP_DELAY_MS} from './native-float-menu';
 import {NATIVE_UI,NATIVE_RIGHT_DOCK_WIDTH,layoutNativePage,nativeVisualWidth,nativeMatrixColumns,nativeMatrixHeadingLines,nativeTableRowScroll,wrapNativeText,nativeCardInk,type NativePageBox,type NativeRowBox,type NativeRect,type NativeRegion,type NativeRegionBox} from './native-layout';
 
 const HUD_DISTANCE=7.5;
@@ -181,6 +182,12 @@ export class NativeStage {
   private hintOwner:CardboardPiece|null=null;
   private hintText='';
   private hintTimer:ReturnType<typeof setTimeout>|undefined;
+  /** Core TooltipHandler: a tip lives while the mouse stays over its region,
+   * re-reads its text, follows the mouse and survives a repaint of the region. */
+  private hintHit:Hit|undefined;
+  private hintAt={x:0,y:0};
+  private hintSize={width:0,height:0};
+  private hintReacquire:string|undefined;
   private hintPiece:CardboardPiece|undefined;
   private hintScroll=0;
   private hintMaxScroll=0;
@@ -397,9 +404,11 @@ export class NativeStage {
     if(placement===this.worldReadoutLayout)return;this.worldReadoutLayout=placement;
     // Use the actual free corner beside the centred management cards. Only a
     // corner narrower than a readable text lane reserves the dock's full height.
-    const left=4,lowLane=this.bottomLeftClearance-24,canUseCorner=lowLane>=180;
-    const maxWidth=Math.max(80,Math.min(640,this.width-NATIVE_RIGHT_DOCK_WIDTH-16,canUseCorner?lowLane:Infinity));
-    const bottom=canUseCorner?2:this.bottomDockHeight+8;this.readoutBottom=bottom;
+    // Core MouseoverReadout.BotLeft (15, 65): 15 px from the left, the first
+    // (bottom) line 65 px above the screen's bottom edge, lines 19 px apart.
+    const left=15,lowLane=this.bottomLeftClearance-24,canUseCorner=lowLane>=180;
+    const maxWidth=Math.max(80,Math.min(640,this.width-NATIVE_RIGHT_DOCK_WIDTH-16,canUseCorner?lowLane-11:Infinity));
+    const bottom=canUseCorner?46:this.bottomDockHeight+8;this.readoutBottom=bottom;
     const lines=this.worldReadoutLines.flatMap(line=>wrapNativeText(line,maxWidth,this.measure,14)),available=Math.max(42,this.height-bottom-180);
     const overflow=lines.length*19+4>available,count=overflow?Math.max(1,Math.floor((available-22)/19)):lines.length;
     this.worldReadoutMaxScroll=Math.max(0,lines.length-count);this.worldReadoutScroll=Math.min(this.worldReadoutScroll,this.worldReadoutMaxScroll);
@@ -676,6 +685,7 @@ export class NativeStage {
     const next=reduced?wanted:this.bottomOffset+(wanted-this.bottomOffset)*Math.min(1,dt*15);
     if(next!==this.bottomOffset){this.bottomOffset=Math.abs(wanted-next)<.001?wanted:next;this.anchors.bottomCenter.position.y=-this.visH/2+.04*this.uiScale+this.bottomOffset*this.uiScale;this.sceneRevision++;}
     const external=this.options.onAnimate?.(dt)??false;if(external)this.sceneRevision++;
+    if(this.hintOwner||this.hintReacquire!==undefined)this.refreshHint();
     this.extraAnimating=Math.abs(wanted-this.bottomOffset)>.001||external;
     for(const piece of this.moving){
       const ud=piece.userData;ud.hoverVal=reduced?ud.hoverTarget:ud.hoverVal+(ud.hoverTarget-ud.hoverVal)*14*dt;
@@ -702,7 +712,7 @@ export class NativeStage {
   }
   private unregister(piece:CardboardPiece):void{
     if(this.mapToolLabelOwner===piece)this.clearMapToolLabel();
-    if(this.hintOwner===piece)this.clearHint();
+    if(this.hintOwner===piece)this.clearHint(true);
     if(this.hovered===piece)this.hover(null);this.moving.delete(piece);
     for(const mesh of piece.userData.interactiveMeshes??[])this.hits.delete(mesh);
     this.art.disposePiece(piece);
@@ -795,6 +805,9 @@ export class NativeStage {
     this.lastPointer={x:event.clientX/this.displayScale,y:event.clientY/this.displayScale};this.options.onPointer?.(this.lastPointer.x,this.lastPointer.y);
     const bottomOpen=this.lastPointer.y>=this.height-Math.max(14,this.bottomDockHeight+this.bottomOffset*100);
     if(bottomOpen!==this.bottomOpen){this.bottomOpen=bottomOpen;this.extraAnimating=true;this.invalidate();}
+    // Core FloatMenu.UpdateBaseColor (vanishIfMouseDistant): the menu closes
+    // once the mouse is more than 95 px from its rectangle grown by 5 px.
+    if(this.page?.floatMenu&&this.pageBox&&!this.dropdown&&floatMenuVanishes(this.pageBox,this.lastPointer.x,this.lastPointer.y))this.closeFloatMenu();
     if(this.editor&&event.target===this.editor)return;
     if(this.regionDrag){const drag=this.regionDrag;if(drag.pointerId!==event.pointerId)return;const value=THREE.MathUtils.clamp(drag.offset+((drag.axis==='x'?event.clientX:event.clientY)/this.displayScale-drag.start)/Math.max(1,drag.travel)*drag.max,0,drag.max);if(drag.axis==='x')this.setHorizontalOffset(drag.region,value);else this.setRegionOffset(drag.region,value);this.rebuildPage(true);this.swallow(event);this.invalidate();return;}
     if(this.scrollbarDrag){const drag=this.scrollbarDrag;if(drag.pointerId!==event.pointerId)return;this.scroll=THREE.MathUtils.clamp(drag.scroll+(event.clientY/this.displayScale-drag.startY)/Math.max(1,drag.travel)*drag.max,0,drag.max);this.rebuildPage(true);this.swallow(event);this.invalidate();return;}
@@ -809,8 +822,23 @@ export class NativeStage {
     this.updatePointerCursor(hit);
     if(hit||this.frontVisible||this.page?.modal)this.swallow(event);
   }
+  /** Core WindowStack.CloseWindowsBecauseClicked: a press outside a float
+   * menu (closeOnClickedOutside) closes it and the event is used. */
+  private floatMenuOutside(event:PointerEvent):boolean{
+    const page=this.page,box=this.pageBox;
+    if(!page?.floatMenu||!box||!this.worldVisible||this.frontVisible||this.dropdown)return false;
+    if(!pressOutsideFloatMenu(box,event.clientX/this.displayScale,event.clientY/this.displayScale))return false;
+    this.closeFloatMenu();return true;
+  }
+  /** Closes only the float menu: the selection and the inspector stay. */
+  private closeFloatMenu():void{
+    const page=this.page;if(!page?.floatMenu)return;
+    this.activationSerial++;this.closeDropdown();this.clearHint();
+    try{if(page.onClose)page.onClose();else this.showPage(null);}catch(error){this.options.onError(String(error));}
+  }
   private pointerDown(event:PointerEvent):void{
     if(this.editor&&event.target===this.editor)return;
+    if(this.floatMenuOutside(event)){this.swallow(event);return;}
     if((event.button===1||event.button===2)&&this.cameraWorldPoint(event.clientX,event.clientY)){
       this.clearHint();this.hover(null);this.setPointerOverUi(false);this.worldPress={pointerId:event.pointerId,button:event.button};setNativeCursor(document.documentElement,'grabbing');return;
     }
@@ -1117,7 +1145,7 @@ export class NativeStage {
     return [{...ink,controls:controls?.map(control=>this.controlInk(control)),columns:columns?.map(({hint:_columnHint,...column})=>column)},!!this.rowHint(row)];
   }
   private pageInkSignature(page:NativePage|null):string{
-    return page?JSON.stringify([page.id,page.contentKey,page.title,page.subtitle,page.width,page.height,page.layout,page.tableProfile,page.setupCatalogueWidth,page.setupAnchor,page.palette,page.research,page.columnRatio,page.portrait?.url,page.visual?.selected,page.visual?.markers,page.rows.map(row=>this.rowInk(row)),page.actions?.map(control=>this.controlInk(control)),page.closable,this.textFontRevision,this.textEntityRevision,this.frontVisible,this.width,this.height,this.displayScale,this.bottomDockHeight,this.scroll,this.regionOffsets,this.graphX,this.paletteX]):'';
+    return page?JSON.stringify([page.id,page.floatMenu,page.contentKey,page.title,page.subtitle,page.width,page.height,page.layout,page.tableProfile,page.setupCatalogueWidth,page.setupAnchor,page.palette,page.research,page.columnRatio,page.portrait?.url,page.visual?.selected,page.visual?.markers,page.rows.map(row=>this.rowInk(row)),page.actions?.map(control=>this.controlInk(control)),page.closable,this.textFontRevision,this.textEntityRevision,this.frontVisible,this.width,this.height,this.displayScale,this.bottomDockHeight,this.scroll,this.regionOffsets,this.graphX,this.paletteX]):'';
   }
   private rebuildPage(force=false):void{
     const page=this.page;
@@ -1135,14 +1163,17 @@ export class NativeStage {
     this.stats.rebuilds++;
     const viewport={width:this.width,height:this.height-(this.frontVisible?0:Math.max(0,this.bottomDockHeight-NATIVE_UI.bottom))};
     const measure=(text:string,size:number,bold?:boolean)=>this.measure(text,size,bold??true);
-    let box=layoutNativePage(page,viewport,this.frontVisible,measure);
+    // A float menu's anchor is the click in CSS pixels; the layout works in stage units.
+    const laid=page.floatMenu?{...page,floatMenu:{x:page.floatMenu.x/this.displayScale,y:page.floatMenu.y/this.displayScale}}:page;
+    let box=layoutNativePage(laid,viewport,this.frontVisible,measure);
     // Preserve the direct time/view controls beside near-fullscreen windows.
     // Shorter windows can keep their requested width and move the entire dock
     // above them. At very large scales the HUD owner handles lack of room as
     // one whole group, never as fragments of individual cards.
-    if(!this.frontVisible&&this.options.onWindowLayout&&box.layout!=='palette'&&this.width>=720&&box.x+box.width>this.width-NATIVE_RIGHT_DOCK_WIDTH&&box.y<118+197+10)
-      box=layoutNativePage(page,{...viewport,width:this.width-NATIVE_RIGHT_DOCK_WIDTH},false,measure);
-    this.pageBox=box;if(this.options.onWindowLayout?.(this.frontVisible||box.layout==='palette'?null:box))this.sceneRevision++;
+    // A float menu stays at the mouse (Core FloatMenu, WindowLayer.Super).
+    if(!this.frontVisible&&!page.floatMenu&&this.options.onWindowLayout&&box.layout!=='palette'&&this.width>=720&&box.x+box.width>this.width-NATIVE_RIGHT_DOCK_WIDTH&&box.y<118+197+10)
+      box=layoutNativePage(laid,{...viewport,width:this.width-NATIVE_RIGHT_DOCK_WIDTH},false,measure);
+    this.pageBox=box;if(this.options.onWindowLayout?.(this.frontVisible||box.layout==='palette'||page.floatMenu?null:box))this.sceneRevision++;
     if(box.layout==='palette'){const index=page.palette==='orders'?0:1,piece=this.toolsDock.children[index] as CardboardPiece;box.y=this.height-8-piece.userData.basePos.y*100-box.height/2;}
     const k=.01,w=box.width*k,h=box.height*k,margin=12;
     const z=.18,factor=1-z/HUD_DISTANCE;
@@ -1385,11 +1416,11 @@ export class NativeStage {
       const control=controls.get(id),input=inputs.get(id);
       record.hit.control=control;record.hit.input=input;
       const hint=control?.hint??control?.label??hints.get(id)??record.piece.userData.tooltip??'';
-      if(this.hintOwner===record.piece&&record.piece.userData.tooltip!==hint)this.clearHint();
+      // A changed text is re-read by the shown tip (animate), not dropped.
       record.piece.userData.tooltip=hint;record.piece.userData.nativeDisabled=!!control?.disabled;
       if(this.editing===record.hit&&input&&this.editor)this.editor.maxLength=input.maxLength??2048;
     }
-    for(const hit of this.pageControls)if(hit.region&&hit.control){const control=controls.get(hit.control.id);if(control){if(this.hintOwner===hit.piece&&control.hint!==hit.control.hint)this.clearHint();hit.control=control;}}
+    for(const hit of this.pageControls)if(hit.region&&hit.control){const control=controls.get(hit.control.id);if(control)hit.control=control;}
     const dropdown=this.dropdown;
     if(dropdown){
       const owner=controls.get(dropdown.controlId),select=owner?.select;
@@ -1398,7 +1429,6 @@ export class NativeStage {
       for(const piece of dropdown.pieces){
         const option=options.get(String(piece.userData.nativeId));if(!option)continue;
         const hint=option.hint??option.label,hit=this.hits.get(piece.userData.mesh);
-        if(this.hintOwner===piece&&piece.userData.tooltip!==hint)this.clearHint();
         piece.userData.tooltip=hint;
         if(hit?.control)hit.control.hint=hint;
       }
@@ -1434,7 +1464,6 @@ export class NativeStage {
     hit.control=control;hit.input=input;
     if(created&&interaction?.hovered)this.hoverPreview.set(control?.onHover);
     const hint=control?.hint??control?.label??'';
-    if(this.hintOwner===piece&&piece.userData.tooltip!==hint)this.clearHint();
     piece.userData.tooltip=hint;piece.userData.nativeDisabled=!!control?.disabled;
     const editing=this.editing===hit;
     if(!created&&record.paint!==paint&&!editing)piece.redraw(options.drawFn,options.bgColor);
@@ -1451,7 +1480,7 @@ export class NativeStage {
       this.retainedPagePieces.delete(id);
       const piece=record.piece;
       if(this.mapToolLabelOwner===piece)this.clearMapToolLabel();
-      if(this.hintOwner===piece)this.clearHint();
+      if(this.hintOwner===piece)this.clearHint(true);
       if(this.hovered===piece)this.hover(null);this.moving.delete(piece);
       for(const mesh of piece.userData.interactiveMeshes??[])this.hits.delete(mesh);
       piece.userData.hoverTarget=piece.userData.hoverVal=piece.userData.pressVal=0;
@@ -1469,26 +1498,64 @@ export class NativeStage {
     this.sceneRevision++;
   }
   private seed(text:string):number{let value=17;for(const c of text)value=(Math.imul(value,31)+c.charCodeAt(0))>>>0;return value;}
-  private clearHint():void{
-    clearTimeout(this.hintTimer);this.hintTimer=undefined;this.hintOwner=null;this.hintText='';
+  /** `reacquire`: the owner piece was repainted or replaced while its tip was
+   * shown; the next frame gives the tip back to the region with the same id
+   * still under the mouse, without a new delay (Core keeps an ActiveTip by
+   * its uniqueId while the region is drawn under the mouse each frame). */
+  private clearHint(reacquire=false):void{
+    const id=reacquire&&this.hintOwner&&this.hintPiece?String(this.hintOwner.userData.nativeId??''):'';
+    clearTimeout(this.hintTimer);this.hintTimer=undefined;this.hintOwner=null;this.hintHit=undefined;this.hintText='';
     this.hintScroll=0;this.hintMaxScroll=0;
     if(this.hintPiece){this.unregister(this.hintPiece);this.hintPiece=undefined;this.invalidate();}
+    this.hintReacquire=id||undefined;
   }
-  private updateHint(hit:Hit|undefined,x:number,y:number):void{
+  private hintTextOf(hit:Hit):string{return hit.control?.hint??hit.piece.userData.tooltip??'';}
+  private updateHint(hit:Hit|undefined,x:number,y:number,immediate=false):void{
     x/=this.displayScale;y/=this.displayScale;
-    const text=hit?.control?.hint??hit?.piece.userData.tooltip??'';
+    const text=hit?this.hintTextOf(hit):'';
     if(!hit||!text){this.clearHint();return;}
-    if(this.hintOwner===hit.piece&&this.hintText===text)return;this.clearHint();this.hintOwner=hit.piece;this.hintText=text;
-    this.hintTimer=setTimeout(()=>{
-      if(this.closed||this.hintOwner!==hit.piece)return;
-      const maxWidth=Math.min(420,this.width-24),raw=text.split('\n'),requested=Math.min(maxWidth,Math.max(70,...raw.map(line=>this.measure(line,13)))+20);
-      const lines=wrapNativeText(text,requested-20,this.measure,13),width=Math.min(maxWidth,Math.max(70,...lines.map(line=>this.measure(line,13)))+20),height=Math.min(this.height-20,lines.length*17+16);
-      const count=lines.length*17+16>height?Math.max(1,Math.floor((height-30)/17)):lines.length;this.hintMaxScroll=Math.max(0,lines.length-count);this.hintScroll=0;
-      const z=2,factor=1-z/HUD_DISTANCE,piece=this.art.createPiece({w:width*.01,h:height*.01,depth:.046,bevel:.038,surface:'panel',uvPadding:1,textureWidth:Math.ceil(width*2),textureHeight:Math.ceil(height*2),seed:347,bgColor:PALETTE.creamPaper,
-        drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=this.font(13);const scrolling=this.hintMaxScroll>0;lines.slice(scrolling?this.hintScroll:0,scrolling?this.hintScroll+count:lines.length).forEach((line,i)=>ctx.fillText(line,10,20+i*17,width-20));if(scrolling){ctx.font=this.font(11);ctx.fillStyle='#6b5b45';ctx.fillText('Molette : suite',10,height-7);ctx.fillStyle='#78975c';ctx.fillRect(width-6,6+(height-12)*this.hintScroll/lines.length,3,Math.max(8,(height-12)*count/lines.length));}ctx.restore();}});
-      const left=THREE.MathUtils.clamp(x+16+width>this.width?x-width-12:x+16,8,this.width-width-8),top=THREE.MathUtils.clamp(y+18+height>this.height?y-height-8:y+18,8,this.height-height-8);
-      piece.userData.nativeId='native-tooltip';piece.scale.setScalar(this.uiScale*factor);piece.setBaseTransform((left+width/2-this.width/2)*this.visH/this.height*factor,(this.height/2-top-height/2)*this.visH/this.height*factor,z);this.setPose(piece,0);this.hudRoot.add(piece);this.hintPiece=piece;this.invalidate();
-    },350);
+    if(this.hintOwner===hit.piece&&this.hintText===text){this.hintAt={x,y};this.placeHint();return;}
+    this.clearHint();this.hintOwner=hit.piece;this.hintHit=hit;this.hintText=text;this.hintAt={x,y};
+    if(immediate){this.showHint();return;}
+    // Core TipSignal.delay: 0.45 s from the first frame over the region.
+    this.hintTimer=setTimeout(()=>{this.hintTimer=undefined;if(!this.closed&&this.hintOwner===hit.piece)this.showHint();},TOOLTIP_DELAY_MS);
+  }
+  /** Paints the tip of the current owner with its current text. */
+  private showHint():void{
+    if(this.hintPiece){this.unregister(this.hintPiece);this.hintPiece=undefined;}
+    const text=this.hintText;
+    const maxWidth=Math.min(420,this.width-24),raw=text.split('\n'),requested=Math.min(maxWidth,Math.max(70,...raw.map(line=>this.measure(line,13)))+20);
+    const lines=wrapNativeText(text,requested-20,this.measure,13),width=Math.min(maxWidth,Math.max(70,...lines.map(line=>this.measure(line,13)))+20),height=Math.min(this.height-20,lines.length*17+16);
+    const count=lines.length*17+16>height?Math.max(1,Math.floor((height-30)/17)):lines.length;this.hintMaxScroll=Math.max(0,lines.length-count);this.hintScroll=Math.min(this.hintScroll,this.hintMaxScroll);
+    const z=2,factor=1-z/HUD_DISTANCE,piece=this.art.createPiece({w:width*.01,h:height*.01,depth:.046,bevel:.038,surface:'panel',uvPadding:1,textureWidth:Math.ceil(width*2),textureHeight:Math.ceil(height*2),seed:347,bgColor:PALETTE.creamPaper,
+      drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=this.font(13);const scrolling=this.hintMaxScroll>0;lines.slice(scrolling?this.hintScroll:0,scrolling?this.hintScroll+count:lines.length).forEach((line,i)=>ctx.fillText(line,10,20+i*17,width-20));if(scrolling){ctx.font=this.font(11);ctx.fillStyle='#6b5b45';ctx.fillText('Molette : suite',10,height-7);ctx.fillStyle='#78975c';ctx.fillRect(width-6,6+(height-12)*this.hintScroll/lines.length,3,Math.max(8,(height-12)*count/lines.length));}ctx.restore();}});
+    piece.userData.nativeId='native-tooltip';piece.scale.setScalar(this.uiScale*factor);this.hudRoot.add(piece);this.hintPiece=piece;this.hintSize={width,height};
+    this.placeHint(true);
+  }
+  /** Core GenUI.GetMouseAttachedWindowPos: 16 px right of the mouse (or 4 px
+   * left of it when it would leave the screen), 14 px below (or 5 px above). */
+  private placeHint(force=false):void{
+    const piece=this.hintPiece;if(!piece)return;
+    const {x,y}=this.hintAt,{width,height}=this.hintSize,at=mouseAttachedTipPosition(x,y,width,height,this.width,this.height);
+    const left=THREE.MathUtils.clamp(at.left,8,Math.max(8,this.width-width-8)),top=THREE.MathUtils.clamp(at.top,8,Math.max(8,this.height-height-8));
+    const z=2,factor=1-z/HUD_DISTANCE,px=(left+width/2-this.width/2)*this.visH/this.height*factor,py=(this.height/2-top-height/2)*this.visH/this.height*factor;
+    if(!force&&piece.userData.basePos.x===px&&piece.userData.basePos.y===py)return;
+    piece.setBaseTransform(px,py,z);this.setPose(piece,0);this.invalidate();
+  }
+  /** Per frame, O(1): a shown tip re-reads its owner's text; a tip whose
+   * owner was repainted comes back on the same region under the mouse. */
+  private refreshHint():void{
+    if(this.hintReacquire!==undefined){
+      const id=this.hintReacquire;this.hintReacquire=undefined;
+      const hit=this.hit(this.lastPointer.x*this.displayScale,this.lastPointer.y*this.displayScale);
+      if(hit&&String(hit.piece.userData.nativeId??'')===id)this.updateHint(hit,this.lastPointer.x*this.displayScale,this.lastPointer.y*this.displayScale,true);
+      return;
+    }
+    const hit=this.hintHit;if(!hit||!this.hintPiece)return;
+    const text=this.hintTextOf(hit),action=tipTextAction(this.hintText,text);
+    if(action==='keep')return;
+    if(action==='clear'){this.clearHint();return;}
+    this.hintText=text;this.showHint();
   }
   private beginEdit(hit:Hit):void{
     if(!hit.input)return;if(this.editing===hit&&this.editor){this.editor.focus({preventScroll:true});return;}this.finishEdit(false);this.editing=hit;this.editingValue=hit.input.value;

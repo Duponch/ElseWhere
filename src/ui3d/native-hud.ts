@@ -792,6 +792,14 @@ export class NativeHudCards {
     this.alertHandleGroup.visible=this.notificationsAutoHide&&this.shown&&!!this.world&&this.alerts.length>0;
   }
 
+  private hoverTemperature?: string;
+  /** Core GlobalControls.TemperatureString: indoors or outdoors and the air
+   * temperature of the cell under the mouse, above the weather. */
+  setHoverTemperature(text: string | undefined): void {
+    if (text === this.hoverTemperature) return;
+    this.hoverTemperature = text;
+    if (this.world) this.refreshWeather(this.world);
+  }
   private refreshWeather(world: World): void {
     const civil = calendarTick(world), minute = Math.floor(((civil % TICKS_PER_DAY + TICKS_PER_DAY) % TICKS_PER_DAY) * 1440 / TICKS_PER_DAY);
     const kind = world.weather ? perceivedWeather(world) : 'clear', temperature = outdoorTemperature(world);
@@ -802,7 +810,7 @@ export class NativeHudCards {
       clock: `${String(Math.floor(minute / 60)).padStart(2, '0')}h${String(minute % 60).padStart(2, '0')}`,
       date: date ? `${date.day} ${quadrums[date.quadrum]} ${date.year}` : `Jour ${1 + Math.floor(civil / TICKS_PER_DAY)} · historique`,
       weather: kind === 'clear' && (minute < 360 || minute >= 1080) ? 'Ciel dégagé' : WEATHER[kind].label,
-      temperature: `${temperature.toFixed(1)} °C`,
+      temperature: this.hoverTemperature ?? `Extérieur ${Math.round(temperature)} °C`,
       condition: weatherConditionLabel(world),
       wind: world.wind ? windIntensity(world).toFixed(2) : '—'
     };

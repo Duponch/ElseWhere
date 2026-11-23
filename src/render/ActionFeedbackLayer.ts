@@ -35,6 +35,8 @@ export class ActionFeedbackLayer {
   private pathCapacity=0;
   private pathSignature='';
   private barsDetailVisible=true;
+  /** Filth thickness seen when each colonist began its current cleaning. */
+  private readonly cleaningStart=new Map<number,{filthId:number;thickness:number}>();
   private readonly movingSlots:{slot:number;pawnIndex:number}[]=[];
   private source:THREE.InstancedBufferGeometry|undefined;
   private travelStamp='';
@@ -77,7 +79,8 @@ export class ActionFeedbackLayer {
   update(world:World,selected:ReadonlySet<number>,source:THREE.InstancedBufferGeometry,externalPath=false):void {
     this.bindSource(source);
     const action=this.bars.geometry.getAttribute('aAction') as THREE.InstancedBufferAttribute;
-    const lookup:ActionLookup={jobs:new Map(world.jobs.map(job=>[job.id,job]))};
+    const lookup:ActionLookup={jobs:new Map(world.jobs.map(job=>[job.id,job])),cleaningStart:this.cleaningStart};
+    if(this.cleaningStart.size)for(const pawn of world.pawns)if(!pawn.cleaning)this.cleaningStart.delete(pawn.id);
     // Retain only resources required by visible work counters. Building the
     // simulation's whole-map spatial index on each render snapshot cost ~1 ms
     // at 100 colonists; this linear capture avoids thousands of map entries.

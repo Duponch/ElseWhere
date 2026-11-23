@@ -6,6 +6,7 @@ import type { Cell, Job, MaterialPile, Resource, World } from '../sim/types';
 import { mapObjectCells, mapResourceSelectable, sameMapObject, type MapObjectSelection } from './map-object-selection';
 import { selectedMapJob296, selectableMapJobs296 } from './wall-door-selection-296';
 import {resourceNeverMultiSelect4871} from './map-plant-multiselect-facts';
+import {NEVER_MULTI_SELECT_STRUCTURES} from './map-object-rectangle';
 
 /** Installed Core 1.6 Selector.MaxNumSelected, not a world-distance radius. */
 export const MAX_MAP_OBJECT_SELECTION = 200;
@@ -59,6 +60,11 @@ function targetIdentity(world:GeyserWorld256,target:MapObjectSelection):Identity
  */
 export function mapObjectGroupTarget(world:GeyserWorld256,underMouse:readonly MapObjectSelection[]):MapObjectSelection|undefined {
   return underMouse.find(target=>{
+    // Core Selector.SelectAllMatchingObjectUnderMouseOnScreen skips the
+    // neverMultiSelect things: natural rock (RockBase), walls, fences,
+    // conduits, sandbags, barricades and the hopper.
+    if(target.kind==='rock')return false;
+    if(target.kind==='structure'){const structure=world.structures.find(s=>s.id===target.id);if(structure&&NEVER_MULTI_SELECT_STRUCTURES.has(structure.kind))return false;}
     if(target.kind==='resource'){
       const resource=world.resources.find(value=>value.id===target.id);
       if(!resource||resourceNeverMultiSelect4871(resource))return false;

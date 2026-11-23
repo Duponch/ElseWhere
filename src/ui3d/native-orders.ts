@@ -15,6 +15,7 @@ import {shipCasketOptions277} from '../ui/ship-casket-controls-277';
 import {cryptosleepOptions271} from '../ui/cryptosleep-controls-271';
 import {contextConsumesFood, tacticalAttackPolicy, tacticalPawns, tacticalRescuePolicy, tacticalTendingPolicy} from '../ui/order-menu';
 import type {NativeControl, NativePage, NativeRow} from './native-contract';
+import {pawnShortName} from '../ui/pawn-short-name';
 
 /** Methods must be bound by the host. Optional readers preserve the current
  * selection/map while a worker query or a native confirmation is pending. */
@@ -99,17 +100,29 @@ export async function nativeOrderPage(
   const current = (): boolean => revision === token && (client.isCurrent?.() ?? true);
   const close = (): void => { if (revision === token) revision++; client.close?.(); };
   const latest = (): World => client.currentWorld ? client.currentWorld() ?? world : world;
-  const shift = (): boolean => queue || (client.queueHeld?.() ?? false);
+  // Core Pawn_JobTracker.TryTakeOrderedJob reads KeyBindingDefOf.QueueOrder
+  // (Shift) when the option is chosen, not when the menu opened.
+  let chosenWithShift = false;
+  const shift = (): boolean => queue || chosenWithShift || (client.queueHeld?.() ?? false);
   const read = (): World | undefined => {
     if (!current()) return;
     const live = client.currentWorld ? client.currentWorld() : world;
     if (!live || live.seed !== world.seed || live.width !== world.width || live.height !== world.height || live.tick < world.tick || client.currentSelectedPawnIds && !sameIds(ids, client.currentSelectedPawnIds())) { close(); return; }
     return live;
   };
+  // Core FloatMenuMap: the orders open at the mouse as a float menu, not as a
+  // modal window; confirmations stay modal dialogs.
+  const menuAt = Number.isFinite(_x) && Number.isFinite(_y) && (_x !== 0 || _y !== 0) ? {x: _x, y: _y} : undefined;
+  let shown = false;
   const present = (page: NativePage): void => {
     if (!current()) return;
-    show({...page, modal: true, width: page.width ?? 6.2, ...(client.close ? {onClose: close} : {})});
+    shown = true;
+    const menu = page.id === 'native-orders' && menuAt;
+    show({...page, modal: !menu, ...(menu ? {floatMenu: menuAt} : {}), width: page.width ?? (menu ? 4.6 : 6.2), ...(client.close ? {onClose: close} : {})});
   };
+  /** Core Selector.HandleMapClicks: no float menu when there is no option;
+   * only this query's own loading page is closed, other windows stay. */
+  const nothing = (): void => { if (!current()) return; if (shown) close(); else revision++; };
   const message = (title: string, text: string): void => present({id: 'native-orders', title, rows: [{id: 'order-message', label: text}]});
   const fail = (error: unknown): void => {
     if (!current()) return;
@@ -136,7 +149,7 @@ export async function nativeOrderPage(
   };
   const commandRow = (id: string, label: string, enabled: boolean, reason: string | undefined, prepare: (live: World) => Command | undefined | Promise<Command | undefined>, success: string, detail?: string): NativeRow => ({
     id, label, ...(reason ? {value: reason} : {}), ...(detail ? {detail} : {}),
-    controls: [{id: `${id}-execute`, label: enabled ? label : 'Indisponible', disabled: !enabled, hint: reason, onActivate: () => run(prepare, success)}]
+    controls: [{id: `${id}-execute`, label: enabled ? label : 'Indisponible', disabled: !enabled, hint: reason, onActivate: gesture => { chosenWithShift = !!gesture?.shift; return run(prepare, success); }}]
   });
 
   if (!Number.isInteger(at.x) || !Number.isInteger(at.z) || at.x < 0 || at.z < 0 || at.x >= world.width || at.z >= world.height) { message('Ordres', 'Cette case est hors de la carte.'); return; }
@@ -181,17 +194,17 @@ export async function nativeOrderPage(
       };
       const moved = `${queue ? 'Déplacement en file' : 'Déplacement'} demandé vers ${at.x}, ${at.z}.`;
       if (cell346) {
-        message(`${actor346!.name} · case ${at.x}, ${at.z}`, 'Vérification des accès…');
+        message(pawnShortName(actor346!.name), 'Vérification des accès…');
         try {
           const rows = await draftedRows346(actor346!.id, true); if (!rows) return;
           const reason = pawns.length ? undefined : 'Mobilisez un colon libre et capable de se déplacer.';
-          rows.push(commandRow('drafted-goto', 'Aller ici', !reason, reason, move, moved),
-            {id: 'orders-hint', label: 'Un colon mobilisé exécute cet ordre puis reste mobilisé et attend sur place.'});
-          present({id: 'native-orders', title: `${actor346!.name} · case ${at.x}, ${at.z}`, rows});
+          rows.push(commandRow('drafted-goto', 'Aller ici', !reason, reason, move, moved));
+          // Core FloatMenu title: the single selected pawn's LabelCap.
+          present({id: 'native-orders', title: pawnShortName(actor346!.name), rows});
         } catch (error) { fail(error); }
         return;
       }
-      if (!pawns.length) { message('Ordre tactique', 'Mobilisez un colon libre et capable de se déplacer.'); return; }
+      if (!pawns.length) { nothing(); return; }
       await run(move, moved);
       return;
     }
@@ -224,20 +237,21 @@ export async function nativeOrderPage(
         return {type: option.kind, pawnIds: accepted.pawnIds, targetId};
       }, `${option.kind === 'shoot' ? 'Tir' : 'Mêlée'} demandé sur ${policy.target}.`));
     }
-    if (queue) rows.push({id: 'tactical-queue-note', label: 'Seuls les déplacements ont une file d’ordres tactiques.'});
     const captive346 = actor346 ? draftedTarget346(world, targetId) : undefined;
     if (actor346 && captive346) {
       try { const extra = await draftedRows346(actor346.id, false, {x: captive346.x, z: captive346.z}); if (!extra) return; rows.unshift(...extra); }
       catch (error) { fail(error); return; }
     }
-    present({id: 'native-orders', title: `${policy.target} · case ${at.x}, ${at.z}`, rows});
+    if (!rows.length) { nothing(); return; }
+    present({id: 'native-orders', title: tacticalIds.size === 1 ? pawnShortName(selected.find(pawn => tacticalIds.has(pawn.id))!.name) : 'Ordres', rows});
     return;
   }
 
   const pawn = ids.length === 1 ? world.pawns.find(person => person.id === ids[0]) : undefined;
-  if (!pawn) { message('Ordres de travail', 'Sélectionnez un seul colon pour lui donner un travail.'); return; }
-  if (!isColonist(pawn) || pawn.prisoner) { message('Ordres de travail', pawn.prisoner ? 'Les prisonniers se gèrent dans leur inspection. Ils ne reçoivent pas d’ordres de colon.' : 'Cette personne ne fait pas partie de la colonie.'); return; }
-  message(`${pawn.name} · case ${at.x}, ${at.z}`, 'Vérification des accès…');
+  // Core FloatMenuMakerMap: the work providers are single-select, a pawn that
+  // cannot take orders (prisoner, outsider, mental state) gets no menu.
+  if (!pawn || !isColonist(pawn) || pawn.prisoner || pawn.mental?.crisis) { nothing(); return; }
+  message(pawnShortName(pawn.name), 'Vérification des accès…');
   try {
     const options = await client.orderOptions(pawn.id, at.x, at.z, queue);
     const live = read(); if (!live) return;
@@ -286,17 +300,9 @@ export async function nativeOrderPage(
       if (!position || position.x !== at.x || position.z !== at.z) throw new Error('Ce feu n’est plus présent sur cette case.');
       return {type: 'order-extinguish', pawnId: pawn.id, fireId: fire.id};
     }, 'Extinction prioritaire demandée.'));
-    if (!options.length && !fire && !cryptosleep.length && !ship.length && !firefoamCount) rows.push({id: 'orders-empty', label: 'Aucun travail ni pile à transporter ici. Utilisez les ordres d’Architecte.'});
-    const hint = firefoamCount ? 'Déclenchement direct : le colon rejoint l’appareil puis travaille au contact. Toute interruption avant la fin empêche l’armement.'
-      : ship.length ? 'Le caisson spatial se ferme au contact et son occupant peut ensuite être éjecté directement, sans autre colon ni électricité.'
-      : cryptosleep.length ? 'Le cryptosommeil se prépare au contact. Un autre colon devra ouvrir le caisson sur place.'
-      : options.some(option => option.openCasketId !== undefined) ? 'Le colon rejoint la capsule et l’ouvre sur place. Ordre direct, sans mise en file.'
-      : options.some(option => option.consumePileId !== undefined) ? 'Consommer remplace l’activité en cours, sans mise en file. Un colon mobilisé reste mobilisé. La nourriture se mange et la bière se boit au contact de la pile.'
-      : options.some(option => option.arrestPatientId !== undefined) ? 'Arrestation directe par un colon démobilisé, avec lit de prison accessible. La chance affichée dépend de l’état actuel ; un refus peut provoquer une fureur violente.'
-      : fire ? 'L’extinction est un ordre direct, sans mise en file.'
-      : options.some(option => option.capturePatientId !== undefined) ? 'La capture est un ordre direct. Préparez un lit de prison dans une pièce fermée.'
-      : 'Maj : ajouter à la file. Construction et cuisine peuvent se poursuivre sur cette case.';
-    rows.push({id: 'orders-hint', label: hint});
-    present({id: 'native-orders', title: `${pawn.name} · case ${at.x}, ${at.z}`, rows});
+    // Core: an empty option list opens no float menu, and the menu carries
+    // only its options (disabled ones with their reason), no explanatory line.
+    if (!rows.length) { nothing(); return; }
+    present({id: 'native-orders', title: pawnShortName(pawn.name), rows});
   } catch (error) { fail(error); }
 }

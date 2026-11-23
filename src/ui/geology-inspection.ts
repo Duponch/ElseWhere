@@ -7,6 +7,16 @@ import {smoothedWallLabel367,smoothedWallDescription367,SMOOTHED_WALL_BEAUTY_367
 import {isRockBeautySchema373,ROUGH_ROCK_BEAUTY_373,roughRockBeauty373,signedBeauty373} from '../sim/rock-beauty-373';
 import type { Resource, Tile } from '../sim/types';
 
+/** The rock Thing's own name, as Core's inspect pane title and mouseover line
+ * (`Thing.LabelCap`): the stone (`Granite`), the ore (`MineableSteel`
+ * « compacted steel »), the smoothed wall or the collapsed rocks. */
+export function rockThingLabel(tile: Tile): string {
+  if (tile.collapsedRock) return 'Roches effondrées';
+  if (tile.smoothedWall367) return smoothedWallLabel367(tile.stone);
+  if (tile.ore) return ORE_DEFINITIONS[tile.ore].label;
+  return tile.stone ? STONE_LABELS[tile.stone] : 'Massif rocheux';
+}
+
 /** `version`: the schema of the inspected game; from 373 the walls tell the
  * Beauty they give the room they border (absent: no Beauty line). */
 export function rockInspection(tile: Tile, resource?: Resource, version?: number): { title: string; description: string } | null {

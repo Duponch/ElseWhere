@@ -149,7 +149,8 @@ test('drafted Equip: the right-click menu offers it beside Go here, the real job
  const w=equipmentCamp(),p=w.pawns[0]!,gun=w.piles[0]!;
  ok(w,{type:'draft',pawnIds:[p.id],enabled:true});
  const menu=await rightClick(w,[p.id],{x:12,z:5});
- expect(lastRows(menu).map(row=>row.label)).toEqual(['Prioriser : Équiper Revolver (normal)','Aller ici','Un colon mobilisé exécute cet ordre puis reste mobilisé et attend sur place.']);
+ // Core float menus carry only their options (interactions note): no explanatory line.
+ expect(lastRows(menu).map(row=>row.label)).toEqual(['Prioriser : Équiper Revolver (normal)','Aller ici']);
  expect(menu.sent).toEqual([]);
  await rowLabelled(menu,/Équiper/)!.controls![0]!.onActivate();
  expect(menu.sent).toEqual([{type:'order-equipment',pawnId:p.id,itemId:gun.id,action:'equip',queue:false}]);

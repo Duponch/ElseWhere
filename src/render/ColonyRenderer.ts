@@ -15,6 +15,7 @@ import {isLineBuildKind} from '../sim/construction-line';
 import {STRUCTURE_DEFINITIONS} from '../sim/definitions';
 import {mapObjectsAt,sameMapObject,type MapObjectSelection} from '../ui/map-object-selection';
 import {matchingMapObjects,mapObjectGroupTarget} from '../ui/map-object-group-selection';
+import {mapObjectsInRect,boxSelection} from '../ui/map-object-rectangle';
 import {cameraClipNear} from './camera-clip';
 import {installMapWheelZoom} from '../ui/map-wheel';
 import {DeferredMapHover} from './deferred-map-hover';
@@ -125,6 +126,7 @@ export class ColonyRenderer extends SceneRenderCore {
         if(!objects.length)return false;
         this.onObjectSelection(objects,event.shiftKey);return true;
       },
+      rectangleSelect:(x1,y1,x2,y2,shift)=>this.selectInsideBox(x1,y1,x2,y2,shift),
       lock:locked=>{this.controls.enabled=!locked;this.keys.clear();},
     });
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown, true);
@@ -147,6 +149,34 @@ export class ColonyRenderer extends SceneRenderCore {
     }catch(error){try{this.dispose();}catch{}throw error;}
   }
   private pick(event:PointerEvent,clamp=false):Cell|null{return this.pickAt(event.clientX,event.clientY,clamp);}
+  /**
+   * Core Selector.SelectInsideDragBox, its predicates in order, the first that
+   * finds something wins: player colonists (colonist bar order), other
+   * humanlike pawns, items counted as resources, any pawn (animals,
+   * mechanoids), then any other multi-selectable thing (buildings,
+   * blueprints, frames, other items, bodies); then zones, or plans when the
+   * box holds some (a plan selection clears the zones). Evaluated on release.
+   */
+  private selectInsideBox(x1:number,y1:number,x2:number,y2:number,shift:boolean):boolean{
+    const left=Math.min(x1,x2),right=Math.max(x1,x2),top=Math.min(y1,y2),bottom=Math.max(y1,y2);
+    const inside=this.screenPawns().filter(p=>p.x>=left&&p.x<=right&&p.y>=top&&p.y<=bottom),world=this.world;
+    // The map objects are projected only when no person is in the box.
+    let objects;
+    if(world&&!inside.some(p=>(p.category??0)<=1)){
+      this.camera.updateMatrixWorld();
+      const rect=this.hostPort.surfaceRect(),point=new THREE.Vector3(),near=cameraClipNear(this.camera);
+      objects=mapObjectsInRect(world,cell=>{
+        point.set(cell.x,0,cell.z).project(this.camera);
+        if(point.z<near||point.z>1)return false;
+        const x=rect.left+(point.x+1)/2*rect.width,y=rect.top+(1-point.y)/2*rect.height;
+        return x>=left&&x<=right&&y>=top&&y<=bottom;
+      });
+    }
+    const chosen=boxSelection(inside,objects);
+    if(!chosen)return false;
+    if('pawns' in chosen)this.onSelection({ids:chosen.pawns,additive:shift,toggle:false});else this.onObjectSelection(chosen.objects,shift);
+    return true;
+  }
   /** Cell whose things a selection click lists: a drawn wall lamp first, then
    * the model met first along the camera ray (with that thing to select
    * first), else the ground cell. One pick per click event. */
@@ -240,7 +270,12 @@ export class ColonyRenderer extends SceneRenderCore {
     }
     const down = this.pointerDown; this.pointerDown = null;
     if(down&&down.button===2&&event.button===2&&down.pointerId===event.pointerId&&this.tool==='select'&&Math.hypot(down.x-event.clientX,down.y-event.clientY)<=6) {
-      const cell=this.pick(event);if(cell)this.onContext(cell,event.clientX,event.clientY,event.shiftKey,hitActors(this.screenPawns(),event.clientX,event.clientY)[0]?.id);return;
+      // Like the left click: a person or animal under the mouse first, then
+      // the drawn model met by the camera ray (tree crown, wall face, pile
+      // side), then the ground cell (Core FloatMenuContext.ClickedThings).
+      const actor=hitActors(this.screenPawns(),event.clientX,event.clientY)[0]?.id;
+      const cell=actor===undefined?this.objectTarget(event)?.cell??this.pick(event):this.pick(event);
+      if(cell)this.onContext(cell,event.clientX,event.clientY,event.shiftKey,actor);return;
     }
     if (!down || down.pointerId !== event.pointerId || down.button !== 0 || event.button !== 0 || Math.hypot(down.x - event.clientX, down.y - event.clientY) > 6) return;
     const cell = this.pick(event);

@@ -44,9 +44,10 @@ test('V387 changed tile snapshots update the existing resident surface batch and
 test('V387 bridge hover keeps the underlying marsh, fertility and light-only support without selecting terrain',()=>{
   const w=deconstructionCamp(0);w.tiles[8*w.width+8]={terrain:'marsh',bridge:true};
   const before=JSON.stringify(w),lines=mapHoverLines(w,{x:8,z:8},1).join(' · ');
-  expect(lines).toContain('Pont en bois sur marais');expect(lines).toContain('fertilité 0 %');
-  expect(lines).toContain('Support léger uniquement');expect(lines).toContain('vitesse de déplacement 100 %');
-  expect(lines).toContain('+0 tick (marais nu : +3)');expect(terrainInspection(w.tiles[8*w.width+8]!)).toContain('Marais'.toLowerCase());
+  // Core MouseoverReadout: the bridge terrain, its walk speed, no fertility
+  // line when it is 0 (interactions note); the marsh stays in the inspection.
+  expect(lines).toContain('Pont (vitesse de marche 100 %)');expect(lines).not.toContain('fert.');
+  expect(lines).not.toContain('Support');expect(terrainInspection(w.tiles[8*w.width+8]!)).toContain('Marais'.toLowerCase());
   expect(mapObjectsAt(w,{x:8,z:8})).toEqual([]);expect(JSON.stringify(w)).toBe(before);
 });
 

@@ -36,7 +36,8 @@ it('a real bridge above fertile marshy ground reports zero fertility in both det
  const w=deconstructionCamp(),cell={x:16,z:16},index=cell.z*w.width+cell.x;Object.assign(w,{schemaVersion:256});
  w.tiles[index]={terrain:'marshy-soil',bridge:true};
  expect(mapCellDetails(w,cell,.5)!.rows.find(row=>row.label==='Fertilité')?.value).toBe('0 %');
- expect(mapHoverLines(w,cell,.5)[0]).toContain('fertilité 0 %');expect(w.tiles[index]!.terrain).toBe('marshy-soil');
+ // Core MouseoverReadout writes the fertility only above 0 (interactions note).
+ expect(mapHoverLines(w,cell,.5)[0]).toBe('Pont (vitesse de marche 100 %)');expect(w.tiles[index]!.terrain).toBe('marshy-soil');
 });
 
 it('the actual impassable collapsed rock takes precedence over preserved bridge/floor, without erasing either',()=>{
@@ -71,6 +72,6 @@ it('keeps French terrain, support and hover facts readable without changing thei
  expect(terrainInspection({terrain:'grass',floor:'wood-planks'})).toContain('Propreté du revêtement');
  expect(terrainInspection({terrain:'sand',snowDepth:.5},context)).toContain('Neige : 50 % · Marche : +0.8 tick(s)');
  const w=deconstructionCamp(0),cell={x:8,z:8},index=cell.z*w.width+cell.x;w.tiles[index]={terrain:'water-shallow',bridge:true};const before=JSON.stringify(w),hover=mapHoverLines(w,cell,1).join(' · ');
- expect(hover).toContain('Support léger uniquement · Marche : +0 tick');expect(hover).toContain('vitesse de déplacement 100 %, fertilité 0 %');
+ expect(hover).toContain('Pont (vitesse de marche 100 %)');expect(hover).not.toMatch(/Support|tick/u);
  expect(hover).not.toMatch(/[ÃÂ]/u);expect(JSON.stringify(w)).toBe(before);
 });

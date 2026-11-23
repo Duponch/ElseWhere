@@ -8,7 +8,6 @@ import { SURGERY_WORK } from '../sim/surgery-rules';
 import { REFUEL_WORK_TICKS } from '../sim/fuel';
 import { TURRET_RELOAD_WORK_TICKS } from '../sim/mini-turret-reload';
 import { handlingStepDuration } from '../sim/animal-handling';
-import {animalTrainingStepTicks282} from '../sim/animal-training-service-282';
 import { SLAUGHTER_WORK_TICKS } from '../sim/animal-slaughter';
 import { isColonist } from '../sim/affiliation';
 import { INGEST_TICKS } from '../sim/eating';
@@ -18,7 +17,8 @@ import { jobDuration } from '../sim/farming';
 import { clearingDuration } from '../sim/gathering';
 import { productionTaskTotal } from '../sim/production-recipes';
 import { workProgress } from '../sim/work-progress';
-import { PRISON_RAPPORT_TICKS } from '../sim/prisoner-state';
+import { rockMaxHP } from '../sim/mining-rules';
+import { isConstruction } from '../sim/construction-rules';
 import type { Cell, Job, Pawn, Resource, World } from '../sim/types';
 
 export interface ActionProgress {
@@ -34,6 +34,9 @@ export interface ActionLookup {
   jobs?:ReadonlyMap<number,Job>;
   resources?:ReadonlyMap<number,Resource>;
   resourceCells?:ReadonlyMap<number,Resource>;
+  /** Presentation memory of the filth thickness when a colonist began
+   * cleaning it (Core JobDriver_CleanFilth's totalCleaningWorkRequired). */
+  cleaningStart?:Map<number,{filthId:number;thickness:number}>;
 }
 
 const measured=(kind:ActionProgress['kind'],completed:number,total:number):ActionProgress|undefined=>
@@ -69,25 +72,28 @@ export function actionProgress(world:World,pawn:Pawn,lookup?:ActionLookup):Actio
   if(pawn.cleaning?.phase==='clean'){
     if(pawn.cleaning.snowCell!==undefined)return measured('cleaning',pawn.cleaning.progress,50*(world.tiles[pawn.cleaning.snowCell]!.snowDepth??0));
     const filth=world.filth?.items.find(item=>item.id===pawn.cleaning!.targets[0]);
-    if(filth)return measured('cleaning',pawn.cleaning.progress,FILTH_DEFINITIONS[filth.kind].work);
+    if(filth){
+      // Core: totalCleaningWorkDone / (cleaningWorkToReduceThickness x thickness
+      // at the start), one bar for the whole filth, not one per thinned layer.
+      const work=FILTH_DEFINITIONS[filth.kind].work,memory=lookup?.cleaningStart;
+      let start=memory?.get(pawn.id);
+      if(!start||start.filthId!==filth.id||start.thickness<filth.thickness){start={filthId:filth.id,thickness:filth.thickness};memory?.set(pawn.id,start);}
+      return measured('cleaning',(start.thickness-filth.thickness)*work+pawn.cleaning.progress,start.thickness*work);
+    }
   }
   if(pawn.animalHandling?.phase==='interact'){
     const task=pawn.animalHandling;
-    if(task.kind==='train'){
-      const animal=world.wildlife?.animals.find(a=>a.id===task.animalId),food=world.piles.find(p=>p.id===task.carryPileId);
-      if(animal&&food)return measured('handling',task.progress,animalTrainingStepTicks282(task as import('../sim/animal-training-service-282').AnimalTrainingTask282,animal,food.item));
-      // After the second physical feed there is deliberately no food holder.
-      if(animal&&task.step===5)return measured('handling',task.progress,10);
-      return undefined;
-    }
+    // Core JobDriver_InteractAnimal (tame, train and its upkeep) and the rope
+    // lead have no progress bar; Slaughter (WaitWith 180) and
+    // GatherAnimalBodyResources (milk, shear) have one.
+    if(task.kind==='tame'||task.kind==='train'||task.kind==='maintain'||task.kind==='lead')return undefined;
     return measured('handling',task.progress,task.kind==='slaughter'?SLAUGHTER_WORK_TICKS:handlingStepDuration(task));
   }
   if(pawn.animalCare?.phase==='treat'&&pawn.animalCare.duration!==undefined)return measured('tending',pawn.animalCare.progress,pawn.animalCare.duration);
   if(pawn.hunting?.phase==='finish')return measured('hunting',pawn.hunting.progress,18);
   if(pawn.tend?.phase==='tend'&&pawn.tend.duration!==undefined)
     return measured('tending',pawn.tend.progress,pawn.tend.duration);
-  if(pawn.ward?.kind==='chat'&&(pawn.ward.phase==='rapport'||pawn.ward.phase==='closing'))
-    return measured('warden',pawn.ward.progress,PRISON_RAPPORT_TICKS);
+  // Core JobDriver_ChatWithPrisoner has no progress bar.
   if(pawn.jobId!==null){
     if(lookup&&!lookup.jobs)lookup.jobs=new Map(world.jobs.map(job=>[job.id,job]));
     const candidate=lookup?.jobs?.get(pawn.jobId)??world.jobs.find(j=>j.id===pawn.jobId);
@@ -107,6 +113,12 @@ export function actionProgress(world:World,pawn:Pawn,lookup?:ActionLookup):Actio
         if(task.phase!=='prepare'||task.durationCore===undefined||!pile||!isMinifiedTree(pile)||pile.innerResource.id!==task.resourceId||pile.owner.type!=='pawn'||pile.owner.pawnId!==pawn.id||task.carryPileId!==pile.id)return undefined;
         return measured('job',task.workCore,task.durationCore);
       }
+      // Core JobDriver_Mine: 1 - HitPoints/MaxHitPoints of the rock, over the
+      // whole rock, not one fill per pick stroke.
+      if(job.kind==='mine'){const tile=world.tiles[job.z*world.width+job.x];return tile?.terrain==='rock'?measured('job',tile.miningDamage??0,rockMaxHP(tile)):undefined;}
+      // Core JobDriver_ConstructFinishFrame has no bar: the frame draws its own
+      // progress tiles. JobDriver_Repair and JobDriver_Flick have none either.
+      if(isConstruction(job)||job.kind==='repair'||job.kind==='flick')return undefined;
       return measured('job',workProgress(job),jobDuration(world,job,lookup?.resourceCells ? lookup.resourceCells.get(job.z*world.width+job.x)??null : undefined));
     }
   }

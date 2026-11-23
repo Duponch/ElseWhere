@@ -10,7 +10,8 @@ it('draws both real natural types through the same continuous slab without an in
  const w=prepared();expect(roofCoverage(w)).toEqual([330,331]);expect(roofSurfaceCells(w)).toEqual([{x:10,z:10},{x:11,z:10}]);
  const old=roofSlabGeometry([{x:10,z:10},{x:11,z:10}],2),current=roofSlabGeometry(roofSurfaceCells(w),2,c=>roofKindAt(w,c.z*w.width+c.x));
  expect(current.getAttribute('position').count).toBe(old.getAttribute('position').count);expect(Array.from(current.getAttribute('color').array)).not.toEqual(Array.from(old.getAttribute('color').array));old.dispose();current.dispose();
- expect(mapHoverLines(w,{x:10,z:10},0)).toContain('Toit naturel mince');expect(mapHoverLines(w,{x:11,z:10},0)).toContain('Toit naturel épais');
+ // Core RoofRockThin / RoofRockThick labels (interactions note).
+ expect(mapHoverLines(w,{x:10,z:10},0)).toContain('Toit de roche mince');expect(mapHoverLines(w,{x:11,z:10},0)).toContain('Montagne au-dessus');
 });
 it('reconciles light coverage from real primitive changes including same-array edits',()=>{
  const w=prepared(),field=new EnvironmentLightField();expect(field.update(w)).toBe(true);expect(field.data[330*4+1]).toBe(255);expect(field.data[331*4+1]).toBe(255);

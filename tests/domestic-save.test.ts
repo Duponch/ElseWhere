@@ -48,7 +48,8 @@ test('all physical taming stages survive cold reload, with exact food and progre
   stepWorld(w);const t=p.animalHandling;if(!t||t.phase!=='interact'||stages.has(t.step))continue;
   stages.add(t.step);expect(validateWorld(w)).toEqual([]);expect(deserializeWorld(serializeWorld(w))).toEqual(w);
   const total=t.step===2||t.step===4?45:t.step===5?35:27;
-  expect(actionProgress(w,p)?.total).toBe(total);
+  // Core JobDriver_InteractAnimal draws no progress bar (interactions note).
+  expect(actionProgress(w,p)).toBeUndefined();
   const bad=structuredClone(w);bad.pawns[0].animalHandling!.progress=total;expect(validateWorld(bad).length).toBeGreaterThan(0);
  }
  expect([...stages]).toEqual([0,1,2,3,4,5]);expect(a.domestic?.tameness).toBe(5);

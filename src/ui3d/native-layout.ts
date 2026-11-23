@@ -683,7 +683,11 @@ export function layoutNativePage(page:NativePage,viewport:{width:number;height:n
   const maxHeight=Math.min(availableHeight,Math.max(header+footer+32,150,Math.min(page.height??(front?760:layout==='inspector'?600:layout==='tools'?560:720),viewport.height-bottom-(front?20:110))));
   const height=page.id==='world'&&page.visual?maxHeight:Math.min(maxHeight,Math.max(header+footer+40,header+contentHeight+footer+8,page.visual?440:0));
   const actions=scrollActions?[]:actionFlow.controls.map(control=>({...control,y:height-header-footer+horizontalReserve+pad+control.y}));
-  const x=front?(viewport.width-width)/2:12,y=front?(viewport.height-height)/2:viewport.height-bottom-height;
+  // Core FloatMenu.SetInitialSizeAndPosition: mouse + (4, 0), kept on screen;
+  // the options start at the mouse, the title above them.
+  const menu=page.floatMenu;
+  const x=menu?Math.max(8,Math.min(menu.x+4,viewport.width-width-8)):front?(viewport.width-width)/2:12;
+  const y=menu?Math.max(8,Math.min(menu.y-header,viewport.height-height-8)):front?(viewport.height-height)/2:viewport.height-bottom-height;
   const body={x:bodyX,y:header,width:contentWidth,height:height-header-footer};
   const nameWidth=Math.min(104,Math.max(1,body.width-1));
   return {x,y,width,height,header,footer,body,contentHeight,rows,layout,regions:matrixColumns?{
