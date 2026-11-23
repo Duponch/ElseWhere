@@ -790,7 +790,7 @@ export class NativeHudCards {
     for(const entry of previous.values())this.dropPiece(entry.piece);
     this.alertLastShown=last;
     // Anchor the stack to the letters: the last card ends at the column's bottom.
-    const overflow=this.alertScroll>0||last<total-1,shift=Math.max(0,(this.viewportHeight-bottomPx-(y*100-6))/100);
+    const overflow=this.alertScroll>0||last<total-1,shift=Math.max(0,(this.viewportHeight-16-bottomPx-(y*100-6))/100);
     for(const entry of this.alertCards){entry.baseY-=shift;this.placePiece(entry.piece,entry.baseX-(this.alertBounces.get(entry.key)?.position??0)/100,entry.baseY,.02,entry.rotation);}
     const footerY=-(.32+shift)+.165;
     const arrows=overflow&&maxWidth>=240;
