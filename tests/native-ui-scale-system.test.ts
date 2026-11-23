@@ -36,7 +36,8 @@ describe('one interface scale in RimWorld points (Text, GenUI, Window)', () => {
       ['literal default text size', /\bsize\s*=\s*\d/],
     ];
     for (const file of readdirSync(dir).filter(name => name.endsWith('.ts') && name !== 'native-ui-scale.ts')) {
-      const source = readFileSync(dir + file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      // Comments are blanked line for line, so the reported line numbers stay the file's.
+      const source = readFileSync(dir + file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, comment => comment.replace(/[^\n]/g, ' ')).replace(/^\s*\/\/.*$/gm, '');
       source.split('\n').forEach((line, index) => { for (const [name, pattern] of patterns) if (pattern.test(line)) offenders.push(`${file}:${index + 1} ${name}`); });
     }
     expect(offenders).toEqual([]);

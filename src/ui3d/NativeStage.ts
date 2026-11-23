@@ -460,7 +460,7 @@ export class NativeStage {
     this.devBarPieces=[];
     if(!buttons?.length){if(this.devBarGroup)this.devBarGroup.visible=false;this.invalidate();return;}
     if(!this.devBarGroup){this.devBarGroup=new THREE.Group();this.anchors.topCenter.add(this.devBarGroup);}
-    const height=26,gap=6,widths=buttons.map(button=>Math.ceil(this.measure(button.label,13,true))+24);
+    const height=26,gap=6,widths=buttons.map(button=>Math.ceil(this.measure(button.label,NATIVE_TEXT.small,true))+24);
     const total=widths.reduce((sum,width)=>sum+width,0)+gap*(buttons.length-1);
     let left=-total/2;
     buttons.forEach((button,index)=>{
