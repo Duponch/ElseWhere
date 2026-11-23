@@ -19,6 +19,7 @@ Liste des retours de l'utilisateur après ses parties du 22 novembre, à traiter
 ## B. Effets visuels
 
 8. **Particules d'action à refaire de zéro.** Abattre, miner, cuisiner et toutes les actions : les particules actuelles sont laides, mal placées, mal animées et ressemblent à des SVG. Les refaire en vrais dessins cohérents avec la direction artistique, au niveau des mains ou de la zone de l'action, pour masquer l'absence de mains et d'animations fines, et en ajouter à toutes les actions qui n'en ont pas.
+   **Fait le 22 novembre** : 71 actions inventoriées (travaux, ateliers, soins, animaux, besoins, loisirs, transport, coups) avec leurs particules dessinées (29 familles peintes en Pastel et en Gouache), nées au contact (tronc, face de roche, plan de travail, patient, museau, bouche) au rythme des gestes, avec chute, rebond au sol et fondu ; un seul dessin à réservoir fixe ; anciennes marques retirées ([note](action-particles-20261122.md)).
 
 ## C. Modèles et affichage
 
