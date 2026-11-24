@@ -117,7 +117,8 @@ describe('a building: the pane of InspectPaneUtility with its tabs, gizmos and i
     expect(facts).toEqual(expect.arrayContaining(['object-id', 'structure-condition', 'structure-size', 'structure-movement']));
     await ui.page.actions!.find(control => control.id === 'inspect-info')!.onActivate();
     const card = ui.page;
-    expect(card.title).toMatch(/Informations$/); expect(card.rows.map(row => row.id)).toEqual(facts);
+    expect(card.title).toMatch(/Informations$/); expect(card.layout).toBe('info');
+    expect(card.rows.filter(row=>row.infoEntry&&row.id!=='info-description').map(row=>row.id).sort()).toEqual(facts.sort());
     await card.actions!.find(control => control.id === 'info-back')!.onActivate();
     expect(ui.page.rows[0]!.id).toBe('pawn-tabs');
   });
@@ -125,7 +126,9 @@ describe('a building: the pane of InspectPaneUtility with its tabs, gizmos and i
     setNativeInspectorTab('none');
     const f = bench(), ui = inspector(f.world, { selectedObjects: [{ kind: 'structure', id: f.station.id }] });
     const ids = new Set(allControls(ui.page).map(control => control.id));
-    for (const id of ['object-action-deconstruct', 'uninstall', 'power']) expect(ids.has(id), id).toBe(true);
+    for (const id of ['object-action-deconstruct', 'uninstall']) expect(ids.has(id), id).toBe(true);
+    // A workbench has no switch (canFlickDevice, CompFlickable in Core): the simulation always refused this row's command.
+    expect(ids.has('power')).toBe(false);
     setNativeInspectorTab('bills');
     expect(allControls(ui.rebuild()).some(control => control.id === 'add-bill')).toBe(true);
     setNativeInspectorTab('none');

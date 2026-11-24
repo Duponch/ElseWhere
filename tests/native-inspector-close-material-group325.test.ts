@@ -36,12 +36,13 @@ function permissionFixture(){
  for(let i=0;i<3;i++){world.tiles[5*world.width+4+i]={terrain:'soil'};addMaterial(world,'food',10,{type:'ground',x:4+i,z:5},'survival-meal');}
  const piles=world.piles.filter(p=>p.item==='survival-meal');expect(piles).toHaveLength(3);return {world,piles};
 }
-test('the displayed mixed-group permission applies one common state in both selection orders',()=>{
+test('the Core mixed-group permission deactivates the allowed gizmos in both selection orders',()=>{
  for(const firstForbidden of [true,false]){const {world,piles}=permissionFixture();setMaterialForbidden256(piles[0]!,firstForbidden);setMaterialForbidden256(piles[1]!,!firstForbidden);setMaterialForbidden256(piles[2]!,firstForbidden);
   const before={tick:world.tick,rng:world.rng,nextId:world.nextId,rows:piles.map(p=>[p.id,p.quantity,{...p.owner}])},selection=piles.map(p=>({kind:'pile' as const,id:p.id})),group=mapObjectGroupActions(world,selection).find(a=>a.id==='material-permission')!;
-  expect(group.label).toBe(firstForbidden?'Autoriser':'Interdire');expect(group.commands).toHaveLength(3);expect(group.commands.map(c=>c.type==='material-forbid'&&c.forbidden)).toEqual([!firstForbidden,!firstForbidden,!firstForbidden]);
+  const eligible=piles.filter(materialAllowedForPlayer256);
+  expect(group.label).toBe('Interdire');expect(group.commands).toEqual(eligible.map(p=>({type:'material-forbid',pileId:p.id,forbidden:true})));
   for(const command of group.commands)expect(applyCommand(world,command).ok).toBe(true);
-  expect(piles.map(materialAllowedForPlayer256)).toEqual([firstForbidden,firstForbidden,firstForbidden]);expect({tick:world.tick,rng:world.rng,nextId:world.nextId,rows:piles.map(p=>[p.id,p.quantity,{...p.owner}])}).toEqual(before);
+  expect(piles.map(materialAllowedForPlayer256)).toEqual([false,false,false]);expect({tick:world.tick,rng:world.rng,nextId:world.nextId,rows:piles.map(p=>[p.id,p.quantity,{...p.owner}])}).toEqual(before);
  }
 });
 test('the real Native group waits for ACK and stops at refusal before touching a later pile',async()=>{

@@ -72,7 +72,7 @@ export function needsSpec(world: World, pawn: Pawn, alive: boolean, tab: readonl
   return { type: 'needs', needs, mood, thoughts: alive ? listed : [] };
 }
 
-export interface HealthPartInfo { label: string; hint: string; ink: string; info: NativeControl }
+export interface HealthPartInfo { label: string; hint: string; ink: string; info?: NativeControl }
 /** The right-hand hediff list: one entry per body part, whole-body entries
  * first, as `HealthCardUtility.VisibleHediffGroupsInOrder` orders them. */
 export function healthEntries(rows: readonly NativeRow[], lookup: {
@@ -80,7 +80,7 @@ export function healthEntries(rows: readonly NativeRow[], lookup: {
   missing: (part: string) => { tended?: boolean } | undefined;
   infectionPart: (index: number) => string | undefined;
   part: (part: string) => HealthPartInfo;
-  whole: () => NativeControl;
+  whole: () => NativeControl | undefined;
 }): HealthEntrySpec[] {
   const parts = new Map<string, { info: HealthPartInfo; items: HealthEntryItem[] }>(), whole: HealthEntryItem[] = [];
   const add = (part: string | undefined, item: HealthEntryItem) => {

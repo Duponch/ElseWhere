@@ -1,5 +1,7 @@
 import { footprintContains, STRUCTURE_DEFINITIONS } from '../sim/definitions';
-import { outdoorTemperature } from '../sim/temperature';
+import { outdoorTemperature,type ThermalRegion } from '../sim/temperature';
+import {roofCells} from '../sim/roof-rules';
+import {worldFog} from '../sim/beauty-need';
 import type { Cell, World } from '../sim/types';
 import { knownPosition256 } from './exploration-readers-256';
 
@@ -35,13 +37,18 @@ export function hoverTemperatureText(world: World, cell: Cell | null | undefined
   AROUND.forEach(([dx, dz], slot) => {
     if (!self && slot !== 8) return;
     const x = cell.x + dx, z = cell.z + dz;
-    if (x >= 0 && z >= 0 && x < world.width && z < world.height) wanted.set(z * world.width + x, slot);
+    if (x >= 0 && z >= 0 && x < world.width && z < world.height&&knownPosition256(world,{x,z})) wanted.set(z * world.width + x, slot);
   });
-  const found: (number | undefined)[] = [];
+  const found: (ThermalRegion | undefined)[] = [];
   for (const region of world.thermal?.regions ?? []) for (const index of region.cells) {
-    const slot = wanted.get(index); if (slot !== undefined) found[slot] = region.temperature;
+    const slot = wanted.get(index); if (slot !== undefined) found[slot] = region;
   }
-  let temperature: number | undefined;
-  for (let slot = 0; slot < 9; slot++) if (found[slot] !== undefined) temperature = found[slot];
-  return temperature === undefined ? outdoors : `Intérieur ${Math.round(temperature)} °C`;
+  let region:ThermalRegion|undefined;
+  for (let slot = 0; slot < 9; slot++) if (found[slot] !== undefined) region = found[slot];
+  if(!region)return outdoors;
+  const roofs=roofCells(world),fogged=worldFog(world);
+  // OpenRoofCount belongs to that real room. A partially unexplored room
+  // does not disclose the number of hidden cells through the HUD.
+  const open=fogged&&region.cells.some(fogged)?0:region.cells.reduce((count,index)=>count+Number(!roofs.has(index)),0);
+  return `Intérieur${open?` (sans toit : ${open})`:''} ${Math.round(region.temperature)} °C`;
 }

@@ -2,6 +2,8 @@
 
 Ce document permet à un nouvel agent de reprendre Elsewhere sans relire l'historique. Il résume le contexte, ce qui vient d'être fait, ce qui n'est pas fini et la suite prévue. L'état de référence est `origin/main` au commit `63757f38` ou après, au **schéma 377**.
 
+**Mise à jour du 24 novembre :** lire aussi le [bilan de la reprise](bilan-20261124.md). Les lots qui étaient urgents ici ont avancé dans les fichiers locaux du dépôt principal (toujours non committés) jusqu'aux boîtes de message, Options, accueil, chargement et pages de création (lot 12), puis au [gestionnaire des sauvegardes et au commerce local/orbital](fenetres-rimworld-sauvegardes-commerce.md) (lot 13), au [commerce des caravanes, rencontres et voyages individuels](fenetres-rimworld-commerce-monde.md) (lot 14), aux [fiches d'information et onglets animaux](fenetres-rimworld-information-animaux.md) (lot 15), à la [remise des demandes commerciales de quête](fenetres-rimworld-remise-commerciale.md) (lot 16), aux [statistiques de pièce et de beauté](fenetres-rimworld-environnement.md) (lot 17) et aux [gestes de sélection, raccourcis, recherche et jauges](fenetres-rimworld-gestes-20261124.md) (lot 18). Ne pas repartir de la version Git distante ni écraser ces modifications avec la copie `tmp/rule-wt` plus ancienne. Reprendre aux menus (tri et pâlissement) et info-bulles pendant le clic ; la file d'ordres générale demande un vrai chantier de simulation. Les compteurs de carrière, les aptitudes non implémentées et les autres nouvelles règles ne sont pas inventés par l'interface. Schéma 377 inchangé ; qualification visuelle réelle toujours ouverte.
+
 ## 1. Le projet et ses règles permanentes
 
 **Elsewhere est un clone en 3D de RimWorld** (jeu de base 1.6, sans extensions), écrit en TypeScript :
@@ -111,6 +113,8 @@ Règles à ne jamais oublier :
 
 ## 4. Ce qui n'est pas fini — à reprendre en premier
 
+*Historique de la passation du 23 novembre : les travaux locaux du 24 couvrent maintenant les points 1 et 2, ainsi que les fenêtres jusqu'au lot 18. Voir le bilan actualisé avant de reprendre ; les preuves en client visuel et la publication ne sont pas acquises.*
+
 1. **Défaut publié : le menu d'ordres reste bloqué.** Avec un colon sélectionné, un clic droit sur des objets au sol ouvre le menu, qui reste bloqué sur « Vérification des accès… ». Les options n'arrivent jamais et la console ne montre aucune erreur. Le défaut est vu dans le client sur la version `a5bb9546` et existe avant le lot 6.
    - Code : `nativeOrderPage` dans `src/ui3d/native-orders.ts`, environ lignes 95 à 260. Il affiche d'abord `message()`, attend `client.orderOptions`, puis appelle `read()` et `present()`.
    - Appel dans `src/main.ts`, `renderer.onContext`, vers la ligne 3188.
@@ -143,10 +147,10 @@ Règles à ne jamais oublier :
   - résumé des compétences d'équipe sur la page des colons de départ.
 - **File de tous les ordres avec Maj** : équiper, porter, manger, secourir, soigner, capturer, arrêter, dépouiller, ouvrir, éteindre, attaquer. Cela demande une entrée de file générale dans la simulation, donc un **changement de schéma**.
 - Reste du lot des interactions (`interactions-rimworld.md`, « reste à faire ») :
-  - fenêtre des statistiques de pièce et de beauté (`EnvironmentStatsDrawer`, réglages G et T) ;
-  - double-clic sur une zone ;
-  - touches F, V, C, X, Ctrl, Z, Origine/Fin, Page haut/bas ;
-  - jauge de travail dessinée sur la cible ;
+  - fenêtre des statistiques de pièce et de beauté (`EnvironmentStatsDrawer`, réglages G et T) : faite au lot 17 (voir note) ;
+  - double-clic sur une zone : fait au lot 18 (zones de culture seulement, comme Core) ;
+  - touches F, V, C, X, Ctrl, Z, Origine/Fin, Page haut/bas : faites au lot 18 ;
+  - jauge de travail dessinée sur la cible : faite au lot 18 ;
   - options du menu triées par priorité ;
   - « Prioriser » la chasse, l'apprivoisement et l'abattage.
 - **Sons** :

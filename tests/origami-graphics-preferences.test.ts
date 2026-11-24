@@ -103,10 +103,10 @@ function fixture(persist=true){
   return {menu,options,change,control,click,get page(){return page!;},get settings(){return {...settings};}};
 }
 
-test('Graphismes offers default and Origami without changing any preference through local navigation',async()=>{
+test('Graphismes offers Pastel and Gouache without changing any preference through local navigation',async()=>{
   const f=fixture();await f.click('option-section-graphics');
-  expect(f.page.layout).toBe('setup');expect(f.page.rows.some(row=>row.id.startsWith('origami-'))).toBe(false);
-  expect(f.control('graphics-style').select?.options).toEqual([{value:'default',label:'Par défaut'},{value:'origami',label:'Origami'}]);
+  expect(f.page.layout).toBe('options');expect(f.page.rows.some(row=>row.id.startsWith('origami-'))).toBe(false);
+  expect(f.control('graphics-style').select?.options).toEqual([{value:'default',label:'Pastel'},{value:'origami',label:'Gouache'}]);
   expect(f.change).not.toHaveBeenCalled();
   await f.control('graphics-style').select!.onChange('origami');
   expect(f.change).toHaveBeenCalledExactlyOnceWith({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'origami'});

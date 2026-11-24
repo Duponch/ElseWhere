@@ -139,6 +139,8 @@ import {overlaySurfaceHeightAtCell as surfaceHeightAtCell,SNOW_OVERLAY_LIFT,isWa
 import { HomePresentationSignature, StoragePresentationSignature, StructurePresentationSignature } from './presentation-signatures';
 import { mapObjectCells,mapObjectsAt,sameMapObject,type MapObjectSelection } from '../ui/map-object-selection';
 import {mapObjectGroupCells} from '../ui/map-object-group-selection';
+import {carpetEyedropper,squareDesignationEnd} from '../ui/map-interaction-shortcuts';
+import {isCarpetFloor355} from '../sim/carpet-355';
 
 import type {SceneRenderHostPort,SceneCameraPort,RendererLifetime} from './scene-render-ports';
 import { AnimationDetail } from './AnimationDetail';
@@ -721,7 +723,7 @@ export class SceneRenderCore {
   onObjectSelection:(objects:MapObjectSelection[],additive:boolean)=>void=()=>{};
   onHover: (cell:Cell|null)=>void=()=>{};
   onContext: (cell:Cell,x:number,y:number,queue:boolean,targetId?:number)=>void=()=>{};
-  onInteractionCancel: ()=>void=()=>{};
+  onInteractionCancel: (reason: 'interaction' | 'presentation')=>void=()=>{};
   onAudioFrame?: (view: AudioFrameView) => void;
   onFatalError: (message: string) => void = () => {};
   onCompatibilityWarning: (message: string) => void = () => {};
@@ -740,10 +742,12 @@ export class SceneRenderCore {
   protected readonly orderRockPreview=new OrderTargetPreviewLayer();
   protected constructionIndex: ConstructionCellIndex | undefined;
   protected areaSignature = '';
+  protected designationControlHeld=false;
   protected areaDrag: ({ pointerId: number; action: AreaAction; from: Cell }
     | { pointerId:number; allowed:boolean; from:Cell }
     | { pointerId: number; kind: LineBuildKind; from: Cell; material?: ConstructionMaterial }) | null = null;
   onArea: (action: AreaAction, from: Cell, to: Cell) => void = () => {};
+  onCarpetEyedropper:(cell:Cell)=>void=()=>{};
   onAllowedAreaPaint:(enabled:boolean,from:Cell,to:Cell)=>void=()=>{};
   protected allowedAreaTarget:number|undefined;
   onExitOrder: () => void = () => {};
@@ -1059,7 +1063,9 @@ export class SceneRenderCore {
   private applyWorldWithinSurfaceReads(world: World, resetPresentation = false): void {
     if (this.disposed) return;
     this.invalidatePausedShadow(resetPresentation);
-    if (resetPresentation) this.cancelDesignation();
+    // A same-map redraw discards uncommitted pointer gestures, not a
+    // pending context-menu query against the current selection.
+    if (resetPresentation) this.cancelDesignation('presentation');
     this.areaIndex = undefined; this.constructionIndex = undefined; this.areaSignature = '';
     this.orderTargetIndex=undefined;
     const now = this.hostPort.now();
@@ -1241,8 +1247,8 @@ export class SceneRenderCore {
   /** A gesture is an uncommitted intention. Losing focus, changing tools/maps or
    * pressing Escape must never submit it later through a stray pointerup.
    */
-  cancelDesignation(): boolean {
-    const selecting=this.hostPort.cancelSelection();this.onInteractionCancel();
+  cancelDesignation(reason: 'interaction' | 'presentation' = 'interaction'): boolean {
+    const selecting=this.hostPort.cancelSelection();this.onInteractionCancel(reason);
     const drag = this.areaDrag;
     this.areaDrag = null; this.pointerDown = null; this.areaSignature = ''; this.hoverCell = null;
     this.constructionIndex = undefined;
@@ -2286,8 +2292,15 @@ export class SceneRenderCore {
     this.orderRockPreview.updateRock(world,[...targets.rocks]);
   }
   setDesignationMinCellPixels(value:number):void { this.designations.setMinCellPixels(value);this.wildlife.setDesignationMinCellPixels(value); }
+  protected areaDragEndpoint(drag:NonNullable<SceneRenderCore['areaDrag']>,cell:Cell,held=this.designationControlHeld):Cell {
+    return held&&this.world&&!('kind'in drag)?squareDesignationEnd(drag.from,cell,this.world.width,this.world.height):cell;
+  }
+  protected setDesignationControl(held:boolean):void {
+    if(held===this.designationControlHeld)return;this.designationControlHeld=held;
+    if(this.areaDrag||this.tool==='lay-floor'&&isCarpetFloor355(this.selectedFloor)){this.areaSignature='';this.updateHover();}
+  }
   protected updateAreaPreview(): void {
-    const drag = this.areaDrag, world = this.world, cell = this.hoverCell;
+    const drag = this.areaDrag, world = this.world, rawCell = this.hoverCell,cell=drag&&rawCell?this.areaDragEndpoint(drag,rawCell):rawCell;
     if (!drag || !world) return;
     this.recreationHints.hide();this.turretRange.hide();this.turretPreviewVisible=false;this.turretPreviewSignature='';this.turretTintSurfaces=EMPTY_GROUND_OVERLAYS;
     try {
@@ -2359,6 +2372,12 @@ export class SceneRenderCore {
     this.hostPort.title('');
     if (this.areaDrag) { this.updateAreaPreview(); return; }
     this.surfaceTint.clearPreview();
+    if(this.tool==='lay-floor'&&isCarpetFloor355(this.selectedFloor)&&this.designationControlHeld){
+      this.recreationHints.hide();this.turretRange.hide();this.clearOrderTargets();this.constructionPreview.hide();
+      const cell=this.hoverCell,world=this.world,copy=cell&&world&&carpetEyedropper(world,this.selectedFloor,cell);
+      this.hover.visible=!!copy;if(copy&&cell&&world){const mat=this.hover.material as THREE.MeshBasicNodeMaterial;this.hover.scale.set(1,1,1);this.hover.position.set(cell.x,(surfaceHeightAtCell(world,cell.x,cell.z)??0)+.055,cell.z);mat.color.setHex(0x9dd9ca);mat.opacity=.55;}
+      this.hostPort.title(copy?'Pipette : prélever la couleur de ce tapis':'Pipette : choisir un tapis découvert');return;
+    }
     if(this.world&&this.hoverCell&&!knownPosition256(this.world,this.hoverCell)){
       this.recreationHints.hide();this.turretRange.hide();this.clearOrderTargets();this.constructionPreview.hide();this.hover.visible=false;
       this.hostPort.title(this.tool==='mine'?'Miner cette zone':UNDISCOVERED_CELL_LABEL_256);return;

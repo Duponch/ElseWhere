@@ -91,6 +91,7 @@ export const colonistBarVisible=(width:number,height:number):boolean=>width>=BAR
 export interface ColumnRect{right:number;bottom:number;width:number;height:number}
 export const ALERT_COLUMN_WIDTH=154,ALERT_TEXT_WIDTH=148,LETTER_ICON={width:38,height:30,right:12},LETTER_SPACING=12;
 export const TIME_BUTTON={width:32,height:24} as const,PLAY_BUTTON=24,PLAY_GAP=2,PLAY_ROW_WIDTH=141,PLAY_PER_ROW=5,DATE_HEIGHT=48,ROW_HEIGHT=26;
+export const NATIVE_VIEW_ACTIONS=['walls','roofs','foliage','zones','home','camera','room-stats','beauty'] as const;
 export interface GlobalColumn{view:ColumnRect[];speed:ColumnRect[];date:ColumnRect;weather:ColumnRect;temperature:ColumnRect;/** Height of the column. */height:number;/** Where the letters' lowest edge sits (column height plus 10). */lettersBase:number}
 /** `GlobalControls.GlobalControlsOnGUI`, from the bottom: 4, display settings
  * (rows of five, wrapping upward), 4, speed, 4, date, weather, temperature, then

@@ -7,6 +7,7 @@ import {createWorldUiModels} from './helpers/native-pregame-world-site-model';
 import type {FrontMenuOptions} from '../src/ui/front-menu';
 import type {NativeControl,NativePage} from '../src/ui3d/native-contract';
 import type {WorldCreationCallbacks256,WorldCreationPreview256} from '../src/ui/world-creation-contract';
+import {layoutNativePage} from '../src/ui3d/native-layout';
 
 // Same bounded92-cell geography helper as the acquired World UI workshop,
 // explicitly a presentation backend, not a normal generation or played World.
@@ -28,7 +29,10 @@ function fixture(){
 
 describe('pregame World/Site region presentation keeps its real creation flow',()=>{
  it('keeps parameter and installed-faction regions, compact named Add controls, live maximum and final Generate',async()=>{
-  const f=fixture();await f.openWorld();expect(f.page.layout).toBe('setup');expect(f.page.setupCatalogueWidth).toBe(400);
+  const f=fixture();await f.openWorld();expect(f.page).toMatchObject({layout:'setup',setupProfile:'world',width:1020,height:764});
+  const laid=layoutNativePage(f.page,{width:1440,height:900},true,(text,size)=>text.length*size*.53),seed=laid.rows.find(row=>row.row.id==='world-seed')!,random=laid.rows.find(row=>row.row.id==='random-seed')!;
+  expect(laid.regions.catalogue!.width).toBe(483);expect(seed.labelWidth).toBe(200);expect(seed.inputRect).toMatchObject({x:seed.x+200,height:30});expect(random.top-seed.top).toBe(40);
+  expect(laid.actions.map(action=>[action.width,action.height])).toEqual([[150,38],[150,38],[150,38]]);
   for(const id of['world-seed','coverage','world-rainfall','world-temperature','world-population','map-size','season'])expect(f.row(id).region).toBe('catalogue');
   expect(f.row('faction-0').region).toBe('details');expect(f.row('world-add-factions').controls?.find(control=>control.id==='add-faction-OutlanderCivil')?.label).toBe('Union civile');expect(f.page.actions!.at(-1)!.id).toBe('generate-world');
   for(let index=0;index<5;index++)await f.click('add-faction-OutlanderCivil');const retained=f.control('add-faction-OutlanderCivil');await retained.onActivate();expect(f.row('human-faction-count').label).toBe('12 / 12 factions humaines');await retained.onActivate();expect(f.row('human-faction-count').label).toBe('12 / 12 factions humaines');expect(f.control('add-faction-OutlanderCivil').disabled).toBe(true);
@@ -40,6 +44,10 @@ describe('pregame World/Site region presentation keeps its real creation flow',(
   const occupied=new Set(models.baseWorld.worldFactions!.settlements.map(value=>value.tile)),eligible=models.geography.surface.tiles.filter(tile=>canPlaceWorldSettlement(models.geography.surface.tiles,tile.id,{settlementTiles:occupied})).map(tile=>tile.id);expect(eligible.length).toBeGreaterThan(16);
   const beforeWorld=JSON.stringify(models.baseWorld),beforeGeography=JSON.stringify(models.geography.definition),surface=models.geography.surface;
   expect(f.page.visual!.surface).toBe(surface);for(const id of['site-views','tile-input','site-selection-tools'])expect(f.row(id).region).toBe('navigation');
+  const box=layoutNativePage(f.page,{width:1440,height:900},true,(text,size)=>text.length*size*.53);
+  expect(f.page.setupProfile).toBe('site');expect([box.x,box.y,box.width,box.height]).toEqual([12,12,1416,876]);
+  expect(box.actions.map(a=>a.control.id)).toEqual(['front-back','tile-random','site-view-factions','confirm-site']);expect(box.actions.every(a=>a.width===150&&a.height===38)).toBe(true);
+  expect(box.actions[0]!.x+box.actions.at(-1)!.x+150).toBeCloseTo(box.width);expect(box.visualRect!.x+box.visualRect!.width).toBeLessThan(box.regions.details!.x);
   await f.click('site-view-places');expect(f.page.rows.filter(row=>/^tile-\d+$/.test(row.id))).toHaveLength(16);await f.click('choose-tile-'+eligible[0]);
   expect(f.page.rows.filter(row=>row.id.startsWith('site-fact-'))).toHaveLength(16);expect(f.row('site-fact-14').value).toBe('325 × 325');expect(f.row('site-fact-15').value).toBe('Hiver');expect(f.control('site-view-facts').active).toBe(true);
   f.page.visual!.onSelect(eligible.at(-1)!);expect(f.page.visual!.selected).toBe(eligible.at(-1));await f.click('site-view-places');expect(f.row('tile-pagination').label).toContain('/ '+eligible.length);await f.click('tiles-previous');

@@ -7,9 +7,10 @@ import type {CampaignGroupSummary,WorldGroupRecord} from '../sim/world-map-state
 import type {GroupPanelSnapshot,GroupPanelFacts,GroupDraft} from '../ui/group-panel';
 import type {GroupFormationPreview,GroupMassView} from '../sim/group-panel-state';
 import type {RetainedArrival261} from '../sim/caravan-encounter-state-261';
-import type {CommercialBuyLine} from '../sim/commercial-state';
+import type {CommercialBuyLine,CommercialStockPile} from '../sim/commercial-state';
 import {ITEM_DEFINITIONS} from '../sim/items';
-import {QUALITY_LABELS} from '../sim/equipment-rules';
+import {QUALITY_LABELS,weaponLabel} from '../sim/equipment-rules';
+import {apparelLabel,apparelDefinition} from '../sim/apparel-rules';
 import {isColonist} from '../sim/affiliation';
 import {campaignUIFacts,mapDisplayName,groupDisplayLabel,readMapRegistryState,readJumpToEntries,type CampaignUIState} from '../ui/map-registry-adapter';
 import {groupWorld,groupEntryActions} from '../sim/world-map-authority';
@@ -24,12 +25,18 @@ import {groupSplitCommand256,groupMergeCommand256} from '../ui/group-reorganizat
 import {travelActorLabel256,travelAnimalNeeds256,travelPackLabel256,travelAnimals256,travelPacks256} from '../ui/group-travel-readers-256';
 import {quoteGroupGift274} from '../sim/group-gift-274';
 import {quoteTradeRequestFulfill284} from '../sim/trade-request-fulfill-284';
+import {tradeRequestContent284} from '../sim/trade-request-content-284';
+import type {TradeRequest284} from '../sim/trade-request-state-284';
 import {quoteMeetingTrade261,type MeetingTradeLine261} from '../sim/caravan-meeting-trade-261';
 import {previewGroupItinerary,previewGenericItinerary261,type GroupTravelEstimateResult} from '../sim/group-travel-estimate';
 import {worldTargetChoices263,worldSiteLabel263} from '../ui/world-target-ui-263';
 import {effectiveCore297} from '../sim/core-phase-297';
 import type {WorldSite263} from '../sim/world-sites-state-263';
 import {worldSettlementAccess256} from '../sim/world-faction-access';
+import {WORLD_FACTION_DEFINITIONS_256} from '../sim/world-faction-catalog';
+import {worldGoodwillChange274,worldNaturalGoodwill274} from '../sim/world-diplomacy-274';
+import {nativeFactionColor} from './native-faction-color';
+import {NATIVE_FACTIONS} from './native-main-tab-metrics';
 import {settlementProximityWarning263} from '../sim/world-settlement-proximity-263';
 import {settlementProximityText263} from '../ui/settlement-proximity-263';
 import {planetTile,planetTileCount,planetGeography256} from '../sim/planet-geography-256';
@@ -38,6 +45,8 @@ import {commercialPreparationReason,previewCommercialLoading} from '../sim/comme
 import {commercialPhaseView,commercialCargoSources} from '../ui/commercial-panel';
 import {quoteCommercial,quoteCommercialSell} from '../sim/commercial-post';
 import {reservedSourcesByPile} from '../sim/materials';
+import {createNativeWorldTradeDraft,worldTradeAmount,type NativeWorldTradeDraft,type WorldTradeGood,type WorldTradeView} from './native-world-trade-draft';
+import {createNativeTradeRequestDelivery,type NativeTradeDeliveryView} from './native-trade-request-delivery';
 import type {CaravanEncounterProgressMessage261,CampEntryProgressMessage256} from '../bridge/protocol';
 
 /** Every draft below contains choices/quantities only, never cloned owners. */
@@ -48,13 +57,21 @@ let tab:'maps'|'groups'|'individual'|'factions'='maps';
 let selectedTile:number|undefined;
 let scope='',campaignIdentity='',scopeRevision=0,lastTick=-1,pending=false;
 let worldJumpIdentity='',worldJumpKey='';
+let activeWorldTrade:NativeWorldTradeDraft|undefined,shownWorldPage:NativePage|undefined,tradeOpenRevision=0;
+let activeDelivery:ReturnType<typeof createNativeTradeRequestDelivery>|undefined;
+let deliverySyncRevision:number|undefined,deliverySyncTick:number|undefined;
 const kg=(grams:number)=>`${(grams/1000).toLocaleString('fr-FR',{maximumFractionDigits:3})} kg`;
 const days=(core:number)=>`${Math.max(0,core/(TICKS_PER_DAY*10)).toLocaleString('fr-FR',{maximumFractionDigits:2})} j`;
 const b=(id:string,label:string,onActivate:NativeControl['onActivate'],extra:Partial<NativeControl>={}):NativeControl=>({id,label,onActivate,...extra});
 const r=(id:string,label:string,value?:string,detail?:string,controls?:NativeControl[]):NativeRow=>({id,label,value,detail,controls});
 const source=():CampaignUIState=>{const value=state?.world??state?.campaign;if(!value)throw Error('La campagne n’est plus disponible.');return value;};
 const local=():World=>{if(!state?.world)throw Error('Affichez la vraie carte locale avant cette opération.');return state.world;};
-function show(page:NativePage):void {actions?.showPage(page);}
+function show(page:NativePage):void {
+ if(activeWorldTrade&&!activeWorldTrade.owns(page)){activeWorldTrade.dispose();activeWorldTrade=undefined;}
+ if(activeDelivery&&!activeDelivery.owns(page)){activeDelivery.dispose();activeDelivery=undefined;}
+ shownWorldPage=page;actions?.showPage(page);
+}
+const worldPageCurrent=(page:NativePage)=>shownWorldPage===page&&(actions?.isCurrentPage?.(page)??true);
 function rootPage():void {if(state&&actions)show(buildNativeWorld(state,actions));}
 function page(id:string,title:string,rows:NativeRow[],controls:NativeControl[]=[],back:()=>void=rootPage):NativePage {return {id,title,rows,width:8.2,modal:true,actions:[...controls,b(`${id}-back`,'Retour',back)],onClose:back};}
 function integer(value:string,min=0,max=Number.MAX_SAFE_INTEGER):number {const n=Number(value);if(value.trim()===''||!Number.isSafeInteger(n)||n<min||n>max)throw Error(`Entier de ${min} à ${max} requis.`);return n;}
@@ -92,22 +109,39 @@ function facts(s:GroupPanelSnapshot,retreat=false):GroupPanelFacts {
 const warnings:Record<string,string>={'no-food':'Presque aucune nourriture admissible.','short-food':'Moins de cinq jours de nourriture estimés.','rot-soon':'Au moins 75 % de la nutrition risque de pourrir avant cinq jours.','disliked-food':'Au moins la moitié des aliments humains risque de déplaire.','no-social':'Aucun membre choisi ne peut assurer les échanges sociaux.'};
 function provisionsRows(value:GroupTravelEstimateResult|undefined):NativeRow[]{if(!value)return [];if(!value.ok)return [r('provisions-refused','Estimation indisponible',value.reason)];return [r('provisions-food','Autonomie alimentaire',`${value.foodDays.toLocaleString('fr-FR',{maximumFractionDigits:2})} j`,`${value.nutrition.toLocaleString('fr-FR',{maximumFractionDigits:2})} nutrition · cueillette ${value.forageNutritionPerDay.toLocaleString('fr-FR',{maximumFractionDigits:2})}/jour · conservation ${value.rotDays.toLocaleString('fr-FR',{maximumFractionDigits:2})} j`),...value.warnings.map(w=>r(`warning-${w}`,'Avertissement',warnings[w]??w))];}
 function massRows(mass:GroupMassView):NativeRow[]{return [r('mass-total','Charge',`${kg(mass.grams)} / ${kg(mass.capacityGrams)}`,`Rations ${mass.rations} · pemmican ${mass.pemmicanUnits} · nutrition ${mass.provisionNutrition.toLocaleString('fr-FR',{maximumFractionDigits:2})}${mass.ridingFactor!==undefined?` · monture ×${mass.ridingFactor.toFixed(2)}`:''}`),...mass.byMember.map(m=>r(`mass-${m.pawnId}`,`Porteur #${m.pawnId}`,`${kg(m.grams)} / ${kg(m.capacityGrams)}`))];}
-function tradeDraftRows(world:World,direction:'buy'|'sell'|'gift',lines:CommercialBuyLine[]):NativeRow[]{
- if(!lines.length)return [r('trade-draft-empty','Panier du brouillon','Aucun bien choisi')];
- if(direction==='gift'){const q=quoteGroupGift274(world,lines);return q.ok?[r('trade-draft-value','Valeur reconnue du cadeau',String(q.recognizedValue)),r('trade-draft-goodwill','Relations prévues',`${q.goodwillBefore} → ${q.goodwillAfter}`),...massRows(q.mass)]:[r('trade-draft-refusal','Brouillon non admissible',q.reason)];}
- const q=groupTradeQuote(world,direction,lines);return q.ok?[r('trade-draft-total','Total du panier',`${q.totalSilver} argent`),...massRows(q.mass)]:[r('trade-draft-refusal','Brouillon non admissible',q.reason)];
-}
-function meetingDraftRows(input:CampaignUIState,group:CampaignGroupSummary,lines:MeetingTradeLine261[]):NativeRow[]{
- if(!lines.length)return [r('meeting-draft-empty','Panier du brouillon','Aucun échange choisi')];
- const q=quoteMeetingTrade261(input,encounterRecord(group),lines);return q.ok?[r('meeting-draft-payment','Paiement du panier',`${q.paid} argent`,`${q.forgone} argent sans contrepartie, soumis à acceptation explicite`)]:[r('meeting-draft-refusal','Brouillon non admissible',q.reason)];
-}
 function commercialDraftRows(world:World,pawnId:number|undefined,quantity:number,silver:number,cargo:CommercialBuyLine[]):NativeRow[]{
  const pawn=world.pawns.find(pawn=>pawn.id===pawnId);if(!pawn)return [r('commercial-draft-missing','Choisissez le voyageur pour calculer la charge.')];
  const mass=previewCommercialLoading(world,pawn,quantity,silver,cargo.length?cargo:undefined);return mass?[r('commercial-draft-mass','Charge du brouillon',`${kg(mass.grams)} / ${kg(mass.capacityGrams)}`,mass.grams>mass.capacityGrams?'La charge dépasse la capacité du voyageur.':undefined)]:[r('commercial-draft-refusal','Chargement du brouillon non admissible')];
 }
-function individualDraftRows(direction:'buy'|'sell',lines:CommercialBuyLine[]):NativeRow[]{
- if(!lines.length)return [r('individual-draft-empty','Panier du brouillon','Aucun bien choisi')];
- const q=direction==='buy'?quoteCommercial(local(),lines):quoteCommercialSell(local(),lines);return q.ok?[r('individual-draft-total','Total du panier',`${q.totalSilver} argent`,`${q.remainingSilver} argent après l’échange`),r('individual-draft-mass','Charge après l’échange',`${kg(q.mass.grams)} / ${kg(q.mass.capacityGrams)}`)]:[r('individual-draft-refusal','Brouillon non admissible',q.reason)];
+
+/** Only the trade drafts reread the host here. Other world operations keep
+ * their existing send/preview contract. A replacement campaign with the same
+ * seed is nevertheless a different owner if its session epoch changed. */
+function liveTradeScope():string {
+ const callbacks=actions,fresh=callbacks?.readState?.()??state;
+ if(!callbacks||!fresh||fresh.busy||fresh.fault||pending)throw Error(fresh?.fault??'Attendez la fin de l’opération courante.');
+ update(fresh,callbacks);return JSON.stringify([fresh.epoch,scope]);
+}
+async function pauseForTrade():Promise<string>{
+ const start=liveTradeScope(),token=++tradeOpenRevision,origin=shownWorldPage&&actions?.isCurrentPage?.(shownWorldPage)?shownWorldPage:undefined;
+ await pause();if(liveTradeScope()!==start||token!==tradeOpenRevision||origin&&actions?.isCurrentPage&&!actions.isCurrentPage(origin))throw Error('Le contexte commercial a changé. Rouvrez le commerce.');return start;
+}
+function openWorldTrade(config:Omit<Parameters<typeof createNativeWorldTradeDraft>[0],'show'|'isCurrent'|'send'>):void {
+ activeWorldTrade?.dispose();
+ const owner=createNativeWorldTradeDraft({...config,show,send,isCurrent:page=>activeWorldTrade===owner&&(actions?.isCurrentPage?.(page)??true)});
+ activeWorldTrade=owner;try{owner.open();}catch(error){owner.dispose();if(activeWorldTrade===owner)activeWorldTrade=undefined;throw error;}
+}
+const cash=(piles:readonly MaterialPile[],owner?:number)=>piles.reduce((sum,pile)=>sum+(pile.item==='silver'&&pile.owner.type==='inventory'&&(owner===undefined||pile.owner.pawnId===owner)?pile.quantity:0),0);
+const postCash=(piles:readonly CommercialStockPile[])=>piles.reduce((sum,pile)=>sum+(pile.item==='silver'?pile.quantity:0),0);
+function worldTradeGood(pile:MaterialPile|CommercialStockPile,side:WorldTradeGood['side'],available:number,unitPrice:number|null,refusal?:string):WorldTradeGood {
+ const quality=pile.book?.quality??pile.weapon?.quality??pile.apparel?.quality;
+ const label=pile.book?pile.book.title:'owner'in pile&&pile.weapon?weaponLabel(pile):'owner'in pile&&pile.apparel?apparelLabel(pile):ITEM_DEFINITIONS[pile.item].label;
+ const detail=[quality?QUALITY_LABELS[quality]:undefined,'owner'in pile&&pile.owner.type==='inventory'?`Porteur n° ${pile.owner.pawnId}`:undefined,'owner'in pile&&pile.apparel?`${pile.apparel.hitPoints}/${apparelDefinition(pile).hitPoints} PV`:pile.damage!==undefined?`Usure ${pile.damage}`:undefined].filter(Boolean).join(' · ');
+ return {id:pile.id,label,side,available,unitPrice,refusal,icon:`item-${pile.item}`,detail:detail||undefined};
+}
+function returnToGroupTrade(id:number,openedScope:string):void {
+ try{if(liveTradeScope()===openedScope&&campaignUIFacts(source())?.groups.some(group=>group.id===id)){groupDetail(id);return;}}catch{/* The visit ended; the world root remains available. */}
+ rootPage();
 }
 
 interface Formation {scope:string;mapId:number;retreat:boolean;members:Set<number>;animals:Set<number>;packs:Set<number>;sources:Map<number,number>;sourceItem?:MaterialPile['item'];sourcePage:number;destination?:number;stationary:boolean}
@@ -164,10 +198,46 @@ function formationConfirmation(d:Formation):void {
 }
 
 function groupPeople(s:GroupPanelSnapshot):Pawn[]{const g=s.group;return !g?[]:'members'in g?g.members:g.memberIds.map(id=>{const p=s.world.pawns.find(p=>p.id===id);if(!p)throw Error('Un membre ne possède plus son propriétaire local.');return p;});}
+function liveTradeRequestDestination(input:CampaignUIState,request:TradeRequest284):boolean {
+ const core=input.tick*10,active=request.status==='offered'?request.offerExpiresAtCore>core:request.status==='accepted'&&(request.expiresAtCore??-1)>core;
+ return !!(active&&!request.closed&&!request.fulfillment&&!request.destinationLost&&input.worldFactions?.settlements.some(entry=>entry.id===request.settlementId&&entry.tile===request.tile&&entry.factionId===request.factionId));
+}
+function deliveryGroupAt(record:CampaignGroupSummary,tile:number):boolean {
+ const g=record.state;return 'members'in g&&g.phase==='at-site'&&g.segment===null&&g.tile===tile&&record.localMapId===null&&!record.pending261&&!record.pendingEntry263;
+}
+/** Quest links borrow only actual visited groups. A stock check is performed
+ * when their dossier is opened, not for every quest on every refresh. */
+export function nativeTradeRequestVisitors(input:CampaignUIState,request:TradeRequest284):readonly CampaignGroupSummary[]{
+ if(request.status!=='accepted'||!liveTradeRequestDestination(input,request))return [];
+ return (campaignUIFacts(input)?.groups??[]).filter(record=>deliveryGroupAt(record,request.tile));
+}
+export function focusNativeTradeRequestDestination(next:NativeUiState,callbacks:NativeUiActions,requestId:number,groupId?:number):boolean {
+ update(next,callbacks);const input=next.world??next.campaign,request=input?.tradeRequests284?.entries.find(entry=>entry.id===requestId);
+ if(!input||!request||next.busy||next.fault||!liveTradeRequestDestination(input,request))return false;
+ if(groupId!==undefined){if(!nativeTradeRequestVisitors(input,request).some(entry=>entry.id===groupId))return false;tab='groups';groupDetail(groupId);return true;}
+ if(!input.planet||!planetTile(input.planet,request.tile))return false;
+ tab='maps';selectedTile=request.tile;rootPage();return true;
+}
+/** A request belongs to the visited settlement, independently of an ordinary
+ * merchant, its stock or a suitable negotiator. There is no remote handover. */
+function activeDeliveryRequests(s:GroupPanelSnapshot,record:CampaignGroupSummary):TradeRequest284[]{
+ const g=s.group;if(s.world.planet?.revision!==3||!g||!('members'in g)||!deliveryGroupAt(record,g.tile))return [];
+ return (s.world.tradeRequests284?.entries??[]).filter(request=>request.status==='accepted'&&request.tile===g.tile&&liveTradeRequestDestination(s.world,request));
+}
+function deliveryIdentity(openedScope:string,record:CampaignGroupSummary,request:TradeRequest284):string{
+ const g=record.state;
+ return JSON.stringify([openedScope,record.id,record.originMapId,record.localMapId,g.startedAt,'departedAt'in g?g.departedAt:null,'tile'in g?g.tile:null,request.id,request.settlementId,request.factionId,request.homeMapId,request.offeredAtCore,request.acceptedAtCore,request.selectedOptionId]);
+}
 function groupDetail(id:number):void {
  const s=snapshot(id),g=s.group;if(!g)throw Error('Cette caravane n’existe plus.');const f=facts(s),row=groupRow(id),people=groupPeople(s),animals=travelAnimals256(s),owners=new Set([...people.map(p=>p.id),...animals.map(a=>a.id)]);
+ const parentScope=JSON.stringify([state?.epoch,scope]);let parent:NativePage;
  const goods='items'in g?g.items:s.world.piles.filter(p=>'pawnId'in p.owner&&owners.has(p.owner.pawnId)),packs=travelPacks256(s,owners);
  const rows:NativeRow[]=[r('group-phase',groupDisplayLabel(row),`Destination ${tileLabel(g.destination)}`,`Origine ${tileLabel(f.originTile)}${'tile'in g?` · position ${tileLabel(g.tile)}`:''}${'stop'in g&&g.stop?` · arrêt ${g.stop.kind}`:''}`),...f.mass?massRows(f.mass):[]];
+ for(const request of activeDeliveryRequests(s,row)){
+  const q=quoteTradeRequestFulfill284(s.world,request.id,id),family=tradeRequestContent284(request.family)?.label??request.family,identity=deliveryIdentity(parentScope,row,request);
+  const reason=q.ok?(state?.fault??(state?.busy||pending?'Attendez la fin de l’opération courante.':undefined)):q.reason;
+  rows.push({...r(`group-request-${request.id}`,`${worldTradeAmount(request.quantity)} ${family}`,request.settlementName,`${days(request.expiresAtCore!-s.world.tick*10)} restant(s). ${q.ok?`${worldTradeAmount(q.available)} unités admissibles dans les inventaires.`:q.reason}`,[b(`group-deliver-${request.id}`,'Remplir la demande commerciale',()=>{if(!reason)return deliverRequest(parent,id,request.id,identity,parentScope);},{disabled:!!reason,hint:reason??'Vérifier la remise complète des marchandises et recevoir la récompense choisie.',icon:'haul'})]),presentation:'record'});
+ }
  if(row.arrival261)rows.push(r('group-arrival-confirmed','Action d’arrivée confirmée',arrivalLabel(row.arrival261.action),tileLabel(row.arrival261.tile)));
  else rows.push(r('group-arrival-confirmed','Action d’arrivée confirmée','S’arrêter sur la tuile'));
  for(const p of people)rows.push(r(`group-person-${p.id}`,p.name,actorNeeds(p),p.caravanCarrySick===false?'Portage en cas de maladie désactivé':'Portage en cas de maladie autorisé',[
@@ -189,11 +259,10 @@ function groupDetail(id:number):void {
   controls.push(b('group-route','Destination et arrivée',()=>routeEditor(id),{disabled:!f.actions.route.ok,hint:f.actions.route.reason}),b('group-split','Séparer',()=>splitEditor(id)),b('group-merge','Regrouper',()=>mergeEditor(id)),b('group-itinerary','Planifier des étapes',()=>itinerary(id)));
   if(f.trade)controls.push(b('group-buy','Acheter',()=>tradeEditor(id,'buy'),{disabled:!f.actions.buy.ok,hint:f.actions.buy.reason}),b('group-sell','Vendre',()=>tradeEditor(id,'sell'),{disabled:!f.actions.sell.ok,hint:f.actions.sell.reason}));
   const gift=quoteGroupGift274(s.world,[]);if(gift.ok)controls.push(b('group-gift','Faire un cadeau',()=>tradeEditor(id,'gift')));
-  for(const request of s.world.tradeRequests284?.entries??[])if(request.status==='accepted'&&request.tile===g.tile)controls.push(b(`group-deliver-${request.id}`,'Remplir la demande commerciale',()=>deliverRequest(id,request.id)));
   for(const mode of ['visit','camp','settle'] as const){const permission=s.entryActions?.[mode];if(permission?.ok)controls.push(b(`group-enter-${mode}`,{visit:'Entrer sur la carte',camp:'Former un camp temporaire',settle:'S’installer'}[mode],()=>enterGroup(id,mode)));}
   if(['at-site','stationary','awaiting-entry'].includes(g.phase))for(const choice of worldTargetChoices263(s.world,g.tile))controls.push(b(`target-${choice.key}`,choice.label,()=>targetOrder(id,g.tile,choice.key),{disabled:!choice.ok,hint:choice.reason}));
  }
- show(page(`group-${id}`,'Caravane',rows,controls));
+ parent=page(`group-${id}`,'Caravane',rows,controls);show(parent);
 }
 function arrivalLabel(action:RetainedArrival261):string {if(!action)return 'S’arrêter sur la tuile';switch(action.kind){case 'enter':return `Entrer sur la carte ${action.mapId}`;case 'trade':return `Commercer à l’établissement ${action.settlementId}`;case 'attack-settlement':return `Attaquer l’établissement ${action.settlementId}`;case 'visit-site':return `Visiter le site ${action.siteId}`;case 'peace-talks':return `Participer aux pourparlers ${action.siteId}`;}}
 function arrivalChoices(s:GroupPanelSnapshot,tile:number):{id:string;label:string;action:RetainedArrival261;disabled?:boolean;reason?:string;confirmAttack?:boolean}[]{
@@ -242,22 +311,45 @@ async function mergeEditor(id:number):Promise<void>{
 }
 
 async function tradeEditor(id:number,direction:'buy'|'sell'|'gift'):Promise<void>{
- await pause();const values=new Map<number,number>();
- const make=():NativePage=>{const s=snapshot(id),f=facts(s),gift=direction==='gift'?quoteGroupGift274(s.world,[]):undefined,goods=direction==='gift'?gift?.ok?gift.goods:[]:direction==='buy'?f.trade?.buys??[]:f.trade?.sells??[];
-  if(direction==='gift'&&!gift?.ok)throw Error(gift?.reason??'Ce cadeau est indisponible.');if(direction!=='gift'&&!f.trade)throw Error('La caravane n’est plus au véritable comptoir.');
-  return page(`group-${direction}-${id}`,direction==='buy'?'Achats au comptoir':direction==='sell'?'Ventes de l’inventaire':'Cadeau diplomatique',[
-   r('trade-funds','Comptoir réel',f.trade?`Caravane ${f.trade.groupSilver} argent · poste ${f.trade.postSilver} argent`:undefined,f.trade?.negotiator?`Négociateur ${f.trade.negotiator.name}`:f.trade?.refusal),
-   ...goods.map(g=>numberRow(`trade-good-${g.pile.id}`,`${ITEM_DEFINITIONS[g.pile.item].label} · pile ${g.pile.id}`,values.get(g.pile.id)??0,n=>{values.set(g.pile.id,n);show(make());},0,g.available,`${g.available} disponibles · ${g.unitPrice.toLocaleString('fr-FR',{maximumFractionDigits:2})} argent/unité${'reason'in g&&g.reason?` · ${g.reason}`:''}`)),
-   ...tradeDraftRows(s.world,direction,quantities(values)),
-  ],[b('trade-quote','Vérifier le panier',()=>{
-   const current=snapshot(id),lines=quantities(values);if(!lines.length)throw Error('Choisissez au moins un bien.');
-   if(direction==='gift'){const q=quoteGroupGift274(current.world,lines);if(!q.ok)throw Error(q.reason);confirm('gift-confirm',`Cadeau à ${q.factionName}`,[r('gift-value','Valeur reconnue',String(q.recognizedValue)),r('gift-goodwill','Relations',`${q.goodwillBefore} → ${q.goodwillAfter}`,`Gain demandé ${q.requestedGain} · gain appliqué ${q.appliedGain}`),...massRows(q.mass)],async()=>{const checked=quoteGroupGift274(snapshot(id).world,lines);if(!checked.ok||checked.signature!==q.signature)throw Error('Le devis du cadeau a changé.');await send({type:'group-gift274',groupId:id,lines,quote:q.signature});},()=>groupDetail(id));return;}
-   const q=groupTradeQuote(current.world,direction,lines);if(!q.ok)throw Error(q.reason);confirm('trade-confirm',direction==='buy'?'Confirmer les achats':'Confirmer les ventes',[r('trade-total','Total',`${q.totalSilver} argent`),...massRows(q.mass)],async()=>{const checked=groupTradeQuote(snapshot(id).world,direction,lines);if(!checked.ok||checked.signature!==q.signature)throw Error('Le devis, le stock ou les propriétaires ont changé.');await send({type:direction==='buy'?'group-buy':'group-sell',groupId:id,lines,quote:q.signature});},()=>groupDetail(id));
-  })],()=>groupDetail(id));};show(make());
+ const openedScope=await pauseForTrade();
+ const read=():WorldTradeView=>{
+  const live=liveTradeScope(),record=groupRow(id),g=record.state,world=groupWorld(source(),id);
+  if(!world||!('members'in g)||g.phase!=='at-site'||live!==openedScope)throw Error('La caravane n’est plus au véritable comptoir.');
+  const identity=JSON.stringify([live,id,g.startedAt,g.departedAt,g.tile,record.originMapId,record.postId]);
+  if(direction==='gift'){
+   const base=quoteGroupGift274(world,[]);if(!base.ok)throw Error(base.reason);
+   return {identity:JSON.stringify([identity,base.settlementId,base.postId,base.factionId]),navigation:[r('trade-funds',base.settlementName,base.factionName,`Négociateur ${g.members.find(p=>p.id===base.negotiatorId)?.name??`#${base.negotiatorId}`} · Relations ${base.goodwillBefore}. Le destinataire ne verse pas d’argent.`)],goods:base.goods.map(good=>worldTradeGood(good.pile,'gift',good.available,good.unitPrice)),quote:lines=>{
+    const q=quoteGroupGift274(world,lines);if(!q.ok)return q;
+    return {ok:true,signature:q.signature,preview:[r('trade-draft-value','Valeur reconnue du cadeau',worldTradeAmount(q.recognizedValue)),r('trade-draft-goodwill','Relations prévues',`${q.goodwillBefore} → ${q.goodwillAfter}`),...massRows(q.mass)],reviewTitle:`Cadeau à ${q.factionName}`,review:[r('gift-value','Valeur reconnue',worldTradeAmount(q.recognizedValue)),r('gift-goodwill','Relations',`${q.goodwillBefore} → ${q.goodwillAfter}`,`Gain demandé ${q.requestedGain} · gain appliqué ${q.appliedGain}`),...massRows(q.mass)],command:()=>({type:'group-gift274',groupId:id,lines,quote:q.signature})};
+   }};
+  }
+  const view=groupPermission(world),trade=view.trade,permission=view.actions[direction];if(!trade||!permission.ok)throw Error(permission.reason??'La caravane n’est plus au véritable comptoir.');
+  return {identity,navigation:[r('trade-funds','Comptoir réel',`Caravane ${worldTradeAmount(trade.groupSilver)} argent · poste ${worldTradeAmount(trade.postSilver)} argent`,trade.negotiator?`Négociateur ${trade.negotiator.name}`:trade.refusal)],goods:(direction==='buy'?trade.buys:trade.sells).map(good=>worldTradeGood(good.pile,direction,good.available,good.unitPrice,good.reason)),quote:lines=>{
+   const q=groupTradeQuote(world,direction,lines);if(!q.ok)return q;
+   return {ok:true,signature:q.signature,preview:[r('trade-draft-total','Total du panier',`${q.totalSilver} argent`),...massRows(q.mass)],review:[r('trade-total','Total',`${q.totalSilver} argent`),...massRows(q.mass)],command:()=>({type:direction==='buy'?'group-buy':'group-sell',groupId:id,lines,quote:q.signature})};
+  }};
+ };
+ openWorldTrade({id:`group-${direction}-${id}`,title:direction==='buy'?'Achats au comptoir':direction==='sell'?'Ventes de l’inventaire':'Cadeau diplomatique',prefix:'trade',goodPrefix:'trade-good',verifyId:'trade-quote',confirmId:direction==='gift'?'gift-confirm':'trade-confirm',confirmTitle:direction==='buy'?'Confirmer les achats':direction==='sell'?'Confirmer les ventes':'Confirmer le cadeau',mode:direction,sourceLabel:'Caravane',partnerLabel:direction==='gift'?'Destinataire':'Comptoir',read,back:()=>returnToGroupTrade(id,openedScope)});
 }
-async function deliverRequest(id:number,requestId:number):Promise<void>{
- await pause();const q=quoteTradeRequestFulfill284(snapshot(id).world,requestId,id);if(!q.ok)throw Error(q.reason);
- confirm('delivery-confirm','Remplir la demande commerciale',[r('delivery-count','Objets remis',`${q.required} admissibles sur ${q.available}`),...q.rewards.map(p=>r(`delivery-reward-${p.id}`,`${p.quantity} ${ITEM_DEFINITIONS[p.item].label}`,p.quality?QUALITY_LABELS[p.quality]:undefined)),r('delivery-bonus','Relations','Bonus de livraison +12 ; récompense de l’option choisie.'),r('delivery-mass','Charge après remise',`${kg(q.mass.grams)} / ${kg(q.mass.capacityGrams)}`,q.mass.grams>q.mass.capacityGrams?'La récompense surchargera la caravane ; sa marche attendra une charge admissible.':undefined)],async()=>{const checked=quoteTradeRequestFulfill284(snapshot(id).world,requestId,id);if(!checked.ok||checked.quote!==q.quote)throw Error('La remise ou ses propriétaires ont changé.');await send({type:'trade-request-fulfill',requestId,groupId:id,quote:q.quote,confirm:true});},()=>groupDetail(id));
+async function deliverRequest(parent:NativePage,id:number,requestId:number,expectedIdentity:string,openedScope:string):Promise<void>{
+ if(!worldPageCurrent(parent)||activeDelivery?.owns(parent))return;
+ const read=():NativeTradeDeliveryView=>{
+  const live=liveTradeScope();if(live!==openedScope)throw Error('La campagne a changé.');
+  const s=snapshot(id),record=groupRow(id),g=s.group,request=activeDeliveryRequests(s,record).find(entry=>entry.id===requestId);
+  if(!g||!('members'in g)||!request)throw Error('Cette caravane ou cette demande ne se trouve plus à l’établissement demandé.');
+  const identity=deliveryIdentity(live,record,request);if(identity!==expectedIdentity)throw Error('Le contexte de cette remise a changé.');
+  const q=quoteTradeRequestFulfill284(s.world,requestId,id),registry=s.world.worldFactions!,faction=registry.factions.find(entry=>entry.id===request.factionId),relation=registry.relations.find(entry=>entry.aId===Math.min(registry.playerFactionId,request.factionId)&&entry.bId===Math.max(registry.playerFactionId,request.factionId)),option=request.options.find(entry=>entry.id===request.selectedOptionId),natural=faction&&worldNaturalGoodwill274(faction);
+  const bonus=relation&&natural!==undefined?worldGoodwillChange274(relation.goodwill,relation.kind,natural,12):undefined,reward=bonus&&natural!==undefined&&option?worldGoodwillChange274(bonus.goodwillAfter,bonus.kindAfter,natural,option.goodwill):undefined;
+  const carriers=new Map([...g.members,...travelAnimals256(s)].map(actor=>[actor.id,travelActorLabel256(actor)]));
+  const carrierLabel=(id:number)=>carriers.get(id)??`Porteur n° ${id}`;
+  return {identity,request,quote:q,groupLabel:groupDisplayLabel(record),paused:state?.speed===0,carrierLabel,
+   relation:q.ok&&relation&&bonus&&reward?{before:relation.goodwill,afterBonus:bonus.goodwillAfter,afterReward:reward.goodwillAfter}:undefined,
+   consumedLabel:(pileId,item)=>{const pile=g.items.find(entry=>entry.id===pileId),label=pile?.weapon?weaponLabel(pile):pile?.apparel?apparelLabel(pile):pile?.book?.title??ITEM_DEFINITIONS[item].label;return `${label} · lot n° ${pileId}${pile?.owner.type==='inventory'?` · ${carrierLabel(pile.owner.pawnId)}`:''}`;}};
+ };
+ activeDelivery?.dispose();tradeOpenRevision++;
+ const owner=createNativeTradeRequestDelivery({parent,requestId,groupId:id,read,pause,send,show,isCurrent:page=>activeDelivery===owner&&worldPageCurrent(page),back:()=>returnToGroupTrade(id,openedScope)});
+ activeDelivery=owner;
+ try{await owner.open();}catch(error){owner.dispose();if(activeDelivery===owner)activeDelivery=undefined;throw error;}
 }
 
 async function itinerary(groupId?:number,draft?:Formation):Promise<void>{
@@ -295,13 +387,19 @@ function encounterPage(row:CampaignGroupSummary):NativePage {
  return {id:`encounter-${row.id}`,title,rows,actions:controls,modal:true,width:7.8,onClose:()=>{}};
 }
 function meetingTrade(id:number):void {
- const values=new Map<number,number>();let shortfall=false;
- const make=():NativePage=>{const input=source(),row=groupRow(id),q=quoteMeetingTrade261(input,encounterRecord(row),[]);if(!q.ok)throw Error(q.reason);return page(`meeting-trade-${id}`,'Commerce de rencontre',[
-  r('meeting-trade-help','Stocks réellement portés',undefined,'Achats et ventes utilisent seulement les inventaires originaux de cette rencontre. L’équipement porté et les meubles gardent leurs propriétaires.'),
-  ...q.goods.map(g=>numberRow(`meeting-good-${g.id}`,`${g.side==='buy'?'Acheter':'Vendre'} ${ITEM_DEFINITIONS[g.item].label}`,values.get(g.id)??0,n=>{values.set(g.id,n);show(make());},0,g.available,`${g.available} disponibles · ${g.refusal??`${g.unitPrice} argent/unité`}`)),
-  ...meetingDraftRows(input,row,quantities(values).map(line=>({...line,quantity:line.quantity*(q.goods.find(g=>g.id===line.pileId)?.side==='buy'?1:-1)}))),
-  r('meeting-shortfall','Part sans contrepartie',shortfall?'Acceptée explicitement':'Refusée','Si le marchand manque d’argent, céder ce solde exige votre acceptation.',[b('meeting-shortfall-toggle',shortfall?'Accepter la perte':'Ne pas abandonner le solde',()=>{shortfall=!shortfall;show(make());},{active:shortfall})]),
- ],[b('meeting-quote','Vérifier le panier',()=>{const row=groupRow(id),empty=quoteMeetingTrade261(source(),encounterRecord(row),[]);if(!empty.ok)throw Error(empty.reason);const lines:MeetingTradeLine261[]=quantities(values).map(line=>({...line,quantity:line.quantity*(empty.goods.find(g=>g.id===line.pileId)?.side==='buy'?1:-1)}));if(!lines.length)throw Error('Choisissez au moins un échange.');const quote=quoteMeetingTrade261(source(),encounterRecord(row),lines);if(!quote.ok)throw Error(quote.reason);if(quote.forgone&&!shortfall)throw Error('Le marchand manque d’argent. Acceptez explicitement la part sans contrepartie ou réduisez les ventes.');confirm('meeting-confirm','Confirmer le commerce',[r('meeting-payment','Paiement',`${quote.paid} argent`,`${quote.forgone} argent abandonné explicitement`)],async()=>{const current=quoteMeetingTrade261(source(),encounterRecord(groupRow(id)),lines);if(!current.ok||current.signature!==quote.signature)throw Error('Le panier de rencontre a changé.');await send({type:'caravan-meeting-trade',groupId:id,lines,quote:quote.signature,acceptShortfall:shortfall});},()=>show(encounterPage(groupRow(id))));})],()=>show(encounterPage(groupRow(id))));};show(make());
+ const openedScope=liveTradeScope();tradeOpenRevision++;
+ const read=():WorldTradeView=>{
+  const live=liveTradeScope(),input=source(),record=groupRow(id),g=record.state,p=record.pending261,base=quoteMeetingTrade261(input,encounterRecord(record),[]);
+  if(!base.ok)throw Error(base.reason);if(live!==openedScope||!('members'in g)||p?.kind!=='meeting')throw Error('Cette rencontre commerciale a changé.');
+  const identity=JSON.stringify([live,id,g.startedAt,p.atCore,p.traderId,p.factionId,record.originMapId]),owners=new Map([...g.items,...p.items].map(pile=>[pile.id,pile]));
+  const goods=base.goods.map(good=>{const pile=owners.get(good.id);if(!pile)throw Error('Le propriétaire commercial du lot est absent.');return worldTradeGood(pile,good.side,good.available,good.unitPrice,good.refusal);});
+  return {identity,goods,navigation:[r('meeting-trade-help','Stocks réellement portés',`Caravane ${worldTradeAmount(cash(g.items))} argent · marchand ${worldTradeAmount(cash(p.items,p.traderId))} argent`,'Achats et ventes utilisent seulement les inventaires originaux de cette rencontre. L’équipement porté et les meubles gardent leurs propriétaires.'),r('meeting-trade-parties',`Négociateur : ${g.members.find(pawn=>pawn.id===base.negotiatorId)?.name??`#${base.negotiatorId}`}`,`Marchand : ${p.people.find(pawn=>pawn.id===base.traderId)?.name??`#${base.traderId}`}`)],quote:(lines:MeetingTradeLine261[])=>{
+   const q=quoteMeetingTrade261(input,encounterRecord(record),lines);if(!q.ok)return q;
+   return {ok:true,signature:q.signature,forgone:q.forgone,preview:[r('meeting-draft-payment','Paiement du panier',`${q.paid} argent`,q.forgone?`${q.forgone} argent sans contrepartie, soumis à acceptation explicite`:undefined)],review:[r('meeting-payment','Paiement',`${q.paid} argent`,q.forgone?`${q.forgone} argent abandonné explicitement`:undefined)],command:acceptShortfall=>({type:'caravan-meeting-trade',groupId:id,lines,quote:q.signature,acceptShortfall})};
+  }};
+ };
+ const back=()=>{try{if(liveTradeScope()===openedScope){const record=groupRow(id);if(record.pending261||record.pendingEntry263){show(encounterPage(record));return;}}}catch{/* The decision ended. */}rootPage();};
+ openWorldTrade({id:`meeting-trade-${id}`,title:'Commerce de rencontre',prefix:'meeting',goodPrefix:'meeting-good',verifyId:'meeting-quote',confirmId:'meeting-confirm',confirmTitle:'Confirmer le commerce',mode:'mixed',sourceLabel:'Caravane',partnerLabel:'Marchand',read,back});
 }
 
 /** Root may give this page priority over any ordinary panel. No UI close resumes it. */
@@ -331,12 +429,17 @@ function commercialEditor():void {
  ],[b('commercial-preview','Vérifier le chargement',()=>{const current=local(),p=current.pawns.find(p=>p.id===pawnId),food=current.piles.find(p=>p.id===foodId),lines=quantities(cargo),reserved=reservedSourcesByPile(current);if(!p||scoutEligible(current,p)!==null||commercialPreparationReason(current,p)!==null||!food||food.owner.type!=='ground'||food.item!=='survival-meal'||food.quantity-(reserved.get(food.id)??0)<quantity||food.foodPoison)throw Error('La personne ou les rations ne sont plus disponibles.');if(silver===0&&!lines.length)throw Error('Embarquez de l’argent ou des textiles.');const mass=previewCommercialLoading(current,p,quantity,silver,lines.length?lines:undefined);if(!mass||mass.grams>mass.capacityGrams)throw Error('La charge ou les possessions ne sont pas admissibles.');confirm('commercial-confirm','Confirmer le voyage',[r('commercial-load','Charge prévue',`${kg(mass.grams)} / ${kg(mass.capacityGrams)}`),r('commercial-money','Argent',String(silver)),r('commercial-rations','Repas de survie',String(quantity))],async()=>{const w=local(),pawn=w.pawns.find(q=>q.id===p.id),checked=pawn&&previewCommercialLoading(w,pawn,quantity,silver,lines.length?lines:undefined);if(!pawn||scoutEligible(w,pawn)!==null||commercialPreparationReason(w,pawn)!==null||!checked||checked.grams>checked.capacityGrams)throw Error('La situation du départ a changé.');await send({type:'commercial-start',pawnId:p.id,foodPileId:food.id,quantity,silver,...lines.length?{cargo:lines}:{}});},rootPage);})]);};show(make());
 }
 async function individualTrade(direction:'buy'|'sell'):Promise<void>{
- await pause();const values=new Map<number,number>(),quote=(lines:CommercialBuyLine[])=>direction==='buy'?quoteCommercial(local(),lines):quoteCommercialSell(local(),lines);
- const make=():NativePage=>{const q=quote([]);if(!q.ok)throw Error(q.reason);return page(`individual-${direction}`,direction==='buy'?'Achats individuels':'Ventes individuelles',[
-  r('individual-trade-help','Paniers successifs',undefined,'Les achats et ventes sont arrondis et confirmés séparément. Les stocks et fonds du poste restent finis.'),
-   ...q.goods.map(g=>numberRow(`individual-good-${g.pileId}`,ITEM_DEFINITIONS[g.item].label,values.get(g.pileId)??0,n=>{values.set(g.pileId,n);show(make());},0,g.available,`${g.available} disponibles · ${g.unitPrice} argent/unité`)),
-   ...individualDraftRows(direction,quantities(values)),
- ],[b('individual-trade-check','Vérifier le panier',()=>{const lines=quantities(values);if(!lines.length)throw Error('Choisissez au moins un bien.');const q=quote(lines);if(!q.ok)throw Error(q.reason);confirm('individual-trade-confirm','Confirmer l’échange',[r('individual-total','Total',`${q.totalSilver} argent`,`${q.remainingSilver} argent portés après l’échange`),r('individual-mass','Charge finale',`${kg(q.mass.grams)} / ${kg(q.mass.capacityGrams)}`)],async()=>{const checked=quote(lines);if(!checked.ok||checked.signature!==q.signature)throw Error('Le panier ou ses propriétaires ont changé.');await send({type:direction==='buy'?'commercial-buy':'commercial-sell',lines,quote:q.signature});},rootPage);})]);};show(make());
+ const openedScope=await pauseForTrade();
+ const read=():WorldTradeView=>{
+  const live=liveTradeScope(),world=local(),trip=world.commercialTrip,post=world.civilianPost,quote=(lines:CommercialBuyLine[])=>direction==='buy'?quoteCommercial(world,lines):quoteCommercialSell(world,lines),base=quote([]);
+  if(!base.ok)throw Error(base.reason);if(live!==openedScope||trip?.phase!=='at-post'||!post)throw Error('Le voyageur n’est plus au comptoir.');
+  const identity=JSON.stringify([live,campaignUIFacts(world)?.activeMapId,trip.pawn.id,trip.startedAt,trip.arrivedAt,trip.decisionUntil,post.generation]),piles=new Map((direction==='buy'?post.stock:trip.items).map(pile=>[pile.id,pile]));
+  return {identity,navigation:[r('individual-trade-help',trip.pawn.name,`Voyageur ${worldTradeAmount(cash(trip.items,trip.pawn.id))} argent · poste ${worldTradeAmount(postCash(post.stock))} argent`,'Les achats et ventes sont arrondis et confirmés séparément. Les stocks et fonds du poste restent finis.')],goods:base.goods.map(good=>{const pile=piles.get(good.pileId);if(!pile)throw Error('Le lot commercial est absent.');return worldTradeGood(pile,direction,good.available,good.unitPrice);}),quote:lines=>{
+   const q=quote(lines);if(!q.ok)return q;
+   return {ok:true,signature:q.signature,preview:[r('individual-draft-total','Total du panier',`${q.totalSilver} argent`,`${q.remainingSilver} argent après l’échange`),r('individual-draft-mass','Charge après l’échange',`${kg(q.mass.grams)} / ${kg(q.mass.capacityGrams)}`)],review:[r('individual-total','Total',`${q.totalSilver} argent`,`${q.remainingSilver} argent portés après l’échange`),r('individual-mass','Charge finale',`${kg(q.mass.grams)} / ${kg(q.mass.capacityGrams)}`)],command:()=>({type:direction==='buy'?'commercial-buy':'commercial-sell',lines,quote:q.signature})};
+  }};
+ };
+ openWorldTrade({id:`individual-${direction}`,title:direction==='buy'?'Achats individuels':'Ventes individuelles',prefix:'individual',goodPrefix:'individual-good',verifyId:'individual-trade-check',confirmId:'individual-trade-confirm',confirmTitle:'Confirmer l’échange',mode:direction,sourceLabel:'Voyageur',partnerLabel:'Comptoir',read,back:rootPage});
 }
 function individualRows():NativeRow[]{
  const w=state?.world;if(!w)return [r('individual-no-map','Voyages individuels','Affichez une carte locale pour préparer un départ.')];
@@ -404,7 +507,12 @@ function update(next:NativeUiState,callbacks:NativeUiActions):void {
  if(campaignIdentity!==key||input&&input.tick<lastTick){campaignIdentity=key;scope=`${key}:${++scopeRevision}`;formation=undefined;selectedTile=undefined;}lastTick=input?.tick??-1;
  const jumpIdentity=[next.epoch,scope].join(':');if(worldJumpIdentity!==jumpIdentity){worldJumpIdentity=jumpIdentity;worldJumpKey='';}
 }
-export function syncNativeWorldState(next:NativeUiState,callbacks:NativeUiActions):void {update(next,callbacks);}
+export function syncNativeWorldState(next:NativeUiState,callbacks:NativeUiActions):void {
+ const tick=(next.world??next.campaign)?.tick;
+ const changed=next.world!==state?.world||next.campaign!==state?.campaign||next.epoch!==state?.epoch||next.speed!==state?.speed||next.busy!==state?.busy||next.fault!==state?.fault||deliverySyncRevision!==next.publicationRevision||deliverySyncTick!==tick;
+ deliverySyncRevision=next.publicationRevision;deliverySyncTick=tick;
+ update(next,callbacks);if(changed)activeDelivery?.refresh();
+}
 /** Main has already checked the authoritative settlement-arrival notice.
  * Resolve its actual group again; opening the dossier never selects a basket
  * or sends an order, and a group that has since left keeps the current page. */
@@ -492,11 +600,15 @@ function factionBrowserGuard<T extends unknown[]>(next:NativeUiState,callbacks:N
  const identity=factionBrowserIdentity(next);
  return (...args)=>{const fresh=callbacks.readState?.()??state;if(!fresh||fresh.busy||factionBrowserIdentity(fresh)!==identity)return;update(fresh,callbacks);return run(fresh,...args);};
 }
-function factionRelationFact(registry:NativeFactionRegistry,faction:NativeFaction):{label:string;goodwill:number|undefined} {
- if(faction.id===registry.playerFactionId)return{label:'Votre faction',goodwill:undefined};
+function factionRelationFact(registry:NativeFactionRegistry,faction:NativeFaction):{label:string;goodwill:number|undefined;kind:NonNullable<NativeRow['factionEntry']>['relation']} {
+ if(faction.id===registry.playerFactionId)return{label:'Votre faction',goodwill:undefined,kind:'your'};
  const relation=registry.relations.find(value=>value.aId===Math.min(faction.id,registry.playerFactionId)&&value.bId===Math.max(faction.id,registry.playerFactionId));
- return relation?{label:({hostile:'Hostile',neutral:'Neutre',ally:'Alliée'} as const)[relation.kind]+' · '+(relation.goodwill>0?'+':'')+relation.goodwill,goodwill:relation.goodwill}:{label:'Relation inconnue',goodwill:undefined};
+ return relation?{label:({hostile:'Hostile',neutral:'Neutre',ally:'Alliée'} as const)[relation.kind]+' · '+(relation.goodwill>0?'+':'')+relation.goodwill,goodwill:relation.goodwill,kind:relation.kind}:{label:'Relation inconnue',goodwill:undefined,kind:'unknown'};
 }
+function factionNaturalGoodwill(registry:NativeFactionRegistry,faction:NativeFaction):number|undefined{
+ return faction.id===registry.playerFactionId||WORLD_FACTION_DEFINITIONS_256[faction.def].permanentEnemy?undefined:worldNaturalGoodwill274(faction);
+}
+const factionSigned=(value:number|undefined)=>value===undefined?'—':(value>0?'+':'')+value;
 function factionDossier(next:NativeUiState,callbacks:NativeUiActions,id:number):void {
  const registry=(next.world??next.campaign)?.worldFactions,faction=registry?.factions.find(value=>value.id===id&&!value.hidden);if(!registry||!faction)return;
  const relation=factionRelationFact(registry,faction),leader=registry.leaders.find(value=>value.factionId===id),settlements=registry.settlements.filter(value=>value.factionId===id);
@@ -504,6 +616,8 @@ function factionDossier(next:NativeUiState,callbacks:NativeUiActions,id:number):
  const rows:NativeRow[]=[
   {...r('faction-detail-type','Type',factionTypeLabel(faction.def),factionDescription(faction.def)??faction.def),presentation:'plain',compact:true},
   {...r('faction-detail-relation','Relations',relation.label),presentation:'plain',compact:true},
+  {...r('faction-detail-natural','Bonne volonté naturelle',factionSigned(factionNaturalGoodwill(registry,faction)),
+    'Cible naturelle de la relation, distincte de la bonne volonté actuelle.'),presentation:'plain',compact:true},
   {...r('faction-detail-leader',factionLeaderTitle(faction.def,'Dirigeant',(leader?.pawn as {appearance?:{sex:'male'|'female'}}|undefined)?.appearance?.sex),leader?.pawn.name??'Non enregistré'),presentation:'plain',compact:true},
   {...r('faction-detail-status','État',faction.lifecycle259?.defeated?'Vaincue':faction.lifecycle259?.temporary?'Temporaire':faction.lifecycle259?'Persistante':'Non enregistré'),presentation:'plain',compact:true},
   {id:'faction-detail-settlements',label:'Établissements · '+settlements.length,emphasis:'heading',presentation:'plain',compact:true},
@@ -526,11 +640,17 @@ export function buildNativeFactions(next:NativeUiState,callbacks:NativeUiActions
  if(!input)return{id:'factions',title:'Factions',rows:[r('factions-no-game','Aucune partie active.')],onClose:close};
  if(!registry)return{id:'factions',title:'Factions',rows:[r('factions-empty','Cette partie ne possède pas de registre de factions.')],onClose:close};
  const refresh=factionBrowserGuard(next,callbacks,fresh=>show(buildNativeFactions(fresh,callbacks)));
- const all=registry.factions.filter(faction=>!faction.hidden).map(faction=>{
-  const relation=factionRelationFact(registry,faction),leader=registry.leaders.find(value=>value.factionId===faction.id)?.pawn.name,settlements=registry.settlements.filter(value=>value.factionId===faction.id);
+ const factions=registry.factions.filter(faction=>!faction.hidden),hostilities=new Map<number,Set<number>>();
+ for(const relation of registry.relations)if(relation.kind==='hostile'){
+  for(const [a,b] of [[relation.aId,relation.bId],[relation.bId,relation.aId]] as const){
+   let enemies=hostilities.get(a);if(!enemies)hostilities.set(a,enemies=new Set());enemies.add(b);
+  }
+ }
+ const all=factions.map(faction=>{
+  const relation=factionRelationFact(registry,faction),leader=registry.leaders.find(value=>value.factionId===faction.id)?.pawn,settlements=registry.settlements.filter(value=>value.factionId===faction.id);
   return{faction,relation,leader,settlements};
  });
- const needle=factionSearchText(factionBrowser.search.trim()),visible=all.filter(value=>!needle||factionSearchText([value.faction.name,value.faction.def,factionTypeLabel(value.faction.def),value.relation.label,value.leader??'',...value.settlements.map(settlement=>settlement.name)].join(' ')).includes(needle));
+ const needle=factionSearchText(factionBrowser.search.trim()),visible=all.filter(value=>!needle||factionSearchText([value.faction.name,value.faction.def,factionTypeLabel(value.faction.def),value.relation.label,value.leader?.name??'',...value.settlements.map(settlement=>settlement.name)].join(' ')).includes(needle));
  visible.sort((a,b)=>{
   const compare=factionBrowser.sort==='settlements'?b.settlements.length-a.settlements.length:factionBrowser.sort==='relation'?(b.relation.goodwill??-Infinity)-(a.relation.goodwill??-Infinity):0;
   return (Number.isNaN(compare)?0:compare)||a.faction.name.localeCompare(b.faction.name,'fr',{numeric:true})||a.faction.id-b.faction.id;
@@ -539,13 +659,21 @@ export function buildNativeFactions(next:NativeUiState,callbacks:NativeUiActions
   {id:'factions-search',label:'Rechercher',region:'navigation',presentation:'plain',compact:true,input:{value:factionBrowser.search,placeholder:'Faction, dirigeant ou établissement…',maxLength:160,onCommit:factionBrowserGuard(next,callbacks,(_fresh,value:string)=>{factionBrowser.search=value;refresh();})}},
   {id:'factions-sort',label:'Trier',region:'navigation',presentation:'plain',compact:true,controls:([['name','Nom'],['relation','Relations'],['settlements','Établissements']] as const).map(([sort,label])=>b('factions-sort-'+sort,label,factionBrowserGuard(next,callbacks,()=>{factionBrowser.sort=sort;refresh();}),{active:factionBrowser.sort===sort}))},
   {id:'factions-count',label:'Factions',value:visible.length+' / '+all.length,region:'navigation',presentation:'plain',compact:true},
-  {id:'factions-heading',label:'Faction',columns:[{label:'Type'},{label:'Relations'},{label:'Dirigeant'},{label:'Établissements'},{label:'État'},{label:'Dossier'}],compact:true},
+  {id:'factions-heading',label:'Faction · type · dirigeant',columns:[{label:'Info',hint:'Dossier de la faction'},{label:''},{label:'Relations'},
+   {label:'Cible',hint:'Bonne volonté naturelle'},{label:'Ennemis',hint:'Autres factions visibles actuellement hostiles'},{label:'Sites',hint:'Établissements enregistrés'},{label:'État'}],compact:true},
  ];
  for(const value of visible){
   const faction=value.faction,open=factionBrowserGuard(next,callbacks,fresh=>factionDossier(fresh,callbacks,faction.id));
-  const facts=[factionTypeLabel(faction.def),value.relation.label,value.leader??'Non enregistré',String(value.settlements.length),faction.lifecycle259?.defeated?'Vaincue':faction.lifecycle259?.temporary?'Temporaire':faction.lifecycle259?'Persistante':'Non enregistré','Ouvrir'];
-  rows.push({id:'faction-'+faction.id,label:faction.name,compact:true,controls:facts.map((label,index)=>b('faction-'+faction.id+'-field-'+index,label,open,{hint:index===0?factionDescription(faction.def)??faction.def:'Ouvrir le dossier de '+faction.name}))});
+  const naturalGoodwill=factionNaturalGoodwill(registry,faction),enemies=factions.filter(other=>other.id!==registry.playerFactionId&&hostilities.get(faction.id)?.has(other.id))
+   .map(other=>({id:other.id,name:other.name,color:nativeFactionColor(other.def,other.colorFromSpectrum)}));
+  const facts=[factionTypeLabel(faction.def),value.relation.label,value.leader?.name??'Non enregistré',String(value.settlements.length),faction.lifecycle259?.defeated?'Vaincue':faction.lifecycle259?.temporary?'Temporaire':faction.lifecycle259?'Persistante':'Non enregistré','Ouvrir',factionSigned(naturalGoodwill),enemies.map(other=>other.name).join(', ')||'Aucun'];
+  const hints=[factionDescription(faction.def)??faction.def,value.relation.label,'Ouvrir le dossier de '+faction.name,'Établissements : '+facts[3],
+   facts[4],'Ouvrir le dossier de '+faction.name,'Bonne volonté naturelle : '+facts[6],'Ennemis : '+facts[7]];
+  rows.push({id:'faction-'+faction.id,label:faction.name,compact:true,
+   factionEntry:{color:nativeFactionColor(faction.def,faction.colorFromSpectrum),leaderTitle:factionLeaderTitle(faction.def,'Dirigeant',(value.leader as {appearance?:{sex:'male'|'female'}}|undefined)?.appearance?.sex),
+    relation:value.relation.kind,goodwill:value.relation.goodwill,permanentEnemy:WORLD_FACTION_DEFINITIONS_256[faction.def].permanentEnemy,naturalGoodwill,enemies},
+   controls:facts.map((label,index)=>b('faction-'+faction.id+'-field-'+index,label,open,{hint:hints[index],...index===5?{icon:'information'}:{}}))});
  }
  if(!visible.length)rows.push({id:'factions-search-empty',label:'Aucune faction ne correspond à la recherche.',presentation:'plain',compact:true});
- return{id:'factions',title:'Factions',contentKey:JSON.stringify([identity,factionBrowser.search,factionBrowser.sort]),layout:'table',tableProfile:'factions',width:1280,rows,actions:[b('factions-back','Retour',close)],onClose:close};
+ return{id:'factions',title:'Factions',contentKey:JSON.stringify([identity,factionBrowser.search,factionBrowser.sort]),layout:'table',tableProfile:'factions',width:NATIVE_FACTIONS.width,height:NATIVE_FACTIONS.height,rows,actions:[b('factions-back','Retour',close)],onClose:close};
 }

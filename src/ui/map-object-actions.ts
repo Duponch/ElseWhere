@@ -1,5 +1,9 @@
 import {isSchema256Or257} from '../sim/schema-compatibility-257.ts';
 import {materialAllowedForPlayer256} from '../sim/material-permission-256';
+import {eggSpeciesForItem256} from '../sim/animal-egg-content-v256';
+import {eggAllowedForPlayer256} from '../sim/animal-egg-permission-v256';
+import {targetBuildingPlayerUse263} from '../sim/world-target-building-263';
+import {actualDeviceSwitch,canFlickDevice} from '../sim/power-flick';
 import {roadPropCanClaim256,roadPropCanDeconstruct256} from '../sim/local-road-prop-ownership-256';
 import { footprintCells } from '../sim/definitions';
 import { stripInspectorAction351 } from '../sim/strip-351';
@@ -13,7 +17,7 @@ import type { Cell, Command, Job, MaterialPile, Resource, Structure, World } fro
 import { mapObjectCells, type MapObjectSelection } from './map-object-selection';
 import { mapObjectGroupCells } from './map-object-group-selection';
 
-export type MapObjectActionId = 'strip' | 'material-permission' | 'claim' | 'mine' | 'smooth-wall' |'chop' | 'harvest' | 'cut' | 'haul-chunks' | 'deconstruct' | 'cancel' | 'extract' | 'replant';
+export type MapObjectActionId = 'strip' | 'material-permission' | 'power-toggle' | 'claim' | 'mine' | 'smooth-wall' |'chop' | 'harvest' | 'cut' | 'haul-chunks' | 'deconstruct' | 'cancel' | 'extract' | 'replant';
 export interface MapObjectAction { id: MapObjectActionId; label: string; command?: Command; placementPileId?:number }
 export interface MapObjectGroupAction { id: MapObjectActionId; label: string; commands: Command[] }
 const same = (a: Cell, b: Cell) => a.x === b.x && a.z === b.z;
@@ -24,8 +28,34 @@ interface GroupLookups {
   firstResources?: Map<string, Resource>;
   piles?: Map<number, MaterialPile>;
   structures?: Map<number, Structure>;
+  flicks?: Map<number, boolean>;
+  removing?: Set<number>;
 }
 const cellKey = (cell: Cell) => `${cell.x}:${cell.z}`;
+
+interface ToggleFact {active:boolean;command:(active:boolean)=>Command}
+/** CompFlickable's gizmo reflects the requested switch, not the energized
+ * circuit nor the physical switch awaiting a colonist. A second click/key
+ * therefore cancels the outstanding designation instead of repeating it. */
+export function requestedPowerToggle(world:World,structure:Structure,lookups?:GroupLookups):ToggleFact|undefined {
+  if(!targetBuildingPlayerUse263(world,structure)||!canFlickDevice(structure)||structure.kind==='vent'&&world.schemaVersion<244)return;
+  const blocked=lookups?.removing?lookups.removing.has(structure.id):world.jobs.some(j=>(j.deconstruction?.structureId??j.furniture?.structureId)===structure.id);
+  if(blocked)return;
+  const pending=lookups?.flicks?lookups.flicks.get(structure.id):world.jobs.find(j=>j.flick?.structureId===structure.id)?.flick?.on;
+  return {active:pending??actualDeviceSwitch(structure),command:on=>({type:'power-flick',structureId:structure.id,on})};
+}
+function permissionToggle(world:World,object:MapObjectSelection,lookups:GroupLookups):ToggleFact|undefined {
+  if(object.kind==='structure'){
+    const s=lookups.structures?.get(object.id);if(!s?.door||!targetBuildingPlayerUse263(world,s))return;
+    return {active:!s.door.forbidden,command:active=>({type:'door-policy',structureId:s.id,setting:'forbidden',value:!active})};
+  }
+  if(object.kind!=='pile')return;
+  const pile=lookups.piles?.get(object.id);if(!pile||pile.owner.type!=='ground')return;
+  if(pile.apparel)return {active:!pile.apparel.forbidden,command:allowed=>({type:'apparel-permission',itemId:pile.id,allowed})};
+  if(pile.weapon)return {active:!pile.weapon.forbidden,command:allowed=>({type:'weapon-permission',itemId:pile.id,allowed})};
+  if(world.schemaVersion>=256&&eggSpeciesForItem256(pile.item))return {active:eggAllowedForPlayer256(pile),command:active=>({type:'egg-forbid',pileId:pile.id,forbidden:!active})};
+  if(isSchema256Or257(world.schemaVersion))return {active:materialAllowedForPlayer256(pile),command:active=>({type:'material-forbid',pileId:pile.id,forbidden:!active})};
+}
 
 /** A presentation offer, never command authority. Worker execution rechecks
  * eligibility, ownership and conservative drops against its current World.
@@ -122,21 +152,39 @@ export function mapObjectGroupActions(world: World, selected: readonly MapObject
   if (structures.size) {
     lookups.structures = new Map();
     for (const structure of world.structures) if (structures.has(structure.id) && !lookups.structures.has(structure.id)) lookups.structures.set(structure.id, structure);
+    lookups.flicks=new Map();lookups.removing=new Set();for(const job of world.jobs){if(job.flick&&structures.has(job.flick.structureId))lookups.flicks.set(job.flick.structureId,job.flick.on);const removing=job.deconstruction?.structureId??job.furniture?.structureId;if(removing!==undefined&&structures.has(removing))lookups.removing.add(removing);}
   }
-  for (let index = 0; index < objects.length; index++) for (const action of actionsFor(world, objects[index]!, cells[index]!, lookups)) {
-    if(!action.command)continue;
+  const permissions=new Map<string,ToggleFact>(),power=new Map<string,ToggleFact>();
+  for (let index = 0; index < objects.length; index++) {
+   const object=objects[index]!,key=`${object.kind}:${object.id}`;if(cells[index]!.length){const permit=permissionToggle(world,object,lookups);if(permit)permissions.set(key,permit);if(object.kind==='structure'){const structure=lookups.structures?.get(object.id),flick=structure&&requestedPowerToggle(world,structure,lookups);if(flick)power.set(key,flick);}}
+   for (const action of actionsFor(world, object, cells[index]!, lookups)) {
+    if(!action.command||action.id==='material-permission')continue;
     const key = JSON.stringify(action.command);
     if (seen.has(key)) continue;
     seen.add(key);
     const group = groups.get(action.id);
     if (group) {
-      const first=group.commands[0];
-      // actionsFor creates this envelope locally; normalize before exposure.
-      if(action.id==='material-permission'&&first?.type==='material-forbid'&&action.command.type==='material-forbid')action.command.forbidden=first.forbidden;
       group.commands.push(action.command);
       if(group.label!==action.label)group.label=action.id==='deconstruct'?'Déconstruire':action.id==='cut'?'Couper':group.label;
     }
     else groups.set(action.id, { id: action.id, label: action.label, commands: [action.command] });
+   }
+  }
+  // Command_Toggle.activateIfAmbiguous: CompForbiddable explicitly selects
+  // the active (allowed) gizmo, whereas CompFlickable prefers the inactive
+  // (requested off) state. The other toggles inherit only if their state
+  // agrees; hence only changed targets receive a command, independent of order.
+  for(const [id,facts,activateIfMixed] of [['material-permission',permissions,false],['power-toggle',power,true]] as const){
+    const values=[...facts.values()];if(!values.length)continue;
+    const desired=activateIfMixed?values.some(fact=>!fact.active):!values.some(fact=>fact.active);
+    groups.set(id,{id,label:id==='material-permission'?(desired?'Autoriser':'Interdire'):(desired?'Demander la mise en marche / ouverture':'Demander l’arrêt / fermeture'),commands:values.filter(fact=>fact.active!==desired).map(fact=>fact.command(desired))});
   }
   return [...groups.values()];
+}
+
+/** Reverse designators and grouped toggle gizmos, not global placement
+ * modes. The caller must own the visible inspector and an actual selection. */
+export function mapSelectionShortcut(world:World,selected:readonly MapObjectSelection[],key:string):MapObjectGroupAction|undefined {
+  const letter=key.toLowerCase(),id=letter==='f'?'material-permission':letter==='v'?'power-toggle':letter==='c'?'cancel':letter==='x'?'deconstruct':undefined;
+  return id?mapObjectGroupActions(world,selected).find(action=>action.id===id):undefined;
 }

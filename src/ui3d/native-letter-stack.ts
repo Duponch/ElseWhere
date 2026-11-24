@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {NATIVE_TEXT} from './native-ui-scale';
-import {globalColumn} from './native-hud-rimworld';
+import {globalColumn,NATIVE_VIEW_ACTIONS} from './native-hud-rimworld';
 import type {World} from '../sim/types';
 import {BUNDLE_LETTER_COLOR_352, LETTER_CLASSES_352, isSchema352OrLater, letterStackRows352, stackLetters352, type Letter352} from '../sim/letters-352';
 import {PALETTE, drawHandRect, type CardboardPiece, type PrototypeCardboardArt} from './prototype-art';
@@ -31,7 +31,7 @@ const FONT='"Comic Sans MS", "Chalkboard SE", Georgia, serif';
 export const LETTER_ROW_PX=30,LETTER_SPACING_PX=12;
 const ICON_PX=38,LABEL_MAX_PX=210,FALL_SECONDS=1,FALL_PX=200;
 /** Bottom of the stack: just above the weather card of the time board. */
-const BASE_Y=globalColumn(6).lettersBase/100;
+const BASE_Y=globalColumn(NATIVE_VIEW_ACTIONS.length).lettersBase/100;
 
 export class NativeLetterStack {
   private cards:LetterCard[]=[];

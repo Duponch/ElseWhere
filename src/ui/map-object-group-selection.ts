@@ -7,6 +7,7 @@ import { mapObjectCells, mapResourceSelectable, sameMapObject, type MapObjectSel
 import { selectedMapJob296, selectableMapJobs296 } from './wall-door-selection-296';
 import {resourceNeverMultiSelect4871} from './map-plant-multiselect-facts';
 import {NEVER_MULTI_SELECT_STRUCTURES} from './map-object-rectangle';
+import {stockpileZoneId} from '../sim/stockpile-zones';
 
 /** Installed Core 1.6 Selector.MaxNumSelected, not a world-distance radius. */
 export const MAX_MAP_OBJECT_SELECTION = 200;
@@ -17,6 +18,51 @@ const playerDefinition=(definition:string):Identity=>({definition,faction:'colon
 const naturalDefinition=(definition:string):Identity=>({definition,faction:null});
 const sameIdentity=(a:Identity,b:Identity)=>a.definition===b.definition&&a.faction===b.faction;
 const cellOf=(cell:Cell):Cell=>({x:cell.x,z:cell.z});
+
+/** Local selections representing Core Zone objects, including storage cells. */
+export function isMapZoneSelection(target:MapObjectSelection):boolean {
+  return target.kind==='growing'||target.kind==='stockpile';
+}
+
+/** Adoption of a rectangle/double-click group. Shift adds without toggling;
+ * entering/leaving zone selection clears the previous family before the cap.
+ * Storage cells retain physical IDs, but share their logical Zone identity.
+ * The earlier Thing/Plan merge behavior is retained outside this zone change. */
+export function mergeMapObjectGroups(world:GeyserWorld256,current:readonly MapObjectSelection[],incoming:readonly MapObjectSelection[],additive:boolean):MapObjectSelection[] {
+  const storageZones=new Map(world.stockpiles.map(cell=>[cell.id,stockpileZoneId(cell)]));
+  const key=(selected:MapObjectSelection)=>`${selected.kind}:${selected.kind==='stockpile'?storageZones.get(selected.id)??selected.id:selected.id}`;
+  const merged:MapObjectSelection[]=[],seen=new Set<string>();
+  const add=(selected:MapObjectSelection)=>{
+    if(merged.length&&isMapZoneSelection(merged[0]!)!==isMapZoneSelection(selected)){merged.length=0;seen.clear();}
+    const identity=key(selected);
+    if(!seen.has(identity)&&merged.length<MAX_MAP_OBJECT_SELECTION){seen.add(identity);merged.push(selected);}
+  };
+  if(additive)for(const selected of current)add(selected);
+  for(const selected of incoming)add(selected);
+  return merged;
+}
+
+/** Zone_Growing.IsMultiselectable is true; Zone_Stockpile inherits the false
+ * Zone default. Runtime class equality ignores crop and sow/cut settings. */
+function matchingMapZones(world:GeyserWorld256,target:MapObjectSelection,visibleCell:(cell:Cell)=>boolean):MapObjectSelection[] {
+  const visible:Array<{selected:MapObjectSelection;firstCell:number}>=[];
+  const firstVisible=(cells:Iterable<Cell>):number=>{
+    let first=Infinity;
+    for(const cell of cells)if(knownPosition256(world,cell)&&visibleCell(cell))first=Math.min(first,cell.z*world.width+cell.x);
+    return first;
+  };
+  if(target.kind==='growing') {
+    for(const zone of world.growingZones) {
+      // A basin's local sowing policy represents Building_PlantGrower, not Zone_Growing.
+      if(zone.basinId!==undefined)continue;
+      const firstCell=firstVisible(zone.cells.map(index=>({x:index%world.width,z:Math.floor(index/world.width)})));
+      if(Number.isFinite(firstCell))visible.push({selected:zone.id===target.id?target:{kind:'growing',id:zone.id},firstCell});
+    }
+  }
+  if(!visible.some(candidate=>sameMapObject(candidate.selected,target)))return [];
+  visible.sort((a,b)=>Number(sameMapObject(b.selected,target))-Number(sameMapObject(a.selected,target))||a.firstCell-b.firstCell);
+  return visible.slice(0,MAX_MAP_OBJECT_SELECTION).map(candidate=>candidate.selected);
+}
 
 function pileIdentity(pile:MaterialPile):Identity {
   // Stuff is encoded in textile ItemIds locally, but is not part of Core's
@@ -59,7 +105,7 @@ function targetIdentity(world:GeyserWorld256,target:MapObjectSelection):Identity
  * Singleselect/selectable flags and the physical candidate order are unchanged.
  */
 export function mapObjectGroupTarget(world:GeyserWorld256,underMouse:readonly MapObjectSelection[]):MapObjectSelection|undefined {
-  return underMouse.find(target=>{
+  const thing=underMouse.find(target=>{
     // Core Selector.SelectAllMatchingObjectUnderMouseOnScreen skips the
     // neverMultiSelect things: natural rock (RockBase), walls, fences,
     // conduits, sandbags, barricades and the hopper.
@@ -71,10 +117,12 @@ export function mapObjectGroupTarget(world:GeyserWorld256,underMouse:readonly Ma
     }
     return !!targetIdentity(world,target)&&mapObjectCells(world,target).length>0;
   });
+  return thing??underMouse.find(target=>target.kind==='growing'&&world.growingZones.some(zone=>zone.id===target.id&&zone.basinId===undefined)&&mapObjectCells(world,target).length>0);
 }
 
 /**
- * Same physical ThingDef/faction on the current screen, up to Core's 200 cap.
+ * Same physical ThingDef/faction, or multiselectable Zone class, on the
+ * current screen, up to Core's 200 cap.
  * The renderer supplies its camera/viewport test; there is no circular radius.
  * Installed and ground-minified furniture share their inner definition. Stuff,
  * quality, damage, rotation and stack size do not discriminate the group.
@@ -83,6 +131,7 @@ export function mapObjectGroupTarget(world:GeyserWorld256,underMouse:readonly Ma
  * explicit local behavior, not a new claim of exhaustive Core equivalence.
  */
 export function matchingMapObjects(world:GeyserWorld256,target:MapObjectSelection,visibleCell:(cell:Cell)=>boolean):MapObjectSelection[] {
+  if(isMapZoneSelection(target))return matchingMapZones(world,target,visibleCell);
   if(target.kind==='resource'){
     const resource=world.resources.find(value=>value.id===target.id);
     if(!resource||resourceNeverMultiSelect4871(resource))return [];

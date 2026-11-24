@@ -7,6 +7,9 @@ export interface MapLabelEntry {
   readonly y: number;
   readonly z: number;
   readonly label: string;
+  /** Optional sRGB ink for a dedicated tinted annotation batch. Ordinary
+   * inventory labels keep the original atlas and vertex layout. */
+  readonly color?:number;
   /** CSS pixels below the anchor, fixed when the label data changes. */
   readonly offsetY?: number;
 }
@@ -57,7 +60,7 @@ function makeAtlas(): { map: THREE.Texture; glyphs: ReadonlyMap<string, Glyph> }
   return { map, glyphs };
 }
 
-function geometryFor(capacity: number): THREE.InstancedBufferGeometry {
+function geometryFor(capacity: number,tinted=false): THREE.InstancedBufferGeometry {
   const geometry = new THREE.InstancedBufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute([-.5, -.5, 0, .5, -.5, 0, -.5, .5, 0, .5, .5, 0], 3));
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
@@ -66,6 +69,7 @@ function geometryFor(capacity: number): THREE.InstancedBufferGeometry {
   geometry.setAttribute('labelAnchor', new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.StaticDrawUsage));
   geometry.setAttribute('labelOffset', new THREE.InstancedBufferAttribute(new Float32Array(capacity * 2), 2).setUsage(THREE.StaticDrawUsage));
   geometry.setAttribute('labelGlyph', new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(THREE.StaticDrawUsage));
+  if(tinted)geometry.setAttribute('labelTint',new THREE.InstancedBufferAttribute(new Float32Array(capacity*3),3).setUsage(THREE.StaticDrawUsage));
   geometry.instanceCount = 0;
   return geometry;
 }
@@ -86,9 +90,11 @@ export class MapLabelBatch {
   private revision = 0;
   private allowed = false;
   private disposed = false;
+  private readonly tinted:boolean;
 
-  constructor() {
-    const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthTest: true, depthWrite: false, alphaTest: .01, fog: false, toneMapped: false });
+  constructor(options:{tinted?:boolean;aboveWorld?:boolean}={}) {
+    this.tinted=!!options.tinted;
+    const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthTest: !options.aboveWorld, depthWrite: false, alphaTest: .01, fog: false, toneMapped: false });
     material.lights = false;
     // Entries already passed knownPile/knownPosition. The generic material
     // binder must not derive an owner from this screen-facing quad's vertices.
@@ -108,8 +114,9 @@ export class MapLabelBatch {
     const glyph = attribute('labelGlyph', 'float');
     const atlasUv = vec2(uv().x.add(glyph.mod(ATLAS_COLUMNS)).div(ATLAS_COLUMNS),
       uv().y.add(glyph.div(ATLAS_COLUMNS).floor().negate().add(ATLAS_ROWS - 1)).div(ATLAS_ROWS));
-    material.colorNode = texture(this.atlas.map, atlasUv);
-    this.mesh = new THREE.Mesh(geometryFor(this.capacity), material);
+    const ink=texture(this.atlas.map,atlasUv);
+    material.colorNode=this.tinted?vec4(ink.rgb.mul(attribute('labelTint','vec3')),ink.a):ink;
+    this.mesh = new THREE.Mesh(geometryFor(this.capacity,this.tinted), material);
     this.mesh.name = 'map-label-glyphs';
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 6;
@@ -124,7 +131,7 @@ export class MapLabelBatch {
     if (entries.length === this.entries.length && entries.every((entry, index) => {
       const before = this.entries[index]!;
       return entry.x === before.x && entry.y === before.y && entry.z === before.z
-        && entry.label === before.label && (entry.offsetY ?? 0) === (before.offsetY ?? 0);
+        && entry.label === before.label && (entry.offsetY ?? 0) === (before.offsetY ?? 0)&&(!this.tinted||entry.color===before.color);
     })) return;
     this.entries = entries.map(entry => ({ ...entry }));
     let count = 0;
@@ -132,15 +139,17 @@ export class MapLabelBatch {
     if (count > this.capacity) {
       this.capacity = 2 ** Math.ceil(Math.log2(count));
       const previous = this.mesh.geometry;
-      this.mesh.geometry = geometryFor(this.capacity);
+      this.mesh.geometry = geometryFor(this.capacity,this.tinted);
       previous.dispose();
     }
     const positions = this.mesh.geometry.getAttribute('labelAnchor');
     const offsets = this.mesh.geometry.getAttribute('labelOffset');
     const glyphs = this.mesh.geometry.getAttribute('labelGlyph');
+    const colors=this.tinted?this.mesh.geometry.getAttribute('labelTint'):undefined,color=colors?new THREE.Color():undefined;
     const fallback = this.atlas.glyphs.get('?')!;
     let index = 0;
     for (const entry of entries) {
+      if(color)color.setHex(entry.color??0xffffff);
       let width = 0;
       for (const character of entry.label) width += (this.atlas.glyphs.get(character) ?? fallback).advance;
       let cursor = -width / 2;
@@ -150,12 +159,13 @@ export class MapLabelBatch {
           positions.setXYZ(index, entry.x, entry.y, entry.z);
           offsets.setXY(index, cursor + glyph.advance / 2, -(entry.offsetY ?? 0));
           glyphs.setX(index, glyph.index);
+          if(colors&&color)colors.setXYZ(index,color.r,color.g,color.b);
           index++;
         }
         cursor += glyph.advance;
       }
     }
-    if (count > 0) positions.needsUpdate = offsets.needsUpdate = glyphs.needsUpdate = true;
+    if (count > 0){positions.needsUpdate = offsets.needsUpdate = glyphs.needsUpdate = true;if(colors)colors.needsUpdate=true;}
     this.instanceCount = count;
     this.mesh.geometry.instanceCount = count;
     this.mesh.visible = count > 0 && this.allowed;

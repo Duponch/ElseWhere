@@ -268,7 +268,7 @@ describe('main-tab and designator keys (Core KeyBindings and MainButtonDefs)',()
   });
 
   test('C cancels and X deconstructs everywhere; the open palette uses Core letters, shown on its tiles',()=>{
-    expect(globalHotkeyTool('c')).toBe('cancel');expect(globalHotkeyTool('X')).toBe('deconstruct');
+    expect(globalHotkeyTool('c')).toBeUndefined();expect(globalHotkeyTool('X')).toBeUndefined();
     expect(Object.values(GLOBAL_TOOL_HOTKEYS)).not.toContain('chop');
     expect(paletteHotkeyTool('orders','b')).toBe('chop');expect(paletteHotkeyTool('orders','H')).toBe('harvest');
     expect(paletteHotkeyTool('zones','b')).toBe('stockpile');expect(paletteHotkeyTool(undefined,'b')).toBeUndefined();

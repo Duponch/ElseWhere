@@ -1,6 +1,8 @@
 import type {NativePage,NativeRow,NativeControl} from './native-contract';
 import type {SavedColony} from '../ui/game-session';
 import {NAMED_SAVE_KEYS,isNamedSaveKey,isManagedSaveKey,saveLabel} from '../ui/save-slots';
+import {NATIVE_MESSAGE} from './native-dialog-metrics';
+import {NATIVE_FILE_LIST} from './native-front-metrics';
 
 export interface NativeSaveManagerOptions {
   readSaves:()=>readonly SavedColony[];
@@ -22,14 +24,16 @@ type Confirmation={action:'overwrite'|'delete';entry:SavedColony};
 const kindLabels:Readonly<Record<SavedColony['kind'],string>>={
   manual:'Sauvegarde manuelle',recovery:'Colonie précédente',named:'Sauvegarde nommée',auto:'Copie automatique',
 };
+const shortKinds:Readonly<Record<SavedColony['kind'],string>>={manual:'Manuelle',recovery:'Précédente',named:'Nommée',auto:'Automatique'};
 const message=(cause:unknown):string=>cause instanceof Error?cause.message:String(cause);
 const same=(a:SavedColony,b:SavedColony):boolean=>a.key===b.key&&a.label===b.label&&a.detail===b.detail&&a.kind===b.kind&&a.savedAt===b.savedAt&&a.revision===b.revision;
 const metadata=(entry:SavedColony):string=>[kindLabels[entry.kind],entry.savedAt===undefined?'':new Date(entry.savedAt).toLocaleString('fr-FR')].filter(Boolean).join(' · ');
+const fold=(value:string)=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr');
 
 /** Native control data only. All capture, storage, compare-and-set, replacement
  * recovery and strict world validation remain in the supplied GameSession flows. */
 export function createNativeSaveManager(options:NativeSaveManagerOptions):NativeSaveManager {
-  let entries:SavedColony[]=[],selectedKey:string|undefined,nameDraft='';
+  let entries:SavedColony[]=[],selectedKey:string|undefined,nameDraft='',search='';
   let confirmation:Confirmation|undefined;
   let opened=false,disposed=false,pending=false,listingAvailable=false;
   let generation=0,status='',statusIsError=false;
@@ -45,10 +49,11 @@ export function createNativeSaveManager(options:NativeSaveManagerOptions):Native
     opened=false;generation++;confirmation=undefined;options.close();
   }
   function control(id:string,label:string,action:()=>void|Promise<void>,disabled=false,hint?:string,active=false):NativeControl {
+    const token=generation,dialog=confirmation;
     return {id,label,disabled,active,hint,onActivate:async()=>{
-      if(disposed||!opened||disabled)return;
+      if(!alive(token)||disabled||confirmation!==dialog)return;
       try {await action();}
-      catch(cause){if(opened&&!disposed){feedback(message(cause),true);paint();}}
+      catch(cause){if(alive(token)){feedback(message(cause),true);paint();}}
     }};
   }
 
@@ -89,12 +94,12 @@ export function createNativeSaveManager(options:NativeSaveManagerOptions):Native
     // Root may update its cached repository while this native page is open.
     // Re-reading metadata never captures or modifies the active World.
     readOrReport();
-    const locked=unavailable(),target=selected();
+    const locked=unavailable(),target=selected(),token=generation;
     if(confirmation){
-      const captured=confirmation.entry,overwrite=confirmation.action==='overwrite';
+      const dialog=confirmation,captured=dialog.entry,overwrite=dialog.action==='overwrite';
       options.show({
         id:'native-saves-confirm',title:overwrite?'Remplacer cette sauvegarde ?':'Supprimer cette sauvegarde ?',
-        modal:true,closable:!pending,width:7.8,
+        modal:true,closable:!pending,layout:'message',width:NATIVE_MESSAGE.width,height:NATIVE_MESSAGE.height,
         rows:[
           {id:'native-save-confirm-target',label:captured.label,value:metadata(captured),detail:captured.detail},
           {id:'native-save-confirm-consequence',label:overwrite?'La partie actuelle remplacera le contenu de cet emplacement. Le contenu précédent sera perdu.':'Cette copie sera supprimée définitivement.',detail:overwrite?'Le nom de cet emplacement reste celui affiché. Le champ « Nouvelle sauvegarde » ne renomme pas une copie existante.':'Les autres sauvegardes et la partie actuelle sont conservées.'},
@@ -102,42 +107,43 @@ export function createNativeSaveManager(options:NativeSaveManagerOptions):Native
         ],
         actions:[
           control('native-save-confirm-cancel','Annuler',()=>{if(unavailable())return;confirmation=undefined;feedback('');paint();},locked),
-          control('native-save-confirm-apply',overwrite?'Remplacer par la partie actuelle':'Supprimer cette copie',confirmChange,locked),
+          control('native-save-confirm-apply',overwrite?'Remplacer par la partie actuelle':'Supprimer cette copie',()=>confirmChange(dialog),locked),
         ],
-        onClose:()=>{if(!pending){confirmation=undefined;feedback('');paint();}},
+        onClose:()=>{if(alive(token)&&!pending&&confirmation===dialog){confirmation=undefined;feedback('');paint();}},closeOwnsNavigation:true,
       });
       return;
     }
 
-    const count=namedCount(),rows:NativeRow[]=[];
-    if(status)rows.push({id:'native-saves-feedback',label:status,detail:statusIsError?'Consultez la liste et réessayez lorsque la situation est résolue.':undefined});
-    if(options.blocked()&&!pending)rows.push({id:'native-saves-blocked',label:'Une opération de partie est en cours. Les commandes de sauvegarde sont momentanément indisponibles.'});
-    rows.push({id:'native-saves-current',label:'Partie actuelle',controls:[
+    const count=namedCount(),rows:NativeRow[]=[],renderedSearch=search,query=fold(search.trim());
+    const visible=entries.filter(entry=>!query||fold([entry.label,metadata(entry),entry.detail].join(' ')).includes(query));
+    if(status)rows.push({id:'native-saves-feedback',label:status,region:'navigation',detail:statusIsError?'Consultez la liste et réessayez lorsque la situation est résolue.':undefined});
+    if(options.blocked()&&!pending)rows.push({id:'native-saves-blocked',label:'Une opération de partie est en cours. Les commandes de sauvegarde sont momentanément indisponibles.',region:'navigation'});
+    rows.push({id:'native-saves-current',label:'Partie actuelle',region:'navigation',controls:[
       control('native-save-current','Sauvegarder',()=>run(options.save,'Sauvegarde de la partie actuelle…','Partie actuelle sauvegardée.'),locked),
       control('native-save-export','Exporter',()=>run(options.exportSave,'Préparation de l’export…','Export de la partie actuelle préparé.',{refresh:false}),locked),
       control('native-save-refresh','Actualiser la liste',refreshList,pending),
     ]});
-    rows.push({id:'native-save-name',label:'Nouvelle sauvegarde nommée',detail:'1 à 64 caractères. Créer utilise un emplacement libre et conserve les copies existantes.',input:{value:nameDraft,placeholder:'Nom de la nouvelle sauvegarde',maxLength:64,onCommit:value=>{
-      if(disposed||!opened||unavailable()||confirmation)return;
-      nameDraft=value;feedback('');paint();
-    }}});
-    rows.push({id:'native-save-named-slots',label:'Emplacements nommés',value:`${count} / ${NAMED_SAVE_KEYS.length}`,detail:count>=NAMED_SAVE_KEYS.length?'Les douze emplacements sont occupés. Choisissez explicitement une copie à remplacer ou supprimer pour libérer une place.':undefined,controls:[
-      control('native-save-create','Créer une nouvelle copie',createNamed,locked||!listingAvailable||count>=NAMED_SAVE_KEYS.length),
-    ]});
-    if(!entries.length)rows.push({id:'native-saves-empty',label:listingAvailable?'Aucune sauvegarde disponible.':'La liste est indisponible. Actualisez-la avant de choisir une copie.'});
-    for(const entry of entries)rows.push({id:`native-save-slot-${entry.key}`,label:'',controlStyle:'card',controls:[
-      {...control(`native-save-load-${entry.key}`,entry.label,()=>loadEntry(entry),locked,[entry.label,metadata(entry),entry.detail].join('\n')),presentation:'card',icon:'load',color:'#f3ead6',caption:metadata(entry),description:entry.detail},
+    rows.push({id:'native-save-search',label:'Rechercher une copie',region:'navigation',input:{value:search,maxLength:160,onCommit:value=>{
+      if(!alive(token)||pending||confirmation)return;search=value;selectedKey=undefined;paint();
+    }}},{id:'native-save-named-slots',label:'Emplacements nommés',region:'navigation',value:`${count} / ${NAMED_SAVE_KEYS.length} · ${visible.length} / ${entries.length} copies affichées`,detail:count>=NAMED_SAVE_KEYS.length?'Les douze emplacements sont occupés. Choisissez explicitement une copie à remplacer ou supprimer pour libérer une place.':undefined});
+    if(!visible.length)rows.push({id:'native-saves-empty',region:'catalogue',label:!listingAvailable?'La liste est indisponible. Actualisez-la avant de choisir une copie.':entries.length?'Aucune copie ne correspond à la recherche.':'Aucune sauvegarde disponible.'});
+    for(const [index,entry] of visible.entries())rows.push({id:`native-save-slot-${entry.key}`,label:entry.label,region:'catalogue',fileEntry:{manage:true,index,date:entry.savedAt===undefined?'—':new Date(entry.savedAt).toLocaleDateString('fr-FR'),kind:shortKinds[entry.kind]},hint:[entry.label,metadata(entry),entry.detail].join('\n'),controls:[
+      control(`native-save-load-${entry.key}`,'Charger',()=>{if(search===renderedSearch)return loadEntry(entry);},locked,[`Charger « ${entry.label} »`,metadata(entry),entry.detail].join('\n')),
       {...control(`native-save-select-${entry.key}`,'Gérer cette copie',()=>{
-        if(unavailable()||confirmation)return;
-        const current=entries.find(candidate=>candidate.key===entry.key);if(!current)throw Error('Cette copie n’existe plus.');
+        if(unavailable()||confirmation||search!==renderedSearch)return;
+        read();const current=entries.find(candidate=>candidate.key===entry.key);if(!current||!same(current,entry))throw Error('Cette copie a changé ou disparu. Choisissez de nouveau une copie.');
         selectedKey=entry.key;feedback('');paint();
       },locked,'Afficher les actions de remplacement ou de suppression de cette copie.',selectedKey===entry.key),presentation:'icon',icon:'settings'},
     ]});
-    if(target)rows.push({id:'native-save-selected',label:`Sélection : ${target.label}`,value:metadata(target),detail:target.detail,controls:[
-      control('native-save-overwrite','Remplacer par la partie actuelle',()=>ask('overwrite'),locked||!isNamedSaveKey(target.key)||target.kind!=='named'||typeof target.revision!=='string',target.kind==='named'?undefined:'Seul un emplacement nommé peut être remplacé ici.'),
-      control('native-save-delete','Supprimer cette copie',()=>ask('delete'),locked||!isManagedSaveKey(target.key)||typeof target.revision!=='string',isManagedSaveKey(target.key)?undefined:'La sauvegarde manuelle et la colonie précédente sont préservées.'),
+    if(target)rows.push({id:'native-save-selected',region:'details',label:`Sélection : ${target.label}`,value:metadata(target),detail:target.detail,controls:[
+      control('native-save-overwrite','Remplacer par la partie actuelle',()=>ask('overwrite',target),locked||!isNamedSaveKey(target.key)||target.kind!=='named'||typeof target.revision!=='string',target.kind==='named'?undefined:'Seul un emplacement nommé peut être remplacé ici.'),
+      control('native-save-delete','Supprimer cette copie',()=>ask('delete',target),locked||!isManagedSaveKey(target.key)||typeof target.revision!=='string',isManagedSaveKey(target.key)?undefined:'La sauvegarde manuelle et la colonie précédente sont préservées.'),
     ]});
-    options.show({id:'native-saves',title:'Sauvegardes',modal:true,closable:!pending,width:8.2,rows,actions:[control('native-saves-close','Retour',close,pending)],onClose:close});
+    rows.push({id:'native-save-name',label:'Nouvelle sauvegarde nommée',region:'toolbar',hint:'1 à 64 caractères. Créer utilise un emplacement libre et conserve les copies existantes.',input:{value:nameDraft,placeholder:'Nom de la nouvelle sauvegarde',maxLength:64,onCommit:value=>{
+      if(!alive(token)||unavailable()||confirmation)return;
+      nameDraft=value;feedback('');paint();
+    }},controls:[control('native-save-create','Créer',createNamed,locked||!listingAvailable||count>=NAMED_SAVE_KEYS.length,'Créer une nouvelle copie sans remplacer les autres sauvegardes.')]});
+    options.show({id:'native-saves',title:'Sauvegardes',modal:true,closable:!pending,layout:'files',width:NATIVE_FILE_LIST.width,height:NATIVE_FILE_LIST.height,contentKey:`managed-saves-${search}`,detailsKey:target?.key??'',rows,actions:[control('native-saves-close','Retour',close,pending)],onClose:()=>{if(alive(token)&&!confirmation)close();},closeOwnsNavigation:true});
   }
 
   async function run(operation:()=>Promise<void>,pendingText:string,successText:string,settings:{refresh?:boolean;after?:()=>void;closeAfter?:boolean}={}):Promise<void> {
@@ -176,10 +182,10 @@ export function createNativeSaveManager(options:NativeSaveManagerOptions):Native
     await run(async()=>{await options.refresh();read();if(namedCount()>=NAMED_SAVE_KEYS.length)throw Error('Les douze emplacements nommés sont occupés. Choisissez explicitement une copie à remplacer ou supprimer.');await options.saveNamed(label);},`Création de « ${label} »…`,`Sauvegarde « ${label} » créée.`,{after:()=>{nameDraft='';}});
   }
 
-  async function ask(action:Confirmation['action']):Promise<void> {
+  async function ask(action:Confirmation['action'],captured:SavedColony):Promise<void> {
     if(unavailable()||confirmation)return;
-    const chosen=selected();if(!chosen)return;
-    const captured={...chosen},token=generation;
+    const chosen=selected();if(!chosen||!same(chosen,captured))throw Error('La sélection a changé. Choisissez à nouveau cette copie.');
+    const token=generation;
     if(action==='overwrite'&&(!isNamedSaveKey(captured.key)||captured.kind!=='named'))throw Error('Choisissez une sauvegarde nommée à remplacer.');
     if(action==='delete'&&!isManagedSaveKey(captured.key))throw Error('La sauvegarde manuelle et la colonie précédente sont préservées.');
     pending=true;feedback('Vérification de la copie sélectionnée…');paint();
@@ -191,9 +197,9 @@ export function createNativeSaveManager(options:NativeSaveManagerOptions):Native
     finally {if(alive(token)){pending=false;paint();}}
   }
 
-  async function confirmChange():Promise<void> {
-    if(unavailable()||!confirmation)return;
-    const captured={...confirmation.entry},action=confirmation.action;
+  async function confirmChange(dialog:Confirmation):Promise<void> {
+    if(unavailable()||confirmation!==dialog)return;
+    const captured={...dialog.entry},action=dialog.action;
     await run(async()=>{
       // Refresh immediately before the explicit destructive action; then the
       // repository atomically checks this same opaque revision again at commit.
@@ -214,7 +220,7 @@ export function createNativeSaveManager(options:NativeSaveManagerOptions):Native
     async open(){
       if(disposed)throw Error('Le gestionnaire de sauvegardes a été fermé.');
       if(opened){paint();return;}
-      opened=true;generation++;confirmation=undefined;feedback('');readOrReport();paint();await refreshList();
+      opened=true;generation++;confirmation=undefined;search='';selectedKey=undefined;feedback('');readOrReport();paint();await refreshList();
     },
     dispose(){
       if(disposed)return;const wasOpen=opened;

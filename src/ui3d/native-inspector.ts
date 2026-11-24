@@ -1,15 +1,15 @@
 import {composeThingPane, objectPaneParts, lineOfRow, type PaneGauge, type PaneSpec, type PaneTab} from './native-thing-pane';
-import {isShipComputerSensorsKind298} from '../sim/ship-computer-sensors-content-298';
 import { stripInspectorAction351 } from '../sim/strip-351';
 import { PLAN_COLORS_369, PLAN_COLOR_DEFS_369, isPlanColor369, planById369, planLabel369, totalPlanArea369 } from '../sim/plans-369';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {readingRefusal295} from '../sim/reading-runtime-295';
 import type { NativeControl, NativePage, NativeRow, NativeUiActions, NativeUiState } from './native-contract';
+import {buildNativeInfoCard,infoFactsFromRows,type NativeInfoSource,type NativeInfoView,type InfoSection} from './native-info-card';
 import type { Command, MaterialPile, Pawn, StorageSettings, Structure, World } from '../sim/types';
 import type { MedicalRecord } from '../sim/injury-types';
 import type { CookingBill, BillSettings } from '../sim/cooking-types';
 import type { BillWorkerOptions283 } from '../sim/bill-worker-state-283';
-import { mapObjectActions, mapObjectGroupActions } from '../ui/map-object-actions';
+import { mapObjectActions, mapObjectGroupActions, requestedPowerToggle } from '../ui/map-object-actions';
 import { mapObjectsAt, mapObjectExists, type MapObjectSelection } from '../ui/map-object-selection';
 import { selectedMapJob296 } from '../ui/wall-door-selection-296';
 import { constructionRecipe } from '../sim/construction-materials';
@@ -65,7 +65,7 @@ import type { NativeBioCard } from './native-bio-card';
 import { NATIVE_INK } from './native-ui-scale';
 import { resetCardScroll } from './native-tab-card';
 import { needsSpec, healthEntries, capacitySpecs, painLabel } from './native-inspector-tabs';
-import type { HealthSettingSpec, HealthOperationsSpec } from './native-tab-health';
+import type { HealthSettingSpec, HealthOperationsSpec, HealthSpec } from './native-tab-health';
 import type { GearRowSpec, GearSpec } from './native-tab-gear';
 import type { SocialRowSpec, InteractionSpec, LogLineSpec } from './native-tab-social';
 import type { PrisonerLineSpec } from './native-tab-prisoner';
@@ -83,6 +83,7 @@ import { backgroundInspectionRows, backgroundRestrictionRows } from '../ui/backg
 import type { TooltipContent } from '../ui/tooltip';
 import { nativeSpecialRows, nativeClinicalConditionRows } from './native-special-inspection';
 import { itemInformation } from '../ui/item-information';
+import {knownPosition256} from '../ui/exploration-readers-256';
 import { learningFactor, XP_SCALE, xpRequired, constructionSpeed } from '../sim/skills';
 import { plantSkill, plantWorkSpeed, plantHarvestYield } from '../sim/plant-skills';
 import { miningSkill, miningWorkSpeed, miningYield } from '../sim/mining-skills';
@@ -125,6 +126,10 @@ import { slaughterRefusal } from '../sim/animal-slaughter';
 import { isExecuteRelease364 } from '../sim/execute-release-364';
 import type { PrisonerMode } from '../sim/prisoner-state';
 import { readAnimalTraining282, trainingRefusal282, ANIMAL_TRAINING_LABELS_282 } from '../sim/animal-training-282';
+import {animalCore256,isAnimalSpecies256} from '../sim/animal-core-v256';
+import {animalWildness315} from '../sim/animal-domestic-v256';
+import {groupPackedMassGrams258} from '../sim/group-freight-mass-258';
+import {gearMassLabel} from './native-tab-gear';
 import { supportsAnimalAreas287, currentAnimalAreaChoice287 } from '../sim/animal-area-policy-287';
 import { animalRescueReason } from '../sim/animal-rescue';
 import { eggSpeciesForItem256 } from '../sim/animal-egg-content-v256';
@@ -172,10 +177,11 @@ let healthPane: 'overview' | 'operations' = 'overview';
 const logFilter = { all: false, social: true, combat: true };
 let portraitClothed = true;
 export function setNativeInspectorTab(value:string):void {
-  if(value==='none'){activeTab=null;subpage=undefined;resetCardScroll();return;}
-  if(!tabs.some(([tab])=>tab===value)&&!THING_TAB_IDS.includes(value))return;activeTab=value;subpage=undefined;resetCardScroll();
+  if(value==='none'){activeTab=null;subpage=undefined;infoSession=undefined;resetCardScroll();return;}
+  if(!tabs.some(([tab])=>tab===value)&&!THING_TAB_IDS.includes(value))return;activeTab=value;subpage=undefined;infoSession=undefined;resetCardScroll();
 }
 let selectionKey = '', subpage: { kind: 'bills' | 'storage' | 'item' | 'anatomy' | 'info'; structureId?: number; stockpileId?: number; itemId?: number; pawnId?: number } | undefined;
+let infoSession:{anchor:string;target:NonNullable<typeof subpage>;view:NativeInfoView;page?:NativePage}|undefined;
 const billDrafts = new Map<string, BillSettings>();
 const billWorkers = new Map<string, BillWorkerOptions283>();
 let storageClipboard: StorageSettings | undefined;
@@ -204,10 +210,12 @@ const needHelp = {
 function repaint(): void { const page = buildNativeInspector(owner.readState?.() ?? latest, owner); if (page) owner.showPage(page); owner.refresh(); }
 function control(id: string, label: string, action: () => unknown, disabled = false, active = false, hint?: string): NativeControl {
   const epoch = latest.epoch, mapId = latest.world && registeredMapId(latest.world), seed = latest.world?.seed;
+  const infoAnchor=id==='inspect-info'||id.startsWith('item-information-')||id.startsWith('anatomy-')?nativeInspectorSelectionKey(latest):undefined;
   return { id, label, disabled: disabled || latest.busy, active, hint: hint ?? label, onActivate: async () => {
     const current = owner.readState?.() ?? latest;
     if (disabled || current.busy) return;
     if (current.epoch !== epoch || current.world?.seed !== seed || (current.world && registeredMapId(current.world)) !== mapId) { feedback = 'La carte a changé. Sélectionnez à nouveau cet objet.'; repaint(); return; }
+    if(infoAnchor!==undefined&&nativeInspectorSelectionKey(current)!==infoAnchor)return;
     latest = current;
     feedback = ''; try { await action(); } catch (cause) { feedback = cause instanceof Error ? cause.message : String(cause); } repaint();
   } };
@@ -218,6 +226,7 @@ async function send(command: Command): Promise<unknown> {
   owner.refresh(); return result;
 }
 function command(id: string, label: string, value: Command, disabled = false, active = false, hint?: string): NativeControl { return control(id, label, () => send(value), disabled, active, hint); }
+function mapGizmoHint(id:string):string|undefined {const key=id==='material-permission'?'F':id==='power-toggle'?'V':id==='cancel'?'C':id==='deconstruct'?'X':undefined;return key?`Raccourci ${key} · agit sur la sélection.`:undefined;}
 function choices<T extends string | number>(id: string, label: string, value: T, values: readonly T[], change: (value: T) => unknown, labelOf: (value: T) => string = String, disabled = false): NativeRow {
   const options = values.map((next, index) => control(`${id}-${index}`, labelOf(next), () => change(next), disabled, value === next));
   const select = control(id, labelOf(value), () => undefined, disabled);
@@ -259,13 +268,6 @@ function bodyRows(record: MedicalRecord | undefined, labels: (part: keyof typeof
   return rows;
 }
 
-function itemPage(world: World, id: number): NativePage | null {
-  const pile = world.piles.find(pile => pile.id === id); if (!pile) return null;
-  const info = itemInformation(pile, world);
-  return { id: `inspect-item-information-${id}`, title: info.title, subtitle: info.description, layout: 'inspector',
-    rows: info.rows.map((fact, index) => row(`item-information-${index}`, `${fact.category} · ${fact.label}`, fact.value, fact.description)),
-    actions: [control('item-information-back', 'Retour', () => { subpage = undefined; })] };
-}
 function anatomyPage(world: World, pawn: Pawn): NativePage {
   const health = pawn.health, efficiencies = bodyEfficiencies({ damage: health?.injuries.map(injury => ({ part: injury.part, loss: injury.severity / HP_UNIT })) ?? [], missing: health?.missing.map(part => part.part) ?? [], pain: 0, ...(health?.artificialParts ? { artificialParts: artificialPartEfficiencies(health) } : {}) });
   const rows: NativeRow[] = [];
@@ -553,6 +555,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   if (colonist && alive && stop && fire) actions.push({ ...command('draft-stop', 'Stop', stop), icon: 'clear-orders' }, { ...command('fire-at-will', fire.type === 'fire-at-will' && fire.enabled ? 'Feu à volonté' : 'Cesser le feu', fire), icon: 'fire-at-will' });
   // Core's hostility response gizmo (also a column of Assignations).
   if (colonist && alive) { const hostility = choices('pawn-hostility', 'Réaction hostile', pawn.hostilityResponse ?? 'flee', ['flee', 'ignore', 'attack'] as const, response => send({ type: 'hostility-response', pawnId: pawn.id, response }), response => ({ flee: 'Fuir', ignore: 'Ignorer', attack: 'Attaquer' })[response]).controls![0]!; actions.push({ ...hostility, icon: 'target-melee', hint: `Réaction hostile : ${hostility.label}` }); }
+  actions.push(control('inspect-info','i',()=>{subpage={kind:'info'};},false,false,'Informations : toutes les caractéristiques de ce personnage'));
   if (pawnTab) actions.push({ ...control('inspect-tab-close', 'Fermer l’onglet', () => { activeTab = null; }), hint: 'Fermer l’onglet' });
   const result: NativePage & { portrait?: { url: string; label: string } } = { id: `inspect-pawn-${pawn.id}-${pawnTab ?? 'pane'}`, title: pawn.name, rows, actions, layout: 'inspector' };
   if (pawnTab) result.inspectTab = { id: pawnTab, ...tabSizes[pawnTab] };
@@ -734,7 +737,7 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
   if (objects.length > 1) {
     const counts = new Map<string, number>(); for (const object of objects) { const label = objectLabel(world, object); counts.set(label, (counts.get(label) ?? 0) + 1); }
     for (const [label, count] of counts) rows.push(row(`group-${rows.length}`, label, String(count)));
-    const actions = mapObjectGroupActions(world, objects).map(action => control(`group-action-${action.id}`, `${action.label} (${action.commands.length})`, async () => { for (const value of action.commands) await send(value); }));
+    const actions = mapObjectGroupActions(world, objects).map(action => control(`group-action-${action.id}`, `${action.label} (${action.commands.length})`, async () => { for (const value of action.commands) await send(value); },false,false,mapGizmoHint(action.id)));
     // Core InspectPaneUtility.AdjustedLabelFor: one definition label (items
     // without their count) or « Divers », then « x » and the summed stack count.
     let base: string | undefined, same = true, total = 0;
@@ -747,7 +750,7 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
   }
   const structure = selected.kind === 'structure' ? world.structures.find(s => s.id === selected.id) : undefined;
   const paneTabs: PaneTab[] = []; paneSpec = { tabs: paneTabs };
-  const actions = mapObjectActions(world, selected).map(action => action.command ? command(`object-action-${action.id}`, action.label, action.command) : control(`object-action-${action.id}`, action.label, () => action.placementPileId === undefined ? undefined : owner.replant?.(action.placementPileId), !owner.replant));
+  const actions = mapObjectActions(world, selected).map(action => action.command ? command(`object-action-${action.id}`, action.label, action.command,false,false,mapGizmoHint(action.id)) : control(`object-action-${action.id}`, action.label, () => action.placementPileId === undefined ? undefined : owner.replant?.(action.placementPileId), !owner.replant));
   // Core BuildCopyCommandUtility: "Copier" selects the same construction and material.
   const copy = structure ? buildCopy346(world, structure) : undefined;
   if (copy) actions.push(control('object-action-copy', 'Copier', () => { owner.tool(copy.tool); if (copy.material) owner.material(copy.material); }, false, false, 'Choisir la même construction et le même matériau dans l’Architecte.'));
@@ -771,7 +774,8 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
     if (use && minifiable(structure.kind)) actions.push(command('uninstall', 'Désinstaller', { type: 'designate', kind: 'uninstall', x: structure.x, z: structure.z, targetId: structure.id }));
     if (use && minifiable(structure.kind) && owner.placeFurniture) actions.push(control('reinstall', 'Réinstaller', () => owner.placeFurniture!(structure.id)));
     if (use && structure.door) rows.push(booleanRow('door-hold', 'Maintenir ouverte', !!structure.door.holdOpen, value => send({ type: 'door-policy', structureId: structure.id, setting: 'holdOpen', value })), booleanRow('door-forbidden', 'Interdire le passage', !!structure.door.forbidden, value => send({ type: 'door-policy', structureId: structure.id, setting: 'forbidden', value })));
-    if (use && structure.power && !isShipComputerSensorsKind298(structure.kind)) rows.push(booleanRow('power', 'Interrupteur demandé', structure.power.switchOn !== false, on => send({ type: 'power-flick', structureId: structure.id, on })));
+    const toggle=requestedPowerToggle(world,structure);
+    if(toggle){const power=booleanRow('power',structure.kind==='vent'?'Ouverture demandée':'Interrupteur demandé',toggle.active,on=>send(toggle.command(on)));power.controls![0]!.hint='Raccourci V · un colon effectuera le changement demandé.';rows.push(power);}
     if (use && structure.fuel) rows.push(booleanRow('refuel', 'Autoriser le remplissage', structure.fuel.autoRefuel, enabled => send({ type: 'refuel-policy', structureId: structure.id, enabled })));
     if (use && ['table', 'table-square', 'table-long', 'table-large', 'campfire'].includes(structure.kind)) rows.push(booleanRow('gather-spot', 'Point de rencontre', structure.gatherSpot !== false, enabled => {
       const fresh = latest.world, current = fresh?.structures.find(current => current.id === structure.id);
@@ -794,7 +798,7 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
   } else if (selected.kind === 'pile') {
     const pile = world.piles.find(pile => pile.id === selected.id); if (pile) {
       const max = pileMaxHp(pile, world.schemaVersion), info = itemInformation(pile, world);
-      rows.push(row('pile-quantity', 'Quantité', String(pile.quantity)), meterRow('pile-condition', 'Points de vie', Math.max(0, max - pileDamage(pile)), max, undefined, `${Math.max(0, max - pileDamage(pile))} / ${max}`), ...info.rows.map((fact, index) => row(`pile-information-${index}`, `${fact.category} · ${fact.label}`, fact.value, fact.description)));
+      rows.push(row('pile-quantity', 'Quantité', String(pile.quantity)), meterRow('pile-condition', 'Points de vie', Math.max(0, max - pileDamage(pile)), max, undefined, `${Math.max(0, max - pileDamage(pile))} / ${max}`), ...info.rows.map((fact, index) => ({...row(`pile-information-${index}`, `${fact.category} · ${fact.label}`, fact.value, fact.description),infoCategory:fact.category})));
       if(pile.book&&(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))){
         const readers=world.pawns.filter(p=>isColonist(p)&&!p.prisoner&&!p.visitor&&p.state!=='dead');
         const readerSelect=control('book-read-select','Choisir un lecteur',()=>undefined,!readers.length);
@@ -883,6 +887,8 @@ function animalPage(world: World, animalId: number): NativePage | null {
   const animal = world.wildlife?.animals.find(animal => animal.id === animalId); if (!animal) return null;
   const species = animalSpecies(animal.species), body = animalBody(animal), model = animalBodyModel(animal.species, animal.ageTicks, animal.growthTracker?.value), dead = animal.state === 'dead';
   const rows: NativeRow[] = [row('animal-identity', `${animal.sex === 'female' ? 'Femelle' : 'Mâle'} · ${{ baby: 'Petit', juvenile: 'Jeune', adult: 'Adulte' }[animalLifeStage(animal)]} · ${animal.domestic ? 'Domestique' : 'Sauvage'}`, `${animal.x}, ${animal.z}`), row('animal-activity', 'Activité', animalActivity(world, animal)), row('animal-age', 'Âge', `${(animal.ageTicks / 6000).toFixed(1)} jours`), row('animal-size', 'Taille corporelle', animalBodySize(animal).toFixed(3)), row('animal-daily-food', 'Nutrition quotidienne', animalFoodPerDay(animal).toFixed(3)), meterRow('animal-food', 'Nourriture', animal.food, animalNutritionMax(animal)), meterRow('animal-rest', 'Repos', animal.rest)];
+  rows.push({...row('animal-wildness','Caractère sauvage',pct(animalWildness315(animal.species)),'Le caractère sauvage propre à cette espèce influe sur l’apprivoisement et l’entretien du dressage.'),infoCategory:'Dressage et vie animale'});
+  if(isAnimalSpecies256(animal.species)){const trainability=animalCore256(animal.species).race.trainability;rows.push({...row('animal-trainability','Trainabilité',trainability==='Advanced'?'Élevée':trainability==='Intermediate'?'Intermédiaire':'Aucune','Le profil de l’espèce détermine les aptitudes de dressage accessibles.'),infoCategory:'Dressage et vie animale'});}
   if (!dead) for (const [key, value] of Object.entries(body.capacities)) rows.push(meterRow(`animal-capacity-${key}`, capacityLabels[key] ?? key, value, 1, capacityHelp[key]));
   rows.push(...bodyRows(animal.health, part => model.byId[part]?.label ?? part));
   if (animal.pregnancy) rows.push(meterRow('pregnancy', 'Gestation', animal.pregnancy.progress, gestationTicks(animal.species), `Père : ${animal.pregnancy.fatherId}`));
@@ -923,6 +929,20 @@ function selectOf(id: string, label: string, current: string, entries: readonly 
   return chooser;
 }
 type WildAnimalView = NonNullable<World['wildlife']>['animals'][number];
+/** Material ownership is the same authority for local hauling and caravan
+ * loading. A job reservation or future load manifest is not possession. */
+function animalGear(world:World,animal:WildAnimalView):GearRowSpec[]{
+  const gear:GearRowSpec[]=world.piles.filter(pile=>pile.owner.type==='inventory'&&pile.owner.pawnId===animal.id).map(pile=>{
+    const unit=physicalTravelUnitMass(pile,world.schemaVersion),label=pile.book?.title??itemTitle(pile.item,ITEM_DEFINITIONS[pile.item].label);
+    return{id:`inventory-${pile.id}`,label:`${label}${pile.quantity>1?` ×${pile.quantity}`:''}`,grams:unit===undefined?undefined:unit*pile.quantity,hint:`${label} · Quantité ${pile.quantity} · Réellement porté par cet animal.`,info:control(`item-information-${pile.id}`,'Informations',()=>{subpage={kind:'item',itemId:pile.id};},false,false,'Consulter cet objet transporté')};
+  });
+  for(const pack of world.packed)if(pack.owner.type==='inventory'&&pack.owner.pawnId===animal.id)gear.push({id:`packed-${pack.building.id}`,label:`${buildingTitle(pack.building.kind,buildingLabels[pack.building.kind])} (emballé)`,grams:groupPackedMassGrams258(pack,world.schemaVersion),hint:'Meuble original emballé, déjà chargé sur cet animal.'});
+  return gear;
+}
+function noActorLog():NonNullable<NativeRow['card']>{
+  const unavailable='Aucun journal individuel n’est enregistré pour cet acteur.';
+  return{type:'log',lines:[],emptyText:unavailable,toggles:[],copy:control('log-copy','Copier',()=>undefined,true,false,unavailable)};
+}
 /** Core `InspectPaneFiller` and the `ITab`s of an animal (`Races_Animal_Base`
  * inspectorTabs: health, needs, training, social, log; its needs tab is hidden
  * for a wild animal, its training tab for one that is not the colony's). */
@@ -939,23 +959,34 @@ function animalPane(world: World, animal: WildAnimalView, rows: NativeRow[], dea
   for (const id of ['animal-master', 'animal-product']) { const entry = find(id); const text = entry && lineOfRow(entry); if (entry && text) lines.push({ id, text: entry.meter ? `${entry.label} : ${entry.value}` : text, hint: entry.hint }); }
   const tabs: PaneTab[] = [], cardRows = (card: NativeRow['card']): (() => NativeRow[]) => () => [{ id: 'tab-card', label: '', card }];
   // Journal (ITab_Pawn_Log): an animal keeps no personal log in Elsewhere.
-  const toggle = (id: 'all' | 'social' | 'combat', label: string, x: number, width: number, hint: string) => ({ id, label, x, width, on: logFilter[id], control: control(`log-toggle-${id}`, label, () => { logFilter[id] = !logFilter[id]; resetCardScroll(); }, false, logFilter[id], hint) });
-  tabs.push({ id: 'journal', label: 'Journal', hint: tabHints.journal, width: 630, height: 510, margin: 0, rows: cardRows({ type: 'log', lines: [], emptyText: '(Aucune entrée récente)', toggles: [toggle('all', 'Tout', 60, 100, 'Afficher aussi les entrées moins importantes.'), toggle('social', 'Social', 330, 105, 'Afficher les échanges sociaux.'), toggle('combat', 'Combat', 445, 115, 'Afficher les combats.')], copy: control('log-copy', 'Copier', () => undefined, false, false, 'Copier le journal affiché dans le presse-papiers.') }) });
-  // Social (ITab_Pawn_Social): the animal's parents and its master.
-  const social: SocialRowSpec[] = [];
-  const parentName = (id: number) => { const other = world.wildlife?.animals.find(entry => entry.id === id); return other ? actualAnimalName256(other) ?? `${animalTitle(other.species, animalSpecies(other.species).label)} ${id}` : `Animal ${id}`; };
-  const present = (id: number) => world.wildlife?.animals.some(entry => entry.id === id);
-  if (animal.parents) social.push({ id: `mother-${animal.parents.motherId}`, relations: 'Mère', name: parentName(animal.parents.motherId), situation: present(animal.parents.motherId) ? 'Présente' : 'Absente', hint: 'Mère de cet animal.' }, { id: `father-${animal.parents.fatherId}`, relations: 'Père', name: parentName(animal.parents.fatherId), situation: present(animal.parents.fatherId) ? 'Présent' : 'Absent', hint: 'Père de cet animal.' });
+  tabs.push({ id: 'journal', label: 'Journal', hint: tabHints.journal, width: 630, height: 510, margin: 0, rows: cardRows(noActorLog()) });
+  const inventory=animalGear(world,animal);
+  if(inventory.length){
+    const total=inventory.every(entry=>entry.grams!==undefined)?inventory.reduce((sum,entry)=>sum+entry.grams!,0):undefined;
+    if(total!==undefined)rows.push({...row('animal-inventory-mass','Masse portée',gearMassLabel(total),'Somme des masses des objets effectivement transportés, mobilier emballé compris.'),infoCategory:'Équipement et possessions'});
+    for(const entry of inventory)rows.push({...row(`animal-${entry.id}`,entry.label,entry.grams===undefined?'Masse non renseignée':gearMassLabel(entry.grams),entry.hint),infoCategory:'Équipement et possessions'});
+    tabs.push({id:'gear',label:'Matériel',hint:tabHints.gear,width:460,height:450,margin:0,rows:cardRows({type:'gear',mass:total===undefined?undefined:{text:`Masse portée : ${gearMassLabel(total)}`,hint:'Masse des possessions actuelles ; pas une estimation de chargement futur.'},sections:[{id:'inventory',label:'Inventaire',rows:inventory}],extras:[],maxHeight:4000})});
+  }
+  // Social (ITab_Pawn_Social): only the preserved animal kinship and master.
   const masterId = animal.training?.masterId ?? animal.startingPet?.masterId, master = masterId === undefined ? undefined : world.pawns.find(pawn => pawn.id === masterId);
-  if (masterId !== undefined) social.push({ id: `master-${masterId}`, relations: 'Maître', name: master?.name ?? world.campaignPeople?.find(person => person.id === masterId)?.name ?? 'Personne hors carte', situation: master ? 'Présent' : 'Absent', hint: 'Le maître est la personne que cet animal suit et écoute.', select: master ? control(`select-person-${master.id}`, 'Inspecter', () => owner.selectPawn(master.id), false, false, `Sélectionner ${master.name}`) : undefined });
-  tabs.push({ id: 'social', label: 'Social', hint: tabHints.social, width: 540, height: 510, margin: 0, rows: cardRows({ type: 'social', rows: social, interactions: [] }) });
+  tabs.push({id:'social',label:'Social',hint:tabHints.social,width:540,height:510,margin:0,rows:()=>{
+    const social:SocialRowSpec[]=[],known=new Map((world.wildlife?.animals??[]).filter(other=>knownPosition256(world,other)).map(other=>[other.id,other]));
+    const relation=(id:number,label:string,kind:string):SocialRowSpec=>{const other=known.get(id),name=other?actualAnimalName256(other)??`${animalTitle(other.species,animalSpecies(other.species).label)} ${id}`:`Animal ${id}`;return{id:`${kind}-${id}`,relations:label,name,situation:other?.state==='dead'?'Décédé':other?'Présent':'Non localisé',hint:`${label} de cet animal, d’après sa filiation enregistrée.`,select:other?control(`select-animal-${id}`,'Inspecter',()=>owner.selectPawn(id),false,false,`Sélectionner ${name}`):undefined};};
+    if(animal.parents)social.push(relation(animal.parents.motherId,'Mère','mother'),relation(animal.parents.fatherId,'Père','father'));
+    for(const other of known.values()){if(other.id===animal.id||!other.parents)continue;if(other.parents.motherId===animal.id||other.parents.fatherId===animal.id)social.push(relation(other.id,'Descendant','child'));else if(animal.parents&&(other.parents.motherId===animal.parents.motherId||other.parents.fatherId===animal.parents.fatherId))social.push(relation(other.id,'Fratrie','sibling'));}
+    if(masterId!==undefined)social.push({id:`master-${masterId}`,relations:'Maître',name:master?.name??world.campaignPeople?.find(person=>person.id===masterId)?.name??'Personne hors carte',situation:master?.state==='dead'?'Décédé':master?'Présent':'Absent',hint:'Maître enregistré dans le dossier de dressage de cet animal.',select:master?control(`select-person-${master.id}`,'Inspecter',()=>owner.selectPawn(master.id),false,false,`Sélectionner ${master.name}`):undefined});
+    return cardRows({type:'social',rows:social,interactions:[]})();
+  }});
   if (animal.domestic) {
-    const trainingRows = ['obedience', 'haul'].map(skill => find(`training-${skill}`)).filter((entry): entry is NativeRow => !!entry);
+    const trainability=isAnimalSpecies256(animal.species)?animalCore256(animal.species).race.trainability:undefined;
+    const trainingRows=(['obedience','haul'] as const).flatMap(skill=>{const entry=find(`training-${skill}`),state=readAnimalTraining282(animal,skill),supported=trainability==='Advanced'||skill==='obedience'&&trainability==='Intermediate';return entry&&(supported||state.steps>0||state.learned||state.wanted)?[{entry,state}]:[];});
     const trainingLines: { id: string; label: string; value?: string; hint: string }[] = [];
     const tameness = find('animal-tameness'); if (tameness) trainingLines.push({ id: 'tameness', label: 'Familiarité', value: tameness.value, hint: 'Familiarité de cet animal avec la colonie, de 0 à 5.' });
-    if (masterId !== undefined) trainingLines.push({ id: 'master', label: 'Maître', value: master?.name ?? 'Personne hors carte', hint: 'Le maître est la personne que cet animal suit et écoute.' });
-    tabs.push({ id: 'training', label: 'Dressage', hint: 'Le dressage de l’animal (ITab_Pawn_Training).', width: 300, height: 220, margin: 0, rows: cardRows({ type: 'training', lines: trainingLines,
-      rows: trainingRows.map(entry => { const learned = /Acquis/.test(entry.value ?? ''), wanted = !!entry.controls?.[0]?.label.startsWith('Ne plus'); return { id: entry.id, label: entry.label, steps: (entry.value ?? '').replace(/ · Acquis/, ''), learned, wanted: wanted || learned, disabled: !!entry.controls?.[0]?.disabled, hint: [entry.label, entry.detail, entry.hint].filter(Boolean).join('\n\n'), control: entry.controls![0]! }; }) }) });
+    trainingLines.push({id:'wildness',label:'Caractère sauvage',value:pct(animalWildness315(animal.species)),hint:'Caractère sauvage de l’espèce ; influe sur l’apprivoisement et l’entretien du dressage.'});
+    if (masterId !== undefined) trainingLines.push({ id: 'master', label: 'Maître', value: master?.name ?? world.campaignPeople?.find(person=>person.id===masterId)?.name ?? 'Personne hors carte', hint: 'Maître enregistré dans le dossier de dressage.' });
+    const trainingHeight=112+28*trainingRows.length;
+    tabs.push({ id: 'training', label: 'Dressage', hint: 'Le dressage de l’animal (ITab_Pawn_Training).', width: 300, height: trainingHeight, margin: 0, rows: cardRows({ type: 'training', lines: trainingLines,minimumHeight:trainingHeight,
+      rows: trainingRows.map(({entry,state})=>({id:entry.id,label:entry.label,steps:`${state.steps} / ${state.maxSteps}`,learned:state.learned,wanted:state.wanted,disabled:!!entry.controls?.[0]?.disabled,hint:[entry.label,entry.detail,entry.hint,state.learned?'Aptitude acquise.':undefined,state.wanted?'Entretien demandé.':'Entretien non demandé.'].filter(Boolean).join('\n\n'),control:entry.controls![0]!})) }) });
     const level = animal.food / animalNutritionMax(animal), rest = animal.rest, sleeping = animal.state === 'sleeping';
     tabs.push({ id: 'needs', label: 'Besoins', hint: tabHints.needs, width: 225, height: 140, margin: 0, rows: cardRows({ type: 'needs', thoughts: [], needs: [
       { id: 'need-hunger', label: 'Nourriture', major: true, level: Math.max(0, Math.min(1, level)), thresholds: [.12, .24], arrow: dead ? 0 : -1, unavailable: dead, hint: `Nourriture : ${dead ? '—' : pct(level)}\n${needHelp.hunger} Nutrition quotidienne : ${animalFoodPerDay(animal).toFixed(3)}.` },
@@ -975,7 +1006,7 @@ function animalPane(world: World, animal: WildAnimalView, rows: NativeRow[], dea
   tabs.push({ id: 'health', label: 'Santé', hint: tabHints.health, width: 630, height: 430, margin: 0, rows: cardRows({ type: 'health', tab: 'overview', tabs: { overview: control('health-overview', 'Vue d’ensemble', () => undefined, false, true, 'Capacités, lésions et politique de soins.'), operationsLabel: 'Opérations' }, settings,
     pain: dead ? undefined : { ...pain, hint: `Niveau de douleur : ${pct(health ? medicalPain(health) : 0)}` }, capacities: dead ? [] : capacitySpecs(Object.entries(body.capacities), key => capacityLabels[key] ?? key, key => capacityHelp[key] ?? ''), entries,
     bleed: bleed > .01 ? { text: `Saignement : ${pct(bleed)}/jour`, hint: 'Somme des plaies qui saignent encore.' } : undefined, emptyText: '(Aucun problème de santé)' }) });
-  const order = ['journal', 'social', 'training', 'needs', 'health'];
+  const order = ['journal', 'gear', 'social', 'training', 'needs', 'health'];
   tabs.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   return { gauges, lines, tabs, consumed: ['animal-area', 'animal-care', 'training-obedience', 'training-haul'] };
 }
@@ -991,11 +1022,10 @@ function mechPage(world: World, actorId: number): NativePage | null {
   // Core pane of a mechanoid: its health bar, its activity lines and the health and log tabs (not flesh: no social or needs tab).
   const total = view.parts.reduce((sum, part) => sum + part.maximum, 0), left = view.parts.reduce((sum, part) => sum + (part.absent ? 0 : part.health), 0), fraction = total > 0 ? left / total : 1;
   const mechLines = ['mech-action', 'mech-target', 'mech-ranged-phase', 'mech-emp'].flatMap(id => { const entry = rows.find(candidate => candidate.id === id); const text = entry && lineOfRow(entry); return entry && text ? [{ id, text, hint: entry.hint }] : []; });
-  const mechToggle = (id: 'all' | 'social' | 'combat', label: string, x: number, width: number, hint: string) => ({ id, label, x, width, on: logFilter[id], control: control(`log-toggle-${id}`, label, () => { logFilter[id] = !logFilter[id]; resetCardScroll(); }, false, logFilter[id], hint) });
   const mechEntries = view.parts.filter(part => part.absent || part.injuries.length).map(part => ({ id: part.id, part: { label: part.label, ink: part.absent ? NATIVE_INK.red : NATIVE_INK.text, hint: `${part.label} : ${part.absent ? 'absente' : `${part.health.toFixed(2)} / ${part.maximum} PV`}` }, items: part.absent ? [{ id: `${part.id}-absent`, label: 'Absente', count: 1, ink: NATIVE_INK.red, bleeding: false, tended: false, hint: 'Partie détruite' }] : part.injuries.map((injury, index) => ({ id: `${part.id}-${index}`, label: `${injury.label} · −${injury.severity.toFixed(2)} PV`, count: 1, bleeding: false, tended: false, hint: `${injury.label} · −${injury.severity.toFixed(2)} PV` })) }));
   paneSpec = { gauges: [{ id: 'health', label: `${Math.round(fraction * 100)} %`, fill: fraction, color: '#bdb39c', hint: `Intégrité : ${pct(fraction)}. Le détail est dans l’onglet Santé.` }],
     lines: mechLines, consumed: [], tabs: [
-      { id: 'journal', label: 'Journal', hint: tabHints.journal, width: 630, height: 510, margin: 0, rows: () => [{ id: 'tab-card', label: '', card: { type: 'log', lines: [], emptyText: '(Aucune entrée récente)', toggles: [mechToggle('all', 'Tout', 60, 100, 'Afficher aussi les entrées moins importantes.'), mechToggle('social', 'Social', 330, 105, 'Afficher les échanges sociaux.'), mechToggle('combat', 'Combat', 445, 115, 'Afficher les combats.')], copy: control('log-copy', 'Copier', () => undefined, false, false, 'Copier le journal affiché dans le presse-papiers.') } }] },
+      { id: 'journal', label: 'Journal', hint: tabHints.journal, width: 630, height: 510, margin: 0, rows: () => [{ id: 'tab-card', label: '', card:noActorLog() }] },
       { id: 'health', label: 'Santé', hint: tabHints.health, width: 630, height: 430, margin: 0, rows: () => [{ id: 'tab-card', label: '', card: { type: 'health', tab: 'overview', tabs: { overview: control('health-overview', 'Vue d’ensemble', () => undefined, false, true, 'Capacités et parties.'), operationsLabel: 'Opérations' }, settings: [], capacities: capacitySpecs(Object.entries(view.capacities), key => capacityLabels[key] ?? key, key => capacityHelp[key] ?? ''), entries: mechEntries, emptyText: '(Aucun problème de santé)' } }] }] };
   return { id: `inspect-mech-${actorId}`, title: view.label, rows, layout: 'inspector' };
 }
@@ -1004,32 +1034,102 @@ function mechPage(world: World, actorId: number): NativePage | null {
  * never come from DOM layout, hidden legacy controls or simulated clicks. */
 function nativeInspectorSelectionKey(state:NativeUiState):string {
   const world=state.world,selected=world?(state.selectedObjects??[]).filter(object=>mapObjectExists(world,object)):[];
-  return `${state.epoch??''}:${world?registeredMapId(world)??'':''}|${state.selectedPawnIds.join(',')}|${state.selectedAnimalId??''}|${state.selectedMechanoidId??''}|${selected.map(object=>`${object.kind}:${object.id}`).join(',')}|${state.selectedCell?.x},${state.selectedCell?.z}`;
+  return `${state.epoch??''}:${world?.seed??''}:${world?registeredMapId(world)??'':''}|${state.selectedPawnIds.join(',')}|${state.selectedAnimalId??''}|${state.selectedMechanoidId??''}|${selected.map(object=>`${object.kind}:${object.id}`).join(',')}|${state.selectedCell?.x},${state.selectedCell?.z}`;
 }
 
-/** The info card behind the (i) button (Core `Dialog_InfoCard`): every fact of
- * the thing, in a page of its own. It closes with the selection. */
-export function buildNativeInspector(state: NativeUiState, actions: NativeUiActions): NativePage | null {
-  if (subpage?.kind !== 'info') return buildPane(state, actions);
-  const before = selectionKey; subpage = undefined;
-  const page = buildPane(state, actions);
-  if (!page?.inspectInfo || selectionKey !== before || subpage) return page;
-  subpage = { kind: 'info' };
-  const closer = page.actions?.find(action => action.id === 'inspect-close');
-  const result: NativePage = { id: `${page.id}-info`, title: `${page.title} · Informations`, subtitle: page.subtitle, rows: page.inspectInfo.map(entry => ({ ...entry })), layout: 'inspector', onClose: page.onClose, textEntities: page.textEntities,
-    actions: [control('info-back', 'Retour', () => { subpage = undefined; }, false, false, 'Revenir à l’inspection'), ...(closer ? [closer] : [])] };
-  return result;
+const healthOverviewInfo:NativeControl={id:'info-health-overview',label:'Vue d’ensemble',active:true,disabled:true,hint:'Les soignants et les opérations restent accessibles dans l’onglet Santé de l’inspecteur.',onActivate:()=>undefined};
+function readOnlyHealth(card:HealthSpec):HealthSpec {
+  return{...card,tab:'overview',tabs:{overview:healthOverviewInfo,operationsLabel:'Opérations'},settings:[],operations:undefined,entries:card.entries.map(entry=>({...entry,info:undefined}))};
 }
-function buildPane(state: NativeUiState, actions: NativeUiActions): NativePage | null {
+/** The human dossier uses the same skill, need and clinical facts as the
+ * inspect tabs. No historical Records are inferred from unrelated events. */
+function humanInfoSource(world:World,pawn:Pawn):NativeInfoSource {
+  const sex=appearanceOf(pawn,world.seed).sex,colonist=isColonist(pawn)&&!pawn.prisoner,alive=pawn.state!=='dead',bio=bioCard(world,pawn,sex,colonist),health=pawn.health;
+  const facts:NativeRow[]=[],add=(category:string,id:string,label:string,value?:string,hint?:string)=>facts.push({...row(id,label,value,hint),infoCategory:category});
+  add('Général','pawn-identity','Sexe',sex==='female'?'Femme':'Homme');
+  add('Général','pawn-affiliation','Statut',pawn.prisoner?'Prisonnier':colonist?'Colon':pawn.visitor?'Visiteur':pawn.podRescue?'Naufragé':'Hors-la-loi');
+  if(bio.faction)add('Général','pawn-faction','Faction',bio.faction.label,bio.faction.hint.split('\n\nCliquer')[0]);
+  if(pawn.age){add('Général','pawn-biological-age','Âge biologique',`${biologicalYears(pawn.age)} ans`);add('Général','pawn-chronological-age','Âge chronologique',`${chronologicalYears(pawn.age)} ans`);}
+  add('Santé','pawn-condition','État général',healthCondition(pawn));
+  add('Santé','pawn-health','Santé générale',pct(health?summaryHealthPercent(health):1),'Indicateur utilisé par la jauge de santé de l’inspecteur.');
+  const capacities=alive?capacitySpecs(Object.entries(pawnBody(pawn).capacities),key=>capacityLabels[key]??key,key=>tooltipText(healthCapacityTooltip(pawn,key as Parameters<typeof healthCapacityTooltip>[1]))):[];
+  for(const cap of capacities)add('Capacités',`pawn-capacity-${cap.id}`,cap.label,cap.value,cap.hint);
+  if(alive){
+    add('Besoins','need-mood','Humeur',`${Math.round(pawn.mood)} %`,`Seuils de crise : ${breakThresholds(pawn).map(value=>`${Math.round(value)} %`).join(' / ')}.`);
+    for(const [key,label]of [['hunger','Nourriture'],['rest','Sommeil'],['beauty','Beauté'],['comfort','Confort']] as const)add('Besoins',`need-${key}`,label,`${Math.round(pawn[key])} %`,needHelp[key]);
+    const carried=commercialMass(world,pawn),comfort=comfortableTemperature(world,pawn);
+    if(carried)add('Équipement et possessions','pawn-mass','Masse portée',`${gearMassLabel(carried.grams)} / ${gearMassLabel(carried.capacityGrams)}`,'Masse physique portée et capacité de charge utilisée pour les déplacements.');
+    add('Équipement et possessions','pawn-comfortable-temperature','Température confortable',`${comfort.min.toFixed(0)} ~ ${comfort.max.toFixed(0)} °C`,'Limites de la personne après application de l’isolation de son équipement réel.');
+    if(isCarePatient(pawn))add('Santé','pawn-medical-policy','Politique médicale',MEDICAL_CARE[medicalCare(pawn)],'Médicaments autorisés pour les soins.');
+    add('Compétences et travail','pawn-work-factor','Facteur de travail général',pct(workSpeedGlobal361(pawn)),'Facteur du profil avant les effets propres au travail, à la lumière et aux capacités.');
+    add('Compétences et travail','pawn-learning-factor','Apprentissage général',pct(globalLearningFactor(pawn)),'Facteur d’apprentissage des traits avant passion et saturation.');
+    add('Compétences et travail','pawn-movement-factor','Facteur de marche du profil',pct(moveSpeedFactor361(pawn)),'Facteur des traits, avant les autres effets sur la marche.');
+  }
+  for(const skill of bio.skills)add('Compétences et travail',skill.id,skill.label,`${skill.level} / 20${skill.disabled?' (indisp.)':''}`,skill.hint);
+  for(const trait of bio.traits)add('Profil',trait.id,trait.label,undefined,trait.hint);
+  for(const story of bio.stories)add('Profil',`background-${story.chip.id}`,story.chip.label,story.phase,story.chip.hint);
+  const records=bodyRows(health);
+  facts.push(...records.map(record=>({...record,infoCategory:'Santé'})));
+  const entries=healthEntries(records,{
+    injury:id=>{const injury=health?.injuries.find(entry=>entry.id===id);return injury?{part:injury.part,bleeding:injuryBleed(health!,injury)>0,tended:injury.tended!==undefined}:undefined;},
+    missing:part=>health?.missing.find(entry=>entry.part===part),infectionPart:index=>health?.infections?.cases[index]?.part,
+    part:part=>{const id=part as BodyPartId,missing=!!health&&partMissing(health,id);return{label:BODY_PARTS[id].label,hint:tooltipText(healthPartTooltip(pawn,id)),ink:missing?NATIVE_INK.red:NATIVE_INK.text};},whole:()=>undefined,
+  });
+  const pain=painLabel(health?medicalPain(health):0),bleed=health?health.injuries.reduce((sum,injury)=>sum+injuryBleed(health,injury),0):0;
+  const card:HealthSpec={type:'health',tab:'overview',tabs:{overview:healthOverviewInfo,operationsLabel:'Opérations'},settings:[],pain:alive?{...pain,hint:`Niveau de douleur : ${pct(health?medicalPain(health):0)}`}:undefined,capacities,entries,bleed:bleed>.01?{text:`Saignement : ${pct(bleed)}/jour`,hint:'Somme des plaies qui saignent encore.'}:undefined,emptyText:'(Aucun problème de santé)'};
+  return{id:`inspect-pawn-${pawn.id}-info`,title:`${pawn.name} · Informations`,icon:'factions',facts:infoFactsFromRows(facts),sections:[{id:'bio',label:'Personnage',rows:[{id:'info-bio-card',label:'',bio:{...bio,faction:bio.faction?{...bio.faction,onActivate:undefined}:undefined}}]},{id:'health',label:'Santé',rows:[{id:'info-health-card',label:'',card}]}]};
+}
+function itemInfoSource(world:World,state:NativeUiState,id:number):NativeInfoSource|undefined {
+  const holder=state.selectedAnimalId??state.selectedPawnIds[0],pile=world.piles.find(entry=>entry.id===id);
+  if(!pile||holder===undefined||!('pawnId'in pile.owner)||pile.owner.pawnId!==holder||state.selectedAnimalId!==undefined&&pile.owner.type!=='inventory')return;
+  // Gear is an ownership view. An item moved to another owner no longer belongs
+  // to the open dossier, even if a retained hit plane still has its old ID.
+  const info=itemInformation(pile,world);
+  return{id:`inspect-item-information-${id}`,title:info.title,description:info.description,icon:pile.weapon?'sword':pile.apparel?'shirt':'information',backId:'item-information-back',facts:info.rows.map((fact,index)=>({id:`item-information-${index}`,category:fact.category,label:fact.label,value:fact.value,explanation:fact.description}))};
+}
+function inspectorInfoSource(world:World,state:NativeUiState,actions:NativeUiActions,target:NonNullable<typeof subpage>):NativeInfoSource|undefined {
+  if(target.kind==='item')return itemInfoSource(world,state,target.itemId!);
+  if(target.kind==='anatomy'){
+    const pawn=world.pawns.find(person=>person.id===target.pawnId&&state.selectedPawnIds.includes(person.id));if(!pawn)return;
+    const page=anatomyPage(world,pawn);return{id:page.id,title:page.title,icon:'limb',backId:'anatomy-back',facts:infoFactsFromRows(page.rows)};
+  }
+  const human=state.selectedAnimalId===undefined&&state.selectedMechanoidId===undefined?world.pawns.find(person=>person.id===state.selectedPawnIds[0]):undefined;
+  if(human)return humanInfoSource(world,human);
+  // Build only the parent dossier, without constructing its already open tab.
+  subpage=undefined;let parent:NativePage|null;
+  try{parent=buildPane(state,actions,true);}finally{if(nativeInspectorSelectionKey(state)===selectionKey)subpage=target;}
+  if(!parent?.inspectInfo)return;
+  const card=currentPaneSpec()?.tabs?.find(tab=>tab.id==='health')?.rows().find(entry=>entry.card?.type==='health')?.card;
+  const selected=state.selectedObjects?.length===1?state.selectedObjects[0]:undefined;
+  const icon=state.selectedAnimalId!==undefined?'animaux':state.selectedMechanoidId!==undefined?'chip':selected?.kind==='structure'?world.structures.find(entry=>entry.id===selected.id)?.kind:selected?.kind==='resource'||selected?.kind==='growing'?'growing':selected?.kind==='rock'?'mine':selected?.kind==='packed'?'haul':'information';
+  return{id:`${parent.id}-info`,title:`${parent.title} · Informations`,description:parent.subtitle,icon,facts:infoFactsFromRows(parent.inspectInfo),sections:card?.type==='health'?[{id:'health',label:'Santé',rows:[{id:'info-health-card',label:'',card:readOnlyHealth(card)}]}]:undefined};
+}
+/** The modal info card is attached to the actual map selection and, for
+ * inventory, the actual owner. Presentation callbacks never send a command. */
+export function buildNativeInspector(state: NativeUiState, actions: NativeUiActions): NativePage | null {
+  const target=subpage,world=state.world;
+  if(!world||!target||!['info','item','anatomy'].includes(target.kind))return buildPane(state,actions);
+  const key=nativeInspectorSelectionKey(state);if(key!==selectionKey)return buildPane(state,actions);
+  latest=state;owner=actions;
+  const source=inspectorInfoSource(world,state,actions,target);
+  if(!source){subpage=undefined;infoSession=undefined;resetCardScroll();return buildPane(state,actions);}
+  if(!infoSession||infoSession.target!==target||infoSession.anchor!==key){infoSession={anchor:key,target,view:{section:'stats',query:''}};resetCardScroll();}
+  const session=infoSession;
+  const valid=()=>infoSession===session&&subpage===session.target&&nativeInspectorSelectionKey(owner.readState?.()??latest)===session.anchor&&(!owner.isCurrentPage||!session.page||owner.isCurrentPage(session.page));
+  const change=(apply:()=>void)=>{if(!valid())return false;apply();repaint();return true;};
+  const section=(next:InfoSection)=>{if(next==='stats'||source.sections?.some(entry=>entry.id===next))change(()=>{session.view.section=next;resetCardScroll();});};
+  const back=()=>{if(!valid())return;subpage=undefined;infoSession=undefined;resetCardScroll();if(owner.closePage&&owner.isCurrentPage)owner.closePage();else repaint();};
+  const search=(value:string)=>{const query=value.slice(0,160);return valid()&&(query===session.view.query||change(()=>{session.view.query=query;session.view.selected=undefined;}));};
+  const page=buildNativeInfoCard(source,session.view,{search,select:id=>{change(()=>{session.view.selected=id;});},section,back});
+  page.textEntities=nativeTextEntitiesFor(world,state.campaign);session.page=page;return page;
+}
+function buildPane(state: NativeUiState, actions: NativeUiActions, informationOnly=false): NativePage | null {
   latest = state; owner = actions; paneSpec = undefined; const world = state.world; if (!world) return null;
   const selected = (state.selectedObjects ?? []).filter(object => mapObjectExists(world, object));
   const key = nativeInspectorSelectionKey(state);
-  if (key !== selectionKey) { resetCardScroll(); subpage = undefined; billDrafts.clear(); billWorkers.clear(); storageNavigation = undefined; feedback = ''; selectionKey = key; }
-  let page: NativePage | null = null, dialog = false;
-  if (subpage?.kind === 'item') { page = itemPage(world, subpage.itemId!); if (!page) subpage = undefined; }
-  else if (subpage?.kind === 'anatomy') { const pawn = world.pawns.find(pawn => pawn.id === subpage?.pawnId); if (pawn) page = anatomyPage(world, pawn); else subpage = undefined; }
-  if (page) { dialog = true; /* The explicit information page keeps this selected owner. */ }
-  else if (state.selectedAnimalId !== undefined) page = animalPage(world, state.selectedAnimalId);
+  if (key !== selectionKey) { resetCardScroll(); subpage = undefined; infoSession=undefined; billDrafts.clear(); billWorkers.clear(); storageNavigation = undefined; feedback = ''; selectionKey = key; }
+  let page: NativePage | null = null;
+  if (state.selectedAnimalId !== undefined) page = animalPage(world, state.selectedAnimalId);
   else if (state.selectedMechanoidId !== undefined) page = mechPage(world, state.selectedMechanoidId);
   else if (state.selectedPawnIds.length) {
     const pawn = world.pawns.find(pawn => pawn.id === state.selectedPawnIds[0]); if (pawn) page = pawnPage(world, pawn);
@@ -1052,9 +1152,9 @@ function buildPane(state: NativeUiState, actions: NativeUiActions): NativePage |
   for (const entry of page.rows) { if (entry.detail) { entry.hint = [entry.hint, entry.detail].filter(Boolean).join(' · '); delete entry.detail; } if (entry.hint) for (const action of entry.controls ?? []) action.hint = [action.hint, entry.hint].filter(Boolean).join(' · '); }
   if (feedback) page.rows.unshift({...row('inspector-feedback', feedback), ...(page.layout === 'storage' ? {region:'details' as const, compact:true, presentation:'plain' as const} : {})});
   // Anything but a person: Core's inspect pane, tabs and gizmos around the same dossier rows.
-  if (!dialog && !page.rows.some(entry => entry.id === 'pawn-tabs')) {
+  if (!page.rows.some(entry => entry.id === 'pawn-tabs')) {
     const parts = objectPaneParts(page.rows), current = currentPaneSpec();
-    page = composeThingPane({ page, spec: { gauges: current?.gauges ?? parts.gauges, lines: current?.lines ?? parts.lines, tabs: current?.tabs ?? [], consumed: current?.consumed }, activeTab, control,
+    page = composeThingPane({ page, spec: { gauges: current?.gauges ?? parts.gauges, lines: current?.lines ?? parts.lines, tabs: current?.tabs ?? [], consumed: current?.consumed }, activeTab:informationOnly?null:activeTab, control,
       toggleTab: id => { activeTab = activeTab === id ? null : id; resetCardScroll(); }, openInfo: () => { subpage = { kind: 'info' }; } });
   }
   if (owner.clearSelection) {

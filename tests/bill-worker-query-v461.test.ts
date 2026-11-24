@@ -9,6 +9,9 @@ import {newCookingBill} from '../src/sim/cooking-bills';
 import {finalizeInitialWorldRegistry} from '../src/sim/world-map-context';
 import type {World} from '../src/sim/types';
 import type {BillWorkerOptions283} from '../src/sim/bill-worker-state-283';
+import {nativeOrderPage,type NativeOrderClient} from '../src/ui3d/native-orders';
+import type {NativePage} from '../src/ui3d/native-contract';
+import type {OrderOption} from '../src/sim/player-orders';
 
 // Transport scheduling only is doubled. The query and human/map owners below
 // are the real implementations; no simulated work or campaign is claimed.
@@ -86,4 +89,27 @@ test('worker uses the authoritative active-map selection and refuses metadata wh
  const f=await runtime();expect(f.world.worldMaps).toBeDefined();f.world.worldMaps!.selectedMapId=null;const before=JSON.stringify(f.world);
  f.request({type:'bill-worker-options',id:2,structureId:f.station.id,billId:f.bill.id});
  expect(f.packets).toEqual([{type:'reply',id:2,ok:false,outcome:'refused',reason:'Aucune carte locale sélectionnée.'}]);expect(f.encode).not.toHaveBeenCalled();expect(f.capture).not.toHaveBeenCalled();expect(JSON.stringify(f.world)).toBe(before);
+});
+
+test('civilian ground-pile orders settle through the real worker query without a publication',async()=>{
+ const f=await runtime(),pawn=f.world.pawns[0]!;
+ // A food pile is a guaranteed order provider even when a policy disables eating.
+ const pile={id:f.world.nextId++,kind:'food' as const,item:'survival-meal' as const,quantity:3,owner:{type:'ground' as const,x:pawn.x,z:pawn.z}};
+ f.world.piles.push(pile);
+ const pages:NativePage[]=[];
+ const client:NativeOrderClient={
+  command:async()=>undefined,currentWorld:()=>f.world,currentSelectedPawnIds:()=>[pawn.id],
+  orderOptions:async(pawnId,x,z,queue)=>{
+   f.request({type:'order-options',id:2,pawnId,x,z,queue:queue??false});
+   expect(f.packets).toHaveLength(1);
+   const reply=f.packets[0]!;expect(reply).toMatchObject({type:'reply',id:2,ok:true});
+   if(reply.type!=='reply')throw Error('Missing order reply');
+   return JSON.parse(reply.data!) as OrderOption[];
+  },
+ };
+ await nativeOrderPage(f.world,[pawn.id],pile.owner,300,200,false,undefined,client,page=>pages.push(page));
+ expect(pages[0]?.rows[0]?.label).toBe('Vérification des accès…');
+ expect(pages.at(-1)?.floatMenu).toEqual({x:300,y:200});
+ expect(pages.at(-1)?.rows.some(row=>row.label.startsWith('Consommer'))).toBe(true);
+ expect(f.encode).not.toHaveBeenCalled();expect(f.capture).not.toHaveBeenCalled();
 });

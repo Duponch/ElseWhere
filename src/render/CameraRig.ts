@@ -2,6 +2,7 @@ import { MathUtils, MOUSE, OrthographicCamera, PerspectiveCamera, Vector3 } from
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { WORLD_SCALE } from '../world/scale';
 import { createRoomLayout, type RoomLayout } from './room-layout';
+import {pageKeyCameraSpan} from '../ui/map-interaction-shortcuts';
 
 export type CameraMode = 'orthographic' | 'perspective';
 const halfHeight = WORLD_SCALE.cameraSpan * 0.53;
@@ -43,6 +44,15 @@ export class CameraRig {
   get span(): number {
     return this.mode === 'orthographic' ? 2 * halfHeight / this.orthographic.zoom
       : 2 * slope * this.perspective.position.distanceTo(this.controls.target);
+  }
+
+  /** PageUp/PageDown preserve the orbit target, angle and scene constraints. */
+  pageZoom(direction:'in'|'out'):void {
+    const damping=this.controls.enableDamping;this.controls.enableDamping=false;this.controls.update();
+    const span=pageKeyCameraSpan(this.span,direction,2*halfHeight/this.controls.maxZoom,2*halfHeight/this.controls.minZoom);
+    if(this.mode==='orthographic'){this.orthographic.zoom=2*halfHeight/span;this.orthographic.updateProjectionMatrix();}
+    else{this.offset.copy(this.perspective.position).sub(this.controls.target).normalize();this.perspective.position.copy(this.controls.target).addScaledVector(this.offset,span/(2*slope));}
+    this.controls.update();this.constrainRoom();this.controls.enableDamping=damping;
   }
 
   setMode(mode: CameraMode): void {

@@ -45,6 +45,15 @@ function fixture(){
 afterEach(()=>vi.restoreAllMocks());
 
 describe('native page ink and hint signatures',()=>{
+  it('rebinds fixed-card targets to the latest real callbacks without redrawing their identical ink',async()=>{
+    const f=fixture();try{
+      const old={id:'item-information-42',label:'Informations',hint:'Objet',onActivate:vi.fn()},fresh={...old,onActivate:vi.fn()};
+      const gear=(info:NativeControl):NativeRow=>({id:'tab-card',label:'',card:{type:'gear',sections:[{id:'inventory',label:'Inventaire',rows:[{id:'inventory-42',label:'Bois ×3',hint:'Objet',info}]}],extras:[],maxHeight:450}});
+      const before=page([gear(old)]),after=page([gear(fresh)]),hit=f.add('card:gear-info:inventory-42','Objet',old);
+      expect(f.stage.pageInkSignature(before)).toBe(f.stage.pageInkSignature(after));f.stage.rebindPage(after);
+      expect(hit.control).toBe(fresh);await hit.control!.onActivate();expect(fresh.onActivate).toHaveBeenCalledExactlyOnceWith();expect(old.onActivate).not.toHaveBeenCalled();expect(hit.piece.redraw).not.toHaveBeenCalled();
+    }finally{f.close();}
+  });
   it('ignores only tooltip text in rows, columns, controls, actions and select options',()=>{
     const f=fixture();
     try{

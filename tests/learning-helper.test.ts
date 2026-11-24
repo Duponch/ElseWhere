@@ -169,7 +169,7 @@ describe('learning helper · browser storage',()=>{
     expect(h.enabled).toBe(false);expect(row().value).toBe('Désactivé');expect(JSON.parse(storage.get(LEARNING_HELPER_STORAGE_KEY)!).enabled).toBe(false);
     await control('learning-helper').onActivate();expect(h.enabled).toBe(true);
     // Reset asks first; cancelling keeps everything.
-    await control('learning-helper-reset').onActivate();expect(page!.id).toBe('front-confirm');expect(page!.title).toBe('Réinitialiser l’assistant');
+    await control('learning-helper-reset').onActivate();expect(page!.id).toBe('front-confirm');expect(page!.title).toBe('Réinitialiser l’assistant');expect([page!.layout,page!.width,page!.height]).toEqual(['message',640,460]);
     await control('confirm-cancel').onActivate();expect(h.isComplete('pause')).toBe(true);
     await control('learning-helper-reset').onActivate();await control('confirm-accept').onActivate();
     expect(h.knowledge('pause')).toBe(0);expect(h.knowledge('camera-zoom')).toBe(0);expect(storage.get(LEARNING_HELPER_STORAGE_KEY)).toBe('{"version":1,"enabled":true,"knowledge":{}}');

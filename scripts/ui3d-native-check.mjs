@@ -105,7 +105,7 @@ try{
     await click('native-save-name');await page.keyboard.press('ControlOrMeta+A');await page.keyboard.type('Qualification carton V476');await click('native-save-create');
     const exportWorld=async name=>{const pending=page.waitForEvent('download').then(file=>({file}),error=>({error}));await click('native-save-export');const result=await pending;if(result.error)throw result.error;const path=resolve(folder,name);await result.file.saveAs(path);return JSON.parse(await readFile(path,'utf8'));};
     const beforeReload=await exportWorld('before-reload.json');
-    await click('native-save-select-lisiere.named.v1.1');await click('native-save-load');
+    await click('native-save-select-lisiere.named.v1.1');await click('native-save-load-lisiere.named.v1.1');
     await page.waitForFunction(()=>window.__lisiere.nativeUi.page!=='native-saves'&&window.__lisiere.hasActiveMap&&!window.__lisiere.busy,null,{timeout:120000});
     await menu();await click('native-manage-saves');const afterReload=await exportWorld('after-reload.json');
     assert.deepEqual(afterReload,beforeReload,'paused save/load must conserve the complete exported world');

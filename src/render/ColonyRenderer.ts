@@ -9,9 +9,12 @@ import type {RendererLifetime} from './scene-render-ports';
 import {ReentrantRenderer} from './ReentrantRenderer';
 import {adapterRendererLimits} from './webgpu-device-limits';
 import {MapLabelsOverlay} from './MapLabelsOverlay';
+import {EnvironmentStatsOverlay} from './EnvironmentStatsOverlay';
+import type {NativeEnvironmentStats} from '../ui3d/native-environment-stats';
 import {PawnSelectionInput,hitActors} from './PawnSelectionInput';
 import {isAreaAction} from '../sim/designation';
 import {isLineBuildKind} from '../sim/construction-line';
+import {isCarpetFloor355,type CarpetFloor355} from '../sim/carpet-355';
 import {STRUCTURE_DEFINITIONS} from '../sim/definitions';
 import {mapObjectsAt,sameMapObject,type MapObjectSelection} from '../ui/map-object-selection';
 import {matchingMapObjects,mapObjectGroupTarget} from '../ui/map-object-group-selection';
@@ -38,11 +41,22 @@ export class ColonyRenderer extends SceneRenderCore {
   private readonly selectionInput:PawnSelectionInput;
   private readonly deferredHover=new DeferredMapHover();
   private areaPointer: { x:number; y:number } | undefined;
+  private eyedropperPress:{pointerId:number;x:number;y:number;floor:CarpetFloor355}|undefined;
   private orderRightPress: {pointerId:number;x:number;y:number;at:number;tool:string;moved:boolean} | null = null;
   private cameraOnlyPointer:number|undefined;
   private readonly resizeObserver:ResizeObserver;
   private releaseMapWheel: (() => void) | undefined;
   protected readonly mapLabels:MapLabelsOverlay;
+  private environmentOverlay:EnvironmentStatsOverlay|undefined;
+  setEnvironmentStats(stats:NativeEnvironmentStats|null):void{
+    const world=this.world;if(this.disposed)return;
+    if(!world||!stats){this.environmentOverlay?.update(world?.width??0,world?.height??0,null);return;}
+    if(!this.environmentOverlay){this.environmentOverlay=new EnvironmentStatsOverlay();this.scene.add(this.environmentOverlay.group);}
+    this.environmentOverlay.update(world.width,world.height,stats);
+  }
+  presentEnvironment(camera:THREE.OrthographicCamera|THREE.PerspectiveCamera,height:number,cellPixels:number):void{this.environmentOverlay?.present(camera,height,cellPixels);}
+  prepareEnvironmentForCompile():()=>void{return this.environmentOverlay?.prepareForCompile()??(()=>{});}
+  disposeEnvironment():void{this.environmentOverlay?.dispose();this.environmentOverlay=undefined;}
   setItemLabelMinCellPixels(value:number):void {this.mapLabels.setMinCellPixels(value);}
   /** Native game pages may keep their command context while the player looks
    * around it. The ordinary/legacy input owner keeps its existing behavior. */
@@ -191,7 +205,11 @@ export class ColonyRenderer extends SceneRenderCore {
   /** DOM methods are consumed only by the owned port; no guard writer here. */
   selectionReady():boolean{return !!this.selectionInput;}
   selectionActive():boolean{return !!this.selectionInput?.active;}
-  override cancelDesignation():boolean {this.orderRightPress=null;return super.cancelDesignation();}
+  override cancelDesignation(reason: 'interaction' | 'presentation' = 'interaction'):boolean {
+    this.orderRightPress=null;const sample=this.eyedropperPress;this.eyedropperPress=undefined;
+    if(sample){this.pointerDown=null;const canvas=this.renderer.domElement;if(canvas.hasPointerCapture(sample.pointerId))canvas.releasePointerCapture(sample.pointerId);}
+    return super.cancelDesignation(reason)||!!sample;
+  }
   cancelSelection():boolean{return this.selectionInput?.cancel()??false;}
   disposeSelection():void{this.selectionInput?.dispose();}
   disconnectResize():void{this.resizeObserver?.disconnect();}
@@ -213,10 +231,11 @@ export class ColonyRenderer extends SceneRenderCore {
   }
   private onPointerDown = (event: PointerEvent): void => {
     if(this.beginCameraOnlyInput(event))return;
-    this.onInteractionCancel();
+    this.setDesignationControl(event.ctrlKey);
+    this.onInteractionCancel('interaction');
     this.renderer.domElement.focus({preventScroll:true});
     if(this.selectionInput.down(event)){this.deferredHover.clear();return;}
-    if (this.areaDrag) {
+    if (this.areaDrag||this.eyedropperPress) {
       if (event.button === 2) this.cancelDesignation();
       event.stopImmediatePropagation(); event.preventDefault(); return;
     }
@@ -229,6 +248,13 @@ export class ColonyRenderer extends SceneRenderCore {
     this.renderer.domElement.focus({ preventScroll: true });
     if(event.button===1||event.button===2)this.deferredHover.beginCamera(event);
     const from = event.button===0?this.pick(event):null;
+    if(event.button===0&&event.isPrimary&&from&&event.ctrlKey&&this.tool==='lay-floor'&&isCarpetFloor355(this.selectedFloor)){
+      // A colour sample is a different gesture from a floor designation.
+      // Consume the entire press even if the sampled tile is not a carpet.
+      event.stopImmediatePropagation();event.preventDefault();this.pointerDown=null;this.keys.clear();
+      this.eyedropperPress={pointerId:event.pointerId,x:event.clientX,y:event.clientY,floor:this.selectedFloor};
+      this.renderer.domElement.setPointerCapture(event.pointerId);this.hoverCell=from;this.updateHover();return;
+    }
     if (event.button === 0 && event.isPrimary && from && (isAreaAction(this.tool) || isLineBuildKind(this.tool)||this.tool==='allowed-expand'||this.tool==='allowed-shrink')) {
       event.stopImmediatePropagation(); event.preventDefault();
       this.areaDrag = this.tool==='allowed-expand'||this.tool==='allowed-shrink'?{pointerId:event.pointerId,allowed:this.tool==='allowed-expand',from}:isLineBuildKind(this.tool)
@@ -246,6 +272,15 @@ export class ColonyRenderer extends SceneRenderCore {
   private onPointerUp = (event: PointerEvent): void => {
     this.deferredHover.release(event);
     if(this.endCameraOnlyInput(event))return;
+    const sample=this.eyedropperPress;if(sample&&sample.pointerId===event.pointerId&&event.button===0){
+      this.eyedropperPress=undefined;this.pointerDown=null;
+      if(this.renderer.domElement.hasPointerCapture(event.pointerId))this.renderer.domElement.releasePointerCapture(event.pointerId);
+      this.setDesignationControl(event.ctrlKey);
+      if(this.tool==='lay-floor'&&this.selectedFloor===sample.floor&&Math.hypot(event.clientX-sample.x,event.clientY-sample.y)<=6&&this.pointerOnCanvas(event)){
+        const cell=this.pick(event);if(cell)this.onCarpetEyedropper(cell);
+      }
+      return;
+    }
     if(this.selectionInput.up(event))return;
     const right=this.orderRightPress;
     if(right&&event.pointerId===right.pointerId&&event.button===2){
@@ -259,7 +294,7 @@ export class ColonyRenderer extends SceneRenderCore {
     const drag = this.areaDrag;
     if (drag) {
       if (event.pointerId !== drag.pointerId || event.button !== 0) return;
-      const to = this.pointerOnCanvas(event) ? this.pick(event, true) : null;
+      const raw = this.pointerOnCanvas(event) ? this.pick(event, true) : null,to=raw?this.areaDragEndpoint(drag,raw,event.ctrlKey):null;
       this.cancelDesignation();
       if (to) {
         if('allowed' in drag)this.onAllowedAreaPaint(drag.allowed,drag.from,to);
@@ -283,6 +318,7 @@ export class ColonyRenderer extends SceneRenderCore {
     this.onPick(cell.x, cell.z);
   };
   private onPointerMove = (event: PointerEvent): void => {
+    this.setDesignationControl(event.ctrlKey);
     const right=this.orderRightPress;
     if(right&&event.pointerId===right.pointerId&&Math.hypot(event.clientX-right.x,event.clientY-right.y)>6)right.moved=true;
     if(this.selectionInput.move(event)){this.deferredHover.clear();return;}
@@ -320,6 +356,7 @@ export class ColonyRenderer extends SceneRenderCore {
     if (this.areaDrag) this.updateAreaPreview(); else {this.pointerDown = null;this.updateHover();}
   };
   private onPointerCancel = (event: PointerEvent): void => {
+    if(this.eyedropperPress?.pointerId===event.pointerId)this.eyedropperPress=undefined;
     if(this.cameraOnlyPointer===event.pointerId)this.cameraOnlyPointer=undefined;
     this.deferredHover.cancel(event.pointerId);
     if(this.orderRightPress?.pointerId===event.pointerId)this.orderRightPress=null;
@@ -330,17 +367,19 @@ export class ColonyRenderer extends SceneRenderCore {
   private onContextMenu = (event: Event): void => { event.preventDefault(); };
   private onKeyDown = (event: KeyboardEvent): void => {
     if (this.host.closest('[inert]')) { this.keys.clear(); return; }
+    if(event.key==='Control'&&!event.defaultPrevented&&!document.querySelector('dialog[open]')&&!(event.target instanceof HTMLElement&&(event.target.matches('input,textarea,select')||event.target.isContentEditable))){this.setDesignationControl(true);return;}
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('dialog[open]')) return;
     if (event.target instanceof HTMLElement && (event.target.matches('input, textarea, select') || event.target.isContentEditable)) return;
     const key = event.key.toLowerCase();
+    if(key==='pageup'||key==='pagedown'){event.preventDefault();if(this.world&&this.controls.enabled&&this.hostPort.canMoveCamera()){this.rig.pageZoom?.(key==='pageup'?'out':'in');this.invalidatePausedShadow();}return;}
     // Q/E rotate a bed in Architecte. Outside placement, Q retains AZERTY pan.
     if ((this.tool === 'install' || this.tool in STRUCTURE_DEFINITIONS) && (key === 'q' || key === 'e')) return;
     if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'q', 'a', 'd', 'z', 'w', 's'].includes(key)) {
       this.keys.add(key); if (key.startsWith('arrow')) event.preventDefault();
     }
   };
-  private onKeyUp = (event: KeyboardEvent): void => { this.keys.delete(event.key.toLowerCase()); };
-  private onBlur = (): void => { this.cameraOnlyPointer=undefined;this.deferredHover.resume();this.keys.clear(); this.cancelDesignation(); };
+  private onKeyUp = (event: KeyboardEvent): void => { this.keys.delete(event.key.toLowerCase());if(event.key==='Control')this.setDesignationControl(event.ctrlKey); };
+  private onBlur = (): void => { this.cameraOnlyPointer=undefined;this.deferredHover.resume();this.keys.clear();this.cancelDesignation();this.setDesignationControl(false); };
 
 
 }

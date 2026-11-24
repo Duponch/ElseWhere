@@ -5,6 +5,9 @@ import {RESEARCH_SCALE} from '../src/sim/research';
 import {researchProjects} from '../src/ui/research-projects';
 import {researchGraphLinks,researchLinks,researchLinkSvgPath,researchNodePosition,researchPrerequisiteLabels,RESEARCH_GRAPH_WIDTH,RESEARCH_GRAPH_HEIGHT,RESEARCH_NODE_WIDTH,RESEARCH_NODE_HEIGHT} from '../src/ui/research-tree';
 import {buildNativeResearch,resetNativeResearch} from '../src/ui3d/native-research';
+import {coreResearchLinks,coreResearchNodePosition} from '../src/ui3d/native-research-geometry';
+import {RESEARCH_PREREQUISITES} from '../src/sim/research-prerequisites';
+import {layoutNativePage,NATIVE_UI} from '../src/ui3d/native-layout';
 import type {NativeControl,NativePage,NativeUiActions,NativeUiState} from '../src/ui3d/native-contract';
 
 let seed=479200;
@@ -24,102 +27,105 @@ function fixture(){
 afterEach(()=>resetNativeResearch());
 
 describe('shared delivered research hierarchy',()=>{
-  it('keeps the exact thirty legacy SVG routes and all forty-two project coordinates',()=>{
-    expect(researchProjects).toHaveLength(42);expect(researchLinks).toHaveLength(30);
-    // Golden was extracted from 47652d6c's original DOM routing, before sharing
-    // its data. It guards every legacy endpoint, bend and numeric expression.
+  it('keeps the exact delivered legacy SVG routes and current project coordinates',()=>{
+    expect(researchProjects).toHaveLength(54);expect(researchLinks).toHaveLength(41);
+    // Golden requalified on the untouched pre-lot-7 integration copy, after
+    // twelve later research additions and the conformed prerequisite table.
     const paths=researchLinks.map(([from,to])=>[from,to,researchLinkSvgPath(from,to)]);
-    expect(createHash('sha256').update(JSON.stringify(paths)).digest('hex')).toBe('09c5f2eca5e6fad26f4de2370cc673aa1e2a434a871cd78d6d1acab343d863f9');
-    expect([RESEARCH_NODE_WIDTH,RESEARCH_NODE_HEIGHT,RESEARCH_GRAPH_WIDTH,RESEARCH_GRAPH_HEIGHT]).toEqual([142,66,850,815]);
+    expect(createHash('sha256').update(JSON.stringify(paths)).digest('hex')).toBe('0a5852c0f82d48ba0c5398b3c7a82f93a7b898c7811c33a5cb70ba7bd9bb5b74');
+    expect([RESEARCH_NODE_WIDTH,RESEARCH_NODE_HEIGHT,RESEARCH_GRAPH_WIDTH,RESEARCH_GRAPH_HEIGHT]).toEqual([142,66,850,992]);
     const positions=researchProjects.map(researchNodePosition);
     // The delivered DOM coordinates contain this pre-existing overlap. Native
     // presentation repairs it separately without rewriting the legacy oracle.
-    expect(new Set(positions.map(position=>`${position.x}:${position.y}`)).size).toBe(41);
+    expect(new Set(positions.map(position=>`${position.x}:${position.y}`)).size).toBe(53);
     expect(researchNodePosition(researchProjects.find(project=>project.id==='prosthetics')!)).toEqual(researchNodePosition(researchProjects.find(project=>project.id==='recon-armor')!));
-    for(const position of positions){expect(position.x).toBeGreaterThanOrEqual(0);expect(position.y).toBeGreaterThanOrEqual(0);expect(position.x+142).toBeLessThanOrEqual(850);expect(position.y+66).toBeLessThanOrEqual(815);}
+    for(const position of positions){expect(position.x).toBeGreaterThanOrEqual(0);expect(position.y).toBeGreaterThanOrEqual(0);expect(position.x+142).toBeLessThanOrEqual(RESEARCH_GRAPH_WIDTH);expect(position.y+66).toBeLessThanOrEqual(RESEARCH_GRAPH_HEIGHT);}
   });
   it('has no dangling native links and samples curves with the same SVG endpoints',()=>{
     const projects=new Set(researchProjects.map(project=>project.id));
     expect(researchGraphLinks.map(link=>[link.from,link.to])).toEqual(researchLinks);
     for(const link of researchGraphLinks){
       expect(projects.has(link.from)).toBe(true);expect(projects.has(link.to)).toBe(true);expect(link.path.length).toBeGreaterThanOrEqual(2);
-      for(const point of link.path){expect(Number.isFinite(point.x)&&Number.isFinite(point.y)).toBe(true);expect(point.x).toBeGreaterThanOrEqual(0);expect(point.x).toBeLessThanOrEqual(850);expect(point.y).toBeGreaterThanOrEqual(0);expect(point.y).toBeLessThanOrEqual(815);}
+      for(const point of link.path){expect(Number.isFinite(point.x)&&Number.isFinite(point.y)).toBe(true);expect(point.x).toBeGreaterThanOrEqual(0);expect(point.x).toBeLessThanOrEqual(RESEARCH_GRAPH_WIDTH);expect(point.y).toBeGreaterThanOrEqual(0);expect(point.y).toBeLessThanOrEqual(RESEARCH_GRAPH_HEIGHT);}
       const numbers=researchLinkSvgPath(link.from,link.to).match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/g)!.map(Number);
       expect(link.path[0]).toEqual({x:numbers[0],y:numbers[1]});
       expect(link.path.at(-1)!.x).toBeCloseTo(numbers.at(-2)!,12);expect(link.path.at(-1)!.y).toBeCloseTo(numbers.at(-1)!,12);
     }
-    expect(researchPrerequisiteLabels.get('vitals-monitor')).toEqual(['Lit d’hôpital','Multi-analyseur']);
+    expect(researchPrerequisiteLabels.get('vitals-monitor')).toEqual(['Multi-analyseur','Lit d’hôpital']);
   });
 });
 
-describe('native research keeps the former tree, dossier and direct actions',()=>{
+describe('native research uses the Core tree and keeps the dossier and direct actions',()=>{
   it('exposes the Principal tab, every fixed-size node and its distinct select/start controls without changing the World',()=>{
     const f=fixture(),before=JSON.stringify(f.world);f.rebuild();
-    expect(f.page.id).toBe('research');expect(f.page.layout).toBe('research');expect([f.page.width,f.page.height]).toEqual([1420,780]);
+    expect(f.page.id).toBe('research');expect(f.page.layout).toBe('research');expect(f.page.width).toBeUndefined();
     expect(f.page.rows.filter(row=>row.region==='navigation').flatMap(row=>row.controls??[]).map(control=>[control.id,control.label])).toEqual([['research-tab-main','Principal']]);
     const nodes=f.page.rows.filter(row=>row.graphNode);
-    expect(nodes).toHaveLength(42);expect(f.page.research!.links).toHaveLength(30);
-    for(const project of researchProjects){const node=nodes.find(row=>row.id==='research-node-'+project.id)!;const base=project.id==='prosthetics'?{x:184,y:726.88}:researchNodePosition(project);expect(node.graphNode).toMatchObject({x:base.x*1.25,y:base.y*1.25,width:142,height:66,cost:project.cost});expect(node.controls!.map(control=>control.id)).toEqual([`research-${project.id}-select`,`research-${project.id}-start`]);expect(node.controls![0]!.hint).toContain(project.detail);}
+    expect(nodes).toHaveLength(researchProjects.length);expect(f.page.research!.links).toEqual(coreResearchLinks);
+    for(const project of researchProjects){const node=nodes.find(row=>row.id==='research-node-'+project.id)!;expect(node.graphNode).toMatchObject({...coreResearchNodePosition(project.id),width:140,height:50,cost:project.cost});expect(node.controls!.map(control=>control.id)).toEqual([`research-${project.id}-select`,`research-${project.id}-start`]);expect(node.controls![0]!.hint).toContain(project.detail);}
     expect(f.page.rows.some(row=>row.region==='details'&&row.id==='research-active-heading')).toBe(true);
     expect(JSON.stringify(f.world)).toBe(before);expect(f.actions.command).not.toHaveBeenCalled();
   });
-  it('spaces all native cards without overlap, preserves every link port and retains the empty Prothèses corridor',()=>{
+  it('places every supported project in the original horizontal tree, with no overlaps and visible prerequisite ports',()=>{
     const legacyBefore=JSON.stringify({positions:researchProjects.map(researchNodePosition),links:researchGraphLinks});
     const f=fixture(),worldBefore=JSON.stringify(f.world),nodes=f.page.rows.filter(row=>row.graphNode);
-    expect(new Set(nodes.map(row=>`${row.graphNode!.x}:${row.graphNode!.y}`)).size).toBe(42);
+    expect(new Set(nodes.map(row=>`${row.graphNode!.x}:${row.graphNode!.y}`)).size).toBe(researchProjects.length);
     expect(new Set(nodes.map(row=>row.id))).toEqual(new Set(researchProjects.map(project=>'research-node-'+project.id)));
-    expect(f.page.research!.links).toHaveLength(30);expect([f.page.research!.width,f.page.research!.height]).toEqual([1063,1019]);
+    expect([f.page.research!.width,f.page.research!.height]).toEqual([4170,650]);
+    // Coordinates checked against Core ResearchProjectDefs and the 190/100
+    // conversion from MainTabWindow_Research (20 points of canvas margin).
+    expect(coreResearchNodePosition('tree-sowing')).toEqual({x:20,y:20});
+    expect(coreResearchNodePosition('prosthetics')).toEqual({x:1350,y:500});
+    expect(coreResearchNodePosition('recon-armor')).toEqual({x:3250,y:130});
+    expect(coreResearchNodePosition('ship-engine')).toEqual({x:4010,y:560});
     for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
       const a=nodes[i]!.graphNode!,b=nodes[j]!.graphNode!;
       expect(a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y,`${nodes[i]!.label} and ${nodes[j]!.label} must not overlap`).toBe(false);
     }
-    const basePosition=(id:string)=>id==='prosthetics'?{x:184,y:726.88}:researchNodePosition(researchProjects.find(project=>project.id===id)!);
-    const onBoundary=(box:NonNullable<(typeof nodes)[number]['graphNode']>,point:{x:number;y:number})=>{
-      const epsilon=1e-7,inside=point.x>=box.x-epsilon&&point.x<=box.x+box.width+epsilon&&point.y>=box.y-epsilon&&point.y<=box.y+box.height+epsilon;
-      const edge=Math.abs(point.x-box.x)<epsilon||Math.abs(point.x-box.x-box.width)<epsilon||Math.abs(point.y-box.y)<epsilon||Math.abs(point.y-box.y-box.height)<epsilon;
-      expect(inside&&edge,'route endpoint lies on its actual card port').toBe(true);
-    };
-    const crossesInterior=(a:{x:number;y:number},b:{x:number;y:number},box:NonNullable<(typeof nodes)[number]['graphNode']>)=>{
-      let enter=0,exit=1;
-      for(const [start,delta,min,max]of[[a.x,b.x-a.x,box.x+1e-7,box.x+box.width-1e-7],[a.y,b.y-a.y,box.y+1e-7,box.y+box.height-1e-7]]){
-        if(Math.abs(delta!)<1e-10){if(start!<=min!||start!>=max!)return false;continue;}
-        const first=(min!-start!)/delta!,last=(max!-start!)/delta!;enter=Math.max(enter,Math.min(first,last));exit=Math.min(exit,Math.max(first,last));if(enter>=exit)return false;
-      }
-      return enter<exit;
-    };
+    const expectedLinks=researchProjects.flatMap(project=>RESEARCH_PREREQUISITES[project.id].visible.filter(parent=>parent!=='electricity').map(parent=>`${parent}>${project.id}`));
+    expect(f.page.research!.links.map(link=>`${link.from}>${link.to}`)).toEqual(expectedLinks);
     for(const link of f.page.research!.links){
-      const legacy=researchGraphLinks.find(previous=>previous.from===link.from&&previous.to===link.to)!;
       const source=nodes.find(row=>row.id==='research-node-'+link.from)!.graphNode!,target=nodes.find(row=>row.id==='research-node-'+link.to)!.graphNode!;
-      onBoundary(source,link.path[0]!);onBoundary(target,link.path.at(-1)!);
-      for(const point of link.path){expect(Number.isFinite(point.x)&&Number.isFinite(point.y)).toBe(true);expect(point.x).toBeGreaterThanOrEqual(0);expect(point.y).toBeGreaterThanOrEqual(0);expect(point.x).toBeLessThanOrEqual(1063);expect(point.y).toBeLessThanOrEqual(1019);}
-      if(link.to!=='prosthetics'){
-        const from=basePosition(link.from),to=basePosition(link.to),first=legacy.path[0]!,last=legacy.path.at(-1)!;
-        expect(link.path).toHaveLength(legacy.path.length);
-        expect(link.path[0]!.x-source.x).toBeCloseTo(first.x-from.x,10);expect(link.path[0]!.y-source.y).toBeCloseTo(first.y-from.y,10);
-        expect(link.path.at(-1)!.x-target.x).toBeCloseTo(last.x-to.x,10);expect(link.path.at(-1)!.y-target.y).toBeCloseTo(last.y-to.y,10);
-        for(let index=1;index<link.path.length-1;index++){expect(link.path[index]!.x).toBeCloseTo(legacy.path[index]!.x*1.25,10);expect(link.path[index]!.y).toBeCloseTo(legacy.path[index]!.y*1.25,10);}
-        continue;
-      }
-      expect(link.from).toBe('machining');expect(link.path).not.toEqual(legacy.path);
-      expect(link.path[0]!.x).toBeCloseTo(source.x+source.width/2,10);expect(link.path[0]!.y).toBeCloseTo(source.y+source.height,10);
-      expect(link.path.at(-1)!.x).toBeCloseTo(target.x+target.width/2,10);expect(link.path.at(-1)!.y).toBeCloseTo(target.y,10);
-      for(const row of nodes){
-        if(row.id==='research-node-machining'||row.id==='research-node-prosthetics')continue;
-        const box=row.graphNode!;
-        for(let i=1;i<link.path.length;i++){
-          const a=link.path[i-1]!,b=link.path[i]!,crosses=crossesInterior(a,b,box);
-          expect(crosses,`Usinage → Prothèses must not cross ${row.label}`).toBe(false);
-        }
-      }
+      expect(link.path).toEqual([{x:source.x+source.width,y:source.y+source.height/2},{x:target.x,y:target.y+target.height/2}]);
     }
     expect(JSON.stringify({positions:researchProjects.map(researchNodePosition),links:researchGraphLinks})).toBe(legacyBefore);
     expect(JSON.stringify(f.world)).toBe(worldBefore);expect(f.actions.command).not.toHaveBeenCalled();
+  });
+  it('has the Core sidebar, 200 × 24 search field, tab and bounded scroll regions',()=>{
+    const f=fixture(),measure=(s:string,n:number)=>s.length*n*.52;
+    for(const viewport of [{width:1440,height:860},{width:960,height:540},{width:480,height:240}]){
+      const box=layoutNativePage(f.page,viewport,false,measure),details=box.regions.details!,graph=box.regions.graph!,nav=box.regions.navigation!;
+      expect(box.x+box.width).toBeLessThanOrEqual(viewport.width);expect(box.y+box.height).toBeLessThanOrEqual(viewport.height);
+      for(const region of Object.values(box.regions)){expect(region.x+region.width).toBeLessThanOrEqual(box.width);expect(region.y+region.height).toBeLessThanOrEqual(box.height);}
+      expect(graph.x-details.x-details.width).toBe(10);
+      const search=box.rows.find(row=>row.row.id==='research-search')!,tab=box.rows.find(row=>row.row.id==='research-tabs')!.controls[0]!;
+      expect(search.inputRect!.height).toBe(24);expect(search.inputRect!.x+search.inputRect!.width).toBeLessThanOrEqual(nav.x+nav.width);
+      expect(search.inputRect!.y+search.inputRect!.height+box.header).toBeLessThanOrEqual(nav.y+nav.contentHeight);
+      expect(graph.contentWidth).toBe(f.page.research!.width);expect(box.rows.filter(row=>row.row.graphNode)).toHaveLength(researchProjects.length);
+      expect(box.rows.find(row=>row.row.id==='research-selected-title')!.height).toBeGreaterThanOrEqual(50);
+      expect(box.rows.find(row=>row.row.id==='research-selected-action')!.controls[0]!.height).toBe(55);
+      if(viewport.width>=960){expect(search.inputRect!.width).toBe(200);expect(tab.width).toBeGreaterThanOrEqual(100);expect(tab.width).toBeLessThanOrEqual(200);
+        expect(details.width).toBe(Math.max(270,Math.round((box.width-2*NATIVE_UI.padding)*.22)));
+      }
+    }
+  });
+  it('searches without removing branches or issuing an order, and requests horizontal focus on the match',async()=>{
+    const f=fixture(),world=JSON.stringify(f.world),before=f.page.research!.focus!.key;
+    await f.page.rows.find(row=>row.id==='research-search')!.input!.onCommit('ship-engine');f.rebuild();
+    expect(f.page.research!.selected).toBe('ship-engine');expect(f.page.research!.focus).toMatchObject({x:4010,y:560});
+    expect(f.page.research!.focus!.key).not.toBe(before);
+    expect(f.page.rows.filter(row=>row.graphNode?.searchMatch).map(row=>row.id)).toEqual(['research-node-ship-engine']);
+    expect(f.page.rows.filter(row=>row.graphNode)).toHaveLength(researchProjects.length);expect(f.page.research!.links).toEqual(coreResearchLinks);
+    expect(JSON.stringify(f.world)).toBe(world);expect(f.actions.command).not.toHaveBeenCalled();
+    f.state.epoch!++;f.rebuild();
+    expect(f.page.rows.find(row=>row.id==='research-search')!.input!.value).toBe('');
+    expect(f.page.rows.filter(row=>row.graphNode?.searchMatch)).toHaveLength(researchProjects.length);
   });
   it('keeps selection separate from launch, preserves the page identity and retains an explicit player choice across fresh World snapshots',async()=>{
     const f=fixture(),before=JSON.stringify(f.world),active=f.world.research?.project;
     await f.control('research-tree-sowing-select').onActivate();f.rebuild();
     expect(f.page.research!.selected).toBe('tree-sowing');expect(f.page.id).toBe('research');expect(f.actions.command).not.toHaveBeenCalled();expect(f.world.research?.project).toBe(active);expect(JSON.stringify(f.world)).toBe(before);
-    f.world.tick++;f.rebuild();expect(f.page.research!.selected).toBe('tree-sowing');
+    f.world.tick++;if(f.world.corePathBudget297)f.world.corePathBudget297.tick=f.world.tick;f.rebuild();expect(f.page.research!.selected).toBe('tree-sowing');
     expect(f.control('research-start').disabled).toBe(false);await f.control('research-start').onActivate();f.rebuild();
     expect(f.actions.command).toHaveBeenCalledExactlyOnceWith({type:'research-project',project:'tree-sowing'});expect(f.world.research?.project).toBe('tree-sowing');
     expect(f.control('research-start').disabled).toBe(true);expect(f.control('research-start').label).toBe('Recherche en cours');

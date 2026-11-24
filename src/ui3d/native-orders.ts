@@ -16,6 +16,7 @@ import {cryptosleepOptions271} from '../ui/cryptosleep-controls-271';
 import {contextConsumesFood, tacticalAttackPolicy, tacticalPawns, tacticalRescuePolicy, tacticalTendingPolicy} from '../ui/order-menu';
 import type {NativeControl, NativePage, NativeRow} from './native-contract';
 import {pawnShortName} from '../ui/pawn-short-name';
+import {NATIVE_MESSAGE} from './native-dialog-metrics';
 
 /** Methods must be bound by the host. Optional readers preserve the current
  * selection/map while a worker query or a native confirmation is pending. */
@@ -30,6 +31,7 @@ export interface NativeOrderClient {
   report?: (message: string, error?: boolean) => void;
 }
 let revision = 0;
+let retirePage: (() => void) | undefined;
 
 /** Schema 346: the one selected colonist, when it is drafted. Core's drafted
  * ordinary providers are Multiselect = false. */
@@ -55,9 +57,14 @@ export function draftedOption346(option: OrderOption, targetId: number | undefin
   return targetId === undefined ? option.consumePileId !== undefined || option.equipmentItemId !== undefined || option.stripTargetId !== undefined : option.capturePatientId === targetId || option.stripTargetId === targetId;
 }
 
-/** Call on interaction cancellation, page dismissal and map/world replacement.
- * A late query can never reopen a cancelled native context. */
-export function cancelNativeOrderPage(): void { revision++; }
+/** Retire the displayed context as well as its pending query. In particular,
+ * a cancelled query must not leave its "Vérification des accès…" page behind. */
+export function cancelNativeOrderPage(): void {
+  const retire = retirePage;
+  retirePage = undefined;
+  revision++;
+  retire?.();
+}
 
 const errorText = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const sameIds = (left: readonly number[], right: readonly number[]): boolean => left.length === right.length && [...left].sort((a, b) => a - b).every((id, index) => id === [...right].sort((a, b) => a - b)[index]);
@@ -95,10 +102,22 @@ export async function nativeOrderPage(
   client: NativeOrderClient,
   show: (page: NativePage) => void
 ): Promise<void> {
-  const token = ++revision, ids = [...new Set(selectedPawnIds)], selection = new Set(ids), at = {x: cell.x, z: cell.z};
-  let busy = false;
-  const current = (): boolean => revision === token && (client.isCurrent?.() ?? true);
-  const close = (): void => { if (revision === token) revision++; client.close?.(); };
+  cancelNativeOrderPage();
+  const token = revision, ids = [...new Set(selectedPawnIds)], selection = new Set(ids), at = {x: cell.x, z: cell.z};
+  let busy = false, shown = false;
+  const invalidate = (): boolean => {
+    if (revision !== token) return false;
+    revision++;
+    retirePage = undefined;
+    return true;
+  };
+  const close = (): void => { if (invalidate() && shown) client.close?.(); };
+  retirePage = () => { if (shown) client.close?.(); };
+  const current = (): boolean => {
+    if (revision !== token) return false;
+    if (client.isCurrent?.() === false) { close(); return false; }
+    return true;
+  };
   const latest = (): World => client.currentWorld ? client.currentWorld() ?? world : world;
   // Core Pawn_JobTracker.TryTakeOrderedJob reads KeyBindingDefOf.QueueOrder
   // (Shift) when the option is chosen, not when the menu opened.
@@ -113,7 +132,6 @@ export async function nativeOrderPage(
   // Core FloatMenuMap: the orders open at the mouse as a float menu, not as a
   // modal window; confirmations stay modal dialogs.
   const menuAt = Number.isFinite(_x) && Number.isFinite(_y) && (_x !== 0 || _y !== 0) ? {x: _x, y: _y} : undefined;
-  let shown = false;
   const present = (page: NativePage): void => {
     if (!current()) return;
     shown = true;
@@ -122,7 +140,7 @@ export async function nativeOrderPage(
   };
   /** Core Selector.HandleMapClicks: no float menu when there is no option;
    * only this query's own loading page is closed, other windows stay. */
-  const nothing = (): void => { if (!current()) return; if (shown) close(); else revision++; };
+  const nothing = (): void => { if (current()) close(); };
   const message = (title: string, text: string): void => present({id: 'native-orders', title, rows: [{id: 'order-message', label: text}]});
   const fail = (error: unknown): void => {
     if (!current()) return;
@@ -131,7 +149,7 @@ export async function nativeOrderPage(
   };
   const finish = (text: string): void => {
     if (!current()) return;
-    revision++; client.report?.(text);
+    invalidate(); client.report?.(text);
     if (client.close) client.close();
     else show({id: 'native-order-result', title: 'Ordre accepté', modal: true, rows: [{id: 'order-result', label: text}]});
   };
@@ -285,7 +303,7 @@ export async function nativeOrderPage(
           const name = currentWorld.pawns.find(person => person.id === pawn.id)?.name ?? 'Ce colon';
           const cancel: NativeControl = {id: 'cryptosleep-cancel', label: 'Annuler', onActivate: () => nativeOrderPage(latest(), ids, at, _x, _y, queue, targetId, client, show)};
           const accept: NativeControl = {id: 'cryptosleep-confirm', label: 'Entrer en cryptosommeil', onActivate: () => run(next => prepare(next, true), 'Ordre de cryptosommeil accepté.')};
-          present({id: 'native-cryptosleep-confirm', title: 'Dernier colon hors des caissons', rows: [{id: 'last-colon', label: `${name} est le dernier colon libre encore présent hors des caissons. Une autre personne devra ouvrir son caisson sur place. Continuer ?`}], actions: [cancel, accept]});
+          present({id: 'native-cryptosleep-confirm', title: 'Dernier colon hors des caissons', layout:'message',width:NATIVE_MESSAGE.width,height:NATIVE_MESSAGE.height,rows: [{id: 'last-colon', label: `${name} est le dernier colon libre encore présent hors des caissons. Une autre personne devra ouvrir son caisson sur place. Continuer ?`}], actions: [cancel, accept]});
           return;
         }
         return fresh.command;

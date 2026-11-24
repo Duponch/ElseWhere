@@ -2,6 +2,8 @@
 
 Le lot porte sur tous les menus avant-partie : accueil, scénario, conteur/difficulté/sauvegarde, paramètres du monde, lieu de départ, personnages, chargement, catalogue de tests, options et confirmations. Il réorganise la présentation sans ajouter de scénario, réglage, candidat, contenu de colonie ou capacité moteur pour remplir les écrans.
 
+**Actualisation du 24 novembre 2026 (schéma 377) :** les géométries et les contrôles natifs ont été repris d'après le jeu de base dans les lots [Dialogues et Options](fenetres-rimworld-dialogues-options.md) et [Accueil, chargement et création](fenetres-rimworld-accueil-creation.md). Ces notes priment pour les dimensions et les écrans actuels ; le lot ci-dessous est conservé comme historique des choix ergonomiques.
+
 ## Problème et comparaison
 
 Le témoin produit est **6628b137d346cdadac1059d5c7b320bebc1a31d3**, schéma301. Son avant-jeu Native utilise principalement des cartes empilées dans un flux commun ; les Options répartissent les lignes en deux colonnes selon leur nombre, et le dossier des personnages suit les huit candidats puis les détails et les douze lignes d'équipe dans le même défilement. Inspecter un profil, comparer l'équipe et retrouver une action demande donc des déplacements excessifs.

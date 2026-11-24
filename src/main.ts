@@ -28,6 +28,7 @@ import {NativeHudCards} from './ui3d/native-hud';
 import {NativeLetterStack} from './ui3d/native-letter-stack';
 import {LETTER_CLASSES_352,type Letter352} from './sim/letters-352';
 import type {NativeHudViewAction} from './ui3d/native-hud';
+import {NativeEnvironmentStatsReader,type NativeEnvironmentModes} from './ui3d/native-environment-stats';
 import {NATIVE_DOCK_PREFERENCE_KEY,parseNativeDockPreferences,NATIVE_UI_SCALE_PREFERENCE_KEY,parseNativeUiScale,normalizeNativeUiScale,type NativeDockPreferences} from './ui3d/native-preferences';
 import {GRAPHICS_STYLE_PREFERENCE_KEY,parseGraphicsStylePreferences,normalizeGraphicsStylePreferences,type GraphicsStylePreferences} from './ui3d/native-preferences';
 import {graphicsStyleComparisonsShareScene,type GraphicsStyleComparisonResult} from './render/graphics-style-comparison';
@@ -238,8 +239,10 @@ import './ui/journal-inspection.css';
 import { presentCellDescription, type CellHealth } from './ui/cell-inspector';
 import { clickedMapObject,mapObjectExists,nextMapObject,type MapObjectSelection } from './ui/map-object-selection';
 import { DEFAULT_PLAN_COLOR_369,planById369,planLabel369,type PlanColor369 } from './sim/plans-369';
-import {mapObjectGroupCells,MAX_MAP_OBJECT_SELECTION} from './ui/map-object-group-selection';
-import {mapObjectActions,mapObjectGroupActions} from './ui/map-object-actions';
+import {mapObjectGroupCells,mergeMapObjectGroups} from './ui/map-object-group-selection';
+import {mapObjectActions,mapObjectGroupActions,mapSelectionShortcut} from './ui/map-object-actions';
+import {carpetEyedropper,stepGameSpeed} from './ui/map-interaction-shortcuts';
+import {createNativeMapSearch,type NativeMapSearchTarget} from './ui3d/native-map-search';
 import { MapHoverLightCache,mapHoverLines } from './ui/map-hover-readout';
 import {installHoverReadoutLayout} from './ui/hover-readout-layout';
 import { mapCellDetails } from './ui/map-cell-details';
@@ -327,6 +330,7 @@ let nativeShipTerminal298:ReturnType<typeof createNativeShipTerminal298>|undefin
 let nativeHud:NativeHudCards|undefined;
 let nativeLetters:NativeLetterStack|undefined;
 let nativeCustomPage:NativePage|undefined;
+let nativeMapSearch:ReturnType<typeof createNativeMapSearch>|undefined,mapSearchOutlineShown=false,mapGizmoShortcutBusy=false;
 /** Main-thread steps of the last launch with their time; diagnostics only. */
 const launchTimeline:{stage:string;at:number}[]=[];
 /** Graphics device and resident layers created while the Worker still loads
@@ -345,6 +349,8 @@ let nativeEncounterKey:string|undefined;
 let nativeBeforeIncident:NativePage|undefined;
 let nativeConstructionMaterial:ConstructionMaterial='wood';
 let nativeRoofsVisible=false,nativeZonesVisible=true,nativePerspective=false;
+const nativeEnvironmentModes:NativeEnvironmentModes={room:false,beauty:false},nativeEnvironmentReader=new NativeEnvironmentStatsReader();
+let nativeEnvironmentBlocked=true,nativePublicationRevision=0,nativeEnvironmentKey='',nativeEnvironmentAt=0;
 let nativeCreationStorage:StorageControlSettings={priority:2,filters:{wood:true,food:true,unfinished:true,textile:true,apparel:true,weapon:true,medicine:true,neutroamine:true,chemfuel:true,shell:true,component:true,'advanced-component':true,steel:true,gold:true,uranium:true,plasteel:true,blocks:true,furniture:true,silver:true}};
 const diagnosticStart = params.has('scenario');
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = gameLayout();
@@ -1015,7 +1021,7 @@ const session = new GameSession(client, saveRepository, prepareWorld, () => {
 },()=>{queueMicrotask(()=>snapshotHud.request(true));});
 const frontHost = document.createElement('div'); document.querySelector('#app')!.append(frontHost);
 if(nativeMode){
-  nativeUi=new NativeStage({onTools:kind=>{if(nativeToolPalette===kind||tutorialAllows({tag:'MainTab-Architect-Open'})){const opening=nativeToolPalette!==kind;showNativeToolPalette(kind);if(opening)tutorialNotify('MainTab-Architect-Open');}},onViewport:(w,h,k,bottom,left)=>{nativeViewport={width:w,height:h,unitsPerPixel:k,bottom:bottom??96,left};applyNativeHudViewport();},onWindowLayout:bounds=>nativeHud?.setWindowBounds(bounds)??false,onPointer:updateNativeDockPointer,onAnimate:dt=>{const hud=nativeHud?.animate(dt)??false,letters=nativeLetters?.animate(dt)??false;return (nativeTutorialCard?.animate()??false)||hud||letters;},countdownFrame298:{canFeed:nativeShipFrameEligible298,canPresent:nativeShipCurtainEligible298,feed:delta=>{client.feedShipFrame298(delta);nativeShipTerminal298?.frame(delta);}},onPanel:id=>{
+  nativeUi=new NativeStage({onTools:kind=>{if(nativeToolPalette===kind||tutorialAllows({tag:'MainTab-Architect-Open'})){const opening=nativeToolPalette!==kind;showNativeToolPalette(kind);if(opening)tutorialNotify('MainTab-Architect-Open');}},onViewport:(w,h,k,bottom,left)=>{nativeViewport={width:w,height:h,unitsPerPixel:k,bottom:bottom??96,left};applyNativeHudViewport();},onWindowLayout:bounds=>nativeHud?.setWindowBounds(bounds)??false,onPointer:updateNativeDockPointer,onWorldHoverBlocked:blocked=>{nativeEnvironmentBlocked=blocked;updateNativeEnvironmentStats(true);},onAnimate:dt=>{const hud=nativeHud?.animate(dt)??false,letters=nativeLetters?.animate(dt)??false;return (nativeTutorialCard?.animate()??false)||hud||letters;},countdownFrame298:{canFeed:nativeShipFrameEligible298,canPresent:nativeShipCurtainEligible298,feed:delta=>{client.feedShipFrame298(delta);nativeShipTerminal298?.frame(delta);}},onPanel:id=>{
     nativeCustomPage=undefined;nativeToolPalette=undefined;
     if(id==='factions'){if(!tutorialAllows({tag:'MainTab-Factions-Open'}))return;nativeCustomPage=buildNativeFactions(readNativeState(),nativeActions());nativeUi!.showPage(nativeCustomPage);tutorialNotify('MainTab-Factions-Open');return;}
     void attempt(()=>switchPanel(currentPanel===id?null:id));
@@ -1034,6 +1040,11 @@ if(nativeMode){
       return true;
     },
     onCancelWorldInteraction:()=>{renderer?.cancelSelection();renderer?.cancelDesignation();},
+  });
+  nativeMapSearch=createNativeMapSearch({readState:()=>({world:snapshot,epoch:session.generation,publicationRevision:nativePublicationRevision,mapVisible:!!snapshot&&!!renderer&&!frontMenu.isOpen()&&!replacingWorld&&!simulationStopped&&!graphicsFault&&!launchProgress&&currentPanel===null}),
+    showPage:page=>{nativeCustomPage=page;nativeUi!.showPage(page);},isCurrentPage:page=>nativeCustomPage===page&&!frontMenu.isOpen(),
+    focus:target=>{if(target.kind==='object'){selectObjects([target.object]);renderer?.focusCell(target.cell);}else if(target.kind==='cell'){renderer?.focusCell(target.cell);}else selectPawns({ids:[target.id],additive:false,toggle:false},true);},
+    preview:highlightMapSearchTarget,close:()=>{if(nativeCustomPage?.id==='map-search'){nativeCustomPage=undefined;refreshNativeUi();}},
   });
   nativeShipTerminal298=createNativeShipTerminal298({readState:readNativeState,
     readEpoch:()=>session.generation,readCredits:()=>readAdoptedShipCredits298(snapshot,campaignOnly,session.hasWorld),
@@ -1116,7 +1127,7 @@ function syncTutorialLesson():void {
   if(shown){const previous=tutorialSoundLesson?.epoch===campaignPresentationEpoch?tutorialSoundLesson.lesson:undefined,cue=tutorialLessonCue(previous,view?.lesson);tutorialSoundLesson={epoch:campaignPresentationEpoch,...view?{lesson:view.lesson}:{}};if(cue&&nativeTutorialCard)audio.playInterface(cue);}
   if(nativeTutorialCard?.update(view,shown))nativeUi?.invalidate();
   const outline=shown&&!frontMenu.isOpen()?engine!.outline():null,key=JSON.stringify(outline);
-  if(key!==tutorialOutlineKey){tutorialOutlineKey=key;renderer?.setMapOutline(outline);}
+  if(!mapSearchOutlineShown&&key!==tutorialOutlineKey){tutorialOutlineKey=key;renderer?.setMapOutline(outline);}
   syncNativeHighlights();
 }
 function openHelp():void {
@@ -1323,20 +1334,34 @@ function showNativeToolPalette(kind:'orders'|'zones',toggle=true):void {
   if(toggle&&nativeToolPalette===kind){nativeToolPalette=undefined;nativeCustomPage=undefined;refreshNativeUi();return;}
   setPanel(null,true);nativeToolPalette=kind;nativeCustomPage=buildNativeToolPalette(readNativeState(),nativeActions(),kind);nativeUi.showPage(nativeCustomPage);
 }
+function highlightMapSearchTarget(target:NativeMapSearchTarget|undefined):void {
+  const cell=target?.cell;if(!cell||!snapshot||!renderer){if(mapSearchOutlineShown){mapSearchOutlineShown=false;tutorialOutlineKey='';syncTutorialLesson();}return;}
+  if(!knownPosition256(snapshot,cell))return;
+  mapSearchOutlineShown=true;const x=Math.max(0,cell.x-1),z=Math.max(0,cell.z-1);
+  renderer.setMapOutline({x,z,width:Math.min(3,snapshot.width-x),height:Math.min(3,snapshot.height-z)});
+}
+function openNativeMapSearch():void {
+  if(!nativeUi?.allowsMapSearch()||!nativeMapSearch||!snapshot||!renderer||replacingWorld)return;
+  if(!nativeMapSearch.isOpen){setPanel(null);if(!nativeMapSearch.open())return;}
+  nativeUi.focusMapSearchInput();
+}
 function applyNativeViewControl(action:NativeHudViewAction):void {
   if(action==='walls'){wallCutaway=!wallCutaway;renderer?.setWallCutaway(wallCutaway);}
   else if(action==='roofs'){nativeRoofsVisible=!nativeRoofsVisible;renderer?.setRoofsVisible(nativeRoofsVisible);}
   else if(action==='foliage'){foliageVisible=!foliageVisible;renderer?.setFoliageVisible(foliageVisible);}
   else if(action==='zones'){nativeZonesVisible=!nativeZonesVisible;renderer?.setZonesVisible(nativeZonesVisible);}
+  else if(action==='room-stats'){nativeEnvironmentModes.room=!nativeEnvironmentModes.room;}
+  else if(action==='beauty'){nativeEnvironmentModes.beauty=!nativeEnvironmentModes.beauty;}
   else if(action==='camera'){nativePerspective=renderer?.toggleCameraMode()==='perspective';}
   else if(action==='home'){const pawn=snapshot?.pawns[0];if(pawn)renderer?.focusPawn(pawn.id);}
   // Core Checkbox_TurnedOn/Off for the view toggles (the walls cut away = on).
-  const toggled=action==='walls'?wallCutaway:action==='roofs'?nativeRoofsVisible:action==='foliage'?foliageVisible:action==='zones'?nativeZonesVisible:undefined;
+  const toggled=action==='walls'?wallCutaway:action==='roofs'?nativeRoofsVisible:action==='foliage'?foliageVisible:action==='zones'?nativeZonesVisible:action==='room-stats'?nativeEnvironmentModes.room:action==='beauty'?nativeEnvironmentModes.beauty:undefined;
   if(toggled!==undefined)audio.playInterface(toggled?'ui.toggle-on':'ui.toggle-off');
   refreshNativeUi();
+  if(action==='room-stats'||action==='beauty'){if(!nativeEnvironmentModes.room&&!nativeEnvironmentModes.beauty)clearNativeEnvironmentStats(true);else updateNativeEnvironmentStats(true);}
 }
 function readNativeState():NativeUiState {
-  return {world:snapshot,epoch:session.generation,campaign:campaignOnly,panel:currentPanel,category:currentCategory,tool:currentTool,
+  return {world:snapshot,epoch:session.generation,publicationRevision:nativePublicationRevision,campaign:campaignOnly,panel:currentPanel,category:currentCategory,tool:currentTool,
     orientation:placementOrientation,constructionMaterial:nativeConstructionMaterial,creationStorage:nativeCreationStorage,selectedPawnIds:[...selection.ids],selectedCell,
     selectedObjects,campProgress:nativeCampProgress,caravanProgress:nativeCaravanProgress,
     selectedAnimalId:selectedPawn!==undefined&&snapshot?.wildlife?.animals.some(animal=>animal.id===selectedPawn)?selectedPawn:undefined,
@@ -1362,7 +1387,7 @@ function nativeActions():NativeUiActions {
     front:openFront,save,exportSave:exportCurrentColony,
     openSaveManager:openNativeSaveManager,openOptions:openNativeOptions,openHelp,
     showPage:page=>{nativeCustomPage=page;nativeUi?.showPage(page);},refresh:()=>renderState(),clearSelection,
-    readState:readNativeState,closePage:()=>{nativeToolPalette=undefined;nativeCustomPage=undefined;renderState();},
+    readState:readNativeState,isCurrentPage:page=>nativeCustomPage===page&&!frontMenu.isOpen(),closePage:()=>{nativeToolPalette=undefined;nativeCustomPage=undefined;renderState();},
     pawnActivity:id=>{const pawn=snapshot?.pawns.find(p=>p.id===id);return pawn&&snapshot?actionLabel(pawn,carriedPatientsOf(snapshot)):'';},
     openVisitorTrade:()=>nativeLocalTrade?.openVisitors(),openOrbitalTrade:id=>openLearningOrbitalTrade(()=>nativeLocalTrade?.openOrbital(id)),openFactionComms298:id=>{void attempt(async()=>nativeFactionComms298?.open(id));},
     launchShip298:id=>nativeShipTerminal298?.openLaunch(id),
@@ -1391,7 +1416,8 @@ function refreshNativeUi():void {
   if(snapshot){nativeHud?.setSelection([...selection.ids]);nativeHud?.update(snapshot,currentSpeed,renderer?.stats.fps??0);}
   syncNativeLetters();
   nativeGuidance?.setHudVisible(!!snapshot&&!frontMenu.isOpen()&&!launchProgress);syncNativeGuidance();
-  nativeHud?.setViewState({walls:wallCutaway?'coupés':'hauts',roofs:nativeRoofsVisible,foliage:foliageVisible,zones:nativeZonesVisible,camera:nativePerspective?'perspective':'iso'});
+  nativeHud?.setViewState({walls:wallCutaway?'coupés':'hauts',roofs:nativeRoofsVisible,foliage:foliageVisible,zones:nativeZonesVisible,camera:nativePerspective?'perspective':'iso',roomStats:nativeEnvironmentModes.room,beauty:nativeEnvironmentModes.beauty});
+  updateNativeEnvironmentStats();
   if(launchProgress){paintLaunch();return;}
   const state=readNativeState(),actions=nativeActions(),terminalPage=nativeShipTerminal298?.update(state);
   if(frontMenu.isOpen())return;
@@ -1399,6 +1425,7 @@ function refreshNativeUi():void {
   if(terminalPage){nativeCustomPage=terminalPage;nativeUi.showPage(terminalPage);return;}
   if(nativeShipTerminal298?.ownsPage(nativeCustomPage?.id))nativeCustomPage=undefined;
   syncNativePanelState(state,actions);
+  nativeMapSearch?.refresh();
   if(nativeToolPalette&&nativeCustomPage?.id==='map-tools-'+nativeToolPalette)nativeCustomPage=buildNativeToolPalette(state,actions,nativeToolPalette);
   if(nativeDevPanelOpen){if(nativeCustomPage?.id===DEV_PANEL_ID)nativeCustomPage=buildNativeDevPanel(state,devPanelHost);else{nativeDevPanelOpen=false;devArmed=undefined;}}
   syncDevBar();
@@ -1408,6 +1435,14 @@ function refreshNativeUi():void {
     if(nativeEncounterKey!==encounter.id){nativeEncounterKey=encounter.id;nativeCustomPage=undefined;}
     if(!nativeCustomPage){encounter.closable=false;nativeUi.showPage(encounter);return;}
   }else if(nativeEncounterKey){nativeEncounterKey=undefined;nativeCustomPage=undefined;}
+  // The information sheet and the animal's actual possessions/training are
+  // projections of the latest accepted snapshot, not frozen popups. Retire
+  // a sheet if its selected owner disappears; other custom flows keep theirs.
+  if(nativeCustomPage&&(nativeCustomPage.layout==='info'&&nativeCustomPage.id.startsWith('inspect-')||nativeCustomPage.layout==='inspector'&&nativeCustomPage.id.startsWith('inspect-animal-'))){
+    const inspected=buildNativeInspector(state,actions);
+    nativeCustomPage=inspected&&(inspected.layout==='info'||inspected.id.startsWith('inspect-animal-'))?inspected:undefined;
+    if(inspected){nativeUi.showPage(inspected);return;}
+  }
   if(nativeCustomPage){nativeUi.showPage(nativeCustomPage);return;}
   const page=currentPanel?buildNativePanel(state,actions):nativeHudHiddenInspectorKey!==undefined&&nativeHudHiddenInspectorKey===nativePawnInspectorKey()?null:buildNativeInspector(state,actions);
   if(page&&!page.onClose)page.onClose=()=>setPanel(null);
@@ -1748,9 +1783,26 @@ function beginTreePlacement(pileId:number):void {
 function selectPawn(id: number) {
   selectPawns({ids:[id],additive:false,toggle:false},true);
 }
+function clearNativeEnvironmentStats(reset=false):void{
+  if(nativeEnvironmentKey||reset){nativeEnvironmentKey='';nativeUi?.setEnvironmentStats(null);renderer?.setEnvironmentStats(null);}
+  if(reset)nativeEnvironmentReader.clear();
+}
+/** No map/beauty reader is called when the two display settings are off.
+ * Read a changed cell immediately; on a moving simulation coalesce updates
+ * to the latest accepted publication at the same cadence as the hover HUD. */
+function updateNativeEnvironmentStats(force=false):void{
+  const world=snapshot,cell=hoveredCell;
+  if(!nativeEnvironmentModes.room&&!nativeEnvironmentModes.beauty||nativeEnvironmentBlocked||!nativeUi||!renderer||!world||!cell||currentTool!=='select'||currentPanel!==null||frontMenu.isOpen()||replacingWorld||graphicsFault||simulationStopped||launchProgress||document.hidden){clearNativeEnvironmentStats();return;}
+  const key=`${nativePublicationRevision}:${cell.x}:${cell.z}:${Number(nativeEnvironmentModes.room)}:${Number(nativeEnvironmentModes.beauty)}`,now=performance.now();
+  if(key===nativeEnvironmentKey||!force&&nativeEnvironmentKey&&now-nativeEnvironmentAt<250)return;
+  nativeEnvironmentKey=key;nativeEnvironmentAt=now;
+  const stats=nativeEnvironmentReader.read(world,cell,nativeEnvironmentModes,nativePublicationRevision);
+  nativeUi.setEnvironmentStats(stats);renderer.setEnvironmentStats(stats);
+}
 function updateMapHover(force=false):void {
   if(nativeUi){
     const cell=hoveredCell;
+    updateNativeEnvironmentStats(force);
     // Core GlobalControls.TemperatureString follows the mouse cell, tabs open or not.
     if(snapshot&&nativeHud){const now=performance.now();if(force||now-lastHoverTemperatureAt>=250){lastHoverTemperatureAt=now;nativeHud.setHoverTemperature(hoverTemperatureText(snapshot,cell));}}
     if(currentTool!=='select'||!snapshot||!cell||currentPanel!==null||frontMenu.isOpen()||replacingWorld){nativeUi.setWorldReadout(null);return;}
@@ -1817,7 +1869,7 @@ function selectPawns(gesture:SelectionGesture,focus=false) {
   selectedPawn=selection.single;selectedCell=undefined;
   selectedObject=undefined;selectedObjects=[];renderer?.setSelectedObject(undefined);
   renderer?.setSelectedPawns(selection.ids);if(selection.ids.size)audio.playInterface('ui.select');
-  setPanel(null);
+  if(!nativeMapSearch?.isOpen)setPanel(null);
   if(focus&&selectedPawn!==undefined)renderer?.focusPawn(selectedPawn);
   if(!nativeUi)rebuildInspector(); renderState();
 }
@@ -1855,7 +1907,7 @@ function pickCell(x: number, z: number, preferred?: MapObjectSelection) {
   if(!object){clearSelection();return;}
   selection.clear();renderer?.setSelectedPawns(selection.ids);
   selectedPawn = undefined; selectedCell = cell;selectedObject=object;selectedObjects=[object];renderer?.setSelectedObject(object);
-  setPanel(null); if(!nativeUi)rebuildInspector(); renderState();
+  if(!nativeMapSearch?.isOpen)setPanel(null); if(!nativeUi)rebuildInspector(); renderState();
 }
 function paintAllowedArea(id:number,enabled:boolean,from:Cell,to:Cell):void {
   if(!snapshot||replacingWorld||frontMenu.isOpen())return;
@@ -1902,13 +1954,20 @@ function clearSelection() {
 }
 function selectObjects(objects:MapObjectSelection[],additive=false):void {
   if(!snapshot||replacingWorld||frontMenu.isOpen())return;
-  const merged=new Map<string,MapObjectSelection>();
-  for(const object of [...(additive?selectedObjects:[]),...objects])merged.set(`${object.kind}:${object.id}`,object);
-  selectedObjects=[...merged.values()].slice(0,MAX_MAP_OBJECT_SELECTION);
+  nativeHudHiddenInspectorKey=undefined;
+  selectedObjects=mergeMapObjectGroups(snapshot,selectedObjects,objects,additive);
   selectedObject=selectedObjects[0];selectedCell=selectedObject?mapObjectGroupCells(snapshot,[selectedObject])[0]?.[0]:undefined;
   selection.clear();selectedPawn=undefined;renderer?.setSelectedPawns(selection.ids);renderer?.setSelectedObjects(selectedObjects);
   if(selectedObjects.length)audio.playInterface('ui.select');
-  setPanel(null);if(!nativeUi)rebuildInspector();renderState();
+  if(!nativeMapSearch?.isOpen)setPanel(null);if(!nativeUi)rebuildInspector();renderState();
+}
+/** A keyboard gesture submits the same exact selected-target commands offered
+ * by the inspector; it never arms an area tool or retargets a later map. */
+function activateMapGizmoShortcut(key:string):void {
+  if(!snapshot||!selectedObjects.length||currentPanel!==null||currentTool!=='select'||mapGizmoShortcutBusy||nativeUi&&!nativeUi.allowsMapGizmoShortcuts())return;
+  const action=mapSelectionShortcut(snapshot,selectedObjects,key);if(!action?.commands.length)return;
+  const generation=session.generation,epoch=campaignPresentationEpoch;mapGizmoShortcutBusy=true;
+  void attempt(async()=>{try{for(const command of action.commands){if(session.generation!==generation||campaignPresentationEpoch!==epoch||!snapshot||replacingWorld||simulationStopped||graphicsFault)throw Error('La colonie ou la carte a changé.');await client.command(command);}renderState();}finally{mapGizmoShortcutBusy=false;}});
 }
 function objectGroupControls():void {
   if(!snapshot||!selectedObject)return;
@@ -2223,7 +2282,7 @@ function renderState() {
     if(snapshot&&explorationEnabled256(snapshot)){
       const visible=new Set([...snapshot.pawns,...(snapshot.wildlife?.animals??[]),...(snapshot.mechanoids??[])].filter(actor=>knownPosition256(snapshot!,actor)).map(actor=>actor.id));
       const kept=new Set([...selection.ids].filter(id=>visible.has(id)));
-      if(kept.size!==selection.ids.size){selection.ids=kept;selectedPawn=selection.single;nativeCustomPage=undefined;cancelNativeOrderPage();renderer?.setSelectedPawns(kept);}
+      if(kept.size!==selection.ids.size){selection.ids=kept;selectedPawn=selection.single;if(!nativeMapSearch?.isOpen)nativeCustomPage=undefined;cancelNativeOrderPage();renderer?.setSelectedPawns(kept);}
     }
     refreshNativeUi();return;
   }
@@ -2946,12 +3005,16 @@ document.addEventListener('keydown', event => {
   // Core designator keys of the open Orders or Zones palette come first (H is Harvest there, not Help).
   const paletteTool=snapshot?paletteHotkeyTool(nativeToolPalette,event.key):undefined;
   if(paletteTool){event.preventDefault();setTool(paletteTool);return;}
+  if(snapshot&&currentPanel==='architect'&&['c','x'].includes(event.key.toLowerCase())){event.preventDefault();setTool(event.key.toLowerCase()==='c'?'cancel':'deconstruct');return;}
+  const displayKey=event.key.toLowerCase();if(nativeUi&&snapshot&&!nativeUi.hasOpenGamePage(true)&&(displayKey==='g'||displayKey==='t')){event.preventDefault();if(!event.repeat)applyNativeViewControl(displayKey==='g'?'room-stats':'beauty');return;}
+  if(nativeUi&&snapshot&&displayKey==='z'){event.preventDefault();if(!event.repeat)openNativeMapSearch();return;}
   if (isHelpShortcut(event)) { event.preventDefault(); if (!event.repeat) openHelp(); return; }
   if (event.code === 'Space') { event.preventDefault();const token=client.getThreatPauseToken(),speed=currentSpeed===0?lastSpeed:0;learningRuntime?.speed(speed,true);void attempt(() => changeSpeed(speed,token)); return; }
   if (event.key === 'Escape') { event.preventDefault(); if(shootingControls.active){shootingControls.cancel();renderState();return;} if (orderMenu.close() || renderer?.cancelDesignation()) return; void attempt(() => switchPanel(null)); clearSelection(); return; }
   const tab = mainTabHotkey(event.key); if (tab) { event.preventDefault(); setPanel(currentPanel === tab ? null : tab); return; }
   const speeds: Record<string, number> = { '1': 1, '2': 3, '3': 6 };
   if (event.key in speeds) { const token=client.getThreatPauseToken(),speed=speeds[event.key];learningRuntime?.speed(speed);void attempt(() => changeSpeed(speed,token)); return; }
+  if(event.key==='Home'||event.key==='End'){event.preventDefault();if(!event.repeat){const speed=stepGameSpeed(currentSpeed,event.key==='Home'?1:-1);if(speed!==currentSpeed){learningRuntime?.speed(speed);const token=client.getThreatPauseToken();void attempt(()=>changeSpeed(speed,token));}}return;}
   // Core NextColonist (Period) / PreviousColonist (Comma):
   // ThingSelectionUtility.SelectNext/PreviousColonist, colonist bar order,
   // from the last (next) or first (previous) selected one, camera jump.
@@ -2969,9 +3032,9 @@ document.addEventListener('keydown', event => {
   }
   if(event.key.toLowerCase()==='r'&&selection.ids.size){event.preventDefault();if(!event.repeat)toggleDraft(snapshot?.pawns.filter(p=>selection.ids.has(p.id)&&isColonist(p)&&!p.prisoner)??[],c=>void attempt(async()=>{await client.command(c);renderState();}));return;}
   if(!snapshot)return;
-  const key = event.key.toLowerCase(), shortcut = globalHotkeyTool(key); if (shortcut) setTool(shortcut);
+  const key=event.key.toLowerCase();if(['f','v','c','x'].includes(key)){event.preventDefault();if(!event.repeat)activateMapGizmoShortcut(key);return;}
+  const shortcut = globalHotkeyTool(key); if (shortcut) setTool(shortcut);
   else if (rotatableTools.has(currentTool) && (key === 'q' || key === 'e')) { event.preventDefault(); rotatePlacement(key === 'q' ? -1 : 1); }
-  else if (key === 's') { event.preventDefault(); setTool('stockpile'); }
 });
 client.onError = message => notify(message, true);
 client.onOperationProgress = progress => {
@@ -2995,6 +3058,7 @@ client.onFault = () => {
 };
 function receiveMainSnapshot(world: World, cost: number, speed: number, replaced: boolean, motion?: PawnTrack[], coreInput297?:object): void {
   latestCoreFullInput297=coreInput297;latestCorePhaseInput297=undefined;
+  nativePublicationRevision++;if(replaced)clearNativeEnvironmentStats(true);
   if(replaced)firstGesturesLearning?.cancelPending();
   campaignOnly=undefined;shell.classList.remove('campaign-only');
   if(replaced){hoveredCell=null;hoverReadoutLayout?.reset();}
@@ -3048,6 +3112,7 @@ function renderCampaignOnly():void {
 }
 function receiveMainCampaignOnly(summary:CampaignSummary,cost:number,speed:number,replaced:boolean):void {
  firstGesturesLearning?.cancelPending();
+ clearNativeEnvironmentStats(true);nativePublicationRevision++;
  const hadMap=!!snapshot;if(replaced||hadMap){nativeHudHiddenInspectorKey=undefined;campaignPresentationEpoch++;}
  if(hadMap||replaced){renderer?.dispose();renderer=undefined;audio.reset();latestMotion=undefined;latestCoreFullInput297=latestCorePhaseInput297=undefined;hoveredCell=null;hoverReadoutLayout?.reset();selection.clear();selectedPawn=undefined;selectedCell=undefined;selectedObject=undefined;selectedObjects=[];orderMenu.close();startingArrivalUI.reset();}
  snapshot=undefined;latestFoodReadability=undefined;campaignOnly=summary;stepMs=cost;currentSpeed=speed;if(speed>0)deferredResumeGuard.confirm(false);session.hasWorld=true;frontMenu.setHasGame(true);
@@ -3184,14 +3249,33 @@ async function prepareWorldView(): Promise<void> {
     renderer.onSelection=gesture=>{if(shootingControls.active){const targetId=gesture.ids[0];if(targetId!==undefined){const type=shootingControls.mode!;shootingControls.cancel();void attempt(async()=>{await client.command({type,pawnIds:selectedColonyIds(),targetId});renderState();});}return;}selectPawns(gesture);};
     renderer.onObjectSelection=selectObjects;
     renderer.onHover=cell=>{hoveredCell=cell;if(cell)hoverReadoutLayout?.resume();updateMapHover(true);};
-    renderer.onInteractionCancel=()=>{cancelNativeOrderPage();orderMenu.close();};
+    renderer.onCarpetEyedropper=cell=>{if(!snapshot||replacingWorld||frontMenu.isOpen())return;const floor=carpetEyedropper(snapshot,currentTool,cell);if(!floor){audio.playInterface('ui.reject');return;}if(floor!==currentTool)applyTool(floor);};
+    renderer.onInteractionCancel=reason=>{if(reason!=='presentation')cancelNativeOrderPage();orderMenu.close();};
     renderer.onContext=(cell,x,y,queue,targetId)=>{
       if(shootingControls.active){shootingControls.cancel();renderState();return;}if(!snapshot||replacingWorld||frontMenu.isOpen())return;
       if(nativeUi){
-        const epoch=session.generation;void nativeOrderPage(snapshot,[...selection.ids],cell,x,y,queue,targetId,
+        const epoch=session.generation,mapEpoch=campaignPresentationEpoch;let ownedPage:NativePage|undefined;
+        void nativeOrderPage(snapshot,[...selection.ids],cell,x,y,queue,targetId,
           {orderOptions:client.orderOptions,command:client.command,currentWorld:()=>snapshot,currentSelectedPawnIds:()=>[...selection.ids],
-            isCurrent:()=>session.generation===epoch&&!replacingWorld&&!frontMenu.isOpen(),close:()=>{nativeCustomPage=undefined;refreshNativeUi();}},
-          page=>{nativeCustomPage=page;nativeUi!.showPage(page);}).catch(error=>notify(String(error),true));return;
+            isCurrent:()=>session.generation===epoch&&campaignPresentationEpoch===mapEpoch&&!replacingWorld&&!frontMenu.isOpen()&&
+              (!ownedPage||(ownedPage.floatMenu?nativeUi!.isFloatMenuCurrent(ownedPage):nativeCustomPage===ownedPage)),
+            close:()=>{
+              const page=ownedPage;ownedPage=undefined;
+              if(page?.floatMenu){nativeUi?.hideFloatMenu(page);return;}
+              if(page&&nativeCustomPage===page){nativeCustomPage=undefined;refreshNativeUi();}
+            }},
+          page=>{
+            const previous=ownedPage;ownedPage=page;
+            if(page.floatMenu){
+              if(previous&&!previous.floatMenu&&nativeCustomPage===previous){nativeCustomPage=undefined;refreshNativeUi();}
+              nativeUi!.showFloatMenu(page);
+            }else{
+              // A confirmation owns the ordinary modal slot; retire only the
+              // visual float layer without cancelling the order's session.
+              if(previous?.floatMenu)nativeUi!.hideFloatMenu(previous);
+              nativeCustomPage=page;nativeUi!.showPage(page);
+            }
+          }).catch(error=>notify(String(error),true));return;
       }
       const selected=snapshot.pawns.filter(p=>selection.ids.has(p.id)&&isColonist(p)&&!p.prisoner);if(selected.some(p=>p.draft))void orderMenu.openTactical(snapshot,new Set(selected.map(p=>p.id)),cell,x,y,queue,targetId);else void orderMenu.open(snapshot,selection.ids,cell,x,y,queue);
     };

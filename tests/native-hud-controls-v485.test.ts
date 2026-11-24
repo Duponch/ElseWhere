@@ -57,6 +57,11 @@ describe('native HUD bounds and severity · V485',()=>{
       expect([px(date.userData.w),px(date.userData.h)]).toEqual([200,48]);expect(px(weather.userData.h)).toBe(26);expect(px(temperature.userData.h)).toBe(26);
       expect(date.position.y).toBeLessThan(weather.position.y);expect(weather.position.y).toBeLessThan(temperature.position.y);expect(speeds[0]!.position.y).toBeLessThan(date.position.y);
       for(const button of views)button.userData.onClick?.();expect(f.view.mock.calls.map(call=>call[0])).toEqual(['walls','roofs','foliage','zones','home','camera']);
+      const room=f.piece('hud:view:room-stats'),beauty=f.piece('hud:view:beauty');
+      expect([px(room.userData.w),px(beauty.userData.h)]).toEqual([24,24]);expect(px(room.position.x-views[5]!.position.x)).toBe(-26);expect(px(beauty.position.x-room.position.x)).toBe(-26);
+      expect(room.position.y).toBe(views[5]!.position.y);expect(beauty.position.y).toBe(room.position.y);
+      f.hud.setViewState({roomStats:true,beauty:true});expect(room.userData.active).toBe(true);expect(beauty.userData.active).toBe(true);expect(room.userData.tooltip).toContain('(G)');expect(beauty.userData.tooltip).toContain('(T)');
+      room.userData.onClick?.();beauty.userData.onClick?.();expect(f.view.mock.calls.slice(-2).map(call=>call[0])).toEqual(['room-stats','beauty']);
       const before=views.map(piece=>piece.position.toArray());f.hud.setViewport(720,450,.01);expect(views.map(piece=>piece.position.toArray())).toEqual(before);
     }finally{f.close();}
   });

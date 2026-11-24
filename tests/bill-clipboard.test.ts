@@ -216,9 +216,10 @@ describe('work priorities clipboard', () => {
 
   it('adds a copy and a paste cell to each colonist row of the Work table', () => {
     const f = workFixture(), pawn = f.world.pawns[0]!;
-    expect(f.page.rows[0]!.columns?.slice(-2).map(column => column.label)).toEqual(['Copier', 'Coller']);
+    // Core PawnTable places the clipboard columns before the work types.
+    expect(f.page.rows[0]!.columns?.slice(0,2).map(column => column.label)).toEqual(['Copier', 'Coller']);
     const row = f.page.rows.find(entry => entry.id === `worker-${pawn.id}`)!;
-    expect(row.controls?.slice(-2).map(entry => entry.id)).toEqual([`work-copy-${pawn.id}`, `work-paste-${pawn.id}`]);
+    expect(row.controls?.slice(0,2).map(entry => entry.id)).toEqual([`work-copy-${pawn.id}`, `work-paste-${pawn.id}`]);
     expect(control(f.page, `work-paste-${pawn.id}`).disabled).toBe(true);
   });
 

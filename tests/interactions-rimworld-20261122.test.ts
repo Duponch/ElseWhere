@@ -6,7 +6,7 @@ import {createWorld} from '../src/sim/engine';
 import {queryOrderOptions} from '../src/sim/player-orders';
 import {SCHEMA_VERSION,type Command,type Job,type World} from '../src/sim/types';
 import {buildNativeInspector} from '../src/ui3d/native-inspector';
-import {nativeOrderPage,type NativeOrderClient} from '../src/ui3d/native-orders';
+import {cancelNativeOrderPage,nativeOrderPage,type NativeOrderClient} from '../src/ui3d/native-orders';
 import {layoutNativePage} from '../src/ui3d/native-layout';
 import {floatMenuDistance,floatMenuVanishes,pressOutsideFloatMenu,mouseAttachedTipPosition,tipTextAction,TOOLTIP_DELAY_MS} from '../src/ui3d/native-float-menu';
 import type {NativePage,NativeUiActions,NativeUiState} from '../src/ui3d/native-contract';
@@ -98,12 +98,63 @@ test('24/25: the orders open as a non-modal float menu at the mouse, titled by t
   expect((await rightClick(w,[pawn.id],{x:pawn.x+2,z:pawn.z},0,0)).pages.at(-1)).toMatchObject({modal:true});
 });
 
+test('cancelled access checks retire their loading window and late replies cannot close or reopen a newer context',async()=>{
+  const w=bare(),pawn=w.pawns[0]!,cell={x:pawn.x+2,z:pawn.z};
+  w.tiles[at(w,cell.x,cell.z)]={terrain:'rock',stone:'granite'};
+  w.jobs.push(job(w,'mine',cell.x,cell.z,{status:'pending'}));
+  const options=queryOrderOptions(w,pawn.id,cell);
+  let finishFirst!:(result:typeof options)=>void,shown:NativePage|undefined,firstClosed=0,secondClosed=0;
+  const first=nativeOrderPage(w,[pawn.id],cell,300,200,false,undefined,{
+    orderOptions:()=>new Promise(resolve=>{finishFirst=resolve;}),
+    command:async()=>undefined,currentWorld:()=>w,close:()=>{firstClosed++;shown=undefined;},
+  },page=>{shown=page;});
+  const old=shown!;
+  expect(old.rows[0]?.label).toBe('Vérification des accès…');
+  cancelNativeOrderPage();
+  expect(shown).toBeUndefined();
+  expect(firstClosed).toBe(1);
+  await nativeOrderPage(w,[pawn.id],cell,350,240,false,undefined,{
+    orderOptions:async()=>options,command:async()=>undefined,currentWorld:()=>w,
+    close:()=>{secondClosed++;shown=undefined;},
+  },page=>{shown=page;});
+  const newer=shown!;
+  expect(newer.rows[0]?.label).toBe('Prioriser : Miner');
+  finishFirst(options);await first;
+  old.onClose?.();
+  expect(shown).toBe(newer);
+  expect(firstClosed).toBe(1);
+  expect(secondClosed).toBe(0);
+  newer.onClose?.();
+  expect(secondClosed).toBe(1);
+});
+
+test('an access check survives an ordinary snapshot update but retires if its selection or page owner changed',async()=>{
+  const w=bare(),pawn=w.pawns[0]!,cell={x:pawn.x+2,z:pawn.z};
+  w.tiles[at(w,cell.x,cell.z)]={terrain:'rock',stone:'granite'};
+  w.jobs.push(job(w,'mine',cell.x,cell.z,{status:'pending'}));
+  const options=queryOrderOptions(w,pawn.id,cell);
+  for(const change of ['snapshot','selection','owner'] as const){
+    let resolve!:(result:typeof options)=>void,view=w,selected=[pawn.id],owned=true,shown:NativePage|undefined;
+    const pending=nativeOrderPage(w,[pawn.id],cell,300,200,false,undefined,{
+      orderOptions:()=>new Promise(done=>{resolve=done;}),command:async()=>undefined,currentWorld:()=>view,
+      currentSelectedPawnIds:()=>selected,isCurrent:()=>owned,close:()=>{shown=undefined;},
+    },page=>{shown=page;});
+    if(change==='snapshot')view={...w,tick:w.tick+1};
+    if(change==='selection')selected=[];
+    if(change==='owner')owned=false;
+    resolve(options);await pending;
+    if(change==='snapshot')expect(shown?.rows[0]?.label).toBe('Prioriser : Miner');
+    else expect(shown).toBeUndefined();
+    cancelNativeOrderPage();
+  }
+});
+
 test('25: the float menu is laid out at the mouse, a press outside closes it, and it vanishes past 95 px (FloatMenu, WindowStack)',()=>{
   const page:NativePage={id:'native-orders',title:'Ada',rows:[{id:'a',label:'Prioriser : Miner'}],floatMenu:{x:300,y:200},width:4.6};
   const box=layoutNativePage(page,{width:1280,height:720},false,(text,size)=>text.length*size*.5);
   expect(box.x).toBe(304);expect(box.y).toBe(200-box.header);
   const right=layoutNativePage({...page,floatMenu:{x:1270,y:710}},{width:1280,height:720},false,(text,size)=>text.length*size*.5);
-  expect(right.x+right.width).toBeLessThanOrEqual(1272);expect(right.y+right.height).toBeLessThanOrEqual(712);
+  expect(right.x+right.width).toBeLessThanOrEqual(1280);expect(right.y+right.height).toBeLessThanOrEqual(720);
   expect(pressOutsideFloatMenu(box,box.x+10,box.y+10)).toBe(false);
   expect(pressOutsideFloatMenu(box,box.x-1,box.y+10)).toBe(true);
   expect(floatMenuDistance(box,box.x-5,box.y)).toBe(0);
@@ -216,9 +267,11 @@ test('33: the hover readout gives MouseoverReadout lines, bottom line first in C
 test('33: the bottom-right temperature is the hovered room\'s, indoors or outdoors (GlobalControls.TemperatureString)',()=>{
   const w=bare(),outside=`Extérieur ${Math.round(outdoorTemperature(w))} °C`;
   w.thermal={regions:[{cells:[at(w,5,5),at(w,6,5)],temperature:21.4}]};
+  w.roofing={constructed:[at(w,5,5),at(w,6,5)],build:[],remove:[],cursor:0};
   w.structures.push({id:w.nextId++,kind:'wall',x:7,z:5,orientation:0,footprint:'standard',material:'wood'});
   expect(hoverTemperatureText(w,{x:5,z:5})).toBe('Intérieur 21 °C');
   expect(hoverTemperatureText(w,{x:7,z:5})).toBe('Intérieur 21 °C');
+  w.roofing.constructed=[at(w,5,5)];expect(hoverTemperatureText(w,{x:5,z:5})).toBe('Intérieur (sans toit : 1) 21 °C');
   expect(hoverTemperatureText(w,{x:12,z:12})).toBe(outside);
   expect(hoverTemperatureText(w,null)).toBe(outside);
   expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(376);

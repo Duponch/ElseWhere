@@ -152,10 +152,10 @@ describe('keys C and X are Core Designator_Cancel and Designator_Deconstruct',()
   test('every palette and the map read C and X as Cancel and Deconstruct, with no other tool on these letters',()=>{
     expect(ORDERS_PALETTE_HOTKEYS.c).toBe('cancel');expect(ORDERS_PALETTE_HOTKEYS.x).toBe('deconstruct');
     expect(ZONES_PALETTE_HOTKEYS.c).toBe('cancel');expect(ZONES_PALETTE_HOTKEYS.x).toBe('deconstruct');
-    expect(GLOBAL_TOOL_HOTKEYS.c).toBe('cancel');expect(GLOBAL_TOOL_HOTKEYS.x).toBe('deconstruct');
-    for(const palette of ['orders','zones',undefined] as const){
-      expect(paletteHotkeyTool(palette,'C')??globalHotkeyTool('c')).toBe('cancel');
-      expect(paletteHotkeyTool(palette,'X')??globalHotkeyTool('x')).toBe('deconstruct');
+    expect(GLOBAL_TOOL_HOTKEYS.c).toBeUndefined();expect(GLOBAL_TOOL_HOTKEYS.x).toBeUndefined();
+    for(const palette of ['orders','zones'] as const){
+      expect(paletteHotkeyTool(palette,'C')).toBe('cancel');
+      expect(paletteHotkeyTool(palette,'X')).toBe('deconstruct');
     }
     const shown=(id:string)=>toolDefinitions.find(t=>t.id===id)?.key;
     expect(shown('cancel')).toBe('C');expect(shown('deconstruct')).toBe('X');

@@ -16,14 +16,14 @@ describe('measured natural heights of structured and storage windows',()=>{
   const viewport={width:1280,height:720},zero=layoutNativePage(architect(0),viewport,false,measure),three=layoutNativePage(architect(3),viewport,false,measure),many=layoutNativePage(architect(120),viewport,false,measure);
   expect(zero.height).toBeLessThan(three.height);expect(three.height).toBeLessThan(many.height);expect(many.height).toBeLessThanOrEqual(viewport.height-106);
   for(const box of [zero,three,many])inside({x:0,y:0,...viewport},box);
-  expect(three.rows.find(r=>r.row.id==='catalogue')!.controls.every(c=>c.height===104)).toBe(true);expect(many.rows.find(r=>r.row.id==='catalogue')!.controls).toHaveLength(120);expect(many.regions.catalogue!.contentHeight).toBeGreaterThan(many.regions.catalogue!.height);
+  expect(three.rows.find(r=>r.row.id==='catalogue')!.controls.every(c=>c.height===75&&c.width===75)).toBe(true);expect(many.rows.find(r=>r.row.id==='catalogue')!.controls).toHaveLength(120);expect(many.regions.catalogue!.contentHeight).toBeGreaterThan(many.regions.catalogue!.height);
   const withRail=layoutNativePage(architect(3,8),viewport,false,measure);expect(withRail.height).toBeGreaterThan(three.height);expect(withRail.regions.navigation!.height).toBeGreaterThanOrEqual(withRail.regions.navigation!.contentHeight);
   // Empty catalogue, real-sized categories and a long detail owner. The last
   // paragraph must be reachable instead of giving the empty catalogue its room.
   const details=Array.from({length:20},(_,i):NativeRow=>({id:`detail-${i}`,label:`Information ${i}`,detail:'Tous les mots et les réglages restent disponibles dans le dossier, sans réduction des caractères.',region:'details'}));
   const page=architect(0,3,details),box=layoutNativePage(page,{width:480,height:720},false,measure),region=box.regions.details!,last=box.rows.find(r=>r.row.id==='detail-19')!,offset=region.contentHeight-region.height;
   inside({x:0,y:0,width:box.width,height:box.height},region);expect(region.height).toBeGreaterThan(190);expect(region.contentHeight).toBeGreaterThan(region.height);expect(box.regions.catalogue!.height).toBeLessThanOrEqual(2);
-  expect(box.header+last.top+last.height-offset).toBeCloseTo(region.y+region.height,6);expect(last.detailLines.join(' ')).toBe(details.at(-1)!.detail);expect(box.rows.find(r=>r.row.id==='categories')!.controls.every(c=>c.height===96)).toBe(true);
+  expect(box.header+last.top+last.height-offset).toBeCloseTo(region.y+region.height,6);expect(last.detailLines.join(' ')).toBe(details.at(-1)!.detail);expect(box.rows.find(r=>r.row.id==='categories')!.controls.every(c=>c.height===33)).toBe(true);
  });
  it('sizes Research from actual nodes, routes and tabs, including routes without nodes and overflowing tabs',()=>{
   const viewport={width:1280,height:720},zero=layoutNativePage(research(0),viewport,false,measure),three=layoutNativePage(research(3),viewport,false,measure),many=layoutNativePage(research(60),viewport,false,measure);

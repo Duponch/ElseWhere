@@ -1,10 +1,11 @@
 import * as THREE from 'three/webgpu';
-import { Fn, If, attribute, positionLocal, uv, vec2, vec3, uint } from 'three/tsl';
+import { Fn, If, attribute, mix, positionLocal, uv, vec2, vec3, uint } from 'three/tsl';
 import type { World, Cell } from '../sim/types';
 import { confirmedRouteEdgeSignature,type ConfirmedIntentRoute } from './confirmed-intent-fields';
 import { pawnPresentationPose } from './pawn-presentation';
 import type { PawnLayer } from './PawnLayer';
-import { actionProgress, selectedConfirmedPath,type ActionLookup } from './action-feedback';
+import { actionProgress, selectedConfirmedPath } from './action-feedback';
+import {actionProgressAnchor,type ActionAnchorLookup} from './action-progress-anchor';
 
 type Clock=Pick<PawnLayer,'blend'|'travelTime'>;
 type Path491={index:number;id:number;route:readonly Readonly<Cell>[];anchor?:Readonly<Cell>};
@@ -23,8 +24,8 @@ function quad():THREE.InstancedBufferGeometry {
   return geometry;
 }
 
-/** The bar and the body share the exact resident pose attributes. Only its
- * measured fraction uploads on worker snapshots; no actor loop runs in RAF. */
+/** Anchors and measured fractions upload on confirmed snapshots. Actor-only
+ * bars and midpoints share the resident pose; no target lookup runs in RAF. */
 export class ActionFeedbackLayer {
   readonly group=new THREE.Group();
   readonly bars:THREE.Mesh<THREE.InstancedBufferGeometry,THREE.SpriteNodeMaterial>;
@@ -47,13 +48,17 @@ export class ActionFeedbackLayer {
     for(const name of poseAttributes)bars.setAttribute(name,new THREE.InstancedBufferAttribute(new Float32Array(4),4));
     (bars.getAttribute('aTravel') as THREE.InstancedBufferAttribute).setW(0,1);
     bars.setAttribute('aAction',new THREE.InstancedBufferAttribute(new Float32Array(2),2));
+    bars.setAttribute('aActionAnchor',new THREE.InstancedBufferAttribute(new Float32Array(4),4));
     const barMaterial=new THREE.SpriteNodeMaterial({depthTest:false,depthWrite:false,transparent:true,opacity:.65});
-    barMaterial.positionNode=Fn(()=>pawnPresentationPose(clock).xyz.add(vec3(0,2.06,0)))();
+    barMaterial.positionNode=Fn(()=>{
+      const anchor=attribute('aActionAnchor','vec4'),pose=pawnPresentationPose(clock);
+      return mix(vec3(anchor.x,0,anchor.y),vec3(pose.x,0,pose.z),anchor.z).add(vec3(0,.18,anchor.w));
+    })();
     barMaterial.scaleNode=vec2(attribute('aAction','vec2').y.mul(.76),attribute('aAction','vec2').y.mul(.105));
     barMaterial.colorNode=uv().x.lessThanEqual(attribute('aAction','vec2').x)
       .select(vec3(.90,.85,.20),vec3(.17,.18,.17));
     this.bars=new THREE.Mesh(bars,barMaterial);
-    this.bars.name='Measured actor action bars — resident GPU poses';
+    this.bars.name='Measured target action bars - confirmed anchors';
     this.bars.visible=false;
     this.bars.frustumCulled=false;this.bars.renderOrder=7;
 
@@ -79,7 +84,8 @@ export class ActionFeedbackLayer {
   update(world:World,selected:ReadonlySet<number>,source:THREE.InstancedBufferGeometry,externalPath=false):void {
     this.bindSource(source);
     const action=this.bars.geometry.getAttribute('aAction') as THREE.InstancedBufferAttribute;
-    const lookup:ActionLookup={jobs:new Map(world.jobs.map(job=>[job.id,job])),cleaningStart:this.cleaningStart};
+    const anchors=this.bars.geometry.getAttribute('aActionAnchor') as THREE.InstancedBufferAttribute;
+    const lookup:ActionAnchorLookup={jobs:new Map(world.jobs.map(job=>[job.id,job])),cleaningStart:this.cleaningStart};
     if(this.cleaningStart.size)for(const pawn of world.pawns)if(!pawn.cleaning)this.cleaningStart.delete(pawn.id);
     // Retain only resources required by visible work counters. Building the
     // simulation's whole-map spatial index on each render snapshot cost ~1 ms
@@ -99,17 +105,29 @@ export class ActionFeedbackLayer {
       if(!cells.size&&!ids.size)break;
     }
     lookup.resourceCells=resourceCells;lookup.resources=resources;
-    let changed=false,active=0;
+    let changed=false,anchorChanged=false,active=0,pawnIndices:Map<number,number>|undefined;
     world.pawns.forEach((pawn,index)=>{
       const progress=actionProgress(world,pawn,lookup),fraction=Math.fround(progress?.fraction??0),visible=progress?1:0;
       if(visible)active++;
-      if(action.getX(index)===fraction&&action.getY(index)===visible)return;
-      action.setXY(index,fraction,visible);changed=true;
+      if(action.getX(index)!==fraction||action.getY(index)!==visible){action.setXY(index,fraction,visible);changed=true;}
+      const anchor=progress?actionProgressAnchor(world,pawn,progress,lookup):undefined;
+      let x=anchor?.target?.x??0,z=anchor?.target?.z??0;
+      if(anchor?.pawnId!==undefined){
+        pawnIndices??=new Map(world.pawns.map((p,i)=>[p.id,i]));
+        const slot=pawnIndices.get(anchor.pawnId);
+        if(slot!==undefined){const poses=source.getAttribute('aTo');x=poses.getX(slot);z=poses.getZ(slot);}
+      }
+      const ax=Math.fround(x),az=Math.fround(z),weight=anchor?.actorWeight??1,offset=anchor?.offsetZ??-.5;
+      if(anchors.getX(index)!==ax||anchors.getY(index)!==az||anchors.getZ(index)!==weight||anchors.getW(index)!==offset){
+        anchors.setXYZW(index,ax,az,weight,offset);anchorChanged=true;
+      }
     });
     this.bars.geometry.instanceCount=world.pawns.length;
     this.stats.activeBars=active;
     this.bars.visible=this.barsDetailVisible&&active>0;
-    if(changed){action.needsUpdate=true;this.stats.barUploads++;}
+    if(changed)action.needsUpdate=true;
+    if(anchorChanged)anchors.needsUpdate=true;
+    if(changed||anchorChanged)this.stats.barUploads++;
     if(!externalPath)this.updatePath(world,selected,source);
   }
 
@@ -118,12 +136,16 @@ export class ActionFeedbackLayer {
     if(this.source===source&&this.barCapacity===capacity)return;
     this.source=source;
     this.travelStamp='';
-    const g=this.bars.geometry,old=g.getAttribute('aAction') as THREE.InstancedBufferAttribute|undefined;
+    const g=this.bars.geometry,old=g.getAttribute('aAction') as THREE.InstancedBufferAttribute|undefined,
+      oldAnchors=g.getAttribute('aActionAnchor') as THREE.InstancedBufferAttribute|undefined;
     const action=new THREE.InstancedBufferAttribute(new Float32Array(capacity*2),2).setUsage(THREE.StaticDrawUsage);
+    const anchors=new THREE.InstancedBufferAttribute(new Float32Array(capacity*4),4).setUsage(THREE.StaticDrawUsage);
     if(old)action.array.set(old.array.subarray(0,Math.min(old.array.length,action.array.length)));
+    if(oldAnchors)anchors.array.set(oldAnchors.array.subarray(0,Math.min(oldAnchors.array.length,anchors.array.length)));
     g.dispose();
     for(const name of poseAttributes)g.setAttribute(name,source.getAttribute(name));
     g.setAttribute('aAction',action);
+    g.setAttribute('aActionAnchor',anchors);
     this.barCapacity=capacity;
   }
 

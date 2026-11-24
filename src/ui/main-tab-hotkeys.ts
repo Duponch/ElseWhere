@@ -37,14 +37,11 @@ export function paletteHotkeyTool(palette:'orders'|'zones'|undefined,key:string)
   return Object.hasOwn(table,letter)?table[letter]:undefined;
 }
 
-/** Letters that pick a tool from anywhere on the map. Core has no global
- * designator key; Elsewhere keeps these shortcuts, with Core's letters for
- * cancel (C) and deconstruct (X), which Core offers in every Architect
- * category. M, B, L and R (when no colonist is selected) stay Elsewhere's;
- * S (stockpile) is handled apart by main.ts. Chop has no global letter any
- * more: B in the Orders palette, as in Core. */
+/** Remaining Elsewhere-specific convenience shortcuts. C/X outside the
+ * Architect now target the selection's reverse designators, and S is the
+ * Core downward camera key. The open palettes have their own bindings. */
 export const GLOBAL_TOOL_HOTKEYS:Readonly<Record<string,Tool>>=Object.freeze({
-  c:'cancel',x:'deconstruct',m:'mine',b:'wall',l:'bed',r:'harvest',
+  m:'mine',b:'wall',l:'bed',r:'harvest',
 });
 export function globalHotkeyTool(key:string):Tool|undefined {
   if(key.length!==1)return undefined;

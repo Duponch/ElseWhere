@@ -54,6 +54,7 @@ describe('native local trade keeps contact, finite ownership and quote consent',
     const before = world.piles.reduce((sum, pile) => sum + (pile.item === 'medicine' ? pile.quantity : 0), 0);
     await ui.quantity(good.pile.id, 1); await ui.click('check-quote');
     expect(ui.page!.id).toBe('native-local-trade-confirm');
+    expect([ui.page!.layout,ui.page!.width,ui.page!.height]).toEqual(['message',640,460]);
     expect(ui.options.command.mock.calls.filter(([command]) => command.type === 'trade-execute')).toHaveLength(0);
     await ui.click('confirm-apply');
     expect(world.trade!.count).toBe(1);
@@ -82,7 +83,7 @@ describe('native local trade keeps contact, finite ownership and quote consent',
     const good = tradeGoods(world, pawn, trader).goods.find(good => good.side === 'sell' && good.pile.item === 'cloth' && !good.refusal)!;
     expect(good).toBeDefined();
     await ui.quantity(good.pile.id, 1);
-    expect(ui.page!.rows.find(row => row.id === 'native-local-trade-check')!.controls![0]!.disabled).toBe(true);
+    expect(ui.page!.actions!.find(control=>control.id==='native-local-trade-check-quote')!.disabled).toBe(true);
     await ui.click('accept-shortfall'); await ui.click('check-quote'); await ui.click('confirm-apply');
     const command = ui.options.command.mock.calls.map(([command]) => command).find(command => command.type === 'trade-execute');
     expect(command).toMatchObject({ acceptShortfall: true }); expect(world.trade!.forgone).toBeGreaterThan(0); ui.manager.dispose();
@@ -99,6 +100,35 @@ describe('native local trade keeps contact, finite ownership and quote consent',
     const delivery = f.world.orbital!.pending[0]!;
     expect(f.world.piles.some(pile => pile.item === 'component' && pile.owner.type === 'orbital-cargo' && pile.owner.deliveryId === delivery.id)).toBe(true);
     expect(ui.options.resume).toHaveBeenCalledTimes(2); ui.manager.dispose();
+  });
+
+  it('shows each real lot in its own stock lane and keeps hidden lines in the verified basket',async()=>{
+    const {world,ui,pawn,trader}=await visitors();
+    addMaterial(world,'textile',10,{type:'ground',x:3,z:3},'cloth');ui.manager.update();await settled();
+    const stock=tradeGoods(world,pawn,trader).goods,good=stock.find(good=>good.side==='buy'&&good.pile.item==='medicine')!;
+    expect(ui.page!.layout).toBe('trade');expect(ui.page!.width).toBe(1024);
+    for(const record of stock){const row=ui.page!.rows.find(row=>row.id===`native-local-trade-good-pile:${record.pile.id}`)!;
+      expect(row.tradeEntry).toMatchObject({side:record.side,available:record.available,unitPrice:record.unitPrice,quantity:0,refused:!!record.refusal,icon:`item-${record.pile.item}`});
+      if(record.refusal){expect(row.input).toBeUndefined();expect(row.controls!.every(control=>control.disabled)).toBe(true);}
+    }
+    await ui.quantity(good.pile.id,1);const controls=()=>ui.page!.rows.find(row=>row.id==='native-local-trade-search')!;
+    await controls().controls![1]!.select!.onChange('stock');let stocks=ui.page!.rows.filter(row=>row.tradeEntry).map(row=>row.tradeEntry!.available);expect(stocks).toEqual([...stocks].sort((a,b)=>b-a));
+    await controls().controls![0]!.select!.onChange('sell');expect(ui.page!.rows.filter(row=>row.tradeEntry).every(row=>row.tradeEntry!.side==='sell')).toBe(true);
+    await controls().input!.onCommit('aucune marchandise de ce nom');expect(ui.page!.rows.some(row=>row.tradeEntry)).toBe(false);
+    expect(ui.page!.rows.find(row=>row.id==='native-local-trade-total')!.detail).toContain('1 lot(s) du panier masqués');
+    await ui.click('check-quote');expect(ui.page!.rows.find(row=>row.id===`native-local-trade-confirmed-pile:${good.pile.id}`)!.value).toBe('Acheter × 1');
+    expect(ui.options.command.mock.calls.filter(([command])=>command.type==='trade-execute')).toHaveLength(0);await ui.click('confirm-apply');
+    expect(ui.options.command.mock.calls.map(([command])=>command).find(command=>command.type==='trade-execute')).toMatchObject({lines:[{pileId:good.pile.id,quantity:1}]});ui.manager.dispose();
+  });
+
+  it('does not turn a stale review or a retained quantity input into consent for a new quote',async()=>{
+    const {world,ui,pawn,trader}=await visitors(),good=tradeGoods(world,pawn,trader).goods.find(good=>good.side==='buy'&&good.pile.item==='medicine')!;
+    const input=ui.page!.rows.find(row=>row.id===`native-local-trade-good-pile:${good.pile.id}`)!.input!;
+    await ui.quantity(good.pile.id,1);await ui.click('check-quote');const oldPage=ui.page!,oldApply=oldPage.actions!.find(control=>control.id==='native-local-trade-confirm-apply')!;
+    expect(await input.onCommit('2')).toBe(false);expect(ui.page!.id).toBe('native-local-trade-confirm');
+    await ui.click('confirm-back');await ui.quantity(good.pile.id,2);await ui.click('check-quote');await oldApply.onActivate();oldPage.onClose?.();
+    expect(ui.options.command.mock.calls.filter(([command])=>command.type==='trade-execute')).toHaveLength(0);expect(ui.page!.rows.find(row=>row.id===`native-local-trade-confirmed-pile:${good.pile.id}`)!.value).toBe('Acheter × 2');
+    await ui.click('confirm-apply');expect(ui.options.command.mock.calls.map(([command])=>command).find(command=>command.type==='trade-execute')).toMatchObject({lines:[{pileId:good.pile.id,quantity:2}]});ui.manager.dispose();
   });
 
   it('rejects an old quantity callback after a replacement world and never takes over another page', async () => {

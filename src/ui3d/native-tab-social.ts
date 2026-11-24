@@ -87,8 +87,8 @@ export function layoutLogTab(spec:LogSpec,measure:CardMeasure):NativeTabCard{
     builder.glyph('check',toggle.x+toggle.width-24,L.toolbarY,24,24,{on:toggle.on});
     builder.target({id:'log-toggle:'+toggle.id,x:toggle.x,y:L.toolbarY,w:toggle.width,h:L.toolbarHeight,hint:toggle.control.hint,control:toggle.control,highlight:true});
   }
-  builder.glyph('copy',L.width-60,0,18,24);
-  builder.target({id:'log-copy',x:L.width-60,y:0,w:18,h:24,hint:spec.copy.hint,control:spec.copy,highlight:true});
+  builder.glyph('copy',L.width-60,0,18,24,{disabled:spec.copy.disabled});
+  builder.target({id:'log-copy',x:L.width-60,y:0,w:18,h:24,hint:spec.copy.hint,control:spec.copy,highlight:!spec.copy.disabled});
   const area={x:L.pad,y:24+L.pad,width:L.width-L.pad*2,height:L.height-24-L.pad*2},width=area.width-16-10+0;
   if(!spec.lines.length){builder.text(0,0,L.width,L.height,spec.emptyText,{ink:NATIVE_INK.none,align:'center'});return builder.card();}
   let y=0,alternate=false;const placed:{y:number;h:number;spec:LogLineSpec;lines:string[]}[]=[];

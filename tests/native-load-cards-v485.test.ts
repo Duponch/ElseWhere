@@ -4,6 +4,7 @@ import type {FrontMenuOptions} from '../src/ui/front-menu';
 import type {NativeControl,NativePage} from '../src/ui3d/native-contract';
 import type {SavedColony} from '../src/ui/game-session';
 import type {TestColony} from '../src/ui/test-colonies';
+import {layoutNativePage} from '../src/ui3d/native-layout';
 
 afterEach(()=>vi.unstubAllGlobals());
 function fixture(){
@@ -18,14 +19,18 @@ function fixture(){
  return {menu,options,tests,link,control,click,setSaves:(next:SavedColony[])=>{saves=next;},get saves(){return saves;},get page(){return page!;}};
 }
 
-describe('direct native load cards · V485',()=>{
- it('keeps every saved record and loads its entire row in one activation',async()=>{
+describe('native file list with direct load actions',()=>{
+ it('keeps every saved record and loads an explicitly clicked row action in one activation',async()=>{
   const f=fixture();f.menu.showLoad();const rows=f.page.rows.filter(row=>row.id.startsWith('save-'));
   expect(rows).toHaveLength(2);expect(f.page.actions?.some(control=>control.id==='load')).toBe(false);
   for(const [index,row]of rows.entries()){
-   expect(row.label).toBe('');expect(row.controlStyle).toBe('card');expect(row.controls).toHaveLength(1);
-   expect(row.controls![0]).toMatchObject({presentation:'card',label:f.saves[index]!.label,description:f.saves[index]!.detail});expect(row.controls![0]!.caption).toBeTruthy();
+   const save=f.saves[index]!;expect(row.label).toBe('');expect(row.fileEntry?.date).toBeTruthy();expect(row.controls).toHaveLength(2);
+   expect(row.controls![0]).toMatchObject({id:'select-save-'+save.key,label:save.label});expect(row.controls![1]).toMatchObject({id:'load-save-'+save.key,label:'Charger'});
+   for(const control of row.controls!){expect(control.hint).toContain(save.label);expect(control.hint).toContain(save.detail);}
   }
+  const box=layoutNativePage(f.page,{width:1440,height:900},true,(text,size)=>text.length*size*.53);expect([box.width,box.height]).toEqual([620,700]);
+  expect(box.rows.filter(row=>row.row.fileEntry).map(row=>[row.height,row.controls[1]!.width,row.controls[1]!.height])).toEqual([[40,100,36],[40,100,36]]);
+  await f.click('select-save-'+f.saves[0]!.key);expect(f.options.onLoad).not.toHaveBeenCalled();expect(f.page.rows.find(row=>row.id==='selected-save-detail')?.detail).toBe(f.saves[0]!.detail);
   await f.click('load-save-'+f.saves[1]!.key);expect(f.options.onLoad).toHaveBeenCalledExactlyOnceWith(f.saves[1]!.key);expect(f.options.onStart).not.toHaveBeenCalled();
  });
 
@@ -34,18 +39,23 @@ describe('direct native load cards · V485',()=>{
   const g=fixture();g.setSaves(g.saves.map(save=>({...save,disabled:true})));g.menu.showLoad();const disabled=g.control('load-save-'+g.saves[0]!.key);expect(disabled.disabled).toBe(true);await disabled.onActivate();expect(g.options.onLoad).not.toHaveBeenCalled();
  });
  it('shows a neutral metadata label for a legacy save without optional kind information',async()=>{
-  const f=fixture();f.options.getSaves=()=>[{key:'legacy-key',label:'Colonie ancienne',detail:'Métadonnées historiques conservées'}];f.menu.showLoad();expect(f.control('load-save-legacy-key').caption).toBe('Colonie enregistrée');await f.click('load-save-legacy-key');expect(f.options.onLoad).toHaveBeenCalledExactlyOnceWith('legacy-key');
+  const f=fixture();f.options.getSaves=()=>[{key:'legacy-key',label:'Colonie ancienne',detail:'Métadonnées historiques conservées'}];f.menu.showLoad();expect(f.page.rows.find(row=>row.id==='save-legacy-key')?.fileEntry).toMatchObject({date:'—',kind:'Colonie enregistrée'});expect(f.control('load-save-legacy-key').hint).toContain('Colonie enregistrée');await f.click('load-save-legacy-key');expect(f.options.onLoad).toHaveBeenCalledExactlyOnceWith('legacy-key');
  });
 
  it('serializes two activations of the same direct row while loading is pending',async()=>{
   const f=fixture();let release!:()=>void;const pending=new Promise<void>(resolve=>{release=resolve;});f.options.onLoad=vi.fn(async()=>pending);f.menu.showLoad();const row=f.control('load-save-'+f.saves[0]!.key),first=row.onActivate();await Promise.resolve();await row.onActivate();expect(f.options.onLoad).toHaveBeenCalledOnce();release();await first;expect(f.options.onLoad).toHaveBeenCalledExactlyOnceWith(f.saves[0]!.key);
  });
 
- it('loads the clicked test card directly and retains its complete description and provenance',async()=>{
+ it('loads the clicked test record directly and retains its complete description and provenance',async()=>{
   const f=fixture();f.menu.showLoad();await f.click('test-colonies');
-  for(const record of f.tests){const row=f.page.rows.find(row=>row.id==='test-'+record.id)!;expect(row.controlStyle).toBe('card');const card=row.controls!.find(control=>control.id==='load-test-'+record.id)!;expect(card.presentation).toBe('card');expect(card.label).toBe(record.label);expect(card.caption).toContain('3 colons · 128 × 128');for(const text of [record.description,...record.focus,...record.steps,record.provenance]){expect(card.description).toContain(text);expect(card.hint).toContain(text);}}
+  for(const record of f.tests){const row=f.page.rows.find(row=>row.id==='test-'+record.id)!;expect(row.controlStyle).toBe('button');const load=row.controls!.find(control=>control.id==='load-test-'+record.id)!;expect(load.label).toBe('Charger');await f.click('inspect-test-'+record.id);const dossier=f.page.rows.find(row=>row.id==='test-current-details')!;expect(dossier.label).toBe(record.label);expect(dossier.value).toContain('3 colons · 128 × 128');for(const text of [record.description,...record.focus,...record.steps,record.provenance]){expect(dossier.detail).toContain(text);expect(load.hint).toContain(text);}}
   expect(f.page.actions?.some(control=>control.id==='load-test')).toBe(false);expect(f.page.rows.some(row=>row.controls?.some(control=>control.id.startsWith('choose-test-')))).toBe(false);
   await f.click('load-test-second');expect(f.options.onLoadTest).toHaveBeenCalledExactlyOnceWith(f.tests[1]);expect(f.options.onLoad).not.toHaveBeenCalled();
+ });
+ it('refuses a retained direct action once its file-list scope has been left or filtered',async()=>{
+  const f=fixture();f.menu.showLoad();const retained=f.control('load-save-'+f.saves[0]!.key);
+  await f.page.rows.find(row=>row.id==='load-search')!.input!.onCommit('halte');await retained.onActivate();expect(f.options.onLoad).not.toHaveBeenCalled();
+  const visible=f.control('load-save-'+f.saves[1]!.key);f.menu.showHome();await visible.onActivate();expect(f.options.onLoad).not.toHaveBeenCalled();expect(f.page.id).toBe('front-home');
  });
 
  it('downloads the corresponding test record independently of loading or any selected row',async()=>{

@@ -26,7 +26,7 @@ import {knownBuilding256, knownNutrition256, knownPile256, knownPosition256, kno
 import type {StatusAlert} from '../ui/status-alerts';
 import type {NativePage, NativeRow} from './native-contract';
 import {NATIVE_RIGHT_DOCK_WIDTH} from './native-layout';
-import {ALERT_COLUMN_WIDTH,BAR_BASE,BAR_MARGIN_TOP,colonistBarLayout,colonistBarVisible,globalColumn,type BarLayout,type ColumnRect} from './native-hud-rimworld';
+import {ALERT_COLUMN_WIDTH,BAR_BASE,BAR_MARGIN_TOP,NATIVE_VIEW_ACTIONS,colonistBarLayout,colonistBarVisible,globalColumn,type BarLayout,type ColumnRect} from './native-hud-rimworld';
 import {NotificationFocusCycle,type NotificationTarget} from '../ui/notification-focus';
 import type {NativeDomainAlert} from './native-domain-alerts';
 import {weatherConditionLabel} from '../ui/weather-inspection';
@@ -58,8 +58,8 @@ export interface NativeHudActions {
   alertStarted?: (started:NativeAlertStart)=>void;
 }
 export interface NativeAlertStart {key:string;text:string;priority:Exclude<CoreAlertPriority,'medium'>;bell:boolean;targets:readonly NotificationTarget[]}
-export type NativeHudViewAction='walls'|'roofs'|'foliage'|'zones'|'home'|'camera';
-export interface NativeHudViewState {walls:string;roofs:boolean;foliage:boolean;zones:boolean;camera:string}
+export type NativeHudViewAction=typeof NATIVE_VIEW_ACTIONS[number];
+export interface NativeHudViewState {walls:string;roofs:boolean;foliage:boolean;zones:boolean;camera:string;roomStats:boolean;beauty:boolean}
 export interface NativeHudWindowBounds {x:number;y:number;width:number;height:number}
 interface ResourceRecord {
   item: ItemId;
@@ -200,8 +200,8 @@ export class NativeHudCards {
   private rightDockOpen=false;
   private notificationsAutoHide=false;
   private rightDockOffset=3.16;
-  private viewState:NativeHudViewState={walls:'hauts',roofs:false,foliage:true,zones:true,camera:'iso'};
-  private readonly column=globalColumn(6);
+  private viewState:NativeHudViewState={walls:'hauts',roofs:false,foliage:true,zones:true,camera:'iso',roomStats:false,beauty:false};
+  private readonly column=globalColumn(NATIVE_VIEW_ACTIONS.length);
   private readonly weatherPiece: CardboardPiece;
   private readonly weatherLabelPiece: CardboardPiece;
   private readonly temperaturePiece: CardboardPiece;
@@ -295,7 +295,7 @@ export class NativeHudCards {
       this.timeGroup.add(piece); this.speedButtons.push(piece);
     });
 
-    (['walls','roofs','foliage','zones','home','camera'] as const).forEach((action,index)=>{
+    NATIVE_VIEW_ACTIONS.forEach((action,index)=>{
       const rect=column.view[index]!;
       const button=this.makePiece({w:rect.width/100,h:rect.height/100,depth:.02,bgColor:PALETTE.creamPaper,bevel:.02,seed:9297+index*17,interactive:true,
         drawFn:(ctx,w,h,rng)=>this.drawViewControl(action,ctx,w,h,rng),onClick:()=>this.actions.view?.(action)});
@@ -456,9 +456,10 @@ export class NativeHudCards {
   setViewState(state:Partial<NativeHudViewState>):void {
     this.viewState={...this.viewState,...state};
     const labels:Record<NativeHudViewAction,string>={walls:`Murs : ${this.viewState.walls}`,roofs:`Toits : ${this.viewState.roofs?'visibles':'masqués'}`,
-      foliage:`Feuillage : ${this.viewState.foliage?'visible':'masqué'}`,zones:`Zones : ${this.viewState.zones?'visibles':'masquées'}`,home:'Recentrer sur la colonie',camera:`Vue : ${this.viewState.camera}`};
+      foliage:`Feuillage : ${this.viewState.foliage?'visible':'masqué'}`,zones:`Zones : ${this.viewState.zones?'visibles':'masquées'}`,home:'Recentrer sur la colonie',camera:`Vue : ${this.viewState.camera}`,
+      'room-stats':`Statistiques de pièce (G) : ${this.viewState.roomStats?'activées':'désactivées'}`,beauty:`Beauté (T) : ${this.viewState.beauty?'activée':'désactivée'}`};
     for(const [action,button] of this.viewButtons){
-      const active=action==='roofs'?this.viewState.roofs:action==='foliage'?!this.viewState.foliage:action==='zones'?this.viewState.zones:action==='walls'?this.viewState.walls!=='hauts':action==='camera'?this.viewState.camera!=='iso':false;
+      const active=action==='roofs'?this.viewState.roofs:action==='foliage'?!this.viewState.foliage:action==='zones'?this.viewState.zones:action==='walls'?this.viewState.walls!=='hauts':action==='camera'?this.viewState.camera!=='iso':action==='room-stats'?this.viewState.roomStats:action==='beauty'?this.viewState.beauty:false;
       if(button.userData.tooltip!==labels[action]||button.userData.active!==active){button.userData.tooltip=labels[action];button.userData.active=active;button.redraw(undefined,active?PALETTE.sageMountain:PALETTE.creamPaper);}
     }
   }
@@ -530,7 +531,7 @@ export class NativeHudCards {
   }
 
   private drawViewControl(action:NativeHudViewAction,ctx:CanvasRenderingContext2D,w:number,h:number,_rng:()=>number):void {
-    const icons:Record<NativeHudViewAction,string>={walls:'wall',roofs:'roof',foliage:'resource-tree',zones:'zones',home:'home',camera:'camera'};
+    const icons:Record<NativeHudViewAction,string>={walls:'wall',roofs:'roof',foliage:'resource-tree',zones:'zones',home:'home',camera:'camera','room-stats':'room-stats',beauty:'beauty-view'};
     drawPicto(ctx,icons[action],w/2,h/2,Math.min(w,h)*.39);
   }
 

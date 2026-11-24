@@ -17,28 +17,32 @@ const architect=(count:number):NativePage=>({id:'architect',title:'Architecte',l
 ]});
 
 describe('cardboard UI proportions and record flow · V480',()=>{
-  it('uses bottom-bar-sized Architect cards instead of stretching every cell across its region',()=>{
+  it('uses the Core category and gizmo sizes with a natural Architect width',()=>{
     const box=layout(architect(7)),nav=box.rows[0]!.controls,tiles=box.rows[1]!.controls;
-    expect(box.width).toBe(1180);expect(box.height).toBe(476);
-    expect(nav).toHaveLength(7);expect(nav.every(c=>c.height===96&&c.width>=90&&c.width<=100)).toBe(true);
+    expect(box.width).toBe(2*NATIVE_UI.padding+210+7*80-5+12);
+    expect(box.regions.details).toMatchObject({width:200,height:270});
+    expect(nav).toHaveLength(7);expect(nav.every(c=>c.height===33&&c.width>=100&&c.width<=101)).toBe(true);
     expect(nav.filter(c=>c.y===nav[0]!.y)).toHaveLength(2);
-    expect(tiles.filter(c=>c.y===tiles[0]!.y)).toHaveLength(6);
-    expect(tiles.every(c=>c.height===104&&c.width>=96&&c.width<=104)).toBe(true);
-    expect(tiles[1]!.x-tiles[0]!.x-tiles[0]!.width).toBeCloseTo(10,10);
+    expect(tiles.filter(c=>c.y===tiles[0]!.y)).toHaveLength(7);
+    expect(tiles.every(c=>c.height===75&&c.width===75)).toBe(true);
+    expect(tiles[1]!.x-tiles[0]!.x-tiles[0]!.width).toBe(5);
     for(const region of Object.values(box.regions))inside({x:0,y:0,width:box.width,height:box.height},region);
-    expect(box.regions.navigation!.contentHeight).toBe(414);
-    expect(box.regions.catalogue!.contentHeight).toBe(218);
+    expect(box.regions.navigation!.height).toBe(box.regions.navigation!.contentHeight);
+    expect(box.regions.catalogue!.height).toBe(box.regions.catalogue!.contentHeight);
+    expect(box.regions.navigation!.y).toBeGreaterThanOrEqual(box.regions.details!.y+270);
   });
 
   it('reflows compact catalogues and their lower options without an off-page region',()=>{
     for(const viewport of[{width:960,height:800},{width:760,height:800},{width:700,height:800},{width:400,height:800},{width:400,height:400}]){
-      const box=layout(architect(32),viewport);
+      const box=layout(architect(120),viewport);
       for(const region of Object.values(box.regions))inside({x:0,y:0,width:box.width,height:box.height},region);
       const controls=box.rows[1]!.controls;
-      expect(controls.map(c=>c.control.id)).toEqual(Array.from({length:32},(_,i)=>'tool-'+i));
-      expect(controls.every(c=>c.height===104&&c.width<=104)).toBe(true);
+      expect(controls.map(c=>c.control.id)).toEqual(Array.from({length:120},(_,i)=>'tool-'+i));
+      expect(controls.every(c=>c.height===75&&c.width===75)).toBe(true);
       expect(box.contentHeight).toBeGreaterThan(box.body.height);
-      if(box.width<850){const cat=box.regions.catalogue!,details=box.regions.details!;expect(details.x).toBe(cat.x);expect(details.y).toBe(cat.y+cat.height+10);}
+      const cat=box.regions.catalogue!,details=box.regions.details!,nav=box.regions.navigation!;
+      expect(cat.x-details.x).toBe(210);expect(nav.y).toBeGreaterThanOrEqual(details.y+details.height);
+      const last=controls.at(-1)!;expect(box.header+last.y+last.height-(cat.contentHeight-cat.height)).toBeLessThanOrEqual(cat.y+cat.height);
     }
   });
 

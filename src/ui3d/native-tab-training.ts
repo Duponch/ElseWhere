@@ -11,7 +11,7 @@ import {NATIVE_INK,NATIVE_LINE} from './native-ui-scale';
  * of 33 at the right edge, « steps / total » (green once learned). */
 export interface TrainingLineSpec {id:string;label:string;value?:string;hint:string}
 export interface TrainingRowSpec {id:string;label:string;steps:string;learned:boolean;wanted:boolean;disabled:boolean;hint:string;control:NativeControl}
-export interface TrainingSpec {type:'training';lines:readonly TrainingLineSpec[];rows:readonly TrainingRowSpec[]}
+export interface TrainingSpec {type:'training';lines:readonly TrainingLineSpec[];rows:readonly TrainingRowSpec[];minimumHeight?:number}
 export const TRAINING_SIZE={width:300,margin:17,top:10,line:22,spacing:2,gap:12,row:28,column:50,columnShift:17} as const;
 export function layoutTrainingTab(spec:TrainingSpec,measure:CardMeasure):NativeTabCard{
   const T=TRAINING_SIZE,inner={x:T.margin,y:T.margin+T.top,width:T.width-T.margin*2},builder=new CardBuilder(T.width,0,measure);
@@ -30,6 +30,6 @@ export function layoutTrainingTab(spec:TrainingSpec,measure:CardMeasure):NativeT
     builder.target({id:'training-row:'+row.id,x:inner.x,y,w:inner.width,h:T.row,hint:row.hint,control:row.control,highlight:true});
     y+=T.row;
   }
-  builder.height=y+T.margin;
+  builder.height=Math.max(y+T.margin,spec.minimumHeight??0);
   return builder.card();
 }

@@ -48,43 +48,45 @@ describe('native UI structure retained with the revised V480 proportions',()=>{
 
   it('restores independent Architecte navigation, catalogue and option regions',()=>{
     const rows:NativeRow[]=[{id:'categories',label:'',region:'navigation',controlStyle:'navigation',controls:Array.from({length:8},(_,i)=>control('category-'+i))},
-      {id:'catalogue',label:'',region:'catalogue',controlStyle:'tile',controls:Array.from({length:40},(_,i)=>({...control('build-'+i),icon:'wall'}))},
+      {id:'catalogue',label:'',region:'catalogue',controlStyle:'tile',controls:Array.from({length:140},(_,i)=>({...control('build-'+i),icon:'wall'}))},
       {id:'options',label:'Matériau choisi',region:'details',detail:'Les réglages de la construction restent dans une colonne distincte.'}];
     const box=layout({id:'architect',title:'Architecte',layout:'architect',width:1420,height:900,rows});
     const nav=box.regions.navigation!,catalogue=box.regions.catalogue!,details=box.regions.details!;
-    expect(box.width).toBe(1180);expect(box.height).toBeLessThanOrEqual(740);
-    expect(nav.x+nav.width).toBeLessThan(catalogue.x);expect(catalogue.x+catalogue.width).toBeLessThan(details.x);
-    expect([nav.y,catalogue.y,details.y]).toEqual([box.header,box.header,box.header]);
+    expect(box.width).toBe(2*NATIVE_UI.padding+210+10*80-5+12);expect(box.height).toBeLessThanOrEqual(900);
+    expect(nav.x+nav.width).toBeLessThan(catalogue.x);expect(details.x).toBe(nav.x);expect(nav.y).toBeGreaterThanOrEqual(details.y+details.height);
+    expect([catalogue.y,details.y]).toEqual([box.header,box.header]);
     const buttons=box.rows[0]!.controls,tiles=box.rows[1]!.controls;
-    expect(buttons.every(button=>button.height===96&&button.width<=100)).toBe(true);
-    expect(new Set(tiles.slice(0,6).map(tile=>tile.y)).size).toBe(1);expect(tiles[6]!.y).toBe(114);
-    expect(tiles.every(tile=>tile.height===104&&tile.width<=104)).toBe(true);expect(catalogue.contentHeight).toBeGreaterThan(catalogue.height);
+    expect(buttons.every(button=>button.height===33&&button.width<=101)).toBe(true);
+    expect(new Set(tiles.slice(0,10).map(tile=>tile.y)).size).toBe(1);expect(tiles[10]!.y-tiles[0]!.y).toBe(89);
+    expect(tiles.every(tile=>tile.height===75&&tile.width===75)).toBe(true);expect(catalogue.contentHeight).toBeGreaterThan(catalogue.height);
     expect(details.contentHeight).toBeLessThan(details.height);expect(box.contentHeight).toBe(catalogue.contentHeight);
     expect(box.body).toEqual({x:catalogue.x,y:catalogue.y,width:catalogue.width,height:catalogue.height});
   });
 
-  it('keeps responsive Architecte regions inside their page while options move below the catalogue',()=>{
+  it('keeps responsive Architecte regions inside their page with the Core information box above the categories and the grid at 210',()=>{
     for(const width of[900,700,400]){
       const box=layout({id:'architect',title:'Architecte',layout:'architect',rows:[],width:1420,height:900},{width,height:800});
       for(const region of Object.values(box.regions))inside({x:0,y:0,width:box.width,height:box.height},region);
-      if(width<740){const cat=box.regions.catalogue!,details=box.regions.details!;expect(details.x).toBe(cat.x);expect(details.y).toBeGreaterThanOrEqual(cat.y+cat.height);}
+      {const cat=box.regions.catalogue!,details=box.regions.details!,nav=box.regions.navigation!;expect(details.x).toBe(nav.x);expect(nav.y).toBeGreaterThanOrEqual(details.y+details.height);expect(cat.x-details.x).toBe(210);}
     }
   });
 
-  it('uses compact V480 cards with more visible catalogue columns and no stretched cell widths',()=>{
+  it('uses fixed Core gizmos with more visible catalogue columns and no stretched cell widths',()=>{
     const page=(cards:number):NativePage=>({id:'architect',title:'Architecte',layout:'architect',width:1420,height:900,rows:[
       {id:'navigation',label:'',region:'navigation',controlStyle:'navigation',controls:Array.from({length:7},(_,i)=>control('category-'+i))},
       {id:'catalogue',label:'',region:'catalogue',controlStyle:'tile',controls:Array.from({length:cards},(_,i)=>control('tool-'+i))},
       {id:'details',label:'Choisir une construction',region:'details',detail:'Les réglages restent accessibles.'}]});
     const wide=layout(page(7)),medium=layout(page(7),{width:960,height:1000}),small=layout(page(7),{width:760,height:1000});
-    expect(wide.rows[1]!.controls.filter(control=>control.y===0)).toHaveLength(6);
-    expect(medium.rows[1]!.controls.filter(control=>control.y===0)).toHaveLength(4);
-    expect(small.rows[1]!.controls.filter(control=>control.y===0)).toHaveLength(4);
-    expect(wide.height).toBe(476);expect(wide.y).toBe(1000-94-wide.height);
-    expect(wide.regions.navigation!.height).toBe(414);expect(wide.regions.catalogue!.contentHeight).toBe(218);
-    expect(wide.body.height).toBe(414);expect(wide.contentHeight).toBe(218);
-    expect(layout(page(13)).height).toBe(476);
-    const long=layout(page(48));expect(long.height).toBe(740);expect(long.contentHeight).toBeGreaterThan(long.body.height);
+    for(const box of [wide,medium,small]){
+      const grid=box.regions.catalogue!,controls=box.rows[1]!.controls;
+      expect(controls.filter(control=>control.y===controls[0]!.y)).toHaveLength(Math.min(7,Math.max(1,Math.floor((grid.width-12+5)/80))));
+      expect(controls.every(control=>control.width===75&&control.height===75)).toBe(true);
+      expect(box.regions.details).toMatchObject({width:200,height:270});
+      expect(box.regions.navigation!.height).toBe(box.regions.navigation!.contentHeight);
+      expect(box.body.height).toBe(grid.height);
+    }
+    expect(wide.height).toBe(layout(page(13)).height);
+    const long=layout(page(140));expect(long.contentHeight).toBeGreaterThan(long.body.height);
   });
 
   it('positions the two map-tool trays without a panel header or large background allocation',()=>{
@@ -98,15 +100,15 @@ describe('native UI structure retained with the revised V480 proportions',()=>{
   });
 
   it('preserves the research graph coordinate system and separate selection/start targets',()=>{
-    const page:NativePage={id:'research',title:'Recherche',layout:'research',width:1190,height:720,research:{width:850,height:815,selected:'b',links:[]},rows:[
+    const page:NativePage={id:'research',title:'Recherche',layout:'research',height:900,research:{width:4170,height:650,selected:'b',links:[]},rows:[
       {id:'tabs',label:'',region:'navigation',controlStyle:'tab',controls:[control('main','Principal')]},
       {id:'detail',label:'Dossier du projet',region:'details'},
-      ...[{id:'a',x:24,y:20},{id:'b',x:644,y:700}].map(node=>({id:node.id,label:'Projet',region:'graph' as const,graphNode:{x:node.x,y:node.y,width:142,height:66,points:0,cost:500,state:'available' as const},controls:[control(node.id),control(node.id+'-start','▶')]}))]};
+      ...[{id:'a',x:20,y:20},{id:'b',x:4010,y:580}].map(node=>({id:node.id,label:'Projet',region:'graph' as const,graphNode:{x:node.x,y:node.y,width:140,height:50,points:0,cost:500,state:'available' as const},controls:[control(node.id),control(node.id+'-start','▶')]}))]};
     const box=layout(page),graph=box.regions.graph!,first=box.rows[2]!,last=box.rows[3]!;
-    expect(graph.y).toBe(box.header+40);expect(graph.contentWidth).toBe(850);expect(graph.contentHeight).toBe(815);
-    expect(first.x).toBe(graph.x+24);expect(first.top).toBe(60);expect(last.top).toBe(740);
-    expect(first.controls.map(button=>[button.width,button.height])).toEqual([[142,66],[22,19]]);
-    expect(first.controls[1]!.x).toBe(first.x+118);expect(first.controls[1]!.y).toBe(first.top+40);
+    expect(graph.y).toBe(box.regions.navigation!.y+box.regions.navigation!.height+6);expect(graph.contentWidth).toBe(4170);expect(graph.contentHeight).toBe(642);
+    expect(first.x).toBe(graph.x+20);expect(first.top+box.header).toBe(graph.y+20);expect(last.top+box.header).toBe(graph.y+580);
+    expect(first.controls.map(button=>[button.width,button.height])).toEqual([[140,50],[22,19]]);
+    expect(first.controls[1]!.x).toBe(first.x+116);expect(first.controls[1]!.y).toBe(first.top+28);
     expect(box.regions.details!.x+box.regions.details!.width).toBeLessThan(graph.x);
     expect(box.contentHeight).toBe(box.regions.details!.contentHeight);expect(box.body.x).toBe(box.regions.details!.x);
   });

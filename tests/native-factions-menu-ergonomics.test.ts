@@ -8,6 +8,10 @@ import {buildNativeFactions} from '../src/ui3d/native-world';
 import {createNativeSaveManager} from '../src/ui3d/native-saves';
 import {NAMED_SAVE_KEYS} from '../src/ui/save-slots';
 import {layoutNativePage,nativeTableRowScroll} from '../src/ui3d/native-layout';
+import {NATIVE_FACTIONS,NATIVE_MENU} from '../src/ui3d/native-main-tab-metrics';
+import {nativeFactionColor} from '../src/ui3d/native-faction-color';
+import {worldNaturalGoodwill274} from '../src/sim/world-diplomacy-274';
+import {WORLD_FACTION_DEFINITIONS_256} from '../src/sim/world-faction-catalog';
 import type {NativeControl,NativePage,NativeUiActions,NativeUiState} from '../src/ui3d/native-contract';
 import type {World} from '../src/sim/types';
 
@@ -36,7 +40,15 @@ describe('Factions and Menu compact navigation keeps the existing authorities',(
   const f=fixture(),key=NAMED_SAVE_KEYS[0]!;f.state.saves=[{key,label:'Avant la pluie',kind:'named',detail:'Métadonnées témoins seulement.'}];
   const manager=createNativeSaveManager({readSaves:()=>f.state.saves,refresh:async()=>{},save:async()=>{await f.actions.save();},saveNamed:async()=>{},deleteSave:async()=>{},load:async()=>{},exportSave:async()=>{},show:f.actions.showPage,close:()=>{},blocked:()=>false});
   f.actions.openSaveManager=vi.fn(()=>manager.open());f.menu();const before=structuredClone(f.world);
-  expect(f.page.width).toBe(450);expect(f.page.rows.some(row=>row.id==='menu-save-'+key)).toBe(false);
+  expect([f.page.width,f.page.height,f.page.layout]).toEqual([450,390,'menu']);expect(f.page.rows.some(row=>row.id==='menu-save-'+key)).toBe(false);
+  const viewport={width:1440,height:900},box=layoutNativePage(f.page,viewport,false,(s,n)=>s.length*n*.53);
+  expect(box.x+box.width).toBe(viewport.width-12);expect(box.height).toBe(NATIVE_MENU.height);
+  const primary=box.regions.navigation!,secondary=box.regions.details!,save=box.rows.find(row=>row.row.id==='menu-game')!.controls[0]!;
+  expect(save).toMatchObject({width:170,height:45});expect(secondary.x-primary.x).toBe(170+17);
+  expect(box.rows.filter(row=>row.row.region==='navigation').flatMap(row=>row.controls).every(c=>box.header+c.y+c.height<=primary.y+primary.height)).toBe(true);
+  const tiny=layoutNativePage(f.page,{width:320,height:240},false,(s,n)=>s.length*n*.53);
+  expect(tiny.regions.details).toBeUndefined();expect(tiny.body.height).toBeGreaterThan(0);expect(tiny.contentHeight).toBeGreaterThan(tiny.body.height);
+  expect(tiny.rows.some(row=>row.controls.some(c=>c.control.id==='menu-resume'))||tiny.actions.some(c=>c.control.id==='menu-resume')).toBe(true);
   await control(f.page,'native-manage-saves').onActivate();expect(f.page.id).toBe('native-saves');expect(f.page.rows.some(row=>row.id==='native-save-name')).toBe(true);
   f.menu();await control(f.page,'native-options').onActivate();expect(f.actions.openOptions).toHaveBeenCalledTimes(1);
   await control(f.page,'native-help').onActivate();expect(f.actions.openHelp).toHaveBeenCalledTimes(1);
@@ -62,10 +74,24 @@ describe('Factions and Menu compact navigation keeps the existing authorities',(
   const f=fixture(),r=registry(f.world),foreign=r.factions.find(value=>!value.hidden&&value.id!==r.playerFactionId&&r.settlements.some(settlement=>settlement.factionId===value.id))!;
   foreign.name='Écume du levant';const settlement=r.settlements.find(value=>value.factionId===foreign.id);expect(settlement).toBeDefined();settlement!.name='Havre des iris';
   f.factions();const before=structuredClone(f.world),all=r.factions.filter(value=>!value.hidden);
-  expect(f.page.layout).toBe('table');expect(f.page.tableProfile).toBe('factions');expect(f.page.rows.filter(row=>/^faction-\d+$/.test(row.id))).toHaveLength(all.length);
+  expect(f.page.layout).toBe('table');expect(f.page.tableProfile).toBe('factions');expect([f.page.width,f.page.height]).toEqual([1010,684]);expect(f.page.rows.filter(row=>/^faction-\d+$/.test(row.id))).toHaveLength(all.length);
   const geometry=layoutNativePage(f.page,{width:1280,height:900},false,(text,size)=>text.length*size*.55),heading=geometry.rows.find(row=>row.row.id==='factions-heading')!,search=geometry.rows.find(row=>row.row.id==='factions-search')!,bodyRow=geometry.rows.find(row=>row.row.id==='faction-'+foreign.id)!;
   expect(search.row.region).toBe('details');expect(geometry.tableHeader!.y).toBeGreaterThanOrEqual(geometry.regions.details!.y+geometry.regions.details!.height);expect(geometry.body.y).toBeGreaterThanOrEqual(geometry.tableHeader!.y+geometry.tableHeader!.height);
   expect(nativeTableRowScroll(geometry,heading.row,80)).toBe(0);expect(nativeTableRowScroll(geometry,bodyRow.row,80)).toBe(80);expect(geometry.regions.navigation!.y).toBe(geometry.body.y);
+  expect([geometry.width,geometry.height,heading.height,bodyRow.height]).toEqual([1010,684,50,80]);
+  expect(geometry.matrixSpec!.name).toBe(NATIVE_FACTIONS.identityX+NATIVE_FACTIONS.identityWidth);
+  expect(geometry.matrixSpec!.widths.slice(0,4)).toEqual([40,60,70,54]);
+  const type=bodyRow.controls.find(c=>c.control.id.endsWith('-field-0'))!,relation=bodyRow.controls.find(c=>c.control.id.endsWith('-field-1'))!,natural=bodyRow.controls.find(c=>c.control.id.endsWith('-field-6'))!,info=bodyRow.controls.find(c=>c.control.id.endsWith('-field-5'))!;
+  expect(type).toMatchObject({region:'navigation',hitOnly:true,width:390});
+  expect(relation).toMatchObject({x:bodyRow.x+490,width:70,hitOnly:true});expect(natural).toMatchObject({x:bodyRow.x+560,width:54,hitOnly:true});
+  expect(info).toMatchObject({width:24,height:24,style:'icon'});
+  const entry=bodyRow.row.factionEntry!,expectedNatural=WORLD_FACTION_DEFINITIONS_256[foreign.def].permanentEnemy?undefined:worldNaturalGoodwill274(foreign);
+  expect(entry.naturalGoodwill).toBe(expectedNatural);
+  expect(entry.enemies.map(other=>other.id)).toEqual(all.filter(other=>other.id!==r.playerFactionId&&r.relations.some(rel=>rel.kind==='hostile'&&rel.aId===Math.min(foreign.id,other.id)&&rel.bId===Math.max(foreign.id,other.id))).map(other=>other.id));
+  const compact=layoutNativePage(f.page,{width:480,height:560},false,(s,n)=>s.length*n*.53);
+  expect(compact.regions.catalogue!.contentWidth).toBeGreaterThan(compact.regions.catalogue!.width);expect(compact.regions.navigation!.width).toBeLessThan(390);
+  const tiny=layoutNativePage(f.page,{width:480,height:240},false,(s,n)=>s.length*n*.53);
+  expect(tiny.body.height).toBeGreaterThan(0);expect(tiny.rows.find(row=>row.row.id==='faction-'+foreign.id)!.controls).toHaveLength(8);
   expect(f.page.rows.some(row=>row.id.startsWith('faction-settlement-'))).toBe(false);
   const facts=f.page.rows.find(row=>row.id==='faction-'+foreign.id)!.controls!.map(value=>value.label);
   expect(facts).toContain(r.leaders.find(value=>value.factionId===foreign.id)!.pawn.name);expect(facts).toContain(String(r.settlements.filter(value=>value.factionId===foreign.id).length));
@@ -75,6 +101,13 @@ describe('Factions and Menu compact navigation keeps the existing authorities',(
   await f.page.rows.find(row=>row.id==='factions-search')!.input!.onCommit('');await control(f.page,'factions-sort-settlements').onActivate();
   const counts=f.page.rows.filter(row=>/^faction-\d+$/.test(row.id)).map(row=>Number(row.controls![3]!.label));expect(counts).toEqual([...counts].sort((a,b)=>b-a));
   expect(f.world).toEqual(before);expect(f.actions.command).not.toHaveBeenCalled();
+ });
+
+ it('uses the visible Core spectra, including inherited faction colours',()=>{
+  expect(nativeFactionColor('OutlanderRough',0)).toBe('#0066f0');
+  expect(nativeFactionColor('OutlanderRough',1)).toBe('#a3ccff');
+  expect(nativeFactionColor('TribeSavage',0)).toBe('#d90000');
+  expect(nativeFactionColor('PlayerColony',0)).toBe(nativeFactionColor('PlayerTribe',1));
  });
 
  it('opens only the chosen faction settlements and resolves the original target again before the existing globe route',async()=>{

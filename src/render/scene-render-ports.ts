@@ -11,6 +11,7 @@ export interface SceneCameraPort {
   readonly controls:{target:THREE.Vector3;enabled:boolean;update():unknown};
   readonly span:number;
   readonly mode:CameraMode;
+  pageZoom?(direction:'in'|'out'):void;
   setMode(mode:CameraMode):void;
   setRoomEnabled?(enabled:boolean):void;
   constrainRoom?():boolean;

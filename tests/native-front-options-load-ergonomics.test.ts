@@ -34,7 +34,7 @@ const examples=():FrontMenuSave[]=>[
 
 test('Options uses real local categories without changing preferences, then preserves actual controls and busy refusal',async()=>{
   const f=fixture();f.menu.showOptions!();
-  expect(f.page.layout).toBe('setup');expect(f.page.rows.filter(row=>row.region==='catalogue').map(row=>row.controls?.[0]?.label)).toEqual(['Jeu','Interface','Graphismes','Éclairage','Audio']);
+  expect([f.page.layout,f.page.width,f.page.height]).toEqual(['options',650,600]);expect(f.page.actions?.[0]?.label).toBe('OK');expect(f.page.rows.filter(row=>row.region==='catalogue').map(row=>row.controls?.[0]?.label)).toEqual(['Jeu','Interface','Graphismes','Éclairage','Audio']);
   expect(f.page.rows.some(row=>row.id==='autosave')).toBe(true);
   await f.click('option-section-interface');expect(f.page.rows.some(row=>row.id==='ui-scale')).toBe(true);expect(f.page.rows.some(row=>row.id==='autosave')).toBe(false);
   expect(f.page.rows.every(row=>row.column===undefined)).toBe(true);expect(f.writes).not.toHaveBeenCalled();
@@ -50,7 +50,7 @@ test('Options uses real local categories without changing preferences, then pres
 
 test('Load searches and selects metadata without opening a colony, preserving source order and available tools',async()=>{
   const saves=examples(),before=JSON.stringify(saves),f=fixture(saves);f.menu.showHome(true);f.menu.showLoad();
-  expect(f.page.layout).toBe('setup');expect(f.control('load-selected').disabled).toBe(true);
+  expect([f.page.layout,f.page.width,f.page.height]).toEqual(['files',620,700]);expect(f.control('load-selected').disabled).toBe(true);
   expect(f.page.actions?.map(control=>control.id)).toEqual(['front-back','test-colonies','import','export','load-selected']);
   await f.click('select-save-beta');expect(f.page.rows.find(row=>row.id==='selected-save-name')?.label).toBe('Bastion');
   expect(f.page.rows.find(row=>row.id==='selected-save-kind')?.value).toBe('Copie automatique');expect(f.options.onLoad).not.toHaveBeenCalled();

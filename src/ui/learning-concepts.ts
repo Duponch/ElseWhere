@@ -117,7 +117,7 @@ export const LEARNING_CONCEPTS:readonly LearningConcept[]=Object.freeze([
     'Un livre est arrivé dans la colonie. Les colons peuvent le lire pendant leurs loisirs ; rangez-le à l’abri, car un livre laissé dehors se détériore.'),
   // Concepts_NotedSelfshow: shown by priority alone, most important first.
   self('camera-dolly','CameraDolly',95,'Déplacer la vue',
-    'Déplacez la caméra avec les flèches, ZQSD ou WASD, ou en glissant le bouton central de la souris. Le bouton droit glissé la fait tourner.'),
+    'Déplacez la caméra avec les flèches ou WASD, ou en glissant le bouton central de la souris. Le bouton droit glissé la fait tourner. Z ouvre la recherche sur la carte, Page précédente/suivante règle le zoom.'),
   self('camera-zoom','CameraZoom',94,'Zoomer',
     'La molette rapproche ou éloigne la vue. De près, les quantités et les qualités des objets s’affichent sur la carte.'),
   self('time-controls','TimeControls',93,'Vitesse du temps',

@@ -3,6 +3,8 @@ import {createNativeFrontMenu} from '../src/ui3d/native-front';
 import type {FrontMenuOptions} from '../src/ui/front-menu';
 import type {NativeControl,NativePage} from '../src/ui3d/native-contract';
 import type {TestColony} from '../src/ui/test-colonies';
+import {layoutNativePage} from '../src/ui3d/native-layout';
+import {NATIVE_CREATION,NATIVE_HOME} from '../src/ui3d/native-front-metrics';
 
 // Private source-to-real-producer contracts. Root supplies the composed source
 // tree including native-front-presentation; no copy of presentation/guard logic.
@@ -36,11 +38,18 @@ function fixture(){
 
 test('Home and Scenario keep distinct navigation controls, unavailable scenarios and the Options return path',async()=>{
   const f=fixture();f.menu.showHome(false);
-  expect(f.page).toMatchObject({id:'front-home',layout:'setup',setupAnchor:'right',width:480});expect(f.page.rows.some(row=>row.id==='resume')).toBe(false);
+  expect(f.page).toMatchObject({id:'front-home',layout:'home',setupAnchor:'right',width:450,height:550,closable:false});expect(f.page.rows.some(row=>row.id==='resume')).toBe(false);
+  const home=layoutNativePage(f.page,{width:1440,height:900},true,(text,size)=>text.length*size*.53);
+  expect(home.x+home.width).toBe(1440-24);expect(home.y).toBe((900-NATIVE_HOME.height)/2+NATIVE_HOME.offsetY);
+  expect(home.rows.flatMap(row=>row.controls).every(control=>control.width===170&&control.height===45)).toBe(true);
   await f.click('options');expect(f.page.id).toBe('front-options');await f.click('front-back');expect(f.page.id).toBe('front-home');expect(f.options.onResume).not.toHaveBeenCalled();
   f.menu.showHome(true);await f.click('options');await f.click('front-back');expect(f.page.id).toBe('front-home');expect(f.control('resume').disabled).not.toBe(true);expect(f.options.onResume).not.toHaveBeenCalled();
-  await f.click('new-game');expect(f.page).toMatchObject({id:'front-scenario',layout:'setup',setupCatalogueWidth:250});
+  await f.click('new-game');expect(f.page).toMatchObject({id:'front-scenario',layout:'setup',setupProfile:'scenario',width:1020,height:764,setupCatalogueWidth:344});
   const choices=f.page.rows.filter(row=>row.region==='catalogue');expect(choices).toHaveLength(6);expect(choices[0]?.controls?.[0]).toMatchObject({id:'crashlanded',label:'Atterrissage forcé',active:true});
+  const scenario=layoutNativePage(f.page,{width:1440,height:900},true,(text,size)=>text.length*size*.53),rail=scenario.regions.catalogue!,details=scenario.regions.details!;
+  expect([scenario.width,scenario.height,scenario.header]).toEqual([1020,764,18+45]);expect(rail.width).toBe(344);expect(details.x).toBe(rail.x+rail.width+17);
+  expect(scenario.rows.filter(row=>row.row.region==='catalogue').map(row=>row.height)).toEqual(Array(6).fill(NATIVE_CREATION.scenarioHeight));
+  expect(scenario.actions.map(action=>[action.width,action.height])).toEqual([[150,38],[150,38]]);expect(scenario.actions[0]!.x).toBe(18);expect(scenario.actions[1]!.x+150).toBe(1020-18);
   for(const row of choices.slice(1)){const unavailable=row.controls![0]!;expect(unavailable.disabled).toBe(true);await unavailable.onActivate();expect(f.page.id).toBe('front-scenario');}
   expect(f.page.rows.find(row=>row.id==='supplies')?.region).toBe('details');expect(f.page.rows.find(row=>row.id==='knowledge')?.region).toBe('details');
   const retainedNext=f.control('scenario-next');f.menu.setBusy(true);await retainedNext.onActivate();expect(f.page.id).toBe('front-scenario');f.menu.setBusy(false);
@@ -49,7 +58,11 @@ test('Home and Scenario keep distinct navigation controls, unavailable scenarios
 
 test('Story keeps the supported difficulty and save-mode guards before World, including retained callbacks during busy',async()=>{
   const f=fixture();f.menu.showCreation();await f.click('scenario-next');
-  expect(f.page).toMatchObject({id:'front-story',layout:'setup',setupCatalogueWidth:220});expect(f.page.rows.find(row=>row.id==='narrator-choice')?.region).toBe('catalogue');
+  expect(f.page).toMatchObject({id:'front-story',layout:'setup',setupProfile:'story',width:1020,height:764,setupCatalogueWidth:NATIVE_CREATION.storytellerWidth});expect(f.page.rows.find(row=>row.id==='narrator-choice')?.region).toBe('catalogue');
+  expect(f.control('narrator-current').active).toBe(true);for(const id of ['narrator-phoebe','narrator-randy']){expect(f.control(id).disabled).toBe(true);await f.control(id).onActivate();}
+  const story=layoutNativePage(f.page,{width:1440,height:900},true,(text,size)=>text.length*size*.53);
+  expect(story.rows.filter(row=>row.row.region==='catalogue').map(row=>row.height)).toEqual([130,130,130]);
+  expect(story.rows.filter(row=>row.row.id.startsWith('difficulty-choice-')||row.row.id.startsWith('saving-choice-')).every(row=>row.controls[0]!.style==='radio'&&row.height===22)).toBe(true);
   expect(f.control('story-next').disabled).toBe(true);await f.control('story-next').onActivate();expect(f.page.id).toBe('front-story');
   const unsupported=f.control('difficulty-Pacifique');expect(unsupported.disabled).toBe(true);await unsupported.onActivate();expect(f.control('story-next').disabled).toBe(true);
   await f.click('difficulty-Récit d’aventure');expect(f.control('story-next').disabled).toBe(true);

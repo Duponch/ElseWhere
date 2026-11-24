@@ -21,7 +21,12 @@ describe('native layout on logical viewports reduced by the chosen scale',()=>{
       expect(box.rows.map(row=>row.row.id)).toEqual(page.rows.map(row=>row.id));
       if(kind==='architect'){
         const detail=box.rows.find(row=>row.row.id==='details')!,region=box.regions.details!;
-        expect(detail.top+box.header).toBe(region.y);expect(box.rows.find(row=>row.row.id==='catalogue')!.controls.every(c=>c.height===104)).toBe(true);
+        expect(detail.top+box.header).toBe(region.y);
+        const nav=box.regions.navigation!,grid=box.regions.catalogue!;
+        expect(nav.y).toBeGreaterThanOrEqual(region.y+region.height);
+        expect(grid.x-region.x).toBe(210);
+        expect(box.rows.find(row=>row.row.id==='catalogue')!.controls.every(c=>c.height===75&&c.width===75)).toBe(true);
+        expect(box.rows.find(row=>row.row.id==='categories')!.controls).toHaveLength(8);
       }
     }
   });

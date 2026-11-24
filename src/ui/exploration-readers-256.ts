@@ -14,7 +14,15 @@ export function knownPile256(world:World,pile:MaterialPile):boolean {
  const owner=pile.owner;
  if(owner.type==='ground')return knownPosition256(world,owner);
  if(owner.type==='job'){const job=world.jobs.find(j=>j.id===owner.jobId);return !!job&&knownPosition256(world,job);}
- if('pawnId' in owner){const id=owner.pawnId,person=world.pawns.find(p=>p.id===id);return !!person&&(isColonist(person)||!!person.prisoner||knownPosition256(world,person));}
+ if('pawnId' in owner){
+  const id=owner.pawnId,person=world.pawns.find(p=>p.id===id);
+  if(person)return isColonist(person)||!!person.prisoner||knownPosition256(world,person);
+  // A local animal can be the actual inventory owner (hauling/loading),
+  // separately from the human pawn namespace. Its possessions follow the
+  // same knowledge rule, never exposing an unknown wild animal in the fog.
+  const animal=owner.type==='inventory'?world.wildlife?.animals.find(entry=>entry.id===id):undefined;
+  return !!animal&&(!!animal.domestic||knownPosition256(world,animal));
+ }
  if(owner.type==='grave'){const id=owner.graveId,grave=world.structures.find(s=>s.id===id);return !!grave&&knownBuilding256(world,grave);}
  return true;
 }

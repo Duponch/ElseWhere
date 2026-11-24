@@ -6,9 +6,12 @@ import {storytellerIncidents347,tutorialMode347} from '../sim/game-profile';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {READING_POLICIES_295,effectiveReadingPolicy295} from '../sim/reading-state-295';
 import type {NativeUiState,NativeUiActions,NativePage,NativeRow,NativeControl,NativeGesture} from './native-contract';
-import {buildNativeWorld,syncNativeWorldState,nativePaidAiSiteFacts298,focusNativePaidAiSite298} from './native-world';
+import {buildNativeWorld,syncNativeWorldState,nativePaidAiSiteFacts298,focusNativePaidAiSite298,focusNativeTradeRequestDestination,nativeTradeRequestVisitors} from './native-world';
+import {groupDisplayLabel} from '../ui/map-registry-adapter';
 import {effectiveCore297} from '../sim/core-phase-297';
 import {nativeArrivalRows} from './native-arrivals';
+import {NATIVE_HISTORY,NATIVE_MENU,NATIVE_QUESTS} from './native-main-tab-metrics';
+import {NATIVE_MESSAGE} from './native-dialog-metrics';
 import {nativeTextEntitiesFor} from './native-text-entities';
 import {toolDefinitions,workColumns,productionToolOrder} from './native-catalog';
 import type {ArchitectCategory} from '../ui/layout';
@@ -424,14 +427,20 @@ function revengeFact(id:string,chance:number,cause:'blessé'|'raté'):NativeCont
   :`Chance de rage quand un apprivoisement échoue : ${label}.`);
 }
 type NarrativeSource=World|NonNullable<NativeUiState['campaign']>;
-const narrativeView={identity:'',historySearch:'',historyAll:false,historyPinnedOnly:false,questHistory:false,tradeChoices:new Map<number,number>()};
+type QuestTab='available'|'active'|'history';
+interface QuestDossier {id:string;tab:QuestTab;kind:string;rows:NativeRow[];auxiliary?:boolean}
+const narrativeView={identity:'',historySearch:'',historyAll:false,historyPinnedOnly:false,
+ historyTab:'messages' as 'messages'|'graph'|'stats',historySelected:undefined as string|undefined,historyShowLetters:true,historyShowMessages:true,
+ questTab:undefined as QuestTab|undefined,questSelected:undefined as string|undefined,questSearch:'',questSelectionExplicit:false,tradeChoices:new Map<number,number>()};
 function narrativeIdentity(state:NativeUiState):string {
  const world=state.world,campaign=state.campaign;
  return world?['local',state.epoch,registeredMapId(world),world.seed,world.width,world.height].join(':'):campaign?['campaign',state.epoch,campaign.campaignSeed,campaign.activeMapId].join(':'):'none';
 }
 function syncNarrativeView(state:NativeUiState):void {
  const identity=narrativeIdentity(state);if(identity===narrativeView.identity)return;
- narrativeView.identity=identity;narrativeView.historySearch='';narrativeView.historyAll=false;narrativeView.historyPinnedOnly=false;narrativeView.questHistory=false;narrativeView.tradeChoices.clear();
+ narrativeView.identity=identity;narrativeView.historySearch='';narrativeView.historyAll=false;narrativeView.historyPinnedOnly=false;
+ narrativeView.historyTab='messages';narrativeView.historySelected=undefined;narrativeView.historyShowLetters=true;narrativeView.historyShowMessages=true;
+ narrativeView.questTab=undefined;narrativeView.questSelected=undefined;narrativeView.questSearch='';narrativeView.questSelectionExplicit=false;narrativeView.tradeChoices.clear();
 }
 /** View navigation and retained buttons borrow the current scope, never a captured World. */
 function narrativeGuard<T extends unknown[]>(action:(state:NativeUiState,...args:T)=>void|Promise<unknown>):(...args:T)=>void|Promise<unknown> {
@@ -476,24 +485,28 @@ const tradeRewardText=(option:TradeRequest284['options'][number]):string=>[...op
  * beyond the 200 most recent unpinned ones (Archive.MaxNonPinnedArchivables). */
 function letterArchiveRows(source:NarrativeSource):NativeRow[] {
  const state=source.letters352,archive=state?.archive??[],pinned=new Set(state?.pinned??[]),stacked=new Set(state?.stack??[]);
- const kept=narrativeView.historyPinnedOnly?archive.filter(entry=>pinned.has(entry.id)):archive;
+ const needle=colonistSearchText(narrativeView.historySearch.trim()),kept=archive.filter(entry=>{
+  const letter='cls'in entry;
+  return (letter?narrativeView.historyShowLetters:narrativeView.historyShowMessages)&&(!narrativeView.historyPinnedOnly||pinned.has(entry.id))
+    &&(!needle||colonistSearchText(letter?entry.title+' '+entry.text:entry.message).includes(needle));
+ });
  const ordered=[...kept].reverse(),shown=narrativeView.historyAll?ordered:ordered.slice(0,30);
  const rows:NativeRow[]=[narrativeHeading('history-letters-heading','Lettres archivées'),
   narrativeFact('history-letters-count','Archive',`${archive.length} entrée${archive.length===1?'':'s'} · ${pinned.size} épinglée${pinned.size===1?'':'s'}`,
    'Les 200 entrées non épinglées les plus récentes sont gardées ; une lettre encore dans la pile n’est jamais retirée.')];
  for(const entry of shown){
   const letter='cls'in entry,pin=pinned.has(entry.id);
-  const controls=[...letter?[narrativeButton(`archive-open-${entry.id}`,'Ouvrir',()=>host?.openLetter352?.(entry.id))]:[],
-   narrativeButton(`archive-pin-${entry.id}`,pin?'Désépingler':'Épingler',async()=>{await host?.command({type:'archive-pin',id:entry.id,pinned:!pin});back();},{active:pin,hint:pin?'Retirer l’épingle : l’entrée pourra quitter l’archive avec le temps.':'Garder cette entrée dans l’archive.'})];
+  const controls=[...letter?[narrativeButton(`archive-open-${entry.id}`,'Ouvrir',()=>host?.openLetter352?.(entry.id),{icon:'history-letter',color:LETTER_CLASSES_352[entry.cls].color,hint:'Ouvrir la lettre complète'})]:[],
+   narrativeButton(`archive-pin-${entry.id}`,pin?'Désépingler':'Épingler',async()=>{await host?.command({type:'archive-pin',id:entry.id,pinned:!pin});back();},{icon:'history-pin',active:pin,hint:pin?'Retirer l’épingle : l’entrée pourra quitter l’archive avec le temps.':'Garder cette entrée dans l’archive.'})];
   rows.push({...narrativeFact(`archive-${entry.id}`,'Jour '+(1+Math.floor(entry.tick/TICKS_PER_DAY)),letter?entry.title:entry.message,
-   letter?LETTER_CLASSES_352[entry.cls].label+(stacked.has(entry.id)?' · dans la pile':''):'Ligne du journal épinglée'),labelWidth:72,controls});
+   letter?LETTER_CLASSES_352[entry.cls].label+(stacked.has(entry.id)?' · dans la pile':''):'Ligne du journal épinglée'),labelWidth:90,controls,
+   historyEntry:{kind:letter?'letter':'journal',body:letter?entry.text:entry.message,...letter?{color:LETTER_CLASSES_352[entry.cls].color}:{}}});
  }
  if(!shown.length)rows.push(narrativeFact('history-letters-empty',narrativeView.historyPinnedOnly?'Aucune entrée épinglée.':'Aucune lettre reçue.'));
  return rows;
 }
-function historyPanel(state:NativeUiState):NativePage {
- syncNarrativeView(state);
- const source=state.world??state.campaign,rows:NativeRow[]=[];
+function historyEconomyRows(state:NativeUiState):NativeRow[] {
+ const rows:NativeRow[]=[];
  if(state.world){
   const economy=state.world.economy;rows.push(narrativeHeading('history-economy-heading','Patrimoine de la colonie'));
   if(economy){
@@ -504,26 +517,68 @@ function historyPanel(state:NativeUiState):NativePage {
     narrativeFact('economy-coverage','Couverture',wealth.complete?'Complète':'Valeurs manquantes',String(wealth.unpricedPawnIds.length)+(wealth.unpricedPawnIds.length===1?' personne':' personnes')+' et '+missing+' autres biens non évalués.'),
     narrativeFact('economy-sample','Dernier relevé','Jour '+(1+Math.floor(economy.sampledAt/TICKS_PER_DAY)),'Montants du dernier relevé. Les attentes sont provisoires si des valeurs manquent.'));
   }else rows.push({...row('economy-adopt','Patrimoine',undefined,'Cette partie conserve ses règles historiques. Activer le suivi part des biens présents, sans inventer les relevés passés.',[narrativeButton('economy-enable','Activer le suivi économique',current=>{if(current.world&&!current.world.economy)return send({type:'adopt-economy'});})]),presentation:'plain'});
+ }else rows.push(narrativeFact('history-economy-off-map','Aucune colonie locale sélectionnée.'));
+ return rows;
+}
+function historyPanel(state:NativeUiState):NativePage {
+ syncNarrativeView(state);
+ const source=state.world??state.campaign,tab=narrativeView.historyTab,rows:NativeRow[]=[
+  {id:'history-tabs',label:'',region:'toolbar',controlStyle:'tab',controls:([['graph','Graphiques'],['messages','Messages'],['stats','Statistiques']] as const).map(([kind,label])=>
+   narrativeButton('history-tab-'+kind,label,()=>{narrativeView.historyTab=kind;back();},{active:kind===tab}))},
+ ];
+ const close=()=>void host?.panel(null);
+ if(tab!=='messages'){
+  const economy=state.world?.economy;
+  if(tab==='graph'&&economy){
+   const wealth=economy.wealth;
+   rows.push({id:'history-wealth-graph',label:'Patrimoine actuel',region:'details',
+    historyGraph:{sample:'Jour '+(1+Math.floor(economy.sampledAt/TICKS_PER_DAY))+' · dernier relevé',total:wealth.knownTotal,complete:wealth.complete,
+      bars:[{label:'Objets',value:wealth.items,color:'#9db77e'},{label:'Bâtiments',value:wealth.structures,color:'#c2ab82'},{label:'Sols',value:wealth.floors,color:'#94b5c1'},{label:'Personnes évaluées',value:wealth.pawnsKnown,color:'#dcb267'}]},
+    hint:'La simulation garde le dernier relevé du patrimoine, pas une série historique. Aucune courbe passée n’est inventée.'});
+  }else rows.push(...historyEconomyRows(state).map(row=>({...row,region:'details' as const})));
+  return {id:'history',title:'Historique',layout:'history',historyMode:tab,width:NATIVE_HISTORY.width,height:NATIVE_HISTORY.height,
+   contentKey:JSON.stringify([narrativeIdentity(state),tab]),rows,onClose:close};
  }
+ const messages:NativeRow[]=[];
  const letters352=!!source&&isSchema352OrLater(source.schemaVersion);
- if(letters352)rows.push(...letterArchiveRows(source!));
+ if(letters352&&(narrativeView.historyShowLetters||narrativeView.historyShowMessages))messages.push(...letterArchiveRows(source!));
  // Journal lines already copied into the archive by a pin.
  const archived=letters352?source!.letters352:undefined,pinnedLines=new Set<string>();
  for(const entry of archived?.archive??[])if(!('cls'in entry)&&archived!.pinned.includes(entry.id))pinnedLines.add(`${entry.tick}|${entry.journal}|${entry.message}`);
  const events=source?.events??[],needle=narrativeView.historySearch.trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr'),matches:number[]=[];
  for(let i=events.length-1;i>=0;i--)if(!needle||events[i]!.message.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr').includes(needle))matches.push(i);
- const shown=narrativeView.historyAll?matches:matches.slice(0,30);
- rows.push(narrativeHeading('history-journal-heading','Journal de la colonie'),
-  {id:'history-search',label:'Rechercher',presentation:'plain',compact:true,input:{value:narrativeView.historySearch,placeholder:'Texte d’un événement…',maxLength:160,onCommit:narrativeGuard((_current,value:string)=>{narrativeView.historySearch=value;back();})}},
+ const shown=narrativeView.historyShowMessages?(narrativeView.historyAll?matches:matches.slice(0,30)):[];
+ rows.push({id:'history-search',label:'',region:'toolbar',hint:'Rechercher dans le titre, la lettre et le journal',input:{value:narrativeView.historySearch,placeholder:'Rechercher…',maxLength:160,onCommit:narrativeGuard((_current,value:string)=>{narrativeView.historySearch=value;narrativeView.historySelected=undefined;back();})}},
+   {id:'history-filters',label:'',region:'toolbar',controlStyle:'button',controls:[
+     narrativeButton('history-filter-letters','Lettres',()=>{narrativeView.historyShowLetters=!narrativeView.historyShowLetters;narrativeView.historySelected=undefined;back();},{active:narrativeView.historyShowLetters}),
+     narrativeButton('history-filter-messages','Messages',()=>{narrativeView.historyShowMessages=!narrativeView.historyShowMessages;narrativeView.historySelected=undefined;back();},{active:narrativeView.historyShowMessages}),
+   ]});
+ if(narrativeView.historyShowMessages)messages.push(narrativeHeading('history-journal-heading','Journal de la colonie'),
   narrativeFact('history-count','Événements',shown.length+' / '+matches.length+(needle?' correspondants':'')+' · '+events.length+' au total'));
  for(const index of shown){const event=events[index]!,pinned=pinnedLines.has(`${event.tick}|${event.type}|${event.message}`);
-  rows.push({...narrativeFact('event-'+index,'Jour '+(1+Math.floor(event.tick/TICKS_PER_DAY)),event.message),labelWidth:72,
-   ...letters352?{controls:[narrativeButton(`event-pin-${index}`,pinned?'Épinglée':'Épingler',async()=>{await host?.command({type:'journal-pin',tick:event.tick,journal:event.type,message:event.message});back();},{disabled:pinned,hint:'Copier cette ligne dans l’archive des lettres, où elle reste.'})]}:{}});}
- if(!shown.length)rows.push(narrativeFact('history-empty',events.length?'Aucun événement ne correspond à la recherche.':'Aucun événement consigné.'));
- return {id:'history',title:'Historique',contentKey:JSON.stringify([narrativeIdentity(state),narrativeView.historySearch,narrativeView.historyAll,narrativeView.historyPinnedOnly]),rows,width:720,actions:[
+  messages.push({...narrativeFact('event-'+index,'Jour '+(1+Math.floor(event.tick/TICKS_PER_DAY)),event.message),labelWidth:90,
+   historyEntry:{kind:'journal',body:event.message},...letters352?{controls:[narrativeButton(`event-pin-${index}`,pinned?'Épinglée':'Épingler',async()=>{await host?.command({type:'journal-pin',tick:event.tick,journal:event.type,message:event.message});back();},{icon:'history-pin',active:pinned,disabled:pinned,hint:'Copier cette ligne dans l’archive des lettres, où elle reste.'})]}:{}});}
+ if(narrativeView.historyShowMessages&&!shown.length)messages.push(narrativeFact('history-empty',events.length?'Aucun événement ne correspond à la recherche.':'Aucun événement consigné.'));
+ const selected=messages.find(row=>row.historyEntry&&row.id===narrativeView.historySelected)??messages.find(row=>row.historyEntry);
+ narrativeView.historySelected=selected?.id;
+ for(const message of messages){
+  message.region='navigation';
+  if(message.historyEntry)(message.controls??=[]).push(narrativeButton('history-select-'+message.id,message.value??message.label,
+   ()=>{narrativeView.historySelected=message.id;back();},{active:selected?.id===message.id,hint:message.historyEntry.body,presentation:'history-row'}));
+  rows.push(message);
+ }
+ if(selected){
+  rows.push({...narrativeHeading('history-selected-date',selected.label+(selected.detail?' · '+selected.detail:'')),region:'details'});
+  if(selected.historyEntry!.kind==='letter')rows.push({...narrativeFact('history-selected-title',selected.value??selected.label),region:'details'});
+  rows.push({...narrativeFact('history-selected-body',selected.historyEntry!.body),region:'details'});
+  const open=selected.controls?.find(control=>control.id.startsWith('archive-open-'));
+  if(open)rows.push({...row('history-selected-open','',undefined,undefined,[{...open,id:'history-detail-open',label:'Ouvrir la lettre',icon:'history-letter'}]),region:'details'});
+ }else rows.push({...narrativeFact('history-selected-empty','Aucun message sélectionné.'),region:'details'});
+ const navigationKey=JSON.stringify([narrativeIdentity(state),tab,narrativeView.historySearch,narrativeView.historyAll,narrativeView.historyPinnedOnly,narrativeView.historyShowLetters,narrativeView.historyShowMessages]);
+ return {id:'history',title:'Historique',layout:'history',historyMode:tab,width:NATIVE_HISTORY.width,height:NATIVE_HISTORY.height,navigationKey,contentKey:JSON.stringify([navigationKey,selected?.id]),rows,actions:[
   ...letters352?[narrativeButton('history-pinned-only',narrativeView.historyPinnedOnly?'Toute l’archive':'Épinglées seulement',()=>{narrativeView.historyPinnedOnly=!narrativeView.historyPinnedOnly;back();})]:[],
   narrativeButton('history-range',narrativeView.historyAll?'30 derniers événements':'Tout le journal',()=>{narrativeView.historyAll=!narrativeView.historyAll;back();},{hint:'Le journal complet reste conservé. Cette commande change uniquement son affichage.'}),
- ],onClose:()=>void host?.panel(null)};
+ ],onClose:close};
 }
 
 function foodEditor(id:number):void {
@@ -683,15 +738,14 @@ function assignPanel(world:World):NativePage {
 
 function questsPanel(state:NativeUiState):NativePage {
  syncNarrativeView(state);
- const source=state.world??state.campaign,rows:NativeRow[]=[],active:NativeRow[]=[],past:NativeRow[]=[];
- if(!source)return {id:'quests',title:'Quêtes',rows:[narrativeFact('quests-empty','Aucune partie active.')],onClose:()=>void host?.panel(null)};
- let activeCount=0,pastCount=0;
- const section=(target:NativeRow[],id:string,label:string,entries:NativeRow[])=>{if(entries.length)target.push(narrativeHeading(id,label),...entries);};
+ const source=state.world??state.campaign,rows:NativeRow[]=[],entries:QuestDossier[]=[];
+ const add=(id:string,tab:QuestTab,kind:string,dossier:NativeRow[],auxiliary=false)=>{if(dossier.length)entries.push({id,tab,kind,rows:dossier,auxiliary});};
+ if(!source)return {id:'quests',title:'Quêtes',layout:'quests',width:NATIVE_QUESTS.width,height:NATIVE_QUESTS.height,rows:[{...narrativeFact('quests-empty','Aucune partie active.'),region:'details'}],onClose:()=>void host?.panel(null)};
  if(state.world){
-  const world=state.world,eligible=storytellerIncidents347(world)&&world.raids?.profile==='cassandra-raids-v1',current:NativeRow[]=[],history:NativeRow[]=[];
-  if(!world.quests&&eligible)current.push({...row('quest-enable','Demandes d’asile',undefined,'Après activation, une première demande peut se présenter après huit jours de jeu.',[narrativeButton('quest-enable-action','Recevoir des demandes',fresh=>{if(fresh.world&&!fresh.world.quests&&fresh.world.gameProfile&&fresh.world.raids?.profile==='cassandra-raids-v1')return send({type:'enable-quests'});})]),presentation:'plain'});
+  const world=state.world,eligible=storytellerIncidents347(world)&&world.raids?.profile==='cassandra-raids-v1';
+  if(!world.quests&&eligible)add('quest-enable','available','Asile et poursuite',[{...row('quest-enable','Demandes d’asile',undefined,'Après activation, une première demande peut se présenter après huit jours de jeu.',[narrativeButton('quest-enable-action','Recevoir des demandes',fresh=>{if(fresh.world&&!fresh.world.quests&&fresh.world.gameProfile&&fresh.world.raids?.profile==='cassandra-raids-v1')return send({type:'enable-quests'});})]),presentation:'plain'}],true);
   for(const quest of [...(world.quests?.entries??[])].reverse()){
-   const ongoing=quest.status==='offered'||quest.status==='accepted',id=quest.id,target=ongoing?current:history;
+   const ongoing=quest.status==='offered'||quest.status==='accepted',id=quest.id,target:NativeRow[]=[];
    const status=({offered:'Offre en cours',accepted:'Acceptée',refused:'Refusée sans pénalité',expired:'Expirée sans pénalité',concluded:'Conclue · issue neutre'} as const)[quest.status];
    const answer=(accept:boolean)=>narrativeGuard((fresh:NativeUiState)=>{const current=fresh.world?.quests?.entries.find(q=>q.id===id);if(current?.status==='offered'&&fresh.world!.tick<current.expiresAt)return send({type:'answer-quest',questId:id,accept});});
    const controls:NativeControl[]=quest.status==='offered'?[button('quest-'+id+'-accept','Accueillir et poursuite',answer(true),{disabled:world.tick>=quest.expiresAt,hint:'Accueillir cette personne et accepter la poursuite annoncée.'}),button('quest-'+id+'-refuse','Refuser sans pénalité',answer(false),{disabled:world.tick>=quest.expiresAt})]:[];
@@ -703,14 +757,12 @@ function questsPanel(state:NativeUiState):NativePage {
     const skills=quest.background?previewBackgroundSkills(quest.profile,quest.background):startingSkills(quest.profile);
     target.push(narrativeFact('quest-'+id+'-skills','Compétences proposées',backgroundSkillSummary(skills,quest)),
      narrativeFact('quest-'+id+'-consequences','Engagement',quest.status==='offered'?'Un colon et sa chemise ; un bandit au couteau le poursuit. Aucun butin promis. Refuser ou laisser expirer ne crée aucune pénalité.':'Préparez nourriture, couchage et défense. La poursuite engagée ne peut plus être annulée.'));
-    activeCount++;
-   }else pastCount++;
+   }
+   add('quest-'+id,quest.status==='offered'?'available':quest.status==='accepted'?'active':'history','Asile et poursuite',target);
   }
-  section(active,'quests-asylum-active','Asile et poursuite',current);section(past,'quests-asylum-history','Demandes d’asile précédentes',history);
  }
- const tradeActive:NativeRow[]=[],tradePast:NativeRow[]=[];
  for(const request of [...(source.tradeRequests284?.entries??[])].reverse()){
-  const id=request.id,ongoing=request.status==='offered'||request.status==='accepted',target=ongoing?tradeActive:tradePast,content=tradeRequestContent284(request.family),family=content?.label??request.family,offered=request.status==='offered'&&source.tick*10<request.offerExpiresAtCore,available=tradeRequestAvailable(source,request);
+  const id=request.id,ongoing=request.status==='offered'||request.status==='accepted',target:NativeRow[]=[],content=tradeRequestContent284(request.family),family=content?.label??request.family,offered=request.status==='offered'&&source.tick*10<request.offerExpiresAtCore,available=tradeRequestAvailable(source,request);
   const chosen=request.selectedOptionId??narrativeView.tradeChoices.get(id),selected=request.options.find(option=>option.id===chosen);
   const controls:NativeControl[]=[];
   if(offered){
@@ -719,7 +771,7 @@ function questsPanel(state:NativeUiState):NativePage {
     const reward=current.request.options.find(option=>option.id===selected.id);if(!reward)return;
     const confirmAction=narrativeGuard(async actual=>{const value=freshTradeRequest(actual,id);if(!value||!tradeRequestAvailable(value.source,value.request)||narrativeView.tradeChoices.get(id)!==reward.id||!value.request.options.some(option=>option.id===reward.id))return;await send({type:'trade-request-answer',requestId:id,optionId:reward.id});});
     const returnToQuests=narrativeGuard(()=>back());
-    open(detailPage('trade-answer-'+id,'Accepter la demande commerciale',[narrativeFact('trade-answer-detail',String(current.request.quantity)+' '+family,'À livrer à '+current.request.settlementName),narrativeFact('trade-answer-reward','Récompense choisie',tradeRewardText(reward))],[narrativeButton('trade-answer-'+id+'-confirm','Confirmer',async()=>{await confirmAction();returnToQuests();})],returnToQuests));
+    open({...detailPage('trade-answer-'+id,'Accepter la demande commerciale',[narrativeFact('trade-answer-detail',String(current.request.quantity)+' '+family,'À livrer à '+current.request.settlementName),narrativeFact('trade-answer-reward','Récompense choisie',tradeRewardText(reward))],[narrativeButton('trade-answer-'+id+'-confirm','Confirmer',async()=>{await confirmAction();returnToQuests();})],returnToQuests),layout:'message',width:NATIVE_MESSAGE.width,height:NATIVE_MESSAGE.height,closeOwnsNavigation:true});
    },{disabled:!available||!selected}));
    controls.push(narrativeButton('trade-request-'+id+'-dismiss',request.dismissed?'Réafficher la lettre':'Masquer la lettre',fresh=>{const current=freshTradeRequest(fresh,id);if(current&&current.request.status==='offered'&&current.source.tick*10<current.request.offerExpiresAtCore)return send({type:'trade-request-dismiss',requestId:id,dismissed:!current.request.dismissed});}));
   }
@@ -731,24 +783,58 @@ function questsPanel(state:NativeUiState):NativePage {
    const choice=offered?[narrativeButton('trade-request-'+id+'-option-'+option.id,chosen===option.id?'Choisie':'Choisir',fresh=>{const current=freshTradeRequest(fresh,id);if(!current||!tradeRequestAvailable(current.source,current.request)||!current.request.options.some(candidate=>candidate.id===option.id))return;narrativeView.tradeChoices.set(id,option.id);back();},{active:chosen===option.id,disabled:!available,hint:'Choix local : accepter la demande reste une action séparée.'})]:[];
    target.push({...row('trade-request-'+id+'-reward-'+option.id,'Récompense '+option.id,tradeRewardText(option),undefined,choice),presentation:'plain',compact:true});
   }
-  if(ongoing)target.push(narrativeFact('trade-request-'+id+'-delivery','Livraison',request.destinationLost?'La destination a disparu ; la livraison est indisponible.':'Biens dans les inventaires de la caravane : frais, de qualité normale ou meilleure si applicable, vêtements non souillés. La récompense suit la livraison complète.'));
-  if(ongoing)activeCount++;else pastCount++;
+  if(ongoing){
+   const go=async(fresh:NativeUiState,groupId?:number)=>{
+    const callbacks=host,anchor=narrativeIdentity(fresh);if(!callbacks)return;
+    await callbacks.panel('world');const now=callbacks.readState?.()??latest;
+    if(now&&now.panel==='world'&&narrativeIdentity(now)===anchor)focusNativeTradeRequestDestination(now,callbacks,id,groupId);
+   };
+   const liveDestination=!!(!request.destinationLost&&source.worldFactions?.settlements.some(entry=>entry.id===request.settlementId&&entry.tile===request.tile&&entry.factionId===request.factionId)&&(offered||request.status==='accepted'&&(request.expiresAtCore??-1)>source.tick*10));
+   target.push({...narrativeFact('trade-request-'+id+'-delivery','Livraison',request.destinationLost?'La destination a disparu ; la livraison est indisponible.':'Biens dans les inventaires de la caravane : frais, de qualité normale ou meilleure si applicable, vêtements non souillés. La récompense suit la livraison complète.'),controls:liveDestination&&source.planet?[narrativeButton('trade-request-'+id+'-destination','Voir la destination',fresh=>go(fresh),{icon:'monde'})]:undefined});
+   for(const group of nativeTradeRequestVisitors(source,request))target.push({...narrativeFact(`trade-request-${id}-group-${group.id}`,'Caravane présente',groupDisplayLabel(group),'Ouvrir les actions de cet inventaire réel, où les marchandises admissibles sont vérifiées.'),controls:[narrativeButton(`trade-request-${id}-group-${group.id}-open`,'Ouvrir la caravane',fresh=>go(fresh,group.id),{icon:'haul'})]});
+  }
+  if(request.status==='succeeded'&&request.fulfillment){
+   const receipt=request.fulfillment,goodwill=receipt.goodwill;
+   target.push(narrativeHeading(`trade-request-${id}-receipt`,'Reçu de livraison'),narrativeFact(`trade-request-${id}-receipt-group`,'Caravane n° '+receipt.groupId,`${receipt.consumed.reduce((sum,pile)=>sum+pile.quantity,0)} unités remises`,questAgo(source.tick-Math.floor(receipt.atCore/10))),
+    ...receipt.delivered.map(pile=>narrativeFact(`trade-request-${id}-received-${pile.id}`,`${pile.quantity} ${ITEM_DEFINITIONS[pile.item].label}`,pile.quality?QUALITY_LABELS[pile.quality]:undefined,`Lot n° ${pile.id} reçu par le porteur n° ${pile.pawnId}.`)),
+    narrativeFact(`trade-request-${id}-receipt-goodwill`,'Relations appliquées',`${goodwill.before} → ${goodwill.afterReward}`,`Après le bonus : ${goodwill.afterBonus} ; récompense demandée ${goodwill.rewardRequested}.`));
+  }
+  add('trade-request-'+id,request.status==='offered'?'available':request.status==='accepted'?'active':'history','Demandes commerciales',target);
  }
- section(active,'quests-trade-active','Demandes commerciales',tradeActive);section(past,'quests-trade-history','Demandes commerciales précédentes',tradePast);
- const talksActive:NativeRow[]=[],talksPast:NativeRow[]=[],paidActive:NativeRow[]=[],paidPast:NativeRow[]=[];
  for(const site of source.worldSites263?.entries??[]){
-  if(site.kind==='peace-talks'){const facts=peaceTalksFacts293(source,site),target=facts.active?talksActive:talksPast;target.push({...row('peace-'+site.id,facts.title,facts.status,facts.destination+' '+facts.body,[narrativeButton('peace-'+site.id+'-world','Monde',()=>host?.panel('world'))]),presentation:'plain',compact:true});if(facts.active)activeCount++;else pastCount++;}
-  const paid=nativePaidAiSiteFacts298(site,effectiveCore297(source));if(paid&&site.kind==='item-stash'){const target=site.closed?paidPast:paidActive;target.push({...row('paid-ai-site-'+site.id,paid.title,'Case '+site.tile+' · '+paid.status,paid.deadline+'. '+paid.detail,[narrativeButton('paid-ai-site-'+site.id+'-world','Inspecter sur le globe',async()=>{await host?.panel('world');focusNativePaidAiSite298(site.id);})]),presentation:'plain',compact:true},narrativeFact('paid-ai-site-'+site.id+'-risk','Risque',paid.risk));if(site.closed)pastCount++;else activeCount++;}
+  if(site.kind==='peace-talks'){const facts=peaceTalksFacts293(source,site);add('peace-'+site.id,facts.active?'active':'history','Pourparlers diplomatiques',[{...row('peace-'+site.id,facts.title,facts.status,facts.destination+' '+facts.body,[narrativeButton('peace-'+site.id+'-world','Monde',()=>host?.panel('world'))]),presentation:'plain',compact:true}]);}
+  const paid=nativePaidAiSiteFacts298(site,effectiveCore297(source));if(paid&&site.kind==='item-stash')add('paid-ai-site-'+site.id,site.closed?'history':'active','Informations de sites acquises',[{...row('paid-ai-site-'+site.id,paid.title,'Case '+site.tile+' · '+paid.status,paid.deadline+'. '+paid.detail,[narrativeButton('paid-ai-site-'+site.id+'-world','Inspecter sur le globe',async()=>{await host?.panel('world');focusNativePaidAiSite298(site.id);})]),presentation:'plain',compact:true},narrativeFact('paid-ai-site-'+site.id+'-risk','Risque',paid.risk)]);
  }
- section(active,'quests-talks-active','Pourparlers diplomatiques',talksActive);section(past,'quests-talks-history','Pourparlers précédents',talksPast);
- section(active,'quests-paid-active','Informations de sites acquises',paidActive);section(past,'quests-paid-history','Sites clos',paidPast);
- const arrivals=nativeArrivalRows(state,host!);section(active,'quests-arrivals','Arrivées et départs',arrivals);if(state.world?.arrivals?.pending)activeCount++;
- rows.push(narrativeHeading('quests-current-heading','En cours · '+activeCount),...active);
- if(!active.length)rows.push(narrativeFact('quests-empty-current','Aucune quête en cours.'));
- if(narrativeView.questHistory)rows.push(narrativeHeading('quests-history-heading','Dossiers précédents · '+pastCount),...past);
- return {id:'quests',title:'Quêtes',contentKey:JSON.stringify([narrativeIdentity(state),narrativeView.questHistory]),rows,width:920,actions:[
-  narrativeButton('quests-history-toggle',narrativeView.questHistory?'Masquer les dossiers précédents':'Dossiers précédents ('+pastCount+')',()=>{narrativeView.questHistory=!narrativeView.questHistory;back();},{disabled:pastCount===0}),
- ],onClose:()=>void host?.panel(null)};
+ add('arrivals','available','Arrivées et départs',nativeArrivalRows(state,host!),!state.world?.arrivals?.pending);
+ const counts:Record<QuestTab,number>={available:0,active:0,history:0};
+ for(const entry of entries)counts[entry.tab]++;
+ const previous=entries.find(entry=>entry.id===narrativeView.questSelected);
+ // When a selected quest is accepted or concludes, follow it to its new
+ // tab. An explicit tab switch clears the selection instead.
+ if(previous&&narrativeView.questTab&&previous.tab!==narrativeView.questTab)narrativeView.questTab=previous.tab;
+ const tab=narrativeView.questTab??(counts.available?'available':counts.active?'active':counts.history?'history':'available');
+ if(entries.length)narrativeView.questTab=tab;
+ const needle=colonistSearchText(narrativeView.questSearch.trim()),visible=entries.filter(entry=>entry.tab===tab&&(!needle||colonistSearchText([entry.kind,...entry.rows.flatMap(row=>[row.label,row.value??'',row.detail??''])].join(' ')).includes(needle)));
+ const retained=visible.find(entry=>entry.id===narrativeView.questSelected);
+ const selected=retained&&(!retained.auxiliary||narrativeView.questSelectionExplicit)?retained:visible.find(entry=>!entry.auxiliary)??visible[0];
+ if(selected?.id!==narrativeView.questSelected)narrativeView.questSelectionExplicit=false;
+ narrativeView.questSelected=selected?.id;
+ rows.push({id:'quests-tabs',label:'',region:'toolbar',controlStyle:'tab',controls:([['available','Disponibles'],['active','Actives'],['history','Historique']] as const).map(([kind,label])=>
+  narrativeButton(kind==='history'?'quests-history-toggle':'quests-tab-'+kind,`${label} (${counts[kind]})`,()=>{narrativeView.questTab=kind;narrativeView.questSelected=undefined;narrativeView.questSelectionExplicit=false;back();},{active:kind===tab}))});
+ rows.push({id:'quests-search',label:'',region:'toolbar',hint:`${visible.length} / ${counts[tab]} quête(s)`,input:{value:narrativeView.questSearch,placeholder:'Rechercher…',maxLength:120,
+  onCommit:narrativeGuard((_state,value:string)=>{narrativeView.questSearch=value;narrativeView.questSelected=undefined;narrativeView.questSelectionExplicit=false;back();})}});
+ for(const entry of visible){
+  const primary=entry.rows[0]!;
+  rows.push({id:'quests-entry-'+entry.id,label:'',region:'navigation',controlStyle:'button',controls:[
+   narrativeButton('quests-select-'+entry.id,primary.label,()=>{narrativeView.questSelected=entry.id;narrativeView.questSelectionExplicit=true;back();},
+    {active:selected?.id===entry.id,hint:[entry.kind,primary.label,primary.value].filter(Boolean).join(' · ')})]});
+ }
+ if(!visible.length)rows.push({...narrativeFact('quests-empty-list',needle?'Aucune quête ne correspond à la recherche.':'Aucune quête dans cette liste.'),region:'navigation'});
+ if(selected)rows.push({...narrativeHeading('quests-kind',selected.kind),region:'details'},...selected.rows.map(row=>({...row,region:'details' as const})));
+ else rows.push({...narrativeFact('quests-empty-selected','Aucune quête sélectionnée.'),region:'details'});
+ const navigationKey=JSON.stringify([narrativeIdentity(state),tab,narrativeView.questSearch]);
+ return {id:'quests',title:'Quêtes',layout:'quests',width:NATIVE_QUESTS.width,height:NATIVE_QUESTS.height,navigationKey,
+  contentKey:JSON.stringify([navigationKey,selected?.id]),rows,onClose:()=>void host?.panel(null)};
 }
 
 const menuView={identity:'',legacy:false,copies:false};
@@ -763,11 +849,10 @@ function menuPanel(state:NativeUiState,actions:NativeUiActions):NativePage {
   if(!world.raids?.mechanoid||world.schemaVersion>=197&&!world.raids.mechanoid.ranged)legacy.push(compact('legacy-mech-raids','Raids mécaniques futurs',[menuAction('legacy-mech-adopt','Admettre les raids mécaniques futurs',fresh=>{const value=fresh.world;if(value&&value.schemaVersion>=194&&value.raids?.profile==='cassandra-raids-v1'&&(!value.raids.mechanoid||value.schemaVersion>=197&&!value.raids.mechanoid.ranged))return send({type:'enable-mech-raids'});},state.busy||world.schemaVersion<194||world.raids?.profile!=='cassandra-raids-v1')],'Concurrence prospective aux occasions Cassandra à partir du jour 45. Aucun raid créé maintenant.'));
   if(!world.gameProfile&&!world.heatwaves)legacy.push(compact('legacy-heatwaves','Canicules du camp',[menuAction('legacy-heatwaves-adopt','Activer les canicules',fresh=>{if(fresh.world&&!fresh.world.gameProfile&&!fresh.world.heatwaves)return send({type:'enable-heatwaves'});},state.busy)],'Calendrier historique : première canicule dans 6 à 7 jours, sans exposition passée.'));
  }
- rows.push(compact('menu-game','Partie',[
+ rows.push({...compact('menu-game','',[
   menuAction('menu-save','Sauvegarder',fresh=>{if(fresh.hasGame&&!fresh.fault)return host?.save();},state.busy||!state.hasGame||!!state.fault),
   menuAction('menu-load','Charger',()=>host?.front('load'),state.busy),
-  menuAction('menu-export','Exporter',fresh=>{if(fresh.hasGame&&!fresh.fault)return host?.exportSave();},state.busy||!state.hasGame||!!state.fault),
- ],state.fault));
+ ],state.fault),region:'navigation'});
  // Schema 347 tutorial: Core's ChooseStoryteller step (Options, storyteller
  // settings) hands the game to a real storyteller and ends the tutorial.
  if(world&&tutorialMode347(world))rows.push(compact('menu-storyteller','Narrateur : Tuteur (tutoriel)',[
@@ -782,21 +867,21 @@ function menuPanel(state:NativeUiState,actions:NativeUiActions):NativePage {
   if(!saved.length)rows.push(compact('menu-copies-empty','Aucune copie disponible.'));
   for(const save of saved)rows.push({...row('menu-save-'+save.key,save.label,({manual:'Manuelle',recovery:'Colonie précédente',named:'Nommée',auto:'Automatique'} as const)[save.kind],save.detail),presentation:'plain',compact:true});
  }
- const preferences:NativeControl[]=[
-  ...(actions.openOptions?[menuAction('native-options','Options',()=>host?.openOptions?.(),state.busy)]:[]),
+ if(actions.openOptions)rows.push({...compact('native-menu-details','',[menuAction('native-options','Options',()=>host?.openOptions?.(),state.busy)]),region:'navigation'});
+ rows.push(compact('menu-extra','Autres commandes',[
+  menuAction('menu-export','Exporter',fresh=>{if(fresh.hasGame&&!fresh.fault)return host?.exportSave();},state.busy||!state.hasGame||!!state.fault),
   ...(actions.openHelp?[menuAction('native-help','Aide',()=>host?.openHelp?.(),state.busy)]:[]),
- ];
- if(preferences.length)rows.push(compact('native-menu-details','Préférences et carnet',preferences));
+ ]));
  const exchanges:NativeControl[]=[
   ...(actions.openVisitorTrade?[menuAction('native-visitor-trade','Visiteurs et commerce',()=>host?.openVisitorTrade?.(),state.busy)]:[]),
   ...(actions.openOrbitalTrade?[menuAction('native-orbital-trade','Commerce orbital',()=>host?.openOrbitalTrade?.(),state.busy)]:[]),
   ...(world&&world.schemaVersion>=298&&isCorePhysicalSchema297(world.schemaVersion)&&actions.openFactionComms298?[menuAction('native-faction-comms298','Communications de faction',()=>host?.openFactionComms298?.(),state.busy)]:[]),
  ];
  if(exchanges.length)rows.push(compact('native-menu-trade','Échanges',exchanges));
- rows.push(compact('menu-new','Autres actions',[
+ rows.push({...compact('menu-new','',[
   menuAction('menu-create','Nouvelle colonie',()=>host?.front('create'),state.busy),
   menuAction('menu-home','Accueil',()=>host?.front('home'),state.busy),
- ]));
+ ]),region:'navigation'});
  if(legacy.length){
   rows.push(compact('menu-legacy','Anciennes parties',[
    {...menuAction('menu-legacy-toggle',menuView.legacy?'Masquer les réglages historiques':'Réglages historiques ('+legacy.length+')',()=>{menuView.legacy=!menuView.legacy;back();},state.busy),glyph:menuView.legacy?'collapse':'expand'},
@@ -804,7 +889,7 @@ function menuPanel(state:NativeUiState,actions:NativeUiActions):NativePage {
   if(menuView.legacy)rows.push(...legacy);
  }
  const close=narrativeGuard(()=>host?.panel(null));
- return {id:'menu',title:'Menu',contentKey:identity,layout:'dialog',width:450,rows,actions:[
+ return {id:'menu',title:'Menu',contentKey:identity,layout:'menu',width:NATIVE_MENU.width,height:NATIVE_MENU.height,rows,actions:[
   menuAction('menu-resume','Reprendre',fresh=>{if(!fresh.fault)return host?.panel(null);},state.busy||!!state.fault),
  ],onClose:close};
 }

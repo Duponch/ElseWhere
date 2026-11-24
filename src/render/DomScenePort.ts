@@ -10,6 +10,9 @@ interface LocalInputOwner {
   disposeSelection():void;
   disconnectResize():void;
   removeInputListeners():void;
+  presentEnvironment?(camera:THREE.OrthographicCamera|THREE.PerspectiveCamera,height:number,cellPixels:number):void;
+  prepareEnvironmentForCompile?():()=>void;
+  disposeEnvironment?():void;
 }
 
 /** DOM owner for the local path. A worker will need a separately qualified
@@ -46,10 +49,10 @@ export function createDomPort(host:HTMLElement,renderer:THREE.WebGPURenderer):{
     releasePointer(id){if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);},
     canMoveCamera:()=>!(host.closest('[inert]')||document.querySelector('dialog[open]')),
     cursor(value){canvas.style.cursor=value;},title(value){canvas.title=value;},
-    drawLabels:(world,camera,cellPixels,width,height,explorationRevision)=>labels!.draw(world,camera,cellPixels,width,height,explorationRevision),
-    prepareLabelsForCompile:()=>labels!.prepareForCompile(),
+    drawLabels:(world,camera,cellPixels,width,height,explorationRevision)=>{labels!.draw(world,camera,cellPixels,width,height,explorationRevision);owner?.presentEnvironment?.(camera,height,cellPixels);},
+    prepareLabelsForCompile:()=>{const restore=labels!.prepareForCompile(),environment=owner?.prepareEnvironmentForCompile?.();return ()=>{restore();environment?.();};},
     disconnectResize:()=>owner?.disconnectResize(),removeInputListeners:()=>owner?.removeInputListeners(),
-    disposeLabels:()=>labels?.dispose(),removeSurface:()=>canvas.remove(),
+    disposeLabels:()=>{labels?.dispose();owner?.disposeEnvironment?.();},removeSurface:()=>canvas.remove(),
     // The exact loaded Texture instance is delivered unchanged to the resident
     // layer. Its existing disposed guard, texture options and ownership remain.
     loadTexture:(url,onLoad,onProgress,onError)=>new THREE.TextureLoader().load(url,onLoad,onProgress,onError),

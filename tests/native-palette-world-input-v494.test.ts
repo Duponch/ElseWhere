@@ -44,4 +44,9 @@ describe('native tool palette versus world drag',()=>{
   const dropdown=fixture();try{dropdown.stage.dropdown={pieces:[dropdown.card.piece]};const down=event(dropdown.worldFrom),up=event(dropdown.worldTo,0);dropdown.stage.pointerDown(down);consumed(down);expect(dropdown.stage.worldPress).toBeUndefined();expect(dropdown.closeDropdown).toHaveBeenCalledOnce();dropdown.stage.pointerUp(up);expect(dropdown.activate).not.toHaveBeenCalled();expect(dropdown.cancel).not.toHaveBeenCalled();}finally{dropdown.dispose();}
   for(const disabled of [false,true]){const f=fixture();try{f.card.control!.disabled=disabled;const down=event(f.cardPoint),up=event(f.cardPoint,0);f.stage.pointerDown(down);f.stage.pointerUp(up);await Promise.resolve();consumed(down);if(!disabled)consumed(up);expect(f.stage.worldPress).toBeUndefined();expect(f.close).not.toHaveBeenCalled();expect(f.escape).not.toHaveBeenCalled();expect(f.activate).toHaveBeenCalledTimes(disabled?0:1);expect(f.errors).not.toHaveBeenCalled();}finally{f.dispose();}}
  });
+ it('passes an empty-map press and release through a modeless map search without closing it',()=>{
+  const f=fixture(null);try{f.stage.page.layout='map-search';f.stage.page.closeOwnsNavigation=true;const down=event(f.worldFrom),up=event(f.worldTo,0);
+   f.stage.pointerDown(down);expect(down.preventDefault).not.toHaveBeenCalled();expect(f.stage.worldPress?.pointerId).toBe(17);f.stage.pointerUp(up);expect(up.preventDefault).not.toHaveBeenCalled();expect(f.close).not.toHaveBeenCalled();expect(f.escape).not.toHaveBeenCalled();expect(f.stage.worldPress).toBeUndefined();
+  }finally{f.dispose();}
+ });
 });

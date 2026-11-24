@@ -3,15 +3,25 @@ import {createStartingCandidateRoster,previewStartingCandidate,previewStartingPa
 import {startingOriginalRequestFromRoster256} from '../src/sim/starting-original-request-256';
 import {BACKGROUND_SKILL_IDS,backgroundSkillRefusal} from '../src/sim/colonist-backgrounds';
 import {createPawnsUiHarness,PAWNS_UI_SEED} from './helpers/native-pregame-pawns-harness';
+import {layoutNativePage} from '../src/ui3d/native-layout';
 
 describe('real Native candidate controller on a declared UI backend',()=>{
  it('keeps eight actual profiles, three/five groups, full dossier and best usable twelve-skill summary without starting',async()=>{
   const f=createPawnsUiHarness();await f.enterPawns();const roster=createStartingCandidateRoster(PAWNS_UI_SEED),party=previewStartingParty(PAWNS_UI_SEED,roster.slice(0,3));
-  expect(f.page!.layout).toBe('setup');expect(f.order()).toEqual(roster.map(person=>person.serial));expect(f.row('party-selected-heading').label).toBe('Au départ');expect(f.row('party-reserve-heading').label).toBe('Laissés sur place');
+  expect(f.page).toMatchObject({layout:'setup',setupProfile:'pawns',width:1020,height:764,setupCatalogueWidth:140});expect(f.order()).toEqual(roster.map(person=>person.serial));expect(f.row('party-selected-heading').label).toBe('Au départ');expect(f.row('party-reserve-heading').label).toBe('Laissés sur place');
   const candidateRows=f.page!.rows.filter(row=>/^candidate-\d+$/.test(row.id)),boundary=f.page!.rows.findIndex(row=>row.id==='party-reserve-heading');expect(candidateRows.filter(row=>f.page!.rows.indexOf(row)<boundary)).toHaveLength(3);expect(candidateRows.filter(row=>f.page!.rows.indexOf(row)>boundary)).toHaveLength(5);
   expect(candidateRows.every(row=>row.controlStyle==='button'&&row.compact&&row.controls?.length===1&&row.controls[0]!.hint?.includes(row.controls[0]!.label))).toBe(true);
+  expect(candidateRows.every(row=>row.controls![0]!.portraitUrl?.startsWith('data:image/svg+xml')&&row.controls![0]!.caption)).toBe(true);
   expect(f.page!.portrait?.label).toContain(f.row('candidate-name').input!.value);expect(f.row('candidate-name').bio!.skills).toHaveLength(12);expect(f.page!.rows.filter(row=>row.id.startsWith('team-'))).toHaveLength(12);
   expect(f.row('candidate-name').bio!.creation).toBe(true);expect(f.row('candidate-health-heading').setupColumn).toBe(2);expect(f.row('candidate-relations-heading').setupColumn).toBe(2);
+  const box=layoutNativePage(f.page!,{width:1440,height:900},true,(text,size)=>text.length*size*.53),bio=box.rows.find(row=>row.row.id==='candidate-name')!,rail=box.regions.catalogue!,details=box.regions.details!;
+  expect(rail.width).toBe(140);expect(box.regions.graph!.height).toBe(127);expect(box.portraitRect).toMatchObject({width:92,height:128});
+  expect(box.rows.filter(row=>/^candidate-\d+$/.test(row.row.id)).map(row=>[row.height,row.controls[0]!.style])).toEqual(Array(8).fill([60,'candidate']));
+  expect([bio.width,bio.height]).toEqual([480,455]);expect(box.header+bio.top+bio.height).toBeLessThanOrEqual(details.y+details.height);expect(box.portraitRect!.x).toBeGreaterThanOrEqual(bio.x+bio.width);
+  const small=layoutNativePage(f.page!,{width:640,height:480},true,(text,size)=>text.length*size*.53),smallBio=small.rows.find(row=>row.row.id==='candidate-name')!;
+  expect(small.regions.details!.contentWidth).toBeGreaterThan(small.regions.details!.width);expect([smallBio.width,smallBio.height]).toEqual([480,455]);
+  const contentKey=f.page!.contentKey,detailsKey=f.page!.detailsKey,portraits=candidateRows.map(row=>row.controls![0]!.portraitUrl);await f.click('inspect-'+roster[6]!.serial);expect(f.page!.contentKey).toBe(contentKey);expect(f.page!.detailsKey).not.toBe(detailsKey);
+  expect(f.page!.rows.filter(row=>/^candidate-\d+$/.test(row.id)).map(row=>row.controls![0]!.portraitUrl)).toEqual(portraits);
   for(const skill of BACKGROUND_SKILL_IDS){const usable=party.pawns.filter(person=>!backgroundSkillRefusal(person,skill)).sort((a,b)=>(b.skills[skill]?.level??0)-(a.skills[skill]?.level??0)||(b.skills[skill]?.passion??0)-(a.skills[skill]?.passion??0)),best=usable[0],summary=f.row('team-'+skill);expect(summary.meter?.value).toBe(best?.skills[skill]?.level??0);expect(summary.meter?.passion).toBe(best?.skills[skill]?.passion??0);for(const person of party.pawns)expect(summary.hint).toContain(person.name);}
   expect(f.backend.start).not.toHaveBeenCalled();expect(f.sourceUnchanged()).toBe(true);
  });

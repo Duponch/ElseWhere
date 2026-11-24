@@ -40,6 +40,8 @@ import { portraitDataUrl, portraitExpressionOf } from '../ui/pawn-portrait';
 import { nativeClinicalConditionRows } from './native-special-inspection';
 import { NATIVE_UI_SCALE_LIMITS,normalizeGraphicsStylePreferences,ORIGAMI_STYLE_CONTROLS,origamiStyleDisplayScale,formatOrigamiStyleValue,type GraphicsStylePreferences } from './native-preferences';
 import {presentNativeFront} from './native-front-presentation';
+import {NATIVE_MESSAGE,NATIVE_OPTIONS} from './native-dialog-metrics';
+import {NATIVE_CREATION,NATIVE_FILE_LIST} from './native-front-metrics';
 import {tutorialBiomeTag349} from '../ui/tutorial-actions-349';
 import {rimWorldReportFileName,type RimWorldImportJob} from '../ui/rimworld-import';
 import {developerPageUrl} from '../ui/developer-pages';
@@ -76,7 +78,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   let selectedTile: number | null = null, eligible: number[] = [], siteOffset = 0;
   let tests: TestColony[] | undefined;
   const testCatalogue={search:'',selected:undefined as string|undefined};
-  const optionSections=[{id:'game',label:'Jeu'},{id:'interface',label:'Interface'},{id:'graphics',label:'Graphismes'},{id:'lighting',label:'Éclairage'},{id:'audio',label:'Audio'},{id:'rimworld-texts',label:'Textes de RimWorld'},{id:'developer',label:'Développeur'}] as const;
+  const optionSections=[{id:'game',label:'Jeu',icon:'people'},{id:'interface',label:'Interface',icon:'information'},{id:'graphics',label:'Graphismes',icon:'paint'},{id:'lighting',label:'Éclairage',icon:'lamp'},{id:'audio',label:'Audio',icon:'speaker'},{id:'rimworld-texts',label:'Textes de RimWorld',icon:'history'},{id:'developer',label:'Développeur',icon:'settings'}] as const;
   let optionSection:typeof optionSections[number]['id']='game';
   let graphicsPreferenceGeneration=0;
   let loadSearch='',selectedLoadKey:string|undefined;
@@ -112,14 +114,14 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   function paint(): void {
     if (!open||externalPage) return;
     if (confirmation) {
-      show({ id: 'front-confirm', title: confirmation.title ?? 'Confirmer le départ', modal: true, layout:'setup',width:620,height:280,rows: [{ id: 'confirmation', region:'details',label: confirmation.message }], actions: [
+      show({ id: 'front-confirm', title: confirmation.title ?? 'Confirmer le départ', modal: true, layout:'message',width:NATIVE_MESSAGE.width,height:NATIVE_MESSAGE.height,rows: [{ id: 'confirmation',label: confirmation.message }], actions: [
         control('confirm-cancel', 'Annuler', () => { confirmation = undefined; }),
         control('confirm-accept', confirmation.acceptLabel ?? 'Confirmer', () => { const accept = confirmation!.accept; confirmation = undefined; return accept(); }),
       ], onClose: () => { confirmation = undefined; paint(); } });
       return;
     }
     if (notice) {
-      show({ id: 'front-learning-notice', title: notice.title, modal: true, layout:'setup',width:620,height:280,rows: [{ id: 'learning-notice', region:'details',label: notice.text }], actions: [
+      show({ id: 'front-learning-notice', title: notice.title, modal: true, layout:'message',width:NATIVE_MESSAGE.width,height:NATIVE_MESSAGE.height,rows: [{ id: 'learning-notice',label: notice.text }], actions: [
         control('learning-notice-accept', 'Compris', () => { notice = undefined; }),
       ], onClose: () => { notice = undefined; paint(); } });
       return;
@@ -346,10 +348,10 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     };
     const category=optionSections.find(section=>section.id===optionSection)!;
     // « Textes de RimWorld » only where the page has its controller, « Développeur » where pages are listed.
-    const catalogue:NativeRow[]=optionSections.filter(section=>(section.id!=='rimworld-texts'||options.rimWorldTexts)&&(section.id!=='developer'||options.developerPages?.length||options.developerMode)).map(section=>({id:`option-section-${section.id}`,label:'',region:'catalogue',controls:[control(`option-section-${section.id}`,section.label,()=>{optionSection=section.id;},false,optionSection===section.id)]}));
+    const catalogue:NativeRow[]=optionSections.filter(section=>(section.id!=='rimworld-texts'||options.rimWorldTexts)&&(section.id!=='developer'||options.developerPages?.length||options.developerMode)).map(section=>({id:`option-section-${section.id}`,label:'',region:'catalogue',controls:[{...control(`option-section-${section.id}`,section.label,()=>{optionSection=section.id;},false,optionSection===section.id),icon:section.icon}]}));
     const details:NativeRow[]=[{id:'option-section-title',label:category.label,emphasis:'heading',region:'details'},
       ...rows.filter(row=>sectionOf(row.id)===optionSection).map(row=>({...row,region:'details' as const,column:undefined}))];
-    return { id:'',title:'Options',rows:[...catalogue,...details],width:900,height:760,layout:'setup',setupCatalogueWidth:180,contentKey:`options-${optionSection}`,actions:navigation() };
+    return { id:'',title:'Options',rows:[...catalogue,...details],width:NATIVE_OPTIONS.width,height:NATIVE_OPTIONS.height,layout:'options',contentKey:`options-${optionSection}`,actions:[control('front-back','OK',back)] };
   }
 
   /** Options → « Développeur »: one row per developer page of this build
@@ -432,7 +434,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     });
     rows.push(details({id:'world-add-factions',label:'Ajouter une faction',controls:addControls}),details({id:'reset-factions',label:'Factions',controls:[control('reset-factions','Réinitialiser',()=>update(()=>{parameters.settings.factions=defaultWorldGenerationSettings().factions;}))]}));
     const primary=busy&&!pending?control('cancel-generation','Annuler la génération',()=>{invalidateDraft();busy=false;status='';paint();},false,false,true):control('generate-world','Générer',generateWorld,!flow||!options.getWorldCreationPlayer);
-    return{id:'',title:tutorial?'Tutoriel · Créer le monde':'Créer le monde',layout:'setup',setupCatalogueWidth:400,rows,actions:[...navigation(),control('reset-world','Réinitialiser tout',()=>update(()=>{parameters={seed:randomSiteSeed(),settings:defaultWorldGenerationSettings(),size:250,season:'auto'};})),primary]};
+    return{id:'',title:tutorial?'Tutoriel · Créer le monde':'Créer le monde',layout:'setup',rows,actions:[...navigation(),control('reset-world','Réinitialiser tout',()=>update(()=>{parameters={seed:randomSiteSeed(),settings:defaultWorldGenerationSettings(),size:250,season:'auto'};})),primary]};
   }
 
   /** Core ChooseLandingSite: only the tiles whose ChooseBiome tag the lesson
@@ -469,9 +471,8 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     const rows:NativeRow[]=[{id:'site-views',region:'navigation',label:'',controlStyle:'tab',compact:true,controls:[
       control('site-view-facts','Lieu choisi',()=>changeView('facts'),false,nativeSiteView.tab==='facts'),
       control('site-view-places','Lieux disponibles',()=>changeView('places'),false,nativeSiteView.tab==='places'),
-      control('site-view-factions','Factions',()=>changeView('factions'),false,nativeSiteView.tab==='factions'),
     ]},{...input('tile-input','Numéro de case',selectedTile===null?'':String(selectedTile),value=>choose(Number(value)),'number'),region:'navigation',compact:true},
-      {id:'site-selection-tools',region:'navigation',presentation:'plain',compact:true,label:`${offered.length} lieux disponibles`,controls:[random],hint:'La sélection ne génère pas de carte locale. Confirmer valide ce lieu avant le choix des personnages.'}];
+      {id:'site-selection-tools',region:'navigation',presentation:'plain',compact:true,label:`${offered.length} lieux disponibles`,hint:'La sélection ne génère pas de carte locale. Confirmer valide ce lieu avant le choix des personnages.'}];
     const detail=(row:NativeRow):NativeRow=>({...row,region:'details',presentation:'plain',dense:true,compact:true});
     if(nativeSiteView.tab==='facts'){
       if(selectedTile===null)rows.push(detail({id:'site-list-summary',label:'Choisissez un lieu sur le globe ou dans la liste.',hint:'Le numéro de case et le bouton Lieu aléatoire restent disponibles au-dessus.'}));
@@ -503,20 +504,25 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     return{id:'',title:'Choisir le lieu de départ',layout:'setup',columnRatio:.58,contentKey:`${scope}:${nativeSiteView.tab}:${selectedTile??'none'}`,rows,
       visual:{kind:'planet',surface,roads:preview.geography.roads,selected:selectedTile,markers:[...preview.settlements.map(settlement=>({tile:settlement.tile,label:settlement.name,color:0x8d7e9c})),...suggested!==null?[{tile:suggested,label:'Lieu conseillé',color:0xd9993e}]:[]],onSelect:id=>{
         error='';try{choose(id);siteOffset=Math.max(0,Math.floor(offered.indexOf(id)/16)*16);}catch(cause){error=errorMessage(cause);}paint();
-      }},actions:navigation(control('confirm-site','Suivant',()=>{
+      }},actions:[...navigation(),random,control('site-view-factions','Factions',()=>changeView('factions'),false,nativeSiteView.tab==='factions'),control('confirm-site','Suivant',()=>{
         if(selectedTile===null)return;
         // Page_SelectStartingSite.CanDoNext: the tile's ChooseBiome tag.
         const chosen=surface.tiles[selectedTile]!,refusal=tutorial?options.tutorialLessons?.allow(tutorialBiomeTag349(chosen.biome,chosen.hilliness)):undefined;
         if(refusal!==undefined)throw Error(refusal);
         const calendar=worldCreationCalendarFacts262(surface.tiles[selectedTile]!,parameters.season);
         confirmation={message:`Confirmer la case ${selectedTile} · ${parameters.size} × ${parameters.size} · ${calendar.choice} · ${calendar.date} ?`,accept:confirmSite};
-      },selectedTile===null))};
+      },selectedTile===null)]};
   }
 
   function renderPawns(): NativePage {
     const draftGeneration=generation,draftSeed=teamSeed,party=previewStartingParty(teamSeed,roster.slice(0,3));
     const selectedProfiles=new Map(party.pawns.map(pawn=>[pawn.id,pawn] as const));
     const profiles=roster.map(descriptor=>selectedProfiles.get(descriptor.serial)??previewStartingCandidate(teamSeed,descriptor));
+    const look=apparelAppearance([]);
+    // The view preference is shared by the selected portrait and the list;
+    // it never modifies the actual candidate or his starting possessions.
+    if(showCandidateClothes){look.shirt=true;look.silhouette=1;look.color=APPAREL['cloth-shirt'].color;look.signature='cloth-shirt';}
+    const portraitOf=(pawn:typeof profiles[number])=>portraitDataUrl(appearanceOf(pawn,teamSeed),look,undefined,portraitExpressionOf(pawn),humanLimbVisualMask(pawn));
     const current=()=>open&&page==='pawns'&&generation===draftGeneration&&teamSeed===draftSeed;
     const live=(serial:number,version:number)=>current()?roster.find(candidate=>candidate.serial===serial&&candidate.generation===version):undefined;
     const reorder=(serial:number,target:number)=>{
@@ -527,26 +533,24 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       // when a left-behind candidate joins the starting group.
       if(tutorial){options.tutorialLessons?.notify('ReorderPawn');if(from>=3&&target<3)options.tutorialLessons?.notify('ReorderPawnOptionalToStarting');}
     };
-    const rows: NativeRow[]=[{id:'party-help',region:'navigation',presentation:'plain',compact:true,label:'Choisir trois personnes',value:'Les trois premiers partent.',hint:'Sélectionnez un candidat dans la liste puis choisissez sa place dans le dossier. Monter et descendre conservent les huit profils et leur ordre relatif.'}];
+    const rows: NativeRow[]=[];
     for(const [index,descriptor] of roster.entries()){
       if(index===0||index===3)rows.push({id:index===0?'party-selected-heading':'party-reserve-heading',region:'catalogue',presentation:'plain',compact:true,emphasis:'heading',label:index===0?'Au départ':'Laissés sur place'});
       const pawn=profiles[index]!,story=pawn.background?storyTitle(pawn.background.adulthood?'adulthood':'childhood',pawn.background.adulthood??pawn.background.childhood,appearanceOf(pawn,teamSeed).sex):'Passé non renseigné';
       rows.push({id:`candidate-${descriptor.serial}`,region:'catalogue',label:'',compact:true,controlStyle:'button',controls:[{
         ...control(`inspect-${descriptor.serial}`,pawn.name,()=>{if(live(descriptor.serial,descriptor.generation))inspected=descriptor.serial;},false,inspected===descriptor.serial),
+        caption:story,portraitUrl:portraitOf(pawn),
         hint:[pawn.name,index<3?'Au départ':'Laissé sur place',story,pawn.age?`${biologicalYears(pawn.age)} ans biologiques · ${chronologicalYears(pawn.age)} ans chronologiques`:'Âge non renseigné'].join('\n'),
       }]});
     }
+    rows.push({id:'party-help',region:'catalogue',presentation:'plain',compact:true,label:'Les trois premiers partent.',hint:'Sélectionnez un candidat dans la liste puis choisissez sa place dans le dossier. Monter et descendre conservent les huit profils et leur ordre relatif.'});
     let portrait:NativePage['portrait'];
     const descriptor=roster.find(candidate=>candidate.serial===inspected)??roster[0];
     if(descriptor){
       const position=roster.findIndex(candidate=>candidate.serial===descriptor.serial),pawn=profiles[position]!,selected=position<3;
       const details=(row:NativeRow,setupColumn:0|1|2=0):NativeRow=>({...row,region:'details',setupColumn,dense:true,compact:true});
       const heading=(id:string,label:string,setupColumn:0|1|2=0):NativeRow=>details({id,label,emphasis:'heading',presentation:'plain'},setupColumn);
-      const look=apparelAppearance([]);
-      // This remains a view of the cloth shirt actually supplied at departure.
-      // Hiding it neither creates a pile nor changes a candidate's equipment.
-      if(showCandidateClothes){look.shirt=true;look.silhouette=1;look.color=APPAREL['cloth-shirt'].color;look.signature='cloth-shirt';}
-      portrait={url:portraitDataUrl(appearanceOf(pawn,teamSeed),look,undefined,portraitExpressionOf(pawn),humanLimbVisualMask(pawn)),label:`Portrait de ${pawn.name}`};
+      portrait={url:portraitOf(pawn),label:`Portrait de ${pawn.name}`};
       const identity=input('candidate-name','Nom',pawn.name,value=>{
         if(!live(descriptor.serial,descriptor.generation))return false;
         const name=value.trim();if(!validStartingCandidateName(name))throw Error('Le nom doit contenir 1 à 80 caractères, sans caractères de contrôle.');
@@ -554,13 +558,14 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       },'text',80);
       identity.controls=[{...control(`reroll-${descriptor.serial}`,'↻',()=>{if(live(descriptor.serial,descriptor.generation)){roster=rerollStartingCandidateForRoster(teamSeed,roster,descriptor.serial,{capableOfViolence:tutorial});if(tutorial)options.tutorialLessons?.notify('RandomizePawn');}}),hint:'Renouveler ce candidat : les sept autres profils et leur ordre sont conservés.'}];
       // The name field and Core's Randomize button sit in the card's name zone (below).
-      rows.push({id:'candidate-actions',region:'catalogue',label:'',compact:true,controls:[
+      rows.push({id:'candidate-actions',region:'details',label:'',compact:true,controls:[
         {...control(`promote-${descriptor.serial}`,selected?'Laisser sur place':'Choisir pour le départ',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)<3?3:2);}),hint:selected?'Place ce profil après les trois personnes choisies ; le candidat suivant rejoint le départ.':'Place ce profil en troisième position ; la dernière personne choisie passe dans les réserves.'},
         {...control(`up-${descriptor.serial}`,'↑',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)-1);},position===0),hint:'Monter ce candidat d’une place.'},
         {...control(`down-${descriptor.serial}`,'↓',()=>{if(live(descriptor.serial,descriptor.generation))reorder(descriptor.serial,roster.findIndex(candidate=>candidate.serial===descriptor.serial)+1);},position===roster.length-1),hint:'Descendre ce candidat d’une place.'},
         control('candidate-clothing',showCandidateClothes?'Masquer les vêtements':'Montrer les vêtements',()=>{if(current())showCandidateClothes=!showCandidateClothes;},false,showCandidateClothes),
       ]});
-      // The portrait's clothing toggle joined the candidate's actions under the list.
+      // The portrait's clothing toggle and the reorder actions stay beside
+      // the Bio card, in the selected candidate's dossier.
       // The same Bio card as the « Bio » tab (Core DrawCharacterCard in creation
       // mode): the name field and the renewal button in its name zone, then
       // stories, traits, incapacities and skills; the age is in its top stack.
@@ -605,7 +610,7 @@ ${pawn.name} appartient à ${colonyName}, votre colonie.`}:undefined;
       });
     }
     if(busy&&pending)rows.push({id:'cancel-local',region:'navigation',label:'Préparation de la colonie',controls:[control('cancel-local','Annuler la préparation',()=>{flow?.cancel();status='Annulation demandée…';},false,false,true)]});
-    return{id:'',title:'Préparer les personnages',layout:'setup',contentKey:`${draftGeneration}:${draftSeed}:${descriptor?.serial??''}`,setupCatalogueWidth:240,width:1260,height:764,rows,portrait,actions:navigation(control('start-colony','Démarrer',askStart,!flow?.ticket))};
+    return{id:'',title:'Préparer les personnages',layout:'setup',contentKey:`${draftGeneration}:${draftSeed}`,detailsKey:`${descriptor?.serial??''}`,setupCatalogueWidth:NATIVE_CREATION.rosterWidth,rows,portrait,actions:navigation(control('start-colony','Démarrer',askStart,!flow?.ticket))};
   }
 
   function importFile(): void {
@@ -757,11 +762,16 @@ ${pawn.name} appartient à ${colonyName}, votre colonie.`}:undefined;
   }
   function renderLoad():NativePage {
     let saves:ReturnType<FrontMenuOptions['getSaves']>=[];try{saves=options.getSaves();}catch(cause){error=errorMessage(cause);}
+    const scope=loadSearch;
     const kinds={manual:'Sauvegarde manuelle',recovery:'Colonie précédente',named:'Sauvegarde nommée',auto:'Copie automatique'} as const;
+    const shortKinds={manual:'Manuelle',recovery:'Précédente',named:'Nommée',auto:'Automatique'} as const;
     const entries=saves.map(save=>{
       const caption=[save.kind?kinds[save.kind]:'Colonie enregistrée',save.savedAt===undefined?'':new Date(save.savedAt).toLocaleString('fr-FR')].filter(Boolean).join(' · ');
       // Keep the former load control and its fresh repository lookup intact.
-      const load=control(`load-save-${save.key}`,save.label,()=>run(async()=>{const current=options.getSaves().find(entry=>entry.key===save.key);if(!current||current.disabled)throw Error('Cette sauvegarde n’est plus disponible. Actualisez la liste avant de la charger.');await options.onLoad(current.key);},'Vérification et chargement de la sauvegarde…'),save.disabled);
+      const load=control(`load-save-${save.key}`,'Charger',()=>{
+        if(!open||externalPage||page!=='load'||loadSearch!==scope)return;
+        return run(async()=>{const current=options.getSaves().find(entry=>entry.key===save.key);if(!current||current.disabled)throw Error('Cette sauvegarde n’est plus disponible. Actualisez la liste avant de la charger.');await options.onLoad(current.key);},'Vérification et chargement de la sauvegarde…');
+      },save.disabled);
       return{save,caption,load};
     });
     const fold=(value:string)=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('fr');
@@ -769,9 +779,10 @@ ${pawn.name} appartient à ${colonyName}, votre colonie.`}:undefined;
     const selected=entries.find(({save})=>save.key===selectedLoadKey);
     const search={...input('load-search','Rechercher une colonie',loadSearch,value=>{loadSearch=value;selectedLoadKey=undefined;},'text',160),region:'navigation' as const};
     const rows:NativeRow[]=[search,{id:'load-count',label:`${visible.length} / ${saves.length} copies`,region:'navigation',dense:true},
-      ...visible.map(({save,caption}):NativeRow=>({id:`save-${save.key}`,label:'',region:'catalogue',controls:[{
-        ...control(`select-save-${save.key}`,save.label,()=>{selectedLoadKey=save.key;},false,selectedLoadKey===save.key),hint:[save.label,caption,save.detail].join('\n'),
-      }]}))];
+      ...visible.map(({save,caption,load},index):NativeRow=>({id:`save-${save.key}`,label:'',region:'catalogue',
+        fileEntry:{date:save.savedAt===undefined?'—':new Date(save.savedAt).toLocaleDateString('fr-FR'),kind:save.kind?shortKinds[save.kind]:'Colonie enregistrée',index},controls:[{
+        ...control(`select-save-${save.key}`,save.label,()=>{if(open&&!externalPage&&page==='load')selectedLoadKey=save.key;},false,selectedLoadKey===save.key),hint:[save.label,caption,save.detail].join('\n'),
+        },{...load,hint:[`Charger « ${save.label} »`,caption,save.detail].join('\n')}]}))];
     if(!visible.length)rows.push({id:'no-save',label:saves.length?'Aucune copie ne correspond à la recherche.':'Aucune colonie enregistrée',region:'catalogue'});
     if(selected){
       rows.push({id:'selected-save-name',label:selected.save.label,emphasis:'heading',region:'details'},
@@ -784,7 +795,7 @@ ${pawn.name} appartient à ${colonyName}, votre colonie.`}:undefined;
       if(selectedLoadKey!==selected.save.key)throw Error('Le choix de sauvegarde a changé. Sélectionnez de nouveau une copie.');
       return selected.load.onActivate();
     },!!selected.load.disabled):control('load-selected','Charger',()=>{},true);
-    return{id:'',title:'Charger une partie',subtitle:'Sélectionner une copie affiche ses informations ; Charger ouvre la colonie en pause.',rows,width:900,height:760,layout:'setup',setupCatalogueWidth:300,contentKey:`load-${loadSearch}`,
+    return{id:'',title:'Charger une partie',subtitle:'Sélectionnez une copie pour ses détails, ou cliquez sur Charger pour ouvrir la colonie en pause.',rows,width:NATIVE_FILE_LIST.width,height:NATIVE_FILE_LIST.height,layout:'files',contentKey:`load-${loadSearch}`,
       actions:[...navigation(),control('test-colonies','Colonies de test',loadTestCatalogue),control('import','Importer un fichier',importFile),
         ...(options.startRimWorldImport&&options.onLoadConverted?[{...control('import-rimworld','Importer une sauvegarde RimWorld',pickRimWorldSave),maxWidth:300,hint:'Convertit une sauvegarde RimWorld 1.6 (.rws, jeu de base seul) en colonie Elsewhere. Rien n’est enregistré avant « Jouer cette colonie ».'}]:[]),
         ...(hasGame&&options.onExport?[control('export','Exporter la partie actuelle',()=>run(options.onExport!,'Préparation du fichier de la partie actuelle…'))]:[]),load]};
@@ -796,7 +807,7 @@ ${pawn.name} appartient à ${colonyName}, votre colonie.`}:undefined;
     if (page === 'world') return renderWorld();
     if (page === 'site') return renderSite();
     if (page === 'pawns') return renderPawns();
-    if (page === 'home') return { id: '', title: 'ELSEWHERE', subtitle: 'Trois vies. Un nouveau foyer. À vous d’écrire la suite.', rows: [
+    if (page === 'home') return { id: '', title: 'ELSEWHERE', subtitle: 'Trois vies. Un nouveau foyer. À vous d’écrire la suite.', closable:hasGame,rows: [
       ...(hasGame ? [{ id: 'resume', label: 'Colonie en pause', controls: [control('resume', 'Reprendre la colonie', () => run(options.onResume, 'Reprise de la colonie…'))] }] : []),
       { id: 'home-tutorial', label: 'Apprendre à jouer', controls: [control('tutorial', 'Tutoriel', showTutorial)] },
       { id: 'home-new', label: 'Nouvelle partie', controls: [control('new-game', 'Nouvelle partie', showCreation)] },

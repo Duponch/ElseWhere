@@ -169,6 +169,8 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
   d.shape([[13,54],[9,50],[44,13],[49,18]],P.wood);d.path('M 37 15 Q 33 6 43 5 L 41 12 L 47 17 L 54 14 Q 56 25 46 24 Z',P.silver);d.shape([[10,17],[15,11],[52,48],[47,54]],P.wood);d.shape([[7,17],[17,6],[27,15],[17,27]],P.silver);break;
  case 'settings':
   for(let i=0;i<8;i++){const a=i*Math.PI/4;d.line([[32+Math.cos(a)*17,32+Math.sin(a)*17],[32+Math.cos(a)*24,32+Math.sin(a)*24]],6,P.stone);}d.ellipse(32,32,18,18,P.stone);d.ellipse(32,32,7,7,P.paper);break;
+ case 'speaker':
+  d.shape([[9,24],[20,24],[34,12],[34,52],[20,40],[9,40]],P.wood);d.path('M 40 24 Q 49 32 40 40 M 46 15 Q 62 32 46 49',null,2.8,P.blue);break;
  case 'planning':
   d.rect(10,13,44,43,P.paper);d.rect(10,13,44,12,P.red);d.path('M 21 7 Q 17 7 18 18 M 45 7 Q 41 7 42 18',null,3);
   for(const x of[18,29,40])for(const y of[32,43])d.rect(x,y,6,6,x===29&&y===32?P.red:P.sage);break;
@@ -369,6 +371,8 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  case 'passion':d.path('M 18 47 Q 8 35 22 24 Q 31 17 29 6 Q 44 14 40 28 Q 46 24 47 17 Q 60 40 43 51 Q 27 61 18 47 Z',P.red);d.path('M 25 48 Q 20 39 32 31 Q 44 43 35 52 Z',P.ochre,1);break;
  case 'eye':d.path('M 5 32 Q 31 5 59 32 Q 32 59 5 32 Z',P.paper);d.ellipse(32,32,11,12,P.blue);d.ellipse(32,32,4,5,P.ink,0);break;
  case 'camera':d.path('M 7 22 L 20 22 L 25 14 L 42 14 L 46 22 L 57 22 L 57 52 L 7 52 Z',P.sage);d.ellipse(33,36,12,12,P.paper);d.ellipse(33,36,7,7,P.blue);d.rect(10,16,10,6,P.wood);d.ellipse(50,27,2,2,P.ochre,0);break;
+ case 'room-stats':d.path('M 8 29 L 8 10 L 54 10 L 54 54 L 8 54 L 8 42',null,3);d.rect(17,34,8,14,P.ochre);d.rect(28,25,8,23,P.sage);d.rect(39,17,8,31,P.blue);break;
+ case 'beauty-view':d.path('M 32 7 L 37 24 L 54 20 L 43 34 L 53 50 L 36 45 L 28 59 L 25 41 L 8 38 L 21 28 L 15 13 L 29 21 Z',P.ochre,2.5);d.ellipse(32,33,7,7,P.paper);d.line([[52,8],[52,17]],2,P.green);d.line([[47,13],[57,13]],2,P.green);break;
  case 'season-spring':sprout(d);d.path('M 10 55 Q 32 51 54 55',null,1.8,P.wood);break;
  case 'season-summer':d.ellipse(32,32,16,16,P.ochre);for(let i=0;i<8;i++){const a=i*Math.PI/4;d.line([[32+Math.cos(a)*21,32+Math.sin(a)*21],[32+Math.cos(a)*27,32+Math.sin(a)*27]],1.7,P.wood);}break;
  case 'season-autumn':d.path('M 32 6 L 38 20 L 52 15 L 47 29 L 59 35 L 42 42 L 32 56 L 27 42 L 8 34 L 20 28 L 16 14 L 29 20 Z',P.red);d.path('M 32 21 Q 31 39 28 58 M 31 39 L 21 32 M 32 33 L 43 27',null,1.5,P.wood);break;
